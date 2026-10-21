@@ -144,7 +144,10 @@ jobs:
       merge lands with no failed check at the merged head, even before anyone marks it; a merge over a
       failed check stays declared, a cancelled task is dropped, a PR links by branch prefix or by the
       task's proof link; kiwi task show always says the stage, and the board says it when it adds
-      evidence (a linked PR, or done that's only declared).
+      evidence (a linked PR, or done that's only declared). A verdict counts only at the head it
+      judged: a push after the round was asked or after the yes leaves the review owed at the new
+      head, a no at the head asks for changes and a push after it is proving again; task show lists
+      the evidence as refs (the PR and its head, proof links, files posted in the task's thread).
       Also test/newer-ops.test.ts: an event whose op this client doesn't know (from a newer client)
       is kept, not dropped: a signed fixture log decodes whole with every signature checking out,
       such an event carries its op as newer and no ev, is quiet, and folds to nothing (the board is

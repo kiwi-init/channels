@@ -713,10 +713,10 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
       Effect.gen(function* () {
         const id = yield* task(raw);
         if (action === "show") {
-          const { state } = yield* s.state();
+          const { state, messages } = yield* s.state();
           const t = state.tasks.get(id);
           if (!t) return yield* new Rejected(`no task ${taskId(id)}`);
-          return formatTask(state, t);
+          return formatTask(state, t, Date.now(), messages);
         }
         if (action === "assign" && owner && owner !== s.me) {
           const state = yield* s.taskHandoff(id, owner, note);
