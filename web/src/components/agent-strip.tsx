@@ -32,6 +32,7 @@ export interface AgentNow {
   lastAt?: number
   card?: Pick<Card, "repo" | "branch">
   outside?: boolean
+  frees?: { text: string; tone: string }
 }
 
 /** What it's doing now, in a few words: live from its harness when it says, else from its tasks. */
@@ -77,9 +78,9 @@ export function AgentRow({ a, onMessage, onOpenTask }: { a: AgentNow; onMessage:
             <span className="truncate text-ui font-medium text-ink">{a.label}</span>
             {a.lead && <span className="shrink-0 text-meta text-ink-3">lead</span>}
           </span>
-          <span className="flex items-center gap-1.5 text-meta text-ink-3">
-            {doing?.busy && <span className="size-1.5 shrink-0 rounded-full bg-doing" />}
-            <span className="truncate">{agentNow(a).text}</span>
+          <span className={cx("flex items-center gap-1.5 text-meta", a.frees?.tone ?? "text-ink-3")}>
+            {(a.frees ? a.frees.tone === "text-doing" : doing?.busy) && <span className="size-1.5 shrink-0 rounded-full bg-doing" />}
+            <span className="truncate">{a.frees?.text ?? agentNow(a).text}</span>
           </span>
         </span>
       </button>

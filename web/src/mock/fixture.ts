@@ -66,7 +66,26 @@ function task(t: Partial<Task> & Pick<Task, "id" | "title" | "state" | "createdB
 }
 
 const TASKS: Task[] = [
-  task({ id: 984, title: "kiwi 0.20.5", state: "doing", owner: "calm-otter", createdBy: "merry-llama", createdAt: at(11, 10), updatedAt: at(14, 52), source: 612 }),
+  task({
+    id: 984,
+    title: "kiwi 0.20.5",
+    state: "doing",
+    owner: "calm-otter",
+    createdBy: "merry-llama",
+    createdAt: at(11, 10),
+    updatedAt: at(14, 52),
+    source: 612,
+    areas: ["desktop/scripts", ".github/workflows"],
+  }),
+  task({
+    id: 1031,
+    title: "Site: show progress while the dictation model loads",
+    state: "todo",
+    createdBy: "keen-pelican",
+    createdAt: at(15, 1),
+    updatedAt: at(15, 1),
+    from: 1012,
+  }),
   task({
     id: 1005,
     title: "The app no longer carries dictation's 27 MB .wasm",
@@ -121,6 +140,7 @@ const TASKS: Task[] = [
     createdAt: at(10, 4),
     updatedAt: at(10, 4),
     issue: { repo: REPO, number: 203 },
+    areas: ["desktop/scripts"],
   }),
 ]
 
@@ -168,7 +188,7 @@ function pr(
 const all = (c: "success" | "failure" | "running", except: Record<string, "success" | "failure" | "running"> = {}) => Object.fromEntries(CHECKS.map((n) => [n, except[n] ?? c]))
 
 const GITHUB: GithubNote[] = [
-  ...pr(540, "T984-release-0.20.5", "kiwi 0.20.5", "open", "e5a1b20", 38, 12, all("success", { "cli / macos": "failure" }), at(14, 18)),
+  ...pr(540, "T984-release-0.20.5", "kiwi 0.20.5", "open", "e5a1b20", 38, 12, all("success", { "cli / macos": "failure" }), at(14, 52)),
   ...pr(538, "T1005-wasm-out", "The app and the site no longer carry dictation's 27 MB WebAssembly", "merged", "b7d2c41", 412, 96, all("success"), at(13, 30)),
   ...pr(527, "T848-linux-dictation", "Dictation works on Linux", "merged", "c41e7aa", 233, 41, all("success"), at(12, 58)),
   ...pr(541, "T1012-lazy-model", "Site: load the dictation model on first use", "open", "d90f312", 120, 18, all("success", { "test / flows-b": "running", "cli / macos": "running" }), at(14, 49)),
@@ -193,15 +213,17 @@ const DOING: Record<string, AgentNow["activity"]> = {
   "bright-robin": { state: "working", tool: "Read" },
   "calm-otter": { state: "waiting" },
   "merry-llama": { state: "idle" },
-  "quiet-heron": { state: "working", tool: "Bash" },
+  "quiet-heron": undefined,
 }
+
+export const AWAY: Record<string, number> = { "quiet-heron": at(14, 51) }
 
 export function agents(state: ChannelState): AgentNow[] {
   return AGENTS.map((a) => ({
     name: a.name,
     label: a.display,
     color: colorOf(state, a.name),
-    here: "wakes",
+    here: AWAY[a.name] ? null : "wakes",
     lead: a.name === state.lead,
     model: a.model,
     activity: DOING[a.name],

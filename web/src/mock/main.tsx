@@ -4,19 +4,19 @@ import { createRoot } from "react-dom/client"
 import "../index.css"
 import { tasksAwaitingPeople } from "@kiwi/core/state.ts"
 import { AgentLanes } from "@/components/agent-lanes"
-import { StuckChains, TreeCanvas, TreeOutline } from "@/components/agent-tree"
+import { SinceYouLeft, StuckChains, TreeCanvas, TreeOutline } from "@/components/agent-tree"
 import { ChannelSidebar } from "@/components/conversation/channel-sidebar"
 import { Header } from "@/components/conversation/header"
 import { Harnesses, Tabs } from "@/components/kit"
 import { TasksView } from "@/components/tasks-view"
 import { Ctx, type Api } from "@/components/controls/context"
 import { useHeight } from "@/hooks/use-height"
-import { chains, lineage } from "@/lib/tree"
+import { chains, changesSince, freesOf, lineage, stalls } from "@/lib/tree"
 import { cx } from "@/lib/utils"
 import { viewCounts, type Tab } from "@/lib/views"
-import { agents, channel, MESSAGES, NOW } from "./fixture"
+import { agents, AWAY, channel, MESSAGES, NOW } from "./fixture"
 
-type Direction = "list" | "request" | "tree" | "stuck" | "both" | "agents"
+type Direction = "list" | "request" | "tree" | "stuck" | "both" | "t81" | "agents"
 
 const params = new URLSearchParams(location.search)
 const direction = (params.get("d") ?? "tree") as Direction
@@ -24,9 +24,21 @@ const theme = params.get("theme")
 if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme
 
 const state = channel()
-const team = agents(state)
+const name = (n: string) => state.members.get(n)?.display ?? n
+const TONE_CLASS: Record<string, string> = {
+  red: "text-alert",
+  waits: "text-decide",
+  doing: "text-doing",
+  review: "text-accent-text",
+  todo: "text-ink-3",
+  done: "text-live",
+  free: "text-live",
+}
+const team = agents(state).map((a) => (direction === "t81" ? { ...a, frees: ((f) => ({ text: f.text, tone: TONE_CLASS[f.tone] ?? "text-ink-3" }))(freesOf(state, a.name, name, a.name in AWAY)) } : a))
 const roots = lineage(state, MESSAGES, NOW)
 const stuck = chains(roots)
+const since = Math.max(...MESSAGES.filter((m) => m.from === "jow").map((m) => m.ts))
+const stalled = stalls(state, roots, (n) => AWAY[n] ?? null, name)
 const asks = MESSAGES.filter((m) => m.esc)
 const waiting = tasksAwaitingPeople(state)
 
@@ -62,7 +74,7 @@ const controls: Api = {
   openDialog: () => {},
 }
 
-function Toolbar({ value }: { value: Direction }) {
+function Toolbar({ value, tree = true }: { value: Direction; tree?: boolean }) {
   const [v, setV] = useState(value)
   return (
     <div className="flex items-center justify-between gap-3 px-3 pt-3">
@@ -73,11 +85,7 @@ function Toolbar({ value }: { value: Direction }) {
           stretch
           label="Group the board"
           onChange={setV}
-          options={[
-            { value: "list", label: "By state" },
-            { value: "request", label: "By request" },
-            { value: "tree", label: "Tree" },
-          ]}
+          options={[{ value: "list", label: "By state" }, { value: "request", label: "By request" }, ...(tree ? [{ value: "tree" as const, label: "Tree" }] : [])]}
         />
       </div>
     </div>
@@ -98,19 +106,30 @@ function Body() {
       return (
         <>
           <Toolbar value="request" />
-          <TreeOutline roots={roots} state={state} />
+          <TreeOutline roots={roots} state={state} now={NOW} name={name} />
         </>
       )
     case "stuck":
-      return board(<StuckChains chains={stuck} state={state} asks={asks} />)
+      return board(<StuckChains chains={stuck} state={state} asks={asks} now={NOW} name={name} />)
     case "both":
       return (
         <>
           <div className="px-3">
-            <StuckChains chains={stuck} state={state} asks={asks} />
+            <StuckChains chains={stuck} state={state} asks={asks} now={NOW} name={name} />
           </div>
           <Toolbar value="request" />
-          <TreeOutline roots={roots} state={state} />
+          <TreeOutline roots={roots} state={state} now={NOW} name={name} />
+        </>
+      )
+    case "t81":
+      return (
+        <>
+          <div className="px-3">
+            <StuckChains title="Needs you" chains={stuck} stalled={stalled} state={state} asks={asks} now={NOW} name={name} />
+            <SinceYouLeft changes={changesSince(state, roots, since, name)} since={since} now={NOW} />
+          </div>
+          <Toolbar value="request" tree={false} />
+          <TreeOutline roots={roots} state={state} now={NOW} name={name} />
         </>
       )
     case "agents":
@@ -161,7 +180,7 @@ function Mock() {
                 wideHeading="channels-dev"
                 headingLabel="Details: channels-dev"
                 face={{ icon: null, title: "channels-dev" }}
-                status={["5 working", "2 merged today", "2 need you"]}
+                status={direction === "t81" ? ["4 working", "2 merged today", "3 need you"] : ["5 working", "2 merged today", "2 need you"]}
                 onTitle={() => {}}
                 searchHint="Search this channel"
               />

@@ -1,11 +1,12 @@
-import { CancelCircleIcon, HelpCircleIcon } from "@hugeicons/core-free-icons"
+import { CancelCircleIcon, HelpCircleIcon, PauseIcon } from "@hugeicons/core-free-icons"
 import type { ReactNode } from "react"
 
 import type { Message } from "@kiwi/core/protocol.ts"
 import { colorOf, taskId, type ChannelState, type Task } from "@kiwi/core/state.ts"
+import { pickFor, taskCandidates } from "@kiwi/core/routing.ts"
 import { taskPr } from "@kiwi/core/work.ts"
 import { excerpt, formatTime, memberName } from "@/lib/format"
-import { rollWords, span, troubled, type Branch, type Chain, type Health, type Roll, type Root } from "@/lib/tree"
+import { baton, rollWords, span, troubled, type Branch, type Chain, type Change, type Health, type Roll, type Root, type Stall } from "@/lib/tree"
 import { cx } from "@/lib/utils"
 import { Ticks } from "./agent-lanes"
 import { Icon } from "./icon"
@@ -269,38 +270,66 @@ function Guides({ path, hot, end }: { path: boolean[]; hot: (string | undefined)
   )
 }
 
-function OutlineRow({ b, state, path, hot, end }: { b: Branch; state: ChannelState; path: boolean[]; hot: (string | undefined)[]; end: End }) {
+function Suggest({ state, id, name }: { state: ChannelState; id: number; name: (n: string) => string }) {
+  const best = pickFor(taskCandidates(state, id))
+  if (!best) return <span className="truncate">nobody has its context yet</span>
+  return (
+    <span className="truncate text-ink-2">
+      best: <span className="font-semibold">{name(best.name)}</span>, {best.reasons[0]}
+    </span>
+  )
+}
+
+function OutlineRow({ b, state, now, name, path, hot, end }: { b: Branch; state: ChannelState; now: number; name: (n: string) => string; path: boolean[]; hot: (string | undefined)[]; end: End }) {
   const t = b.task
-  const owner = t.owner ? state.members.get(t.owner) : undefined
   const pr = taskPr(state, t.id)
   const below = b.children.length ? b.roll.tasks - 1 : 0
-  const r = rounds(t, state)
+  const hand = baton(state, b, name)
+  const open = !t.owner && t.state === "todo"
+  const best = open ? pickFor(taskCandidates(state, t.id)) : null
   return (
-    <div className="grid grid-cols-[auto_28px_minmax(0,1fr)_56px] items-center gap-x-3 rounded-row pr-3 transition-colors hover:bg-wash md:grid-cols-[auto_28px_minmax(0,1fr)_168px_56px] lg:grid-cols-[auto_28px_minmax(0,1fr)_168px_128px_56px]">
+    <div className="grid grid-cols-[auto_28px_minmax(0,1fr)_auto] items-center gap-x-3 rounded-row pr-3 transition-colors hover:bg-wash md:grid-cols-[auto_28px_minmax(0,1fr)_168px_auto] lg:grid-cols-[auto_28px_minmax(0,1fr)_168px_128px_64px]">
       <Guides path={path} hot={hot} end={end} />
-      <span className="py-2.5">{t.owner ? <Face state={state} name={t.owner} size={28} /> : <span className="block size-7 rounded-full shadow-[inset_0_0_0_1px_var(--edge-strong)]" />}</span>
+      <span className="py-2.5">{t.owner ? <Face state={state} name={t.owner} size={28} /> : <span className="block size-7 rounded-full border border-dashed border-edge-strong" />}</span>
       <span className="min-w-0 py-2.5">
         <span className={cx("block truncate text-body leading-snug", t.state === "done" ? "text-ink-2" : "text-ink")}>{t.title}</span>
         <span className="flex min-w-0 items-center gap-1.5 text-meta text-ink-3">
           <span className="shrink-0 tabular-nums">{taskId(t.id)}</span>
           <span aria-hidden>·</span>
-          <span className="shrink-0 max-md:hidden">{t.owner ? memberName(owner, t.owner) : "unassigned"}</span>
-          <span aria-hidden className="max-md:hidden">
-            ·
-          </span>
-          <span className={cx("flex min-w-0 shrink items-center gap-1.5 truncate", TONE[b.health], (b.health === "red" || b.health === "waits") && "font-semibold")}>
-            {b.health === "doing" && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-doing" />}
-            {b.why ?? (r && b.health !== "todo" ? r : WORD[b.health].toLowerCase())}
-          </span>
-          {below > 0 && (
+          {b.health === "red" && b.why && (
             <>
-              <span aria-hidden>·</span>
-              <span className={cx("shrink-0", troubled(b) && b.health !== "red" && b.health !== "waits" && TONE[b.roll.worst])}>
-                {below} below{troubled(b) && b.health !== "red" && b.health !== "waits" ? `, ${b.roll.red ? `${b.roll.red} red` : `${b.roll.waits} waits on you`}` : ""}
+              <span className="shrink-0 font-semibold text-alert max-md:hidden">{b.why}</span>
+              <span aria-hidden className="max-md:hidden">
+                ·
               </span>
             </>
           )}
+          {open ? (
+            <Suggest state={state} id={t.id} name={name} />
+          ) : (
+            <span className={cx("flex min-w-0 shrink items-center gap-1.5 truncate", TONE[hand.tone], (hand.tone === "red" || hand.tone === "waits") && "font-semibold")}>
+              {hand.tone === "doing" && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-doing" />}
+              <span className="truncate">
+                {hand.text}
+                {hand.since !== undefined && hand.tone !== "done" ? ` · ${span(now - hand.since)}` : ""}
+                {hand.tone === "done" && hand.since !== undefined ? ` ${span(now - hand.since)} ago` : ""}
+              </span>
+            </span>
+          )}
+          {below > 0 && troubled(b) && b.health !== "red" && b.health !== "waits" && (
+            <>
+              <span aria-hidden>·</span>
+              <span className={cx("shrink-0", TONE[b.roll.worst])}>{b.roll.red ? `${b.roll.red} red below` : `${b.roll.waits} below waits on you`}</span>
+            </>
+          )}
         </span>
+        {best && (
+          <span className="mt-1.5 block md:hidden">
+            <Button size="sm" variant="secondary">
+              Give to {name(best.name)}
+            </Button>
+          </span>
+        )}
       </span>
       <span className="hidden min-w-0 md:block">
         <PrCell pr={pr} done={t.state === "done"} />
@@ -308,28 +337,38 @@ function OutlineRow({ b, state, path, hot, end }: { b: Branch; state: ChannelSta
       <span className="hidden min-w-0 lg:block">
         <ChecksCell pr={pr} />
       </span>
-      <span className="text-right text-meta text-ink-3 tabular-nums">{t.state === "todo" ? "queued" : span(b.ms)}</span>
+      <span className="flex justify-end text-right text-meta text-ink-3 tabular-nums">
+        {best ? (
+          <Button size="sm" variant="secondary" className="max-md:hidden">
+            Give to {name(best.name)}
+          </Button>
+        ) : t.state === "todo" ? (
+          "queued"
+        ) : (
+          span(b.ms)
+        )}
+      </span>
     </div>
   )
 }
 
 const hotOf = (b: Branch | undefined) => (b ? HOT[b.roll.worst] : undefined)
 
-function outlineRows(branches: Branch[], state: ChannelState, path: boolean[], hot: (string | undefined)[]): ReactNode[] {
+function outlineRows(branches: Branch[], state: ChannelState, now: number, name: (n: string) => string, path: boolean[], hot: (string | undefined)[]): ReactNode[] {
   return branches.flatMap((b, i) => {
     const here = [...path, i === branches.length - 1]
     const later = branches.slice(i + 1).find(troubled)
     const end = { top: hotOf(troubled(b) ? b : later), elbow: troubled(b) ? hotOf(b) : undefined, bottom: hotOf(later) }
     return [
       <li key={b.task.id}>
-        <OutlineRow b={b} state={state} path={here} hot={hot} end={end} />
+        <OutlineRow b={b} state={state} now={now} name={name} path={here} hot={hot} end={end} />
       </li>,
-      ...outlineRows(b.children, state, here, [...hot, hotOf(later)]),
+      ...outlineRows(b.children, state, now, name, here, [...hot, hotOf(later)]),
     ]
   })
 }
 
-export function TreeOutline({ roots, state }: { roots: Root[]; state: ChannelState }) {
+export function TreeOutline({ roots, state, now, name }: { roots: Root[]; state: ChannelState; now: number; name: (n: string) => string }) {
   return (
     <div className="flex flex-col gap-6 pt-3 pb-8">
       {roots.map((root) => (
@@ -353,7 +392,7 @@ export function TreeOutline({ roots, state }: { roots: Root[]; state: ChannelSta
               </span>
             </span>
           </header>
-          <ul className="pl-4">{outlineRows(root.branches, state, [], [])}</ul>
+          <ul className="pl-4">{outlineRows(root.branches, state, now, name, [], [])}</ul>
         </section>
       ))}
     </div>
@@ -388,18 +427,36 @@ function ChainLine({ c, state }: { c: Chain; state: ChannelState }) {
   )
 }
 
-export function StuckChains({ chains, state, asks }: { chains: Chain[]; state: ChannelState; asks: Message[] }) {
-  if (!chains.length) return null
+export function StuckChains({
+  chains,
+  state,
+  asks,
+  now,
+  name,
+  title = "Where it's stuck",
+  stalled = [],
+}: {
+  chains: Chain[]
+  state: ChannelState
+  asks: Message[]
+  now: number
+  name: (n: string) => string
+  title?: string
+  stalled?: Stall[]
+}) {
+  if (!chains.length && !stalled.length) return null
   return (
-    <section aria-label="Where it's stuck" className="pt-3 pb-2">
+    <section aria-label={title} className="pt-3 pb-2">
       <h2 className="flex items-baseline gap-2 text-ui font-semibold">
-        Where it's stuck <span className="font-normal text-ink-3 tabular-nums">{chains.length}</span>
+        {title} <span className="font-normal text-ink-3 tabular-nums">{chains.length + stalled.length}</span>
       </h2>
       <ul className="divide-y divide-line border-b border-line">
         {chains.map((c) => {
           const t = c.branch.task
           const ask = asks.find((m) => m.task === t.id)
           const pr = taskPr(state, t.id)
+          const hand = baton(state, c.branch, name)
+          const waited = hand.since === undefined ? c.branch.ms : now - hand.since
           return (
             <li key={t.id}>
               <Row
@@ -414,7 +471,11 @@ export function StuckChains({ chains, state, asks }: { chains: Chain[]; state: C
                   <>
                     <ChainLine c={c} state={state} />
                     <span className="mt-1 block tabular-nums">
-                      {c.root.roll.tasks - c.root.roll.done} of {c.root.roll.tasks} tasks for this request still open · this one for {span(c.branch.ms)}
+                      <span className={cx("font-semibold", TONE[c.branch.health])}>
+                        {c.branch.health === "waits" ? "waiting on you" : "red"} for {span(waited)}
+                      </span>
+                      {" · "}
+                      {c.root.roll.tasks - c.root.roll.done} of {c.root.roll.tasks} tasks for {c.root.kind === "message" ? `#${c.root.seq}` : "it"} still open
                     </span>
                   </>
                 }
@@ -439,7 +500,62 @@ export function StuckChains({ chains, state, asks }: { chains: Chain[]; state: C
             </li>
           )
         })}
+        {stalled.map((c) => (
+          <li key={`s${c.branch.task.id}`}>
+            <Row
+              lead={
+                <span className="text-ink-2">
+                  <Icon icon={PauseIcon} size={17} />
+                </span>
+              }
+              title={c.what}
+              detail={
+                <>
+                  <ChainLine c={c} state={state} />
+                  <span className="mt-1 block tabular-nums">
+                    <span className="font-semibold text-ink-2">stalled for {span(now - c.since)}</span>
+                    {" · "}
+                    {c.root.roll.tasks - c.root.roll.done} of {c.root.roll.tasks} tasks for {c.root.kind === "message" ? `#${c.root.seq}` : "it"} still open
+                  </span>
+                </>
+              }
+            >
+              <Button size="sm" variant="secondary">
+                Hand it on
+              </Button>
+              <Button size="sm" variant="secondary">
+                Ping {name(c.who)}
+              </Button>
+            </Row>
+          </li>
+        ))}
       </ul>
+    </section>
+  )
+}
+
+export function SinceYouLeft({ changes, since, now }: { changes: Change[]; since: number; now: number }) {
+  if (!changes.length) return null
+  return (
+    <section aria-label="Since you left" className="pt-4 pb-1">
+      <h2 className="flex items-baseline gap-2 text-ui font-semibold">
+        Since you left <span className="font-normal text-ink-3 tabular-nums">{changes.length}</span>
+      </h2>
+      <ul className="pt-1.5">
+        {changes.map((c) => (
+          <li key={`${c.at}-${c.text}`} className="grid grid-cols-[52px_10px_minmax(0,1fr)_auto] items-center gap-x-2.5 rounded-row py-1.5 text-ui hover:bg-wash">
+            <time className="text-meta text-ink-3 tabular-nums">{span(now - c.at)}</time>
+            <span aria-hidden className={cx("size-2 rounded-full", FILL[c.tone])} />
+            <span className="truncate text-ink">{c.text}</span>
+            {c.task !== undefined ? <span className="text-meta text-ink-3 tabular-nums">{taskId(c.task)}</span> : <span />}
+          </li>
+        ))}
+      </ul>
+      <div className="mt-2 flex items-center gap-3 text-meta text-ink-3">
+        <span className="h-px flex-1 bg-line" />
+        <span className="tabular-nums">you were here · {formatTime(since)}</span>
+        <span className="h-px flex-1 bg-line" />
+      </div>
     </section>
   )
 }
