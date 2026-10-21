@@ -51,6 +51,7 @@ describe("how a permission was settled", () => {
     body: "Permission",
     ts: 1,
     esc: true,
+    sig: "sig-5",
     choices: [ALLOW_ONCE, DENY],
     permission: shown({ command: "ls" }),
   } as Message
@@ -61,15 +62,15 @@ describe("how a permission was settled", () => {
   test("only the signed answer counts: Allow from the agent's own person, Deny from them or the owner", () => {
     expect(settled([])).toBeNull()
     expect(settled([reply(6, "ana", { body: ALLOW_ONCE })])).toBeNull()
-    expect(settled([reply(6, "ana", { body: ALLOW_ONCE, perm: { ask: "ask-5", allow: true } })])).toEqual({ answer: { allow: true, by: "ana", at: 6 } })
-    expect(settled([reply(6, "ana", { perm: { ask: "another", allow: true } })])).toBeNull()
-    expect(settled([reply(6, "jonatas", { perm: { ask: "ask-5", allow: true } })])).toBeNull()
-    expect(settled([reply(6, "jonatas", { perm: { ask: "ask-5", allow: false } })])).toEqual({ answer: { allow: false, by: "jonatas", at: 6 } })
+    expect(settled([reply(6, "ana", { body: ALLOW_ONCE, perm: { ask: "ask-5", by: "atlas", of: "sig-5", allow: true } })])).toEqual({ answer: { allow: true, by: "ana", at: 6 } })
+    expect(settled([reply(6, "ana", { perm: { ask: "another", by: "atlas", of: "sig-5", allow: true } })])).toBeNull()
+    expect(settled([reply(6, "jonatas", { perm: { ask: "ask-5", by: "atlas", of: "sig-5", allow: true } })])).toBeNull()
+    expect(settled([reply(6, "jonatas", { perm: { ask: "ask-5", by: "atlas", of: "sig-5", allow: false } })])).toEqual({ answer: { allow: false, by: "jonatas", at: 6 } })
   })
 
   test("the asker's own closing reply settles it, and says an earlier answer came too late", () => {
     expect(settled([reply(7, "atlas", { settled: "terminal" })])).toEqual({ closed: { kind: "terminal", at: 7 } })
-    expect(settled([reply(6, "ana", { perm: { ask: "ask-5", allow: false } }), reply(8, "atlas", { settled: "terminal" })])).toEqual({
+    expect(settled([reply(6, "ana", { perm: { ask: "ask-5", by: "atlas", of: "sig-5", allow: false } }), reply(8, "atlas", { settled: "terminal" })])).toEqual({
       answer: { allow: false, by: "ana", at: 6 },
       closed: { kind: "terminal", at: 8 },
     })

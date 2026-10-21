@@ -1,6 +1,7 @@
 import { ArrowDown01Icon } from "@hugeicons/core-free-icons"
 import { useCallback, useDeferredValue, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react"
 
+import { permissionReply } from "@kiwi/core/permission.ts"
 import { droppedCount } from "@kiwi/core/format.ts"
 import { memberLoad } from "@kiwi/core/load.ts"
 import { GENERAL_ROOM, isReaction, type ImageAttachment, type Message } from "@kiwi/core/protocol.ts"
@@ -442,7 +443,11 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       agentOf={(name) => isAgent(state.members.get(name))}
       onReply={async (m, text) => void (await send(text, { to: [m.from], re: [m.seq], kind: "msg" }))}
       permissionOf={(m) => ({ human: humanOf(state, m.from), owner: ownerOf(state) })}
-      onPermission={async (m, allow) => void (await send(allow ? ALLOW_ONCE : DENY, { to: [m.from], re: [m.seq], kind: "msg", perm: { ask: m.id, allow } }))}
+      onPermission={async (m, allow) => {
+        const perm = permissionReply(m, allow)
+        if (!perm) throw new Error("this one can only be answered in the terminal")
+        await send(allow ? ALLOW_ONCE : DENY, { to: [m.from], re: [m.seq], kind: "msg", perm })
+      }}
       onApproveTask={(t: Task) => sendTask(approveTask(t), closedDigest(state, messages, t, { by: me }))}
       onSendBack={(t: Task, why: string) => sendTask(sendBackTask(t, why))}
       onOpenTask={openTask}
