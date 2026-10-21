@@ -47,7 +47,6 @@ export interface RowsContext {
   /** The question waiting above the composer, which the feed shows only as a pointer to it. */
   banner: number | null
   onAnswer: (m: Message, text: string) => Promise<boolean>
-  onReact: (m: Message) => void
   onJump: (seq: number) => void
   openThread: (root: number) => void
   openTask: (task: number) => void
@@ -81,7 +80,6 @@ export function rowMakers(c: RowsContext) {
     decisions,
     banner,
     onAnswer,
-    onReact,
     onJump,
     openThread,
     openTask,
@@ -126,7 +124,6 @@ export function rowMakers(c: RowsContext) {
         chosen={chosen(m)}
         settled={settledOf(m)}
         prs={prsOf(m)}
-        onReact={anchor ? undefined : onReact}
         onJump={onJump}
         thread={search || anchor ? undefined : threadOf(m, next)}
         onOpenThread={openThread}
