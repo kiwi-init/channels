@@ -55,5 +55,6 @@ function isolate(): void {
   }
 }
 
+for (const [key, dir] of Object.entries(DIRS)) process.env[key] = dir;
 isolate();
 beforeEach(isolate);

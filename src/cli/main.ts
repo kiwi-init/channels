@@ -30,6 +30,7 @@ import { taskCommands } from "./commands/tasks.ts";
 import { toolCommands } from "./commands/tools.ts";
 import { rotateCommands } from "./commands/rotate.ts";
 import { rexCommands } from "./commands/rex.ts";
+import { terminalCommands } from "./commands/terminal.ts";
 import { launchCommands } from "./commands/launch.ts";
 import { fail } from "./fail.ts";
 
@@ -70,6 +71,7 @@ const commands: Record<string, Command> = {
   ...toolCommands,
   ...rotateCommands,
   ...rexCommands,
+  ...terminalCommands,
   ...launchCommands,
 };
 

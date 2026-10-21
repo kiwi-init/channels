@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { openPlace, placeKind } from "../src/launch/place.ts";
 import { terminalLine } from "../src/terminals/app/index.ts";
-import type { PlaceRequest, PlaceTools } from "../src/terminals/plugin.ts";
+import type { Config } from "../src/config.ts";
+import type { PlaceRequest, PlaceTools, TerminalId } from "../src/terminals/plugin.ts";
 import { loginArgv } from "../src/terminals/shared/launch.ts";
 
 const SESSION = "session:01a15acd-04bb-7b4e-9c8a-feb34c17dd89";
@@ -33,6 +34,8 @@ afterAll(() => rmSync(dir, { recursive: true, force: true }));
 const request = (over: Partial<PlaceRequest> = {}): PlaceRequest => ({ argv: ["claude", "run kiwi join"], folder, name: "claude-two", env: { KIWI_LAUNCH: "l1" }, ...over });
 
 const tools = (over: Partial<PlaceTools> = {}): PlaceTools => ({ platform: "linux", shell: "/bin/zsh", rex: null, tmux: null, osascript: null, ...over });
+const prefers = (prefer: TerminalId, on: "on" | "off" = "on"): Pick<Config, "terminals"> => ({ terminals: { prefer, helpers: prefer === "app" ? {} : { [prefer]: on } } });
+const REX = prefers("rex");
 
 function fake(name: string, body: string): { bin: string; calls: () => string[][] } {
   const bin = join(dir, name);
@@ -78,7 +81,7 @@ const argsOf = (call: string[]) => JSON.parse(call.at(-1)!) as Record<string, un
 
 describe("what a request may hold", () => {
   test("nothing to run, an option or assignment as the program, control characters, a missing folder, a bad name or variable are refused", async () => {
-    const refused = async (over: Partial<PlaceRequest>) => openPlace(request(over), tools({ tmux: "/nonexistent/tmux" }));
+    const refused = async (over: Partial<PlaceRequest>) => openPlace(request(over), tools({ tmux: "/nonexistent/tmux" }), {});
     const bad: Partial<PlaceRequest>[] = [
       { argv: [] },
       { argv: ["-c", "x"] },
@@ -152,7 +155,7 @@ describe("Rex", () => {
         ],
       },
     });
-    const placed = await openPlace(request(), tools({ rex: rex.bin, tmux: "/nonexistent/tmux" }));
+    const placed = await openPlace(request(), tools({ rex: rex.bin, tmux: "/nonexistent/tmux" }), REX);
     expect(placed).toEqual({ ok: true, place: "rex", rex: { server: ENDPOINT, session: SESSION, block: BLOCK }, window: "window:w1", pid: 4242 });
     const calls = rex.calls();
     expect(calls.every((c) => c.includes("--autostart=false"))).toBe(true);
@@ -182,32 +185,37 @@ describe("Rex", () => {
         ],
       },
     });
-    expect(await openPlace(request(), tools({ rex: some.bin }))).toMatchObject({ ok: true, rex: { session: SESSION } });
+    expect(await openPlace(request(), tools({ rex: some.bin }), REX)).toMatchObject({ ok: true, rex: { session: SESSION } });
     const none = fakeRex();
-    expect(await openPlace(request(), tools({ rex: none.bin }))).toMatchObject({ ok: true, rex: { session: MADE } });
+    expect(await openPlace(request(), tools({ rex: none.bin }), REX)).toMatchObject({ ok: true, rex: { session: MADE } });
     expect(argsOf(none.calls().find((c) => method(c) === "session.create")!)).toEqual({ label: "kiwi" });
   });
 
   test("a window Rex refuses is a failure, never a second try somewhere else", async () => {
     const rex = fakeRex({ window: "echo 'conflict: too many windows' >&2; exit 1" });
     const tmux = fake("tmux", "exit 0");
-    const placed = await openPlace(request(), tools({ rex: rex.bin, tmux: tmux.bin }));
+    const placed = await openPlace(request(), tools({ rex: rex.bin, tmux: tmux.bin }), REX);
     expect(placed).toEqual({ ok: false, why: "failed", detail: "Rex session.new_window: conflict: too many windows" });
     expect(tmux.calls()).toEqual([]);
   });
 });
 
 describe("which place", () => {
-  test("Rex while its server answers, then tmux, then Terminal on a Mac; Linux with neither has none", async () => {
+  test("the preferred terminal while its helpers are on and it can open, else Terminal saying why, else tmux; with none, nothing", async () => {
     const up = fakeRex();
     const down = fake("rex-down", "exit 4");
     const tmux = fake("tmux", `printf '/tmp/tmux-1/default\\tkiwi\\t@3\\t%%3\\t777\\n'`);
     const osascript = fake("osascript", "echo 'tab 1 of window id 4711'");
-    expect(await placeKind(tools({ rex: up.bin, tmux: tmux.bin }))).toBe("rex");
-    expect(await placeKind(tools({ rex: down.bin, tmux: tmux.bin }))).toBe("tmux");
-    expect(await placeKind(tools({ platform: "darwin", rex: down.bin, osascript: osascript.bin }))).toBe("terminal");
-    expect(await placeKind(tools({ rex: down.bin }))).toBeNull();
-    expect(await openPlace(request(), tools({ rex: down.bin, tmux: tmux.bin }))).toEqual({
+    const mac = (over: Partial<PlaceTools> = {}) => tools({ platform: "darwin", osascript: osascript.bin, tmux: tmux.bin, ...over });
+    expect(await placeKind(mac({ rex: up.bin }), REX)).toBe("rex");
+    expect(await placeKind(mac({ rex: up.bin }), {})).toBe("terminal");
+    expect(await placeKind(mac({ rex: up.bin }), prefers("rex", "off"))).toBe("terminal");
+    expect(await placeKind(mac(), prefers("tmux"))).toBe("tmux");
+    expect(await placeKind(mac({ osascript: null }), {})).toBe("tmux");
+    expect(await placeKind(tools({ rex: up.bin, tmux: tmux.bin }), {})).toBe("tmux");
+    expect(await placeKind(tools({ rex: down.bin }), REX)).toBeNull();
+    expect(await openPlace(request(), mac({ rex: down.bin }), REX)).toEqual({ ok: true, place: "terminal", window: 4711, instead: "Rex isn't running, so it opened in Terminal" });
+    expect(await openPlace(request(), tools({ rex: down.bin, tmux: tmux.bin }), REX)).toEqual({
       ok: true,
       place: "tmux",
       socket: "/tmp/tmux-1/default",
@@ -215,8 +223,9 @@ describe("which place", () => {
       window: "@3",
       pane: "%3",
       pid: 777,
+      instead: "Rex isn't running, so it opened in tmux",
     });
-    expect(await openPlace(request(), tools({ rex: down.bin }))).toEqual({ ok: false, why: "no-place", detail: "No terminal to open: install tmux, or run kiwi join yourself" });
+    expect(await openPlace(request(), tools({ rex: down.bin }), REX)).toEqual({ ok: false, why: "no-place", detail: "No terminal to open: install tmux, or run kiwi join yourself" });
     expect(down.calls().every((c) => c.includes("--autostart=false"))).toBe(true);
   });
 });
@@ -231,11 +240,11 @@ describe("tmux's own answers", () => {
 esac`,
     );
     rmSync(join(dir, "made"), { force: true });
-    expect(await openPlace(request(), tools({ tmux: racing.bin }))).toMatchObject({ ok: true, place: "tmux", window: "@2" });
+    expect(await openPlace(request(), tools({ tmux: racing.bin }), {})).toMatchObject({ ok: true, place: "tmux", window: "@2" });
     expect(racing.calls().every((c) => c[0] === "-u")).toBe(true);
     expect(racing.calls().map((c) => c[1])).toEqual(["new-window", "new-session", "new-window"]);
     const refusing = fake("tmux", "echo 'create window failed: index 3 in use' >&2; exit 1");
-    expect(await openPlace(request(), tools({ tmux: refusing.bin }))).toEqual({ ok: false, why: "failed", detail: "tmux: create window failed: index 3 in use" });
+    expect(await openPlace(request(), tools({ tmux: refusing.bin }), {})).toEqual({ ok: false, why: "failed", detail: "tmux: create window failed: index 3 in use" });
     expect(refusing.calls()).toHaveLength(1);
   });
 });
@@ -244,7 +253,7 @@ describe("Terminal.app", () => {
   test("do script gets the line as an argument and the window id comes back", async () => {
     const osascript = fake("osascript", "echo 'tab 1 of window id 4711'");
     const req = request();
-    expect(await openPlace(req, tools({ platform: "darwin", osascript: osascript.bin }))).toEqual({ ok: true, place: "terminal", window: 4711 });
+    expect(await openPlace(req, tools({ platform: "darwin", osascript: osascript.bin }), {})).toEqual({ ok: true, place: "terminal", window: 4711 });
     const [call] = osascript.calls();
     expect(call!.at(-1)).toBe(terminalLine("/bin/zsh", req));
     const script = call!.filter((a) => a !== "-e").slice(0, -1);
@@ -255,7 +264,7 @@ describe("Terminal.app", () => {
 
   test("Automation turned off for the app says where to allow it", async () => {
     const osascript = fake("osascript", "echo 'execution error: Not authorized to send Apple events to Terminal. (-1743)' >&2; exit 1");
-    expect(await openPlace(request(), tools({ platform: "darwin", osascript: osascript.bin }))).toMatchObject({ ok: false, why: "not-allowed" });
+    expect(await openPlace(request(), tools({ platform: "darwin", osascript: osascript.bin }), {})).toMatchObject({ ok: false, why: "not-allowed" });
   });
 });
 
@@ -266,8 +275,8 @@ describe.skipIf(!hasTmux || !bash)("tmux", () => {
   test("each launch is a window in the detached session kiwi, in its folder, and the pane's pid is the program's", async () => {
     const t = tools({ shell: bash!, tmux: Bun.which("tmux")!, socket: socket() });
     const script = 'printf "%s\\n%s\\n" "$KIWI_LAUNCH" "$(pwd)" > "out-$KIWI_LAUNCH"; exec sleep 30';
-    const one = await openPlace(request({ argv: ["sh", "-c", script], env: { KIWI_LAUNCH: "one" } }), t);
-    const two = await openPlace(request({ argv: ["sh", "-c", script], env: { KIWI_LAUNCH: "two" }, name: "claude-three" }), t);
+    const one = await openPlace(request({ argv: ["sh", "-c", script], env: { KIWI_LAUNCH: "one" } }), t, {});
+    const two = await openPlace(request({ argv: ["sh", "-c", script], env: { KIWI_LAUNCH: "two" }, name: "claude-three" }), t, {});
     if (!one.ok || one.place !== "tmux" || !two.ok || two.place !== "tmux") throw new Error(`not placed: ${JSON.stringify([one, two])}`);
     expect([realpathSync(dirname(one.socket)), basename(one.socket)]).toEqual([realpathSync(dir), "t"]);
     expect([one.session, two.session]).toEqual(["kiwi", "kiwi"]);
@@ -290,7 +299,7 @@ describe.skipIf(!hasTmux || !bash)("tmux", () => {
     const place = join(import.meta.dir, "..", "src", "launch", "place.ts");
     writeFileSync(
       script,
-      `import { openPlace } from ${JSON.stringify(place)};\nconsole.log(JSON.stringify(await openPlace(${JSON.stringify(request({ argv: ["sleep", "30"] }))}, ${JSON.stringify(t)})));\n`,
+      `import { openPlace } from ${JSON.stringify(place)};\nconsole.log(JSON.stringify(await openPlace(${JSON.stringify(request({ argv: ["sleep", "30"] }))}, ${JSON.stringify(t)}, {})));\n`,
     );
     const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== "LANG" && !key.startsWith("LC_")));
     try {
