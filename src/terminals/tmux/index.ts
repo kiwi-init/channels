@@ -1,7 +1,17 @@
+import { realpathSync } from "node:fs";
+import { join } from "node:path";
+import { allSeats, loadConfig } from "../../config.ts";
+import { selfCommand } from "../../hooks/self.ts";
 import type { PlaceRequest, Placed, PlaceTools, TerminalPlugin } from "../plugin.ts";
+import { helpersOn } from "../registry.ts";
 import { loginArgv } from "../shared/launch.ts";
 import { run, said } from "../shared/run.ts";
+import { tmuxSocket } from "../shared/tmux.ts";
+import { downloadTmuxHelpers, removeTmuxHelpers } from "./helpers.ts";
+import { tmuxPlaceFrom } from "./locate.ts";
 import { tmuxManifest } from "./manifest.ts";
+import { tmuxMarker } from "./mark.ts";
+import { showPane } from "./show.ts";
 
 const TMUX_SESSION = "kiwi";
 const TMUX_FORMAT = "#{socket_path}\t#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_pid}";
@@ -20,10 +30,33 @@ async function openTmux(t: PlaceTools & { tmux: string }, req: PlaceRequest): Pr
   return { ok: true, place: "tmux", socket, session, window: win, pane, ...(Number(pid) > 0 ? { pid: Number(pid) } : {}) };
 }
 
+function liveSockets(): string[] {
+  const own = join(process.env.TMUX_TMPDIR || "/tmp", `tmux-${process.getuid?.() ?? 0}`, "default");
+  const seats = allSeats(loadConfig()).flatMap((r) => (r.tmux ? [r.tmux.socket] : []));
+  const real = (socket: string): string[] => {
+    try {
+      return [realpathSync(socket)];
+    } catch {
+      // No socket there means no server running to change.
+      return [];
+    }
+  };
+  return [...new Set([tmuxSocket(process.env), own, ...seats].flatMap((s) => (s ? real(s) : [])))];
+}
+
 export function tmuxTerminal(t: PlaceTools): TerminalPlugin {
+  const tmux = t.tmux ?? "tmux";
   return {
     manifest: tmuxManifest,
     detect: async () => ({ found: !!t.tmux, running: !!t.tmux }),
+    helpers: {
+      status: () => (helpersOn("tmux", loadConfig()) ? "on" : "off"),
+      download: async () => void (await downloadTmuxHelpers(selfCommand(), { tmux, sockets: liveSockets() })),
+      remove: () => removeTmuxHelpers({ tmux, sockets: liveSockets() }),
+    },
+    locate: tmuxPlaceFrom,
+    mark: tmuxMarker(tmux),
+    show: async (place) => (place.tmux ? showPane(place.tmux, tmux) : { ok: false, why: "failed" }),
     open: async (req) => (t.tmux ? openTmux({ ...t, tmux: t.tmux }, req) : { ok: false, why: "no-place", detail: "tmux isn't installed on this computer" }),
   };
 }

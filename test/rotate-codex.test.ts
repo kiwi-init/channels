@@ -150,7 +150,7 @@ describe.skipIf(!hasTmux || !bash)("a Codex window in tmux", () => {
     const state = join(dir, `${name}.state`);
     const fake = join(import.meta.dir, "fixtures", "fake-codex.sh");
     const command = [join(dir, "bin", "codex"), fake, typed, state, title, switchAt].map((a) => `'${a}'`).join(" ");
-    spawnSync("tmux", ["-S", socket, "new-session", "-d", "-s", name, "-x", "120", "-y", "20", "-c", cwd, `exec ${command}`]);
+    spawnSync("tmux", ["-f", "/dev/null", "-S", socket, "new-session", "-d", "-s", name, "-x", "120", "-y", "20", "-c", cwd, `exec ${command}`]);
     const [id, pid] = spawnSync("tmux", ["-S", socket, "display-message", "-p", "-t", name, "#{pane_id} #{pane_pid}"], { encoding: "utf8" }).stdout.trim().split(" ");
     await Bun.sleep(300);
     return { pane: id!, pid: Number(pid), typed, state };

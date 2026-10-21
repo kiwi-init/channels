@@ -13,7 +13,7 @@ import { DAEMON_PROTOCOL, daemonSock, readListener, type DaemonEvent, type Daemo
 import { activityEnv, reachOf, readsRex, seatRecordFor, wakeOn, type Attached } from "./reach.ts";
 import { readRexInto } from "./rex-reads.ts";
 import type { RexActivity, RexPlace, SeatPlace, TerminalPlugin } from "../terminals/plugin.ts";
-import { helpersOn, terminalPlugin } from "../terminals/registry.ts";
+import { helpersOn, marking, terminalPlugin } from "../terminals/registry.ts";
 import { pruneHookFiles } from "../hooks/delivered.ts";
 import { seatFolders } from "../launch/folders.ts";
 import { harnessInventory } from "../launch/harnesses.ts";
@@ -793,14 +793,15 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     }
   };
   const watchStatus = async (): Promise<void> => {
-    const on = ((): boolean => {
+    const [marks, on] = ((): [boolean, boolean] => {
       try {
-        return helpersOn("rex", loadConfig());
+        const cfg = loadConfig();
+        return [marking(cfg).length > 0, helpersOn("rex", cfg)];
       } catch {
-        return false;
+        return [false, false];
       }
     })();
-    if (on && !statusWatch) {
+    if (marks && !statusWatch) {
       const { startStatusWatch } = await import("../status.ts");
       if (stopped) return;
       statusWatch = startStatusWatch({
@@ -811,7 +812,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         },
         stopped: () => stopped,
       });
-    } else if (!on && statusWatch) {
+    } else if (!marks && statusWatch) {
       statusWatch.stop();
       statusWatch = null;
     }
