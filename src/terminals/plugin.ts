@@ -1,12 +1,12 @@
-import type { LaunchRefusal, Opened, RexPlace, TerminalId } from "@kiwi/core/terminals.ts";
-import type { SeatRecord } from "../config.ts";
+import type { LaunchRefusal, Opened, PlacedSeat, RexPlace, ShowResult, TerminalId } from "@kiwi/core/terminals.ts";
+import type { Config, SeatRecord } from "../config.ts";
 
 export interface TerminalPlace {
   program: string;
   version?: string;
 }
 
-export type { RexPlace, TerminalId };
+export type { RexPlace, ShowResult, TerminalId };
 
 export interface TmuxPlace {
   socket: string;
@@ -49,8 +49,6 @@ interface Detected {
   version?: string;
 }
 
-export type ShowResult = { ok: true } | { ok: false; why: "no-rex" | "no-server" | "no-app" | "remote-control" | "failed" };
-
 export interface Pane {
   screen(): string | null;
   type(text: string): boolean;
@@ -89,6 +87,7 @@ export interface TerminalPlugin {
   locate?(env: Record<string, string | undefined>): SeatPlace;
   open?(req: PlaceRequest): Promise<Placed>;
   mark?(seat: SeatRecord, changed: readonly StatusRecord[], cleared: readonly string[], all: readonly StatusRecord[]): Promise<boolean>;
+  seats?(cfg: Config): PlacedSeat[];
   show?(place: SeatPlace): Promise<ShowResult>;
   watch?(places: () => SeatPlace[], changed: (match: (place: SeatPlace) => boolean, gone: boolean) => void): { stop(): void };
   activity?(place: SeatPlace): Promise<RexActivity | null>;

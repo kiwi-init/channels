@@ -1,12 +1,14 @@
 import * as Effect from "effect/Effect";
+import { PLACE_NAMES, readPlacedSeat, type TerminalId, type TerminalRow, type TerminalsStatus } from "@kiwi/core/terminals.ts";
 import { loadConfig, updateConfig, type HelperId } from "../../config.ts";
 import { showNeedsYou, type NeedsYou, type ShowWhy } from "../../status.ts";
-import type { TerminalId, TerminalRow, TerminalsStatus } from "@kiwi/core/terminals.ts";
-import { helpersOn, launchesOn, MANIFESTS, placeTools, preferred, switchHelpers, terminalPlugin, terminalPlugins } from "../../terminals/registry.ts";
+import { helpersOn, launchesOn, MANIFESTS, placeTools, preferred, seatPlaces, showSeat, switchHelpers, terminalPlugin, terminalPlugins } from "../../terminals/registry.ts";
+import { parseJson } from "../../terminals/shared/json.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, out } from "../context.ts";
 
-const USAGE = "usage: kiwi terminal [status] [--json] | kiwi terminal download|remove rex|tmux | kiwi terminal prefer app|rex|tmux | kiwi terminal show --needs-you";
+const USAGE =
+  "usage: kiwi terminal [status] [--json] | kiwi terminal download|remove rex|tmux | kiwi terminal prefer app|rex|tmux | kiwi terminal seats [--json] | kiwi terminal show --needs-you | kiwi terminal show --seat SEAT";
 const LAUNCHES_USAGE = "usage: kiwi launches on|off|status [--json]";
 
 const isHelperId = (id: string | undefined): id is HelperId => id === "rex" || id === "tmux";
@@ -79,6 +81,11 @@ export const terminalCommands: Record<string, Command> = {
         yield* setHelpers(id, sub === "download");
         return out(statusText(yield* Effect.promise(() => terminalsStatus())));
       }
+      if (sub === "show" && opt.seat !== undefined) {
+        const seat = readPlacedSeat(parseJson(opt.seat));
+        if (!seat) return yield* die("usage: kiwi terminal show --seat SEAT, with SEAT one of kiwi terminal seats --json");
+        return out(JSON.stringify(yield* Effect.promise(() => showSeat(seat))));
+      }
       if (sub === "show") {
         if (!opt["needs-you"]) return yield* die(USAGE);
         const got = yield* Effect.promise(() => showNeedsYou(loadConfig()));
@@ -93,6 +100,10 @@ export const terminalCommands: Record<string, Command> = {
           c.terminals = { ...c.terminals, prefer: id };
         });
         return out(statusText(yield* Effect.promise(() => terminalsStatus())));
+      }
+      if (sub === "seats") {
+        const seats = yield* Effect.promise(() => seatPlaces());
+        return out(opt.json ? JSON.stringify(seats) : seats.map((s) => `${s.alias} ${s.agent} ${PLACE_NAMES[s.place]}`).join("\n"));
       }
       return yield* die(USAGE);
     }),
