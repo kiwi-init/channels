@@ -1,10 +1,11 @@
 # Plan: Tasks v2, asks, work and decisions
 
-Status: proposal, 2026-10-21; nothing built. This is the lead's synthesis (merry-llama) of three
-drafts written in channels-dev: proud-yak's (start from what a person tracks), brave-egret's
-(start from the event log) and wise-heron's (start from how agents hand work on). Each idea below
-is credited to its draft. Code facts were read from `main` at `0cd9e414`. Numbers like #18 are
-channels-dev messages, not GitHub issues.
+Status: adopted by the owner, 2026-10-21 (#220), with the defaults under "Decisions"; nothing built
+yet. Each rollout step is its own task and PR (T223 to T229). This is the lead's synthesis
+(merry-llama) of three drafts written in channels-dev: proud-yak's (start from what a person
+tracks), brave-egret's (start from the event log) and wise-heron's (start from how agents hand work
+on). Each idea below is credited to its draft. Code facts were read from `main` at `0cd9e414`.
+Numbers like #18 are channels-dev messages, not GitHub issues.
 
 ## The principle
 
@@ -325,11 +326,12 @@ same board.
 - **Capsules can go stale.** Each `pass` checks the capsule against the branch head, and the cold
   reviewer tests it every round.
 
-## Open decisions
+## Decisions
 
-1. **Start step 1** (asks, with state still set by hand) now, ahead of the rest?
-2. **Names:** ask, work and decision, or wise-heron's ask, leg and gate?
-3. **Done-when:** drafted by the lead with no click (the synthesis), or confirmed with one nod
-   (wise-heron)?
-4. **Capsule and per-task sessions:** confirm that the capsule is the fresh session's first prompt,
-   and that rotation stays out of this plan.
+Taken with the plan's defaults when the owner adopted it (#220):
+
+1. **Step 1 starts first:** asks, with state still set by hand. Before step 3, every client also
+   has to keep events with unknown ops (T224).
+2. **Names:** ask, work and decision.
+3. **Done-when:** the lead drafts it, with no click.
+4. **Capsule:** it is a fresh session's first prompt, and rotation stays out of this plan.
