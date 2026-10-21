@@ -1,7 +1,8 @@
 # Plan: Rex helpers (Settings → Install Rex Helpers)
 
 Status: built, 2026-10-20. Items 1 and 2 landed in #554, items 3 to 6 in #557 (with #560), and
-Settings → Install Rex Helpers in #563. Probes 1, 3, 4, 6 and 7 ran against
+Settings → Install Rex Helpers in #563. Since #650 its code is the Rex terminal plugin, in
+`src/terminals/rex/` ([terminal-plugins.md](terminal-plugins.md)). Probes 1, 3, 4, 6 and 7 ran against
 Rex `0.0.1792433367-g93d474` (API revision 4) and Claude Code 2.1.304 on jow's Mac; the results
 are under "Probes before building", and what they changed in the build under "What the probes
 changed". The plan below is kept as it was decided. Facts below were read from `main` at `9db1595e`

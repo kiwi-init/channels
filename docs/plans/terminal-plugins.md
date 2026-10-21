@@ -1,7 +1,9 @@
 # Plan: terminal plugins (Rex, tmux and the terminal app)
 
-Status: proposed, 2026-10-21, from the owner's ask (#1927). Facts below were read from `main` at
-`00217d35` (kiwi 0.23.1).
+Status: approved by the owner (#2004), 2026-10-21, from the owner's ask (#1927). Rows 1 to 4 are
+built (#648, #649, #650, #651), rows 5 to 8 are in progress; what changed while building is under
+"As built". The audit and the plan below are kept as they were decided: their facts were read from
+`main` at `00217d35` (kiwi 0.23.1), before the code moved.
 
 ## The ask
 
@@ -267,3 +269,26 @@ One task and one PR each, in this order. Each one's tests run in `test / unit`.
 | 7 | Show from Needs you, for every plugin | Show in Rex becomes Show in Rex or Show in tmux; `seatPlaces`, `showSeat` | yes: shots, then the owner's OK |
 | 8 | Settings → New agents | the four rows above and their bridge methods; New agent follows the switch and Prefer | yes: shots, then the owner's OK |
 | 9 | Docs | `docs/agents.md`, `kiwi help`, rex-helpers.md's status line, and this plan as built | no |
+
+## As built
+
+1. **Shared terminal plumbing (#648, T2009).** `src/terminals/shared/` holds `run.ts` (`runNow`,
+   `run` and `said`), `json.ts`, `foreground.ts` (`leadsTerminal`, `holdsInput`) and `tmux.ts`.
+   `run` gives up at its deadline even when the program's child keeps its output open. Every Rex API
+   call passes `--autostart=false`, as launches already did.
+2. **The interface and the registry (#649, T2010).** Each plugin is made for a set of `PlaceTools`
+   (`terminalPlugin(id, tools)`), so `detect` and `open` take no tools of their own; the Rex plugin
+   asks `whoami` once and keeps the answer for its `open`. A launch's answer keeps `place:
+   "terminal"` for the app, so a paired computer on another version reads it as before.
+3. **Rex as a plugin (#650, T2011).** `src/rex.ts`, `rex-show.ts`, `rex-events.ts` and
+   `rex-palette.ts` became `src/terminals/rex/` (`api`, `show`, `watch`, `helpers`), with `locate.ts`,
+   `mark.ts` and `type.ts`; the OSC 7501 frames and the device write are `shared/osc7501.ts`.
+   - `locate` is also the registry's own synchronous `locate(env)`, since every hook reads it.
+   - `watch` hands the daemon a match for the changed pane, and `activity` sits beside it.
+   - `helpersOn(id, cfg)` in the registry is the one read of the Rex switch.
+   - `allSeats(cfg)` in the config is the one walk over every seat record.
+   - Rotation still imports `rex/` directly, until it is removed.
+4. **One reader per shape (#651, T2012).** `packages/core/src/terminals.ts` holds the place names
+   (`PLACE_NAMES`), a launch's result (`readLaunched`, `Opened`, `LaunchRefusal`), Rex's status and a
+   Rex seat, read the same way by the daemon, the CLI and the desktop app. `RexPlace` lives there
+   too, and `src/terminals/plugin.ts` re-exports it.

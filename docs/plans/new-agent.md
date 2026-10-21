@@ -2,7 +2,8 @@
 
 Status: built for this computer (T38 to T42) and for paired computers (T44: T786 to T790,
 T1122), 2026-10-20. The owner took all five decisions as proposed (#51), and chose remote launches on
-for every paired computer, with no opt-in (#799). Item 4 below is as built. From the owner's ask there (#16): next to
+for every paired computer, with no opt-in (#799). Item 4 below is as built. Since #649 each
+terminal place (item 2) is a terminal plugin in `src/terminals/` ([terminal-plugins.md](terminal-plugins.md)). From the owner's ask there (#16): next to
 Agents in the sidebar, **New agent** opens a modal (which machine, which detected harness,
 nickname, personality, Start), and the agent starts and joins by itself. Facts below were read
 from `main` at `bbc4198a` (kiwi 0.22.0).
