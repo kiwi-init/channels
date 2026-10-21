@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join as joinPath } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
-import { looksSecret, PERMISSION_CHOICES, permissionAnswer, permissionShown, wellFormedPermission, type PermissionShown } from "@kiwi/core/permission.ts";
+import { looksSecret, PERMISSION_CHOICES, permissionAnswer, permissionReply, permissionShown, wellFormedPermission, type PermissionShown } from "@kiwi/core/permission.ts";
 import { wellFormed, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 import { startRelay } from "../src/relay/bun.ts";
@@ -311,13 +311,13 @@ describe("a permission on the wire", () => {
   });
 
   test("an answer names the ask it answers, on a reply only", () => {
-    expect(wellFormed({ ...reply, perm: { ask: "x", allow: true } })).toBe(true);
-    expect(wellFormed({ ...reply, re: undefined, perm: { ask: "x", allow: true } })).toBe(false);
-    expect(wellFormed({ ...reply, re: [], perm: { ask: "x", allow: true } })).toBe(false);
-    expect(wellFormed({ ...reply, kind: "event", ev: { op: "hello" }, perm: { ask: "x", allow: true } })).toBe(false);
-    expect(wellFormed({ ...reply, perm: { ask: "x", allow: true, also: 1 } })).toBe(false);
-    expect(wellFormed({ ...reply, perm: { ask: "x".repeat(101), allow: true } })).toBe(false);
-    expect(wellFormed({ ...reply, perm: { ask: "x", allow: "yes" } })).toBe(false);
+    expect(wellFormed({ ...reply, perm: { ask: "x", by: "win", of: "s", allow: true } })).toBe(true);
+    expect(wellFormed({ ...reply, re: undefined, perm: { ask: "x", by: "win", of: "s", allow: true } })).toBe(false);
+    expect(wellFormed({ ...reply, re: [], perm: { ask: "x", by: "win", of: "s", allow: true } })).toBe(false);
+    expect(wellFormed({ ...reply, kind: "event", ev: { op: "hello" }, perm: { ask: "x", by: "win", of: "s", allow: true } })).toBe(false);
+    expect(wellFormed({ ...reply, perm: { ask: "x", by: "win", of: "s", allow: true, also: 1 } })).toBe(false);
+    expect(wellFormed({ ...reply, perm: { ask: "x".repeat(101), by: "win", of: "s", allow: true } })).toBe(false);
+    expect(wellFormed({ ...reply, perm: { ask: "x", by: "win", of: "s", allow: "yes" } })).toBe(false);
   });
 
   test("settled, on a reply only", () => {
@@ -328,7 +328,7 @@ describe("a permission on the wire", () => {
   });
 });
 
-type Extra = Partial<Pick<Payload, "to" | "re" | "esc" | "choices" | "permission" | "perm" | "settled">>;
+type Extra = Partial<Pick<Payload, "id" | "to" | "re" | "esc" | "choices" | "permission" | "perm" | "settled">>;
 
 const ids: Record<string, Identity> = {};
 let seq = 0;
@@ -342,7 +342,7 @@ const view = (more: Partial<PermissionShown> = {}): PermissionShown => ({ tool: 
 const askFrom = (from: string, to: string[], permission: PermissionShown | null = view()) =>
   msg(from, "blocking", "Allow Bash: rm -rf dist?", { to, esc: true, choices: [...PERMISSION_CHOICES], ...(permission ? { permission } : {}) });
 const answer = (from: string, ask: Message, allow: boolean, more: Extra = {}, signer = from) =>
-  msg(from, "msg", allow ? PERMISSION_CHOICES[0] : PERMISSION_CHOICES[1], { re: [ask.seq], perm: { ask: ask.id, allow }, ...more }, signer);
+  msg(from, "msg", allow ? PERMISSION_CHOICES[0] : PERMISSION_CHOICES[1], { re: [ask.seq], perm: { ask: ask.id, by: ask.from, of: ask.sig!, allow }, ...more }, signer);
 const state = (ms: Message[], now?: number) =>
   fold(
     [...ms].sort((a, b) => a.seq - b.seq),
@@ -397,7 +397,7 @@ describe("who answers a permission", () => {
     expect(decide(ask, await answer("win", ask, true))).toBeNull();
     expect(decide(ask, await answer("ana", ask, true, {}, "eve"))).toBeNull();
     expect(decide(ask, await answer("ana", ask, true, { re: [other.seq] }))).toBeNull();
-    expect(decide(ask, await answer("ana", ask, true, { perm: { ask: other.id, allow: true } }))).toBeNull();
+    expect(decide(ask, await answer("ana", ask, true, { perm: { ask: other.id, by: other.from, of: other.sig!, allow: true } }))).toBeNull();
     for (const body of ["A", "A: Allow once", "B", "yes", "C"]) expect(decide(ask, await msg("ana", "msg", body, { re: [ask.seq] }))).toBeNull();
     const plain = await askFrom("win", ["ana", "jon"], null);
     expect(decide(plain, await answer("ana", plain, true))).toBeNull();
@@ -446,7 +446,9 @@ describe("through a relay", () => {
       const ch = new Channel(made.access, relay, owner);
       const permission = view({ call: "toolu_01ABC" });
       const askSeq = await ch.send("Allow Bash: rm -rf dist?", { kind: "blocking", to: ["human"], esc: true, choices: [...PERMISSION_CHOICES], permission, id: "hook-ask-0001" });
-      const perm = { ask: "hook-ask-0001", allow: true };
+      const sent = (await ch.history(0)).messages.find((m) => m.seq === askSeq)!;
+      const perm = permissionReply(sent, true)!;
+      expect(perm).toEqual({ ask: "hook-ask-0001", by: "human", of: sent.sig!, allow: true });
       const answerSeq = await ch.send(PERMISSION_CHOICES[0], { re: [askSeq], perm });
       const settleSeq = await ch.send("answered in the terminal", { re: [askSeq], settled: "terminal" });
       await expect(ch.send("x", { kind: "blocking", to: ["human"], esc: true, choices: [...PERMISSION_CHOICES], permission: { ...permission, nonce: "bad" } })).rejects.toThrow("malformed");
@@ -462,4 +464,44 @@ describe("through a relay", () => {
       rmSync(dataDir, { recursive: true, force: true });
     }
   }, 30_000);
+});
+
+describe("review round 2 (T1454)", () => {
+  test("an Allow names the exact ask it answers: a look-alike under the same id can't take it", async () => {
+    const real = await askFrom("win", ["ana", "jon"], view({ command: "rm -rf ~" }));
+    const lookalike = await msg("mac", "blocking", "Allow Bash: ls?", { id: real.id, to: ["ana", "jon"], esc: true, choices: [...PERMISSION_CHOICES], permission: view({ command: "ls" }) });
+    const toLookalike = await answer("ana", real, true, { perm: { ask: real.id, by: lookalike.from, of: lookalike.sig!, allow: true } });
+    expect(decide(real, toLookalike)).toBeNull();
+    const wrongSig = await answer("ana", real, true, { perm: { ask: real.id, by: real.from, of: lookalike.sig!, allow: true } });
+    expect(decide(real, wrongSig)).toBeNull();
+    expect(decide(real, await answer("ana", real, true))).toBe("allow");
+    expect(wellFormed({ ...toLookalike, perm: { ask: real.id, allow: true } })).toBe(false);
+  });
+
+  test("a macOS temp folder or a worktree with a UUID in its path isn't taken for a secret", () => {
+    const tree = "/var/folders/2r/3954x2p578v2jdp4vkj8yytc0000gn/T/kiwi-permission-relay-Xq3Zr9";
+    const other = "/private/tmp/claude-501/-Users-jow-www-channels/e56f7b60-e1ce-4045-9b46-521838197e78/scratchpad/kiwi-cache-backup";
+    expect(permissionShown({ tool_name: "Bash", tool_input: { command: "bun test", description: "run the tests" }, cwd: tree }, NONCE, LATER)).not.toBeNull();
+    expect(permissionShown({ tool_name: "Bash", tool_input: { command: `cd ${tree} && bun test test/permission.test.ts`, description: "run one file" }, cwd: tree }, NONCE, LATER)).not.toBeNull();
+    expect(permissionShown({ tool_name: "Write", tool_input: { file_path: `${other}/notes.md`, content: "hello" }, cwd: tree }, NONCE, LATER)).not.toBeNull();
+    expect(looksSecret(`cp ${tree}/a.txt ${other}/`)).toBe(false);
+  });
+
+  test("hook input that isn't an object reads as nothing to show, not a crash", () => {
+    expect(permissionShown(null, NONCE, LATER)).toBeNull();
+    expect(permissionShown("Bash", NONCE, LATER)).toBeNull();
+  });
+
+  test("an answer signed after the deadline doesn't count, whatever time the relay stamps on it", async () => {
+    const ask = await askFrom("win", ["ana", "jon"], view({ expiresAt: seq + 1 }));
+    seq += 5;
+    const late = { ...(await answer("ana", ask, true)), rts: 0 };
+    expect(decide(ask, late)).toBeNull();
+  });
+
+  test("a permission ask carries exactly the two choices the row and the hook agree on", async () => {
+    const ask = await askFrom("win", ["ana", "jon"]);
+    expect(wellFormed(ask)).toBe(true);
+    expect(wellFormed({ ...ask, choices: ["A: Yes", "B: No"] })).toBe(false);
+  });
 });
