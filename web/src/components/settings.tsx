@@ -8,7 +8,8 @@ import { cx } from "@/lib/utils"
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { relayUrl } from "@/lib/relay"
 import { bridge, useSecrets } from "@/lib/secrets"
-import type { RexStatus } from "@kiwi/core/terminals.ts"
+import { terminalsBridge } from "@/lib/terminals"
+import type { TerminalId, TerminalRow, TerminalsStatus } from "@kiwi/core/terminals.ts"
 import { version } from "../../../package.json"
 import { ComputerRows } from "./computers"
 import { HarnessFace } from "./harness-face"
@@ -18,10 +19,25 @@ import { UpdateCheck } from "./update-check"
 
 // Both apply at once and stay in this browser; nothing here leaves it.
 
-function Choice<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
+function Choice<T extends string>({
+  label,
+  desc,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  desc?: string
+  value: T
+  options: { value: T; label: string; disabled?: boolean }[]
+  onChange: (v: T) => void
+}) {
   return (
     <div data-item className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-      <p className="min-w-0 flex-1 text-ui font-medium text-ink">{label}</p>
+      <div className="min-w-0 flex-1">
+        <p className="text-ui font-medium text-ink">{label}</p>
+        {desc && <p className="text-meta leading-snug text-ink-3">{desc}</p>}
+      </div>
       <div role="radiogroup" aria-label={label} className={cx("grid w-full gap-0.5 sm:w-auto", SEGMENTED)} style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
         {options.map((o) => (
           <button
@@ -29,8 +45,9 @@ function Choice<T extends string>({ label, value, options, onChange }: { label: 
             type="button"
             role="radio"
             aria-checked={value === o.value}
+            disabled={o.disabled}
             onClick={() => onChange(o.value)}
-            className={cx("h-7 rounded-row px-3 text-ui font-medium transition-colors", value === o.value ? SEGMENT_ON : SEGMENT_OFF)}
+            className={cx("h-7 rounded-row px-3 text-ui font-medium transition-colors disabled:opacity-40", value === o.value ? SEGMENT_ON : SEGMENT_OFF)}
           >
             {o.label}
           </button>
@@ -235,67 +252,91 @@ function GithubFields() {
   )
 }
 
-function RexFields() {
-  const b = bridge()
-  const [status, setStatus] = useState<RexStatus | null>(null)
-  const [busy, setBusy] = useState<"on" | "off" | null>(null)
+const HELPERS: Record<"rex" | "tmux", { download: string; on: string; off: string }> = {
+  rex: {
+    download: "Download Rex Helpers",
+    on: "Downloaded. A seat that needs you marks its Rex tab, and Needs you opens it.",
+    off: "Marks a seat that needs you in its Rex tab, opens it from Needs you, and lets new agents open in Rex.",
+  },
+  tmux: {
+    download: "Download Tmux Helpers",
+    on: "Downloaded. A seat that needs you marks its window in tmux, and prefix K jumps to it.",
+    off: "Marks a seat that needs you in tmux's window list, jumps to it with prefix K, and lets new agents open in tmux.",
+  },
+}
+
+const PREFER_ORDER: TerminalId[] = ["app", "rex", "tmux"]
+
+function NewAgentsFields() {
+  const b = terminalsBridge()
+  const [status, setStatus] = useState<TerminalsStatus | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
-    if (!b?.rexStatus) return
-    void b.rexStatus().then(setStatus, () => setStatus(null))
+    if (!b) return
+    void b.terminals().then(setStatus, () => setStatus(null))
   }, [b])
-  if (!b?.rexStatus || !status || (!status.found && status.helpers === "off")) return null
-  const run = (to: "on" | "off", go: () => Promise<RexStatus>) => {
+  if (!b || !status) return null
+  const run = (key: string, go: () => Promise<TerminalsStatus | null>) => {
+    if (busy) return
     setError(null)
-    setBusy(to)
+    setBusy(key)
     go()
-      .then(setStatus, (e: unknown) => setError(e instanceof Error ? e.message.replace(/^.*?Error: /, "") : String(e)))
+      .then(
+        (next) => next && setStatus(next),
+        (e: unknown) => setError(e instanceof Error ? e.message.replace(/^.*?Error: /, "") : String(e))
+      )
       .finally(() => setBusy(null))
   }
-  const on = status.helpers === "on"
-  const notes = [
-    on && !status.found && "Rex isn't on this computer anymore. Remove takes back what Kiwi wrote.",
-    on && status.found && status.server === "stopped" && "Rex isn't running. Kiwi picks it up once it starts.",
-  ].filter((n): n is string => !!n)
+  const rows = PREFER_ORDER.flatMap((id) => status.terminals.filter((t) => t.id === id))
+  const helpers = rows.filter((t): t is TerminalRow & { id: "rex" | "tmux"; helpers: "on" | "off" } => t.id !== "app" && t.helpers !== null && (t.found || t.helpers === "on"))
   return (
-    <Item
-      tile={<span className="text-stamp font-bold tracking-tight">rex</span>}
-      title="Rex"
-      desc={
-        on ? "Helpers on: a seat that needs you marks its Rex tab, and Needs you opens it." : "Mark a seat that needs you in its Rex tab, open it from Needs you, and let rotation work in Rex panes."
-      }
-      aside={
-        on ? (
-          <Button variant="secondary" disabled={busy !== null} onClick={() => run("off", b.rexRemove)}>
-            {busy === "off" ? "Removing…" : "Remove"}
-          </Button>
-        ) : (
-          <Button variant="secondary" disabled={busy !== null} onClick={() => run("on", b.rexInstall)}>
-            {busy === "on" ? "Installing…" : "Install Rex Helpers"}
-          </Button>
+    <>
+      <Choice
+        label="Allow creating new agents"
+        desc="New agent starts an agent on this computer, from this app or from a computer paired with it."
+        value={status.launch}
+        options={[
+          { value: "on", label: "On" },
+          { value: "off", label: "Off" },
+        ]}
+        onChange={(to) => run("launch", () => b.setLaunches(to))}
+      />
+      <Choice
+        label="Prefer"
+        desc="Where a new agent opens. If it can't open there, it opens in Terminal."
+        value={status.prefer}
+        options={rows.map((t) => ({ value: t.id, label: t.name, disabled: t.id !== "app" && t.helpers !== "on" }))}
+        onChange={(id) => run("prefer", () => b.terminalPrefer(id))}
+      />
+      {helpers.map((t) => {
+        const on = t.helpers === "on"
+        const note =
+          on && !t.found ? `${t.name} isn't on this computer anymore. Remove takes back what Kiwi wrote.` : on && !t.running ? `${t.name} isn't running. Kiwi picks it up once it starts.` : null
+        return (
+          <Item
+            key={t.id}
+            tile={<span className="text-stamp font-bold tracking-tight">{t.id}</span>}
+            title={t.name}
+            desc={on ? HELPERS[t.id].on : HELPERS[t.id].off}
+            aside={
+              <Button variant="secondary" disabled={busy !== null} onClick={() => run(t.id, () => b.terminalHelpers(t.id, on ? "off" : "on"))}>
+                {busy === t.id ? (on ? "Removing…" : "Downloading…") : on ? "Remove" : HELPERS[t.id].download}
+              </Button>
+            }
+          >
+            {note && <p className="text-ui text-ink-2">{note}</p>}
+          </Item>
         )
-      }
-    >
-      {(notes.length > 0 || (on && status.rotation === "off") || error) && (
-        <>
-          {notes.map((n) => (
-            <p key={n} className="text-ui text-ink-2">
-              {n}
-            </p>
-          ))}
-          {on && status.rotation === "off" && (
-            <p className="text-ui text-ink-2">
-              Rotation is off on this computer. <span className="font-mono text-ink">kiwi rotate on</span> turns it on.
-            </p>
-          )}
-          {error && (
-            <p className="mt-1 text-ui text-ink-2" role="alert">
-              {error}
-            </p>
-          )}
-        </>
+      })}
+      {error && (
+        <div data-item className="px-4 py-3">
+          <p className="text-ui text-ink-2" role="alert">
+            {error}
+          </p>
+        </div>
       )}
-    </Item>
+    </>
   )
 }
 
@@ -339,6 +380,7 @@ function KiwiHere() {
 const SECTIONS: { id: string; label: string; icon: IconSvgElement }[] = [
   { id: "appearance", label: "Appearance", icon: PaintBoardIcon },
   { id: "agents", label: "Agents", icon: Robot01Icon },
+  { id: "new-agents", label: "New agents", icon: TerminalIcon },
   { id: "services", label: "Services", icon: Link01Icon },
   { id: "computers", label: "Computers", icon: ComputerIcon },
   { id: "app", label: "This app", icon: Settings02Icon },
@@ -352,7 +394,7 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
   const b = bridge()
   const [on, setOn] = useState("appearance")
   const [adding, setAdding] = useState(false)
-  const shown = SECTIONS.filter((s) => (s.id === "services" ? !!(b?.githubStatus || b?.setVoiceKey || b?.rexStatus) : s.id === "computers" ? !!person : true))
+  const shown = SECTIONS.filter((s) => (s.id === "services" ? !!(b?.githubStatus || b?.setVoiceKey) : s.id === "new-agents" ? !!terminalsBridge() : s.id === "computers" ? !!person : true))
   const go = (id: string) => {
     setOn(id)
     document.getElementById(`settings-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" })
@@ -425,10 +467,12 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
               <PersonalitiesField onOpen={onPersonalities} />
               <KiwiHere />
             </Group>
+            <Group id="new-agents" title="New agents">
+              <NewAgentsFields />
+            </Group>
             <Group id="services" title="Services">
               <GithubFields />
               <VoiceFields />
-              <RexFields />
             </Group>
             {person && (
               <Group id="computers" title="Computers">

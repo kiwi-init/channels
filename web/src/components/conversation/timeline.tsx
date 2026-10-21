@@ -10,9 +10,10 @@ import type { ChannelHandle } from "@/lib/channel"
 import { formatTime } from "@/lib/format"
 import { chipsFor } from "@/lib/reactions"
 import { receipt } from "@/lib/receipts"
+import { isActivity } from "@/lib/activity"
 import { foldTaskEvents, isTaskCard } from "@/lib/task-cards"
-import { LiveTaskCard } from "../live-task-card"
-import { DayMark, EventGroup, EventRow, GithubRow, MessageRow, standsAlone, type ThreadSummary } from "../message"
+import { ActivityRun } from "../lazy"
+import { DayMark, EventGroup, EventRow, GithubRow, isAgent, MessageRow, standsAlone, type ThreadSummary } from "../message"
 
 const RUN_GAP = 5 * 60_000
 
@@ -99,39 +100,43 @@ export function rowMakers(c: RowsContext) {
     const prs = prsIn(state, [m], () => true)
     return prs.length ? prs : undefined
   }
-  const bubble = (m: Message, first: boolean, prev: Message | undefined, anchor?: string, next?: Message) => (
-    <MessageRow
-      key={m.seq}
-      anchor={anchor}
-      m={m}
-      me={me}
-      author={(m.pk && byKey.get(m.pk)) || state.members.get(m.from)}
-      tag={tagOf(m.from)}
-      trust={state.trust.get(m.seq)}
-      online={online.has(m.from)}
-      color={colorOf(state, m.from)}
-      first={first}
-      fresh={!anchor && isFresh(m.seq)}
-      adjacentReply={(m.re?.length ?? 0) === 1 && (prev?.seq === m.re![0] || bySeq.get(m.re![0]!)?.kind === "event")}
-      highlighted={highlight === m.seq}
-      quoted={quoted}
-      nameOf={nameOf}
-      onReply={anchor ? undefined : onReply}
-      onChoose={!anchor && decisions.has(m.seq) ? (choice) => onAnswer(m, choice) : undefined}
-      inBanner={!anchor && banner === m.seq}
-      chosen={chosen(m)}
-      settled={settledOf(m)}
-      prs={prsOf(m)}
-      onReact={anchor ? undefined : onReact}
-      onJump={onJump}
-      thread={search || anchor ? undefined : threadOf(m, next)}
-      onOpenThread={openThread}
-      receipt={showsReceipt(m, anchor) ? (receipt(m, state, marks, pkOf, formatTime) ?? undefined) : undefined}
-      reactions={chipsFor(state, m.seq, me, nameOf)}
-      image={image}
-      onOpenImage={onOpenImage}
-    />
-  )
+  const bubble = (m: Message, first: boolean, prev: Message | undefined, anchor?: string, next?: Message, general = false) => {
+    const author = (m.pk && byKey.get(m.pk)) || state.members.get(m.from)
+    return (
+      <MessageRow
+        key={m.seq}
+        anchor={anchor}
+        m={m}
+        me={me}
+        author={author}
+        clamp={general && isAgent(author) && !m.esc && !m.choices?.length && m.kind !== "ask" && m.kind !== "blocking"}
+        tag={tagOf(m.from)}
+        trust={state.trust.get(m.seq)}
+        online={online.has(m.from)}
+        color={colorOf(state, m.from)}
+        first={first}
+        fresh={!anchor && isFresh(m.seq)}
+        adjacentReply={(m.re?.length ?? 0) === 1 && (prev?.seq === m.re![0] || bySeq.get(m.re![0]!)?.kind === "event")}
+        highlighted={highlight === m.seq}
+        quoted={quoted}
+        nameOf={nameOf}
+        onReply={anchor ? undefined : onReply}
+        onChoose={!anchor && decisions.has(m.seq) ? (choice) => onAnswer(m, choice) : undefined}
+        inBanner={!anchor && banner === m.seq}
+        chosen={chosen(m)}
+        settled={settledOf(m)}
+        prs={prsOf(m)}
+        onReact={anchor ? undefined : onReact}
+        onJump={onJump}
+        thread={search || anchor ? undefined : threadOf(m, next)}
+        onOpenThread={openThread}
+        receipt={showsReceipt(m, anchor) ? (receipt(m, state, marks, pkOf, formatTime) ?? undefined) : undefined}
+        reactions={chipsFor(state, m.seq, me, nameOf)}
+        image={image}
+        onOpenImage={onOpenImage}
+      />
+    )
+  }
   const timeline = (all: Message[], anchor?: string) => {
     const cards = !anchor && hereKey === "main"
     const list = cards ? foldTaskEvents(all, state.tasks) : all
@@ -141,8 +146,13 @@ export function rowMakers(c: RowsContext) {
       const prev = list[i - 1]
       if (cards && isTaskCard(m, state.tasks) && !taskCards.shown(m.seq, cardRoom)) continue
       if (!prev || !sameDay(prev.ts, m.ts)) out.push(<DayMark key={`s${m.seq}`} ts={m.ts} />)
-      if (cards && isTaskCard(m, state.tasks)) {
-        out.push(<LiveTaskCard key={`card${m.seq}`} id={m.seq} card={taskCards.card(m.seq, me)} state={state} now={now} onOpen={openTask} />)
+      if (cards && isActivity(m, state.tasks)) {
+        const run: Message[] = [m]
+        let j = i + 1
+        for (; j < list.length && isActivity(list[j]!, state.tasks) && sameDay(m.ts, list[j]!.ts); j++)
+          if (!isTaskCard(list[j]!, state.tasks) || taskCards.shown(list[j]!.seq, cardRoom)) run.push(list[j]!)
+        i = j - 1
+        out.push(<ActivityRun key={`a${m.seq}`} run={run} state={state} cards={taskCards} me={me} now={now} onOpenTask={openTask} highlight={highlight} />)
         continue
       }
       if (m.kind === "event") {
@@ -161,8 +171,9 @@ export function rowMakers(c: RowsContext) {
         continue
       }
       const next = list[i + 1]
-      const runs = (a: Message | undefined, b: Message) => !!a && a.kind !== "event" && b.kind !== "event" && a.from === b.from && sameDay(a.ts, b.ts) && b.ts - a.ts <= RUN_GAP
-      out.push(bubble(m, !runs(prev, m), prev, anchor, next))
+      const runs = (a: Message | undefined, b: Message) =>
+        !!a && a.kind !== "event" && b.kind !== "event" && !(cards && isActivity(a, state.tasks)) && a.from === b.from && sameDay(a.ts, b.ts) && b.ts - a.ts <= RUN_GAP
+      out.push(bubble(m, !runs(prev, m), prev, anchor, next, cards))
     }
     return out
   }

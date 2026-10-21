@@ -1,4 +1,4 @@
-import type { Config } from "../config.ts";
+import type { Config, HelperId } from "../config.ts";
 import { loginPath, loginShell } from "../launch/shell.ts";
 import { appManifest } from "./app/manifest.ts";
 import type { PlaceTools, SeatPlace, TerminalId, TerminalManifest, TerminalPlugin } from "./plugin.ts";
@@ -46,6 +46,20 @@ export function locate(env: Record<string, string | undefined>): SeatPlace {
   return placeFrom(env);
 }
 
-export function helpersOn(id: TerminalId, cfg: Pick<Config, "rex">): boolean {
-  return id === "rex" && cfg.rex === "on";
+export function helpersOn(id: TerminalId, cfg: Pick<Config, "terminals">): boolean {
+  return id !== "app" && cfg.terminals?.helpers?.[id] === "on";
+}
+
+export function preferred(cfg: Pick<Config, "terminals">): TerminalId {
+  const prefer = cfg.terminals?.prefer;
+  return prefer && helpersOn(prefer, cfg) ? prefer : "app";
+}
+
+export function switchHelpers(terminals: NonNullable<Config["terminals"]>, id: HelperId, on: boolean): NonNullable<Config["terminals"]> {
+  const { prefer, ...rest } = terminals;
+  return { ...rest, ...(prefer && (on || prefer !== id) ? { prefer } : {}), helpers: { ...terminals.helpers, [id]: on ? "on" : "off" } };
+}
+
+export function launchesOn(cfg: Pick<Config, "launch">): boolean {
+  return cfg.launch !== "off";
 }

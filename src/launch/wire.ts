@@ -27,5 +27,5 @@ export function launchedText(r: Launched): string {
   if (!r.ok) return r.detail;
   const p = r.placed;
   const where = p.place === "tmux" ? `${PLACE_NAMES.tmux} window ${p.window} of session ${p.session} (tmux attach -t ${p.session})` : `a ${PLACE_NAMES[p.place]} window`;
-  return `started in ${where}; it joins with launch ${r.launch}`;
+  return `started in ${where}${p.instead ? ` (${p.instead})` : ""}; it joins with launch ${r.launch}`;
 }

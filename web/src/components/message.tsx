@@ -47,7 +47,7 @@ function splitStamp(stamp: string): [string, string] {
 }
 
 /** What happened, in as few words as it takes: the long form is in the line's tooltip. */
-function shortEvent(m: Message, state: ChannelState): string {
+export function shortEvent(m: Message, state: ChannelState): string {
   const ev = m.ev
   const who = memberName(state.members.get(m.from), m.from)
   const name = (n: string) => memberName(state.members.get(n), n)
@@ -209,6 +209,35 @@ export interface MessageProps {
   face?: ReactNode
   image?: (img: ImageAttachment) => Promise<string | null>
   onOpenImage?: (m: Message, img: ImageAttachment, src: string) => void
+  clamp?: boolean
+}
+
+function Clamp({ on, children }: { on: boolean; children: ReactNode }) {
+  const [box, setBox] = useState<HTMLDivElement | null>(null)
+  const [inner, setInner] = useState<HTMLDivElement | null>(null)
+  const [over, setOver] = useState(false)
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    if (!on || open || !box || !inner || typeof ResizeObserver === "undefined") return
+    const measure = () => setOver(inner.offsetHeight > box.clientHeight + 2)
+    measure()
+    const watch = new ResizeObserver(measure)
+    watch.observe(inner)
+    return () => watch.disconnect()
+  }, [on, open, box, inner])
+  if (!on || open) return children
+  return (
+    <>
+      <div ref={setBox} className={cx("max-h-[6lh] overflow-hidden", over && "clamp-more")}>
+        <div ref={setInner}>{children}</div>
+      </div>
+      {over && (
+        <button type="button" onClick={() => setOpen(true)} className="mt-0.5 text-meta font-medium text-accent-text hover:underline">
+          Show more
+        </button>
+      )}
+    </>
+  )
 }
 
 function useSeen(el: Element | null): boolean {
@@ -391,6 +420,7 @@ export const MessageRow = memo(function MessageRow({
   reactions,
   image,
   onOpenImage,
+  clamp = false,
 }: MessageProps) {
   const forged = ignored(trust)
   const refs = useMemo(() => ({ known: (seq: number) => seq !== m.seq && quoted(seq) !== undefined, open: onJump }), [m.seq, quoted, onJump])
@@ -446,7 +476,9 @@ export const MessageRow = memo(function MessageRow({
                 forged && "line-through opacity-60"
               )}
             >
-              <Markdown refs={refs}>{m.body}</Markdown>
+              <Clamp on={clamp}>
+                <Markdown refs={refs}>{m.body}</Markdown>
+              </Clamp>
             </div>
           )
         )}
