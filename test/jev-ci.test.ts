@@ -146,7 +146,7 @@ describe("ci.yml edits outside the jobs", () => {
 
 describe("ci.yml edits inside jobs", () => {
   test("a step edited in one job runs that job", async () => {
-    const { result, by } = await planFor({ ".github/workflows/ci.yml": CI.replace("      - run: bun scripts/ci-tests.ts all\n", "      - run: bun scripts/ci-tests.ts all --bail\n") });
+    const { result, by } = await planFor({ ".github/workflows/ci.yml": CI.replace("scripts/ci-tests.ts all --shard=", "scripts/ci-tests.ts all --bail --shard=") });
     expect(by("cli-macos")).toMatchObject({ run: true, layer: "L0" });
     expect(by("cli-macos").reason).toContain("its job in");
     expect(ran(result)).toEqual(["cli-macos", "static"]);
@@ -392,5 +392,14 @@ describe("pass markers", () => {
     expect([...passMarkers(caches, jobs, trustedRef(pr(repo), undefined))]).toEqual(["static:aaa"]);
     const trunk: PullEvent = { ...pr(repo), repository: { default_branch: "trunk" } };
     expect([...passMarkers([{ key: "jev-ci-pass-static-eee", ref: "refs/heads/trunk" }, ...caches], jobs, trustedRef(trunk, "refs/pull/7/merge"))].sort()).toEqual(["static:eee", "test-unit:bbb"]);
+  });
+
+  test("a job split into shards passed only once every shard's marker is there, each from a trusted run", () => {
+    const own = trustedRef(pr(repo), "refs/pull/7/merge");
+    const shard = (i: number, ref = "refs/pull/7/merge"): PassCache => ({ key: `jev-ci-pass-cli-macos-fff-shard${i}of3`, ref });
+    expect([...passMarkers([shard(1), shard(3)], ["cli-macos"], own)]).toEqual([]);
+    expect([...passMarkers([shard(1), shard(2, "refs/heads/main"), shard(3)], ["cli-macos"], own)]).toEqual(["cli-macos:fff"]);
+    expect([...passMarkers([shard(1), shard(2, "refs/pull/8/merge"), shard(3)], ["cli-macos"], own)]).toEqual([]);
+    expect([...passMarkers([shard(1), { key: "jev-ci-pass-cli-macos-fff-shard2of2", ref: "refs/pull/7/merge" }, shard(3)], ["cli-macos"], own)]).toEqual([]);
   });
 });

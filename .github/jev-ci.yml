@@ -73,7 +73,7 @@ jobs:
   test-unit:
     name: test / unit
     inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/workflows/nightly.yml", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "desktop/package.json", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
-    always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
+    always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts", "scripts/ci-flows.ts", "scripts/ci-shards.ts"]
     description: >-
       Runs the unit tests with bun test (failing when the run ends before every file ran, which
       scripts/ci-tests.ts checks for every group from the last summary bun prints, without waiting
@@ -684,7 +684,7 @@ jobs:
     name: test / flows-a
     inputs: ["src/**", "packages/core/**", "test/owner-cli.ts"]
     imports_from: ["test/e2e.test.ts", "test/verbs.test.ts", "test/threads.test.ts", "test/reconnect.test.ts", "test/cache-trim.test.ts", "test/budget-*.test.ts"]
-    always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
+    always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts", "scripts/ci-shards.ts"]
     description: >-
       Runs slow end-to-end tests (failing when the run ends before every file ran) that start a real local relay (src/relay/bun.ts) and drive the
       kiwi CLI and client: e2e (create a channel, join, send and listen through the relay),
@@ -706,7 +706,7 @@ jobs:
     name: test / flows-b
     inputs: ["src/**", "packages/core/**", "test/owner-cli.ts"]
     imports_from: ["test/join-seats.test.ts", "test/read-receipts.test.ts", "test/daemon-pair.test.ts", "test/sh-escape.test.ts", "test/reclaim.test.ts", "test/wake-yourself.test.ts", "test/seats.test.ts", "test/multi-seat.test.ts", "test/handoff.test.ts", "test/hooks-once.test.ts", "test/hooks-hung-relay.test.ts", "test/offline-read.test.ts", "test/hooks-reentry.test.ts", "test/hooks-persona.test.ts", "test/mimo-wake-restart.test.ts", "test/held-seat.test.ts"]
-    always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
+    always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts", "scripts/ci-shards.ts"]
     description: >-
       Runs slow agent-flow tests (failing when the run ends before every file ran) against a real local relay and the kiwi CLI: join-seats
       (joining, one seat per agent, Claude Code hooks doing the listening, and a Codex hook run from inside
@@ -906,7 +906,7 @@ jobs:
   cli-macos:
     name: cli / macos
     inputs: ["src/**", "packages/core/**", "test/**", "site/install", "site/install.sh", "desktop/src/**", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", ".github/workflows/release-build.yml", "package.json", "bun.lock", "bunfig.toml", "web/package.json"]
-    always: ["scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
+    always: ["scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/ci-tests.ts", "scripts/ci-flows.ts", "scripts/ci-shards.ts"]
     question: >-
       Could this change to `file` make the job described in `job` fail on macOS, or fail to
       cross-compile a darwin target, while the same tests and the Linux build pass
@@ -922,11 +922,15 @@ jobs:
         The change behaves the same on macOS as on Linux: a failure it causes would fail the
         Linux jobs too, which catch it, or it can't fail at all.
     description: >-
-      On a macOS runner, does what the release's cli job does: runs the whole bun test suite
-      (every test/*.test.ts and web/src test, the agent flows included) through
-      `scripts/ci-tests.ts all`, with bun test --parallel so each file gets a fresh global as on
-      Linux (one process for every file once let a test's SIGINT end the run early, exit 0,
-      after 128 of 328 files), and fails when the run ends before every file ran. Then compiles the kiwi CLI
+      On three macOS runners at once (a matrix of `scripts/ci-tests.ts all --shard=N/3`, which deals
+      the files out by their times in test/timings.json: the slowest each file has taken in a cli / macos run (from
+      `scripts/ci-tests.ts all --shard=N/3 --update-timings` or the run's log), so the heavy flows
+      that slow each other on one runner land apart; every group also hands bun that file
+      so --parallel starts the slowest files first), does what the release's cli job does: runs the whole bun test suite
+      (every test/*.test.ts and web/src test, the agent flows included) with bun test --parallel so
+      each file gets a fresh global as on Linux (one process for every file once let a test's
+      SIGINT end the run early, exit 0, after 128 of 328 files), and fails when a shard's run ends
+      before every file it was dealt ran. The first shard then compiles the kiwi CLI
       for darwin-arm64, darwin-x64, linux-x64 and linux-arm64 with
       scripts/build-cli.ts, ad-hoc signs the macOS binaries and runs `kiwi --version`. The same
       tests run on Linux in test / unit, test / flows-a and test / flows-b, so this job is for what fails only on macOS: paths (os.tmpdir() is under
@@ -936,8 +940,10 @@ jobs:
       versions of shell tools, process, signal and file-watching differences, and a build
       target that fails to compile. test/desktop-entitlements.test.ts signs stand-in apps with
       codesign here, so release-build.yml's entitlements check runs for real only on macOS. Fails
-      if any test fails on macOS or a target doesn't build. Its jev-ci pass (a cache save) gets
-      one minute, so a hung save can't hold the job.
+      if any test fails on macOS or a target doesn't build. Each shard saves its own jev-ci pass
+      (shard1of3 and so on, given a minute so a hung cache save can't hold it), and the plan
+      counts the job passed on its inputs only once all three have, each from main or this pull
+      request (passMarkers in .github/jev-ci/github.ts, test/jev-ci.test.ts).
 
   release-rehearsal:
     name: release / rehearsal
