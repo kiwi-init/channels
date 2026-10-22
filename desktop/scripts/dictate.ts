@@ -73,7 +73,7 @@ const DEBUG_PORT = 40000 + Math.floor(Math.random() * 20000);
 const app: ChildProcess = spawn(
   exe,
   [...(process.platform === "linux" ? ["--no-sandbox"] : []), `--remote-debugging-port=${DEBUG_PORT}`, "--use-fake-device-for-media-stream", `--use-file-for-fake-audio-capture=${FIXTURE}`],
-  { env, stdio: ["ignore", "inherit", "inherit"] },
+  { env, stdio: ["ignore", "inherit", "inherit"], detached: true },
 );
 
 async function attach(): Promise<{ browser: Browser; page: Page }> {
@@ -151,7 +151,12 @@ try {
 } finally {
   await cdp?.close().catch(() => undefined);
   await daemonStop(env.KIWI_HOME!, 2_000).catch(() => undefined);
-  app.kill("SIGKILL");
+  try {
+    if (app.pid !== undefined) process.kill(-app.pid, "SIGKILL");
+  } catch {
+    // The group is already gone, or never formed: kill the main process alone.
+    app.kill("SIGKILL");
+  }
   relay.kill("SIGKILL");
   rmSync(root, { recursive: true, force: true });
 }

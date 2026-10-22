@@ -885,7 +885,7 @@ jobs:
       on. desktop/scripts/size.ts fails if app.asar ships node_modules (dist/ already bundles
       them), if more than the English Chromium locales ship (electronLanguages), or if the
       packaged Linux app is over 375MB on disk or 162MB as a tar.gz. The bundled kiwi is
-      packed by desktop/scripts/pack-cli.ts first (zstd, checked to unpack to the same bytes), and
+      packed by desktop/scripts/pack-cli.ts first (zstd level 19 on every core, checked to unpack to the same bytes), and
       the smoke's daemon runs from the copy the app unpacks. desktop/scripts/smoke.ts starts the packaged app under Xvfb and fails unless its
       window renders, the page's scripts land in the V8 code cache (kiwi-app:// registered with
       codeCache, so a launch after the first skips compiling them), its key process
@@ -901,7 +901,7 @@ jobs:
       spoken words land in the Message box, the model is kept in the app's data folder
       ($XDG_CONFIG_HOME/kiwi-desktop) once, and nothing of it lands in $XDG_CACHE_HOME. Fails on a
       bundling or packaging error, a fuse changed or dropped, an app that no longer starts, or
-      dictation that doesn't work on Linux.
+      dictation that doesn't work on Linux. The app runs in its own process group, killed whole when the check ends.
 
   cli-macos:
     name: cli / macos
