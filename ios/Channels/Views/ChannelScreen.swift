@@ -16,6 +16,10 @@ struct ChannelScreen: View {
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var follow = Follow()
     @State private var forward = true
+    @State private var fan: FanMode?
+    @State private var hover: String?
+    @State private var frames: [String: CGRect] = [:]
+    @State private var dockTop: CGFloat = 0
     @FocusState private var typing: Bool
 
     init(route: Route) {
@@ -55,8 +59,28 @@ struct ChannelScreen: View {
                     }
                     .safeAreaInset(edge: .top, spacing: 0) { header(room) }
                     .bar(.bottom) {
-                        Dock(room: room, place: place, replyTo: $replyTo, typing: $typing, follow: follow) {
+                        Dock(room: room, place: place, replyTo: $replyTo, typing: $typing, follow: follow, switcher: control(room)) {
                             withAnimation(Motion.ease) { position.scrollTo(edge: .bottom) }
+                        }
+                        .onGeometryChange(for: CGFloat.self) {
+                            $0.frame(in: .global).minY
+                        } action: {
+                            dockTop = $0
+                        }
+                    }
+                    .overlay {
+                        if let fan {
+                            GeometryReader { geo in
+                                Fan(
+                                    room: room, items: Self.fanItems(room, model: model, current: place), current: place, mode: fan, hover: hover,
+                                    bottom: max(0, geo.frame(in: .global).maxY - dockTop + 10), frames: $frames
+                                ) { key in
+                                    pick(room, key)
+                                } dismiss: {
+                                    self.fan = nil
+                                }
+                            }
+                            .transition(.opacity)
                         }
                     }
                     .animation(.snappy(duration: 0.3), value: room.place)
@@ -82,7 +106,15 @@ struct ChannelScreen: View {
         }
         .background(Tone.canvas)
         .toolbar(.hidden, for: .navigationBar)
-        .task { await model.open(code, place: place) }
+        .task {
+            await model.open(code, place: place)
+            #if DEBUG
+                if UserDefaults.standard.bool(forKey: "fan") {
+                    try? await Task.sleep(for: .seconds(2))
+                    fan = .tapped
+                }
+            #endif
+        }
     }
 
     private func header(_ room: RoomView) -> some View {
@@ -101,84 +133,56 @@ struct ChannelScreen: View {
                 .accessibilityLabel("Channels")
                 Spacer()
             }
-            Menu {
-                switcher(room)
-            } label: {
-                TitlePill(room: room, place: room.placeView(place), fresh: model.freshElsewhere(room, than: place))
-            } primaryAction: {
+            Button {
                 Haptic.tap()
                 details = true
+            } label: {
+                TitlePill(room: room, place: room.placeView(place), fresh: false)
             }
-            .menuOrder(.fixed)
             .buttonStyle(.plain)
             .frame(maxWidth: 240)
-            .accessibilityHint("Tap for tasks and details. Touch and hold, slide and let go to switch conversation.")
+            .accessibilityHint("Tasks, people and details")
         }
         .padding(.horizontal, 12)
         .padding(.top, 2)
         .padding(.bottom, 4)
     }
 
-    @ViewBuilder private func switcher(_ room: RoomView) -> some View {
-        let direct = room.places.filter { $0.kind == "dm" && $0.withMe }.sorted { $0.lastSeq > $1.lastSeq }
-        let between = room.places.filter { $0.kind == "dm" && !$0.withMe }
-        let talked = Set(direct.compactMap { room.other(in: $0) })
-        let strangers = room.members.filter { $0.name != room.me && !talked.contains($0.name) }
-        let working = room.tasks.filter { $0.state == "doing" || $0.state == "review" }
-        Section {
-            item(room, "main", title: "# general", line: room.placeView("main")?.last, icon: "number")
-            ForEach(direct) { p in
-                item(room, p.key, title: p.title, line: p.last, icon: "person.crop.circle")
-            }
-        }
-        if !working.isEmpty {
-            Section("Tasks in progress") {
-                ForEach(working.prefix(6)) { t in
-                    Button {
-                        go(room, "task:\(t.id)")
-                    } label: {
-                        Label("\(taskLabel(t.id)) \(t.title)", systemImage: place == "task:\(t.id)" ? "checkmark" : "checklist")
-                        Text(t.owner.map { room.display($0) } ?? "Unassigned")
-                    }
+    private func control(_ room: RoomView) -> SwitchControl {
+        SwitchControl(
+            current: room.placeView(place),
+            fresh: model.freshElsewhere(room, than: place),
+            hold: {
+                hover = nil
+                withAnimation(.snappy(duration: 0.2)) { fan = .held }
+            },
+            move: { point in
+                let hit = frames.first { $0.value.minY - 5 <= point.y && point.y <= $0.value.maxY + 5 && point.x >= $0.value.minX - 40 }?.key
+                if hit != hover {
+                    hover = hit
+                    if hit != nil { UISelectionFeedbackGenerator().selectionChanged() }
                 }
-            }
-        }
-        Section {
-            if !strangers.isEmpty {
-                Menu {
-                    ForEach(strangers) { m in
-                        Button(m.display) { go(room, room.dmKey(with: m.name)) }
-                    }
-                } label: {
-                    Label("Message someone", systemImage: "square.and.pencil")
+            },
+            release: {
+                if let hover {
+                    pick(room, hover)
+                } else {
+                    withAnimation(.snappy(duration: 0.2)) { fan = nil }
                 }
-            }
-            if !between.isEmpty {
-                Menu {
-                    ForEach(between) { p in
-                        Button(p.title) { go(room, p.key) }
-                    }
-                } label: {
-                    Label("Between others", systemImage: "eye")
-                }
-            }
-            Button {
-                details = true
-            } label: {
-                Label("Tasks and details", systemImage: "list.bullet.rectangle")
-            }
-        }
+            },
+            tap: {
+                hover = nil
+                withAnimation(.snappy(duration: 0.2)) { fan = fan == nil ? .tapped : nil }
+            })
     }
 
-    private func item(_ room: RoomView, _ key: String, title: String, line: MessageView?, icon: String) -> some View {
-        let fresh = model.fresh(room, key)
-        return Button {
+    private func pick(_ room: RoomView, _ key: String) {
+        withAnimation(.snappy(duration: 0.2)) { fan = nil }
+        hover = nil
+        if key == FanItem.everything {
+            details = true
+        } else {
             go(room, key)
-        } label: {
-            Label(fresh ? "\(title)  ●" : title, systemImage: place == key ? "checkmark" : icon)
-            if let line {
-                Text("\(line.mine ? "You" : room.display(line.from)): \(line.body.replacingOccurrences(of: "\n", with: " "))")
-            }
         }
     }
 
@@ -221,7 +225,7 @@ struct TitlePill: View {
             VStack(spacing: 0) {
                 HStack(spacing: 3) {
                     Text(title).type(.ui, .semibold).foregroundStyle(Tone.ink).lineLimit(1)
-                    Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(Tone.ink3)
+                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(Tone.ink3)
                 }
                 status
             }
@@ -306,7 +310,7 @@ struct ChannelAvatar: View {
 extension View {
     @ViewBuilder func softEdges() -> some View {
         if #available(iOS 26.0, *) {
-            self.scrollEdgeEffectStyle(.soft, for: .all)
+            self.scrollEdgeEffectStyle(.soft, for: .top).scrollEdgeEffectHidden(true, for: .bottom)
         } else {
             self
         }

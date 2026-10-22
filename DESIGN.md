@@ -393,15 +393,20 @@ everything you touch under your thumb: the owner asked for both, so on the phone
   ask's options are capsules under it once answered (`accent` text, the chosen one filled);
   while one waits on you the bubble says "Waiting on you · answer below" and the dock holds the
   answers.
-- The bottom is quiet: a glass `+` (photos) and a glass capsule field (send inside it), and
-  nothing else but what the moment needs: `@` mention chips while you type a name, a reply bar,
-  a small ⌄ at the right when you've scrolled up. The top holds the channel: a glass back button
-  and, centred, the glass title pill with where you are and its state ("2 working" with the
-  `doing` dot, "1 needs you" in `decide`), a blue dot when another conversation has news. The
-  conversation fades out under it. Tap the pill for the details sheet; touch and hold it, slide
-  to a conversation and let go to switch (the native menu: #general and your direct threads with
-  their last line, the tasks in progress, Message someone, Between others). Questions waiting on
-  you are answered from their own bubble.
+- The bottom is quiet and holds what your thumb does: a glass `+` (photos), the glass field
+  (send inside it) and a round glass switch showing the face of the conversation you're in (a
+  blue dot when another has news). Nothing else but what the moment needs: `@` mention chips
+  while you type a name, a reply bar, a small ↓ at the right when you've scrolled up. The scroll
+  edge effect stays off at the bottom, so the last message is never blurred into looking like
+  more.
+- Switching is the switch: touch and hold it and your conversations fan up above it as glass
+  bubbles (#general, your direct threads by recency with their last line, Everything for the
+  details sheet) over a dimmed, blurred conversation; slide your thumb up, the bubble under it
+  grows with a selection tick, let go to open it. A tap opens the same fan to tap from.
+- The top holds the channel, read rather than touched: a glass back button and, centred, the
+  glass title pill with where you are and its state ("2 working" with the `doing` dot, "1 needs
+  you" in `decide`); a tap opens the details sheet. The conversation fades out under it.
+  Questions waiting on you are answered from their own bubble.
 - A channel has several conversations, as on the Mac: #general, a direct thread with each
   member, the threads between others (read along: the dock says so instead of a field) and
   each task's thread. The switcher is a half-height sheet: All channels, the channel's card,

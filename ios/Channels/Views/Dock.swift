@@ -43,12 +43,98 @@ enum Shrink {
     }
 }
 
+struct SwitchControl {
+    let current: PlaceView?
+    let fresh: Bool
+    let hold: () -> Void
+    let move: (CGPoint) -> Void
+    let release: () -> Void
+    let tap: () -> Void
+}
+
+struct SwitchButton: View {
+    let room: RoomView
+    let control: SwitchControl
+    @State private var holding = false
+    @State private var heldAt: Date?
+
+    var body: some View {
+        PlaceFace(room: room, place: control.current, size: 34)
+            .frame(width: 44, height: 44)
+            .glassCircle()
+            .overlay(alignment: .topTrailing) {
+                if control.fresh {
+                    Circle().fill(Tone.accent).frame(width: 11, height: 11).overlay(Circle().stroke(Tone.canvas, lineWidth: 2)).offset(x: 1, y: -1)
+                }
+            }
+            .scaleEffect(holding ? 0.9 : 1)
+            .animation(.spring(duration: 0.25, bounce: 0.4), value: holding)
+            .contentShape(Circle())
+            .gesture(
+                LongPressGesture(minimumDuration: 0.2)
+                    .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
+                    .onChanged { value in
+                        guard case .second(true, let drag) = value else { return }
+                        if !holding {
+                            holding = true
+                            heldAt = .now
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            control.hold()
+                        }
+                        if let drag { control.move(drag.location) }
+                    }
+                    .onEnded { value in
+                        if case .second(true, _) = value { control.release() }
+                        holding = false
+                    }
+            )
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    if let heldAt, Date.now.timeIntervalSince(heldAt) < 1.5 { return }
+                    Haptic.tap()
+                    control.tap()
+                }
+            )
+            .accessibilityLabel("Switch conversation")
+            .accessibilityHint("Touch and hold, slide up to a conversation and let go. Or tap to choose.")
+            .accessibilityAddTraits(.isButton)
+    }
+}
+
+struct PlaceFace: View {
+    let room: RoomView
+    let place: PlaceView?
+    var size: CGFloat = 34
+
+    var body: some View {
+        if let place, place.kind == "dm", let other = room.other(in: place) {
+            Face(name: other, member: room.member(other), size: size)
+        } else if let place, place.kind == "dm" {
+            HStack(spacing: -size * 0.5) {
+                ForEach(place.with, id: \.self) { name in
+                    Face(name: name, member: room.member(name), size: size * 0.8).overlay(Circle().stroke(Tone.canvas, lineWidth: 1.5))
+                }
+            }
+            .frame(width: size, height: size)
+        } else if let place, place.kind == "task", let id = place.task {
+            Text(taskLabel(id))
+                .font(.system(size: size * 0.32, weight: .bold, design: .rounded))
+                .foregroundStyle(Tone.doing)
+                .frame(width: size, height: size)
+                .background(Tone.doing.opacity(0.15), in: Circle())
+        } else {
+            ChannelAvatar(room: room, size: size)
+        }
+    }
+}
+
 struct Dock: View {
     let room: RoomView
     let place: String
     @Binding var replyTo: MessageView?
     var typing: FocusState<Bool>.Binding
     let follow: Follow
+    let switcher: SwitchControl
     let jump: () -> Void
     @Environment(AppModel.self) private var model
     @Namespace private var glass
@@ -99,6 +185,7 @@ struct Dock: View {
                         plus.glassID("plus", in: glass)
                         field.glassID("field", in: glass)
                     }
+                    SwitchButton(room: room, control: switcher).glassID("switch", in: glass)
                 }
             }
         }
