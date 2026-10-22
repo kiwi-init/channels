@@ -31,6 +31,7 @@ describe("kiwi demo", () => {
     const lines: string[] = [];
     const web = mkdtempSync(join(tmpdir(), "kiwi-demo-web-"));
     writeFileSync(join(web, "index.html"), "<!doctype html><title>kiwi</title>");
+    const listening = process.listenerCount("SIGINT");
     const stop = new AbortController();
     const staying = runDemo({ pace: 0, stay: true, web, stop: stop.signal, print: (l) => lines.push(l) });
     try {
@@ -49,6 +50,7 @@ describe("kiwi demo", () => {
     } finally {
       stop.abort();
       await staying;
+      expect(process.listenerCount("SIGINT")).toBe(listening);
       rmSync(web, { recursive: true, force: true });
     }
   }, 60_000);
