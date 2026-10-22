@@ -84,10 +84,13 @@ const needed = Math.min(2, reports.length);
 const rows: string[] = [];
 const over: string[] = [];
 const short: string[] = [];
+const partial: string[] = [];
 for (const [name, l] of Object.entries(limits)) {
   if (l.nightly && !nightly) continue;
   const measured = reports.map((r) => pick(r, l.at)).filter((v): v is number => v !== null);
-  const seen = reports.map((r, i) => scaled(r, l, calibrated[i]!)).filter((v): v is number => v !== null);
+  const each = reports.map((r, i) => scaled(r, l, calibrated[i]!));
+  for (const [i, v] of each.entries()) if (v === null && typeof calibrated[i] !== "string") partial.push(`${l.what}: ${basename(runs[i]!)} has no usable value`);
+  const seen = each.filter((v): v is number => v !== null);
   if (!seen.length || (l.per && seen.length < needed)) {
     over.push(`${l.what}: not measured${seen.length ? ` (${seen.length} of ${reports.length} runs can be scaled, ${needed} needed)` : ""}`);
     rows.push(`| ${l.what} | not measured | | ${l.gate ?? "none yet"} | ${l.budget} |`);
@@ -108,6 +111,7 @@ const lines = [
   "|---|---|---|---|---|",
   ...rows,
   ...(leftOut.length ? ["", `Left out of the scaled timings (${usable} of ${reports.length} runs kept):`, ...leftOut.map((s) => `- ${s}`)] : []),
+  ...(partial.length ? ["", "Left out of one timing:", ...partial.map((s) => `- ${s}`)] : []),
   ...(short.length ? ["", `Not yet at the 0.20 budget (${short.length}):`, ...short.map((s) => `- ${s}`)] : []),
   ...(over.length ? ["", "Over a gate:", ...over.map((s) => `- ${s}`)] : []),
 ];
