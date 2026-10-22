@@ -860,7 +860,9 @@ jobs:
     parts: [perf-runs]
     description: >-
       Three perf-runs jobs, side by side on their own runners, each build the web dashboard and
-      run scripts/perf-scale.ts once without the soak: a local relay and headless Chromium with
+      run scripts/perf-scale.ts --gated once without the soak (only what perf-check gates: no
+      1x tab switches, details toggles, profiles or second reload; the nightly runs it whole): a
+      local relay and headless Chromium with
       10 agents, 100 tasks and 2000 messages (the agents join at once and the seeding sends through each agent's own session, src/agent.ts, on a local relay started with --dev-no-rate-limits, so no per-minute cap slows it), timing the reload to the first screen, the Tasks,
       Agents and Conversation tabs at 4x CPU and typing while the agents post, and upload the
       run as the perf-scale-N artifact, with a CPU calibration (a fixed in-page workload) at 1x
