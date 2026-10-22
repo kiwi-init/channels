@@ -8,7 +8,7 @@ import type { JoinRequest, Member } from "@kiwi/core/membership.ts"
 import { SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts"
 import { fold, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts"
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "../channel-ops"
-import { readCached, rememberRow, rememberRows } from "../history"
+import { openCached, planCached, rememberRow, rememberRows } from "../history"
 import { checksToPost, issuesToPost, linksToPost, setCheckedUpTo, tasksToClose } from "../review-checks"
 import { drain } from "../github-queue"
 import { closeFromGithub } from "../task-actions"
@@ -21,11 +21,11 @@ import { untilOpen } from "../until-open"
 import { useClock } from "./clock"
 import { noteAgentWorked } from "./recent"
 import { forgetChannel, loadMember, renameChannel, type StoredMember } from "./store"
-import { baseFrom, startsWhole, usableBase } from "./base-plan"
 import { hear, onlineByName, type Online } from "./online"
 import { trimmed } from "./trim"
 import { foldRoster } from "./fold-roster"
-import { dropWarm, heldWindow, keepWarm, warmOf } from "./warm"
+import { onceEach, openChannel, warmUp } from "./open"
+import { dropWarm, keepWarm, warmOf } from "./warm"
 
 const HISTORY = 2_000
 
@@ -111,6 +111,13 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
       onGone(err)
     }
   }, [ch, onGone])
+  const loadRoster = useCallback(async () => {
+    try {
+      setRoster(await ch.members())
+    } catch (err) {
+      onGone(err)
+    }
+  }, [ch, onGone])
   const refreshRequests = useCallback(async () => {
     if (!ch.isOwner) return
     try {
@@ -192,21 +199,32 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
           return
       }
     }
+    const steps = onceEach({
+      head: () => ch.head(),
+      roster: loadRoster,
+      requests: refreshRequests,
+      rotate: () => (ch.isOwner ? ch.rotateIfDue().catch((err: unknown) => (onGone(err), false)) : Promise.resolve(false)),
+      cache: () => openCached(ch.roomId, ch.pk, ch.openRows).catch(() => null),
+      plan: (opened, head) => planCached(ch.roomId, ch.pk, opened, head, HISTORY).catch(() => null),
+      snapshot: () => ch.snapshot().catch(() => null),
+      paint: (cached, base) => {
+        if (closed) return
+        if (cached?.unread.length) {
+          const seen = cached.unread
+          setUnread((prev) => [...new Set([...prev, ...seen])].slice(-HISTORY))
+        }
+        if (cached?.messages.length) {
+          const kept = cached.messages
+          setMessages((prev) => merged(prev, kept))
+          if (kept.some((m) => m.kind === "event" && m.ev?.op === "card")) noteAgentWorked()
+        }
+        if (base) setBase(base)
+      },
+    })
+    warmUp(steps, was)
     const opening = untilOpen(
       Effect.tryPromise({
-        try: async () => {
-          await Promise.all([refreshRoster(), refreshRequests()])
-          const head = await ch.head()
-          const held = heldWindow(was, head, HISTORY)
-          const cached = held ? null : await readCached(ch.roomId, ch.pk, ch.openRows, head, HISTORY).catch(() => null)
-          const since = held ? held.since : cached ? cached.since : Math.max(0, head - HISTORY)
-          const firstSeq = held ? held.firstSeq : cached?.firstSeq
-          const from = baseFrom(since, firstSeq)
-          const warm = usableBase(was?.base ?? null, from)
-          const snap = from > 0 && !warm ? await ch.snapshot().catch(() => null) : null
-          const base = usableBase(snap, from)
-          return { head, cached, since, firstSeq, base, whole: startsWhole(head, HISTORY, since, firstSeq, base ?? warm) }
-        },
+        try: () => openChannel(steps, was, HISTORY),
         catch: (err) => err,
       }),
       () => Effect.sync(() => setConnection("reconnecting"))
@@ -216,16 +234,6 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
         Effect.flatMap((opened) =>
           Effect.sync(() => {
             if (closed) return
-            if (opened.cached?.unread.length) {
-              const seen = opened.cached.unread
-              setUnread((prev) => [...new Set([...prev, ...seen])].slice(-HISTORY))
-            }
-            if (opened.cached?.messages.length) {
-              const cached = opened.cached.messages
-              setMessages((prev) => merged(prev, cached))
-              if (cached.some((m) => m.kind === "event" && m.ev?.op === "card")) noteAgentWorked()
-            }
-            if (opened.base) setBase(opened.base)
             setStart({ head: opened.head, whole: opened.whole })
             stopLive = ch.follow(opened.since, onEvent)
           })
@@ -240,7 +248,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
       clearTimeout(flush)
       lent.release()
     }
-  }, [ch, refreshRoster, refreshRequests, onGone, human, member.code, was])
+  }, [ch, refreshRoster, loadRoster, refreshRequests, onGone, human, member.code, was])
 
   const admitted = useMemo(() => roster.filter((m) => !m.unverified), [roster])
   const keyOf = useMemo(() => new Map(admitted.filter((r) => r.active).map((r) => [r.name, r.pk])), [admitted])

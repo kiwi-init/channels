@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { ServerWebSocket } from "bun";
-import { chromium, type CDPSession, type Page } from "playwright-core";
+import { chromium, type CDPSession, type Page, type Request, type WebSocket as PageSocket } from "playwright-core";
 import { daemonSock } from "../src/daemon/protocol.ts";
 import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
@@ -30,6 +30,7 @@ const flag = (name: string) => {
 };
 const OUT = flag("--json");
 const SHOTS = flag("--shots");
+const TRACE = process.argv.includes("--trace");
 const data = mkdtempSync(join(tmpdir(), "kiwi-perf-feel-"));
 const cli = join(data, "cli");
 mkdirSync(join(cli, "bin"), { recursive: true });
@@ -206,6 +207,36 @@ async function filmstrip(cdp: CDPSession, name: string, run: () => Promise<unkno
   await cdp.send("Page.stopScreencast");
   cdp.off("Page.screencastFrame", onFrame);
   frames.forEach((f, i) => writeFileSync(join(SHOTS, `${name}-${String(i).padStart(3, "0")}-${f.at}ms.jpg`), Buffer.from(f.data, "base64")));
+}
+
+function trace(page: Page, t0: number): () => string[] {
+  const lines: { at: number; line: string }[] = [];
+  const at = () => Math.round(performance.now() - t0);
+  const started = new Map<object, number>();
+  const onRequest = (r: Request) => started.set(r, at());
+  const onDone = (r: Request) => {
+    const path = new URL(r.url()).pathname.replace(/[A-Za-z0-9_-]{24,}/g, "…");
+    if (!/\.(js|css|woff2?|png|svg|ico)$/.test(path)) lines.push({ at: started.get(r) ?? 0, line: `${r.method()} ${path} ${started.get(r) ?? 0}→${at()} ms` });
+  };
+  const onSocket = (ws: PageSocket) => {
+    const opened = at();
+    let frames = 0;
+    lines.push({ at: opened, line: `ws ${new URL(ws.url()).pathname.replace(/[A-Za-z0-9_-]{24,}/g, "…")} from ${opened} ms` });
+    ws.on("framereceived", () => {
+      if (frames++ < 3) lines.push({ at: at(), line: `ws frame ${frames} at ${at()} ms` });
+    });
+  };
+  page.on("request", onRequest);
+  page.on("requestfinished", onDone);
+  page.on("requestfailed", onDone);
+  page.on("websocket", onSocket);
+  return () => {
+    page.off("request", onRequest);
+    page.off("requestfinished", onDone);
+    page.off("requestfailed", onDone);
+    page.off("websocket", onSocket);
+    return lines.sort((a, b) => a.at - b.at).map((l) => l.line);
+  };
 }
 
 async function view(page: Page, label: string, marker: string): Promise<number> {
@@ -446,8 +477,11 @@ try {
       return { firstScreenMs, ...inPage };
     };
     let r = { firstScreenMs: 0, firstScreenInPageMs: 0, liveInPageMs: 0 };
-    if (i === 0) await filmstrip(cdp, "reload", async () => (r = await run()));
-    else r = await run();
+    if (i === 0) {
+      const stop = TRACE ? trace(page, at) : null;
+      await filmstrip(cdp, "reload", async () => (r = await run()));
+      if (stop) report.reloadTrace = stop();
+    } else r = await run();
     await later(1500);
     const d = await drain(page);
     reloads.push({ ...r, shifts: d.shifts, moved: d.moved });

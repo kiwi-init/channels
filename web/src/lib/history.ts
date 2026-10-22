@@ -132,6 +132,16 @@ export const rememberRow = (roomId: string, memberPk: string, row: CachedRow, li
  * Messages to paint, and the exclusive seq to stream from. An unusable cache
  * is deleted here, so the next save starts clean.
  */
+export interface OpenedCache {
+  stored: number
+  opened: (Message | Unread)[]
+}
+
+export async function openCached(roomId: string, memberPk: string, openRows: OpenRows): Promise<OpenedCache> {
+  const stored = await db().rows(roomId, memberPk)
+  return { stored: stored.length, opened: (await openRows(stored)).filter((m): m is Message | Unread => m !== null) }
+}
+
 export async function readCached(
   roomId: string,
   memberPk: string,
@@ -139,15 +149,23 @@ export async function readCached(
   head: number,
   limit: number
 ): Promise<{ messages: Message[]; unread: number[]; firstSeq: number | undefined; since: number }> {
-  const stored = await db().rows(roomId, memberPk)
-  const opened = (await openRows(stored)).filter((m): m is Message | Unread => m !== null)
+  return planCached(roomId, memberPk, await openCached(roomId, memberPk, openRows), head, limit)
+}
+
+export async function planCached(
+  roomId: string,
+  memberPk: string,
+  { stored, opened }: OpenedCache,
+  head: number,
+  limit: number
+): Promise<{ messages: Message[]; unread: number[]; firstSeq: number | undefined; since: number }> {
   const plan = planReload(
     opened.map((m) => m.seq),
     head,
     limit
   )
   if (!plan.keep.length) {
-    if (stored.length) await db().drop(roomId, memberPk)
+    if (stored) await db().drop(roomId, memberPk)
   } else {
     // Drop a prefix the window no longer wants, and any seq past the relay head
     // so a later head cannot revive it ahead of the relay.
