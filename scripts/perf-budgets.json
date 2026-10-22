@@ -1,7 +1,8 @@
 {
   "reference": { "@1x": 110, "@4x": 430 },
+  "calibration": { "@1x": [40, 250], "@4x": [160, 1000], "ratio": [3, 5] },
   "limits": {
-    "reloadMs": { "what": "Reload to first screen", "at": ["@1x", "reloadToTasksMs"], "per": "@1x", "budget": 400, "gate": 900 },
+    "reloadMs": { "what": "Reload to first screen", "at": ["@1x", "reloadToTasksMs"], "per": "@1x", "inPage": ["reload, in page", "firstScreenMs"], "budget": 400, "gate": 900 },
     "tasksMs": { "what": "Tasks tab @4x", "at": ["@4x", "switchMedianMs", "Tasks"], "per": "@4x", "budget": 100, "gate": 220 },
     "agentsMs": { "what": "Agents tab @4x", "at": ["@4x", "switchMedianMs", "Agents"], "per": "@4x", "budget": 100, "gate": 115 },
     "conversationMs": { "what": "Conversation tab @4x", "at": ["@4x", "switchMedianMs", "Conversation"], "per": "@4x", "budget": 100, "gate": 330 },
