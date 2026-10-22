@@ -73,7 +73,7 @@ function Item({ tile, title, desc, aside, children }: { tile?: ReactNode; title:
   return (
     <div data-item className="px-4 py-3">
       <div className="flex items-center gap-3">
-        {tile && <span className="flex size-8 shrink-0 items-center justify-center rounded-row text-ink edge">{tile}</span>}
+        {tile && <span className="flex size-8 shrink-0 items-center justify-center rounded-row edge text-ink">{tile}</span>}
         <div className="min-w-0 flex-1">
           <p className="text-ui font-medium text-ink">{title}</p>
           {desc && <p className="text-meta leading-snug text-ink-3">{desc}</p>}
@@ -276,7 +276,7 @@ function PersonalitiesField({ onOpen }: { onOpen: () => void }) {
   const count = useOwnPersonalities().length
   return (
     <button data-item type="button" onClick={onOpen} className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-wash">
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-row text-ink edge">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-row edge text-ink">
         <Icon icon={SparklesIcon} size={16} />
       </span>
       <span className="min-w-0 flex-1">

@@ -84,7 +84,7 @@ export function ReposView({ repos, onSave, reach, initialQuery = "" }: { repos: 
       {draft.length > 0 ? (
         <ul aria-label="This channel's repos" className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-1">
           {draft.map((r) => (
-            <li key={r} className="flex items-center gap-2 rounded-row px-3 py-1.5 edge">
+            <li key={r} className="flex items-center gap-2 rounded-row edge px-3 py-1.5">
               <span className="min-w-0 flex-1 truncate font-mono text-ui">{r}</span>
               {onSave && (
                 <button type="button" aria-label={`Remove ${r}`} onClick={() => toggle(r)} className="shrink-0 rounded-row p-1 text-ink-3 transition-colors hover:bg-wash hover:text-ink">
@@ -100,7 +100,7 @@ export function ReposView({ repos, onSave, reach, initialQuery = "" }: { repos: 
 
       {onSave && (
         <>
-          <label className="mt-5 flex h-9 items-center gap-2 rounded-ctl px-3 text-ink-3 edge focus-within:shadow-[inset_0_0_0_1px_var(--ring)]">
+          <label className="mt-5 flex h-9 items-center gap-2 rounded-ctl edge px-3 text-ink-3 focus-within:shadow-[inset_0_0_0_1px_var(--ring)]">
             <Icon icon={Search01Icon} size={15} className="shrink-0" />
             <input
               autoFocus

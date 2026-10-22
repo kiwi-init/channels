@@ -61,8 +61,9 @@ export function PermissionItem({
               {note}
             </p>
           ))}
-          <p className="mt-1.5">{[p.tool, `in ${p.cwd}`, m.task ? taskId(m.task) : null, formatAgo(m.ts, now)].filter(Boolean).join(" · ")}</p>
-          <p className="mt-1">Claude Code asks in its terminal too, and whichever answers first wins. This waits until {formatTime(p.expiresAt)}.</p>
+          <p className="mt-1.5">
+            {[p.tool, `in ${p.cwd}`, m.task ? taskId(m.task) : null, formatAgo(m.ts, now), `also asked in its terminal until ${formatTime(p.expiresAt)}`].filter(Boolean).join(" · ")}
+          </p>
         </>
       }
     >

@@ -26,7 +26,7 @@ export function DiffDialog({ repo, sha, title, load, onClose }: { repo: string; 
           <span className="font-mono">{repo}</span> at <span className="font-mono">{sha.slice(0, 7)}</span>
           {got && "diff" in got && ` against ${got.diff.base}`}
         </Dialog.Description>
-        <div className="mt-4 min-h-0 flex-1 overflow-auto rounded-ctl p-3 edge">
+        <div className="mt-4 min-h-0 flex-1 overflow-auto rounded-ctl edge p-3">
           {!got && <p className="text-ui text-ink-3">Asking GitHub…</p>}
           {got && "error" in got && <p className="text-ui text-alert">{got.error}</p>}
           {got && "diff" in got && (

@@ -17,7 +17,7 @@ type ButtonVariant = "primary" | "secondary" | "ghost" | "danger"
 
 const BUTTON: Record<ButtonVariant, string> = {
   primary: "bg-accent text-accent-ink hover:opacity-90 active:opacity-80",
-  secondary: "text-ink shadow-[inset_0_0_0_1px_var(--edge-strong)] hover:bg-wash",
+  secondary: "bg-wash text-ink hover:bg-wash-2",
   ghost: "text-ink-2 hover:bg-wash hover:text-ink",
   danger: "text-alert hover:bg-[color-mix(in_srgb,var(--alert)_9%,transparent)]",
 }

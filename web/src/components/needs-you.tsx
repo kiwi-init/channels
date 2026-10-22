@@ -128,7 +128,7 @@ export function Row({ icon, lead, title, detail, children }: { icon?: IconSvgEle
   return (
     <div className="flex flex-col gap-2 py-3 md:flex-row md:items-center md:gap-4">
       <div className="flex min-w-0 flex-1 items-start gap-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-row border border-edge-strong text-decide">{lead ?? (icon && <Icon icon={icon} size={17} />)}</span>
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-row bg-wash text-decide">{lead ?? (icon && <Icon icon={icon} size={17} />)}</span>
         <div className="min-w-0 flex-1">
           <p className="text-body leading-snug [overflow-wrap:anywhere]">{title}</p>
           {detail && <div className="mt-0.5 text-meta leading-snug text-ink-3">{detail}</div>}
@@ -186,7 +186,7 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
       detail={
         <>
           {who} · asked {formatAgo(r.ts, now)}
-          {r.kind !== "human" && <AgentFacts card={r.card} runs={r.runs} said repos={p.state.repos} className="mt-1" />}
+          {r.kind !== "human" && <AgentFacts card={r.card} runs={r.runs} said brief repos={p.state.repos} className="mt-1" />}
           {r.check === "ready" && r.code && (
             <span className="mt-1.5 flex items-baseline gap-2">
               <span>Let in only if {r.kind === "human" ? "they see" : "its terminal shows"}</span>

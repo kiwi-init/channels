@@ -72,11 +72,7 @@ export function TaskDetails({
     )
 
   return (
-    <section
-      id={`k${id}`}
-      aria-label={`Task ${taskId(id)}`}
-      className={cx("mt-1 rounded-card bg-raised px-4 py-3.5 shadow-[0_0_0_1px_var(--line)]", highlighted && "animate-flash outline-2 outline-offset-2 outline-[var(--ring)]")}
-    >
+    <section id={`k${id}`} aria-label={`Task ${taskId(id)}`} className={cx("mt-1 rounded-card bg-wash px-4 py-3.5", highlighted && "animate-flash outline-2 outline-offset-2 outline-[var(--ring)]")}>
       <h2 className="flex items-start gap-2 text-title font-semibold">
         <span className="mt-0.5">
           <StateMark state={task.state} />
@@ -437,7 +433,7 @@ function Prop({ label, children }: { label: string; children: ReactNode }) {
 function NoteBox({ task, blocked, onNote }: { task: Task; blocked: string | null; onNote: (note: string) => Promise<void> }) {
   const [text, setText] = useState("")
   const [busy, setBusy] = useState(false)
-  if (blocked) return <p className="mt-3 rounded-card px-3.5 py-2.5 text-ui text-ink-3 edge">{blocked}</p>
+  if (blocked) return <p className="mt-3 rounded-card edge px-3.5 py-2.5 text-ui text-ink-3">{blocked}</p>
   const submit = async () => {
     if (!text.trim() || busy) return
     setBusy(true)
@@ -450,7 +446,7 @@ function NoteBox({ task, blocked, onNote }: { task: Task; blocked: string | null
   }
   return (
     <form
-      className="mt-3 flex items-end gap-2 rounded-card px-3.5 py-2.5 edge"
+      className="mt-3 flex items-end gap-2 rounded-card edge px-3.5 py-2.5"
       onSubmit={(e) => {
         e.preventDefault()
         void submit()

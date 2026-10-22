@@ -48,7 +48,7 @@ export function PrCard({ pr, state, load }: { pr: GithubPr; state: ChannelState;
   const rest = Array.isArray(files) ? files.slice(FILES) : []
   const url = pr.url ?? `https://github.com/${pr.repo}/pull/${pr.number}`
   return (
-    <section aria-label={`PR #${pr.number}`} className="flex flex-col gap-3 rounded-card p-3.5 edge">
+    <section aria-label={`PR #${pr.number}`} className="flex flex-col gap-3 rounded-card edge p-3.5">
       <header className="flex min-w-0 items-center gap-2 text-ui font-semibold">
         <Icon icon={GitPullRequestIcon} size={15} className="shrink-0" />
         <span className="tabular-nums">PR #{pr.number}</span>
@@ -111,7 +111,7 @@ export function PrCard({ pr, state, load }: { pr: GithubPr; state: ChannelState;
           href={url}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex h-7 flex-1 items-center justify-center rounded-row px-2.5 text-ui font-medium text-ink shadow-[inset_0_0_0_1px_var(--edge-strong)] transition-colors hover:bg-wash"
+          className="inline-flex h-7 flex-1 items-center justify-center rounded-row bg-wash px-2.5 text-ui font-medium text-ink transition-colors hover:bg-wash-2"
         >
           GitHub
         </a>

@@ -62,7 +62,7 @@ function SearchRow({ search, onSearch }: { search: string | null; onSearch: (q: 
     )
   return (
     <li>
-      <label className="flex h-9 items-center gap-2.5 rounded-ctl px-3 text-ui text-ink-3 edge transition-colors focus-within:text-ink-2">
+      <label className="flex h-9 items-center gap-2.5 rounded-ctl edge px-3 text-ui text-ink-3 transition-colors focus-within:text-ink-2">
         <Icon icon={Search01Icon} size={16} className="shrink-0" />
         <input
           autoFocus
@@ -256,7 +256,7 @@ export function ConversationMenu({ conversations, current, onConversation }: { c
         <button
           type="button"
           aria-label={`Conversations${unread ? ", with unread messages" : ""}`}
-          className="no-drag relative hidden h-9 shrink-0 items-center gap-1 rounded-full pr-2.5 pl-3.5 text-ui text-ink-2 edge transition-colors hover:bg-wash hover:text-ink md:flex"
+          className="no-drag relative hidden h-9 shrink-0 items-center gap-1 rounded-full edge pr-2.5 pl-3.5 text-ui text-ink-2 transition-colors hover:bg-wash hover:text-ink md:flex"
         >
           <span className="max-w-40 truncate">{label}</span>
           <Icon icon={ArrowDown01Icon} size={14} />

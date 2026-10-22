@@ -127,6 +127,37 @@ function dragCaught(): string[] {
   });
 }
 
+type Weight = { nodes: number; outlined: number; rules: number; filled: number; textLines: number; styles: number };
+
+function visualWeight(): Weight {
+  const seen = (r: DOMRect) => r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth;
+  const clear = (c: string) => c === "transparent" || /rgba\([^)]*,\s*0\)$/.test(c) || /\/\s*0\)$/.test(c);
+  const weight: Weight = { nodes: 0, outlined: 0, rules: 0, filled: 0, textLines: 0, styles: 0 };
+  const inks = new Set<string>();
+  for (const el of document.body.querySelectorAll("*")) {
+    const r = el.getBoundingClientRect();
+    if (!seen(r)) continue;
+    const s = getComputedStyle(el);
+    if (s.visibility === "hidden" || s.opacity === "0" || s.display === "contents") continue;
+    weight.nodes++;
+    const sides = ["top", "right", "bottom", "left"].filter(
+      (side) => parseFloat(s.getPropertyValue(`border-${side}-width`)) > 0 && s.getPropertyValue(`border-${side}-style`) !== "none" && !clear(s.getPropertyValue(`border-${side}-color`)),
+    ).length;
+    const ring = /\b0px 0px 0px [1-9]/.test(s.boxShadow);
+    if (sides >= 3 || ring || (s.outlineStyle !== "none" && parseFloat(s.outlineWidth) > 0)) weight.outlined++;
+    else if (sides > 0) weight.rules++;
+    if (el !== document.body && !clear(s.backgroundColor)) weight.filled++;
+    const text = [...el.childNodes].some((n) => n.nodeType === Node.TEXT_NODE && (n.textContent ?? "").trim());
+    if (!text) continue;
+    const line = parseFloat(s.lineHeight) || parseFloat(s.fontSize) * 1.2;
+    const visible = Math.min(r.bottom, innerHeight) - Math.max(r.top, 0);
+    weight.textLines += Math.max(1, Math.round(visible / line));
+    inks.add(`${s.color} ${s.fontSize} ${s.fontWeight}`);
+  }
+  weight.styles = inks.size;
+  return weight;
+}
+
 /** One named screen: get there, wait for it to settle, shoot it, put things back. */
 async function shoot(page: Page, tag: string, name: string, open?: () => Promise<void>, close: () => Promise<void> = async () => void (await page.keyboard.press("Escape"))) {
   if (!takes(tag, name)) return;
@@ -139,6 +170,7 @@ async function shoot(page: Page, tag: string, name: string, open?: () => Promise
     await page.waitForTimeout(350);
     const file = join(OUT, `${tag}-${name}.png`);
     await page.screenshot({ path: file });
+    if (process.env.SHOTS_WEIGHT) writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(await page.evaluate(visualWeight)));
     shots.push(file);
     console.log(`shot ${tag}-${name}`);
   } catch (e) {

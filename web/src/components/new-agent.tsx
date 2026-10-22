@@ -247,7 +247,7 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
               type="button"
               onClick={() => void choose()}
               disabled={busy}
-              className="flex h-10 items-center gap-2 rounded-ctl px-3 text-left text-ui font-medium text-accent-text edge hover:bg-wash"
+              className="flex h-10 items-center gap-2 rounded-ctl edge px-3 text-left text-ui font-medium text-accent-text hover:bg-wash"
             >
               Choose a folder…
             </button>

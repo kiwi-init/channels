@@ -88,7 +88,7 @@ export function Header({
       </div>
       {search !== null && (
         <div className={cx("relative mx-auto w-full max-w-[792px] px-3 pb-2", !wide && "md:hidden")}>
-          <label className="flex h-9 items-center gap-2 rounded-full px-3.5 text-ink-3 edge">
+          <label className="flex h-9 items-center gap-2 rounded-full edge px-3.5 text-ink-3">
             <Icon icon={Search01Icon} size={16} className="shrink-0" />
             <input
               autoFocus

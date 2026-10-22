@@ -64,7 +64,7 @@ export function Sidebar({
           channel's face is, its words where a name is. Joining with a code is in its dialog (and ⌘K). */}
       <div className="shrink-0 px-3 pb-1">
         <button type="button" onClick={onNew} className="flex h-12 w-full items-center gap-3 rounded-card px-3 text-left text-ink-2 transition-colors hover:bg-wash hover:text-ink">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-full shadow-[inset_0_0_0_1.5px_var(--edge-strong)]">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-wash">
             <Icon icon={Add01Icon} size={18} />
           </span>
           <span className="text-body font-medium">New channel</span>

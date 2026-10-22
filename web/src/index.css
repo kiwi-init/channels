@@ -466,13 +466,12 @@ html.reduce-motion ::after {
 }
 
 @utility edge {
-  box-shadow: inset 0 0 0 1px var(--line);
+  background-color: var(--wash);
 }
 
 @utility sheet {
   margin: 0 8px 8px 0;
   border-radius: var(--radius-card);
   background: var(--canvas);
-  box-shadow: 0 0 0 1px var(--line);
   overflow: clip;
 }

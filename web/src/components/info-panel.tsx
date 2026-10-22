@@ -170,7 +170,7 @@ export function InfoPanel({
           </div>
 
           {picking && (
-            <div className="mb-5 max-w-[420px] rounded-card p-2 edge">
+            <div className="mb-5 max-w-[420px] rounded-card edge p-2">
               <RobotPicker value={icon?.kind === "robot" ? icon.robot : null} onPick={pickIcon} disabled={savingIcon} />
             </div>
           )}
@@ -431,7 +431,7 @@ function MemberRow({
           <span className="truncate text-ui font-semibold" title={`@${handle}`}>
             {name}
           </span>
-          {tag && <span className="shrink-0 rounded-row px-1.5 text-stamp font-medium text-ink-3 edge">{tag}</span>}
+          {tag && <span className="shrink-0 rounded-row edge px-1.5 text-stamp font-medium text-ink-3">{tag}</span>}
         </span>
         <span className="block truncate text-meta text-ink-3">{line}</span>
       </span>

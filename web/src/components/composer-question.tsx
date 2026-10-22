@@ -23,7 +23,7 @@ export function ComposerQuestion({
 }) {
   const choose = useChoosing(m.seq, onChoose)
   return (
-    <section aria-label="Question" className="mb-2 flex flex-col gap-2 rounded-card bg-raised px-3.5 py-3 shadow-[0_0_0_1px_var(--decide)]">
+    <section aria-label="Question" className="mb-2 flex flex-col gap-2 rounded-card bg-decide-wash px-3.5 py-3">
       <p className="flex flex-wrap items-start gap-x-2 gap-y-1 text-ui">
         <span className="shrink-0 rounded-full bg-decide-wash px-1.5 text-meta font-semibold text-decide">{m.esc ? decisionLabel(m) : "Question for you"}</span>
         {held?.length ? (
@@ -44,7 +44,7 @@ export function ComposerQuestion({
                 type="button"
                 disabled={disabled || choose.busy}
                 onClick={() => choose.pick(c)}
-                className="w-full rounded-row px-3 py-1.5 text-left text-ui leading-snug [overflow-wrap:anywhere] edge transition-colors hover:bg-wash-2 disabled:pointer-events-none disabled:opacity-40"
+                className="w-full rounded-row edge px-3 py-1.5 text-left text-ui leading-snug [overflow-wrap:anywhere] transition-colors hover:bg-wash-2 disabled:pointer-events-none disabled:opacity-40"
               >
                 {c}
               </button>

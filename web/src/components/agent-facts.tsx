@@ -15,12 +15,14 @@ export function AgentFacts({
   runs,
   said,
   repos,
+  brief,
   className,
 }: {
   card: Card | undefined
   runs?: Runs
   /** Its own word, not checked: a join request's. */ said?: boolean
   repos?: string[]
+  brief?: boolean
   className?: string
 }) {
   if (!card) return <p className={cx("text-meta text-ink-3", className)}>Didn’t say its model (an older kiwi)</p>
@@ -35,8 +37,8 @@ export function AgentFacts({
         {said && <span className="text-ink-3"> · its word</span>}
       </p>
       {card.repo && <RepoLine card={card} outside={!!repos && outsideRepos({ repos }, card)} />}
-      {machine && <p className="truncate text-ink-3">{machine}</p>}
-      {card.tools?.length ? <p className="truncate text-ink-3">{card.tools.join(", ")}</p> : null}
+      {machine && !brief && <p className="truncate text-ink-3">{machine}</p>}
+      {card.tools?.length && !brief ? <p className="truncate text-ink-3">{card.tools.join(", ")}</p> : null}
     </div>
   )
 }

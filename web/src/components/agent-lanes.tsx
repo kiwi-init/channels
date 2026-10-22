@@ -39,7 +39,7 @@ function PrLine({ pr }: { pr: PrRef }) {
 
 function TaskBlock({ c, now, onOpen }: { c: LaneTask; now: number; onOpen: (id: number) => void }) {
   return (
-    <li className="rounded-card border border-line px-3 py-2.5">
+    <li className="rounded-card bg-wash px-3 py-2.5">
       <button type="button" onClick={() => onOpen(c.task.id)} className="block w-full text-left">
         <span className="block text-meta text-ink-3">
           <span className="tabular-nums">{taskId(c.task.id)}</span> · {stateWord(c.task)} · {formatAgo(c.since, now)}
