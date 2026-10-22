@@ -528,7 +528,9 @@ jobs:
       (plus 500 of slack) into the fold base, and tasks and facts from before it stay;
       lib/channel/warm.test.ts: only the last four channels stay warm; lib/threads.test.ts: what's
       been seen where keeps the newest 500 places. And
-      test/perf-check.test.ts: perf-check compares the median of the runs with each gate, counts the
+      test/perf-check.test.ts: perf-check compares the median of the runs with each gate after
+      scaling each timing by its run's CPU calibration (a slow runner's numbers pass, a timing
+      without its calibration counts as not measured), counts the
       soak's limits only in the nightly run and lists what isn't at its 0.20 budget yet, and every
       step in ci.yml and nightly.yml that pipes perf-check into tee runs with shell: bash (pipefail),
       so an over-gate median fails the job;
@@ -849,9 +851,10 @@ jobs:
       run scripts/perf-scale.ts once without the soak: a local relay and headless Chromium with
       10 agents, 100 tasks and 2000 messages (the agents join at once and the seeding sends through each agent's own session, src/agent.ts, on a local relay started with --dev-no-rate-limits, so no per-minute cap slows it), timing the reload to the first screen, the Tasks,
       Agents and Conversation tabs at 4x CPU and typing while the agents post, and upload the
-      run as the perf-scale-N artifact. A run that crashes fails its job. Then perf / scale
-      downloads the three runs, and scripts/perf-check.ts takes the medians and fails when one
-      is over its gate in scripts/perf-budgets.json (a ratchet: each gate starts at today's
+      run as the perf-scale-N artifact, with a CPU calibration (a fixed in-page workload) at 1x
+      and 4x. A run that crashes fails its job. Then perf / scale downloads the three runs, and
+      scripts/perf-check.ts scales each timing by its run's calibration to the reference runner
+      in scripts/perf-budgets.json, takes the medians and fails when one is over its gate there (a ratchet: each gate starts at today's
       median plus 20% and comes down to its 0.20 budget as fixes land), writing the table and
       the gaps to the 0.20 budgets to the job summary and a perf-scale comment on the pull
       request. The soak's memory slopes are gated by the nightly workflow
