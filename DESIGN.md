@@ -400,9 +400,16 @@ everything you touch under your thumb: the owner asked for both, so on the phone
   edge effect stays off at the bottom, so the last message is never blurred into looking like
   more.
 - Switching is the switch: touch and hold it and your conversations fan up above it as glass
-  bubbles (#general, your direct threads by recency with their last line, Everything for the
-  details sheet) over a dimmed, blurred conversation; slide your thumb up, the bubble under it
-  grows with a selection tick, let go to open it. A tap opens the same fan to tap from.
+  bubbles over a dimmed, blurred conversation, nearest first in the order you reach for them:
+  #general, then your direct thread with the lead (even before either of you wrote), then your
+  other direct threads by recency, each with its last line. Threads between others aren't
+  there (the details sheet has them). Slide your thumb up, the bubble under it grows with a
+  selection tick, let go to open it; a tap opens the same fan to tap from.
+- Prism (`Theme/Prism.swift`) is the desktop's `prism-lit` drawn the same way: the lit fill, a
+  1px glint edge bright at one corner (140°), the seven-colour spectrum band at 70% (112°, 30%
+  opacity), a 2px `ink` ring instead under Increase Contrast. As on the desktop it marks what's
+  chosen and nothing else: the switch (the conversation you're in), and in the fan the current
+  bubble and the one under your thumb, whose band slides as you pass over it.
 - The top holds the channel, read rather than touched: a glass back button and, centred, the
   glass title pill with where you are and its state ("2 working" with the `doing` dot, "1 needs
   you" in `decide`); a tap opens the details sheet. The conversation fades out under it.

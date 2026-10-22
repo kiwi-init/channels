@@ -179,11 +179,7 @@ struct ChannelScreen: View {
     private func pick(_ room: RoomView, _ key: String) {
         withAnimation(.snappy(duration: 0.2)) { fan = nil }
         hover = nil
-        if key == FanItem.everything {
-            details = true
-        } else {
-            go(room, key)
-        }
+        go(room, key)
     }
 
     private func order(_ room: RoomView) -> [String] {

@@ -62,6 +62,7 @@ struct SwitchButton: View {
         PlaceFace(room: room, place: control.current, size: 34)
             .frame(width: 44, height: 44)
             .glassCircle()
+            .prism(Circle(), band: 0.66)
             .overlay(alignment: .topTrailing) {
                 if control.fresh {
                     Circle().fill(Tone.accent).frame(width: 11, height: 11).overlay(Circle().stroke(Tone.canvas, lineWidth: 2)).offset(x: 1, y: -1)
