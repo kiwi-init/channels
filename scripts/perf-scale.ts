@@ -185,6 +185,47 @@ async function calibrate(page: Page): Promise<{ ms: number; reps: number[] }> {
   });
 }
 
+async function calibrateIsolated(page: Page, rate: number): Promise<{ ms: number; reps: number[] }> {
+  const blank = await page.context().newPage();
+  try {
+    const cdp = await page.context().newCDPSession(blank);
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate });
+    const reps = await blank.evaluate(async () => {
+      const times: number[] = [];
+      for (let r = 0; r < 5; r++) {
+        await new Promise((ok) => requestAnimationFrame(() => setTimeout(ok, 0)));
+        const t0 = performance.now();
+        const host = document.createElement("div");
+        host.style.cssText = "position:absolute;left:-20000px;top:0;width:720px;font:14px/1.5 sans-serif";
+        for (let i = 0; i < 2000; i++) {
+          const row = document.createElement("div");
+          row.style.cssText = "display:flex;align-items:flex-start;gap:8px;padding:6px 12px";
+          const who = document.createElement("span");
+          who.style.cssText = "font-weight:500";
+          who.textContent = `agent-${i % 10}`;
+          const body = document.createElement("p");
+          body.style.cssText = "margin:0;min-width:0;flex:1;overflow-wrap:anywhere";
+          body.textContent = `M${i}: ${"words in a message ".repeat(3 + (i % 9))}`;
+          row.append(who, body);
+          host.append(row);
+        }
+        document.body.append(host);
+        void host.offsetHeight;
+        const items = Array.from({ length: 20000 }, (_, i) => ({ seq: (i * 7919) % 20011, body: `M${i}` }));
+        items.sort((a, b) => a.seq - b.seq);
+        void (JSON.parse(JSON.stringify(items)) as unknown[]).length;
+        host.remove();
+        times.push(Math.round((performance.now() - t0) * 10) / 10);
+      }
+      return times;
+    });
+    return { ms: Math.min(...reps), reps };
+  } finally {
+    await blank.close();
+    await page.bringToFront();
+  }
+}
+
 async function work(cdp: CDPSession): Promise<Record<string, number>> {
   const { metrics } = (await cdp.send("Performance.getMetrics")) as { metrics: { name: string; value: number }[] };
   const m = Object.fromEntries(metrics.map((x) => [x.name, x.value]));
@@ -419,6 +460,7 @@ try {
     await drain(page);
     await cdp.send("Emulation.setCPUThrottlingRate", { rate: throttle });
     const calibration = await calibrate(page);
+    const isolated = await calibrateIsolated(page, throttle);
     const views: Record<string, number[]> = { Agents: [], Conversation: [], Tasks: [] };
     const spent: Record<string, Record<string, number>[]> = { Agents: [], Conversation: [], Tasks: [] };
     const markers: Record<string, string> = { Agents: agents.at(-1)!, Conversation: "M\\d+: ", Tasks: lastTask };
@@ -451,6 +493,8 @@ try {
     report[`@${throttle}x`] = {
       calibrationMs: calibration.ms,
       calibrationRepsMs: calibration.reps,
+      isolatedMs: isolated.ms,
+      isolatedRepsMs: isolated.reps,
       reloadToTasksMs: throttle === 1 ? reloadMs : undefined,
       switchMedianMs: Object.fromEntries(Object.entries(views).map(([k, v]) => [k, median(v)])),
       switchMs: views,
