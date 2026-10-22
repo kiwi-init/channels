@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState, type RefObject } from "react"
 
 const WINDOW_STEP = 120
+const FIRST_SCREEN = 40
 const MOUNTED_MAX = 2 * WINDOW_STEP
 const NEAR_TOP = 600
 const NEAR_BOTTOM = 80
@@ -14,17 +15,17 @@ export function trimmedFrom<T extends { seq: number }>(items: T[], hidden: numbe
 }
 
 export function awayFrom<T extends { seq: number }>(items: T[], hidden: number): number | null {
-  return items.length - hidden > MOUNTED_MAX ? startOf(items, WINDOW_STEP) : null
+  return items.length - hidden > FIRST_SCREEN ? startOf(items, FIRST_SCREEN) : null
 }
 
 export function useWindow<T extends { seq: number }>(items: T[], hereKey: string, scroller: RefObject<HTMLDivElement | null>, reveal: number | null, showing: boolean) {
   const [shownKey, setShownKey] = useState(hereKey)
-  const [from, setFrom] = useState(() => startOf(items, WINDOW_STEP))
+  const [from, setFrom] = useState(() => startOf(items, FIRST_SCREEN))
   if (shownKey !== hereKey) {
     setShownKey(hereKey)
-    setFrom(startOf(items, WINDOW_STEP))
+    setFrom(startOf(items, FIRST_SCREEN))
   }
-  if (from === 0 && items.length > WINDOW_STEP) setFrom(startOf(items, WINDOW_STEP))
+  if (from === 0 && items.length > FIRST_SCREEN) setFrom(startOf(items, FIRST_SCREEN))
   if (reveal !== null && reveal < from && items.some((m) => m.seq === reveal))
     setFrom(
       startOf(

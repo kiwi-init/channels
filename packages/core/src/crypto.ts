@@ -54,9 +54,14 @@ export function b64url(bytes: Uint8Array): string {
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
+function bytesOf(bin: string): Uint8Array<ArrayBuffer> {
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
 export function fromB64url(s: string): Uint8Array<ArrayBuffer> {
-  const bin = atob(s.replace(/-/g, "+").replace(/_/g, "/"));
-  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  return bytesOf(atob(s.replace(/-/g, "+").replace(/_/g, "/")));
 }
 
 function hex(bytes: Uint8Array): string {
@@ -258,7 +263,7 @@ export function toBase64(bytes: Uint8Array): string {
 }
 
 export function fromBase64(s: string): Uint8Array<ArrayBuffer> {
-  return Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+  return bytesOf(atob(s));
 }
 
 export async function blobId(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
