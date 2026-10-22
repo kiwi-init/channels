@@ -429,10 +429,12 @@ everything you touch under your thumb: the owner asked for both, so on the phone
   you" in `decide`, "working on T8" in a direct thread with an agent at work). The conversation fades out under it.
   Questions waiting on you are answered from their own bubble.
 - Cause and effect stay close: what you touch at the top opens from the top, what you touch
-  at the bottom rises from the bottom. A tap on the title pill drops the details out of it: a
-  glass panel (34pt corners) under the pill, which stays above a dimmed, blurred conversation
-  with its chevron turned down. Tap the pill or the dimmed conversation, or drag the panel's
-  grabber up, and it goes back into the pill. Inside, on glass: the channel's icon, name and
+  at the bottom rises from the bottom. A tap on the title pill grows the pill itself into the
+  details: one glass shape stretches from the pill's frame down to the bottom (8pt margins,
+  corners easing from the capsule to 44pt) over a dimmed, blurred conversation, the pill's words
+  fading as the panel's fade in; never a pill plus a second box. The ✕ in its corner, the
+  dimmed edge, or dragging its grabber up shrinks it back into the pill. Inside, on glass:
+  the channel's icon, name and
   people count; three tiles (Message someone, Pin, Channels); Needs you; Conversations
   (#general and your direct threads, a ✓ on the one you're in); Between others (read along);
   People (lead first, then who's working, each "Agent · working on T8" or "here"/"away"; tap

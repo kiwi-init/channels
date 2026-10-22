@@ -20,6 +20,7 @@ struct ChannelScreen: View {
     @State private var hover: String?
     @State private var frames: [String: CGRect] = [:]
     @State private var anchor: CGRect = .zero
+    @State private var pillFrame: CGRect = .zero
     @FocusState private var typing: Bool
 
     init(route: Route) {
@@ -87,7 +88,17 @@ struct ChannelScreen: View {
                         follow = Follow()
                         position.scrollTo(edge: .bottom)
                     }
-                    .overlay(alignment: .top) { panel(room) }
+                    .overlay {
+                        if details {
+                            DetailsMorph(room: room, current: place, pill: pillFrame) { key in
+                                go(room, key)
+                            } channels: {
+                                dismiss()
+                            } closed: {
+                                details = false
+                            }
+                        }
+                    }
             } else {
                 Centered(title: "This channel is gone", detail: "Its owner closed it, or this phone was removed from it.")
             }
@@ -124,58 +135,25 @@ struct ChannelScreen: View {
                 .accessibilityLabel("Channels")
                 Spacer()
             }
-            pill(room, open: false)
+            Button {
+                Haptic.tap()
+                details = true
+            } label: {
+                TitlePill(room: room, place: room.placeView(place), fresh: false)
+                    .onGeometryChange(for: CGRect.self) {
+                        $0.frame(in: .global)
+                    } action: {
+                        pillFrame = $0
+                    }
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: 240)
+            .opacity(details ? 0 : 1)
+            .accessibilityHint("Tasks, people and details")
         }
         .padding(.horizontal, 12)
         .padding(.top, 2)
         .padding(.bottom, 4)
-    }
-
-    private func pill(_ room: RoomView, open: Bool) -> some View {
-        Button {
-            Haptic.tap()
-            withAnimation(Self.drop) { details.toggle() }
-        } label: {
-            TitlePill(room: room, place: room.placeView(place), fresh: false, open: open)
-        }
-        .buttonStyle(.plain)
-        .frame(maxWidth: 240)
-        .accessibilityHint(open ? "Closes the details" : "Tasks, people and details")
-    }
-
-    private static let drop = Animation.spring(duration: 0.42, bounce: 0.2)
-
-    private func panel(_ room: RoomView) -> some View {
-        GeometryReader { geo in
-            ZStack(alignment: .top) {
-                if details {
-                    Rectangle()
-                        .fill(.black.opacity(0.4))
-                        .background(.ultraThinMaterial)
-                        .ignoresSafeArea()
-                        .onTapGesture { withAnimation(Self.drop) { details = false } }
-                        .transition(.opacity)
-                }
-                if details {
-                    pill(room, open: true).padding(.top, 2)
-                }
-                if details {
-                    DetailsPanel(room: room, current: place) { key in
-                        withAnimation(Self.drop) { details = false }
-                        go(room, key)
-                    } channels: {
-                        details = false
-                        dismiss()
-                    } close: {
-                        withAnimation(Self.drop) { details = false }
-                    }
-                    .frame(height: max(320, geo.size.height - 140))
-                    .padding(.horizontal, 8)
-                    .padding(.top, 52)
-                    .transition(.scale(scale: 0.2, anchor: .top).combined(with: .opacity))
-                }
-            }
-        }
     }
 
     private func control(_ room: RoomView) -> SwitchControl {
@@ -250,10 +228,17 @@ struct TitlePill: View {
     let room: RoomView
     let place: PlaceView?
     let fresh: Bool
-    var open = false
-    @State private var turned = false
+    var bare = false
 
     var body: some View {
+        if bare {
+            label
+        } else {
+            label.glassCapsule().contentShape(Capsule())
+        }
+    }
+
+    private var label: some View {
         HStack(spacing: 7) {
             if let place, place.kind == "dm", let other = room.other(in: place) {
                 Face(name: other, member: room.member(other), size: 26)
@@ -262,7 +247,6 @@ struct TitlePill: View {
                 HStack(spacing: 3) {
                     Text(title).type(.ui, .semibold).foregroundStyle(Tone.ink).lineLimit(1)
                     Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(Tone.ink3)
-                        .rotationEffect(.degrees(turned ? 90 : 0))
                 }
                 status
             }
@@ -272,12 +256,6 @@ struct TitlePill: View {
         }
         .padding(.horizontal, 16)
         .frame(minHeight: 40)
-        .glassCapsule()
-        .contentShape(Capsule())
-        .onAppear {
-            guard open else { return }
-            withAnimation(.spring(duration: 0.35, bounce: 0.3)) { turned = true }
-        }
     }
 
     private var title: String {
@@ -309,42 +287,99 @@ struct TitlePill: View {
     }
 }
 
-struct DetailsPanel: View {
+struct DetailsMorph: View {
     let room: RoomView
     let current: String
+    let pill: CGRect
     let choose: (String) -> Void
     let channels: () -> Void
-    let close: () -> Void
+    let closed: () -> Void
+    @State private var open = false
     @State private var pull: CGFloat = 0
 
+    private static let spring = Animation.spring(duration: 0.46, bounce: 0.16)
+
     var body: some View {
+        GeometryReader { geo in
+            let box = geo.frame(in: .global)
+            let from = pill == .zero ? CGRect(x: geo.size.width / 2 - 70, y: 2, width: 140, height: 40) : pill.offsetBy(dx: -box.minX, dy: -box.minY)
+            let to = CGRect(x: 8, y: from.minY, width: geo.size.width - 16, height: geo.size.height - from.minY - 4)
+            let rect = open ? to.offsetBy(dx: 0, dy: pull * 0.4) : from
+            let radius = open ? 44 : from.height / 2
+            ZStack(alignment: .topLeading) {
+                Rectangle()
+                    .fill(.black.opacity(open ? 0.4 : 0))
+                    .background(.ultraThinMaterial.opacity(open ? 1 : 0))
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: collapse)
+                ZStack(alignment: .top) {
+                    content
+                        .frame(width: to.width, height: to.height)
+                        .opacity(open ? 1 : 0)
+                    TitlePill(room: room, place: room.placeView(current), fresh: false, bare: true)
+                        .frame(height: from.height)
+                        .opacity(open ? 0 : 1)
+                }
+                .frame(width: rect.width, height: rect.height, alignment: .top)
+                .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+                .glass(radius)
+                .offset(x: rect.minX, y: rect.minY)
+            }
+        }
+        .onAppear {
+            withAnimation(Self.spring) { open = true }
+        }
+    }
+
+    private var content: some View {
         VStack(spacing: 0) {
-            TasksTab(room: room, current: current, choose: choose, channels: channels)
+            TasksTab(
+                room: room, current: current,
+                choose: { key in
+                    choose(key)
+                    collapse()
+                }, channels: channels)
             Capsule()
                 .fill(Tone.ink3.opacity(0.6))
                 .frame(width: 40, height: 5)
-                .frame(maxWidth: .infinity, minHeight: 28)
+                .frame(maxWidth: .infinity, minHeight: 30)
                 .contentShape(Rectangle())
                 .gesture(
                     DragGesture()
                         .onChanged { pull = min(0, $0.translation.height) }
                         .onEnded { drag in
                             if drag.translation.height < -50 || drag.predictedEndTranslation.height < -140 {
-                                close()
+                                collapse()
                             } else {
                                 withAnimation(.spring(duration: 0.3, bounce: 0.3)) { pull = 0 }
                             }
                         }
                 )
-                .accessibilityElement()
-                .accessibilityLabel("Close details")
-                .accessibilityAddTraits(.isButton)
-                .accessibilityAction { close() }
+                .accessibilityHidden(true)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
-        .glass(34)
-        .scaleEffect(y: 1 + pull / 2000, anchor: .top)
-        .offset(y: pull * 0.5)
+        .overlay(alignment: .topTrailing) {
+            Button(action: collapse) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Tone.ink2)
+                    .frame(width: 34, height: 34)
+                    .background(Tone.wash2, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .padding(14)
+            .accessibilityLabel("Close details")
+        }
+    }
+
+    private func collapse() {
+        Haptic.tap()
+        withAnimation(Self.spring) {
+            open = false
+            pull = 0
+        } completion: {
+            closed()
+        }
     }
 }
 
