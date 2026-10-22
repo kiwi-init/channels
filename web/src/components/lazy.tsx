@@ -1,3 +1,5 @@
+import type { ReactNode } from "react"
+
 import { later } from "@/lib/later"
 import type { MessageRefs } from "./markdown"
 
@@ -32,6 +34,10 @@ const taskDetails = later(() => import("./task-details").then((m) => m.TaskDetai
 const tasksView = later(() => import("./tasks-view").then((m) => m.TasksView))
 const thread = later(() => import("./thread").then((m) => m.ThreadPanel))
 const annotator = later(() => import("./annotator").then((m) => m.Annotator))
+const presence = later(
+  () => import("./motion").then((m) => m.Presence),
+  ({ children }: { children: ReactNode }) => children
+)
 const agentLanes = later(() => import("./agent-lanes").then((m) => m.AgentLanes))
 const composerQuestion = later(() => import("./composer-question").then((m) => m.ComposerQuestion))
 const permissionItem = later(() => import("./permission-item").then((m) => m.PermissionItem))
@@ -78,6 +84,7 @@ export const TasksView = tasksView.View
 export const ThreadPanel = thread.View
 export const Annotator = annotator.View
 export const AgentLanes = agentLanes.View
+export const Presence = presence.View
 export const ComposerQuestion = composerQuestion.View
 export const PermissionItem = permissionItem.View
 export const PermissionInThread = permissionInThread.View
@@ -100,5 +107,5 @@ export function loadPermission(): void {
 }
 
 export function loadSurfaces(): void {
-  for (const surface of [settings, computers, palette, info, tasks, tasksView, taskDetails, thread, confirmDialogs, holdDialog, charterDialog, renameDialog]) surface.load()
+  for (const surface of [presence, settings, computers, palette, info, tasks, tasksView, taskDetails, thread, confirmDialogs, holdDialog, charterDialog, renameDialog]) surface.load()
 }

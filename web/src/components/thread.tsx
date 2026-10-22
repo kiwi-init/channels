@@ -33,7 +33,7 @@ export function ThreadPanel({ count, children, composer, onClose }: { count: num
     <ResizablePanel className="flex">
       <aside
         aria-label="Thread"
-        className="animate-slide-in flex min-w-0 flex-1 flex-col border-l border-line bg-canvas md:sheet md:border-l-0"
+        className="flex min-w-0 flex-1 flex-col border-l border-line bg-canvas md:sheet md:border-l-0"
         onKeyDown={(e) => {
           if (e.key !== "Escape") return
           e.preventDefault()
