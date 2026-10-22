@@ -2,6 +2,44 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.25.3 — 2026-10-22
+
+- **The invite box keeps the whole join command inside it: a pinned personality's --persona token wraps (T12)** ([#691](https://github.com/ojowwalker77/channels/pull/691))
+- **perf / scale runs its three runs side by side on three runners, then takes the medians (T13)** ([#692](https://github.com/ojowwalker77/channels/pull/692))
+- **cli / macos: a hung cache save can't hold the job (T15)** ([#693](https://github.com/ojowwalker77/channels/pull/693))
+- **Chromium's apt packages install from cached .deb files, so a slow mirror no longer stalls build / shots (T39)** ([#690](https://github.com/ojowwalker77/channels/pull/690))
+- **perf / scale's gates fail CI again: perf-check's exit code no longer dies in tee (T53)** ([#695](https://github.com/ojowwalker77/channels/pull/695))
+- **perf-scale seeds the channel in-process and lets the ten agents in at once (T106)** ([#697](https://github.com/ojowwalker77/channels/pull/697))
+- **perf-scale's local relay runs without per-minute caps: --dev-no-rate-limits (T133)** ([#698](https://github.com/ojowwalker77/channels/pull/698))
+- **--dev-no-rate-limits lifts the caps only for requests made on this machine directly, like dev sign-in (T171)** ([#701](https://github.com/ojowwalker77/channels/pull/701))
+- **build / shots takes its phone shots in the same run, on the channel it already seeded (T151)** ([#699](https://github.com/ojowwalker77/channels/pull/699))
+- **cli / macos runs every test file: a test's SIGINT no longer ends the run early with exit 0 (T163)** ([#700](https://github.com/ojowwalker77/channels/pull/700))
+- **shoot-ui's phone pass skips the blocks that shoot nothing at that size (T205)** ([#703](https://github.com/ojowwalker77/channels/pull/703))
+- **perf gates compare timings scaled to a reference runner, so a slow runner can't fail them (T101)** ([#696](https://github.com/ojowwalker77/channels/pull/696))
+- **Neither dev flag starts with a trusted proxy, and a proxied socket upgrade keeps the cap, tested (T192)** ([#702](https://github.com/ojowwalker77/channels/pull/702))
+- **perf-check bounds each run's calibration and scales only Reload's in-page part (T257)** ([#706](https://github.com/ojowwalker77/channels/pull/706))
+- **Base64 decoding builds its bytes in a plain loop: a reload with 2000 messages takes 13% less (T67)** ([#707](https://github.com/ojowwalker77/channels/pull/707))
+- **The Conversation tab mounts a first screen of rows, not 120: its switch at 4x takes half the time (T66)** ([#705](https://github.com/ojowwalker77/channels/pull/705))
+- **ci-tests.ts reads bun's last summary and doesn't wait on a leftover process; the demo's stay lets go of SIGINT (T214)** ([#704](https://github.com/ojowwalker77/channels/pull/704))
+- **shoot-ui opens the add-agent screen only when it shoots it (T236)** ([#709](https://github.com/ojowwalker77/channels/pull/709))
+- **The relay refuses --flag=value instead of ignoring it (T241)** ([#708](https://github.com/ojowwalker77/channels/pull/708))
+- **Reload's gate goes back to 820: main measures it at 706 since #707 (T301)** ([#711](https://github.com/ojowwalker77/channels/pull/711))
+- **cli / macos splits its tests across three macOS runners, dealt by measured times (T91)** ([#694](https://github.com/ojowwalker77/channels/pull/694))
+- **test / unit, flows-a and flows-b each split across two runners (T152)** ([#713](https://github.com/ojowwalker77/channels/pull/713))
+- **CI's perf runs measure only what the gates read: about 16 s less per run (T356)** ([#716](https://github.com/ojowwalker77/channels/pull/716))
+- **The daemon's wake tests run in three files side by side: 73 s in one file becomes about 27 s (T359)** ([#717](https://github.com/ojowwalker77/channels/pull/717))
+- **pack-cli compresses on every core: desktop / package's packing goes from 44 to 16 s (T355)** ([#715](https://github.com/ojowwalker77/channels/pull/715))
+- **A key that waited for approval gets its daemon seat when its join writes its cursor, not at its backed-off retry (T407)** ([#720](https://github.com/ojowwalker77/channels/pull/720))
+- **A newer prompt is judged by the time its mark holds, not the file's: Linux dates files by a coarser clock (T386)** ([#719](https://github.com/ojowwalker77/channels/pull/719))
+- **The desktop app never spawns a kiwi binary still being written: places of one file share one write (T369)** ([#722](https://github.com/ojowwalker77/channels/pull/722))
+- **perf-check names a run left out of one timing; the blank-page calibration was measured and stays out (T292)** ([#710](https://github.com/ojowwalker77/channels/pull/710))
+- **join-seats.test.ts runs in three files side by side: 63 s in one file becomes about 25 s (T442)** ([#724](https://github.com/ojowwalker77/channels/pull/724))
+- **Channels no longer has voice or dictation: the app, the desktop app, the relay, CI and the docs (T404)** ([#721](https://github.com/ojowwalker77/channels/pull/721))
+- **The app's Pair leaves its answer for the computer, and a dropped pairing mailbox reads 404 (#714)** ([#718](https://github.com/ojowwalker77/channels/pull/718))
+- **Link a phone: the Mac app hands an iPhone its person and channel keys by QR** ([#725](https://github.com/ojowwalker77/channels/pull/725))
+- **link.ts's X25519 deriveBits typechecks again on main** ([#727](https://github.com/ojowwalker77/channels/pull/727))
+- **Channels for iPhone: a native SwiftUI app that reads and answers your channels like Messages** ([#726](https://github.com/ojowwalker77/channels/pull/726))
+
 ## 0.25.2 — 2026-10-22
 
 - **The Tasks board's rows size to the board, not the window: with a task open beside it, titles show again and nothing runs over them** ([#688](https://github.com/ojowwalker77/channels/pull/688))
