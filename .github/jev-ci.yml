@@ -841,11 +841,12 @@ jobs:
     name: perf / scale
     inputs: ["web/**", "desktop/**", "packages/core/**", "scripts/perf-scale.ts", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json"]
     always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "scripts/perf-scale.ts", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json"]
+    imports_from: ["scripts/perf-scale.ts"]
     parts: [perf-runs]
     description: >-
       Three perf-runs jobs, side by side on their own runners, each build the web dashboard and
       run scripts/perf-scale.ts once without the soak: a local relay and headless Chromium with
-      10 agents, 100 tasks and 2000 messages, timing the reload to the first screen, the Tasks,
+      10 agents, 100 tasks and 2000 messages (the agents join at once and the seeding sends through each agent's own session, src/agent.ts, with the relay's 120-a-minute limit as its floor), timing the reload to the first screen, the Tasks,
       Agents and Conversation tabs at 4x CPU and typing while the agents post, and upload the
       run as the perf-scale-N artifact. A run that crashes fails its job. Then perf / scale
       downloads the three runs, and scripts/perf-check.ts takes the medians and fails when one
