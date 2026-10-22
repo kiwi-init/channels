@@ -18,7 +18,6 @@ type Handlers = Pick<
   | "onHold"
   | "onCharter"
   | "onRepos"
-  | "onVoice"
   | "onGithubWrite"
   | "onBranchPrefix"
   | "onRename"
@@ -107,11 +106,6 @@ export function useControlsHandlers({
           await ch.setGithubRepos(repos)
           const since = await send(repos.length ? `repos: ${repos.join(", ")}` : "cleared the channel's repos", { kind: "event", ev: { op: "repos.set", repos } })
           await ch.setRepos({ list: repos, since })
-        }
-      : undefined,
-    onVoice: isOwner
-      ? async (on) => {
-          await send(on ? "allowed voice in the channel" : "turned voice off for the channel", { kind: "event", ev: { op: "voice.set", on } })
         }
       : undefined,
     onGithubWrite: isOwner

@@ -16,8 +16,9 @@ if (process.argv.includes("--help")) {
   console.log(`A busy channel, measured: PERF_AGENTS agents (10), PERF_TASKS tasks (100), PERF_MESSAGES messages (2000), then PERF_SOAK_MIN minutes (20) of agents posting.
 Reports cold load, the reload to the first screen, each view's switch at 1x and 4x CPU, key delay while agents post, and heap, DOM nodes and listeners over time.
 PERF_TASKS_FIRST=1 makes the tasks before the messages, so a reload has to keep them from beyond the newest 2000.
+--gated measures only what scripts/perf-check.ts gates: the reload at 1x, the views at 4x and typing, without the 1x views, details toggles, profiles or second reload.
 
-  bun run web:build && bun scripts/perf-scale.ts [--json out.json]
+  bun run web:build && bun scripts/perf-scale.ts [--gated] [--json out.json]
 
 Needs Playwright's Chromium: bunx playwright-core install --only-shell chromium (or SMOKE_CHROMIUM=<Chrome binary>).`);
   process.exit(0);
@@ -28,6 +29,7 @@ const AGENTS = Number(process.env.PERF_AGENTS ?? 10);
 const TASKS = Number(process.env.PERF_TASKS ?? 100);
 const MESSAGES = Number(process.env.PERF_MESSAGES ?? 2000);
 const SOAK_MIN = Number(process.env.PERF_SOAK_MIN ?? 20);
+const GATED = process.argv.includes("--gated");
 const jsonAt = process.argv.indexOf("--json");
 const OUT = jsonAt > 0 ? process.argv[jsonAt + 1] : undefined;
 const data = mkdtempSync(join(tmpdir(), "kiwi-perf-scale-"));
@@ -351,7 +353,7 @@ try {
           if (n >= MESSAGES) return;
           await say(s, `M${n}: ${TEXTS[n % TEXTS.length]}`, n % 4 === 0 && tasks.length ? tasks[n % tasks.length] : undefined);
           sent++;
-          if (sent % 500 === 0) await mark(`${sent} messages`);
+          if (sent % 500 === 0 && !GATED) await mark(`${sent} messages`);
         }
       }),
     );
@@ -390,39 +392,43 @@ try {
   await mark(`${MESSAGES} messages, live`);
 
   const lastTask = `Task ${TASKS - 1}:`;
+  let reloadMs = 0;
   for (const throttle of [1, 4]) {
-    await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
-    const reloadAt = performance.now();
-    await page.reload();
-    await page
-      .getByText(lastTask)
-      .filter({ visible: true })
-      .first()
-      .waitFor({ timeout: 60000 })
-      .catch(async (e: unknown) => {
-        await page.screenshot({ path: join(tmpdir(), "kiwi-perf-scale-reload.png"), fullPage: true });
-        writeFileSync(join(tmpdir(), "kiwi-perf-scale-reload.txt"), await page.evaluate(() => document.body.innerText));
-        throw e;
+    if (!GATED || throttle === 1) {
+      await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+      const reloadAt = performance.now();
+      await page.reload();
+      await page
+        .getByText(lastTask)
+        .filter({ visible: true })
+        .first()
+        .waitFor({ timeout: 60000 })
+        .catch(async (e: unknown) => {
+          await page.screenshot({ path: join(tmpdir(), "kiwi-perf-scale-reload.png"), fullPage: true });
+          writeFileSync(join(tmpdir(), "kiwi-perf-scale-reload.txt"), await page.evaluate(() => document.body.innerText));
+          throw e;
+        });
+      reloadMs = Math.round(performance.now() - reloadAt);
+      const inPage = await page.evaluate(() => {
+        const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming;
+        return {
+          firstScreenMs: Math.round((window as unknown as { __firstScreen?: number }).__firstScreen ?? -1),
+          domContentLoadedMs: Math.round(nav.domContentLoadedEventEnd),
+          fcpMs: Math.round(performance.getEntriesByName("first-contentful-paint")[0]?.startTime ?? -1),
+        };
       });
-    const reloadMs = Math.round(performance.now() - reloadAt);
-    const inPage = await page.evaluate(() => {
-      const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming;
-      return {
-        firstScreenMs: Math.round((window as unknown as { __firstScreen?: number }).__firstScreen ?? -1),
-        domContentLoadedMs: Math.round(nav.domContentLoadedEventEnd),
-        fcpMs: Math.round(performance.getEntriesByName("first-contentful-paint")[0]?.startTime ?? -1),
-      };
-    });
-    if (throttle === 1) report["reload, in page"] = inPage;
-    log("reload in page", JSON.stringify(inPage));
-    await page.waitForTimeout(2000);
-    await drain(page);
+      if (throttle === 1) report["reload, in page"] = inPage;
+      log("reload in page", JSON.stringify(inPage));
+      await page.waitForTimeout(2000);
+      await drain(page);
+    }
     await cdp.send("Emulation.setCPUThrottlingRate", { rate: throttle });
     const calibration = await calibrate(page);
+    const switching = !GATED || throttle === 4;
     const views: Record<string, number[]> = { Agents: [], Conversation: [], Tasks: [] };
     const spent: Record<string, Record<string, number>[]> = { Agents: [], Conversation: [], Tasks: [] };
     const markers: Record<string, string> = { Agents: agents.at(-1)!, Conversation: "M\\d+: ", Tasks: lastTask };
-    for (let i = 0; i < 3; i++)
+    for (let i = 0; i < (switching ? 3 : 0); i++)
       for (const v of ["Agents", "Conversation", "Tasks"]) {
         const before = await work(cdp);
         views[v]!.push(await tab(page, v, markers[v]!));
@@ -430,36 +436,42 @@ try {
         const after = await work(cdp);
         spent[v]!.push(Object.fromEntries(Object.keys(after).map((k) => [`${k}Ms`, Math.round(((after[k] ?? 0) - (before[k] ?? 0)) * 1000)])));
       }
-    await tab(page, "Conversation", markers.Conversation!);
-    await page.waitForTimeout(500);
-    const opens: Awaited<ReturnType<typeof detailsToggle>>[] = [];
-    const closes: Awaited<ReturnType<typeof detailsToggle>>[] = [];
-    for (let i = 0; i < 5; i++) {
-      opens.push(await detailsToggle(page, cdp, true));
-      closes.push(await detailsToggle(page, cdp, false));
+    if (!GATED) {
+      await tab(page, "Conversation", markers.Conversation!);
+      await page.waitForTimeout(500);
+      const opens: Awaited<ReturnType<typeof detailsToggle>>[] = [];
+      const closes: Awaited<ReturnType<typeof detailsToggle>>[] = [];
+      for (let i = 0; i < 5; i++) {
+        opens.push(await detailsToggle(page, cdp, true));
+        closes.push(await detailsToggle(page, cdp, false));
+      }
+      const mid = (xs: Awaited<ReturnType<typeof detailsToggle>>[]) => ({
+        ms: median(xs.map((x) => x.ms)),
+        taskMs: median(xs.map((x) => x.taskMs)),
+        scriptMs: median(xs.map((x) => x.scriptMs)),
+        styleMs: median(xs.map((x) => x.styleMs)),
+        layoutMs: median(xs.map((x) => x.layoutMs)),
+      });
+      report[`details @${throttle}x`] = { open: mid(opens), close: mid(closes) };
+      log(`details @${throttle}x`, JSON.stringify(report[`details @${throttle}x`]));
     }
-    const mid = (xs: Awaited<ReturnType<typeof detailsToggle>>[]) => ({
-      ms: median(xs.map((x) => x.ms)),
-      taskMs: median(xs.map((x) => x.taskMs)),
-      scriptMs: median(xs.map((x) => x.scriptMs)),
-      styleMs: median(xs.map((x) => x.styleMs)),
-      layoutMs: median(xs.map((x) => x.layoutMs)),
-    });
-    report[`details @${throttle}x`] = { open: mid(opens), close: mid(closes) };
-    log(`details @${throttle}x`, JSON.stringify(report[`details @${throttle}x`]));
     const after = await drain(page);
     report[`@${throttle}x`] = {
       calibrationMs: calibration.ms,
       calibrationRepsMs: calibration.reps,
       reloadToTasksMs: throttle === 1 ? reloadMs : undefined,
-      switchMedianMs: Object.fromEntries(Object.entries(views).map(([k, v]) => [k, median(v)])),
-      switchMs: views,
-      switchWorkMs: Object.fromEntries(Object.entries(spent).map(([k, v]) => [k, Object.fromEntries(Object.keys(v[0] ?? {}).map((m) => [m, median(v.map((x) => x[m] ?? 0))]))])),
+      ...(switching
+        ? {
+            switchMedianMs: Object.fromEntries(Object.entries(views).map(([k, v]) => [k, median(v)])),
+            switchMs: views,
+            switchWorkMs: Object.fromEntries(Object.entries(spent).map(([k, v]) => [k, Object.fromEntries(Object.keys(v[0] ?? {}).map((m) => [m, median(v.map((x) => x[m] ?? 0))]))])),
+          }
+        : {}),
       longTasks: after.longTasks,
       worstMs: after.worstMs,
     };
     log(`@${throttle}x`, JSON.stringify(report[`@${throttle}x`]));
-    if (throttle === 4) {
+    if (throttle === 4 && !GATED) {
       report["profile: Conversation @4x"] = await profile(cdp, () => tab(page, "Conversation", markers.Conversation!));
       await page.waitForTimeout(500);
       report["profile: Tasks @4x"] = await profile(cdp, () => tab(page, "Tasks", markers.Tasks!));

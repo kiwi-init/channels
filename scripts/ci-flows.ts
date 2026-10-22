@@ -6,6 +6,8 @@ export const FLOWS: Record<string, string[]> = {
   "flows-a": ["e2e", "verbs", "threads", "reconnect", "cache-trim", ...budget],
   "flows-b": [
     "join-seats",
+    "join-seats-review",
+    "join-seats-hooks",
     "read-receipts",
     "daemon-pair",
     "sh-escape",

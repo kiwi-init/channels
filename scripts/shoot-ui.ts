@@ -736,12 +736,13 @@ try {
         },
         closeSettings,
       );
-      await owner.goto(fresh);
-      await owner
-        .getByRole("region", { name: "Add an agent" })
-        .waitFor({ timeout: 10000 })
-        .catch(() => {});
-      await shoot(owner, tag, "16-add-agent");
+      await shoot(owner, tag, "16-add-agent", async () => {
+        await owner.goto(fresh);
+        await owner
+          .getByRole("region", { name: "Add an agent" })
+          .waitFor({ timeout: 10000 })
+          .catch(() => {});
+      });
 
       // The desktop app's New agent, with a stand-in for the four launch methods its bridge adds,
       // on only while this tab's flag is set so the other screens stay the browser's.

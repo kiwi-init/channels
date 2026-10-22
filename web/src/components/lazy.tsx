@@ -33,8 +33,6 @@ const tasksView = later(() => import("./tasks-view").then((m) => m.TasksView))
 const thread = later(() => import("./thread").then((m) => m.ThreadPanel))
 const annotator = later(() => import("./annotator").then((m) => m.Annotator))
 const agentLanes = later(() => import("./agent-lanes").then((m) => m.AgentLanes))
-const talkButton = later(() => import("./talk").then((m) => m.TalkButton))
-const talkBar = later(() => import("./talk").then((m) => m.TalkBar))
 const composerQuestion = later(() => import("./composer-question").then((m) => m.ComposerQuestion))
 const permissionItem = later(() => import("./permission-item").then((m) => m.PermissionItem))
 const permissionInThread = later(() => import("./permission-thread").then((m) => m.PermissionInThread))
@@ -80,11 +78,6 @@ export const TasksView = tasksView.View
 export const ThreadPanel = thread.View
 export const Annotator = annotator.View
 export const AgentLanes = agentLanes.View
-export const TalkButton = talkButton.View
-export const TalkBar = talkBar.View
-export function leaveTalk(roomId: string): void {
-  void import("./talk").then((m) => m.leaveTalk(roomId))
-}
 export const ComposerQuestion = composerQuestion.View
 export const PermissionItem = permissionItem.View
 export const PermissionInThread = permissionInThread.View

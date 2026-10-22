@@ -28,7 +28,6 @@ export interface FoldCtx {
   repos: string[];
   github: GithubState;
   hold: Hold | null;
-  voice: boolean;
   githubWrite: number | null;
   branchPrefix: string | null;
   compact: Compact | null;
@@ -136,14 +135,9 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       break;
     }
 
-    case "voice.set": {
-      if (!member.owner) {
-        reject("only the owner allows voice in the channel");
-        break;
-      }
-      c.voice = ev.on;
+    case "voice.set":
+      if (!member.owner) reject("only the owner allows voice in the channel");
       break;
-    }
 
     case "github.write.set": {
       if (!member.owner) {

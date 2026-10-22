@@ -25,12 +25,9 @@ import { AgentStrip, agentNow, type AgentNow } from "../agent-strip"
 import { ChannelControls } from "../controls"
 import { Icon } from "../icon"
 import { Button, Harnesses, Pictures, Spinner, errorText, toast } from "../kit"
-import { AddAgent, AgentLanes, CompactBlock, HoldDialog, leaveTalk, NewAgent, ProposalCard, TalkBar, TalkButton, TasksView } from "../lazy"
+import { AddAgent, AgentLanes, CompactBlock, HoldDialog, NewAgent, ProposalCard, TasksView } from "../lazy"
 import { canStartAgents } from "@/lib/launches"
 import { ALLOW_ONCE, DENY, settledOf } from "@/lib/permission-settled"
-import { bridge } from "@/lib/secrets"
-import type { ToolCtx } from "@/lib/voice/tools"
-import { defaultPowers, defaultScopes } from "../scopes"
 import { isAgent } from "../message"
 import { NeedsYou } from "../needs-you"
 import { ChannelSidebar, ConversationMenu, type Conversation as ConversationRow } from "./channel-sidebar"
@@ -201,33 +198,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const [newAgent, setNewAgent] = useState(false)
   const onNewAgent = isOwner && canStartAgents() ? () => setNewAgent(true) : undefined
   const addsAgents = !isOwner && !!roster.find((m) => m.active && m.pk === member.identity.pk)?.addsAgents
-  const voiceTools = useMemo<ToolCtx>(
-    () => ({
-      state,
-      me,
-      channel: title,
-      isOwner,
-      online: new Set(online.keys()),
-      requests: isOwner ? requests : [],
-      nameOf,
-      send,
-      hold: handlers.onHold,
-      letIn: isOwner
-        ? async (id: string) => {
-            const r = requests.find((x) => x.id === id)
-            if (!r) throw new Error("That request is gone.")
-            await handlers.onApprove(r, defaultScopes(roomId), undefined, defaultPowers(roomId))
-          }
-        : undefined,
-      approve: (t: Task) => sendTask(approveTask(t), closedDigest(state, messages, t, { by: me })),
-    }),
-    [state, me, title, isOwner, online, requests, nameOf, send, handlers, roomId, sendTask, messages]
-  )
-  const voiceHere = !!state.voice && typeof bridge()?.voiceToken === "function"
-  useEffect(() => {
-    if (!voiceHere) return
-    return () => leaveTalk(roomId)
-  }, [voiceHere, roomId])
   const hold = handlers.onHold
   const commands = useMemo<Command[]>(
     () => [
@@ -618,17 +588,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                                 stick()
                                 return send(body, opts)
                               }}
-                              talk={
-                                voiceHere
-                                  ? {
-                                      button:
-                                        place.kind === "main" ? (
-                                          <TalkButton channel={{ roomId, channel: title, me, nameOf, state, messages, tools: voiceTools }} disabled={connection === "connecting"} />
-                                        ) : null,
-                                      bar: <TalkBar roomId={roomId} messages={messages} state={state} nameOf={nameOf} me={me} tools={voiceTools} />,
-                                    }
-                                  : undefined
-                              }
                               footer={
                                 <div className="md:hidden">
                                   <AgentStrip agents={agentsNow} now={now} onOpenTask={openTask} />

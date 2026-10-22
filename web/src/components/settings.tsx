@@ -12,9 +12,8 @@ import { contextLineBridge, terminalsBridge } from "@/lib/terminals"
 import type { TerminalId, TerminalRow, TerminalsStatus } from "@kiwi/core/terminals.ts"
 import { version } from "../../../package.json"
 import { ComputerRows } from "./computers"
-import { HarnessFace } from "./harness-face"
 import { Icon, type IconSvgElement } from "./icon"
-import { Button, Checkbox, IconButton, Monogram, SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from "./kit"
+import { Button, IconButton, Monogram, SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from "./kit"
 import { UpdateCheck } from "./update-check"
 
 // Both apply at once and stay in this browser; nothing here leaves it.
@@ -109,86 +108,6 @@ function RelayField() {
           Use
         </Button>
       </div>
-      {error && (
-        <p className="mt-1 text-ui text-ink-2" role="alert">
-          {error}
-        </p>
-      )}
-    </Item>
-  )
-}
-
-function VoiceFields() {
-  const b = bridge()
-  const snap = useSecrets()
-  const [key, setKey] = useState("")
-  const [error, setError] = useState<string | null>(null)
-  if (!b?.setVoiceKey) return null
-  const fail = (e: unknown) => setError(e instanceof Error ? e.message.replace(/^.*?Error: /, "") : String(e))
-  const save = () => {
-    setError(null)
-    b.setVoiceKey(key).catch(fail)
-  }
-  const clear = () => {
-    setError(null)
-    setKey("")
-    b.setVoiceKey("").catch(fail)
-  }
-  const rooms = snap.channels.filter((c) => c.roomId)
-  return (
-    <Item
-      tile={<HarnessFace harness="grok" size={18} />}
-      title="Grok Voice"
-      desc={
-        snap.voice.configured
-          ? "A key is saved on this Mac. Each channel stays off until you turn it on."
-          : "An xAI key lets this Mac talk with Grok Voice. Each channel stays off until you turn it on."
-      }
-    >
-      <label htmlFor="voice-key" className="mb-2 block text-ui font-medium text-ink">
-        xAI key
-      </label>
-      <div className="flex gap-2">
-        <input
-          id="voice-key"
-          type="password"
-          value={key}
-          onChange={(e) => setKey(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && key.trim() && save()}
-          spellCheck={false}
-          autoComplete="off"
-          className="h-8 min-w-0 flex-1 rounded-row border border-line bg-transparent px-2 font-mono text-ui text-ink"
-        />
-        <Button variant="secondary" onClick={save} disabled={!key.trim()}>
-          Save
-        </Button>
-        {snap.voice.configured && (
-          <Button variant="secondary" onClick={clear}>
-            Remove
-          </Button>
-        )}
-      </div>
-      {rooms.length > 0 && (
-        <div className="mt-4 grid gap-1">
-          {rooms.map((c) => {
-            const id = c.roomId
-            if (!id) return null
-            const on = snap.voice.consent[id] === true
-            return (
-              <label key={id} className="flex items-center gap-2 text-ui text-ink">
-                <Checkbox
-                  checked={on}
-                  onChange={(e) => {
-                    setError(null)
-                    b.setVoiceConsent(id, e.target.checked).catch(fail)
-                  }}
-                />
-                {c.name ?? c.label}
-              </label>
-            )
-          })}
-        </div>
-      )}
       {error && (
         <p className="mt-1 text-ui text-ink-2" role="alert">
           {error}
@@ -443,7 +362,7 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
   const b = bridge()
   const [on, setOn] = useState("appearance")
   const [adding, setAdding] = useState(false)
-  const shown = SECTIONS.filter((s) => (s.id === "services" ? !!(b?.githubStatus || b?.setVoiceKey) : s.id === "new-agents" ? !!terminalsBridge() : s.id === "computers" ? !!person : true))
+  const shown = SECTIONS.filter((s) => (s.id === "services" ? !!b?.githubStatus : s.id === "new-agents" ? !!terminalsBridge() : s.id === "computers" ? !!person : true))
   const go = (id: string) => {
     setOn(id)
     document.getElementById(`settings-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" })
@@ -522,7 +441,6 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
             </Group>
             <Group id="services" title="Services">
               <GithubFields />
-              <VoiceFields />
             </Group>
             {person && (
               <Group id="computers" title="Computers">

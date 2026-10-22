@@ -4,8 +4,7 @@
 // Usage: bun src/relay/bun.ts --help
 
 import { Database } from "bun:sqlite";
-import { randomUUID } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { basename, join, resolve, sep } from "node:path";
 import type { ServerWebSocket } from "bun";
 import * as Context from "effect/Context";
@@ -15,12 +14,10 @@ import { ChannelGone, NotFound, UpdateRequired } from "./failures.ts";
 import { clockLayer, MAX_REQUEST_BYTES } from "./http.ts";
 import { authkitDomains, devHostOk, devHumanAuth, devRequestOk, Human, HUMAN_HEADER, workosFromSettings, type HumanAuth } from "./human.ts";
 import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
-import type { Hasher } from "@kiwi/core/dictation.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
 import { MACHINE_ASKS_PER_MINUTE, MACHINE_BOX_TTL_MS, MACHINE_UNSEEN_MS, MACHINE_WRITES_PER_ADDRESS, onMachineHttp, type MachineBox, type MachineStore } from "./machine.ts";
 import { allow as allowPerMinute } from "./room/limits.ts";
-import { clientAddress, downloadAllowed, parseTrustProxy, trustProxyFromArgs, trustProxyHint, trustsAProxy, untrustedProxy, writeAllowed, type TrustProxy } from "./address.ts";
-import { onDictationHttp, type DictationStore } from "./dictation.ts";
+import { clientAddress, parseTrustProxy, trustProxyFromArgs, trustProxyHint, trustsAProxy, untrustedProxy, writeAllowed, type TrustProxy } from "./address.ts";
 import { Policy, policyFrom, type RelayPolicy, type RoomPolicy } from "./policy.ts";
 import {
   Directory,
@@ -72,14 +69,6 @@ export interface WebApp {
   connect?: string[];
 }
 
-export function bunHasher(): Hasher {
-  const hash = new Bun.CryptoHasher("sha256");
-  return {
-    update: (chunk) => void hash.update(chunk),
-    hex: async () => hash.digest("hex"),
-  };
-}
-
 export function startRelay(
   opts: {
     port?: number;
@@ -93,7 +82,6 @@ export function startRelay(
     githubSecret?: string | null;
     githubApp?: GithubAppApi | null;
     githubPush?: PushCheck | null;
-    dictationUpstream?: (url: string) => Promise<Response>;
     devNoRateLimits?: boolean;
   } = {},
 ) {
@@ -321,26 +309,6 @@ export function startRelay(
     }
     return expired;
   };
-  const dictationDir = join(dataDir, "dictation");
-  const dictation: DictationStore = {
-    read: async (sha256) => {
-      const f = Bun.file(join(dictationDir, sha256));
-      return (await f.exists()) ? f : null;
-    },
-    write: async (sha256, body) => {
-      mkdirSync(dictationDir, { recursive: true, mode: 0o700 });
-      const tmp = join(dictationDir, `${sha256}.${process.pid}.${randomUUID()}.part`);
-      try {
-        await Bun.write(Bun.file(tmp), new Response(body));
-        chmodSync(tmp, 0o600);
-        renameSync(tmp, join(dictationDir, sha256));
-      } catch (err) {
-        // A broken or refused download leaves no partial file behind; the route still answers the failure.
-        rmSync(tmp, { force: true });
-        throw err;
-      }
-    },
-  };
   const sweeper = policy.expireAfterDays ? setInterval(sweep, 3_600_000) : undefined;
   sweeper?.unref?.();
 
@@ -370,8 +338,6 @@ export function startRelay(
           proxyHinted = true;
           process.stderr.write(`${trustProxyHint(proxy)}\n`);
         }
-        const spoken = await onDictationHttp(req, { store: dictation, hasher: bunHasher, ip, allow: downloadAllowed, ...(opts.dictationUpstream ? { upstream: opts.dictationUpstream } : {}) });
-        if (spoken) return spoken;
         const mailbox = await onMailboxHttp(req, mailboxes, ip ? { ip, allow: writeAllowed } : {});
         if (mailbox) return mailbox;
         const machine = await onMachineHttp(req, machines, {
@@ -553,7 +519,7 @@ function webApp(app: WebApp): (pathname: string) => Response {
   if (!existsSync(join(root, "index.html"))) throw new Error(`no index.html in ${root} (build it with: bun run web:build)`);
   const connect = ["'self'", ...(app.connect ?? [])].join(" ");
   const security = {
-    "content-security-policy": `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ${connect}; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+    "content-security-policy": `default-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ${connect}; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
     "referrer-policy": "no-referrer",
     "x-content-type-options": "nosniff",
   };
@@ -618,6 +584,12 @@ export function runRelay(argv: string[], cmd = "bun src/relay/bun.ts"): void {
   if (argv.includes("--help") || argv.includes("-h")) {
     process.stdout.write(usage(cmd));
     process.exit(0);
+  }
+  const joined = argv.find((a) => /^--[a-z-]+=/.test(a));
+  if (joined) {
+    const flag = joined.slice(0, joined.indexOf("="));
+    process.stderr.write(`${cmd} takes a flag's value after a space: write ${flag} ${joined.slice(flag.length + 1)}, not ${joined} (it would be ignored).\n`);
+    process.exit(2);
   }
   const arg = (name: string, env: string) => {
     const i = argv.indexOf(name);
