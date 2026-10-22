@@ -152,7 +152,7 @@ async function tab(page: Page, label: string, marker: string): Promise<number> {
   );
 }
 
-async function calibrate(page: Page): Promise<number> {
+async function calibrate(page: Page): Promise<{ ms: number; reps: number[] }> {
   return page.evaluate(async () => {
     const times: number[] = [];
     for (let r = 0; r < 5; r++) {
@@ -180,8 +180,8 @@ async function calibrate(page: Page): Promise<number> {
       host.remove();
       times.push(performance.now() - t0);
     }
-    times.sort((a, b) => a - b);
-    return Math.round(times[2]! * 10) / 10;
+    const reps = times.map((t) => Math.round(t * 10) / 10);
+    return { ms: [...reps].sort((a, b) => a - b)[2]!, reps };
   });
 }
 
@@ -418,7 +418,7 @@ try {
     await page.waitForTimeout(2000);
     await drain(page);
     await cdp.send("Emulation.setCPUThrottlingRate", { rate: throttle });
-    const calibrationMs = await calibrate(page);
+    const calibration = await calibrate(page);
     const views: Record<string, number[]> = { Agents: [], Conversation: [], Tasks: [] };
     const markers: Record<string, string> = { Agents: agents.at(-1)!, Conversation: "M\\d+: ", Tasks: lastTask };
     for (let i = 0; i < 3; i++)
@@ -445,7 +445,8 @@ try {
     log(`details @${throttle}x`, JSON.stringify(report[`details @${throttle}x`]));
     const after = await drain(page);
     report[`@${throttle}x`] = {
-      calibrationMs,
+      calibrationMs: calibration.ms,
+      calibrationRepsMs: calibration.reps,
       reloadToTasksMs: throttle === 1 ? reloadMs : undefined,
       switchMedianMs: Object.fromEntries(Object.entries(views).map(([k, v]) => [k, median(v)])),
       switchMs: views,
