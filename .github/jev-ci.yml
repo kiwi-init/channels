@@ -358,8 +358,10 @@ jobs:
       Also the daemon's and hooks' reliability (audit #132, bundle H): a stale daemon.lock whose pid now belongs to
       another program freed without killing it, only a kiwi daemon's command line being killed (test/daemon-lock.test.ts);
       hooks retrying an unreachable daemon spawning one per home every 15 s while a lock exists (claimSpawn,
-      test/daemon-lock.test.ts); a key that waited long for approval getting its seat within seconds of the approval
-      (test/daemon-seats.test.ts); a wake command that ignores TERM or leaves a child on its stderr ending at its deadline
+      test/daemon-lock.test.ts); a key that waited for approval getting its seat within seconds of its join writing its
+      cursor, not at its backed-off retry: the retry's fingerprint includes whether the key has a
+      cursor yet, and a changed fingerprint starts the backoff over (test/daemon-seat-approval.test.ts,
+      its daemon's first retry 60 s away so only the cursor can seat it in time); a wake command that ignores TERM or leaves a child on its stderr ending at its deadline
       (runBounded, test/wake-bounded.test.ts); the Rex helpers replacing init.lua in one rename through its dotfiles link,
       keeping its mode (test/terminal-rex.test.ts); and a kiwi sh query run in its own process, stopped after its deadline, with
       randomblob and zeroblob refused (queryIsolated, test/sh-query.test.ts).
@@ -673,7 +675,9 @@ jobs:
       call settles in the transcript first; no seat for the session or a subagent's call asks
       nobody. The transcript watcher finds the newest unanswered matching tool_use and sees its
       tool_result, a new prompt or a new assistant turn. test/permission-session.test.ts: one
-      hook waits per session and a later prompt marks it as overtaken; a lock file still being
+      hook waits per session and a later prompt marks it as overtaken, judged by the Date.now() the
+      mark holds, not its file time (Linux dates files by a coarser clock that can read a few ms
+      earlier); a lock file still being
       written counts as held, a stale one doesn't; letting go leaves another hook's lock and its
       newer-prompt mark alone; the folder shown starts with ~. An answer the fold doesn't have yet
       is read again a bounded number of times and decided only on the fold's copy
@@ -893,8 +897,10 @@ jobs:
       on. desktop/scripts/size.ts fails if app.asar ships node_modules (dist/ already bundles
       them), if more than the English Chromium locales ship (electronLanguages), or if the
       packaged Linux app is over 375MB on disk or 162MB as a tar.gz. The bundled kiwi is
-      packed by desktop/scripts/pack-cli.ts first (zstd, checked to unpack to the same bytes), and
-      the smoke's daemon runs from the copy the app unpacks. desktop/scripts/smoke.ts starts the packaged app under Xvfb and fails unless its
+      packed by desktop/scripts/pack-cli.ts first (zstd level 19 on every core, checked to unpack to the same bytes), and
+      the smoke's daemon runs from the copy the app unpacks (places of one destination started at
+      once share one write under a unique temp name, so the app's start and an adopt never spawn a
+      binary still being written: ETXTBSY on Linux; test/desktop-place.test.ts in test / unit). desktop/scripts/smoke.ts starts the packaged app under Xvfb and fails unless its
       window renders, the page's scripts land in the V8 code cache (kiwi-app:// registered with
       codeCache, so a launch after the first skips compiling them), its key process
       (utilityProcess.fork of dist/channels.js from app.asar) stays up and the bundled kiwi
