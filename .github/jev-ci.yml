@@ -436,7 +436,9 @@ jobs:
       message it was for is still unread, so a busy session's queue doesn't fill with wakes that find nothing unread;
       reading any of them (by cursor, or as a reply marked seen) lets the next through, a replaced session or webhook
       is woken at once, and a message held back by a wake never read gets its wake once that one has been outstanding
-      for wakeOutstandingMs (AgentSession.unreadAt's seqs, src/daemon/wake.ts, test/wake.test.ts).
+      for wakeOutstandingMs (AgentSession.unreadAt's seqs, src/daemon/wake.ts, test/wake.test.ts,
+      test/wake-sessions.test.ts, test/wake-harnesses.test.ts: the daemon's wake tests in three files,
+      each with its own relay and daemon from test/wake-harness.ts, so they run side by side).
       Also test/context-line.test.ts: a seat's context in words (tokensWord), the Stop hook's nudge
       once per crossing of CONTEXT_LINE (250k; back under it resets, unknown keeps the state), naming
       each open task the seat owns and the checkpoint command, and asking the lead for its lead
