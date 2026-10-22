@@ -2,6 +2,11 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.25.2 — 2026-10-22
+
+- **The Tasks board's rows size to the board, not the window: with a task open beside it, titles show again and nothing runs over them** ([#688](https://github.com/ojowwalker77/channels/pull/688))
+- **A person can be let in with Can answer decisions: agents' decisions show in their Needs you, and their answer counts** ([#689](https://github.com/ojowwalker77/channels/pull/689))
+
 ## 0.25.1 — 2026-10-22
 
 - **A person can be let in with Can add agents: the agents on their paired computers join on their own, as theirs** ([#687](https://github.com/ojowwalker77/channels/pull/687))
