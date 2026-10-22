@@ -808,7 +808,7 @@ jobs:
       scripts/smoke-cli.ts drives the binary against a local relay (every allowed kiwi sh
       command compared with the source CLI, the MCP sh tool, kiwi doctor). Then bundles the
       Cloudflare worker (src/relay/worker.ts) with wrangler deploy --dry-run, failing on a Node-
-      or Bun-only import reaching it or an invalid wrangler.jsonc.
+      or Bun-only import reaching it or an invalid wrangler.jsonc. Headless Chromium and the apt packages it needs come from .github/actions/browser, which installs the packages from cached .deb files and fails the job if they can't be installed.
 
   shots:
     name: build / shots
@@ -832,7 +832,7 @@ jobs:
       with a code and the invite preview.
       The shots are uploaded as the ui-shots artifact. Fails when the conversation isn't at its newest message (within 80px of the bottom) once the channel opens and again back from the Tasks tab (which it visits itself), at the wide size and, in a second short run of the channel and Tasks screens, at phone size too (web/src/components/conversation/use-scroll.ts), or when the window's drag band would take a control of the open viewer (each app-region box added or taken away in document order, as Electron does), or when the seeding can't drive the
       dashboard or any screen can't be reached (a control renamed, moved or gone), so the shots
-      keep up with the UI.
+      keep up with the UI. Headless Chromium and the apt packages it needs come from .github/actions/browser, which installs the packages from cached .deb files and fails the job if they can't be installed.
 
   perf:
     name: perf / scale
@@ -847,7 +847,7 @@ jobs:
       20% and comes down to its 0.20 budget as fixes land), writes the table and the gaps to the
       0.20 budgets to the job summary and a perf-scale comment on the pull request, and uploads
       the runs as the perf-scale artifact. The soak's memory slopes are gated by the nightly
-      workflow (.github/workflows/nightly.yml), not here.
+      workflow (.github/workflows/nightly.yml), not here. Headless Chromium and the apt packages it needs come from .github/actions/browser, which installs the packages from cached .deb files and fails the job if they can't be installed.
 
   desktop:
     name: desktop / package
