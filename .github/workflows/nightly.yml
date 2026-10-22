@@ -30,6 +30,7 @@ jobs:
           for i in 1 2 3 4; do PERF_SOAK_MIN=0 bun scripts/perf-scale.ts --json "$RUNNER_TEMP/perf-$i.json"; done
           PERF_SOAK_MIN=20 bun scripts/perf-scale.ts --json "$RUNNER_TEMP/perf-5.json"
       - name: medians against the gates
+        shell: bash
         run: bun scripts/perf-check.ts --nightly "$RUNNER_TEMP"/perf-*.json | tee -a "$GITHUB_STEP_SUMMARY"
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

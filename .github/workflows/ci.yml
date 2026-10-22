@@ -285,6 +285,7 @@ jobs:
           path: ${{ runner.temp }}/perf
           merge-multiple: true
       - name: medians against the gates
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
