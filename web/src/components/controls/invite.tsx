@@ -1,6 +1,7 @@
 import { Copy01Icon } from "@hugeicons/core-free-icons"
 import { useEffect, useState } from "react"
 
+import type { PersonPowers } from "@kiwi/core/membership.ts"
 import type { Persona } from "@kiwi/core/personality.ts"
 import { SCOPES, type Scope } from "@kiwi/core/scopes.ts"
 import { usePersonalities } from "@/lib/personalities"
@@ -9,7 +10,7 @@ import { relayUrl } from "@/lib/relay"
 import { Icon } from "../icon"
 import { IconButton, Tabs, TextField, toast } from "../kit"
 import { PersonalityPicker } from "../personality-picker"
-import { AddsAgentsPicker, defaultAddsAgents, defaultScopes, saveDefaultAddsAgents, saveDefaultScopes, ScopePicker } from "../scopes"
+import { defaultPowers, defaultScopes, PowersPicker, saveDefaultPowers, saveDefaultScopes, ScopePicker } from "../scopes"
 import { useControls } from "./context"
 
 function CopyBox({ text, label, done }: { text: string; label: string; done: string }) {
@@ -37,7 +38,7 @@ export function Invite() {
   const [nick, setNick] = useState("")
   const [rules, setRules] = useState("")
   const [newScopes, setNewScopes] = useState<Scope[]>(() => (p.roomId ? defaultScopes(p.roomId) : [...SCOPES]))
-  const [addsAgents, setAddsAgents] = useState(() => (p.roomId ? defaultAddsAgents(p.roomId) : false))
+  const [powers, setPowers] = useState<PersonPowers>(() => (p.roomId ? defaultPowers(p.roomId) : {}))
   const [joinsAs, setJoinsAs] = useState<Persona | null>(null)
   const [signed, setSigned] = useState<{ name: string; token: string } | null>(null)
   const onPin = p.onPin
@@ -104,7 +105,7 @@ export function Invite() {
         <ScopePicker value={newScopes} onChange={(s) => (setNewScopes(s), p.roomId && saveDefaultScopes(p.roomId, s))} />
         {who === "person" && (
           <div className="mt-3">
-            <AddsAgentsPicker value={addsAgents} onChange={(on) => (setAddsAgents(on), p.roomId && saveDefaultAddsAgents(p.roomId, on))} />
+            <PowersPicker value={powers} onChange={(next) => (setPowers(next), p.roomId && saveDefaultPowers(p.roomId, next))} />
           </div>
         )}
       </div>

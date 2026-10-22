@@ -3,7 +3,7 @@ import { join as joinPath } from "node:path";
 import { oneLook } from "../../agent.ts";
 import { saveImages } from "../../attach.ts";
 import { home } from "../../config.ts";
-import { formatShown, missingImages, parseDuration } from "@kiwi/core/format.ts";
+import { alsoAnswers, formatShown, missingImages, parseDuration } from "@kiwi/core/format.ts";
 import {
   CHAT_KINDS,
   CHOICE_MAX_LENGTH,
@@ -252,9 +252,9 @@ export const messageCommands: Record<string, Command> = {
         for (const f of ["vendor", "expires", "wait"] as const) if (opt[f] !== undefined) return yield* die(`--${f} goes with --handoff URL`);
         const choices = opt.option?.map((o) => o.trim());
         if (choices && !wellFormedChoices(choices)) return yield* die(`--option takes ${CHOICES_MIN} to ${CHOICES_MAX} different answers, one line of up to ${CHOICE_MAX_LENGTH} characters each`);
-        const { seq, to } = yield* s.escalate(body, re, undefined, { ...(choices ? { choices } : {}), ...(task !== undefined ? { task } : {}), ...hold });
+        const { seq, to, also } = yield* s.escalate(body, re, undefined, { ...(choices ? { choices } : {}), ...(task !== undefined ? { task } : {}), ...hold });
         digestNote();
-        return out(`escalated #${seq} to ${to.join(" and ")}${choices ? ` with ${choices.length} options` : ""}${heldText}; wait for their answer before acting on it`);
+        return out(`escalated #${seq} to ${to.join(" and ")}${choices ? ` with ${choices.length} options` : ""}${heldText}${alsoAnswers(also)}; wait for their answer before acting on it`);
       }
       if (opt.option !== undefined) return yield* die("--handoff has its own Done and Couldn't answers; leave out --option");
       if (!handoffUrl(opt.handoff)) return yield* die("--handoff takes an https link without a user name or password, up to 2048 characters");

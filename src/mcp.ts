@@ -24,6 +24,7 @@ import { holdSession } from "./hooks/listeners.ts";
 import { ChannelGone, goneText, reason, type Channel, type Refused, type Relay } from "@kiwi/core/client.ts";
 import {
   ago,
+  alsoAnswers,
   cardLine,
   formatFact,
   formatMessage,
@@ -542,14 +543,14 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         const choices = options?.map((o) => o.trim());
         if (choices && !wellFormedChoices(choices))
           return yield* new Rejected(`options takes ${CHOICES_MIN} to ${CHOICES_MAX} different answers, one line of up to ${CHOICE_MAX_LENGTH} characters each`);
-        const { seq, to } = yield* s.escalate(text, re, undefined, {
+        const { seq, to, also } = yield* s.escalate(text, re, undefined, {
           ...(choices ? { choices } : {}),
           ...(task !== undefined ? { task } : {}),
           ...(holds?.length ? { holds } : {}),
           ...(kind ? { decision: kind } : {}),
         });
         const none = task === undefined && !holds?.length ? "; it holds nothing up, so it goes to their digest, not Needs you" : "";
-        return `escalated #${seq} to ${to.join(" and ")}${choices ? ` with ${choices.length} options` : ""}${none}; wait for their answer before acting on it`;
+        return `escalated #${seq} to ${to.join(" and ")}${choices ? ` with ${choices.length} options` : ""}${alsoAnswers(also)}${none}; wait for their answer before acting on it`;
       }),
     ),
   );

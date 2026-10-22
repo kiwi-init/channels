@@ -1,7 +1,7 @@
 import { EVENT_OPS_VERSION, GENERAL_ROOM, ignored, isOldGifKey, isReaction, MAX_ROOMS, ROOM_ID_RE, type Message, type Trust } from "../protocol.ts";
 import { refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
-import { allowedOnHold, isLeadRole, isPerson, LEAD, ON_HOLD } from "./people.ts";
+import { allowedOnHold, answersDecisions, isLeadRole, isPerson, LEAD, ON_HOLD } from "./people.ts";
 import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
 import { askHeadOf, fileTask } from "./asks.ts";
@@ -73,6 +73,7 @@ export function fold(
       scopes: scopesOf(r),
       ...(r.runs ? { runs: r.runs } : {}),
       ...(r.persona ? { persona: r.persona } : {}),
+      ...(r.answersDecisions && r.kind === "human" && !r.owner ? { answersDecisions: true } : {}),
       owner: r.owner,
       joined: r.at,
       lastSeen: r.at,
@@ -427,7 +428,7 @@ export function fold(
     if (m.permission)
       return !(settledBy.get(m.seq)?.has(m.from) || now > m.permission.expiresAt || (permReplies.get(m.seq) ?? []).some((r) => permissionAnswer(m, r, { trust, members, bySeq: permBySeq }) !== null));
     const by = answered.get(m.seq);
-    const answers = (n: string) => (m.esc ? !!m.to?.includes(n) : n !== m.from);
+    const answers = (n: string) => (m.esc ? !!m.to?.includes(n) || (!m.handoff && answersDecisions(members, n)) : n !== m.from);
     return !by || ![...by].some(answers);
   });
 

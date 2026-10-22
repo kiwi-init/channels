@@ -3,7 +3,7 @@ import type { IconSvgElement } from "@hugeicons/react"
 import { useState, type ReactNode } from "react"
 
 import { freeHandle, seededPick } from "@kiwi/core/handles.ts"
-import { nameKey, type JoinRequest } from "@kiwi/core/membership.ts"
+import { nameKey, type JoinRequest, type PersonPowers } from "@kiwi/core/membership.ts"
 import { HANDOFF_DONE, HANDOFF_FAILED, type Message } from "@kiwi/core/protocol.ts"
 import { TOO_MANY_REQUESTS } from "@kiwi/core/sas.ts"
 import { taskId, type Task } from "@kiwi/core/state.ts"
@@ -18,7 +18,7 @@ import { useControls } from "./controls"
 import { Icon } from "./icon"
 import { Button, Checkbox, Monogram, TextField, errorText, toast } from "./kit"
 import { ComposerQuestion, PermissionItem } from "./lazy"
-import { defaultAddsAgents, defaultScopes } from "./scopes"
+import { defaultPowers, defaultScopes, POWER_WORDS, POWERS } from "./scopes"
 import { AgentFacts } from "./agent-facts"
 
 /**
@@ -172,7 +172,7 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
   const who = r.kind === "human" ? (r.person ? `A person · key ${r.person.slice(0, 8)}` : "A person") : r.computer ? `An agent on ${r.computer.personName}’s ${r.computer.label}` : "An agent"
   const lead = <Monogram name={r.display || r.name} hue={r.name} agent={r.kind !== "human"} size={28} />
   const pinnedAs = usePinned(r.pin)
-  const [addsAgents, setAddsAgents] = useState(() => r.kind === "human" && defaultAddsAgents(roomId))
+  const [powers, setPowers] = useState<PersonPowers>(() => (r.kind === "human" ? defaultPowers(roomId) : {}))
   return (
     <Row
       lead={lead}
@@ -194,10 +194,14 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
             </span>
           )}
           {r.kind === "human" && r.check === "ready" && (
-            <label className="mt-1.5 flex items-center gap-2 text-ink-2">
-              <Checkbox checked={addsAgents} onChange={(e) => setAddsAgents(e.target.checked)} disabled={busy} />
-              Can add agents
-            </label>
+            <span className="mt-1.5 flex flex-wrap items-center gap-x-5 gap-y-1 text-ink-2">
+              {POWERS.map((power) => (
+                <label key={power} className="flex items-center gap-2">
+                  <Checkbox checked={!!powers[power]} onChange={(e) => setPowers({ ...powers, [power]: e.target.checked })} disabled={busy} />
+                  {POWER_WORDS[power].label}
+                </label>
+              ))}
+            </span>
           )}
         </>
       }
@@ -223,11 +227,11 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
             size="sm"
             variant="secondary"
             disabled={busy || (!!r.pin && pinnedAs === undefined)}
-            onClick={() => run(() => p.onApprove(r, defaultScopes(roomId), pinnedAs ?? undefined, addsAgents), pinnedAs ? `${r.name} joined as ${pinnedAs.name}` : `${r.name} joined`)}
+            onClick={() => run(() => p.onApprove(r, defaultScopes(roomId), pinnedAs ?? undefined, powers), pinnedAs ? `${r.name} joined as ${pinnedAs.name}` : `${r.name} joined`)}
           >
             {pinnedAs ? `It matches: let in as ${pinnedAs.name}` : "It matches: let in"}
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => ask({ kind: "approve", req: r, addsAgents })}>
+          <Button size="sm" variant="ghost" onClick={() => ask({ kind: "approve", req: r, powers })}>
             Choose what it can do…
           </Button>
         </>

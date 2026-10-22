@@ -44,6 +44,15 @@ describe("asksFor", () => {
   test("nothing open is nothing to show", () => {
     expect(asksFor([], "jon")).toEqual({ decisions: [], escalations: [], questions: [] })
   })
+
+  test("a person who answers decisions sees agents' decisions to others, but not their permission prompts or browser handoffs", () => {
+    const decision = ask(1, "bot", { to: ["jon"], esc: true })
+    const permission = ask(2, "bot", { to: ["jon"], esc: true, permission: { tool: "Bash", command: "ls", cwd: "/repo", nonce: "n", expiresAt: 1, canAllow: true } })
+    const handoff = ask(3, "bot", { to: ["jon"], esc: true, handoff: { url: "https://example.com/x", vendor: "x", expiresAt: 1 } })
+    const question = ask(4, "bot", { to: ["jon"] })
+    expect(asksFor([decision, permission, handoff, question], "ana", true)).toEqual({ decisions: [decision], escalations: [], questions: [] })
+    expect(asksFor([decision, permission, handoff, question], "ana")).toEqual({ decisions: [], escalations: [], questions: [] })
+  })
 })
 
 describe("heldAsks", () => {
@@ -93,6 +102,10 @@ describe("who chose what", () => {
   test("only someone it was asked of chooses; the asker, other people and other threads don't", () => {
     expect(chosenOf(asked, [reply(14, "bot", "A"), reply(15, "ana", "A"), reply(16, "jon", "A", { re: [99] })])).toBeUndefined()
     expect(chosenOf({ ...asked, to: ["*"] }, [reply(17, "ana", "A")])).toEqual({ choice: options[0]!, by: "ana", at: 17000 })
+  })
+
+  test("a person who answers decisions chooses too", () => {
+    expect(chosenOf(asked, [reply(22, "ana", "B")], ["ana"])).toEqual({ choice: options[1]!, by: "ana", at: 22000 })
   })
 
   test("the first choice counts, and an ask without options has none", () => {

@@ -35,10 +35,19 @@ export function MemberActions({ m, trigger, onMessage }: { m: RosterMember; trig
           {now && scopesLine(now.scopes) === "read only" ? "Let them write…" : now && scopesLine(now.scopes) ? "Let them do everything…" : "Make read-only…"}
         </MenuItem>
       )}
-      {m.kind === "human" && p.onAddsAgents && (
-        <MenuItem onClick={() => void run(() => p.onAddsAgents!(m, !m.addsAgents), m.addsAgents ? `${memberName(m)}’s agents wait for you now` : `${memberName(m)} can add agents`)}>
-          {m.addsAgents ? "Stop them adding agents" : "Let them add agents"}
-        </MenuItem>
+      {m.kind === "human" && p.onPowers && (
+        <>
+          <MenuItem onClick={() => void run(() => p.onPowers!(m, { addsAgents: !m.addsAgents }), m.addsAgents ? `${memberName(m)}’s agents wait for you now` : `${memberName(m)} can add agents`)}>
+            {m.addsAgents ? "Stop them adding agents" : "Let them add agents"}
+          </MenuItem>
+          <MenuItem
+            onClick={() =>
+              void run(() => p.onPowers!(m, { answersDecisions: !m.answersDecisions }), m.answersDecisions ? `${memberName(m)} no longer answers decisions` : `${memberName(m)} can answer decisions`)
+            }
+          >
+            {m.answersDecisions ? "Stop them answering decisions" : "Let them answer decisions"}
+          </MenuItem>
+        </>
       )}
       <MenuSeparator />
       <MenuItem tone="danger" onClick={() => ask({ kind: "remove", member: m })}>

@@ -163,6 +163,7 @@ export class ChannelRequests {
         ...(sponsor ? { sponsor } : {}),
         ...(kind === "human" && req.person ? { person: req.person } : {}),
         ...(kind === "human" && as?.addsAgents ? { addsAgents: true } : {}),
+        ...(kind === "human" && as?.answersDecisions ? { answersDecisions: true } : {}),
         ...(kind === "agent" && req.computer ? { from: { pk: req.computer.pk, label: req.computer.label } } : {}),
         ...(kind === "agent" && req.runs ? { runs: req.runs } : {}),
         ...(persona ? { persona } : {}),

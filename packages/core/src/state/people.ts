@@ -1,5 +1,5 @@
 import type { Color, Message } from "../protocol.ts";
-import type { ChannelState } from "./types.ts";
+import type { ChannelState, Member } from "./types.ts";
 
 export const isPerson = (m: { kind?: string; owner?: boolean }) => m.kind === "human" || !!m.owner;
 
@@ -7,6 +7,16 @@ export function humanOf(state: Pick<ChannelState, "members">, name: string): str
   const m = state.members.get(name);
   if (!m || isPerson(m) || !m.sponsor) return null;
   return [...state.members.values()].find((x) => x.active && isPerson(x) && x.sponsor?.user === m.sponsor!.user)?.name ?? null;
+}
+
+export function answersDecisions(members: ReadonlyMap<string, Pick<Member, "active" | "answersDecisions">>, name: string): boolean {
+  const m = members.get(name);
+  return !!m?.active && !!m.answersDecisions;
+}
+
+export function decidersOf(state: Pick<ChannelState, "members">, m: Pick<Message, "esc" | "to" | "handoff" | "permission">): string[] {
+  if (!m.esc || m.handoff || m.permission) return [];
+  return [...state.members.values()].filter((x) => answersDecisions(state.members, x.name) && !m.to?.includes(x.name)).map((x) => x.name);
 }
 
 export function ownerOf(state: Pick<ChannelState, "members">): string | null {

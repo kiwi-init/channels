@@ -1,3 +1,4 @@
+import type { PersonPowers } from "@kiwi/core/membership.ts"
 import { presetOf, SCOPES, type Scope } from "@kiwi/core/scopes.ts"
 import { Checkbox } from "./kit"
 
@@ -55,34 +56,55 @@ export function saveDefaultScopes(roomId: string, scopes: Scope[]): void {
   }
 }
 
-const AGENTS_KEY = (roomId: string) => `mc.addsAgents.${roomId}`
+export const POWERS = ["addsAgents", "answersDecisions"] as const
+type Power = (typeof POWERS)[number]
 
-export function defaultAddsAgents(roomId: string): boolean {
-  try {
-    return localStorage.getItem(AGENTS_KEY(roomId)) === "1"
-  } catch {
-    return false
-  }
+export const POWER_WORDS: Record<Power, { label: string; on: string; off: string }> = {
+  addsAgents: {
+    label: "Can add agents",
+    on: "Their agents join on their own from computers paired with their Kiwi app, while yours is open.",
+    off: "Their agents wait for you to let them in.",
+  },
+  answersDecisions: {
+    label: "Can answer decisions",
+    on: "They see agents’ decisions in Needs you and answer them, as you do. Permission prompts and browser handoffs stay with you and each agent’s own person.",
+    off: "Agents’ decisions go to you and each agent’s own person.",
+  },
 }
 
-export function saveDefaultAddsAgents(roomId: string, on: boolean): void {
+const POWER_KEY = (roomId: string, power: Power) => `mc.${power}.${roomId}`
+
+export function defaultPowers(roomId: string): PersonPowers {
+  const on = (power: Power) => {
+    try {
+      return localStorage.getItem(POWER_KEY(roomId, power)) === "1"
+    } catch {
+      return false
+    }
+  }
+  return { addsAgents: on("addsAgents"), answersDecisions: on("answersDecisions") }
+}
+
+export function saveDefaultPowers(roomId: string, powers: PersonPowers): void {
   try {
-    localStorage.setItem(AGENTS_KEY(roomId), on ? "1" : "0")
+    for (const power of POWERS) localStorage.setItem(POWER_KEY(roomId, power), powers[power] ? "1" : "0")
   } catch {
     // A full or blocked store just forgets the preference.
   }
 }
 
-export function AddsAgentsPicker({ value, onChange, disabled }: { value: boolean; onChange: (on: boolean) => void; disabled?: boolean }) {
+export function PowersPicker({ value, onChange, disabled }: { value: PersonPowers; onChange: (powers: PersonPowers) => void; disabled?: boolean }) {
   return (
-    <div className="grid gap-1">
-      <label className="flex items-center gap-2 text-ui text-ink">
-        <Checkbox checked={value} onChange={(e) => onChange(e.target.checked)} disabled={disabled} />
-        Can add agents
-      </label>
-      <p className="text-meta leading-snug text-ink-3">
-        {value ? "Their agents join on their own from computers paired with their Kiwi app, while yours is open." : "Their agents wait for you to let them in."}
-      </p>
+    <div className="grid gap-3">
+      {POWERS.map((power) => (
+        <div key={power} className="grid gap-1">
+          <label className="flex items-center gap-2 text-ui text-ink">
+            <Checkbox checked={!!value[power]} onChange={(e) => onChange({ ...value, [power]: e.target.checked })} disabled={disabled} />
+            {POWER_WORDS[power].label}
+          </label>
+          <p className="text-meta leading-snug text-ink-3">{value[power] ? POWER_WORDS[power].on : POWER_WORDS[power].off}</p>
+        </div>
+      ))}
     </div>
   )
 }

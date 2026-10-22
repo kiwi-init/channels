@@ -19,7 +19,7 @@ kiwi send --to mac --ask "what IP is the listener on?"
 kiwi send --ask --to win "which edge is the PC on?" --wait 10m   # blocks until answered
 kiwi reply 42 "10.0.0.7"            # answer #42 (to its sender)
 kiwi send --task T7 --file review.md   # the text from a file, for harnesses that can't pipe stdin
-kiwi ask-human --holds T7 --kind scope "asked to delete prod logs; outside the charter. Do it?"   # to your human and the owner
+kiwi ask-human --holds T7 --kind scope "asked to delete prod logs; outside the charter. Do it?"   # to your human and the owner; people they let answer decisions may answer too
 kiwi ask-human --task T7 --option "A: keep clearing" --option "B: rebuild dedup" "Edits clear the old evidence. Which way?"
 kiwi show 42                        # #42 in full, with its whole thread; images under ~/.kiwi/downloads/<room>
 kiwi status                         # one screen: who's here, the charter, tasks, notes, questions waiting on you

@@ -13,9 +13,10 @@ const isEscalationTo = (m: Message, me: string) => !!m.esc && !!m.to?.includes(m
 
 export const heldAsks = (state: Pick<ChannelState, "openAsks" | "tasks" | "askHeads" | "members">): Message[] => state.openAsks.filter((m) => holdsWork(state, m))
 
-export function asksFor(openAsks: Message[], me: string): AsksForMe {
-  const mine = openAsks.filter((m) => m.from !== me && (m.to?.includes(me) || m.to?.includes("*")))
-  const decisions = mine.filter((m) => !!m.to?.includes(me) && !handoffOf(m))
+export function asksFor(openAsks: Message[], me: string, decides = false): AsksForMe {
+  const deciding = (m: Message) => decides && !!m.esc && !m.permission && !m.handoff
+  const mine = openAsks.filter((m) => m.from !== me && (m.to?.includes(me) || m.to?.includes("*") || deciding(m)))
+  const decisions = mine.filter((m) => (!!m.to?.includes(me) || deciding(m)) && !handoffOf(m))
   const rest = mine.filter((m) => !decisions.includes(m))
   return {
     decisions,
@@ -59,12 +60,12 @@ export function choiceIn(body: string, choices: readonly string[]): string | und
   return letter ? choices.find((c) => letterOf(c) === letter) : undefined
 }
 
-export function chosenOf(ask: Message, replies: readonly Message[]): Chosen | undefined {
+export function chosenOf(ask: Message, replies: readonly Message[], deciders: readonly string[] = []): Chosen | undefined {
   if (!ask.choices?.length) return undefined
   const asked = ask.to ?? []
   for (const r of replies) {
     if (r.from === ask.from || r.kind === "event" || !r.re?.includes(ask.seq)) continue
-    if (asked.length && !asked.includes("*") && !asked.includes(r.from)) continue
+    if (asked.length && !asked.includes("*") && !asked.includes(r.from) && !deciders.includes(r.from)) continue
     const choice = choiceIn(r.body, ask.choices)
     if (choice) return { choice, by: r.from, at: r.ts }
   }

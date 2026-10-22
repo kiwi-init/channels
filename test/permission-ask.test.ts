@@ -80,7 +80,7 @@ function relay(onClose: Effect.Effect<void> = Effect.void, onRead: (readsSinceAn
           ...(ask.id ? { id: ask.id } : {}),
           ...(ask.permission ? { permission: ask.permission } : {}),
         });
-        return { seq: m.seq, to };
+        return { seq: m.seq, to, also: [] };
       }),
     reply: (seq, _body, _kind, _imgs, extra = {}) => Effect.sync(() => (replies.push({ re: seq, settled: extra.settled }), log.length)),
     ch: { fx: { head: () => Effect.succeed(log.length), live: () => Stream.fromQueue(frames).pipe(Stream.ensuring(onClose)) } },

@@ -16,6 +16,7 @@ export interface Member {
   card?: Card & { at: number };
   runs?: Runs;
   persona?: Persona;
+  answersDecisions?: boolean;
   owner: boolean;
   joined: number;
   active: boolean;
@@ -42,6 +43,7 @@ export type Roster = {
   laterRole?: { role: string | null; about?: string | null; since: number };
   runs?: Runs;
   persona?: Persona;
+  answersDecisions?: boolean;
 }[];
 
 export const toRoster = (m: MemberRecord): Roster[number] => ({
@@ -61,6 +63,7 @@ export const toRoster = (m: MemberRecord): Roster[number] => ({
   ...(m.laterRole ? { laterRole: m.laterRole } : {}),
   ...(m.runs ? { runs: m.runs } : {}),
   ...(m.persona ? { persona: m.persona } : {}),
+  ...(m.answersDecisions ? { answersDecisions: true } : {}),
 });
 
 export const rosterOf = (members: readonly MemberRecord[]): Roster => members.filter((m) => !m.unverified).map(toRoster);

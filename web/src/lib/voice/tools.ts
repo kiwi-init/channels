@@ -1,5 +1,5 @@
 import type { Message } from "@kiwi/core/protocol.ts"
-import { taskId, type ChannelState, type Task } from "@kiwi/core/state.ts"
+import { answersDecisions, taskId, type ChannelState, type Task } from "@kiwi/core/state.ts"
 import { memberLoad } from "@kiwi/core/load.ts"
 import type { SendOptions } from "@kiwi/core/client.ts"
 
@@ -129,7 +129,7 @@ function taskLine(t: Task, nameOf: (n: string) => string) {
 }
 
 function waiting(ctx: ToolCtx): Message[] {
-  const { decisions, escalations, questions } = asksFor(heldAsks(ctx.state), ctx.me)
+  const { decisions, escalations, questions } = asksFor(heldAsks(ctx.state), ctx.me, answersDecisions(ctx.state.members, ctx.me))
   return [...decisions, ...escalations, ...questions].filter((m) => !m.permission).sort((a, b) => a.seq - b.seq)
 }
 

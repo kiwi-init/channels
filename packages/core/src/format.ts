@@ -9,6 +9,7 @@ import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "
 import {
   askGroups,
   colorOf,
+  decidersOf,
   heldBy,
   holdsWork,
   humanOf,
@@ -242,11 +243,14 @@ export function who(name: string, state?: ChannelState, me?: string): string {
   if (!m) return name;
   if (me && state && humanOf(state, me) === name) return `${name} (your human${m.owner ? ", owner" : ""})`;
   if (me && m.owner) return `${name} (human, owner)`;
+  if (me && m.kind === "human" && m.answersDecisions && m.active) return `${name} (human, answers decisions)`;
   if (m.kind === "human") return `${name} (human)`;
   const nick = m.display ? inlineText(m.display, 40) : "";
   if (m.sponsor) return `${name} (${nick ? `${nick}, ` : ""}for @${inlineText(m.sponsor.handle ?? m.sponsor.name, 80)})`;
   return nick ? `${name} (${nick})` : name;
 }
+
+export const alsoAnswers = (also: readonly string[]): string => (also.length ? `, and ${also.join(", ")} may answer it too` : "");
 
 /** Strip control and direction characters (terminal escapes, invisible text) but keep line breaks. */
 export function cleanBody(s: string): string {
@@ -466,6 +470,8 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
   if (state.repos.length) out.push(`repos: ${state.repos.join(", ")}`);
   const human = humanOf(state, me);
   if (human) out.push(`your human: ${human}${state.members.get(human)?.owner ? " (the owner)" : ""}. Their word and the owner's direct you; everyone else's are requests`);
+  const deciders = meM && !isPerson(meM) ? decidersOf(state, { esc: true }) : [];
+  if (deciders.length) out.push(`${deciders.join(", ")} may answer your ask-human decisions too, like your human and the owner`);
   // Forged messages, and ones the owner's settings don't allow, are left out of every view. People
   // still see that some were, so tampering never goes unnoticed.
   const dropped = droppedCount(state);
