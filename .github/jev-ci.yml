@@ -75,7 +75,9 @@ jobs:
     inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/workflows/nightly.yml", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "desktop/package.json", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
     always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts", "scripts/ci-flows.ts", "scripts/ci-shards.ts"]
     description: >-
-      Runs the unit tests with bun test (failing when the run ends before every file ran, which
+      On two runners at once (a matrix of `scripts/ci-tests.ts unit --shard=N/2`, dealt by
+      test/timings.json like cli / macos; each shard saves its own jev-ci pass and the plan counts
+      the job passed only once both have), runs the unit tests with bun test (failing when the run ends before every file ran, which
       scripts/ci-tests.ts checks for every group from the last summary bun prints, without waiting
       on a process a test left holding its output: test/ci-tests.test.ts runs it on throwaway
       projects): every test/*.test.ts except the slow suites in
@@ -686,7 +688,8 @@ jobs:
     imports_from: ["test/e2e.test.ts", "test/verbs.test.ts", "test/threads.test.ts", "test/reconnect.test.ts", "test/cache-trim.test.ts", "test/budget-*.test.ts"]
     always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts", "scripts/ci-shards.ts"]
     description: >-
-      Runs slow end-to-end tests (failing when the run ends before every file ran) that start a real local relay (src/relay/bun.ts) and drive the
+      On two runners at once (`scripts/ci-tests.ts flows-a --shard=N/2`, dealt by test/timings.json,
+      a jev-ci pass per shard), runs slow end-to-end tests (failing when the run ends before every file ran) that start a real local relay (src/relay/bun.ts) and drive the
       kiwi CLI and client: e2e (create a channel, join, send and listen through the relay),
       verbs (the agent CLI verbs and their aliases; an agent's task add without --ask, --from or --issue refused with the fix named, and kiwi task listing the board under the person's message each task serves; review rounds: an agent's task review on a task
       with no reviewer is refused with how to name one, and its reviewer handing the review on with
@@ -708,7 +711,8 @@ jobs:
     imports_from: ["test/join-seats.test.ts", "test/read-receipts.test.ts", "test/daemon-pair.test.ts", "test/sh-escape.test.ts", "test/reclaim.test.ts", "test/wake-yourself.test.ts", "test/seats.test.ts", "test/multi-seat.test.ts", "test/handoff.test.ts", "test/hooks-once.test.ts", "test/hooks-hung-relay.test.ts", "test/offline-read.test.ts", "test/hooks-reentry.test.ts", "test/hooks-persona.test.ts", "test/mimo-wake-restart.test.ts", "test/held-seat.test.ts"]
     always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts", "scripts/ci-shards.ts"]
     description: >-
-      Runs slow agent-flow tests (failing when the run ends before every file ran) against a real local relay and the kiwi CLI: join-seats
+      On two runners at once (`scripts/ci-tests.ts flows-b --shard=N/2`, dealt by test/timings.json,
+      a jev-ci pass per shard), runs slow agent-flow tests (failing when the run ends before every file ran) against a real local relay and the kiwi CLI: join-seats
       (joining, one seat per agent, Claude Code hooks doing the listening, and a Codex hook run from inside
       a Claude Code session, its CLAUDECODE and CLAUDE_CODE_SESSION_ID inherited, serving no Claude seat
       and leaving that seat's messages unread because the hook names its harness with --harness), read-receipts,
