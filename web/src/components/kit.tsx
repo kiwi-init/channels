@@ -263,6 +263,7 @@ interface ToastItem {
   id: number
   text: string
   tone?: "error"
+  leaving?: boolean
 }
 
 let toasts: ToastItem[] = []
@@ -281,8 +282,12 @@ export function toast(text: string, tone?: "error") {
   emit()
   setTimeout(
     () => {
-      toasts = toasts.filter((t) => t.id !== id)
+      toasts = toasts.map((t) => (t.id === id ? { ...t, leaving: true } : t))
       emit()
+      setTimeout(() => {
+        toasts = toasts.filter((t) => t.id !== id)
+        emit()
+      }, 160)
     },
     tone === "error" ? 6000 : 2200
   )
@@ -303,7 +308,11 @@ export function Toaster() {
         <div
           key={t.id}
           role="status"
-          className={cx("animate-rise max-w-md rounded-card px-3.5 py-2 text-ui font-medium shadow-pop", t.tone === "error" ? "bg-alert-fill text-white" : "bg-ink text-canvas")}
+          className={cx(
+            "max-w-md rounded-card px-3.5 py-2 text-ui font-medium shadow-pop",
+            t.leaving ? "animate-leave" : "animate-rise",
+            t.tone === "error" ? "bg-alert-fill text-white" : "bg-ink text-canvas"
+          )}
         >
           {t.text}
         </div>
