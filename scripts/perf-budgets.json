@@ -5,7 +5,7 @@
     "reloadMs": { "what": "Reload to first screen", "at": ["@1x", "reloadToTasksMs"], "per": "@1x", "inPage": ["reload, in page", "firstScreenMs"], "budget": 400, "gate": 900 },
     "tasksMs": { "what": "Tasks tab @4x", "at": ["@4x", "switchMedianMs", "Tasks"], "per": "@4x", "budget": 100, "gate": 220 },
     "agentsMs": { "what": "Agents tab @4x", "at": ["@4x", "switchMedianMs", "Agents"], "per": "@4x", "budget": 100, "gate": 115 },
-    "conversationMs": { "what": "Conversation tab @4x", "at": ["@4x", "switchMedianMs", "Conversation"], "per": "@4x", "budget": 100, "gate": 470 },
+    "conversationMs": { "what": "Conversation tab @4x", "at": ["@4x", "switchMedianMs", "Conversation"], "per": "@4x", "budget": 100, "gate": 330 },
     "typingP95Ms": { "what": "Typing while agents post, p95 key event", "at": ["typing", "p95Ms"], "per": "@1x", "budget": 32, "gate": 165 },
     "heapMBPerHour": { "what": "Soak: heap growth per hour", "at": ["soak", "heapSlopeMBPerHour"], "budget": 5, "gate": null, "nightly": true },
     "nodesPerHour": { "what": "Soak: DOM nodes per hour", "at": ["soak", "nodesSlopePerHour"], "budget": 5000, "gate": null, "nightly": true },
