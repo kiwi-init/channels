@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { received } from "@kiwi/core/client/history.ts";
 import { newChannelKey } from "@kiwi/core/crypto.ts";
-import { generateIdentity, verify } from "@kiwi/core/identity.ts";
+import { describeEvent } from "@kiwi/core/format.ts";
+import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { EVENT_OPS_VERSION, isQuiet, knownOp, outgrown, PROTOCOL_VERSION, wellFormed, type Event, type Message } from "@kiwi/core/protocol.ts";
 import { openSnapshot, sealSnapshot } from "@kiwi/core/snapshot.ts";
 import { fold, type FoldBase, type Roster } from "@kiwi/core/state.ts";
@@ -210,5 +211,46 @@ describe("events from a newer client", () => {
     const older = await sealSnapshot(owner, access, { ...base, folded: EVENT_OPS_VERSION - 1 });
     expect(older).not.toBeNull();
     expect(await openSnapshot(access, older)).toBeNull();
+  });
+});
+
+describe("voice.set, from when Channels had voice", () => {
+  test("an old log's voice.set still verifies and folds to nothing: the owner's changes no state, anyone else's is refused as before", async () => {
+    const jow = await generateIdentity("jow");
+    const ann = await generateIdentity("ann");
+    const people: Roster = [
+      { name: "jow", pk: jow.pk, owner: true, at: 0, active: true, kind: "human" },
+      { name: "ann", pk: ann.pk, owner: false, at: 0, active: true, kind: "agent" },
+    ];
+    const voiceSet = async (id: Identity, seq: number, on: boolean): Promise<Message> => {
+      const p = await sign(id, { v: PROTOCOL_VERSION, id: crypto.randomUUID(), from: id.name, kind: "event" as const, body: "", ev: { op: "voice.set" as const, on }, ts: T0 + seq });
+      if (!wellFormed(p)) throw new Error(`#${seq} is malformed`);
+      return received(p, seq, T0 + seq, await verify(p));
+    };
+    const allowed = await voiceSet(jow, 1, true);
+    const byAgent = await voiceSet(ann, 2, true);
+    const off = await voiceSet(jow, 3, false);
+    expect([allowed, byAgent, off].map((m) => [m.sigOk, m.ev?.op, m.newer])).toEqual([
+      [true, "voice.set", undefined],
+      [true, "voice.set", undefined],
+      [true, "voice.set", undefined],
+    ]);
+    const s = fold([allowed, byAgent, off], people, T0 + 3_600_000);
+    expect([...s.rejected]).toEqual([[2, "only the owner allows voice in the channel"]]);
+    expect(Object.hasOwn(s, "voice")).toBe(false);
+    expect(describeEvent(allowed)).toBe("allowed voice in the channel (gone: Channels no longer has voice)");
+    expect(describeEvent(off)).toBe("turned voice off for the channel (gone: Channels no longer has voice)");
+    const base = { v: PROTOCOL_VERSION, id: "x", from: "jow", kind: "event", body: "", ts: T0 };
+    expect(wellFormed({ ...base, ev: { op: "voice.set", on: "yes" } })).toBe(false);
+    expect(wellFormed({ ...base, ev: { op: "voice.set" } })).toBe(false);
+  });
+
+  test("a snapshot sealed while it carried voice still opens, and folds without it", async () => {
+    const owner = await generateIdentity("jow");
+    const access = { roomId: "ef".repeat(16), ownerPk: owner.pk, ownerXpk: owner.xpk ?? "", epoch: 0, keys: { "0": newChannelKey() } };
+    const base = baseOf((await decoded()).filter((m) => m.newer === undefined));
+    const kept = await openSnapshot(access, await sealSnapshot(owner, access, { ...base, voice: true }));
+    expect(kept?.voice).toBe(true);
+    expect(Object.hasOwn(fold([], roster, T0 + 3_600_000, null, null, kept), "voice")).toBe(false);
   });
 });

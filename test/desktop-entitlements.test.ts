@@ -8,8 +8,9 @@ const CLI = "desktop/build/entitlements.cli.plist";
 const keys = (file: string) => [...readFileSync(file, "utf8").matchAll(/<key>([^<]+)<\/key>/g)].map((m) => m[1]);
 const workflow = readFileSync(".github/workflows/release-build.yml", "utf8");
 
-test("Channels.app runs V8 and the microphone, nothing more; only the bundled kiwi gets Bun's DYLD and library entitlements", () => {
-  expect(keys(APP)).toEqual(["com.apple.security.cs.allow-jit", "com.apple.security.cs.allow-unsigned-executable-memory", "com.apple.security.device.audio-input"]);
+test("Channels.app runs V8, nothing more: no microphone; only the bundled kiwi gets Bun's DYLD and library entitlements", () => {
+  expect(keys(APP)).toEqual(["com.apple.security.cs.allow-jit", "com.apple.security.cs.allow-unsigned-executable-memory"]);
+  expect([...keys(APP), ...keys(CLI)]).not.toContain("com.apple.security.device.audio-input");
   expect(keys(CLI)).toEqual([
     "com.apple.security.cs.allow-jit",
     "com.apple.security.cs.allow-unsigned-executable-memory",
@@ -17,8 +18,9 @@ test("Channels.app runs V8 and the microphone, nothing more; only the bundled ki
     "com.apple.security.cs.disable-library-validation",
     "com.apple.security.cs.allow-dyld-environment-variables",
   ]);
-  const mac = (JSON.parse(readFileSync("desktop/package.json", "utf8")) as { build: { mac: { entitlements: string; entitlementsInherit: string } } }).build.mac;
+  const mac = (JSON.parse(readFileSync("desktop/package.json", "utf8")) as { build: { mac: { entitlements: string; entitlementsInherit: string; extendInfo?: Record<string, string> } } }).build.mac;
   expect([mac.entitlements, mac.entitlementsInherit]).toEqual(["build/entitlements.app.plist", "build/entitlements.app.plist"]);
+  expect(mac.extendInfo?.NSMicrophoneUsageDescription).toBeUndefined();
   expect(workflow).toContain("--entitlements build/entitlements.cli.plist");
   expect(workflow).not.toContain("entitlements.mac.plist");
 });
@@ -60,11 +62,14 @@ function signed(name: string, app: string | null, helper: string): { code: numbe
 test.skipIf(process.platform !== "darwin")("a signed release refuses an app or helper carrying the CLI's entitlements, and passes the app's own", () => {
   const plus = join(root, "plus.plist");
   writeFileSync(plus, readFileSync(APP, "utf8").replace("  </dict>", "    <key>com.apple.security.cs.disable-library-validation</key>\n    <true/>\n  </dict>"));
+  const mic = join(root, "mic.plist");
+  writeFileSync(mic, readFileSync(APP, "utf8").replace("  </dict>", "    <key>com.apple.security.device.audio-input</key>\n    <true/>\n  </dict>"));
   expect(signed("good", APP, APP)).toEqual({ code: 0, out: "" });
   const cases: [string, string | null, string, string][] = [
     ["helper with the CLI's", APP, CLI, "Channels Helper.app carries com.apple.security.cs.allow-dyld-environment-variables"],
     ["app with library validation off", plus, APP, "Channels.app carries com.apple.security.cs.disable-library-validation"],
-    ["app with the CLI's (no microphone)", CLI, APP, "or it lacks the microphone"],
+    ["app with the CLI's", CLI, APP, "Channels.app carries com.apple.security.cs.allow-dyld-environment-variables"],
+    ["app with the microphone", mic, APP, "Channels.app carries com.apple.security.device.audio-input"],
     ["app with no entitlements", null, APP, "couldn't read the entitlements"],
   ];
   for (const [what, app, helper, says] of cases) {

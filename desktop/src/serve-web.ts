@@ -5,13 +5,12 @@ import { app, protocol } from "electron";
 import { APP_HOST, APP_SCHEME, csp, fileFor } from "./guard.ts";
 import { mimeOf } from "./mime.ts";
 import { store } from "./store.ts";
-import { voiceOriginsFor } from "./voice.ts";
 
 const webDist = () => path.join(app.isPackaged ? process.resourcesPath : path.join(__dirname, ".."), app.isPackaged ? "web/dist" : "../web/dist");
 
 const webHeaders = (type: string): Record<string, string> => ({
   "content-type": type,
-  "content-security-policy": csp(store.relayUrl, voiceOriginsFor(store.voice)),
+  "content-security-policy": csp(store.relayUrl),
   "x-content-type-options": "nosniff",
   "referrer-policy": "no-referrer",
 });

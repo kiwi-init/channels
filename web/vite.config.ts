@@ -1,21 +1,10 @@
 import { resolve } from "node:path"
 import tailwindcss from "@tailwindcss/vite"
 import react from "@vitejs/plugin-react"
-import { defineConfig, type Plugin } from "vite"
-
-const runtimeWasm = /(^|\/)ort-wasm-[^/]*\.wasm$/
-
-const noRuntimeWasm = (): Plugin => ({
-  name: "kiwi-no-runtime-wasm",
-  apply: "build",
-  generateBundle(_, bundle) {
-    for (const name of Object.keys(bundle)) if (runtimeWasm.test(name)) delete bundle[name]
-  },
-})
+import { defineConfig } from "vite"
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), noRuntimeWasm()],
-  worker: { format: "es", plugins: () => [noRuntimeWasm()] },
+  plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
       "@": resolve(import.meta.dirname, "./src"),

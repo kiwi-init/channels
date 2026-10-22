@@ -432,16 +432,6 @@ owner, so it can enforce the create gate and the channel count. It keeps no
 names or emails, and joining doesn't sign anyone in. Room ids and join codes
 are dropped when a channel closes.
 
-**Dictation.** Speech becomes text on the person's own computer: the app runs
-Whisper locally, and the audio is never sent anywhere. The one thing that goes
-over the network is the model, about 107 MB, downloaded once through the relay
-(`/v1/dictation`) the first time someone dictates, after a notice that says so.
-The relay fetches each file from a pinned URL and checks its SHA-256, and the
-app checks it again before using it, so a changed upstream file is refused, not
-run. Hugging Face and jsDelivr see the relay, never the person. The app's CSP
-allows WebAssembly (`'wasm-unsafe-eval'`, not JavaScript eval) and workers from
-its own origin for this; it still connects only to its relay.
-
 **Read receipts.** Each member's key has a read mark at the relay: how far it
 has read (a seq) and when it got there, never what was read. So the relay
 learns when an agent took in its messages, including when a Claude Code

@@ -228,7 +228,8 @@ jobs:
             for app in release/mac*/Channels.app; do
               codesign --verify --deep --strict --verbose=2 "$app"
               ents=$(codesign -d --entitlements - --xml "$app" 2>/dev/null)
-              [[ "$ents" == *"com.apple.security.device.audio-input"* ]] || { echo "couldn't read the entitlements of $app, or it lacks the microphone"; exit 1; }
+              [[ "$ents" == *"com.apple.security.cs.allow-jit"* ]] || { echo "couldn't read the entitlements of $app"; exit 1; }
+              [[ "$ents" != *"com.apple.security.device.audio-input"* ]] || { echo "$app carries com.apple.security.device.audio-input, and Channels doesn't use the microphone"; exit 1; }
               for bin in "$app" "$app"/Contents/Frameworks/*.app; do
                 ents=$(codesign -d --entitlements - --xml "$bin" 2>/dev/null)
                 for e in allow-dyld-environment-variables disable-library-validation disable-executable-page-protection; do

@@ -41,11 +41,9 @@ import {
   type SqlParam,
 } from "./room.ts";
 import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
-import { hexOf, type Hasher } from "@kiwi/core/dictation.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
 import { MACHINE_ASKS_PER_MINUTE, MACHINE_BOX_TTL_MS, MACHINE_UNSEEN_MS, machineAlarmAt, onMachineHttp, signedMachineRequest, type MachineBox, type MachineStore } from "./machine.ts";
 import { allow as allowPerMinute } from "./room/limits.ts";
-import { onDictationHttp, type DictationStore } from "./dictation.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync, type Relay } from "./route.ts";
 import { GithubApp, githubAppFrom, GithubPush, githubPushFrom } from "./github-app.ts";
 import { GITHUB_QUEUE_MAX, GITHUB_QUEUE_TTL_MS, onGithubHttp, type GithubItem, type GithubLink, type GithubRoutes } from "./github.ts";
@@ -68,7 +66,6 @@ interface Env {
   MAILBOX_WRITES: RateLimit;
   /** 60 machine registrations and inbox writes per minute per client address. */
   MACHINE_WRITES: RateLimit;
-  DICTATION_DOWNLOADS: RateLimit;
   /** "off": don't retry a room request the platform refused (to count refusals, e.g. on a canary). */
   KIWI_ROOM_RETRY?: string;
   KIWI_PAGE_KEY?: string;
@@ -477,47 +474,12 @@ function close(ws: WebSocket, code: number, reason: string): void {
   }
 }
 
-const edgeKey = (sha256: string) => `https://dictation.kiwi.invalid/${sha256}`;
-
-const edgeDictation: DictationStore = {
-  read: async (sha256) => {
-    const hit = await caches.default.match(edgeKey(sha256));
-    return hit?.body ?? null;
-  },
-  write: async (sha256, body, size) => {
-    const { readable, writable } = new FixedLengthStream(size);
-    await Promise.all([
-      caches.default.put(edgeKey(sha256), new Response(readable, { headers: { "cache-control": "public, max-age=31536000, immutable", "content-length": String(size) } })),
-      body.pipeTo(writable),
-    ]);
-  },
-};
-
-function edgeHasher(): Hasher {
-  const digest = new crypto.DigestStream("SHA-256");
-  const writer = digest.getWriter();
-  return {
-    update: (chunk) => writer.write(chunk),
-    hex: async () => {
-      await writer.close();
-      return hexOf(await digest.digest);
-    },
-  };
-}
-
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
     if (url.pathname === "/v1/config") return withCors(relayConfig(human(env), env.GITHUB_APP_CLIENT_ID));
     // The desktop app's renderer isn't served by the relay: /v1/* answers any origin.
     if (req.method === "OPTIONS" && url.pathname.startsWith("/v1/")) return corsPreflight();
-    const spoken = await onDictationHttp(req, {
-      store: url.hostname.endsWith(".workers.dev") ? null : edgeDictation,
-      hasher: edgeHasher,
-      ip: req.headers.get("cf-connecting-ip"),
-      allow: async (key) => (await env.DICTATION_DOWNLOADS.limit({ key })).success,
-    });
-    if (spoken) return spoken;
     if (url.pathname.startsWith("/v1/mailbox")) {
       // One object per mailbox id; a path without one is a 404, never a wake-up.
       const id = /^\/v1\/mailbox\/([A-Za-z0-9_-]{43})(?:\/(?:a|b))?$/.exec(url.pathname)?.[1];
