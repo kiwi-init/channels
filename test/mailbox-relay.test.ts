@@ -3,6 +3,7 @@
 // read, gone ten minutes after the first write, open to any origin.
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,7 +11,8 @@ import { generateIdentity } from "@kiwi/core/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { answerPair, askToPair, mailboxId, newSecret, openMailbox, readPairAnswer, readPairAsk } from "@kiwi/core/mailbox.ts";
 import { MAILBOX_MAX_BYTES } from "@kiwi/core/mailbox.ts";
-import { onMailboxHttp, type MailboxStore } from "../src/relay/mailbox.ts";
+import { onMailboxHttp, sqlMailboxStore, type MailboxStore } from "../src/relay/mailbox.ts";
+import type { Sql, SqlParam } from "../src/relay/room/db.ts";
 
 const dataDir = mkdtempSync(join(tmpdir(), "kiwi-mailbox-relay-"));
 let server: ReturnType<typeof startRelay> | undefined;
@@ -84,6 +86,8 @@ describe("the relay's pairing mailbox", () => {
   });
 });
 
+const call = (store: MailboxStore, path: string, init?: RequestInit, opts?: Parameters<typeof onMailboxHttp>[2]) => onMailboxHttp(new Request(`http://relay.test${path}`, init), store, opts);
+
 describe("mailbox expiry and write limiting", () => {
   /** In-memory store with a movable clock. */
   const fakeStore = () => {
@@ -95,7 +99,6 @@ describe("mailbox expiry and write limiting", () => {
     };
     return store;
   };
-  const call = (store: MailboxStore, path: string, init?: RequestInit, opts?: Parameters<typeof onMailboxHttp>[2]) => onMailboxHttp(new Request(`http://relay.test${path}`, init), store, opts);
 
   test("a mailbox read after ten minutes is empty, and a write starts it over", async () => {
     const store = fakeStore();
@@ -115,5 +118,43 @@ describe("mailbox expiry and write limiting", () => {
     const gate = { ip: "10.0.0.7", allow: () => false };
     expect((await call(store, `/v1/mailbox/${id}/a`, { method: "PUT", body: JSON.stringify({ box: "x" }) }, gate))?.status).toBe(429);
     expect((await call(store, `/v1/mailbox/${id}/a`, {}, gate))?.status).toBe(404);
+  });
+});
+
+describe("the Durable Object's mailbox store", () => {
+  const durable = () => {
+    const db = new Database(":memory:");
+    const sql: Sql = {
+      run: (q, ...p) => void db.query(q).run(...p),
+      all: <T>(q: string, ...p: SqlParam[]) => db.query(q).all(...p) as T[],
+    };
+    const tables = () => (db.query("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]).map((t) => t.name);
+    let alarm: number | null = null;
+    const store = sqlMailboxStore(sql, {
+      expireAt: async (at) => void (alarm = at),
+      wipe: async () => {
+        alarm = null;
+        for (const name of tables()) db.run(`DROP TABLE ${name}`);
+      },
+    });
+    return { store, tables, alarm: () => alarm };
+  };
+
+  test("a read after the mailbox is dropped is a 404, and reads leave no tables behind", async () => {
+    const { store, tables, alarm } = durable();
+    const id = await mailboxId(newSecret());
+    expect((await call(store, `/v1/mailbox/${id}/a`))?.status).toBe(404);
+    expect(tables()).toEqual([]);
+    expect((await call(store, `/v1/mailbox/${id}/a`, { method: "PUT", body: JSON.stringify({ box: "ask" }) }))?.status).toBe(204);
+    expect((await call(store, `/v1/mailbox/${id}/b`, { method: "PUT", body: JSON.stringify({ box: "answer" }) }))?.status).toBe(204);
+    expect(await (await call(store, `/v1/mailbox/${id}/b`))?.json()).toEqual({ box: "answer" });
+    expect(alarm()).not.toBeNull();
+    expect((await call(store, `/v1/mailbox/${id}`, { method: "DELETE" }))?.status).toBe(204);
+    expect(tables()).toEqual([]);
+    expect(alarm()).toBeNull();
+    expect((await call(store, `/v1/mailbox/${id}/b`))?.status).toBe(404);
+    expect(tables()).toEqual([]);
+    expect((await call(store, `/v1/mailbox/${id}/a`, { method: "PUT", body: JSON.stringify({ box: "again" }) }))?.status).toBe(204);
+    expect(await (await call(store, `/v1/mailbox/${id}/a`))?.json()).toEqual({ box: "again" });
   });
 });

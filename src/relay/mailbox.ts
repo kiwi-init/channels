@@ -19,6 +19,7 @@
 
 import { MAILBOX_ID_RE, MAILBOX_MAX_BYTES, MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
 import { readText } from "./http.ts";
+import type { Sql } from "./room/db.ts";
 
 interface MailboxSlots {
   a: string | null;
@@ -30,6 +31,29 @@ export interface MailboxStore {
   load(id: string): Promise<MailboxSlots | null>;
   save(id: string, rec: MailboxSlots): Promise<void>;
   drop(id: string): Promise<void>;
+}
+
+export function sqlMailboxStore(sql: Sql, storage: { expireAt(at: number): Promise<void>; wipe(): Promise<void> }): MailboxStore {
+  const kept = () => sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'meta'").length > 0;
+  const box = (slot: "a" | "b") => sql.all<{ box: string }>("SELECT box FROM slots WHERE slot = ?", slot)[0]?.box ?? null;
+  return {
+    load: async () => {
+      if (!kept()) return null;
+      const first = sql.all<{ firstAt: number }>("SELECT firstAt FROM meta")[0];
+      return first ? { a: box("a"), b: box("b"), firstAt: first.firstAt } : null;
+    },
+    save: async (_id, rec) => {
+      sql.run("CREATE TABLE IF NOT EXISTS slots (slot TEXT PRIMARY KEY, box TEXT NOT NULL)");
+      sql.run("CREATE TABLE IF NOT EXISTS meta (k INTEGER PRIMARY KEY CHECK (k = 1), firstAt INTEGER NOT NULL)");
+      sql.run("INSERT OR REPLACE INTO meta (k, firstAt) VALUES (1, ?)", rec.firstAt);
+      for (const s of ["a", "b"] as const) {
+        const written = rec[s];
+        if (written) sql.run("INSERT OR REPLACE INTO slots (slot, box) VALUES (?, ?)", s, written);
+      }
+      await storage.expireAt(rec.firstAt + MAILBOX_TTL_MS);
+    },
+    drop: () => storage.wipe(),
+  };
 }
 
 const PATH = /^\/v1\/mailbox\/([A-Za-z0-9_-]{43})(?:\/(a|b))?$/;

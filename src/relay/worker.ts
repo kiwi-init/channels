@@ -40,9 +40,8 @@ import {
   type Sql,
   type SqlParam,
 } from "./room.ts";
-import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
 import { hexOf, type Hasher } from "@kiwi/core/dictation.ts";
-import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
+import { corsPreflight, onMailboxHttp, sqlMailboxStore, withCors } from "./mailbox.ts";
 import { MACHINE_ASKS_PER_MINUTE, MACHINE_BOX_TTL_MS, MACHINE_UNSEEN_MS, machineAlarmAt, onMachineHttp, signedMachineRequest, type MachineBox, type MachineStore } from "./machine.ts";
 import { allow as allowPerMinute } from "./room/limits.ts";
 import { onDictationHttp, type DictationStore } from "./dictation.ts";
@@ -413,34 +412,19 @@ export class MachineInbox extends DurableObject<Env> {
 
 /** One pairing mailbox: two sealed slots, gone ten minutes after the first write. */
 export class MailboxBox extends DurableObject<Env> {
-  constructor(ctx: DurableObjectState, env: Env) {
-    super(ctx, env);
-    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS slots (slot TEXT PRIMARY KEY, box TEXT NOT NULL)");
-    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS meta (k INTEGER PRIMARY KEY CHECK (k = 1), firstAt INTEGER NOT NULL)");
-  }
-
   override async fetch(req: Request): Promise<Response> {
-    const sql = this.ctx.storage.sql;
-    const store: MailboxStore = {
-      load: async () => {
-        const first = sql.exec("SELECT firstAt FROM meta").toArray()[0] as { firstAt: number } | undefined;
-        if (!first) return null;
-        const at = (s: string) => (sql.exec("SELECT box FROM slots WHERE slot = ?", s).toArray()[0] as { box: string } | undefined)?.box ?? null;
-        return { a: at("a"), b: at("b"), firstAt: first.firstAt };
-      },
-      save: async (_id, rec) => {
-        sql.exec("INSERT OR REPLACE INTO meta (k, firstAt) VALUES (1, ?)", rec.firstAt);
-        for (const s of ["a", "b"] as const) {
-          if (rec[s]) sql.exec("INSERT OR REPLACE INTO slots (slot, box) VALUES (?, ?)", s, rec[s]);
-        }
-        // A mailbox nobody reads still dies on time.
-        await this.ctx.storage.setAlarm(rec.firstAt + MAILBOX_TTL_MS);
-      },
-      drop: async () => {
-        await this.ctx.storage.deleteAlarm();
-        await this.ctx.storage.deleteAll();
-      },
+    const storage = this.ctx.storage;
+    const sql: Sql = {
+      run: (q, ...p) => void storage.sql.exec(q, ...p),
+      all: <T>(q: string, ...p: SqlParam[]) => storage.sql.exec(q, ...p).toArray() as T[],
     };
+    const store = sqlMailboxStore(sql, {
+      expireAt: (at) => storage.setAlarm(at),
+      wipe: async () => {
+        await storage.deleteAlarm();
+        await storage.deleteAll();
+      },
+    });
     const ip = req.headers.get("cf-connecting-ip");
     const res =
       (await onMailboxHttp(req, store, {
