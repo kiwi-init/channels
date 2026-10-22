@@ -512,6 +512,23 @@ async function run(part: Part): Promise<string[]> {
     const tasksPanel = await openFromBoard(/Smoke task/);
     if (await tasksPanel.getByRole("button", { name: "All tasks" }).count()) throw new Error("the Tasks panel offers a second task list");
     log("ok  a board row opens its task in the Tasks panel, with no second list behind it");
+    const squeezedRows = () =>
+      page.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>('li > [role="button"]')].flatMap((row) => {
+          const label = row.getAttribute("aria-label") ?? "";
+          if (!/^T\d+, /.test(label)) return [];
+          const text = row.children[1];
+          return text && text.getBoundingClientRect().width >= 120 && text.scrollWidth <= text.clientWidth + 1 ? [] : [label];
+        }),
+      );
+    for (const width of [1280, 1180]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.waitForTimeout(200);
+      const squeezed = await squeezedRows();
+      if (squeezed.length) throw new Error(`at ${width}px with a task open, the board's rows lose their title or spill out of it: ${squeezed.join("; ")}`);
+    }
+    await page.setViewportSize({ width: 1280, height: 800 });
+    log("ok  with a task open beside it, each board row keeps its title and nothing spills out of it, at 1280 and 1180px");
     await tasksPanel
       .getByRole("region", { name: /^Task T\d+/ })
       .getByRole("button", { name: /^Activity/ })
