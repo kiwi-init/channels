@@ -164,6 +164,8 @@ test("neither dev flag goes with a trusted proxy, by flag or by KIWI_TRUST_PROXY
       [["--trust-proxy"], {}],
       [["--trust-proxy", "172.17.0.1"], {}],
       [[], { KIWI_TRUST_PROXY: "1" }],
+      [[], { KIWI_TRUST_PROXY: "," }],
+      [[], { KIWI_TRUST_PROXY: " , " }],
     ] as const) {
       const run = await runFlag(["--hostname", "127.0.0.1", flag, ...flags], env);
       expect(run.code).toBe(2);
@@ -173,4 +175,6 @@ test("neither dev flag goes with a trusted proxy, by flag or by KIWI_TRUST_PROXY
   const at = { port: 0, hostname: "127.0.0.1", dataDir: tempDir("kiwi-dev-rate-proxy-"), trustProxy: true };
   expect(() => startRelay({ ...at, devNoRateLimits: true })).toThrow("can't go with trustProxy");
   expect(() => startRelay({ ...at, human: devHumanAuth() })).toThrow("can't go with trustProxy");
+  expect(() => startRelay({ ...at, trustProxy: [], devNoRateLimits: true })).toThrow("can't go with trustProxy");
+  expect(() => startRelay({ ...at, trustProxy: [], human: devHumanAuth() })).toThrow("can't go with trustProxy");
 });

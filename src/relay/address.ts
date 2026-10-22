@@ -149,7 +149,7 @@ function specMatches(ip: string, spec: string): boolean {
 /** `true` trusts loopback only. A list trusts loopback and those addresses or CIDRs. `false` trusts no proxy. */
 export type TrustProxy = boolean | readonly string[];
 
-export const trustsAProxy = (t: TrustProxy): boolean => t === true || (t !== false && t.length > 0);
+export const trustsAProxy = (t: TrustProxy): boolean => t !== false;
 
 /** Check a --trust-proxy list. A prefix of /0 is refused: that would trust every peer. */
 export function parseTrustProxy(specs: readonly string[]): string[] {
