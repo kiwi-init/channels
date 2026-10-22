@@ -46,11 +46,11 @@ enum Shrink {
 struct SwitchControl {
     let current: PlaceView?
     let fresh: Bool
-    let open: Bool
     let hold: () -> Void
     let move: (CGPoint) -> Void
-    let release: (Bool) -> Void
-    let tap: () -> Void
+    let release: () -> Void
+    let close: () -> Void
+    let list: () -> Void
     let step: (Int) -> Bool
     let placed: (CGRect) -> Void
 }
@@ -65,33 +65,27 @@ struct SwitchButton: View {
     @State private var touch = Touch.idle
     @State private var timer: Task<Void, Never>?
     @State private var nudge: CGFloat = 0
+    @State private var bounce: CGFloat = 0
     @GestureState private var pressed = false
 
     var body: some View {
         ZStack {
-            if control.open {
-                Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Tone.ink)
-                    .transition(.scale(scale: 0.4).combined(with: .opacity))
-            } else {
-                PlaceFace(room: room, place: control.current, size: 34)
-                    .id(control.current?.key)
-                    .transition(.scale(scale: 0.6).combined(with: .opacity))
-            }
+            PlaceFace(room: room, place: control.current, size: 34)
+                .id(control.current?.key)
+                .transition(.scale(scale: 0.6).combined(with: .opacity))
         }
         .offset(x: nudge)
         .frame(width: 44, height: 44)
         .glassCircle()
         .prism(Circle(), band: 0.66)
         .overlay(alignment: .topTrailing) {
-            if control.fresh && !control.open {
+            if control.fresh {
                 Circle().fill(Tone.accent).frame(width: 11, height: 11).overlay(Circle().stroke(Tone.canvas, lineWidth: 2)).offset(x: 1, y: -1)
             }
         }
         .scaleEffect(touch == .idle ? 1 : 0.9)
+        .offset(y: bounce)
         .animation(.spring(duration: 0.2, bounce: 0.4), value: touch == .idle)
-        .animation(.spring(duration: 0.3, bounce: 0.3), value: control.open)
         .animation(.spring(duration: 0.3, bounce: 0.3), value: control.current?.key)
         .contentShape(Circle())
         .onGeometryChange(for: CGRect.self) {
@@ -111,9 +105,9 @@ struct SwitchButton: View {
         }
         .accessibilityElement()
         .accessibilityLabel(control.current.map { "Switch conversation, now in \($0.kind == "main" ? "general" : $0.title)" } ?? "Switch conversation")
-        .accessibilityHint("Swipe up for the list, or sideways for the next one.")
+        .accessibilityHint("Double-tap to list your conversations, or swipe up or down to step through them.")
         .accessibilityAddTraits(.isButton)
-        .accessibilityAction { control.tap() }
+        .accessibilityAction { control.list() }
         .accessibilityAdjustableAction { direction in
             _ = control.step(direction == .increment ? 1 : -1)
         }
@@ -154,7 +148,11 @@ struct SwitchButton: View {
         switch was {
         case .pressing, .idle:
             Haptic.tap()
-            control.tap()
+            withAnimation(.spring(duration: 0.16, bounce: 0.2)) { bounce = -7 }
+            Task {
+                try? await Task.sleep(for: .milliseconds(140))
+                withAnimation(.spring(duration: 0.4, bounce: 0.6)) { bounce = 0 }
+            }
         case .flicking:
             let dx = drag.translation.width
             guard abs(dx) > 26, abs(dx) > abs(drag.translation.height) * 1.2 else { return }
@@ -162,14 +160,14 @@ struct SwitchButton: View {
                 UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: 0.6)
             }
         case .holding:
-            control.release(hypot(drag.translation.width, drag.translation.height) < 24)
+            control.release()
         }
     }
 
     private func abandon() {
         guard touch != .idle else { return }
         timer?.cancel()
-        if touch == .holding { control.tap() }
+        if touch == .holding { control.close() }
         touch = .idle
         withAnimation(.spring(duration: 0.35, bounce: 0.5)) { nudge = 0 }
     }

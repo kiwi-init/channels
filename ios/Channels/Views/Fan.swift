@@ -46,21 +46,17 @@ struct Fan: View {
             }
         }
         .onAppear { shown = true }
+        .accessibilityAction(.escape, dismiss)
     }
 
     private var close: some View {
-        Button(action: dismiss) {
-            Image(systemName: "xmark")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Tone.ink)
-                .frame(width: 44, height: 44)
-                .glassCircle()
-                .prism(Circle(), band: 0.66)
-                .scaleEffect(hover == nil && mode == .held ? 0.9 : 1)
-        }
-        .buttonStyle(.plain)
-        .allowsHitTesting(mode == .tapped)
-        .accessibilityLabel("Close")
+        PlaceFace(room: room, place: room.placeView(current), size: 34)
+            .frame(width: 44, height: 44)
+            .glassCircle()
+            .prism(Circle(), band: 0.66)
+            .scaleEffect(mode == .held ? 0.9 : 1)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 
     private var stack: some View {

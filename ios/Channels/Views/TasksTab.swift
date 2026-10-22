@@ -5,6 +5,7 @@ struct TasksTab: View {
     let current: String
     let choose: (String) -> Void
     let channels: () -> Void
+    let close: () -> Void
     @Environment(AppModel.self) private var model
     @State private var open: TaskView?
 
@@ -87,9 +88,15 @@ struct TasksTab: View {
 
     private var header: some View {
         VStack(spacing: 4) {
-            ChannelAvatar(room: room, size: 96).padding(.bottom, 8)
-            Text(room.title).font(.title2.weight(.bold)).foregroundStyle(Tone.ink).multilineTextAlignment(.center)
-            Text(summary).type(.ui).foregroundStyle(Tone.ink3)
+            VStack(spacing: 4) {
+                ChannelAvatar(room: room, size: 96).padding(.bottom, 8)
+                Text(room.title).font(.title2.weight(.bold)).foregroundStyle(Tone.ink).multilineTextAlignment(.center)
+                Text(summary).type(.ui).foregroundStyle(Tone.ink3)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture(perform: close)
+            .accessibilityElement(children: .combine)
+            .accessibilityHint("Closes the details")
             HStack(spacing: 10) {
                 Menu {
                     ForEach(people.filter { $0.name != room.me }) { m in

@@ -160,7 +160,6 @@ struct ChannelScreen: View {
         SwitchControl(
             current: room.placeView(place),
             fresh: model.freshElsewhere(room, than: place),
-            open: fan != nil,
             hold: {
                 hover = nil
                 withAnimation(.snappy(duration: 0.2)) { fan = .held }
@@ -172,14 +171,18 @@ struct ChannelScreen: View {
                     if hit != nil { UISelectionFeedbackGenerator().selectionChanged() }
                 }
             },
-            release: { stayed in
+            release: {
                 if let hover {
                     pick(room, hover)
                 } else {
-                    withAnimation(.snappy(duration: 0.2)) { fan = stayed ? .tapped : nil }
+                    withAnimation(.snappy(duration: 0.2)) { fan = nil }
                 }
             },
-            tap: {
+            close: {
+                hover = nil
+                withAnimation(.snappy(duration: 0.2)) { fan = nil }
+            },
+            list: {
                 hover = nil
                 withAnimation(.snappy(duration: 0.2)) { fan = fan == nil ? .tapped : nil }
             },
@@ -339,7 +342,7 @@ struct DetailsMorph: View {
                 choose: { key in
                     choose(key)
                     collapse()
-                }, channels: channels)
+                }, channels: channels, close: collapse)
             Capsule()
                 .fill(Tone.ink3.opacity(0.6))
                 .frame(width: 40, height: 5)
@@ -358,18 +361,7 @@ struct DetailsMorph: View {
                 )
                 .accessibilityHidden(true)
         }
-        .overlay(alignment: .topTrailing) {
-            Button(action: collapse) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Tone.ink2)
-                    .frame(width: 34, height: 34)
-                    .background(Tone.wash2, in: Circle())
-            }
-            .buttonStyle(.plain)
-            .padding(14)
-            .accessibilityLabel("Close details")
-        }
+        .accessibilityAction(.escape, collapse)
     }
 
     private func collapse() {

@@ -406,16 +406,17 @@ everything you touch under your thumb: the owner asked for both, so on the phone
   while you type a name, a reply bar, a small ↓ at the right when you've scrolled up. The scroll
   edge effect stays off at the bottom, so the last message is never blurred into looking like
   more.
-- Switching is the switch: press it and your conversations fan up above it at once (after
-  90 ms, so a sideways flick still steps) as glass bubbles over a dimmed, blurred
-  conversation, and the switch turns into a ✕ that closes them, nearest first in the order you
-  reach for them:
+- Switching is one motion, never tap-then-tap: press and hold the switch and your
+  conversations fan up above it (after 90 ms, so a sideways flick still steps) as glass
+  bubbles over a dimmed, blurred conversation, nearest first in the order you reach for them:
   #general, then your direct thread with the lead (even before either of you wrote), then your
   other direct threads by recency, each with its last line. Threads between others aren't
-  there (the details sheet has them). Slide your thumb up, the bubble under it grows with a
-  selection tick, let go to open it; let go without sliding and the fan stays open to tap from;
-  slide away and let go on nothing (or the ✕) to close it. Flick the switch sideways to step through the same order without looking: left for the
-  next, right for the one before, a dull tap at either end; VoiceOver adjusts it the same way.
+  there (the details have them). Slide your thumb up, the bubble under it grows with a
+  selection tick, let go to open it; let go anywhere else (the switch under your thumb still
+  shows where you are) and nothing changes. A quick tap opens nothing: the switch hops with a
+  tick, hinting to hold. Flick it sideways to step through the same order without looking:
+  left for the next, right for the one before, a dull tap at either end. VoiceOver, which
+  can't hold and slide, gets the fan as buttons on a double-tap and steps with swipe up/down.
 - A draft stays with its conversation: switch away and back, or leave the channel, and what
   you wrote (and the photos you added) is still in the field. Others show "Draft:" in `alert`
   in the fan and the channel list. Drafts live in memory only, never on disk.
@@ -426,16 +427,15 @@ everything you touch under your thumb: the owner asked for both, so on the phone
   bubble and the one under your thumb, whose band slides as you pass over it.
 - The top holds the channel, read rather than touched: a glass back button and, centred, the
   glass title pill with where you are and its state ("2 working" with the `doing` dot, "1 needs
-  you" in `decide`, "working on T8" in a direct thread with an agent at work). The conversation fades out under it.
-  Questions waiting on you are answered from their own bubble.
+  you" in `decide`, "working on T8" in a direct thread with an agent at work). The
+  conversation fades out under it. Questions waiting on you are answered from their own bubble.
 - Cause and effect stay close: what you touch at the top opens from the top, what you touch
   at the bottom rises from the bottom. A tap on the title pill grows the pill itself into the
   details: one glass shape stretches from the pill's frame down to the bottom (8pt margins,
   corners easing from the capsule to 44pt) over a dimmed, blurred conversation, the pill's words
-  fading as the panel's fade in; never a pill plus a second box. The ✕ in its corner, the
-  dimmed edge, or dragging its grabber up shrinks it back into the pill. Inside, on glass:
-  the channel's icon, name and
-  people count; three tiles (Message someone, Pin, Channels); Needs you; Conversations
+  fading as the panel's fade in; never a pill plus a second box, and no ✕. Tapping where the
+  pill was (the channel's icon and name), the dimmed edge, or dragging its grabber up shrinks
+  it back into the pill. Inside, on glass: the channel's icon, name and people count; three tiles (Message someone, Pin, Channels); Needs you; Conversations
   (#general and your direct threads, a ✓ on the one you're in); Between others (read along);
   People (lead first, then who's working, each "Agent · working on T8" or "here"/"away"; tap
   one to message them); then In progress, Up next, Done this week. A task opens in place
