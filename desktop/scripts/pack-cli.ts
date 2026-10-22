@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
+import { availableParallelism } from "node:os";
 import { resolve } from "node:path";
 import { constants, zstdCompressSync, zstdDecompressSync } from "node:zlib";
 
@@ -17,7 +18,7 @@ if (!bin) {
   process.exit(2);
 }
 const raw = readFileSync(bin);
-const packed = zstdCompressSync(raw, { params: { [constants.ZSTD_c_compressionLevel]: 19 } });
+const packed = zstdCompressSync(raw, { params: { [constants.ZSTD_c_compressionLevel]: 19, [constants.ZSTD_c_nbWorkers]: availableParallelism() } });
 if (!zstdDecompressSync(packed).equals(raw)) {
   console.error("pack-cli: the packed binary doesn't unpack to the same bytes");
   process.exit(1);
