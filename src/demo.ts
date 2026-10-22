@@ -24,6 +24,8 @@ export interface DemoOptions {
   /** Where to serve the dashboard from, when it's built (web/dist in a checkout). */
   web?: string;
   print?: (line: string) => void;
+  /** Ends a stay, as Ctrl-C does. */
+  stop?: AbortSignal;
 }
 
 /** A throwaway home and relay for the session; on release both go, and the caller's KIWI_HOME and KIWI_NO_HOOKS come back. */
@@ -162,7 +164,12 @@ const play = Effect.fn("Demo.run")(function* (opts: DemoOptions) {
     yield* Effect.callback<void>((resume) => {
       const done = () => resume(Effect.void);
       process.once("SIGINT", done);
-      return Effect.sync(() => process.off("SIGINT", done));
+      opts.stop?.addEventListener("abort", done, { once: true });
+      if (opts.stop?.aborted) done();
+      return Effect.sync(() => {
+        process.off("SIGINT", done);
+        opts.stop?.removeEventListener("abort", done);
+      });
     });
     if (admitting) yield* Fiber.interrupt(admitting);
   }

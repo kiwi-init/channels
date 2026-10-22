@@ -11,9 +11,9 @@ const slow = new Set(
     .flat()
     .map((name) => `test/${name}.test.ts`),
 );
-const files = group === "unit" ? all.filter((f) => !slow.has(f)) : FLOWS[group]?.map((name) => `test/${name}.test.ts`);
+const files = group === "all" ? all : group === "unit" ? all.filter((f) => !slow.has(f)) : FLOWS[group]?.map((name) => `test/${name}.test.ts`);
 if (!files) {
-  console.error(`usage: bun scripts/ci-tests.ts ${["unit", ...Object.keys(FLOWS)].join(" | ")}`);
+  console.error(`usage: bun scripts/ci-tests.ts ${["all", "unit", ...Object.keys(FLOWS)].join(" | ")}`);
   process.exit(2);
 }
 const missing = files.filter((f) => !all.includes(f));
@@ -39,9 +39,20 @@ function tmpBehindSymlink(): { dir: string; cleanup: () => void } {
 
 const tmp = tmpBehindSymlink();
 const proc = Bun.spawn(["bun", "test", "--parallel", ...files.map((f) => `./${f}`)], {
-  stdio: ["inherit", "inherit", "inherit"],
+  stdio: ["inherit", "inherit", "pipe"],
   env: { ...process.env, TMPDIR: tmp.dir },
 });
+const decoder = new TextDecoder();
+let tail = "";
+for await (const chunk of proc.stderr) {
+  process.stderr.write(chunk);
+  tail = (tail + decoder.decode(chunk, { stream: true })).slice(-4096);
+}
 const code = await proc.exited;
 tmp.cleanup();
+const ran = /Ran \d+ tests? across (\d+) files?\./.exec(tail)?.[1];
+if (code === 0 && Number(ran) !== files.length) {
+  console.error(`bun test exited 0 after ${ran ?? "an unknown number"} of ${files.length} files: a test ended the run early`);
+  process.exit(1);
+}
 process.exit(code);
