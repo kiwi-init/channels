@@ -11,6 +11,7 @@ import { doingNow, type AgentNow } from "./agent-strip"
 import { Icon } from "./icon"
 import { Monogram } from "./kit"
 import { isAgent } from "./message"
+import { AnimatePresence, m, Motion, MOVE } from "./motion"
 import { PrCell, type Pr } from "./pr-cell"
 import { DecisionMark, StateMark } from "./tasks"
 
@@ -60,70 +61,68 @@ function TaskRow({
   const doing = agent && agent.load.current.some((t) => t.id === task.id) ? doingNow(agent) : null
   const pr = taskPr(state, task.id)
   return (
-    <li>
-      <div
-        role="button"
-        tabIndex={0}
-        aria-current={open || undefined}
-        aria-label={`${taskId(task.id)}, ${task.title}`}
-        onClick={() => onOpen(task.id)}
-        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onOpen(task.id))}
-        className={cx(
-          "relative grid cursor-pointer grid-cols-[28px_minmax(0,1fr)_44px] items-center gap-x-3.5 rounded-row px-3 py-2.5 transition-colors hover:bg-wash @lg:grid-cols-[28px_minmax(0,1fr)_168px_44px] @2xl:grid-cols-[28px_minmax(0,1fr)_168px_128px_44px]",
-          open && "before:absolute before:inset-y-2.5 before:left-0 before:w-0.5 before:rounded-full before:bg-accent"
-        )}
-      >
-        {task.owner ? (
-          <Monogram name={memberName(owner, task.owner)} hue={task.owner} agent={isAgent(owner)} color={colorOf(state, task.owner)} size={28} />
-        ) : (
-          <span className="flex size-7 items-center justify-center">
-            <StateMark state={task.state} />
-          </span>
-        )}
-        <span className="min-w-0">
-          <span className={cx("block truncate text-body leading-snug", task.state === "done" ? "text-ink-2" : "text-ink", open && "font-semibold")}>{task.title}</span>
-          <span className="flex min-w-0 items-center gap-1.5 text-meta text-ink-3">
-            <span className="shrink-0 tabular-nums">{taskId(task.id)}</span>
-            <span aria-hidden>·</span>
-            <span className="shrink-0">{task.owner ? memberName(owner, task.owner) : "unassigned"}</span>
-            <span aria-hidden>·</span>
-            {waiting ? (
-              <DecisionMark />
-            ) : doing ? (
-              <span className={cx("flex min-w-0 items-center gap-1.5", doing.busy ? "text-doing" : "text-ink-3")}>
-                {doing.busy && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-doing shadow-[0_0_0_3px_color-mix(in_srgb,var(--doing)_18%,transparent)]" />}
-                <span className="truncate">{doing.text}</span>
-              </span>
-            ) : (
-              <span className="truncate">{labelOf(task)}</span>
-            )}
-          </span>
+    <div
+      role="button"
+      tabIndex={0}
+      aria-current={open || undefined}
+      aria-label={`${taskId(task.id)}, ${task.title}`}
+      onClick={() => onOpen(task.id)}
+      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onOpen(task.id))}
+      className={cx(
+        "relative grid cursor-pointer grid-cols-[28px_minmax(0,1fr)_44px] items-center gap-x-3.5 rounded-row px-3 py-2.5 transition-colors hover:bg-wash @lg:grid-cols-[28px_minmax(0,1fr)_168px_44px] @2xl:grid-cols-[28px_minmax(0,1fr)_168px_128px_44px]",
+        open && "before:absolute before:inset-y-2.5 before:left-0 before:w-0.5 before:rounded-full before:bg-accent"
+      )}
+    >
+      {task.owner ? (
+        <Monogram name={memberName(owner, task.owner)} hue={task.owner} agent={isAgent(owner)} color={colorOf(state, task.owner)} size={28} />
+      ) : (
+        <span className="flex size-7 items-center justify-center">
+          <StateMark state={task.state} />
         </span>
-        <span className="hidden min-w-0 @lg:block">
-          <PrCell pr={pr} done={task.state === "done"} />
+      )}
+      <span className="min-w-0">
+        <span className={cx("block truncate text-body leading-snug", task.state === "done" ? "text-ink-2" : "text-ink", open && "font-semibold")}>{task.title}</span>
+        <span className="flex min-w-0 items-center gap-1.5 text-meta text-ink-3">
+          <span className="shrink-0 tabular-nums">{taskId(task.id)}</span>
+          <span aria-hidden>·</span>
+          <span className="shrink-0">{task.owner ? memberName(owner, task.owner) : "unassigned"}</span>
+          <span aria-hidden>·</span>
+          {waiting ? (
+            <DecisionMark />
+          ) : doing ? (
+            <span className={cx("flex min-w-0 items-center gap-1.5", doing.busy ? "text-doing" : "text-ink-3")}>
+              {doing.busy && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-doing shadow-[0_0_0_3px_color-mix(in_srgb,var(--doing)_18%,transparent)]" />}
+              <span className="truncate">{doing.text}</span>
+            </span>
+          ) : (
+            <span className="truncate">{labelOf(task)}</span>
+          )}
         </span>
-        <span className="hidden min-w-0 @2xl:block">
-          <ChecksCell pr={pr} />
-        </span>
-        <time className="text-right text-meta text-ink-3 tabular-nums">{formatAgoShort(task.updatedAt, now)}</time>
-      </div>
-    </li>
+      </span>
+      <span className="hidden min-w-0 @lg:block">
+        <PrCell pr={pr} done={task.state === "done"} />
+      </span>
+      <span className="hidden min-w-0 @2xl:block">
+        <ChecksCell pr={pr} />
+      </span>
+      <time className="text-right text-meta text-ink-3 tabular-nums">{formatAgoShort(task.updatedAt, now)}</time>
+    </div>
   )
 }
 
-function AskGroup({ ask, count, state, children }: { ask: AskHead | null; count: number; state: ChannelState; children: ReactNode }) {
+function AskGroup({ ask, count, state, order, children }: { ask: AskHead | null; count: number; state: ChannelState; order: string; children: ReactNode }) {
   const words = ask?.words.trim() ?? ""
   const label = ask ? (words ? `“${words}”` : `#${ask.id}`) : "Unfiled"
   const meta = ask ? `${memberName(state.members.get(ask.by), ask.by)} · #${ask.id}` : "No person's message holds these"
   return (
-    <section aria-label={label} className="pt-4">
+    <m.section layout="position" layoutDependency={order} transition={{ layout: MOVE }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} aria-label={label} className="pt-4">
       <h2 title={words || undefined} className="flex min-w-0 items-baseline gap-2 px-3 text-ui font-semibold">
         <span className="truncate">{label}</span>
         <span className="shrink-0 font-normal text-ink-3 tabular-nums">{count}</span>
       </h2>
       <p className="truncate px-3 pb-1.5 text-meta text-ink-3">{meta}</p>
       {children}
-    </section>
+    </m.section>
   )
 }
 
@@ -166,20 +165,29 @@ export function TasksView({
         </div>
       </div>
     )
+  const order = groups.map((g) => `${g.key}:${g.tasks.map((t) => t.id).join(",")}`).join(" ")
   return (
-    <div className="@container pb-8">
-      {showNeeds && <div className="px-3">{needs}</div>}
-      {view === "needs" && !needs && <p className="px-3 pt-6 text-ui text-ink-3">Nothing needs you right now.</p>}
-      {groups.map((g) => (
-        <AskGroup key={g.key} ask={g.ask} count={g.tasks.length} state={state}>
-          <ul className="divide-y divide-line">
-            {g.tasks.map((t) => (
-              <TaskRow key={t.id} task={t} state={state} now={now} agent={t.owner ? byName.get(t.owner) : undefined} waiting={waiting.has(t.id)} open={open === t.id} onOpen={onOpen} />
-            ))}
-          </ul>
-        </AskGroup>
-      ))}
-      {!groups.length && view !== "everything" && view !== "needs" && <p className="px-3 pt-6 text-ui text-ink-3">Nothing here right now.</p>}
-    </div>
+    <Motion>
+      <div className="@container relative pb-8">
+        {showNeeds && <div className="px-3">{needs}</div>}
+        {view === "needs" && !needs && <p className="px-3 pt-6 text-ui text-ink-3">Nothing needs you right now.</p>}
+        <AnimatePresence initial={false} mode="popLayout">
+          {groups.map((g) => (
+            <AskGroup key={g.key} ask={g.ask} count={g.tasks.length} state={state} order={order}>
+              <ul className="relative divide-y divide-line">
+                <AnimatePresence initial={false} mode="popLayout">
+                  {g.tasks.map((t) => (
+                    <m.li key={t.id} layout="position" layoutDependency={order} transition={{ layout: MOVE }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                      <TaskRow task={t} state={state} now={now} agent={t.owner ? byName.get(t.owner) : undefined} waiting={waiting.has(t.id)} open={open === t.id} onOpen={onOpen} />
+                    </m.li>
+                  ))}
+                </AnimatePresence>
+              </ul>
+            </AskGroup>
+          ))}
+        </AnimatePresence>
+        {!groups.length && view !== "everything" && view !== "needs" && <p className="px-3 pt-6 text-ui text-ink-3">Nothing here right now.</p>}
+      </div>
+    </Motion>
   )
 }
