@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 
-export const SLOW_MS = 1000
+const SLOW_MS = 1000
 
 export function useLater(on: boolean, ms = SLOW_MS): boolean {
   const [was, setWas] = useState(on)
