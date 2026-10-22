@@ -1,5 +1,6 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react"
 
+import type { PersonPowers } from "@kiwi/core/membership.ts"
 import type { Scope } from "@kiwi/core/scopes.ts"
 import { usePinned } from "@/lib/pinned"
 import { memberName } from "@/lib/format"
@@ -8,7 +9,7 @@ import { Alert, Button, errorText, TextField, toast } from "../kit"
 import { exportNote, logFileName } from "@/lib/log-export"
 import type { Persona } from "@kiwi/core/personality.ts"
 import { PersonalityPicker } from "../personality-picker"
-import { AddsAgentsPicker, ScopePicker } from "../scopes"
+import { PowersPicker, ScopePicker } from "../scopes"
 import type { Confirm, ControlsProps } from "./context"
 
 export function ConfirmDialogs({
@@ -62,9 +63,9 @@ export function ConfirmDialogs({
   useEffect(() => {
     if (pinnedAs) setPersonaDraft(pinnedAs)
   }, [pinnedAs, setPersonaDraft])
-  const [agentsPick, setAgentsPick] = useState<{ for: Confirm; on: boolean } | null>(null)
-  const agentsDraft = agentsPick?.for === confirm ? agentsPick.on : confirm?.kind === "approve" && !!confirm.addsAgents
-  const setAgentsDraft = (on: boolean) => setAgentsPick({ for: confirm, on })
+  const [powersPick, setPowersPick] = useState<{ for: Confirm; powers: PersonPowers } | null>(null)
+  const powersDraft = powersPick?.for === confirm ? powersPick.powers : confirm?.kind === "approve" ? (confirm.powers ?? {}) : {}
+  const setPowersDraft = (powers: PersonPowers) => setPowersPick({ for: confirm, powers })
   return (
     <>
       <Alert
@@ -145,7 +146,7 @@ export function ConfirmDialogs({
                   <span className="mb-2 block text-ui font-medium text-ink">What they can do</span>
                   <ScopePicker value={scopeDraft} onChange={setScopeDraft} disabled={busy} />
                   <div className="mt-3">
-                    <AddsAgentsPicker value={agentsDraft} onChange={setAgentsDraft} disabled={busy} />
+                    <PowersPicker value={powersDraft} onChange={setPowersDraft} disabled={busy} />
                   </div>
                 </>
               ) : (
@@ -166,7 +167,7 @@ export function ConfirmDialogs({
             disabled={busy || taken}
             onClick={() =>
               run(
-                () => (confirm.req.kind !== "human" && chosen ? p.onApprove(confirm.req, undefined, chosen) : p.onApprove(confirm.req, scopeDraft, undefined, agentsDraft)),
+                () => (confirm.req.kind !== "human" && chosen ? p.onApprove(confirm.req, undefined, chosen) : p.onApprove(confirm.req, scopeDraft, undefined, powersDraft)),
                 confirm.req.kind !== "human" && chosen ? `${confirm.req.name} joined as ${chosen.name}` : `${confirm.req.name} joined`
               )
             }

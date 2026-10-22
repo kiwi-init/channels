@@ -213,19 +213,34 @@ describe("auto-approval", () => {
     const bobsPerson = await generateIdentity("bobs-person");
     const { member: bob } = await joinPerson(s, "bob", bobsPerson);
     expect(bob.addsAgents).toBeUndefined();
-    await s.ownerCh.updateAddsAgents(bob, true);
+    await s.ownerCh.updatePowers(bob, { addsAgents: true });
     const on = (await s.ownerCh.members()).find((m) => m.pk === bob.pk)!;
     expect(on).toMatchObject({ addsAgents: true, person: bobsPerson.pk, name: "bob" });
     const bobsBox = await pairComputer(bobsPerson, "bob-box");
     await askFrom(s, "scout", bobsBox);
     expect((await s.ownerCh.autoApprove(s.person.pk)).map((m) => m.name)).toEqual(["scout"]);
-    await s.ownerCh.updateAddsAgents(on, false);
+    await s.ownerCh.updatePowers(on, { addsAgents: false });
     const off = (await s.ownerCh.members()).find((m) => m.pk === bob.pk)!;
     expect(off.addsAgents).toBeUndefined();
     await askFrom(s, "scout-2", bobsBox);
     expect(await s.ownerCh.autoApprove(s.person.pk)).toEqual([]);
     const scout = (await s.ownerCh.members()).find((m) => m.name === "scout")!;
-    await expect(s.ownerCh.updateAddsAgents(scout, true)).rejects.toThrow(/only a person's record/);
+    await expect(s.ownerCh.updatePowers(scout, { addsAgents: true })).rejects.toThrow(/only a person's record/);
+    await s.ownerCh.close();
+  });
+
+  test("answering decisions rides the same record: set at Let in, changed on its own, and the other power kept", async () => {
+    const s = await setupChannel(relay);
+    const { member: ana } = await joinPerson(s, "ana", await generateIdentity("anas-person"), { answersDecisions: true });
+    expect(ana).toMatchObject({ kind: "human", answersDecisions: true });
+    expect(ana.addsAgents).toBeUndefined();
+    await s.ownerCh.updatePowers(ana, { addsAgents: true });
+    const both = (await s.ownerCh.members()).find((m) => m.pk === ana.pk)!;
+    expect(both).toMatchObject({ addsAgents: true, answersDecisions: true });
+    await s.ownerCh.updatePowers(both, { answersDecisions: false });
+    const one = (await s.ownerCh.members()).find((m) => m.pk === ana.pk)!;
+    expect(one).toMatchObject({ addsAgents: true });
+    expect(one.answersDecisions).toBeUndefined();
     await s.ownerCh.close();
   });
 

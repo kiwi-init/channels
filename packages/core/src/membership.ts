@@ -43,6 +43,7 @@ export interface MemberInfo {
    */
   person?: string;
   addsAgents?: boolean;
+  answersDecisions?: boolean;
   /**
    * On an agent let in with a computer claim: the computer it runs on, so the app can list and
    * remove a computer's agents.
@@ -79,6 +80,8 @@ export interface MemberInfo {
   runs?: Runs;
   persona?: Persona;
 }
+
+export type PersonPowers = Pick<MemberInfo, "addsAgents" | "answersDecisions">;
 
 /** What runs an agent: its harness (claude-code, codex, opencode…) and the model id it answers with. */
 export interface Runs {
@@ -188,6 +191,7 @@ export async function makeRecord(owner: Identity, room: string, m: MemberInfo & 
     ...(m.sponsor ? { sponsor: m.sponsor } : {}),
     ...(m.person ? { person: m.person } : {}),
     ...(!m.owner && m.kind === "human" && m.addsAgents ? { addsAgents: true } : {}),
+    ...(!m.owner && m.kind === "human" && m.answersDecisions ? { answersDecisions: true } : {}),
     ...(m.from ? { from: { pk: m.from.pk, label: m.from.label } } : {}),
     ...(m.color && (m.kind === "human" || m.owner) ? { color: m.color } : {}),
     ...(!m.owner && wireScopes(m.scopes) ? { scopes: wireScopes(m.scopes)! } : {}),
@@ -229,6 +233,7 @@ export async function readRecord(key: string, sealed: string, room: string, pk: 
     const persona = owner || kind === "human" || rec.pk !== ownerPk ? undefined : (cleanPersona((rec as { persona?: unknown }).persona) ?? undefined);
     const person = typeof rec.person === "string" && rec.person.length <= 64 ? rec.person : undefined;
     const addsAgents = !owner && kind === "human" && rec.pk === ownerPk && (rec as { addsAgents?: unknown }).addsAgents === true;
+    const answersDecisions = !owner && kind === "human" && rec.pk === ownerPk && (rec as { answersDecisions?: unknown }).answersDecisions === true;
     const from = readFrom((rec as { from?: unknown }).from);
     return {
       signer: rec.pk,
@@ -244,6 +249,7 @@ export async function readRecord(key: string, sealed: string, room: string, pk: 
         sponsor: rec.sponsor,
         person,
         ...(addsAgents ? { addsAgents } : {}),
+        ...(answersDecisions ? { answersDecisions } : {}),
         ...(from ? { from } : {}),
         ...(isColor(rec.color) ? { color: rec.color } : {}),
         ...(scopes ? { scopes } : {}),

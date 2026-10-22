@@ -6,7 +6,7 @@ import { droppedCount } from "@kiwi/core/format.ts"
 import { memberLoad } from "@kiwi/core/load.ts"
 import { GENERAL_ROOM, isReaction, type ImageAttachment, type Message } from "@kiwi/core/protocol.ts"
 import { taskCards } from "@kiwi/core/standup.ts"
-import { colorOf, heldBy, outsideRepos, taskId, tasksAwaitingPeople, type Task, humanOf, ownerOf } from "@kiwi/core/state.ts"
+import { answersDecisions, colorOf, decidersOf, heldBy, outsideRepos, taskId, tasksAwaitingPeople, type Task, humanOf, ownerOf } from "@kiwi/core/state.ts"
 import { channelTitle, loadRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
 import { howHere } from "@/lib/presence"
 import { asksFor, chosenOf, heldAsks } from "@/lib/asks"
@@ -30,7 +30,7 @@ import { canStartAgents } from "@/lib/launches"
 import { ALLOW_ONCE, DENY, settledOf } from "@/lib/permission-settled"
 import { bridge } from "@/lib/secrets"
 import type { ToolCtx } from "@/lib/voice/tools"
-import { defaultAddsAgents, defaultScopes } from "../scopes"
+import { defaultPowers, defaultScopes } from "../scopes"
 import { isAgent } from "../message"
 import { NeedsYou } from "../needs-you"
 import { ChannelSidebar, ConversationMenu, type Conversation as ConversationRow } from "./channel-sidebar"
@@ -109,7 +109,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
 
   const arrivals = useMemo(() => messages.filter((m) => m.from !== me && !isReaction(m)).length, [messages, me])
   const cards = useMemo(() => taskCards(state, messages), [state, messages])
-  const { decisions, escalations, questions } = useMemo(() => asksFor(heldAsks(state), me), [state, me])
+  const { decisions, escalations, questions } = useMemo(() => asksFor(heldAsks(state), me, answersDecisions(state.members, me)), [state, me])
   const reviews = useMemo(() => reviewsFor(state.tasks.values(), me, iAmPerson), [state.tasks, me, iAmPerson])
   const needsMe = decisions.length + escalations.length + questions.length + reviews.length + (isOwner ? requests.length : 0)
   useChannelNews(roomId, Math.max(head, messages.at(-1)?.seq ?? 0), arrivals, 0, needsMe)
@@ -183,7 +183,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     for (const m of messages) for (const seq of m.re ?? []) out.set(seq, [...(out.get(seq) ?? []), m])
     return out
   }, [messages])
-  const chosen = useCallback((m: Message) => (m.choices?.length ? chosenOf(m, repliesTo.get(m.seq) ?? []) : undefined), [repliesTo])
+  const chosen = useCallback((m: Message) => (m.choices?.length ? chosenOf(m, repliesTo.get(m.seq) ?? [], decidersOf(state, m)) : undefined), [repliesTo, state])
   const composerAsks = useMemo(() => decisions.filter((m) => !m.permission), [decisions])
   const permissionSettled = useCallback((m: Message) => (m.permission ? settledOf(m, repliesTo.get(m.seq) ?? [], state, bySeq) : undefined), [repliesTo, state, bySeq])
   const answer = useCallback(
@@ -216,7 +216,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
         ? async (id: string) => {
             const r = requests.find((x) => x.id === id)
             if (!r) throw new Error("That request is gone.")
-            await handlers.onApprove(r, defaultScopes(roomId), undefined, defaultAddsAgents(roomId))
+            await handlers.onApprove(r, defaultScopes(roomId), undefined, defaultPowers(roomId))
           }
         : undefined,
       approve: (t: Task) => sendTask(approveTask(t), closedDigest(state, messages, t, { by: me })),

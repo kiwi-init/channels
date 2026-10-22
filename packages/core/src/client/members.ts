@@ -1,7 +1,7 @@
 import { cleanPersona, personaScopes, type Persona } from "../personality.ts";
 import * as Effect from "effect/Effect";
 import { newChannelKey } from "../crypto.ts";
-import { inlineText, makeRecord, sealRecord, type Member } from "../membership.ts";
+import { inlineText, makeRecord, sealRecord, type Member, type PersonPowers } from "../membership.ts";
 import { omit } from "../omit.ts";
 import { Rejected } from "../refusals.ts";
 import { canPost, SCOPES, scopesOf, type Scope } from "../scopes.ts";
@@ -22,7 +22,7 @@ export interface MembersFx {
   updateRole(m: Member, role: string | null, about: string | null | undefined, since: number): Effect.Effect<void, Refused, Relay>;
   updatePersona(m: Member, persona: Persona | null, since: number): Effect.Effect<void, Refused, Relay>;
   updateNickname(m: Member, nickname: string | null): Effect.Effect<void, Refused, Relay>;
-  updateAddsAgents(m: Member, on: boolean): Effect.Effect<void, Refused, Relay>;
+  updatePowers(m: Member, powers: PersonPowers): Effect.Effect<void, Refused, Relay>;
   reconcilePosting(state: Pick<ChannelState, "members" | "scopeSets" | "roleSets">, members?: Member[]): Effect.Effect<string[], Refused, Relay>;
   remove(pk: string): Effect.Effect<void, Refused, Relay>;
   rotate(): Effect.Effect<number, Refused, Relay>;
@@ -97,14 +97,18 @@ export class ChannelMembers {
       yield* this.ch.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: canPost(scopes) }) });
     }),
 
-    updateAddsAgents: Effect.fn("Channel.updateAddsAgents")({ self: this }, function* (this: ChannelMembers, m: Member, on: boolean) {
+    updatePowers: Effect.fn("Channel.updatePowers")({ self: this }, function* (this: ChannelMembers, m: Member, powers: PersonPowers) {
       yield* this.ch.ownerOnly();
       if (m.unverified) return yield* new Rejected(NO_RECORD);
-      if (m.owner || m.kind !== "human") return yield* new Rejected("only a person's record says whether they add agents");
+      if (m.owner || m.kind !== "human") return yield* new Rejected("only a person's record says whether they add agents or answer decisions");
       const e = this.ch.access.epoch;
       const key = this.ch.access.keys[String(e)]!;
-      const info = omit(m, "active", "readOnly", "unverified", "at", "addsAgents");
-      const rec = yield* Effect.promise(async () => sealRecord(key, await makeRecord(this.ch.identity, this.ch.roomId, { ...info, ...(on ? { addsAgents: true } : {}) })));
+      const info = omit(m, "active", "readOnly", "unverified", "at", "addsAgents", "answersDecisions");
+      const addsAgents = powers.addsAgents ?? !!m.addsAgents;
+      const answersDecisions = powers.answersDecisions ?? !!m.answersDecisions;
+      const rec = yield* Effect.promise(async () =>
+        sealRecord(key, await makeRecord(this.ch.identity, this.ch.roomId, { ...info, ...(addsAgents ? { addsAgents } : {}), ...(answersDecisions ? { answersDecisions } : {}) })),
+      );
       const scopes = m.later?.scopes ?? scopesOf(m);
       yield* this.ch.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: canPost(scopes) }) });
     }),

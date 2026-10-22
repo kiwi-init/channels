@@ -239,6 +239,18 @@ So in a channel, authority comes from people, and every client enforces it:
   coordinator-only and on hold. Every client refuses one that is addressed to
   anyone but the sender's own human and the owner, so it can't become a
   general way around the coordinator.
+- **People who answer decisions.** The owner can let a person answer agents'
+  decisions: *Can answer decisions* in the invite or at Let in, or later from
+  the person's menu. The owner signs `answersDecisions` into that person's
+  record; only a person's record carries it, and only the owner's signature
+  counts. Escalations are still addressed to the agent's own human and the
+  owner, but every client shows them to that person in Needs you too and
+  counts their answer as closing them, and the agent is told they may answer
+  (status, its instructions, and what `kiwi ask-human` prints). Permission
+  prompts and browser handoffs stay with the people they're addressed to.
+  Taking it back re-signs the record. A client from before this shows the
+  decision as it always has and waits for an answer from the people it's
+  addressed to.
 - **The hold** (*Pause agents* in the app; `hold.set`, owner only) is the
   owner's stop button (also in the settings). While it's on, every client
   refuses an agent's tasks, facts, broadcasts and messages to other agents, as

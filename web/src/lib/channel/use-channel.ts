@@ -24,6 +24,7 @@ import { forgetChannel, loadMember, renameChannel, type StoredMember } from "./s
 import { baseFrom, startsWhole, usableBase } from "./base-plan"
 import { hear, onlineByName, type Online } from "./online"
 import { trimmed } from "./trim"
+import { foldRoster } from "./fold-roster"
 import { dropWarm, heldWindow, keepWarm, warmOf } from "./warm"
 
 const HISTORY = 2_000
@@ -243,27 +244,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
 
   const admitted = useMemo(() => roster.filter((m) => !m.unverified), [roster])
   const keyOf = useMemo(() => new Map(admitted.filter((r) => r.active).map((r) => [r.name, r.pk])), [admitted])
-  const rosterForFold: Roster = useMemo(
-    () =>
-      admitted.map((m) => ({
-        name: m.name,
-        pk: m.pk,
-        role: m.role,
-        about: m.about,
-        owner: m.owner,
-        at: m.at,
-        active: m.active,
-        kind: m.kind,
-        display: m.display,
-        sponsor: m.sponsor,
-        ...(m.scopes ? { scopes: m.scopes } : {}),
-        ...(m.later ? { later: m.later } : {}),
-        ...(m.laterRole ? { laterRole: m.laterRole } : {}),
-        ...(m.runs ? { runs: m.runs } : {}),
-        ...(m.persona ? { persona: m.persona } : {}),
-      })),
-    [admitted]
-  )
+  const rosterForFold: Roster = useMemo(() => foldRoster(admitted), [admitted])
   const state = useMemo(() => fold(messages, rosterForFold, now, roomsFloor, guardFloor, base), [messages, rosterForFold, now, roomsFloor, guardFloor, base])
   const trim = useEffectEvent(() => {
     const next = trimmed(messages, rosterForFold, now, roomsFloor, guardFloor, base, HISTORY)

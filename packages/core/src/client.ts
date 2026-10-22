@@ -12,7 +12,7 @@
 import type { Persona, Personality } from "./personality.ts";
 import { newRoomId, type ChannelAccess } from "./crypto.ts";
 import type { Identity } from "./identity.ts";
-import type { JoinClaims, JoinRequest, Member, MemberInfo } from "./membership.ts";
+import type { JoinClaims, JoinRequest, Member, MemberInfo, PersonPowers } from "./membership.ts";
 import type { ChannelIcon, Envelope, ImageAttachment, Message } from "./protocol.ts";
 import type { SigningBudget } from "./sas.ts";
 import type { Scope } from "./scopes.ts";
@@ -326,8 +326,8 @@ export class Channel {
     return run(this.fx.updateNickname(m, nickname));
   }
 
-  updateAddsAgents(m: Member, on: boolean): Promise<void> {
-    return run(this.fx.updateAddsAgents(m, on));
+  updatePowers(m: Member, powers: PersonPowers): Promise<void> {
+    return run(this.fx.updatePowers(m, powers));
   }
 
   /**
