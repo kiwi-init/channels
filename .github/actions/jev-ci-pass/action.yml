@@ -8,6 +8,12 @@ inputs:
   hash:
     description: The job's input hash from the plan. Empty when planning failed; then nothing is saved.
     required: true
+  shard:
+    description: >-
+      For a job split across runners, this runner's part as `1of3`. Each part saves its own entry,
+      and jev-ci counts the job passed only once every part has one.
+    required: false
+    default: ""
 runs:
   using: composite
   steps:
@@ -18,4 +24,4 @@ runs:
       uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: ${{ runner.temp }}/jev-ci-pass/${{ inputs.job }}
-        key: jev-ci-pass-${{ inputs.job }}-${{ inputs.hash }}
+        key: jev-ci-pass-${{ inputs.job }}-${{ inputs.hash }}${{ inputs.shard != '' && format('-shard{0}', inputs.shard) || '' }}

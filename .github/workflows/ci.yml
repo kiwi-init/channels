@@ -318,11 +318,20 @@ jobs:
     if: fromJSON(needs.plan.outputs.run)['cli-macos']
     runs-on: macos-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
-      - run: bun test
-      - run: |
+      - run: bun test --shard=${{ matrix.shard }}/3 --timings=test/macos-timings.json --update-timings
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: macos-timings-${{ matrix.shard }}
+          path: test/macos-timings.json
+      - if: matrix.shard == 1
+        run: |
           mkdir -p dist
           for t in darwin-arm64 darwin-x64 linux-x64 linux-arm64; do
             bun scripts/build-cli.ts --target "bun-$t" --outfile "dist/kiwi-$t"
@@ -331,9 +340,11 @@ jobs:
           ./dist/kiwi-darwin-arm64 --version
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
+        timeout-minutes: 1
         with:
           job: cli-macos
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['cli-macos'] }}
+          shard: ${{ matrix.shard }}of3
 
   release-rehearsal:
     name: release / rehearsal

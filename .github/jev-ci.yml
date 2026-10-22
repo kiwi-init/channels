@@ -901,8 +901,9 @@ jobs:
         The change behaves the same on macOS as on Linux: a failure it causes would fail the
         Linux jobs too, which catch it, or it can't fail at all.
     description: >-
-      On a macOS runner, does what the release's cli job does: runs the whole bun test suite
-      (every test/*.test.ts and web/src test, the agent flows included), compiles the kiwi CLI
+      On three macOS runners at once (a matrix of bun test --shard=N/3, balanced by the per-file
+      times in test/macos-timings.json), does what the release's cli job does: runs the whole bun test suite
+      (every test/*.test.ts and web/src test, the agent flows included), and in the first shard compiles the kiwi CLI
       for darwin-arm64, darwin-x64, linux-x64 and linux-arm64 with
       scripts/build-cli.ts, ad-hoc signs the macOS binaries and runs `kiwi --version`. The same
       tests run on Linux in test / unit, test / flows-a and test / flows-b, so this job is for what fails only on macOS: paths (os.tmpdir() is under
@@ -912,7 +913,10 @@ jobs:
       versions of shell tools, process, signal and file-watching differences, and a build
       target that fails to compile. test/desktop-entitlements.test.ts signs stand-in apps with
       codesign here, so release-build.yml's entitlements check runs for real only on macOS. Fails
-      if any test fails on macOS or a target doesn't build.
+      if any test fails on macOS or a target doesn't build. Each shard saves its own jev-ci pass
+      (shard1of3 and so on, given a minute so a hung cache save can't hold it), and the plan
+      counts the job passed on its inputs only once all three have, each from main or this pull
+      request (passMarkers in .github/jev-ci/github.ts, test/jev-ci.test.ts).
 
   release-rehearsal:
     name: release / rehearsal
