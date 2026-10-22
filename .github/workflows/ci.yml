@@ -321,7 +321,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
-      - run: bun test
+      - run: bun scripts/ci-tests.ts all
       - run: |
           mkdir -p dist
           for t in darwin-arm64 darwin-x64 linux-x64 linux-arm64; do
@@ -331,6 +331,7 @@ jobs:
           ./dist/kiwi-darwin-arm64 --version
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
+        timeout-minutes: 1
         with:
           job: cli-macos
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['cli-macos'] }}
