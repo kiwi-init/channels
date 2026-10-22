@@ -819,7 +819,7 @@ jobs:
     inputs: ["src/**", "packages/core/**", "web/**", "scripts/shoot-ui.ts", "scripts/local-relay.ts", "scripts/seed-permission.ts", "assets/**"]
     always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "scripts/shoot-ui.ts", "scripts/local-relay.ts", "scripts/seed-permission.ts"]
     description: >-
-      Builds the web dashboard (bun run web:build), then scripts/shoot-ui.ts --wide --theme dark
+      Builds the web dashboard (bun run web:build), then scripts/shoot-ui.ts --wide --phone channel,tasks --theme dark
       starts the relay and the kiwi CLI as two agents' computers, seeds a channel in headless
       Chromium (the owner signs in with a passkey, lets atlas in and gives it the Lead
       personality, lets win in, a conversation with an ask, a reply, two tasks and a task's
