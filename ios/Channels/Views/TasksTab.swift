@@ -2,7 +2,23 @@ import SwiftUI
 
 struct TasksTab: View {
     let room: RoomView
+    let current: String
+    let choose: (String) -> Void
+    @Environment(AppModel.self) private var model
     @State private var open: TaskView?
+
+    private var direct: [PlaceView] {
+        room.places.filter { $0.kind == "dm" && $0.withMe }.sorted { $0.lastSeq > $1.lastSeq }
+    }
+
+    private var between: [PlaceView] {
+        room.places.filter { $0.kind == "dm" && !$0.withMe }.sorted { $0.lastSeq > $1.lastSeq }
+    }
+
+    private var strangers: [MemberView] {
+        let talked = Set(direct.compactMap { room.other(in: $0) })
+        return room.members.filter { $0.name != room.me && !talked.contains($0.name) }
+    }
 
     private var doing: [TaskView] { room.tasks.filter { $0.state == "doing" || $0.state == "review" } }
     private var next: [TaskView] { room.tasks.filter { $0.state == "todo" } }
@@ -14,6 +30,54 @@ struct TasksTab: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 card
+                section("Conversations", count: 1 + direct.count, tone: Tone.ink3)
+                if let general = room.placeView("main") {
+                    Button {
+                        choose("main")
+                    } label: {
+                        PlaceRow(room: room, place: general, current: current == "main", fresh: model.fresh(room, "main"))
+                    }
+                    .buttonStyle(RowPress())
+                }
+                ForEach(direct) { place in
+                    Button {
+                        choose(place.key)
+                    } label: {
+                        PlaceRow(room: room, place: place, current: current == place.key, fresh: model.fresh(room, place.key))
+                    }
+                    .buttonStyle(RowPress())
+                }
+                if !strangers.isEmpty {
+                    Menu {
+                        ForEach(strangers) { m in
+                            Button(m.display) { choose(room.dmKey(with: m.name)) }
+                        }
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "square.and.pencil")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(Tone.accent)
+                                .frame(width: 36, height: 36)
+                                .background(Tone.accentWash, in: Circle())
+                            Text("Message someone directly").type(.body).foregroundStyle(Tone.accent)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .contentShape(Rectangle())
+                    }
+                }
+                if !between.isEmpty {
+                    section("Between others", count: between.count, tone: Tone.ink3)
+                    ForEach(between) { place in
+                        Button {
+                            choose(place.key)
+                        } label: {
+                            PlaceRow(room: room, place: place, current: current == place.key, fresh: false)
+                        }
+                        .buttonStyle(RowPress())
+                    }
+                }
                 if !room.asks.isEmpty {
                     section("Needs you", count: room.asks.count, tone: Tone.decide)
                     ForEach(room.asks) { ask in NeedsYouRow(ask: ask, room: room) }
@@ -75,6 +139,59 @@ struct TasksTab: View {
         .padding(.horizontal, 16)
         .padding(.top, 20)
         .padding(.bottom, 6)
+    }
+}
+
+struct PlaceRow: View {
+    let room: RoomView
+    let place: PlaceView
+    let current: Bool
+    let fresh: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Group {
+                if place.kind == "main" {
+                    Image(systemName: "number")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Tone.ink2)
+                        .frame(width: 36, height: 36)
+                        .background(Tone.wash2, in: Circle())
+                } else if let other = room.other(in: place) {
+                    Face(name: other, member: room.member(other), size: 36)
+                } else {
+                    HStack(spacing: -14) {
+                        ForEach(place.with, id: \.self) { name in
+                            Face(name: name, member: room.member(name), size: 26).overlay(Circle().stroke(Tone.canvas, lineWidth: 2))
+                        }
+                    }
+                    .frame(width: 36, height: 36)
+                }
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    Text(place.kind == "main" ? "general" : place.title).type(.body, fresh ? .semibold : .regular).foregroundStyle(Tone.ink).lineLimit(1)
+                    Spacer()
+                    if let last = place.last {
+                        Text(When.short(last.date)).type(.meta).foregroundStyle(fresh ? Tone.accent : Tone.ink3)
+                    }
+                }
+                Text(preview).type(.ui).foregroundStyle(Tone.ink3).lineLimit(1)
+            }
+            if current {
+                Image(systemName: "checkmark").font(.system(size: 13, weight: .semibold)).foregroundStyle(Tone.accent)
+            } else if fresh {
+                Dot(color: Tone.accent, size: 9)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+    }
+
+    private var preview: String {
+        guard let last = place.last else { return "No messages yet" }
+        let who = last.mine ? "You" : room.display(last.from)
+        return "\(who): \(last.body.replacingOccurrences(of: "\n", with: " "))"
     }
 }
 

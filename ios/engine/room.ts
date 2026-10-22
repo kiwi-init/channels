@@ -1,7 +1,7 @@
 import { ChannelGone, type RoomsSetting } from "@kiwi/core/client.ts";
 import type { Member } from "@kiwi/core/membership.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
-import { fold, type ChannelState, type FoldBase, type GuardFloor } from "@kiwi/core/state.ts";
+import { fold, MAIN, placeFromKey, type ChannelState, type FoldBase, type GuardFloor } from "@kiwi/core/state.ts";
 
 import type { ChannelIdentityView, FollowEvent, WireError } from "../../desktop/src/bridge.ts";
 import type { Keyring } from "../../desktop/src/keyring.ts";
@@ -41,6 +41,7 @@ export class Room {
   private clock: ReturnType<typeof setInterval> | null = null;
   private closed = false;
   private state: ChannelState | null = null;
+  private place = "main";
 
   constructor(
     private readonly keyring: Keyring,
@@ -90,12 +91,29 @@ export class Room {
     if (this.clock) clearInterval(this.clock);
   }
 
+  open(place: string): void {
+    this.place = placeFromKey(place) ? place : "main";
+    this.schedule();
+  }
+
   async send(body: string, re: number | null, imgs: readonly Picture[]): Promise<number> {
     const names = this.roster.filter((m) => m.active && !m.unverified).map((m) => m.name);
     const named = [...body.matchAll(/(^|\s)@([A-Za-z0-9_.-]+)/g)].map((x) => x[2]!).filter((n) => names.includes(n) && n !== this.me);
     const replyTo = re === null ? undefined : this.messages.find((m) => m.seq === re);
+    const where = placeFromKey(this.place) ?? MAIN;
+    if (where.kind === "dm") {
+      if (!where.with.includes(this.me)) throw new Error("this conversation is between two others: you can read along");
+      const other = where.with[0] === this.me ? where.with[1] : where.with[0];
+      return this.keyring.call(this.code, "send", body, { kind: "msg", to: [other], dm: true, ...(re !== null ? { re: [re] } : {}), ...(imgs.length ? { imgs: [...imgs] } : {}) });
+    }
     const to = named.length ? named : replyTo && replyTo.from !== this.me ? [replyTo.from] : undefined;
-    return this.keyring.call(this.code, "send", body, { kind: "msg", ...(to ? { to } : {}), ...(re !== null ? { re: [re] } : {}), ...(imgs.length ? { imgs: [...imgs] } : {}) });
+    return this.keyring.call(this.code, "send", body, {
+      kind: "msg",
+      ...(to ? { to } : {}),
+      ...(where.kind === "task" ? { task: where.task } : {}),
+      ...(re !== null ? { re: [re] } : {}),
+      ...(imgs.length ? { imgs: [...imgs] } : {}),
+    });
   }
 
   async react(seq: number, emoji: string | null): Promise<number> {
@@ -218,6 +236,7 @@ export class Room {
         messages: this.messages,
         state: this.state,
         online: onlineByName(this.heard, keyOf, now),
+        place: this.place,
       }),
     );
   }

@@ -55,6 +55,10 @@ struct Conversation: View {
 
     private static let revealMax: CGFloat = 62
 
+    private var solo: Bool {
+        room.placeView(room.place).map { $0.kind == "dm" && $0.withMe } ?? false
+    }
+
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
@@ -68,7 +72,7 @@ struct Conversation: View {
                     Text("No messages yet").type(.ui).foregroundStyle(Tone.ink3).padding(.top, 80)
                 }
                 ForEach(Line.build(room.messages)) { line in
-                    LineView(line: line, room: room, reveal: reveal) { m in
+                    LineView(line: line, room: room, reveal: reveal, solo: solo) { m in
                         replyTo = m
                         typing.wrappedValue = true
                     } jump: { seq in
@@ -130,6 +134,7 @@ struct LineView: View {
     let line: Line
     let room: RoomView
     let reveal: CGFloat
+    let solo: Bool
     let reply: (MessageView) -> Void
     let jump: (Int) -> Void
 
@@ -152,7 +157,7 @@ struct LineView: View {
                 .padding(.horizontal, 32)
                 .padding(.vertical, 4)
         case .bubble(let m, let first, let last):
-            BubbleRow(message: m, first: first, last: last, room: room, reveal: reveal, reply: reply, jump: jump)
+            BubbleRow(message: m, first: first, last: last, room: room, reveal: reveal, solo: solo, reply: reply, jump: jump)
         }
     }
 }
@@ -163,6 +168,7 @@ struct BubbleRow: View {
     let last: Bool
     let room: RoomView
     let reveal: CGFloat
+    let solo: Bool
     let reply: (MessageView) -> Void
     let jump: (Int) -> Void
     @State private var pull: CGFloat = 0
@@ -175,7 +181,7 @@ struct BubbleRow: View {
         HStack(alignment: .bottom, spacing: 8) {
             if message.mine {
                 Spacer(minLength: 56)
-            } else {
+            } else if !solo {
                 Group {
                     if last {
                         Face(name: message.from, member: room.member(message.from), size: avatar)
@@ -186,7 +192,7 @@ struct BubbleRow: View {
                 .frame(width: avatar, height: avatar)
             }
             VStack(alignment: message.mine ? .trailing : .leading, spacing: 3) {
-                if first && !message.mine {
+                if first && !message.mine && !solo {
                     Text(room.display(message.from))
                         .type(.meta)
                         .foregroundStyle(Tone.ink3)

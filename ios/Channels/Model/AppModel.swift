@@ -38,6 +38,7 @@ final class AppModel {
     }
     var seen: [String: Int] = UserDefaults.standard.dictionary(forKey: "seen") as? [String: Int] ?? [:]
     var pinned: [String] = UserDefaults.standard.stringArray(forKey: "pinned") ?? []
+    var placeSeen: [String: Int] = UserDefaults.standard.dictionary(forKey: "placeSeen") as? [String: Int] ?? [:]
 
     @ObservationIgnored let engine = Engine()
     @ObservationIgnored private var booted = false
@@ -65,24 +66,50 @@ final class AppModel {
     }
 
     func markUnread(_ room: RoomView) {
-        guard let last = room.messages.last(where: { !$0.mine && !$0.event }) else { return }
+        guard let last = room.placeView("main")?.last, !last.mine else { return }
         seen[room.code] = last.seq - 1
         UserDefaults.standard.set(seen, forKey: "seen")
     }
 
     func markRead(_ room: RoomView) {
-        guard let top = room.messages.last?.seq else { return }
-        seen[room.code] = top
+        seen[room.code] = max(seen[room.code] ?? 0, room.placeView("main")?.lastSeq ?? room.messages.last?.seq ?? 0)
         UserDefaults.standard.set(seen, forKey: "seen")
+        for place in room.places where place.kind == "dm" {
+            placeSeen["\(room.code)|\(place.key)"] = place.lastSeq
+        }
+        UserDefaults.standard.set(placeSeen, forKey: "placeSeen")
     }
 
     func unread(_ room: RoomView) -> Int {
         let mark = seen[room.code] ?? 0
-        return room.messages.filter { $0.seq > mark && !$0.mine && !$0.event }.count
+        let here = room.place == "main" ? room.messages.filter { $0.seq > mark && !$0.mine && !$0.event }.count : (fresh(room, "main") ? 1 : 0)
+        return here + room.places.filter { $0.kind == "dm" && $0.withMe && fresh(room, $0.key) }.count
+    }
+
+    func fresh(_ room: RoomView, _ key: String) -> Bool {
+        guard let place = room.placeView(key), let last = place.last, !last.mine else { return false }
+        let mark = key == "main" ? (seen[room.code] ?? 0) : (placeSeen["\(room.code)|\(key)"] ?? 0)
+        return place.lastSeq > mark
+    }
+
+    func freshElsewhere(_ room: RoomView, than key: String) -> Bool {
+        room.places.contains { $0.key != key && ($0.kind == "main" || $0.withMe) && fresh(room, $0.key) }
+    }
+
+    func markSeen(_ room: RoomView, place key: String) {
+        guard room.place == key else { return }
+        if key == "main" { return markSeen(room) }
+        guard let top = room.placeView(key)?.lastSeq, top > (placeSeen["\(room.code)|\(key)"] ?? 0) else { return }
+        placeSeen["\(room.code)|\(key)"] = top
+        UserDefaults.standard.set(placeSeen, forKey: "placeSeen")
+    }
+
+    func open(_ code: String, place: String) async {
+        try? await engine.ask(["op": "open", "code": code, "place": place])
     }
 
     func markSeen(_ room: RoomView) {
-        guard let top = room.messages.last?.seq, top > (seen[room.code] ?? 0) else { return }
+        guard room.place == "main", let top = room.messages.last?.seq, top > (seen[room.code] ?? 0) else { return }
         seen[room.code] = top
         UserDefaults.standard.set(seen, forKey: "seen")
     }

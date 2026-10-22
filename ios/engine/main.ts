@@ -132,6 +132,9 @@ async function handle(ask: Ask): Promise<unknown> {
       return room(ask.code).answer(ask.seq, ask.text);
     case "react":
       return room(ask.code).react(ask.seq, ask.emoji);
+    case "open":
+      room(ask.code).open(ask.place);
+      return null;
     case "nudge":
       keyring?.nudge();
       return null;

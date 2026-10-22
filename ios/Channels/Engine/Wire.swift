@@ -96,6 +96,19 @@ struct AskView: Codable, Sendable, Hashable, Identifiable {
     var date: Date { Date(timeIntervalSince1970: at / 1000) }
 }
 
+struct PlaceView: Codable, Sendable, Hashable, Identifiable {
+    let key: String
+    let kind: String
+    let title: String
+    let with: [String]
+    let withMe: Bool
+    let task: Int?
+    let lastSeq: Int
+    let last: MessageView?
+
+    var id: String { key }
+}
+
 struct RoomView: Codable, Sendable, Hashable, Identifiable {
     let code: String
     let title: String
@@ -114,8 +127,23 @@ struct RoomView: Codable, Sendable, Hashable, Identifiable {
     let tasks: [TaskView]
     let asks: [AskView]
     let last: MessageView?
+    let place: String
+    let places: [PlaceView]
 
     var id: String { code }
+
+    func placeView(_ key: String) -> PlaceView? {
+        places.first { $0.key == key }
+    }
+
+    func other(in place: PlaceView) -> String? {
+        place.kind == "dm" && place.withMe ? place.with.first { $0 != me } : nil
+    }
+
+    func dmKey(with name: String) -> String {
+        let pair = [me, name].sorted()
+        return "dm:\(pair[0])~\(pair[1])"
+    }
 
     func member(_ name: String) -> MemberView? {
         members.first { $0.name == name }

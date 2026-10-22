@@ -15,6 +15,7 @@ export type Ask =
   | { op: "image"; code: string; seq: number; index: number }
   | { op: "answer"; code: string; seq: number; text: string }
   | { op: "react"; code: string; seq: number; emoji: string | null }
+  | { op: "open"; code: string; place: string }
   | { op: "nudge" };
 
 export interface Picture {
@@ -97,6 +98,17 @@ export interface AskView {
   task: number | null;
 }
 
+export interface PlaceView {
+  key: string;
+  kind: "main" | "dm" | "task";
+  title: string;
+  with: string[];
+  withMe: boolean;
+  task: number | null;
+  lastSeq: number;
+  last: MessageView | null;
+}
+
 export interface RoomView {
   code: string;
   title: string;
@@ -115,4 +127,6 @@ export interface RoomView {
   tasks: TaskView[];
   asks: AskView[];
   last: MessageView | null;
+  place: string;
+  places: PlaceView[];
 }

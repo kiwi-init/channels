@@ -1,12 +1,12 @@
 import { ignored, isQuiet, type Message } from "@kiwi/core/protocol.ts";
-import { answersDecisions, decidersOf, inGeneral, MAIN, placeKey, type ChannelState } from "@kiwi/core/state.ts";
+import { answersDecisions, decidersOf, MAIN, placeFromKey, placeKey, taskId, type ChannelState } from "@kiwi/core/state.ts";
 import type { FoldMember } from "@kiwi/core/state/types.ts";
 
 import { askLabel, asksFor, chosenOf, heldAsks } from "../../web/src/lib/asks.ts";
 import { chipsFor } from "../../web/src/lib/reactions.ts";
 import type { Online } from "../../web/src/lib/channel/online.ts";
 import { knownHarness, monoHarness } from "../../web/src/lib/harness.ts";
-import type { AskView, Connection, MemberView, MessageView, RoomView, TaskView } from "./wire.ts";
+import type { AskView, Connection, MemberView, MessageView, PlaceView, RoomView, TaskView } from "./wire.ts";
 
 const SHOWN = 300;
 const QUOTE_CHARS = 140;
@@ -24,6 +24,7 @@ export interface RoomInput {
   messages: readonly Message[];
   state: ChannelState;
   online: ReadonlyMap<string, Online>;
+  place: string;
 }
 
 const oneLine = (s: string, max: number): string => {
@@ -53,9 +54,8 @@ function memberView(m: FoldMember, state: ChannelState, online: ReadonlyMap<stri
   };
 }
 
-function shownInMain(m: Message, state: ChannelState): boolean {
-  if (placeKey(state.placeOf.get(m.seq) ?? MAIN) !== "main") return false;
-  if (m.kind !== "event" && !inGeneral(state, m.seq)) return false;
+function shownIn(m: Message, state: ChannelState, key: string): boolean {
+  if (placeKey(state.placeOf.get(m.seq) ?? MAIN) !== key) return false;
   return !isQuiet(m) && !ignored(state.trust.get(m.seq));
 }
 
@@ -66,7 +66,9 @@ export function roomView(r: RoomInput): RoomView {
   for (const m of r.messages) for (const seq of m.re ?? []) repliesTo.set(seq, [...(repliesTo.get(seq) ?? []), m]);
   const { decisions, escalations, questions } = asksFor(heldAsks(state), me, answersDecisions(state.members, me));
   const waiting = new Set([...decisions, ...escalations].map((m) => m.seq));
-  const visible = r.messages.filter((m) => shownInMain(m, state));
+  const here = placeFromKey(r.place) ? r.place : "main";
+  const visible = r.messages.filter((m) => shownIn(m, state, here));
+  const general = here === "main" ? visible : r.messages.filter((m) => shownIn(m, state, "main"));
   const shown = visible.slice(-SHOWN);
 
   const messageView = (m: Message, prev: Message | undefined): MessageView => {
@@ -93,7 +95,41 @@ export function roomView(r: RoomInput): RoomView {
   };
 
   const messages = shown.map((m, i) => messageView(m, i > 0 ? shown[i - 1] : visible[visible.length - shown.length - 1]));
-  const lastChat = visible.findLast((m) => m.kind !== "event");
+  const lastChat = general.findLast((m) => m.kind !== "event");
+  const lastIn = new Map<string, Message>();
+  for (const m of r.messages) {
+    if (m.kind === "event" || isQuiet(m) || ignored(state.trust.get(m.seq))) continue;
+    lastIn.set(placeKey(state.placeOf.get(m.seq) ?? MAIN), m);
+  }
+  const nameOf = (name: string) => state.members.get(name)?.display ?? name;
+  const placeView = (key: string): PlaceView | null => {
+    const p = placeFromKey(key);
+    if (!p) return null;
+    const last = lastIn.get(key);
+    const summary = state.places.get(key);
+    const withMe = p.kind !== "dm" || p.with.includes(me);
+    const title =
+      p.kind === "main" ? r.title : p.kind === "task" ? `${taskId(p.task)} ${state.tasks.get(p.task)?.title ?? ""}`.trim() : withMe ? nameOf(p.with.find((n) => n !== me) ?? me) : p.with.map(nameOf).join(" & ");
+    return {
+      key,
+      kind: p.kind,
+      title,
+      with: p.kind === "dm" ? [...p.with] : [],
+      withMe,
+      task: p.kind === "task" ? p.task : null,
+      lastSeq: summary?.last ?? last?.seq ?? 0,
+      last: last ? messageView(last, undefined) : null,
+    };
+  };
+  const placeKeys = ["main", ...[...state.places.keys()].filter((k) => k.startsWith("dm:")), ...(here !== "main" && !state.places.has(here) ? [here] : [])];
+  const places = [...new Set(placeKeys)].flatMap((k) => {
+    const v = placeView(k);
+    return v ? [v] : [];
+  });
+  if (here.startsWith("task:") && !places.some((p) => p.key === here)) {
+    const v = placeView(here);
+    if (v) places.push(v);
+  }
   const tasks: TaskView[] = [...state.tasks.values()]
     .filter((t) => !t.archived)
     .sort((a, b) => b.updatedAt - a.updatedAt)
@@ -139,5 +175,7 @@ export function roomView(r: RoomInput): RoomView {
     tasks,
     asks,
     last: lastChat ? messageView(lastChat, undefined) : null,
+    place: here,
+    places,
   };
 }
