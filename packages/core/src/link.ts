@@ -115,7 +115,8 @@ async function chunkSecret(secret: string, i: number): Promise<string> {
 async function linkKey(secret: string, mine: string, theirs: string, dxpk: string, pxpk: string): Promise<string> {
   const priv = await crypto.subtle.importKey("pkcs8", fromB64url(mine), X25519, false, ["deriveBits"]);
   const pub = await crypto.subtle.importKey("raw", fromB64url(theirs), X25519, false, []);
-  const shared = await crypto.subtle.deriveBits({ name: "X25519", public: pub } as unknown as { name: string }, priv, 256);
+  const algorithm = { name: "X25519", public: pub };
+  const shared = await crypto.subtle.deriveBits(algorithm, priv, 256);
   const ikm = await crypto.subtle.importKey("raw", shared, "HKDF", false, ["deriveBits"]);
   const bits = await crypto.subtle.deriveBits({ name: "HKDF", hash: "SHA-256", salt: fromB64url(secret), info: enc.encode(`kiwi-link-key\n${dxpk}\n${pxpk}`) }, ikm, 256);
   return b64url(new Uint8Array(bits));
