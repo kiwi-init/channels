@@ -706,6 +706,8 @@ async function run(part: Part): Promise<string[]> {
     await withPin.waitFor({ timeout: 15000 });
     const token = /--persona (\S+)/.exec((await withPin.textContent()) ?? "")?.[1];
     if (!token) throw new Error("the invite command carries no --persona token");
+    const spill = await withPin.evaluate((c) => Math.max(...[...c.children].map((s) => s.getBoundingClientRect().right)) - c.getBoundingClientRect().right);
+    if (spill > 1) throw new Error(`the invite command runs ${Math.round(spill)}px past its box's right edge`);
     await inviting.getByRole("button", { name: "Back to details" }).click();
     await panel.getByRole("button", { name: "Close details" }).click();
     const hunter = kiwi(["join", code, "smoke", "--relay", BASE, "--as", "hunter", "--persona", token]);
