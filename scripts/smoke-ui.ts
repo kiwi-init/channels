@@ -530,12 +530,12 @@ async function run(part: Part): Promise<string[]> {
     await page.evaluate(() => sessionStorage.setItem("smoke.emptyStates", "watch"));
     await page.reload();
     await page.getByText("Smoke task").first().waitFor({ timeout: 15000 });
-    await page.getByRole("textbox", { name: "Message" }).first().waitFor();
     await page.waitForTimeout(500);
     const flashed = await page.evaluate(() => (window as unknown as { __emptyStates?: string[] }).__emptyStates ?? null);
     if (flashed === null) throw new Error("the watch for empty states didn't run on the reload");
     if (flashed.length) throw new Error(`a reload of a channel with agents and a task showed ${flashed.join(", ")} before its history`);
     log(`ok  ${at}`);
+    await toTab("Conversation");
 
     at = "a slash in the composer lists the commands, and one runs instead of being sent";
     const typed = page.getByRole("textbox", { name: "Message" });
