@@ -24,7 +24,6 @@ export interface DemoOptions {
   /** Where to serve the dashboard from, when it's built (web/dist in a checkout). */
   web?: string;
   print?: (line: string) => void;
-  /** Ends a stay, as Ctrl-C does. */
   stop?: AbortSignal;
 }
 
@@ -162,14 +161,18 @@ const play = Effect.fn("Demo.run")(function* (opts: DemoOptions) {
     if (opts.web) yield* line(`\nThe dashboard for this channel (Ctrl-C to stop; the demo lets it in as soon as it asks): ${relay}/#${encodeURIComponent(code)}`);
     else yield* line("\nThe relay stays up until Ctrl-C.");
     yield* Effect.callback<void>((resume) => {
-      const done = () => resume(Effect.void);
+      const detach = () => {
+        process.off("SIGINT", done);
+        opts.stop?.removeEventListener("abort", done);
+      };
+      const done = () => {
+        detach();
+        resume(Effect.void);
+      };
       process.once("SIGINT", done);
       opts.stop?.addEventListener("abort", done, { once: true });
       if (opts.stop?.aborted) done();
-      return Effect.sync(() => {
-        process.off("SIGINT", done);
-        opts.stop?.removeEventListener("abort", done);
-      });
+      return Effect.sync(detach);
     });
     if (admitting) yield* Fiber.interrupt(admitting);
   }
