@@ -1,12 +1,13 @@
-import { ignored, isQuiet, type Message } from "@kiwi/core/protocol.ts";
+import { ignored, isQuiet, ROBOT_FACES, type ChannelIcon, type Message } from "@kiwi/core/protocol.ts";
 import { answersDecisions, decidersOf, MAIN, placeFromKey, placeKey, taskId, type ChannelState } from "@kiwi/core/state.ts";
 import type { FoldMember } from "@kiwi/core/state/types.ts";
 
 import { askLabel, asksFor, chosenOf, heldAsks } from "../../web/src/lib/asks.ts";
+import { avatarIndex } from "../../web/src/lib/avatar-pick.ts";
 import { chipsFor } from "../../web/src/lib/reactions.ts";
 import type { Online } from "../../web/src/lib/channel/online.ts";
 import { knownHarness, monoHarness } from "../../web/src/lib/harness.ts";
-import type { AskView, Connection, MemberView, MessageView, PlaceView, RoomView, TaskView } from "./wire.ts";
+import type { AskView, Connection, IconView, MemberView, MessageView, PlaceView, RoomView, TaskView } from "./wire.ts";
 
 const SHOWN = 300;
 const QUOTE_CHARS = 140;
@@ -14,6 +15,7 @@ const QUOTE_CHARS = 140;
 export interface RoomInput {
   code: string;
   title: string;
+  icon: ChannelIcon | null;
   me: string;
   isOwner: boolean;
   connection: Connection;
@@ -26,6 +28,8 @@ export interface RoomInput {
   online: ReadonlyMap<string, Online>;
   place: string;
 }
+
+const iconView = (icon: ChannelIcon | null, title: string): IconView => icon ?? { kind: "robot", robot: ROBOT_FACES[avatarIndex(title.trim().toLowerCase(), ROBOT_FACES.length)]! };
 
 const oneLine = (s: string, max: number): string => {
   const line = s.replace(/\s+/g, " ").trim();
@@ -166,6 +170,7 @@ export function roomView(r: RoomInput): RoomView {
   return {
     code: r.code,
     title: r.title,
+    icon: iconView(r.icon, r.title),
     me,
     isOwner: r.isOwner,
     connection: r.connection,

@@ -67,11 +67,11 @@ struct Fan: View {
         VStack(alignment: .trailing, spacing: 10) {
             ForEach(Array(items.enumerated().reversed()), id: \.element.id) { index, item in
                 row(item)
-                    .scaleEffect(shown ? (hover == item.key ? 1.07 : 1) : 0.4, anchor: .trailing)
+                    .scaleEffect(shown ? (hover == item.key ? 1.07 : 1) : 0.75, anchor: .bottomTrailing)
                     .opacity(shown ? 1 : 0)
-                    .offset(y: shown ? 0 : CGFloat(index + 1) * 22)
-                    .animation(.spring(duration: 0.38, bounce: 0.32).delay(shown ? Double(index) * 0.025 : 0), value: shown)
-                    .animation(.spring(duration: 0.2, bounce: 0.4), value: hover)
+                    .offset(y: shown ? 0 : CGFloat(index + 1) * 12)
+                    .animation(.spring(duration: 0.24, bounce: 0.28).delay(shown ? Double(index) * 0.012 : 0), value: shown)
+                    .animation(.spring(duration: 0.16, bounce: 0.4), value: hover)
                     .onGeometryChange(for: CGRect.self) {
                         $0.frame(in: .global)
                     } action: {

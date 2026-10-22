@@ -1,6 +1,6 @@
 import { ChannelGone, type RoomsSetting } from "@kiwi/core/client.ts";
 import type { Member } from "@kiwi/core/membership.ts";
-import type { Message } from "@kiwi/core/protocol.ts";
+import type { ChannelIcon, Message } from "@kiwi/core/protocol.ts";
 import { fold, MAIN, placeFromKey, type ChannelState, type FoldBase, type GuardFloor } from "@kiwi/core/state.ts";
 
 import type { ChannelIdentityView, FollowEvent, WireError } from "../../desktop/src/bridge.ts";
@@ -36,6 +36,7 @@ export class Room {
   private head = 0;
   private since = 0;
   private title: string;
+  private icon: ChannelIcon | null = null;
   private stopLive: (() => void) | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private clock: ReturnType<typeof setInterval> | null = null;
@@ -93,7 +94,9 @@ export class Room {
 
   open(place: string): void {
     this.place = placeFromKey(place) ? place : "main";
-    this.schedule();
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+    this.flush();
   }
 
   async send(body: string, re: number | null, imgs: readonly Picture[]): Promise<number> {
@@ -142,12 +145,14 @@ export class Room {
   }
 
   private async refreshInfo(): Promise<void> {
-    const [title, guard, rooms] = await Promise.all([
+    const [title, guard, rooms, icon] = await Promise.all([
       this.keyring.call(this.code, "title").catch(() => null),
       this.keyring.call(this.code, "guard").catch(() => null),
       this.keyring.call(this.code, "rooms").catch(() => null),
+      this.keyring.call(this.code, "icon").catch(() => null),
     ]);
     if (title) this.title = title;
+    this.icon = icon;
     this.guard = guard;
     this.rooms = rooms;
     this.schedule();
@@ -226,6 +231,7 @@ export class Room {
       roomView({
         code: this.code,
         title: this.title,
+        icon: this.icon,
         me: this.me,
         isOwner: this.isOwner,
         connection: this.connection,

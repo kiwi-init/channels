@@ -87,15 +87,7 @@ struct ChannelScreen: View {
                         follow = Follow()
                         position.scrollTo(edge: .bottom)
                     }
-                    .sheet(isPresented: $details) {
-                        Details(room: room, current: place) { key in
-                            details = false
-                            go(room, key)
-                        } channels: {
-                            details = false
-                            dismiss()
-                        }
-                    }
+                    .overlay(alignment: .top) { panel(room) }
             } else {
                 Centered(title: "This channel is gone", detail: "Its owner closed it, or this phone was removed from it.")
             }
@@ -132,19 +124,58 @@ struct ChannelScreen: View {
                 .accessibilityLabel("Channels")
                 Spacer()
             }
-            Button {
-                Haptic.tap()
-                details = true
-            } label: {
-                TitlePill(room: room, place: room.placeView(place), fresh: false)
-            }
-            .buttonStyle(.plain)
-            .frame(maxWidth: 240)
-            .accessibilityHint("Tasks, people and details")
+            pill(room, open: false)
         }
         .padding(.horizontal, 12)
         .padding(.top, 2)
         .padding(.bottom, 4)
+    }
+
+    private func pill(_ room: RoomView, open: Bool) -> some View {
+        Button {
+            Haptic.tap()
+            withAnimation(Self.drop) { details.toggle() }
+        } label: {
+            TitlePill(room: room, place: room.placeView(place), fresh: false, open: open)
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: 240)
+        .accessibilityHint(open ? "Closes the details" : "Tasks, people and details")
+    }
+
+    private static let drop = Animation.spring(duration: 0.42, bounce: 0.2)
+
+    private func panel(_ room: RoomView) -> some View {
+        GeometryReader { geo in
+            ZStack(alignment: .top) {
+                if details {
+                    Rectangle()
+                        .fill(.black.opacity(0.4))
+                        .background(.ultraThinMaterial)
+                        .ignoresSafeArea()
+                        .onTapGesture { withAnimation(Self.drop) { details = false } }
+                        .transition(.opacity)
+                }
+                if details {
+                    pill(room, open: true).padding(.top, 2)
+                }
+                if details {
+                    DetailsPanel(room: room, current: place) { key in
+                        withAnimation(Self.drop) { details = false }
+                        go(room, key)
+                    } channels: {
+                        details = false
+                        dismiss()
+                    } close: {
+                        withAnimation(Self.drop) { details = false }
+                    }
+                    .frame(height: max(320, geo.size.height - 140))
+                    .padding(.horizontal, 8)
+                    .padding(.top, 52)
+                    .transition(.scale(scale: 0.2, anchor: .top).combined(with: .opacity))
+                }
+            }
+        }
     }
 
     private func control(_ room: RoomView) -> SwitchControl {
@@ -163,11 +194,11 @@ struct ChannelScreen: View {
                     if hit != nil { UISelectionFeedbackGenerator().selectionChanged() }
                 }
             },
-            release: {
+            release: { stayed in
                 if let hover {
                     pick(room, hover)
                 } else {
-                    withAnimation(.snappy(duration: 0.2)) { fan = nil }
+                    withAnimation(.snappy(duration: 0.2)) { fan = stayed ? .tapped : nil }
                 }
             },
             tap: {
@@ -219,6 +250,8 @@ struct TitlePill: View {
     let room: RoomView
     let place: PlaceView?
     let fresh: Bool
+    var open = false
+    @State private var turned = false
 
     var body: some View {
         HStack(spacing: 7) {
@@ -229,6 +262,7 @@ struct TitlePill: View {
                 HStack(spacing: 3) {
                     Text(title).type(.ui, .semibold).foregroundStyle(Tone.ink).lineLimit(1)
                     Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(Tone.ink3)
+                        .rotationEffect(.degrees(turned ? 90 : 0))
                 }
                 status
             }
@@ -240,6 +274,10 @@ struct TitlePill: View {
         .frame(minHeight: 40)
         .glassCapsule()
         .contentShape(Capsule())
+        .onAppear {
+            guard open else { return }
+            withAnimation(.spring(duration: 0.35, bounce: 0.3)) { turned = true }
+        }
     }
 
     private var title: String {
@@ -271,75 +309,76 @@ struct TitlePill: View {
     }
 }
 
-struct Details: View {
+struct DetailsPanel: View {
     let room: RoomView
     let current: String
     let choose: (String) -> Void
     let channels: () -> Void
-    @Environment(\.dismiss) private var dismiss
+    let close: () -> Void
+    @State private var pull: CGFloat = 0
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
             TasksTab(room: room, current: current, choose: choose, channels: channels)
-                .background(Tone.canvas)
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { dismiss() }
-                    }
-                }
+            Capsule()
+                .fill(Tone.ink3.opacity(0.6))
+                .frame(width: 40, height: 5)
+                .frame(maxWidth: .infinity, minHeight: 28)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture()
+                        .onChanged { pull = min(0, $0.translation.height) }
+                        .onEnded { drag in
+                            if drag.translation.height < -50 || drag.predictedEndTranslation.height < -140 {
+                                close()
+                            } else {
+                                withAnimation(.spring(duration: 0.3, bounce: 0.3)) { pull = 0 }
+                            }
+                        }
+                )
+                .accessibilityElement()
+                .accessibilityLabel("Close details")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { close() }
         }
-        .presentationDetents([.medium, .large])
-        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
-        .presentationDragIndicator(.visible)
+        .clipShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
+        .glass(34)
+        .scaleEffect(y: 1 + pull / 2000, anchor: .top)
+        .offset(y: pull * 0.5)
     }
 }
 
-struct Spot: Sendable {
-    let d: CGFloat
-    let x: CGFloat
-    let y: CGFloat
+@MainActor
+enum Icons {
+    private static let decoded = NSCache<NSString, UIImage>()
+
+    static func picture(_ room: RoomView) -> UIImage? {
+        guard let data = room.icon?.data else { return nil }
+        let key = "\(room.code)|\(data.count)|\(data.suffix(32))" as NSString
+        if let hit = decoded.object(forKey: key) { return hit }
+        guard let raw = Data(base64Encoded: data), let image = UIImage(data: raw) else { return nil }
+        decoded.setObject(image, forKey: key)
+        return image
+    }
 }
 
 struct ChannelAvatar: View {
     let room: RoomView
     var size: CGFloat = 50
 
-    private static let spots: [[Spot]] = [
-        [Spot(d: 0.56, x: -0.12, y: -0.1), Spot(d: 0.44, x: 0.17, y: 0.18)],
-        [Spot(d: 0.46, x: -0.12, y: -0.13), Spot(d: 0.36, x: 0.2, y: 0.08), Spot(d: 0.3, x: -0.1, y: 0.25)],
-    ]
-
-    private var crew: [MemberView] {
-        let others = room.members.filter { $0.name != room.me }
-        return Array((others.filter(\.lead) + others.filter { !$0.lead }).prefix(3))
-    }
-
     var body: some View {
-        let crew = crew
         Group {
-            if crew.count > 1 {
-                ZStack {
-                    Circle().fill(LinearGradient(colors: [Tone.wash2, Tone.wash], startPoint: .top, endPoint: .bottom))
-                    ForEach(Array(crew.enumerated()), id: \.element.name) { i, m in
-                        let spot = Self.spots[crew.count - 2][i]
-                        Face(name: m.name, member: m, size: size * spot.d, badge: false)
-                            .overlay(Circle().stroke(Tone.canvas, lineWidth: max(1, size * 0.03)))
-                            .offset(x: size * spot.x, y: size * spot.y)
-                            .zIndex(Double(-i))
-                    }
-                }
-            } else if let only = crew.first {
-                Face(name: only.name, member: only, size: size, badge: false)
+            if room.icon?.kind == "image", let picture = Icons.picture(room) {
+                Image(uiImage: picture).resizable().scaledToFill().background(Tone.wash2)
+            } else if room.icon?.kind == "emoji", let emoji = room.icon?.emoji {
+                Text(emoji).font(.system(size: size * 0.52)).frame(width: size, height: size).background(Tone.wash2)
             } else {
-                Text(String(room.title.prefix(1)).uppercased())
-                    .font(.system(size: size * 0.42, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .frame(width: size, height: size)
-                    .background(Circle().fill(LinearGradient(colors: [Tone.avatarTop, Tone.avatarBottom], startPoint: .top, endPoint: .bottom)))
+                Image("robot-\(room.icon?.robot ?? "blue")").resizable().scaledToFit()
             }
         }
         .frame(width: size, height: size)
+        .clipShape(Circle())
+        .accessibilityHidden(true)
     }
 }
 

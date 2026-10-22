@@ -1,3 +1,4 @@
+import LocalAuthentication
 import SwiftUI
 
 struct ChannelList: View {
@@ -83,7 +84,11 @@ struct ChannelList: View {
             .onChange(of: model.channels.first?.code) { _, code in
                 guard let code, path.isEmpty, let shot = UserDefaults.standard.string(forKey: "shot") else { return }
                 if let text = UserDefaults.standard.string(forKey: "draft") { model.keep(Draft(text: text), code, "main") }
-                if shot != "list" { path = [Route(code: code)] }
+                if shot == "settings" {
+                    settings = true
+                } else if shot != "list" {
+                    path = [Route(code: code)]
+                }
             }
         #endif
     }
@@ -322,57 +327,95 @@ struct SettingsSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var confirm = false
+    @State private var guarded = SettingsSheet.lockWords()
+
+    private var relayHost: String {
+        URL(string: model.relay)?.host() ?? model.relay
+    }
+
+    private var version: String {
+        let info = Bundle.main.infoDictionary
+        return "\(info?["CFBundleShortVersionString"] as? String ?? "") (\(info?["CFBundleVersion"] as? String ?? ""))"
+    }
+
+    private static func lockWords() -> String {
+        let context = LAContext()
+        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: nil) else { return "Off, no passcode" }
+        let how =
+            switch context.biometryType {
+            case .faceID: "Face ID"
+            case .touchID: "Touch ID"
+            case .opticID: "Optic ID"
+            default: "Passcode"
+            }
+        return "\(how), after 30 s"
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("Settings").type(.title, .semibold).foregroundStyle(Tone.ink)
-                Spacer()
-                Button("Done") { dismiss() }.type(.body, .semibold)
-            }
-            .padding(.bottom, 24)
-            HStack(spacing: 12) {
-                Face(name: model.person, member: nil, size: 44)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(model.person).type(.body, .semibold).foregroundStyle(Tone.ink)
-                    Text("Linked to your Mac").type(.ui).foregroundStyle(Tone.ink3)
+        NavigationStack {
+            List {
+                Section {
+                    VStack(spacing: 4) {
+                        Face(name: model.person, member: nil, size: 88).padding(.bottom, 8)
+                        Text(model.person).font(.title2.weight(.bold)).foregroundStyle(Tone.ink)
+                        Text("Linked to your Mac").type(.ui).foregroundStyle(Tone.ink3)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 6, trailing: 0))
+                Section("This iPhone") {
+                    LabeledContent {
+                        Text("\(model.channels.count)")
+                    } label: {
+                        Setting(symbol: "bubble.left.and.bubble.right.fill", tint: Tone.live, title: "Channels")
+                    }
+                    LabeledContent {
+                        Text(relayHost).lineLimit(1).truncationMode(.middle)
+                    } label: {
+                        Setting(symbol: "antenna.radiowaves.left.and.right", tint: Tone.doing, title: "Relay")
+                    }
+                    LabeledContent {
+                        Text(guarded)
+                    } label: {
+                        Setting(symbol: "lock.fill", tint: Tone.ink3, title: "Lock")
+                    }
+                }
+                Section {
+                    Button {
+                        dismiss()
+                        model.relinkAsked = true
+                    } label: {
+                        Setting(symbol: "link", tint: Tone.accent, title: "Link again")
+                    }
+                    .tint(Tone.ink)
+                } footer: {
+                    Text("Brings the channels you joined on your Mac since you linked.")
+                }
+                Section {
+                    Button(role: .destructive) {
+                        confirm = true
+                    } label: {
+                        Text("Unlink this iPhone").frame(maxWidth: .infinity)
+                    }
+                } footer: {
+                    Text("This iPhone holds your person key and your channels' keys in its keychain. Unlinking deletes them from this phone.")
+                }
+                Section {
+                } footer: {
+                    Text("Channels \(version)").frame(maxWidth: .infinity)
                 }
             }
-            .padding(.bottom, 20)
-            row("Relay", model.relay)
-            row("Channels", "\(model.channels.count)")
-            Button {
-                dismiss()
-                model.relinkAsked = true
-            } label: {
-                HStack {
-                    Text("Link again").type(.ui, .medium).foregroundStyle(Tone.accent)
-                    Spacer()
-                    Text("Brings channels you joined since").type(.meta).foregroundStyle(Tone.ink3)
+            .listStyle(.insetGrouped)
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
                 }
-                .padding(.vertical, 12)
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            Text("This iPhone holds your person key and the keys of your channels, in its keychain. Unlinking deletes them from this phone.")
-                .type(.ui)
-                .foregroundStyle(Tone.ink3)
-                .padding(.top, 20)
-            Spacer()
-            Button(role: .destructive) {
-                confirm = true
-            } label: {
-                Text("Unlink this iPhone")
-                    .type(.body, .semibold)
-                    .foregroundStyle(Tone.alert)
-                    .frame(maxWidth: .infinity, minHeight: 50)
-                    .outlined(Radius.ctl, Tone.edgeStrong)
-            }
-            .buttonStyle(.plain)
         }
-        .padding(24)
-        .background(Tone.canvas)
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.large])
         .confirmationDialog("Unlink this iPhone?", isPresented: $confirm, titleVisibility: .visible) {
             Button("Unlink", role: .destructive) {
                 dismiss()
@@ -382,14 +425,22 @@ struct SettingsSheet: View {
             Text("Its keys are deleted. Link again from your Mac to come back.")
         }
     }
+}
 
-    private func row(_ label: String, _ value: String) -> some View {
-        HStack {
-            Text(label).type(.ui).foregroundStyle(Tone.ink2)
-            Spacer()
-            Text(value).type(.ui).foregroundStyle(Tone.ink).lineLimit(1).truncationMode(.middle)
+struct Setting: View {
+    let symbol: String
+    let tint: Color
+    let title: String
+
+    var body: some View {
+        Label {
+            Text(title).type(.body).foregroundStyle(Tone.ink)
+        } icon: {
+            Image(systemName: symbol)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 30, height: 30)
+                .background(tint.gradient, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
         }
-        .padding(.vertical, 12)
-        .overlay(alignment: .bottom) { Rectangle().fill(Tone.line).frame(height: 1) }
     }
 }

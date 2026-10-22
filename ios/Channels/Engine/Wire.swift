@@ -109,9 +109,18 @@ struct PlaceView: Codable, Sendable, Hashable, Identifiable {
     var id: String { key }
 }
 
+struct IconView: Codable, Sendable, Hashable {
+    let kind: String
+    let robot: String?
+    let emoji: String?
+    let mime: String?
+    let data: String?
+}
+
 struct RoomView: Codable, Sendable, Hashable, Identifiable {
     let code: String
     let title: String
+    let icon: IconView?
     let me: String
     let isOwner: Bool
     let connection: Connection

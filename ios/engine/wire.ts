@@ -109,9 +109,12 @@ export interface PlaceView {
   last: MessageView | null;
 }
 
+export type IconView = { kind: "robot"; robot: string } | { kind: "emoji"; emoji: string } | { kind: "image"; mime: string; data: string };
+
 export interface RoomView {
   code: string;
   title: string;
+  icon: IconView;
   me: string;
   isOwner: boolean;
   connection: Connection;

@@ -16,9 +16,11 @@ struct TasksTab: View {
         room.places.filter { $0.kind == "dm" && !$0.withMe }.sorted { $0.lastSeq > $1.lastSeq }
     }
 
-    private var strangers: [MemberView] {
-        let talked = Set(direct.compactMap { room.other(in: $0) })
-        return room.members.filter { $0.name != room.me && !talked.contains($0.name) }
+    private var people: [MemberView] {
+        let lead = room.members.filter { $0.lead }
+        let rest = room.members.filter { !$0.lead && $0.name != room.me }.sorted { ($0.working ? 0 : 1, $0.display) < ($1.working ? 0 : 1, $1.display) }
+        let me = room.members.filter { $0.name == room.me && !$0.lead }
+        return lead + rest + me
     }
 
     private var doing: [TaskView] { room.tasks.filter { $0.state == "doing" || $0.state == "review" } }
@@ -28,130 +30,170 @@ struct TasksTab: View {
     }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                Button(action: channels) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "chevron.left").font(.system(size: 13, weight: .semibold))
-                        Text("All channels").type(.ui, .medium)
-                        Spacer()
-                    }
-                    .foregroundStyle(Tone.accent)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 6)
-                    .contentShape(Rectangle())
+        ZStack {
+            if let task = open {
+                TaskDetail(task: task, room: room, back: { withAnimation(Motion.ease) { open = nil } }) {
+                    choose("task:\(task.id)")
                 }
-                .buttonStyle(.plain)
-                card
-                section("Conversations", count: 1 + direct.count, tone: Tone.ink3)
-                if let general = room.placeView("main") {
-                    Button {
-                        choose("main")
-                    } label: {
-                        PlaceRow(room: room, place: general, current: current == "main", fresh: model.fresh(room, "main"))
-                    }
-                    .buttonStyle(RowPress())
-                }
-                ForEach(direct) { place in
-                    Button {
-                        choose(place.key)
-                    } label: {
-                        PlaceRow(room: room, place: place, current: current == place.key, fresh: model.fresh(room, place.key))
-                    }
-                    .buttonStyle(RowPress())
-                }
-                if !strangers.isEmpty {
-                    Menu {
-                        ForEach(strangers) { m in
-                            Button(m.display) { choose(room.dmKey(with: m.name)) }
-                        }
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "square.and.pencil")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(Tone.accent)
-                                .frame(width: 36, height: 36)
-                                .background(Tone.accentWash, in: Circle())
-                            Text("Message someone directly").type(.body).foregroundStyle(Tone.accent)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .contentShape(Rectangle())
-                    }
-                }
-                if !between.isEmpty {
-                    section("Between others", count: between.count, tone: Tone.ink3)
-                    ForEach(between) { place in
-                        Button {
-                            choose(place.key)
-                        } label: {
-                            PlaceRow(room: room, place: place, current: current == place.key, fresh: false)
-                        }
-                        .buttonStyle(RowPress())
-                    }
-                }
-                if !room.asks.isEmpty {
-                    section("Needs you", count: room.asks.count, tone: Tone.decide)
-                    ForEach(room.asks) { ask in NeedsYouRow(ask: ask, room: room) }
-                }
-                group("In progress", doing)
-                group("Up next", next)
-                group("Done this week", done)
-                if room.tasks.isEmpty && room.asks.isEmpty {
-                    Text("No tasks yet").type(.ui).foregroundStyle(Tone.ink3).frame(maxWidth: .infinity).padding(.top, 60)
-                }
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else {
+                list.transition(.move(edge: .leading).combined(with: .opacity))
             }
-            .padding(.bottom, 24)
         }
-        .sheet(item: $open) { task in TaskSheet(task: task, room: room) }
+        .animation(.snappy(duration: 0.3), value: open?.id)
     }
 
-    private var card: some View {
-        VStack(spacing: 8) {
-            ChannelAvatar(room: room, size: 84)
-            Text(room.title).type(.title).foregroundStyle(Tone.ink)
-            HStack(spacing: -6) {
-                ForEach(room.members.prefix(8)) { m in
-                    Face(name: m.name, member: m, size: 26)
-                        .overlay(Circle().stroke(Tone.canvas, lineWidth: 2))
+    private var list: some View {
+        List {
+            Section {
+                header
+            }
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 22, leading: 0, bottom: 6, trailing: 0))
+            if !room.asks.isEmpty {
+                Section {
+                    ForEach(room.asks) { ask in NeedsYouRow(ask: ask, room: room) }
+                } header: {
+                    Text("Needs you").foregroundStyle(Tone.decide)
+                }
+                .listRowBackground(Tone.wash)
+            }
+            Section("Conversations") {
+                if let general = room.placeView("main") { place(general) }
+                ForEach(direct) { place($0) }
+            }
+            .listRowBackground(Tone.wash)
+            if !between.isEmpty {
+                Section {
+                    ForEach(between) { place($0) }
+                } header: {
+                    Text("Between others")
+                } footer: {
+                    Text("You can read along.")
+                }
+                .listRowBackground(Tone.wash)
+            }
+            Section("\(room.members.count) people") {
+                ForEach(people) { person($0) }
+            }
+            .listRowBackground(Tone.wash)
+            tasks("In progress", doing)
+            tasks("Up next", next)
+            tasks("Done this week", done)
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+    }
+
+    private var header: some View {
+        VStack(spacing: 4) {
+            ChannelAvatar(room: room, size: 96).padding(.bottom, 8)
+            Text(room.title).font(.title2.weight(.bold)).foregroundStyle(Tone.ink).multilineTextAlignment(.center)
+            Text(summary).type(.ui).foregroundStyle(Tone.ink3)
+            HStack(spacing: 10) {
+                Menu {
+                    ForEach(people.filter { $0.name != room.me }) { m in
+                        Button(m.display) { choose(room.dmKey(with: m.name)) }
+                    }
+                } label: {
+                    Action(symbol: "message.fill", title: "Message")
+                }
+                Button {
+                    Haptic.tap()
+                    withAnimation(Motion.ease) { model.togglePin(room) }
+                } label: {
+                    Action(symbol: pinned ? "pin.slash.fill" : "pin.fill", title: pinned ? "Unpin" : "Pin")
+                }
+                Button(action: channels) {
+                    Action(symbol: "bubble.left.and.bubble.right.fill", title: "Channels")
                 }
             }
-            Text(people).type(.meta).foregroundStyle(Tone.ink3).multilineTextAlignment(.center)
+            .buttonStyle(.plain)
+            .padding(.top, 16)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 8)
-        .padding(.bottom, 4)
-        .padding(.horizontal, 24)
     }
 
-    private var people: String {
-        let names = room.members.map { $0.name == room.me ? "you" : $0.display }
-        return names.count <= 5 ? names.joined(separator: ", ") : "\(names.prefix(4).joined(separator: ", ")) and \(names.count - 4) more"
+    private var pinned: Bool { model.pinned.contains(room.code) }
+
+    private var summary: String {
+        let count = "\(room.members.count) \(room.members.count == 1 ? "person" : "people")"
+        return room.working > 0 ? "\(count) · \(room.working) working" : count
     }
 
-    @ViewBuilder private func group(_ title: String, _ tasks: [TaskView]) -> some View {
-        if !tasks.isEmpty {
-            section(title, count: tasks.count, tone: Tone.ink3)
-            ForEach(tasks) { task in
-                Button {
-                    open = task
-                } label: {
-                    TaskRow(task: task, room: room)
+    private func place(_ place: PlaceView) -> some View {
+        Button {
+            choose(place.key)
+        } label: {
+            PlaceRow(room: room, place: place, current: current == place.key, fresh: place.withMe || place.kind != "dm" ? model.fresh(room, place.key) : false)
+        }
+        .tint(Tone.ink)
+    }
+
+    private func person(_ m: MemberView) -> some View {
+        Button {
+            choose(room.dmKey(with: m.name))
+        } label: {
+            HStack(spacing: 12) {
+                Face(name: m.name, member: m, size: 36)
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 6) {
+                        Text(m.display).type(.body).foregroundStyle(Tone.ink).lineLimit(1)
+                        if m.name == room.me { Text("you").type(.meta).foregroundStyle(Tone.ink3) }
+                    }
+                    Text(status(m)).type(.meta).foregroundStyle(m.working ? Tone.doing : Tone.ink3).lineLimit(1)
                 }
-                .buttonStyle(RowPress())
+                Spacer(minLength: 0)
+                if m.name != room.me {
+                    Image(systemName: "message").font(.system(size: 15)).foregroundStyle(Tone.accent)
+                }
             }
         }
+        .tint(Tone.ink)
+        .disabled(m.name == room.me)
     }
 
-    private func section(_ title: String, count: Int, tone: Color) -> some View {
-        HStack(spacing: 6) {
-            Text(title).type(.meta, .semibold).foregroundStyle(tone == Tone.decide ? Tone.decide : Tone.ink2)
-            Text("\(count)").type(.meta).foregroundStyle(Tone.ink3)
+    private func status(_ m: MemberView) -> String {
+        let what = m.lead ? "Lead" : m.owner ? "Owner" : m.isAgent ? "Agent" : "Person"
+        let now: String
+        if m.working {
+            now = m.doing.first.map { "working on \(taskLabel($0))" } ?? "working"
+        } else {
+            now = m.here ? "here" : "away"
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 20)
-        .padding(.bottom, 6)
+        return "\(what) · \(now)"
+    }
+
+    @ViewBuilder private func tasks(_ title: String, _ list: [TaskView]) -> some View {
+        if !list.isEmpty {
+            Section(title) {
+                ForEach(list) { task in
+                    Button {
+                        withAnimation(Motion.ease) { open = task }
+                    } label: {
+                        TaskRow(task: task, room: room)
+                    }
+                    .tint(Tone.ink)
+                }
+            }
+            .listRowBackground(Tone.wash)
+        }
+    }
+}
+
+struct Action: View {
+    let symbol: String
+    let title: String
+
+    var body: some View {
+        VStack(spacing: 5) {
+            Image(systemName: symbol).font(.system(size: 18, weight: .medium))
+            Text(title).type(.meta, .medium)
+        }
+        .foregroundStyle(Tone.accent)
+        .frame(maxWidth: .infinity, minHeight: 60)
+        .background(Tone.wash2, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 
@@ -163,27 +205,10 @@ struct PlaceRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Group {
-                if place.kind == "main" {
-                    Image(systemName: "number")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Tone.ink2)
-                        .frame(width: 36, height: 36)
-                        .background(Tone.wash2, in: Circle())
-                } else if let other = room.other(in: place) {
-                    Face(name: other, member: room.member(other), size: 36)
-                } else {
-                    HStack(spacing: -14) {
-                        ForEach(place.with, id: \.self) { name in
-                            Face(name: name, member: room.member(name), size: 26).overlay(Circle().stroke(Tone.canvas, lineWidth: 2))
-                        }
-                    }
-                    .frame(width: 36, height: 36)
-                }
-            }
+            PlaceFace(room: room, place: place, size: 36)
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
-                    Text(place.kind == "main" ? "general" : place.title).type(.body, fresh ? .semibold : .regular).foregroundStyle(Tone.ink).lineLimit(1)
+                    Text(place.kind == "main" ? "# general" : place.title).type(.body, fresh ? .semibold : .regular).foregroundStyle(Tone.ink).lineLimit(1)
                     Spacer()
                     if let last = place.last {
                         Text(When.short(last.date)).type(.meta).foregroundStyle(fresh ? Tone.accent : Tone.ink3)
@@ -192,13 +217,11 @@ struct PlaceRow: View {
                 Text(preview).type(.ui).foregroundStyle(Tone.ink3).lineLimit(1)
             }
             if current {
-                Image(systemName: "checkmark").font(.system(size: 13, weight: .semibold)).foregroundStyle(Tone.accent)
+                Image(systemName: "checkmark").font(.system(size: 14, weight: .semibold)).foregroundStyle(Tone.accent)
             } else if fresh {
                 Dot(color: Tone.accent, size: 9)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
     }
 
     private var preview: String {
@@ -215,16 +238,14 @@ struct TaskRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             if let owner = task.owner {
-                Face(name: owner, member: room.member(owner), size: 28)
+                Face(name: owner, member: room.member(owner), size: 30)
             } else {
-                Circle().strokeBorder(Tone.edgeStrong, style: StrokeStyle(lineWidth: 1, dash: [3, 3])).frame(width: 28, height: 28)
+                Circle().strokeBorder(Tone.edgeStrong, style: StrokeStyle(lineWidth: 1, dash: [3, 3])).frame(width: 30, height: 30)
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(task.title).type(.body).foregroundStyle(Tone.ink).multilineTextAlignment(.leading).lineLimit(2)
                 HStack(spacing: 5) {
-                    Text(taskLabel(task.id)).type(.meta).foregroundStyle(Tone.ink3)
-                    Text("·").type(.meta).foregroundStyle(Tone.ink3)
-                    Text(task.owner.map { room.display($0) } ?? "Unassigned").type(.meta).foregroundStyle(Tone.ink3)
+                    Text([taskLabel(task.id), task.owner.map { room.display($0) } ?? "Unassigned"].joined(separator: " · ")).type(.meta).foregroundStyle(Tone.ink3)
                     Text("·").type(.meta).foregroundStyle(Tone.ink3)
                     if task.state == "doing", let owner = task.owner, room.member(owner)?.working == true {
                         Dot(color: Tone.doing, size: 5)
@@ -235,9 +256,7 @@ struct TaskRow: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 11)
-        .overlay(alignment: .bottom) { Rectangle().fill(Tone.line).frame(height: 1).padding(.leading, 56) }
+        .padding(.vertical, 2)
     }
 }
 
@@ -250,53 +269,48 @@ struct NeedsYouRow: View {
     @State private var text = ""
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: ask.choices.isEmpty ? "questionmark" : "arrow.triangle.branch")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Tone.decide)
-                .frame(width: 36, height: 36)
-                .outlined(Radius.row)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(ask.label).type(.meta, .semibold).foregroundStyle(Tone.decide)
-                Prose(text: ask.body)
-                Text([ask.task.map(taskLabel), room.display(ask.from), When.short(ask.date)].compactMap { $0 }.joined(separator: " · "))
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Face(name: ask.from, member: room.member(ask.from), size: 24)
+                Text([room.display(ask.from), ask.task.map(taskLabel), When.short(ask.date)].compactMap { $0 }.joined(separator: " · "))
                     .type(.meta)
                     .foregroundStyle(Tone.ink3)
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(ask.choices, id: \.self) { choice in
-                        answer(choice)
-                    }
-                    if replying {
-                        HStack(spacing: 8) {
-                            TextField("Your answer", text: $text, axis: .vertical)
-                                .type(.body)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 9)
-                                .outlined(Radius.ctl)
-                            Button("Send") { submit(text) }
-                                .type(.ui, .semibold)
-                                .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty || sending != nil)
-                        }
-                    } else {
+                Spacer(minLength: 0)
+                Text(ask.label).type(.meta, .semibold).foregroundStyle(Tone.decide)
+            }
+            Prose(text: ask.body)
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(ask.choices, id: \.self) { choice in
+                    answer(choice)
+                }
+                if replying {
+                    HStack(spacing: 8) {
+                        TextField("Your answer", text: $text, axis: .vertical)
+                            .type(.body)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 9)
+                            .background(Tone.wash2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         Button {
-                            replying = true
+                            submit(text)
                         } label: {
-                            Text(ask.choices.isEmpty ? "Answer" : "Something else")
-                                .type(.ui, .medium)
-                                .foregroundStyle(Tone.ink)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .outlined(Radius.row, Tone.edgeStrong)
+                            Image(systemName: "arrow.up").font(.system(size: 15, weight: .bold)).foregroundStyle(.white).frame(width: 34, height: 34).background(
+                                Tone.accent, in: Circle())
                         }
-                        .buttonStyle(.plain)
+                        .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty || sending != nil)
+                        .accessibilityLabel("Send answer")
+                    }
+                } else {
+                    Button {
+                        replying = true
+                    } label: {
+                        Text(ask.choices.isEmpty ? "Answer" : "Something else").type(.ui, .medium).foregroundStyle(Tone.accent).padding(.vertical, 6)
                     }
                 }
-                .padding(.top, 6)
             }
+            .buttonStyle(.plain)
+            .padding(.top, 2)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .overlay(alignment: .bottom) { Rectangle().fill(Tone.line).frame(height: 1) }
+        .padding(.vertical, 4)
     }
 
     private func answer(_ choice: String) -> some View {
@@ -304,16 +318,15 @@ struct NeedsYouRow: View {
             submit(choice)
         } label: {
             HStack {
-                Text(choice).type(.ui).foregroundStyle(Tone.ink).multilineTextAlignment(.leading)
+                Text(choice).type(.ui, .medium).foregroundStyle(Tone.ink).multilineTextAlignment(.leading)
                 Spacer(minLength: 0)
                 if sending == choice { ProgressView().controlSize(.small) }
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 9)
-            .outlined(Radius.row, Tone.edgeStrong)
+            .padding(.vertical, 10)
+            .background(Tone.wash2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .disabled(sending != nil)
     }
 
@@ -331,47 +344,71 @@ struct NeedsYouRow: View {
     }
 }
 
-struct TaskSheet: View {
+struct TaskDetail: View {
     let task: TaskView
     let room: RoomView
+    let back: () -> Void
+    let thread: () -> Void
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 6) {
-                    Text(taskLabel(task.id)).type(.meta, .semibold).foregroundStyle(Tone.ink3)
-                    Text("·").type(.meta).foregroundStyle(Tone.ink3)
-                    Text(stateWords(task.state)).type(.meta, .semibold).foregroundStyle(stateColor(task.state))
-                }
-                Text(task.title).type(.display, .semibold).foregroundStyle(Tone.ink)
-                VStack(spacing: 0) {
-                    line("Owner", task.owner.map { room.display($0) } ?? "Unassigned")
-                    if let review = task.review { line("Review", review == "*" ? "Anyone" : room.display(review)) }
-                    line("Opened", task.createdAt > 0 ? When.short(Date(timeIntervalSince1970: task.createdAt / 1000)) : "—")
-                    line("Updated", When.short(task.updated))
-                }
-                if let last = task.last {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Last note").type(.meta, .semibold).foregroundStyle(Tone.ink2)
-                        Prose(text: last)
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: 10) {
+                    Button(action: back) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "chevron.left").font(.system(size: 14, weight: .semibold))
+                            Text(room.title).type(.body)
+                        }
+                        .foregroundStyle(Tone.accent)
                     }
-                    .padding(.top, 6)
+                    .buttonStyle(.plain)
+                    .padding(.bottom, 6)
+                    HStack(spacing: 6) {
+                        Text(taskLabel(task.id)).type(.meta, .bold).foregroundStyle(Tone.ink2)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Tone.wash2, in: Capsule())
+                        Text(stateWords(task.state)).type(.meta, .semibold).foregroundStyle(stateColor(task.state))
+                    }
+                    Text(task.title).font(.title2.weight(.bold)).foregroundStyle(Tone.ink)
                 }
             }
-            .padding(24)
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 20, leading: 4, bottom: 4, trailing: 4))
+            Section {
+                LabeledContent("Owner") {
+                    if let owner = task.owner {
+                        HStack(spacing: 6) {
+                            Face(name: owner, member: room.member(owner), size: 22)
+                            Text(room.display(owner))
+                        }
+                    } else {
+                        Text("Unassigned")
+                    }
+                }
+                if let review = task.review {
+                    LabeledContent("Review", value: review == "*" ? "Anyone" : room.display(review))
+                }
+                if task.createdAt > 0 {
+                    LabeledContent("Opened", value: When.short(Date(timeIntervalSince1970: task.createdAt / 1000)))
+                }
+                LabeledContent("Updated", value: When.short(task.updated))
+            }
+            .listRowBackground(Tone.wash)
+            if let last = task.last {
+                Section("Last note") {
+                    Prose(text: last).padding(.vertical, 2)
+                }
+                .listRowBackground(Tone.wash)
+            }
+            Section {
+                Button(action: thread) {
+                    Label("Open its thread", systemImage: "bubble.left.and.text.bubble.right")
+                }
+            }
+            .listRowBackground(Tone.wash)
         }
-        .background(Tone.canvas)
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
-    }
-
-    private func line(_ label: String, _ value: String) -> some View {
-        HStack {
-            Text(label).type(.ui).foregroundStyle(Tone.ink2)
-            Spacer()
-            Text(value).type(.ui).foregroundStyle(Tone.ink)
-        }
-        .padding(.vertical, 10)
-        .overlay(alignment: .bottom) { Rectangle().fill(Tone.line).frame(height: 1) }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
     }
 }

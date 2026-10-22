@@ -49,7 +49,7 @@ struct SwitchControl {
     let open: Bool
     let hold: () -> Void
     let move: (CGPoint) -> Void
-    let release: () -> Void
+    let release: (Bool) -> Void
     let tap: () -> Void
     let step: (Int) -> Bool
     let placed: (CGRect) -> Void
@@ -89,8 +89,8 @@ struct SwitchButton: View {
                 Circle().fill(Tone.accent).frame(width: 11, height: 11).overlay(Circle().stroke(Tone.canvas, lineWidth: 2)).offset(x: 1, y: -1)
             }
         }
-        .scaleEffect(touch == .holding ? 0.9 : 1)
-        .animation(.spring(duration: 0.25, bounce: 0.4), value: touch == .holding)
+        .scaleEffect(touch == .idle ? 1 : 0.9)
+        .animation(.spring(duration: 0.2, bounce: 0.4), value: touch == .idle)
         .animation(.spring(duration: 0.3, bounce: 0.3), value: control.open)
         .animation(.spring(duration: 0.3, bounce: 0.3), value: control.current?.key)
         .contentShape(Circle())
@@ -126,7 +126,7 @@ struct SwitchButton: View {
         case .idle:
             touch = .pressing
             timer = Task {
-                try? await Task.sleep(for: .milliseconds(220))
+                try? await Task.sleep(for: .milliseconds(90))
                 guard !Task.isCancelled, touch == .pressing else { return }
                 lift()
             }
@@ -162,7 +162,7 @@ struct SwitchButton: View {
                 UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: 0.6)
             }
         case .holding:
-            control.release()
+            control.release(hypot(drag.translation.width, drag.translation.height) < 24)
         }
     }
 
