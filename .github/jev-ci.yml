@@ -916,7 +916,8 @@ jobs:
       versions of shell tools, process, signal and file-watching differences, and a build
       target that fails to compile. test/desktop-entitlements.test.ts signs stand-in apps with
       codesign here, so release-build.yml's entitlements check runs for real only on macOS. Fails
-      if any test fails on macOS or a target doesn't build.
+      if any test fails on macOS or a target doesn't build. Its jev-ci pass (a cache save) gets
+      one minute, so a hung save can't hold the job.
 
   release-rehearsal:
     name: release / rehearsal
