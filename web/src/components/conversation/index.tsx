@@ -30,7 +30,7 @@ import { canStartAgents } from "@/lib/launches"
 import { ALLOW_ONCE, DENY, settledOf } from "@/lib/permission-settled"
 import { bridge } from "@/lib/secrets"
 import type { ToolCtx } from "@/lib/voice/tools"
-import { defaultScopes } from "../scopes"
+import { defaultAddsAgents, defaultScopes } from "../scopes"
 import { isAgent } from "../message"
 import { NeedsYou } from "../needs-you"
 import { ChannelSidebar, ConversationMenu, type Conversation as ConversationRow } from "./channel-sidebar"
@@ -200,6 +200,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const handlers = useControlsHandlers({ live, member, onGone })
   const [newAgent, setNewAgent] = useState(false)
   const onNewAgent = isOwner && canStartAgents() ? () => setNewAgent(true) : undefined
+  const addsAgents = !isOwner && !!roster.find((m) => m.active && m.pk === member.identity.pk)?.addsAgents
   const voiceTools = useMemo<ToolCtx>(
     () => ({
       state,
@@ -215,7 +216,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
         ? async (id: string) => {
             const r = requests.find((x) => x.id === id)
             if (!r) throw new Error("That request is gone.")
-            await handlers.onApprove(r, defaultScopes(roomId))
+            await handlers.onApprove(r, defaultScopes(roomId), undefined, defaultAddsAgents(roomId))
           }
         : undefined,
       approve: (t: Task) => sendTask(approveTask(t), closedDigest(state, messages, t, { by: me })),
@@ -533,14 +534,14 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                             view={view}
                             agents={agentsNow}
                             needs={needsMe ? needsYou(true) : null}
-                            empty={noAgents ? <AddAgent code={member.code} isOwner={isOwner} onNewAgent={onNewAgent} /> : null}
+                            empty={noAgents ? <AddAgent code={member.code} isOwner={isOwner} addsAgents={addsAgents} onNewAgent={onNewAgent} /> : null}
                             open={shownTask}
                             onOpen={openTask}
                           />
                         ) : agentsNow.length ? (
                           <AgentLanes agents={agentsNow} state={state} messages={messages} now={now} nameOf={nameOf} onOpenTask={openTask} />
                         ) : (
-                          <AddAgent code={member.code} isOwner={isOwner} onNewAgent={onNewAgent} />
+                          <AddAgent code={member.code} isOwner={isOwner} addsAgents={addsAgents} onNewAgent={onNewAgent} />
                         )}
                       </div>
                     </div>
@@ -563,7 +564,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                             </Centered>
                           ) : hereKey === "main" && noAgents && !search ? (
                             <>
-                              <AddAgent code={member.code} isOwner={isOwner} onNewAgent={onNewAgent} />
+                              <AddAgent code={member.code} isOwner={isOwner} addsAgents={addsAgents} onNewAgent={onNewAgent} />
                               {!quiet && rows}
                             </>
                           ) : visible.length === 0 ? (

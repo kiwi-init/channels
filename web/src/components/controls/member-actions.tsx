@@ -1,7 +1,7 @@
 import { memberLoad, showsLoad, type Load } from "@kiwi/core/load.ts"
 import type { Member as RosterMember } from "@kiwi/core/membership.ts"
 import { taskId } from "@kiwi/core/state.ts"
-import { memberLine } from "@/lib/format"
+import { memberLine, memberName } from "@/lib/format"
 import { scopesLine } from "../scopes"
 import { Menu, MenuItem, MenuSeparator } from "../ui/menu"
 import { useControls, type ControlsProps } from "./context"
@@ -18,7 +18,7 @@ export function loadDetail(l: Load): string {
 }
 
 export function MemberActions({ m, trigger, onMessage }: { m: RosterMember; trigger: Parameters<typeof Menu>[0]["trigger"]; onMessage?: () => void }) {
-  const { p, ask, editScopes, editPersona, editNickname } = useControls()
+  const { p, run, ask, editScopes, editPersona, editNickname } = useControls()
   const now = p.state.members.get(m.name)
   return (
     <Menu align="center" trigger={trigger}>
@@ -33,6 +33,11 @@ export function MemberActions({ m, trigger, onMessage }: { m: RosterMember; trig
       {p.onScopes && (
         <MenuItem onClick={() => editScopes(m)}>
           {now && scopesLine(now.scopes) === "read only" ? "Let them write…" : now && scopesLine(now.scopes) ? "Let them do everything…" : "Make read-only…"}
+        </MenuItem>
+      )}
+      {m.kind === "human" && p.onAddsAgents && (
+        <MenuItem onClick={() => void run(() => p.onAddsAgents!(m, !m.addsAgents), m.addsAgents ? `${memberName(m)}’s agents wait for you now` : `${memberName(m)} can add agents`)}>
+          {m.addsAgents ? "Stop them adding agents" : "Let them add agents"}
         </MenuItem>
       )}
       <MenuSeparator />

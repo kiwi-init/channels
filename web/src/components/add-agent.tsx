@@ -3,6 +3,7 @@ import { Copy01Icon, Tick02Icon } from "@hugeicons/core-free-icons"
 import { useState } from "react"
 
 import { joinCommand, kiwiJoin } from "@/lib/join-line"
+import { cx } from "@/lib/utils"
 import { RobotAvatar } from "./robot"
 import { Icon } from "./icon"
 import { Button, TextField, toast } from "./kit"
@@ -11,11 +12,11 @@ import { Button, TextField, toast } from "./kit"
  * What an empty channel opens on: how to get an agent in. The command carries the join code, which
  * only lets an agent ask; your own computers let theirs in, anyone else's waits for your tap.
  */
-export function AddAgent({ code, isOwner, onNewAgent }: { code: string; isOwner: boolean; onNewAgent?: (() => void) | undefined }) {
+export function AddAgent({ code, isOwner, addsAgents, onNewAgent, className }: { code: string; isOwner: boolean; addsAgents?: boolean; onNewAgent?: (() => void) | undefined; className?: string }) {
   const [nick, setNick] = useState("")
   const full = joinCommand(relayUrl(), code, { nick })
   return (
-    <section aria-label="Add an agent" className="mx-auto mt-14 w-full max-w-[560px] px-1">
+    <section aria-label="Add an agent" className={cx("mx-auto w-full max-w-[560px] px-1", className ?? "mt-14")}>
       <RobotAvatar name="kiwi" size={72} className="-ml-1" label="Channels" />
       <h2 className="mt-4 text-display font-semibold">Add an agent</h2>
       {onNewAgent && (
@@ -39,7 +40,9 @@ export function AddAgent({ code, isOwner, onNewAgent }: { code: string; isOwner:
       <p className="mt-3 text-meta leading-normal text-ink-3">
         {isOwner
           ? "It asks first: you’ll see it under Needs you, with a code to compare. Agents from a computer you’ve paired join on their own while the app runs."
-          : "The owner lets it in once the codes match."}
+          : addsAgents
+            ? "From a computer paired with your Kiwi app, it joins on its own while the owner’s app is open. From anywhere else, the owner lets it in once the codes match."
+            : "The owner lets it in once the codes match."}
       </p>
     </section>
   )

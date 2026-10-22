@@ -54,3 +54,35 @@ export function saveDefaultScopes(roomId: string, scopes: Scope[]): void {
     // A full or blocked store just forgets the preference.
   }
 }
+
+const AGENTS_KEY = (roomId: string) => `mc.addsAgents.${roomId}`
+
+export function defaultAddsAgents(roomId: string): boolean {
+  try {
+    return localStorage.getItem(AGENTS_KEY(roomId)) === "1"
+  } catch {
+    return false
+  }
+}
+
+export function saveDefaultAddsAgents(roomId: string, on: boolean): void {
+  try {
+    localStorage.setItem(AGENTS_KEY(roomId), on ? "1" : "0")
+  } catch {
+    // A full or blocked store just forgets the preference.
+  }
+}
+
+export function AddsAgentsPicker({ value, onChange, disabled }: { value: boolean; onChange: (on: boolean) => void; disabled?: boolean }) {
+  return (
+    <div className="grid gap-1">
+      <label className="flex items-center gap-2 text-ui text-ink">
+        <Checkbox checked={value} onChange={(e) => onChange(e.target.checked)} disabled={disabled} />
+        Can add agents
+      </label>
+      <p className="text-meta leading-snug text-ink-3">
+        {value ? "Their agents join on their own from computers paired with their Kiwi app, while yours is open." : "Their agents wait for you to let them in."}
+      </p>
+    </div>
+  )
+}

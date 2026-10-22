@@ -8,7 +8,7 @@ import type { ChannelState } from "@kiwi/core/state.ts"
 import type { LogExport } from "@/lib/log-export"
 
 export type Confirm =
-  | { kind: "approve"; req: JoinRequest }
+  | { kind: "approve"; req: JoinRequest; addsAgents?: boolean }
   | { kind: "remove"; member: RosterMember }
   | { kind: "scopes"; member: RosterMember }
   | { kind: "persona"; member: RosterMember }
@@ -28,7 +28,7 @@ export interface ControlsProps {
   statusOf?: (name: string) => { text: string; busy: boolean } | undefined
   state: ChannelState
   now: number
-  onApprove: (r: JoinRequest, scopes?: Scope[], persona?: Persona) => Promise<void>
+  onApprove: (r: JoinRequest, scopes?: Scope[], persona?: Persona, addsAgents?: boolean) => Promise<void>
   onDeny: (r: JoinRequest) => Promise<void>
   onCheck: (r: JoinRequest) => Promise<void>
   onRemove: (m: RosterMember) => Promise<void>
@@ -36,6 +36,7 @@ export interface ControlsProps {
   onPersona?: (m: RosterMember, persona: Persona | null) => Promise<void>
   onPin?: (p: Personality) => Promise<string>
   onNickname?: (m: RosterMember, nickname: string | null) => Promise<void>
+  onAddsAgents?: (m: RosterMember, on: boolean) => Promise<void>
   onCloseChannel: () => Promise<void>
   onLeaveChannel: () => Promise<void>
   exportLog: () => Promise<LogExport>

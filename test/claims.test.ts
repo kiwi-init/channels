@@ -163,6 +163,72 @@ describe("auto-approval", () => {
 
   const builder = PRESETS.find((p) => p.id === "builder")!;
 
+  async function askFrom(s: OwnerSetup, name: string, computer: PairedComputer, claims: Omit<JoinClaims, "computer"> = {}) {
+    const id = await generateIdentity(name);
+    const { requestId } = await Channel.requestJoin(relay, s.code, id, { name }, { computer: await claimComputer(computer.machine, computer.cert, s.roomId, id.pk), ...claims });
+    await s.ownerCh.requests({ person: s.person.pk });
+    await Channel.joinStatus(relay, s.code, id, requestId);
+    return { id, requestId };
+  }
+
+  test("a person let in to add agents: their computers' agents join on their own, as theirs, with no more than they may do", async () => {
+    const s = await setupChannel(relay);
+    const bobsPerson = await generateIdentity("bobs-person");
+    const { member: bob } = await joinPerson(s, "bob", bobsPerson, { addsAgents: true });
+    expect(bob).toMatchObject({ kind: "human", person: bobsPerson.pk, addsAgents: true });
+    const bobsBox = await pairComputer(bobsPerson, "bob-box");
+    const budget = memoryBudget();
+    const { id, requestId } = await askFrom(s, "scout", bobsBox);
+    expect((await s.ownerCh.requests({ budget, person: s.person.pk })).find((r) => r.id === requestId)?.computer).toMatchObject({ own: false, joinsOnItsOwn: true });
+    const approved = await s.ownerCh.autoApprove(s.person.pk);
+    expect(approved.map((m) => m.name)).toEqual(["scout"]);
+    expect(approved[0]).toMatchObject({ kind: "agent", sponsor: { user: bobsPerson.pk, handle: "bob" }, from: { pk: bobsBox.machine.pk } });
+    expect(budget.load(s.roomId)).toEqual([]);
+    const st = await Channel.joinStatus(relay, s.code, id, requestId);
+    expect(st.status).toBe("approved");
+    await s.ownerCh.close();
+  });
+
+  test("a person without it, or a read-only one, or a pinned ask: their agents wait for the owner's tap", async () => {
+    const s = await setupChannel(relay);
+    const plainPerson = await generateIdentity("plain-person");
+    await joinPerson(s, "plain", plainPerson);
+    const readerPerson = await generateIdentity("reader-person");
+    await joinPerson(s, "reader", readerPerson, { addsAgents: true, scopes: [] });
+    const pinnerPerson = await generateIdentity("pinner-person");
+    await joinPerson(s, "pinner", pinnerPerson, { addsAgents: true });
+    const plain = await askFrom(s, "plain-agent", await pairComputer(plainPerson, "plain-box"));
+    const reader = await askFrom(s, "reader-agent", await pairComputer(readerPerson, "reader-box"));
+    const pinner = await askFrom(s, "pinned-agent", await pairComputer(pinnerPerson, "pinner-box"), { pin: await s.ownerCh.pinPersona(builder) });
+    expect(await s.ownerCh.autoApprove(s.person.pk, PRESETS)).toEqual([]);
+    const waiting = await s.ownerCh.requests({ person: s.person.pk });
+    expect(waiting.find((r) => r.id === plain.requestId)).toMatchObject({ check: "unchecked", computer: { joinsOnItsOwn: false } });
+    expect(waiting.find((r) => r.id === reader.requestId)).toMatchObject({ check: "unchecked", computer: { joinsOnItsOwn: false } });
+    expect(waiting.find((r) => r.id === pinner.requestId)).toMatchObject({ check: "ready", computer: { joinsOnItsOwn: true } });
+    await s.ownerCh.close();
+  });
+
+  test("the owner turns it on and off for a person already in; only a person's record carries it", async () => {
+    const s = await setupChannel(relay);
+    const bobsPerson = await generateIdentity("bobs-person");
+    const { member: bob } = await joinPerson(s, "bob", bobsPerson);
+    expect(bob.addsAgents).toBeUndefined();
+    await s.ownerCh.updateAddsAgents(bob, true);
+    const on = (await s.ownerCh.members()).find((m) => m.pk === bob.pk)!;
+    expect(on).toMatchObject({ addsAgents: true, person: bobsPerson.pk, name: "bob" });
+    const bobsBox = await pairComputer(bobsPerson, "bob-box");
+    await askFrom(s, "scout", bobsBox);
+    expect((await s.ownerCh.autoApprove(s.person.pk)).map((m) => m.name)).toEqual(["scout"]);
+    await s.ownerCh.updateAddsAgents(on, false);
+    const off = (await s.ownerCh.members()).find((m) => m.pk === bob.pk)!;
+    expect(off.addsAgents).toBeUndefined();
+    await askFrom(s, "scout-2", bobsBox);
+    expect(await s.ownerCh.autoApprove(s.person.pk)).toEqual([]);
+    const scout = (await s.ownerCh.members()).find((m) => m.name === "scout")!;
+    await expect(s.ownerCh.updateAddsAgents(scout, true)).rejects.toThrow(/only a person's record/);
+    await s.ownerCh.close();
+  });
+
   async function askFromOwn(s: OwnerSetup, name: string, own: PairedComputer, claims: Omit<JoinClaims, "computer">) {
     const id = await generateIdentity(name);
     const computer = await claimComputer(own.machine, own.cert, s.roomId, id.pk);

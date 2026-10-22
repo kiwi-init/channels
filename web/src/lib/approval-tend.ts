@@ -4,8 +4,10 @@ import type { Watches } from "./watch"
 
 export const TEND_SAFETY_MS = 300_000
 
+type LetIn = { name: string; sponsor?: { user: string; name: string } }
+
 export interface TendApi {
-  autoApprove: (person: string) => Promise<readonly { name: string }[]>
+  autoApprove: (person: string) => Promise<readonly LetIn[]>
   requests: (opts: { person: string }) => Promise<readonly { id: string; name: string }[]>
 }
 
@@ -14,13 +16,21 @@ export interface TendApi {
  * own-computer requests auto-approve did not let in (it threw, or returned none).
  */
 export async function tendOwned(person: string, title: string, api: TendApi, ping: (title: string, body: string) => void, told: Set<string>): Promise<void> {
-  let letIn: readonly { name: string }[] = []
+  let letIn: readonly LetIn[] = []
   try {
     letIn = await api.autoApprove(person)
   } catch {
     // Still list remaining requests.
   }
-  if (letIn.length) ping(title, letIn.length === 1 ? `${letIn[0]!.name} joined from your computer` : `${letIn.length} of your agents joined`)
+  const theirs = (m: LetIn) => (m.sponsor && m.sponsor.user !== person ? m.sponsor.name : null)
+  const one = letIn[0]
+  if (one) {
+    const from = theirs(one)
+    ping(
+      title,
+      letIn.length === 1 ? `${one.name} joined from ${from ? `${from}’s computer` : "your computer"}` : letIn.some(theirs) ? `${letIn.length} agents joined` : `${letIn.length} of your agents joined`
+    )
+  }
   let remaining: readonly { id: string; name: string }[]
   try {
     remaining = await api.requests({ person })

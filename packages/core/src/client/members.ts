@@ -22,6 +22,7 @@ export interface MembersFx {
   updateRole(m: Member, role: string | null, about: string | null | undefined, since: number): Effect.Effect<void, Refused, Relay>;
   updatePersona(m: Member, persona: Persona | null, since: number): Effect.Effect<void, Refused, Relay>;
   updateNickname(m: Member, nickname: string | null): Effect.Effect<void, Refused, Relay>;
+  updateAddsAgents(m: Member, on: boolean): Effect.Effect<void, Refused, Relay>;
   reconcilePosting(state: Pick<ChannelState, "members" | "scopeSets" | "roleSets">, members?: Member[]): Effect.Effect<string[], Refused, Relay>;
   remove(pk: string): Effect.Effect<void, Refused, Relay>;
   rotate(): Effect.Effect<number, Refused, Relay>;
@@ -92,6 +93,18 @@ export class ChannelMembers {
       const info = omit(m, "active", "readOnly", "unverified", "at", "display");
       const display = inlineText(nickname ?? "", 40);
       const rec = yield* Effect.promise(async () => sealRecord(key, await makeRecord(this.ch.identity, this.ch.roomId, { ...info, ...(display ? { display } : {}) })));
+      const scopes = m.later?.scopes ?? scopesOf(m);
+      yield* this.ch.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: canPost(scopes) }) });
+    }),
+
+    updateAddsAgents: Effect.fn("Channel.updateAddsAgents")({ self: this }, function* (this: ChannelMembers, m: Member, on: boolean) {
+      yield* this.ch.ownerOnly();
+      if (m.unverified) return yield* new Rejected(NO_RECORD);
+      if (m.owner || m.kind !== "human") return yield* new Rejected("only a person's record says whether they add agents");
+      const e = this.ch.access.epoch;
+      const key = this.ch.access.keys[String(e)]!;
+      const info = omit(m, "active", "readOnly", "unverified", "at", "addsAgents");
+      const rec = yield* Effect.promise(async () => sealRecord(key, await makeRecord(this.ch.identity, this.ch.roomId, { ...info, ...(on ? { addsAgents: true } : {}) })));
       const scopes = m.later?.scopes ?? scopesOf(m);
       yield* this.ch.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: canPost(scopes) }) });
     }),

@@ -31,7 +31,7 @@ import { loadDetail, MemberActions, memberDetail } from "./controls/member-actio
 import { Repos } from "./controls/repos"
 import { Icon, type IconSvgElement } from "./icon"
 import { Button, IconButton, Monogram, SEGMENTED, SEGMENT_OFF, SEGMENT_ON, errorText, toast } from "./kit"
-import { Invite } from "./lazy"
+import { AddAgent, Invite } from "./lazy"
 import { defaultScopes, saveDefaultScopes } from "./scopes"
 
 export function InfoPanel({
@@ -58,7 +58,7 @@ export function InfoPanel({
   onNewAgent?: (() => void) | undefined
 }) {
   const { p, ask, openDialog } = useControls()
-  const [view, setView] = useState<"details" | "invite" | "repos">("details")
+  const [view, setView] = useState<"details" | "invite" | "repos" | "agent">("details")
   const [picking, setPicking] = useState(false)
   const [savingIcon, setSavingIcon] = useState(false)
   const [readOnly, setReadOnly] = useState(() => (p.roomId ? presetOf(defaultScopes(p.roomId)) === "read-only" : false))
@@ -84,6 +84,7 @@ export function InfoPanel({
     .filter((m) => m.active)
     .sort((a, b) => Number(b.owner) - Number(a.owner) || Number(a.kind !== "human") - Number(b.kind !== "human") || Number(p.online.has(b.name)) - Number(p.online.has(a.name)))
   const former = p.roster.filter((m) => !m.active)
+  const addsAgents = !p.isOwner && !!active.find((m) => m.pk === p.myKey)?.addsAgents
   const hold = p.state.hold
   const lead = p.state.lead
   const back = view === "details" ? onClose : () => setView("details")
@@ -94,12 +95,22 @@ export function InfoPanel({
         <IconButton label={view === "details" ? "Close details" : "Back to details"} round className="glass size-9 text-ink" onClick={back}>
           <Icon icon={ArrowLeft01Icon} size={18} />
         </IconButton>
-        <span className="truncate text-ui font-semibold">{view === "details" ? title : "Channel settings"}</span>
+        <span className="truncate text-ui font-semibold">{view === "details" || view === "agent" ? title : "Channel settings"}</span>
       </header>
 
       {view !== "details" ? (
         <div className="flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-[560px]">{view === "invite" ? <Invite /> : <Repos repos={p.state.repos} onSave={p.isOwner ? p.onRepos : undefined} />}</div>
+          <div className="mx-auto w-full max-w-[560px]">
+            {view === "invite" ? (
+              <Invite />
+            ) : view === "agent" ? (
+              <div className="px-4 pb-6">
+                <AddAgent code={p.code} isOwner={false} addsAgents className="mt-2" />
+              </div>
+            ) : (
+              <Repos repos={p.state.repos} onSave={p.isOwner ? p.onRepos : undefined} />
+            )}
+          </div>
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto px-4 pb-8 md:px-9">
@@ -147,6 +158,14 @@ export function InfoPanel({
                     {hold ? "Resume agents" : "Pause agents"}
                   </Button>
                 )}
+              </div>
+            )}
+            {addsAgents && (
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" onClick={() => setView("agent")}>
+                  <Icon icon={Robot01Icon} size={16} />
+                  Add an agent
+                </Button>
               </div>
             )}
           </div>
@@ -221,14 +240,14 @@ export function InfoPanel({
               {former.length > 0 && (
                 <p className="px-4 py-2.5 text-meta text-ink-3">Left: {[...new Set(former.map((m) => (active.some((a) => a.name === m.name) ? `${m.name} (an earlier key)` : m.name)))].join(", ")}</p>
               )}
-              {p.isOwner && (
+              {(p.isOwner || addsAgents) && (
                 <button
                   type="button"
-                  onClick={onNewAgent ?? (() => setView("invite"))}
+                  onClick={p.isOwner ? (onNewAgent ?? (() => setView("invite"))) : () => setView("agent")}
                   className="flex w-full items-center gap-3 px-4 py-3 text-left text-ui font-medium text-accent-text transition-colors hover:bg-wash"
                 >
                   <Icon icon={Add01Icon} size={16} className="shrink-0" />
-                  {onNewAgent ? "Start an agent" : "Invite someone"}
+                  {!p.isOwner ? "Add an agent" : onNewAgent ? "Start an agent" : "Invite someone"}
                 </button>
               )}
             </Card>

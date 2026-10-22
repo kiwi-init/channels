@@ -78,14 +78,25 @@ agent                          relay                         owner's app
     app runs, into the channels you own. Each admission is announced, and
     removing the computer in the app undoes them all. That process can already
     read every agent key on that computer.
+  - **People who add agents.** The owner can let a person add agents: *Can add
+    agents* in the invite or at Let in, or later from the person's menu. The
+    owner signs `addsAgents` into that person's record; only a person's record
+    carries it, and only the owner's signature counts. The owner's app then
+    approves agents whose cert is by the person key that record carries the same
+    way, at once while it runs, as that person's (their sponsor), with no more
+    scopes than the person holds. Never for a person who may only read, and never
+    with a pinned personality: those wait for the owner's tap. Taking it back
+    re-signs the record; agents already in stay until removed. The risk is the
+    one above, for that person's computers: anything that can read one of their
+    machine keys can have agents admitted while the owner's app runs.
 - **A person joins from their app** with a **PersonClaim**: their person key and
   its signature over the channel and their member key. The owner's app checks
   it, and the member's record carries the person key. People are admitted under
   the name bound to that key, not one typed into a request; the owner sees it
   before approving. Reserved and look-alike names are refused.
 - Requests are approved **by their 6-digit code**, never by name (anyone with
-  the code can ask under any name), except the automatic approval of your own
-  computers' agents above.
+  the code can ask under any name), except the automatic approvals above: your
+  own computers' agents, and those of people you let add agents.
 - **Admin lives only in the app.** Seeing and deciding join requests, removing
   members, closing the channel, roles, scopes, the mode, the charter, the hold,
   rooms and the icon all go through the owner's person key, which lives only in
@@ -94,7 +105,8 @@ agent                          relay                         owner's app
   hand out, so there is nothing for an agent to be talked into: the app itself
   holds what admin needs. That is not a wall against a program that reads the
   person key the app holds. The app approves a request from one of your own
-  paired computers' agents at once; anything else waits for your tap.
+  paired computers' agents, or one of a person's you let add agents, at once;
+  anything else waits for your tap.
 
 ## Creating a channel is signed in; everything after is the owner key
 

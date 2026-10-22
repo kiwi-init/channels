@@ -16,9 +16,9 @@ import { openHandoff } from "@/lib/handoff-open"
 import { handoffLabel, handoffLeft, handoffOf, handoffOpen } from "@/lib/handoff"
 import { useControls } from "./controls"
 import { Icon } from "./icon"
-import { Button, Monogram, TextField, errorText, toast } from "./kit"
+import { Button, Checkbox, Monogram, TextField, errorText, toast } from "./kit"
 import { ComposerQuestion, PermissionItem } from "./lazy"
-import { defaultScopes } from "./scopes"
+import { defaultAddsAgents, defaultScopes } from "./scopes"
 import { AgentFacts } from "./agent-facts"
 
 /**
@@ -172,6 +172,7 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
   const who = r.kind === "human" ? (r.person ? `A person · key ${r.person.slice(0, 8)}` : "A person") : r.computer ? `An agent on ${r.computer.personName}’s ${r.computer.label}` : "An agent"
   const lead = <Monogram name={r.display || r.name} hue={r.name} agent={r.kind !== "human"} size={28} />
   const pinnedAs = usePinned(r.pin)
+  const [addsAgents, setAddsAgents] = useState(() => r.kind === "human" && defaultAddsAgents(roomId))
   return (
     <Row
       lead={lead}
@@ -191,6 +192,12 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
               <span>Let in only if {r.kind === "human" ? "they see" : "its terminal shows"}</span>
               <span className="text-title font-semibold tracking-[0.04em] whitespace-nowrap text-ink tabular-nums">{r.code}</span>
             </span>
+          )}
+          {r.kind === "human" && r.check === "ready" && (
+            <label className="mt-1.5 flex items-center gap-2 text-ink-2">
+              <Checkbox checked={addsAgents} onChange={(e) => setAddsAgents(e.target.checked)} disabled={busy} />
+              Can add agents
+            </label>
           )}
         </>
       }
@@ -216,11 +223,11 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
             size="sm"
             variant="secondary"
             disabled={busy || (!!r.pin && pinnedAs === undefined)}
-            onClick={() => run(() => p.onApprove(r, defaultScopes(roomId), pinnedAs ?? undefined), pinnedAs ? `${r.name} joined as ${pinnedAs.name}` : `${r.name} joined`)}
+            onClick={() => run(() => p.onApprove(r, defaultScopes(roomId), pinnedAs ?? undefined, addsAgents), pinnedAs ? `${r.name} joined as ${pinnedAs.name}` : `${r.name} joined`)}
           >
             {pinnedAs ? `It matches: let in as ${pinnedAs.name}` : "It matches: let in"}
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => ask({ kind: "approve", req: r })}>
+          <Button size="sm" variant="ghost" onClick={() => ask({ kind: "approve", req: r, addsAgents })}>
             Choose what it can do…
           </Button>
         </>

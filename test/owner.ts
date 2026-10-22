@@ -9,7 +9,7 @@ import { Channel } from "@kiwi/core/client.ts";
 import type { JoinRequest } from "@kiwi/core/membership.ts";
 import type { ChannelAccess } from "@kiwi/core/crypto.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
-import type { Member } from "@kiwi/core/membership.ts";
+import type { Member, MemberInfo } from "@kiwi/core/membership.ts";
 import { certifyMachine, claimComputer, provePerson, type MachineCert } from "@kiwi/core/person.ts";
 import { checked, memoryBudget } from "./check.ts";
 
@@ -83,12 +83,12 @@ export async function joinAgent(
 }
 
 /** A person asks to join themself, and the owner lets them in. */
-export async function joinPerson(s: OwnerSetup, name: string, person: Identity): Promise<{ id: Identity; ch: Channel; member: Member }> {
+export async function joinPerson(s: OwnerSetup, name: string, person: Identity, as?: Partial<MemberInfo>): Promise<{ id: Identity; ch: Channel; member: Member }> {
   const id = await generateIdentity(name);
   const claim = await provePerson(person, s.roomId, id.pk);
   const { requestId } = await Channel.requestJoin(s.relay, s.code, id, { name }, { person: claim });
   const req = (await handshake(s, [{ id, requestId }])).find((r) => r.id === requestId)!;
-  await s.ownerCh.approve(req, undefined, { person: s.person.pk });
+  await s.ownerCh.approve(req, as, { person: s.person.pk });
   const st = await Channel.joinStatus(s.relay, s.code, id, requestId);
   if (st.status !== "approved") throw new Error(`not approved: ${st.status}`);
   const member = (await s.ownerCh.members()).find((m) => m.pk === id.pk)!;
