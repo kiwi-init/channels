@@ -545,7 +545,7 @@ jobs:
       (xz in 1 MiB blocks made the app take most of a minute to appear). And
       test/retry-after.test.ts: the relay's 429 carries Retry-After (header and body, on the socket
       too), a refused attempt isn't counted, and a rate-limited send waits it out and goes in, over
-      the socket without an extra try over HTTP; test/dev-rate-limits.test.ts: the Bun relay's --dev-no-rate-limits (refused off localhost, never read from the environment or a policy alone) lets a member on this machine post and read past the per-minute caps, over HTTP and the socket, while a request or socket upgrade a proxy passed on keeps them, and neither it nor --dev-sign-in starts with --trust-proxy or KIWI_TRUST_PROXY; web lib/github-queue.test.ts: the owner's GitHub
+      the socket without an extra try over HTTP; test/dev-rate-limits.test.ts: the Bun relay's --dev-no-rate-limits (refused off localhost, never read from the environment or a policy alone) lets a member on this machine post and read past the per-minute caps, over HTTP and the socket, while a request or socket upgrade a proxy passed on keeps them, and neither it nor --dev-sign-in starts with --trust-proxy or KIWI_TRUST_PROXY, and the relay refuses any --flag=value it would otherwise ignore; web lib/github-queue.test.ts: the owner's GitHub
       posts keep a rate-limited or unreachable item to try again. And
       test/desktop-daemon-keeper.test.ts: the app checks its daemon every 30s and starts it again
       when it stops answering, retrying a daemon that won't start from 5s up to every 5 minutes, and

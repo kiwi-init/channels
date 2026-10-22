@@ -80,6 +80,8 @@ built `site/`.
 | `--dev-no-rate-limits` | | | Testing only: no per-minute cap on a member's messages or history reads (load tests such as `scripts/perf-scale.ts`), for requests made on this machine directly. Like dev sign-in, a request a proxy passed on keeps the caps. Refused unless `--hostname` is `127.0.0.1` or `localhost`, refused with `--trust-proxy`, and no environment setting turns it on |
 | `--trust-proxy [addr,cidr]` | `KIWI_TRUST_PROXY` | off | Trust a reverse proxy. Bare or `1` trusts a loopback peer. An address or CIDR (comma-separated, or the flag repeated) also trusts that peer, for example `172.17.0.1` or `172.16.0.0/12`. A trusted peer's last `X-Forwarded-For` entry is the client. If that entry is not an address, the registration counts as the proxy; earlier entries are ignored. Any other peer ignores the header. A prefix of `/0` is refused |
 
+A flag's value comes after a space (`--trust-proxy 172.17.0.1`): the relay refuses `--flag=value`, which it would otherwise ignore.
+
 Beta and quota settings come from the environment (see [Limits](#limits-and-the-private-beta)).
 
 ### Data layout
