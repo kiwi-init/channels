@@ -69,7 +69,7 @@ function TaskRow({
         onClick={() => onOpen(task.id)}
         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onOpen(task.id))}
         className={cx(
-          "relative grid cursor-pointer grid-cols-[28px_minmax(0,1fr)_44px] items-center gap-x-3.5 rounded-row px-3 py-2.5 transition-colors hover:bg-wash md:grid-cols-[28px_minmax(0,1fr)_168px_44px] lg:grid-cols-[28px_minmax(0,1fr)_168px_128px_44px]",
+          "relative grid cursor-pointer grid-cols-[28px_minmax(0,1fr)_44px] items-center gap-x-3.5 rounded-row px-3 py-2.5 transition-colors hover:bg-wash @lg:grid-cols-[28px_minmax(0,1fr)_168px_44px] @2xl:grid-cols-[28px_minmax(0,1fr)_168px_128px_44px]",
           open && "before:absolute before:inset-y-2.5 before:left-0 before:w-0.5 before:rounded-full before:bg-accent"
         )}
       >
@@ -99,10 +99,10 @@ function TaskRow({
             )}
           </span>
         </span>
-        <span className="hidden min-w-0 md:block">
+        <span className="hidden min-w-0 @lg:block">
           <PrCell pr={pr} done={task.state === "done"} />
         </span>
-        <span className="hidden min-w-0 lg:block">
+        <span className="hidden min-w-0 @2xl:block">
           <ChecksCell pr={pr} />
         </span>
         <time className="text-right text-meta text-ink-3 tabular-nums">{formatAgoShort(task.updatedAt, now)}</time>
@@ -167,7 +167,7 @@ export function TasksView({
       </div>
     )
   return (
-    <div className="pb-8">
+    <div className="@container pb-8">
       {showNeeds && <div className="px-3">{needs}</div>}
       {view === "needs" && !needs && <p className="px-3 pt-6 text-ui text-ink-3">Nothing needs you right now.</p>}
       {groups.map((g) => (
