@@ -901,7 +901,7 @@ jobs:
       spoken words land in the Message box, the model is kept in the app's data folder
       ($XDG_CONFIG_HOME/kiwi-desktop) once, and nothing of it lands in $XDG_CACHE_HOME. Fails on a
       bundling or packaging error, a fuse changed or dropped, an app that no longer starts, or
-      dictation that doesn't work on Linux. The app runs in its own process group, killed whole when the check ends.
+      dictation that doesn't work on Linux.
 
   cli-macos:
     name: cli / macos
