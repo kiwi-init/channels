@@ -36,7 +36,6 @@ export async function pairAnswer(accept: boolean): Promise<{ machinePk: string }
   }
   const person = requirePerson();
   await answerPair(person, mailbox, ask);
-  await mailbox.drop().catch(() => {});
   upsertComputer({ label: ask.label, os: ask.os, machinePk: ask.pk, machineXpk: ask.mxpk, personPk: person.pk, at: Date.now() });
   return { machinePk: ask.pk };
 }
