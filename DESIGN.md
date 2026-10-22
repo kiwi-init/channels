@@ -395,11 +395,12 @@ asked for that, so on the phone it wins over §9's rows.
   passed. Events are one centred quiet line. A reply carries the answered words in an
   outlined capsule above it. An ask's options are capsules under it: `accent` text, the
   chosen one filled; "Waiting on you" in `decide` while it waits.
-- The header is the channel's avatar over a glass name pill (tap: the details sheet with the
-  people, Needs you and the tasks), a glass back button, and one quiet status line. The
-  composer is a glass `+` (photos) and a glass capsule field whose send arrow appears when
-  there is something to send. On iOS 26 and later both bars are `safeAreaBar`s with the
-  system's glass; earlier, material.
+- The header is one row: a glass back button and, centred, a glass pill with the channel's
+  name (tap: the details sheet with the people, Needs you and the tasks) and one quiet status
+  line in it. No channel image there: it costs a phone too much height. The conversation fades
+  out under it, from the canvas at the top of the screen to clear just below the pill, over the
+  system's soft scroll-edge blur. The composer is a glass `+` (photos) and a glass capsule field
+  whose send arrow appears when there is something to send.
 - The channel list is Messages' list: a large title, search, a blue dot for unread, a 52pt
   avatar, the name, the time and a chevron, two quiet lines of the last message (or "Needs
   you:" in `decide`).

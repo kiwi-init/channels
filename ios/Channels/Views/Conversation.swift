@@ -15,10 +15,12 @@ struct Line: Identifiable {
     static func build(_ messages: [MessageView]) -> [Line] {
         var out: [Line] = []
         var prev: MessageView?
+        var lastAt: MessageView?
         for m in messages {
-            let gap = prev.map { m.at - $0.at } ?? .infinity
-            let newDay = prev.map { !Calendar.current.isDate($0.date, inSameDayAs: m.date) } ?? true
-            if out.isEmpty || newDay || gap > 15 * 60_000 {
+            let gap = lastAt.map { m.at - $0.at } ?? .infinity
+            let newDay = lastAt.map { !Calendar.current.isDate($0.date, inSameDayAs: m.date) } ?? true
+            lastAt = m
+            if newDay || gap > 15 * 60_000 {
                 out.append(Line(id: "t\(m.seq)", kind: .time(m.date)))
                 prev = nil
             }
@@ -71,6 +73,7 @@ struct Conversation: View {
             }
             .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
+            .softEdges()
             .onChange(of: room.messages.last?.seq) { _, _ in
                 withAnimation(Motion.ease) { proxy.scrollTo("bottom", anchor: .bottom) }
             }

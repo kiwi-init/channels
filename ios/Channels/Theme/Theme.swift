@@ -51,6 +51,8 @@ enum Tone {
     static let doing = Color(Shade(0x2f6fe4), Shade(0x5b9bff))
     static let bubbleThem = Color(Shade(0xe9e9eb), Shade(0x262628))
     static let bubbleMine = Color(Shade(0x007aff), Shade(0x0b84fe))
+    static let faceTop = Color(Shade(0xf2f2f4), Shade(0x323236))
+    static let faceBottom = Color(Shade(0xe4e4e8), Shade(0x26262a))
     static let avatarTop = Color(Shade(0xa8a8b0), Shade(0x78787f))
     static let avatarBottom = Color(Shade(0x8a8a92), Shade(0x55555c))
     static let glassFill = Color(Shade(0xffffff, 0.64), Shade(0x28282c, 0.52))

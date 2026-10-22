@@ -33,7 +33,7 @@ struct Face: View {
 
     @ViewBuilder private var agent: some View {
         ZStack {
-            Circle().fill(LinearGradient(colors: [Tone.wash2, Tone.wash], startPoint: .top, endPoint: .bottom))
+            Circle().fill(LinearGradient(colors: [Tone.faceTop, Tone.faceBottom], startPoint: .top, endPoint: .bottom))
             if let harness = member?.harness, UIImage(named: "harness-\(harness)") != nil {
                 Image("harness-\(harness)")
                     .resizable()
