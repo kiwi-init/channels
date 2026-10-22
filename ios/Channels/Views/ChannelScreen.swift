@@ -19,7 +19,7 @@ struct ChannelScreen: View {
     @State private var fan: FanMode?
     @State private var hover: String?
     @State private var frames: [String: CGRect] = [:]
-    @State private var dockTop: CGFloat = 0
+    @State private var anchor: CGRect = .zero
     @FocusState private var typing: Bool
 
     init(route: Route) {
@@ -62,18 +62,14 @@ struct ChannelScreen: View {
                         Dock(room: room, place: place, replyTo: $replyTo, typing: $typing, follow: follow, switcher: control(room)) {
                             withAnimation(Motion.ease) { position.scrollTo(edge: .bottom) }
                         }
-                        .onGeometryChange(for: CGFloat.self) {
-                            $0.frame(in: .global).minY
-                        } action: {
-                            dockTop = $0
-                        }
                     }
                     .overlay {
                         if let fan {
                             GeometryReader { geo in
+                                let box = geo.frame(in: .global)
                                 Fan(
                                     room: room, items: Self.fanItems(room, model: model, current: place), current: place, mode: fan, hover: hover,
-                                    bottom: max(0, geo.frame(in: .global).maxY - dockTop + 10), frames: $frames
+                                    anchor: anchor.offsetBy(dx: -box.minX, dy: -box.minY), frames: $frames
                                 ) { key in
                                     pick(room, key)
                                 } dismiss: {
@@ -111,6 +107,9 @@ struct ChannelScreen: View {
             #if DEBUG
                 if UserDefaults.standard.bool(forKey: "fan") {
                     try? await Task.sleep(for: .seconds(2))
+                    if let text = UserDefaults.standard.string(forKey: "draft"), let room = model.rooms[code], let lead = room.lead {
+                        model.keep(Draft(text: text), code, room.dmKey(with: lead))
+                    }
                     fan = .tapped
                 }
             #endif
@@ -152,12 +151,13 @@ struct ChannelScreen: View {
         SwitchControl(
             current: room.placeView(place),
             fresh: model.freshElsewhere(room, than: place),
+            open: fan != nil,
             hold: {
                 hover = nil
                 withAnimation(.snappy(duration: 0.2)) { fan = .held }
             },
             move: { point in
-                let hit = frames.first { $0.value.minY - 5 <= point.y && point.y <= $0.value.maxY + 5 && point.x >= $0.value.minX - 40 }?.key
+                let hit = frames.first { $0.value.minY - 5 <= point.y && point.y <= $0.value.maxY + 5 }?.key
                 if hit != hover {
                     hover = hit
                     if hit != nil { UISelectionFeedbackGenerator().selectionChanged() }
@@ -173,7 +173,15 @@ struct ChannelScreen: View {
             tap: {
                 hover = nil
                 withAnimation(.snappy(duration: 0.2)) { fan = fan == nil ? .tapped : nil }
-            })
+            },
+            step: { by in
+                let keys = order(room)
+                let at = keys.firstIndex(of: place) ?? 0
+                guard keys.indices.contains(at + by) else { return false }
+                go(room, keys[at + by])
+                return true
+            },
+            placed: { anchor = $0 })
     }
 
     private func pick(_ room: RoomView, _ key: String) {
@@ -183,9 +191,8 @@ struct ChannelScreen: View {
     }
 
     private func order(_ room: RoomView) -> [String] {
-        var keys = ["main"] + room.places.filter { $0.kind == "dm" && $0.withMe }.sorted { $0.lastSeq > $1.lastSeq }.map(\.key)
-        if !keys.contains(place) { keys.insert(place, at: 1) }
-        return keys
+        let keys = Self.fanItems(room, model: model, current: place).map(\.key)
+        return keys.contains(place) ? keys : keys + [place]
     }
 
     private func go(_ room: RoomView, _ key: String) {
@@ -241,10 +248,15 @@ struct TitlePill: View {
         return place.title
     }
 
+    private var busy: String? {
+        guard let place, let other = room.other(in: place), let member = room.member(other), member.working else { return nil }
+        return member.doing.first.map { "working on \(taskLabel($0))" } ?? "working"
+    }
+
     @ViewBuilder private var status: some View {
         let parts: [String] = [
             place?.kind == "task" ? place?.task.flatMap { id in room.tasks.first { $0.id == id }?.title } : nil,
-            place?.kind == "dm" ? (place?.withMe == true ? "in \(room.title)" : "read along") : nil,
+            place?.kind == "dm" ? (place?.withMe == true ? (busy ?? "in \(room.title)") : "read along") : nil,
             room.connection == .connecting ? "Connecting…" : nil,
             room.connection == .reconnecting ? "Reconnecting…" : nil,
             place?.kind == "main" && room.working > 0 ? "\(room.working) working" : nil,
@@ -252,7 +264,7 @@ struct TitlePill: View {
         ].compactMap { $0 }
         if !parts.isEmpty {
             HStack(spacing: 4) {
-                if place?.kind == "main" && room.working > 0 { Dot(color: Tone.doing, size: 5) }
+                if (place?.kind == "main" && room.working > 0) || busy != nil { Dot(color: Tone.doing, size: 5) }
                 Text(parts.joined(separator: " · ")).type(.stamp, .medium).foregroundStyle(place?.kind == "main" && !room.asks.isEmpty ? Tone.decide : Tone.ink3).lineLimit(1)
             }
         }
@@ -283,14 +295,42 @@ struct Details: View {
     }
 }
 
+struct Spot: Sendable {
+    let d: CGFloat
+    let x: CGFloat
+    let y: CGFloat
+}
+
 struct ChannelAvatar: View {
     let room: RoomView
     var size: CGFloat = 50
 
+    private static let spots: [[Spot]] = [
+        [Spot(d: 0.56, x: -0.12, y: -0.1), Spot(d: 0.44, x: 0.17, y: 0.18)],
+        [Spot(d: 0.46, x: -0.12, y: -0.13), Spot(d: 0.36, x: 0.2, y: 0.08), Spot(d: 0.3, x: -0.1, y: 0.25)],
+    ]
+
+    private var crew: [MemberView] {
+        let others = room.members.filter { $0.name != room.me }
+        return Array((others.filter(\.lead) + others.filter { !$0.lead }).prefix(3))
+    }
+
     var body: some View {
+        let crew = crew
         Group {
-            if let lead = room.lead, let member = room.member(lead) {
-                Face(name: lead, member: member, size: size)
+            if crew.count > 1 {
+                ZStack {
+                    Circle().fill(LinearGradient(colors: [Tone.wash2, Tone.wash], startPoint: .top, endPoint: .bottom))
+                    ForEach(Array(crew.enumerated()), id: \.element.name) { i, m in
+                        let spot = Self.spots[crew.count - 2][i]
+                        Face(name: m.name, member: m, size: size * spot.d, badge: false)
+                            .overlay(Circle().stroke(Tone.canvas, lineWidth: max(1, size * 0.03)))
+                            .offset(x: size * spot.x, y: size * spot.y)
+                            .zIndex(Double(-i))
+                    }
+                }
+            } else if let only = crew.first {
+                Face(name: only.name, member: only, size: size, badge: false)
             } else {
                 Text(String(room.title.prefix(1)).uppercased())
                     .font(.system(size: size * 0.42, weight: .semibold, design: .rounded))

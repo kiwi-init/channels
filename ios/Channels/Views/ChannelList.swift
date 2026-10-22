@@ -45,7 +45,7 @@ struct ChannelList: View {
                     Button {
                         path.append(Route(code: room.code))
                     } label: {
-                        ChannelRow(room: room, unread: unread)
+                        ChannelRow(room: room, unread: unread, draft: model.draft(in: room))
                     }
                     .buttonStyle(RowPress())
                     .listRowInsets(EdgeInsets())
@@ -81,8 +81,9 @@ struct ChannelList: View {
         }
         #if DEBUG
             .onChange(of: model.channels.first?.code) { _, code in
-                guard let code, path.isEmpty, UserDefaults.standard.string(forKey: "shot") != nil else { return }
-                path = [Route(code: code)]
+                guard let code, path.isEmpty, let shot = UserDefaults.standard.string(forKey: "shot") else { return }
+                if let text = UserDefaults.standard.string(forKey: "draft") { model.keep(Draft(text: text), code, "main") }
+                if shot != "list" { path = [Route(code: code)] }
             }
         #endif
     }
@@ -256,6 +257,7 @@ struct RowPress: ButtonStyle {
 struct ChannelRow: View {
     let room: RoomView
     let unread: Int
+    var draft: Draft?
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
@@ -295,6 +297,10 @@ struct ChannelRow: View {
             Text("Opening…").type(.ui).foregroundStyle(Tone.ink3)
         } else if !room.asks.isEmpty {
             (Text("Needs you: ").foregroundStyle(Tone.decide).fontWeight(.semibold) + Text(oneLine(room.asks[0].body)).foregroundStyle(Tone.ink3))
+                .type(.ui)
+                .lineLimit(2)
+        } else if let draft {
+            (Text("Draft: ").foregroundStyle(Tone.alert) + Text(draft.text.isEmpty ? "a photo" : oneLine(draft.text)).foregroundStyle(Tone.ink3))
                 .type(.ui)
                 .lineLimit(2)
         } else if let last = room.last {

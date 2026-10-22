@@ -67,8 +67,8 @@ struct Conversation: View {
                         .foregroundStyle(Tone.ink3)
                         .padding(.vertical, 14)
                 }
-                if room.messages.isEmpty && room.connection == .live {
-                    Text("No messages yet").type(.ui).foregroundStyle(Tone.ink3).padding(.top, 80)
+                if room.whole || (room.messages.isEmpty && room.connection == .live) {
+                    Intro(room: room)
                 }
                 ForEach(Line.build(room.messages)) { line in
                     LineView(line: line, room: room, reveal: reveal, solo: solo) { m in
@@ -126,6 +126,60 @@ struct Conversation: View {
                 withAnimation(Motion.ease) { position.scrollTo(edge: .bottom) }
             }
         }
+    }
+}
+
+struct Intro: View {
+    let room: RoomView
+
+    private var place: PlaceView? { room.placeView(room.place) }
+
+    var body: some View {
+        VStack(spacing: 4) {
+            face.padding(.bottom, 8)
+            Text(title).type(.title).foregroundStyle(Tone.ink).multilineTextAlignment(.center)
+            ForEach(lines, id: \.self) { line in
+                Text(line).type(.meta).foregroundStyle(Tone.ink3).multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 32)
+        .padding(.top, room.messages.isEmpty ? 72 : 28)
+        .padding(.bottom, 20)
+    }
+
+    @ViewBuilder private var face: some View {
+        if let place, place.kind != "main" {
+            PlaceFace(room: room, place: place, size: 72)
+        } else {
+            ChannelAvatar(room: room, size: 72)
+        }
+    }
+
+    private var title: String {
+        guard let place, place.kind != "main" else { return room.title }
+        if place.kind == "task", let id = place.task { return taskLabel(id) }
+        if let other = room.other(in: place) { return room.display(other) }
+        return place.with.map { room.display($0) }.joined(separator: " and ")
+    }
+
+    private var lines: [String] {
+        guard let place, place.kind != "main" else {
+            let names = room.members.filter { $0.name != room.me }.map(\.display)
+            return ["You, \(names.joined(separator: ", "))", room.messages.isEmpty ? "No messages yet" : "The start of #general"]
+        }
+        if place.kind == "task", let id = place.task {
+            let task = room.tasks.first { $0.id == id }
+            let state = task.map { t in
+                let words = stateWords(t.state)
+                return ([words.prefix(1).uppercased() + words.dropFirst()] + (t.owner.map { [room.display($0)] } ?? [])).joined(separator: " · ")
+            }
+            return [task?.title, state].compactMap { $0 }
+        }
+        guard let other = room.other(in: place) else { return ["You're reading along"] }
+        let member = room.member(other)
+        let now: String? = member?.working == true ? (member?.doing.first.map { "Working on \(taskLabel($0))" } ?? "Working") : nil
+        return [member?.lead == true ? "Lead of \(room.title)" : "In \(room.title)", now ?? (room.messages.isEmpty ? "No messages yet" : nil)].compactMap { $0 }
     }
 }
 

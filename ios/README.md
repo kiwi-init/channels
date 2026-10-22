@@ -53,5 +53,6 @@ xcrun devicectl device process launch --device <UDID> --terminate-existing --pay
 
 The phone and the Mac must be on the same network. The lead answers whatever you send, and a
 new code is printed after each link, so you can link again. Debug builds take `-shot
-conversation` or `-shot tasks` after `--` to open the first channel there, for screenshots
-with `xcrun devicectl device capture screenshot`.
+conversation`, `-shot tasks` or `-shot list` after `--` to open the first channel there (or
+stay on the list), plus `-place KEY`, `-fan YES` and `-draft TEXT`, for screenshots with `xcrun
+devicectl device capture screenshot`.

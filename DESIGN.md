@@ -392,19 +392,31 @@ everything you touch under your thumb: the owner asked for both, so on the phone
   centred quiet line. A reply carries the answered words in an outlined capsule above it. An
   ask's options are capsules under it once answered (`accent` text, the chosen one filled);
   while one waits on you the bubble says "Waiting on you · answer below" and the dock holds the
-  answers.
+  answers. A conversation that starts on the phone (or is loaded from its start) opens on an
+  intro, as Messages does for a contact: a 72pt face, the name, and one or two quiet lines (the
+  crew for #general, "Lead of onemouse" or "Working on T8" for a direct thread, the task's
+  title, state and owner for a task thread).
+- A channel's face is its crew, as Messages draws a group: up to three members' faces
+  (the lead biggest) clustered in a soft circle, so #general never looks like the lead's
+  direct thread. It is the channel in the list, the details card, the fan and the switch.
 - The bottom is quiet and holds what your thumb does: a glass `+` (photos), the glass field
   (send inside it) and a round glass switch showing the face of the conversation you're in (a
   blue dot when another has news). Nothing else but what the moment needs: `@` mention chips
   while you type a name, a reply bar, a small ↓ at the right when you've scrolled up. The scroll
   edge effect stays off at the bottom, so the last message is never blurred into looking like
   more.
-- Switching is the switch: touch and hold it and your conversations fan up above it as glass
-  bubbles over a dimmed, blurred conversation, nearest first in the order you reach for them:
+- Switching is the switch: touch and hold it (or just swipe up from it, without waiting) and
+  your conversations fan up above it as glass bubbles over a dimmed, blurred conversation, and
+  the switch turns into a ✕ that closes them, nearest first in the order you reach for them:
   #general, then your direct thread with the lead (even before either of you wrote), then your
   other direct threads by recency, each with its last line. Threads between others aren't
   there (the details sheet has them). Slide your thumb up, the bubble under it grows with a
-  selection tick, let go to open it; a tap opens the same fan to tap from.
+  selection tick, let go to open it (let go on the ✕ to stay); a tap opens the same fan to tap
+  from. Flick the switch sideways to step through the same order without looking: left for the
+  next, right for the one before, a dull tap at either end; VoiceOver adjusts it the same way.
+- A draft stays with its conversation: switch away and back, or leave the channel, and what
+  you wrote (and the photos you added) is still in the field. Others show "Draft:" in `alert`
+  in the fan and the channel list. Drafts live in memory only, never on disk.
 - Prism (`Theme/Prism.swift`) is the desktop's `prism-lit` drawn the same way: the lit fill, a
   1px glint edge bright at one corner (140°), the seven-colour spectrum band at 70% (112°, 30%
   opacity), a 2px `ink` ring instead under Increase Contrast. As on the desktop it marks what's
@@ -412,7 +424,8 @@ everything you touch under your thumb: the owner asked for both, so on the phone
   bubble and the one under your thumb, whose band slides as you pass over it.
 - The top holds the channel, read rather than touched: a glass back button and, centred, the
   glass title pill with where you are and its state ("2 working" with the `doing` dot, "1 needs
-  you" in `decide`); a tap opens the details sheet. The conversation fades out under it.
+  you" in `decide`, "working on T8" in a direct thread with an agent at work); a tap opens the
+  details sheet. The conversation fades out under it.
   Questions waiting on you are answered from their own bubble.
 - A channel has several conversations, as on the Mac: #general, a direct thread with each
   member, the threads between others (read along: the dock says so instead of a field) and

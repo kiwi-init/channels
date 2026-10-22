@@ -5,6 +5,7 @@ struct Face: View {
     let name: String
     let member: MemberView?
     var size: CGFloat = 32
+    var badge = true
 
     private var initials: String {
         let words = (member?.display ?? name).split(whereSeparator: { $0 == " " || $0 == "-" || $0 == "_" || $0 == "." })
@@ -19,7 +20,7 @@ struct Face: View {
             } else {
                 person
             }
-            if member?.isAgent == true && member?.working == true {
+            if badge && member?.isAgent == true && member?.working == true {
                 Circle()
                     .fill(Tone.doing)
                     .frame(width: max(8, size * 0.28), height: max(8, size * 0.28))

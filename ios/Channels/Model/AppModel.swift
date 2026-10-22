@@ -23,6 +23,13 @@ enum Linking: Equatable {
     case failed(String)
 }
 
+struct Draft {
+    var text = ""
+    var attached: [Attached] = []
+
+    var isEmpty: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attached.isEmpty }
+}
+
 @MainActor
 @Observable
 final class AppModel {
@@ -39,6 +46,7 @@ final class AppModel {
     var seen: [String: Int] = UserDefaults.standard.dictionary(forKey: "seen") as? [String: Int] ?? [:]
     var pinned: [String] = UserDefaults.standard.stringArray(forKey: "pinned") ?? []
     var placeSeen: [String: Int] = UserDefaults.standard.dictionary(forKey: "placeSeen") as? [String: Int] ?? [:]
+    var drafts: [String: Draft] = [:]
 
     @ObservationIgnored let engine = Engine()
     @ObservationIgnored private var booted = false
@@ -102,6 +110,19 @@ final class AppModel {
         guard let top = room.placeView(key)?.lastSeq, top > (placeSeen["\(room.code)|\(key)"] ?? 0) else { return }
         placeSeen["\(room.code)|\(key)"] = top
         UserDefaults.standard.set(placeSeen, forKey: "placeSeen")
+    }
+
+    func draft(_ code: String, _ place: String) -> Draft {
+        drafts["\(code)|\(place)"] ?? Draft()
+    }
+
+    func keep(_ draft: Draft, _ code: String, _ place: String) {
+        drafts["\(code)|\(place)"] = draft.isEmpty ? nil : draft
+    }
+
+    func draft(in room: RoomView) -> Draft? {
+        let keys = ["main"] + room.places.map(\.key)
+        return keys.lazy.compactMap { self.drafts["\(room.code)|\($0)"] }.first
     }
 
     func open(_ code: String, place: String) async {
