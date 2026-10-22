@@ -146,10 +146,17 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   `data-starting-style` / `data-ending-style` transitions, 0.1-0.12s.
 - [Motion](https://motion.dev) (`motion/react`, through
   `components/motion.tsx`) only for what CSS can't do: a side panel leaving
-  (`Presence`, `popLayout`, so the conversation takes the space at once) and
-  rows moving to a new place (the task board's `layout`, with a
-  `layoutDependency` on the order so a re-render doesn't measure). No hover,
-  press or decorative motion through it.
+  (`Presence`, `popLayout`, so the conversation takes the space at once). No
+  hover, press or decorative motion through it, and none on rows of a long
+  list: a Motion component re-renders with every relay event, and 60 of them
+  on the task board cost a frame per event at 4x CPU slowdown.
+- Rows moving to a new place (the task board's `Reorder`) slide with the Web
+  Animations API: measured just before React commits a new order, animated
+  from there with `el.animate`, only for rows near the screen, and only on a
+  board of up to 24 rows: starting a slide on 60 cost one frame at 4x CPU
+  slowdown however few rows moved, so bigger boards jump as before. Nothing
+  runs between reorders. `bun scripts/perf-motion.ts` times the frames of
+  each animation.
 - Motion stays off the first load: import it only from lazy surfaces
   (`components/lazy.tsx`); the conversation reaches it through the lazy
   `Presence` (`side-presence.tsx`). A lazy import goes to a module of its own
@@ -157,12 +164,11 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   first load split React and some 35 modules out of the entry chunk (+9 KB,
   37 more files). Wrap a surface that animates in `<Motion>` so it follows
   the reduce-motion settings.
-- Eases: `cubic-bezier(0.2, 0.8, 0.2, 1)` (`EASE`) generally,
-  `(0.3, 1.35, 0.5, 1)` for sent. Moves are springs without bounce, 0.28s
-  (`MOVE`). Leaving is quicker than arriving.
+- Eases: `cubic-bezier(0.2, 0.8, 0.2, 1)` generally, `(0.3, 1.35, 0.5, 1)`
+  for sent. Moves take 0.28s. Leaving is quicker than arriving.
 - Reduced motion: `html.reduce-motion` (the persisted toggle) and OS
   reduced-motion turn CSS animation off; `<Motion>` turns Motion's movement
-  off for both and keeps only its fades.
+  off for both and keeps only its fades; `Reorder` doesn't slide.
 
 ## 7. Core components
 

@@ -1,5 +1,5 @@
 import { CancelCircleIcon, CheckmarkCircle02Icon, Loading03Icon } from "@hugeicons/core-free-icons"
-import type { ReactNode } from "react"
+import { Component, createRef, type ReactNode } from "react"
 
 import { colorOf, taskId, tasksAwaitingPeople, type AskHead, type ChannelState, type Task } from "@kiwi/core/state.ts"
 import { taskPr, type PrChecks } from "@kiwi/core/work.ts"
@@ -11,7 +11,6 @@ import { doingNow, type AgentNow } from "./agent-strip"
 import { Icon } from "./icon"
 import { Monogram } from "./kit"
 import { isAgent } from "./message"
-import { AnimatePresence, m, Motion, MOVE } from "./motion"
 import { PrCell, type Pr } from "./pr-cell"
 import { DecisionMark, StateMark } from "./tasks"
 
@@ -61,69 +60,112 @@ function TaskRow({
   const doing = agent && agent.load.current.some((t) => t.id === task.id) ? doingNow(agent) : null
   const pr = taskPr(state, task.id)
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-current={open || undefined}
-      aria-label={`${taskId(task.id)}, ${task.title}`}
-      onClick={() => onOpen(task.id)}
-      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onOpen(task.id))}
-      className={cx(
-        "relative grid cursor-pointer grid-cols-[28px_minmax(0,1fr)_44px] items-center gap-x-3.5 rounded-row px-3 py-2.5 transition-colors hover:bg-wash @lg:grid-cols-[28px_minmax(0,1fr)_168px_44px] @2xl:grid-cols-[28px_minmax(0,1fr)_168px_128px_44px]",
-        open && "before:absolute before:inset-y-2.5 before:left-0 before:w-0.5 before:rounded-full before:bg-accent"
-      )}
-    >
-      {task.owner ? (
-        <Monogram name={memberName(owner, task.owner)} hue={task.owner} agent={isAgent(owner)} color={colorOf(state, task.owner)} size={28} />
-      ) : (
-        <span className="flex size-7 items-center justify-center">
-          <StateMark state={task.state} />
+    <li data-slide={`t${task.id}`} className="bg-canvas">
+      <div
+        role="button"
+        tabIndex={0}
+        aria-current={open || undefined}
+        aria-label={`${taskId(task.id)}, ${task.title}`}
+        onClick={() => onOpen(task.id)}
+        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onOpen(task.id))}
+        className={cx(
+          "relative grid cursor-pointer grid-cols-[28px_minmax(0,1fr)_44px] items-center gap-x-3.5 rounded-row px-3 py-2.5 transition-colors hover:bg-wash @lg:grid-cols-[28px_minmax(0,1fr)_168px_44px] @2xl:grid-cols-[28px_minmax(0,1fr)_168px_128px_44px]",
+          open && "before:absolute before:inset-y-2.5 before:left-0 before:w-0.5 before:rounded-full before:bg-accent"
+        )}
+      >
+        {task.owner ? (
+          <Monogram name={memberName(owner, task.owner)} hue={task.owner} agent={isAgent(owner)} color={colorOf(state, task.owner)} size={28} />
+        ) : (
+          <span className="flex size-7 items-center justify-center">
+            <StateMark state={task.state} />
+          </span>
+        )}
+        <span className="min-w-0">
+          <span className={cx("block truncate text-body leading-snug", task.state === "done" ? "text-ink-2" : "text-ink", open && "font-semibold")}>{task.title}</span>
+          <span className="flex min-w-0 items-center gap-1.5 text-meta text-ink-3">
+            <span className="shrink-0 tabular-nums">{taskId(task.id)}</span>
+            <span aria-hidden>·</span>
+            <span className="shrink-0">{task.owner ? memberName(owner, task.owner) : "unassigned"}</span>
+            <span aria-hidden>·</span>
+            {waiting ? (
+              <DecisionMark />
+            ) : doing ? (
+              <span className={cx("flex min-w-0 items-center gap-1.5", doing.busy ? "text-doing" : "text-ink-3")}>
+                {doing.busy && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-doing shadow-[0_0_0_3px_color-mix(in_srgb,var(--doing)_18%,transparent)]" />}
+                <span className="truncate">{doing.text}</span>
+              </span>
+            ) : (
+              <span className="truncate">{labelOf(task)}</span>
+            )}
+          </span>
         </span>
-      )}
-      <span className="min-w-0">
-        <span className={cx("block truncate text-body leading-snug", task.state === "done" ? "text-ink-2" : "text-ink", open && "font-semibold")}>{task.title}</span>
-        <span className="flex min-w-0 items-center gap-1.5 text-meta text-ink-3">
-          <span className="shrink-0 tabular-nums">{taskId(task.id)}</span>
-          <span aria-hidden>·</span>
-          <span className="shrink-0">{task.owner ? memberName(owner, task.owner) : "unassigned"}</span>
-          <span aria-hidden>·</span>
-          {waiting ? (
-            <DecisionMark />
-          ) : doing ? (
-            <span className={cx("flex min-w-0 items-center gap-1.5", doing.busy ? "text-doing" : "text-ink-3")}>
-              {doing.busy && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-doing shadow-[0_0_0_3px_color-mix(in_srgb,var(--doing)_18%,transparent)]" />}
-              <span className="truncate">{doing.text}</span>
-            </span>
-          ) : (
-            <span className="truncate">{labelOf(task)}</span>
-          )}
+        <span className="hidden min-w-0 @lg:block">
+          <PrCell pr={pr} done={task.state === "done"} />
         </span>
-      </span>
-      <span className="hidden min-w-0 @lg:block">
-        <PrCell pr={pr} done={task.state === "done"} />
-      </span>
-      <span className="hidden min-w-0 @2xl:block">
-        <ChecksCell pr={pr} />
-      </span>
-      <time className="text-right text-meta text-ink-3 tabular-nums">{formatAgoShort(task.updatedAt, now)}</time>
-    </div>
+        <span className="hidden min-w-0 @2xl:block">
+          <ChecksCell pr={pr} />
+        </span>
+        <time className="text-right text-meta text-ink-3 tabular-nums">{formatAgoShort(task.updatedAt, now)}</time>
+      </div>
+    </li>
   )
 }
 
-function AskGroup({ ask, count, state, order, children }: { ask: AskHead | null; count: number; state: ChannelState; order: string; children: ReactNode }) {
+function AskGroup({ ask, count, state, children }: { ask: AskHead | null; count: number; state: ChannelState; children: ReactNode }) {
   const words = ask?.words.trim() ?? ""
   const label = ask ? (words ? `“${words}”` : `#${ask.id}`) : "Unfiled"
   const meta = ask ? `${memberName(state.members.get(ask.by), ask.by)} · #${ask.id}` : "No person's message holds these"
   return (
-    <m.section layout="position" layoutDependency={order} transition={{ layout: MOVE }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} aria-label={label} className="pt-4">
-      <h2 title={words || undefined} className="flex min-w-0 items-baseline gap-2 px-3 text-ui font-semibold">
-        <span className="truncate">{label}</span>
-        <span className="shrink-0 font-normal text-ink-3 tabular-nums">{count}</span>
-      </h2>
-      <p className="truncate px-3 pb-1.5 text-meta text-ink-3">{meta}</p>
+    <section aria-label={label} className="pt-4">
+      <div data-slide={`g${ask?.id ?? "unfiled"}`}>
+        <h2 title={words || undefined} className="flex min-w-0 items-baseline gap-2 px-3 text-ui font-semibold">
+          <span className="truncate">{label}</span>
+          <span className="shrink-0 font-normal text-ink-3 tabular-nums">{count}</span>
+        </h2>
+        <p className="truncate px-3 pb-1.5 text-meta text-ink-3">{meta}</p>
+      </div>
       {children}
-    </m.section>
+    </section>
   )
+}
+
+const SLIDE: KeyframeAnimationOptions = { duration: 280, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" }
+
+function slides(box: HTMLElement): Map<string, HTMLElement> {
+  return new Map([...box.querySelectorAll<HTMLElement>("[data-slide]")].map((el) => [el.dataset.slide ?? "", el]))
+}
+
+const SLIDES_UP_TO = 24
+
+class Reorder extends Component<{ order: string; rows: number; children: ReactNode }> {
+  box = createRef<HTMLDivElement>()
+
+  getSnapshotBeforeUpdate(prev: { order: string }): Map<string, number> | null {
+    const box = this.box.current
+    if (prev.order === this.props.order || this.props.rows > SLIDES_UP_TO || !box || document.documentElement.classList.contains("reduce-motion")) return null
+    return new Map([...slides(box)].map(([key, el]) => [key, el.getBoundingClientRect().top]))
+  }
+
+  componentDidUpdate(_prev: unknown, _state: unknown, first: Map<string, number> | null) {
+    const box = this.box.current
+    if (!first || !box) return
+    const near = (y: number) => y > -200 && y < window.innerHeight + 200
+    for (const [key, el] of slides(box)) {
+      const from = first.get(key)
+      if (from === undefined) continue
+      for (const a of el.getAnimations()) a.cancel()
+      const to = el.getBoundingClientRect().top
+      if (Math.abs(from - to) > 0.5 && (near(from) || near(to))) el.animate([{ transform: `translateY(${from - to}px)` }, { transform: "none" }], SLIDE)
+    }
+  }
+
+  render() {
+    return (
+      <div ref={this.box} className="@container pb-8">
+        {this.props.children}
+      </div>
+    )
+  }
 }
 
 export function TasksView({
@@ -167,36 +209,19 @@ export function TasksView({
     )
   const order = groups.map((g) => `${g.key}:${g.tasks.map((t) => t.id).join(",")}`).join(" ")
   return (
-    <Motion>
-      <div className="@container relative pb-8">
-        {showNeeds && <div className="px-3">{needs}</div>}
-        {view === "needs" && !needs && <p className="px-3 pt-6 text-ui text-ink-3">Nothing needs you right now.</p>}
-        <AnimatePresence initial={false} mode="popLayout">
-          {groups.map((g) => (
-            <AskGroup key={g.key} ask={g.ask} count={g.tasks.length} state={state} order={order}>
-              <ul className="relative divide-y divide-line">
-                <AnimatePresence initial={false} mode="popLayout">
-                  {g.tasks.map((t) => (
-                    <m.li
-                      key={t.id}
-                      layout="position"
-                      layoutDependency={order}
-                      transition={{ layout: MOVE }}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="bg-canvas"
-                    >
-                      <TaskRow task={t} state={state} now={now} agent={t.owner ? byName.get(t.owner) : undefined} waiting={waiting.has(t.id)} open={open === t.id} onOpen={onOpen} />
-                    </m.li>
-                  ))}
-                </AnimatePresence>
-              </ul>
-            </AskGroup>
-          ))}
-        </AnimatePresence>
-        {!groups.length && view !== "everything" && view !== "needs" && <p className="px-3 pt-6 text-ui text-ink-3">Nothing here right now.</p>}
-      </div>
-    </Motion>
+    <Reorder order={order} rows={groups.reduce((n, g) => n + g.tasks.length, 0)}>
+      {showNeeds && <div className="px-3">{needs}</div>}
+      {view === "needs" && !needs && <p className="px-3 pt-6 text-ui text-ink-3">Nothing needs you right now.</p>}
+      {groups.map((g) => (
+        <AskGroup key={g.key} ask={g.ask} count={g.tasks.length} state={state}>
+          <ul className="divide-y divide-line">
+            {g.tasks.map((t) => (
+              <TaskRow key={t.id} task={t} state={state} now={now} agent={t.owner ? byName.get(t.owner) : undefined} waiting={waiting.has(t.id)} open={open === t.id} onOpen={onOpen} />
+            ))}
+          </ul>
+        </AskGroup>
+      ))}
+      {!groups.length && view !== "everything" && view !== "needs" && <p className="px-3 pt-6 text-ui text-ink-3">Nothing here right now.</p>}
+    </Reorder>
   )
 }
