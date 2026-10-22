@@ -72,7 +72,7 @@ jobs:
 
   test-unit:
     name: test / unit
-    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/release-build.yml", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "desktop/package.json", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
+    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/workflows/nightly.yml", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "desktop/package.json", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
     always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
     description: >-
       Runs the unit tests with bun test: every test/*.test.ts except the slow suites in
@@ -528,7 +528,9 @@ jobs:
       lib/channel/warm.test.ts: only the last four channels stay warm; lib/threads.test.ts: what's
       been seen where keeps the newest 500 places. And
       test/perf-check.test.ts: perf-check compares the median of the runs with each gate, counts the
-      soak's limits only in the nightly run and lists what isn't at its 0.20 budget yet;
+      soak's limits only in the nightly run and lists what isn't at its 0.20 budget yet, and every
+      step in ci.yml and nightly.yml that pipes perf-check into tee runs with shell: bash (pipefail),
+      so an over-gate median fails the job;
       test/mac-size.test.ts: desktop/scripts/mac-size.ts (run by release-build on macOS) fails a dmg
       or zip over 150 MiB or an installed app over 320 MiB, the 0.20 budgets;
       test/appimage-squashfs.test.ts: desktop/scripts/appimage-squashfs.ts (run by release-build on

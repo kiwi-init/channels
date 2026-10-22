@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -47,4 +47,13 @@ test("the soak's limits count only in the nightly run, and the gap to 0.20 is li
   expect(check(files).out).not.toContain("Soak: heap growth per hour");
   expect(check(files, "--nightly").out).toContain("Soak: heap growth per hour");
   expect(check(files).out).toContain("Not yet at the 0.20 budget");
+});
+
+test("every workflow step that pipes perf-check runs under pipefail, so an over-gate median fails it", () => {
+  const steps = [".github/workflows/ci.yml", ".github/workflows/nightly.yml"].flatMap((path) => {
+    const wf = Bun.YAML.parse(readFileSync(path, "utf8")) as { jobs: Record<string, { steps?: { run?: string; shell?: string }[] }> };
+    return Object.values(wf.jobs).flatMap((job) => (job.steps ?? []).filter((step) => step.run?.includes("perf-check.ts")).map((step) => ({ path, ...step })));
+  });
+  expect(steps.length).toBeGreaterThanOrEqual(2);
+  for (const { path, run, shell } of steps) if (run!.includes("|")) expect({ path, shell }).toEqual({ path, shell: "bash" });
 });
