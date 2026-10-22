@@ -177,27 +177,12 @@ enum When {
         date.formatted(.dateTime.hour().minute())
     }
 
-    static func day(_ date: Date, now: Date = .now) -> String {
-        if Calendar.current.isDateInToday(date) { return "Today" }
-        if Calendar.current.isDateInYesterday(date) { return "Yesterday" }
-        if now.timeIntervalSince(date) < 6 * 86400 { return date.formatted(.dateTime.weekday(.wide)) }
-        return date.formatted(.dateTime.weekday(.wide).month(.wide).day())
-    }
-
     static func list(_ date: Date, now: Date = .now) -> String {
         let calendar = Calendar.current
         if calendar.isDateInToday(date) { return date.formatted(.dateTime.hour().minute()) }
         if calendar.isDateInYesterday(date) { return "Yesterday" }
         if now.timeIntervalSince(date) < 6 * 86400 { return date.formatted(.dateTime.weekday(.wide)) }
         return date.formatted(.dateTime.month(.defaultDigits).day().year(.twoDigits))
-    }
-
-    static func since(_ date: Date, now: Date = .now) -> String {
-        let s = max(0, now.timeIntervalSince(date))
-        if s < 60 { return "just now" }
-        if s < 3600 { return "\(Int(s / 60)) min" }
-        if s < 86400 { return "\(Int(s / 3600)) h" }
-        return "\(Int(s / 86400)) d"
     }
 }
 
@@ -208,20 +193,3 @@ enum Haptic {
 }
 
 func taskLabel(_ id: Int) -> String { "T\(id)" }
-
-func stateWords(_ state: String) -> String {
-    switch state {
-    case "doing": "in progress"
-    case "review": "in review"
-    case "done": "done"
-    default: "open"
-    }
-}
-
-func stateColor(_ state: String) -> Color {
-    switch state {
-    case "doing", "review": Tone.doing
-    case "done": Tone.live
-    default: Tone.ink3
-    }
-}

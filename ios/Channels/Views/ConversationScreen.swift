@@ -219,9 +219,7 @@ struct TitlePill: View {
     }
 
     private var title: String {
-        guard let place, place.kind != "main" else { return room.title }
-        if place.kind == "task", let id = place.task { return taskLabel(id) }
-        return place.title
+        room.spotTitle(place?.key ?? "main")
     }
 
     private var other: MemberView? {
@@ -236,8 +234,7 @@ struct TitlePill: View {
 
     @ViewBuilder private var status: some View {
         let parts: [String] = [
-            place?.kind == "task" ? place?.task.flatMap { id in room.tasks.first { $0.id == id }?.title } : nil,
-            place?.kind == "dm" ? (place?.withMe == true ? (busy ?? (other?.here == true ? "here" : "away")) : "read along") : nil,
+            place?.kind == "dm" ? (busy ?? (other?.here == true ? "here" : "away")) : nil,
             room.connection == .connecting ? "Connecting…" : nil,
             room.connection == .reconnecting ? "Reconnecting…" : nil,
             place?.kind == "main" && room.working > 0 ? "\(room.working) working" : nil,

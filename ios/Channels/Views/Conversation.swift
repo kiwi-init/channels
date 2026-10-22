@@ -153,7 +153,7 @@ struct Conversation: View {
 struct Intro: View {
     let room: RoomView
 
-    private var place: PlaceView? { room.placeView(room.place) }
+    private var lead: String? { room.place == "main" ? nil : room.lead }
 
     var body: some View {
         VStack(spacing: 4) {
@@ -170,37 +170,25 @@ struct Intro: View {
     }
 
     @ViewBuilder private var face: some View {
-        if let place, place.kind != "main" {
-            PlaceFace(room: room, place: place, size: 72)
+        if let lead {
+            Face(name: lead, member: room.member(lead), size: 72)
         } else {
             ChannelAvatar(room: room, size: 72)
         }
     }
 
     private var title: String {
-        guard let place, place.kind != "main" else { return room.title }
-        if place.kind == "task", let id = place.task { return taskLabel(id) }
-        if let other = room.other(in: place) { return room.display(other) }
-        return place.with.map { room.display($0) }.joined(separator: " and ")
+        lead.map { room.display($0) } ?? room.title
     }
 
     private var lines: [String] {
-        guard let place, place.kind != "main" else {
+        guard let lead else {
             let names = room.members.filter { $0.name != room.me }.map(\.display)
             return ["You, \(names.joined(separator: ", "))", room.messages.isEmpty ? "No messages yet" : "The start of #general"]
         }
-        if place.kind == "task", let id = place.task {
-            let task = room.tasks.first { $0.id == id }
-            let state = task.map { t in
-                let words = stateWords(t.state)
-                return ([words.prefix(1).uppercased() + words.dropFirst()] + (t.owner.map { [room.display($0)] } ?? [])).joined(separator: " · ")
-            }
-            return [task?.title, state].compactMap { $0 }
-        }
-        guard let other = room.other(in: place) else { return ["You're reading along"] }
-        let member = room.member(other)
+        let member = room.member(lead)
         let now: String? = member?.working == true ? (member?.doing.first.map { "Working on \(taskLabel($0))" } ?? "Working") : nil
-        return [member?.lead == true ? "Lead of \(room.title)" : "In \(room.title)", now ?? (room.messages.isEmpty ? "No messages yet" : nil)].compactMap { $0 }
+        return ["Lead of \(room.title)", now ?? (room.messages.isEmpty ? "Only you and \(room.display(lead)) here" : nil)].compactMap { $0 }
     }
 }
 

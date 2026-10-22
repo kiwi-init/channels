@@ -44,33 +44,6 @@ enum Shrink {
     }
 }
 
-struct PlaceFace: View {
-    let room: RoomView
-    let place: PlaceView?
-    var size: CGFloat = 34
-
-    var body: some View {
-        if let place, place.kind == "dm", let other = room.other(in: place) {
-            Face(name: other, member: room.member(other), size: size)
-        } else if let place, place.kind == "dm" {
-            HStack(spacing: -size * 0.5) {
-                ForEach(place.with, id: \.self) { name in
-                    Face(name: name, member: room.member(name), size: size * 0.8).overlay(Circle().stroke(Tone.canvas, lineWidth: 1.5))
-                }
-            }
-            .frame(width: size, height: size)
-        } else if let place, place.kind == "task", let id = place.task {
-            Text(taskLabel(id))
-                .font(.system(size: size * 0.32, weight: .bold, design: .rounded))
-                .foregroundStyle(Tone.doing)
-                .frame(width: size, height: size)
-                .background(Tone.doing.opacity(0.15), in: Circle())
-        } else {
-            ChannelAvatar(room: room, size: size)
-        }
-    }
-}
-
 struct Dock: View {
     let room: RoomView
     let spot: Spot
