@@ -149,15 +149,17 @@ try {
   console.error(`dictation failed at "${at}": ${err instanceof Error ? err.message : String(err)} (screenshot: ${shot})`);
   process.exitCode = 1;
 } finally {
-  await cdp?.close().catch(() => undefined);
-  await daemonStop(env.KIWI_HOME!, 2_000).catch(() => undefined);
+  const cleanup = Date.now();
   try {
     if (app.pid !== undefined) process.kill(-app.pid, "SIGKILL");
   } catch {
     // The group is already gone, or never formed: kill the main process alone.
     app.kill("SIGKILL");
   }
+  await cdp?.close().catch(() => undefined);
+  await daemonStop(env.KIWI_HOME!, 2_000).catch(() => undefined);
   relay.kill("SIGKILL");
+  console.log(`dictate: cleaned up in ${Date.now() - cleanup} ms`);
   rmSync(root, { recursive: true, force: true });
 }
 process.exit(process.exitCode ?? 0);
