@@ -204,10 +204,7 @@ jobs:
       - uses: ./.github/actions/browser
       - run: bun run web:build
       - name: ui shots
-        run: bun scripts/shoot-ui.ts --wide --theme dark "$RUNNER_TEMP/shots"
-      - name: ui shots, phone size too
-        if: ${{ !cancelled() }}
-        run: bun scripts/shoot-ui.ts --only channel,tasks --theme dark "$RUNNER_TEMP/shots"
+        run: bun scripts/shoot-ui.ts --wide --phone channel,tasks --theme dark "$RUNNER_TEMP/shots"
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

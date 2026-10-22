@@ -833,7 +833,7 @@ jobs:
       chosen, and its started screen (with a stand-in for the launch methods the desktop bridge
       adds), first run, signed in with nothing open, Join
       with a code and the invite preview.
-      The shots are uploaded as the ui-shots artifact. Fails when the conversation isn't at its newest message (within 80px of the bottom) once the channel opens and again back from the Tasks tab (which it visits itself), at the wide size and, in a second short run of the channel and Tasks screens, at phone size too (web/src/components/conversation/use-scroll.ts), or when the window's drag band would take a control of the open viewer (each app-region box added or taken away in document order, as Electron does), or when the seeding can't drive the
+      The shots are uploaded as the ui-shots artifact. Fails when the conversation isn't at its newest message (within 80px of the bottom) once the channel opens and again back from the Tasks tab (which it visits itself), at the wide size and, in the same run (--phone channel,tasks: the channel and Tasks screens on the channel already seeded), at phone size too (web/src/components/conversation/use-scroll.ts), or when the window's drag band would take a control of the open viewer (each app-region box added or taken away in document order, as Electron does), or when the seeding can't drive the
       dashboard or any screen can't be reached (a control renamed, moved or gone), so the shots
       keep up with the UI. Headless Chromium and the apt packages it needs come from .github/actions/browser, which installs the packages from cached .deb files and fails the job if they can't be installed.
 
