@@ -48,6 +48,7 @@ export interface ChannelHandle {
   marks: Marks
   pkOf: (name: string) => string | undefined
   snapshotTooBig: boolean
+  ready: boolean
 }
 
 const merged = (prev: Message[], more: Message[]) => {
@@ -59,6 +60,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
   const ch = useMemo(() => linkOf(member), [member])
   const [was] = useState(() => warmOf(member.code))
   const [connection, setConnection] = useState<Connection>("connecting")
+  const [ready, setReady] = useState(() => !!was)
   const [start, setStart] = useState<{ head: number; whole: boolean } | null>(null)
   const [gone, setGone] = useState<"removed" | "closed" | null>(null)
   const [messages, setMessages] = useState<Message[]>(was?.messages ?? [])
@@ -219,6 +221,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
           if (kept.some((m) => m.kind === "event" && m.ev?.op === "card")) noteAgentWorked()
         }
         if (base) setBase(base)
+        setReady(true)
       },
     })
     warmUp(steps, was)
@@ -374,5 +377,5 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
 
   const pkOf = useCallback((name: string) => keyOf.get(name), [keyOf])
 
-  return { ch, connection, gone, messages, roster, state, online: live, isOwner, requests, send, refreshRequests, refreshRoster, head: start?.head ?? 0, marks, pkOf, snapshotTooBig }
+  return { ch, connection, gone, messages, roster, state, online: live, isOwner, requests, send, refreshRequests, refreshRoster, head: start?.head ?? 0, marks, pkOf, snapshotTooBig, ready }
 }

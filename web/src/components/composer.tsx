@@ -13,6 +13,7 @@ import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
 import { CommandBar, CommandList, ComposerQuestion } from "./lazy"
 import { Monogram, errorText, toast } from "./kit"
+import { useLater } from "@/hooks/use-later"
 
 const MENTION = /(^|\s)@([\p{L}\p{N}_.-]*)$/u
 const LEADING = /^(?:\s*@([\p{L}\p{N}_.-]+)[\s,]*)+/u
@@ -68,6 +69,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
   useEffect(() => keepDraft(draftKey, { body, files }), [draftKey, body, files])
   const [dropping, setDropping] = useState(false)
   const [sending, setSending] = useState(false)
+  const slow = useLater(disabled)
   const [mention, setMention] = useState<{
     query: string
     index: number
@@ -223,7 +225,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
   }
 
   const asked = !thread && !replyTo ? asking : undefined
-  const hint = disabled ? "Connecting…" : thread ? "Reply" : replyTo ? `Reply to ${nameOf(replyTo.from)}` : asked ? `Answer ${nameOf(asked.from)}` : (placeholder ?? "Message")
+  const hint = slow ? "Connecting…" : thread ? "Reply" : replyTo ? `Reply to ${nameOf(replyTo.from)}` : asked ? `Answer ${nameOf(asked.from)}` : (placeholder ?? "Message")
 
   return (
     <div className={cx("relative mx-auto w-full shrink-0", thread ? "px-3 pt-2 pb-3" : "max-w-[792px] px-3 pt-2 pb-4 md:px-4")}>
@@ -347,7 +349,6 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
                 ref={area}
                 rows={1}
                 value={body}
-                disabled={disabled}
                 aria-label="Message"
                 placeholder={hint}
                 onChange={(e) => {

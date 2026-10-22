@@ -511,6 +511,32 @@ async function run(part: Part): Promise<string[]> {
     if (await page.getByText("smoke in the task", { exact: true }).count()) throw new Error("a message in a task's conversation showed in main, outside its task");
     log(`ok  ${at}: main shows the task as one line, and what was said in it stays in the task`);
 
+    at = "a reload shows no empty state before the channel's history is in";
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem("smoke.emptyStates") !== "watch") return;
+      sessionStorage.removeItem("smoke.emptyStates");
+      const w = window as unknown as { __emptyStates: string[] };
+      const seen = new Set<string>();
+      w.__emptyStates = [];
+      const look = () => {
+        if (document.querySelector('section[aria-label="Add an agent"]')) seen.add("Add an agent");
+        for (const p of document.querySelectorAll("p")) if (p.textContent === "No tasks yet" || p.textContent === "No messages yet") seen.add(p.textContent);
+        w.__emptyStates = [...seen];
+      };
+      const watch = new MutationObserver(look);
+      watch.observe(document, { childList: true, subtree: true, characterData: true });
+      setTimeout(() => watch.disconnect(), 5000);
+    });
+    await page.evaluate(() => sessionStorage.setItem("smoke.emptyStates", "watch"));
+    await page.reload();
+    await page.getByText("Smoke task").first().waitFor({ timeout: 15000 });
+    await page.getByRole("textbox", { name: "Message" }).first().waitFor();
+    await page.waitForTimeout(500);
+    const flashed = await page.evaluate(() => (window as unknown as { __emptyStates?: string[] }).__emptyStates ?? null);
+    if (flashed === null) throw new Error("the watch for empty states didn't run on the reload");
+    if (flashed.length) throw new Error(`a reload of a channel with agents and a task showed ${flashed.join(", ")} before its history`);
+    log(`ok  ${at}`);
+
     at = "a slash in the composer lists the commands, and one runs instead of being sent";
     const typed = page.getByRole("textbox", { name: "Message" });
     await typed.fill("/");
