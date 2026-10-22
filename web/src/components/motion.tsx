@@ -3,7 +3,7 @@ import type { ReactNode } from "react"
 
 import { useAccessibilityOption } from "@/lib/accessibility"
 
-export const EASE = [0.2, 0.8, 0.2, 1] as const
+const EASE = [0.2, 0.8, 0.2, 1] as const
 
 export const MOVE: Transition = { type: "spring", bounce: 0, visualDuration: 0.28 }
 
@@ -13,14 +13,6 @@ export function Motion({ children }: { children: ReactNode }) {
     <MotionConfig reducedMotion={reduce ? "always" : "user"} transition={{ duration: 0.2, ease: EASE }}>
       {children}
     </MotionConfig>
-  )
-}
-
-export function Presence({ children }: { children: ReactNode }) {
-  return (
-    <Motion>
-      <AnimatePresence mode="popLayout">{children}</AnimatePresence>
-    </Motion>
   )
 }
 

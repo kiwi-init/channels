@@ -152,8 +152,11 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   press or decorative motion through it.
 - Motion stays off the first load: import it only from lazy surfaces
   (`components/lazy.tsx`); the conversation reaches it through the lazy
-  `Presence`. Wrap a surface that animates in `<Motion>` so it follows the
-  reduce-motion settings.
+  `Presence` (`side-presence.tsx`). A lazy import goes to a module of its own
+  like that one, never to `motion.tsx` itself: importing it lazily from the
+  first load split React and some 35 modules out of the entry chunk (+9 KB,
+  37 more files). Wrap a surface that animates in `<Motion>` so it follows
+  the reduce-motion settings.
 - Eases: `cubic-bezier(0.2, 0.8, 0.2, 1)` (`EASE`) generally,
   `(0.3, 1.35, 0.5, 1)` for sent. Moves are springs without bounce, 0.28s
   (`MOVE`). Leaving is quicker than arriving.

@@ -35,7 +35,7 @@ const tasksView = later(() => import("./tasks-view").then((m) => m.TasksView))
 const thread = later(() => import("./thread").then((m) => m.ThreadPanel))
 const annotator = later(() => import("./annotator").then((m) => m.Annotator))
 const presence = later(
-  () => import("./motion").then((m) => m.Presence),
+  () => import("./side-presence").then((m) => m.SidePresence),
   ({ children }: { children: ReactNode }) => children
 )
 const agentLanes = later(() => import("./agent-lanes").then((m) => m.AgentLanes))
