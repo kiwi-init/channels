@@ -7,6 +7,7 @@ import { APP_SCHEME, permissionAllowed } from "./guard.ts";
 import { wireDaemonIpc } from "./ipc/daemon.ts";
 import { wireGithubIpc } from "./ipc/github.ts";
 import { wireMiscIpc } from "./ipc/misc.ts";
+import { wireLinkingIpc } from "./ipc/linking.ts";
 import { wirePairingIpc } from "./ipc/pairing.ts";
 import { wireSignInIpc } from "./ipc/signin.ts";
 import { wireStoreIpc } from "./ipc/store.ts";
@@ -27,6 +28,7 @@ function wireIpc(): void {
   wireSignInIpc();
   wireGithubIpc();
   wirePairingIpc();
+  wireLinkingIpc();
   wireDaemonIpc();
   wireMiscIpc();
   wireVoiceIpc();

@@ -1,4 +1,16 @@
-import { ArrowLeft01Icon, ArrowRight01Icon, ComputerIcon, GithubIcon, Link01Icon, PaintBoardIcon, Robot01Icon, Settings02Icon, SparklesIcon, TerminalIcon } from "@hugeicons/core-free-icons"
+import {
+  ArrowLeft01Icon,
+  ArrowRight01Icon,
+  ComputerIcon,
+  GithubIcon,
+  Link01Icon,
+  PaintBoardIcon,
+  Robot01Icon,
+  Settings02Icon,
+  SmartPhone01Icon,
+  SparklesIcon,
+  TerminalIcon,
+} from "@hugeicons/core-free-icons"
 import { useOwnPersonalities } from "@/lib/personalities"
 import { Personalities } from "./personalities"
 
@@ -12,6 +24,7 @@ import { contextLineBridge, terminalsBridge } from "@/lib/terminals"
 import type { TerminalId, TerminalRow, TerminalsStatus } from "@kiwi/core/terminals.ts"
 import { version } from "../../../package.json"
 import { ComputerRows } from "./computers"
+import { PhoneRows } from "./phones"
 import { HarnessFace } from "./harness-face"
 import { Icon, type IconSvgElement } from "./icon"
 import { Button, Checkbox, IconButton, Monogram, SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from "./kit"
@@ -432,6 +445,7 @@ const SECTIONS: { id: string; label: string; icon: IconSvgElement }[] = [
   { id: "new-agents", label: "New agents", icon: TerminalIcon },
   { id: "services", label: "Services", icon: Link01Icon },
   { id: "computers", label: "Computers", icon: ComputerIcon },
+  { id: "phone", label: "Phone", icon: SmartPhone01Icon },
   { id: "app", label: "This app", icon: Settings02Icon },
 ]
 
@@ -443,7 +457,10 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
   const b = bridge()
   const [on, setOn] = useState("appearance")
   const [adding, setAdding] = useState(false)
-  const shown = SECTIONS.filter((s) => (s.id === "services" ? !!(b?.githubStatus || b?.setVoiceKey) : s.id === "new-agents" ? !!terminalsBridge() : s.id === "computers" ? !!person : true))
+  const [linking, setLinking] = useState(false)
+  const shown = SECTIONS.filter((s) =>
+    s.id === "services" ? !!(b?.githubStatus || b?.setVoiceKey) : s.id === "new-agents" ? !!terminalsBridge() : s.id === "computers" ? !!person : s.id === "phone" ? !!person && !!b : true
+  )
   const go = (id: string) => {
     setOn(id)
     document.getElementById(`settings-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" })
@@ -533,6 +550,21 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
                 {!adding && b && (
                   <button type="button" onClick={() => setAdding(true)} className="flex w-full items-center px-4 py-3 text-left text-ui font-medium text-accent-text transition-colors hover:bg-wash">
                     Add a computer
+                  </button>
+                )}
+              </Group>
+            )}
+            {person && b && (
+              <Group id="phone" title="Phone">
+                <div data-item className="grid gap-1 px-4 py-2">
+                  <p className="pt-1 text-meta leading-snug text-ink-3">
+                    Your iPhone reads and answers your channels as you. Linking hands it your person and channel keys, end to end through the relay.
+                  </p>
+                  <PhoneRows linking={linking} onLinked={() => setLinking(false)} />
+                </div>
+                {!linking && (
+                  <button type="button" onClick={() => setLinking(true)} className="flex w-full items-center px-4 py-3 text-left text-ui font-medium text-accent-text transition-colors hover:bg-wash">
+                    Link a phone
                   </button>
                 )}
               </Group>

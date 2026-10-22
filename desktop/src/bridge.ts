@@ -215,9 +215,21 @@ export interface StoreSnapshot {
   person: PublicPerson | null;
   channels: ChannelView[];
   computers: ComputerView[];
+  phones: PhoneView[];
   pending: PendingItem[];
   voice: VoiceView;
   personalities: Personality[];
+}
+
+export interface PhoneView {
+  label: string;
+  at: number;
+}
+
+export interface LinkAskView {
+  label: string;
+  digits: string;
+  at: number;
 }
 
 /** A computer asking to pair, for the person to confirm. */
@@ -304,6 +316,10 @@ export interface KiwiBridge {
   pairPoll(): Promise<PairAskView | null>;
   pairAnswer(accept: boolean): Promise<{ machinePk: string } | null>;
   pairCancel(): Promise<void>;
+  linkBegin(): Promise<{ code: string }>;
+  linkPoll(): Promise<LinkAskView | null>;
+  linkAnswer(accept: boolean): Promise<PhoneView | null>;
+  linkCancel(): Promise<void>;
   daemonStatus(): Promise<DaemonStatus>;
   /** Certify this machine's daemon key with the person key and hand the cert back. */
   daemonAdopt(): Promise<ComputerView>;

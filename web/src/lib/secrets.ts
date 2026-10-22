@@ -5,12 +5,25 @@
 
 import { useSyncExternalStore } from "react"
 
-import type { ChannelIdentityView, ChannelView, ComputerView, GithubRepoView, KiwiBridge, PairAskView, PublicPerson, StoreSnapshot, UpdateCheckView, UpdateView } from "../../../desktop/src/bridge.ts"
+import type {
+  ChannelIdentityView,
+  ChannelView,
+  ComputerView,
+  GithubRepoView,
+  KiwiBridge,
+  LinkAskView,
+  PairAskView,
+  PhoneView,
+  PublicPerson,
+  StoreSnapshot,
+  UpdateCheckView,
+  UpdateView,
+} from "../../../desktop/src/bridge.ts"
 import { publicChannel } from "../../../desktop/src/public-channel.ts"
 import { onLocalChange, readLocal, writeLocal, type Local } from "./local-store"
 import { persistQueue } from "./persist-queue"
 
-export type { ChannelView, ComputerView, GithubRepoView, KiwiBridge, PairAskView, PublicPerson, StoreSnapshot, UpdateCheckView, UpdateView }
+export type { ChannelView, ComputerView, GithubRepoView, KiwiBridge, LinkAskView, PairAskView, PhoneView, PublicPerson, StoreSnapshot, UpdateCheckView, UpdateView }
 
 /** The desktop bridge, or null in a plain browser. */
 export function bridge(): KiwiBridge | null {
@@ -27,6 +40,7 @@ const publicOf = (l: Local): StoreSnapshot => ({
   person: l.person ? { name: l.person.name, pk: l.person.pk, xpk: l.person.xpk } : null,
   channels: l.channels.map(publicChannel),
   computers: l.computers,
+  phones: [],
   pending: l.pending,
   voice: { configured: false, consent: {} },
   personalities: l.personalities,
