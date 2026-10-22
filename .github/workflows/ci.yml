@@ -152,14 +152,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
-      - id: playwright
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-      - run: bunx playwright-core install-deps chromium-headless-shell
-      - if: steps.playwright.outputs.cache-hit != 'true'
-        run: bunx playwright-core install --only-shell chromium
+      - uses: ./.github/actions/browser
       - name: web build
         run: cd web && bun run build
       - name: web bundle budget
@@ -208,14 +201,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
-      - id: playwright
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-      - run: bunx playwright-core install-deps chromium-headless-shell
-      - if: steps.playwright.outputs.cache-hit != 'true'
-        run: bunx playwright-core install --only-shell chromium
+      - uses: ./.github/actions/browser
       - run: bun run web:build
       - name: ui shots
         run: bun scripts/shoot-ui.ts --wide --theme dark "$RUNNER_TEMP/shots"
@@ -246,14 +232,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
-      - id: playwright
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-      - run: bunx playwright-core install-deps chromium-headless-shell
-      - if: steps.playwright.outputs.cache-hit != 'true'
-        run: bunx playwright-core install --only-shell chromium
+      - uses: ./.github/actions/browser
       - run: bun run web:build
       - name: perf-scale
         env:
