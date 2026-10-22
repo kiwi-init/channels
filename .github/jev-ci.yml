@@ -937,9 +937,9 @@ jobs:
         Linux jobs too, which catch it, or it can't fail at all.
     description: >-
       On three macOS runners at once (a matrix of `scripts/ci-tests.ts all --shard=N/3`, which deals
-      the files out by their times in test/timings.json: the slowest each file has taken in a cli / macos run (from
-      `scripts/ci-tests.ts all --shard=N/3 --update-timings` or the run's log), so the heavy flows
-      that slow each other on one runner land apart; every group also hands bun that file
+      the files out by their times in test/timings.json: each file's median over recent cli / macos runs (from their logs or
+      `scripts/ci-tests.ts all --shard=N/3 --update-timings`), so one slow run on a busy runner
+      doesn't skew it and the heavy flows land apart; every group also hands bun that file
       so --parallel starts the slowest files first), does what the release's cli job does: runs the whole bun test suite
       (every test/*.test.ts and web/src test, the agent flows included) with bun test --parallel so
       each file gets a fresh global as on Linux (one process for every file once let a test's
