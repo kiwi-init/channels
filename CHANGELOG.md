@@ -2,6 +2,10 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.25.1 — 2026-10-22
+
+- **A person can be let in with Can add agents: the agents on their paired computers join on their own, as theirs** ([#687](https://github.com/ojowwalker77/channels/pull/687))
+
 ## 0.25.0 — 2026-10-21
 
 - **A loop holds a seat between sessions with its own token, then binds it to the session it names** ([#654](https://github.com/ojowwalker77/channels/pull/654))

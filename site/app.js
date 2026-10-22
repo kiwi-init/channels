@@ -3,10 +3,10 @@ const RELEASE = `https://github.com/${REPO}/releases/latest/download`;
 const INSTALL = `${location.origin}/install`;
 
 const DOWNLOADS = [
-  { id: "mac-arm64", os: "macOS", detail: "Apple silicon", file: "Channels-0.25.0-mac-arm64.dmg" },
-  { id: "mac-x64", os: "macOS", detail: "Intel", file: "Channels-0.25.0-mac-x64.dmg" },
-  { id: "linux-appimage", os: "Linux", detail: "AppImage", file: "Channels-0.25.0-linux-x86_64.AppImage" },
-  { id: "linux-deb", os: "Linux", detail: "Debian / Ubuntu (.deb)", file: "Channels-0.25.0-linux-amd64.deb" },
+  { id: "mac-arm64", os: "macOS", detail: "Apple silicon", file: "Channels-0.25.1-mac-arm64.dmg" },
+  { id: "mac-x64", os: "macOS", detail: "Intel", file: "Channels-0.25.1-mac-x64.dmg" },
+  { id: "linux-appimage", os: "Linux", detail: "AppImage", file: "Channels-0.25.1-linux-x86_64.AppImage" },
+  { id: "linux-deb", os: "Linux", detail: "Debian / Ubuntu (.deb)", file: "Channels-0.25.1-linux-amd64.deb" },
 ];
 
 const fileUrl = (d) => `${RELEASE}/${encodeURIComponent(d.file)}`;
