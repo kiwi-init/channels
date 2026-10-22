@@ -3,17 +3,21 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const budgets = (await Bun.file("scripts/perf-budgets.json").json()) as Record<string, { budget: number; gate: number | null; nightly?: boolean }>;
+const { reference, limits: budgets } = (await Bun.file("scripts/perf-budgets.json").json()) as {
+  reference: Record<"@1x" | "@4x", number>;
+  limits: Record<string, { at: string[]; per?: "@1x" | "@4x"; budget: number; gate: number | null; nightly?: boolean }>;
+};
 const dir = mkdtempSync(join(tmpdir(), "kiwi-perf-check-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-function run(tasksMs: number, i: number): string {
+function run(tasksMs: number, i: number, speed = 1, calibrated = true): string {
   const file = join(dir, `run-${i}.json`);
+  const calibration = (s: "@1x" | "@4x") => (calibrated ? { calibrationMs: reference[s] * speed } : {});
   writeFileSync(
     file,
     JSON.stringify({
-      "@1x": { reloadToTasksMs: 500 },
-      "@4x": { switchMedianMs: { Tasks: tasksMs, Agents: 90, Conversation: 95 } },
+      "@1x": { reloadToTasksMs: 500, ...calibration("@1x") },
+      "@4x": { switchMedianMs: { Tasks: tasksMs, Agents: 90, Conversation: 95 }, ...calibration("@4x") },
       "typing while 10 agents post": { p95Ms: 30 },
       soak: { heapSlopeMBPerHour: 60, nodesSlopePerHour: 152000, listenersSlopePerHour: 22000 },
     }),
@@ -40,6 +44,25 @@ test("the median of the runs is what's compared: one slow run doesn't fail, a sl
   const r = check([run(gate + 10, 4), run(gate + 20, 5), run(gate - 5, 6)]);
   expect(r.code).toBe(1);
   expect(r.out).toContain("Tasks tab @4x");
+});
+
+test("timings are scaled by each run's calibration: a slow runner's numbers aren't a regression", () => {
+  const gate = budgets.tasksMs!.gate;
+  if (gate === null) return;
+  const slow = check([run(gate * 1.5, 8, 2), run(gate * 1.6, 9, 2), run(gate * 1.4, 10, 2)]);
+  expect(slow.code).toBe(0);
+  expect(slow.out).toContain(`| Tasks tab @4x | ${gate * 1.5} | ${gate * 0.75} |`);
+  expect(check([run(gate * 1.5, 11), run(gate * 1.6, 12), run(gate * 1.4, 13)]).code).toBe(1);
+});
+
+test("a timing without its run's calibration counts as not measured", () => {
+  const r = check([run(50, 14, 1, false)]);
+  expect(r.code).toBe(1);
+  expect(r.out).toContain("Tasks tab @4x: not measured");
+});
+
+test("every timing with a gate is scaled by the calibration at its CPU speed", () => {
+  for (const [name, l] of Object.entries(budgets)) if (l.gate !== null) expect({ name, per: l.per }).toEqual({ name, per: l.at[0] === "@4x" ? "@4x" : "@1x" });
 });
 
 test("the soak's limits count only in the nightly run, and the gap to 0.20 is listed", () => {
