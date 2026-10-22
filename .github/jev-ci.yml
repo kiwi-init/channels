@@ -73,9 +73,11 @@ jobs:
   test-unit:
     name: test / unit
     inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/workflows/nightly.yml", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "desktop/package.json", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
-    always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
+    always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts", "scripts/ci-flows.ts", "scripts/ci-shards.ts"]
     description: >-
-      Runs the unit tests with bun test (failing when the run ends before every file ran, which
+      On two runners at once (a matrix of `scripts/ci-tests.ts unit --shard=N/2`, dealt by
+      test/timings.json like cli / macos; each shard saves its own jev-ci pass and the plan counts
+      the job passed only once both have), runs the unit tests with bun test (failing when the run ends before every file ran, which
       scripts/ci-tests.ts checks for every group from the last summary bun prints, without waiting
       on a process a test left holding its output: test/ci-tests.test.ts runs it on throwaway
       projects): every test/*.test.ts except the slow suites in
@@ -354,8 +356,10 @@ jobs:
       Also the daemon's and hooks' reliability (audit #132, bundle H): a stale daemon.lock whose pid now belongs to
       another program freed without killing it, only a kiwi daemon's command line being killed (test/daemon-lock.test.ts);
       hooks retrying an unreachable daemon spawning one per home every 15 s while a lock exists (claimSpawn,
-      test/daemon-lock.test.ts); a key that waited long for approval getting its seat within seconds of the approval
-      (test/daemon-seats.test.ts); a wake command that ignores TERM or leaves a child on its stderr ending at its deadline
+      test/daemon-lock.test.ts); a key that waited for approval getting its seat within seconds of its join writing its
+      cursor, not at its backed-off retry: the retry's fingerprint includes whether the key has a
+      cursor yet, and a changed fingerprint starts the backoff over (test/daemon-seat-approval.test.ts,
+      its daemon's first retry 60 s away so only the cursor can seat it in time); a wake command that ignores TERM or leaves a child on its stderr ending at its deadline
       (runBounded, test/wake-bounded.test.ts); the Rex helpers replacing init.lua in one rename through its dotfiles link,
       keeping its mode (test/terminal-rex.test.ts); and a kiwi sh query run in its own process, stopped after its deadline, with
       randomblob and zeroblob refused (queryIsolated, test/sh-query.test.ts).
@@ -434,7 +438,9 @@ jobs:
       message it was for is still unread, so a busy session's queue doesn't fill with wakes that find nothing unread;
       reading any of them (by cursor, or as a reply marked seen) lets the next through, a replaced session or webhook
       is woken at once, and a message held back by a wake never read gets its wake once that one has been outstanding
-      for wakeOutstandingMs (AgentSession.unreadAt's seqs, src/daemon/wake.ts, test/wake.test.ts).
+      for wakeOutstandingMs (AgentSession.unreadAt's seqs, src/daemon/wake.ts, test/wake.test.ts,
+      test/wake-sessions.test.ts, test/wake-harnesses.test.ts: the daemon's wake tests in three files,
+      each with its own relay and daemon from test/wake-harness.ts, so they run side by side).
       Also test/context-line.test.ts: a seat's context in words (tokensWord), the Stop hook's nudge
       once per crossing of CONTEXT_LINE (250k; back under it resets, unknown keeps the state), naming
       each open task the seat owns and the checkpoint command, and asking the lead for its lead
@@ -545,7 +551,7 @@ jobs:
       (xz in 1 MiB blocks made the app take most of a minute to appear). And
       test/retry-after.test.ts: the relay's 429 carries Retry-After (header and body, on the socket
       too), a refused attempt isn't counted, and a rate-limited send waits it out and goes in, over
-      the socket without an extra try over HTTP; test/dev-rate-limits.test.ts: the Bun relay's --dev-no-rate-limits (refused off localhost, never read from the environment or a policy alone) lets a member on this machine post and read past the per-minute caps, over HTTP and the socket, while a request or socket upgrade a proxy passed on keeps them, and neither it nor --dev-sign-in starts with --trust-proxy or KIWI_TRUST_PROXY; web lib/github-queue.test.ts: the owner's GitHub
+      the socket without an extra try over HTTP; test/dev-rate-limits.test.ts: the Bun relay's --dev-no-rate-limits (refused off localhost, never read from the environment or a policy alone) lets a member on this machine post and read past the per-minute caps, over HTTP and the socket, while a request or socket upgrade a proxy passed on keeps them, and neither it nor --dev-sign-in starts with --trust-proxy or KIWI_TRUST_PROXY, and the relay refuses any --flag=value it would otherwise ignore; web lib/github-queue.test.ts: the owner's GitHub
       posts keep a rate-limited or unreachable item to try again. And
       test/desktop-daemon-keeper.test.ts: the app checks its daemon every 30s and starts it again
       when it stops answering, retrying a daemon that won't start from 5s up to every 5 minutes, and
@@ -666,7 +672,9 @@ jobs:
       call settles in the transcript first; no seat for the session or a subagent's call asks
       nobody. The transcript watcher finds the newest unanswered matching tool_use and sees its
       tool_result, a new prompt or a new assistant turn. test/permission-session.test.ts: one
-      hook waits per session and a later prompt marks it as overtaken; a lock file still being
+      hook waits per session and a later prompt marks it as overtaken, judged by the Date.now() the
+      mark holds, not its file time (Linux dates files by a coarser clock that can read a few ms
+      earlier); a lock file still being
       written counts as held, a stale one doesn't; letting go leaves another hook's lock and its
       newer-prompt mark alone; the folder shown starts with ~. An answer the fold doesn't have yet
       is read again a bounded number of times and decided only on the fold's copy
@@ -684,9 +692,10 @@ jobs:
     name: test / flows-a
     inputs: ["src/**", "packages/core/**", "test/owner-cli.ts"]
     imports_from: ["test/e2e.test.ts", "test/verbs.test.ts", "test/threads.test.ts", "test/reconnect.test.ts", "test/cache-trim.test.ts", "test/budget-*.test.ts"]
-    always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
+    always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts", "scripts/ci-shards.ts"]
     description: >-
-      Runs slow end-to-end tests (failing when the run ends before every file ran) that start a real local relay (src/relay/bun.ts) and drive the
+      On two runners at once (`scripts/ci-tests.ts flows-a --shard=N/2`, dealt by test/timings.json,
+      a jev-ci pass per shard), runs slow end-to-end tests (failing when the run ends before every file ran) that start a real local relay (src/relay/bun.ts) and drive the
       kiwi CLI and client: e2e (create a channel, join, send and listen through the relay),
       verbs (the agent CLI verbs and their aliases; an agent's task add without --ask, --from or --issue refused with the fix named, and kiwi task listing the board under the person's message each task serves; review rounds: an agent's task review on a task
       with no reviewer is refused with how to name one, and its reviewer handing the review on with
@@ -706,9 +715,10 @@ jobs:
     name: test / flows-b
     inputs: ["src/**", "packages/core/**", "test/owner-cli.ts"]
     imports_from: ["test/join-seats.test.ts", "test/read-receipts.test.ts", "test/daemon-pair.test.ts", "test/sh-escape.test.ts", "test/reclaim.test.ts", "test/wake-yourself.test.ts", "test/seats.test.ts", "test/multi-seat.test.ts", "test/handoff.test.ts", "test/hooks-once.test.ts", "test/hooks-hung-relay.test.ts", "test/offline-read.test.ts", "test/hooks-reentry.test.ts", "test/hooks-persona.test.ts", "test/mimo-wake-restart.test.ts", "test/held-seat.test.ts"]
-    always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
+    always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts", "scripts/ci-shards.ts"]
     description: >-
-      Runs slow agent-flow tests (failing when the run ends before every file ran) against a real local relay and the kiwi CLI: join-seats
+      On two runners at once (`scripts/ci-tests.ts flows-b --shard=N/2`, dealt by test/timings.json,
+      a jev-ci pass per shard), runs slow agent-flow tests (failing when the run ends before every file ran) against a real local relay and the kiwi CLI: join-seats
       (joining, one seat per agent, Claude Code hooks doing the listening, and a Codex hook run from inside
       a Claude Code session, its CLAUDECODE and CLAUDE_CODE_SESSION_ID inherited, serving no Claude seat
       and leaving that seat's messages unread because the hook names its harness with --harness), read-receipts,
@@ -856,7 +866,9 @@ jobs:
     parts: [perf-runs]
     description: >-
       Three perf-runs jobs, side by side on their own runners, each build the web dashboard and
-      run scripts/perf-scale.ts once without the soak: a local relay and headless Chromium with
+      run scripts/perf-scale.ts --gated once without the soak (only what perf-check gates: no
+      1x tab switches, details toggles, profiles or second reload; the nightly runs it whole): a
+      local relay and headless Chromium with
       10 agents, 100 tasks and 2000 messages (the agents join at once and the seeding sends through each agent's own session, src/agent.ts, on a local relay started with --dev-no-rate-limits, so no per-minute cap slows it), timing the reload to the first screen, the Tasks,
       Agents and Conversation tabs at 4x CPU and typing while the agents post, and upload the
       run as the perf-scale-N artifact, with a CPU calibration (a fixed in-page workload) at 1x
@@ -885,8 +897,10 @@ jobs:
       on. desktop/scripts/size.ts fails if app.asar ships node_modules (dist/ already bundles
       them), if more than the English Chromium locales ship (electronLanguages), or if the
       packaged Linux app is over 375MB on disk or 162MB as a tar.gz. The bundled kiwi is
-      packed by desktop/scripts/pack-cli.ts first (zstd, checked to unpack to the same bytes), and
-      the smoke's daemon runs from the copy the app unpacks. desktop/scripts/smoke.ts starts the packaged app under Xvfb and fails unless its
+      packed by desktop/scripts/pack-cli.ts first (zstd level 19 on every core, checked to unpack to the same bytes), and
+      the smoke's daemon runs from the copy the app unpacks (places of one destination started at
+      once share one write under a unique temp name, so the app's start and an adopt never spawn a
+      binary still being written: ETXTBSY on Linux; test/desktop-place.test.ts in test / unit). desktop/scripts/smoke.ts starts the packaged app under Xvfb and fails unless its
       window renders, the page's scripts land in the V8 code cache (kiwi-app:// registered with
       codeCache, so a launch after the first skips compiling them), its key process
       (utilityProcess.fork of dist/channels.js from app.asar) stays up and the bundled kiwi
@@ -906,7 +920,7 @@ jobs:
   cli-macos:
     name: cli / macos
     inputs: ["src/**", "packages/core/**", "test/**", "site/install", "site/install.sh", "desktop/src/**", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", ".github/workflows/release-build.yml", "package.json", "bun.lock", "bunfig.toml", "web/package.json"]
-    always: ["scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
+    always: ["scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/ci-tests.ts", "scripts/ci-flows.ts", "scripts/ci-shards.ts"]
     question: >-
       Could this change to `file` make the job described in `job` fail on macOS, or fail to
       cross-compile a darwin target, while the same tests and the Linux build pass
@@ -922,11 +936,15 @@ jobs:
         The change behaves the same on macOS as on Linux: a failure it causes would fail the
         Linux jobs too, which catch it, or it can't fail at all.
     description: >-
-      On a macOS runner, does what the release's cli job does: runs the whole bun test suite
-      (every test/*.test.ts and web/src test, the agent flows included) through
-      `scripts/ci-tests.ts all`, with bun test --parallel so each file gets a fresh global as on
-      Linux (one process for every file once let a test's SIGINT end the run early, exit 0,
-      after 128 of 328 files), and fails when the run ends before every file ran. Then compiles the kiwi CLI
+      On three macOS runners at once (a matrix of `scripts/ci-tests.ts all --shard=N/3`, which deals
+      the files out by their times in test/timings.json: the slowest each file has taken in a cli / macos run (from
+      `scripts/ci-tests.ts all --shard=N/3 --update-timings` or the run's log), so the heavy flows
+      that slow each other on one runner land apart; every group also hands bun that file
+      so --parallel starts the slowest files first), does what the release's cli job does: runs the whole bun test suite
+      (every test/*.test.ts and web/src test, the agent flows included) with bun test --parallel so
+      each file gets a fresh global as on Linux (one process for every file once let a test's
+      SIGINT end the run early, exit 0, after 128 of 328 files), and fails when a shard's run ends
+      before every file it was dealt ran. The first shard then compiles the kiwi CLI
       for darwin-arm64, darwin-x64, linux-x64 and linux-arm64 with
       scripts/build-cli.ts, ad-hoc signs the macOS binaries and runs `kiwi --version`. The same
       tests run on Linux in test / unit, test / flows-a and test / flows-b, so this job is for what fails only on macOS: paths (os.tmpdir() is under
@@ -936,8 +954,10 @@ jobs:
       versions of shell tools, process, signal and file-watching differences, and a build
       target that fails to compile. test/desktop-entitlements.test.ts signs stand-in apps with
       codesign here, so release-build.yml's entitlements check runs for real only on macOS. Fails
-      if any test fails on macOS or a target doesn't build. Its jev-ci pass (a cache save) gets
-      one minute, so a hung save can't hold the job.
+      if any test fails on macOS or a target doesn't build. Each shard saves its own jev-ci pass
+      (shard1of3 and so on, given a minute so a hung cache save can't hold it), and the plan
+      counts the job passed on its inputs only once all three have, each from main or this pull
+      request (passMarkers in .github/jev-ci/github.ts, test/jev-ci.test.ts).
 
   release-rehearsal:
     name: release / rehearsal

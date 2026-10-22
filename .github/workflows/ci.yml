@@ -99,15 +99,21 @@ jobs:
     if: fromJSON(needs.plan.outputs.run)['test-unit']
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
-      - run: bun scripts/ci-tests.ts unit
+      - run: bun scripts/ci-tests.ts unit --shard=${{ matrix.shard }}/2
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
+        timeout-minutes: 1
         with:
           job: test-unit
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['test-unit'] }}
+          shard: ${{ matrix.shard }}of2
 
   # The slow suites against a real local relay, split in two so they run side by side (scripts/ci-tests.ts).
   test-flows-a:
@@ -116,15 +122,21 @@ jobs:
     if: fromJSON(needs.plan.outputs.run)['test-flows-a']
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
-      - run: bun scripts/ci-tests.ts flows-a
+      - run: bun scripts/ci-tests.ts flows-a --shard=${{ matrix.shard }}/2
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
+        timeout-minutes: 1
         with:
           job: test-flows-a
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['test-flows-a'] }}
+          shard: ${{ matrix.shard }}of2
 
   test-flows-b:
     name: test / flows-b
@@ -132,15 +144,21 @@ jobs:
     if: fromJSON(needs.plan.outputs.run)['test-flows-b']
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
-      - run: bun scripts/ci-tests.ts flows-b
+      - run: bun scripts/ci-tests.ts flows-b --shard=${{ matrix.shard }}/2
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
+        timeout-minutes: 1
         with:
           job: test-flows-b
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['test-flows-b'] }}
+          shard: ${{ matrix.shard }}of2
 
   # The web dashboard, the CLI binary and the worker, each built and smoke-tested.
   build:
@@ -234,7 +252,7 @@ jobs:
       - name: perf-scale
         env:
           PERF_SOAK_MIN: "0"
-        run: bun scripts/perf-scale.ts --json "$RUNNER_TEMP/perf-${{ matrix.run }}.json"
+        run: bun scripts/perf-scale.ts --gated --json "$RUNNER_TEMP/perf-${{ matrix.run }}.json"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: perf-scale-${{ matrix.run }}
@@ -314,11 +332,16 @@ jobs:
     if: fromJSON(needs.plan.outputs.run)['cli-macos']
     runs-on: macos-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
-      - run: bun scripts/ci-tests.ts all
-      - run: |
+      - run: bun scripts/ci-tests.ts all --shard=${{ matrix.shard }}/3
+      - if: matrix.shard == 1
+        run: |
           mkdir -p dist
           for t in darwin-arm64 darwin-x64 linux-x64 linux-arm64; do
             bun scripts/build-cli.ts --target "bun-$t" --outfile "dist/kiwi-$t"
@@ -331,6 +354,7 @@ jobs:
         with:
           job: cli-macos
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['cli-macos'] }}
+          shard: ${{ matrix.shard }}of3
 
   release-rehearsal:
     name: release / rehearsal

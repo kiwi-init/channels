@@ -4,6 +4,7 @@
 // downgrade: a newer one someone installed stays), and makes sure a shell finds it as plain `kiwi`.
 
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -38,9 +39,19 @@ export async function keepCli(bundled: string, bundledVersion: string): Promise<
   return { path: dest, version: bundledVersion, updated: true };
 }
 
-export async function place(bundled: string, dest: string): Promise<void> {
+const placing = new Map<string, Promise<void>>();
+
+export function place(bundled: string, dest: string): Promise<void> {
+  const busy = placing.get(dest);
+  if (busy) return busy;
+  const done = unpack(bundled, dest).finally(() => placing.delete(dest));
+  placing.set(dest, done);
+  return done;
+}
+
+async function unpack(bundled: string, dest: string): Promise<void> {
   await fs.promises.mkdir(path.dirname(dest), { recursive: true });
-  const tmp = `${dest}.new-${process.pid}`;
+  const tmp = `${dest}.new-${process.pid}-${randomUUID()}`;
   if (bundled.endsWith(".zst")) await pipeline(fs.createReadStream(bundled), zlib.createZstdDecompress(), fs.createWriteStream(tmp));
   else await fs.promises.copyFile(bundled, tmp);
   if (process.platform !== "win32") await fs.promises.chmod(tmp, 0o755);

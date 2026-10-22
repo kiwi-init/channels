@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { Socket } from "bun";
 import type { Channel, PresenceFields, Probe } from "@kiwi/core/client.ts";
 import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity, saveAccess, type Config } from "../config.ts";
+import { readCursor } from "../config/cursors.ts";
 import { saveMachine } from "../machine.ts";
 import { readMachineCert } from "@kiwi/core/person.ts";
 import { VERSION } from "../version.ts";
@@ -57,6 +58,7 @@ export interface DaemonOptions {
   orphanMs?: number;
   wakeOutstandingMs?: number;
   listenerGraceMs?: number;
+  retryFirstMs?: number;
 }
 
 const WAKE_DELAY_MS = 2_000;
@@ -102,11 +104,13 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   const people = new Set<string>();
   const keeper: Waiting = { tell: () => {}, alive: () => !stopped };
 
-  const fingerprintOf = (key: string, alias: string): string => `${key}\u0000${JSON.stringify(loadConfig().channels[alias] ?? null)}`;
+  const fingerprint = (key: string, channel: Config["channels"][string] | null, alias: string, agent: string): string =>
+    `${key}\u0000${JSON.stringify(channel)}\u0000${readCursor(alias, agent) === null ? "" : "joined"}`;
+  const fingerprintOf = (key: string, alias: string, agent: string): string => fingerprint(key, loadConfig().channels[alias] ?? null, alias, agent);
 
   const backoff = (key: string, fp: string): void => {
     const prev = retries.get(key);
-    const delay = prev ? Math.min(prev.delay * 2, RETRY_MAX_MS) : RETRY_FIRST_MS;
+    const delay = prev && prev.fp === fp ? Math.min(prev.delay * 2, RETRY_MAX_MS) : (opts.retryFirstMs ?? RETRY_FIRST_MS);
     retries.set(key, { at: Date.now() + delay, delay, fp });
   };
 
@@ -325,7 +329,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       return;
     }
     closeSeat(seat, `the channel stream ended: ${why(err)}`);
-    backoff(seat.key, fingerprintOf(seat.key, seat.alias));
+    backoff(seat.key, fingerprintOf(seat.key, seat.alias, seat.agent));
   };
 
   const beaconMs = opts.beaconMs ?? 60_000;
@@ -562,7 +566,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         const key = `${c.roomId}/${id.pk}`;
         wanted.add(key);
         if (seats.has(key) || opening.has(key) || people.has(key)) continue;
-        const fp = `${key}\u0000${JSON.stringify(c)}`;
+        const fp = fingerprint(key, c, alias, agent);
         const retry = retries.get(key);
         if (retry && retry.fp === fp && Date.now() < retry.at) continue;
         void seatFor(alias, agent, keeper).then(

@@ -35,10 +35,24 @@ export function trustedRef(event: PullEvent, ref: string | undefined): (cacheRef
 
 export function passMarkers(caches: readonly PassCache[], jobs: readonly string[], trusted: (ref: string) => boolean): Set<string> {
   const passed = new Set<string>();
+  const shards = new Map<string, Set<string>>();
   for (const { key, ref } of caches) {
     if (!trusted(ref)) continue;
     const job = jobs.find((j) => key.startsWith(`${PASS_PREFIX}${j}-`));
-    if (job) passed.add(`${job}:${key.slice(PASS_PREFIX.length + job.length + 1)}`);
+    if (!job) continue;
+    const rest = key.slice(PASS_PREFIX.length + job.length + 1);
+    const shard = /^(.+)-shard(\d+)of(\d+)$/.exec(rest);
+    if (!shard) {
+      passed.add(`${job}:${rest}`);
+      continue;
+    }
+    const [, hash, i, n] = shard;
+    const of = `${job}:${hash}:${n}`;
+    shards.set(of, (shards.get(of) ?? new Set()).add(i!));
+  }
+  for (const [of, done] of shards) {
+    const [job, hash, n] = of.split(":");
+    if (Array.from({ length: Number(n) }, (_, i) => String(i + 1)).every((i) => done.has(i))) passed.add(`${job}:${hash}`);
   }
   return passed;
 }
