@@ -1,3 +1,4 @@
+import AudioToolbox
 import PhotosUI
 import SwiftUI
 import UIKit
@@ -338,6 +339,15 @@ struct Dock: View {
     private func send() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard canSend else { return }
+        if attached.isEmpty && !(replyTo == nil && asking != nil) {
+            model.post(spot, text, re: replyTo?.seq)
+            draft = ""
+            replyTo = nil
+            error = nil
+            Haptic.tap()
+            AudioServicesPlaySystemSound(1004)
+            return
+        }
         sending = true
         error = nil
         Haptic.tap()

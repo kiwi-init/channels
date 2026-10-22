@@ -8,12 +8,13 @@ struct Line: Identifiable {
         case bubble(MessageView, first: Bool, last: Bool)
         case stub(PlaceView)
         case stubs([PlaceView])
+        case pending(Pending)
     }
 
     let id: String
     let kind: Kind
 
-    static func build(_ messages: [MessageView], stubs: [PlaceView] = []) -> [Line] {
+    static func build(_ messages: [MessageView], stubs: [PlaceView] = [], pending: [Pending] = [], sentAs: [Int: UUID] = [:]) -> [Line] {
         var out: [Line] = []
         var prev: MessageView?
         var lastAt: MessageView?
@@ -41,10 +42,12 @@ struct Line: Identifiable {
             if !first, let lastLine = out.last, case .bubble(let p, let pFirst, _) = lastLine.kind {
                 out[out.count - 1] = Line(id: lastLine.id, kind: .bubble(p, first: pFirst, last: false))
             }
-            out.append(Line(id: "b\(m.seq)", kind: .bubble(m, first: first, last: true)))
+            out.append(Line(id: sentAs[m.seq].map { "p\($0)" } ?? "b\(m.seq)", kind: .bubble(m, first: first, last: true)))
             prev = m
         }
         out += waiting.map { Line(id: "s\($0.key)", kind: .stub($0)) }
+        let shown = Set(messages.map(\.seq))
+        out += pending.filter { item in item.seq.map { !shown.contains($0) } ?? true }.map { Line(id: "p\($0.id)", kind: .pending($0)) }
         return folded(out)
     }
 
@@ -84,6 +87,7 @@ struct Conversation: View {
     @Binding var follow: Follow
     var typing: FocusState<Bool>.Binding
     var thread: ((String) -> Void)?
+    @Environment(AppModel.self) private var model
     @State private var reveal: CGFloat = 0
 
     private static let revealMax: CGFloat = 62
@@ -109,7 +113,7 @@ struct Conversation: View {
                 if room.whole || (room.messages.isEmpty && room.connection == .live) {
                     Intro(room: room)
                 }
-                ForEach(Line.build(room.messages, stubs: stubs)) { line in
+                ForEach(Line.build(room.messages, stubs: stubs, pending: model.pending["\(room.code)|\(room.place)"] ?? [], sentAs: model.sentAs)) { line in
                     LineView(line: line, room: room, reveal: reveal, solo: solo) { m in
                         replyTo = m
                         typing.wrappedValue = true
@@ -146,6 +150,10 @@ struct Conversation: View {
         } action: { _, near in
             follow.atBottom = near
             if near { follow.unseen = 0 }
+        }
+        .onChange(of: model.pending["\(room.code)|\(room.place)"]?.count ?? 0) { old, now in
+            guard now > old else { return }
+            withAnimation(Motion.sent) { position.scrollTo(edge: .bottom) }
         }
         .onChange(of: room.messages.last?.seq) { old, _ in
             guard old != nil, let last = room.messages.last else { return }
@@ -239,6 +247,8 @@ struct LineView: View {
             ThreadStub(place: place, room: room) { open(place.key) }
         case .stubs(let places):
             StubGroup(places: places, room: room, open: open)
+        case .pending(let item):
+            PendingBubble(item: item, spot: Spot(code: room.code, place: room.place))
         case .time(let date):
             (Text(When.dayWord(date)).fontWeight(.semibold) + Text(" \(When.clock(date))"))
                 .type(.meta)
@@ -323,6 +333,50 @@ struct ThreadStub: View {
             Spacer(minLength: 40)
         }
         .padding(.top, 10)
+    }
+}
+
+struct PendingBubble: View {
+    let item: Pending
+    let spot: Spot
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Spacer(minLength: 56)
+            if item.failed {
+                Menu {
+                    Button {
+                        model.retry(item, spot)
+                    } label: {
+                        Label("Try Again", systemImage: "arrow.clockwise")
+                    }
+                    Button(role: .destructive) {
+                        withAnimation(Motion.ease) { model.drop(item, spot) }
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "exclamationmark.circle.fill").font(.system(size: 22)).foregroundStyle(Tone.alert)
+                }
+                .accessibilityLabel("Not delivered")
+            }
+            VStack(alignment: .trailing, spacing: 3) {
+                Prose(text: item.body, ink: .white, link: .white, code: .white.opacity(0.18), underline: true)
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 8)
+                    .background {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 19, style: .continuous).fill(Tone.bubbleMine)
+                            Tail().fill(Tone.bubbleMine)
+                        }
+                    }
+                if item.failed {
+                    Text("Not Delivered").type(.stamp, .semibold).foregroundStyle(Tone.alert)
+                }
+            }
+        }
+        .padding(.top, 2)
     }
 }
 

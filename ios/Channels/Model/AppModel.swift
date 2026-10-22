@@ -49,6 +49,8 @@ final class AppModel {
     var hidden: [String: Int] = UserDefaults.standard.dictionary(forKey: "hidden") as? [String: Int] ?? [:]
     var drafts: [String: Draft] = [:]
     var feeds: [String: Feed] = [:]
+    var pending: [String: [Pending]] = [:]
+    var sentAs: [Int: UUID] = [:]
     var visited: [Spot] = []
 
     @ObservationIgnored let engine = Engine()
@@ -135,6 +137,7 @@ final class AppModel {
                 }
             }
             feeds["\(room.code)|\(room.place)"] = Feed(messages: room.messages, whole: room.whole)
+            defer { settle(Spot(code: room.code, place: room.place)) }
             let grew = (room.messages.last?.seq ?? 0) > (rooms[room.code]?.messages.last?.seq ?? Int.max)
             if grew {
                 withAnimation(Motion.sent) { rooms[room.code] = room }
@@ -170,12 +173,14 @@ final class AppModel {
         try? await engine.ask(["op": "linkCancel"])
     }
 
-    func send(_ spot: Spot, _ body: String, re: Int?, pictures: [Outgoing] = []) async throws {
+    @discardableResult
+    func send(_ spot: Spot, _ body: String, re: Int?, pictures: [Outgoing] = []) async throws -> Int {
         var ask: [String: Any] = [
             "op": "send", "code": spot.code, "place": spot.place, "body": body, "imgs": pictures.map { ["name": $0.name, "mime": $0.mime, "data": $0.data] },
         ]
         ask["re"] = re ?? NSNull()
-        try await engine.ask(ask)
+        let data = try await engine.ask(ask)
+        return (try? JSONDecoder().decode(Int.self, from: data)) ?? 0
     }
 
     func image(_ code: String, seq: Int, index: Int) async -> UIImage? {

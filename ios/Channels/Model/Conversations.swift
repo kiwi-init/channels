@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 struct Spot: Hashable, Codable, Sendable {
     let code: String
@@ -33,6 +34,15 @@ enum Filter: String, CaseIterable, Sendable {
         case .along: "eyeglasses"
         }
     }
+}
+
+struct Pending: Identifiable, Equatable {
+    let id: UUID
+    let body: String
+    let re: Int?
+    let at: Date
+    var seq: Int?
+    var failed = false
 }
 
 struct Feed {
@@ -214,5 +224,41 @@ extension AppModel {
 
     func open(_ spot: Spot) async {
         await open(spot.code, place: spot.place)
+    }
+
+    func post(_ spot: Spot, _ body: String, re: Int?) {
+        let item = Pending(id: UUID(), body: body, re: re, at: .now)
+        pending[spot.id, default: []].append(item)
+        deliver(item, spot)
+    }
+
+    func retry(_ item: Pending, _ spot: Spot) {
+        guard let at = pending[spot.id]?.firstIndex(where: { $0.id == item.id }) else { return }
+        pending[spot.id]?[at].failed = false
+        deliver(item, spot)
+    }
+
+    func drop(_ item: Pending, _ spot: Spot) {
+        pending[spot.id]?.removeAll { $0.id == item.id }
+    }
+
+    private func deliver(_ item: Pending, _ spot: Spot) {
+        Task {
+            do {
+                let seq = try await send(spot, item.body, re: item.re)
+                sentAs[seq] = item.id
+                if let at = pending[spot.id]?.firstIndex(where: { $0.id == item.id }) { pending[spot.id]?[at].seq = seq }
+                settle(spot)
+            } catch {
+                if let at = pending[spot.id]?.firstIndex(where: { $0.id == item.id }) { pending[spot.id]?[at].failed = true }
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
+            }
+        }
+    }
+
+    func settle(_ spot: Spot) {
+        guard let list = pending[spot.id], !list.isEmpty, let room = rooms[spot.code], room.place == spot.place else { return }
+        let have = Set(room.messages.map(\.seq))
+        pending[spot.id] = list.filter { item in item.seq.map { !have.contains($0) } ?? true }
     }
 }

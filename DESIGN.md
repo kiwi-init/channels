@@ -441,7 +441,10 @@ what follows is what ships.
   double-tap or long-press for tapbacks, tap a picture to zoom. The top fades the content under
   the header; the bottom never blurs the last bubble.
 - **Composer.** A glass `+` and the glass field (send inside it), nothing else; `@` chips
-  while you type a name. A draft (text and photos) stays with its conversation, in memory
+  while you type a name. Sending is instant: the field clears, your bubble is drawn at once
+  at full colour with Messages' sent sound (silent mode mutes it), and the delivered message
+  takes its place without a flicker. No "Sending…" or "Delivered"; only a failure says "Not
+  Delivered", with a red "!" whose menu offers Try Again and Delete. A draft (text and photos) stays with its conversation, in memory
   only. A send names its conversation, so a quick switch can't misdirect it.
 - **Details** (from the pill): the channel's icon, name and "5 people · 2 working", tiles for
   Message, Pin and Channels, Needs you (answer in place), Conversations, Between others,
