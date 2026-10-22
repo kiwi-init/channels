@@ -2,7 +2,12 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { chromium, type CDPSession, type Page } from "playwright-core";
+import * as Effect from "effect/Effect";
+import { chromium, type CDPSession, type Locator, type Page } from "playwright-core";
+import { RelayError } from "@kiwi/core/client.ts";
+import { chooseThread } from "@kiwi/core/state.ts";
+import { AgentSession, oneLook, runAgent } from "../src/agent.ts";
+import { loadConfig } from "../src/config.ts";
 import { daemonSock } from "../src/daemon/protocol.ts";
 import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
@@ -33,6 +38,7 @@ for (const opener of ["open", "xdg-open"]) {
   writeFileSync(join(cli, "bin", opener), "#!/bin/sh\nexit 0\n");
   chmodSync(join(cli, "bin", opener), 0o755);
 }
+process.env.KIWI_HOME = join(cli, "home");
 const running: ChildProcess[] = [];
 function kiwi(argv: string[]): Promise<string> {
   const env = { KIWI_MODEL: "claude-sonnet-5-5", ...process.env, KIWI_HOME: join(cli, "home"), CLAUDE_CONFIG_DIR: join(cli, "no-claude"), PATH: `${join(cli, "bin")}:${process.env.PATH}` };
@@ -59,6 +65,29 @@ async function as(agent: string, argv: string[]): Promise<string> {
     }
   }
 }
+async function patiently<A>(attempt: () => Promise<A>): Promise<A> {
+  for (;;) {
+    try {
+      return await attempt();
+    } catch (e) {
+      if (!(e instanceof RelayError && e.status === 429)) throw e;
+      await new Promise((r) => setTimeout(r, (e.retryAfter ?? 1) * 1000));
+    }
+  }
+}
+const say = (s: AgentSession, body: string, task?: number) =>
+  patiently(() =>
+    runAgent(
+      oneLook(
+        Effect.gen(function* () {
+          const { state } = yield* s.state();
+          const chosen = chooseThread(state, s.me, task === undefined ? {} : { task });
+          if (typeof chosen === "string") return yield* Effect.fail(new Error(chosen));
+          return yield* s.send(body, { kind: "msg", ...(chosen.to ? { to: chosen.to } : {}), ...(chosen.task !== undefined ? { task: chosen.task } : {}) });
+        }),
+      ),
+    ),
+  );
 
 const median = (xs: number[]) => {
   const s = [...xs].sort((a, b) => a - b);
@@ -238,28 +267,33 @@ try {
   const needs = page.getByRole("region", { name: "Needs you" });
   const letIn = needs.getByRole("button", { name: "It matches: let in" });
   const showCode = needs.getByRole("button", { name: "Show code" });
-  for (const agent of agents) {
-    const joining = kiwi(["join", code, "scale", "--as", agent, "--model", "claude-opus-5-5", "--relay", BASE]);
-    let joined = false;
-    void joining.then(() => (joined = true));
-    const deadline = Date.now() + 60000;
-    while (!joined && Date.now() < deadline) {
-      if (await showCode.isVisible().catch(() => false)) await showCode.click().catch(() => undefined);
-      if (await letIn.isVisible().catch(() => false)) await letIn.click().catch(() => undefined);
-      await page.waitForTimeout(300);
-    }
-    await joining;
-    const offer = page.getByRole("button", { name: "Save channels to a passkey" });
-    if (await offer.isVisible().catch(() => false)) {
-      await offer.click();
-      const saving = page.getByRole("dialog").filter({ hasText: "Save your recovery code" });
-      await saving.waitFor();
-      await saving.getByRole("checkbox").check();
-      await saving.getByRole("button", { name: "Done" }).click();
-      await saving.waitFor({ state: "hidden" });
-    }
+  const tap = async (button: Locator) => {
+    const first = button.first();
+    if (await first.isVisible().catch(() => false)) await first.click().catch(() => undefined);
+  };
+  const offer = page.getByRole("button", { name: "Save channels to a passkey" });
+  const saveOffer = async () => {
+    if (!(await offer.isVisible().catch(() => false))) return;
+    await offer.click();
+    const saving = page.getByRole("dialog").filter({ hasText: "Save your recovery code" });
+    await saving.waitFor();
+    await saving.getByRole("checkbox").check();
+    await saving.getByRole("button", { name: "Done" }).click();
+    await saving.waitFor({ state: "hidden" });
+  };
+  let joined = 0;
+  const joining = Promise.all(agents.map((agent) => kiwi(["join", code, "scale", "--as", agent, "--model", "claude-opus-5-5", "--relay", BASE]).then(() => void joined++)));
+  const deadline = Date.now() + 120000;
+  while (joined < AGENTS && Date.now() < deadline) {
+    await tap(showCode);
+    await tap(letIn);
+    await saveOffer();
+    await page.waitForTimeout(100);
   }
+  await joining;
+  await saveOffer();
   log(`${AGENTS} agents in`);
+  const seats = await Promise.all(agents.map((agent) => AgentSession.open("scale", loadConfig().channels["scale"]!, agent)));
   await drain(page);
 
   const heap: { atMin: number; phase: string; heapMB: number; nodes: number; listeners: number; documents: number }[] = [];
@@ -275,15 +309,14 @@ try {
   const perSender = Math.ceil(MESSAGES / AGENTS);
   const early = process.env.PERF_TASKS_FIRST ? 0 : Math.floor(perSender * 0.7);
   let sent = 0;
-  const tasks: string[] = [];
+  const tasks: number[] = [];
   const post = (from: number, to: number) =>
     Promise.all(
-      agents.map(async (agent, a) => {
+      seats.map(async (s, a) => {
         for (let i = from; i < to; i++) {
           const n = a * perSender + i;
           if (n >= MESSAGES) return;
-          const dest = n % 4 === 0 && tasks.length ? ["--to", tasks[n % tasks.length]!] : [];
-          await as(agent, ["send", ...dest, `M${n}: ${TEXTS[n % TEXTS.length]}`]);
+          await say(s, `M${n}: ${TEXTS[n % TEXTS.length]}`, n % 4 === 0 && tasks.length ? tasks[n % tasks.length] : undefined);
           sent++;
           if (sent % 500 === 0) await mark(`${sent} messages`);
         }
@@ -294,31 +327,22 @@ try {
   await tab(page, "Conversation", "");
   await page.getByRole("textbox", { name: "Message" }).fill(asked);
   await page.keyboard.press("Enter");
-  let ask = "";
+  let ask = 0;
   while (!ask) {
-    const said = (await as(agents[0]!, ["log", "-n", "50", "--json"])).split("\n").flatMap((line) => (line.trim() ? [JSON.parse(line) as { seq: number; body?: string }] : []));
-    ask = String(said.find((m) => m.body === asked)?.seq ?? "");
+    const { messages } = await patiently(() => runAgent(seats[0]!.state()));
+    ask = messages.find((m) => m.body === asked)?.seq ?? 0;
     if (!ask) await page.waitForTimeout(300);
   }
   const perAgent = Math.ceil(TASKS / AGENTS);
   await Promise.all(
-    agents.map(async (agent, a) => {
+    seats.map(async (s, a) => {
       for (let i = 0; i < perAgent && a * perAgent + i < TASKS; i++) {
         const n = a * perAgent + i;
-        const out = await as(agent, [
-          "task",
-          "add",
-          `Task ${n}: ${["speed up the switch", "fix the relay retry", "polish the sidebar", "write the stable criteria"][n % 4]} (${agent})`,
-          "--owner",
-          agent,
-          "--ask",
-          ask,
-        ]);
-        const id = out.match(/\bT\d+\b/)?.[0];
-        if (!id) continue;
+        const title = `Task ${n}: ${["speed up the switch", "fix the relay retry", "polish the sidebar", "write the stable criteria"][n % 4]} (${s.me})`;
+        const id = await patiently(() => runAgent(s.taskAdd(title, { owner: s.me, re: ask })));
         tasks.push(id);
-        if (n % 3 === 1) await as(agent, ["task", "start", id]);
-        if (n % 3 === 2) await as(agent, ["task", "done", id]);
+        if (n % 3 === 1) await patiently(() => runAgent(s.taskUpdate(id, { state: "doing" })));
+        if (n % 3 === 2) await patiently(() => runAgent(s.taskUpdate(id, { state: "done" })));
       }
     }),
   );
@@ -438,7 +462,7 @@ try {
     agents.map(async (agent, a) => {
       while (Date.now() < soakEnd) {
         const n = MESSAGES + soakSent++;
-        const to = n % 5 === 0 && tasks.length ? ["--to", tasks[n % tasks.length]!] : [];
+        const to = n % 5 === 0 && tasks.length ? ["--to", `T${tasks[n % tasks.length]!}`] : [];
         await as(agent, ["send", ...to, `S${n}: ${TEXTS[(n + a) % TEXTS.length]}`]);
         await new Promise((r) => setTimeout(r, 4000 + Math.random() * 4000));
       }
