@@ -248,7 +248,6 @@ export function fold(
       issues: new Map(from?.github?.issues?.map((i) => [prKey(i.repo, i.number), i])),
     },
     hold: from?.hold ?? null,
-    voice: from?.voice ?? false,
     githubWrite: from?.githubWrite ?? null,
     branchPrefix: from?.branchPrefix ?? null,
   };
@@ -456,7 +455,6 @@ export function fold(
         issues: [...ctx.github.issues.values()].filter((i) => i.state === "open" || !closedLongAgo(i.at, hw) || taskIssues.has(prKey(i.repo, i.number))),
       },
       hold: ctx.hold,
-      voice: ctx.voice,
       githubWrite: ctx.githubWrite,
       branchPrefix: ctx.branchPrefix,
       scopesByKey: [...scopesByKey],
@@ -537,7 +535,6 @@ export function fold(
     repos: ctx.repos,
     github: ctx.github,
     hold: ctx.hold,
-    voice: ctx.voice,
     githubWrite: ctx.githubWrite,
     branchPrefix: ctx.branchPrefix,
     reactions,

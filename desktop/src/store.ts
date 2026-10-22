@@ -8,7 +8,6 @@ import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts";
 import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, StoreSnapshot } from "./bridge.ts";
 import { chooseStore, normalizeRelay, snapshotOf, writePrivate, keyringState, needsResave, type KeyringState } from "./guard.ts";
 import { tellKeys } from "./keys-process.ts";
-import type { VoiceStore } from "./voice.ts";
 import { logMainError } from "./main-log.ts";
 import { currentWindow } from "./window.ts";
 
@@ -21,7 +20,6 @@ export interface StoreFile {
   signin?: { access: string; refresh: string; exp: number };
   github?: { login: string; id: number; token: string; at: number; relay?: string; clientId?: string };
   migrated?: boolean;
-  voice?: VoiceStore;
   personalities?: Personality[];
 }
 
@@ -66,7 +64,8 @@ export function loadStore(): void {
     if (read?.kind === "unreadable") storeBroken = read.why;
   }
   store.relayUrl = normalizeRelay(store.relayUrl) ?? DEFAULT_RELAY;
-  if (read && needsResave(process.platform, choice?.restore ?? raw, read, keys)) saveStore();
+  const staleVoice = Object.hasOwn(store, "voice") && Reflect.deleteProperty(store, "voice");
+  if (read && (staleVoice || needsResave(process.platform, choice?.restore ?? raw, read, keys))) saveStore();
   if (keys === "plain" && process.platform === "linux") logMainError(new Error(`no keyring (safeStorage backend ${backend ?? "none"}): the keys in ${storePath()} are kept without encryption`));
 }
 

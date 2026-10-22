@@ -38,7 +38,6 @@ const board = (tasks: Task[]): ChannelState =>
     repos: [],
     github: { prs: new Map(), checks: new Map(), issues: new Map() },
     hold: null,
-    voice: false,
     githubWrite: null,
     branchPrefix: null,
     reactions: new Map(),

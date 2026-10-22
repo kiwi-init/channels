@@ -14,4 +14,3 @@ desktop/release/
 .env.*
 *.sqlite
 !.env.example
-.dictation-files/

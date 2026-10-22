@@ -199,16 +199,6 @@ export interface PendingItem {
   body: unknown;
 }
 
-export interface VoiceView {
-  configured: boolean;
-  consent: Record<string, boolean>;
-}
-
-export interface VoiceAuth {
-  token: string;
-  expiresAt: number;
-}
-
 /** Everything the renderer needs at load: one synchronous snapshot (see main). */
 export interface StoreSnapshot {
   relayUrl: string;
@@ -216,7 +206,6 @@ export interface StoreSnapshot {
   channels: ChannelView[];
   computers: ComputerView[];
   pending: PendingItem[];
-  voice: VoiceView;
   personalities: Personality[];
 }
 
@@ -322,9 +311,6 @@ export interface KiwiBridge {
   /** A link came in while the app runs (it waits for getDeepLink too, so it's opened once). */
   onDeepLink(cb: (url: string) => void): () => void;
   onTextStep(cb: (step: TextStep) => void): () => void;
-  setVoiceKey(key: string): Promise<void>;
-  setVoiceConsent(roomId: string, on: boolean): Promise<void>;
-  voiceToken(roomId: string): Promise<VoiceAuth>;
   setPersonalities(list: Personality[]): Promise<void>;
   seatPlaces(): Promise<PlacedSeat[]>;
   showSeat(seat: PlacedSeat): Promise<ShowResult>;
