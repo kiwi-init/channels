@@ -9,7 +9,7 @@ import { relayUrl } from "@/lib/relay"
 import { Icon } from "../icon"
 import { IconButton, Tabs, TextField, toast } from "../kit"
 import { PersonalityPicker } from "../personality-picker"
-import { defaultScopes, saveDefaultScopes, ScopePicker } from "../scopes"
+import { AddsAgentsPicker, defaultAddsAgents, defaultScopes, saveDefaultAddsAgents, saveDefaultScopes, ScopePicker } from "../scopes"
 import { useControls } from "./context"
 
 function CopyBox({ text, label, done }: { text: string; label: string; done: string }) {
@@ -37,6 +37,7 @@ export function Invite() {
   const [nick, setNick] = useState("")
   const [rules, setRules] = useState("")
   const [newScopes, setNewScopes] = useState<Scope[]>(() => (p.roomId ? defaultScopes(p.roomId) : [...SCOPES]))
+  const [addsAgents, setAddsAgents] = useState(() => (p.roomId ? defaultAddsAgents(p.roomId) : false))
   const [joinsAs, setJoinsAs] = useState<Persona | null>(null)
   const [signed, setSigned] = useState<{ name: string; token: string } | null>(null)
   const onPin = p.onPin
@@ -101,6 +102,11 @@ export function Invite() {
           New members can <span className="font-normal text-ink-3">· you confirm it when you approve each one</span>
         </p>
         <ScopePicker value={newScopes} onChange={(s) => (setNewScopes(s), p.roomId && saveDefaultScopes(p.roomId, s))} />
+        {who === "person" && (
+          <div className="mt-3">
+            <AddsAgentsPicker value={addsAgents} onChange={(on) => (setAddsAgents(on), p.roomId && saveDefaultAddsAgents(p.roomId, on))} />
+          </div>
+        )}
       </div>
     </div>
   )

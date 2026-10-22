@@ -81,6 +81,7 @@ export const CHANNEL_CALLS = [
   "updateScopes",
   "updatePersona",
   "updateNickname",
+  "updateAddsAgents",
   "reconcilePosting",
   "rotateIfDue",
   "snapshotIfDue",

@@ -42,6 +42,7 @@ export interface MemberInfo {
    * client recognise that person's computers later.
    */
   person?: string;
+  addsAgents?: boolean;
   /**
    * On an agent let in with a computer claim: the computer it runs on, so the app can list and
    * remove a computer's agents.
@@ -186,6 +187,7 @@ export async function makeRecord(owner: Identity, room: string, m: MemberInfo & 
     ...(m.display ? { display: m.display } : {}),
     ...(m.sponsor ? { sponsor: m.sponsor } : {}),
     ...(m.person ? { person: m.person } : {}),
+    ...(!m.owner && m.kind === "human" && m.addsAgents ? { addsAgents: true } : {}),
     ...(m.from ? { from: { pk: m.from.pk, label: m.from.label } } : {}),
     ...(m.color && (m.kind === "human" || m.owner) ? { color: m.color } : {}),
     ...(!m.owner && wireScopes(m.scopes) ? { scopes: wireScopes(m.scopes)! } : {}),
@@ -226,6 +228,7 @@ export async function readRecord(key: string, sealed: string, room: string, pk: 
     const runs = owner || kind === "human" || rec.pk !== ownerPk ? undefined : readRuns((rec as { runs?: unknown }).runs);
     const persona = owner || kind === "human" || rec.pk !== ownerPk ? undefined : (cleanPersona((rec as { persona?: unknown }).persona) ?? undefined);
     const person = typeof rec.person === "string" && rec.person.length <= 64 ? rec.person : undefined;
+    const addsAgents = !owner && kind === "human" && rec.pk === ownerPk && (rec as { addsAgents?: unknown }).addsAgents === true;
     const from = readFrom((rec as { from?: unknown }).from);
     return {
       signer: rec.pk,
@@ -240,6 +243,7 @@ export async function readRecord(key: string, sealed: string, room: string, pk: 
         ...(typeof rec.display === "string" && inlineText(rec.display, 80) ? { display: inlineText(rec.display, 80) } : {}),
         sponsor: rec.sponsor,
         person,
+        ...(addsAgents ? { addsAgents } : {}),
         ...(from ? { from } : {}),
         ...(isColor(rec.color) ? { color: rec.color } : {}),
         ...(scopes ? { scopes } : {}),
@@ -356,10 +360,11 @@ export interface JoinRequest extends MemberInfo {
   /**
    * The computer this agent runs on, when its claim (its person's cert for it, and its signature
    * over this channel and this agent's key) checks out. `person` is the person key that certified
-   * it, `personName` the name on that cert, and `own` whether that person key is the owner's own
-   * (which the owner's client passes in, since only the app holds it).
+   * it, `personName` the name on that cert, `own` whether that person key is the owner's own
+   * (which the owner's client passes in, since only the app holds it), and `joinsOnItsOwn` whether
+   * it's let in without a tap: the owner's own, or a person's whose record says they add agents.
    */
-  computer?: { pk: string; label: string; person: string; personName: string; own: boolean };
+  computer?: { pk: string; label: string; person: string; personName: string; own: boolean; joinsOnItsOwn: boolean };
   /**
    * A person asking to join themself: their verified person key (from a valid PersonClaim over this
    * channel and this member key). Approving signs it into their member record.

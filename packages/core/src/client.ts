@@ -326,6 +326,10 @@ export class Channel {
     return run(this.fx.updateNickname(m, nickname));
   }
 
+  updateAddsAgents(m: Member, on: boolean): Promise<void> {
+    return run(this.fx.updateAddsAgents(m, on));
+  }
+
   /**
    * Owner: make each member's record and the relay's "can post" bit match the log. A scope.set lands
    * first and the record (with the bit) follows in a second call; if that one failed, or the bit was

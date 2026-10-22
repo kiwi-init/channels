@@ -59,6 +59,26 @@ describe("tendOwned", () => {
     expect(pinged).toEqual(["2 of your agents joined", "ada asks to join"])
   })
 
+  test("an agent from a member's computer is announced as theirs", async () => {
+    pinged.length = 0
+    await tendOwned("pk", "chan", api({ autoApprove: async () => [{ name: "scout", sponsor: { user: "bob-pk", name: "Bob" } }] }), ping, new Set())
+    expect(pinged).toEqual(["scout joined from Bob’s computer"])
+    pinged.length = 0
+    await tendOwned(
+      "pk",
+      "chan",
+      api({
+        autoApprove: async () => [
+          { name: "scout", sponsor: { user: "bob-pk", name: "Bob" } },
+          { name: "dev", sponsor: { user: "pk", name: "Me" } },
+        ],
+      }),
+      ping,
+      new Set()
+    )
+    expect(pinged).toEqual(["2 agents joined"])
+  })
+
   test("requests throwing still keeps the joined note", async () => {
     pinged.length = 0
     await tendOwned(

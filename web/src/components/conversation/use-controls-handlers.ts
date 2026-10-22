@@ -11,6 +11,7 @@ type Handlers = Pick<
   | "onPersona"
   | "onPin"
   | "onNickname"
+  | "onAddsAgents"
   | "onDeny"
   | "onCheck"
   | "onRemove"
@@ -46,8 +47,8 @@ export function useControlsHandlers({
     : undefined
 
   return {
-    onApprove: async (r, scopes, persona) => {
-      const as = persona ? { persona } : wireScopes(scopes) ? { scopes } : undefined
+    onApprove: async (r, scopes, persona, addsAgents) => {
+      const as = persona ? { persona } : { ...(wireScopes(scopes) ? { scopes } : {}), ...(r.kind === "human" && addsAgents ? { addsAgents } : {}) }
       try {
         await ch.approve(r, as, { person: secrets().person?.pk })
       } catch (err) {
@@ -75,6 +76,10 @@ export function useControlsHandlers({
     },
     onNickname: async (m, nickname) => {
       await ch.updateNickname(m, nickname)
+      await refreshRoster()
+    },
+    onAddsAgents: async (m, on) => {
+      await ch.updateAddsAgents(m, on)
       await refreshRoster()
     },
     onDeny: async (r) => {
