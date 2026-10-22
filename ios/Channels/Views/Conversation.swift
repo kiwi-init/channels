@@ -6,16 +6,25 @@ struct Line: Identifiable {
         case time(Date)
         case event(MessageView)
         case bubble(MessageView, first: Bool, last: Bool)
+        case stub(PlaceView)
+        case stubs([PlaceView])
     }
 
     let id: String
     let kind: Kind
 
-    static func build(_ messages: [MessageView]) -> [Line] {
+    static func build(_ messages: [MessageView], stubs: [PlaceView] = []) -> [Line] {
         var out: [Line] = []
         var prev: MessageView?
         var lastAt: MessageView?
-        for m in messages {
+        var waiting = stubs.sorted { $0.lastSeq < $1.lastSeq }[...]
+        let answers = Set(messages.compactMap { m in m.chosen.map { "\($0.by)|\($0.choice)" } })
+        for m in messages where !m.choices.isEmpty || !answers.contains("\(m.from)|\(m.body)") {
+            while let stub = waiting.first, stub.lastSeq < m.seq {
+                out.append(Line(id: "s\(stub.key)", kind: .stub(stub)))
+                waiting.removeFirst()
+                prev = nil
+            }
             let gap = lastAt.map { m.at - $0.at } ?? .infinity
             let newDay = lastAt.map { !Calendar.current.isDate($0.date, inSameDayAs: m.date) } ?? true
             lastAt = m
@@ -35,6 +44,30 @@ struct Line: Identifiable {
             out.append(Line(id: "b\(m.seq)", kind: .bubble(m, first: first, last: true)))
             prev = m
         }
+        out += waiting.map { Line(id: "s\($0.key)", kind: .stub($0)) }
+        return folded(out)
+    }
+
+    private static func folded(_ lines: [Line]) -> [Line] {
+        var out: [Line] = []
+        var run: [PlaceView] = []
+        func flush() {
+            if run.count >= 3 {
+                out.append(Line(id: "g\(run[0].key)", kind: .stubs(run)))
+            } else {
+                out += run.map { Line(id: "s\($0.key)", kind: .stub($0)) }
+            }
+            run = []
+        }
+        for line in lines {
+            if case .stub(let place) = line.kind {
+                run.append(place)
+            } else {
+                flush()
+                out.append(line)
+            }
+        }
+        flush()
         return out
     }
 }
@@ -50,9 +83,15 @@ struct Conversation: View {
     @Binding var position: ScrollPosition
     @Binding var follow: Follow
     var typing: FocusState<Bool>.Binding
+    var thread: ((String) -> Void)?
     @State private var reveal: CGFloat = 0
 
     private static let revealMax: CGFloat = 62
+
+    private var stubs: [PlaceView] {
+        guard room.place == "main", thread != nil, let floor = room.messages.first?.seq else { return [] }
+        return room.places.filter { $0.kind == "task" && $0.lastSeq >= floor }
+    }
 
     private var solo: Bool {
         room.placeView(room.place).map { $0.kind == "dm" && $0.withMe } ?? false
@@ -70,12 +109,14 @@ struct Conversation: View {
                 if room.whole || (room.messages.isEmpty && room.connection == .live) {
                     Intro(room: room)
                 }
-                ForEach(Line.build(room.messages)) { line in
+                ForEach(Line.build(room.messages, stubs: stubs)) { line in
                     LineView(line: line, room: room, reveal: reveal, solo: solo) { m in
                         replyTo = m
                         typing.wrappedValue = true
                     } jump: { seq in
                         withAnimation(Motion.ease) { position.scrollTo(id: "b\(seq)", anchor: .center) }
+                    } open: { key in
+                        thread?(key)
                     }
                     .id(line.id)
                     .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
@@ -190,9 +231,14 @@ struct LineView: View {
     let solo: Bool
     let reply: (MessageView) -> Void
     let jump: (Int) -> Void
+    let open: (String) -> Void
 
     var body: some View {
         switch line.kind {
+        case .stub(let place):
+            ThreadStub(place: place, room: room) { open(place.key) }
+        case .stubs(let places):
+            StubGroup(places: places, room: room, open: open)
         case .time(let date):
             (Text(When.dayWord(date)).fontWeight(.semibold) + Text(" \(When.clock(date))"))
                 .type(.meta)
@@ -211,6 +257,106 @@ struct LineView: View {
                 .padding(.vertical, 4)
         case .bubble(let m, let first, let last):
             BubbleRow(message: m, first: first, last: last, room: room, reveal: reveal, solo: solo, reply: reply, jump: jump)
+        }
+    }
+}
+
+struct ThreadStub: View {
+    let place: PlaceView
+    let room: RoomView
+    let open: () -> Void
+    @Environment(AppModel.self) private var model
+
+    private var task: TaskView? { place.task.flatMap { id in room.tasks.first { $0.id == id } } }
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            Group {
+                if let from = place.last?.from ?? task?.owner {
+                    Face(name: from, member: room.member(from), size: 30)
+                } else {
+                    Color.clear
+                }
+            }
+            .frame(width: 30, height: 30)
+            Button(action: open) {
+                VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            Text(place.task.map(taskLabel) ?? place.title).font(.mono(.meta)).fontWeight(.semibold).foregroundStyle(Tone.ink2)
+                            if let task {
+                                Text(stateWords(task.state))
+                                    .type(.stamp, .semibold)
+                                    .foregroundStyle(stateColor(task.state))
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 2)
+                                    .background(stateColor(task.state).opacity(0.14), in: Capsule())
+                            }
+                        }
+                        Text(task?.title ?? place.title).type(.ui, .semibold).foregroundStyle(Tone.ink).lineLimit(2).multilineTextAlignment(.leading)
+                        if let last = place.last {
+                            Text("\(last.mine ? "You" : room.display(last.from)): \(last.body.replacingOccurrences(of: "\n", with: " "))")
+                                .type(.meta)
+                                .foregroundStyle(Tone.ink3)
+                                .lineLimit(1)
+                        } else if let owner = task?.owner {
+                            Text("Owner \(room.display(owner))").type(.meta).foregroundStyle(Tone.ink3)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .frame(maxWidth: 280, alignment: .leading)
+                    .overlay(RoundedRectangle(cornerRadius: 17, style: .continuous).strokeBorder(Tone.edgeStrong, lineWidth: 1))
+                    HStack(spacing: 5) {
+                        Text("Thread").type(.meta, .semibold).foregroundStyle(Tone.accent)
+                        if model.fresh(room, place.key) {
+                            Dot(color: Tone.accent, size: 7)
+                            Text("new").type(.meta).foregroundStyle(Tone.accent)
+                        }
+                    }
+                    .padding(.leading, 12)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(place.task.map(taskLabel) ?? "") thread, \(task?.title ?? "")")
+            Spacer(minLength: 40)
+        }
+        .padding(.top, 10)
+    }
+}
+
+struct StubGroup: View {
+    let places: [PlaceView]
+    let room: RoomView
+    let open: (String) -> Void
+    @Environment(AppModel.self) private var model
+    @State private var expanded = false
+
+    var body: some View {
+        if expanded {
+            VStack(spacing: 0) {
+                ForEach(places) { place in
+                    ThreadStub(place: place, room: room) { open(place.key) }
+                }
+            }
+            .transition(.opacity)
+        } else {
+            Button {
+                withAnimation(Motion.ease) { expanded = true }
+            } label: {
+                HStack(spacing: 5) {
+                    if places.contains(where: { model.fresh(room, $0.key) }) { Dot(color: Tone.accent, size: 7) }
+                    Text("\(places.count) threads updated").type(.meta, .semibold)
+                    Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold))
+                }
+                .foregroundStyle(Tone.ink3)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Shows them")
         }
     }
 }
@@ -254,10 +400,11 @@ struct BubbleRow: View {
                 if let quote = message.quote {
                     QuoteBubble(quote: quote, room: room) { jump(quote.seq) }
                 }
-                Bubble(message: message, room: room, tail: last, reply: { reply(message) })
-                    .padding(.top, message.reactions.isEmpty ? 0 : 20)
-                if !message.choices.isEmpty {
-                    Choices(message: message, room: room)
+                if message.choices.isEmpty {
+                    Bubble(message: message, room: room, tail: last, reply: { reply(message) })
+                        .padding(.top, message.reactions.isEmpty ? 0 : 20)
+                } else {
+                    PollCard(message: message, room: room, tail: last) { reply(message) }
                 }
             }
             if !message.mine { Spacer(minLength: 40) }
@@ -447,55 +594,119 @@ struct QuoteBubble: View {
     }
 }
 
-struct Choices: View {
+struct PollCard: View {
     let message: MessageView
     let room: RoomView
+    let tail: Bool
+    let other: () -> Void
     @Environment(AppModel.self) private var model
     @State private var sending: String?
+    @State private var failed = false
+
+    private var open: Bool { message.waiting && message.chosen == nil }
+    private var picked: String? { message.chosen?.choice ?? sending }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(open ? "Question for you" : message.chosen == nil ? "Question" : "Decided")
+                .type(.meta, .semibold)
+                .foregroundStyle(open ? Tone.decide : Tone.ink3)
+                .padding(.bottom, 4)
+            Prose(text: message.body)
+                .padding(.bottom, 10)
+            Rectangle().fill(Tone.line).frame(height: 0.5)
             ForEach(message.choices, id: \.self) { choice in
-                let picked = message.chosen?.choice == choice
-                Button {
-                    guard message.waiting, message.chosen == nil, sending == nil else { return }
-                    sending = choice
-                    Haptic.tap()
-                    Task {
-                        try? await model.answer(room.code, seq: message.seq, text: choice)
-                        sending = nil
+                option(choice)
+            }
+            if open {
+                Button(action: other) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "arrowshape.turn.up.left").font(.system(size: 13, weight: .semibold)).frame(width: 22)
+                        Text("Something else…").type(.ui, .medium)
+                        Spacer(minLength: 0)
                     }
-                } label: {
-                    HStack(spacing: 8) {
-                        Text(choice)
-                            .type(.ui, .medium)
-                            .foregroundStyle(picked ? .white : (message.chosen == nil ? Tone.accent : Tone.ink3))
-                            .multilineTextAlignment(.leading)
-                        if sending == choice { ProgressView().controlSize(.mini) }
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .background {
-                        if picked {
-                            Capsule().fill(Tone.accent)
-                        } else {
-                            Capsule().strokeBorder(Tone.edgeStrong, lineWidth: 1)
-                        }
-                    }
-                    .contentShape(Capsule())
+                    .foregroundStyle(Tone.accent)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
             if let chosen = message.chosen {
-                Text("\(chosen.by == room.me ? "You" : room.display(chosen.by)) chose this")
+                Text("\(chosen.by == room.me ? "You" : room.display(chosen.by)) chose")
                     .type(.meta)
                     .foregroundStyle(Tone.ink3)
-                    .padding(.leading, 12)
-            } else if message.waiting {
-                Text("Waiting on you").type(.meta, .semibold).foregroundStyle(Tone.decide).padding(.leading, 12)
+                    .padding(.top, 2)
+            } else if failed {
+                Text("Couldn't send · Try again").type(.meta).foregroundStyle(Tone.alert).padding(.top, 2)
             }
         }
-        .padding(.top, 3)
+        .padding(.horizontal, 14)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .frame(maxWidth: 300, alignment: .leading)
+        .background {
+            ZStack {
+                RoundedRectangle(cornerRadius: 19, style: .continuous).fill(Tone.bubbleThem)
+                if tail {
+                    Tail().fill(Tone.bubbleThem).scaleEffect(x: -1, anchor: .center)
+                }
+            }
+        }
+        .animation(.spring(duration: 0.35, bounce: 0.3), value: picked)
+    }
+
+    private func option(_ choice: String) -> some View {
+        let chosen = picked == choice
+        return Button {
+            guard open, sending == nil else { return }
+            sending = choice
+            failed = false
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            Task {
+                do {
+                    try await model.answer(room.code, seq: message.seq, text: choice)
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                } catch {
+                    sending = nil
+                    failed = true
+                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                }
+            }
+        } label: {
+            VStack(spacing: 0) {
+                HStack(spacing: 10) {
+                    ZStack {
+                        Circle().strokeBorder(chosen ? Tone.accent : Tone.ink3, lineWidth: 1.5)
+                        if chosen {
+                            Circle().fill(Tone.accent)
+                            Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                        }
+                    }
+                    .frame(width: 22, height: 22)
+                    Text(choice)
+                        .type(.ui, .medium)
+                        .foregroundStyle(picked == nil || chosen ? Tone.ink : Tone.ink3)
+                        .multilineTextAlignment(.leading)
+                    Spacer(minLength: 0)
+                    if sending == choice && message.chosen == nil {
+                        ProgressView().controlSize(.mini)
+                    }
+                }
+                .padding(.vertical, 11)
+                .padding(.horizontal, chosen ? 8 : 0)
+                .background {
+                    if chosen {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.clear).prism(RoundedRectangle(cornerRadius: 12, style: .continuous), band: 0.5)
+                    }
+                }
+                .padding(.horizontal, chosen ? -8 : 0)
+                Rectangle().fill(Tone.line).frame(height: 0.5).padding(.leading, 32)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!open)
+        .accessibilityLabel(chosen ? "\(choice), chosen" : choice)
     }
 }
 

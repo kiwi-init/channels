@@ -5,18 +5,25 @@ struct ConversationScreen: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var spot: Spot
+    @State private var thread: String?
     @State private var previous: Spot?
     @State private var details = ConversationScreen.opensDetails
     @State private var replyTo: MessageView?
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var follow = Follow()
+    @State private var threadPosition = ScrollPosition(edge: .bottom)
+    @State private var threadFollow = Follow()
     @State private var pillFrame: CGRect = .zero
     @State private var late = false
     @FocusState private var typing: Bool
 
     init(start: Spot) {
-        _spot = State(initialValue: start)
+        let task = start.place.hasPrefix("task:")
+        _spot = State(initialValue: task ? Spot(code: start.code) : start)
+        _thread = State(initialValue: task ? start.place : nil)
     }
+
+    private var active: Spot { thread.map { Spot(code: spot.code, place: $0) } ?? spot }
 
     private static var opensDetails: Bool {
         #if DEBUG
@@ -30,53 +37,73 @@ struct ConversationScreen: View {
         Group {
             if let room = model.shown(spot) {
                 let ready = model.ready(spot)
-                Conversation(room: room, replyTo: $replyTo, position: $position, follow: $follow, typing: $typing)
-                    .id(spot.id)
-                    .transition(.opacity.combined(with: .offset(y: 6)))
-                    .opacity(ready ? 1 : 0)
-                    .overlay {
-                        if !ready && late { ProgressView() }
-                    }
-                    .overlay(alignment: .top) {
-                        GeometryReader { geo in
-                            LinearGradient(stops: fade, startPoint: .top, endPoint: .bottom)
-                                .frame(height: geo.safeAreaInsets.top + 30)
-                                .offset(y: -geo.safeAreaInsets.top)
+                Conversation(room: room, replyTo: $replyTo, position: $position, follow: $follow, typing: $typing) { key in
+                    openThread(key)
+                }
+                .id(spot.id)
+                .transition(.opacity.combined(with: .offset(y: 6)))
+                .opacity(ready ? 1 : 0)
+                .overlay {
+                    if !ready && late { ProgressView() }
+                }
+                .overlay {
+                    if let thread, let inner = model.shown(Spot(code: spot.code, place: thread)) {
+                        ZStack {
+                            Rectangle()
+                                .fill(.black.opacity(0.35))
+                                .background(.ultraThinMaterial)
+                                .ignoresSafeArea()
+                                .onTapGesture(perform: closeThread)
+                            Conversation(room: inner, replyTo: $replyTo, position: $threadPosition, follow: $threadFollow, typing: $typing)
+                                .id(thread)
+                                .opacity(model.ready(active) ? 1 : 0)
                         }
-                        .allowsHitTesting(false)
+                        .transition(.opacity.combined(with: .offset(y: 24)))
                     }
-                    .safeAreaInset(edge: .top, spacing: 0) { header(room) }
-                    .bar(.bottom) {
-                        Dock(room: room, spot: spot, replyTo: $replyTo, typing: $typing, follow: follow) {
-                            withAnimation(Motion.ease) { position.scrollTo(edge: .bottom) }
+                }
+                .overlay(alignment: .top) {
+                    GeometryReader { geo in
+                        LinearGradient(stops: fade, startPoint: .top, endPoint: .bottom)
+                            .frame(height: geo.safeAreaInsets.top + 30)
+                            .offset(y: -geo.safeAreaInsets.top)
+                    }
+                    .allowsHitTesting(false)
+                }
+                .safeAreaInset(edge: .top, spacing: 0) { header(room) }
+                .bar(.bottom) {
+                    Dock(room: model.shown(active) ?? room, spot: active, replyTo: $replyTo, typing: $typing, follow: thread == nil ? follow : threadFollow) {
+                        withAnimation(Motion.ease) {
+                            if thread == nil { position.scrollTo(edge: .bottom) } else { threadPosition.scrollTo(edge: .bottom) }
                         }
                     }
-                    .overlay {
-                        if details {
-                            DetailsMorph(room: room, current: spot.place, pill: pillFrame) { key in
-                                switchTo(Spot(code: room.code, place: key))
-                            } channels: {
-                                dismiss()
-                            } closed: {
-                                details = false
-                            }
+                }
+                .overlay {
+                    if details {
+                        DetailsMorph(room: room, current: active.place, pill: pillFrame) { key in
+                            switchTo(Spot(code: room.code, place: key))
+                        } channels: {
+                            dismiss()
+                        } closed: {
+                            details = false
                         }
                     }
-                    .animation(Motion.swap, value: spot)
-                    .onAppear(perform: seen)
-                    .onChange(of: model.rooms[spot.code]?.messages.last?.seq) { _, _ in seen() }
-                    .onChange(of: model.rooms[spot.code]?.place) { _, _ in seen() }
+                }
+                .animation(Motion.swap, value: spot)
+                .animation(.spring(duration: 0.38, bounce: 0.12), value: thread)
+                .onAppear(perform: seen)
+                .onChange(of: model.rooms[spot.code]?.messages.last?.seq) { _, _ in seen() }
+                .onChange(of: model.rooms[spot.code]?.place) { _, _ in seen() }
             } else {
                 Centered(title: "This channel is gone", detail: "Its owner closed it, or this phone was removed from it.")
             }
         }
         .background(Tone.canvas)
         .toolbar(.hidden, for: .navigationBar)
-        .task(id: spot) {
-            model.visit(spot)
+        .task(id: active) {
+            model.visit(active)
             late = false
-            follow = Follow()
-            await model.open(spot)
+            if thread == nil { follow = Follow() }
+            await model.open(active)
             guard (try? await Task.sleep(for: .milliseconds(400))) != nil else { return }
             late = true
         }
@@ -84,15 +111,36 @@ struct ConversationScreen: View {
 
     private func seen() {
         guard let room = model.rooms[spot.code] else { return }
-        model.markSeen(room, place: spot.place)
+        model.markSeen(room, place: active.place)
     }
 
     private func switchTo(_ next: Spot) {
-        guard next != spot else { return }
+        guard next != active else { return }
+        if next.place.hasPrefix("task:") && next.code == spot.code {
+            previous = active
+            return openThread(next.place)
+        }
         Haptic.tap()
-        previous = spot
+        previous = active
         replyTo = nil
-        withAnimation(Motion.swap) { spot = next }
+        let task = next.place.hasPrefix("task:")
+        withAnimation(Motion.swap) {
+            thread = task ? next.place : nil
+            spot = task ? Spot(code: next.code) : next
+        }
+    }
+
+    private func openThread(_ key: String) {
+        Haptic.tap()
+        replyTo = nil
+        threadFollow = Follow()
+        threadPosition = ScrollPosition(edge: .bottom)
+        withAnimation(.spring(duration: 0.38, bounce: 0.12)) { thread = key }
+    }
+
+    private func closeThread() {
+        replyTo = nil
+        withAnimation(.spring(duration: 0.38, bounce: 0.12)) { thread = nil }
     }
 
     private var elsewhere: Bool {
@@ -113,8 +161,8 @@ struct ConversationScreen: View {
                         }
                     }
                     .overlay {
-                        HoldButton(label: "Back", hint: "Touch and hold for your other conversations") {
-                            dismiss()
+                        HoldButton(label: thread == nil ? "Back" : "Close thread", hint: "Touch and hold for your other conversations") {
+                            if thread == nil { dismiss() } else { closeThread() }
                         } menu: {
                             backMenu()
                         }
@@ -122,14 +170,14 @@ struct ConversationScreen: View {
                 Spacer()
                 if !room.asks.isEmpty { asks(room) }
             }
-            TitlePill(room: room, place: room.placeView(spot.place), fresh: false)
+            TitlePill(room: room, place: room.placeView(active.place), fresh: false)
                 .onGeometryChange(for: CGRect.self) {
                     $0.frame(in: .global)
                 } action: {
                     pillFrame = $0
                 }
                 .overlay {
-                    HoldButton(label: room.spotTitle(spot.place), hint: "Tap for details, touch and hold to switch conversations") {
+                    HoldButton(label: room.spotTitle(active.place), hint: "Tap for details, touch and hold to switch conversations") {
                         Haptic.tap()
                         details = true
                     } menu: {
@@ -175,9 +223,9 @@ struct ConversationScreen: View {
     }
 
     private func backMenu() -> [HoldSection] {
-        var used: Set<Spot> = [spot]
+        var used: Set<Spot> = [spot, active]
         var sections: [HoldSection] = []
-        if let last = previous ?? model.visited.first(where: { $0 != spot }), let row = model.row(last) {
+        if let last = previous ?? model.visited.first(where: { $0 != active && $0 != spot }), let row = model.row(last) {
             used.insert(last)
             sections.append(HoldSection(items: [item(row, prefix: "Previous")]))
         }
@@ -206,7 +254,7 @@ struct ConversationScreen: View {
             HoldSection(items: [
                 HoldItem(
                     title: "# general", subtitle: line(room.placeView("main")), image: MenuArt.image("channel|\(code)") { ChannelAvatar(room: room, size: 30) },
-                    checked: spot == general
+                    checked: active == general
                 ) { switchTo(general) }
             ])
         ]
@@ -216,7 +264,7 @@ struct ConversationScreen: View {
             let key = room.dmKey(with: lead)
             talked.insert(lead)
             direct.append(
-                HoldItem(title: room.display(lead), subtitle: line(room.placeView(key)) ?? "Lead", image: face(lead), checked: spot.place == key) {
+                HoldItem(title: room.display(lead), subtitle: line(room.placeView(key)) ?? "Lead", image: face(lead), checked: active.place == key) {
                     switchTo(Spot(code: code, place: key))
                 })
         }
@@ -225,7 +273,7 @@ struct ConversationScreen: View {
             guard let other = room.other(in: place), !talked.contains(other) else { continue }
             talked.insert(other)
             direct.append(
-                HoldItem(title: room.display(other), subtitle: line(place), image: face(other), checked: spot.place == place.key) {
+                HoldItem(title: room.display(other), subtitle: line(place), image: face(other), checked: active.place == place.key) {
                     switchTo(Spot(code: code, place: place.key))
                 })
         }
@@ -246,7 +294,7 @@ struct ConversationScreen: View {
                     let task = room.tasks.first { $0.id == id }
                     return HoldItem(
                         title: "\(taskLabel(id)) \(task?.title ?? "")", subtitle: [task.map { stateWords($0.state) }, line(place)].compactMap { $0 }.joined(separator: " · "),
-                        image: MenuArt.image("task|\(code)|\(id)") { PlaceFace(room: room, place: place, size: 30) }, checked: spot.place == place.key
+                        image: MenuArt.image("task|\(code)|\(id)") { PlaceFace(room: room, place: place, size: 30) }, checked: active.place == place.key
                     ) { switchTo(Spot(code: code, place: place.key)) }
                 }))
         let along = room.places.filter { $0.kind == "dm" && !$0.withMe }.sorted { $0.lastSeq > $1.lastSeq }.prefix(8)
@@ -254,7 +302,7 @@ struct ConversationScreen: View {
             HoldSection(
                 title: "Read Along", nested: true,
                 items: along.map { place in
-                    HoldItem(title: place.with.map { room.display($0) }.joined(separator: " & "), subtitle: line(place), checked: spot.place == place.key) {
+                    HoldItem(title: place.with.map { room.display($0) }.joined(separator: " & "), subtitle: line(place), checked: active.place == place.key) {
                         switchTo(Spot(code: code, place: place.key))
                     }
                 }))

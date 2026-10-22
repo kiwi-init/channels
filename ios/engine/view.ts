@@ -131,7 +131,12 @@ export function roomView(r: RoomInput): RoomView {
       last: last ? messageView(last, undefined) : null,
     };
   };
-  const placeKeys = ["main", ...[...state.places.keys()].filter((k) => k.startsWith("dm:")), ...(here !== "main" && !state.places.has(here) ? [here] : [])];
+  const floor = r.messages[0]?.seq ?? 0;
+  const busy = (k: string): boolean => {
+    const p = placeFromKey(k);
+    return p?.kind === "task" && !state.tasks.get(p.task)?.archived && (state.places.get(k)?.last ?? 0) >= floor;
+  };
+  const placeKeys = ["main", ...[...state.places.keys()].filter((k) => k.startsWith("dm:") || busy(k)), ...(here !== "main" && !state.places.has(here) ? [here] : [])];
   const places = [...new Set(placeKeys)].flatMap((k) => {
     const v = placeView(k);
     return v ? [v] : [];

@@ -424,9 +424,20 @@ what follows is what ships.
 - **Transcript.** Bubbles: yours right in blue, others left in grey, a tail on the last of a
   run, the sender's name over the first and their 30pt face beside the last (none in a
   one-to-one). A time header where 15 minutes or a day passed; events as one quiet centred
-  line; a reply carries its quote. An ask's options sit under it; while it waits the composer
-  says "Answer lead". A conversation loaded from its start opens on an intro (face, name, a
-  quiet line). Gestures are Messages': swipe a bubble right to reply, drag left for times,
+  line; a reply carries its quote. A conversation loaded from its start opens on an intro
+  (face, name, a quiet line).
+- **Questions are polls** (Messages iOS 26): one grey card with "Question for you" in
+  `decide`, the question, then a row per option (a radio circle, ≥44pt) and "Something else…"
+  in `accent` (it replies to the question). A tap fills the circle at once, with a medium
+  haptic, then success; the chosen row wears the Prism, the others dim, and the footer says
+  "You chose". Your answer isn't drawn again as its own bubble.
+- **Task threads are reply threads.** In #general each task with activity in view shows as a
+  stub where it last moved: the last speaker's face (or the owner's), an outlined card with
+  "T8", its state capsule, the title and its last line, and "Thread" under it (a dot and
+  "new" when unread). Three or more in a row fold into "4 threads updated ›". A tap opens the
+  thread over the blurred #general: the header retitles to the task, the composer retargets
+  to it ("Message T8"), and the back circle closes the thread before it leaves the
+  conversation. The pill's hold menu and a row's long-press open threads the same way. Gestures are Messages': swipe a bubble right to reply, drag left for times,
   double-tap or long-press for tapbacks, tap a picture to zoom. The top fades the content under
   the header; the bottom never blurs the last bubble.
 - **Composer.** A glass `+` and the glass field (send inside it), nothing else; `@` chips
