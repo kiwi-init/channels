@@ -593,7 +593,8 @@ jobs:
       past 2,000 messages, so the owner's review checks, link-backs, CI-red tasks and posting
       reconcile keep running). And
       web use-window.test.ts: the conversation's mounted rows drop back to the newest window once
-      they pass twice its size and the cut is above the view. And
+      they pass twice its size and the cut is above the view, and away from the conversation (Tasks
+      or Agents) they shrink to the newest 40, so switching back mounts only a first screen. And
       test/history-bytes.test.ts: against a local relay, history pages stop at PAGE_BYTES (with at
       least one message each) and still return every message, and a body over MAX_BODY_LENGTH is
       refused at send instead of lost at read. And

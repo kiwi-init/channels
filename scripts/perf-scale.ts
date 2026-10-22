@@ -420,11 +420,15 @@ try {
     await cdp.send("Emulation.setCPUThrottlingRate", { rate: throttle });
     const calibrationMs = await calibrate(page);
     const views: Record<string, number[]> = { Agents: [], Conversation: [], Tasks: [] };
+    const spent: Record<string, Record<string, number>[]> = { Agents: [], Conversation: [], Tasks: [] };
     const markers: Record<string, string> = { Agents: agents.at(-1)!, Conversation: "M\\d+: ", Tasks: lastTask };
     for (let i = 0; i < 3; i++)
       for (const v of ["Agents", "Conversation", "Tasks"]) {
+        const before = await work(cdp);
         views[v]!.push(await tab(page, v, markers[v]!));
         await page.waitForTimeout(500);
+        const after = await work(cdp);
+        spent[v]!.push(Object.fromEntries(Object.keys(after).map((k) => [`${k}Ms`, Math.round(((after[k] ?? 0) - (before[k] ?? 0)) * 1000)])));
       }
     await tab(page, "Conversation", markers.Conversation!);
     await page.waitForTimeout(500);
@@ -449,6 +453,7 @@ try {
       reloadToTasksMs: throttle === 1 ? reloadMs : undefined,
       switchMedianMs: Object.fromEntries(Object.entries(views).map(([k, v]) => [k, median(v)])),
       switchMs: views,
+      switchWorkMs: Object.fromEntries(Object.entries(spent).map(([k, v]) => [k, Object.fromEntries(Object.keys(v[0] ?? {}).map((m) => [m, median(v.map((x) => x[m] ?? 0))]))])),
       longTasks: after.longTasks,
       worstMs: after.worstMs,
     };
