@@ -5,7 +5,6 @@ import { join } from "node:path";
 
 const { reference, limits: budgets } = (await Bun.file("scripts/perf-budgets.json").json()) as {
   reference: Record<"@1x" | "@4x", number>;
-  calibration: Record<"@1x" | "@4x" | "ratio", [number, number]>;
   limits: Record<string, { at: string[]; per?: "@1x" | "@4x"; budget: number; gate: number | null; nightly?: boolean }>;
 };
 const dir = mkdtempSync(join(tmpdir(), "kiwi-perf-check-"));
@@ -89,6 +88,14 @@ test("Reload scales only its in-page part: the rest of the reload doesn't follow
   const r = check([fast(24), fast(25), fast(26)]);
   expect(r.out).toContain("| Reload to first screen | 500 | 925 |");
   expect(check([run(50, 27, 1, true, {}, { total: 500, inPage: -1 }), run(50, 28, 1, true, {}, { total: 500, inPage: -1 })]).out).toContain("Reload to first screen: not measured");
+});
+
+test("a calibrated run left out of just one timing is named, even when enough runs remain", () => {
+  const r = check([run(50, 30), run(50, 31, 1, true, {}, { total: 500, inPage: 600 }), run(50, 32)]);
+  expect(r.code).toBe(0);
+  expect(r.out).toContain("Left out of one timing:");
+  expect(r.out).toContain("Reload to first screen: run-31.json has no usable value");
+  expect(r.out).not.toContain("run-30.json has no usable value");
 });
 
 test("every timing with a gate is scaled by the calibration at its CPU speed", () => {

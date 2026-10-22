@@ -12,7 +12,6 @@ import type { Identity } from "@kiwi/core/identity.ts";
 import { provePerson, type PersonClaim } from "@kiwi/core/person.ts";
 import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, PhoneView, PublicPerson, StoreSnapshot } from "./bridge.ts";
 import { publicChannel } from "./seats.ts";
-import { voiceViewOf, type VoiceStore } from "./voice.ts";
 
 export { acceptSeat, mergeChannels, mergePublicChannels, migrateEntries, movedRelay, withAccess } from "./seats.ts";
 
@@ -78,14 +77,13 @@ export function fileFor(root: string, pathname: string): string | null {
  * WorkOS: in the app, sign-in runs in main (the device flow), never in the page. No eval, no inline
  * script, nothing framed, no form posts: script that got in some other way can't phone anywhere else.
  */
-export function csp(relay: string, voiceOrigins: readonly string[] = []): string {
+export function csp(relay: string): string {
   const origin = normalizeRelay(relay);
   const socket = origin ? origin.replace(/^http/, "ws") : null;
-  const extra = voiceOrigins.filter((o) => o.length > 0);
-  const connect = ["'self'", ...(origin ? [origin, socket!] : []), ...extra].join(" ");
-  const parts = [
+  const connect = ["'self'", ...(origin ? [origin, socket!] : [])].join(" ");
+  return [
     "default-src 'self'",
-    "script-src 'self' 'wasm-unsafe-eval'",
+    "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self'",
@@ -94,12 +92,11 @@ export function csp(relay: string, voiceOrigins: readonly string[] = []): string
     "base-uri 'none'",
     "form-action 'none'",
     "frame-ancestors 'none'",
-  ];
-  parts.push(extra.length ? "worker-src 'self' blob:" : "worker-src 'self'");
-  return parts.join("; ");
+    "worker-src 'self'",
+  ].join("; ");
 }
 
-const ALLOWED = new Set(["media", "clipboard-sanitized-write"]);
+const ALLOWED = new Set(["clipboard-sanitized-write"]);
 
 export function permissionAllowed(url: string, permission: string): boolean {
   return ALLOWED.has(permission) && isAppUrl(url);
@@ -146,7 +143,6 @@ export interface StoredKeys {
   computers: ComputerView[];
   phones?: PhoneView[];
   pending: PendingItem[];
-  voice?: VoiceStore;
   personalities?: Personality[];
 }
 
@@ -158,7 +154,6 @@ export function snapshotOf(s: StoredKeys): StoreSnapshot {
     computers: s.computers,
     phones: (s.phones ?? []).map((p) => ({ label: p.label, at: p.at })),
     pending: s.pending,
-    voice: voiceViewOf(s.voice),
     personalities: cleanPersonalities(s.personalities),
   };
 }

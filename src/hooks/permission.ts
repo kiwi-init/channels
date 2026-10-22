@@ -136,7 +136,7 @@ export function holdSession(session: string): Held | null {
         },
         newer: () => {
           try {
-            return statSync(marker).mtimeMs >= since;
+            return Number(readFileSync(marker, "utf8")) >= since;
           } catch {
             // No later prompt in this session has started.
             return false;

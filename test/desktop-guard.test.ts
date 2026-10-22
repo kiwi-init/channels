@@ -16,6 +16,7 @@ import {
   isAppUrl,
   mergeChannels,
   normalizeRelay,
+  permissionAllowed,
   publicComputer,
   readStore,
   snapshotOf,
@@ -36,6 +37,13 @@ describe("the window shows the app and nothing else (T183)", () => {
     expect(externalUrl("https://github.com/x")).toBe("https://github.com/x");
     expect(externalUrl("http://localhost:8787/")).toBe("http://localhost:8787/");
     for (const u of ["javascript:alert(1)", "file:///Applications", "kiwi-app://app/", "smb://share", "data:text/html,hi", ""]) expect(externalUrl(u)).toBeNull();
+  });
+  test("copying is allowed only from kiwi-app://, and the microphone or camera never", () => {
+    expect(permissionAllowed("kiwi-app://app/index.html", "clipboard-sanitized-write")).toBe(true);
+    expect(permissionAllowed("kiwi-app://app/index.html", "media")).toBe(false);
+    expect(permissionAllowed("kiwi-app://app/", "notifications")).toBe(false);
+    expect(permissionAllowed("kiwi-app://app/", "clipboard-read")).toBe(false);
+    expect(permissionAllowed("https://evil.example/", "clipboard-sanitized-write")).toBe(false);
   });
 });
 
@@ -99,7 +107,7 @@ describe("kiwi-app:// sends a CSP (T184)", () => {
   const directives = (p: string) => new Map(p.split("; ").map((d) => [d.split(" ")[0]!, d.split(" ").slice(1)]));
   test("only the app's own script; its relay over HTTP and WebSocket; nothing framed or posted", () => {
     const d = directives(csp("https://channels.kiwiinit.com"));
-    expect(d.get("script-src")).toEqual(["'self'", "'wasm-unsafe-eval'"]);
+    expect(d.get("script-src")).toEqual(["'self'"]);
     expect(d.get("worker-src")).toEqual(["'self'"]);
     expect(d.get("connect-src")).toEqual(expect.arrayContaining(["'self'", "https://channels.kiwiinit.com", "wss://channels.kiwiinit.com"]));
     expect(d.get("object-src")).toEqual(["'none'"]);
@@ -108,8 +116,7 @@ describe("kiwi-app:// sends a CSP (T184)", () => {
     expect(csp("http://localhost:8787")).toContain("ws://localhost:8787");
     // A relay that isn't one adds nothing to connect to.
     expect(csp("http://attacker.example")).not.toContain("attacker");
-    for (const p of [csp("https://r.example")]) expect(p).not.toMatch(/(?<!wasm-)unsafe-eval|script-src[^;]*unsafe-inline/);
-    expect(csp("https://r.example")).not.toContain("api.x.ai");
+    for (const p of [csp("https://r.example")]) expect(p).not.toMatch(/unsafe-eval|script-src[^;]*unsafe-inline/);
     expect(csp("https://r.example")).not.toContain("blob:'");
     expect(directives(csp("https://r.example")).get("worker-src")).toEqual(["'self'"]);
   });

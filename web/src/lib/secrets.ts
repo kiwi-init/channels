@@ -42,7 +42,6 @@ const publicOf = (l: Local): StoreSnapshot => ({
   computers: l.computers,
   phones: [],
   pending: l.pending,
-  voice: { configured: false, consent: {} },
   personalities: l.personalities,
 })
 

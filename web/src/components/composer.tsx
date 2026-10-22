@@ -1,4 +1,4 @@
-import { Add01Icon, ArrowUp02Icon, Cancel01Icon, Loading03Icon, Mic01Icon } from "@hugeicons/core-free-icons"
+import { Add01Icon, ArrowUp02Icon, Cancel01Icon } from "@hugeicons/core-free-icons"
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
 import type { SendOptions } from "@kiwi/core/client.ts"
@@ -7,13 +7,12 @@ import { matchCommands, parseCommand, type Command } from "@/lib/commands"
 import { answered } from "@/lib/asks"
 import { draftOf, keepDraft, type DraftFile } from "@/lib/drafts"
 import { needsCompressing } from "@/lib/needs-compressing"
-import { appendDictation, PRESS_LABEL, useDictation } from "@/lib/dictation"
 import { excerpt } from "@/lib/format"
 import { composerMentions, mentionText, withHandles } from "@/lib/mentions"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
 import { CommandBar, CommandList, ComposerQuestion } from "./lazy"
-import { Alert, Button, Monogram, errorText, toast } from "./kit"
+import { Monogram, errorText, toast } from "./kit"
 
 const MENTION = /(^|\s)@([\p{L}\p{N}_.-]*)$/u
 const LEADING = /^(?:\s*@([\p{L}\p{N}_.-]+)[\s,]*)+/u
@@ -54,7 +53,6 @@ interface Props {
   placeholder?: string
   /** Under the field, inside the composer: what the agents are doing (agent-strip.tsx). */
   footer?: ReactNode
-  talk?: { button: ReactNode; bar: ReactNode }
   draftKey?: string
 }
 
@@ -64,7 +62,7 @@ function recipients(body: string, names: Set<string>): string[] {
   return [...lead.matchAll(/@([\p{L}\p{N}_.-]+)/gu)].map((m) => m[1]!).filter((n) => names.has(n))
 }
 
-export function Composer({ me, people, replyTo, asking, commands = [], more = 0, onAnswer, nameOf, onClearReply, disabled, send, thread, extra, placeholder, footer, talk, draftKey }: Props) {
+export function Composer({ me, people, replyTo, asking, commands = [], more = 0, onAnswer, nameOf, onClearReply, disabled, send, thread, extra, placeholder, footer, draftKey }: Props) {
   const [body, setBody] = useState(() => draftOf(draftKey)?.body ?? "")
   const [files, setFiles] = useState<DraftFile[]>(() => draftOf(draftKey)?.files ?? [])
   useEffect(() => keepDraft(draftKey, { body, files }), [draftKey, body, files])
@@ -79,10 +77,6 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
   const area = useRef<HTMLTextAreaElement>(null)
   const backdrop = useRef<HTMLDivElement>(null)
   const caretTo = useRef<number | null>(null)
-  const dictation = useDictation(
-    (text) => setBody((current) => appendDictation(current, text)),
-    (message) => toast(message, "error")
-  )
   const picker = useRef<HTMLInputElement>(null)
 
   const others = useMemo(() => people.filter((p) => p.name !== me), [people, me])
@@ -260,7 +254,6 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
 
       {running && <CommandBar command={running.command} args={running.args} />}
 
-      {talk?.bar}
       {replyTo && !thread && replyTo.seq !== asking?.seq && (
         <div className="mb-1.5 ml-3 flex items-center gap-2 rounded-ctl px-2 text-meta text-ink-2">
           <span className="min-w-0 truncate">
@@ -426,43 +419,6 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
                 className="bubble-text relative block max-h-[220px] min-h-[48px] w-full resize-none bg-transparent py-[13px] pr-1 pl-1 text-body outline-none placeholder:truncate placeholder:text-ink-3 focus-visible:outline-none"
               />
             </div>
-            {talk?.button}
-            {dictation.supported && (
-              <button
-                type="button"
-                aria-label={PRESS_LABEL[dictation.phase]}
-                aria-pressed={dictation.phase === "listening"}
-                title={dictation.phase === "downloading" ? `${PRESS_LABEL.downloading}, ${Math.round(dictation.progress * 100)}%` : PRESS_LABEL[dictation.phase]}
-                onClick={() => void dictation.press()}
-                onPointerEnter={dictation.warm}
-                onFocus={dictation.warm}
-                disabled={disabled || dictation.phase === "downloading" || dictation.phase === "transcribing"}
-                className={cx(
-                  "my-1.5 ml-1.5 flex size-9 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-40",
-                  dictation.phase === "listening" ? "bg-accent text-accent-ink" : "text-ink-2 hover:bg-wash hover:text-ink"
-                )}
-              >
-                <Icon
-                  icon={dictation.phase === "downloading" || dictation.phase === "transcribing" ? Loading03Icon : Mic01Icon}
-                  size={17}
-                  strokeWidth={2}
-                  className={dictation.phase === "downloading" || dictation.phase === "transcribing" ? "animate-spin" : undefined}
-                />
-              </button>
-            )}
-            {dictation.phase === "asking" && (
-              <Alert
-                open
-                onClose={dictation.cancel}
-                title="Dictate on this computer?"
-                message={`Dictation turns your voice into text right here, on this computer. The first time, it downloads a ${dictation.modelMb} MB speech model through your relay. After that, your audio never leaves this computer.`}
-              >
-                <Button variant="secondary" onClick={dictation.cancel}>
-                  Not now
-                </Button>
-                <Button onClick={() => void dictation.confirm()}>Download and dictate</Button>
-              </Alert>
-            )}
             <button
               type="button"
               aria-label="Send (Return)"

@@ -90,38 +90,17 @@ Beta and quota settings come from the environment (see [Limits](#limits-and-the-
 relay-data/
   people.sqlite                        each signed-in person's owned-channel count, for the create quota
   39269772c5b024a5c16dc2201dfec0fb.sqlite        one file per channel (plus -wal and -shm while open)
-  dictation/<sha256>                   the dictation model's files, once someone has dictated (~107 MB)
 ```
 
 A channel's file appears when the channel is created and is deleted when the
 channel is closed or expires. The relay creates the data folder readable only by its
 own user. Run it with `umask 077` (the systemd unit below sets `UMask=0077`) so the
-files inside are private too.
+files inside are private too. A `dictation/` folder left by an older relay held the
+dictation model, which Channels no longer has: it can be deleted.
 
 Pairing never touches the relay's records beyond a mailbox that is dropped when
 it ends, and there are no stored channel lists, linked computers or vault. There
 is no device handover.
-
-### Dictation's model
-
-Dictation turns speech into text on each person's computer, with a speech model
-the app downloads once through the relay: `GET /v1/dictation/<name>`. The names
-are a fixed list in `packages/core/src/dictation.ts`: eight files (Whisper base,
-8-bit, from Hugging Face at a pinned revision, and the onnxruntime-web
-WebAssembly it runs on, from jsDelivr at a pinned version), each with its size
-and SHA-256. Nothing else is served, and nothing from the request goes upstream,
-so the route can't be used as a proxy.
-
-The first request for a file streams it from its pinned URL into `dictation/` in
-the data folder, hashing as it goes, and keeps it only if its size and SHA-256
-match; later ones are served from there. The relay never holds a whole file in
-memory. A Worker on a `workers.dev` address, where the Cache API stores nothing,
-streams the checked file straight to the app instead. The app checks the hash
-again before it uses a file. Downloads are
-limited to 32 an hour per client address (a first download is eight). A relay
-that can't reach Hugging Face or jsDelivr answers 502, and the app says
-dictation isn't available there. To run offline, fill `dictation/` ahead of
-time: `bun scripts/dictation-files.ts relay-data/dictation`.
 
 ### Backups
 
@@ -247,10 +226,7 @@ nothing.
    client address (`CF-Connecting-IP`). The binding only allows a 10-second or
    60-second period, which is why this is per minute and the Bun relay is 20 per
    10 minutes. `namespace_id` must be unique in your Cloudflare account; change it
-   if `870202` is already taken. Deleting the binding turns the cap off. The second
-   one, `DICTATION_DOWNLOADS`, caps dictation-model downloads at 16 a minute per
-   address (`namespace_id` `870203`, also yours to change); the Worker keeps the
-   files it has checked in Cloudflare's cache, so Hugging Face is asked rarely.
+   if `870202` is already taken. Deleting the binding turns the cap off.
 2. Deploy:
    ```bash
    bunx wrangler login

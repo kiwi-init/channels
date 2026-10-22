@@ -184,7 +184,6 @@ export interface ChannelState {
   repos: string[];
   github: GithubState;
   hold: Hold | null;
-  voice: boolean;
   githubWrite: number | null;
   branchPrefix: string | null;
   compact: Compact | null;
