@@ -619,6 +619,12 @@ export function runRelay(argv: string[], cmd = "bun src/relay/bun.ts"): void {
     process.stdout.write(usage(cmd));
     process.exit(0);
   }
+  const joined = argv.find((a) => /^--[a-z-]+=/.test(a));
+  if (joined) {
+    const flag = joined.slice(0, joined.indexOf("="));
+    process.stderr.write(`${cmd} takes a flag's value after a space: write ${flag} ${joined.slice(flag.length + 1)}, not ${joined} (it would be ignored).\n`);
+    process.exit(2);
+  }
   const arg = (name: string, env: string) => {
     const i = argv.indexOf(name);
     return (i >= 0 ? argv[i + 1] : undefined) ?? (process.env[env] || undefined);
