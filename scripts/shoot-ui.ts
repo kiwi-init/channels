@@ -603,6 +603,11 @@ try {
           await detailsBtn().click();
           await details().getByRole("button", { name: "Invite", exact: true }).click();
           await details().getByRole("heading", { name: "Invite to this channel" }).waitFor();
+          await details().getByRole("textbox", { name: "Nickname" }).fill("claude-two");
+          await details().getByRole("radiogroup", { name: "Personality" }).getByText("Bug hunter", { exact: true }).click();
+          const command = details().locator("code", { hasText: "--persona" });
+          await command.waitFor({ timeout: 15000 });
+          await command.scrollIntoViewIfNeeded();
         },
         toChannel,
       );
