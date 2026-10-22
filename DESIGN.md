@@ -376,90 +376,69 @@ between the rails.
 
 ## 14. The iPhone app
 
-The native app in `ios/` (SwiftUI) feels like Apple Messages, not like the desktop, and puts
-everything you touch under your thumb: the owner asked for both, so on the phone they win over
-§9's rows.
+The native app in `ios/` (SwiftUI) is Apple Messages, all the way: the same structure, the
+same gestures, the same speed. The owner asked for it, so on the phone it wins over §9's rows.
+The full spec it was built from is the redesign spec (Messages paradigms mapped one by one);
+what follows is what ships.
 
-- Type is SF Pro through Dynamic Type text styles (`Theme.swift`'s `Step` maps the six steps
-  to `caption2`, `caption`, `subheadline`, `body`, `headline`, `largeTitle`). No Inter.
-- Colours are this file's tokens (`Tone` in `Theme.swift`), with the dark canvas true black
-  as in Messages, `bubbleMine` the accent and `bubbleThem` Messages grey (`#e9e9eb` /
-  `#262628`).
-- A conversation is bubbles: yours on the right in blue, everyone else's on the left in grey,
-  a tail on the last bubble of a run, the sender's name over the first and their 30pt face
-  beside the last (a direct thread with you drops both, as a one-to-one chat does). A time
-  header (`Today 4:06 PM`) sits centred where 15 minutes or a day passed. Events are one
-  centred quiet line. A reply carries the answered words in an outlined capsule above it. An
-  ask's options are capsules under it once answered (`accent` text, the chosen one filled);
-  while one waits on you the bubble says "Waiting on you · answer below" and the dock holds the
-  answers. A conversation that starts on the phone (or is loaded from its start) opens on an
-  intro, as Messages does for a contact: a 72pt face, the name, and one or two quiet lines (the
-  crew for #general, "Lead of onemouse" or "Working on T8" for a direct thread, the task's
-  title, state and owner for a task thread).
-- A channel's face is its desktop icon, never a phone-only one: the prism glass head its owner
-  picked (the twelve in `assets/avatars`, drawn as vectors), its emoji or its picture, and with
-  none the head the desktop picks from its title. It is the channel in the list, the details,
-  the fan and the switch (#general), so #general never looks like the lead's direct thread.
-- The bottom is quiet and holds what your thumb does: a glass `+` (photos), the glass field
-  (send inside it) and a round glass switch showing the face of the conversation you're in (a
-  blue dot when another has news). Nothing else but what the moment needs: `@` mention chips
-  while you type a name, a reply bar, a small ↓ at the right when you've scrolled up. The scroll
-  edge effect stays off at the bottom, so the last message is never blurred into looking like
-  more.
-- Switching is one motion, never tap-then-tap: press and hold the switch and your
-  conversations fan up above it (after 90 ms, so a sideways flick still steps) as glass
-  bubbles over a dimmed, blurred conversation, nearest first in the order you reach for them:
-  #general, then your direct thread with the lead (even before either of you wrote), then your
-  other direct threads by recency, each with its last line. Threads between others aren't
-  there (the details have them). Slide your thumb up, the bubble under it grows with a
-  selection tick, let go to open it; let go anywhere else (the switch under your thumb still
-  shows where you are) and nothing changes. A quick tap opens nothing: the switch hops with a
-  tick, hinting to hold. Flick it sideways to step through the same order without looking:
-  left for the next, right for the one before, a dull tap at either end. VoiceOver, which
-  can't hold and slide, gets the fan as buttons on a double-tap and steps with swipe up/down.
-- A draft stays with its conversation: switch away and back, or leave the channel, and what
-  you wrote (and the photos you added) is still in the field. Others show "Draft:" in `alert`
-  in the fan and the channel list. Drafts live in memory only, never on disk.
-- Prism (`Theme/Prism.swift`) is the desktop's `prism-lit` drawn the same way: the lit fill, a
-  1px glint edge bright at one corner (140°), the seven-colour spectrum band at 70% (112°, 30%
-  opacity), a 2px `ink` ring instead under Increase Contrast. As on the desktop it marks what's
-  chosen and nothing else: the switch (the conversation you're in), and in the fan the current
-  bubble and the one under your thumb, whose band slides as you pass over it.
-- The top holds the channel, read rather than touched: a glass back button and, centred, the
-  glass title pill with where you are and its state ("2 working" with the `doing` dot, "1 needs
-  you" in `decide`, "working on T8" in a direct thread with an agent at work). The
-  conversation fades out under it. Questions waiting on you are answered from their own bubble.
-- Cause and effect stay close: what you touch at the top opens from the top, what you touch
-  at the bottom rises from the bottom. A tap on the title pill grows the pill itself into the
-  details: one glass shape stretches from the pill's frame down to the bottom (8pt margins,
-  corners easing from the capsule to 44pt) over a dimmed, blurred conversation, the pill's words
-  fading as the panel's fade in; never a pill plus a second box, and no ✕. Tapping where the
-  pill was (the channel's icon and name), the dimmed edge, or dragging its grabber up shrinks
-  it back into the pill. Inside, on glass: the channel's icon, name and people count; three tiles (Message someone, Pin, Channels); Needs you; Conversations
-  (#general and your direct threads, a ✓ on the one you're in); Between others (read along);
-  People (lead first, then who's working, each "Agent · working on T8" or "here"/"away"; tap
-  one to message them); then In progress, Up next, Done this week. A task opens in place
-  (‹ back): its state, owner, review, times, last note and "Open its thread".
-- A channel has several conversations, as on the Mac: #general, a direct thread with each
-  member, the threads between others (read along: the dock says so instead of a field) and
-  each task's thread.
-- Gestures are Messages': swipe in from the left edge to go back; swipe a bubble right to
-  reply (a haptic tick where it arms); drag the conversation left to see each message's time;
-  double-tap a bubble (or long-press → Tapback) for the six tapbacks, which are the channel's
-  `react` events and sit as badges on the bubble's top corner; tap a picture for a zoomable
-  viewer that a downward swipe closes. Plain links are tappable. A new bubble springs in
-  (`sent`). Scrolled up, new messages don't move you: a glass ⌄ with a count over the dock
-  brings you back.
-- The channel list is Messages' list under a large title (it isn't touched, so it may stay up
-  there): pinned channels as 76pt circles in a grid, then rows with a blue dot for unread, a
-  52pt avatar, the name, the time and a chevron, two quiet lines of the last message (or "Needs
-  you:" in `decide`). Swipe right to pin, left to mark read or unread; long-press for both. Its
-  dock holds search, a ✋ with how many questions wait on you across every channel (it opens
-  the Needs you inbox: one card per question with thumb-sized answers, "Something else" and
-  Open), Next unread, and you: Settings, which rise from that corner as iOS Settings do, in
-  grouped rows with coloured symbol tiles (Channels, Relay, Lock with Face ID after 30 s),
-  Link again, Unlink this iPhone, and the version.
-- No agents view: faces, the working dot and "N working" carry agent state.
+- **Type, colour, faces.** SF Pro through Dynamic Type (`Step` maps the six steps to
+  `caption2` … `largeTitle`). `Tone` tokens, the dark canvas true black, `bubbleMine` the
+  accent and `bubbleThem` Messages grey. Agents wear their harness logo; people their
+  initials. A channel's face is its desktop icon, never a phone-only one: the prism glass head
+  its owner picked (the twelve in `assets/avatars`, as vectors), its emoji or its picture, and
+  with none the head the desktop picks from its title.
+- **One list, like Messages.** The root is every conversation that is yours, across all your
+  channels, newest first: each channel's #general is a group row (its icon, a `doing` dot when
+  an agent works), each direct thread with you is a one-to-one row (their face; " · onemouse"
+  and a small channel badge when you have two or more channels). Threads between others stay
+  out of it (Filter › Read Along). A row: blue unread dot in the gutter, 52pt avatar, name,
+  Messages time ("7:13 PM", "Yesterday", the weekday, the date) and chevron, two quiet lines
+  of preview: "Needs you:" in `decide` when a question waits on you, "Draft:" in `alert`,
+  else the last message. Pinned conversations sit on top as a 3-column grid of 80pt avatars
+  with a peek bubble (the unread text, or the question in `decide`).
+- **List chrome.** Top: an "Edit" menu (Settings, Mark All as Read), the title, and a Filter
+  menu (Conversations, Needs You, Unread, Drafts, Read Along) with a `decide` dot when
+  something waits on you. Bottom: a glass search capsule and a compose circle. Search filters
+  rows and finds messages already on the phone; its magnifier turns into a chevron that ends
+  it (no ✕). Swipe a row right for Read/Unread and Pin, left to Hide a direct thread.
+  Long-press a row for a live preview and a menu that answers a waiting question on the spot
+  (press, slide to "A: …", let go), jumps into a task thread, pins, marks read or hides.
+- **Cause and effect stay close; one glass shape; no ✕.** Whatever opens grows out of what you
+  touched and shrinks back into it: Settings out of "Edit", New Message out of the compose
+  circle ("To:" on top, people by channel, # general first), the details out of the title
+  pill. Each is one frosted glass shape (corners easing to 44pt) over a dimmed, blurred
+  backdrop. Close by tapping the spot you opened it from, the dimmed edge, or dragging its
+  grabber back toward where it came from.
+- **A conversation is one screen.** Header: a glass back circle (a blue dot when another
+  conversation is unread), the centred glass name pill (a face inside only for a direct
+  thread; "2 working · 1 needs you", "working on T8", "here"/"away"), and a ✋ count circle
+  when a question in this channel waits on you (it takes you to it). No channel image.
+  Switching never pushes another screen: it swaps what this one shows, from cache, with a
+  quick cross-fade.
+- **Switching is one motion.** Hold the back circle and slide: Previous conversation, Needs
+  You, Unread, Recent, across channels. Hold the name pill and slide: # general, your direct
+  threads (the lead first, even before either of you wrote), New Message ›, the channel's task
+  threads, Read Along ›. Let go on one to be there. A tap on the back circle goes back; a tap
+  on the pill opens the details. These are native iOS button menus, so press-hold-slide-release
+  works the way it does everywhere on the iPhone. Or swipe back from the edge and tap a row.
+- **Transcript.** Bubbles: yours right in blue, others left in grey, a tail on the last of a
+  run, the sender's name over the first and their 30pt face beside the last (none in a
+  one-to-one). A time header where 15 minutes or a day passed; events as one quiet centred
+  line; a reply carries its quote. An ask's options sit under it; while it waits the composer
+  says "Answer lead". A conversation loaded from its start opens on an intro (face, name, a
+  quiet line). Gestures are Messages': swipe a bubble right to reply, drag left for times,
+  double-tap or long-press for tapbacks, tap a picture to zoom. The top fades the content under
+  the header; the bottom never blurs the last bubble.
+- **Composer.** A glass `+` and the glass field (send inside it), nothing else; `@` chips
+  while you type a name. A draft (text and photos) stays with its conversation, in memory
+  only. A send names its conversation, so a quick switch can't misdirect it.
+- **Details** (from the pill): the channel's icon, name and "5 people · 2 working", tiles for
+  Message, Pin and Channels, Needs you (answer in place), Conversations, Between others,
+  People (tap to message), then tasks, a task opening in place.
+- **Settings** (from Edit): iOS Settings, grouped rows with coloured symbol tiles (Channels,
+  Relay, Lock with Face ID after 30 s), Link Again, Unlink This iPhone, the version.
+- No Agents view, no read receipts, no typing bubble, no "New messages" line: faces, the
+  `doing` dot and "N working" carry agent state.
 
 ## 15. New-surface checklist
 

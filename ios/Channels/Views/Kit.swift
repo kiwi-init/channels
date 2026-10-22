@@ -184,6 +184,14 @@ enum When {
         return date.formatted(.dateTime.weekday(.wide).month(.wide).day())
     }
 
+    static func list(_ date: Date, now: Date = .now) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return date.formatted(.dateTime.hour().minute()) }
+        if calendar.isDateInYesterday(date) { return "Yesterday" }
+        if now.timeIntervalSince(date) < 6 * 86400 { return date.formatted(.dateTime.weekday(.wide)) }
+        return date.formatted(.dateTime.month(.defaultDigits).day().year(.twoDigits))
+    }
+
     static func since(_ date: Date, now: Date = .now) -> String {
         let s = max(0, now.timeIntervalSince(date))
         if s < 60 { return "just now" }

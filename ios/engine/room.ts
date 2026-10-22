@@ -99,11 +99,11 @@ export class Room {
     this.flush();
   }
 
-  async send(body: string, re: number | null, imgs: readonly Picture[]): Promise<number> {
+  async send(body: string, re: number | null, imgs: readonly Picture[], at: string | null): Promise<number> {
     const names = this.roster.filter((m) => m.active && !m.unverified).map((m) => m.name);
     const named = [...body.matchAll(/(^|\s)@([A-Za-z0-9_.-]+)/g)].map((x) => x[2]!).filter((n) => names.includes(n) && n !== this.me);
     const replyTo = re === null ? undefined : this.messages.find((m) => m.seq === re);
-    const where = placeFromKey(this.place) ?? MAIN;
+    const where = placeFromKey(at ?? this.place) ?? MAIN;
     if (where.kind === "dm") {
       if (!where.with.includes(this.me)) throw new Error("this conversation is between two others: you can read along");
       const other = where.with[0] === this.me ? where.with[1] : where.with[0];

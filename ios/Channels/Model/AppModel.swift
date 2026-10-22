@@ -44,9 +44,12 @@ final class AppModel {
         phase == .ready && (relinkAsked || linking != .idle)
     }
     var seen: [String: Int] = UserDefaults.standard.dictionary(forKey: "seen") as? [String: Int] ?? [:]
-    var pinned: [String] = UserDefaults.standard.stringArray(forKey: "pinned") ?? []
+    var pinned: [String] = (UserDefaults.standard.stringArray(forKey: "pinned") ?? []).map { $0.contains("|") ? $0 : "\($0)|main" }
     var placeSeen: [String: Int] = UserDefaults.standard.dictionary(forKey: "placeSeen") as? [String: Int] ?? [:]
+    var hidden: [String: Int] = UserDefaults.standard.dictionary(forKey: "hidden") as? [String: Int] ?? [:]
     var drafts: [String: Draft] = [:]
+    var feeds: [String: Feed] = [:]
+    var visited: [Spot] = []
 
     @ObservationIgnored let engine = Engine()
     @ObservationIgnored private var booted = false
@@ -56,52 +59,10 @@ final class AppModel {
         rooms.values.filter { $0.gone == nil }.sorted { ($0.last?.at ?? 0) > ($1.last?.at ?? 0) }
     }
 
-    var pinnedChannels: [RoomView] {
-        pinned.compactMap { rooms[$0] }.filter { $0.gone == nil }
-    }
-
-    var otherChannels: [RoomView] {
-        channels.filter { !pinned.contains($0.code) }
-    }
-
-    func togglePin(_ room: RoomView) {
-        if pinned.contains(room.code) {
-            pinned.removeAll { $0 == room.code }
-        } else {
-            pinned.append(room.code)
-        }
-        UserDefaults.standard.set(pinned, forKey: "pinned")
-    }
-
-    func markUnread(_ room: RoomView) {
-        guard let last = room.placeView("main")?.last, !last.mine else { return }
-        seen[room.code] = last.seq - 1
-        UserDefaults.standard.set(seen, forKey: "seen")
-    }
-
-    func markRead(_ room: RoomView) {
-        seen[room.code] = max(seen[room.code] ?? 0, room.placeView("main")?.lastSeq ?? room.messages.last?.seq ?? 0)
-        UserDefaults.standard.set(seen, forKey: "seen")
-        for place in room.places where place.kind == "dm" {
-            placeSeen["\(room.code)|\(place.key)"] = place.lastSeq
-        }
-        UserDefaults.standard.set(placeSeen, forKey: "placeSeen")
-    }
-
-    func unread(_ room: RoomView) -> Int {
-        let mark = seen[room.code] ?? 0
-        let here = room.place == "main" ? room.messages.filter { $0.seq > mark && !$0.mine && !$0.event }.count : (fresh(room, "main") ? 1 : 0)
-        return here + room.places.filter { $0.kind == "dm" && $0.withMe && fresh(room, $0.key) }.count
-    }
-
     func fresh(_ room: RoomView, _ key: String) -> Bool {
         guard let place = room.placeView(key), let last = place.last, !last.mine else { return false }
         let mark = key == "main" ? (seen[room.code] ?? 0) : (placeSeen["\(room.code)|\(key)"] ?? 0)
         return place.lastSeq > mark
-    }
-
-    func freshElsewhere(_ room: RoomView, than key: String) -> Bool {
-        room.places.contains { $0.key != key && ($0.kind == "main" || $0.withMe) && fresh(room, $0.key) }
     }
 
     func markSeen(_ room: RoomView, place key: String) {
@@ -118,11 +79,6 @@ final class AppModel {
 
     func keep(_ draft: Draft, _ code: String, _ place: String) {
         drafts["\(code)|\(place)"] = draft.isEmpty ? nil : draft
-    }
-
-    func draft(in room: RoomView) -> Draft? {
-        let keys = ["main"] + room.places.map(\.key)
-        return keys.lazy.compactMap { self.drafts["\(room.code)|\($0)"] }.first
     }
 
     func open(_ code: String, place: String) async {
@@ -178,6 +134,7 @@ final class AppModel {
                     UINotificationFeedbackGenerator().notificationOccurred(.warning)
                 }
             }
+            feeds["\(room.code)|\(room.place)"] = Feed(messages: room.messages, whole: room.whole)
             let grew = (room.messages.last?.seq ?? 0) > (rooms[room.code]?.messages.last?.seq ?? Int.max)
             if grew {
                 withAnimation(Motion.sent) { rooms[room.code] = room }
@@ -213,8 +170,10 @@ final class AppModel {
         try? await engine.ask(["op": "linkCancel"])
     }
 
-    func send(_ code: String, _ body: String, re: Int?, pictures: [Outgoing] = []) async throws {
-        var ask: [String: Any] = ["op": "send", "code": code, "body": body, "imgs": pictures.map { ["name": $0.name, "mime": $0.mime, "data": $0.data] }]
+    func send(_ spot: Spot, _ body: String, re: Int?, pictures: [Outgoing] = []) async throws {
+        var ask: [String: Any] = [
+            "op": "send", "code": spot.code, "place": spot.place, "body": body, "imgs": pictures.map { ["name": $0.name, "mime": $0.mime, "data": $0.data] },
+        ]
         ask["re"] = re ?? NSNull()
         try await engine.ask(ask)
     }

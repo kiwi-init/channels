@@ -59,7 +59,7 @@ struct RootView: View {
             case .unlinked:
                 LinkView()
             case .ready:
-                ChannelList()
+                ConversationList()
                     .sheet(isPresented: relinking) {
                         LinkView().presentationDragIndicator(.visible)
                     }

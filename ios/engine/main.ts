@@ -125,7 +125,7 @@ async function handle(ask: Ask): Promise<unknown> {
       linking = null;
       return null;
     case "send":
-      return room(ask.code).send(ask.body, ask.re, ask.imgs ?? []);
+      return room(ask.code).send(ask.body, ask.re, ask.imgs ?? [], ask.place ?? null);
     case "image":
       return room(ask.code).image(ask.seq, ask.index);
     case "answer":

@@ -116,4 +116,6 @@ enum Motion {
     static let ease = Animation.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.2)
     static let rise = Animation.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.18)
     static let sent = Animation.timingCurve(0.3, 1.35, 0.5, 1, duration: 0.24)
+    static let morph = Animation.spring(duration: 0.46, bounce: 0.16)
+    static let swap = Animation.easeOut(duration: 0.18)
 }

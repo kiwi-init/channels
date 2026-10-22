@@ -43,7 +43,7 @@ const { loadIdentity, saveConfig } = await import("../../src/config.ts");
 
 const server = startRelay({ port, hostname: "0.0.0.0", dataDir: join(root, "relay") });
 const local = `http://127.0.0.1:${port}`;
-const relay = `http://${lanAddress()}:${port}`;
+const relay = `http://${arg("host", lanAddress())}:${port}`;
 const say = (line: string) => process.stdout.write(`${line}\n`);
 
 const person = await generateIdentity(personName);

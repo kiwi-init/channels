@@ -107,7 +107,7 @@ struct TasksTab: View {
                 }
                 Button {
                     Haptic.tap()
-                    withAnimation(Motion.ease) { model.togglePin(room) }
+                    withAnimation(Motion.ease) { model.togglePin(Spot(code: room.code, place: current)) }
                 } label: {
                     Action(symbol: pinned ? "pin.slash.fill" : "pin.fill", title: pinned ? "Unpin" : "Pin")
                 }
@@ -121,7 +121,7 @@ struct TasksTab: View {
         .frame(maxWidth: .infinity)
     }
 
-    private var pinned: Bool { model.pinned.contains(room.code) }
+    private var pinned: Bool { model.isPinned(Spot(code: room.code, place: current)) }
 
     private var summary: String {
         let count = "\(room.members.count) \(room.members.count == 1 ? "person" : "people")"

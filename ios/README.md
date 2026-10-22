@@ -40,7 +40,7 @@ xcrun devicectl device install app --device <UDID> <DerivedData>/Build/Products/
 ## A channel to try it on
 
 ```bash
-bun ios/scripts/dev-channel.ts [--port 8790] [--dir .ios-dev] [--name "Your Name"]
+bun ios/scripts/dev-channel.ts [--port 8790] [--dir .ios-dev] [--name "Your Name"] [--host IP]
 ```
 
 starts a relay on your network, makes a channel with four agents, a board and a question for
@@ -51,7 +51,7 @@ it on the phone as a link:
 xcrun devicectl device process launch --device <UDID> --terminate-existing --payload-url "kiwi://link/$(cat .ios-dev/link-code.txt)" com.kiwiinit.channels
 ```
 
-The phone and the Mac must be on the same network. The lead answers whatever you send, and a
+The phone and the Mac must be on the same network; with the phone off Wi-Fi but on the cable, pass the Mac's USB link address (`ipconfig getifaddr en6`) as `--host`. The lead answers whatever you send, and a
 new code is printed after each link, so you can link again. Debug builds take `-shot
 conversation`, `-shot tasks`, `-shot list` or `-shot settings` after `--` to open the first
 channel there (or stay on the list, or open Settings), plus `-place KEY`, `-fan YES` and

@@ -43,142 +43,6 @@ enum Shrink {
     }
 }
 
-struct SwitchControl {
-    let current: PlaceView?
-    let fresh: Bool
-    let hold: () -> Void
-    let move: (CGPoint) -> Void
-    let release: () -> Void
-    let close: () -> Void
-    let list: () -> Void
-    let step: (Int) -> Bool
-    let placed: (CGRect) -> Void
-}
-
-struct SwitchButton: View {
-    enum Touch {
-        case idle, pressing, flicking, holding
-    }
-
-    let room: RoomView
-    let control: SwitchControl
-    @State private var touch = Touch.idle
-    @State private var timer: Task<Void, Never>?
-    @State private var nudge: CGFloat = 0
-    @State private var bounce: CGFloat = 0
-    @GestureState private var pressed = false
-
-    var body: some View {
-        ZStack {
-            PlaceFace(room: room, place: control.current, size: 34)
-                .id(control.current?.key)
-                .transition(.scale(scale: 0.6).combined(with: .opacity))
-        }
-        .offset(x: nudge)
-        .frame(width: 44, height: 44)
-        .glassCircle()
-        .prism(Circle(), band: 0.66)
-        .overlay(alignment: .topTrailing) {
-            if control.fresh {
-                Circle().fill(Tone.accent).frame(width: 11, height: 11).overlay(Circle().stroke(Tone.canvas, lineWidth: 2)).offset(x: 1, y: -1)
-            }
-        }
-        .scaleEffect(touch == .idle ? 1 : 0.9)
-        .offset(y: bounce)
-        .animation(.spring(duration: 0.2, bounce: 0.4), value: touch == .idle)
-        .animation(.spring(duration: 0.3, bounce: 0.3), value: control.current?.key)
-        .contentShape(Circle())
-        .onGeometryChange(for: CGRect.self) {
-            $0.frame(in: .global)
-        } action: {
-            control.placed($0)
-        }
-        .gesture(
-            DragGesture(minimumDistance: 0, coordinateSpace: .global)
-                .updating($pressed) { _, state, _ in state = true }
-                .onChanged(changed)
-                .onEnded(ended)
-        )
-        .onChange(of: pressed) { _, now in
-            guard !now else { return }
-            Task { abandon() }
-        }
-        .accessibilityElement()
-        .accessibilityLabel(control.current.map { "Switch conversation, now in \($0.kind == "main" ? "general" : $0.title)" } ?? "Switch conversation")
-        .accessibilityHint("Double-tap to list your conversations, or swipe up or down to step through them.")
-        .accessibilityAddTraits(.isButton)
-        .accessibilityAction { control.list() }
-        .accessibilityAdjustableAction { direction in
-            _ = control.step(direction == .increment ? 1 : -1)
-        }
-    }
-
-    private func changed(_ drag: DragGesture.Value) {
-        let dx = drag.translation.width
-        let dy = drag.translation.height
-        switch touch {
-        case .idle:
-            touch = .pressing
-            timer = Task {
-                try? await Task.sleep(for: .milliseconds(90))
-                guard !Task.isCancelled, touch == .pressing else { return }
-                lift()
-            }
-        case .pressing:
-            guard hypot(dx, dy) > 10 else { return }
-            timer?.cancel()
-            if dy < 0 && -dy > abs(dx) {
-                lift()
-                control.move(drag.location)
-            } else {
-                touch = .flicking
-            }
-        case .flicking:
-            nudge = max(-16, min(16, dx * 0.35))
-        case .holding:
-            control.move(drag.location)
-        }
-    }
-
-    private func ended(_ drag: DragGesture.Value) {
-        timer?.cancel()
-        let was = touch
-        touch = .idle
-        withAnimation(.spring(duration: 0.35, bounce: 0.5)) { nudge = 0 }
-        switch was {
-        case .pressing, .idle:
-            Haptic.tap()
-            withAnimation(.spring(duration: 0.16, bounce: 0.2)) { bounce = -7 }
-            Task {
-                try? await Task.sleep(for: .milliseconds(140))
-                withAnimation(.spring(duration: 0.4, bounce: 0.6)) { bounce = 0 }
-            }
-        case .flicking:
-            let dx = drag.translation.width
-            guard abs(dx) > 26, abs(dx) > abs(drag.translation.height) * 1.2 else { return }
-            if !control.step(dx < 0 ? 1 : -1) {
-                UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: 0.6)
-            }
-        case .holding:
-            control.release()
-        }
-    }
-
-    private func abandon() {
-        guard touch != .idle else { return }
-        timer?.cancel()
-        if touch == .holding { control.close() }
-        touch = .idle
-        withAnimation(.spring(duration: 0.35, bounce: 0.5)) { nudge = 0 }
-    }
-
-    private func lift() {
-        touch = .holding
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        control.hold()
-    }
-}
-
 struct PlaceFace: View {
     let room: RoomView
     let place: PlaceView?
@@ -208,11 +72,10 @@ struct PlaceFace: View {
 
 struct Dock: View {
     let room: RoomView
-    let place: String
+    let spot: Spot
     @Binding var replyTo: MessageView?
     var typing: FocusState<Bool>.Binding
     let follow: Follow
-    let switcher: SwitchControl
     let jump: () -> Void
     @Environment(AppModel.self) private var model
     @Namespace private var glass
@@ -222,9 +85,9 @@ struct Dock: View {
     @State private var picked: [PhotosPickerItem] = []
     @State private var choosing = false
     @State private var attached: [Attached] = []
-    @State private var drafting = ""
+    @State private var drafting: Spot?
 
-    private var here: PlaceView? { room.placeView(place) }
+    private var here: PlaceView? { room.placeView(spot.place) }
     private var readOnly: Bool { here.map { $0.kind == "dm" && !$0.withMe } ?? false }
     private var hasText: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     private var canSend: Bool { !sending && room.connection == .live && (hasText || !attached.isEmpty) }
@@ -264,7 +127,6 @@ struct Dock: View {
                         plus.glassID("plus", in: glass)
                         field.glassID("field", in: glass)
                     }
-                    SwitchButton(room: room, control: switcher).glassID("switch", in: glass)
                 }
             }
         }
@@ -279,10 +141,10 @@ struct Dock: View {
         }
         .animation(.snappy(duration: 0.25), value: follow.atBottom)
         .photosPicker(isPresented: $choosing, selection: $picked, maxSelectionCount: 4, matching: .images)
-        .onAppear { restore(place) }
-        .onDisappear { model.keep(Draft(text: draft, attached: attached), room.code, place) }
-        .onChange(of: place) { old, new in
-            model.keep(Draft(text: draft, attached: attached), room.code, old)
+        .onAppear { restore(spot) }
+        .onDisappear { model.keep(Draft(text: draft, attached: attached), spot.code, spot.place) }
+        .onChange(of: spot) { old, new in
+            model.keep(Draft(text: draft, attached: attached), old.code, old.place)
             error = nil
             restore(new)
         }
@@ -451,9 +313,9 @@ struct Dock: View {
         return "Message"
     }
 
-    private func restore(_ key: String) {
+    private func restore(_ key: Spot) {
         drafting = key
-        let kept = model.draft(room.code, key)
+        let kept = model.draft(key.code, key.place)
         draft = kept.text
         attached = kept.attached
     }
@@ -479,21 +341,21 @@ struct Dock: View {
         sending = true
         error = nil
         Haptic.tap()
-        let from = drafting
+        let from = spot
         let pictures = attached.enumerated().map { i, a in Outgoing(name: "photo-\(i + 1).jpg", mime: "image/jpeg", data: a.data.base64EncodedString()) }
         Task {
             do {
                 if replyTo == nil, pictures.isEmpty, let asking {
-                    try await model.answer(room.code, seq: asking.seq, text: text)
+                    try await model.answer(from.code, seq: asking.seq, text: text)
                 } else {
-                    try await model.send(room.code, text, re: replyTo?.seq, pictures: pictures)
+                    try await model.send(from, text, re: replyTo?.seq, pictures: pictures)
                 }
                 if drafting == from {
                     if draft.trimmingCharacters(in: .whitespacesAndNewlines) == text { draft = "" }
                     attached = []
                     replyTo = nil
                 } else {
-                    model.keep(Draft(), room.code, from)
+                    model.keep(Draft(), from.code, from.place)
                 }
             } catch {
                 self.error = error.localizedDescription

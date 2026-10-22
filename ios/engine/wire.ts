@@ -11,7 +11,7 @@ export type Ask =
   | { op: "linkAsk"; code: string; label: string }
   | { op: "linkWait" }
   | { op: "linkCancel" }
-  | { op: "send"; code: string; body: string; re: number | null; imgs: Picture[] }
+  | { op: "send"; code: string; body: string; re: number | null; imgs: Picture[]; place?: string }
   | { op: "image"; code: string; seq: number; index: number }
   | { op: "answer"; code: string; seq: number; text: string }
   | { op: "react"; code: string; seq: number; emoji: string | null }
