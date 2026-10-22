@@ -1,0 +1,219 @@
+import { ChannelGone, type RoomsSetting } from "@kiwi/core/client.ts";
+import type { Member } from "@kiwi/core/membership.ts";
+import type { Message } from "@kiwi/core/protocol.ts";
+import { fold, type ChannelState, type FoldBase, type GuardFloor } from "@kiwi/core/state.ts";
+
+import type { ChannelIdentityView, FollowEvent, WireError } from "../../desktop/src/bridge.ts";
+import type { Keyring } from "../../desktop/src/keyring.ts";
+import { usableBase } from "../../web/src/lib/channel/base-plan.ts";
+import { foldRoster } from "../../web/src/lib/channel/fold-roster.ts";
+import { hear, onlineByName, type Online } from "../../web/src/lib/channel/online.ts";
+import { trimmed } from "../../web/src/lib/channel/trim.ts";
+import { roomView } from "./view.ts";
+import type { Connection, Picture, RoomView } from "./wire.ts";
+
+const WINDOW = 400;
+const KEEP = 1_500;
+const EMIT_MS = 60;
+
+const merged = (prev: readonly Message[], more: readonly Message[]): Message[] => {
+  const seen = new Set(prev.map((p) => p.seq));
+  return [...prev, ...more.filter((m) => !seen.has(m.seq))].sort((a, b) => a.seq - b.seq);
+};
+
+const errorText = (e: WireError): string => (e.kind === "gone" ? `the channel was ${e.why}` : e.message);
+
+export class Room {
+  private messages: Message[] = [];
+  private roster: Member[] = [];
+  private base: FoldBase | null = null;
+  private guard: GuardFloor | null = null;
+  private rooms: RoomsSetting | null = null;
+  private heard: ReadonlyMap<string, Online> = new Map();
+  private connection: Connection = "connecting";
+  private gone: "removed" | "closed" | null = null;
+  private error: string | null = null;
+  private head = 0;
+  private since = 0;
+  private title: string;
+  private stopLive: (() => void) | null = null;
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  private clock: ReturnType<typeof setInterval> | null = null;
+  private closed = false;
+  private state: ChannelState | null = null;
+
+  constructor(
+    private readonly keyring: Keyring,
+    private readonly seat: ChannelIdentityView,
+    private readonly emit: (room: RoomView) => void,
+    private readonly lost: (code: string) => void,
+  ) {
+    this.title = seat.name ?? seat.label;
+  }
+
+  get code(): string {
+    return this.seat.code ?? "";
+  }
+
+  private get me(): string {
+    return this.seat.idName ?? this.seat.label;
+  }
+
+  private get isOwner(): boolean {
+    const access = this.seat.access as { ownerPk?: unknown } | undefined;
+    return access?.ownerPk === this.seat.pk;
+  }
+
+  async start(): Promise<void> {
+    this.schedule();
+    this.clock = setInterval(() => this.schedule(), 30_000);
+    try {
+      await this.refreshRoster();
+      const head = await this.keyring.call(this.code, "head");
+      this.head = head;
+      this.since = Math.max(0, head - WINDOW);
+      if (this.since > 0) this.base = usableBase(await this.keyring.call(this.code, "snapshot").catch(() => null), this.since);
+      void this.refreshInfo();
+      if (this.closed) return;
+      this.stopLive = this.keyring.follow(this.code, this.since, (ev) => this.on(ev));
+    } catch (e) {
+      this.error = e instanceof Error ? e.message : String(e);
+      this.connection = "reconnecting";
+      this.schedule();
+    }
+  }
+
+  stop(): void {
+    this.closed = true;
+    this.stopLive?.();
+    if (this.timer) clearTimeout(this.timer);
+    if (this.clock) clearInterval(this.clock);
+  }
+
+  async send(body: string, re: number | null, imgs: readonly Picture[]): Promise<number> {
+    const names = this.roster.filter((m) => m.active && !m.unverified).map((m) => m.name);
+    const named = [...body.matchAll(/(^|\s)@([A-Za-z0-9_.-]+)/g)].map((x) => x[2]!).filter((n) => names.includes(n) && n !== this.me);
+    const replyTo = re === null ? undefined : this.messages.find((m) => m.seq === re);
+    const to = named.length ? named : replyTo && replyTo.from !== this.me ? [replyTo.from] : undefined;
+    return this.keyring.call(this.code, "send", body, { kind: "msg", ...(to ? { to } : {}), ...(re !== null ? { re: [re] } : {}), ...(imgs.length ? { imgs: [...imgs] } : {}) });
+  }
+
+  async image(seq: number, index: number): Promise<string | null> {
+    const img = this.messages.find((m) => m.seq === seq)?.imgs?.[index];
+    return img ? this.keyring.call(this.code, "image", img) : null;
+  }
+
+  async answer(seq: number, text: string): Promise<number> {
+    const ask = this.messages.find((m) => m.seq === seq);
+    if (!ask) throw new Error("that question isn't here any more");
+    return this.keyring.call(this.code, "send", text, { to: [ask.from], re: [ask.seq], kind: "msg" });
+  }
+
+  private async refreshRoster(): Promise<void> {
+    try {
+      this.roster = await this.keyring.call(this.code, "members");
+      this.schedule();
+    } catch (e) {
+      this.fail(e);
+    }
+  }
+
+  private async refreshInfo(): Promise<void> {
+    const [title, guard, rooms] = await Promise.all([
+      this.keyring.call(this.code, "title").catch(() => null),
+      this.keyring.call(this.code, "guard").catch(() => null),
+      this.keyring.call(this.code, "rooms").catch(() => null),
+    ]);
+    if (title) this.title = title;
+    this.guard = guard;
+    this.rooms = rooms;
+    this.schedule();
+  }
+
+  private fail(e: unknown): void {
+    if (e instanceof ChannelGone) {
+      this.gone = e.why;
+      this.lost(this.code);
+    } else this.error = e instanceof Error ? e.message : String(e);
+    this.schedule();
+  }
+
+  private on(ev: FollowEvent): void {
+    switch (ev._tag) {
+      case "Open":
+        this.connection = "live";
+        this.error = null;
+        if (ev.kind !== "page") void this.refreshRoster();
+        void this.keyring.presence(this.code, { client: "probe", query: true }).catch(() => {});
+        break;
+      case "Message":
+        this.messages = merged(this.messages, [ev.message]);
+        this.head = Math.max(this.head, ev.message.seq);
+        break;
+      case "Head":
+        this.head = Math.max(this.head, ev.seq);
+        break;
+      case "Presence":
+        this.heard = hear(this.heard, ev.presence, Date.now());
+        break;
+      case "Roster":
+        void this.refreshRoster();
+        break;
+      case "Info":
+        void this.refreshInfo();
+        break;
+      case "Down":
+        this.connection = "reconnecting";
+        break;
+      case "Failed":
+        if (ev.error.kind === "gone") {
+          this.gone = ev.error.why;
+          this.lost(this.code);
+        } else {
+          this.connection = "reconnecting";
+          this.error = errorText(ev.error);
+        }
+        break;
+      default:
+        return;
+    }
+    this.schedule();
+  }
+
+  private schedule(): void {
+    if (this.timer || this.closed) return;
+    this.timer = setTimeout(() => {
+      this.timer = null;
+      this.flush();
+    }, EMIT_MS);
+  }
+
+  private flush(): void {
+    const now = Date.now();
+    const admitted = this.roster.filter((m) => !m.unverified);
+    const roster = foldRoster(admitted);
+    const next = trimmed(this.messages, roster, now, this.rooms, this.guard, this.base, KEEP);
+    if (next) {
+      this.base = next;
+      this.messages = this.messages.filter((m) => m.seq > next.n);
+    }
+    this.state = fold(this.messages, roster, now, this.rooms, this.guard, this.base);
+    const keyOf = new Map(admitted.filter((m) => m.active).map((m) => [m.name, m.pk]));
+    this.emit(
+      roomView({
+        code: this.code,
+        title: this.title,
+        me: this.me,
+        isOwner: this.isOwner,
+        connection: this.connection,
+        gone: this.gone,
+        error: this.error,
+        head: this.head,
+        whole: this.since === 0 || this.base !== null,
+        messages: this.messages,
+        state: this.state,
+        online: onlineByName(this.heard, keyOf, now),
+      }),
+    );
+  }
+}

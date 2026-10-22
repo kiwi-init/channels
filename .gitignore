@@ -15,3 +15,7 @@ desktop/release/
 *.sqlite
 !.env.example
 .dictation-files/
+
+# iPhone app (ios/): Xcode's per-user state and the dev channel's throwaway folder
+ios/**/xcuserdata/
+.ios-dev/

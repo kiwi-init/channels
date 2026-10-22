@@ -66,6 +66,9 @@ jobs:
       - name: desktop types
         if: ${{ !cancelled() }}
         run: cd desktop && bunx tsc --noEmit
+      - name: ios engine types
+        if: ${{ !cancelled() }}
+        run: bunx tsc --noEmit -p ios/engine/tsconfig.json && bunx tsc --noEmit -p ios/scripts/tsconfig.json
       - name: ui tokens
         if: ${{ !cancelled() }}
         run: bun scripts/ui-tokens.ts
@@ -356,6 +359,32 @@ jobs:
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['cli-macos'] }}
           shard: ${{ matrix.shard }}of3
 
+  # The iPhone app: Swift lint, then an unsigned build for devices with the engine bundled in.
+  ios:
+    name: ios / build
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['ios']
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup
+      - name: newest xcode
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+          xcodebuild -version
+      - name: swift lint
+        run: xcrun swift-format lint -r --strict --configuration ios/.swift-format ios/Channels
+      - name: app build
+        if: ${{ !cancelled() }}
+        run: xcodebuild -project ios/Channels.xcodeproj -scheme Channels -configuration Release -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/ios" CODE_SIGNING_ALLOWED=NO build
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        timeout-minutes: 1
+        with:
+          job: ios
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['ios'] }}
+
   release-rehearsal:
     name: release / rehearsal
     needs: plan
@@ -368,7 +397,7 @@ jobs:
   # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, static, test-unit, test-flows-a, test-flows-b, build, shots, perf-runs, perf, desktop, cli-macos, release-rehearsal]
+    needs: [plan, static, test-unit, test-flows-a, test-flows-b, build, shots, perf-runs, perf, desktop, cli-macos, ios, release-rehearsal]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

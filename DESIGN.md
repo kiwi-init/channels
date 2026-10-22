@@ -379,7 +379,33 @@ but what's chosen in the sidebar, spread the spectrum beyond a thin band
 in it, or put hairlines
 between the rails.
 
-## 14. New-surface checklist
+## 14. The iPhone app
+
+The native app in `ios/` (SwiftUI) looks like Apple Messages, not like the desktop: the owner
+asked for that, so on the phone it wins over §9's rows.
+
+- Type is SF Pro through Dynamic Type text styles (`Theme.swift`'s `Step` maps the six steps
+  to `caption2`, `caption`, `subheadline`, `body`, `headline`, `largeTitle`). No Inter.
+- Colours are this file's tokens (`Tone` in `Theme.swift`), with the dark canvas true black
+  as in Messages, `bubbleMine` the accent and `bubbleThem` Messages grey (`#e9e9eb` /
+  `#262628`).
+- A conversation is bubbles: yours on the right in blue, everyone else's on the left in grey,
+  a tail on the last bubble of a run, the sender's name over the first and their 30pt face
+  beside the last. A time header (`Today 4:06 PM`) sits centred where 15 minutes or a day
+  passed. Events are one centred quiet line. A reply carries the answered words in an
+  outlined capsule above it. An ask's options are capsules under it: `accent` text, the
+  chosen one filled; "Waiting on you" in `decide` while it waits.
+- The header is the channel's avatar over a glass name pill (tap: the details sheet with the
+  people, Needs you and the tasks), a glass back button, and one quiet status line. The
+  composer is a glass `+` (photos) and a glass capsule field whose send arrow appears when
+  there is something to send. On iOS 26 and later both bars are `safeAreaBar`s with the
+  system's glass; earlier, material.
+- The channel list is Messages' list: a large title, search, a blue dot for unread, a 52pt
+  avatar, the name, the time and a chevron, two quiet lines of the last message (or "Needs
+  you:" in `decide`).
+- No agents view: faces, the working dot and "N working" carry agent state.
+
+## 15. New-surface checklist
 
 1. Copy theme vars, `design-tokens.ts`, `fonts.ts`, `accessibility.ts`.
 2. Copy `kit.tsx` plus one `ui/` primitive at a time (not a whole library).
