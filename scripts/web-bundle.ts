@@ -2,6 +2,7 @@ import { readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
 const BUDGET_BYTES = 590_000;
+const MOTION_MARKS = ["motionComponentSymbol", "data-motion-pop-id", "reduced-motion-disabled"];
 const FILE_LIMIT_BYTES = 20 * 1024 * 1024;
 
 const dist = resolve(import.meta.dir, "../web/dist");
@@ -20,6 +21,15 @@ console.log(`first-load JS: ${total} bytes in ${sizes.length} files (budget ${BU
 if (total > BUDGET_BYTES) {
   console.error(
     `the dashboard's first-load JS is ${total} bytes, over its ${BUDGET_BYTES}-byte budget. Load the new code lazily (web/src/components/lazy.tsx), or take as much off the first load as you add; the budget doesn't go up for a feature.`,
+  );
+  process.exit(1);
+}
+
+const firstLoad = await Promise.all(files.map((path) => Bun.file(join(dist, path)).text()));
+const withMotion = files.filter((_, i) => MOTION_MARKS.some((mark) => firstLoad[i]?.includes(mark)));
+if (withMotion.length) {
+  console.error(
+    `Motion is in the dashboard's first load (${withMotion.join(", ")}). Import motion/react only from components/motion.tsx, and that only from lazy surfaces (web/src/components/lazy.tsx): the conversation reaches it through the lazy Presence.`,
   );
   process.exit(1);
 }

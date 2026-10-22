@@ -135,15 +135,31 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 
 ## 6. Motion
 
-- Keyframes only, no motion library: `rise` (dialogs, panels: 0.18s),
-  `slide-in` (0.2s), `flash` (jump landing: 1.6s), `sent` (your message
-  lands: 0.24s spring), `arrived` (theirs rises: 0.22s).
-- Eases: `cubic-bezier(0.2, 0.8, 0.2, 1)` generally, `(0.3, 1.35, 0.5, 1)`
-  for sent.
-- Motion only answers an action. Nothing animates forever: a busy agent's
-  dot is steady (a running animation keeps the GPU drawing every frame). All animation disables under
-  `html.reduce-motion`, the persisted reduce-motion toggle, or OS
-  reduced-motion.
+- Motion only answers an action: something opens, closes, arrives or moves
+  because someone did something. Nothing animates forever: a busy agent's dot
+  is steady (a running animation keeps the GPU drawing every frame).
+- CSS first. Keyframes for what appears: `rise` (settings, composer lists,
+  the lightbox, toasts: 0.18s), `flash` (jump landing: 1.6s), `sent` (your
+  message lands: 0.24s spring), `arrived` (theirs rises: 0.22s), `leave` (a
+  toast goes: 0.16s).
+  Base UI popups (menus, dialogs, the palette, tooltips) enter and leave with
+  `data-starting-style` / `data-ending-style` transitions, 0.1-0.12s.
+- [Motion](https://motion.dev) (`motion/react`, through
+  `components/motion.tsx`) only for what CSS can't do: a side panel leaving
+  (`Presence`, `popLayout`, so the conversation takes the space at once) and
+  rows moving to a new place (the task board's `layout`, with a
+  `layoutDependency` on the order so a re-render doesn't measure). No hover,
+  press or decorative motion through it.
+- Motion stays off the first load: import it only from lazy surfaces
+  (`components/lazy.tsx`); the conversation reaches it through the lazy
+  `Presence`. Wrap a surface that animates in `<Motion>` so it follows the
+  reduce-motion settings.
+- Eases: `cubic-bezier(0.2, 0.8, 0.2, 1)` (`EASE`) generally,
+  `(0.3, 1.35, 0.5, 1)` for sent. Moves are springs without bounce, 0.28s
+  (`MOVE`). Leaving is quicker than arriving.
+- Reduced motion: `html.reduce-motion` (the persisted toggle) and OS
+  reduced-motion turn CSS animation off; `<Motion>` turns Motion's movement
+  off for both and keeps only its fades.
 
 ## 7. Core components
 
@@ -350,8 +366,9 @@ actions row with send.
   steps (`--text-scale`), never the layout. In the desktop app ⌘+, ⌘− and
   ⌘0 (Ctrl elsewhere) and the View menu step through those sizes; the page
   itself never zooms. Appearance persists per browser (`mc.appearance`).
-- Persisted toggles (`kiwi:a11y:*`): `reduce-motion` (all durations to near
-  zero, including sent/arrived). OS reduced-motion is respected too.
+- Persisted toggles (`kiwi:a11y:*`): `reduce-motion` (CSS durations to near
+  zero, including sent/arrived; Motion keeps only fades). OS reduced-motion is
+  respected too.
 - `prefers-contrast: more` forces solid backgrounds with no transparency
   tricks.
 - New entry points call `applyStoredAppearance()` plus
