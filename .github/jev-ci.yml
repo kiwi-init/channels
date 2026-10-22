@@ -356,8 +356,10 @@ jobs:
       Also the daemon's and hooks' reliability (audit #132, bundle H): a stale daemon.lock whose pid now belongs to
       another program freed without killing it, only a kiwi daemon's command line being killed (test/daemon-lock.test.ts);
       hooks retrying an unreachable daemon spawning one per home every 15 s while a lock exists (claimSpawn,
-      test/daemon-lock.test.ts); a key that waited long for approval getting its seat within seconds of the approval
-      (test/daemon-seats.test.ts); a wake command that ignores TERM or leaves a child on its stderr ending at its deadline
+      test/daemon-lock.test.ts); a key that waited for approval getting its seat within seconds of its join writing its
+      cursor, not at its backed-off retry: the retry's fingerprint includes whether the key has a
+      cursor yet, and a changed fingerprint starts the backoff over (test/daemon-seat-approval.test.ts,
+      its daemon's first retry 60 s away so only the cursor can seat it in time); a wake command that ignores TERM or leaves a child on its stderr ending at its deadline
       (runBounded, test/wake-bounded.test.ts); the Rex helpers replacing init.lua in one rename through its dotfiles link,
       keeping its mode (test/terminal-rex.test.ts); and a kiwi sh query run in its own process, stopped after its deadline, with
       randomblob and zeroblob refused (queryIsolated, test/sh-query.test.ts).
