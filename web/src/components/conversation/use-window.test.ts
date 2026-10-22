@@ -15,14 +15,15 @@ describe("the mounted window doesn't grow while you read at the bottom", () => {
   })
 })
 
-describe("away from the conversation (Tasks or Agents), the window keeps up without a scroller", () => {
-  test("once more than twice the window has piled up, it moves to the newest rows", () => {
-    expect(awayFrom(items(1_000), 0)).toBe(881)
-    expect(awayFrom(items(1_000), 700)).toBe(881)
+describe("away from the conversation (Tasks or Agents), the window shrinks to a first screen, so coming back mounts only that", () => {
+  test("more than the newest 40 rows mounted moves it to the newest 40", () => {
+    expect(awayFrom(items(1_000), 0)).toBe(961)
+    expect(awayFrom(items(1_000), 700)).toBe(961)
+    expect(awayFrom(items(1_000), 800)).toBe(961)
   })
 
-  test("a window that's still small is left as it is", () => {
-    expect(awayFrom(items(1_000), 800)).toBeNull()
-    expect(awayFrom(items(200), 0)).toBeNull()
+  test("a window already at the first screen, or a short conversation, is left as it is", () => {
+    expect(awayFrom(items(1_000), 960)).toBeNull()
+    expect(awayFrom(items(30), 0)).toBeNull()
   })
 })

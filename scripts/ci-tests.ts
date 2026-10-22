@@ -51,13 +51,16 @@ const proc = Bun.spawn(["bun", "test", "--parallel", ...timings, ...files.map((f
 });
 const decoder = new TextDecoder();
 let tail = "";
-for await (const chunk of proc.stderr) {
-  process.stderr.write(chunk);
-  tail = (tail + decoder.decode(chunk, { stream: true })).slice(-4096);
-}
+const reading = (async () => {
+  for await (const chunk of proc.stderr) {
+    process.stderr.write(chunk);
+    tail = (tail + decoder.decode(chunk, { stream: true })).slice(-4096);
+  }
+})();
 const code = await proc.exited;
+await Promise.race([reading, Bun.sleep(2000)]);
 tmp.cleanup();
-const ran = /Ran \d+ tests? across (\d+) files?\./.exec(tail)?.[1];
+const ran = [...tail.matchAll(/Ran \d+ tests? across (\d+) files?\./g)].at(-1)?.[1];
 if (code === 0 && Number(ran) !== files.length) {
   console.error(`bun test exited 0 after ${ran ?? "an unknown number"} of ${files.length} files: a test ended the run early`);
   process.exit(1);

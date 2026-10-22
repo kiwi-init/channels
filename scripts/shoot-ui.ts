@@ -70,7 +70,8 @@ const skipped: string[] = [];
 /** Retina, as the owner sees it: the crispness of type and edges is half of what the shots are for. */
 const page = (viewport: { width: number; height: number }) => browser.newPage({ viewport, deviceScaleFactor: 2 });
 const wanted = (name: string) => !only || only.some((w) => name.includes(w));
-const wantedNarrow = (name: string) => !wideOnly || !!phone?.some((w) => name.includes(w));
+const takes = (tag: string, name: string) => wanted(name) && (!tag.endsWith("-narrow") || !wideOnly || !!phone?.some((w) => name.includes(w)));
+if (phone && !wideOnly) console.error("--phone narrows a --wide run; without --wide every screen is shot at both sizes");
 
 const chrome = (page: Page) => page.getByRole("banner", { name: "Channels" }).or(page.getByRole("complementary"));
 
@@ -128,7 +129,7 @@ function dragCaught(): string[] {
 
 /** One named screen: get there, wait for it to settle, shoot it, put things back. */
 async function shoot(page: Page, tag: string, name: string, open?: () => Promise<void>, close: () => Promise<void> = async () => void (await page.keyboard.press("Escape"))) {
-  if (!wanted(name) || (tag.endsWith("-narrow") && !wantedNarrow(name))) return;
+  if (!takes(tag, name)) return;
   try {
     if (open) await open();
     await page
@@ -659,7 +660,7 @@ try {
         if (narrow) await toChannel();
       });
       await shoot(owner, tag, "18-settings", openSettings, closeSettings);
-      if (["27-new-agents", "28-new-agents-ready", "29-context-line"].some(wanted)) {
+      if (["27-new-agents", "28-new-agents-ready", "29-context-line"].some((n) => takes(tag, n))) {
         if (!terminalsStub) {
           terminalsStub = true;
           await owner.addInitScript(() => {
@@ -744,7 +745,7 @@ try {
 
       // The desktop app's New agent, with a stand-in for the four launch methods its bridge adds,
       // on only while this tab's flag is set so the other screens stay the browser's.
-      if (["24-new-agent", "26-new-agent-remote", "25-new-agent-started"].some(wanted)) {
+      if (["24-new-agent", "26-new-agent-remote", "25-new-agent-started"].some((n) => takes(tag, n))) {
         if (!launcherStub) {
           launcherStub = true;
           await owner.addInitScript(() => {
@@ -810,7 +811,7 @@ try {
 
       // Signed out, and someone opening the invite link who isn't in yet.
       const signedOut = ["20-first-run", "21-join-with-code", "22-invite-preview", "23-signed-in-empty"];
-      if ((only && !signedOut.some(wanted)) || (narrow && !signedOut.some(wantedNarrow))) continue;
+      if (!signedOut.some((n) => takes(tag, n))) continue;
       const out = await page(size);
       await out.goto(BASE);
       await setTheme(out, theme);
