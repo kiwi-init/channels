@@ -1,5 +1,5 @@
 import { GitPullRequestIcon } from "@hugeicons/core-free-icons"
-import { memo, useEffect, useMemo, useState, type ReactNode } from "react"
+import { memo, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react"
 
 import { describeEvent, githubLine } from "@kiwi/core/format.ts"
 import { ignored, type Color, type Handoff, type ImageAttachment, type Message, type Trust } from "@kiwi/core/protocol.ts"
@@ -212,6 +212,7 @@ export interface MessageProps {
   image?: (img: ImageAttachment) => Promise<string | null>
   onOpenImage?: (m: Message, img: ImageAttachment, src: string) => void
   clamp?: boolean
+  eager?: boolean
 }
 
 function Clamp({ on, children }: { on: boolean; children: ReactNode }) {
@@ -219,7 +220,7 @@ function Clamp({ on, children }: { on: boolean; children: ReactNode }) {
   const [inner, setInner] = useState<HTMLDivElement | null>(null)
   const [over, setOver] = useState(false)
   const [open, setOpen] = useState(false)
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!on || open || !box || !inner || typeof ResizeObserver === "undefined") return
     const measure = () => setOver(inner.offsetHeight > box.clientHeight + 2)
     measure()
@@ -422,6 +423,7 @@ export const MessageRow = memo(function MessageRow({
   image,
   onOpenImage,
   clamp = false,
+  eager = false,
 }: MessageProps) {
   const forged = ignored(trust)
   const refs = useMemo(() => ({ known: (seq: number) => seq !== m.seq && quoted(seq) !== undefined, open: onJump }), [m.seq, quoted, onJump])
@@ -445,7 +447,7 @@ export const MessageRow = memo(function MessageRow({
     >
       <div className="pt-0.5">{first && (face ?? <Monogram name={who} hue={m.from} agent={isAgent(author)} online={online} color={color} size={32} />)}</div>
 
-      <div className="-m-1 min-w-0 p-1 offscreen-lazy">
+      <div className={cx("-m-1 min-w-0 p-1", !eager && "offscreen-lazy")}>
         {first && (
           <p className="flex min-w-0 items-baseline gap-2 text-ui">
             <span className="truncate font-semibold text-ink" title={sponsor}>

@@ -19,6 +19,7 @@ const RUN_GAP = 5 * 60_000
 
 const sameDay = (a: number, b: number) => new Date(a).toDateString() === new Date(b).toDateString()
 const EVENT_GAP = 15 * 60_000
+const EAGER_ROWS = 30
 
 export interface RowsContext {
   me: string
@@ -98,7 +99,7 @@ export function rowMakers(c: RowsContext) {
     const prs = prsIn(state, [m], () => true)
     return prs.length ? prs : undefined
   }
-  const bubble = (m: Message, first: boolean, prev: Message | undefined, anchor?: string, next?: Message, general = false) => {
+  const bubble = (m: Message, first: boolean, prev: Message | undefined, anchor?: string, next?: Message, general = false, eager = false) => {
     const author = (m.pk && byKey.get(m.pk)) || state.members.get(m.from)
     return (
       <MessageRow
@@ -131,6 +132,7 @@ export function rowMakers(c: RowsContext) {
         reactions={chipsFor(state, m.seq, me, nameOf)}
         image={image}
         onOpenImage={onOpenImage}
+        eager={eager}
       />
     )
   }
@@ -170,7 +172,7 @@ export function rowMakers(c: RowsContext) {
       const next = list[i + 1]
       const runs = (a: Message | undefined, b: Message) =>
         !!a && a.kind !== "event" && b.kind !== "event" && !(cards && isActivity(a, state.tasks)) && a.from === b.from && sameDay(a.ts, b.ts) && b.ts - a.ts <= RUN_GAP
-      out.push(bubble(m, !runs(prev, m), prev, anchor, next, cards))
+      out.push(bubble(m, !runs(prev, m), prev, anchor, next, cards, i >= list.length - EAGER_ROWS))
     }
     return out
   }
@@ -185,7 +187,7 @@ export function threadRowsOf(root: Message | undefined, replies: Message[], bubb
       const prev = list[i - 1]
       const next = list[i + 1]
       const first = !prev || prev.from !== m.from || m.ts - prev.ts > RUN_GAP
-      threadRows.push(bubble(m, first, prev, "t", next))
+      threadRows.push(bubble(m, first, prev, "t", next, false, i < EAGER_ROWS || i >= list.length - EAGER_ROWS))
       if (i === 0 && replies.length)
         threadRows.push(
           <div key="split" className="my-3 text-center text-stamp text-ink-3">
