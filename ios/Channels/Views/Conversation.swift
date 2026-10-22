@@ -201,7 +201,7 @@ struct BubbleRow: View {
                     QuoteBubble(quote: quote, room: room) { jump(quote.seq) }
                 }
                 Bubble(message: message, room: room, tail: last, reply: { reply(message) })
-                    .padding(.top, message.reactions.isEmpty ? 0 : 16)
+                    .padding(.top, message.reactions.isEmpty ? 0 : 20)
                 if !message.choices.isEmpty {
                     Choices(message: message, room: room)
                 }
@@ -309,7 +309,7 @@ struct Bubble: View {
         .overlay(alignment: message.mine ? .topLeading : .topTrailing) {
             if !message.reactions.isEmpty {
                 Badges(reactions: message.reactions, mine: message.mine)
-                    .offset(x: message.mine ? -14 : 14, y: -16)
+                    .offset(x: message.mine ? -16 : 16, y: -22)
             }
         }
     }
@@ -347,8 +347,8 @@ struct Badges: View {
         HStack(spacing: -8) {
             ForEach(reactions.prefix(3), id: \.emoji) { r in
                 Text(r.emoji)
-                    .font(.system(size: 15))
-                    .frame(width: 30, height: 30)
+                    .font(.system(size: 14))
+                    .frame(width: 28, height: 28)
                     .background(Circle().fill(r.mine ? Tone.bubbleMine : Tone.bubbleThem))
                     .overlay(Circle().stroke(Tone.canvas, lineWidth: 2))
             }
@@ -379,19 +379,17 @@ struct QuoteBubble: View {
 
     var body: some View {
         Button(action: tap) {
-            HStack(spacing: 6) {
-                Image(systemName: "arrowshape.turn.up.left.fill").font(.system(size: 10)).foregroundStyle(Tone.ink3)
-                (Text("\(room.display(quote.from)): ").fontWeight(.semibold) + Text(quote.words))
-                    .type(.meta)
-                    .foregroundStyle(Tone.ink2)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(room.display(quote.from)).type(.stamp, .semibold).foregroundStyle(Tone.ink3)
+                Text(quote.words).type(.meta).foregroundStyle(Tone.ink3).lineLimit(2).multilineTextAlignment(.leading)
             }
-            .padding(.horizontal, 11)
-            .padding(.vertical, 6)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Tone.edgeStrong, lineWidth: 1))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(Tone.wash, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .frame(maxWidth: 260, alignment: .leading)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("In reply to \(room.display(quote.from)): \(quote.words)")
     }
 }
 
@@ -403,7 +401,7 @@ struct Choices: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ForEach(message.waiting && message.chosen == nil ? [] : message.choices, id: \.self) { choice in
+            ForEach(message.choices, id: \.self) { choice in
                 let picked = message.chosen?.choice == choice
                 Button {
                     guard message.waiting, message.chosen == nil, sending == nil else { return }
@@ -440,7 +438,7 @@ struct Choices: View {
                     .foregroundStyle(Tone.ink3)
                     .padding(.leading, 12)
             } else if message.waiting {
-                Label("Waiting on you · answer below", systemImage: "arrow.down").type(.meta, .semibold).foregroundStyle(Tone.decide).padding(.leading, 12)
+                Text("Waiting on you").type(.meta, .semibold).foregroundStyle(Tone.decide).padding(.leading, 12)
             }
         }
         .padding(.top, 3)

@@ -43,21 +43,13 @@ enum Shrink {
     }
 }
 
-struct DockActions {
-    let jump: () -> Void
-    let switcher: () -> Void
-    let step: (Int) -> Void
-    let go: (String) -> Void
-    let channels: () -> Void
-}
-
 struct Dock: View {
     let room: RoomView
     let place: String
     @Binding var replyTo: MessageView?
     var typing: FocusState<Bool>.Binding
     let follow: Follow
-    let act: DockActions
+    let jump: () -> Void
     @Environment(AppModel.self) private var model
     @Namespace private var glass
     @State private var draft = ""
@@ -66,13 +58,11 @@ struct Dock: View {
     @State private var picked: [PhotosPickerItem] = []
     @State private var choosing = false
     @State private var attached: [Attached] = []
-    @State private var nudge: CGSize = .zero
 
     private var here: PlaceView? { room.placeView(place) }
     private var readOnly: Bool { here.map { $0.kind == "dm" && !$0.withMe } ?? false }
     private var hasText: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     private var canSend: Bool { !sending && room.connection == .live && (hasText || !attached.isEmpty) }
-    private var compact: Bool { typing.wrappedValue || hasText || !attached.isEmpty }
 
     private var asking: AskView? {
         guard here?.kind != "dm" else { return nil }
@@ -90,52 +80,38 @@ struct Dock: View {
         return room.members.filter { $0.name != room.me && ($0.name.lowercased().hasPrefix(mention) || $0.display.lowercased().hasPrefix(mention)) }
     }
 
-    private var crew: [MemberView] {
-        room.members.filter { $0.isAgent && $0.working }
-    }
-
     var body: some View {
         VStack(alignment: .trailing, spacing: 8) {
             if let error {
                 Text("Not sent: \(error)").type(.meta).foregroundStyle(Tone.alert).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
             }
-            if !mentionable.isEmpty {
-                mentions
-            } else if let asking, !asking.choices.isEmpty, replyTo == nil, !hasText {
-                answers(asking)
-            } else if !crew.isEmpty, !compact {
-                crewRow
-            }
+            if !mentionable.isEmpty { mentions }
             if let replyTo { replyBar(replyTo) }
             GlassGroup(spacing: 12) {
                 HStack(alignment: .bottom, spacing: 8) {
-                    if !readOnly {
-                        plus.glassID("plus", in: glass)
-                        field.glassID("field", in: glass)
-                    } else {
-                        Text("Between \(here?.with.map { room.display($0) }.joined(separator: " and ") ?? "two others"). Read along.")
+                    if readOnly {
+                        Text("Between \(here?.with.map { room.display($0) }.joined(separator: " and ") ?? "two others"). You can read along.")
                             .type(.meta)
                             .foregroundStyle(Tone.ink3)
-                            .lineLimit(2)
-                            .padding(.horizontal, 16)
-                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                            .glass(22)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    } else {
+                        plus.glassID("plus", in: glass)
+                        field.glassID("field", in: glass)
                     }
-                    pill.glassID("pill", in: glass)
                 }
             }
         }
         .padding(.horizontal, 12)
         .padding(.top, 6)
         .padding(.bottom, 6)
-        .animation(.snappy(duration: 0.28), value: compact)
-        .animation(.snappy(duration: 0.28), value: mentionable.map(\.name))
-        .animation(.snappy(duration: 0.28), value: asking?.seq)
-        .overlay(alignment: .topLeading) {
+        .animation(.snappy(duration: 0.25), value: mentionable.map(\.name))
+        .overlay(alignment: .topTrailing) {
             if !follow.atBottom {
-                jumpButton.padding(.leading, 12).offset(y: -46).transition(.scale(scale: 0.6).combined(with: .opacity))
+                jumpButton.padding(.trailing, 14).offset(y: -40).transition(.scale(scale: 0.5).combined(with: .opacity))
             }
         }
+        .animation(.snappy(duration: 0.25), value: follow.atBottom)
         .photosPicker(isPresented: $choosing, selection: $picked, maxSelectionCount: 4, matching: .images)
         .onChange(of: picked) { _, items in
             guard !items.isEmpty else { return }
@@ -174,93 +150,6 @@ struct Dock: View {
         }
         .frame(minHeight: 44)
         .glass(22)
-    }
-
-    private var pill: some View {
-        Pill(room: room, place: here, compact: compact, fresh: model.freshElsewhere(room, than: place))
-            .offset(x: nudge.width, y: min(0, nudge.height))
-            .contentShape(Capsule())
-            .onTapGesture {
-                Haptic.tap()
-                act.switcher()
-            }
-            .gesture(
-                DragGesture(minimumDistance: 10)
-                    .onChanged { drag in
-                        nudge = CGSize(width: drag.translation.width * 0.35, height: drag.translation.height * 0.35)
-                    }
-                    .onEnded { drag in
-                        let dx = drag.translation.width
-                        let dy = drag.translation.height
-                        if dy < -36 && abs(dy) > abs(dx) {
-                            Haptic.tap()
-                            act.switcher()
-                        } else if abs(dx) > 40 && abs(dx) > abs(dy) {
-                            act.step(dx < 0 ? 1 : -1)
-                        }
-                        withAnimation(.spring(duration: 0.32, bounce: 0.3)) { nudge = .zero }
-                    }
-            )
-            .contextMenu {
-                Button(action: act.switcher) { Label("Conversations and tasks", systemImage: "bubble.left.and.text.bubble.right") }
-                if place != "main" {
-                    Button {
-                        act.go("main")
-                    } label: {
-                        Label("# general", systemImage: "number")
-                    }
-                }
-                Button(action: act.channels) { Label("All channels", systemImage: "square.grid.2x2") }
-            }
-            .accessibilityLabel("\(here?.title ?? room.title). Swipe to change conversation.")
-            .accessibilityAddTraits(.isButton)
-    }
-
-    private var crewRow: some View {
-        HStack(spacing: 6) {
-            Dot(color: Tone.doing, size: 6)
-            Text(crew.count == 1 ? "\(crew[0].display) is working" : "\(crew.count) working").type(.meta, .medium).foregroundStyle(Tone.ink2)
-            HStack(spacing: -8) {
-                ForEach(crew.prefix(5)) { agent in
-                    Button {
-                        Haptic.tap()
-                        act.go(room.dmKey(with: agent.name))
-                    } label: {
-                        Face(name: agent.name, member: agent, size: 28).overlay(Circle().stroke(Tone.canvas, lineWidth: 2))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Message \(agent.display)")
-                }
-            }
-        }
-        .padding(.leading, 12)
-        .padding(.trailing, 6)
-        .padding(.vertical, 5)
-        .glassCapsule()
-        .transition(.move(edge: .bottom).combined(with: .opacity))
-    }
-
-    private func answers(_ ask: AskView) -> some View {
-        VStack(alignment: .trailing, spacing: 6) {
-            Text("\(room.display(ask.from)) asks you").type(.meta, .semibold).foregroundStyle(Tone.decide).padding(.trailing, 6)
-            ForEach(ask.choices, id: \.self) { choice in
-                Button {
-                    answer(ask, choice)
-                } label: {
-                    HStack(spacing: 8) {
-                        Text(choice).type(.ui, .medium).foregroundStyle(Tone.ink).multilineTextAlignment(.leading)
-                        if sending { ProgressView().controlSize(.mini) }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 11)
-                    .glassCapsule()
-                }
-                .buttonStyle(.plain)
-                .disabled(sending)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .trailing)
-        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
     private var mentions: some View {
@@ -309,12 +198,12 @@ struct Dock: View {
     }
 
     private var jumpButton: some View {
-        Button(action: act.jump) {
+        Button(action: jump) {
             ZStack(alignment: .topTrailing) {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 16, weight: .semibold))
+                Image(systemName: "arrow.down")
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(Tone.ink)
-                    .frame(width: 40, height: 40)
+                    .frame(width: 34, height: 34)
                     .glassCircle()
                 if follow.unseen > 0 {
                     Text("\(follow.unseen)")
@@ -397,19 +286,6 @@ struct Dock: View {
         Haptic.tap()
     }
 
-    private func answer(_ ask: AskView, _ choice: String) {
-        sending = true
-        Haptic.tap()
-        Task {
-            do {
-                try await model.answer(room.code, seq: ask.seq, text: choice)
-            } catch {
-                self.error = error.localizedDescription
-            }
-            sending = false
-        }
-    }
-
     private func load(_ items: [PhotosPickerItem]) async {
         for item in items {
             guard let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data), let jpeg = Shrink.jpeg(image) else { continue }
@@ -438,80 +314,6 @@ struct Dock: View {
                 self.error = error.localizedDescription
             }
             sending = false
-        }
-    }
-}
-
-struct Pill: View {
-    let room: RoomView
-    let place: PlaceView?
-    let compact: Bool
-    let fresh: Bool
-
-    var body: some View {
-        HStack(spacing: 8) {
-            avatar
-            if !compact {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(title).type(.ui, .semibold).foregroundStyle(Tone.ink).lineLimit(1)
-                    subtitle
-                }
-                .frame(maxWidth: 120, alignment: .leading)
-                Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(Tone.ink3)
-            }
-        }
-        .padding(.leading, 6)
-        .padding(.trailing, compact ? 6 : 12)
-        .frame(height: 44)
-        .glassCapsule()
-        .overlay(alignment: .topTrailing) {
-            if fresh {
-                Circle().fill(Tone.accent).frame(width: 11, height: 11).overlay(Circle().stroke(Tone.canvas, lineWidth: 2)).offset(x: 1, y: -1)
-            }
-        }
-    }
-
-    @ViewBuilder private var avatar: some View {
-        if let place, place.kind == "dm", let other = room.other(in: place) {
-            Face(name: other, member: room.member(other), size: 32)
-        } else if let place, place.kind == "dm" {
-            HStack(spacing: -16) {
-                ForEach(place.with, id: \.self) { name in
-                    Face(name: name, member: room.member(name), size: 26).overlay(Circle().stroke(Tone.canvas, lineWidth: 1.5))
-                }
-            }
-            .frame(width: 32, height: 32)
-        } else if let place, place.kind == "task", let id = place.task {
-            Text(taskLabel(id))
-                .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundStyle(Tone.doing)
-                .frame(width: 32, height: 32)
-                .background(Tone.doing.opacity(0.15), in: Circle())
-        } else {
-            ChannelAvatar(room: room, size: 32)
-        }
-    }
-
-    private var title: String {
-        guard let place, place.kind != "main" else { return room.title }
-        if place.kind == "task", let id = place.task { return room.tasks.first { $0.id == id }?.title ?? taskLabel(id) }
-        return place.title
-    }
-
-    @ViewBuilder private var subtitle: some View {
-        if let place, place.kind == "dm" {
-            Text(place.withMe ? room.title : "read along").type(.stamp, .medium).foregroundStyle(Tone.ink3).lineLimit(1)
-        } else if let place, place.kind == "task", let id = place.task {
-            Text("\(taskLabel(id)) · \(room.title)").type(.stamp, .medium).foregroundStyle(Tone.ink3).lineLimit(1)
-        } else if !room.asks.isEmpty {
-            Text("\(room.asks.count) \(room.asks.count == 1 ? "needs" : "need") you").type(.stamp, .semibold).foregroundStyle(Tone.decide).lineLimit(1)
-        } else if room.working > 0 {
-            HStack(spacing: 3) {
-                Dot(color: Tone.doing, size: 5)
-                Text("\(room.working) working").type(.stamp, .medium).foregroundStyle(Tone.ink3).lineLimit(1)
-            }
-        } else {
-            Text(room.connection == .live ? "# general" : "Connecting…").type(.stamp, .medium).foregroundStyle(Tone.ink3).lineLimit(1)
         }
     }
 }

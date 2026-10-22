@@ -393,18 +393,15 @@ everything you touch under your thumb: the owner asked for both, so on the phone
   ask's options are capsules under it once answered (`accent` text, the chosen one filled);
   while one waits on you the bubble says "Waiting on you · answer below" and the dock holds the
   answers.
-- Thumb first: nothing to tap sits at the top. A channel's messages run to the top of the screen
-  and fade under the status bar; everything you touch lives in one floating glass dock at the
-  bottom (`Dock.swift`), whose glass shapes blend into each other on iOS 26
-  (`GlassEffectContainer`). In a channel it is `+` (photos), the field (send inside it) and, at
-  the bottom right where the thumb rests, the conversation pill: who or where you are and the
-  channel's state ("1 needs you" in `decide`, "2 working"), with a blue dot when another
-  conversation has news. The pill shrinks to its face while you type. Tap it, or swipe it up,
-  for the switcher; swipe it left or right to step through the conversations, with a haptic and
-  a firm tick at either end; long-press it for quick ways out. Above the dock, in order of need:
-  `@` mention chips while you type a name, the answer chips of a question waiting on you here
-  (big glass capsules under "lead asks you"), or the faces of the agents working now (tap one
-  to talk to it directly). A new question anywhere gives a warning haptic.
+- The bottom is quiet: a glass `+` (photos) and a glass capsule field (send inside it), and
+  nothing else but what the moment needs: `@` mention chips while you type a name, a reply bar,
+  a small ⌄ at the right when you've scrolled up. The top holds the channel: a glass back button
+  and, centred, the glass title pill with where you are and its state ("2 working" with the
+  `doing` dot, "1 needs you" in `decide`), a blue dot when another conversation has news. The
+  conversation fades out under it. Tap the pill for the details sheet; touch and hold it, slide
+  to a conversation and let go to switch (the native menu: #general and your direct threads with
+  their last line, the tasks in progress, Message someone, Between others). Questions waiting on
+  you are answered from their own bubble.
 - A channel has several conversations, as on the Mac: #general, a direct thread with each
   member, the threads between others (read along: the dock says so instead of a field) and
   each task's thread. The switcher is a half-height sheet: All channels, the channel's card,
