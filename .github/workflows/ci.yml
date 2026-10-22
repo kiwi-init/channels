@@ -321,11 +321,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
-      - run: bun scripts/ci-tests.ts all --shard=${{ matrix.shard }}/3 --update-timings
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: test-timings-${{ matrix.shard }}
-          path: test/timings.json
+      - run: bun scripts/ci-tests.ts all --shard=${{ matrix.shard }}/3
       - if: matrix.shard == 1
         run: |
           mkdir -p dist

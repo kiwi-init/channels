@@ -910,7 +910,9 @@ jobs:
         Linux jobs too, which catch it, or it can't fail at all.
     description: >-
       On three macOS runners at once (a matrix of `scripts/ci-tests.ts all --shard=N/3`, which deals
-      the files out by their times in test/timings.json), does what the release's cli job does: runs the whole bun test suite
+      the files out by their times in test/timings.json, per-file times from a CI run of
+      `scripts/ci-tests.ts all --shard=N/3 --update-timings`; every group also hands bun that file
+      so --parallel starts the slowest files first), does what the release's cli job does: runs the whole bun test suite
       (every test/*.test.ts and web/src test, the agent flows included) with bun test --parallel so
       each file gets a fresh global as on Linux (one process for every file once let a test's
       SIGINT end the run early, exit 0, after 128 of 328 files), and fails when a shard's run ends
