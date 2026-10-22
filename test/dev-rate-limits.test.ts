@@ -9,9 +9,11 @@ import * as Stream from "effect/Stream";
 import { signRequest } from "@kiwi/core/auth.ts";
 import { Channel } from "@kiwi/core/client.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
+import { WS_PROTOCOL } from "@kiwi/core/protocol.ts";
 import { runAgent } from "../src/agent.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { OPEN_POLICY, policyFrom } from "../src/relay/policy.ts";
+import { devHumanAuth } from "../src/relay/human.ts";
+import { OPEN_POLICY, policyFrom, type RoomPolicy } from "../src/relay/policy.ts";
 import { MESSAGES_PER_MINUTE, PAGES_PER_MINUTE } from "../src/relay/room.ts";
 
 setDefaultTimeout(30_000);
@@ -65,9 +67,30 @@ async function rawPost(origin: string, owner: Identity, roomId: string): Promise
   return res.status;
 }
 
-function runFlag(hostname: string): Promise<{ code: number | null; out: string }> {
+async function socketSends(origin: string, headers: Record<string, string>, n: number): Promise<{ acks: number; refused: number }> {
+  const { owner, roomId } = await channel(origin);
+  const auth = await signRequest(owner, roomId, "GET", "/ws");
+  const u = new URL(`/v1/rooms/${roomId}/ws?since=0&presence=0&reads=0&echo=0`, origin.replace(/^http/, "ws"));
+  const ws = new WebSocket(u, { headers, protocols: [WS_PROTOCOL, auth] });
+  const counts = { acks: 0, refused: 0 };
+  return new Promise((ok, fail) => {
+    ws.onerror = () => fail(new Error("socket error"));
+    ws.onmessage = (ev) => {
+      const f = JSON.parse(String(ev.data)) as { t: string; tag?: string };
+      if (f.t === "ready") for (let i = 0; i < n; i++) ws.send(JSON.stringify({ t: "send", id: `f${i}`, iv: "x", ct: "y" }));
+      if (f.t === "ack") counts.acks++;
+      if (f.t === "err" && f.tag === "TooMany") counts.refused++;
+      if (counts.acks + counts.refused === n) {
+        ws.close();
+        ok(counts);
+      }
+    };
+  });
+}
+
+function runFlag(flags: string[], env: Record<string, string> = {}): Promise<{ code: number | null; out: string }> {
   const data = tempDir("kiwi-dev-rate-flag-");
-  const p = spawn("bun", ["src/relay/bun.ts", "--hostname", hostname, "--port", "0", "--data", data, "--no-web", "--dev-no-rate-limits"], { cwd: ROOT });
+  const p = spawn("bun", ["src/relay/bun.ts", "--port", "0", "--data", data, "--no-web", ...flags], { cwd: ROOT, env: { ...process.env, ...env } });
   let out = "";
   const take = (d: Buffer) => {
     out += d.toString("utf8");
@@ -112,8 +135,14 @@ test("a request a proxy passed on keeps the caps, even on a relay started withou
   expect(await rawPost(through, owner, roomId)).toBe(429);
 });
 
+test("a socket upgrade a proxy passed on keeps the cap; a direct one doesn't", async () => {
+  expect(await socketSends(dev, { "x-forwarded-for": "203.0.113.7" }, MESSAGES_PER_MINUTE + 1)).toEqual({ acks: MESSAGES_PER_MINUTE, refused: 1 });
+  expect(await socketSends(dev, {}, MESSAGES_PER_MINUTE + 1)).toEqual({ acks: MESSAGES_PER_MINUTE + 1, refused: 0 });
+});
+
 test("a policy alone can't lift the caps, and the option is refused off loopback", async () => {
-  const plain = relay({ policy: { ...OPEN_POLICY, noRateLimits: true } });
+  const carrying: RoomPolicy = { ...OPEN_POLICY, noRateLimits: true };
+  const plain = relay({ policy: carrying });
   const { ch, owner, roomId } = await channel(plain);
   for (let i = 0; i < MESSAGES_PER_MINUTE; i++) await ch.send(`q${i}`);
   expect(await rawPost(plain, owner, roomId)).toBe(429);
@@ -122,9 +151,30 @@ test("a policy alone can't lift the caps, and the option is refused off loopback
 
 test("only the Bun relay's flag on localhost turns the caps off: never the environment", async () => {
   expect("noRateLimits" in policyFrom({ ...process.env, KIWI_NO_RATE_LIMITS: "1", KIWI_DEV_NO_RATE_LIMITS: "1" })).toBe(false);
-  const refused = await runFlag("0.0.0.0");
+  const refused = await runFlag(["--hostname", "0.0.0.0", "--dev-no-rate-limits"]);
   expect(refused.code).toBe(2);
   expect(refused.out).toContain("--dev-no-rate-limits lets one member flood a channel");
-  const local = await runFlag("127.0.0.1");
+  const local = await runFlag(["--hostname", "127.0.0.1", "--dev-no-rate-limits"]);
   expect(local.out).toContain("rate limits: DEV: off for requests made on this machine, not through a proxy");
+});
+
+test("neither dev flag goes with a trusted proxy, by flag or by KIWI_TRUST_PROXY", async () => {
+  for (const flag of ["--dev-no-rate-limits", "--dev-sign-in"]) {
+    for (const [flags, env] of [
+      [["--trust-proxy"], {}],
+      [["--trust-proxy", "172.17.0.1"], {}],
+      [[], { KIWI_TRUST_PROXY: "1" }],
+      [[], { KIWI_TRUST_PROXY: "," }],
+      [[], { KIWI_TRUST_PROXY: " , " }],
+    ] as const) {
+      const run = await runFlag(["--hostname", "127.0.0.1", flag, ...flags], env);
+      expect(run.code).toBe(2);
+      expect(run.out).toContain(`${flag} is for requests made on this machine: it can't go with --trust-proxy`);
+    }
+  }
+  const at = { port: 0, hostname: "127.0.0.1", dataDir: tempDir("kiwi-dev-rate-proxy-"), trustProxy: true };
+  expect(() => startRelay({ ...at, devNoRateLimits: true })).toThrow("can't go with trustProxy");
+  expect(() => startRelay({ ...at, human: devHumanAuth() })).toThrow("can't go with trustProxy");
+  expect(() => startRelay({ ...at, trustProxy: [], devNoRateLimits: true })).toThrow("can't go with trustProxy");
+  expect(() => startRelay({ ...at, trustProxy: [], human: devHumanAuth() })).toThrow("can't go with trustProxy");
 });
