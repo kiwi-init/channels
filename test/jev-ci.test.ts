@@ -105,7 +105,7 @@ const ran = (r: Plan) =>
     .filter((d) => d.run)
     .map((d) => d.job)
     .sort();
-const CHECKS = ["static", "test-unit", "test-flows-a", "test-flows-b", "build", "shots", "perf", "desktop", "cli-macos"];
+const CHECKS = ["static", "test-unit", "test-flows-a", "test-flows-b", "build", "shots", "perf-runs", "perf", "desktop", "cli-macos"];
 
 describe("ci.yml edits outside the jobs", () => {
   test("a concurrency-only edit (#315) runs only the static checks, by rule", async () => {
@@ -136,10 +136,11 @@ describe("ci.yml edits outside the jobs", () => {
     expect(ran(result)).toEqual([...CHECKS, "release-rehearsal"].sort());
   });
 
-  test("workflow permissions run the jobs that inherit them", async () => {
+  test("workflow permissions run the jobs that inherit them, and a job whose part inherits them", async () => {
     const { result, by } = await planFor({ ".github/workflows/ci.yml": CI.replace("permissions:\n  contents: read\n", "permissions:\n  contents: read\n  issues: read\n") });
     expect(by("cli-macos")).toMatchObject({ run: true, layer: "L0" });
-    expect(ran(result)).toEqual([...CHECKS.filter((c) => c !== "perf"), "release-rehearsal"].sort());
+    expect(by("perf").reason).toContain("perf-runs");
+    expect(ran(result)).toEqual([...CHECKS, "release-rehearsal"].sort());
   });
 });
 
@@ -169,6 +170,22 @@ describe("ci.yml edits inside jobs", () => {
     const extra = CI.replace("  ci-ok:\n", "  extra:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n\n  ci-ok:\n");
     const { by } = await planFor({ ".github/workflows/ci.yml": extra });
     expect(by("extra")).toMatchObject({ run: true, layer: "L0" });
+  });
+
+  test("a job's parts run and skip with it", async () => {
+    const skipped = await planFor({ "docs/notes.md": "# notes, edited\n" });
+    expect(skipped.by("perf-runs")).toMatchObject({ run: false, layer: "L0" });
+    const forced = await planFor({ "scripts/perf-budgets.json": "{}\n" });
+    expect(forced.by("perf")).toMatchObject({ run: true, layer: "L0" });
+    expect(forced.by("perf-runs")).toMatchObject({ run: true, layer: "L0" });
+    expect(forced.by("perf-runs").reason).toContain("perf / scale");
+  });
+
+  test("a change to a part's job runs the job it does part of", async () => {
+    const { result, by } = await planFor({ ".github/workflows/ci.yml": CI.replace("        run: [1, 2, 3]\n", "        run: [1, 2, 3, 4]\n") });
+    expect(by("perf")).toMatchObject({ run: true, layer: "L0" });
+    expect(by("perf").reason).toContain("perf-runs");
+    expect(ran(result)).toEqual(["perf", "perf-runs", "static"]);
   });
 
   test("a change to the gate job runs nothing else by itself", async () => {
@@ -341,9 +358,11 @@ describe("jev-ci.yml matches the repo", () => {
     }
   });
 
-  test("every check job in ci.yml has an entry, and the rest are planner jobs", () => {
+  test("every check job in ci.yml has an entry or is another's part, and the rest are planner jobs", () => {
     const wf = Bun.YAML.parse(CI) as { jobs: Record<string, unknown> };
-    for (const id of Object.keys(wf.jobs)) expect(Boolean(config.jobs[id]) || Boolean(config.planner_jobs?.includes(id))).toBe(true);
+    const parts = Object.values(config.jobs).flatMap((j) => j.parts ?? []);
+    for (const id of Object.keys(wf.jobs)) expect(Boolean(config.jobs[id]) || parts.includes(id) || Boolean(config.planner_jobs?.includes(id))).toBe(true);
+    for (const id of parts) expect(wf.jobs[id]).toBeDefined();
   });
 });
 

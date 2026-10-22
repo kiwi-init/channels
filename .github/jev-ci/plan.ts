@@ -45,7 +45,7 @@ export function allHashes(repo: string, head: string, config: Config, tree: Tree
   const out: Record<string, string> = {};
   for (const [job, j] of Object.entries(config.jobs)) {
     const files = [...tree].filter(([path]) => reads[job]!(path) || matches(j.always, path)).map(([path, sha]) => `${sha}\t${path}`);
-    const definition = config.workflow ? jobFingerprint(repo, head, tree, wf, job) : "";
+    const definition = config.workflow ? [job, ...(j.parts ?? [])].map((id) => jobFingerprint(repo, head, tree, wf, id)).join("") : "";
     out[job] = createHash("sha256").update(files.join("\n")).update(definition).digest("hex").slice(0, 16);
   }
   return out;
@@ -97,7 +97,7 @@ function jevRequest(f: FileChange, jobs: string[], config: Config): Request {
 
 const empty = (hashes: Record<string, string>): Plan => ({ decisions: [], hashes, changed: 0, moved: 0, notes: [], jevLines: 0, jevCalls: 0, inputTokens: 0 });
 
-export function runAll(config: Config, reason: string, hashes: Record<string, string> = {}, event?: string): Plan {
+function runEvery(config: Config, reason: string, hashes: Record<string, string> = {}, event?: string): Plan {
   const decisions = Object.keys(config.jobs).map((job) =>
     event === "push" && config.jobs[job]!.push === false
       ? { job, run: false, layer: "L0" as const, reason: "a push to main skips it: pull requests and manual runs plan it" }
@@ -105,6 +105,24 @@ export function runAll(config: Config, reason: string, hashes: Record<string, st
   );
   return { ...empty(hashes), decisions };
 }
+
+export const runAll = (config: Config, reason: string, hashes: Record<string, string> = {}, event?: string): Plan => withParts(config, runEvery(config, reason, hashes, event));
+
+function withParts(config: Config, p: Plan): Plan {
+  const decisions = p.decisions.flatMap((d) => [
+    d,
+    ...(config.jobs[d.job]?.parts ?? []).map((part) => ({
+      job: part,
+      run: d.run,
+      layer: d.layer,
+      reason: `it does part of ${config.jobs[d.job]!.name ?? d.job}, so it goes with it`,
+      ...(d.wouldSkip ? { wouldSkip: true } : {}),
+    })),
+  ]);
+  return { ...p, decisions };
+}
+
+const ownerOf = (config: Config, id: string): string | undefined => Object.keys(config.jobs).find((job) => config.jobs[job]!.parts?.includes(id));
 
 function configChange(repo: string, base: string, head: string, path: string): { all?: string; jobs: Map<string, string[]>; notes: string[] } {
   const out = { jobs: new Map<string, string[]>(), notes: [] as string[] };
@@ -135,7 +153,11 @@ function configChange(repo: string, base: string, head: string, path: string): {
   return out;
 }
 
-export async function plan(opts: { repo: string; base: string; head: string; config: Config; configPath?: string; passed?: Set<string>; ask?: Ask }): Promise<Plan> {
+type PlanOptions = { repo: string; base: string; head: string; config: Config; configPath?: string; passed?: Set<string>; ask?: Ask };
+
+export const plan = async (opts: PlanOptions): Promise<Plan> => withParts(opts.config, await decideJobs(opts));
+
+async function decideJobs(opts: PlanOptions): Promise<Plan> {
   const { repo, base, head, config } = opts;
   const ask = opts.ask ?? askJev;
   const configPath = opts.configPath ?? CONFIG_PATH;
@@ -156,7 +178,7 @@ export async function plan(opts: { repo: string; base: string; head: string; con
   const bump = diff.find((f) => f.hunks.length > 0 && !meaningful(f, config));
   const out: Plan = { ...empty(hashes), changed: changes.length, moved: markMoves(changes) };
   const decide = (d: Decision) => out.decisions.push(d);
-  const all = (reason: string): Plan => ({ ...runAll(config, reason, hashes), changed: out.changed, moved: out.moved, notes: out.notes });
+  const all = (reason: string): Plan => ({ ...runEvery(config, reason, hashes), changed: out.changed, moved: out.moved, notes: out.notes });
 
   const plannerChange = changes.find((f) => matches(config.run_all_when_changed, f.path));
   if (plannerChange) return all(`${plannerChange.path} changed: the planner itself changed`);
@@ -168,8 +190,12 @@ export async function plan(opts: { repo: string; base: string; head: string; con
     out.notes.push(...wc.notes);
     for (const [job] of wc.jobs) if (config.planner_jobs?.includes(job)) out.notes.push(`The \`${job}\` job changed; it runs on every pull request, so this run already checks it.`);
     for (const [job, why] of wc.jobs) if (config.jobs[job]) redefined.set(job, why);
+    for (const [part, why] of wc.jobs) {
+      const owner = ownerOf(config, part);
+      if (owner && !redefined.has(owner)) redefined.set(owner, `${part}, which does part of it: ${why}`);
+    }
     for (const id of Object.keys(readWorkflow(repo, head, config.workflow)?.jobs ?? {}))
-      if (!config.jobs[id] && !config.planner_jobs?.includes(id)) decide({ job: id, run: true, layer: "L0", reason: `it has no entry in ${configPath}, so it always runs` });
+      if (!config.jobs[id] && !config.planner_jobs?.includes(id) && !ownerOf(config, id)) decide({ job: id, run: true, layer: "L0", reason: `it has no entry in ${configPath}, so it always runs` });
   }
   if (changes.some((f) => f.path === configPath)) {
     const cc = configChange(repo, base, head, configPath);
