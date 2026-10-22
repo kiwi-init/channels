@@ -146,7 +146,7 @@ describe("ci.yml edits outside the jobs", () => {
 
 describe("ci.yml edits inside jobs", () => {
   test("a step edited in one job runs that job", async () => {
-    const { result, by } = await planFor({ ".github/workflows/ci.yml": CI.replace(" --timings=test/macos-timings.json", " --timings=test/macos-timings.json --bail") });
+    const { result, by } = await planFor({ ".github/workflows/ci.yml": CI.replace("scripts/ci-tests.ts all --shard=", "scripts/ci-tests.ts all --bail --shard=") });
     expect(by("cli-macos")).toMatchObject({ run: true, layer: "L0" });
     expect(by("cli-macos").reason).toContain("its job in");
     expect(ran(result)).toEqual(["cli-macos", "static"]);

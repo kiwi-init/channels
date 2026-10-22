@@ -3,14 +3,14 @@
 // first (a lead and an agent working a task, messages, a thread, a task's conversation, a
 // direct one, notes, a pending join request), the same way scripts/smoke-ui.ts walks the flows.
 //
-//   bun run web:build && bun scripts/shoot-ui.ts [outdir] [--only channel,task-thread,…] [--wide] [--theme dark|light] [--channels 20]
+//   bun run web:build && bun scripts/shoot-ui.ts [outdir] [--only channel,task-thread,…] [--wide] [--phone channel,tasks] [--theme dark|light] [--channels 20]
 //
 // Shots are taken at 2x (Retina), as most people see the dashboard. --only keeps the screens whose
 // name contains one of the words (and skips the signed-out ones unless named), --wide skips the phone
-// size, --theme keeps one theme: for a quick look at a few screens while working on them. --channels
+// size but for the screens --phone names, --theme keeps one theme: for a quick look at a few screens while working on them. --channels
 // adds that many more channels (one with news), to see a crowded tab bar and its More menu.
 // A screen that can't be reached is saved as skipped-<name>.png and fails the run. CI's
-// `build / shots` runs it --wide --theme dark and uploads the shots as the ui-shots artifact.
+// `build / shots` runs it --wide --phone channel,tasks --theme dark and uploads the shots as the ui-shots artifact.
 //
 // Needs Playwright's Chromium: bunx playwright-core install --only-shell chromium
 // (or set SMOKE_CHROMIUM to a Chrome binary).
@@ -31,6 +31,7 @@ const flag = (name: string) => {
 const only = flag("--only")?.split(",").filter(Boolean);
 const themeOnly = flag("--theme");
 const moreChannels = Number(flag("--channels") ?? 0);
+const phone = flag("--phone")?.split(",").filter(Boolean);
 const wideOnly = args.includes("--wide") ? (args.splice(args.indexOf("--wide"), 1), true) : false;
 const OUT = resolve(args[0] ?? join(tmpdir(), "kiwi-shots"));
 mkdirSync(OUT, { recursive: true });
@@ -69,6 +70,7 @@ const skipped: string[] = [];
 /** Retina, as the owner sees it: the crispness of type and edges is half of what the shots are for. */
 const page = (viewport: { width: number; height: number }) => browser.newPage({ viewport, deviceScaleFactor: 2 });
 const wanted = (name: string) => !only || only.some((w) => name.includes(w));
+const wantedNarrow = (name: string) => !wideOnly || !!phone?.some((w) => name.includes(w));
 
 const chrome = (page: Page) => page.getByRole("banner", { name: "Channels" }).or(page.getByRole("complementary"));
 
@@ -126,7 +128,7 @@ function dragCaught(): string[] {
 
 /** One named screen: get there, wait for it to settle, shoot it, put things back. */
 async function shoot(page: Page, tag: string, name: string, open?: () => Promise<void>, close: () => Promise<void> = async () => void (await page.keyboard.press("Escape"))) {
-  if (!wanted(name)) return;
+  if (!wanted(name) || (tag.endsWith("-narrow") && !wantedNarrow(name))) return;
   try {
     if (open) await open();
     await page
@@ -371,7 +373,7 @@ try {
         ["wide", WIDE],
         ["narrow", NARROW],
       ] as const
-    ).filter(([v]) => !wideOnly || v === "wide")) {
+    ).filter(([v]) => !wideOnly || v === "wide" || !!phone)) {
       const tag = `${theme}-${vp}`;
       await owner.setViewportSize(size);
       await owner.goto(channel);
@@ -807,7 +809,8 @@ try {
       }
 
       // Signed out, and someone opening the invite link who isn't in yet.
-      if (only && !["20-first-run", "21-join-with-code", "22-invite-preview", "23-signed-in-empty"].some(wanted)) continue;
+      const signedOut = ["20-first-run", "21-join-with-code", "22-invite-preview", "23-signed-in-empty"];
+      if ((only && !signedOut.some(wanted)) || (narrow && !signedOut.some(wantedNarrow))) continue;
       const out = await page(size);
       await out.goto(BASE);
       await setTheme(out, theme);

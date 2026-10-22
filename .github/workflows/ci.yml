@@ -152,14 +152,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
-      - id: playwright
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-      - run: bunx playwright-core install-deps chromium-headless-shell
-      - if: steps.playwright.outputs.cache-hit != 'true'
-        run: bunx playwright-core install --only-shell chromium
+      - uses: ./.github/actions/browser
       - name: web build
         run: cd web && bun run build
       - name: web bundle budget
@@ -208,20 +201,10 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
-      - id: playwright
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-      - run: bunx playwright-core install-deps chromium-headless-shell
-      - if: steps.playwright.outputs.cache-hit != 'true'
-        run: bunx playwright-core install --only-shell chromium
+      - uses: ./.github/actions/browser
       - run: bun run web:build
       - name: ui shots
-        run: bun scripts/shoot-ui.ts --wide --theme dark "$RUNNER_TEMP/shots"
-      - name: ui shots, phone size too
-        if: ${{ !cancelled() }}
-        run: bun scripts/shoot-ui.ts --only channel,tasks --theme dark "$RUNNER_TEMP/shots"
+        run: bun scripts/shoot-ui.ts --wide --phone channel,tasks --theme dark "$RUNNER_TEMP/shots"
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -246,14 +229,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
-      - id: playwright
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-      - run: bunx playwright-core install-deps chromium-headless-shell
-      - if: steps.playwright.outputs.cache-hit != 'true'
-        run: bunx playwright-core install --only-shell chromium
+      - uses: ./.github/actions/browser
       - run: bun run web:build
       - name: perf-scale
         env:
@@ -285,6 +261,7 @@ jobs:
           path: ${{ runner.temp }}/perf
           merge-multiple: true
       - name: medians against the gates
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -344,11 +321,11 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
-      - run: bun test --shard=${{ matrix.shard }}/3 --timings=test/macos-timings.json --update-timings
+      - run: bun scripts/ci-tests.ts all --shard=${{ matrix.shard }}/3 --update-timings
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: macos-timings-${{ matrix.shard }}
-          path: test/macos-timings.json
+          name: test-timings-${{ matrix.shard }}
+          path: test/timings.json
       - if: matrix.shard == 1
         run: |
           mkdir -p dist

@@ -31,7 +31,8 @@ describe("kiwi demo", () => {
     const lines: string[] = [];
     const web = mkdtempSync(join(tmpdir(), "kiwi-demo-web-"));
     writeFileSync(join(web, "index.html"), "<!doctype html><title>kiwi</title>");
-    const staying = runDemo({ pace: 0, stay: true, web, print: (l) => lines.push(l) });
+    const stop = new AbortController();
+    const staying = runDemo({ pace: 0, stay: true, web, stop: stop.signal, print: (l) => lines.push(l) });
     try {
       const link = await waitFor(() => lines.join("\n").match(/https?:\/\/\S+#\S+/)?.[0]);
       const url = new URL(link);
@@ -46,7 +47,7 @@ describe("kiwi demo", () => {
       });
       expect(status.status).toBe("approved");
     } finally {
-      process.emit("SIGINT");
+      stop.abort();
       await staying;
       rmSync(web, { recursive: true, force: true });
     }

@@ -72,10 +72,11 @@ jobs:
 
   test-unit:
     name: test / unit
-    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/release-build.yml", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "desktop/package.json", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
-    always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
+    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/workflows/nightly.yml", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "desktop/package.json", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
+    always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts", "scripts/ci-flows.ts", "scripts/ci-shards.ts"]
     description: >-
-      Runs the unit tests with bun test: every test/*.test.ts except the slow suites in
+      Runs the unit tests with bun test (failing when the run ends before every file ran, which
+      scripts/ci-tests.ts checks for every group): every test/*.test.ts except the slow suites in
       scripts/ci-tests.ts's flows groups, plus the dashboard's tests in web/src (task-cards
       among them: one live card per open task, a done task as its last line only; agent-facts: an agent's repo@branch, flagged when the channel doesn't list its repo; quote: a reply's inline quote names who it answers and what they said, an image as Image; lib/tab-fit.test.ts: the tab bar shows every channel tab that fits, the rest go under More with room kept for it, and the open channel always keeps a tab; conversation/channel-sidebar.test.tsx: on a wide screen the sidebar's Search is a row that turns into a real field holding what you typed, the view list is one Tasks row with a quiet dot and number for Needs you, In progress and In review (none at zero, the chosen one marked current), Conversations keep the rooms, your own threads, one asking for you and the open one while threads between agents fold behind an 'N more' row with their unread total, and its Agents heading opens the Agents tab; agent-strip.test.tsx's one status: away is away even holding a task, a reachable agent on a task is working, what its harness says now wins; message-banner.test.tsx: the question waiting above the composer is only a one-line pointer in the feed, and moving in or out of the banner renders its row again; markdown.test.tsx's mentions: a member's @handle reads as @nickname with the handle as its title, never inside code or links, and a non-member's @ stays text; lib/mentions.test.ts: the composer writes a picked member as their nickname when it names only them (else their handle), and turns nicknames back into handles on send, never inside code; lib/lanes.test.ts: an agent's lane on a folded signed log (its tasks in progress and in review with their PRs, since when, what's queued, its last three moves, the lead watching the other open PRs, all from one task-to-PR map), every task's PRs in one pass matching each task's own feed (test/work.test.ts: notes, threads naming it, merged or closed later, GitHub branches, forged links), unread counts for every place in one pass matching each place's own (test/standup.test.ts), every task's live card in one pass matching each card asked alone (test/standup.test.ts: messages said, the last line by status, note then chat, its room, who's waited on), a message row's props compared by value with early exits (web message-memo.test.tsx); lib/asks.test.ts: Needs you holds only a person's question or a decision that holds an open task or ask (heldAsks; a done task holds nothing), a decision's kind in its label, who chose which option of an ask, by its words or its letter, and only from someone it was asked of, and Needs you's permission rows only from the fold's openAsks (permissionAsks: a forged copy, two asks at one seq, an ask past its deadline and a plain question make none); lib/voice/grok.test.ts: the Grok Voice adapter replayed on JSON event fixtures with a fake socket, no network: the token only in the subprotocol, the session config, a spoken turn, barge-in (cancel and truncate), tool calls answered before the answer resumes, errors, PCM16 base64, and no static import of lib/voice anywhere in the app so it stays lazy; lib/voice/talk.test.ts: Talk to channel with a fake token, mic, speaker and socket: the room's token, the snapshot in the instructions, mic up and captions back, channel news only from after it started, End stopping everything, leaving its channel ending the call (while it connects too) and leaving another leaving it alone, another channel's news and tools never reaching it, the setting to turn on when consent or the key is missing; lib/voice/tools.test.ts and talk.test.ts: every voice action (post, answer_ask, enqueue_work, yes, hold, stop) acts only on what was just read back and only after the person spoke after the readback without saying no, so an instruction smuggled in channel news (sent as a user item, never system) can't act; the spoken verbs (yes on the top Needs you item, hold, stop) act only on what was just read back: a join with its code (never one whose code isn't in), a plain question answered yes, one with options asked which, a review approved, stop ending the call; plus lib/voice/tools.test.ts: the voice's fast tools on a folded signed log, each read under 300 ms on a 2000-task board (channel status, open tasks, Needs you for the person and joins for the owner only), and acting as the person (post, answer an ask with its option, hold for the owner only, enqueue work as a task), a failed send said back as words; test/picture.test.ts: a person's picture (picture.set by that person only, never an agent's, a png, jpeg or webp of at most 24 KB in base64, quiet in the conversation, carried by snapshots), with test/github-link.test.ts: the linked account's avatar fetched by its id at 96px, at 64px when too big, null when not an image, and the link token handed only to the relay it was linked on, while that relay's /v1/config still names the same GitHub App, never to another relay after a switch, nor from a link made before the token was bound to its relay; Settings shows the link only on its own relay (desktop/src/github-flow.ts, desktop/src/ipc/github.ts) (test/create-seat.test.ts: never to clear the repo list), and web monogram.test.tsx: a face wears the channel's picture for that member, initials without one, an agent its harness's logo (a one-colour logo in the theme's ink, a plain terminal for a harness Kiwi doesn't know or none said; web lib/harness.test.ts: short names read as the product, every detected harness has a logo); test/icon.test.ts and web channel-icon.test.tsx: a channel's icon is the robot head its owner picked (by colour, only the twelve), an emoji or an image, a channel without one a robot head steady for its title, never the lead's, and the picker offers all twelve; test/personalities.test.ts: personalities on the person's account (the six presets valid, one of your own needs an id and one glyph, the list drops presets, repeats and broken ones, at most fifty, copies take a free id, the desktop snapshot hands the page only valid ones); test/voice-allow.test.ts: only the owner allows voice in a channel (voice.set), carried by snapshots; web lib/dictation/dictation.test.ts: a second press while the mic is opening opens nothing, a mic that opens after the composer is gone or after another recording took it is closed at once, and a crashed speech model ends the transcription with a message and the next one starts a fresh model, and nothing outside its lazy engine statically imports the model, the recorder, the transcriber or core's dictation.ts, so they load on the first mic press and not with the app, and a failed load of that engine says to reload (Electron's Chromium keeps a failed import until then) and loads again on the next press; lib/voice/news.test.ts: what the live voice is told as the channel moves, on a folded signed log: a task done said once even when its digest follows, a new question for the person with its options, CI red once per check and commit, and the snapshot it starts from). They cover
       pure modules: protocol and event validation, state folding, formatting, identity and
@@ -528,7 +529,9 @@ jobs:
       lib/channel/warm.test.ts: only the last four channels stay warm; lib/threads.test.ts: what's
       been seen where keeps the newest 500 places. And
       test/perf-check.test.ts: perf-check compares the median of the runs with each gate, counts the
-      soak's limits only in the nightly run and lists what isn't at its 0.20 budget yet;
+      soak's limits only in the nightly run and lists what isn't at its 0.20 budget yet, and every
+      step in ci.yml and nightly.yml that pipes perf-check into tee runs with shell: bash (pipefail),
+      so an over-gate median fails the job;
       test/mac-size.test.ts: desktop/scripts/mac-size.ts (run by release-build on macOS) fails a dmg
       or zip over 150 MiB or an installed app over 320 MiB, the 0.20 budgets;
       test/appimage-squashfs.test.ts: desktop/scripts/appimage-squashfs.ts (run by release-build on
@@ -536,7 +539,7 @@ jobs:
       (xz in 1 MiB blocks made the app take most of a minute to appear). And
       test/retry-after.test.ts: the relay's 429 carries Retry-After (header and body, on the socket
       too), a refused attempt isn't counted, and a rate-limited send waits it out and goes in, over
-      the socket without an extra try over HTTP; web lib/github-queue.test.ts: the owner's GitHub
+      the socket without an extra try over HTTP; test/dev-rate-limits.test.ts: the Bun relay's --dev-no-rate-limits (refused off localhost, never read from the environment or a policy alone) lets a member on this machine post and read past the per-minute caps, over HTTP and the socket, while a request a proxy passed on keeps them; web lib/github-queue.test.ts: the owner's GitHub
       posts keep a rate-limited or unreachable item to try again. And
       test/desktop-daemon-keeper.test.ts: the app checks its daemon every 30s and starts it again
       when it stops answering, retrying a daemon that won't start from 5s up to every 5 minutes, and
@@ -671,7 +674,7 @@ jobs:
     name: test / flows-a
     inputs: ["src/**", "packages/core/**", "test/owner-cli.ts"]
     imports_from: ["test/e2e.test.ts", "test/verbs.test.ts", "test/threads.test.ts", "test/reconnect.test.ts", "test/cache-trim.test.ts", "test/budget-*.test.ts"]
-    always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
+    always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts", "scripts/ci-shards.ts"]
     description: >-
       Runs slow end-to-end tests that start a real local relay (src/relay/bun.ts) and drive the
       kiwi CLI and client: e2e (create a channel, join, send and listen through the relay),
@@ -693,7 +696,7 @@ jobs:
     name: test / flows-b
     inputs: ["src/**", "packages/core/**", "test/owner-cli.ts"]
     imports_from: ["test/join-seats.test.ts", "test/read-receipts.test.ts", "test/daemon-pair.test.ts", "test/sh-escape.test.ts", "test/reclaim.test.ts", "test/wake-yourself.test.ts", "test/seats.test.ts", "test/multi-seat.test.ts", "test/handoff.test.ts", "test/hooks-once.test.ts", "test/hooks-hung-relay.test.ts", "test/offline-read.test.ts", "test/hooks-reentry.test.ts", "test/hooks-persona.test.ts", "test/mimo-wake-restart.test.ts", "test/held-seat.test.ts"]
-    always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
+    always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts", "scripts/ci-shards.ts"]
     description: >-
       Runs slow agent-flow tests against a real local relay and the kiwi CLI: join-seats
       (joining, one seat per agent, Claude Code hooks doing the listening, and a Codex hook run from inside
@@ -809,7 +812,7 @@ jobs:
       scripts/smoke-cli.ts drives the binary against a local relay (every allowed kiwi sh
       command compared with the source CLI, the MCP sh tool, kiwi doctor). Then bundles the
       Cloudflare worker (src/relay/worker.ts) with wrangler deploy --dry-run, failing on a Node-
-      or Bun-only import reaching it or an invalid wrangler.jsonc.
+      or Bun-only import reaching it or an invalid wrangler.jsonc. Headless Chromium and the apt packages it needs come from .github/actions/browser, which installs the packages from cached .deb files and fails the job if they can't be installed.
 
   shots:
     name: build / shots
@@ -831,19 +834,20 @@ jobs:
       chosen, and its started screen (with a stand-in for the launch methods the desktop bridge
       adds), first run, signed in with nothing open, Join
       with a code and the invite preview.
-      The shots are uploaded as the ui-shots artifact. Fails when the conversation isn't at its newest message (within 80px of the bottom) once the channel opens and again back from the Tasks tab (which it visits itself), at the wide size and, in a second short run of the channel and Tasks screens, at phone size too (web/src/components/conversation/use-scroll.ts), or when the window's drag band would take a control of the open viewer (each app-region box added or taken away in document order, as Electron does), or when the seeding can't drive the
+      The shots are uploaded as the ui-shots artifact. Fails when the conversation isn't at its newest message (within 80px of the bottom) once the channel opens and again back from the Tasks tab (which it visits itself), at the wide size and, in the same run (--phone channel,tasks: the channel and Tasks screens on the channel already seeded), at phone size too (web/src/components/conversation/use-scroll.ts), or when the window's drag band would take a control of the open viewer (each app-region box added or taken away in document order, as Electron does), or when the seeding can't drive the
       dashboard or any screen can't be reached (a control renamed, moved or gone), so the shots
-      keep up with the UI.
+      keep up with the UI. Headless Chromium and the apt packages it needs come from .github/actions/browser, which installs the packages from cached .deb files and fails the job if they can't be installed.
 
   perf:
     name: perf / scale
-    inputs: ["web/**", "desktop/**", "packages/core/**", "scripts/perf-scale.ts", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json"]
+    inputs: ["web/**", "desktop/**", "packages/core/**", "src/relay/**", "scripts/perf-scale.ts", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json"]
     always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "scripts/perf-scale.ts", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json"]
+    imports_from: ["scripts/perf-scale.ts"]
     parts: [perf-runs]
     description: >-
       Three perf-runs jobs, side by side on their own runners, each build the web dashboard and
       run scripts/perf-scale.ts once without the soak: a local relay and headless Chromium with
-      10 agents, 100 tasks and 2000 messages, timing the reload to the first screen, the Tasks,
+      10 agents, 100 tasks and 2000 messages (the agents join at once and the seeding sends through each agent's own session, src/agent.ts, on a local relay started with --dev-no-rate-limits, so no per-minute cap slows it), timing the reload to the first screen, the Tasks,
       Agents and Conversation tabs at 4x CPU and typing while the agents post, and upload the
       run as the perf-scale-N artifact. A run that crashes fails its job. Then perf / scale
       downloads the three runs, and scripts/perf-check.ts takes the medians and fails when one
@@ -851,7 +855,7 @@ jobs:
       median plus 20% and comes down to its 0.20 budget as fixes land), writing the table and
       the gaps to the 0.20 budgets to the job summary and a perf-scale comment on the pull
       request. The soak's memory slopes are gated by the nightly workflow
-      (.github/workflows/nightly.yml), not here.
+      (.github/workflows/nightly.yml), not here. Headless Chromium and the apt packages it needs come from .github/actions/browser, which installs the packages from cached .deb files and fails the job if they can't be installed.
 
   desktop:
     name: desktop / package
@@ -889,7 +893,7 @@ jobs:
   cli-macos:
     name: cli / macos
     inputs: ["src/**", "packages/core/**", "test/**", "site/install", "site/install.sh", "desktop/src/**", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", ".github/workflows/release-build.yml", "package.json", "bun.lock", "bunfig.toml", "web/package.json"]
-    always: ["scripts/build-cli.ts", "scripts/cli-bundle.ts"]
+    always: ["scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/ci-tests.ts", "scripts/ci-flows.ts", "scripts/ci-shards.ts"]
     question: >-
       Could this change to `file` make the job described in `job` fail on macOS, or fail to
       cross-compile a darwin target, while the same tests and the Linux build pass
@@ -905,9 +909,12 @@ jobs:
         The change behaves the same on macOS as on Linux: a failure it causes would fail the
         Linux jobs too, which catch it, or it can't fail at all.
     description: >-
-      On three macOS runners at once (a matrix of bun test --shard=N/3, balanced by the per-file
-      times in test/macos-timings.json), does what the release's cli job does: runs the whole bun test suite
-      (every test/*.test.ts and web/src test, the agent flows included), and in the first shard compiles the kiwi CLI
+      On three macOS runners at once (a matrix of `scripts/ci-tests.ts all --shard=N/3`, which deals
+      the files out by their times in test/timings.json), does what the release's cli job does: runs the whole bun test suite
+      (every test/*.test.ts and web/src test, the agent flows included) with bun test --parallel so
+      each file gets a fresh global as on Linux (one process for every file once let a test's
+      SIGINT end the run early, exit 0, after 128 of 328 files), and fails when a shard's run ends
+      before every file it was dealt ran. The first shard then compiles the kiwi CLI
       for darwin-arm64, darwin-x64, linux-x64 and linux-arm64 with
       scripts/build-cli.ts, ad-hoc signs the macOS binaries and runs `kiwi --version`. The same
       tests run on Linux in test / unit, test / flows-a and test / flows-b, so this job is for what fails only on macOS: paths (os.tmpdir() is under

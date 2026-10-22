@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { basename, join, resolve, sep } from "node:path";
 import type { ServerWebSocket } from "bun";
+import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import { CLOSE_CLOSED, CLOSE_REMOVED, GONE_WORDS, MAX_BLOB_BYTES, PING, PONG } from "@kiwi/core/protocol.ts";
 import { ChannelGone, NotFound, UpdateRequired } from "./failures.ts";
@@ -62,6 +63,7 @@ interface SocketData {
   reads: boolean;
   echo: boolean;
   watch: boolean;
+  devLimits?: boolean;
 }
 
 /** The static site's files, and the sign-in origins its page may call besides this relay. */
@@ -92,11 +94,13 @@ export function startRelay(
     githubApp?: GithubAppApi | null;
     githubPush?: PushCheck | null;
     dictationUpstream?: (url: string) => Promise<Response>;
+    devNoRateLimits?: boolean;
   } = {},
 ) {
+  if (opts.devNoRateLimits && !devHostOk(opts.hostname)) throw new Error("devNoRateLimits needs hostname 127.0.0.1 (or localhost)");
   const human = opts.human ?? null;
   // Settings come from the caller, or else from the environment, the same keys the Worker reads.
-  const policy = opts.policy ?? policyFrom(process.env);
+  const policy: RelayPolicy = { ...(opts.policy ?? policyFrom(process.env)), noRateLimits: false };
   const trustProxy: TrustProxy = Array.isArray(opts.trustProxy) ? parseTrustProxy(opts.trustProxy) : opts.trustProxy === true;
   const web = opts.web ? webApp(opts.web) : null;
   const dataDir = opts.dataDir ?? ".relay-data";
@@ -247,6 +251,8 @@ export function startRelay(
     clockLayer(opts.now),
   );
   const relay = makeRelay(services);
+  const devRelay = Context.add(relay, Policy, { ...policy, noRateLimits: true });
+  const devLimitsFor = (req: Request, peer: string | null) => !!opts.devNoRateLimits && devRequestOk(req, peer ?? undefined);
   const clock = opts.now ?? Date.now;
   const githubRoutes: GithubRoutes = {
     rooms: async (repo) => (people.query("SELECT room FROM github_routes WHERE repo = ?").all(repo) as { room: string }[]).map((r) => r.room),
@@ -408,14 +414,23 @@ export function startRelay(
             const since = Number(url.searchParams.get("since") ?? 0) || 0;
             if (
               server.upgrade(req, {
-                data: { roomId: route.roomId, pk, since, presence: takesPresence(url) && !wantsWatch(url), reads: wantsReads(url), echo: wantsEcho(url), watch: wantsWatch(url) },
+                data: {
+                  roomId: route.roomId,
+                  pk,
+                  since,
+                  presence: takesPresence(url) && !wantsWatch(url),
+                  reads: wantsReads(url),
+                  echo: wantsEcho(url),
+                  watch: wantsWatch(url),
+                  devLimits: devLimitsFor(req, peer),
+                },
                 headers: wsHeaders(req),
               })
             )
               return undefined;
             return withCors(errorResponse(new UpdateRequired({ message: "expected websocket" })));
           }
-          const result = await onHttp(relay, db, req, route.rest);
+          const result = await onHttp(devLimitsFor(req, peer) ? devRelay : relay, db, req, route.rest);
           if (isCreate) empty = noRoom();
           if (result.fx) apply(route.roomId, result.fx);
           return withCors(result.res);
@@ -467,7 +482,7 @@ export function startRelay(
         const db = storeFor(ws.data.roomId, false);
         let fx: Effects;
         try {
-          fx = runRoomSync(relay, db, onClientFrame(raw, ws.data.pk, ws.data.echo));
+          fx = runRoomSync(ws.data.devLimits ? devRelay : relay, db, onClientFrame(raw, ws.data.pk, ws.data.echo));
         } finally {
           doneWith(db);
         }
@@ -581,6 +596,9 @@ Usage: ${cmd} [options]
                                 both while moving to a custom domain (env WORKOS_AUTHKIT_DOMAIN)
   --dev-sign-in                 testing only: the token "dev:<name>" signs in as <name>, no password.
                                 Needs --hostname 127.0.0.1 (or localhost); refused on any other address.
+  --dev-no-rate-limits          testing only: no per-minute cap on a member's messages or history reads,
+                                for requests made on this machine directly (never through a proxy).
+                                Needs --hostname 127.0.0.1 (or localhost), like --dev-sign-in.
   --trust-proxy [addr,cidr]     a reverse proxy sits in front (env KIWI_TRUST_PROXY=1, or a list).
                                 Bare, or =1: trust a loopback peer. An address or CIDR (repeat
                                 the flag, or comma-separate) trusts that peer too, for example
@@ -611,6 +629,11 @@ export function runRelay(argv: string[], cmd = "bun src/relay/bun.ts"): void {
     process.stderr.write("--dev-sign-in lets anyone sign in as anyone: it needs --hostname 127.0.0.1 (or localhost).\n");
     process.exit(2);
   }
+  const unlimited = argv.includes("--dev-no-rate-limits");
+  if (unlimited && !devHostOk(hostname)) {
+    process.stderr.write("--dev-no-rate-limits lets one member flood a channel: it needs --hostname 127.0.0.1 (or localhost).\n");
+    process.exit(2);
+  }
   let trustProxy: TrustProxy;
   try {
     trustProxy = trustProxyFromArgs(argv, process.env.KIWI_TRUST_PROXY);
@@ -631,11 +654,13 @@ export function runRelay(argv: string[], cmd = "bun src/relay/bun.ts"): void {
     human,
     web: webDir ? { dir: webDir, connect } : null,
     trustProxy,
+    devNoRateLimits: unlimited,
   });
   console.log(`Kiwi Channels relay listening on ${server.url}`);
   console.log(
     `  sign-in: ${human?.dev ? 'DEV: the token "dev:<name>" is <name>, no password (this machine only)' : human ? `WorkOS ${human.clientId}${human.profile ? " (with emails, for the beta list)" : ""}` : "off"}`,
   );
+  if (unlimited) console.log("  rate limits: DEV: off for requests made on this machine, not through a proxy");
   console.log(`  site: ${webDir ? resolve(webDir) : "not served"}`);
 }
 
