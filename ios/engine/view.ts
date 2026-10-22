@@ -109,7 +109,13 @@ export function roomView(r: RoomInput): RoomView {
     const summary = state.places.get(key);
     const withMe = p.kind !== "dm" || p.with.includes(me);
     const title =
-      p.kind === "main" ? r.title : p.kind === "task" ? `${taskId(p.task)} ${state.tasks.get(p.task)?.title ?? ""}`.trim() : withMe ? nameOf(p.with.find((n) => n !== me) ?? me) : p.with.map(nameOf).join(" & ");
+      p.kind === "main"
+        ? r.title
+        : p.kind === "task"
+          ? `${taskId(p.task)} ${state.tasks.get(p.task)?.title ?? ""}`.trim()
+          : withMe
+            ? nameOf(p.with.find((n) => n !== me) ?? me)
+            : p.with.map(nameOf).join(" & ");
     return {
       key,
       kind: p.kind,

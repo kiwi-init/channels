@@ -376,8 +376,9 @@ between the rails.
 
 ## 14. The iPhone app
 
-The native app in `ios/` (SwiftUI) looks like Apple Messages, not like the desktop: the owner
-asked for that, so on the phone it wins over §9's rows.
+The native app in `ios/` (SwiftUI) feels like Apple Messages, not like the desktop, and puts
+everything you touch under your thumb: the owner asked for both, so on the phone they win over
+§9's rows.
 
 - Type is SF Pro through Dynamic Type text styles (`Theme.swift`'s `Step` maps the six steps
   to `caption2`, `caption`, `subheadline`, `body`, `headline`, `largeTitle`). No Inter.
@@ -386,26 +387,43 @@ asked for that, so on the phone it wins over §9's rows.
   `#262628`).
 - A conversation is bubbles: yours on the right in blue, everyone else's on the left in grey,
   a tail on the last bubble of a run, the sender's name over the first and their 30pt face
-  beside the last. A time header (`Today 4:06 PM`) sits centred where 15 minutes or a day
-  passed. Events are one centred quiet line. A reply carries the answered words in an
-  outlined capsule above it. An ask's options are capsules under it: `accent` text, the
-  chosen one filled; "Waiting on you" in `decide` while it waits.
-- The header is one row: a glass back button and, centred, a glass pill with the channel's
-  name (tap: the details sheet with the people, Needs you and the tasks) and one quiet status
-  line in it. No channel image there: it costs a phone too much height. The conversation fades
-  out under it, from the canvas at the top of the screen to clear just below the pill, over the
-  system's soft scroll-edge blur. The composer is a glass `+` (photos) and a glass capsule field
-  whose send arrow appears when there is something to send.
+  beside the last (a direct thread with you drops both, as a one-to-one chat does). A time
+  header (`Today 4:06 PM`) sits centred where 15 minutes or a day passed. Events are one
+  centred quiet line. A reply carries the answered words in an outlined capsule above it. An
+  ask's options are capsules under it once answered (`accent` text, the chosen one filled);
+  while one waits on you the bubble says "Waiting on you · answer below" and the dock holds the
+  answers.
+- Thumb first: nothing to tap sits at the top. A channel's messages run to the top of the screen
+  and fade under the status bar; everything you touch lives in one floating glass dock at the
+  bottom (`Dock.swift`), whose glass shapes blend into each other on iOS 26
+  (`GlassEffectContainer`). In a channel it is `+` (photos), the field (send inside it) and, at
+  the bottom right where the thumb rests, the conversation pill: who or where you are and the
+  channel's state ("1 needs you" in `decide`, "2 working"), with a blue dot when another
+  conversation has news. The pill shrinks to its face while you type. Tap it, or swipe it up,
+  for the switcher; swipe it left or right to step through the conversations, with a haptic and
+  a firm tick at either end; long-press it for quick ways out. Above the dock, in order of need:
+  `@` mention chips while you type a name, the answer chips of a question waiting on you here
+  (big glass capsules under "lead asks you"), or the faces of the agents working now (tap one
+  to talk to it directly). A new question anywhere gives a warning haptic.
+- A channel has several conversations, as on the Mac: #general, a direct thread with each
+  member, the threads between others (read along: the dock says so instead of a field) and
+  each task's thread. The switcher is a half-height sheet: All channels, the channel's card,
+  the conversations (general, your direct threads by recency with a dot when new, "Message
+  someone directly", "Between others"), Needs you, then the tasks; a task row opens its thread.
 - Gestures are Messages': swipe in from the left edge to go back; swipe a bubble right to
   reply (a haptic tick where it arms); drag the conversation left to see each message's time;
   double-tap a bubble (or long-press → Tapback) for the six tapbacks, which are the channel's
   `react` events and sit as badges on the bubble's top corner; tap a picture for a zoomable
-  viewer that a downward swipe closes. Plain links in a message are tappable. A new bubble
-  springs in (`sent`). Scrolled up, new messages don't move you: a glass ⌄ with a count over the
-  composer brings you back.
-' list: a large title, search, a blue dot for unread, a 52pt
-  avatar, the name, the time and a chevron, two quiet lines of the last message (or "Needs
-  you:" in `decide`).
+  viewer that a downward swipe closes. Plain links are tappable. A new bubble springs in
+  (`sent`). Scrolled up, new messages don't move you: a glass ⌄ with a count over the dock
+  brings you back.
+- The channel list is Messages' list under a large title (it isn't touched, so it may stay up
+  there): pinned channels as 76pt circles in a grid, then rows with a blue dot for unread, a
+  52pt avatar, the name, the time and a chevron, two quiet lines of the last message (or "Needs
+  you:" in `decide`). Swipe right to pin, left to mark read or unread; long-press for both. Its
+  dock holds search, a ✋ with how many questions wait on you across every channel (it opens
+  the Needs you inbox: one card per question with thumb-sized answers, "Something else" and
+  Open), Next unread, and you (settings).
 - No agents view: faces, the working dot and "N working" carry agent state.
 
 ## 15. New-surface checklist
