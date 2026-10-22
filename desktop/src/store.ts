@@ -5,7 +5,7 @@ import { app, dialog, safeStorage } from "electron";
 import type { Identity } from "@kiwi/core/identity.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
 import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts";
-import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, StoreSnapshot } from "./bridge.ts";
+import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, PhoneView, StoreSnapshot } from "./bridge.ts";
 import { chooseStore, normalizeRelay, snapshotOf, writePrivate, keyringState, needsResave, type KeyringState } from "./guard.ts";
 import { tellKeys } from "./keys-process.ts";
 import { logMainError } from "./main-log.ts";
@@ -16,6 +16,7 @@ export interface StoreFile {
   person: PersonView | null;
   channels: ChannelIdentityView[];
   computers: ComputerView[];
+  phones?: PhoneView[];
   pending: PendingItem[];
   signin?: { access: string; refresh: string; exp: number };
   github?: { login: string; id: number; token: string; at: number; relay?: string; clientId?: string };

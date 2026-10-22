@@ -611,6 +611,51 @@ What this doesn't change: a person who allows a harmful command has allowed
 it, exactly as in the terminal. Read the command, not the description, which
 the agent wrote.
 
+## Linking a phone: the keys move, and the relay cannot read them
+
+Linking gives an iPhone the same person as the Mac app: the person key and the key of every
+channel the app holds (Settings → Phone → Link a phone). It uses the one-time mailbox that
+pairing a computer uses, with a code starting `kl1-` (`packages/core/src/link.ts`).
+
+1. The Mac app makes a 256-bit secret and an ephemeral X25519 key, and shows the secret, that
+   public key, a short fingerprint of the person key and the relay's origin as a QR and as
+   text. Nothing about the person key itself is in it.
+2. The phone makes its own ephemeral key and writes its public key into a mailbox slot, sealed
+   under a key derived from the secret. Each slot is written once.
+3. Both screens show six digits derived from the secret and both public keys. The Mac sends
+   nothing until the person has compared them and pressed "It matches: link".
+4. The Mac seals the person and every channel identity to the phone's public key: X25519
+   between the two ephemeral keys, mixed with the secret by HKDF, AES-GCM, with both keys and
+   each chunk's place bound in. It goes in 24 KB chunks across mailboxes derived from the
+   secret. The phone opens it only with its private key, the secret and every chunk, and only
+   if the person inside is the one the code named.
+
+What the relay sees is mailbox ids (hashes), sizes and timing. It never gets the secret (it
+goes from screen to camera, or by hand), nor either private key, and the ephemeral keys are
+dropped afterwards, so a later break-in on the Mac cannot open a recorded link. A mailbox is
+gone ten minutes after its first write.
+
+If the code leaks (a photo of the screen), someone who answers first gets different digits
+from the real phone's, so the person says no; the real phone then finds the slot taken and
+says the code was used. Nobody can read the answer without the phone's private key.
+
+On the phone the keys live in the iOS keychain, readable only while the phone is unlocked and
+never moved to another device or a backup (`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`).
+The app asks for Face ID or the passcode when it opens with keys on it and after 30 seconds
+away; a phone with neither set up is not asked, because there is nothing to ask. It runs the
+same `@kiwi/core` client as the Mac, bundled into the app (a hidden web view loads only that
+bundle), so a message is verified and decrypted on the phone the same way it is on the Mac.
+The phone does none of the owner's chores (snapshots, posting rules, GitHub checks): those stay
+with the Mac app.
+
+What it does not do:
+- **A phone that holds these keys is as powerful as the Mac app**, and it cannot be revoked:
+  keys cannot be rotated for it yet. Link only a phone you hold. The Mac app lists linked
+  phones and says so. A per-device key certified by the person key, as computers have, is the
+  safer design and is not built.
+- **Channels joined later stay on the Mac** until you link again (Settings → Link again on the
+  phone): the link is a copy at that moment, not a sync.
+
 ## Limits that double as abuse brakes
 
 - At most 20 pending join requests per channel; requests expire an hour after

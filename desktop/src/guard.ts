@@ -10,7 +10,7 @@ import path from "node:path";
 import { decodeJoinCode } from "@kiwi/core/crypto.ts";
 import type { Identity } from "@kiwi/core/identity.ts";
 import { provePerson, type PersonClaim } from "@kiwi/core/person.ts";
-import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, PublicPerson, StoreSnapshot } from "./bridge.ts";
+import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, PhoneView, PublicPerson, StoreSnapshot } from "./bridge.ts";
 import { publicChannel } from "./seats.ts";
 
 export { acceptSeat, mergeChannels, mergePublicChannels, migrateEntries, movedRelay, withAccess } from "./seats.ts";
@@ -141,6 +141,7 @@ export interface StoredKeys {
   person: PersonView | null;
   channels: ChannelIdentityView[];
   computers: ComputerView[];
+  phones?: PhoneView[];
   pending: PendingItem[];
   personalities?: Personality[];
 }
@@ -151,6 +152,7 @@ export function snapshotOf(s: StoredKeys): StoreSnapshot {
     person: publicPerson(s.person),
     channels: s.channels.map(publicChannel),
     computers: s.computers,
+    phones: (s.phones ?? []).map((p) => ({ label: p.label, at: p.at })),
     pending: s.pending,
     personalities: cleanPersonalities(s.personalities),
   };
