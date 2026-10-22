@@ -25,7 +25,7 @@ import { AgentStrip, agentNow, type AgentNow } from "../agent-strip"
 import { ChannelControls } from "../controls"
 import { Icon } from "../icon"
 import { Button, Harnesses, Pictures, Spinner, errorText, toast } from "../kit"
-import { AddAgent, AgentLanes, CompactBlock, HoldDialog, NewAgent, ProposalCard, TasksView } from "../lazy"
+import { AddAgent, AgentLanes, CompactBlock, HoldDialog, NewAgent, Presence, ProposalCard, TasksView } from "../lazy"
 import { canStartAgents } from "@/lib/launches"
 import { ALLOW_ONCE, DENY, settledOf } from "@/lib/permission-settled"
 import { isAgent } from "../message"
@@ -621,20 +621,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                 </div>
               </div>
 
-              {root && (
-                <ThreadSide
-                  root={root}
-                  count={replies.length}
-                  rows={threadRows}
-                  onClose={() => setSide(null)}
-                  me={me}
-                  people={people}
-                  nameOf={nameOf}
-                  connecting={connection === "connecting"}
-                  send={send}
-                />
-              )}
-
               {picture && <PictureSide picture={picture} nameOf={nameOf} state={state} mayWrite={mayWrite} me={me} extra={extra} send={send} onClose={() => setPicture(null)} />}
 
               {info && (
@@ -657,28 +643,45 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                 />
               )}
 
-              {side?.kind === "tasks" && (
-                <TasksSide
-                  side={side}
-                  setSide={setSide}
-                  task={task}
-                  taskKey={taskKey}
-                  inTask={inTask}
-                  rows={taskRows}
-                  me={me}
-                  people={people}
-                  nameOf={nameOf}
-                  connecting={connection === "connecting"}
-                  send={send}
-                  sendTask={sendTask}
-                  githubDiff={ch.githubDiff}
-                  state={state}
-                  messages={messages}
-                  now={now}
-                  highlight={highlight}
-                  iAmPerson={iAmPerson}
-                />
-              )}
+              <Presence>
+                {root && (
+                  <ThreadSide
+                    key="thread"
+                    root={root}
+                    count={replies.length}
+                    rows={threadRows}
+                    onClose={() => setSide(null)}
+                    me={me}
+                    people={people}
+                    nameOf={nameOf}
+                    connecting={connection === "connecting"}
+                    send={send}
+                  />
+                )}
+                {side?.kind === "tasks" && (
+                  <TasksSide
+                    key="tasks"
+                    side={side}
+                    setSide={setSide}
+                    task={task}
+                    taskKey={taskKey}
+                    inTask={inTask}
+                    rows={taskRows}
+                    me={me}
+                    people={people}
+                    nameOf={nameOf}
+                    connecting={connection === "connecting"}
+                    send={send}
+                    sendTask={sendTask}
+                    githubDiff={ch.githubDiff}
+                    state={state}
+                    messages={messages}
+                    now={now}
+                    highlight={highlight}
+                    iAmPerson={iAmPerson}
+                  />
+                )}
+              </Presence>
             </div>
           </ChannelControls>
         </MentionNames.Provider>
