@@ -204,7 +204,8 @@ async function wrapKey(shared: ArrayBuffer, info: string): Promise<CryptoKey> {
 export async function sealTo(xpk: string, data: string, info = "mc/box"): Promise<string> {
   const eph = (await crypto.subtle.generateKey(X25519, true, ["deriveBits"])) as unknown as CryptoKeyPair;
   const pub = await crypto.subtle.importKey("raw", fromB64url(xpk), X25519, false, []);
-  const shared = await crypto.subtle.deriveBits({ name: "X25519", public: pub } as unknown as { name: string }, eph.privateKey, 256);
+  const algorithm = { name: "X25519", public: pub };
+  const shared = await crypto.subtle.deriveBits(algorithm, eph.privateKey, 256);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const epk = new Uint8Array((await crypto.subtle.exportKey("raw", eph.publicKey)) as ArrayBuffer);
   const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: epk }, await wrapKey(shared, info), enc.encode(data));
@@ -217,7 +218,8 @@ export async function openFrom(xsk: string, box: string, info = "mc/box"): Promi
     const [epk, iv, ct] = box.split(".");
     const priv = await crypto.subtle.importKey("pkcs8", fromB64url(xsk), X25519, false, ["deriveBits"]);
     const pub = await crypto.subtle.importKey("raw", fromB64url(epk!), X25519, false, []);
-    const shared = await crypto.subtle.deriveBits({ name: "X25519", public: pub } as unknown as { name: string }, priv, 256);
+    const algorithm = { name: "X25519", public: pub };
+    const shared = await crypto.subtle.deriveBits(algorithm, priv, 256);
     const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromB64url(iv!), additionalData: fromB64url(epk!) }, await wrapKey(shared, info), fromB64url(ct!));
     return dec.decode(pt);
   } catch {
