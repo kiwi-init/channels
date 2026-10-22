@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { startRelay } from "../src/relay/bun.ts";
 import { kiwiCmd } from "./owner.ts";
 
-export type Env = Record<string, string>;
+type Env = Record<string, string>;
 
 export interface JoinSeats {
   readonly claudeDir: string;
