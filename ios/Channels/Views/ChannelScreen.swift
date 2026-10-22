@@ -6,6 +6,8 @@ struct ChannelScreen: View {
     @Environment(\.dismiss) private var dismiss
     @State private var details = Self.opensDetails
     @State private var replyTo: MessageView?
+    @State private var position = ScrollPosition(edge: .bottom)
+    @State private var follow = Follow()
     @FocusState private var typing: Bool
 
     private static var opensDetails: Bool {
@@ -19,7 +21,7 @@ struct ChannelScreen: View {
     var body: some View {
         Group {
             if let room = model.rooms[code] {
-                Conversation(room: room, replyTo: $replyTo, typing: $typing)
+                Conversation(room: room, replyTo: $replyTo, position: $position, follow: $follow, typing: $typing)
                     .overlay(alignment: .top) {
                         GeometryReader { geo in
                             LinearGradient(stops: fade, startPoint: .top, endPoint: .bottom)
@@ -29,7 +31,12 @@ struct ChannelScreen: View {
                         .allowsHitTesting(false)
                     }
                     .safeAreaInset(edge: .top, spacing: 0) { header(room) }
-                    .bar(.bottom) { Composer(room: room, replyTo: $replyTo, typing: $typing) }
+                    .bar(.bottom) {
+                        Composer(room: room, replyTo: $replyTo, typing: $typing, follow: follow) {
+                            withAnimation(Motion.ease) { position.scrollTo(edge: .bottom) }
+                        }
+                        .animation(Motion.ease, value: follow.atBottom)
+                    }
                     .onAppear { model.markSeen(room) }
                     .onChange(of: room.messages.last?.seq) { _, _ in model.markSeen(room) }
                     .sheet(isPresented: $details) { Details(room: room) }

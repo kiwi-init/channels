@@ -98,6 +98,11 @@ export class Room {
     return this.keyring.call(this.code, "send", body, { kind: "msg", ...(to ? { to } : {}), ...(re !== null ? { re: [re] } : {}), ...(imgs.length ? { imgs: [...imgs] } : {}) });
   }
 
+  async react(seq: number, emoji: string | null): Promise<number> {
+    const body = emoji ? `reacted ${emoji} to #${seq}` : `took back the reaction on #${seq}`;
+    return this.keyring.call(this.code, "send", body, { kind: "event", ev: { op: "react", seq, emoji } });
+  }
+
   async image(seq: number, index: number): Promise<string | null> {
     const img = this.messages.find((m) => m.seq === seq)?.imgs?.[index];
     return img ? this.keyring.call(this.code, "image", img) : null;

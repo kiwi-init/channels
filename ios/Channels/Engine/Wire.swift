@@ -56,9 +56,17 @@ struct MessageView: Codable, Sendable, Hashable, Identifiable {
     let waiting: Bool
     let images: Int
     let task: Int?
+    let reactions: [ReactionView]
 
     var id: Int { seq }
+    var myReaction: String? { reactions.first { $0.mine }?.emoji }
     var date: Date { Date(timeIntervalSince1970: at / 1000) }
+}
+
+struct ReactionView: Codable, Sendable, Hashable {
+    let emoji: String
+    let who: [String]
+    let mine: Bool
 }
 
 struct TaskView: Codable, Sendable, Hashable, Identifiable {

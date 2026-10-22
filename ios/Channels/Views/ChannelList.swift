@@ -6,31 +6,60 @@ struct ChannelList: View {
     @State private var settings = false
     @State private var search = ""
 
-    private var shown: [RoomView] {
-        let q = search.trimmingCharacters(in: .whitespaces).lowercased()
-        return q.isEmpty ? model.channels : model.channels.filter { $0.title.lowercased().contains(q) }
+    private var query: String { search.trimmingCharacters(in: .whitespaces).lowercased() }
+
+    private var rows: [RoomView] {
+        let all = query.isEmpty ? model.otherChannels : model.channels
+        return query.isEmpty ? all : all.filter { $0.title.lowercased().contains(query) }
     }
 
     var body: some View {
         NavigationStack(path: $path) {
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    header
-                    if model.channels.isEmpty {
-                        empty
+            List {
+                header
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Tone.canvas)
+                if query.isEmpty && !model.pinnedChannels.isEmpty {
+                    pins
+                        .listRowInsets(EdgeInsets())
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Tone.canvas)
+                }
+                if model.channels.isEmpty {
+                    empty
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Tone.canvas)
+                }
+                ForEach(rows) { room in
+                    let unread = model.unread(room)
+                    Button {
+                        path.append(room.code)
+                    } label: {
+                        ChannelRow(room: room, unread: unread)
                     }
-                    ForEach(shown) { room in
+                    .buttonStyle(RowPress())
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Tone.canvas)
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
                         Button {
-                            path.append(room.code)
+                            withAnimation(Motion.ease) { model.togglePin(room) }
                         } label: {
-                            ChannelRow(room: room, unread: model.unread(room))
+                            Label("Pin", systemImage: "pin.fill")
                         }
-                        .buttonStyle(RowPress())
+                        .tint(Tone.decide)
                     }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        readButton(room, unread: unread)
+                    }
+                    .contextMenu { menu(room, unread: unread) }
                 }
             }
-            .refreshable { model.nudge() }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
             .background(Tone.canvas)
+            .refreshable { model.nudge() }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: String.self) { code in
                 ChannelScreen(code: code)
@@ -45,6 +74,65 @@ struct ChannelList: View {
         #endif
     }
 
+    private func readButton(_ room: RoomView, unread: Int) -> some View {
+        Button {
+            if unread > 0 { model.markRead(room) } else { model.markUnread(room) }
+        } label: {
+            Label(unread > 0 ? "Read" : "Unread", systemImage: unread > 0 ? "envelope.open.fill" : "envelope.badge.fill")
+        }
+        .tint(Tone.accent)
+    }
+
+    @ViewBuilder private func menu(_ room: RoomView, unread: Int) -> some View {
+        Button {
+            withAnimation(Motion.ease) { model.togglePin(room) }
+        } label: {
+            Label(model.pinned.contains(room.code) ? "Unpin" : "Pin", systemImage: model.pinned.contains(room.code) ? "pin.slash" : "pin")
+        }
+        Button {
+            if unread > 0 { model.markRead(room) } else { model.markUnread(room) }
+        } label: {
+            Label(unread > 0 ? "Mark as Read" : "Mark as Unread", systemImage: unread > 0 ? "envelope.open" : "envelope.badge")
+        }
+    }
+
+    private var pins: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 16) {
+            ForEach(model.pinnedChannels) { room in
+                let unread = model.unread(room)
+                Button {
+                    path.append(room.code)
+                } label: {
+                    VStack(spacing: 6) {
+                        ChannelAvatar(room: room, size: 76)
+                            .overlay(alignment: .topLeading) {
+                                if unread > 0 {
+                                    Circle().fill(Tone.accent).frame(width: 14, height: 14).overlay(Circle().stroke(Tone.canvas, lineWidth: 2.5))
+                                }
+                            }
+                            .overlay(alignment: .topTrailing) {
+                                if !room.asks.isEmpty {
+                                    Text("\(room.asks.count)")
+                                        .type(.stamp, .bold)
+                                        .foregroundStyle(.white)
+                                        .frame(minWidth: 20, minHeight: 20)
+                                        .background(Tone.decide, in: Capsule())
+                                        .overlay(Capsule().stroke(Tone.canvas, lineWidth: 2))
+                                }
+                            }
+                        Text(room.title).type(.meta, unread > 0 ? .semibold : .regular).foregroundStyle(unread > 0 ? Tone.ink : Tone.ink2).lineLimit(1)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .contextMenu { menu(room, unread: unread) }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
+        .padding(.bottom, 14)
+    }
+
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -54,6 +142,7 @@ struct ChannelList: View {
                 } label: {
                     Face(name: model.person, member: nil, size: 36)
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel("Settings")
             }
             Text("Channels").type(.display, .bold).foregroundStyle(Tone.ink)
@@ -63,6 +152,15 @@ struct ChannelList: View {
                     .type(.body)
                     .foregroundStyle(Tone.ink)
                     .submitLabel(.search)
+                if !search.isEmpty {
+                    Button {
+                        search = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(Tone.ink3)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear search")
+                }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -81,6 +179,7 @@ struct ChannelList: View {
                 .foregroundStyle(Tone.ink3)
                 .multilineTextAlignment(.center)
         }
+        .frame(maxWidth: .infinity)
         .padding(40)
     }
 }

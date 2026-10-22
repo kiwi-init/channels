@@ -3,6 +3,7 @@ import { answersDecisions, decidersOf, inGeneral, MAIN, placeKey, type ChannelSt
 import type { FoldMember } from "@kiwi/core/state/types.ts";
 
 import { askLabel, asksFor, chosenOf, heldAsks } from "../../web/src/lib/asks.ts";
+import { chipsFor } from "../../web/src/lib/reactions.ts";
 import type { Online } from "../../web/src/lib/channel/online.ts";
 import { knownHarness, monoHarness } from "../../web/src/lib/harness.ts";
 import type { AskView, Connection, MemberView, MessageView, RoomView, TaskView } from "./wire.ts";
@@ -87,6 +88,7 @@ export function roomView(r: RoomInput): RoomView {
       waiting: waiting.has(m.seq),
       images: m.imgs?.length ?? 0,
       task: place?.kind === "task" ? place.task : (m.task ?? null),
+      reactions: chipsFor(state, m.seq, me, (name) => state.members.get(name)?.display ?? name),
     };
   };
 

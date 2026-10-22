@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftUI
 import UIKit
 
 struct Outgoing: Sendable {
@@ -36,6 +37,7 @@ final class AppModel {
         phase == .ready && (relinkAsked || linking != .idle)
     }
     var seen: [String: Int] = UserDefaults.standard.dictionary(forKey: "seen") as? [String: Int] ?? [:]
+    var pinned: [String] = UserDefaults.standard.stringArray(forKey: "pinned") ?? []
 
     @ObservationIgnored let engine = Engine()
     @ObservationIgnored private var booted = false
@@ -43,6 +45,35 @@ final class AppModel {
 
     var channels: [RoomView] {
         rooms.values.filter { $0.gone == nil }.sorted { ($0.last?.at ?? 0) > ($1.last?.at ?? 0) }
+    }
+
+    var pinnedChannels: [RoomView] {
+        pinned.compactMap { rooms[$0] }.filter { $0.gone == nil }
+    }
+
+    var otherChannels: [RoomView] {
+        channels.filter { !pinned.contains($0.code) }
+    }
+
+    func togglePin(_ room: RoomView) {
+        if pinned.contains(room.code) {
+            pinned.removeAll { $0 == room.code }
+        } else {
+            pinned.append(room.code)
+        }
+        UserDefaults.standard.set(pinned, forKey: "pinned")
+    }
+
+    func markUnread(_ room: RoomView) {
+        guard let last = room.messages.last(where: { !$0.mine && !$0.event }) else { return }
+        seen[room.code] = last.seq - 1
+        UserDefaults.standard.set(seen, forKey: "seen")
+    }
+
+    func markRead(_ room: RoomView) {
+        guard let top = room.messages.last?.seq else { return }
+        seen[room.code] = top
+        UserDefaults.standard.set(seen, forKey: "seen")
     }
 
     func unread(_ room: RoomView) -> Int {
@@ -93,7 +124,12 @@ final class AppModel {
         case .saved(let data):
             Vault.save(data)
         case .room(let room):
-            rooms[room.code] = room
+            let grew = (room.messages.last?.seq ?? 0) > (rooms[room.code]?.messages.last?.seq ?? Int.max)
+            if grew {
+                withAnimation(Motion.sent) { rooms[room.code] = room }
+            } else {
+                rooms[room.code] = room
+            }
         case .gone(let code):
             rooms[code] = nil
         case .log:
@@ -139,6 +175,10 @@ final class AppModel {
         else { return nil }
         pictures.setObject(image, forKey: key)
         return image
+    }
+
+    func react(_ code: String, seq: Int, emoji: String?) async throws {
+        try await engine.ask(["op": "react", "code": code, "seq": seq, "emoji": emoji ?? NSNull()])
     }
 
     func answer(_ code: String, seq: Int, text: String) async throws {

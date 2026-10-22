@@ -14,6 +14,7 @@ export type Ask =
   | { op: "send"; code: string; body: string; re: number | null; imgs: Picture[] }
   | { op: "image"; code: string; seq: number; index: number }
   | { op: "answer"; code: string; seq: number; text: string }
+  | { op: "react"; code: string; seq: number; emoji: string | null }
   | { op: "nudge" };
 
 export interface Picture {
@@ -65,6 +66,13 @@ export interface MessageView {
   waiting: boolean;
   images: number;
   task: number | null;
+  reactions: ReactionView[];
+}
+
+interface ReactionView {
+  emoji: string;
+  who: string[];
+  mine: boolean;
 }
 
 export interface TaskView {

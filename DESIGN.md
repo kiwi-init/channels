@@ -396,7 +396,14 @@ asked for that, so on the phone it wins over §9's rows.
   out under it, from the canvas at the top of the screen to clear just below the pill, over the
   system's soft scroll-edge blur. The composer is a glass `+` (photos) and a glass capsule field
   whose send arrow appears when there is something to send.
-- The channel list is Messages' list: a large title, search, a blue dot for unread, a 52pt
+- Gestures are Messages': swipe in from the left edge to go back; swipe a bubble right to
+  reply (a haptic tick where it arms); drag the conversation left to see each message's time;
+  double-tap a bubble (or long-press → Tapback) for the six tapbacks, which are the channel's
+  `react` events and sit as badges on the bubble's top corner; tap a picture for a zoomable
+  viewer that a downward swipe closes. Plain links in a message are tappable. A new bubble
+  springs in (`sent`). Scrolled up, new messages don't move you: a glass ⌄ with a count over the
+  composer brings you back.
+' list: a large title, search, a blue dot for unread, a 52pt
   avatar, the name, the time and a chevron, two quiet lines of the last message (or "Needs
   you:" in `decide`).
 - No agents view: faces, the working dot and "N working" carry agent state.
