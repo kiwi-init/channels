@@ -32,6 +32,9 @@ export interface RelayPolicy {
   /** Delete a channel after this many days with no new message and nobody connected. */
   expireAfterDays: number | null;
   pageKey: string | null;
+}
+
+export interface RoomPolicy extends RelayPolicy {
   noRateLimits?: boolean;
 }
 
@@ -48,7 +51,7 @@ export const OPEN_POLICY: RelayPolicy = {
 };
 
 /** What this relay allows, as the room and its routes see it. */
-export class Policy extends Context.Service<Policy, RelayPolicy>()("kiwi/relay/Policy") {}
+export class Policy extends Context.Service<Policy, RoomPolicy>()("kiwi/relay/Policy") {}
 
 const positive = (v: string | undefined): number | null => {
   const n = Number(v);

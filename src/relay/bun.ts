@@ -19,9 +19,9 @@ import type { Hasher } from "@kiwi/core/dictation.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
 import { MACHINE_ASKS_PER_MINUTE, MACHINE_BOX_TTL_MS, MACHINE_UNSEEN_MS, MACHINE_WRITES_PER_ADDRESS, onMachineHttp, type MachineBox, type MachineStore } from "./machine.ts";
 import { allow as allowPerMinute } from "./room/limits.ts";
-import { clientAddress, downloadAllowed, parseTrustProxy, trustProxyFromArgs, trustProxyHint, untrustedProxy, writeAllowed, type TrustProxy } from "./address.ts";
+import { clientAddress, downloadAllowed, parseTrustProxy, trustProxyFromArgs, trustProxyHint, trustsAProxy, untrustedProxy, writeAllowed, type TrustProxy } from "./address.ts";
 import { onDictationHttp, type DictationStore } from "./dictation.ts";
-import { Policy, policyFrom, type RelayPolicy } from "./policy.ts";
+import { Policy, policyFrom, type RelayPolicy, type RoomPolicy } from "./policy.ts";
 import {
   Directory,
   forgetRoom,
@@ -100,8 +100,9 @@ export function startRelay(
   if (opts.devNoRateLimits && !devHostOk(opts.hostname)) throw new Error("devNoRateLimits needs hostname 127.0.0.1 (or localhost)");
   const human = opts.human ?? null;
   // Settings come from the caller, or else from the environment, the same keys the Worker reads.
-  const policy: RelayPolicy = { ...(opts.policy ?? policyFrom(process.env)), noRateLimits: false };
+  const policy: RoomPolicy = { ...(opts.policy ?? policyFrom(process.env)), noRateLimits: false };
   const trustProxy: TrustProxy = Array.isArray(opts.trustProxy) ? parseTrustProxy(opts.trustProxy) : opts.trustProxy === true;
+  if ((human?.dev || opts.devNoRateLimits) && trustsAProxy(trustProxy)) throw new Error("dev sign-in and devNoRateLimits can't go with trustProxy: a proxy in front passes other people's requests on");
   const web = opts.web ? webApp(opts.web) : null;
   const dataDir = opts.dataDir ?? ".relay-data";
   // Rooms hold ciphertext, member keys and join codes: only the relay's own user reads them.
@@ -639,6 +640,11 @@ export function runRelay(argv: string[], cmd = "bun src/relay/bun.ts"): void {
     trustProxy = trustProxyFromArgs(argv, process.env.KIWI_TRUST_PROXY);
   } catch (err) {
     process.stderr.write(`${err instanceof Error ? err.message : "bad --trust-proxy"}\n`);
+    process.exit(2);
+  }
+  const devFlag = dev ? "--dev-sign-in" : unlimited ? "--dev-no-rate-limits" : null;
+  if (devFlag && trustsAProxy(trustProxy)) {
+    process.stderr.write(`${devFlag} is for requests made on this machine: it can't go with --trust-proxy (or KIWI_TRUST_PROXY), since a proxy in front passes other people's requests on.\n`);
     process.exit(2);
   }
   const human = dev ? devHumanAuth() : workosFromSettings({ clientId: arg("--workos-client-id", "WORKOS_CLIENT_ID"), authkitDomain, apiKey: process.env.WORKOS_API_KEY || undefined });

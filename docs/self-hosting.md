@@ -76,8 +76,8 @@ built `site/`.
 | `--workos-client-id <id>` | `WORKOS_CLIENT_ID` | | Turn on sign-in, the create gate, with your WorkOS app ([below](#sign-in-with-your-own-workos-app)) |
 | `--workos-authkit-domain <url>` | `WORKOS_AUTHKIT_DOMAIN` | | Your AuthKit domain. Comma-separate two while moving to your own ([below](#your-own-sign-in-domain)) |
 | | `WORKOS_API_KEY` | | Secret, env only: lets the relay show the creator's real name |
-| `--dev-sign-in` | | | Testing only: the token `dev:<name>` signs in as `<name>`, no password. Refused unless `--hostname` is `127.0.0.1` or `localhost` ([below](#testing-a-relay)) |
-| `--dev-no-rate-limits` | | | Testing only: no per-minute cap on a member's messages or history reads (load tests such as `scripts/perf-scale.ts`), for requests made on this machine directly. Like dev sign-in, a request a proxy passed on keeps the caps. Refused unless `--hostname` is `127.0.0.1` or `localhost`, and no environment setting turns it on |
+| `--dev-sign-in` | | | Testing only: the token `dev:<name>` signs in as `<name>`, no password. Refused unless `--hostname` is `127.0.0.1` or `localhost`, and refused with `--trust-proxy` ([below](#testing-a-relay)) |
+| `--dev-no-rate-limits` | | | Testing only: no per-minute cap on a member's messages or history reads (load tests such as `scripts/perf-scale.ts`), for requests made on this machine directly. Like dev sign-in, a request a proxy passed on keeps the caps. Refused unless `--hostname` is `127.0.0.1` or `localhost`, refused with `--trust-proxy`, and no environment setting turns it on |
 | `--trust-proxy [addr,cidr]` | `KIWI_TRUST_PROXY` | off | Trust a reverse proxy. Bare or `1` trusts a loopback peer. An address or CIDR (comma-separated, or the flag repeated) also trusts that peer, for example `172.17.0.1` or `172.16.0.0/12`. A trusted peer's last `X-Forwarded-For` entry is the client. If that entry is not an address, the registration counts as the proxy; earlier entries are ignored. Any other peer ignores the header. A prefix of `/0` is refused |
 
 Beta and quota settings come from the environment (see [Limits](#limits-and-the-private-beta)).
@@ -458,6 +458,10 @@ Anyone who can reach it can sign in as anyone. So the relay refuses to start
 with `--dev-sign-in` on any address but loopback, and refuses a dev token on any
 request that didn't come straight from this machine: another peer address, a
 public host name, or any proxy header (`Forwarded`, `X-Forwarded-For`, `Via`…),
-so a reverse proxy in front of it can't publish it. `test/dev-sign-in.test.ts`
+so a reverse proxy in front of it can't publish it. A proxy that adds no header
+and rewrites the host name (nginx's bare `proxy_pass`, a TCP forwarder) would
+look like this machine, so the relay also refuses `--dev-sign-in` and
+`--dev-no-rate-limits` with `--trust-proxy` or `KIWI_TRUST_PROXY`: saying a proxy
+is in front means other people reach it. `test/dev-sign-in.test.ts`
 walks a signed-in owner, a computer-claimed agent (auto-approved while the owner's
 client runs) and a person-claim join through it.
