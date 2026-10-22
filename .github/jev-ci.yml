@@ -538,7 +538,7 @@ jobs:
       (xz in 1 MiB blocks made the app take most of a minute to appear). And
       test/retry-after.test.ts: the relay's 429 carries Retry-After (header and body, on the socket
       too), a refused attempt isn't counted, and a rate-limited send waits it out and goes in, over
-      the socket without an extra try over HTTP; web lib/github-queue.test.ts: the owner's GitHub
+      the socket without an extra try over HTTP; test/dev-rate-limits.test.ts: the Bun relay's --dev-no-rate-limits (refused off localhost, never read from the environment) lets a member post and read past the per-minute caps, over HTTP and the socket; web lib/github-queue.test.ts: the owner's GitHub
       posts keep a rate-limited or unreachable item to try again. And
       test/desktop-daemon-keeper.test.ts: the app checks its daemon every 30s and starts it again
       when it stops answering, retrying a daemon that won't start from 5s up to every 5 minutes, and
@@ -839,14 +839,14 @@ jobs:
 
   perf:
     name: perf / scale
-    inputs: ["web/**", "desktop/**", "packages/core/**", "scripts/perf-scale.ts", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json"]
+    inputs: ["web/**", "desktop/**", "packages/core/**", "src/relay/**", "scripts/perf-scale.ts", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json"]
     always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "scripts/perf-scale.ts", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json"]
     imports_from: ["scripts/perf-scale.ts"]
     parts: [perf-runs]
     description: >-
       Three perf-runs jobs, side by side on their own runners, each build the web dashboard and
       run scripts/perf-scale.ts once without the soak: a local relay and headless Chromium with
-      10 agents, 100 tasks and 2000 messages (the agents join at once and the seeding sends through each agent's own session, src/agent.ts, with the relay's 120-a-minute limit as its floor), timing the reload to the first screen, the Tasks,
+      10 agents, 100 tasks and 2000 messages (the agents join at once and the seeding sends through each agent's own session, src/agent.ts, on a local relay started with --dev-no-rate-limits, so no per-minute cap slows it), timing the reload to the first screen, the Tasks,
       Agents and Conversation tabs at 4x CPU and typing while the agents post, and upload the
       run as the perf-scale-N artifact. A run that crashes fails its job. Then perf / scale
       downloads the three runs, and scripts/perf-check.ts takes the medians and fails when one

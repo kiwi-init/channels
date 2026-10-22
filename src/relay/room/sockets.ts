@@ -2,6 +2,7 @@ import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import { MAX_EPH_LENGTH, MAX_IV_LENGTH, MORE_REFUSED, type ClientFrame, type Envelope, type ServerFrame } from "@kiwi/core/protocol.ts";
 import { isRefusal } from "../failures.ts";
+import { Policy } from "../policy.ts";
 import { RoomStore } from "./db.ts";
 import type { Effects } from "./directory.ts";
 import { allow, EPHEMERAL_PER_MINUTE, MESSAGES_PER_MINUTE, MORE_PER_MINUTE, READS_PER_MINUTE, take } from "./limits.ts";
@@ -61,7 +62,8 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
     return { reply: [frame({ t: "page" }), ...(yield* welcomeFrames(Number(f.since) || 0))] } satisfies Effects;
   }
   if (f.t !== "send") return { reply: frame({ t: "err", error: "unknown frame" }) } satisfies Effects;
-  const counted = take(`${db.roomId}:${sender}`, MESSAGES_PER_MINUTE);
+  const { noRateLimits } = yield* Policy;
+  const counted = take(`${db.roomId}:${sender}`, noRateLimits ? Infinity : MESSAGES_PER_MINUTE);
   if ("retryAfter" in counted) return { reply: frame({ t: "err", error: "too many messages; wait a minute", id: f.id, tag: "TooMany", retryAfter: counted.retryAfter }) } satisfies Effects;
   const send = f;
   const stored = yield* Effect.exit(append(send.iv, send.ct, Number(send.e ?? 0), sender));
