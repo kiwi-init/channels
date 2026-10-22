@@ -3,6 +3,7 @@ export type Job = {
   inputs: string[];
   imports_from?: string[];
   always?: string[];
+  parts?: string[];
   description: string;
   question?: string;
   criteria?: { true: string; false: string };
