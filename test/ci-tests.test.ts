@@ -43,8 +43,14 @@ describe("scripts/ci-tests.ts", () => {
   }, 30_000);
 
   test("a process a test leaves running with the run's stderr doesn't hold the group after bun test exits", async () => {
-    const leaves = `test("leaves a sleeper", () => { Bun.spawn(["sleep", "15"], { stdout: "ignore", stderr: "inherit" }).unref(); });`;
-    const r = await run(project({ leaves, a: passing }, { slow: ["leaves"] }), "slow");
+    const leaves = `test("leaves a sleeper", async () => {
+  const sleeper = Bun.spawn(["sleep", "15"], { stdout: "ignore", stderr: "inherit", detached: true });
+  sleeper.unref();
+  await Bun.write("sleeper.pid", String(sleeper.pid));
+});`;
+    const dir = project({ leaves, a: passing }, { slow: ["leaves"] });
+    const r = await run(dir, "slow");
+    process.kill(Number(await Bun.file(join(dir, "sleeper.pid")).text()), "SIGKILL");
     expect(r.code).toBe(0);
     expect(r.ms).toBeLessThan(8_000);
   }, 30_000);
