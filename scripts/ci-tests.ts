@@ -11,9 +11,9 @@ const slow = new Set(
     .flat()
     .map((name) => `test/${name}.test.ts`),
 );
-const files = group === "all" ? all : group === "unit" ? all.filter((f) => !slow.has(f)) : FLOWS[group]?.map((name) => `test/${name}.test.ts`);
+const files = group === "unit" ? all.filter((f) => !slow.has(f)) : FLOWS[group]?.map((name) => `test/${name}.test.ts`);
 if (!files) {
-  console.error(`usage: bun scripts/ci-tests.ts ${["all", "unit", ...Object.keys(FLOWS)].join(" | ")}`);
+  console.error(`usage: bun scripts/ci-tests.ts ${["unit", ...Object.keys(FLOWS)].join(" | ")}`);
   process.exit(2);
 }
 const missing = files.filter((f) => !all.includes(f));

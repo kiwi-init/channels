@@ -885,7 +885,7 @@ jobs:
   cli-macos:
     name: cli / macos
     inputs: ["src/**", "packages/core/**", "test/**", "site/install", "site/install.sh", "desktop/src/**", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", ".github/workflows/release-build.yml", "package.json", "bun.lock", "bunfig.toml", "web/package.json"]
-    always: ["scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
+    always: ["scripts/build-cli.ts", "scripts/cli-bundle.ts"]
     question: >-
       Could this change to `file` make the job described in `job` fail on macOS, or fail to
       cross-compile a darwin target, while the same tests and the Linux build pass
@@ -902,8 +902,7 @@ jobs:
         Linux jobs too, which catch it, or it can't fail at all.
     description: >-
       On a macOS runner, does what the release's cli job does: runs the whole bun test suite
-      (every test/*.test.ts and web/src test, the agent flows included) with bun test --parallel
-      through `scripts/ci-tests.ts all`, compiles the kiwi CLI
+      (every test/*.test.ts and web/src test, the agent flows included), compiles the kiwi CLI
       for darwin-arm64, darwin-x64, linux-x64 and linux-arm64 with
       scripts/build-cli.ts, ad-hoc signs the macOS binaries and runs `kiwi --version`. The same
       tests run on Linux in test / unit, test / flows-a and test / flows-b, so this job is for what fails only on macOS: paths (os.tmpdir() is under
