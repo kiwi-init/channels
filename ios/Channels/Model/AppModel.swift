@@ -151,6 +151,12 @@ final class AppModel {
         case .saved(let data):
             Vault.save(data)
         case .room(let room):
+            if let before = rooms[room.code], before.connection == .live {
+                let known = Set(before.asks.map(\.seq))
+                if room.asks.contains(where: { !known.contains($0.seq) }) {
+                    UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                }
+            }
             let grew = (room.messages.last?.seq ?? 0) > (rooms[room.code]?.messages.last?.seq ?? Int.max)
             if grew {
                 withAnimation(Motion.sent) { rooms[room.code] = room }

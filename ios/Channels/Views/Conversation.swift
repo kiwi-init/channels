@@ -1,4 +1,3 @@
-import PhotosUI
 import SwiftUI
 import UIKit
 
@@ -404,7 +403,7 @@ struct Choices: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ForEach(message.choices, id: \.self) { choice in
+            ForEach(message.waiting && message.chosen == nil ? [] : message.choices, id: \.self) { choice in
                 let picked = message.chosen?.choice == choice
                 Button {
                     guard message.waiting, message.chosen == nil, sending == nil else { return }
@@ -441,7 +440,7 @@ struct Choices: View {
                     .foregroundStyle(Tone.ink3)
                     .padding(.leading, 12)
             } else if message.waiting {
-                Text("Waiting on you").type(.meta, .semibold).foregroundStyle(Tone.decide).padding(.leading, 12)
+                Label("Waiting on you · answer below", systemImage: "arrow.down").type(.meta, .semibold).foregroundStyle(Tone.decide).padding(.leading, 12)
             }
         }
         .padding(.top, 3)
@@ -638,220 +637,5 @@ enum Block {
         let rest = buffer.joined(separator: "\n")
         if !rest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { out.append(inCode ? .code(rest) : .text(rest)) }
         return out
-    }
-}
-
-struct Attached: Identifiable {
-    let id = UUID()
-    let image: UIImage
-    let data: Data
-}
-
-struct Composer: View {
-    let room: RoomView
-    @Binding var replyTo: MessageView?
-    var typing: FocusState<Bool>.Binding
-    let follow: Follow
-    let jump: () -> Void
-    @Environment(AppModel.self) private var model
-    @State private var draft = ""
-    @State private var sending = false
-    @State private var error: String?
-    @State private var picked: [PhotosPickerItem] = []
-    @State private var choosing = false
-    @State private var attached: [Attached] = []
-
-    private var asking: AskView? { room.asks.first { $0.task == nil } }
-    private var hasText: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    private var canSend: Bool { !sending && room.connection == .live && (hasText || !attached.isEmpty) }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if let error {
-                Text("Not sent: \(error)").type(.meta).foregroundStyle(Tone.alert).padding(.horizontal, 16)
-            }
-            if let replyTo {
-                HStack(spacing: 8) {
-                    Image(systemName: "arrowshape.turn.up.left.fill").font(.system(size: 11)).foregroundStyle(Tone.accent)
-                    (Text("Replying to \(room.display(replyTo.from)): ").fontWeight(.semibold) + Text(replyTo.body.replacingOccurrences(of: "\n", with: " ")))
-                        .type(.meta)
-                        .foregroundStyle(Tone.ink2)
-                        .lineLimit(1)
-                    Spacer()
-                    Button {
-                        self.replyTo = nil
-                    } label: {
-                        Image(systemName: "xmark.circle.fill").font(.system(size: 17)).foregroundStyle(Tone.ink3)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Cancel reply")
-                }
-                .padding(.horizontal, 16)
-            }
-            HStack(alignment: .bottom, spacing: 8) {
-                Button {
-                    choosing = true
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 19, weight: .medium))
-                        .foregroundStyle(Tone.ink)
-                        .frame(width: 40, height: 40)
-                        .glassCircle()
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Add photos")
-                VStack(alignment: .leading, spacing: 0) {
-                    if !attached.isEmpty { tray }
-                    HStack(alignment: .bottom, spacing: 6) {
-                        TextField(placeholder, text: $draft, axis: .vertical)
-                            .type(.body)
-                            .foregroundStyle(Tone.ink)
-                            .lineLimit(1...6)
-                            .focused(typing)
-                            .padding(.leading, 14)
-                            .padding(.vertical, 9)
-                        if canSend || sending { sendButton }
-                    }
-                }
-                .frame(minHeight: 40)
-                .glass(20)
-            }
-            .padding(.horizontal, 12)
-            .animation(Motion.ease, value: canSend)
-        }
-        .padding(.top, 6)
-        .padding(.bottom, 6)
-        .overlay(alignment: .topTrailing) {
-            if !follow.atBottom {
-                Button(action: jump) {
-                    ZStack(alignment: .topTrailing) {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(Tone.ink)
-                            .frame(width: 40, height: 40)
-                            .glassCircle()
-                        if follow.unseen > 0 {
-                            Text("\(follow.unseen)")
-                                .type(.stamp, .bold)
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 5)
-                                .frame(minWidth: 18, minHeight: 18)
-                                .background(Tone.accent, in: Capsule())
-                                .offset(x: 4, y: -4)
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-                .padding(.trailing, 16)
-                .offset(y: -46)
-                .transition(.scale(scale: 0.6).combined(with: .opacity))
-                .accessibilityLabel(follow.unseen > 0 ? "\(follow.unseen) new, jump to the latest" : "Jump to the latest")
-            }
-        }
-        .photosPicker(isPresented: $choosing, selection: $picked, maxSelectionCount: 4, matching: .images)
-        .onChange(of: picked) { _, items in
-            guard !items.isEmpty else { return }
-            picked = []
-            Task { await load(items) }
-        }
-    }
-
-    private var tray: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(attached) { a in
-                    Image(uiImage: a.image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 64, height: 64)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .overlay(alignment: .topTrailing) {
-                            Button {
-                                attached.removeAll { $0.id == a.id }
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 18))
-                                    .symbolRenderingMode(.palette)
-                                    .foregroundStyle(.white, .black.opacity(0.55))
-                            }
-                            .buttonStyle(.plain)
-                            .padding(3)
-                        }
-                }
-            }
-            .padding(.horizontal, 6)
-            .padding(.top, 6)
-        }
-    }
-
-    private var sendButton: some View {
-        Button(action: send) {
-            ZStack {
-                if sending {
-                    ProgressView().tint(.white).controlSize(.mini)
-                } else {
-                    Image(systemName: "arrow.up").font(.system(size: 15, weight: .bold))
-                }
-            }
-            .foregroundStyle(.white)
-            .frame(width: 30, height: 30)
-            .background(Tone.accent, in: Circle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!canSend)
-        .padding(.trailing, 5)
-        .padding(.bottom, 5)
-        .transition(.scale.combined(with: .opacity))
-        .accessibilityLabel("Send")
-    }
-
-    private var placeholder: String {
-        if room.connection != .live { return "Connecting…" }
-        if let replyTo { return "Reply to \(room.display(replyTo.from))" }
-        if let asking { return "Answer \(room.display(asking.from))" }
-        return "Message"
-    }
-
-    private func load(_ items: [PhotosPickerItem]) async {
-        for item in items {
-            guard let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data), let jpeg = Shrink.jpeg(image) else { continue }
-            attached.append(Attached(image: image, data: jpeg))
-        }
-    }
-
-    private func send() {
-        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard canSend else { return }
-        sending = true
-        error = nil
-        Haptic.tap()
-        let pictures = attached.enumerated().map { i, a in Outgoing(name: "photo-\(i + 1).jpg", mime: "image/jpeg", data: a.data.base64EncodedString()) }
-        Task {
-            do {
-                if replyTo == nil, pictures.isEmpty, let asking {
-                    try await model.answer(room.code, seq: asking.seq, text: text)
-                } else {
-                    try await model.send(room.code, text, re: replyTo?.seq, pictures: pictures)
-                }
-                if draft.trimmingCharacters(in: .whitespacesAndNewlines) == text { draft = "" }
-                attached = []
-                replyTo = nil
-            } catch {
-                self.error = error.localizedDescription
-            }
-            sending = false
-        }
-    }
-}
-
-enum Shrink {
-    static func jpeg(_ image: UIImage, longest: CGFloat = 1600) -> Data? {
-        let size = image.size
-        let scale = min(1, longest / max(size.width, size.height))
-        let target = CGSize(width: (size.width * scale).rounded(), height: (size.height * scale).rounded())
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        let resized = UIGraphicsImageRenderer(size: target, format: format).image { _ in image.draw(in: CGRect(origin: .zero, size: target)) }
-        return resized.jpegData(compressionQuality: 0.7)
     }
 }

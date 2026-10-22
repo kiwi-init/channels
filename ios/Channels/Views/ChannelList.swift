@@ -2,9 +2,18 @@ import SwiftUI
 
 struct ChannelList: View {
     @Environment(AppModel.self) private var model
-    @State private var path: [String] = []
+    @State private var path: [Route] = []
     @State private var settings = false
+    @State private var inbox = false
     @State private var search = ""
+    @FocusState private var searching: Bool
+    @Namespace private var glass
+
+    private var needs: Int { model.channels.reduce(0) { $0 + $1.asks.count } }
+
+    private var nextUnread: RoomView? {
+        (model.pinnedChannels + model.otherChannels).first { model.unread($0) > 0 }
+    }
 
     private var query: String { search.trimmingCharacters(in: .whitespaces).lowercased() }
 
@@ -34,7 +43,7 @@ struct ChannelList: View {
                 ForEach(rows) { room in
                     let unread = model.unread(room)
                     Button {
-                        path.append(room.code)
+                        path.append(Route(code: room.code))
                     } label: {
                         ChannelRow(room: room, unread: unread)
                     }
@@ -61,15 +70,19 @@ struct ChannelList: View {
             .background(Tone.canvas)
             .refreshable { model.nudge() }
             .toolbar(.hidden, for: .navigationBar)
-            .navigationDestination(for: String.self) { code in
-                ChannelScreen(code: code)
+            .navigationDestination(for: Route.self) { route in
+                ChannelScreen(route: route)
             }
+            .bar(.bottom) { dock }
         }
         .sheet(isPresented: $settings) { SettingsSheet() }
+        .sheet(isPresented: $inbox) {
+            Inbox { code, place in path = [Route(code: code, place: place)] }
+        }
         #if DEBUG
             .onChange(of: model.channels.first?.code) { _, code in
                 guard let code, path.isEmpty, UserDefaults.standard.string(forKey: "shot") != nil else { return }
-                path = [code]
+                path = [Route(code: code)]
             }
         #endif
     }
@@ -101,7 +114,7 @@ struct ChannelList: View {
             ForEach(model.pinnedChannels) { room in
                 let unread = model.unread(room)
                 Button {
-                    path.append(room.code)
+                    path.append(Route(code: room.code))
                 } label: {
                     VStack(spacing: 6) {
                         ChannelAvatar(room: room, size: 76)
@@ -134,41 +147,89 @@ struct ChannelList: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Spacer()
-                Button {
-                    settings = true
-                } label: {
-                    Face(name: model.person, member: nil, size: 36)
+        Text("Channels")
+            .type(.display, .bold)
+            .foregroundStyle(Tone.ink)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 8)
+    }
+
+    private var dock: some View {
+        GlassGroup(spacing: 12) {
+            HStack(spacing: 8) {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(Tone.ink3)
+                    TextField("Search", text: $search)
+                        .type(.body)
+                        .foregroundStyle(Tone.ink)
+                        .submitLabel(.search)
+                        .focused($searching)
+                    if !search.isEmpty {
+                        Button {
+                            search = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill").foregroundStyle(Tone.ink3)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Clear search")
+                    }
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Settings")
-            }
-            Text("Channels").type(.display, .bold).foregroundStyle(Tone.ink)
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass").foregroundStyle(Tone.ink3)
-                TextField("Search", text: $search)
-                    .type(.body)
-                    .foregroundStyle(Tone.ink)
-                    .submitLabel(.search)
-                if !search.isEmpty {
+                .padding(.horizontal, 14)
+                .frame(height: 48)
+                .glassCapsule()
+                .glassID("search", in: glass)
+                if !searching {
+                    if needs > 0 {
+                        Button {
+                            Haptic.tap()
+                            inbox = true
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: "hand.raised.fill").font(.system(size: 14, weight: .semibold))
+                                Text("\(needs)").type(.ui, .bold)
+                            }
+                            .foregroundStyle(Tone.decide)
+                            .padding(.horizontal, 14)
+                            .frame(height: 48)
+                            .glassCapsule()
+                        }
+                        .buttonStyle(.plain)
+                        .glassID("needs", in: glass)
+                        .accessibilityLabel("\(needs) need you")
+                    }
+                    if let next = nextUnread {
+                        Button {
+                            Haptic.tap()
+                            path.append(Route(code: next.code))
+                        } label: {
+                            Image(systemName: "arrow.turn.down.right")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(Tone.accent)
+                                .frame(width: 48, height: 48)
+                                .glassCircle()
+                        }
+                        .buttonStyle(.plain)
+                        .glassID("next", in: glass)
+                        .accessibilityLabel("Next unread: \(next.title)")
+                    }
                     Button {
-                        search = ""
+                        settings = true
                     } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(Tone.ink3)
+                        Face(name: model.person, member: nil, size: 40)
+                            .frame(width: 48, height: 48)
+                            .glassCircle()
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Clear search")
+                    .glassID("me", in: glass)
+                    .accessibilityLabel("Settings")
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(Tone.wash2, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .animation(.snappy(duration: 0.28), value: searching)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 6)
-        .padding(.bottom, 8)
     }
 
     private var empty: some View {

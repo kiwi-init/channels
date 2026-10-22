@@ -4,6 +4,7 @@ struct TasksTab: View {
     let room: RoomView
     let current: String
     let choose: (String) -> Void
+    let channels: () -> Void
     @Environment(AppModel.self) private var model
     @State private var open: TaskView?
 
@@ -29,6 +30,18 @@ struct TasksTab: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
+                Button(action: channels) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "chevron.left").font(.system(size: 13, weight: .semibold))
+                        Text("All channels").type(.ui, .medium)
+                        Spacer()
+                    }
+                    .foregroundStyle(Tone.accent)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
                 card
                 section("Conversations", count: 1 + direct.count, tone: Tone.ink3)
                 if let general = room.placeView("main") {
