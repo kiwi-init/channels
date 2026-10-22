@@ -13,7 +13,6 @@ struct ConversationScreen: View {
     @State private var follow = Follow()
     @State private var threadPosition = ScrollPosition(edge: .bottom)
     @State private var threadFollow = Follow()
-    @State private var pillFrame: CGRect = .zero
     @State private var late = false
     @FocusState private var typing: Bool
 
@@ -77,15 +76,10 @@ struct ConversationScreen: View {
                         }
                     }
                 }
-                .overlay {
-                    if details {
-                        DetailsMorph(room: room, current: active.place, pill: pillFrame) { key in
-                            switchTo(Spot(code: room.code, place: key))
-                        } channels: {
-                            dismiss()
-                        } closed: {
-                            details = false
-                        }
+                .navigationDestination(isPresented: $details) {
+                    DetailsScreen(code: room.code, current: active.place) { key in
+                        details = false
+                        switchTo(Spot(code: room.code, place: key))
                     }
                 }
                 .animation(Motion.swap, value: spot)
@@ -171,11 +165,6 @@ struct ConversationScreen: View {
                 if !room.asks.isEmpty { asks(room) }
             }
             TitlePill(room: room, place: room.placeView(active.place), fresh: false)
-                .onGeometryChange(for: CGRect.self) {
-                    $0.frame(in: .global)
-                } action: {
-                    pillFrame = $0
-                }
                 .overlay {
                     HoldButton(label: room.spotTitle(active.place), hint: "Tap for details, touch and hold to switch conversations") {
                         Haptic.tap()
@@ -185,7 +174,6 @@ struct ConversationScreen: View {
                     }
                 }
                 .frame(maxWidth: 240)
-                .opacity(details ? 0 : 1)
                 .contentTransition(.interpolate)
         }
         .padding(.horizontal, 12)
@@ -323,14 +311,8 @@ struct TitlePill: View {
     let room: RoomView
     let place: PlaceView?
     let fresh: Bool
-    var bare = false
-
     var body: some View {
-        if bare {
-            label
-        } else {
-            label.glassCapsule().contentShape(Capsule())
-        }
+        label.glassCapsule().contentShape(Capsule())
     }
 
     private var label: some View {
@@ -387,25 +369,23 @@ struct TitlePill: View {
     }
 }
 
-struct DetailsMorph: View {
-    let room: RoomView
+struct DetailsScreen: View {
+    let code: String
     let current: String
-    let pill: CGRect
     let choose: (String) -> Void
-    let channels: () -> Void
-    let closed: () -> Void
+    @Environment(AppModel.self) private var model
 
     var body: some View {
-        MorphPanel(from: pill, closed: closed) {
-            TitlePill(room: room, place: room.placeView(current), fresh: false, bare: true)
-        } content: { close in
-            TasksTab(
-                room: room, current: current,
-                choose: { key in
-                    choose(key)
-                    close()
-                }, channels: channels, close: close)
+        Group {
+            if let room = model.rooms[code] {
+                TasksTab(room: room, current: current, choose: choose)
+                    .navigationTitle(room.spotTitle(current))
+            } else {
+                Centered(title: "This channel is gone", detail: "Its owner closed it, or this phone was removed from it.")
+            }
         }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
     }
 }
 

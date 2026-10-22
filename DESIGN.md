@@ -403,12 +403,10 @@ what follows is what ships.
   it (no ✕). Swipe a row right for Read/Unread and Pin, left to Hide a direct thread.
   Long-press a row for a live preview and a menu that answers a waiting question on the spot
   (press, slide to "A: …", let go), jumps into a task thread, pins, marks read or hides.
-- **Cause and effect stay close; one glass shape; no ✕.** Whatever opens grows out of what you
-  touched and shrinks back into it: Settings out of "Edit", New Message out of the compose
-  circle ("To:" on top, people by channel, # general first), the details out of the title
-  pill. Each is one frosted glass shape (corners easing to 44pt) over a dimmed, blurred
-  backdrop. Close by tapping the spot you opened it from, the dimmed edge, or dragging its
-  grabber back toward where it came from.
+- **Native presentations, nothing custom.** The details push from the name pill and Settings
+  push from Edit, with the system back button, as screens do in Messages and Settings; New
+  Message is the system sheet with Cancel, from the compose circle. No custom morphing glass
+  panels.
 - **A conversation is one screen.** Header: a glass back circle (a blue dot when another
   conversation is unread), the centred glass name pill (a face inside only for a direct
   thread; "2 working · 1 needs you", "working on T8", "here"/"away"), and a ✋ count circle
@@ -419,7 +417,7 @@ what follows is what ships.
   You, Unread, Recent, across channels. Hold the name pill and slide: # general, your direct
   threads (the lead first, even before either of you wrote), New Message ›, the channel's task
   threads, Read Along ›. Let go on one to be there. A tap on the back circle goes back; a tap
-  on the pill opens the details. These are native iOS button menus, so press-hold-slide-release
+  on the pill pushes the details. These are native iOS button menus, so press-hold-slide-release
   works the way it does everywhere on the iPhone. Or swipe back from the edge and tap a row.
 - **Transcript.** Bubbles: yours right in blue, others left in grey, a tail on the last of a
   run, the sender's name over the first and their 30pt face beside the last (none in a
@@ -446,10 +444,11 @@ what follows is what ships.
   takes its place without a flicker. No "Sending…" or "Delivered"; only a failure says "Not
   Delivered", with a red "!" whose menu offers Try Again and Delete. A draft (text and photos) stays with its conversation, in memory
   only. A send names its conversation, so a quick switch can't misdirect it.
-- **Details** (from the pill): the channel's icon, name and "5 people · 2 working", tiles for
-  Message, Pin and Channels, Needs you (answer in place), Conversations, Between others,
-  People (tap to message), then tasks, a task opening in place.
-- **Settings** (from Edit): iOS Settings, grouped rows with coloured symbol tiles (Channels,
+- **Details** (pushed from the pill): the channel's icon, name and "5 people · 2 working",
+  tiles for Message and Pin, Needs you (answer in place), Conversations, Between others,
+  People (tap to message), then tasks (tap one to open its thread). A grouped list on the
+  system's grouped backgrounds.
+- **Settings** (pushed from Edit): iOS Settings, grouped rows with coloured symbol tiles (Channels,
   Relay, Lock with Face ID after 30 s), Link Again, Unlink This iPhone, the version.
 - No Agents view, no read receipts, no typing bubble, no "New messages" line: faces, the
   `doing` dot and "N working" carry agent state.

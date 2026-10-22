@@ -8,8 +8,6 @@ struct ConversationList: View {
     @State private var search = ""
     @State private var settings = false
     @State private var composing = false
-    @State private var editFrame: CGRect = .zero
-    @State private var composeFrame: CGRect = .zero
     @FocusState private var searching: Bool
     @Namespace private var glass
 
@@ -104,33 +102,15 @@ struct ConversationList: View {
             .navigationDestination(for: Spot.self) { spot in
                 ConversationScreen(start: spot)
             }
+            .navigationDestination(isPresented: $settings) {
+                SettingsScreen()
+            }
             .bar(.bottom) { dock }
         }
-        .overlay {
-            if settings {
-                MorphPanel(from: editFrame) {
-                    settings = false
-                } face: {
-                    Text("Edit").type(.body).foregroundStyle(Tone.ink)
-                } content: { close in
-                    SettingsPanel(close: close)
-                }
-            }
-        }
-        .overlay {
-            if composing {
-                MorphPanel(from: composeFrame, rising: true) {
-                    composing = false
-                } face: {
-                    Image(systemName: "square.and.pencil").font(.system(size: 19, weight: .medium)).foregroundStyle(Tone.ink)
-                } content: { close in
-                    NewMessage { spot in
-                        close()
-                        path.append(spot)
-                    } close: {
-                        close()
-                    }
-                }
+        .sheet(isPresented: $composing) {
+            NewMessage { spot in
+                composing = false
+                path.append(spot)
             }
         }
         #if DEBUG
@@ -174,11 +154,6 @@ struct ConversationList: View {
                 }
             } label: {
                 Text("Edit")
-                    .onGeometryChange(for: CGRect.self) {
-                        $0.frame(in: .global).insetBy(dx: -14, dy: -10)
-                    } action: {
-                        editFrame = $0
-                    }
             }
         }
         ToolbarItem(placement: .principal) {
@@ -311,11 +286,6 @@ struct ConversationList: View {
                     }
                     .buttonStyle(.plain)
                     .glassID("compose", in: glass)
-                    .onGeometryChange(for: CGRect.self) {
-                        $0.frame(in: .global)
-                    } action: {
-                        composeFrame = $0
-                    }
                     .accessibilityLabel("New Message")
                 }
             }
@@ -637,23 +607,29 @@ struct Hit: View {
 
 struct NewMessage: View {
     let pick: (Spot) -> Void
-    let close: () -> Void
     @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
     @State private var to = ""
     @FocusState private var focused: Bool
 
     private var query: String { to.trimmingCharacters(in: .whitespaces).lowercased() }
 
     var body: some View {
+        NavigationStack {
+            people
+                .navigationTitle("New Message")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }
+                    }
+                }
+        }
+        .onAppear { focused = true }
+    }
+
+    private var people: some View {
         VStack(spacing: 0) {
-            Text("New Message")
-                .type(.title)
-                .foregroundStyle(Tone.ink)
-                .frame(maxWidth: .infinity, minHeight: 52)
-                .contentShape(Rectangle())
-                .onTapGesture(perform: close)
-                .accessibilityAddTraits(.isButton)
-                .accessibilityHint("Closes New Message")
             HStack(spacing: 6) {
                 Text("To:").type(.body).foregroundStyle(Tone.ink3)
                 TextField("", text: $to).type(.body).foregroundStyle(Tone.ink).focused($focused).autocorrectionDisabled().textInputAutocapitalization(.never)
@@ -697,14 +673,11 @@ struct NewMessage: View {
                                 Text(room.title)
                             }
                         }
-                        .listRowBackground(Tone.wash)
                     }
                 }
             }
             .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
         }
-        .onAppear { focused = true }
     }
 
     private func matches(_ text: String) -> Bool {
@@ -718,11 +691,10 @@ struct NewMessage: View {
     }
 }
 
-struct SettingsPanel: View {
-    let close: () -> Void
+struct SettingsScreen: View {
     @Environment(AppModel.self) private var model
     @State private var confirm = false
-    @State private var guarded = SettingsPanel.lockWords()
+    @State private var guarded = SettingsScreen.lockWords()
 
     private var relayHost: String {
         URL(string: model.relay)?.host() ?? model.relay
@@ -750,19 +722,15 @@ struct SettingsPanel: View {
         List {
             Section {
                 VStack(spacing: 4) {
-                    Text("Settings").type(.title).foregroundStyle(Tone.ink).padding(.bottom, 14)
                     Face(name: model.person, member: nil, size: 80).padding(.bottom, 8)
                     Text(model.person).font(.title2.weight(.bold)).foregroundStyle(Tone.ink)
                     Text("Linked to your Mac").type(.ui).foregroundStyle(Tone.ink3)
                 }
                 .frame(maxWidth: .infinity)
-                .contentShape(Rectangle())
-                .onTapGesture(perform: close)
                 .accessibilityElement(children: .combine)
-                .accessibilityHint("Closes Settings")
             }
             .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets(top: 14, leading: 0, bottom: 6, trailing: 0))
+            .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 6, trailing: 0))
             Section("This iPhone") {
                 LabeledContent {
                     Text("\(model.channels.count)")
@@ -780,10 +748,8 @@ struct SettingsPanel: View {
                     Setting(symbol: "lock.fill", tint: Tone.ink3, title: "Lock")
                 }
             }
-            .listRowBackground(Tone.wash)
             Section {
                 Button {
-                    close()
                     model.relinkAsked = true
                 } label: {
                     Setting(symbol: "link", tint: Tone.accent, title: "Link Again")
@@ -792,7 +758,6 @@ struct SettingsPanel: View {
             } footer: {
                 Text("Brings the channels you joined on your Mac since you linked.")
             }
-            .listRowBackground(Tone.wash)
             Section {
                 Button(role: .destructive) {
                     confirm = true
@@ -802,17 +767,16 @@ struct SettingsPanel: View {
             } footer: {
                 Text("This iPhone holds your person key and your channels' keys in its keychain. Unlinking deletes them from this phone.")
             }
-            .listRowBackground(Tone.wash)
             Section {
             } footer: {
                 Text("Channels \(version)").frame(maxWidth: .infinity)
             }
         }
         .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
+        .navigationTitle("Settings")
+        .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("Unlink this iPhone?", isPresented: $confirm, titleVisibility: .visible) {
             Button("Unlink", role: .destructive) {
-                close()
                 model.unlink()
             }
         } message: {

@@ -4,10 +4,7 @@ struct TasksTab: View {
     let room: RoomView
     let current: String
     let choose: (String) -> Void
-    let channels: () -> Void
-    let close: () -> Void
     @Environment(AppModel.self) private var model
-    @State private var open: TaskView?
 
     private var direct: [PlaceView] {
         room.places.filter { $0.kind == "dm" && $0.withMe }.sorted { $0.lastSeq > $1.lastSeq }
@@ -31,39 +28,23 @@ struct TasksTab: View {
     }
 
     var body: some View {
-        ZStack {
-            if let task = open {
-                TaskDetail(task: task, room: room, back: { withAnimation(Motion.ease) { open = nil } }) {
-                    choose("task:\(task.id)")
-                }
-                .transition(.move(edge: .trailing).combined(with: .opacity))
-            } else {
-                list.transition(.move(edge: .leading).combined(with: .opacity))
-            }
-        }
-        .animation(.snappy(duration: 0.3), value: open?.id)
-    }
-
-    private var list: some View {
         List {
             Section {
                 header
             }
             .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets(top: 22, leading: 0, bottom: 6, trailing: 0))
+            .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 6, trailing: 0))
             if !room.asks.isEmpty {
                 Section {
                     ForEach(room.asks) { ask in NeedsYouRow(ask: ask, room: room) }
                 } header: {
                     Text("Needs you").foregroundStyle(Tone.decide)
                 }
-                .listRowBackground(Tone.wash)
             }
             Section("Conversations") {
                 if let general = room.placeView("main") { place(general) }
                 ForEach(direct) { place($0) }
             }
-            .listRowBackground(Tone.wash)
             if !between.isEmpty {
                 Section {
                     ForEach(between) { place($0) }
@@ -72,31 +53,22 @@ struct TasksTab: View {
                 } footer: {
                     Text("You can read along.")
                 }
-                .listRowBackground(Tone.wash)
             }
             Section("\(room.members.count) people") {
                 ForEach(people) { person($0) }
             }
-            .listRowBackground(Tone.wash)
             tasks("In progress", doing)
             tasks("Up next", next)
             tasks("Done this week", done)
         }
         .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
     }
 
     private var header: some View {
         VStack(spacing: 4) {
-            VStack(spacing: 4) {
-                ChannelAvatar(room: room, size: 96).padding(.bottom, 8)
-                Text(room.title).font(.title2.weight(.bold)).foregroundStyle(Tone.ink).multilineTextAlignment(.center)
-                Text(summary).type(.ui).foregroundStyle(Tone.ink3)
-            }
-            .contentShape(Rectangle())
-            .onTapGesture(perform: close)
-            .accessibilityElement(children: .combine)
-            .accessibilityHint("Closes the details")
+            ChannelAvatar(room: room, size: 96).padding(.bottom, 8)
+            Text(room.title).font(.title2.weight(.bold)).foregroundStyle(Tone.ink).multilineTextAlignment(.center)
+            Text(summary).type(.ui).foregroundStyle(Tone.ink3)
             HStack(spacing: 10) {
                 Menu {
                     ForEach(people.filter { $0.name != room.me }) { m in
@@ -110,9 +82,6 @@ struct TasksTab: View {
                     withAnimation(Motion.ease) { model.togglePin(Spot(code: room.code, place: current)) }
                 } label: {
                     Action(symbol: pinned ? "pin.slash.fill" : "pin.fill", title: pinned ? "Unpin" : "Pin")
-                }
-                Button(action: channels) {
-                    Action(symbol: "bubble.left.and.bubble.right.fill", title: "Channels")
                 }
             }
             .buttonStyle(.plain)
@@ -176,14 +145,13 @@ struct TasksTab: View {
             Section(title) {
                 ForEach(list) { task in
                     Button {
-                        withAnimation(Motion.ease) { open = task }
+                        choose("task:\(task.id)")
                     } label: {
                         TaskRow(task: task, room: room)
                     }
                     .tint(Tone.ink)
                 }
             }
-            .listRowBackground(Tone.wash)
         }
     }
 }
@@ -199,7 +167,7 @@ struct Action: View {
         }
         .foregroundStyle(Tone.accent)
         .frame(maxWidth: .infinity, minHeight: 60)
-        .background(Tone.wash2, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
@@ -348,74 +316,5 @@ struct NeedsYouRow: View {
             text = ""
             replying = false
         }
-    }
-}
-
-struct TaskDetail: View {
-    let task: TaskView
-    let room: RoomView
-    let back: () -> Void
-    let thread: () -> Void
-
-    var body: some View {
-        List {
-            Section {
-                VStack(alignment: .leading, spacing: 10) {
-                    Button(action: back) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "chevron.left").font(.system(size: 14, weight: .semibold))
-                            Text(room.title).type(.body)
-                        }
-                        .foregroundStyle(Tone.accent)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.bottom, 6)
-                    HStack(spacing: 6) {
-                        Text(taskLabel(task.id)).type(.meta, .bold).foregroundStyle(Tone.ink2)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(Tone.wash2, in: Capsule())
-                        Text(stateWords(task.state)).type(.meta, .semibold).foregroundStyle(stateColor(task.state))
-                    }
-                    Text(task.title).font(.title2.weight(.bold)).foregroundStyle(Tone.ink)
-                }
-            }
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets(top: 20, leading: 4, bottom: 4, trailing: 4))
-            Section {
-                LabeledContent("Owner") {
-                    if let owner = task.owner {
-                        HStack(spacing: 6) {
-                            Face(name: owner, member: room.member(owner), size: 22)
-                            Text(room.display(owner))
-                        }
-                    } else {
-                        Text("Unassigned")
-                    }
-                }
-                if let review = task.review {
-                    LabeledContent("Review", value: review == "*" ? "Anyone" : room.display(review))
-                }
-                if task.createdAt > 0 {
-                    LabeledContent("Opened", value: When.short(Date(timeIntervalSince1970: task.createdAt / 1000)))
-                }
-                LabeledContent("Updated", value: When.short(task.updated))
-            }
-            .listRowBackground(Tone.wash)
-            if let last = task.last {
-                Section("Last note") {
-                    Prose(text: last).padding(.vertical, 2)
-                }
-                .listRowBackground(Tone.wash)
-            }
-            Section {
-                Button(action: thread) {
-                    Label("Open its thread", systemImage: "bubble.left.and.text.bubble.right")
-                }
-            }
-            .listRowBackground(Tone.wash)
-        }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
     }
 }
