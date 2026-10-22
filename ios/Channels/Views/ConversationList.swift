@@ -7,7 +7,6 @@ struct ConversationList: View {
     @State private var filter = Filter.all
     @State private var search = ""
     @State private var settings = false
-    @State private var composing = false
     @FocusState private var searching: Bool
     @Namespace private var glass
 
@@ -23,7 +22,7 @@ struct ConversationList: View {
     private var hits: [(Row, MessageView)] {
         guard query.count > 1 else { return [] }
         return model.rows(.all).flatMap { row in
-            (model.feeds[row.id]?.messages ?? []).filter { !$0.event && $0.body.lowercased().contains(query) }.suffix(3).map { (row, $0) }
+            (model.shown(row.spot)?.messages ?? []).filter { !$0.event && $0.body.lowercased().contains(query) }.suffix(3).map { (row, $0) }
         }
         .sorted { $0.1.at > $1.1.at }
         .prefix(20)
@@ -63,7 +62,6 @@ struct ConversationList: View {
                     .listRowSeparator(.hidden)
                     .listRowBackground(Tone.canvas)
                     .swipeActions(edge: .leading, allowsFullSwipe: true) { leading(row) }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) { trailing(row) }
                     .contextMenu {
                         RowMenu(row: row) { path.append($0) }
                     } preview: {
@@ -107,19 +105,12 @@ struct ConversationList: View {
             }
             .bar(.bottom) { dock }
         }
-        .sheet(isPresented: $composing) {
-            NewMessage { spot in
-                composing = false
-                path.append(spot)
-            }
-        }
         #if DEBUG
             .onChange(of: model.channels.first?.code) { _, code in
                 guard let code, path.isEmpty, let shot = UserDefaults.standard.string(forKey: "shot") else { return }
                 if let text = UserDefaults.standard.string(forKey: "draft") { model.keep(Draft(text: text), code, "main") }
                 switch shot {
                 case "settings": settings = true
-                case "compose": composing = true
                 case "list": break
                 default: path = [Spot(code: code, place: UserDefaults.standard.string(forKey: "place") ?? "main")]
                 }
@@ -132,8 +123,6 @@ struct ConversationList: View {
         case .all: "No Conversations"
         case .needs: "Nothing Needs You"
         case .unread: "No Unread Messages"
-        case .drafts: "No Drafts"
-        case .along: "Nothing to Read Along"
         }
     }
 
@@ -211,17 +200,6 @@ struct ConversationList: View {
         .tint(Tone.decide)
     }
 
-    @ViewBuilder private func trailing(_ row: Row) -> some View {
-        if row.kind != .group {
-            Button {
-                withAnimation(Motion.ease) { model.hide(row.spot) }
-            } label: {
-                Label("Hide", systemImage: "eye.slash")
-            }
-            .tint(Tone.ink3)
-        }
-    }
-
     private var pins: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 18) {
             ForEach(model.pins()) { row in
@@ -274,20 +252,6 @@ struct ConversationList: View {
                 .frame(height: 48)
                 .glassCapsule()
                 .glassID("search", in: glass)
-                if !finding {
-                    Button {
-                        composing = true
-                    } label: {
-                        Image(systemName: "square.and.pencil")
-                            .font(.system(size: 19, weight: .medium))
-                            .foregroundStyle(Tone.ink)
-                            .frame(width: 48, height: 48)
-                            .glassCircle()
-                    }
-                    .buttonStyle(.plain)
-                    .glassID("compose", in: glass)
-                    .accessibilityLabel("New Message")
-                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
@@ -333,10 +297,8 @@ struct RowAvatar: View {
                             Circle().fill(Tone.doing).frame(width: size * 0.26, height: size * 0.26).overlay(Circle().stroke(Tone.canvas, lineWidth: 2))
                         }
                     }
-            case .direct:
-                Face(name: row.other ?? row.title, member: row.other.flatMap { row.room.member($0) }, size: size)
-            case .along:
-                PlaceFace(room: row.room, place: row.place, size: size)
+            case .lead:
+                Face(name: row.lead ?? row.title, member: row.lead.flatMap { row.room.member($0) }, size: size)
             }
         }
         .overlay(alignment: .bottomTrailing) {
@@ -447,10 +409,6 @@ struct RowMenu: View {
     let open: (Spot) -> Void
     @Environment(AppModel.self) private var model
 
-    private var threads: [PlaceView] {
-        Array(row.room.places.filter { $0.kind == "task" && $0.last != nil }.sorted { $0.lastSeq > $1.lastSeq }.prefix(5))
-    }
-
     var body: some View {
         if let ask = row.asks.first(where: { !$0.choices.isEmpty }) {
             Section("Answer \(row.room.display(ask.from))") {
@@ -464,15 +422,11 @@ struct RowMenu: View {
                 }
             }
         }
-        if row.kind == .group && !threads.isEmpty {
-            Section("Threads") {
-                ForEach(threads) { place in
-                    Button {
-                        open(Spot(code: row.spot.code, place: place.key))
-                    } label: {
-                        Label(place.task.map { id in "\(taskLabel(id)) \(row.room.tasks.first { $0.id == id }?.title ?? "")" } ?? place.title, systemImage: "number")
-                    }
-                }
+        if let other = row.room.other(than: row.spot) {
+            Button {
+                open(other)
+            } label: {
+                Label(other.general ? "Open # general" : "Message \(row.room.spotTitle(other.place))", systemImage: other.general ? "number" : "bubble.left")
             }
         }
         Button {
@@ -487,13 +441,6 @@ struct RowMenu: View {
         } label: {
             Label(row.unread ? "Mark as Read" : "Mark as Unread", systemImage: row.unread ? "envelope.open" : "envelope.badge")
         }
-        if row.kind != .group {
-            Button(role: .destructive) {
-                withAnimation(Motion.ease) { model.hide(row.spot) }
-            } label: {
-                Label("Hide", systemImage: "eye.slash")
-            }
-        }
     }
 }
 
@@ -502,7 +449,7 @@ struct RowPeek: View {
     @Environment(AppModel.self) private var model
 
     private var messages: [MessageView] {
-        let cached = model.feeds[row.id]?.messages.filter { !$0.event } ?? []
+        let cached = model.shown(row.spot)?.messages.filter { !$0.event } ?? []
         if !cached.isEmpty { return Array(cached.suffix(8)) }
         return row.last.map { [$0] } ?? []
     }
@@ -602,92 +549,6 @@ struct Hit: View {
             out[range].font = .body.bold()
         }
         return out
-    }
-}
-
-struct NewMessage: View {
-    let pick: (Spot) -> Void
-    @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
-    @State private var to = ""
-    @FocusState private var focused: Bool
-
-    private var query: String { to.trimmingCharacters(in: .whitespaces).lowercased() }
-
-    var body: some View {
-        NavigationStack {
-            people
-                .navigationTitle("New Message")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") { dismiss() }
-                    }
-                }
-        }
-        .onAppear { focused = true }
-    }
-
-    private var people: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 6) {
-                Text("To:").type(.body).foregroundStyle(Tone.ink3)
-                TextField("", text: $to).type(.body).foregroundStyle(Tone.ink).focused($focused).autocorrectionDisabled().textInputAutocapitalization(.never)
-            }
-            .padding(.horizontal, 16)
-            .frame(height: 44)
-            .background(Tone.wash2, in: Capsule())
-            .padding(.horizontal, 14)
-            .padding(.bottom, 6)
-            List {
-                ForEach(model.channels) { room in
-                    let people = room.members.filter { $0.name != room.me && matches($0.display + " " + $0.name) }
-                    if matches(room.title) || !people.isEmpty {
-                        Section {
-                            if matches(room.title + " general") {
-                                Button {
-                                    pick(Spot(code: room.code))
-                                } label: {
-                                    HStack(spacing: 12) {
-                                        ChannelAvatar(room: room, size: 36)
-                                        Text("# general").type(.body).foregroundStyle(Tone.ink)
-                                    }
-                                }
-                            }
-                            ForEach(people) { m in
-                                Button {
-                                    pick(Spot(code: room.code, place: room.dmKey(with: m.name)))
-                                } label: {
-                                    HStack(spacing: 12) {
-                                        Face(name: m.name, member: m, size: 36)
-                                        VStack(alignment: .leading, spacing: 1) {
-                                            Text(m.display).type(.body).foregroundStyle(Tone.ink)
-                                            Text(status(m)).type(.meta).foregroundStyle(m.working ? Tone.doing : Tone.ink3)
-                                        }
-                                    }
-                                }
-                            }
-                        } header: {
-                            HStack(spacing: 6) {
-                                ChannelAvatar(room: room, size: 20)
-                                Text(room.title)
-                            }
-                        }
-                    }
-                }
-            }
-            .listStyle(.insetGrouped)
-        }
-    }
-
-    private func matches(_ text: String) -> Bool {
-        query.isEmpty || text.lowercased().contains(query)
-    }
-
-    private func status(_ m: MemberView) -> String {
-        let what = m.lead ? "Lead" : m.isAgent ? "Agent" : "Person"
-        if m.working { return "\(what) · \(m.doing.first.map { "working on \(taskLabel($0))" } ?? "working")" }
-        return "\(what) · \(m.here ? "here" : "away")"
     }
 }
 

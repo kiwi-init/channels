@@ -6,22 +6,21 @@ struct Spot: Hashable, Codable, Sendable {
     var place = "main"
 
     var id: String { "\(code)|\(place)" }
+    var general: Bool { place == "main" }
 }
 
 enum RowKind: Sendable {
-    case group, direct, along
+    case group, lead
 }
 
 enum Filter: String, CaseIterable, Sendable {
-    case all, needs, unread, drafts, along
+    case all, needs, unread
 
     var title: String {
         switch self {
         case .all: "Conversations"
         case .needs: "Needs You"
         case .unread: "Unread"
-        case .drafts: "Drafts"
-        case .along: "Read Along"
         }
     }
 
@@ -30,8 +29,6 @@ enum Filter: String, CaseIterable, Sendable {
         case .all: "bubble.left.and.bubble.right"
         case .needs: "hand.raised"
         case .unread: "envelope.badge"
-        case .drafts: "pencil"
-        case .along: "eyeglasses"
         }
     }
 }
@@ -64,13 +61,12 @@ struct Row: Identifiable {
     var id: String { spot.id }
     var last: MessageView? { place?.last }
     var lastAt: Double { last?.at ?? 0 }
-    var other: String? { place.flatMap { room.other(in: $0) } }
+    var lead: String? { kind == .lead ? room.lead : nil }
 
     var working: Bool {
         switch kind {
         case .group: room.working > 0
-        case .direct: other.flatMap { room.member($0) }?.working ?? false
-        case .along: false
+        case .lead: lead.flatMap { room.member($0) }?.working ?? false
         }
     }
 
@@ -82,26 +78,38 @@ struct Row: Identifiable {
         if room.connection == .connecting && last == nil { return "Connecting…" }
         if let ask = asks.first { return "Needs you: \(ask.body.replacingOccurrences(of: "\n", with: " "))" }
         if let draft { return "Draft: \(draft.text.isEmpty ? "Photo" : draft.text.replacingOccurrences(of: "\n", with: " "))" }
-        guard let last else { return "No messages yet" }
+        guard let last else { return kind == .lead ? "Message \(title) directly" : "No messages yet" }
         let body = last.body.isEmpty && last.images > 0 ? (last.images == 1 ? "Photo" : "\(last.images) Photos") : last.body.replacingOccurrences(of: "\n", with: " ")
-        if kind == .direct { return last.mine ? "You: \(body)" : body }
+        if kind == .lead { return last.mine ? "You: \(body)" : body }
         return "\(last.mine ? "You" : room.display(last.from)): \(body)"
     }
 }
 
 extension RoomView {
+    var leadSpot: Spot? { sideKey.map { Spot(code: code, place: $0) } }
+
+    func other(than spot: Spot) -> Spot? {
+        spot.general ? leadSpot : Spot(code: code)
+    }
+
+    func asks(in key: String) -> [AskView] {
+        key == sideKey ? asks.filter { $0.place == key } : asks.filter { $0.place != sideKey }
+    }
+
+    func elsewhere() -> [AskView] {
+        asks.filter { $0.place != "main" && $0.place != sideKey }
+    }
+
     func showing(_ key: String, _ feed: Feed?) -> RoomView {
         RoomView(
             code: code, title: title, icon: icon, me: me, isOwner: isOwner, connection: connection, gone: gone, error: error, head: head,
-            whole: feed?.whole ?? false, hold: hold, charter: charter, lead: lead, members: members, messages: feed?.messages ?? [], tasks: tasks,
-            asks: asks, last: last, place: key, places: places)
+            whole: feed?.whole ?? false, hold: hold, charter: charter, lead: lead, members: members, messages: feed?.messages ?? [], side: side,
+            sideKey: sideKey, tasks: tasks, asks: asks, last: last, place: key, places: places)
     }
 
     func spotTitle(_ key: String) -> String {
-        guard let place = placeView(key), key != "main" else { return title }
-        if place.kind == "task", let id = place.task { return taskLabel(id) }
-        if let other = other(in: place) { return display(other) }
-        return place.title
+        guard key != "main", let lead else { return title }
+        return display(lead)
     }
 }
 
@@ -111,43 +119,29 @@ extension AppModel {
         let many = live.count > 1
         var out: [Row] = []
         for room in live {
-            let main = room.placeView("main")
+            let general = Spot(code: room.code)
             out.append(
                 Row(
-                    spot: Spot(code: room.code), kind: .group, room: room, place: main, title: room.title, qualifier: nil,
-                    unread: fresh(room, "main"), asks: room.asks, draft: drafts["\(room.code)|main"]))
-            for place in room.places where place.kind == "dm" {
-                let spot = Spot(code: room.code, place: place.key)
-                let draft = drafts[spot.id]
-                if let mark = hidden[spot.id], place.lastSeq <= mark, draft == nil { continue }
-                if place.withMe {
-                    guard place.last != nil || draft != nil else { continue }
-                    let other = room.other(in: place) ?? place.title
-                    out.append(
-                        Row(
-                            spot: spot, kind: .direct, room: room, place: place, title: room.display(other), qualifier: many ? room.title : nil,
-                            unread: fresh(room, place.key), asks: [], draft: draft))
-                } else {
-                    out.append(
-                        Row(
-                            spot: spot, kind: .along, room: room, place: place, title: place.with.map { room.display($0) }.joined(separator: " & "),
-                            qualifier: many ? room.title : nil, unread: false, asks: [], draft: nil))
-                }
+                    spot: general, kind: .group, room: room, place: room.placeView("main"), title: room.title, qualifier: nil,
+                    unread: fresh(room, "main"), asks: room.asks(in: "main"), draft: drafts[general.id]))
+            if let spot = room.leadSpot, let lead = room.lead {
+                out.append(
+                    Row(
+                        spot: spot, kind: .lead, room: room, place: room.placeView(spot.place), title: room.display(lead), qualifier: many ? room.title : nil,
+                        unread: fresh(room, spot.place), asks: room.asks(in: spot.place), draft: drafts[spot.id]))
             }
         }
         let kept: [Row] =
             switch filter {
-            case .all: out.filter { $0.kind != .along }
+            case .all: out
             case .needs: out.filter { !$0.asks.isEmpty }
             case .unread: out.filter { $0.unread }
-            case .drafts: out.filter { $0.draft != nil }
-            case .along: out.filter { $0.kind == .along }
             }
         return kept.sorted { ($0.lastAt, $0.title) > ($1.lastAt, $1.title) }
     }
 
     func row(_ spot: Spot) -> Row? {
-        rows(.all).first { $0.spot == spot } ?? rows(.along).first { $0.spot == spot }
+        rows(.all).first { $0.spot == spot }
     }
 
     var waiting: Int { channels.reduce(0) { $0 + $1.asks.count } }
@@ -164,7 +158,7 @@ extension AppModel {
     }
 
     func pins() -> [Row] {
-        let all = rows(.all) + rows(.along)
+        let all = rows(.all)
         return pinned.compactMap { id in all.first { $0.id == id } }
     }
 
@@ -175,18 +169,20 @@ extension AppModel {
 
     func markRead(_ spot: Spot) {
         guard let room = rooms[spot.code], let top = room.placeView(spot.place)?.lastSeq else { return }
-        if spot.place == "main" {
-            seen[spot.code] = max(seen[spot.code] ?? 0, top)
+        if spot.general {
+            guard top > (seen[spot.code] ?? 0) else { return }
+            seen[spot.code] = top
             UserDefaults.standard.set(seen, forKey: "seen")
         } else {
-            placeSeen[spot.id] = max(placeSeen[spot.id] ?? 0, top)
+            guard top > (placeSeen[spot.id] ?? 0) else { return }
+            placeSeen[spot.id] = top
             UserDefaults.standard.set(placeSeen, forKey: "placeSeen")
         }
     }
 
     func markUnread(_ spot: Spot) {
         guard let room = rooms[spot.code], let last = room.placeView(spot.place)?.last, !last.mine else { return }
-        if spot.place == "main" {
+        if spot.general {
             seen[spot.code] = last.seq - 1
             UserDefaults.standard.set(seen, forKey: "seen")
         } else {
@@ -199,31 +195,16 @@ extension AppModel {
         for row in rows(.unread) { markRead(row.spot) }
     }
 
-    func hide(_ spot: Spot) {
-        guard let top = rooms[spot.code]?.placeView(spot.place)?.lastSeq else { return }
-        hidden[spot.id] = top
-        pinned.removeAll { $0 == spot.id }
-        UserDefaults.standard.set(hidden, forKey: "hidden")
-        UserDefaults.standard.set(pinned, forKey: "pinned")
-    }
-
     func shown(_ spot: Spot) -> RoomView? {
         guard let room = rooms[spot.code] else { return nil }
-        return room.place == spot.place ? room : room.showing(spot.place, feeds[spot.id])
-    }
-
-    func ready(_ spot: Spot) -> Bool {
-        rooms[spot.code]?.place == spot.place || feeds[spot.id] != nil
+        if spot.place == room.sideKey { return room.showing(spot.place, Feed(messages: room.side ?? [], whole: room.whole)) }
+        return room.place == "main" ? room : room.showing("main", feeds[spot.id])
     }
 
     func visit(_ spot: Spot) {
         visited.removeAll { $0 == spot }
         visited.insert(spot, at: 0)
         if visited.count > 12 { visited.removeLast() }
-    }
-
-    func open(_ spot: Spot) async {
-        await open(spot.code, place: spot.place)
     }
 
     func post(_ spot: Spot, _ body: String, re: Int?) {
@@ -248,7 +229,7 @@ extension AppModel {
                 let seq = try await send(spot, item.body, re: item.re)
                 sentAs[seq] = item.id
                 if let at = pending[spot.id]?.firstIndex(where: { $0.id == item.id }) { pending[spot.id]?[at].seq = seq }
-                settle(spot)
+                settle(spot.code)
             } catch {
                 if let at = pending[spot.id]?.firstIndex(where: { $0.id == item.id }) { pending[spot.id]?[at].failed = true }
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
@@ -256,9 +237,13 @@ extension AppModel {
         }
     }
 
-    func settle(_ spot: Spot) {
-        guard let list = pending[spot.id], !list.isEmpty, let room = rooms[spot.code], room.place == spot.place else { return }
-        let have = Set(room.messages.map(\.seq))
-        pending[spot.id] = list.filter { item in item.seq.map { !have.contains($0) } ?? true }
+    func settle(_ code: String) {
+        guard let room = rooms[code] else { return }
+        let have = Set(room.messages.map(\.seq) + (room.side ?? []).map(\.seq))
+        for key in ["main"] + (room.sideKey.map { [$0] } ?? []) {
+            let id = "\(code)|\(key)"
+            guard let list = pending[id], !list.isEmpty else { continue }
+            pending[id] = list.filter { item in item.seq.map { !have.contains($0) } ?? true }
+        }
     }
 }

@@ -96,6 +96,7 @@ export interface AskView {
   label: string;
   choices: string[];
   task: number | null;
+  place: string;
 }
 
 export interface PlaceView {
@@ -127,6 +128,8 @@ export interface RoomView {
   lead: string | null;
   members: MemberView[];
   messages: MessageView[];
+  side: MessageView[];
+  sideKey: string | null;
   tasks: TaskView[];
   asks: AskView[];
   last: MessageView | null;

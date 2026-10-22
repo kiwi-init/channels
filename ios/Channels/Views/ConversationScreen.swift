@@ -5,24 +5,18 @@ struct ConversationScreen: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var spot: Spot
-    @State private var thread: String?
     @State private var previous: Spot?
     @State private var details = ConversationScreen.opensDetails
     @State private var replyTo: MessageView?
+    @State private var answering: AskView?
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var follow = Follow()
-    @State private var threadPosition = ScrollPosition(edge: .bottom)
-    @State private var threadFollow = Follow()
-    @State private var late = false
+    @State private var toLead = true
     @FocusState private var typing: Bool
 
     init(start: Spot) {
-        let task = start.place.hasPrefix("task:")
-        _spot = State(initialValue: task ? Spot(code: start.code) : start)
-        _thread = State(initialValue: task ? start.place : nil)
+        _spot = State(initialValue: start)
     }
-
-    private var active: Spot { thread.map { Spot(code: spot.code, place: $0) } ?? spot }
 
     private static var opensDetails: Bool {
         #if DEBUG
@@ -35,31 +29,17 @@ struct ConversationScreen: View {
     var body: some View {
         Group {
             if let room = model.shown(spot) {
-                let ready = model.ready(spot)
-                Conversation(room: room, replyTo: $replyTo, position: $position, follow: $follow, typing: $typing) { key in
-                    openThread(key)
+                Conversation(
+                    room: room, replyTo: $replyTo, position: $position, follow: $follow, typing: $typing, elsewhere: spot.general ? room.elsewhere() : []
+                ) { ask in
+                    replyTo = nil
+                    answering = ask
+                    typing = true
                 }
                 .id(spot.id)
-                .transition(.opacity.combined(with: .offset(y: 6)))
-                .opacity(ready ? 1 : 0)
-                .overlay {
-                    if !ready && late { ProgressView() }
-                }
-                .overlay {
-                    if let thread, let inner = model.shown(Spot(code: spot.code, place: thread)) {
-                        ZStack {
-                            Rectangle()
-                                .fill(.black.opacity(0.35))
-                                .background(.ultraThinMaterial)
-                                .ignoresSafeArea()
-                                .onTapGesture(perform: closeThread)
-                            Conversation(room: inner, replyTo: $replyTo, position: $threadPosition, follow: $threadFollow, typing: $typing)
-                                .id(thread)
-                                .opacity(model.ready(active) ? 1 : 0)
-                        }
-                        .transition(.opacity.combined(with: .offset(y: 24)))
-                    }
-                }
+                .transition(
+                    .asymmetric(insertion: .move(edge: toLead ? .trailing : .leading), removal: .move(edge: toLead ? .leading : .trailing))
+                )
                 .overlay(alignment: .top) {
                     GeometryReader { geo in
                         LinearGradient(stops: fade, startPoint: .top, endPoint: .bottom)
@@ -70,79 +50,49 @@ struct ConversationScreen: View {
                 }
                 .safeAreaInset(edge: .top, spacing: 0) { header(room) }
                 .bar(.bottom) {
-                    Dock(room: model.shown(active) ?? room, spot: active, replyTo: $replyTo, typing: $typing, follow: thread == nil ? follow : threadFollow) {
-                        withAnimation(Motion.ease) {
-                            if thread == nil { position.scrollTo(edge: .bottom) } else { threadPosition.scrollTo(edge: .bottom) }
-                        }
+                    Dock(room: room, spot: spot, replyTo: $replyTo, answering: $answering, typing: $typing, follow: follow) {
+                        withAnimation(Motion.ease) { position.scrollTo(edge: .bottom) }
                     }
                 }
                 .navigationDestination(isPresented: $details) {
-                    DetailsScreen(code: room.code, current: active.place) { key in
+                    DetailsScreen(code: room.code, current: spot.place) { key in
                         details = false
                         switchTo(Spot(code: room.code, place: key))
                     }
                 }
-                .animation(Motion.swap, value: spot)
-                .animation(.spring(duration: 0.38, bounce: 0.12), value: thread)
                 .onAppear(perform: seen)
-                .onChange(of: model.rooms[spot.code]?.messages.last?.seq) { _, _ in seen() }
-                .onChange(of: model.rooms[spot.code]?.place) { _, _ in seen() }
+                .onChange(of: room.placeView(spot.place)?.lastSeq) { _, _ in seen() }
             } else {
                 Centered(title: "This channel is gone", detail: "Its owner closed it, or this phone was removed from it.")
             }
         }
         .background(Tone.canvas)
         .toolbar(.hidden, for: .navigationBar)
-        .task(id: active) {
-            model.visit(active)
-            late = false
-            if thread == nil { follow = Follow() }
-            await model.open(active)
-            guard (try? await Task.sleep(for: .milliseconds(400))) != nil else { return }
-            late = true
+        .task(id: spot) {
+            model.visit(spot)
+            follow = Follow()
+            await model.open(spot.code, place: "main")
         }
     }
 
     private func seen() {
-        guard let room = model.rooms[spot.code] else { return }
-        model.markSeen(room, place: active.place)
+        model.markRead(spot)
     }
 
     private func switchTo(_ next: Spot) {
-        guard next != active else { return }
-        if next.place.hasPrefix("task:") && next.code == spot.code {
-            previous = active
-            return openThread(next.place)
-        }
+        guard next != spot else { return }
         Haptic.tap()
-        previous = active
+        previous = spot
         replyTo = nil
-        let task = next.place.hasPrefix("task:")
-        withAnimation(Motion.swap) {
-            thread = task ? next.place : nil
-            spot = task ? Spot(code: next.code) : next
-        }
-    }
-
-    private func openThread(_ key: String) {
-        Haptic.tap()
-        replyTo = nil
-        threadFollow = Follow()
-        threadPosition = ScrollPosition(edge: .bottom)
-        withAnimation(.spring(duration: 0.38, bounce: 0.12)) { thread = key }
-    }
-
-    private func closeThread() {
-        replyTo = nil
-        withAnimation(.spring(duration: 0.38, bounce: 0.12)) { thread = nil }
-    }
-
-    private var elsewhere: Bool {
-        model.rows(.unread).contains { $0.spot != spot }
+        answering = nil
+        toLead = !next.general
+        withAnimation(.spring(duration: 0.34, bounce: 0.08)) { spot = next }
     }
 
     private func header(_ room: RoomView) -> some View {
-        ZStack {
+        let other = room.other(than: spot)
+        let elsewhere = model.rows(.unread).contains { $0.spot != spot && $0.spot != other }
+        return ZStack {
             HStack {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 17, weight: .semibold))
@@ -155,53 +105,55 @@ struct ConversationScreen: View {
                         }
                     }
                     .overlay {
-                        HoldButton(label: thread == nil ? "Back" : "Close thread", hint: "Touch and hold for your other conversations") {
-                            if thread == nil { dismiss() } else { closeThread() }
+                        HoldButton(label: "Back", hint: "Touch and hold for your other channels") {
+                            dismiss()
                         } menu: {
                             backMenu()
                         }
                     }
                 Spacer()
-                if !room.asks.isEmpty { asks(room) }
+                if let other { flip(room, to: other) }
             }
-            TitlePill(room: room, place: room.placeView(active.place), fresh: false)
-                .overlay {
-                    HoldButton(label: room.spotTitle(active.place), hint: "Tap for details, touch and hold to switch conversations") {
-                        Haptic.tap()
-                        details = true
-                    } menu: {
-                        pillMenu(room)
-                    }
-                }
-                .frame(maxWidth: 240)
-                .contentTransition(.interpolate)
+            Button {
+                Haptic.tap()
+                details = true
+            } label: {
+                TitlePill(room: room, place: room.placeView(spot.place), fresh: false)
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: 220)
+            .accessibilityHint("Shows the channel's details")
         }
         .padding(.horizontal, 12)
         .padding(.top, 2)
         .padding(.bottom, 6)
     }
 
-    private func asks(_ room: RoomView) -> some View {
-        Button {
-            guard let ask = room.asks.first else { return }
-            let target = Spot(code: room.code, place: ask.task.map { "task:\($0)" } ?? "main")
-            switchTo(target)
-            Task {
-                try? await Task.sleep(for: .milliseconds(350))
-                withAnimation(Motion.ease) { position.scrollTo(id: "b\(ask.seq)", anchor: .center) }
-            }
+    private func flip(_ room: RoomView, to other: Spot) -> some View {
+        let asks = !room.asks(in: other.place).isEmpty
+        let fresh = model.unread(other)
+        return Button {
+            switchTo(other)
         } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "hand.raised.fill").font(.system(size: 14, weight: .semibold))
-                Text("\(room.asks.count)").type(.ui, .bold)
+            Group {
+                if other.general {
+                    ChannelAvatar(room: room, size: 34)
+                } else if let lead = room.lead {
+                    Face(name: lead, member: room.member(lead), size: 34)
+                }
             }
-            .foregroundStyle(Tone.decide)
-            .padding(.horizontal, 12)
-            .frame(height: 44)
-            .glassCapsule()
+            .frame(width: 44, height: 44)
+            .glassCircle()
+            .overlay(alignment: .topTrailing) {
+                if asks || fresh {
+                    Circle().fill(asks ? Tone.decide : Tone.accent).frame(width: 11, height: 11).overlay(Circle().stroke(Tone.canvas, lineWidth: 2))
+                        .offset(x: 1, y: -1)
+                }
+            }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(room.asks.count) \(room.asks.count == 1 ? "needs" : "need") you")
+        .accessibilityLabel(other.general ? "Open # general" : "Open your chat with \(room.spotTitle(other.place))")
+        .accessibilityValue(asks ? "needs you" : fresh ? "unread" : "")
     }
 
     private func item(_ row: Row, prefix: String? = nil) -> HoldItem {
@@ -211,9 +163,9 @@ struct ConversationScreen: View {
     }
 
     private func backMenu() -> [HoldSection] {
-        var used: Set<Spot> = [spot, active]
+        var used: Set<Spot> = [spot]
         var sections: [HoldSection] = []
-        if let last = previous ?? model.visited.first(where: { $0 != active && $0 != spot }), let row = model.row(last) {
+        if let last = previous ?? model.visited.first(where: { $0 != spot }), let row = model.row(last) {
             used.insert(last)
             sections.append(HoldSection(items: [item(row, prefix: "Previous")]))
         }
@@ -225,75 +177,6 @@ struct ConversationScreen: View {
         sections.append(HoldSection(title: "Needs You", items: take(model.rows(.needs), 3)))
         sections.append(HoldSection(title: "Unread", items: take(model.rows(.unread), 3)))
         sections.append(HoldSection(title: "Recent", items: take(model.rows(.all), 6)))
-        return sections
-    }
-
-    private func pillMenu(_ room: RoomView) -> [HoldSection] {
-        let code = room.code
-        func face(_ name: String) -> UIImage? {
-            MenuArt.image("face|\(code)|\(name)|\(room.member(name)?.working == true)") { Face(name: name, member: room.member(name), size: 30) }
-        }
-        func line(_ place: PlaceView?) -> String? {
-            guard let last = place?.last else { return nil }
-            return "\(last.mine ? "You" : room.display(last.from)): \(last.body.replacingOccurrences(of: "\n", with: " "))"
-        }
-        let general = Spot(code: code)
-        var sections = [
-            HoldSection(items: [
-                HoldItem(
-                    title: "# general", subtitle: line(room.placeView("main")), image: MenuArt.image("channel|\(code)") { ChannelAvatar(room: room, size: 30) },
-                    checked: active == general
-                ) { switchTo(general) }
-            ])
-        ]
-        var direct: [HoldItem] = []
-        var talked: Set<String> = [room.me]
-        if let lead = room.lead, lead != room.me {
-            let key = room.dmKey(with: lead)
-            talked.insert(lead)
-            direct.append(
-                HoldItem(title: room.display(lead), subtitle: line(room.placeView(key)) ?? "Lead", image: face(lead), checked: active.place == key) {
-                    switchTo(Spot(code: code, place: key))
-                })
-        }
-        let threads = room.places.filter { $0.kind == "dm" && $0.withMe && $0.last != nil }.sorted { $0.lastSeq > $1.lastSeq }
-        for place in threads.prefix(6) {
-            guard let other = room.other(in: place), !talked.contains(other) else { continue }
-            talked.insert(other)
-            direct.append(
-                HoldItem(title: room.display(other), subtitle: line(place), image: face(other), checked: active.place == place.key) {
-                    switchTo(Spot(code: code, place: place.key))
-                })
-        }
-        sections.append(HoldSection(title: "Direct", items: direct))
-        let strangers = room.members.filter { !talked.contains($0.name) }
-        sections.append(
-            HoldSection(
-                title: "New Message", nested: true,
-                items: strangers.map { m in
-                    HoldItem(title: m.display, image: face(m.name)) { switchTo(Spot(code: code, place: room.dmKey(with: m.name))) }
-                }))
-        let tasks = room.places.filter { $0.kind == "task" && $0.last != nil }.sorted { $0.lastSeq > $1.lastSeq }.prefix(6)
-        sections.append(
-            HoldSection(
-                title: "Tasks",
-                items: tasks.map { place in
-                    let id = place.task ?? 0
-                    let task = room.tasks.first { $0.id == id }
-                    return HoldItem(
-                        title: "\(taskLabel(id)) \(task?.title ?? "")", subtitle: [task.map { stateWords($0.state) }, line(place)].compactMap { $0 }.joined(separator: " · "),
-                        image: MenuArt.image("task|\(code)|\(id)") { PlaceFace(room: room, place: place, size: 30) }, checked: active.place == place.key
-                    ) { switchTo(Spot(code: code, place: place.key)) }
-                }))
-        let along = room.places.filter { $0.kind == "dm" && !$0.withMe }.sorted { $0.lastSeq > $1.lastSeq }.prefix(8)
-        sections.append(
-            HoldSection(
-                title: "Read Along", nested: true,
-                items: along.map { place in
-                    HoldItem(title: place.with.map { room.display($0) }.joined(separator: " & "), subtitle: line(place), checked: active.place == place.key) {
-                        switchTo(Spot(code: code, place: place.key))
-                    }
-                }))
         return sections
     }
 
@@ -378,7 +261,7 @@ struct DetailsScreen: View {
     var body: some View {
         Group {
             if let room = model.rooms[code] {
-                TasksTab(room: room, current: current, choose: choose)
+                ChannelDetails(room: room, current: current, choose: choose)
                     .navigationTitle(room.spotTitle(current))
             } else {
                 Centered(title: "This channel is gone", detail: "Its owner closed it, or this phone was removed from it.")

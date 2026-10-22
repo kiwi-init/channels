@@ -91,6 +91,7 @@ struct AskView: Codable, Sendable, Hashable, Identifiable {
     let label: String
     let choices: [String]
     let task: Int?
+    let place: String?
 
     var id: Int { seq }
     var date: Date { Date(timeIntervalSince1970: at / 1000) }
@@ -133,6 +134,8 @@ struct RoomView: Codable, Sendable, Hashable, Identifiable {
     let lead: String?
     let members: [MemberView]
     let messages: [MessageView]
+    let side: [MessageView]?
+    let sideKey: String?
     let tasks: [TaskView]
     let asks: [AskView]
     let last: MessageView?

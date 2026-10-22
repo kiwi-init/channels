@@ -99,6 +99,10 @@ export function roomView(r: RoomInput): RoomView {
   };
 
   const messages = shown.map((m, i) => messageView(m, i > 0 ? shown[i - 1] : visible[visible.length - shown.length - 1]));
+  const sideKey = state.lead && state.lead !== me ? `dm:${[me, state.lead].sort().join("~")}` : null;
+  const sideAll = sideKey ? r.messages.filter((m) => shownIn(m, state, sideKey)) : [];
+  const sideShown = sideAll.slice(-SHOWN);
+  const side = sideShown.map((m, i) => messageView(m, i > 0 ? sideShown[i - 1] : sideAll[sideAll.length - sideShown.length - 1]));
   const lastChat = general.findLast((m) => m.kind !== "event");
   const lastIn = new Map<string, Message>();
   for (const m of r.messages) {
@@ -131,20 +135,11 @@ export function roomView(r: RoomInput): RoomView {
       last: last ? messageView(last, undefined) : null,
     };
   };
-  const floor = r.messages[0]?.seq ?? 0;
-  const busy = (k: string): boolean => {
-    const p = placeFromKey(k);
-    return p?.kind === "task" && !state.tasks.get(p.task)?.archived && (state.places.get(k)?.last ?? 0) >= floor;
-  };
-  const placeKeys = ["main", ...[...state.places.keys()].filter((k) => k.startsWith("dm:") || busy(k)), ...(here !== "main" && !state.places.has(here) ? [here] : [])];
+  const placeKeys = ["main", ...(sideKey ? [sideKey] : []), ...(here !== "main" ? [here] : [])];
   const places = [...new Set(placeKeys)].flatMap((k) => {
     const v = placeView(k);
     return v ? [v] : [];
   });
-  if (here.startsWith("task:") && !places.some((p) => p.key === here)) {
-    const v = placeView(here);
-    if (v) places.push(v);
-  }
   const tasks: TaskView[] = [...state.tasks.values()]
     .filter((t) => !t.archived)
     .sort((a, b) => b.updatedAt - a.updatedAt)
@@ -169,6 +164,7 @@ export function roomView(r: RoomInput): RoomView {
       label: askLabel(m, me),
       choices: m.choices ?? [],
       task: place?.kind === "task" ? place.task : null,
+      place: placeKey(place ?? MAIN),
     };
   });
 
@@ -188,6 +184,8 @@ export function roomView(r: RoomInput): RoomView {
     lead: state.lead,
     members: [...state.members.values()].filter((m) => m.active).map((m) => memberView(m as FoldMember, state, r.online)),
     messages,
+    side,
+    sideKey,
     tasks,
     asks,
     last: lastChat ? messageView(lastChat, undefined) : null,

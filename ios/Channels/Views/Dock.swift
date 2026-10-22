@@ -75,6 +75,7 @@ struct Dock: View {
     let room: RoomView
     let spot: Spot
     @Binding var replyTo: MessageView?
+    @Binding var answering: AskView?
     var typing: FocusState<Bool>.Binding
     let follow: Follow
     let jump: () -> Void
@@ -89,15 +90,8 @@ struct Dock: View {
     @State private var drafting: Spot?
 
     private var here: PlaceView? { room.placeView(spot.place) }
-    private var readOnly: Bool { here.map { $0.kind == "dm" && !$0.withMe } ?? false }
     private var hasText: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     private var canSend: Bool { !sending && room.connection == .live && (hasText || !attached.isEmpty) }
-
-    private var asking: AskView? {
-        guard here?.kind != "dm" else { return nil }
-        let task = here?.task
-        return room.asks.first { $0.task == task }
-    }
 
     private var mention: String? {
         guard let token = draft.split(separator: " ", omittingEmptySubsequences: false).last, token.hasPrefix("@") else { return nil }
@@ -115,19 +109,15 @@ struct Dock: View {
                 Text("Not sent: \(error)").type(.meta).foregroundStyle(Tone.alert).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
             }
             if !mentionable.isEmpty { mentions }
-            if let replyTo { replyBar(replyTo) }
+            if let answering {
+                bar("hand.raised.fill", Tone.decide, room.display(answering.from), answering.body) { self.answering = nil }
+            } else if let replyTo {
+                bar("arrowshape.turn.up.left.fill", Tone.accent, room.display(replyTo.from), replyTo.body) { self.replyTo = nil }
+            }
             GlassGroup(spacing: 12) {
                 HStack(alignment: .bottom, spacing: 8) {
-                    if readOnly {
-                        Text("Between \(here?.with.map { room.display($0) }.joined(separator: " and ") ?? "two others"). You can read along.")
-                            .type(.meta)
-                            .foregroundStyle(Tone.ink3)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                    } else {
-                        plus.glassID("plus", in: glass)
-                        field.glassID("field", in: glass)
-                    }
+                    plus.glassID("plus", in: glass)
+                    field.glassID("field", in: glass)
                 }
             }
         }
@@ -212,21 +202,19 @@ struct Dock: View {
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
-    private func replyBar(_ m: MessageView) -> some View {
+    private func bar(_ symbol: String, _ tint: Color, _ who: String, _ body: String, cancel: @escaping () -> Void) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: "arrowshape.turn.up.left.fill").font(.system(size: 11)).foregroundStyle(Tone.accent)
-            (Text("\(room.display(m.from)): ").fontWeight(.semibold) + Text(m.body.replacingOccurrences(of: "\n", with: " ")))
+            Image(systemName: symbol).font(.system(size: 11)).foregroundStyle(tint)
+            (Text("\(who): ").fontWeight(.semibold) + Text(body.replacingOccurrences(of: "\n", with: " ")))
                 .type(.meta)
                 .foregroundStyle(Tone.ink2)
                 .lineLimit(1)
             Spacer()
-            Button {
-                replyTo = nil
-            } label: {
+            Button(action: cancel) {
                 Image(systemName: "xmark.circle.fill").font(.system(size: 17)).foregroundStyle(Tone.ink3)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Cancel reply")
+            .accessibilityLabel("Cancel")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
@@ -308,9 +296,8 @@ struct Dock: View {
     private var placeholder: String {
         if room.connection != .live { return "Connecting…" }
         if let replyTo { return "Reply to \(room.display(replyTo.from))" }
-        if let asking { return "Answer \(room.display(asking.from))" }
+        if let answering { return "Answer \(room.display(answering.from))" }
         if let here, here.kind == "dm", let other = room.other(in: here) { return "Message \(room.display(other))" }
-        if let here, here.kind == "task", let id = here.task { return "Message \(taskLabel(id))" }
         return "Message"
     }
 
@@ -339,7 +326,7 @@ struct Dock: View {
     private func send() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard canSend else { return }
-        if attached.isEmpty && !(replyTo == nil && asking != nil) {
+        if attached.isEmpty && answering == nil {
             model.post(spot, text, re: replyTo?.seq)
             draft = ""
             replyTo = nil
@@ -355,8 +342,9 @@ struct Dock: View {
         let pictures = attached.enumerated().map { i, a in Outgoing(name: "photo-\(i + 1).jpg", mime: "image/jpeg", data: a.data.base64EncodedString()) }
         Task {
             do {
-                if replyTo == nil, pictures.isEmpty, let asking {
-                    try await model.answer(from.code, seq: asking.seq, text: text)
+                if pictures.isEmpty, let ask = answering {
+                    try await model.answer(from.code, seq: ask.seq, text: text)
+                    answering = nil
                 } else {
                     try await model.send(from, text, re: replyTo?.seq, pictures: pictures)
                 }

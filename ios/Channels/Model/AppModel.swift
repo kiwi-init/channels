@@ -46,7 +46,6 @@ final class AppModel {
     var seen: [String: Int] = UserDefaults.standard.dictionary(forKey: "seen") as? [String: Int] ?? [:]
     var pinned: [String] = (UserDefaults.standard.stringArray(forKey: "pinned") ?? []).map { $0.contains("|") ? $0 : "\($0)|main" }
     var placeSeen: [String: Int] = UserDefaults.standard.dictionary(forKey: "placeSeen") as? [String: Int] ?? [:]
-    var hidden: [String: Int] = UserDefaults.standard.dictionary(forKey: "hidden") as? [String: Int] ?? [:]
     var drafts: [String: Draft] = [:]
     var feeds: [String: Feed] = [:]
     var pending: [String: [Pending]] = [:]
@@ -67,14 +66,6 @@ final class AppModel {
         return place.lastSeq > mark
     }
 
-    func markSeen(_ room: RoomView, place key: String) {
-        guard room.place == key else { return }
-        if key == "main" { return markSeen(room) }
-        guard let top = room.placeView(key)?.lastSeq, top > (placeSeen["\(room.code)|\(key)"] ?? 0) else { return }
-        placeSeen["\(room.code)|\(key)"] = top
-        UserDefaults.standard.set(placeSeen, forKey: "placeSeen")
-    }
-
     func draft(_ code: String, _ place: String) -> Draft {
         drafts["\(code)|\(place)"] ?? Draft()
     }
@@ -85,12 +76,6 @@ final class AppModel {
 
     func open(_ code: String, place: String) async {
         try? await engine.ask(["op": "open", "code": code, "place": place])
-    }
-
-    func markSeen(_ room: RoomView) {
-        guard room.place == "main", let top = room.messages.last?.seq, top > (seen[room.code] ?? 0) else { return }
-        seen[room.code] = top
-        UserDefaults.standard.set(seen, forKey: "seen")
     }
 
     func boot() async {
@@ -137,7 +122,7 @@ final class AppModel {
                 }
             }
             feeds["\(room.code)|\(room.place)"] = Feed(messages: room.messages, whole: room.whole)
-            defer { settle(Spot(code: room.code, place: room.place)) }
+            defer { settle(room.code) }
             let grew = (room.messages.last?.seq ?? 0) > (rooms[room.code]?.messages.last?.seq ?? Int.max)
             if grew {
                 withAnimation(Motion.sent) { rooms[room.code] = room }
