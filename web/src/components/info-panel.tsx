@@ -7,7 +7,6 @@ import {
   GitBranchIcon,
   GithubIcon,
   GitPullRequestIcon,
-  Mic01Icon,
   Note01Icon,
   PauseIcon,
   PencilEdit01Icon,
@@ -252,7 +251,7 @@ export function InfoPanel({
               )}
             </Card>
 
-            {(p.isOwner || p.state.charter || p.state.repos.length > 0 || p.state.voice) && (
+            {(p.isOwner || p.state.charter || p.state.repos.length > 0) && (
               <Card icon={Settings02Icon} title="Channel" sub={p.isOwner ? "Only you change these" : "Set by the owner"}>
                 {p.isOwner && p.onRename && (
                   <Row icon={PencilEdit01Icon} onClick={() => openDialog("rename")} detail={title}>
@@ -296,22 +295,6 @@ export function InfoPanel({
                     Branch prefix
                   </Row>
                 )}
-                {(p.isOwner || p.state.voice) &&
-                  (p.isOwner && p.onVoice ? (
-                    <Setting icon={Mic01Icon} label="Voice" hint={p.state.voice ? "Each person turns it on for themselves in Settings" : "Nobody here can talk to the channel with Grok Voice"}>
-                      <Segmented
-                        label="Voice"
-                        value={p.state.voice ? "on" : "off"}
-                        options={[
-                          { value: "off", label: "Off" },
-                          { value: "on", label: "Allowed" },
-                        ]}
-                        onChange={(v) => void p.onVoice!(v === "on").catch((err: unknown) => toast(errorText(err), "error"))}
-                      />
-                    </Setting>
-                  ) : (
-                    <Setting icon={Mic01Icon} label="Voice" hint="Allowed: each person turns it on for themselves in Settings" />
-                  ))}
                 {p.isOwner && p.roomId && (
                   <Setting icon={UserAdd01Icon} label="New members can" hint="You confirm it when you let each one in">
                     <Segmented

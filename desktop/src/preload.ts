@@ -34,7 +34,6 @@ import type {
   StoreSnapshot,
   UpdateCheckView,
   UpdateView,
-  VoiceAuth,
 } from "./bridge.ts";
 
 let latest = ipcRenderer.sendSync("kiwi:snapshot-sync") as StoreSnapshot;
@@ -137,9 +136,6 @@ const kiwi: KiwiBridge = {
   getDeepLink: () => ipcRenderer.invoke("kiwi:deep-link") as Promise<string | null>,
   onDeepLink: (cb) => on("kiwi:deep-link", cb),
   onTextStep: (cb) => on("kiwi:text-step", cb),
-  setVoiceKey: (key: string) => ipcRenderer.invoke("kiwi:voice-set-key", key) as Promise<void>,
-  setVoiceConsent: (roomId: string, on: boolean) => ipcRenderer.invoke("kiwi:voice-set-consent", roomId, on) as Promise<void>,
-  voiceToken: (roomId: string) => ipcRenderer.invoke("kiwi:voice-token", roomId) as Promise<VoiceAuth>,
   setPersonalities: (list: Personality[]) => ipcRenderer.invoke("kiwi:personalities-set", list) as Promise<void>,
   seatPlaces: () => ipcRenderer.invoke("kiwi:seat-places") as Promise<PlacedSeat[]>,
   showSeat: (seat: PlacedSeat) => ipcRenderer.invoke("kiwi:show-seat", seat) as Promise<ShowResult>,

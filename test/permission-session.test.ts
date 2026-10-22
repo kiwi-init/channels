@@ -49,10 +49,20 @@ test("a lock file still being written counts as held for a few seconds, then as 
   taken.release();
 });
 
+test("a newer-prompt mark written after this hook took the session counts, even when the file system dates it earlier", () => {
+  const held = holdSession("sess-f")!;
+  expect(holdSession("sess-f")).toBeNull();
+  const marker = join(home, "permission", "sess-f.pid.newer");
+  const earlier = new Date(Date.now() - 50);
+  utimesSync(marker, earlier, earlier);
+  expect(held.newer()).toBe(true);
+  held.release();
+});
+
 test("a newer-prompt mark from before this hook took the session doesn't count", () => {
   mkdirSync(join(home, "permission"), { recursive: true });
   const marker = join(home, "permission", "sess-d.pid.newer");
-  writeFileSync(marker, "x");
+  writeFileSync(marker, String(Date.now() - 60_000));
   const old = new Date(Date.now() - 60_000);
   utimesSync(marker, old, old);
   const held = holdSession("sess-d")!;

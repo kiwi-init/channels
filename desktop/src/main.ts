@@ -11,7 +11,6 @@ import { wireLinkingIpc } from "./ipc/linking.ts";
 import { wirePairingIpc } from "./ipc/pairing.ts";
 import { wireSignInIpc } from "./ipc/signin.ts";
 import { wireStoreIpc } from "./ipc/store.ts";
-import { wireVoiceIpc } from "./ipc/voice.ts";
 import { wirePersonalitiesIpc } from "./ipc/personalities.ts";
 import { wireLaunchIpc } from "./ipc/launch.ts";
 import { wireTerminalsIpc } from "./ipc/terminals.ts";
@@ -31,7 +30,6 @@ function wireIpc(): void {
   wireLinkingIpc();
   wireDaemonIpc();
   wireMiscIpc();
-  wireVoiceIpc();
   wirePersonalitiesIpc();
   wireTerminalsIpc();
   wireLaunchIpc();
