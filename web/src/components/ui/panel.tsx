@@ -34,7 +34,7 @@ export function ResizablePanel({ children, className }: { children: ReactNode; c
         initial={{ opacity: 0, x: 10 }}
         animate={{ opacity: 1, x: 0 }}
         exit={{ opacity: 0, x: 10, transition: { duration: 0.16 } }}
-        className={cx("relative h-full w-full shrink-0 md:w-(--panel)", dragging && "select-none", className)}
+        className={cx("relative z-30 h-full w-full shrink-0 md:w-(--panel)", dragging && "select-none", className)}
         style={{ "--panel": `${shown}px` } as CSSProperties}
       >
         {/* A div, not an hr: the browser gives an hr height 0, so the edge cannot be grabbed. */}

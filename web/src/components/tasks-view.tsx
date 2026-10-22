@@ -177,7 +177,16 @@ export function TasksView({
               <ul className="relative divide-y divide-line">
                 <AnimatePresence initial={false} mode="popLayout">
                   {g.tasks.map((t) => (
-                    <m.li key={t.id} layout="position" layoutDependency={order} transition={{ layout: MOVE }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                    <m.li
+                      key={t.id}
+                      layout="position"
+                      layoutDependency={order}
+                      transition={{ layout: MOVE }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="bg-canvas"
+                    >
                       <TaskRow task={t} state={state} now={now} agent={t.owner ? byName.get(t.owner) : undefined} waiting={waiting.has(t.id)} open={open === t.id} onOpen={onOpen} />
                     </m.li>
                   ))}
