@@ -1,5 +1,5 @@
 import { Copy01Icon } from "@hugeicons/core-free-icons"
-import { useEffect, useState } from "react"
+import { Fragment, useEffect, useState } from "react"
 
 import type { PersonPowers } from "@kiwi/core/membership.ts"
 import type { Persona } from "@kiwi/core/personality.ts"
@@ -14,13 +14,16 @@ import { defaultPowers, defaultScopes, PowersPicker, saveDefaultPowers, saveDefa
 import { useControls } from "./context"
 
 function CopyBox({ text, label, done }: { text: string; label: string; done: string }) {
+  const [head, ...flags] = text.split(/\s(?=--[a-z])/)
   return (
     <div className="flex items-start gap-1 rounded-ctl bg-wash p-2.5">
       <code className="min-w-0 flex-1 font-mono text-meta leading-relaxed [overflow-wrap:anywhere] text-ink-2">
-        {text.split(/(?=\s--[a-z])/).map((part, i) => (
-          <span key={i} className={i > 0 ? "whitespace-nowrap" : undefined}>
-            {part}
-          </span>
+        {head}
+        {flags.map((flag, i) => (
+          <Fragment key={i}>
+            {" "}
+            <span className={/^\S+\s\S+$/.test(flag) ? "inline-block break-all" : "inline-block"}>{flag}</span>
+          </Fragment>
         ))}
       </code>
       <IconButton label={label} className="size-7" onClick={() => navigator.clipboard.writeText(text).then(() => toast(done))}>
