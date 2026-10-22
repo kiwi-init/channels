@@ -763,6 +763,7 @@ try {
             const block = "block:01a15ad9-310a-703a-ad0b-3cc137458451";
             const rex = { server: "unix:///Users/you/Library/Application%20Support/rex/server.sock", session: "session:01a15ad9-30f4-7bcb-8455-c3eeb9e1071c", block };
             (window as unknown as { kiwi: object }).kiwi = {
+              relayUrl: window.location.origin,
               harnesses: async () => rows,
               seatFolders: async () => ["/Users/you/code/payments", "/Users/you/code/payments-site"],
               chooseFolder: async () => null,

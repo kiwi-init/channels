@@ -44,6 +44,7 @@ import { useScroll } from "./use-scroll"
 import { useThreads } from "./use-threads"
 import { useWindow } from "./use-window"
 import { useLatest } from "@/lib/use-latest"
+import { useLater } from "@/hooks/use-later"
 
 function useNow(intervalMs = 30_000): number {
   return useClock(intervalMs)
@@ -55,7 +56,9 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   useEffect(() => {
     if (live.snapshotTooBig) toast("Too big to snapshot: this channel loads slowly. Tell the Kiwi team.", "error")
   }, [live.snapshotTooBig])
-  const { ch, connection, gone, messages, roster, state, online, isOwner, requests, send, head, marks, pkOf } = live
+  const { ch, connection, gone, messages, roster, state, online, isOwner, requests, send, head, marks, pkOf, ready } = live
+  const slowToConnect = useLater(connection === "connecting")
+  const slowToOpen = useLater(!ready)
   const pictures = usePictures(state)
   const harnesses = useHarnesses(state, requests)
   usePublishPicture(state, me, connection !== "connecting", send)
@@ -116,7 +119,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     },
     [send]
   )
-  const noAgents = !active.some((m) => isAgent(m))
+  const noAgents = ready && !active.some((m) => isAgent(m))
   const quiet = noAgents && !messages.some((m) => m.kind !== "event")
 
   useRecentPreview({ member, messages, others, state, me, nameOf })
@@ -317,13 +320,15 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const taskRows = shownTask === null ? [] : timeline(inTask, "k")
 
   const subtitle =
-    connection === "connecting"
+    connection === "connecting" && slowToConnect
       ? "Connecting…"
       : connection === "reconnecting"
         ? "Reconnecting…"
-        : online.size
-          ? `${memberCount} members, ${online.size} online`
-          : `${memberCount} ${memberCount === 1 ? "member" : "members"}`
+        : !ready
+          ? ""
+          : online.size
+            ? `${memberCount} members, ${online.size} online`
+            : `${memberCount} ${memberCount === 1 ? "member" : "members"}`
   const lastAt = new Map<string, number>()
   for (const m of messages) if (m.kind !== "event") lastAt.set(m.from, m.ts)
   const agentsNow: AgentNow[] = active
@@ -354,9 +359,11 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const counts = viewCounts(state, now, needsMe, waiting)
   const merged = mergedSince(state, startOfDay(now))
   const status =
-    connection === "connecting" || connection === "reconnecting"
+    (connection === "connecting" && slowToConnect) || connection === "reconnecting"
       ? [subtitle]
-      : [working ? `${working} working` : null, merged ? `${merged} merged today` : null, needsMe ? `${needsMe} ${needsMe === 1 ? "needs" : "need"} you` : null].filter((x): x is string => !!x)
+      : !ready
+        ? []
+        : [working ? `${working} working` : null, merged ? `${merged} merged today` : null, needsMe ? `${needsMe} ${needsMe === 1 ? "needs" : "need"} you` : null].filter((x): x is string => !!x)
   const agentCount = active.filter((m) => isAgent(m)).length
   const personCount = active.length - agentCount
   const peopleLine = [agentCount ? `${agentCount} ${agentCount === 1 ? "agent" : "agents"}` : null, personCount ? `${personCount} ${personCount === 1 ? "person" : "people"}` : null]
@@ -484,7 +491,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                     }}
                     heading={heading}
                     wideHeading={place.kind === "dm" ? placeTitle : rooms.length > 1 ? `# ${roomName}` : title}
-                    headingLabel={`Details: ${title}, ${subtitle}`}
+                    headingLabel={`Details: ${title}${subtitle ? `, ${subtitle}` : ""}`}
                     face={{ icon, title }}
                     status={status}
                     onTitle={() => setSide((s) => (s?.kind === "info" ? null : { kind: "info" }))}
@@ -497,7 +504,13 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                   {tab === "tasks" || tab === "agents" ? (
                     <div className="absolute inset-0 overflow-y-auto pt-[calc(var(--head)+8px)]">
                       <div className={cx("mx-auto w-full px-2 md:px-4", tab === "tasks" && "max-w-[960px]")}>
-                        {tab === "tasks" ? (
+                        {!ready ? (
+                          slowToOpen && (
+                            <Centered>
+                              <Spinner />
+                            </Centered>
+                          )
+                        ) : tab === "tasks" ? (
                           <TasksView
                             state={state}
                             now={now}
@@ -528,10 +541,12 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                         <div className="relative mx-auto w-full max-w-[792px] px-4 pt-[calc(var(--head)+8px)] pb-[calc(var(--foot)+16px)]">
                           {hereKey === "main" && needsYou(false)}
                           {hereKey === "main" && state.rooms.size > 1 && !search && <RoomChips rooms={[...state.rooms.values()]} value={cardRoom} onChange={setCardRoom} />}
-                          {connection === "connecting" && messages.length === 0 ? (
-                            <Centered>
-                              <Spinner />
-                            </Centered>
+                          {!ready && messages.length === 0 ? (
+                            slowToOpen && (
+                              <Centered>
+                                <Spinner />
+                              </Centered>
+                            )
                           ) : hereKey === "main" && noAgents && !search ? (
                             <>
                               <AddAgent code={member.code} isOwner={isOwner} addsAgents={addsAgents} onNewAgent={onNewAgent} />
