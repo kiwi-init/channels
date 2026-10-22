@@ -374,7 +374,71 @@ but what's chosen in the sidebar, spread the spectrum beyond a thin band
 in it, or put hairlines
 between the rails.
 
-## 14. New-surface checklist
+## 14. The iPhone app
+
+The native app in `ios/` (SwiftUI) is Apple Messages, all the way: the same structure, the
+same gestures, the same speed. The owner asked for it, so on the phone it wins over §9's rows.
+
+- **Two conversations per channel, nothing else.** On the phone you see each channel's
+  #general and your direct chat with its lead. Other direct threads, threads between agents
+  and task threads stay on the Mac: the lead reports in #general and answers you directly.
+  When you are the lead, there is only #general.
+- **Type, colour, faces.** SF Pro through Dynamic Type (`Step`). `Tone` tokens, the dark
+  canvas true black, `bubbleMine` the accent and `bubbleThem` Messages grey. Agents wear their
+  harness logo; people their initials. A channel's face is its desktop icon, never a
+  phone-only one: the prism glass head its owner picked (the twelve in `assets/avatars`, as
+  vectors), its emoji or its picture, and with none the head the desktop picks from its title.
+- **One list, like Messages.** Every channel's #general (a group row: the channel icon, a
+  `doing` dot when an agent works) and its lead chat (the lead's face; " · onemouse" and a
+  small channel badge when you have two or more channels; always there, so you can write to
+  the lead first), newest first. A row: blue unread dot, 52pt avatar, name, Messages time and
+  chevron, two quiet lines: "Needs you:" in `decide` when a question waits on you, "Draft:"
+  in `alert`, else the last message. Pins sit on top as a 3-column grid of 80pt avatars with a
+  peek bubble. Top: an "Edit" menu (Settings, Mark All as Read), the title, a Filter menu
+  (Conversations, Needs You, Unread) with a `decide` dot when something waits on you. Bottom:
+  a glass search capsule (its magnifier turns into a chevron that ends search). Swipe a row
+  for Read/Unread and Pin; long-press it for a live preview and a menu that answers a waiting
+  question on the spot, opens the other conversation, pins or marks read.
+- **A conversation is one screen.** Header: a glass back circle (a blue dot when another
+  channel is unread; hold it and slide for Previous, Needs You, Unread, Recent across
+  channels), the centred glass name pill ("2 working · 1 needs you", "working on T8",
+  "here"/"away"; a tap pushes the details), and at the trailing edge the other conversation:
+  the lead's face in #general, the channel's icon in the lead chat, with a blue dot when it
+  has unread messages or a `decide` dot when a question waits there. One tap slides across:
+  #general sits on the left, the lead on the right. Both conversations ride every update,
+  so switching never waits.
+- **Nothing that needs you hides.** A question for you asked anywhere else in the channel
+  (in a task thread, between agents) shows in #general at the moment it was asked, as a poll
+  card under "win · in T8".
+- **Transcript.** Bubbles: yours right in blue, others left in grey, a tail on the last of a
+  run, the sender's name over the first and their 30pt face beside the last (none in the lead
+  chat). A time header where 15 minutes or a day passed; events as one quiet centred line; a
+  reply carries its quote. A conversation loaded from its start opens on an intro (face, name,
+  a quiet line). Gestures are Messages': swipe a bubble right to reply, drag left for times,
+  double-tap or long-press for tapbacks, tap a picture to zoom. The top fades the content under
+  the header; the bottom never blurs the last bubble.
+- **Questions are polls** (Messages iOS 26): one grey card with "Question for you" in
+  `decide`, the question, a row per option (a radio circle, ≥44pt) and "Something else…" in
+  `accent`, which puts the composer in answer mode ("Answer win", with a bar you can cancel).
+  A tap on an option fills the circle at once (medium haptic, then success); the chosen row
+  wears the Prism, the others dim, and the footer says "You chose". Your answer isn't drawn
+  again as its own bubble. Which questions wait on you is the desktop's rule (`asksFor`), so
+  both apps agree.
+- **Composer.** A glass `+` and the glass field (send inside it), nothing else; `@` chips
+  while you type a name. Sending is instant: the field clears, your bubble is drawn at once
+  with Messages' sent sound (silent mode mutes it), and the delivered message takes its place
+  without a flicker. Only a failure speaks: a red "!" with Try Again and Delete, "Not
+  Delivered". A draft (text and photos) stays with its conversation, in memory only.
+- **Native presentations, nothing custom.** The details push from the name pill and Settings
+  push from Edit, with the system back button. Details: the channel's icon, name and "5 people
+  · 2 working", tiles for the other conversation and Pin, Needs you (answer in place), the
+  crew (who works on what; tap the lead to write to them), and About (charter, hold). Settings:
+  iOS Settings, grouped rows with coloured symbol tiles (Channels, Relay, Lock with Face ID
+  after 30 s), Link Again, Unlink This iPhone, the version.
+- No Agents view, no read receipts, no typing bubble, no "New messages" line: faces, the
+  `doing` dot and "N working" carry agent state.
+
+## 15. New-surface checklist
 
 1. Copy theme vars, `design-tokens.ts`, `fonts.ts`, `accessibility.ts`.
 2. Copy `kit.tsx` plus one `ui/` primitive at a time (not a whole library).
