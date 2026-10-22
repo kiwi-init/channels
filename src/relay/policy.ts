@@ -32,6 +32,7 @@ export interface RelayPolicy {
   /** Delete a channel after this many days with no new message and nobody connected. */
   expireAfterDays: number | null;
   pageKey: string | null;
+  noRateLimits?: boolean;
 }
 
 /** The policy when nothing is configured: today's behavior plus the byte safety cap. */

@@ -300,7 +300,8 @@ const routes: RoomRoute[] = [
     run: ({ me }) =>
       Effect.gen(function* () {
         const db = yield* RoomStore;
-        if (!allow(`pages:${db.roomId}:${me}`, PAGES_PER_MINUTE)) return yield* new TooMany({ message: "too many history reads; wait a minute" });
+        const { noRateLimits } = yield* Policy;
+        if (!allow(`pages:${db.roomId}:${me}`, noRateLimits ? Infinity : PAGES_PER_MINUTE)) return yield* new TooMany({ message: "too many history reads; wait a minute" });
         const { url } = yield* Request_;
         const since = Number(url.searchParams.get("since") ?? 0) || 0;
         const limit = Number(url.searchParams.get("limit") ?? PAGE_LIMIT) || PAGE_LIMIT;
@@ -318,7 +319,8 @@ const routes: RoomRoute[] = [
     run: ({ me }) =>
       Effect.gen(function* () {
         const db = yield* RoomStore;
-        const counted = take(`${db.roomId}:${me}`, MESSAGES_PER_MINUTE);
+        const { noRateLimits } = yield* Policy;
+        const counted = take(`${db.roomId}:${me}`, noRateLimits ? Infinity : MESSAGES_PER_MINUTE);
         if ("retryAfter" in counted) return yield* new TooMany({ message: "too many messages; wait a minute", retryAfter: counted.retryAfter });
         const b = yield* json<{ iv?: string; ct?: string; e?: number; slot?: unknown; free?: unknown }>().pipe(Effect.tapError(() => Effect.sync(counted.refund)));
         if (b.slot !== undefined && !wellFormedSlot(b.slot)) return yield* Effect.andThen(Effect.sync(counted.refund), new BadRequest({ message: "bad slot" }));

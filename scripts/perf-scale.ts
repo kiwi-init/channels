@@ -96,7 +96,7 @@ const median = (xs: number[]) => {
 const mb = (b: number) => Math.round((b / 1048576) * 10) / 10;
 const log = (...xs: unknown[]) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...xs);
 
-const { relay, port } = await startLocalRelay(join(data, "relay"), "web/dist");
+const { relay, port } = await startLocalRelay(join(data, "relay"), "web/dist", { rateLimits: false });
 const BASE = `http://localhost:${port}/`;
 
 const browser = await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });

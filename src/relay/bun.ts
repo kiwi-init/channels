@@ -581,6 +581,8 @@ Usage: ${cmd} [options]
                                 both while moving to a custom domain (env WORKOS_AUTHKIT_DOMAIN)
   --dev-sign-in                 testing only: the token "dev:<name>" signs in as <name>, no password.
                                 Needs --hostname 127.0.0.1 (or localhost); refused on any other address.
+  --dev-no-rate-limits          testing only: no per-minute cap on a member's messages or history reads.
+                                Needs --hostname 127.0.0.1 (or localhost), like --dev-sign-in.
   --trust-proxy [addr,cidr]     a reverse proxy sits in front (env KIWI_TRUST_PROXY=1, or a list).
                                 Bare, or =1: trust a loopback peer. An address or CIDR (repeat
                                 the flag, or comma-separate) trusts that peer too, for example
@@ -611,6 +613,11 @@ export function runRelay(argv: string[], cmd = "bun src/relay/bun.ts"): void {
     process.stderr.write("--dev-sign-in lets anyone sign in as anyone: it needs --hostname 127.0.0.1 (or localhost).\n");
     process.exit(2);
   }
+  const unlimited = argv.includes("--dev-no-rate-limits");
+  if (unlimited && !devHostOk(hostname)) {
+    process.stderr.write("--dev-no-rate-limits lets one member flood a channel: it needs --hostname 127.0.0.1 (or localhost).\n");
+    process.exit(2);
+  }
   let trustProxy: TrustProxy;
   try {
     trustProxy = trustProxyFromArgs(argv, process.env.KIWI_TRUST_PROXY);
@@ -631,11 +638,13 @@ export function runRelay(argv: string[], cmd = "bun src/relay/bun.ts"): void {
     human,
     web: webDir ? { dir: webDir, connect } : null,
     trustProxy,
+    ...(unlimited ? { policy: { ...policyFrom(process.env), noRateLimits: true } } : {}),
   });
   console.log(`Kiwi Channels relay listening on ${server.url}`);
   console.log(
     `  sign-in: ${human?.dev ? 'DEV: the token "dev:<name>" is <name>, no password (this machine only)' : human ? `WorkOS ${human.clientId}${human.profile ? " (with emails, for the beta list)" : ""}` : "off"}`,
   );
+  if (unlimited) console.log("  rate limits: DEV: off (this machine only)");
   console.log(`  site: ${webDir ? resolve(webDir) : "not served"}`);
 }
 
