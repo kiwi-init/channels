@@ -15,11 +15,20 @@ const KEY_BYTES = 32;
 export interface StoreKey {
   get(): Promise<string | null>;
   set(value: string): Promise<void>;
+  drop(): Promise<void>;
+  finished(): Promise<boolean>;
+  finish(): Promise<void>;
 }
 
 export const keychainKey = (service: string = "Channels", name: string = "store-key"): StoreKey => ({
   get: () => Bun.secrets.get({ service, name }),
   set: (value) => Bun.secrets.set({ service, name, value }),
+  drop: async () => {
+    await Bun.secrets.delete({ service, name: `${name}-ready` });
+    await Bun.secrets.delete({ service, name });
+  },
+  finished: async () => (await Bun.secrets.get({ service, name: `${name}-ready` })) !== null,
+  finish: () => Bun.secrets.set({ service, name: `${name}-ready`, value: "1" }),
 });
 
 export type OpenStore =
@@ -109,6 +118,22 @@ function readCopy(raw: Buffer | null, key: Buffer | null, plainOk: boolean): Cop
   }
 }
 
+async function markFinished(key: StoreKey): Promise<void> {
+  try {
+    if (!(await key.finished())) await key.finish();
+  } catch {
+    // The mark is set again by the next start that opens the store, so a keychain that refuses it now loses nothing.
+  }
+}
+
+async function dropMade(key: StoreKey): Promise<void> {
+  try {
+    await key.drop();
+  } catch {
+    // A key left behind stays unfinished, and an unfinished key with no copies is a first run, so the next start carries on with it.
+  }
+}
+
 export async function openStore({ dir, key, legacy, platform = process.platform }: StoreOptions): Promise<OpenStore> {
   const file = path.join(dir, STORE_FILE);
   const backup = `${file}.bak`;
@@ -138,8 +163,15 @@ export async function openStore({ dir, key, legacy, platform = process.platform 
     if (found.kind === "failed" && (sealed || platform !== "linux")) return refuse(keychainWhy(found.why));
     if (found.kind === "none" && sealed) return refuse(keychainWhy("it holds no store key"));
     if (main === null && back === null) {
-      if (found.kind === "key" && platform !== "linux")
-        return refuse("the store was deleted: the keychain still holds its key but both copies are gone, so Channels neither starts over nor imports the Electron app's keys in its place");
+      if (found.kind === "key" && platform !== "linux") {
+        const done = await key.finished().then(
+          (f): { finished: boolean } | { failed: string } => ({ finished: f }),
+          (e: unknown) => ({ failed: reason(e) }),
+        );
+        if ("failed" in done) return refuse(keychainWhy(done.failed));
+        if (done.finished)
+          return refuse("the store was deleted: the keychain still holds its key but both copies are gone, so Channels neither starts over nor imports the Electron app's keys in its place");
+      }
       const old = await legacy();
       if (old.kind === "unreadable") return refuse(`the keys the Electron app saved in ${old.file} can't be read: ${old.why}`);
       if (old.kind === "ok" && !old.encrypted && platform !== "linux")
@@ -148,20 +180,32 @@ export async function openStore({ dir, key, legacy, platform = process.platform 
       if (made.kind === "failed" && platform !== "linux") return refuse(keychainWhy(made.why));
       const k = made.kind === "key" ? made.key : null;
       const noKeychain = made.kind === "failed" ? made.why : null;
+      const takeBack = async (why: string): Promise<OpenStore> => {
+        fs.rmSync(file, { force: true });
+        fs.rmSync(backup, { force: true });
+        if (k && made !== found) await dropMade(key);
+        return refuse(why);
+      };
       if (old.kind === "ok" && old.encrypted && !k)
         return refuse(`the keys the Electron app saved in ${old.file} are encrypted, and without a keychain Channels would keep them in plain text: ${noKeychain}`);
       if (k && made !== found) {
         const kept = await lookup(key);
-        if (kept.kind !== "key" || !kept.key.equals(k)) return refuse(keychainWhy("it didn't keep the store key Channels just made"));
+        if (kept.kind !== "key" || !kept.key.equals(k)) return takeBack(keychainWhy("it didn't keep the store key Channels just made"));
       }
       const json = old.kind === "ok" ? JSON.stringify(old.json) : "{}";
-      saver(k)(json);
+      const unsaved = (() => {
+        try {
+          saver(k)(json);
+          return null;
+        } catch (e) {
+          return reason(e);
+        }
+      })();
+      if (unsaved !== null) return takeBack(`the new store couldn't be saved: ${unsaved}`);
       const saved = readCopy(bytes(file), k, k === null);
-      if (saved.kind !== "ok" || JSON.stringify(saved.json) !== json) {
-        fs.rmSync(file, { force: true });
-        fs.rmSync(backup, { force: true });
-        return refuse(`the new store didn't read back, so it wasn't kept${old.kind === "ok" ? ` (the keys from ${old.file})` : ""}${saved.kind === "unreadable" ? `: ${saved.why}` : ""}`);
-      }
+      if (saved.kind !== "ok" || JSON.stringify(saved.json) !== json)
+        return takeBack(`the new store didn't read back, so it wasn't kept${old.kind === "ok" ? ` (the keys from ${old.file})` : ""}${saved.kind === "unreadable" ? `: ${saved.why}` : ""}`);
+      if (k) await markFinished(key);
       return old.kind === "ok" ? open(old.json, old.file, k, noKeychain) : open(null, null, k, noKeychain);
     }
     let k = found.kind === "key" ? found.key : null;
@@ -174,10 +218,18 @@ export async function openStore({ dir, key, legacy, platform = process.platform 
     if (m.kind !== "ok" && back) writePrivate(file, back, platform);
     if (!read.sealed && found.kind === "none") {
       const made = await create(key);
-      if (made.kind === "key") k = made.key;
       if (made.kind === "failed") noKeychain = made.why;
+      else if (made.kind === "key") {
+        const kept = await lookup(key);
+        if (kept.kind === "key" && kept.key.equals(made.key)) k = made.key;
+        else {
+          await dropMade(key);
+          noKeychain = "it didn't keep the store key Channels just made";
+        }
+      }
     }
     if (k && !read.sealed) saver(k)(JSON.stringify(read.json));
+    if (k) await markFinished(key);
     return open(read.json, null, k, noKeychain);
   } catch (e) {
     return refuse(reason(e));

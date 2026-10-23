@@ -552,10 +552,12 @@ jobs:
       once, sealed and read back, its file untouched, or, when it can't be read, is encrypted with no
       keychain to keep it sealed, or is plain text anywhere but Linux (a Mac's Electron app always
       encrypted it, so a deleted v2 store and a planted plain kiwi-store.bin get nothing in), nothing
-      saved; on a Mac, a keychain that still holds the store key while both copies are gone is a
-      deleted store, refused without asking for the Electron store, the store key is made only after
-      the import decision and read back from the keychain before anything is saved, and a first run
-      saves an empty sealed store at once (T907). With test/desktop-legacy-store.test.ts
+      saved; on a Mac, a keychain that still holds a finished store key while both copies are gone is
+      a deleted store, refused without asking for the Electron store, the store key is made only
+      after the import decision, read back from the keychain before anything is saved, and marked
+      finished (a second item, store-key-ready) only once the first save reads back, so a first run
+      cut off after the key was made carries on with it next time, a refused or failed first save
+      takes its new key back, and a first run saves an empty sealed store at once (T907). With test/desktop-legacy-store.test.ts
       (desktop/src/legacy-store.ts, legacy-keys.ts): Electron's safeStorage format opened from what
       Electron itself wrote, v11 on a GNOME keyring and v10 on the macOS Keychain, Linux v10 with
       Chromium's fixed password (which counts as plain, not encrypted), a torn store read from its .bak asking the keychain once, an old
