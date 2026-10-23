@@ -983,6 +983,26 @@ jobs:
       bundle fails here. Fails on a lint finding, a Swift compile error, a missing asset or
       Info.plist key the build needs, or a bundle error. It does not run the app or the engine.
 
+  android:
+    name: android / build
+    inputs: ["android/**", "ios/engine/**"]
+    imports_from: ["ios/engine/main.ts"]
+    always: ["package.json", "bun.lock", "web/package.json", "desktop/package.json", "packages/core/package.json"]
+    description: >-
+      On an Ubuntu runner with JDK 17 and the preinstalled Android SDK, builds the Android app in
+      android/ with its Gradle wrapper (Gradle 8.14.3, Android Gradle plugin 8.13, Kotlin 2.2, Jetpack
+      Compose; versions in android/gradle/libs.versions.toml): `./gradlew assembleRelease lintRelease`.
+      The app's Gradle build runs bun build on ios/engine/main.ts (browser target, IIFE) into the
+      APK's assets, the same engine the iPhone app bundles, so a change to the engine, @kiwi/core,
+      the desktop Keyring, seats or bridge types, or the pure web/src/lib modules the engine imports
+      that breaks the bundle fails here. Then the Kotlin sources compile (strict types, kotlinx
+      serialization models of the engine's wire in android/app/.../engine/Wire.kt), R8 shrinks and
+      the release APK is signed with a debug key the job keeps in its cache, and Android lint runs
+      on the release variant with abortOnError (manifest, resources, API levels, the targetSdk).
+      Fails on a bundle error, a Kotlin compile error, a missing resource or manifest entry, an R8
+      failure, or a lint error. Uploads app-release.apk and the lint report as the channels-android
+      artifact. It does not run the app or the engine on a device.
+
   release-rehearsal:
     name: release / rehearsal
     jev: false
