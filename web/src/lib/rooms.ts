@@ -7,7 +7,7 @@ export interface RoomEntry {
   name: string
 }
 
-export const cleanRoomName = (typed: string): string => roomName(typed.trim().replace(/^#+/, ""))
+export const cleanRoomName = (typed: string): string => roomName(typed.replace(/^[#\s]+/, ""))
 
 export function roomProblem(rooms: Iterable<Pick<Room, "id" | "name">>, typed: string, renaming?: string): string | null {
   const name = cleanRoomName(typed)
@@ -20,7 +20,7 @@ export function roomProblem(rooms: Iterable<Pick<Room, "id" | "name">>, typed: s
 
 export function roomsAfter(rooms: Iterable<Pick<Room, "id" | "name">>, change: RoomEntry): RoomEntry[] {
   const next = new Map([...rooms].map((r) => [r.id, { id: r.id, name: r.name }]))
-  next.set(change.id, { id: change.id, name: cleanRoomName(change.name) })
+  next.set(change.id, { id: change.id, name: change.name })
   return [...next.values()].filter((r) => r.id !== GENERAL_ROOM || r.name !== GENERAL_ROOM)
 }
 
