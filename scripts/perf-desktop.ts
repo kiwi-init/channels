@@ -10,7 +10,7 @@ if (process.argv.includes("--help") || !process.argv[2]) {
   console.log(`The packaged desktop app's cold start, measured: from launching the executable to its window and its first screen, then from a click on
 the channel to its first cached message on screen and to live, PERF_RUNS times (5) after one run that makes a channel with PERF_MESSAGES messages (20)
 on a local relay. It runs in a temp user data dir and a temp KIWI_HOME (and on Linux a temp HOME), with a mock keychain on a Mac: it never touches
-the real app. Fails when the median launch to the first screen is over the coldStartMs gate in scripts/perf-budgets.json.
+the real app. Fails when a median is over its gate in scripts/perf-budgets.json (the limits whose source is desktop).
 
   bun scripts/perf-desktop.ts <packaged app executable> [--json out.json]`);
   process.exit(process.argv[2] ? 0 : 2);
@@ -202,20 +202,22 @@ try {
   rmSync(root, { recursive: true, force: true });
 }
 
-const report = {
-  runs: runs.length,
+const medians: Record<string, number> = {
   windowMs: median(runs.map((r) => r.windowMs)),
   firstScreenMs: median(runs.map((r) => r.firstScreenMs)),
   openToMessageMs: median(runs.map((r) => r.openToMessageMs)),
   openToLiveMs: median(runs.map((r) => r.openToLiveMs)),
-  each: runs,
 };
+const report = { runs: runs.length, ...medians, each: runs };
 console.log(JSON.stringify(report, null, 2));
 if (OUT) writeFileSync(OUT, JSON.stringify(report, null, 2));
 
-const { limits } = JSON.parse(readFileSync(resolve(import.meta.dir, "perf-budgets.json"), "utf8")) as { limits: Record<string, { what: string; budget: number; gate: number | null }> };
-const limit = limits["coldStartMs"];
-if (limit?.gate != null && report.firstScreenMs > limit.gate) {
-  console.error(`${limit.what}: ${report.firstScreenMs} ms, over its gate ${limit.gate} (budget ${limit.budget})`);
-  process.exit(1);
-}
+const { limits } = JSON.parse(readFileSync(resolve(import.meta.dir, "perf-budgets.json"), "utf8")) as {
+  limits: Record<string, { what: string; at: string[]; budget: number; gate: number | null; source?: string }>;
+};
+const over = Object.values(limits).flatMap((l) => {
+  const v = l.source === "desktop" ? medians[l.at[0] ?? ""] : undefined;
+  return v !== undefined && l.gate !== null && v > l.gate ? [`${l.what}: ${v} ms, over its gate ${l.gate} (budget ${l.budget})`] : [];
+});
+for (const o of over) console.error(o);
+if (over.length) process.exit(1);

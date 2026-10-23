@@ -927,8 +927,9 @@ jobs:
       launches each time the window (the renderer's timeOrigin) and the first screen (first contentful
       paint) from the process start, and from a click on the channel its first cached message on screen
       (the kiwi:first-message mark) and live (kiwi:live); the medians go to the log and --json, and it fails
-      when the median launch to the first screen is over the coldStartMs gate in scripts/perf-budgets.json
-      (a limit perf-check skips: source desktop). Fails on a
+      when a median is over its gate in scripts/perf-budgets.json, the limits whose source is desktop and
+      perf-check skips: coldStartMs (launch to the first screen) and channelOpenMs (a click on the channel to
+      its first cached message). Fails on a
       bundling or packaging error, a fuse changed or dropped, or an app that no longer starts.
 
   cli-macos:
