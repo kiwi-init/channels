@@ -73,7 +73,7 @@ jobs:
 
   test-unit:
     name: test / unit
-    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/workflows/nightly.yml", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "desktop/package.json", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml", "ios/engine/**"]
+    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/workflows/nightly.yml", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "desktop/package.json", "desktop/scripts/eb-pins.ts", "desktop/electrobun-pins.json", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml", "ios/engine/**"]
     always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts", "scripts/ci-flows.ts", "scripts/ci-shards.ts"]
     description: >-
       On two runners at once (a matrix of `scripts/ci-tests.ts unit --shard=N/2`, dealt by
@@ -729,7 +729,14 @@ jobs:
       person may approve is in its reviews, done by the task's owner and dated by its open round, one
       waiting on an agent reviewer isn't, an agent's seat gets none, and the channel's latest line is
       its newest message outside the chat with the lead (a task thread's, with the thread it was said
-      in), #general's when nothing came after it. Fails if any of that breaks.
+      in), #general's when nothing came after it. And the Electrobun shell's page and pins:
+      test/desktop-eb-page.test.ts (desktop/src/eb-page.ts: the CSP meta first in a <head> found by
+      the page's structure, with only HTML's whitespace (tab, LF, FF, CR, space) allowed before it,
+      so a non-breaking space or a vertical tab is refused; the navigation rules and the one page
+      they allow; will-navigate read as the page, a refusal or a breach) and
+      test/desktop-eb-pins.test.ts (desktop/scripts/eb-pins.ts and desktop/electrobun-pins.json: the
+      pins moving with the electrobun dependency, a host without pins refused, a changed or
+      missing file named, a tree hash over every path and byte). Fails if any of that breaks.
 
   test-flows-a:
     name: test / flows-a
@@ -1003,7 +1010,9 @@ jobs:
       at Resources/app/page/ outside views/, copies the rest of web/dist into views/internal and
       fails if an index.html lands there, compiles native/macos/kiwi-shell.m with clang -Wall
       -Werror into Contents/MacOS (the patch that denies the microphone, camera and location
-      Electrobun grants the page and lets only the page's own blob:/data: downloads through,
+      Electrobun grants the page, lets only the page's own blob:/data: downloads through, and
+      cancels every navigation but views://internal/index.html and its #/? forms in Electrobun's
+      own navigation delegate, before load, whatever rules the page's internal RPC sets,
       and the window's minimum size and background), and fails if any Electrobun file in the app
       differs from its pin or Contents/MacOS holds a file nobody pinned. We ship the plain app, not Electrobun's
       self-extracting wrapper (which would run the app from a folder the user's rights can edit):

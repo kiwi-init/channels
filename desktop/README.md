@@ -48,9 +48,11 @@ bun run typecheck:eb                                  # fetches the devkit into 
 - `native/macos/kiwi-shell.m` — built into the app by `scripts/eb-post-build.ts`: denies
   the microphone, camera and location that Electrobun's WebKit delegate grants our page,
   lets only downloads of the page's own `blob:` and `data:` URLs through (Electrobun would
-  save any download into Downloads, past the navigation rules), and sets the window's
-  minimum size and background on the main thread. The shell opens no window if either
-  patch can't apply.
+  save any download into Downloads, past the navigation rules), cancels every navigation
+  but the page in Electrobun's own navigation delegate, before load (rules the page's
+  internal RPC could change don't decide it), and sets the window's
+  minimum size and background on the main thread. The shell opens no window if any of
+  these patches can't apply.
 
 ## Layout
 

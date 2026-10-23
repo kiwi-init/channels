@@ -15,6 +15,7 @@ const binDir = path.dirname(process.execPath);
 const shell = dlopen(path.join(binDir, `libkiwi-shell.${suffix}`), {
   kiwi_deny_permissions: { args: [], returns: FFIType.bool },
   kiwi_guard_downloads: { args: [], returns: FFIType.bool },
+  kiwi_allow_only: { args: [FFIType.ptr], returns: FFIType.bool },
   kiwi_window_look: { args: [FFIType.ptr, FFIType.f64, FFIType.f64, FFIType.u32, FFIType.u32], returns: FFIType.void },
 }).symbols;
 
@@ -25,6 +26,8 @@ const core = dlopen(path.join(binDir, `libElectrobunCore.${suffix}`), {
 const cString = (s: string): Uint8Array => new TextEncoder().encode(`${s}\0`);
 
 const rgb = (hex: string): number => Number.parseInt(hex.slice(1), 16);
+
+const PAGE_ONLY = cString(PAGE_URL);
 
 function openOutside(url: string): void {
   const ext = externalUrl(url);
@@ -68,15 +71,18 @@ async function createWindow(page: Uint8Array): Promise<void> {
     hidden: true,
   });
   const view = win.webview;
+  let closing = false;
   view.on("will-navigate", (e) => {
     const nav = navigation((e as { data?: { detail?: unknown } }).data?.detail);
     if (nav.kind === "refused") openOutside(nav.url);
     if (nav.kind !== "breach") return;
+    closing = true;
     win.hide();
     fail(`a navigation the rules should have refused went through (${nav.url ?? "unreadable"}); closing`);
   });
   view.setNavigationRules(PAGE_RULES);
   if (!(await rulesHold(view))) {
+    closing = true;
     win.hide();
     fail("the window's navigation rules didn't take effect; not opening it");
     return;
@@ -91,7 +97,7 @@ async function createWindow(page: Uint8Array): Promise<void> {
     if (url) openOutside(url);
   });
   view.on("dom-ready", () => {
-    if (!win.isVisible()) win.show();
+    if (!closing && !win.isVisible()) win.show();
   });
 }
 
@@ -99,6 +105,7 @@ BrowserView.on("created", (tag) => tag.remove());
 
 if (!shell.kiwi_deny_permissions()) fail("the web view's permission handler wasn't found; not opening a window that could grant the microphone");
 else if (!shell.kiwi_guard_downloads()) fail("the web view's download handler wasn't found; not opening a window that could save any file into Downloads");
+else if (!shell.kiwi_allow_only(ptr(PAGE_ONLY))) fail("the web view's navigation handler wasn't found; not opening a window whose page could navigate away");
 else {
   const page = buildPage();
   if (page) await createWindow(page);
