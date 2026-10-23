@@ -978,22 +978,31 @@ jobs:
 
   desktop-mac:
     name: desktop / mac
-    inputs: ["desktop/src/**", "desktop/native/**", "desktop/build/icon.icns", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "package.json", "bun.lock"]
+    inputs: ["desktop/src/**", "desktop/native/**", "desktop/build/icon.icns", "packages/core/**", "web/src/**", "web/index.html", "web/vite.config.ts", "web/public/**", "web/package.json", "package.json", "bun.lock"]
     imports_from: ["desktop/src/main-eb.ts"]
-    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-size.ts"]
+    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/electrobun-pins.json", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb.ts", "desktop/scripts/eb-pins.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-size.ts"]
     description: >-
       On a macOS runner (Electrobun builds only for the host it runs on), checks the Electrobun
       shell that is replacing Electron (issue #757). Builds web/dist, then `bun run typecheck:eb`
-      in desktop/: `electrobun prepare` fetches Electrobun 2.0.4's devkit (Hutch, the pinned
-      core and Bun) into desktop/.hutch, and tsc -p tsconfig.eb.json typechecks
-      src/main-eb.ts, electrobun.config.ts and the eb-*.ts build scripts against it, strict.
-      Then `bun run build:eb` (electrobun build --env=stable): bundles src/main-eb.ts with the
+      in desktop/: desktop/scripts/eb.ts downloads Hutch from the URL desktop/electrobun-pins.json
+      pins, fails unless the archive and its files match their sha256 pins, and runs
+      `electrobun prepare` through it (never the npm shim's unpinned install.sh fallback), which
+      fetches Electrobun 2.0.4's devkit, core and Bun into desktop/.hutch; tsc -p
+      tsconfig.eb.json typechecks src/main-eb.ts, electrobun.config.ts and the eb*.ts build
+      scripts against it, strict.
+      Then `bun run build:eb` (electrobun build --env=stable, through eb.ts): scripts/eb-pre-build.ts
+      fails unless the build runs the pinned Hutch and desktop/.hutch/devkit/api hashes to its pin;
+      the build bundles src/main-eb.ts with the
       shared desktop modules it imports (guard.ts csp(), open.ts, eb-page.ts, window-look.ts,
       window-size.ts) and @kiwi/core; scripts/eb-pre-build.ts turns build/icon.icns into the
-      iconset; scripts/eb-post-build.ts copies web/dist into the app's views/internal and
-      compiles native/macos/kiwi-shell.m with clang -Wall -Werror into Contents/MacOS (the
-      patch that denies the microphone, camera and location Electrobun grants the page, and the
-      window's minimum size and background). We ship the plain app, not Electrobun's
+      iconset; scripts/eb-post-build.ts runs pageWithCsp on the built web/dist/index.html (fails
+      unless only a doctype, <html> and <head> come before the CSP's place), puts that template
+      at Resources/app/page/ outside views/, copies the rest of web/dist into views/internal and
+      fails if an index.html lands there, compiles native/macos/kiwi-shell.m with clang -Wall
+      -Werror into Contents/MacOS (the patch that denies the microphone, camera and location
+      Electrobun grants the page and lets only the page's own blob:/data: downloads through,
+      and the window's minimum size and background), and fails if any Electrobun file in the app
+      differs from its pin or Contents/MacOS holds a file nobody pinned. We ship the plain app, not Electrobun's
       self-extracting wrapper (which would run the app from a folder the user's rights can edit):
       desktop/scripts/eb-size.ts unpacks the plain .app from the build's .app.tar.zst payload,
       makes its dmg (hdiutil ULMO) and its zip (ditto, the updater's layout), and fails if that

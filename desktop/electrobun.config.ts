@@ -5,7 +5,7 @@ import pkg from "./package.json" with { type: "json" };
 export default {
   app: {
     name: "Channels",
-    identifier: process.env.CHANNELS_EB_IDENTIFIER ?? "com.kiwiinit.channels",
+    identifier: process.env.CHANNELS_EB_IDENTIFIER ?? (process.env.CHANNELS_EB_RELEASE === "1" ? "com.kiwiinit.channels" : "com.kiwiinit.channels.dev"),
     version: pkg.version,
   },
   build: {

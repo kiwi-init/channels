@@ -4,7 +4,7 @@ import path from "node:path";
 import Electrobun, { BrowserView, BrowserWindow, PATHS, Utils } from "electrobun/main";
 
 import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts";
-import { navigationUrl, openedUrl, PAGE_RULES, PAGE_URL, pageWithCsp } from "./eb-page.ts";
+import { navigation, openedUrl, PAGE_RULES, PAGE_TEMPLATE, PAGE_URL, pageWithCsp, RULES_CANARY } from "./eb-page.ts";
 import { externalUrl } from "./guard.ts";
 import { openInBrowser } from "./open.ts";
 import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts";
@@ -14,6 +14,7 @@ const binDir = path.dirname(process.execPath);
 
 const shell = dlopen(path.join(binDir, `libkiwi-shell.${suffix}`), {
   kiwi_deny_permissions: { args: [], returns: FFIType.bool },
+  kiwi_guard_downloads: { args: [], returns: FFIType.bool },
   kiwi_window_look: { args: [FFIType.ptr, FFIType.f64, FFIType.f64, FFIType.u32, FFIType.u32], returns: FFIType.void },
 }).symbols;
 
@@ -30,7 +31,35 @@ function openOutside(url: string): void {
   if (ext) void openInBrowser(ext, async (u) => void Utils.openExternal(u)).catch(() => {});
 }
 
-function createWindow(): void {
+function fail(why: string): void {
+  console.error(`Channels: ${why}`);
+  Utils.quit(1);
+}
+
+function buildPage(): Uint8Array | null {
+  try {
+    return cString(pageWithCsp(fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "..", PAGE_TEMPLATE), "utf8"), DEFAULT_RELAY));
+  } catch (e) {
+    fail(`the page can't be built: ${e instanceof Error ? e.message : String(e)}`);
+    return null;
+  }
+}
+
+function rulesHold(view: BrowserWindow["webview"]): Promise<boolean> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), 5000);
+    view.on("will-navigate", (e) => {
+      const nav = navigation((e as { data?: { detail?: unknown } }).data?.detail);
+      if (nav.kind === "refused" && nav.url === RULES_CANARY) {
+        clearTimeout(timer);
+        resolve(true);
+      }
+    });
+    view.loadURL(RULES_CANARY);
+  });
+}
+
+async function createWindow(page: Uint8Array): Promise<void> {
   const win = new BrowserWindow({
     title: "Channels",
     url: null,
@@ -39,18 +68,24 @@ function createWindow(): void {
     hidden: true,
   });
   const view = win.webview;
+  view.on("will-navigate", (e) => {
+    const nav = navigation((e as { data?: { detail?: unknown } }).data?.detail);
+    if (nav.kind === "refused") openOutside(nav.url);
+    if (nav.kind !== "breach") return;
+    win.hide();
+    fail(`a navigation the rules should have refused went through (${nav.url ?? "unreadable"}); closing`);
+  });
   view.setNavigationRules(PAGE_RULES);
-  const index = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "internal", "index.html"), "utf8");
-  const page = cString(pageWithCsp(index, DEFAULT_RELAY));
+  if (!(await rulesHold(view))) {
+    win.hide();
+    fail("the window's navigation rules didn't take effect; not opening it");
+    return;
+  }
   core.setWebviewHTMLContent(view.id, ptr(page));
   view.loadURL(PAGE_URL);
   const look = win.ptr;
   if (look) shell.kiwi_window_look(look, minWindowWidth(process.platform), WINDOW_SIZE.minHeight, rgb(windowBackground(false)), rgb(windowBackground(true)));
   win.setWindowButtonPosition(TRAFFIC_LIGHTS.x, TRAFFIC_LIGHTS.y);
-  view.on("will-navigate", (e) => {
-    const nav = navigationUrl((e as { data?: { detail?: unknown } }).data?.detail);
-    if (nav && !nav.allowed) openOutside(nav.url);
-  });
   Electrobun.events.on(`new-window-open-${view.id}`, (e: { data?: { detail?: unknown } }) => {
     const url = openedUrl(e.data?.detail);
     if (url) openOutside(url);
@@ -62,7 +97,9 @@ function createWindow(): void {
 
 BrowserView.on("created", (tag) => tag.remove());
 
-if (!shell.kiwi_deny_permissions()) {
-  console.error("Channels: the web view's permission handler wasn't found; not opening a window that could grant the microphone");
-  Utils.quit(1);
-} else createWindow();
+if (!shell.kiwi_deny_permissions()) fail("the web view's permission handler wasn't found; not opening a window that could grant the microphone");
+else if (!shell.kiwi_guard_downloads()) fail("the web view's download handler wasn't found; not opening a window that could save any file into Downloads");
+else {
+  const page = buildPage();
+  if (page) await createWindow(page);
+}
