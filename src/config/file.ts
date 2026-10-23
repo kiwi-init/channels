@@ -68,7 +68,6 @@ export interface Config {
   harnessHooks?: Partial<Record<"codex" | "gemini" | "cursor" | "grok" | "kimi" | "pi" | "mimo", "on" | "off">>;
   wakeOff?: string[];
   wakeHooks?: Record<string, WakeHook>;
-  rotate?: "on" | "off";
   contextLine?: "on" | "off";
   rex?: "on" | "off";
   launch?: "on" | "off";

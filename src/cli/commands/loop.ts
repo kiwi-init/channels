@@ -1,5 +1,4 @@
 import * as Effect from "effect/Effect";
-import { loadConfig } from "../../config.ts";
 import { newSeatToken, SEAT_TOKEN } from "../../hold.ts";
 import { loginPath } from "../../launch/shell.ts";
 import { SESSION_MARKERS } from "../../terminals/shared/launch.ts";
@@ -24,7 +23,6 @@ export const loopCommands: Record<string, Command> = {
     Effect.gen(function* () {
       const harness = opt.harness ?? "claude";
       if (!isLoopHarness(harness)) return yield* die(`${USAGE}: the loop doesn't start ${harness} yet`);
-      if (loadConfig().rotate === "on") return yield* die("rotation is on for this computer, and its Stop hook would clear the loop's sessions: run kiwi rotate off first");
       for (const key of SESSION_MARKERS) if (!key.startsWith("KIWI_")) delete process.env[key];
       const recipe = recipeFor(harness);
       if (recipe.typed && !typedPaneOk())
