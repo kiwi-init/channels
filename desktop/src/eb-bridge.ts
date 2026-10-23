@@ -28,6 +28,8 @@ export function frameOf(v: unknown): Frame | null {
 
 export const onOurPage = (url: string | null): boolean => url !== null && url.split("#")[0] === PAGE_URL;
 
+export const stillOurs = (ours: boolean, navigatedTo: string | null): boolean => ours && onOurPage(navigatedTo);
+
 export function committedUrl(detail: unknown): string | null {
   if (typeof detail !== "string") return null;
   if (!detail.startsWith("{")) return detail;
