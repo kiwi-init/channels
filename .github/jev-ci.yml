@@ -500,7 +500,9 @@ jobs:
       Also test/machine-file.test.ts: saving this computer's key keeps machine.json.bak, a machine.json
       cut short comes back from it, and one with no backup stops kiwi instead of minting a new key
       (src/machine.ts); with test/desktop-guard.test.ts's chooseStore: kiwi-store.bin comes back from its
-      backup when it's missing or broken, never over a good file or a locked keychain.
+      backup when it's missing or broken, never over a good file or a locked keychain, and a missing
+      kiwi-store.bin with a .bak that can't be read, decrypted or opened (loadCopies, on real files)
+      is unreadable, never a first run whose first change would save defaults over the .bak (T855).
       Also test/silent-socket.test.ts: a live socket that goes quiet after opening (no answer to
       a ping) and an upgrade nobody answers are both dropped and opened again; a nudge (the network or
       the Mac coming back) cuts a long reconnect wait short and drops a socket that doesn't answer a
@@ -676,7 +678,9 @@ jobs:
       main-log.ts, signin.ts) never import electron however deep the import, read from their real
       import graph, while the Electron shell's own electron-host.ts and main.ts still do. And
       test/desktop-store-open.test.ts: a store vault whose load throws partway leaves the store
-      broken, so no later change saves defaults over either copy (desktop/src/store.ts openStore). And
+      broken, so no later change saves defaults over either copy (desktop/src/store.ts openStore), as
+      does a load that fails with an empty reason or throws an error with no message, the thrown
+      error goes to main.log, and a store that opens fine after a broken one is writable again. And
       test/jev-ci.test.ts: the CI planner in .github/jev-ci, which plans synthetic changes
       against the real .github/jev-ci.yml and .github/workflows/ci.yml in a scratch git repo,
       following imports into workspace packages (@kiwi/core) by name, and trusts a pass marker only
