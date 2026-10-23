@@ -242,6 +242,13 @@ From `design-tokens.ts`:
   Tasks / Agents / Conversation tabs. A channel opens on its conversation
   (Needs you's rows at its top while something waits); a view opens Tasks;
   a conversation opens Conversation. The approved mockups are in `docs/ui/`.
+- Needs you says one line per thing: a face or icon, what it is in one
+  truncated line (a permission's command in mono, a join request's code
+  beside it), and its answer buttons on the right (Allow once / Deny, let in /
+  Decline, an ask's options or Answer, Approve / Send back). Everything else
+  (the whole command and what it replaces, the machine and tools, who asked
+  when, Show in the conversation, Show in Rex) opens under it on a click of
+  the line.
 - Tasks: Needs you's rows first, then the
   board grouped by the person's message each task serves: the group's
   heading is their own words in quotes, under it who said it and #N, the
@@ -254,7 +261,8 @@ From `design-tokens.ts`:
   `doing` with a steady dot while it works) or the task's state; then its PR
   (number, a 48px diff bar in `live` and `alert`, the additions), its
   checks in a word and the time, short. The PR and checks columns drop on
-  narrow windows.
+  narrow windows, and when no task on the board has a PR; a row without one
+  leaves them blank, never "no PR yet".
 - A task opens in place, under its row (a click again folds it): its
   conversation as the conversation draws it, a reply box that talks in the
   task, and Details for the Tasks panel (review, reviewer, cancel). Beside

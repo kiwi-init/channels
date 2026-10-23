@@ -21,8 +21,7 @@ function DiffBar({ additions, deletions }: { additions: number; deletions: numbe
   )
 }
 
-export function PrCell({ pr, done }: { pr: Pr | undefined; done: boolean }) {
-  if (!pr) return <span className="text-meta text-ink-3">{done ? "no PR" : "no PR yet"}</span>
+export function PrCell({ pr }: { pr: Pr }) {
   const { additions, deletions } = pr.pr
   const sized = additions !== undefined && deletions !== undefined
   return (

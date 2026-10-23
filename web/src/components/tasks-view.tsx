@@ -29,7 +29,7 @@ function ChecksCell({ pr }: { pr: Pr | undefined }) {
         merged
       </span>
     )
-  if (!pr?.checks) return <span className="text-meta text-ink-3">—</span>
+  if (!pr?.checks) return null
   const w = checksWords(pr.checks)
   return (
     <span className="flex min-w-0 items-center gap-1.5 text-meta text-ink-2">
@@ -46,6 +46,7 @@ function TaskRow({
   agent,
   waiting,
   open,
+  prs,
   onOpen,
 }: {
   task: Task
@@ -54,6 +55,7 @@ function TaskRow({
   agent: AgentNow | undefined
   waiting: boolean
   open: boolean
+  prs: boolean
   onOpen: (id: number) => void
 }) {
   const owner = task.owner ? state.members.get(task.owner) : undefined
@@ -69,7 +71,8 @@ function TaskRow({
         onClick={() => onOpen(task.id)}
         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onOpen(task.id))}
         className={cx(
-          "relative grid cursor-pointer grid-cols-[28px_minmax(0,1fr)_44px] items-center gap-x-3.5 rounded-row px-3 py-2.5 transition-colors hover:bg-wash @lg:grid-cols-[28px_minmax(0,1fr)_168px_44px] @2xl:grid-cols-[28px_minmax(0,1fr)_168px_128px_44px]",
+          "relative grid cursor-pointer grid-cols-[28px_minmax(0,1fr)_44px] items-center gap-x-3.5 rounded-row px-3 py-2.5 transition-colors hover:bg-wash",
+          prs && "@lg:grid-cols-[28px_minmax(0,1fr)_168px_44px] @2xl:grid-cols-[28px_minmax(0,1fr)_168px_128px_44px]",
           open && "before:absolute before:inset-y-2.5 before:left-0 before:w-0.5 before:rounded-full before:bg-accent"
         )}
       >
@@ -99,12 +102,14 @@ function TaskRow({
             )}
           </span>
         </span>
-        <span className="hidden min-w-0 @lg:block">
-          <PrCell pr={pr} done={task.state === "done"} />
-        </span>
-        <span className="hidden min-w-0 @2xl:block">
-          <ChecksCell pr={pr} />
-        </span>
+        {prs && (
+          <>
+            <span className="hidden min-w-0 @lg:block">{pr && <PrCell pr={pr} />}</span>
+            <span className="hidden min-w-0 @2xl:block">
+              <ChecksCell pr={pr} />
+            </span>
+          </>
+        )}
         <time className="text-right text-meta text-ink-3 tabular-nums">{formatAgoShort(task.updatedAt, now)}</time>
       </div>
     </li>
@@ -188,6 +193,7 @@ export function TasksView({
   onOpen: (id: number) => void
 }) {
   const groups = taskGroups(state, view, now)
+  const prs = groups.some((g) => g.tasks.some((t) => taskPr(state, t.id)))
   const byName = new Map(agents.map((a) => [a.name, a]))
   const showNeeds = view === "everything" || view === "needs"
   const waiting = tasksAwaitingPeople(state)
@@ -216,7 +222,7 @@ export function TasksView({
         <AskGroup key={g.key} ask={g.ask} count={g.tasks.length} state={state}>
           <ul className="divide-y divide-line">
             {g.tasks.map((t) => (
-              <TaskRow key={t.id} task={t} state={state} now={now} agent={t.owner ? byName.get(t.owner) : undefined} waiting={waiting.has(t.id)} open={open === t.id} onOpen={onOpen} />
+              <TaskRow key={t.id} task={t} state={state} now={now} agent={t.owner ? byName.get(t.owner) : undefined} waiting={waiting.has(t.id)} open={open === t.id} prs={prs} onOpen={onOpen} />
             ))}
           </ul>
         </AskGroup>
