@@ -983,13 +983,16 @@ jobs:
     always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/electrobun-pins.json", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb.ts", "desktop/scripts/eb-pins.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-size.ts"]
     description: >-
       On a macOS runner (Electrobun builds only for the host it runs on), checks the Electrobun
-      shell that is replacing Electron (issue #757). Builds web/dist, then `bun run typecheck:eb`
-      in desktop/: desktop/scripts/eb.ts downloads Hutch from the URL desktop/electrobun-pins.json
-      pins, fails unless the archive and its files match their sha256 pins, and runs
-      `electrobun prepare` through it (never the npm shim's unpinned install.sh fallback), which
-      fetches Electrobun 2.0.4's devkit, core and Bun into desktop/.hutch; tsc -p
-      tsconfig.eb.json typechecks src/main-eb.ts, electrobun.config.ts and the eb*.ts build
-      scripts against it, strict.
+      shell that is replacing Electron (issue #757). Builds web/dist, restores ~/.hutch (the pinned
+      Hutch under kiwi-pinned/, Cottontail, Electrobun's core and devkit, Bun) from actions/cache
+      keyed on desktop/electrobun-pins.json, and runs `bun run prepare:eb` up to three times, 20 s
+      apart, so a download blip from GitHub or blackboard.sh doesn't fail the job:
+      desktop/scripts/eb.ts downloads Hutch from the URL desktop/electrobun-pins.json pins, fails
+      unless the archive and its files match their sha256 pins, and runs `electrobun prepare`
+      through it (never the npm shim's unpinned install.sh fallback). The steps after it run
+      with DASH_RELEASE_OFFLINE=1 and fetch nothing. Then `bun run typecheck:eb` in desktop/:
+      tsc -p tsconfig.eb.json typechecks src/main-eb.ts, electrobun.config.ts and the eb*.ts
+      build scripts against the projected devkit, strict.
       Then `bun run build:eb` (electrobun build --env=stable, through eb.ts): scripts/eb-pre-build.ts
       fails unless the build runs the pinned Hutch and desktop/.hutch/devkit/api hashes to its pin;
       the build bundles src/main-eb.ts with the
