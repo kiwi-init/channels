@@ -45,15 +45,15 @@ const later = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 function homeKeychain(home: string): () => void {
   const env = { ...process.env, HOME: home };
+  const kc = join(home, "Library", "Keychains", "login.keychain");
   for (const args of [
-    ["create-keychain", "-p", "", "login.keychain"],
-    ["set-keychain-settings", "login.keychain"],
-    ["unlock-keychain", "-p", "", "login.keychain"],
-    ["default-keychain", "-d", "user", "-s", "login.keychain"],
-    ["list-keychains", "-d", "user", "-s", "login.keychain"],
+    ["create-keychain", "-p", "", kc],
+    ["set-keychain-settings", kc],
+    ["default-keychain", "-d", "user", "-s", kc],
+    ["list-keychains", "-d", "user", "-s", kc],
   ])
     execFileSync("security", args, { env, stdio: "ignore" });
-  return () => void spawnSync("security", ["delete-keychain", "login.keychain"], { env, stdio: "ignore" });
+  return () => void spawnSync("security", ["delete-keychain", kc], { env, stdio: "ignore" });
 }
 
 function stuck(pid: number): string {
