@@ -7,7 +7,7 @@ import { loadConfig, matches, type Config } from "../.github/jev-ci/config.ts";
 import { markMoves, size, type FileChange } from "../.github/jev-ci/diff.ts";
 import { mergeGroupRange, passMarkers, testedByQueue, trustedRef, type PassCache, type PullEvent, type QueueRun } from "../.github/jev-ci/github.ts";
 import type { Request } from "../.github/jev-ci/jev.ts";
-import { plan, skipAll, type Ask, type Decision, type Plan } from "../.github/jev-ci/plan.ts";
+import { plan, pullRequestOnly, skipAll, type Ask, type Decision, type Plan } from "../.github/jev-ci/plan.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const CI = readFileSync(join(ROOT, ".github/workflows/ci.yml"), "utf8");
@@ -492,5 +492,35 @@ describe("the merge queue (T2034)", () => {
     expect(CI).toMatch(/\n {2}merge_group:\n {4}types: \[checks_requested\]\n/);
     expect(CI).toContain("group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.run_id }}");
     expect(CI).toMatch(/\n {2}ci-ok:\n(?: .*\n)*? {4}if: always\(\)\n/);
+  });
+});
+
+describe("a pull request runs only the fast checks, the merge queue the rest (T2134)", () => {
+  test("jev-ci.yml names repo / static and test / unit, both jobs it plans", () => {
+    expect(config.pull_request_jobs).toEqual(["static", "test-unit"]);
+    for (const job of config.pull_request_jobs ?? []) expect(config.jobs[job]).toBeDefined();
+  });
+
+  test("on a pull request the fast jobs keep their plan and every other job that would run waits for the queue, with the reason it would run", async () => {
+    const { result, by } = await planFor({ "src/a.ts": "export const a = 5\n", "web/src/lib/v.ts": "export const v = 9\n" }, fakeJev(0.9));
+    const wouldRun = result.decisions.filter((d) => d.run).map((d) => d.job);
+    expect(wouldRun.filter((j) => !["static", "test-unit"].includes(j)).length).toBeGreaterThan(0);
+    const pr = pullRequestOnly(config, result);
+    for (const d of pr.decisions) {
+      if (["static", "test-unit"].includes(d.job) || !by(d.job).run) expect(d).toEqual(by(d.job));
+      else expect(d).toMatchObject({ run: false, layer: "L0", reason: `a pull request runs only static and test-unit; its merge queue group runs this (${by(d.job).reason})` });
+    }
+  });
+
+  test("a part goes with the job it belongs to, and a config without pull_request_jobs keeps the whole plan", () => {
+    const all: Plan = { ...skipAll(config, "x"), decisions: skipAll(config, "x").decisions.map((d) => ({ ...d, run: true, reason: "changed" })) };
+    const perf = pullRequestOnly({ ...config, pull_request_jobs: ["perf"] }, all);
+    expect(
+      perf.decisions
+        .filter((d) => d.run)
+        .map((d) => d.job)
+        .sort(),
+    ).toEqual(["perf", "perf-runs"]);
+    expect(pullRequestOnly({ ...config, pull_request_jobs: undefined }, all)).toEqual(all);
   });
 });

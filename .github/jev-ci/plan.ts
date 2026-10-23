@@ -127,6 +127,14 @@ function withParts(config: Config, p: Plan): Plan {
 
 const ownerOf = (config: Config, id: string): string | undefined => Object.keys(config.jobs).find((job) => config.jobs[job]!.parts?.includes(id));
 
+export function pullRequestOnly(config: Config, p: Plan): Plan {
+  const fast = config.pull_request_jobs;
+  if (!fast) return p;
+  const kept = (job: string): boolean => fast.includes(job) || fast.includes(ownerOf(config, job) ?? "");
+  const queued = (d: Decision): Decision => ({ job: d.job, run: false, layer: "L0", reason: `a pull request runs only ${fast.join(" and ")}; its merge queue group runs this (${d.reason})` });
+  return { ...p, decisions: p.decisions.map((d) => (d.run && !kept(d.job) ? queued(d) : d)) };
+}
+
 function configChange(repo: string, base: string, head: string, path: string): { all?: string; jobs: Map<string, string[]>; notes: string[] } {
   const out = { jobs: new Map<string, string[]>(), notes: [] as string[] };
   const a = show(repo, base, path);
