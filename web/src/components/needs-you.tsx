@@ -1,4 +1,4 @@
-import { CheckmarkCircle02Icon, Globe02Icon, HelpCircleIcon, Key01Icon } from "@hugeicons/core-free-icons"
+import { ArrowDown01Icon, CheckmarkCircle02Icon, Globe02Icon, HelpCircleIcon, Key01Icon } from "@hugeicons/core-free-icons"
 import type { IconSvgElement } from "@hugeicons/react"
 import { useState, type ReactNode } from "react"
 
@@ -17,7 +17,7 @@ import { handoffLabel, handoffLeft, handoffOf, handoffOpen } from "@/lib/handoff
 import { useControls } from "./controls"
 import { Icon } from "./icon"
 import { Button, Checkbox, Monogram, TextField, errorText, toast } from "./kit"
-import { ComposerQuestion, PermissionItem } from "./lazy"
+import { PermissionItem } from "./lazy"
 import { defaultPowers, defaultScopes, POWER_WORDS, POWERS } from "./scopes"
 import { AgentFacts } from "./agent-facts"
 
@@ -30,7 +30,7 @@ export function NeedsYou({
   roomId,
   me,
   decisions,
-  decisionCards,
+  withDecisions,
   escalations,
   questions,
   reviews,
@@ -49,9 +49,9 @@ export function NeedsYou({
   now: number
   roomId: string
   me: string
-  /** Asks to this person by name: the oldest also waits above the composer, where it is answered. */
+  /** Asks to this person by name: in the conversation the oldest waits above the composer, where it is answered. */
   decisions: Message[]
-  decisionCards: boolean
+  withDecisions: boolean
   /** Escalations to this person nobody has answered yet. */
   escalations: Message[]
   questions: Message[]
@@ -98,8 +98,7 @@ export function NeedsYou({
       }
     }),
     ...requests.map((r) => ({ key: `r${r.id}`, node: <RequestItem r={r} roomId={roomId} now={now} /> })),
-    ...(decisionCards ? asked(decisions) : []).map((m) => ({ key: `a${m.seq}`, node: <DecisionCard m={m} held={heldOf(m)} nameOf={nameOf} onReply={onReply} seat={seatOf(m.from)} /> })),
-    ...[...(decisionCards ? [] : asked(decisions)), ...asked(escalations), ...questions].map((m) => ({
+    ...[...(withDecisions ? asked(decisions) : []), ...asked(escalations), ...questions].map((m) => ({
       key: `a${m.seq}`,
       node: <AskItem m={m} me={me} now={now} nameOf={nameOf} agent={agentOf(m.from)} held={heldOf(m)} onReply={onReply} onJump={onJump} seat={seatOf(m.from)} />,
     })),
@@ -124,17 +123,43 @@ export function NeedsYou({
   )
 }
 
-export function Row({ icon, lead, title, detail, children }: { icon?: IconSvgElement; lead?: ReactNode; title: ReactNode; detail?: ReactNode; children?: ReactNode }) {
+export function Row({
+  icon,
+  lead,
+  title,
+  aside,
+  detail,
+  below,
+  children,
+}: {
+  icon?: IconSvgElement
+  lead?: ReactNode
+  title: ReactNode
+  aside?: ReactNode
+  detail?: ReactNode
+  below?: ReactNode
+  children?: ReactNode
+}) {
+  const [open, setOpen] = useState(false)
   return (
-    <div className="flex flex-col gap-2 py-3 md:flex-row md:items-center md:gap-4">
-      <div className="flex min-w-0 flex-1 items-start gap-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-row border border-edge-strong text-decide">{lead ?? (icon && <Icon icon={icon} size={17} />)}</span>
-        <div className="min-w-0 flex-1">
-          <p className="text-body leading-snug [overflow-wrap:anywhere]">{title}</p>
-          {detail && <div className="mt-0.5 text-meta leading-snug text-ink-3">{detail}</div>}
+    <div className="py-2">
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          {lead ?? <span className="flex size-7 shrink-0 items-center justify-center rounded-row border border-edge-strong text-decide">{icon && <Icon icon={icon} size={15} />}</span>}
+          {detail ? (
+            <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="flex min-w-0 items-center gap-1.5 text-left text-body leading-snug">
+              <span className="min-w-0 truncate">{title}</span>
+              <Icon icon={ArrowDown01Icon} size={14} className={cx("shrink-0 text-ink-3 transition-transform", open && "rotate-180")} />
+            </button>
+          ) : (
+            <p className="min-w-0 truncate text-body leading-snug">{title}</p>
+          )}
+          {aside}
         </div>
+        {children && <div className="flex shrink-0 flex-wrap items-center gap-2 pl-10 md:pl-0">{children}</div>}
       </div>
-      {children && <div className="flex flex-wrap items-center gap-2 pl-12 md:max-w-[45%] md:shrink-0 md:justify-end md:pl-0">{children}</div>}
+      {below && <div className="mt-2 pl-10">{below}</div>}
+      {open && detail && <div className="mt-1.5 pl-10 text-meta leading-snug text-ink-3">{detail}</div>}
     </div>
   )
 }
@@ -171,6 +196,7 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
   // Whose computer it runs on, from its verified computer claim (not the relay's word).
   const who = r.kind === "human" ? (r.person ? `A person · key ${r.person.slice(0, 8)}` : "A person") : r.computer ? `An agent on ${r.computer.personName}’s ${r.computer.label}` : "An agent"
   const lead = <Monogram name={r.display || r.name} hue={r.name} agent={r.kind !== "human"} size={28} />
+  const ready = r.check === "ready"
   const pinnedAs = usePinned(r.pin)
   const [powers, setPowers] = useState<PersonPowers>(() => (r.kind === "human" ? defaultPowers(roomId) : {}))
   return (
@@ -183,17 +209,13 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
           {r.pin && <span className="text-ink-2">{pinnedAs === null ? `, pinned as ${r.pin.name}, which isn't on your account as it was` : `, pinned as ${r.pin.name}`}</span>}
         </>
       }
+      aside={ready && r.code && <span className="shrink-0 font-semibold tracking-[0.04em] whitespace-nowrap text-ink tabular-nums">{r.code}</span>}
       detail={
         <>
           {who} · asked {formatAgo(r.ts, now)}
           {r.kind !== "human" && <AgentFacts card={r.card} runs={r.runs} said repos={p.state.repos} className="mt-1" />}
-          {r.check === "ready" && r.code && (
-            <span className="mt-1.5 flex items-baseline gap-2">
-              <span>Let in only if {r.kind === "human" ? "they see" : "its terminal shows"}</span>
-              <span className="text-title font-semibold tracking-[0.04em] whitespace-nowrap text-ink tabular-nums">{r.code}</span>
-            </span>
-          )}
-          {r.kind === "human" && r.check === "ready" && (
+          {ready && r.code && <span className="mt-1.5 block">Let it in only if {r.kind === "human" ? "they see" : "its terminal shows"} the same code.</span>}
+          {r.kind === "human" && ready && (
             <span className="mt-1.5 flex flex-wrap items-center gap-x-5 gap-y-1 text-ink-2">
               {POWERS.map((power) => (
                 <label key={power} className="flex items-center gap-2">
@@ -203,44 +225,50 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
               ))}
             </span>
           )}
+          {ready && !taken && (
+            <span className="mt-1.5 block">
+              <Button size="sm" variant="ghost" className="-ml-2.5" onClick={() => ask({ kind: "approve", req: r, powers })}>
+                Choose what it can do…
+              </Button>
+            </span>
+          )}
         </>
       }
-    >
-      {r.check === "ready" && taken ? (
-        <form
-          className="flex flex-wrap items-center gap-2"
-          onSubmit={(e) => {
-            e.preventDefault()
-            const name = rename.trim()
-            if (name) void run(() => p.onApprove({ ...r, name }, defaultScopes(roomId)), `${r.name} joined as ${name}`)
-          }}
-        >
-          <span className="text-meta text-ink-2">{r.name} is taken here. It matches: let in as</span>
-          <TextField value={rename} onChange={(e) => setRename(e.target.value)} maxLength={32} aria-label="Name to let it in as" className="w-36" />
-          <Button size="sm" variant="secondary" type="submit" disabled={busy || !rename.trim() || p.roster.some((m) => m.active && nameKey(m.name) === nameKey(rename.trim()))}>
-            Let in
-          </Button>
-        </form>
-      ) : r.check === "ready" ? (
-        <>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={busy || (!!r.pin && pinnedAs === undefined)}
-            onClick={() => run(() => p.onApprove(r, defaultScopes(roomId), pinnedAs ?? undefined, powers), pinnedAs ? `${r.name} joined as ${pinnedAs.name}` : `${r.name} joined`)}
+      below={
+        ready &&
+        taken && (
+          <form
+            className="flex flex-wrap items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault()
+              const name = rename.trim()
+              if (name) void run(() => p.onApprove({ ...r, name }, defaultScopes(roomId)), `${r.name} joined as ${name}`)
+            }}
           >
-            {pinnedAs ? `It matches: let in as ${pinnedAs.name}` : "It matches: let in"}
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => ask({ kind: "approve", req: r, powers })}>
-            Choose what it can do…
-          </Button>
-        </>
+            <span className="text-meta text-ink-2">{r.name} is taken here. It matches: let in as</span>
+            <TextField value={rename} onChange={(e) => setRename(e.target.value)} maxLength={32} aria-label="Name to let it in as" className="w-36" />
+            <Button size="sm" variant="secondary" type="submit" disabled={busy || !rename.trim() || p.roster.some((m) => m.active && nameKey(m.name) === nameKey(rename.trim()))}>
+              Let in
+            </Button>
+          </form>
+        )
+      }
+    >
+      {ready && !taken ? (
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={busy || (!!r.pin && pinnedAs === undefined)}
+          onClick={() => run(() => p.onApprove(r, defaultScopes(roomId), pinnedAs ?? undefined, powers), pinnedAs ? `${r.name} joined as ${pinnedAs.name}` : `${r.name} joined`)}
+        >
+          {pinnedAs ? `It matches: let in as ${pinnedAs.name}` : "It matches: let in"}
+        </Button>
       ) : r.check === "unchecked" ? (
         <Button size="sm" variant="secondary" disabled={busy} onClick={() => run(() => p.onCheck(r), `Asked ${r.name} for its code`)}>
           Show code
         </Button>
       ) : (
-        <span className="text-meta text-ink-3">Waiting for {r.kind === "human" ? "their" : "its"} code…</span>
+        !ready && <span className="text-meta text-ink-3">Waiting for {r.kind === "human" ? "their" : "its"} code…</span>
       )}
       <Button size="sm" variant="ghost" disabled={busy} onClick={() => run(() => p.onDeny(r), `Declined ${r.name}`)}>
         Decline
@@ -277,17 +305,36 @@ function AskItem({
   return (
     <Row
       icon={handoff ? Globe02Icon : m.esc ? Key01Icon : HelpCircleIcon}
-      title={excerpt(m.body, 220)}
-      detail={[
-        held.length ? `holds ${held.join(", ")}` : null,
-        `${handoff ? "Browser for you" : askLabel(m, me)} from ${nameOf(m.from)}${agent ? "" : " (a person)"}`,
-        formatAgo(m.ts, now),
-        handoff ? `${handoffLabel(handoff)} · ${live ? handoffLeft(handoff, now) : "link expired"}` : null,
-      ]
-        .filter(Boolean)
-        .join(" · ")}
+      title={
+        <>
+          {m.esc && <span className="mr-1.5 rounded-full bg-decide-wash px-1.5 align-middle text-meta font-semibold text-decide">{askLabel(m, me)}</span>}
+          <span className="font-semibold">{nameOf(m.from)}</span> {excerpt(m.body, 220)}
+        </>
+      }
+      detail={
+        <>
+          <p className="text-ui leading-normal whitespace-pre-wrap text-ink-2">{excerpt(m.body, 2000)}</p>
+          <p className="mt-1">
+            {[
+              held.length ? `holds ${held.join(", ")}` : null,
+              `${handoff ? "Browser for you" : askLabel(m, me)} from ${nameOf(m.from)}${agent ? "" : " (a person)"}`,
+              formatAgo(m.ts, now),
+              handoff ? `${handoffLabel(handoff)} · ${live ? handoffLeft(handoff, now) : "link expired"}` : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+          <span className="mt-1 flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="ghost" className="-ml-2.5" onClick={() => onJump(m.seq)}>
+              Show in the conversation
+            </Button>
+            <ShowSeat seat={seat} />
+          </span>
+        </>
+      }
+      below={draft !== null && <AnswerForm draft={draft} setDraft={setDraft} busy={busy} send={send} to={nameOf(m.from)} autoFocus onEscape={() => setDraft(null)} />}
     >
-      {draft === null ? (
+      {draft === null && (
         <>
           {!handoff &&
             m.choices?.map((c) => (
@@ -311,13 +358,7 @@ function AskItem({
           <Button size="sm" variant={m.choices?.length ? "ghost" : "secondary"} onClick={() => setDraft("")}>
             {m.choices?.length ? "Something else" : "Answer"}
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => onJump(m.seq)}>
-            Show
-          </Button>
-          <ShowSeat seat={seat} />
         </>
-      ) : (
-        <AnswerForm draft={draft} setDraft={setDraft} busy={busy} send={send} to={nameOf(m.from)} autoFocus onEscape={() => setDraft(null)} />
       )}
     </Row>
   )
@@ -385,23 +426,6 @@ function AnswerForm({
   )
 }
 
-function DecisionCard({ m, held, nameOf, onReply, seat }: { m: Message; held: string[]; nameOf: (n: string) => string; onReply: (m: Message, text: string) => Promise<void>; seat?: PlacedSeat }) {
-  const choices = !!m.choices?.length
-  const idle = choices ? null : ""
-  const { draft, setDraft, busy, send } = useAnswer(m, nameOf, onReply, idle)
-  return (
-    <div className="flex flex-col py-3">
-      <ComposerQuestion m={m} more={0} held={held} nameOf={nameOf} disabled={busy} onChoose={(c) => send(c)} onElse={() => setDraft((d) => d ?? "")} />
-      {draft !== null && <AnswerForm draft={draft} setDraft={setDraft} busy={busy} send={send} to={nameOf(m.from)} autoFocus={choices} onEscape={() => setDraft(idle)} />}
-      {seat && (
-        <div className="mt-1 flex flex-wrap items-center gap-2">
-          <ShowSeat seat={seat} />
-        </div>
-      )}
-    </div>
-  )
-}
-
 /** Work an agent says is finished, waiting on this person's word. */
 function ReviewItem({
   t,
@@ -433,8 +457,50 @@ function ReviewItem({
     }
   }
   return (
-    <Row icon={CheckmarkCircle02Icon} title={t.title} detail={`${taskId(t.id)} · ready for your review${t.owner ? ` · done by ${nameOf(t.owner)}` : ""} · check the work itself, not just the word`}>
-      {why === null ? (
+    <Row
+      icon={CheckmarkCircle02Icon}
+      title={
+        <>
+          <span className="text-ink-3 tabular-nums">{taskId(t.id)}</span> {t.title}
+        </>
+      }
+      detail={
+        <>
+          Ready for your review{t.owner ? ` · done by ${nameOf(t.owner)}` : ""} · check the work itself, not just the word
+          <span className="mt-1 flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="ghost" className="-ml-2.5" onClick={() => onOpen(t.id)}>
+              Open the task
+            </Button>
+            <ShowSeat seat={seat} />
+          </span>
+        </>
+      }
+      below={
+        why !== null && (
+          <form
+            className="flex w-full items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (why.trim()) void act(() => onSendBack(t, why.trim()), `Sent ${taskId(t.id)} back`)
+            }}
+          >
+            <TextField
+              autoFocus
+              value={why}
+              onChange={(e) => setWhy(e.target.value)}
+              onKeyDown={(e) => e.key === "Escape" && setWhy(null)}
+              placeholder="What to change"
+              aria-label="What to change"
+              className="flex-1"
+            />
+            <Button size="sm" variant="secondary" type="submit" disabled={busy || !why.trim()}>
+              Send back
+            </Button>
+          </form>
+        )
+      }
+    >
+      {why === null && (
         <>
           <Button size="sm" variant="secondary" disabled={busy} onClick={() => act(() => onApprove(t), `Approved ${taskId(t.id)}`)}>
             Approve
@@ -442,32 +508,7 @@ function ReviewItem({
           <Button size="sm" variant="ghost" onClick={() => setWhy("")}>
             Send back
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => onOpen(t.id)}>
-            Open
-          </Button>
-          <ShowSeat seat={seat} />
         </>
-      ) : (
-        <form
-          className="flex w-full items-center gap-2"
-          onSubmit={(e) => {
-            e.preventDefault()
-            if (why.trim()) void act(() => onSendBack(t, why.trim()), `Sent ${taskId(t.id)} back`)
-          }}
-        >
-          <TextField
-            autoFocus
-            value={why}
-            onChange={(e) => setWhy(e.target.value)}
-            onKeyDown={(e) => e.key === "Escape" && setWhy(null)}
-            placeholder="What to change"
-            aria-label="What to change"
-            className="flex-1"
-          />
-          <Button size="sm" variant="secondary" type="submit" disabled={busy || !why.trim()}>
-            Send back
-          </Button>
-        </form>
       )}
     </Row>
   )

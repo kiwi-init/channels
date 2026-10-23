@@ -396,13 +396,13 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     go(placeFromKey(key) ?? MAIN)
   }
   const roomName = state.rooms.get(cardRoom)?.name ?? GENERAL_ROOM
-  const needsYou = (decisionCards: boolean) => (
+  const needsYou = (withDecisions: boolean) => (
     <NeedsYou
       now={now}
       roomId={roomId}
       me={me}
       decisions={decisions}
-      decisionCards={decisionCards}
+      withDecisions={withDecisions}
       escalations={escalations}
       questions={questions}
       reviews={reviews}
