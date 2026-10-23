@@ -20,7 +20,7 @@ function statusJson(): RexStatus {
     ...(rex.version ? { version: rex.version } : {}),
     server: rex.server,
     helpers: helpersOn("rex", cfg) ? "on" : "off",
-    rotation: cfg.rotate === "on" ? "on" : "off",
+    rotation: "off",
   };
 }
 
@@ -31,7 +31,7 @@ function statusText(): string {
     s.helpers === "on"
       ? "the Rex helpers are on for this computer: a seat in a terminal that takes OSC 7501 shows when a person is needed or work waits for review. Stays on this computer"
       : "the Rex helpers are off for this computer (kiwi terminal download rex turns them on; nothing of them is loaded while off)";
-  return `${where}; ${on} Rotation for this computer is ${s.rotation}.`;
+  return `${where}; ${on}`;
 }
 
 export const rexCommands: Record<string, Command> = {

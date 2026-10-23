@@ -28,7 +28,6 @@ import { factCommands } from "./commands/facts.ts";
 import { leaseCommands } from "./commands/leases.ts";
 import { taskCommands } from "./commands/tasks.ts";
 import { toolCommands } from "./commands/tools.ts";
-import { rotateCommands } from "./commands/rotate.ts";
 import { contextLineCommands } from "./commands/context-line.ts";
 import { seatCommands } from "./commands/seat.ts";
 import { rexCommands } from "./commands/rex.ts";
@@ -72,7 +71,6 @@ const commands: Record<string, Command> = {
   ...leaseCommands,
   ...taskCommands,
   ...toolCommands,
-  ...rotateCommands,
   ...contextLineCommands,
   ...seatCommands,
   ...rexCommands,

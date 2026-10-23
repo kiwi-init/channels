@@ -506,6 +506,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
+      - run: brew install tmux
       - run: bun scripts/ci-tests.ts all --shard=${{ matrix.shard }}/3
       - if: matrix.shard == 1
         run: |

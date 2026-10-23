@@ -3,6 +3,8 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig } from "../src/config.ts";
+import { pidAlive } from "../src/seats.ts";
+import { tmuxPastesFlag } from "../src/loop/kimi.ts";
 import { daemonSock, stopDaemon } from "../src/daemon.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { kiwiCmd } from "./owner.ts";
@@ -22,6 +24,7 @@ const claudeDir = scratch("claude");
 const codexDir = scratch("codex");
 const grokDir = scratch("grok");
 const mimoDir = scratch("mimo");
+const kimiDir = scratch("kimi");
 const bin = scratch("bin");
 const owner = scratch("owner");
 const agent = scratch("agent");
@@ -37,6 +40,7 @@ const base = (home: string): Env => ({
   CODEX_HOME: codexDir,
   GROK_HOME: grokDir,
   MIMOCODE_HOME: mimoDir,
+  KIMI_CODE_HOME: kimiDir,
   KIWI_MODEL: "test-model",
   CLAUDE_PROJECT_DIR: "",
 });
@@ -67,7 +71,8 @@ type Seen =
   | { kind: "start"; harness: string; pid: number; argv: string[]; token: boolean; as?: string; channel?: string; marker: boolean; thread?: string }
   | { kind: "done"; pid: number; out: string }
   | { kind: "term"; pid: number }
-  | { kind: "ignored-term"; pid: number };
+  | { kind: "ignored-term"; pid: number }
+  | { kind: "typed"; pid: number; prompt: string; stray: number };
 const seen = (): Seen[] =>
   existsSync(record)
     ? readFileSync(record, "utf8")
@@ -191,6 +196,49 @@ db.prepare("INSERT INTO message (id, session_id, time_created, data) VALUES ('m1
 setInterval(() => {}, 1_000);
 `;
 
+const FAKE_KIMI = `#!${process.execPath}
+import { appendFileSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+const record = ${JSON.stringify(record)};
+const say = (o) => appendFileSync(record, JSON.stringify(o) + "\\n");
+process.on("SIGTERM", () => { say({ kind: "term", pid: process.pid }); process.exit(143); });
+const argv = process.argv.slice(2);
+say({ kind: "start", harness: "kimi", pid: process.pid, argv, token: !!process.env.KIWI_SEAT_TOKEN, as: process.env.KIWI_AS, channel: process.env.KIWI_CHANNEL, marker: !!process.env.CLAUDE_CODE_SESSION_ID });
+process.stdout.write("Model: fake\\r\\nNo session yet — one will be created on your first message.\\r\\n> ");
+await Bun.sleep(1_000);
+process.stdout.write("\\x1b[?2004h");
+process.stdin.setRawMode(true);
+process.stdin.resume();
+let got = "";
+const prompt = await new Promise((resolve) => {
+  process.stdin.on("data", (d) => {
+    got += d.toString();
+    const open = got.indexOf("\\x1b[200~");
+    const close = got.indexOf("\\x1b[201~");
+    if (open >= 0 && close > open && /[\\r\\n]/.test(got.slice(close + 6))) resolve(got.slice(open + 6, close));
+  });
+});
+const session = "session_" + crypto.randomUUID();
+const dir = join(process.env.KIMI_CODE_HOME, "sessions", "wd_fake_1", session);
+mkdirSync(join(dir, "agents", "main"), { recursive: true });
+writeFileSync(join(dir, "state.json"), JSON.stringify({ id: session, cwd: realpathSync(process.cwd()), createdAt: Date.now() }));
+const wire = (o) => appendFileSync(join(dir, "agents", "main", "wire.jsonl"), JSON.stringify(o) + "\\n");
+wire({ type: "turn.prompt", text: prompt });
+const stray = Bun.spawn(["bash", "-c", "exec -a 'kiwi listen --once' sleep 120"], { stdout: "ignore", stderr: "ignore" });
+say({ kind: "typed", pid: process.pid, prompt, stray: stray.pid });
+await Bun.sleep(1_500);
+const task = /This session is for (T\\d+)/.exec(prompt)?.[1];
+if (task) {
+  wire({ type: "tool.call" });
+  const p = Bun.spawn(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: process.env, stdout: "pipe", stderr: "pipe" });
+  const out = (await new Response(p.stdout).text()) + (await new Response(p.stderr).text());
+  await p.exited;
+  say({ kind: "done", pid: process.pid, out });
+}
+wire({ type: "turn.ended" });
+setInterval(() => {}, 1_000);
+`;
+
 beforeAll(async () => {
   server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir });
   writeFileSync(join(bin, "claude"), FAKE);
@@ -201,6 +249,8 @@ beforeAll(async () => {
   chmodSync(join(bin, "grok"), 0o755);
   writeFileSync(join(bin, "mimo"), FAKE_MIMO);
   chmodSync(join(bin, "mimo"), 0o755);
+  writeFileSync(join(bin, "kimi"), FAKE_KIMI);
+  chmodSync(join(bin, "kimi"), 0o755);
   mkdirSync(join(mimoDir, "state"), { recursive: true });
   writeFileSync(join(mimoDir, "state", "model.json"), JSON.stringify({ recent: [{ providerID: "xiaomi", modelID: "mimo-test" }] }));
   const code = /join code: (\S+)/.exec(await ok(owner, ["create", "loop", "--as", "boss"]))![1]!;
@@ -445,4 +495,86 @@ test("with --harness mimo, the loop passes MiMoCode's chosen model, finds the se
   await until(() => !seatOf(agent)?.hold, "the seat released");
   expect(log).toContain(`bound to MiMoCode session ${start.thread}`);
   expect(log).toContain(`${id} is over; its session ended`);
+});
+
+const tmuxPastes = !!Bun.which("tmux") && tmuxPastesFlag(new TextDecoder().decode(Bun.spawnSync(["tmux", "-V"]).stdout));
+const shWord = (w: string) => `'${w.replace(/'/g, "'\\''")}'`;
+
+test.skipIf(!tmuxPastes)("with --harness kimi in tmux 3.7 or newer, the loop types the first prompt once Kimi is ready, binds the seat to its process, and stops the listener it left", async () => {
+  const before = seen().length;
+  const id = /added (T\d+)/.exec(await ok(owner, ["--as", "human", "task", "add", "kimi work", "--owner", me, "--ask", want], { CLAUDECODE: "" }))![1]!;
+  const outside = spawn(agent, ["loop", "--harness", "kimi"], { PATH: `${bin}:${process.env.PATH}`, SHELL: "/bin/sh", TMUX: "", TMUX_PANE: "" });
+  const [refusal, code] = await Promise.all([new Response(outside.stderr).text(), outside.exited]);
+  expect(code).not.toBe(0);
+  expect(refusal).toContain("runs only inside tmux");
+
+  const where = scratch("tmux");
+  const sock = join(where, "s");
+  const logFile = join(where, "loop.log");
+  const env: Env = { ...base(agent), PATH: `${bin}:${process.env.PATH}`, SHELL: "/bin/sh", CLAUDECODE: "", CLAUDE_PID: "", CLAUDE_CODE_SESSION_ID: "" };
+  const line = ["exec", "env", ...Object.entries(env).map(([k, v]) => shWord(`${k}=${v}`)), ...kiwiCmd(["loop", "--harness", "kimi"]).map(shWord), `2>>${shWord(logFile)}`].join(" ");
+  const tmux = (...args: string[]) => Bun.spawnSync(["tmux", "-S", sock, ...args], { stdout: "pipe", stderr: "pipe" });
+  expect(tmux("new-session", "-d", "-s", "loop", "-x", "200", "-y", "50", "-c", agent, line).exitCode).toBe(0);
+  const log = () => (existsSync(logFile) ? readFileSync(logFile, "utf8") : "");
+  const fail = (e: unknown) => {
+    tmux("kill-server");
+    throw new Error(`${String(e)}\n${JSON.stringify(seen().slice(before))}\n${log()}`);
+  };
+  try {
+    await until(
+      () =>
+        seen()
+          .slice(before)
+          .some((s) => s.kind === "typed"),
+      "the typed first prompt",
+    ).catch(fail);
+    const start = seen()
+      .slice(before)
+      .find((s) => s.kind === "start");
+    const typed = seen()
+      .slice(before)
+      .find((s) => s.kind === "typed");
+    if (start?.kind !== "start" || typed?.kind !== "typed") throw new Error("no start");
+    expect(start.harness).toBe("kimi");
+    expect(start.token).toBe(false);
+    expect(start.argv).toEqual([]);
+    expect(typed.prompt).toContain(`This session is for ${id} “kimi work”`);
+    expect(typed.prompt).toMatch(/\r|\n/);
+    expect(typed.prompt).toMatch(/\(Kiwi loop launch [0-9a-f]{18}\)$/);
+    await until(() => seatOf(agent)?.pid === start.pid, "the seat bound to Kimi's process").catch(fail);
+    expect(seatOf(agent)?.harness).toBe("kimi");
+
+    await until(() => seen().some((s) => s.kind === "term" && s.pid === start.pid), "the Kimi session's end").catch(fail);
+    const done = seen().find((s) => s.kind === "done" && s.pid === start.pid);
+    expect(done?.kind === "done" && done.out).toContain(id);
+    expect(await ok(owner, ["--as", "human", "task", "show", id], { CLAUDECODE: "" })).toContain("state: done");
+    await until(() => !pidAlive(typed.stray), "the stray listener stopped").catch(fail);
+
+    const loopPid = Number(new TextDecoder().decode(tmux("display-message", "-p", "-t", "loop", "#{pane_pid}").stdout).trim());
+    process.kill(loopPid, "SIGTERM");
+    await until(() => !seatOf(agent)?.hold, "the seat released").catch(fail);
+    expect(log()).toContain("stopped 1 kiwi listener the session left running");
+    expect(log()).toContain(`${id} is over; its session ended`);
+  } finally {
+    tmux("kill-server");
+  }
+});
+
+test("on tmux older than 3.7, kiwi loop --harness kimi refuses up front instead of waiting for a paste flag tmux can't report", async () => {
+  const shim = scratch("oldtmux");
+  writeFileSync(
+    join(shim, "tmux"),
+    `#!/bin/sh
+case "$*" in
+  *"#{version}"*) echo 3.6a ;;
+  *"#{pane_pid}"*) echo ${process.pid} ;;
+  *) exit 0 ;;
+esac
+`,
+  );
+  chmodSync(join(shim, "tmux"), 0o755);
+  const loop = spawn(agent, ["loop", "--harness", "kimi"], { PATH: `${shim}:${bin}:${process.env.PATH}`, SHELL: "/bin/sh", TMUX: `${join(shim, "sock")},1,0`, TMUX_PANE: "%1" });
+  const [refusal, code] = await Promise.all([new Response(loop.stderr).text(), loop.exited]);
+  expect(code).not.toBe(0);
+  expect(refusal).toContain("Kimi Code's first prompt needs tmux 3.7 or newer, to know when it can paste; this tmux is 3.6a");
 });

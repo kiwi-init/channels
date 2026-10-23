@@ -90,26 +90,6 @@ export function rexInstance(place: RexPlace, bin: string | null = rexBinary()): 
   return typeof id === "string" && id ? id : null;
 }
 
-function blocksIn(v: unknown): unknown[] | null {
-  const list = listIn(v, ["blocks", "list", "ids", "block_ids"], true);
-  if (list) return list;
-  const record = object(v);
-  const placed = record?.placed;
-  const detached = record?.detached;
-  if (Array.isArray(placed) || Array.isArray(detached)) return [...(Array.isArray(placed) ? placed : []), ...(Array.isArray(detached) ? detached : [])];
-  return null;
-}
-
-export function rexBlockPresent(place: RexPlace, bin: string | null = rexBinary()): boolean | null {
-  const list = blocksIn(rexApi(place, "session.list_blocks", {}, bin));
-  if (!list) return null;
-  return list.some((item) => {
-    if (typeof item === "string") return item === place.block;
-    const block = object(item);
-    return block?.block_id === place.block || block?.id === place.block;
-  });
-}
-
 export function rexScreen(place: RexPlace, bin: string | null = rexBinary()): string | null {
   const got = blockCall(place, "format", { format: "vt" }, bin);
   if (typeof got === "string") return got;
