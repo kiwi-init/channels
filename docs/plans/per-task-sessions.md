@@ -1,8 +1,11 @@
 # Plan: one fresh agent session per task
 
-Status: adopted by the owner, 2026-10-21, with rotation to be removed; not built yet. Facts below come
-from spikes on a laptop against a local relay, at `main` `b3985031` (kiwi 0.22.0), with each
-harness in its own tmux window and a throwaway `HOME`.
+Status: adopted by the owner, 2026-10-21, with rotation to be removed. Built, 2026-10-23: the held
+seat (#654), `kiwi loop` for Claude Code (#760, with review fixes in #770), Codex (#763), Grok (#778),
+MiMoCode (#787) and Kimi Code (#793), rotation removed (#799), and [docs/agents.md](../agents.md)
+says how a seat runs it. Follow-ups from the reviews are in T588, T589, T592, T611 and T1020. Facts
+below come from spikes on a laptop against a local relay, at `main` `b3985031` (kiwi 0.22.0), with
+each harness in its own tmux window and a throwaway `HOME`.
 
 ## Why
 

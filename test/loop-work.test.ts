@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
@@ -8,6 +8,9 @@ import { fold, type Roster } from "@kiwi/core/state.ts";
 import { claudeArgv, claudeSession } from "../src/loop/claude.ts";
 import { codexArgv, codexIdle, codexThread } from "../src/loop/codex.ts";
 import { grokArgv, grokIdle, grokSession } from "../src/loop/grok.ts";
+import { mimoArgv, mimoIdle, mimoSession } from "../src/loop/mimo.ts";
+import { isListener, kimiArgv, kimiIdle, kimiScreen, kimiSession, listenersUnder, stopStrays, strayKey, tmuxPastesFlag, type Proc } from "../src/loop/kimi.ts";
+import { Database } from "bun:sqlite";
 import { firstPrompt, nextWork, workOver } from "../src/loop/work.ts";
 
 const ids: Record<string, Identity> = {};
@@ -273,5 +276,167 @@ describe("the Grok recipe", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("the MiMoCode recipe", () => {
+  const SCHEMA =
+    "CREATE TABLE IF NOT EXISTS session (id text PRIMARY KEY, parent_id text, directory text NOT NULL, time_created integer NOT NULL); CREATE TABLE IF NOT EXISTS message (id text PRIMARY KEY, session_id text NOT NULL, agent_id text NOT NULL DEFAULT 'main', time_created integer NOT NULL, data text NOT NULL); CREATE TABLE IF NOT EXISTS part (id text PRIMARY KEY, message_id text NOT NULL, session_id text NOT NULL, time_created integer NOT NULL, data text NOT NULL);";
+  const home = () => {
+    const h = mkdtempSync(join(tmpdir(), "kiwi-loop-mimo-"));
+    mkdirSync(join(h, "data"), { recursive: true });
+    mkdirSync(join(h, "state"), { recursive: true });
+    return h;
+  };
+
+  test("the model given, else the one chosen in MiMoCode, then the prompt; never an effort", () => {
+    const h = home();
+    try {
+      const env = { MIMOCODE_HOME: h };
+      expect(mimoArgv({ bin: "mimo", model: "xiaomi/x", prompt: "go" }, env)).toEqual(["mimo", "-m", "xiaomi/x", "--prompt", "go"]);
+      expect(mimoArgv({ bin: "mimo", prompt: "go" }, env)).toEqual(["mimo", "--prompt", "go"]);
+      writeFileSync(join(h, "state", "model.json"), JSON.stringify({ recent: [{ providerID: "xiaomi", modelID: "mimo-v2.6-pro" }], variant: {} }));
+      expect(mimoArgv({ bin: "mimo", prompt: "go" }, env)).toEqual(["mimo", "-m", "xiaomi/mimo-v2.6-pro", "--prompt", "go"]);
+    } finally {
+      rmSync(h, { recursive: true, force: true });
+    }
+  });
+
+  test("the launch's session is the top-level one in this folder started after it with the nonce in a part; idle once its last message is a finished answer", () => {
+    const h = home();
+    const db = new Database(join(h, "data", "mimocode.db"));
+    try {
+      const env = { MIMOCODE_HOME: h };
+      const cwd = h;
+      const dir = realpathSync(h);
+      const now = Date.now();
+      db.exec(SCHEMA);
+      const session = db.prepare("INSERT INTO session (id, parent_id, directory, time_created) VALUES (?1, ?2, ?3, ?4)");
+      const part = db.prepare("INSERT INTO part (id, message_id, session_id, time_created, data) VALUES (?1, 'm', ?2, ?3, ?4)");
+      const message = db.prepare("INSERT INTO message (id, session_id, time_created, data) VALUES (?1, ?2, ?3, ?4)");
+      session.run("ses_old", null, dir, now - 60_000);
+      part.run("p1", "ses_old", now - 60_000, '{"type":"text","text":"(Kiwi loop launch abc123)"}');
+      session.run("ses_child", "ses_x", dir, now + 100);
+      part.run("p2", "ses_child", now + 100, '{"type":"text","text":"(Kiwi loop launch abc123)"}');
+      session.run("ses_elsewhere", null, "/somewhere/else", now + 100);
+      part.run("p3", "ses_elsewhere", now + 100, '{"type":"text","text":"(Kiwi loop launch abc123)"}');
+      expect(mimoSession("abc123", now, cwd, env)).toBeNull();
+      session.run("ses_mine", null, dir, now + 200);
+      part.run("p4", "ses_mine", now + 200, '{"type":"text","text":"(Kiwi loop launch abc123)"}');
+      expect(mimoSession("abc123", now, cwd, env)).toBe("ses_mine");
+
+      expect(mimoIdle("ses_mine", env)).toEqual({ idle: false, since: null });
+      message.run("m1", "ses_mine", now + 300, JSON.stringify({ role: "user", time: { created: now + 300 } }));
+      expect(mimoIdle("ses_mine", env).idle).toBe(false);
+      message.run("m2", "ses_mine", now + 400, JSON.stringify({ role: "assistant", time: { created: now + 400 } }));
+      expect(mimoIdle("ses_mine", env).idle).toBe(false);
+      message.run("m3", "ses_mine", now + 500, JSON.stringify({ role: "assistant", time: { created: now + 500, completed: now + 900 } }));
+      expect(mimoIdle("ses_mine", env)).toEqual({ idle: true, since: now + 900 });
+    } finally {
+      db.close();
+      rmSync(h, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("the Kimi Code recipe", () => {
+  test("the model, and no prompt: it's typed in once the screen is ready, never into the trust prompt", () => {
+    expect(kimiArgv({ bin: "kimi", model: "kimi-code/k3" })).toEqual(["kimi", "-m", "kimi-code/k3"]);
+    expect(kimiArgv({ bin: "kimi" })).toEqual(["kimi"]);
+    expect(kimiScreen("Model: K3-256k\nNo session yet — one will be created on your first message.\n│ > ")).toBe("ready");
+    expect(kimiScreen("Trust this folder?\n❯ Trust and continue\nExit")).toBe("trust");
+    expect(kimiScreen("")).toBe("starting");
+  });
+
+  test("the launch's session is the earliest one for this folder started after it whose wire log holds its nonce; idle once its turn ended", () => {
+    const home = mkdtempSync(join(tmpdir(), "kiwi-loop-kimi-"));
+    try {
+      const env = { KIMI_CODE_HOME: home };
+      const cwd = realpathSync(home);
+      const now = Date.now();
+      const write = (wd: string, id: string, at: number, folder: string, wire: string[]) => {
+        const dir = join(home, "sessions", wd, id);
+        mkdirSync(join(dir, "agents", "main"), { recursive: true });
+        writeFileSync(join(dir, "state.json"), JSON.stringify({ id, cwd: folder, createdAt: at }));
+        writeFileSync(join(dir, "agents", "main", "wire.jsonl"), wire.join("\n") + "\n");
+        return dir;
+      };
+      const prompt = JSON.stringify({ type: "turn.prompt", text: "(Kiwi loop launch abc123)" });
+      write("wd_x_1", "session_old", now - 60_000, cwd, [prompt]);
+      write("wd_y_2", "session_elsewhere", now + 100, "/some/other", [prompt]);
+      expect(kimiSession("abc123", now, cwd, env)).toBeNull();
+      const later = write("wd_x_1", "session_later", now + 900, cwd, [prompt]);
+      const mine = write("wd_x_1", "session_mine", now + 200, cwd, [prompt, JSON.stringify({ type: "step.begin" })]);
+      expect(kimiSession("abc123", now, cwd, env)).toEqual({ session: "session_mine", dir: mine });
+      expect(later).not.toBe(mine);
+
+      expect(kimiIdle(mine).idle).toBe(false);
+      writeFileSync(
+        join(mine, "agents", "main", "wire.jsonl"),
+        [prompt, JSON.stringify({ type: "tool.call" }), JSON.stringify({ type: "turn.ended" }), JSON.stringify({ type: "context.append_loop_event" })].join("\n") + "\n",
+      );
+      expect(kimiIdle(mine)).toMatchObject({ idle: true });
+      expect(kimiIdle(join(home, "nowhere"))).toEqual({ idle: false, since: null });
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("the kiwi listeners a session left running are found under it, by pid and start time", async () => {
+    const parent = Bun.spawn(["sh", "-c", "bash -c 'exec -a \"kiwi listen --once\" sleep 30' & sleep 30 & wait"], { stdout: "ignore", stderr: "ignore" });
+    try {
+      let found: { pid: number; start: string }[] = [];
+      for (let i = 0; i < 50 && found.length === 0; i++) {
+        await Bun.sleep(50);
+        found = listenersUnder(parent.pid);
+      }
+      expect(found).toHaveLength(1);
+      expect(found[0]!.start).toMatch(/\d{4}$/);
+    } finally {
+      parent.kill("SIGKILL");
+      for (const s of listenersUnder(parent.pid)) process.kill(s.pid, "SIGKILL");
+    }
+  });
+
+  test("only a listener still running with the pid and start time recorded is stopped; a reused pid, another command or an unkillable process isn't", () => {
+    const start = "Fri Oct 23 13:25:11 2026";
+    const procs: Proc[] = [
+      { pid: 101, ppid: 1, start, args: "/home/u/.kiwi/bin/kiwi listen --once" },
+      { pid: 102, ppid: 1, start: "Fri Oct 23 15:00:00 2026", args: "/home/u/.kiwi/bin/kiwi listen --once" },
+      { pid: 103, ppid: 1, start, args: "vim notes" },
+      { pid: 104, ppid: 1, start, args: "kiwi listen" },
+    ];
+    const recorded = new Set([101, 102, 103, 104].map((pid) => strayKey({ pid, start })));
+    const signalled: number[] = [];
+    const kill = (pid: number) => {
+      if (pid === 104) throw Object.assign(new Error("EPERM"), { code: "EPERM" });
+      signalled.push(pid);
+    };
+    expect(stopStrays(recorded, procs, kill)).toBe(1);
+    expect(signalled).toEqual([101]);
+  });
+
+  test("a kiwi listen is told by the kiwi command's own words, quickly even on a long command line", () => {
+    expect(isListener("/home/u/.kiwi/bin/kiwi listen --once")).toBe(true);
+    expect(isListener("kiwi -c dev --as fond-owl listen --once")).toBe(true);
+    expect(isListener("sh -c kiwi hook listen")).toBe(true);
+    expect(isListener("kiwi --quiet listen")).toBe(true);
+    expect(isListener("kiwi send listen")).toBe(false);
+    expect(isListener("bun test test/kiwi/listen.test.ts")).toBe(false);
+    expect(isListener("rg listen /home/u/kiwi")).toBe(false);
+    const long = `kiwi ${"-x ".repeat(5_000)}nope`;
+    const at = performance.now();
+    expect(isListener(long)).toBe(false);
+    expect(performance.now() - at).toBeLessThan(50);
+  });
+
+  test("bracketed paste can be checked from tmux 3.7 on", () => {
+    expect(tmuxPastesFlag("3.6a")).toBe(false);
+    expect(tmuxPastesFlag("tmux 3.4")).toBe(false);
+    expect(tmuxPastesFlag("3.7")).toBe(true);
+    expect(tmuxPastesFlag("tmux 3.8")).toBe(true);
+    expect(tmuxPastesFlag("next-4.0")).toBe(true);
+    expect(tmuxPastesFlag("master")).toBe(true);
+    expect(tmuxPastesFlag("")).toBe(false);
   });
 });

@@ -66,6 +66,7 @@
         "src/preload-eb.ts",
         "src/preload.ts",
         "src/channels.ts",
+        "src/keys-worker.ts",
         "scripts/*.ts",
         "electrobun.config.ts"
       ],

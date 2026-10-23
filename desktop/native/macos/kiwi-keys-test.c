@@ -1,4 +1,5 @@
 #include <CoreFoundation/CoreFoundation.h>
+#include <Security/Security.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -104,6 +105,17 @@ static void check_prefix(const char *what, const char *in, size_t len, const cha
   }
 }
 
+static void forget(const char *account) {
+  CFStringRef a = CFStringCreateWithCString(kCFAllocatorDefault, account, kCFStringEncodingUTF8);
+  CFMutableDictionaryRef q = CFDictionaryCreateMutable(kCFAllocatorDefault, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+  CFDictionarySetValue(q, kSecClass, kSecClassGenericPassword);
+  CFDictionarySetValue(q, kSecAttrService, service);
+  CFDictionarySetValue(q, kSecAttrAccount, a);
+  SecItemDelete(q);
+  CFRelease(q);
+  CFRelease(a);
+}
+
 static uint64_t rng = 0x9e3779b97f4a7c15ULL;
 
 static uint64_t next(void) {
@@ -114,7 +126,7 @@ static uint64_t next(void) {
 }
 
 static void fuzz(int rounds) {
-  static const char *words[] = {"get", "set ", "legacy ", "done", "key ", "QQ==", "AAAA", "=", "\n", " ", "\0", "kiwi-desktop", "\xff\xfe"};
+  static const char *words[] = {"get", "set ", "legacy ", "done", "finished", "finish", "drop", "key ", "QQ==", "AAAA", "=", "\n", " ", "\0", "kiwi-desktop", "\xff\xfe"};
   static char in[12288];
   static char out[OUT_CAP];
   for (int r = 0; r < rounds; r++) {
@@ -147,6 +159,11 @@ static int parser(void) {
   snprintf(listed, sizeof listed, "legacy %s\n", legacy_name);
 
   check("no store key yet: none", "get\n", 4, "none\n");
+  check("no store key yet: not marked ready", "finished\n", 9, "none\n");
+  check("no store key yet: nothing to mark ready", "finish\n", 7, "fail there's no store key to mark ready\n");
+  check("no key made in this session: nothing to take back", "drop\n", 5, "fail the launcher only takes back a store key it made in this session\n");
+  check("a key made, marked and taken back in one session is gone, mark and all", "set QUJD\nfinished\nfinish\nfinished\ndrop\nget\nfinished\n", 52, "ok\nnone\nok\nok\nok\nnone\nnone\n");
+  check("a session takes its key back only once", "set QUJD\ndrop\ndrop\nget\n", 23, "ok\nok\nfail the launcher only takes back a store key it made in this session\nnone\n");
   check("an unknown request", "dump\n", 5, "fail the launcher doesn't know that request\n");
   check("an empty line", "\n", 1, "fail the launcher doesn't know that request\n");
   check("set with no space", "set\n", 4, "fail the launcher doesn't know that request\n");
@@ -165,7 +182,15 @@ static int parser(void) {
   check("a second key is refused, and the first one read back", "set QUI=\nget\n", 14, "fail the keychain already holds a store key, and Channels never replaces one\nkey QQ==\n");
   check("done ends the session: nothing after it is answered", "done\nget\nget\n", 13, "ok\n");
   check("many requests in one write, one answer each", "get\ndump\nget\n", 13, "key QQ==\nfail the launcher doesn't know that request\nkey QQ==\n");
+  check("a key saved in an earlier session isn't marked ready yet", "finished\n", 9, "none\n");
+  check("finish marks it, and finished says so", "finish\nfinished\n", 16, "ok\nok\n");
+  check("a later session can't take that key back, and it stays marked", "drop\nget\nfinished\n", 18, "fail the launcher only takes back a store key it made in this session\nkey QQ==\nok\n");
+  forget("store-key");
+  check("a mark left by a key deleted by hand doesn't count for the next key", "set QUI=\nfinished\n", 18, "ok\nnone\n");
+  check("finish moves the mark to the new key", "finish\nfinished\n", 16, "ok\nok\n");
   fuzz(1500);
+  forget("store-key");
+  forget("store-key-ready");
   return failures ? 1 : 0;
 }
 
