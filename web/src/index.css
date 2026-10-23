@@ -476,3 +476,12 @@ html.reduce-motion ::after {
   box-shadow: 0 0 0 1px var(--line);
   overflow: clip;
 }
+
+@utility sheet-over {
+  box-shadow: var(--shadow-pop);
+}
+
+@utility aside-room {
+  translate: calc(-1 * clamp(0px, var(--aside-on, 0) * (var(--aside, 0px) + 8px - (100cqw - var(--column, 100cqw)) / 2), max(0px, (100cqw - var(--column, 100cqw)) / 2)));
+  transition: translate 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}

@@ -444,7 +444,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
             {...handlers}
           >
             {onNewAgent && <NewAgent open={newAgent} onClose={() => setNewAgent(false)} code={member.code} roomId={roomId} channel={title} lead={state.lead} onPin={handlers.onPin} roster={roster} />}
-            <div className="flex h-full min-w-0 flex-1">
+            <div className="relative flex h-full min-w-0 flex-1">
               <ChannelSidebar
                 title={title}
                 icon={icon}
@@ -477,7 +477,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                 current={currentConversation}
                 onConversation={(key) => (leaveInfo(), openConversation(key))}
               />
-              <div className={cx("relative flex min-w-0 flex-1 md:sheet", info ? "hidden" : (root || side?.kind === "tasks") && "hidden md:flex")}>
+              <div className={cx("@container relative flex min-w-0 flex-1 md:sheet", info ? "hidden" : (root || side?.kind === "tasks") && "hidden md:flex")}>
                 <div className="relative flex min-w-0 flex-1 flex-col bg-canvas" style={{ "--head": `${headH}px`, "--foot": `${footH}px` } as CSSProperties}>
                   <Header
                     headRef={headRef}
@@ -503,7 +503,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
 
                   {tab === "tasks" || tab === "agents" ? (
                     <div className="absolute inset-0 overflow-y-auto pt-[calc(var(--head)+8px)]">
-                      <div className={cx("mx-auto w-full px-2 md:px-4", tab === "tasks" && "max-w-[960px]")}>
+                      <div className={cx("mx-auto w-full aside-room px-2 md:px-4", tab === "tasks" && "max-w-[960px] [--column:960px]")}>
                         {!ready ? (
                           slowToOpen && (
                             <Centered>
@@ -538,7 +538,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                           onScrolled(e.currentTarget)
                         }}
                       >
-                        <div className="relative mx-auto w-full max-w-[792px] px-4 pt-[calc(var(--head)+8px)] pb-[calc(var(--foot)+16px)]">
+                        <div className="relative mx-auto w-full max-w-[792px] aside-room px-4 pt-[calc(var(--head)+8px)] pb-[calc(var(--foot)+16px)] [--column:792px]">
                           {hereKey === "main" && needsYou(false)}
                           {hereKey === "main" && state.rooms.size > 1 && !search && <RoomChips rooms={[...state.rooms.values()]} value={cardRoom} onChange={setCardRoom} />}
                           {!ready && messages.length === 0 ? (
