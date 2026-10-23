@@ -14,6 +14,7 @@ export default {
     buildFolder: "release-eb/build",
     artifactFolder: "release-eb/artifacts",
     mac: { icons: "release-eb/icon.iconset" },
+    linux: { icon: "build/icons/512x512.png" },
   },
   runtime: { exitOnLastWindowClosed: false },
   scripts: { preBuild: "./scripts/eb-pre-build.ts", postBuild: "./scripts/eb-post-build.ts" },

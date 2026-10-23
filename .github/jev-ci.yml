@@ -1046,6 +1046,21 @@ jobs:
       launcher itself (a signed build's hardened runtime stops that one), or leaves anything
       running; it starts a release-id app only on CI, never on a person's Mac.
 
+  desktop-linux:
+    name: desktop / linux
+    inputs: ["desktop/src/**", "desktop/build/icons/**", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "package.json", "bun.lock"]
+    imports_from: ["desktop/src/main-eb.ts"]
+    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts"]
+    description: >-
+      On an ubuntu runner (Electrobun builds only for the host it runs on), builds the Electrobun
+      shell for Linux on WebKitGTK (issue #757, T444): web/dist, `electrobun prepare` (Hutch's
+      devkit, cached under ~/.hutch), then `bun run build:eb` (electrobun build --env=stable), with
+      scripts/eb-pre-build.ts making the Mac iconset only on macOS and scripts/eb-post-build.ts
+      copying web/dist into the bundle's Resources/app/views/internal on either OS (the Mac's native
+      shell and launcher only on macOS). Prints the bundle's tree and what each executable links
+      against, and keeps Electrobun's artifacts as electrobun-linux for 3 days. Fails when the
+      Linux build fails.
+
   cli-macos:
     name: cli / macos
     inputs: ["src/**", "packages/core/**", "test/**", "site/install", "site/install.sh", "desktop/src/**", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", ".github/workflows/release-build.yml", "package.json", "bun.lock", "bunfig.toml", "web/package.json"]

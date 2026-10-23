@@ -369,6 +369,43 @@ jobs:
           job: desktop-mac
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-mac'] }}
 
+  desktop-linux:
+    name: desktop / linux
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['desktop-linux']
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup
+      - run: bun run web:build
+      - id: electrobun
+        run: echo "version=$(bun -e 'console.log(require("./desktop/package.json").devDependencies.electrobun)')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.hutch
+          key: hutch-${{ runner.os }}-${{ runner.arch }}-electrobun-${{ steps.electrobun.outputs.version }}
+      - name: electrobun toolchain
+        working-directory: desktop
+        run: for i in 1 2 3; do bun run prepare:eb && exit 0; echo "electrobun prepare failed ($i of 3)"; sleep 20; done; exit 1
+      - working-directory: desktop
+        env:
+          DASH_RELEASE_OFFLINE: "1"
+        run: bun run build:eb
+      - name: the Linux bundle
+        if: ${{ !cancelled() }}
+        run: |
+          find desktop/release-eb -maxdepth 6 -not -path '*/views/internal/*' -printf '%M %10s %p\n' | sort -k3 | head -400
+          for f in $(find desktop/release-eb/build -maxdepth 4 -type f -perm -u+x); do echo "== $f"; file "$f"; ldd "$f" 2>/dev/null | head -40; done
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: electrobun-linux
+          path: desktop/release-eb/artifacts
+          if-no-files-found: warn
+          retention-days: 3
+          overwrite: true
+
   cli-macos:
     name: cli / macos
     needs: plan
@@ -476,7 +513,7 @@ jobs:
   # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, static, test-unit, test-flows-a, test-flows-b, build, shots, perf-runs, perf, desktop, desktop-mac, cli-macos, ios, ios-gestures, release-rehearsal]
+    needs: [plan, static, test-unit, test-flows-a, test-flows-b, build, shots, perf-runs, perf, desktop, desktop-mac, desktop-linux, cli-macos, ios, ios-gestures, release-rehearsal]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
