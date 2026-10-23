@@ -21,7 +21,7 @@ import { openInBrowser } from "./open.ts";
 import { claimInstance, handoffFor, type Instance } from "./single-instance.ts";
 import { bunBridge } from "./rpc-eb.ts";
 import { brokenStore, openStore, snapshot, store } from "./store.ts";
-import { openEbStore, unmarkedNote, v2Vault } from "./store-eb.ts";
+import { openEbStore, plainNote, unmarkedNote, v2Vault } from "./store-eb.ts";
 import { updateState } from "./updater.ts";
 import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts";
 import { minWindowWidth } from "./window-size.ts";
@@ -149,6 +149,8 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
   });
   const broken = brokenStore();
   if (broken) void Utils.showMessageBox({ type: "error", message: "Channels can't read its saved keys", detail: broken.message });
+  const plain = plainNote(opened);
+  if (plain) logMainError(new Error(plain));
   const unmarked = unmarkedNote(opened);
   if (unmarked) {
     logMainError(new Error(unmarked));

@@ -408,6 +408,13 @@ jobs:
       - name: AppImage tools
         if: ${{ !cancelled() }}
         run: sudo apt-get update -q && sudo apt-get install -y --no-install-recommends squashfs-tools
+      - name: the store on Linux, through a throwaway GNOME keyring and with no Secret Service
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
+        run: |
+          sudo apt-get install -y --no-install-recommends gnome-keyring libsecret-tools dbus
+          dbus-run-session -- sh -c 'printf throwaway | gnome-keyring-daemon --unlock --components=secrets >/dev/null && bun desktop/scripts/linux-store-check.ts keyring'
+          env -u DBUS_SESSION_BUS_ADDRESS bun desktop/scripts/linux-store-check.ts none
       - name: deb and AppImage, each at most 40 MB
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/package-linux.ts desktop/release-eb desktop/release-eb/linux

@@ -1181,14 +1181,21 @@ jobs:
     name: desktop / linux
     inputs: ["desktop/src/**", "desktop/build/icons/**", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "package.json", "bun.lock"]
     imports_from: ["desktop/src/main-eb.ts"]
-    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/package-linux.ts", "desktop/scripts/linux-files.ts", "desktop/scripts/appimage-squashfs.ts"]
+    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/package-linux.ts", "desktop/scripts/linux-files.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/scripts/linux-store-check.ts"]
     description: >-
       On an ubuntu runner (Electrobun builds only for the host it runs on), builds the Electrobun
       shell for Linux on WebKitGTK (issue #757, T444): web/dist, `electrobun prepare` (Hutch's
       devkit, cached under ~/.hutch), then `bun run build:eb` (electrobun build --env=stable), with
       scripts/eb-pre-build.ts making the Mac iconset only on macOS and scripts/eb-post-build.ts
       copying web/dist into the bundle's Resources/app/views/internal on either OS (the Mac's native
-      shell and launcher only on macOS). Then desktop/scripts/package-linux.ts makes today's two
+      shell and launcher only on macOS). Then desktop/scripts/linux-store-check.ts runs the app's
+      store (store-eb.ts openEbStore with keySources' Linux keychain key) twice: inside
+      dbus-run-session with a throwaway gnome-keyring unlocked, it plants the Electron app's
+      kiwi-desktop Safe Storage password under Chromium's libsecret schema and its v11 kiwi-store.bin,
+      and fails unless the first start imports it sealed under a store key the keyring keeps with its
+      ready mark, both copies at 0600, the next start reads store v2 without importing again, and
+      the old file stays; with no session bus, it fails unless the store opens in plain JSON at 0600
+      with the reason main.log gets (T1550). Then desktop/scripts/package-linux.ts makes today's two
       Linux downloads from Electrobun's plain stable artifact (never its self-extracting setup), without
       Electrobun's updater tools (bspatch, zig-zstd: only its Updater uses them, and these packages
       update as a whole file), its uninstall tool or its own Channels.desktop:
