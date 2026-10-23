@@ -1211,9 +1211,9 @@ jobs:
     imports_from: ["desktop/src/main-eb.ts"]
     always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/package-linux.ts", "desktop/scripts/linux-files.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/native/linux/**", "desktop/scripts/eb-linux-start.sh"]
     description: >-
-      On an Ubuntu 26.04 runner, pinned rather than ubuntu-latest while that label moves from 24.04
-      to 26.04 (on 24.04 WebKitGTK's bubblewrap sandbox can't set up its loopback, so the web
-      process dies and the start check crashes) (Electrobun builds only for the host it runs on), builds the Electrobun
+      On two runners at once, Ubuntu 24.04 and 26.04 (a matrix, each part saving its own jev-ci pass;
+      T2119: on 24.04 AppArmor's unprivileged user-namespace restriction keeps bubblewrap from setting up
+      its loopback, so WebKitGTK's sandbox can't start there) (Electrobun builds only for the host it runs on), builds the Electrobun
       shell for Linux on WebKitGTK (issue #757, T444): web/dist, `electrobun prepare` (Hutch's
       devkit, cached under ~/.hutch), then `bun run build:eb` (electrobun build --env=stable), with
       scripts/eb-pre-build.ts making the Mac iconset only on macOS and scripts/eb-post-build.ts
@@ -1254,13 +1254,19 @@ jobs:
       allow everything, as Electrobun's Allow/Block dialog is, never runs, a terminated web
       process reaches kiwi_watch_page's callback, kiwi_committed_url gives the page's committed URL (the bridge's
       trust check, from load-changed's commit as the Mac's from didCommitNavigation), and kiwi_sandbox_pages, asked from another thread, turns
-      WebKitGTK's bubblewrap sandbox on for the default context before its first web view (off without bwrap or
-      xdg-dbus-proxy on PATH: the AppImage on a system without them runs unsandboxed, with a main.log line; the
-      deb depends on both). desktop/scripts/eb-linux-start.sh then starts
+      WebKitGTK's bubblewrap sandbox on for the default context before its first web view once a trial
+      bwrap --unshare-all builds its namespaces (on 26.04), or leaves it off and says why (on 24.04, where
+      it can't: WebKit's web process would otherwise die in bwrap's loopback setup and abort the app;
+      also off without bwrap or xdg-dbus-proxy on PATH; main-eb prints the reason and writes it to main.log). desktop/scripts/eb-linux-start.sh then starts
       /opt/Channels/bin/launcher under Xvfb with a temp HOME and fails unless a window with
       WM_CLASS Channels (Electrobun's own class, the entry's StartupWMClass) titled Channels opens
-      within 30 s, a WebKitWebProcess of the app's own runs 5 s later inside a bwrap of the app's own
-      (so WebKitGTK's sandbox works under the runner's AppArmor), the app is still up, and nothing of it is left 10 s after SIGTERM. Both are kept as linux-packages for 3 days.
+      within 30 s, a WebKitWebProcess of the app's own runs 5 s later inside a bwrap of the app's own on 26.04,
+      and on 24.04 without one while the app says why, the app is still up, and nothing of it is left 10 s
+      after SIGTERM; it starts the AppImage (--appimage-extract-and-run) the same way. A last step, which
+      only prints and never fails, records what bwrap can do under the runner's AppArmor (the restriction,
+      the profiles naming bwrap or userns, and bwrap and unshare -Urn with and without a scratch unconfined
+      profile granting userns), for a deb profile that brings the sandbox to 24.04 later.
+      Each image's packages are kept as linux-packages-<image> for 3 days.
 
   cli-macos:
     name: cli / macos
