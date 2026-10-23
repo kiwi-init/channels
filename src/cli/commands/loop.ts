@@ -19,7 +19,7 @@ export const loopCommands: Record<string, Command> = {
       if (loadConfig().rotate === "on") return yield* die("rotation is on for this computer, and its Stop hook would clear the loop's sessions: run kiwi rotate off first");
       for (const key of SESSION_MARKERS) if (!key.startsWith("KIWI_")) delete process.env[key];
       const recipe = recipeFor(harness);
-      const bin = Bun.which(harness, { PATH: yield* Effect.promise(() => loginPath()) });
+      const bin = Bun.which(harness, { PATH: process.env.PATH ?? "" }) ?? Bun.which(harness, { PATH: yield* Effect.promise(() => loginPath()) });
       if (!bin) return yield* die(`${harness} isn't on your login shell's PATH`);
       const { alias, name } = yield* seatNamed;
       const cfg = (yield* config).channels[alias];

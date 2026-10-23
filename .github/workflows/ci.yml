@@ -329,6 +329,33 @@ jobs:
           job: desktop
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop'] }}
 
+  desktop-mac:
+    name: desktop / mac
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['desktop-mac']
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup
+      - run: bun run web:build
+      - working-directory: desktop
+        run: bun run typecheck:eb
+      - working-directory: desktop
+        if: ${{ !cancelled() }}
+        run: bun run build:eb
+      - if: ${{ !cancelled() }}
+        run: bun desktop/scripts/eb-size.ts desktop/release-eb
+      - name: the launcher keeps BUN_*, NODE_*, DYLD_* and JSC_* out of the app
+        if: ${{ !cancelled() }}
+        run: bun desktop/scripts/eb-env-check.ts desktop/release-eb
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        timeout-minutes: 1
+        with:
+          job: desktop-mac
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-mac'] }}
+
   cli-macos:
     name: cli / macos
     needs: plan
@@ -436,7 +463,7 @@ jobs:
   # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, static, test-unit, test-flows-a, test-flows-b, build, shots, perf-runs, perf, desktop, cli-macos, ios, ios-gestures, release-rehearsal]
+    needs: [plan, static, test-unit, test-flows-a, test-flows-b, build, shots, perf-runs, perf, desktop, desktop-mac, cli-macos, ios, ios-gestures, release-rehearsal]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

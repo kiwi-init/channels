@@ -12,5 +12,6 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["src", "scripts/fuses.ts", "scripts/smoke.ts"]
+  "include": ["src", "scripts/fuses.ts", "scripts/smoke.ts"],
+  "exclude": ["src/main-eb.ts"]
 }
