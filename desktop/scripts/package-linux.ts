@@ -10,6 +10,7 @@ import {
   DEB_POSTRM,
   DEB_PREINST,
   debControl,
+  ELECTROBUN_LAUNCHER,
   debName,
   desktopEntry,
   EXECUTABLE,
@@ -58,6 +59,8 @@ function plainApp(tmp: string): { app: string; arch: LinuxArch; version: string 
   rmSync(tar);
   const app = join(into, "Channels");
   if (!existsSync(join(app, "bin", "launcher"))) throw new Error(`package-linux: ${name} has no Channels/bin/launcher`);
+  if (!existsSync(join(app, "bin", ELECTROBUN_LAUNCHER)))
+    throw new Error(`package-linux: ${name} has no Channels/bin/${ELECTROBUN_LAUNCHER}, so its bin/launcher isn't the one that keeps the environment to an allowlist`);
   for (const path of LEFT_OUT) rmSync(join(app, path), { force: true });
   const { version } = JSON.parse(readFileSync(join(app, "Resources", "version.json"), "utf8")) as { version: unknown };
   if (typeof version !== "string") throw new Error(`package-linux: ${name}'s version.json names no version`);
