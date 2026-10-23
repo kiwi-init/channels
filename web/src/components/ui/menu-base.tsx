@@ -8,8 +8,8 @@ import { Icon, type IconSvgElement } from "../icon"
 // element that opens it as `trigger`; it keeps its own look.
 
 const POP = "rounded-card bg-raised p-1 text-ink shadow-pop outline-none"
-/** Popups grow out of their anchor on open and leave at once on close. */
-const POP_IN = "origin-(--transform-origin) transition-[opacity,scale] duration-120 ease-out data-starting-style:scale-[0.98] data-starting-style:opacity-0"
+const POP_IN =
+  "origin-(--transform-origin) transition-[opacity,scale] duration-120 ease-out data-ending-style:opacity-0 data-ending-style:duration-100 data-starting-style:scale-[0.98] data-starting-style:opacity-0"
 const ITEM =
   "flex w-full cursor-default items-center gap-2 rounded-ctl px-2 py-1.5 text-left text-ui outline-none select-none data-disabled:opacity-40 data-highlighted:bg-wash-2 data-highlighted:text-ink"
 

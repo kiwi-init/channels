@@ -288,14 +288,14 @@ button {
   animation: rise 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-@keyframes slide-in {
-  from {
-    transform: translateX(10px);
+@keyframes leave {
+  to {
     opacity: 0;
+    transform: translateY(3px) scale(0.99);
   }
 }
-.animate-slide-in {
-  animation: slide-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+.animate-leave {
+  animation: leave 0.16s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 
 @keyframes flash {

@@ -100,10 +100,10 @@ export function Palette({ open, onClose, commands: channels, actions }: { open: 
       }}
     >
       <Dialog.Portal>
-        <Dialog.Backdrop className="no-drag fixed inset-0 z-50 bg-overlay transition-opacity duration-120 data-starting-style:opacity-0" />
+        <Dialog.Backdrop className="no-drag fixed inset-0 z-50 bg-overlay transition-opacity duration-120 data-ending-style:opacity-0 data-starting-style:opacity-0" />
         <Dialog.Popup
           aria-label="Go to a channel or run a command"
-          className="no-drag fixed top-[14vh] left-1/2 z-50 flex max-h-[min(480px,70svh)] w-[calc(100%-2rem)] max-w-[560px] -translate-x-1/2 flex-col overflow-hidden rounded-card bg-raised shadow-pop transition-[opacity,scale] duration-120 ease-out outline-none data-starting-style:scale-[0.98] data-starting-style:opacity-0"
+          className="no-drag fixed top-[14vh] left-1/2 z-50 flex max-h-[min(480px,70svh)] w-[calc(100%-2rem)] max-w-[560px] -translate-x-1/2 flex-col overflow-hidden rounded-card bg-raised shadow-pop transition-[opacity,scale] duration-120 ease-out outline-none data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0"
         >
           <label className="flex h-12 shrink-0 items-center gap-2.5 px-4 shadow-[inset_0_-1px_0_var(--line)]">
             <Icon icon={Search01Icon} size={17} className="shrink-0 text-ink-3" />

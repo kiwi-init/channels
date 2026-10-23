@@ -1,5 +1,5 @@
 import { CancelCircleIcon, CheckmarkCircle02Icon, Loading03Icon } from "@hugeicons/core-free-icons"
-import type { ReactNode } from "react"
+import { Component, createRef, type ReactNode } from "react"
 
 import { colorOf, taskId, tasksAwaitingPeople, type AskHead, type ChannelState, type Task } from "@kiwi/core/state.ts"
 import { taskPr, type PrChecks } from "@kiwi/core/work.ts"
@@ -60,7 +60,7 @@ function TaskRow({
   const doing = agent && agent.load.current.some((t) => t.id === task.id) ? doingNow(agent) : null
   const pr = taskPr(state, task.id)
   return (
-    <li>
+    <li data-slide={`t${task.id}`} className="bg-canvas">
       <div
         role="button"
         tabIndex={0}
@@ -117,14 +117,55 @@ function AskGroup({ ask, count, state, children }: { ask: AskHead | null; count:
   const meta = ask ? `${memberName(state.members.get(ask.by), ask.by)} · #${ask.id}` : "No person's message holds these"
   return (
     <section aria-label={label} className="pt-4">
-      <h2 title={words || undefined} className="flex min-w-0 items-baseline gap-2 px-3 text-ui font-semibold">
-        <span className="truncate">{label}</span>
-        <span className="shrink-0 font-normal text-ink-3 tabular-nums">{count}</span>
-      </h2>
-      <p className="truncate px-3 pb-1.5 text-meta text-ink-3">{meta}</p>
+      <div data-slide={`g${ask?.id ?? "unfiled"}`}>
+        <h2 title={words || undefined} className="flex min-w-0 items-baseline gap-2 px-3 text-ui font-semibold">
+          <span className="truncate">{label}</span>
+          <span className="shrink-0 font-normal text-ink-3 tabular-nums">{count}</span>
+        </h2>
+        <p className="truncate px-3 pb-1.5 text-meta text-ink-3">{meta}</p>
+      </div>
       {children}
     </section>
   )
+}
+
+const SLIDE: KeyframeAnimationOptions = { duration: 280, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" }
+
+function slides(box: HTMLElement): Map<string, HTMLElement> {
+  return new Map([...box.querySelectorAll<HTMLElement>("[data-slide]")].map((el) => [el.dataset.slide ?? "", el]))
+}
+
+const SLIDES_UP_TO = 24
+
+class Reorder extends Component<{ order: string; rows: number; children: ReactNode }> {
+  box = createRef<HTMLDivElement>()
+
+  getSnapshotBeforeUpdate(prev: { order: string }): Map<string, number> | null {
+    const box = this.box.current
+    if (prev.order === this.props.order || this.props.rows > SLIDES_UP_TO || !box || document.documentElement.classList.contains("reduce-motion")) return null
+    return new Map([...slides(box)].map(([key, el]) => [key, el.getBoundingClientRect().top]))
+  }
+
+  componentDidUpdate(_prev: unknown, _state: unknown, first: Map<string, number> | null) {
+    const box = this.box.current
+    if (!first || !box) return
+    const near = (y: number) => y > -200 && y < window.innerHeight + 200
+    for (const [key, el] of slides(box)) {
+      const from = first.get(key)
+      if (from === undefined) continue
+      for (const a of el.getAnimations()) a.cancel()
+      const to = el.getBoundingClientRect().top
+      if (Math.abs(from - to) > 0.5 && (near(from) || near(to))) el.animate([{ transform: `translateY(${from - to}px)` }, { transform: "none" }], SLIDE)
+    }
+  }
+
+  render() {
+    return (
+      <div ref={this.box} className="@container pb-8">
+        {this.props.children}
+      </div>
+    )
+  }
 }
 
 export function TasksView({
@@ -166,8 +207,9 @@ export function TasksView({
         </div>
       </div>
     )
+  const order = groups.map((g) => `${g.key}:${g.tasks.map((t) => t.id).join(",")}`).join(" ")
   return (
-    <div className="@container pb-8">
+    <Reorder order={order} rows={groups.reduce((n, g) => n + g.tasks.length, 0)}>
       {showNeeds && <div className="px-3">{needs}</div>}
       {view === "needs" && !needs && <p className="px-3 pt-6 text-ui text-ink-3">Nothing needs you right now.</p>}
       {groups.map((g) => (
@@ -180,6 +222,6 @@ export function TasksView({
         </AskGroup>
       ))}
       {!groups.length && view !== "everything" && view !== "needs" && <p className="px-3 pt-6 text-ui text-ink-3">Nothing here right now.</p>}
-    </div>
+    </Reorder>
   )
 }

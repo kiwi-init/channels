@@ -31,3 +31,4 @@ jobs:
           name: perf-nightly
           path: ${{ runner.temp }}/perf-*.json
           if-no-files-found: ignore
+          overwrite: true

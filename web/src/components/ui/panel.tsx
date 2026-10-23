@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react"
 
 import { cx } from "@/lib/utils"
+import { m, Motion } from "../motion"
 
 // A side panel you can widen by dragging its left edge (or with the arrow keys
 // on that edge). Its width is kept per browser. On phones it fills the screen.
@@ -28,46 +29,54 @@ export function ResizablePanel({ children, className }: { children: ReactNode; c
   useEffect(() => localStorage.setItem(KEY, String(width)), [width])
 
   return (
-    <div className={cx("relative h-full w-full shrink-0 md:w-(--panel)", dragging && "select-none", className)} style={{ "--panel": `${shown}px` } as CSSProperties}>
-      {/* A div, not an hr: the browser gives an hr height 0, so the edge cannot be grabbed. */}
-      <div
-        role="separator"
-        tabIndex={0}
-        aria-orientation="vertical"
-        aria-label="Resize panel"
-        aria-valuemin={MIN}
-        aria-valuemax={MAX}
-        aria-valuenow={shown}
-        className={cx(
-          "absolute inset-y-0 -left-1 z-10 m-0 hidden w-2 cursor-col-resize touch-none border-0 bg-transparent transition-colors md:block",
-          "after:absolute after:inset-y-0 after:left-1 after:w-px after:bg-transparent hover:after:bg-line focus-visible:after:bg-ring",
-          dragging && "after:bg-ring"
-        )}
-        onPointerDown={(e) => {
-          if (e.button !== 0) return
-          e.preventDefault()
-          e.currentTarget.setPointerCapture(e.pointerId)
-          from.current = { x: e.clientX, width: shown }
-          setDragging(true)
-        }}
-        onPointerMove={(e) => from.current && setWidth(clamp(from.current.width + from.current.x - e.clientX))}
-        onPointerUp={() => ((from.current = null), setDragging(false))}
-        onPointerCancel={() => ((from.current = null), setDragging(false))}
-        onDoubleClick={() => setWidth(DEFAULT)}
-        onKeyDown={(e) => {
-          if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+    <Motion>
+      <m.div
+        initial={{ opacity: 0, x: 10 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: 10, transition: { duration: 0.16 } }}
+        className={cx("relative z-30 h-full w-full shrink-0 md:w-(--panel)", dragging && "select-none", className)}
+        style={{ "--panel": `${shown}px` } as CSSProperties}
+      >
+        {/* A div, not an hr: the browser gives an hr height 0, so the edge cannot be grabbed. */}
+        <div
+          role="separator"
+          tabIndex={0}
+          aria-orientation="vertical"
+          aria-label="Resize panel"
+          aria-valuemin={MIN}
+          aria-valuemax={MAX}
+          aria-valuenow={shown}
+          className={cx(
+            "absolute inset-y-0 -left-1 z-10 m-0 hidden w-2 cursor-col-resize touch-none border-0 bg-transparent transition-colors md:block",
+            "after:absolute after:inset-y-0 after:left-1 after:w-px after:bg-transparent hover:after:bg-line focus-visible:after:bg-ring",
+            dragging && "after:bg-ring"
+          )}
+          onPointerDown={(e) => {
+            if (e.button !== 0) return
             e.preventDefault()
-            setWidth(clamp(shown + (e.key === "ArrowLeft" ? 32 : -32)))
-          } else if (e.key === "Home") {
-            e.preventDefault()
-            setWidth(MIN)
-          } else if (e.key === "End") {
-            e.preventDefault()
-            setWidth(clamp(MAX))
-          }
-        }}
-      />
-      {children}
-    </div>
+            e.currentTarget.setPointerCapture(e.pointerId)
+            from.current = { x: e.clientX, width: shown }
+            setDragging(true)
+          }}
+          onPointerMove={(e) => from.current && setWidth(clamp(from.current.width + from.current.x - e.clientX))}
+          onPointerUp={() => ((from.current = null), setDragging(false))}
+          onPointerCancel={() => ((from.current = null), setDragging(false))}
+          onDoubleClick={() => setWidth(DEFAULT)}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+              e.preventDefault()
+              setWidth(clamp(shown + (e.key === "ArrowLeft" ? 32 : -32)))
+            } else if (e.key === "Home") {
+              e.preventDefault()
+              setWidth(MIN)
+            } else if (e.key === "End") {
+              e.preventDefault()
+              setWidth(clamp(MAX))
+            }
+          }}
+        />
+        {children}
+      </m.div>
+    </Motion>
   )
 }
