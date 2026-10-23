@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { fakeHost } from "../../test/fake-host.ts";
-import type { KeysPort, StoreSnapshot } from "../src/bridge.ts";
+import type { KeysPort, KeysRequest, StoreSnapshot } from "../src/bridge.ts";
+import type { KeysFrame } from "../src/keys-eb.ts";
 import { makeBridge } from "../src/calls.ts";
 import { onOurPage } from "../src/eb-bridge.ts";
 import { PAGE_URL } from "../src/eb-page.ts";
@@ -20,10 +21,15 @@ const channels: KeysPort = { request: () => new Promise(() => {}), onPush: () =>
 let at: string | null = PAGE_URL;
 let fromPage: (packet: unknown) => void = () => {};
 let toPage: (packet: unknown) => void = () => {};
+const keysAsked: { session: string; req: KeysRequest }[] = [];
 const main = bunBridge(
   handlers(shell.host),
   () => onOurPage(at),
   (packet) => toPage(wire(packet)),
+  async (session, req) => {
+    keysAsked.push({ session, req });
+    return { id: req.id, ok: true, value: null };
+  },
 );
 main.setTransport({ registerHandler: (h) => (fromPage = h) });
 const page = pageBridge(
@@ -83,5 +89,51 @@ describe("window.kiwi over Electrobun's RPC, both ends as the app wires them", (
       (receive) => (toPage = receive),
     );
     expect(await settled(loose.call("constructor" as "chooseFolder"))).toBe("refused the app has no such call");
+  });
+
+  test("keys: a page's request reaches main with its session and comes back, and main's frames reach the page", async () => {
+    at = PAGE_URL;
+    const session = "0123456789abcdef0123456789abcdef";
+    const frames: KeysFrame[] = [];
+    const off = page.onKeys((f) => frames.push(f));
+    expect(await page.keys(session, { id: 4, op: "nudge" } as KeysRequest)).toEqual({ id: 4, ok: true, value: null });
+    main.pushKeys({ session, push: { sub: 1, event: null } });
+    main.pushKeys({ session, restart: true });
+    await Bun.sleep(0);
+    off();
+    expect({ asked: keysAsked.at(-1), frames }).toEqual({
+      asked: { session, req: { id: 4, op: "nudge" } as KeysRequest },
+      frames: [
+        { session, push: { sub: 1, event: null } },
+        { session, restart: true },
+      ],
+    });
+  });
+
+  test("keys off our page: a request gets no answer and never reaches main, and frames aren't sent", async () => {
+    at = "https://evil.example/";
+    const before = keysAsked.length;
+    const frames: KeysFrame[] = [];
+    const off = page.onKeys((f) => frames.push(f));
+    expect(await settled(page.keys("0123456789abcdef0123456789abcdef", { id: 5, op: "nudge" } as KeysRequest))).toBe("no answer");
+    main.pushKeys({ session: "0123456789abcdef0123456789abcdef", restart: true });
+    await Bun.sleep(0);
+    off();
+    expect({ asked: keysAsked.length - before, frames }).toEqual({ asked: 0, frames: [] });
+    at = PAGE_URL;
+  });
+
+  test("keys with a session or request that isn't one is refused before main's keys see it", async () => {
+    at = PAGE_URL;
+    const before = keysAsked.length;
+    for (const [session, req] of [
+      ["short", { id: 1 }],
+      ["0123456789abcdef0123456789abcdef!", { id: 1 }],
+      ["0123456789abcdef0123456789abcdef", null],
+      ["0123456789abcdef0123456789abcdef", { id: "1" }],
+      ["0123456789abcdef0123456789abcdef", [1]],
+    ] as const)
+      expect(await settled(page.keys(session, req as unknown as KeysRequest))).toStartWith("refused keys takes");
+    expect(keysAsked.length - before).toBe(0);
   });
 });

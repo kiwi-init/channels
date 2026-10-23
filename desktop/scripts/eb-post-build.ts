@@ -45,5 +45,9 @@ execFileSync(
 );
 
 const app = path.join(contents, "Resources", "app");
+const keysWorker = await Bun.build({ entrypoints: [path.join(desktop, "src", "keys-worker.ts")], target: "bun" });
+const keysOut = keysWorker.outputs[0];
+if (!keysWorker.success || !keysOut) throw new Error(`the keys worker didn't bundle: ${keysWorker.logs.join("\n")}`);
+fs.writeFileSync(path.join(app, "bun", "keys.js"), await keysOut.text());
 const problems = bundleProblems(fs.readFileSync(path.join(app, "bun", "index.js"), "utf8"), fs.readFileSync(path.join(app, "views", "preload", "index.js"), "utf8"));
 if (problems.length) throw new Error(`eb-post-build: ${problems.join("; ")}`);
