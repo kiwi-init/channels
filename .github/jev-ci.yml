@@ -85,7 +85,7 @@ jobs:
 
   test-unit:
     name: test / unit
-    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/workflows/nightly.yml", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "desktop/package.json", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml", "ios/engine/**"]
+    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/workflows/nightly.yml", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "desktop/package.json", "desktop/scripts/eb-pins.ts", "desktop/electrobun-pins.json", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml", "ios/engine/**"]
     always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts", "scripts/ci-flows.ts", "scripts/ci-shards.ts"]
     description: >-
       test/desktop-linux-launcher.test.ts (Linux): desktop/native/linux/kiwi-launcher.c, compiled with
@@ -552,14 +552,7 @@ jobs:
       store through launcherKey and a stand-in launcher that keeps the key and mark as
       native/macos/kiwi-keys.c does: finished, finish and drop on the wire, a key made just before a
       failed first save opening as a first run, a stale mark, a deleted store refused after only get
-      and finished, a failed first save taking back only the key that start made (T1076), a key another
-      start marked never taken back, and finish refused for a key other than the one the store was sealed
-      under (T1582). test/desktop-store-eb.test.ts: the Electrobun app's store (desktop/src/store-eb.ts):
-      no launcher channel means no store, refused with its reason and nothing written; a first start
-      opens sealed, ends the launcher's session once and saves through store.ts's vault; Electron's
-      store is imported once through the launcher's kiwi-desktop password; a deleted store whose key is
-      marked is refused without reading a planted Electron store; and a refused ready mark leaves the
-      store open with a note for the person (T1582). With test/desktop-legacy-store.test.ts
+      and finished, and a failed first save taking back only the key that start made (T1076). With test/desktop-legacy-store.test.ts
       (desktop/src/legacy-store.ts, legacy-keys.ts): Electron's safeStorage format opened from what
       Electron itself wrote, v11 on a GNOME keyring and v10 on the macOS Keychain, Linux v10 with
       Chromium's fixed password (which counts as plain, not encrypted), a torn store read from its .bak asking the keychain once, an old
@@ -799,7 +792,14 @@ jobs:
       person may approve is in its reviews, done by the task's owner and dated by its open round, one
       waiting on an agent reviewer isn't, an agent's seat gets none, and the channel's latest line is
       its newest message outside the chat with the lead (a task thread's, with the thread it was said
-      in), #general's when nothing came after it. Fails if any of that breaks.
+      in), #general's when nothing came after it. And the Electrobun shell's page and pins:
+      test/desktop-eb-page.test.ts (desktop/src/eb-page.ts: the CSP meta first in a <head> found by
+      the page's structure, with only HTML's whitespace (tab, LF, FF, CR, space) allowed before it,
+      so a non-breaking space or a vertical tab is refused; the navigation rules and the one page
+      they allow; will-navigate read as the page, a refusal or a breach) and
+      test/desktop-eb-pins.test.ts (desktop/scripts/eb-pins.ts and desktop/electrobun-pins.json: the
+      pins moving with the electrobun dependency, a host without pins refused, a changed or
+      missing file named, a tree hash over every path and byte). Fails if any of that breaks.
 
   test-flows-a:
     name: test / flows-a
@@ -958,7 +958,7 @@ jobs:
       scripts/smoke-cli.ts drives the binary against a local relay (every allowed kiwi sh
       command compared with the source CLI, the MCP sh tool, kiwi doctor). Then bundles the
       Cloudflare worker (src/relay/worker.ts) with wrangler deploy --dry-run, failing on a Node-
-      or Bun-only import reaching it or an invalid wrangler.jsonc. Headless Chromium and the apt packages it needs come from .github/actions/browser, which installs the packages from cached .deb files and fails the job if they can't be installed.
+      or Bun-only import reaching it or an invalid wrangler.jsonc. Headless Chromium and the apt packages it needs come from .github/actions/browser, which installs the packages from .deb files cached for this very runner image (and Playwright's browsers cached per Ubuntu release, since its WebKit is built for one) and fails the job if they can't be installed.
 
   shots:
     name: build / shots
@@ -988,7 +988,7 @@ jobs:
       The shots are uploaded as the ui-shots artifact, WebKit's as ui-shots-webkit. Fails when the conversation isn't at its newest message (within 80px of the bottom) once the channel opens and again back from the Tasks tab (which it visits itself), at the wide size and, in the same run (--phone channel,tasks: the channel and Tasks screens on the channel already seeded), at phone size too (web/src/components/conversation/use-scroll.ts), or when the window's drag band would take a control of the open viewer (each app-region box added or taken away in document order, as Electron does), or when the seeding can't drive the
       dashboard or any screen can't be reached (a control renamed, moved or gone), so the shots
       keep up with the UI; each of these in either engine, so a screen or the conversation's place that works in
-      Chromium but not in WebKit fails too. Headless Chromium and the apt packages it needs come from .github/actions/browser, which installs the packages from cached .deb files and fails the job if they can't be installed.
+      Chromium but not in WebKit fails too. Headless Chromium and the apt packages it needs come from .github/actions/browser, which installs the packages from .deb files cached for this very runner image (and Playwright's browsers cached per Ubuntu release, since its WebKit is built for one) and fails the job if they can't be installed.
 
   perf:
     name: perf / scale
@@ -1019,7 +1019,7 @@ jobs:
       median plus 20% and comes down to its 0.20 budget as fixes land), writing the table and
       the gaps to the 0.20 budgets to the job summary and a perf-scale comment on the pull
       request. The soak's memory slopes are gated by the nightly workflow
-      (.github/workflows/nightly.yml), not here. Headless Chromium and the apt packages it needs come from .github/actions/browser, which installs the packages from cached .deb files and fails the job if they can't be installed.
+      (.github/workflows/nightly.yml), not here. Headless Chromium and the apt packages it needs come from .github/actions/browser, which installs the packages from .deb files cached for this very runner image (and Playwright's browsers cached per Ubuntu release, since its WebKit is built for one) and fails the job if they can't be installed.
 
   desktop:
     name: desktop / package
@@ -1060,51 +1060,60 @@ jobs:
 
   desktop-mac:
     name: desktop / mac
-    inputs: ["desktop/src/**", "desktop/native/**", "desktop/eb-tests/**", "desktop/build/icon.icns", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "test/fake-host.ts", "package.json", "bun.lock", "src/relay/**", "scripts/local-relay.ts", "scripts/perf-desktop.ts", "scripts/perf-calibrate.ts", "scripts/perf-budgets.json"]
+    inputs: ["desktop/src/**", "desktop/native/**", "desktop/build/icon.icns", "packages/core/**", "web/src/**", "web/index.html", "web/vite.config.ts", "web/public/**", "web/package.json", "package.json", "bun.lock", "desktop/eb-tests/**", "test/fake-host.ts", "src/relay/**", "scripts/local-relay.ts", "scripts/perf-desktop.ts", "scripts/perf-calibrate.ts", "scripts/perf-budgets.json"]
     imports_from: ["desktop/src/main-eb.ts", "desktop/src/preload-eb.ts", "desktop/scripts/smoke-eb.ts", "scripts/perf-desktop.ts"]
-    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-bundle.ts", "desktop/scripts/eb-size.ts", "desktop/scripts/eb-env-check.ts", "desktop/scripts/eb-app.ts", "desktop/scripts/eb-seal.ts", "desktop/scripts/eb-keys-check.ts", "desktop/scripts/eb-keys-probe.ts", "desktop/scripts/eb-store-probe.ts", "desktop/scripts/eb-drive.ts", "desktop/scripts/smoke-eb.ts", "desktop/scripts/eb-bridge-checks.ts", "desktop/scripts/eb-driver-check.ts"]
+    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/electrobun-pins.json", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb.ts", "desktop/scripts/eb-pins.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-size.ts", "desktop/scripts/eb-app.ts", "desktop/scripts/eb-release.ts", "desktop/scripts/eb-update-rehearsal.ts", "desktop/scripts/eb-env-check.ts", "desktop/scripts/eb-seal.ts", "desktop/scripts/eb-keys-check.ts", "desktop/scripts/eb-keys-probe.ts", "desktop/scripts/eb-store-probe.ts", "desktop/scripts/eb-seal-check.ts", "desktop/scripts/eb-bundle.ts", "desktop/scripts/eb-drive.ts", "desktop/scripts/smoke-eb.ts", "desktop/scripts/eb-driver-check.ts", "desktop/scripts/eb-bridge-checks.ts"]
     description: >-
       On a macOS runner (Electrobun builds only for the host it runs on), checks the Electrobun
-      shell that is replacing Electron (issue #757). Builds web/dist, restores ~/.hutch (Hutch,
-      Cottontail, Electrobun's core and devkit, Bun) from actions/cache keyed on the
-      electrobun version in desktop/package.json, and runs `bun run prepare:eb` (electrobun
-      prepare) up to three times, 20 s apart, so a download blip from GitHub or blackboard.sh
-      doesn't fail the job; the steps after it run with DASH_RELEASE_OFFLINE=1 and fetch
-      nothing. Then `bun run typecheck:eb` in desktop/: electrobun prepare projects the devkit
-      into desktop/.hutch, and tsc -p tsconfig.eb.json typechecks
-      src/main-eb.ts, src/preload-eb.ts, electrobun.config.ts, eb-tests/ and the eb-*.ts build
-      scripts against it, strict. Then `bun test --tsconfig-override tsconfig.eb.json ./eb-tests`
-      runs window.kiwi over Electrobun's own createRPC on both ends, wired as preload-eb.ts and
-      main-eb.ts wire them (rpc-eb.ts): calls reach main's handler table with their arguments,
-      answers and errors come back, pushes reach their listener, a view off our page gets no
-      answers and no pushes, a call that isn't the bridge's is refused, and a reloaded page
-      never takes the previous load's replies while the old page's late messages get nothing; the
-      keys request and frame (T437) go the same way, off our page get nothing, and a session or
-      request that isn't one is refused before main's keys see it. Sessions are main's (T1230):
-      only the session main minted for the load opens, so a thousand hellos with ids of the
-      page's own choosing open nothing, every load gets a fresh id, a retired session's late reply
-      never leaves main, and a page whose first frame is a keys request has its session opened
-      before the keys see it. Each document is its own session (T1741): two documents that boot
-      from one preload's id carry their own nonce and get their own sessions, so neither takes the
-      other's reply, and main's load() retires the session at once, so nothing for the old load
-      leaves main before the new page says hello. eb-tests/page-script.test.ts bundles the real
-      preload and runs it in its own realm, then page script there hooks JSON.stringify,
-      Object.prototype.toJSON, RegExp.prototype.test, Reflect.apply, the message handler's
-      postMessage, the __electrobunHostBridge alias and globalThis: none of the hooks sees the
-      session id or the document's nonce, the hijacked globalThis gets no frame, and window.kiwi
-      keeps answering and hearing pushes (T1855). Then `bun run build:eb` (electrobun build --env=stable): bundles src/main-eb.ts with the
-      shared desktop modules it imports (ipc/handlers.ts and all the app's calls through
-      host-eb.ts, guard.ts csp(), open.ts, eb-page.ts, eb-bridge.ts, rpc-eb.ts, window-look.ts,
-      window-size.ts) and @kiwi/core, and src/preload-eb.ts as the preload view; scripts/eb-pre-build.ts turns build/icon.icns into the
-      iconset; scripts/eb-post-build.ts copies web/dist into the app's views/internal and
-      compiles native/macos/kiwi-shell.m with clang -Wall -Werror into Contents/MacOS (the
-      patch that denies the microphone, camera and location Electrobun grants the page, records
-      each committed navigation's URL natively so the bridge answers only while the view is on our
-      page whatever events the page posts, and sets the window's minimum size and background),
-      bundles src/keys-worker.ts into app/bun/keys.js
+      shell that is replacing Electron (issue #757). Builds web/dist, restores ~/.hutch (the pinned
+      Hutch under kiwi-pinned/, Cottontail, Electrobun's core and devkit, Bun) from actions/cache
+      keyed on desktop/electrobun-pins.json, and runs `bun run prepare:eb` up to three times, 20 s
+      apart, within 5 minutes, so a download blip from GitHub or blackboard.sh doesn't fail the job:
+      desktop/scripts/eb.ts downloads Hutch from the URL desktop/electrobun-pins.json pins, fails
+      unless the archive and its files match their sha256 pins, and runs `electrobun prepare`
+      through it (never the npm shim's unpinned install.sh fallback). The steps after it run
+      with DASH_RELEASE_OFFLINE=1 and fetch nothing. Then `bun run typecheck:eb` in desktop/:
+      tsc -p tsconfig.eb.json typechecks src/main-eb.ts, src/preload-eb.ts, electrobun.config.ts,
+      eb-tests/ and the eb*.ts build scripts against the projected devkit, strict. Then
+      `bun test --tsconfig-override tsconfig.eb.json ./eb-tests` runs window.kiwi over Electrobun's
+      own createRPC on both ends, wired as preload-eb.ts and main-eb.ts wire them (rpc-eb.ts):
+      calls reach main's handler table with their arguments, answers and errors come back, pushes
+      reach their listener, a view off our page gets no answers and no pushes, a call that isn't
+      the bridge's is refused, and a reloaded page never takes the previous load's replies while
+      the old page's late messages get nothing; the keys request and frame (T437) go the same way,
+      off our page get nothing, and a session or request that isn't one is refused before main's
+      keys see it. Sessions are main's (T1230): only the session main minted for the load opens,
+      so a thousand hellos with ids of the page's own choosing open nothing, every load gets a
+      fresh id, a retired session's late reply never leaves main, and a page whose first frame is
+      a keys request has its session opened before the keys see it. Each document is its own
+      session (T1741): two documents that boot from one preload's id carry their own nonce and get
+      their own sessions, so neither takes the other's reply, and main's load() retires the session
+      at once, so nothing for the old load leaves main before the new page says hello.
+      eb-tests/page-script.test.ts bundles the real preload and runs it in its own realm, then
+      page script there hooks JSON.stringify, Object.prototype.toJSON, RegExp.prototype.test,
+      Reflect.apply, the message handler's postMessage, the __electrobunHostBridge alias and
+      globalThis: none of the hooks sees the session id or the document's nonce, the hijacked
+      globalThis gets no frame, and window.kiwi keeps answering and hearing pushes (T1855).
+      Then `bun run build:eb` (electrobun build --env=stable, through eb.ts): scripts/eb-pre-build.ts
+      fails unless the build runs the pinned Hutch and desktop/.hutch/devkit/api hashes to its pin,
+      and turns build/icon.icns into the iconset; the build bundles src/main-eb.ts with the shared
+      desktop modules it imports (ipc/handlers.ts and all the app's calls through host-eb.ts,
+      guard.ts csp(), open.ts, eb-page.ts, eb-bridge.ts, rpc-eb.ts, window-look.ts,
+      window-size.ts) and @kiwi/core, and src/preload-eb.ts as the preload view;
+      scripts/eb-post-build.ts runs pageWithCsp on the built web/dist/index.html (fails unless only
+      a doctype, <html> and <head> come before the CSP's place), puts that template at
+      Resources/app/page/ outside views/, copies the rest of web/dist into views/internal and fails
+      if an index.html lands there, compiles native/macos/kiwi-shell.m with clang -Wall -Werror
+      into Contents/MacOS (the patch that denies the microphone, camera and location Electrobun
+      grants the page, lets only the page's own blob:/data: downloads through, cancels every
+      navigation but views://internal/index.html and its #/? forms in Electrobun's own navigation
+      delegate, before load, whatever rules the page's internal RPC sets, records each committed
+      navigation's URL natively so the bridge answers only while the view is on our page whatever
+      events the page posts (T1855), and sets the window's minimum size and background), fails if any Electrobun file in the app differs from its pin
+      or Contents/MacOS holds a file nobody pinned, bundles src/keys-worker.ts into app/bun/keys.js
       beside the main bundle and fails unless that bundled keys worker answers a page's request,
-      then checks the bundle (scripts/eb-bundle.ts): the
-      main bundle holds exactly one copy of Electrobun's internal RPC table, the one
+      then checks the bundle (scripts/eb-bundle.ts):
+      the main bundle holds exactly one copy of Electrobun's internal RPC table, the one
       lockInternalRpc empties, and the preload bundle exists and has no WebSocket. We ship the
       plain app, not Electrobun's
       self-extracting wrapper (which would run the app from a folder the user's rights can edit):
@@ -1121,6 +1130,11 @@ jobs:
       Bun's transpiler cache under HOME can't replace main's code), and execs Electrobun's launcher
       with that, so BUN_OPTIONS (--preload), BUN_INSPECT (a debugger), NODE_*, DYLD_* and JSC_*
       never reach the bun process that runs main and the web view (T632).
+      desktop/scripts/eb-seal-check.ts builds a probe bundle whose executable is
+      native/macos/kiwi-keys.c's kiwi_seal_check, seals it with scripts/eb-seal.ts, and fails
+      unless it starts as sealed and with a ticket stapled into Contents/CodeResources afterwards,
+      and is refused once a sealed file (MacOS/CodeResources included) changes or an unsealed
+      file is added: the launcher's C check and the TS seal held to the same rules.
       desktop/scripts/eb-env-check.ts unpacks the plain .app and fails if the launcher, run in front
       of a stand-in that writes down its environment, passes on any name beyond those (it sets one
       from each family, and KIWI_EB_DRIVER, KIWI_EB_RELAY and CFFIXED_USER_HOME, which only a test
@@ -1157,27 +1171,20 @@ jobs:
       afterwards gets no socket and no KIWI_KEY_FD, the first
       start makes a key through the launcher (not marked ready until finish, then marked) and the next
       gets the same one, still marked, and can't take it back with drop (T1076), a second key is refused, the legacy key comes through while an
-      unlisted name and an unknown request are refused; that store v2 opens on the Mac as main-eb opens
-      it (scripts/eb-store-probe.ts as main.js, taking the key channel in its first import, then
-      store-eb.ts's openEbStore with its own throwaway Electron folder): a first start makes a sealed
-      store and a key marked ready, the next reads it back with the same key, and with both copies
-      deleted and a plain Electron store planted it's refused as a deleted store with nothing written,
-      and, on CI's temporary keychain only, Electron's kiwi-store.bin is imported once through a
-      kiwi-desktop key (T1582); and copies with a changed main.js, a
+      unlisted name and an unknown request are refused, and copies with a changed main.js, a
       bunfig.toml beside bun, an app.asar, a link or a missing file all stop before bun runs, and
       unless the launcher's check of the whole app takes 500 ms or less (median of 7), and unless,
       built with -fsanitize=address,undefined -fno-sanitize-recover=all into a throwaway sealed
       bundle, native/macos/kiwi-keys-test.c's parser cases (malformed, truncated, oversized, unknown,
       a NUL inside, done ending the session, many requests in one write, the ready mark's finished,
-      finish and drop (finish naming the key it marks by its SHA-256 and refused for any other; drop
-      only for a key made in that session, never once it's marked ready, and, in a live session, never
-      for a key put in its place, as it deletes by the item reference SecItemAdd gave; a mark left by
-      a key deleted by hand not counting for the next), and 1500 seeded random sessions), the seal check on a sealed and on a changed app, and the launcher itself all run
+      finish and drop (drop only for a key made in that session and still the keychain's, a mark
+      left by a key deleted by hand not counting for the next), and 1500 seeded random sessions), the seal check on a sealed and on a changed app, and the launcher itself all run
       with no sanitizer report; on CI it uses
       a temporary keychain, and it deletes its items either way. eb-env-check runs the launcher
       inside a small sealed bundle and expects KIWI_KEY_FD as the one name it adds.
       Then it starts the app, without CDP (WebKit has none; T442): a second build, `electrobun
-      build --env=dev` with CHANNELS_EB_TEST=1 and its own bundle id (com.kiwiinit.channels.test),
+      build --env=dev` through desktop/scripts/eb.ts (the pinned Hutch, as every build) with
+      CHANNELS_EB_TEST=1 and its own bundle id (com.kiwiinit.channels.test),
       compiles in the test driver (desktop/src/eb-driver.ts behind the KIWI_EB_TEST build-time
       define in electrobun.config.ts), and its launcher (built with -DKIWI_EB_TEST) also lets
       KIWI_EB_DRIVER, KIWI_EB_RELAY and CFFIXED_USER_HOME through: with KIWI_EB_DRIVER set, main listens on that Unix socket,
@@ -1224,16 +1231,20 @@ jobs:
     name: desktop / linux
     inputs: ["desktop/src/**", "desktop/native/linux/**", "desktop/build/icons/**", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "package.json", "bun.lock"]
     imports_from: ["desktop/src/main-eb.ts"]
-    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/package-linux.ts", "desktop/scripts/linux-files.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/native/linux/**", "desktop/scripts/eb-linux-start.sh"]
+    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/electrobun-pins.json", "desktop/scripts/eb.ts", "desktop/scripts/eb-pins.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/package-linux.ts", "desktop/scripts/linux-files.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/native/linux/**", "desktop/scripts/eb-linux-start.sh"]
     description: >-
       On two runners at once, Ubuntu 24.04 and 26.04 (a matrix, each part saving its own jev-ci pass;
       T2119: on 24.04 AppArmor's unprivileged user-namespace restriction keeps bubblewrap from setting up
       its loopback, so WebKitGTK's sandbox can't start there) (Electrobun builds only for the host it runs on), builds the Electrobun
-      shell for Linux on WebKitGTK (issue #757, T444): web/dist, `electrobun prepare` (Hutch's
-      devkit, cached under ~/.hutch), then `bun run build:eb` (electrobun build --env=stable), with
-      scripts/eb-pre-build.ts making the Mac iconset only on macOS and scripts/eb-post-build.ts
-      copying web/dist into the bundle's Resources/app/views/internal on either OS (the Mac's native
-      shell and launcher only on macOS); on Linux it renames Electrobun's bin/launcher to
+      shell for Linux on WebKitGTK (issue #757, T444): web/dist, `bun run prepare:eb` (Hutch's
+      devkit, cached under ~/.hutch), then `bun run build:eb` (electrobun build --env=stable), both
+      through desktop/scripts/eb.ts, which runs only the Hutch desktop/electrobun-pins.json pins for
+      this host (its archive and files checked by sha256); scripts/eb-pre-build.ts fails unless the
+      build runs that Hutch and desktop/.hutch/devkit/api hashes to its pin (the same tree for
+      macOS and Linux) and makes the Mac iconset only on macOS, and scripts/eb-post-build.ts puts
+      web/dist/index.html (checked by pageWithCsp) at Resources/app/page/ and the rest of web/dist
+      in Resources/app/views/internal on either OS (the Mac's native shell, launcher and app-file
+      pins only on macOS); on Linux it renames Electrobun's bin/launcher to
       bin/electrobun-launcher and compiles native/linux/kiwi-launcher.c into bin/launcher with
       cc -Wall -Wextra -Werror, so the entry, /usr/bin/channels-desktop and the AppImage's AppRun all
       start ours, which keeps the environment to an allowlist (the session, locale, input method,
@@ -1251,9 +1262,10 @@ jobs:
       and Channels-<v>-linux-x86_64.AppImage (zstd squashfs in 128 KiB blocks on AppImage's type2
       runtime, release 20251108 checked against its pinned sha256), and fails when either is over
       40 MB. scripts/appimage-squashfs.ts checks the AppImage's compression, and the job fails when
-      the deb or the extracted AppImage lacks either launcher, Bun, the page, the .desktop entry or the
-      icon, or carries what it leaves out, or when the built bin/launcher, put in front of env, passes
-      on LD_PRELOAD, LD_LIBRARY_PATH, BUN_OPTIONS, NODE_OPTIONS or GTK_MODULES (T1548). It then installs the v0.26.0 Electron deb (pinned by sha256) and this
+      the deb or the extracted AppImage lacks either launcher, Bun, the page template (Resources/app/page/index.html),
+      the page's assets, the .desktop entry or the icon, or carries what it leaves out (an index.html under views/ among it),
+      or when the built bin/launcher, put in front of env, passes on LD_PRELOAD, LD_LIBRARY_PATH, BUN_OPTIONS,
+      NODE_OPTIONS or GTK_MODULES (T1548). It then installs the v0.26.0 Electron deb (pinned by sha256) and this
       deb over it, and fails unless /usr/bin/channels-desktop leads to /opt/Channels/bin/launcher, the
       Electron app is gone, the entry runs the launcher and dpkg --verify finds nothing; it prints the runner's
       AppArmor user-namespace setting for WebKitGTK's sandbox.
@@ -1380,7 +1392,7 @@ jobs:
     push: false
     version_bumps: true
     inputs: []
-    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/actions/stamp/action.yml", "scripts/stamp.ts", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/scripts/fuses.ts", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/scripts/pack-cli.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "scripts/changelog.ts", "scripts/cli-downloads.ts"]
+    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/actions/stamp/action.yml", "scripts/stamp.ts", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/scripts/fuses.ts", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/scripts/pack-cli.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "scripts/changelog.ts", "scripts/cli-downloads.ts", "desktop/electrobun.config.ts", "desktop/electrobun-pins.json", "desktop/native/macos/kiwi-shell.m", "desktop/scripts/eb.ts", "desktop/scripts/eb-pins.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-app.ts", "desktop/scripts/eb-release.ts", "desktop/scripts/eb-update-rehearsal.ts", "desktop/src/signer.ts", "desktop/src/update-asset.ts"]
     description: >-
       Runs .github/workflows/release-build.yml, the build a tag's release.yml runs, with
       rehearsal: true and a read-only token, publishing nothing: scripts/stamp.ts stamping the tag
@@ -1396,7 +1408,28 @@ jobs:
       desktop/scripts/pack-cli.ts (which checks it unpacks to the same bytes), and on macOS
       desktop/scripts/mac-size.ts failing a dmg or zip over 150 MiB or an app over 320 MiB, and on Linux
       desktop/scripts/appimage-squashfs.ts failing an AppImage not packed with gzip, lz4 or zstd in
-      blocks of at most 128 KiB. On a pull request, and on a manual run of ci.yml from any
+      blocks of at most 128 KiB. The desktop-mac-eb job (rehearsals always; a tag only once
+      release.yml passes electrobun_mac: true, which also drops Electron's arm64 build so Intel
+      Macs keep Electron's mac-x64 files) builds the Electrobun app with the release bundle id
+      (CHANNELS_EB_RELEASE=1) through the pinned toolchain, then desktop/scripts/eb-release.ts unpacks
+      the plain Channels.app from the build's payload, fails unless it is com.kiwiinit.channels at
+      desktop/package.json's version, signs every Mach-O, re-seals the app (T544's KiwiSeal, which skips the stapled Contents/CodeResources) and then signs the bundle, all with the Developer ID
+      and the hardened runtime (Bun alone gets entitlements.app.plist's allow-jit), notarizes and
+      staples it, zips it with ditto (Channels.app at the zip's root) under the name the Electron
+      updater asks for (update-asset.ts swapAsset: Channels-<version>-mac-arm64.zip), makes a ULMO dmg
+      with an Applications link, signs, notarizes and staples that, and fails on a binary carrying
+      audio-input, camera, disable-library-validation, allow-dyld-environment-variables or
+      disable-executable-page-protection, on a designated requirement that isn't Developer ID for
+      com.kiwiinit.channels (signer.ts developerIdRequirement), on codesign --verify, stapler or
+      Gatekeeper refusing the app or the dmg, on a shipped file that no longer matches the seal (eb-seal.ts sealProblems, after stapling), or on a dmg or zip over 40 MB; without the secrets
+      (a pull request) it ad-hoc signs and skips notarization. Then
+      desktop/scripts/eb-update-rehearsal.ts installs the last Electron arm64 release
+      (ELECTRON_LAST_MAC_ARM64, v0.26.0) into a temp Applications folder and runs its updater's own
+      steps on the new zip: the asset name, the SHA256SUMS line, ditto -x, Channels.app at the root,
+      a newer version, signedLikeThisApp (codesign -R the installed app's designated requirement, then
+      spctl) when signed, and update-asset.ts swapScript swapping the bundle in place; it fails unless
+      the swapped app is com.kiwiinit.channels at the new version with no leftovers, and unless it
+      opens its window within 30 s. On a pull request, and on a manual run of ci.yml from any
       branch but main, the macOS app is unsigned: no caller passes the signing secrets, and only
       the release environment (main and v* tags) holds them. A manual run on main takes them from
       that environment, so the app is signed, notarized and checked as on a tag. Fails where the tag would: a stamped file with no version for the stamp
