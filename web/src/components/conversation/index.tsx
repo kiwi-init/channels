@@ -134,6 +134,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
 
   const { placeOf, places } = state
   const { place, hereKey, unreadIn, taskKey } = usePlaces({ here, roomId, messages, me, state, shownTask })
+  const openRoom = hereKey === "main" && state.rooms.size > 1 ? cardRoom : null
+  const sendRoom = openRoom !== null && openRoom !== GENERAL_ROOM ? openRoom : undefined
   const { bySeq, threadRoot, showDropped, setShowDropped, threads, visible, inTask, quoted, summaryOf } = useThreads({
     messages,
     state,
@@ -142,6 +144,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     isOwner,
     search: query,
     hereKey,
+    room: openRoom,
     taskKey,
     shownTask,
     nameOf,
@@ -218,7 +221,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const onAnswer = useLatest(answer)
   const onJump = useLatest(jump)
   const onOpenImage = useLatest((pm: Message, img: ImageAttachment, src: string) => setPicture({ m: pm, img, src }))
-  const handlers = useControlsHandlers({ live, member, onGone, rooms: () => state.rooms })
+  const roomsNow = useLatest(() => state.rooms)
+  const handlers = useControlsHandlers({ live, member, onGone, rooms: roomsNow })
   const [newAgent, setNewAgent] = useState(false)
   const onNewAgent = isOwner && canStartAgents() ? () => setNewAgent(true) : undefined
   const addsAgents = !isOwner && !!roster.find((m) => m.active && m.pk === member.identity.pk)?.addsAgents
@@ -605,8 +609,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                         <div className="relative aside-room [--column:792px]">
                           {mayWrite ? (
                             <Composer
-                              key={hereKey}
-                              draftKey={`${roomId}:${hereKey}`}
+                              key={`${hereKey}:${sendRoom ?? ""}`}
+                              draftKey={`${roomId}:${hereKey}${sendRoom ? `:${sendRoom}` : ""}`}
                               me={me}
                               people={people}
                               replyTo={replyTo}
@@ -619,9 +623,12 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                               onRestoreReply={(answering) => setReplyTo((now) => now ?? answering)}
                               disabled={connection === "connecting"}
                               extra={extra}
-                              placeholder={place.kind === "main" ? "Message everyone" : `Message ${nameOf(place.with.find((n) => n !== me) ?? "")} privately`}
-                              send={async (body, opts) => {
+                              placeholder={
+                                place.kind === "main" ? (rooms.length > 1 ? `Message #${roomName}` : "Message everyone") : `Message ${nameOf(place.with.find((n) => n !== me) ?? "")} privately`
+                              }
+                              send={async (body, given) => {
                                 stick()
+                                const opts: SendOptions = sendRoom && given.task === undefined ? { ...given, room: sendRoom } : given
                                 const answering = (o: SendOptions) => withSentQuotes(o, (k) => sendingSeq.current.get(k))
                                 if (opts.imgs?.length || opts.task !== undefined) return inTurn(async () => send(body, await answering(opts)))
                                 const key = sendingBase + ++sendingKey.current
@@ -637,6 +644,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                                   ...(opts.to ? { to: opts.to } : {}),
                                   ...(opts.re ? { re: opts.re } : {}),
                                   ...(opts.dm ? { dm: true } : {}),
+                                  ...(opts.room ? { room: opts.room } : {}),
                                 }
                                 setSending((all) => [...all, { key, place: hereKey, m, after: messages.at(-1)?.seq ?? 0 }].slice(-50))
                                 const going = inTurn(async () => send(body, await answering(opts)))

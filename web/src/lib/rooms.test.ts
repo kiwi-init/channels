@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
 import { MAX_ROOM_NAME, MAX_ROOMS } from "@kiwi/core/protocol.ts"
-import { cleanRoomName, roomProblem, roomsAfter } from "./rooms"
+import { cleanRoomName, roomOfMessage, roomProblem, roomsAfter } from "./rooms"
 
 const general = { id: "general", name: "general" }
 const desktop = { id: "k3x9a1b2", name: "desktop" }
@@ -33,9 +33,20 @@ describe("a room the owner makes or renames from channel settings (T987)", () =>
     expect(roomProblem(full, "renamed", "r3")).toBeNull()
   })
 
-  test("signs the room list as it is after the change, leaving #general out unless it was renamed", () => {
+  test("signs the room list as it is after the change, leaving #general out unless it was renamed or the change is to it, so renaming it back sticks for a client folding from a saved base", () => {
     expect(roomsAfter([general, desktop], { id: "m0b1le00", name: cleanRoomName("#mobile") })).toEqual([desktop, { id: "m0b1le00", name: "mobile" }])
     expect(roomsAfter([general, desktop], { id: desktop.id, name: "electrobun" })).toEqual([{ id: desktop.id, name: "electrobun" }])
     expect(roomsAfter([general, desktop], { id: "general", name: "lobby" })).toEqual([{ id: "general", name: "lobby" }, desktop])
+    expect(roomsAfter([{ id: "general", name: "lobby" }, desktop], { id: "general", name: "general" })).toEqual([general, desktop])
+  })
+})
+
+describe("a room is its own conversation (T1030)", () => {
+  test("a message is in the room the fold put it in, one still sending in the room it was sent to, and anything else in #general", () => {
+    const state = { roomOf: new Map([[7, "k3x9a1b2"]]) }
+    expect(roomOfMessage(state, { seq: 7 })).toBe("k3x9a1b2")
+    expect(roomOfMessage(state, { seq: 7, room: "other" })).toBe("k3x9a1b2")
+    expect(roomOfMessage(state, { seq: -3, room: "k3x9a1b2" })).toBe("k3x9a1b2")
+    expect(roomOfMessage(state, { seq: 8 })).toBe("general")
   })
 })

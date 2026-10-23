@@ -1,6 +1,6 @@
-import { GENERAL_ROOM, MAX_ROOMS } from "@kiwi/core/protocol.ts"
+import { GENERAL_ROOM, MAX_ROOMS, type Message } from "@kiwi/core/protocol.ts"
 import { roomName } from "@kiwi/core/state/rooms.ts"
-import type { Room } from "@kiwi/core/state/types.ts"
+import type { ChannelState, Room } from "@kiwi/core/state/types.ts"
 
 export interface RoomEntry {
   id: string
@@ -21,5 +21,7 @@ export function roomProblem(rooms: Iterable<Pick<Room, "id" | "name">>, typed: s
 export function roomsAfter(rooms: Iterable<Pick<Room, "id" | "name">>, change: RoomEntry): RoomEntry[] {
   const next = new Map([...rooms].map((r) => [r.id, { id: r.id, name: r.name }]))
   next.set(change.id, { id: change.id, name: change.name })
-  return [...next.values()].filter((r) => r.id !== GENERAL_ROOM || r.name !== GENERAL_ROOM)
+  return [...next.values()].filter((r) => r.id !== GENERAL_ROOM || r.name !== GENERAL_ROOM || change.id === GENERAL_ROOM)
 }
+
+export const roomOfMessage = (state: Pick<ChannelState, "roomOf">, m: Pick<Message, "seq" | "room">): string => state.roomOf.get(m.seq) ?? m.room ?? GENERAL_ROOM
