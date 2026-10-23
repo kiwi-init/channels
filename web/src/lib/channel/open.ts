@@ -79,3 +79,9 @@ export async function openChannel(steps: OpenSteps, was: Warm | undefined, limit
   if (await rotated) await steps.roster()
   return { head, since, whole: startsWhole(head, limit, since, firstSeq, base ?? warm) }
 }
+
+export function handOver<T extends { seq: number }>(shown: readonly T[], early: ReadonlySet<number>, planned: readonly T[]): T[] {
+  const kept = shown.filter((m) => !early.has(m.seq))
+  const seen = new Set(kept.map((m) => m.seq))
+  return [...kept, ...planned.filter((m) => !seen.has(m.seq))].sort((a, b) => a.seq - b.seq)
+}
