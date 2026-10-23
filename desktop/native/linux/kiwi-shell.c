@@ -131,7 +131,7 @@ static gchar *bwrap_refusal(void) {
   } else if (!g_spawn_check_wait_status(status, NULL)) {
     gchar **lines = g_strsplit(g_strstrip(err), "\n", 2);
     refusal = g_strdup_printf("bwrap can't build it here (%s)%s", lines[0] && *lines[0] ? lines[0] : "no message",
-                              userns_restricted() ? "; AppArmor lets only apps with a profile use user namespaces, and the .deb installs Channels' profile" : "");
+                              userns_restricted() ? "; AppArmor restricts unprivileged user namespaces on this system" : "");
     g_strfreev(lines);
   }
   g_free(err);

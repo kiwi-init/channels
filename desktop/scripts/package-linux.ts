@@ -1,11 +1,9 @@
 import { execFileSync } from "node:child_process";
 import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import {
   APP_RUN,
-  APPARMOR,
-  APPARMOR_SOURCE,
   appImageName,
   archOfArtifact,
   DEB_POSTINST,
@@ -86,8 +84,6 @@ function deb(app: string, arch: LinuxArch, version: string, tmp: string): string
   mkdirSync(join(root, "usr", "share", "applications"), { recursive: true });
   writeFileSync(join(root, "usr", "share", "applications", `${EXECUTABLE}.desktop`), desktopEntry(`${INSTALL_DIR}/bin/launcher`));
   icons(root, "usr/share");
-  mkdirSync(join(root, dirname(APPARMOR_SOURCE)), { recursive: true });
-  writeFileSync(join(root, APPARMOR_SOURCE), APPARMOR);
   const { author } = JSON.parse(readFileSync(join(desktop, "package.json"), "utf8")) as { author: { name: string; email: string } };
   mkdirSync(join(root, "DEBIAN"));
   writeFileSync(join(root, "DEBIAN", "control"), debControl({ version, arch, maintainer: `${author.name} <${author.email}>`, installedKiB: sizeOf(root) / 1024 }));
