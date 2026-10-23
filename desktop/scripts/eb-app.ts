@@ -38,8 +38,14 @@ export function stableBuild(releaseEb: string): StableBuild {
     `stable Mac .app under ${builds}`,
   );
   const listed = readdirSync(artifacts);
-  const wrapperDmg = only(listed.filter((n) => n.endsWith(".dmg")).map((n) => join(artifacts, n)), `.dmg under ${artifacts}`);
-  const payload = only(listed.filter((n) => n.endsWith(".app.tar.zst")).map((n) => join(artifacts, n)), `.app.tar.zst under ${artifacts}`);
+  const wrapperDmg = only(
+    listed.filter((n) => n.endsWith(".dmg")).map((n) => join(artifacts, n)),
+    `.dmg under ${artifacts}`,
+  );
+  const payload = only(
+    listed.filter((n) => n.endsWith(".app.tar.zst")).map((n) => join(artifacts, n)),
+    `.app.tar.zst under ${artifacts}`,
+  );
   return { wrapper, wrapperDmg, payload };
 }
 

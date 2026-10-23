@@ -42,7 +42,10 @@ function windowOf(pids: number[]): string | null {
 function tree(root: number): number[] {
   const out = [root];
   for (let i = 0; i < out.length; i++) {
-    const kids = spawnSync("pgrep", ["-P", String(out[i])], { encoding: "utf8" }).stdout.split("\n").filter(Boolean).map(Number);
+    const kids = spawnSync("pgrep", ["-P", String(out[i])], { encoding: "utf8" })
+      .stdout.split("\n")
+      .filter(Boolean)
+      .map(Number);
     out.push(...kids);
   }
   return out;
@@ -75,7 +78,8 @@ try {
   const next = path.join(stage, "Channels.app");
   if (!fs.existsSync(next)) throw new Error(`update rehearsal: ${name} has no Channels.app at its root`);
   if (signed) {
-    if (!(await signedLikeThisApp(target, next))) throw new Error("update rehearsal: the Electron app's updater would refuse it: not signed like the installed app (codesign -R its designated requirement, then spctl)");
+    if (!(await signedLikeThisApp(target, next)))
+      throw new Error("update rehearsal: the Electron app's updater would refuse it: not signed like the installed app (codesign -R its designated requirement, then spctl)");
     console.log("signed like the installed app: its designated requirement and Gatekeeper accept the update");
   } else console.log("rehearsal without the Developer ID: the signature check is skipped");
 

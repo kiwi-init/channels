@@ -26,7 +26,8 @@ const entitlements = path.join(desktop, "build", "entitlements.app.plist");
 const keychain = process.env.EB_SIGN_KEYCHAIN ?? "";
 const notary = { key: process.env.APPLE_API_KEY ?? "", id: process.env.APPLE_API_KEY_ID ?? "", issuer: process.env.APPLE_API_ISSUER ?? "" };
 const signed = keychain !== "";
-if (!signed && process.env.REHEARSAL !== "true") throw new Error("eb-release: a release can't publish an unsigned Mac app (Macs would never update to it): set EB_SIGN_KEYCHAIN, or run it as a rehearsal");
+if (!signed && process.env.REHEARSAL !== "true")
+  throw new Error("eb-release: a release can't publish an unsigned Mac app (Macs would never update to it): set EB_SIGN_KEYCHAIN, or run it as a rehearsal");
 if (signed && (!notary.key || !notary.id || !notary.issuer)) throw new Error("eb-release: signing without notarizing: set APPLE_API_KEY, APPLE_API_KEY_ID and APPLE_API_ISSUER");
 
 interface Ran {
@@ -143,7 +144,8 @@ try {
     if (!entitlementsOf(bun).includes("com.apple.security.cs.allow-jit")) throw new Error("eb-release: Bun lost allow-jit; its JavaScript can't run under the hardened runtime");
     must("codesign", ["--verify", "--deep", "--strict", "--verbose=2", app], "verifying the signature");
     const req = developerIdRequirement(must("codesign", ["-d", "-r-", app], "reading the designated requirement").stdout);
-    if (!req?.includes(`identifier "${IDENTIFIER}"`)) throw new Error(`eb-release: the app's designated requirement isn't a Developer ID one for ${IDENTIFIER}, so the Electron app's updater would refuse it`);
+    if (!req?.includes(`identifier "${IDENTIFIER}"`))
+      throw new Error(`eb-release: the app's designated requirement isn't a Developer ID one for ${IDENTIFIER}, so the Electron app's updater would refuse it`);
     must("xcrun", ["stapler", "validate", app], "validating the app's ticket");
     must("spctl", ["--assess", "--type", "execute", "--verbose=2", app], "Gatekeeper on the app");
     must("xcrun", ["stapler", "validate", dmg], "validating the dmg's ticket");

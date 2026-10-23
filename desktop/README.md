@@ -52,6 +52,17 @@ bun run typecheck:eb                                  # fetches the devkit into 
   minimum size and background on the main thread. The shell opens no window if either
   patch can't apply.
 
+- Release (`.github/workflows/release-build.yml`, job `desktop-mac-eb`): the plain
+  `Channels.app` from the build's payload, signed with the Developer ID (Bun alone gets the
+  JIT entitlements), notarized and stapled, as `Channels-<version>-mac-arm64.zip` (ditto,
+  `Channels.app` at its root, the name the Electron app's updater asks for) and `.dmg`, each at
+  most 40 MB (`scripts/eb-release.ts`). `scripts/eb-update-rehearsal.ts` installs the last
+  Electron arm64 release and runs its updater's own steps on the new zip, then opens the
+  swapped app. Rehearsals always run it; a tag publishes it only once `release.yml` passes
+  `electrobun_mac: true`, and Intel Macs keep Electron's x64 build until a stable Electrobun
+  ships darwin-x64. Never launch a release-id build on a Mac with Channels installed: macOS
+  keeps its preferences and WebKit data under the real home whatever `HOME` says.
+
 ## Layout
 
 - `src/main.ts` — window, tray, `kiwi-app://` hosting, safeStorage store, WorkOS device
