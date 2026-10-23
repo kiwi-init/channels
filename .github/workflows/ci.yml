@@ -392,16 +392,35 @@ jobs:
         env:
           DASH_RELEASE_OFFLINE: "1"
         run: bun run build:eb
-      - name: the Linux bundle
+      - name: AppImage tools
         if: ${{ !cancelled() }}
+        run: sudo apt-get install -y --no-install-recommends squashfs-tools
+      - name: deb and AppImage, each at most 40 MB
+        if: ${{ !cancelled() }}
+        run: bun desktop/scripts/package-linux.ts desktop/release-eb desktop/release-eb/linux
+      - name: the packages hold the app
+        if: ${{ !cancelled() }}
+        working-directory: desktop/release-eb/linux
         run: |
-          find desktop/release-eb -maxdepth 6 -not -path '*/views/internal/*' -printf '%M %10s %p\n' | sort -k3 | head -400
-          for f in $(find desktop/release-eb/build -maxdepth 4 -type f -perm -u+x); do echo "== $f"; file "$f"; ldd "$f" 2>/dev/null | head -40; done
+          bun ../../scripts/appimage-squashfs.ts .
+          deb=$(ls Channels-*-linux-amd64.deb)
+          dpkg-deb --field "$deb" Package Version Architecture Depends
+          files=$(dpkg-deb --contents "$deb")
+          for p in ./opt/Channels/bin/launcher ./opt/Channels/bin/bun ./opt/Channels/Resources/app/views/internal/index.html ./usr/bin/channels-desktop ./usr/share/applications/channels-desktop.desktop ./usr/share/icons/hicolor/512x512/apps/channels-desktop.png; do
+            [[ "$files" == *" $p"* ]] || { echo "$deb lacks $p"; exit 1; }
+          done
+          img=$(ls Channels-*-linux-x86_64.AppImage)
+          "./$img" --appimage-extract > /dev/null
+          for p in AppRun channels-desktop.desktop channels-desktop.png Channels/bin/launcher Channels/bin/bun Channels/Resources/app/views/internal/index.html; do
+            [ -e "squashfs-root/$p" ] || { echo "$img lacks $p"; exit 1; }
+          done
+          rm -rf squashfs-root
+          echo "checked: $deb and $img"
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: electrobun-linux
-          path: desktop/release-eb/artifacts
+          name: linux-packages
+          path: desktop/release-eb/linux/*
           if-no-files-found: warn
           retention-days: 3
           overwrite: true
