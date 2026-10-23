@@ -387,7 +387,6 @@ jobs:
         run: bunx electrobun build --env=dev
         env:
           CHANNELS_EB_TEST: "1"
-          CHANNELS_EB_IDENTIFIER: com.kiwiinit.channels.test
           DASH_RELEASE_OFFLINE: "1"
       - name: no test driver in the release build
         if: ${{ !cancelled() }}

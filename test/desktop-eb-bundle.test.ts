@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { bundleProblems, RELEASE_ID, urlSchemeProblems } from "../desktop/scripts/eb-bundle.ts";
+import { bundleProblems, RELEASE_ID, urlSchemeProblems, testBuildProblems, TEST_ID } from "../desktop/scripts/eb-bundle.ts";
 
 const table = "var internalRpcHandlers = { message: { webviewTagExecuteJavascript: (params) => {} } };";
 
@@ -19,4 +19,13 @@ test("the release bundle registers kiwi:// and a test bundle never does (T438)",
   expect(urlSchemeProblems(plist(["other"]), RELEASE_ID, "kiwi")).toEqual([expect.stringContaining("registers no kiwi:// scheme")]);
   expect(urlSchemeProblems(plist([]), "com.kiwiinit.channels.eb-test", "kiwi")).toEqual([]);
   expect(urlSchemeProblems(plist(["kiwi"]), "com.kiwiinit.channels.eb-test", "kiwi")).toEqual([expect.stringContaining("could take links meant for the installed Channels")]);
+});
+
+test("a CHANNELS_EB_TEST=1 build is a dev build with the test id, and anything else is refused (T1820)", () => {
+  const dev = JSON.stringify({ channel: "dev", identifier: TEST_ID });
+  expect(testBuildProblems(true, TEST_ID, dev)).toEqual([]);
+  expect(testBuildProblems(false, "com.kiwiinit.channels", JSON.stringify({ channel: "stable" }))).toEqual([]);
+  for (const channel of ["stable", "canary"]) expect(testBuildProblems(true, TEST_ID, JSON.stringify({ channel }))).toEqual([expect.stringContaining(`built a ${channel} app`)]);
+  expect(testBuildProblems(true, "com.kiwiinit.channels", dev)).toEqual([expect.stringContaining(`a test build is always ${TEST_ID}`)]);
+  expect(testBuildProblems(true, TEST_ID, "not json")).toEqual([expect.stringContaining("built a undefined app")]);
 });
