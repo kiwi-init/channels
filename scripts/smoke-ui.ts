@@ -328,7 +328,11 @@ async function run(part: Part): Promise<string[]> {
         .dispatchEvent("click");
       await page.getByPlaceholder(/^Reply to /).waitFor();
       await send(`answer ${i}`);
-      await page.getByRole("button", { name: new RegExp(`^Replying to .+: ping ${i}$`) }).waitFor({ timeout: 15000 });
+      await page
+        .locator("[id^='m']:not([id^='m-'])")
+        .filter({ hasText: `answer ${i}` })
+        .getByRole("button", { name: new RegExp(`^Replying to .+: ping ${i}$`) })
+        .waitFor({ timeout: 15000 });
     }
     log(`ok  ${at}`);
     at = "Details → Close channel…: the log downloads first, every message signed, and Cancel keeps the channel";
