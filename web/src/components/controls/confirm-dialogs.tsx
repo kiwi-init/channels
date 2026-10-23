@@ -5,12 +5,12 @@ import type { Scope } from "@kiwi/core/scopes.ts"
 import { usePinned } from "@/lib/pinned"
 import { memberName } from "@/lib/format"
 import { AgentFacts } from "../agent-facts"
-import { Alert, Button, errorText, TextField, toast } from "../kit"
-import { exportNote, logFileName } from "@/lib/log-export"
+import { Alert, Button, TextField } from "../kit"
 import type { Persona } from "@kiwi/core/personality.ts"
 import { PersonalityPicker } from "../personality-picker"
 import { PowersPicker, ScopePicker } from "../scopes"
 import type { Confirm, ControlsProps } from "./context"
+import { useDownload } from "./use-download"
 
 export function ConfirmDialogs({
   p,
@@ -40,25 +40,7 @@ export function ConfirmDialogs({
   setPersonaDraft: Dispatch<SetStateAction<Persona | null>>
 }) {
   const chosen = personaDraft
-  const [saving, setSaving] = useState(false)
-  const download = async () => {
-    setSaving(true)
-    try {
-      const log = await p.exportLog()
-      const url = URL.createObjectURL(new Blob([log.text], { type: "application/jsonl" }))
-      const a = document.createElement("a")
-      a.href = url
-      a.download = logFileName(p.title, new Date())
-      a.click()
-      setTimeout(() => URL.revokeObjectURL(url), 60_000)
-      const note = exportNote(log)
-      toast(note.text, note.complete ? undefined : "error")
-    } catch (err) {
-      toast(`Not downloaded: ${errorText(err)}`, "error")
-    } finally {
-      setSaving(false)
-    }
-  }
+  const { saving, download } = useDownload(p)
   const pinnedAs = usePinned(confirm?.kind === "approve" ? confirm.req.pin : undefined)
   useEffect(() => {
     if (pinnedAs) setPersonaDraft(pinnedAs)
@@ -226,7 +208,7 @@ export function ConfirmDialogs({
               <span>Every message, member and key is deleted on the relay, and everyone’s copy is wiped the next time they connect. It can’t be recovered.</span>
               <span>Download the log first to keep it: every message with its author’s signature, so a message cited by number can still be checked.</span>
               <span>
-                <Button variant="secondary" disabled={busy || saving} onClick={() => void download()}>
+                <Button variant="secondary" disabled={busy || !!saving} onClick={() => void download("log")}>
                   {saving ? "Downloading…" : "Download log"}
                 </Button>
               </span>
@@ -241,7 +223,7 @@ export function ConfirmDialogs({
         </Button>
         <Button
           className="bg-alert"
-          disabled={busy || saving}
+          disabled={busy || !!saving}
           onClick={() => run(confirm?.kind === "close" ? p.onCloseChannel : p.onLeaveChannel, confirm?.kind === "close" ? "Channel closed" : "You left the channel")}
         >
           {confirm?.kind === "close" ? "Close channel" : "Leave channel"}

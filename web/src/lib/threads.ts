@@ -61,6 +61,24 @@ export function markSeenIn(room: string, updates: Record<string, number>): void 
   for (const l of seenListeners) l()
 }
 
+const roomsFromKey = (room: string) => `mc.rooms-from.${room}`
+const roomsFromCache = new Map<string, number>()
+
+export function roomsFrom(room: string): number {
+  const known = roomsFromCache.get(room)
+  if (known !== undefined) return known
+  let from = seenIn(room).main ?? 0
+  try {
+    const kept = localStorage.getItem(roomsFromKey(room))
+    if (kept !== null && Number.isSafeInteger(Number(kept))) from = Number(kept)
+    else localStorage.setItem(roomsFromKey(room), String(from))
+  } catch {
+    // Without storage, the main mark stands in for every room until the page reloads.
+  }
+  roomsFromCache.set(room, from)
+  return from
+}
+
 export function useSeen(room: string): Record<string, number> {
   return useSyncExternalStore(
     (l) => (seenListeners.add(l), () => void seenListeners.delete(l)),

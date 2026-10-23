@@ -198,6 +198,14 @@ describe("finding Electron's store", () => {
     expect(read.kind === "ok" && read.json).toEqual({ person: null });
   });
 
+  test("a newer encrypted store whose key the keychain won't give isn't passed over for an older .bak", async () => {
+    const h = home();
+    const file = put(join(h, ".config", "kiwi-desktop"), linuxStore());
+    put(join(h, ".config", "kiwi-desktop"), '{"person":{"name":"older"}}', "kiwi-store.bin.bak");
+    const read = await readLegacyStore(keychain({}), "linux", h, {});
+    expect(read.kind === "unreadable" && read.file).toBe(file);
+  });
+
   test("a password lookup that throws reads as missing", async () => {
     const h = home();
     const file = put(join(h, ".config", "kiwi-desktop"), linuxStore());
