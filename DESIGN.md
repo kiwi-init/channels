@@ -132,6 +132,12 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   `prefers-contrast: more` it falls back to a solid fill with a 2px `ink`
   ring: no band, no glint.
 - Fall back to solid fills under `prefers-contrast: more`.
+- On a machine that draws without a GPU (WebGL's renderer is SwiftShader,
+  llvmpipe or a basic render driver, or there's no WebGL: `lib/drawing.ts`
+  marks `html[data-drawing=software]` once the app is idle), the scrims under
+  the header and over the composer drop their blur and mask and keep only
+  their fade: re-blurring them on every keystroke made typing take 128 ms
+  at p95 there, 32 ms without (`PERF_GL=swiftshader bun scripts/perf-scale.ts`).
 
 ## 6. Motion
 
