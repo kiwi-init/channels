@@ -218,6 +218,14 @@ no `client.ts` split and no bundle check for `effect` in `web/dist`; the web
 accepts the ~30KB gzipped. Step 1 still exports plain tagged errors the web can
 branch on before it moves.
 
+Revisited (Jow, #391, T392): **the channel-open path is plain promises**, so
+a channel paints without Effect's runtime in the first load (60 KB of 581 KB
+minified). `untilOpen` retries with a promise loop, `use-channel` no longer
+forks a fiber, and the plain `RelayError` and `ChannelGone` live in
+`packages/core/src/client/relay-errors.ts`, re-exported by `errors.ts`. The
+rest of the web (sign-in's `run`, `Storage`) stays on Effect and loads with the
+surfaces that use it.
+
 ## Risks
 
 - **A big diff in security-sensitive code.** Mitigation: the protocol and crypto
