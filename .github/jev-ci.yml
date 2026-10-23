@@ -944,7 +944,7 @@ jobs:
     name: desktop / mac
     inputs: ["desktop/src/**", "desktop/native/**", "desktop/build/icon.icns", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "package.json", "bun.lock"]
     imports_from: ["desktop/src/main-eb.ts"]
-    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-size.ts"]
+    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-size.ts", "desktop/scripts/eb-env-check.ts"]
     description: >-
       On a macOS runner (Electrobun builds only for the host it runs on), checks the Electrobun
       shell that is replacing Electron (issue #757). Builds web/dist, then `bun run typecheck:eb`
@@ -964,8 +964,20 @@ jobs:
       .app is over 100MB on disk or its dmg or zip is over 40MB; the wrapper's sizes are only
       printed. Fails on a type error, a bundling error (an import the
       Bun main process can't resolve), an ObjC warning or a WebKit/AppKit API that no longer
-      exists, a missing web/dist, or an app over its size gates. It doesn't start the app:
-      starting it in CI is T442.
+      exists, a missing web/dist, or an app over its size gates.
+      The plain .app's CFBundleExecutable is our launcher (desktop/native/macos/kiwi-launcher.c,
+      built by eb-post-build.ts with clang -Wall -Wextra -Werror), not Electrobun's: it keeps only
+      HOME, USER, LOGNAME, TMPDIR, PATH, SHELL, LANG, LC_*, XPC_* and __CF_USER_TEXT_ENCODING and
+      execs Electrobun's launcher with that, so BUN_OPTIONS (--preload), BUN_INSPECT (a debugger),
+      NODE_*, DYLD_* and JSC_* never reach the bun process that runs main and the web view (T632).
+      desktop/scripts/eb-env-check.ts unpacks the plain .app and fails if the launcher, run in front
+      of a stand-in that writes down its environment, passes on any name beyond those (it sets one
+      from each family) or drops one of them, or if the running app, started with BUN_OPTIONS
+      --preload, BUN_INSPECT on a free port, NODE_OPTIONS --require and DYLD_INSERT_LIBRARIES, runs
+      the preload, listens on that port, or loads the library into any process but the unsigned
+      launcher itself (a signed build's hardened runtime stops that one), or leaves anything
+      running; it starts a release-id app only on CI, never on a person's Mac. Starting the app
+      through a test driver is T442.
 
   cli-macos:
     name: cli / macos
