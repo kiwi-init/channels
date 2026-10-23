@@ -73,7 +73,7 @@ jobs:
 
   test-unit:
     name: test / unit
-    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/workflows/nightly.yml", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "desktop/package.json", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
+    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/workflows/nightly.yml", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "desktop/package.json", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml", "ios/engine/**"]
     always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts", "scripts/ci-flows.ts", "scripts/ci-shards.ts"]
     description: >-
       On two runners at once (a matrix of `scripts/ci-tests.ts unit --shard=N/2`, dealt by
@@ -697,7 +697,12 @@ jobs:
       test/permission-lock.test.ts (node:fs wrapped to act at the exact moment): a stale lock swapped
       for a live or still-written one just before the takeover stays with that hook, a newer hook
       that takes the session while the lock is set aside keeps it, and letting go removes the
-      newer-prompt mark before the lock. Fails if any of that breaks.
+      newer-prompt mark before the lock. test/ios-view.test.ts: the iPhone app's room view
+      (ios/engine/view.ts, the engine's roomView on a folded signed log): a task in review that the
+      person may approve is in its reviews, done by the task's owner and dated by its open round, one
+      waiting on an agent reviewer isn't, an agent's seat gets none, and the channel's latest line is
+      its newest message outside the chat with the lead (a task thread's, with the thread it was said
+      in), #general's when nothing came after it. Fails if any of that breaks.
 
   test-flows-a:
     name: test / flows-a
@@ -980,7 +985,7 @@ jobs:
       asset catalog, and the "Bundle the engine" build phase, which runs bun build on
       ios/engine/main.ts (browser target, IIFE) into the app. The engine imports @kiwi/core, the
       desktop's Keyring, seats and bridge types, and a few pure web/src/lib modules (asks,
-      harness names, presence, base-plan, fold-roster, trim), so a change there that breaks the
+      harness names, presence, base-plan, fold-roster, trim, preview, task-actions), so a change there that breaks the
       bundle fails here. Fails on a lint finding, a Swift compile error, a missing asset or
       Info.plist key the build needs, or a bundle error. It does not run the app or the engine.
 
