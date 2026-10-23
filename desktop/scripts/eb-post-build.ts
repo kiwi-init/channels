@@ -2,6 +2,8 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
+import { sealApp } from "./eb-seal.ts";
+
 const buildDir = process.env.ELECTROBUN_BUILD_DIR;
 const os = process.env.ELECTROBUN_OS;
 const arch = process.env.ELECTROBUN_ARCH;
@@ -41,3 +43,27 @@ execFileSync(
   ],
   { stdio: "inherit" },
 );
+
+execFileSync(
+  "clang",
+  [
+    "-O2",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-arch",
+    arch === "x64" ? "x86_64" : "arm64",
+    "-mmacosx-version-min=12.0",
+    "-framework",
+    "CoreFoundation",
+    "-framework",
+    "Security",
+    "-o",
+    path.join(contents, "MacOS", "kiwi-launcher"),
+    path.join(desktop, "native", "macos", "kiwi-launcher.c"),
+    path.join(desktop, "native", "macos", "kiwi-keys.c"),
+  ],
+  { stdio: "inherit" },
+);
+execFileSync("plutil", ["-replace", "CFBundleExecutable", "-string", "kiwi-launcher", path.join(contents, "Info.plist")]);
+console.log(`eb-post-build: ${sealApp(path.dirname(contents))} files sealed in Info.plist`);
