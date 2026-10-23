@@ -7,6 +7,8 @@ import { LINUX_ENTRY } from "./eb-drive.ts";
 
 const IN_CODE = ["kiwiDriver", "KIWI_EB_DRIVER", "KIWI_EB_RELAY", "kiwi-eb-test-store.json"];
 const IN_LAUNCHER = ["KIWI_EB_DRIVER", "KIWI_EB_RELAY", "CFFIXED_USER_HOME"];
+const IN_BOTH_CODE = ["views://internal/index.html", "restoreWindowFocusAfterExternalDrop"];
+const IN_BOTH_LAUNCHER = ["BUN_RUNTIME_TRANSPILER_CACHE_PATH"];
 
 const dir = resolve(process.argv[2] ?? "desktop/release-eb");
 const installed = process.argv[3] ? resolve(process.argv[3]) : null;
@@ -20,20 +22,29 @@ function scripts(path: string): string[] {
   return /\.(c|m)?js$/.test(path) ? [path] : [];
 }
 
-function marks(app: string): { code: string[]; launcher: string[] } {
+function marks(app: string): { code: string[]; launcher: string[]; unread: string[] } {
   const code = scripts(join(app, "Contents", "Resources"))
     .map((f) => readFileSync(f, "utf8"))
     .join("\n");
   const exe = execFileSync("plutil", ["-extract", "CFBundleExecutable", "raw", join(app, "Contents", "Info.plist")], { encoding: "utf8" }).trim();
   const launcher = readFileSync(join(app, "Contents", "MacOS", exe)).toString("latin1");
-  return { code: IN_CODE.filter((m) => code.includes(m)), launcher: IN_LAUNCHER.filter((m) => launcher.includes(m)) };
+  return {
+    code: IN_CODE.filter((m) => code.includes(m)),
+    launcher: IN_LAUNCHER.filter((m) => launcher.includes(m)),
+    unread: [...IN_BOTH_CODE.filter((m) => !code.includes(m)), ...IN_BOTH_LAUNCHER.filter((m) => !launcher.includes(m)).map((m) => `${m} in its launcher`)],
+  };
 }
 
-function linuxMarks(app: string): { code: string[]; launcher: string[] } {
+function linuxMarks(app: string): { code: string[]; launcher: string[]; unread: string[] } {
   const code = scripts(join(app, "Resources"))
     .map((f) => readFileSync(f, "utf8"))
     .join("\n");
-  return { code: IN_CODE.filter((m) => code.includes(m)), launcher: [] };
+  const launcher = readFileSync(join(app, "bin", "launcher")).toString("latin1");
+  return {
+    code: IN_CODE.filter((m) => code.includes(m)),
+    launcher: [],
+    unread: [...IN_BOTH_CODE.filter((m) => !code.includes(m)), ...IN_BOTH_LAUNCHER.filter((m) => !launcher.includes(m)).map((m) => `${m} in its launcher`)],
+  };
 }
 
 const tests = readdirSync(builds)
@@ -49,6 +60,14 @@ try {
   if (linux && !installed) throw new Error("on Linux, name the installed release app (/opt/Channels, from the deb) after the build folder");
   const release = linux ? linuxMarks(installed!) : marks(shippedApp(payloadOf(join(dir, "artifacts")), tmp));
   const test = linux ? linuxMarks(tests[0]!) : marks(tests[0]!);
+  for (const [name, read] of [
+    ["release", release],
+    ["test", test],
+  ] as const) {
+    if (!read.unread.length) continue;
+    console.error(`eb-driver-check: the ${name} build lacks ${read.unread.join(", ")}, which every build has, so the check read the wrong files and proves nothing`);
+    bad++;
+  }
   if (release.code.length || release.launcher.length) {
     console.error(`eb-driver-check: the release build carries test-only code: ${[...release.code, ...release.launcher.map((m) => `${m} through its launcher`)].join(", ")}`);
     bad++;

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { KeysReply, KeysRequest } from "../desktop/src/bridge.ts";
-import { bunWorker, keysController, type KeysFrame, type KeysWorker } from "../desktop/src/keys-eb.ts";
+import { bunWorker, FLUSH_MS, keysController, type KeysFrame, type KeysWorker } from "../desktop/src/keys-eb.ts";
 
 const WORKER = join(import.meta.dir, "..", "desktop", "src", "keys-worker.ts");
 const SESSION = "0123456789abcdef0123456789abcdef";
@@ -28,7 +28,7 @@ function start() {
     init: () => ({ type: "init", relay: "https://relay.invalid", dir, seats: [], person: null }),
     answer: (_m, done) => done(),
     toPage: (f) => void frames.push(f),
-    clock: { now: () => Date.now(), later: (fn) => setTimeout(fn, 10), clear: (t) => clearTimeout(t) },
+    clock: { now: () => Date.now(), later: (fn, ms) => setTimeout(fn, ms === FLUSH_MS ? ms : 10), clear: (t) => clearTimeout(t) },
   });
   keys.start();
   return { keys, dir, workers, frames };

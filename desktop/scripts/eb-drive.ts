@@ -29,9 +29,9 @@ export function testEnv(root: string, socket: string, relay: string, extra: Node
   mkdirSync(home, { recursive: true });
   const linux =
     process.platform === "linux"
-      ? { HOME: home, XDG_CONFIG_HOME: join(home, ".config"), XDG_DATA_HOME: join(home, ".local", "share"), XDG_CACHE_HOME: join(home, ".cache"), XDG_STATE_HOME: join(home, ".local", "state") }
+      ? { XDG_CONFIG_HOME: join(home, ".config"), XDG_DATA_HOME: join(home, ".local", "share"), XDG_CACHE_HOME: join(home, ".cache"), XDG_STATE_HOME: join(home, ".local", "state") }
       : {};
-  const env: NodeJS.ProcessEnv = { ...process.env, CFFIXED_USER_HOME: home, ...linux, KIWI_HOME: join(root, ".kiwi"), KIWI_EB_DRIVER: socket, KIWI_EB_RELAY: relay, ...extra };
+  const env: NodeJS.ProcessEnv = { ...process.env, HOME: home, CFFIXED_USER_HOME: home, ...linux, KIWI_HOME: join(root, ".kiwi"), KIWI_EB_DRIVER: socket, KIWI_EB_RELAY: relay, ...extra };
   for (const name of ["BUN_OPTIONS", "BUN_INSPECT", "NODE_OPTIONS"]) if (!(name in extra)) delete env[name];
   return env;
 }
@@ -79,7 +79,13 @@ export async function attach(socketPath: string, ms = 60_000): Promise<Driver> {
             const lines = (buffered + chunk.toString("utf8")).split("\n");
             buffered = lines.pop() ?? "";
             for (const line of lines) {
-              const a = JSON.parse(line) as { id: number; ok: boolean; value?: unknown; error?: string };
+              let a: { id: number; ok: boolean; value?: unknown; error?: string };
+              try {
+                a = JSON.parse(line) as { id: number; ok: boolean; value?: unknown; error?: string };
+              } catch {
+                // A line that isn't JSON answers nothing: the call it was meant for times out with its own error.
+                continue;
+              }
               const w = waiting.get(a.id);
               waiting.delete(a.id);
               if (a.ok) w?.ok(a.value);

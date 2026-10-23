@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startLocalRelay } from "../../scripts/local-relay.ts";
+import { bridgeChecks } from "./eb-bridge-checks.ts";
 import { appExecutable, appRoot, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
 
 if (!process.argv[2]) {
@@ -85,6 +86,7 @@ try {
         : "not exposed",
     (v) => v !== "granted",
   );
+  await bridgeChecks(d, problems);
   d.close();
 } catch (e) {
   problems.push(e instanceof Error ? e.message : String(e));

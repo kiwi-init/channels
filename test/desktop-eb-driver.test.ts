@@ -1,6 +1,10 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-import { driverAsk, pageAnswer, pageScript, type DriverAnswer } from "../desktop/src/eb-driver.ts";
+import { driverAsk, driverSocketProblem, pageAnswer, pageScript, type DriverAnswer } from "../desktop/src/eb-driver.ts";
+import { testHomeProblem } from "../desktop/src/eb-test-home.ts";
 
 async function inPage(id: number, fn: string, arg: unknown): Promise<DriverAnswer | null> {
   const posted: string[] = [];
@@ -43,5 +47,37 @@ describe("the Electrobun test driver runs a function in the page and hands back 
     expect(pageAnswer({ type: "response", id: 1, success: true, payload: "x" })).toBeNull();
     expect(pageAnswer({ kiwiDriver: "1", ok: true })).toBeNull();
     expect(pageAnswer(null)).toBeNull();
+  });
+});
+
+const root = mkdtempSync(join(tmpdir(), "kiwi-eb-driver-"));
+afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+describe("where the test driver listens (T1820)", () => {
+  test("only in a folder only this user can open, and never over a file that isn't a socket", () => {
+    const own = join(root, "own");
+    mkdirSync(own, { mode: 0o700 });
+    chmodSync(own, 0o700);
+    expect(driverSocketProblem(join(own, "driver.sock"))).toBeNull();
+    const shared = join(root, "shared");
+    mkdirSync(shared);
+    chmodSync(shared, 0o755);
+    expect(driverSocketProblem(join(shared, "driver.sock"))).toContain("isn't a folder only this user can open");
+    writeFileSync(join(own, "notes.txt"), "keep me");
+    expect(driverSocketProblem(join(own, "notes.txt"))).toContain("isn't a socket, so the driver won't remove it");
+    expect(driverSocketProblem(join(root, "missing", "driver.sock"))).toContain("doesn't exist");
+    expect(driverSocketProblem("driver.sock")).toContain("isn't an absolute path");
+    expect(driverSocketProblem(join(own, "driver.sock"), -2)).toContain("isn't a folder only this user can open");
+  });
+});
+
+describe("a test build's home (T1820)", () => {
+  test("its data folder has to sit under the temp home it was given, or it doesn't start", () => {
+    expect(testHomeProblem("/tmp/run/home/Library/Application Support/com.kiwiinit.channels.test/dev", "/tmp/run/home")).toBeNull();
+    expect(testHomeProblem("/Users/someone/Library/Application Support/com.kiwiinit.channels.test/dev", "/tmp/run/home")).toContain("Bun follows HOME");
+    expect(testHomeProblem("/tmp/run/homework/Library/Application Support/x", "/tmp/run/home")).toContain("isn't under the temp home");
+    expect(testHomeProblem("/tmp/run/home", "/tmp/run/home")).toContain("isn't under the temp home");
+    expect(testHomeProblem("/tmp/run/home/Library", undefined)).toContain("CFFIXED_USER_HOME");
+    expect(testHomeProblem("/tmp/run/home/Library", "relative/home")).toContain("CFFIXED_USER_HOME");
   });
 });
