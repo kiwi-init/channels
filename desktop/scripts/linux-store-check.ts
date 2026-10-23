@@ -21,6 +21,7 @@ function expect(what: string, ok: boolean, detail: string): void {
 }
 
 const home = fs.mkdtempSync(path.join(os.tmpdir(), "kiwi-linux-store-"));
+process.env["XDG_CONFIG_HOME"] = path.join(home, ".config");
 const id = `com.kiwiinit.channels.store-check-${randomBytes(4).toString("hex")}`;
 const dir = ebDataDir(id, "stable", "linux", home, {});
 const store = path.join(dir, STORE_FILE);
