@@ -320,4 +320,15 @@ describe("each document is its own session (T1741)", () => {
     const second = r.load();
     expect(await settled(second.call("getDeepLink"))).toBe("answered null");
   });
+
+  test("an id takes one second document at most: a third nonce opens nothing, so page script can retire the live session once at most, and never again without the next id", async () => {
+    const r = rig();
+    const id = r.bridge.nextSession();
+    r.load(id);
+    const second = r.load(id);
+    for (let i = 0; i < 100; i++) r.raw({ session: id, doc: crypto.randomUUID(), packet: { type: "request", id: 1, method: "notify", params: ["forged", "nonce"] } });
+    expect(await settled(second.call("getDeepLink"))).toBe("answered null");
+    expect(r.events).toEqual([`opened ${id}`, `opened ${id}`]);
+    expect(shell.did).not.toContain("notify forged: nonce");
+  });
 });
