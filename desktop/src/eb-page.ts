@@ -2,17 +2,13 @@ import { csp } from "./guard.ts";
 
 export const PAGE_URL = "views://internal/index.html";
 
-export const PAGE_RULES = ["^*", PAGE_URL, `${PAGE_URL}#*`, `${PAGE_URL}?*`];
+export const PAGE_RULES = ["^*", PAGE_URL, `${PAGE_URL}#*`];
 
 export const PAGE_TEMPLATE = "page/index.html";
 
 export const RULES_CANARY = "views://internal/kiwi-rules-check";
 
-export function isPageUrl(url: string): boolean {
-  if (url.slice(0, PAGE_URL.length).toLowerCase() !== PAGE_URL) return false;
-  const next = url.charAt(PAGE_URL.length);
-  return next === "" || next === "#" || next === "?";
-}
+export const isPageUrl = (url: string): boolean => url === PAGE_URL || url.startsWith(`${PAGE_URL}#`);
 
 const WS = String.raw`[\t\n\f\r ]`;
 

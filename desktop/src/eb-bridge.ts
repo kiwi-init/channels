@@ -1,6 +1,6 @@
 import type { KeysReply, KeysRequest, StoreSnapshot } from "./bridge.ts";
 import type { Call, CallArgs, CallValue, Handlers, Pushes } from "./calls.ts";
-import { PAGE_URL } from "./eb-page.ts";
+import { isPageUrl } from "./eb-page.ts";
 import type { KeysFrame } from "./keys-eb.ts";
 
 export const BOOT_GLOBAL = "__kiwiBoot";
@@ -48,7 +48,7 @@ export function bootOf(v: unknown): Boot | null {
   return { snapshot: snapshot as StoreSnapshot, session };
 }
 
-export const onOurPage = (url: string | null): boolean => url !== null && url.split("#")[0] === PAGE_URL;
+export const onOurPage = (url: string | null): boolean => url !== null && isPageUrl(url);
 
 export interface PacketTransport<Out = unknown> {
   send?: (packet: Out) => void | PromiseLike<void>;
