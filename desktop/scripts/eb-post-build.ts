@@ -7,7 +7,7 @@ import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts";
 import { JOIN_SCHEME } from "../src/deep-links.ts";
 import { PAGE_TEMPLATE, pageWithCsp } from "../src/eb-page.ts";
 import type { FromWorker, ToWorker } from "../src/keys-shim.ts";
-import { bundleProblems, urlSchemeProblems } from "./eb-bundle.ts";
+import { bundleProblems, testBuildProblems, urlSchemeProblems } from "./eb-bundle.ts";
 import { hostKey, mismatches, pinFor, PINS } from "./eb-pins.ts";
 import { sealApp } from "./eb-seal.ts";
 import { ELECTROBUN_LAUNCHER } from "./linux-files.ts";
@@ -126,6 +126,7 @@ if (answered !== "ok") throw new Error(`the bundled keys worker didn't answer a 
 const problems = [
   ...bundleProblems(fs.readFileSync(path.join(app, "bun", "index.js"), "utf8"), fs.readFileSync(path.join(app, "views", "preload", "index.js"), "utf8")),
   ...urlSchemeProblems(fs.readFileSync(path.join(contents, "Info.plist"), "utf8"), process.env.ELECTROBUN_APP_IDENTIFIER ?? "", JOIN_SCHEME),
+  ...testBuildProblems(process.env.CHANNELS_EB_TEST === "1", process.env.ELECTROBUN_APP_IDENTIFIER ?? "", fs.readFileSync(path.join(contents, "Resources", "version.json"), "utf8")),
 ];
 if (problems.length) throw new Error(`eb-post-build: ${problems.join("; ")}`);
 if (fs.existsSync(path.join(views, "index.html"))) throw new Error("eb-post-build: index.html is under views/ again by the seal, where Electrobun would serve it without the CSP");
