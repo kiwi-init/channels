@@ -81,7 +81,7 @@ function watchPage(view: BrowserView, pageUrl: string): void {
     now: Date.now,
   });
   pageWatch = new JSCallback(() => gone("its web content process ended"), { args: [], returns: "void", threadsafe: true });
-  if (!shell.kiwi_watch_page(pageWatch.ptr)) logMainError(new Error("Electrobun's navigation delegate wasn't found: a stopped page isn't reloaded or counted"));
+  if (!shell.kiwi_watch_page(pageWatch)) logMainError(new Error("Electrobun's navigation delegate wasn't found: a stopped page isn't reloaded or counted"));
 }
 
 BrowserView.on("created", (tag) => tag.remove());
