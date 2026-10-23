@@ -35,6 +35,24 @@ static gboolean stop(gpointer data) {
   return G_SOURCE_REMOVE;
 }
 
+typedef struct {
+  bool (*deny)(void);
+  bool (*watch)(void (*)(void));
+  bool ok;
+} Hooks;
+
+static gpointer install_off_main(gpointer data) {
+  Hooks *hooks = data;
+  hooks->ok = hooks->deny() && hooks->watch(gone);
+  g_idle_add(stop, NULL);
+  return NULL;
+}
+
+static gboolean install_from_worker(gpointer data) {
+  g_thread_unref(g_thread_new("worker", install_off_main, data));
+  return G_SOURCE_REMOVE;
+}
+
 static const char *PAGE =
     "<script>(async () => {"
     "if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { document.title = 'no media'; return; }"
@@ -65,8 +83,13 @@ int main(int argc, char **argv) {
     bad++;
   } else
     printf("program name and class: channels-desktop (the Wayland app_id, matching channels-desktop.desktop)\n");
-  if (!deny() || !watch(gone)) {
-    fprintf(stderr, "kiwi-shell-test: a WebKitWebView signal hook wasn't installed\n");
+  loop = g_main_loop_new(NULL, FALSE);
+  Hooks hooks = {deny, watch, false};
+  g_idle_add(install_from_worker, &hooks);
+  g_main_loop_run(loop);
+  if (hooks.ok) printf("hooks: installed on GTK's main loop when asked from another thread, as main-eb's worker asks\n");
+  if (!hooks.ok) {
+    fprintf(stderr, "kiwi-shell-test: a WebKitWebView signal hook wasn't installed from another thread\n");
     return 1;
   }
 
@@ -79,7 +102,6 @@ int main(int argc, char **argv) {
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
   gtk_widget_show_all(window);
 
-  loop = g_main_loop_new(NULL, FALSE);
   guint timeout = g_timeout_add_seconds(30, stop, NULL);
   webkit_web_view_load_html(view, PAGE, "http://localhost/");
   g_main_loop_run(loop);
