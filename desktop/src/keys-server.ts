@@ -52,6 +52,13 @@ export function serveKeys(k: Keyring, push: (p: KeysPush) => void): KeysSession 
         const rows = fromWire(r.rows);
         return k.openRows(text(r.code), Array.isArray(rows) ? rows : []);
       }
+      case "keep": {
+        const state = fromWire(r.state);
+        if (!state || typeof state !== "object" || Array.isArray(state)) throw new Error("bad request");
+        return k.keep(text(r.code), state);
+      }
+      case "openKept":
+        return k.openKept(text(r.code), fromWire(r.sealed));
       case "follow": {
         const stop = k.follow(text(r.code), count(r.since), (event) => push({ sub: id, event: toWire(event) }), { watch: r.watch === true });
         subs.set(id, stop);
