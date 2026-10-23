@@ -20,6 +20,7 @@ const scratch = (tag: string) => {
 const dataDir = scratch("relay");
 const claudeDir = scratch("claude");
 const codexDir = scratch("codex");
+const grokDir = scratch("grok");
 const bin = scratch("bin");
 const owner = scratch("owner");
 const agent = scratch("agent");
@@ -28,7 +29,15 @@ let server: ReturnType<typeof startRelay> | undefined;
 let me = "";
 let want = "";
 
-const base = (home: string): Env => ({ KIWI_HOME: home, KIWI_RELAY: server!.url.origin, CLAUDE_CONFIG_DIR: claudeDir, CODEX_HOME: codexDir, KIWI_MODEL: "test-model", CLAUDE_PROJECT_DIR: "" });
+const base = (home: string): Env => ({
+  KIWI_HOME: home,
+  KIWI_RELAY: server!.url.origin,
+  CLAUDE_CONFIG_DIR: claudeDir,
+  CODEX_HOME: codexDir,
+  GROK_HOME: grokDir,
+  KIWI_MODEL: "test-model",
+  CLAUDE_PROJECT_DIR: "",
+});
 
 function spawn(home: string, args: string[], env: Env = {}) {
   return Bun.spawn(kiwiCmd(args), { cwd: home, env: { ...process.env, ...base(home), ...env }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
@@ -119,12 +128,42 @@ line({ type: "event_msg", payload: { type: "task_complete" } });
 setInterval(() => {}, 1_000);
 `;
 
+const FAKE_GROK = `#!${process.execPath}
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+const record = ${JSON.stringify(record)};
+const ms = Date.now().toString(16).padStart(12, "0");
+const session = ms.slice(0, 8) + "-" + ms.slice(8) + "-7" + crypto.randomUUID().slice(15);
+const dir = join(process.env.GROK_HOME, "sessions", encodeURIComponent(process.cwd()), session);
+mkdirSync(dir, { recursive: true });
+const update = (u) => appendFileSync(join(dir, "updates.jsonl"), JSON.stringify({ jsonrpc: "2.0", method: "session/update", params: { sessionId: session, update: u } }) + "\\n");
+const say = (o) => appendFileSync(record, JSON.stringify(o) + "\\n");
+process.on("SIGTERM", () => { say({ kind: "term" }); process.exit(0); });
+const argv = process.argv.slice(2);
+writeFileSync(join(dir, "chat_history.jsonl"), JSON.stringify({ type: "user", content: [{ type: "text", text: argv.at(-1) }] }) + "\\n");
+update({ sessionUpdate: "user_message_chunk" });
+say({ kind: "start", harness: "grok", pid: process.pid, argv, token: !!process.env.KIWI_SEAT_TOKEN, as: process.env.KIWI_AS, channel: process.env.KIWI_CHANNEL, marker: !!process.env.GROK_SESSION_ID, thread: session });
+await Bun.sleep(1_500);
+const task = /This session is for (T\\d+)/.exec(argv.at(-1) ?? "")?.[1];
+if (task) {
+  update({ sessionUpdate: "tool_call" });
+  const p = Bun.spawn(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: { ...process.env, GROK_SESSION_ID: session }, stdout: "pipe", stderr: "pipe" });
+  const out = (await new Response(p.stdout).text()) + (await new Response(p.stderr).text());
+  await p.exited;
+  say({ kind: "done", out });
+}
+update({ sessionUpdate: "turn_completed" });
+setInterval(() => {}, 1_000);
+`;
+
 beforeAll(async () => {
   server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir });
   writeFileSync(join(bin, "claude"), FAKE);
   chmodSync(join(bin, "claude"), 0o755);
   writeFileSync(join(bin, "codex"), FAKE_CODEX);
   chmodSync(join(bin, "codex"), 0o755);
+  writeFileSync(join(bin, "grok"), FAKE_GROK);
+  chmodSync(join(bin, "grok"), 0o755);
   const code = /join code: (\S+)/.exec(await ok(owner, ["create", "loop", "--as", "boss"]))![1]!;
   let out = "";
   const joining = spawn(agent, ["join", code, "--timeout", "60s"], S);
@@ -248,5 +287,59 @@ test("with --harness codex, the loop finds the new thread by the nonce in its fi
   await reading;
   await until(() => !seatOf(agent)?.hold, "the seat released");
   expect(log).toContain(`bound to Codex session ${start.thread}`);
+  expect(log).toContain(`${id} is over; its session ended`);
+});
+
+test("with --harness grok, the loop asks for a listener, finds the session by its nonce in this folder, binds the seat to it, and ends it once the task is done", async () => {
+  const before = seen().length;
+  const id = /added (T\d+)/.exec(await ok(owner, ["--as", "human", "task", "add", "grok work", "--owner", me, "--ask", want], { CLAUDECODE: "" }))![1]!;
+  const loopEnv: Env = { PATH: `${bin}:${process.env.PATH}`, SHELL: "/bin/sh", CLAUDECODE: "", CLAUDE_PID: "", GROK_SESSION_ID: "outer" };
+  const loop = spawn(agent, ["loop", "--harness", "grok", "--model", "grok-test", "--effort", "high"], loopEnv);
+  let log = "";
+  const reading = new Response(loop.stderr).text().then((t) => void (log = t));
+  const fail = async (e: unknown) => {
+    loop.kill();
+    await loop.exited;
+    await reading;
+    throw new Error(`${String(e)}\n${JSON.stringify(seen().slice(before))}\n${log}`);
+  };
+  await until(
+    () =>
+      seen()
+        .slice(before)
+        .some((s) => s.kind === "start"),
+    "the Grok session's start",
+  ).catch(fail);
+  const start = seen()
+    .slice(before)
+    .find((s) => s.kind === "start");
+  if (start?.kind !== "start") throw new Error("no start");
+  expect(start.harness).toBe("grok");
+  expect(start.token).toBe(false);
+  expect(start.marker).toBe(false);
+  expect(start.argv.slice(0, 4)).toEqual(["-m", "grok-test", "--reasoning-effort", "high"]);
+  expect(start.argv.at(-1)).toContain(`This session is for ${id} “grok work”`);
+  expect(start.argv.at(-1)).toContain("start the monitor tool with command `kiwi listen`");
+  await until(() => seatOf(agent)?.session === start.thread, "the seat bound to the new session").catch(fail);
+  expect(seatOf(agent)?.harness).toBe("grok");
+
+  await until(
+    () =>
+      seen()
+        .slice(before)
+        .some((s) => s.kind === "term"),
+    "the Grok session's end",
+  ).catch(fail);
+  const done = seen()
+    .slice(before)
+    .find((s) => s.kind === "done");
+  expect(done?.kind === "done" && done.out).toContain(id);
+  expect(await ok(owner, ["--as", "human", "task", "show", id], { CLAUDECODE: "" })).toContain("state: done");
+
+  loop.kill("SIGTERM");
+  await loop.exited;
+  await reading;
+  await until(() => !seatOf(agent)?.hold, "the seat released");
+  expect(log).toContain(`bound to Grok session ${start.thread}`);
   expect(log).toContain(`${id} is over; its session ended`);
 });
