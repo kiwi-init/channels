@@ -54,7 +54,7 @@ function sandboxOff(): string | null {
 
 const windowLook = mac ? dlopen(shellPath, { kiwi_window_look: { args: [FFIType.ptr, FFIType.f64, FFIType.f64, FFIType.u32, FFIType.u32], returns: FFIType.void } }).symbols.kiwi_window_look : null;
 
-const macGuards = mac ? dlopen(shellPath, { kiwi_guard_downloads: { args: [], returns: FFIType.bool }, kiwi_allow_only: { args: [FFIType.ptr], returns: FFIType.bool } }).symbols : null;
+const guards = dlopen(shellPath, { kiwi_guard_downloads: { args: [], returns: FFIType.bool }, kiwi_allow_only: { args: [FFIType.ptr], returns: FFIType.bool } }).symbols;
 
 const core = dlopen(path.join(binDir, `libElectrobunCore.${suffix}`), {
   setWebviewHTMLContent: { args: [FFIType.u32, FFIType.ptr], returns: FFIType.void },
@@ -252,8 +252,8 @@ else if (instance.kind === "second") {
   if (!instance.delivered) console.error("Channels: another Channels holds this data folder and didn't answer; quitting");
   Utils.quit(0);
 } else if (!shell.kiwi_deny_permissions()) refuse(instance, "the web view's permission handler wasn't found; not opening a window that could grant the microphone");
-else if (macGuards && !macGuards.kiwi_guard_downloads()) refuse(instance, "the web view's download handler wasn't found; not opening a window that could save any file into Downloads");
-else if (macGuards && !macGuards.kiwi_allow_only(ptr(PAGE_ONLY))) refuse(instance, "the web view's navigation handler wasn't found; not opening a window whose page could navigate away");
+else if (!guards.kiwi_guard_downloads()) refuse(instance, "the web view's download handler wasn't found; not opening a window that could save any file into Downloads");
+else if (!guards.kiwi_allow_only(ptr(PAGE_ONLY))) refuse(instance, "the web view's navigation handler wasn't found; not opening a window whose page could navigate away");
 else if (!shell.kiwi_watch_commits()) refuse(instance, "the web view's navigation delegate wasn't found; not opening a window that would trust a page it can't see");
 else {
   const off = sandboxOff();

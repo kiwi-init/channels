@@ -1279,7 +1279,9 @@ jobs:
       channels-desktop (the Wayland app_id, which matches channels-desktop.desktop), a microphone
       request on mock capture devices is denied (NotAllowedError) while a handler connected first to
       allow everything, as Electrobun's Allow/Block dialog is, never runs, a terminated web
-      process reaches kiwi_watch_page's callback, kiwi_committed_url gives the page's committed URL (the bridge's
+      process reaches kiwi_watch_page's callback, kiwi_guard_downloads and kiwi_allow_only (T2071, as the Mac's from #776) hold even behind a handler that uses
+      every navigation: a load elsewhere and a window.open are refused, an http: download is cancelled, the page's data:
+      downloads are saved and a data: navigation becomes a download, not a page; kiwi_committed_url gives the page's committed URL (the bridge's
       trust check, from load-changed's commit as the Mac's from didCommitNavigation), and kiwi_sandbox_pages, asked from another thread, turns
       WebKitGTK's bubblewrap sandbox on for the default context before its first web view once a trial
       bwrap --unshare-all builds its namespaces (on 26.04), or leaves it off and says why (on 24.04, where
@@ -1288,7 +1290,8 @@ jobs:
       /opt/Channels/bin/launcher under Xvfb with a temp HOME and fails unless a window with
       WM_CLASS Channels (Electrobun's own class, the entry's StartupWMClass) titled Channels opens
       within 30 s, a WebKitWebProcess of the app's own runs 5 s later inside a bwrap of the app's own on 26.04,
-      and on 24.04 without one while the app says why, the app is still up, and nothing of it is left 10 s
+      and on 24.04 without one while the app says why, its rules canary was reported refused (the app quits
+      otherwise) and its download and navigation guards installed (T2071), the app is still up, and nothing of it is left 10 s
       after SIGTERM; it starts the AppImage (--appimage-extract-and-run) the same way. A last step, which
       only prints and never fails, records what bwrap can do under the runner's AppArmor (the restriction,
       the profiles naming bwrap or userns, and bwrap and unshare -Urn with and without a scratch unconfined
