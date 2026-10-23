@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
-import { randomBytes } from "node:crypto";
+import { createCipheriv, pbkdf2Sync, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -129,11 +129,13 @@ describe("store v2", () => {
   test("an Electron store that can't be read: says so and saves nothing", async () => {
     const dir = folder();
     const legacy = async (): Promise<LegacyRead> => ({ kind: "unreadable", file: "/old/kiwi-store.bin", why: "the keychain said no" });
-    const s = await openStore({ dir, key: keychain().key, legacy, platform: "darwin" });
+    const k = keychain();
+    const s = await openStore({ dir, key: k.key, legacy, platform: "darwin" });
     expect(s.kind).toBe("unreadable");
     expect(s.kind === "unreadable" && s.why).toContain("/old/kiwi-store.bin");
     expect(s.kind === "unreadable" && s.why).toContain("the keychain said no");
     expect(existsSync(dir)).toBe(false);
+    expect(k.sets()).toBe(0);
   });
 
   test("a sealed store whose key is gone is unreadable, and no new key replaces it", async () => {
@@ -214,10 +216,12 @@ describe("store v2", () => {
       asked++;
       return { kind: "none" };
     };
-    const s = await openStore({ dir, key: keychain().key, legacy, platform: "linux" });
+    const k = keychain();
+    const s = await openStore({ dir, key: k.key, legacy, platform: "linux" });
     expect(s.kind).toBe("unreadable");
     expect(asked).toBe(0);
     expect(existsSync(join(dir, STORE_FILE))).toBe(false);
+    expect(k.sets()).toBe(0);
   });
 
   test("a Mac never takes a plain copy: one planted over a sealed store is replaced from the backup, never sealed over it", async () => {
@@ -271,20 +275,75 @@ describe("store v2", () => {
     expect(JSON.parse(read(dir).toString("utf8"))).toEqual(STORE);
   });
 
-  test("a Mac never imports a plain Electron store, so deleting the sealed store and planting one gets nothing in", async () => {
+  test("a Mac never imports a plain Electron store, so planting one gets nothing in, and no key is made for it", async () => {
     for (const name of ["kiwi-desktop", "Kiwi"]) {
       const dir = folder();
       const home = join(dir, "..", "home");
       const k = keychain();
-      opened(await openStore({ dir, key: k.key, legacy: NO_LEGACY, platform: "darwin" })).save('{"person":{"sk":"real-sk"}}');
-      rmSync(join(dir, STORE_FILE));
-      rmSync(join(dir, `${STORE_FILE}.bak`));
       put(join(home, "Library", "Application Support", name), "kiwi-store.bin", '{"person":{"sk":"planted"}}');
       const legacy = () => readLegacyStore(legacyPassword("darwin"), "darwin", home, {});
       const s = await openStore({ dir, key: k.key, legacy, platform: "darwin" });
       expect(s.kind === "unreadable" && s.why).toContain("plain text");
-      expect(readdirSync(dir)).toEqual([]);
+      expect(existsSync(dir)).toBe(false);
+      expect(k.sets()).toBe(0);
     }
+  });
+
+  test("a Mac whose keychain still holds the store key but whose two copies are gone refuses it as a deleted store, and imports nothing", async () => {
+    const dir = folder();
+    const k = keychain();
+    opened(await openStore({ dir, key: k.key, legacy: NO_LEGACY, platform: "darwin" })).save('{"person":{"sk":"real-sk"}}');
+    rmSync(join(dir, STORE_FILE));
+    rmSync(join(dir, `${STORE_FILE}.bak`));
+    let asked = 0;
+    const encryptedByTheOldApp = async (): Promise<LegacyRead> => {
+      asked++;
+      return { kind: "ok", json: { person: { sk: "planted" } }, file: "/old/kiwi-store.bin", encrypted: true };
+    };
+    const s = await openStore({ dir, key: k.key, legacy: encryptedByTheOldApp, platform: "darwin" });
+    expect(s.kind === "unreadable" && s.why).toContain("deleted");
+    expect(asked).toBe(0);
+    expect(readdirSync(dir)).toEqual([]);
+    expect(k.sets()).toBe(1);
+  });
+
+  test("a first run saves an empty sealed store at once, so a quick quit isn't taken for a deleted store next time", async () => {
+    const dir = folder();
+    const k = keychain();
+    expect(opened(await openStore({ dir, key: k.key, legacy: NO_LEGACY, platform: "darwin" })).json).toBeNull();
+    expect(isSealed(read(dir))).toBe(true);
+    expect(opened(await openStore({ dir, key: k.key, legacy: NO_LEGACY, platform: "darwin" })).json).toEqual({});
+    expect(k.sets()).toBe(1);
+  });
+
+  test("a keychain that doesn't keep the key Channels made is refused before anything is saved", async () => {
+    const dir = folder();
+    let sets = 0;
+    const leaky: StoreKey = { get: async () => null, set: async () => void sets++ };
+    const s = await openStore({ dir, key: leaky, legacy: NO_LEGACY, platform: "darwin" });
+    expect(s.kind === "unreadable" && s.why).toContain("didn't keep the store key");
+    expect(sets).toBe(1);
+    expect(existsSync(dir)).toBe(false);
+  });
+
+  test("Linux, where the Secret Service gives no app its own key, starts over when both copies are gone", async () => {
+    const dir = folder();
+    const k = keychain(randomBytes(32).toString("base64"));
+    const s = opened(await openStore({ dir, key: k.key, legacy: NO_LEGACY, platform: "linux" }));
+    expect(s).toMatchObject({ json: null, sealed: true });
+    expect(k.sets()).toBe(0);
+  });
+
+  test("Linux with no keychain imports a v10 Electron store (Chromium's fixed password) as plain", async () => {
+    const dir = folder();
+    const home = join(dir, "..", "home");
+    const key = pbkdf2Sync("peanuts", "saltysalt", 1, 16, "sha1");
+    const c = createCipheriv("aes-128-cbc", key, Buffer.alloc(16, 0x20));
+    put(join(home, ".config", "kiwi-desktop"), "kiwi-store.bin", Buffer.concat([Buffer.from("v10"), c.update(JSON.stringify(STORE), "utf8"), c.final()]));
+    const legacy = () => readLegacyStore(legacyPassword("linux"), "linux", home, {});
+    const s = opened(await openStore({ dir, key: keychain(null, { get: "no secret service", set: "no secret service" }).key, legacy, platform: "linux" }));
+    expect(s).toMatchObject({ json: STORE, sealed: false, noKeychain: "no secret service" });
+    expect(JSON.parse(read(dir).toString("utf8"))).toEqual(STORE);
   });
 
   test("a store that isn't an object is unreadable", async () => {
