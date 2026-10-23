@@ -1,9 +1,9 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-import { launcherChannel, launcherKey, parseAnswer, type LineChannel } from "../src/launcher-key.ts";
+import { endSession, KEY_FD_ENV, launcherChannel, launcherKey, parseAnswer, type LineChannel } from "../src/launcher-key.ts";
 
 export type ProbeStep = { ok: string | null } | { error: string };
 
@@ -40,11 +40,32 @@ function inherited(fd: number): string | null {
   }
 }
 
+function afterDone(other: number): string {
+  try {
+    fs.writeSync(other, "get\n");
+    const buf = Buffer.alloc(256);
+    const n = fs.readSync(other, buf, 0, buf.length, null);
+    return n === 0 ? "nothing" : `answered: ${buf.toString("latin1", 0, n).trim()}`;
+  } catch {
+    // EPIPE or ECONNRESET: the launcher shut the socket, so nothing answers on any copy of it.
+    return "nothing";
+  }
+}
+
+const CHILD = `const fs = require("node:fs"); const open = []; for (let f = 3; f < 256; f++) { try { if (fs.fstatSync(f).isSocket()) open.push(f); } catch { /* not open, so not passed on */ } } console.log(JSON.stringify({ sockets: open, env: process.env.${KEY_FD_ENV} ?? null }));`;
+
 async function probe(): Promise<ProbeReport> {
+  const passedOn = inherited(5);
+  const other = fs.openSync("/dev/fd/3", "r+");
   const ch = launcherChannel();
   if (!ch) return { channel: { error: "no key channel" } };
   const key = launcherKey(ch);
-  const report: ProbeReport = { inherited: { ok: inherited(5) }, first: await step(() => key.get()) };
+  const report: ProbeReport = {
+    inherited: { ok: passedOn },
+    fd3: { ok: inherited(3) },
+    env: { ok: process.env[KEY_FD_ENV] ?? null },
+    first: await step(() => key.get()),
+  };
   const first = report["first"];
   if (first && "ok" in first && first.ok === null) {
     const made = randomBytes(32).toString("base64");
@@ -55,7 +76,14 @@ async function probe(): Promise<ProbeReport> {
   report["legacy"] = await step(() => answer(ch, `legacy ${legacyName()}`));
   report["unlisted"] = await step(() => answer(ch, "legacy kiwi-desktop"));
   report["unknown"] = await step(() => answer(ch, "dump"));
-  ch.close();
+  report["done"] = await step(async () => {
+    endSession(ch);
+    return "ended";
+  });
+  report["after"] = { ok: afterDone(other) };
+  fs.closeSync(other);
+  const child = spawnSync(process.execPath, ["-e", CHILD], { encoding: "utf8" });
+  report["child"] = { ok: child.stdout.trim() || child.stderr.trim() };
   return report;
 }
 

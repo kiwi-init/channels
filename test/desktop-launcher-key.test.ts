@@ -1,6 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
 
-import { KEY_FD_ENV, keySources, launcherChannel, launcherKey, launcherLegacyPassword, parseAnswer, type LineChannel } from "../desktop/src/launcher-key.ts";
+import { endSession, KEY_FD_ENV, keyFd, keySources, launcherChannel, launcherKey, launcherLegacyPassword, parseAnswer, type LineChannel } from "../desktop/src/launcher-key.ts";
 
 const b64 = (s: string): string => Buffer.from(s, "utf8").toString("base64");
 
@@ -65,9 +65,27 @@ describe("the store key through the launcher", () => {
 
 describe("where the key comes from", () => {
   test("the launcher's descriptor comes from KIWI_KEY_FD, and nothing else is taken for one", () => {
-    expect(launcherChannel({})).toBeNull();
-    expect(launcherChannel({ [KEY_FD_ENV]: "3" })).not.toBeNull();
-    for (const bad of ["", "0", "1", "2", "-3", "3x", "99999", "03"]) expect(() => launcherChannel({ [KEY_FD_ENV]: bad })).toThrow("isn't a file descriptor");
+    expect(keyFd({})).toBeNull();
+    expect(keyFd({ [KEY_FD_ENV]: "3" })).toBe(3);
+    for (const bad of ["", "0", "1", "2", "-3", "3x", "99999", "03"]) expect(() => keyFd({ [KEY_FD_ENV]: bad })).toThrow("isn't a file descriptor");
+  });
+
+  test("taking the channel removes KIWI_KEY_FD, so nothing the app starts sees it", () => {
+    const env: NodeJS.ProcessEnv = { [KEY_FD_ENV]: "bad", HOME: "/Users/ana" };
+    expect(() => launcherChannel(env)).toThrow("isn't a file descriptor");
+    const none: NodeJS.ProcessEnv = { HOME: "/Users/ana" };
+    expect(launcherChannel(none)).toBeNull();
+    expect(none).toEqual({ HOME: "/Users/ana" });
+  });
+
+  test("ending the session says done, then closes the channel, even when the launcher has gone", () => {
+    const s = scripted({ done: "ok" });
+    endSession(s.ch);
+    expect(s.asked).toEqual(["done"]);
+    expect(s.closed()).toBe(true);
+    const gone = scripted({});
+    expect(() => endSession(gone.ch)).toThrow();
+    expect(gone.closed()).toBe(true);
   });
 
   test("a Mac takes the key only from the signed launcher, never from Bun.secrets", () => {
