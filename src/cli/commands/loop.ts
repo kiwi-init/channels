@@ -2,21 +2,25 @@ import * as Effect from "effect/Effect";
 import { loadConfig } from "../../config.ts";
 import { newSeatToken, SEAT_TOKEN } from "../../hold.ts";
 import { loginPath } from "../../launch/shell.ts";
+import { SESSION_MARKERS } from "../../terminals/shared/launch.ts";
+import { isLoopHarness, LOOP_HARNESSES, recipeFor } from "../../loop/recipes.ts";
 import { runLoop } from "../../loop/run.ts";
 import { opt } from "../args.ts";
 import { type Command, config, die, keepDaemon } from "../context.ts";
 import { seatNamed } from "./seat.ts";
 
-const USAGE = "usage: kiwi loop [--model ID] [--effort LEVEL] (in a tmux window, from the seat's folder)";
+const USAGE = `usage: kiwi loop [--harness ${LOOP_HARNESSES.join("|")}] [--model ID] [--effort LEVEL] (in a tmux window, from the seat's folder)`;
 
 export const loopCommands: Record<string, Command> = {
   loop: () =>
     Effect.gen(function* () {
       const harness = opt.harness ?? "claude";
-      if (harness !== "claude") return yield* die(`${USAGE}: the loop starts Claude Code only so far, not ${harness}`);
+      if (!isLoopHarness(harness)) return yield* die(`${USAGE}: the loop doesn't start ${harness} yet`);
       if (loadConfig().rotate === "on") return yield* die("rotation is on for this computer, and its Stop hook would clear the loop's sessions: run kiwi rotate off first");
-      const bin = Bun.which("claude", { PATH: yield* Effect.promise(() => loginPath()) });
-      if (!bin) return yield* die("claude isn't on your login shell's PATH");
+      for (const key of SESSION_MARKERS) if (!key.startsWith("KIWI_")) delete process.env[key];
+      const recipe = recipeFor(harness);
+      const bin = Bun.which(harness, { PATH: process.env.PATH ?? "" }) ?? Bun.which(harness, { PATH: yield* Effect.promise(() => loginPath()) });
+      if (!bin) return yield* die(`${harness} isn't on your login shell's PATH`);
       const { alias, name } = yield* seatNamed;
       const cfg = (yield* config).channels[alias];
       if (!cfg) return yield* die(`unknown channel "${alias}" (see: kiwi channels)`);
@@ -29,6 +33,6 @@ export const loopCommands: Record<string, Command> = {
       process.on("SIGTERM", asked);
       process.on("SIGHUP", asked);
       const token = process.env[SEAT_TOKEN] || newSeatToken();
-      yield* runLoop({ alias, cfg, me: name, token, bin, ...(opt.model ? { model: opt.model } : {}), ...(opt.effort ? { effort: opt.effort } : {}) }, stop);
+      yield* runLoop({ alias, cfg, me: name, token, recipe: { ...recipe, bin }, ...(opt.model ? { model: opt.model } : {}), ...(opt.effort ? { effort: opt.effort } : {}) }, stop);
     }),
 };
