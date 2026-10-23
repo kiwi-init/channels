@@ -653,6 +653,9 @@ jobs:
       through the Host seam (the folder picker, notifications, the update restart, the browser only for
       http(s) links, a new relay saved, told to the keys and the page reloaded, a bad one changing
       nothing, a bad argument refused under the call's name). And
+      test/desktop-cli.test.ts: the app's kiwi.js becomes a working kiwi in the install folder,
+      compiled with the running Bun (and signed ad-hoc on macOS), a current one is kept, and a
+      kiwi.js that doesn't build leaves nothing behind (desktop/src/cli.ts keepCli, T446). And
       test/desktop-shared-modules.test.ts: the modules both desktop shells share (ipc/handlers.ts and
       everything it imports, calls.ts, host.ts, store.ts, updater.ts, bundled-daemon.ts, deep-links.ts,
       main-log.ts, page-crash.ts, signin.ts) never import electron however deep the import, read from their real
@@ -974,17 +977,21 @@ jobs:
       Then `bun run build:eb` (electrobun build --env=stable): bundles src/main-eb.ts with the
       shared desktop modules it imports (guard.ts csp(), open.ts, eb-page.ts, window-look.ts,
       window-size.ts) and @kiwi/core; scripts/eb-pre-build.ts turns build/icon.icns into the
-      iconset; before it, scripts/build-cli.ts builds the kiwi CLI for darwin-arm64 and
-      desktop/scripts/pack-cli.ts packs it into dist/kiwi.zst; scripts/eb-post-build.ts copies
-      dist/kiwi.zst into the app's Resources (failing if it's missing), web/dist into its views/internal and
+      iconset; before it, `scripts/build-cli.ts --js` builds the kiwi CLI as one JS file
+      (dist/kiwi.js, about 2.6MB) instead of a second compiled Bun: the app compiles it into
+      ~/.kiwi/bin/kiwi with its own Bun at install time (desktop/src/cli.ts, Bun.build with compile,
+      then an ad-hoc codesign on macOS, which Electrobun's Bun 1.4.0 output needs to run; T446);
+      scripts/eb-post-build.ts copies dist/kiwi.js into the app's Resources (failing if it's
+      missing), web/dist into its views/internal and
       compiles native/macos/kiwi-shell.m with clang -Wall -Werror into Contents/MacOS (the
       patch that denies the microphone, camera and location Electrobun grants the page, and the
       window's minimum size and background). We ship the plain app, not Electrobun's
       self-extracting wrapper (which would run the app from a folder the user's rights can edit):
       desktop/scripts/eb-size.ts unpacks the plain .app from the build's .app.tar.zst payload,
       makes its dmg (hdiutil ULMO) and its zip (ditto, the updater's layout), and fails if that
-      .app is over 100MB on disk or its dmg or zip is over 45MB (40MB until the bundled kiwi CLI,
-      ~19MB of zstd, came in; T446 takes it out again); the wrapper's sizes are only printed. Fails on a type error, a bundling error (an import the
+      .app is over 100MB on disk or its dmg or zip is over 40MB (about 24MB and 30MB with
+      kiwi.js; the bundled 19MB kiwi.zst had pushed the zip to about 47MB); the wrapper's sizes are
+      only printed. Fails on a type error, a bundling error (an import the
       Bun main process can't resolve), an ObjC warning or a WebKit/AppKit API that no longer
       exists, a missing web/dist, or an app over its size gates.
       The plain .app's CFBundleExecutable is our launcher (desktop/native/macos/kiwi-launcher.c,
