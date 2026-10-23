@@ -138,6 +138,7 @@ async function createWindow(): Promise<BrowserWindow | null> {
   const load = (html: Uint8Array = page()): void => {
     core.setWebviewHTMLContent(webview.id, ptr(html));
     ours = true;
+    bridge.retire();
     webview.loadURL(PAGE_URL);
   };
   const refreshPreload = (): void =>

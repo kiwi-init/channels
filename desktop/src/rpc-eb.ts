@@ -10,12 +10,15 @@ export interface BunBridge {
   push<P extends Push>(name: P, value: Pushes[P]): void;
   pushKeys(frame: KeysFrame): void;
   nextSession(): string;
+  retire(): void;
 }
 
 export type KeysHandler = (session: string, req: KeysRequest) => Promise<KeysReply>;
 
 interface Session {
   id: string;
+  doc: string;
+  rebindable: boolean;
   deliver(packet: unknown): void;
   send(name: Push, value: Pushes[Push]): void;
   sendKeys(name: "keys", value: KeysFrame): void;
@@ -37,19 +40,19 @@ export function bunBridge(
   let out: PacketTransport<Frame> = {};
   let current: Session | null = null;
   let expected = mint();
-  const open = (id: string): Session => {
+  const open = (id: string, doc: string, rebindable: boolean): Session => {
     let deliver: (packet: unknown) => void = () => {};
     const rpc = createRPC<BunSide, PageSide>({
       maxRequestTime: Infinity,
       requestHandler: (method, params) => (method === "keys" ? keysAnswer(keys, id, params) : answer(table, method, params)),
       transport: {
-        send: (packet: unknown) => (current?.id === id ? out.send?.({ session: id, packet }) : undefined),
+        send: (packet: unknown) => (current === session ? out.send?.({ session: id, doc, packet }) : undefined),
         registerHandler: (h: (packet: unknown) => void) => (deliver = h),
       },
     });
     const send: (name: Push, value: Pushes[Push]) => void = rpc.send;
     const sendKeys: (name: "keys", value: KeysFrame) => void = rpc.send;
-    const session: Session = { id, deliver: (packet) => deliver(packet), send, sendKeys };
+    const session: Session = { id, doc, rebindable, deliver: (packet) => deliver(packet), send, sendKeys };
     current = session;
     expected = mint();
     opened(id);
@@ -57,8 +60,9 @@ export function bunBridge(
   };
   const receive = (raw: unknown): void => {
     const frame = frameOf(raw);
-    if (!frame) return;
-    const session = frame.session === current?.id ? current : frame.session === expected ? open(frame.session) : null;
+    if (!frame?.doc) return;
+    const live = current?.id === frame.session ? current : null;
+    const session = live?.doc === frame.doc ? live : live?.rebindable ? open(frame.session, frame.doc, false) : frame.session === expected ? open(frame.session, frame.doc, true) : null;
     if (session && frame.packet !== undefined) session.deliver(frame.packet);
   };
   return {
@@ -71,6 +75,7 @@ export function bunBridge(
       if (current?.id === frame.session) current.sendKeys("keys", frame);
     },
     nextSession: () => expected,
+    retire: () => void (current = null),
   };
 }
 
@@ -82,19 +87,19 @@ export interface PageBridge {
   onKeys(cb: (frame: KeysFrame) => void): () => void;
 }
 
-export function pageBridge(toHost: (frame: Frame) => void, onHost: (receive: (frame: unknown) => void) => void, session: string): PageBridge {
+export function pageBridge(toHost: (frame: Frame) => void, onHost: (receive: (frame: unknown) => void) => void, session: string, doc: string = crypto.randomUUID()): PageBridge {
   const rpc = createRPC<PageSide, BunSide>({
     maxRequestTime: Infinity,
     transport: {
-      send: (packet: unknown) => toHost({ session, packet }),
+      send: (packet: unknown) => toHost({ session, doc, packet }),
       registerHandler: (h: (packet: unknown) => void) =>
         onHost((raw) => {
           const frame = frameOf(raw);
-          if (frame?.session === session && frame.packet !== undefined) h(frame.packet);
+          if (frame?.session === session && frame.doc === doc && frame.packet !== undefined) h(frame.packet);
         }),
     },
   });
-  toHost({ session });
+  toHost({ session, doc });
   const calls = rpc as unknown as ReturnType<typeof createRPC<PageSide, CallSide>>;
   function call<K extends Call>(name: K, ...args: CallArgs<K>): Promise<CallValue<K>> {
     return calls.request(name, args) as Promise<CallValue<K>>;
