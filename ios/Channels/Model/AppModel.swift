@@ -88,6 +88,13 @@ final class AppModel {
             phase = .broken(error.localizedDescription)
             return
         }
+        #if DEBUG
+            if let json = ProcessInfo.processInfo.environment["CHANNELS_FIXTURE"], let room = try? JSONDecoder().decode(RoomView.self, from: Data(json.utf8)) {
+                rooms[room.code] = room
+                phase = .ready
+                return
+            }
+        #endif
         guard let saved = Vault.load() else {
             phase = .unlinked
             return

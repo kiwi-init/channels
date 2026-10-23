@@ -106,7 +106,7 @@ struct ConversationList: View {
             .bar(.bottom) { dock }
         }
         #if DEBUG
-            .onChange(of: model.channels.first?.code) { _, code in
+            .onChange(of: model.channels.first?.code, initial: true) { _, code in
                 guard let code, path.isEmpty, let shot = UserDefaults.standard.string(forKey: "shot") else { return }
                 if let text = UserDefaults.standard.string(forKey: "draft") { model.keep(Draft(text: text), code, "main") }
                 switch shot {

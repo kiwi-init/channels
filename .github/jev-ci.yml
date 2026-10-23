@@ -973,7 +973,7 @@ jobs:
     description: >-
       On a macOS runner with the newest Xcode installed there, checks the iPhone app in ios/.
       swift-format lint --strict (ios/.swift-format: 4-space indent, 180 columns, lowerCamelCase
-      names, no force unwraps or force try) over ios/Channels. Then xcodebuild builds the Channels
+      names, no force unwraps or force try) over ios/Channels and ios/ChannelsUITests. Then xcodebuild builds the Channels
       scheme for generic iOS devices, Release, unsigned: the Swift sources (SwiftUI, Swift 6 with
       complete strict concurrency, so a value that isn't Sendable crossing an actor fails), the
       asset catalog, and the "Bundle the engine" build phase, which runs bun build on
@@ -982,6 +982,28 @@ jobs:
       harness names, presence, base-plan, fold-roster, trim), so a change there that breaks the
       bundle fails here. Fails on a lint finding, a Swift compile error, a missing asset or
       Info.plist key the build needs, or a bundle error. It does not run the app or the engine.
+
+  ios-gestures:
+    name: ios / gestures
+    inputs: ["ios/**"]
+    imports_from: ["ios/engine/main.ts", "ios/scripts/fixture.ts"]
+    always: ["package.json", "bun.lock", "web/package.json", "desktop/package.json", "packages/core/package.json"]
+    description: >-
+      On a macOS runner with the newest Xcode, boots an iPhone simulator on the newest iOS
+      runtime installed and runs the Channels scheme's tests: ios/ChannelsUITests, XCUITest
+      driving the Debug app with real touches. The target's "Make the fixture" build phase runs
+      ios/scripts/fixture.ts, which folds a signed log of twelve messages (six long ones from
+      agents) and writes the engine's own roomView of it, so the canned channel always has the
+      wire shape the app decodes; a Debug build given it in CHANNELS_FIXTURE shows that channel
+      instead of reading the keychain (ios/Channels/Model/AppModel.swift). GestureTests opens the
+      channel from the list eight times, fresh each time, and 0.3 or 0.8 s after the tap drags
+      200 pt down from the middle right of the screen, on a message bubble: every drag has to
+      scroll the conversation more than 100 pt (a SwiftUI DragGesture on each row swallowed about
+      half of them right after opening: 0 pt), and so does the same drag beside the bubbles.
+      Swiping a bubble right has to start a reply ("Reply to …" in the composer) without leaving
+      the conversation (the Rightward pan in Conversation.swift). The drags' distances are printed
+      as GESTURE lines. Fails on a compile error in the app or the tests, a fixture the app can't
+      decode, or any of those gestures failing.
 
   release-rehearsal:
     name: release / rehearsal
