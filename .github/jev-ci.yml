@@ -1108,6 +1108,35 @@ jobs:
       a temporary keychain, and it deletes its items either way. eb-env-check runs the launcher
       inside a small sealed bundle and expects KIWI_KEY_FD as the one name it adds.
 
+  desktop-linux:
+    name: desktop / linux
+    inputs: ["desktop/src/**", "desktop/build/icons/**", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "package.json", "bun.lock"]
+    imports_from: ["desktop/src/main-eb.ts"]
+    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/package-linux.ts", "desktop/scripts/linux-files.ts", "desktop/scripts/appimage-squashfs.ts"]
+    description: >-
+      On an ubuntu runner (Electrobun builds only for the host it runs on), builds the Electrobun
+      shell for Linux on WebKitGTK (issue #757, T444): web/dist, `electrobun prepare` (Hutch's
+      devkit, cached under ~/.hutch), then `bun run build:eb` (electrobun build --env=stable), with
+      scripts/eb-pre-build.ts making the Mac iconset only on macOS and scripts/eb-post-build.ts
+      copying web/dist into the bundle's Resources/app/views/internal on either OS (the Mac's native
+      shell and launcher only on macOS). Then desktop/scripts/package-linux.ts makes today's two
+      Linux downloads from Electrobun's plain stable artifact (never its self-extracting setup), without
+      Electrobun's updater tools (bspatch, zig-zstd: only its Updater uses them, and these packages
+      update as a whole file), its uninstall tool or its own Channels.desktop:
+      Channels-<v>-linux-amd64.deb (package kiwi-desktop, so it replaces the Electron one, the app in
+      /opt/Channels, /usr/bin/channels-desktop, a .desktop entry opening kiwi:// links, the hicolor
+      icons, Depends on libwebkit2gtk-4.1-0, libgtk-3-0, libayatana-appindicator3-1 and librsvg2-2, md5sums,
+      an entry that runs /opt/Channels/bin/launcher, a preinst that drops the Electron deb's
+      channels-desktop alternative and a postinst that restores the link if an old postrm took it)
+      and Channels-<v>-linux-x86_64.AppImage (zstd squashfs in 128 KiB blocks on AppImage's type2
+      runtime, release 20251108 checked against its pinned sha256), and fails when either is over
+      40 MB. scripts/appimage-squashfs.ts checks the AppImage's compression, and the job fails when
+      the deb or the extracted AppImage lacks the launcher, Bun, the page, the .desktop entry or the
+      icon, or carries what it leaves out. It then installs the v0.26.0 Electron deb (pinned by sha256) and this
+      deb over it, and fails unless /usr/bin/channels-desktop leads to /opt/Channels/bin/launcher, the
+      Electron app is gone, the entry runs the launcher and dpkg --verify finds nothing; it prints the runner's
+      AppArmor user-namespace setting for WebKitGTK's sandbox. Both are kept as linux-packages for 3 days.
+
   cli-macos:
     name: cli / macos
     inputs: ["src/**", "packages/core/**", "test/**", "site/install", "site/install.sh", "desktop/src/**", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", ".github/workflows/release-build.yml", "package.json", "bun.lock", "bunfig.toml", "web/package.json"]
