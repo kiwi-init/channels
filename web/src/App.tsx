@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react"
 
 import { Boundary, Toaster } from "@/components/kit"
 import { ChannelGate } from "@/components/onboarding"
@@ -22,6 +22,7 @@ import { formatShort } from "@/lib/format"
 import { useSidebarShortcut } from "@/lib/sidebar-hidden"
 import { bridge, useSecrets } from "@/lib/secrets"
 import { cx } from "@/lib/utils"
+import { lastChannel, rememberChannel, reopenable } from "@/lib/last-channel"
 
 // The join code lives in the URL fragment, which never leaves the app.
 const readHash = () => parseHash(location.hash)
@@ -80,6 +81,19 @@ export default function App() {
   )
   const actions = useMemo<PaletteActions>(() => ({ onNew: () => setSheet("new"), onJoin: () => setSheet("join"), onComputers: () => setSheet("computers"), onSettings: () => setSettings(true) }), [])
 
+  const [restored, setRestored] = useState(false)
+  if (!restored && person && (code || rows.length)) {
+    setRestored(true)
+    const last = code ? null : reopenable(lastChannel(), rows)
+    if (last) setHash({ code: last })
+  }
+  useLayoutEffect(() => {
+    if (code && readHash().code !== code) history.replaceState(null, "", `${location.pathname}#${encodeURIComponent(code)}`)
+  }, [code])
+  useEffect(() => {
+    if (code && rows.some((r) => r.code === code && r.state === "member")) rememberChannel(code)
+  }, [code, rows])
+
   useEffect(() => {
     const onHash = () => {
       setHash(readHash())
@@ -107,6 +121,7 @@ export default function App() {
 
   const close = useCallback(() => {
     history.replaceState(null, "", location.pathname)
+    rememberChannel(null)
     setHash({ code: "" })
   }, [])
 
