@@ -868,7 +868,7 @@ jobs:
 
   perf:
     name: perf / scale
-    inputs: ["web/**", "desktop/**", "packages/core/**", "src/relay/**", "scripts/perf-scale.ts", "scripts/perf-feel.ts", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json"]
+    inputs: ["web/**", "desktop/**", "packages/core/**", "src/relay/**", "scripts/perf-scale.ts", "scripts/perf-calibrate.ts", "scripts/perf-feel.ts", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json"]
     always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "scripts/perf-scale.ts", "scripts/perf-feel.ts", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json"]
     imports_from: ["scripts/perf-scale.ts", "scripts/perf-feel.ts"]
     parts: [perf-runs]
@@ -899,7 +899,7 @@ jobs:
 
   desktop:
     name: desktop / package
-    inputs: ["desktop/**", "src/**", "packages/core/**", "web/src/**", "web/index.html", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/perf-desktop.ts", "scripts/local-relay.ts", "scripts/perf-budgets.json", "package.json", "bun.lock", "web/package.json"]
+    inputs: ["desktop/**", "src/**", "packages/core/**", "web/src/**", "web/index.html", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/perf-desktop.ts", "scripts/perf-calibrate.ts", "scripts/local-relay.ts", "scripts/perf-budgets.json", "package.json", "bun.lock", "web/package.json"]
     always: ["desktop/package.json", "desktop/tsconfig*.json", "desktop/scripts/fuses.ts", "desktop/scripts/pack-cli.ts", "desktop/scripts/size.ts", "desktop/scripts/smoke.ts", "scripts/perf-desktop.ts"]
     description: >-
       Bundles the Electron shell's main, preload and channels (key process) scripts with bun
@@ -926,8 +926,10 @@ jobs:
       app pointed at the relay through its bridge's setRelayUrl, over --remote-debugging-port), then five
       launches each time, from the process start, the window (the renderer's timeOrigin), the first screen
       (first contentful paint), the first cached message of the channel it reopens (the kiwi:first-message
-      mark) and live (kiwi:live), and fail if it doesn't reopen the channel left open; the medians go to the
-      log and --json, and it fails when a median is over its gate in scripts/perf-budgets.json, the limits
+      mark) and live (kiwi:live), and fail if it doesn't reopen the channel left open; each launch also times
+      perf-scale's CPU calibration (scripts/perf-calibrate.ts) in the app's page, the medians are scaled by it
+      to the reference runner and go to the log and --json, and it fails when one is over its gate in
+      scripts/perf-budgets.json, the limits
       whose source is desktop and perf-check skips: desktopFirstScreenMs and coldStartMs (launch to the first
       cached message). Fails on a
       bundling or packaging error, a fuse changed or dropped, or an app that no longer starts.

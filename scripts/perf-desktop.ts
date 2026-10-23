@@ -5,12 +5,14 @@ import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
 import { daemonStop } from "../desktop/src/daemon-client.ts";
 import { startLocalRelay } from "./local-relay.ts";
+import { calibrate } from "./perf-calibrate.ts";
 
 if (process.argv.includes("--help") || !process.argv[2]) {
   console.log(`The packaged desktop app's cold start, measured: from launching the executable to its window, its first screen, the first cached message
 of the channel it reopens on screen, and live, PERF_RUNS times (5) after one run that makes a channel with PERF_MESSAGES messages (20) on a local relay,
 and leaves it open. A launch that doesn't reopen that channel fails. It runs in a temp user data dir and a temp KIWI_HOME (and on Linux a temp HOME), with a mock keychain on a Mac: it never touches
-the real app. Fails when a median is over its gate in scripts/perf-budgets.json (the limits whose source is desktop).
+the real app. Each launch also times perf-scale's CPU calibration in the app's page; the medians are scaled by it to the reference runner in
+scripts/perf-budgets.json, and it fails when one is over its gate there (the limits whose source is desktop).
 
   bun scripts/perf-desktop.ts <packaged app executable> [--json out.json]`);
   process.exit(process.argv[2] ? 0 : 2);
@@ -112,7 +114,7 @@ async function quit(r: Running): Promise<void> {
 
 const { relay, port } = await startLocalRelay(join(root, "relay"), null, { rateLimits: false });
 const RELAY = `http://127.0.0.1:${port}`;
-const runs: { windowMs: number; firstScreenMs: number; firstMessageMs: number; liveMs: number }[] = [];
+const runs: { windowMs: number; firstScreenMs: number; firstMessageMs: number; liveMs: number; calibrationMs: number }[] = [];
 let running: Running | null = null;
 try {
   log("first run: a person, a channel and its messages on the local relay");
@@ -174,6 +176,7 @@ try {
       firstScreenMs: Math.round(screen.origin + screen.paint - started),
       firstMessageMs: Math.round(screen.origin + reopened.message - started),
       liveMs: Math.round(screen.origin + reopened.live - started),
+      calibrationMs: (await calibrate(page)).ms,
     };
     runs.push(run);
     log(`run ${i + 1}`, JSON.stringify(run));
@@ -190,22 +193,28 @@ try {
   rmSync(root, { recursive: true, force: true });
 }
 
-const medians: Record<string, number> = {
+const { reference, limits } = JSON.parse(readFileSync(resolve(import.meta.dir, "perf-budgets.json"), "utf8")) as {
+  reference: { "@1x": number };
+  limits: Record<string, { what: string; at: string[]; budget: number; gate: number | null; source?: string }>;
+};
+const calibrationMs = median(runs.map((r) => r.calibrationMs));
+const factor = reference["@1x"] / calibrationMs;
+const measured: Record<string, number> = {
   windowMs: median(runs.map((r) => r.windowMs)),
   firstScreenMs: median(runs.map((r) => r.firstScreenMs)),
   firstMessageMs: median(runs.map((r) => r.firstMessageMs)),
   liveMs: median(runs.map((r) => r.liveMs)),
 };
-const report = { runs: runs.length, ...medians, each: runs };
+const scaled = Object.fromEntries(Object.entries(measured).map(([k, v]) => [k, Math.round(v * factor)]));
+const report = { runs: runs.length, calibrationMs, reference: reference["@1x"], measured, scaled, each: runs };
 console.log(JSON.stringify(report, null, 2));
 if (OUT) writeFileSync(OUT, JSON.stringify(report, null, 2));
 
-const { limits } = JSON.parse(readFileSync(resolve(import.meta.dir, "perf-budgets.json"), "utf8")) as {
-  limits: Record<string, { what: string; at: string[]; budget: number; gate: number | null; source?: string }>;
-};
 const over = Object.values(limits).flatMap((l) => {
-  const v = l.source === "desktop" ? medians[l.at[0] ?? ""] : undefined;
-  return v !== undefined && l.gate !== null && v > l.gate ? [`${l.what}: ${v} ms, over its gate ${l.gate} (budget ${l.budget})`] : [];
+  const v = l.source === "desktop" ? scaled[l.at[0] ?? ""] : undefined;
+  return v !== undefined && l.gate !== null && v > l.gate
+    ? [`${l.what}: ${v} ms scaled to the reference runner (calibration ${calibrationMs} ms against ${reference["@1x"]}), over its gate ${l.gate} (budget ${l.budget})`]
+    : [];
 });
 for (const o of over) console.error(o);
 if (over.length) process.exit(1);
