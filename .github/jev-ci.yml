@@ -549,6 +549,9 @@ jobs:
       soak's limits only in the nightly run and lists what isn't at its 0.20 budget yet, and every
       step in ci.yml and nightly.yml that pipes perf-check into tee runs with shell: bash (pipefail),
       so an over-gate median fails the job;
+      test/artifact-overwrite.test.ts: every upload-artifact step in the workflows sets overwrite: true,
+      so a re-run's artifact replaces the one the attempt before it left and a later download (perf
+      / scale's runs, the release's stamp and binaries) reads the re-run, not the first attempt;
       test/mac-size.test.ts: desktop/scripts/mac-size.ts (run by release-build on macOS) fails a dmg
       or zip over 150 MiB or an installed app over 320 MiB, the 0.20 budgets;
       test/appimage-squashfs.test.ts: desktop/scripts/appimage-squashfs.ts (run by release-build on
@@ -873,7 +876,8 @@ jobs:
       local relay and headless Chromium with
       10 agents, 100 tasks and 2000 messages (the agents join at once and the seeding sends through each agent's own session, src/agent.ts, on a local relay started with --dev-no-rate-limits, so no per-minute cap slows it), timing the reload to the first screen, the Tasks,
       Agents and Conversation tabs at 4x CPU and typing while the agents post, and upload the
-      run as the perf-scale-N artifact, with a CPU calibration (a fixed in-page workload) at 1x
+      run as the perf-scale-N artifact (overwrite: a re-run of a run job replaces it, so perf / scale
+      reads the new measurement), with a CPU calibration (a fixed in-page workload) at 1x
       and 4x. A run that crashes fails its job. Then perf / scale downloads the three runs, and
       scripts/perf-check.ts scales each timing by its run's calibration to the reference runner
       in scripts/perf-budgets.json (Reload only its in-page first screen; a run whose calibration

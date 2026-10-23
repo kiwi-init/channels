@@ -189,6 +189,7 @@ jobs:
           name: ui-smoke-failure
           path: /tmp/kiwi-smoke-failure-*.png
           if-no-files-found: ignore
+          overwrite: true
       - name: cli build
         if: ${{ !cancelled() }}
         run: bun run build && ./dist/kiwi --version && bun scripts/build-cli.ts --check
@@ -223,6 +224,7 @@ jobs:
           name: ui-shots
           path: ${{ runner.temp }}/shots
           if-no-files-found: ignore
+          overwrite: true
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         with:
@@ -252,6 +254,7 @@ jobs:
           name: perf-scale-${{ matrix.run }}
           path: ${{ runner.temp }}/perf-${{ matrix.run }}.json
           if-no-files-found: error
+          overwrite: true
 
   perf:
     name: perf / scale
