@@ -4,11 +4,14 @@ import path from "node:path";
 import Electrobun, { BrowserView, BrowserWindow, PATHS, Utils } from "electrobun/main";
 
 import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts";
+import { drive } from "./eb-driver.ts";
 import { navigationUrl, openedUrl, PAGE_RULES, PAGE_URL, pageWithCsp } from "./eb-page.ts";
 import { externalUrl } from "./guard.ts";
 import { openInBrowser } from "./open.ts";
 import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts";
 import { minWindowWidth } from "./window-size.ts";
+
+declare const KIWI_EB_TEST: boolean;
 
 const binDir = path.dirname(process.execPath);
 
@@ -29,7 +32,7 @@ function openOutside(url: string): void {
   if (ext) void openInBrowser(ext, async (u) => void Utils.openExternal(u)).catch(() => {});
 }
 
-function createWindow(): void {
+function createWindow(relay: string, url: string): BrowserView {
   const win = new BrowserWindow({
     title: "Channels",
     url: null,
@@ -54,9 +57,10 @@ function createWindow(): void {
     if (!win.isVisible()) win.show();
   });
   const index = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "internal", "index.html"), "utf8");
-  const page = cString(pageWithCsp(index, DEFAULT_RELAY));
+  const page = cString(pageWithCsp(index, relay));
   core.setWebviewHTMLContent(view.id, ptr(page));
-  view.loadURL(PAGE_URL);
+  view.loadURL(url);
+  return view;
 }
 
 BrowserView.on("created", (tag) => tag.remove());
@@ -64,4 +68,9 @@ BrowserView.on("created", (tag) => tag.remove());
 if (!shell.kiwi_deny_permissions()) {
   console.error("Channels: the web view's permission handler wasn't found; not opening a window that could grant the microphone");
   Utils.quit(1);
-} else createWindow();
+} else if (KIWI_EB_TEST) {
+  const relay = process.env.KIWI_EB_RELAY ?? DEFAULT_RELAY;
+  const view = createWindow(relay, `${PAGE_URL}?relay=${encodeURIComponent(relay)}`);
+  const socket = process.env.KIWI_EB_DRIVER;
+  if (socket) drive(view, socket);
+} else createWindow(DEFAULT_RELAY, PAGE_URL);
