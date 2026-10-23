@@ -980,7 +980,7 @@ jobs:
     name: desktop / mac
     inputs: ["desktop/src/**", "desktop/native/**", "desktop/build/icon.icns", "packages/core/**", "web/src/**", "web/index.html", "web/vite.config.ts", "web/public/**", "web/package.json", "package.json", "bun.lock"]
     imports_from: ["desktop/src/main-eb.ts"]
-    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/electrobun-pins.json", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb.ts", "desktop/scripts/eb-pins.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-size.ts"]
+    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/electrobun-pins.json", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb.ts", "desktop/scripts/eb-pins.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-size.ts", "desktop/scripts/eb-app.ts", "desktop/scripts/eb-release.ts", "desktop/scripts/eb-update-rehearsal.ts"]
     description: >-
       On a macOS runner (Electrobun builds only for the host it runs on), checks the Electrobun
       shell that is replacing Electron (issue #757). Builds web/dist, restores ~/.hutch (the pinned
@@ -1103,7 +1103,7 @@ jobs:
     push: false
     version_bumps: true
     inputs: []
-    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/actions/stamp/action.yml", "scripts/stamp.ts", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/scripts/fuses.ts", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/scripts/pack-cli.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "scripts/changelog.ts", "scripts/cli-downloads.ts"]
+    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/actions/stamp/action.yml", "scripts/stamp.ts", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/scripts/fuses.ts", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/scripts/pack-cli.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "scripts/changelog.ts", "scripts/cli-downloads.ts", "desktop/electrobun.config.ts", "desktop/electrobun-pins.json", "desktop/native/macos/kiwi-shell.m", "desktop/scripts/eb.ts", "desktop/scripts/eb-pins.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-app.ts", "desktop/scripts/eb-release.ts", "desktop/scripts/eb-update-rehearsal.ts", "desktop/src/signer.ts", "desktop/src/update-asset.ts"]
     description: >-
       Runs .github/workflows/release-build.yml, the build a tag's release.yml runs, with
       rehearsal: true and a read-only token, publishing nothing: scripts/stamp.ts stamping the tag
@@ -1119,7 +1119,28 @@ jobs:
       desktop/scripts/pack-cli.ts (which checks it unpacks to the same bytes), and on macOS
       desktop/scripts/mac-size.ts failing a dmg or zip over 150 MiB or an app over 320 MiB, and on Linux
       desktop/scripts/appimage-squashfs.ts failing an AppImage not packed with gzip, lz4 or zstd in
-      blocks of at most 128 KiB. On a pull request, and on a manual run of ci.yml from any
+      blocks of at most 128 KiB. The desktop-mac-eb job (rehearsals always; a tag only once
+      release.yml passes electrobun_mac: true, which also drops Electron's arm64 build so Intel
+      Macs keep Electron's mac-x64 files) builds the Electrobun app with the release bundle id
+      (CHANNELS_EB_RELEASE=1) through the pinned toolchain, then desktop/scripts/eb-release.ts unpacks
+      the plain Channels.app from the build's payload, fails unless it is com.kiwiinit.channels at
+      desktop/package.json's version, signs every Mach-O and then the bundle with the Developer ID
+      and the hardened runtime (Bun alone gets entitlements.app.plist's allow-jit), notarizes and
+      staples it, zips it with ditto (Channels.app at the zip's root) under the name the Electron
+      updater asks for (update-asset.ts swapAsset: Channels-<version>-mac-arm64.zip), makes a ULMO dmg
+      with an Applications link, signs, notarizes and staples that, and fails on a binary carrying
+      audio-input, camera, disable-library-validation, allow-dyld-environment-variables or
+      disable-executable-page-protection, on a designated requirement that isn't Developer ID for
+      com.kiwiinit.channels (signer.ts developerIdRequirement), on codesign --verify, stapler or
+      Gatekeeper refusing the app or the dmg, or on a dmg or zip over 40 MB; without the secrets
+      (a pull request) it ad-hoc signs and skips notarization. Then
+      desktop/scripts/eb-update-rehearsal.ts installs the last Electron arm64 release
+      (ELECTRON_LAST_MAC_ARM64, v0.26.0) into a temp Applications folder and runs its updater's own
+      steps on the new zip: the asset name, the SHA256SUMS line, ditto -x, Channels.app at the root,
+      a newer version, signedLikeThisApp (codesign -R the installed app's designated requirement, then
+      spctl) when signed, and update-asset.ts swapScript swapping the bundle in place; it fails unless
+      the swapped app is com.kiwiinit.channels at the new version with no leftovers, and unless it
+      opens its window within 30 s. On a pull request, and on a manual run of ci.yml from any
       branch but main, the macOS app is unsigned: no caller passes the signing secrets, and only
       the release environment (main and v* tags) holds them. A manual run on main takes them from
       that environment, so the app is signed, notarized and checked as on a tag. Fails where the tag would: a stamped file with no version for the stamp
