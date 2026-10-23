@@ -284,6 +284,53 @@ async function run(part: Part): Promise<string[]> {
     await panel.getByRole("button", { name: "Back to details" }).click();
     await panel.getByRole("button", { name: /^Repos.*octo\/kiwi/ }).waitFor();
     log(`ok  ${at}`);
+    at = "Details → Rooms: the owner makes #mobile and renames it, a taken name is refused before it's sent, and the room shows in the sidebar";
+    await panel.getByRole("button", { name: /^Rooms/ }).click();
+    await panel.getByRole("heading", { name: "Rooms" }).waitFor();
+    const roomName = panel.getByRole("textbox", { name: "New room’s name" });
+    await roomName.fill("#mobile");
+    await panel.getByRole("button", { name: "New room", exact: true }).click();
+    await page.getByText("Made #mobile").first().waitFor();
+    const roomList = panel.getByRole("list", { name: "This channel's rooms" });
+    await roomList.getByText("#mobile", { exact: true }).waitFor();
+    await roomName.fill("Mobile");
+    await panel.getByText("A room is already called #Mobile").waitFor();
+    if (await panel.getByRole("button", { name: "New room", exact: true }).isEnabled()) throw new Error("a room name already taken could still be sent");
+    await roomName.fill("");
+    if (process.env.SMOKE_SHOTS) await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "rooms.png") });
+    await panel.getByRole("button", { name: "Back to details" }).click();
+    await panel.getByRole("button", { name: /^Rooms.*#mobile/ }).waitFor();
+    const conversations = page.getByRole("complementary", { name: "Channel" }).getByRole("region", { name: "Conversations" });
+    await conversations.getByRole("button", { name: /# mobile/ }).waitFor();
+    await panel.getByRole("button", { name: /^Rooms/ }).click();
+    await panel.getByRole("button", { name: "Rename #mobile" }).click();
+    await panel.getByRole("textbox", { name: "New name for #mobile" }).fill("ios");
+    await panel.getByRole("button", { name: "Save", exact: true }).click();
+    await page.getByText("Renamed to #ios").first().waitFor();
+    await panel.getByRole("button", { name: "Back to details" }).click();
+    await panel.getByRole("button", { name: /^Rooms.*#ios/ }).waitFor();
+    await conversations.getByRole("button", { name: /# ios/ }).waitFor();
+    log(`ok  ${at}`);
+    at = "a room is its own conversation: what's posted in #ios shows there and not in #general";
+    await panel.getByRole("button", { name: "Close details" }).click();
+    await panel.waitFor({ state: "detached" });
+    const roomRow = (text: string) => page.locator("[id^='m']").filter({ hasText: text });
+    await conversations.getByRole("button", { name: /# ios/ }).click();
+    await page.getByRole("textbox", { name: "Message" }).and(page.getByPlaceholder("Message #ios")).waitFor();
+    await send("smoke, in #ios");
+    await roomRow("smoke, in #ios").first().waitFor();
+    if (process.env.SMOKE_SHOTS) await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "room-ios.png") });
+    await conversations.getByRole("button", { name: /# general/ }).click();
+    await page.getByPlaceholder("Message #general").waitFor();
+    await page.waitForTimeout(300);
+    if (await roomRow("smoke, in #ios").count()) throw new Error("a message posted in #ios shows in #general");
+    if (process.env.SMOKE_SHOTS) await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "room-general.png") });
+    await conversations.getByRole("button", { name: /# ios/ }).click();
+    await roomRow("smoke, in #ios").first().waitFor();
+    await conversations.getByRole("button", { name: /# general/ }).click();
+    await page.getByPlaceholder("Message #general").waitFor();
+    await inDetails(async () => {});
+    log(`ok  ${at}`);
     at = "phone: the header opens Details, and Invite is reachable from it";
     await panel.getByRole("button", { name: "Close details" }).click();
     await panel.waitFor({ state: "detached" });
@@ -334,6 +381,21 @@ async function run(part: Part): Promise<string[]> {
         .getByRole("button", { name: new RegExp(`^Replying to .+: ping ${i}$`) })
         .waitFor({ timeout: 15000 });
     }
+    log(`ok  ${at}`);
+    at = "Details → Download, any time: a transcript to read (each message's number, date, time and sender) and the signed log, named with the date and time";
+    await inDetails(async () => {});
+    const downloads = panel.getByRole("region", { name: "Download" });
+    const [md] = await Promise.all([page.waitForEvent("download"), downloads.getByRole("button", { name: "Transcript (.md)" }).click()]);
+    if (!/-transcript-\d{4}-\d{2}-\d{2}-\d{4}\.md$/.test(md.suggestedFilename())) throw new Error(`the transcript was saved as ${md.suggestedFilename()}`);
+    if (!/\*\*#\d+ · \d{4}-\d{2}-\d{2} \d{2}:\d{2} · smoke\*\*\n\n> smoke test\n/.test(readFileSync(await md.path(), "utf8")))
+      throw new Error("the transcript lacks “smoke test”, quoted, under its number, date, time and sender");
+    const [jsonl] = await Promise.all([page.waitForEvent("download"), downloads.getByRole("button", { name: "Signed log (.jsonl)" }).click()]);
+    if (!/-log-\d{4}-\d{2}-\d{2}-\d{4}\.jsonl$/.test(jsonl.suggestedFilename())) throw new Error(`the log was saved as ${jsonl.suggestedFilename()}`);
+    const signed: unknown[] = readFileSync(await jsonl.path(), "utf8")
+      .trimEnd()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    if (!signed.every((m) => typeof m === "object" && m !== null && "sig" in m)) throw new Error("a line of the downloaded log has no signature");
     log(`ok  ${at}`);
     at = "Details → Close channel…: the log downloads first, every message signed, and Cancel keeps the channel";
     await inDetails(() => panel.getByRole("button", { name: /^Close channel/ }).click());

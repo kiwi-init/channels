@@ -17,7 +17,11 @@
     "build": "bun run build:main && bun run build:preload && bun run build:channels",
     "start": "bun run build && electron dist/main.js",
     "dist": "bun run build && electron-builder",
-    "typecheck": "bunx tsc --noEmit"
+    "prepare:eb": "electrobun prepare",
+    "start:eb": "electrobun dev",
+    "build:eb": "electrobun build --env=stable",
+    "typecheck": "bunx tsc --noEmit",
+    "typecheck:eb": "bun run prepare:eb && bunx tsc --noEmit -p tsconfig.eb.json"
   },
   "dependencies": {
     "@kiwi/core": "workspace:*"
@@ -26,6 +30,7 @@
     "@electron/fuses": "^1.8.0",
     "@types/bun": "^1.4.3",
     "@types/node": "^26.6.5",
+    "electrobun": "2.0.4",
     "electron": "^44.7.2",
     "electron-builder": "^26.15.3",
     "typescript": "^7.0.2"
