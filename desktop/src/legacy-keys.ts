@@ -71,12 +71,9 @@ function libsecretOrNull(name: LegacyName): string | null {
   }
 }
 
-export const macKeychainItem = (name: LegacyName): { service: string; name: string } => ({ service: `${name} Safe Storage`, name: `${name} Key` });
-
 export const legacyPassword =
   (platform: NodeJS.Platform = process.platform): LegacyPassword =>
   async (name) => {
-    if (platform === "darwin") return Bun.secrets.get(macKeychainItem(name));
     if (platform !== "linux") return null;
     return libsecretOrNull(name) ?? kwalletLookup(name);
   };

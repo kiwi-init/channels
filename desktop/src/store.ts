@@ -36,9 +36,18 @@ let vault: StoreVault | null = null;
 
 let storeBroken: string | null = null;
 
+function loaded(v: StoreVault): VaultRead {
+  try {
+    return v.load();
+  } catch (e) {
+    // A load that stopped partway may have left either copy half-restored: the store counts as unreadable, so nothing saves over them.
+    return { ok: false, why: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 export function openStore(v: StoreVault): void {
+  const read = loaded(v);
   vault = v;
-  const read = v.load();
   store = read.ok && read.file ? { ...defaults(), ...read.file } : defaults();
   if (!read.ok) storeBroken = read.why;
   store.relayUrl = normalizeRelay(store.relayUrl) ?? DEFAULT_RELAY;
