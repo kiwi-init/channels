@@ -983,9 +983,13 @@ jobs:
     always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-size.ts"]
     description: >-
       On a macOS runner (Electrobun builds only for the host it runs on), checks the Electrobun
-      shell that is replacing Electron (issue #757). Builds web/dist, then `bun run typecheck:eb`
-      in desktop/: `electrobun prepare` fetches Electrobun 2.0.4's devkit (Hutch, the pinned
-      core and Bun) into desktop/.hutch, and tsc -p tsconfig.eb.json typechecks
+      shell that is replacing Electron (issue #757). Builds web/dist, restores ~/.hutch (Hutch,
+      Cottontail, Electrobun's core and devkit, Bun) from actions/cache keyed on the
+      electrobun version in desktop/package.json, and runs `bun run prepare:eb` (electrobun
+      prepare) up to three times, 20 s apart, so a download blip from GitHub or blackboard.sh
+      doesn't fail the job; the steps after it run with DASH_RELEASE_OFFLINE=1 and fetch
+      nothing. Then `bun run typecheck:eb` in desktop/: electrobun prepare projects the devkit
+      into desktop/.hutch, and tsc -p tsconfig.eb.json typechecks
       src/main-eb.ts, electrobun.config.ts and the eb-*.ts build scripts against it, strict.
       Then `bun run build:eb` (electrobun build --env=stable): bundles src/main-eb.ts with the
       shared desktop modules it imports (guard.ts csp(), open.ts, eb-page.ts, window-look.ts,
