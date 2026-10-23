@@ -672,6 +672,14 @@ jobs:
       own receiver, and every Electrobun internal RPC handler but window dragging doing nothing
       (webviewTagUpdateSrc, SetNavigationRules and ExecuteJavascript included); with
       test/desktop-eb-bundle.test.ts: the post-build check of the built bundle. And
+      test/desktop-app-life.test.ts: the Electrobun app's single instance (desktop/src/single-instance.ts:
+      an exclusive flock on app.lock in the data folder, opened O_CLOEXEC so a child left running
+      never keeps it, and dropped by the kernel with the process; a second start hands its kiwi://
+      link or "show" over app.sock, 0600 in a 0700 folder, and goes; two first runs at once leave
+      exactly one first; a socket that answers only a well-formed handoff under 4 KB), the wake
+      nudge by timer drift (desktop/src/wake.ts) and the tray and app menus as data
+      (desktop/src/app-menus.ts: Restart to update only when one is ready, the text sizes on ⌘0,
+      ⌘= and ⌘-, only the app's own actions read back from a click). And
       test/desktop-shared-modules.test.ts: the modules both desktop shells share (ipc/handlers.ts and
       everything it imports, calls.ts, host.ts, store.ts, updater.ts, bundled-daemon.ts, deep-links.ts,
       main-log.ts, signin.ts) never import electron however deep the import, read from their real
