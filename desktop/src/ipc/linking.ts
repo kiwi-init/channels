@@ -1,10 +1,9 @@
-import { ipcMain } from "electron";
-
 import type { LinkAskView, PhoneView } from "../bridge.ts";
+import type { Serves } from "../calls.ts";
 import { createLinkHost } from "../link-host.ts";
 import { mutate, store } from "../store.ts";
 
-export function wireLinkingIpc(): void {
+export function linkingCalls(): Serves<"linkBegin" | "linkPoll" | "linkAnswer" | "linkCancel"> {
   const host = createLinkHost({
     relayUrl: () => store.relayUrl,
     person: () => {
@@ -18,8 +17,10 @@ export function wireLinkingIpc(): void {
         s.phones = [...(s.phones ?? []), phone];
       }),
   });
-  ipcMain.handle("kiwi:link-begin", () => host.begin());
-  ipcMain.handle("kiwi:link-poll", (): Promise<LinkAskView | null> => host.poll());
-  ipcMain.handle("kiwi:link-answer", (_e, accept: boolean): Promise<PhoneView | null> => host.answer(accept === true));
-  ipcMain.handle("kiwi:link-cancel", () => host.cancel());
+  return {
+    linkBegin: () => host.begin(),
+    linkPoll: (): Promise<LinkAskView | null> => host.poll(),
+    linkAnswer: (accept: boolean): Promise<PhoneView | null> => host.answer(accept === true),
+    linkCancel: () => host.cancel(),
+  };
 }

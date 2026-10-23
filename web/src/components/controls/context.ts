@@ -5,7 +5,7 @@ import type { Persona, Personality } from "@kiwi/core/personality.ts"
 import type { ChannelIcon } from "@kiwi/core/protocol.ts"
 import type { Scope } from "@kiwi/core/scopes.ts"
 import type { ChannelState } from "@kiwi/core/state.ts"
-import type { LogExport } from "@/lib/log-export"
+import type { Exported } from "@/lib/log-export"
 
 export type Confirm =
   | { kind: "approve"; req: JoinRequest; powers?: PersonPowers }
@@ -39,7 +39,7 @@ export interface ControlsProps {
   onPowers?: (m: RosterMember, powers: PersonPowers) => Promise<void>
   onCloseChannel: () => Promise<void>
   onLeaveChannel: () => Promise<void>
-  exportLog: () => Promise<LogExport>
+  exportLog: () => Promise<Exported>
   onRename?: (name: string) => Promise<void>
   onIcon?: (icon: ChannelIcon | null) => Promise<void>
   onHold?: (on: boolean, note?: string) => Promise<void>
@@ -47,6 +47,8 @@ export interface ControlsProps {
   onRepos?: (repos: string[]) => Promise<void>
   onGithubWrite?: (on: boolean) => Promise<void>
   onBranchPrefix?: (prefix: string | null) => Promise<void>
+  onMakeRoom?: (name: string) => Promise<void>
+  onRenameRoom?: (id: string, name: string) => Promise<void>
   title?: string
   roomId?: string
 }

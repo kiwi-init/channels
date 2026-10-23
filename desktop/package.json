@@ -17,10 +17,11 @@
     "build": "bun run build:main && bun run build:preload && bun run build:channels",
     "start": "bun run build && electron dist/main.js",
     "dist": "bun run build && electron-builder",
+    "prepare:eb": "electrobun prepare",
     "start:eb": "electrobun dev",
     "build:eb": "electrobun build --env=stable",
     "typecheck": "bunx tsc --noEmit",
-    "typecheck:eb": "electrobun prepare && bunx tsc --noEmit -p tsconfig.eb.json"
+    "typecheck:eb": "bun run prepare:eb && bunx tsc --noEmit -p tsconfig.eb.json"
   },
   "dependencies": {
     "@kiwi/core": "workspace:*"

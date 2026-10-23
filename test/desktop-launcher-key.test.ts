@@ -1,6 +1,10 @@
 import { describe, expect, spyOn, test } from "bun:test";
+import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-import { endSession, KEY_FD_ENV, keyFd, keySources, launcherChannel, launcherKey, launcherLegacyPassword, parseAnswer, type LineChannel } from "../desktop/src/launcher-key.ts";
+import { endSession, KEY_FD_ENV, keyFd, keySources, launcherChannel, launcherKey, launcherLegacyPassword, NO_READY_MARK, parseAnswer, type LineChannel } from "../desktop/src/launcher-key.ts";
+import { openStore } from "../desktop/src/store-v2.ts";
 
 const b64 = (s: string): string => Buffer.from(s, "utf8").toString("base64");
 
@@ -53,6 +57,25 @@ describe("the store key through the launcher", () => {
     expect(s.asked).toEqual([`set ${b64("a2V5")}`]);
     await expect(launcherKey(scripted({ set: "fail the keychain already holds a store key" }).ch).set("x")).rejects.toThrow("already holds");
     await expect(launcherKey(scripted({ set: "none" }).ch).set("x")).rejects.toThrow("didn't save");
+  });
+
+  test("until the launcher keeps the store's ready mark (T1076), drop, finished and finish ask it nothing and fail, so a key with no store is refused, never started over", async () => {
+    const s = scripted({ get: `key ${b64(Buffer.alloc(32, 7).toString("base64"))}` });
+    const key = launcherKey(s.ch);
+    await expect(key.finished()).rejects.toThrow(NO_READY_MARK);
+    await expect(key.finish()).rejects.toThrow(NO_READY_MARK);
+    await expect(key.drop()).rejects.toThrow(NO_READY_MARK);
+    expect(s.asked).toEqual([]);
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-launcher-store-"));
+    try {
+      const opened = await openStore({ dir, key, legacy: async () => ({ kind: "none" }), platform: "darwin" });
+      expect(opened.kind).toBe("unreadable");
+      expect(opened.kind === "unreadable" ? opened.why : "").toContain(NO_READY_MARK);
+      expect(readdirSync(dir)).toEqual([]);
+      expect(existsSync(join(dir, "kiwi-store-v2.bin"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("the old app's key is asked for by its name", async () => {

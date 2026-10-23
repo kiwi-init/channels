@@ -1,14 +1,13 @@
-import { ipcMain, shell } from "electron";
-
 import type { GithubRepoView, GithubStatus } from "../bridge.ts";
 import type { MemberPicture } from "@kiwi/core/protocol.ts";
+import type { Serves } from "../calls.ts";
 
 import { avatar, finishDevice, linkedHere, listRepos, startDevice } from "../github-flow.ts";
 import { held } from "../held.ts";
+import type { Host } from "../host.ts";
 import { openInBrowser } from "../open.ts";
 import { relayConfig } from "../signin.ts";
 import { mutate, store } from "../store.ts";
-import { currentWindow } from "../window.ts";
 
 async function status(): Promise<GithubStatus> {
   const link = linkedHere(store.github, store.relayUrl) ? store.github : undefined;
@@ -30,29 +29,31 @@ function picture(): Promise<MemberPicture | null> {
   return face.picture;
 }
 
-async function link(): Promise<GithubStatus> {
+async function link(host: Host): Promise<GithubStatus> {
   const relay = store.relayUrl;
   const clientId = (await relayConfig(relay)).githubClientId;
   if (!clientId) throw new Error("this relay has no GitHub App");
   const start = await startDevice(clientId);
-  currentWindow()?.webContents.send("kiwi:github-code", { code: start.userCode, url: start.url });
-  await openInBrowser(start.url, (u) => shell.openExternal(u));
+  host.push("githubCode", { code: start.userCode, url: start.url });
+  await openInBrowser(start.url, (u) => host.openExternal(u));
   const found = await finishDevice(clientId, start, { fetch, sleep: (ms) => new Promise((r) => setTimeout(r, ms)), now: Date.now });
   mutate((s) => (s.github = { ...found, at: Date.now(), relay, clientId }));
   return status();
 }
 
-export function wireGithubIpc(): void {
-  ipcMain.handle("kiwi:github-status", () => status());
-  ipcMain.handle("kiwi:github-link", () => (linking ??= link().finally(() => (linking = null))));
-  ipcMain.handle("kiwi:github-repos", (): Promise<GithubRepoView[]> => {
-    const link = store.github;
-    if (!link || !linkedHere(link, store.relayUrl)) return Promise.reject(new Error("link GitHub in Settings first"));
-    return reposFor(link.token);
-  });
-  ipcMain.handle("kiwi:github-picture", () => picture());
-  ipcMain.handle("kiwi:github-unlink", async () => {
-    mutate((s) => (s.github = undefined));
-    return status();
-  });
+export function githubCalls(host: Host): Serves<"githubStatus" | "githubLink" | "githubRepos" | "githubPicture" | "githubUnlink"> {
+  return {
+    githubStatus: () => status(),
+    githubLink: () => (linking ??= link(host).finally(() => (linking = null))),
+    githubRepos: (): Promise<GithubRepoView[]> => {
+      const link = store.github;
+      if (!link || !linkedHere(link, store.relayUrl)) return Promise.reject(new Error("link GitHub in Settings first"));
+      return reposFor(link.token);
+    },
+    githubPicture: () => picture(),
+    githubUnlink: async () => {
+      mutate((s) => (s.github = undefined));
+      return status();
+    },
+  };
 }

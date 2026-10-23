@@ -87,12 +87,20 @@ function keyOrNone(line: string): string | null {
   return a.kind === "key" ? a.value : null;
 }
 
+export const NO_READY_MARK = "the launcher doesn't keep the store's ready mark yet (T1076)";
+
 export function launcherKey(ch: LineChannel): StoreKey {
+  const notYet = async (): Promise<never> => {
+    throw new Error(NO_READY_MARK);
+  };
   return {
     get: async () => keyOrNone(ch.request("get")),
     set: async (value) => {
       if (parseAnswer(ch.request(`set ${toWire(value)}`)).kind !== "ok") throw new Error("the launcher didn't save the store key");
     },
+    drop: notYet,
+    finished: notYet,
+    finish: notYet,
   };
 }
 

@@ -1,7 +1,9 @@
-import { afterAll, expect, mock, test } from "bun:test";
+import { afterAll, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { useHost } from "../desktop/src/host.ts";
+import { fakeHost } from "./fake-host.ts";
 
 const root = mkdtempSync(join(tmpdir(), "kiwi-blocked-"));
 const parent = join(root, "Applications");
@@ -13,14 +15,7 @@ afterAll(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-mock.module("electron", () => ({
-  app: {
-    isPackaged: true,
-    getVersion: () => "0.19.0",
-    getPath: (name: string) => (name === "exe" ? join(parent, "Channels.app", "Contents", "MacOS", "Channels") : userData),
-    on: () => {},
-  },
-}));
+useHost(fakeHost({ packaged: true, version: "0.19.0", paths: { exe: join(parent, "Channels.app", "Contents", "MacOS", "Channels"), data: userData, logs: userData } }).host);
 
 type Checked = { state: string; version?: string; url?: string; blocked?: true };
 const updater = "../desktop/src/updater.ts?blocked";
