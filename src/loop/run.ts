@@ -145,7 +145,7 @@ function session(seat: LoopSeat, s: AgentSession, first: Work, prompt: string, s
       bound = claudeSession(child.pid)?.sessionId ?? null;
       if (!bound) yield* Effect.sleep(100);
     }
-    if (!bound) return yield* end(exited ? { kind: "own", lived: Date.now() - started } : { kind: "unbound" });
+    if (!bound) return yield* end(exited ? { kind: "own", lived: Date.now() - started } : stop.asked ? { kind: "stopped" } : { kind: "unbound" });
     yield* heldOrDie(bindHeldSeat(seat.alias, seat.me, seat.token, { harness: "claude", session: bound, pid: child.pid }), seat);
     yield* say(`${seat.me} is bound to session ${bound}`);
 

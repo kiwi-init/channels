@@ -15,7 +15,7 @@ export const loopCommands: Record<string, Command> = {
       const harness = opt.harness ?? "claude";
       if (harness !== "claude") return yield* die(`${USAGE}: the loop starts Claude Code only so far, not ${harness}`);
       if (loadConfig().rotate === "on") return yield* die("rotation is on for this computer, and its Stop hook would clear the loop's sessions: run kiwi rotate off first");
-      const bin = Bun.which("claude", { PATH: yield* Effect.promise(() => loginPath()) });
+      const bin = Bun.which("claude", { PATH: process.env.PATH ?? "" }) ?? Bun.which("claude", { PATH: yield* Effect.promise(() => loginPath()) });
       if (!bin) return yield* die("claude isn't on your login shell's PATH");
       const { alias, name } = yield* seatNamed;
       const cfg = (yield* config).channels[alias];
