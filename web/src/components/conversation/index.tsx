@@ -29,6 +29,7 @@ import { Icon } from "../icon"
 import { Button, Harnesses, Pictures, Spinner, errorText, toast } from "../kit"
 import { AddAgent, AgentLanes, CompactBlock, HoldDialog, NewAgent, Presence, ProposalCard, TasksView } from "../lazy"
 import { canStartAgents } from "@/lib/launches"
+import { markOnce } from "@/lib/marks"
 import { ALLOW_ONCE, DENY, settledOf } from "@/lib/permission-settled"
 import { isAgent } from "../message"
 import { NeedsYou } from "../needs-you"
@@ -146,6 +147,10 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     nameOf,
   })
   const { behind, setBehind, isFresh, scroller, stick, toBottom, onScroll } = useScroll({ messages, visible, hereKey })
+  const anyShown = visible.length > 0
+  useEffect(() => {
+    if (anyShown) requestAnimationFrame(() => markOnce("kiwi:first-message"))
+  }, [anyShown])
   const landed = useCallback(
     (s: { m: Message; after: number; seq?: number }) => (s.seq !== undefined ? bySeq.get(s.seq) : messages.findLast((x) => x.seq > s.after && x.from === me && x.body === s.m.body)),
     [bySeq, messages, me]

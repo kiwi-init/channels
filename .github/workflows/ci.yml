@@ -310,6 +310,7 @@ jobs:
       - run: bun desktop/scripts/size.ts desktop/release/linux-unpacked/channels-desktop
       - run: command -v xvfb-run || (sudo apt-get update && sudo apt-get install -y xvfb)
       - run: xvfb-run -a bun desktop/scripts/smoke.ts desktop/release/linux-unpacked/channels-desktop
+      - run: xvfb-run -a bun scripts/perf-desktop.ts desktop/release/linux-unpacked/channels-desktop --json "$RUNNER_TEMP/perf-desktop.json"
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         with:
