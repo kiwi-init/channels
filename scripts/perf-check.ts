@@ -101,7 +101,7 @@ for (const [name, l] of Object.entries(limits)) {
       rows.push(`| ${l.what} | not measured | | ${l.gate ?? "none yet"} | ${l.budget} |`);
       continue;
     }
-    const m = round(median(seen));
+    const m = Math.round(median(seen) * 1000) / 1000;
     rows.push(`| ${l.what} | ${m} | | ${l.gate ?? "none yet"} | ${l.budget} |`);
     if (l.gate !== null && m > l.gate) over.push(`${l.what}: ${m}, over its gate ${l.gate} (${name})`);
     if (l.gate === null || l.gate > l.budget) short.push(`${l.what}: gate ${l.gate ?? "none"}, 0.20 budget ${l.budget}`);

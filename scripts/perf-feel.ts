@@ -464,7 +464,7 @@ try {
 
   let ask = "";
   while (!ask) {
-    const said = (await atlas(["log", "-n", "20", "--json"])).split("\n").flatMap((line) => (line.trim() ? [JSON.parse(line) as { seq: number; body?: string }] : []));
+    const said = (await atlas(["log", "-n", "20", "--json"])).split("\n").flatMap((line) => (line.trim().startsWith("{") ? [JSON.parse(line) as { seq: number; body?: string }] : []));
     ask = String(said.find((m) => m.body === "Make it feel fast")?.seq ?? "");
     if (!ask) await later(300);
   }
