@@ -109,16 +109,16 @@ try {
   else problems.push(`the app didn't install the kiwi CLI at ${cli}`);
 
   const ours = webContent().filter((p) => !before.has(p));
-  if (ours.length !== 1) problems.push(`expected one web content process of the app's own, found ${ours.length}: not stopping any`);
+  if (!ours.length) problems.push("found no web content process of the app's own to stop");
   else {
     const origin = await d.evaluate(() => performance.timeOrigin, null);
-    process.kill(ours[0]!, "SIGKILL");
+    for (const pid of ours) process.kill(pid, "SIGKILL");
     const back = await until("the page, back after its web content process was killed", 30_000, () =>
       d.evaluate(() => (document.querySelector("#root")?.childElementCount ? performance.timeOrigin : null), null, 2_000).then((o) => (o !== null && o !== origin ? o : null)),
     ).catch((e: Error) => (problems.push(e.message), null));
     const logs = found(join(root, "home", "Library", "Logs"), "main.log");
     const logged = logs.some((f) => readFileSync(f, "utf8").includes("the window's page stopped"));
-    if (back && logged) console.log(`web content process killed: the page reloaded and main.log says so (${logs[0]!.slice(root.length)})`);
+    if (back && logged) console.log(`the app's ${ours.length} web content processes killed: the page reloaded and main.log says so (${logs[0]!.slice(root.length)})`);
     else if (back) problems.push(`the page reloaded but no main.log under the test HOME's Library/Logs says it stopped (found ${logs.length})`);
   }
   d.close();

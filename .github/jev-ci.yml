@@ -1066,7 +1066,9 @@ jobs:
       ~/Library in a temp CFFIXED_USER_HOME, a local relay) fails unless the window shows the
       dashboard from views://internal/index.html with a first paint, the relay it was given reaches the page as window.kiwi.relayUrl and answers
       through the CSP, an inline script and a fetch to another origin are refused, the microphone
-      isn't granted, and nothing of the app is left running after it quits. scripts/perf-desktop.ts
+      isn't granted, the kiwi daemon answers on the test KIWI_HOME, the kiwi CLI is installed in the test
+      HOME's .kiwi/bin, killing every web content process of the app's own brings the page back with a
+      line in main.log (T439), and nothing of the app is left running after it quits. scripts/perf-desktop.ts
       --electrobun then times the test build's cold start as desktop / package times Electron's:
       a person, a channel and 20 messages on a local relay through the driver (the name field,
       Continue, New channel, Create channel, the composer and Enter), then 5 launches to the
