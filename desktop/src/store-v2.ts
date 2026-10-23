@@ -133,6 +133,7 @@ export async function openStore({ dir, key, legacy, platform = process.platform 
       const old = await legacy();
       if (old.kind === "none") return open(null, null);
       if (old.kind === "unreadable") return refuse(`the keys the Electron app saved in ${old.file} can't be read: ${old.why}`);
+      if (!old.encrypted && platform !== "linux") return refuse(`the keys in ${old.file} are in plain text, and the Electron app only ever kept them encrypted here, so Channels won't take them`);
       if (old.encrypted && !k) return refuse(`the keys the Electron app saved in ${old.file} are encrypted, and without a keychain Channels would keep them in plain text: ${noKeychain}`);
       const json = JSON.stringify(old.json);
       save(json);

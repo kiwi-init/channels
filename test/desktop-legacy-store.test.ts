@@ -124,6 +124,7 @@ describe("finding Electron's store", () => {
       {},
     );
     expect(read.kind === "ok" && read.json).toEqual({ channels: [] });
+    expect(read.kind === "ok" && read.encrypted).toBe(false);
     expect(asked).toBe(0);
   });
 

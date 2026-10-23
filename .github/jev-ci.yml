@@ -549,11 +549,13 @@ jobs:
       empty store; plain JSON on Linux without a secret service (the open store says why), sealed once a
       keychain shows up, and never a plain copy on a Mac or over a sealed copy on Linux (a planted one
       is replaced from the sealed backup, never sealed over it); and Electron's kiwi-store.bin imported
-      once, sealed and read back, its file untouched, or, when it can't be read or is encrypted with no
-      keychain to keep it sealed, nothing saved. With test/desktop-legacy-store.test.ts
+      once, sealed and read back, its file untouched, or, when it can't be read, is encrypted with no
+      keychain to keep it sealed, or is plain text anywhere but Linux (a Mac's Electron app always
+      encrypted it, so a deleted v2 store and a planted plain kiwi-store.bin get nothing in), nothing
+      saved. With test/desktop-legacy-store.test.ts
       (desktop/src/legacy-store.ts, legacy-keys.ts): Electron's safeStorage format opened from what
       Electron itself wrote, v11 on a GNOME keyring and v10 on the macOS Keychain, Linux v10 with
-      Chromium's fixed password, a torn store read from its .bak asking the keychain once, an old
+      Chromium's fixed password (which counts as plain, not encrypted), a torn store read from its .bak asking the keychain once, an old
       store without its key unreadable, never empty, and an unreadable kiwi-desktop store never passed
       over for the old Kiwi folder's; Bun reads the old password only on Linux. And
       test/desktop-guard.test.ts's writePrivate: a link at the file's path or at a guessable temp

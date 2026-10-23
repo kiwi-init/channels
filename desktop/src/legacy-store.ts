@@ -70,7 +70,7 @@ export async function readLegacyAt(file: string, name: LegacyName, platform: Nod
   const pw = await legacyKey(prefix, name, platform, password);
   if (pw === null) return { kind: "unreadable", file, why: `the system keychain didn't give Channels the key the old app saved as "${name} Safe Storage"` };
   try {
-    return { kind: "ok", json: storeObject(await openLegacy(raw, pw, legacyRounds(platform))), file, encrypted: true };
+    return { kind: "ok", json: storeObject(await openLegacy(raw, pw, legacyRounds(platform))), file, encrypted: !(platform === "linux" && prefix === "v10") };
   } catch (e) {
     return { kind: "unreadable", file, why: `its key didn't open it (${reason(e)})` };
   }

@@ -4,7 +4,8 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { LegacyRead } from "../desktop/src/legacy-store.ts";
+import { legacyPassword } from "../desktop/src/legacy-keys.ts";
+import { readLegacyStore, type LegacyRead } from "../desktop/src/legacy-store.ts";
 import { isSealed, keychainKey, openStore, seal, STORE_FILE, unseal, type OpenStore, type StoreKey } from "../desktop/src/store-v2.ts";
 
 const dirs: string[] = [];
@@ -268,6 +269,22 @@ describe("store v2", () => {
     const s = opened(await openStore({ dir, key: keychain(null, { get: "no secret service", set: "no secret service" }).key, legacy, platform: "linux" }));
     expect(s).toMatchObject({ json: STORE, sealed: false, noKeychain: "no secret service", imported: "/old/kiwi-store.bin" });
     expect(JSON.parse(read(dir).toString("utf8"))).toEqual(STORE);
+  });
+
+  test("a Mac never imports a plain Electron store, so deleting the sealed store and planting one gets nothing in", async () => {
+    for (const name of ["kiwi-desktop", "Kiwi"]) {
+      const dir = folder();
+      const home = join(dir, "..", "home");
+      const k = keychain();
+      opened(await openStore({ dir, key: k.key, legacy: NO_LEGACY, platform: "darwin" })).save('{"person":{"sk":"real-sk"}}');
+      rmSync(join(dir, STORE_FILE));
+      rmSync(join(dir, `${STORE_FILE}.bak`));
+      put(join(home, "Library", "Application Support", name), "kiwi-store.bin", '{"person":{"sk":"planted"}}');
+      const legacy = () => readLegacyStore(legacyPassword("darwin"), "darwin", home, {});
+      const s = await openStore({ dir, key: k.key, legacy, platform: "darwin" });
+      expect(s.kind === "unreadable" && s.why).toContain("plain text");
+      expect(readdirSync(dir)).toEqual([]);
+    }
   });
 
   test("a store that isn't an object is unreadable", async () => {
