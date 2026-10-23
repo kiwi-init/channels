@@ -195,14 +195,16 @@ async function firstRunWithDriver(d: Driver): Promise<void> {
 }
 
 async function settled(): Promise<string> {
-  const end = Date.now() + 5_000;
+  const from = Date.now();
   let left = processesOf(exe);
-  while (left.length && Date.now() < end) {
+  const lingered = left.length;
+  while (left.length && Date.now() - from < 5_000) {
     await later(100);
     left = processesOf(exe);
   }
   if (left.length) throw new Error(`the last launch left ${left.length} process(es) of the app running: ${left.join("; ")}`);
-  return `nothing of the app left running, ${webkitHelpers()} WebKit helpers on the machine`;
+  const waited = lingered ? `, after ${lingered} of its processes took ${Date.now() - from} ms to go` : "";
+  return `nothing of the app left running${waited}, ${webkitHelpers()} WebKit helpers on the machine`;
 }
 
 async function launchElectrobun(relay: string): Promise<Running> {
@@ -300,7 +302,7 @@ try {
 
 const { reference, limits } = JSON.parse(readFileSync(resolve(import.meta.dir, "perf-budgets.json"), "utf8")) as {
   reference: { "@1x": number; loop: number };
-  limits: Record<string, { what: string; at: string[]; budget: number; gate: number | null; source?: string; scale?: "loop" }>;
+  limits: Record<string, { what: string; at: string[]; budget: number; gate: number | null; source?: string }>;
 };
 const calibrationMs = median(runs.map((r) => r.calibrationMs));
 const loopMs = median(runs.map((r) => r.loopMs));
@@ -333,10 +335,10 @@ console.log(JSON.stringify(report, null, 2));
 if (OUT) writeFileSync(OUT, JSON.stringify(report, null, 2));
 
 const over = Object.values(limits).flatMap((l) => {
-  const byLoop = l.scale === "loop";
-  const v = l.source === (ELECTROBUN ? "desktop-eb" : "desktop") ? (byLoop ? loopScaled : scaled)[l.at[0] ?? ""] : undefined;
-  const by = byLoop ? `loop ${loopMs} ms against ${reference.loop}` : `calibration ${calibrationMs} ms against ${reference["@1x"]}`;
-  return v !== undefined && l.gate !== null && v > l.gate ? [`${l.what}: ${v} ms scaled to the reference runner (${by}), over its gate ${l.gate} (budget ${l.budget})`] : [];
+  const v = l.source === (ELECTROBUN ? "desktop-eb" : "desktop") ? scaled[l.at[0] ?? ""] : undefined;
+  return v !== undefined && l.gate !== null && v > l.gate
+    ? [`${l.what}: ${v} ms scaled to the reference runner (calibration ${calibrationMs} ms against ${reference["@1x"]}), over its gate ${l.gate} (budget ${l.budget})`]
+    : [];
 });
 for (const o of over) console.error(o);
 if (over.length) process.exit(1);
