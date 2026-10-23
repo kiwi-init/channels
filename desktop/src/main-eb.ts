@@ -4,6 +4,8 @@ import path from "node:path";
 import Electrobun, { BrowserView, BrowserWindow, PATHS, Utils } from "electrobun/main";
 
 import { internalRpcHandlers } from "../.hutch/devkit/api/sdks/main/proc/native.ts";
+import { startAppLife } from "./app-life-eb.ts";
+import { handleDeepLink, JOIN_SCHEME } from "./deep-links.ts";
 import { committedUrl, lockInternalRpc, preloadSource, stillOurs, toPageScript } from "./eb-bridge.ts";
 import { navigationUrl, openedUrl, PAGE_RULES, PAGE_URL, pageWithCsp } from "./eb-page.ts";
 import { externalUrl } from "./guard.ts";
@@ -12,12 +14,17 @@ import { useHost } from "./host.ts";
 import { handlers } from "./ipc/handlers.ts";
 import { logMainError } from "./main-log.ts";
 import { openInBrowser } from "./open.ts";
+import { claimInstance, handoffFor, type Instance } from "./single-instance.ts";
 import { bunBridge } from "./rpc-eb.ts";
 import { brokenStore, openStore, snapshot, store, type StoreVault } from "./store.ts";
+import { updateState } from "./updater.ts";
 import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts";
 import { minWindowWidth } from "./window-size.ts";
 
 useHost(ebHost);
+Electrobun.events.on("open-url", (e: { data?: { url?: unknown } }) => {
+  if (typeof e.data?.url === "string") handleDeepLink(e.data.url);
+});
 lockInternalRpc(internalRpcHandlers);
 
 const binDir = path.dirname(process.execPath);
@@ -47,7 +54,7 @@ function openOutside(url: string): void {
 
 const memoryVault: StoreVault = { where: () => `memory, nothing saved (${bundle.identifier})`, load: () => ({ ok: true, file: null, resave: false }), save: () => {} };
 
-function createWindow(): void {
+function createWindow(): BrowserWindow {
   const index = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "internal", "index.html"), "utf8");
   const bundled = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "preload", "index.js"), "utf8");
   const table = handlers(ebHost);
@@ -102,26 +109,55 @@ function createWindow(): void {
   webview.on("dom-ready", () => {
     if (!win.isVisible()) win.show();
   });
+  return win;
 }
 
-function start(): void {
+function start(instance: Extract<Instance, { kind: "first" }>): void {
   openStore(memoryVault);
-  createWindow();
+  const win = createWindow();
+  startAppLife({
+    win,
+    view: win.webview,
+    showWindow: () => ebHost.showWindow(),
+    reload: () => ebHost.reload(),
+    textStep: (step) => ebHost.push("textStep", step),
+    restartToUpdate: () => ebHost.restartToUpdate(),
+    update: updateState,
+    nudgeKeys: () => ebHost.tellKeys({ type: "nudge" }),
+    flushKeys: async () => {},
+    release: instance.release,
+  });
   const broken = brokenStore();
   if (broken) void Utils.showMessageBox({ type: "error", message: "Channels can't read its saved keys", detail: broken.message });
 }
 
 BrowserView.on("created", (tag) => tag.remove());
 
-if (!shell.kiwi_deny_permissions()) {
+const instance = await claimInstance({
+  dir: Utils.paths.userData,
+  handoff: handoffFor(process.argv, JOIN_SCHEME),
+  scheme: JOIN_SCHEME,
+  onHandoff: (h) => (h.kind === "link" ? handleDeepLink(h.url) : ebHost.showWindow()),
+}).catch((e: unknown) => {
+  logMainError(e);
+  console.error("Channels: couldn't take the single-instance lock in its data folder", e);
+  return null;
+});
+if (!instance) Utils.quit(1);
+else if (instance.kind === "second") {
+  if (!instance.delivered) console.error("Channels: another Channels holds this data folder and didn't answer; quitting");
+  Utils.quit(0);
+} else if (!shell.kiwi_deny_permissions()) {
   console.error("Channels: the web view's permission handler wasn't found; not opening a window that could grant the microphone");
+  instance.release();
   Utils.quit(1);
 } else
   try {
-    start();
+    start(instance);
   } catch (e) {
     // Nothing on screen can say what went wrong: main.log and the console carry it, and the app quits instead of running windowless.
     logMainError(e);
     console.error("Channels: the window couldn't start", e);
+    instance.release();
     Utils.quit(1);
   }

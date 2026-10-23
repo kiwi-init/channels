@@ -52,8 +52,9 @@ export const ebHost: Host = {
   notify: (title, body) => Utils.showNotification({ title, body }),
   showWindow: () => {
     if (!shown) return;
+    if (shown.win.isMinimized()) shown.win.unminimize();
     shown.win.show();
-    shown.win.focus();
+    shown.win.activate();
   },
   reload: () => shown?.reload(),
   restartToUpdate: () => {},
