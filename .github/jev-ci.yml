@@ -538,6 +538,18 @@ jobs:
       included. And
       test/desktop-guard.test.ts: on Linux, no encryption or the basic_text backend counts as keys kept
       without a keyring, and such a store is saved again into a keyring once one is there. And
+      test/desktop-store-v2.test.ts: the Electrobun app's store (desktop/src/store-v2.ts) sealed with
+      AES-256-GCM under a random 256-bit key kept in the keychain through Bun.secrets (a wrong key, a
+      flipped byte or a cut file fails), written atomically at 0600 with its backup; a sealed store whose
+      key is gone or wrong, a keychain that fails or holds something else, a Mac without its keychain and
+      a missing store with a damaged backup all unreadable and left as they were, never a fresh key or an
+      empty store; plain JSON on Linux without a secret service, sealed once a keychain shows up; and
+      Electron's kiwi-store.bin imported once, sealed, its file untouched, or, when it can't be read,
+      nothing saved. With test/desktop-legacy-store.test.ts (desktop/src/legacy-store.ts,
+      legacy-keys.ts): Electron's safeStorage format opened from what Electron itself wrote, v11 on a
+      GNOME keyring and v10 on the macOS Keychain (item "<name> Safe Storage", account "<name> Key"),
+      Linux v10 with Chromium's fixed password, a torn store read from its .bak asking the keychain
+      once, and an old store without its key unreadable, never empty. And
       web lib/channel/trim.test.ts: a long session folds the messages past the 2000-message window
       (plus 500 of slack) into the fold base, and tasks and facts from before it stay;
       lib/channel/warm.test.ts: only the last four channels stay warm; lib/threads.test.ts: what's
