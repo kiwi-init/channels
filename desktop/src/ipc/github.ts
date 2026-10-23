@@ -3,6 +3,7 @@ import type { MemberPicture } from "@kiwi/core/protocol.ts";
 import type { Serves } from "../calls.ts";
 
 import { avatar, finishDevice, linkedHere, listRepos, startDevice } from "../github-flow.ts";
+import { externalUrl } from "../guard.ts";
 import { held } from "../held.ts";
 import type { Host } from "../host.ts";
 import { openInBrowser } from "../open.ts";
@@ -34,8 +35,10 @@ async function link(host: Host): Promise<GithubStatus> {
   const clientId = (await relayConfig(relay)).githubClientId;
   if (!clientId) throw new Error("this relay has no GitHub App");
   const start = await startDevice(clientId);
+  const page = externalUrl(start.url);
+  if (!page) throw new Error("GitHub sent a sign-in page that isn't a web link");
   host.push("githubCode", { code: start.userCode, url: start.url });
-  await openInBrowser(start.url, (u) => host.openExternal(u));
+  await openInBrowser(page, (u) => host.openExternal(u));
   const found = await finishDevice(clientId, start, { fetch, sleep: (ms) => new Promise((r) => setTimeout(r, ms)), now: Date.now });
   mutate((s) => (s.github = { ...found, at: Date.now(), relay, clientId }));
   return status();

@@ -672,6 +672,14 @@ jobs:
       through the Host seam (the folder picker, notifications, the update restart, the browser only for
       http(s) links, a new relay saved, told to the keys and the page reloaded, a bad one changing
       nothing, a bad argument refused under the call's name). And
+      test/desktop-eb-bridge.test.ts: the Electrobun bridge's own rules (desktop/src/eb-bridge.ts):
+      only views://internal/index.html counts as our page whatever its hash, a navigation event's
+      detail read as a string or WebKit's JSON, nothing in or out while the view is off our page,
+      a call that isn't the bridge's (__proto__, constructor and the like) or not given as a list
+      never reaching a handler, the preload carrying the snapshot and packets going only to our
+      own receiver, and every Electrobun internal RPC handler but window dragging doing nothing
+      (webviewTagUpdateSrc, SetNavigationRules and ExecuteJavascript included); with
+      test/desktop-eb-bundle.test.ts: the post-build check of the built bundle. And
       test/desktop-shared-modules.test.ts: the modules both desktop shells share (ipc/handlers.ts and
       everything it imports, calls.ts, host.ts, store.ts, updater.ts, bundled-daemon.ts, deep-links.ts,
       main-log.ts, page-crash.ts, signin.ts) never import electron however deep the import, read from their real
@@ -991,24 +999,33 @@ jobs:
 
   desktop-mac:
     name: desktop / mac
-    inputs: ["desktop/src/**", "desktop/native/**", "desktop/build/icon.icns", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "package.json", "bun.lock", "src/**", "scripts/build-cli.ts", "desktop/scripts/pack-cli.ts", "scripts/local-relay.ts", "scripts/perf-desktop.ts", "scripts/perf-calibrate.ts", "scripts/perf-budgets.json"]
-    imports_from: ["desktop/src/main-eb.ts", "desktop/scripts/smoke-eb.ts", "scripts/perf-desktop.ts"]
-    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-size.ts", "desktop/scripts/eb-env-check.ts", "desktop/scripts/eb-plain.ts", "desktop/scripts/eb-drive.ts", "desktop/scripts/smoke-eb.ts", "desktop/scripts/eb-driver-check.ts"]
+    inputs: ["desktop/src/**", "desktop/native/**", "desktop/eb-tests/**", "desktop/build/icon.icns", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "test/fake-host.ts", "package.json", "bun.lock", "src/relay/**", "scripts/local-relay.ts", "scripts/perf-desktop.ts", "scripts/perf-calibrate.ts", "scripts/perf-budgets.json", "src/**", "scripts/build-cli.ts", "desktop/scripts/pack-cli.ts"]
+    imports_from: ["desktop/src/main-eb.ts", "desktop/src/preload-eb.ts", "desktop/scripts/smoke-eb.ts", "scripts/perf-desktop.ts"]
+    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-bundle.ts", "desktop/scripts/eb-size.ts", "desktop/scripts/eb-env-check.ts", "desktop/scripts/eb-plain.ts", "desktop/scripts/eb-drive.ts", "desktop/scripts/smoke-eb.ts", "desktop/scripts/eb-driver-check.ts"]
     description: >-
       On a macOS runner (Electrobun builds only for the host it runs on), checks the Electrobun
       shell that is replacing Electron (issue #757). Builds web/dist, then `bun run typecheck:eb`
       in desktop/: `electrobun prepare` fetches Electrobun 2.0.4's devkit (Hutch, the pinned
       core and Bun) into desktop/.hutch, and tsc -p tsconfig.eb.json typechecks
-      src/main-eb.ts, electrobun.config.ts and the eb-*.ts build scripts against it, strict.
-      Then `bun run build:eb` (electrobun build --env=stable): bundles src/main-eb.ts with the
-      shared desktop modules it imports (guard.ts csp(), open.ts, eb-page.ts, window-look.ts,
-      window-size.ts) and @kiwi/core; scripts/eb-pre-build.ts turns build/icon.icns into the
+      src/main-eb.ts, src/preload-eb.ts, electrobun.config.ts, eb-tests/ and the eb-*.ts build
+      scripts against it, strict. Then `bun test --tsconfig-override tsconfig.eb.json ./eb-tests`
+      runs window.kiwi over Electrobun's own createRPC on both ends, wired as preload-eb.ts and
+      main-eb.ts wire them (rpc-eb.ts): calls reach main's handler table with their arguments,
+      answers and errors come back, pushes reach their listener, a view off our page gets no
+      answers and no pushes, and a call that isn't the bridge's is refused. Then `bun run
+      build:eb` (electrobun build --env=stable): bundles src/main-eb.ts with the shared desktop
+      modules it imports (ipc/handlers.ts and all the app's calls through host-eb.ts, guard.ts
+      csp(), open.ts, eb-page.ts, eb-bridge.ts, window-look.ts, window-size.ts) and @kiwi/core,
+      and src/preload-eb.ts as the preload view; scripts/eb-pre-build.ts turns build/icon.icns into the
       iconset; before it, scripts/build-cli.ts builds the kiwi CLI for darwin-arm64 and
       desktop/scripts/pack-cli.ts packs it into dist/kiwi.zst; scripts/eb-post-build.ts copies
       dist/kiwi.zst into the app's Resources (failing if it's missing), web/dist into its views/internal and
       compiles native/macos/kiwi-shell.m with clang -Wall -Werror into Contents/MacOS (the
       patch that denies the microphone, camera and location Electrobun grants the page, and the
-      window's minimum size and background). We ship the plain app, not Electrobun's
+      window's minimum size and background), then checks the bundle (scripts/eb-bundle.ts): the
+      main bundle holds exactly one copy of Electrobun's internal RPC table, the one
+      lockInternalRpc empties, and the preload bundle exists and has no WebSocket. We ship the
+      plain app, not Electrobun's
       self-extracting wrapper (which would run the app from a folder the user's rights can edit):
       desktop/scripts/eb-size.ts unpacks the plain .app from the build's .app.tar.zst payload,
       makes its dmg (hdiutil ULMO) and its zip (ditto, the updater's layout), and fails if that
@@ -1039,13 +1056,15 @@ jobs:
       define in electrobun.config.ts), and its launcher (built with -DKIWI_EB_TEST) also lets
       KIWI_EB_DRIVER, KIWI_EB_RELAY and CFFIXED_USER_HOME through: with KIWI_EB_DRIVER set, main listens on that Unix socket,
       runs each function it's sent in the page with executeJavascript and hands back what the
-      page posts on Electrobun's host bridge; KIWI_EB_RELAY points the page's CSP and its
-      ?relay= at a local relay. desktop/scripts/eb-driver-check.ts fails if the plain release .app (unpacked
-      by eb-plain.ts) carries the driver or the relay override in its code (kiwiDriver,
-      KIWI_EB_DRIVER, KIWI_EB_RELAY) or lets them or CFFIXED_USER_HOME through its launcher, or if
+      page posts on Electrobun's host bridge; KIWI_EB_RELAY sets the relay in the test build's store (so the page's CSP and
+      window.kiwi.relayUrl both name the local relay), and the test build keeps its store as plain JSON
+      (kiwi-eb-test-store.json, 0600, under its own data folder: desktop/src/eb-test-store.ts) where the
+      release build has only memory, so a relaunch reopens the channel. desktop/scripts/eb-driver-check.ts fails if the plain release .app (unpacked
+      by eb-plain.ts) carries the driver, the relay override or the plain-JSON store in its code (kiwiDriver,
+      KIWI_EB_DRIVER, KIWI_EB_RELAY, kiwi-eb-test-store.json) or lets them or CFFIXED_USER_HOME through its launcher, or if
       the test build lacks any of them. desktop/scripts/smoke-eb.ts (through desktop/scripts/eb-drive.ts,
       ~/Library in a temp CFFIXED_USER_HOME, a local relay) fails unless the window shows the
-      dashboard from views://internal/index.html with a first paint, the relay it was given answers
+      dashboard from views://internal/index.html with a first paint, the relay it was given reaches the page as window.kiwi.relayUrl and answers
       through the CSP, an inline script and a fetch to another origin are refused, the microphone
       isn't granted, and nothing of the app is left running after it quits. scripts/perf-desktop.ts
       --electrobun then times the test build's cold start as desktop / package times Electron's:

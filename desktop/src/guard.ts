@@ -30,10 +30,12 @@ export function isAppUrl(url: string): boolean {
 }
 
 /** `url`, if it may go to the system browser: http(s) only (never file:, javascript:, a custom scheme). */
-export function externalUrl(url: string): string | null {
+export type ExternalUrl = string & { readonly checked: "http(s)" };
+
+export function externalUrl(url: string): ExternalUrl | null {
   try {
     const u = new URL(url);
-    return u.protocol === "https:" || u.protocol === "http:" ? u.href : null;
+    return u.protocol === "https:" || u.protocol === "http:" ? (u.href as ExternalUrl) : null;
   } catch {
     return null;
   }

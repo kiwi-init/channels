@@ -34,8 +34,8 @@ describe("the window shows the app and nothing else (T183)", () => {
     for (const u of ["https://evil.example/", "kiwi-app://evil/index.html", "file:///etc/passwd", "kiwi://join/abc", "not a url"]) expect(isAppUrl(u)).toBe(false);
   });
   test("only http(s) leaves for the system browser", () => {
-    expect(externalUrl("https://github.com/x")).toBe("https://github.com/x");
-    expect(externalUrl("http://localhost:8787/")).toBe("http://localhost:8787/");
+    expect<string | null>(externalUrl("https://github.com/x")).toBe("https://github.com/x");
+    expect<string | null>(externalUrl("http://localhost:8787/")).toBe("http://localhost:8787/");
     for (const u of ["javascript:alert(1)", "file:///Applications", "kiwi-app://app/", "smb://share", "data:text/html,hi", ""]) expect(externalUrl(u)).toBeNull();
   });
   test("copying is allowed only from kiwi-app://, and the microphone or camera never", () => {

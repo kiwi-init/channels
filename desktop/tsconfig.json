@@ -13,5 +13,5 @@
     "verbatimModuleSyntax": true
   },
   "include": ["src", "scripts/fuses.ts", "scripts/smoke.ts", "scripts/smoke-eb.ts", "scripts/eb-drive.ts", "scripts/eb-driver-check.ts"],
-  "exclude": ["src/main-eb.ts"]
+  "exclude": ["src/*-eb.ts"]
 }
