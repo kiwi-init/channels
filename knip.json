@@ -4,6 +4,8 @@
     "oxfmt",
     "iconutil",
     "clang",
+    "dpkg-deb",
+    "mksquashfs",
     "ditto",
     "hdiutil",
     "pgrep",
@@ -59,8 +61,10 @@
       "entry": [
         "src/main.ts",
         "src/main-eb.ts",
+        "src/preload-eb.ts",
         "src/preload.ts",
         "src/channels.ts",
+        "src/keys-worker.ts",
         "scripts/*.ts",
         "electrobun.config.ts"
       ],
