@@ -19,6 +19,7 @@ const scratch = (tag: string) => {
 };
 const dataDir = scratch("relay");
 const claudeDir = scratch("claude");
+const codexDir = scratch("codex");
 const bin = scratch("bin");
 const owner = scratch("owner");
 const agent = scratch("agent");
@@ -27,7 +28,7 @@ let server: ReturnType<typeof startRelay> | undefined;
 let me = "";
 let want = "";
 
-const base = (home: string): Env => ({ KIWI_HOME: home, KIWI_RELAY: server!.url.origin, CLAUDE_CONFIG_DIR: claudeDir, KIWI_MODEL: "test-model", CLAUDE_PROJECT_DIR: "" });
+const base = (home: string): Env => ({ KIWI_HOME: home, KIWI_RELAY: server!.url.origin, CLAUDE_CONFIG_DIR: claudeDir, CODEX_HOME: codexDir, KIWI_MODEL: "test-model", CLAUDE_PROJECT_DIR: "" });
 
 function spawn(home: string, args: string[], env: Env = {}) {
   return Bun.spawn(kiwiCmd(args), { cwd: home, env: { ...process.env, ...base(home), ...env }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
@@ -51,7 +52,10 @@ async function until(pred: () => boolean | Promise<boolean>, label: string, ms =
 
 const S: Env = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "joiner", CLAUDE_PID: String(process.pid), AI_AGENT: "claude-code_2-1-296_agent" };
 
-type Seen = { kind: "start"; pid: number; argv: string[]; token: boolean; as?: string; channel?: string; marker: boolean } | { kind: "done"; out: string } | { kind: "term" };
+type Seen =
+  | { kind: "start"; harness: string; pid: number; argv: string[]; token: boolean; as?: string; channel?: string; marker: boolean; thread?: string }
+  | { kind: "done"; out: string }
+  | { kind: "term" };
 const seen = (): Seen[] =>
   existsSync(record)
     ? readFileSync(record, "utf8")
@@ -72,7 +76,7 @@ const say = (o) => appendFileSync(record, JSON.stringify(o) + "\\n");
 process.on("SIGTERM", () => { say({ kind: "term" }); process.exit(143); });
 const argv = process.argv.slice(2);
 reg("busy");
-say({ kind: "start", pid: process.pid, argv, token: !!process.env.KIWI_SEAT_TOKEN, as: process.env.KIWI_AS, channel: process.env.KIWI_CHANNEL, marker: !!process.env.CLAUDE_CODE_SESSION_ID });
+say({ kind: "start", harness: "claude", pid: process.pid, argv, token: !!process.env.KIWI_SEAT_TOKEN, as: process.env.KIWI_AS, channel: process.env.KIWI_CHANNEL, marker: !!process.env.CLAUDE_CODE_SESSION_ID });
 await Bun.sleep(1_500);
 const task = /This session is for (T\\d+)/.exec(argv.at(-1) ?? "")?.[1];
 if (task) {
@@ -85,10 +89,42 @@ reg("idle");
 setInterval(() => {}, 1_000);
 `;
 
+const FAKE_CODEX = `#!${process.execPath}
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+const record = ${JSON.stringify(record)};
+const ms = Date.now().toString(16).padStart(12, "0");
+const thread = ms.slice(0, 8) + "-" + ms.slice(8) + "-7" + crypto.randomUUID().slice(15);
+const d = new Date();
+const dir = join(process.env.CODEX_HOME, "sessions", String(d.getFullYear()), String(d.getMonth() + 1).padStart(2, "0"), String(d.getDate()).padStart(2, "0"));
+mkdirSync(dir, { recursive: true });
+const rollout = join(dir, "rollout-fake-" + thread + ".jsonl");
+const line = (o) => appendFileSync(rollout, JSON.stringify(o) + "\\n");
+const say = (o) => appendFileSync(record, JSON.stringify(o) + "\\n");
+process.on("SIGTERM", () => { say({ kind: "term" }); process.exit(143); });
+const argv = process.argv.slice(2);
+line({ type: "session_meta", payload: { id: thread, cwd: process.cwd(), originator: "codex_cli_rs" } });
+line({ type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: argv.at(-1) }] } });
+line({ type: "event_msg", payload: { type: "task_started" } });
+say({ kind: "start", harness: "codex", pid: process.pid, argv, token: !!process.env.KIWI_SEAT_TOKEN, as: process.env.KIWI_AS, channel: process.env.KIWI_CHANNEL, marker: !!process.env.CODEX_THREAD_ID, thread });
+await Bun.sleep(1_500);
+const task = /This session is for (T\\d+)/.exec(argv.at(-1) ?? "")?.[1];
+if (task) {
+  const p = Bun.spawn(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: { ...process.env, CODEX_THREAD_ID: thread }, stdout: "pipe", stderr: "pipe" });
+  const out = (await new Response(p.stdout).text()) + (await new Response(p.stderr).text());
+  await p.exited;
+  say({ kind: "done", out });
+}
+line({ type: "event_msg", payload: { type: "task_complete" } });
+setInterval(() => {}, 1_000);
+`;
+
 beforeAll(async () => {
   server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir });
   writeFileSync(join(bin, "claude"), FAKE);
   chmodSync(join(bin, "claude"), 0o755);
+  writeFileSync(join(bin, "codex"), FAKE_CODEX);
+  chmodSync(join(bin, "codex"), 0o755);
   const code = /join code: (\S+)/.exec(await ok(owner, ["create", "loop", "--as", "boss"]))![1]!;
   let out = "";
   const joining = spawn(agent, ["join", code, "--timeout", "60s"], S);
@@ -128,7 +164,7 @@ test("the loop holds the seat, starts a fresh Claude Code session for a task, bi
   const loopEnv: Env = { PATH: `${bin}:${process.env.PATH}`, SHELL: "/bin/sh", CLAUDECODE: "", CLAUDE_CODE_SESSION_ID: "outer", CLAUDE_PID: "" };
   const loop = spawn(agent, ["loop", "--model", "test-model"], loopEnv);
   let log = "";
-  void new Response(loop.stderr).text().then((t) => void (log = t));
+  const reading = new Response(loop.stderr).text().then((t) => void (log = t));
   await until(() => !!seatOf(agent)?.hold, "the loop's hold");
   expect(seen()).toEqual([]);
 
@@ -155,7 +191,62 @@ test("the loop holds the seat, starts a fresh Claude Code session for a task, bi
 
   loop.kill("SIGTERM");
   await loop.exited;
+  await reading;
   await until(() => !seatOf(agent)?.hold, "the seat released");
   expect(log).toContain(`${id} is over; its session ended`);
   expect(log).toContain(`released ${me} in loop`);
+});
+
+test("with --harness codex, the loop finds the new thread by the nonce in its first prompt, binds the seat to it, and ends it once the task is done", async () => {
+  const before = seen().length;
+  const id = /added (T\d+)/.exec(await ok(owner, ["--as", "human", "task", "add", "codex work", "--owner", me, "--ask", want], { CLAUDECODE: "" }))![1]!;
+  const loopEnv: Env = { PATH: `${bin}:${process.env.PATH}`, SHELL: "/bin/sh", CLAUDECODE: "", CLAUDE_PID: "", CODEX_THREAD_ID: "outer" };
+  const loop = spawn(agent, ["loop", "--harness", "codex", "--model", "gpt-test", "--effort", "high"], loopEnv);
+  let log = "";
+  const reading = new Response(loop.stderr).text().then((t) => void (log = t));
+
+  await until(
+    () =>
+      seen()
+        .slice(before)
+        .some((s) => s.kind === "start"),
+    "the Codex session's start",
+  );
+  const start = seen()
+    .slice(before)
+    .find((s) => s.kind === "start");
+  if (start?.kind !== "start") throw new Error("no start");
+  expect(start.harness).toBe("codex");
+  expect(start.token).toBe(false);
+  expect(start.marker).toBe(false);
+  expect(start.argv.slice(0, 4)).toEqual(["-m", "gpt-test", "-c", 'model_reasoning_effort="high"']);
+  expect(start.argv.at(-1)).toContain(`This session is for ${id} “codex work”`);
+  expect(start.argv.at(-1)).toMatch(/\(Kiwi loop launch [0-9a-f]{18}\)$/);
+  await until(() => seatOf(agent)?.session === start.thread, "the seat bound to the new thread");
+  expect(seatOf(agent)?.harness).toBe("codex");
+
+  await until(
+    () =>
+      seen()
+        .slice(before)
+        .some((s) => s.kind === "term"),
+    "the Codex session's end",
+  ).catch(async (e: unknown) => {
+    loop.kill();
+    await loop.exited;
+    await reading;
+    throw new Error(`${String(e)}\n${JSON.stringify(seen().slice(before))}\n${log}`);
+  });
+  const done = seen()
+    .slice(before)
+    .find((s) => s.kind === "done");
+  expect(done?.kind === "done" && done.out).toContain(id);
+  expect(await ok(owner, ["--as", "human", "task", "show", id], { CLAUDECODE: "" })).toContain("state: done");
+
+  loop.kill("SIGTERM");
+  await loop.exited;
+  await reading;
+  await until(() => !seatOf(agent)?.hold, "the seat released");
+  expect(log).toContain(`bound to Codex session ${start.thread}`);
+  expect(log).toContain(`${id} is over; its session ended`);
 });
