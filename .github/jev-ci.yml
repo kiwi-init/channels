@@ -986,7 +986,7 @@ jobs:
       shell that is replacing Electron (issue #757). Builds web/dist, restores ~/.hutch (the pinned
       Hutch under kiwi-pinned/, Cottontail, Electrobun's core and devkit, Bun) from actions/cache
       keyed on desktop/electrobun-pins.json, and runs `bun run prepare:eb` up to three times, 20 s
-      apart, so a download blip from GitHub or blackboard.sh doesn't fail the job:
+      apart, within 5 minutes, so a download blip from GitHub or blackboard.sh doesn't fail the job:
       desktop/scripts/eb.ts downloads Hutch from the URL desktop/electrobun-pins.json pins, fails
       unless the archive and its files match their sha256 pins, and runs `electrobun prepare`
       through it (never the npm shim's unpinned install.sh fallback). The steps after it run
