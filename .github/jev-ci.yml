@@ -1144,8 +1144,8 @@ jobs:
       reopen the channel; the numbers are the perf-desktop-eb artifact. Electrobun has its own
       cold-start gate, electrobunColdStartMs at 1300 ms, because on CI its dev test build scales to
       900-1070 ms where Electron scales to about 680 (coldStartMs, gate 905): T798 finds why, times
-      the stable build, and brings it under 905, then the gate tightens to match. Its first-screen
-      gate is Electron's (745).
+      the stable build, and brings it under 905, then the gate tightens to match. Its first-screen gate,
+      electrobunFirstScreenMs, is 1000 ms for the same reason (600-875 ms scaled on CI, against Electron's 745).
 
   desktop-linux:
     name: desktop / linux
