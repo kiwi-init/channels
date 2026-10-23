@@ -1113,8 +1113,10 @@ jobs:
       built with -fsanitize=address,undefined -fno-sanitize-recover=all into a throwaway sealed
       bundle, native/macos/kiwi-keys-test.c's parser cases (malformed, truncated, oversized, unknown,
       a NUL inside, done ending the session, many requests in one write, the ready mark's finished,
-      finish and drop (drop only for a key made in that session and still the keychain's, a mark
-      left by a key deleted by hand not counting for the next), and 1500 seeded random sessions), the seal check on a sealed and on a changed app, and the launcher itself all run
+      finish and drop (finish naming the key it marks by its SHA-256 and refused for any other; drop
+      only for a key made in that session, never once it's marked ready, and, in a live session, never
+      for a key put in its place, as it deletes by the item reference SecItemAdd gave; a mark left by
+      a key deleted by hand not counting for the next), and 1500 seeded random sessions), the seal check on a sealed and on a changed app, and the launcher itself all run
       with no sanitizer report; on CI it uses
       a temporary keychain, and it deletes its items either way. eb-env-check runs the launcher
       inside a small sealed bundle and expects KIWI_KEY_FD as the one name it adds.

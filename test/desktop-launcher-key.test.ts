@@ -66,14 +66,14 @@ describe("the store key through the launcher", () => {
     const s = scripted({ finished: "ok", finish: "ok", drop: "ok" });
     const key = launcherKey(s.ch);
     expect(await key.finished()).toBe(true);
-    await key.finish();
+    await key.finish("c2VhbGVk");
     await key.drop();
-    expect(s.asked).toEqual(["finished", "finish", "drop"]);
+    expect(s.asked).toEqual(["finished", `finish ${readyMark("c2VhbGVk")}`, "drop"]);
     expect(await launcherKey(scripted({ finished: "none" }).ch).finished()).toBe(false);
     await expect(launcherKey(scripted({ finished: `key ${b64("x")}` }).ch).finished()).rejects.toThrow("should say whether");
     await expect(launcherKey(scripted({ finished: "fail the keychain is locked" }).ch).finished()).rejects.toThrow("the keychain is locked");
-    await expect(launcherKey(scripted({ finish: "fail there's no store key to mark ready" }).ch).finish()).rejects.toThrow("no store key to mark ready");
-    await expect(launcherKey(scripted({ finish: "none" }).ch).finish()).rejects.toThrow("didn't mark");
+    await expect(launcherKey(scripted({ finish: "fail there's no store key to mark ready" }).ch).finish("eA==")).rejects.toThrow("no store key to mark ready");
+    await expect(launcherKey(scripted({ finish: "none" }).ch).finish("eA==")).rejects.toThrow("didn't mark");
     await expect(launcherKey(scripted({ drop: "fail the launcher only takes back a store key it made in this session" }).ch).drop()).rejects.toThrow("made in this session");
     await expect(launcherKey(scripted({ drop: "none" }).ch).drop()).rejects.toThrow("didn't take back");
   });
@@ -113,13 +113,15 @@ function launcher(items: Record<string, string> = {}): Launcher {
       if (verb === "finished") return key !== undefined && kept.get("store-key-ready") === readyMark(key) ? "ok" : "none";
       if (verb === "finish") {
         if (key === undefined) return "fail there's no store key to mark ready";
+        if (line.slice(7) !== readyMark(key)) return "fail the keychain's store key isn't the one Channels sealed its store under";
         kept.set("store-key-ready", readyMark(key));
         return "ok";
       }
       if (verb === "drop") {
         if (!made) return "fail the launcher only takes back a store key it made in this session";
-        if (key === undefined || readyMark(key) !== made) return "fail the keychain's store key isn't the one this session made, so the launcher leaves it";
-        kept.delete("store-key-ready");
+        if (key === undefined) return "fail the keychain no longer holds the store key this session made";
+        if (readyMark(key) !== made) return "fail the keychain's store key isn't the one this session made, so the launcher leaves it";
+        if (kept.get("store-key-ready") === made) return "fail the store key is marked ready, so the launcher keeps it";
         kept.delete("store-key");
         made = "";
         return "ok";
@@ -220,7 +222,7 @@ describe("store v2 through the launcher, as kiwi-keys.c keeps the key and its re
     }
   });
 
-  test("a first save that fails takes back the key this start made, mark and all, and the next start begins again", async () => {
+  test("a first save that fails takes back the key this start made, and the next start begins again", async () => {
     const { dir, done } = storeDir();
     const root = join(dir, "..");
     try {
@@ -245,6 +247,30 @@ describe("store v2 through the launcher, as kiwi-keys.c keeps the key and its re
     l.start();
     await expect(launcherKey(l.ch).drop()).rejects.toThrow("made in this session");
     expect(l.items.get("store-key")).toBe(key);
+  });
+
+  test("a key another start already marked ready is never taken back, even by the start that made it (#808's review)", async () => {
+    const l = launcher();
+    l.start();
+    const mine = launcherKey(l.ch);
+    const made = randomBytes(32).toString("base64");
+    await mine.set(made);
+    l.items.set("store-key-ready", readyMark(made));
+    await expect(mine.drop()).rejects.toThrow("marked ready, so the launcher keeps it");
+    expect([...l.items]).toEqual([
+      ["store-key", made],
+      ["store-key-ready", readyMark(made)],
+    ]);
+  });
+
+  test("finish marks only the key this start sealed under, never whatever the keychain holds by then (#808's review)", async () => {
+    const theirs = randomBytes(32).toString("base64");
+    const l = launcher({ "store-key": theirs });
+    l.start();
+    await expect(launcherKey(l.ch).finish(randomBytes(32).toString("base64"))).rejects.toThrow("isn't the one Channels sealed its store under");
+    expect(l.items.has("store-key-ready")).toBe(false);
+    await launcherKey(l.ch).finish(theirs);
+    expect(l.items.get("store-key-ready")).toBe(readyMark(theirs));
   });
 });
 

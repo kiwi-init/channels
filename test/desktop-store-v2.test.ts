@@ -494,10 +494,11 @@ describe("the keychain item", () => {
     try {
       const k = keychainKey("Channels Test", "store-key-test");
       expect(await k.finished()).toBe(false);
-      await expect(k.finish()).rejects.toThrow("no store key to mark ready");
+      await expect(k.finish("a2V5")).rejects.toThrow("no store key to mark ready");
       await k.set("a2V5");
       expect(await k.finished()).toBe(false);
-      await k.finish();
+      await expect(k.finish("b3RoZXI=")).rejects.toThrow("isn't the one Channels sealed its store under");
+      await k.finish("a2V5");
       expect(s.items.get("Channels Test/store-key-test-ready")).toBe(readyMark("a2V5"));
       expect(readyMark("a2V5")).toMatch(/^[0-9a-f]{64}$/);
       expect(await k.finished()).toBe(true);
@@ -508,7 +509,7 @@ describe("the keychain item", () => {
     }
   });
 
-  test("drop takes back only a key this run made, while the keychain still holds it, mark and all", async () => {
+  test("drop takes back only a key this run made, while the keychain still holds it and nothing has marked it ready", async () => {
     const s = secrets();
     try {
       s.items.set("Channels Test/store-key-test", "b2xk");
@@ -517,10 +518,15 @@ describe("the keychain item", () => {
       s.items.clear();
       const mine = keychainKey("Channels Test", "store-key-test");
       await mine.set("bmV3");
-      await mine.finish();
       await mine.drop();
       expect([...s.items.keys()]).toEqual([]);
       await expect(mine.drop()).rejects.toThrow("only a store key it made in this run");
+      const marked = keychainKey("Channels Test", "store-key-test");
+      await marked.set("bWFya2Vk");
+      await keychainKey("Channels Test", "store-key-test").finish("bWFya2Vk");
+      await expect(marked.drop()).rejects.toThrow("marked ready, so Channels keeps it");
+      expect(s.items.get("Channels Test/store-key-test")).toBe("bWFya2Vk");
+      s.items.clear();
       const raced = keychainKey("Channels Test", "store-key-test");
       await raced.set("bWluZQ==");
       s.items.set("Channels Test/store-key-test", "dGhlaXJz");

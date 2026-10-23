@@ -17,7 +17,7 @@ export interface StoreKey {
   set(value: string): Promise<void>;
   drop(): Promise<void>;
   finished(): Promise<boolean>;
-  finish(): Promise<void>;
+  finish(key: string): Promise<void>;
 }
 
 export const readyMark = (key: string): string => createHash("sha256").update(key, "utf8").digest("hex");
@@ -33,7 +33,7 @@ export const keychainKey = (service: string = "Channels", name: string = "store-
     },
     drop: async () => {
       if (made === null || (await Bun.secrets.get({ service, name })) !== made) throw new Error("Channels takes back only a store key it made in this run, while the keychain still holds it");
-      await Bun.secrets.delete({ service, name: ready });
+      if ((await Bun.secrets.get({ service, name: ready })) === readyMark(made)) throw new Error("the store key is marked ready, so Channels keeps it");
       await Bun.secrets.delete({ service, name });
       made = null;
     },
@@ -41,9 +41,10 @@ export const keychainKey = (service: string = "Channels", name: string = "store-
       const key = await Bun.secrets.get({ service, name });
       return key !== null && (await Bun.secrets.get({ service, name: ready })) === readyMark(key);
     },
-    finish: async () => {
-      const key = await Bun.secrets.get({ service, name });
-      if (key === null) throw new Error("there's no store key to mark ready");
+    finish: async (key) => {
+      const held = await Bun.secrets.get({ service, name });
+      if (held === null) throw new Error("there's no store key to mark ready");
+      if (held !== key) throw new Error("the keychain's store key isn't the one Channels sealed its store under");
       await Bun.secrets.set({ service, name: ready, value: readyMark(key) });
     },
   };
@@ -136,9 +137,9 @@ function readCopy(raw: Buffer | null, key: Buffer | null, plainOk: boolean): Cop
   }
 }
 
-async function markFinished(key: StoreKey): Promise<string | null> {
+async function markFinished(key: StoreKey, sealed: Buffer): Promise<string | null> {
   try {
-    if (!(await key.finished())) await key.finish();
+    if (!(await key.finished())) await key.finish(sealed.toString("base64"));
     return null;
   } catch (e) {
     return reason(e);
@@ -225,7 +226,7 @@ export async function openStore({ dir, key, legacy, platform = process.platform 
       const saved = readCopy(bytes(file), k, k === null);
       if (saved.kind !== "ok" || JSON.stringify(saved.json) !== json)
         return takeBack(`the new store didn't read back, so it wasn't kept${old.kind === "ok" ? ` (the keys from ${old.file})` : ""}${saved.kind === "unreadable" ? `: ${saved.why}` : ""}`);
-      const unmarked = k ? await markFinished(key) : null;
+      const unmarked = k ? await markFinished(key, k) : null;
       return old.kind === "ok" ? open(old.json, old.file, k, noKeychain, unmarked) : open(null, null, k, noKeychain, unmarked);
     }
     let k = found.kind === "key" ? found.key : null;
@@ -246,7 +247,7 @@ export async function openStore({ dir, key, legacy, platform = process.platform 
       }
     }
     if (k && !read.sealed) saver(k)(JSON.stringify(read.json));
-    return open(read.json, null, k, noKeychain, k ? await markFinished(key) : null);
+    return open(read.json, null, k, noKeychain, k ? await markFinished(key, k) : null);
   } catch (e) {
     return refuse(reason(e));
   }
