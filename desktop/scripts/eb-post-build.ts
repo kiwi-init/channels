@@ -36,7 +36,7 @@ const bundle = path.dirname(contents);
 const pinned = pinFor(PINS.app, key, "app files");
 const bad = mismatches(bundle, pinned);
 if (bad.length) throw new Error(`eb-post-build: Electrobun's files in the app don't match their pins: ${bad.join("; ")}`);
-const OURS = new Set(["libkiwi-shell.dylib"]);
+const OURS = new Set(["libkiwi-shell.dylib", "kiwi-launcher"]);
 const extra = fs.readdirSync(path.join(contents, "MacOS")).filter((f) => !OURS.has(f) && !Object.hasOwn(pinned, `Contents/MacOS/${f}`));
 if (extra.length) throw new Error(`eb-post-build: Contents/MacOS holds files nobody pinned: ${extra.join(", ")}`);
 
