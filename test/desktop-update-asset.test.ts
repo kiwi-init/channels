@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { cantSwap, debAsset, relaunchAfter, swapAsset, swapScript } from "../desktop/src/update-asset.ts";
+import { cantSwap, debAsset, githubHop, ownAppImage, relaunchAfter, releaseFile, releasePage, swapAsset, swapScript } from "../desktop/src/update-asset.ts";
 
 test("a Mac swaps itself for the zip for its CPU", () => {
   expect(swapAsset("0.14.0", "darwin", "arm64")).toBe("Channels-0.14.0-mac-arm64.zip");
@@ -24,6 +24,41 @@ test("a deb install and Windows never swap themselves; a deb install is offered 
   expect(debAsset("0.27.0", "linux", "x64", "/home/a/Channels.AppImage")).toBeNull();
   expect(debAsset("0.27.0", "darwin", "arm64")).toBeNull();
   expect(debAsset("0.27.0", "win32", "x64")).toBeNull();
+});
+
+test("it's an AppImage only when its own executable runs from the AppImage's mount: an inherited APPIMAGE names someone else's app (T1554)", () => {
+  const image = "/home/a/Applications/Channels.AppImage";
+  expect(ownAppImage(image, "/tmp/.mount_ChanXYZ", "/tmp/.mount_ChanXYZ/Channels/bin/bun")).toBe(image);
+  expect(ownAppImage("/home/a/Cursor.AppImage", "/tmp/.mount_CursorXYZ", "/opt/Channels/bin/bun")).toBeUndefined();
+  expect(ownAppImage(image, "/tmp/.mount_Chan", "/tmp/.mount_ChanXYZ/Channels/bin/bun")).toBeUndefined();
+  expect(ownAppImage(image, undefined, "/tmp/.mount_ChanXYZ/Channels/bin/bun")).toBeUndefined();
+  expect(ownAppImage("Channels.AppImage", "/tmp/.mount_ChanXYZ", "/tmp/.mount_ChanXYZ/Channels/bin/bun")).toBeUndefined();
+  expect(ownAppImage(image, "/tmp/.mount_ChanXYZ/../..", "/opt/Channels/bin/bun")).toBeUndefined();
+});
+
+test("an update's files come only from this repo's releases on github.com over https, and redirects stay on GitHub's hosts (T1554)", () => {
+  const repo = "ojowwalker77/channels";
+  const ok = "https://github.com/ojowwalker77/channels/releases/download/v0.27.0/SHA256SUMS";
+  expect(releaseFile(repo, ok)).toBe(ok);
+  for (const bad of [
+    undefined,
+    "http://github.com/ojowwalker77/channels/releases/download/v0.27.0/SHA256SUMS",
+    "https://github.com.evil.example/ojowwalker77/channels/releases/download/v0.27.0/SHA256SUMS",
+    "https://github.com/someone/channels/releases/download/v0.27.0/SHA256SUMS",
+    "https://github.com/ojowwalker77/channels/releases/download/../../../someone/x/releases/download/v1/a",
+    "https://user:pw@github.com/ojowwalker77/channels/releases/download/v0.27.0/SHA256SUMS",
+    "https://github.com:8443/ojowwalker77/channels/releases/download/v0.27.0/SHA256SUMS",
+    "not a url",
+  ])
+    expect(releaseFile(repo, bad)).toBeNull();
+  expect(releasePage(repo, "https://github.com/ojowwalker77/channels/releases/tag/v0.27.0")).toBe("https://github.com/ojowwalker77/channels/releases/tag/v0.27.0");
+  expect(releasePage(repo, "javascript:alert(1)")).toBe("https://github.com/ojowwalker77/channels/releases/latest");
+  expect(releasePage(repo, "https://evil.example/ojowwalker77/channels/releases/tag/v0.27.0")).toBe("https://github.com/ojowwalker77/channels/releases/latest");
+  expect(githubHop("https://release-assets.githubusercontent.com/github-production-release-asset/1/2")).toBe(true);
+  expect(githubHop("https://objects.githubusercontent.com/github-production-release-asset-2e65be/1")).toBe(true);
+  expect(githubHop("https://github.com/ojowwalker77/channels/releases/download/v0.27.0/a")).toBe(true);
+  expect(githubHop("http://objects.githubusercontent.com/x")).toBe(false);
+  expect(githubHop("https://evil.example/x")).toBe(false);
 });
 
 test("a relaunch waits for this process to end, then starts the app without the old AppImage's environment (T1554)", async () => {

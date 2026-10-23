@@ -647,7 +647,10 @@ jobs:
       itself with its mode and relaunches it; a mismatched download leaves it and offers the
       release; an AppImage in a folder it can't write, or after a failed swap of that version,
       says it can't update itself and downloads nothing; a deb install gets the .deb's link and
-      downloads nothing. And
+      downloads nothing, also when it inherited another AppImage app's APPIMAGE (it's an
+      AppImage only when its own executable runs from APPDIR); files come only from this repo's
+      releases on github.com over https, a redirect off GitHub's hosts is refused, and a tag
+      that isn't v and a plain X.Y.Z is a failed check. And
       test/desktop-update-failures.test.ts (macOS): a temp folder that can't be made, or a download
       that doesn't match its checksum, ends at available with the reason in main.log (and a retry in
       30 minutes), and a staged update whose folder went away doesn't throw at quit. And

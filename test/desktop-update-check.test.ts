@@ -46,8 +46,8 @@ test("a newer release is only offered with its link when the app isn't packaged:
   expect(seen).toEqual(["https://api.github.com/repos/ojowwalker77/channels/releases/latest"]);
 });
 
-test("a tag that isn't a plain version is a failed check: it never reaches a file name or the swap script (T1554)", async () => {
-  for (const tag of ["v9.9.9/../../x", "v99.0.0'; rm -rf ~; '", "v1.0.0-rc.1", "v0.27.0\n", "v0.27", "latest"]) {
+test("a tag that isn't v and a plain version is a failed check: it never reaches a file name or the swap script (T1554)", async () => {
+  for (const tag of ["v9.9.9/../../x", "v99.0.0'; rm -rf ~; '", "v1.0.0-rc.1", "v0.27.0\n", "v0.27", "latest", "0.27.0", "V0.27.0"]) {
     const seen: string[] = [];
     answer(
       200,

@@ -16,7 +16,7 @@ interface Updater {
 }
 
 const platformWas = process.platform;
-const envWas = { TMPDIR: process.env["TMPDIR"], APPIMAGE: process.env["APPIMAGE"] };
+const envWas = { TMPDIR: process.env["TMPDIR"], APPIMAGE: process.env["APPIMAGE"], APPDIR: process.env["APPDIR"] };
 const realFetch = globalThis.fetch;
 const root = mkdtempSync(join(tmpdir(), "kiwi-uplinux-"));
 const tmp = join(root, "tmp");
@@ -33,6 +33,7 @@ afterAll(() => {
   Object.defineProperty(process, "platform", { value: platformWas, configurable: true });
   restore("TMPDIR");
   restore("APPIMAGE");
+  restore("APPDIR");
   globalThis.fetch = realFetch;
   for (const dir of readdirSync(root)) chmodSync(join(root, dir), 0o755);
   rmSync(root, { recursive: true, force: true });
@@ -44,17 +45,32 @@ const NEW = "the 0.27.0 AppImage";
 const OLD = "the 0.26.0 AppImage";
 const sha = (s: string): string => createHash("sha256").update(s).digest("hex");
 
-function release(sums = `${sha(NEW)}  ${appImageName("0.27.0", arch)}\n`): string[] {
+const DOWNLOAD = "https://github.com/ojowwalker77/channels/releases/download/v0.27.0/";
+const ASSETS = "https://release-assets.githubusercontent.com/github-production-release-asset/";
+
+interface Release {
+  sums?: string;
+  where?: (name: string) => string;
+  redirect?: (name: string) => string | null;
+}
+
+function release(o: Release = {}): string[] {
   const seen: string[] = [];
-  const files: Record<string, string> = { [appImageName("0.27.0", arch)]: NEW, [debName("0.27.0", arch)]: "the 0.27.0 deb", SHA256SUMS: sums };
+  const files: Record<string, string> = {
+    [appImageName("0.27.0", arch)]: NEW,
+    [debName("0.27.0", arch)]: "the 0.27.0 deb",
+    SHA256SUMS: o.sums ?? `${sha(NEW)}  ${appImageName("0.27.0", arch)}\n`,
+  };
+  const where = o.where ?? ((name: string) => `${DOWNLOAD}${name}`);
   globalThis.fetch = Object.assign(
     async (input: string | URL | Request) => {
       const url = String(input);
       seen.push(url);
-      if (url.endsWith("/releases/latest"))
-        return Response.json({ tag_name: "v0.27.0", html_url: PAGE, assets: Object.keys(files).map((name) => ({ name, browser_download_url: `https://dl.example/${name}` })) });
-      const body = files[url.replace("https://dl.example/", "")];
-      return body === undefined ? new Response("", { status: 404 }) : new Response(body);
+      if (url.endsWith("/releases/latest")) return Response.json({ tag_name: "v0.27.0", html_url: PAGE, assets: Object.keys(files).map((name) => ({ name, browser_download_url: where(name) })) });
+      const name = Object.keys(files).find((n) => url === where(n) || url === `${ASSETS}${n}` || url.endsWith(`/${n}`));
+      if (!name) return new Response("", { status: 404 });
+      const to = url === where(name) ? (o.redirect?.(name) ?? null) : null;
+      return to ? new Response(null, { status: 302, headers: { location: to } }) : new Response(files[name]);
     },
     { preconnect: realFetch.preconnect },
   );
@@ -62,11 +78,28 @@ function release(sums = `${sha(NEW)}  ${appImageName("0.27.0", arch)}\n`): strin
 }
 
 let loaded = 0;
-async function launch(appImage: string | undefined, data: string): Promise<{ fake: FakeHost; u: Updater }> {
-  if (appImage === undefined) delete process.env["APPIMAGE"];
-  else process.env["APPIMAGE"] = appImage;
+const setEnv = (name: "APPIMAGE" | "APPDIR", value: string | undefined): void => {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
+};
+
+function mounted(name: string): { appDir: string; exe: string } {
+  const appDir = join(root, `.mount_${name}`);
+  const exe = join(appDir, "Channels", "bin", "bun");
+  mkdirSync(join(appDir, "Channels", "bin"), { recursive: true });
+  writeFileSync(exe, "bun");
+  return { appDir, exe };
+}
+
+const DEB_EXE = join(root, "opt", "Channels", "bin", "bun");
+mkdirSync(join(root, "opt", "Channels", "bin"), { recursive: true });
+writeFileSync(DEB_EXE, "bun");
+
+async function launch(appImage: string | undefined, data: string, run: { appDir?: string; exe: string } = appImage ? mounted(`${loaded}`) : { exe: DEB_EXE }): Promise<{ fake: FakeHost; u: Updater }> {
+  setEnv("APPIMAGE", appImage);
+  setEnv("APPDIR", run.appDir);
   mkdirSync(data, { recursive: true });
-  const fake = fakeHost({ packaged: true, version: "0.26.0", paths: { data, logs: join(root, "logs") } });
+  const fake = fakeHost({ packaged: true, version: "0.26.0", paths: { data, logs: join(root, "logs"), exe: run.exe } });
   useHost(fake.host);
   const u = (await import(`../desktop/src/updater.ts?linux${loaded++}`)) as Updater;
   return { fake, u };
@@ -90,7 +123,7 @@ const downloads = (): string[] => readdirSync(tmp).filter((n) => n.startsWith("k
 
 test("an AppImage downloads the release's AppImage, checks it against SHA256SUMS, swaps itself in place and relaunches it", async () => {
   const appImage = installed("Applications");
-  release();
+  release({ redirect: (name) => `${ASSETS}${name}` });
   const { fake, u } = await launch(appImage, join(root, "data-swap"));
   expect((await u.checkForUpdate()).state).toBe("downloading");
   expect(await settled(u)).toEqual({ version: "0.27.0", state: "ready", url: PAGE });
@@ -104,7 +137,7 @@ test("an AppImage downloads the release's AppImage, checks it against SHA256SUMS
 
 test("an AppImage whose download doesn't match SHA256SUMS stays as it is and only offers the release", async () => {
   const appImage = installed("Mismatch");
-  release(`${"0".repeat(64)}  ${appImageName("0.27.0", arch)}\n`);
+  release({ sums: `${"0".repeat(64)}  ${appImageName("0.27.0", arch)}\n` });
   const { fake, u } = await launch(appImage, join(root, "data-mismatch"));
   expect((await u.checkForUpdate()).state).toBe("downloading");
   expect(await settled(u)).toEqual({ version: "0.27.0", state: "available", url: PAGE });
@@ -126,7 +159,7 @@ test("an AppImage in a folder it can't write says it can't update itself and dow
 test("a deb install never swaps itself: it's offered the release's .deb for its CPU and downloads nothing", async () => {
   const seen = release();
   const { u } = await launch(undefined, join(root, "data-deb"));
-  expect(await u.checkForUpdate()).toEqual({ version: "0.27.0", state: "available", url: PAGE, deb: `https://dl.example/${debName("0.27.0", arch)}` });
+  expect(await u.checkForUpdate()).toEqual({ version: "0.27.0", state: "available", url: PAGE, deb: `${DOWNLOAD}${debName("0.27.0", arch)}` });
   expect(seen).toEqual(["https://api.github.com/repos/ojowwalker77/channels/releases/latest"]);
 });
 
@@ -149,4 +182,33 @@ test("a swap that fails leaves the AppImage, says it can't update itself, and th
   expect(await next.u.checkForUpdate()).toEqual({ version: "0.27.0", state: "available", url: PAGE, blocked: true });
   expect(seen).toEqual(["https://api.github.com/repos/ojowwalker77/channels/releases/latest"]);
   expect(existsSync(join(data, "update-failed"))).toBe(true);
+});
+
+test("a deb install started from another AppImage app (its APPIMAGE inherited) is offered its .deb and never touches that app", async () => {
+  const other = join(root, "Other");
+  mkdirSync(other);
+  const cursor = join(other, "Cursor.AppImage");
+  writeFileSync(cursor, "the Cursor AppImage");
+  const seen = release();
+  const { fake, u } = await launch(cursor, join(root, "data-inherited"), { appDir: join(root, ".mount_CursorXYZ"), exe: DEB_EXE });
+  expect(await u.checkForUpdate()).toEqual({ version: "0.27.0", state: "available", url: PAGE, deb: `${DOWNLOAD}${debName("0.27.0", arch)}` });
+  expect(seen).toEqual(["https://api.github.com/repos/ojowwalker77/channels/releases/latest"]);
+  expect(u.applyUpdate(false)).toBe(false);
+  expect(readFileSync(cursor, "utf8")).toBe("the Cursor AppImage");
+  expect(fake.did.filter((d) => d.startsWith("relaunch"))).toEqual([]);
+});
+
+test("an AppImage takes its update only from GitHub: an asset off github.com isn't fetched, and a redirect off GitHub's hosts is refused", async () => {
+  const appImage = installed("OffGithub");
+  const seen = release({ where: (name) => `https://evil.example/${name}` });
+  const first = await launch(appImage, join(root, "data-off"));
+  expect(await first.u.checkForUpdate()).toEqual({ version: "0.27.0", state: "available", url: PAGE });
+  expect(seen).toEqual(["https://api.github.com/repos/ojowwalker77/channels/releases/latest"]);
+  const hops = release({ redirect: (name) => `https://evil.example/${name}` });
+  const next = await launch(appImage, join(root, "data-redirect"));
+  expect((await next.u.checkForUpdate()).state).toBe("downloading");
+  expect(await settled(next.u)).toEqual({ version: "0.27.0", state: "available", url: PAGE });
+  expect(hops.some((h) => h.startsWith("https://evil.example/"))).toBe(false);
+  expect(readFileSync(appImage, "utf8")).toBe(OLD);
+  expect(downloads()).toEqual([]);
 });

@@ -4,6 +4,39 @@ import { appImageName, debName, type LinuxArch } from "../scripts/linux-files.ts
 
 const linuxArch = (arch: string): LinuxArch | null => (arch === "x64" || arch === "arm64" ? arch : null);
 
+export function ownAppImage(image: string | undefined, appDir: string | undefined, exe: string): string | undefined {
+  if (!image || !appDir || !path.isAbsolute(image) || !path.isAbsolute(appDir)) return undefined;
+  return exe.startsWith(`${path.resolve(appDir)}/`) ? image : undefined;
+}
+
+const ASSET_HOSTS = new Set(["github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"]);
+
+const parsed = (url: string | undefined): URL | null => {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" && !u.port && !u.username && !u.password ? u : null;
+  } catch {
+    // Not a URL at all: the caller treats it as missing.
+    return null;
+  }
+};
+
+export function releaseFile(repo: string, url: string | undefined): string | null {
+  const u = parsed(url);
+  return u && u.hostname === "github.com" && u.pathname.startsWith(`/${repo}/releases/download/`) ? u.href : null;
+}
+
+export function releasePage(repo: string, url: string | undefined): string {
+  const u = parsed(url);
+  return u && u.hostname === "github.com" && u.pathname.startsWith(`/${repo}/releases/`) ? u.href : `https://github.com/${repo}/releases/latest`;
+}
+
+export const githubHop = (url: string): boolean => {
+  const u = parsed(url);
+  return !!u && ASSET_HOSTS.has(u.hostname);
+};
+
 export function swapAsset(version: string, platform: NodeJS.Platform, arch: string, appImage?: string): string | null {
   if (platform === "darwin") return `Channels-${version}-mac-${arch === "arm64" ? "arm64" : "x64"}.zip`;
   const linux = linuxArch(arch);
