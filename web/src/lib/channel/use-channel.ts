@@ -92,6 +92,8 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
     }, KEEP_DELAY_MS)
     return () => clearTimeout(t)
   }, [ch, start, gone, roster, base, guardFloor, roomsFloor])
+  const guardIn = useRef(false)
+  const roomsIn = useRef(false)
   useEffect(() => {
     const title = ch.title()
     const guard = ch.guard()
@@ -102,8 +104,20 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
         if (name && stored && stored.name !== name) void renameChannel(member.code, name)
       })
       .catch(() => {})
-    void guard.then(setGuardFloor, () => {})
-    void rooms.then(setRoomsFloor, () => {})
+    void guard.then(
+      (g) => {
+        guardIn.current = true
+        setGuardFloor(g)
+      },
+      () => {}
+    )
+    void rooms.then(
+      (r) => {
+        roomsIn.current = true
+        setRoomsFloor(r)
+      },
+      () => {}
+    )
   }, [ch, member.code, infoAt])
 
   const onGone = useCallback(
@@ -239,8 +253,8 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
           earlyBase = true
           setBase((prev) => prev ?? kept.base)
         }
-        setGuardFloor((prev) => prev ?? kept.guardFloor)
-        setRoomsFloor((prev) => prev ?? kept.roomsFloor)
+        if (!guardIn.current) setGuardFloor(kept.guardFloor)
+        if (!roomsIn.current) setRoomsFloor(kept.roomsFloor)
         if (cached?.unread.length) {
           const seen = cached.unread
           for (const seq of seen) earlyUnread.add(seq)
