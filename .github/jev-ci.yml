@@ -573,7 +573,14 @@ jobs:
       store through launcherKey and a stand-in launcher that keeps the key and mark as
       native/macos/kiwi-keys.c does: finished, finish and drop on the wire, a key made just before a
       failed first save opening as a first run, a stale mark, a deleted store refused after only get
-      and finished, and a failed first save taking back only the key that start made (T1076). With test/desktop-legacy-store.test.ts
+      and finished, a failed first save taking back only the key that start made (T1076), a key another
+      start marked never taken back, and finish refused for a key other than the one the store was sealed
+      under (T1582). test/desktop-store-eb.test.ts: the Electrobun app's store (desktop/src/store-eb.ts):
+      no launcher channel means no store, refused with its reason and nothing written; a first start
+      opens sealed, ends the launcher's session once and saves through store.ts's vault; Electron's
+      store is imported once through the launcher's kiwi-desktop password; a deleted store whose key is
+      marked is refused without reading a planted Electron store; and a refused ready mark leaves the
+      store open with a note for the person (T1582). With test/desktop-legacy-store.test.ts
       (desktop/src/legacy-store.ts, legacy-keys.ts): Electron's safeStorage format opened from what
       Electron itself wrote, v11 on a GNOME keyring and v10 on the macOS Keychain, Linux v10 with
       Chromium's fixed password (which counts as plain, not encrypted), a torn store read from its .bak asking the keychain once, an old
@@ -1040,7 +1047,7 @@ jobs:
     name: desktop / mac
     inputs: ["desktop/src/**", "desktop/native/**", "desktop/eb-tests/**", "desktop/build/icon.icns", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "test/fake-host.ts", "package.json", "bun.lock"]
     imports_from: ["desktop/src/main-eb.ts", "desktop/src/preload-eb.ts"]
-    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-bundle.ts", "desktop/scripts/eb-size.ts", "desktop/scripts/eb-env-check.ts", "desktop/scripts/eb-app.ts", "desktop/scripts/eb-seal.ts", "desktop/scripts/eb-keys-check.ts", "desktop/scripts/eb-keys-probe.ts"]
+    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-bundle.ts", "desktop/scripts/eb-size.ts", "desktop/scripts/eb-env-check.ts", "desktop/scripts/eb-app.ts", "desktop/scripts/eb-seal.ts", "desktop/scripts/eb-keys-check.ts", "desktop/scripts/eb-keys-probe.ts", "desktop/scripts/eb-store-probe.ts"]
     description: >-
       On a macOS runner (Electrobun builds only for the host it runs on), checks the Electrobun
       shell that is replacing Electron (issue #757). Builds web/dist, restores ~/.hutch (Hutch,
@@ -1117,7 +1124,13 @@ jobs:
       afterwards gets no socket and no KIWI_KEY_FD, the first
       start makes a key through the launcher (not marked ready until finish, then marked) and the next
       gets the same one, still marked, and can't take it back with drop (T1076), a second key is refused, the legacy key comes through while an
-      unlisted name and an unknown request are refused, and copies with a changed main.js, a
+      unlisted name and an unknown request are refused; that store v2 opens on the Mac as main-eb opens
+      it (scripts/eb-store-probe.ts as main.js, taking the key channel in its first import, then
+      store-eb.ts's openEbStore with its own throwaway Electron folder): a first start makes a sealed
+      store and a key marked ready, the next reads it back with the same key, and with both copies
+      deleted and a plain Electron store planted it's refused as a deleted store with nothing written,
+      and, on CI's temporary keychain only, Electron's kiwi-store.bin is imported once through a
+      kiwi-desktop key (T1582); and copies with a changed main.js, a
       bunfig.toml beside bun, an app.asar, a link or a missing file all stop before bun runs, and
       unless the launcher's check of the whole app takes 500 ms or less (median of 7), and unless,
       built with -fsanitize=address,undefined -fno-sanitize-recover=all into a throwaway sealed

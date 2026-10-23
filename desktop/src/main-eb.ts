@@ -1,3 +1,5 @@
+import { launcherKeys } from "./launcher-channel-eb.ts";
+
 import { dlopen, FFIType, ptr, suffix } from "bun:ffi";
 import fs from "node:fs";
 import path from "node:path";
@@ -9,14 +11,15 @@ import { handleDeepLink, JOIN_SCHEME } from "./deep-links.ts";
 import { committedUrl, lockInternalRpc, preloadSource, stillOurs, toPageScript } from "./eb-bridge.ts";
 import { navigationUrl, openedUrl, PAGE_RULES, PAGE_URL, pageWithCsp } from "./eb-page.ts";
 import { externalUrl } from "./guard.ts";
-import { attachWindow, bundle, ebHost } from "./host-eb.ts";
+import { attachWindow, ebHost } from "./host-eb.ts";
 import { useHost } from "./host.ts";
 import { handlers } from "./ipc/handlers.ts";
 import { logMainError } from "./main-log.ts";
 import { openInBrowser } from "./open.ts";
 import { claimInstance, handoffFor, type Instance } from "./single-instance.ts";
 import { bunBridge } from "./rpc-eb.ts";
-import { brokenStore, openStore, snapshot, store, type StoreVault } from "./store.ts";
+import { brokenStore, openStore, snapshot, store } from "./store.ts";
+import { openEbStore, unmarkedNote, v2Vault } from "./store-eb.ts";
 import { updateState } from "./updater.ts";
 import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts";
 import { minWindowWidth } from "./window-size.ts";
@@ -51,8 +54,6 @@ function openOutside(url: string): void {
   const ext = externalUrl(url);
   if (ext) void openInBrowser(ext, (u) => ebHost.openExternal(u)).catch(() => {});
 }
-
-const memoryVault: StoreVault = { where: () => `memory, nothing saved (${bundle.identifier})`, load: () => ({ ok: true, file: null, resave: false }), save: () => {} };
 
 function createWindow(): BrowserWindow {
   const index = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "internal", "index.html"), "utf8");
@@ -112,8 +113,9 @@ function createWindow(): BrowserWindow {
   return win;
 }
 
-function start(instance: Extract<Instance, { kind: "first" }>): void {
-  openStore(memoryVault);
+async function start(instance: Extract<Instance, { kind: "first" }>): Promise<void> {
+  const opened = await openEbStore({ dir: Utils.paths.userData, keys: launcherKeys });
+  openStore(v2Vault(opened));
   const win = createWindow();
   startAppLife({
     win,
@@ -129,6 +131,11 @@ function start(instance: Extract<Instance, { kind: "first" }>): void {
   });
   const broken = brokenStore();
   if (broken) void Utils.showMessageBox({ type: "error", message: "Channels can't read its saved keys", detail: broken.message });
+  const unmarked = unmarkedNote(opened);
+  if (unmarked) {
+    logMainError(new Error(unmarked));
+    void Utils.showMessageBox({ type: "warning", message: "Channels couldn't mark its store key ready", detail: unmarked });
+  }
 }
 
 BrowserView.on("created", (tag) => tag.remove());
@@ -153,7 +160,7 @@ else if (instance.kind === "second") {
   Utils.quit(1);
 } else
   try {
-    start(instance);
+    await start(instance);
   } catch (e) {
     // Nothing on screen can say what went wrong: main.log and the console carry it, and the app quits instead of running windowless.
     logMainError(e);
