@@ -7,9 +7,11 @@ import { internalRpcHandlers } from "../.hutch/devkit/api/sdks/main/proc/native.
 import { committedUrl, lockInternalRpc, preloadSource, stillOurs, toPageScript } from "./eb-bridge.ts";
 import { navigation, openedUrl, PAGE_RULES, PAGE_TEMPLATE, PAGE_URL, pageWithCsp, RULES_CANARY } from "./eb-page.ts";
 import { externalUrl } from "./guard.ts";
-import { attachWindow, bundle, ebHost } from "./host-eb.ts";
+import { attachKeys, attachWindow, bundle, ebHost } from "./host-eb.ts";
 import { useHost } from "./host.ts";
 import { handlers } from "./ipc/handlers.ts";
+import { bunWorker, keysController, type KeysFrame } from "./keys-eb.ts";
+import { answerKeys } from "./keys-host.ts";
 import { logMainError } from "./main-log.ts";
 import { openInBrowser } from "./open.ts";
 import { bunBridge } from "./rpc-eb.ts";
@@ -65,6 +67,15 @@ function rulesHold(view: BrowserView): Promise<boolean> {
   });
 }
 
+let keysToPage: (frame: KeysFrame) => void = () => {};
+
+const keys = keysController({
+  spawn: () => bunWorker(path.join(import.meta.dir, "keys.js")),
+  init: () => ({ type: "init", relay: store.relayUrl, dir: Utils.paths.userData, seats: store.channels, person: store.person?.pk ?? null }),
+  answer: answerKeys,
+  toPage: (frame) => keysToPage(frame),
+});
+
 const memoryVault: StoreVault = { where: () => `memory, nothing saved (${bundle.identifier})`, load: () => ({ ok: true, file: null, resave: false }), save: () => {} };
 
 async function createWindow(): Promise<void> {
@@ -79,8 +90,13 @@ async function createWindow(): Promise<void> {
     table,
     () => ours,
     (frame) => view?.executeJavascript(toPageScript(frame)),
-    () => bridge.push("store", snapshot()),
+    () => {
+      keys.pageGone();
+      bridge.push("store", snapshot());
+    },
+    (session, req) => keys.request(session, req),
   );
+  keysToPage = (frame) => bridge.pushKeys(frame);
   const win = new BrowserWindow({
     title: "Channels",
     url: null,
@@ -136,6 +152,8 @@ async function createWindow(): Promise<void> {
 
 async function start(): Promise<void> {
   openStore(memoryVault);
+  attachKeys((m) => keys.tell(m));
+  keys.start();
   await createWindow();
   const broken = brokenStore();
   if (broken) void Utils.showMessageBox({ type: "error", message: "Channels can't read its saved keys", detail: broken.message });
