@@ -31,7 +31,8 @@ else
     problems+=("no WebKitWebProcess of the app's own is running 5s after its window opened")
   else
     echo "WebKitWebProcess $web: $(tr '\0' ' ' < "/proc/$web/cmdline" | cut -c1-160)"
-    echo "sandbox: $(pgrep -s "$pid" -a bwrap | head -n 1 | cut -c1-160 || true)"
+    sandbox=$(pgrep -s "$pid" -a bwrap | head -n 1 | cut -c1-160)
+    if [ -n "$sandbox" ]; then echo "sandbox: $sandbox"; else problems+=("no bwrap of the app's own: WebKitGTK's web process isn't sandboxed"); fi
   fi
   kill -0 "$pid" 2> /dev/null || problems+=("the app exited while its window was open")
 fi
@@ -54,5 +55,5 @@ if [ ${#problems[@]} -gt 0 ]; then
   rm -rf "$home"
   exit 1
 fi
-echo "the app started: its window's WM_CLASS is Channels (the .desktop entry's StartupWMClass), its web process ran, and it stopped cleanly"
+echo "the app started: its window's WM_CLASS is Channels (the .desktop entry's StartupWMClass), its web process ran in WebKitGTK's bubblewrap sandbox, and it stopped cleanly"
 rm -rf "$home"

@@ -28,6 +28,8 @@ const shell = dlopen(shellPath, {
   kiwi_deny_permissions: { args: [], returns: FFIType.bool },
 }).symbols;
 
+const sandboxPages = mac ? null : dlopen(shellPath, { kiwi_sandbox_pages: { args: [], returns: FFIType.bool } }).symbols.kiwi_sandbox_pages;
+
 const windowLook = mac ? dlopen(shellPath, { kiwi_window_look: { args: [FFIType.ptr, FFIType.f64, FFIType.f64, FFIType.u32, FFIType.u32], returns: FFIType.void } }).symbols.kiwi_window_look : null;
 
 const core = dlopen(path.join(binDir, `libElectrobunCore.${suffix}`), {
@@ -119,7 +121,8 @@ BrowserView.on("created", (tag) => tag.remove());
 if (!shell.kiwi_deny_permissions()) {
   console.error("Channels: the web view's permission handler wasn't found; not opening a window that could grant the microphone");
   Utils.quit(1);
-} else
+} else {
+  if (sandboxPages && !sandboxPages()) logMainError(new Error("WebKitGTK's sandbox is off: bwrap or xdg-dbus-proxy isn't installed, so the page runs without it"));
   try {
     start();
   } catch (e) {
@@ -128,3 +131,4 @@ if (!shell.kiwi_deny_permissions()) {
     console.error("Channels: the window couldn't start", e);
     Utils.quit(1);
   }
+}

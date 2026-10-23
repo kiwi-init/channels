@@ -38,11 +38,14 @@ static gboolean stop(gpointer data) {
 typedef struct {
   bool (*deny)(void);
   bool (*watch)(void (*)(void));
+  bool (*sandbox)(void);
   bool ok;
+  bool sandboxed;
 } Hooks;
 
 static gpointer install_off_main(gpointer data) {
   Hooks *hooks = data;
+  hooks->sandboxed = hooks->sandbox();
   hooks->ok = hooks->deny() && hooks->watch(gone);
   g_idle_add(stop, NULL);
   return NULL;
@@ -73,9 +76,10 @@ int main(int argc, char **argv) {
   }
   bool (*deny)(void) = (bool (*)(void))dlsym(lib, "kiwi_deny_permissions");
   bool (*watch)(void (*)(void)) = (bool (*)(void (*)(void)))dlsym(lib, "kiwi_watch_page");
+  bool (*sandbox)(void) = (bool (*)(void))dlsym(lib, "kiwi_sandbox_pages");
   int bad = 0;
-  if (!deny || !watch) {
-    fprintf(stderr, "kiwi-shell-test: kiwi_deny_permissions or kiwi_watch_page isn't exported\n");
+  if (!deny || !watch || !sandbox) {
+    fprintf(stderr, "kiwi-shell-test: kiwi_deny_permissions, kiwi_watch_page or kiwi_sandbox_pages isn't exported\n");
     return 1;
   }
   if (g_strcmp0(g_get_prgname(), "channels-desktop") != 0 || g_strcmp0(gdk_get_program_class(), "channels-desktop") != 0) {
@@ -84,10 +88,15 @@ int main(int argc, char **argv) {
   } else
     printf("program name and class: channels-desktop (the Wayland app_id, matching channels-desktop.desktop)\n");
   loop = g_main_loop_new(NULL, FALSE);
-  Hooks hooks = {deny, watch, false};
+  Hooks hooks = {deny, watch, sandbox, false, false};
   g_idle_add(install_from_worker, &hooks);
   g_main_loop_run(loop);
   if (hooks.ok) printf("hooks: installed on GTK's main loop when asked from another thread, as main-eb's worker asks\n");
+  if (!hooks.sandboxed || !webkit_web_context_get_sandbox_enabled(webkit_web_context_get_default())) {
+    fprintf(stderr, "kiwi-shell-test: kiwi_sandbox_pages didn't turn WebKitGTK's sandbox on (bwrap and xdg-dbus-proxy are installed here)\n");
+    bad++;
+  } else
+    printf("sandbox: on for the default context before its first web view, so the page below runs in bubblewrap\n");
   if (!hooks.ok) {
     fprintf(stderr, "kiwi-shell-test: a WebKitWebView signal hook wasn't installed from another thread\n");
     return 1;

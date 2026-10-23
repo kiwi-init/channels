@@ -403,7 +403,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/linux-debs/partial"
           echo "Dir::Cache::Archives \"$RUNNER_TEMP/linux-debs/\";" | sudo tee /etc/apt/apt.conf.d/90linux-debs > /dev/null
           sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev xvfb xauth xdotool x11-utils squashfs-tools
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools
       - run: bun run web:build
       - id: electrobun
         run: echo "version=$(bun -e 'console.log(require("./desktop/package.json").devDependencies.electrobun)')" >> "$GITHUB_OUTPUT"
@@ -453,7 +453,7 @@ jobs:
           echo "0fb7656f63f14c5f802b71d6c6f255a13404a73455b407d7f8bb0c05e0b729f2  old.deb" | sha256sum -c -
           sudo apt-get install -y --no-install-recommends ./old.deb
           [ "$(readlink -f /usr/bin/channels-desktop)" = /opt/Channels/channels-desktop ] || { echo "the Electron deb didn't make its link"; exit 1; }
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-0 libgtk-3-0 libayatana-appindicator3-1 librsvg2-2
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-0 libgtk-3-0 libayatana-appindicator3-1 librsvg2-2 bubblewrap xdg-dbus-proxy
           sudo dpkg -i "$(ls Channels-*-linux-amd64.deb)"
           link=$(readlink -f /usr/bin/channels-desktop || true)
           [ "$link" = /opt/Channels/bin/launcher ] || { echo "after the upgrade /usr/bin/channels-desktop is '$link', not /opt/Channels/bin/launcher"; exit 1; }
