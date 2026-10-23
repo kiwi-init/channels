@@ -1,7 +1,13 @@
-# jev-ci: which CI jobs a pull request can break. Read by .github/jev-ci/cli.ts in the
-# `plan` job of .github/workflows/ci.yml. Pushes to main run everything except the jobs marked
-# `push: false`, which run on pull requests and manual runs only. `version_bumps: true` runs a
-# job when a change only bumps a version number, which otherwise counts as no change.
+# jev-ci: which CI jobs a pull request or merge group can break. Read by .github/jev-ci/cli.ts
+# in the `plan` job of .github/workflows/ci.yml. A pull request runs only `pull_request_jobs`
+# (below); the rest of its plan runs in the merge queue. A merge group is planned like a pull request,
+# on the group's combined change (merge_group.base_sha..head_sha), and it trusts pass markers
+# from main and from the merge queue's gh-readonly-queue/main/ refs as pull requests do. Pushes
+# to main run nothing when a merge_group run of ci.yml already passed on that very commit (the
+# queue merges what it tested as-is), and otherwise everything except the jobs marked
+# `push: false`, which run on pull requests, merge groups and manual runs only.
+# `version_bumps: true` runs a job when a change only bumps a version number, which otherwise
+# counts as no change.
 #
 # For each job: `inputs` are the files it reads (a change elsewhere skips it), `imports_from`
 # are entry files whose static imports (followed through the repo) count as inputs too,
@@ -29,6 +35,12 @@ workflow: .github/workflows/ci.yml
 # Jobs in the workflow that aren't checks: they run on every pull request, so a change to
 # them needs no other job. Any other job in the workflow without an entry here always runs.
 planner_jobs: [plan, ci-ok]
+
+# A pull request runs only these jobs, as planned (and so does a pull request whose planning
+# failed); ci-ok passes on them, so it joins the merge queue minutes after a push. Every other
+# job the plan picks is skipped there with the reason it would have run, and runs once in the
+# merge queue's group run, which plans the group's combined change with every job.
+pull_request_jobs: [static, test-unit]
 
 # The planner itself: a change here runs every job.
 run_all_when_changed:
@@ -717,7 +729,11 @@ jobs:
       test/jev-ci.test.ts: the CI planner in .github/jev-ci, which plans synthetic changes
       against the real .github/jev-ci.yml and .github/workflows/ci.yml in a scratch git repo,
       following imports into workspace packages (@kiwi/core) by name, and trusts a pass marker only
-      from main or the pull request's own runs, never a fork's. And
+      from main, the merge queue's gh-readonly-queue/main/ refs or the pull request's own runs,
+      never a fork's; a merge group is planned on its combined base..head change, a group event
+      without a base_sha and head_sha fails the plan (so everything runs), a push to main runs
+      nothing only when a successful merge_group run of ci.yml has that very sha, and ci.yml
+      runs on merge_group with a concurrency group per merge group (T2034). And
       test/core-package.test.ts: packages/core imports nothing outside itself but effect/*,
       node: builtins only under packages/core/src/node, no Node or Bun globals elsewhere in it,
       web/src never imports @kiwi/core/node/, and nothing reaches packages/core by a relative
