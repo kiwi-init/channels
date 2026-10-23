@@ -146,7 +146,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     shownTask,
     nameOf,
   })
-  const { behind, setBehind, isFresh, scroller, stick, toBottom, onScroll } = useScroll({ messages, visible, hereKey })
+  const { behind, setBehind, isFresh, scroller, stick, theirs, toBottom, onScroll } = useScroll({ messages, visible, hereKey })
   const anyShown = visible.length > 0
   useEffect(() => {
     if (anyShown) requestAnimationFrame(() => markOnce("kiwi:first-message"))
@@ -189,11 +189,12 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
           if (left > 0) requestAnimationFrame(() => find(left - 1))
           return
         }
+        theirs()
         el.scrollIntoView({ block: "center", behavior: "smooth" })
       }
       requestAnimationFrame(() => requestAnimationFrame(() => find(3)))
     },
-    [placeOf, hereKey, openTask, state.compact]
+    [placeOf, hereKey, openTask, state.compact, theirs]
   )
 
   const onReply = useCallback((m: Message) => setReplyTo(m), [])

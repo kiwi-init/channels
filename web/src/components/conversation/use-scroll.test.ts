@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { arrivedAfter, pin, resized, scrolled, type Follow } from "./use-scroll"
+import { arrivedAfter, pin, resized, scrolled, touched, type Follow } from "./use-scroll"
 import { unreadOf } from "./use-news"
 
 describe("what counts as new", () => {
@@ -45,13 +45,13 @@ describe("staying at the newest message", () => {
 
   test("content that shrinks and then grows before the scroll event lands leaves it at the bottom, not where the browser clamped it", () => {
     const el = scroller(1596)
-    const f: Follow = { atBottom: true, lastTop: 0 }
+    const f: Follow = { atBottom: true, lastTop: 0, theirsUntil: 0 }
     el.scrollTop = el.scrollHeight
-    scrolled(el, f)
+    scrolled(el, f, 0)
     el.scrollHeight = 1535
     resized(el, f, false)
     el.scrollHeight = 1785
-    scrolled(el, f)
+    scrolled(el, f, 0)
     resized(el, f, false)
     expect(f.atBottom).toBe(true)
     expect(gap(el)).toBe(0)
@@ -59,17 +59,18 @@ describe("staying at the newest message", () => {
 
   test("a person scrolling up stays where they went as content grows, and back at the bottom it follows again", () => {
     const el = scroller(1596)
-    const f: Follow = { atBottom: true, lastTop: 0 }
+    const f: Follow = { atBottom: true, lastTop: 0, theirsUntil: 0 }
     el.scrollTop = el.scrollHeight
-    scrolled(el, f)
+    scrolled(el, f, 0)
+    touched(f, 0)
     el.scrollTop -= 300
-    scrolled(el, f)
+    scrolled(el, f, 16)
     el.scrollHeight = 1846
     resized(el, f, false)
     expect(f.atBottom).toBe(false)
     expect(el.scrollTop).toBe(412)
     el.scrollTop = el.scrollHeight
-    scrolled(el, f)
+    scrolled(el, f, 0)
     el.scrollHeight = 1900
     resized(el, f, false)
     expect(gap(el)).toBe(0)
@@ -77,7 +78,7 @@ describe("staying at the newest message", () => {
 
   test("while a smooth scroll runs, growing content doesn't jump it to the bottom", () => {
     const el = scroller(1596)
-    const f: Follow = { atBottom: true, lastTop: 0 }
+    const f: Follow = { atBottom: true, lastTop: 0, theirsUntil: 0 }
     el.scrollTop = 600
     el.scrollHeight = 1700
     resized(el, f, true)
@@ -87,15 +88,15 @@ describe("staying at the newest message", () => {
 
   test("content that shrinks and then grows during a smooth scroll leaves it at the bottom once the scroll settles", () => {
     const el = scroller(1596)
-    const f: Follow = { atBottom: true, lastTop: 0 }
+    const f: Follow = { atBottom: true, lastTop: 0, theirsUntil: 0 }
     pin(el, f)
     el.scrollHeight = 1700
     el.scrollTop = 750
-    scrolled(el, f)
+    scrolled(el, f, 0)
     el.scrollHeight = 1535
     resized(el, f, true)
     el.scrollHeight = 1785
-    scrolled(el, f)
+    scrolled(el, f, 0)
     resized(el, f, true)
     expect(f.atBottom).toBe(true)
     pin(el, f)
@@ -104,13 +105,47 @@ describe("staying at the newest message", () => {
 
   test("after a switch from a longer place, content that grows before the first scroll event leaves it at the bottom", () => {
     const el = scroller(1596)
-    const f: Follow = { atBottom: true, lastTop: 3000 }
+    const f: Follow = { atBottom: true, lastTop: 3000, theirsUntil: 0 }
     pin(el, f)
     expect(f.lastTop).toBe(712)
     el.scrollHeight = 1846
-    scrolled(el, f)
+    scrolled(el, f, 0)
     resized(el, f, false)
     expect(f.atBottom).toBe(true)
     expect(gap(el)).toBe(0)
+  })
+
+  test("the browser moving the view up by itself, with no input from the person, never stops it following: the next resize puts it back", () => {
+    const el = scroller(1175)
+    const f: Follow = { atBottom: true, lastTop: 0, theirsUntil: 0 }
+    pin(el, f)
+    el.scrollTop -= 108
+    scrolled(el, f, 5000)
+    expect(f.atBottom).toBe(true)
+    el.scrollHeight = 1225
+    resized(el, f, false)
+    expect(gap(el)).toBe(0)
+  })
+
+  test("a scroll up counts as the person's for a second after their wheel, touch or key, and for as long as they hold the scrollbar", () => {
+    const el = scroller(1596)
+    const f: Follow = { atBottom: true, lastTop: 0, theirsUntil: 0 }
+    pin(el, f)
+    touched(f, 1000)
+    el.scrollTop -= 200
+    scrolled(el, f, 2001)
+    expect(f.atBottom).toBe(true)
+    resized(el, f, false)
+    touched(f, 3000, true)
+    el.scrollTop -= 200
+    scrolled(el, f, 60000)
+    expect(f.atBottom).toBe(false)
+    touched(f, 60000)
+    el.scrollTop = el.scrollHeight
+    scrolled(el, f, 60100)
+    expect(f.atBottom).toBe(true)
+    el.scrollTop -= 200
+    scrolled(el, f, 61001)
+    expect(f.atBottom).toBe(true)
   })
 })

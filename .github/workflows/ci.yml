@@ -215,14 +215,26 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/browser
+        with:
+          webkit: "true"
       - run: bun run web:build
       - name: ui shots
         run: bun scripts/shoot-ui.ts --wide --phone channel,tasks --theme dark "$RUNNER_TEMP/shots"
+      - name: ui shots in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/shoot-ui.ts --browser webkit --wide --theme light "$RUNNER_TEMP/shots-webkit"
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ui-shots
           path: ${{ runner.temp }}/shots
+          if-no-files-found: ignore
+          overwrite: true
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ui-shots-webkit
+          path: ${{ runner.temp }}/shots-webkit
           if-no-files-found: ignore
           overwrite: true
       - uses: ./.github/actions/jev-ci-pass
