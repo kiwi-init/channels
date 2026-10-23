@@ -22,6 +22,7 @@
 #define MAX_SECRET 1024
 #define HEX_LEN (CC_SHA256_DIGEST_LENGTH * 2)
 #define STORE_ACCOUNT "store-key"
+#define READY_ACCOUNT "store-key-ready"
 
 static volatile pid_t child_pid = -1;
 
@@ -39,6 +40,10 @@ static bool c_string(CFStringRef s, char *out, size_t len) {
 
 static bool url_path(CFURLRef url, char *out, size_t len) {
   return url && CFURLGetFileSystemRepresentation(url, true, (UInt8 *)out, (CFIndex)len);
+}
+
+static void to_hex(const unsigned char digest[CC_SHA256_DIGEST_LENGTH], char out[HEX_LEN + 1]) {
+  for (int i = 0; i < CC_SHA256_DIGEST_LENGTH; i++) snprintf(out + i * 2, 3, "%02x", digest[i]);
 }
 
 static int sha256_hex(const char *path, char out[HEX_LEN + 1]) {
@@ -60,7 +65,7 @@ static int sha256_hex(const char *path, char out[HEX_LEN + 1]) {
   close(fd);
   unsigned char digest[CC_SHA256_DIGEST_LENGTH];
   CC_SHA256_Final(digest, &ctx);
-  for (int i = 0; i < CC_SHA256_DIGEST_LENGTH; i++) snprintf(out + i * 2, 3, "%02x", digest[i]);
+  to_hex(digest, out);
   return 0;
 }
 
@@ -204,29 +209,147 @@ static CFMutableDictionaryRef item_query(CFStringRef service, CFStringRef accoun
   return q;
 }
 
-static void serve_read(int fd, CFStringRef service, CFStringRef account, const char *what) {
+typedef enum { ITEM_OK, ITEM_NONE, ITEM_BAD, ITEM_ERROR } item_result;
+
+static item_result copy_item(CFStringRef service, CFStringRef account, CFDataRef *data, OSStatus *status) {
   CFMutableDictionaryRef q = item_query(service, account);
   CFDictionarySetValue(q, kSecReturnData, kCFBooleanTrue);
   CFDictionarySetValue(q, kSecMatchLimit, kSecMatchLimitOne);
   CFTypeRef out = NULL;
-  OSStatus status = SecItemCopyMatching(q, &out);
+  *status = SecItemCopyMatching(q, &out);
   CFRelease(q);
-  if (status == errSecItemNotFound) {
+  *data = NULL;
+  if (*status == errSecItemNotFound) return ITEM_NONE;
+  if (*status != errSecSuccess) return ITEM_ERROR;
+  if (!out || CFGetTypeID(out) != CFDataGetTypeID() || CFDataGetLength(out) > MAX_SECRET) {
+    if (out) CFRelease(out);
+    return ITEM_BAD;
+  }
+  *data = out;
+  return ITEM_OK;
+}
+
+static void data_hex(CFDataRef data, char out[HEX_LEN + 1]) {
+  unsigned char digest[CC_SHA256_DIGEST_LENGTH];
+  CC_SHA256(CFDataGetBytePtr(data), (CC_LONG)CFDataGetLength(data), digest);
+  to_hex(digest, out);
+}
+
+static item_result store_key_hex(CFStringRef service, char out[HEX_LEN + 1], OSStatus *status) {
+  CFDataRef data = NULL;
+  item_result r = copy_item(service, CFSTR(STORE_ACCOUNT), &data, status);
+  if (r == ITEM_OK) {
+    data_hex(data, out);
+    CFRelease(data);
+  }
+  return r;
+}
+
+static void serve_read(int fd, CFStringRef service, CFStringRef account, const char *what) {
+  CFDataRef data = NULL;
+  OSStatus status = errSecSuccess;
+  item_result r = copy_item(service, account, &data, &status);
+  if (r == ITEM_NONE) {
     reply(fd, "none");
-  } else if (status != errSecSuccess) {
+  } else if (r == ITEM_ERROR) {
     reply_status(fd, what, status);
-  } else if (!out || CFGetTypeID(out) != CFDataGetTypeID() || CFDataGetLength(out) > MAX_SECRET) {
+  } else if (r == ITEM_BAD) {
     reply(fd, "fail the keychain item isn't a key Channels can use");
   } else {
     char line[MAX_LINE];
     memcpy(line, "key ", 4);
-    b64_encode(CFDataGetBytePtr(out), (size_t)CFDataGetLength(out), line + 4);
+    b64_encode(CFDataGetBytePtr(data), (size_t)CFDataGetLength(data), line + 4);
+    CFRelease(data);
     reply(fd, line);
   }
-  if (out) CFRelease(out);
 }
 
-static void serve_set(int fd, CFStringRef service, CFStringRef label, const char *b64) {
+static bool store_key_or_reply(int fd, CFStringRef service, char out[HEX_LEN + 1], const char *none) {
+  OSStatus status = errSecSuccess;
+  item_result r = store_key_hex(service, out, &status);
+  if (r == ITEM_ERROR)
+    reply_status(fd, "reading the store key", status);
+  else if (r == ITEM_BAD)
+    reply(fd, "fail the keychain item isn't a key Channels can use");
+  else if (r == ITEM_NONE)
+    reply(fd, none);
+  return r == ITEM_OK;
+}
+
+static void serve_finished(int fd, CFStringRef service) {
+  char key[HEX_LEN + 1];
+  if (!store_key_or_reply(fd, service, key, "none")) return;
+  CFDataRef mark = NULL;
+  OSStatus status = errSecSuccess;
+  item_result r = copy_item(service, CFSTR(READY_ACCOUNT), &mark, &status);
+  if (r == ITEM_ERROR) {
+    reply_status(fd, "reading the store key's ready mark", status);
+    return;
+  }
+  bool ready = r == ITEM_OK && CFDataGetLength(mark) == HEX_LEN && memcmp(CFDataGetBytePtr(mark), key, HEX_LEN) == 0;
+  if (mark) CFRelease(mark);
+  reply(fd, ready ? "ok" : "none");
+}
+
+static void serve_finish(int fd, CFStringRef service, CFStringRef label) {
+  char key[HEX_LEN + 1];
+  if (!store_key_or_reply(fd, service, key, "fail there's no store key to mark ready")) return;
+  CFDataRef data = CFDataCreate(kCFAllocatorDefault, (const UInt8 *)key, HEX_LEN);
+  CFMutableDictionaryRef q = item_query(service, CFSTR(READY_ACCOUNT));
+  CFDictionarySetValue(q, kSecValueData, data);
+  CFStringRef ready_label = CFStringCreateWithFormat(kCFAllocatorDefault, NULL, CFSTR("%@ ready"), label);
+  if (ready_label) CFDictionarySetValue(q, kSecAttrLabel, ready_label);
+  OSStatus status = SecItemAdd(q, NULL);
+  CFRelease(q);
+  if (ready_label) CFRelease(ready_label);
+  if (status == errSecDuplicateItem) {
+    CFMutableDictionaryRef find = item_query(service, CFSTR(READY_ACCOUNT));
+    CFMutableDictionaryRef change = CFDictionaryCreateMutable(kCFAllocatorDefault, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+    CFDictionarySetValue(change, kSecValueData, data);
+    status = SecItemUpdate(find, change);
+    CFRelease(find);
+    CFRelease(change);
+  }
+  CFRelease(data);
+  if (status == errSecSuccess)
+    reply(fd, "ok");
+  else
+    reply_status(fd, "saving the store key's ready mark", status);
+}
+
+static OSStatus delete_item(CFStringRef service, CFStringRef account) {
+  CFMutableDictionaryRef q = item_query(service, account);
+  OSStatus status = SecItemDelete(q);
+  CFRelease(q);
+  return status;
+}
+
+static void serve_drop(int fd, CFStringRef service, char made[HEX_LEN + 1]) {
+  if (!made[0]) {
+    reply(fd, "fail the launcher only takes back a store key it made in this session");
+    return;
+  }
+  char key[HEX_LEN + 1];
+  if (!store_key_or_reply(fd, service, key, "fail the keychain no longer holds the store key this session made")) return;
+  if (strcmp(key, made) != 0) {
+    reply(fd, "fail the keychain's store key isn't the one this session made, so the launcher leaves it");
+    return;
+  }
+  OSStatus status = delete_item(service, CFSTR(READY_ACCOUNT));
+  if (status != errSecSuccess && status != errSecItemNotFound) {
+    reply_status(fd, "taking back the store key's ready mark", status);
+    return;
+  }
+  status = delete_item(service, CFSTR(STORE_ACCOUNT));
+  if (status != errSecSuccess) {
+    reply_status(fd, "taking back the store key", status);
+    return;
+  }
+  made[0] = 0;
+  reply(fd, "ok");
+}
+
+static void serve_set(int fd, CFStringRef service, CFStringRef label, const char *b64, char made[HEX_LEN + 1]) {
   UInt8 secret[MAX_SECRET];
   long len = b64_decode(b64, secret, sizeof secret);
   if (len <= 0) {
@@ -240,6 +363,7 @@ static void serve_set(int fd, CFStringRef service, CFStringRef label, const char
   CFDictionarySetValue(q, kSecAttrLabel, label);
   OSStatus status = SecItemAdd(q, NULL);
   CFRelease(q);
+  if (status == errSecSuccess) data_hex(data, made);
   CFRelease(data);
   if (status == errSecSuccess)
     reply(fd, "ok");
@@ -267,6 +391,7 @@ static void serve_legacy(int fd, CFArrayRef names, const char *name) {
 
 void kiwi_serve(int fd, CFStringRef service, CFStringRef label, CFArrayRef legacy) {
   char buf[MAX_LINE + 1];
+  char made[HEX_LEN + 1] = "";
   size_t used = 0;
   for (;;) {
     ssize_t n = read(fd, buf + used, MAX_LINE - used);
@@ -285,7 +410,13 @@ void kiwi_serve(int fd, CFStringRef service, CFStringRef label, CFArrayRef legac
       } else if (strcmp(buf, "get") == 0)
         serve_read(fd, service, CFSTR(STORE_ACCOUNT), "reading the store key");
       else if (strncmp(buf, "set ", 4) == 0)
-        serve_set(fd, service, label, buf + 4);
+        serve_set(fd, service, label, buf + 4, made);
+      else if (strcmp(buf, "finished") == 0)
+        serve_finished(fd, service);
+      else if (strcmp(buf, "finish") == 0)
+        serve_finish(fd, service, label);
+      else if (strcmp(buf, "drop") == 0)
+        serve_drop(fd, service, made);
       else if (strncmp(buf, "legacy ", 7) == 0)
         serve_legacy(fd, legacy, buf + 7);
       else
