@@ -186,23 +186,8 @@ fun ConversationScreen(
                                 type()
                             },
                         )
-                        AnimatedVisibility(
-                            visible = !follow.atBottom,
-                            enter = scaleIn() + fadeIn(),
-                            exit = scaleOut() + fadeOut(),
-                            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 8.dp),
-                        ) {
-                            BadgedBox(badge = { if (follow.unseen > 0) Badge { Text("${follow.unseen}") } }) {
-                                SmallFloatingActionButton(
-                                    onClick = { scope.launch { state.animateScrollToItem(0) } },
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                ) {
-                                    Icon(
-                                        Icons.Filled.KeyboardArrowDown,
-                                        contentDescription = if (follow.unseen > 0) "${follow.unseen} new, jump to the latest" else "Jump to the latest",
-                                    )
-                                }
-                            }
+                        Jump(!follow.atBottom, follow.unseen, Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 8.dp)) {
+                            scope.launch { state.animateScrollToItem(0) }
                         }
                     }
                 }
@@ -218,6 +203,17 @@ fun ConversationScreen(
             clearReply = { replyTo = null },
             clearAnswer = { answering = null },
         )
+    }
+}
+
+@Composable
+private fun Jump(visible: Boolean, unseen: Int, modifier: Modifier, go: () -> Unit) {
+    AnimatedVisibility(visible = visible, enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut(), modifier = modifier) {
+        BadgedBox(badge = { if (unseen > 0) Badge { Text("$unseen") } }) {
+            SmallFloatingActionButton(onClick = go, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = if (unseen > 0) "$unseen new, jump to the latest" else "Jump to the latest")
+            }
+        }
     }
 }
 
