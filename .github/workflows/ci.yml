@@ -352,6 +352,29 @@ jobs:
       - name: the launcher keeps BUN_*, NODE_*, DYLD_* and JSC_* out of the app
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-env-check.ts desktop/release-eb
+      - name: test build (the test driver in, its own bundle id)
+        if: ${{ !cancelled() }}
+        working-directory: desktop
+        run: bunx electrobun build --env=dev
+        env:
+          CHANNELS_EB_TEST: "1"
+          CHANNELS_EB_IDENTIFIER: com.kiwiinit.channels.test
+      - name: no test driver in the release build
+        if: ${{ !cancelled() }}
+        run: bun desktop/scripts/eb-driver-check.ts desktop/release-eb
+      - name: smoke
+        if: ${{ !cancelled() }}
+        run: bun desktop/scripts/smoke-eb.ts desktop/release-eb/build/dev-macos-*/*.app
+      - name: cold start
+        if: ${{ !cancelled() }}
+        run: bun scripts/perf-desktop.ts desktop/release-eb/build/dev-macos-*/*.app --electrobun --json "$RUNNER_TEMP/perf-desktop-eb.json"
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: perf-desktop-eb
+          path: ${{ runner.temp }}/perf-desktop-eb.json
+          if-no-files-found: ignore
+          overwrite: true
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         timeout-minutes: 1

@@ -3,6 +3,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFile
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { plainApp } from "./eb-plain.ts";
 
 const given = resolve(process.argv[2] ?? "");
 if (!existsSync(given)) {
@@ -11,21 +12,7 @@ if (!existsSync(given)) {
 }
 const tmp = mkdtempSync(join(tmpdir(), "kiwi-env-check-"));
 
-function plainApp(dir: string): string {
-  const artifacts = join(dir, "artifacts");
-  const payloads = readdirSync(artifacts).filter((n) => n.endsWith(".app.tar.zst"));
-  if (payloads.length !== 1) throw new Error(`expected one .app.tar.zst under ${artifacts}, found ${payloads.length}`);
-  const tar = join(tmp, "app.tar");
-  writeFileSync(tar, Bun.zstdDecompressSync(readFileSync(join(artifacts, payloads[0]!))));
-  const out = join(tmp, "plain");
-  mkdirSync(out);
-  execFileSync("tar", ["-xf", tar, "-C", out]);
-  const apps = readdirSync(out).filter((n) => n.endsWith(".app"));
-  if (apps.length !== 1) throw new Error(`expected one .app in ${payloads[0]}, found ${apps.length}`);
-  return join(out, apps[0]!);
-}
-
-const app = given.endsWith(".app") ? given : plainApp(given);
+const app = given.endsWith(".app") ? given : plainApp(given, tmp);
 const plist = join(app, "Contents", "Info.plist");
 const read = (key: string) => execFileSync("plutil", ["-extract", key, "raw", plist], { encoding: "utf8" }).trim();
 const id = read("CFBundleIdentifier");

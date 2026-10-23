@@ -10,7 +10,7 @@ export default {
   },
   build: {
     mainProcess: "bun",
-    bun: { entrypoint: "src/main-eb.ts" },
+    bun: { entrypoint: "src/main-eb.ts", define: { KIWI_EB_TEST: process.env.CHANNELS_EB_TEST === "1" ? "true" : "false" } },
     views: { preload: { entrypoint: "src/preload-eb.ts" } },
     buildFolder: "release-eb/build",
     artifactFolder: "release-eb/artifacts",

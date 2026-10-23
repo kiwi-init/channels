@@ -5,17 +5,21 @@ import Electrobun, { BrowserView, BrowserWindow, PATHS, Utils } from "electrobun
 
 import { internalRpcHandlers } from "../.hutch/devkit/api/sdks/main/proc/native.ts";
 import { committedUrl, lockInternalRpc, preloadSource, stillOurs, toPageScript } from "./eb-bridge.ts";
+import { drive } from "./eb-driver.ts";
 import { navigationUrl, openedUrl, PAGE_RULES, PAGE_URL, pageWithCsp } from "./eb-page.ts";
-import { externalUrl } from "./guard.ts";
+import { testVault } from "./eb-test-store.ts";
+import { externalUrl, normalizeRelay } from "./guard.ts";
 import { attachWindow, bundle, ebHost } from "./host-eb.ts";
 import { useHost } from "./host.ts";
 import { handlers } from "./ipc/handlers.ts";
 import { logMainError } from "./main-log.ts";
 import { openInBrowser } from "./open.ts";
 import { bunBridge } from "./rpc-eb.ts";
-import { brokenStore, openStore, snapshot, store, type StoreVault } from "./store.ts";
+import { brokenStore, mutate, openStore, snapshot, store, type StoreVault } from "./store.ts";
 import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts";
 import { minWindowWidth } from "./window-size.ts";
+
+declare const KIWI_EB_TEST: boolean;
 
 useHost(ebHost);
 lockInternalRpc(internalRpcHandlers);
@@ -47,7 +51,7 @@ function openOutside(url: string): void {
 
 const memoryVault: StoreVault = { where: () => `memory, nothing saved (${bundle.identifier})`, load: () => ({ ok: true, file: null, resave: false }), save: () => {} };
 
-function createWindow(): void {
+function createWindow(): BrowserView {
   const index = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "internal", "index.html"), "utf8");
   const bundled = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "preload", "index.js"), "utf8");
   const table = handlers(ebHost);
@@ -102,11 +106,21 @@ function createWindow(): void {
   webview.on("dom-ready", () => {
     if (!win.isVisible()) win.show();
   });
+  return webview;
 }
 
 function start(): void {
-  openStore(memoryVault);
-  createWindow();
+  if (KIWI_EB_TEST) {
+    openStore(testVault(Utils.paths.userData));
+    const relay = normalizeRelay(process.env.KIWI_EB_RELAY ?? "");
+    if (relay) mutate((s) => void (s.relayUrl = relay));
+    const view = createWindow();
+    const socket = process.env.KIWI_EB_DRIVER;
+    if (socket) drive(view, socket);
+  } else {
+    openStore(memoryVault);
+    createWindow();
+  }
   const broken = brokenStore();
   if (broken) void Utils.showMessageBox({ type: "error", message: "Channels can't read its saved keys", detail: broken.message });
 }

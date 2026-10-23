@@ -11,14 +11,24 @@ extern char **environ;
 
 static const char *const KEEP[] = {"HOME", "USER", "LOGNAME", "TMPDIR", "PATH", "SHELL", "LANG", "__CF_USER_TEXT_ENCODING", "XPC_SERVICE_NAME", "XPC_FLAGS", NULL};
 static const char *const KEEP_PREFIXES[] = {"LC_", NULL};
+#ifdef KIWI_EB_TEST
+static const char *const KEEP_IN_TEST_BUILDS[] = {"KIWI_EB_DRIVER", "KIWI_EB_RELAY", "CFFIXED_USER_HOME", NULL};
+#else
+static const char *const KEEP_IN_TEST_BUILDS[] = {NULL};
+#endif
 static char *const IMPOSED[] = {"BUN_RUNTIME_TRANSPILER_CACHE_PATH=0", NULL};
+
+static bool listed(const char *entry, size_t len, const char *const *names) {
+  for (const char *const *k = names; *k; k++)
+    if (strlen(*k) == len && strncmp(entry, *k, len) == 0) return true;
+  return false;
+}
 
 static bool kept(const char *entry) {
   const char *eq = strchr(entry, '=');
   if (!eq) return false;
   size_t len = (size_t)(eq - entry);
-  for (const char *const *k = KEEP; *k; k++)
-    if (strlen(*k) == len && strncmp(entry, *k, len) == 0) return true;
+  if (listed(entry, len, KEEP) || listed(entry, len, KEEP_IN_TEST_BUILDS)) return true;
   for (const char *const *p = KEEP_PREFIXES; *p; p++)
     if (len > strlen(*p) && strncmp(entry, *p, strlen(*p)) == 0) return true;
   return false;
