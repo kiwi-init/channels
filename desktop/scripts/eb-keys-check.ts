@@ -1,4 +1,4 @@
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { createCipheriv, pbkdf2Sync, randomBytes } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -254,6 +254,32 @@ try {
   }
   const median = times.sort((a, b) => a - b)[3] ?? 0;
   expect(`the launcher checks ${files} files in ${median.toFixed(0)} ms (median of 7, gate ${SEAL_GATE_MS} ms)`, median <= SEAL_GATE_MS, `${times.map((t) => t.toFixed(0)).join(", ")} ms`);
+
+  const sleepy = copy(good, "sleepy");
+  const sleeper = path.join(tmp, "sleeper");
+  fs.writeFileSync(`${sleeper}.c`, "#include <unistd.h>\nint main(void) {\n  if (fork() == 0)\n    for (;;) pause();\n  for (;;) pause();\n}\n");
+  execFileSync("clang", ["-O2", "-o", sleeper, `${sleeper}.c`]);
+  fs.copyFileSync(sleeper, path.join(contents(sleepy), "MacOS", "launcher"));
+  sealApp(sleepy);
+  const ofSleepy = (): number[] =>
+    spawnSync("pgrep", ["-f", path.join(contents(sleepy), "MacOS")], { encoding: "utf8" })
+      .stdout.split("\n")
+      .filter(Boolean)
+      .map(Number);
+  const held = spawn(executable(sleepy), [], { stdio: "ignore" });
+  const exited = new Promise<number | null>((resolve) => held.on("exit", (code) => resolve(code)));
+  await Bun.sleep(1_500);
+  const running = ofSleepy().length;
+  held.kill("SIGTERM");
+  const code = await Promise.race([exited, Bun.sleep(5_000).then(() => -1)]);
+  await Bun.sleep(500);
+  const left = ofSleepy();
+  for (const pid of left) process.kill(pid, "SIGKILL");
+  expect(
+    "a SIGTERM while the launcher still holds the key session ends the whole app at once (Electrobun's launcher and what it started), so a start waiting on the keychain can still be quit",
+    running >= 3 && code === 143 && left.length === 0,
+    `running ${running}, exit ${code}, left ${left.join(", ")}`,
+  );
 
   const sanitized = path.join(tmp, "Sanitized.app");
   const sanMacos = path.join(contents(sanitized), "MacOS");

@@ -25,6 +25,7 @@
 #define READY_ACCOUNT "store-key-ready"
 
 static volatile pid_t child_pid = -1;
+static volatile sig_atomic_t serving = 0;
 
 static int fail(char *why, size_t why_len, const char *fmt, ...) {
   va_list ap;
@@ -505,7 +506,12 @@ void kiwi_serve(int fd, CFStringRef service, CFStringRef label, CFArrayRef legac
 }
 
 static void forward(int sig) {
-  if (child_pid > 0) kill(child_pid, sig);
+  if (child_pid <= 0) return;
+  if (serving) {
+    kill(-child_pid, SIGKILL);
+    _exit(128 + sig);
+  }
+  kill(-child_pid, sig);
 }
 
 int kiwi_run_with_keys(const char *path, char *const argv[], char *const envp[]) {
@@ -532,7 +538,8 @@ int kiwi_run_with_keys(const char *path, char *const argv[], char *const envp[])
   posix_spawnattr_t attr;
   posix_spawn_file_actions_init(&actions);
   posix_spawnattr_init(&attr);
-  posix_spawnattr_setflags(&attr, POSIX_SPAWN_CLOEXEC_DEFAULT);
+  posix_spawnattr_setflags(&attr, POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETPGROUP);
+  posix_spawnattr_setpgroup(&attr, 0);
   for (int fd = 0; fd <= 2; fd++)
     if (fd != sv[1] && fcntl(fd, F_GETFD) != -1) posix_spawn_file_actions_addinherit_np(&actions, fd);
   if (sv[1] == KIWI_KEY_FD)
@@ -558,7 +565,9 @@ int kiwi_run_with_keys(const char *path, char *const argv[], char *const envp[])
   sigemptyset(&sa.sa_mask);
   int signals[] = {SIGTERM, SIGINT, SIGHUP, SIGQUIT};
   for (size_t i = 0; i < sizeof signals / sizeof signals[0]; i++) sigaction(signals[i], &sa, NULL);
+  serving = 1;
   kiwi_serve(sv[0], id, label, names);
+  serving = 0;
   close(sv[0]);
   CFRelease(label);
   int status = 0;
