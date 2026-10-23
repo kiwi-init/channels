@@ -7,7 +7,7 @@
 // has to match the row, so editing the row cannot move a message.
 //
 // Rows are keyed by room and member key, so two accounts in one browser do not
-// share a cache. Leave, kick, close, and sign-out delete them. A hole, a seal
+// share a cache. Leave, kick and close delete them. A hole, a seal
 // that does not open, or a seq past the relay's head drops that cache and the
 // page loads the usual window. The cache does not fill a gap or sort ahead of
 // the relay. See history-plan.ts.
