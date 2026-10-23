@@ -393,17 +393,33 @@ jobs:
       - uses: ./.github/actions/setup
       - id: image
         run: echo "key=$ImageOS-$ImageVersion" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ runner.temp }}/linux-debs
-          key: linux-debs-${{ runner.arch }}-${{ steps.image.outputs.key }}-${{ hashFiles('.github/workflows/ci.yml') }}
+          key: linux-debs-${{ runner.arch }}-${{ steps.image.outputs.key }}-${{ github.run_id }}
           restore-keys: linux-debs-${{ runner.arch }}-${{ steps.image.outputs.key }}-
-      - name: WebKitGTK, Xvfb and the AppImage tools, from cached .debs when the mirror is slow
+      - name: WebKitGTK, its sandbox, Xvfb and the AppImage tools, from cached .debs when the mirror is slow
+        timeout-minutes: 15
         run: |
-          mkdir -p "$RUNNER_TEMP/linux-debs/partial"
-          echo "Dir::Cache::Archives \"$RUNNER_TEMP/linux-debs/\";" | sudo tee /etc/apt/apt.conf.d/90linux-debs > /dev/null
+          debs="$RUNNER_TEMP/linux-debs"
+          mkdir -p "$debs/partial"
+          find "$debs" -maxdepth 1 -name '*.deb' | wc -l > "$RUNNER_TEMP/debs-before"
+          echo "Dir::Cache::Archives \"$debs/\";" | sudo tee /etc/apt/apt.conf.d/90linux-debs > /dev/null
           sudo apt-get update -q
           sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools
+      - id: debs
+        name: keep what apt downloaded, even when it ran out of time
+        if: always()
+        run: |
+          debs="$RUNNER_TEMP/linux-debs"
+          sudo rm -rf "$debs/partial" "$debs/lock"
+          sudo chown -R "$(id -u):$(id -g)" "$debs"
+          echo "new=$([ "$(find "$debs" -maxdepth 1 -name '*.deb' | wc -l)" -gt "$(cat "$RUNNER_TEMP/debs-before" 2> /dev/null || echo 0)" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - if: always() && steps.debs.outputs.new == 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/linux-debs
+          key: linux-debs-${{ runner.arch }}-${{ steps.image.outputs.key }}-${{ github.run_id }}
       - run: bun run web:build
       - id: electrobun
         run: echo "version=$(bun -e 'console.log(require("./desktop/package.json").devDependencies.electrobun)')" >> "$GITHUB_OUTPUT"
@@ -480,12 +496,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 3
           overwrite: true
-      - name: hand the .debs back to the cache
-        if: always()
-        run: |
-          sudo apt-get autoclean -qq || true
-          sudo rm -rf /etc/apt/apt.conf.d/90linux-debs "$RUNNER_TEMP/linux-debs/partial" "$RUNNER_TEMP/linux-debs/lock"
-          sudo chown -R "$(id -u):$(id -g)" "$RUNNER_TEMP/linux-debs"
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         with:

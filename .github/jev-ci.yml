@@ -1138,7 +1138,8 @@ jobs:
       Electron app is gone, the entry runs the launcher and dpkg --verify finds nothing; it prints the runner's
       AppArmor user-namespace setting for WebKitGTK's sandbox.
       The job's apt packages come from .debs cached under the runner image's key (as .github/actions/browser
-      does), so a slow mirror costs one run, not every run.
+      does); the apt step has 15 minutes, and what it downloaded is saved even when it runs out of time, so a
+      slow mirror costs one run, not every run.
       Then it starts the installed app (T1545): desktop/native/linux/kiwi-shell.c, built by
       eb-post-build into the bundle's bin as libkiwi-shell.so, is what main-eb.ts loads on Linux
       too. desktop/native/linux/kiwi-shell-test.c (run under Xvfb against the installed library,
