@@ -2,7 +2,9 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreBinaries": [
     "oxfmt",
-    "iconutil"
+    "iconutil",
+    "clang",
+    "ditto"
   ],
   "workspaces": {
     ".": {
@@ -52,9 +54,11 @@
     "desktop": {
       "entry": [
         "src/main.ts",
+        "src/main-eb.ts",
         "src/preload.ts",
         "src/channels.ts",
-        "scripts/*.ts"
+        "scripts/*.ts",
+        "electrobun.config.ts"
       ],
       "project": [
         "src/**/*.ts",

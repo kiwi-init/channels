@@ -8,6 +8,7 @@ import { keepRendererAlive } from "./revive.ts";
 import { entryUrl } from "./serve-web.ts";
 import { textStepFor, type TextStep } from "./text-size.ts";
 import { applyUpdate, updateState } from "./updater.ts";
+import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts";
 import { minWindowWidth } from "./window-size.ts";
 
 let win: BrowserWindow | null = null;
@@ -48,14 +49,14 @@ export function guardContents(wc: Electron.WebContents): void {
 
 export function createWindow(): void {
   win = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: WINDOW_SIZE.width,
+    height: WINDOW_SIZE.height,
     minWidth: minWindowWidth(process.platform),
-    minHeight: 480,
+    minHeight: WINDOW_SIZE.minHeight,
     autoHideMenuBar: true,
     ...(process.platform === "linux" ? { icon: path.join(assetsDir(), "icon.png") } : {}),
-    ...(process.platform === "darwin" ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 20, y: 20 } } : {}),
-    backgroundColor: nativeTheme.shouldUseDarkColors ? "#000000" : "#f2f2f5",
+    ...(process.platform === "darwin" ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: TRAFFIC_LIGHTS } : {}),
+    backgroundColor: windowBackground(nativeTheme.shouldUseDarkColors),
     webPreferences: { preload: preloadPath(), contextIsolation: true, sandbox: true },
   });
   keepRendererAlive(win, () => quitting);
