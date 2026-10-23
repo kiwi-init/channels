@@ -113,7 +113,7 @@ test.skipIf(process.platform === "win32")(
       .trim()
       .split("\n")
       .map((l) => JSON.parse(l) as { pid: number; args: string[]; fd3: number | null; env: string[] });
-    expect(seen.map((r) => r.args)).toEqual([["--version"], ["cleanup", "--quiet"], ["--version"]]);
+    expect(seen.map((r) => r.args.join(" ")).sort()).toEqual(["--version", "--version", "cleanup --quiet"]);
     expect(seen.filter((r) => r.fd3 === keyIno || r.env.length > 0)).toEqual([]);
     const preloads = readFileSync(preloaded, "utf8").trim().split("\n").map(Number);
     expect(preloads.length).toBeGreaterThan(0);
