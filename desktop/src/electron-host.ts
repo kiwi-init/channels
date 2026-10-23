@@ -1,6 +1,7 @@
-import { app, dialog, ipcMain, Notification, shell, type OpenDialogOptions } from "electron";
+import { app, dialog, ipcMain, Notification, shell, type IpcMainEvent, type IpcMainInvokeEvent, type OpenDialogOptions } from "electron";
 
 import type { Call, CallArgs, Handlers } from "./calls.ts";
+import { isAppUrl } from "./guard.ts";
 import type { Host } from "./host.ts";
 import { connectKeys, tellKeys } from "./keys-process.ts";
 import { entryUrl } from "./serve-web.ts";
@@ -42,13 +43,23 @@ export const electronHost: Host = {
   tellKeys,
 };
 
+const fromPage = (e: IpcMainEvent | IpcMainInvokeEvent): boolean => {
+  const frame = e.senderFrame;
+  return frame !== null && frame.parent === null && isAppUrl(frame.url);
+};
+
 function serve<K extends Call>(handlers: Handlers, name: K): void {
   const fn: Handlers[K] = handlers[name];
-  ipcMain.handle(`kiwi:${name}`, (_e, ...args: CallArgs<K>) => fn(...args));
+  ipcMain.handle(`kiwi:${name}`, (e, ...args: CallArgs<K>) => {
+    if (!fromPage(e)) throw new Error("only Channels' own page can call the app");
+    return fn(...args);
+  });
 }
 
 export function serveCalls(handlers: Handlers): void {
-  ipcMain.on("kiwi:snapshot-sync", (e) => (e.returnValue = snapshot()));
-  ipcMain.on("kiwi:channels-connect", (e) => connectKeys(e.sender));
+  ipcMain.on("kiwi:snapshot-sync", (e) => (e.returnValue = fromPage(e) ? snapshot() : null));
+  ipcMain.on("kiwi:channels-connect", (e) => {
+    if (fromPage(e)) connectKeys(e.sender);
+  });
   for (const name of Object.keys(handlers) as Call[]) serve(handlers, name);
 }

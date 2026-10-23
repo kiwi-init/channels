@@ -13,5 +13,5 @@
     "verbatimModuleSyntax": true
   },
   "include": ["src", "scripts/fuses.ts", "scripts/smoke.ts", "scripts/linux-files.ts", "scripts/package-linux.ts"],
-  "exclude": ["src/main-eb.ts"]
+  "exclude": ["src/*-eb.ts"]
 }

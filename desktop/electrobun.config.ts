@@ -11,6 +11,7 @@ export default {
   build: {
     mainProcess: "bun",
     bun: { entrypoint: "src/main-eb.ts" },
+    views: { preload: { entrypoint: "src/preload-eb.ts" } },
     buildFolder: "release-eb/build",
     artifactFolder: "release-eb/artifacts",
     mac: { icons: "release-eb/icon.iconset" },

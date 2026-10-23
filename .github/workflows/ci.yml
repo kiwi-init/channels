@@ -192,7 +192,14 @@ jobs:
           overwrite: true
       - name: cli build
         if: ${{ !cancelled() }}
-        run: bun run build && ./dist/kiwi --version && bun scripts/build-cli.ts --check
+        run: |
+          bun run build && ./dist/kiwi --version && bun scripts/build-cli.ts --check
+          probe="$RUNNER_TEMP/kiwi-autoload"
+          mkdir -p "$probe"
+          printf 'preload = ["./p.js"]\n' > "$probe/bunfig.toml"
+          printf 'require("node:fs").writeFileSync("preload-ran", "")\n' > "$probe/p.js"
+          (cd "$probe" && "$GITHUB_WORKSPACE/dist/kiwi" --version)
+          test ! -e "$probe/preload-ran" || { echo "the kiwi CLI ran a bunfig.toml preload from the folder it was started in"; exit 1; }
       - name: cli smoke
         if: ${{ !cancelled() }}
         run: bun scripts/smoke-cli.ts dist/kiwi
@@ -354,6 +361,9 @@ jobs:
         run: bun run typecheck:eb
       - working-directory: desktop
         if: ${{ !cancelled() }}
+        run: bun test --tsconfig-override tsconfig.eb.json ./eb-tests
+      - working-directory: desktop
+        if: ${{ !cancelled() }}
         env:
           DASH_RELEASE_OFFLINE: "1"
         run: bun run build:eb
@@ -362,7 +372,7 @@ jobs:
       - name: the launcher keeps BUN_*, NODE_*, DYLD_* and JSC_* out of the app
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-env-check.ts desktop/release-eb
-      - name: the launcher holds the store key and refuses a changed app
+      - name: the launcher holds the store key for one session, refuses a changed app, and its C runs clean under ASan and UBSan
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-keys-check.ts desktop/release-eb
       - uses: ./.github/actions/jev-ci-pass

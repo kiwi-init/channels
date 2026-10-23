@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
 import { COMMANDS } from "../src/sh.ts";
-import { coverageChunks, heavyIn, mcpValidatorStub, registryEntries, stubbedChunks, stubPlugin, validatorsIn } from "./cli-bundle.ts";
+import { CLI_COMPILE, coverageChunks, heavyIn, mcpValidatorStub, registryEntries, stubbedChunks, stubPlugin, validatorsIn } from "./cli-bundle.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const BUDGET_BYTES = 2_700_000;
@@ -64,7 +64,7 @@ if (values.check) {
   }
 } else {
   const outfile = resolve(values.outfile);
-  const result = await Bun.build({ ...shared, compile: target === undefined ? { outfile } : { target, outfile } });
+  const result = await Bun.build({ ...shared, compile: { ...CLI_COMPILE, ...(target === undefined ? {} : { target }), outfile } });
   if (failed(result)) process.exit(1);
   console.log(`built ${outfile}${target ? ` for ${target}` : ""}, ${stubbed.size} just-bash command chunks left out`);
 }

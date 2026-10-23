@@ -61,6 +61,7 @@
       "entry": [
         "src/main.ts",
         "src/main-eb.ts",
+        "src/preload-eb.ts",
         "src/preload.ts",
         "src/channels.ts",
         "scripts/*.ts",
