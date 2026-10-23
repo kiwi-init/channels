@@ -196,11 +196,6 @@ async function run(part: Part): Promise<string[]> {
     await page.getByRole("dialog").getByRole("textbox").fill("smoke");
     await page.getByRole("button", { name: "Create channel" }).click();
     await page.waitForURL(/#mc2-/);
-    await page
-      .locator('nav[aria-label="Views of the channel"]:visible button[aria-current="page"]:text-is("Tasks"), aside[aria-label="Channel"] nav[aria-label="Views"] button[aria-current="page"]')
-      .first()
-      .waitFor();
-    await toTab("Conversation");
     await page.getByRole("textbox", { name: "Message" }).waitFor();
   };
 
@@ -411,6 +406,11 @@ async function run(part: Part): Promise<string[]> {
     await letIn.or(showCode).first().waitFor({ timeout: 30000 });
     if (await showCode.count()) await showCode.click();
     await letIn.waitFor({ timeout: 30000 });
+    const joinRow = needs.getByRole("button", { name: /wants to join/ });
+    const expand = async () => {
+      if ((await joinRow.first().getAttribute("aria-expanded")) !== "true") await joinRow.first().click();
+    };
+    await expand();
     await needs.getByText("claude-sonnet-5-5").first().waitFor({ timeout: 5000 });
     if (process.env.SMOKE_SHOTS) {
       await needs.evaluate((el) => el.scrollIntoView({ block: "start" }));
@@ -423,6 +423,7 @@ async function run(part: Part): Promise<string[]> {
     await letIn.waitFor({ timeout: 15000 });
     for (const gone of ["Copy invite link", "Review and approve"]) if (await page.getByRole("button", { name: gone }).count()) throw new Error(`details still offers "${gone}"`);
     log(`ok  ${at}`);
+    await expand();
     await opens("Needs you → Choose what it can do…", () => needs.getByRole("button", { name: "Choose what it can do…" }).click());
     at = "approve";
     await needsOpen();
@@ -440,6 +441,7 @@ async function run(part: Part): Promise<string[]> {
     await letIn.or(showCode).first().waitFor({ timeout: 30000 });
     if (await showCode.count()) await showCode.click();
     await letIn.waitFor({ timeout: 30000 });
+    await expand();
     await needs.getByRole("button", { name: "Choose what it can do…" }).click();
     const letting = page.getByRole("dialog", { name: /^Let helper in\?/ });
     await letting.getByRole("radiogroup", { name: "Personality" }).getByText("Reviewer", { exact: true }).click();
@@ -566,15 +568,15 @@ async function run(part: Part): Promise<string[]> {
     await tasksPanel.waitFor({ state: "detached" });
     log(`ok  ${at}`);
 
-    at = "ask-human: the question sits in the composer with its options, is one row of Needs you, Tasks' Needs you shows it as the composer's card, and the task waits on a person until one is picked";
+    at =
+      "ask-human: the question sits in the composer with its options, is one row of Needs you, Tasks' Needs you shows it as one row with its options, and the task waits on a person until one is picked";
     await kiwi(["-c", "smoke", "--as", "bot", "ask-human", "--task", smokeTask, "--option", "A: ship it", "--option", "B: wait a day", "Ship the smoke build now?"]);
     const awaiting = page.getByText("Needs a decision");
     await toTab("Tasks");
     await awaiting.first().waitFor({ timeout: 15000 });
-    const card = needs.getByRole("region", { name: "Question" });
-    await card.getByText("Ship the smoke build now?").waitFor({ timeout: 15000 });
-    await card.getByRole("list", { name: "Options" }).getByRole("button", { name: "A: ship it" }).waitFor();
-    await card.getByRole("button", { name: "Something else" }).click();
+    await needs.getByText("Ship the smoke build now?").waitFor({ timeout: 15000 });
+    await needs.getByRole("button", { name: "A: ship it" }).waitFor();
+    await needs.getByRole("button", { name: "Something else" }).click();
     await needs.getByRole("textbox", { name: "Answer" }).waitFor();
     await toTab("Conversation");
     const question = page.getByRole("region", { name: "Question" });

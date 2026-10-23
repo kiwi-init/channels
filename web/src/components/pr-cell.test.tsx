@@ -13,7 +13,7 @@ const pr = (additions: number, deletions: number): Pr => {
 
 describe("a PR's cell on the Tasks board stays inside its column", () => {
   test("the link clips, the bar is what gives way, and the numbers never shrink", () => {
-    const html = renderToStaticMarkup(createElement(PrCell, { pr: pr(449, 262), done: true }))
+    const html = renderToStaticMarkup(createElement(PrCell, { pr: pr(449, 262) }))
     expect(html).toContain("overflow-hidden text-meta")
     expect(html).toContain('title="#476 · +449 −262"')
     expect(html).toMatch(/class="[^"]*\bw-12 min-w-0 shrink\b/)
@@ -23,6 +23,6 @@ describe("a PR's cell on the Tasks board stays inside its column", () => {
   })
 
   test("four-digit counts keep their title for hover", () => {
-    expect(renderToStaticMarkup(createElement(PrCell, { pr: pr(12840, 3021), done: false }))).toContain('title="#476 · +12840 −3021"')
+    expect(renderToStaticMarkup(createElement(PrCell, { pr: pr(12840, 3021) }))).toContain('title="#476 · +12840 −3021"')
   })
 })

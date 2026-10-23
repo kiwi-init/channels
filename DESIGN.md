@@ -135,6 +135,12 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   `prefers-contrast: more` it falls back to a solid fill with a 2px `ink`
   ring: no band, no glint.
 - Fall back to solid fills under `prefers-contrast: more`.
+- On a machine that draws without a GPU (WebGL's renderer is SwiftShader,
+  llvmpipe or a basic render driver, or there's no WebGL: `lib/drawing.ts`
+  marks `html[data-drawing=software]` once the app is idle), the scrims under
+  the header and over the composer drop their blur and mask and keep only
+  their fade: re-blurring them on every keystroke made typing take 128 ms
+  at p95 there, 32 ms without (`PERF_GL=swiftshader bun scripts/perf-scale.ts`).
 
 ## 6. Motion
 
@@ -236,9 +242,17 @@ From `design-tokens.ts`:
   carrying their unread total, which opens to "Show less". The page
   beside it has one header row: what is shown, the channel's status
   (working, merged today, needs you), and the
-  Tasks / Agents / Conversation tabs. A view opens Tasks; a conversation
-  opens Conversation. The approved mockups are in `docs/ui/`.
-- Tasks, the tab a channel opens on: Needs you's rows first, then the
+  Tasks / Agents / Conversation tabs. A channel opens on its conversation
+  (Needs you's rows at its top while something waits); a view opens Tasks;
+  a conversation opens Conversation. The approved mockups are in `docs/ui/`.
+- Needs you says one line per thing: a face or icon, what it is in one
+  truncated line (a permission's command in mono, a join request's code
+  beside it), and its answer buttons on the right (Allow once / Deny, let in /
+  Decline, an ask's options or Answer, Approve / Send back). Everything else
+  (the whole command and what it replaces, the machine and tools, who asked
+  when, Show in the conversation, Show in Rex) opens under it on a click of
+  the line.
+- Tasks: Needs you's rows first, then the
   board grouped by the person's message each task serves: the group's
   heading is their own words in quotes, under it who said it and #N, the
   ask that moved last first and Unfiled (no person's message holds these)
@@ -250,7 +264,8 @@ From `design-tokens.ts`:
   `doing` with a steady dot while it works) or the task's state; then its PR
   (number, a 48px diff bar in `live` and `alert`, the additions), its
   checks in a word and the time, short. The PR and checks columns drop on
-  narrow windows.
+  narrow windows, and when no task on the board has a PR; a row without one
+  leaves them blank, never "no PR yet".
 - A task opens in place, under its row (a click again folds it): its
   conversation as the conversation draws it, a reply box that talks in the
   task, and Details for the Tasks panel (review, reviewer, cancel). Beside

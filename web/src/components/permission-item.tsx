@@ -40,14 +40,15 @@ export function PermissionItem({
       )
       .finally(() => setBusy(false))
   }
-  const why = !p.canAllow ? null : `Only ${human ? nameOf(human) : "its own person"} can allow it: it runs on their computer`
+  const who = human ? nameOf(human) : "its own person"
   return (
     <Row
       lead={<Monogram name={nameOf(m.from)} hue={m.from} agent size={28} />}
       title={
         <>
-          <span className="font-semibold">{nameOf(m.from)}</span> {permissionTitle(p)}{" "}
-          <span className="ml-1 rounded-full bg-decide-wash px-1.5 align-middle text-meta font-semibold text-decide">Permission</span>
+          <span className="font-semibold">{nameOf(m.from)}</span>
+          <span className="mx-1.5 rounded-full bg-decide-wash px-1.5 align-middle text-meta font-semibold text-decide">Permission</span>
+          {permissionTitle(p)} <code className="ml-1 font-mono text-ui text-ink-2">{permissionCode(p).split("\n")[0]}</code>
         </>
       }
       detail={
@@ -63,10 +64,15 @@ export function PermissionItem({
           ))}
           <p className="mt-1.5">{[p.tool, `in ${p.cwd}`, m.task ? taskId(m.task) : null, formatAgo(m.ts, now)].filter(Boolean).join(" · ")}</p>
           <p className="mt-1">Claude Code asks in its terminal too, and whichever answers first wins. This waits until {formatTime(p.expiresAt)}.</p>
+          {p.canAllow && !canAllow && <p className="mt-1">Only {who} can allow it: it runs on their computer.</p>}
+          {seat && (
+            <span className="mt-1 flex flex-wrap items-center gap-2">
+              <ShowSeat seat={seat} />
+            </span>
+          )}
         </>
       }
     >
-      <ShowSeat seat={seat} />
       {canDeny && (
         <Button size="sm" variant="secondary" className="text-alert" disabled={busy} onClick={() => answer(false)}>
           Deny
@@ -77,7 +83,7 @@ export function PermissionItem({
           Allow once
         </Button>
       ) : (
-        why && <span className="text-meta text-ink-3">{why}</span>
+        p.canAllow && <span className="text-meta text-ink-3">Only {who} can allow</span>
       )}
     </Row>
   )

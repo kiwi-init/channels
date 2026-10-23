@@ -16,6 +16,7 @@ if (process.argv.includes("--help")) {
   console.log(`A busy channel, measured: PERF_AGENTS agents (10), PERF_TASKS tasks (100), PERF_MESSAGES messages (2000), then PERF_SOAK_MIN minutes (20) of agents posting.
 Reports cold load, the reload to the first screen, each view's switch at 1x and 4x CPU, key delay while agents post, and heap, DOM nodes and listeners over time.
 PERF_TASKS_FIRST=1 makes the tasks before the messages, so a reload has to keep them from beyond the newest 2000.
+PERF_GL=swiftshader draws with the CPU, as CI's runners do: on a Mac that's how to see what CI sees.
 --gated measures only what scripts/perf-check.ts gates: the reload at 1x, the views at 4x and typing, without the 1x views, details toggles, profiles or second reload.
 
   bun run web:build && bun scripts/perf-scale.ts [--gated] [--json out.json]
@@ -101,12 +102,17 @@ const log = (...xs: unknown[]) => console.log(`[${new Date().toISOString().slice
 const { relay, port } = await startLocalRelay(join(data, "relay"), "web/dist", { rateLimits: false });
 const BASE = `http://localhost:${port}/`;
 
-const browser = await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
+const browser = await chromium.launch({
+  executablePath: process.env.SMOKE_CHROMIUM || undefined,
+  args: process.env.PERF_GL ? [`--use-angle=${process.env.PERF_GL}`, "--enable-unsafe-swiftshader"] : [],
+});
 
 const WATCH = () => {
-  const w = window as unknown as { __long: number[]; __events: { name: string; duration: number; delay: number }[] };
+  const w = window as unknown as { __long: number[]; __events: { name: string; duration: number; delay: number }[]; __keys: number };
   w.__long = [];
   w.__events = [];
+  w.__keys = 0;
+  for (const type of ["keydown", "keypress", "keyup"]) window.addEventListener(type, () => w.__keys++, true);
   new PerformanceObserver((l) => l.getEntries().forEach((e) => w.__long.push(e.duration))).observe({ type: "longtask", buffered: true });
   new PerformanceObserver((l) =>
     l.getEntries().forEach((e) => {
@@ -126,12 +132,14 @@ async function sample(cdp: CDPSession): Promise<{ heapMB: number; nodes: number;
   return { heapMB: mb(m.JSHeapUsedSize ?? 0), nodes: m.Nodes ?? 0, listeners: m.JSEventListeners ?? 0, documents: m.Documents ?? 0, attached: result.value[0], rows: result.value[1] };
 }
 
-async function drain(page: Page): Promise<{ longTasks: number; longMs: number; worstMs: number; events: { name: string; duration: number; delay: number }[] }> {
+async function drain(page: Page): Promise<{ longTasks: number; longMs: number; worstMs: number; events: { name: string; duration: number; delay: number }[]; keys: number }> {
   return page.evaluate(() => {
-    const w = window as unknown as { __long: number[]; __events: { name: string; duration: number; delay: number }[] };
+    const w = window as unknown as { __long: number[]; __events: { name: string; duration: number; delay: number }[]; __keys: number };
     const long = w.__long.splice(0);
     const events = w.__events.splice(0);
-    return { longTasks: long.length, longMs: Math.round(long.reduce((a, b) => a + b, 0)), worstMs: Math.round(Math.max(0, ...long)), events };
+    const keys = w.__keys;
+    w.__keys = 0;
+    return { longTasks: long.length, longMs: Math.round(long.reduce((a, b) => a + b, 0)), worstMs: Math.round(Math.max(0, ...long)), events, keys };
   });
 }
 
@@ -245,22 +253,20 @@ const TEXTS = [
   "PR is up: https://github.com/ojowwalker77/channels/pull/417 — CI green, waiting on review.",
 ];
 
+const SEEDED = "Seeded: a reload opens the channel here";
 const report: Record<string, unknown> = { agents: AGENTS, tasks: TASKS, messages: MESSAGES, soakMinutes: SOAK_MIN };
 const agents = Array.from({ length: AGENTS }, (_, i) => `agent${i}`);
 try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await context.addInitScript(WATCH);
-  await context.addInitScript(
-    (marker: string) => {
-      const w = window as unknown as { __firstScreen?: number };
-      const seen = () => {
-        if (w.__firstScreen === undefined && document.body?.textContent?.includes(marker)) w.__firstScreen = performance.now();
-        return w.__firstScreen !== undefined;
-      };
-      new MutationObserver((_, obs) => seen() && obs.disconnect()).observe(document, { childList: true, subtree: true, characterData: true });
-    },
-    `Task ${TASKS - 1}:`,
-  );
+  await context.addInitScript((marker: string) => {
+    const w = window as unknown as { __firstScreen?: number };
+    const seen = () => {
+      if (w.__firstScreen === undefined && document.body?.textContent?.includes(marker)) w.__firstScreen = performance.now();
+      return w.__firstScreen !== undefined;
+    };
+    new MutationObserver((_, obs) => seen() && obs.disconnect()).observe(document, { childList: true, subtree: true, characterData: true });
+  }, SEEDED);
   const page = await context.newPage();
   page.on("pageerror", (e) => log(`page error: ${e.message}`));
   const cdp = await context.newCDPSession(page);
@@ -385,6 +391,7 @@ try {
   await mark("tasks added");
 
   await post(early, perSender);
+  await say(seats[0]!, SEEDED);
   report.seedSeconds = Math.round((Date.now() - seedStart) / 1000);
   const live = await drain(page);
   report["while seeding (page open on the channel)"] = { longTasks: live.longTasks, longMs: live.longMs, worstMs: live.worstMs, perMessageMs: Math.round((live.longMs / MESSAGES) * 10) / 10 };
@@ -399,7 +406,7 @@ try {
       const reloadAt = performance.now();
       await page.reload();
       await page
-        .getByText(lastTask)
+        .getByText(SEEDED)
         .filter({ visible: true })
         .first()
         .waitFor({ timeout: 60000 })
@@ -459,7 +466,7 @@ try {
     report[`@${throttle}x`] = {
       calibrationMs: calibration.ms,
       calibrationRepsMs: calibration.reps,
-      reloadToTasksMs: throttle === 1 ? reloadMs : undefined,
+      reloadToFirstScreenMs: throttle === 1 ? reloadMs : undefined,
       ...(switching
         ? {
             switchMedianMs: Object.fromEntries(Object.entries(views).map(([k, v]) => [k, median(v)])),
@@ -491,17 +498,19 @@ try {
       await composer.fill("");
     }
   })();
-  const burst = Promise.all(agents.map((agent, a) => as(agent, ["send", `burst ${a}: ${TEXTS[a % TEXTS.length]}`])));
+  const burst = Promise.all(seats.map((s, a) => say(s, `burst ${a}: ${TEXTS[a % TEXTS.length]}`)));
   await Promise.all([typing, burst]);
   const typed = await drain(page);
   const keys = typed.events
     .filter((e) => e.name.startsWith("key"))
     .map((e) => e.duration)
     .sort((a, b) => a - b);
+  const every = [...Array<number>(Math.max(0, typed.keys - keys.length)).fill(16), ...keys];
   report[`typing while ${AGENTS} agents post`] = {
+    keyEvents: typed.keys,
     keyEventsOver16ms: keys.length,
     over50ms: keys.filter((d) => d > 50).length,
-    p95Ms: Math.round(keys[Math.floor(keys.length * 0.95)] ?? 0),
+    p95Ms: Math.round(every[Math.floor(every.length * 0.95)] ?? 0),
     worstMs: Math.round(keys.at(-1) ?? 0),
     longTasks: typed.longTasks,
     worstLongMs: typed.worstMs,
