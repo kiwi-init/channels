@@ -41,3 +41,22 @@ execFileSync(
   ],
   { stdio: "inherit" },
 );
+
+execFileSync(
+  "clang",
+  [
+    "-O2",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-arch",
+    arch === "x64" ? "x86_64" : "arm64",
+    "-mmacosx-version-min=12.0",
+    ...(process.env.CHANNELS_EB_TEST === "1" ? ["-DKIWI_EB_TEST"] : []),
+    "-o",
+    path.join(contents, "MacOS", "kiwi-launcher"),
+    path.join(desktop, "native", "macos", "kiwi-launcher.c"),
+  ],
+  { stdio: "inherit" },
+);
+execFileSync("plutil", ["-replace", "CFBundleExecutable", "-string", "kiwi-launcher", path.join(contents, "Info.plist")]);

@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startLocalRelay } from "../../scripts/local-relay.ts";
@@ -29,7 +29,6 @@ async function check<T>(what: string, d: Driver, fn: () => T | Promise<T>, ok: (
 const { relay, port } = await startLocalRelay(join(root, "relay"), null, { rateLimits: false });
 const RELAY = `http://127.0.0.1:${port}`;
 const app = launch(exe, testEnv(root, join(root, "driver.sock"), RELAY));
-let second: ReturnType<typeof launch> | null = null;
 try {
   const d = await attach(join(root, "driver.sock"));
   const page = await until("the dashboard's first screen", 60_000, () =>
@@ -89,23 +88,9 @@ try {
     (v) => v !== "granted",
   );
   d.close();
-
-  const marker = join(root, "preloaded");
-  const preload = join(root, "preload.js");
-  writeFileSync(preload, `require("node:fs").writeFileSync(${JSON.stringify(marker)}, "ran");`);
-  second = launch(exe, testEnv(join(root, "second"), join(root, "second.sock"), RELAY, { BUN_OPTIONS: `--preload=${preload}`, NODE_OPTIONS: `--require=${preload}` }));
-  await until("the second launch's window", 60_000, async () => {
-    const d2 = await attach(join(root, "second.sock"), 1_000);
-    d2.close();
-    return true;
-  }).catch(() => undefined);
-  await later(2_000);
-  if (existsSync(marker)) problems.push("BUN_OPTIONS / NODE_OPTIONS ran code of the caller's choosing in the app's main process");
-  else console.log("BUN_OPTIONS / NODE_OPTIONS: ignored");
 } catch (e) {
   problems.push(e instanceof Error ? e.message : String(e));
 } finally {
-  if (second) await stop(second);
   await stop(app);
   relay.kill();
   await later(1_000);

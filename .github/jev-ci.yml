@@ -944,7 +944,7 @@ jobs:
     name: desktop / mac
     inputs: ["desktop/src/**", "desktop/native/**", "desktop/build/icon.icns", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "package.json", "bun.lock", "src/relay/**", "scripts/local-relay.ts", "scripts/perf-desktop.ts", "scripts/perf-calibrate.ts", "scripts/perf-budgets.json"]
     imports_from: ["desktop/src/main-eb.ts", "desktop/scripts/smoke-eb.ts", "scripts/perf-desktop.ts"]
-    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-size.ts", "desktop/scripts/eb-drive.ts", "desktop/scripts/smoke-eb.ts", "desktop/scripts/eb-driver-check.ts"]
+    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-size.ts", "desktop/scripts/eb-env-check.ts", "desktop/scripts/eb-plain.ts", "desktop/scripts/eb-drive.ts", "desktop/scripts/smoke-eb.ts", "desktop/scripts/eb-driver-check.ts"]
     description: >-
       On a macOS runner (Electrobun builds only for the host it runs on), checks the Electrobun
       shell that is replacing Electron (issue #757). Builds web/dist, then `bun run typecheck:eb`
@@ -957,25 +957,41 @@ jobs:
       iconset; scripts/eb-post-build.ts copies web/dist into the app's views/internal and
       compiles native/macos/kiwi-shell.m with clang -Wall -Werror into Contents/MacOS (the
       patch that denies the microphone, camera and location Electrobun grants the page, and the
-      window's minimum size and background); Electrobun writes the dmg. desktop/scripts/eb-size.ts
-      fails if the stable .app is over 100MB on disk, or its dmg or its zip (ditto, the
-      updater's layout) is over 40MB. Fails on a type error, a bundling error (an import the
+      window's minimum size and background). We ship the plain app, not Electrobun's
+      self-extracting wrapper (which would run the app from a folder the user's rights can edit):
+      desktop/scripts/eb-size.ts unpacks the plain .app from the build's .app.tar.zst payload,
+      makes its dmg (hdiutil ULMO) and its zip (ditto, the updater's layout), and fails if that
+      .app is over 100MB on disk or its dmg or zip is over 40MB; the wrapper's sizes are only
+      printed. Fails on a type error, a bundling error (an import the
       Bun main process can't resolve), an ObjC warning or a WebKit/AppKit API that no longer
       exists, a missing web/dist, or an app over its size gates.
+      The plain .app's CFBundleExecutable is our launcher (desktop/native/macos/kiwi-launcher.c,
+      built by eb-post-build.ts with clang -Wall -Wextra -Werror), not Electrobun's: it keeps only
+      HOME, USER, LOGNAME, TMPDIR, PATH, SHELL, LANG, LC_*, XPC_* and __CF_USER_TEXT_ENCODING and
+      execs Electrobun's launcher with that, so BUN_OPTIONS (--preload), BUN_INSPECT (a debugger),
+      NODE_*, DYLD_* and JSC_* never reach the bun process that runs main and the web view (T632).
+      desktop/scripts/eb-env-check.ts unpacks the plain .app and fails if the launcher, run in front
+      of a stand-in that writes down its environment, passes on any name beyond those (it sets one
+      from each family) or drops one of them, or if the running app, started with BUN_OPTIONS
+      --preload, BUN_INSPECT on a free port, NODE_OPTIONS --require and DYLD_INSERT_LIBRARIES, runs
+      the preload, listens on that port, or loads the library into any process but the unsigned
+      launcher itself (a signed build's hardened runtime stops that one), or leaves anything
+      running; it starts a release-id app only on CI, never on a person's Mac.
       Then it starts the app, without CDP (WebKit has none; T442): a second build, `electrobun
       build --env=dev` with CHANNELS_EB_TEST=1 and its own bundle id (com.kiwiinit.channels.test),
       compiles in the test driver (desktop/src/eb-driver.ts behind the KIWI_EB_TEST build-time
-      define in electrobun.config.ts): with KIWI_EB_DRIVER set, main listens on that Unix socket,
+      define in electrobun.config.ts), and its launcher (built with -DKIWI_EB_TEST) also lets
+      KIWI_EB_DRIVER, KIWI_EB_RELAY and CFFIXED_USER_HOME through: with KIWI_EB_DRIVER set, main listens on that Unix socket,
       runs each function it's sent in the page with executeJavascript and hands back what the
       page posts on Electrobun's host bridge; KIWI_EB_RELAY points the page's CSP and its
-      ?relay= at a local relay. desktop/scripts/eb-driver-check.ts fails if the stable build's
-      code carries the driver or the relay override (kiwiDriver, KIWI_EB_DRIVER, KIWI_EB_RELAY), or
-      the test build lacks them. desktop/scripts/smoke-eb.ts (through desktop/scripts/eb-drive.ts,
+      ?relay= at a local relay. desktop/scripts/eb-driver-check.ts fails if the plain release .app (unpacked
+      by eb-plain.ts) carries the driver or the relay override in its code (kiwiDriver,
+      KIWI_EB_DRIVER, KIWI_EB_RELAY) or lets them or CFFIXED_USER_HOME through its launcher, or if
+      the test build lacks any of them. desktop/scripts/smoke-eb.ts (through desktop/scripts/eb-drive.ts,
       ~/Library in a temp CFFIXED_USER_HOME, a local relay) fails unless the window shows the
       dashboard from views://internal/index.html with a first paint, the relay it was given answers
       through the CSP, an inline script and a fetch to another origin are refused, the microphone
-      isn't granted, BUN_OPTIONS / NODE_OPTIONS with a --preload or --require run nothing in the
-      main process, and nothing of the app is left running after it quits. scripts/perf-desktop.ts
+      isn't granted, and nothing of the app is left running after it quits. scripts/perf-desktop.ts
       --electrobun then times the test build's cold start as desktop / package times Electron's:
       a person, a channel and 20 messages on a local relay through the driver (the name field,
       Continue, New channel, Create channel, the composer and Enter), then 5 launches to the
