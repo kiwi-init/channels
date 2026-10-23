@@ -6,8 +6,9 @@
     "clang",
     "ditto",
     "hdiutil",
+    "pgrep",
     "plutil",
-    "pgrep"
+    "kwallet-query"
   ],
   "workspaces": {
     ".": {
