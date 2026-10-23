@@ -1,11 +1,13 @@
 #include <gdk/gdk.h>
 #include <glib-object.h>
 #include <stdbool.h>
+#include <string.h>
 #include <webkit2/webkit2.h>
 
 #define KIWI_APP_ID "channels-desktop"
 
 static void (*page_gone)(void) = NULL;
+static gchar *the_page = NULL;
 static GMutex committed_lock;
 static char committed[4096] = "";
 
@@ -42,6 +44,56 @@ static gboolean load_changed(GSignalInvocationHint *hint, guint n, const GValue 
   g_mutex_lock(&committed_lock);
   if (g_strlcpy(committed, uri ? uri : "", sizeof committed) >= sizeof committed) committed[0] = 0;
   g_mutex_unlock(&committed_lock);
+  return TRUE;
+}
+
+static bool own_download(const char *uri) {
+  return uri && (g_ascii_strncasecmp(uri, "blob:", 5) == 0 || g_ascii_strncasecmp(uri, "data:", 5) == 0);
+}
+
+static bool is_the_page(const char *uri) {
+  size_t n = the_page ? strlen(the_page) : 0;
+  if (n == 0 || !uri || strlen(uri) < n || g_ascii_strncasecmp(uri, the_page, n) != 0) return false;
+  return uri[n] == 0 || uri[n] == '#' || uri[n] == '?';
+}
+
+static gboolean only_the_page(GSignalInvocationHint *hint, guint n, const GValue *params, gpointer data) {
+  (void)hint;
+  (void)data;
+  if (n < 3) return TRUE;
+  GObject *decision = g_value_get_object(&params[1]);
+  WebKitPolicyDecisionType type = g_value_get_enum(&params[2]);
+  if (!decision || (type != WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION && type != WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION)) return TRUE;
+  WebKitPolicyDecision *policy = WEBKIT_POLICY_DECISION(decision);
+  if (type == WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION) {
+    webkit_policy_decision_ignore(policy);
+    return TRUE;
+  }
+  WebKitNavigationAction *action = webkit_navigation_policy_decision_get_navigation_action(WEBKIT_NAVIGATION_POLICY_DECISION(decision));
+  const char *uri = action ? webkit_uri_request_get_uri(webkit_navigation_action_get_request(action)) : NULL;
+  if (is_the_page(uri)) return TRUE;
+  if (own_download(uri))
+    webkit_policy_decision_download(policy);
+  else
+    webkit_policy_decision_ignore(policy);
+  return TRUE;
+}
+
+static gboolean download_started(GSignalInvocationHint *hint, guint n, const GValue *params, gpointer data) {
+  (void)hint;
+  (void)data;
+  if (n < 2) return TRUE;
+  GObject *download = g_value_get_object(&params[1]);
+  if (download && !own_download(webkit_uri_request_get_uri(webkit_download_get_request(WEBKIT_DOWNLOAD(download))))) webkit_download_cancel(WEBKIT_DOWNLOAD(download));
+  return TRUE;
+}
+
+static gboolean decide_destination(GSignalInvocationHint *hint, guint n, const GValue *params, gpointer data) {
+  (void)hint;
+  (void)data;
+  if (n < 1) return TRUE;
+  GObject *download = g_value_get_object(&params[0]);
+  if (download && !own_download(webkit_uri_request_get_uri(webkit_download_get_request(WEBKIT_DOWNLOAD(download))))) webkit_download_cancel(WEBKIT_DOWNLOAD(download));
   return TRUE;
 }
 
@@ -93,13 +145,14 @@ static bool on_main(bool (*run)(gconstpointer), gconstpointer arg) {
 }
 
 typedef struct {
+  GType (*type)(void);
   const char *signal;
   GSignalEmissionHook fn;
 } Hook;
 
 static bool install_hook(gconstpointer arg) {
   const Hook *hook = arg;
-  GType type = webkit_web_view_get_type();
+  GType type = hook->type();
   g_type_class_ref(type);
   guint id = g_signal_lookup(hook->signal, type);
   return id != 0 && g_signal_add_emission_hook(id, 0, hook->fn, NULL, NULL) != 0;
@@ -120,9 +173,14 @@ static bool sandbox_default_context(gconstpointer arg) {
   return webkit_web_context_get_sandbox_enabled(context);
 }
 
-static const Hook DENY = {"permission-request", deny_request};
-static const Hook WATCH = {"web-process-terminated", process_ended};
-static const Hook COMMITS = {"load-changed", load_changed};
+static const Hook DENY = {webkit_web_view_get_type, "permission-request", deny_request};
+static const Hook WATCH = {webkit_web_view_get_type, "web-process-terminated", process_ended};
+static const Hook COMMITS = {webkit_web_view_get_type, "load-changed", load_changed};
+static const Hook PAGE_ONLY = {webkit_web_view_get_type, "decide-policy", only_the_page};
+static const Hook DOWNLOADS = {webkit_web_context_get_type, "download-started", download_started};
+static const Hook DESTINATIONS = {webkit_download_get_type, "decide-destination", decide_destination};
+static bool guarding_downloads = false;
+static bool allowing_only = false;
 static bool watching_commits = false;
 
 bool kiwi_deny_permissions(void) {
@@ -145,6 +203,19 @@ size_t kiwi_committed_url(char *out, size_t size) {
   size_t n = g_strlcpy(out, committed, size);
   g_mutex_unlock(&committed_lock);
   return n;
+}
+
+bool kiwi_guard_downloads(void) {
+  if (!guarding_downloads) guarding_downloads = on_main(install_hook, &DOWNLOADS) && on_main(install_hook, &DESTINATIONS);
+  return guarding_downloads;
+}
+
+bool kiwi_allow_only(const char *page) {
+  if (!page || !*page) return false;
+  g_free(the_page);
+  the_page = g_strdup(page);
+  if (!allowing_only) allowing_only = on_main(install_hook, &PAGE_ONLY);
+  return allowing_only;
 }
 
 bool kiwi_sandbox_pages(void) {
