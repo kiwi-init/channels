@@ -218,7 +218,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const onAnswer = useLatest(answer)
   const onJump = useLatest(jump)
   const onOpenImage = useLatest((pm: Message, img: ImageAttachment, src: string) => setPicture({ m: pm, img, src }))
-  const handlers = useControlsHandlers({ live, member, onGone })
+  const handlers = useControlsHandlers({ live, member, onGone, rooms: () => state.rooms })
   const [newAgent, setNewAgent] = useState(false)
   const onNewAgent = isOwner && canStartAgents() ? () => setNewAgent(true) : undefined
   const addsAgents = !isOwner && !!roster.find((m) => m.active && m.pk === member.identity.pk)?.addsAgents
