@@ -139,6 +139,7 @@ try {
     await composer.press("Enter");
     await page
       .getByText(`Message ${i + 1}:`)
+      .filter({ visible: true })
       .first()
       .waitFor({ timeout: 15_000 });
   }
