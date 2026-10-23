@@ -424,9 +424,11 @@ jobs:
           - os: ubuntu-24.04
             part: 1
             unprofiled: unsandboxed
+            drive: false
           - os: ubuntu-26.04
             part: 2
             unprofiled: sandboxed
+            drive: true
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
@@ -511,9 +513,10 @@ jobs:
         if: ${{ !cancelled() }}
         working-directory: desktop/release-eb/linux
         run: |
-          curl -fsSL -o old.deb https://github.com/ojowwalker77/channels/releases/download/v0.26.0/Channels-0.26.0-linux-amd64.deb
-          echo "0fb7656f63f14c5f802b71d6c6f255a13404a73455b407d7f8bb0c05e0b729f2  old.deb" | sha256sum -c -
-          sudo apt-get install -y --no-install-recommends ./old.deb
+          old="$RUNNER_TEMP/old.deb"
+          curl -fsSL -o "$old" https://github.com/ojowwalker77/channels/releases/download/v0.26.0/Channels-0.26.0-linux-amd64.deb
+          echo "0fb7656f63f14c5f802b71d6c6f255a13404a73455b407d7f8bb0c05e0b729f2  $old" | sha256sum -c -
+          sudo apt-get install -y --no-install-recommends "$old"
           [ "$(readlink -f /usr/bin/channels-desktop)" = /opt/Channels/channels-desktop ] || { echo "the Electron deb didn't make its link"; exit 1; }
           sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-0 libgtk-3-0 libayatana-appindicator3-1 librsvg2-2 bubblewrap xdg-dbus-proxy
           sudo dpkg -i "$(ls Channels-*-linux-amd64.deb)"
@@ -527,7 +530,7 @@ jobs:
           sudo grep -q '^channels-desktop ' /sys/kernel/security/apparmor/profiles || { echo "the AppArmor profile isn't loaded"; exit 1; }
           echo "upgraded: $(dpkg-query -W kiwi-desktop), /usr/bin/channels-desktop -> $link"
           echo "for WebKitGTK's sandbox: kernel.apparmor_restrict_unprivileged_userns=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo unset), unshare -U as a user: $(unshare -U true 2>&1 && echo allowed || echo refused)"
-          rm old.deb
+          rm "$old"
       - name: the installed app starts on WebKitGTK, with the .desktop entry's names, and its permission and page hooks work
         if: ${{ !cancelled() }}
         run: |
@@ -537,13 +540,48 @@ jobs:
           xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh /opt/Channels/bin/launcher sandboxed
           img=$(ls "$PWD"/desktop/release-eb/linux/Channels-*-linux-x86_64.AppImage)
           xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$img" ${{ matrix.unprofiled }} --appimage-extract-and-run
+      - name: test build (the test driver in, its own id)
+        if: ${{ !cancelled() && matrix.drive }}
+        working-directory: desktop
+        run: bunx electrobun build --env=dev
+        env:
+          CHANNELS_EB_TEST: "1"
+          CHANNELS_EB_IDENTIFIER: com.kiwiinit.channels.test
+          DASH_RELEASE_OFFLINE: "1"
+      - id: test-app
+        if: ${{ !cancelled() && matrix.drive }}
+        run: |
+          found=$(ls -d desktop/release-eb/build/dev-linux-*/*/bin/electrobun-launcher)
+          [ "$(echo "$found" | wc -l)" = 1 ] || { echo "expected one test build, found: $found"; exit 1; }
+          echo "path=$(dirname "$(dirname "$found")")" >> "$GITHUB_OUTPUT"
+      - name: no test driver in the release build (the installed deb)
+        if: ${{ !cancelled() && matrix.drive }}
+        run: bun desktop/scripts/eb-driver-check.ts desktop/release-eb /opt/Channels
+      - name: smoke, under Xvfb
+        if: ${{ !cancelled() && matrix.drive }}
+        run: xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/smoke-eb.ts "${{ steps.test-app.outputs.path }}"
+      - name: cold start, under Xvfb
+        if: ${{ !cancelled() && matrix.drive }}
+        run: xvfb-run -a -s "-screen 0 1280x800x24" bun scripts/perf-desktop.ts "${{ steps.test-app.outputs.path }}" --electrobun --json "$RUNNER_TEMP/perf-desktop-eb-linux.json"
+      - if: ${{ !cancelled() && matrix.drive }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: perf-desktop-eb-linux
+          path: ${{ runner.temp }}/perf-desktop-eb-linux.json
+          if-no-files-found: ignore
+          overwrite: true
+      - name: dpkg --purge leaves nothing of the app behind
+        if: ${{ !cancelled() }}
+        run: |
           sudo dpkg --purge kiwi-desktop
-          [ ! -e /etc/apparmor.d/channels-desktop ] || { echo "the AppArmor profile is still there after --purge"; exit 1; }
+          left=$(ls -d /opt/Channels /usr/bin/channels-desktop /usr/share/applications/channels-desktop.desktop /usr/share/icons/hicolor/*/apps/channels-desktop.png /usr/share/kiwi-desktop /etc/apparmor.d/channels-desktop 2> /dev/null || true)
+          [ -z "$left" ] || { echo "left after --purge:"; echo "$left"; exit 1; }
           ! sudo grep -q '^channels-desktop ' /sys/kernel/security/apparmor/profiles || { echo "the AppArmor profile is still loaded after --purge"; exit 1; }
+          echo "purged: no files, link, entry, icons or AppArmor profile left"
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: linux-packages
+          name: linux-packages-${{ matrix.os }}
           path: desktop/release-eb/linux/*
           if-no-files-found: warn
           retention-days: 3

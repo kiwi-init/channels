@@ -3,14 +3,14 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startLocalRelay } from "../../scripts/local-relay.ts";
-import { appExecutable, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
+import { appExecutable, appRoot, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
 
 if (!process.argv[2]) {
-  console.error("usage: bun desktop/scripts/smoke-eb.ts <Channels.app built with CHANNELS_EB_TEST=1>");
+  console.error("usage: bun desktop/scripts/smoke-eb.ts <Channels.app, or on Linux its app folder, built with CHANNELS_EB_TEST=1>");
   process.exit(2);
 }
 const exe = appExecutable(process.argv[2]);
-const bundle = exe.includes(".app/") ? exe.slice(0, exe.indexOf(".app/") + 4) : exe;
+const bundle = appRoot(exe);
 const root = mkdtempSync(join(tmpdir(), "kiwi-smoke-eb-"));
 const problems: string[] = [];
 const later = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
