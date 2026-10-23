@@ -343,6 +343,9 @@ jobs:
         run: bun run typecheck:eb
       - working-directory: desktop
         if: ${{ !cancelled() }}
+        run: bun test --tsconfig-override tsconfig.eb.json ./eb-tests
+      - working-directory: desktop
+        if: ${{ !cancelled() }}
         run: bun run build:eb
       - if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-size.ts desktop/release-eb
