@@ -7,8 +7,18 @@ import path from "node:path";
 
 import { daemonEnv, daemonLogPath, noteDaemon, spawnDaemon } from "../desktop/src/daemon-client.ts";
 
-test("the daemon gets the app's environment without the keys process's fd or the launcher's transpiler-cache switch, so its agents and shells don't inherit them (T439, T1062)", () => {
-  const from = { PATH: "/usr/bin", HOME: "/Users/someone", KIWI_KEY_FD: "3", BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0", KIWI_RELAY: "https://from-the-environment.example" };
+test("the daemon gets only the names a child of the app keeps (desktop/src/child-env.ts): not the key's fd number, the launcher's transpiler-cache switch, Electrobun's LD_LIBRARY_PATH=. or Bun's and Node's switches, so its agents and shells don't inherit them (T439, T1062)", () => {
+  const from = {
+    PATH: "/usr/bin",
+    HOME: "/Users/someone",
+    KIWI_KEY_FD: "3",
+    BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0",
+    LD_LIBRARY_PATH: ".",
+    BUN_OPTIONS: "--preload=/tmp/evil.ts",
+    NODE_OPTIONS: "--require=/tmp/evil.js",
+    REX_SESSION: "session:1",
+    KIWI_RELAY: "https://from-the-environment.example",
+  };
   expect(daemonEnv(from, "/tmp/home", "https://relay.example")).toEqual({ PATH: "/usr/bin", HOME: "/Users/someone", KIWI_HOME: "/tmp/home", KIWI_RELAY: "https://relay.example" });
   expect(from.KIWI_KEY_FD).toBe("3");
 });

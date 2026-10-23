@@ -406,6 +406,12 @@ jobs:
           done
           codesign --force --sign - dist/kiwi-darwin-arm64 dist/kiwi-darwin-x64
           ./dist/kiwi-darwin-arm64 --version
+          probe="$RUNNER_TEMP/kiwi-autoload"
+          mkdir -p "$probe"
+          printf 'preload = ["./p.js"]\n' > "$probe/bunfig.toml"
+          printf 'require("node:fs").writeFileSync("preload-ran", "")\n' > "$probe/p.js"
+          (cd "$probe" && "$GITHUB_WORKSPACE/dist/kiwi-darwin-arm64" --version)
+          test ! -e "$probe/preload-ran" || { echo "the kiwi CLI ran a bunfig.toml preload from the folder it was started in"; exit 1; }
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         timeout-minutes: 1

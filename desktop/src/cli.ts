@@ -12,6 +12,7 @@ import { pipeline } from "node:stream/promises";
 import zlib from "node:zlib";
 import { ensureOnPath as ensureShellPath } from "@kiwi/core/node/shell-path.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
+import { childEnv } from "./child-env.ts";
 
 /** Where the CLI lives: the install script's place (KIWI_INSTALL moves both). */
 function cliPath(): string {
@@ -21,7 +22,7 @@ function cliPath(): string {
 /** What a kiwi binary says it is, or null when it won't run. */
 function versionOf(bin: string): Promise<string | null> {
   return new Promise((resolve) => {
-    execFile(bin, ["--version"], { timeout: 5_000 }, (err, stdout) => resolve(err ? null : stdout.trim().split(/\s+/).pop() || null));
+    execFile(bin, ["--version"], { timeout: 5_000, env: childEnv() }, (err, stdout) => resolve(err ? null : stdout.trim().split(/\s+/).pop() || null));
   });
 }
 
@@ -60,7 +61,11 @@ function run(file: string, args: string[], what: string): Promise<void> {
 }
 
 async function compile(bundle: string, out: string): Promise<void> {
-  await run(process.execPath, ["build", "--compile", bundle, "--outfile", out, ...CLI_EXTERNAL.flatMap((e) => ["--external", e])], `the kiwi CLI didn't build from ${bundle}`);
+  await run(
+    process.execPath,
+    ["build", "--compile", "--no-macros", "--no-compile-autoload-bunfig", "--no-compile-autoload-dotenv", bundle, "--outfile", out, ...CLI_EXTERNAL.flatMap((e) => ["--external", e])],
+    `the kiwi CLI didn't build from ${bundle}`,
+  );
   if (process.platform === "darwin") await run("/usr/bin/codesign", ["--force", "--sign", "-", out], "codesign failed");
   await run(out, ["--version"], "the kiwi CLI built from the app doesn't run");
 }
@@ -82,7 +87,7 @@ async function unpack(bundled: string, dest: string): Promise<void> {
 
 function tidy(bin: string): Promise<void> {
   return new Promise((resolve) => {
-    execFile(bin, ["cleanup", "--quiet"], { timeout: 15_000 }, () => resolve());
+    execFile(bin, ["cleanup", "--quiet"], { timeout: 15_000, env: childEnv() }, () => resolve());
   });
 }
 

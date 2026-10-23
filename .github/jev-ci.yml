@@ -673,11 +673,21 @@ jobs:
       http(s) links, a new relay saved, told to the keys and the page reloaded, a bad one changing
       nothing, a bad argument refused under the call's name). And
       test/desktop-cli.test.ts: the app's kiwi.js becomes a working kiwi in the install folder,
-      compiled by a child of the running Bun (a macro in it runs in that child, never in the app's
-      process, and sees no KIWI_KEY_FD) and signed ad-hoc on macOS, a current one is kept, a kiwi.js
-      that doesn't build leaves nothing behind, and with only kiwi.js in the app the daemon's own
-      copy is compiled into the app's data, never the .js handed back (desktop/src/cli.ts keepCli,
-      bundled-daemon.ts kiwiCli, T446). And
+      compiled by a child of the running Bun with --no-macros (a kiwi.js with a macro is refused and
+      the macro never runs) and signed ad-hoc on macOS, a current one is kept, a kiwi.js that
+      doesn't build leaves nothing behind, with only kiwi.js in the app the daemon's own copy is
+      compiled into the app's data, never the .js handed back, and every kiwi the app runs (the
+      check of a new build, its version, its cleanup), started from a helper holding an open fd 3
+      and KIWI_KEY_FD, BUN_OPTIONS, NODE_OPTIONS and LD_LIBRARY_PATH, sees none of them and loads no
+      bunfig.toml or .env from the folder it runs in (desktop/src/cli.ts keepCli, bundled-daemon.ts
+      kiwiCli, T446, T1062). And test/desktop-child-env.test.ts: a child of the app gets only the
+      names desktop/src/child-env.ts childEnv keeps (PATH, HOME, the locale, the desktop session,
+      proxies, KIWI_* and the like; never LD_*, DYLD_*, BUN_*, NODE_OPTIONS or KIWI_KEY_FD), the
+      person's browser keeps their session minus those switches (sessionEnv), and, bundling
+      desktop/src/main-eb.ts and channels.ts and parsing the result with oxc-parser, every spawn
+      they can reach (child_process's spawn, execFile and the rest, and Bun.spawn, whose default is
+      Bun's startup environment with KIWI_KEY_FD still in it) passes an env built by childEnv or a
+      builder on it, with no spawner passed on unchecked (T1062). And
       test/desktop-eb-bridge.test.ts: the Electrobun bridge's own rules (desktop/src/eb-bridge.ts):
       only views://internal/index.html counts as our page whatever its hash, a navigation event's
       detail read as a string or WebKit's JSON, nothing in or out while the view is off our page,
@@ -1116,7 +1126,9 @@ jobs:
       SIGINT end the run early, exit 0, after 128 of 328 files), and fails when a shard's run ends
       before every file it was dealt ran. The first shard then compiles the kiwi CLI
       for darwin-arm64, darwin-x64, linux-x64 and linux-arm64 with
-      scripts/build-cli.ts, ad-hoc signs the macOS binaries and runs `kiwi --version`. The same
+      scripts/build-cli.ts (with bunfig.toml and .env autoload off), ad-hoc signs the macOS
+      binaries and runs `kiwi --version`, then runs it again from a folder whose bunfig.toml
+      preloads a file and fails if that file ran (T1062). The same
       tests run on Linux in test / unit, test / flows-a and test / flows-b, so this job is for what fails only on macOS: paths (os.tmpdir() is under
       /var, a symlink to /private/var, so process.cwd() and realpath spell a folder differently
       from mkdtemp; home is under /Users; the file system ignores case; a unix socket path is

@@ -76,7 +76,7 @@ if (values.check) {
   console.log(`built ${outfile}: the CLI as one JS file, ${out.size} bytes, for the app to compile with its own Bun`);
 } else {
   const outfile = resolve(values.outfile);
-  const result = await Bun.build({ ...shared, compile: target === undefined ? { outfile } : { target, outfile } });
+  const result = await Bun.build({ ...shared, compile: { ...(target === undefined ? {} : { target }), outfile, autoloadBunfig: false, autoloadDotenv: false } });
   if (failed(result)) process.exit(1);
   console.log(`built ${outfile}${target ? ` for ${target}` : ""}, ${stubbed.size} just-bash command chunks left out`);
 }
