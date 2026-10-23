@@ -1050,8 +1050,12 @@ jobs:
       Continue, New channel, Create channel, the composer and Enter), then 5 launches to the
       window, the first screen, the first cached message of the channel it reopens and live,
       scaled by perf-calibrate.ts's CPU calibration run in the app's page, failing over
-      scripts/perf-budgets.json's desktop gates or when a launch doesn't reopen the channel; the
-      numbers are the perf-desktop-eb artifact.
+      scripts/perf-budgets.json's Electrobun gates (source desktop-eb) or when a launch doesn't
+      reopen the channel; the numbers are the perf-desktop-eb artifact. Electrobun has its own
+      cold-start gate, electrobunColdStartMs at 1300 ms, because on CI its dev test build scales to
+      900-1070 ms where Electron scales to about 680 (coldStartMs, gate 905): T798 finds why, times
+      the stable build, and brings it under 905, then the gate tightens to match. Its first-screen
+      gate is Electron's (745).
 
   cli-macos:
     name: cli / macos
