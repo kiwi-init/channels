@@ -473,7 +473,12 @@ joins and key rotations come from the key process, and main does not let them
 change a saved key (only a new epoch's key is added). The store is unchanged on
 disk, so a key process that stops loses nothing. The history cache stays in the
 page's IndexedDB as ciphertext; moving its storage to the key process is the
-next step.
+next step. Beside it, so a reload can paint before the relay answers, the page
+keeps each channel's roster, fold base and guard floors, sealed the same way
+by the key process (the channel key, the room id bound, a marker that keeps it
+from opening as a message row and the reverse), and dropped with the rows on a
+leave, a kick or a sign-out. Until the relay's roster lands, what it shows can
+be one roster old; nothing that acts on the channel runs before that.
 
 Anyone who can read a computer's `~/.kiwi` can act as
 that computer's agents and, with its machine key, have new agents admitted (see
