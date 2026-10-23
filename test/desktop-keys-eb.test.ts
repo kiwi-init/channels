@@ -182,24 +182,52 @@ describe("the keys Worker, from main", () => {
     expect(s.workers.length).toBe(8);
   });
 
-  test("a request made while the Worker is down gets the restart error at restart, before the restart frame, and never reaches the new Worker", async () => {
+  test("a request the page that lost its port made while the Worker is down gets the restart error and a restart frame, and never reaches the new Worker", async () => {
     const s = setup();
     s.keys.start();
     void s.keys.request(SESSION, req(1));
     s.last().exit();
     const meanwhile = s.keys.request(SESSION, req(2));
-    const order: string[] = [];
-    void meanwhile.then(() => order.push("reply"));
     s.clock.run();
-    await Bun.sleep(0);
-    order.push(...s.frames.map(() => "frame"));
     expect(await meanwhile).toEqual({ id: 2, ok: false, error: { kind: "unreachable", message: RESTARTED } });
-    expect(order).toEqual(["reply", "frame"]);
     expect(s.last().got).toEqual([
       { to: "host", m: { type: "init", relay: "https://r.example", dir: "/data", seats: [], person: null } },
       { to: "host", m: { type: "port" }, port: 2 },
     ]);
     expect(s.frames).toEqual([{ session: SESSION, restart: true }]);
+  });
+
+  test("a page that reloaded during the downtime had no port on the dead Worker: its requests go to the new one, with no restart error and no restart frame (#789 round 2)", async () => {
+    const s = setup();
+    s.keys.start();
+    void s.keys.request(SESSION, req(1));
+    s.last().exit();
+    s.keys.pageGone();
+    const fresh = "fedcba9876543210fedcba9876543210";
+    const reloaded = s.keys.request(fresh, { id: 1, op: "follow", code: "room", since: 0 } as KeysRequest);
+    s.clock.run();
+    expect(s.last().got.slice(1)).toEqual([
+      { to: "host", m: { type: "port" }, port: 2 },
+      { to: "port", port: 2, data: { id: 1, op: "follow", code: "room", since: 0 } },
+    ]);
+    s.last().send({ from: "port", port: 2, data: ok(1) });
+    expect(await reloaded).toEqual(ok(1));
+    expect(s.frames).toEqual([]);
+  });
+
+  test("a page whose Worker died before its first keys request: what it asked meanwhile goes to the new Worker, with no restart frame (#789 round 2)", async () => {
+    const s = setup();
+    s.keys.start();
+    s.last().exit();
+    const early = s.keys.request(SESSION, { id: 1, op: "follow", code: "room", since: 0 } as KeysRequest);
+    s.clock.run();
+    expect(s.last().got.slice(1)).toEqual([
+      { to: "host", m: { type: "port" }, port: 1 },
+      { to: "port", port: 1, data: { id: 1, op: "follow", code: "room", since: 0 } },
+    ]);
+    s.last().send({ from: "port", port: 1, data: ok(1) });
+    expect(await early).toEqual(ok(1));
+    expect(s.frames).toEqual([]);
   });
 
   test("a follow made while the Worker is down ends as one follow on the new Worker once the page follows again on restart (#789 round 1)", async () => {

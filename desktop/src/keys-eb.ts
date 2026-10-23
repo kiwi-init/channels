@@ -114,12 +114,14 @@ export function keysController(deps: KeysDeps): Keys {
       if (stopping) return;
       wait = clock.now() - started > 60_000 ? 1_000 : Math.min(wait * 2, 30_000);
       clock.later(() => {
-        for (const q of queued.splice(0)) q.done(unreachable(q.req.id, RESTARTED));
+        const died = lastSession;
+        const waiting = queued.splice(0);
+        for (const q of waiting) if (q.session === died) q.done(unreachable(q.req.id, RESTARTED));
+        queued.push(...waiting.filter((q) => q.session !== died));
         start();
-        const session = lastSession;
-        if (!session || !worker) return;
-        if (!page) connect(worker, session);
-        deps.toPage({ session, restart: true });
+        if (!died || !worker) return;
+        if (!page) connect(worker, died);
+        deps.toPage({ session: died, restart: true });
       }, wait);
     });
     w.post({ to: "host", m: deps.init() });
