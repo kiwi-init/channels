@@ -149,7 +149,7 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
       found = recipe.started(child.pid, started, nonce);
       if (!found) yield* Effect.sleep(100);
     }
-    if (!found) return yield* end(exited ? { kind: "own", lived: Date.now() - started } : { kind: "unbound" });
+    if (!found) return yield* end(exited ? { kind: "own", lived: Date.now() - started } : stop.asked ? { kind: "stopped" } : { kind: "unbound" });
     const live = found;
     yield* heldOrDie(bindHeldSeat(seat.alias, seat.me, seat.token, live.bound), seat);
     yield* say(`${seat.me} is bound to ${recipe.label} session ${live.id}`);
