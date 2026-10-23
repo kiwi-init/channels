@@ -6,6 +6,8 @@ import Electrobun, { BuildConfig, PATHS, Utils, type BrowserView, type BrowserWi
 import type { Push, Pushes } from "./calls.ts";
 import type { Host } from "./host.ts";
 import type { HostToKeys } from "./keys-server.ts";
+import { relaunchAfter } from "./update-asset.ts";
+import { applyUpdate } from "./updater.ts";
 
 interface Bundle {
   identifier: string;
@@ -45,7 +47,10 @@ export const ebHost: Host = {
     version: () => bundle.version,
     path: (name) => (name === "data" ? Utils.paths.userData : name === "logs" ? Utils.paths.userLogs : name === "exe" ? process.execPath : PATHS.RESOURCES_FOLDER),
     ready: () => true,
-    relaunch: (execPath) => spawn(execPath, [], { detached: true, stdio: "ignore" }).unref(),
+    relaunch: (execPath) => {
+      const after = relaunchAfter(process.pid, execPath, process.env);
+      spawn("/bin/sh", after.args, { detached: true, stdio: "ignore", env: after.env }).unref();
+    },
     onQuit: (fn) => Electrobun.events.on("before-quit", fn),
   },
   push: (name, value) => shown?.push(name, value),
@@ -64,6 +69,8 @@ export const ebHost: Host = {
     shown.win.activate();
   },
   reload: () => shown?.reload(),
-  restartToUpdate: () => {},
+  restartToUpdate: () => {
+    if (applyUpdate(true)) Utils.quit();
+  },
   tellKeys: (m) => keysTell(m),
 };
