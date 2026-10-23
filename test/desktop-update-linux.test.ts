@@ -40,12 +40,12 @@ afterAll(() => {
 });
 
 const arch: LinuxArch = process.arch === "arm64" ? "arm64" : "x64";
-const PAGE = "https://github.com/ojowwalker77/channels/releases/tag/v0.27.0";
+const PAGE = "https://github.com/kiwi-init/channels/releases/tag/v0.27.0";
 const NEW = "the 0.27.0 AppImage";
 const OLD = "the 0.26.0 AppImage";
 const sha = (s: string): string => createHash("sha256").update(s).digest("hex");
 
-const DOWNLOAD = "https://github.com/ojowwalker77/channels/releases/download/v0.27.0/";
+const DOWNLOAD = "https://github.com/kiwi-init/channels/releases/download/v0.27.0/";
 const ASSETS = "https://release-assets.githubusercontent.com/github-production-release-asset/";
 
 interface Release {
@@ -153,14 +153,14 @@ test("an AppImage in a folder it can't write says it can't update itself and dow
   const seen = release();
   const { u } = await launch(appImage, join(root, "data-readonly"));
   expect(await u.checkForUpdate()).toEqual({ version: "0.27.0", state: "available", url: PAGE, blocked: true });
-  expect(seen).toEqual(["https://api.github.com/repos/ojowwalker77/channels/releases/latest"]);
+  expect(seen).toEqual(["https://api.github.com/repos/kiwi-init/channels/releases/latest"]);
 });
 
 test("a deb install never swaps itself: it's offered the release's .deb for its CPU and downloads nothing", async () => {
   const seen = release();
   const { u } = await launch(undefined, join(root, "data-deb"));
   expect(await u.checkForUpdate()).toEqual({ version: "0.27.0", state: "available", url: PAGE, deb: `${DOWNLOAD}${debName("0.27.0", arch)}` });
-  expect(seen).toEqual(["https://api.github.com/repos/ojowwalker77/channels/releases/latest"]);
+  expect(seen).toEqual(["https://api.github.com/repos/kiwi-init/channels/releases/latest"]);
 });
 
 test("a swap that fails leaves the AppImage, says it can't update itself, and the next launch doesn't download that version again", async () => {
@@ -180,7 +180,7 @@ test("a swap that fails leaves the AppImage, says it can't update itself, and th
   const seen = release();
   const next = await launch(appImage, data);
   expect(await next.u.checkForUpdate()).toEqual({ version: "0.27.0", state: "available", url: PAGE, blocked: true });
-  expect(seen).toEqual(["https://api.github.com/repos/ojowwalker77/channels/releases/latest"]);
+  expect(seen).toEqual(["https://api.github.com/repos/kiwi-init/channels/releases/latest"]);
   expect(existsSync(join(data, "update-failed"))).toBe(true);
 });
 
@@ -192,7 +192,7 @@ test("a deb install started from another AppImage app (its APPIMAGE inherited) i
   const seen = release();
   const { fake, u } = await launch(cursor, join(root, "data-inherited"), { appDir: join(root, ".mount_CursorXYZ"), exe: DEB_EXE });
   expect(await u.checkForUpdate()).toEqual({ version: "0.27.0", state: "available", url: PAGE, deb: `${DOWNLOAD}${debName("0.27.0", arch)}` });
-  expect(seen).toEqual(["https://api.github.com/repos/ojowwalker77/channels/releases/latest"]);
+  expect(seen).toEqual(["https://api.github.com/repos/kiwi-init/channels/releases/latest"]);
   expect(u.applyUpdate(false)).toBe(false);
   expect(readFileSync(cursor, "utf8")).toBe("the Cursor AppImage");
   expect(fake.did.filter((d) => d.startsWith("relaunch"))).toEqual([]);
@@ -203,7 +203,7 @@ test("an AppImage takes its update only from GitHub: an asset off github.com isn
   const seen = release({ where: (name) => `https://evil.example/${name}` });
   const first = await launch(appImage, join(root, "data-off"));
   expect(await first.u.checkForUpdate()).toEqual({ version: "0.27.0", state: "available", url: PAGE });
-  expect(seen).toEqual(["https://api.github.com/repos/ojowwalker77/channels/releases/latest"]);
+  expect(seen).toEqual(["https://api.github.com/repos/kiwi-init/channels/releases/latest"]);
   const hops = release({ redirect: (name) => `https://evil.example/${name}` });
   const next = await launch(appImage, join(root, "data-redirect"));
   expect((await next.u.checkForUpdate()).state).toBe("downloading");

@@ -17,7 +17,7 @@ import { logMainError } from "./main-log.ts";
 import { signedLikeThisApp } from "./signer.ts";
 import { cantSwap, debAsset, githubHop, ownAppImage, releaseFile, releasePage, swapAsset, swapScript } from "./update-asset.ts";
 
-const REPO = "ojowwalker77/channels";
+const REPO = "kiwi-init/channels";
 const EVERY_MS = 6 * 3_600_000;
 const RETRY_MS = 30 * 60_000;
 const ASK_WAIT_MS = 30_000;

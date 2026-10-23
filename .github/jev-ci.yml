@@ -335,6 +335,7 @@ jobs:
       messages to a prompt, handing them to a turn that would end, starting a turn when its
       listener wakes, and stopping its listener's process group on shutdown, the file itself passing tsc --strict; Pi's seat and card
       from PI_CODING_AGENT and the extension's process (test/seats.test.ts, test/routing.test.ts),
+      test/repo-path.test.ts: no tracked file names the repo's old path, since it is kiwi-init/channels (T2037),
       its model from its session file (test/harness-model.test.ts), its wake path and words
       (test/wake.test.ts, test/daemon-seats.test.ts) and its name and logo (web lib/harness.test.ts).
       Also a Kimi Code or Grok seat with a live listener (Grok's persistent kiwi listen monitor) announced as
