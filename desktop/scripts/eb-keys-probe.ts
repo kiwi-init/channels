@@ -119,9 +119,16 @@ async function probe(): Promise<ProbeReport> {
     first: await step(() => key.get()),
   };
   const first = report["first"];
+  const marked = async (): Promise<string> => ((await key.finished()) ? "marked" : "unmarked");
   if (first && "ok" in first && first.ok === null) {
     const made = randomBytes(32).toString("base64");
     report["set"] = await step(() => key.set(made).then(() => made));
+    report["markedBefore"] = await step(marked);
+    report["finish"] = await step(() => key.finish().then(() => "ok"));
+    report["markedAfter"] = await step(marked);
+  } else {
+    report["drop"] = await step(() => key.drop().then(() => "dropped"));
+    report["markedKept"] = await step(marked);
   }
   report["get"] = await step(() => key.get());
   report["replace"] = await step(() => key.set(randomBytes(32).toString("base64")).then(() => "replaced"));

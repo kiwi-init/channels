@@ -561,10 +561,19 @@ jobs:
       encrypted it, so a deleted v2 store and a planted plain kiwi-store.bin get nothing in), nothing
       saved; on a Mac, a keychain that still holds a finished store key while both copies are gone is
       a deleted store, refused without asking for the Electron store, the store key is made only
-      after the import decision, read back from the keychain before anything is saved, and marked
-      finished (a second item, store-key-ready) only once the first save reads back, so a first run
-      cut off after the key was made carries on with it next time, a refused or failed first save
-      takes its new key back, and a first run saves an empty sealed store at once (T907). With test/desktop-legacy-store.test.ts
+      after the import decision, read back from the keychain before anything is saved (a key read
+      back that isn't the one just made, as when another start got there first, is refused with
+      nothing taken back or removed), and marked ready (a second item, store-key-ready, holding the
+      SHA-256 of the key it marks, so a mark left by a key deleted by hand doesn't count for the next
+      one) only once the first save reads back, so a first run cut off after the key was made carries
+      on with it next time, a refused or failed first save takes back the key it made (keychainKey's
+      drop takes back only a key that run made, while the keychain still holds it), a keychain that
+      won't take the mark leaves the store open with the reason in unmarked, and a first run saves an
+      empty sealed store at once (T907, T1076). test/desktop-launcher-key.test.ts runs the same
+      store through launcherKey and a stand-in launcher that keeps the key and mark as
+      native/macos/kiwi-keys.c does: finished, finish and drop on the wire, a key made just before a
+      failed first save opening as a first run, a stale mark, a deleted store refused after only get
+      and finished, and a failed first save taking back only the key that start made (T1076). With test/desktop-legacy-store.test.ts
       (desktop/src/legacy-store.ts, legacy-keys.ts): Electron's safeStorage format opened from what
       Electron itself wrote, v11 on a GNOME keyring and v10 on the macOS Keychain, Linux v10 with
       Chromium's fixed password (which counts as plain, not encrypted), a torn store read from its .bak asking the keychain once, an old
@@ -1096,14 +1105,16 @@ jobs:
       (fcntl F_GETFD) and a child started through libc system() while the channel is open gets no
       socket and no KIWI_KEY_FD, another copy of the socket gets nothing after done, a child started
       afterwards gets no socket and no KIWI_KEY_FD, the first
-      start makes a key through the launcher and the next gets the same one, a second key is refused, the legacy key comes through while an
+      start makes a key through the launcher (not marked ready until finish, then marked) and the next
+      gets the same one, still marked, and can't take it back with drop (T1076), a second key is refused, the legacy key comes through while an
       unlisted name and an unknown request are refused, and copies with a changed main.js, a
       bunfig.toml beside bun, an app.asar, a link or a missing file all stop before bun runs, and
       unless the launcher's check of the whole app takes 500 ms or less (median of 7), and unless,
       built with -fsanitize=address,undefined -fno-sanitize-recover=all into a throwaway sealed
       bundle, native/macos/kiwi-keys-test.c's parser cases (malformed, truncated, oversized, unknown,
-      a NUL inside, done ending the session, many requests in one write, and 1500 seeded random
-      sessions), the seal check on a sealed and on a changed app, and the launcher itself all run
+      a NUL inside, done ending the session, many requests in one write, the ready mark's finished,
+      finish and drop (drop only for a key made in that session and still the keychain's, a mark
+      left by a key deleted by hand not counting for the next), and 1500 seeded random sessions), the seal check on a sealed and on a changed app, and the launcher itself all run
       with no sanitizer report; on CI it uses
       a temporary keychain, and it deletes its items either way. eb-env-check runs the launcher
       inside a small sealed bundle and expects KIWI_KEY_FD as the one name it adds.
