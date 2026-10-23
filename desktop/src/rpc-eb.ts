@@ -2,7 +2,7 @@ import { createRPC, type RPCTransport } from "electrobun/rpc";
 
 import type { KeysReply, KeysRequest } from "./bridge.ts";
 import type { Call, CallArgs, CallValue, Handlers, Push, Pushes } from "./calls.ts";
-import { answer, keysCall, pageOnly, type BunSide, type PageSide } from "./eb-bridge.ts";
+import { answer, keysCall, pageOnly, type BunSide, type CallSide, type PageSide } from "./eb-bridge.ts";
 import type { KeysFrame } from "./keys-eb.ts";
 
 export interface BunBridge {
@@ -41,8 +41,9 @@ export interface PageBridge {
 
 export function pageBridge(toHost: (packet: unknown) => void, onHost: (receive: (packet: unknown) => void) => void): PageBridge {
   const rpc = createRPC<PageSide, BunSide>({ maxRequestTime: Infinity, transport: { send: toHost, registerHandler: onHost } });
+  const calls = rpc as unknown as ReturnType<typeof createRPC<PageSide, CallSide>>;
   function call<K extends Call>(name: K, ...args: CallArgs<K>): Promise<CallValue<K>> {
-    return rpc.request(name, args as never) as Promise<CallValue<K>>;
+    return calls.request(name, args) as Promise<CallValue<K>>;
   }
   function listen<P extends Push>(name: P, cb: (value: Pushes[P]) => void): () => void {
     rpc.addMessageListener(name, cb);

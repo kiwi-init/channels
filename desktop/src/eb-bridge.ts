@@ -11,6 +11,7 @@ export const toPageScript = (packet: unknown): string => `globalThis.${RECEIVE_G
 
 type BridgeRequests = { [K in Call]: { params: CallArgs<K>; response: CallValue<K> } };
 export type KeysCall = { session: string; req: KeysRequest };
+export type CallSide = { requests: BridgeRequests; messages: Pushes };
 export type BunSide = { requests: BridgeRequests & { keys: { params: KeysCall; response: KeysReply } }; messages: Pushes & { keys: KeysFrame } };
 
 const SESSION = /^[A-Za-z0-9_-]{16,64}$/;
