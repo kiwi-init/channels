@@ -1,10 +1,18 @@
+import { cleanBody, describeEvent } from "@kiwi/core/format.ts"
+import { inlineText } from "@kiwi/core/membership.ts"
 import { asSent, type Message } from "@kiwi/core/protocol.ts"
+import type { ChannelState } from "@kiwi/core/state.ts"
 
 export interface LogExport {
   text: string
   messages: readonly Message[]
   missing: number[]
   dropped: number
+}
+
+export interface Exported {
+  log: LogExport
+  state: ChannelState
 }
 
 export type ExportKind = "log" | "transcript"
@@ -50,20 +58,33 @@ function utcOffset(at: Date): string {
   return `UTC${sign}${pad(Math.floor(Math.abs(minutes) / 60))}:${pad(Math.abs(minutes) % 60)}`
 }
 
-export function transcript({ title, log, nameOf, at }: { title: string | undefined; log: LogExport; nameOf: (from: string) => string; at: Date }): string {
-  const gaps = [log.missing.length ? `${unread(log.missing).replace(/^./, (c) => c.toUpperCase())}.` : "", dropped(log.dropped)].filter(Boolean)
+const quoted = (text: string): string =>
+  cleanBody(text)
+    .split("\n")
+    .map((line) => (line ? `> ${line}` : ">"))
+    .join("\n")
+
+const plain = (s: string, max: number): string => inlineText(s, max).replace(/[[\]()<>`*_]/g, "")
+
+const leftOut = (n: number): string =>
+  n ? `${n === 1 ? "1 message is" : `${n} messages are`} left out, as the app leaves them out: forged, or against what the owner allows (the signed log still has them, each with its signature).` : ""
+
+export function transcript({ title, log, state, nameOf, at }: { title: string | undefined; log: LogExport; state: ChannelState; nameOf: (from: string) => string; at: Date }): string {
+  const shown = log.messages.filter((m) => state.trust.get(m.seq) === "verified")
+  const gaps = [log.missing.length ? `${unread(log.missing).replace(/^./, (c) => c.toUpperCase())}.` : "", dropped(log.dropped), leftOut(log.messages.length - shown.length)].filter(Boolean)
   const head = [
-    `# ${title || "Channel"}`,
+    `# ${inlineText(title, 80) || "Channel"}`,
     [
-      `Downloaded ${localStamp(at)} (${utcOffset(at)}): ${log.messages.length === 1 ? "1 message" : `${log.messages.length} messages`}, each with its number, the date and time it was sent here, and who sent it.`,
+      `Downloaded ${localStamp(at)} (${utcOffset(at)}): ${shown.length === 1 ? "1 message" : `${shown.length} messages`}, each with its number, the date and time it was sent here, and who sent it, then what it says, quoted.`,
       ...gaps,
     ].join(" "),
   ]
-  const entries = log.messages.map((m) => {
-    const kind = m.kind && m.kind !== "msg" ? ` (${m.kind})` : ""
-    const images = (m.imgs ?? []).map((i) => `[image: ${i.name}]`)
-    const text = [m.body ?? "", ...images].filter(Boolean).join("\n\n")
-    return `**#${m.seq} · ${localStamp(new Date(m.ts))} · ${nameOf(m.from)}**${kind}\n\n${text || "_(no text)_"}`
+  const entries = shown.map((m) => {
+    const kind = m.kind && m.kind !== "msg" ? ` (${inlineText(m.kind, 20)})` : ""
+    const said = m.kind === "event" ? describeEvent(m, state) : (m.body ?? "")
+    const images = (m.imgs ?? []).map((i) => `> [image: ${plain(i.name, 80)}]`)
+    const text = [said ? quoted(said) : "", ...images].filter(Boolean).join("\n>\n")
+    return `**#${m.seq} · ${localStamp(new Date(m.ts))} · ${plain(nameOf(m.from), 60)}**${kind}\n\n${text || "_(no text)_"}`
   })
   return `${[...head, ...entries].join("\n\n")}\n`
 }

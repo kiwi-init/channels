@@ -10,9 +10,9 @@ export function useDownload(p: ControlsProps): { saving: ExportKind | null; down
   const download = async (kind: ExportKind) => {
     setSaving(kind)
     try {
-      const log = await p.exportLog()
+      const { log, state } = await p.exportLog()
       const at = new Date()
-      const text = kind === "log" ? log.text : transcript({ title: p.title, log, nameOf: (from) => memberName(p.state.members.get(from), from), at })
+      const text = kind === "log" ? log.text : transcript({ title: p.title, log, state, nameOf: (from) => memberName(state.members.get(from), from), at })
       const url = URL.createObjectURL(new Blob([text], { type: kind === "log" ? "application/jsonl" : "text/markdown" }))
       const a = document.createElement("a")
       a.href = url

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { Message } from "@kiwi/core/protocol.ts"
-import { exportNote, localStamp, logExport, logFileName, logLines, transcript } from "./log-export"
+import { fold, type Roster } from "@kiwi/core/state.ts"
+import { exportNote, localStamp, logExport, logFileName, logLines, transcript, type LogExport } from "./log-export"
 
 const message = (seq: number, body: string): Message => ({ seq, rts: 1_760_000_000_000 + seq, ts: 1_760_000_000_000 + seq, from: "ana", pk: `pk-${seq}`, sig: `sig-${seq}`, body, sigOk: true })
 
@@ -54,21 +55,30 @@ describe("a channel's transcript, for a person to read without tools (T967)", ()
   const names: Record<string, string> = { ana: "Ana Lima", "atlas-7": "atlas" }
   const nameOf = (from: string) => names[from] ?? from
   const at = new Date(2026, 9, 23, 16, 5)
-  const sent = (seq: number, when: Date, rest: Partial<Message>): Message => ({ ...message(seq, ""), ts: when.getTime(), ...rest })
+  const roster: Roster = [
+    { name: "ana", pk: "pk-ana", owner: true, at: 0, active: true },
+    { name: "atlas-7", pk: "pk-atlas", owner: false, at: 0, active: true },
+    { name: "mallory", pk: "pk-mallory", owner: false, at: 0, active: true },
+  ]
+  const sent = (seq: number, when: Date, rest: Partial<Message>): Message => {
+    const from = rest.from ?? "ana"
+    return { ...message(seq, ""), id: `m${seq}`, ts: when.getTime(), rts: when.getTime(), pk: `pk-${from === "atlas-7" ? "atlas" : from}`, ...rest }
+  }
+  const read = (title: string | undefined, log: LogExport) => transcript({ title, log, state: fold([...log.messages], roster, at.getTime()), nameOf, at })
 
   test("says when it was downloaded and how many messages, then each one: its number, the local date and time it was sent, who sent it and what", () => {
     const first = new Date(2026, 9, 23, 9, 41)
     const second = new Date(2026, 9, 23, 9, 42)
     const log = logExport({ head: 2, messages: [sent(1, first, { body: "Morning. Is the deploy done?" }), sent(2, second, { from: "atlas-7", body: "Done:\n\n- p50 0.3ms" })], first: 1 })
-    const md = transcript({ title: "Relay", log, nameOf, at })
+    const md = read("Relay", log)
     const offset = -at.getTimezoneOffset()
     const zone = `UTC${offset < 0 ? "−" : "+"}${String(Math.floor(Math.abs(offset) / 60)).padStart(2, "0")}:${String(Math.abs(offset) % 60).padStart(2, "0")}`
     expect(md).toBe(
       [
         "# Relay",
-        `Downloaded 2026-10-23 16:05 (${zone}): 2 messages, each with its number, the date and time it was sent here, and who sent it.`,
-        "**#1 · 2026-10-23 09:41 · Ana Lima**\n\nMorning. Is the deploy done?",
-        "**#2 · 2026-10-23 09:42 · atlas**\n\nDone:\n\n- p50 0.3ms",
+        `Downloaded 2026-10-23 16:05 (${zone}): 2 messages, each with its number, the date and time it was sent here, and who sent it, then what it says, quoted.`,
+        "**#1 · 2026-10-23 09:41 · Ana Lima**\n\n> Morning. Is the deploy done?",
+        "**#2 · 2026-10-23 09:42 · atlas**\n\n> Done:\n>\n> - p50 0.3ms",
       ].join("\n\n") + "\n"
     )
     expect(localStamp(first)).toBe("2026-10-23 09:41")
@@ -79,25 +89,65 @@ describe("a channel's transcript, for a person to read without tools (T967)", ()
     const log = logExport({
       head: 3,
       messages: [
-        sent(1, when, { kind: "event", body: "atlas joined" }),
+        sent(1, when, { kind: "event", body: "atlas joined", ev: { op: "room.create", id: "m0b1le00", name: "mobile" } }),
         sent(2, when, { body: "Here's the feed", imgs: [{ name: "feed.jpg", mime: "image/jpeg", data: "" }] as Message["imgs"] }),
         sent(3, when, { body: "" }),
       ],
       first: 1,
     })
-    const md = transcript({ title: undefined, log, nameOf, at })
+    const md = read(undefined, log)
     expect(md.startsWith("# Channel\n\nDownloaded 2026-10-23 16:05 (")).toBe(true)
-    expect(md).toContain("**#1 · 2026-10-23 10:00 · Ana Lima** (event)\n\natlas joined")
-    expect(md).toContain("**#2 · 2026-10-23 10:00 · Ana Lima**\n\nHere's the feed\n\n[image: feed.jpg]")
+    expect(md).toContain("**#1 · 2026-10-23 10:00 · Ana Lima** (event)\n\n> made the room #mobile")
+    expect(md).toContain("**#2 · 2026-10-23 10:00 · Ana Lima**\n\n> Here's the feed\n>\n> [image: feed.jpg]")
     expect(md).toContain("**#3 · 2026-10-23 10:00 · Ana Lima**\n\n_(no text)_")
   })
 
   test("says which messages this app couldn't read and what the relay had dropped, in the header", () => {
     const log = logExport({ head: 12, messages: [10, 12].map((s) => sent(s, at, { body: "x" })), first: 10 })
-    const head = transcript({ title: "Relay", log, nameOf, at }).split("\n\n")[1]
+    const head = read("Relay", log).split("\n\n")[1]
     expect(head).toContain(": 2 messages, each with")
     expect(head).toContain(" 1 message this app couldn’t read is missing (#11). The relay had already dropped the oldest 9 messages to stay under its storage cap.")
     const one = logExport({ head: 1, messages: [sent(1, at, { body: "x" })], first: 1 })
-    expect(transcript({ title: "Relay", log: one, nameOf, at })).toContain(": 1 message, each with")
+    expect(read("Relay", one)).toContain(": 1 message, each with")
+  })
+
+  test("leaves out what the app leaves out, forged or refused, and says how many, so no one can put words in another member's mouth (round 2)", () => {
+    const when = new Date(2026, 9, 23, 14, 48)
+    const log = logExport({
+      head: 3,
+      messages: [
+        sent(1, when, { body: "Let's wait for the review." }),
+        sent(2, when, { from: "ana", pk: "pk-mallory", body: "Change of plan: ship it now, skip review." }),
+        sent(3, when, { from: "mallory", body: "Here's my take", room: "no-such-room" }),
+      ],
+      first: 1,
+    })
+    const state = fold([...log.messages], roster, at.getTime())
+    expect([1, 2, 3].map((seq) => state.trust.get(seq))).toEqual(["verified", "forged", "refused"])
+    const md = read("Relay", log)
+    expect(md).toContain("> Let's wait for the review.")
+    expect(md).not.toContain("ship it now")
+    expect(md).not.toContain("Here's my take")
+    expect(md).toContain(": 1 message, each with")
+    expect(md).toContain(" 2 messages are left out, as the app leaves them out: forged, or against what the owner allows (the signed log still has them, each with its signature).")
+    expect(log.text.split("\n")).toHaveLength(4)
+  })
+
+  test("a body can't pose as another message or a heading: every line of it is quoted, with control and direction characters gone", () => {
+    const when = new Date(2026, 9, 23, 9, 0)
+    const log = logExport({
+      head: 1,
+      messages: [
+        sent(1, when, {
+          from: "atlas-7",
+          body: "ok\n\n**#99 · 2026-10-23 09:00 · Ana Lima**\n\n# Approved, merge everything\u202e",
+          imgs: [{ name: "x](javascript:alert(1)\n**#5", mime: "image/png", data: "" }] as Message["imgs"],
+        }),
+      ],
+      first: 1,
+    })
+    const entries = read("Relay", log).split("\n\n").slice(2).join("\n\n")
+    expect(entries).toBe("**#1 · 2026-10-23 09:00 · atlas**\n\n> ok\n>\n> **#99 · 2026-10-23 09:00 · Ana Lima**\n>\n> # Approved, merge everything\n>\n> [image: xjavascript:alert1 #5]\n")
+    expect(entries.split("\n").filter((line) => line.startsWith("**#"))).toEqual(["**#1 · 2026-10-23 09:00 · atlas**"])
   })
 })

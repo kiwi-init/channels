@@ -340,8 +340,8 @@ async function run(part: Part): Promise<string[]> {
     const downloads = panel.getByRole("region", { name: "Download" });
     const [md] = await Promise.all([page.waitForEvent("download"), downloads.getByRole("button", { name: "Transcript (.md)" }).click()]);
     if (!/-transcript-\d{4}-\d{2}-\d{2}-\d{4}\.md$/.test(md.suggestedFilename())) throw new Error(`the transcript was saved as ${md.suggestedFilename()}`);
-    if (!/\*\*#\d+ · \d{4}-\d{2}-\d{2} \d{2}:\d{2} · smoke\*\*\n\nsmoke test\n/.test(readFileSync(await md.path(), "utf8")))
-      throw new Error("the transcript lacks “smoke test” under its number, date, time and sender");
+    if (!/\*\*#\d+ · \d{4}-\d{2}-\d{2} \d{2}:\d{2} · smoke\*\*\n\n> smoke test\n/.test(readFileSync(await md.path(), "utf8")))
+      throw new Error("the transcript lacks “smoke test”, quoted, under its number, date, time and sender");
     const [jsonl] = await Promise.all([page.waitForEvent("download"), downloads.getByRole("button", { name: "Signed log (.jsonl)" }).click()]);
     if (!/-log-\d{4}-\d{2}-\d{2}-\d{4}\.jsonl$/.test(jsonl.suggestedFilename())) throw new Error(`the log was saved as ${jsonl.suggestedFilename()}`);
     const signed: unknown[] = readFileSync(await jsonl.path(), "utf8")
