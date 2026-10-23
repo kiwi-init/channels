@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 const { reference, limits: budgets } = (await Bun.file("scripts/perf-budgets.json").json()) as {
   reference: Record<"@1x" | "@4x", number>;
-  limits: Record<string, { at: string[]; per?: "@1x" | "@4x"; budget: number; gate: number | null; nightly?: boolean }>;
+  limits: Record<string, { what: string; at: string[]; per?: "@1x" | "@4x"; budget: number; gate: number | null; nightly?: boolean; source?: "feel" }>;
 };
 const dir = mkdtempSync(join(tmpdir(), "kiwi-perf-check-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -98,8 +98,47 @@ test("a calibrated run left out of just one timing is named, even when enough ru
   expect(r.out).not.toContain("run-30.json has no usable value");
 });
 
-test("every timing with a gate is scaled by the calibration at its CPU speed", () => {
-  for (const [name, l] of Object.entries(budgets)) if (l.gate !== null) expect({ name, per: l.per }).toEqual({ name, per: l.at[0] === "@4x" ? "@4x" : "@1x" });
+test("every perf-scale timing with a gate is scaled by the calibration at its CPU speed; perf-feel's rows aren't scaled", () => {
+  for (const [name, l] of Object.entries(budgets))
+    if (l.source === "feel") expect({ name, per: l.per }).toEqual({ name, per: undefined });
+    else if (l.gate !== null) expect({ name, per: l.per }).toEqual({ name, per: l.at[0] === "@4x" ? "@4x" : "@1x" });
+});
+
+function feel(i: number, values: Record<string, number> = {}): string {
+  const file = join(dir, `feel-${i}.json`);
+  const report: Record<string, Record<string, number> | number> = { rttMs: 150 };
+  for (const l of Object.values(budgets).filter((x) => x.source === "feel")) {
+    const [section, key] = l.at as [string, string];
+    const v = values[key] ?? (l.gate ?? l.budget * 2) * 0.5;
+    report[section] = { ...(report[section] as Record<string, number> | undefined), [key]: v };
+  }
+  writeFileSync(file, JSON.stringify(report));
+  return file;
+}
+
+test("perf-feel runs are told apart by their rttMs, graded by their own median, unscaled, next to perf-scale's", () => {
+  const scaled = [run(50, 40), run(50, 41), run(50, 42)];
+  const ok = check([...scaled, feel(1), feel(2), feel(3)]);
+  expect(ok.code).toBe(0);
+  expect(ok.out).toContain("perf-feel, median of 3");
+  const screens = budgets.feelFalseScreens!;
+  expect(ok.out).toContain(`| ${screens.what} | 0.25 | | ${screens.gate} | ${screens.budget} |`);
+  const flash = check([...scaled, feel(4, { falseScreens: 2 }), feel(5, { falseScreens: 1 }), feel(6)]);
+  expect(flash.code).toBe(1);
+  expect(flash.out).toContain(`${screens.what}: 1, over its gate ${screens.gate} (feelFalseScreens)`);
+  expect(check([...scaled, feel(7, { falseScreens: 3 }), feel(8), feel(9)]).code).toBe(0);
+});
+
+test("without perf-feel runs (the nightly), perf-feel's rows are left out, not failed", () => {
+  const r = check([run(50, 43), run(50, 44)]);
+  expect(r.code).toBe(0);
+  expect(r.out).not.toContain(budgets.feelFalseScreens!.what);
+});
+
+test("CI's perf job hands perf-check the perf-feel runs its perf-runs jobs made", () => {
+  const ci = readFileSync(".github/workflows/ci.yml", "utf8");
+  expect(ci).toMatch(/perf-feel\.ts --json "\$RUNNER_TEMP\/feel-\$\{\{ matrix\.run \}\}\.json"/);
+  expect(ci).toContain('perf-check.ts --comment "$RUNNER_TEMP"/perf/perf-*.json "$RUNNER_TEMP"/perf/feel-*.json');
 });
 
 test("the soak's limits count only in the nightly run, and the gap to 0.20 is listed", () => {
