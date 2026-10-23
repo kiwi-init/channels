@@ -1,5 +1,5 @@
 {
-  "reference": { "@1x": 110, "@4x": 430 },
+  "reference": { "@1x": 110, "@4x": 430, "loop": 21 },
   "calibration": { "@1x": [40, 250], "@4x": [160, 1000], "ratio": [3, 5] },
   "limits": {
     "reloadMs": { "what": "Reload to first screen", "at": ["@1x", "reloadToFirstScreenMs"], "per": "@1x", "inPage": ["reload, in page", "firstScreenMs"], "budget": 400, "gate": 820 },
@@ -8,13 +8,14 @@
     "conversationMs": { "what": "Conversation tab @4x", "at": ["@4x", "switchMedianMs", "Conversation"], "per": "@4x", "budget": 100, "gate": 330 },
     "desktopFirstScreenMs": { "what": "Desktop app: launch to the first screen", "at": ["firstScreenMs"], "budget": 400, "gate": 745, "source": "desktop" },
     "coldStartMs": { "what": "Desktop app: launch to the first cached message of the channel it reopens", "at": ["firstMessageMs"], "budget": 500, "gate": 905, "source": "desktop" },
-    "electrobunFirstScreenMs": { "what": "Desktop app on Electrobun: launch to the first screen", "at": ["firstScreenMs"], "budget": 400, "gate": 1000, "source": "desktop-eb" },
+    "electrobunFirstScreenMs": { "what": "Desktop app on Electrobun: launch to the first screen", "at": ["firstScreenMs"], "budget": 400, "gate": 1000, "source": "desktop-eb", "scale": "loop" },
     "electrobunColdStartMs": {
       "what": "Desktop app on Electrobun: launch to the first cached message of the channel it reopens",
       "at": ["firstMessageMs"],
       "budget": 500,
       "gate": 1300,
-      "source": "desktop-eb"
+      "source": "desktop-eb",
+      "scale": "loop"
     },
     "typingP95Ms": { "what": "Typing while agents post, p95 key event", "at": ["typing", "p95Ms"], "per": "@1x", "budget": 32, "gate": 32 },
     "feelReloadMs": { "what": "Reload to the first screen, 150 ms RTT, in page", "at": ["reload", "firstScreenInPageMs"], "source": "feel", "budget": 150, "gate": 440 },

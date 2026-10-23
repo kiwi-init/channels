@@ -8,6 +8,7 @@ import { startAppLife } from "./app-life-eb.ts";
 import { handleDeepLink, JOIN_SCHEME } from "./deep-links.ts";
 import { lockInternalRpc, onOurPage, preloadSource, toPageScript } from "./eb-bridge.ts";
 import { drive } from "./eb-driver.ts";
+import { mark, startupMarks } from "./eb-startup.ts";
 import { navigationUrl, openedUrl, PAGE_RULES, PAGE_URL, pageWithCsp } from "./eb-page.ts";
 import { testVault } from "./eb-test-store.ts";
 import { externalUrl, normalizeRelay } from "./guard.ts";
@@ -27,6 +28,8 @@ import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts"
 import { minWindowWidth } from "./window-size.ts";
 
 declare const KIWI_EB_TEST: boolean;
+
+mark("main");
 
 useHost(ebHost);
 Electrobun.events.on("open-url", (e: { data?: { url?: unknown } }) => {
@@ -101,6 +104,7 @@ function createWindow(): BrowserWindow {
     (session, req) => keys.request(session, req),
   );
   keysToPage = (frame) => bridge.pushKeys(frame);
+  mark("window");
   const win = new BrowserWindow({
     title: "Channels",
     url: null,
@@ -110,6 +114,7 @@ function createWindow(): BrowserWindow {
     preload: preloadSource({ snapshot: snapshot(), session: bridge.nextSession() }, bundled),
     rpc: bridge,
   });
+  mark("webview");
   const webview = win.webview;
   view = webview;
   webview.setNavigationRules(PAGE_RULES);
@@ -130,6 +135,7 @@ function createWindow(): BrowserWindow {
     reload: () => (refreshPreload(), load()),
   });
   load();
+  mark("load");
   const look = win.ptr;
   if (look && windowLook) windowLook(look, minWindowWidth(process.platform), WINDOW_SIZE.minHeight, rgb(windowBackground(false)), rgb(windowBackground(true)));
   if (mac) win.setWindowButtonPosition(TRAFFIC_LIGHTS.x, TRAFFIC_LIGHTS.y);
@@ -158,7 +164,7 @@ function start(instance: Extract<Instance, { kind: "first" }>): void {
   const win = createWindow();
   if (KIWI_EB_TEST) {
     const socket = process.env.KIWI_EB_DRIVER;
-    if (socket) drive(win.webview, socket);
+    if (socket) drive(win.webview, socket, { startup: startupMarks });
   }
   const tray = startAppLife({
     win,
