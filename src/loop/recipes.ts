@@ -8,14 +8,14 @@ export const LOOP_HARNESSES = ["claude", "codex"] as const;
 
 export type LoopHarness = (typeof LOOP_HARNESSES)[number];
 
-export interface Launch {
+interface Launch {
   bin: string;
   model?: string;
   effort?: string;
   prompt: string;
 }
 
-export type Idle = { idle: boolean; since: number | null };
+type Idle = { idle: boolean; since: number | null };
 
 export interface Started {
   id: string;

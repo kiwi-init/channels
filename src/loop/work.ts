@@ -6,14 +6,26 @@ export type Work = { kind: "coding"; task: number } | { kind: "reviewing"; task:
 
 const live = (t: Task | undefined): t is Task => !!t && t.state !== "done" && !t.archived;
 
-export function nextWork(state: ChannelState, me: string, unreadForMe: number): Work | null {
-  const open = [...state.tasks.values()].filter(live).sort((a, b) => a.id - b.id);
-  const coding = open.find((t) => t.owner === me && t.state === "doing") ?? open.find((t) => t.owner === me);
-  if (coding) return { kind: "coding", task: coding.id };
-  for (const t of open) {
+const openTasks = (state: ChannelState) => [...state.tasks.values()].filter(live).sort((a, b) => a.id - b.id);
+
+const awaitingVerdict = (t: Task) => !!openRound(t);
+
+function owedReview(state: ChannelState, me: string): Work | null {
+  for (const t of openTasks(state)) {
     const round = openRound(t);
     if (round && t.review === me && t.owner !== me) return { kind: "reviewing", task: t.id, round: round.n };
   }
+  return null;
+}
+
+export function nextWork(state: ChannelState, me: string, unreadForMe: number): Work | null {
+  const mine = openTasks(state).filter((t) => t.owner === me);
+  const doing = mine.find((t) => t.state === "doing" && !awaitingVerdict(t));
+  if (doing) return { kind: "coding", task: doing.id };
+  const review = owedReview(state, me);
+  if (review) return review;
+  const coding = mine.find((t) => !awaitingVerdict(t)) ?? mine[0];
+  if (coding) return { kind: "coding", task: coding.id };
   return unreadForMe > 0 ? { kind: "answering" } : null;
 }
 
@@ -21,7 +33,7 @@ export function workOver(work: Work, state: ChannelState, me: string): boolean {
   switch (work.kind) {
     case "coding": {
       const t = state.tasks.get(work.task);
-      return !live(t) || t.owner !== me;
+      return !live(t) || t.owner !== me || (awaitingVerdict(t) && owedReview(state, me) !== null);
     }
     case "reviewing": {
       const t = state.tasks.get(work.task);
@@ -58,9 +70,9 @@ function focus(work: Work, state: ChannelState, mc: string): string {
       const id = taskId(work.task);
       const title = t ? ` “${inlineText(t.title, 160)}”` : "";
       const finish = t?.review
-        ? `When the work is ready, send it for review with \`${mc} task review ${id} --at SHA\` (the commit it's at), then wait here for the verdict: on a rejection, fix what it says and send a new round. The session ends when the review approves ${id}.`
+        ? `When the work is ready, send it for review with \`${mc} task review ${id} --at SHA\` (the commit it's at), then wait here for the verdict: on a rejection, fix what it says and send a new round. The session ends when the review approves ${id}, or sooner if a review you owe comes up while you wait (a rejection then gets a fresh session).`
         : `When it's finished, mark it with \`${mc} task done ${id}\`. The session ends then.`;
-      return `This session is for ${id}${title}, which you own. Start it with \`${mc} task show ${id}\` and \`${mc} task start ${id}\` if it isn't doing yet, and stay on it: other work waits for its own session. ${finish}`;
+      return `This session is for ${id}${title}, which you own. Start it with \`${mc} task show ${id}\` and \`${mc} task start ${id}\` if it isn't doing yet. Answer messages for you as they come; only other tasks and reviews wait for their own session. ${finish}`;
     }
     case "reviewing": {
       const id = taskId(work.task);

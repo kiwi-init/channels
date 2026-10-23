@@ -21,7 +21,7 @@ export function codexArgv({ bin, model, effort, prompt }: CodexStart): string[] 
   return [bin, ...(model ? ["-m", model] : []), ...(effort ? ["-c", `model_reasoning_effort="${effort}"`] : []), "--", prompt];
 }
 
-export function codexHome(env: Env = process.env): string {
+function codexHome(env: Env): string {
   return env.CODEX_HOME || join(homedir(), ".codex");
 }
 

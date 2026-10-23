@@ -17,8 +17,8 @@ export function claudeArgv({ bin, model, effort, prompt }: ClaudeStart): string[
   return [bin, ...(model ? ["--model", model] : []), ...(effort ? ["--effort", effort] : []), "--", prompt];
 }
 
-export function claudeDir(env: Env = process.env): string {
-  return env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
+function claudeDir(env: Env): string {
+  return env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
 }
 
 export function claudeSession(pid: number, env: Env = process.env): ClaudeSession | null {
