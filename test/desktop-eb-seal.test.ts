@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { sealOf } from "../desktop/scripts/eb-seal.ts";
+import { sealDiff, sealOf } from "../desktop/scripts/eb-seal.ts";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -24,7 +24,7 @@ function bundle(files: Record<string, string>): string {
 
 const sha = (s: string): string => createHash("sha256").update(s).digest("hex");
 
-test("every file bun can load is sealed by its SHA-256; Info.plist, the signature and the launcher itself are not", () => {
+test("every file bun can load is sealed by its SHA-256; Info.plist, the signature, a stapled ticket and the launcher itself are not", () => {
   const contents = bundle({
     "Info.plist": "<plist/>",
     "MacOS/kiwi-launcher": "ours",
@@ -33,6 +33,7 @@ test("every file bun can load is sealed by its SHA-256; Info.plist, the signatur
     "Resources/main.js": "main",
     "Resources/app/bun/index.js": "app",
     "_CodeSignature/CodeResources": "sig",
+    CodeResources: "notarization ticket",
   });
   expect(sealOf(contents, "kiwi-launcher")).toEqual({
     "MacOS/launcher": sha("electrobun's"),
@@ -46,4 +47,12 @@ test("a link can't be sealed, since the launcher refuses an app with one", () =>
   const contents = bundle({ "MacOS/kiwi-launcher": "ours", "Resources/main.js": "main" });
   symlinkSync("/tmp", join(contents, "Resources", "link"));
   expect(() => sealOf(contents, "kiwi-launcher")).toThrow("Resources/link isn't a plain file or folder");
+});
+
+test("the release's last check: every shipped file still matches the seal, and nothing sealed is gone (T443)", () => {
+  const sealed = { "MacOS/bun": "a", "Resources/main.js": "b" };
+  expect(sealDiff(sealed, { "MacOS/bun": "a", "Resources/main.js": "b" })).toEqual([]);
+  expect(sealDiff(sealed, { "MacOS/bun": "signed later", "Resources/main.js": "b" })).toEqual(["MacOS/bun changed after sealing"]);
+  expect(sealDiff(sealed, { "MacOS/bun": "a", "Resources/main.js": "b", "Resources/new.js": "c" })).toEqual(["Resources/new.js isn't sealed"]);
+  expect(sealDiff(sealed, { "MacOS/bun": "a" })).toEqual(["Resources/main.js is sealed but gone"]);
 });

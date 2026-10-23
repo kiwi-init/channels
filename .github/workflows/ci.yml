@@ -368,6 +368,8 @@ jobs:
         run: bun run build:eb
       - if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-size.ts desktop/release-eb
+      - if: ${{ !cancelled() }}
+        run: bun desktop/scripts/eb-seal-check.ts
       - name: the launcher keeps BUN_*, NODE_*, DYLD_* and JSC_* out of the app
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-env-check.ts desktop/release-eb
