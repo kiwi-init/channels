@@ -81,9 +81,16 @@ export async function bridgeChecks(d: Driver, problems: string[]): Promise<void>
 
   await step(problems, "a local client on Electrobun's 127.0.0.1 RPC socket gets nothing while the page is pushed to, and its requests do nothing", async () => {
     const ids = await d.evaluate(() => ({ port: (window as unknown as Page).__electrobunRpcSocketPort ?? null, id: (window as unknown as Page).__electrobunWebviewId ?? null }), null);
-    if (ids.port === null || ids.id === null) return null;
+    if (ids.port === null || ids.id === null) {
+      console.log("Electrobun's RPC socket: the page names none, so there's nothing to connect to");
+      return null;
+    }
     const client = await socketClient(ids.port, ids.id);
-    if (!client.opened) return null;
+    if (!client.opened) {
+      console.log(`Electrobun's RPC socket: nothing listens on 127.0.0.1:${ids.port}`);
+      return null;
+    }
+    console.log(`Electrobun's RPC socket: a local client connected to 127.0.0.1:${ids.port} as view ${ids.id}`);
     const forged = { id: "local", at: 1, title: "FROM-A-LOCAL-CLIENT", body: null };
     client.send({ type: "request", id: 4242, method: "setPending", params: [[forged]] });
     client.send({ session: "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0", doc: "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f1", packet: { type: "request", id: 4243, method: "setPending", params: [[forged]] } });
