@@ -2,8 +2,8 @@
 import { parseArgs } from "node:util";
 import { loadConfig } from "./config.ts";
 import { git } from "./git.ts";
-import { headline, LEGEND, notesBlock, passedJobs, planTable, pullEvent, pullRequest, setOutput, summary, trustedRef, upsertComment } from "./github.ts";
-import { allHashes, plan, runAll, type Decision, type Plan } from "./plan.ts";
+import { headline, LEGEND, mergeGroupRange, notesBlock, passedJobs, planTable, pullEvent, pullRequest, queueRuns, setOutput, summary, testedByQueue, trustedRef, upsertComment } from "./github.ts";
+import { allHashes, plan, runAll, skipAll, type Decision, type Plan } from "./plan.ts";
 
 const { positionals, values } = parseArgs({
   allowPositionals: true,
@@ -32,8 +32,20 @@ async function comment(body: string) {
 async function planInCI(): Promise<Plan> {
   const head = git(values.repo, ["rev-parse", "HEAD"]).trim();
   const event = process.env.GITHUB_EVENT_NAME;
+  const payload = await pullEvent();
+  if (event === "push") {
+    const tested = testedByQueue(await queueRuns(slug, head).catch((e: unknown) => (note(e), [])), head, ".github/workflows/ci.yml");
+    if (tested !== null) return skipAll(config, `the merge queue tested this commit as-is (run ${tested})`, allHashes(values.repo, head, config));
+  }
+  if (event === "merge_group") {
+    const group = mergeGroupRange(payload);
+    if (group.head !== head) throw new Error(`checked out ${head}, not the merge group's ${group.head}`);
+    git(values.repo, ["fetch", "--no-tags", "--depth=1", "origin", group.base]);
+    const passed = await passedJobs(slug, Object.keys(config.jobs), trustedRef(payload, process.env.GITHUB_REF)).catch((e: unknown) => (note(e), new Set<string>()));
+    return plan({ repo: values.repo, base: group.base, head, config, configPath: values.config, passed });
+  }
   if (event !== "pull_request") return runAll(config, `${event} run: everything runs`, allHashes(values.repo, head, config), event);
-  const trusted = trustedRef(await pullEvent(), process.env.GITHUB_REF);
+  const trusted = trustedRef(payload, process.env.GITHUB_REF);
   const passed = await passedJobs(slug, Object.keys(config.jobs), trusted).catch((e: unknown) => (note(e), new Set<string>()));
   const base = git(values.repo, ["rev-parse", "HEAD^1"]).trim();
   return plan({ repo: values.repo, base, head, config, configPath: values.config, passed });
