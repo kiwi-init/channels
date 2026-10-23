@@ -63,6 +63,26 @@ test("the key channel is taken before anything else in the main bundle runs: con
   expect(keyChannelProblems(`${INERT}\ninit_native();\nboot();\n${CHANNEL}`)).toEqual([expect.stringContaining("2 top-level statements run")]);
 });
 
+test("a key channel Bun wrapped in __esm fails: its bare declaration sits early but keySources() runs only when init is called, after an import above it already ran (T1710, #814's review)", () => {
+  const wrapped = [
+    INERT,
+    "var launcherKeys;",
+    "var init_launcher_channel_eb = __esm(() => {",
+    "  launcherKeys = (() => {",
+    "    try {",
+    "      return keySources();",
+    "    } catch (e) {",
+    "      return new Error(errorText(e));",
+    "    }",
+    "  })();",
+    "});",
+    'spawnSync("true");',
+    "init_launcher_channel_eb();",
+  ].join("\n");
+  expect(keyChannelProblems(wrapped)).toEqual([expect.stringContaining("declares launcherKeys without calling keySources() there")]);
+  expect(keyChannelProblems(`${INERT}\nvar launcherKeys = errorOnly();\n`)).toEqual([expect.stringContaining("without calling keySources() there")]);
+});
+
 test("a non-builtin import runs before every line of the bundle, wherever it sits, and a bundle that never takes the channel fails (T1710)", () => {
   expect(keyChannelProblems(`${INERT}\n${CHANNEL}import Electrobun from "electrobun/main";\n`)).toEqual([expect.stringContaining("imports electrobun/main")]);
   expect(keyChannelProblems(`import "bun:ffi";\nimport path from "node:path";\nimport { spawn } from "child_process";\n${CHANNEL}`)).toEqual([]);
@@ -74,7 +94,7 @@ afterAll(() => {
   for (const d of built.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-async function bundleMain(before: string | null): Promise<string> {
+async function bundleMain(before: string | null, lazy = false): Promise<string> {
   const dir = mkdtempSync(join(tmpdir(), "kiwi-eb-order-"));
   built.push(dir);
   const stub = join(dir, "electrobun-stub.ts");
@@ -85,7 +105,11 @@ async function bundleMain(before: string | null): Promise<string> {
   const entry = join(dir, "entry.ts");
   const side = join(dir, "side.ts");
   writeFileSync(side, 'import { spawnSync } from "node:child_process";\nspawnSync("true");\nexport {};\n');
-  writeFileSync(entry, `${before === null ? "" : `import ${JSON.stringify(side)};\n`}import ${JSON.stringify(join(import.meta.dir, "../desktop/src/main-eb.ts"))};\n`);
+  const channel = JSON.stringify(join(import.meta.dir, "../desktop/src/launcher-channel-eb.ts"));
+  writeFileSync(
+    entry,
+    `${before === null ? "" : `import ${JSON.stringify(side)};\n`}import ${JSON.stringify(join(import.meta.dir, "../desktop/src/main-eb.ts"))};\n${lazy ? `export const lazyKeys = () => import(${channel});\n` : ""}`,
+  );
   const out = await Bun.build({
     entrypoints: [entry],
     target: "bun",
@@ -99,4 +123,6 @@ async function bundleMain(before: string | null): Promise<string> {
 test("main-eb.ts as built: its first import takes the key channel before any other module's top level, and an import added above it is caught (T1710)", async () => {
   expect(keyChannelProblems(await bundleMain(null))).toEqual([]);
   expect(keyChannelProblems(await bundleMain("side"))).toEqual([expect.stringContaining('spawnSync("true")')]);
+  expect(keyChannelProblems(await bundleMain("side", true))).toEqual([expect.stringContaining("without calling keySources() there")]);
+  expect(keyChannelProblems(await bundleMain(null, true))).toEqual([expect.stringContaining("import launcher-channel-eb.ts only statically")]);
 }, 60_000);

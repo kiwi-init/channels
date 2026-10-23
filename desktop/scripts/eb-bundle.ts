@@ -170,6 +170,18 @@ function helpersIn(body: (Directive | Statement)[]): Map<string, Expression> {
   return helpers;
 }
 
+type Walked = { type: string } & Record<string, unknown>;
+
+const walked = (v: unknown): v is Walked => typeof v === "object" && v !== null && typeof (v as { type?: unknown }).type === "string";
+
+function calls(name: string, node: unknown): boolean {
+  if (Array.isArray(node)) return node.some((n) => calls(name, n));
+  if (!walked(node)) return false;
+  const callee = node["callee"];
+  if (node.type === "CallExpression" && walked(callee) && callee.type === "Identifier" && callee["name"] === name) return true;
+  return Object.entries(node).some(([k, v]) => k !== "parent" && calls(name, v));
+}
+
 const declares = (st: Directive | Statement, name: string): boolean => st.type === "VariableDeclaration" && st.declarations.some((d) => d.id.type === "Identifier" && d.id.name === name);
 
 export function keyChannelProblems(main: string): string[] {
@@ -181,6 +193,13 @@ export function keyChannelProblems(main: string): string[] {
     .map((st) => `the main bundle imports ${st.type === "ImportDeclaration" ? st.source.value : ""}, whose top level runs before the key channel is taken: ${shown(st)}`);
   const at = program.body.findIndex((st) => declares(st, KEY_CHANNEL));
   if (at < 0) return [...problems, `the main bundle never takes the launcher's key channel (${KEY_CHANNEL} from desktop/src/launcher-channel-eb.ts)`];
+  const channel = program.body[at];
+  const declarator = channel?.type === "VariableDeclaration" ? channel.declarations.find((d) => d.id.type === "Identifier" && d.id.name === KEY_CHANNEL) : undefined;
+  if (!declarator?.init || !calls("keySources", declarator.init))
+    return [
+      ...problems,
+      `the main bundle declares ${KEY_CHANNEL} without calling keySources() there: Bun wrapped launcher-channel-eb.ts in __esm (it does when a module is also import()ed or require()d), so where the declaration sits doesn't say when the channel is taken; import launcher-channel-eb.ts only statically, as main-eb's first import`,
+    ];
   const before = program.body.slice(0, at);
   const { statement } = inertness(helpersIn(before));
   const early = before.filter((st) => !statement(st));

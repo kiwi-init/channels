@@ -1097,7 +1097,9 @@ jobs:
       main bundle holds exactly one copy of Electrobun's internal RPC table, the one
       lockInternalRpc empties, the preload bundle exists and has no WebSocket, and the main bundle
       takes the launcher's key channel (launcherKeys = keySources(), from launcher-channel-eb.ts)
-      before any other code runs: every top-level statement before it is a declaration, a constant
+      before any other code runs: the launcherKeys declaration itself must call keySources() (a
+      bare declaration means Bun wrapped the module in __esm, as it does when it's also import()ed,
+      and its place no longer says when it runs), every top-level statement before it is a declaration, a constant
       or the bundler's lazy wrapper (parsed with oxc-parser), and every import in the bundle is a
       builtin, since an import runs before everything, so an import put above it in main-eb.ts
       fails the build instead of leaving fd 3 to a child (T1710). We ship the
@@ -1168,7 +1170,8 @@ jobs:
       for a key put in its place, as it deletes by the item reference SecItemAdd gave; a mark left by
       a key deleted by hand not counting for the next), and 1500 seeded random sessions), the seal check on a sealed and on a changed app, and the launcher itself all run
       with no sanitizer report, and the harness says that drop deleted the key its session made
-      and left one put in its place (deleting by item reference); on CI it uses
+      and left one put in its place (deleting by item reference); on GitHub Actions (CI,
+      GITHUB_ACTIONS and an absolute RUNNER_TEMP, never on a developer's Mac) it uses
       a temporary keychain, where a second throwaway keychain in the search list holds a store key
       of the same name and the harness's decoy session makes its own key and takes it back by
       reference, leaving that one (T1710); it deletes its items either way. eb-env-check runs the launcher

@@ -139,6 +139,8 @@ test("the app's data folder is pinned to its bundle identifier and build channel
   expect(ebDataDir("com.kiwiinit.channels", "dev", "darwin", "/Users/a", {})).toBe("/Users/a/Library/Application Support/com.kiwiinit.channels/dev");
   expect(ebDataDir("com.kiwiinit.channels", "stable", "linux", "/home/a", {})).toBe("/home/a/.local/share/com.kiwiinit.channels/stable");
   expect(ebDataDir("com.kiwiinit.channels", "stable", "linux", "/home/a", { XDG_DATA_HOME: "/data" })).toBe("/data/com.kiwiinit.channels/stable");
+  expect(ebDataDir("com.kiwiinit.channels", "stable", "linux", "/home/a", { XDG_DATA_HOME: "relative/data" })).toBe("/home/a/.local/share/com.kiwiinit.channels/stable");
+  expect(ebDataDir("com.kiwiinit.channels", "stable", "win32", "C:\\Users\\a", { LOCALAPPDATA: "relative" })).toBe("C:\\Users\\a/AppData/Local/com.kiwiinit.channels/stable");
   expect(ebDataDir("com.kiwiinit.channels", "stable", "win32", "C:\\Users\\a", { LOCALAPPDATA: "/local" })).toBe("/local/com.kiwiinit.channels/stable");
   expect(() => ebDataDir("../elsewhere", "stable", "darwin", "/Users/a", {})).toThrow("plain identifier and channel");
   expect(() => ebDataDir("com.kiwiinit.channels", "../stable", "darwin", "/Users/a", {})).toThrow("plain identifier and channel");
@@ -159,5 +161,8 @@ test("the broken-store dialog says what to do for its cause, not 'unlock your ke
   expect(brokenStore()?.message).toContain("Open Channels from your Applications folder");
   openStoreFile({ where: () => "/old/kiwi-store.bin", load: () => ({ ok: false, why: "the keyring is locked" }), save: () => {} });
   expect(brokenStore()?.message).toContain("Unlock your keychain, then quit and reopen Channels.");
-  expect(Object.keys(REFUSAL_ADVICE).sort()).toEqual(["copy", "deleted", "keychain", "keyless", "launcher", "legacy", "legacy-plain", "save"]);
+  expect(Object.keys(REFUSAL_ADVICE).sort()).toEqual(["copy", "deleted", "keychain", "keyless", "launcher", "legacy", "legacy-keyless", "legacy-plain", "save"]);
+  expect(REFUSAL_ADVICE["legacy-keyless"]).toContain("Move that file out of its folder");
+  expect(REFUSAL_ADVICE["legacy-plain"]).toContain("move it out of its folder");
+  expect(REFUSAL_ADVICE.copy).not.toContain("Restore the store from a backup, then");
 });

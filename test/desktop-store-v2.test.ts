@@ -462,6 +462,8 @@ describe("store v2", () => {
     expect(cause(await openStore({ dir: folder(), key: keychain().key, legacy: plainOld, platform: "darwin" }))).toBe("legacy-plain");
     const unreadableOld = async (): Promise<LegacyRead> => ({ kind: "unreadable", file: "/old/kiwi-store.bin", why: "locked" });
     expect(cause(await openStore({ dir: folder(), key: keychain().key, legacy: unreadableOld, platform: "darwin" }))).toBe("legacy");
+    const keylessOld = async (): Promise<LegacyRead> => ({ kind: "unreadable", file: "/old/kiwi-store.bin", why: "its key is gone", keyless: true });
+    expect(cause(await openStore({ dir: folder(), key: keychain().key, legacy: keylessOld, platform: "darwin" }))).toBe("legacy-keyless");
     const torn = folder();
     put(torn, STORE_FILE, "not json");
     expect(cause(await openStore({ dir: torn, key: keychain(null, { get: "none", set: "none" }).key, legacy: NO_LEGACY, platform: "linux" }))).toBe("copy");

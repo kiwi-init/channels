@@ -18,7 +18,8 @@ const legacyValue = randomBytes(16).toString("base64");
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "eb-keys-"));
 const storeId = `${id}-store`;
 const importId = `${id}-import`;
-const CI = process.env["CI"] === "true";
+const runnerTemp = process.env["RUNNER_TEMP"] ?? "";
+const CI = process.env["CI"] === "true" && process.env["GITHUB_ACTIONS"] === "true" && path.isAbsolute(runnerTemp) && fs.existsSync(runnerTemp);
 const failures: string[] = [];
 const SEAL_GATE_MS = 500;
 
@@ -107,7 +108,7 @@ interface CiKeychains {
 
 function ciKeychain(): CiKeychains {
   if (!CI) return { restore: () => {}, first: null, rest: [] };
-  const kc = path.join(tmp, "keys-check.keychain-db");
+  const kc = path.join(runnerTemp, `keys-check-${tag}.keychain-db`);
   const list = execFileSync("security", ["list-keychains", "-d", "user"], { encoding: "utf8" }).split("\n").map(unquote).filter(Boolean);
   const def = unquote(execFileSync("security", ["default-keychain", "-d", "user"], { encoding: "utf8" }));
   execFileSync("security", ["create-keychain", "-p", "", kc]);
@@ -127,6 +128,11 @@ function ciKeychain(): CiKeychains {
 }
 
 const ci = ciKeychain();
+for (const signal of ["SIGINT", "SIGTERM"] as const)
+  process.on(signal, () => {
+    ci.restore();
+    process.exit(signal === "SIGINT" ? 130 : 143);
+  });
 try {
   const base = shippedApp(payloadOf(path.join(release, "artifacts")), tmp);
   const probe = await Bun.build({ entrypoints: [path.join(import.meta.dirname, "eb-keys-probe.ts")], target: "bun" });
@@ -197,7 +203,10 @@ try {
     return app;
   };
   const store = await storeApp("store", storeId, [legacy]);
-  const channel = (JSON.parse(fs.readFileSync(path.join(contents(store), "Resources", "version.json"), "utf8")) as { channel: string }).channel;
+  const builtVersion: unknown = JSON.parse(fs.readFileSync(path.join(contents(store), "Resources", "version.json"), "utf8"));
+  const builtChannel = typeof builtVersion === "object" && builtVersion !== null && "channel" in builtVersion ? builtVersion.channel : null;
+  const channel = typeof builtChannel === "string" ? builtChannel : "";
+  if (!channel) throw new Error("the built app's version.json names no channel");
   const places = storePlaces(storeId, channel);
   const fresh = storeRun(store);
   expect(
@@ -313,7 +322,7 @@ try {
     parser.stdout.slice(-1500),
   );
   if (ci.first) {
-    const second = path.join(tmp, "keys-check-decoy.keychain-db");
+    const second = path.join(runnerTemp, `keys-check-decoy-${tag}.keychain-db`);
     execFileSync("security", ["create-keychain", "-p", "", second]);
     execFileSync("security", ["set-keychain-settings", second]);
     execFileSync("security", ["unlock-keychain", "-p", "", second]);

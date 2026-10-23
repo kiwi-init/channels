@@ -54,7 +54,7 @@ export type OpenStore =
   | { kind: "open"; json: Record<string, unknown> | null; sealed: boolean; noKeychain: string | null; unmarked: string | null; imported: string | null; file: string; save: (json: string) => void }
   | { kind: "unreadable"; why: string; file: string; cause: Refusal };
 
-export type Refusal = "keychain" | "keyless" | "deleted" | "legacy" | "legacy-plain" | "save" | "copy" | "launcher";
+export type Refusal = "keychain" | "keyless" | "deleted" | "legacy" | "legacy-keyless" | "legacy-plain" | "save" | "copy" | "launcher";
 
 export interface StoreOptions {
   dir: string;
@@ -199,7 +199,7 @@ export async function openStore({ dir, key, legacy, platform = process.platform 
           );
       }
       const old = await legacy();
-      if (old.kind === "unreadable") return refuse(`the keys the Electron app saved in ${old.file} can't be read: ${old.why}`, "legacy");
+      if (old.kind === "unreadable") return refuse(`the keys the Electron app saved in ${old.file} can't be read: ${old.why}`, old.keyless ? "legacy-keyless" : "legacy");
       if (old.kind === "ok" && !old.encrypted && platform !== "linux")
         return refuse(`the keys in ${old.file} are in plain text, and the Electron app only ever kept them encrypted here, so Channels won't take them`, "legacy-plain");
       const made = found.kind === "none" ? await create(key) : found;
@@ -254,6 +254,6 @@ export async function openStore({ dir, key, legacy, platform = process.platform 
     if (k && !read.sealed) saver(k)(JSON.stringify(read.json));
     return open(read.json, null, k, noKeychain, k ? await markFinished(key, k) : null);
   } catch (e) {
-    return refuse(reason(e), "copy");
+    return refuse(reason(e), "save");
   }
 }
