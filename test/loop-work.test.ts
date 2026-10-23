@@ -9,7 +9,7 @@ import { claudeArgv, claudeSession } from "../src/loop/claude.ts";
 import { codexArgv, codexIdle, codexThread } from "../src/loop/codex.ts";
 import { grokArgv, grokIdle, grokSession } from "../src/loop/grok.ts";
 import { mimoArgv, mimoIdle, mimoSession } from "../src/loop/mimo.ts";
-import { isListener, kimiArgv, kimiIdle, kimiScreen, kimiSession, listenersUnder, stopStrays, strayKey, type Proc } from "../src/loop/kimi.ts";
+import { isListener, kimiArgv, kimiIdle, kimiScreen, kimiSession, listenersUnder, stopStrays, strayKey, tmuxPastesFlag, type Proc } from "../src/loop/kimi.ts";
 import { Database } from "bun:sqlite";
 import { firstPrompt, nextWork, workOver } from "../src/loop/work.ts";
 
@@ -401,16 +401,42 @@ describe("the Kimi Code recipe", () => {
   test("only a listener still running with the pid and start time recorded is stopped; a reused pid, another command or an unkillable process isn't", () => {
     const start = "Fri Oct 23 13:25:11 2026";
     const procs: Proc[] = [
-      { pid: 999_991, ppid: 1, start, args: "/home/u/.kiwi/bin/kiwi listen --once" },
-      { pid: 999_992, ppid: 1, start: "Fri Oct 23 15:00:00 2026", args: "/home/u/.kiwi/bin/kiwi listen --once" },
-      { pid: 999_993, ppid: 1, start, args: "vim notes" },
+      { pid: 101, ppid: 1, start, args: "/home/u/.kiwi/bin/kiwi listen --once" },
+      { pid: 102, ppid: 1, start: "Fri Oct 23 15:00:00 2026", args: "/home/u/.kiwi/bin/kiwi listen --once" },
+      { pid: 103, ppid: 1, start, args: "vim notes" },
+      { pid: 104, ppid: 1, start, args: "kiwi listen" },
     ];
-    const recorded = new Set([strayKey({ pid: 999_991, start }), strayKey({ pid: 999_992, start }), strayKey({ pid: 999_993, start })]);
-    expect(stopStrays(recorded, procs)).toBe(0);
+    const recorded = new Set([101, 102, 103, 104].map((pid) => strayKey({ pid, start })));
+    const signalled: number[] = [];
+    const kill = (pid: number) => {
+      if (pid === 104) throw Object.assign(new Error("EPERM"), { code: "EPERM" });
+      signalled.push(pid);
+    };
+    expect(stopStrays(recorded, procs, kill)).toBe(1);
+    expect(signalled).toEqual([101]);
+  });
+
+  test("a kiwi listen is told by the kiwi command's own words, quickly even on a long command line", () => {
     expect(isListener("/home/u/.kiwi/bin/kiwi listen --once")).toBe(true);
     expect(isListener("kiwi -c dev --as fond-owl listen --once")).toBe(true);
     expect(isListener("sh -c kiwi hook listen")).toBe(true);
+    expect(isListener("kiwi --quiet listen")).toBe(true);
+    expect(isListener("kiwi send listen")).toBe(false);
     expect(isListener("bun test test/kiwi/listen.test.ts")).toBe(false);
     expect(isListener("rg listen /home/u/kiwi")).toBe(false);
+    const long = `kiwi ${"-x ".repeat(5_000)}nope`;
+    const at = performance.now();
+    expect(isListener(long)).toBe(false);
+    expect(performance.now() - at).toBeLessThan(50);
+  });
+
+  test("bracketed paste can be checked from tmux 3.7 on", () => {
+    expect(tmuxPastesFlag("3.6a")).toBe(false);
+    expect(tmuxPastesFlag("tmux 3.4")).toBe(false);
+    expect(tmuxPastesFlag("3.7")).toBe(true);
+    expect(tmuxPastesFlag("tmux 3.8")).toBe(true);
+    expect(tmuxPastesFlag("next-4.0")).toBe(true);
+    expect(tmuxPastesFlag("master")).toBe(true);
+    expect(tmuxPastesFlag("")).toBe(false);
   });
 });
