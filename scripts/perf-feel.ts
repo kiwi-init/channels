@@ -289,6 +289,34 @@ async function send(page: Page, text: string): Promise<{ clearedMs: number; bubb
   return page.evaluate(() => (window as unknown as { __sent: Promise<{ clearedMs: number; bubbleMs: number }> }).__sent);
 }
 
+async function work(cdp: CDPSession): Promise<{ layout: number; style: number }> {
+  const { metrics } = (await cdp.send("Performance.getMetrics")) as { metrics: { name: string; value: number }[] };
+  const m = Object.fromEntries(metrics.map((x) => [x.name, x.value]));
+  return { layout: m.LayoutDuration ?? 0, style: m.RecalcStyleDuration ?? 0 };
+}
+
+async function details(page: Page, cdp: CDPSession, opening: boolean): Promise<{ ms: number; layoutMs: number; styleMs: number }> {
+  const before = await work(cdp);
+  const ms = await page.evaluate(async (open) => {
+    const button = open
+      ? [...document.querySelectorAll<HTMLElement>("button")].find((b) => (b.getAttribute("aria-label") ?? "").startsWith("Details:") && b.offsetParent !== null)
+      : document.querySelector<HTMLElement>('button[aria-label="Close details"]');
+    if (!button) return -1;
+    const t0 = performance.now();
+    button.click();
+    const deadline = t0 + 15000;
+    while (performance.now() < deadline) {
+      await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+      if (!!document.querySelector('aside[aria-label="Details"]') === open) break;
+    }
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    return Math.round(performance.now() - t0);
+  }, opening);
+  await later(400);
+  const after = await work(cdp);
+  return { ms, layoutMs: Math.round((after.layout - before.layout) * 1000), styleMs: Math.round((after.style - before.style) * 1000) };
+}
+
 async function openTask(page: Page, id: number, marker: string): Promise<number> {
   return page.evaluate(
     async ([task, text]) => {
@@ -569,6 +597,22 @@ try {
   const openDrain = await drain(page);
   report.openTask = { medianMs: median(opens), runs: opens, layoutShift: openDrain.shifts, moved: openDrain.moved, longTasks: openDrain.longTasks, worstLongMs: openDrain.worstLongMs };
   log("open task", JSON.stringify(report.openTask));
+
+  await view(page, "# general", `M${MESSAGES - 1}: `);
+  await later(800);
+  await cdp.send("Performance.enable");
+  await drain(page);
+  const toggles: { open: { ms: number; layoutMs: number; styleMs: number }; close: { ms: number; layoutMs: number; styleMs: number } }[] = [];
+  for (let i = 0; i < REPS; i++) toggles.push({ open: await details(page, cdp, true), close: await details(page, cdp, false) });
+  const detailsDrain = await drain(page);
+  report.details = {
+    openMs: median(toggles.map((t) => t.open.ms)),
+    openLayoutMs: median(toggles.map((t) => t.open.layoutMs)),
+    closeLayoutMs: median(toggles.map((t) => t.close.layoutMs)),
+    styleMs: median(toggles.map((t) => t.open.styleMs + t.close.styleMs)),
+    layoutShift: detailsDrain.shifts,
+  };
+  log("details", JSON.stringify(report.details));
 
   await view(page, "# general", `M${MESSAGES - 1}: `);
   await later(1000);
