@@ -9,9 +9,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { app } from "electron";
-
 import { compareVersions } from "@kiwi/core/versions.ts";
+import { host } from "./host.ts";
 import { moveOver } from "./move.ts";
 import { logMainError } from "./main-log.ts";
 import { signedLikeThisApp } from "./signer.ts";
@@ -41,7 +40,7 @@ let fetching: Promise<void> | null = null;
 
 function retrySoon(why: string): void {
   logMainError(new Error(why));
-  if (retry || !app.isPackaged) return;
+  if (retry || !host().app.packaged()) return;
   retry = setTimeout(() => {
     retry = null;
     void checkForUpdate();
@@ -52,9 +51,9 @@ let notify: (s: UpdateState) => void = () => {};
 let running: Promise<UpdateCheck> | null = null;
 
 /** The Channels.app this runs from (…/Channels.app/Contents/MacOS/Channels). */
-const macBundle = () => path.resolve(app.getPath("exe"), "..", "..", "..");
+const macBundle = () => path.resolve(host().app.path("exe"), "..", "..", "..");
 
-const failedMarker = () => path.join(app.getPath("userData"), "update-failed");
+const failedMarker = () => path.join(host().app.path("data"), "update-failed");
 
 const writableDir = (dir: string): boolean => {
   try {
@@ -87,14 +86,14 @@ async function check(): Promise<UpdateCheck> {
   const rel = (await res.json()) as { tag_name?: string; html_url?: string; prerelease?: boolean; draft?: boolean; assets?: { name: string; browser_download_url: string }[] };
   const version = rel.tag_name?.replace(/^v/, "");
   if (!version) return { state: "failed" };
-  if (rel.prerelease || rel.draft || compareVersions(version, app.getVersion()) <= 0) return { state: "current", version: app.getVersion() };
+  if (rel.prerelease || rel.draft || compareVersions(version, host().app.version()) <= 0) return { state: "current", version: host().app.version() };
   const url = rel.html_url ?? `https://github.com/${REPO}/releases/latest`;
   if (staged && compareVersions(version, staged.version) <= 0) return current ?? set({ version: staged.version, state: "ready", url: staged.url });
   if (staged) {
     fs.rmSync(path.dirname(staged.path), { recursive: true, force: true });
     staged = null;
   }
-  const name = app.isPackaged ? swapAsset(version, process.platform, process.arch) : null;
+  const name = host().app.packaged() ? swapAsset(version, process.platform, process.arch) : null;
   const asset = name ? rel.assets?.find((a) => a.name === name) : undefined;
   const sums = rel.assets?.find((a) => a.name === "SHA256SUMS");
   if (name && process.platform === "darwin" && cantSwap(macBundle(), writableDir, failedBefore(version))) return set({ version, state: "available", url, blocked: true });
@@ -222,7 +221,7 @@ function swapIn(next: { version: string; path: string }, relaunch: boolean): boo
       return false;
     }
     fs.rmSync(dir, { recursive: true, force: true });
-    if (relaunch) app.relaunch({ execPath: target });
+    if (relaunch) host().app.relaunch(target);
   }
   staged = null;
   return true;
@@ -231,12 +230,12 @@ function swapIn(next: { version: string; path: string }, relaunch: boolean): boo
 /** Start checking (packaged apps only): `onChange` hears each step, for the window and the tray. */
 export function startUpdates(onChange: (s: UpdateState) => void): void {
   notify = onChange;
-  if (!app.isPackaged) return;
+  if (!host().app.packaged()) return;
   const tick = () => void checkForUpdate();
   setTimeout(tick, 20_000);
   setInterval(tick, EVERY_MS);
   // Whatever's ready goes in when the app quits on its own terms.
-  app.on("will-quit", () => void applyUpdate(false));
+  host().app.onQuit(() => void applyUpdate(false));
 }
 
 export const updateState = (): UpdateState | null => current;
