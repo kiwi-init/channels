@@ -7,6 +7,7 @@ import type { Event, Message } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 import { claudeArgv, claudeSession } from "../src/loop/claude.ts";
 import { codexArgv, codexIdle, codexThread } from "../src/loop/codex.ts";
+import { grokArgv, grokIdle, grokSession } from "../src/loop/grok.ts";
 import { firstPrompt, nextWork, workOver } from "../src/loop/work.ts";
 
 const ids: Record<string, Identity> = {};
@@ -218,6 +219,59 @@ describe("the Codex recipe", () => {
       expect(codexIdle(file).since).toBeNumber();
     } finally {
       rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("the Grok recipe", () => {
+  const sessionId = (ms: number, tail: string) => `${ms.toString(16).padStart(12, "0").slice(0, 8)}-${ms.toString(16).padStart(12, "0").slice(8)}-7abc-8def-${tail}`;
+  const update = (sessionUpdate: string, extra: Record<string, unknown> = {}) =>
+    JSON.stringify({ jsonrpc: "2.0", method: "session/update", params: { sessionId: "s", update: { sessionUpdate, ...extra } } });
+
+  test("the model and reasoning effort, then the prompt after --", () => {
+    expect(grokArgv({ bin: "grok", model: "grok-4.7", effort: "high", prompt: "go" })).toEqual(["grok", "-m", "grok-4.7", "--reasoning-effort", "high", "--", "go"]);
+    expect(grokArgv({ bin: "grok", prompt: "go" })).toEqual(["grok", "--", "go"]);
+  });
+
+  test("the launch's session is the one in this folder started after it whose history holds its nonce", () => {
+    const home = mkdtempSync(join(tmpdir(), "kiwi-loop-grok-"));
+    try {
+      const env = { GROK_HOME: home };
+      const cwd = "/work/proj";
+      const now = Date.now();
+      const here = join(home, "sessions", encodeURIComponent(cwd));
+      const elsewhere = join(home, "sessions", encodeURIComponent("/work/other"));
+      const older = sessionId(now - 60_000, "000000000001");
+      const other = sessionId(now + 100, "000000000002");
+      const mine = sessionId(now + 200, "000000000003");
+      mkdirSync(join(here, older), { recursive: true });
+      mkdirSync(join(here, mine), { recursive: true });
+      mkdirSync(join(elsewhere, other), { recursive: true });
+      writeFileSync(join(here, older, "chat_history.jsonl"), '{"type":"user","content":"(Kiwi loop launch abc123)"}\n');
+      writeFileSync(join(elsewhere, other, "chat_history.jsonl"), '{"type":"user","content":"(Kiwi loop launch abc123)"}\n');
+      expect(grokSession("abc123", now, cwd, env)).toBeNull();
+      writeFileSync(join(here, mine, "chat_history.jsonl"), '{"type":"user","content":"(Kiwi loop launch abc123)"}\n');
+      expect(grokSession("abc123", now, cwd, env)).toEqual({ session: mine, dir: join(here, mine) });
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("its update stream says when a turn is over: turn_completed or the Stop hook's run", () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-loop-grok-"));
+    try {
+      const file = join(dir, "updates.jsonl");
+      expect(grokIdle(dir)).toEqual({ idle: false, since: null });
+      writeFileSync(file, [update("user_message_chunk"), update("tool_call")].join("\n") + "\n");
+      expect(grokIdle(dir).idle).toBe(false);
+      writeFileSync(file, [update("tool_call"), update("agent_message_chunk"), update("turn_completed"), update("background_tasks")].join("\n") + "\n");
+      expect(grokIdle(dir)).toMatchObject({ idle: true });
+      writeFileSync(file, [update("tool_call"), update("hook_execution", { event_name: "stop" })].join("\n") + "\n");
+      expect(grokIdle(dir).idle).toBe(true);
+      writeFileSync(file, [update("turn_completed"), update("user_message_chunk")].join("\n") + "\n");
+      expect(grokIdle(dir).idle).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 });

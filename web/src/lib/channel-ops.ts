@@ -106,6 +106,7 @@ export class ChannelLink {
   guard = () => this.c("guard")
   setCharter = (...a: Args<"setCharter">) => this.c("setCharter", ...a)
   setHold = (...a: Args<"setHold">) => this.c("setHold", ...a)
+  setRooms = (...a: Args<"setRooms">) => this.c("setRooms", ...a)
   setRepos = (...a: Args<"setRepos">) => this.c("setRepos", ...a)
   icon = () => this.c("icon")
   setIcon = (...a: Args<"setIcon">) => this.c("setIcon", ...a)
