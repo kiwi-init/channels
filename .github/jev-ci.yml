@@ -267,8 +267,11 @@ jobs:
       (arrivedAfter), a hidden window's unread never goes below zero (unreadOf), and the conversation
       stays at its newest message when content shrinks and then grows before the scroll event lands,
       also during a smooth scroll, and when content grows before the first scroll event after a switch
-      from a longer place (its own scrolls to the bottom record where they left it: pin), while a
-      person who scrolled up stays where they went (resized, scrolled).
+      from a longer place (its own scrolls to the bottom record where they left it: pin), and when the
+      browser moves the view up by itself with no input from the person (WebKit does, as a channel
+      opens): only a scroll up within a second of the person's wheel, touch or scroll key, or while
+      they hold the scrollbar, stops it following (touched), while a person who scrolled up stays
+      where they went (resized, scrolled).
       Also test/daemon-big-lines.test.ts: the daemon's socket writes queue what the socket
       didn't take and flush it on drain (src/daemon/server.ts), so a catch-up of thirty
       messages with 50 KB ones among them, and big live messages back to back, arrive whole
@@ -538,6 +541,18 @@ jobs:
       included. And
       test/desktop-guard.test.ts: on Linux, no encryption or the basic_text backend counts as keys kept
       without a keyring, and such a store is saved again into a keyring once one is there. And
+      test/desktop-store-v2.test.ts: the Electrobun app's store (desktop/src/store-v2.ts) sealed with
+      AES-256-GCM under a random 256-bit key kept in the keychain through Bun.secrets (a wrong key, a
+      flipped byte or a cut file fails), written atomically at 0600 with its backup; a sealed store whose
+      key is gone or wrong, a keychain that fails or holds something else, a Mac without its keychain and
+      a missing store with a damaged backup all unreadable and left as they were, never a fresh key or an
+      empty store; plain JSON on Linux without a secret service, sealed once a keychain shows up; and
+      Electron's kiwi-store.bin imported once, sealed, its file untouched, or, when it can't be read,
+      nothing saved. With test/desktop-legacy-store.test.ts (desktop/src/legacy-store.ts,
+      legacy-keys.ts): Electron's safeStorage format opened from what Electron itself wrote, v11 on a
+      GNOME keyring and v10 on the macOS Keychain (item "<name> Safe Storage", account "<name> Key"),
+      Linux v10 with Chromium's fixed password, a torn store read from its .bak asking the keychain
+      once, and an old store without its key unreadable, never empty. And
       web lib/channel/trim.test.ts: a long session folds the messages past the 2000-message window
       (plus 500 of slack) into the fold base, and tasks and facts from before it stay;
       lib/channel/warm.test.ts: only the last four channels stay warm; lib/threads.test.ts: what's
@@ -638,9 +653,21 @@ jobs:
       prefers-contrast fallbacks, the spectrum and segment tokens written once, the kit the quiet
       look). And
       test/desktop-update-check.test.ts: Settings' check for updates (desktop/src/updater.ts's
-      checkForUpdate, with electron and fetch faked): the latest release says current, a
+      checkForUpdate, with a fake host and fetch): the latest release says current, a
       pre-release or draft never counts, an unpackaged app only offers the release link and
       downloads nothing, GitHub failing is a failed check, and two checks at once share one. And
+      test/desktop-calls.test.ts: window.kiwi's calls and the main process's handlers as one typed table
+      (desktop/src/calls.ts, host.ts, ipc/handlers.ts, on a fake host and an in-memory store, electron
+      never loaded): every bridge call goes out
+      under its own name with its arguments and main has exactly one handler for each, every on* hears
+      only its own push and getSnapshot follows the store's, and the handlers reach the shell only
+      through the Host seam (the folder picker, notifications, the update restart, the browser only for
+      http(s) links, a new relay saved, told to the keys and the page reloaded, a bad one changing
+      nothing, a bad argument refused under the call's name). And
+      test/desktop-shared-modules.test.ts: the modules both desktop shells share (ipc/handlers.ts and
+      everything it imports, calls.ts, host.ts, store.ts, updater.ts, bundled-daemon.ts, deep-links.ts,
+      main-log.ts, signin.ts) never import electron however deep the import, read from their real
+      import graph, while the Electron shell's own electron-host.ts and main.ts still do. And
       test/jev-ci.test.ts: the CI planner in .github/jev-ci, which plans synthetic changes
       against the real .github/jev-ci.yml and .github/workflows/ci.yml in a scratch git repo,
       following imports into workspace packages (@kiwi/core) by name, and trusts a pass marker only
@@ -862,23 +889,27 @@ jobs:
     always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "scripts/shoot-ui.ts", "scripts/local-relay.ts", "scripts/seed-permission.ts"]
     description: >-
       Builds the web dashboard (bun run web:build), then scripts/shoot-ui.ts --wide --phone channel,tasks --theme dark
-      starts the relay and the kiwi CLI as two agents' computers, seeds a channel in headless
-      Chromium (the owner signs in with a passkey, lets atlas in and gives it the Lead
+      in headless Chromium and again with --browser webkit --wide --theme light in Playwright's WebKit (the engine of
+      the Mac's and Linux's system web view, which the desktop app moves to: .github/actions/browser installs it and
+      its apt packages with webkit: "true"). Each run
+      starts the relay and the kiwi CLI as two agents' computers, seeds a channel in that
+      browser (the owner signs in, with a virtual passkey authenticator in Chromium, lets atlas in and gives it the Lead
       personality, lets win in, a conversation with an ask, a reply, two tasks and a task's
       conversation, a review and an escalation under Needs you, a direct conversation between two agents, a picture the lead sends in the direct conversation, two Claude Code permission prompts from
       win (scripts/seed-permission.ts, built by core's permissionShown: a command the owner denies from
       Needs you, an edit of every occurrence left waiting, showing what it replaces and with what), a direct conversation, notes, the channel's repo saved from Details so Write to GitHub shows under Repos, a
       pending join request and a second empty channel) and shoots every screen of the wide
-      window in the dark: the conversation, the channel with its sidebar hidden (⌘\: the header takes its views), the tab bar in a Mac window (with a stand-in for its traffic lights), the channel sidebar's search open and its folded conversations opened, the reply bar, the composer with words in it, the Tasks tab, a task opened from its board row
+      window in its theme: the conversation, the channel with its sidebar hidden (⌘\: the header takes its views), the tab bar in a Mac window (with a stand-in for its traffic lights), the channel sidebar's search open and its folded conversations opened, the reply bar, the composer with words in it, the Tasks tab, a task opened from its board row
       in the Tasks panel, Needs you, the permission prompts in the conversation (one denied, one waiting), the Agents tab, the channel's settings page (Details: members, the channel's settings with its repo and Write to GitHub off, notes and closing, side by side), the direct conversation, its picture open in the viewer (in a Mac window, with a stand-in for its traffic lights),
       Invite, the account menu, the command palette, Notes, Pause, Settings (its sections and their groups), Settings' New agents group with a stand-in for the desktop app's terminal methods (Allow, Prefer with Rex and tmux greyed, the Rex row) before and after Download Rex Helpers and Prefer Rex, Personalities (opened from its row), Add
       an agent, the desktop app's New agent modal, its computer picker with a paired computer
       chosen, and its started screen (with a stand-in for the launch methods the desktop bridge
       adds), first run, signed in with nothing open, Join
       with a code and the invite preview.
-      The shots are uploaded as the ui-shots artifact. Fails when the conversation isn't at its newest message (within 80px of the bottom) once the channel opens and again back from the Tasks tab (which it visits itself), at the wide size and, in the same run (--phone channel,tasks: the channel and Tasks screens on the channel already seeded), at phone size too (web/src/components/conversation/use-scroll.ts), or when the window's drag band would take a control of the open viewer (each app-region box added or taken away in document order, as Electron does), or when the seeding can't drive the
+      The shots are uploaded as the ui-shots artifact, WebKit's as ui-shots-webkit. Fails when the conversation isn't at its newest message (within 80px of the bottom) once the channel opens and again back from the Tasks tab (which it visits itself), at the wide size and, in the same run (--phone channel,tasks: the channel and Tasks screens on the channel already seeded), at phone size too (web/src/components/conversation/use-scroll.ts), or when the window's drag band would take a control of the open viewer (each app-region box added or taken away in document order, as Electron does), or when the seeding can't drive the
       dashboard or any screen can't be reached (a control renamed, moved or gone), so the shots
-      keep up with the UI. Headless Chromium and the apt packages it needs come from .github/actions/browser, which installs the packages from cached .deb files and fails the job if they can't be installed.
+      keep up with the UI; each of these in either engine, so a screen or the conversation's place that works in
+      Chromium but not in WebKit fails too. Headless Chromium and the apt packages it needs come from .github/actions/browser, which installs the packages from cached .deb files and fails the job if they can't be installed.
 
   perf:
     name: perf / scale
