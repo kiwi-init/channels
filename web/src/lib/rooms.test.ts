@@ -11,6 +11,15 @@ describe("a room the owner makes or renames from channel settings (T987)", () =>
     expect(cleanRoomName("#mobile")).toBe("mobile")
     expect(cleanRoomName("  ##iOS   builders ")).toBe("iOS builders")
     expect(cleanRoomName("x".repeat(60)).length).toBe(MAX_ROOM_NAME)
+    expect(cleanRoomName("# #mobile")).toBe("mobile")
+    for (const typed of ["# #mobile", " ## iOS  builders", "x".repeat(60), "#a #b"]) expect(cleanRoomName(cleanRoomName(typed))).toBe(cleanRoomName(typed))
+  })
+
+  test("a name typed with more #s and spaces is the same name: refused when taken, and signed exactly as the event sends it", () => {
+    const mobile = { id: "m0b1le00", name: "mobile" }
+    expect(roomProblem([general, mobile], "# #mobile")).toBe("A room is already called #mobile")
+    const sent = { id: "n3w00000", name: cleanRoomName("#a #b") }
+    expect(roomsAfter([general], sent)).toEqual([sent])
   })
 
   test("is refused before it's sent for what the fold would refuse: no name, a name taken in any case, too many rooms", () => {
@@ -25,7 +34,7 @@ describe("a room the owner makes or renames from channel settings (T987)", () =>
   })
 
   test("signs the room list as it is after the change, leaving #general out unless it was renamed", () => {
-    expect(roomsAfter([general, desktop], { id: "m0b1le00", name: "#mobile" })).toEqual([desktop, { id: "m0b1le00", name: "mobile" }])
+    expect(roomsAfter([general, desktop], { id: "m0b1le00", name: cleanRoomName("#mobile") })).toEqual([desktop, { id: "m0b1le00", name: "mobile" }])
     expect(roomsAfter([general, desktop], { id: desktop.id, name: "electrobun" })).toEqual([{ id: desktop.id, name: "electrobun" }])
     expect(roomsAfter([general, desktop], { id: "general", name: "lobby" })).toEqual([{ id: "general", name: "lobby" }, desktop])
   })
