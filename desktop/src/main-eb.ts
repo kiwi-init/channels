@@ -207,7 +207,11 @@ else if (instance.kind === "second") {
   Utils.quit(1);
 } else {
   const off = sandboxOff();
-  if (off !== null) logMainError(new Error(`WebKitGTK's sandbox is off: ${off}, so the page runs without it`));
+  if (off !== null) {
+    const why = `WebKitGTK's sandbox is off: ${off}, so the page runs without it`;
+    console.error(`Channels: ${why}`);
+    logMainError(new Error(why));
+  }
   try {
     start(instance);
   } catch (e) {

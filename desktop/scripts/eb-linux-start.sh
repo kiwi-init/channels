@@ -36,12 +36,12 @@ else
   else
     echo "WebKitWebProcess $web: $(tr '\0' ' ' < "/proc/$web/cmdline" | cut -c1-160)"
     sandbox=$(pgrep -s "$pid" -a bwrap | head -n 1 | cut -c1-160)
-    off=$(find "$home" -name main.log -exec grep -h "WebKitGTK's sandbox is off" {} + 2> /dev/null | head -n 1)
+    off=$(grep -h "WebKitGTK's sandbox is off" "$out" 2> /dev/null | head -n 1)
     if [ "$want" = sandboxed ]; then
       if [ -n "$sandbox" ]; then echo "sandbox: $sandbox"; else problems+=("no bwrap of the app's own: WebKitGTK's web process isn't sandboxed${off:+ ($off)}"); fi
     else
-      [ -z "$sandbox" ] || problems+=("bwrap runs ($sandbox), though here it can't build the sandbox without the deb's AppArmor profile")
-      if [ -n "$off" ]; then echo "main.log: $off"; else problems+=("the web process runs without the sandbox, but main.log doesn't say why"); fi
+      [ -z "$sandbox" ] || problems+=("bwrap runs ($sandbox), though here it can't build the sandbox")
+      if [ -n "$off" ]; then echo "the app says: $off"; else problems+=("the web process runs without the sandbox, but the app doesn't say why"); fi
     fi
   fi
   kill -0 "$pid" 2> /dev/null || problems+=("the app exited while its window was open")
@@ -66,6 +66,6 @@ if [ ${#problems[@]} -gt 0 ]; then
   rm -rf "$home"
   exit 1
 fi
-if [ "$want" = sandboxed ]; then ran="in WebKitGTK's bubblewrap sandbox"; else ran="without the sandbox bwrap can't build here, and main.log says so"; fi
+if [ "$want" = sandboxed ]; then ran="in WebKitGTK's bubblewrap sandbox"; else ran="without the sandbox bwrap can't build here, and the app says why"; fi
 echo "the app started: its window's WM_CLASS is Channels (the .desktop entry's StartupWMClass), its web process ran $ran, and it stopped cleanly"
 rm -rf "$home"

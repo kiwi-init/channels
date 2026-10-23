@@ -3,7 +3,7 @@ import { parseArgs } from "node:util";
 import { loadConfig } from "./config.ts";
 import { git } from "./git.ts";
 import { headline, LEGEND, mergeGroupRange, notesBlock, passedJobs, planTable, pullEvent, pullRequest, queueRuns, setOutput, summary, testedByQueue, trustedRef, upsertComment } from "./github.ts";
-import { allHashes, plan, runAll, skipAll, type Decision, type Plan } from "./plan.ts";
+import { allHashes, plan, pullRequestOnly, runAll, skipAll, type Decision, type Plan } from "./plan.ts";
 
 const { positionals, values } = parseArgs({
   allowPositionals: true,
@@ -48,13 +48,20 @@ async function planInCI(): Promise<Plan> {
   const trusted = trustedRef(payload, process.env.GITHUB_REF);
   const passed = await passedJobs(slug, Object.keys(config.jobs), trusted).catch((e: unknown) => (note(e), new Set<string>()));
   const base = git(values.repo, ["rev-parse", "HEAD^1"]).trim();
-  return plan({ repo: values.repo, base, head, config, configPath: values.config, passed });
+  return pullRequestOnly(config, await plan({ repo: values.repo, base, head, config, configPath: values.config, passed }));
+}
+
+function plannerFailed(e: unknown): Plan {
+  note(e);
+  const event = process.env.GITHUB_EVENT_NAME;
+  const all = runAll(config, `planner failed, so everything runs: ${message(e)}`, {}, event);
+  return event === "pull_request" ? pullRequestOnly(config, all) : all;
 }
 
 type Planned = Pick<Plan, "decisions" | "jevCalls" | "inputTokens" | "changed" | "moved" | "notes">;
 
 if (positionals[0] === "plan" && values.github) {
-  const result = await planInCI().catch((e: unknown) => (note(e), runAll(config, `planner failed, so everything runs: ${message(e)}`, {}, process.env.GITHUB_EVENT_NAME)));
+  const result = await planInCI().catch(plannerFailed);
   const compact = result.decisions.map(({ job, run, layer, reason, p, wouldSkip }) => ({ job, run, layer, reason, p, wouldSkip }));
   const planned: Planned = { decisions: compact, jevCalls: result.jevCalls, inputTokens: result.inputTokens, changed: result.changed, moved: result.moved, notes: result.notes };
   setOutput("run", JSON.stringify(Object.fromEntries(result.decisions.map((d) => [d.job, d.run]))));
