@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { plainApp } from "./eb-plain.ts";
+import { payloadOf, shippedApp } from "./eb-app.ts";
 
 const IN_CODE = ["kiwiDriver", "KIWI_EB_DRIVER", "KIWI_EB_RELAY"];
 const IN_LAUNCHER = ["KIWI_EB_DRIVER", "KIWI_EB_RELAY", "CFFIXED_USER_HOME"];
@@ -36,7 +36,7 @@ const tests = readdirSync(builds)
 let bad = 0;
 try {
   if (tests.length !== 1) throw new Error(`expected one dev (CHANNELS_EB_TEST=1) .app under ${builds}, found ${tests.length}`);
-  const release = marks(plainApp(dir, tmp));
+  const release = marks(shippedApp(payloadOf(join(dir, "artifacts")), tmp));
   const test = marks(tests[0]!);
   if (release.code.length || release.launcher.length) {
     console.error(`eb-driver-check: the release build carries test-only code: ${[...release.code, ...release.launcher.map((m) => `${m} through its launcher`)].join(", ")}`);

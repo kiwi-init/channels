@@ -517,8 +517,13 @@ jobs:
       stays authentic after a reload because the cache keeps its envelope (a filtered row would read
       as forged); test/snapshot.test.ts: one message the owner can't open doesn't stop its snapshots; and web lib/history.test.ts: its sealed row keeps the cache whole (no hole, no reload)
       and opens as the message once a newer build can read it.
-      Also web lib/log-export.test.ts: a channel's log kept before it closes, one JSON line per message
-      with its key and signature, under a file name from the channel's title and the day; every seq from the
+      Also web lib/log-export.test.ts: a channel's log, downloaded from channel settings any time or before it closes, one JSON line per message
+      with its key and signature, under a file name from the channel's title and the local date and time (two downloads a minute apart
+      don't collide); a transcript to read without tools (T967): when it was downloaded and how many messages, then each message's
+      number, local date and time, sender and text, its kind when it isn't a plain message, its pictures by name, only for messages
+      the app verifies (from a whole log, the owner's snapshot or the app's own fold; forged, refused and uncheckable ones left out and
+      counted), each body quoted with \, &, <, [, ] and ! escaped so no tag, comment, link, link definition, reference or image
+      survives (T1374); every seq from the
       first the relay kept to the head either in the file or named as missing, and those the relay dropped
       under its storage cap said apart; with test/log-export.test.ts, a stored message this build can't read
       named as missing instead of the download passing for the whole log.
@@ -891,7 +896,7 @@ jobs:
       animation library) reaches that first load, which is kept for lazy surfaces, and when web/dist carries
       any file over 20 MiB, which would weigh on every desktop download. Then ui smoke: starts the relay and the kiwi CLI
       as a test computer and drives the built dashboard in headless Chromium, opening every
-      menu, popover and dialog, making the room #mobile from Details → Rooms (a taken name refused before it's sent; the room in the Rooms row and the sidebar's conversations) and renaming it #ios, then posting in #ios from its conversation (the composer says Message #ios) and finding the message there and not in #general, setting up a passkey, previewing an invite, an invite that pins a personality keeping its whole join command (the long --persona token wrapping, the short flags whole) inside its box, the tab bar's controls starting past a Mac's traffic lights and the page's sheet below the bar (Settings with data-shell="mac": the bar's first control at least --lights-w in, the sheet at least --chrome-h down), the open channel's tab marked current and ⌘\ hiding the channel's sidebar (the header's Tasks / Agents / Conversation tabs take over, it stays hidden across a reload, and the tab bar's Show the sidebar brings it back), Settings → Personalities duplicating a preset into the person's own, the Agents tab showing a lane per agent with what's next on it, Needs you as rows always in view (an agent asking in is let in from its row), an answered ask saying who chose what on the ask itself, replying inline (the reply quotes what it answers, "1 Reply" opens the thread; then three replies, each sent right after two messages, keep their quotes: an earlier send's late answer doesn't clear the reply, and a reply to a message still sending waits for its seq, checked on the reply's row once the relay's copy has landed), Details → Close channel… downloading the whole log first as JSON Lines with each message's key and signature (the history call through ChannelLink and the desktop keyring) and Cancel keeping the channel, linking a computer
+      menu, popover and dialog, downloading the channel from Details any time (a transcript naming each message's number, date, time and sender, and the signed log, both named with the date and time), making the room #mobile from Details → Rooms (a taken name refused before it's sent; the room in the Rooms row and the sidebar's conversations) and renaming it #ios, then posting in #ios from its conversation (the composer says Message #ios) and finding the message there and not in #general, setting up a passkey, previewing an invite, an invite that pins a personality keeping its whole join command (the long --persona token wrapping, the short flags whole) inside its box, the tab bar's controls starting past a Mac's traffic lights and the page's sheet below the bar (Settings with data-shell="mac": the bar's first control at least --lights-w in, the sheet at least --chrome-h down), the open channel's tab marked current and ⌘\ hiding the channel's sidebar (the header's Tasks / Agents / Conversation tabs take over, it stays hidden across a reload, and the tab bar's Show the sidebar brings it back), Settings → Personalities duplicating a preset into the person's own, the Agents tab showing a lane per agent with what's next on it, Needs you as rows always in view (an agent asking in is let in from its row), an answered ask saying who chose what on the ask itself, replying inline (the reply quotes what it answers, "1 Reply" opens the thread; then three replies, each sent right after two messages, keep their quotes: an earlier send's late answer doesn't clear the reply, and a reply to a message still sending waits for its seq, checked on the reply's row once the relay's copy has landed), Details → Close channel… downloading the whole log first as JSON Lines with each message's key and signature (the history call through ChannelLink and the desktop keyring) and Cancel keeping the channel, linking a computer
       with `kiwi setup`, approving its agent and opening a task (a board row opens it in the Tasks panel, with no second task list behind it, and with the task open beside it at 1280 and 1180px every row keeps a readable title with nothing spilling out of it, its columns picked by the board's own width; /tasks switches to the Tasks tab; the details' wants-to-join row closes them and shows Needs you, where the agent is let in, and details offer no Copy invite link or second approve flow), a reload of that channel never showing the Add an agent card, No tasks yet or No messages yet before its history is in, the app loaded with no channel in its address reopening the one that was open instead of Nothing open, finding controls by visible
       names and roles; fails if a page throws while rendering, a control it looks for is renamed
       or missing, or the relay, pairing or join flow breaks. Then compiles the kiwi CLI into one
@@ -1005,7 +1010,7 @@ jobs:
     name: desktop / mac
     inputs: ["desktop/src/**", "desktop/native/**", "desktop/build/icon.icns", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "package.json", "bun.lock", "src/relay/**", "scripts/local-relay.ts", "scripts/perf-desktop.ts", "scripts/perf-calibrate.ts", "scripts/perf-budgets.json"]
     imports_from: ["desktop/src/main-eb.ts", "desktop/scripts/smoke-eb.ts", "scripts/perf-desktop.ts"]
-    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-size.ts", "desktop/scripts/eb-env-check.ts", "desktop/scripts/eb-plain.ts", "desktop/scripts/eb-drive.ts", "desktop/scripts/smoke-eb.ts", "desktop/scripts/eb-driver-check.ts"]
+    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-size.ts", "desktop/scripts/eb-env-check.ts", "desktop/scripts/eb-app.ts", "desktop/scripts/eb-seal.ts", "desktop/scripts/eb-keys-check.ts", "desktop/scripts/eb-keys-probe.ts", "desktop/scripts/eb-drive.ts", "desktop/scripts/smoke-eb.ts", "desktop/scripts/eb-driver-check.ts"]
     description: >-
       On a macOS runner (Electrobun builds only for the host it runs on), checks the Electrobun
       shell that is replacing Electron (issue #757). Builds web/dist, restores ~/.hutch (Hutch,
@@ -1047,6 +1052,27 @@ jobs:
       library into any process but the unsigned
       launcher itself (a signed build's hardened runtime stops that one), or leaves anything
       running; it starts a release-id app only on CI, never on a person's Mac.
+      The launcher also holds the store key (T544, desktop/native/macos/kiwi-keys.c): before it
+      starts anything it checks every file in Contents (but Info.plist, _CodeSignature and itself)
+      against the SHA-256 list scripts/eb-seal.ts writes into Info.plist as KiwiSeal (at the end of
+      eb-post-build.ts for dev builds; a stable build's Resources/version.json gets its hash from
+      Electrobun after that hook, so the shipped plain .app is sealed once it's out of the payload,
+      by scripts/eb-app.ts shippedApp, which eb-size, eb-env-check and eb-keys-check use, as T443's
+      packaging will between signing the nested code and the app), and refuses a changed, missing
+      or unlisted file or a link (247 files in about 60 ms on an M2); then it starts Electrobun's
+      launcher from / with posix_spawn and CLOEXEC_DEFAULT, so only stdio and a socketpair on fd 3
+      (KIWI_KEY_FD=3) get through, and answers bun's requests there (desktop/src/launcher-key.ts):
+      the store key from the Keychain under the bundle id, made only when none is there and never
+      replaced, and the old Electron app's key for a name in Info.plist's KiwiLegacyNames only.
+      desktop/scripts/eb-keys-check.ts takes a copy of the plain .app with a probe
+      (scripts/eb-keys-probe.ts) as main.js, a throwaway bundle id and a throwaway legacy item,
+      resealed, and fails unless a descriptor the launcher inherited never reaches bun, the first
+      start makes a key through the launcher and the next gets the same one, a second key is refused, the legacy key comes through while an
+      unlisted name and an unknown request are refused, and copies with a changed main.js, a
+      bunfig.toml beside bun, an app.asar, a link or a missing file all stop before bun runs, and
+      unless the launcher's check of the whole app takes 500 ms or less (median of 7); on CI it uses
+      a temporary keychain, and it deletes its items either way. eb-env-check runs the launcher
+      inside a small sealed bundle and expects KIWI_KEY_FD as the one name it adds.
       Then it starts the app, without CDP (WebKit has none; T442): a second build, `electrobun
       build --env=dev` with CHANNELS_EB_TEST=1 and its own bundle id (com.kiwiinit.channels.test),
       compiles in the test driver (desktop/src/eb-driver.ts behind the KIWI_EB_TEST build-time
@@ -1054,8 +1080,8 @@ jobs:
       KIWI_EB_DRIVER, KIWI_EB_RELAY and CFFIXED_USER_HOME through: with KIWI_EB_DRIVER set, main listens on that Unix socket,
       runs each function it's sent in the page with executeJavascript and hands back what the
       page posts on Electrobun's host bridge; KIWI_EB_RELAY points the page's CSP and its
-      ?relay= at a local relay. desktop/scripts/eb-driver-check.ts fails if the plain release .app (unpacked
-      by eb-plain.ts) carries the driver or the relay override in its code (kiwiDriver,
+      ?relay= at a local relay; the test build's launcher holds the store key as the release one does. desktop/scripts/eb-driver-check.ts fails if the shipped release .app (unpacked
+      and sealed by eb-app.ts shippedApp) carries the driver or the relay override in its code (kiwiDriver,
       KIWI_EB_DRIVER, KIWI_EB_RELAY) or lets them or CFFIXED_USER_HOME through its launcher, or if
       the test build lacks any of them. desktop/scripts/smoke-eb.ts (through desktop/scripts/eb-drive.ts,
       ~/Library in a temp CFFIXED_USER_HOME, a local relay) fails unless the window shows the

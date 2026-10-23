@@ -382,6 +382,21 @@ async function run(part: Part): Promise<string[]> {
         .waitFor({ timeout: 15000 });
     }
     log(`ok  ${at}`);
+    at = "Details → Download, any time: a transcript to read (each message's number, date, time and sender) and the signed log, named with the date and time";
+    await inDetails(async () => {});
+    const downloads = panel.getByRole("region", { name: "Download" });
+    const [md] = await Promise.all([page.waitForEvent("download"), downloads.getByRole("button", { name: "Transcript (.md)" }).click()]);
+    if (!/-transcript-\d{4}-\d{2}-\d{2}-\d{4}\.md$/.test(md.suggestedFilename())) throw new Error(`the transcript was saved as ${md.suggestedFilename()}`);
+    if (!/\*\*#\d+ · \d{4}-\d{2}-\d{2} \d{2}:\d{2} · smoke\*\*\n\n> smoke test\n/.test(readFileSync(await md.path(), "utf8")))
+      throw new Error("the transcript lacks “smoke test”, quoted, under its number, date, time and sender");
+    const [jsonl] = await Promise.all([page.waitForEvent("download"), downloads.getByRole("button", { name: "Signed log (.jsonl)" }).click()]);
+    if (!/-log-\d{4}-\d{2}-\d{2}-\d{4}\.jsonl$/.test(jsonl.suggestedFilename())) throw new Error(`the log was saved as ${jsonl.suggestedFilename()}`);
+    const signed: unknown[] = readFileSync(await jsonl.path(), "utf8")
+      .trimEnd()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    if (!signed.every((m) => typeof m === "object" && m !== null && "sig" in m)) throw new Error("a line of the downloaded log has no signature");
+    log(`ok  ${at}`);
     at = "Details → Close channel…: the log downloads first, every message signed, and Cancel keeps the channel";
     await inDetails(() => panel.getByRole("button", { name: /^Close channel/ }).click());
     const closing = page.getByRole("dialog", { name: "Close this channel for everyone?" });

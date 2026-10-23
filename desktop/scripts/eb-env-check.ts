@@ -3,7 +3,9 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFile
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { plainApp } from "./eb-plain.ts";
+
+import { payloadOf, shippedApp } from "./eb-app.ts";
+import { sealApp } from "./eb-seal.ts";
 
 const given = resolve(process.argv[2] ?? "");
 if (!existsSync(given)) {
@@ -12,7 +14,7 @@ if (!existsSync(given)) {
 }
 const tmp = mkdtempSync(join(tmpdir(), "kiwi-env-check-"));
 
-const app = given.endsWith(".app") ? given : plainApp(given, tmp);
+const app = given.endsWith(".app") ? given : shippedApp(payloadOf(join(given, "artifacts")), tmp);
 const plist = join(app, "Contents", "Info.plist");
 const read = (key: string) => execFileSync("plutil", ["-extract", key, "raw", plist], { encoding: "utf8" }).trim();
 const id = read("CFBundleIdentifier");
@@ -41,7 +43,7 @@ function forgedCacheHome(target: string, bun: string): string {
 const problems: string[] = [];
 const later = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-const IMPOSED: Record<string, string> = { BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" };
+const IMPOSED: Record<string, string> = { BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0", KIWI_KEY_FD: "3" };
 const KEPT = ["HOME", "USER", "LOGNAME", "TMPDIR", "PATH", "SHELL", "LANG", "LC_ALL", "LC_CTYPE", "__CF_USER_TEXT_ENCODING", "XPC_SERVICE_NAME", "XPC_FLAGS"];
 const DROPPED = [
   "BUN_OPTIONS",
@@ -59,6 +61,7 @@ const DROPPED = [
   "XDG_CACHE_HOME",
   "BUN_INSTALL",
   "BUN_RUNTIME_TRANSPILER_CACHE_PATH",
+  "KIWI_KEY_FD",
   "XPC_SOMETHING",
   "SOMETHING_ELSE",
 ];
@@ -80,15 +83,24 @@ const injected = () =>
     .map((n) => n.slice("injected-".length));
 
 const filter = join(tmp, "filter");
-copyFileSync(join(macos, read("CFBundleExecutable")), join(tmp, "kiwi-launcher"));
-execFileSync("chmod", ["755", join(tmp, "kiwi-launcher")]);
+const mini = join(tmp, "Mini.app");
+const miniMacos = join(mini, "Contents", "MacOS");
+mkdirSync(miniMacos, { recursive: true });
+copyFileSync(join(macos, read("CFBundleExecutable")), join(miniMacos, "kiwi-launcher"));
+execFileSync("chmod", ["755", join(miniMacos, "kiwi-launcher")]);
 clang(
   join(tmp, "launcher"),
   `#include <stdio.h>\nextern char **environ;\nint main(int argc, char **argv) { if (argc < 2) return 2; FILE *f = fopen(argv[1], "w"); if (!f) return 1; for (char **e = environ; *e; e++) fprintf(f, "%s\\n", *e); fclose(f); return 0; }\n`,
   [],
 );
+copyFileSync(join(tmp, "launcher"), join(miniMacos, "launcher"));
+writeFileSync(
+  join(mini, "Contents", "Info.plist"),
+  `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict><key>CFBundleExecutable</key><string>kiwi-launcher</string><key>CFBundleIdentifier</key><string>com.kiwiinit.channels.env-check</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>\n`,
+);
+sealApp(mini);
 const polluted: NodeJS.ProcessEnv = Object.fromEntries([...KEPT, ...DROPPED].map((n) => [n, n === "DYLD_INSERT_LIBRARIES" ? marker : `${n.toLowerCase()}-value`]));
-const ran = spawnSync(join(tmp, "kiwi-launcher"), [filter], { env: polluted, encoding: "utf8" });
+const ran = spawnSync(join(miniMacos, "kiwi-launcher"), [filter], { env: polluted, encoding: "utf8" });
 if (ran.status !== 0 || !existsSync(filter)) problems.push(`the launcher didn't start the next one (status ${ran.status}): ${ran.stderr.trim()}`);
 else {
   const seen = readFileSync(filter, "utf8")

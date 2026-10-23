@@ -7,6 +7,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "kiwi-keys.h"
+
 extern char **environ;
 
 static const char *const KEEP[] = {"HOME", "USER", "LOGNAME", "TMPDIR", "PATH", "SHELL", "LANG", "__CF_USER_TEXT_ENCODING", "XPC_SERVICE_NAME", "XPC_FLAGS", NULL};
@@ -16,7 +18,7 @@ static const char *const KEEP_IN_TEST_BUILDS[] = {"KIWI_EB_DRIVER", "KIWI_EB_REL
 #else
 static const char *const KEEP_IN_TEST_BUILDS[] = {NULL};
 #endif
-static char *const IMPOSED[] = {"BUN_RUNTIME_TRANSPILER_CACHE_PATH=0", NULL};
+static char *const IMPOSED[] = {"BUN_RUNTIME_TRANSPILER_CACHE_PATH=0", KIWI_KEY_FD_ENV, NULL};
 
 static bool listed(const char *entry, size_t len, const char *const *names) {
   for (const char *const *k = names; *k; k++)
@@ -69,8 +71,11 @@ int main(int argc, char **argv) {
     fputs("Channels: can't find the app's launcher\n", stderr);
     return 1;
   }
+  char why[1024];
+  if (kiwi_seal_check(why, sizeof why) != 0) {
+    fprintf(stderr, "Channels: refusing to start: %s\n", why);
+    return 78;
+  }
   argv[0] = launcher;
-  execve(launcher, argv, env);
-  perror("Channels: can't start the app");
-  return 1;
+  return kiwi_run_with_keys(launcher, argv, env);
 }

@@ -362,6 +362,9 @@ jobs:
       - name: the launcher keeps BUN_*, NODE_*, DYLD_* and JSC_* out of the app
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-env-check.ts desktop/release-eb
+      - name: the launcher holds the store key and refuses a changed app
+        if: ${{ !cancelled() }}
+        run: bun desktop/scripts/eb-keys-check.ts desktop/release-eb
       - name: test build (the test driver in, its own bundle id)
         if: ${{ !cancelled() }}
         working-directory: desktop
@@ -369,6 +372,7 @@ jobs:
         env:
           CHANNELS_EB_TEST: "1"
           CHANNELS_EB_IDENTIFIER: com.kiwiinit.channels.test
+          DASH_RELEASE_OFFLINE: "1"
       - name: no test driver in the release build
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-driver-check.ts desktop/release-eb
