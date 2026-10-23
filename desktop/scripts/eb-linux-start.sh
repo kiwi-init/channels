@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 set -u
 
-launcher=${1:?usage: eb-linux-start.sh LAUNCHER}
+usage="usage: eb-linux-start.sh LAUNCHER sandboxed|unsandboxed [ARG...]"
+launcher=${1:?$usage}
+want=${2:?$usage}
+[ "$want" = sandboxed ] || [ "$want" = unsandboxed ] || { echo "$usage" >&2; exit 2; }
+shift 2
 home=$(mktemp -d)
 out="$home/app.log"
 problems=()
 
-HOME="$home" setsid "$launcher" > "$out" 2>&1 &
+HOME="$home" setsid "$launcher" "$@" > "$out" 2>&1 &
 pid=$!
 
 win=""
@@ -32,7 +36,13 @@ else
   else
     echo "WebKitWebProcess $web: $(tr '\0' ' ' < "/proc/$web/cmdline" | cut -c1-160)"
     sandbox=$(pgrep -s "$pid" -a bwrap | head -n 1 | cut -c1-160)
-    if [ -n "$sandbox" ]; then echo "sandbox: $sandbox"; else problems+=("no bwrap of the app's own: WebKitGTK's web process isn't sandboxed"); fi
+    off=$(grep -h "WebKitGTK's sandbox is off" "$out" 2> /dev/null | head -n 1)
+    if [ "$want" = sandboxed ]; then
+      if [ -n "$sandbox" ]; then echo "sandbox: $sandbox"; else problems+=("no bwrap of the app's own: WebKitGTK's web process isn't sandboxed${off:+ ($off)}"); fi
+    else
+      [ -z "$sandbox" ] || problems+=("bwrap runs ($sandbox), though here it can't build the sandbox")
+      if [ -n "$off" ]; then echo "the app says: $off"; else problems+=("the web process runs without the sandbox, but the app doesn't say why"); fi
+    fi
   fi
   kill -0 "$pid" 2> /dev/null || problems+=("the app exited while its window was open")
 fi
@@ -54,9 +64,11 @@ if grep -qE "download handler wasn't found|navigation handler wasn't found" "$ou
 if [ ${#problems[@]} -gt 0 ]; then
   echo "the app's output:"
   tail -n 60 "$out"
+  find "$home" -name main.log -exec tail -n 20 {} + 2> /dev/null
   for p in "${problems[@]}"; do echo "eb-linux-start: $p" >&2; done
   rm -rf "$home"
   exit 1
 fi
-echo "the app started: its window's WM_CLASS is Channels (the .desktop entry's StartupWMClass), its web process ran in WebKitGTK's bubblewrap sandbox, and it stopped cleanly"
+if [ "$want" = sandboxed ]; then ran="in WebKitGTK's bubblewrap sandbox"; else ran="without the sandbox bwrap can't build here, and the app says why"; fi
+echo "the app started: its window's WM_CLASS is Channels (the .desktop entry's StartupWMClass), its web process ran $ran, and it stopped cleanly"
 rm -rf "$home"
