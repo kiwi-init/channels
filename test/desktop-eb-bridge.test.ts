@@ -1,21 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { StoreSnapshot } from "../desktop/src/bridge.ts";
 import type { Handlers } from "../desktop/src/calls.ts";
-import {
-  answer,
-  BOOT_GLOBAL,
-  bootOf,
-  committedUrl,
-  frameOf,
-  stillOurs,
-  lockInternalRpc,
-  onOurPage,
-  PAGE_INTERNAL_RPC,
-  pageOnly,
-  preloadSource,
-  RECEIVE_GLOBAL,
-  toPageScript,
-} from "../desktop/src/eb-bridge.ts";
+import { answer, BOOT_GLOBAL, bootOf, frameOf, lockInternalRpc, onOurPage, PAGE_INTERNAL_RPC, pageOnly, preloadSource, RECEIVE_GLOBAL, toPageScript } from "../desktop/src/eb-bridge.ts";
 import { PAGE_URL } from "../desktop/src/eb-page.ts";
 import { useHost } from "../desktop/src/host.ts";
 import { handlers } from "../desktop/src/ipc/handlers.ts";
@@ -31,23 +17,6 @@ describe("which page the Electrobun view is on", () => {
     expect(onOurPage(`${PAGE_URL}#mc2-abc`)).toBe(true);
     for (const off of [null, "", "views://internal/other.html", "views://internal/index.html?x=1", "views://evil/index.html", "https://evil.example/", "about:blank", "file:///etc/passwd"])
       expect(onOurPage(off)).toBe(false);
-  });
-
-  test("a navigation event can only take the bridge away from the view, never give it back: the page can post such events itself", () => {
-    expect(stillOurs(true, PAGE_URL)).toBe(true);
-    expect(stillOurs(true, `${PAGE_URL}#mc2-abc`)).toBe(true);
-    expect(stillOurs(true, "https://evil.example/")).toBe(false);
-    expect(stillOurs(true, null)).toBe(false);
-    expect(stillOurs(false, PAGE_URL)).toBe(false);
-    let ours = true;
-    for (const url of [PAGE_URL, "about:blank", PAGE_URL, `${PAGE_URL}#x`]) ours = stillOurs(ours, url);
-    expect(ours).toBe(false);
-  });
-
-  test("a navigation event's detail names the page, as a string or WebKit's JSON", () => {
-    expect(committedUrl(PAGE_URL)).toBe(PAGE_URL);
-    expect(committedUrl(JSON.stringify({ url: "https://evil.example/" }))).toBe("https://evil.example/");
-    for (const junk of [undefined, null, 7, { url: PAGE_URL }, "{not json", JSON.stringify({ href: PAGE_URL })]) expect(committedUrl(junk)).toBeNull();
   });
 });
 
@@ -95,6 +64,15 @@ describe("the bridge answers only our page", () => {
 });
 
 describe("what main sends the page", () => {
+  test("main's script reaches our receiver through window, which page script can't replace, not through globalThis, which it can (T1855)", () => {
+    const got: unknown[] = [];
+    const stolen: unknown[] = [];
+    const ours = { [RECEIVE_GLOBAL]: (p: unknown) => void got.push(p) };
+    const theirs = { [RECEIVE_GLOBAL]: (p: unknown) => void stolen.push(p) };
+    new Function("window", "globalThis", toPageScript({ type: "message", id: "store" }))(ours, theirs);
+    expect({ got, stolen }).toEqual({ got: [{ type: "message", id: "store" }], stolen: [] });
+  });
+
   test("the boot carries the snapshot and main's session for this load, and anything else isn't a boot", () => {
     const session = "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0";
     const snapshot: StoreSnapshot = { relayUrl: "https://relay.example", person: null, channels: [], computers: [], phones: [], pending: [], personalities: [] };
@@ -110,8 +88,8 @@ describe("what main sends the page", () => {
     expect(bootOf(page[BOOT_GLOBAL])?.snapshot.pending[0]?.title).toBe("line break </script>");
     expect(source.endsWith("bundle();")).toBe(true);
     const got: unknown[] = [];
-    new Function("globalThis", toPageScript({ type: "message", id: "store", payload: { a: " " } }))({ [RECEIVE_GLOBAL]: (p: unknown) => got.push(p) });
-    new Function("globalThis", toPageScript({ type: "message" }))({});
+    new Function("window", toPageScript({ type: "message", id: "store", payload: { a: " " } }))({ [RECEIVE_GLOBAL]: (p: unknown) => got.push(p) });
+    new Function("window", toPageScript({ type: "message" }))({});
     expect(got).toEqual([{ type: "message", id: "store", payload: { a: " " } }]);
   });
 });

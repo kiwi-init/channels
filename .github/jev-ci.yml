@@ -76,6 +76,12 @@ jobs:
     inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/workflows/nightly.yml", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "desktop/package.json", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml", "ios/engine/**"]
     always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts", "scripts/ci-flows.ts", "scripts/ci-shards.ts"]
     description: >-
+      test/desktop-linux-launcher.test.ts (Linux): desktop/native/linux/kiwi-launcher.c, compiled with
+      cc, hands Electrobun's launcher only the names it keeps (never LD_*, BUN_*, NODE_OPTIONS, JSC_*,
+      GTK_MODULES, GTK_PATH, GIO_MODULE_DIR, GST_PLUGIN_PATH, QT_PLUGIN_PATH, WebKit's injected
+      bundle or KIWI_KEY_FD), sets BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 itself, finds Electrobun's
+      launcher beside itself when started through a link, passes the arguments on, and refuses with
+      127 when it isn't there (T1548). And
       On two runners at once (a matrix of `scripts/ci-tests.ts unit --shard=N/2`, dealt by
       test/timings.json like cli / macos; each shard saves its own jev-ci pass and the plan counts
       the job passed only once both have), runs the unit tests with bun test (failing when the run ends before every file ran, which
@@ -664,8 +670,8 @@ jobs:
       http(s) links, a new relay saved, told to the keys and the page reloaded, a bad one changing
       nothing, a bad argument refused under the call's name). And
       test/desktop-eb-bridge.test.ts: the Electrobun bridge's own rules (desktop/src/eb-bridge.ts):
-      only views://internal/index.html counts as our page whatever its hash, a navigation event
-      can only take the bridge away (only main's own load gives it), a frame read as its page
+      only views://internal/index.html counts as our page whatever its hash, main's script reaching
+      our receiver through window (which page script can't replace) rather than globalThis, a frame read as its page
       load's session id and packet, the preload's boot read as the snapshot plus main's session for
       that load, nothing in or out while the view is off our page, a call that
       isn't the bridge's (__proto__, constructor and the like) or not given as a list never
@@ -1056,14 +1062,21 @@ jobs:
       before the keys see it. Each document is its own session (T1741): two documents that boot
       from one preload's id carry their own nonce and get their own sessions, so neither takes the
       other's reply, and main's load() retires the session at once, so nothing for the old load
-      leaves main before the new page says hello. Then `bun run build:eb` (electrobun build --env=stable): bundles src/main-eb.ts with the
+      leaves main before the new page says hello. eb-tests/page-script.test.ts bundles the real
+      preload and runs it in its own realm, then page script there hooks JSON.stringify,
+      Object.prototype.toJSON, RegExp.prototype.test, Reflect.apply, the message handler's
+      postMessage, the __electrobunHostBridge alias and globalThis: none of the hooks sees the
+      session id or the document's nonce, the hijacked globalThis gets no frame, and window.kiwi
+      keeps answering and hearing pushes (T1855). Then `bun run build:eb` (electrobun build --env=stable): bundles src/main-eb.ts with the
       shared desktop modules it imports (ipc/handlers.ts and all the app's calls through
       host-eb.ts, guard.ts csp(), open.ts, eb-page.ts, eb-bridge.ts, rpc-eb.ts, window-look.ts,
       window-size.ts) and @kiwi/core, and src/preload-eb.ts as the preload view; scripts/eb-pre-build.ts turns build/icon.icns into the
       iconset; scripts/eb-post-build.ts copies web/dist into the app's views/internal and
       compiles native/macos/kiwi-shell.m with clang -Wall -Werror into Contents/MacOS (the
-      patch that denies the microphone, camera and location Electrobun grants the page, and the
-      window's minimum size and background), bundles src/keys-worker.ts into app/bun/keys.js
+      patch that denies the microphone, camera and location Electrobun grants the page, records
+      each committed navigation's URL natively so the bridge answers only while the view is on our
+      page whatever events the page posts, and sets the window's minimum size and background),
+      bundles src/keys-worker.ts into app/bun/keys.js
       beside the main bundle and fails unless that bundled keys worker answers a page's request,
       then checks the bundle (scripts/eb-bundle.ts): the
       main bundle holds exactly one copy of Electrobun's internal RPC table, the one
@@ -1163,14 +1176,19 @@ jobs:
     name: desktop / linux
     inputs: ["desktop/src/**", "desktop/build/icons/**", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "package.json", "bun.lock"]
     imports_from: ["desktop/src/main-eb.ts"]
-    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/package-linux.ts", "desktop/scripts/linux-files.ts", "desktop/scripts/appimage-squashfs.ts"]
+    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/package-linux.ts", "desktop/scripts/linux-files.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/native/linux/**"]
     description: >-
       On an ubuntu runner (Electrobun builds only for the host it runs on), builds the Electrobun
       shell for Linux on WebKitGTK (issue #757, T444): web/dist, `electrobun prepare` (Hutch's
       devkit, cached under ~/.hutch), then `bun run build:eb` (electrobun build --env=stable), with
       scripts/eb-pre-build.ts making the Mac iconset only on macOS and scripts/eb-post-build.ts
       copying web/dist into the bundle's Resources/app/views/internal on either OS (the Mac's native
-      shell and launcher only on macOS). Then desktop/scripts/package-linux.ts makes today's two
+      shell and launcher only on macOS); on Linux it renames Electrobun's bin/launcher to
+      bin/electrobun-launcher and compiles native/linux/kiwi-launcher.c into bin/launcher with
+      cc -Wall -Wextra -Werror, so the entry, /usr/bin/channels-desktop and the AppImage's AppRun all
+      start ours, which keeps the environment to an allowlist (the session, locale, input method,
+      proxies, the AppImage's own names, WebKit's DISABLE switches) and sets
+      BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 before it execs Electrobun's (T1548). Then desktop/scripts/package-linux.ts makes today's two
       Linux downloads from Electrobun's plain stable artifact (never its self-extracting setup), without
       Electrobun's updater tools (bspatch, zig-zstd: only its Updater uses them, and these packages
       update as a whole file), its uninstall tool or its own Channels.desktop:
@@ -1182,8 +1200,9 @@ jobs:
       and Channels-<v>-linux-x86_64.AppImage (zstd squashfs in 128 KiB blocks on AppImage's type2
       runtime, release 20251108 checked against its pinned sha256), and fails when either is over
       40 MB. scripts/appimage-squashfs.ts checks the AppImage's compression, and the job fails when
-      the deb or the extracted AppImage lacks the launcher, Bun, the page, the .desktop entry or the
-      icon, or carries what it leaves out. It then installs the v0.26.0 Electron deb (pinned by sha256) and this
+      the deb or the extracted AppImage lacks either launcher, Bun, the page, the .desktop entry or the
+      icon, or carries what it leaves out, or when the built bin/launcher, put in front of env, passes
+      on LD_PRELOAD, LD_LIBRARY_PATH, BUN_OPTIONS, NODE_OPTIONS or GTK_MODULES (T1548). It then installs the v0.26.0 Electron deb (pinned by sha256) and this
       deb over it, and fails unless /usr/bin/channels-desktop leads to /opt/Channels/bin/launcher, the
       Electron app is gone, the entry runs the launcher and dpkg --verify finds nothing; it prints the runner's
       AppArmor user-namespace setting for WebKitGTK's sandbox. Both are kept as linux-packages for 3 days.
