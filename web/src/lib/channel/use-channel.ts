@@ -9,6 +9,7 @@ import { SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts"
 import { fold, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts"
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "../channel-ops"
 import { openCached, planCached, rememberRow, rememberRows } from "../history"
+import { markOnce } from "../marks"
 import { checksToPost, issuesToPost, linksToPost, setCheckedUpTo, tasksToClose } from "../review-checks"
 import { drain } from "../github-queue"
 import { closeFromGithub } from "../task-actions"
@@ -161,6 +162,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
     const onEvent = (ev: FollowEvent) => {
       switch (ev._tag) {
         case "Open":
+          markOnce("kiwi:live")
           setConnection("live")
           lent.emit({ _tag: "Open" })
           if (ev.kind !== "page") {
