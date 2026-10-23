@@ -582,7 +582,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
 
                       <div ref={footRef} className="absolute inset-x-0 bottom-0 z-20">
                         <div aria-hidden className="scrim-bottom absolute inset-x-0 -top-6 bottom-0" />
-                        <div className="relative">
+                        <div className="relative aside-room [--column:792px]">
                           {mayWrite ? (
                             <Composer
                               key={hereKey}

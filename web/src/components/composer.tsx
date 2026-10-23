@@ -228,7 +228,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
   const hint = slow ? "Connecting…" : thread ? "Reply" : replyTo ? `Reply to ${nameOf(replyTo.from)}` : asked ? `Answer ${nameOf(asked.from)}` : (placeholder ?? "Message")
 
   return (
-    <div className={cx("relative mx-auto w-full shrink-0", thread ? "px-3 pt-2 pb-3" : "max-w-[792px] aside-room px-3 pt-2 pb-4 [--column:792px] md:px-4")}>
+    <div className={cx("relative mx-auto w-full shrink-0", thread ? "px-3 pt-2 pb-3" : "max-w-[792px] px-3 pt-2 pb-4 md:px-4")}>
       <input ref={picker} type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple className="hidden" onChange={(e) => (pick(e.target.files), (e.target.value = ""))} />
 
       {matches.length > 0 && (
