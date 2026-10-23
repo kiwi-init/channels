@@ -43,7 +43,7 @@ interface Props {
   more?: number
   onAnswer?: (m: Message, text: string) => Promise<boolean>
   nameOf: (name: string) => string
-  onClearReply: () => void
+  onClearReply: (answered?: Message) => void
   disabled: boolean
   send: (body: string, opts: SendOptions) => Promise<number>
   /** In a thread: every message answers replyTo (the root), and there's no reply bar to cancel. */
@@ -196,6 +196,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
       return
     }
     const typed = { body, files }
+    const target = replyTo
     const text = withHandles(body.trim(), others) || files.map((f) => f.name).join(", ")
     const named = recipients(text, names)
     const answering = answered(asking, named, !!replyTo || !!thread)
@@ -214,7 +215,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
         ...(extra?.dm ? { to: extra.to, dm: true } : {}),
         imgs: typed.files.length ? typed.files : undefined,
       })
-      if (!thread) onClearReply()
+      if (!thread && target) onClearReply(target)
     } catch (err) {
       if (!area.current?.value) {
         keepDraft(draftKey, typed)
@@ -267,7 +268,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
           <button
             type="button"
             aria-label="Cancel reply"
-            onClick={onClearReply}
+            onClick={() => onClearReply()}
             className="ml-auto flex size-6 shrink-0 items-center justify-center rounded-full text-ink-3 hover:bg-wash-2 hover:text-ink"
           >
             <Icon icon={Cancel01Icon} size={12} />

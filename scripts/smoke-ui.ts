@@ -315,6 +315,22 @@ async function run(part: Part): Promise<string[]> {
     await page.getByRole("button", { name: "Close thread" }).waitFor();
     await page.getByRole("button", { name: "Close thread" }).click();
     log("ok  Thread panel");
+    at = "a reply right after two sends keeps its quote: an earlier send's late answer doesn't clear the reply, and a reply to a message still sending waits for its seq";
+    await page.getByRole("complementary", { name: "Thread" }).waitFor({ state: "detached" });
+    for (let i = 1; i <= 3; i++) {
+      await send(`ping ${i}`);
+      await send(`pong ${i}`);
+      await page
+        .locator("[id^='m']")
+        .filter({ hasText: `ping ${i}` })
+        .last()
+        .locator("button[aria-label='Reply']")
+        .dispatchEvent("click");
+      await page.getByPlaceholder(/^Reply to /).waitFor();
+      await send(`answer ${i}`);
+      await page.getByRole("button", { name: new RegExp(`^Replying to .+: ping ${i}$`) }).waitFor({ timeout: 15000 });
+    }
+    log(`ok  ${at}`);
     at = "Details → Close channel…: the log downloads first, every message signed, and Cancel keeps the channel";
     await inDetails(() => panel.getByRole("button", { name: /^Close channel/ }).click());
     const closing = page.getByRole("dialog", { name: "Close this channel for everyone?" });

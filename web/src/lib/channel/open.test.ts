@@ -3,7 +3,8 @@ import { PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts"
 import type { FoldBase } from "@kiwi/core/state.ts"
 import type { OpenedCache } from "../history"
 import type { Kept } from "./kept"
-import { onceEach, openChannel, warmUp, type OpenSteps, type Planned } from "./open"
+import { planReload } from "../history-plan"
+import { handOver, onceEach, openChannel, warmUp, type OpenSteps, type Planned } from "./open"
 
 const msg = (seq: number): Message => ({ v: PROTOCOL_VERSION, id: `id-${seq}`, from: "atlas", kind: "msg", body: `m${seq}`, ts: 1_700_000_000_000 + seq, seq, sigOk: true })
 const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i)
@@ -151,5 +152,48 @@ describe("opening a channel", () => {
     expect(r.early).toEqual([])
     await r.roundTrip()
     expect(r.painted.map((p) => p.at)).toEqual([1])
+  })
+
+  test("an island the early paint showed, which the relay's head turns down, is gone once the relay answers: no old rows above a gap", async () => {
+    const r = relay()
+    let shown: Message[] = []
+    const early = new Set<number>()
+    let base: number | null = null
+    const cache = range(1001, 1400)
+    const steps = onceEach({
+      ...r.make(5000, cache, 3000, kept(1000)),
+      plan: async (c, head): Promise<Planned> => {
+        const plan = planReload(
+          c.opened.map((m) => m.seq),
+          head,
+          2000
+        )
+        const keep = new Set(plan.keep)
+        return { messages: c.opened.filter((m): m is Message => keep.has(m.seq) && !("unread" in m)), unread: [], firstSeq: plan.keep[0], since: plan.since }
+      },
+      early: (cached, k) => {
+        for (const m of cached?.messages ?? []) early.add(m.seq)
+        shown = handOver(shown, new Set(), cached?.messages ?? [])
+        base = k.base?.n ?? null
+      },
+      paint: (cached, b) => {
+        shown = handOver(shown, early, cached?.messages ?? [])
+        base = b?.n ?? null
+      },
+    })
+    warmUp(steps, undefined, 2000)
+    const opening = openChannel(steps, undefined, 2000)
+    await r.settle()
+    expect(shown.map((m) => m.seq)).toEqual(cache)
+    await r.roundTrip()
+    await r.roundTrip()
+    await opening
+    expect(shown).toEqual([])
+    expect(base).toBe(3000)
+  })
+
+  test("the hand-over keeps what the plan keeps and drops only what the early paint added", () => {
+    const early = new Set([1, 2, 3])
+    expect(handOver([1, 2, 3, 9].map(msg), early, [2, 3, 4].map(msg)).map((m) => m.seq)).toEqual([2, 3, 4, 9])
   })
 })

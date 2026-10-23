@@ -476,9 +476,15 @@ page's IndexedDB as ciphertext; moving its storage to the key process is the
 next step. Beside it, so a reload can paint before the relay answers, the page
 keeps each channel's roster, fold base and guard floors, sealed the same way
 by the key process (the channel key, the room id bound, a marker that keeps it
-from opening as a message row and the reverse), and dropped with the rows on a
-leave, a kick or a sign-out. Until the relay's roster lands, what it shows can
-be one roster old; nothing that acts on the channel runs before that.
+from opening as a message row and the reverse), its base checked like a
+snapshot before it's used, and dropped with the rows on a leave, a kick or a
+close. Signing out keeps both, as the channels stay on the computer. Until the
+relay's roster lands, the screen can show the roster from the last time the
+channel was open, however long ago. Nothing the key process does trusts it:
+it reads members and requests from the relay itself. The owner's
+reconciliation, review checks and sending wait for the relay; only the
+owner's snapshot check (run by the key process) and publishing the person's
+own picture (if the open falls back to reconnecting) can run before it.
 
 Anyone who can read a computer's `~/.kiwi` can act as
 that computer's agents and, with its machine key, have new agents admitted (see
