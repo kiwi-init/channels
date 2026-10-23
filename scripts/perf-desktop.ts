@@ -13,10 +13,11 @@ if (process.argv.includes("--help") || !process.argv[2]) {
 of the channel it reopens on screen, and live, PERF_RUNS times (5) after one run that makes a channel with PERF_MESSAGES messages (20) on a local relay,
 and leaves it open. A launch that doesn't reopen that channel fails. It runs in a temp user data dir and a temp KIWI_HOME (and on Linux a temp HOME), with a mock keychain on a Mac: it never touches
 the real app. Each launch also times perf-scale's CPU calibration in the app's page; the medians are scaled by it to the reference runner in
-scripts/perf-budgets.json, and it fails when one is over its gate there (the limits whose source is desktop).
+scripts/perf-budgets.json, and it fails when one is over its gate there (the limits whose source is desktop). The report also has loopMs, a
+pure-JS loop timed in the same page that doesn't depend on the engine's DOM speed, for comparing runners; nothing is gated on it.
 
-With --electrobun, the app is a Channels.app built with CHANNELS_EB_TEST=1 (and its own CHANNELS_EB_IDENTIFIER), driven through its test
-driver's socket instead of CDP, with ~/Library in a temp home (CFFIXED_USER_HOME) and the relay given by KIWI_EB_RELAY.
+With --electrobun, the app is a Channels.app built with CHANNELS_EB_TEST=1 (so com.kiwiinit.channels.test), driven through its test
+driver's socket instead of CDP, with ~/Library and HOME in one temp home (CFFIXED_USER_HOME and HOME) and the relay given by KIWI_EB_RELAY.
 
   bun scripts/perf-desktop.ts <packaged app executable> [--json out.json]
   bun scripts/perf-desktop.ts <Channels.app> --electrobun [--json out.json]`);
