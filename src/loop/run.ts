@@ -52,6 +52,12 @@ const hooksFirst = Effect.suspend(() => {
   return say(installHooks());
 });
 
+const pauseFor = (ms: number, stop: { asked: boolean }) =>
+  Effect.gen(function* () {
+    const until = Date.now() + ms;
+    while (!stop.asked && Date.now() < until) yield* Effect.sleep(250);
+  });
+
 const look = (s: AgentSession) =>
   Effect.gen(function* () {
     const { messages, state } = yield* s.state();
@@ -92,11 +98,14 @@ const cycles = (seat: LoopSeat, stop: { asked: boolean; busy: boolean }): Effect
       const ended = yield* session(seat, s, work, firstPrompt(work, seen.state, seat.me, seat.alias), stop);
       yield* hold(seat);
       if (ended.kind === "done") yield* say(`${workName(ended.work)} is over; its session ended`);
-      if (ended.kind === "unbound") yield* say("the session never reported its id; ended it");
+      if (ended.kind === "unbound") {
+        yield* say(`the session never reported its id; ended it, and the next one starts in ${Math.round(QUICK_END_MS / 1000)}s`);
+        yield* pauseFor(QUICK_END_MS, stop);
+      }
       if (ended.kind === "own") {
         const pause = ended.lived < QUICK_END_MS ? QUICK_END_MS : PAUSE_MS;
         yield* say(`the session ended by itself; the next one starts in ${Math.round(pause / 1000)}s (Ctrl-C stops the loop)`);
-        yield* Effect.sleep(pause);
+        yield* pauseFor(pause, stop);
       }
     }
   });
@@ -119,7 +128,7 @@ function session(seat: LoopSeat, s: AgentSession, first: Work, prompt: string, s
       Effect.gen(function* () {
         if (!exited) {
           yield* hold(seat);
-          const until = Date.now() + IDLE_WAIT_MS;
+          const until = why.kind === "done" ? Date.now() + IDLE_WAIT_MS : 0;
           while (!exited && !stop.asked && Date.now() < until && !claudeSession(child.pid)?.idle) yield* Effect.sleep(POLL_MS);
           child.kill("SIGTERM");
           const late = Date.now() + TERM_GRACE_MS;
@@ -132,7 +141,7 @@ function session(seat: LoopSeat, s: AgentSession, first: Work, prompt: string, s
       });
 
     let bound: string | null = null;
-    while (!bound && !exited && Date.now() - started < BIND_MS) {
+    while (!bound && !exited && !stop.asked && Date.now() - started < BIND_MS) {
       bound = claudeSession(child.pid)?.sessionId ?? null;
       if (!bound) yield* Effect.sleep(100);
     }
