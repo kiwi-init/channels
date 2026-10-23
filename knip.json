@@ -4,6 +4,7 @@
     "oxfmt",
     "iconutil",
     "clang",
+    "cc",
     "dpkg-deb",
     "mksquashfs",
     "ditto",

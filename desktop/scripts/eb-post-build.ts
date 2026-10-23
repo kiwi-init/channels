@@ -7,6 +7,7 @@ import { JOIN_SCHEME } from "../src/deep-links.ts";
 import type { FromWorker, ToWorker } from "../src/keys-shim.ts";
 import { bundleProblems, urlSchemeProblems } from "./eb-bundle.ts";
 import { sealApp } from "./eb-seal.ts";
+import { ELECTROBUN_LAUNCHER } from "./linux-files.ts";
 
 const buildDir = process.env.ELECTROBUN_BUILD_DIR;
 const os = process.env.ELECTROBUN_OS;
@@ -33,7 +34,17 @@ if (resources.length !== 1) throw new Error(`expected one app bundle (Resources/
 const views = path.join(resources[0] as string, "app", "views", "internal");
 fs.rmSync(views, { recursive: true, force: true });
 fs.cpSync(web, views, { recursive: true, filter: (src) => path.basename(src) !== "_headers" });
-if (os === "linux") process.exit(0);
+if (os === "linux") {
+  const host = process.arch === "x64" ? "x64" : process.arch === "arm64" ? "arm64" : process.arch;
+  if (host !== arch) throw new Error(`eb-post-build: the Linux launcher is built with this machine's cc, for ${host}, not the ${arch} app`);
+  const bin = path.join(path.dirname(resources[0] as string), "bin");
+  const theirs = path.join(bin, "launcher");
+  if (!fs.existsSync(theirs)) throw new Error(`eb-post-build: no Electrobun launcher at ${theirs}`);
+  fs.renameSync(theirs, path.join(bin, ELECTROBUN_LAUNCHER));
+  execFileSync("cc", ["-O2", "-Wall", "-Wextra", "-Werror", "-o", theirs, path.join(desktop, "native", "linux", "kiwi-launcher.c")], { stdio: "inherit" });
+  console.log(`eb-post-build: bin/launcher keeps the app's environment to an allowlist, then starts Electrobun's (bin/${ELECTROBUN_LAUNCHER})`);
+  process.exit(0);
+}
 const contents = path.dirname(resources[0] as string);
 
 execFileSync(
