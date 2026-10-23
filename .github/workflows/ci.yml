@@ -22,9 +22,12 @@ permissions:
 # One job per area, its checks as steps: each job pays for one checkout and one install.
 # A step that fails doesn't stop the checks after it (`!cancelled()`), so one run shows every failure.
 jobs:
-  # Decides which jobs this pull request can break (.github/jev-ci.yml): rules first, then a
-  # cache of inputs that already passed, then Jev for the rest. Pushes to main run everything,
-  # and if planning fails, everything runs. Every check below runs only if the plan says so.
+  # Decides which jobs this pull request or merge group can break (.github/jev-ci.yml): rules
+  # first, then a cache of inputs that already passed, then Jev for the rest. A pull request runs
+  # only its pull_request_jobs (repo / static, test / unit); a merge group is planned on its
+  # combined change (merge_group.base_sha..head_sha) and runs every job that plan picks. A push to main runs
+  # nothing when the merge queue already tested that commit as-is, and everything otherwise;
+  # if planning fails, everything runs. Every check below runs only if the plan says so.
   plan:
     runs-on: ubuntu-latest
     timeout-minutes: 5
