@@ -101,6 +101,7 @@ export const CHANNEL_CALLS = [
   "guard",
   "setCharter",
   "setHold",
+  "setRooms",
   "setRepos",
   "icon",
   "setIcon",

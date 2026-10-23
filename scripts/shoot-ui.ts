@@ -634,6 +634,20 @@ try {
       await shoot(
         owner,
         tag,
+        "09c-rooms",
+        async () => {
+          await detailsBtn().click();
+          await details()
+            .getByRole("button", { name: /^Rooms/ })
+            .click();
+          await details().getByRole("heading", { name: "Rooms" }).waitFor();
+          await details().getByRole("textbox", { name: "New room’s name" }).fill("mobile");
+        },
+        toChannel,
+      );
+      await shoot(
+        owner,
+        tag,
         "10-account-menu",
         async () => {
           await toList();
