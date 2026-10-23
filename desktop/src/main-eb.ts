@@ -19,7 +19,7 @@ import { openInBrowser } from "./open.ts";
 import { claimInstance, handoffFor, type Instance } from "./single-instance.ts";
 import { bunBridge } from "./rpc-eb.ts";
 import { brokenStore, openStore, snapshot, store, type StoreVault } from "./store.ts";
-import { updateState } from "./updater.ts";
+import { startUpdates, updateState } from "./updater.ts";
 import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts";
 import { minWindowWidth } from "./window-size.ts";
 
@@ -136,7 +136,7 @@ function start(instance: Extract<Instance, { kind: "first" }>): void {
   attachKeys((m) => keys.tell(m));
   keys.start();
   const win = createWindow();
-  startAppLife({
+  const tray = startAppLife({
     win,
     view: win.webview,
     showWindow: () => ebHost.showWindow(),
@@ -147,6 +147,10 @@ function start(instance: Extract<Instance, { kind: "first" }>): void {
     nudgeKeys: () => ebHost.tellKeys({ type: "nudge" }),
     flushKeys: () => keys.flush(),
     release: instance.release,
+  });
+  startUpdates((u) => {
+    ebHost.push("update", u);
+    tray.refresh(u);
   });
   const broken = brokenStore();
   if (broken) void Utils.showMessageBox({ type: "error", message: "Channels can't read its saved keys", detail: broken.message });
