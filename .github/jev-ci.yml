@@ -654,8 +654,11 @@ jobs:
       http(s) links, a new relay saved, told to the keys and the page reloaded, a bad one changing
       nothing, a bad argument refused under the call's name). And
       test/desktop-cli.test.ts: the app's kiwi.js becomes a working kiwi in the install folder,
-      compiled with the running Bun (and signed ad-hoc on macOS), a current one is kept, and a
-      kiwi.js that doesn't build leaves nothing behind (desktop/src/cli.ts keepCli, T446). And
+      compiled by a child of the running Bun (a macro in it runs in that child, never in the app's
+      process, and sees no KIWI_KEY_FD) and signed ad-hoc on macOS, a current one is kept, a kiwi.js
+      that doesn't build leaves nothing behind, and with only kiwi.js in the app the daemon's own
+      copy is compiled into the app's data, never the .js handed back (desktop/src/cli.ts keepCli,
+      bundled-daemon.ts kiwiCli, T446). And
       test/desktop-shared-modules.test.ts: the modules both desktop shells share (ipc/handlers.ts and
       everything it imports, calls.ts, host.ts, store.ts, updater.ts, bundled-daemon.ts, deep-links.ts,
       main-log.ts, page-crash.ts, signin.ts) never import electron however deep the import, read from their real
@@ -979,8 +982,10 @@ jobs:
       window-size.ts) and @kiwi/core; scripts/eb-pre-build.ts turns build/icon.icns into the
       iconset; before it, `scripts/build-cli.ts --js` builds the kiwi CLI as one JS file
       (dist/kiwi.js, about 2.6MB) instead of a second compiled Bun: the app compiles it into
-      ~/.kiwi/bin/kiwi with its own Bun at install time (desktop/src/cli.ts, Bun.build with compile,
-      then an ad-hoc codesign on macOS, which Electrobun's Bun 1.4.0 output needs to run; T446);
+      ~/.kiwi/bin/kiwi with its own Bun at install time (desktop/src/cli.ts: `bun build --compile` in
+      a child of the app's Bun, from / with only PATH, HOME and TMPDIR, so no macro in kiwi.js runs in
+      the process that holds the store key; then an ad-hoc codesign on macOS, which Electrobun's Bun
+      1.4.0 output needs to run, and a --version check before it replaces anything; T446);
       scripts/eb-post-build.ts copies dist/kiwi.js into the app's Resources (failing if it's
       missing), web/dist into its views/internal and
       compiles native/macos/kiwi-shell.m with clang -Wall -Werror into Contents/MacOS (the

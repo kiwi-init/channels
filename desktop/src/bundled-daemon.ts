@@ -23,7 +23,7 @@ function bundledKiwi(): string {
 
 async function runnableKiwi(): Promise<string> {
   const bundled = bundledKiwi();
-  if (!bundled.endsWith(".zst")) return bundled;
+  if (!bundled.endsWith(".zst") && !bundled.endsWith(".js")) return bundled;
   const dir = path.join(host().app.path("data"), "bin");
   const name = `kiwi-${host().app.version()}`;
   const unpacked = path.join(dir, name);

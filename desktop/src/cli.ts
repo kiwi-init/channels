@@ -51,16 +51,18 @@ export function place(bundled: string, dest: string): Promise<void> {
 
 const CLI_EXTERNAL = ["node-liblzma", "@mongodb-js/zstd"];
 
-function run(file: string, args: string[]): Promise<void> {
+const CHILD_ENV = (): NodeJS.ProcessEnv => ({ PATH: "/usr/bin:/bin", HOME: os.homedir(), TMPDIR: os.tmpdir() });
+
+function run(file: string, args: string[], what: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    execFile(file, args, { timeout: 60_000 }, (err, _out, stderr) => (err ? reject(new Error(`${path.basename(file)} failed: ${stderr.trim() || err.message}`)) : resolve()));
+    execFile(file, args, { timeout: 120_000, cwd: "/", env: CHILD_ENV() }, (err, _out, stderr) => (err ? reject(new Error(`${what}: ${stderr.trim() || err.message}`)) : resolve()));
   });
 }
 
 async function compile(bundle: string, out: string): Promise<void> {
-  const built = await Bun.build({ entrypoints: [bundle], compile: { outfile: out }, external: CLI_EXTERNAL, throw: false });
-  if (!built.success) throw new Error(`the kiwi CLI didn't build from ${bundle}: ${built.logs.map(String).join("; ")}`);
-  if (process.platform === "darwin") await run("/usr/bin/codesign", ["--force", "--sign", "-", out]);
+  await run(process.execPath, ["build", "--compile", bundle, "--outfile", out, ...CLI_EXTERNAL.flatMap((e) => ["--external", e])], `the kiwi CLI didn't build from ${bundle}`);
+  if (process.platform === "darwin") await run("/usr/bin/codesign", ["--force", "--sign", "-", out], "codesign failed");
+  await run(out, ["--version"], "the kiwi CLI built from the app doesn't run");
 }
 
 async function unpack(bundled: string, dest: string): Promise<void> {
