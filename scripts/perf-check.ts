@@ -11,6 +11,7 @@ interface Limit {
   budget: number;
   gate: number | null;
   nightly?: boolean;
+  desktop?: boolean;
 }
 
 type Range = [number, number];
@@ -86,7 +87,7 @@ const over: string[] = [];
 const short: string[] = [];
 const partial: string[] = [];
 for (const [name, l] of Object.entries(limits)) {
-  if (l.nightly && !nightly) continue;
+  if ((l.nightly && !nightly) || l.desktop) continue;
   const measured = reports.map((r) => pick(r, l.at)).filter((v): v is number => v !== null);
   const each = reports.map((r, i) => scaled(r, l, calibrated[i]!));
   for (const [i, v] of each.entries()) if (v === null && typeof calibrated[i] !== "string") partial.push(`${l.what}: ${basename(runs[i]!)} has no usable value`);

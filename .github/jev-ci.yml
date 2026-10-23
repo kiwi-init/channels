@@ -893,8 +893,8 @@ jobs:
 
   desktop:
     name: desktop / package
-    inputs: ["desktop/**", "src/**", "packages/core/**", "web/src/**", "web/index.html", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "package.json", "bun.lock", "web/package.json"]
-    always: ["desktop/package.json", "desktop/tsconfig*.json", "desktop/scripts/fuses.ts", "desktop/scripts/pack-cli.ts", "desktop/scripts/size.ts", "desktop/scripts/smoke.ts"]
+    inputs: ["desktop/**", "src/**", "packages/core/**", "web/src/**", "web/index.html", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/perf-desktop.ts", "scripts/local-relay.ts", "scripts/perf-budgets.json", "package.json", "bun.lock", "web/package.json"]
+    always: ["desktop/package.json", "desktop/tsconfig*.json", "desktop/scripts/fuses.ts", "desktop/scripts/pack-cli.ts", "desktop/scripts/size.ts", "desktop/scripts/smoke.ts", "scripts/perf-desktop.ts"]
     description: >-
       Bundles the Electron shell's main, preload and channels (key process) scripts with bun
       build, then packages the Linux app with electron-builder --dir from desktop/package.json's
@@ -914,7 +914,14 @@ jobs:
       codeCache, so a launch after the first skips compiling them), its key process
       (utilityProcess.fork of dist/channels.js from app.asar) stays up and the bundled kiwi
       daemon answers on its socket, and fails if
-      ELECTRON_RUN_AS_NODE=1 runs JavaScript or --inspect opens a debugger. Fails on a
+      ELECTRON_RUN_AS_NODE=1 runs JavaScript or --inspect opens a debugger. Then
+      scripts/perf-desktop.ts times the packaged app's cold start under Xvfb, in a temp user data dir,
+      KIWI_HOME and HOME, against a local relay: one run makes a person, a channel and 20 messages (the
+      app pointed at the relay through its bridge's setRelayUrl, over --remote-debugging-port), then five
+      launches each time the window (the renderer's timeOrigin), the first paint, the first cached message
+      on screen (the kiwi:first-message mark) and the channel live (kiwi:live), from the process start; the
+      medians go to the log and --json, and it fails when the median launch to the first message is over
+      the coldStartMs gate in scripts/perf-budgets.json (a limit perf-check skips, marked desktop). Fails on a
       bundling or packaging error, a fuse changed or dropped, or an app that no longer starts.
 
   cli-macos:
