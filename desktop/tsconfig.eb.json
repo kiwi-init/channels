@@ -4,9 +4,11 @@
     "resolveJsonModule": true,
     "paths": {
       "electrobun": ["./.hutch/devkit/api/sdks/main/index.ts"],
-      "electrobun/main": ["./.hutch/devkit/api/sdks/main/index.ts"]
+      "electrobun/main": ["./.hutch/devkit/api/sdks/main/index.ts"],
+      "electrobun/view": ["./.hutch/devkit/api/browser/index.ts"],
+      "electrobun/rpc": ["./.hutch/devkit/api/sdks/main/entries/rpc.ts"]
     }
   },
-  "include": ["src", "electrobun.config.ts", "scripts/eb-pre-build.ts", "scripts/eb-post-build.ts", "scripts/eb-size.ts", "scripts/eb-env-check.ts", "scripts/eb.ts", "scripts/eb-pins.ts", "scripts/eb-app.ts", "scripts/eb-seal.ts", "scripts/eb-keys-check.ts", "scripts/eb-keys-probe.ts"],
+  "include": ["src", "electrobun.config.ts", "scripts/eb-pre-build.ts", "scripts/eb-post-build.ts", "scripts/eb-size.ts", "scripts/eb-env-check.ts", "scripts/eb.ts", "scripts/eb-pins.ts", "scripts/eb-app.ts", "scripts/eb-seal.ts", "scripts/eb-keys-check.ts", "scripts/eb-keys-probe.ts", "eb-tests", "../test/fake-host.ts", "scripts/eb-bundle.ts"],
   "exclude": []
 }

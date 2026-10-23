@@ -135,7 +135,7 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
           yield* hold(seat);
           const until = why.kind === "done" ? Date.now() + IDLE_WAIT_MS : 0;
           while (!exited && !stop.asked && Date.now() < until && !found?.idle().idle) yield* Effect.sleep(POLL_MS);
-          child.kill("SIGTERM");
+          child.kill(recipe.stopSignal);
           const late = Date.now() + TERM_GRACE_MS;
           while (!exited && Date.now() < late) yield* Effect.sleep(250);
           if (!exited) child.kill("SIGKILL");

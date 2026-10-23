@@ -3,12 +3,22 @@ import fs from "node:fs";
 import path from "node:path";
 import Electrobun, { BrowserView, BrowserWindow, PATHS, Utils } from "electrobun/main";
 
-import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts";
+import { internalRpcHandlers } from "../.hutch/devkit/api/sdks/main/proc/native.ts";
+import { committedUrl, lockInternalRpc, preloadSource, stillOurs, toPageScript } from "./eb-bridge.ts";
 import { navigation, openedUrl, PAGE_RULES, PAGE_TEMPLATE, PAGE_URL, pageWithCsp, RULES_CANARY } from "./eb-page.ts";
 import { externalUrl } from "./guard.ts";
+import { attachWindow, bundle, ebHost } from "./host-eb.ts";
+import { useHost } from "./host.ts";
+import { handlers } from "./ipc/handlers.ts";
+import { logMainError } from "./main-log.ts";
 import { openInBrowser } from "./open.ts";
+import { bunBridge } from "./rpc-eb.ts";
+import { brokenStore, openStore, snapshot, store, type StoreVault } from "./store.ts";
 import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts";
 import { minWindowWidth } from "./window-size.ts";
+
+useHost(ebHost);
+lockInternalRpc(internalRpcHandlers);
 
 const binDir = path.dirname(process.execPath);
 
@@ -20,15 +30,20 @@ const shell = dlopen(path.join(binDir, `libkiwi-shell.${suffix}`), {
 
 const core = dlopen(path.join(binDir, `libElectrobunCore.${suffix}`), {
   setWebviewHTMLContent: { args: [FFIType.u32, FFIType.ptr], returns: FFIType.void },
+  updatePreloadScriptToWebView: { args: [FFIType.u32, FFIType.ptr, FFIType.ptr, FFIType.bool], returns: FFIType.void },
 }).symbols;
 
 const cString = (s: string): Uint8Array => new TextEncoder().encode(`${s}\0`);
 
 const rgb = (hex: string): number => Number.parseInt(hex.slice(1), 16);
 
+const PRELOAD_ID = cString("electrobun_custom_preload_script");
+
+const detailOf = (e: unknown): unknown => (e as { data?: { detail?: unknown } }).data?.detail;
+
 function openOutside(url: string): void {
   const ext = externalUrl(url);
-  if (ext) void openInBrowser(ext, async (u) => void Utils.openExternal(u)).catch(() => {});
+  if (ext) void openInBrowser(ext, (u) => ebHost.openExternal(u)).catch(() => {});
 }
 
 function fail(why: string): void {
@@ -36,20 +51,11 @@ function fail(why: string): void {
   Utils.quit(1);
 }
 
-function buildPage(): Uint8Array | null {
-  try {
-    return cString(pageWithCsp(fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "..", PAGE_TEMPLATE), "utf8"), DEFAULT_RELAY));
-  } catch (e) {
-    fail(`the page can't be built: ${e instanceof Error ? e.message : String(e)}`);
-    return null;
-  }
-}
-
-function rulesHold(view: BrowserWindow["webview"]): Promise<boolean> {
+function rulesHold(view: BrowserView): Promise<boolean> {
   return new Promise((resolve) => {
     const timer = setTimeout(() => resolve(false), 5000);
     view.on("will-navigate", (e) => {
-      const nav = navigation((e as { data?: { detail?: unknown } }).data?.detail);
+      const nav = navigation(detailOf(e));
       if (nav.kind === "refused" && nav.url === RULES_CANARY) {
         clearTimeout(timer);
         resolve(true);
@@ -59,47 +65,92 @@ function rulesHold(view: BrowserWindow["webview"]): Promise<boolean> {
   });
 }
 
-async function createWindow(page: Uint8Array): Promise<void> {
+const memoryVault: StoreVault = { where: () => `memory, nothing saved (${bundle.identifier})`, load: () => ({ ok: true, file: null, resave: false }), save: () => {} };
+
+async function createWindow(): Promise<void> {
+  const index = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "..", PAGE_TEMPLATE), "utf8");
+  const page = (): Uint8Array => cString(pageWithCsp(index, store.relayUrl));
+  const first = page();
+  const bundled = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "preload", "index.js"), "utf8");
+  const table = handlers(ebHost);
+  let ours = true;
+  let view: BrowserView | null = null;
+  const bridge = bunBridge(
+    table,
+    () => ours,
+    (frame) => view?.executeJavascript(toPageScript(frame)),
+    () => bridge.push("store", snapshot()),
+  );
   const win = new BrowserWindow({
     title: "Channels",
     url: null,
     frame: { width: WINDOW_SIZE.width, height: WINDOW_SIZE.height },
     titleBarStyle: "hiddenInset",
     hidden: true,
+    preload: preloadSource(snapshot(), bundled),
+    rpc: bridge,
   });
-  const view = win.webview;
-  view.on("will-navigate", (e) => {
-    const nav = navigation((e as { data?: { detail?: unknown } }).data?.detail);
+  const webview = win.webview;
+  view = webview;
+  webview.on("will-navigate", (e) => {
+    const nav = navigation(detailOf(e));
     if (nav.kind === "refused") openOutside(nav.url);
     if (nav.kind !== "breach") return;
     win.hide();
     fail(`a navigation the rules should have refused went through (${nav.url ?? "unreadable"}); closing`);
   });
-  view.setNavigationRules(PAGE_RULES);
-  if (!(await rulesHold(view))) {
+  webview.setNavigationRules(PAGE_RULES);
+  if (!(await rulesHold(webview))) {
     win.hide();
     fail("the window's navigation rules didn't take effect; not opening it");
     return;
   }
-  core.setWebviewHTMLContent(view.id, ptr(page));
-  view.loadURL(PAGE_URL);
+  const load = (html: Uint8Array = page()): void => {
+    core.setWebviewHTMLContent(webview.id, ptr(html));
+    ours = true;
+    webview.loadURL(PAGE_URL);
+  };
+  const refreshPreload = (): void => core.updatePreloadScriptToWebView(webview.id, ptr(PRELOAD_ID), ptr(cString(preloadSource(snapshot(), bundled))), true);
+  attachWindow({
+    win,
+    view: webview,
+    push: (name, value) => {
+      if (name === "store") refreshPreload();
+      bridge.push(name, value);
+    },
+    reload: () => (refreshPreload(), load()),
+  });
+  for (const moved of ["did-commit-navigation", "did-navigate", "did-navigate-in-page"] as const) webview.on(moved, (e) => (ours = stillOurs(ours, committedUrl(detailOf(e)))));
+  load(first);
   const look = win.ptr;
   if (look) shell.kiwi_window_look(look, minWindowWidth(process.platform), WINDOW_SIZE.minHeight, rgb(windowBackground(false)), rgb(windowBackground(true)));
   win.setWindowButtonPosition(TRAFFIC_LIGHTS.x, TRAFFIC_LIGHTS.y);
-  Electrobun.events.on(`new-window-open-${view.id}`, (e: { data?: { detail?: unknown } }) => {
+  Electrobun.events.on(`new-window-open-${webview.id}`, (e: { data?: { detail?: unknown } }) => {
     const url = openedUrl(e.data?.detail);
     if (url) openOutside(url);
   });
-  view.on("dom-ready", () => {
+  webview.on("dom-ready", () => {
     if (!win.isVisible()) win.show();
   });
+}
+
+async function start(): Promise<void> {
+  openStore(memoryVault);
+  await createWindow();
+  const broken = brokenStore();
+  if (broken) void Utils.showMessageBox({ type: "error", message: "Channels can't read its saved keys", detail: broken.message });
 }
 
 BrowserView.on("created", (tag) => tag.remove());
 
 if (!shell.kiwi_deny_permissions()) fail("the web view's permission handler wasn't found; not opening a window that could grant the microphone");
 else if (!shell.kiwi_guard_downloads()) fail("the web view's download handler wasn't found; not opening a window that could save any file into Downloads");
-else {
-  const page = buildPage();
-  if (page) await createWindow(page);
-}
+else
+  try {
+    await start();
+  } catch (e) {
+    // Nothing on screen can say what went wrong: main.log and the console carry it, and the app quits instead of running windowless.
+    logMainError(e);
+    console.error("Channels: the window couldn't start", e);
+    Utils.quit(1);
+  }

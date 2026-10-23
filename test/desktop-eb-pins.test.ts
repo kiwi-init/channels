@@ -27,10 +27,11 @@ describe("Electrobun's toolchain and what it ships are pinned in the repo (T804)
     }
     expect(Object.keys(pinFor(PINS.app, "macos-arm64", "app files"))).toContain("Contents/MacOS/libNativeWrapper.dylib");
     expect(pinFor(PINS.devkit, "macos-arm64", "devkit")).toMatch(/^[0-9a-f]{64}$/);
+    for (const key of ["linux-x64", "linux-arm64"]) expect(pinFor(PINS.devkit, key, "devkit")).toBe(pinFor(PINS.devkit, "macos-arm64", "devkit"));
   });
 
   test("a host without pins is refused by name", () => {
-    expect(() => pinFor(PINS.devkit, "linux-x64", "devkit")).toThrow("pins no devkit for linux-x64");
+    expect(() => pinFor(PINS.app, "linux-x64", "app files")).toThrow("pins no app files for linux-x64");
     expect(hostKey("darwin", "arm64")).toBe("macos-arm64");
     expect(hostKey("linux", "x64")).toBe("linux-x64");
     expect(() => hostKey("win32", "x64")).toThrow("doesn't build on win32-x64");
