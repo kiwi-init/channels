@@ -863,9 +863,9 @@ jobs:
 
   perf:
     name: perf / scale
-    inputs: ["web/**", "desktop/**", "packages/core/**", "src/relay/**", "scripts/perf-scale.ts", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json"]
-    always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "scripts/perf-scale.ts", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json"]
-    imports_from: ["scripts/perf-scale.ts"]
+    inputs: ["web/**", "desktop/**", "packages/core/**", "src/relay/**", "scripts/perf-scale.ts", "scripts/perf-feel.ts", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json"]
+    always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "scripts/perf-scale.ts", "scripts/perf-feel.ts", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json"]
+    imports_from: ["scripts/perf-scale.ts", "scripts/perf-feel.ts"]
     parts: [perf-runs]
     description: >-
       Three perf-runs jobs, side by side on their own runners, each build the web dashboard and
@@ -873,10 +873,16 @@ jobs:
       1x tab switches, details toggles, profiles or second reload; the nightly runs it whole): a
       local relay and headless Chromium with
       10 agents, 100 tasks and 2000 messages (the agents join at once and the seeding sends through each agent's own session, src/agent.ts, on a local relay started with --dev-no-rate-limits, so no per-minute cap slows it), timing the reload to the first screen, the Tasks,
-      Agents and Conversation tabs at 4x CPU and typing while the agents post, and upload the
-      run as the perf-scale-N artifact, with a CPU calibration (a fixed in-page workload) at 1x
-      and 4x. A run that crashes fails its job. Then perf / scale downloads the three runs, and
-      scripts/perf-check.ts scales each timing by its run's calibration to the reference runner
+      Agents and Conversation tabs at 4x CPU and typing while the agents post, then run
+      scripts/perf-feel.ts with PERF_RTT_MS=150 (one channel of 400 messages and 12 tasks behind a
+      proxy that delays HTTP and the WebSocket by half the round trip each way: reload to the board,
+      Enter to an empty composer and to the bubble, layout shift switching Tasks / #general and
+      opening tasks, false screens like Add an agent during five reloads, frames over 33 ms
+      scrolling the channel), and upload both as the perf-scale-N artifact, perf-scale's with a CPU
+      calibration (a fixed in-page workload) at 1x and 4x. A run that crashes fails its job. Then perf / scale downloads the three runs, and
+      scripts/perf-check.ts tells the perf-feel runs apart by their rttMs and grades their medians
+      unscaled (their timings wait mostly on the round trip; shifts and screens aren't times),
+      and scales each perf-scale timing by its run's calibration to the reference runner
       in scripts/perf-budgets.json (Reload only its in-page first screen; a run whose calibration
       is out of the ranges there is left out and named, and fewer than two usable runs fail the
       scaled gates), takes the medians and fails when one is over its gate there (a ratchet: each gate starts at today's

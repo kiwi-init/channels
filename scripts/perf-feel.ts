@@ -355,6 +355,19 @@ const report: Record<string, unknown> = { messages: MESSAGES, tasks: TASKS, rttM
 try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await context.addInitScript(WATCH);
+  await context.addInitScript(() => {
+    const w = window as unknown as { __falseScreens: string[] };
+    const seen = new Set<string>();
+    w.__falseScreens = [];
+    const look = () => {
+      if (document.querySelector('section[aria-label="Add an agent"]')) seen.add("Add an agent");
+      for (const p of document.querySelectorAll("p")) if (p.textContent === "No tasks yet" || p.textContent === "No messages yet") seen.add(p.textContent);
+      w.__falseScreens = [...seen];
+    };
+    const watch = new MutationObserver(look);
+    watch.observe(document, { childList: true, subtree: true, characterData: true });
+    setTimeout(() => watch.disconnect(), 5000);
+  });
   await context.addInitScript(
     (marker: string) => {
       const w = window as unknown as { __firstScreen?: number };
@@ -398,7 +411,7 @@ try {
   await page.waitForURL((u) => /#mc2-/.test(u.href) && u.href !== before);
   const code = decodeURIComponent(new URL(page.url()).hash.slice(1));
   const needs = page.getByRole("region", { name: "Needs you" });
-  const joining = kiwi(["join", code, "feel", "--as", "atlas", "--model", "claude-opus-5-5", "--relay", BASE]);
+  const joining = kiwi(["join", code, "feel", "--as", "atlas", "--model", "claude-opus-5-5", "--relay", `${UPSTREAM}/`]);
   const letIn = needs.getByRole("button", { name: "It matches: let in" });
   const showCode = needs.getByRole("button", { name: "Show code" });
   await letIn.or(showCode).first().waitFor({ timeout: 30000 });
@@ -458,7 +471,7 @@ try {
   await later(1500);
   await drain(page);
 
-  const reloads: { firstScreenMs: number; firstScreenInPageMs: number; liveInPageMs: number; shifts: number; moved: string[] }[] = [];
+  const reloads: { firstScreenMs: number; firstScreenInPageMs: number; liveInPageMs: number; shifts: number; moved: string[]; falseScreens: string[] }[] = [];
   for (let i = 0; i < REPS; i++) {
     const at = performance.now();
     const run = async () => {
@@ -484,13 +497,15 @@ try {
     } else r = await run();
     await later(1500);
     const d = await drain(page);
-    reloads.push({ ...r, shifts: d.shifts, moved: d.moved });
+    const falseScreens = await page.evaluate(() => (window as unknown as { __falseScreens?: string[] }).__falseScreens ?? []);
+    reloads.push({ ...r, shifts: d.shifts, moved: d.moved, falseScreens });
   }
   report.reload = {
     firstScreenMs: median(reloads.map((r) => r.firstScreenMs)),
     firstScreenInPageMs: median(reloads.map((r) => r.firstScreenInPageMs)),
     socketOpenInPageMs: median(reloads.map((r) => r.liveInPageMs)),
     layoutShift: median(reloads.map((r) => r.shifts)),
+    falseScreens: reloads.reduce((n, r) => n + r.falseScreens.length, 0),
     runs: reloads,
   };
   log("reload", JSON.stringify(report.reload));
