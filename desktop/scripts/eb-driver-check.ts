@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { payloadOf, shippedApp } from "./eb-app.ts";
 
-const IN_CODE = ["kiwiDriver", "KIWI_EB_DRIVER", "KIWI_EB_RELAY"];
+const IN_CODE = ["kiwiDriver", "KIWI_EB_DRIVER", "KIWI_EB_RELAY", "kiwi-eb-test-store.json"];
 const IN_LAUNCHER = ["KIWI_EB_DRIVER", "KIWI_EB_RELAY", "CFFIXED_USER_HOME"];
 
 const dir = resolve(process.argv[2] ?? "desktop/release-eb");
@@ -41,12 +41,12 @@ try {
   if (release.code.length || release.launcher.length) {
     console.error(`eb-driver-check: the release build carries test-only code: ${[...release.code, ...release.launcher.map((m) => `${m} through its launcher`)].join(", ")}`);
     bad++;
-  } else console.log("release build: no test driver, no relay override, and its launcher lets none of their variables through");
+  } else console.log("release build: no test driver, no relay override, no plain-JSON test store, and its launcher lets none of their variables through");
   const missing = [...IN_CODE.filter((m) => !test.code.includes(m)), ...IN_LAUNCHER.filter((m) => !test.launcher.includes(m)).map((m) => `${m} through its launcher`)];
   if (missing.length) {
     console.error(`eb-driver-check: the test build lacks ${missing.join(", ")}, so this check can't tell a release build from it`);
     bad++;
-  } else console.log("test build: the driver, the relay override and their variables through the launcher are in");
+  } else console.log("test build: the driver, the relay override, the plain-JSON test store and their variables through the launcher are in");
 } catch (e) {
   console.error(`eb-driver-check: ${e instanceof Error ? e.message : String(e)}`);
   bad++;

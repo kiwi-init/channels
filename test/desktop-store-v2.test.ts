@@ -6,7 +6,7 @@ import { join } from "node:path";
 
 import { legacyPassword } from "../desktop/src/legacy-keys.ts";
 import { readLegacyStore, type LegacyRead } from "../desktop/src/legacy-store.ts";
-import { isSealed, keychainKey, openStore, seal, STORE_FILE, unseal, type OpenStore, type StoreKey } from "../desktop/src/store-v2.ts";
+import { isSealed, keychainKey, openStore, readyMark, seal, STORE_FILE, unseal, type OpenStore, type StoreKey } from "../desktop/src/store-v2.ts";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -26,7 +26,7 @@ interface Keychain {
   ready: () => boolean;
 }
 
-function keychain(start: string | null = null, fail: { get?: string; set?: string; finished?: string } = {}, done = false): Keychain {
+function keychain(start: string | null = null, fail: { get?: string; set?: string; finished?: string; finish?: string } = {}, done = false): Keychain {
   let value = start;
   let sets = 0;
   let ready = done;
@@ -49,7 +49,10 @@ function keychain(start: string | null = null, fail: { get?: string; set?: strin
         if (fail.finished) throw new Error(fail.finished);
         return ready;
       },
-      finish: async () => void (ready = true),
+      finish: async () => {
+        if (fail.finish) throw new Error(fail.finish);
+        ready = true;
+      },
     },
     value: () => value,
     sets: () => sets,
@@ -363,6 +366,7 @@ describe("store v2", () => {
   test("a keychain that can't say whether the key is finished is refused when both copies are gone", async () => {
     const dir = folder();
     const s = await openStore({ dir, key: keychain(randomBytes(32).toString("base64"), { finished: "locked" }).key, legacy: NO_LEGACY, platform: "darwin" });
+    expect(s.kind === "unreadable" && s.why).toContain("marked ready");
     expect(s.kind === "unreadable" && s.why).toContain("locked");
     expect(existsSync(dir)).toBe(false);
   });
@@ -371,10 +375,11 @@ describe("store v2", () => {
     const dir = folder();
     put(dir, STORE_FILE, JSON.stringify(STORE));
     let sets = 0;
-    const leaky: StoreKey = { get: async () => null, set: async () => void sets++, drop: async () => {}, finished: async () => false, finish: async () => {} };
+    let drops = 0;
+    const leaky: StoreKey = { get: async () => null, set: async () => void sets++, drop: async () => void drops++, finished: async () => false, finish: async () => {} };
     const s = opened(await openStore({ dir, key: leaky, legacy: NO_LEGACY, platform: "linux" }));
     expect(s).toMatchObject({ json: STORE, sealed: false, noKeychain: "it didn't keep the store key Channels just made" });
-    expect(sets).toBe(1);
+    expect({ sets, drops }).toEqual({ sets: 1, drops: 0 });
     expect(isSealed(read(dir))).toBe(false);
   });
 
@@ -395,6 +400,32 @@ describe("store v2", () => {
     expect(s.kind === "unreadable" && s.why).toContain("didn't keep the store key");
     expect(sets).toBe(1);
     expect(existsSync(dir)).toBe(false);
+  });
+
+  test("a key read back that isn't the one Channels just made (another start got there first) is refused, and nothing is taken back or removed", async () => {
+    const dir = folder();
+    const theirs = randomBytes(32).toString("base64");
+    put(dir, "theirs.txt", "left as it was");
+    let value: string | null = null;
+    let drops = 0;
+    const raced: StoreKey = {
+      get: async () => value,
+      set: async () => void (value = theirs),
+      drop: async () => void drops++,
+      finished: async () => false,
+      finish: async () => {},
+    };
+    const s = await openStore({ dir, key: raced, legacy: NO_LEGACY, platform: "darwin" });
+    expect(s.kind === "unreadable" && s.why).toContain("didn't keep the store key");
+    expect({ value: await raced.get(), drops, files: readdirSync(dir) }).toEqual({ value: theirs, drops: 0, files: ["theirs.txt"] });
+  });
+
+  test("a keychain that won't take the ready mark: the store opens, and says why its key isn't marked", async () => {
+    const dir = folder();
+    const k = keychain(null, { finish: "the keychain is read-only" });
+    expect(opened(await openStore({ dir, key: k.key, legacy: NO_LEGACY, platform: "darwin" }))).toMatchObject({ sealed: true, unmarked: "the keychain is read-only" });
+    expect(opened(await openStore({ dir, key: k.key, legacy: NO_LEGACY, platform: "darwin" }))).toMatchObject({ json: {}, unmarked: "the keychain is read-only" });
+    expect(opened(await openStore({ dir, key: keychain(k.value()).key, legacy: NO_LEGACY, platform: "darwin" }))).toMatchObject({ json: {}, unmarked: null });
   });
 
   test("Linux, where the Secret Service gives no app its own key, starts over when both copies are gone", async () => {
@@ -442,22 +473,61 @@ describe("the keychain item", () => {
     }
   });
 
-  test("the finished mark is a second item beside the key, and dropping takes both back", async () => {
-    const get = spyOn(Bun.secrets, "get").mockResolvedValue(null);
-    const set = spyOn(Bun.secrets, "set").mockResolvedValue(undefined);
-    const del = spyOn(Bun.secrets, "delete").mockResolvedValue(true);
+  function secrets(): { items: Map<string, string>; restore: () => void } {
+    const items = new Map<string, string>();
+    const at = (o: { service: string; name: string }): string => `${o.service}/${o.name}`;
+    const get = spyOn(Bun.secrets, "get").mockImplementation(async (o) => items.get(at(o)) ?? null);
+    const set = spyOn(Bun.secrets, "set").mockImplementation(async (o) => void items.set(at(o), o.value));
+    const del = spyOn(Bun.secrets, "delete").mockImplementation(async (o) => items.delete(at(o)));
+    return {
+      items,
+      restore: () => {
+        get.mockRestore();
+        set.mockRestore();
+        del.mockRestore();
+      },
+    };
+  }
+
+  test("the ready mark is a second item holding the SHA-256 of the key it marks, so a mark left by another key doesn't count", async () => {
+    const s = secrets();
     try {
       const k = keychainKey("Channels Test", "store-key-test");
       expect(await k.finished()).toBe(false);
-      expect(get).toHaveBeenLastCalledWith({ service: "Channels Test", name: "store-key-test-ready" });
+      await expect(k.finish()).rejects.toThrow("no store key to mark ready");
+      await k.set("a2V5");
+      expect(await k.finished()).toBe(false);
       await k.finish();
-      expect(set).toHaveBeenLastCalledWith({ service: "Channels Test", name: "store-key-test-ready", value: "1" });
-      await k.drop();
-      expect(del.mock.calls).toEqual([[{ service: "Channels Test", name: "store-key-test-ready" }], [{ service: "Channels Test", name: "store-key-test" }]]);
+      expect(s.items.get("Channels Test/store-key-test-ready")).toBe(readyMark("a2V5"));
+      expect(readyMark("a2V5")).toMatch(/^[0-9a-f]{64}$/);
+      expect(await k.finished()).toBe(true);
+      s.items.set("Channels Test/store-key-test", "b3RoZXI=");
+      expect(await k.finished()).toBe(false);
     } finally {
-      get.mockRestore();
-      set.mockRestore();
-      del.mockRestore();
+      s.restore();
+    }
+  });
+
+  test("drop takes back only a key this run made, while the keychain still holds it, mark and all", async () => {
+    const s = secrets();
+    try {
+      s.items.set("Channels Test/store-key-test", "b2xk");
+      await expect(keychainKey("Channels Test", "store-key-test").drop()).rejects.toThrow("only a store key it made in this run");
+      expect(s.items.get("Channels Test/store-key-test")).toBe("b2xk");
+      s.items.clear();
+      const mine = keychainKey("Channels Test", "store-key-test");
+      await mine.set("bmV3");
+      await mine.finish();
+      await mine.drop();
+      expect([...s.items.keys()]).toEqual([]);
+      await expect(mine.drop()).rejects.toThrow("only a store key it made in this run");
+      const raced = keychainKey("Channels Test", "store-key-test");
+      await raced.set("bWluZQ==");
+      s.items.set("Channels Test/store-key-test", "dGhlaXJz");
+      await expect(raced.drop()).rejects.toThrow("while the keychain still holds it");
+      expect(s.items.get("Channels Test/store-key-test")).toBe("dGhlaXJz");
+    } finally {
+      s.restore();
     }
   });
 });

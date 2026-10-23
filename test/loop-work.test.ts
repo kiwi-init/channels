@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
@@ -8,6 +8,8 @@ import { fold, type Roster } from "@kiwi/core/state.ts";
 import { claudeArgv, claudeSession } from "../src/loop/claude.ts";
 import { codexArgv, codexIdle, codexThread } from "../src/loop/codex.ts";
 import { grokArgv, grokIdle, grokSession } from "../src/loop/grok.ts";
+import { mimoArgv, mimoIdle, mimoSession } from "../src/loop/mimo.ts";
+import { Database } from "bun:sqlite";
 import { firstPrompt, nextWork, workOver } from "../src/loop/work.ts";
 
 const ids: Record<string, Identity> = {};
@@ -272,6 +274,66 @@ describe("the Grok recipe", () => {
       expect(grokIdle(dir).idle).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("the MiMoCode recipe", () => {
+  const SCHEMA =
+    "CREATE TABLE IF NOT EXISTS session (id text PRIMARY KEY, parent_id text, directory text NOT NULL, time_created integer NOT NULL); CREATE TABLE IF NOT EXISTS message (id text PRIMARY KEY, session_id text NOT NULL, agent_id text NOT NULL DEFAULT 'main', time_created integer NOT NULL, data text NOT NULL); CREATE TABLE IF NOT EXISTS part (id text PRIMARY KEY, message_id text NOT NULL, session_id text NOT NULL, time_created integer NOT NULL, data text NOT NULL);";
+  const home = () => {
+    const h = mkdtempSync(join(tmpdir(), "kiwi-loop-mimo-"));
+    mkdirSync(join(h, "data"), { recursive: true });
+    mkdirSync(join(h, "state"), { recursive: true });
+    return h;
+  };
+
+  test("the model given, else the one chosen in MiMoCode, then the prompt; never an effort", () => {
+    const h = home();
+    try {
+      const env = { MIMOCODE_HOME: h };
+      expect(mimoArgv({ bin: "mimo", model: "xiaomi/x", prompt: "go" }, env)).toEqual(["mimo", "-m", "xiaomi/x", "--prompt", "go"]);
+      expect(mimoArgv({ bin: "mimo", prompt: "go" }, env)).toEqual(["mimo", "--prompt", "go"]);
+      writeFileSync(join(h, "state", "model.json"), JSON.stringify({ recent: [{ providerID: "xiaomi", modelID: "mimo-v2.6-pro" }], variant: {} }));
+      expect(mimoArgv({ bin: "mimo", prompt: "go" }, env)).toEqual(["mimo", "-m", "xiaomi/mimo-v2.6-pro", "--prompt", "go"]);
+    } finally {
+      rmSync(h, { recursive: true, force: true });
+    }
+  });
+
+  test("the launch's session is the top-level one in this folder started after it with the nonce in a part; idle once its last message is a finished answer", () => {
+    const h = home();
+    const db = new Database(join(h, "data", "mimocode.db"));
+    try {
+      const env = { MIMOCODE_HOME: h };
+      const cwd = h;
+      const dir = realpathSync(h);
+      const now = Date.now();
+      db.exec(SCHEMA);
+      const session = db.prepare("INSERT INTO session (id, parent_id, directory, time_created) VALUES (?1, ?2, ?3, ?4)");
+      const part = db.prepare("INSERT INTO part (id, message_id, session_id, time_created, data) VALUES (?1, 'm', ?2, ?3, ?4)");
+      const message = db.prepare("INSERT INTO message (id, session_id, time_created, data) VALUES (?1, ?2, ?3, ?4)");
+      session.run("ses_old", null, dir, now - 60_000);
+      part.run("p1", "ses_old", now - 60_000, '{"type":"text","text":"(Kiwi loop launch abc123)"}');
+      session.run("ses_child", "ses_x", dir, now + 100);
+      part.run("p2", "ses_child", now + 100, '{"type":"text","text":"(Kiwi loop launch abc123)"}');
+      session.run("ses_elsewhere", null, "/somewhere/else", now + 100);
+      part.run("p3", "ses_elsewhere", now + 100, '{"type":"text","text":"(Kiwi loop launch abc123)"}');
+      expect(mimoSession("abc123", now, cwd, env)).toBeNull();
+      session.run("ses_mine", null, dir, now + 200);
+      part.run("p4", "ses_mine", now + 200, '{"type":"text","text":"(Kiwi loop launch abc123)"}');
+      expect(mimoSession("abc123", now, cwd, env)).toBe("ses_mine");
+
+      expect(mimoIdle("ses_mine", env)).toEqual({ idle: false, since: null });
+      message.run("m1", "ses_mine", now + 300, JSON.stringify({ role: "user", time: { created: now + 300 } }));
+      expect(mimoIdle("ses_mine", env).idle).toBe(false);
+      message.run("m2", "ses_mine", now + 400, JSON.stringify({ role: "assistant", time: { created: now + 400 } }));
+      expect(mimoIdle("ses_mine", env).idle).toBe(false);
+      message.run("m3", "ses_mine", now + 500, JSON.stringify({ role: "assistant", time: { created: now + 500, completed: now + 900 } }));
+      expect(mimoIdle("ses_mine", env)).toEqual({ idle: true, since: now + 900 });
+    } finally {
+      db.close();
+      rmSync(h, { recursive: true, force: true });
     }
   });
 });

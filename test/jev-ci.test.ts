@@ -105,7 +105,35 @@ const ran = (r: Plan) =>
     .filter((d) => d.run)
     .map((d) => d.job)
     .sort();
-const CHECKS = ["static", "test-unit", "test-flows-a", "test-flows-b", "build", "shots", "perf-runs", "perf", "desktop", "desktop-mac", "cli-macos", "ios", "ios-gestures"];
+const CHECKS = ["static", "test-unit", "test-flows-a", "test-flows-b", "build", "shots", "perf-runs", "perf", "desktop", "desktop-mac", "desktop-linux", "cli-macos", "ios", "ios-gestures"];
+
+describe("the iPhone jobs wait only on what the iPhone app is built from (T1598)", () => {
+  const desktopOnly = {
+    "desktop/package.json": '{\n  "name": "desktop",\n  "devDependencies": { "electrobun": "2.0.4" }\n}\n',
+    "bun.lock": '{\n  "lockfileVersion": 1,\n  "packages": { "electrobun": ["electrobun@2.0.4"] }\n}\n',
+  };
+
+  test("a desktop-only dependency change doesn't queue them by rule: Jev judges it", async () => {
+    const { by } = await planFor(desktopOnly);
+    for (const job of ["ios", "ios-gestures"]) {
+      expect(by(job).run).toBe(false);
+      expect(by(job).layer).not.toBe("L0");
+    }
+  });
+
+  test("Jev can still run them on a manifest change it thinks reaches the bundle", async () => {
+    const { by } = await planFor(
+      desktopOnly,
+      fakeJev((job) => (job.startsWith("ios") ? 0.9 : 0.05)),
+    );
+    for (const job of ["ios", "ios-gestures"]) expect(by(job)).toMatchObject({ run: true, layer: "L2" });
+  });
+
+  test("@kiwi/core's manifest, the exports map the engine resolves through, runs them by rule", async () => {
+    const { by } = await planFor({ "packages/core/package.json": '{\n  "name": "@kiwi/core",\n  "exports": { "./*": "./src/*" }\n}\n' });
+    for (const job of ["ios", "ios-gestures"]) expect(by(job)).toMatchObject({ run: true, layer: "L0" });
+  });
+});
 
 describe("ci.yml edits outside the jobs", () => {
   test("a concurrency-only edit (#315) runs only the static checks, by rule", async () => {

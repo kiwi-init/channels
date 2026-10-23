@@ -43,10 +43,10 @@ try {
     (v) => typeof v === "number",
   );
   await check(
-    "the relay it was given answers through the CSP",
+    "the relay it was given reaches the page through the store (window.kiwi.relayUrl) and answers through the CSP",
     d,
     () =>
-      fetch(`${new URLSearchParams(location.search).get("relay")}/v1/config`).then(
+      fetch(`${(window as unknown as { kiwi: { relayUrl: string } }).kiwi.relayUrl}/v1/config`).then(
         (r) => r.status,
         (e: unknown) => String(e),
       ),
