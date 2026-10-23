@@ -70,6 +70,7 @@ jobs:
         with:
           name: stamp
           path: ${{ runner.temp }}/stamp.patch
+          overwrite: true
 
   cli:
     needs: version
@@ -114,6 +115,7 @@ jobs:
         with:
           name: release-cli
           path: dist/kiwi-*
+          overwrite: true
 
   # The Electron app builds on each OS for that OS: dmg/zip on macOS, AppImage/deb
   # on Linux. Unsigned for now. No Windows app, and no Windows CLI.
@@ -290,3 +292,4 @@ jobs:
           name: release-desktop-${{ matrix.target }}
           path: out/*
           if-no-files-found: error
+          overwrite: true
