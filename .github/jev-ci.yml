@@ -729,6 +729,9 @@ jobs:
       memory on flush, and started again after it ends; and test/desktop-keys-page.test.ts: the
       page's KeysPort over the RPC (keys-page.ts), each request numbered and sent with the page's
       session, frames from another session dropped, and a refused RPC an unreachable reply. And
+      test/desktop-github-relink.test.ts: a page that presses Link while a GitHub link runs (as
+      after a reload) joins the same flow and gets that flow's device code again
+      (desktop/src/ipc/github.ts, with fetch and the browser faked). And
       test/desktop-store-open.test.ts: a store vault whose load throws partway leaves the store
       broken, so no later change saves defaults over either copy (desktop/src/store.ts openStore), as
       does a load that fails with an empty reason or throws an error with no message, the thrown
@@ -1078,7 +1081,10 @@ jobs:
       only the session main minted for the load opens, so a thousand hellos with ids of the
       page's own choosing open nothing, every load gets a fresh id, a retired session's late reply
       never leaves main, and a page whose first frame is a keys request has its session opened
-      before the keys see it. Then `bun run build:eb` (electrobun build --env=stable): bundles src/main-eb.ts with the
+      before the keys see it. Each document is its own session (T1741): two documents that boot
+      from one preload's id carry their own nonce and get their own sessions, so neither takes the
+      other's reply, and main's load() retires the session at once, so nothing for the old load
+      leaves main before the new page says hello. Then `bun run build:eb` (electrobun build --env=stable): bundles src/main-eb.ts with the
       shared desktop modules it imports (ipc/handlers.ts and all the app's calls through
       host-eb.ts, guard.ts csp(), open.ts, eb-page.ts, eb-bridge.ts, rpc-eb.ts, window-look.ts,
       window-size.ts) and @kiwi/core, and src/preload-eb.ts as the preload view; scripts/eb-pre-build.ts turns build/icon.icns into the

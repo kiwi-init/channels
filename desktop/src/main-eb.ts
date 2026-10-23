@@ -98,6 +98,7 @@ function createWindow(): BrowserWindow {
   const load = (): void => {
     core.setWebviewHTMLContent(webview.id, ptr(cString(pageWithCsp(index, store.relayUrl))));
     ours = true;
+    bridge.retire();
     webview.loadURL(PAGE_URL);
   };
   const refreshPreload = (): void =>

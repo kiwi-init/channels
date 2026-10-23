@@ -57,6 +57,9 @@ describe("the bridge answers only our page", () => {
     expect(frameOf({ session })).toEqual({ session });
     expect(frameOf({ session, packet: { type: "request", id: 1 } })).toEqual({ session, packet: { type: "request", id: 1 } });
     expect(frameOf({ session, packet: null })).toEqual({ session, packet: null });
+    expect(frameOf({ session, doc: session, packet: 1 })).toEqual({ session, doc: session, packet: 1 });
+    expect(frameOf({ session, doc: "short" })).toBeNull();
+    expect(frameOf({ session, doc: 7 })).toBeNull();
     for (const junk of [null, "x", { packet: {} }, { session: 7 }, { session: "short" }, { session: "has space in it, quite long" }, { session: "a".repeat(65) }]) expect(frameOf(junk)).toBeNull();
   });
 
