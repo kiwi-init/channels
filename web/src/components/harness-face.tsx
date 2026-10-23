@@ -1,19 +1,13 @@
 import { harnessUrl } from "@/lib/avatars"
 import { harnessName, knownHarness, monoHarness } from "@/lib/harness"
-import { cx } from "@/lib/utils"
 
-export function HarnessFace({ harness, size, working }: { harness: string | undefined; size: number; working?: boolean }) {
+export function HarnessFace({ harness, size }: { harness: string | undefined; size: number }) {
   const known = knownHarness(harness)
   const mark = Math.round(size * 0.86)
   const url = known ? harnessUrl(known) : ""
   const mask = `url(${JSON.stringify(url)})`
   return (
-    <span
-      role="img"
-      aria-label={known ? harnessName(known) : "Agent"}
-      title={known ? harnessName(known) : undefined}
-      className={cx("flex size-full items-center justify-center rounded-full select-none", working && "shadow-[0_0_0_1.5px_var(--canvas),0_0_0_3px_var(--doing)]")}
-    >
+    <span role="img" aria-label={known ? harnessName(known) : "Agent"} title={known ? harnessName(known) : undefined} className="flex size-full items-center justify-center rounded-full select-none">
       {known && url ? (
         monoHarness(known) ? (
           <span

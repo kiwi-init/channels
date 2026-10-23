@@ -22,6 +22,16 @@ describe("an agent in the channel's sidebar", () => {
     expect(out.match(/<button/g)).toHaveLength(2)
     expect(out).not.toContain("disabled")
   })
+  test("at work it says which task in words and wears the spectrum ring; away it says so, with no ring", () => {
+    const row = (here: "listening" | null) =>
+      renderToStaticMarkup(createElement(AgentRow, { a: { name: "atlas", label: "atlas", color: null, here, lead: true, load: load([task]) }, onMessage: () => {}, onOpenTask: () => {} }))
+    const working = row("listening")
+    expect(working).toContain(">Write fewer rows per message</span>")
+    expect(working).toContain("spectrum-ring")
+    const away = row(null)
+    expect(away).toContain(">Away</span>")
+    expect(away).not.toContain("spectrum-ring")
+  })
   test("with no task, the row still opens the conversation and there is no task button", () => {
     const out = html([])
     expect(out).toContain('aria-label="Message atlas privately"')

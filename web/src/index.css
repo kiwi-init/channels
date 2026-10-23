@@ -412,7 +412,27 @@ html.reduce-motion ::after {
   }
 }
 
+@layer components {
+  .spectrum-ring::before {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    padding: 1.5px;
+    pointer-events: none;
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    background: conic-gradient(from 200deg, var(--spectrum-1), var(--spectrum-2), var(--spectrum-3), var(--spectrum-4), var(--spectrum-5), var(--spectrum-6), var(--spectrum-7), var(--spectrum-1));
+  }
+}
+
 @media (prefers-contrast: more) {
+  .spectrum-ring::before {
+    background: var(--doing);
+  }
   .prism-lit,
   .glass {
     background: var(--canvas);

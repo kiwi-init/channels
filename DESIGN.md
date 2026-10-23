@@ -131,6 +131,10 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   reads as meant. `test/prism.test.ts` keeps it that way. Under
   `prefers-contrast: more` it falls back to a solid fill with a 2px `ink`
   ring: no band, no glint.
+- The spectrum's one other place: an agent at work (here and on a task, or
+  its harness says it's working) wears a thin spectrum ring round its face
+  (`spectrum-ring`, 1.5px, 3px out), steady, never spinning. Away or idle,
+  no ring. Under `prefers-contrast: more` the ring is solid `doing`.
 - Fall back to solid fills under `prefers-contrast: more`.
 
 ## 6. Motion
@@ -226,8 +230,9 @@ From `design-tokens.ts`:
   row (it opens Everything, with Done this week at its foot) and beside it a
   quiet dot and number for each state that waits (`alert` Needs you, `doing`
   In progress, `decide` In review, only when above zero, each opening its
-  view), the agents with what each is doing now (a click opens your direct
-  conversation with it; the task id beside it opens its task), and the
+  view), the agents with what each is doing now (the task it's on in words,
+  else its live status; a click opens your direct conversation with it; the
+  task id beside it opens its task), and the
   conversations: the rooms, your own direct ones, one that asks for you and
   the open one stay; threads between agents fold behind an "N more" row
   carrying their unread total, which opens to "Show less". The page
@@ -397,7 +402,7 @@ channel views.
 Don't: hard-code hex, add font families, ship gradient marketing styling,
 build floating composer menus, use colored shadows, put prism on anything
 but what's chosen in the sidebar, spread the spectrum beyond a thin band
-in it, or put hairlines
+in it and a working agent's ring, or put hairlines
 between the rails.
 
 ## 14. The iPhone app

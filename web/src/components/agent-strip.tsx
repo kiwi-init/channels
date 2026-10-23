@@ -63,11 +63,11 @@ const busy = (a: AgentNow) => agentNow(a).busy
 
 export const byBusy = (agents: AgentNow[]) => [...agents].sort((a, b) => Number(busy(b)) - Number(busy(a)) || Number(!!b.here) - Number(!!a.here))
 
-const face = (a: AgentNow, size: number) => <Monogram name={a.label} hue={a.name} agent color={a.color} size={size} online={size > 20 && !!a.here} />
+const face = (a: AgentNow, size: number) => <Monogram name={a.label} hue={a.name} agent color={a.color} size={size} online={size > 20 && !!a.here} working={busy(a)} />
 
 export function AgentRow({ a, onMessage, onOpenTask }: { a: AgentNow; onMessage: (name: string) => void; onOpenTask: (id: number) => void }) {
-  const doing = doingNow(a)
   const task = a.load.current[0]
+  const line = a.here && task ? task.title : agentNow(a).text
   return (
     <li className="flex items-center rounded-row transition-colors hover:bg-wash">
       <button type="button" onClick={() => onMessage(a.name)} aria-label={`Message ${a.label} privately`} className="flex min-w-0 flex-1 items-center gap-3 px-2 py-1.5 text-left">
@@ -77,10 +77,7 @@ export function AgentRow({ a, onMessage, onOpenTask }: { a: AgentNow; onMessage:
             <span className="truncate text-ui font-medium text-ink">{a.label}</span>
             {a.lead && <span className="shrink-0 text-meta text-ink-3">lead</span>}
           </span>
-          <span className="flex items-center gap-1.5 text-meta text-ink-3">
-            {doing?.busy && <span className="size-1.5 shrink-0 rounded-full bg-doing" />}
-            <span className="truncate">{agentNow(a).text}</span>
-          </span>
+          <span className={cx("block truncate text-meta", a.here && task ? "text-ink-2" : "text-ink-3")}>{line}</span>
         </span>
       </button>
       {task && (

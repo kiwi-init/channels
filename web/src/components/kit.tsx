@@ -113,7 +113,7 @@ export const Harnesses = createContext<ReadonlyMap<string, string>>(new Map())
 /**
  * Who someone is, at a glance: a circle with their initials, or the picture they published. A person wears their own pick (their
  * agents wear it too), or a quiet grey; an agent with no pick gets a steady hue from its name.
- * `working` puts a ring in the in-progress blue around an agent's.
+ * `working` puts a thin spectrum ring round the face while it works.
  */
 export function Monogram({
   name,
@@ -144,22 +144,16 @@ export function Monogram({
   const harness = useContext(Harnesses).get(hue ?? name)
   const face = agent ? null : (picture ?? known ?? null)
   return (
-    <span className={cx("relative inline-flex shrink-0", className)} style={{ width: size, height: size }}>
+    <span className={cx("relative inline-flex shrink-0", working && "spectrum-ring", className)} style={{ width: size, height: size }}>
       {agent ? (
-        <HarnessFace harness={harness} size={size} working={working} />
+        <HarnessFace harness={harness} size={size} />
       ) : face ? (
-        <img
-          src={`data:${face.mime};base64,${face.data}`}
-          alt=""
-          draggable={false}
-          className={cx("size-full rounded-full bg-wash-2 object-cover select-none", working && "shadow-[0_0_0_1.5px_var(--canvas),0_0_0_3px_var(--doing)]")}
-        />
+        <img src={`data:${face.mime};base64,${face.data}`} alt="" draggable={false} className="size-full rounded-full bg-wash-2 object-cover select-none" />
       ) : (
         <span
           className={cx(
             "flex size-full items-center justify-center rounded-full font-semibold tracking-[-0.01em] text-white select-none",
-            !tone && "bg-[linear-gradient(180deg,var(--avatar-top),var(--avatar-bottom))]",
-            working && "shadow-[0_0_0_1.5px_var(--canvas),0_0_0_3px_var(--doing)]"
+            !tone && "bg-[linear-gradient(180deg,var(--avatar-top),var(--avatar-bottom))]"
           )}
           style={{
             ...(tone && { background: `linear-gradient(180deg, ${tone.fill}, color-mix(in srgb, ${tone.fill} 72%, black))`, color: tone.ink }),
@@ -168,13 +162,6 @@ export function Monogram({
         >
           {letters}
         </span>
-      )}
-      {agent && working && (
-        <span
-          className="absolute -top-0.5 -right-0.5 rounded-full bg-doing shadow-[0_0_0_2px_var(--canvas)]"
-          style={{ width: Math.max(7, Math.round(size * 0.26)), height: Math.max(7, Math.round(size * 0.26)) }}
-          title="Working"
-        />
       )}
       {online && (
         <span
