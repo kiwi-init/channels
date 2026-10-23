@@ -7,9 +7,9 @@ import { daemonStop } from "../desktop/src/daemon-client.ts";
 import { startLocalRelay } from "./local-relay.ts";
 
 if (process.argv.includes("--help") || !process.argv[2]) {
-  console.log(`The packaged desktop app's cold start, measured: from launching the executable to its window and its first screen, then from a click on
-the channel to its first cached message on screen and to live, PERF_RUNS times (5) after one run that makes a channel with PERF_MESSAGES messages (20)
-on a local relay. It runs in a temp user data dir and a temp KIWI_HOME (and on Linux a temp HOME), with a mock keychain on a Mac: it never touches
+  console.log(`The packaged desktop app's cold start, measured: from launching the executable to its window, its first screen, the first cached message
+of the channel it reopens on screen, and live, PERF_RUNS times (5) after one run that makes a channel with PERF_MESSAGES messages (20) on a local relay,
+and leaves it open. A launch that doesn't reopen that channel fails. It runs in a temp user data dir and a temp KIWI_HOME (and on Linux a temp HOME), with a mock keychain on a Mac: it never touches
 the real app. Fails when a median is over its gate in scripts/perf-budgets.json (the limits whose source is desktop).
 
   bun scripts/perf-desktop.ts <packaged app executable> [--json out.json]`);
@@ -112,7 +112,7 @@ async function quit(r: Running): Promise<void> {
 
 const { relay, port } = await startLocalRelay(join(root, "relay"), null, { rateLimits: false });
 const RELAY = `http://127.0.0.1:${port}`;
-const runs: { windowMs: number; firstScreenMs: number; openToMessageMs: number; openToLiveMs: number }[] = [];
+const runs: { windowMs: number; firstScreenMs: number; firstMessageMs: number; liveMs: number }[] = [];
 let running: Running | null = null;
 try {
   log("first run: a person, a channel and its messages on the local relay");
@@ -159,19 +159,7 @@ try {
         })
         .catch(() => null),
     );
-    const channel = page
-      .getByRole("banner", { name: "Channels" })
-      .or(page.getByRole("complementary"))
-      .getByRole("button", { name: /^cold\b/ })
-      .filter({ visible: true })
-      .first();
-    await channel.waitFor({ timeout: 30_000 });
-    const clicked = await channel.evaluate((el) => {
-      const at = performance.now();
-      (el as HTMLElement).click();
-      return at;
-    });
-    const opened = await until("the first message and the live connection", 60_000, () =>
+    const reopened = await until("the channel it had open, reopened on launch, with its first message and live", 20_000, () =>
       page
         .evaluate(() => {
           const mark = (name: string) => performance.getEntriesByName(name, "mark")[0]?.startTime;
@@ -184,8 +172,8 @@ try {
     const run = {
       windowMs: Math.round(screen.origin - started),
       firstScreenMs: Math.round(screen.origin + screen.paint - started),
-      openToMessageMs: Math.round(opened.message - clicked),
-      openToLiveMs: Math.round(opened.live - clicked),
+      firstMessageMs: Math.round(screen.origin + reopened.message - started),
+      liveMs: Math.round(screen.origin + reopened.live - started),
     };
     runs.push(run);
     log(`run ${i + 1}`, JSON.stringify(run));
@@ -205,8 +193,8 @@ try {
 const medians: Record<string, number> = {
   windowMs: median(runs.map((r) => r.windowMs)),
   firstScreenMs: median(runs.map((r) => r.firstScreenMs)),
-  openToMessageMs: median(runs.map((r) => r.openToMessageMs)),
-  openToLiveMs: median(runs.map((r) => r.openToLiveMs)),
+  firstMessageMs: median(runs.map((r) => r.firstMessageMs)),
+  liveMs: median(runs.map((r) => r.liveMs)),
 };
 const report = { runs: runs.length, ...medians, each: runs };
 console.log(JSON.stringify(report, null, 2));
