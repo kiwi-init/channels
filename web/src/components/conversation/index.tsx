@@ -10,6 +10,7 @@ import { taskCards } from "@kiwi/core/standup.ts"
 import { answersDecisions, colorOf, decidersOf, heldBy, outsideRepos, taskId, tasksAwaitingPeople, type Task, humanOf, ownerOf } from "@kiwi/core/state.ts"
 import { channelTitle, loadRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
 import { howHere } from "@/lib/presence"
+import { sendsInTurn, withSentQuotes } from "@/lib/send-order"
 import { asksFor, chosenOf, heldAsks } from "@/lib/asks"
 import type { Command } from "@/lib/commands"
 import { approveTask, closedDigest, reviewsFor, sendBackTask, type TaskSend } from "@/lib/task-actions"
@@ -84,7 +85,9 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const query = useDeferredValue(search?.trim() ? search : null)
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [sending, setSending] = useState<{ key: number; place: string; m: Message; after: number; seq?: number }[]>([])
+  const [sendingBase] = useState(() => Date.now())
   const sendingKey = useRef(0)
+  const [inTurn] = useState(sendsInTurn)
   const sendingSeq = useRef(new Map<number, Promise<number>>())
   const [picture, setPicture] = useState<{ m: Message; img: ImageAttachment; src: string } | null>(null)
   const [highlight, setHighlight] = useState<number | null>(null)
@@ -612,20 +615,15 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                               onAnswer={answer}
                               nameOf={nameOf}
                               onClearReply={(answered) => setReplyTo((now) => (!answered || now === answered ? null : now))}
+                              onRestoreReply={(answering) => setReplyTo((now) => now ?? answering)}
                               disabled={connection === "connecting"}
                               extra={extra}
                               placeholder={place.kind === "main" ? "Message everyone" : `Message ${nameOf(place.with.find((n) => n !== me) ?? "")} privately`}
                               send={async (body, opts) => {
                                 stick()
-                                const answering = async (o: SendOptions): Promise<SendOptions> =>
-                                  o.re?.some((seq) => seq < 0)
-                                    ? {
-                                        ...o,
-                                        re: await Promise.all(o.re.map((seq) => (seq < 0 ? (sendingSeq.current.get(-seq) ?? Promise.reject(new Error("the message it answers wasn't sent"))) : seq))),
-                                      }
-                                    : o
-                                if (opts.imgs?.length || opts.task !== undefined) return send(body, await answering(opts))
-                                const key = ++sendingKey.current
+                                const answering = (o: SendOptions) => withSentQuotes(o, (k) => sendingSeq.current.get(k))
+                                if (opts.imgs?.length || opts.task !== undefined) return inTurn(async () => send(body, await answering(opts)))
+                                const key = sendingBase + ++sendingKey.current
                                 const m: Message = {
                                   v: PROTOCOL_VERSION,
                                   id: `sending-${key}`,
@@ -640,7 +638,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                                   ...(opts.dm ? { dm: true } : {}),
                                 }
                                 setSending((all) => [...all, { key, place: hereKey, m, after: messages.at(-1)?.seq ?? 0 }].slice(-50))
-                                const going = answering(opts).then((o) => send(body, o))
+                                const going = inTurn(async () => send(body, await answering(opts)))
                                 sendingSeq.current.set(key, going)
                                 sendingSeq.current.delete(key - 50)
                                 try {

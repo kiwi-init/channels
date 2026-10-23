@@ -132,6 +132,10 @@ async function handle(ask: Ask): Promise<unknown> {
       return room(ask.code).answer(ask.seq, ask.text);
     case "react":
       return room(ask.code).react(ask.seq, ask.emoji);
+    case "approve":
+      return room(ask.code).approve(ask.task);
+    case "sendBack":
+      return room(ask.code).sendBack(ask.task, ask.why);
     case "open":
       room(ask.code).open(ask.place);
       return null;
