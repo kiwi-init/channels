@@ -6,7 +6,8 @@ import path from "node:path";
 import desktopPackage from "../package.json" with { type: "json" };
 import { developerIdRequirement } from "../src/signer.ts";
 import { swapAsset } from "../src/update-asset.ts";
-import { MB, mb, sizeOf, stableBuild, unpackApp } from "./eb-app.ts";
+import { MB, mb, payloadOf, shippedApp, sizeOf } from "./eb-app.ts";
+import { sealApp } from "./eb-seal.ts";
 
 const PACKED_LIMIT = 40 * MB;
 const IDENTIFIER = "com.kiwiinit.channels";
@@ -93,7 +94,7 @@ const dmgName = zipName.replace(/\.zip$/, ".dmg");
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "eb-release-"));
 try {
-  const app = unpackApp(stableBuild(path.resolve(releaseEb)).payload, path.join(tmp, "app"));
+  const app = shippedApp(payloadOf(path.join(path.resolve(releaseEb), "artifacts")), tmp);
   if (path.basename(app) !== "Channels.app") throw new Error(`eb-release: the plain app is ${path.basename(app)}, not Channels.app`);
   const id = plist(app, "CFBundleIdentifier");
   if (id !== IDENTIFIER) throw new Error(`eb-release: the app is ${id}, not ${IDENTIFIER}: build it with CHANNELS_EB_RELEASE=1`);
@@ -104,12 +105,17 @@ try {
   const bun = path.join(app, "Contents", "MacOS", "bun");
   if (signed) {
     for (const f of machOs(app).filter((f) => f !== mainExe)) sign(f, f === bun);
+    sealApp(app);
     sign(app, false);
     const forNotary = path.join(tmp, "notarize.zip");
     must("ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", app, forNotary], "zipping for notarization");
     notarize(forNotary);
     must("xcrun", ["stapler", "staple", app], "stapling the app");
-  } else must("codesign", ["--force", "--deep", "--sign", "-", app], "ad-hoc signing");
+  } else {
+    for (const f of machOs(app).filter((f) => f !== mainExe)) must("codesign", ["--force", "--sign", "-", f], `ad-hoc signing ${f}`);
+    sealApp(app);
+    must("codesign", ["--force", "--sign", "-", app], "ad-hoc signing the app");
+  }
 
   fs.mkdirSync(outDir, { recursive: true });
   const zip = path.join(outDir, zipName);

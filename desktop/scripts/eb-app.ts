@@ -1,6 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+
+import { sealApp } from "./eb-seal.ts";
 
 export const MB = 1024 ** 2;
 
@@ -18,48 +20,31 @@ export function only(found: string[], what: string): string {
   return found[0] as string;
 }
 
-export interface StableBuild {
-  wrapper: string;
-  wrapperDmg: string;
-  payload: string;
-}
-
-export function stableBuild(releaseEb: string): StableBuild {
-  const builds = join(releaseEb, "build");
-  const artifacts = join(releaseEb, "artifacts");
-  const wrapper = only(
-    readdirSync(builds)
-      .filter((name) => name.startsWith("stable-macos-"))
-      .flatMap((name) =>
-        readdirSync(join(builds, name))
-          .filter((n) => n.endsWith(".app"))
-          .map((app) => join(builds, name, app)),
-      ),
-    `stable Mac .app under ${builds}`,
-  );
-  const listed = readdirSync(artifacts);
-  const wrapperDmg = only(
-    listed.filter((n) => n.endsWith(".dmg")).map((n) => join(artifacts, n)),
-    `.dmg under ${artifacts}`,
-  );
-  const payload = only(
-    listed.filter((n) => n.endsWith(".app.tar.zst")).map((n) => join(artifacts, n)),
+export function payloadOf(artifacts: string): string {
+  return only(
+    readdirSync(artifacts)
+      .filter((name) => name.endsWith(".app.tar.zst"))
+      .map((name) => join(artifacts, name)),
     `.app.tar.zst under ${artifacts}`,
   );
-  return { wrapper, wrapperDmg, payload };
 }
 
-export function unpackApp(payload: string, into: string): string {
-  rmSync(into, { recursive: true, force: true });
-  mkdirSync(into, { recursive: true });
-  const tar = join(into, ".app.tar");
+function plainApp(payload: string, into: string): string {
+  const tar = join(into, "app.tar");
   writeFileSync(tar, Bun.zstdDecompressSync(readFileSync(payload)));
-  execFileSync("tar", ["-xf", tar, "-C", into]);
-  rmSync(tar);
+  const unpacked = join(into, "app");
+  mkdirSync(unpacked);
+  execFileSync("tar", ["-xf", tar, "-C", unpacked]);
   return only(
-    readdirSync(into)
+    readdirSync(unpacked)
       .filter((n) => n.endsWith(".app"))
-      .map((n) => join(into, n)),
+      .map((n) => join(unpacked, n)),
     `.app in ${payload}`,
   );
+}
+
+export function shippedApp(payload: string, into: string): string {
+  const app = plainApp(payload, into);
+  sealApp(app);
+  return app;
 }

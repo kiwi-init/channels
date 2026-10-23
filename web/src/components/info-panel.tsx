@@ -4,6 +4,7 @@ import {
   ArrowRight01Icon,
   BookOpen01Icon,
   Delete02Icon,
+  Download04Icon,
   GitBranchIcon,
   GithubIcon,
   GitPullRequestIcon,
@@ -30,6 +31,7 @@ import { useControls } from "./controls"
 import { loadDetail, MemberActions, memberDetail } from "./controls/member-actions"
 import { Repos } from "./controls/repos"
 import { Rooms } from "./controls/rooms"
+import { useDownload } from "./controls/use-download"
 import { Icon, type IconSvgElement } from "./icon"
 import { Button, IconButton, Monogram, SEGMENTED, SEGMENT_OFF, SEGMENT_ON, errorText, toast } from "./kit"
 import { AddAgent, Invite } from "./lazy"
@@ -59,6 +61,7 @@ export function InfoPanel({
   onNewAgent?: (() => void) | undefined
 }) {
   const { p, ask, openDialog } = useControls()
+  const { saving, download } = useDownload(p)
   const [view, setView] = useState<"details" | "invite" | "repos" | "rooms" | "agent">("details")
   const [picking, setPicking] = useState(false)
   const [savingIcon, setSavingIcon] = useState(false)
@@ -328,6 +331,21 @@ export function InfoPanel({
                   <p className="px-4 py-3 text-meta text-ink-3">None yet.</p>
                 </Card>
               )}
+              <Card icon={Download04Icon} title="Download" sub="Everything said here so far, whenever you like">
+                <div className="grid gap-2.5 px-4 py-3">
+                  <p className="text-meta text-ink-3">
+                    The transcript reads as a document: each message with its date, time and sender. The log keeps each message’s signature, so one cited by number can still be checked.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="secondary" disabled={!!saving} onClick={() => void download("transcript")}>
+                      {saving === "transcript" ? "Downloading…" : "Transcript (.md)"}
+                    </Button>
+                    <Button variant="secondary" disabled={!!saving} onClick={() => void download("log")}>
+                      {saving === "log" ? "Downloading…" : "Signed log (.jsonl)"}
+                    </Button>
+                  </div>
+                </div>
+              </Card>
               <Card icon={Delete02Icon} tone="alert" title={p.isOwner ? "Close channel" : "Leave channel"} sub={p.isOwner ? "Deletes it on the relay for everyone" : "You stop getting its messages"}>
                 <div className="px-4 py-3">
                   <Button variant="danger" onClick={() => ask(p.isOwner ? { kind: "close" } : { kind: "leave" })}>

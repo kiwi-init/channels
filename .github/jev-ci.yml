@@ -262,7 +262,7 @@ jobs:
       option answers once (choiceGate in lib/choosing.ts refuses a click within 400 ms of the question showing or
       while its answer is on its way, and frees it when the send fails), and a message @addressed
       to others isn't the waiting question's answer (answered in lib/asks.ts); web
-      lib/rooms.test.ts: a room the owner makes or renames in channel settings keeps the name the fold would (no leading #, at most 40 characters), is refused before it's sent for an empty name, one taken in any case or a 51st room, and signs the room list as it is after the change (#general only once renamed); web lib/drafts.test.ts: a draft (text or images) is kept per channel and place until emptied; web lib/later.test.ts: a lazy view that fails to load tells its listeners (the Toaster then says to reload, once) and loads again on the next try;
+      lib/rooms.test.ts: a room the owner makes or renames in channel settings keeps the name the fold would (no leading #, at most 40 characters), is refused before it's sent for an empty name, one taken in any case or a 51st room, and signs the room list as it is after the change, with the name exactly as the event sent it and #general always in it (so #general renamed back to general stays general for a client folding from a base saved while it had another name, checked with the real fold; src/owner.ts signs it the same way); each room's unread count holds only its own messages and its read mark goes up to its own last message, under its own key (#general keeps main), so an @mention in #mobile doesn't mark #general (roomUnread, roomLast, roomSeenKey), and after the update a room with no mark of its own starts from the main mark the single feed left, frozen once per channel apart from the pruned marks (lib/threads.test.ts roomsFrom), so nothing it already showed comes back unread; a message's room is the one the fold put it in, or the one it's being sent to (roomOfMessage, which the conversation shows a room's messages by); web lib/drafts.test.ts: a draft (text or images) is kept per channel and place until emptied; web lib/later.test.ts: a lazy view that fails to load tells its listeners (the Toaster then says to reload, once) and loads again on the next try;
       web conversation/use-scroll.test.ts: only messages newer than the newest seen count as new
       (arrivedAfter), a hidden window's unread never goes below zero (unreadOf), and the conversation
       stays at its newest message when content shrinks and then grows before the scroll event lands,
@@ -517,8 +517,13 @@ jobs:
       stays authentic after a reload because the cache keeps its envelope (a filtered row would read
       as forged); test/snapshot.test.ts: one message the owner can't open doesn't stop its snapshots; and web lib/history.test.ts: its sealed row keeps the cache whole (no hole, no reload)
       and opens as the message once a newer build can read it.
-      Also web lib/log-export.test.ts: a channel's log kept before it closes, one JSON line per message
-      with its key and signature, under a file name from the channel's title and the day; every seq from the
+      Also web lib/log-export.test.ts: a channel's log, downloaded from channel settings any time or before it closes, one JSON line per message
+      with its key and signature, under a file name from the channel's title and the local date and time (two downloads a minute apart
+      don't collide); a transcript to read without tools (T967): when it was downloaded and how many messages, then each message's
+      number, local date and time, sender and text, its kind when it isn't a plain message, its pictures by name, only for messages
+      the app verifies (from a whole log, the owner's snapshot or the app's own fold; forged, refused and uncheckable ones left out and
+      counted), each body quoted with \, &, <, [, ] and ! escaped so no tag, comment, link, link definition, reference or image
+      survives (T1374); every seq from the
       first the relay kept to the head either in the file or named as missing, and those the relay dropped
       under its storage cap said apart; with test/log-export.test.ts, a stored message this build can't read
       named as missing instead of the download passing for the whole log.
@@ -891,7 +896,7 @@ jobs:
       animation library) reaches that first load, which is kept for lazy surfaces, and when web/dist carries
       any file over 20 MiB, which would weigh on every desktop download. Then ui smoke: starts the relay and the kiwi CLI
       as a test computer and drives the built dashboard in headless Chromium, opening every
-      menu, popover and dialog, making the room #mobile from Details → Rooms (a taken name refused before it's sent; the room in the Rooms row and the sidebar's conversations) and renaming it #ios, setting up a passkey, previewing an invite, an invite that pins a personality keeping its whole join command (the long --persona token wrapping, the short flags whole) inside its box, the tab bar's controls starting past a Mac's traffic lights and the page's sheet below the bar (Settings with data-shell="mac": the bar's first control at least --lights-w in, the sheet at least --chrome-h down), the open channel's tab marked current and ⌘\ hiding the channel's sidebar (the header's Tasks / Agents / Conversation tabs take over, it stays hidden across a reload, and the tab bar's Show the sidebar brings it back), Settings → Personalities duplicating a preset into the person's own, the Agents tab showing a lane per agent with what's next on it, Needs you as rows always in view (an agent asking in is let in from its row), an answered ask saying who chose what on the ask itself, replying inline (the reply quotes what it answers, "1 Reply" opens the thread; then three replies, each sent right after two messages, keep their quotes: an earlier send's late answer doesn't clear the reply, and a reply to a message still sending waits for its seq, checked on the reply's row once the relay's copy has landed), Details → Close channel… downloading the whole log first as JSON Lines with each message's key and signature (the history call through ChannelLink and the desktop keyring) and Cancel keeping the channel, linking a computer
+      menu, popover and dialog, downloading the channel from Details any time (a transcript naming each message's number, date, time and sender, and the signed log, both named with the date and time), making the room #mobile from Details → Rooms (a taken name refused before it's sent; the room in the Rooms row and the sidebar's conversations) and renaming it #ios, then posting in #ios from its conversation (the composer says Message #ios) and finding the message there and not in #general, setting up a passkey, previewing an invite, an invite that pins a personality keeping its whole join command (the long --persona token wrapping, the short flags whole) inside its box, the tab bar's controls starting past a Mac's traffic lights and the page's sheet below the bar (Settings with data-shell="mac": the bar's first control at least --lights-w in, the sheet at least --chrome-h down), the open channel's tab marked current and ⌘\ hiding the channel's sidebar (the header's Tasks / Agents / Conversation tabs take over, it stays hidden across a reload, and the tab bar's Show the sidebar brings it back), Settings → Personalities duplicating a preset into the person's own, the Agents tab showing a lane per agent with what's next on it, Needs you as rows always in view (an agent asking in is let in from its row), an answered ask saying who chose what on the ask itself, replying inline (the reply quotes what it answers, "1 Reply" opens the thread; then three replies, each sent right after two messages, keep their quotes: an earlier send's late answer doesn't clear the reply, and a reply to a message still sending waits for its seq, checked on the reply's row once the relay's copy has landed), Details → Close channel… downloading the whole log first as JSON Lines with each message's key and signature (the history call through ChannelLink and the desktop keyring) and Cancel keeping the channel, linking a computer
       with `kiwi setup`, approving its agent and opening a task (a board row opens it in the Tasks panel, with no second task list behind it, and with the task open beside it at 1280 and 1180px every row keeps a readable title with nothing spilling out of it, its columns picked by the board's own width; /tasks switches to the Tasks tab; the details' wants-to-join row closes them and shows Needs you, where the agent is let in, and details offer no Copy invite link or second approve flow), a reload of that channel never showing the Add an agent card, No tasks yet or No messages yet before its history is in, the app loaded with no channel in its address reopening the one that was open instead of Nothing open, finding controls by visible
       names and roles; fails if a page throws while rendering, a control it looks for is renamed
       or missing, or the relay, pairing or join flow breaks. Then compiles the kiwi CLI into one
@@ -925,7 +930,9 @@ jobs:
       an agent, the desktop app's New agent modal, its computer picker with a paired computer
       chosen, and its started screen (with a stand-in for the launch methods the desktop bridge
       adds), first run, signed in with nothing open, Join
-      with a code and the invite preview.
+      with a code and the invite preview; last, so no other screen has rooms, the owner makes #mobile and atlas posts
+      once in #general and twice in #mobile (one an @mention of the owner) while #general is open: the sidebar's
+      per-room unread counts (T1236).
       The shots are uploaded as the ui-shots artifact, WebKit's as ui-shots-webkit. Fails when the conversation isn't at its newest message (within 80px of the bottom) once the channel opens and again back from the Tasks tab (which it visits itself), at the wide size and, in the same run (--phone channel,tasks: the channel and Tasks screens on the channel already seeded), at phone size too (web/src/components/conversation/use-scroll.ts), or when the window's drag band would take a control of the open viewer (each app-region box added or taken away in document order, as Electron does), or when the seeding can't drive the
       dashboard or any screen can't be reached (a control renamed, moved or gone), so the shots
       keep up with the UI; each of these in either engine, so a screen or the conversation's place that works in
@@ -1003,7 +1010,7 @@ jobs:
     name: desktop / mac
     inputs: ["desktop/src/**", "desktop/native/**", "desktop/build/icon.icns", "packages/core/**", "web/src/**", "web/index.html", "web/vite.config.ts", "web/public/**", "web/package.json", "package.json", "bun.lock"]
     imports_from: ["desktop/src/main-eb.ts"]
-    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/electrobun-pins.json", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb.ts", "desktop/scripts/eb-pins.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-size.ts", "desktop/scripts/eb-app.ts", "desktop/scripts/eb-release.ts", "desktop/scripts/eb-update-rehearsal.ts", "desktop/scripts/eb-env-check.ts"]
+    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/electrobun-pins.json", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb.ts", "desktop/scripts/eb-pins.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-size.ts", "desktop/scripts/eb-app.ts", "desktop/scripts/eb-release.ts", "desktop/scripts/eb-update-rehearsal.ts", "desktop/scripts/eb-env-check.ts", "desktop/scripts/eb-seal.ts", "desktop/scripts/eb-keys-check.ts", "desktop/scripts/eb-keys-probe.ts"]
     description: >-
       On a macOS runner (Electrobun builds only for the host it runs on), checks the Electrobun
       shell that is replacing Electron (issue #757). Builds web/dist, restores ~/.hutch (the pinned
@@ -1053,6 +1060,27 @@ jobs:
       library into any process but the unsigned
       launcher itself (a signed build's hardened runtime stops that one), or leaves anything
       running; it starts a release-id app only on CI, never on a person's Mac.
+      The launcher also holds the store key (T544, desktop/native/macos/kiwi-keys.c): before it
+      starts anything it checks every file in Contents (but Info.plist, _CodeSignature and itself)
+      against the SHA-256 list scripts/eb-seal.ts writes into Info.plist as KiwiSeal (at the end of
+      eb-post-build.ts for dev builds; a stable build's Resources/version.json gets its hash from
+      Electrobun after that hook, so the shipped plain .app is sealed once it's out of the payload,
+      by scripts/eb-app.ts shippedApp, which eb-size, eb-env-check and eb-keys-check use, as T443's
+      packaging will between signing the nested code and the app), and refuses a changed, missing
+      or unlisted file or a link (247 files in about 60 ms on an M2); then it starts Electrobun's
+      launcher from / with posix_spawn and CLOEXEC_DEFAULT, so only stdio and a socketpair on fd 3
+      (KIWI_KEY_FD=3) get through, and answers bun's requests there (desktop/src/launcher-key.ts):
+      the store key from the Keychain under the bundle id, made only when none is there and never
+      replaced, and the old Electron app's key for a name in Info.plist's KiwiLegacyNames only.
+      desktop/scripts/eb-keys-check.ts takes a copy of the plain .app with a probe
+      (scripts/eb-keys-probe.ts) as main.js, a throwaway bundle id and a throwaway legacy item,
+      resealed, and fails unless a descriptor the launcher inherited never reaches bun, the first
+      start makes a key through the launcher and the next gets the same one, a second key is refused, the legacy key comes through while an
+      unlisted name and an unknown request are refused, and copies with a changed main.js, a
+      bunfig.toml beside bun, an app.asar, a link or a missing file all stop before bun runs, and
+      unless the launcher's check of the whole app takes 500 ms or less (median of 7); on CI it uses
+      a temporary keychain, and it deletes its items either way. eb-env-check runs the launcher
+      inside a small sealed bundle and expects KIWI_KEY_FD as the one name it adds.
 
   cli-macos:
     name: cli / macos
@@ -1163,7 +1191,7 @@ jobs:
       Macs keep Electron's mac-x64 files) builds the Electrobun app with the release bundle id
       (CHANNELS_EB_RELEASE=1) through the pinned toolchain, then desktop/scripts/eb-release.ts unpacks
       the plain Channels.app from the build's payload, fails unless it is com.kiwiinit.channels at
-      desktop/package.json's version, signs every Mach-O and then the bundle with the Developer ID
+      desktop/package.json's version, signs every Mach-O, re-seals the app (T544's KiwiSeal, which skips the stapled Contents/CodeResources) and then signs the bundle, all with the Developer ID
       and the hardened runtime (Bun alone gets entitlements.app.plist's allow-jit), notarizes and
       staples it, zips it with ditto (Channels.app at the zip's root) under the name the Electron
       updater asks for (update-asset.ts swapAsset: Channels-<version>-mac-arm64.zip), makes a ULMO dmg

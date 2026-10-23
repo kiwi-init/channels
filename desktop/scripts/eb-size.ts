@@ -1,18 +1,36 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { MB, mb, sizeOf, stableBuild, unpackApp } from "./eb-app.ts";
+import { MB, mb, only, payloadOf, shippedApp, sizeOf } from "./eb-app.ts";
 
 const LIMITS = { app: 100 * MB, packed: 40 * MB };
 
 const dir = resolve(process.argv[2] ?? "desktop/release-eb");
-const { wrapper, wrapperDmg, payload } = stableBuild(dir);
+const builds = join(dir, "build");
+const artifacts = join(dir, "artifacts");
+const wrapper = only(
+  readdirSync(builds)
+    .filter((name) => name.startsWith("stable-macos-"))
+    .flatMap((name) =>
+      readdirSync(join(builds, name))
+        .filter((n) => n.endsWith(".app"))
+        .map((app) => join(builds, name, app)),
+    ),
+  `stable Mac .app under ${builds}`,
+);
+const wrapperDmg = only(
+  readdirSync(artifacts)
+    .filter((name) => name.endsWith(".dmg"))
+    .map((name) => join(artifacts, name)),
+  `.dmg under ${artifacts}`,
+);
+const payload = payloadOf(artifacts);
 
 const tmp = mkdtempSync(join(tmpdir(), "eb-size-"));
 try {
-  const app = unpackApp(payload, join(tmp, "app"));
+  const app = shippedApp(payload, tmp);
   const zip = join(tmp, "Channels.zip");
   execFileSync("ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", app, zip]);
   const dmg = join(tmp, "Channels.dmg");

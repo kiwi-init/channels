@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const LEGACY_NAMES = ["kiwi-desktop", "Kiwi"] as const;
+export const LEGACY_NAMES = ["kiwi-desktop", "Kiwi"] as const;
 
 export type LegacyName = (typeof LEGACY_NAMES)[number];
 
