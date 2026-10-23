@@ -25,6 +25,10 @@ const KIWI_ENV = {
   ARGV0: "Channels.AppImage",
   OWD: "/home/a",
   ELECTRON_RUN_AS_NODE: "1",
+  LD_LIBRARY_PATH: ".",
+  BUN_OPTIONS: "--preload=/tmp/evil.ts",
+  NODE_OPTIONS: "--require=/tmp/evil.js",
+  KIWI_KEY_FD: "3",
 };
 
 function fakeLaunch(fail = false) {
@@ -39,7 +43,7 @@ function fakeLaunch(fail = false) {
 }
 
 describe("links leave the app for the person's own browser", () => {
-  test("the browser gets the session's environment without the app's desktop identity", () => {
+  test("the browser gets the session's environment without the app's desktop identity or its loader, Bun and Node switches (T1062)", () => {
     expect(browserEnv(KIWI_ENV)).toEqual({ PATH: "/usr/bin", HOME: "/home/a", DISPLAY: ":0", WAYLAND_DISPLAY: "wayland-0", XDG_CURRENT_DESKTOP: "GNOME" });
   });
 

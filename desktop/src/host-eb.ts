@@ -4,6 +4,7 @@ import path from "node:path";
 import Electrobun, { BuildConfig, PATHS, Utils, type BrowserView, type BrowserWindow } from "electrobun/main";
 
 import type { Push, Pushes } from "./calls.ts";
+import { childEnv } from "./child-env.ts";
 import type { Host } from "./host.ts";
 import type { HostToKeys } from "./keys-server.ts";
 import { relaunchAfter } from "./update-asset.ts";
@@ -49,7 +50,7 @@ export const ebHost: Host = {
     ready: () => true,
     relaunch: (execPath) => {
       const after = relaunchAfter(process.pid, execPath, process.env);
-      spawn("/bin/sh", after.args, { detached: true, stdio: "ignore", env: after.env }).unref();
+      spawn("/bin/sh", after.args, { detached: true, stdio: "ignore", env: childEnv(after.env) }).unref();
     },
     onQuit: (fn) => Electrobun.events.on("before-quit", fn),
   },

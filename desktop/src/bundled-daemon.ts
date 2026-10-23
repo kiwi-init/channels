@@ -12,7 +12,7 @@ import { requirePerson, store, upsertComputer } from "./store.ts";
 
 function bundledKiwi(): string {
   const exe = process.platform === "win32" ? "kiwi.exe" : "kiwi";
-  for (const name of [`${exe}.zst`, exe]) {
+  for (const name of [`${exe}.zst`, "kiwi.js", exe]) {
     const fromPkg = path.join(host().app.path("resources"), name);
     if (host().app.packaged() && fs.existsSync(fromPkg)) return fromPkg;
   }
@@ -23,7 +23,7 @@ function bundledKiwi(): string {
 
 async function runnableKiwi(): Promise<string> {
   const bundled = bundledKiwi();
-  if (!bundled.endsWith(".zst")) return bundled;
+  if (!bundled.endsWith(".zst") && !bundled.endsWith(".js")) return bundled;
   const dir = path.join(host().app.path("data"), "bin");
   const name = `kiwi-${host().app.version()}`;
   const unpacked = path.join(dir, name);

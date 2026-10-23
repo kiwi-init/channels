@@ -9,6 +9,11 @@ static GMainLoop *loop;
 static char *verdict = NULL;
 static int allowed_by_handler = 0;
 static int ended = 0;
+static int windows_made = 0;
+static int downloads_started = 0;
+static int downloads_finished = 0;
+static int downloads_cancelled = 0;
+static char *download_dir = NULL;
 
 static void gone(void) { ended++; }
 
@@ -29,6 +34,62 @@ static void title_changed(GObject *view, GParamSpec *spec, gpointer data) {
   g_main_loop_quit(loop);
 }
 
+static gboolean use_everything(WebKitWebView *view, WebKitPolicyDecision *decision, WebKitPolicyDecisionType type, gpointer data) {
+  (void)view;
+  (void)type;
+  (void)data;
+  webkit_policy_decision_use(decision);
+  return TRUE;
+}
+
+static GtkWidget *make_window(WebKitWebView *view, WebKitNavigationAction *action, gpointer data) {
+  (void)view;
+  (void)action;
+  (void)data;
+  windows_made++;
+  return NULL;
+}
+
+static gboolean save_into_temp(WebKitDownload *download, gchar *suggested, gpointer data) {
+  (void)suggested;
+  (void)data;
+  gchar *file = g_build_filename(download_dir, "download", NULL);
+  gchar *uri = g_filename_to_uri(file, NULL, NULL);
+  webkit_download_set_allow_overwrite(download, TRUE);
+  webkit_download_set_destination(download, uri);
+  g_free(uri);
+  g_free(file);
+  return TRUE;
+}
+
+static void download_finished(WebKitDownload *download, gpointer data) {
+  (void)download;
+  (void)data;
+  downloads_finished++;
+}
+
+static void download_failed(WebKitDownload *download, GError *error, gpointer data) {
+  (void)download;
+  (void)data;
+  if (g_error_matches(error, WEBKIT_DOWNLOAD_ERROR, WEBKIT_DOWNLOAD_ERROR_CANCELLED_BY_USER)) downloads_cancelled++;
+}
+
+static void download_started(WebKitWebContext *context, WebKitDownload *download, gpointer data) {
+  (void)context;
+  (void)data;
+  downloads_started++;
+  g_signal_connect(download, "decide-destination", G_CALLBACK(save_into_temp), NULL);
+  g_signal_connect(download, "finished", G_CALLBACK(download_finished), NULL);
+  g_signal_connect(download, "failed", G_CALLBACK(download_failed), NULL);
+}
+
+static gboolean stop(gpointer data);
+
+static void spin(guint ms) {
+  g_timeout_add(ms, stop, NULL);
+  g_main_loop_run(loop);
+}
+
 static gboolean stop(gpointer data) {
   (void)data;
   g_main_loop_quit(loop);
@@ -40,6 +101,8 @@ typedef struct {
   bool (*watch)(void (*)(void));
   bool (*sandbox)(char *, size_t);
   bool (*commits)(void);
+  bool (*downloads)(void);
+  bool (*allow_only)(const char *);
   bool ok;
   bool sandboxed;
   char why[1024];
@@ -48,7 +111,7 @@ typedef struct {
 static gpointer install_off_main(gpointer data) {
   Hooks *hooks = data;
   hooks->sandboxed = hooks->sandbox(hooks->why, sizeof hooks->why);
-  hooks->ok = hooks->deny() && hooks->watch(gone) && hooks->commits();
+  hooks->ok = hooks->deny() && hooks->watch(gone) && hooks->commits() && hooks->downloads() && hooks->allow_only("http://localhost/");
   g_idle_add(stop, NULL);
   return NULL;
 }
@@ -82,9 +145,11 @@ int main(int argc, char **argv) {
   bool (*sandbox)(char *, size_t) = (bool (*)(char *, size_t))dlsym(lib, "kiwi_sandbox_pages");
   bool (*commits)(void) = (bool (*)(void))dlsym(lib, "kiwi_watch_commits");
   size_t (*committed)(char *, size_t) = (size_t (*)(char *, size_t))dlsym(lib, "kiwi_committed_url");
+  bool (*downloads)(void) = (bool (*)(void))dlsym(lib, "kiwi_guard_downloads");
+  bool (*allow_only)(const char *) = (bool (*)(const char *))dlsym(lib, "kiwi_allow_only");
   int bad = 0;
-  if (!deny || !watch || !sandbox || !commits || !committed) {
-    fprintf(stderr, "kiwi-shell-test: one of kiwi_deny_permissions, kiwi_watch_page, kiwi_sandbox_pages, kiwi_watch_commits or kiwi_committed_url isn't exported\n");
+  if (!deny || !watch || !sandbox || !commits || !committed || !downloads || !allow_only) {
+    fprintf(stderr, "kiwi-shell-test: one of libkiwi-shell's entry points isn't exported\n");
     return 1;
   }
   if (g_strcmp0(g_get_prgname(), "channels-desktop") != 0 || g_strcmp0(gdk_get_program_class(), "channels-desktop") != 0) {
@@ -93,7 +158,7 @@ int main(int argc, char **argv) {
   } else
     printf("program name and class: channels-desktop (the Wayland app_id, matching channels-desktop.desktop)\n");
   loop = g_main_loop_new(NULL, FALSE);
-  Hooks hooks = {deny, watch, sandbox, commits, false, false, ""};
+  Hooks hooks = {deny, watch, sandbox, commits, downloads, allow_only, false, false, ""};
   g_idle_add(install_from_worker, &hooks);
   g_main_loop_run(loop);
   if (hooks.ok) printf("hooks: installed on GTK's main loop when asked from another thread, as main-eb's worker asks\n");
@@ -116,8 +181,12 @@ int main(int argc, char **argv) {
   GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
   WebKitWebView *view = WEBKIT_WEB_VIEW(webkit_web_view_new());
   WebKitSettings *settings = webkit_web_view_get_settings(view);
-  g_object_set(settings, "enable-media-stream", TRUE, "enable-mock-capture-devices", TRUE, NULL);
+  g_object_set(settings, "enable-media-stream", TRUE, "enable-mock-capture-devices", TRUE, "javascript-can-open-windows-automatically", TRUE, NULL);
   g_signal_connect(view, "permission-request", G_CALLBACK(allow_everything), NULL);
+  g_signal_connect(view, "decide-policy", G_CALLBACK(use_everything), NULL);
+  g_signal_connect(view, "create", G_CALLBACK(make_window), NULL);
+  g_signal_connect(webkit_web_view_get_context(view), "download-started", G_CALLBACK(download_started), NULL);
+  download_dir = g_dir_make_tmp("kiwi-shell-test-XXXXXX", NULL);
   g_signal_connect(view, "notify::title", G_CALLBACK(title_changed), NULL);
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
   gtk_widget_show_all(window);
@@ -139,6 +208,32 @@ int main(int argc, char **argv) {
     bad++;
   } else
     printf("committed URL: %s, as the bridge checks it\n", url);
+
+  webkit_web_view_load_uri(view, "http://localhost/elsewhere");
+  spin(2000);
+  webkit_web_view_evaluate_javascript(view, "window.open('http://localhost/popup')", -1, NULL, NULL, NULL, NULL, NULL);
+  spin(2000);
+  n = committed(url, sizeof url);
+  if (n >= sizeof url || strcmp(url, "http://localhost/") != 0 || windows_made) {
+    fprintf(stderr, "kiwi-shell-test: with a handler that uses every navigation, the view committed '%s' and %d windows were asked for\n", url, windows_made);
+    bad++;
+  } else
+    printf("navigation: only http://localhost/, a load elsewhere and a window.open refused, though the app's handler would use them\n");
+
+  webkit_web_view_download_uri(view, "http://localhost/file.bin");
+  spin(2000);
+  int cancelled = downloads_cancelled;
+  webkit_web_view_download_uri(view, "data:text/plain,kiwi");
+  spin(2000);
+  int finished = downloads_finished;
+  webkit_web_view_evaluate_javascript(view, "location.href = 'data:text/plain,navigated'", -1, NULL, NULL, NULL, NULL, NULL);
+  spin(2000);
+  n = committed(url, sizeof url);
+  if (cancelled != 1 || finished != 1 || downloads_finished != 2 || n >= sizeof url || strcmp(url, "http://localhost/") != 0) {
+    fprintf(stderr, "kiwi-shell-test: downloads: %d started, the http: one cancelled %d times, data: ones finished %d (want 2), the page committed '%s'\n", downloads_started, cancelled, downloads_finished, url);
+    bad++;
+  } else
+    printf("downloads: an http: one cancelled, the page's data: ones saved, and a data: navigation made a download, not a page\n");
 
   webkit_web_view_terminate_web_process(view);
   g_timeout_add(2000, stop, NULL);

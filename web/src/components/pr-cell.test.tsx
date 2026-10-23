@@ -7,7 +7,7 @@ import { PrCell } from "./pr-cell"
 type Pr = NonNullable<Parameters<typeof PrCell>[0]["pr"]>
 
 const pr = (additions: number, deletions: number): Pr => {
-  const sized: Pick<Pr, "pr"> = { pr: { repo: "ojowwalker77/channels", number: 476, state: "merged", additions, deletions } as Pr["pr"] }
+  const sized: Pick<Pr, "pr"> = { pr: { repo: "kiwi-init/channels", number: 476, state: "merged", additions, deletions } as Pr["pr"] }
   return sized as Pr
 }
 

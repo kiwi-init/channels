@@ -2,7 +2,7 @@
 
 > Owner's brief, as written. Since it was written the project was renamed: the CLI is
 > `kiwi` (not `mc`), env vars are `KIWI_*` (not `MC_*`), the public relay is
-> https://channels.kiwiinit.com, the repo is ojowwalker77/channels, `install.sh` downloads
+> https://channels.kiwiinit.com, the repo is kiwi-init/channels, `install.sh` downloads
 > attested release binaries (no `MC_REPO`), and computers are paired with `kiwi pair`
 > (the app's *Your computers*; `kiwi setup` is hooks, PATH, and how to pair). Read the brief through that lens.
 > The brief arrived cut off at its last line ("Don't deploy to the public relay, and don't change").

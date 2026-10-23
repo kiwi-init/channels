@@ -37,26 +37,26 @@ test("it's an AppImage only when its own executable runs from the AppImage's mou
 });
 
 test("an update's files come only from this repo's releases on github.com over https, and redirects stay on GitHub's hosts (T1554)", () => {
-  const repo = "ojowwalker77/channels";
-  const ok = "https://github.com/ojowwalker77/channels/releases/download/v0.27.0/SHA256SUMS";
+  const repo = "kiwi-init/channels";
+  const ok = "https://github.com/kiwi-init/channels/releases/download/v0.27.0/SHA256SUMS";
   expect(releaseFile(repo, ok)).toBe(ok);
   for (const bad of [
     undefined,
-    "http://github.com/ojowwalker77/channels/releases/download/v0.27.0/SHA256SUMS",
-    "https://github.com.evil.example/ojowwalker77/channels/releases/download/v0.27.0/SHA256SUMS",
+    "http://github.com/kiwi-init/channels/releases/download/v0.27.0/SHA256SUMS",
+    "https://github.com.evil.example/kiwi-init/channels/releases/download/v0.27.0/SHA256SUMS",
     "https://github.com/someone/channels/releases/download/v0.27.0/SHA256SUMS",
-    "https://github.com/ojowwalker77/channels/releases/download/../../../someone/x/releases/download/v1/a",
-    "https://user:pw@github.com/ojowwalker77/channels/releases/download/v0.27.0/SHA256SUMS",
-    "https://github.com:8443/ojowwalker77/channels/releases/download/v0.27.0/SHA256SUMS",
+    "https://github.com/kiwi-init/channels/releases/download/../../../someone/x/releases/download/v1/a",
+    "https://user:pw@github.com/kiwi-init/channels/releases/download/v0.27.0/SHA256SUMS",
+    "https://github.com:8443/kiwi-init/channels/releases/download/v0.27.0/SHA256SUMS",
     "not a url",
   ])
     expect(releaseFile(repo, bad)).toBeNull();
-  expect(releasePage(repo, "https://github.com/ojowwalker77/channels/releases/tag/v0.27.0")).toBe("https://github.com/ojowwalker77/channels/releases/tag/v0.27.0");
-  expect(releasePage(repo, "javascript:alert(1)")).toBe("https://github.com/ojowwalker77/channels/releases/latest");
-  expect(releasePage(repo, "https://evil.example/ojowwalker77/channels/releases/tag/v0.27.0")).toBe("https://github.com/ojowwalker77/channels/releases/latest");
+  expect(releasePage(repo, "https://github.com/kiwi-init/channels/releases/tag/v0.27.0")).toBe("https://github.com/kiwi-init/channels/releases/tag/v0.27.0");
+  expect(releasePage(repo, "javascript:alert(1)")).toBe("https://github.com/kiwi-init/channels/releases/latest");
+  expect(releasePage(repo, "https://evil.example/kiwi-init/channels/releases/tag/v0.27.0")).toBe("https://github.com/kiwi-init/channels/releases/latest");
   expect(githubHop("https://release-assets.githubusercontent.com/github-production-release-asset/1/2")).toBe(true);
   expect(githubHop("https://objects.githubusercontent.com/github-production-release-asset-2e65be/1")).toBe(true);
-  expect(githubHop("https://github.com/ojowwalker77/channels/releases/download/v0.27.0/a")).toBe(true);
+  expect(githubHop("https://github.com/kiwi-init/channels/releases/download/v0.27.0/a")).toBe(true);
   expect(githubHop("http://objects.githubusercontent.com/x")).toBe(false);
   expect(githubHop("https://evil.example/x")).toBe(false);
 });
