@@ -11,7 +11,7 @@ interface Limit {
   budget: number;
   gate: number | null;
   nightly?: boolean;
-  desktop?: boolean;
+  source?: "feel" | "desktop";
 }
 
 type Range = [number, number];
@@ -27,12 +27,17 @@ const nightly = args.includes("--nightly");
 const comment = args.includes("--comment");
 const runs = args.filter((a) => !a.startsWith("--"));
 if (!runs.length) {
-  console.error("usage: bun scripts/perf-check.ts [--nightly] run1.json [run2.json ...]");
+  console.error("usage: bun scripts/perf-check.ts [--nightly] run1.json [run2.json ...] [feel1.json ...]");
   process.exit(2);
 }
 
 const { reference, calibration: bounds, limits } = JSON.parse(readFileSync(resolve(import.meta.dir, "perf-budgets.json"), "utf8")) as Budgets;
-const reports = runs.map((f) => JSON.parse(readFileSync(f, "utf8")) as Record<string, unknown>);
+const read = runs.map((f) => ({ file: f, report: JSON.parse(readFileSync(f, "utf8")) as Record<string, unknown> }));
+const isFeel = (r: Record<string, unknown>) => "rttMs" in r;
+const feels = read.filter((r) => isFeel(r.report)).map((r) => r.report);
+const scaleRuns = read.filter((r) => !isFeel(r.report));
+const files = scaleRuns.map((r) => r.file);
+const reports = scaleRuns.map((r) => r.report);
 
 function pick(report: Record<string, unknown>, at: string[]): number | null {
   const [first, ...rest] = at;
@@ -78,7 +83,7 @@ const calibrations = (["@1x", "@4x"] as const).map((s) => {
 });
 
 const calibrated = reports.map(calibrationOf);
-const leftOut = calibrated.flatMap((c, i) => (typeof c === "string" ? [`${basename(runs[i]!)}: ${c}`] : []));
+const leftOut = calibrated.flatMap((c, i) => (typeof c === "string" ? [`${basename(files[i]!)}: ${c}`] : []));
 const usable = calibrated.length - leftOut.length;
 const needed = Math.min(2, reports.length);
 
@@ -87,10 +92,24 @@ const over: string[] = [];
 const short: string[] = [];
 const partial: string[] = [];
 for (const [name, l] of Object.entries(limits)) {
-  if ((l.nightly && !nightly) || l.desktop) continue;
+  if ((l.nightly && !nightly) || l.source === "desktop") continue;
+  if (l.source === "feel") {
+    if (!feels.length) continue;
+    const seen = feels.map((r) => pick(r, l.at)).filter((v): v is number => v !== null);
+    if (!seen.length) {
+      over.push(`${l.what}: not measured (${feels.length} perf-feel run${feels.length === 1 ? "" : "s"})`);
+      rows.push(`| ${l.what} | not measured | | ${l.gate ?? "none yet"} | ${l.budget} |`);
+      continue;
+    }
+    const m = Math.round(median(seen) * 1000) / 1000;
+    rows.push(`| ${l.what} | ${m} | | ${l.gate ?? "none yet"} | ${l.budget} |`);
+    if (l.gate !== null && m > l.gate) over.push(`${l.what}: ${m}, over its gate ${l.gate} (${name})`);
+    if (l.gate === null || l.gate > l.budget) short.push(`${l.what}: gate ${l.gate ?? "none"}, 0.20 budget ${l.budget}`);
+    continue;
+  }
   const measured = reports.map((r) => pick(r, l.at)).filter((v): v is number => v !== null);
   const each = reports.map((r, i) => scaled(r, l, calibrated[i]!));
-  for (const [i, v] of each.entries()) if (v === null && typeof calibrated[i] !== "string") partial.push(`${l.what}: ${basename(runs[i]!)} has no usable value`);
+  for (const [i, v] of each.entries()) if (v === null && typeof calibrated[i] !== "string") partial.push(`${l.what}: ${basename(files[i]!)} has no usable value`);
   const seen = each.filter((v): v is number => v !== null);
   if (!seen.length || (l.per && seen.length < needed)) {
     over.push(`${l.what}: not measured${seen.length ? ` (${seen.length} of ${reports.length} runs can be scaled, ${needed} needed)` : ""}`);
@@ -104,9 +123,9 @@ for (const [name, l] of Object.entries(limits)) {
 }
 
 const lines = [
-  `**perf-scale, median of ${reports.length} run${reports.length === 1 ? "" : "s"}${nightly ? " with the soak" : ""}**`,
+  `**perf-scale, median of ${reports.length} run${reports.length === 1 ? "" : "s"}${nightly ? " with the soak" : ""}${feels.length ? `; perf-feel, median of ${feels.length}` : ""}**`,
   "",
-  `Timings are scaled to the reference runner by each run's CPU calibration before the gates: ${calibrations.join("; ")}.`,
+  `Timings are scaled to the reference runner by each run's CPU calibration before the gates: ${calibrations.join("; ")}.${feels.length ? " perf-feel's rows aren't: they wait mostly on the relay's round trip, or count layout shift and screens." : ""}`,
   "",
   "| What | Measured | Scaled | Gate | 0.20 budget |",
   "|---|---|---|---|---|",

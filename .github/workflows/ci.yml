@@ -249,10 +249,16 @@ jobs:
         env:
           PERF_SOAK_MIN: "0"
         run: bun scripts/perf-scale.ts --gated --json "$RUNNER_TEMP/perf-${{ matrix.run }}.json"
+      - name: perf-feel
+        env:
+          PERF_RTT_MS: "150"
+        run: bun scripts/perf-feel.ts --json "$RUNNER_TEMP/feel-${{ matrix.run }}.json"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: perf-scale-${{ matrix.run }}
-          path: ${{ runner.temp }}/perf-${{ matrix.run }}.json
+          path: |
+            ${{ runner.temp }}/perf-${{ matrix.run }}.json
+            ${{ runner.temp }}/feel-${{ matrix.run }}.json
           if-no-files-found: error
           overwrite: true
 
@@ -280,7 +286,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: bun scripts/perf-check.ts --comment "$RUNNER_TEMP"/perf/perf-*.json | tee -a "$GITHUB_STEP_SUMMARY"
+        run: bun scripts/perf-check.ts --comment "$RUNNER_TEMP"/perf/perf-*.json "$RUNNER_TEMP"/perf/feel-*.json | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         with:

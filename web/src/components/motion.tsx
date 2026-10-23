@@ -1,4 +1,4 @@
-import { AnimatePresence, MotionConfig, motion } from "motion/react"
+import { AnimatePresence, MotionConfig, motion, useIsPresent } from "motion/react"
 import type { ReactNode } from "react"
 
 import { useAccessibilityOption } from "@/lib/accessibility"
@@ -14,4 +14,4 @@ export function Motion({ children }: { children: ReactNode }) {
   )
 }
 
-export { AnimatePresence, motion as m }
+export { AnimatePresence, motion as m, useIsPresent }

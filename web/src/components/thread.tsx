@@ -30,10 +30,10 @@ export function ThreadPanel({ count, children, composer, onClose }: { count: num
   // The same canvas as the conversation, a hairline between them; its header is on the window's one
   // header row. Others' bubbles stay Messages grey, as in the main conversation.
   return (
-    <ResizablePanel className="flex">
+    <ResizablePanel className="flex" over>
       <aside
         aria-label="Thread"
-        className="flex min-w-0 flex-1 flex-col border-l border-line bg-canvas md:sheet md:border-l-0"
+        className="flex min-w-0 flex-1 flex-col border-l border-line bg-canvas md:sheet md:border-l-0 md:sheet-over"
         onKeyDown={(e) => {
           if (e.key !== "Escape") return
           e.preventDefault()

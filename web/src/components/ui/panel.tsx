@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react"
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react"
 
 import { cx } from "@/lib/utils"
-import { m, Motion } from "../motion"
+import { m, Motion, useIsPresent } from "../motion"
 
 // A side panel you can widen by dragging its left edge (or with the arrow keys
 // on that edge). Its width is kept per browser. On phones it fills the screen.
@@ -20,21 +20,34 @@ function stored(): number {
   return v >= MIN ? v : DEFAULT
 }
 
-export function ResizablePanel({ children, className }: { children: ReactNode; className?: string }) {
+export function ResizablePanel({ children, className, over = false }: { children: ReactNode; className?: string; over?: boolean }) {
   const [width, setWidth] = useState(stored)
   const [dragging, setDragging] = useState(false)
   const from = useRef<{ x: number; width: number } | null>(null)
+  const self = useRef<HTMLDivElement>(null)
+  const present = useIsPresent()
   const shown = typeof window === "undefined" ? width : clamp(width)
 
   useEffect(() => localStorage.setItem(KEY, String(width)), [width])
+  useLayoutEffect(() => {
+    const row = self.current?.parentElement
+    if (!over || !present || !row) return
+    row.style.setProperty("--aside", `${shown}px`)
+    row.style.setProperty("--aside-on", "1")
+    return () => {
+      row.style.removeProperty("--aside")
+      row.style.removeProperty("--aside-on")
+    }
+  }, [over, present, shown])
 
   return (
     <Motion>
       <m.div
-        initial={{ opacity: 0, x: 10 }}
+        ref={self}
+        initial={{ opacity: 0, x: over ? 24 : 10 }}
         animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: 10, transition: { duration: 0.16 } }}
-        className={cx("relative z-30 h-full w-full shrink-0 md:w-(--panel)", dragging && "select-none", className)}
+        exit={{ opacity: 0, x: over ? 24 : 10, transition: { duration: 0.16 } }}
+        className={cx("relative z-30 h-full w-full shrink-0 md:w-(--panel)", over && "md:absolute md:inset-y-0 md:right-0", dragging && "select-none", className)}
         style={{ "--panel": `${shown}px` } as CSSProperties}
       >
         {/* A div, not an hr: the browser gives an hr height 0, so the edge cannot be grabbed. */}

@@ -110,8 +110,11 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   sheet of `canvas` (the `sheet` utility: right under the tab bar, 8px in
   from the window's other edges, `card` radius, a 1px `line` ring), holding
   the header, the
-  conversation and the tasks. A side panel (details, a thread, the tasks
-  panel) is a sheet of its own beside it, 8px apart. `raised` and `field`
+  conversation and the tasks. Details is a sheet of its own beside it, 8px
+  apart. A thread and the tasks panel slide over the page's right side as a
+  sheet lifted with the `pop` shadow (`sheet-over`): the page keeps its width
+  and scroll, and its centered column (`aside-room`) slides left only as far
+  as its margin allows, so nothing reflows. `raised` and `field`
   are the canvas. Inside a sheet,
   rows, cards, search, inputs and the composer have no grey fill and no
   background of their own; they are separated by spacing and a thin 1px
