@@ -1,6 +1,6 @@
 {
   "name": "kiwi-desktop",
-  "version": "0.25.3",
+  "version": "0.26.0",
   "private": true,
   "description": "Channels desktop app: an Electron shell hosting web/ for people (auto-approval, pairing, admin).",
   "homepage": "https://github.com/ojowwalker77/channels",

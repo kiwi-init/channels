@@ -2,6 +2,33 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.26.0 — 2026-10-23
+
+- **perf-feel.ts times what a person feels behind a relay far away: send to bubble, opening a task, layout shifts, filmstrips (T11)** ([#728](https://github.com/ojowwalker77/channels/pull/728))
+- **A channel opens after one round trip, not three: board in 375 ms instead of 768 at 150 ms RTT (T30)** ([#729](https://github.com/ojowwalker77/channels/pull/729))
+- **A channel that's still opening shows nothing it doesn't know: no Add an agent / No tasks yet / Connecting… flash on reload (T31)** ([#731](https://github.com/ojowwalker77/channels/pull/731))
+- **Panels, menus and dialogs leave instead of vanishing, and tasks slide to their new place: Motion only where CSS can't (T10)** ([#730](https://github.com/ojowwalker77/channels/pull/730))
+- **The rows a conversation opens on are laid out at once, so they don't grow from a 64 px guess after they're painted (T33)** ([#732](https://github.com/ojowwalker77/channels/pull/732))
+- **A re-run of perf / scale measures again: every artifact upload overwrites the attempt before it (T79)** ([#733](https://github.com/ojowwalker77/channels/pull/733))
+- **Typing on machines without a GPU: the scrims drop their blur there, and perf-scale's typing gate measures the app, not its own CLI start-ups (T34)** ([#734](https://github.com/ojowwalker77/channels/pull/734))
+- **A channel opens on its conversation, not the Tasks board (T180)** ([#737](https://github.com/ojowwalker77/channels/pull/737))
+- **Needs you says one line per thing, details on a click; the board drops its empty PR columns (T182)** ([#739](https://github.com/ojowwalker77/channels/pull/739))
+- **Optimistic send: the box empties on Enter and your message shows at once (T32)** ([#741](https://github.com/ojowwalker77/channels/pull/741))
+- **A task or a thread slides over the page instead of squeezing it: the page keeps its width and scroll (T181)** ([#738](https://github.com/ojowwalker77/channels/pull/738))
+- **perf / scale runs perf-feel at 150 ms RTT and gates what a person feels (T54)** ([#735](https://github.com/ojowwalker77/channels/pull/735))
+- **A channel paints from what this device kept, before the relay answers: reload 375 → 265 ms at 150 ms RTT (T71)** ([#744](https://github.com/ojowwalker77/channels/pull/744))
+- **The relay's answer replaces what the early paint showed: an island the relay's head turns down is gone, not left above a gap (T300)** ([#746](https://github.com/ojowwalker77/channels/pull/746))
+- **SECURITY.md says what the kept state can and can't do, and a floor the relay already answered isn't replaced by the kept one (T302)** ([#748](https://github.com/ojowwalker77/channels/pull/748))
+- **A reply right after a send keeps its quote: fixes the smoke-ui 'send and reply' flake (T330)** ([#750](https://github.com/ojowwalker77/channels/pull/750))
+- **The app reopens the channel you had open: a launch lands in your last channel, not "Nothing open" (T287)** ([#745](https://github.com/ojowwalker77/channels/pull/745))
+- **A kept fold base is checked like a snapshot before it's used: version, shape, outgrown, ≤ the relay's head (T301)** ([#747](https://github.com/ojowwalker77/channels/pull/747))
+- **Optimistic send edges: messages go out in the order typed, a failed message never takes a reply with it, the reply bar clears on Enter (T369)** ([#751](https://github.com/ojowwalker77/channels/pull/751))
+- **What a channel doesn't need before it paints loads when it runs: first-load JS 586,793 -> 581,635 bytes (T379)** ([#753](https://github.com/ojowwalker77/channels/pull/753))
+- **A channel paints without Effect's runtime: the open path is plain promises, first-load JS 581,635 -> 515,538 bytes (T392)** ([#754](https://github.com/ojowwalker77/channels/pull/754))
+- **iPhone: reviews waiting on you reach the phone, and a channel's row shows its latest message (#743)** ([#752](https://github.com/ojowwalker77/channels/pull/752))
+- **Desktop cold start, measured: launch to window, first paint, first cached message and live, in desktop / package (T53)** ([#742](https://github.com/ojowwalker77/channels/pull/742))
+- **iPhone: a drag that starts on a message bubble scrolls the conversation (#749)** ([#756](https://github.com/ojowwalker77/channels/pull/756))
+
 ## 0.25.3 — 2026-10-22
 
 - **The invite box keeps the whole join command inside it: a pinned personality's --persona token wraps (T12)** ([#691](https://github.com/ojowwalker77/channels/pull/691))
