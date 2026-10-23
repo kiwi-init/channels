@@ -652,8 +652,8 @@ jobs:
       http(s) links, a new relay saved, told to the keys and the page reloaded, a bad one changing
       nothing, a bad argument refused under the call's name). And
       test/desktop-eb-bridge.test.ts: the Electrobun bridge's own rules (desktop/src/eb-bridge.ts):
-      only views://internal/index.html counts as our page whatever its hash, a navigation event
-      can only take the bridge away (only main's own load gives it), a frame read as its page
+      only views://internal/index.html counts as our page whatever its hash, main's script reaching
+      our receiver through window (which page script can't replace) rather than globalThis, a frame read as its page
       load's session id and packet, the preload's boot read as the snapshot plus main's session for
       that load, nothing in or out while the view is off our page, a call that
       isn't the bridge's (__proto__, constructor and the like) or not given as a list never
@@ -1044,14 +1044,21 @@ jobs:
       before the keys see it. Each document is its own session (T1741): two documents that boot
       from one preload's id carry their own nonce and get their own sessions, so neither takes the
       other's reply, and main's load() retires the session at once, so nothing for the old load
-      leaves main before the new page says hello. Then `bun run build:eb` (electrobun build --env=stable): bundles src/main-eb.ts with the
+      leaves main before the new page says hello. eb-tests/page-script.test.ts bundles the real
+      preload and runs it in its own realm, then page script there hooks JSON.stringify,
+      Object.prototype.toJSON, RegExp.prototype.test, Reflect.apply, the message handler's
+      postMessage, the __electrobunHostBridge alias and globalThis: none of the hooks sees the
+      session id or the document's nonce, the hijacked globalThis gets no frame, and window.kiwi
+      keeps answering and hearing pushes (T1855). Then `bun run build:eb` (electrobun build --env=stable): bundles src/main-eb.ts with the
       shared desktop modules it imports (ipc/handlers.ts and all the app's calls through
       host-eb.ts, guard.ts csp(), open.ts, eb-page.ts, eb-bridge.ts, rpc-eb.ts, window-look.ts,
       window-size.ts) and @kiwi/core, and src/preload-eb.ts as the preload view; scripts/eb-pre-build.ts turns build/icon.icns into the
       iconset; scripts/eb-post-build.ts copies web/dist into the app's views/internal and
       compiles native/macos/kiwi-shell.m with clang -Wall -Werror into Contents/MacOS (the
-      patch that denies the microphone, camera and location Electrobun grants the page, and the
-      window's minimum size and background), bundles src/keys-worker.ts into app/bun/keys.js
+      patch that denies the microphone, camera and location Electrobun grants the page, records
+      each committed navigation's URL natively so the bridge answers only while the view is on our
+      page whatever events the page posts, and sets the window's minimum size and background),
+      bundles src/keys-worker.ts into app/bun/keys.js
       beside the main bundle and fails unless that bundled keys worker answers a page's request,
       then checks the bundle (scripts/eb-bundle.ts): the
       main bundle holds exactly one copy of Electrobun's internal RPC table, the one
