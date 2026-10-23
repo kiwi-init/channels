@@ -1,50 +1,9 @@
-// The context-isolated face of main.ts: exposes window.kiwi and nothing else.
-// The snapshot is synchronous (main decrypted once at startup), everything else
-// is invoke/on. The relay is main's, from the snapshot: never the page's URL,
-// which anything that can make the app load a URL could choose (and the token
-// getToken hands out would go to it).
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 
-import { contextBridge, ipcRenderer } from "electron";
-import type { HarnessRow } from "@kiwi/core/harnesses.ts";
-import type { Personality } from "@kiwi/core/personality.ts";
-import type { MemberPicture } from "@kiwi/core/protocol.ts";
-import type { LaunchedView, PlacedSeat, ShowResult, TerminalId, TerminalsStatus } from "@kiwi/core/terminals.ts";
+import type { KeysPort, KeysPush, KeysReply, KeysRequest, StoreSnapshot } from "./bridge.ts";
+import { makeBridge, type Call, type CallArgs, type CallValue, type Push, type Pushes } from "./calls.ts";
 
-import type {
-  ChannelIdentityView,
-  ChannelView,
-  ComputerView,
-  DaemonStatus,
-  KeysPort,
-  KeysPush,
-  KeysReply,
-  KeysRequest,
-  KiwiBridge,
-  LinkAskView,
-  FromMachine,
-  LaunchAgentRequest,
-  MachineView,
-  PairAskView,
-  PendingItem,
-  PhoneView,
-  PublicPerson,
-  SignInResult,
-  GithubRepoView,
-  GithubStatus,
-  StoreSnapshot,
-  UpdateCheckView,
-  UpdateView,
-} from "./bridge.ts";
-
-let latest = ipcRenderer.sendSync("kiwi:snapshot-sync") as StoreSnapshot;
-ipcRenderer.on("kiwi:store", (_e, v: StoreSnapshot) => (latest = v));
-const relayUrl = latest.relayUrl;
-
-const on = (channel: "kiwi:store" | "kiwi:deep-link" | "kiwi:update" | "kiwi:github-code" | "kiwi:text-step", cb: (v: never) => void): (() => void) => {
-  const fn = (_e: unknown, v: never) => cb(v);
-  ipcRenderer.on(channel, fn as (...args: unknown[]) => void);
-  return () => ipcRenderer.removeListener(channel, fn as (...args: unknown[]) => void);
-};
+const snapshot = ipcRenderer.sendSync("kiwi:snapshot-sync") as StoreSnapshot;
 
 let port: MessagePort | null = null;
 let nextAsk = 1;
@@ -95,63 +54,14 @@ const channels: KeysPort = {
   },
 };
 
-const kiwi: KiwiBridge = {
-  relayUrl,
-  getSnapshot: () => latest,
-  onStore: (cb) => on("kiwi:store", cb),
-  setRelayUrl: (url: string) => ipcRenderer.invoke("kiwi:set-relay-url", url) as Promise<string>,
-  createPerson: (name: string) => ipcRenderer.invoke("kiwi:create-person", name) as Promise<PublicPerson>,
-  saveChannels: (list: ChannelView[]) => ipcRenderer.invoke("kiwi:save-channels", list) as Promise<void>,
-  migrateChannels: (entries: ChannelIdentityView[]) => ipcRenderer.invoke("kiwi:migrate-channels", entries) as Promise<number>,
-  channels,
-  saveComputers: (computers: ComputerView[]) => ipcRenderer.invoke("kiwi:save-computers", computers) as Promise<void>,
-  setPending: (pending: PendingItem[]) => ipcRenderer.invoke("kiwi:set-pending", pending) as Promise<void>,
-  signIn: () => ipcRenderer.invoke("kiwi:sign-in") as Promise<SignInResult>,
-  devSignIn: (name: string) => ipcRenderer.invoke("kiwi:dev-sign-in", name) as Promise<{ token: string }>,
-  getToken: () => ipcRenderer.invoke("kiwi:token") as Promise<string | null>,
-  signOut: () => ipcRenderer.invoke("kiwi:sign-out") as Promise<void>,
-  githubStatus: () => ipcRenderer.invoke("kiwi:github-status") as Promise<GithubStatus>,
-  githubLink: () => ipcRenderer.invoke("kiwi:github-link") as Promise<GithubStatus>,
-  githubUnlink: () => ipcRenderer.invoke("kiwi:github-unlink") as Promise<GithubStatus>,
-  githubRepos: () => ipcRenderer.invoke("kiwi:github-repos") as Promise<GithubRepoView[]>,
-  githubPicture: () => ipcRenderer.invoke("kiwi:github-picture") as Promise<MemberPicture | null>,
-  onGithubCode: (cb) => on("kiwi:github-code", cb),
-  pairBegin: () => ipcRenderer.invoke("kiwi:pair-begin") as Promise<{ code: string }>,
-  pairPoll: () => ipcRenderer.invoke("kiwi:pair-poll") as Promise<PairAskView | null>,
-  pairCancel: () => ipcRenderer.invoke("kiwi:pair-cancel") as Promise<void>,
-  pairAnswer: (accept: boolean) => ipcRenderer.invoke("kiwi:pair-answer", accept) as Promise<{ machinePk: string } | null>,
-  linkBegin: () => ipcRenderer.invoke("kiwi:link-begin") as Promise<{ code: string }>,
-  linkPoll: () => ipcRenderer.invoke("kiwi:link-poll") as Promise<LinkAskView | null>,
-  linkAnswer: (accept: boolean) => ipcRenderer.invoke("kiwi:link-answer", accept) as Promise<PhoneView | null>,
-  linkCancel: () => ipcRenderer.invoke("kiwi:link-cancel") as Promise<void>,
-  daemonStatus: () => ipcRenderer.invoke("kiwi:daemon-status") as Promise<DaemonStatus>,
-  daemonAdopt: () => ipcRenderer.invoke("kiwi:daemon-adopt") as Promise<ComputerView>,
-  installCli: () => ipcRenderer.invoke("kiwi:install-cli") as Promise<{ path: string }>,
-  getUpdate: () => ipcRenderer.invoke("kiwi:update-state") as Promise<UpdateView | null>,
-  onUpdate: (cb) => on("kiwi:update", cb),
-  installUpdate: () => ipcRenderer.invoke("kiwi:update-install") as Promise<void>,
-  checkUpdate: () => ipcRenderer.invoke("kiwi:update-check") as Promise<UpdateCheckView>,
-  notify: (title: string, body: string) => ipcRenderer.invoke("kiwi:notify", title, body) as Promise<void>,
-  openExternal: (url: string) => ipcRenderer.invoke("kiwi:open-external", url) as Promise<void>,
-  getDeepLink: () => ipcRenderer.invoke("kiwi:deep-link") as Promise<string | null>,
-  onDeepLink: (cb) => on("kiwi:deep-link", cb),
-  onTextStep: (cb) => on("kiwi:text-step", cb),
-  setPersonalities: (list: Personality[]) => ipcRenderer.invoke("kiwi:personalities-set", list) as Promise<void>,
-  seatPlaces: () => ipcRenderer.invoke("kiwi:seat-places") as Promise<PlacedSeat[]>,
-  showSeat: (seat: PlacedSeat) => ipcRenderer.invoke("kiwi:show-seat", seat) as Promise<ShowResult>,
-  terminals: () => ipcRenderer.invoke("kiwi:terminals") as Promise<TerminalsStatus | null>,
-  terminalHelpers: (id: "rex" | "tmux", to: "on" | "off") => ipcRenderer.invoke("kiwi:terminal-helpers", id, to) as Promise<TerminalsStatus | null>,
-  terminalPrefer: (id: TerminalId) => ipcRenderer.invoke("kiwi:terminal-prefer", id) as Promise<TerminalsStatus | null>,
-  setLaunches: (to: "on" | "off") => ipcRenderer.invoke("kiwi:launches", to) as Promise<TerminalsStatus | null>,
-  contextLine: () => ipcRenderer.invoke("kiwi:context-line") as Promise<"on" | "off" | null>,
-  setContextLine: (to: "on" | "off") => ipcRenderer.invoke("kiwi:set-context-line", to) as Promise<"on" | "off" | null>,
-  harnesses: () => ipcRenderer.invoke("kiwi:harnesses") as Promise<HarnessRow[]>,
-  seatFolders: (roomId: string) => ipcRenderer.invoke("kiwi:seat-folders", roomId) as Promise<string[]>,
-  chooseFolder: () => ipcRenderer.invoke("kiwi:choose-folder") as Promise<string | null>,
-  launchAgent: (req: LaunchAgentRequest) => ipcRenderer.invoke("kiwi:launch-agent", req) as Promise<LaunchedView>,
-  machines: () => ipcRenderer.invoke("kiwi:machines") as Promise<MachineView[]>,
-  harnessesOn: (machinePk: string) => ipcRenderer.invoke("kiwi:harnesses-on", machinePk) as Promise<FromMachine<HarnessRow[]>>,
-  foldersOn: (machinePk: string, roomId: string) => ipcRenderer.invoke("kiwi:folders-on", machinePk, roomId) as Promise<FromMachine<string[]>>,
-};
+function call<K extends Call>(name: K, ...args: CallArgs<K>): Promise<CallValue<K>> {
+  return ipcRenderer.invoke(`kiwi:${name}`, ...args) as Promise<CallValue<K>>;
+}
 
-contextBridge.exposeInMainWorld("kiwi", kiwi);
+function listen<P extends Push>(name: P, cb: (value: Pushes[P]) => void): () => void {
+  const fn = (_e: IpcRendererEvent, value: Pushes[P]) => cb(value);
+  ipcRenderer.on(`kiwi:${name}`, fn);
+  return () => ipcRenderer.removeListener(`kiwi:${name}`, fn);
+}
+
+contextBridge.exposeInMainWorld("kiwi", makeBridge({ snapshot, channels, call, listen }));

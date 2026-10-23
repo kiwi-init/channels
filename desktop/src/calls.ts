@@ -1,0 +1,89 @@
+import type { KeysPort, KiwiBridge, StoreSnapshot, UpdateView } from "./bridge.ts";
+import type { TextStep } from "./text-size.ts";
+
+export type Call = { [K in keyof KiwiBridge]: KiwiBridge[K] extends (...args: never[]) => Promise<unknown> ? K : never }[keyof KiwiBridge];
+export type CallArgs<K extends Call> = KiwiBridge[K] extends (...args: infer A) => Promise<unknown> ? A : never;
+export type CallValue<K extends Call> = KiwiBridge[K] extends (...args: never[]) => Promise<infer V> ? V : never;
+
+export type Handlers = { [K in Call]: (...args: CallArgs<K>) => CallValue<K> | Promise<CallValue<K>> };
+export type Serves<K extends Call> = Pick<Handlers, K>;
+
+export interface Pushes {
+  store: StoreSnapshot;
+  update: UpdateView;
+  githubCode: { code: string; url: string };
+  deepLink: string;
+  textStep: TextStep;
+}
+
+export type Push = keyof Pushes;
+
+export interface BridgeTransport {
+  readonly snapshot: StoreSnapshot;
+  readonly channels: KeysPort;
+  call<K extends Call>(name: K, ...args: CallArgs<K>): Promise<CallValue<K>>;
+  listen<P extends Push>(name: P, cb: (value: Pushes[P]) => void): () => void;
+}
+
+export function makeBridge(t: BridgeTransport): KiwiBridge {
+  let latest = t.snapshot;
+  t.listen("store", (s) => (latest = s));
+  return {
+    relayUrl: latest.relayUrl,
+    getSnapshot: () => latest,
+    onStore: (cb) => t.listen("store", cb),
+    setRelayUrl: (url) => t.call("setRelayUrl", url),
+    createPerson: (name) => t.call("createPerson", name),
+    saveChannels: (list) => t.call("saveChannels", list),
+    migrateChannels: (entries) => t.call("migrateChannels", entries),
+    channels: t.channels,
+    saveComputers: (computers) => t.call("saveComputers", computers),
+    setPending: (pending) => t.call("setPending", pending),
+    signIn: () => t.call("signIn"),
+    devSignIn: (name) => t.call("devSignIn", name),
+    getToken: () => t.call("getToken"),
+    signOut: () => t.call("signOut"),
+    githubStatus: () => t.call("githubStatus"),
+    githubLink: () => t.call("githubLink"),
+    githubUnlink: () => t.call("githubUnlink"),
+    githubRepos: () => t.call("githubRepos"),
+    githubPicture: () => t.call("githubPicture"),
+    onGithubCode: (cb) => t.listen("githubCode", cb),
+    pairBegin: () => t.call("pairBegin"),
+    pairPoll: () => t.call("pairPoll"),
+    pairCancel: () => t.call("pairCancel"),
+    pairAnswer: (accept) => t.call("pairAnswer", accept),
+    linkBegin: () => t.call("linkBegin"),
+    linkPoll: () => t.call("linkPoll"),
+    linkAnswer: (accept) => t.call("linkAnswer", accept),
+    linkCancel: () => t.call("linkCancel"),
+    daemonStatus: () => t.call("daemonStatus"),
+    daemonAdopt: () => t.call("daemonAdopt"),
+    installCli: () => t.call("installCli"),
+    getUpdate: () => t.call("getUpdate"),
+    onUpdate: (cb) => t.listen("update", cb),
+    installUpdate: () => t.call("installUpdate"),
+    checkUpdate: () => t.call("checkUpdate"),
+    notify: (title, body) => t.call("notify", title, body),
+    openExternal: (url) => t.call("openExternal", url),
+    getDeepLink: () => t.call("getDeepLink"),
+    onDeepLink: (cb) => t.listen("deepLink", cb),
+    onTextStep: (cb) => t.listen("textStep", cb),
+    setPersonalities: (list) => t.call("setPersonalities", list),
+    seatPlaces: () => t.call("seatPlaces"),
+    showSeat: (seat) => t.call("showSeat", seat),
+    terminals: () => t.call("terminals"),
+    terminalHelpers: (id, to) => t.call("terminalHelpers", id, to),
+    terminalPrefer: (id) => t.call("terminalPrefer", id),
+    setLaunches: (to) => t.call("setLaunches", to),
+    contextLine: () => t.call("contextLine"),
+    setContextLine: (to) => t.call("setContextLine", to),
+    harnesses: () => t.call("harnesses"),
+    seatFolders: (roomId) => t.call("seatFolders", roomId),
+    chooseFolder: () => t.call("chooseFolder"),
+    launchAgent: (req) => t.call("launchAgent", req),
+    machines: () => t.call("machines"),
+    harnessesOn: (machinePk) => t.call("harnessesOn", machinePk),
+    foldersOn: (machinePk, roomId) => t.call("foldersOn", machinePk, roomId),
+  };
+}

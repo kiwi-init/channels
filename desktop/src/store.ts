@@ -9,7 +9,7 @@ import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, PhoneV
 import { chooseStore, normalizeRelay, snapshotOf, writePrivate, keyringState, needsResave, type KeyringState } from "./guard.ts";
 import { tellKeys } from "./keys-process.ts";
 import { logMainError } from "./main-log.ts";
-import { currentWindow } from "./window.ts";
+import { push } from "./window.ts";
 
 export interface StoreFile {
   relayUrl: string;
@@ -87,7 +87,7 @@ export function warnIfBroken(): void {
 }
 
 export const snapshot = (): StoreSnapshot => snapshotOf(store);
-const broadcast = () => currentWindow()?.webContents.send("kiwi:store", snapshot());
+const broadcast = () => push("store", snapshot());
 export const mutate = (fn: (s: StoreFile) => void) => {
   if (storeBroken) throw brokenError();
   fn(store);

@@ -641,6 +641,13 @@ jobs:
       checkForUpdate, with electron and fetch faked): the latest release says current, a
       pre-release or draft never counts, an unpackaged app only offers the release link and
       downloads nothing, GitHub failing is a failed check, and two checks at once share one. And
+      test/desktop-calls.test.ts: window.kiwi's calls and the main process's handlers as one typed table
+      (desktop/src/calls.ts, host.ts, ipc/handlers.ts, with electron faked): every bridge call goes out
+      under its own name with its arguments and main has exactly one handler for each, every on* hears
+      only its own push and getSnapshot follows the store's, and the handlers reach the shell only
+      through the Host seam (the folder picker, notifications, the update restart, the browser only for
+      http(s) links, a new relay saved, told to the keys and the page reloaded, a bad one changing
+      nothing, a bad argument refused under the call's name). And
       test/jev-ci.test.ts: the CI planner in .github/jev-ci, which plans synthetic changes
       against the real .github/jev-ci.yml and .github/workflows/ci.yml in a scratch git repo,
       following imports into workspace packages (@kiwi/core) by name, and trusts a pass marker only
