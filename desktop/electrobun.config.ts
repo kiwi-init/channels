@@ -1,12 +1,17 @@
 import type { ElectrobunConfig } from "electrobun";
 
 import pkg from "./package.json" with { type: "json" };
+import { RELEASE_ID } from "./scripts/eb-bundle.ts";
+import { JOIN_SCHEME } from "./src/deep-links.ts";
+
+const identifier = process.env.CHANNELS_EB_IDENTIFIER ?? RELEASE_ID;
 
 export default {
   app: {
     name: "Channels",
-    identifier: process.env.CHANNELS_EB_IDENTIFIER ?? "com.kiwiinit.channels",
+    identifier,
     version: pkg.version,
+    ...(identifier === RELEASE_ID ? { urlSchemes: [JOIN_SCHEME] } : {}),
   },
   build: {
     mainProcess: "bun",
@@ -15,6 +20,7 @@ export default {
     buildFolder: "release-eb/build",
     artifactFolder: "release-eb/artifacts",
     mac: { icons: "release-eb/icon.iconset" },
+    copy: { assets: "assets" },
     linux: { icon: "build/icons/512x512.png" },
   },
   runtime: { exitOnLastWindowClosed: false },
