@@ -25,6 +25,7 @@ import { testHomeProblem } from "./eb-test-home.ts";
 import { bunBridge } from "./rpc-eb.ts";
 import { brokenStore, mutate, openStore, snapshot, store } from "./store.ts";
 import { openEbStore, unmarkedNote, v2Vault } from "./store-eb.ts";
+import type { OpenStore } from "./store-v2.ts";
 import { startUpdates, updateState } from "./updater.ts";
 import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts";
 import { minWindowWidth } from "./window-size.ts";
@@ -164,13 +165,15 @@ function endKeySession(): void {
 }
 
 async function start(instance: Extract<Instance, { kind: "first" }>): Promise<void> {
-  const opened = KIWI_EB_TEST ? null : await openEbStore({ dir: Utils.paths.userData, keys: launcherKeys });
-  if (opened) openStore(v2Vault(opened));
-  else {
+  let opened: OpenStore | null = null;
+  if (KIWI_EB_TEST) {
     endKeySession();
     openStore(testVault(Utils.paths.userData));
     const relay = normalizeRelay(process.env.KIWI_EB_RELAY ?? "");
     if (relay) mutate((s) => void (s.relayUrl = relay));
+  } else {
+    opened = await openEbStore({ dir: Utils.paths.userData, keys: launcherKeys });
+    openStore(v2Vault(opened));
   }
   attachKeys((m) => keys.tell(m));
   keys.start();
