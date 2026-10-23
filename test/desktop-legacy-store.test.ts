@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { legacyPassword, macKeychainItem } from "../desktop/src/legacy-keys.ts";
+import { legacyPassword } from "../desktop/src/legacy-keys.ts";
 import { legacyDirs, legacyPrefix, legacyRounds, openLegacy, readLegacyAt, readLegacyStore, type LegacyName } from "../desktop/src/legacy-store.ts";
 
 const ELECTRON_LINUX = {
@@ -199,11 +199,8 @@ describe("finding Electron's store", () => {
 });
 
 describe("the old password's lookup", () => {
-  test("Electron's Keychain item: '<name> Safe Storage', account '<name> Key'", () => {
-    expect(macKeychainItem("kiwi-desktop")).toEqual({ service: "kiwi-desktop Safe Storage", name: "kiwi-desktop Key" });
-  });
-
-  test("only a Mac or Linux had an Electron app, so elsewhere there is nothing to look up", async () => {
+  test("Bun looks up the old password only on Linux: on a Mac the signed launcher does, and elsewhere there was no Electron app", async () => {
+    expect(await legacyPassword("darwin")("kiwi-desktop")).toBeNull();
     expect(await legacyPassword("win32")("kiwi-desktop")).toBeNull();
   });
 });
