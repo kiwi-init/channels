@@ -3,37 +3,16 @@ import { app, powerMonitor, protocol, session } from "electron";
 
 import { keepDaemon } from "./bundled-daemon.ts";
 import { handleDeepLink, JOIN_SCHEME, rememberDeepLink } from "./deep-links.ts";
+import { electronHost, serveCalls } from "./electron-host.ts";
 import { APP_SCHEME, permissionAllowed } from "./guard.ts";
-import { wireDaemonIpc } from "./ipc/daemon.ts";
-import { wireGithubIpc } from "./ipc/github.ts";
-import { wireMiscIpc } from "./ipc/misc.ts";
-import { wireLinkingIpc } from "./ipc/linking.ts";
-import { wirePairingIpc } from "./ipc/pairing.ts";
-import { wireSignInIpc } from "./ipc/signin.ts";
-import { wireStoreIpc } from "./ipc/store.ts";
-import { wirePersonalitiesIpc } from "./ipc/personalities.ts";
-import { wireLaunchIpc } from "./ipc/launch.ts";
-import { wireTerminalsIpc } from "./ipc/terminals.ts";
+import { handlers } from "./ipc/handlers.ts";
 import { closeKeys, keysOpen, startKeys, tellKeys } from "./keys-process.ts";
 import { setAppMenu } from "./menu.ts";
 import { catchMainErrors } from "./revive.ts";
 import { serveWeb } from "./serve-web.ts";
 import { loadStore, warnIfBroken } from "./store.ts";
 import { startUpdates } from "./updater.ts";
-import { createTray, createWindow, currentWindow, guardContents, isQuitting, markQuitting, refreshTray, showWindow, stepText } from "./window.ts";
-
-function wireIpc(): void {
-  wireStoreIpc();
-  wireSignInIpc();
-  wireGithubIpc();
-  wirePairingIpc();
-  wireLinkingIpc();
-  wireDaemonIpc();
-  wireMiscIpc();
-  wirePersonalitiesIpc();
-  wireTerminalsIpc();
-  wireLaunchIpc();
-}
+import { createTray, createWindow, guardContents, isQuitting, markQuitting, push, refreshTray, showWindow, stepText } from "./window.ts";
 
 catchMainErrors();
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -57,7 +36,7 @@ else {
     session.defaultSession.setPermissionRequestHandler((wc, permission, callback) => {
       callback(permissionAllowed(wc.getURL(), permission));
     });
-    wireIpc();
+    serveCalls(handlers(electronHost));
     setAppMenu(stepText);
     createWindow();
     loadStore();
@@ -65,7 +44,7 @@ else {
     startKeys();
     createTray();
     startUpdates((u) => {
-      currentWindow()?.webContents.send("kiwi:update", u);
+      push("update", u);
       refreshTray();
     });
     app.on("activate", showWindow);

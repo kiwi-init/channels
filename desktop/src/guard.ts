@@ -132,6 +132,8 @@ export function readStore(raw: Buffer | null, decrypt: ((b: Buffer) => string) |
   }
 }
 
+export function publicPerson(p: PersonView): PublicPerson;
+export function publicPerson(p: PersonView | null): PublicPerson | null;
 export function publicPerson(p: PersonView | null): PublicPerson | null {
   return p ? { name: p.name, pk: p.pk, xpk: p.xpk } : null;
 }

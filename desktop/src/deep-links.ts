@@ -1,6 +1,6 @@
 import { app } from "electron";
 
-import { currentWindow, showWindow } from "./window.ts";
+import { push, showWindow } from "./window.ts";
 
 export const JOIN_SCHEME = "kiwi";
 
@@ -21,6 +21,6 @@ export function takeDeepLink(): string | null {
 export function handleDeepLink(url: string): void {
   if (!url.startsWith(`${JOIN_SCHEME}://join/`)) return;
   deepLink = url;
-  currentWindow()?.webContents.send("kiwi:deep-link", url);
+  push("deepLink", url);
   if (app.isReady()) showWindow();
 }

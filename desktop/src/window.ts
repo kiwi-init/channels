@@ -1,6 +1,7 @@
 import path from "node:path";
 import { app, BrowserWindow, Menu, nativeImage, nativeTheme, shell, Tray } from "electron";
 
+import type { Push, Pushes } from "./calls.ts";
 import { pendingDeepLink } from "./deep-links.ts";
 import { externalUrl, isAppUrl } from "./guard.ts";
 import { openInBrowser } from "./open.ts";
@@ -27,8 +28,12 @@ function openOutside(url: string): void {
   if (ext) void openInBrowser(ext, (u) => shell.openExternal(u)).catch(() => {});
 }
 
+export function push<P extends Push>(name: P, value: Pushes[P]): void {
+  win?.webContents.send(`kiwi:${name}`, value);
+}
+
 export function stepText(step: TextStep): void {
-  win?.webContents.send("kiwi:text-step", step);
+  push("textStep", step);
 }
 
 export function guardContents(wc: Electron.WebContents): void {
@@ -75,7 +80,7 @@ export function createWindow(): void {
   });
   win.on("closed", () => (win = null));
   const deepLink = pendingDeepLink();
-  if (deepLink) win.webContents.send("kiwi:deep-link", deepLink);
+  if (deepLink) push("deepLink", deepLink);
 }
 
 export function restartToUpdate(): void {
