@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react"
 
 import { ignored, isQuiet, type Color, type Message } from "@kiwi/core/protocol.ts"
+import type { TaskCards } from "@kiwi/core/standup.ts"
 import { colorOf, type ChannelState } from "@kiwi/core/state.ts"
 import { digestTask } from "@/lib/activity"
 import { roomOfMessage } from "@/lib/rooms"
@@ -18,6 +19,7 @@ export function useThreads({
   search,
   hereKey,
   room,
+  cards,
   taskKey,
   shownTask,
   nameOf,
@@ -30,6 +32,7 @@ export function useThreads({
   search: string | null
   hereKey: string
   room: string | null
+  cards: Pick<TaskCards, "shown">
   taskKey: string | null
   shownTask: number | null
   nameOf: (name: string) => string
@@ -63,17 +66,18 @@ export function useThreads({
   const visible = useMemo(() => {
     const q = search?.trim().toLowerCase()
     let list = messages.filter((m) => {
-      const at = placeKey(placeOf.get(m.seq) ?? MAIN)
-      const inHere = at === hereKey || (hereKey === "main" && at.startsWith("task:") && summarised(m))
+      const p = placeOf.get(m.seq) ?? MAIN
+      const at = placeKey(p)
+      const inHere = at === hereKey || (hereKey === "main" && p.kind === "task" && summarised(m))
       if (!inHere) return false
-      if (room !== null && hereKey === "main" && roomOfMessage(state, m) !== room) return false
+      if (room !== null && hereKey === "main" && (p.kind === "task" ? !cards.shown(p.task, room) : roomOfMessage(state, m) !== room)) return false
       if (isQuiet(m)) return false
       if (!revealed && ignored(state.trust.get(m.seq))) return false
       return true
     })
     if (q) list = list.filter((m) => m.body.toLowerCase().includes(q) || nameOf(m.from).toLowerCase().includes(q))
     return list
-  }, [messages, placeOf, hereKey, room, search, nameOf, state, revealed])
+  }, [messages, placeOf, hereKey, room, cards, search, nameOf, state, revealed])
   const inTask = useMemo(
     () => (taskKey === null ? [] : messages.filter((m) => m.seq !== shownTask && placeKey(placeOf.get(m.seq) ?? MAIN) === taskKey && (revealed || !ignored(state.trust.get(m.seq))))),
     [messages, placeOf, taskKey, shownTask, state.trust, revealed]
