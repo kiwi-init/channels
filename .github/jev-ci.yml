@@ -1053,7 +1053,7 @@ jobs:
     name: desktop / mac
     inputs: ["desktop/src/**", "desktop/native/**", "desktop/eb-tests/**", "desktop/build/icon.icns", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "test/fake-host.ts", "package.json", "bun.lock", "src/relay/**", "scripts/local-relay.ts", "scripts/perf-desktop.ts", "scripts/perf-calibrate.ts", "scripts/perf-budgets.json"]
     imports_from: ["desktop/src/main-eb.ts", "desktop/src/preload-eb.ts", "desktop/scripts/smoke-eb.ts", "scripts/perf-desktop.ts"]
-    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-bundle.ts", "desktop/scripts/eb-size.ts", "desktop/scripts/eb-env-check.ts", "desktop/scripts/eb-app.ts", "desktop/scripts/eb-seal.ts", "desktop/scripts/eb-keys-check.ts", "desktop/scripts/eb-keys-probe.ts", "desktop/scripts/eb-drive.ts", "desktop/scripts/smoke-eb.ts", "desktop/scripts/eb-driver-check.ts"]
+    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-bundle.ts", "desktop/scripts/eb-size.ts", "desktop/scripts/eb-env-check.ts", "desktop/scripts/eb-app.ts", "desktop/scripts/eb-seal.ts", "desktop/scripts/eb-keys-check.ts", "desktop/scripts/eb-keys-probe.ts", "desktop/scripts/eb-drive.ts", "desktop/scripts/smoke-eb.ts", "desktop/scripts/eb-bridge-checks.ts", "desktop/scripts/eb-driver-check.ts"]
     description: >-
       On a macOS runner (Electrobun builds only for the host it runs on), checks the Electrobun
       shell that is replacing Electron (issue #757). Builds web/dist, restores ~/.hutch (Hutch,
@@ -1175,7 +1175,15 @@ jobs:
       ~/Library in a temp CFFIXED_USER_HOME, a local relay) fails unless the window shows the
       dashboard from views://internal/index.html with a first paint, the relay it was given reaches the page as
       window.kiwi.relayUrl and answers through the CSP, an inline script and a fetch to another origin are refused, the microphone
-      isn't granted, and nothing of the app is left running after it quits. scripts/perf-desktop.ts
+      isn't granted, and nothing of the app is left running after it quits; with
+      desktop/scripts/eb-bridge-checks.ts (T1240) it also fails unless window.kiwi answers our page,
+      page calls to Electrobun's internal webviewTag RPC (ExecuteJavascript, SetNavigationRules,
+      UpdateSrc) and a link to about:blank leave the title and location as they were, a local client
+      on Electrobun's 127.0.0.1 RPC socket connected as our view gets nothing while the page is
+      pushed to three times and its requests never reach the store, a did-commit-navigation the
+      page posts itself doesn't turn the bridge off, a page that replaces globalThis gets none of
+      main's frames, and after the page's own location.reload() the new document is answered.
+      scripts/perf-desktop.ts
       --electrobun then times the test build's cold start as desktop / package times Electron's:
       a person, a channel and 20 messages on a local relay through the driver (the name field,
       Continue, New channel, Create channel, the composer and Enter), then 5 launches to the
