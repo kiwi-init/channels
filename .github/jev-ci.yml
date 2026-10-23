@@ -1008,13 +1008,16 @@ jobs:
       the store key from the Keychain under the bundle id, made only when none is there and never
       replaced, and the old Electron app's key for a name in Info.plist's KiwiLegacyNames only, for
       one session: bun's done (or the end of the socket) shuts it, so Electrobun's launcher's copy of
-      fd 3 gets nothing after. bun copies the channel off fd 3 onto a close-on-exec descriptor and
-      closes fd 3 at once, and drops KIWI_KEY_FD, so nothing the app starts inherits either (T873).
+      fd 3 gets nothing after. bun copies the channel off fd 3 onto a descriptor opened O_CLOEXEC and
+      closes fd 3 at once, and drops KIWI_KEY_FD from process.env and the C environment (unsetenv),
+      so nothing the app starts inherits either (T873).
       desktop/scripts/eb-keys-check.ts takes a copy of the plain .app with a probe
       (scripts/eb-keys-probe.ts) as main.js, a throwaway bundle id and a throwaway legacy item,
       resealed, and fails unless a descriptor the launcher inherited never reaches bun, bun has no
-      fd 3 and no KIWI_KEY_FD once it holds the channel, another copy of the socket gets nothing
-      after done, a child started afterwards gets no socket and no KIWI_KEY_FD, the first
+      fd 3 and no KIWI_KEY_FD once it holds the channel, its copy of the channel is close-on-exec
+      (fcntl F_GETFD) and a child started through libc system() while the channel is open gets no
+      socket and no KIWI_KEY_FD, another copy of the socket gets nothing after done, a child started
+      afterwards gets no socket and no KIWI_KEY_FD, the first
       start makes a key through the launcher and the next gets the same one, a second key is refused, the legacy key comes through while an
       unlisted name and an unknown request are refused, and copies with a changed main.js, a
       bunfig.toml beside bun, an app.asar, a link or a missing file all stop before bun runs, and
