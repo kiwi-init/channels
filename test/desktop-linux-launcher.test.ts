@@ -1,6 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -10,11 +10,17 @@ const linux = process.platform === "linux";
 const root = mkdtempSync(join(tmpdir(), "kiwi-linux-launcher-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
-function launcherBeside(name: string, standIn: string): string {
+const STAND_INS = {
+  env: "#include <stdio.h>\nextern char **environ;\nint main(void) {\n  for (char **e = environ; *e; e++) puts(*e);\n  return 0;\n}\n",
+  args: '#include <stdio.h>\nint main(int argc, char **argv) {\n  for (int i = 1; i < argc; i++) printf("%s%s", i > 1 ? " " : "", argv[i]);\n  return 0;\n}\n',
+};
+
+function launcherBeside(name: keyof typeof STAND_INS): string {
   const bin = join(root, name);
   mkdirSync(bin, { recursive: true });
   execFileSync("cc", ["-O2", "-Wall", "-Wextra", "-Werror", "-o", join(bin, "launcher"), join(import.meta.dir, "../desktop/native/linux/kiwi-launcher.c")]);
-  copyFileSync(standIn, join(bin, ELECTROBUN_LAUNCHER));
+  writeFileSync(join(bin, "stand-in.c"), STAND_INS[name]);
+  execFileSync("cc", ["-O2", "-o", join(bin, ELECTROBUN_LAUNCHER), join(bin, "stand-in.c")]);
   return join(bin, "launcher");
 }
 
@@ -47,7 +53,7 @@ const POLLUTED = {
 };
 
 test.skipIf(!linux)("the Linux launcher hands Electrobun's launcher only the names it keeps, and sets the transpiler-cache switch itself, whatever it was given (T1548)", () => {
-  const launcher = launcherBeside("env", "/usr/bin/env");
+  const launcher = launcherBeside("env");
   const seen = execFileSync(launcher, [], { env: POLLUTED, encoding: "utf8" }).trim().split("\n");
   expect(seen).toEqual([
     "HOME=/home/ana",
@@ -66,7 +72,7 @@ test.skipIf(!linux)("the Linux launcher hands Electrobun's launcher only the nam
 });
 
 test.skipIf(!linux)("started through a link elsewhere (/usr/bin/channels-desktop), it still starts the Electrobun launcher beside itself, with the arguments it was given (T1548)", () => {
-  const launcher = launcherBeside("echo", "/bin/echo");
+  const launcher = launcherBeside("args");
   const links = join(root, "usr-bin");
   mkdirSync(links, { recursive: true });
   symlinkSync(launcher, join(links, "channels-desktop"));

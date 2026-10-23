@@ -435,7 +435,8 @@ jobs:
           done
           probe=$(mktemp -d)
           cp squashfs-root/Channels/bin/launcher "$probe/launcher"
-          cp "$(command -v env)" "$probe/electrobun-launcher"
+          printf '#include <stdio.h>\nextern char **environ;\nint main(void) { for (char **e = environ; *e; e++) puts(*e); return 0; }\n' > "$probe/env.c"
+          cc -O2 -o "$probe/electrobun-launcher" "$probe/env.c"
           seen=$(env -i HOME=/home/ana DISPLAY=:0 LD_PRELOAD=/tmp/evil.so LD_LIBRARY_PATH=. BUN_OPTIONS=--preload=/tmp/evil.ts NODE_OPTIONS=--require=/tmp/evil.js GTK_MODULES=evil XDG_RUNTIME_DIR=/run/user/1000 "$probe/launcher")
           want=$(printf 'HOME=/home/ana\nDISPLAY=:0\nXDG_RUNTIME_DIR=/run/user/1000\nBUN_RUNTIME_TRANSPILER_CACHE_PATH=0')
           [ "$seen" = "$want" ] || { echo "the built bin/launcher passed on:"; echo "$seen"; exit 1; }
