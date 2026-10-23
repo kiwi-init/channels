@@ -2,8 +2,9 @@ import type { Identity } from "@kiwi/core/identity.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
 import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts";
 import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, PhoneView, StoreSnapshot } from "./bridge.ts";
-import { normalizeRelay, snapshotOf } from "./guard.ts";
+import { errorText, normalizeRelay, snapshotOf } from "./guard.ts";
 import { host } from "./host.ts";
+import { logMainError } from "./main-log.ts";
 
 export interface StoreFile {
   relayUrl: string;
@@ -36,11 +37,21 @@ let vault: StoreVault | null = null;
 
 let storeBroken: string | null = null;
 
+function loaded(v: StoreVault): VaultRead {
+  try {
+    return v.load();
+  } catch (e) {
+    // A load that stopped partway may have left either copy half-restored: the store counts as unreadable, so nothing saves over them, and main.log says why.
+    logMainError(e);
+    return { ok: false, why: errorText(e) };
+  }
+}
+
 export function openStore(v: StoreVault): void {
+  const read = loaded(v);
   vault = v;
-  const read = v.load();
   store = read.ok && read.file ? { ...defaults(), ...read.file } : defaults();
-  if (!read.ok) storeBroken = read.why;
+  storeBroken = read.ok ? null : read.why || "an error with no message";
   store.relayUrl = normalizeRelay(store.relayUrl) ?? DEFAULT_RELAY;
   const staleVoice = Object.hasOwn(store, "voice") && Reflect.deleteProperty(store, "voice");
   if (read.ok && read.file && (staleVoice || read.resave)) saveStore();
@@ -49,17 +60,17 @@ export function openStore(v: StoreVault): void {
 const brokenError = () =>
   new Error(`Channels can't read its saved keys (${storeBroken}), so it saves nothing over them. Unlock your keychain, then quit and reopen Channels. The file is ${vault?.where()}.`);
 
-export const brokenStore = (): Error | null => (storeBroken ? brokenError() : null);
+export const brokenStore = (): Error | null => (storeBroken === null ? null : brokenError());
 
 function saveStore(): void {
-  if (storeBroken) throw brokenError();
+  if (storeBroken !== null) throw brokenError();
   if (!vault) throw new Error("the store isn't open yet");
   vault.save(store);
 }
 
 export const snapshot = (): StoreSnapshot => snapshotOf(store);
 export const mutate = (fn: (s: StoreFile) => void) => {
-  if (storeBroken) throw brokenError();
+  if (storeBroken !== null) throw brokenError();
   fn(store);
   saveStore();
   const shell = host();

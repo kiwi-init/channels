@@ -1,7 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import type { StoreSnapshot } from "../desktop/src/bridge.ts";
 import type { Handlers } from "../desktop/src/calls.ts";
-import { answer, BOOT_GLOBAL, committedUrl, lockInternalRpc, onOurPage, PAGE_INTERNAL_RPC, pageOnly, preloadSource, RECEIVE_GLOBAL, toPageScript } from "../desktop/src/eb-bridge.ts";
+import {
+  answer,
+  BOOT_GLOBAL,
+  committedUrl,
+  frameOf,
+  stillOurs,
+  lockInternalRpc,
+  onOurPage,
+  PAGE_INTERNAL_RPC,
+  pageOnly,
+  preloadSource,
+  RECEIVE_GLOBAL,
+  toPageScript,
+} from "../desktop/src/eb-bridge.ts";
 import { PAGE_URL } from "../desktop/src/eb-page.ts";
 import { useHost } from "../desktop/src/host.ts";
 import { handlers } from "../desktop/src/ipc/handlers.ts";
@@ -19,6 +32,17 @@ describe("which page the Electrobun view is on", () => {
       expect(onOurPage(off)).toBe(false);
   });
 
+  test("a navigation event can only take the bridge away from the view, never give it back: the page can post such events itself", () => {
+    expect(stillOurs(true, PAGE_URL)).toBe(true);
+    expect(stillOurs(true, `${PAGE_URL}#mc2-abc`)).toBe(true);
+    expect(stillOurs(true, "https://evil.example/")).toBe(false);
+    expect(stillOurs(true, null)).toBe(false);
+    expect(stillOurs(false, PAGE_URL)).toBe(false);
+    let ours = true;
+    for (const url of [PAGE_URL, "about:blank", PAGE_URL, `${PAGE_URL}#x`]) ours = stillOurs(ours, url);
+    expect(ours).toBe(false);
+  });
+
   test("a navigation event's detail names the page, as a string or WebKit's JSON", () => {
     expect(committedUrl(PAGE_URL)).toBe(PAGE_URL);
     expect(committedUrl(JSON.stringify({ url: "https://evil.example/" }))).toBe("https://evil.example/");
@@ -27,6 +51,14 @@ describe("which page the Electrobun view is on", () => {
 });
 
 describe("the bridge answers only our page", () => {
+  test("a frame names its page load by a session id; a hello has no packet, and anything else isn't a frame", () => {
+    const session = "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0";
+    expect(frameOf({ session })).toEqual({ session });
+    expect(frameOf({ session, packet: { type: "request", id: 1 } })).toEqual({ session, packet: { type: "request", id: 1 } });
+    expect(frameOf({ session, packet: null })).toEqual({ session, packet: null });
+    for (const junk of [null, "x", { packet: {} }, { session: 7 }, { session: "short" }, { session: "has space in it, quite long" }, { session: "a".repeat(65) }]) expect(frameOf(junk)).toBeNull();
+  });
+
   test("off our page, nothing comes in and nothing goes out", () => {
     let on = true;
     const sent: unknown[] = [];

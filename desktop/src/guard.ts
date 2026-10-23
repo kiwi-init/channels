@@ -4,6 +4,7 @@
 
 import { cleanPersonalities } from "@kiwi/core/personalities.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
+import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -170,9 +171,9 @@ export function writePrivate(file: string, raw: Buffer, platform: NodeJS.Platfor
   const dir = path.dirname(file);
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   if (platform !== "win32") fs.chmodSync(dir, 0o700);
-  const tmp = `${file}.${process.pid}.tmp`;
+  const tmp = `${file}.${randomBytes(8).toString("hex")}.tmp`;
   try {
-    const fd = fs.openSync(tmp, "w", 0o600);
+    const fd = fs.openSync(tmp, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0), 0o600);
     try {
       fs.writeFileSync(fd, raw);
       fs.fsyncSync(fd);
@@ -220,7 +221,40 @@ export function chooseStore(main: Buffer | null, backup: Buffer | null, decrypt:
   const read = readStore(main, decrypt);
   if (read.kind === "ok" || !backup) return { read, restore: null };
   const saved = readStore(backup, decrypt);
-  return saved.kind === "ok" ? { read: saved, restore: backup } : { read, restore: null };
+  if (saved.kind === "ok") return { read: saved, restore: backup };
+  return { read: read.kind === "none" ? saved : read, restore: null };
+}
+
+export const errorText = (e: unknown): string => (e instanceof Error ? e.message : String(e)) || "an error with no message";
+
+export type StoreLoad = { ok: true; choice: StoreChoice; raw: Buffer | null } | { ok: false; why: string };
+
+function readCopy(file: string): Buffer | null {
+  try {
+    return fs.readFileSync(file);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw e;
+  }
+}
+
+export function loadCopies(file: string, decrypt: ((b: Buffer) => string) | null): StoreLoad {
+  let raw: Buffer | null;
+  try {
+    raw = readCopy(file);
+  } catch (e) {
+    return { ok: false, why: errorText(e) };
+  }
+  let backup: Buffer | null = null;
+  let backupWhy: string | null = null;
+  try {
+    backup = readCopy(`${file}.bak`);
+  } catch (e) {
+    backupWhy = errorText(e);
+  }
+  const choice = chooseStore(raw, backup, decrypt);
+  if (choice.read.kind === "none" && backupWhy !== null) return { ok: false, why: `its backup can't be read: ${backupWhy}` };
+  return { ok: true, choice, raw };
 }
 
 export function claimFor(person: Identity, code: unknown, memberPk: unknown): Promise<PersonClaim> {

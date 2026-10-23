@@ -12,7 +12,23 @@ type BridgeRequests = { [K in Call]: { params: CallArgs<K>; response: CallValue<
 export type BunSide = { requests: BridgeRequests; messages: Pushes };
 export type PageSide = { requests: Record<never, never>; messages: Record<never, never> };
 
+export interface Frame {
+  session: string;
+  packet?: unknown;
+}
+
+const SESSION = /^[A-Za-z0-9-]{16,64}$/;
+
+export function frameOf(v: unknown): Frame | null {
+  if (!v || typeof v !== "object") return null;
+  const { session, packet } = v as { session?: unknown; packet?: unknown };
+  if (typeof session !== "string" || !SESSION.test(session)) return null;
+  return packet === undefined ? { session } : { session, packet };
+}
+
 export const onOurPage = (url: string | null): boolean => url !== null && url.split("#")[0] === PAGE_URL;
+
+export const stillOurs = (ours: boolean, navigatedTo: string | null): boolean => ours && onOurPage(navigatedTo);
 
 export function committedUrl(detail: unknown): string | null {
   if (typeof detail !== "string") return null;

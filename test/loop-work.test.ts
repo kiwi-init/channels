@@ -1,11 +1,15 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import type { Event, Message } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 import { claudeArgv, claudeSession } from "../src/loop/claude.ts";
+import { codexArgv, codexIdle, codexThread } from "../src/loop/codex.ts";
+import { grokArgv, grokIdle, grokSession } from "../src/loop/grok.ts";
+import { mimoArgv, mimoIdle, mimoSession } from "../src/loop/mimo.ts";
+import { Database } from "bun:sqlite";
 import { firstPrompt, nextWork, workOver } from "../src/loop/work.ts";
 
 const ids: Record<string, Identity> = {};
@@ -110,6 +114,30 @@ describe("the work a loop starts a session for", () => {
     expect(workOver(work, fold([t, round, approved], roster), "ana")).toBe(true);
   });
 
+  test("a task whose round is open isn't told to start it, which would withdraw the round", async () => {
+    const t = await ev("jon", { op: "task.add", title: "Sent", owner: "ana", review: "bo" });
+    const round = await ev("ana", { op: "task.update", task: t.seq, state: "review", at: "eee5555" });
+    const text = firstPrompt({ kind: "coding", task: t.seq }, fold([t, round], roster), "ana", "dev");
+    expect(text).toContain(`Its round 1 is with bo: wait here for the verdict, and don't run \`kiwi task start T${t.seq}\``);
+    expect(text).not.toContain("if it isn't doing yet");
+    expect(text).toContain(`kiwi task checkpoint T${t.seq} --file note.md`);
+  });
+
+  test("a reviewed task asks for a checkpoint before its round; a self-reviewed one says nobody else will judge it", async () => {
+    const t = await ev("jon", { op: "task.add", title: "Reviewed", owner: "ana", review: "bo" });
+    const text = firstPrompt({ kind: "coding", task: t.seq }, fold([t], roster), "ana", "dev");
+    expect(text.indexOf(`kiwi task checkpoint T${t.seq}`)).toBeLessThan(text.indexOf(`kiwi task review T${t.seq} --at SHA`));
+    expect(text).not.toContain("You're also its reviewer");
+    const own = await ev("jon", { op: "task.add", title: "Own", owner: "ana", review: "ana" });
+    expect(firstPrompt({ kind: "coding", task: own.seq }, fold([own], roster), "ana", "dev")).toContain("You're also its reviewer, so nobody else will give its verdict");
+  });
+
+  test("a review session answers messages but leaves the seat's own tasks for their sessions", async () => {
+    const t = await ev("jon", { op: "task.add", title: "Bo's", owner: "bo", review: "ana" });
+    const text = firstPrompt({ kind: "reviewing", task: t.seq, round: 1 }, fold([t], roster), "ana", "dev");
+    expect(text).toContain("your own tasks wait for their own session, even if one of them is rejected meanwhile");
+  });
+
   test("the first prompt names the work, how it ends, and carries re-entry", async () => {
     const t = await ev("jon", { op: "task.add", title: "Reviewed", owner: "ana", review: "bo" });
     const note = await ev("ana", { op: "task.update", task: t.seq, note: "branch feat/x at abc1234", checkpoint: true });
@@ -145,6 +173,167 @@ describe("the Claude Code recipe", () => {
       expect(claudeSession(42, env)).toEqual({ sessionId: "s-1", idle: true, since: null });
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("the Codex recipe", () => {
+  const thread = (ms: number, tail: string) => `${ms.toString(16).padStart(12, "0").slice(0, 8)}-${ms.toString(16).padStart(12, "0").slice(8)}-7abc-8def-${tail}`;
+  const day = (home: string, at: number) => {
+    const d = new Date(at);
+    const dir = join(home, "sessions", String(d.getFullYear()), String(d.getMonth() + 1).padStart(2, "0"), String(d.getDate()).padStart(2, "0"));
+    mkdirSync(dir, { recursive: true });
+    return dir;
+  };
+
+  test("the model, the effort as a config override, then the prompt after --", () => {
+    expect(codexArgv({ bin: "codex", model: "gpt-6-astra", effort: "high", prompt: "go" })).toEqual(["codex", "-m", "gpt-6-astra", "-c", 'model_reasoning_effort="high"', "--", "go"]);
+    expect(codexArgv({ bin: "codex", prompt: "go" })).toEqual(["codex", "--", "go"]);
+  });
+
+  test("the launch's thread is the one started after it whose rollout holds its nonce", () => {
+    const home = mkdtempSync(join(tmpdir(), "kiwi-loop-codex-"));
+    try {
+      const env = { CODEX_HOME: home };
+      const now = Date.now();
+      const dir = day(home, now);
+      const older = thread(now - 60_000, "000000000001");
+      const other = thread(now + 100, "000000000002");
+      const mine = thread(now + 200, "000000000003");
+      writeFileSync(join(dir, `rollout-x-${older}.jsonl`), '{"type":"session_meta"}\n{"text":"(Kiwi loop launch abc123)"}\n');
+      writeFileSync(join(dir, `rollout-x-${other}.jsonl`), '{"type":"session_meta"}\n{"text":"another launch"}\n');
+      expect(codexThread("abc123", now, now + 1_000, env)).toBeNull();
+      writeFileSync(join(dir, `rollout-x-${mine}.jsonl`), '{"type":"session_meta"}\n{"text":"(Kiwi loop launch abc123)"}\n');
+      expect(codexThread("abc123", now, now + 1_000, env)).toEqual({ thread: mine, rollout: join(dir, `rollout-x-${mine}.jsonl`) });
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("its rollout says when a turn is over", () => {
+    const home = mkdtempSync(join(tmpdir(), "kiwi-loop-codex-"));
+    try {
+      const file = join(home, "rollout.jsonl");
+      writeFileSync(file, '{"type":"event_msg","payload":{"type":"task_started"}}\n');
+      expect(codexIdle(file).idle).toBe(false);
+      writeFileSync(file, '{"type":"event_msg","payload":{"type":"task_started"}}\n{"type":"event_msg","payload":{"type":"task_complete"}}\n');
+      expect(codexIdle(file)).toMatchObject({ idle: true });
+      expect(codexIdle(file).since).toBeNumber();
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("the Grok recipe", () => {
+  const sessionId = (ms: number, tail: string) => `${ms.toString(16).padStart(12, "0").slice(0, 8)}-${ms.toString(16).padStart(12, "0").slice(8)}-7abc-8def-${tail}`;
+  const update = (sessionUpdate: string, extra: Record<string, unknown> = {}) =>
+    JSON.stringify({ jsonrpc: "2.0", method: "session/update", params: { sessionId: "s", update: { sessionUpdate, ...extra } } });
+
+  test("the model and reasoning effort, then the prompt after --", () => {
+    expect(grokArgv({ bin: "grok", model: "grok-4.7", effort: "high", prompt: "go" })).toEqual(["grok", "-m", "grok-4.7", "--reasoning-effort", "high", "--", "go"]);
+    expect(grokArgv({ bin: "grok", prompt: "go" })).toEqual(["grok", "--", "go"]);
+  });
+
+  test("the launch's session is the one in this folder started after it whose history holds its nonce", () => {
+    const home = mkdtempSync(join(tmpdir(), "kiwi-loop-grok-"));
+    try {
+      const env = { GROK_HOME: home };
+      const cwd = "/work/proj";
+      const now = Date.now();
+      const here = join(home, "sessions", encodeURIComponent(cwd));
+      const elsewhere = join(home, "sessions", encodeURIComponent("/work/other"));
+      const older = sessionId(now - 60_000, "000000000001");
+      const other = sessionId(now + 100, "000000000002");
+      const mine = sessionId(now + 200, "000000000003");
+      mkdirSync(join(here, older), { recursive: true });
+      mkdirSync(join(here, mine), { recursive: true });
+      mkdirSync(join(elsewhere, other), { recursive: true });
+      writeFileSync(join(here, older, "chat_history.jsonl"), '{"type":"user","content":"(Kiwi loop launch abc123)"}\n');
+      writeFileSync(join(elsewhere, other, "chat_history.jsonl"), '{"type":"user","content":"(Kiwi loop launch abc123)"}\n');
+      expect(grokSession("abc123", now, cwd, env)).toBeNull();
+      writeFileSync(join(here, mine, "chat_history.jsonl"), '{"type":"user","content":"(Kiwi loop launch abc123)"}\n');
+      expect(grokSession("abc123", now, cwd, env)).toEqual({ session: mine, dir: join(here, mine) });
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("its update stream says when a turn is over: turn_completed or the Stop hook's run", () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-loop-grok-"));
+    try {
+      const file = join(dir, "updates.jsonl");
+      expect(grokIdle(dir)).toEqual({ idle: false, since: null });
+      writeFileSync(file, [update("user_message_chunk"), update("tool_call")].join("\n") + "\n");
+      expect(grokIdle(dir).idle).toBe(false);
+      writeFileSync(file, [update("tool_call"), update("agent_message_chunk"), update("turn_completed"), update("background_tasks")].join("\n") + "\n");
+      expect(grokIdle(dir)).toMatchObject({ idle: true });
+      writeFileSync(file, [update("tool_call"), update("hook_execution", { event_name: "stop" })].join("\n") + "\n");
+      expect(grokIdle(dir).idle).toBe(true);
+      writeFileSync(file, [update("turn_completed"), update("user_message_chunk")].join("\n") + "\n");
+      expect(grokIdle(dir).idle).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("the MiMoCode recipe", () => {
+  const SCHEMA =
+    "CREATE TABLE IF NOT EXISTS session (id text PRIMARY KEY, parent_id text, directory text NOT NULL, time_created integer NOT NULL); CREATE TABLE IF NOT EXISTS message (id text PRIMARY KEY, session_id text NOT NULL, agent_id text NOT NULL DEFAULT 'main', time_created integer NOT NULL, data text NOT NULL); CREATE TABLE IF NOT EXISTS part (id text PRIMARY KEY, message_id text NOT NULL, session_id text NOT NULL, time_created integer NOT NULL, data text NOT NULL);";
+  const home = () => {
+    const h = mkdtempSync(join(tmpdir(), "kiwi-loop-mimo-"));
+    mkdirSync(join(h, "data"), { recursive: true });
+    mkdirSync(join(h, "state"), { recursive: true });
+    return h;
+  };
+
+  test("the model given, else the one chosen in MiMoCode, then the prompt; never an effort", () => {
+    const h = home();
+    try {
+      const env = { MIMOCODE_HOME: h };
+      expect(mimoArgv({ bin: "mimo", model: "xiaomi/x", prompt: "go" }, env)).toEqual(["mimo", "-m", "xiaomi/x", "--prompt", "go"]);
+      expect(mimoArgv({ bin: "mimo", prompt: "go" }, env)).toEqual(["mimo", "--prompt", "go"]);
+      writeFileSync(join(h, "state", "model.json"), JSON.stringify({ recent: [{ providerID: "xiaomi", modelID: "mimo-v2.6-pro" }], variant: {} }));
+      expect(mimoArgv({ bin: "mimo", prompt: "go" }, env)).toEqual(["mimo", "-m", "xiaomi/mimo-v2.6-pro", "--prompt", "go"]);
+    } finally {
+      rmSync(h, { recursive: true, force: true });
+    }
+  });
+
+  test("the launch's session is the top-level one in this folder started after it with the nonce in a part; idle once its last message is a finished answer", () => {
+    const h = home();
+    const db = new Database(join(h, "data", "mimocode.db"));
+    try {
+      const env = { MIMOCODE_HOME: h };
+      const cwd = h;
+      const dir = realpathSync(h);
+      const now = Date.now();
+      db.exec(SCHEMA);
+      const session = db.prepare("INSERT INTO session (id, parent_id, directory, time_created) VALUES (?1, ?2, ?3, ?4)");
+      const part = db.prepare("INSERT INTO part (id, message_id, session_id, time_created, data) VALUES (?1, 'm', ?2, ?3, ?4)");
+      const message = db.prepare("INSERT INTO message (id, session_id, time_created, data) VALUES (?1, ?2, ?3, ?4)");
+      session.run("ses_old", null, dir, now - 60_000);
+      part.run("p1", "ses_old", now - 60_000, '{"type":"text","text":"(Kiwi loop launch abc123)"}');
+      session.run("ses_child", "ses_x", dir, now + 100);
+      part.run("p2", "ses_child", now + 100, '{"type":"text","text":"(Kiwi loop launch abc123)"}');
+      session.run("ses_elsewhere", null, "/somewhere/else", now + 100);
+      part.run("p3", "ses_elsewhere", now + 100, '{"type":"text","text":"(Kiwi loop launch abc123)"}');
+      expect(mimoSession("abc123", now, cwd, env)).toBeNull();
+      session.run("ses_mine", null, dir, now + 200);
+      part.run("p4", "ses_mine", now + 200, '{"type":"text","text":"(Kiwi loop launch abc123)"}');
+      expect(mimoSession("abc123", now, cwd, env)).toBe("ses_mine");
+
+      expect(mimoIdle("ses_mine", env)).toEqual({ idle: false, since: null });
+      message.run("m1", "ses_mine", now + 300, JSON.stringify({ role: "user", time: { created: now + 300 } }));
+      expect(mimoIdle("ses_mine", env).idle).toBe(false);
+      message.run("m2", "ses_mine", now + 400, JSON.stringify({ role: "assistant", time: { created: now + 400 } }));
+      expect(mimoIdle("ses_mine", env).idle).toBe(false);
+      message.run("m3", "ses_mine", now + 500, JSON.stringify({ role: "assistant", time: { created: now + 500, completed: now + 900 } }));
+      expect(mimoIdle("ses_mine", env)).toEqual({ idle: true, since: now + 900 });
+    } finally {
+      db.close();
+      rmSync(h, { recursive: true, force: true });
     }
   });
 });

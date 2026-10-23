@@ -6,7 +6,7 @@ import Electrobun, { BrowserView, BrowserWindow, PATHS, Utils } from "electrobun
 import { internalRpcHandlers } from "../.hutch/devkit/api/sdks/main/proc/native.ts";
 import { startAppLife } from "./app-life-eb.ts";
 import { handleDeepLink, JOIN_SCHEME } from "./deep-links.ts";
-import { committedUrl, lockInternalRpc, onOurPage, preloadSource, toPageScript } from "./eb-bridge.ts";
+import { committedUrl, lockInternalRpc, preloadSource, stillOurs, toPageScript } from "./eb-bridge.ts";
 import { navigationUrl, openedUrl, PAGE_RULES, PAGE_URL, pageWithCsp } from "./eb-page.ts";
 import { externalUrl } from "./guard.ts";
 import { attachWindow, bundle, ebHost } from "./host-eb.ts";
@@ -58,12 +58,13 @@ function createWindow(): BrowserWindow {
   const index = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "internal", "index.html"), "utf8");
   const bundled = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "preload", "index.js"), "utf8");
   const table = handlers(ebHost);
-  let at: string | null = PAGE_URL;
+  let ours = true;
   let view: BrowserView | null = null;
   const bridge = bunBridge(
     table,
-    () => onOurPage(at),
-    (packet) => view?.executeJavascript(toPageScript(packet)),
+    () => ours,
+    (frame) => view?.executeJavascript(toPageScript(frame)),
+    () => bridge.push("store", snapshot()),
   );
   const win = new BrowserWindow({
     title: "Channels",
@@ -79,7 +80,7 @@ function createWindow(): BrowserWindow {
   webview.setNavigationRules(PAGE_RULES);
   const load = (): void => {
     core.setWebviewHTMLContent(webview.id, ptr(cString(pageWithCsp(index, store.relayUrl))));
-    at = PAGE_URL;
+    ours = true;
     webview.loadURL(PAGE_URL);
   };
   const refreshPreload = (): void => core.updatePreloadScriptToWebView(webview.id, ptr(PRELOAD_ID), ptr(cString(preloadSource(snapshot(), bundled))), true);
@@ -92,7 +93,7 @@ function createWindow(): BrowserWindow {
     },
     reload: () => (refreshPreload(), load()),
   });
-  for (const moved of ["did-commit-navigation", "did-navigate", "did-navigate-in-page"] as const) webview.on(moved, (e) => (at = committedUrl(detailOf(e))));
+  for (const moved of ["did-commit-navigation", "did-navigate", "did-navigate-in-page"] as const) webview.on(moved, (e) => (ours = stillOurs(ours, committedUrl(detailOf(e)))));
   load();
   const look = win.ptr;
   if (look) shell.kiwi_window_look(look, minWindowWidth(process.platform), WINDOW_SIZE.minHeight, rgb(windowBackground(false)), rgb(windowBackground(true)));

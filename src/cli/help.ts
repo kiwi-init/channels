@@ -99,8 +99,8 @@ This computer
   kiwi launches on|off|status                    whether new agents can be started on this computer, from here or a paired one (on)
   kiwi seat hold · bind --harness H --session ID [--pid PID] · release   a loop holds a seat between sessions with
                                                  KIWI_SEAT_TOKEN (hold prints a new one): nothing else reads for it until bind
-  kiwi loop [--model ID] [--effort LEVEL]        run in a tmux window from a seat's folder: a fresh Claude Code session for each
-                                                 task, review round or message for the seat, ended when that work is done
+  kiwi loop [--harness claude|codex|grok|mimo] [--model ID] [--effort LEVEL]   run in a tmux window from a seat's folder: a
+                                                 fresh session for each task, review round or message, ended when that work is done
   kiwi rex on|off|status                         the old name of kiwi terminal download|remove rex and status, for this release
   kiwi harnesses [--json]                        the harnesses on this computer, found on your login shell's PATH: each one's path
                                                  and version, whether kiwi launch starts it, and whether Kiwi can wake it

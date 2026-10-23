@@ -4,8 +4,12 @@
     "oxfmt",
     "iconutil",
     "clang",
+    "dpkg-deb",
+    "mksquashfs",
     "ditto",
     "hdiutil",
+    "pgrep",
+    "plutil",
     "kwallet-query"
   ],
   "workspaces": {
