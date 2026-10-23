@@ -144,6 +144,7 @@ export function keysController(deps: KeysDeps): Keys {
       }),
     flush: () => {
       stopping = true;
+      for (const q of queued.splice(0)) q.done(unreachable(q.req.id, "Channels is quitting"));
       const w = worker;
       if (!w) return Promise.resolve();
       return new Promise<void>((resolve) => {

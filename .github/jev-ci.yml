@@ -695,7 +695,8 @@ jobs:
       test/desktop-eb-bridge.test.ts: the Electrobun bridge's own rules (desktop/src/eb-bridge.ts):
       only views://internal/index.html counts as our page whatever its hash, a navigation event
       can only take the bridge away (only main's own load gives it), a frame read as its page
-      load's session id and packet, nothing in or out while the view is off our page, a call that
+      load's session id and packet, the preload's boot read as the snapshot plus main's session for
+      that load, nothing in or out while the view is off our page, a call that
       isn't the bridge's (__proto__, constructor and the like) or not given as a list never
       reaching a handler, the preload carrying the snapshot and packets going only to our own
       receiver, and every Electrobun internal RPC handler but window dragging doing nothing
@@ -721,7 +722,8 @@ jobs:
       Electron's keys-process.ts) and an answer for a Worker that has gone dropped, a Worker that
       dies giving waiting requests the restart error and coming back after 2 s, 4 s ... up to 30 s
       (1 s again after a minute up), with a fresh port and a restart frame for the page, and quitting
-      flushing (ended once it says flushed, or after 1 s) with nothing restarted; with
+      flushing (ended once it says flushed, or after 1 s) with nothing restarted, and a quit during
+      the restart wait answering what a page asked meanwhile with "Channels is quitting"; with
       test/desktop-keys-worker.test.ts: the real keys-worker.ts in a Bun Worker, channels.ts
       unchanged behind keys-shim.ts's process.parentPort, answering a page's request, writing its
       memory on flush, and started again after it ends; and test/desktop-keys-page.test.ts: the
@@ -1072,7 +1074,11 @@ jobs:
       answers and no pushes, a call that isn't the bridge's is refused, and a reloaded page
       never takes the previous load's replies while the old page's late messages get nothing; the
       keys request and frame (T437) go the same way, off our page get nothing, and a session or
-      request that isn't one is refused before main's keys see it. Then `bun run build:eb` (electrobun build --env=stable): bundles src/main-eb.ts with the
+      request that isn't one is refused before main's keys see it. Sessions are main's (T1230):
+      only the session main minted for the load opens, so a thousand hellos with ids of the
+      page's own choosing open nothing, every load gets a fresh id, a retired session's late reply
+      never leaves main, and a page whose first frame is a keys request has its session opened
+      before the keys see it. Then `bun run build:eb` (electrobun build --env=stable): bundles src/main-eb.ts with the
       shared desktop modules it imports (ipc/handlers.ts and all the app's calls through
       host-eb.ts, guard.ts csp(), open.ts, eb-page.ts, eb-bridge.ts, rpc-eb.ts, window-look.ts,
       window-size.ts) and @kiwi/core, and src/preload-eb.ts as the preload view; scripts/eb-pre-build.ts turns build/icon.icns into the
