@@ -14,9 +14,11 @@ export function isPageUrl(url: string): boolean {
   return next === "" || next === "#" || next === "?";
 }
 
-const ATTRS = String.raw`(?:\s+[^\s"'>/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>\x60]+))?)*\s*`;
+const WS = String.raw`[\t\n\f\r ]`;
 
-const PROLOGUE = new RegExp(String.raw`^\uFEFF?\s*(?:<!doctype\s[^<>]*>\s*)?(?:<html${ATTRS}>\s*)?<head${ATTRS}>`, "i");
+const ATTRS = String.raw`(?:${WS}+[^\t\n\f\r "'>/=]+(?:${WS}*=${WS}*(?:"[^"]*"|'[^']*'|[^\t\n\f\r "'=<>\x60]+))?)*${WS}*`;
+
+const PROLOGUE = new RegExp(String.raw`^\uFEFF?${WS}*(?:<!doctype${WS}[^<>]*>${WS}*)?(?:<html${ATTRS}>${WS}*)?<head${ATTRS}>`, "i");
 
 const escapeAttr = (s: string): string => s.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
 

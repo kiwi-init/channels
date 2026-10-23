@@ -43,6 +43,16 @@ describe("the Electrobun page carries the app's CSP before any script (T434)", (
     expect(() => pageWithCsp(INDEX.replace("<head>", "<header>"), "https://channels.kiwiinit.com")).toThrow("only a doctype");
   });
 
+  test("only HTML's whitespace counts before <head>, not every space regex knows (T1045)", () => {
+    const relay = "https://channels.kiwiinit.com";
+    const nbsp = String.fromCharCode(0xa0);
+    const vt = String.fromCharCode(0x0b);
+    for (const page of [`<!doctype html>${nbsp}<html><head></head>`, `<html>${vt}<head></head>`, `<head${nbsp}x></head>`, `<!doctype${nbsp}html><head>`, `<html${nbsp}lang="en"><head>`])
+      expect(() => pageWithCsp(page, relay)).toThrow("only a doctype");
+    const meta = `<meta http-equiv="Content-Security-Policy" content="${csp(relay)}">`;
+    expect(pageWithCsp(`<!doctype html>\t\n\f\r <html\tlang="en"\f>\r\n<head\n data-a="b">`, relay)).toBe(`<!doctype html>\t\n\f\r <html\tlang="en"\f>\r\n<head\n data-a="b">${meta}`);
+  });
+
   test("<head> is found by the page's structure, not by the first match of its text (T804)", () => {
     const relay = "https://channels.kiwiinit.com";
     const tricks = [
