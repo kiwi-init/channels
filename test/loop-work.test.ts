@@ -6,6 +6,7 @@ import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identi
 import type { Event, Message } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 import { claudeArgv, claudeSession } from "../src/loop/claude.ts";
+import { codexArgv, codexIdle, codexThread } from "../src/loop/codex.ts";
 import { firstPrompt, nextWork, workOver } from "../src/loop/work.ts";
 
 const ids: Record<string, Identity> = {};
@@ -115,6 +116,54 @@ describe("the Claude Code recipe", () => {
       expect(claudeSession(42, env)).toEqual({ sessionId: "s-1", idle: true, since: null });
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("the Codex recipe", () => {
+  const thread = (ms: number, tail: string) => `${ms.toString(16).padStart(12, "0").slice(0, 8)}-${ms.toString(16).padStart(12, "0").slice(8)}-7abc-8def-${tail}`;
+  const day = (home: string, at: number) => {
+    const d = new Date(at);
+    const dir = join(home, "sessions", String(d.getFullYear()), String(d.getMonth() + 1).padStart(2, "0"), String(d.getDate()).padStart(2, "0"));
+    mkdirSync(dir, { recursive: true });
+    return dir;
+  };
+
+  test("the model, the effort as a config override, then the prompt after --", () => {
+    expect(codexArgv({ bin: "codex", model: "gpt-6-astra", effort: "high", prompt: "go" })).toEqual(["codex", "-m", "gpt-6-astra", "-c", 'model_reasoning_effort="high"', "--", "go"]);
+    expect(codexArgv({ bin: "codex", prompt: "go" })).toEqual(["codex", "--", "go"]);
+  });
+
+  test("the launch's thread is the one started after it whose rollout holds its nonce", () => {
+    const home = mkdtempSync(join(tmpdir(), "kiwi-loop-codex-"));
+    try {
+      const env = { CODEX_HOME: home };
+      const now = Date.now();
+      const dir = day(home, now);
+      const older = thread(now - 60_000, "000000000001");
+      const other = thread(now + 100, "000000000002");
+      const mine = thread(now + 200, "000000000003");
+      writeFileSync(join(dir, `rollout-x-${older}.jsonl`), '{"type":"session_meta"}\n{"text":"(Kiwi loop launch abc123)"}\n');
+      writeFileSync(join(dir, `rollout-x-${other}.jsonl`), '{"type":"session_meta"}\n{"text":"another launch"}\n');
+      expect(codexThread("abc123", now, now + 1_000, env)).toBeNull();
+      writeFileSync(join(dir, `rollout-x-${mine}.jsonl`), '{"type":"session_meta"}\n{"text":"(Kiwi loop launch abc123)"}\n');
+      expect(codexThread("abc123", now, now + 1_000, env)).toEqual({ thread: mine, rollout: join(dir, `rollout-x-${mine}.jsonl`) });
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("its rollout says when a turn is over", () => {
+    const home = mkdtempSync(join(tmpdir(), "kiwi-loop-codex-"));
+    try {
+      const file = join(home, "rollout.jsonl");
+      writeFileSync(file, '{"type":"event_msg","payload":{"type":"task_started"}}\n');
+      expect(codexIdle(file).idle).toBe(false);
+      writeFileSync(file, '{"type":"event_msg","payload":{"type":"task_started"}}\n{"type":"event_msg","payload":{"type":"task_complete"}}\n');
+      expect(codexIdle(file)).toMatchObject({ idle: true });
+      expect(codexIdle(file).since).toBeNumber();
+    } finally {
+      rmSync(home, { recursive: true, force: true });
     }
   });
 });

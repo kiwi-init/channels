@@ -1,12 +1,12 @@
 import * as Effect from "effect/Effect";
 import { openSession, type Agent } from "../agent.ts";
 import type { AgentSession } from "../agent.ts";
-import { loadConfig, type ChannelConfig } from "../config.ts";
-import { hooksInstalled, installHooks } from "../hooks.ts";
+import { randomBytes } from "node:crypto";
+import type { ChannelConfig } from "../config.ts";
 import { bindHeldSeat, holdSeat, releaseSeat, SEAT_TOKEN, type HoldChange } from "../hold.ts";
 import { loginShell } from "../launch/shell.ts";
 import { loginArgv } from "../terminals/shared/launch.ts";
-import { claudeArgv, claudeSession } from "./claude.ts";
+import type { Recipe, Started } from "./recipes.ts";
 import { firstPrompt, nextWork, workName, workOver, type Work } from "./work.ts";
 
 const POLL_MS = 2_000;
@@ -23,7 +23,7 @@ export interface LoopSeat {
   cfg: ChannelConfig;
   me: string;
   token: string;
-  bin: string;
+  recipe: Recipe;
   model?: string;
   effort?: string;
 }
@@ -47,10 +47,11 @@ function heldOrDie(change: HoldChange, seat: LoopSeat): Effect.Effect<void, Erro
 
 const hold = (seat: LoopSeat) => Effect.suspend(() => heldOrDie(holdSeat(seat.alias, seat.me, seat.token), seat));
 
-const hooksFirst = Effect.suspend(() => {
-  if (process.env.KIWI_NO_HOOKS || loadConfig().claudeHooks === "off" || hooksInstalled()) return Effect.void;
-  return say(installHooks());
-});
+const hooksFirst = (recipe: Recipe) =>
+  Effect.suspend(() => {
+    const wrote = recipe.hooks();
+    return wrote ? say(`installed ${recipe.label}'s Kiwi hooks: ${wrote}`) : Effect.void;
+  });
 
 const look = (s: AgentSession) =>
   Effect.gen(function* () {
@@ -89,7 +90,7 @@ const cycles = (seat: LoopSeat, stop: { asked: boolean; busy: boolean }): Effect
         work = nextWork(seen.state, seat.me, seen.forMe);
       }
       if (!work || stop.asked) break;
-      const ended = yield* session(seat, s, work, firstPrompt(work, seen.state, seat.me, seat.alias), stop);
+      const ended = yield* runSession(seat, s, work, firstPrompt(work, seen.state, seat.me, seat.alias), stop);
       yield* hold(seat);
       if (ended.kind === "done") yield* say(`${workName(ended.work)} is over; its session ended`);
       if (ended.kind === "unbound") yield* say("the session never reported its id; ended it");
@@ -101,26 +102,30 @@ const cycles = (seat: LoopSeat, stop: { asked: boolean; busy: boolean }): Effect
     }
   });
 
-function session(seat: LoopSeat, s: AgentSession, first: Work, prompt: string, stop: { asked: boolean; busy: boolean }): Effect.Effect<Ended, unknown, Agent> {
+function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string, stop: { asked: boolean; busy: boolean }): Effect.Effect<Ended, unknown, Agent> {
   return Effect.gen(function* () {
-    const argv = loginArgv(loginShell(), claudeArgv({ bin: seat.bin, prompt, ...(seat.model ? { model: seat.model } : {}), ...(seat.effort ? { effort: seat.effort } : {}) }), {
+    const { recipe } = seat;
+    const nonce = randomBytes(9).toString("hex");
+    const launched = `${prompt}\n\n(Kiwi loop launch ${nonce})`;
+    const argv = loginArgv(loginShell(), recipe.argv({ bin: recipe.bin, prompt: launched, ...(seat.model ? { model: seat.model } : {}), ...(seat.effort ? { effort: seat.effort } : {}) }), {
       KIWI_CHANNEL: seat.alias,
       KIWI_AS: seat.me,
     });
-    yield* hooksFirst;
+    yield* hooksFirst(recipe);
     const started = Date.now();
     const child = Bun.spawn(argv, { cwd: process.cwd(), env: childEnv(), stdin: "inherit", stdout: "inherit", stderr: "inherit" });
     stop.busy = true;
     let exited = false;
     void child.exited.then(() => void (exited = true));
-    yield* say(`${workName(first)}: started Claude Code (pid ${child.pid})`);
+    yield* say(`${workName(first)}: started ${recipe.label} (pid ${child.pid})`);
 
+    let found: Started | null = null;
     const end = (why: Ended) =>
       Effect.gen(function* () {
         if (!exited) {
           yield* hold(seat);
           const until = Date.now() + IDLE_WAIT_MS;
-          while (!exited && !stop.asked && Date.now() < until && !claudeSession(child.pid)?.idle) yield* Effect.sleep(POLL_MS);
+          while (!exited && !stop.asked && Date.now() < until && !found?.idle().idle) yield* Effect.sleep(POLL_MS);
           child.kill("SIGTERM");
           const late = Date.now() + TERM_GRACE_MS;
           while (!exited && Date.now() < late) yield* Effect.sleep(250);
@@ -131,14 +136,14 @@ function session(seat: LoopSeat, s: AgentSession, first: Work, prompt: string, s
         return why;
       });
 
-    let bound: string | null = null;
-    while (!bound && !exited && Date.now() - started < BIND_MS) {
-      bound = claudeSession(child.pid)?.sessionId ?? null;
-      if (!bound) yield* Effect.sleep(100);
+    while (!found && !exited && Date.now() - started < BIND_MS) {
+      found = recipe.started(child.pid, started, nonce);
+      if (!found) yield* Effect.sleep(100);
     }
-    if (!bound) return yield* end(exited ? { kind: "own", lived: Date.now() - started } : { kind: "unbound" });
-    yield* heldOrDie(bindHeldSeat(seat.alias, seat.me, seat.token, { harness: "claude", session: bound, pid: child.pid }), seat);
-    yield* say(`${seat.me} is bound to session ${bound}`);
+    if (!found) return yield* end(exited ? { kind: "own", lived: Date.now() - started } : { kind: "unbound" });
+    const live = found;
+    yield* heldOrDie(bindHeldSeat(seat.alias, seat.me, seat.token, live.bound), seat);
+    yield* say(`${seat.me} is bound to ${recipe.label} session ${live.id}`);
 
     let work = first;
     while (true) {
@@ -152,15 +157,15 @@ function session(seat: LoopSeat, s: AgentSession, first: Work, prompt: string, s
           yield* say(`the session took on ${workName(work)}; it lasts until that's done`);
         }
       }
-      const over = work.kind === "answering" ? answered(child.pid, started, seen.forMe) : workOver(work, seen.state, seat.me);
+      const over = work.kind === "answering" ? answered(live, started, seen.forMe) : workOver(work, seen.state, seat.me);
       if (over) return yield* end({ kind: "done", work });
       yield* Effect.sleep(POLL_MS);
     }
   });
 }
 
-function answered(pid: number, started: number, forMe: number): boolean {
+function answered(session: Started, started: number, forMe: number): boolean {
   const now = Date.now();
-  const c = claudeSession(pid);
-  return forMe === 0 && now - started >= ANSWER_MIN_MS && !!c?.idle && c.since !== null && now - c.since >= IDLE_SETTLED_MS;
+  const c = session.idle();
+  return forMe === 0 && now - started >= ANSWER_MIN_MS && c.idle && c.since !== null && now - c.since >= IDLE_SETTLED_MS;
 }
