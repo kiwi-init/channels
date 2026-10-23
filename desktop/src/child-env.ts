@@ -4,6 +4,7 @@ const KEPT = new Set([
   "USER",
   "LOGNAME",
   "SHELL",
+  "ZDOTDIR",
   "TMPDIR",
   "TMP",
   "TEMP",
@@ -11,6 +12,16 @@ const KEPT = new Set([
   "LANGUAGE",
   "TZ",
   "SSH_AUTH_SOCK",
+  "CLAUDE_CONFIG_DIR",
+  "CODEX_HOME",
+  "GROK_HOME",
+  "KIMI_CODE_HOME",
+  "MIMOCODE_HOME",
+  "PI_CODING_AGENT_DIR",
+  "TMUX_TMPDIR",
+  "REX_CONFIG",
+  "REX_BIN_DIR",
+  "BUN_INSTALL",
   "__CF_USER_TEXT_ENCODING",
   "XPC_SERVICE_NAME",
   "XPC_FLAGS",
@@ -50,7 +61,7 @@ const KEPT = new Set([
   "OS",
 ]);
 const KEPT_PREFIXES = ["LC_", "XDG_", "KIWI_"];
-const RUNTIME = /^(LD_.*|DYLD_.*|BUN_.*|NODE_OPTIONS|KIWI_KEY_FD)$/;
+const RUNTIME = /^(LD_.*|DYLD_.*|BUN_(?!INSTALL$).*|NODE_OPTIONS|KIWI_KEY_FD)$/;
 
 const defined = (from: NodeJS.ProcessEnv, keep: (name: string) => boolean): NodeJS.ProcessEnv =>
   Object.fromEntries(Object.entries(from).filter(([name, value]) => value !== undefined && keep(name.toUpperCase())));

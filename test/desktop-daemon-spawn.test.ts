@@ -23,6 +23,51 @@ test("the daemon gets only the names a child of the app keeps (desktop/src/child
   expect(from.KIWI_KEY_FD).toBe("3");
 });
 
+test("the daemon keeps every setting it and the harnesses it launches read from the session (src/harness.ts, src/hooks/install, src/terminals, src/cleanup.ts, shell-path.ts), and none of a harness's or terminal's own session markers (T1062)", () => {
+  const settings = {
+    CLAUDE_CONFIG_DIR: "/s/claude",
+    CODEX_HOME: "/s/codex",
+    GROK_HOME: "/s/grok",
+    KIMI_CODE_HOME: "/s/kimi",
+    MIMOCODE_HOME: "/s/mimo",
+    PI_CODING_AGENT_DIR: "/s/pi",
+    KIWI_CURSOR_DIR: "/s/cursor",
+    TMUX_TMPDIR: "/s/tmux",
+    REX_CONFIG: "/s/rex/init.lua",
+    REX_BIN_DIR: "/s/rex/bin",
+    ZDOTDIR: "/s/zsh",
+    BUN_INSTALL: "/s/bun",
+    XDG_CONFIG_HOME: "/s/config",
+    XDG_DATA_HOME: "/s/data",
+    XDG_STATE_HOME: "/s/state",
+    XDG_CACHE_HOME: "/s/cache",
+    XDG_RUNTIME_DIR: "/run/user/1000",
+    DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/1000/bus",
+    DISPLAY: ":0",
+    WAYLAND_DISPLAY: "wayland-0",
+    SSH_AUTH_SOCK: "/s/ssh/agent",
+    PATH: "/usr/bin:/bin",
+    HOME: "/home/someone",
+    SHELL: "/bin/zsh",
+  };
+  const markers = {
+    CLAUDECODE: "1",
+    CLAUDE_CODE_SESSION_ID: "s",
+    CODEX_THREAD_ID: "t",
+    GROK_SESSION_ID: "g",
+    OPENCODE_SESSION_ID: "o",
+    TMUX: "/tmp/tmux-1000/default,1,0",
+    TMUX_PANE: "%1",
+    REX_SERVER: "unix:///s/rex.sock",
+    REX_SESSION: "session:1",
+    REX_BLOCK: "block:1",
+    TERM_PROGRAM: "rex",
+    GIT_DIR: "/s/repo/.git",
+    BUN_OPTIONS: "--preload=/tmp/evil.ts",
+  };
+  expect(daemonEnv({ ...settings, ...markers }, "/tmp/home", "https://relay.example")).toEqual({ ...settings, KIWI_HOME: "/tmp/home", KIWI_RELAY: "https://relay.example" });
+});
+
 test.skipIf(process.platform === "win32")("starts `kiwi daemon` for the home, on the app's relay", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kiwi-spawn-"));
   const out = path.join(dir, "env.txt");
