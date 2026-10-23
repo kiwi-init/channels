@@ -34,6 +34,7 @@ kiwi pair kp1-…                     # pair this computer with your app (approv
 kiwi unpair                         # stop being paired: the relay forgets this computer, and it takes no more asks
 kiwi harnesses                      # the harnesses here (from your login shell's PATH), their versions, which kiwi launch starts
 kiwi launch claude --code mc2-… --folder ~/src/app --nick Ada   # start an agent in a terminal you can open; it joins by itself
+kiwi loop --harness codex           # in a tmux window in the seat's folder: a fresh session per task (see below)
 kiwi daemon                         # one long-running process per computer, for every local agent
 kiwi setup                          # this computer once: hooks, PATH, and how to pair it
 kiwi card --model …                 # add to the card (does not change the owner-signed seat)
@@ -85,6 +86,46 @@ The new session's `kiwi join` carries the launch's id in its sealed join claims.
 - **Unpairing:** unpairing the computer in the app, or running `kiwi unpair` on it, makes the relay forget it and closes its inbox. After that it takes no more asks.
 
 **Terminals.** Terminal, Rex and tmux are terminal plugins (`src/terminals/`, [plans/terminal-plugins.md](plans/terminal-plugins.md)). Settings → New agents downloads or removes a terminal's helpers on this computer (`kiwi terminal download|remove rex|tmux`): they mark a seat that needs you in that terminal (in tmux, its window in the window list, and `prefix K` jumps to it), let Needs you open it (Show in Rex or Show in tmux), and let new agents open there. `kiwi terminal status` says what's found, what's on and what's preferred; `kiwi rex on|off|status` still works this release.
+
+## One session per task: `kiwi loop`
+
+A seat doesn't have to live in one long harness session. `kiwi loop` runs in a tmux window you open in the seat's folder, and starts a fresh session for each piece of work. Each session ends when its work is done, so every task starts with a small context instead of everything the seat has done before. The plan is [plans/per-task-sessions.md](plans/per-task-sessions.md).
+
+```bash
+kiwi loop                                   # Claude Code, with its default model
+kiwi loop --harness codex --model gpt-6-astra --effort high
+kiwi loop --harness kimi                    # inside tmux only: Kimi's first prompt is typed in
+```
+
+What the loop does:
+
+1. **It holds the seat** (`kiwi seat hold`) with a token only the loop has. While the seat is held, nothing else reads its messages or moves its cursor, so what arrives waits for the next session.
+2. **It picks the work.** First a task the seat is doing, then a review round it owes, then its other open tasks, then its own task waiting on a verdict, then messages for it. It watches the channel without marking anything read.
+3. **It starts the harness** with the window's model and effort, in a clean environment: no markers from an outer session and no seat token, with `KIWI_CHANNEL` and `KIWI_AS` set. The first prompt names the work, says how it ends (`kiwi task review T7 --at SHA`, `kiwi task done T7`, or the verdict for round N), carries the re-entry text, and ends with a one-time launch nonce. The harness's Kiwi hooks are installed first if they're missing.
+4. **It binds the seat to that session** (`kiwi seat bind`), found by the nonce or the process, so the session's own hooks and commands act as the seat.
+5. **It ends the session when its work is over.**
+   - A coding session lasts until the task is done, archived or given to someone else. If the task has a reviewer, the same session waits for the verdict and fixes after a rejection. If a review the seat owes comes up while it waits, the session ends so the review gets its own, and a rejection later gets a fresh coding session from the task's checkpoint.
+   - A review session ends when its round closes.
+   - A session for messages ends once it's idle with nothing unread, unless it took on a task.
+   - In every case the loop holds the seat first, waits for the session to go idle (at most 15 minutes), then stops it, and stops any `kiwi listen` the session left running.
+
+| Harness | Started as | Seat bound to | Idle when | Stopped with |
+| --- | --- | --- | --- | --- |
+| Claude Code | `claude [--model] [--effort] -- PROMPT` | the session in `~/.claude/sessions/<pid>.json` | that file says `idle` | SIGTERM |
+| Codex | `codex [-m] [-c model_reasoning_effort=…] -- PROMPT` | the thread whose rollout holds the nonce | the rollout's last turn completed | SIGTERM |
+| Grok | `grok [-m] [--reasoning-effort] -- PROMPT` | the session in the folder whose history holds the nonce | `turn_completed` or the Stop hook ran | SIGTERM |
+| MiMoCode | `mimo [-m] --prompt PROMPT` | the top-level session in the folder holding the nonce | its last answer is finished | SIGINT (it ignores SIGTERM for about 19 s) |
+| Kimi Code | `kimi [-m]`, then the prompt pasted in once its screen is ready | Kimi's process | its wire log says the turn ended | SIGTERM |
+
+Some details per harness:
+
+- **Grok and Kimi Code** are also told in the first prompt to start their `kiwi listen` listener, since nothing else wakes them.
+- **MiMoCode** gets the model chosen in MiMoCode when `--model` isn't given (its own default is a free tier that has ended). MiMoCode and Kimi take no `--effort`.
+- **Kimi Code** must run inside tmux, in the loop's own pane. The loop clears the pane, waits for Kimi's ready screen with bracketed paste on, and pastes the prompt. While Kimi asks "Trust this folder?", the loop waits for you to answer; it never answers dialogs. The same goes for Codex's "Hooks need review" and every harness's permission prompts.
+
+Stopping the loop: Ctrl-C while no session runs, or SIGTERM or SIGHUP at any time. The loop then releases the seat. While a session runs, Ctrl-C goes to the harness. A session that ends by itself is followed by a short pause before the next one starts.
+
+The lead stays one long-running session. Its context is held by the harness's auto-compaction.
 
 ## How agents get woken up
 

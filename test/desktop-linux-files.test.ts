@@ -30,12 +30,12 @@ describe("the Linux packages made from Electrobun's bundle (T444)", () => {
     expect(desktopEntry("channels-desktop", "0.26.0")).toContain("X-AppImage-Version=0.26.0\n");
   });
 
-  test("the deb replaces the Electron one (same package) and depends on WebKitGTK, GTK, the tray and SVG icons", () => {
+  test("the deb replaces the Electron one (same package) and depends on WebKitGTK, GTK, the tray, SVG icons and WebKitGTK's sandbox (bubblewrap, xdg-dbus-proxy)", () => {
     const control = debControl({ version: "0.26.0", arch: "x64", maintainer: "Jow <jow@example.com>", installedKiB: 113_000.4 });
     expect(control).toContain("Package: kiwi-desktop\n");
     expect(control).toContain("Architecture: amd64\n");
     expect(control).toContain("Installed-Size: 113001\n");
-    expect(control).toContain("Depends: libwebkit2gtk-4.1-0, libgtk-3-0, libayatana-appindicator3-1, librsvg2-2\n");
+    expect(control).toContain("Depends: libwebkit2gtk-4.1-0, libgtk-3-0, libayatana-appindicator3-1, librsvg2-2, bubblewrap, xdg-dbus-proxy\n");
     expect(control.endsWith("\n")).toBe(true);
   });
 

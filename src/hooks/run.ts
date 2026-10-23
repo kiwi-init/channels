@@ -10,10 +10,8 @@ import { holdAnswering } from "./delivered.ts";
 import { migrateClaudeHooks } from "./install/claude.ts";
 import { migrateExtraHooks } from "./install/extra.ts";
 import { migrateMimo } from "./install/mimo.ts";
-import { takeHandoff } from "./handoff.ts";
 import { handoffFrom, listen, refusedFrom, type Served } from "./listen.ts";
 import { refreshListeners, seatsFor } from "./listeners.ts";
-import { rotateAfterStop } from "./rotate.ts";
 import { decisionJson, runPermission, type PermissionInput } from "./permission.ts";
 import { KIMI_STOP, LISTEN, PERMISSION } from "./self.ts";
 
@@ -82,10 +80,6 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string, harness?
   const work = Effect.gen(function* () {
     if (event === "session-start") yield* Effect.sync(migrateClaudeHooks);
     if (!harness && event !== KIMI_STOP) yield* Effect.sync(migrateExtraHooks);
-    const cwd = input.cwd;
-    const fresh = who.session;
-    const rollout = input.transcript_path;
-    if (event === "session-start" && who.harness === "codex" && input.source === "startup" && cwd && fresh && typeof rollout === "string") yield* Effect.sync(() => takeHandoff(cwd, fresh, rollout));
     const served = yield* seatsServed;
     const session = input.session_id;
     if (kimi && session)
@@ -104,10 +98,7 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string, harness?
       return code;
     }
     const out = hookOutput(got);
-    if (out === null) {
-      if (event === "stop") yield* rotateAfterStop(input, served, who).pipe(Effect.catchCause(() => Effect.void));
-      return 0;
-    }
+    if (out === null) return 0;
     yield* say(out).pipe(
       Effect.andThen(shown(printed(got))),
       Effect.catchCause(() => Effect.void),

@@ -282,6 +282,19 @@ describe("quitting", () => {
     expect(s.workers.length).toBe(1);
   });
 
+  test("a quit during the restart wait answers what a fresh page asked meanwhile, and starts no Worker after it (#789 round 3)", async () => {
+    const s = setup();
+    s.keys.start();
+    s.last().exit();
+    s.keys.pageGone();
+    const fresh = s.keys.request("fedcba9876543210fedcba9876543210", req(1));
+    await s.keys.flush();
+    expect(await settled(fresh)).toBe("answered");
+    expect(await fresh).toEqual({ id: 1, ok: false, error: { kind: "unreachable", message: "Channels is quitting" } });
+    s.clock.run();
+    expect(s.workers.length).toBe(1);
+  });
+
   test("flush with no Worker up returns at once", async () => {
     const s = setup();
     await s.keys.flush();

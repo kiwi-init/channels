@@ -196,8 +196,6 @@
     "test/room-files.test.ts": 64,
     "test/rooms-cli.test.ts": 2793,
     "test/rooms.test.ts": 432,
-    "test/rotate-codex.test.ts": 276,
-    "test/rotate.test.ts": 82,
     "test/route-table.test.ts": 65,
     "test/routing.test.ts": 325,
     "test/runs.test.ts": 64,
