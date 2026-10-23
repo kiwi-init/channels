@@ -2,7 +2,8 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreBinaries": [
     "oxfmt",
-    "iconutil"
+    "iconutil",
+    "kwallet-query"
   ],
   "workspaces": {
     ".": {
