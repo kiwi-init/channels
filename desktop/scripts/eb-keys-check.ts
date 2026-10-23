@@ -11,6 +11,7 @@ import { sealApp } from "./eb-seal.ts";
 const release = path.resolve(process.argv[2] ?? "desktop/release-eb");
 const tag = randomBytes(4).toString("hex");
 const id = `com.kiwiinit.channels.keys-check-${tag}`;
+const asanId = `${id}-asan`;
 const legacy = `kiwi-keys-check-${tag}`;
 const legacyValue = randomBytes(16).toString("base64");
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "eb-keys-"));
@@ -32,10 +33,12 @@ interface Run {
   status: number | null;
   stderr: string;
   report: ProbeReport | null;
+  ran: string;
 }
 
 function run(app: string): Run {
   const extra = fs.openSync(path.join(tmp, "extra"), "a");
+  const began = performance.now();
   const r = spawnSync(executable(app), [], {
     encoding: "utf8",
     timeout: 60_000,
@@ -44,7 +47,8 @@ function run(app: string): Run {
   });
   fs.closeSync(extra);
   const line = r.stdout.split("\n").find((l) => l.startsWith(PROBE_PREFIX));
-  return { status: r.status, stderr: r.stderr, report: line ? (JSON.parse(line.slice(PROBE_PREFIX.length)) as ProbeReport) : null };
+  const ran = `status ${r.status}, signal ${r.signal}, ${r.error ? `error ${r.error.message}, ` : ""}${Math.round(performance.now() - began)} ms, stdout ${JSON.stringify(r.stdout.slice(-300))}`;
+  return { status: r.status, stderr: r.stderr, report: line ? (JSON.parse(line.slice(PROBE_PREFIX.length)) as ProbeReport) : null, ran };
 }
 
 function expect(what: string, ok: boolean, detail: string): void {
@@ -112,9 +116,22 @@ try {
   expect(
     "first start: no store key yet, one made and saved through the launcher",
     okOf(first, "first") === null && typeof made === "string" && okOf(first, "get") === made,
-    JSON.stringify(first.report ?? first.stderr.slice(-400)),
+    JSON.stringify(first.report ?? `${first.ran}; stderr ${first.stderr.slice(-400)}`),
   );
   expect("bun gets only stdio and the key channel: a descriptor the launcher inherited stays behind", okOf(first, "inherited") === null, JSON.stringify(first.report?.["inherited"]));
+  expect("bun moves the channel off fd 3 at once and drops KIWI_KEY_FD", okOf(first, "fd3") === null && okOf(first, "env") === null, JSON.stringify([first.report?.["fd3"], first.report?.["env"]]));
+  expect(
+    "done ends the session: another copy of the socket gets nothing after it",
+    okOf(first, "done") === "ended" && okOf(first, "after") === "nothing",
+    JSON.stringify([first.report?.["done"], first.report?.["after"]]),
+  );
+  expect("bun's copy of the key channel is close-on-exec", okOf(first, "cloexec") === "set", JSON.stringify(first.report?.["cloexec"]));
+  expect(
+    "a child started through libc system() while the channel is open gets no socket and no KIWI_KEY_FD",
+    okOf(first, "native") === JSON.stringify({ sockets: [], env: null }),
+    JSON.stringify(first.report?.["native"]),
+  );
+  expect("a child the app starts afterwards gets no socket and no KIWI_KEY_FD", okOf(first, "child") === JSON.stringify({ sockets: [], env: null }), JSON.stringify(first.report?.["child"]));
   expect("a second key never replaces the first", errorOf(first, "replace").includes("never replaces"), JSON.stringify(first.report?.["replace"]));
   expect("the old app's key, read by the launcher", okOf(first, "legacy") === legacyValue, JSON.stringify(first.report?.["legacy"]));
   expect("an app name not in Info.plist's KiwiLegacyNames is refused", errorOf(first, "unlisted").includes("isn't an app whose keys"), JSON.stringify(first.report?.["unlisted"]));
@@ -148,8 +165,70 @@ try {
   }
   const median = times.sort((a, b) => a - b)[3] ?? 0;
   expect(`the launcher checks ${files} files in ${median.toFixed(0)} ms (median of 7, gate ${SEAL_GATE_MS} ms)`, median <= SEAL_GATE_MS, `${times.map((t) => t.toFixed(0)).join(", ")} ms`);
+
+  const sanitized = path.join(tmp, "Sanitized.app");
+  const sanMacos = path.join(contents(sanitized), "MacOS");
+  fs.mkdirSync(sanMacos, { recursive: true });
+  const native = path.join(import.meta.dirname, "..", "native", "macos");
+  const flags = [
+    "-g",
+    "-O1",
+    "-fno-omit-frame-pointer",
+    "-fsanitize=address,undefined",
+    "-fno-sanitize-recover=all",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-mmacosx-version-min=12.0",
+    "-I",
+    native,
+    "-framework",
+    "CoreFoundation",
+    "-framework",
+    "Security",
+  ];
+  const harness = path.join(sanMacos, "kiwi-keys-test");
+  execFileSync("clang", [...flags, "-o", harness, path.join(native, "kiwi-keys.c"), path.join(native, "kiwi-keys-test.c")]);
+  execFileSync("clang", [...flags, "-o", path.join(sanMacos, "kiwi-launcher"), path.join(native, "kiwi-launcher.c"), path.join(native, "kiwi-keys.c")]);
+  fs.copyFileSync(quick, path.join(sanMacos, "launcher"));
+  fs.writeFileSync(
+    plist(sanitized),
+    `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict><key>CFBundleExecutable</key><string>kiwi-launcher</string><key>CFBundleIdentifier</key><string>${asanId}</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>\n`,
+  );
+  sealApp(sanitized);
+  execFileSync("plutil", ["-replace", "KiwiLegacyNames", "-json", JSON.stringify([`${legacy}-asan`]), plist(sanitized)]);
+  const sanEnv: NodeJS.ProcessEnv = { ...process.env, ASAN_OPTIONS: "halt_on_error=1:detect_leaks=0", UBSAN_OPTIONS: "halt_on_error=1:print_stacktrace=1" };
+  const sanRun = (file: string, args: string[]) => spawnSync(file, args, { encoding: "utf8", env: sanEnv, timeout: 300_000 });
+  const clean = (r: { stderr: string }): boolean => !/AddressSanitizer|UndefinedBehaviorSanitizer|runtime error:/.test(r.stderr);
+  const parser = sanRun(harness, ["parser"]);
+  for (const line of parser.stdout.split("\n").filter(Boolean)) console.log(`        ${line}`);
+  expect(
+    "the key server's parser under ASan and UBSan: malformed, truncated, oversized, unknown and random requests",
+    parser.status === 0 && clean(parser),
+    `status ${parser.status}: ${parser.stderr.slice(-1200)}`,
+  );
+  const sealedRun = sanRun(harness, ["seal"]);
+  expect(
+    "the seal check under ASan and UBSan passes a sealed app",
+    sealedRun.status === 0 && sealedRun.stdout.trim() === "sealed" && clean(sealedRun),
+    `${sealedRun.stdout} ${sealedRun.stderr.slice(-800)}`,
+  );
+  const launched = sanRun(path.join(sanMacos, "kiwi-launcher"), []);
+  expect(
+    "the launcher under ASan and UBSan checks the app, starts the next one and serves to its end",
+    launched.status === 0 && clean(launched),
+    `status ${launched.status}: ${launched.stderr.slice(-800)}`,
+  );
+  fs.appendFileSync(path.join(sanMacos, "launcher"), "x");
+  const changed = sanRun(harness, ["seal"]);
+  expect(
+    "the seal check under ASan and UBSan refuses a changed file",
+    changed.status === 78 && changed.stdout.includes("MacOS/launcher was changed") && clean(changed),
+    `${changed.stdout} ${changed.stderr.slice(-800)}`,
+  );
 } finally {
   keychain(["delete-generic-password", "-s", id, "-a", "store-key"]);
+  keychain(["delete-generic-password", "-s", asanId, "-a", "store-key"]);
   keychain(["delete-generic-password", "-s", `${legacy} Safe Storage`, "-a", `${legacy} Key`]);
   restoreKeychain();
   fs.rmSync(tmp, { recursive: true, force: true });

@@ -82,16 +82,19 @@ int kiwi_seal_check(char *why, size_t why_len) {
   if (!bundle) return fail(why, why_len, "the launcher isn't in an app bundle");
   CFTypeRef seal = CFBundleGetValueForInfoDictionaryKey(bundle, CFSTR("KiwiSeal"));
   if (!seal || CFGetTypeID(seal) != CFDictionaryGetTypeID()) return fail(why, why_len, "the app's Info.plist has no KiwiSeal");
-  char app[PATH_MAX], exe[PATH_MAX], contents[PATH_MAX], self[PATH_MAX];
+  char exe[NAME_MAX + 1];
+  if (!c_string(CFBundleGetValueForInfoDictionaryKey(bundle, kCFBundleExecutableKey), exe, sizeof exe) || !exe[0] || strchr(exe, '/'))
+    return fail(why, why_len, "the app's Info.plist names no executable");
+  char self[PATH_MAX];
+  if (snprintf(self, sizeof self, "MacOS/%s", exe) >= (int)sizeof self) return fail(why, why_len, "the app's executable name is too long");
+  char app[PATH_MAX], contents[PATH_MAX];
   CFURLRef app_url = CFBundleCopyBundleURL(bundle);
-  CFURLRef exe_url = CFBundleCopyExecutableURL(bundle);
-  bool paths = url_path(app_url, app, sizeof app) && url_path(exe_url, exe, sizeof exe);
+  bool paths = url_path(app_url, app, sizeof app);
   if (app_url) CFRelease(app_url);
-  if (exe_url) CFRelease(exe_url);
   if (!paths) return fail(why, why_len, "the app's paths can't be read");
   char joined[PATH_MAX];
   if (snprintf(joined, sizeof joined, "%s/Contents", app) >= (int)sizeof joined) return fail(why, why_len, "the app's path is too long");
-  if (!realpath(joined, contents) || !realpath(exe, self)) return fail(why, why_len, "the app's paths can't be resolved: %s", strerror(errno));
+  if (!realpath(joined, contents)) return fail(why, why_len, "the app's paths can't be resolved: %s", strerror(errno));
   size_t base = strlen(contents) + 1;
   char *roots[] = {contents, NULL};
   FTS *fts = fts_open(roots, FTS_PHYSICAL | FTS_NOCHDIR, NULL);
@@ -114,7 +117,7 @@ int kiwi_seal_check(char *why, size_t why_len) {
       case FTS_DP:
         break;
       case FTS_F:
-        if (strcmp(rel, "Info.plist") == 0 || strcmp(rel, "CodeResources") == 0 || strcmp(e->fts_path, self) == 0) break;
+        if (strcmp(rel, "Info.plist") == 0 || strcmp(rel, "CodeResources") == 0 || strcmp(rel, self) == 0) break;
         rc = check_file(seal, e->fts_path, rel, why, why_len);
         if (rc == 0) matched++;
         break;
@@ -262,7 +265,7 @@ static void serve_legacy(int fd, CFArrayRef names, const char *name) {
   CFRelease(wanted);
 }
 
-static void serve(int fd, CFStringRef service, CFStringRef label, CFArrayRef legacy) {
+void kiwi_serve(int fd, CFStringRef service, CFStringRef label, CFArrayRef legacy) {
   char buf[MAX_LINE + 1];
   size_t used = 0;
   for (;;) {
@@ -273,7 +276,13 @@ static void serve(int fd, CFStringRef service, CFStringRef label, CFArrayRef leg
     char *nl;
     while ((nl = memchr(buf, '\n', used)) != NULL) {
       *nl = 0;
-      if (strcmp(buf, "get") == 0)
+      if (memchr(buf, 0, (size_t)(nl - buf)) != NULL)
+        reply(fd, "fail the launcher doesn't know that request");
+      else if (strcmp(buf, "done") == 0) {
+        reply(fd, "ok");
+        shutdown(fd, SHUT_RDWR);
+        return;
+      } else if (strcmp(buf, "get") == 0)
         serve_read(fd, service, CFSTR(STORE_ACCOUNT), "reading the store key");
       else if (strncmp(buf, "set ", 4) == 0)
         serve_set(fd, service, label, buf + 4);
@@ -346,7 +355,7 @@ int kiwi_run_with_keys(const char *path, char *const argv[], char *const envp[])
   sigemptyset(&sa.sa_mask);
   int signals[] = {SIGTERM, SIGINT, SIGHUP, SIGQUIT};
   for (size_t i = 0; i < sizeof signals / sizeof signals[0]; i++) sigaction(signals[i], &sa, NULL);
-  serve(sv[0], id, label, names);
+  kiwi_serve(sv[0], id, label, names);
   close(sv[0]);
   CFRelease(label);
   int status = 0;

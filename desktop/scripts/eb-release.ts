@@ -7,7 +7,7 @@ import desktopPackage from "../package.json" with { type: "json" };
 import { developerIdRequirement } from "../src/signer.ts";
 import { swapAsset } from "../src/update-asset.ts";
 import { MB, mb, payloadOf, shippedApp, sizeOf } from "./eb-app.ts";
-import { sealApp } from "./eb-seal.ts";
+import { sealApp, sealProblems } from "./eb-seal.ts";
 
 const PACKED_LIMIT = 40 * MB;
 const IDENTIFIER = "com.kiwiinit.channels";
@@ -157,6 +157,9 @@ try {
     must("xcrun", ["stapler", "validate", dmg], "validating the dmg's ticket");
     must("spctl", ["--assess", "--type", "open", "--context", "context:primary-signature", "--verbose=2", dmg], "Gatekeeper on the dmg");
   }
+
+  const unsealed = sealProblems(app);
+  if (unsealed.length) throw new Error(`eb-release: the launcher would refuse this app: ${unsealed.join("; ")}`);
 
   let over = 0;
   for (const f of [zip, dmg]) {
