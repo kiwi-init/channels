@@ -124,6 +124,7 @@ describe("finding Electron's store", () => {
       {},
     );
     expect(read.kind === "ok" && read.json).toEqual({ channels: [] });
+    expect(read.kind === "ok" && read.encrypted).toBe(false);
     expect(asked).toBe(0);
   });
 
@@ -182,9 +183,16 @@ describe("finding Electron's store", () => {
     expect(readFileSync(torn).equals(good.subarray(0, 12))).toBe(true);
   });
 
-  test("a readable store under the other name wins over an unreadable one", async () => {
+  test("an unreadable store stops the search: the old Kiwi folder's is never imported in its place", async () => {
     const h = home();
-    put(join(h, ".config", "kiwi-desktop"), "{not json");
+    const file = put(join(h, ".config", "kiwi-desktop"), linuxStore());
+    put(join(h, ".config", "Kiwi"), '{"person":null}');
+    const read = await readLegacyStore(keychain({}), "linux", h, {});
+    expect(read.kind === "unreadable" && read.file).toBe(file);
+  });
+
+  test("with no kiwi-desktop store at all, the Kiwi folder's is read", async () => {
+    const h = home();
     put(join(h, ".config", "Kiwi"), '{"person":null}');
     const read = await readLegacyStore(keychain({}), "linux", h, {});
     expect(read.kind === "ok" && read.json).toEqual({ person: null });
@@ -199,7 +207,7 @@ describe("finding Electron's store", () => {
 });
 
 describe("the old password's lookup", () => {
-  test("Bun looks up the old password only on Linux: on a Mac the signed launcher does, and elsewhere there was no Electron app", async () => {
+  test("Bun looks up the old password only on Linux: on a Mac the signed launcher reads it (T544), and elsewhere there was no Electron app", async () => {
     expect(await legacyPassword("darwin")("kiwi-desktop")).toBeNull();
     expect(await legacyPassword("win32")("kiwi-desktop")).toBeNull();
   });

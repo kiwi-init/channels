@@ -88,6 +88,7 @@ const parsed = parseArgs({
     dm: { type: "string" },
     main: { type: "boolean" },
     model: { type: "string" },
+    effort: { type: "string" },
     harness: { type: "string" },
     persona: { type: "string" },
     folder: { type: "string" },
