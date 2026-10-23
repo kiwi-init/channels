@@ -11,7 +11,7 @@ import { handleDeepLink, JOIN_SCHEME } from "./deep-links.ts";
 import { committedUrl, lockInternalRpc, preloadSource, stillOurs, toPageScript } from "./eb-bridge.ts";
 import { navigationUrl, openedUrl, PAGE_RULES, PAGE_URL, pageWithCsp } from "./eb-page.ts";
 import { externalUrl } from "./guard.ts";
-import { attachKeys, attachWindow, ebHost } from "./host-eb.ts";
+import { attachKeys, attachWindow, dataDir, ebHost } from "./host-eb.ts";
 import { useHost } from "./host.ts";
 import { handlers } from "./ipc/handlers.ts";
 import { bunWorker, keysController, type KeysFrame } from "./keys-eb.ts";
@@ -61,7 +61,7 @@ let keysToPage: (frame: KeysFrame) => void = () => {};
 
 const keys = keysController({
   spawn: () => bunWorker(path.join(import.meta.dir, "keys.js")),
-  init: () => ({ type: "init", relay: store.relayUrl, dir: Utils.paths.userData, seats: store.channels, person: store.person?.pk ?? null }),
+  init: () => ({ type: "init", relay: store.relayUrl, dir: dataDir, seats: store.channels, person: store.person?.pk ?? null }),
   answer: answerKeys,
   toPage: (frame) => keysToPage(frame),
 });
@@ -130,7 +130,7 @@ function createWindow(): BrowserWindow {
 }
 
 async function start(instance: Extract<Instance, { kind: "first" }>): Promise<void> {
-  const opened = await openEbStore({ dir: Utils.paths.userData, keys: launcherKeys });
+  const opened = await openEbStore({ dir: dataDir, keys: launcherKeys });
   openStore(v2Vault(opened));
   attachKeys((m) => keys.tell(m));
   keys.start();
@@ -159,7 +159,7 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
 BrowserView.on("created", (tag) => tag.remove());
 
 const instance = await claimInstance({
-  dir: Utils.paths.userData,
+  dir: dataDir,
   handoff: handoffFor(process.argv, JOIN_SCHEME),
   scheme: JOIN_SCHEME,
   onHandoff: (h) => (h.kind === "link" ? handleDeepLink(h.url) : ebHost.showWindow()),

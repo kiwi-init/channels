@@ -6,8 +6,9 @@ import { join } from "node:path";
 
 import type { KeySources } from "../desktop/src/launcher-key.ts";
 import type { LegacyName } from "../desktop/src/legacy-store.ts";
-import { openEbStore, unmarkedNote, v2Vault } from "../desktop/src/store-eb.ts";
+import { ebDataDir, openEbStore, REFUSAL_ADVICE, unmarkedNote, v2Vault } from "../desktop/src/store-eb.ts";
 import { isSealed, STORE_FILE, type StoreKey } from "../desktop/src/store-v2.ts";
+import { brokenStore, openStore as openStoreFile } from "../desktop/src/store.ts";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -67,10 +68,10 @@ function electronStore(home: string, json: unknown, password: string): string {
 test("a Mac app without its launcher's key channel opens no store: refused with the launcher's reason, nothing written", async () => {
   const { dir, home } = place();
   const opened = await openEbStore({ dir, keys: new Error("on a Mac, Channels gets its store key only from its signed launcher"), home, platform: "darwin" });
-  expect(opened).toEqual({ kind: "unreadable", why: "on a Mac, Channels gets its store key only from its signed launcher", file: join(dir, STORE_FILE) });
+  expect(opened).toEqual({ kind: "unreadable", why: "on a Mac, Channels gets its store key only from its signed launcher", file: join(dir, STORE_FILE), cause: "launcher" });
   expect(existsSync(dir)).toBe(false);
   const vault = v2Vault(opened);
-  expect(vault.load()).toEqual({ ok: false, why: "on a Mac, Channels gets its store key only from its signed launcher" });
+  expect(vault.load()).toEqual({ ok: false, why: "on a Mac, Channels gets its store key only from its signed launcher", advice: REFUSAL_ADVICE.launcher });
   expect(() => vault.save({ relayUrl: "https://r.example", person: null, channels: [], computers: [], pending: [] })).toThrow("can't be saved");
 });
 
@@ -131,4 +132,29 @@ test("a launcher that has gone before done still leaves the store open", async (
     },
   };
   expect(await openEbStore({ dir, keys, home, platform: "darwin" })).toMatchObject({ kind: "open", sealed: true });
+});
+
+test("the app's data folder is pinned to the bundle identifier, not to wherever Electrobun puts userData for this install (T1710)", () => {
+  expect(ebDataDir("com.kiwiinit.channels", "darwin", "/Users/a", {})).toBe("/Users/a/Library/Application Support/com.kiwiinit.channels");
+  expect(ebDataDir("com.kiwiinit.channels", "linux", "/home/a", {})).toBe("/home/a/.local/share/com.kiwiinit.channels");
+  expect(ebDataDir("com.kiwiinit.channels", "linux", "/home/a", { XDG_DATA_HOME: "/data" })).toBe("/data/com.kiwiinit.channels");
+  expect(ebDataDir("com.kiwiinit.channels", "win32", "C:\\Users\\a", { LOCALAPPDATA: "/local" })).toBe("/local/com.kiwiinit.channels");
+});
+
+test("the broken-store dialog says what to do for its cause, not 'unlock your keychain' for everything (T1710)", async () => {
+  const { dir, home } = place();
+  const s = sources("electron-pw");
+  expect(await openEbStore({ dir, keys: s.keys, home, platform: "darwin" })).toMatchObject({ kind: "open" });
+  rmSync(dir, { recursive: true, force: true });
+  const deleted = await openEbStore({ dir, keys: s.keys, home, platform: "darwin" });
+  expect(deleted).toMatchObject({ kind: "unreadable", cause: "deleted" });
+  openStoreFile(v2Vault(deleted));
+  const message = brokenStore()?.message ?? "";
+  expect(message).toContain("both copies of the store are gone");
+  expect(message).not.toContain("Unlock your keychain");
+  openStoreFile(v2Vault(await openEbStore({ dir, keys: new Error("no launcher"), home, platform: "darwin" })));
+  expect(brokenStore()?.message).toContain("Open Channels from your Applications folder");
+  openStoreFile({ where: () => "/old/kiwi-store.bin", load: () => ({ ok: false, why: "the keyring is locked" }), save: () => {} });
+  expect(brokenStore()?.message).toContain("Unlock your keychain, then quit and reopen Channels.");
+  expect(Object.keys(REFUSAL_ADVICE).sort()).toEqual(["copy", "deleted", "keychain", "keyless", "launcher", "legacy", "legacy-plain", "save"]);
 });

@@ -6,6 +6,7 @@ import Electrobun, { BuildConfig, PATHS, Utils, type BrowserView, type BrowserWi
 import type { Push, Pushes } from "./calls.ts";
 import type { Host } from "./host.ts";
 import type { HostToKeys } from "./keys-server.ts";
+import { ebDataDir } from "./store-eb.ts";
 
 interface Bundle {
   identifier: string;
@@ -19,6 +20,8 @@ function bundleInfo(): Bundle {
 }
 
 const bundle: Bundle = bundleInfo();
+
+export const dataDir: string = ebDataDir(bundle.identifier);
 
 interface Shown {
   win: BrowserWindow;
@@ -43,7 +46,7 @@ export const ebHost: Host = {
   app: {
     packaged: () => BuildConfig.getSync().isPackaged,
     version: () => bundle.version,
-    path: (name) => (name === "data" ? Utils.paths.userData : name === "logs" ? Utils.paths.userLogs : name === "exe" ? process.execPath : PATHS.RESOURCES_FOLDER),
+    path: (name) => (name === "data" ? dataDir : name === "logs" ? Utils.paths.userLogs : name === "exe" ? process.execPath : PATHS.RESOURCES_FOLDER),
     ready: () => true,
     relaunch: (execPath) => spawn(execPath, [], { detached: true, stdio: "ignore" }).unref(),
     onQuit: (fn) => Electrobun.events.on("before-quit", fn),

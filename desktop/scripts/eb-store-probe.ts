@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { openEbStore, unmarkedNote } from "../src/store-eb.ts";
+import { ebDataDir, openEbStore, unmarkedNote } from "../src/store-eb.ts";
 
 export type StoreProbe =
   | { kind: "open"; sealed: boolean; imported: string | null; unmarked: string | null; note: string | null; json: Record<string, unknown> | null }
@@ -14,7 +14,7 @@ export type StoreProbe =
 export const STORE_PROBE_PREFIX = "kiwi-store-probe:";
 
 export function storePlaces(id: string, home: string = os.homedir()): { data: string; legacyHome: string } {
-  const data = path.join(home, "Library", "Application Support", id);
+  const data = ebDataDir(id, "darwin", home);
   return { data, legacyHome: path.join(data, "legacy-home") };
 }
 
