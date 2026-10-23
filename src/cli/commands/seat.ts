@@ -6,7 +6,7 @@ import { agentName, channelAlias, type Command, config, die, out, type Quit } fr
 
 const USAGE = `usage: kiwi seat hold | bind --harness HARNESS (--session ID [--pid PID] | --pid PID for kimi) | release (bind and release read ${SEAT_TOKEN})`;
 
-const seatNamed = Effect.gen(function* () {
+export const seatNamed = Effect.gen(function* () {
   const alias = yield* channelAlias();
   const ch = (yield* config).channels[alias];
   if (!ch) return yield* die(`unknown channel "${alias}" (see: kiwi channels)`);

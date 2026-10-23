@@ -1,4 +1,5 @@
 import type { Push, Pushes } from "./calls.ts";
+import type { ExternalUrl } from "./guard.ts";
 import type { HostToKeys } from "./keys-server.ts";
 
 export type AppPath = "data" | "exe" | "logs" | "resources";
@@ -15,7 +16,7 @@ interface AppFacts {
 export interface Host {
   readonly app: AppFacts;
   push<P extends Push>(name: P, value: Pushes[P]): void;
-  openExternal(url: string): Promise<void>;
+  openExternal(url: ExternalUrl): Promise<void>;
   pickFolder(): Promise<string | null>;
   notify(title: string, body: string): void;
   showWindow(): void;

@@ -10,8 +10,8 @@ import { watchWake } from "./wake.ts";
 export interface LifeShell {
   win: BrowserWindow;
   view: BrowserView;
-  pageUrl: string;
   showWindow(): void;
+  reload(): void;
   textStep(step: TextStep): void;
   restartToUpdate(): void;
   update(): UpdateState | null;
@@ -29,7 +29,7 @@ export function startAppLife(shell: LifeShell): AppTray {
     if (a === "open") shell.showWindow();
     else if (a === "restart") shell.restartToUpdate();
     else if (a === "quit") Utils.quit();
-    else if (a === "reload") shell.view.loadURL(shell.pageUrl);
+    else if (a === "reload") shell.reload();
     else if (a === "devtools") shell.view.toggleDevTools();
   };
   Electrobun.events.on("open-url", (e: { data?: { url?: unknown } }) => {
