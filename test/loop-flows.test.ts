@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig } from "../src/config.ts";
 import { pidAlive } from "../src/seats.ts";
+import { tmuxPastesFlag } from "../src/loop/kimi.ts";
 import { daemonSock, stopDaemon } from "../src/daemon.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { kiwiCmd } from "./owner.ts";
@@ -496,9 +497,10 @@ test("with --harness mimo, the loop passes MiMoCode's chosen model, finds the se
   expect(log).toContain(`${id} is over; its session ended`);
 });
 
+const tmuxPastes = !!Bun.which("tmux") && tmuxPastesFlag(new TextDecoder().decode(Bun.spawnSync(["tmux", "-V"]).stdout));
 const shWord = (w: string) => `'${w.replace(/'/g, "'\\''")}'`;
 
-test.skipIf(!Bun.which("tmux"))("with --harness kimi in tmux, the loop types the first prompt once Kimi is ready, binds the seat to its process, and stops the listener it left", async () => {
+test.skipIf(!tmuxPastes)("with --harness kimi in tmux 3.7 or newer, the loop types the first prompt once Kimi is ready, binds the seat to its process, and stops the listener it left", async () => {
   const before = seen().length;
   const id = /added (T\d+)/.exec(await ok(owner, ["--as", "human", "task", "add", "kimi work", "--owner", me, "--ask", want], { CLAUDECODE: "" }))![1]!;
   const outside = spawn(agent, ["loop", "--harness", "kimi"], { PATH: `${bin}:${process.env.PATH}`, SHELL: "/bin/sh", TMUX: "", TMUX_PANE: "" });
@@ -556,4 +558,23 @@ test.skipIf(!Bun.which("tmux"))("with --harness kimi in tmux, the loop types the
   } finally {
     tmux("kill-server");
   }
+});
+
+test("on tmux older than 3.7, kiwi loop --harness kimi refuses up front instead of waiting for a paste flag tmux can't report", async () => {
+  const shim = scratch("oldtmux");
+  writeFileSync(
+    join(shim, "tmux"),
+    `#!/bin/sh
+case "$*" in
+  *"#{version}"*) echo 3.6a ;;
+  *"#{pane_pid}"*) echo ${process.pid} ;;
+  *) exit 0 ;;
+esac
+`,
+  );
+  chmodSync(join(shim, "tmux"), 0o755);
+  const loop = spawn(agent, ["loop", "--harness", "kimi"], { PATH: `${shim}:${bin}:${process.env.PATH}`, SHELL: "/bin/sh", TMUX: `${join(shim, "sock")},1,0`, TMUX_PANE: "%1" });
+  const [refusal, code] = await Promise.all([new Response(loop.stderr).text(), loop.exited]);
+  expect(code).not.toBe(0);
+  expect(refusal).toContain("Kimi Code's first prompt needs tmux 3.7 or newer, to know when it can paste; this tmux is 3.6a");
 });

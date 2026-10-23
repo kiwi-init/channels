@@ -204,10 +204,14 @@ function typeFirst(pid: number, text: string, exited: () => boolean, stop: { ask
     const pane = process.env.TMUX_PANE;
     if (!socket || !pane) return false;
     let told = false;
+    let sawReady = false;
     let deadline = Date.now() + STARTING_MS;
     while (!exited() && !stop.asked) {
       const screen = kimiScreen(paneText(socket, pane));
-      if (screen === "ready" && pasteBracketed(socket, pane)) return typeInto(socket, pane, text);
+      if (screen === "ready") {
+        if (pasteBracketed(socket, pane)) return typeInto(socket, pane, text);
+        sawReady = true;
+      }
       if (screen === "trust") {
         deadline = Date.now() + STARTING_MS;
         if (!told) {
@@ -215,7 +219,12 @@ function typeFirst(pid: number, text: string, exited: () => boolean, stop: { ask
           yield* say(`waiting for you to answer the trust prompt in this window (pid ${pid})`);
         }
       } else if (Date.now() > deadline) {
-        yield* say(`the session never showed its ready screen within ${Math.round(STARTING_MS / 60_000)} minutes`);
+        const minutes = Math.round(STARTING_MS / 60_000);
+        yield* say(
+          sawReady
+            ? `the session showed its ready screen, but tmux never reported bracketed paste on within ${minutes} minutes`
+            : `the session never showed its ready screen within ${minutes} minutes`,
+        );
         return false;
       }
       yield* Effect.sleep(500);

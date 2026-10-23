@@ -183,10 +183,11 @@ export interface Proc {
 
 export type Stray = { pid: number; start: string };
 
-const LISTENER = /(?:^|\s)(?:\S*\/)?kiwi(?:\s+-{1,2}[\w-]+(?:\s+[^-\s]\S*)?)*\s+(?:hook\s+)?listen(?:\s|$)/;
+const VALUE_FLAGS = new Set(["-c", "--channel", "--as", "--relay", "--timeout", "--thread", "--room", "-n"]);
+const TMUX_PASTE_FLAG = [3, 7] as const;
 
 function processes(): Proc[] {
-  const r = runNow(["ps", "-eo", "pid=,ppid=,lstart=,args="], 5_000);
+  const r = runNow(["env", "LC_ALL=C", "TZ=UTC0", "ps", "-eo", "pid=,ppid=,lstart=,args="], 5_000);
   if (r.status !== 0) return [];
   return r.stdout.split("\n").flatMap((line) => {
     const m = /^\s*(\d+)\s+(\d+)\s+(\S+\s+\S+\s+\d+\s+[\d:]+\s+\d+)\s+(.*)$/.exec(line);
@@ -195,7 +196,28 @@ function processes(): Proc[] {
 }
 
 export function isListener(args: string): boolean {
-  return LISTENER.test(args);
+  const words = args.split(/\s+/).filter(Boolean);
+  const at = words.findIndex((w) => w === "kiwi" || w.endsWith("/kiwi"));
+  if (at < 0) return false;
+  const rest: string[] = [];
+  for (let i = at + 1; i < words.length; i++) {
+    const w = words[i]!;
+    if (!w.startsWith("-")) rest.push(w);
+    else if (VALUE_FLAGS.has(w)) i++;
+    if (rest.length === 2) break;
+  }
+  return rest[0] === "listen" || (rest[0] === "hook" && rest[1] === "listen");
+}
+
+export function tmuxPastesFlag(version: string): boolean {
+  const m = /(\d+)\.(\d+)/.exec(version);
+  if (!m) return /\bmaster\b/.test(version);
+  const [major, minor] = [Number(m[1]), Number(m[2])];
+  return major > TMUX_PASTE_FLAG[0] || (major === TMUX_PASTE_FLAG[0] && minor >= TMUX_PASTE_FLAG[1]);
+}
+
+export function tmuxVersion(socket: string): string {
+  return tmuxNow(socket, ["display-message", "-p", "#{version}"])?.trim() ?? "";
 }
 
 export function listenersUnder(pid: number, procs: readonly Proc[] = processes()): Stray[] {
@@ -214,12 +236,12 @@ export function listenersUnder(pid: number, procs: readonly Proc[] = processes()
 
 export const strayKey = (s: Stray) => `${s.pid}@${s.start}`;
 
-export function stopStrays(recorded: ReadonlySet<string>, procs: readonly Proc[] = processes()): number {
+export function stopStrays(recorded: ReadonlySet<string>, procs: readonly Proc[] = processes(), kill: (pid: number) => void = (pid) => process.kill(pid, "SIGTERM")): number {
   let stopped = 0;
   for (const p of procs) {
     if (!isListener(p.args) || !recorded.has(strayKey(p))) continue;
     try {
-      process.kill(p.pid, "SIGTERM");
+      kill(p.pid);
       stopped++;
     } catch {
       // Gone since the listing (ESRCH) or not this user's process (EPERM): not one of ours to stop.
