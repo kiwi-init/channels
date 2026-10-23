@@ -36,6 +36,18 @@ export async function calibrateInPage(): Promise<Calibration> {
   return { ms: [...reps].sort((a, b) => a - b)[2]!, reps };
 }
 
+export async function loopInPage(): Promise<number> {
+  const times: number[] = [];
+  let x = 0;
+  for (let r = 0; r < 5; r++) {
+    await new Promise((ok) => setTimeout(ok, 0));
+    const t0 = performance.now();
+    for (let i = 0; i < 5_000_000; i++) x = (x + i * 31) % 1_000_003;
+    times.push(performance.now() - t0);
+  }
+  return x < 0 ? -1 : Math.round([...times].sort((a, b) => a - b)[2]! * 10) / 10;
+}
+
 export async function calibrate(page: Page): Promise<Calibration> {
   return page.evaluate(calibrateInPage);
 }

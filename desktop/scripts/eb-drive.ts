@@ -24,7 +24,7 @@ export function appExecutable(path: string): string {
 export function testEnv(root: string, socket: string, relay: string, extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   const home = join(root, "home");
   mkdirSync(home, { recursive: true });
-  const env: NodeJS.ProcessEnv = { ...process.env, CFFIXED_USER_HOME: home, KIWI_HOME: join(root, ".kiwi"), KIWI_EB_DRIVER: socket, KIWI_EB_RELAY: relay, ...extra };
+  const env: NodeJS.ProcessEnv = { ...process.env, HOME: home, CFFIXED_USER_HOME: home, KIWI_HOME: join(root, ".kiwi"), KIWI_EB_DRIVER: socket, KIWI_EB_RELAY: relay, ...extra };
   for (const name of ["BUN_OPTIONS", "BUN_INSPECT", "NODE_OPTIONS"]) if (!(name in extra)) delete env[name];
   return env;
 }
@@ -67,7 +67,13 @@ export async function attach(socketPath: string, ms = 60_000): Promise<Driver> {
             const lines = (buffered + chunk.toString("utf8")).split("\n");
             buffered = lines.pop() ?? "";
             for (const line of lines) {
-              const a = JSON.parse(line) as { id: number; ok: boolean; value?: unknown; error?: string };
+              let a: { id: number; ok: boolean; value?: unknown; error?: string };
+              try {
+                a = JSON.parse(line) as { id: number; ok: boolean; value?: unknown; error?: string };
+              } catch {
+                // A line that isn't JSON answers nothing: the call it was meant for times out with its own error.
+                continue;
+              }
               const w = waiting.get(a.id);
               waiting.delete(a.id);
               if (a.ok) w?.ok(a.value);

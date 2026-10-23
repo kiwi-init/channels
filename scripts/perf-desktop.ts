@@ -6,7 +6,7 @@ import { chromium, type Page } from "playwright-core";
 import { appExecutable, attach, launch as launchApp, stop, testEnv, type Driver } from "../desktop/scripts/eb-drive.ts";
 import { daemonStop } from "../desktop/src/daemon-client.ts";
 import { startLocalRelay } from "./local-relay.ts";
-import { calibrateInPage } from "./perf-calibrate.ts";
+import { calibrateInPage, loopInPage } from "./perf-calibrate.ts";
 
 if (process.argv.includes("--help") || !process.argv[2]) {
   console.log(`The packaged desktop app's cold start, measured: from launching the executable to its window, its first screen, the first cached message
@@ -210,7 +210,7 @@ async function launchElectrobun(relay: string): Promise<Running> {
 const { relay, port } = await startLocalRelay(join(root, "relay"), null, { rateLimits: false });
 const RELAY = `http://127.0.0.1:${port}`;
 const launch = (): Promise<Running> => (ELECTROBUN ? launchElectrobun(RELAY) : launchElectron());
-const runs: { windowMs: number; firstScreenMs: number; firstMessageMs: number; liveMs: number; calibrationMs: number }[] = [];
+const runs: { windowMs: number; firstScreenMs: number; firstMessageMs: number; liveMs: number; calibrationMs: number; loopMs: number }[] = [];
 let running: Running | null = null;
 try {
   log("first run: a person, a channel and its messages on the local relay");
@@ -255,6 +255,7 @@ try {
       firstMessageMs: Math.round(screen.origin + reopened.message - app.started),
       liveMs: Math.round(screen.origin + reopened.live - app.started),
       calibrationMs: (await app.evaluate(calibrateInPage, null)).ms,
+      loopMs: await app.evaluate(loopInPage, null),
     };
     runs.push(run);
     log(`run ${i + 1}`, JSON.stringify(run));
@@ -284,7 +285,8 @@ const measured: Record<string, number> = {
   liveMs: median(runs.map((r) => r.liveMs)),
 };
 const scaled = Object.fromEntries(Object.entries(measured).map(([k, v]) => [k, Math.round(v * factor)]));
-const report = { app: ELECTROBUN ? "electrobun" : "electron", runs: runs.length, calibrationMs, reference: reference["@1x"], measured, scaled, each: runs };
+const loopMs = median(runs.map((r) => r.loopMs));
+const report = { app: ELECTROBUN ? "electrobun" : "electron", runs: runs.length, calibrationMs, loopMs, reference: reference["@1x"], measured, scaled, each: runs };
 console.log(JSON.stringify(report, null, 2));
 if (OUT) writeFileSync(OUT, JSON.stringify(report, null, 2));
 

@@ -1,5 +1,22 @@
 export const RELEASE_ID = "com.kiwiinit.channels";
 
+export const TEST_ID = "com.kiwiinit.channels.test";
+
+export function testBuildProblems(testBuild: boolean, identifier: string, versionJson: string): string[] {
+  if (!testBuild) return [];
+  let channel: unknown;
+  try {
+    channel = (JSON.parse(versionJson) as { channel?: unknown }).channel;
+  } catch {
+    // An unreadable version.json names no channel, so it can't show the test build is a dev one.
+    channel = undefined;
+  }
+  return [
+    ...(channel === "dev" ? [] : [`CHANNELS_EB_TEST=1 built a ${String(channel)} app: the test driver goes only into dev builds, never a stable or canary one`]),
+    ...(identifier === TEST_ID ? [] : [`CHANNELS_EB_TEST=1 built ${identifier}: a test build is always ${TEST_ID}`]),
+  ];
+}
+
 export function bundleProblems(main: string, preload: string): string[] {
   const problems: string[] = [];
   const tables = main.match(/webviewTagExecuteJavascript\s*:\s*\(/g)?.length ?? 0;

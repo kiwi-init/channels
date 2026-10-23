@@ -19,6 +19,7 @@ import { answerKeys } from "./keys-host.ts";
 import { logMainError } from "./main-log.ts";
 import { openInBrowser } from "./open.ts";
 import { claimInstance, handoffFor, type Instance } from "./single-instance.ts";
+import { testHomeProblem } from "./eb-test-home.ts";
 import { bunBridge } from "./rpc-eb.ts";
 import { brokenStore, mutate, openStore, snapshot, store, type StoreVault } from "./store.ts";
 import { startUpdates, updateState } from "./updater.ts";
@@ -181,16 +182,20 @@ function start(instance: Extract<Instance, { kind: "first" }>): void {
 
 BrowserView.on("created", (tag) => tag.remove());
 
-const instance = await claimInstance({
-  dir: Utils.paths.userData,
-  handoff: handoffFor(process.argv, JOIN_SCHEME),
-  scheme: JOIN_SCHEME,
-  onHandoff: (h) => (h.kind === "link" ? handleDeepLink(h.url) : ebHost.showWindow()),
-}).catch((e: unknown) => {
-  logMainError(e);
-  console.error("Channels: couldn't take the single-instance lock in its data folder", e);
-  return null;
-});
+const wrongHome = KIWI_EB_TEST ? testHomeProblem(Utils.paths.userData, process.env.CFFIXED_USER_HOME) : null;
+if (wrongHome) console.error(`Channels test build: ${wrongHome}; not starting, so nothing lands under the person's home`);
+const instance = wrongHome
+  ? null
+  : await claimInstance({
+      dir: Utils.paths.userData,
+      handoff: handoffFor(process.argv, JOIN_SCHEME),
+      scheme: JOIN_SCHEME,
+      onHandoff: (h) => (h.kind === "link" ? handleDeepLink(h.url) : ebHost.showWindow()),
+    }).catch((e: unknown) => {
+      logMainError(e);
+      console.error("Channels: couldn't take the single-instance lock in its data folder", e);
+      return null;
+    });
 if (!instance) Utils.quit(1);
 else if (instance.kind === "second") {
   if (!instance.delivered) console.error("Channels: another Channels holds this data folder and didn't answer; quitting");
