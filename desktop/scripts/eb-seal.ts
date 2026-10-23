@@ -16,7 +16,7 @@ export function sealOf(contents: string, executable: string): Record<string, str
         continue;
       }
       if (!entry.isFile()) throw new Error(`${rel} isn't a plain file or folder, and the launcher refuses an app with one`);
-      if (rel === "Info.plist" || rel === path.join("MacOS", executable)) continue;
+      if (rel === "Info.plist" || rel === "CodeResources" || rel === path.join("MacOS", executable)) continue;
       seal[rel] = createHash("sha256").update(fs.readFileSync(full)).digest("hex");
     }
   };
@@ -31,6 +31,21 @@ export function sealApp(app: string): number {
   execFileSync("plutil", ["-replace", "KiwiSeal", "-json", JSON.stringify(seal), plist]);
   execFileSync("plutil", ["-replace", "KiwiLegacyNames", "-json", JSON.stringify(LEGACY_NAMES), plist]);
   return Object.keys(seal).length;
+}
+
+export function sealDiff(sealed: Record<string, unknown>, now: Record<string, string>): string[] {
+  return [
+    ...Object.entries(now).flatMap(([rel, sha]) => (sealed[rel] === undefined ? [`${rel} isn't sealed`] : sealed[rel] === sha ? [] : [`${rel} changed after sealing`])),
+    ...Object.keys(sealed).flatMap((rel) => (rel in now ? [] : [`${rel} is sealed but gone`])),
+  ];
+}
+
+export function sealProblems(app: string): string[] {
+  const plist = path.join(app, "Contents", "Info.plist");
+  const executable = execFileSync("plutil", ["-extract", "CFBundleExecutable", "raw", plist], { encoding: "utf8" }).trim();
+  const raw = JSON.parse(execFileSync("plutil", ["-extract", "KiwiSeal", "json", "-o", "-", plist], { encoding: "utf8" })) as unknown;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return ["Info.plist's KiwiSeal isn't a dictionary"];
+  return sealDiff(raw as Record<string, unknown>, sealOf(path.join(app, "Contents"), executable));
 }
 
 if (import.meta.main) {

@@ -122,7 +122,7 @@ int kiwi_seal_check(char *why, size_t why_len) {
       case FTS_DP:
         break;
       case FTS_F:
-        if (strcmp(rel, "Info.plist") == 0 || strcmp(rel, self) == 0) break;
+        if (strcmp(rel, "Info.plist") == 0 || strcmp(rel, "CodeResources") == 0 || strcmp(rel, self) == 0) break;
         rc = check_file(seal, e->fts_path, rel, why, why_len);
         if (rc == 0) matched++;
         break;
