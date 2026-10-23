@@ -43,6 +43,10 @@ if (os === "linux") {
   fs.renameSync(theirs, path.join(bin, ELECTROBUN_LAUNCHER));
   execFileSync("cc", ["-O2", "-Wall", "-Wextra", "-Werror", "-o", theirs, path.join(desktop, "native", "linux", "kiwi-launcher.c")], { stdio: "inherit" });
   console.log(`eb-post-build: bin/launcher keeps the app's environment to an allowlist, then starts Electrobun's (bin/${ELECTROBUN_LAUNCHER})`);
+  const webkit = execFileSync("pkg-config", ["--cflags", "--libs", "webkit2gtk-4.1"], { encoding: "utf8" }).trim().split(/\s+/);
+  execFileSync("cc", ["-shared", "-fPIC", "-O2", "-Wall", "-Wextra", "-Werror", "-o", path.join(bin, "libkiwi-shell.so"), path.join(desktop, "native", "linux", "kiwi-shell.c"), ...webkit], {
+    stdio: "inherit",
+  });
   process.exit(0);
 }
 const contents = path.dirname(resources[0] as string);

@@ -1145,9 +1145,9 @@ jobs:
 
   desktop-linux:
     name: desktop / linux
-    inputs: ["desktop/src/**", "desktop/build/icons/**", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "package.json", "bun.lock"]
+    inputs: ["desktop/src/**", "desktop/native/linux/**", "desktop/build/icons/**", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "package.json", "bun.lock"]
     imports_from: ["desktop/src/main-eb.ts"]
-    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/package-linux.ts", "desktop/scripts/linux-files.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/native/linux/**"]
+    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/package-linux.ts", "desktop/scripts/linux-files.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/native/linux/**", "desktop/scripts/eb-linux-start.sh"]
     description: >-
       On an ubuntu runner (Electrobun builds only for the host it runs on), builds the Electrobun
       shell for Linux on WebKitGTK (issue #757, T444): web/dist, `electrobun prepare` (Hutch's
@@ -1165,7 +1165,8 @@ jobs:
       update as a whole file), its uninstall tool or its own Channels.desktop:
       Channels-<v>-linux-amd64.deb (package kiwi-desktop, so it replaces the Electron one, the app in
       /opt/Channels, /usr/bin/channels-desktop, a .desktop entry opening kiwi:// links, the hicolor
-      icons, Depends on libwebkit2gtk-4.1-0, libgtk-3-0, libayatana-appindicator3-1 and librsvg2-2, md5sums,
+      icons, Depends on libwebkit2gtk-4.1-0, libgtk-3-0, libayatana-appindicator3-1, librsvg2-2, bubblewrap and
+      xdg-dbus-proxy (WebKitGTK's sandbox), md5sums,
       an entry that runs /opt/Channels/bin/launcher, a preinst that drops the Electron deb's
       channels-desktop alternative and a postinst that restores the link if an old postrm took it)
       and Channels-<v>-linux-x86_64.AppImage (zstd squashfs in 128 KiB blocks on AppImage's type2
@@ -1176,7 +1177,26 @@ jobs:
       on LD_PRELOAD, LD_LIBRARY_PATH, BUN_OPTIONS, NODE_OPTIONS or GTK_MODULES (T1548). It then installs the v0.26.0 Electron deb (pinned by sha256) and this
       deb over it, and fails unless /usr/bin/channels-desktop leads to /opt/Channels/bin/launcher, the
       Electron app is gone, the entry runs the launcher and dpkg --verify finds nothing; it prints the runner's
-      AppArmor user-namespace setting for WebKitGTK's sandbox. Both are kept as linux-packages for 3 days.
+      AppArmor user-namespace setting for WebKitGTK's sandbox.
+      The job's apt packages come from .debs cached under the runner image's key (as .github/actions/browser
+      does); the apt step has 15 minutes, and what it downloaded is saved even when it runs out of time, so a
+      slow mirror costs one run, not every run.
+      Then it starts the installed app (T1545): desktop/native/linux/kiwi-shell.c, built by
+      eb-post-build into the bundle's bin as libkiwi-shell.so, is what main-eb.ts loads on Linux
+      too. desktop/native/linux/kiwi-shell-test.c (run under Xvfb against the installed library,
+      loaded after gtk_init as the app loads it) fails unless the program name and class are
+      channels-desktop (the Wayland app_id, which matches channels-desktop.desktop), a microphone
+      request on mock capture devices is denied (NotAllowedError) while a handler connected first to
+      allow everything, as Electrobun's Allow/Block dialog is, never runs, a terminated web
+      process reaches kiwi_watch_page's callback, kiwi_committed_url gives the page's committed URL (the bridge's
+      trust check, from load-changed's commit as the Mac's from didCommitNavigation), and kiwi_sandbox_pages, asked from another thread, turns
+      WebKitGTK's bubblewrap sandbox on for the default context before its first web view (off without bwrap or
+      xdg-dbus-proxy on PATH: the AppImage on a system without them runs unsandboxed, with a main.log line; the
+      deb depends on both). desktop/scripts/eb-linux-start.sh then starts
+      /opt/Channels/bin/launcher under Xvfb with a temp HOME and fails unless a window with
+      WM_CLASS Channels (Electrobun's own class, the entry's StartupWMClass) titled Channels opens
+      within 30 s, a WebKitWebProcess of the app's own runs 5 s later inside a bwrap of the app's own
+      (so WebKitGTK's sandbox works under the runner's AppArmor), the app is still up, and nothing of it is left 10 s after SIGTERM. Both are kept as linux-packages for 3 days.
 
   cli-macos:
     name: cli / macos
