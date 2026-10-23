@@ -1,4 +1,4 @@
-import { ArrowDown01Icon, CheckmarkCircle02Icon, Globe02Icon, HelpCircleIcon, Key01Icon } from "@hugeicons/core-free-icons"
+import { CheckmarkCircle02Icon, Globe02Icon, HelpCircleIcon, Key01Icon } from "@hugeicons/core-free-icons"
 import type { IconSvgElement } from "@hugeicons/react"
 import { useState, type ReactNode } from "react"
 
@@ -149,7 +149,10 @@ export function Row({
           {detail ? (
             <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="flex min-w-0 items-center gap-1.5 text-left text-body leading-snug">
               <span className="min-w-0 truncate">{title}</span>
-              <Icon icon={ArrowDown01Icon} size={14} className={cx("shrink-0 text-ink-3 transition-transform", open && "rotate-180")} />
+              <span
+                aria-hidden
+                className={cx("mx-1 size-1.5 shrink-0 border-r-[1.5px] border-b-[1.5px] border-ink-3 transition-transform", open ? "translate-y-0.5 rotate-[225deg]" : "-translate-y-0.5 rotate-45")}
+              />
             </button>
           ) : (
             <p className="min-w-0 truncate text-body leading-snug">{title}</p>
