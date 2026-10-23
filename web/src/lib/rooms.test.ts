@@ -94,11 +94,11 @@ describe("each room has its own unread count and read mark (T1236)", () => {
   const state = fold(messages, roster, T + 100)
 
   test("a message counts in its own room only, so an @jow in #mobile doesn't mark #general", () => {
-    const unread = roomUnread(state, messages, "jow", {})
+    const unread = roomUnread(state, messages, "jow", {}, 0)
     expect(unread("general")).toEqual({ n: 2, forMe: true })
     expect(unread("m0b1le00")).toEqual({ n: 2, forMe: true })
-    expect(roomUnread(state, messages, "jow", { main: 5 })("m0b1le00")).toEqual({ n: 2, forMe: true })
-    expect(roomUnread(state, messages, "jow", { main: 5 })("general")).toEqual({ n: 0, forMe: false })
+    expect(roomUnread(state, messages, "jow", { main: 5 }, 0)("m0b1le00")).toEqual({ n: 2, forMe: true })
+    expect(roomUnread(state, messages, "jow", { main: 5 }, 0)("general")).toEqual({ n: 0, forMe: false })
   })
 
   test("opening a room marks it read up to its own last message, not the channel's, under its own key (#general keeps main)", () => {
@@ -110,7 +110,14 @@ describe("each room has its own unread count and read mark (T1236)", () => {
     )
     expect(roomSeenKey("general")).toBe("main")
     expect(roomSeenKey("m0b1le00")).toBe("room:m0b1le00")
-    expect(roomUnread(state, messages, "jow", { "room:m0b1le00": 4 })("m0b1le00")).toEqual({ n: 0, forMe: false })
-    expect(roomUnread(state, messages, "jow", { "room:m0b1le00": 4 })("general")).toEqual({ n: 2, forMe: true })
+    expect(roomUnread(state, messages, "jow", { "room:m0b1le00": 4 }, 0)("m0b1le00")).toEqual({ n: 0, forMe: false })
+    expect(roomUnread(state, messages, "jow", { "room:m0b1le00": 4 }, 0)("general")).toEqual({ n: 2, forMe: true })
+  })
+
+  test("after the update, a room with no mark of its own starts from the main mark the single feed left (frozen once), so nothing it already showed comes back unread; later messages still count", () => {
+    expect(roomUnread(state, messages, "jow", { main: 5 }, 5)("m0b1le00")).toEqual({ n: 0, forMe: false })
+    expect(roomUnread(state, messages, "jow", { main: 3 }, 3)("m0b1le00")).toEqual({ n: 1, forMe: true })
+    expect(roomUnread(state, messages, "jow", { main: 5, "room:m0b1le00": 3 }, 5)("m0b1le00")).toEqual({ n: 1, forMe: true })
+    expect(roomUnread(state, messages, "jow", { main: 2 }, 5)("general")).toEqual({ n: 1, forMe: true })
   })
 })

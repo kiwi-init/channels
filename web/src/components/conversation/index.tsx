@@ -134,7 +134,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   useRecentPreview({ member, messages, others, state, me, nameOf })
 
   const { placeOf, places } = state
-  const { place, hereKey, openRoom, unreadIn, unreadInRoom, taskKey } = usePlaces({ here, roomId, cardRoom, messages, me, state, shownTask })
+  const { place, hereKey, openRoom, unreadIn, unreadInRoom, taskKey } = usePlaces({ here, roomId, cardRoom, viewing: tab === "conversation", messages, me, state, shownTask })
   const sendRoom = openRoom !== null && openRoom !== GENERAL_ROOM ? openRoom : undefined
   const { bySeq, threadRoot, showDropped, setShowDropped, threads, visible, inTask, quoted, summaryOf } = useThreads({
     messages,
@@ -194,9 +194,13 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       const at = placeOf.get(seq)
       const inTask = at?.kind === "task" ? at.task : null
       if (inTask !== null) openTask(inTask)
-      else if (at && placeKey(at) !== hereKey) setHere(placeKey(at))
+      else {
+        setTab("conversation")
+        if (at && placeKey(at) !== hereKey) setHere(placeKey(at))
+      }
       const m = bySeq.get(seq)
-      if (inTask === null && (at ?? MAIN).kind === "main" && m && state.rooms.size > 1 && roomOfMessage(state, m) !== cardRoom) switchRoom(roomOfMessage(state, m))
+      const room = m ? roomOfMessage(state, m) : cardRoom
+      if (inTask === null && (at ?? MAIN).kind === "main" && room !== cardRoom && state.rooms.has(room)) switchRoom(room)
       setSearch(null)
       const find = (left: number) => {
         const el = document.getElementById(`${inTask !== null ? "k" : "m"}${seq}`)

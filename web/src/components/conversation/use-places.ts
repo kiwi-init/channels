@@ -4,13 +4,14 @@ import type { Message } from "@kiwi/core/protocol.ts"
 import { unreadAll } from "@kiwi/core/standup.ts"
 import type { ChannelState } from "@kiwi/core/state.ts"
 import { roomLast, roomSeenKey, roomUnread } from "@/lib/rooms"
-import { markSeenIn, placeFromKey, placeKey, seenIn, useSeen } from "@/lib/threads"
+import { markSeenIn, placeFromKey, placeKey, roomsFrom, seenIn, useSeen } from "@/lib/threads"
 import type { Here, Unread } from "./types"
 
 export function usePlaces({
   here,
   roomId,
   cardRoom,
+  viewing,
   messages,
   me,
   state,
@@ -19,6 +20,7 @@ export function usePlaces({
   here: string
   roomId: string
   cardRoom: string
+  viewing: boolean
   messages: Message[]
   me: string
   state: ChannelState
@@ -42,12 +44,15 @@ export function usePlaces({
     markSeenIn(roomId, { ...Object.fromEntries([...places].map(([k, v]) => [k, v.last])), ...Object.fromEntries([...(lastByRoom ?? [])].map(([id, seq]) => [roomSeenKey(id), seq])) })
   }, [messages.length, places, lastByRoom, roomId])
   const unreadIn: (key: string) => Unread = useMemo(() => unreadAll(state, messages, me, seen), [seen, messages, me, state])
-  const unreadInRoom: (id: string) => Unread = useMemo(() => (rooms ? roomUnread(state, messages, me, seen) : () => unreadIn("main")), [rooms, state, messages, me, seen, unreadIn])
+  const unreadInRoom: (id: string) => Unread = useMemo(
+    () => (rooms ? roomUnread(state, messages, me, seen, roomsFrom(roomId)) : () => unreadIn("main")),
+    [rooms, state, messages, me, seen, unreadIn, roomId]
+  )
   const seenHere = openRoom === null ? hereKey : roomSeenKey(openRoom)
   const lastHere = openRoom === null ? (places.get(hereKey)?.last ?? 0) : (lastByRoom?.get(openRoom) ?? 0)
   useEffect(() => {
-    if (!document.hidden && lastHere) markSeenIn(roomId, { [seenHere]: lastHere })
-  }, [seenHere, lastHere, roomId])
+    if (viewing && !document.hidden && lastHere) markSeenIn(roomId, { [seenHere]: lastHere })
+  }, [viewing, seenHere, lastHere, roomId])
   const taskKey = shownTask === null ? null : placeKey({ kind: "task", task: shownTask })
   const lastInTask = (taskKey && places.get(taskKey)?.last) || 0
   useEffect(() => {

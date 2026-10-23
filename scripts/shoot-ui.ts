@@ -865,7 +865,6 @@ try {
     }
   }
 
-  // Last, so no other screen has rooms: #mobile with an @mention, while #general is open.
   const roomTags = (["dark", "light"] as const).filter((t) => (!themeOnly || t === themeOnly) && takes(`${t}-wide`, "26-room-unread"));
   if (roomTags.length) {
     await owner.setViewportSize(WIDE);
