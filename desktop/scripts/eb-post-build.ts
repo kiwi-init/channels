@@ -44,7 +44,6 @@ const views = path.join(app, "views", "internal");
 fs.rmSync(views, { recursive: true, force: true });
 fs.cpSync(web, views, { recursive: true, filter: (src) => src !== path.join(web, "index.html") && path.basename(src) !== "_headers" });
 if (fs.existsSync(path.join(views, "index.html"))) throw new Error("eb-post-build: index.html must not be under views/, where Electrobun would serve it without the CSP");
-fs.cpSync(web, views, { recursive: true, filter: (src) => path.basename(src) !== "_headers" });
 if (os === "linux") {
   const host = process.arch === "x64" ? "x64" : process.arch === "arm64" ? "arm64" : process.arch;
   if (host !== arch) throw new Error(`eb-post-build: the Linux launcher is built with this machine's cc, for ${host}, not the ${arch} app`);
@@ -129,6 +128,7 @@ const problems = [
   ...urlSchemeProblems(fs.readFileSync(path.join(contents, "Info.plist"), "utf8"), process.env.ELECTROBUN_APP_IDENTIFIER ?? "", JOIN_SCHEME),
 ];
 if (problems.length) throw new Error(`eb-post-build: ${problems.join("; ")}`);
+if (fs.existsSync(path.join(views, "index.html"))) throw new Error("eb-post-build: index.html is under views/ again by the seal, where Electrobun would serve it without the CSP");
 console.log(`eb-post-build: ${sealApp(path.dirname(contents))} files sealed in Info.plist`);
 
 async function bundledKeysAnswer(file: string): Promise<string> {
