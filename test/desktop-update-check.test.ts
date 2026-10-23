@@ -1,8 +1,8 @@
-import { afterEach, expect, mock, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
+import { useHost } from "../desktop/src/host.ts";
+import { fakeHost } from "./fake-host.ts";
 
-mock.module("electron", () => ({
-  app: { isPackaged: false, getVersion: () => "0.19.0", getPath: () => "/nowhere", on: () => {} },
-}));
+useHost(fakeHost({ packaged: false, version: "0.19.0" }).host);
 
 type Checked = { state: "current"; version: string } | { state: "failed" } | { state: "downloading" | "ready" | "available"; version: string; url: string };
 const updater = "../desktop/src/updater.ts";
