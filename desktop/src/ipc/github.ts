@@ -1,6 +1,6 @@
 import type { GithubRepoView, GithubStatus } from "../bridge.ts";
 import type { MemberPicture } from "@kiwi/core/protocol.ts";
-import type { Serves } from "../calls.ts";
+import type { Pushes, Serves } from "../calls.ts";
 
 import { avatar, finishDevice, linkedHere, listRepos, startDevice } from "../github-flow.ts";
 import { externalUrl } from "../guard.ts";
@@ -20,6 +20,7 @@ async function status(): Promise<GithubStatus> {
 }
 
 let linking: Promise<GithubStatus> | null = null;
+let pending: Pushes["githubCode"] | null = null;
 const reposFor = held(5 * 60_000, (token: string) => listRepos(token));
 let face: { id: number; picture: Promise<MemberPicture | null> } | null = null;
 
@@ -37,7 +38,8 @@ async function link(host: Host): Promise<GithubStatus> {
   const start = await startDevice(clientId);
   const page = externalUrl(start.url);
   if (!page) throw new Error("GitHub sent a sign-in page that isn't a web link");
-  host.push("githubCode", { code: start.userCode, url: start.url });
+  pending = { code: start.userCode, url: start.url };
+  host.push("githubCode", pending);
   await openInBrowser(page, (u) => host.openExternal(u));
   const found = await finishDevice(clientId, start, { fetch, sleep: (ms) => new Promise((r) => setTimeout(r, ms)), now: Date.now });
   mutate((s) => (s.github = { ...found, at: Date.now(), relay, clientId }));
@@ -47,7 +49,17 @@ async function link(host: Host): Promise<GithubStatus> {
 export function githubCalls(host: Host): Serves<"githubStatus" | "githubLink" | "githubRepos" | "githubPicture" | "githubUnlink"> {
   return {
     githubStatus: () => status(),
-    githubLink: () => (linking ??= link(host).finally(() => (linking = null))),
+    githubLink: () => {
+      if (linking) {
+        if (pending) host.push("githubCode", pending);
+        return linking;
+      }
+      linking = link(host).finally(() => {
+        linking = null;
+        pending = null;
+      });
+      return linking;
+    },
     githubRepos: (): Promise<GithubRepoView[]> => {
       const link = store.github;
       if (!link || !linkedHere(link, store.relayUrl)) return Promise.reject(new Error("link GitHub in Settings first"));

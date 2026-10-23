@@ -22,6 +22,7 @@ export type PageSide = { requests: Record<never, never>; messages: Record<never,
 
 export interface Frame {
   session: string;
+  doc?: string;
   packet?: unknown;
 }
 
@@ -29,9 +30,10 @@ const SESSION = /^[A-Za-z0-9-]{16,64}$/;
 
 export function frameOf(v: unknown): Frame | null {
   if (!v || typeof v !== "object") return null;
-  const { session, packet } = v as { session?: unknown; packet?: unknown };
+  const { session, doc, packet } = v as { session?: unknown; doc?: unknown; packet?: unknown };
   if (typeof session !== "string" || !SESSION.test(session)) return null;
-  return packet === undefined ? { session } : { session, packet };
+  if (doc !== undefined && (typeof doc !== "string" || !SESSION.test(doc))) return null;
+  return { session, ...(doc === undefined ? {} : { doc }), ...(packet === undefined ? {} : { packet }) };
 }
 
 export interface Boot {
