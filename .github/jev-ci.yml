@@ -668,6 +668,8 @@ jobs:
       everything it imports, calls.ts, host.ts, store.ts, updater.ts, bundled-daemon.ts, deep-links.ts,
       main-log.ts, signin.ts) never import electron however deep the import, read from their real
       import graph, while the Electron shell's own electron-host.ts and main.ts still do. And
+      test/desktop-store-open.test.ts: a store vault whose load throws partway leaves the store
+      broken, so no later change saves defaults over either copy (desktop/src/store.ts openStore). And
       test/jev-ci.test.ts: the CI planner in .github/jev-ci, which plans synthetic changes
       against the real .github/jev-ci.yml and .github/workflows/ci.yml in a scratch git repo,
       following imports into workspace packages (@kiwi/core) by name, and trusts a pass marker only
