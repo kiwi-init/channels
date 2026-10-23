@@ -9,13 +9,14 @@
 
 extern char **environ;
 
-static const char *const KEEP[] = {"HOME", "USER", "LOGNAME", "TMPDIR", "PATH", "SHELL", "LANG", "__CF_USER_TEXT_ENCODING", NULL};
-static const char *const KEEP_PREFIXES[] = {"LC_", "XPC_", NULL};
+static const char *const KEEP[] = {"HOME", "USER", "LOGNAME", "TMPDIR", "PATH", "SHELL", "LANG", "__CF_USER_TEXT_ENCODING", "XPC_SERVICE_NAME", "XPC_FLAGS", NULL};
+static const char *const KEEP_PREFIXES[] = {"LC_", NULL};
 #ifdef KIWI_EB_TEST
 static const char *const KEEP_IN_TEST_BUILDS[] = {"KIWI_EB_DRIVER", "KIWI_EB_RELAY", "CFFIXED_USER_HOME", NULL};
 #else
 static const char *const KEEP_IN_TEST_BUILDS[] = {NULL};
 #endif
+static char *const IMPOSED[] = {"BUN_RUNTIME_TRANSPILER_CACHE_PATH=0", NULL};
 
 static bool listed(const char *entry, size_t len, const char *const *names) {
   for (const char *const *k = names; *k; k++)
@@ -36,11 +37,14 @@ static bool kept(const char *entry) {
 static char **allowed_env(char **env) {
   size_t n = 0;
   while (env[n]) n++;
-  char **out = calloc(n + 1, sizeof *out);
+  size_t m = 0;
+  while (IMPOSED[m]) m++;
+  char **out = calloc(n + m + 1, sizeof *out);
   if (!out) return NULL;
   size_t k = 0;
   for (size_t i = 0; i < n; i++)
     if (kept(env[i])) out[k++] = env[i];
+  for (size_t i = 0; i < m; i++) out[k++] = IMPOSED[i];
   out[k] = NULL;
   return out;
 }

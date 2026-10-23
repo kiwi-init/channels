@@ -967,14 +967,19 @@ jobs:
       exists, a missing web/dist, or an app over its size gates.
       The plain .app's CFBundleExecutable is our launcher (desktop/native/macos/kiwi-launcher.c,
       built by eb-post-build.ts with clang -Wall -Wextra -Werror), not Electrobun's: it keeps only
-      HOME, USER, LOGNAME, TMPDIR, PATH, SHELL, LANG, LC_*, XPC_* and __CF_USER_TEXT_ENCODING and
-      execs Electrobun's launcher with that, so BUN_OPTIONS (--preload), BUN_INSPECT (a debugger),
-      NODE_*, DYLD_* and JSC_* never reach the bun process that runs main and the web view (T632).
+      HOME, USER, LOGNAME, TMPDIR, PATH, SHELL, LANG, LC_*, XPC_SERVICE_NAME, XPC_FLAGS and
+      __CF_USER_TEXT_ENCODING, sets BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 itself (so a forged entry in
+      Bun's transpiler cache under HOME can't replace main's code), and execs Electrobun's launcher
+      with that, so BUN_OPTIONS (--preload), BUN_INSPECT (a debugger), NODE_*, DYLD_* and JSC_*
+      never reach the bun process that runs main and the web view (T632).
       desktop/scripts/eb-env-check.ts unpacks the plain .app and fails if the launcher, run in front
       of a stand-in that writes down its environment, passes on any name beyond those (it sets one
-      from each family) or drops one of them, or if the running app, started with BUN_OPTIONS
-      --preload, BUN_INSPECT on a free port, NODE_OPTIONS --require and DYLD_INSERT_LIBRARIES, runs
-      the preload, listens on that port, or loads the library into any process but the unsigned
+      from each family) or drops one of them, or doesn't set BUN_RUNTIME_TRANSPILER_CACHE_PATH=0
+      once whatever the caller gave, or if the running app, started with BUN_OPTIONS --preload,
+      BUN_INSPECT on a free port, NODE_OPTIONS --require, DYLD_INSERT_LIBRARIES and HOME pointing at
+      a forged transpiler cache entry for its own index.js (made with the app's bun, its length and
+      wyhash rewritten), runs the preload or the forged code, listens on that port, or loads the
+      library into any process but the unsigned
       launcher itself (a signed build's hardened runtime stops that one), or leaves anything
       running; it starts a release-id app only on CI, never on a person's Mac.
       Then it starts the app, without CDP (WebKit has none; T442): a second build, `electrobun
