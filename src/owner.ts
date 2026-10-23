@@ -9,7 +9,7 @@ import { Keystore, type ChannelConfig } from "./config.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { personaScopes, type Persona } from "@kiwi/core/personality.ts";
 import { describeScopes, SCOPES, wireScopes, type Scope } from "@kiwi/core/scopes.ts";
-import { GENERAL_ROOM, MAX_CHARTER, SNAPSHOT_EVERY, type Event } from "@kiwi/core/protocol.ts";
+import { MAX_CHARTER, SNAPSHOT_EVERY, type Event } from "@kiwi/core/protocol.ts";
 import { fold, newRoomId, type FoldBase } from "@kiwi/core/state.ts";
 
 class OwnerSession extends AgentSession {
@@ -97,7 +97,7 @@ class OwnerSession extends AgentSession {
     return Effect.gen({ self: this }, function* () {
       const seq = yield* owner.fx.send(body, { kind: "event", ev });
       const state = yield* this.confirm(seq);
-      const list = [...state.rooms.values()].filter((r) => r.id !== GENERAL_ROOM || r.name !== GENERAL_ROOM).map(({ id, name }) => ({ id, name }));
+      const list = [...state.rooms.values()].map(({ id, name }) => ({ id, name }));
       yield* owner.fx.setRooms({ list, since: seq });
       this.roomsFloor = { list, since: seq };
       return state;
