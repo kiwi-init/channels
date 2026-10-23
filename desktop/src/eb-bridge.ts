@@ -1,6 +1,7 @@
-import type { StoreSnapshot } from "./bridge.ts";
+import type { KeysReply, KeysRequest, StoreSnapshot } from "./bridge.ts";
 import type { Call, CallArgs, CallValue, Handlers, Pushes } from "./calls.ts";
 import { PAGE_URL } from "./eb-page.ts";
+import type { KeysFrame } from "./keys-eb.ts";
 
 export const BOOT_GLOBAL = "__kiwiBoot";
 
@@ -9,7 +10,14 @@ export const RECEIVE_GLOBAL = "__kiwiReceive";
 export const toPageScript = (packet: unknown): string => `globalThis.${RECEIVE_GLOBAL}?.(${JSON.stringify(packet)});`;
 
 type BridgeRequests = { [K in Call]: { params: CallArgs<K>; response: CallValue<K> } };
-export type BunSide = { requests: BridgeRequests; messages: Pushes };
+export type CallSide = { requests: BridgeRequests; messages: Pushes };
+export type BunSide = { requests: BridgeRequests & { keys: { params: KeysRequest; response: KeysReply } }; messages: Pushes & { keys: KeysFrame } };
+
+export function keysRequest(params: unknown): KeysRequest | null {
+  if (!params || typeof params !== "object" || Array.isArray(params)) return null;
+  const id = (params as { id?: unknown }).id;
+  return typeof id === "number" && Number.isSafeInteger(id) ? (params as KeysRequest) : null;
+}
 export type PageSide = { requests: Record<never, never>; messages: Record<never, never> };
 
 export interface Frame {

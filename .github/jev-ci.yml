@@ -703,8 +703,22 @@ jobs:
       test/desktop-eb-bundle.test.ts: the post-build check of the built bundle. And
       test/desktop-shared-modules.test.ts: the modules both desktop shells share (ipc/handlers.ts and
       everything it imports, calls.ts, host.ts, store.ts, updater.ts, bundled-daemon.ts, deep-links.ts,
-      main-log.ts, signin.ts) never import electron however deep the import, read from their real
-      import graph, while the Electron shell's own electron-host.ts and main.ts still do. And
+      main-log.ts, signin.ts, and the keys' keys-host.ts, keys-eb.ts, keys-shim.ts and keys-page.ts)
+      never import electron however deep the import, read from their real import graph, while the
+      Electron shell's own electron-host.ts and main.ts still do. And
+      test/desktop-keys-eb.test.ts: the Electrobun app's keys on a Bun Worker (desktop/src/keys-eb.ts,
+      T437), on a fake Worker and clock: init first, requests made before the Worker is up queued and
+      sent over one port for their page, a push to the page with its session, a reload's new session
+      closing the old port, the Worker's asks answered by the host (keys-host.ts, shared with
+      Electron's keys-process.ts) and an answer for a Worker that has gone dropped, a Worker that
+      dies giving waiting requests the restart error and coming back after 2 s, 4 s ... up to 30 s
+      (1 s again after a minute up), with a fresh port and a restart frame for the page, and quitting
+      flushing (ended once it says flushed, or after 1 s) with nothing restarted; with
+      test/desktop-keys-worker.test.ts: the real keys-worker.ts in a Bun Worker, channels.ts
+      unchanged behind keys-shim.ts's process.parentPort, answering a page's request, writing its
+      memory on flush, and started again after it ends; and test/desktop-keys-page.test.ts: the
+      page's KeysPort over the RPC (keys-page.ts), each request numbered and sent with the page's
+      session, frames from another session dropped, and a refused RPC an unreachable reply. And
       test/desktop-store-open.test.ts: a store vault whose load throws partway leaves the store
       broken, so no later change saves defaults over either copy (desktop/src/store.ts openStore), as
       does a load that fails with an empty reason or throws an error with no message, the thrown
@@ -1048,15 +1062,18 @@ jobs:
       main-eb.ts wire them (rpc-eb.ts): calls reach main's handler table with their arguments,
       answers and errors come back, pushes reach their listener, a view off our page gets no
       answers and no pushes, a call that isn't the bridge's is refused, and a reloaded page
-      never takes the previous load's replies while the old page's late messages get nothing.
-      Then `bun run build:eb` (electrobun build --env=stable): bundles src/main-eb.ts with the
+      never takes the previous load's replies while the old page's late messages get nothing; the
+      keys request and frame (T437) go the same way, off our page get nothing, and a session or
+      request that isn't one is refused before main's keys see it. Then `bun run build:eb` (electrobun build --env=stable): bundles src/main-eb.ts with the
       shared desktop modules it imports (ipc/handlers.ts and all the app's calls through
       host-eb.ts, guard.ts csp(), open.ts, eb-page.ts, eb-bridge.ts, rpc-eb.ts, window-look.ts,
       window-size.ts) and @kiwi/core, and src/preload-eb.ts as the preload view; scripts/eb-pre-build.ts turns build/icon.icns into the
       iconset; scripts/eb-post-build.ts copies web/dist into the app's views/internal and
       compiles native/macos/kiwi-shell.m with clang -Wall -Werror into Contents/MacOS (the
       patch that denies the microphone, camera and location Electrobun grants the page, and the
-      window's minimum size and background), then checks the bundle (scripts/eb-bundle.ts): the
+      window's minimum size and background), bundles src/keys-worker.ts into app/bun/keys.js
+      beside the main bundle and fails unless that bundled keys worker answers a page's request,
+      then checks the bundle (scripts/eb-bundle.ts): the
       main bundle holds exactly one copy of Electrobun's internal RPC table, the one
       lockInternalRpc empties, and the preload bundle exists and has no WebSocket. We ship the
       plain app, not Electrobun's
