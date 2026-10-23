@@ -5,7 +5,9 @@
     "iconutil",
     "clang",
     "ditto",
-    "hdiutil"
+    "hdiutil",
+    "plutil",
+    "pgrep"
   ],
   "workspaces": {
     ".": {
