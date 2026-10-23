@@ -30,7 +30,6 @@ export function NeedsYou({
   roomId,
   me,
   decisions,
-  withDecisions,
   escalations,
   questions,
   reviews,
@@ -49,9 +48,8 @@ export function NeedsYou({
   now: number
   roomId: string
   me: string
-  /** Asks to this person by name: in the conversation the oldest waits above the composer, where it is answered. */
+  /** Asks to this person by name: the oldest also waits above the composer, where it is answered. */
   decisions: Message[]
-  withDecisions: boolean
   /** Escalations to this person nobody has answered yet. */
   escalations: Message[]
   questions: Message[]
@@ -98,7 +96,7 @@ export function NeedsYou({
       }
     }),
     ...requests.map((r) => ({ key: `r${r.id}`, node: <RequestItem r={r} roomId={roomId} now={now} /> })),
-    ...[...(withDecisions ? asked(decisions) : []), ...asked(escalations), ...questions].map((m) => ({
+    ...[...asked(decisions), ...asked(escalations), ...questions].map((m) => ({
       key: `a${m.seq}`,
       node: <AskItem m={m} me={me} now={now} nameOf={nameOf} agent={agentOf(m.from)} held={heldOf(m)} onReply={onReply} onJump={onJump} seat={seatOf(m.from)} />,
     })),
