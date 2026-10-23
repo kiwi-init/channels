@@ -5,9 +5,9 @@ import { dirname, join } from "node:path";
 import { FLOWS } from "../scripts/ci-flows.ts";
 import { loadConfig, matches, type Config } from "../.github/jev-ci/config.ts";
 import { markMoves, size, type FileChange } from "../.github/jev-ci/diff.ts";
-import { passMarkers, trustedRef, type PassCache, type PullEvent } from "../.github/jev-ci/github.ts";
+import { mergeGroupRange, passMarkers, testedByQueue, trustedRef, type PassCache, type PullEvent, type QueueRun } from "../.github/jev-ci/github.ts";
 import type { Request } from "../.github/jev-ci/jev.ts";
-import { plan, type Ask, type Decision, type Plan } from "../.github/jev-ci/plan.ts";
+import { plan, skipAll, type Ask, type Decision, type Plan } from "../.github/jev-ci/plan.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const CI = readFileSync(join(ROOT, ".github/workflows/ci.yml"), "utf8");
@@ -422,6 +422,18 @@ describe("pass markers", () => {
     expect([...passMarkers([{ key: "jev-ci-pass-static-eee", ref: "refs/heads/trunk" }, ...caches], jobs, trustedRef(trunk, "refs/pull/7/merge"))].sort()).toEqual(["static:eee", "test-unit:bbb"]);
   });
 
+  test("the merge queue's runs on main's queue are trusted like main's, by pull requests and merge groups alike (T2034)", () => {
+    const queued: PassCache[] = [
+      { key: "jev-ci-pass-build-qqq", ref: "refs/heads/gh-readonly-queue/main/pr-9-0123456789abcdef0123456789abcdef01234567" },
+      { key: "jev-ci-pass-test-unit-rrr", ref: "refs/heads/gh-readonly-queue/release/pr-3-0123456789abcdef0123456789abcdef01234567" },
+      { key: "jev-ci-pass-test-unit-sss", ref: "refs/heads/gh-readonly-queue-main/pr-1" },
+      ...caches,
+    ];
+    expect([...passMarkers(queued, jobs, trustedRef(pr(repo), "refs/pull/7/merge"))].sort()).toEqual(["build:qqq", "static:aaa", "test-unit:bbb"]);
+    const group: PullEvent = { repository: { default_branch: "main" }, merge_group: { base_sha: "a".repeat(40), head_sha: "b".repeat(40), head_ref: "refs/heads/gh-readonly-queue/main/pr-12-x" } };
+    expect([...passMarkers(queued, jobs, trustedRef(group, "refs/heads/gh-readonly-queue/main/pr-12-x"))].sort()).toEqual(["build:qqq", "static:aaa"]);
+  });
+
   test("a job split into shards passed only once every shard's marker is there, each from a trusted run", () => {
     const own = trustedRef(pr(repo), "refs/pull/7/merge");
     const shard = (i: number, ref = "refs/pull/7/merge"): PassCache => ({ key: `jev-ci-pass-cli-macos-fff-shard${i}of3`, ref });
@@ -429,5 +441,56 @@ describe("pass markers", () => {
     expect([...passMarkers([shard(1), shard(2, "refs/heads/main"), shard(3)], ["cli-macos"], own)]).toEqual(["cli-macos:fff"]);
     expect([...passMarkers([shard(1), shard(2, "refs/pull/8/merge"), shard(3)], ["cli-macos"], own)]).toEqual([]);
     expect([...passMarkers([shard(1), { key: "jev-ci-pass-cli-macos-fff-shard2of2", ref: "refs/pull/7/merge" }, shard(3)], ["cli-macos"], own)]).toEqual([]);
+  });
+});
+
+describe("the merge queue (T2034)", () => {
+  const sha = (c: string) => c.repeat(40);
+
+  test("a merge group is read as its base and head commits, and an event without them fails the plan so everything runs", () => {
+    expect(mergeGroupRange({ merge_group: { base_sha: sha("a"), head_sha: sha("b"), head_ref: "refs/heads/gh-readonly-queue/main/pr-1-x" } })).toEqual({ base: sha("a"), head: sha("b") });
+    for (const bad of [
+      {},
+      { merge_group: { head_sha: sha("b") } },
+      { merge_group: { base_sha: "main", head_sha: sha("b") } },
+      { merge_group: { base_sha: sha("a"), head_sha: `${sha("b")}; rm -rf /` } },
+    ])
+      expect(() => mergeGroupRange(bad)).toThrow("names no base_sha and head_sha");
+  });
+
+  test("a push to main skips its run only when a merge_group run of ci.yml passed on that very commit", () => {
+    const run = (o: Partial<QueueRun>): QueueRun => ({ id: 1, event: "merge_group", path: ".github/workflows/ci.yml", head_sha: sha("c"), conclusion: "success", ...o });
+    expect(testedByQueue([run({ id: 41 })], sha("c"), ".github/workflows/ci.yml")).toBe(41);
+    expect(testedByQueue([run({ conclusion: "failure" }), run({ conclusion: null })], sha("c"), ".github/workflows/ci.yml")).toBeNull();
+    expect(testedByQueue([run({ head_sha: sha("d") })], sha("c"), ".github/workflows/ci.yml")).toBeNull();
+    expect(testedByQueue([run({ path: ".github/workflows/release.yml" })], sha("c"), ".github/workflows/ci.yml")).toBeNull();
+    expect(testedByQueue([run({ event: "pull_request" })], sha("c"), ".github/workflows/ci.yml")).toBeNull();
+    expect(testedByQueue([], sha("c"), ".github/workflows/ci.yml")).toBeNull();
+  });
+
+  test("a commit the queue already tested runs no job on main, parts included, and says why", () => {
+    const skipped = skipAll(config, "the merge queue tested this commit as-is (run 41)");
+    expect(skipped.decisions.filter((d) => d.run)).toEqual([]);
+    expect(skipped.decisions.map((d) => d.job)).toContain("perf-runs");
+    for (const d of skipped.decisions) expect(d.reason).toMatch(/merge queue tested this commit|does part of/);
+  });
+
+  test("a merge group is planned on its combined change: every queued pull request's files count, not only the last one's", async () => {
+    const { dir, base } = repo();
+    commit(dir, { "src/a.ts": "export const a = 10\n" });
+    const head = commit(dir, { "web/src/lib/v.ts": "export const v = 30\n" });
+    const by = (r: Plan, job: string) => r.decisions.find((d) => d.job === job)!;
+    const group = await plan({ repo: dir, base, head, config, ask: fakeJev(0.9).ask });
+    expect(by(group, "test-flows-b").run).toBe(true);
+    expect(by(group, "perf").run).toBe(true);
+    const lastOnly = await plan({ repo: dir, base: sh(dir, ["rev-parse", "HEAD^1"]), head, config, ask: fakeJev(0.9).ask });
+    expect(by(lastOnly, "test-flows-b")).toMatchObject({ run: false, layer: "L0" });
+    expect(by(lastOnly, "perf").run).toBe(true);
+  });
+
+  test("ci.yml answers the merge queue: it runs on merge_group's checks_requested, each group in a concurrency group of its own", () => {
+    expect(CI).toMatch(/\n {2}merge_group:\n {4}types: \[checks_requested\]\n/);
+    expect(CI).toContain("group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.run_id }}");
+    expect(CI).toMatch(/\n {2}ci-ok:\n(?: .*\n)*? {4}if: always\(\)\n/);
   });
 });

@@ -1,7 +1,12 @@
-# jev-ci: which CI jobs a pull request can break. Read by .github/jev-ci/cli.ts in the
-# `plan` job of .github/workflows/ci.yml. Pushes to main run everything except the jobs marked
-# `push: false`, which run on pull requests and manual runs only. `version_bumps: true` runs a
-# job when a change only bumps a version number, which otherwise counts as no change.
+# jev-ci: which CI jobs a pull request or merge group can break. Read by .github/jev-ci/cli.ts
+# in the `plan` job of .github/workflows/ci.yml. A merge group is planned like a pull request,
+# on the group's combined change (merge_group.base_sha..head_sha), and it trusts pass markers
+# from main and from the merge queue's gh-readonly-queue/main/ refs as pull requests do. Pushes
+# to main run nothing when a merge_group run of ci.yml already passed on that very commit (the
+# queue merges what it tested as-is), and otherwise everything except the jobs marked
+# `push: false`, which run on pull requests, merge groups and manual runs only.
+# `version_bumps: true` runs a job when a change only bumps a version number, which otherwise
+# counts as no change.
 #
 # For each job: `inputs` are the files it reads (a change elsewhere skips it), `imports_from`
 # are entry files whose static imports (followed through the repo) count as inputs too,
@@ -716,7 +721,11 @@ jobs:
       test/jev-ci.test.ts: the CI planner in .github/jev-ci, which plans synthetic changes
       against the real .github/jev-ci.yml and .github/workflows/ci.yml in a scratch git repo,
       following imports into workspace packages (@kiwi/core) by name, and trusts a pass marker only
-      from main or the pull request's own runs, never a fork's. And
+      from main, the merge queue's gh-readonly-queue/main/ refs or the pull request's own runs,
+      never a fork's; a merge group is planned on its combined base..head change, a group event
+      without a base_sha and head_sha fails the plan (so everything runs), a push to main runs
+      nothing only when a successful merge_group run of ci.yml has that very sha, and ci.yml
+      runs on merge_group with a concurrency group per merge group (T2034). And
       test/core-package.test.ts: packages/core imports nothing outside itself but effect/*,
       node: builtins only under packages/core/src/node, no Node or Bun globals elsewhere in it,
       web/src never imports @kiwi/core/node/, and nothing reaches packages/core by a relative

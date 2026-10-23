@@ -108,6 +108,9 @@ function runEvery(config: Config, reason: string, hashes: Record<string, string>
 
 export const runAll = (config: Config, reason: string, hashes: Record<string, string> = {}, event?: string): Plan => withParts(config, runEvery(config, reason, hashes, event));
 
+export const skipAll = (config: Config, reason: string, hashes: Record<string, string> = {}): Plan =>
+  withParts(config, { ...empty(hashes), decisions: Object.keys(config.jobs).map((job) => ({ job, run: false, layer: "L0" as const, reason })) });
+
 function withParts(config: Config, p: Plan): Plan {
   const decisions = p.decisions.flatMap((d) => [
     d,

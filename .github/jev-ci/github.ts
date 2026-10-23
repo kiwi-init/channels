@@ -23,14 +23,44 @@ export interface PassCache {
 export interface PullEvent {
   repository?: { default_branch?: string };
   pull_request?: { number: number; base?: { repo?: { full_name?: string } | null }; head?: { repo?: { full_name?: string } | null } };
+  merge_group?: { base_sha?: string; head_sha?: string; head_ref?: string };
+}
+
+export interface QueueRun {
+  id: number;
+  event: string;
+  path: string;
+  head_sha: string;
+  conclusion: string | null;
+}
+
+const SHA = /^[0-9a-f]{40}$/;
+
+export function mergeGroupRange(event: PullEvent): { base: string; head: string } {
+  const base = event.merge_group?.base_sha;
+  const head = event.merge_group?.head_sha;
+  if (!base || !head || !SHA.test(base) || !SHA.test(head)) throw new Error("the merge_group event names no base_sha and head_sha");
+  return { base, head };
+}
+
+export function testedByQueue(runs: readonly QueueRun[], sha: string, workflow: string): number | null {
+  return runs.find((r) => r.event === "merge_group" && r.path === workflow && r.head_sha === sha && r.conclusion === "success")?.id ?? null;
+}
+
+export async function queueRuns(repo: string, sha: string): Promise<QueueRun[]> {
+  const res = await api(`/repos/${repo}/actions/runs?event=merge_group&head_sha=${sha}&status=success&per_page=50`);
+  if (!res.ok) throw new Error(`listing merge queue runs: ${res.status}`);
+  return ((await res.json()) as { workflow_runs: QueueRun[] }).workflow_runs;
 }
 
 export function trustedRef(event: PullEvent, ref: string | undefined): (cacheRef: string) => boolean {
-  const main = `refs/heads/${event.repository?.default_branch || "main"}`;
+  const branch = event.repository?.default_branch || "main";
+  const main = `refs/heads/${branch}`;
+  const queue = `refs/heads/gh-readonly-queue/${branch}/`;
   const pr = event.pull_request;
   const head = pr?.head?.repo?.full_name;
   const own = pr && ref && head && head === pr.base?.repo?.full_name ? ref : null;
-  return (cacheRef) => cacheRef === main || cacheRef === own;
+  return (cacheRef) => cacheRef === main || cacheRef.startsWith(queue) || cacheRef === own;
 }
 
 export function passMarkers(caches: readonly PassCache[], jobs: readonly string[], trusted: (ref: string) => boolean): Set<string> {
