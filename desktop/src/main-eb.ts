@@ -11,9 +11,11 @@ import { handleDeepLink, JOIN_SCHEME } from "./deep-links.ts";
 import { committedUrl, lockInternalRpc, preloadSource, stillOurs, toPageScript } from "./eb-bridge.ts";
 import { navigationUrl, openedUrl, PAGE_RULES, PAGE_URL, pageWithCsp } from "./eb-page.ts";
 import { externalUrl } from "./guard.ts";
-import { attachWindow, ebHost } from "./host-eb.ts";
+import { attachKeys, attachWindow, ebHost } from "./host-eb.ts";
 import { useHost } from "./host.ts";
 import { handlers } from "./ipc/handlers.ts";
+import { bunWorker, keysController, type KeysFrame } from "./keys-eb.ts";
+import { answerKeys } from "./keys-host.ts";
 import { logMainError } from "./main-log.ts";
 import { openInBrowser } from "./open.ts";
 import { claimInstance, handoffFor, type Instance } from "./single-instance.ts";
@@ -55,6 +57,15 @@ function openOutside(url: string): void {
   if (ext) void openInBrowser(ext, (u) => ebHost.openExternal(u)).catch(() => {});
 }
 
+let keysToPage: (frame: KeysFrame) => void = () => {};
+
+const keys = keysController({
+  spawn: () => bunWorker(path.join(import.meta.dir, "keys.js")),
+  init: () => ({ type: "init", relay: store.relayUrl, dir: Utils.paths.userData, seats: store.channels, person: store.person?.pk ?? null }),
+  answer: answerKeys,
+  toPage: (frame) => keysToPage(frame),
+});
+
 function createWindow(): BrowserWindow {
   const index = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "internal", "index.html"), "utf8");
   const bundled = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "preload", "index.js"), "utf8");
@@ -65,8 +76,13 @@ function createWindow(): BrowserWindow {
     table,
     () => ours,
     (frame) => view?.executeJavascript(toPageScript(frame)),
-    () => bridge.push("store", snapshot()),
+    () => {
+      keys.pageGone();
+      bridge.push("store", snapshot());
+    },
+    (session, req) => keys.request(session, req),
   );
+  keysToPage = (frame) => bridge.pushKeys(frame);
   const win = new BrowserWindow({
     title: "Channels",
     url: null,
@@ -116,6 +132,8 @@ function createWindow(): BrowserWindow {
 async function start(instance: Extract<Instance, { kind: "first" }>): Promise<void> {
   const opened = await openEbStore({ dir: Utils.paths.userData, keys: launcherKeys });
   openStore(v2Vault(opened));
+  attachKeys((m) => keys.tell(m));
+  keys.start();
   const win = createWindow();
   startAppLife({
     win,
@@ -126,7 +144,7 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
     restartToUpdate: () => ebHost.restartToUpdate(),
     update: updateState,
     nudgeKeys: () => ebHost.tellKeys({ type: "nudge" }),
-    flushKeys: async () => {},
+    flushKeys: () => keys.flush(),
     release: instance.release,
   });
   const broken = brokenStore();

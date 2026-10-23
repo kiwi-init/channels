@@ -1,11 +1,9 @@
 import path from "node:path";
 import { app, MessageChannelMain, utilityProcess } from "electron";
 
-import type { PersonClaim } from "@kiwi/core/person.ts";
-import { acceptSeat, claimFor, withAccess } from "./guard.ts";
+import { answerKeys } from "./keys-host.ts";
 import type { HostToKeys, KeysToHost } from "./keys-server.ts";
-import { tokenForRelay } from "./github-flow.ts";
-import { mutate, requirePerson, store } from "./store.ts";
+import { store } from "./store.ts";
 import { currentWindow, isQuitting } from "./window.ts";
 
 let keys: Electron.UtilityProcess | null = null;
@@ -64,29 +62,7 @@ function onKeys(child: Electron.UtilityProcess, m: KeysToHost): void {
     keysFlushed?.();
     return;
   }
-  const done = (extra: { error?: string; claim?: PersonClaim | null; token?: string | null } = {}) => {
+  answerKeys(m, (extra = {}) => {
     if (keys === child) child.postMessage({ type: "done", id: m.id, ...extra } satisfies HostToKeys);
-  };
-  const fail = (e: unknown) => done({ error: e instanceof Error ? e.message : String(e) });
-  try {
-    switch (m.type) {
-      case "save":
-        mutate((s) => (s.channels = acceptSeat(s.channels, m.entry)));
-        return done();
-      case "access":
-        mutate((s) => (s.channels = withAccess(s.channels, m.code, m.pk, m.access)));
-        return done();
-      case "forget":
-        mutate((s) => (s.channels = s.channels.filter((c) => c.code !== m.code)));
-        return done();
-      case "githubToken":
-        return void tokenForRelay(store.relayUrl, store.github).then((token) => done({ token }), fail);
-      case "prove":
-        if (!store.person) return done({ claim: null });
-        void claimFor(requirePerson(), m.code, m.memberPk).then((claim) => done({ claim }), fail);
-        return;
-    }
-  } catch (e) {
-    fail(e);
-  }
+  });
 }
