@@ -4,7 +4,7 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 
-import { openRows as openSealedRows, packRow, packEnvelope, type CachedRow, type Unread } from "@kiwi/core/cache-row.ts";
+import { openKept as openSealedKept, openRows as openSealedRows, packKept, packRow, packEnvelope, type CachedKept, type CachedRow, type Unread } from "@kiwi/core/cache-row.ts";
 import { Channel, ChannelGone, RelayError, Relay, Unreachable, eachLive, fetchRelay, type Live, type PresenceFields } from "@kiwi/core/client.ts";
 import { encodeJoinCode, keepSeen, newRoomId, ownerFingerprint, type ChannelAccess } from "@kiwi/core/crypto.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
@@ -253,6 +253,17 @@ export class Keyring implements ChannelOps {
     const access = channelAccess(this.seat(code, true));
     if (!access) return rows.map(() => null);
     return openSealedRows(rows, access.roomId, access.keys);
+  }
+
+  async keep(code: string, state: object): Promise<CachedKept | null> {
+    const access = channelAccess(this.seat(code, true));
+    const key = access?.keys[String(access.epoch)];
+    return access && key ? packKept(key, access.roomId, access.epoch, state) : null;
+  }
+
+  async openKept(code: string, sealed: unknown): Promise<unknown> {
+    const access = channelAccess(this.seat(code, true));
+    return access ? openSealedKept(sealed, access.roomId, access.keys) : null;
   }
 
   follow(code: string, since: number, on: (e: FollowEvent) => void, opts: FollowOptions = {}): () => void {

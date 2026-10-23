@@ -12,11 +12,11 @@
 // page loads the usual window. The cache does not fill a gap or sort ahead of
 // the relay. See history-plan.ts.
 
-import type { CachedRow, Unread } from "@kiwi/core/cache-row.ts"
+import type { CachedKept, CachedRow, Unread } from "@kiwi/core/cache-row.ts"
 import type { Message } from "@kiwi/core/protocol.ts"
 import { planReload } from "./history-plan"
 
-export type { CachedRow }
+export type { CachedKept, CachedRow }
 export type OpenRows = (rows: CachedRow[]) => Promise<(Message | Unread | null)[]>
 
 export interface HistoryDb {
@@ -29,10 +29,13 @@ export interface HistoryDb {
   trimAbove(roomId: string, memberPk: string, newestKept: number): Promise<void>
   drop(roomId: string, memberPk: string): Promise<void>
   dropAll(): Promise<void>
+  putKept(roomId: string, memberPk: string, kept: CachedKept): Promise<void>
+  kept(roomId: string, memberPk: string): Promise<CachedKept | null>
 }
 
 const DB = "mc.history"
 const STORE = "rows"
+const KEPT = "kept"
 
 function range(roomId: string, memberPk: string, hi: number, hiOpen: boolean): IDBKeyRange {
   return IDBKeyRange.bound([roomId, memberPk, 0], [roomId, memberPk, hi], false, hiOpen)
@@ -47,10 +50,11 @@ function idb(): HistoryDb {
   let open: Promise<IDBDatabase> | null = null
   const openDb = (): Promise<IDBDatabase> =>
     (open ??= new Promise<IDBDatabase>((resolve, reject) => {
-      const req = indexedDB.open(DB, 1)
+      const req = indexedDB.open(DB, 2)
       req.onupgradeneeded = () => {
         const db = req.result
         if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE)
+        if (!db.objectStoreNames.contains(KEPT)) db.createObjectStore(KEPT)
       }
       req.onsuccess = () => {
         const db = req.result
@@ -69,24 +73,24 @@ function idb(): HistoryDb {
       }
     }))
 
-  const once = async <T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T> | void): Promise<T> => {
+  const once = async <T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T> | void, name: string = STORE): Promise<T> => {
     const db = await openDb()
     return new Promise<T>((resolve, reject) => {
-      const tx = db.transaction(STORE, mode)
-      const out = fn(tx.objectStore(STORE))
+      const tx = db.transaction(name, mode)
+      const out = fn(tx.objectStore(name))
       tx.oncomplete = () => resolve((out && "result" in out ? out.result : undefined) as T)
       tx.onerror = () => reject(tx.error)
       tx.onabort = () => reject(tx.error)
     })
   }
-  const run = async <T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T> | void): Promise<T> => {
+  const run = async <T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T> | void, name: string = STORE): Promise<T> => {
     try {
-      return await once(mode, fn)
+      return await once(mode, fn, name)
     } catch (err) {
       if (!(err instanceof DOMException && err.name === "InvalidStateError")) throw err
       // The kept connection closed under us (another tab upgraded or the browser closed it): open a fresh one, once.
       open = null
-      return once(mode, fn)
+      return once(mode, fn, name)
     }
   }
 
@@ -100,8 +104,16 @@ function idb(): HistoryDb {
     rows: (roomId, memberPk) => run<CachedRow[]>("readonly", (s) => s.getAll(range(roomId, memberPk, Number.MAX_SAFE_INTEGER, false))),
     trimBelow: (roomId, memberPk, oldestKept) => run<void>("readwrite", (s) => void s.delete(range(roomId, memberPk, oldestKept, true))),
     trimAbove: (roomId, memberPk, newestKept) => run<void>("readwrite", (s) => void s.delete(rangeAbove(roomId, memberPk, newestKept))),
-    drop: (roomId, memberPk) => run<void>("readwrite", (s) => void s.delete(range(roomId, memberPk, Number.MAX_SAFE_INTEGER, false))),
-    dropAll: () => run<void>("readwrite", (s) => void s.clear()),
+    drop: async (roomId, memberPk) => {
+      await run<void>("readwrite", (s) => void s.delete(range(roomId, memberPk, Number.MAX_SAFE_INTEGER, false)))
+      await run<void>("readwrite", (s) => void s.delete([roomId, memberPk]), KEPT)
+    },
+    dropAll: async () => {
+      await run<void>("readwrite", (s) => void s.clear())
+      await run<void>("readwrite", (s) => void s.clear(), KEPT)
+    },
+    putKept: (roomId, memberPk, kept) => run<void>("readwrite", (s) => void s.put(kept, [roomId, memberPk]), KEPT),
+    kept: async (roomId, memberPk) => (await run<CachedKept | undefined>("readonly", (s) => s.get([roomId, memberPk]), KEPT)) ?? null,
   }
 }
 
@@ -175,6 +187,14 @@ export async function planCached(
   const keep = new Set(plan.keep)
   const kept = opened.filter((m) => keep.has(m.seq)).sort((a, b) => a.seq - b.seq)
   return { messages: kept.filter((m): m is Message => !("unread" in m)), unread: kept.filter((m) => "unread" in m).map((m) => m.seq), firstSeq: kept[0]?.seq, since: plan.since }
+}
+
+export async function rememberKept(roomId: string, memberPk: string, kept: CachedKept): Promise<void> {
+  await db().putKept(roomId, memberPk, kept)
+}
+
+export async function readKept(roomId: string, memberPk: string): Promise<CachedKept | null> {
+  return db().kept(roomId, memberPk)
 }
 
 export async function forgetHistory(roomId: string, memberPk: string): Promise<void> {

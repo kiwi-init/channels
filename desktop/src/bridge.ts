@@ -4,7 +4,7 @@
 
 import type { HarnessRow, KnownHarness } from "@kiwi/core/harnesses.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
-import type { CachedRow, Unread } from "@kiwi/core/cache-row.ts";
+import type { CachedKept, CachedRow, Unread } from "@kiwi/core/cache-row.ts";
 import type { Channel, OpenKind, PresenceFields } from "@kiwi/core/client.ts";
 import type { MemberPicture, Message, Presence, ReadMark } from "@kiwi/core/protocol.ts";
 import type { LaunchedView, PlacedSeat, ShowResult, TerminalId, TerminalsStatus } from "@kiwi/core/terminals.ts";
@@ -139,6 +139,8 @@ export interface ChannelOps {
   forget(code: string): Promise<void>;
   presence(code: string, p: PresenceFields): Promise<void>;
   openRows(code: string, rows: CachedRow[]): Promise<(Message | Unread | null)[]>;
+  keep(code: string, state: object): Promise<CachedKept | null>;
+  openKept(code: string, sealed: CachedKept): Promise<unknown>;
   follow(code: string, since: number, on: (e: FollowEvent) => void, opts?: FollowOptions): () => void;
   nudge(): void;
 }
@@ -161,6 +163,8 @@ export type KeysAsk =
   | { op: "forget"; code: string }
   | { op: "presence"; code: string; p: Wire }
   | { op: "openRows"; code: string; rows: Wire }
+  | { op: "keep"; code: string; state: Wire }
+  | { op: "openKept"; code: string; sealed: Wire }
   | { op: "follow"; code: string; since: number; watch?: boolean }
   | { op: "unfollow"; sub: number }
   | { op: "nudge" };
