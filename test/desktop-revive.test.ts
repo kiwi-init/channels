@@ -3,14 +3,17 @@ import { EventEmitter } from "node:events";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { useHost } from "../desktop/src/host.ts";
+import { fakeHost } from "./fake-host.ts";
 
 const logs = mkdtempSync(join(tmpdir(), "kiwi-revive-"));
 afterAll(() => rmSync(logs, { recursive: true, force: true }));
+useHost(fakeHost({ paths: { logs } }).host);
 let answer = 1;
 const asked: string[] = [];
 let quits = 0;
 mock.module("electron", () => ({
-  app: { getPath: () => logs, quit: () => void quits++ },
+  app: { quit: () => void quits++ },
   dialog: {
     showMessageBox: async (_w: unknown, o: { message: string }) => {
       asked.push(o.message);

@@ -1,35 +1,16 @@
-import { afterAll, describe, expect, mock, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { describe, expect, test } from "bun:test";
 import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts";
-import type { KeysPort, StoreSnapshot } from "../desktop/src/bridge.ts";
+import type { KeysPort, KiwiBridge, StoreSnapshot } from "../desktop/src/bridge.ts";
 import { makeBridge, type BridgeTransport, type Call, type CallArgs, type CallValue, type Handlers, type Push, type Pushes } from "../desktop/src/calls.ts";
-import type { Host } from "../desktop/src/host.ts";
-import type { HostToKeys } from "../desktop/src/keys-server.ts";
+import { useHost } from "../desktop/src/host.ts";
+import { handlers } from "../desktop/src/ipc/handlers.ts";
+import { openStore, store, type StoreFile } from "../desktop/src/store.ts";
+import { fakeHost } from "./fake-host.ts";
 
-const data = mkdtempSync(join(tmpdir(), "kiwi-calls-"));
-afterAll(() => rmSync(data, { recursive: true, force: true }));
-
-mock.module("electron", () => ({
-  app: { isPackaged: false, getVersion: () => "0.26.0", getPath: () => data, getAppPath: () => data, isReady: () => false, on: () => {} },
-  safeStorage: { isEncryptionAvailable: () => false },
-  dialog: {},
-  shell: {},
-  protocol: {},
-  nativeTheme: {},
-  nativeImage: {},
-  Menu: {},
-  Tray: class {},
-  BrowserWindow: class {},
-  MessageChannelMain: class {},
-  utilityProcess: {},
-}));
-
-const handlersPath = "../desktop/src/ipc/handlers.ts";
-const storePath = "../desktop/src/store.ts";
-const { handlers } = (await import(handlersPath)) as typeof import("../desktop/src/ipc/handlers.ts");
-const { store } = (await import(storePath)) as typeof import("../desktop/src/store.ts");
+const shell = fakeHost();
+useHost(shell.host);
+const saved: StoreFile[] = [];
+openStore({ where: () => "memory", load: () => ({ ok: true, file: null, resave: false }), save: (file) => void saved.push(structuredClone(file)) });
 
 const snapshot: StoreSnapshot = { relayUrl: "https://relay.example", person: null, channels: [], computers: [], phones: [], pending: [], personalities: [] };
 const channels: KeysPort = { request: () => new Promise(() => {}), onPush: () => () => {}, onRestart: () => () => {} };
@@ -63,21 +44,6 @@ function inProcess(table: Handlers): BridgeTransport["call"] {
   };
 }
 
-function fakeHost(): { host: Host; did: string[]; told: HostToKeys[] } {
-  const did: string[] = [];
-  const told: HostToKeys[] = [];
-  const host: Host = {
-    push: (name) => void did.push(`push ${name}`),
-    openExternal: async (url) => void did.push(`open ${url}`),
-    pickFolder: async () => "/Users/someone/app",
-    notify: (title, body) => void did.push(`notify ${title}: ${body}`),
-    reload: () => void did.push("reload"),
-    restartToUpdate: () => void did.push("restart"),
-    tellKeys: (m) => void told.push(m),
-  };
-  return { host, did, told };
-}
-
 describe("window.kiwi on any transport", () => {
   test("every call goes out under its own name with its arguments, and main has exactly one handler for each", async () => {
     const seen: { name: Call; args: unknown[] }[] = [];
@@ -90,17 +56,17 @@ describe("window.kiwi on any transport", () => {
         return Promise.reject(new Error(name));
       },
     });
-    const called: string[] = [];
-    for (const [key, value] of Object.entries(bridge)) {
-      if (typeof value !== "function" || key === "getSnapshot" || /^on[A-Z]/.test(key)) continue;
-      const out: unknown = Reflect.apply(value, bridge, [`${key} 1`, `${key} 2`]);
-      await expect(out).rejects.toThrow(key);
-      called.push(key);
+    const isCall = (key: keyof KiwiBridge): key is Call => typeof bridge[key] === "function" && key !== "getSnapshot" && !/^on[A-Z]/.test(key);
+    const called: Call[] = [];
+    for (const name of (Object.keys(bridge) as (keyof KiwiBridge)[]).filter(isCall)) {
+      const out: unknown = Reflect.apply(bridge[name], bridge, [`${name} 1`, `${name} 2`]);
+      await expect(out).rejects.toThrow(name);
+      called.push(name);
     }
-    expect(seen.map((s) => s.name)).toEqual(called as Call[]);
+    expect(seen.map((s) => s.name)).toEqual(called);
     for (const s of seen) for (const arg of s.args) expect(String(arg).startsWith(`${s.name} `)).toBe(true);
     expect(seen.find((s) => s.name === "foldersOn")?.args).toEqual(["foldersOn 1", "foldersOn 2"]);
-    expect([...called].sort()).toEqual(Object.keys(handlers(fakeHost().host)).sort());
+    expect(Object.keys(handlers(shell.host)).sort()).toEqual([...called].sort());
   });
 
   test("each on* hears its own push, stops when unsubscribed, and getSnapshot follows store pushes", () => {
@@ -131,7 +97,7 @@ describe("window.kiwi on any transport", () => {
 });
 
 describe("main's handlers reach the shell only through the host", () => {
-  const { host, did, told } = fakeHost();
+  const { host, did, told } = shell;
   const bus = pushes();
   const bridge = makeBridge({ snapshot, channels, listen: bus.listen, call: inProcess(handlers(host)) });
 
@@ -153,7 +119,15 @@ describe("main's handlers reach the shell only through the host", () => {
     await expect(bridge.setRelayUrl("ftp://relay.example")).rejects.toThrow("that isn't a relay URL");
     expect({ did, told, relay: store.relayUrl }).toEqual({ did: [], told: [], relay: DEFAULT_RELAY });
     expect(await bridge.setRelayUrl("https://relay.example/")).toBe("https://relay.example");
-    expect({ did, told, relay: store.relayUrl }).toEqual({ did: ["reload"], told: [{ type: "relay", relay: "https://relay.example" }], relay: "https://relay.example" });
+    expect({ did, told, relay: store.relayUrl }).toEqual({
+      did: ["push store", "reload"],
+      told: [
+        { type: "seats", seats: [], person: null },
+        { type: "relay", relay: "https://relay.example" },
+      ],
+      relay: "https://relay.example",
+    });
+    expect(saved.at(-1)?.relayUrl).toBe("https://relay.example");
   });
 
   test("a bad argument is refused under the call's name before anything runs", async () => {

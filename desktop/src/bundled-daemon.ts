@@ -1,21 +1,20 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { app } from "electron";
-
 import { certifyMachine } from "@kiwi/core/person.ts";
 import type { ComputerView } from "./bridge.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
 import { ensureOnPath, keepCli, place } from "./cli.ts";
 import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, noteDaemon, spawnDaemon, type HelloResult } from "./daemon-client.ts";
 import { keepAlive } from "./daemon-keeper.ts";
+import { host } from "./host.ts";
 import { requirePerson, store, upsertComputer } from "./store.ts";
 
 function bundledKiwi(): string {
   const exe = process.platform === "win32" ? "kiwi.exe" : "kiwi";
   for (const name of [`${exe}.zst`, exe]) {
-    const fromPkg = path.join(process.resourcesPath, name);
-    if (app.isPackaged && fs.existsSync(fromPkg)) return fromPkg;
+    const fromPkg = path.join(host().app.path("resources"), name);
+    if (host().app.packaged() && fs.existsSync(fromPkg)) return fromPkg;
   }
   const fromRepo = path.join(__dirname, "..", "..", "dist", exe);
   if (fs.existsSync(fromRepo)) return fromRepo;
@@ -25,8 +24,8 @@ function bundledKiwi(): string {
 async function runnableKiwi(): Promise<string> {
   const bundled = bundledKiwi();
   if (!bundled.endsWith(".zst")) return bundled;
-  const dir = path.join(app.getPath("userData"), "bin");
-  const name = `kiwi-${app.getVersion()}`;
+  const dir = path.join(host().app.path("data"), "bin");
+  const name = `kiwi-${host().app.version()}`;
   const unpacked = path.join(dir, name);
   if (fs.existsSync(unpacked)) return unpacked;
   await place(bundled, unpacked);
@@ -72,15 +71,15 @@ export async function adoptDaemon(): Promise<ComputerView> {
 }
 
 export async function installCli(): Promise<{ path: string }> {
-  kiwiBin = await keepCli(bundledKiwi(), app.getVersion());
+  kiwiBin = await keepCli(bundledKiwi(), host().app.version());
   ensureOnPath();
   return { path: kiwiBin.path };
 }
 
 export async function keepDaemon(stopped: () => boolean): Promise<void> {
-  if (app.isPackaged) {
+  if (host().app.packaged()) {
     try {
-      kiwiBin = await keepCli(bundledKiwi(), app.getVersion());
+      kiwiBin = await keepCli(bundledKiwi(), host().app.version());
       ensureOnPath();
     } catch {
       // The daemon still runs from the app's own copy below.
