@@ -1,5 +1,7 @@
 import fs from "node:fs";
 
+import { dlopen, FFIType, ptr } from "bun:ffi";
+
 import { legacyPassword } from "./legacy-keys.ts";
 import type { LegacyPassword } from "./legacy-store.ts";
 import { keychainKey, type StoreKey } from "./store-v2.ts";
@@ -7,6 +9,19 @@ import { keychainKey, type StoreKey } from "./store-v2.ts";
 export const KEY_FD_ENV = "KIWI_KEY_FD";
 
 const MAX_LINE = 4096;
+
+const O_CLOEXEC = process.platform === "darwin" ? 0x01000000 : 0o2000000;
+
+const LIBC = process.platform === "darwin" ? "/usr/lib/libSystem.B.dylib" : "libc.so.6";
+
+function unsetenv(name: string): void {
+  const libc = dlopen(LIBC, { unsetenv: { args: [FFIType.ptr], returns: FFIType.i32 } });
+  try {
+    libc.symbols.unsetenv(ptr(Buffer.from(`${name}\0`, "utf8")));
+  } finally {
+    libc.close();
+  }
+}
 
 export interface LineChannel {
   request(line: string): string;
@@ -21,7 +36,9 @@ export interface KeySources {
 
 type Answer = { kind: "key"; value: string } | { kind: "none" } | { kind: "ok" };
 
-function fdChannel(fd: number): LineChannel {
+function fdChannel(inherited: number): LineChannel {
+  const fd = fs.openSync(`/dev/fd/${inherited}`, fs.constants.O_RDWR | O_CLOEXEC);
+  fs.closeSync(inherited);
   let pending = "";
   let open = true;
   const chunk = Buffer.alloc(MAX_LINE);
@@ -92,16 +109,31 @@ export const launcherLegacyPassword =
   async (name) =>
     keyOrNone(ch.request(`legacy ${name}`));
 
-export function launcherChannel(env: NodeJS.ProcessEnv = process.env): LineChannel | null {
+export function keyFd(env: NodeJS.ProcessEnv): number | null {
   const raw = env[KEY_FD_ENV];
   if (raw === undefined) return null;
   if (!/^(?:[3-9]|[1-9]\d{1,3})$/.test(raw)) throw new Error(`${KEY_FD_ENV} isn't a file descriptor: ${JSON.stringify(raw)}`);
-  return fdChannel(Number(raw));
+  return Number(raw);
+}
+
+export function launcherChannel(env: NodeJS.ProcessEnv = process.env): LineChannel | null {
+  const fd = keyFd(env);
+  Reflect.deleteProperty(env, KEY_FD_ENV);
+  if (env === process.env) unsetenv(KEY_FD_ENV);
+  return fd === null ? null : fdChannel(fd);
+}
+
+export function endSession(ch: LineChannel): void {
+  try {
+    parseAnswer(ch.request("done"));
+  } finally {
+    ch.close();
+  }
 }
 
 export function keySources(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env): KeySources {
   if (platform !== "darwin") return { key: keychainKey(), legacy: legacyPassword(platform), done: () => {} };
   const ch = launcherChannel(env);
   if (!ch) throw new Error("on a Mac, Channels gets its store key only from its signed launcher, and it wasn't started by it");
-  return { key: launcherKey(ch), legacy: launcherLegacyPassword(ch), done: () => ch.close() };
+  return { key: launcherKey(ch), legacy: launcherLegacyPassword(ch), done: () => endSession(ch) };
 }

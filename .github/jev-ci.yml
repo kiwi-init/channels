@@ -1065,14 +1065,27 @@ jobs:
       launcher from / with posix_spawn and CLOEXEC_DEFAULT, so only stdio and a socketpair on fd 3
       (KIWI_KEY_FD=3) get through, and answers bun's requests there (desktop/src/launcher-key.ts):
       the store key from the Keychain under the bundle id, made only when none is there and never
-      replaced, and the old Electron app's key for a name in Info.plist's KiwiLegacyNames only.
+      replaced, and the old Electron app's key for a name in Info.plist's KiwiLegacyNames only, for
+      one session: bun's done (or the end of the socket) shuts it, so Electrobun's launcher's copy of
+      fd 3 gets nothing after. bun copies the channel off fd 3 onto a descriptor opened O_CLOEXEC and
+      closes fd 3 at once, and drops KIWI_KEY_FD from process.env and the C environment (unsetenv),
+      so nothing the app starts inherits either (T873).
       desktop/scripts/eb-keys-check.ts takes a copy of the plain .app with a probe
       (scripts/eb-keys-probe.ts) as main.js, a throwaway bundle id and a throwaway legacy item,
-      resealed, and fails unless a descriptor the launcher inherited never reaches bun, the first
+      resealed, and fails unless a descriptor the launcher inherited never reaches bun, bun has no
+      fd 3 and no KIWI_KEY_FD once it holds the channel, its copy of the channel is close-on-exec
+      (fcntl F_GETFD) and a child started through libc system() while the channel is open gets no
+      socket and no KIWI_KEY_FD, another copy of the socket gets nothing after done, a child started
+      afterwards gets no socket and no KIWI_KEY_FD, the first
       start makes a key through the launcher and the next gets the same one, a second key is refused, the legacy key comes through while an
       unlisted name and an unknown request are refused, and copies with a changed main.js, a
       bunfig.toml beside bun, an app.asar, a link or a missing file all stop before bun runs, and
-      unless the launcher's check of the whole app takes 500 ms or less (median of 7); on CI it uses
+      unless the launcher's check of the whole app takes 500 ms or less (median of 7), and unless,
+      built with -fsanitize=address,undefined -fno-sanitize-recover=all into a throwaway sealed
+      bundle, native/macos/kiwi-keys-test.c's parser cases (malformed, truncated, oversized, unknown,
+      a NUL inside, done ending the session, many requests in one write, and 1500 seeded random
+      sessions), the seal check on a sealed and on a changed app, and the launcher itself all run
+      with no sanitizer report; on CI it uses
       a temporary keychain, and it deletes its items either way. eb-env-check runs the launcher
       inside a small sealed bundle and expects KIWI_KEY_FD as the one name it adds.
 
