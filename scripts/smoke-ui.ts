@@ -315,6 +315,26 @@ async function run(part: Part): Promise<string[]> {
     await page.getByRole("button", { name: "Close thread" }).waitFor();
     await page.getByRole("button", { name: "Close thread" }).click();
     log("ok  Thread panel");
+    at = "a reply right after two sends keeps its quote: an earlier send's late answer doesn't clear the reply, and a reply to a message still sending waits for its seq";
+    await page.getByRole("complementary", { name: "Thread" }).waitFor({ state: "detached" });
+    for (let i = 1; i <= 3; i++) {
+      await send(`ping ${i}`);
+      await send(`pong ${i}`);
+      await page
+        .locator("[id^='m']")
+        .filter({ hasText: `ping ${i}` })
+        .last()
+        .locator("button[aria-label='Reply']")
+        .dispatchEvent("click");
+      await page.getByPlaceholder(/^Reply to /).waitFor();
+      await send(`answer ${i}`);
+      await page
+        .locator("[id^='m']:not([id^='m-'])")
+        .filter({ hasText: `answer ${i}` })
+        .getByRole("button", { name: new RegExp(`^Replying to .+: ping ${i}$`) })
+        .waitFor({ timeout: 15000 });
+    }
+    log(`ok  ${at}`);
     at = "Details → Close channel…: the log downloads first, every message signed, and Cancel keeps the channel";
     await inDetails(() => panel.getByRole("button", { name: /^Close channel/ }).click());
     const closing = page.getByRole("dialog", { name: "Close this channel for everyone?" });
@@ -382,6 +402,12 @@ async function run(part: Part): Promise<string[]> {
     if (!(Number(since) > 0)) throw new Error(`reload streamed since ${since}; expected only newer seqs`);
     await account.waitFor();
     log(`ok  reload fetches only what is new (since ${since})`);
+
+    at = "the app opened with no channel in its address reopens the one that was open";
+    await page.goto(new URL("/", BASE).href);
+    await page.getByText("smoke test", { exact: true }).first().waitFor({ timeout: 15000 });
+    if (await page.getByRole("heading", { name: "Nothing open" }).count()) throw new Error("the app showed Nothing open instead of the channel that was open");
+    log(`ok  ${at}`);
   };
 
   const agents = async () => {

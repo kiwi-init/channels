@@ -43,7 +43,8 @@ interface Props {
   more?: number
   onAnswer?: (m: Message, text: string) => Promise<boolean>
   nameOf: (name: string) => string
-  onClearReply: () => void
+  onClearReply: (answered?: Message) => void
+  onRestoreReply?: (answering: Message) => void
   disabled: boolean
   send: (body: string, opts: SendOptions) => Promise<number>
   /** In a thread: every message answers replyTo (the root), and there's no reply bar to cancel. */
@@ -63,7 +64,25 @@ function recipients(body: string, names: Set<string>): string[] {
   return [...lead.matchAll(/@([\p{L}\p{N}_.-]+)/gu)].map((m) => m[1]!).filter((n) => names.has(n))
 }
 
-export function Composer({ me, people, replyTo, asking, commands = [], more = 0, onAnswer, nameOf, onClearReply, disabled, send, thread, extra, placeholder, footer, draftKey }: Props) {
+export function Composer({
+  me,
+  people,
+  replyTo,
+  asking,
+  commands = [],
+  more = 0,
+  onAnswer,
+  nameOf,
+  onClearReply,
+  onRestoreReply,
+  disabled,
+  send,
+  thread,
+  extra,
+  placeholder,
+  footer,
+  draftKey,
+}: Props) {
   const [body, setBody] = useState(() => draftOf(draftKey)?.body ?? "")
   const [files, setFiles] = useState<DraftFile[]>(() => draftOf(draftKey)?.files ?? [])
   useEffect(() => keepDraft(draftKey, { body, files }), [draftKey, body, files])
@@ -196,6 +215,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
       return
     }
     const typed = { body, files }
+    const target = replyTo
     const text = withHandles(body.trim(), others) || files.map((f) => f.name).join(", ")
     const named = recipients(text, names)
     const answering = answered(asking, named, !!replyTo || !!thread)
@@ -203,23 +223,24 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
     keepDraft(draftKey, { body: "", files: [] })
     setBody("")
     setFiles([])
+    if (!thread && target) onClearReply(target)
     try {
       await send(text, {
         to,
         // A person's message is just a message: a question needs no menu to be one.
         kind: "msg",
-        re: replyTo ? [replyTo.seq] : answering ? [answering.seq] : undefined,
+        re: target ? [target.seq] : answering ? [answering.seq] : undefined,
         ...(extra?.task !== undefined ? { task: extra.task } : {}),
         // A direct thread's message is to the other one only: an @ or a reply can't widen it.
         ...(extra?.dm ? { to: extra.to, dm: true } : {}),
         imgs: typed.files.length ? typed.files : undefined,
       })
-      if (!thread) onClearReply()
     } catch (err) {
       if (!area.current?.value) {
         keepDraft(draftKey, typed)
         setBody(typed.body)
         setFiles((now) => (now.length ? now : typed.files))
+        if (!thread && target) onRestoreReply?.(target)
       }
       toast(`Not sent: ${errorText(err)}`, "error")
     } finally {
@@ -267,7 +288,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
           <button
             type="button"
             aria-label="Cancel reply"
-            onClick={onClearReply}
+            onClick={() => onClearReply()}
             className="ml-auto flex size-6 shrink-0 items-center justify-center rounded-full text-ink-3 hover:bg-wash-2 hover:text-ink"
           >
             <Icon icon={Cancel01Icon} size={12} />

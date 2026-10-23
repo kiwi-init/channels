@@ -56,11 +56,24 @@ struct Row: Identifiable {
     let qualifier: String?
     let unread: Bool
     let asks: [AskView]
+    let reviews: [ReviewView]
     let draft: Draft?
 
     var id: String { spot.id }
-    var last: MessageView? { place?.last }
+    var last: MessageView? { kind == .group ? room.latest ?? place?.last : place?.last }
     var lastAt: Double { last?.at ?? 0 }
+    var needs: Int { asks.count + reviews.count }
+
+    var need: String? {
+        let words = asks.first?.body ?? reviews.first.map { "\(taskLabel($0.task)) \($0.title)" }
+        return words?.replacingOccurrences(of: "\n", with: " ")
+    }
+
+    private var origin: String {
+        guard kind == .group, room.latest != nil else { return "" }
+        if room.latestIn.hasPrefix("task:"), let task = Int(room.latestIn.dropFirst(5)) { return " in \(taskLabel(task))" }
+        return room.latestIn.hasPrefix("dm:") ? " in a direct thread" : ""
+    }
     var lead: String? { kind == .lead ? room.lead : nil }
 
     var working: Bool {
@@ -76,12 +89,12 @@ struct Row: Identifiable {
 
     var line: String {
         if room.connection == .connecting && last == nil { return "Connecting…" }
-        if let ask = asks.first { return "Needs you: \(ask.body.replacingOccurrences(of: "\n", with: " "))" }
+        if let need { return "Needs you: \(need)" }
         if let draft { return "Draft: \(draft.text.isEmpty ? "Photo" : draft.text.replacingOccurrences(of: "\n", with: " "))" }
         guard let last else { return kind == .lead ? "Message \(title) directly" : "No messages yet" }
         let body = last.body.isEmpty && last.images > 0 ? (last.images == 1 ? "Photo" : "\(last.images) Photos") : last.body.replacingOccurrences(of: "\n", with: " ")
         if kind == .lead { return last.mine ? "You: \(body)" : body }
-        return "\(last.mine ? "You" : room.display(last.from)): \(body)"
+        return "\(last.mine ? "You" : room.display(last.from))\(origin): \(body)"
     }
 }
 
@@ -104,7 +117,7 @@ extension RoomView {
         RoomView(
             code: code, title: title, icon: icon, me: me, isOwner: isOwner, connection: connection, gone: gone, error: error, head: head,
             whole: feed?.whole ?? false, hold: hold, charter: charter, lead: lead, members: members, messages: feed?.messages ?? [], side: side,
-            sideKey: sideKey, tasks: tasks, asks: asks, last: last, place: key, places: places)
+            sideKey: sideKey, tasks: tasks, asks: asks, reviews: reviews, last: last, latest: latest, latestIn: latestIn, place: key, places: places)
     }
 
     func spotTitle(_ key: String) -> String {
@@ -123,18 +136,18 @@ extension AppModel {
             out.append(
                 Row(
                     spot: general, kind: .group, room: room, place: room.placeView("main"), title: room.title, qualifier: nil,
-                    unread: fresh(room, "main"), asks: room.asks(in: "main"), draft: drafts[general.id]))
+                    unread: fresh(room, "main"), asks: room.asks(in: "main"), reviews: room.reviews, draft: drafts[general.id]))
             if let spot = room.leadSpot, let lead = room.lead {
                 out.append(
                     Row(
                         spot: spot, kind: .lead, room: room, place: room.placeView(spot.place), title: room.display(lead), qualifier: many ? room.title : nil,
-                        unread: fresh(room, spot.place), asks: room.asks(in: spot.place), draft: drafts[spot.id]))
+                        unread: fresh(room, spot.place), asks: room.asks(in: spot.place), reviews: [], draft: drafts[spot.id]))
             }
         }
         let kept: [Row] =
             switch filter {
             case .all: out
-            case .needs: out.filter { !$0.asks.isEmpty }
+            case .needs: out.filter { $0.needs > 0 }
             case .unread: out.filter { $0.unread }
             }
         return kept.sorted { ($0.lastAt, $0.title) > ($1.lastAt, $1.title) }
@@ -144,7 +157,7 @@ extension AppModel {
         rows(.all).first { $0.spot == spot }
     }
 
-    var waiting: Int { channels.reduce(0) { $0 + $1.asks.count } }
+    var waiting: Int { channels.reduce(0) { $0 + $1.asks.count + $1.reviews.count } }
 
     func isPinned(_ spot: Spot) -> Bool { pinned.contains(spot.id) }
 

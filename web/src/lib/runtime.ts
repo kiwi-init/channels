@@ -1,6 +1,5 @@
 import { Relay, fetchRelay, settle } from "@kiwi/core/client/relay.ts"
 import * as Effect from "effect/Effect"
-import * as Fiber from "effect/Fiber"
 import * as Layer from "effect/Layer"
 import * as ManagedRuntime from "effect/ManagedRuntime"
 
@@ -27,14 +26,4 @@ const runtime = ManagedRuntime.make(WebLive)
  */
 export function run<A, E>(effect: Effect.Effect<A, E, Web>): Promise<A> {
   return runtime.runPromiseExit(effect).then(settle)
-}
-
-/**
- * Start something that runs until it's stopped (a channel's live stream): the
- * returned function stops it, which is what a React effect's cleanup calls. It
- * handles its own failures: nobody is waiting on it to hear them.
- */
-export function fork(effect: Effect.Effect<void, never, Web>): () => void {
-  const fiber = runtime.runFork(effect)
-  return () => void Effect.runFork(Fiber.interrupt(fiber))
 }

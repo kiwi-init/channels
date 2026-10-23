@@ -1,6 +1,7 @@
 import { ArrowDown01Icon } from "@hugeicons/core-free-icons"
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react"
 
+import type { SendOptions } from "@kiwi/core/client.ts"
 import { permissionReply } from "@kiwi/core/permission.ts"
 import { droppedCount } from "@kiwi/core/format.ts"
 import { memberLoad } from "@kiwi/core/load.ts"
@@ -9,6 +10,7 @@ import { taskCards } from "@kiwi/core/standup.ts"
 import { answersDecisions, colorOf, decidersOf, heldBy, outsideRepos, taskId, tasksAwaitingPeople, type Task, humanOf, ownerOf } from "@kiwi/core/state.ts"
 import { channelTitle, loadRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
 import { howHere } from "@/lib/presence"
+import { sendsInTurn, withSentQuotes } from "@/lib/send-order"
 import { asksFor, chosenOf, heldAsks } from "@/lib/asks"
 import type { Command } from "@/lib/commands"
 import { approveTask, closedDigest, reviewsFor, sendBackTask, type TaskSend } from "@/lib/task-actions"
@@ -82,7 +84,10 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const query = useDeferredValue(search?.trim() ? search : null)
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [sending, setSending] = useState<{ key: number; place: string; m: Message; after: number; seq?: number }[]>([])
+  const [sendingBase] = useState(() => Date.now())
   const sendingKey = useRef(0)
+  const [inTurn] = useState(sendsInTurn)
+  const sendingSeq = useRef(new Map<number, Promise<number>>())
   const [picture, setPicture] = useState<{ m: Message; img: ImageAttachment; src: string } | null>(null)
   const [highlight, setHighlight] = useState<number | null>(null)
   const [headRef, headH] = useHeight()
@@ -148,6 +153,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const sentNow = sending.map((s) => ({ s, real: landed(s) }))
   const replaced = new Set(sentNow.flatMap(({ real }) => (real ? [real.seq] : [])))
   const sendingHere = sentNow.filter(({ s, real }) => s.place === hereKey && !real).map(({ s }) => s.m)
+  const quotedHere = useCallback((seq: number) => (seq < 0 ? sending.find((s) => s.key === -seq)?.m : quoted(seq)), [quoted, sending])
 
   const go = useCallback(
     (p: Place) => {
@@ -272,7 +278,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     search: query,
     highlight,
     bySeq,
-    quoted,
+    quoted: quotedHere,
     chosen,
     nameOf,
     isFresh: (seq: number) => seq < 0 || (isFresh(seq) && !replaced.has(seq)),
@@ -603,14 +609,16 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                               more={Math.max(composerAsks.length - 1, 0)}
                               onAnswer={answer}
                               nameOf={nameOf}
-                              onClearReply={() => setReplyTo(null)}
+                              onClearReply={(answered) => setReplyTo((now) => (!answered || now === answered ? null : now))}
+                              onRestoreReply={(answering) => setReplyTo((now) => now ?? answering)}
                               disabled={connection === "connecting"}
                               extra={extra}
                               placeholder={place.kind === "main" ? "Message everyone" : `Message ${nameOf(place.with.find((n) => n !== me) ?? "")} privately`}
                               send={async (body, opts) => {
                                 stick()
-                                if (opts.imgs?.length || opts.task !== undefined) return send(body, opts)
-                                const key = ++sendingKey.current
+                                const answering = (o: SendOptions) => withSentQuotes(o, (k) => sendingSeq.current.get(k))
+                                if (opts.imgs?.length || opts.task !== undefined) return inTurn(async () => send(body, await answering(opts)))
+                                const key = sendingBase + ++sendingKey.current
                                 const m: Message = {
                                   v: PROTOCOL_VERSION,
                                   id: `sending-${key}`,
@@ -625,8 +633,11 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                                   ...(opts.dm ? { dm: true } : {}),
                                 }
                                 setSending((all) => [...all, { key, place: hereKey, m, after: messages.at(-1)?.seq ?? 0 }].slice(-50))
+                                const going = inTurn(async () => send(body, await answering(opts)))
+                                sendingSeq.current.set(key, going)
+                                sendingSeq.current.delete(key - 50)
                                 try {
-                                  const seq = await send(body, opts)
+                                  const seq = await going
                                   setSending((all) => all.map((s) => (s.key === key ? { ...s, seq } : s)))
                                   return seq
                                 } catch (err) {

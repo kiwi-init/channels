@@ -9,6 +9,7 @@ struct ConversationScreen: View {
     @State private var details = ConversationScreen.opensDetails
     @State private var replyTo: MessageView?
     @State private var answering: AskView?
+    @State private var sendingBack: ReviewView?
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var follow = Follow()
     @State private var toLead = true
@@ -30,10 +31,17 @@ struct ConversationScreen: View {
         Group {
             if let room = model.shown(spot) {
                 Conversation(
-                    room: room, replyTo: $replyTo, position: $position, follow: $follow, typing: $typing, elsewhere: spot.general ? room.elsewhere() : []
+                    room: room, replyTo: $replyTo, position: $position, follow: $follow, typing: $typing, elsewhere: spot.general ? room.elsewhere() : [],
+                    reviews: spot.general ? room.reviews : []
                 ) { ask in
                     replyTo = nil
+                    sendingBack = nil
                     answering = ask
+                    typing = true
+                } sendBack: { review in
+                    replyTo = nil
+                    answering = nil
+                    sendingBack = review
                     typing = true
                 }
                 .id(spot.id)
@@ -50,7 +58,7 @@ struct ConversationScreen: View {
                 }
                 .safeAreaInset(edge: .top, spacing: 0) { header(room) }
                 .bar(.bottom) {
-                    Dock(room: room, spot: spot, replyTo: $replyTo, answering: $answering, typing: $typing, follow: follow) {
+                    Dock(room: room, spot: spot, replyTo: $replyTo, answering: $answering, sendingBack: $sendingBack, typing: $typing, follow: follow) {
                         withAnimation(Motion.ease) { position.scrollTo(edge: .bottom) }
                     }
                 }
@@ -85,6 +93,7 @@ struct ConversationScreen: View {
         previous = spot
         replyTo = nil
         answering = nil
+        sendingBack = nil
         toLead = !next.general
         withAnimation(.spring(duration: 0.34, bounce: 0.08)) { spot = next }
     }
@@ -130,7 +139,7 @@ struct ConversationScreen: View {
     }
 
     private func flip(_ room: RoomView, to other: Spot) -> some View {
-        let asks = !room.asks(in: other.place).isEmpty
+        let asks = !room.asks(in: other.place).isEmpty || (other.general && !room.reviews.isEmpty)
         let fresh = model.unread(other)
         return Button {
             switchTo(other)
@@ -233,17 +242,18 @@ struct TitlePill: View {
     }
 
     @ViewBuilder private var status: some View {
+        let needs = place?.kind == "main" ? room.asks.count + room.reviews.count : 0
         let parts: [String] = [
             place?.kind == "dm" ? (busy ?? (other?.here == true ? "here" : "away")) : nil,
             room.connection == .connecting ? "Connecting…" : nil,
             room.connection == .reconnecting ? "Reconnecting…" : nil,
             place?.kind == "main" && room.working > 0 ? "\(room.working) working" : nil,
-            place?.kind == "main" && !room.asks.isEmpty ? "\(room.asks.count) \(room.asks.count == 1 ? "needs" : "need") you" : nil,
+            needs > 0 ? "\(needs) \(needs == 1 ? "needs" : "need") you" : nil,
         ].compactMap { $0 }
         if !parts.isEmpty {
             HStack(spacing: 4) {
                 if (place?.kind == "main" && room.working > 0) || busy != nil { Dot(color: Tone.doing, size: 5) }
-                Text(parts.joined(separator: " · ")).type(.stamp, .medium).foregroundStyle(place?.kind == "main" && !room.asks.isEmpty ? Tone.decide : Tone.ink3).lineLimit(1)
+                Text(parts.joined(separator: " · ")).type(.stamp, .medium).foregroundStyle(needs > 0 ? Tone.decide : Tone.ink3).lineLimit(1)
             }
         }
     }

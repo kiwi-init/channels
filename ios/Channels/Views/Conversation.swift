@@ -7,21 +7,23 @@ struct Line: Identifiable {
         case event(MessageView)
         case bubble(MessageView, first: Bool, last: Bool)
         case ask(AskView)
+        case review(ReviewView)
         case pending(Pending)
     }
 
     let id: String
     let kind: Kind
 
-    static func build(_ messages: [MessageView], asks: [AskView] = [], pending: [Pending] = [], sentAs: [Int: UUID] = [:]) -> [Line] {
+    static func build(_ messages: [MessageView], asks: [AskView] = [], reviews: [ReviewView] = [], pending: [Pending] = [], sentAs: [Int: UUID] = [:]) -> [Line] {
         var out: [Line] = []
         var prev: MessageView?
         var lastAt: MessageView?
-        var waiting = asks.sorted { $0.at < $1.at }[...]
+        let held = asks.map { (at: $0.at, line: Line(id: "a\($0.seq)", kind: .ask($0))) } + reviews.map { (at: $0.at, line: Line(id: "r\($0.task)", kind: .review($0))) }
+        var waiting = held.sorted { $0.at < $1.at }[...]
         let answers = Set(messages.compactMap { m in m.chosen.map { "\($0.by)|\($0.choice)" } })
         for m in messages where !m.choices.isEmpty || !answers.contains("\(m.from)|\(m.body)") {
-            while let ask = waiting.first, ask.at < m.at {
-                out.append(Line(id: "a\(ask.seq)", kind: .ask(ask)))
+            while let next = waiting.first, next.at < m.at {
+                out.append(next.line)
                 waiting.removeFirst()
                 prev = nil
             }
@@ -44,7 +46,7 @@ struct Line: Identifiable {
             out.append(Line(id: sentAs[m.seq].map { "p\($0)" } ?? "b\(m.seq)", kind: .bubble(m, first: first, last: true)))
             prev = m
         }
-        out += waiting.map { Line(id: "a\($0.seq)", kind: .ask($0)) }
+        out += waiting.map(\.line)
         let shown = Set(messages.map(\.seq))
         out += pending.filter { item in item.seq.map { !shown.contains($0) } ?? true }.map { Line(id: "p\($0.id)", kind: .pending($0)) }
         return out
@@ -63,7 +65,9 @@ struct Conversation: View {
     @Binding var follow: Follow
     var typing: FocusState<Bool>.Binding
     var elsewhere: [AskView] = []
+    var reviews: [ReviewView] = []
     var answer: (AskView) -> Void = { _ in }
+    var sendBack: (ReviewView) -> Void = { _ in }
     @Environment(AppModel.self) private var model
     @State private var reveal: CGFloat = 0
 
@@ -85,7 +89,9 @@ struct Conversation: View {
                 if room.whole || (room.messages.isEmpty && room.connection == .live) {
                     Intro(room: room)
                 }
-                ForEach(Line.build(room.messages, asks: elsewhere, pending: model.pending["\(room.code)|\(room.place)"] ?? [], sentAs: model.sentAs)) { line in
+                ForEach(
+                    Line.build(room.messages, asks: elsewhere, reviews: reviews, pending: model.pending["\(room.code)|\(room.place)"] ?? [], sentAs: model.sentAs)
+                ) { line in
                     LineView(line: line, room: room, reveal: reveal, solo: solo) { m in
                         replyTo = m
                         typing.wrappedValue = true
@@ -93,6 +99,8 @@ struct Conversation: View {
                         withAnimation(Motion.ease) { position.scrollTo(id: "b\(seq)", anchor: .center) }
                     } answer: { seq in
                         if let ask = room.asks.first(where: { $0.seq == seq }) { answer(ask) }
+                    } sendBack: { review in
+                        sendBack(review)
                     }
                     .id(line.id)
                     .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
@@ -200,11 +208,14 @@ struct LineView: View {
     let reply: (MessageView) -> Void
     let jump: (Int) -> Void
     let answer: (Int) -> Void
+    let sendBack: (ReviewView) -> Void
 
     var body: some View {
         switch line.kind {
         case .ask(let ask):
             AskLine(ask: ask, room: room) { answer(ask.seq) }
+        case .review(let review):
+            ReviewLine(review: review, room: room) { sendBack(review) }
         case .pending(let item):
             PendingBubble(item: item, spot: Spot(code: room.code, place: room.place))
         case .time(let date):
@@ -584,6 +595,109 @@ struct AskLine: View {
             Spacer(minLength: 40)
         }
         .padding(.top, 10)
+    }
+}
+
+struct ReviewLine: View {
+    let review: ReviewView
+    let room: RoomView
+    let back: () -> Void
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            if let by = review.by {
+                Face(name: by, member: room.member(by), size: 30)
+            } else {
+                Color.clear.frame(width: 30, height: 30)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text([review.by.map { room.display($0) }, "in \(taskLabel(review.task))"].compactMap { $0 }.joined(separator: " · "))
+                    .type(.meta)
+                    .foregroundStyle(Tone.ink3)
+                    .padding(.leading, 12)
+                ReviewCard(review: review, room: room, back: back)
+            }
+            Spacer(minLength: 40)
+        }
+        .padding(.top, 10)
+    }
+}
+
+struct ReviewCard: View {
+    let review: ReviewView
+    let room: RoomView
+    let back: () -> Void
+    @Environment(AppModel.self) private var model
+    @State private var approving = false
+    @State private var failed = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Ready for your review")
+                .type(.meta, .semibold)
+                .foregroundStyle(Tone.decide)
+                .padding(.bottom, 4)
+            (Text(taskLabel(review.task)).foregroundStyle(Tone.ink3) + Text(" \(review.title)").foregroundStyle(Tone.ink))
+                .type(.body)
+                .padding(.bottom, 10)
+            Rectangle().fill(Tone.line).frame(height: 0.5)
+            Button(action: approve) {
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark.circle").font(.system(size: 17, weight: .medium)).frame(width: 22)
+                    Text("Approve").type(.ui, .medium)
+                    Spacer(minLength: 0)
+                    if approving { ProgressView().controlSize(.mini) }
+                }
+                .foregroundStyle(Tone.ink)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(approving)
+            Rectangle().fill(Tone.line).frame(height: 0.5).padding(.leading, 32)
+            Button(action: back) {
+                HStack(spacing: 10) {
+                    Image(systemName: "arrowshape.turn.up.left").font(.system(size: 13, weight: .semibold)).frame(width: 22)
+                    Text("Send back…").type(.ui, .medium)
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(Tone.accent)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(approving)
+            if failed {
+                Text("Couldn't send · Try again").type(.meta).foregroundStyle(Tone.alert).padding(.top, 2)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .frame(maxWidth: 300, alignment: .leading)
+        .background {
+            ZStack {
+                RoundedRectangle(cornerRadius: 19, style: .continuous).fill(Tone.bubbleThem)
+                Tail().fill(Tone.bubbleThem).scaleEffect(x: -1, anchor: .center)
+            }
+        }
+    }
+
+    private func approve() {
+        guard !approving else { return }
+        approving = true
+        failed = false
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        Task {
+            do {
+                try await model.approve(room.code, task: review.task)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            } catch {
+                failed = true
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
+            }
+            approving = false
+        }
     }
 }
 

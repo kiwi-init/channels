@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react"
 
 import { Boundary, Toaster } from "@/components/kit"
 import { ChannelGate } from "@/components/onboarding"
@@ -13,8 +13,7 @@ import type { Command, PaletteActions } from "@/components/ui/palette"
 import { usePaletteShortcut } from "@/components/ui/palette-shortcut"
 import { ComputersModal, Palette, preloadAccountItems, SettingsPage } from "@/components/lazy"
 import { whenIdle } from "@/lib/later"
-import { useAutoApproval } from "@/lib/approval"
-import { adoptThisComputer } from "@/lib/computers"
+import { useAutoApproval } from "@/lib/auto-approval"
 import { parseHash, useChannelList } from "@/lib/channel"
 import { joinCodeFromLink } from "@/lib/deep-link"
 import { newsTotal, rowNews, startMarks, useMarks, useNewsKeys, useOpenNews, useTabNews } from "@/lib/news"
@@ -22,6 +21,7 @@ import { formatShort } from "@/lib/format"
 import { useSidebarShortcut } from "@/lib/sidebar-hidden"
 import { bridge, useSecrets } from "@/lib/secrets"
 import { cx } from "@/lib/utils"
+import { lastChannel, rememberChannel, reopenable } from "@/lib/last-channel"
 
 // The join code lives in the URL fragment, which never leaves the app.
 const readHash = () => parseHash(location.hash)
@@ -49,7 +49,7 @@ export default function App() {
   // The app's own computer joins the list once there's a person to certify it (lib/computers.ts).
   const personPk = person?.pk
   useEffect(() => {
-    if (personPk) void adoptThisComputer().catch(() => {})
+    if (personPk) void import("@/lib/computers").then((m) => m.adoptThisComputer()).catch(() => {})
   }, [personPk])
 
   // What's new where: a dot per channel, the total in the tab, Alt+↑/↓ through the ones with news.
@@ -80,6 +80,19 @@ export default function App() {
   )
   const actions = useMemo<PaletteActions>(() => ({ onNew: () => setSheet("new"), onJoin: () => setSheet("join"), onComputers: () => setSheet("computers"), onSettings: () => setSettings(true) }), [])
 
+  const [restored, setRestored] = useState(false)
+  if (!restored && person && (code || rows.length)) {
+    setRestored(true)
+    const last = code ? null : reopenable(lastChannel(), rows)
+    if (last) setHash({ code: last })
+  }
+  useLayoutEffect(() => {
+    if (code && readHash().code !== code) history.replaceState(null, "", `${location.pathname}#${encodeURIComponent(code)}`)
+  }, [code])
+  useEffect(() => {
+    if (code && rows.some((r) => r.code === code && r.state === "member")) rememberChannel(code)
+  }, [code, rows])
+
   useEffect(() => {
     const onHash = () => {
       setHash(readHash())
@@ -107,6 +120,7 @@ export default function App() {
 
   const close = useCallback(() => {
     history.replaceState(null, "", location.pathname)
+    rememberChannel(null)
     setHash({ code: "" })
   }, [])
 

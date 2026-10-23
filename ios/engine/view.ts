@@ -1,5 +1,5 @@
 import { ignored, isQuiet, ROBOT_FACES, type ChannelIcon, type Message } from "@kiwi/core/protocol.ts";
-import { answersDecisions, decidersOf, MAIN, placeFromKey, placeKey, taskId, type ChannelState } from "@kiwi/core/state.ts";
+import { answersDecisions, decidersOf, MAIN, openRound, placeFromKey, placeKey, taskId, type ChannelState } from "@kiwi/core/state.ts";
 import type { FoldMember } from "@kiwi/core/state/types.ts";
 
 import { askLabel, asksFor, chosenOf, heldAsks } from "../../web/src/lib/asks.ts";
@@ -7,7 +7,9 @@ import { avatarIndex } from "../../web/src/lib/avatar-pick.ts";
 import { chipsFor } from "../../web/src/lib/reactions.ts";
 import type { Online } from "../../web/src/lib/channel/online.ts";
 import { knownHarness, monoHarness } from "../../web/src/lib/harness.ts";
-import type { AskView, Connection, IconView, MemberView, MessageView, PlaceView, RoomView, TaskView } from "./wire.ts";
+import { lastPreview } from "../../web/src/lib/preview.ts";
+import { reviewsFor } from "../../web/src/lib/task-actions.ts";
+import type { AskView, Connection, IconView, MemberView, MessageView, PlaceView, ReviewView, RoomView, TaskView } from "./wire.ts";
 
 const SHOWN = 300;
 const QUOTE_CHARS = 140;
@@ -110,6 +112,12 @@ export function roomView(r: RoomInput): RoomView {
     lastIn.set(placeKey(state.placeOf.get(m.seq) ?? MAIN), m);
   }
   const nameOf = (name: string) => state.members.get(name)?.display ?? name;
+  const keyOf = (m: Message) => placeKey(state.placeOf.get(m.seq) ?? MAIN);
+  const latest = lastPreview(
+    r.messages.filter((m) => keyOf(m) !== sideKey),
+    (seq) => state.trust.get(seq),
+  );
+  const latestIn = latest ? keyOf(latest) : "main";
   const placeView = (key: string): PlaceView | null => {
     const p = placeFromKey(key);
     if (!p) return null;
@@ -168,6 +176,15 @@ export function roomView(r: RoomInput): RoomView {
     };
   });
 
+  const mine = state.members.get(me);
+  const person = (mine?.kind ?? (mine?.owner ? "human" : "agent")) === "human";
+  const reviews: ReviewView[] = reviewsFor(state.tasks.values(), me, person).map((t) => ({
+    task: t.id,
+    title: t.title,
+    by: t.owner ?? t.workedBy.at(-1) ?? null,
+    at: openRound(t)?.ts ?? t.updatedAt,
+  }));
+
   return {
     code: r.code,
     title: r.title,
@@ -188,7 +205,10 @@ export function roomView(r: RoomInput): RoomView {
     sideKey,
     tasks,
     asks,
+    reviews,
     last: lastChat ? messageView(lastChat, undefined) : null,
+    latest: latest ? messageView(latest, undefined) : null,
+    latestIn,
     place: here,
     places,
   };
