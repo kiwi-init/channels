@@ -2,7 +2,7 @@ import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 import { payloadOf, shippedApp } from "./eb-app.ts";
 import { sealApp } from "./eb-seal.ts";
@@ -43,24 +43,17 @@ function forgedCacheHome(target: string, bun: string): string {
 const problems: string[] = [];
 const later = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-const unquote = (line: string): string => line.trim().replace(/^"|"$/g, "");
-
-function ciKeychain(): () => void {
-  const runnerTemp = process.env["RUNNER_TEMP"] ?? "";
-  if (process.env["CI"] !== "true" || process.env["GITHUB_ACTIONS"] !== "true" || !isAbsolute(runnerTemp) || !existsSync(runnerTemp)) return () => {};
-  const kc = join(runnerTemp, `env-check-${process.pid}.keychain-db`);
-  const list = execFileSync("security", ["list-keychains", "-d", "user"], { encoding: "utf8" }).split("\n").map(unquote).filter(Boolean);
-  const def = unquote(execFileSync("security", ["default-keychain", "-d", "user"], { encoding: "utf8" }));
-  execFileSync("security", ["create-keychain", "-p", "", kc]);
-  execFileSync("security", ["set-keychain-settings", kc]);
-  execFileSync("security", ["unlock-keychain", "-p", "", kc]);
-  execFileSync("security", ["list-keychains", "-d", "user", "-s", kc, ...list]);
-  execFileSync("security", ["default-keychain", "-d", "user", "-s", kc]);
-  return () => {
-    spawnSync("security", ["list-keychains", "-d", "user", "-s", ...list], { stdio: "ignore" });
-    if (def) spawnSync("security", ["default-keychain", "-d", "user", "-s", def], { stdio: "ignore" });
-    spawnSync("security", ["delete-keychain", kc], { stdio: "ignore" });
-  };
+function homeKeychain(home: string): () => void {
+  const env = { ...process.env, HOME: home };
+  for (const args of [
+    ["create-keychain", "-p", "", "login.keychain"],
+    ["set-keychain-settings", "login.keychain"],
+    ["unlock-keychain", "-p", "", "login.keychain"],
+    ["default-keychain", "-d", "user", "-s", "login.keychain"],
+    ["list-keychains", "-d", "user", "-s", "login.keychain"],
+  ])
+    execFileSync("security", args, { env, stdio: "ignore" });
+  return () => void spawnSync("security", ["delete-keychain", "login.keychain"], { env, stdio: "ignore" });
 }
 
 function stuck(pid: number): string {
@@ -154,12 +147,6 @@ if (injected().includes("launcher")) problems.push("DYLD_INSERT_LIBRARIES reache
 if (id === "com.kiwiinit.channels" && !process.env.CI) {
   console.log(`not starting ${app}: it's a release build (${id}) and this isn't CI, so it would share the installed app's data; build one with CHANNELS_EB_IDENTIFIER to check it here`);
 } else {
-  const restoreKeychain = ciKeychain();
-  for (const signal of ["SIGINT", "SIGTERM"] as const)
-    process.on(signal, () => {
-      restoreKeychain();
-      process.exit(signal === "SIGINT" ? 130 : 143);
-    });
   const preload = join(tmp, "preload.js");
   writeFileSync(preload, `require("node:fs").writeFileSync(${JSON.stringify(join(tmp, "injected-preload"))}, "ran");`);
   const port = await new Promise<number>((ok) => {
@@ -169,6 +156,7 @@ if (id === "com.kiwiinit.channels" && !process.env.CI) {
     });
   });
   const home = forgedCacheHome(join(app, "Contents", "Resources", "app", "bun", "index.js"), join(macos, "bun"));
+  const dropKeychain = homeKeychain(home);
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     HOME: home,
@@ -207,7 +195,7 @@ if (id === "com.kiwiinit.channels" && !process.env.CI) {
   for (const pid of left) console.error(`eb-env-check: still running after SIGTERM, where it waits:\n${stuck(pid)}`);
   for (const pid of left) process.kill(pid, "SIGKILL");
   if (left.length) problems.push(`still running after the check: ${left.join(", ")}`);
-  restoreKeychain();
+  dropKeychain();
 }
 
 rmSync(tmp, { recursive: true, force: true });
