@@ -10,22 +10,29 @@ export const RECEIVE_GLOBAL = "__kiwiReceive";
 export const toPageScript = (packet: unknown): string => `globalThis.${RECEIVE_GLOBAL}?.(${JSON.stringify(packet)});`;
 
 type BridgeRequests = { [K in Call]: { params: CallArgs<K>; response: CallValue<K> } };
-export type KeysCall = { session: string; req: KeysRequest };
 export type CallSide = { requests: BridgeRequests; messages: Pushes };
-export type BunSide = { requests: BridgeRequests & { keys: { params: KeysCall; response: KeysReply } }; messages: Pushes & { keys: KeysFrame } };
+export type BunSide = { requests: BridgeRequests & { keys: { params: KeysRequest; response: KeysReply } }; messages: Pushes & { keys: KeysFrame } };
 
-const SESSION = /^[A-Za-z0-9_-]{16,64}$/;
-
-export function keysCall(params: unknown): KeysCall | null {
+export function keysRequest(params: unknown): KeysRequest | null {
   if (!params || typeof params !== "object" || Array.isArray(params)) return null;
-  const { session, req } = params as { session?: unknown; req?: unknown };
-  if (typeof session !== "string" || !SESSION.test(session)) return null;
-  if (!req || typeof req !== "object" || Array.isArray(req)) return null;
-  const id = (req as { id?: unknown }).id;
-  if (typeof id !== "number" || !Number.isSafeInteger(id)) return null;
-  return { session, req: req as KeysRequest };
+  const id = (params as { id?: unknown }).id;
+  return typeof id === "number" && Number.isSafeInteger(id) ? (params as KeysRequest) : null;
 }
 export type PageSide = { requests: Record<never, never>; messages: Record<never, never> };
+
+export interface Frame {
+  session: string;
+  packet?: unknown;
+}
+
+const SESSION = /^[A-Za-z0-9-]{16,64}$/;
+
+export function frameOf(v: unknown): Frame | null {
+  if (!v || typeof v !== "object") return null;
+  const { session, packet } = v as { session?: unknown; packet?: unknown };
+  if (typeof session !== "string" || !SESSION.test(session)) return null;
+  return packet === undefined ? { session } : { session, packet };
+}
 
 export const onOurPage = (url: string | null): boolean => url !== null && url.split("#")[0] === PAGE_URL;
 

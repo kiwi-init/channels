@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { fakeHost } from "../../test/fake-host.ts";
 import type { KeysPort, KeysRequest, StoreSnapshot } from "../src/bridge.ts";
+import { makeBridge, type Handlers } from "../src/calls.ts";
 import type { KeysFrame } from "../src/keys-eb.ts";
-import { makeBridge } from "../src/calls.ts";
 import { onOurPage } from "../src/eb-bridge.ts";
 import { PAGE_URL } from "../src/eb-page.ts";
 import { useHost } from "../src/host.ts";
@@ -26,6 +26,7 @@ const main = bunBridge(
   handlers(shell.host),
   () => onOurPage(at),
   (packet) => toPage(wire(packet)),
+  () => {},
   async (session, req) => {
     keysAsked.push({ session, req });
     return { id: req.id, ok: true, value: null };
@@ -90,59 +91,119 @@ describe("window.kiwi over Electrobun's RPC, both ends as the app wires them", (
 
   test("a call that isn't the bridge's is refused before any handler", async () => {
     at = PAGE_URL;
-    const loose = pageBridge(
-      (packet) => fromPage(wire(packet)),
-      (receive) => (toPage = receive),
-    );
-    expect(await settled(loose.call("constructor" as "chooseFolder"))).toBe("refused the app has no such call");
+    expect(await settled(page.call("constructor" as "chooseFolder"))).toBe("refused the app has no such call");
   });
 
-  test("keys: a page's request reaches main with its session and comes back, and main's frames reach the page", async () => {
-    const kp = ownPage();
+  test("a reloaded page never gets the previous load's replies, and the old page's late messages get nothing", async () => {
+    let release: (folder: string) => void = () => {};
+    const slow = new Promise<string>((r) => (release = r));
+    const table: Handlers = { ...handlers(shell.host), chooseFolder: () => slow };
+    let fromAnyPage: (frame: unknown) => void = () => {};
+    let toLoaded: (frame: unknown) => void = () => {};
+    const opened: string[] = [];
+    const reloading = bunBridge(
+      table,
+      () => true,
+      (frame) => toLoaded(wire(frame)),
+      (session) => opened.push(session),
+    );
+    reloading.setTransport({ registerHandler: (h) => (fromAnyPage = h) });
+    const first = pageBridge(
+      (frame) => fromAnyPage(wire(frame)),
+      (receive) => (toLoaded = receive),
+    );
+    const before = first.call("chooseFolder");
+    const second = pageBridge(
+      (frame) => fromAnyPage(wire(frame)),
+      (receive) => (toLoaded = receive),
+    );
+    const deep = second.call("getDeepLink");
+    release("/the/previous/load's/room");
+    expect(await settled(deep)).toBe("answered null");
+    expect(await settled(before)).toBe("no answer");
+    const done = shell.did.length;
+    expect(await settled(first.call("notify", "late", "from the old page"))).toBe("no answer");
+    expect(shell.did.slice(done)).toEqual([]);
+    const heard: string[] = [];
+    second.listen("deepLink", (u) => heard.push(u));
+    reloading.push("deepLink", "kiwi://join/mc2-after-reload");
+    await Bun.sleep(0);
+    expect({ opened, heard }).toEqual({ opened: [first.session, second.session], heard: ["kiwi://join/mc2-after-reload"] });
+  });
+
+  test("keys: a page's request reaches main with that page's session and comes back, and main's frames reach the page", async () => {
     at = PAGE_URL;
-    const session = "0123456789abcdef0123456789abcdef";
+    const kp = ownPage();
     const frames: KeysFrame[] = [];
     const off = kp.onKeys((f) => frames.push(f));
-    expect(await kp.keys(session, { id: 4, op: "nudge" } as KeysRequest)).toEqual({ id: 4, ok: true, value: null });
-    main.pushKeys({ session, push: { sub: 1, event: null } });
-    main.pushKeys({ session, restart: true });
+    expect(await kp.keys({ id: 4, op: "nudge" } as KeysRequest)).toEqual({ id: 4, ok: true, value: null });
+    main.pushKeys({ session: kp.session, push: { sub: 1, event: null } });
+    main.pushKeys({ session: kp.session, restart: true });
+    main.pushKeys({ session: "an-older-page-session-id", restart: true });
     await Bun.sleep(0);
     off();
     expect({ asked: keysAsked.at(-1), frames }).toEqual({
-      asked: { session, req: { id: 4, op: "nudge" } as KeysRequest },
+      asked: { session: kp.session, req: { id: 4, op: "nudge" } as KeysRequest },
       frames: [
-        { session, push: { sub: 1, event: null } },
-        { session, restart: true },
+        { session: kp.session, push: { sub: 1, event: null } },
+        { session: kp.session, restart: true },
       ],
     });
   });
 
   test("keys off our page: a request gets no answer and never reaches main, and frames aren't sent", async () => {
+    at = PAGE_URL;
     const kp = ownPage();
     at = "https://evil.example/";
     const before = keysAsked.length;
     const frames: KeysFrame[] = [];
     const off = kp.onKeys((f) => frames.push(f));
-    expect(await settled(kp.keys("0123456789abcdef0123456789abcdef", { id: 5, op: "nudge" } as KeysRequest))).toBe("no answer");
-    main.pushKeys({ session: "0123456789abcdef0123456789abcdef", restart: true });
+    expect(await settled(kp.keys({ id: 5, op: "nudge" } as KeysRequest))).toBe("no answer");
+    main.pushKeys({ session: kp.session, restart: true });
     await Bun.sleep(0);
     off();
     expect({ asked: keysAsked.length - before, frames }).toEqual({ asked: 0, frames: [] });
     at = PAGE_URL;
   });
 
-  test("keys with a session or request that isn't one is refused before main's keys see it", async () => {
-    const kp = ownPage();
+  test("keys with a request that isn't one is refused before main's keys see it", async () => {
     at = PAGE_URL;
+    const kp = ownPage();
     const before = keysAsked.length;
-    for (const [session, req] of [
-      ["short", { id: 1 }],
-      ["0123456789abcdef0123456789abcdef!", { id: 1 }],
-      ["0123456789abcdef0123456789abcdef", null],
-      ["0123456789abcdef0123456789abcdef", { id: "1" }],
-      ["0123456789abcdef0123456789abcdef", [1]],
-    ] as const)
-      expect(await settled(kp.keys(session, req as unknown as KeysRequest))).toStartWith("refused keys takes");
+    for (const req of [null, {}, { id: "1" }, { id: 1.5 }, [1]]) expect(await settled(kp.keys(req as unknown as KeysRequest))).toStartWith("refused keys takes");
     expect(keysAsked.length - before).toBe(0);
+  });
+
+  test("keys across a reload: the old page's late answer never reaches the new page, which gets its own (#789 round 1)", async () => {
+    let fromPage2: (packet: unknown) => void = () => {};
+    let toPage2: (packet: unknown) => void = () => {};
+    const answers: ((r: { id: number; ok: true; value: string }) => void)[] = [];
+    const opened: string[] = [];
+    const main2 = bunBridge(
+      handlers(shell.host),
+      () => true,
+      (packet) => toPage2(wire(packet)),
+      (session) => void opened.push(session),
+      (_session, req) => new Promise((resolve) => answers.push((r) => resolve({ ...r, id: req.id }))),
+    );
+    main2.setTransport({ registerHandler: (h) => (fromPage2 = h) });
+    const loadA = pageBridge(
+      (packet) => fromPage2(wire(packet)),
+      (receive) => (toPage2 = receive),
+    );
+    const fromA = loadA.keys({ id: 1, op: "nudge" } as KeysRequest);
+    const loadB = pageBridge(
+      (packet) => fromPage2(wire(packet)),
+      (receive) => (toPage2 = receive),
+    );
+    const fromB = loadB.keys({ id: 1, op: "nudge" } as KeysRequest);
+    await Bun.sleep(0);
+    answers[0]?.({ id: 0, ok: true, value: "load A's answer" });
+    answers[1]?.({ id: 0, ok: true, value: "load B's answer" });
+    expect({ b: await settled(fromB), a: await settled(fromA), opened: opened.length }).toEqual({
+      b: 'answered {"id":1,"ok":true,"value":"load B\'s answer"}',
+      a: "no answer",
+      opened: 2,
+    });
   });
 });

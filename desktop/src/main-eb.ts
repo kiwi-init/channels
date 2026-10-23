@@ -67,7 +67,11 @@ function createWindow(): void {
   const bridge = bunBridge(
     table,
     () => onOurPage(at),
-    (packet) => view?.executeJavascript(toPageScript(packet)),
+    (frame) => view?.executeJavascript(toPageScript(frame)),
+    () => {
+      keys.pageGone();
+      bridge.push("store", snapshot());
+    },
     (session, req) => keys.request(session, req),
   );
   keysToPage = (frame) => bridge.pushKeys(frame);
