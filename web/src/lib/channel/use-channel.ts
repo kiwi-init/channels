@@ -26,7 +26,7 @@ import { hear, onlineByName, type Online } from "./online"
 import { trimmed } from "./trim"
 import { foldRoster } from "./fold-roster"
 import { asKept } from "./kept"
-import { onceEach, openChannel, warmUp } from "./open"
+import { handOver, onceEach, openChannel, warmUp } from "./open"
 import { dropWarm, keepWarm, warmOf } from "./warm"
 
 const HISTORY = 2_000
@@ -93,6 +93,8 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
     }, KEEP_DELAY_MS)
     return () => clearTimeout(t)
   }, [ch, start, gone, roster, base, guardFloor, roomsFloor])
+  const guardIn = useRef(false)
+  const roomsIn = useRef(false)
   useEffect(() => {
     const title = ch.title()
     const guard = ch.guard()
@@ -103,8 +105,20 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
         if (name && stored && stored.name !== name) void renameChannel(member.code, name)
       })
       .catch(() => {})
-    void guard.then(setGuardFloor, () => {})
-    void rooms.then(setRoomsFloor, () => {})
+    void guard.then(
+      (g) => {
+        guardIn.current = true
+        setGuardFloor(g)
+      },
+      () => {}
+    )
+    void rooms.then(
+      (r) => {
+        roomsIn.current = true
+        setRoomsFloor(r)
+      },
+      () => {}
+    )
   }, [ch, member.code, infoAt])
 
   const onGone = useCallback(
@@ -219,6 +233,8 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
       }
     }
     const early = new Set<number>()
+    const earlyUnread = new Set<number>()
+    let earlyBase = false
     let painted = false
     const steps = onceEach({
       head: () => ch.head(),
@@ -235,11 +251,15 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
       early: (cached, kept) => {
         if (closed || painted) return
         if (!rosterIn.current) setRoster(kept.roster)
-        if (kept.base) setBase((prev) => prev ?? kept.base)
-        setGuardFloor((prev) => prev ?? kept.guardFloor)
-        setRoomsFloor((prev) => prev ?? kept.roomsFloor)
+        if (kept.base) {
+          earlyBase = true
+          setBase((prev) => prev ?? kept.base)
+        }
+        if (!guardIn.current) setGuardFloor(kept.guardFloor)
+        if (!roomsIn.current) setRoomsFloor(kept.roomsFloor)
         if (cached?.unread.length) {
           const seen = cached.unread
+          for (const seq of seen) earlyUnread.add(seq)
           setUnread((prev) => [...new Set([...prev, ...seen])].slice(-HISTORY))
         }
         if (cached?.messages.length) {
@@ -249,24 +269,27 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
         }
         setReady(true)
       },
-      paint: (cached, base, head) => {
+      paint: (cached, base) => {
         if (closed) return
         painted = true
-        if (cached?.unread.length) {
-          const seen = cached.unread
-          setUnread((prev) => [...new Set([...prev, ...seen])].slice(-HISTORY))
+        if (cached?.unread.length || earlyUnread.size) {
+          const seen = cached?.unread ?? []
+          setUnread((prev) =>
+            handOver(
+              prev.map((seq) => ({ seq })),
+              earlyUnread,
+              seen.map((seq) => ({ seq }))
+            )
+              .map((u) => u.seq)
+              .slice(-HISTORY)
+          )
         }
         if (cached?.messages.length || early.size) {
           const kept = cached?.messages ?? []
-          setMessages((prev) =>
-            merged(
-              prev.filter((m) => m.seq <= head || !early.has(m.seq)),
-              kept
-            )
-          )
+          setMessages((prev) => handOver(prev, early, kept))
           if (kept.some((m) => m.kind === "event" && m.ev?.op === "card")) noteAgentWorked()
         }
-        if (base) setBase(base)
+        if (base || earlyBase) setBase(base)
         setReady(true)
       },
     })
