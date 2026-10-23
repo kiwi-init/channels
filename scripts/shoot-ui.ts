@@ -864,6 +864,32 @@ try {
       await out.close();
     }
   }
+
+  const roomTags = (["dark", "light"] as const).filter((t) => (!themeOnly || t === themeOnly) && takes(`${t}-wide`, "26-room-unread"));
+  if (roomTags.length) {
+    await owner.setViewportSize(WIDE);
+    await owner.goto(channel);
+    await owner.reload();
+    await toTab("Conversation");
+    const details = owner.getByRole("complementary", { name: "Details" });
+    await owner.getByRole("button", { name: /^Details:/ }).click();
+    await details.getByRole("button", { name: /^Rooms/ }).click();
+    await details.getByRole("textbox", { name: "New room’s name" }).fill("mobile");
+    await details.getByRole("button", { name: "New room" }).click();
+    await owner.getByText("Made #mobile").first().waitFor({ timeout: 15000 });
+    await owner.goto(channel);
+    await owner.reload();
+    await toTab("Conversation");
+    await bot("send", "The relay's p95 held overnight.");
+    await bot("send", "--room", "mobile", "@jonatas the iOS build is red: the signing profile expired.");
+    await bot("send", "--room", "mobile", "I'll renew it after lunch.");
+    await owner.getByText("The relay's p95 held overnight.").first().waitFor({ timeout: 15000 });
+    for (const theme of roomTags) {
+      await setTheme(owner, theme);
+      await toTab("Conversation");
+      await shoot(owner, `${theme}-wide`, "26-room-unread", undefined, async () => {});
+    }
+  }
 } catch (e) {
   // Where it stopped, for whoever reads the failure.
   for (const ctx of browser.contexts()) for (const [i, pg] of ctx.pages().entries()) await pg.screenshot({ path: join(OUT, `failed-${i}.png`) }).catch(() => {});
