@@ -85,13 +85,14 @@ export async function readLegacyStore(password: LegacyPassword, platform: NodeJS
     asked.set(name, next);
     return next;
   };
-  let first: LegacyRead = { kind: "none" };
   for (const { name, dir } of legacyDirs(platform, home, env)) {
+    let unreadable: LegacyRead | null = null;
     for (const file of LEGACY_FILES) {
       const read = await readLegacyAt(path.join(dir, file), name, platform, once);
       if (read.kind === "ok") return read;
-      if (first.kind === "none") first = read;
+      if (read.kind === "unreadable" && !unreadable) unreadable = read;
     }
+    if (unreadable) return unreadable;
   }
-  return first;
+  return { kind: "none" };
 }

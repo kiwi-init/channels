@@ -95,7 +95,7 @@ describe("store v2", () => {
     const dir = folder();
     const k = keychain();
     const s = opened(await openStore({ dir, key: k.key, legacy: NO_LEGACY, platform: "darwin" }));
-    expect(s).toMatchObject({ json: null, sealed: true, imported: null, file: join(dir, STORE_FILE) });
+    expect(s).toMatchObject({ json: null, sealed: true, noKeychain: null, imported: null, file: join(dir, STORE_FILE) });
     expect(keyOf(k).length).toBe(32);
     s.save(JSON.stringify(STORE));
     for (const name of [STORE_FILE, `${STORE_FILE}.bak`]) {
@@ -171,7 +171,7 @@ describe("store v2", () => {
     const dir = folder();
     const k = keychain(null, { get: "no secret service", set: "no secret service" });
     const s = opened(await openStore({ dir, key: k.key, legacy: NO_LEGACY, platform: "linux" }));
-    expect(s.sealed).toBe(false);
+    expect(s).toMatchObject({ sealed: false, noKeychain: "no secret service" });
     s.save(JSON.stringify(STORE));
     expect(JSON.parse(read(dir).toString("utf8"))).toEqual(STORE);
     expect(statSync(join(dir, STORE_FILE)).mode & 0o777).toBe(0o600);
@@ -217,6 +217,57 @@ describe("store v2", () => {
     expect(s.kind).toBe("unreadable");
     expect(asked).toBe(0);
     expect(existsSync(join(dir, STORE_FILE))).toBe(false);
+  });
+
+  test("a Mac never takes a plain copy: one planted over a sealed store is replaced from the backup, never sealed over it", async () => {
+    const dir = folder();
+    const k = keychain(randomBytes(32).toString("base64"));
+    const good = seal(JSON.stringify(STORE), keyOf(k));
+    put(dir, STORE_FILE, '{"person":{"sk":"planted"}}');
+    put(dir, `${STORE_FILE}.bak`, good);
+    expect(opened(await openStore({ dir, key: k.key, legacy: NO_LEGACY, platform: "darwin" })).json).toEqual(STORE);
+    expect(read(dir).equals(good)).toBe(true);
+    expect(read(dir, `${STORE_FILE}.bak`).equals(good)).toBe(true);
+  });
+
+  test("a Mac with only a plain copy refuses it and leaves it as it was", async () => {
+    const dir = folder();
+    put(dir, STORE_FILE, JSON.stringify(STORE));
+    const s = await openStore({ dir, key: keychain(randomBytes(32).toString("base64")).key, legacy: NO_LEGACY, platform: "darwin" });
+    expect(s.kind === "unreadable" && s.why).toContain("plain text");
+    expect(read(dir).toString("utf8")).toBe(JSON.stringify(STORE));
+    expect(existsSync(join(dir, `${STORE_FILE}.bak`))).toBe(false);
+  });
+
+  test("Linux, once sealed, refuses a plain copy too", async () => {
+    const dir = folder();
+    const k = keychain(randomBytes(32).toString("base64"));
+    put(dir, STORE_FILE, '{"person":{"sk":"planted"}}');
+    put(dir, `${STORE_FILE}.bak`, seal(JSON.stringify(STORE), keyOf(k)));
+    expect(opened(await openStore({ dir, key: k.key, legacy: NO_LEGACY, platform: "linux" })).json).toEqual(STORE);
+    expect(isSealed(read(dir))).toBe(true);
+    const lone = folder();
+    put(lone, `${STORE_FILE}.bak`, seal(JSON.stringify(STORE), keyOf(k)));
+    put(lone, STORE_FILE, '{"person":null}');
+    const noKeychain = await openStore({ dir: lone, key: keychain(null, { get: "no secret service" }).key, legacy: NO_LEGACY, platform: "linux" });
+    expect(noKeychain.kind).toBe("unreadable");
+  });
+
+  test("Linux without a keychain refuses to import an encrypted Electron store in plain text, and saves nothing", async () => {
+    const dir = folder();
+    const legacy = async (): Promise<LegacyRead> => ({ kind: "ok", json: STORE, file: "/old/kiwi-store.bin", encrypted: true });
+    const s = await openStore({ dir, key: keychain(null, { get: "no secret service", set: "no secret service" }).key, legacy, platform: "linux" });
+    expect(s.kind === "unreadable" && s.why).toContain("encrypted");
+    expect(s.kind === "unreadable" && s.why).toContain("no secret service");
+    expect(existsSync(dir)).toBe(false);
+  });
+
+  test("Linux without a keychain imports a plain Electron store as plain, and says why", async () => {
+    const dir = folder();
+    const legacy = async (): Promise<LegacyRead> => ({ kind: "ok", json: STORE, file: "/old/kiwi-store.bin", encrypted: false });
+    const s = opened(await openStore({ dir, key: keychain(null, { get: "no secret service", set: "no secret service" }).key, legacy, platform: "linux" }));
+    expect(s).toMatchObject({ json: STORE, sealed: false, noKeychain: "no secret service", imported: "/old/kiwi-store.bin" });
+    expect(JSON.parse(read(dir).toString("utf8"))).toEqual(STORE);
   });
 
   test("a store that isn't an object is unreadable", async () => {

@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-import { chooseStore, needsResave, readStore, writePrivate } from "./guard.ts";
+import { writePrivate } from "./guard.ts";
 import type { LegacyRead } from "./legacy-store.ts";
 
 export const STORE_FILE = "kiwi-store-v2.bin";
@@ -23,7 +23,7 @@ export const keychainKey = (service: string = "Channels", name: string = "store-
 });
 
 export type OpenStore =
-  | { kind: "open"; json: Record<string, unknown> | null; sealed: boolean; imported: string | null; file: string; save: (json: string) => void }
+  | { kind: "open"; json: Record<string, unknown> | null; sealed: boolean; noKeychain: string | null; imported: string | null; file: string; save: (json: string) => void }
   | { kind: "unreadable"; why: string; file: string };
 
 export interface StoreOptions {
@@ -34,6 +34,8 @@ export interface StoreOptions {
 }
 
 type Lookup = { kind: "key"; key: Buffer } | { kind: "none" } | { kind: "failed"; why: string };
+
+type Copy = { kind: "none" } | { kind: "ok"; json: Record<string, unknown>; sealed: boolean } | { kind: "unreadable"; why: string };
 
 const reason = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
@@ -90,6 +92,23 @@ function bytes(file: string): Buffer | null {
   }
 }
 
+function storeObject(text: string): Record<string, unknown> {
+  const v: unknown = JSON.parse(text);
+  if (!isRecord(v)) throw new Error("not a store");
+  return v;
+}
+
+function readCopy(raw: Buffer | null, key: Buffer | null, plainOk: boolean): Copy {
+  if (raw === null) return { kind: "none" };
+  try {
+    if (isSealed(raw)) return key ? { kind: "ok", json: storeObject(unseal(raw, key)), sealed: true } : { kind: "unreadable", why: "it's sealed, and Channels has no key for it" };
+    if (!plainOk) return { kind: "unreadable", why: "a copy in plain text where Channels keeps its store sealed" };
+    return { kind: "ok", json: storeObject(new TextDecoder("utf-8", { fatal: true }).decode(raw)), sealed: false };
+  } catch (e) {
+    return { kind: "unreadable", why: reason(e) };
+  }
+}
+
 export async function openStore({ dir, key, legacy, platform = process.platform }: StoreOptions): Promise<OpenStore> {
   const file = path.join(dir, STORE_FILE);
   const backup = `${file}.bak`;
@@ -102,26 +121,35 @@ export async function openStore({ dir, key, legacy, platform = process.platform 
     if (found.kind === "none") found = sealed ? { kind: "failed", why: "it holds no store key" } : await create(key);
     if (found.kind === "failed" && (sealed || platform !== "linux")) return refuse(`the system keychain didn't give Channels its store key: ${found.why}`);
     const k = found.kind === "key" ? found.key : null;
+    const noKeychain = found.kind === "failed" ? found.why : null;
+    const plainOk = platform === "linux" && !sealed;
     const save = (json: string): void => {
       const raw = k ? seal(json, k) : Buffer.from(json, "utf8");
       writePrivate(file, raw, platform);
       writePrivate(backup, raw, platform);
     };
-    const open = (json: Record<string, unknown> | null, imported: string | null): OpenStore => ({ kind: "open", json, sealed: k !== null, imported, file, save });
+    const open = (json: Record<string, unknown> | null, imported: string | null): OpenStore => ({ kind: "open", json, sealed: k !== null, noKeychain, imported, file, save });
     if (main === null && back === null) {
       const old = await legacy();
       if (old.kind === "none") return open(null, null);
       if (old.kind === "unreadable") return refuse(`the keys the Electron app saved in ${old.file} can't be read: ${old.why}`);
-      save(JSON.stringify(old.json));
+      if (old.encrypted && !k) return refuse(`the keys the Electron app saved in ${old.file} are encrypted, and without a keychain Channels would keep them in plain text: ${noKeychain}`);
+      const json = JSON.stringify(old.json);
+      save(json);
+      const saved = readCopy(bytes(file), k, k === null);
+      if (saved.kind !== "ok" || JSON.stringify(saved.json) !== json) {
+        fs.rmSync(file, { force: true });
+        fs.rmSync(backup, { force: true });
+        return refuse(`the keys imported from ${old.file} didn't read back, so they weren't kept${saved.kind === "unreadable" ? `: ${saved.why}` : ""}`);
+      }
       return open(old.json, old.file);
     }
-    const decrypt = k ? (b: Buffer) => unseal(b, k) : null;
-    const choice = chooseStore(main, back, decrypt);
-    const read = choice.read.kind === "none" && back ? readStore(back, decrypt) : choice.read;
-    if (read.kind !== "ok") return refuse(read.kind === "unreadable" ? read.why : "it has no store");
-    if (!isRecord(read.json)) return refuse("not a store");
-    if (choice.restore) writePrivate(file, choice.restore, platform);
-    if (needsResave(platform, choice.restore ?? main, read, k ? "keyring" : "plain")) save(JSON.stringify(read.json));
+    const m = readCopy(main, k, plainOk);
+    const b = readCopy(back, k, plainOk);
+    const read = m.kind === "ok" ? m : b;
+    if (read.kind !== "ok") return refuse(m.kind === "unreadable" ? m.why : b.kind === "unreadable" ? b.why : "it has no store");
+    if (m.kind !== "ok" && back) writePrivate(file, back, platform);
+    if (k && !read.sealed) save(JSON.stringify(read.json));
     return open(read.json, null);
   } catch (e) {
     return refuse(reason(e));
