@@ -30,6 +30,7 @@ import { Button, Harnesses, Pictures, Spinner, errorText, toast } from "../kit"
 import { AddAgent, AgentLanes, CompactBlock, HoldDialog, NewAgent, Presence, ProposalCard, TasksView } from "../lazy"
 import { canStartAgents } from "@/lib/launches"
 import { markOnce } from "@/lib/marks"
+import { roomOfMessage } from "@/lib/rooms"
 import { ALLOW_ONCE, DENY, settledOf } from "@/lib/permission-settled"
 import { isAgent } from "../message"
 import { NeedsYou } from "../needs-you"
@@ -133,7 +134,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   useRecentPreview({ member, messages, others, state, me, nameOf })
 
   const { placeOf, places } = state
-  const { place, hereKey, unreadIn, taskKey } = usePlaces({ here, roomId, messages, me, state, shownTask })
+  const { place, hereKey, openRoom, unreadIn, unreadInRoom, taskKey } = usePlaces({ here, roomId, cardRoom, viewing: tab === "conversation", messages, me, state, shownTask })
+  const sendRoom = openRoom !== null && openRoom !== GENERAL_ROOM ? openRoom : undefined
   const { bySeq, threadRoot, showDropped, setShowDropped, threads, visible, inTask, quoted, summaryOf } = useThreads({
     messages,
     state,
@@ -142,6 +144,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     isOwner,
     search: query,
     hereKey,
+    room: openRoom,
+    cards,
     taskKey,
     shownTask,
     nameOf,
@@ -157,7 +161,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   )
   const sentNow = sending.map((s) => ({ s, real: landed(s) }))
   const replaced = new Set(sentNow.flatMap(({ real }) => (real ? [real.seq] : [])))
-  const sendingHere = sentNow.filter(({ s, real }) => s.place === hereKey && !real).map(({ s }) => s.m)
+  const sendingHere = sentNow.filter(({ s, real }) => s.place === hereKey && !real && (openRoom === null || roomOfMessage(state, s.m) === openRoom)).map(({ s }) => s.m)
   const quotedHere = useCallback((seq: number) => (seq < 0 ? sending.find((s) => s.key === -seq)?.m : quoted(seq)), [quoted, sending])
 
   const go = useCallback(
@@ -173,6 +177,15 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     [openTask, setBehind]
   )
 
+  const switchRoom = useCallback(
+    (id: string) => {
+      setCardRoom(id)
+      setReplyTo(null)
+      setBehind(0)
+    },
+    [setBehind]
+  )
+
   const jump = useCallback(
     (seq: number) => {
       setHighlight(seq)
@@ -181,7 +194,13 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       const at = placeOf.get(seq)
       const inTask = at?.kind === "task" ? at.task : null
       if (inTask !== null) openTask(inTask)
-      else if (at && placeKey(at) !== hereKey) setHere(placeKey(at))
+      else {
+        setTab("conversation")
+        if (at && placeKey(at) !== hereKey) setHere(placeKey(at))
+      }
+      const m = bySeq.get(seq)
+      const room = m ? roomOfMessage(state, m) : cardRoom
+      if (inTask === null && (at ?? MAIN).kind === "main" && room !== cardRoom && state.rooms.has(room)) switchRoom(room)
       setSearch(null)
       const find = (left: number) => {
         const el = document.getElementById(`${inTask !== null ? "k" : "m"}${seq}`)
@@ -194,7 +213,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       }
       requestAnimationFrame(() => requestAnimationFrame(() => find(3)))
     },
-    [placeOf, hereKey, openTask, state.compact, theirs]
+    [placeOf, hereKey, openTask, state, theirs, bySeq, cardRoom, switchRoom]
   )
 
   const onReply = useCallback((m: Message) => setReplyTo(m), [])
@@ -218,7 +237,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const onAnswer = useLatest(answer)
   const onJump = useLatest(jump)
   const onOpenImage = useLatest((pm: Message, img: ImageAttachment, src: string) => setPicture({ m: pm, img, src }))
-  const handlers = useControlsHandlers({ live, member, onGone })
+  const roomsNow = useLatest(() => state.rooms)
+  const handlers = useControlsHandlers({ live, member, onGone, rooms: roomsNow })
   const [newAgent, setNewAgent] = useState(false)
   const onNewAgent = isOwner && canStartAgents() ? () => setNewAgent(true) : undefined
   const addsAgents = !isOwner && !!roster.find((m) => m.active && m.pk === member.identity.pk)?.addsAgents
@@ -394,7 +414,10 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const roomKey = (id: string) => `room:${id}`
   const conversations: ConversationRow[] = [
     ...(rooms.length > 1
-      ? rooms.map((r) => ({ key: roomKey(r.id), label: `# ${r.name}`, unread: r.id === GENERAL_ROOM ? unreadIn("main").n : 0, forMe: r.id === GENERAL_ROOM && unreadIn("main").forMe, withMe: true }))
+      ? rooms.map((r) => {
+          const u = unreadInRoom(r.id)
+          return { key: roomKey(r.id), label: `# ${r.name}`, unread: u.n, forMe: u.forMe, withMe: true }
+        })
       : [{ key: "main", label: `# ${GENERAL_ROOM}`, unread: unreadIn("main").n, forMe: unreadIn("main").forMe, withMe: true }]),
     ...[...places]
       .filter(([, p]) => p.place.kind === "dm")
@@ -410,8 +433,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const openConversation = (key: string) => {
     setTab("conversation")
     if (key.startsWith("room:")) {
-      setCardRoom(key.slice(5))
       go(MAIN)
+      setCardRoom(key.slice(5))
       return
     }
     go(placeFromKey(key) ?? MAIN)
@@ -560,7 +583,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                       >
                         <div className="relative mx-auto w-full max-w-[792px] aside-room px-4 pt-[calc(var(--head)+8px)] pb-[calc(var(--foot)+16px)] [--column:792px]">
                           {hereKey === "main" && needsYou}
-                          {hereKey === "main" && state.rooms.size > 1 && !search && <RoomChips rooms={[...state.rooms.values()]} value={cardRoom} onChange={setCardRoom} />}
+                          {hereKey === "main" && state.rooms.size > 1 && !search && <RoomChips rooms={[...state.rooms.values()]} value={cardRoom} onChange={switchRoom} />}
                           {!ready && messages.length === 0 ? (
                             slowToOpen && (
                               <Centered>
@@ -605,8 +628,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                         <div className="relative aside-room [--column:792px]">
                           {mayWrite ? (
                             <Composer
-                              key={hereKey}
-                              draftKey={`${roomId}:${hereKey}`}
+                              key={`${hereKey}:${sendRoom ?? ""}`}
+                              draftKey={`${roomId}:${hereKey}${sendRoom ? `:${sendRoom}` : ""}`}
                               me={me}
                               people={people}
                               replyTo={replyTo}
@@ -619,9 +642,12 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                               onRestoreReply={(answering) => setReplyTo((now) => now ?? answering)}
                               disabled={connection === "connecting"}
                               extra={extra}
-                              placeholder={place.kind === "main" ? "Message everyone" : `Message ${nameOf(place.with.find((n) => n !== me) ?? "")} privately`}
-                              send={async (body, opts) => {
+                              placeholder={
+                                place.kind === "main" ? (rooms.length > 1 ? `Message #${roomName}` : "Message everyone") : `Message ${nameOf(place.with.find((n) => n !== me) ?? "")} privately`
+                              }
+                              send={async (body, given) => {
                                 stick()
+                                const opts: SendOptions = sendRoom && given.task === undefined ? { ...given, room: sendRoom } : given
                                 const answering = (o: SendOptions) => withSentQuotes(o, (k) => sendingSeq.current.get(k))
                                 if (opts.imgs?.length || opts.task !== undefined) return inTurn(async () => send(body, await answering(opts)))
                                 const key = sendingBase + ++sendingKey.current
@@ -637,6 +663,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                                   ...(opts.to ? { to: opts.to } : {}),
                                   ...(opts.re ? { re: opts.re } : {}),
                                   ...(opts.dm ? { dm: true } : {}),
+                                  ...(opts.room ? { room: opts.room } : {}),
                                 }
                                 setSending((all) => [...all, { key, place: hereKey, m, after: messages.at(-1)?.seq ?? 0 }].slice(-50))
                                 const going = inTurn(async () => send(body, await answering(opts)))

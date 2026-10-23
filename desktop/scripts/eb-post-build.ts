@@ -5,6 +5,7 @@ import path from "node:path";
 
 import type { FromWorker, ToWorker } from "../src/keys-shim.ts";
 import { bundleProblems } from "./eb-bundle.ts";
+import { sealApp } from "./eb-seal.ts";
 
 const buildDir = process.env.ELECTROBUN_BUILD_DIR;
 const os = process.env.ELECTROBUN_OS;
@@ -56,9 +57,14 @@ execFileSync(
     "-arch",
     arch === "x64" ? "x86_64" : "arm64",
     "-mmacosx-version-min=12.0",
+    "-framework",
+    "CoreFoundation",
+    "-framework",
+    "Security",
     "-o",
     path.join(contents, "MacOS", "kiwi-launcher"),
     path.join(desktop, "native", "macos", "kiwi-launcher.c"),
+    path.join(desktop, "native", "macos", "kiwi-keys.c"),
   ],
   { stdio: "inherit" },
 );
@@ -73,6 +79,7 @@ const answered = await bundledKeysAnswer(path.join(app, "bun", "keys.js"));
 if (answered !== "ok") throw new Error(`the bundled keys worker didn't answer a page's request: ${answered}`);
 const problems = bundleProblems(fs.readFileSync(path.join(app, "bun", "index.js"), "utf8"), fs.readFileSync(path.join(app, "views", "preload", "index.js"), "utf8"));
 if (problems.length) throw new Error(`eb-post-build: ${problems.join("; ")}`);
+console.log(`eb-post-build: ${sealApp(path.dirname(contents))} files sealed in Info.plist`);
 
 async function bundledKeysAnswer(file: string): Promise<string> {
   const dir = fs.mkdtempSync(path.join(tmpdir(), "kiwi-keys-bundle-"));

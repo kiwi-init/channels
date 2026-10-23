@@ -221,7 +221,40 @@ export function chooseStore(main: Buffer | null, backup: Buffer | null, decrypt:
   const read = readStore(main, decrypt);
   if (read.kind === "ok" || !backup) return { read, restore: null };
   const saved = readStore(backup, decrypt);
-  return saved.kind === "ok" ? { read: saved, restore: backup } : { read, restore: null };
+  if (saved.kind === "ok") return { read: saved, restore: backup };
+  return { read: read.kind === "none" ? saved : read, restore: null };
+}
+
+export const errorText = (e: unknown): string => (e instanceof Error ? e.message : String(e)) || "an error with no message";
+
+export type StoreLoad = { ok: true; choice: StoreChoice; raw: Buffer | null } | { ok: false; why: string };
+
+function readCopy(file: string): Buffer | null {
+  try {
+    return fs.readFileSync(file);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw e;
+  }
+}
+
+export function loadCopies(file: string, decrypt: ((b: Buffer) => string) | null): StoreLoad {
+  let raw: Buffer | null;
+  try {
+    raw = readCopy(file);
+  } catch (e) {
+    return { ok: false, why: errorText(e) };
+  }
+  let backup: Buffer | null = null;
+  let backupWhy: string | null = null;
+  try {
+    backup = readCopy(`${file}.bak`);
+  } catch (e) {
+    backupWhy = errorText(e);
+  }
+  const choice = chooseStore(raw, backup, decrypt);
+  if (choice.read.kind === "none" && backupWhy !== null) return { ok: false, why: `its backup can't be read: ${backupWhy}` };
+  return { ok: true, choice, raw };
 }
 
 export function claimFor(person: Identity, code: unknown, memberPk: unknown): Promise<PersonClaim> {

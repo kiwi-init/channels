@@ -192,7 +192,14 @@ jobs:
           overwrite: true
       - name: cli build
         if: ${{ !cancelled() }}
-        run: bun run build && ./dist/kiwi --version && bun scripts/build-cli.ts --check
+        run: |
+          bun run build && ./dist/kiwi --version && bun scripts/build-cli.ts --check
+          probe="$RUNNER_TEMP/kiwi-autoload"
+          mkdir -p "$probe"
+          printf 'preload = ["./p.js"]\n' > "$probe/bunfig.toml"
+          printf 'require("node:fs").writeFileSync("preload-ran", "")\n' > "$probe/p.js"
+          (cd "$probe" && "$GITHUB_WORKSPACE/dist/kiwi" --version)
+          test ! -e "$probe/preload-ran" || { echo "the kiwi CLI ran a bunfig.toml preload from the folder it was started in"; exit 1; }
       - name: cli smoke
         if: ${{ !cancelled() }}
         run: bun scripts/smoke-cli.ts dist/kiwi
@@ -339,19 +346,35 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
       - run: bun run web:build
+      - id: electrobun
+        run: echo "version=$(bun -e 'console.log(require("./desktop/package.json").devDependencies.electrobun)')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.hutch
+          key: hutch-${{ runner.os }}-${{ runner.arch }}-electrobun-${{ steps.electrobun.outputs.version }}
+      - name: electrobun toolchain
+        working-directory: desktop
+        run: for i in 1 2 3; do bun run prepare:eb && exit 0; echo "electrobun prepare failed ($i of 3)"; sleep 20; done; exit 1
       - working-directory: desktop
+        env:
+          DASH_RELEASE_OFFLINE: "1"
         run: bun run typecheck:eb
       - working-directory: desktop
         if: ${{ !cancelled() }}
         run: bun test --tsconfig-override tsconfig.eb.json ./eb-tests
       - working-directory: desktop
         if: ${{ !cancelled() }}
+        env:
+          DASH_RELEASE_OFFLINE: "1"
         run: bun run build:eb
       - if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-size.ts desktop/release-eb
       - name: the launcher keeps BUN_*, NODE_*, DYLD_* and JSC_* out of the app
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-env-check.ts desktop/release-eb
+      - name: the launcher holds the store key for one session, refuses a changed app, and its C runs clean under ASan and UBSan
+        if: ${{ !cancelled() }}
+        run: bun desktop/scripts/eb-keys-check.ts desktop/release-eb
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         timeout-minutes: 1

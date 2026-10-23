@@ -2,13 +2,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const LEGACY_NAMES = ["kiwi-desktop", "Kiwi"] as const;
+export const LEGACY_NAMES = ["kiwi-desktop", "Kiwi"] as const;
 
 export type LegacyName = (typeof LEGACY_NAMES)[number];
 
 export type LegacyPassword = (name: LegacyName) => Promise<string | null>;
 
-export type LegacyRead = { kind: "none" } | { kind: "ok"; json: Record<string, unknown>; file: string; encrypted: boolean } | { kind: "unreadable"; file: string; why: string };
+export type LegacyRead = { kind: "none" } | { kind: "ok"; json: Record<string, unknown>; file: string; encrypted: boolean } | { kind: "unreadable"; file: string; why: string; keyless?: true };
 
 const PREFIXES = ["v10", "v11"] as const;
 
@@ -68,7 +68,7 @@ export async function readLegacyAt(file: string, name: LegacyName, platform: Nod
     }
   }
   const pw = await legacyKey(prefix, name, platform, password);
-  if (pw === null) return { kind: "unreadable", file, why: `the system keychain didn't give Channels the key the old app saved as "${name} Safe Storage"` };
+  if (pw === null) return { kind: "unreadable", file, why: `the system keychain didn't give Channels the key the old app saved as "${name} Safe Storage"`, keyless: true };
   try {
     return { kind: "ok", json: storeObject(await openLegacy(raw, pw, legacyRounds(platform))), file, encrypted: !(platform === "linux" && prefix === "v10") };
   } catch (e) {
@@ -90,7 +90,9 @@ export async function readLegacyStore(password: LegacyPassword, platform: NodeJS
     for (const file of LEGACY_FILES) {
       const read = await readLegacyAt(path.join(dir, file), name, platform, once);
       if (read.kind === "ok") return read;
-      if (read.kind === "unreadable" && !unreadable) unreadable = read;
+      if (read.kind !== "unreadable") continue;
+      if (!unreadable) unreadable = read;
+      if (read.keyless) break;
     }
     if (unreadable) return unreadable;
   }
