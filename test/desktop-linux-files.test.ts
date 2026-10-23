@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
-import { APP_RUN, appImageName, archOfArtifact, debControl, debName, desktopEntry, runtimeUrl, UPDATER_TOOLS } from "../desktop/scripts/linux-files.ts";
+import { APP_RUN, appImageName, archOfArtifact, DEB_POSTINST, DEB_POSTRM, DEB_PREINST, debControl, debName, desktopEntry, LEFT_OUT, md5sums, runtimeUrl } from "../desktop/scripts/linux-files.ts";
 
 describe("the Linux packages made from Electrobun's bundle (T444)", () => {
   test("keep today's asset names, which the site's downloads and the updater look for", () => {
@@ -39,8 +39,20 @@ describe("the Linux packages made from Electrobun's bundle (T444)", () => {
     expect(control.endsWith("\n")).toBe(true);
   });
 
-  test("leave out Electrobun's own updater tools, which only its Updater runs: these packages update as a whole file", () => {
-    expect([...UPDATER_TOOLS]).toEqual(["bspatch", "zig-zstd"]);
+  test("leave out Electrobun's updater tools, its uninstall tool and its own .desktop entry: these packages install, update and integrate as a whole", () => {
+    expect([...LEFT_OUT]).toEqual(["bin/bspatch", "bin/zig-zstd", "Resources/uninstall", "Channels.desktop"]);
+  });
+
+  test("upgrading today's Electron deb keeps /usr/bin/channels-desktop: its postrm removes the channels-desktop alternative after the new files are unpacked (round 1)", () => {
+    expect(desktopEntry("/opt/Channels/bin/launcher")).toContain("Exec=/opt/Channels/bin/launcher %U\n");
+    expect(DEB_PREINST).toContain("  install|upgrade) if command -v update-alternatives >/dev/null 2>&1; then update-alternatives --remove-all channels-desktop >/dev/null 2>&1 || true; fi ;;");
+    expect(DEB_POSTINST).toContain("[ -e /usr/bin/channels-desktop ] || ln -sf /opt/Channels/bin/launcher /usr/bin/channels-desktop\n");
+    expect(DEB_POSTRM).not.toContain("channels-desktop");
+    for (const script of [DEB_PREINST, DEB_POSTINST, DEB_POSTRM]) expect(script.startsWith("#!/bin/sh\nset -e\n")).toBe(true);
+  });
+
+  test("the deb lists each file's md5, as dpkg --verify reads it", () => {
+    expect(md5sums([{ path: "opt/Channels/bin/launcher", md5: "d41d8cd98f00b204e9800998ecf8427e" }])).toBe("d41d8cd98f00b204e9800998ecf8427e  opt/Channels/bin/launcher\n");
   });
 
   test("the AppImage starts Electrobun's launcher from wherever it's mounted, with a pinned runtime", () => {

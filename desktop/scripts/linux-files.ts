@@ -5,7 +5,7 @@ export const PACKAGE = "kiwi-desktop";
 export const INSTALL_DIR = "/opt/Channels";
 export const DEPENDS = ["libwebkit2gtk-4.1-0", "libgtk-3-0", "libayatana-appindicator3-1", "librsvg2-2"] as const;
 export const MAX_DOWNLOAD = 40 * 1024 ** 2;
-export const UPDATER_TOOLS = ["bspatch", "zig-zstd"] as const;
+export const LEFT_OUT = ["bin/bspatch", "bin/zig-zstd", "Resources/uninstall", "Channels.desktop"] as const;
 
 export const RUNTIME_RELEASE = "20251108";
 export const RUNTIME_SHA256: Record<LinuxArch, string> = {
@@ -58,12 +58,26 @@ export function debControl({ version, arch, maintainer, installedKiB }: { versio
   ].join("\n");
 }
 
-export const DEB_REFRESH = [
-  "#!/bin/sh",
-  "set -e",
+const REFRESH = [
   "if command -v update-desktop-database >/dev/null 2>&1; then update-desktop-database -q /usr/share/applications || true; fi",
   "if command -v gtk-update-icon-cache >/dev/null 2>&1; then gtk-update-icon-cache -q -t /usr/share/icons/hicolor || true; fi",
+];
+
+export const DEB_PREINST = [
+  "#!/bin/sh",
+  "set -e",
+  'case "$1" in',
+  `  install|upgrade) if command -v update-alternatives >/dev/null 2>&1; then update-alternatives --remove-all ${EXECUTABLE} >/dev/null 2>&1 || true; fi ;;`,
+  "esac",
   "",
 ].join("\n");
+
+export const DEB_POSTINST = ["#!/bin/sh", "set -e", `[ -e /usr/bin/${EXECUTABLE} ] || ln -sf ${INSTALL_DIR}/bin/launcher /usr/bin/${EXECUTABLE}`, ...REFRESH, ""].join("\n");
+
+export const DEB_POSTRM = ["#!/bin/sh", "set -e", ...REFRESH, ""].join("\n");
+
+export function md5sums(files: readonly { path: string; md5: string }[]): string {
+  return files.map((f) => `${f.md5}  ${f.path.replace(/^\/+/, "")}\n`).join("");
+}
 
 export const APP_RUN = ["#!/bin/sh", 'HERE="$(dirname "$(readlink -f "$0")")"', 'exec "$HERE/Channels/bin/launcher" "$@"', ""].join("\n");

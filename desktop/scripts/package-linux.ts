@@ -6,16 +6,19 @@ import {
   APP_RUN,
   appImageName,
   archOfArtifact,
-  DEB_REFRESH,
+  DEB_POSTINST,
+  DEB_POSTRM,
+  DEB_PREINST,
   debControl,
   debName,
   desktopEntry,
   EXECUTABLE,
   INSTALL_DIR,
+  LEFT_OUT,
   MAX_DOWNLOAD,
+  md5sums,
   RUNTIME_SHA256,
   runtimeUrl,
-  UPDATER_TOOLS,
   type LinuxArch,
 } from "./linux-files.ts";
 
@@ -29,6 +32,14 @@ function sizeOf(path: string): number {
   if (st.isSymbolicLink()) return 0;
   if (!st.isDirectory()) return st.size;
   return readdirSync(path).reduce((sum, name) => sum + sizeOf(join(path, name)), 0);
+}
+
+function filesUnder(root: string, at: string): string[] {
+  return readdirSync(join(root, at), { withFileTypes: true }).flatMap((d) => {
+    const path = at ? `${at}/${d.name}` : d.name;
+    if (d.isDirectory()) return filesUnder(root, path);
+    return d.isFile() ? [path] : [];
+  });
 }
 
 function plainApp(tmp: string): { app: string; arch: LinuxArch; version: string } {
@@ -47,7 +58,7 @@ function plainApp(tmp: string): { app: string; arch: LinuxArch; version: string 
   rmSync(tar);
   const app = join(into, "Channels");
   if (!existsSync(join(app, "bin", "launcher"))) throw new Error(`package-linux: ${name} has no Channels/bin/launcher`);
-  for (const tool of UPDATER_TOOLS) rmSync(join(app, "bin", tool), { force: true });
+  for (const path of LEFT_OUT) rmSync(join(app, path), { force: true });
   const { version } = JSON.parse(readFileSync(join(app, "Resources", "version.json"), "utf8")) as { version: unknown };
   if (typeof version !== "string") throw new Error(`package-linux: ${name}'s version.json names no version`);
   return { app, arch, version };
@@ -68,13 +79,25 @@ function deb(app: string, arch: LinuxArch, version: string, tmp: string): string
   mkdirSync(join(root, "usr", "bin"), { recursive: true });
   symlinkSync(`${INSTALL_DIR}/bin/launcher`, join(root, "usr", "bin", EXECUTABLE));
   mkdirSync(join(root, "usr", "share", "applications"), { recursive: true });
-  writeFileSync(join(root, "usr", "share", "applications", `${EXECUTABLE}.desktop`), desktopEntry(EXECUTABLE));
+  writeFileSync(join(root, "usr", "share", "applications", `${EXECUTABLE}.desktop`), desktopEntry(`${INSTALL_DIR}/bin/launcher`));
   icons(root, "usr/share");
   const { author } = JSON.parse(readFileSync(join(desktop, "package.json"), "utf8")) as { author: { name: string; email: string } };
   mkdirSync(join(root, "DEBIAN"));
   writeFileSync(join(root, "DEBIAN", "control"), debControl({ version, arch, maintainer: `${author.name} <${author.email}>`, installedKiB: sizeOf(root) / 1024 }));
-  for (const hook of ["postinst", "postrm"]) {
-    writeFileSync(join(root, "DEBIAN", hook), DEB_REFRESH);
+  writeFileSync(
+    join(root, "DEBIAN", "md5sums"),
+    md5sums(
+      filesUnder(root, "")
+        .filter((f) => !f.startsWith("DEBIAN/"))
+        .map((path) => ({ path, md5: new Bun.CryptoHasher("md5").update(readFileSync(join(root, path))).digest("hex") })),
+    ),
+  );
+  for (const [hook, script] of [
+    ["preinst", DEB_PREINST],
+    ["postinst", DEB_POSTINST],
+    ["postrm", DEB_POSTRM],
+  ] as const) {
+    writeFileSync(join(root, "DEBIAN", hook), script);
     chmodSync(join(root, "DEBIAN", hook), 0o755);
   }
   const file = join(out, debName(version, arch));
