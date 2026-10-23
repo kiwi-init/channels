@@ -3,9 +3,12 @@ import fs from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts";
 import { JOIN_SCHEME } from "../src/deep-links.ts";
+import { PAGE_TEMPLATE, pageWithCsp } from "../src/eb-page.ts";
 import type { FromWorker, ToWorker } from "../src/keys-shim.ts";
 import { bundleProblems, testBuildProblems, urlSchemeProblems } from "./eb-bundle.ts";
+import { hostKey, mismatches, pinFor, PINS } from "./eb-pins.ts";
 import { sealApp } from "./eb-seal.ts";
 import { ELECTROBUN_LAUNCHER } from "./linux-files.ts";
 
@@ -18,6 +21,8 @@ if (os !== "macos" && os !== "linux") throw new Error(`the Electrobun shell buil
 const desktop = path.resolve(import.meta.dirname, "..");
 const web = path.resolve(desktop, "../web/dist");
 if (!fs.existsSync(path.join(web, "index.html"))) throw new Error("web/dist/index.html is missing: run `bun run web:build` in the repo root first");
+const index = fs.readFileSync(path.join(web, "index.html"), "utf8");
+pageWithCsp(index, DEFAULT_RELAY);
 
 function resourcesOf(dir: string, depth: number): string[] {
   if (depth < 0) return [];
@@ -31,9 +36,14 @@ function resourcesOf(dir: string, depth: number): string[] {
 
 const resources = resourcesOf(buildDir, 3);
 if (resources.length !== 1) throw new Error(`expected one app bundle (Resources/app) under ${buildDir}, found ${resources.length}`);
-const views = path.join(resources[0] as string, "app", "views", "internal");
+const app = path.join(resources[0] as string, "app");
+const template = path.join(app, PAGE_TEMPLATE);
+fs.mkdirSync(path.dirname(template), { recursive: true });
+fs.writeFileSync(template, index);
+const views = path.join(app, "views", "internal");
 fs.rmSync(views, { recursive: true, force: true });
-fs.cpSync(web, views, { recursive: true, filter: (src) => path.basename(src) !== "_headers" });
+fs.cpSync(web, views, { recursive: true, filter: (src) => src !== path.join(web, "index.html") && path.basename(src) !== "_headers" });
+if (fs.existsSync(path.join(views, "index.html"))) throw new Error("eb-post-build: index.html must not be under views/, where Electrobun would serve it without the CSP");
 if (os === "linux") {
   const host = process.arch === "x64" ? "x64" : process.arch === "arm64" ? "arm64" : process.arch;
   if (host !== arch) throw new Error(`eb-post-build: the Linux launcher is built with this machine's cc, for ${host}, not the ${arch} app`);
@@ -53,6 +63,15 @@ const contents = path.dirname(resources[0] as string);
 const cli = path.resolve(desktop, "../dist/kiwi.js");
 if (!fs.existsSync(cli)) throw new Error("dist/kiwi.js is missing: run `bun scripts/build-cli.ts --js dist/kiwi.js` in the repo root first");
 fs.copyFileSync(cli, path.join(contents, "Resources", "kiwi.js"));
+
+const key = hostKey("darwin", arch === "x64" ? "x64" : "arm64");
+const bundle = path.dirname(contents);
+const pinned = pinFor(PINS.app, key, "app files");
+const bad = mismatches(bundle, pinned);
+if (bad.length) throw new Error(`eb-post-build: Electrobun's files in the app don't match their pins: ${bad.join("; ")}`);
+const OURS = new Set(["libkiwi-shell.dylib", "kiwi-launcher"]);
+const extra = fs.readdirSync(path.join(contents, "MacOS")).filter((f) => !OURS.has(f) && !Object.hasOwn(pinned, `Contents/MacOS/${f}`));
+if (extra.length) throw new Error(`eb-post-build: Contents/MacOS holds files nobody pinned: ${extra.join(", ")}`);
 
 execFileSync(
   "clang",
@@ -101,7 +120,6 @@ execFileSync(
 );
 execFileSync("plutil", ["-replace", "CFBundleExecutable", "-string", "kiwi-launcher", path.join(contents, "Info.plist")]);
 
-const app = path.join(contents, "Resources", "app");
 const keysWorker = await Bun.build({ entrypoints: [path.join(desktop, "src", "keys-worker.ts")], target: "bun" });
 const keysOut = keysWorker.outputs[0];
 if (!keysWorker.success || !keysOut) throw new Error(`the keys worker didn't bundle: ${keysWorker.logs.join("\n")}`);
@@ -114,6 +132,7 @@ const problems = [
   ...testBuildProblems(process.env.CHANNELS_EB_TEST === "1", process.env.ELECTROBUN_APP_IDENTIFIER ?? "", fs.readFileSync(path.join(contents, "Resources", "version.json"), "utf8")),
 ];
 if (problems.length) throw new Error(`eb-post-build: ${problems.join("; ")}`);
+if (fs.existsSync(path.join(views, "index.html"))) throw new Error("eb-post-build: index.html is under views/ again by the seal, where Electrobun would serve it without the CSP");
 console.log(`eb-post-build: ${sealApp(path.dirname(contents))} files sealed in Info.plist`);
 
 async function bundledKeysAnswer(file: string): Promise<string> {
