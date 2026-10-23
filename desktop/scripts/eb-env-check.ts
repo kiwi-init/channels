@@ -30,9 +30,31 @@ const plist = join(app, "Contents", "Info.plist");
 const read = (key: string) => execFileSync("plutil", ["-extract", key, "raw", plist], { encoding: "utf8" }).trim();
 const id = read("CFBundleIdentifier");
 const macos = join(app, "Contents", "MacOS");
+
+function forgedCacheHome(target: string, bun: string): string {
+  const own = join(tmp, "attacker.js");
+  writeFileSync(own, `if (process.argv[2] !== "gen") require("node:fs").writeFileSync(${JSON.stringify(join(tmp, "injected-cache"))}, "ran");\n// ${"x".repeat(60_000)}\n`);
+  const gen = join(tmp, "cache-gen");
+  execFileSync(bun, [own, "gen"], { env: { HOME: gen, PATH: "/usr/bin:/bin" } });
+  const piles = join(gen, "Library", "Caches", "bun", "@t@");
+  const made = readdirSync(piles).filter((n) => n.endsWith(".pile"));
+  if (made.length !== 1) throw new Error(`expected Bun to cache one entry for a 60 KB file, found ${made.length}`);
+  const pile = readFileSync(join(piles, made[0]!));
+  const source = readFileSync(target);
+  const key = Buffer.alloc(8);
+  key.writeBigUInt64LE(Bun.hash.wyhash(source, 42n));
+  pile.writeBigUInt64LE(BigInt(source.length), 14);
+  key.copy(pile, 22);
+  const home = join(tmp, "home");
+  const into = join(home, "Library", "Caches", "bun", "@t@");
+  mkdirSync(into, { recursive: true });
+  writeFileSync(join(into, `${key.toString("hex")}.pile`), pile);
+  return home;
+}
 const problems: string[] = [];
 const later = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+const IMPOSED: Record<string, string> = { BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" };
 const KEPT = ["HOME", "USER", "LOGNAME", "TMPDIR", "PATH", "SHELL", "LANG", "LC_ALL", "LC_CTYPE", "__CF_USER_TEXT_ENCODING", "XPC_SERVICE_NAME", "XPC_FLAGS"];
 const DROPPED = [
   "BUN_OPTIONS",
@@ -47,6 +69,10 @@ const DROPPED = [
   "JSC_dumpOptions",
   "ELECTRON_RUN_AS_NODE",
   "KIWI_HOME",
+  "XDG_CACHE_HOME",
+  "BUN_INSTALL",
+  "BUN_RUNTIME_TRANSPILER_CACHE_PATH",
+  "XPC_SOMETHING",
   "SOMETHING_ELSE",
 ];
 
@@ -82,11 +108,16 @@ else {
     .split("\n")
     .filter(Boolean)
     .map((line) => line.slice(0, line.indexOf("=")));
-  const leaked = seen.filter((n) => !KEPT.includes(n));
+  const imposed = Object.entries(IMPOSED).map(([n, v]) => `${n}=${v}`);
+  const lines = readFileSync(filter, "utf8").split("\n").filter(Boolean);
+  const leaked = seen.filter((n) => !KEPT.includes(n) && !(n in IMPOSED));
   const lost = KEPT.filter((n) => !seen.includes(n));
+  const unset = imposed.filter((line) => lines.filter((l) => l.startsWith(`${line.split("=")[0]}=`)).join() !== line);
   if (leaked.length) problems.push(`the launcher passed on ${leaked.join(", ")}`);
   if (lost.length) problems.push(`the launcher dropped ${lost.join(", ")}, which the app needs`);
-  if (!leaked.length && !lost.length) console.log(`environment: passes on ${KEPT.length} names it keeps, drops ${DROPPED.length} it doesn't (BUN_*, NODE_*, DYLD_*, JSC_* and the rest)`);
+  if (unset.length) problems.push(`the launcher didn't set ${unset.join(", ")} (and only that) whatever the caller gave`);
+  if (!leaked.length && !lost.length && !unset.length)
+    console.log(`environment: passes on ${KEPT.length} names it keeps, drops ${DROPPED.length} it doesn't (BUN_*, NODE_*, DYLD_*, JSC_* and the rest) and sets ${imposed.join(", ")} itself`);
 }
 if (injected().includes("launcher")) problems.push("DYLD_INSERT_LIBRARIES reached the program the launcher starts");
 
@@ -101,7 +132,15 @@ if (id === "com.kiwiinit.channels" && !process.env.CI) {
       s.close(() => ok(p));
     });
   });
-  const env: NodeJS.ProcessEnv = { ...process.env, BUN_OPTIONS: `--preload=${preload}`, BUN_INSPECT: `127.0.0.1:${port}/kiwi`, NODE_OPTIONS: `--require=${preload}`, DYLD_INSERT_LIBRARIES: marker };
+  const home = forgedCacheHome(join(app, "Contents", "Resources", "app", "bun", "index.js"), join(macos, "bun"));
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    HOME: home,
+    BUN_OPTIONS: `--preload=${preload}`,
+    BUN_INSPECT: `127.0.0.1:${port}/kiwi`,
+    NODE_OPTIONS: `--require=${preload}`,
+    DYLD_INSERT_LIBRARIES: marker,
+  };
   const child = spawn(join(macos, read("CFBundleExecutable")), [], { env, stdio: "ignore", detached: true });
   const bun = join(macos, "bun");
   const up = async () => {
@@ -112,13 +151,14 @@ if (id === "com.kiwiinit.channels" && !process.env.CI) {
   else {
     await later(6_000);
     if (injected().includes("preload")) problems.push("BUN_OPTIONS or NODE_OPTIONS ran a file of the caller's choosing in the app's main process");
+    if (injected().includes("cache")) problems.push("a forged entry in Bun's transpiler cache under HOME ran in place of the app's main code");
     const listening = spawnSync("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN"], { encoding: "utf8" }).stdout.trim();
     if (listening) problems.push(`BUN_INSPECT opened a debugger on 127.0.0.1:${port}`);
-    const reached = injected().filter((n) => n !== "kiwi-launcher" && n !== "preload");
+    const reached = injected().filter((n) => n !== "kiwi-launcher" && n !== "preload" && n !== "cache");
     if (reached.length) problems.push(`DYLD_INSERT_LIBRARIES reached ${reached.join(", ")}`);
     if (!problems.length)
       console.log(
-        `the running app: BUN_OPTIONS, BUN_INSPECT, NODE_OPTIONS and DYLD_INSERT_LIBRARIES reach none of its processes${injected().includes("kiwi-launcher") ? " (the unsigned launcher itself loads an inserted library: only a signed build's hardened runtime stops that)" : ""}`,
+        `the running app: BUN_OPTIONS, BUN_INSPECT, NODE_OPTIONS, DYLD_INSERT_LIBRARIES and a forged transpiler cache entry under HOME reach none of its processes${injected().includes("kiwi-launcher") ? " (the unsigned launcher itself loads an inserted library: only a signed build's hardened runtime stops that)" : ""}`,
       );
   }
   try {
