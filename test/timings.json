@@ -319,7 +319,6 @@
     "web/src/lib/review-checks.test.ts": 22,
     "web/src/lib/show-seat.test.ts": 560,
     "web/src/lib/snapshot-plan.test.ts": 8,
-    "web/src/lib/tab-fit.test.ts": 4,
     "web/src/lib/task-actions.test.ts": 90,
     "web/src/lib/task-cards.test.ts": 6,
     "web/src/lib/task-labels.test.ts": 3,

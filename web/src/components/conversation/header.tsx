@@ -46,7 +46,7 @@ export function Header({
   const wide = useSidebarHidden()
   return (
     <header ref={headRef} className="absolute inset-x-0 top-0 z-20 bg-canvas">
-      <div className="drag relative flex h-(--chrome-h) items-center gap-1 px-2 sm:gap-3 sm:px-3 md:px-6">
+      <div className={cx("drag relative flex h-(--chrome-h) items-center gap-1 px-2 sm:gap-3 sm:px-3 md:px-6", wide && "md:shell-mac:pl-(--lights-w)")}>
         {wide && (
           <IconButton label={`Show the sidebar (${SIDEBAR_KEYS})`} round className="no-drag hidden size-9 text-ink-2 hover:text-ink md:flex" onClick={toggleSidebar}>
             <Icon icon={SidebarLeftIcon} size={18} />

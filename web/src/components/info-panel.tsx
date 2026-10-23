@@ -23,6 +23,7 @@ import { presetOf, SCOPES } from "@kiwi/core/scopes.ts"
 import { colorOf } from "@kiwi/core/state.ts"
 import { memberLoad } from "@kiwi/core/load.ts"
 import { memberName } from "@/lib/format"
+import { useSidebarHidden } from "@/lib/sidebar-hidden"
 import { cx } from "@/lib/utils"
 import { ChannelIconTile, RobotPicker } from "./channel-icon"
 import { useControls } from "./controls"
@@ -87,10 +88,11 @@ export function InfoPanel({
   const hold = p.state.hold
   const lead = p.state.lead
   const back = view === "details" ? onClose : () => setView("details")
+  const sidebarHidden = useSidebarHidden()
 
   return (
     <aside aria-label="Details" className="flex min-w-0 flex-1 flex-col bg-canvas md:sheet" onKeyDown={(e) => e.key === "Escape" && back()}>
-      <header className="drag flex h-(--chrome-h) shrink-0 items-center gap-2 px-3">
+      <header className={cx("drag flex h-(--chrome-h) shrink-0 items-center gap-2 px-3", sidebarHidden && "md:shell-mac:pl-(--lights-w)")}>
         <IconButton label={view === "details" ? "Close details" : "Back to details"} round className="glass size-9 text-ink" onClick={back}>
           <Icon icon={ArrowLeft01Icon} size={18} />
         </IconButton>

@@ -523,7 +523,7 @@ export function SettingsPage({ backTo, onClose }: { backTo: string; onClose: () 
         back()
       }}
     >
-      <header className="drag flex h-(--chrome-h) shrink-0 items-center gap-2 px-3">
+      <header className="drag flex h-(--chrome-h) shrink-0 items-center gap-2 px-3 shell-mac:pl-(--lights-w)">
         <IconButton label={inner ? "Back to Settings" : "Close settings"} round className="glass size-9 text-ink" onClick={back}>
           <Icon icon={ArrowLeft01Icon} size={18} />
         </IconButton>

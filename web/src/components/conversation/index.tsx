@@ -31,6 +31,7 @@ import { ALLOW_ONCE, DENY, settledOf } from "@/lib/permission-settled"
 import { isAgent } from "../message"
 import { NeedsYou } from "../needs-you"
 import { ChannelSidebar, ConversationMenu, type Conversation as ConversationRow } from "./channel-sidebar"
+import { AccountFoot, ChannelSwitcher } from "../channel-switcher"
 import { Header } from "./header"
 import { InfoSide, PictureSide, TasksSide, ThreadSide } from "./side-panels"
 import { Centered, rowMakers, threadRowsOf } from "./timeline"
@@ -450,6 +451,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                 icon={icon}
                 people={peopleLine}
                 onTitle={() => setSide((s) => (s?.kind === "info" ? null : { kind: "info" }))}
+                head={<ChannelSwitcher title={title} icon={icon} people={peopleLine} onDetails={() => setSide({ kind: "info" })} />}
+                foot={<AccountFoot />}
                 search={search}
                 onSearch={(q) => {
                   if (q !== null) setTab("conversation")

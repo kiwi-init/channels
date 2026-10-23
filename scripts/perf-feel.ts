@@ -408,18 +408,14 @@ try {
   log("cold", JSON.stringify(report["cold: first run, empty cache"]));
   await page.getByRole("textbox", { name: "Your name" }).fill("Jonatas");
   await page.getByRole("button", { name: "Continue" }).click();
-  await page
-    .getByRole("banner", { name: "Channels" })
-    .getByRole("button", { name: /Jonatas/i })
-    .first()
-    .waitFor();
+  await page.getByRole("button", { name: "Jonatas, your account" }).filter({ visible: true }).first().waitFor();
   const wa = await context.newCDPSession(page);
   await wa.send("WebAuthn.enable");
   await wa.send("WebAuthn.addVirtualAuthenticator", {
     options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true, hasPrf: true },
   } as never);
 
-  await page.getByRole("banner", { name: "Channels" }).getByRole("button", { name: "New channel", exact: true }).click();
+  await page.getByRole("button", { name: "New channel", exact: true }).filter({ visible: true }).first().click();
   await page.getByRole("dialog").getByRole("textbox").fill("feel");
   const before = page.url();
   await page.getByRole("button", { name: "Create channel" }).click();

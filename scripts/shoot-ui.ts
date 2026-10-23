@@ -160,7 +160,14 @@ try {
   await passkey(owner);
 
   // New is the list's first row.
-  const newChannel = chrome(owner).getByRole("button", { name: "New channel", exact: true }).filter({ visible: true }).first();
+  const newChannel = {
+    click: async () => {
+      const direct = chrome(owner).getByRole("button", { name: "New channel", exact: true }).filter({ visible: true }).first();
+      if (await direct.isVisible().catch(() => false)) return void (await direct.click());
+      await owner.getByRole("button", { name: /: switch channel/ }).click();
+      await owner.getByRole("menuitem", { name: "New channel" }).click();
+    },
+  };
   await newChannel.click();
   await owner.getByRole("dialog").getByRole("textbox").fill("kiwi");
   await owner.getByRole("button", { name: "Create channel" }).click();
@@ -481,17 +488,11 @@ try {
         await shoot(
           owner,
           tag,
-          "01f-mac-tab-bar",
+          "01f-mac-window",
           () => owner.evaluate(macWindow, true),
           () => owner.evaluate(macWindow, false),
         );
-        if (moreChannels > 0)
-          await shoot(owner, tag, "01e-more-channels", () =>
-            owner
-              .getByRole("banner", { name: "Channels" })
-              .getByRole("button", { name: /^\d+ more channels?\b/ })
-              .click(),
-          );
+        await shoot(owner, tag, "01e-switch-channel", () => owner.getByRole("button", { name: /: switch channel/ }).click());
       }
       await owner.mouse.wheel(0, -4000);
       await shoot(owner, tag, "02-channel-top");

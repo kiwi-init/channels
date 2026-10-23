@@ -15,7 +15,7 @@ import { AccountItems, UpdatePill } from "./lazy"
 import { Menu } from "./ui/menu"
 
 /** What a row says on hover: what was said last, or why this browser can't open it yet. */
-export function rowNote(c: ChannelRow): string {
+function rowNote(c: ChannelRow): string {
   if (c.state === "pending") return "Waiting for the owner to let you in"
   if (c.state === "elsewhere") return `On ${c.relay}: switch back to that relay in Settings to open it`
   if (c.state === "agents") return c.agents === 1 ? "One of your agents is here" : `${c.agents} of your agents are here`
@@ -128,7 +128,7 @@ export function Sidebar({
             side="top"
             className="w-60"
             trigger={
-              <button type="button" className="glass flex h-10 max-w-full items-center gap-2 rounded-full pr-4 pl-1 transition-colors">
+              <button type="button" aria-label={`${person.name}, your account`} className="glass flex h-10 max-w-full items-center gap-2 rounded-full pr-4 pl-1 transition-colors">
                 <Monogram name={person.name} size={32} picture={picture} />
                 <span className="truncate text-ui font-semibold">{person.name}</span>
               </button>

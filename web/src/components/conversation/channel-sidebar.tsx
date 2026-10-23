@@ -6,7 +6,7 @@ import { VIEWS, type View } from "@/lib/views"
 import { SIDEBAR_KEYS, toggleSidebar, useSidebarHidden } from "@/lib/sidebar-hidden"
 import { cx } from "@/lib/utils"
 import { AgentRow, byBusy, type AgentNow } from "../agent-strip"
-import { AccountFoot, ChannelSwitcher } from "../channel-tabs"
+import { ChannelIconTile } from "../channel-icon"
 import { Icon } from "../icon"
 import { IconButton } from "../kit"
 import { Menu, MenuItem } from "../ui/menu"
@@ -176,6 +176,8 @@ export function ChannelSidebar({
   conversations,
   current,
   onConversation,
+  head,
+  foot,
 }: {
   title: string
   icon: ChannelIcon | null
@@ -194,6 +196,8 @@ export function ChannelSidebar({
   conversations: Conversation[]
   current: string | null
   onConversation: (key: string) => void
+  head?: ReactNode
+  foot?: ReactNode
 }) {
   const hidden = useSidebarHidden()
   if (hidden) return null
@@ -204,7 +208,15 @@ export function ChannelSidebar({
           <Icon icon={SidebarLeftIcon} size={18} />
         </IconButton>
       </div>
-      <ChannelSwitcher title={title} icon={icon} people={people} onDetails={onTitle} />
+      {head ?? (
+        <button type="button" onClick={onTitle} className="no-drag flex items-center gap-3 rounded-row px-2 py-1.5 text-left transition-colors hover:bg-wash">
+          <ChannelIconTile icon={icon} title={title} size={36} />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-title">{title}</span>
+            <span className="block truncate text-meta text-ink-3">{people}</span>
+          </span>
+        </button>
+      )}
 
       <nav aria-label="Views" className="mt-4">
         <ul className="space-y-0.5">
@@ -240,7 +252,7 @@ export function ChannelSidebar({
       )}
 
       <Conversations conversations={conversations} current={current} onConversation={onConversation} />
-      <AccountFoot />
+      {foot}
     </aside>
   )
 }

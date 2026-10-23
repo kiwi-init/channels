@@ -50,7 +50,7 @@ const BASE = `http://localhost:${port}/`;
 const browser = await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
 
 async function channel(page: Page, title: string): Promise<string> {
-  await page.getByRole("banner", { name: "Channels" }).getByRole("button", { name: "New channel", exact: true }).click();
+  await page.getByRole("button", { name: "New channel", exact: true }).filter({ visible: true }).first().click();
   await page.getByRole("dialog").getByRole("textbox").fill(title);
   const before = page.url();
   await page.getByRole("button", { name: "Create channel" }).click();
@@ -118,14 +118,16 @@ async function seed(alias: string, prefix: string): Promise<void> {
   for (let i = 0; i < MESSAGES; i += 10) await Promise.all(Array.from({ length: Math.min(10, MESSAGES - i) }, (_, j) => send(`${prefix}${i + j}: ${texts[(i + j) % texts.length]}`)));
 }
 
-// A click on the channel's tab, timed in the page until the target's first screen (its task board) is painted.
+// The channel picked in the sidebar head's menu, timed in the page from the pick until the target's first screen (its conversation) is painted.
 async function switchTo(page: Page, title: string, last: string): Promise<number> {
+  await page.getByRole("button", { name: /: switch channel/ }).click();
+  await page.getByRole("menuitem").filter({ hasText: title }).first().waitFor();
   return page.evaluate(
     async ([name, text]) => {
-      const tile = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Channel tabs"] button')].find((b) => (b.getAttribute("aria-label") ?? "").startsWith(`${name},`));
-      if (!tile) return -1;
+      const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((b) => b.textContent?.includes(name));
+      if (!item) return -1;
       const t0 = performance.now();
-      tile.click();
+      item.click();
       const deadline = t0 + 15000;
       while (performance.now() < deadline) {
         await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
@@ -167,11 +169,7 @@ try {
   await page.goto(BASE);
   await page.getByRole("textbox", { name: "Your name" }).fill("Jonatas");
   await page.getByRole("button", { name: "Continue" }).click();
-  await page
-    .getByRole("banner", { name: "Channels" })
-    .getByRole("button", { name: /Jonatas/i })
-    .first()
-    .waitFor();
+  await page.getByRole("button", { name: "Jonatas, your account" }).filter({ visible: true }).first().waitFor();
   const wa = await page.context().newCDPSession(page);
   await wa.send("WebAuthn.enable");
   await wa.send("WebAuthn.addVirtualAuthenticator", {
@@ -184,7 +182,7 @@ try {
   await Promise.all([seed("alpha", "A"), seed("beta", "B")]);
   console.log(`seeded ${MESSAGES} messages in each of two channels in ${Math.round((Date.now() - t0) / 1000)}s`);
 
-  const lastOf = { alpha: "A board: the first screen", beta: "B board: the first screen" };
+  const lastOf = { alpha: `A${MESSAGES - 1}: `, beta: `B${MESSAGES - 1}: ` };
   await page
     .getByText(`B${MESSAGES - 1}: `)
     .filter({ visible: true })
