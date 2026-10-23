@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { JOIN_SCHEME } from "../src/deep-links.ts";
 import type { FromWorker, ToWorker } from "../src/keys-shim.ts";
-import { bundleProblems, urlSchemeProblems } from "./eb-bundle.ts";
+import { bundleProblems, keyChannelProblems, urlSchemeProblems } from "./eb-bundle.ts";
 import { sealApp } from "./eb-seal.ts";
 
 const buildDir = process.env.ELECTROBUN_BUILD_DIR;
@@ -92,6 +92,7 @@ if (answered !== "ok") throw new Error(`the bundled keys worker didn't answer a 
 const problems = [
   ...bundleProblems(fs.readFileSync(path.join(app, "bun", "index.js"), "utf8"), fs.readFileSync(path.join(app, "views", "preload", "index.js"), "utf8")),
   ...urlSchemeProblems(fs.readFileSync(path.join(contents, "Info.plist"), "utf8"), process.env.ELECTROBUN_APP_IDENTIFIER ?? "", JOIN_SCHEME),
+  ...keyChannelProblems(fs.readFileSync(path.join(app, "bun", "index.js"), "utf8")),
 ];
 if (problems.length) throw new Error(`eb-post-build: ${problems.join("; ")}`);
 console.log(`eb-post-build: ${sealApp(path.dirname(contents))} files sealed in Info.plist`);

@@ -1,3 +1,6 @@
+import { builtinModules } from "node:module";
+import { parseSync, type Argument, type Class, type Directive, type Expression, type Statement } from "oxc-parser";
+
 export const RELEASE_ID = "com.kiwiinit.channels";
 
 export function bundleProblems(main: string, preload: string): string[] {
@@ -15,4 +18,175 @@ export function urlSchemeProblems(infoPlist: string, identifier: string, scheme:
   const has = schemes.includes(scheme);
   if (identifier === RELEASE_ID) return has ? [] : [`the app registers no ${scheme}:// scheme (CFBundleURLSchemes in Info.plist), so macOS never sends it a ${scheme}:// link`];
   return has ? [`the test build ${identifier} registers ${scheme}://, so it could take links meant for the installed Channels`] : [];
+}
+
+const KEY_CHANNEL = "launcherKeys";
+const PURE_CALLS = new Set(["__esm", "__commonJS", "__export", "createRequire", "Symbol"]);
+const PURE_STATICS: Record<string, ReadonlySet<string>> = {
+  Object: new Set(["defineProperty", "freeze", "create", "assign", "keys", "entries", "fromEntries", "getOwnPropertyNames", "getOwnPropertyDescriptor", "getPrototypeOf"]),
+  Buffer: new Set(["from", "alloc"]),
+  Array: new Set(["from", "isArray"]),
+  JSON: new Set(["stringify", "parse"]),
+};
+const PURE_METHODS = new Set([
+  "encode",
+  "decode",
+  "map",
+  "filter",
+  "includes",
+  "indexOf",
+  "some",
+  "every",
+  "find",
+  "join",
+  "concat",
+  "slice",
+  "split",
+  "trim",
+  "toLowerCase",
+  "toUpperCase",
+  "replace",
+]);
+const PURE_NEW = new Set(["Map", "Set", "WeakMap", "WeakSet", "TextEncoder", "TextDecoder", "RegExp", "Error"]);
+const BUILTINS = new Set(builtinModules);
+
+const builtin = (source: string): boolean => source.startsWith("node:") || source.startsWith("bun:") || source === "bun" || BUILTINS.has(source);
+
+function inertness(helpers: ReadonlyMap<string, Expression>): { inert: (e: Expression | null) => boolean; statement: (st: Directive | Statement) => boolean } {
+  const visiting = new Set<string>();
+
+  const inertClass = (c: Class): boolean =>
+    c.decorators.length === 0 &&
+    inert(c.superClass) &&
+    c.body.body.every((m) => {
+      if (m.type === "StaticBlock") return false;
+      if (m.type === "TSIndexSignature") return true;
+      if (m.computed && m.key.type !== "PrivateIdentifier" && !inert(m.key as Expression)) return false;
+      return !(m.type === "PropertyDefinition" || m.type === "AccessorProperty") || !m.static || inert(m.value);
+    });
+
+  const inertArgument = (a: Argument): boolean => {
+    if (a.type === "SpreadElement") return inert(a.argument);
+    if (a.type === "ArrowFunctionExpression") return a.body.type !== "BlockStatement" && inert(a.body);
+    return a.type !== "FunctionExpression" && inert(a);
+  };
+
+  const inertHelper = (name: string): boolean => {
+    const body = helpers.get(name);
+    if (body === undefined || visiting.has(name)) return false;
+    visiting.add(name);
+    try {
+      return inert(body);
+    } finally {
+      visiting.delete(name);
+    }
+  };
+
+  const asValue = (a: Argument): boolean => (a.type === "SpreadElement" ? inert(a.argument) : inert(a));
+
+  const inertCall = (callee: Expression, args: Argument[]): boolean => {
+    if (callee.type === "Identifier") return (PURE_CALLS.has(callee.name) || inertHelper(callee.name)) && args.every(asValue);
+    if (callee.type !== "MemberExpression" || callee.computed || callee.property.type !== "Identifier") return false;
+    const method = callee.property.name;
+    if (callee.object.type === "Identifier" && PURE_STATICS[callee.object.name]?.has(method)) return args.every(asValue);
+    return PURE_METHODS.has(method) && inert(callee.object) && args.every(inertArgument);
+  };
+
+  function inert(e: Expression | null): boolean {
+    if (e === null) return true;
+    switch (e.type) {
+      case "Literal":
+      case "Identifier":
+      case "ThisExpression":
+      case "MetaProperty":
+      case "ArrowFunctionExpression":
+      case "FunctionExpression":
+        return true;
+      case "TemplateLiteral":
+        return e.expressions.every(inert);
+      case "ClassExpression":
+        return inertClass(e);
+      case "ArrayExpression":
+        return e.elements.every((x) => x === null || (x.type === "SpreadElement" ? inert(x.argument) : inert(x)));
+      case "ObjectExpression":
+        return e.properties.every((p) => (p.type === "SpreadElement" ? inert(p.argument) : (!p.computed || inert(p.key as Expression)) && inert(p.value as Expression)));
+      case "UnaryExpression":
+        return e.operator !== "delete" && inert(e.argument);
+      case "BinaryExpression":
+        return (e.left.type === "PrivateIdentifier" || inert(e.left)) && inert(e.right);
+      case "LogicalExpression":
+        return inert(e.left) && inert(e.right);
+      case "ConditionalExpression":
+        return inert(e.test) && inert(e.consequent) && inert(e.alternate);
+      case "SequenceExpression":
+        return e.expressions.every(inert);
+      case "ParenthesizedExpression":
+        return inert(e.expression);
+      case "ChainExpression":
+        return e.expression.type === "CallExpression" ? inertCall(e.expression.callee, e.expression.arguments) : inert(e.expression);
+      case "MemberExpression":
+        return inert(e.object) && (!e.computed || inert(e.property));
+      case "AssignmentExpression":
+        return e.operator === "=" && e.left.type === "Identifier" && inert(e.right);
+      case "CallExpression":
+        return inertCall(e.callee, e.arguments);
+      case "NewExpression":
+        return e.callee.type === "Identifier" && PURE_NEW.has(e.callee.name) && e.arguments.every(inertArgument);
+      default:
+        return false;
+    }
+  }
+
+  const statement = (st: Directive | Statement): boolean => {
+    switch (st.type) {
+      case "ImportDeclaration":
+      case "FunctionDeclaration":
+      case "EmptyStatement":
+        return true;
+      case "ClassDeclaration":
+        return inertClass(st);
+      case "VariableDeclaration":
+        return st.declarations.every((d) => inert(d.init));
+      case "ExpressionStatement":
+        return inert(st.expression);
+      default:
+        return false;
+    }
+  };
+
+  return { inert, statement };
+}
+
+function helpersIn(body: (Directive | Statement)[]): Map<string, Expression> {
+  const helpers = new Map<string, Expression>();
+  for (const st of body) {
+    if (st.type === "FunctionDeclaration" && st.id && st.body?.body.length === 1) {
+      const only = st.body.body[0];
+      if (only?.type === "ReturnStatement" && only.argument) helpers.set(st.id.name, only.argument);
+    }
+    if (st.type === "VariableDeclaration")
+      for (const d of st.declarations) if (d.id.type === "Identifier" && d.init?.type === "ArrowFunctionExpression" && d.init.body.type !== "BlockStatement") helpers.set(d.id.name, d.init.body);
+  }
+  return helpers;
+}
+
+const declares = (st: Directive | Statement, name: string): boolean => st.type === "VariableDeclaration" && st.declarations.some((d) => d.id.type === "Identifier" && d.id.name === name);
+
+export function keyChannelProblems(main: string): string[] {
+  const { program, errors } = parseSync("index.js", main, { sourceType: "module" });
+  if (errors.length) return [`the main bundle doesn't parse: ${errors[0]?.message ?? ""}`];
+  const shown = (st: { start: number; end: number }): string => main.slice(st.start, Math.min(st.end, st.start + 100)).replace(/\s+/g, " ");
+  const problems = program.body
+    .filter((st) => st.type === "ImportDeclaration" && !builtin(st.source.value))
+    .map((st) => `the main bundle imports ${st.type === "ImportDeclaration" ? st.source.value : ""}, whose top level runs before the key channel is taken: ${shown(st)}`);
+  const at = program.body.findIndex((st) => declares(st, KEY_CHANNEL));
+  if (at < 0) return [...problems, `the main bundle never takes the launcher's key channel (${KEY_CHANNEL} from desktop/src/launcher-channel-eb.ts)`];
+  const before = program.body.slice(0, at);
+  const { statement } = inertness(helpersIn(before));
+  const early = before.filter((st) => !statement(st));
+  if (early.length)
+    problems.push(
+      `${early.length} top-level statement${early.length === 1 ? " runs" : "s run"} before the key channel is taken, so a child started there would inherit fd 3; launcher-channel-eb.ts must stay main-eb's first import: ${early.slice(0, 3).map(shown).join(" | ")}`,
+    );
+  return problems;
 }
