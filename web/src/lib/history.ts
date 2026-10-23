@@ -15,6 +15,7 @@
 import type { CachedKept, CachedRow, Unread } from "@kiwi/core/cache-row.ts"
 import type { Message } from "@kiwi/core/protocol.ts"
 import { planReload } from "./history-plan"
+import { markOnce } from "./marks"
 
 export type { CachedKept, CachedRow }
 export type OpenRows = (rows: CachedRow[]) => Promise<(Message | Unread | null)[]>
@@ -151,6 +152,7 @@ export interface OpenedCache {
 
 export async function openCached(roomId: string, memberPk: string, openRows: OpenRows): Promise<OpenedCache> {
   const stored = await db().rows(roomId, memberPk)
+  markOnce("kiwi:cache-read")
   return { stored: stored.length, opened: (await openRows(stored)).filter((m): m is Message | Unread => m !== null) }
 }
 

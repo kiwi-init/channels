@@ -237,12 +237,18 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
       roster: loadRoster,
       requests: refreshRequests,
       rotate: () => (ch.isOwner ? ch.rotateIfDue().catch((err: unknown) => (onGone(err), false)) : Promise.resolve(false)),
-      cache: () => openCached(ch.roomId, ch.pk, ch.openRows).catch(() => null),
+      cache: () =>
+        openCached(ch.roomId, ch.pk, ch.openRows)
+          .then((opened) => (markOnce("kiwi:cache-open"), opened))
+          .catch(() => null),
       plan: (opened, head) => planCached(ch.roomId, ch.pk, opened, head, HISTORY).catch(() => null),
       snapshot: () => ch.snapshot().catch(() => null),
       kept: async () => {
         const sealed = await readKept(ch.roomId, ch.pk).catch(() => null)
-        return sealed ? asKept(await ch.openKept(sealed).catch(() => null)) : null
+        markOnce("kiwi:kept-read")
+        const kept = sealed ? asKept(await ch.openKept(sealed).catch(() => null)) : null
+        markOnce("kiwi:kept-open")
+        return kept
       },
       early: (cached, kept) => {
         if (closed || painted) return
