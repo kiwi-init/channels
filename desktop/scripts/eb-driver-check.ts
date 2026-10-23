@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { plainApp } from "./eb-plain.ts";
 
 const IN_CODE = ["kiwiDriver", "KIWI_EB_DRIVER", "KIWI_EB_RELAY"];
-const IN_LAUNCHER = ["KIWI_EB_DRIVER", "KIWI_EB_RELAY", "CFFIXED_USER_HOME"];
+const IN_LAUNCHER = ["KIWI_EB_DRIVER", "KIWI_EB_RELAY", "CFFIXED_USER_HOME", "KIWI_HOME"];
 
 const dir = resolve(process.argv[2] ?? "desktop/release-eb");
 const builds = join(dir, "build");
