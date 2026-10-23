@@ -1,8 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState, type UIEvent } from "react"
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type UIEvent } from "react"
 
 import type { Message } from "@kiwi/core/protocol.ts"
 
 const SMOOTH_MS = 500
+const THEIRS_MS = 1000
+const SCROLL_KEYS = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "])
 
 export function arrivedAfter(visible: readonly Pick<Message, "seq">[], seen: number): number {
   return seen ? visible.filter((m) => m.seq > seen).length : visible.length
@@ -17,6 +19,11 @@ export interface Scrolled {
 export interface Follow {
   atBottom: boolean
   lastTop: number
+  theirsUntil: number
+}
+
+export function touched(f: Follow, now: number, holding = false): void {
+  f.theirsUntil = holding ? Infinity : now + THEIRS_MS
 }
 
 export function pin(el: Scrolled, f: Follow): void {
@@ -30,12 +37,17 @@ export function resized(el: Scrolled, f: Follow, smoothing: boolean): void {
   else pin(el, f)
 }
 
-export function scrolled(el: Scrolled, f: Follow): void {
+export function scrolled(el: Scrolled, f: Follow, now: number): void {
   const near = el.scrollHeight - el.scrollTop - el.clientHeight < 80
   const up = el.scrollTop < f.lastTop - 2
   f.lastTop = el.scrollTop
   if (near) f.atBottom = true
-  else if (up) f.atBottom = false
+  else if (up && now < f.theirsUntil) f.atBottom = false
+}
+
+function scrollsByKey(e: KeyboardEvent): boolean {
+  const at = e.target
+  return SCROLL_KEYS.has(e.key) && !(at instanceof HTMLElement && (at.isContentEditable || at.closest("input, textarea, select")))
 }
 
 export function useScroll({ messages, visible, hereKey }: { messages: Message[]; visible: Message[]; hereKey: string }) {
@@ -47,7 +59,7 @@ export function useScroll({ messages, visible, hereKey }: { messages: Message[];
   const isFresh = (seq: number) => baseline !== null && baseline.key === hereKey && seq > baseline.seq
 
   const scroller = useRef<HTMLDivElement>(null)
-  const follow = useRef<Follow>({ atBottom: true, lastTop: 0 })
+  const follow = useRef<Follow>({ atBottom: true, lastTop: 0, theirsUntil: 0 })
   const lastSeq = useRef(0)
   const smoothUntil = useRef(0)
   const followed = useRef<{ el: HTMLDivElement; stop: () => void } | null>(null)
@@ -63,7 +75,29 @@ export function useScroll({ messages, visible, hereKey }: { messages: Message[];
     const content = el.firstElementChild
     const observer = content && typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => resized(el, follow.current, Date.now() <= smoothUntil.current)) : null
     if (content) observer?.observe(content, { box: "border-box" })
-    followed.current = { el, stop: () => observer?.disconnect() }
+    const touch = () => touched(follow.current, Date.now())
+    const hold = () => touched(follow.current, Date.now(), true)
+    const key = (e: KeyboardEvent) => {
+      if (scrollsByKey(e)) touch()
+    }
+    el.addEventListener("wheel", touch, { passive: true })
+    el.addEventListener("touchmove", touch, { passive: true })
+    el.addEventListener("pointerdown", hold)
+    window.addEventListener("pointerup", touch)
+    window.addEventListener("pointercancel", touch)
+    window.addEventListener("keydown", key)
+    followed.current = {
+      el,
+      stop: () => {
+        observer?.disconnect()
+        el.removeEventListener("wheel", touch)
+        el.removeEventListener("touchmove", touch)
+        el.removeEventListener("pointerdown", hold)
+        window.removeEventListener("pointerup", touch)
+        window.removeEventListener("pointercancel", touch)
+        window.removeEventListener("keydown", key)
+      },
+    }
   })
   useEffect(
     () => () => {
@@ -104,7 +138,7 @@ export function useScroll({ messages, visible, hereKey }: { messages: Message[];
   }
 
   const onScroll = (e: UIEvent<HTMLDivElement>) => {
-    scrolled(e.currentTarget, follow.current)
+    scrolled(e.currentTarget, follow.current, Date.now())
     if (follow.current.atBottom && behind) setBehind(0)
   }
 
@@ -112,5 +146,7 @@ export function useScroll({ messages, visible, hereKey }: { messages: Message[];
     follow.current.atBottom = true
   }
 
-  return { behind, setBehind, isFresh, scroller, stick, toBottom, onScroll }
+  const theirs = useCallback(() => touched(follow.current, Date.now()), [])
+
+  return { behind, setBehind, isFresh, scroller, stick, theirs, toBottom, onScroll }
 }

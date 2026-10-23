@@ -2,7 +2,7 @@ import { basename } from "node:path";
 
 const POSIX = new Set(["sh", "bash", "zsh", "ksh", "mksh", "dash", "yash"]);
 
-const SESSION_MARKERS = [
+export const SESSION_MARKERS = [
   "AI_AGENT",
   "CLAUDECODE",
   "CLAUDE_PID",

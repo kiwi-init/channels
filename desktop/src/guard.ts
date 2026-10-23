@@ -4,6 +4,7 @@
 
 import { cleanPersonalities } from "@kiwi/core/personalities.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
+import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -132,6 +133,8 @@ export function readStore(raw: Buffer | null, decrypt: ((b: Buffer) => string) |
   }
 }
 
+export function publicPerson(p: PersonView): PublicPerson;
+export function publicPerson(p: PersonView | null): PublicPerson | null;
 export function publicPerson(p: PersonView | null): PublicPerson | null {
   return p ? { name: p.name, pk: p.pk, xpk: p.xpk } : null;
 }
@@ -166,9 +169,9 @@ export function writePrivate(file: string, raw: Buffer, platform: NodeJS.Platfor
   const dir = path.dirname(file);
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   if (platform !== "win32") fs.chmodSync(dir, 0o700);
-  const tmp = `${file}.${process.pid}.tmp`;
+  const tmp = `${file}.${randomBytes(8).toString("hex")}.tmp`;
   try {
-    const fd = fs.openSync(tmp, "w", 0o600);
+    const fd = fs.openSync(tmp, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0), 0o600);
     try {
       fs.writeFileSync(fd, raw);
       fs.fsyncSync(fd);

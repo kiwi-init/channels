@@ -1,9 +1,9 @@
-import { BrowserWindow, dialog, ipcMain, type OpenDialogOptions } from "electron";
-
 import { readHarnessRow, type HarnessRow } from "@kiwi/core/harnesses.ts";
 import type { LaunchedView } from "@kiwi/core/terminals.ts";
 import type { ComputerView, FromMachine, LaunchAgentRequest, MachineView } from "../bridge.ts";
+import type { Serves } from "../calls.ts";
 import { daemonHarnesses, daemonHello, daemonLaunch } from "../daemon-client.ts";
+import type { Host } from "../host.ts";
 import { launchedView, launchRequestOf, MACHINE_PK } from "../launch-view.ts";
 import { askMachine, machineOnline, type Asked, type Asker } from "../remote.ts";
 import { requirePerson, store } from "../store.ts";
@@ -61,39 +61,35 @@ async function launchOn(c: ComputerView, req: LaunchAgentRequest): Promise<Launc
   return { ok: false, why: "failed", detail: asked.detail };
 }
 
-const PICK: OpenDialogOptions = { properties: ["openDirectory", "createDirectory"], buttonLabel: "Choose" };
-
-export function wireLaunchIpc(): void {
-  ipcMain.handle("kiwi:harnesses", (): Promise<HarnessRow[]> => daemonHarnesses().catch(() => []));
-  ipcMain.handle("kiwi:seat-folders", async (_e, roomId: unknown): Promise<string[]> => {
-    if (typeof roomId !== "string" || !ROOM.test(roomId)) return [];
-    const listed = await runKiwi(["folders", "--room", roomId, "--json"]);
-    return listed.code === 0 ? folders(listed.stdout) : [];
-  });
-  ipcMain.handle("kiwi:choose-folder", async (e): Promise<string | null> => {
-    const win = BrowserWindow.fromWebContents(e.sender);
-    const picked = await (win ? dialog.showOpenDialog(win, PICK) : dialog.showOpenDialog(PICK));
-    return picked.canceled ? null : (picked.filePaths[0] ?? null);
-  });
-  ipcMain.handle("kiwi:launch-agent", async (_e, value: unknown): Promise<LaunchedView> => {
-    const req = launchRequestOf(value);
-    if (!req) return { ok: false, why: "bad-request", detail: "the app sent a launch it can't check" };
-    const there = req.machinePk ? paired(req.machinePk) : null;
-    if (req.machinePk && !there) return { ok: false, why: "bad-request", detail: "that isn't one of your paired computers" };
-    const launched = there ? launchOn(there, req) : daemonLaunch(req);
-    return launched.catch((err: unknown) => ({ ok: false, why: "failed", detail: err instanceof Error ? err.message : String(err) }));
-  });
-  ipcMain.handle("kiwi:machines", (): Promise<MachineView[]> => machines().catch(() => []));
-  ipcMain.handle("kiwi:harnesses-on", async (_e, machinePk: unknown): Promise<FromMachine<HarnessRow[]>> => {
-    const c = paired(machinePk);
-    if (!c) return { ok: false, detail: "that isn't one of your paired computers" };
-    const asked = await askMachine(asker(), { pk: c.machinePk, xpk: c.machineXpk }, "harnesses", {}, { timeoutMs: ASK_MS });
-    return fromMachine(asked, (r) => (Array.isArray(r["harnesses"]) ? r["harnesses"].map(readHarnessRow).filter((row): row is HarnessRow => row !== null) : null));
-  });
-  ipcMain.handle("kiwi:folders-on", async (_e, machinePk: unknown, roomId: unknown): Promise<FromMachine<string[]>> => {
-    const c = paired(machinePk);
-    if (!c || typeof roomId !== "string" || !ROOM_ID.test(roomId)) return { ok: false, detail: "that isn't one of your paired computers" };
-    const asked = await askMachine(asker(), { pk: c.machinePk, xpk: c.machineXpk }, "folders", { room: roomId }, { timeoutMs: ASK_MS });
-    return fromMachine(asked, (r) => (Array.isArray(r["folders"]) ? r["folders"].filter((f): f is string => typeof f === "string" && f.startsWith("/")).slice(0, 20) : null));
-  });
+export function launchCalls(host: Host): Serves<"harnesses" | "seatFolders" | "chooseFolder" | "launchAgent" | "machines" | "harnessesOn" | "foldersOn"> {
+  return {
+    harnesses: (): Promise<HarnessRow[]> => daemonHarnesses().catch(() => []),
+    seatFolders: async (roomId: unknown): Promise<string[]> => {
+      if (typeof roomId !== "string" || !ROOM.test(roomId)) return [];
+      const listed = await runKiwi(["folders", "--room", roomId, "--json"]);
+      return listed.code === 0 ? folders(listed.stdout) : [];
+    },
+    chooseFolder: () => host.pickFolder(),
+    launchAgent: async (value: unknown): Promise<LaunchedView> => {
+      const req = launchRequestOf(value);
+      if (!req) return { ok: false, why: "bad-request", detail: "the app sent a launch it can't check" };
+      const there = req.machinePk ? paired(req.machinePk) : null;
+      if (req.machinePk && !there) return { ok: false, why: "bad-request", detail: "that isn't one of your paired computers" };
+      const launched = there ? launchOn(there, req) : daemonLaunch(req);
+      return launched.catch((err: unknown) => ({ ok: false, why: "failed", detail: err instanceof Error ? err.message : String(err) }));
+    },
+    machines: (): Promise<MachineView[]> => machines().catch(() => []),
+    harnessesOn: async (machinePk: unknown): Promise<FromMachine<HarnessRow[]>> => {
+      const c = paired(machinePk);
+      if (!c) return { ok: false, detail: "that isn't one of your paired computers" };
+      const asked = await askMachine(asker(), { pk: c.machinePk, xpk: c.machineXpk }, "harnesses", {}, { timeoutMs: ASK_MS });
+      return fromMachine(asked, (r) => (Array.isArray(r["harnesses"]) ? r["harnesses"].map(readHarnessRow).filter((row): row is HarnessRow => row !== null) : null));
+    },
+    foldersOn: async (machinePk: unknown, roomId: unknown): Promise<FromMachine<string[]>> => {
+      const c = paired(machinePk);
+      if (!c || typeof roomId !== "string" || !ROOM_ID.test(roomId)) return { ok: false, detail: "that isn't one of your paired computers" };
+      const asked = await askMachine(asker(), { pk: c.machinePk, xpk: c.machineXpk }, "folders", { room: roomId }, { timeoutMs: ASK_MS });
+      return fromMachine(asked, (r) => (Array.isArray(r["folders"]) ? r["folders"].filter((f): f is string => typeof f === "string" && f.startsWith("/")).slice(0, 20) : null));
+    },
+  };
 }
