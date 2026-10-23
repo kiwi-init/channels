@@ -4,9 +4,13 @@ import path from "node:path";
 import Electrobun, { BrowserView, BrowserWindow, PATHS, Utils } from "electrobun/main";
 
 import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts";
+import { startAppLife } from "./app-life-eb.ts";
+import { handleDeepLink, JOIN_SCHEME } from "./deep-links.ts";
 import { navigationUrl, openedUrl, PAGE_RULES, PAGE_URL, pageWithCsp } from "./eb-page.ts";
 import { externalUrl } from "./guard.ts";
 import { openInBrowser } from "./open.ts";
+import { claimInstance, handoffFor } from "./single-instance.ts";
+import { updateState } from "./updater.ts";
 import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts";
 import { minWindowWidth } from "./window-size.ts";
 
@@ -30,7 +34,7 @@ function openOutside(url: string): void {
   if (ext) void openInBrowser(ext, async (u) => void Utils.openExternal(u)).catch(() => {});
 }
 
-function createWindow(): void {
+function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     title: "Channels",
     url: null,
@@ -58,11 +62,41 @@ function createWindow(): void {
   view.on("dom-ready", () => {
     if (!win.isVisible()) win.show();
   });
+  return win;
+}
+
+function showWindow(win: BrowserWindow): void {
+  if (win.isMinimized()) win.unminimize();
+  win.show();
+  win.activate();
 }
 
 BrowserView.on("created", (tag) => tag.remove());
 
-if (!shell.kiwi_deny_permissions()) {
+let show: (() => void) | null = null;
+const instance = await claimInstance({
+  dir: Utils.paths.userData,
+  handoff: handoffFor(process.argv, JOIN_SCHEME),
+  onHandoff: (h) => (h.kind === "link" ? handleDeepLink(h.url) : show?.()),
+});
+if (instance.kind === "second") Utils.quit(0);
+else if (!shell.kiwi_deny_permissions()) {
   console.error("Channels: the web view's permission handler wasn't found; not opening a window that could grant the microphone");
+  instance.release();
   Utils.quit(1);
-} else createWindow();
+} else {
+  const win = createWindow();
+  show = () => showWindow(win);
+  startAppLife({
+    win,
+    view: win.webview,
+    pageUrl: PAGE_URL,
+    showWindow: show,
+    textStep: () => {},
+    restartToUpdate: () => {},
+    update: updateState,
+    nudgeKeys: () => {},
+    flushKeys: async () => {},
+    release: instance.release,
+  });
+}
