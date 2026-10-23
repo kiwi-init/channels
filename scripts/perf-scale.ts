@@ -251,17 +251,14 @@ const agents = Array.from({ length: AGENTS }, (_, i) => `agent${i}`);
 try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await context.addInitScript(WATCH);
-  await context.addInitScript(
-    (marker: string) => {
-      const w = window as unknown as { __firstScreen?: number };
-      const seen = () => {
-        if (w.__firstScreen === undefined && document.body?.textContent?.includes(marker)) w.__firstScreen = performance.now();
-        return w.__firstScreen !== undefined;
-      };
-      new MutationObserver((_, obs) => seen() && obs.disconnect()).observe(document, { childList: true, subtree: true, characterData: true });
-    },
-    SEEDED,
-  );
+  await context.addInitScript((marker: string) => {
+    const w = window as unknown as { __firstScreen?: number };
+    const seen = () => {
+      if (w.__firstScreen === undefined && document.body?.textContent?.includes(marker)) w.__firstScreen = performance.now();
+      return w.__firstScreen !== undefined;
+    };
+    new MutationObserver((_, obs) => seen() && obs.disconnect()).observe(document, { childList: true, subtree: true, characterData: true });
+  }, SEEDED);
   const page = await context.newPage();
   page.on("pageerror", (e) => log(`page error: ${e.message}`));
   const cdp = await context.newCDPSession(page);
