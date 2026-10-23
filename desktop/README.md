@@ -37,7 +37,12 @@ bun run typecheck:eb                                  # fetches the devkit into 
   `CHANNELS_EB_IDENTIFIER` (a test's own id) says otherwise, so a local run never shares
   state with an installed Channels; a `CHANNELS_EB_TEST=1` build is always
   `com.kiwiinit.channels.test`, on the dev channel only.
-- `src/main-eb.ts` — the window. The page is `web/dist/index.html` with `csp(relay)` from
+- `src/main-eb.ts` — only the order things start in: one instance, the native guards
+  (`native-eb.ts`), the store (`store-eb.ts`), the keys Worker (`keys-start-eb.ts`), the
+  window (`window-eb.ts`), the test build's driver (`test-build-eb.ts`), then app life and
+  updates (`life-updates-eb.ts`). Each feature's wiring lives in its own module, so pull requests that
+  add features don't all edit one file.
+- `src/window-eb.ts` — the window. The page is `web/dist/index.html` with `csp(relay)` from
   `guard.ts` as a `<meta>` first in `<head>` (found by the page's structure, and checked at
   build time), kept in memory and served at `views://internal/index.html` (Electrobun's
   scheme sends fixed headers, so no CSP header). The template sits outside `views/`, so no

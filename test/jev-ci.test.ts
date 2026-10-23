@@ -237,7 +237,7 @@ describe("jev-ci.yml edits", () => {
 
   test("a job's inputs edited run that job", async () => {
     const { by } = await planFor({
-      ".github/jev-ci.yml": CONFIG_TEXT.replace('"test/owner.ts", "test/owner-cli.ts", "test/check.ts"]', '"test/owner.ts", "test/owner-cli.ts", "test/check.ts", "test/other.ts"]'),
+      ".github/jev-ci.yml": CONFIG_TEXT.replace('      - "test/check.ts"\n', '      - "test/check.ts"\n      - "test/other.ts"\n'),
     });
     expect(by("build")).toMatchObject({ run: true, layer: "L0" });
     expect(by("build").reason).toContain("inputs");
@@ -522,5 +522,31 @@ describe("a pull request runs only the fast checks, the merge queue the rest (T2
         .sort(),
     ).toEqual(["perf", "perf-runs"]);
     expect(pullRequestOnly({ ...config, pull_request_jobs: undefined }, all)).toEqual(all);
+  });
+});
+
+describe("jev-ci.yml stays merge-friendly (T2212)", () => {
+  const lines = CONFIG_TEXT.split("\n");
+  const jobs = lines.indexOf("jobs:");
+
+  test("each job's inputs, imports_from, always and parts are block lists, one item per line, sorted", () => {
+    const flow = lines.slice(jobs).filter((l) => /^ {4}(inputs|imports_from|always|parts): \[.+\]/.test(l));
+    expect(flow).toEqual([]);
+    for (let i = jobs; i < lines.length; i++) {
+      if (!/^ {4}(inputs|imports_from|always|parts):$/.test(lines[i]!)) continue;
+      const items: string[] = [];
+      for (let j = i + 1; j < lines.length && lines[j]!.startsWith("      - "); j++) items.push(lines[j]!.slice(8));
+      expect(items.length).toBeGreaterThan(0);
+      expect(items).toEqual([...items].sort());
+    }
+  });
+
+  test("each description is one sentence per line", () => {
+    const run: string[] = [];
+    for (let i = jobs; i < lines.length; i++) {
+      if (lines[i] !== "    description: >-") continue;
+      for (let j = i + 1; j < lines.length && lines[j]!.startsWith("      "); j++) if (/[.;:!?)] (?=[A-Z`('"])/.test(lines[j]!)) run.push(lines[j]!.slice(0, 80));
+    }
+    expect(run).toEqual([]);
   });
 });
