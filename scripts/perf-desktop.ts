@@ -119,8 +119,14 @@ try {
   running = await launch();
   let page = running.page;
   await page.waitForLoadState("domcontentloaded");
-  await page.evaluate((url) => (window as unknown as { kiwi: { setRelayUrl: (u: string) => Promise<string> } }).kiwi.setRelayUrl(url), RELAY);
-  await page.reload();
+  type Bridge = { kiwi: { relayUrl: string; setRelayUrl: (u: string) => Promise<string> } };
+  await page.evaluate((url) => void (window as unknown as Bridge).kiwi.setRelayUrl(url), RELAY).catch(() => undefined);
+  await until("the app on the local relay", 30_000, () =>
+    page
+      .evaluate(() => (window as unknown as Bridge).kiwi.relayUrl)
+      .then((url) => (url.startsWith(RELAY) ? true : null))
+      .catch(() => null),
+  );
   await page.getByRole("textbox", { name: "Your name" }).fill("Jonatas", { timeout: 60_000 });
   await page.getByRole("button", { name: "Continue" }).click();
   const chrome = page.getByRole("banner", { name: "Channels" }).or(page.getByRole("complementary"));
@@ -166,6 +172,10 @@ try {
     await quit(running);
     running = null;
   }
+} catch (e) {
+  const text = await running?.page.evaluate(() => document.body.innerText).catch(() => null);
+  console.error(`where it stopped (${running?.page.url() ?? "no window"}):\n${text?.slice(0, 1500) ?? "(no page text)"}`);
+  throw e;
 } finally {
   if (running) await quit(running);
   relay.kill();
