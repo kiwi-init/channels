@@ -1007,7 +1007,7 @@ jobs:
     name: desktop / mac
     inputs: ["desktop/src/**", "desktop/native/**", "desktop/build/icon.icns", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "package.json", "bun.lock"]
     imports_from: ["desktop/src/main-eb.ts"]
-    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-size.ts", "desktop/scripts/eb-env-check.ts"]
+    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-size.ts", "desktop/scripts/eb-env-check.ts", "desktop/scripts/eb-app.ts", "desktop/scripts/eb-seal.ts", "desktop/scripts/eb-keys-check.ts", "desktop/scripts/eb-keys-probe.ts"]
     description: >-
       On a macOS runner (Electrobun builds only for the host it runs on), checks the Electrobun
       shell that is replacing Electron (issue #757). Builds web/dist, restores ~/.hutch (Hutch,
@@ -1049,6 +1049,27 @@ jobs:
       library into any process but the unsigned
       launcher itself (a signed build's hardened runtime stops that one), or leaves anything
       running; it starts a release-id app only on CI, never on a person's Mac.
+      The launcher also holds the store key (T544, desktop/native/macos/kiwi-keys.c): before it
+      starts anything it checks every file in Contents (but Info.plist, _CodeSignature and itself)
+      against the SHA-256 list scripts/eb-seal.ts writes into Info.plist as KiwiSeal (at the end of
+      eb-post-build.ts for dev builds; a stable build's Resources/version.json gets its hash from
+      Electrobun after that hook, so the shipped plain .app is sealed once it's out of the payload,
+      by scripts/eb-app.ts shippedApp, which eb-size, eb-env-check and eb-keys-check use, as T443's
+      packaging will between signing the nested code and the app), and refuses a changed, missing
+      or unlisted file or a link (247 files in about 60 ms on an M2); then it starts Electrobun's
+      launcher from / with posix_spawn and CLOEXEC_DEFAULT, so only stdio and a socketpair on fd 3
+      (KIWI_KEY_FD=3) get through, and answers bun's requests there (desktop/src/launcher-key.ts):
+      the store key from the Keychain under the bundle id, made only when none is there and never
+      replaced, and the old Electron app's key for a name in Info.plist's KiwiLegacyNames only.
+      desktop/scripts/eb-keys-check.ts takes a copy of the plain .app with a probe
+      (scripts/eb-keys-probe.ts) as main.js, a throwaway bundle id and a throwaway legacy item,
+      resealed, and fails unless a descriptor the launcher inherited never reaches bun, the first
+      start makes a key through the launcher and the next gets the same one, a second key is refused, the legacy key comes through while an
+      unlisted name and an unknown request are refused, and copies with a changed main.js, a
+      bunfig.toml beside bun, an app.asar, a link or a missing file all stop before bun runs, and
+      unless the launcher's check of the whole app takes 500 ms or less (median of 7); on CI it uses
+      a temporary keychain, and it deletes its items either way. eb-env-check runs the launcher
+      inside a small sealed bundle and expects KIWI_KEY_FD as the one name it adds.
 
   cli-macos:
     name: cli / macos
