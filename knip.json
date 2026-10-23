@@ -3,6 +3,9 @@
   "ignoreBinaries": [
     "oxfmt",
     "iconutil",
+    "clang",
+    "ditto",
+    "hdiutil",
     "kwallet-query"
   ],
   "workspaces": {
@@ -53,9 +56,11 @@
     "desktop": {
       "entry": [
         "src/main.ts",
+        "src/main-eb.ts",
         "src/preload.ts",
         "src/channels.ts",
-        "scripts/*.ts"
+        "scripts/*.ts",
+        "electrobun.config.ts"
       ],
       "project": [
         "src/**/*.ts",
