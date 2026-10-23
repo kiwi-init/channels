@@ -66,9 +66,9 @@ jobs:
       - name: desktop types
         if: ${{ !cancelled() }}
         run: cd desktop && bunx tsc --noEmit
-      - name: ios engine types
+      - name: phone engine types
         if: ${{ !cancelled() }}
-        run: bunx tsc --noEmit -p ios/engine/tsconfig.json && bunx tsc --noEmit -p ios/scripts/tsconfig.json
+        run: bunx tsc --noEmit -p ios/engine/tsconfig.json && bunx tsc --noEmit -p ios/scripts/tsconfig.json && bunx tsc --noEmit -p android/scripts/tsconfig.json
       - name: ui tokens
         if: ${{ !cancelled() }}
         run: bun scripts/ui-tokens.ts
@@ -374,6 +374,7 @@ jobs:
 
   # The Android app: Gradle bundles the engine, builds a release APK (R8, signed with a debug key kept in the cache so
   # installs update in place) and runs Android lint on it. The APK is kept as an artifact to install on a phone.
+  # Then the engine runs in Chromium the way Engine.kt hosts it, linked to a dev channel, through the kiwiAndroid bridge.
   android:
     name: android / build
     needs: plan
@@ -397,6 +398,11 @@ jobs:
       - name: app build and lint
         working-directory: android
         run: JAVA_HOME="$JAVA_HOME_17_X64" ./gradlew --no-daemon --stacktrace assembleRelease lintRelease
+      - uses: ./.github/actions/browser
+        if: ${{ !cancelled() }}
+      - name: engine bridge
+        if: ${{ !cancelled() }}
+        run: bun android/scripts/bridge-check.ts
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -413,6 +419,60 @@ jobs:
           job: android
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['android'] }}
 
+  # The Android app on an emulator: the newest Google APIs image this runner's SDK offers, booted with KVM. The APK
+  # links to a dev channel on the runner by kiwi://link, sends, opens details and the lead chat; screenshots kept.
+  android-device:
+    name: android / device
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['android-device']
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle.kts', 'android/gradle/libs.versions.toml', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+      - name: app build
+        working-directory: android
+        run: JAVA_HOME="$JAVA_HOME_17_X64" ./gradlew --no-daemon assembleRelease
+      - name: emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          sdk="$ANDROID_HOME/cmdline-tools/latest/bin"
+          image=$("$sdk/sdkmanager" --list 2>/dev/null | grep -oE 'system-images;android-[0-9]+;google_apis;x86_64' | sort -u | sort -t';' -k2,2V | tail -1)
+          echo "image: $image"
+          yes | "$sdk/sdkmanager" --install "$image" emulator platform-tools > /dev/null
+          echo no | "$sdk/avdmanager" create avd -n ci -k "$image" -d pixel_7 --force
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          nohup "$ANDROID_HOME/emulator/emulator" -avd ci -no-window -no-audio -no-boot-anim -no-snapshot -no-metrics -gpu swiftshader_indirect -memory 4096 > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          "$ANDROID_HOME/platform-tools/adb" wait-for-device
+          timeout 600 bash -c 'until [ "$("$ANDROID_HOME/platform-tools/adb" shell getprop sys.boot_completed | tr -d "\r")" = 1 ]; do sleep 3; done'
+          "$ANDROID_HOME/platform-tools/adb" shell settings put global window_animation_scale 0
+          "$ANDROID_HOME/platform-tools/adb" shell settings put global transition_animation_scale 0
+          "$ANDROID_HOME/platform-tools/adb" shell dumpsys package com.google.android.webview | grep -m1 versionName || true
+      - name: app on the emulator
+        run: bun android/scripts/device-check.ts android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/android-shots"
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: android-shots
+          path: ${{ runner.temp }}/android-shots
+          if-no-files-found: ignore
+          overwrite: true
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        timeout-minutes: 1
+        with:
+          job: android-device
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['android-device'] }}
+
   release-rehearsal:
     name: release / rehearsal
     needs: plan
@@ -425,7 +485,7 @@ jobs:
   # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, static, test-unit, test-flows-a, test-flows-b, build, shots, perf-runs, perf, desktop, cli-macos, ios, android, release-rehearsal]
+    needs: [plan, static, test-unit, test-flows-a, test-flows-b, build, shots, perf-runs, perf, desktop, cli-macos, ios, android, android-device, release-rehearsal]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

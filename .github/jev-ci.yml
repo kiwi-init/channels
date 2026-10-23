@@ -59,10 +59,10 @@ jobs:
       Workers types (tsconfig.worker.json), tsc -b in web/ (which also compiles the
       packages/core modules the dashboard imports as @kiwi/core/*), and tsc --noEmit in
       desktop/, and tsc --noEmit over the iPhone app's engine (ios/engine/tsconfig.json, which adds
-      the DOM lib) and its dev scripts (ios/scripts). scripts/ui-tokens.ts fails on an arbitrary text-[Npx] or rounded-[Npx] Tailwind
+      the DOM lib), its dev scripts (ios/scripts) and the Android app's bridge check (android/scripts). scripts/ui-tokens.ts fails on an arbitrary text-[Npx] or rounded-[Npx] Tailwind
       class in web/src. oxlint (root .oxlintrc.json) on src/, packages/core/src, desktop/src, desktop/scripts,
       scripts/, test/, .github/jev-ci/ and site/app.js: unused variables or imports, an empty block or catch,
-      explicit any, a useless assignment or escape, a rethrow without its cause; ios/engine and ios/scripts too. oxlint on web/src
+      explicit any, a useless assignment or escape, a rethrow without its cause; ios/engine, ios/scripts and android/scripts too. oxlint on web/src
       (web/.oxlintrc.json extends the root config and adds the React rules: conditional hooks,
       setState in an effect, impure calls in render). oxfmt --check on web/src (web/.oxfmtrc.json:
       no semicolons) and on the same root paths as oxlint (root .oxfmtrc.json: semicolons, trailing
@@ -985,8 +985,8 @@ jobs:
 
   android:
     name: android / build
-    inputs: ["android/**", "ios/engine/**"]
-    imports_from: ["ios/engine/main.ts"]
+    inputs: ["android/**", "ios/engine/**", "ios/scripts/**"]
+    imports_from: ["ios/engine/main.ts", "ios/scripts/dev-channel.ts", "android/scripts/bridge-check.ts"]
     always: ["package.json", "bun.lock", "web/package.json", "desktop/package.json", "packages/core/package.json"]
     description: >-
       On an Ubuntu runner with JDK 17 and the preinstalled Android SDK, builds the Android app in
@@ -1001,7 +1001,32 @@ jobs:
       on the release variant with abortOnError (manifest, resources, API levels, the targetSdk).
       Fails on a bundle error, a Kotlin compile error, a missing resource or manifest entry, an R8
       failure, or a lint error. Uploads app-release.apk and the lint report as the channels-android
-      artifact. It does not run the app or the engine on a device.
+      artifact. Then android/scripts/bridge-check.ts runs the engine the way Engine.kt hosts it: the
+      bundle loaded in headless Chromium at http://localhost/, the PROBE and call wrapper taken from
+      Engine.kt's source, a kiwiAndroid object standing in for the bridge. It links to a channel
+      from ios/scripts/dev-channel.ts (a local relay, agents, tasks, a question) and checks the
+      probe passes (secure context, Ed25519, X25519), linkAsk and linkWait, start, that room pushes
+      arrive with every field Wire.kt requires, and that send, a lead-chat send, react and answer
+      come back. Fails on any of those. It does not run the Android app itself.
+
+  android-device:
+    name: android / device
+    inputs: ["android/**", "ios/engine/**", "ios/scripts/**"]
+    imports_from: ["ios/engine/main.ts", "ios/scripts/dev-channel.ts", "android/scripts/device-check.ts"]
+    always: ["package.json", "bun.lock", "web/package.json", "desktop/package.json", "packages/core/package.json"]
+    description: >-
+      Runs the Android app on an emulator. On an Ubuntu runner, Gradle builds the release APK as in
+      android / build (the engine bundled from ios/engine/main.ts), then the job boots the newest
+      google_apis x86_64 system image the runner's SDK lists, with KVM, and prints its Android System
+      WebView version. android/scripts/device-check.ts installs the APK and drives it with adb and
+      uiautomator: the app opens on Link this phone (so the engine loaded in the real WebView and its
+      probe passed: secure context, Ed25519, X25519), a kiwi://link/ intent with a code from
+      ios/scripts/dev-channel.ts (a relay on the runner, reached at 10.0.2.2) shows the digits and
+      links, the channel shows in the list, opening it shows the lead's messages, a message typed in
+      the dock reaches the channel and the lead's answer shows, the title opens the details with the
+      crew, the header opens the lead chat, and no crash is in logcat. Screenshots of each screen
+      (and the list in dark mode) with logcat are kept as the android-shots artifact. Fails on any
+      of those, a build error, or an emulator that doesn't boot.
 
   release-rehearsal:
     name: release / rehearsal

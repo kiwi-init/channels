@@ -1,5 +1,6 @@
 package com.kiwiinit.channels.ui
 
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -79,11 +80,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -464,7 +465,8 @@ private val tapbacks = listOf("❤️", "👍", "👎", "😂", "‼️", "❓")
 private fun BubbleBody(model: AppModel, room: RoomView, message: MessageView, first: Boolean, last: Boolean, reply: () -> Unit) {
     val tone = Tone.current
     val view = LocalView.current
-    val clipboard = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
     var menu by remember { mutableStateOf(false) }
     val fill = if (message.mine) tone.mine else tone.them
     val ink = if (message.mine) tone.onMine else tone.onThem
@@ -536,7 +538,7 @@ private fun BubbleBody(model: AppModel, room: RoomView, message: MessageView, fi
                 leadingIcon = { Icon(Icons.Filled.ContentCopy, contentDescription = null) },
                 onClick = {
                     menu = false
-                    clipboard.setText(AnnotatedString(message.body))
+                    scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Message", message.body))) }
                 },
             )
         }

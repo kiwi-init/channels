@@ -1,7 +1,6 @@
 package com.kiwiinit.channels.ui
 
 import android.content.pm.PackageManager
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -46,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import com.kiwiinit.channels.model.AppModel
 import com.kiwiinit.channels.theme.Tone
 
@@ -64,7 +64,7 @@ fun SettingsScreen(model: AppModel, back: () -> Unit) {
             ""
         }
     }
-    val relayHost = Uri.parse(model.relay).host ?: model.relay
+    val relayHost = model.relay.toUri().host ?: model.relay
     val guarded = when {
         !model.lock.available -> "Off, no screen lock"
         model.lock.biometric -> "Biometrics, after 30 s"

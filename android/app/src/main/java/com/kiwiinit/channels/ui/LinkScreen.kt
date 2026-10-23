@@ -24,12 +24,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -42,6 +43,7 @@ import com.kiwiinit.channels.R
 import com.kiwiinit.channels.model.AppModel
 import com.kiwiinit.channels.model.Linking
 import com.kiwiinit.channels.theme.Tone
+import kotlinx.coroutines.launch
 
 private const val SCHEME = "kiwi://link/"
 
@@ -66,7 +68,8 @@ private fun scan(context: Context, found: (String) -> Unit, failed: (String) -> 
 fun LinkScreen(model: AppModel, modifier: Modifier = Modifier) {
     val tone = Tone.current
     val context = LocalContext.current
-    val clipboard = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
     var problem by remember { mutableStateOf<String?>(null) }
     Column(
         modifier.fillMaxSize()
@@ -102,12 +105,16 @@ fun LinkScreen(model: AppModel, modifier: Modifier = Modifier) {
                         scan(context, found = { model.link(it) }, failed = { problem = it })
                     }
                     QuietButton("Paste the code") {
-                        val code = clipboard.getText()?.text?.let(::linkCode)
-                        if (code == null) {
-                            problem = "The clipboard doesn't hold a link code. Copy it from Link a phone on your Mac."
-                        } else {
-                            problem = null
-                            model.link(code)
+                        scope.launch {
+                            val clip = clipboard.getClipEntry()?.clipData
+                            val text = if (clip != null && clip.itemCount > 0) clip.getItemAt(0).coerceToText(context).toString() else ""
+                            val code = linkCode(text)
+                            if (code == null) {
+                                problem = "The clipboard doesn't hold a link code. Copy it from Link a phone on your Mac."
+                            } else {
+                                problem = null
+                                model.link(code)
+                            }
                         }
                     }
                 }

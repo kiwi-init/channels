@@ -1,0 +1,133 @@
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { chromium } from "playwright-core";
+
+import type { AskView, MessageView, Push, Reply, RoomView, Saved } from "../../ios/engine/wire.ts";
+
+const repo = join(import.meta.dir, "../..");
+const kotlin = readFileSync(join(repo, "android/app/src/main/java/com/kiwiinit/channels/engine/Engine.kt"), "utf8");
+
+const constant = (name: string): string => {
+  const raw = kotlin.match(new RegExp(`const val ${name} =\\s*"""([\\s\\S]*?)"""`))?.[1] ?? kotlin.match(new RegExp(`const val ${name} = "(.*)"\\n`))?.[1]?.replace(/\\"/g, '"');
+  if (raw === undefined) throw new Error(`Engine.kt has no ${name}`);
+  return raw;
+};
+const probe = constant("PROBE");
+const page = constant("PAGE");
+const wrapper = kotlin.match(/"(Promise\.resolve\(\)\.then\(\(\) => \$expr\).*)",\n/)?.[1]?.replace(/\\"/g, '"');
+if (!wrapper) throw new Error("Engine.kt has no call wrapper");
+
+const built = await Bun.build({ entrypoints: [join(repo, "ios/engine/main.ts")], target: "browser", format: "iife", minify: true });
+const bundle = built.outputs[0];
+if (!built.success || !bundle) throw new Error(`the engine didn't bundle: ${built.logs.join("\n")}`);
+const engine = await bundle.text();
+
+const dir = mkdtempSync(join(tmpdir(), "android-bridge-"));
+const port = String(20_000 + Math.floor(Math.random() * 20_000));
+const relay = Bun.spawn(["bun", "ios/scripts/dev-channel.ts", "--port", port, "--dir", dir, "--host", "127.0.0.1"], { cwd: repo, stdout: "pipe", stderr: "pipe" });
+const codeFile = join(dir, "link-code.txt");
+for (let i = 0; i < 600 && !existsSync(codeFile); i++) await Bun.sleep(100);
+
+let failed = 0;
+const check = (ok: boolean, what: string): void => {
+  console.log(`${ok ? "ok  " : "FAIL"} ${what}`);
+  if (!ok) failed++;
+};
+
+const browser = await chromium.launch({
+  args: ["--disable-features=LocalNetworkAccessChecks,PrivateNetworkAccessSendPreflights,PrivateNetworkAccessRespectPreflightResults,BlockInsecurePrivateNetworkRequests"],
+});
+try {
+  if (!existsSync(codeFile)) throw new Error(`the dev channel never printed a link code: ${await new Response(relay.stderr).text()}`);
+  const linkCode = readFileSync(codeFile, "utf8").trim();
+  const tab = await browser.newPage();
+  const pushes: Push[] = [];
+  const replies = new Map<number, (text: string) => void>();
+  let next = 0;
+  tab.on("pageerror", (e) => check(false, `no page error (${e.message})`));
+  await tab.route("http://localhost/", (r) => r.fulfill({ contentType: "text/html", body: page }));
+  await tab.route("http://localhost/engine.js", (r) => r.fulfill({ contentType: "text/javascript", body: engine }));
+  await tab.exposeFunction("__push", (text: string) => pushes.push(JSON.parse(text) as Push));
+  await tab.exposeFunction("__reply", (id: number, text: string) => replies.get(id)?.(text));
+  await tab.addInitScript({ content: "globalThis.kiwiAndroid = { postMessage: (t) => globalThis.__push(t), reply: (id, t) => globalThis.__reply(id, t) };" });
+  await tab.goto("http://localhost/");
+
+  const call = (expr: string): Promise<string> => {
+    const id = ++next;
+    const done = new Promise<string>((resolve) => replies.set(id, resolve));
+    void tab.evaluate(wrapper.replace("$expr", expr).replaceAll("$id", String(id)));
+    return done;
+  };
+  const ask = async <T>(request: object): Promise<T> => {
+    const reply = JSON.parse(await call(`kiwi.ask(${JSON.stringify(JSON.stringify(request))})`)) as Reply;
+    if (!reply.ok) throw new Error(reply.error);
+    return reply.value as T;
+  };
+  const room = async (pred: (r: RoomView) => boolean, ms = 20_000): Promise<RoomView | null> => {
+    const until = Date.now() + ms;
+    while (Date.now() < until) {
+      const hit = pushes.flatMap((p) => (p.type === "room" ? [p.room] : [])).findLast(pred);
+      if (hit) return hit;
+      await Bun.sleep(100);
+    }
+    return null;
+  };
+
+  check((await tab.evaluate("isSecureContext")) === true, "http://localhost/ is a secure context");
+  check((await call(probe)) === "ok", "Engine.kt's probe passes: the engine loaded, Ed25519 and X25519 are there");
+  const started = await ask<{ digits: string; relay: string }>({ op: "linkAsk", code: linkCode, label: "Android bridge check" });
+  check(/^\d{6}$/.test(started.digits), "linkAsk answers six digits");
+  const saved = await ask<Saved>({ op: "linkWait" });
+  check(saved.seats.length === 1 && saved.person !== null, "linkWait brings the person and one seat");
+  check((await ask<number>({ op: "start", saved })) === 1, "start opens one room");
+
+  const live = await room((r) => r.connection === "live" && r.messages.length > 5 && r.asks.length > 0);
+  check(live !== null, "a live room arrives through kiwiAndroid.postMessage");
+  if (live) {
+    const given = (o: object, keys: string[]): boolean => keys.every((k) => (o as Record<string, unknown>)[k] !== undefined && (o as Record<string, unknown>)[k] !== null);
+    check(given(live, ["code", "title", "me"]), "the room has every field Wire.kt requires");
+    check(
+      live.members.every((m) => given(m, ["name", "display", "kind"])),
+      "so does every member",
+    );
+    check(
+      live.messages.every((m: MessageView) => given(m, ["seq", "from", "at", "kind", "body"]) && Number.isInteger(m.seq)),
+      "and every message",
+    );
+    check(
+      live.tasks.every((t) => given(t, ["id", "title", "state"])),
+      "and every task",
+    );
+    check(
+      live.asks.every((a: AskView) => given(a, ["seq", "from", "body", "at", "label"])),
+      "and every ask",
+    );
+    check(
+      live.places.every((p) => given(p, ["key", "kind", "title"])),
+      "and every place",
+    );
+    check(live.sideKey !== null, "the lead chat is there");
+
+    const seq = await ask<number>({ op: "send", code: live.code, place: "main", body: "hello from the Android bridge check", re: null, imgs: [] });
+    check(Number.isInteger(seq) && seq > 0, "send answers the new seq");
+    check((await room((r) => r.messages.some((m) => m.from === r.lead && m.seq > seq))) !== null, "the lead's answer comes back");
+    const side = await ask<number>({ op: "send", code: live.code, place: live.sideKey, body: "and one to the lead", re: null, imgs: [] });
+    check((await room((r) => (r.side ?? []).some((m) => m.seq === side))) !== null, "a message to the lead chat shows in side");
+    await ask<number>({ op: "react", code: live.code, seq, emoji: "👍" });
+    check((await room((r) => r.messages.some((m) => m.seq === seq && m.reactions.some((x) => x.emoji === "👍" && x.mine)))) !== null, "a reaction comes back as mine");
+    const question = live.asks.find((a) => a.choices.length > 0);
+    if (question) {
+      await ask<number>({ op: "answer", code: live.code, seq: question.seq, text: question.choices[0] });
+      check((await room((r) => !r.asks.some((a) => a.seq === question.seq))) !== null, "answering a question clears it from asks");
+    }
+  }
+} finally {
+  await browser.close();
+  relay.kill();
+  await relay.exited;
+  rmSync(dir, { recursive: true, force: true });
+}
+if (failed) console.log(`${failed} check${failed === 1 ? "" : "s"} failed`);
+process.exit(failed ? 1 : 0);

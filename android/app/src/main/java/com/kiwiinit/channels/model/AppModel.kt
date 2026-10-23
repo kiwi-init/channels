@@ -14,6 +14,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.content.edit
 import com.kiwiinit.channels.engine.Connection
 import com.kiwiinit.channels.engine.Engine
 import com.kiwiinit.channels.engine.EngineException
@@ -391,7 +392,7 @@ class AppModel(private val app: Application) {
 
     fun togglePin(spot: Spot) {
         if (!pinned.remove(spot.id)) pinned.add(spot.id)
-        prefs.edit().putString("pinned", wire.encodeToString(ListSerializer(String.serializer()), pinned.toList())).apply()
+        prefs.edit { putString("pinned", wire.encodeToString(ListSerializer(String.serializer()), pinned.toList())) }
     }
 
     fun unread(spot: Spot): Boolean {
@@ -509,7 +510,7 @@ class AppModel(private val app: Application) {
     }
 
     private fun saveCounts(key: String, map: Map<String, Int>) {
-        prefs.edit().putString(key, wire.encodeToString(MapSerializer(String.serializer(), Int.serializer()), map.toMap())).apply()
+        prefs.edit { putString(key, wire.encodeToString(MapSerializer(String.serializer(), Int.serializer()), map.toMap())) }
     }
 
     private fun decodePicture(text: String): ImageBitmap? {
