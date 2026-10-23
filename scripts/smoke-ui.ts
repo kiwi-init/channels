@@ -196,11 +196,6 @@ async function run(part: Part): Promise<string[]> {
     await page.getByRole("dialog").getByRole("textbox").fill("smoke");
     await page.getByRole("button", { name: "Create channel" }).click();
     await page.waitForURL(/#mc2-/);
-    await page
-      .locator('nav[aria-label="Views of the channel"]:visible button[aria-current="page"]:text-is("Tasks"), aside[aria-label="Channel"] nav[aria-label="Views"] button[aria-current="page"]')
-      .first()
-      .waitFor();
-    await toTab("Conversation");
     await page.getByRole("textbox", { name: "Message" }).waitFor();
   };
 
