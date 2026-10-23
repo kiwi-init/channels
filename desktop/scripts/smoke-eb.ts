@@ -36,12 +36,10 @@ try {
   );
   if (page.href.startsWith("views://internal/index.html")) console.log(`page: ${page.href} (${page.title})`);
   else problems.push(`the window shows ${page.href}, not views://internal/index.html`);
-  await check(
-    "first paint",
-    d,
-    () => performance.getEntriesByName("first-contentful-paint")[0]?.startTime ?? null,
-    (v) => typeof v === "number",
+  const paint = await until("the page's first paint", 15_000, () => d.evaluate(() => performance.getEntriesByName("first-contentful-paint")[0]?.startTime ?? null, null, 2_000)).catch(
+    (e: Error) => (problems.push(e.message), null),
   );
+  if (paint !== null) console.log(`first paint: ${paint}`);
   await check(
     "the relay it was given reaches the page through the store (window.kiwi.relayUrl) and answers through the CSP",
     d,
