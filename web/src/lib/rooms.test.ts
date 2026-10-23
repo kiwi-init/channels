@@ -33,10 +33,11 @@ describe("a room the owner makes or renames from channel settings (T987)", () =>
     expect(roomProblem(full, "renamed", "r3")).toBeNull()
   })
 
-  test("signs the room list as it is after the change, leaving #general out unless it was renamed", () => {
+  test("signs the room list as it is after the change, leaving #general out unless it was renamed or the change is to it, so renaming it back sticks for a client folding from a saved base", () => {
     expect(roomsAfter([general, desktop], { id: "m0b1le00", name: cleanRoomName("#mobile") })).toEqual([desktop, { id: "m0b1le00", name: "mobile" }])
     expect(roomsAfter([general, desktop], { id: desktop.id, name: "electrobun" })).toEqual([{ id: desktop.id, name: "electrobun" }])
     expect(roomsAfter([general, desktop], { id: "general", name: "lobby" })).toEqual([{ id: "general", name: "lobby" }, desktop])
+    expect(roomsAfter([{ id: "general", name: "lobby" }, desktop], { id: "general", name: "general" })).toEqual([general, desktop])
   })
 })
 

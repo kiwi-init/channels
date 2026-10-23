@@ -52,6 +52,11 @@ export function useControlsHandlers({
       }
     : undefined
 
+  const folded = async (room: { id: string; name: string }): Promise<void> => {
+    for (const end = Date.now() + 10_000; Date.now() < end; await new Promise((r) => setTimeout(r, 50))) if (rooms().get(room.id)?.name === room.name) return
+    throw new Error(`#${room.name} was sent, but it hasn't come back from the relay yet, so the room list wasn't updated: reopen the channel and look again`)
+  }
+
   return {
     onApprove: async (r, scopes, persona, powers) => {
       const granted = r.kind === "human" ? { ...(powers?.addsAgents ? { addsAgents: true } : {}), ...(powers?.answersDecisions ? { answersDecisions: true } : {}) } : {}
@@ -131,6 +136,7 @@ export function useControlsHandlers({
           if (problem) throw new Error(problem)
           const room = { id: newRoomId(), name: cleanRoomName(typed) }
           const since = await send(`made the room #${room.name}`, { kind: "event", ev: { op: "room.create", ...room } })
+          await folded(room)
           await ch.setRooms({ list: roomsAfter(rooms().values(), room), since })
         }
       : undefined,
@@ -140,6 +146,7 @@ export function useControlsHandlers({
           if (problem) throw new Error(problem)
           const room = { id, name: cleanRoomName(typed) }
           const since = await send(`renamed a room to #${room.name}`, { kind: "event", ev: { op: "room.rename", ...room } })
+          await folded(room)
           await ch.setRooms({ list: roomsAfter(rooms().values(), room), since })
         }
       : undefined,

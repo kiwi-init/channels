@@ -319,14 +319,17 @@ async function run(part: Part): Promise<string[]> {
     await page.getByRole("textbox", { name: "Message" }).and(page.getByPlaceholder("Message #ios")).waitFor();
     await send("smoke, in #ios");
     await roomRow("smoke, in #ios").first().waitFor();
+    if (process.env.SMOKE_SHOTS) await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "room-ios.png") });
     await conversations.getByRole("button", { name: /# general/ }).click();
     await page.getByPlaceholder("Message #general").waitFor();
     await page.waitForTimeout(300);
     if (await roomRow("smoke, in #ios").count()) throw new Error("a message posted in #ios shows in #general");
+    if (process.env.SMOKE_SHOTS) await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "room-general.png") });
     await conversations.getByRole("button", { name: /# ios/ }).click();
     await roomRow("smoke, in #ios").first().waitFor();
     await conversations.getByRole("button", { name: /# general/ }).click();
     await page.getByPlaceholder("Message #general").waitFor();
+    await inDetails(async () => {});
     log(`ok  ${at}`);
     at = "phone: the header opens Details, and Invite is reachable from it";
     await panel.getByRole("button", { name: "Close details" }).click();
