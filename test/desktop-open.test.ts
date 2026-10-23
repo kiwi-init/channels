@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { EventEmitter } from "node:events";
 
+import { externalUrl, type ExternalUrl } from "../desktop/src/guard.ts";
 import { browserEnv, openInBrowser, type Launch } from "../desktop/src/open.ts";
+
+function web(url: string): ExternalUrl {
+  const checked = externalUrl(url);
+  if (!checked) throw new Error(`${url} is not a web link`);
+  return checked;
+}
 
 const KIWI_ENV = {
   PATH: "/usr/bin",
@@ -39,7 +46,7 @@ describe("links leave the app for the person's own browser", () => {
   test("on Linux a link goes to xdg-open, detached, with that environment", async () => {
     const { launch, calls } = fakeLaunch();
     const fallback: string[] = [];
-    await openInBrowser("https://example.com/a", async (u) => void fallback.push(u), "linux", KIWI_ENV, launch);
+    await openInBrowser(web("https://example.com/a"), async (u) => void fallback.push(u), "linux", KIWI_ENV, launch);
     expect(calls).toEqual([{ cmd: "xdg-open", args: ["https://example.com/a"], env: browserEnv(KIWI_ENV), detached: true }]);
     expect(fallback).toEqual([]);
   });
@@ -47,7 +54,7 @@ describe("links leave the app for the person's own browser", () => {
   test("on Linux without xdg-open, Electron's own opener still opens it", async () => {
     const { launch } = fakeLaunch(true);
     const fallback: string[] = [];
-    await openInBrowser("https://example.com/b", async (u) => void fallback.push(u), "linux", KIWI_ENV, launch);
+    await openInBrowser(web("https://example.com/b"), async (u) => void fallback.push(u), "linux", KIWI_ENV, launch);
     expect(fallback).toEqual(["https://example.com/b"]);
   });
 
@@ -55,7 +62,7 @@ describe("links leave the app for the person's own browser", () => {
     for (const platform of ["darwin", "win32"] as const) {
       const { launch, calls } = fakeLaunch();
       const fallback: string[] = [];
-      await openInBrowser("https://example.com/c", async (u) => void fallback.push(u), platform, KIWI_ENV, launch);
+      await openInBrowser(web("https://example.com/c"), async (u) => void fallback.push(u), platform, KIWI_ENV, launch);
       expect(calls).toEqual([]);
       expect(fallback).toEqual(["https://example.com/c"]);
     }

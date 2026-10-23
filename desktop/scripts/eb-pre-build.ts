@@ -15,7 +15,9 @@ const devkit = treeSha256(path.join(desktop, ".hutch", "devkit", "api"));
 const pinnedDevkit = pinFor(PINS.devkit, key, "devkit");
 if (devkit !== pinnedDevkit) throw new Error(`eb-pre-build: Electrobun's devkit in desktop/.hutch/devkit/api is ${devkit}, pinned ${pinnedDevkit}`);
 
-const iconset = path.join(desktop, "release-eb", "icon.iconset");
-fs.rmSync(iconset, { recursive: true, force: true });
-fs.mkdirSync(path.dirname(iconset), { recursive: true });
-execFileSync("iconutil", ["-c", "iconset", path.join(desktop, "build", "icon.icns"), "-o", iconset], { stdio: "inherit" });
+if (process.platform === "darwin") {
+  const iconset = path.join(desktop, "release-eb", "icon.iconset");
+  fs.rmSync(iconset, { recursive: true, force: true });
+  fs.mkdirSync(path.dirname(iconset), { recursive: true });
+  execFileSync("iconutil", ["-c", "iconset", path.join(desktop, "build", "icon.icns"), "-o", iconset], { stdio: "inherit" });
+}

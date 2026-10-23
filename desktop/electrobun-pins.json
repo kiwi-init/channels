@@ -36,7 +36,9 @@
     }
   },
   "devkit": {
-    "macos-arm64": "aa91d8834bb00ec25e7f8886b8988446a9842be4339ef7033b1bc7cd5e4808ca"
+    "macos-arm64": "aa91d8834bb00ec25e7f8886b8988446a9842be4339ef7033b1bc7cd5e4808ca",
+    "linux-x64": "aa91d8834bb00ec25e7f8886b8988446a9842be4339ef7033b1bc7cd5e4808ca",
+    "linux-arm64": "aa91d8834bb00ec25e7f8886b8988446a9842be4339ef7033b1bc7cd5e4808ca"
   },
   "app": {
     "macos-arm64": {

@@ -118,6 +118,11 @@ try {
     okOf(first, "first") === null && typeof made === "string" && okOf(first, "get") === made,
     JSON.stringify(first.report ?? `${first.ran}; stderr ${first.stderr.slice(-400)}`),
   );
+  expect(
+    "a new key isn't marked ready until finish, and then it is",
+    okOf(first, "markedBefore") === "unmarked" && okOf(first, "finish") === "ok" && okOf(first, "markedAfter") === "marked",
+    JSON.stringify([first.report?.["markedBefore"], first.report?.["finish"], first.report?.["markedAfter"]]),
+  );
   expect("bun gets only stdio and the key channel: a descriptor the launcher inherited stays behind", okOf(first, "inherited") === null, JSON.stringify(first.report?.["inherited"]));
   expect("bun moves the channel off fd 3 at once and drops KIWI_KEY_FD", okOf(first, "fd3") === null && okOf(first, "env") === null, JSON.stringify([first.report?.["fd3"], first.report?.["env"]]));
   expect(
@@ -141,6 +146,11 @@ try {
     "the next start gets the same key",
     typeof made === "string" && okOf(second, "first") === made && second.report?.["set"] === undefined,
     JSON.stringify(second.report ?? second.stderr.slice(-400)),
+  );
+  expect(
+    "the next start can't take back a key an earlier one made, and the key stays marked ready",
+    errorOf(second, "drop").includes("made in this session") && okOf(second, "markedKept") === "marked" && okOf(second, "get") === made,
+    JSON.stringify([second.report?.["drop"], second.report?.["markedKept"], second.report?.["get"]]),
   );
 
   const main = (app: string): string => path.join(contents(app), "Resources", "main.js");
@@ -203,7 +213,7 @@ try {
   const parser = sanRun(harness, ["parser"]);
   for (const line of parser.stdout.split("\n").filter(Boolean)) console.log(`        ${line}`);
   expect(
-    "the key server's parser under ASan and UBSan: malformed, truncated, oversized, unknown and random requests",
+    "the key server's parser under ASan and UBSan: malformed, truncated, oversized, unknown and random requests, and the ready mark's finished, finish and drop",
     parser.status === 0 && clean(parser),
     `status ${parser.status}: ${parser.stderr.slice(-1200)}`,
   );
@@ -227,8 +237,7 @@ try {
     `${changed.stdout} ${changed.stderr.slice(-800)}`,
   );
 } finally {
-  keychain(["delete-generic-password", "-s", id, "-a", "store-key"]);
-  keychain(["delete-generic-password", "-s", asanId, "-a", "store-key"]);
+  for (const service of [id, asanId]) for (const account of ["store-key", "store-key-ready"]) keychain(["delete-generic-password", "-s", service, "-a", account]);
   keychain(["delete-generic-password", "-s", `${legacy} Safe Storage`, "-a", `${legacy} Key`]);
   restoreKeychain();
   fs.rmSync(tmp, { recursive: true, force: true });
