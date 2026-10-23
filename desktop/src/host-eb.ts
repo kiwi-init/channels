@@ -4,6 +4,7 @@ import path from "node:path";
 import Electrobun, { BuildConfig, PATHS, Utils, type BrowserView, type BrowserWindow } from "electrobun/main";
 
 import type { Push, Pushes } from "./calls.ts";
+import { childEnv } from "./child-env.ts";
 import type { Host } from "./host.ts";
 import type { HostToKeys } from "./keys-server.ts";
 
@@ -45,7 +46,7 @@ export const ebHost: Host = {
     version: () => bundle.version,
     path: (name) => (name === "data" ? Utils.paths.userData : name === "logs" ? Utils.paths.userLogs : name === "exe" ? process.execPath : PATHS.RESOURCES_FOLDER),
     ready: () => true,
-    relaunch: (execPath) => spawn(execPath, [], { detached: true, stdio: "ignore" }).unref(),
+    relaunch: (execPath) => spawn(execPath, [], { detached: true, stdio: "ignore", env: childEnv() }).unref(),
     onQuit: (fn) => Electrobun.events.on("before-quit", fn),
   },
   push: (name, value) => shown?.push(name, value),

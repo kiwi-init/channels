@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { only, payloadOf, shippedApp } from "./eb-app.ts";
 
 const MB = 1024 ** 2;
-const LIMITS = { app: 100 * MB, packed: 45 * MB };
+const LIMITS = { app: 100 * MB, packed: 40 * MB };
 
 const dir = resolve(process.argv[2] ?? "desktop/release-eb");
 const mb = (bytes: number) => `${(bytes / MB).toFixed(1)}MB`;

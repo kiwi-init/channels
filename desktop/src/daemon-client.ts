@@ -22,6 +22,7 @@ import type { MachineCert } from "@kiwi/core/person.ts";
 import type { LaunchedView } from "@kiwi/core/terminals.ts";
 
 import type { LaunchAgentRequest } from "./bridge.ts";
+import { childEnv } from "./child-env.ts";
 import { launchedView } from "./launch-view.ts";
 
 export interface HelloResult {
@@ -160,10 +161,7 @@ export function noteDaemon(line: string, home: string = kiwiHome()): void {
 }
 
 export function daemonEnv(from: NodeJS.ProcessEnv, home: string, relay: string): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...from, KIWI_HOME: home, KIWI_RELAY: relay };
-  delete env["KIWI_KEY_FD"];
-  delete env["BUN_RUNTIME_TRANSPILER_CACHE_PATH"];
-  return env;
+  return { ...childEnv(from), KIWI_HOME: home, KIWI_RELAY: relay };
 }
 
 export function spawnDaemon(bin: string, home: string, relay: string): void {
