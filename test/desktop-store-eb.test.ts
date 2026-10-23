@@ -134,11 +134,14 @@ test("a launcher that has gone before done still leaves the store open", async (
   expect(await openEbStore({ dir, keys, home, platform: "darwin" })).toMatchObject({ kind: "open", sealed: true });
 });
 
-test("the app's data folder is pinned to the bundle identifier, not to wherever Electrobun puts userData for this install (T1710)", () => {
-  expect(ebDataDir("com.kiwiinit.channels", "darwin", "/Users/a", {})).toBe("/Users/a/Library/Application Support/com.kiwiinit.channels");
-  expect(ebDataDir("com.kiwiinit.channels", "linux", "/home/a", {})).toBe("/home/a/.local/share/com.kiwiinit.channels");
-  expect(ebDataDir("com.kiwiinit.channels", "linux", "/home/a", { XDG_DATA_HOME: "/data" })).toBe("/data/com.kiwiinit.channels");
-  expect(ebDataDir("com.kiwiinit.channels", "win32", "C:\\Users\\a", { LOCALAPPDATA: "/local" })).toBe("/local/com.kiwiinit.channels");
+test("the app's data folder is pinned to its bundle identifier and build channel, not to wherever Electrobun puts userData for this install, so a dev build never opens the stable app's folder (T1710)", () => {
+  expect(ebDataDir("com.kiwiinit.channels", "stable", "darwin", "/Users/a", {})).toBe("/Users/a/Library/Application Support/com.kiwiinit.channels/stable");
+  expect(ebDataDir("com.kiwiinit.channels", "dev", "darwin", "/Users/a", {})).toBe("/Users/a/Library/Application Support/com.kiwiinit.channels/dev");
+  expect(ebDataDir("com.kiwiinit.channels", "stable", "linux", "/home/a", {})).toBe("/home/a/.local/share/com.kiwiinit.channels/stable");
+  expect(ebDataDir("com.kiwiinit.channels", "stable", "linux", "/home/a", { XDG_DATA_HOME: "/data" })).toBe("/data/com.kiwiinit.channels/stable");
+  expect(ebDataDir("com.kiwiinit.channels", "stable", "win32", "C:\\Users\\a", { LOCALAPPDATA: "/local" })).toBe("/local/com.kiwiinit.channels/stable");
+  expect(() => ebDataDir("../elsewhere", "stable", "darwin", "/Users/a", {})).toThrow("plain identifier and channel");
+  expect(() => ebDataDir("com.kiwiinit.channels", "../stable", "darwin", "/Users/a", {})).toThrow("plain identifier and channel");
 });
 
 test("the broken-store dialog says what to do for its cause, not 'unlock your keychain' for everything (T1710)", async () => {

@@ -6,10 +6,16 @@ import { readLegacyStore } from "./legacy-store.ts";
 import { openStore, STORE_FILE, type OpenStore, type Refusal } from "./store-v2.ts";
 import type { StoreFile, StoreVault } from "./store.ts";
 
-export function ebDataDir(identifier: string, platform: NodeJS.Platform = process.platform, home: string = os.homedir(), env: NodeJS.ProcessEnv = process.env): string {
-  if (platform === "darwin") return path.join(home, "Library", "Application Support", identifier);
-  if (platform === "win32") return path.join(env["LOCALAPPDATA"] || path.join(home, "AppData", "Local"), identifier);
-  return path.join(env["XDG_DATA_HOME"] || path.join(home, ".local", "share"), identifier);
+export function ebDataDir(identifier: string, channel: string, platform: NodeJS.Platform = process.platform, home: string = os.homedir(), env: NodeJS.ProcessEnv = process.env): string {
+  if (!/^[A-Za-z0-9][A-Za-z0-9.-]*$/.test(identifier) || !/^[a-z0-9-]+$/.test(channel))
+    throw new Error(`the app's data folder needs a plain identifier and channel, not ${JSON.stringify(identifier)} and ${JSON.stringify(channel)}`);
+  const root =
+    platform === "darwin"
+      ? path.join(home, "Library", "Application Support")
+      : platform === "win32"
+        ? env["LOCALAPPDATA"] || path.join(home, "AppData", "Local")
+        : env["XDG_DATA_HOME"] || path.join(home, ".local", "share");
+  return path.join(root, identifier, channel);
 }
 
 export interface EbStoreOptions {

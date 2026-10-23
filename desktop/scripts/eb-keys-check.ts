@@ -16,7 +16,6 @@ const asanId = `${id}-asan`;
 const legacy = `kiwi-keys-check-${tag}`;
 const legacyValue = randomBytes(16).toString("base64");
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "eb-keys-"));
-const dataDir = path.join(os.homedir(), "Library", "Application Support", id);
 const storeId = `${id}-store`;
 const importId = `${id}-import`;
 const CI = process.env["CI"] === "true";
@@ -198,7 +197,8 @@ try {
     return app;
   };
   const store = await storeApp("store", storeId, [legacy]);
-  const places = storePlaces(storeId);
+  const channel = (JSON.parse(fs.readFileSync(path.join(contents(store), "Resources", "version.json"), "utf8")) as { channel: string }).channel;
+  const places = storePlaces(storeId, channel);
   const fresh = storeRun(store);
   expect(
     "store v2 on the Mac, first start: a sealed store and a key made through the launcher and marked ready",
@@ -227,7 +227,7 @@ try {
   if (CI) {
     execFileSync("security", ["add-generic-password", "-s", "kiwi-desktop Safe Storage", "-a", "kiwi-desktop Key", "-w", legacyValue, "-A"]);
     const imports = await storeApp("import", importId, ["kiwi-desktop"]);
-    const file = electronStore(storePlaces(importId).legacyHome, { relayUrl: "https://old.example", channels: [] }, legacyValue);
+    const file = electronStore(storePlaces(importId, channel).legacyHome, { relayUrl: "https://old.example", channels: [] }, legacyValue);
     const first = storeRun(imports);
     const next = storeRun(imports);
     expect(
@@ -353,7 +353,7 @@ try {
   keychain(["delete-generic-password", "-s", `${legacy} Safe Storage`, "-a", `${legacy} Key`]);
   ci.restore();
   fs.rmSync(tmp, { recursive: true, force: true });
-  for (const dir of [dataDir, storePlaces(storeId).data, storePlaces(importId).data]) fs.rmSync(dir, { recursive: true, force: true });
+  for (const appId of [id, storeId, importId]) fs.rmSync(path.join(os.homedir(), "Library", "Application Support", appId), { recursive: true, force: true });
 }
 
 if (failures.length) {
