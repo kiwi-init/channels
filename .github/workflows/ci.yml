@@ -361,6 +361,9 @@ jobs:
         run: bun run typecheck:eb
       - working-directory: desktop
         if: ${{ !cancelled() }}
+        run: bun test --tsconfig-override tsconfig.eb.json ./eb-tests
+      - working-directory: desktop
+        if: ${{ !cancelled() }}
         env:
           DASH_RELEASE_OFFLINE: "1"
         run: bun run build:eb

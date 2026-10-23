@@ -683,6 +683,15 @@ jobs:
       through the Host seam (the folder picker, notifications, the update restart, the browser only for
       http(s) links, a new relay saved, told to the keys and the page reloaded, a bad one changing
       nothing, a bad argument refused under the call's name). And
+      test/desktop-eb-bridge.test.ts: the Electrobun bridge's own rules (desktop/src/eb-bridge.ts):
+      only views://internal/index.html counts as our page whatever its hash, a navigation event
+      can only take the bridge away (only main's own load gives it), a frame read as its page
+      load's session id and packet, nothing in or out while the view is off our page, a call that
+      isn't the bridge's (__proto__, constructor and the like) or not given as a list never
+      reaching a handler, the preload carrying the snapshot and packets going only to our own
+      receiver, and every Electrobun internal RPC handler but window dragging doing nothing
+      (webviewTagUpdateSrc, SetNavigationRules and ExecuteJavascript included); with
+      test/desktop-eb-bundle.test.ts: the post-build check of the built bundle. And
       test/desktop-shared-modules.test.ts: the modules both desktop shells share (ipc/handlers.ts and
       everything it imports, calls.ts, host.ts, store.ts, updater.ts, bundled-daemon.ts, deep-links.ts,
       main-log.ts, signin.ts) never import electron however deep the import, read from their real
@@ -1010,9 +1019,9 @@ jobs:
 
   desktop-mac:
     name: desktop / mac
-    inputs: ["desktop/src/**", "desktop/native/**", "desktop/build/icon.icns", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "package.json", "bun.lock"]
-    imports_from: ["desktop/src/main-eb.ts"]
-    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-size.ts", "desktop/scripts/eb-env-check.ts", "desktop/scripts/eb-app.ts", "desktop/scripts/eb-seal.ts", "desktop/scripts/eb-keys-check.ts", "desktop/scripts/eb-keys-probe.ts"]
+    inputs: ["desktop/src/**", "desktop/native/**", "desktop/eb-tests/**", "desktop/build/icon.icns", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "test/fake-host.ts", "package.json", "bun.lock"]
+    imports_from: ["desktop/src/main-eb.ts", "desktop/src/preload-eb.ts"]
+    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-bundle.ts", "desktop/scripts/eb-size.ts", "desktop/scripts/eb-env-check.ts", "desktop/scripts/eb-app.ts", "desktop/scripts/eb-seal.ts", "desktop/scripts/eb-keys-check.ts", "desktop/scripts/eb-keys-probe.ts"]
     description: >-
       On a macOS runner (Electrobun builds only for the host it runs on), checks the Electrobun
       shell that is replacing Electron (issue #757). Builds web/dist, restores ~/.hutch (Hutch,
@@ -1022,14 +1031,24 @@ jobs:
       doesn't fail the job; the steps after it run with DASH_RELEASE_OFFLINE=1 and fetch
       nothing. Then `bun run typecheck:eb` in desktop/: electrobun prepare projects the devkit
       into desktop/.hutch, and tsc -p tsconfig.eb.json typechecks
-      src/main-eb.ts, electrobun.config.ts and the eb-*.ts build scripts against it, strict.
+      src/main-eb.ts, src/preload-eb.ts, electrobun.config.ts, eb-tests/ and the eb-*.ts build
+      scripts against it, strict. Then `bun test --tsconfig-override tsconfig.eb.json ./eb-tests`
+      runs window.kiwi over Electrobun's own createRPC on both ends, wired as preload-eb.ts and
+      main-eb.ts wire them (rpc-eb.ts): calls reach main's handler table with their arguments,
+      answers and errors come back, pushes reach their listener, a view off our page gets no
+      answers and no pushes, a call that isn't the bridge's is refused, and a reloaded page
+      never takes the previous load's replies while the old page's late messages get nothing.
       Then `bun run build:eb` (electrobun build --env=stable): bundles src/main-eb.ts with the
-      shared desktop modules it imports (guard.ts csp(), open.ts, eb-page.ts, window-look.ts,
-      window-size.ts) and @kiwi/core; scripts/eb-pre-build.ts turns build/icon.icns into the
+      shared desktop modules it imports (ipc/handlers.ts and all the app's calls through
+      host-eb.ts, guard.ts csp(), open.ts, eb-page.ts, eb-bridge.ts, rpc-eb.ts, window-look.ts,
+      window-size.ts) and @kiwi/core, and src/preload-eb.ts as the preload view; scripts/eb-pre-build.ts turns build/icon.icns into the
       iconset; scripts/eb-post-build.ts copies web/dist into the app's views/internal and
       compiles native/macos/kiwi-shell.m with clang -Wall -Werror into Contents/MacOS (the
       patch that denies the microphone, camera and location Electrobun grants the page, and the
-      window's minimum size and background). We ship the plain app, not Electrobun's
+      window's minimum size and background), then checks the bundle (scripts/eb-bundle.ts): the
+      main bundle holds exactly one copy of Electrobun's internal RPC table, the one
+      lockInternalRpc empties, and the preload bundle exists and has no WebSocket. We ship the
+      plain app, not Electrobun's
       self-extracting wrapper (which would run the app from a folder the user's rights can edit):
       desktop/scripts/eb-size.ts unpacks the plain .app from the build's .app.tar.zst payload,
       makes its dmg (hdiutil ULMO) and its zip (ditto, the updater's layout), and fails if that
