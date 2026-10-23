@@ -398,6 +398,12 @@ async function run(part: Part): Promise<string[]> {
     if (!(Number(since) > 0)) throw new Error(`reload streamed since ${since}; expected only newer seqs`);
     await account.waitFor();
     log(`ok  reload fetches only what is new (since ${since})`);
+
+    at = "the app opened with no channel in its address reopens the one that was open";
+    await page.goto(new URL("/", BASE).href);
+    await page.getByText("smoke test", { exact: true }).first().waitFor({ timeout: 15000 });
+    if (await page.getByRole("heading", { name: "Nothing open" }).count()) throw new Error("the app showed Nothing open instead of the channel that was open");
+    log(`ok  ${at}`);
   };
 
   const agents = async () => {
