@@ -1,9 +1,9 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test"
 
-import type { Member } from "@kiwi/core/membership.ts";
-import { fold } from "@kiwi/core/state.ts";
+import type { Member } from "@kiwi/core/membership.ts"
+import { fold } from "@kiwi/core/state.ts"
 
-import { foldRoster } from "./fold-roster";
+import { foldRoster } from "./fold-roster"
 
 const ana: Member = {
   name: "ana",
@@ -19,16 +19,16 @@ const ana: Member = {
   owner: false,
   at: 1,
   active: true,
-};
+}
 
 describe("foldRoster", () => {
   test("what the owner signed into a record reaches the app's fold, as it reaches the agents'", () => {
-    const [row] = foldRoster([ana]);
-    expect(row).toMatchObject({ name: "ana", kind: "human", display: "Ana", scopes: [], answersDecisions: true });
-    expect(fold([], foldRoster([ana])).members.get("ana")?.answersDecisions).toBe(true);
-  });
+    const [row] = foldRoster([ana])
+    expect(row).toMatchObject({ name: "ana", kind: "human", display: "Ana", scopes: [], answersDecisions: true })
+    expect(fold([], foldRoster([ana])).members.get("ana")?.answersDecisions).toBe(true)
+  })
 
   test("the record's colour stays out, as it always has in the app", () => {
-    expect(foldRoster([ana])[0]).not.toHaveProperty("color");
-  });
-});
+    expect(foldRoster([ana])[0]).not.toHaveProperty("color")
+  })
+})
