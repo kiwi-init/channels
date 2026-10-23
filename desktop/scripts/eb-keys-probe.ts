@@ -1,7 +1,10 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+
+import { dlopen, FFIType, ptr } from "bun:ffi";
 
 import { endSession, KEY_FD_ENV, launcherChannel, launcherKey, parseAnswer, type LineChannel } from "../src/launcher-key.ts";
 
@@ -54,9 +57,58 @@ function afterDone(other: number): string {
 
 const CHILD = `const fs = require("node:fs"); const open = []; for (let f = 3; f < 256; f++) { try { if (fs.fstatSync(f).isSocket()) open.push(f); } catch { /* not open, so not passed on */ } } console.log(JSON.stringify({ sockets: open, env: process.env.${KEY_FD_ENV} ?? null }));`;
 
+const O_CLOEXEC = 0x01000000;
+const F_GETFD = 1;
+const FD_CLOEXEC = 1;
+
+const libc = () =>
+  dlopen("/usr/lib/libSystem.B.dylib", {
+    fcntl: { args: [FFIType.i32, FFIType.i32], returns: FFIType.i32 },
+    system: { args: [FFIType.ptr], returns: FFIType.i32 },
+  });
+
+function sockets(except: number): number[] {
+  const found: number[] = [];
+  for (let f = 3; f < 256; f++) {
+    if (f === except) continue;
+    try {
+      if (fs.fstatSync(f).isSocket()) found.push(f);
+    } catch {
+      // Not open: nothing there to check.
+    }
+  }
+  return found;
+}
+
+function channelCloexec(other: number): string {
+  const c = libc();
+  try {
+    const open = sockets(other).map((fd) => ({ fd, flags: c.symbols.fcntl(fd, F_GETFD) }));
+    const leaky = open.filter((o) => (o.flags & FD_CLOEXEC) === 0);
+    return open.length === 0 ? "no socket" : leaky.length ? `missing on fd ${leaky.map((o) => o.fd).join(", ")}` : "set";
+  } finally {
+    c.close();
+  }
+}
+
+function nativeChild(): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kiwi-probe-"));
+  const script = path.join(dir, "child.js");
+  const out = path.join(dir, "out");
+  fs.writeFileSync(script, CHILD);
+  const c = libc();
+  try {
+    c.symbols.system(ptr(Buffer.from(`'${process.execPath}' '${script}' > '${out}' 2>&1\0`, "utf8")));
+    return fs.readFileSync(out, "utf8").trim();
+  } finally {
+    c.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 async function probe(): Promise<ProbeReport> {
   const passedOn = inherited(5);
-  const other = fs.openSync("/dev/fd/3", "r+");
+  const other = fs.openSync("/dev/fd/3", fs.constants.O_RDWR | O_CLOEXEC);
   const ch = launcherChannel();
   if (!ch) return { channel: { error: "no key channel" } };
   const key = launcherKey(ch);
@@ -76,6 +128,8 @@ async function probe(): Promise<ProbeReport> {
   report["legacy"] = await step(() => answer(ch, `legacy ${legacyName()}`));
   report["unlisted"] = await step(() => answer(ch, "legacy kiwi-desktop"));
   report["unknown"] = await step(() => answer(ch, "dump"));
+  report["cloexec"] = { ok: channelCloexec(other) };
+  report["native"] = { ok: nativeChild() };
   report["done"] = await step(async () => {
     endSession(ch);
     return "ended";

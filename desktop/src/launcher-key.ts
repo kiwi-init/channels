@@ -1,5 +1,7 @@
 import fs from "node:fs";
 
+import { dlopen, FFIType, ptr } from "bun:ffi";
+
 import { legacyPassword } from "./legacy-keys.ts";
 import type { LegacyPassword } from "./legacy-store.ts";
 import { keychainKey, type StoreKey } from "./store-v2.ts";
@@ -7,6 +9,19 @@ import { keychainKey, type StoreKey } from "./store-v2.ts";
 export const KEY_FD_ENV = "KIWI_KEY_FD";
 
 const MAX_LINE = 4096;
+
+const O_CLOEXEC = process.platform === "darwin" ? 0x01000000 : 0o2000000;
+
+const LIBC = process.platform === "darwin" ? "/usr/lib/libSystem.B.dylib" : "libc.so.6";
+
+function unsetenv(name: string): void {
+  const libc = dlopen(LIBC, { unsetenv: { args: [FFIType.ptr], returns: FFIType.i32 } });
+  try {
+    libc.symbols.unsetenv(ptr(Buffer.from(`${name}\0`, "utf8")));
+  } finally {
+    libc.close();
+  }
+}
 
 export interface LineChannel {
   request(line: string): string;
@@ -22,7 +37,7 @@ export interface KeySources {
 type Answer = { kind: "key"; value: string } | { kind: "none" } | { kind: "ok" };
 
 function fdChannel(inherited: number): LineChannel {
-  const fd = fs.openSync(`/dev/fd/${inherited}`, "r+");
+  const fd = fs.openSync(`/dev/fd/${inherited}`, fs.constants.O_RDWR | O_CLOEXEC);
   fs.closeSync(inherited);
   let pending = "";
   let open = true;
@@ -96,6 +111,7 @@ export function keyFd(env: NodeJS.ProcessEnv): number | null {
 export function launcherChannel(env: NodeJS.ProcessEnv = process.env): LineChannel | null {
   const fd = keyFd(env);
   Reflect.deleteProperty(env, KEY_FD_ENV);
+  if (env === process.env) unsetenv(KEY_FD_ENV);
   return fd === null ? null : fdChannel(fd);
 }
 

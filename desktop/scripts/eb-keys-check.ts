@@ -33,10 +33,12 @@ interface Run {
   status: number | null;
   stderr: string;
   report: ProbeReport | null;
+  ran: string;
 }
 
 function run(app: string): Run {
   const extra = fs.openSync(path.join(tmp, "extra"), "a");
+  const began = performance.now();
   const r = spawnSync(executable(app), [], {
     encoding: "utf8",
     timeout: 60_000,
@@ -45,7 +47,8 @@ function run(app: string): Run {
   });
   fs.closeSync(extra);
   const line = r.stdout.split("\n").find((l) => l.startsWith(PROBE_PREFIX));
-  return { status: r.status, stderr: r.stderr, report: line ? (JSON.parse(line.slice(PROBE_PREFIX.length)) as ProbeReport) : null };
+  const ran = `status ${r.status}, signal ${r.signal}, ${r.error ? `error ${r.error.message}, ` : ""}${Math.round(performance.now() - began)} ms, stdout ${JSON.stringify(r.stdout.slice(-300))}`;
+  return { status: r.status, stderr: r.stderr, report: line ? (JSON.parse(line.slice(PROBE_PREFIX.length)) as ProbeReport) : null, ran };
 }
 
 function expect(what: string, ok: boolean, detail: string): void {
@@ -113,7 +116,7 @@ try {
   expect(
     "first start: no store key yet, one made and saved through the launcher",
     okOf(first, "first") === null && typeof made === "string" && okOf(first, "get") === made,
-    JSON.stringify(first.report ?? first.stderr.slice(-400)),
+    JSON.stringify(first.report ?? `${first.ran}; stderr ${first.stderr.slice(-400)}`),
   );
   expect("bun gets only stdio and the key channel: a descriptor the launcher inherited stays behind", okOf(first, "inherited") === null, JSON.stringify(first.report?.["inherited"]));
   expect("bun moves the channel off fd 3 at once and drops KIWI_KEY_FD", okOf(first, "fd3") === null && okOf(first, "env") === null, JSON.stringify([first.report?.["fd3"], first.report?.["env"]]));
@@ -121,6 +124,12 @@ try {
     "done ends the session: another copy of the socket gets nothing after it",
     okOf(first, "done") === "ended" && okOf(first, "after") === "nothing",
     JSON.stringify([first.report?.["done"], first.report?.["after"]]),
+  );
+  expect("bun's copy of the key channel is close-on-exec", okOf(first, "cloexec") === "set", JSON.stringify(first.report?.["cloexec"]));
+  expect(
+    "a child started through libc system() while the channel is open gets no socket and no KIWI_KEY_FD",
+    okOf(first, "native") === JSON.stringify({ sockets: [], env: null }),
+    JSON.stringify(first.report?.["native"]),
   );
   expect("a child the app starts afterwards gets no socket and no KIWI_KEY_FD", okOf(first, "child") === JSON.stringify({ sockets: [], env: null }), JSON.stringify(first.report?.["child"]));
   expect("a second key never replaces the first", errorOf(first, "replace").includes("never replaces"), JSON.stringify(first.report?.["replace"]));
