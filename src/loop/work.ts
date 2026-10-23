@@ -63,20 +63,26 @@ export function workName(work: Work): string {
   }
 }
 
-function focus(work: Work, state: ChannelState, mc: string): string {
+function focus(work: Work, state: ChannelState, me: string, mc: string): string {
   switch (work.kind) {
     case "coding": {
       const t = state.tasks.get(work.task);
       const id = taskId(work.task);
       const title = t ? ` “${inlineText(t.title, 160)}”` : "";
+      const head = `This session is for ${id}${title}, which you own. Answer messages for you as they come; only other tasks and reviews wait for their own session.`;
+      const send = `write where it stands with \`${mc} task checkpoint ${id} --file note.md\`, then send it for review with \`${mc} task review ${id} --at SHA\` (the commit it's at)`;
+      const selfReviewed = t?.review === me ? ` You're also its reviewer, so nobody else will give its verdict: ask the lead or a person to name another reviewer.` : "";
+      const round = t ? openRound(t) : undefined;
+      if (t?.review && round)
+        return `${head} Its round ${round.n} is with ${inlineText(t.review, 40)}: wait here for the verdict, and don't run \`${mc} task start ${id}\`, which would withdraw that round. On a rejection, fix what it says, ${send}. The session ends when the review approves ${id}, or sooner if a review you owe comes up while you wait (a rejection then gets a fresh session).${selfReviewed}`;
       const finish = t?.review
-        ? `When the work is ready, send it for review with \`${mc} task review ${id} --at SHA\` (the commit it's at), then wait here for the verdict: on a rejection, fix what it says and send a new round. The session ends when the review approves ${id}, or sooner if a review you owe comes up while you wait (a rejection then gets a fresh session).`
+        ? `When the work is ready, ${send}, then wait here for the verdict: on a rejection, fix what it says and send a new round the same way. The session ends when the review approves ${id}, or sooner if a review you owe comes up while you wait (a rejection then gets a fresh session).${selfReviewed}`
         : `When it's finished, mark it with \`${mc} task done ${id}\`. The session ends then.`;
-      return `This session is for ${id}${title}, which you own. Start it with \`${mc} task show ${id}\` and \`${mc} task start ${id}\` if it isn't doing yet. Answer messages for you as they come; only other tasks and reviews wait for their own session. ${finish}`;
+      return `${head} Start with \`${mc} task show ${id}\`, and \`${mc} task start ${id}\` if it isn't doing yet. ${finish}`;
     }
     case "reviewing": {
       const id = taskId(work.task);
-      return `This session is for reviewing round ${work.round} of ${id}. Read it with \`${mc} task show ${id}\`, check the work at the round's commit, and give your verdict with \`${mc} task approve ${id} --round ${work.round} "note"\` or \`${mc} task reject ${id} --round ${work.round} "what to fix"\`. The session ends when the round closes.`;
+      return `This session is for reviewing round ${work.round} of ${id}. Read it with \`${mc} task show ${id}\`, check the work at the round's commit, and give your verdict with \`${mc} task approve ${id} --round ${work.round} "note"\` or \`${mc} task reject ${id} --round ${work.round} "what to fix"\`. Answer messages for you as they come; your own tasks wait for their own session, even if one of them is rejected meanwhile. The session ends when the round closes.`;
     }
     case "answering":
       return `This session is for messages waiting on you. Read them with \`${mc} listen --now\` and answer each one. The session ends when you're idle with nothing unread; if you take on a task, it stays open for that task until it's done.`;
@@ -89,5 +95,5 @@ function focus(work: Work, state: ChannelState, mc: string): string {
 
 export function firstPrompt(work: Work, state: ChannelState, me: string, alias: string, now = Date.now(), mc = "kiwi"): string {
   const reentry = reentryText(state, me, now, undefined, mc);
-  return [`You're ${me} in the Kiwi Channels channel "${alias}", started by your seat's loop in a fresh session.`, focus(work, state, mc), ...(reentry ? [reentry] : [])].join("\n\n");
+  return [`You're ${me} in the Kiwi Channels channel "${alias}", started by your seat's loop in a fresh session.`, focus(work, state, me, mc), ...(reentry ? [reentry] : [])].join("\n\n");
 }
