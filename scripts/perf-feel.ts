@@ -392,7 +392,7 @@ try {
       };
       new MutationObserver((_, obs) => seen() && obs.disconnect()).observe(document, { childList: true, subtree: true, characterData: true });
     },
-    `Task ${TASKS - 1}:`,
+    `M${MESSAGES - 1}: `,
   );
   const page = await context.newPage();
   page.on("pageerror", (e) => log(`page error: ${e.message}`));
@@ -492,7 +492,7 @@ try {
     const run = async () => {
       await page.reload();
       await page
-        .getByText(`Task ${TASKS - 1}:`)
+        .getByText(`M${MESSAGES - 1}: `)
         .filter({ visible: true })
         .first()
         .waitFor({ timeout: 60000 });

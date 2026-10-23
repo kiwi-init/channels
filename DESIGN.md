@@ -132,6 +132,12 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   `prefers-contrast: more` it falls back to a solid fill with a 2px `ink`
   ring: no band, no glint.
 - Fall back to solid fills under `prefers-contrast: more`.
+- On a machine that draws without a GPU (WebGL's renderer is SwiftShader,
+  llvmpipe or a basic render driver, or there's no WebGL: `lib/drawing.ts`
+  marks `html[data-drawing=software]` once the app is idle), the scrims under
+  the header and over the composer drop their blur and mask and keep only
+  their fade: re-blurring them on every keystroke made typing take 128 ms
+  at p95 there, 32 ms without (`PERF_GL=swiftshader bun scripts/perf-scale.ts`).
 
 ## 6. Motion
 
@@ -233,9 +239,10 @@ From `design-tokens.ts`:
   carrying their unread total, which opens to "Show less". The page
   beside it has one header row: what is shown, the channel's status
   (working, merged today, needs you), and the
-  Tasks / Agents / Conversation tabs. A view opens Tasks; a conversation
-  opens Conversation. The approved mockups are in `docs/ui/`.
-- Tasks, the tab a channel opens on: Needs you's rows first, then the
+  Tasks / Agents / Conversation tabs. A channel opens on its conversation
+  (Needs you's rows at its top while something waits); a view opens Tasks;
+  a conversation opens Conversation. The approved mockups are in `docs/ui/`.
+- Tasks: Needs you's rows first, then the
   board grouped by the person's message each task serves: the group's
   heading is their own words in quotes, under it who said it and #N, the
   ask that moved last first and Unfiled (no person's message holds these)
