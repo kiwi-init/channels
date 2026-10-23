@@ -30,11 +30,21 @@ function legacyName(): string {
   return Array.isArray(names) && typeof names[0] === "string" ? names[0] : "";
 }
 
+function inherited(fd: number): string | null {
+  try {
+    fs.fstatSync(fd);
+    return "open";
+  } catch {
+    // EBADF: the descriptor didn't come through, which is what the launcher should do.
+    return null;
+  }
+}
+
 async function probe(): Promise<ProbeReport> {
   const ch = launcherChannel();
   if (!ch) return { channel: { error: "no key channel" } };
   const key = launcherKey(ch);
-  const report: ProbeReport = { first: await step(() => key.get()) };
+  const report: ProbeReport = { inherited: { ok: inherited(5) }, first: await step(() => key.get()) };
   const first = report["first"];
   if (first && "ok" in first && first.ok === null) {
     const made = randomBytes(32).toString("base64");

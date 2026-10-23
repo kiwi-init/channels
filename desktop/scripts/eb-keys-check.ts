@@ -35,7 +35,14 @@ interface Run {
 }
 
 function run(app: string): Run {
-  const r = spawnSync(executable(app), [], { encoding: "utf8", timeout: 60_000, env: { ...process.env, BUN_OPTIONS: `--preload ${path.join(tmp, "nowhere.js")}` } });
+  const extra = fs.openSync(path.join(tmp, "extra"), "a");
+  const r = spawnSync(executable(app), [], {
+    encoding: "utf8",
+    timeout: 60_000,
+    stdio: ["ignore", "pipe", "pipe", "ignore", "ignore", extra],
+    env: { ...process.env, BUN_OPTIONS: `--preload ${path.join(tmp, "nowhere.js")}` },
+  });
+  fs.closeSync(extra);
   const line = r.stdout.split("\n").find((l) => l.startsWith(PROBE_PREFIX));
   return { status: r.status, stderr: r.stderr, report: line ? (JSON.parse(line.slice(PROBE_PREFIX.length)) as ProbeReport) : null };
 }
@@ -107,6 +114,7 @@ try {
     okOf(first, "first") === null && typeof made === "string" && okOf(first, "get") === made,
     JSON.stringify(first.report ?? first.stderr.slice(-400)),
   );
+  expect("bun gets only stdio and the key channel: a descriptor the launcher inherited stays behind", okOf(first, "inherited") === null, JSON.stringify(first.report?.["inherited"]));
   expect("a second key never replaces the first", errorOf(first, "replace").includes("never replaces"), JSON.stringify(first.report?.["replace"]));
   expect("the old app's key, read by the launcher", okOf(first, "legacy") === legacyValue, JSON.stringify(first.report?.["legacy"]));
   expect("an app name not in Info.plist's KiwiLegacyNames is refused", errorOf(first, "unlisted").includes("isn't an app whose keys"), JSON.stringify(first.report?.["unlisted"]));

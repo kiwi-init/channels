@@ -8,6 +8,7 @@
 #include <fts.h>
 #include <limits.h>
 #include <signal.h>
+#include <spawn.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -305,27 +306,38 @@ int kiwi_run_with_keys(const char *path, char *const argv[], char *const envp[])
   CFTypeRef legacy = CFBundleGetValueForInfoDictionaryKey(bundle, CFSTR("KiwiLegacyNames"));
   CFArrayRef names = legacy && CFGetTypeID(legacy) == CFArrayGetTypeID() ? legacy : NULL;
   CFStringRef label = CFStringCreateWithFormat(kCFAllocatorDefault, NULL, CFSTR("%@ store key"), id);
+  if (chdir("/") != 0) {
+    fprintf(stderr, "channels: can't leave the folder it was started in: %s\n", strerror(errno));
+    return 1;
+  }
   int sv[2];
   if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) != 0) {
     fprintf(stderr, "channels: no key channel: %s\n", strerror(errno));
     return 1;
   }
   fcntl(sv[0], F_SETFD, FD_CLOEXEC);
-  pid_t pid = fork();
-  if (pid < 0) {
-    fprintf(stderr, "channels: can't start the app: %s\n", strerror(errno));
+  posix_spawn_file_actions_t actions;
+  posix_spawnattr_t attr;
+  posix_spawn_file_actions_init(&actions);
+  posix_spawnattr_init(&attr);
+  posix_spawnattr_setflags(&attr, POSIX_SPAWN_CLOEXEC_DEFAULT);
+  for (int fd = 0; fd <= 2; fd++)
+    if (fd != sv[1] && fcntl(fd, F_GETFD) != -1) posix_spawn_file_actions_addinherit_np(&actions, fd);
+  if (sv[1] == KIWI_KEY_FD)
+    posix_spawn_file_actions_addinherit_np(&actions, KIWI_KEY_FD);
+  else
+    posix_spawn_file_actions_adddup2(&actions, sv[1], KIWI_KEY_FD);
+  pid_t pid = 0;
+  int spawned = posix_spawn(&pid, path, &actions, &attr, argv, envp);
+  posix_spawn_file_actions_destroy(&actions);
+  posix_spawnattr_destroy(&attr);
+  close(sv[1]);
+  if (spawned != 0) {
+    close(sv[0]);
+    CFRelease(label);
+    fprintf(stderr, "channels: can't start the app: %s\n", strerror(spawned));
     return 1;
   }
-  if (pid == 0) {
-    close(sv[0]);
-    if (sv[1] != KIWI_KEY_FD) {
-      if (dup2(sv[1], KIWI_KEY_FD) < 0) _exit(127);
-      close(sv[1]);
-    }
-    execve(path, argv, envp);
-    _exit(127);
-  }
-  close(sv[1]);
   child_pid = pid;
   struct sigaction sa;
   memset(&sa, 0, sizeof sa);
