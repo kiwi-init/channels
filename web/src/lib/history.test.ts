@@ -5,8 +5,8 @@ import { afterAll, beforeEach, expect, test } from "bun:test"
 import { b64url, seal } from "@kiwi/core/crypto.ts"
 import { generateIdentity, sign } from "@kiwi/core/identity.ts"
 import { PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts"
-import { openRow, openRows, packRow, packEnvelope } from "@kiwi/core/cache-row.ts"
-import { forgetAllHistory, forgetHistory, readCached, rememberRow, rememberRows, useHistoryDb, type CachedRow, type HistoryDb } from "./history.ts"
+import { openKept, openRow, openRows, packKept, packRow, packEnvelope } from "@kiwi/core/cache-row.ts"
+import { forgetAllHistory, forgetHistory, readCached, readKept, rememberKept, rememberRow, rememberRows, useHistoryDb, type CachedKept, type CachedRow, type HistoryDb } from "./history.ts"
 
 const SENTINEL = "SENTINEL-plain-text-should-not-rest"
 const ROOM = "a".repeat(32)
@@ -19,6 +19,7 @@ let key: string
 
 function memoryDb(): HistoryDb {
   const rows = new Map<string, CachedRow>()
+  const kept = new Map<string, CachedKept>()
   const id = (room: string, pk: string, seq: number) => `${room}\0${pk}\0${seq}`
   const list = (room: string, pk: string) =>
     [...rows.entries()]
@@ -42,10 +43,14 @@ function memoryDb(): HistoryDb {
     },
     drop: async (room, pk) => {
       for (const row of list(room, pk)) rows.delete(id(room, pk, row.seq))
+      kept.delete(`${room}\0${pk}`)
     },
     dropAll: async () => {
       rows.clear()
+      kept.clear()
     },
+    putKept: async (room, pk, k) => void kept.set(`${room}\0${pk}`, k),
+    kept: async (room, pk) => kept.get(`${room}\0${pk}`) ?? null,
   }
 }
 
@@ -230,4 +235,30 @@ test("an unread row opens as the message once the build can read it, and a moved
   const later = await packEnvelope(key, ROOM, 1, { seq: 8, ts: 80, e: 1, ...unreadable })
   expect(await openRow(later, ROOM, { "1": key })).toEqual({ seq: 8, unread: true })
   expect(await openRow({ ...later, seq: 9 }, ROOM, { "1": key })).toBeNull()
+})
+
+test("a channel's kept state rests sealed, opens only with its channel's key, and leaves with the member", async () => {
+  const keys = { "1": key }
+  const state = { roster: [{ name: SENTINEL, pk: "pk" }], base: null }
+  await rememberKept(ROOM, PK_A, await packKept(key, ROOM, 1, state))
+  await rememberKept(ROOM, PK_B, await packKept(key, ROOM, 1, { roster: [], base: null }))
+  const sealed = await readKept(ROOM, PK_A)
+  expect(JSON.stringify(sealed)).not.toContain(SENTINEL)
+  expect(await openKept(sealed, ROOM, keys)).toEqual(state)
+  expect(await openKept(sealed, ROOM_B, keys)).toBeNull()
+  expect(await openKept(sealed, ROOM, { "1": b64url(crypto.getRandomValues(new Uint8Array(32))) })).toBeNull()
+
+  await forgetHistory(ROOM, PK_A)
+  expect(await readKept(ROOM, PK_A)).toBeNull()
+  expect(await readKept(ROOM, PK_B)).not.toBeNull()
+  await forgetAllHistory()
+  expect(await readKept(ROOM, PK_B)).toBeNull()
+})
+
+test("a kept state never opens as a message row, and a row never opens as a kept state", async () => {
+  const keys = { "1": key }
+  const kept = await packKept(key, ROOM, 1, { roster: [], base: null })
+  expect(await openRow({ seq: 1, ...kept }, ROOM, keys)).toBeNull()
+  const row = await packRow(key, ROOM, 1, msg(1, "a"))
+  expect(await openKept({ e: row.e, iv: row.iv, ct: row.ct }, ROOM, keys)).toBeNull()
 })

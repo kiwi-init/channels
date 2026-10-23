@@ -8,7 +8,7 @@ import type { JoinRequest, Member } from "@kiwi/core/membership.ts"
 import { SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts"
 import { fold, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts"
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "../channel-ops"
-import { openCached, planCached, rememberRow, rememberRows } from "../history"
+import { openCached, planCached, readKept, rememberKept, rememberRow, rememberRows } from "../history"
 import { markOnce } from "../marks"
 import { checksToPost, issuesToPost, linksToPost, setCheckedUpTo, tasksToClose } from "../review-checks"
 import { drain } from "../github-queue"
@@ -25,10 +25,12 @@ import { forgetChannel, loadMember, renameChannel, type StoredMember } from "./s
 import { hear, onlineByName, type Online } from "./online"
 import { trimmed } from "./trim"
 import { foldRoster } from "./fold-roster"
+import { asKept } from "./kept"
 import { onceEach, openChannel, warmUp } from "./open"
 import { dropWarm, keepWarm, warmOf } from "./warm"
 
 const HISTORY = 2_000
+const KEEP_DELAY_MS = 3_000
 
 type Connection = "connecting" | "live" | "reconnecting"
 
@@ -82,6 +84,16 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
     else keepWarm(member.code, { messages, unread, roster, requests, marks, guardFloor, roomsFloor, base })
   }, [member.code, gone, messages, unread, roster, requests, marks, guardFloor, roomsFloor, base])
   useEffect(() => {
+    if (!start || gone) return
+    const t = setTimeout(() => {
+      void ch
+        .keep({ roster, base, guardFloor, roomsFloor })
+        .then((sealed) => (sealed ? rememberKept(ch.roomId, ch.pk, sealed) : undefined))
+        .catch(() => {})
+    }, KEEP_DELAY_MS)
+    return () => clearTimeout(t)
+  }, [ch, start, gone, roster, base, guardFloor, roomsFloor])
+  useEffect(() => {
     const title = ch.title()
     const guard = ch.guard()
     const rooms = ch.rooms()
@@ -106,9 +118,11 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
     [member.code]
   )
 
+  const rosterIn = useRef(false)
   const refreshRoster = useCallback(async () => {
     try {
       setRoster(await ch.members())
+      rosterIn.current = true
       if (ch.isOwner && (await ch.rotateIfDue())) setRoster(await ch.members())
     } catch (err) {
       onGone(err)
@@ -117,6 +131,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
   const loadRoster = useCallback(async () => {
     try {
       setRoster(await ch.members())
+      rosterIn.current = true
     } catch (err) {
       onGone(err)
     }
@@ -203,6 +218,8 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
           return
       }
     }
+    const early = new Set<number>()
+    let painted = false
     const steps = onceEach({
       head: () => ch.head(),
       roster: loadRoster,
@@ -211,22 +228,49 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
       cache: () => openCached(ch.roomId, ch.pk, ch.openRows).catch(() => null),
       plan: (opened, head) => planCached(ch.roomId, ch.pk, opened, head, HISTORY).catch(() => null),
       snapshot: () => ch.snapshot().catch(() => null),
-      paint: (cached, base) => {
-        if (closed) return
+      kept: async () => {
+        const sealed = await readKept(ch.roomId, ch.pk).catch(() => null)
+        return sealed ? asKept(await ch.openKept(sealed).catch(() => null)) : null
+      },
+      early: (cached, kept) => {
+        if (closed || painted) return
+        if (!rosterIn.current) setRoster(kept.roster)
+        if (kept.base) setBase((prev) => prev ?? kept.base)
+        setGuardFloor((prev) => prev ?? kept.guardFloor)
+        setRoomsFloor((prev) => prev ?? kept.roomsFloor)
         if (cached?.unread.length) {
           const seen = cached.unread
           setUnread((prev) => [...new Set([...prev, ...seen])].slice(-HISTORY))
         }
         if (cached?.messages.length) {
-          const kept = cached.messages
-          setMessages((prev) => merged(prev, kept))
+          const shown = cached.messages
+          for (const m of shown) early.add(m.seq)
+          setMessages((prev) => merged(prev, shown))
+        }
+        setReady(true)
+      },
+      paint: (cached, base, head) => {
+        if (closed) return
+        painted = true
+        if (cached?.unread.length) {
+          const seen = cached.unread
+          setUnread((prev) => [...new Set([...prev, ...seen])].slice(-HISTORY))
+        }
+        if (cached?.messages.length || early.size) {
+          const kept = cached?.messages ?? []
+          setMessages((prev) =>
+            merged(
+              prev.filter((m) => m.seq <= head || !early.has(m.seq)),
+              kept
+            )
+          )
           if (kept.some((m) => m.kind === "event" && m.ev?.op === "card")) noteAgentWorked()
         }
         if (base) setBase(base)
         setReady(true)
       },
     })
-    warmUp(steps, was)
+    warmUp(steps, was, HISTORY)
     const opening = untilOpen(
       Effect.tryPromise({
         try: () => openChannel(steps, was, HISTORY),

@@ -1,4 +1,4 @@
-import type { CachedRow } from "@kiwi/core/cache-row.ts"
+import type { CachedKept, CachedRow } from "@kiwi/core/cache-row.ts"
 import type { PresenceFields } from "@kiwi/core/client.ts"
 
 import type { CallResult, ChannelCallName, ChannelCalls, ChannelOps, FollowEvent } from "../../../desktop/src/bridge.ts"
@@ -28,6 +28,8 @@ function lazyLocalOps(): ChannelOps {
     forget: (code) => local().then((o) => o.forget(code)),
     presence: (code, p) => local().then((o) => o.presence(code, p)),
     openRows: (code, rows) => local().then((o) => o.openRows(code, rows)),
+    keep: (code, state) => local().then((o) => o.keep(code, state)),
+    openKept: (code, sealed) => local().then((o) => o.openKept(code, sealed)),
     nudge: () => {
       if (real) void real.then((o) => o.nudge())
     },
@@ -114,6 +116,8 @@ export class ChannelLink {
   history = (...a: Args<"history">) => this.c("history", ...a)
   presence = (p: PresenceFields) => this.via.presence(this.code, p)
   openRows = (rows: CachedRow[]) => this.via.openRows(this.code, rows)
+  keep = (state: object) => this.via.keep(this.code, state)
+  openKept = (sealed: CachedKept) => this.via.openKept(this.code, sealed)
   follow = (since: number, on: (e: FollowEvent) => void) => this.via.follow(this.code, since, on)
 }
 

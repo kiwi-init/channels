@@ -63,3 +63,33 @@ function wellFormedRow(x: unknown): x is CachedRow {
 export async function openRows(rows: readonly unknown[], roomId: string, keys: Record<string, string>): Promise<(Message | Unread | null)[]> {
   return Promise.all(rows.map((row) => (wellFormedRow(row) ? openRow(row, roomId, keys).catch(() => null) : Promise.resolve(null))));
 }
+
+const KEPT = 1;
+
+export interface CachedKept {
+  e: number;
+  iv: string;
+  ct: string;
+}
+
+export async function packKept(key: string, roomId: string, epoch: number, state: object): Promise<CachedKept> {
+  const sealed = await seal(key, roomId, { kept: KEPT, state }, { pack: true });
+  return { e: epoch, iv: sealed.iv, ct: sealed.ct };
+}
+
+function wellFormedKept(x: unknown): x is CachedKept {
+  if (!x || typeof x !== "object") return false;
+  const r = x as Record<string, unknown>;
+  return Number.isSafeInteger(r.e) && typeof r.iv === "string" && typeof r.ct === "string";
+}
+
+export async function openKept(sealed: unknown, roomId: string, keys: Record<string, string>): Promise<unknown> {
+  if (!wellFormedKept(sealed)) return null;
+  for (const e of [String(sealed.e), ...Object.keys(keys).filter((k) => k !== String(sealed.e))]) {
+    const key = keys[e];
+    if (!key) continue;
+    const opened = (await open(key, roomId, sealed.iv, sealed.ct).catch(() => null)) as { kept?: unknown; state?: unknown } | null;
+    if (opened && opened.kept === KEPT && opened.state && typeof opened.state === "object") return opened.state;
+  }
+  return null;
+}
