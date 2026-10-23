@@ -4,16 +4,19 @@ import { app, powerMonitor, protocol, session } from "electron";
 import { keepDaemon } from "./bundled-daemon.ts";
 import { handleDeepLink, JOIN_SCHEME, rememberDeepLink } from "./deep-links.ts";
 import { electronHost, serveCalls } from "./electron-host.ts";
+import { electronVault, warnIfBroken } from "./electron-store.ts";
 import { APP_SCHEME, permissionAllowed } from "./guard.ts";
+import { useHost } from "./host.ts";
 import { handlers } from "./ipc/handlers.ts";
 import { closeKeys, keysOpen, startKeys, tellKeys } from "./keys-process.ts";
 import { setAppMenu } from "./menu.ts";
 import { catchMainErrors } from "./revive.ts";
 import { serveWeb } from "./serve-web.ts";
-import { loadStore, warnIfBroken } from "./store.ts";
+import { openStore } from "./store.ts";
 import { startUpdates } from "./updater.ts";
 import { createTray, createWindow, guardContents, isQuitting, markQuitting, push, refreshTray, showWindow, stepText } from "./window.ts";
 
+useHost(electronHost);
 catchMainErrors();
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
@@ -39,7 +42,7 @@ else {
     serveCalls(handlers(electronHost));
     setAppMenu(stepText);
     createWindow();
-    loadStore();
+    openStore(electronVault);
     warnIfBroken();
     startKeys();
     createTray();

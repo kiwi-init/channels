@@ -1,4 +1,4 @@
-import { dialog, ipcMain, Notification, shell, type OpenDialogOptions } from "electron";
+import { app, dialog, ipcMain, Notification, shell, type OpenDialogOptions } from "electron";
 
 import type { Call, CallArgs, Handlers } from "./calls.ts";
 import type { Host } from "./host.ts";
@@ -11,6 +11,14 @@ const PICK: OpenDialogOptions = { properties: ["openDirectory", "createDirectory
 const shown = new Set<Notification>();
 
 export const electronHost: Host = {
+  app: {
+    packaged: () => app.isPackaged,
+    version: () => app.getVersion(),
+    path: (name) => (name === "resources" ? process.resourcesPath : app.getPath(name === "data" ? "userData" : name)),
+    ready: () => app.isReady(),
+    relaunch: (execPath) => app.relaunch({ execPath }),
+    onQuit: (fn) => void app.on("will-quit", fn),
+  },
   push,
   openExternal: (url) => shell.openExternal(url),
   pickFolder: async () => {
@@ -28,6 +36,7 @@ export const electronHost: Host = {
     n.on("failed", done);
     n.show();
   },
+  showWindow,
   reload: () => void currentWindow()?.loadURL(entryUrl()),
   restartToUpdate,
   tellKeys,
