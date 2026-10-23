@@ -1,8 +1,19 @@
 import path from "node:path";
 
-export function swapAsset(version: string, platform: NodeJS.Platform, arch: string): string | null {
+import { appImageName, debName, type LinuxArch } from "../scripts/linux-files.ts";
+
+const linuxArch = (arch: string): LinuxArch | null => (arch === "x64" || arch === "arm64" ? arch : null);
+
+export function swapAsset(version: string, platform: NodeJS.Platform, arch: string, appImage?: string): string | null {
   if (platform === "darwin") return `Channels-${version}-mac-${arch === "arm64" ? "arm64" : "x64"}.zip`;
+  const linux = linuxArch(arch);
+  if (platform === "linux" && appImage && linux) return appImageName(version, linux);
   return null;
+}
+
+export function debAsset(version: string, platform: NodeJS.Platform, arch: string, appImage?: string): string | null {
+  const linux = linuxArch(arch);
+  return platform === "linux" && !appImage && linux ? debName(version, linux) : null;
 }
 
 export function cantSwap(bundle: string, writable: (dir: string) => boolean, failedBefore: boolean): boolean {
@@ -19,4 +30,13 @@ export function swapScript(o: { pid: number; target: string; next: string; dir: 
     o.relaunch ? `open ${q(o.target)}` : "",
     `rm -rf ${q(o.dir)}`,
   ].join("\n");
+}
+
+const LEFT_BEHIND = ["APPDIR", "APPIMAGE", "ARGV0", "OWD", "LD_LIBRARY_PATH", "LD_PRELOAD"];
+
+export function relaunchAfter(pid: number, exe: string, env: NodeJS.ProcessEnv): { args: string[]; env: NodeJS.ProcessEnv } {
+  return {
+    args: ["-c", `while kill -0 ${pid} 2>/dev/null; do sleep 0.2; done; exec "$0"`, exe],
+    env: Object.fromEntries(Object.entries(env).filter(([k]) => !LEFT_BEHIND.includes(k))),
+  };
 }

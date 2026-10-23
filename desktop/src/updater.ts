@@ -14,7 +14,7 @@ import { host } from "./host.ts";
 import { moveOver } from "./move.ts";
 import { logMainError } from "./main-log.ts";
 import { signedLikeThisApp } from "./signer.ts";
-import { cantSwap, swapAsset, swapScript } from "./update-asset.ts";
+import { cantSwap, debAsset, swapAsset, swapScript } from "./update-asset.ts";
 
 const REPO = "ojowwalker77/channels";
 const EVERY_MS = 6 * 3_600_000;
@@ -30,6 +30,7 @@ export interface UpdateState {
   state: "downloading" | "ready" | "available";
   url: string;
   blocked?: true;
+  deb?: string;
 }
 
 export type UpdateCheck = UpdateState | { state: "current"; version: string } | { state: "failed" };
@@ -93,11 +94,16 @@ async function check(): Promise<UpdateCheck> {
     fs.rmSync(path.dirname(staged.path), { recursive: true, force: true });
     staged = null;
   }
-  const name = host().app.packaged() ? swapAsset(version, process.platform, process.arch) : null;
+  const appImage = process.env["APPIMAGE"];
+  const packaged = host().app.packaged();
+  const name = packaged ? swapAsset(version, process.platform, process.arch, appImage) : null;
   const asset = name ? rel.assets?.find((a) => a.name === name) : undefined;
   const sums = rel.assets?.find((a) => a.name === "SHA256SUMS");
-  if (name && process.platform === "darwin" && cantSwap(macBundle(), writableDir, failedBefore(version))) return set({ version, state: "available", url, blocked: true });
-  if (!asset || !sums) return set({ version, state: "available", url });
+  const target = process.platform === "darwin" ? macBundle() : appImage;
+  if (name && target && cantSwap(target, writableDir, failedBefore(version))) return set({ version, state: "available", url, blocked: true });
+  const debName = packaged ? debAsset(version, process.platform, process.arch, appImage) : null;
+  const deb = debName ? rel.assets?.find((a) => a.name === debName)?.browser_download_url : undefined;
+  if (!asset || !sums) return set({ version, state: "available", url, ...(deb ? { deb } : {}) });
   const shown = set({ version, state: "downloading", url });
   fetching = fetchUpdate(version, url, asset.browser_download_url, sums.browser_download_url, name!).finally(() => (fetching = null));
   return shown;
@@ -203,7 +209,7 @@ export function applyUpdate(relaunch: boolean): boolean {
   }
 }
 
-function swapIn(next: { version: string; path: string }, relaunch: boolean): boolean {
+function swapIn(next: { version: string; path: string; url: string }, relaunch: boolean): boolean {
   const dir = path.dirname(next.path);
   if (process.platform === "darwin") {
     const target = macBundle();
@@ -217,9 +223,16 @@ function swapIn(next: { version: string; path: string }, relaunch: boolean): boo
     // The download sits in the temp dir, often on another filesystem than the AppImage (moveOver).
     try {
       moveOver(next.path, target);
-    } catch {
+    } catch (e) {
+      // The AppImage stays as it was; the marker keeps the next launch from downloading this version again.
+      logMainError(e);
+      fs.writeFileSync(failedMarker(), next.version);
+      fs.rmSync(dir, { recursive: true, force: true });
+      staged = null;
+      set({ version: next.version, state: "available", url: next.url, blocked: true });
       return false;
     }
+    fs.rmSync(failedMarker(), { force: true });
     fs.rmSync(dir, { recursive: true, force: true });
     if (relaunch) host().app.relaunch(target);
   }
