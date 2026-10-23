@@ -32,7 +32,9 @@ static gboolean process_ended(GSignalInvocationHint *hint, guint n, const GValue
 }
 
 static bool hook(const char *signal, GSignalEmissionHook fn) {
-  guint id = g_signal_lookup(signal, webkit_web_view_get_type());
+  GType type = webkit_web_view_get_type();
+  g_type_class_ref(type);
+  guint id = g_signal_lookup(signal, type);
   return id != 0 && g_signal_add_emission_hook(id, 0, fn, NULL, NULL) != 0;
 }
 
