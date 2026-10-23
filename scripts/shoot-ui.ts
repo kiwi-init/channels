@@ -3,7 +3,7 @@
 // first (a lead and an agent working a task, messages, a thread, a task's conversation, a
 // direct one, notes, a pending join request), the same way scripts/smoke-ui.ts walks the flows.
 //
-//   bun run web:build && bun scripts/shoot-ui.ts [outdir] [--only channel,task-thread,…] [--wide] [--phone channel,tasks] [--theme dark|light] [--channels 20]
+//   bun run web:build && bun scripts/shoot-ui.ts [outdir] [--only channel,task-thread,…] [--wide] [--phone channel,tasks] [--theme dark|light] [--channels 20] [--browser chromium|webkit]
 //
 // Shots are taken at 2x (Retina), as most people see the dashboard. --only keeps the screens whose
 // name contains one of the words (and skips the signed-out ones unless named), --wide skips the phone
@@ -13,13 +13,14 @@
 // `build / shots` runs it --wide --phone channel,tasks --theme dark and uploads the shots as the ui-shots artifact.
 //
 // Needs Playwright's Chromium: bunx playwright-core install --only-shell chromium
-// (or set SMOKE_CHROMIUM to a Chrome binary).
+// (or set SMOKE_CHROMIUM to a Chrome binary). --browser webkit shoots in Playwright's WebKit,
+// the engine of the Mac's and Linux's system web view: bunx playwright-core install webkit.
 
 import { spawn, type ChildProcess } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { chromium, type Page } from "playwright-core";
+import { chromium, webkit, type Page } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
@@ -31,6 +32,8 @@ const flag = (name: string) => {
 const only = flag("--only")?.split(",").filter(Boolean);
 const themeOnly = flag("--theme");
 const moreChannels = Number(flag("--channels") ?? 0);
+const engine = flag("--browser") ?? "chromium";
+if (engine !== "chromium" && engine !== "webkit") throw new Error(`--browser is chromium or webkit, not ${engine}`);
 const phone = flag("--phone")?.split(",").filter(Boolean);
 const wideOnly = args.includes("--wide") ? (args.splice(args.indexOf("--wide"), 1), true) : false;
 const OUT = resolve(args[0] ?? join(tmpdir(), "kiwi-shots"));
@@ -62,7 +65,7 @@ const win = (...args: string[]) => kiwi(["-c", "kiwi-w", "--as", "win", ...args]
 const { relay, port } = await startLocalRelay(join(data, "relay"), "web/dist");
 const BASE = `http://localhost:${port}/`;
 
-const browser = await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
+const browser = engine === "webkit" ? await webkit.launch() : await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
 const WIDE = { width: 1440, height: 900 };
 const NARROW = { width: 390, height: 844 };
 const shots: string[] = [];
@@ -86,6 +89,7 @@ async function firstRunAs(page: Page, name: string) {
 }
 
 async function passkey(page: Page) {
+  if (engine === "webkit") return;
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("WebAuthn.enable");
   await cdp.send("WebAuthn.addVirtualAuthenticator", {

@@ -34,6 +34,7 @@ import { seatCommands } from "./commands/seat.ts";
 import { rexCommands } from "./commands/rex.ts";
 import { terminalCommands } from "./commands/terminal.ts";
 import { launchCommands } from "./commands/launch.ts";
+import { loopCommands } from "./commands/loop.ts";
 import { fail } from "./fail.ts";
 
 // Early signals for `kiwi daemon` only (the first positional, same as the CLI). Bun plus the
@@ -77,6 +78,7 @@ const commands: Record<string, Command> = {
   ...rexCommands,
   ...terminalCommands,
   ...launchCommands,
+  ...loopCommands,
 };
 
 if (import.meta.main) {
