@@ -21,7 +21,7 @@ to the Electron one and shares every module that doesn't import `electron`:
 
 ```sh
 bun run web:build && cd desktop && bun run start:eb   # dev build, opened
-bun run build:eb                                      # release-eb/: the .app and dmg
+bun run build:eb                                      # release-eb/: the stable build; scripts/eb-size.ts measures the plain .app we ship
 bun run typecheck:eb                                  # fetches the devkit into .hutch/, then tsc
 ```
 

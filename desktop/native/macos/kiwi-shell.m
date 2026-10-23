@@ -31,21 +31,11 @@ static NSColor *rgb(uint32_t c) {
   return [NSColor colorWithSRGBRed:((c >> 16) & 0xff) / 255.0 green:((c >> 8) & 0xff) / 255.0 blue:(c & 0xff) / 255.0 alpha:1];
 }
 
-bool kiwi_dark(void) {
-  __block BOOL dark = NO;
-  void (^read)(void) = ^{
-    NSAppearanceName name = [NSApp.effectiveAppearance bestMatchFromAppearancesWithNames:@[ NSAppearanceNameAqua, NSAppearanceNameDarkAqua ]];
-    dark = [name isEqualToString:NSAppearanceNameDarkAqua];
-  };
-  if (NSThread.isMainThread) read();
-  else dispatch_sync(dispatch_get_main_queue(), read);
-  return dark;
-}
-
-void kiwi_window_look(void *ptr, double minWidth, double minHeight, uint32_t background) {
+void kiwi_window_look(void *ptr, double minWidth, double minHeight, uint32_t light, uint32_t dark) {
   NSWindow *window = (__bridge NSWindow *)ptr;
   dispatch_async(dispatch_get_main_queue(), ^{
     window.minSize = NSMakeSize(minWidth, minHeight);
-    window.backgroundColor = rgb(background);
+    NSAppearanceName name = [NSApp.effectiveAppearance bestMatchFromAppearancesWithNames:@[ NSAppearanceNameAqua, NSAppearanceNameDarkAqua ]];
+    window.backgroundColor = rgb([name isEqualToString:NSAppearanceNameDarkAqua] ? dark : light);
   });
 }
