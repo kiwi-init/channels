@@ -4,6 +4,7 @@ import type { Handlers } from "../desktop/src/calls.ts";
 import {
   answer,
   BOOT_GLOBAL,
+  bootOf,
   committedUrl,
   frameOf,
   stillOurs,
@@ -91,12 +92,19 @@ describe("the bridge answers only our page", () => {
 });
 
 describe("what main sends the page", () => {
+  test("the boot carries the snapshot and main's session for this load, and anything else isn't a boot", () => {
+    const session = "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0";
+    const snapshot: StoreSnapshot = { relayUrl: "https://relay.example", person: null, channels: [], computers: [], phones: [], pending: [], personalities: [] };
+    expect(bootOf({ snapshot, session })).toEqual({ snapshot, session });
+    for (const junk of [null, snapshot, { snapshot }, { session }, { snapshot: null, session }, { snapshot, session: "short" }, { snapshot: "x", session }]) expect(bootOf(junk)).toBeNull();
+  });
+
   test("the preload carries the snapshot, and packets go only to our own receiver", () => {
     const snapshot: StoreSnapshot = { relayUrl: "https://relay.example", person: null, channels: [], computers: [], phones: [], pending: [], personalities: [] };
-    const source = preloadSource({ ...snapshot, pending: [{ id: "1", at: 1, title: "line break </script>", body: null }] }, "bundle();");
+    const source = preloadSource({ session: "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0", snapshot: { ...snapshot, pending: [{ id: "1", at: 1, title: "line break </script>", body: null }] } }, "bundle();");
     const page: Record<string, unknown> = {};
     new Function("globalThis", source.replace("bundle();", ""))(page);
-    expect((page[BOOT_GLOBAL] as StoreSnapshot).pending[0]?.title).toBe("line break </script>");
+    expect(bootOf(page[BOOT_GLOBAL])?.snapshot.pending[0]?.title).toBe("line break </script>");
     expect(source.endsWith("bundle();")).toBe(true);
     const got: unknown[] = [];
     new Function("globalThis", toPageScript({ type: "message", id: "store", payload: { a: " " } }))({ [RECEIVE_GLOBAL]: (p: unknown) => got.push(p) });

@@ -9,6 +9,7 @@ export interface BunBridge {
   setTransport(t: RPCTransport): void;
   push<P extends Push>(name: P, value: Pushes[P]): void;
   pushKeys(frame: KeysFrame): void;
+  nextSession(): string;
 }
 
 export type KeysHandler = (session: string, req: KeysRequest) => Promise<KeysReply>;
@@ -31,40 +32,45 @@ export function bunBridge(
   toPage: (frame: Frame) => void,
   opened: (session: string) => void = () => {},
   keys: KeysHandler = () => Promise.reject(new Error("this window holds no keys")),
+  mint: () => string = () => crypto.randomUUID(),
 ): BunBridge {
-  let out: PacketTransport = {};
+  let out: PacketTransport<Frame> = {};
   let current: Session | null = null;
-  const retired = new Set<string>();
+  let expected = mint();
   const open = (id: string): Session => {
     let deliver: (packet: unknown) => void = () => {};
     const rpc = createRPC<BunSide, PageSide>({
       maxRequestTime: Infinity,
       requestHandler: (method, params) => (method === "keys" ? keysAnswer(keys, id, params) : answer(table, method, params)),
-      transport: { send: (packet: unknown) => out.send?.({ session: id, packet }), registerHandler: (h: (packet: unknown) => void) => (deliver = h) },
+      transport: {
+        send: (packet: unknown) => (current?.id === id ? out.send?.({ session: id, packet }) : undefined),
+        registerHandler: (h: (packet: unknown) => void) => (deliver = h),
+      },
     });
     const send: (name: Push, value: Pushes[Push]) => void = rpc.send;
     const sendKeys: (name: "keys", value: KeysFrame) => void = rpc.send;
-    if (current) retired.add(current.id);
     const session: Session = { id, deliver: (packet) => deliver(packet), send, sendKeys };
     current = session;
+    expected = mint();
     opened(id);
     return session;
   };
   const receive = (raw: unknown): void => {
     const frame = frameOf(raw);
-    if (!frame || retired.has(frame.session)) return;
-    const session = current?.id === frame.session ? current : open(frame.session);
-    if (frame.packet !== undefined) session.deliver(frame.packet);
+    if (!frame) return;
+    const session = frame.session === current?.id ? current : frame.session === expected ? open(frame.session) : null;
+    if (session && frame.packet !== undefined) session.deliver(frame.packet);
   };
   return {
     setTransport: (t) => {
-      out = pageOnly({ send: (frame) => toPage(frame as Frame), registerHandler: t.registerHandler, unregisterHandler: t.unregisterHandler }, onPage);
+      out = pageOnly<Frame>({ send: toPage, registerHandler: t.registerHandler, unregisterHandler: t.unregisterHandler }, onPage);
       out.registerHandler?.(receive);
     },
     push: (name, value) => current?.send(name, value),
     pushKeys: (frame) => {
       if (current?.id === frame.session) current.sendKeys("keys", frame);
     },
+    nextSession: () => expected,
   };
 }
 
@@ -76,7 +82,7 @@ export interface PageBridge {
   onKeys(cb: (frame: KeysFrame) => void): () => void;
 }
 
-export function pageBridge(toHost: (frame: Frame) => void, onHost: (receive: (frame: unknown) => void) => void, session: string = crypto.randomUUID()): PageBridge {
+export function pageBridge(toHost: (frame: Frame) => void, onHost: (receive: (frame: unknown) => void) => void, session: string): PageBridge {
   const rpc = createRPC<PageSide, BunSide>({
     maxRequestTime: Infinity,
     transport: {
