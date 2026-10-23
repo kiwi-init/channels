@@ -983,15 +983,19 @@ jobs:
       launcher itself (a signed build's hardened runtime stops that one), or leaves anything
       running; it starts a release-id app only on CI, never on a person's Mac.
       Then it starts the app, without CDP (WebKit has none; T442): a second build, `electrobun
-      build --env=dev` with CHANNELS_EB_TEST=1 and its own bundle id (com.kiwiinit.channels.test),
+      build --env=stable` with CHANNELS_EB_TEST=1, the same optimized build as the release but into
+      its own folder (desktop/release-eb-test) and always under its own bundle id
+      (com.kiwiinit.channels.test, whatever CHANNELS_EB_IDENTIFIER says), and desktop/scripts/eb-plain.ts
+      unpacks its plain .app from that folder's .app.tar.zst for the checks below; it
       compiles in the test driver (desktop/src/eb-driver.ts behind the KIWI_EB_TEST build-time
       define in electrobun.config.ts), and its launcher (built with -DKIWI_EB_TEST) also lets
       KIWI_EB_DRIVER, KIWI_EB_RELAY and CFFIXED_USER_HOME through: with KIWI_EB_DRIVER set, main listens on that Unix socket,
       runs each function it's sent in the page with executeJavascript and hands back what the
       page posts on Electrobun's host bridge; KIWI_EB_RELAY points the page's CSP and its
-      ?relay= at a local relay. desktop/scripts/eb-driver-check.ts fails if the plain release .app (unpacked
-      by eb-plain.ts) carries the driver or the relay override in its code (kiwiDriver,
-      KIWI_EB_DRIVER, KIWI_EB_RELAY) or lets them or CFFIXED_USER_HOME through its launcher, or if
+      ?relay= at a local relay. desktop/scripts/eb-driver-check.ts unpacks both plain .apps and fails unless both
+      main bundles (Contents/Resources/app/bun/index.js) were read (each must contain
+      kiwi_deny_permissions), or if the plain release .app carries the driver or the relay override in its code or its web views
+      (kiwiDriver, KIWI_EB_DRIVER, KIWI_EB_RELAY) or lets them or CFFIXED_USER_HOME through its launcher, or if
       the test build lacks any of them. desktop/scripts/smoke-eb.ts (through desktop/scripts/eb-drive.ts,
       ~/Library in a temp CFFIXED_USER_HOME, a local relay) fails unless the window shows the
       dashboard from views://internal/index.html with a first paint, the relay it was given answers
@@ -1002,8 +1006,10 @@ jobs:
       Continue, New channel, Create channel, the composer and Enter), then 5 launches to the
       window, the first screen, the first cached message of the channel it reopens and live,
       scaled by perf-calibrate.ts's CPU calibration run in the app's page, failing over
-      scripts/perf-budgets.json's desktop gates or when a launch doesn't reopen the channel; the
-      numbers are the perf-desktop-eb artifact.
+      scripts/perf-budgets.json's desktop gates, when a launch doesn't reopen the channel, or when
+      anything of the app or of its temp folder is still running after a quit; after each quit it
+      logs what's left, how many WebKit helpers run and the five busiest processes; the numbers are
+      the perf-desktop-eb artifact.
 
   cli-macos:
     name: cli / macos

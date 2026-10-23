@@ -2,17 +2,20 @@ import type { ElectrobunConfig } from "electrobun";
 
 import pkg from "./package.json" with { type: "json" };
 
+const test = process.env.CHANNELS_EB_TEST === "1";
+const out = test ? "release-eb-test" : "release-eb";
+
 export default {
   app: {
     name: "Channels",
-    identifier: process.env.CHANNELS_EB_IDENTIFIER ?? "com.kiwiinit.channels",
+    identifier: test ? "com.kiwiinit.channels.test" : (process.env.CHANNELS_EB_IDENTIFIER ?? "com.kiwiinit.channels"),
     version: pkg.version,
   },
   build: {
     mainProcess: "bun",
-    bun: { entrypoint: "src/main-eb.ts", define: { KIWI_EB_TEST: process.env.CHANNELS_EB_TEST === "1" ? "true" : "false" } },
-    buildFolder: "release-eb/build",
-    artifactFolder: "release-eb/artifacts",
+    bun: { entrypoint: "src/main-eb.ts", define: { KIWI_EB_TEST: test ? "true" : "false" } },
+    buildFolder: `${out}/build`,
+    artifactFolder: `${out}/artifacts`,
     mac: { icons: "release-eb/icon.iconset" },
   },
   runtime: { exitOnLastWindowClosed: false },

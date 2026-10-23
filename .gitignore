@@ -21,4 +21,5 @@ ios/**/xcuserdata/
 
 # Electrobun shell (desktop/: bun run build:eb): its build, artifacts and the devkit Hutch projects
 desktop/release-eb/
+desktop/release-eb-test/
 desktop/.hutch/

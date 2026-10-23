@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -190,6 +190,28 @@ async function firstRunWithDriver(d: Driver): Promise<void> {
   }
 }
 
+const leftovers: string[] = [];
+
+function afterQuit(when: string): void {
+  const bundle = exe.includes(".app/") ? exe.slice(0, exe.indexOf(".app/") + 4) : exe;
+  const pids = (pattern: string) => spawnSync("pgrep", ["-f", pattern], { encoding: "utf8" }).stdout.split("\n").filter(Boolean);
+  const left = [...new Set([...pids(bundle), ...pids(root)])].filter((p) => p !== String(relay.pid));
+  if (left.length) leftovers.push(`${when}: ${left.map((p) => spawnSync("ps", ["-o", "pid=,command=", "-p", p], { encoding: "utf8" }).stdout.trim().slice(0, 160)).join(" | ")}`);
+  const webkit = pids("com.apple.WebKit").length;
+  const busiest = spawnSync("ps", ["-Ao", "pcpu=,comm=", "-r"], { encoding: "utf8" })
+    .stdout.split("\n")
+    .filter(Boolean)
+    .slice(0, 5)
+    .map((l) =>
+      l
+        .trim()
+        .replace(/\s+/, "% ")
+        .replace(/^(\S+% ).*\//, "$1"),
+    )
+    .join(", ");
+  log(`${when}: ${left.length ? `${left.length} of the app's processes still running` : "nothing of the app left"}; ${webkit} WebKit helpers; busiest: ${busiest}`);
+}
+
 async function launchElectrobun(relay: string): Promise<Running> {
   const socket = join(root, "driver.sock");
   const started = Date.now();
@@ -219,6 +241,7 @@ try {
   await later(3_000);
   await running.quit();
   running = null;
+  if (ELECTROBUN) afterQuit("after the first run");
 
   for (let i = 0; i < RUNS; i++) {
     running = await launch();
@@ -260,6 +283,7 @@ try {
     log(`run ${i + 1}`, JSON.stringify(run));
     await app.quit();
     running = null;
+    if (ELECTROBUN) afterQuit(`after run ${i + 1}`);
   }
 } catch (e) {
   const where = await running?.where().catch(() => null);
@@ -295,4 +319,5 @@ const over = Object.values(limits).flatMap((l) => {
     : [];
 });
 for (const o of over) console.error(o);
-if (over.length) process.exit(1);
+for (const l of leftovers) console.error(`still running ${l}`);
+if (over.length || leftovers.length) process.exit(1);
