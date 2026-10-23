@@ -975,7 +975,9 @@ jobs:
       the files out by their times in test/timings.json: the slowest each file has taken in a cli / macos run (from
       `scripts/ci-tests.ts all --shard=N/3 --update-timings` or the run's log), so the heavy flows
       that slow each other on one runner land apart; every group also hands bun that file
-      so --parallel starts the slowest files first), does what the release's cli job does: runs the whole bun test suite
+      so --parallel starts the slowest files first), with Homebrew's tmux installed first (3.7 or newer, so the
+      tmux tests and kiwi loop --harness kimi's typed-prompt flow run here, which the Linux runner's tmux 3.6a skips),
+      does what the release's cli job does: runs the whole bun test suite
       (every test/*.test.ts and web/src test, the agent flows included) with bun test --parallel so
       each file gets a fresh global as on Linux (one process for every file once let a test's
       SIGINT end the run early, exit 0, after 128 of 328 files), and fails when a shard's run ends
