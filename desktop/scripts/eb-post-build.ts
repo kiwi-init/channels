@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { JOIN_SCHEME } from "../src/deep-links.ts";
 import type { FromWorker, ToWorker } from "../src/keys-shim.ts";
-import { bundleProblems, urlSchemeProblems } from "./eb-bundle.ts";
+import { bundleProblems, testBuildProblems, urlSchemeProblems } from "./eb-bundle.ts";
 import { sealApp } from "./eb-seal.ts";
 import { ELECTROBUN_LAUNCHER } from "./linux-files.ts";
 
@@ -43,6 +43,10 @@ if (os === "linux") {
   fs.renameSync(theirs, path.join(bin, ELECTROBUN_LAUNCHER));
   execFileSync("cc", ["-O2", "-Wall", "-Wextra", "-Werror", "-o", theirs, path.join(desktop, "native", "linux", "kiwi-launcher.c")], { stdio: "inherit" });
   console.log(`eb-post-build: bin/launcher keeps the app's environment to an allowlist, then starts Electrobun's (bin/${ELECTROBUN_LAUNCHER})`);
+  const webkit = execFileSync("pkg-config", ["--cflags", "--libs", "webkit2gtk-4.1"], { encoding: "utf8" }).trim().split(/\s+/);
+  execFileSync("cc", ["-shared", "-fPIC", "-O2", "-Wall", "-Wextra", "-Werror", "-o", path.join(bin, "libkiwi-shell.so"), path.join(desktop, "native", "linux", "kiwi-shell.c"), ...webkit], {
+    stdio: "inherit",
+  });
   process.exit(0);
 }
 const contents = path.dirname(resources[0] as string);
@@ -84,6 +88,7 @@ execFileSync(
     "CoreFoundation",
     "-framework",
     "Security",
+    ...(process.env.CHANNELS_EB_TEST === "1" ? ["-DKIWI_EB_TEST"] : []),
     "-o",
     path.join(contents, "MacOS", "kiwi-launcher"),
     path.join(desktop, "native", "macos", "kiwi-launcher.c"),
@@ -103,6 +108,7 @@ if (answered !== "ok") throw new Error(`the bundled keys worker didn't answer a 
 const problems = [
   ...bundleProblems(fs.readFileSync(path.join(app, "bun", "index.js"), "utf8"), fs.readFileSync(path.join(app, "views", "preload", "index.js"), "utf8")),
   ...urlSchemeProblems(fs.readFileSync(path.join(contents, "Info.plist"), "utf8"), process.env.ELECTROBUN_APP_IDENTIFIER ?? "", JOIN_SCHEME),
+  ...testBuildProblems(process.env.CHANNELS_EB_TEST === "1", process.env.ELECTROBUN_APP_IDENTIFIER ?? "", fs.readFileSync(path.join(contents, "Resources", "version.json"), "utf8")),
 ];
 if (problems.length) throw new Error(`eb-post-build: ${problems.join("; ")}`);
 console.log(`eb-post-build: ${sealApp(path.dirname(contents))} files sealed in Info.plist`);

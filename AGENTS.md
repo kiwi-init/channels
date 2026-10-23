@@ -16,7 +16,7 @@ and the most important of them all: we can fix everything!
 
 ## Branches and CI
 
-- One issue = one branch = one pull request. Name the branch after the task (for example `T52-compress`), push it, and open a PR into `main`. Keep it small and branch from a recent `main`. The PR's CI runs by itself and `ci-ok` is the gate: when it is green, squash-merge the PR (`gh pr merge --squash`). If `main` moved and the PR conflicts, merge `main` into the branch and fix the conflicts there; never rebase or force-push.
+- One issue = one branch = one pull request. Name the branch after the task (for example `T52-compress`), push it, and open a PR into `main`. Keep it small and branch from a recent `main`. The PR's CI runs by itself and `ci-ok` is the gate. On a PR it covers `repo / static` and `test / unit` only; put the PR in the merge queue (`gh pr merge --auto --squash`) and the queue's `merge_group` run plans and runs every other job the group's change can break. A group that fails drops its PR from the queue: read the failures in that `merge_group` run, not the PR's. If `main` moved and the PR conflicts, merge `main` into the branch and fix the conflicts there; never rebase or force-push.
 - People and outside contributors work the same way: one branch = one PR.
 - A conflicted lockfile is never resolved by hand: take the remote one and regenerate it.
 - Small commits. Before every push, run the checks for the area you touched, then a plain `git push`.

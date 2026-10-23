@@ -26,8 +26,9 @@ bun run typecheck:eb                                  # fetches the devkit into 
 ```
 
 - `electrobun.config.ts` — Electrobun 2.0.4, pinned exact, `mainProcess: "bun"`. The
-  `CHANNELS_EB_IDENTIFIER` variable gives a test build its own bundle id, so it never shares
-  state with an installed Channels.
+  `CHANNELS_EB_IDENTIFIER` variable gives a build its own bundle id, so it never shares
+  state with an installed Channels; a `CHANNELS_EB_TEST=1` build is always
+  `com.kiwiinit.channels.test`, on the dev channel only.
 - `src/main-eb.ts` — the window. The page is `web/dist/index.html` with `csp(relay)` from
   `guard.ts` as a `<meta>` first in `<head>`, kept in memory and served at
   `views://internal/index.html` (Electrobun's scheme sends fixed headers, so no CSP header);

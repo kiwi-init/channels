@@ -8,9 +8,11 @@ import Electrobun, { BrowserView, BrowserWindow, PATHS, Utils } from "electrobun
 import { internalRpcHandlers } from "../.hutch/devkit/api/sdks/main/proc/native.ts";
 import { startAppLife } from "./app-life-eb.ts";
 import { handleDeepLink, JOIN_SCHEME } from "./deep-links.ts";
-import { committedUrl, lockInternalRpc, preloadSource, stillOurs, toPageScript } from "./eb-bridge.ts";
+import { lockInternalRpc, onOurPage, preloadSource, toPageScript } from "./eb-bridge.ts";
+import { drive } from "./eb-driver.ts";
 import { navigationUrl, openedUrl, PAGE_RULES, PAGE_URL, pageWithCsp } from "./eb-page.ts";
-import { externalUrl } from "./guard.ts";
+import { testVault } from "./eb-test-store.ts";
+import { externalUrl, normalizeRelay } from "./guard.ts";
 import { attachKeys, attachWindow, ebHost } from "./host-eb.ts";
 import { useHost } from "./host.ts";
 import { handlers } from "./ipc/handlers.ts";
@@ -19,12 +21,15 @@ import { answerKeys } from "./keys-host.ts";
 import { logMainError } from "./main-log.ts";
 import { openInBrowser } from "./open.ts";
 import { claimInstance, handoffFor, type Instance } from "./single-instance.ts";
+import { testHomeProblem } from "./eb-test-home.ts";
 import { bunBridge } from "./rpc-eb.ts";
-import { brokenStore, openStore, snapshot, store } from "./store.ts";
+import { brokenStore, mutate, openStore, snapshot, store } from "./store.ts";
 import { openEbStore, unmarkedNote, v2Vault } from "./store-eb.ts";
 import { startUpdates, updateState } from "./updater.ts";
 import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts";
 import { minWindowWidth } from "./window-size.ts";
+
+declare const KIWI_EB_TEST: boolean;
 
 useHost(ebHost);
 Electrobun.events.on("open-url", (e: { data?: { url?: unknown } }) => {
@@ -33,16 +38,36 @@ Electrobun.events.on("open-url", (e: { data?: { url?: unknown } }) => {
 lockInternalRpc(internalRpcHandlers);
 
 const binDir = path.dirname(process.execPath);
+const mac = process.platform === "darwin";
+const shellPath = path.join(binDir, `libkiwi-shell.${suffix}`);
 
-const shell = dlopen(path.join(binDir, `libkiwi-shell.${suffix}`), {
+const shell = dlopen(shellPath, {
   kiwi_deny_permissions: { args: [], returns: FFIType.bool },
-  kiwi_window_look: { args: [FFIType.ptr, FFIType.f64, FFIType.f64, FFIType.u32, FFIType.u32], returns: FFIType.void },
+  kiwi_watch_commits: { args: [], returns: FFIType.bool },
+  kiwi_committed_url: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
 }).symbols;
+
+const sandboxPages = mac ? null : dlopen(shellPath, { kiwi_sandbox_pages: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.bool } }).symbols.kiwi_sandbox_pages;
+
+function sandboxOff(): string | null {
+  if (!sandboxPages) return null;
+  const why = new Uint8Array(1024);
+  return sandboxPages(ptr(why), why.length) ? null : new TextDecoder().decode(why.subarray(0, Math.max(0, why.indexOf(0))));
+}
+
+const windowLook = mac ? dlopen(shellPath, { kiwi_window_look: { args: [FFIType.ptr, FFIType.f64, FFIType.f64, FFIType.u32, FFIType.u32], returns: FFIType.void } }).symbols.kiwi_window_look : null;
 
 const core = dlopen(path.join(binDir, `libElectrobunCore.${suffix}`), {
   setWebviewHTMLContent: { args: [FFIType.u32, FFIType.ptr], returns: FFIType.void },
   updatePreloadScriptToWebView: { args: [FFIType.u32, FFIType.ptr, FFIType.ptr, FFIType.bool], returns: FFIType.void },
 }).symbols;
+
+const committedBuffer = new Uint8Array(4096);
+
+function committedPage(): string | null {
+  const n = Number(shell.kiwi_committed_url(ptr(committedBuffer), committedBuffer.length));
+  return n > 0 && n < committedBuffer.length ? new TextDecoder().decode(committedBuffer.subarray(0, n)) : null;
+}
 
 const cString = (s: string): Uint8Array => new TextEncoder().encode(`${s}\0`);
 
@@ -70,11 +95,10 @@ function createWindow(): BrowserWindow {
   const index = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "internal", "index.html"), "utf8");
   const bundled = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "preload", "index.js"), "utf8");
   const table = handlers(ebHost);
-  let ours = true;
   let view: BrowserView | null = null;
   const bridge = bunBridge(
     table,
-    () => ours,
+    () => onOurPage(committedPage()),
     (frame) => view?.executeJavascript(toPageScript(frame)),
     () => {
       keys.pageGone();
@@ -88,7 +112,7 @@ function createWindow(): BrowserWindow {
     title: "Channels",
     url: null,
     frame: { width: WINDOW_SIZE.width, height: WINDOW_SIZE.height },
-    titleBarStyle: "hiddenInset",
+    titleBarStyle: mac ? "hiddenInset" : "default",
     hidden: true,
     preload: preloadSource({ snapshot: snapshot(), session: bridge.nextSession() }, bundled),
     rpc: bridge,
@@ -98,7 +122,6 @@ function createWindow(): BrowserWindow {
   webview.setNavigationRules(PAGE_RULES);
   const load = (): void => {
     core.setWebviewHTMLContent(webview.id, ptr(cString(pageWithCsp(index, store.relayUrl))));
-    ours = true;
     bridge.retire();
     webview.loadURL(PAGE_URL);
   };
@@ -113,11 +136,10 @@ function createWindow(): BrowserWindow {
     },
     reload: () => (refreshPreload(), load()),
   });
-  for (const moved of ["did-commit-navigation", "did-navigate", "did-navigate-in-page"] as const) webview.on(moved, (e) => (ours = stillOurs(ours, committedUrl(detailOf(e)))));
   load();
   const look = win.ptr;
-  if (look) shell.kiwi_window_look(look, minWindowWidth(process.platform), WINDOW_SIZE.minHeight, rgb(windowBackground(false)), rgb(windowBackground(true)));
-  win.setWindowButtonPosition(TRAFFIC_LIGHTS.x, TRAFFIC_LIGHTS.y);
+  if (look && windowLook) windowLook(look, minWindowWidth(process.platform), WINDOW_SIZE.minHeight, rgb(windowBackground(false)), rgb(windowBackground(true)));
+  if (mac) win.setWindowButtonPosition(TRAFFIC_LIGHTS.x, TRAFFIC_LIGHTS.y);
   webview.on("will-navigate", (e) => {
     const nav = navigationUrl(detailOf(e));
     if (nav && !nav.allowed) openOutside(nav.url);
@@ -132,12 +154,31 @@ function createWindow(): BrowserWindow {
   return win;
 }
 
+function endKeySession(): void {
+  if (launcherKeys instanceof Error) return;
+  try {
+    launcherKeys.done();
+  } catch {
+    // A test build may start without the launcher in front, and then there's no session to end.
+  }
+}
+
 async function start(instance: Extract<Instance, { kind: "first" }>): Promise<void> {
-  const opened = await openEbStore({ dir: Utils.paths.userData, keys: launcherKeys });
-  openStore(v2Vault(opened));
+  const opened = KIWI_EB_TEST ? null : await openEbStore({ dir: Utils.paths.userData, keys: launcherKeys });
+  if (opened) openStore(v2Vault(opened));
+  else {
+    endKeySession();
+    openStore(testVault(Utils.paths.userData));
+    const relay = normalizeRelay(process.env.KIWI_EB_RELAY ?? "");
+    if (relay) mutate((s) => void (s.relayUrl = relay));
+  }
   attachKeys((m) => keys.tell(m));
   keys.start();
   const win = createWindow();
+  if (KIWI_EB_TEST) {
+    const socket = process.env.KIWI_EB_DRIVER;
+    if (socket) drive(win.webview, socket);
+  }
   const tray = startAppLife({
     win,
     view: win.webview,
@@ -156,7 +197,7 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
   });
   const broken = brokenStore();
   if (broken) void Utils.showMessageBox({ type: "error", message: "Channels can't read its saved keys", detail: broken.message });
-  const unmarked = unmarkedNote(opened);
+  const unmarked = opened ? unmarkedNote(opened) : null;
   if (unmarked) {
     logMainError(new Error(unmarked));
     void Utils.showMessageBox({ type: "warning", message: "Channels couldn't mark its store key ready", detail: unmarked });
@@ -165,25 +206,35 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
 
 BrowserView.on("created", (tag) => tag.remove());
 
-const instance = await claimInstance({
-  dir: Utils.paths.userData,
-  handoff: handoffFor(process.argv, JOIN_SCHEME),
-  scheme: JOIN_SCHEME,
-  onHandoff: (h) => (h.kind === "link" ? handleDeepLink(h.url) : ebHost.showWindow()),
-}).catch((e: unknown) => {
-  logMainError(e);
-  console.error("Channels: couldn't take the single-instance lock in its data folder", e);
-  return null;
-});
+const wrongHome = KIWI_EB_TEST ? testHomeProblem(Utils.paths.userData, process.env.CFFIXED_USER_HOME) : null;
+if (wrongHome) console.error(`Channels test build: ${wrongHome}; not starting, so nothing lands under the person's home`);
+const instance = wrongHome
+  ? null
+  : await claimInstance({
+      dir: Utils.paths.userData,
+      handoff: handoffFor(process.argv, JOIN_SCHEME),
+      scheme: JOIN_SCHEME,
+      onHandoff: (h) => (h.kind === "link" ? handleDeepLink(h.url) : ebHost.showWindow()),
+    }).catch((e: unknown) => {
+      logMainError(e);
+      console.error("Channels: couldn't take the single-instance lock in its data folder", e);
+      return null;
+    });
 if (!instance) Utils.quit(1);
 else if (instance.kind === "second") {
   if (!instance.delivered) console.error("Channels: another Channels holds this data folder and didn't answer; quitting");
   Utils.quit(0);
-} else if (!shell.kiwi_deny_permissions()) {
-  console.error("Channels: the web view's permission handler wasn't found; not opening a window that could grant the microphone");
+} else if (!shell.kiwi_deny_permissions() || !shell.kiwi_watch_commits()) {
+  console.error("Channels: the web view's permission handler or navigation delegate wasn't found; not opening a window that could grant the microphone or trust a page it can't see");
   instance.release();
   Utils.quit(1);
-} else
+} else {
+  const off = sandboxOff();
+  if (off !== null) {
+    const why = `WebKitGTK's sandbox is off: ${off}, so the page runs without it`;
+    console.error(`Channels: ${why}`);
+    logMainError(new Error(why));
+  }
   try {
     await start(instance);
   } catch (e) {
@@ -193,3 +244,4 @@ else if (instance.kind === "second") {
     instance.release();
     Utils.quit(1);
   }
+}

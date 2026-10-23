@@ -7,7 +7,7 @@ export const BOOT_GLOBAL = "__kiwiBoot";
 
 export const RECEIVE_GLOBAL = "__kiwiReceive";
 
-export const toPageScript = (packet: unknown): string => `globalThis.${RECEIVE_GLOBAL}?.(${JSON.stringify(packet)});`;
+export const toPageScript = (packet: unknown): string => `window.${RECEIVE_GLOBAL}?.(${JSON.stringify(packet)});`;
 
 type BridgeRequests = { [K in Call]: { params: CallArgs<K>; response: CallValue<K> } };
 export type CallSide = { requests: BridgeRequests; messages: Pushes };
@@ -49,21 +49,6 @@ export function bootOf(v: unknown): Boot | null {
 }
 
 export const onOurPage = (url: string | null): boolean => url !== null && url.split("#")[0] === PAGE_URL;
-
-export const stillOurs = (ours: boolean, navigatedTo: string | null): boolean => ours && onOurPage(navigatedTo);
-
-export function committedUrl(detail: unknown): string | null {
-  if (typeof detail !== "string") return null;
-  if (!detail.startsWith("{")) return detail;
-  try {
-    const v = JSON.parse(detail) as unknown;
-    const url = v && typeof v === "object" ? (v as { url?: unknown }).url : undefined;
-    return typeof url === "string" ? url : null;
-  } catch {
-    // WebKit's own JSON; one it couldn't build names no page, so the view counts as off ours.
-    return null;
-  }
-}
 
 export interface PacketTransport<Out = unknown> {
   send?: (packet: Out) => void | PromiseLike<void>;

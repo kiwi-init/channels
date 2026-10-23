@@ -17,6 +17,7 @@ export type Config = {
   mode?: "enforce" | "shadow";
   workflow?: string;
   planner_jobs?: string[];
+  pull_request_jobs?: string[];
   run_all_when_changed?: string[];
   version_only?: { files: string[]; pattern: string };
   summarize_files?: string[];

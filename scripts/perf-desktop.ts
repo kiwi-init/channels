@@ -2,23 +2,30 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { chromium, type Browser, type Page } from "playwright-core";
+import { chromium, type Page } from "playwright-core";
+import { appExecutable, attach, launch as launchApp, stop, testEnv, type Driver } from "../desktop/scripts/eb-drive.ts";
 import { daemonStop } from "../desktop/src/daemon-client.ts";
 import { startLocalRelay } from "./local-relay.ts";
-import { calibrate } from "./perf-calibrate.ts";
+import { calibrateInPage, loopInPage } from "./perf-calibrate.ts";
 
 if (process.argv.includes("--help") || !process.argv[2]) {
   console.log(`The packaged desktop app's cold start, measured: from launching the executable to its window, its first screen, the first cached message
 of the channel it reopens on screen, and live, PERF_RUNS times (5) after one run that makes a channel with PERF_MESSAGES messages (20) on a local relay,
 and leaves it open. A launch that doesn't reopen that channel fails. It runs in a temp user data dir and a temp KIWI_HOME (and on Linux a temp HOME), with a mock keychain on a Mac: it never touches
 the real app. Each launch also times perf-scale's CPU calibration in the app's page; the medians are scaled by it to the reference runner in
-scripts/perf-budgets.json, and it fails when one is over its gate there (the limits whose source is desktop).
+scripts/perf-budgets.json, and it fails when one is over its gate there (the limits whose source is desktop). The report also has loopMs, a
+pure-JS loop timed in the same page that doesn't depend on the engine's DOM speed, for comparing runners; nothing is gated on it.
 
-  bun scripts/perf-desktop.ts <packaged app executable> [--json out.json]`);
+With --electrobun, the app is a Channels.app built with CHANNELS_EB_TEST=1 (so com.kiwiinit.channels.test), driven through its test
+driver's socket instead of CDP, with ~/Library and HOME in one temp home (CFFIXED_USER_HOME and HOME) and the relay given by KIWI_EB_RELAY.
+
+  bun scripts/perf-desktop.ts <packaged app executable> [--json out.json]
+  bun scripts/perf-desktop.ts <Channels.app> --electrobun [--json out.json]`);
   process.exit(process.argv[2] ? 0 : 2);
 }
 
-const exe = resolve(process.argv[2]);
+const ELECTROBUN = process.argv.includes("--electrobun");
+const exe = ELECTROBUN ? appExecutable(process.argv[2]) : resolve(process.argv[2]);
 if (!existsSync(exe)) {
   console.error(`no app at ${exe}`);
   process.exit(2);
@@ -61,13 +68,48 @@ async function until<T>(what: string, ms: number, probe: () => Promise<T | null>
 }
 
 interface Running {
-  app: ChildProcess;
   started: number;
-  browser: Browser;
-  page: Page;
+  evaluate<A, R>(fn: (arg: A) => R | Promise<R>, arg: A, ms?: number): Promise<R>;
+  firstRun(relay: string): Promise<void>;
+  where(): Promise<string>;
+  quit(): Promise<void>;
 }
 
-async function launch(): Promise<Running> {
+async function stopApp(app: ChildProcess): Promise<void> {
+  await stop(app);
+  await daemonStop(home, 2_000).catch(() => undefined);
+  await later(500);
+}
+
+async function firstRunWithPlaywright(page: Page, relay: string): Promise<void> {
+  await page.waitForLoadState("domcontentloaded");
+  type Bridge = { kiwi: { relayUrl: string; setRelayUrl: (u: string) => Promise<string> } };
+  await page.evaluate((url) => void (window as unknown as Bridge).kiwi.setRelayUrl(url), relay).catch(() => undefined);
+  await until("the app on the local relay", 30_000, () =>
+    page
+      .evaluate(() => (window as unknown as Bridge).kiwi.relayUrl)
+      .then((url) => (url.startsWith(relay) ? true : null))
+      .catch(() => null),
+  );
+  await page.getByRole("textbox", { name: "Your name" }).fill("Jonatas", { timeout: 60_000 });
+  await page.getByRole("button", { name: "Continue" }).click();
+  const chrome = page.getByRole("banner", { name: "Channels" }).or(page.getByRole("complementary"));
+  await chrome.getByRole("button", { name: "New channel", exact: true }).filter({ visible: true }).first().click({ timeout: 60_000 });
+  await page.getByRole("dialog").getByRole("textbox").fill("cold");
+  await page.getByRole("button", { name: "Create channel" }).click();
+  const composer = page.getByRole("textbox", { name: "Message" });
+  for (let i = 0; i < MESSAGES; i++) {
+    await composer.fill(`Message ${i + 1}: the relay deploy is done, numbers in a minute.`);
+    await composer.press("Enter");
+    await page
+      .getByText(`Message ${i + 1}:`)
+      .filter({ visible: true })
+      .first()
+      .waitFor({ timeout: 15_000 });
+  }
+}
+
+async function launchElectron(): Promise<Running> {
   rmSync(join(userData, "DevToolsActivePort"), { force: true });
   const started = Date.now();
   const app = spawn(exe, flags, { env, stdio: "ignore", detached: true });
@@ -89,106 +131,144 @@ async function launch(): Promise<Running> {
         .flatMap((c) => c.pages())
         .find((p) => !p.url().startsWith("devtools:")) ?? null,
   );
-  return { app, started, browser, page };
+  return {
+    started,
+    evaluate: <A, R>(fn: (arg: A) => R | Promise<R>, arg: A) => page.evaluate(fn as (arg: unknown) => R | Promise<R>, arg as unknown),
+    firstRun: (relay) => firstRunWithPlaywright(page, relay),
+    where: async () => `${page.url()}\n${(await page.evaluate(() => document.body.innerText).catch(() => null)) ?? "(no page text)"}`,
+    quit: async () => {
+      await browser.close().catch(() => undefined);
+      await stopApp(app);
+    },
+  };
 }
 
-async function quit(r: Running): Promise<void> {
-  await r.browser.close().catch(() => undefined);
-  const exited = new Promise<void>((done) => (r.app.exitCode !== null ? done() : r.app.once("exit", () => done())));
-  try {
-    process.kill(-r.app.pid!, "SIGTERM");
-  } catch {
-    r.app.kill("SIGTERM");
+const fillIn = ({ selector, value }: { selector: string; value: string }): boolean => {
+  const el = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector);
+  if (!el) return false;
+  const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  Object.getOwnPropertyDescriptor(proto, "value")?.set?.call(el, value);
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+  return true;
+};
+
+const clickButton = ({ name, within }: { name: string; within: string }): boolean => {
+  const button = [...document.querySelectorAll<HTMLButtonElement>(`${within} button`)].find(
+    (b) => (b.getAttribute("aria-label") ?? b.textContent ?? "").trim() === name && b.getClientRects().length > 0 && !b.disabled,
+  );
+  button?.click();
+  return !!button;
+};
+
+const sendMessage = (text: string): boolean => {
+  if (document.body.innerText.includes(text)) return true;
+  const el = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]');
+  if (!el || el.disabled) return false;
+  if (el.value === text) el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+  else {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(el, text);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
   }
-  await Promise.race([exited, later(10_000)]);
-  if (r.app.exitCode === null && r.app.signalCode === null) {
-    try {
-      process.kill(-r.app.pid!, "SIGKILL");
-    } catch {
-      r.app.kill("SIGKILL");
-    }
+  return false;
+};
+
+async function firstRunWithDriver(d: Driver): Promise<void> {
+  const step = (what: string, ms: number, act: () => Promise<boolean>) =>
+    until(what, ms, () =>
+      act().then(
+        (done) => (done ? true : null),
+        () => null,
+      ),
+    );
+  const probe = 2_000;
+  await step("the name field", 60_000, () => d.evaluate(fillIn, { selector: 'input[aria-label="Your name"]', value: "Jonatas" }, probe));
+  await step("Continue", 10_000, () => d.evaluate(clickButton, { name: "Continue", within: "body" }, probe));
+  await step("New channel", 60_000, () => d.evaluate(clickButton, { name: "New channel", within: "body" }, probe));
+  await step("the new channel's name", 10_000, () => d.evaluate(fillIn, { selector: '[role="dialog"] input', value: "cold" }, probe));
+  await step("Create channel", 10_000, () => d.evaluate(clickButton, { name: "Create channel", within: '[role="dialog"]' }, probe));
+  for (let i = 0; i < MESSAGES; i++) {
+    await step(`message ${i + 1}, sent and in the conversation`, 60_000, () => d.evaluate(sendMessage, `Message ${i + 1}: the relay deploy is done, numbers in a minute.`, probe));
   }
-  await daemonStop(home, 2_000).catch(() => undefined);
-  await later(500);
+}
+
+async function launchElectrobun(relay: string): Promise<Running> {
+  const socket = join(root, "driver.sock");
+  const started = Date.now();
+  const app = launchApp(exe, testEnv(root, socket, relay));
+  const d = await attach(socket);
+  return {
+    started,
+    evaluate: (fn, arg, ms) => d.evaluate(fn, arg, ms),
+    firstRun: () => firstRunWithDriver(d),
+    where: async () => (await d.evaluate(() => `${location.href}\n${document.body.innerText}`, null).catch(() => null)) ?? "(no page)",
+    quit: async () => {
+      d.close();
+      await stopApp(app);
+    },
+  };
 }
 
 const { relay, port } = await startLocalRelay(join(root, "relay"), null, { rateLimits: false });
 const RELAY = `http://127.0.0.1:${port}`;
-const runs: { windowMs: number; firstScreenMs: number; firstMessageMs: number; liveMs: number; calibrationMs: number }[] = [];
+const launch = (): Promise<Running> => (ELECTROBUN ? launchElectrobun(RELAY) : launchElectron());
+const runs: { windowMs: number; firstScreenMs: number; firstMessageMs: number; liveMs: number; calibrationMs: number; loopMs: number }[] = [];
 let running: Running | null = null;
 try {
   log("first run: a person, a channel and its messages on the local relay");
   running = await launch();
-  let page = running.page;
-  await page.waitForLoadState("domcontentloaded");
-  type Bridge = { kiwi: { relayUrl: string; setRelayUrl: (u: string) => Promise<string> } };
-  await page.evaluate((url) => void (window as unknown as Bridge).kiwi.setRelayUrl(url), RELAY).catch(() => undefined);
-  await until("the app on the local relay", 30_000, () =>
-    page
-      .evaluate(() => (window as unknown as Bridge).kiwi.relayUrl)
-      .then((url) => (url.startsWith(RELAY) ? true : null))
-      .catch(() => null),
-  );
-  await page.getByRole("textbox", { name: "Your name" }).fill("Jonatas", { timeout: 60_000 });
-  await page.getByRole("button", { name: "Continue" }).click();
-  const chrome = page.getByRole("banner", { name: "Channels" }).or(page.getByRole("complementary"));
-  await chrome.getByRole("button", { name: "New channel", exact: true }).filter({ visible: true }).first().click({ timeout: 60_000 });
-  await page.getByRole("dialog").getByRole("textbox").fill("cold");
-  await page.getByRole("button", { name: "Create channel" }).click();
-  const composer = page.getByRole("textbox", { name: "Message" });
-  for (let i = 0; i < MESSAGES; i++) {
-    await composer.fill(`Message ${i + 1}: the relay deploy is done, numbers in a minute.`);
-    await composer.press("Enter");
-    await page
-      .getByText(`Message ${i + 1}:`)
-      .filter({ visible: true })
-      .first()
-      .waitFor({ timeout: 15_000 });
-  }
+  await running.firstRun(RELAY);
   await later(3_000);
-  await quit(running);
+  await running.quit();
   running = null;
 
   for (let i = 0; i < RUNS; i++) {
     running = await launch();
-    page = running.page;
-    const started = running.started;
+    const app = running;
     const screen = await until("the first screen", 60_000, () =>
-      page
-        .evaluate(() => {
-          const paint = performance.getEntriesByName("first-contentful-paint")[0]?.startTime;
-          return paint === undefined ? null : { origin: performance.timeOrigin, paint };
-        })
+      app
+        .evaluate(
+          () => {
+            const paint = performance.getEntriesByName("first-contentful-paint")[0]?.startTime;
+            return paint === undefined ? null : { origin: performance.timeOrigin, paint };
+          },
+          null,
+          2_000,
+        )
         .catch(() => null),
     );
     const reopened = await until("the channel it had open, reopened on launch, with its first message and live", 20_000, () =>
-      page
-        .evaluate(() => {
-          const mark = (name: string) => performance.getEntriesByName(name, "mark")[0]?.startTime;
-          const message = mark("kiwi:first-message");
-          const live = mark("kiwi:live");
-          return message === undefined || live === undefined ? null : { message, live };
-        })
+      app
+        .evaluate(
+          () => {
+            const mark = (name: string) => performance.getEntriesByName(name, "mark")[0]?.startTime;
+            const message = mark("kiwi:first-message");
+            const live = mark("kiwi:live");
+            return message === undefined || live === undefined ? null : { message, live };
+          },
+          null,
+          2_000,
+        )
         .catch(() => null),
     );
     const run = {
-      windowMs: Math.round(screen.origin - started),
-      firstScreenMs: Math.round(screen.origin + screen.paint - started),
-      firstMessageMs: Math.round(screen.origin + reopened.message - started),
-      liveMs: Math.round(screen.origin + reopened.live - started),
-      calibrationMs: (await calibrate(page)).ms,
+      windowMs: Math.round(screen.origin - app.started),
+      firstScreenMs: Math.round(screen.origin + screen.paint - app.started),
+      firstMessageMs: Math.round(screen.origin + reopened.message - app.started),
+      liveMs: Math.round(screen.origin + reopened.live - app.started),
+      calibrationMs: (await app.evaluate(calibrateInPage, null)).ms,
+      loopMs: await app.evaluate(loopInPage, null),
     };
     runs.push(run);
     log(`run ${i + 1}`, JSON.stringify(run));
-    await quit(running);
+    await app.quit();
     running = null;
   }
 } catch (e) {
-  const text = await running?.page.evaluate(() => document.body.innerText).catch(() => null);
-  console.error(`where it stopped (${running?.page.url() ?? "no window"}):\n${text?.slice(0, 1500) ?? "(no page text)"}`);
+  const where = await running?.where().catch(() => null);
+  console.error(`where it stopped:\n${where?.slice(0, 1500) ?? "(no window)"}`);
   throw e;
 } finally {
-  if (running) await quit(running);
+  if (running) await running.quit();
   relay.kill();
   rmSync(root, { recursive: true, force: true });
 }
@@ -206,12 +286,13 @@ const measured: Record<string, number> = {
   liveMs: median(runs.map((r) => r.liveMs)),
 };
 const scaled = Object.fromEntries(Object.entries(measured).map(([k, v]) => [k, Math.round(v * factor)]));
-const report = { runs: runs.length, calibrationMs, reference: reference["@1x"], measured, scaled, each: runs };
+const loopMs = median(runs.map((r) => r.loopMs));
+const report = { app: ELECTROBUN ? "electrobun" : "electron", runs: runs.length, calibrationMs, loopMs, reference: reference["@1x"], measured, scaled, each: runs };
 console.log(JSON.stringify(report, null, 2));
 if (OUT) writeFileSync(OUT, JSON.stringify(report, null, 2));
 
 const over = Object.values(limits).flatMap((l) => {
-  const v = l.source === "desktop" ? scaled[l.at[0] ?? ""] : undefined;
+  const v = l.source === (ELECTROBUN ? "desktop-eb" : "desktop") ? scaled[l.at[0] ?? ""] : undefined;
   return v !== undefined && l.gate !== null && v > l.gate
     ? [`${l.what}: ${v} ms scaled to the reference runner (calibration ${calibrationMs} ms against ${reference["@1x"]}), over its gate ${l.gate} (budget ${l.budget})`]
     : [];

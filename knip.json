@@ -6,6 +6,7 @@
     "clang",
     "cc",
     "sample",
+    "pkg-config",
     "dpkg-deb",
     "mksquashfs",
     "ditto",
