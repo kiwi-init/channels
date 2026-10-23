@@ -4,6 +4,8 @@ import path from "node:path";
 import Electrobun, { BrowserView, BrowserWindow, PATHS, Utils } from "electrobun/main";
 
 import { internalRpcHandlers } from "../.hutch/devkit/api/sdks/main/proc/native.ts";
+import { startAppLife } from "./app-life-eb.ts";
+import { handleDeepLink, JOIN_SCHEME } from "./deep-links.ts";
 import { committedUrl, lockInternalRpc, preloadSource, stillOurs, toPageScript } from "./eb-bridge.ts";
 import { navigation, openedUrl, PAGE_RULES, PAGE_TEMPLATE, PAGE_URL, pageWithCsp, RULES_CANARY } from "./eb-page.ts";
 import { externalUrl } from "./guard.ts";
@@ -14,12 +16,17 @@ import { bunWorker, keysController, type KeysFrame } from "./keys-eb.ts";
 import { answerKeys } from "./keys-host.ts";
 import { logMainError } from "./main-log.ts";
 import { openInBrowser } from "./open.ts";
+import { claimInstance, handoffFor, type Instance } from "./single-instance.ts";
 import { bunBridge } from "./rpc-eb.ts";
 import { brokenStore, openStore, snapshot, store, type StoreVault } from "./store.ts";
+import { updateState } from "./updater.ts";
 import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts";
 import { minWindowWidth } from "./window-size.ts";
 
 useHost(ebHost);
+Electrobun.events.on("open-url", (e: { data?: { url?: unknown } }) => {
+  if (typeof e.data?.url === "string") handleDeepLink(e.data.url);
+});
 lockInternalRpc(internalRpcHandlers);
 
 const binDir = path.dirname(process.execPath);
@@ -81,7 +88,7 @@ const keys = keysController({
 
 const memoryVault: StoreVault = { where: () => `memory, nothing saved (${bundle.identifier})`, load: () => ({ ok: true, file: null, resave: false }), save: () => {} };
 
-async function createWindow(): Promise<void> {
+async function createWindow(): Promise<BrowserWindow | null> {
   const index = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "..", PAGE_TEMPLATE), "utf8");
   const page = (): Uint8Array => cString(pageWithCsp(index, store.relayUrl));
   const first = page();
@@ -125,7 +132,7 @@ async function createWindow(): Promise<void> {
     closing = true;
     win.hide();
     fail("the window's navigation rules didn't take effect; not opening it");
-    return;
+    return null;
   }
   const load = (html: Uint8Array = page()): void => {
     core.setWebviewHTMLContent(webview.id, ptr(html));
@@ -154,28 +161,65 @@ async function createWindow(): Promise<void> {
   webview.on("dom-ready", () => {
     if (!closing && !win.isVisible()) win.show();
   });
+  return win;
 }
 
-async function start(): Promise<void> {
+async function start(instance: Extract<Instance, { kind: "first" }>): Promise<void> {
   openStore(memoryVault);
   attachKeys((m) => keys.tell(m));
   keys.start();
-  await createWindow();
+  const win = await createWindow();
+  if (!win) {
+    instance.release();
+    return;
+  }
+  startAppLife({
+    win,
+    view: win.webview,
+    showWindow: () => ebHost.showWindow(),
+    reload: () => ebHost.reload(),
+    textStep: (step) => ebHost.push("textStep", step),
+    restartToUpdate: () => ebHost.restartToUpdate(),
+    update: updateState,
+    nudgeKeys: () => ebHost.tellKeys({ type: "nudge" }),
+    flushKeys: () => keys.flush(),
+    release: instance.release,
+  });
   const broken = brokenStore();
   if (broken) void Utils.showMessageBox({ type: "error", message: "Channels can't read its saved keys", detail: broken.message });
 }
 
+function refuse(instance: Extract<Instance, { kind: "first" }>, why: string): void {
+  instance.release();
+  fail(why);
+}
+
 BrowserView.on("created", (tag) => tag.remove());
 
-if (!shell.kiwi_deny_permissions()) fail("the web view's permission handler wasn't found; not opening a window that could grant the microphone");
-else if (!shell.kiwi_guard_downloads()) fail("the web view's download handler wasn't found; not opening a window that could save any file into Downloads");
-else if (!shell.kiwi_allow_only(ptr(PAGE_ONLY))) fail("the web view's navigation handler wasn't found; not opening a window whose page could navigate away");
+const instance = await claimInstance({
+  dir: Utils.paths.userData,
+  handoff: handoffFor(process.argv, JOIN_SCHEME),
+  scheme: JOIN_SCHEME,
+  onHandoff: (h) => (h.kind === "link" ? handleDeepLink(h.url) : ebHost.showWindow()),
+}).catch((e: unknown) => {
+  logMainError(e);
+  console.error("Channels: couldn't take the single-instance lock in its data folder", e);
+  return null;
+});
+if (!instance) Utils.quit(1);
+else if (instance.kind === "second") {
+  if (!instance.delivered) console.error("Channels: another Channels holds this data folder and didn't answer; quitting");
+  Utils.quit(0);
+} else if (!shell.kiwi_deny_permissions()) refuse(instance, "the web view's permission handler wasn't found; not opening a window that could grant the microphone");
+else if (!shell.kiwi_guard_downloads()) refuse(instance, "the web view's download handler wasn't found; not opening a window that could save any file into Downloads");
+else if (!shell.kiwi_allow_only(ptr(PAGE_ONLY))) refuse(instance, "the web view's navigation handler wasn't found; not opening a window whose page could navigate away");
 else
   try {
-    await start();
+    await start(instance);
   } catch (e) {
     // Nothing on screen can say what went wrong: main.log and the console carry it, and the app quits instead of running windowless.
     logMainError(e);
     console.error("Channels: the window couldn't start", e);
+    instance.release();
     Utils.quit(1);
   }
