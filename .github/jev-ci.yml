@@ -262,7 +262,7 @@ jobs:
       option answers once (choiceGate in lib/choosing.ts refuses a click within 400 ms of the question showing or
       while its answer is on its way, and frees it when the send fails), and a message @addressed
       to others isn't the waiting question's answer (answered in lib/asks.ts); web
-      lib/drafts.test.ts: a draft (text or images) is kept per channel and place until emptied; web lib/later.test.ts: a lazy view that fails to load tells its listeners (the Toaster then says to reload, once) and loads again on the next try;
+      lib/rooms.test.ts: a room the owner makes or renames in channel settings keeps the name the fold would (no leading #, at most 40 characters), is refused before it's sent for an empty name, one taken in any case or a 51st room, and signs the room list as it is after the change (#general only once renamed); web lib/drafts.test.ts: a draft (text or images) is kept per channel and place until emptied; web lib/later.test.ts: a lazy view that fails to load tells its listeners (the Toaster then says to reload, once) and loads again on the next try;
       web conversation/use-scroll.test.ts: only messages newer than the newest seen count as new
       (arrivedAfter), a hidden window's unread never goes below zero (unreadOf), and the conversation
       stays at its newest message when content shrinks and then grows before the scroll event lands,
@@ -500,7 +500,9 @@ jobs:
       Also test/machine-file.test.ts: saving this computer's key keeps machine.json.bak, a machine.json
       cut short comes back from it, and one with no backup stops kiwi instead of minting a new key
       (src/machine.ts); with test/desktop-guard.test.ts's chooseStore: kiwi-store.bin comes back from its
-      backup when it's missing or broken, never over a good file or a locked keychain.
+      backup when it's missing or broken, never over a good file or a locked keychain, and a missing
+      kiwi-store.bin with a .bak that can't be read, decrypted or opened (loadCopies, on real files)
+      is unreadable, never a first run whose first change would save defaults over the .bak (T855).
       Also test/silent-socket.test.ts: a live socket that goes quiet after opening (no answer to
       a ping) and an upgrade nobody answers are both dropped and opened again; a nudge (the network or
       the Mac coming back) cuts a long reconnect wait short and drops a socket that doesn't answer a
@@ -552,12 +554,17 @@ jobs:
       once, sealed and read back, its file untouched, or, when it can't be read, is encrypted with no
       keychain to keep it sealed, or is plain text anywhere but Linux (a Mac's Electron app always
       encrypted it, so a deleted v2 store and a planted plain kiwi-store.bin get nothing in), nothing
-      saved. With test/desktop-legacy-store.test.ts
+      saved; on a Mac, a keychain that still holds a finished store key while both copies are gone is
+      a deleted store, refused without asking for the Electron store, the store key is made only
+      after the import decision, read back from the keychain before anything is saved, and marked
+      finished (a second item, store-key-ready) only once the first save reads back, so a first run
+      cut off after the key was made carries on with it next time, a refused or failed first save
+      takes its new key back, and a first run saves an empty sealed store at once (T907). With test/desktop-legacy-store.test.ts
       (desktop/src/legacy-store.ts, legacy-keys.ts): Electron's safeStorage format opened from what
       Electron itself wrote, v11 on a GNOME keyring and v10 on the macOS Keychain, Linux v10 with
       Chromium's fixed password (which counts as plain, not encrypted), a torn store read from its .bak asking the keychain once, an old
-      store without its key unreadable, never empty, and an unreadable kiwi-desktop store never passed
-      over for the old Kiwi folder's; Bun reads the old password only on Linux. And
+      store without its key unreadable, never empty and never passed over for an older .bak, and an
+      unreadable kiwi-desktop store never passed over for the old Kiwi folder's; Bun reads the old password only on Linux. And
       test/desktop-guard.test.ts's writePrivate: a link at the file's path or at a guessable temp
       name is never written through (the temp file is created exclusively under a random name). And
       web lib/channel/trim.test.ts: a long session folds the messages past the 2000-message window
@@ -676,7 +683,9 @@ jobs:
       main-log.ts, signin.ts) never import electron however deep the import, read from their real
       import graph, while the Electron shell's own electron-host.ts and main.ts still do. And
       test/desktop-store-open.test.ts: a store vault whose load throws partway leaves the store
-      broken, so no later change saves defaults over either copy (desktop/src/store.ts openStore). And
+      broken, so no later change saves defaults over either copy (desktop/src/store.ts openStore), as
+      does a load that fails with an empty reason or throws an error with no message, the thrown
+      error goes to main.log, and a store that opens fine after a broken one is writable again. And
       test/jev-ci.test.ts: the CI planner in .github/jev-ci, which plans synthetic changes
       against the real .github/jev-ci.yml and .github/workflows/ci.yml in a scratch git repo,
       following imports into workspace packages (@kiwi/core) by name, and trusts a pass marker only
@@ -884,7 +893,7 @@ jobs:
       animation library) reaches that first load, which is kept for lazy surfaces, and when web/dist carries
       any file over 20 MiB, which would weigh on every desktop download. Then ui smoke: starts the relay and the kiwi CLI
       as a test computer and drives the built dashboard in headless Chromium, opening every
-      menu, popover and dialog, setting up a passkey, previewing an invite, an invite that pins a personality keeping its whole join command (the long --persona token wrapping, the short flags whole) inside its box, the tab bar's controls starting past a Mac's traffic lights and the page's sheet below the bar (Settings with data-shell="mac": the bar's first control at least --lights-w in, the sheet at least --chrome-h down), the open channel's tab marked current and ⌘\ hiding the channel's sidebar (the header's Tasks / Agents / Conversation tabs take over, it stays hidden across a reload, and the tab bar's Show the sidebar brings it back), Settings → Personalities duplicating a preset into the person's own, the Agents tab showing a lane per agent with what's next on it, Needs you as rows always in view (an agent asking in is let in from its row), an answered ask saying who chose what on the ask itself, replying inline (the reply quotes what it answers, "1 Reply" opens the thread; then three replies, each sent right after two messages, keep their quotes: an earlier send's late answer doesn't clear the reply, and a reply to a message still sending waits for its seq, checked on the reply's row once the relay's copy has landed), Details → Close channel… downloading the whole log first as JSON Lines with each message's key and signature (the history call through ChannelLink and the desktop keyring) and Cancel keeping the channel, linking a computer
+      menu, popover and dialog, making the room #mobile from Details → Rooms (a taken name refused before it's sent; the room in the Rooms row and the sidebar's conversations) and renaming it #ios, setting up a passkey, previewing an invite, an invite that pins a personality keeping its whole join command (the long --persona token wrapping, the short flags whole) inside its box, the tab bar's controls starting past a Mac's traffic lights and the page's sheet below the bar (Settings with data-shell="mac": the bar's first control at least --lights-w in, the sheet at least --chrome-h down), the open channel's tab marked current and ⌘\ hiding the channel's sidebar (the header's Tasks / Agents / Conversation tabs take over, it stays hidden across a reload, and the tab bar's Show the sidebar brings it back), Settings → Personalities duplicating a preset into the person's own, the Agents tab showing a lane per agent with what's next on it, Needs you as rows always in view (an agent asking in is let in from its row), an answered ask saying who chose what on the ask itself, replying inline (the reply quotes what it answers, "1 Reply" opens the thread; then three replies, each sent right after two messages, keep their quotes: an earlier send's late answer doesn't clear the reply, and a reply to a message still sending waits for its seq, checked on the reply's row once the relay's copy has landed), Details → Close channel… downloading the whole log first as JSON Lines with each message's key and signature (the history call through ChannelLink and the desktop keyring) and Cancel keeping the channel, linking a computer
       with `kiwi setup`, approving its agent and opening a task (a board row opens it in the Tasks panel, with no second task list behind it, and with the task open beside it at 1280 and 1180px every row keeps a readable title with nothing spilling out of it, its columns picked by the board's own width; /tasks switches to the Tasks tab; the details' wants-to-join row closes them and shows Needs you, where the agent is let in, and details offer no Copy invite link or second approve flow), a reload of that channel never showing the Add an agent card, No tasks yet or No messages yet before its history is in, the app loaded with no channel in its address reopening the one that was open instead of Nothing open, finding controls by visible
       names and roles; fails if a page throws while rendering, a control it looks for is renamed
       or missing, or the relay, pairing or join flow breaks. Then compiles the kiwi CLI into one
@@ -914,7 +923,7 @@ jobs:
       pending join request and a second empty channel) and shoots every screen of the wide
       window in its theme: the conversation, the channel with its sidebar hidden (⌘\: the header takes its views), the tab bar in a Mac window (with a stand-in for its traffic lights), the channel sidebar's search open and its folded conversations opened, the reply bar, the composer with words in it, the Tasks tab, a task opened from its board row
       in the Tasks panel, Needs you, the permission prompts in the conversation (one denied, one waiting), the Agents tab, the channel's settings page (Details: members, the channel's settings with its repo and Write to GitHub off, notes and closing, side by side), the direct conversation, its picture open in the viewer (in a Mac window, with a stand-in for its traffic lights),
-      Invite, the account menu, the command palette, Notes, Pause, Settings (its sections and their groups), Settings' New agents group with a stand-in for the desktop app's terminal methods (Allow, Prefer with Rex and tmux greyed, the Rex row) before and after Download Rex Helpers and Prefer Rex, Personalities (opened from its row), Add
+      Invite, Details → Rooms with a new room's name typed in, the account menu, the command palette, Notes, Pause, Settings (its sections and their groups), Settings' New agents group with a stand-in for the desktop app's terminal methods (Allow, Prefer with Rex and tmux greyed, the Rex row) before and after Download Rex Helpers and Prefer Rex, Personalities (opened from its row), Add
       an agent, the desktop app's New agent modal, its computer picker with a paired computer
       chosen, and its started screen (with a stand-in for the launch methods the desktop bridge
       adds), first run, signed in with nothing open, Join
@@ -991,6 +1000,49 @@ jobs:
       whose source is desktop and perf-check skips: desktopFirstScreenMs and coldStartMs (launch to the first
       cached message). Fails on a
       bundling or packaging error, a fuse changed or dropped, or an app that no longer starts.
+
+  desktop-mac:
+    name: desktop / mac
+    inputs: ["desktop/src/**", "desktop/native/**", "desktop/build/icon.icns", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "package.json", "bun.lock"]
+    imports_from: ["desktop/src/main-eb.ts"]
+    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-size.ts", "desktop/scripts/eb-env-check.ts"]
+    description: >-
+      On a macOS runner (Electrobun builds only for the host it runs on), checks the Electrobun
+      shell that is replacing Electron (issue #757). Builds web/dist, then `bun run typecheck:eb`
+      in desktop/: `electrobun prepare` fetches Electrobun 2.0.4's devkit (Hutch, the pinned
+      core and Bun) into desktop/.hutch, and tsc -p tsconfig.eb.json typechecks
+      src/main-eb.ts, electrobun.config.ts and the eb-*.ts build scripts against it, strict.
+      Then `bun run build:eb` (electrobun build --env=stable): bundles src/main-eb.ts with the
+      shared desktop modules it imports (guard.ts csp(), open.ts, eb-page.ts, window-look.ts,
+      window-size.ts) and @kiwi/core; scripts/eb-pre-build.ts turns build/icon.icns into the
+      iconset; scripts/eb-post-build.ts copies web/dist into the app's views/internal and
+      compiles native/macos/kiwi-shell.m with clang -Wall -Werror into Contents/MacOS (the
+      patch that denies the microphone, camera and location Electrobun grants the page, and the
+      window's minimum size and background). We ship the plain app, not Electrobun's
+      self-extracting wrapper (which would run the app from a folder the user's rights can edit):
+      desktop/scripts/eb-size.ts unpacks the plain .app from the build's .app.tar.zst payload,
+      makes its dmg (hdiutil ULMO) and its zip (ditto, the updater's layout), and fails if that
+      .app is over 100MB on disk or its dmg or zip is over 40MB; the wrapper's sizes are only
+      printed. Fails on a type error, a bundling error (an import the
+      Bun main process can't resolve), an ObjC warning or a WebKit/AppKit API that no longer
+      exists, a missing web/dist, or an app over its size gates.
+      The plain .app's CFBundleExecutable is our launcher (desktop/native/macos/kiwi-launcher.c,
+      built by eb-post-build.ts with clang -Wall -Wextra -Werror), not Electrobun's: it keeps only
+      HOME, USER, LOGNAME, TMPDIR, PATH, SHELL, LANG, LC_*, XPC_SERVICE_NAME, XPC_FLAGS and
+      __CF_USER_TEXT_ENCODING, sets BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 itself (so a forged entry in
+      Bun's transpiler cache under HOME can't replace main's code), and execs Electrobun's launcher
+      with that, so BUN_OPTIONS (--preload), BUN_INSPECT (a debugger), NODE_*, DYLD_* and JSC_*
+      never reach the bun process that runs main and the web view (T632).
+      desktop/scripts/eb-env-check.ts unpacks the plain .app and fails if the launcher, run in front
+      of a stand-in that writes down its environment, passes on any name beyond those (it sets one
+      from each family) or drops one of them, or doesn't set BUN_RUNTIME_TRANSPILER_CACHE_PATH=0
+      once whatever the caller gave, or if the running app, started with BUN_OPTIONS --preload,
+      BUN_INSPECT on a free port, NODE_OPTIONS --require, DYLD_INSERT_LIBRARIES and HOME pointing at
+      a forged transpiler cache entry for its own index.js (made with the app's bun, its length and
+      wyhash rewritten), runs the preload or the forged code, listens on that port, or loads the
+      library into any process but the unsigned
+      launcher itself (a signed build's hardened runtime stops that one), or leaves anything
+      running; it starts a release-id app only on CI, never on a person's Mac.
 
   cli-macos:
     name: cli / macos

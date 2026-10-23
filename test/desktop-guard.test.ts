@@ -14,6 +14,7 @@ import {
   externalUrl,
   fileFor,
   isAppUrl,
+  loadCopies,
   mergeChannels,
   normalizeRelay,
   permissionAllowed,
@@ -79,8 +80,74 @@ describe("the saved keys are never lost to a bad read (T186)", () => {
     expect(chooseStore(torn, good, decrypt)).toEqual({ read: { kind: "ok", json: store, encrypted: true }, restore: good });
     expect(chooseStore(null, good, decrypt)).toEqual({ read: { kind: "ok", json: store, encrypted: true }, restore: good });
     expect(chooseStore(torn, torn, decrypt)).toEqual({ read: readStore(torn, decrypt), restore: null });
+    expect(chooseStore(null, torn, decrypt)).toEqual({ read: readStore(torn, decrypt), restore: null });
+    expect(chooseStore(null, null, decrypt)).toEqual({ read: { kind: "none" }, restore: null });
     expect(chooseStore(good, good, null).read.kind).toBe("unreadable");
     expect(chooseStore(good, good, null).restore).toBeNull();
+  });
+});
+
+describe.skipIf(process.platform === "win32" || process.getuid?.() === 0)("loading the store's two copies (T855)", () => {
+  const enc = (s: string) => Buffer.from(`enc:${s}`);
+  const decrypt = (b: Buffer) => {
+    const s = b.toString("utf8");
+    if (!s.startsWith("enc:")) throw new Error("not encrypted");
+    return s.slice(4);
+  };
+  const good = enc('{"relayUrl":"https://r.example"}');
+
+  function folder(files: Record<string, Buffer | string>, locked: string[] = []): string {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-copies-"));
+    for (const [name, body] of Object.entries(files)) writeFileSync(join(dir, name), body);
+    for (const name of locked) chmodSync(join(dir, name), 0o000);
+    return dir;
+  }
+
+  test("no main file and a .bak that can't be decrypted or parsed is unreadable, never a first run", () => {
+    const dir = folder({ "kiwi-store.bin.bak": Buffer.from("\x00\x01garbage") });
+    try {
+      const loaded = loadCopies(join(dir, "kiwi-store.bin"), decrypt);
+      expect(loaded.ok && loaded.choice.read.kind).toBe("unreadable");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("no main file and a .bak this user can't open is unreadable too", () => {
+    const dir = folder({ "kiwi-store.bin.bak": good }, ["kiwi-store.bin.bak"]);
+    try {
+      const loaded = loadCopies(join(dir, "kiwi-store.bin"), decrypt);
+      expect(loaded.ok).toBe(false);
+      expect(!loaded.ok && loaded.why).toContain("its backup can't be read");
+    } finally {
+      chmodSync(join(dir, "kiwi-store.bin.bak"), 0o600);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a good main file decides even when its .bak can't be opened, and a main that can't be opened is unreadable", () => {
+    const dir = folder({ "kiwi-store.bin": good, "kiwi-store.bin.bak": good }, ["kiwi-store.bin.bak"]);
+    const locked = folder({ "kiwi-store.bin": good }, ["kiwi-store.bin"]);
+    try {
+      const loaded = loadCopies(join(dir, "kiwi-store.bin"), decrypt);
+      expect(loaded.ok && loaded.choice.read).toEqual({ kind: "ok", json: { relayUrl: "https://r.example" }, encrypted: true });
+      expect(loadCopies(join(locked, "kiwi-store.bin"), decrypt).ok).toBe(false);
+    } finally {
+      chmodSync(join(dir, "kiwi-store.bin.bak"), 0o600);
+      chmodSync(join(locked, "kiwi-store.bin"), 0o600);
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(locked, { recursive: true, force: true });
+    }
+  });
+
+  test("neither copy is a first run", () => {
+    const dir = folder({});
+    try {
+      const loaded = loadCopies(join(dir, "kiwi-store.bin"), decrypt);
+      expect(loaded.ok && loaded.choice.read).toEqual({ kind: "none" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
