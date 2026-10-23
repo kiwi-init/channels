@@ -5,7 +5,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { daemonLogPath, noteDaemon, spawnDaemon } from "../desktop/src/daemon-client.ts";
+import { daemonEnv, daemonLogPath, noteDaemon, spawnDaemon } from "../desktop/src/daemon-client.ts";
+
+test("the daemon gets the app's environment without the keys process's fd or the launcher's transpiler-cache switch, so its agents and shells don't inherit them (T439, T1062)", () => {
+  const from = { PATH: "/usr/bin", HOME: "/Users/someone", KIWI_KEY_FD: "3", BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0", KIWI_RELAY: "https://from-the-environment.example" };
+  expect(daemonEnv(from, "/tmp/home", "https://relay.example")).toEqual({ PATH: "/usr/bin", HOME: "/Users/someone", KIWI_HOME: "/tmp/home", KIWI_RELAY: "https://relay.example" });
+  expect(from.KIWI_KEY_FD).toBe("3");
+});
 
 test.skipIf(process.platform === "win32")("starts `kiwi daemon` for the home, on the app's relay", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kiwi-spawn-"));

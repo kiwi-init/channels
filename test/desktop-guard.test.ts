@@ -4,7 +4,7 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { chmodSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import type { ChannelIdentityView, ComputerView, PersonView } from "../desktop/src/bridge.ts";
 import {
@@ -34,8 +34,8 @@ describe("the window shows the app and nothing else (T183)", () => {
     for (const u of ["https://evil.example/", "kiwi-app://evil/index.html", "file:///etc/passwd", "kiwi://join/abc", "not a url"]) expect(isAppUrl(u)).toBe(false);
   });
   test("only http(s) leaves for the system browser", () => {
-    expect(externalUrl("https://github.com/x")).toBe("https://github.com/x");
-    expect(externalUrl("http://localhost:8787/")).toBe("http://localhost:8787/");
+    expect<string | null>(externalUrl("https://github.com/x")).toBe("https://github.com/x");
+    expect<string | null>(externalUrl("http://localhost:8787/")).toBe("http://localhost:8787/");
     for (const u of ["javascript:alert(1)", "file:///Applications", "kiwi-app://app/", "smb://share", "data:text/html,hi", ""]) expect(externalUrl(u)).toBeNull();
   });
   test("copying is allowed only from kiwi-app://, and the microphone or camera never", () => {
@@ -199,6 +199,29 @@ describe.skipIf(process.platform === "win32")("the saved keys are a 0600 file in
       writePrivate(file, Buffer.from('{"a":1}'));
       expect(statSync(dir).mode & 0o777).toBe(0o700);
       expect(statSync(file).mode & 0o777).toBe(0o600);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("a link at the store's path or at a guessable temp name is never written through, and no temp file is left", () => {
+    const root = mkdtempSync(join(tmpdir(), "kiwi-store-"));
+    try {
+      const dir = join(root, "Channels");
+      mkdirSync(dir, { mode: 0o700 });
+      const elsewhere = join(root, "elsewhere");
+      writeFileSync(elsewhere, "theirs");
+      const file = join(dir, "kiwi-store.bin");
+      symlinkSync(elsewhere, file);
+      const planted = join(root, "planted");
+      writeFileSync(planted, "theirs");
+      symlinkSync(planted, `${file}.${process.pid}.tmp`);
+      writePrivate(file, Buffer.from("{}"));
+      expect(readFileSync(elsewhere, "utf8")).toBe("theirs");
+      expect(readFileSync(planted, "utf8")).toBe("theirs");
+      expect(lstatSync(file).isSymbolicLink()).toBe(false);
+      expect(readFileSync(file, "utf8")).toBe("{}");
+      expect(readdirSync(dir).sort()).toEqual(["kiwi-store.bin", `kiwi-store.bin.${process.pid}.tmp`]);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

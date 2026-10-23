@@ -6,8 +6,9 @@
     "clang",
     "ditto",
     "hdiutil",
+    "pgrep",
     "plutil",
-    "pgrep"
+    "kwallet-query"
   ],
   "workspaces": {
     ".": {
@@ -58,6 +59,7 @@
       "entry": [
         "src/main.ts",
         "src/main-eb.ts",
+        "src/preload-eb.ts",
         "src/preload.ts",
         "src/channels.ts",
         "scripts/*.ts",

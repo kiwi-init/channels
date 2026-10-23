@@ -159,9 +159,16 @@ export function noteDaemon(line: string, home: string = kiwiHome()): void {
   }
 }
 
+export function daemonEnv(from: NodeJS.ProcessEnv, home: string, relay: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...from, KIWI_HOME: home, KIWI_RELAY: relay };
+  delete env["KIWI_KEY_FD"];
+  delete env["BUN_RUNTIME_TRANSPILER_CACHE_PATH"];
+  return env;
+}
+
 export function spawnDaemon(bin: string, home: string, relay: string): void {
   const log = openDaemonLog(home);
-  const child = spawn(bin, ["daemon"], { env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay }, detached: true, stdio: ["ignore", log, log], windowsHide: true });
+  const child = spawn(bin, ["daemon"], { env: daemonEnv(process.env, home, relay), detached: true, stdio: ["ignore", log, log], windowsHide: true });
   if (typeof log === "number") fs.closeSync(log);
   // A binary that won't start shows as no hello (the caller waits for one), not an uncaught error.
   child.on("error", () => {});

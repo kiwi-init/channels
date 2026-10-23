@@ -4,6 +4,7 @@
 
 import { cleanPersonalities } from "@kiwi/core/personalities.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
+import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -29,10 +30,12 @@ export function isAppUrl(url: string): boolean {
 }
 
 /** `url`, if it may go to the system browser: http(s) only (never file:, javascript:, a custom scheme). */
-export function externalUrl(url: string): string | null {
+export type ExternalUrl = string & { readonly checked: "http(s)" };
+
+export function externalUrl(url: string): ExternalUrl | null {
   try {
     const u = new URL(url);
-    return u.protocol === "https:" || u.protocol === "http:" ? u.href : null;
+    return u.protocol === "https:" || u.protocol === "http:" ? (u.href as ExternalUrl) : null;
   } catch {
     return null;
   }
@@ -168,9 +171,9 @@ export function writePrivate(file: string, raw: Buffer, platform: NodeJS.Platfor
   const dir = path.dirname(file);
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   if (platform !== "win32") fs.chmodSync(dir, 0o700);
-  const tmp = `${file}.${process.pid}.tmp`;
+  const tmp = `${file}.${randomBytes(8).toString("hex")}.tmp`;
   try {
-    const fd = fs.openSync(tmp, "w", 0o600);
+    const fd = fs.openSync(tmp, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0), 0o600);
     try {
       fs.writeFileSync(fd, raw);
       fs.fsyncSync(fd);
