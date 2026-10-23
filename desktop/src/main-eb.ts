@@ -22,7 +22,7 @@ import { claimInstance, handoffFor, type Instance } from "./single-instance.ts";
 import { bunBridge } from "./rpc-eb.ts";
 import { brokenStore, openStore, snapshot, store } from "./store.ts";
 import { openEbStore, unmarkedNote, v2Vault } from "./store-eb.ts";
-import { updateState } from "./updater.ts";
+import { startUpdates, updateState } from "./updater.ts";
 import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts";
 import { minWindowWidth } from "./window-size.ts";
 
@@ -78,6 +78,7 @@ function createWindow(): BrowserWindow {
     (frame) => view?.executeJavascript(toPageScript(frame)),
     () => {
       keys.pageGone();
+      refreshPreload();
       bridge.push("store", snapshot());
     },
     (session, req) => keys.request(session, req),
@@ -89,7 +90,7 @@ function createWindow(): BrowserWindow {
     frame: { width: WINDOW_SIZE.width, height: WINDOW_SIZE.height },
     titleBarStyle: "hiddenInset",
     hidden: true,
-    preload: preloadSource(snapshot(), bundled),
+    preload: preloadSource({ snapshot: snapshot(), session: bridge.nextSession() }, bundled),
     rpc: bridge,
   });
   const webview = win.webview;
@@ -98,9 +99,11 @@ function createWindow(): BrowserWindow {
   const load = (): void => {
     core.setWebviewHTMLContent(webview.id, ptr(cString(pageWithCsp(index, store.relayUrl))));
     ours = true;
+    bridge.retire();
     webview.loadURL(PAGE_URL);
   };
-  const refreshPreload = (): void => core.updatePreloadScriptToWebView(webview.id, ptr(PRELOAD_ID), ptr(cString(preloadSource(snapshot(), bundled))), true);
+  const refreshPreload = (): void =>
+    core.updatePreloadScriptToWebView(webview.id, ptr(PRELOAD_ID), ptr(cString(preloadSource({ snapshot: snapshot(), session: bridge.nextSession() }, bundled))), false);
   attachWindow({
     win,
     view: webview,
@@ -135,7 +138,7 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
   attachKeys((m) => keys.tell(m));
   keys.start();
   const win = createWindow();
-  startAppLife({
+  const tray = startAppLife({
     win,
     view: win.webview,
     showWindow: () => ebHost.showWindow(),
@@ -146,6 +149,10 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
     nudgeKeys: () => ebHost.tellKeys({ type: "nudge" }),
     flushKeys: () => keys.flush(),
     release: instance.release,
+  });
+  startUpdates((u) => {
+    ebHost.push("update", u);
+    tray.refresh(u);
   });
   const broken = brokenStore();
   if (broken) void Utils.showMessageBox({ type: "error", message: "Channels can't read its saved keys", detail: broken.message });

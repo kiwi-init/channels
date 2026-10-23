@@ -356,6 +356,7 @@ export interface UpdateView {
   /** The release's page. */
   url: string;
   blocked?: true;
+  deb?: string;
 }
 
 export type UpdateCheckView = UpdateView | { state: "current"; version: string } | { state: "failed" };

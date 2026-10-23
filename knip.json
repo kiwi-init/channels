@@ -1,6 +1,19 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignoreBinaries": ["oxfmt", "iconutil", "clang", "sample", "dpkg-deb", "mksquashfs", "ditto", "hdiutil", "pgrep", "plutil", "kwallet-query"],
+  "ignoreBinaries": [
+    "oxfmt",
+    "iconutil",
+    "clang",
+    "cc",
+    "sample",
+    "dpkg-deb",
+    "mksquashfs",
+    "ditto",
+    "hdiutil",
+    "pgrep",
+    "plutil",
+    "kwallet-query"
+  ],
   "workspaces": {
     ".": {
       "entry": ["scripts/*.ts", "scripts/bench-sh/run.ts", "test/**/*.test.ts", "test/owner-cli.ts", "test/fixtures/home-probe.ts", "ios/engine/main.ts", "ios/scripts/*.ts"],
