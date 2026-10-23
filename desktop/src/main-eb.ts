@@ -7,8 +7,10 @@ import { internalRpcHandlers } from "../.hutch/devkit/api/sdks/main/proc/native.
 import { startAppLife } from "./app-life-eb.ts";
 import { handleDeepLink, JOIN_SCHEME } from "./deep-links.ts";
 import { lockInternalRpc, onOurPage, preloadSource, toPageScript } from "./eb-bridge.ts";
+import { drive } from "./eb-driver.ts";
 import { navigation, openedUrl, PAGE_RULES, PAGE_TEMPLATE, PAGE_URL, pageWithCsp, RULES_CANARY } from "./eb-page.ts";
-import { externalUrl } from "./guard.ts";
+import { testVault } from "./eb-test-store.ts";
+import { externalUrl, normalizeRelay } from "./guard.ts";
 import { attachKeys, attachWindow, bundle, ebHost } from "./host-eb.ts";
 import { useHost } from "./host.ts";
 import { handlers } from "./ipc/handlers.ts";
@@ -18,10 +20,12 @@ import { logMainError } from "./main-log.ts";
 import { openInBrowser } from "./open.ts";
 import { claimInstance, handoffFor, type Instance } from "./single-instance.ts";
 import { bunBridge } from "./rpc-eb.ts";
-import { brokenStore, openStore, snapshot, store, type StoreVault } from "./store.ts";
+import { brokenStore, mutate, openStore, snapshot, store, type StoreVault } from "./store.ts";
 import { startUpdates, updateState } from "./updater.ts";
 import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts";
 import { minWindowWidth } from "./window-size.ts";
+
+declare const KIWI_EB_TEST: boolean;
 
 useHost(ebHost);
 Electrobun.events.on("open-url", (e: { data?: { url?: unknown } }) => {
@@ -30,15 +34,20 @@ Electrobun.events.on("open-url", (e: { data?: { url?: unknown } }) => {
 lockInternalRpc(internalRpcHandlers);
 
 const binDir = path.dirname(process.execPath);
+const mac = process.platform === "darwin";
+const shellPath = path.join(binDir, `libkiwi-shell.${suffix}`);
 
-const shell = dlopen(path.join(binDir, `libkiwi-shell.${suffix}`), {
+const shell = dlopen(shellPath, {
   kiwi_deny_permissions: { args: [], returns: FFIType.bool },
-  kiwi_guard_downloads: { args: [], returns: FFIType.bool },
   kiwi_watch_commits: { args: [], returns: FFIType.bool },
   kiwi_committed_url: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
-  kiwi_allow_only: { args: [FFIType.ptr], returns: FFIType.bool },
-  kiwi_window_look: { args: [FFIType.ptr, FFIType.f64, FFIType.f64, FFIType.u32, FFIType.u32], returns: FFIType.void },
 }).symbols;
+
+const sandboxPages = mac ? null : dlopen(shellPath, { kiwi_sandbox_pages: { args: [], returns: FFIType.bool } }).symbols.kiwi_sandbox_pages;
+
+const windowLook = mac ? dlopen(shellPath, { kiwi_window_look: { args: [FFIType.ptr, FFIType.f64, FFIType.f64, FFIType.u32, FFIType.u32], returns: FFIType.void } }).symbols.kiwi_window_look : null;
+
+const macGuards = mac ? dlopen(shellPath, { kiwi_guard_downloads: { args: [], returns: FFIType.bool }, kiwi_allow_only: { args: [FFIType.ptr], returns: FFIType.bool } }).symbols : null;
 
 const core = dlopen(path.join(binDir, `libElectrobunCore.${suffix}`), {
   setWebviewHTMLContent: { args: [FFIType.u32, FFIType.ptr], returns: FFIType.void },
@@ -120,7 +129,7 @@ async function createWindow(): Promise<BrowserWindow | null> {
     title: "Channels",
     url: null,
     frame: { width: WINDOW_SIZE.width, height: WINDOW_SIZE.height },
-    titleBarStyle: "hiddenInset",
+    titleBarStyle: mac ? "hiddenInset" : "default",
     hidden: true,
     preload: preloadSource({ snapshot: snapshot(), session: bridge.nextSession() }, bundled),
     rpc: bridge,
@@ -161,8 +170,8 @@ async function createWindow(): Promise<BrowserWindow | null> {
   });
   load(first);
   const look = win.ptr;
-  if (look) shell.kiwi_window_look(look, minWindowWidth(process.platform), WINDOW_SIZE.minHeight, rgb(windowBackground(false)), rgb(windowBackground(true)));
-  win.setWindowButtonPosition(TRAFFIC_LIGHTS.x, TRAFFIC_LIGHTS.y);
+  if (look && windowLook) windowLook(look, minWindowWidth(process.platform), WINDOW_SIZE.minHeight, rgb(windowBackground(false)), rgb(windowBackground(true)));
+  if (mac) win.setWindowButtonPosition(TRAFFIC_LIGHTS.x, TRAFFIC_LIGHTS.y);
   Electrobun.events.on(`new-window-open-${webview.id}`, (e: { data?: { detail?: unknown } }) => {
     const url = openedUrl(e.data?.detail);
     if (url) openOutside(url);
@@ -174,13 +183,21 @@ async function createWindow(): Promise<BrowserWindow | null> {
 }
 
 async function start(instance: Extract<Instance, { kind: "first" }>): Promise<void> {
-  openStore(memoryVault);
+  if (KIWI_EB_TEST) {
+    openStore(testVault(Utils.paths.userData));
+    const relay = normalizeRelay(process.env.KIWI_EB_RELAY ?? "");
+    if (relay) mutate((s) => void (s.relayUrl = relay));
+  } else openStore(memoryVault);
   attachKeys((m) => keys.tell(m));
   keys.start();
   const win = await createWindow();
   if (!win) {
     instance.release();
     return;
+  }
+  if (KIWI_EB_TEST) {
+    const socket = process.env.KIWI_EB_DRIVER;
+    if (socket) drive(win.webview, socket);
   }
   const tray = startAppLife({
     win,
@@ -224,10 +241,11 @@ else if (instance.kind === "second") {
   if (!instance.delivered) console.error("Channels: another Channels holds this data folder and didn't answer; quitting");
   Utils.quit(0);
 } else if (!shell.kiwi_deny_permissions()) refuse(instance, "the web view's permission handler wasn't found; not opening a window that could grant the microphone");
-else if (!shell.kiwi_guard_downloads()) refuse(instance, "the web view's download handler wasn't found; not opening a window that could save any file into Downloads");
-else if (!shell.kiwi_allow_only(ptr(PAGE_ONLY))) refuse(instance, "the web view's navigation handler wasn't found; not opening a window whose page could navigate away");
+else if (macGuards && !macGuards.kiwi_guard_downloads()) refuse(instance, "the web view's download handler wasn't found; not opening a window that could save any file into Downloads");
+else if (macGuards && !macGuards.kiwi_allow_only(ptr(PAGE_ONLY))) refuse(instance, "the web view's navigation handler wasn't found; not opening a window whose page could navigate away");
 else if (!shell.kiwi_watch_commits()) refuse(instance, "the web view's navigation delegate wasn't found; not opening a window that would trust a page it can't see");
-else
+else {
+  if (sandboxPages && !sandboxPages()) logMainError(new Error("WebKitGTK's sandbox is off: bwrap or xdg-dbus-proxy isn't installed, so the page runs without it"));
   try {
     await start(instance);
   } catch (e) {
@@ -237,3 +255,4 @@ else
     instance.release();
     Utils.quit(1);
   }
+}

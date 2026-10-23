@@ -11,7 +11,7 @@ interface Limit {
   budget: number;
   gate: number | null;
   nightly?: boolean;
-  source?: "feel" | "desktop";
+  source?: "feel" | "desktop" | "desktop-eb";
 }
 
 type Range = [number, number];
@@ -92,7 +92,7 @@ const over: string[] = [];
 const short: string[] = [];
 const partial: string[] = [];
 for (const [name, l] of Object.entries(limits)) {
-  if ((l.nightly && !nightly) || l.source === "desktop") continue;
+  if ((l.nightly && !nightly) || l.source === "desktop" || l.source === "desktop-eb") continue;
   if (l.source === "feel") {
     if (!feels.length) continue;
     const seen = feels.map((r) => pick(r, l.at)).filter((v): v is number => v !== null);

@@ -5,6 +5,7 @@
     "iconutil",
     "clang",
     "cc",
+    "pkg-config",
     "dpkg-deb",
     "mksquashfs",
     "ditto",
