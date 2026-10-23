@@ -5,6 +5,7 @@ import Electrobun, { BuildConfig, PATHS, Utils, type BrowserView, type BrowserWi
 
 import type { Push, Pushes } from "./calls.ts";
 import type { Host } from "./host.ts";
+import type { HostToKeys } from "./keys-server.ts";
 
 interface Bundle {
   identifier: string;
@@ -28,8 +29,14 @@ interface Shown {
 
 let shown: Shown | null = null;
 
+let keysTell: (m: HostToKeys) => void = () => {};
+
 export function attachWindow(next: Shown): void {
   shown = next;
+}
+
+export function attachKeys(tell: (m: HostToKeys) => void): void {
+  keysTell = tell;
 }
 
 export const ebHost: Host = {
@@ -52,10 +59,11 @@ export const ebHost: Host = {
   notify: (title, body) => Utils.showNotification({ title, body }),
   showWindow: () => {
     if (!shown) return;
+    if (shown.win.isMinimized()) shown.win.unminimize();
     shown.win.show();
-    shown.win.focus();
+    shown.win.activate();
   },
   reload: () => shown?.reload(),
   restartToUpdate: () => {},
-  tellKeys: () => {},
+  tellKeys: (m) => keysTell(m),
 };

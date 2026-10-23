@@ -115,7 +115,7 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
   return Effect.gen(function* () {
     const { recipe } = seat;
     const nonce = randomBytes(9).toString("hex");
-    const launched = `${prompt}\n\n(Kiwi loop launch ${nonce})`;
+    const launched = [prompt, ...(recipe.firstLine ? [recipe.firstLine] : []), `(Kiwi loop launch ${nonce})`].join("\n\n");
     const argv = loginArgv(loginShell(), recipe.argv({ bin: recipe.bin, prompt: launched, ...(seat.model ? { model: seat.model } : {}), ...(seat.effort ? { effort: seat.effort } : {}) }), {
       KIWI_CHANNEL: seat.alias,
       KIWI_AS: seat.me,
@@ -135,7 +135,7 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
           yield* hold(seat);
           const until = why.kind === "done" ? Date.now() + IDLE_WAIT_MS : 0;
           while (!exited && !stop.asked && Date.now() < until && !found?.idle().idle) yield* Effect.sleep(POLL_MS);
-          child.kill("SIGTERM");
+          child.kill(recipe.stopSignal);
           const late = Date.now() + TERM_GRACE_MS;
           while (!exited && Date.now() < late) yield* Effect.sleep(250);
           if (!exited) child.kill("SIGKILL");

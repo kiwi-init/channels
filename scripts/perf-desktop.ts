@@ -289,7 +289,7 @@ console.log(JSON.stringify(report, null, 2));
 if (OUT) writeFileSync(OUT, JSON.stringify(report, null, 2));
 
 const over = Object.values(limits).flatMap((l) => {
-  const v = l.source === "desktop" ? scaled[l.at[0] ?? ""] : undefined;
+  const v = l.source === (ELECTROBUN ? "desktop-eb" : "desktop") ? scaled[l.at[0] ?? ""] : undefined;
   return v !== undefined && l.gate !== null && v > l.gate
     ? [`${l.what}: ${v} ms scaled to the reference runner (calibration ${calibrationMs} ms against ${reference["@1x"]}), over its gate ${l.gate} (budget ${l.budget})`]
     : [];

@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -15,15 +15,42 @@ const KEY_BYTES = 32;
 export interface StoreKey {
   get(): Promise<string | null>;
   set(value: string): Promise<void>;
+  drop(): Promise<void>;
+  finished(): Promise<boolean>;
+  finish(): Promise<void>;
 }
 
-export const keychainKey = (service: string = "Channels", name: string = "store-key"): StoreKey => ({
-  get: () => Bun.secrets.get({ service, name }),
-  set: (value) => Bun.secrets.set({ service, name, value }),
-});
+export const readyMark = (key: string): string => createHash("sha256").update(key, "utf8").digest("hex");
+
+export const keychainKey = (service: string = "Channels", name: string = "store-key"): StoreKey => {
+  const ready = `${name}-ready`;
+  let made: string | null = null;
+  return {
+    get: () => Bun.secrets.get({ service, name }),
+    set: async (value) => {
+      await Bun.secrets.set({ service, name, value });
+      made = value;
+    },
+    drop: async () => {
+      if (made === null || (await Bun.secrets.get({ service, name })) !== made) throw new Error("Channels takes back only a store key it made in this run, while the keychain still holds it");
+      await Bun.secrets.delete({ service, name: ready });
+      await Bun.secrets.delete({ service, name });
+      made = null;
+    },
+    finished: async () => {
+      const key = await Bun.secrets.get({ service, name });
+      return key !== null && (await Bun.secrets.get({ service, name: ready })) === readyMark(key);
+    },
+    finish: async () => {
+      const key = await Bun.secrets.get({ service, name });
+      if (key === null) throw new Error("there's no store key to mark ready");
+      await Bun.secrets.set({ service, name: ready, value: readyMark(key) });
+    },
+  };
+};
 
 export type OpenStore =
-  | { kind: "open"; json: Record<string, unknown> | null; sealed: boolean; noKeychain: string | null; imported: string | null; file: string; save: (json: string) => void }
+  | { kind: "open"; json: Record<string, unknown> | null; sealed: boolean; noKeychain: string | null; unmarked: string | null; imported: string | null; file: string; save: (json: string) => void }
   | { kind: "unreadable"; why: string; file: string };
 
 export interface StoreOptions {
@@ -109,49 +136,117 @@ function readCopy(raw: Buffer | null, key: Buffer | null, plainOk: boolean): Cop
   }
 }
 
+async function markFinished(key: StoreKey): Promise<string | null> {
+  try {
+    if (!(await key.finished())) await key.finish();
+    return null;
+  } catch (e) {
+    return reason(e);
+  }
+}
+
+async function dropMade(key: StoreKey): Promise<void> {
+  try {
+    await key.drop();
+  } catch {
+    // A key that can't be taken back stays unmarked, and an unmarked key with both copies gone is a first run, so the next start carries on with it.
+  }
+}
+
 export async function openStore({ dir, key, legacy, platform = process.platform }: StoreOptions): Promise<OpenStore> {
   const file = path.join(dir, STORE_FILE);
   const backup = `${file}.bak`;
   const refuse = (why: string): OpenStore => ({ kind: "unreadable", why, file });
-  try {
-    const main = bytes(file);
-    const back = bytes(backup);
-    const sealed = [main, back].some((b) => b !== null && isSealed(b));
-    let found = await lookup(key);
-    if (found.kind === "none") found = sealed ? { kind: "failed", why: "it holds no store key" } : await create(key);
-    if (found.kind === "failed" && (sealed || platform !== "linux")) return refuse(`the system keychain didn't give Channels its store key: ${found.why}`);
-    const k = found.kind === "key" ? found.key : null;
-    const noKeychain = found.kind === "failed" ? found.why : null;
-    const plainOk = platform === "linux" && !sealed;
-    const save = (json: string): void => {
+  const keychainWhy = (why: string): string => `the system keychain didn't give Channels its store key: ${why}`;
+  const saver =
+    (k: Buffer | null) =>
+    (json: string): void => {
       const raw = k ? seal(json, k) : Buffer.from(json, "utf8");
       writePrivate(file, raw, platform);
       writePrivate(backup, raw, platform);
     };
-    const open = (json: Record<string, unknown> | null, imported: string | null): OpenStore => ({ kind: "open", json, sealed: k !== null, noKeychain, imported, file, save });
+  const open = (json: Record<string, unknown> | null, imported: string | null, k: Buffer | null, noKeychain: string | null, unmarked: string | null): OpenStore => ({
+    kind: "open",
+    json,
+    sealed: k !== null,
+    noKeychain,
+    unmarked,
+    imported,
+    file,
+    save: saver(k),
+  });
+  try {
+    const main = bytes(file);
+    const back = bytes(backup);
+    const sealed = [main, back].some((b) => b !== null && isSealed(b));
+    const found = await lookup(key);
+    if (found.kind === "failed" && (sealed || platform !== "linux")) return refuse(keychainWhy(found.why));
+    if (found.kind === "none" && sealed) return refuse(keychainWhy("it holds no store key"));
     if (main === null && back === null) {
+      if (found.kind === "key" && platform !== "linux") {
+        const done = await key.finished().then(
+          (f): { finished: boolean } | { failed: string } => ({ finished: f }),
+          (e: unknown) => ({ failed: reason(e) }),
+        );
+        if ("failed" in done) return refuse(`the system keychain couldn't say whether the store key is marked ready, which it is once its first save reads back: ${done.failed}`);
+        if (done.finished)
+          return refuse("the store was deleted: the keychain still holds its key but both copies are gone, so Channels neither starts over nor imports the Electron app's keys in its place");
+      }
       const old = await legacy();
-      if (old.kind === "none") return open(null, null);
       if (old.kind === "unreadable") return refuse(`the keys the Electron app saved in ${old.file} can't be read: ${old.why}`);
-      if (!old.encrypted && platform !== "linux") return refuse(`the keys in ${old.file} are in plain text, and the Electron app only ever kept them encrypted here, so Channels won't take them`);
-      if (old.encrypted && !k) return refuse(`the keys the Electron app saved in ${old.file} are encrypted, and without a keychain Channels would keep them in plain text: ${noKeychain}`);
-      const json = JSON.stringify(old.json);
-      save(json);
-      const saved = readCopy(bytes(file), k, k === null);
-      if (saved.kind !== "ok" || JSON.stringify(saved.json) !== json) {
+      if (old.kind === "ok" && !old.encrypted && platform !== "linux")
+        return refuse(`the keys in ${old.file} are in plain text, and the Electron app only ever kept them encrypted here, so Channels won't take them`);
+      const made = found.kind === "none" ? await create(key) : found;
+      if (made.kind === "failed" && platform !== "linux") return refuse(keychainWhy(made.why));
+      const k = made.kind === "key" ? made.key : null;
+      const noKeychain = made.kind === "failed" ? made.why : null;
+      const takeBack = async (why: string): Promise<OpenStore> => {
         fs.rmSync(file, { force: true });
         fs.rmSync(backup, { force: true });
-        return refuse(`the keys imported from ${old.file} didn't read back, so they weren't kept${saved.kind === "unreadable" ? `: ${saved.why}` : ""}`);
+        if (k && made !== found) await dropMade(key);
+        return refuse(why);
+      };
+      if (old.kind === "ok" && old.encrypted && !k)
+        return refuse(`the keys the Electron app saved in ${old.file} are encrypted, and without a keychain Channels would keep them in plain text: ${noKeychain}`);
+      if (k && made !== found) {
+        const kept = await lookup(key);
+        if (kept.kind !== "key" || !kept.key.equals(k)) return refuse(keychainWhy("it didn't keep the store key Channels just made"));
       }
-      return open(old.json, old.file);
+      const json = old.kind === "ok" ? JSON.stringify(old.json) : "{}";
+      const unsaved = (() => {
+        try {
+          saver(k)(json);
+          return null;
+        } catch (e) {
+          return reason(e);
+        }
+      })();
+      if (unsaved !== null) return takeBack(`the new store couldn't be saved: ${unsaved}`);
+      const saved = readCopy(bytes(file), k, k === null);
+      if (saved.kind !== "ok" || JSON.stringify(saved.json) !== json)
+        return takeBack(`the new store didn't read back, so it wasn't kept${old.kind === "ok" ? ` (the keys from ${old.file})` : ""}${saved.kind === "unreadable" ? `: ${saved.why}` : ""}`);
+      const unmarked = k ? await markFinished(key) : null;
+      return old.kind === "ok" ? open(old.json, old.file, k, noKeychain, unmarked) : open(null, null, k, noKeychain, unmarked);
     }
+    let k = found.kind === "key" ? found.key : null;
+    let noKeychain = found.kind === "failed" ? found.why : null;
+    const plainOk = platform === "linux" && !sealed;
     const m = readCopy(main, k, plainOk);
     const b = readCopy(back, k, plainOk);
     const read = m.kind === "ok" ? m : b;
     if (read.kind !== "ok") return refuse(m.kind === "unreadable" ? m.why : b.kind === "unreadable" ? b.why : "it has no store");
     if (m.kind !== "ok" && back) writePrivate(file, back, platform);
-    if (k && !read.sealed) save(JSON.stringify(read.json));
-    return open(read.json, null);
+    if (!read.sealed && found.kind === "none") {
+      const made = await create(key);
+      if (made.kind === "failed") noKeychain = made.why;
+      else if (made.kind === "key") {
+        const kept = await lookup(key);
+        if (kept.kind === "key" && kept.key.equals(made.key)) k = made.key;
+        else noKeychain = "it didn't keep the store key Channels just made";
+      }
+    }
+    if (k && !read.sealed) saver(k)(JSON.stringify(read.json));
+    return open(read.json, null, k, noKeychain, k ? await markFinished(key) : null);
   } catch (e) {
     return refuse(reason(e));
   }

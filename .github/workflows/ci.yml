@@ -192,7 +192,14 @@ jobs:
           overwrite: true
       - name: cli build
         if: ${{ !cancelled() }}
-        run: bun run build && ./dist/kiwi --version && bun scripts/build-cli.ts --check
+        run: |
+          bun run build && ./dist/kiwi --version && bun scripts/build-cli.ts --check
+          probe="$RUNNER_TEMP/kiwi-autoload"
+          mkdir -p "$probe"
+          printf 'preload = ["./p.js"]\n' > "$probe/bunfig.toml"
+          printf 'require("node:fs").writeFileSync("preload-ran", "")\n' > "$probe/p.js"
+          (cd "$probe" && "$GITHUB_WORKSPACE/dist/kiwi" --version)
+          test ! -e "$probe/preload-ran" || { echo "the kiwi CLI ran a bunfig.toml preload from the folder it was started in"; exit 1; }
       - name: cli smoke
         if: ${{ !cancelled() }}
         run: bun scripts/smoke-cli.ts dist/kiwi
@@ -339,21 +346,37 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
       - run: bun run web:build
+      - id: electrobun
+        run: echo "version=$(bun -e 'console.log(require("./desktop/package.json").devDependencies.electrobun)')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.hutch
+          key: hutch-${{ runner.os }}-${{ runner.arch }}-electrobun-${{ steps.electrobun.outputs.version }}
+      - name: electrobun toolchain
+        working-directory: desktop
+        run: for i in 1 2 3; do bun run prepare:eb && exit 0; echo "electrobun prepare failed ($i of 3)"; sleep 20; done; exit 1
       - name: the kiwi CLI the app bundles
         run: mkdir -p dist && bun scripts/build-cli.ts --target bun-darwin-arm64 --outfile dist/kiwi && bun desktop/scripts/pack-cli.ts dist/kiwi
       - working-directory: desktop
+        env:
+          DASH_RELEASE_OFFLINE: "1"
         run: bun run typecheck:eb
       - working-directory: desktop
         if: ${{ !cancelled() }}
         run: bun test --tsconfig-override tsconfig.eb.json ./eb-tests
       - working-directory: desktop
         if: ${{ !cancelled() }}
+        env:
+          DASH_RELEASE_OFFLINE: "1"
         run: bun run build:eb
       - if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-size.ts desktop/release-eb
       - name: the launcher keeps BUN_*, NODE_*, DYLD_* and JSC_* out of the app
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-env-check.ts desktop/release-eb
+      - name: the launcher holds the store key for one session, refuses a changed app, and its C runs clean under ASan and UBSan
+        if: ${{ !cancelled() }}
+        run: bun desktop/scripts/eb-keys-check.ts desktop/release-eb
       - name: test build (the test driver in, its own bundle id)
         if: ${{ !cancelled() }}
         working-directory: desktop
@@ -361,6 +384,7 @@ jobs:
         env:
           CHANNELS_EB_TEST: "1"
           CHANNELS_EB_IDENTIFIER: com.kiwiinit.channels.test
+          DASH_RELEASE_OFFLINE: "1"
       - name: no test driver in the release build
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-driver-check.ts desktop/release-eb
@@ -383,6 +407,93 @@ jobs:
         with:
           job: desktop-mac
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-mac'] }}
+
+  desktop-linux:
+    name: desktop / linux
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['desktop-linux']
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup
+      - run: bun run web:build
+      - id: electrobun
+        run: echo "version=$(bun -e 'console.log(require("./desktop/package.json").devDependencies.electrobun)')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.hutch
+          key: hutch-${{ runner.os }}-${{ runner.arch }}-electrobun-${{ steps.electrobun.outputs.version }}
+      - name: electrobun toolchain
+        working-directory: desktop
+        run: for i in 1 2 3; do bun run prepare:eb && exit 0; echo "electrobun prepare failed ($i of 3)"; sleep 20; done; exit 1
+      - working-directory: desktop
+        env:
+          DASH_RELEASE_OFFLINE: "1"
+        run: bun run build:eb
+      - name: AppImage tools
+        if: ${{ !cancelled() }}
+        run: sudo apt-get update -q && sudo apt-get install -y --no-install-recommends squashfs-tools
+      - name: deb and AppImage, each at most 40 MB
+        if: ${{ !cancelled() }}
+        run: bun desktop/scripts/package-linux.ts desktop/release-eb desktop/release-eb/linux
+      - name: the packages hold the app
+        if: ${{ !cancelled() }}
+        working-directory: desktop/release-eb/linux
+        run: |
+          bun ../../scripts/appimage-squashfs.ts .
+          deb=$(ls Channels-*-linux-amd64.deb)
+          dpkg-deb --field "$deb" Package Version Architecture Depends
+          files=$(dpkg-deb --contents "$deb")
+          for p in ./opt/Channels/bin/launcher ./opt/Channels/bin/bun ./opt/Channels/Resources/app/views/internal/index.html ./usr/bin/channels-desktop ./usr/share/applications/channels-desktop.desktop ./usr/share/icons/hicolor/512x512/apps/channels-desktop.png; do
+            [[ "$files" == *" $p"* ]] || { echo "$deb lacks $p"; exit 1; }
+          done
+          for p in ./opt/Channels/bin/bspatch ./opt/Channels/bin/zig-zstd ./opt/Channels/Resources/uninstall ./opt/Channels/Channels.desktop; do
+            [[ "$files" != *" $p"* ]] || { echo "$deb carries $p, which it leaves out"; exit 1; }
+          done
+          img=$(ls Channels-*-linux-x86_64.AppImage)
+          "./$img" --appimage-extract > /dev/null
+          for p in AppRun channels-desktop.desktop channels-desktop.png Channels/bin/launcher Channels/bin/bun Channels/Resources/app/views/internal/index.html; do
+            [ -e "squashfs-root/$p" ] || { echo "$img lacks $p"; exit 1; }
+          done
+          for p in Channels/bin/bspatch Channels/bin/zig-zstd Channels/Resources/uninstall Channels/Channels.desktop; do
+            [ ! -e "squashfs-root/$p" ] || { echo "$img carries $p, which it leaves out"; exit 1; }
+          done
+          rm -rf squashfs-root
+          echo "checked: $deb and $img"
+      - name: the deb installs over today's Electron deb and keeps its launcher link
+        if: ${{ !cancelled() }}
+        working-directory: desktop/release-eb/linux
+        run: |
+          curl -fsSL -o old.deb https://github.com/ojowwalker77/channels/releases/download/v0.26.0/Channels-0.26.0-linux-amd64.deb
+          echo "0fb7656f63f14c5f802b71d6c6f255a13404a73455b407d7f8bb0c05e0b729f2  old.deb" | sha256sum -c -
+          sudo apt-get install -y --no-install-recommends ./old.deb
+          [ "$(readlink -f /usr/bin/channels-desktop)" = /opt/Channels/channels-desktop ] || { echo "the Electron deb didn't make its link"; exit 1; }
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-0 libgtk-3-0 libayatana-appindicator3-1 librsvg2-2
+          sudo dpkg -i "$(ls Channels-*-linux-amd64.deb)"
+          link=$(readlink -f /usr/bin/channels-desktop || true)
+          [ "$link" = /opt/Channels/bin/launcher ] || { echo "after the upgrade /usr/bin/channels-desktop is '$link', not /opt/Channels/bin/launcher"; exit 1; }
+          [ ! -e /opt/Channels/channels-desktop ] || { echo "the Electron app is still in /opt/Channels"; exit 1; }
+          grep -qx 'Exec=/opt/Channels/bin/launcher %U' /usr/share/applications/channels-desktop.desktop || { echo "the installed entry doesn't run /opt/Channels/bin/launcher"; exit 1; }
+          verify=$(dpkg --verify kiwi-desktop || true)
+          [ -z "$verify" ] || { echo "dpkg --verify kiwi-desktop:"; echo "$verify"; exit 1; }
+          echo "upgraded: $(dpkg-query -W kiwi-desktop), /usr/bin/channels-desktop -> $link"
+          echo "for WebKitGTK's sandbox: kernel.apparmor_restrict_unprivileged_userns=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo unset), unshare -U as a user: $(unshare -U true 2>&1 && echo allowed || echo refused)"
+          sudo dpkg --purge kiwi-desktop
+          rm old.deb
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: linux-packages
+          path: desktop/release-eb/linux/*
+          if-no-files-found: warn
+          retention-days: 3
+          overwrite: true
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: desktop-linux
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-linux'] }}
 
   cli-macos:
     name: cli / macos
@@ -491,7 +602,7 @@ jobs:
   # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, static, test-unit, test-flows-a, test-flows-b, build, shots, perf-runs, perf, desktop, desktop-mac, cli-macos, ios, ios-gestures, release-rehearsal]
+    needs: [plan, static, test-unit, test-flows-a, test-flows-b, build, shots, perf-runs, perf, desktop, desktop-mac, desktop-linux, cli-macos, ios, ios-gestures, release-rehearsal]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

@@ -45,6 +45,7 @@ export interface ChannelHandle {
   head: number
   marks: Marks
   pkOf: (name: string) => string | undefined
+  foldFrom: (messages: Message[], base: FoldBase | null) => ChannelState
   snapshotTooBig: boolean
   ready: boolean
 }
@@ -314,6 +315,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
   const keyOf = useMemo(() => new Map(admitted.filter((r) => r.active).map((r) => [r.name, r.pk])), [admitted])
   const rosterForFold: Roster = useMemo(() => foldRoster(admitted), [admitted])
   const state = useMemo(() => fold(messages, rosterForFold, now, roomsFloor, guardFloor, base), [messages, rosterForFold, now, roomsFloor, guardFloor, base])
+  const foldFrom = useCallback((all: Message[], from: FoldBase | null) => fold(all, rosterForFold, Date.now(), roomsFloor, guardFloor, from), [rosterForFold, roomsFloor, guardFloor])
   const trim = useEffectEvent(() => {
     const next = trimmed(messages, rosterForFold, now, roomsFloor, guardFloor, base, HISTORY)
     if (!next) return
@@ -397,5 +399,5 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
 
   const pkOf = useCallback((name: string) => keyOf.get(name), [keyOf])
 
-  return { ch, connection, gone, messages, roster, state, online: live, isOwner, requests, send, refreshRequests, refreshRoster, head: start?.head ?? 0, marks, pkOf, snapshotTooBig, ready }
+  return { ch, connection, gone, messages, roster, state, online: live, isOwner, requests, send, refreshRequests, refreshRoster, head: start?.head ?? 0, marks, pkOf, foldFrom, snapshotTooBig, ready }
 }

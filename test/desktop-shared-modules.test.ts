@@ -25,7 +25,22 @@ function walk(entry: string): { files: number; electron: string[] | null } {
 }
 
 test("the modules both shells share never reach electron, however deep the import", () => {
-  for (const entry of ["ipc/handlers.ts", "calls.ts", "host.ts", "store.ts", "updater.ts", "bundled-daemon.ts", "deep-links.ts", "main-log.ts", "page-crash.ts", "signin.ts"]) {
+  for (const entry of [
+    "ipc/handlers.ts",
+    "calls.ts",
+    "host.ts",
+    "store.ts",
+    "updater.ts",
+    "bundled-daemon.ts",
+    "deep-links.ts",
+    "main-log.ts",
+    "page-crash.ts",
+    "signin.ts",
+    "keys-host.ts",
+    "keys-eb.ts",
+    "keys-shim.ts",
+    "keys-page.ts",
+  ]) {
     expect({ entry, electron: walk(entry).electron }).toEqual({ entry, electron: null });
   }
   expect(walk("ipc/handlers.ts").files).toBeGreaterThan(30);
