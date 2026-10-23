@@ -38,12 +38,12 @@ export function useControlsHandlers({
   onGone,
   rooms,
 }: {
-  live: Pick<ChannelHandle, "ch" | "send" | "isOwner" | "refreshRequests" | "refreshRoster">
+  live: Pick<ChannelHandle, "ch" | "send" | "isOwner" | "refreshRequests" | "refreshRoster" | "foldFrom" | "state">
   member: StoredMember
   onGone: () => void
   rooms: () => ReadonlyMap<string, Room>
 }): Handlers {
-  const { ch, send, isOwner, refreshRequests, refreshRoster } = live
+  const { ch, send, isOwner, refreshRequests, refreshRoster, foldFrom, state } = live
   const hold = isOwner
     ? async (on: boolean, note?: string) => {
         const ev = { op: "hold.set" as const, on, ...(note ? { note } : {}) }
@@ -172,6 +172,9 @@ export function useControlsHandlers({
       forgetChannel(member.code)
       onGone()
     },
-    exportLog: async () => (await import("@/lib/log-export")).logExport(await ch.history(0)),
+    exportLog: async () => {
+      const [{ checkedState, logExport }, history] = await Promise.all([import("@/lib/log-export"), ch.history(0)])
+      return { log: logExport(history), state: await checkedState(history, foldFrom, () => ch.snapshot().catch(() => null), state) }
+    },
   }
 }
