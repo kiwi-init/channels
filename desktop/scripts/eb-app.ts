@@ -2,6 +2,8 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { sealApp } from "./eb-seal.ts";
+
 export function only(found: string[], what: string): string {
   if (found.length !== 1) throw new Error(`expected one ${what}, found ${found.length}`);
   return found[0] as string;
@@ -16,7 +18,7 @@ export function payloadOf(artifacts: string): string {
   );
 }
 
-export function plainApp(payload: string, into: string): string {
+function plainApp(payload: string, into: string): string {
   const tar = join(into, "app.tar");
   writeFileSync(tar, Bun.zstdDecompressSync(readFileSync(payload)));
   const unpacked = join(into, "app");
@@ -28,4 +30,10 @@ export function plainApp(payload: string, into: string): string {
       .map((n) => join(unpacked, n)),
     `.app in ${payload}`,
   );
+}
+
+export function shippedApp(payload: string, into: string): string {
+  const app = plainApp(payload, into);
+  sealApp(app);
+  return app;
 }

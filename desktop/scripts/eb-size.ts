@@ -3,7 +3,7 @@ import { lstatSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { only, payloadOf, plainApp } from "./eb-app.ts";
+import { only, payloadOf, shippedApp } from "./eb-app.ts";
 
 const MB = 1024 ** 2;
 const LIMITS = { app: 100 * MB, packed: 40 * MB };
@@ -40,7 +40,7 @@ const payload = payloadOf(artifacts);
 
 const tmp = mkdtempSync(join(tmpdir(), "eb-size-"));
 try {
-  const app = plainApp(payload, tmp);
+  const app = shippedApp(payload, tmp);
   const zip = join(tmp, "Channels.zip");
   execFileSync("ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", app, zip]);
   const dmg = join(tmp, "Channels.dmg");

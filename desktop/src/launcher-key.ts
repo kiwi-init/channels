@@ -21,7 +21,7 @@ export interface KeySources {
 
 type Answer = { kind: "key"; value: string } | { kind: "none" } | { kind: "ok" };
 
-export function fdChannel(fd: number): LineChannel {
+function fdChannel(fd: number): LineChannel {
   let pending = "";
   let open = true;
   const chunk = Buffer.alloc(MAX_LINE);

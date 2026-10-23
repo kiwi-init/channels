@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { payloadOf, plainApp } from "./eb-app.ts";
+import { payloadOf, shippedApp } from "./eb-app.ts";
 import { PROBE_PREFIX, type ProbeReport } from "./eb-keys-probe.ts";
 import { sealApp } from "./eb-seal.ts";
 
@@ -16,6 +16,7 @@ const legacyValue = randomBytes(16).toString("base64");
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "eb-keys-"));
 const dataDir = path.join(os.homedir(), "Library", "Application Support", id);
 const failures: string[] = [];
+const SEAL_GATE_MS = 500;
 
 const contents = (app: string): string => path.join(app, "Contents");
 const plist = (app: string): string => path.join(contents(app), "Info.plist");
@@ -65,8 +66,28 @@ function keychain(args: string[]): void {
   spawnSync("security", args, { stdio: "ignore" });
 }
 
+const unquote = (line: string): string => line.trim().replace(/^"|"$/g, "");
+
+function ciKeychain(): () => void {
+  if (process.env["CI"] !== "true") return () => {};
+  const kc = path.join(tmp, "keys-check.keychain-db");
+  const list = execFileSync("security", ["list-keychains", "-d", "user"], { encoding: "utf8" }).split("\n").map(unquote).filter(Boolean);
+  const def = unquote(execFileSync("security", ["default-keychain", "-d", "user"], { encoding: "utf8" }));
+  execFileSync("security", ["create-keychain", "-p", "", kc]);
+  execFileSync("security", ["set-keychain-settings", kc]);
+  execFileSync("security", ["unlock-keychain", "-p", "", kc]);
+  execFileSync("security", ["list-keychains", "-d", "user", "-s", kc, ...list]);
+  execFileSync("security", ["default-keychain", "-d", "user", "-s", kc]);
+  return () => {
+    keychain(["list-keychains", "-d", "user", "-s", ...list]);
+    if (def) keychain(["default-keychain", "-d", "user", "-s", def]);
+    keychain(["delete-keychain", kc]);
+  };
+}
+
+const restoreKeychain = ciKeychain();
 try {
-  const base = plainApp(payloadOf(path.join(release, "artifacts")), tmp);
+  const base = shippedApp(payloadOf(path.join(release, "artifacts")), tmp);
   const probe = await Bun.build({ entrypoints: [path.join(import.meta.dirname, "eb-keys-probe.ts")], target: "bun" });
   const out = probe.outputs[0];
   if (!probe.success || !out) throw new Error(`the probe didn't bundle: ${probe.logs.join("\n")}`);
@@ -81,13 +102,21 @@ try {
 
   const first = run(good);
   const made = okOf(first, "set");
-  expect("first start: no store key yet, one made and saved through the launcher", okOf(first, "first") === null && typeof made === "string" && okOf(first, "get") === made, JSON.stringify(first.report ?? first.stderr.slice(-400)));
+  expect(
+    "first start: no store key yet, one made and saved through the launcher",
+    okOf(first, "first") === null && typeof made === "string" && okOf(first, "get") === made,
+    JSON.stringify(first.report ?? first.stderr.slice(-400)),
+  );
   expect("a second key never replaces the first", errorOf(first, "replace").includes("never replaces"), JSON.stringify(first.report?.["replace"]));
   expect("the old app's key, read by the launcher", okOf(first, "legacy") === legacyValue, JSON.stringify(first.report?.["legacy"]));
   expect("an app name not in Info.plist's KiwiLegacyNames is refused", errorOf(first, "unlisted").includes("isn't an app whose keys"), JSON.stringify(first.report?.["unlisted"]));
   expect("an unknown request is refused", errorOf(first, "unknown").includes("doesn't know"), JSON.stringify(first.report?.["unknown"]));
   const second = run(good);
-  expect("the next start gets the same key", typeof made === "string" && okOf(second, "first") === made && second.report?.["set"] === undefined, JSON.stringify(second.report ?? second.stderr.slice(-400)));
+  expect(
+    "the next start gets the same key",
+    typeof made === "string" && okOf(second, "first") === made && second.report?.["set"] === undefined,
+    JSON.stringify(second.report ?? second.stderr.slice(-400)),
+  );
 
   const main = (app: string): string => path.join(contents(app), "Resources", "main.js");
   refused("main.js changed", good, (app) => fs.appendFileSync(main(app), "\n"), "Resources/main.js was changed");
@@ -95,9 +124,26 @@ try {
   refused("an app.asar dropped in", good, (app) => fs.writeFileSync(path.join(contents(app), "Resources", "app.asar"), ""), "Resources/app.asar isn't part of the app");
   refused("a link", good, (app) => fs.symlinkSync("/tmp", path.join(contents(app), "Resources", "link")), "Resources/link isn't a plain file or folder");
   refused("a sealed file missing", good, (app) => fs.rmSync(path.join(contents(app), "Resources", "build.json")), "of the app's files are missing");
+
+  const timed = copy(good, "timed");
+  const quick = path.join(tmp, "quick");
+  fs.writeFileSync(`${quick}.c`, "int main(void) { return 0; }\n");
+  execFileSync("clang", ["-O2", "-o", quick, `${quick}.c`]);
+  fs.copyFileSync(quick, path.join(contents(timed), "MacOS", "launcher"));
+  const files = sealApp(timed);
+  const times: number[] = [];
+  for (let i = 0; i < 7; i++) {
+    const start = performance.now();
+    const r = spawnSync(executable(timed), [], { encoding: "utf8" });
+    times.push(performance.now() - start);
+    if (r.status !== 0) failures.push(`the timed launcher failed: ${r.stderr.slice(-300)}`);
+  }
+  const median = times.sort((a, b) => a - b)[3] ?? 0;
+  expect(`the launcher checks ${files} files in ${median.toFixed(0)} ms (median of 7, gate ${SEAL_GATE_MS} ms)`, median <= SEAL_GATE_MS, `${times.map((t) => t.toFixed(0)).join(", ")} ms`);
 } finally {
   keychain(["delete-generic-password", "-s", id, "-a", "store-key"]);
   keychain(["delete-generic-password", "-s", `${legacy} Safe Storage`, "-a", `${legacy} Key`]);
+  restoreKeychain();
   fs.rmSync(tmp, { recursive: true, force: true });
   fs.rmSync(dataDir, { recursive: true, force: true });
 }

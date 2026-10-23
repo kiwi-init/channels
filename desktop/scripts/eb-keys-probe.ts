@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import fs from "node:fs";
 import path from "node:path";
 
 import { launcherChannel, launcherKey, parseAnswer, type LineChannel } from "../src/launcher-key.ts";
@@ -49,6 +50,6 @@ async function probe(): Promise<ProbeReport> {
 }
 
 if (import.meta.main) {
-  console.log(`${PROBE_PREFIX}${JSON.stringify(await probe())}`);
+  fs.writeSync(1, `${PROBE_PREFIX}${JSON.stringify(await probe())}\n`);
   process.exit(0);
 }
