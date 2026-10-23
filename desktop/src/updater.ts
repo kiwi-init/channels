@@ -86,7 +86,7 @@ async function check(): Promise<UpdateCheck> {
   }
   const rel = (await res.json()) as { tag_name?: string; html_url?: string; prerelease?: boolean; draft?: boolean; assets?: { name: string; browser_download_url: string }[] };
   const version = rel.tag_name?.replace(/^v/, "");
-  if (!version) return { state: "failed" };
+  if (!version || !/^\d{1,6}\.\d{1,6}\.\d{1,6}$/.test(version)) return { state: "failed" };
   if (rel.prerelease || rel.draft || compareVersions(version, host().app.version()) <= 0) return { state: "current", version: host().app.version() };
   const url = rel.html_url ?? `https://github.com/${REPO}/releases/latest`;
   if (staged && compareVersions(version, staged.version) <= 0) return current ?? set({ version: staged.version, state: "ready", url: staged.url });

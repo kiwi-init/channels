@@ -46,6 +46,19 @@ test("a newer release is only offered with its link when the app isn't packaged:
   expect(seen).toEqual(["https://api.github.com/repos/ojowwalker77/channels/releases/latest"]);
 });
 
+test("a tag that isn't a plain version is a failed check: it never reaches a file name or the swap script (T1554)", async () => {
+  for (const tag of ["v9.9.9/../../x", "v99.0.0'; rm -rf ~; '", "v1.0.0-rc.1", "v0.27.0\n", "v0.27", "latest"]) {
+    const seen: string[] = [];
+    answer(
+      200,
+      { tag_name: tag, html_url: "https://github.com/ojowwalker77/channels/releases/latest", assets: [{ name: "SHA256SUMS", browser_download_url: "https://example.com/SHA256SUMS" }] },
+      seen,
+    );
+    expect(await checkForUpdate()).toEqual({ state: "failed" });
+    expect(seen).toEqual(["https://api.github.com/repos/ojowwalker77/channels/releases/latest"]);
+  }
+});
+
 test("GitHub not answering, or answering without a version, is a failed check", async () => {
   answer(503, {});
   expect(await checkForUpdate()).toEqual({ state: "failed" });
