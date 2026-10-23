@@ -28,8 +28,8 @@ function route(answer: (session: string, req: KeysRequest) => Promise<KeysReply>
 test("each request gets the next id and goes with this page's session", async () => {
   const t = route(async (_s, req) => ({ id: req.id, ok: true, value: null }));
   const port = keysPort(t.r, "page-one-session-id");
-  expect(await port.request({ op: "nudge" } as Omit<KeysRequest, "id">)).toEqual({ id: 1, ok: true, value: null });
-  await port.request({ op: "nudge" } as Omit<KeysRequest, "id">);
+  expect(await port.request({ op: "nudge" })).toEqual({ id: 1, ok: true, value: null });
+  await port.request({ op: "nudge" });
   expect(t.sent.map((s) => [s.session, s.req.id])).toEqual([
     ["page-one-session-id", 1],
     ["page-one-session-id", 2],
@@ -55,7 +55,7 @@ test("pushes and restarts reach this page's listeners only for its own session, 
 test("a refused or failed RPC comes back as an unreachable reply, never a rejection", async () => {
   const t = route(() => Promise.reject(new Error("keys takes { session, req }")));
   const port = keysPort(t.r, "page-one-session-id");
-  expect(await port.request({ op: "nudge" } as Omit<KeysRequest, "id">)).toEqual({ id: 1, ok: false, error: { kind: "unreachable", message: "keys takes { session, req }" } });
+  expect(await port.request({ op: "nudge" })).toEqual({ id: 1, ok: false, error: { kind: "unreachable", message: "keys takes { session, req }" } });
 });
 
 test("a page's session is 32 random hex characters", () => {

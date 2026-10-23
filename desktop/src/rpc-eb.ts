@@ -42,7 +42,7 @@ export interface PageBridge {
 export function pageBridge(toHost: (packet: unknown) => void, onHost: (receive: (packet: unknown) => void) => void): PageBridge {
   const rpc = createRPC<PageSide, BunSide>({ maxRequestTime: Infinity, transport: { send: toHost, registerHandler: onHost } });
   function call<K extends Call>(name: K, ...args: CallArgs<K>): Promise<CallValue<K>> {
-    return rpc.request(name, args) as Promise<CallValue<K>>;
+    return rpc.request(name, args as never) as Promise<CallValue<K>>;
   }
   function listen<P extends Push>(name: P, cb: (value: Pushes[P]) => void): () => void {
     rpc.addMessageListener(name, cb);

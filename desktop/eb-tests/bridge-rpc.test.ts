@@ -38,6 +38,12 @@ const page = pageBridge(
 );
 const kiwi = makeBridge({ snapshot, channels, call: page.call, listen: page.listen });
 
+const ownPage = (): ReturnType<typeof pageBridge> =>
+  pageBridge(
+    (packet) => fromPage(wire(packet)),
+    (receive) => (toPage = receive),
+  );
+
 const settled = (p: Promise<unknown>, ms = 100): Promise<string> =>
   Promise.race([
     p.then(
@@ -92,11 +98,12 @@ describe("window.kiwi over Electrobun's RPC, both ends as the app wires them", (
   });
 
   test("keys: a page's request reaches main with its session and comes back, and main's frames reach the page", async () => {
+    const kp = ownPage();
     at = PAGE_URL;
     const session = "0123456789abcdef0123456789abcdef";
     const frames: KeysFrame[] = [];
-    const off = page.onKeys((f) => frames.push(f));
-    expect(await page.keys(session, { id: 4, op: "nudge" } as KeysRequest)).toEqual({ id: 4, ok: true, value: null });
+    const off = kp.onKeys((f) => frames.push(f));
+    expect(await kp.keys(session, { id: 4, op: "nudge" } as KeysRequest)).toEqual({ id: 4, ok: true, value: null });
     main.pushKeys({ session, push: { sub: 1, event: null } });
     main.pushKeys({ session, restart: true });
     await Bun.sleep(0);
@@ -111,11 +118,12 @@ describe("window.kiwi over Electrobun's RPC, both ends as the app wires them", (
   });
 
   test("keys off our page: a request gets no answer and never reaches main, and frames aren't sent", async () => {
+    const kp = ownPage();
     at = "https://evil.example/";
     const before = keysAsked.length;
     const frames: KeysFrame[] = [];
-    const off = page.onKeys((f) => frames.push(f));
-    expect(await settled(page.keys("0123456789abcdef0123456789abcdef", { id: 5, op: "nudge" } as KeysRequest))).toBe("no answer");
+    const off = kp.onKeys((f) => frames.push(f));
+    expect(await settled(kp.keys("0123456789abcdef0123456789abcdef", { id: 5, op: "nudge" } as KeysRequest))).toBe("no answer");
     main.pushKeys({ session: "0123456789abcdef0123456789abcdef", restart: true });
     await Bun.sleep(0);
     off();
@@ -124,6 +132,7 @@ describe("window.kiwi over Electrobun's RPC, both ends as the app wires them", (
   });
 
   test("keys with a session or request that isn't one is refused before main's keys see it", async () => {
+    const kp = ownPage();
     at = PAGE_URL;
     const before = keysAsked.length;
     for (const [session, req] of [
@@ -133,7 +142,7 @@ describe("window.kiwi over Electrobun's RPC, both ends as the app wires them", (
       ["0123456789abcdef0123456789abcdef", { id: "1" }],
       ["0123456789abcdef0123456789abcdef", [1]],
     ] as const)
-      expect(await settled(page.keys(session, req as unknown as KeysRequest))).toStartWith("refused keys takes");
+      expect(await settled(kp.keys(session, req as unknown as KeysRequest))).toStartWith("refused keys takes");
     expect(keysAsked.length - before).toBe(0);
   });
 });

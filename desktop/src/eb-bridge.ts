@@ -13,7 +13,7 @@ type BridgeRequests = { [K in Call]: { params: CallArgs<K>; response: CallValue<
 export type KeysCall = { session: string; req: KeysRequest };
 export type BunSide = { requests: BridgeRequests & { keys: { params: KeysCall; response: KeysReply } }; messages: Pushes & { keys: KeysFrame } };
 
-export const SESSION = /^[A-Za-z0-9_-]{16,64}$/;
+const SESSION = /^[A-Za-z0-9_-]{16,64}$/;
 
 export function keysCall(params: unknown): KeysCall | null {
   if (!params || typeof params !== "object" || Array.isArray(params)) return null;

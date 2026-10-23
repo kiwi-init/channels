@@ -5,7 +5,7 @@ export type ToWorker = { to: "host"; m: HostToKeys; port?: number } | { to: "por
 
 export type FromWorker = { from: "host"; m: KeysToHost } | { from: "port"; port: number; data: KeysReply | KeysPush };
 
-export interface WorkerScope {
+interface WorkerScope {
   post(m: FromWorker): void;
   listen(fn: (m: ToWorker) => void): void;
 }

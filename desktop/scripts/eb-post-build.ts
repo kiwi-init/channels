@@ -1,7 +1,9 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
+import type { FromWorker, ToWorker } from "../src/keys-shim.ts";
 import { bundleProblems } from "./eb-bundle.ts";
 
 const buildDir = process.env.ELECTROBUN_BUILD_DIR;
@@ -49,5 +51,31 @@ const keysWorker = await Bun.build({ entrypoints: [path.join(desktop, "src", "ke
 const keysOut = keysWorker.outputs[0];
 if (!keysWorker.success || !keysOut) throw new Error(`the keys worker didn't bundle: ${keysWorker.logs.join("\n")}`);
 fs.writeFileSync(path.join(app, "bun", "keys.js"), await keysOut.text());
+const answered = await bundledKeysAnswer(path.join(app, "bun", "keys.js"));
+if (answered !== "ok") throw new Error(`the bundled keys worker didn't answer a page's request: ${answered}`);
 const problems = bundleProblems(fs.readFileSync(path.join(app, "bun", "index.js"), "utf8"), fs.readFileSync(path.join(app, "views", "preload", "index.js"), "utf8"));
 if (problems.length) throw new Error(`eb-post-build: ${problems.join("; ")}`);
+
+async function bundledKeysAnswer(file: string): Promise<string> {
+  const dir = fs.mkdtempSync(path.join(tmpdir(), "kiwi-keys-bundle-"));
+  const worker = new Worker(file);
+  try {
+    return await new Promise<string>((resolve) => {
+      const timer = setTimeout(() => resolve("no answer in 5 s"), 5_000);
+      worker.addEventListener("message", (e: MessageEvent<FromWorker>) => {
+        if (e.data.from !== "port") return;
+        clearTimeout(timer);
+        const d = e.data.data;
+        resolve("id" in d && d.id === 1 && d.ok ? "ok" : JSON.stringify(d));
+      });
+      worker.addEventListener("error", (e) => resolve(`it threw: ${e.message}`));
+      const send = (m: ToWorker) => worker.postMessage(m);
+      send({ to: "host", m: { type: "init", relay: "https://relay.invalid", dir, seats: [], person: null } });
+      send({ to: "host", m: { type: "port" }, port: 1 });
+      send({ to: "port", port: 1, data: { id: 1, op: "nudge" } });
+    });
+  } finally {
+    worker.terminate();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
