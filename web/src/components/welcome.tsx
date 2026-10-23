@@ -15,7 +15,7 @@ import { RobotPicker } from "./channel-icon"
 import { RobotAvatar } from "./robot"
 import { Icon } from "./icon"
 import { Button, Modal, Monogram, Spinner, TextField, Wordmark, errorText } from "./kit"
-import { Stage } from "./onboarding"
+import { Stage } from "./join-screens"
 
 // ---------- nothing selected ----------
 

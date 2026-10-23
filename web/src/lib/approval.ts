@@ -3,10 +3,8 @@
 // own, as an agent sponsored by the person (Channel.autoApprove); anything else gets a notification,
 // once, so the person can open the channel and decide.
 
-import { useEffect } from "react"
-
 import { TEND_SAFETY_MS, tendOnPush, tendOwned } from "./approval-tend"
-import { loadMember, type ChannelRow } from "./channel"
+import { loadMember } from "./channel"
 import { linkOf, watches } from "./channel-ops"
 import { followedLaunches, sawMembers, sawRequests } from "./launches"
 import { bridge, secrets } from "./secrets"
@@ -40,22 +38,16 @@ async function tend(code: string, person: string): Promise<void> {
 }
 
 /** Watch every owned channel in `rows` while the app runs (the tray keeps it running when closed). */
-export function useAutoApproval(rows: ChannelRow[]): void {
-  const owned = rows.filter((r) => r.owner && r.state === "member").map((r) => r.code)
-  const key = owned.join(" ")
-  useEffect(() => {
-    if (!key) return
-    const codes = key.split(" ")
-    const tending = tendOnPush(codes, watches().watch, async (code) => {
-      const person = secrets().person?.pk
-      if (person) await tend(code, person)
-    })
-    const timer = window.setInterval(() => {
-      for (const code of codes) tending.kick(code)
-    }, TEND_SAFETY_MS)
-    return () => {
-      tending.stop()
-      clearInterval(timer)
-    }
-  }, [key])
+export function startAutoApproval(codes: string[]): () => void {
+  const tending = tendOnPush(codes, watches().watch, async (code) => {
+    const person = secrets().person?.pk
+    if (person) await tend(code, person)
+  })
+  const timer = window.setInterval(() => {
+    for (const code of codes) tending.kick(code)
+  }, TEND_SAFETY_MS)
+  return () => {
+    tending.stop()
+    clearInterval(timer)
+  }
 }

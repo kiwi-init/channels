@@ -9,9 +9,6 @@ import { SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts"
 import { fold, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts"
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "../channel-ops"
 import { openCached, planCached, readKept, rememberKept, rememberRow, rememberRows } from "../history"
-import { checksToPost, issuesToPost, linksToPost, setCheckedUpTo, tasksToClose } from "../review-checks"
-import { drain } from "../github-queue"
-import { closeFromGithub } from "../task-actions"
 import { ICON_LIVE } from "../icon-event"
 import { addMarks, type Marks } from "../receipts"
 import { fork } from "../runtime"
@@ -373,50 +370,13 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
   const checksBusy = useRef(false)
   const postReviewChecks = useEffectEvent(() => {
     if (!ch.isOwner || !caughtUp || !state.repos.length || checksBusy.current) return
-    const due = checksToPost(ch.roomId, state, messages)
-    const links = linksToPost(ch.roomId, state)
-    const issues = issuesToPost(ch.roomId, state)
-    const closes = tasksToClose(ch.roomId, state)
-    if (!due.length && !links.length && !issues.length && !closes.length) return
     checksBusy.current = true
-    void (async () => {
-      if (
-        !(await drain(
-          due,
-          (c) => ch.postReviewCheck(c),
-          (seq) => setCheckedUpTo(ch.roomId, seq)
-        ))
-      )
-        return
-      if (
-        !(await drain(
-          links,
-          (l) => ch.commentOnPr(l.repo, l.number, l.body),
-          (seq) => setCheckedUpTo(ch.roomId, seq, "prLinks")
-        ))
-      )
-        return
-      if (
-        !(await drain(
-          issues,
-          (i) => ch.closeIssue(i),
-          (seq) => setCheckedUpTo(ch.roomId, seq, "issueCloses")
-        ))
-      )
-        return
-      await drain(
-        closes,
-        async (c) => {
-          const t = state.tasks.get(c.task)
-          if (!t) return
-          const { body, opts } = closeFromGithub(t, c)
-          await ch.send(body, opts)
-        },
-        (seq) => setCheckedUpTo(ch.roomId, seq, "issueTasks")
-      )
-    })().finally(() => {
-      checksBusy.current = false
-    })
+    void import("./review-chores")
+      .then((m) => m.postReviewChores(ch, state, messages))
+      .catch(() => {})
+      .finally(() => {
+        checksBusy.current = false
+      })
   })
   useEffect(() => postReviewChecks(), [state.head, caughtUp])
   const drainGithub = useEffectEvent(() => {

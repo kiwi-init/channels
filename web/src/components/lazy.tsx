@@ -10,6 +10,7 @@ const markdown = later(
 const addAgent = later(() => import("./add-agent").then((m) => m.AddAgent))
 const newAgent = later(() => import("./new-agent").then((m) => m.NewAgent))
 const welcome = later(() => import("./welcome").then((m) => m.Welcome))
+const joinScreens = later(() => import("./join-screens").then((m) => m.JoinScreens))
 const newChannel = later(() => import("./welcome").then((m) => m.NewChannel))
 const joinWithCode = later(() => import("./welcome").then((m) => m.JoinWithCode))
 const settings = later(() => import("./settings").then((m) => m.SettingsPage))
@@ -66,6 +67,7 @@ export const ActivityRun = activityRun.View
 export const AddAgent = addAgent.View
 export const NewAgent = newAgent.View
 export const Welcome = welcome.View
+export const JoinScreens = joinScreens.View
 export const NewChannel = newChannel.View
 export const JoinWithCode = joinWithCode.View
 export const SettingsPage = settings.View

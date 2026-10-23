@@ -13,8 +13,7 @@ import type { Command, PaletteActions } from "@/components/ui/palette"
 import { usePaletteShortcut } from "@/components/ui/palette-shortcut"
 import { ComputersModal, Palette, preloadAccountItems, SettingsPage } from "@/components/lazy"
 import { whenIdle } from "@/lib/later"
-import { useAutoApproval } from "@/lib/approval"
-import { adoptThisComputer } from "@/lib/computers"
+import { useAutoApproval } from "@/lib/auto-approval"
 import { parseHash, useChannelList } from "@/lib/channel"
 import { joinCodeFromLink } from "@/lib/deep-link"
 import { newsTotal, rowNews, startMarks, useMarks, useNewsKeys, useOpenNews, useTabNews } from "@/lib/news"
@@ -50,7 +49,7 @@ export default function App() {
   // The app's own computer joins the list once there's a person to certify it (lib/computers.ts).
   const personPk = person?.pk
   useEffect(() => {
-    if (personPk) void adoptThisComputer().catch(() => {})
+    if (personPk) void import("@/lib/computers").then((m) => m.adoptThisComputer()).catch(() => {})
   }, [personPk])
 
   // What's new where: a dot per channel, the total in the tab, Alt+↑/↓ through the ones with news.
