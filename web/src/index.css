@@ -447,6 +447,12 @@ html.reduce-motion ::after {
   background: linear-gradient(to top, var(--canvas) 35%, transparent);
   mask-image: linear-gradient(to top, #000 55%, transparent);
 }
+html[data-drawing="software"] .scrim-top,
+html[data-drawing="software"] .scrim-bottom {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  mask-image: none;
+}
 
 /* The desktop app draws no title bar: the header row moves the window, and what's on it still clicks. */
 .drag {
