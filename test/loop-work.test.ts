@@ -9,7 +9,7 @@ import { claudeArgv, claudeSession } from "../src/loop/claude.ts";
 import { codexArgv, codexIdle, codexThread } from "../src/loop/codex.ts";
 import { grokArgv, grokIdle, grokSession } from "../src/loop/grok.ts";
 import { mimoArgv, mimoIdle, mimoSession } from "../src/loop/mimo.ts";
-import { kimiArgv, kimiIdle, kimiScreen, kimiSession, listenersUnder } from "../src/loop/kimi.ts";
+import { isListener, kimiArgv, kimiIdle, kimiScreen, kimiSession, listenersUnder, stopStrays, strayKey, type Proc } from "../src/loop/kimi.ts";
 import { Database } from "bun:sqlite";
 import { firstPrompt, nextWork, workOver } from "../src/loop/work.ts";
 
@@ -382,19 +382,35 @@ describe("the Kimi Code recipe", () => {
     }
   });
 
-  test("the kiwi listeners a session left running are found under it, and nothing else is", async () => {
+  test("the kiwi listeners a session left running are found under it, by pid and start time", async () => {
     const parent = Bun.spawn(["sh", "-c", "bash -c 'exec -a \"kiwi listen --once\" sleep 30' & sleep 30 & wait"], { stdout: "ignore", stderr: "ignore" });
     try {
-      let found: number[] = [];
+      let found: { pid: number; start: string }[] = [];
       for (let i = 0; i < 50 && found.length === 0; i++) {
         await Bun.sleep(50);
         found = listenersUnder(parent.pid);
       }
       expect(found).toHaveLength(1);
-      expect(listenersUnder(process.pid).filter((pid) => found.includes(pid))).toEqual(found);
+      expect(found[0]!.start).toMatch(/\d{4}$/);
     } finally {
       parent.kill("SIGKILL");
-      for (const pid of listenersUnder(parent.pid)) process.kill(pid, "SIGKILL");
+      for (const s of listenersUnder(parent.pid)) process.kill(s.pid, "SIGKILL");
     }
+  });
+
+  test("only a listener still running with the pid and start time recorded is stopped; a reused pid, another command or an unkillable process isn't", () => {
+    const start = "Fri Oct 23 13:25:11 2026";
+    const procs: Proc[] = [
+      { pid: 999_991, ppid: 1, start, args: "/home/u/.kiwi/bin/kiwi listen --once" },
+      { pid: 999_992, ppid: 1, start: "Fri Oct 23 15:00:00 2026", args: "/home/u/.kiwi/bin/kiwi listen --once" },
+      { pid: 999_993, ppid: 1, start, args: "vim notes" },
+    ];
+    const recorded = new Set([strayKey({ pid: 999_991, start }), strayKey({ pid: 999_992, start }), strayKey({ pid: 999_993, start })]);
+    expect(stopStrays(recorded, procs)).toBe(0);
+    expect(isListener("/home/u/.kiwi/bin/kiwi listen --once")).toBe(true);
+    expect(isListener("kiwi -c dev --as fond-owl listen --once")).toBe(true);
+    expect(isListener("sh -c kiwi hook listen")).toBe(true);
+    expect(isListener("bun test test/kiwi/listen.test.ts")).toBe(false);
+    expect(isListener("rg listen /home/u/kiwi")).toBe(false);
   });
 });

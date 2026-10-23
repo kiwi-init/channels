@@ -46,8 +46,28 @@ export function typeInto(socket: string, pane: string, text: string): boolean {
     if (tmuxNow(socket, ["paste-buffer", "-p", "-d", "-b", buffer, "-t", pane]) === null) return false;
     return tmuxNow(socket, ["send-keys", "-t", pane, "Enter"]) !== null;
   } finally {
+    tmuxNow(socket, ["delete-buffer", "-b", buffer]);
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+export function pasteBracketed(socket: string, pane: string): boolean {
+  return tmuxNow(socket, ["display-message", "-p", "-t", pane, "#{bracket_paste_flag}"])?.trim() === "1";
+}
+
+export function clearPane(socket: string, pane: string): void {
+  tmuxNow(socket, ["send-keys", "-R", "-t", pane]);
+  tmuxNow(socket, ["clear-history", "-t", pane]);
+}
+
+export function paneIsOurs(socket: string, pane: string, procs: readonly Proc[] = processes()): boolean {
+  const panePid = Number(tmuxNow(socket, ["display-message", "-p", "-t", pane, "#{pane_pid}"])?.trim());
+  if (!Number.isInteger(panePid) || panePid <= 1) return false;
+  const parent = new Map(procs.map((p) => [p.pid, p.ppid]));
+  for (let pid: number | undefined = process.pid, hops = 0; pid !== undefined && pid > 1 && hops < 64; pid = parent.get(pid), hops++) {
+    if (pid === panePid) return true;
+  }
+  return false;
 }
 
 function realDir(dir: string): string {
@@ -154,22 +174,56 @@ export function kimiIdle(dir: string): { idle: boolean; since: number | null } {
   return { idle: false, since };
 }
 
-export function listenersUnder(pid: number): number[] {
-  const r = runNow(["ps", "-eo", "pid=,ppid=,args="], 5_000);
+export interface Proc {
+  pid: number;
+  ppid: number;
+  start: string;
+  args: string;
+}
+
+export type Stray = { pid: number; start: string };
+
+const LISTENER = /(?:^|\s)(?:\S*\/)?kiwi(?:\s+-{1,2}[\w-]+(?:\s+[^-\s]\S*)?)*\s+(?:hook\s+)?listen(?:\s|$)/;
+
+function processes(): Proc[] {
+  const r = runNow(["ps", "-eo", "pid=,ppid=,lstart=,args="], 5_000);
   if (r.status !== 0) return [];
-  const rows = r.stdout.split("\n").flatMap((line) => {
-    const m = /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(line);
-    return m ? [{ pid: Number(m[1]), ppid: Number(m[2]), args: m[3]! }] : [];
+  return r.stdout.split("\n").flatMap((line) => {
+    const m = /^\s*(\d+)\s+(\d+)\s+(\S+\s+\S+\s+\d+\s+[\d:]+\s+\d+)\s+(.*)$/.exec(line);
+    return m ? [{ pid: Number(m[1]), ppid: Number(m[2]), start: m[3]!, args: m[4]! }] : [];
   });
+}
+
+export function isListener(args: string): boolean {
+  return LISTENER.test(args);
+}
+
+export function listenersUnder(pid: number, procs: readonly Proc[] = processes()): Stray[] {
   const under = new Set([pid]);
   for (let grew = true; grew;) {
     grew = false;
-    for (const row of rows) {
-      if (!under.has(row.pid) && under.has(row.ppid)) {
-        under.add(row.pid);
+    for (const p of procs) {
+      if (!under.has(p.pid) && under.has(p.ppid)) {
+        under.add(p.pid);
         grew = true;
       }
     }
   }
-  return rows.filter((row) => row.pid !== pid && under.has(row.pid) && /\bkiwi\b.*\blisten\b/.test(row.args)).map((row) => row.pid);
+  return procs.filter((p) => p.pid !== pid && under.has(p.pid) && isListener(p.args)).map((p) => ({ pid: p.pid, start: p.start }));
+}
+
+export const strayKey = (s: Stray) => `${s.pid}@${s.start}`;
+
+export function stopStrays(recorded: ReadonlySet<string>, procs: readonly Proc[] = processes()): number {
+  let stopped = 0;
+  for (const p of procs) {
+    if (!isListener(p.args) || !recorded.has(strayKey(p))) continue;
+    try {
+      process.kill(p.pid, "SIGTERM");
+      stopped++;
+    } catch {
+      // Gone since the listing (ESRCH) or not this user's process (EPERM): not one of ours to stop.
+    }
+  }
+  return stopped;
 }

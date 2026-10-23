@@ -7,9 +7,8 @@ import { bindHeldSeat, holdSeat, releaseSeat, SEAT_TOKEN, type HoldChange } from
 import { loginShell } from "../launch/shell.ts";
 import { loginArgv } from "../terminals/shared/launch.ts";
 import type { Recipe, Started } from "./recipes.ts";
-import { kimiScreen, listenersUnder, paneText, typeInto } from "./kimi.ts";
+import { clearPane, kimiScreen, listenersUnder, paneText, pasteBracketed, stopStrays, strayKey, typeInto } from "./kimi.ts";
 import { tmuxSocket } from "../terminals/shared/tmux.ts";
-import { pidAlive } from "../seats.ts";
 import { firstPrompt, nextWork, workName, workOver, type Work } from "./work.ts";
 
 const POLL_MS = 2_000;
@@ -20,6 +19,8 @@ const IDLE_WAIT_MS = 15 * 60_000;
 const TERM_GRACE_MS = 15_000;
 const QUICK_END_MS = 30_000;
 const PAUSE_MS = 5_000;
+const STRAY_EVERY = 5;
+const STARTING_MS = 2 * 60_000;
 
 export interface LoopSeat {
   alias: string;
@@ -124,6 +125,7 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
       KIWI_AS: seat.me,
     });
     yield* hooksFirst(recipe);
+    if (recipe.typed) clearTypedPane();
     const started = Date.now();
     const child = Bun.spawn(argv, { cwd: process.cwd(), env: childEnv(), stdin: "inherit", stdout: "inherit", stderr: "inherit" });
     stop.busy = true;
@@ -132,10 +134,11 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
     yield* say(`${workName(first)}: started ${recipe.label} (pid ${child.pid})`);
 
     let found: Started | null = null;
-    const strays = new Set<number>();
+    const strays = new Set<string>();
     const noteStrays = () => {
-      for (const pid of listenersUnder(child.pid)) strays.add(pid);
+      for (const stray of listenersUnder(child.pid)) strays.add(strayKey(stray));
     };
+    let polls = 0;
     const end = (why: Ended) =>
       Effect.gen(function* () {
         if (!exited) noteStrays();
@@ -149,8 +152,8 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
           if (!exited) child.kill("SIGKILL");
           yield* Effect.promise(() => child.exited);
         }
-        for (const pid of strays) if (pidAlive(pid)) process.kill(pid, "SIGTERM");
-        if (strays.size) yield* say(`stopped ${strays.size} kiwi listener${strays.size > 1 ? "s" : ""} the session left running`);
+        const stopped = strays.size ? stopStrays(strays) : 0;
+        if (stopped) yield* say(`stopped ${stopped} kiwi listener${stopped > 1 ? "s" : ""} the session left running`);
         stop.busy = false;
         return why;
       });
@@ -173,7 +176,7 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
     while (true) {
       if (exited) return yield* end({ kind: "own", lived: Date.now() - started });
       if (stop.asked) return yield* end({ kind: "stopped" });
-      noteStrays();
+      if (polls++ % STRAY_EVERY === 0) noteStrays();
       const seen = yield* look(s);
       if (work.kind === "answering") {
         const taken = nextWork(seen.state, seat.me, 0);
@@ -189,18 +192,31 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
   });
 }
 
+function clearTypedPane(): void {
+  const socket = tmuxSocket(process.env);
+  const pane = process.env.TMUX_PANE;
+  if (socket && pane) clearPane(socket, pane);
+}
+
 function typeFirst(pid: number, text: string, exited: () => boolean, stop: { asked: boolean }): Effect.Effect<boolean> {
   return Effect.gen(function* () {
     const socket = tmuxSocket(process.env);
     const pane = process.env.TMUX_PANE;
     if (!socket || !pane) return false;
     let told = false;
+    let deadline = Date.now() + STARTING_MS;
     while (!exited() && !stop.asked) {
       const screen = kimiScreen(paneText(socket, pane));
-      if (screen === "ready") return typeInto(socket, pane, text);
-      if (screen === "trust" && !told) {
-        told = true;
-        yield* say(`waiting for you to answer the trust prompt in this window (pid ${pid})`);
+      if (screen === "ready" && pasteBracketed(socket, pane)) return typeInto(socket, pane, text);
+      if (screen === "trust") {
+        deadline = Date.now() + STARTING_MS;
+        if (!told) {
+          told = true;
+          yield* say(`waiting for you to answer the trust prompt in this window (pid ${pid})`);
+        }
+      } else if (Date.now() > deadline) {
+        yield* say(`the session never showed its ready screen within ${Math.round(STARTING_MS / 60_000)} minutes`);
+        return false;
       }
       yield* Effect.sleep(500);
     }
