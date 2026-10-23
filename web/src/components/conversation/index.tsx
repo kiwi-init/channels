@@ -83,7 +83,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [sending, setSending] = useState<{ key: number; place: string; m: Message; after: number; seq?: number }[]>([])
   const sendingKey = useRef(0)
-  const sentSeqs = useRef(new Set<number>())
   const [picture, setPicture] = useState<{ m: Message; img: ImageAttachment; src: string } | null>(null)
   const [highlight, setHighlight] = useState<number | null>(null)
   const [headRef, headH] = useHeight()
@@ -146,23 +145,9 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     (s: { m: Message; after: number; seq?: number }) => (s.seq !== undefined ? bySeq.get(s.seq) : messages.findLast((x) => x.seq > s.after && x.from === me && x.body === s.m.body)),
     [bySeq, messages, me]
   )
-  useEffect(() => {
-    setSending((all) => {
-      const left = all.filter((s) => {
-        const real = landed(s)
-        if (real) sentSeqs.current.add(real.seq)
-        return !real
-      })
-      return left.length === all.length ? all : left
-    })
-  }, [landed])
-  const sendingHere = sending
-    .filter((s) => {
-      const real = s.place === hereKey ? landed(s) : undefined
-      if (real) sentSeqs.current.add(real.seq)
-      return s.place === hereKey && !real
-    })
-    .map((s) => s.m)
+  const sentNow = sending.map((s) => ({ s, real: landed(s) }))
+  const replaced = new Set(sentNow.flatMap(({ real }) => (real ? [real.seq] : [])))
+  const sendingHere = sentNow.filter(({ s, real }) => s.place === hereKey && !real).map(({ s }) => s.m)
 
   const go = useCallback(
     (p: Place) => {
@@ -290,7 +275,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     quoted,
     chosen,
     nameOf,
-    isFresh: (seq: number) => seq < 0 || (isFresh(seq) && !sentSeqs.current.has(seq)),
+    isFresh: (seq: number) => seq < 0 || (isFresh(seq) && !replaced.has(seq)),
     summaryOf,
     showsReceipt,
     onReply,
@@ -640,10 +625,9 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                                   ...(opts.re ? { re: opts.re } : {}),
                                   ...(opts.dm ? { dm: true } : {}),
                                 }
-                                setSending((all) => [...all, { key, place: hereKey, m, after: messages.at(-1)?.seq ?? 0 }])
+                                setSending((all) => [...all, { key, place: hereKey, m, after: messages.at(-1)?.seq ?? 0 }].slice(-50))
                                 try {
                                   const seq = await send(body, opts)
-                                  sentSeqs.current.add(seq)
                                   setSending((all) => all.map((s) => (s.key === key ? { ...s, seq } : s)))
                                   return seq
                                 } catch (err) {
