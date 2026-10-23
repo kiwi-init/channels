@@ -68,7 +68,6 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
   const [files, setFiles] = useState<DraftFile[]>(() => draftOf(draftKey)?.files ?? [])
   useEffect(() => keepDraft(draftKey, { body, files }), [draftKey, body, files])
   const [dropping, setDropping] = useState(false)
-  const [sending, setSending] = useState(false)
   const slow = useLater(disabled)
   const [mention, setMention] = useState<{
     query: string
@@ -125,7 +124,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
   const picked = listed.length ? listed[Math.min(slash, listed.length - 1)] : undefined
   const running = thread ? null : parseCommand(commands, body)
 
-  const canSend = !disabled && !sending && (body.trim().length > 0 || files.length > 0)
+  const canSend = !disabled && (body.trim().length > 0 || files.length > 0)
 
   const pick = (list: FileList | File[] | null) => {
     if (!list || disabled) return
@@ -196,12 +195,15 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
       area.current?.focus()
       return
     }
-    setSending(true)
+    const typed = { body, files }
+    const text = withHandles(body.trim(), others) || files.map((f) => f.name).join(", ")
+    const named = recipients(text, names)
+    const answering = answered(asking, named, !!replyTo || !!thread)
+    const to = named.length ? named : answering ? [answering.from] : replyTo && replyTo.from !== me ? [replyTo.from] : extra?.to
+    keepDraft(draftKey, { body: "", files: [] })
+    setBody("")
+    setFiles([])
     try {
-      const text = withHandles(body.trim(), others) || files.map((f) => f.name).join(", ")
-      const named = recipients(text, names)
-      const answering = answered(asking, named, !!replyTo || !!thread)
-      const to = named.length ? named : answering ? [answering.from] : replyTo && replyTo.from !== me ? [replyTo.from] : extra?.to
       await send(text, {
         to,
         // A person's message is just a message: a question needs no menu to be one.
@@ -210,16 +212,17 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
         ...(extra?.task !== undefined ? { task: extra.task } : {}),
         // A direct thread's message is to the other one only: an @ or a reply can't widen it.
         ...(extra?.dm ? { to: extra.to, dm: true } : {}),
-        imgs: files.length ? files : undefined,
+        imgs: typed.files.length ? typed.files : undefined,
       })
-      if (area.current?.value === body || !area.current) keepDraft(draftKey, { body: "", files: [] })
-      setBody((now) => (now === body ? "" : now))
-      setFiles([])
       if (!thread) onClearReply()
     } catch (err) {
+      if (!area.current?.value) {
+        keepDraft(draftKey, typed)
+        setBody(typed.body)
+        setFiles((now) => (now.length ? now : typed.files))
+      }
       toast(`Not sent: ${errorText(err)}`, "error")
     } finally {
-      setSending(false)
       area.current?.focus()
     }
   }
