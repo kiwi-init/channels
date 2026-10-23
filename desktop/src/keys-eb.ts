@@ -30,6 +30,7 @@ export interface KeysDeps {
 
 export interface Keys {
   start(): void;
+  pageGone(): void;
   tell(m: HostToKeys): void;
   request(session: string, req: KeysRequest): Promise<KeysReply>;
   flush(): Promise<void>;
@@ -61,11 +62,14 @@ export function keysController(deps: KeysDeps): Keys {
     pending.clear();
   };
 
+  function forgetPage(w: KeysWorker | null): void {
+    if (page && w) w.post({ to: "close", port: page.port });
+    page = null;
+    pending.clear();
+  }
+
   function connect(w: KeysWorker, session: string): { session: string; port: number } {
-    if (page && page.session !== session) {
-      w.post({ to: "close", port: page.port });
-      failAll("the page that asked has gone");
-    }
+    if (page && page.session !== session) forgetPage(w);
     const next = { session, port: nextPort++ };
     page = next;
     lastSession = session;
@@ -110,6 +114,7 @@ export function keysController(deps: KeysDeps): Keys {
       if (stopping) return;
       wait = clock.now() - started > 60_000 ? 1_000 : Math.min(wait * 2, 30_000);
       clock.later(() => {
+        for (const q of queued.splice(0)) q.done(unreachable(q.req.id, RESTARTED));
         start();
         const session = lastSession;
         if (!session || !worker) return;
@@ -123,6 +128,11 @@ export function keysController(deps: KeysDeps): Keys {
 
   return {
     start,
+    pageGone: () => {
+      forgetPage(worker);
+      queued.length = 0;
+      lastSession = null;
+    },
     tell: (m) => worker?.post({ to: "host", m }),
     request: (session, req) =>
       new Promise<KeysReply>((done) => {

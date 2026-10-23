@@ -82,6 +82,8 @@ function setup(answer: KeysDeps["answer"] = (_m, done) => done()) {
   return { keys, workers, frames, clock, last };
 }
 
+const settled = (p: Promise<unknown>, ms = 50): Promise<string> => Promise.race([p.then(() => "answered"), new Promise<string>((r) => setTimeout(() => r("unanswered"), ms))]);
+
 const SESSION = "0123456789abcdef0123456789abcdef";
 
 describe("the keys Worker, from main", () => {
@@ -110,7 +112,7 @@ describe("the keys Worker, from main", () => {
     expect(s.frames).toEqual([{ session: SESSION, push: { sub: 1, event: null } }]);
   });
 
-  test("a reload's new session closes the old port, so its follows stop, and the old page's waiting requests are answered", async () => {
+  test("a new session closes the old port, so its follows stop, and the old page's waiting requests are dropped, never answered", async () => {
     const s = setup();
     s.keys.start();
     const old = s.keys.request(SESSION, req(1));
@@ -121,9 +123,27 @@ describe("the keys Worker, from main", () => {
       { to: "host", m: { type: "port" }, port: 2 },
       { to: "port", port: 2, data: req(1) },
     ]);
-    expect((await old).ok).toBe(false);
+    s.last().send({ from: "port", port: 1, data: ok(1) });
+    expect(await settled(old)).toBe("unanswered");
   });
 
+  test("a page that's gone: its port closes, its waiting and queued requests are dropped unanswered, a late reply for it goes nowhere, and no restart frame is sent for it", async () => {
+    const s = setup();
+    s.keys.start();
+    const waiting = s.keys.request(SESSION, req(1));
+    s.keys.pageGone();
+    expect(s.last().got.at(-1)).toEqual({ to: "close", port: 1 });
+    s.last().send({ from: "port", port: 1, data: ok(1) });
+    s.last().send({ from: "port", port: 1, data: { sub: 1, event: null } });
+    expect(await settled(waiting)).toBe("unanswered");
+    s.last().exit();
+    const queued = s.keys.request(SESSION, req(2));
+    s.keys.pageGone();
+    s.clock.run();
+    expect(await settled(queued)).toBe("unanswered");
+    expect(s.frames).toEqual([]);
+    expect(s.last().got).toEqual([{ to: "host", m: { type: "init", relay: "https://r.example", dir: "/data", seats: [], person: null } }]);
+  });
   test("the Worker's asks are answered by the host, and an answer for a Worker that has gone is dropped", () => {
     const answers: ((extra?: KeysAnswer) => void)[] = [];
     const asked: KeysAsk[] = [];
@@ -162,24 +182,43 @@ describe("the keys Worker, from main", () => {
     expect(s.workers.length).toBe(8);
   });
 
-  test("once it's back, the page gets a fresh port and a restart frame, and requests made meanwhile wait for it", async () => {
+  test("a request made while the Worker is down gets the restart error at restart, before the restart frame, and never reaches the new Worker", async () => {
     const s = setup();
     s.keys.start();
     void s.keys.request(SESSION, req(1));
     s.last().exit();
     const meanwhile = s.keys.request(SESSION, req(2));
+    const order: string[] = [];
+    void meanwhile.then(() => order.push("reply"));
     s.clock.run();
-    const back = s.last();
-    expect(back.got).toEqual([
+    await Bun.sleep(0);
+    order.push(...s.frames.map(() => "frame"));
+    expect(await meanwhile).toEqual({ id: 2, ok: false, error: { kind: "unreachable", message: RESTARTED } });
+    expect(order).toEqual(["reply", "frame"]);
+    expect(s.last().got).toEqual([
       { to: "host", m: { type: "init", relay: "https://r.example", dir: "/data", seats: [], person: null } },
       { to: "host", m: { type: "port" }, port: 2 },
-      { to: "port", port: 2, data: req(2) },
     ]);
     expect(s.frames).toEqual([{ session: SESSION, restart: true }]);
-    back.send({ from: "port", port: 2, data: ok(2) });
-    expect(await meanwhile).toEqual(ok(2));
   });
 
+  test("a follow made while the Worker is down ends as one follow on the new Worker once the page follows again on restart (#789 round 1)", async () => {
+    const s = setup();
+    const follows: KeysRequest[] = [];
+    let nextId = 1;
+    const follow = (): Promise<KeysReply> => s.keys.request(SESSION, { id: nextId++, op: "follow", code: "room", since: 0 } as KeysRequest);
+    s.keys.start();
+    const first = s.keys.request(SESSION, req(99));
+    s.last().send({ from: "port", port: 1, data: ok(99) });
+    await first;
+    s.last().exit();
+    const during = follow();
+    s.clock.run();
+    expect((await during).ok).toBe(false);
+    for (const f of s.frames) if ("restart" in f) void follow();
+    for (const m of s.last().got) if (m.to === "port") follows.push(m.data as KeysRequest);
+    expect(follows.map((f) => f.op)).toEqual(["follow"]);
+  });
   test("tellKeys reaches the Worker that's up, and nothing while it's down", () => {
     const s = setup();
     s.keys.tell({ type: "nudge" });
