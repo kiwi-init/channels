@@ -7,7 +7,7 @@ import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts";
 import { JOIN_SCHEME } from "../src/deep-links.ts";
 import { PAGE_TEMPLATE, pageWithCsp } from "../src/eb-page.ts";
 import type { FromWorker, ToWorker } from "../src/keys-shim.ts";
-import { bundleProblems, urlSchemeProblems } from "./eb-bundle.ts";
+import { bundleProblems, testBuildProblems, urlSchemeProblems } from "./eb-bundle.ts";
 import { hostKey, mismatches, pinFor, PINS } from "./eb-pins.ts";
 import { sealApp } from "./eb-seal.ts";
 import { ELECTROBUN_LAUNCHER } from "./linux-files.ts";
@@ -44,7 +44,6 @@ const views = path.join(app, "views", "internal");
 fs.rmSync(views, { recursive: true, force: true });
 fs.cpSync(web, views, { recursive: true, filter: (src) => src !== path.join(web, "index.html") && path.basename(src) !== "_headers" });
 if (fs.readdirSync(views).some((n) => n.toLowerCase() === "index.html")) throw new Error("eb-post-build: index.html must not be under views/, where Electrobun would serve it without the CSP");
-fs.cpSync(web, views, { recursive: true, filter: (src) => path.basename(src) !== "_headers" });
 if (os === "linux") {
   const host = process.arch === "x64" ? "x64" : process.arch === "arm64" ? "arm64" : process.arch;
   if (host !== arch) throw new Error(`eb-post-build: the Linux launcher is built with this machine's cc, for ${host}, not the ${arch} app`);
@@ -129,8 +128,11 @@ if (!bundleId) throw new Error("eb-post-build: the app's Info.plist names no CFB
 const problems = [
   ...bundleProblems(fs.readFileSync(path.join(app, "bun", "index.js"), "utf8"), fs.readFileSync(path.join(app, "views", "preload", "index.js"), "utf8")),
   ...urlSchemeProblems(fs.readFileSync(path.join(contents, "Info.plist"), "utf8"), bundleId, JOIN_SCHEME),
+  ...testBuildProblems(process.env.CHANNELS_EB_TEST === "1", bundleId, fs.readFileSync(path.join(contents, "Resources", "version.json"), "utf8")),
 ];
 if (problems.length) throw new Error(`eb-post-build: ${problems.join("; ")}`);
+if (fs.readdirSync(views).some((n) => n.toLowerCase() === "index.html"))
+  throw new Error("eb-post-build: index.html is under views/ again by the seal, where Electrobun would serve it without the CSP");
 console.log(`eb-post-build: ${sealApp(path.dirname(contents))} files sealed in Info.plist`);
 
 async function bundledKeysAnswer(file: string): Promise<string> {

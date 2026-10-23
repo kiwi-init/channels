@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startLocalRelay } from "../../scripts/local-relay.ts";
+import { bridgeChecks } from "./eb-bridge-checks.ts";
 import { appExecutable, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
 
 if (!process.argv[2]) {
@@ -85,6 +86,7 @@ try {
         : "not exposed",
     (v) => v !== "granted",
   );
+  await bridgeChecks(d, problems);
   for (const to of ["views://internal/icon.svg", "views://internal/index.html?x=1", "file:///etc/hosts"]) {
     await d.evaluate((url: string) => void (location.href = url), to, 2_000).catch(() => undefined);
     await later(1_000);
