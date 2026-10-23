@@ -6,7 +6,7 @@ import Electrobun, { BrowserView, BrowserWindow, PATHS, Utils } from "electrobun
 import { internalRpcHandlers } from "../.hutch/devkit/api/sdks/main/proc/native.ts";
 import { startAppLife } from "./app-life-eb.ts";
 import { handleDeepLink, JOIN_SCHEME } from "./deep-links.ts";
-import { committedUrl, lockInternalRpc, preloadSource, stillOurs, toPageScript } from "./eb-bridge.ts";
+import { lockInternalRpc, onOurPage, preloadSource, toPageScript } from "./eb-bridge.ts";
 import { navigationUrl, openedUrl, PAGE_RULES, PAGE_URL, pageWithCsp } from "./eb-page.ts";
 import { externalUrl } from "./guard.ts";
 import { attachKeys, attachWindow, bundle, ebHost } from "./host-eb.ts";
@@ -19,7 +19,7 @@ import { openInBrowser } from "./open.ts";
 import { claimInstance, handoffFor, type Instance } from "./single-instance.ts";
 import { bunBridge } from "./rpc-eb.ts";
 import { brokenStore, openStore, snapshot, store, type StoreVault } from "./store.ts";
-import { updateState } from "./updater.ts";
+import { startUpdates, updateState } from "./updater.ts";
 import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts";
 import { minWindowWidth } from "./window-size.ts";
 
@@ -35,6 +35,8 @@ const shellPath = path.join(binDir, `libkiwi-shell.${suffix}`);
 
 const shell = dlopen(shellPath, {
   kiwi_deny_permissions: { args: [], returns: FFIType.bool },
+  kiwi_watch_commits: { args: [], returns: FFIType.bool },
+  kiwi_committed_url: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
 }).symbols;
 
 const sandboxPages = mac ? null : dlopen(shellPath, { kiwi_sandbox_pages: { args: [], returns: FFIType.bool } }).symbols.kiwi_sandbox_pages;
@@ -45,6 +47,13 @@ const core = dlopen(path.join(binDir, `libElectrobunCore.${suffix}`), {
   setWebviewHTMLContent: { args: [FFIType.u32, FFIType.ptr], returns: FFIType.void },
   updatePreloadScriptToWebView: { args: [FFIType.u32, FFIType.ptr, FFIType.ptr, FFIType.bool], returns: FFIType.void },
 }).symbols;
+
+const committedBuffer = new Uint8Array(4096);
+
+function committedPage(): string | null {
+  const n = Number(shell.kiwi_committed_url(ptr(committedBuffer), committedBuffer.length));
+  return n > 0 && n < committedBuffer.length ? new TextDecoder().decode(committedBuffer.subarray(0, n)) : null;
+}
 
 const cString = (s: string): Uint8Array => new TextEncoder().encode(`${s}\0`);
 
@@ -74,11 +83,10 @@ function createWindow(): BrowserWindow {
   const index = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "internal", "index.html"), "utf8");
   const bundled = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "preload", "index.js"), "utf8");
   const table = handlers(ebHost);
-  let ours = true;
   let view: BrowserView | null = null;
   const bridge = bunBridge(
     table,
-    () => ours,
+    () => onOurPage(committedPage()),
     (frame) => view?.executeJavascript(toPageScript(frame)),
     () => {
       keys.pageGone();
@@ -102,7 +110,6 @@ function createWindow(): BrowserWindow {
   webview.setNavigationRules(PAGE_RULES);
   const load = (): void => {
     core.setWebviewHTMLContent(webview.id, ptr(cString(pageWithCsp(index, store.relayUrl))));
-    ours = true;
     bridge.retire();
     webview.loadURL(PAGE_URL);
   };
@@ -117,7 +124,6 @@ function createWindow(): BrowserWindow {
     },
     reload: () => (refreshPreload(), load()),
   });
-  for (const moved of ["did-commit-navigation", "did-navigate", "did-navigate-in-page"] as const) webview.on(moved, (e) => (ours = stillOurs(ours, committedUrl(detailOf(e)))));
   load();
   const look = win.ptr;
   if (look && windowLook) windowLook(look, minWindowWidth(process.platform), WINDOW_SIZE.minHeight, rgb(windowBackground(false)), rgb(windowBackground(true)));
@@ -141,7 +147,7 @@ function start(instance: Extract<Instance, { kind: "first" }>): void {
   attachKeys((m) => keys.tell(m));
   keys.start();
   const win = createWindow();
-  startAppLife({
+  const tray = startAppLife({
     win,
     view: win.webview,
     showWindow: () => ebHost.showWindow(),
@@ -152,6 +158,10 @@ function start(instance: Extract<Instance, { kind: "first" }>): void {
     nudgeKeys: () => ebHost.tellKeys({ type: "nudge" }),
     flushKeys: () => keys.flush(),
     release: instance.release,
+  });
+  startUpdates((u) => {
+    ebHost.push("update", u);
+    tray.refresh(u);
   });
   const broken = brokenStore();
   if (broken) void Utils.showMessageBox({ type: "error", message: "Channels can't read its saved keys", detail: broken.message });
@@ -173,8 +183,8 @@ if (!instance) Utils.quit(1);
 else if (instance.kind === "second") {
   if (!instance.delivered) console.error("Channels: another Channels holds this data folder and didn't answer; quitting");
   Utils.quit(0);
-} else if (!shell.kiwi_deny_permissions()) {
-  console.error("Channels: the web view's permission handler wasn't found; not opening a window that could grant the microphone");
+} else if (!shell.kiwi_deny_permissions() || !shell.kiwi_watch_commits()) {
+  console.error("Channels: the web view's permission handler or navigation delegate wasn't found; not opening a window that could grant the microphone or trust a page it can't see");
   instance.release();
   Utils.quit(1);
 } else {

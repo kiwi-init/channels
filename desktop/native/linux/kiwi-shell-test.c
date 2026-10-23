@@ -39,6 +39,7 @@ typedef struct {
   bool (*deny)(void);
   bool (*watch)(void (*)(void));
   bool (*sandbox)(void);
+  bool (*commits)(void);
   bool ok;
   bool sandboxed;
 } Hooks;
@@ -46,7 +47,7 @@ typedef struct {
 static gpointer install_off_main(gpointer data) {
   Hooks *hooks = data;
   hooks->sandboxed = hooks->sandbox();
-  hooks->ok = hooks->deny() && hooks->watch(gone);
+  hooks->ok = hooks->deny() && hooks->watch(gone) && hooks->commits();
   g_idle_add(stop, NULL);
   return NULL;
 }
@@ -77,9 +78,11 @@ int main(int argc, char **argv) {
   bool (*deny)(void) = (bool (*)(void))dlsym(lib, "kiwi_deny_permissions");
   bool (*watch)(void (*)(void)) = (bool (*)(void (*)(void)))dlsym(lib, "kiwi_watch_page");
   bool (*sandbox)(void) = (bool (*)(void))dlsym(lib, "kiwi_sandbox_pages");
+  bool (*commits)(void) = (bool (*)(void))dlsym(lib, "kiwi_watch_commits");
+  size_t (*committed)(char *, size_t) = (size_t (*)(char *, size_t))dlsym(lib, "kiwi_committed_url");
   int bad = 0;
-  if (!deny || !watch || !sandbox) {
-    fprintf(stderr, "kiwi-shell-test: kiwi_deny_permissions, kiwi_watch_page or kiwi_sandbox_pages isn't exported\n");
+  if (!deny || !watch || !sandbox || !commits || !committed) {
+    fprintf(stderr, "kiwi-shell-test: one of kiwi_deny_permissions, kiwi_watch_page, kiwi_sandbox_pages, kiwi_watch_commits or kiwi_committed_url isn't exported\n");
     return 1;
   }
   if (g_strcmp0(g_get_prgname(), "channels-desktop") != 0 || g_strcmp0(gdk_get_program_class(), "channels-desktop") != 0) {
@@ -88,7 +91,7 @@ int main(int argc, char **argv) {
   } else
     printf("program name and class: channels-desktop (the Wayland app_id, matching channels-desktop.desktop)\n");
   loop = g_main_loop_new(NULL, FALSE);
-  Hooks hooks = {deny, watch, sandbox, false, false};
+  Hooks hooks = {deny, watch, sandbox, commits, false, false};
   g_idle_add(install_from_worker, &hooks);
   g_main_loop_run(loop);
   if (hooks.ok) printf("hooks: installed on GTK's main loop when asked from another thread, as main-eb's worker asks\n");
@@ -120,6 +123,14 @@ int main(int argc, char **argv) {
     bad++;
   } else
     printf("microphone: %s, and the handler that would allow it never ran\n", verdict);
+
+  char url[4096];
+  size_t n = committed(url, sizeof url);
+  if (n == 0 || n >= sizeof url || strcmp(url, "http://localhost/") != 0) {
+    fprintf(stderr, "kiwi-shell-test: kiwi_committed_url gave '%s', not the page's committed http://localhost/\n", n < sizeof url ? url : "(too long)");
+    bad++;
+  } else
+    printf("committed URL: %s, as the bridge checks it\n", url);
 
   webkit_web_view_terminate_web_process(view);
   g_timeout_add(2000, stop, NULL);

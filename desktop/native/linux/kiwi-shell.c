@@ -6,6 +6,8 @@
 #define KIWI_APP_ID "channels-desktop"
 
 static void (*page_gone)(void) = NULL;
+static GMutex committed_lock;
+static char committed[4096] = "";
 
 __attribute__((constructor)) static void kiwi_identity(void) {
   g_set_prgname(KIWI_APP_ID);
@@ -28,6 +30,18 @@ static gboolean process_ended(GSignalInvocationHint *hint, guint n, const GValue
   (void)params;
   (void)data;
   if (page_gone) page_gone();
+  return TRUE;
+}
+
+static gboolean load_changed(GSignalInvocationHint *hint, guint n, const GValue *params, gpointer data) {
+  (void)hint;
+  (void)data;
+  if (n < 2 || g_value_get_enum(&params[1]) != WEBKIT_LOAD_COMMITTED) return TRUE;
+  GObject *view = g_value_get_object(&params[0]);
+  const char *uri = view ? webkit_web_view_get_uri(WEBKIT_WEB_VIEW(view)) : NULL;
+  g_mutex_lock(&committed_lock);
+  if (g_strlcpy(committed, uri ? uri : "", sizeof committed) >= sizeof committed) committed[0] = 0;
+  g_mutex_unlock(&committed_lock);
   return TRUE;
 }
 
@@ -108,6 +122,8 @@ static bool sandbox_default_context(gconstpointer arg) {
 
 static const Hook DENY = {"permission-request", deny_request};
 static const Hook WATCH = {"web-process-terminated", process_ended};
+static const Hook COMMITS = {"load-changed", load_changed};
+static bool watching_commits = false;
 
 bool kiwi_deny_permissions(void) {
   return on_main(install_hook, &DENY);
@@ -116,6 +132,19 @@ bool kiwi_deny_permissions(void) {
 bool kiwi_watch_page(void (*gone)(void)) {
   page_gone = gone;
   return on_main(install_hook, &WATCH);
+}
+
+bool kiwi_watch_commits(void) {
+  if (watching_commits) return true;
+  watching_commits = on_main(install_hook, &COMMITS);
+  return watching_commits;
+}
+
+size_t kiwi_committed_url(char *out, size_t size) {
+  g_mutex_lock(&committed_lock);
+  size_t n = g_strlcpy(out, committed, size);
+  g_mutex_unlock(&committed_lock);
+  return n;
 }
 
 bool kiwi_sandbox_pages(void) {
