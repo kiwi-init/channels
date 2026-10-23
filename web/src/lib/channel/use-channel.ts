@@ -1,8 +1,7 @@
-import * as Effect from "effect/Effect"
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react"
 
 import type { CachedRow } from "@kiwi/core/cache-row.ts"
-import { ChannelGone } from "@kiwi/core/client/errors.ts"
+import { ChannelGone } from "@kiwi/core/client/relay-errors.ts"
 import type { HumanSession, RoomsSetting, SendOptions } from "@kiwi/core/client.ts"
 import type { JoinRequest, Member } from "@kiwi/core/membership.ts"
 import { SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts"
@@ -11,7 +10,6 @@ import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "..
 import { openCached, planCached, readKept, rememberKept, rememberRow, rememberRows } from "../history"
 import { ICON_LIVE } from "../icon-event"
 import { addMarks, type Marks } from "../receipts"
-import { fork } from "../runtime"
 import { noteSignInGone } from "../session"
 import { nextSnapshotTry } from "../snapshot-plan"
 import { untilOpen } from "../until-open"
@@ -289,28 +287,21 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
       },
     })
     warmUp(steps, was, HISTORY)
-    const opening = untilOpen(
-      Effect.tryPromise({
-        try: () => openChannel(steps, was, HISTORY),
-        catch: (err) => err,
-      }),
-      () => Effect.sync(() => setConnection("reconnecting"))
+    void untilOpen(
+      () => openChannel(steps, was, HISTORY),
+      () => setConnection("reconnecting"),
+      () => closed
     )
-    const stop = fork(
-      opening.pipe(
-        Effect.flatMap((opened) =>
-          Effect.sync(() => {
-            if (closed) return
-            setStart({ head: opened.head, whole: opened.whole })
-            stopLive = ch.follow(opened.since, onEvent)
-          })
-        ),
-        Effect.catch((err) => Effect.sync(() => void onGone(err)))
-      )
-    )
+      .then((opened) => {
+        if (closed) return
+        setStart({ head: opened.head, whole: opened.whole })
+        stopLive = ch.follow(opened.since, onEvent)
+      })
+      .catch((err: unknown) => {
+        if (!closed) onGone(err)
+      })
     return () => {
       closed = true
-      stop()
       stopLive?.()
       clearTimeout(flush)
       lent.release()

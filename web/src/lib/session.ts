@@ -3,7 +3,7 @@
 // the session really ended (not a blip fetching the token) and signs this
 // browser out, so the page asks you to sign in again instead of throwing.
 
-import { RelayError } from "@kiwi/core/client/errors.ts"
+import { RelayError } from "@kiwi/core/client/relay-errors.ts"
 
 const SIGN_IN_GONE = "mc:sign-in-gone"
 
