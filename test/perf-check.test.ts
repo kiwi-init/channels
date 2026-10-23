@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 const { reference, limits: budgets } = (await Bun.file("scripts/perf-budgets.json").json()) as {
   reference: Record<"@1x" | "@4x", number>;
-  limits: Record<string, { what: string; at: string[]; per?: "@1x" | "@4x"; budget: number; gate: number | null; nightly?: boolean; source?: "feel" }>;
+  limits: Record<string, { what: string; at: string[]; per?: "@1x" | "@4x"; budget: number; gate: number | null; nightly?: boolean; source?: "feel" | "desktop" }>;
 };
 const dir = mkdtempSync(join(tmpdir(), "kiwi-perf-check-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -98,9 +98,9 @@ test("a calibrated run left out of just one timing is named, even when enough ru
   expect(r.out).not.toContain("run-30.json has no usable value");
 });
 
-test("every perf-scale timing with a gate is scaled by the calibration at its CPU speed; perf-feel's rows aren't scaled", () => {
+test("every perf-scale timing with a gate is scaled by the calibration at its CPU speed; perf-feel's and the desktop app's rows aren't scaled", () => {
   for (const [name, l] of Object.entries(budgets))
-    if (l.source === "feel") expect({ name, per: l.per }).toEqual({ name, per: undefined });
+    if (l.source === "feel" || l.source === "desktop") expect({ name, per: l.per }).toEqual({ name, per: undefined });
     else if (l.gate !== null) expect({ name, per: l.per }).toEqual({ name, per: l.at[0] === "@4x" ? "@4x" : "@1x" });
 });
 
