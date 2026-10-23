@@ -49,6 +49,7 @@ struct Dock: View {
     let spot: Spot
     @Binding var replyTo: MessageView?
     @Binding var answering: AskView?
+    @Binding var sendingBack: ReviewView?
     var typing: FocusState<Bool>.Binding
     let follow: Follow
     let jump: () -> Void
@@ -82,7 +83,9 @@ struct Dock: View {
                 Text("Not sent: \(error)").type(.meta).foregroundStyle(Tone.alert).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
             }
             if !mentionable.isEmpty { mentions }
-            if let answering {
+            if let sendingBack {
+                bar("arrowshape.turn.up.left.fill", Tone.decide, "Send back \(taskLabel(sendingBack.task))", sendingBack.title) { self.sendingBack = nil }
+            } else if let answering {
                 bar("hand.raised.fill", Tone.decide, room.display(answering.from), answering.body) { self.answering = nil }
             } else if let replyTo {
                 bar("arrowshape.turn.up.left.fill", Tone.accent, room.display(replyTo.from), replyTo.body) { self.replyTo = nil }
@@ -268,6 +271,7 @@ struct Dock: View {
 
     private var placeholder: String {
         if room.connection != .live { return "Connecting…" }
+        if sendingBack != nil { return "What to change" }
         if let replyTo { return "Reply to \(room.display(replyTo.from))" }
         if let answering { return "Answer \(room.display(answering.from))" }
         if let here, here.kind == "dm", let other = room.other(in: here) { return "Message \(room.display(other))" }
@@ -299,7 +303,7 @@ struct Dock: View {
     private func send() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard canSend else { return }
-        if attached.isEmpty && answering == nil {
+        if attached.isEmpty && answering == nil && sendingBack == nil {
             model.post(spot, text, re: replyTo?.seq)
             draft = ""
             replyTo = nil
@@ -315,7 +319,10 @@ struct Dock: View {
         let pictures = attached.enumerated().map { i, a in Outgoing(name: "photo-\(i + 1).jpg", mime: "image/jpeg", data: a.data.base64EncodedString()) }
         Task {
             do {
-                if pictures.isEmpty, let ask = answering {
+                if pictures.isEmpty, let review = sendingBack {
+                    try await model.sendBack(from.code, task: review.task, why: text)
+                    sendingBack = nil
+                } else if pictures.isEmpty, let ask = answering {
                     try await model.answer(from.code, seq: ask.seq, text: text)
                     answering = nil
                 } else {

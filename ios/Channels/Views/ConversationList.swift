@@ -350,10 +350,9 @@ struct ConversationRowView: View {
 
     private var preview: Text {
         let line = row.line
-        if let ask = row.asks.first {
-            let more = row.asks.count > 1 ? " · \(row.asks.count)" : ""
-            return Text("Needs you: ").foregroundStyle(Tone.decide).fontWeight(.semibold)
-                + Text(ask.body.replacingOccurrences(of: "\n", with: " ") + more).foregroundStyle(Tone.ink3)
+        if let need = row.need {
+            let more = row.needs > 1 ? " · \(row.needs)" : ""
+            return Text("Needs you: ").foregroundStyle(Tone.decide).fontWeight(.semibold) + Text(need + more).foregroundStyle(Tone.ink3)
         }
         if row.draft != nil, line.hasPrefix("Draft: ") {
             return Text("Draft: ").foregroundStyle(Tone.alert) + Text(String(line.dropFirst(7))).foregroundStyle(Tone.ink3)
@@ -377,11 +376,11 @@ struct PinCell: View {
                     if let peek {
                         Text(peek)
                             .type(.meta)
-                            .foregroundStyle(row.asks.isEmpty ? Tone.ink2 : Tone.decide)
+                            .foregroundStyle(row.needs == 0 ? Tone.ink2 : Tone.decide)
                             .lineLimit(1)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
-                            .background(row.asks.isEmpty ? Tone.bubbleThem : Tone.decideWash, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .background(row.needs == 0 ? Tone.bubbleThem : Tone.decideWash, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                             .frame(maxWidth: 112)
                             .offset(y: -22)
                             .transition(.scale(scale: 0.6).combined(with: .opacity))
@@ -398,7 +397,7 @@ struct PinCell: View {
     }
 
     private var peek: String? {
-        if let ask = row.asks.first { return ask.body.replacingOccurrences(of: "\n", with: " ") }
+        if let need = row.need { return need }
         guard row.unread, let last = row.last else { return nil }
         return last.body.replacingOccurrences(of: "\n", with: " ")
     }
@@ -480,6 +479,14 @@ struct RowPeek: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .background(Tone.wash2, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                         }
+                    }
+                    .padding(12)
+                    .background(Tone.bubbleThem, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else if let review = row.reviews.first {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Ready for your review").type(.meta, .semibold).foregroundStyle(Tone.decide)
+                        Text("\(taskLabel(review.task)) \(review.title)").type(.ui).foregroundStyle(Tone.ink).lineLimit(4)
                     }
                     .padding(12)
                     .background(Tone.bubbleThem, in: RoundedRectangle(cornerRadius: 18, style: .continuous))

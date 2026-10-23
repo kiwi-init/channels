@@ -1,7 +1,7 @@
 import { ChannelGone, type RoomsSetting } from "@kiwi/core/client.ts";
 import type { Member } from "@kiwi/core/membership.ts";
 import type { ChannelIcon, Message } from "@kiwi/core/protocol.ts";
-import { fold, MAIN, placeFromKey, type ChannelState, type FoldBase, type GuardFloor } from "@kiwi/core/state.ts";
+import { fold, MAIN, placeFromKey, taskId, type ChannelState, type FoldBase, type GuardFloor, type Task } from "@kiwi/core/state.ts";
 
 import type { ChannelIdentityView, FollowEvent, WireError } from "../../desktop/src/bridge.ts";
 import type { Keyring } from "../../desktop/src/keyring.ts";
@@ -9,6 +9,7 @@ import { usableBase } from "../../web/src/lib/channel/base-plan.ts";
 import { foldRoster } from "../../web/src/lib/channel/fold-roster.ts";
 import { hear, onlineByName, type Online } from "../../web/src/lib/channel/online.ts";
 import { trimmed } from "../../web/src/lib/channel/trim.ts";
+import { approveTask, closedDigest, sendBackTask, type TaskSend } from "../../web/src/lib/task-actions.ts";
 import { roomView } from "./view.ts";
 import type { Connection, Picture, RoomView } from "./wire.ts";
 
@@ -133,6 +134,29 @@ export class Room {
     const ask = this.messages.find((m) => m.seq === seq);
     if (!ask) throw new Error("that question isn't here any more");
     return this.keyring.call(this.code, "send", text, { to: [ask.from], re: [ask.seq], kind: "msg" });
+  }
+
+  async approve(id: number): Promise<number> {
+    const state = this.state;
+    const task = this.reviewing(id);
+    if (!state) throw new Error("this channel hasn't loaded yet");
+    const seq = await this.post(approveTask(task));
+    await this.post(closedDigest(state, this.messages, task, { by: this.me }));
+    return seq;
+  }
+
+  async sendBack(id: number, why: string): Promise<number> {
+    return this.post(sendBackTask(this.reviewing(id), why));
+  }
+
+  private reviewing(id: number): Task {
+    const task = this.state?.tasks.get(id);
+    if (!task || task.state !== "review") throw new Error(`${taskId(id)} isn't waiting for a review any more`);
+    return task;
+  }
+
+  private post({ body, opts }: TaskSend): Promise<number> {
+    return this.keyring.call(this.code, "send", body, opts);
   }
 
   private async refreshRoster(): Promise<void> {

@@ -97,6 +97,16 @@ struct AskView: Codable, Sendable, Hashable, Identifiable {
     var date: Date { Date(timeIntervalSince1970: at / 1000) }
 }
 
+struct ReviewView: Codable, Sendable, Hashable, Identifiable {
+    let task: Int
+    let title: String
+    let by: String?
+    let at: Double
+
+    var id: Int { task }
+    var date: Date { Date(timeIntervalSince1970: at / 1000) }
+}
+
 struct PlaceView: Codable, Sendable, Hashable, Identifiable {
     let key: String
     let kind: String
@@ -138,7 +148,10 @@ struct RoomView: Codable, Sendable, Hashable, Identifiable {
     let sideKey: String?
     let tasks: [TaskView]
     let asks: [AskView]
+    let reviews: [ReviewView]
     let last: MessageView?
+    let latest: MessageView?
+    let latestIn: String
     let place: String
     let places: [PlaceView]
 
