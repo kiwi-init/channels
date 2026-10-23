@@ -1110,9 +1110,9 @@ jobs:
 
   desktop-linux:
     name: desktop / linux
-    inputs: ["desktop/src/**", "desktop/build/icons/**", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "package.json", "bun.lock"]
+    inputs: ["desktop/src/**", "desktop/native/linux/**", "desktop/build/icons/**", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "package.json", "bun.lock"]
     imports_from: ["desktop/src/main-eb.ts"]
-    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/package-linux.ts", "desktop/scripts/linux-files.ts", "desktop/scripts/appimage-squashfs.ts"]
+    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/package-linux.ts", "desktop/scripts/linux-files.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/scripts/eb-linux-start.sh"]
     description: >-
       On an ubuntu runner (Electrobun builds only for the host it runs on), builds the Electrobun
       shell for Linux on WebKitGTK (issue #757, T444): web/dist, `electrobun prepare` (Hutch's
@@ -1135,7 +1135,19 @@ jobs:
       icon, or carries what it leaves out. It then installs the v0.26.0 Electron deb (pinned by sha256) and this
       deb over it, and fails unless /usr/bin/channels-desktop leads to /opt/Channels/bin/launcher, the
       Electron app is gone, the entry runs the launcher and dpkg --verify finds nothing; it prints the runner's
-      AppArmor user-namespace setting for WebKitGTK's sandbox. Both are kept as linux-packages for 3 days.
+      AppArmor user-namespace setting for WebKitGTK's sandbox.
+      Then it starts the installed app (T1545): desktop/native/linux/kiwi-shell.c, built by
+      eb-post-build into the bundle's bin as libkiwi-shell.so, is what main-eb.ts loads on Linux
+      too. desktop/native/linux/kiwi-shell-test.c (run under Xvfb against the installed library,
+      loaded after gtk_init as the app loads it) fails unless the program name and class are
+      channels-desktop (the Wayland app_id, which matches channels-desktop.desktop), a microphone
+      request on mock capture devices is denied (NotAllowedError) while a handler connected first to
+      allow everything, as Electrobun's Allow/Block dialog is, never runs, and a terminated web
+      process reaches kiwi_watch_page's callback. desktop/scripts/eb-linux-start.sh then starts
+      /opt/Channels/bin/launcher under Xvfb with a temp HOME and fails unless a window with
+      WM_CLASS Channels (Electrobun's own class, the entry's StartupWMClass) titled Channels opens
+      within 30 s, a WebKitWebProcess of the app's own runs 5 s later (so WebKitGTK's sandbox works
+      under the runner's AppArmor), the app is still up, and nothing of it is left 10 s after SIGTERM. Both are kept as linux-packages for 3 days.
 
   cli-macos:
     name: cli / macos

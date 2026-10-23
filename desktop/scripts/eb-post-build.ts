@@ -30,7 +30,12 @@ if (resources.length !== 1) throw new Error(`expected one app bundle (Resources/
 const views = path.join(resources[0] as string, "app", "views", "internal");
 fs.rmSync(views, { recursive: true, force: true });
 fs.cpSync(web, views, { recursive: true, filter: (src) => path.basename(src) !== "_headers" });
-if (os === "linux") process.exit(0);
+if (os === "linux") {
+  const webkit = execFileSync("pkg-config", ["--cflags", "--libs", "webkit2gtk-4.1"], { encoding: "utf8" }).trim().split(/\s+/);
+  const lib = path.join(path.dirname(resources[0] as string), "bin", "libkiwi-shell.so");
+  execFileSync("cc", ["-shared", "-fPIC", "-O2", "-Wall", "-Wextra", "-Werror", "-o", lib, path.join(desktop, "native", "linux", "kiwi-shell.c"), ...webkit], { stdio: "inherit" });
+  process.exit(0);
+}
 const contents = path.dirname(resources[0] as string);
 
 execFileSync(

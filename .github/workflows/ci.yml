@@ -391,6 +391,8 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
+      - name: WebKitGTK, Xvfb and the AppImage tools
+        run: sudo apt-get update -q && sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev xvfb xauth xdotool x11-utils squashfs-tools
       - run: bun run web:build
       - id: electrobun
         run: echo "version=$(bun -e 'console.log(require("./desktop/package.json").devDependencies.electrobun)')" >> "$GITHUB_OUTPUT"
@@ -405,9 +407,6 @@ jobs:
         env:
           DASH_RELEASE_OFFLINE: "1"
         run: bun run build:eb
-      - name: AppImage tools
-        if: ${{ !cancelled() }}
-        run: sudo apt-get update -q && sudo apt-get install -y --no-install-recommends squashfs-tools
       - name: deb and AppImage, each at most 40 MB
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/package-linux.ts desktop/release-eb desktop/release-eb/linux
@@ -453,8 +452,15 @@ jobs:
           [ -z "$verify" ] || { echo "dpkg --verify kiwi-desktop:"; echo "$verify"; exit 1; }
           echo "upgraded: $(dpkg-query -W kiwi-desktop), /usr/bin/channels-desktop -> $link"
           echo "for WebKitGTK's sandbox: kernel.apparmor_restrict_unprivileged_userns=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo unset), unshare -U as a user: $(unshare -U true 2>&1 && echo allowed || echo refused)"
-          sudo dpkg --purge kiwi-desktop
           rm old.deb
+      - name: the installed app starts on WebKitGTK, with the .desktop entry's names, and its permission and page hooks work
+        if: ${{ !cancelled() }}
+        run: |
+          cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-shell-test" desktop/native/linux/kiwi-shell-test.c $(pkg-config --cflags --libs webkit2gtk-4.1) -ldl
+          xvfb-run -a "$RUNNER_TEMP/kiwi-shell-test" /opt/Channels/bin/libkiwi-shell.so
+          echo "for WebKitGTK's sandbox: kernel.apparmor_restrict_unprivileged_userns=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo unset)"
+          xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh /opt/Channels/bin/launcher
+          sudo dpkg --purge kiwi-desktop
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

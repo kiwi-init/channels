@@ -21,11 +21,14 @@ useHost(ebHost);
 lockInternalRpc(internalRpcHandlers);
 
 const binDir = path.dirname(process.execPath);
+const mac = process.platform === "darwin";
+const shellPath = path.join(binDir, `libkiwi-shell.${suffix}`);
 
-const shell = dlopen(path.join(binDir, `libkiwi-shell.${suffix}`), {
+const shell = dlopen(shellPath, {
   kiwi_deny_permissions: { args: [], returns: FFIType.bool },
-  kiwi_window_look: { args: [FFIType.ptr, FFIType.f64, FFIType.f64, FFIType.u32, FFIType.u32], returns: FFIType.void },
 }).symbols;
+
+const windowLook = mac ? dlopen(shellPath, { kiwi_window_look: { args: [FFIType.ptr, FFIType.f64, FFIType.f64, FFIType.u32, FFIType.u32], returns: FFIType.void } }).symbols.kiwi_window_look : null;
 
 const core = dlopen(path.join(binDir, `libElectrobunCore.${suffix}`), {
   setWebviewHTMLContent: { args: [FFIType.u32, FFIType.ptr], returns: FFIType.void },
@@ -63,7 +66,7 @@ function createWindow(): void {
     title: "Channels",
     url: null,
     frame: { width: WINDOW_SIZE.width, height: WINDOW_SIZE.height },
-    titleBarStyle: "hiddenInset",
+    titleBarStyle: mac ? "hiddenInset" : "default",
     hidden: true,
     preload: preloadSource(snapshot(), bundled),
     rpc: bridge,
@@ -89,8 +92,8 @@ function createWindow(): void {
   for (const moved of ["did-commit-navigation", "did-navigate", "did-navigate-in-page"] as const) webview.on(moved, (e) => (ours = stillOurs(ours, committedUrl(detailOf(e)))));
   load();
   const look = win.ptr;
-  if (look) shell.kiwi_window_look(look, minWindowWidth(process.platform), WINDOW_SIZE.minHeight, rgb(windowBackground(false)), rgb(windowBackground(true)));
-  win.setWindowButtonPosition(TRAFFIC_LIGHTS.x, TRAFFIC_LIGHTS.y);
+  if (look && windowLook) windowLook(look, minWindowWidth(process.platform), WINDOW_SIZE.minHeight, rgb(windowBackground(false)), rgb(windowBackground(true)));
+  if (mac) win.setWindowButtonPosition(TRAFFIC_LIGHTS.x, TRAFFIC_LIGHTS.y);
   webview.on("will-navigate", (e) => {
     const nav = navigationUrl(detailOf(e));
     if (nav && !nav.allowed) openOutside(nav.url);
