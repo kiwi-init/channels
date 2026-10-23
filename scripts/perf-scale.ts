@@ -245,6 +245,7 @@ const TEXTS = [
   "PR is up: https://github.com/ojowwalker77/channels/pull/417 — CI green, waiting on review.",
 ];
 
+const SEEDED = "Seeded: a reload opens the channel here";
 const report: Record<string, unknown> = { agents: AGENTS, tasks: TASKS, messages: MESSAGES, soakMinutes: SOAK_MIN };
 const agents = Array.from({ length: AGENTS }, (_, i) => `agent${i}`);
 try {
@@ -259,7 +260,7 @@ try {
       };
       new MutationObserver((_, obs) => seen() && obs.disconnect()).observe(document, { childList: true, subtree: true, characterData: true });
     },
-    `Task ${TASKS - 1}:`,
+    SEEDED,
   );
   const page = await context.newPage();
   page.on("pageerror", (e) => log(`page error: ${e.message}`));
@@ -385,6 +386,7 @@ try {
   await mark("tasks added");
 
   await post(early, perSender);
+  await say(seats[0]!, SEEDED);
   report.seedSeconds = Math.round((Date.now() - seedStart) / 1000);
   const live = await drain(page);
   report["while seeding (page open on the channel)"] = { longTasks: live.longTasks, longMs: live.longMs, worstMs: live.worstMs, perMessageMs: Math.round((live.longMs / MESSAGES) * 10) / 10 };
@@ -399,7 +401,7 @@ try {
       const reloadAt = performance.now();
       await page.reload();
       await page
-        .getByText(lastTask)
+        .getByText(SEEDED)
         .filter({ visible: true })
         .first()
         .waitFor({ timeout: 60000 })
@@ -459,7 +461,7 @@ try {
     report[`@${throttle}x`] = {
       calibrationMs: calibration.ms,
       calibrationRepsMs: calibration.reps,
-      reloadToTasksMs: throttle === 1 ? reloadMs : undefined,
+      reloadToFirstScreenMs: throttle === 1 ? reloadMs : undefined,
       ...(switching
         ? {
             switchMedianMs: Object.fromEntries(Object.entries(views).map(([k, v]) => [k, median(v)])),
