@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { fakeHost } from "../../test/fake-host.ts";
 import type { KeysPort, StoreSnapshot } from "../src/bridge.ts";
-import { makeBridge } from "../src/calls.ts";
+import { makeBridge, type Handlers } from "../src/calls.ts";
 import { onOurPage } from "../src/eb-bridge.ts";
 import { PAGE_URL } from "../src/eb-page.ts";
 import { useHost } from "../src/host.ts";
@@ -78,10 +78,43 @@ describe("window.kiwi over Electrobun's RPC, both ends as the app wires them", (
 
   test("a call that isn't the bridge's is refused before any handler", async () => {
     at = PAGE_URL;
-    const loose = pageBridge(
-      (packet) => fromPage(wire(packet)),
-      (receive) => (toPage = receive),
+    expect(await settled(page.call("constructor" as "chooseFolder"))).toBe("refused the app has no such call");
+  });
+
+  test("a reloaded page never gets the previous load's replies, and the old page's late messages get nothing", async () => {
+    let release: (folder: string) => void = () => {};
+    const slow = new Promise<string>((r) => (release = r));
+    const table: Handlers = { ...handlers(shell.host), chooseFolder: () => slow };
+    let fromAnyPage: (frame: unknown) => void = () => {};
+    let toLoaded: (frame: unknown) => void = () => {};
+    const opened: string[] = [];
+    const reloading = bunBridge(
+      table,
+      () => true,
+      (frame) => toLoaded(wire(frame)),
+      (session) => opened.push(session),
     );
-    expect(await settled(loose.call("constructor" as "chooseFolder"))).toBe("refused the app has no such call");
+    reloading.setTransport({ registerHandler: (h) => (fromAnyPage = h) });
+    const first = pageBridge(
+      (frame) => fromAnyPage(wire(frame)),
+      (receive) => (toLoaded = receive),
+    );
+    const before = first.call("chooseFolder");
+    const second = pageBridge(
+      (frame) => fromAnyPage(wire(frame)),
+      (receive) => (toLoaded = receive),
+    );
+    const deep = second.call("getDeepLink");
+    release("/the/previous/load's/room");
+    expect(await settled(deep)).toBe("answered null");
+    expect(await settled(before)).toBe("no answer");
+    const done = shell.did.length;
+    expect(await settled(first.call("notify", "late", "from the old page"))).toBe("no answer");
+    expect(shell.did.slice(done)).toEqual([]);
+    const heard: string[] = [];
+    second.listen("deepLink", (u) => heard.push(u));
+    reloading.push("deepLink", "kiwi://join/mc2-after-reload");
+    await Bun.sleep(0);
+    expect({ opened, heard }).toEqual({ opened: [first.session, second.session], heard: ["kiwi://join/mc2-after-reload"] });
   });
 });

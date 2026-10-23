@@ -56,7 +56,8 @@ function createWindow(): void {
   const bridge = bunBridge(
     table,
     () => onOurPage(at),
-    (packet) => view?.executeJavascript(toPageScript(packet)),
+    (frame) => view?.executeJavascript(toPageScript(frame)),
+    () => bridge.push("store", snapshot()),
   );
   const win = new BrowserWindow({
     title: "Channels",
