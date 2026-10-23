@@ -1187,7 +1187,9 @@ jobs:
     imports_from: ["desktop/src/main-eb.ts"]
     always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/package-linux.ts", "desktop/scripts/linux-files.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/native/linux/**", "desktop/scripts/eb-linux-start.sh"]
     description: >-
-      On an ubuntu runner (Electrobun builds only for the host it runs on), builds the Electrobun
+      On an Ubuntu 26.04 runner, pinned rather than ubuntu-latest while that label moves from 24.04
+      to 26.04 (on 24.04 WebKitGTK's bubblewrap sandbox can't set up its loopback, so the web
+      process dies and the start check crashes) (Electrobun builds only for the host it runs on), builds the Electrobun
       shell for Linux on WebKitGTK (issue #757, T444): web/dist, `electrobun prepare` (Hutch's
       devkit, cached under ~/.hutch), then `bun run build:eb` (electrobun build --env=stable), with
       scripts/eb-pre-build.ts making the Mac iconset only on macOS and scripts/eb-post-build.ts
