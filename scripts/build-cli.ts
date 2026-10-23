@@ -15,6 +15,7 @@ const { values } = parseArgs({
     target: { type: "string" },
     outfile: { type: "string", default: "dist/kiwi" },
     check: { type: "boolean", default: false },
+    js: { type: "string" },
   },
 });
 
@@ -62,6 +63,17 @@ if (values.check) {
   } finally {
     rmSync(outdir, { recursive: true, force: true });
   }
+} else if (values.js !== undefined) {
+  const outfile = resolve(values.js);
+  const result = await Bun.build({ ...shared, splitting: false, target: "bun" });
+  if (failed(result)) process.exit(1);
+  const [out, ...more] = result.outputs;
+  if (!out || more.length) {
+    console.error(`expected the CLI as one JS file, got ${result.outputs.length}`);
+    process.exit(1);
+  }
+  await Bun.write(outfile, out);
+  console.log(`built ${outfile}: the CLI as one JS file, ${out.size} bytes, for the app to compile with its own Bun`);
 } else {
   const outfile = resolve(values.outfile);
   const result = await Bun.build({ ...shared, compile: target === undefined ? { outfile } : { target, outfile } });

@@ -340,7 +340,7 @@ jobs:
       - uses: ./.github/actions/setup
       - run: bun run web:build
       - name: the kiwi CLI the app bundles
-        run: mkdir -p dist && bun scripts/build-cli.ts --target bun-darwin-arm64 --outfile dist/kiwi && bun desktop/scripts/pack-cli.ts dist/kiwi
+        run: mkdir -p dist && bun scripts/build-cli.ts --js dist/kiwi.js
       - working-directory: desktop
         run: bun run typecheck:eb
       - working-directory: desktop

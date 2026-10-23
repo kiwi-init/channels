@@ -49,13 +49,33 @@ export function place(bundled: string, dest: string): Promise<void> {
   return done;
 }
 
+const CLI_EXTERNAL = ["node-liblzma", "@mongodb-js/zstd"];
+
+function run(file: string, args: string[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    execFile(file, args, { timeout: 60_000 }, (err, _out, stderr) => (err ? reject(new Error(`${path.basename(file)} failed: ${stderr.trim() || err.message}`)) : resolve()));
+  });
+}
+
+async function compile(bundle: string, out: string): Promise<void> {
+  const built = await Bun.build({ entrypoints: [bundle], compile: { outfile: out }, external: CLI_EXTERNAL, throw: false });
+  if (!built.success) throw new Error(`the kiwi CLI didn't build from ${bundle}: ${built.logs.map(String).join("; ")}`);
+  if (process.platform === "darwin") await run("/usr/bin/codesign", ["--force", "--sign", "-", out]);
+}
+
 async function unpack(bundled: string, dest: string): Promise<void> {
   await fs.promises.mkdir(path.dirname(dest), { recursive: true });
   const tmp = `${dest}.new-${process.pid}-${randomUUID()}`;
-  if (bundled.endsWith(".zst")) await pipeline(fs.createReadStream(bundled), zlib.createZstdDecompress(), fs.createWriteStream(tmp));
-  else await fs.promises.copyFile(bundled, tmp);
-  if (process.platform !== "win32") await fs.promises.chmod(tmp, 0o755);
-  await fs.promises.rename(tmp, dest);
+  try {
+    if (bundled.endsWith(".js")) await compile(bundled, tmp);
+    else if (bundled.endsWith(".zst")) await pipeline(fs.createReadStream(bundled), zlib.createZstdDecompress(), fs.createWriteStream(tmp));
+    else await fs.promises.copyFile(bundled, tmp);
+    if (process.platform !== "win32") await fs.promises.chmod(tmp, 0o755);
+    await fs.promises.rename(tmp, dest);
+  } catch (e) {
+    await fs.promises.rm(tmp, { force: true });
+    throw e;
+  }
 }
 
 function tidy(bin: string): Promise<void> {

@@ -18,9 +18,9 @@ if (!fs.existsSync(path.join(web, "index.html"))) throw new Error("web/dist/inde
 const views = path.join(contents, "Resources", "app", "views", "internal");
 fs.rmSync(views, { recursive: true, force: true });
 fs.cpSync(web, views, { recursive: true, filter: (src) => path.basename(src) !== "_headers" });
-const cli = path.resolve(desktop, "../dist/kiwi.zst");
-if (!fs.existsSync(cli)) throw new Error("dist/kiwi.zst is missing: run `bun scripts/build-cli.ts --outfile dist/kiwi && bun desktop/scripts/pack-cli.ts dist/kiwi` in the repo root first");
-fs.copyFileSync(cli, path.join(contents, "Resources", "kiwi.zst"));
+const cli = path.resolve(desktop, "../dist/kiwi.js");
+if (!fs.existsSync(cli)) throw new Error("dist/kiwi.js is missing: run `bun scripts/build-cli.ts --js dist/kiwi.js` in the repo root first");
+fs.copyFileSync(cli, path.join(contents, "Resources", "kiwi.js"));
 
 execFileSync(
   "clang",

@@ -12,7 +12,7 @@ import { requirePerson, store, upsertComputer } from "./store.ts";
 
 function bundledKiwi(): string {
   const exe = process.platform === "win32" ? "kiwi.exe" : "kiwi";
-  for (const name of [`${exe}.zst`, exe]) {
+  for (const name of [`${exe}.zst`, "kiwi.js", exe]) {
     const fromPkg = path.join(host().app.path("resources"), name);
     if (host().app.packaged() && fs.existsSync(fromPkg)) return fromPkg;
   }
