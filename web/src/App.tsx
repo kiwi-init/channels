@@ -87,7 +87,7 @@ export default function App() {
     if (last) setHash({ code: last })
   }
   useLayoutEffect(() => {
-    if (code && readHash().code !== code) history.replaceState(null, "", `${location.pathname}#${encodeURIComponent(code)}`)
+    if (code && readHash().code !== code) history.replaceState(null, "", `${location.pathname}${location.search}#${encodeURIComponent(code)}`)
   }, [code])
   useEffect(() => {
     if (code && rows.some((r) => r.code === code && r.state === "member")) rememberChannel(code)
@@ -119,7 +119,7 @@ export default function App() {
   }, [open])
 
   const close = useCallback(() => {
-    history.replaceState(null, "", location.pathname)
+    history.replaceState(null, "", `${location.pathname}${location.search}`)
     rememberChannel(null)
     setHash({ code: "" })
   }, [])

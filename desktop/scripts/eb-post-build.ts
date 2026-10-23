@@ -88,6 +88,7 @@ execFileSync(
     "CoreFoundation",
     "-framework",
     "Security",
+    ...(process.env.CHANNELS_EB_TEST === "1" ? ["-DKIWI_EB_TEST"] : []),
     "-o",
     path.join(contents, "MacOS", "kiwi-launcher"),
     path.join(desktop, "native", "macos", "kiwi-launcher.c"),

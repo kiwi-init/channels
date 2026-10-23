@@ -7,8 +7,10 @@ import { internalRpcHandlers } from "../.hutch/devkit/api/sdks/main/proc/native.
 import { startAppLife } from "./app-life-eb.ts";
 import { handleDeepLink, JOIN_SCHEME } from "./deep-links.ts";
 import { lockInternalRpc, onOurPage, preloadSource, toPageScript } from "./eb-bridge.ts";
+import { drive } from "./eb-driver.ts";
 import { navigationUrl, openedUrl, PAGE_RULES, PAGE_URL, pageWithCsp } from "./eb-page.ts";
-import { externalUrl } from "./guard.ts";
+import { testVault } from "./eb-test-store.ts";
+import { externalUrl, normalizeRelay } from "./guard.ts";
 import { attachKeys, attachWindow, bundle, ebHost } from "./host-eb.ts";
 import { useHost } from "./host.ts";
 import { handlers } from "./ipc/handlers.ts";
@@ -18,10 +20,12 @@ import { logMainError } from "./main-log.ts";
 import { openInBrowser } from "./open.ts";
 import { claimInstance, handoffFor, type Instance } from "./single-instance.ts";
 import { bunBridge } from "./rpc-eb.ts";
-import { brokenStore, openStore, snapshot, store, type StoreVault } from "./store.ts";
+import { brokenStore, mutate, openStore, snapshot, store, type StoreVault } from "./store.ts";
 import { startUpdates, updateState } from "./updater.ts";
 import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts";
 import { minWindowWidth } from "./window-size.ts";
+
+declare const KIWI_EB_TEST: boolean;
 
 useHost(ebHost);
 Electrobun.events.on("open-url", (e: { data?: { url?: unknown } }) => {
@@ -143,10 +147,18 @@ function createWindow(): BrowserWindow {
 }
 
 function start(instance: Extract<Instance, { kind: "first" }>): void {
-  openStore(memoryVault);
+  if (KIWI_EB_TEST) {
+    openStore(testVault(Utils.paths.userData));
+    const relay = normalizeRelay(process.env.KIWI_EB_RELAY ?? "");
+    if (relay) mutate((s) => void (s.relayUrl = relay));
+  } else openStore(memoryVault);
   attachKeys((m) => keys.tell(m));
   keys.start();
   const win = createWindow();
+  if (KIWI_EB_TEST) {
+    const socket = process.env.KIWI_EB_DRIVER;
+    if (socket) drive(win.webview, socket);
+  }
   const tray = startAppLife({
     win,
     view: win.webview,
