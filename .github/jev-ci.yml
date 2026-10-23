@@ -1058,7 +1058,9 @@ jobs:
       scripts/eb-pre-build.ts making the Mac iconset only on macOS and scripts/eb-post-build.ts
       copying web/dist into the bundle's Resources/app/views/internal on either OS (the Mac's native
       shell and launcher only on macOS). Then desktop/scripts/package-linux.ts makes today's two
-      Linux downloads from Electrobun's plain stable artifact (never its self-extracting setup):
+      Linux downloads from Electrobun's plain stable artifact (never its self-extracting setup), without
+      Electrobun's own updater tools (bspatch, zig-zstd: only its Updater uses them, and these packages
+      update as a whole file):
       Channels-<v>-linux-amd64.deb (package kiwi-desktop, so it replaces the Electron one, the app in
       /opt/Channels, /usr/bin/channels-desktop, a .desktop entry opening kiwi:// links, the hicolor
       icons, Depends on libwebkit2gtk-4.1-0, libgtk-3-0, libayatana-appindicator3-1 and librsvg2-2)
@@ -1066,7 +1068,7 @@ jobs:
       runtime, release 20251108 checked against its pinned sha256), and fails when either is over
       40 MB. scripts/appimage-squashfs.ts checks the AppImage's compression, and the job fails when
       the deb or the extracted AppImage lacks the launcher, Bun, the page, the .desktop entry or the
-      icon. Both are kept as linux-packages for 3 days.
+      icon, or carries bspatch or zig-zstd. Both are kept as linux-packages for 3 days.
 
   cli-macos:
     name: cli / macos

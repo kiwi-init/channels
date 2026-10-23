@@ -409,10 +409,16 @@ jobs:
           for p in ./opt/Channels/bin/launcher ./opt/Channels/bin/bun ./opt/Channels/Resources/app/views/internal/index.html ./usr/bin/channels-desktop ./usr/share/applications/channels-desktop.desktop ./usr/share/icons/hicolor/512x512/apps/channels-desktop.png; do
             [[ "$files" == *" $p"* ]] || { echo "$deb lacks $p"; exit 1; }
           done
+          for p in ./opt/Channels/bin/bspatch ./opt/Channels/bin/zig-zstd; do
+            [[ "$files" != *" $p"* ]] || { echo "$deb carries Electrobun's updater tool $p"; exit 1; }
+          done
           img=$(ls Channels-*-linux-x86_64.AppImage)
           "./$img" --appimage-extract > /dev/null
           for p in AppRun channels-desktop.desktop channels-desktop.png Channels/bin/launcher Channels/bin/bun Channels/Resources/app/views/internal/index.html; do
             [ -e "squashfs-root/$p" ] || { echo "$img lacks $p"; exit 1; }
+          done
+          for p in Channels/bin/bspatch Channels/bin/zig-zstd; do
+            [ ! -e "squashfs-root/$p" ] || { echo "$img carries Electrobun's updater tool $p"; exit 1; }
           done
           rm -rf squashfs-root
           echo "checked: $deb and $img"

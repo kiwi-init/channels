@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
-import { APP_RUN, appImageName, archOfArtifact, debControl, debName, desktopEntry, runtimeUrl } from "../desktop/scripts/linux-files.ts";
+import { APP_RUN, appImageName, archOfArtifact, debControl, debName, desktopEntry, runtimeUrl, UPDATER_TOOLS } from "../desktop/scripts/linux-files.ts";
 
 describe("the Linux packages made from Electrobun's bundle (T444)", () => {
   test("keep today's asset names, which the site's downloads and the updater look for", () => {
@@ -37,6 +37,10 @@ describe("the Linux packages made from Electrobun's bundle (T444)", () => {
     expect(control).toContain("Installed-Size: 113001\n");
     expect(control).toContain("Depends: libwebkit2gtk-4.1-0, libgtk-3-0, libayatana-appindicator3-1, librsvg2-2\n");
     expect(control.endsWith("\n")).toBe(true);
+  });
+
+  test("leave out Electrobun's own updater tools, which only its Updater runs: these packages update as a whole file", () => {
+    expect([...UPDATER_TOOLS]).toEqual(["bspatch", "zig-zstd"]);
   });
 
   test("the AppImage starts Electrobun's launcher from wherever it's mounted, with a pinned runtime", () => {

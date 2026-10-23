@@ -15,6 +15,7 @@ import {
   MAX_DOWNLOAD,
   RUNTIME_SHA256,
   runtimeUrl,
+  UPDATER_TOOLS,
   type LinuxArch,
 } from "./linux-files.ts";
 
@@ -46,6 +47,7 @@ function plainApp(tmp: string): { app: string; arch: LinuxArch; version: string 
   rmSync(tar);
   const app = join(into, "Channels");
   if (!existsSync(join(app, "bin", "launcher"))) throw new Error(`package-linux: ${name} has no Channels/bin/launcher`);
+  for (const tool of UPDATER_TOOLS) rmSync(join(app, "bin", tool), { force: true });
   const { version } = JSON.parse(readFileSync(join(app, "Resources", "version.json"), "utf8")) as { version: unknown };
   if (typeof version !== "string") throw new Error(`package-linux: ${name}'s version.json names no version`);
   return { app, arch, version };

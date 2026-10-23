@@ -5,6 +5,7 @@ export const PACKAGE = "kiwi-desktop";
 export const INSTALL_DIR = "/opt/Channels";
 export const DEPENDS = ["libwebkit2gtk-4.1-0", "libgtk-3-0", "libayatana-appindicator3-1", "librsvg2-2"] as const;
 export const MAX_DOWNLOAD = 40 * 1024 ** 2;
+export const UPDATER_TOOLS = ["bspatch", "zig-zstd"] as const;
 
 export const RUNTIME_RELEASE = "20251108";
 export const RUNTIME_SHA256: Record<LinuxArch, string> = {
