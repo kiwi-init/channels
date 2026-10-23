@@ -520,6 +520,19 @@ try {
       await shoot(
         owner,
         tag,
+        "06b-thread-panel",
+        async () => {
+          await owner
+            .getByRole("button", { name: /^\d+ repl(y|ies)/ })
+            .first()
+            .click();
+          await owner.getByRole("complementary", { name: "Thread" }).waitFor();
+        },
+        () => owner.getByRole("button", { name: "Close thread" }).click(),
+      );
+      await shoot(
+        owner,
+        tag,
         "15-needs-you",
         async () => {
           if (narrow) await toTab("Tasks");
