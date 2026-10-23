@@ -7,6 +7,9 @@ import { bindHeldSeat, holdSeat, releaseSeat, SEAT_TOKEN, type HoldChange } from
 import { loginShell } from "../launch/shell.ts";
 import { loginArgv } from "../terminals/shared/launch.ts";
 import type { Recipe, Started } from "./recipes.ts";
+import { kimiScreen, listenersUnder, paneText, typeInto } from "./kimi.ts";
+import { tmuxSocket } from "../terminals/shared/tmux.ts";
+import { pidAlive } from "../seats.ts";
 import { firstPrompt, nextWork, workName, workOver, type Work } from "./work.ts";
 
 const POLL_MS = 2_000;
@@ -129,8 +132,13 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
     yield* say(`${workName(first)}: started ${recipe.label} (pid ${child.pid})`);
 
     let found: Started | null = null;
+    const strays = new Set<number>();
+    const noteStrays = () => {
+      for (const pid of listenersUnder(child.pid)) strays.add(pid);
+    };
     const end = (why: Ended) =>
       Effect.gen(function* () {
+        if (!exited) noteStrays();
         if (!exited) {
           yield* hold(seat);
           const until = why.kind === "done" ? Date.now() + IDLE_WAIT_MS : 0;
@@ -141,11 +149,18 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
           if (!exited) child.kill("SIGKILL");
           yield* Effect.promise(() => child.exited);
         }
+        for (const pid of strays) if (pidAlive(pid)) process.kill(pid, "SIGTERM");
+        if (strays.size) yield* say(`stopped ${strays.size} kiwi listener${strays.size > 1 ? "s" : ""} the session left running`);
         stop.busy = false;
         return why;
       });
 
-    while (!found && !exited && !stop.asked && Date.now() - started < BIND_MS) {
+    if (recipe.typed) {
+      const typed = yield* typeFirst(child.pid, launched, () => exited, stop);
+      if (!typed) return yield* end(exited ? { kind: "own", lived: Date.now() - started } : stop.asked ? { kind: "stopped" } : { kind: "unbound" });
+    }
+    const binding = Date.now();
+    while (!found && !exited && !stop.asked && Date.now() - binding < BIND_MS) {
       found = recipe.started(child.pid, started, nonce);
       if (!found) yield* Effect.sleep(100);
     }
@@ -158,6 +173,7 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
     while (true) {
       if (exited) return yield* end({ kind: "own", lived: Date.now() - started });
       if (stop.asked) return yield* end({ kind: "stopped" });
+      noteStrays();
       const seen = yield* look(s);
       if (work.kind === "answering") {
         const taken = nextWork(seen.state, seat.me, 0);
@@ -170,6 +186,25 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
       if (over) return yield* end({ kind: "done", work });
       yield* Effect.sleep(POLL_MS);
     }
+  });
+}
+
+function typeFirst(pid: number, text: string, exited: () => boolean, stop: { asked: boolean }): Effect.Effect<boolean> {
+  return Effect.gen(function* () {
+    const socket = tmuxSocket(process.env);
+    const pane = process.env.TMUX_PANE;
+    if (!socket || !pane) return false;
+    let told = false;
+    while (!exited() && !stop.asked) {
+      const screen = kimiScreen(paneText(socket, pane));
+      if (screen === "ready") return typeInto(socket, pane, text);
+      if (screen === "trust" && !told) {
+        told = true;
+        yield* say(`waiting for you to answer the trust prompt in this window (pid ${pid})`);
+      }
+      yield* Effect.sleep(500);
+    }
+    return false;
   });
 }
 

@@ -5,10 +5,11 @@ import { claudeArgv, claudeSession } from "./claude.ts";
 import { codexArgv, codexIdle, codexThread } from "./codex.ts";
 import { grokArgv, grokIdle, grokSession } from "./grok.ts";
 import { mimoArgv, mimoIdle, mimoSession } from "./mimo.ts";
+import { kimiArgv, kimiIdle, kimiSession } from "./kimi.ts";
 import { installMimo, mimoInstalled } from "../hooks/install/mimo.ts";
 import { startListener } from "../hooks/reach.ts";
 
-export const LOOP_HARNESSES = ["claude", "codex", "grok", "mimo"] as const;
+export const LOOP_HARNESSES = ["claude", "codex", "grok", "mimo", "kimi"] as const;
 
 export type LoopHarness = (typeof LOOP_HARNESSES)[number];
 
@@ -36,6 +37,7 @@ export interface Recipe {
   firstLine: string | null;
   stopSignal: "SIGTERM" | "SIGINT";
   takesEffort: boolean;
+  typed: boolean;
   started: (pid: number, since: number, nonce: string) => Started | null;
 }
 
@@ -53,6 +55,7 @@ export function recipeFor(harness: LoopHarness): Omit<Recipe, "bin"> {
         firstLine: null,
         stopSignal: "SIGTERM",
         takesEffort: true,
+        typed: false,
         hooks: () => (process.env.KIWI_NO_HOOKS || loadConfig().claudeHooks === "off" || hooksInstalled() ? null : installHooks()),
         started: (pid) => {
           const found = claudeSession(pid);
@@ -67,6 +70,7 @@ export function recipeFor(harness: LoopHarness): Omit<Recipe, "bin"> {
         firstLine: null,
         stopSignal: "SIGTERM",
         takesEffort: true,
+        typed: false,
         hooks: () => (process.env.KIWI_NO_HOOKS || loadConfig().harnessHooks?.codex === "off" || extraInstalled("codex") ? null : installExtra("codex")),
         started: (pid, since, nonce) => {
           const found = codexThread(nonce, since);
@@ -81,6 +85,7 @@ export function recipeFor(harness: LoopHarness): Omit<Recipe, "bin"> {
         firstLine: startListener("kiwi", "grok"),
         stopSignal: "SIGTERM",
         takesEffort: true,
+        typed: false,
         hooks: () => (process.env.KIWI_NO_HOOKS || loadConfig().harnessHooks?.grok === "off" || extraInstalled("grok") ? null : installExtra("grok")),
         started: (pid, since, nonce) => {
           const found = grokSession(nonce, since);
@@ -95,10 +100,26 @@ export function recipeFor(harness: LoopHarness): Omit<Recipe, "bin"> {
         firstLine: null,
         stopSignal: "SIGINT",
         takesEffort: false,
+        typed: false,
         hooks: () => (process.env.KIWI_NO_HOOKS || loadConfig().harnessHooks?.mimo === "off" || mimoInstalled() ? null : installMimo()),
         started: (pid, since, nonce) => {
           const found = mimoSession(nonce, since);
           return found ? { id: found, bound: { harness, session: found, pid }, idle: () => mimoIdle(found) } : null;
+        },
+      };
+    case "kimi":
+      return {
+        harness,
+        label: "Kimi Code",
+        argv: (launch) => kimiArgv(launch),
+        firstLine: startListener("kiwi", "kimi"),
+        stopSignal: "SIGTERM",
+        takesEffort: false,
+        typed: true,
+        hooks: () => (process.env.KIWI_NO_HOOKS || loadConfig().harnessHooks?.kimi === "off" || extraInstalled("kimi") ? null : installExtra("kimi")),
+        started: (pid, since, nonce) => {
+          const found = kimiSession(nonce, since);
+          return found ? { id: found.session, bound: { harness, pid }, idle: () => kimiIdle(found.dir) } : null;
         },
       };
     default: {
