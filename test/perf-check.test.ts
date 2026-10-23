@@ -16,7 +16,7 @@ function run(tasksMs: number, i: number, speed = 1, calibrated = true, at: Parti
   writeFileSync(
     file,
     JSON.stringify({
-      "@1x": { reloadToTasksMs: reload.total, ...calibration("@1x") },
+      "@1x": { reloadToFirstScreenMs: reload.total, ...calibration("@1x") },
       "reload, in page": { firstScreenMs: reload.inPage },
       "@4x": { switchMedianMs: { Tasks: tasksMs, Agents: 90, Conversation: 95 }, ...calibration("@4x") },
       "typing while 10 agents post": { p95Ms: 30 },

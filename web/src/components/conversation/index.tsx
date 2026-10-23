@@ -69,7 +69,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const [here, setHere] = useState<string>("main")
   const [cardRoom, setCardRoom] = useState<string>(GENERAL_ROOM)
   const [side, setSide] = useState<Side>(null)
-  const [tab, setTab] = useState<Tab>("tasks")
+  const [tab, setTab] = useState<Tab>("conversation")
   const [view, setView] = useState<View>("everything")
   const [earlier, setEarlier] = useState(false)
   const sideRoot = side?.kind === "thread" ? side.root : null

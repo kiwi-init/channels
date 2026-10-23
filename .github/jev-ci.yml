@@ -877,10 +877,10 @@ jobs:
       run scripts/perf-scale.ts --gated once without the soak (only what perf-check gates: no
       1x tab switches, details toggles, profiles or second reload; the nightly runs it whole): a
       local relay and headless Chromium with
-      10 agents, 100 tasks and 2000 messages (the agents join at once and the seeding sends through each agent's own session, src/agent.ts, on a local relay started with --dev-no-rate-limits, so no per-minute cap slows it), timing the reload to the first screen, the Tasks,
+      10 agents, 100 tasks and 2000 messages (the agents join at once and the seeding sends through each agent's own session, src/agent.ts, on a local relay started with --dev-no-rate-limits, so no per-minute cap slows it), timing the reload to the first screen (the conversation a channel opens on, down to the last message seeded), the Tasks,
       Agents and Conversation tabs at 4x CPU and typing while the agents post (their burst sent through those same in-process sessions, so no ten CLI start-ups compete with the browser for the CPU; the p95 is over every key event typed, those under 16 ms, which Event Timing doesn't report, counted at 16), then run
       scripts/perf-feel.ts with PERF_RTT_MS=150 (one channel of 400 messages and 12 tasks behind a
-      proxy that delays HTTP and the WebSocket by half the round trip each way: reload to the board,
+      proxy that delays HTTP and the WebSocket by half the round trip each way: reload to the first screen,
       Enter to an empty composer and to the bubble, layout shift switching Tasks / #general and
       opening tasks, false screens like Add an agent during five reloads, frames over 33 ms
       scrolling the channel), and upload both as the perf-scale-N artifact (overwrite: a re-run of a
