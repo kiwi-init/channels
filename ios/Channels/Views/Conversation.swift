@@ -355,24 +355,51 @@ struct BubbleRow: View {
                 .opacity(Double(reveal / 62))
                 .offset(x: 62 - reveal + 4)
         }
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 14)
-                .onChanged { drag in
-                    let dx = drag.translation.width
-                    guard dx > 0, abs(dx) > abs(drag.translation.height) * 1.3 else { return }
-                    pull = min(84, dx * 0.6)
-                    let now = pull >= Self.replyAt
-                    if now != armed {
-                        armed = now
-                        if now { Haptic.tap() }
-                    }
+        .gesture(
+            Rightward { dx in
+                pull = min(84, max(0, dx) * 0.6)
+                let now = pull >= Self.replyAt
+                if now != armed {
+                    armed = now
+                    if now { Haptic.tap() }
                 }
-                .onEnded { _ in
-                    if armed { reply(message) }
-                    armed = false
-                    withAnimation(.spring(duration: 0.3, bounce: 0.2)) { pull = 0 }
-                }
+            } ended: {
+                if armed { reply(message) }
+                armed = false
+                withAnimation(.spring(duration: 0.3, bounce: 0.2)) { pull = 0 }
+            }
         )
+    }
+}
+
+struct Rightward: UIGestureRecognizerRepresentable {
+    let moved: (CGFloat) -> Void
+    let ended: () -> Void
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Only {
+        Only()
+    }
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let pan = UIPanGestureRecognizer()
+        pan.delegate = context.coordinator
+        return pan
+    }
+
+    func handleUIGestureRecognizerAction(_ pan: UIPanGestureRecognizer, context: Context) {
+        switch pan.state {
+        case .began, .changed: moved(pan.translation(in: pan.view).x)
+        case .ended, .cancelled, .failed: ended()
+        default: break
+        }
+    }
+
+    final class Only: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = recognizer as? UIPanGestureRecognizer else { return false }
+            let v = pan.velocity(in: pan.view)
+            return v.x > 0 && v.x > abs(v.y) * 1.3
+        }
     }
 }
 

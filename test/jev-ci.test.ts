@@ -105,7 +105,7 @@ const ran = (r: Plan) =>
     .filter((d) => d.run)
     .map((d) => d.job)
     .sort();
-const CHECKS = ["static", "test-unit", "test-flows-a", "test-flows-b", "build", "shots", "perf-runs", "perf", "desktop", "cli-macos", "ios"];
+const CHECKS = ["static", "test-unit", "test-flows-a", "test-flows-b", "build", "shots", "perf-runs", "perf", "desktop", "cli-macos", "ios", "ios-gestures"];
 
 describe("ci.yml edits outside the jobs", () => {
   test("a concurrency-only edit (#315) runs only the static checks, by rule", async () => {
