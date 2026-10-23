@@ -3,7 +3,7 @@ import type { FoldBase } from "@kiwi/core/state.ts"
 import type { OpenedCache } from "../history"
 import { planReload } from "../history-plan"
 import { baseFrom, startsWhole, usableBase } from "./base-plan"
-import type { Kept } from "./kept"
+import { keptBaseUpTo, type Kept } from "./kept"
 import { heldWindow, type Warm } from "./warm"
 
 export interface Planned {
@@ -71,7 +71,7 @@ export async function openChannel(steps: OpenSteps, was: Warm | undefined, limit
   const firstSeq = held ? held.firstSeq : cached?.firstSeq
   const from = baseFrom(since, firstSeq)
   const kept = was?.base ? null : await steps.kept()
-  const keptBase = usableBase(kept?.base ?? null, from)
+  const keptBase = usableBase(keptBaseUpTo(kept, head), from)
   const warm = usableBase(was?.base ?? null, from) ?? keptBase
   const snap = from > 0 && !warm ? await steps.snapshot() : null
   const base = usableBase(snap, from) ?? keptBase

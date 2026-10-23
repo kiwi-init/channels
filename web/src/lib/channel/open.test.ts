@@ -152,4 +152,15 @@ describe("opening a channel", () => {
     await r.roundTrip()
     expect(r.painted.map((p) => p.at)).toEqual([1])
   })
+
+  test("a kept base past the relay's head is left out: the snapshot is asked for and painted instead", async () => {
+    const r = relay()
+    const steps = r.make(5000, range(3001, 5000), 3000, kept(6000))
+    void openChannel(steps, undefined, 2000)
+    await r.settle()
+    await r.roundTrip()
+    await r.roundTrip()
+    expect(r.log).toContain("snapshot@1")
+    expect(r.painted).toEqual([{ at: 2, seqs: range(3001, 5000), base: 3000 }])
+  })
 })

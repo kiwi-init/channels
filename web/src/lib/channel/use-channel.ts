@@ -24,7 +24,7 @@ import { forgetChannel, loadMember, renameChannel, type StoredMember } from "./s
 import { hear, onlineByName, type Online } from "./online"
 import { trimmed } from "./trim"
 import { foldRoster } from "./fold-roster"
-import { asKept } from "./kept"
+import { asKept, toKept } from "./kept"
 import { onceEach, openChannel, warmUp } from "./open"
 import { dropWarm, keepWarm, warmOf } from "./warm"
 
@@ -86,7 +86,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
     if (!start || gone) return
     const t = setTimeout(() => {
       void ch
-        .keep({ roster, base, guardFloor, roomsFloor })
+        .keep(toKept({ roster, base, guardFloor, roomsFloor }))
         .then((sealed) => (sealed ? rememberKept(ch.roomId, ch.pk, sealed) : undefined))
         .catch(() => {})
     }, KEEP_DELAY_MS)
