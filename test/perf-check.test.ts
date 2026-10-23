@@ -122,7 +122,7 @@ test("perf-feel runs are told apart by their rttMs, graded by their own median, 
   expect(ok.code).toBe(0);
   expect(ok.out).toContain("perf-feel, median of 3");
   const screens = budgets.feelFalseScreens!;
-  expect(ok.out).toContain(`| ${screens.what} | 0.3 | | ${screens.gate} | ${screens.budget} |`);
+  expect(ok.out).toContain(`| ${screens.what} | 0.25 | | ${screens.gate} | ${screens.budget} |`);
   const flash = check([...scaled, feel(4, { falseScreens: 2 }), feel(5, { falseScreens: 1 }), feel(6)]);
   expect(flash.code).toBe(1);
   expect(flash.out).toContain(`${screens.what}: 1, over its gate ${screens.gate} (feelFalseScreens)`);
