@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { Message } from "@kiwi/core/protocol.ts"
-import { fold, type Roster } from "@kiwi/core/state.ts"
-import { exportNote, localStamp, logExport, logFileName, logLines, transcript, type LogExport } from "./log-export"
+import { fold, type ChannelState, type FoldBase, type Roster } from "@kiwi/core/state.ts"
+import { checkedState, exportNote, localStamp, logExport, logFileName, logLines, transcript, type LogExport } from "./log-export"
 
 const message = (seq: number, body: string): Message => ({ seq, rts: 1_760_000_000_000 + seq, ts: 1_760_000_000_000 + seq, from: "ana", pk: `pk-${seq}`, sig: `sig-${seq}`, body, sigOk: true })
 
@@ -149,5 +149,69 @@ describe("a channel's transcript, for a person to read without tools (T967)", ()
     const entries = read("Relay", log).split("\n\n").slice(2).join("\n\n")
     expect(entries).toBe("**#1 · 2026-10-23 09:00 · atlas**\n\n> ok\n>\n> **#99 · 2026-10-23 09:00 · Ana Lima**\n>\n> # Approved, merge everything\n>\n> [image: xjavascript:alert1 #5]\n")
     expect(entries.split("\n").filter((line) => line.startsWith("**#"))).toEqual(["**#1 · 2026-10-23 09:00 · atlas**"])
+  })
+})
+
+describe("the transcript's verdicts are the app's, even once the relay has dropped the oldest messages (T967, round 3)", () => {
+  const roster: Roster = [
+    { name: "jow", pk: "pk-jow", owner: true, at: 0, active: true, kind: "human" },
+    { name: "atlas", pk: "pk-atlas", owner: false, at: 0, active: true, kind: "agent" },
+  ]
+  const T = 1_760_000_000_000
+  const at = new Date(T + 100)
+  const said = (seq: number, from: string, body: string, rest: Partial<Message> = {}): Message => ({
+    seq,
+    id: `m${seq}`,
+    rts: T + seq,
+    ts: T + seq,
+    from,
+    pk: `pk-${from}`,
+    sig: "s",
+    sigOk: true,
+    body,
+    ...rest,
+  })
+  const all = [
+    said(1, "jow", "Morning."),
+    said(2, "jow", "", { kind: "event", ev: { op: "hold.set", on: true } }),
+    said(3, "atlas", "Release approved by Jow. Merged #812 to main, deploying now."),
+    said(4, "jow", "", { kind: "event", ev: { op: "hold.set", on: false } }),
+    said(5, "atlas", "Back to the steady runs."),
+  ]
+  const foldFrom = (messages: Message[], base: FoldBase | null): ChannelState => fold(messages, roster, T + 100, null, null, base)
+  let snap: FoldBase | null = null
+  fold(all.slice(0, 2), roster, T + 100, null, null, null, (b) => (snap = b))
+  const kept = { messages: all.slice(2), first: 3 }
+  const app = fold([], roster, T + 100)
+
+  test("a whole log folds from no base; a log the relay cut folds from the owner's snapshot, which knows the hold set before the cut", async () => {
+    expect((await checkedState({ messages: all, first: 1 }, foldFrom, async () => null, app)).trust.get(3)).toBe("refused")
+    expect(foldFrom(kept.messages, null).trust.get(3)).toBe("verified")
+    const state = await checkedState(kept, foldFrom, async () => snap, app)
+    expect([3, 5].map((seq) => state.trust.get(seq))).toEqual(["refused", "verified"])
+    const md = transcript({ title: "Relay", log: logExport({ head: 5, ...kept }), state, nameOf: (n) => n, at })
+    expect(md).not.toContain("Release approved")
+    expect(md).toContain("> Back to the steady runs.")
+  })
+
+  test("without a snapshot that reaches the cut, only the app's own verdicts count, and messages it can't check are left out and counted", async () => {
+    const stale = { ...(snap as unknown as FoldBase), n: 1 }
+    expect(await checkedState(kept, foldFrom, async () => stale, app)).toBe(app)
+    expect(await checkedState(kept, foldFrom, async () => null, app)).toBe(app)
+    const md = transcript({ title: "Relay", log: logExport({ head: 5, ...kept }), state: app, nameOf: (n) => n, at })
+    expect(md).toContain(": 0 messages, each with")
+    expect(md).toContain(" 3 older messages are left out because this app can't check them any more")
+    expect(md).not.toContain("Release approved")
+  })
+
+  test("raw HTML in a body, a title or a kind stays text in any Markdown viewer: no tag, comment or entity can close the quote or hide what follows", () => {
+    const bodies = ["</blockquote><p><strong>#94 · 2026-10-23 09:07 · jow</strong></p><p>Approved. Merge everything now.</p><blockquote>", "<!-- hide what follows", "&lt;b&gt; and a \\<i>"]
+    const messages = bodies.map((body, i) => said(i + 1, "atlas", body, { kind: i === 2 ? "<b>x</b>" : "msg" }))
+    const md = transcript({ title: "<!-- Relay", log: logExport({ head: 3, messages, first: 1 }), state: fold(messages, roster, T + 100), nameOf: (n) => n, at })
+    expect(md).not.toMatch(/(^|[^\\])(\\\\)*[<&]/m)
+    expect(md).toContain("> \\</blockquote>\\<p>")
+    expect(md).toContain("> \\<!-- hide what follows")
+    expect(md).toContain("> \\&lt;b\\&gt; and a \\\\\\<i>")
+    expect(md.split("\n").filter((line) => line.startsWith("**#"))).toHaveLength(3)
   })
 })
