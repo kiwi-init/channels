@@ -2,7 +2,8 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-import { bundleProblems } from "./eb-bundle.ts";
+import { JOIN_SCHEME } from "../src/deep-links.ts";
+import { bundleProblems, urlSchemeProblems } from "./eb-bundle.ts";
 
 const buildDir = process.env.ELECTROBUN_BUILD_DIR;
 const os = process.env.ELECTROBUN_OS;
@@ -45,5 +46,8 @@ execFileSync(
 );
 
 const app = path.join(contents, "Resources", "app");
-const problems = bundleProblems(fs.readFileSync(path.join(app, "bun", "index.js"), "utf8"), fs.readFileSync(path.join(app, "views", "preload", "index.js"), "utf8"));
+const problems = [
+  ...bundleProblems(fs.readFileSync(path.join(app, "bun", "index.js"), "utf8"), fs.readFileSync(path.join(app, "views", "preload", "index.js"), "utf8")),
+  ...urlSchemeProblems(fs.readFileSync(path.join(contents, "Info.plist"), "utf8"), process.env.ELECTROBUN_APP_IDENTIFIER ?? "", JOIN_SCHEME),
+];
 if (problems.length) throw new Error(`eb-post-build: ${problems.join("; ")}`);

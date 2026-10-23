@@ -22,6 +22,9 @@ import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts"
 import { minWindowWidth } from "./window-size.ts";
 
 useHost(ebHost);
+Electrobun.events.on("open-url", (e: { data?: { url?: unknown } }) => {
+  if (typeof e.data?.url === "string") handleDeepLink(e.data.url);
+});
 lockInternalRpc(internalRpcHandlers);
 
 const binDir = path.dirname(process.execPath);
@@ -132,10 +135,18 @@ BrowserView.on("created", (tag) => tag.remove());
 const instance = await claimInstance({
   dir: Utils.paths.userData,
   handoff: handoffFor(process.argv, JOIN_SCHEME),
+  scheme: JOIN_SCHEME,
   onHandoff: (h) => (h.kind === "link" ? handleDeepLink(h.url) : ebHost.showWindow()),
+}).catch((e: unknown) => {
+  logMainError(e);
+  console.error("Channels: couldn't take the single-instance lock in its data folder", e);
+  return null;
 });
-if (instance.kind === "second") Utils.quit(0);
-else if (!shell.kiwi_deny_permissions()) {
+if (!instance) Utils.quit(1);
+else if (instance.kind === "second") {
+  if (!instance.delivered) console.error("Channels: another Channels holds this data folder and didn't answer; quitting");
+  Utils.quit(0);
+} else if (!shell.kiwi_deny_permissions()) {
   console.error("Channels: the web view's permission handler wasn't found; not opening a window that could grant the microphone");
   instance.release();
   Utils.quit(1);

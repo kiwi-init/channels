@@ -1,7 +1,6 @@
 import Electrobun, { Utils, type BrowserView, type BrowserWindow } from "electrobun/main";
 
 import { textStepOf, type MenuAction } from "./app-menus.ts";
-import { handleDeepLink } from "./deep-links.ts";
 import { createTray, setAppMenu, type AppTray } from "./menus-eb.ts";
 import type { TextStep } from "./text-size.ts";
 import type { UpdateState } from "./updater.ts";
@@ -23,6 +22,7 @@ export interface LifeShell {
 export function startAppLife(shell: LifeShell): AppTray {
   let quitting = false;
   let flushed = false;
+  let flushing: Promise<void> | null = null;
   const act = (a: MenuAction): void => {
     const step = textStepOf(a);
     if (step) return shell.textStep(step);
@@ -32,9 +32,6 @@ export function startAppLife(shell: LifeShell): AppTray {
     else if (a === "reload") shell.reload();
     else if (a === "devtools") shell.view.toggleDevTools();
   };
-  Electrobun.events.on("open-url", (e: { data?: { url?: unknown } }) => {
-    if (typeof e.data?.url === "string") handleDeepLink(e.data.url);
-  });
   Electrobun.events.on("reopen", () => shell.showWindow());
   Electrobun.events.on(`will-close-${shell.win.id}`, (e: { response?: { allow: boolean } }) => {
     if (quitting) return;
@@ -59,7 +56,7 @@ export function startAppLife(shell: LifeShell): AppTray {
       return;
     }
     e.response = { allow: false };
-    void flushThenQuit();
+    flushing ??= flushThenQuit();
   });
   setAppMenu(act);
   return createTray(act, shell.update());

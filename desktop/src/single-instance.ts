@@ -10,6 +10,7 @@ export type Instance = { kind: "first"; listening: boolean; release: () => void 
 export interface InstanceOptions {
   dir: string;
   handoff: Handoff;
+  scheme: string;
   onHandoff: (h: Handoff) => void;
   waitMs?: number;
   platform?: NodeJS.Platform;
@@ -35,7 +36,7 @@ export function handoffFor(argv: readonly string[], scheme: string): Handoff {
   return url && url.length <= MAX_URL ? { kind: "link", url } : { kind: "show" };
 }
 
-export function readHandoff(line: string): Handoff | null {
+export function readHandoff(line: string, scheme: string): Handoff | null {
   let v: unknown;
   try {
     v = JSON.parse(line);
@@ -46,11 +47,11 @@ export function readHandoff(line: string): Handoff | null {
   if (!v || typeof v !== "object") return null;
   const { kind, url } = v as { kind?: unknown; url?: unknown };
   if (kind === "show") return { kind: "show" };
-  if (kind === "link" && typeof url === "string" && url.length <= MAX_URL) return { kind: "link", url };
+  if (kind === "link" && typeof url === "string" && url.length <= MAX_URL && url.startsWith(`${scheme}://`)) return { kind: "link", url };
   return null;
 }
 
-function serve(socket: string, onHandoff: (h: Handoff) => void): Promise<net.Server> {
+function serve(socket: string, scheme: string, onHandoff: (h: Handoff) => void): Promise<net.Server> {
   const server = net.createServer((conn) => {
     let buf = "";
     let answered = false;
@@ -62,7 +63,7 @@ function serve(socket: string, onHandoff: (h: Handoff) => void): Promise<net.Ser
       const end = buf.indexOf("\n");
       if (end < 0 && buf.length <= MAX_LINE) return;
       answered = true;
-      const h = end >= 0 ? readHandoff(buf.slice(0, end)) : null;
+      const h = end >= 0 ? readHandoff(buf.slice(0, end), scheme) : null;
       conn.end(h ? "ok\n" : "no\n");
       if (h) onHandoff(h);
     });
@@ -89,13 +90,14 @@ function deliver(socket: string, h: Handoff): Promise<boolean> {
   });
 }
 
-export async function claimInstance({ dir, handoff, onHandoff, waitMs = 5000, platform = process.platform }: InstanceOptions): Promise<Instance> {
+export async function claimInstance({ dir, handoff, scheme, onHandoff, waitMs = 5000, platform = process.platform }: InstanceOptions): Promise<Instance> {
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  fs.chmodSync(dir, 0o700);
   const socket = path.join(dir, SOCKET_FILE);
   const fd = fs.openSync(path.join(dir, LOCK_FILE), fs.constants.O_CREAT | fs.constants.O_RDWR | oCloexec(platform), 0o600);
   if (flock(platform)(fd, LOCK_EX | LOCK_NB) === 0) {
     fs.rmSync(socket, { force: true });
-    const server = await serve(socket, onHandoff).catch(() => null);
+    const server = await serve(socket, scheme, onHandoff).catch(() => null);
     let released = false;
     return {
       kind: "first",

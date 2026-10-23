@@ -22,7 +22,7 @@ afterEach(() => {
 });
 
 const claim = async (dir: string, handoff: Handoff, got: Handoff[] = [], waitMs = 500): Promise<Instance> => {
-  const i = await claimInstance({ dir, handoff, onHandoff: (h) => got.push(h), waitMs });
+  const i = await claimInstance({ dir, handoff, scheme: "kiwi", onHandoff: (h) => got.push(h), waitMs });
   held.push(i);
   return i;
 };
@@ -35,6 +35,14 @@ describe("one Channels per data folder, taken before the store opens (T438)", ()
     expect(fs.statSync(dir).mode & 0o777).toBe(0o700);
     expect(fs.statSync(path.join(dir, SOCKET_FILE)).mode & 0o777).toBe(0o600);
     expect(fs.statSync(path.join(dir, LOCK_FILE)).mode & 0o777).toBe(0o600);
+  });
+
+  test("a data folder that already exists is closed to other users too", async () => {
+    const dir = fresh();
+    fs.mkdirSync(dir, { recursive: true, mode: 0o755 });
+    fs.chmodSync(dir, 0o755);
+    await claim(dir, { kind: "show" });
+    expect(fs.statSync(dir).mode & 0o777).toBe(0o700);
   });
 
   test("a second start hands its kiwi:// link to the first and is told to go", async () => {
@@ -71,7 +79,7 @@ describe("one Channels per data folder, taken before the store opens (T438)", ()
   test("a lock held by a process that died is free again: the kernel drops it", async () => {
     const dir = fresh();
     const script = `import { claimInstance } from ${JSON.stringify(path.resolve(import.meta.dir, "../desktop/src/single-instance.ts"))};
-      const i = await claimInstance({ dir: ${JSON.stringify(dir)}, handoff: { kind: "show" }, onHandoff: () => {} });
+      const i = await claimInstance({ dir: ${JSON.stringify(dir)}, handoff: { kind: "show" }, scheme: "kiwi", onHandoff: () => {} });
       console.log(i.kind); process.exit(0);`;
     const run = Bun.spawnSync(["bun", "-e", script]);
     expect(run.stdout.toString().trim()).toBe("first");
@@ -83,7 +91,7 @@ describe("one Channels per data folder, taken before the store opens (T438)", ()
     const libc = process.platform === "darwin" ? "/usr/lib/libSystem.B.dylib" : "libc.so.6";
     const script = `import { claimInstance } from ${JSON.stringify(path.resolve(import.meta.dir, "../desktop/src/single-instance.ts"))};
       import { dlopen, FFIType, ptr } from "bun:ffi";
-      await claimInstance({ dir: ${JSON.stringify(dir)}, handoff: { kind: "show" }, onHandoff: () => {} });
+      await claimInstance({ dir: ${JSON.stringify(dir)}, handoff: { kind: "show" }, scheme: "kiwi", onHandoff: () => {} });
       const sh = dlopen(${JSON.stringify(libc)}, { system: { args: [FFIType.ptr], returns: FFIType.i32 } }).symbols;
       const cmd = new TextEncoder().encode("sleep 4.321 >/dev/null 2>&1 &\\0");
       sh.system(ptr(cmd)); process.exit(0);`;
@@ -121,6 +129,7 @@ describe("one Channels per data folder, taken before the store opens (T438)", ()
     expect(await ask('{"kind":"rm -rf"}\n')).toBe("no\n");
     expect(await ask("not json\n")).toBe("no\n");
     expect(await ask(`{"kind":"link","url":"${"x".repeat(5000)}"}`)).toBe("no\n");
+    expect(await ask('{"kind":"link","url":"file:///etc/passwd"}\n')).toBe("no\n");
     expect(got).toEqual([]);
   });
 });
@@ -133,9 +142,19 @@ describe("what a start hands over", () => {
   });
 
   test("only show and a link of at most 2 KB are read back", () => {
-    expect(readHandoff('{"kind":"show"}')).toEqual({ kind: "show" });
-    expect(readHandoff('{"kind":"link","url":"kiwi://join/x"}')).toEqual({ kind: "link", url: "kiwi://join/x" });
-    for (const bad of ['{"kind":"link"}', '{"kind":"link","url":7}', "[]", "null", "{", `{"kind":"link","url":"${"y".repeat(2049)}"}`]) expect(readHandoff(bad)).toBeNull();
+    expect(readHandoff('{"kind":"show"}', "kiwi")).toEqual({ kind: "show" });
+    expect(readHandoff('{"kind":"link","url":"kiwi://join/x"}', "kiwi")).toEqual({ kind: "link", url: "kiwi://join/x" });
+    for (const bad of [
+      '{"kind":"link"}',
+      '{"kind":"link","url":7}',
+      '{"kind":"link","url":"https://evil.example/"}',
+      '{"kind":"link","url":"kiwix://join/x"}',
+      "[]",
+      "null",
+      "{",
+      `{"kind":"link","url":"kiwi://${"y".repeat(2049)}"}`,
+    ])
+      expect(readHandoff(bad, "kiwi")).toBeNull();
   });
 });
 
