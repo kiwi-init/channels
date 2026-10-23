@@ -412,11 +412,21 @@ jobs:
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-mac'] }}
 
   desktop-linux:
-    name: desktop / linux
+    name: desktop / linux, ${{ matrix.os }}
     needs: plan
     if: fromJSON(needs.plan.outputs.run)['desktop-linux']
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            part: 1
+            unprofiled: unsandboxed
+          - os: ubuntu-26.04
+            part: 2
+            unprofiled: sandboxed
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
@@ -513,6 +523,8 @@ jobs:
           grep -qx 'Exec=/opt/Channels/bin/launcher %U' /usr/share/applications/channels-desktop.desktop || { echo "the installed entry doesn't run /opt/Channels/bin/launcher"; exit 1; }
           verify=$(dpkg --verify kiwi-desktop || true)
           [ -z "$verify" ] || { echo "dpkg --verify kiwi-desktop:"; echo "$verify"; exit 1; }
+          cmp /usr/share/kiwi-desktop/apparmor/channels-desktop /etc/apparmor.d/channels-desktop || { echo "postinst didn't install the AppArmor profile"; exit 1; }
+          sudo grep -q '^channels-desktop ' /sys/kernel/security/apparmor/profiles || { echo "the AppArmor profile isn't loaded"; exit 1; }
           echo "upgraded: $(dpkg-query -W kiwi-desktop), /usr/bin/channels-desktop -> $link"
           echo "for WebKitGTK's sandbox: kernel.apparmor_restrict_unprivileged_userns=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo unset), unshare -U as a user: $(unshare -U true 2>&1 && echo allowed || echo refused)"
           rm old.deb
@@ -520,10 +532,14 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-shell-test" desktop/native/linux/kiwi-shell-test.c $(pkg-config --cflags --libs webkit2gtk-4.1) -ldl
-          xvfb-run -a "$RUNNER_TEMP/kiwi-shell-test" /opt/Channels/bin/libkiwi-shell.so
+          xvfb-run -a "$RUNNER_TEMP/kiwi-shell-test" /opt/Channels/bin/libkiwi-shell.so ${{ matrix.unprofiled }}
           echo "for WebKitGTK's sandbox: kernel.apparmor_restrict_unprivileged_userns=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo unset)"
-          xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh /opt/Channels/bin/launcher
+          xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh /opt/Channels/bin/launcher sandboxed
+          img=$(ls "$PWD"/desktop/release-eb/linux/Channels-*-linux-x86_64.AppImage)
+          xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$img" ${{ matrix.unprofiled }} --appimage-extract-and-run
           sudo dpkg --purge kiwi-desktop
+          [ ! -e /etc/apparmor.d/channels-desktop ] || { echo "the AppArmor profile is still there after --purge"; exit 1; }
+          ! sudo grep -q '^channels-desktop ' /sys/kernel/security/apparmor/profiles || { echo "the AppArmor profile is still loaded after --purge"; exit 1; }
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -537,6 +553,7 @@ jobs:
         with:
           job: desktop-linux
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-linux'] }}
+          shard: ${{ matrix.part }}of2
 
   cli-macos:
     name: cli / macos

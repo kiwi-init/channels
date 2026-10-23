@@ -43,7 +43,13 @@ const shell = dlopen(shellPath, {
   kiwi_committed_url: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
 }).symbols;
 
-const sandboxPages = mac ? null : dlopen(shellPath, { kiwi_sandbox_pages: { args: [], returns: FFIType.bool } }).symbols.kiwi_sandbox_pages;
+const sandboxPages = mac ? null : dlopen(shellPath, { kiwi_sandbox_pages: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.bool } }).symbols.kiwi_sandbox_pages;
+
+function sandboxOff(): string | null {
+  if (!sandboxPages) return null;
+  const why = new Uint8Array(1024);
+  return sandboxPages(ptr(why), why.length) ? null : new TextDecoder().decode(why.subarray(0, Math.max(0, why.indexOf(0))));
+}
 
 const windowLook = mac ? dlopen(shellPath, { kiwi_window_look: { args: [FFIType.ptr, FFIType.f64, FFIType.f64, FFIType.u32, FFIType.u32], returns: FFIType.void } }).symbols.kiwi_window_look : null;
 
@@ -200,7 +206,8 @@ else if (instance.kind === "second") {
   instance.release();
   Utils.quit(1);
 } else {
-  if (sandboxPages && !sandboxPages()) logMainError(new Error("WebKitGTK's sandbox is off: bwrap or xdg-dbus-proxy isn't installed, so the page runs without it"));
+  const off = sandboxOff();
+  if (off !== null) logMainError(new Error(`WebKitGTK's sandbox is off: ${off}, so the page runs without it`));
   try {
     start(instance);
   } catch (e) {

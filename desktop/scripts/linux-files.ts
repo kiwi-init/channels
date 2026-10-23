@@ -64,6 +64,39 @@ const REFRESH = [
   "if command -v gtk-update-icon-cache >/dev/null 2>&1; then gtk-update-icon-cache -q -t /usr/share/icons/hicolor || true; fi",
 ];
 
+export const APPARMOR_SOURCE = `/usr/share/${PACKAGE}/apparmor/${EXECUTABLE}`;
+export const APPARMOR_PROFILE = `/etc/apparmor.d/${EXECUTABLE}`;
+
+export const APPARMOR = [
+  "abi <abi/4.0>,",
+  "include <tunables/global>",
+  "",
+  `profile ${EXECUTABLE} ${INSTALL_DIR}/bin/* flags=(unconfined) {`,
+  "  userns,",
+  "",
+  `  include if exists <local/${EXECUTABLE}>`,
+  "}",
+  "",
+].join("\n");
+
+const APPARMOR_ON = '[ "$(cat /sys/module/apparmor/parameters/enabled 2>/dev/null)" = Y ]';
+
+const LOAD_PROFILE = [
+  `if command -v apparmor_parser >/dev/null 2>&1 && [ -d /etc/apparmor.d ] && apparmor_parser --skip-kernel-load --skip-cache --quiet ${APPARMOR_SOURCE} >/dev/null 2>&1; then`,
+  `  cp -f ${APPARMOR_SOURCE} ${APPARMOR_PROFILE}`,
+  `  if ${APPARMOR_ON} && ! { [ -x /usr/bin/ischroot ] && /usr/bin/ischroot; }; then apparmor_parser --replace --write-cache --skip-read-cache ${APPARMOR_PROFILE} || true; fi`,
+  "fi",
+];
+
+const UNLOAD_PROFILE = [
+  'case "$1" in',
+  "  remove|purge)",
+  `    if [ -e ${APPARMOR_PROFILE} ] && command -v apparmor_parser >/dev/null 2>&1 && ${APPARMOR_ON}; then apparmor_parser --remove ${APPARMOR_PROFILE} >/dev/null 2>&1 || true; fi`,
+  `    rm -f ${APPARMOR_PROFILE} /var/cache/apparmor/*/${EXECUTABLE}`,
+  "    ;;",
+  "esac",
+];
+
 export const DEB_PREINST = [
   "#!/bin/sh",
   "set -e",
@@ -73,9 +106,9 @@ export const DEB_PREINST = [
   "",
 ].join("\n");
 
-export const DEB_POSTINST = ["#!/bin/sh", "set -e", `[ -e /usr/bin/${EXECUTABLE} ] || ln -sf ${INSTALL_DIR}/bin/launcher /usr/bin/${EXECUTABLE}`, ...REFRESH, ""].join("\n");
+export const DEB_POSTINST = ["#!/bin/sh", "set -e", `[ -e /usr/bin/${EXECUTABLE} ] || ln -sf ${INSTALL_DIR}/bin/launcher /usr/bin/${EXECUTABLE}`, ...LOAD_PROFILE, ...REFRESH, ""].join("\n");
 
-export const DEB_POSTRM = ["#!/bin/sh", "set -e", ...REFRESH, ""].join("\n");
+export const DEB_POSTRM = ["#!/bin/sh", "set -e", ...UNLOAD_PROFILE, ...REFRESH, ""].join("\n");
 
 export function md5sums(files: readonly { path: string; md5: string }[]): string {
   return files.map((f) => `${f.md5}  ${f.path.replace(/^\/+/, "")}\n`).join("");

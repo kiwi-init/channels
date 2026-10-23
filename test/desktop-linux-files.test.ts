@@ -1,7 +1,24 @@
 import { describe, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
-import { APP_RUN, appImageName, archOfArtifact, DEB_POSTINST, DEB_POSTRM, DEB_PREINST, debControl, debName, desktopEntry, LEFT_OUT, md5sums, runtimeUrl } from "../desktop/scripts/linux-files.ts";
+import {
+  APP_RUN,
+  APPARMOR,
+  APPARMOR_PROFILE,
+  APPARMOR_SOURCE,
+  appImageName,
+  archOfArtifact,
+  DEB_POSTINST,
+  DEB_POSTRM,
+  DEB_PREINST,
+  debControl,
+  debName,
+  desktopEntry,
+  LEFT_OUT,
+  md5sums,
+  runtimeUrl,
+} from "../desktop/scripts/linux-files.ts";
 
 describe("the Linux packages made from Electrobun's bundle (T444)", () => {
   test("keep today's asset names, which the site's downloads and the updater look for", () => {
@@ -47,8 +64,24 @@ describe("the Linux packages made from Electrobun's bundle (T444)", () => {
     expect(desktopEntry("/opt/Channels/bin/launcher")).toContain("Exec=/opt/Channels/bin/launcher %U\n");
     expect(DEB_PREINST).toContain("  install|upgrade) if command -v update-alternatives >/dev/null 2>&1; then update-alternatives --remove-all channels-desktop >/dev/null 2>&1 || true; fi ;;");
     expect(DEB_POSTINST).toContain("[ -e /usr/bin/channels-desktop ] || ln -sf /opt/Channels/bin/launcher /usr/bin/channels-desktop\n");
-    expect(DEB_POSTRM).not.toContain("channels-desktop");
-    for (const script of [DEB_PREINST, DEB_POSTINST, DEB_POSTRM]) expect(script.startsWith("#!/bin/sh\nset -e\n")).toBe(true);
+    expect(DEB_POSTRM).not.toContain("/usr/bin/channels-desktop");
+    expect(DEB_POSTRM).not.toContain("update-alternatives");
+    for (const script of [DEB_PREINST, DEB_POSTINST, DEB_POSTRM]) {
+      expect(script.startsWith("#!/bin/sh\nset -e\n")).toBe(true);
+      expect(spawnSync("sh", ["-n"], { input: script }).status).toBe(0);
+    }
+  });
+
+  test("on Ubuntu 24.04 the deb's AppArmor profile lets the app's processes use user namespaces, which WebKitGTK's bubblewrap needs, and changes nothing else (T2119)", () => {
+    expect(APPARMOR_SOURCE).toBe("/usr/share/kiwi-desktop/apparmor/channels-desktop");
+    expect(APPARMOR_PROFILE).toBe("/etc/apparmor.d/channels-desktop");
+    expect(APPARMOR).toBe(
+      "abi <abi/4.0>,\ninclude <tunables/global>\n\nprofile channels-desktop /opt/Channels/bin/* flags=(unconfined) {\n  userns,\n\n  include if exists <local/channels-desktop>\n}\n",
+    );
+    expect(DEB_POSTINST).toContain(`apparmor_parser --skip-kernel-load --skip-cache --quiet ${APPARMOR_SOURCE} >/dev/null 2>&1; then\n  cp -f ${APPARMOR_SOURCE} ${APPARMOR_PROFILE}\n`);
+    expect(DEB_POSTINST).toContain(`apparmor_parser --replace --write-cache --skip-read-cache ${APPARMOR_PROFILE} || true; fi\n`);
+    expect(DEB_POSTRM).toContain(`  remove|purge)\n    if [ -e ${APPARMOR_PROFILE} ]`);
+    expect(DEB_POSTRM).toContain(`apparmor_parser --remove ${APPARMOR_PROFILE} >/dev/null 2>&1 || true; fi\n    rm -f ${APPARMOR_PROFILE} /var/cache/apparmor/*/channels-desktop\n`);
   });
 
   test("the deb lists each file's md5, as dpkg --verify reads it", () => {

@@ -38,15 +38,16 @@ static gboolean stop(gpointer data) {
 typedef struct {
   bool (*deny)(void);
   bool (*watch)(void (*)(void));
-  bool (*sandbox)(void);
+  bool (*sandbox)(char *, size_t);
   bool (*commits)(void);
   bool ok;
   bool sandboxed;
+  char why[1024];
 } Hooks;
 
 static gpointer install_off_main(gpointer data) {
   Hooks *hooks = data;
-  hooks->sandboxed = hooks->sandbox();
+  hooks->sandboxed = hooks->sandbox(hooks->why, sizeof hooks->why);
   hooks->ok = hooks->deny() && hooks->watch(gone) && hooks->commits();
   g_idle_add(stop, NULL);
   return NULL;
@@ -65,10 +66,11 @@ static const char *PAGE =
     "})();</script>";
 
 int main(int argc, char **argv) {
-  if (argc != 2) {
-    fprintf(stderr, "usage: kiwi-shell-test <libkiwi-shell.so>\n");
+  if (argc != 3 || (strcmp(argv[2], "sandboxed") != 0 && strcmp(argv[2], "unsandboxed") != 0)) {
+    fprintf(stderr, "usage: kiwi-shell-test <libkiwi-shell.so> sandboxed|unsandboxed\n");
     return 2;
   }
+  bool want_sandbox = strcmp(argv[2], "sandboxed") == 0;
   gtk_init(&argc, &argv);
   void *lib = dlopen(argv[1], RTLD_NOW);
   if (!lib) {
@@ -77,7 +79,7 @@ int main(int argc, char **argv) {
   }
   bool (*deny)(void) = (bool (*)(void))dlsym(lib, "kiwi_deny_permissions");
   bool (*watch)(void (*)(void)) = (bool (*)(void (*)(void)))dlsym(lib, "kiwi_watch_page");
-  bool (*sandbox)(void) = (bool (*)(void))dlsym(lib, "kiwi_sandbox_pages");
+  bool (*sandbox)(char *, size_t) = (bool (*)(char *, size_t))dlsym(lib, "kiwi_sandbox_pages");
   bool (*commits)(void) = (bool (*)(void))dlsym(lib, "kiwi_watch_commits");
   size_t (*committed)(char *, size_t) = (size_t (*)(char *, size_t))dlsym(lib, "kiwi_committed_url");
   int bad = 0;
@@ -91,15 +93,21 @@ int main(int argc, char **argv) {
   } else
     printf("program name and class: channels-desktop (the Wayland app_id, matching channels-desktop.desktop)\n");
   loop = g_main_loop_new(NULL, FALSE);
-  Hooks hooks = {deny, watch, sandbox, commits, false, false};
+  Hooks hooks = {deny, watch, sandbox, commits, false, false, ""};
   g_idle_add(install_from_worker, &hooks);
   g_main_loop_run(loop);
   if (hooks.ok) printf("hooks: installed on GTK's main loop when asked from another thread, as main-eb's worker asks\n");
-  if (!hooks.sandboxed || !webkit_web_context_get_sandbox_enabled(webkit_web_context_get_default())) {
-    fprintf(stderr, "kiwi-shell-test: kiwi_sandbox_pages didn't turn WebKitGTK's sandbox on (bwrap and xdg-dbus-proxy are installed here)\n");
+  bool enabled = webkit_web_context_get_sandbox_enabled(webkit_web_context_get_default());
+  if (want_sandbox && (!hooks.sandboxed || !enabled)) {
+    fprintf(stderr, "kiwi-shell-test: kiwi_sandbox_pages didn't turn WebKitGTK's sandbox on: %s\n", hooks.why[0] ? hooks.why : "no reason given");
+    bad++;
+  } else if (want_sandbox)
+    printf("sandbox: on for the default context before its first web view, so the page below runs in bubblewrap\n");
+  else if (hooks.sandboxed || enabled || !strstr(hooks.why, "bwrap can't build it here")) {
+    fprintf(stderr, "kiwi-shell-test: with bwrap unable to build its namespaces here, kiwi_sandbox_pages left the sandbox %s and said '%s'\n", enabled ? "on" : "off", hooks.why);
     bad++;
   } else
-    printf("sandbox: on for the default context before its first web view, so the page below runs in bubblewrap\n");
+    printf("sandbox: off, because %s; the page below runs without it instead of WebKit aborting\n", hooks.why);
   if (!hooks.ok) {
     fprintf(stderr, "kiwi-shell-test: a WebKitWebView signal hook wasn't installed from another thread\n");
     return 1;

@@ -112,9 +112,34 @@ static bool has_program(const char *name) {
   return has;
 }
 
+static bool userns_restricted(void) {
+  gchar *value = NULL;
+  bool restricted = g_file_get_contents("/proc/sys/kernel/apparmor_restrict_unprivileged_userns", &value, NULL, NULL) && g_strstrip(value)[0] == '1';
+  g_free(value);
+  return restricted;
+}
+
+static gchar *bwrap_refusal(void) {
+  gchar *argv[] = {"bwrap", "--unshare-all", "--die-with-parent", "--ro-bind", "/", "/", "true", NULL};
+  gchar *err = NULL;
+  gint status = 0;
+  GError *error = NULL;
+  gchar *refusal = NULL;
+  if (!g_spawn_sync(NULL, argv, NULL, G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL, NULL, NULL, NULL, &err, &status, &error)) {
+    refusal = g_strdup_printf("bwrap didn't run (%s)", error->message);
+    g_error_free(error);
+  } else if (!g_spawn_check_wait_status(status, NULL)) {
+    gchar **lines = g_strsplit(g_strstrip(err), "\n", 2);
+    refusal = g_strdup_printf("bwrap can't build it here (%s)%s", lines[0] && *lines[0] ? lines[0] : "no message",
+                              userns_restricted() ? "; AppArmor lets only apps with a profile use user namespaces, and the .deb installs Channels' profile" : "");
+    g_strfreev(lines);
+  }
+  g_free(err);
+  return refusal;
+}
+
 static bool sandbox_default_context(gconstpointer arg) {
   (void)arg;
-  if (!has_program("bwrap") || !has_program("xdg-dbus-proxy")) return false;
   WebKitWebContext *context = webkit_web_context_get_default();
   webkit_web_context_set_sandbox_enabled(context, TRUE);
   return webkit_web_context_get_sandbox_enabled(context);
@@ -147,6 +172,19 @@ size_t kiwi_committed_url(char *out, size_t size) {
   return n;
 }
 
-bool kiwi_sandbox_pages(void) {
-  return on_main(sandbox_default_context, NULL);
+static bool refuse_sandbox(char *why, size_t size, const char *text) {
+  if (why && size) g_strlcpy(why, text, size);
+  return false;
+}
+
+bool kiwi_sandbox_pages(char *why, size_t size) {
+  if (why && size) why[0] = 0;
+  if (!has_program("bwrap") || !has_program("xdg-dbus-proxy")) return refuse_sandbox(why, size, "bwrap or xdg-dbus-proxy isn't installed");
+  gchar *refusal = bwrap_refusal();
+  if (refusal) {
+    refuse_sandbox(why, size, refusal);
+    g_free(refusal);
+    return false;
+  }
+  return on_main(sandbox_default_context, NULL) || refuse_sandbox(why, size, "WebKitGTK's default context didn't turn it on");
 }
