@@ -22,9 +22,12 @@ permissions:
 # One job per area, its checks as steps: each job pays for one checkout and one install.
 # A step that fails doesn't stop the checks after it (`!cancelled()`), so one run shows every failure.
 jobs:
-  # Decides which jobs this pull request can break (.github/jev-ci.yml): rules first, then a
-  # cache of inputs that already passed, then Jev for the rest. Pushes to main run everything,
-  # and if planning fails, everything runs. Every check below runs only if the plan says so.
+  # Decides which jobs this pull request or merge group can break (.github/jev-ci.yml): rules
+  # first, then a cache of inputs that already passed, then Jev for the rest. A pull request runs
+  # only its pull_request_jobs (repo / static, test / unit); a merge group is planned on its
+  # combined change (merge_group.base_sha..head_sha) and runs every job that plan picks. A push to main runs
+  # nothing when the merge queue already tested that commit as-is, and everything otherwise;
+  # if planning fails, everything runs. Every check below runs only if the plan says so.
   plan:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -386,7 +389,6 @@ jobs:
         run: bunx electrobun build --env=dev
         env:
           CHANNELS_EB_TEST: "1"
-          CHANNELS_EB_IDENTIFIER: com.kiwiinit.channels.test
           DASH_RELEASE_OFFLINE: "1"
       - name: no test driver in the release build
         if: ${{ !cancelled() }}
@@ -412,11 +414,21 @@ jobs:
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-mac'] }}
 
   desktop-linux:
-    name: desktop / linux
+    name: desktop / linux, ${{ matrix.os }}
     needs: plan
     if: fromJSON(needs.plan.outputs.run)['desktop-linux']
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            part: 1
+            sandbox: unsandboxed
+          - os: ubuntu-26.04
+            part: 2
+            sandbox: sandboxed
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
@@ -520,14 +532,34 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-shell-test" desktop/native/linux/kiwi-shell-test.c $(pkg-config --cflags --libs webkit2gtk-4.1) -ldl
-          xvfb-run -a "$RUNNER_TEMP/kiwi-shell-test" /opt/Channels/bin/libkiwi-shell.so
+          xvfb-run -a "$RUNNER_TEMP/kiwi-shell-test" /opt/Channels/bin/libkiwi-shell.so ${{ matrix.sandbox }}
           echo "for WebKitGTK's sandbox: kernel.apparmor_restrict_unprivileged_userns=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo unset)"
-          xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh /opt/Channels/bin/launcher
+          xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh /opt/Channels/bin/launcher ${{ matrix.sandbox }}
+          img=$(ls "$PWD"/desktop/release-eb/linux/Channels-*-linux-x86_64.AppImage)
+          xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$img" ${{ matrix.sandbox }} --appimage-extract-and-run
           sudo dpkg --purge kiwi-desktop
+      - name: what bwrap can do under this AppArmor, for an app profile later (prints only)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          try() { out=$("$@" 2>&1) && echo "ok" || echo "refused: $(echo "$out" | head -n 1)"; }
+          echo "kernel.apparmor_restrict_unprivileged_userns=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo unset)"
+          echo "profiles in /etc/apparmor.d naming bwrap or userns: $(grep -lE 'bwrap|userns' /etc/apparmor.d/* 2>/dev/null | tr '\n' ' ')"
+          echo "loaded profiles naming bwrap or userns: $(sudo grep -E 'bwrap|userns' /sys/kernel/security/apparmor/profiles | tr '\n' ';')"
+          echo "bwrap --unshare-all, unprofiled: $(try bwrap --unshare-all --die-with-parent --ro-bind / / true)"
+          printf 'abi <abi/4.0>,\ninclude <tunables/global>\nprofile kiwi-userns-probe flags=(unconfined) {\n  userns,\n}\n' > "$RUNNER_TEMP/kiwi-userns-probe"
+          sudo apparmor_parser -r "$RUNNER_TEMP/kiwi-userns-probe" && echo "loaded kiwi-userns-probe (unconfined, userns)"
+          echo "under kiwi-userns-probe, bwrap itself: $(try aa-exec -p kiwi-userns-probe -- bwrap --unshare-all --die-with-parent --ro-bind / / true)"
+          echo "under kiwi-userns-probe, bwrap exec'd from sh: $(try aa-exec -p kiwi-userns-probe -- sh -c 'bwrap --unshare-all --die-with-parent --ro-bind / / true')"
+          echo "label of sh under kiwi-userns-probe, and of what it execs: $(aa-exec -p kiwi-userns-probe -- sh -c 'cat /proc/self/attr/current; echo; cat /proc/$$/attr/current' | tr '\n' ' ')"
+          echo "label of bwrap's child under kiwi-userns-probe: $(aa-exec -p kiwi-userns-probe -- bwrap --unshare-all --die-with-parent --ro-bind / / cat /proc/self/attr/current 2>&1 | head -n 1)"
+          echo "unshare -Urn under kiwi-userns-probe: $(try aa-exec -p kiwi-userns-probe -- unshare -Urn ip link set lo up)"
+          echo "unshare -Urn, unprofiled: $(try unshare -Urn ip link set lo up)"
+          sudo apparmor_parser -R "$RUNNER_TEMP/kiwi-userns-probe" || true
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: linux-packages
+          name: linux-packages-${{ matrix.os }}
           path: desktop/release-eb/linux/*
           if-no-files-found: warn
           retention-days: 3
@@ -537,6 +569,7 @@ jobs:
         with:
           job: desktop-linux
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-linux'] }}
+          shard: ${{ matrix.part }}of2
 
   cli-macos:
     name: cli / macos

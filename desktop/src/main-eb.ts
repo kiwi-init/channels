@@ -21,6 +21,7 @@ import { catchMainErrors, logMainError } from "./main-log.ts";
 import { openInBrowser } from "./open.ts";
 import { keepPageAlive } from "./page-crash.ts";
 import { claimInstance, handoffFor, type Instance } from "./single-instance.ts";
+import { testHomeProblem } from "./eb-test-home.ts";
 import { bunBridge } from "./rpc-eb.ts";
 import { brokenStore, mutate, openStore, snapshot, store, type StoreVault } from "./store.ts";
 import { startUpdates, updateState } from "./updater.ts";
@@ -47,7 +48,13 @@ const shell = dlopen(shellPath, {
   kiwi_watch_page: { args: [FFIType.function], returns: FFIType.bool },
 }).symbols;
 
-const sandboxPages = mac ? null : dlopen(shellPath, { kiwi_sandbox_pages: { args: [], returns: FFIType.bool } }).symbols.kiwi_sandbox_pages;
+const sandboxPages = mac ? null : dlopen(shellPath, { kiwi_sandbox_pages: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.bool } }).symbols.kiwi_sandbox_pages;
+
+function sandboxOff(): string | null {
+  if (!sandboxPages) return null;
+  const why = new Uint8Array(1024);
+  return sandboxPages(ptr(why), why.length) ? null : new TextDecoder().decode(why.subarray(0, Math.max(0, why.indexOf(0))));
+}
 
 const windowLook = mac ? dlopen(shellPath, { kiwi_window_look: { args: [FFIType.ptr, FFIType.f64, FFIType.f64, FFIType.u32, FFIType.u32], returns: FFIType.void } }).symbols.kiwi_window_look : null;
 
@@ -204,16 +211,20 @@ function watchPage(): void {
 
 BrowserView.on("created", (tag) => tag.remove());
 
-const instance = await claimInstance({
-  dir: Utils.paths.userData,
-  handoff: handoffFor(process.argv, JOIN_SCHEME),
-  scheme: JOIN_SCHEME,
-  onHandoff: (h) => (h.kind === "link" ? handleDeepLink(h.url) : ebHost.showWindow()),
-}).catch((e: unknown) => {
-  logMainError(e);
-  console.error("Channels: couldn't take the single-instance lock in its data folder", e);
-  return null;
-});
+const wrongHome = KIWI_EB_TEST ? testHomeProblem(Utils.paths.userData, process.env.CFFIXED_USER_HOME) : null;
+if (wrongHome) console.error(`Channels test build: ${wrongHome}; not starting, so nothing lands under the person's home`);
+const instance = wrongHome
+  ? null
+  : await claimInstance({
+      dir: Utils.paths.userData,
+      handoff: handoffFor(process.argv, JOIN_SCHEME),
+      scheme: JOIN_SCHEME,
+      onHandoff: (h) => (h.kind === "link" ? handleDeepLink(h.url) : ebHost.showWindow()),
+    }).catch((e: unknown) => {
+      logMainError(e);
+      console.error("Channels: couldn't take the single-instance lock in its data folder", e);
+      return null;
+    });
 if (!instance) Utils.quit(1);
 else if (instance.kind === "second") {
   if (!instance.delivered) console.error("Channels: another Channels holds this data folder and didn't answer; quitting");
@@ -223,7 +234,12 @@ else if (instance.kind === "second") {
   instance.release();
   Utils.quit(1);
 } else {
-  if (sandboxPages && !sandboxPages()) logMainError(new Error("WebKitGTK's sandbox is off: bwrap or xdg-dbus-proxy isn't installed, so the page runs without it"));
+  const off = sandboxOff();
+  if (off !== null) {
+    const why = `WebKitGTK's sandbox is off: ${off}, so the page runs without it`;
+    console.error(`Channels: ${why}`);
+    logMainError(new Error(why));
+  }
   try {
     start(instance);
   } catch (e) {

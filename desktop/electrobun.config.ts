@@ -1,10 +1,10 @@
 import type { ElectrobunConfig } from "electrobun";
 
 import pkg from "./package.json" with { type: "json" };
-import { RELEASE_ID } from "./scripts/eb-bundle.ts";
+import { RELEASE_ID, TEST_ID } from "./scripts/eb-bundle.ts";
 import { JOIN_SCHEME } from "./src/deep-links.ts";
 
-const identifier = process.env.CHANNELS_EB_IDENTIFIER ?? RELEASE_ID;
+const identifier = process.env.CHANNELS_EB_TEST === "1" ? TEST_ID : (process.env.CHANNELS_EB_IDENTIFIER ?? RELEASE_ID);
 
 export default {
   app: {

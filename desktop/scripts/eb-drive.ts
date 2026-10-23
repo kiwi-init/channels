@@ -67,7 +67,13 @@ export async function attach(socketPath: string, ms = 60_000): Promise<Driver> {
             const lines = (buffered + chunk.toString("utf8")).split("\n");
             buffered = lines.pop() ?? "";
             for (const line of lines) {
-              const a = JSON.parse(line) as { id: number; ok: boolean; value?: unknown; error?: string };
+              let a: { id: number; ok: boolean; value?: unknown; error?: string };
+              try {
+                a = JSON.parse(line) as { id: number; ok: boolean; value?: unknown; error?: string };
+              } catch {
+                // A line that isn't JSON answers nothing: the call it was meant for times out with its own error.
+                continue;
+              }
               const w = waiting.get(a.id);
               waiting.delete(a.id);
               if (a.ok) w?.ok(a.value);
