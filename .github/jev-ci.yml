@@ -918,10 +918,11 @@ jobs:
       scripts/perf-desktop.ts times the packaged app's cold start under Xvfb, in a temp user data dir,
       KIWI_HOME and HOME, against a local relay: one run makes a person, a channel and 20 messages (the
       app pointed at the relay through its bridge's setRelayUrl, over --remote-debugging-port), then five
-      launches each time the window (the renderer's timeOrigin), the first paint, the first cached message
-      on screen (the kiwi:first-message mark) and the channel live (kiwi:live), from the process start; the
-      medians go to the log and --json, and it fails when the median launch to the first message is over
-      the coldStartMs gate in scripts/perf-budgets.json (a limit perf-check skips, marked desktop). Fails on a
+      launches each time the window (the renderer's timeOrigin) and the first screen (first contentful
+      paint) from the process start, and from a click on the channel its first cached message on screen
+      (the kiwi:first-message mark) and live (kiwi:live); the medians go to the log and --json, and it fails
+      when the median launch to the first screen is over the coldStartMs gate in scripts/perf-budgets.json
+      (a limit perf-check skips, marked desktop). Fails on a
       bundling or packaging error, a fuse changed or dropped, or an app that no longer starts.
 
   cli-macos:

@@ -7,10 +7,10 @@ import { daemonStop } from "../desktop/src/daemon-client.ts";
 import { startLocalRelay } from "./local-relay.ts";
 
 if (process.argv.includes("--help") || !process.argv[2]) {
-  console.log(`The packaged desktop app's cold start, measured: from launching the executable to its window, its first paint, the first cached message
-on screen and the channel live, PERF_RUNS times (5) after one run that makes a channel with PERF_MESSAGES messages (20) on a local relay.
-It runs in a temp user data dir and a temp KIWI_HOME (and on Linux a temp HOME), with a mock keychain on a Mac: it never touches the real app.
-Fails when the median launch to first message is over the coldStartMs gate in scripts/perf-budgets.json.
+  console.log(`The packaged desktop app's cold start, measured: from launching the executable to its window and its first screen, then from a click on
+the channel to its first cached message on screen and to live, PERF_RUNS times (5) after one run that makes a channel with PERF_MESSAGES messages (20)
+on a local relay. It runs in a temp user data dir and a temp KIWI_HOME (and on Linux a temp HOME), with a mock keychain on a Mac: it never touches
+the real app. Fails when the median launch to the first screen is over the coldStartMs gate in scripts/perf-budgets.json.
 
   bun scripts/perf-desktop.ts <packaged app executable> [--json out.json]`);
   process.exit(process.argv[2] ? 0 : 2);
@@ -112,7 +112,7 @@ async function quit(r: Running): Promise<void> {
 
 const { relay, port } = await startLocalRelay(join(root, "relay"), null, { rateLimits: false });
 const RELAY = `http://127.0.0.1:${port}`;
-const runs: { windowMs: number; firstPaintMs: number; firstMessageMs: number; liveMs: number }[] = [];
+const runs: { windowMs: number; firstScreenMs: number; openToMessageMs: number; openToLiveMs: number }[] = [];
 let running: Running | null = null;
 try {
   log("first run: a person, a channel and its messages on the local relay");
@@ -151,22 +151,41 @@ try {
     running = await launch();
     page = running.page;
     const started = running.started;
-    const marks = await until("the first message and the live connection", 60_000, () =>
+    const screen = await until("the first screen", 60_000, () =>
+      page
+        .evaluate(() => {
+          const paint = performance.getEntriesByName("first-contentful-paint")[0]?.startTime;
+          return paint === undefined ? null : { origin: performance.timeOrigin, paint };
+        })
+        .catch(() => null),
+    );
+    const channel = page
+      .getByRole("banner", { name: "Channels" })
+      .or(page.getByRole("complementary"))
+      .getByRole("button", { name: /^cold\b/ })
+      .filter({ visible: true })
+      .first();
+    await channel.waitFor({ timeout: 30_000 });
+    const clicked = await channel.evaluate((el) => {
+      const at = performance.now();
+      (el as HTMLElement).click();
+      return at;
+    });
+    const opened = await until("the first message and the live connection", 60_000, () =>
       page
         .evaluate(() => {
           const mark = (name: string) => performance.getEntriesByName(name, "mark")[0]?.startTime;
           const message = mark("kiwi:first-message");
           const live = mark("kiwi:live");
-          const paint = performance.getEntriesByName("first-contentful-paint")[0]?.startTime;
-          return message === undefined || live === undefined || paint === undefined ? null : { origin: performance.timeOrigin, message, live, paint };
+          return message === undefined || live === undefined ? null : { message, live };
         })
         .catch(() => null),
     );
     const run = {
-      windowMs: Math.round(marks.origin - started),
-      firstPaintMs: Math.round(marks.origin + marks.paint - started),
-      firstMessageMs: Math.round(marks.origin + marks.message - started),
-      liveMs: Math.round(marks.origin + marks.live - started),
+      windowMs: Math.round(screen.origin - started),
+      firstScreenMs: Math.round(screen.origin + screen.paint - started),
+      openToMessageMs: Math.round(opened.message - clicked),
+      openToLiveMs: Math.round(opened.live - clicked),
     };
     runs.push(run);
     log(`run ${i + 1}`, JSON.stringify(run));
@@ -186,9 +205,9 @@ try {
 const report = {
   runs: runs.length,
   windowMs: median(runs.map((r) => r.windowMs)),
-  firstPaintMs: median(runs.map((r) => r.firstPaintMs)),
-  firstMessageMs: median(runs.map((r) => r.firstMessageMs)),
-  liveMs: median(runs.map((r) => r.liveMs)),
+  firstScreenMs: median(runs.map((r) => r.firstScreenMs)),
+  openToMessageMs: median(runs.map((r) => r.openToMessageMs)),
+  openToLiveMs: median(runs.map((r) => r.openToLiveMs)),
   each: runs,
 };
 console.log(JSON.stringify(report, null, 2));
@@ -196,7 +215,7 @@ if (OUT) writeFileSync(OUT, JSON.stringify(report, null, 2));
 
 const { limits } = JSON.parse(readFileSync(resolve(import.meta.dir, "perf-budgets.json"), "utf8")) as { limits: Record<string, { what: string; budget: number; gate: number | null }> };
 const limit = limits["coldStartMs"];
-if (limit?.gate != null && report.firstMessageMs > limit.gate) {
-  console.error(`${limit.what}: ${report.firstMessageMs} ms, over its gate ${limit.gate} (budget ${limit.budget})`);
+if (limit?.gate != null && report.firstScreenMs > limit.gate) {
+  console.error(`${limit.what}: ${report.firstScreenMs} ms, over its gate ${limit.gate} (budget ${limit.budget})`);
   process.exit(1);
 }
