@@ -272,8 +272,8 @@ describe("handing over", () => {
 
 describe("reading the machine", () => {
   test("repo names from https and ssh remotes", () => {
-    expect(repoName("https://github.com/ojowwalker77/channels.git")).toBe("ojowwalker77/channels");
-    expect(repoName("git@github.com:ojowwalker77/channels.git")).toBe("ojowwalker77/channels");
+    expect(repoName("https://github.com/kiwi-init/channels.git")).toBe("kiwi-init/channels");
+    expect(repoName("git@github.com:kiwi-init/channels.git")).toBe("kiwi-init/channels");
     expect(repoName("https://gitlab.com/a/b/")).toBe("a/b");
     expect(repoName(null)).toBeNull();
   });

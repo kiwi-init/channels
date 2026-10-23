@@ -1,4 +1,4 @@
-const REPO = "ojowwalker77/channels";
+const REPO = "kiwi-init/channels";
 const RELEASE = `https://github.com/${REPO}/releases/latest/download`;
 const INSTALL = `${location.origin}/install`;
 

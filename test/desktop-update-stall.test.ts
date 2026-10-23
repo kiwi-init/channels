@@ -57,10 +57,10 @@ globalThis.fetch = Object.assign(
       return new Response(
         JSON.stringify({
           tag_name: tag,
-          html_url: `https://github.com/ojowwalker77/channels/releases/tag/v${version}`,
+          html_url: `https://github.com/kiwi-init/channels/releases/tag/v${version}`,
           assets: [
-            { name, browser_download_url: `https://github.com/ojowwalker77/channels/releases/download/v${version}/zip` },
-            { name: "SHA256SUMS", browser_download_url: `https://github.com/ojowwalker77/channels/releases/download/v${version}/sums` },
+            { name, browser_download_url: `https://github.com/kiwi-init/channels/releases/download/v${version}/zip` },
+            { name: "SHA256SUMS", browser_download_url: `https://github.com/kiwi-init/channels/releases/download/v${version}/sums` },
           ],
         }),
       );
