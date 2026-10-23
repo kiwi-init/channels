@@ -152,6 +152,36 @@ describe("a channel's transcript, for a person to read without tools (T967)", ()
   })
 })
 
+describe("no message's Markdown can reach another's or load anything when the transcript is opened (T1374)", () => {
+  const roster: Roster = [
+    { name: "jow", pk: "pk-jow", owner: true, at: 0, active: true, kind: "human" },
+    { name: "mallory", pk: "pk-mallory", owner: false, at: 0, active: true, kind: "agent" },
+  ]
+  const T = 1_760_000_000_000
+  const said = (seq: number, from: string, body: string): Message => ({ seq, id: `m${seq}`, rts: T + seq, ts: T + seq, from, pk: `pk-${from}`, sig: "s", sigOk: true, body })
+  const messages = [
+    said(1, "mallory", "[x]: javascript:alert(4)"),
+    said(2, "jow", "The release notes are at [x], and the [spec] too."),
+    said(3, "mallory", "![](https://tracker.example/p.png) and [click](javascript:alert(1)) and [^1]"),
+    said(4, "mallory", "    [y]: https://tracker.example/q.png\n![y]"),
+  ]
+  const md = transcript({
+    title: "[Relay](javascript:x) ![t](https://tracker.example/t.png)",
+    log: logExport({ head: 4, messages, first: 1 }),
+    state: fold(messages, roster, T + 100),
+    nameOf: (n) => n,
+    at: new Date(T + 100),
+  })
+
+  test("every [, ] and ! is escaped, so no link, link definition, reference, footnote or image is left, in a body or the title", () => {
+    expect(md).not.toMatch(/(^|[^\\])(\\\\)*[[\]!]/m)
+    expect(md).toContain("> \\[x\\]: javascript:alert(4)")
+    expect(md).toContain("> The release notes are at \\[x\\], and the \\[spec\\] too.")
+    expect(md).toContain("> \\!\\[\\](https://tracker.example/p.png) and \\[click\\](javascript:alert(1)) and \\[^1\\]")
+    expect(md.split("\n")[0]).toBe("# \\[Relay\\](javascript:x) \\!\\[t\\](https://tracker.example/t.png)")
+  })
+})
+
 describe("the transcript's verdicts are the app's, even once the relay has dropped the oldest messages (T967, round 3)", () => {
   const roster: Roster = [
     { name: "jow", pk: "pk-jow", owner: true, at: 0, active: true, kind: "human" },
@@ -210,7 +240,7 @@ describe("the transcript's verdicts are the app's, even once the relay has dropp
     const md = transcript({ title: "<!-- Relay", log: logExport({ head: 3, messages, first: 1 }), state: fold(messages, roster, T + 100), nameOf: (n) => n, at })
     expect(md).not.toMatch(/(^|[^\\])(\\\\)*[<&]/m)
     expect(md).toContain("> \\</blockquote>\\<p>")
-    expect(md).toContain("> \\<!-- hide what follows")
+    expect(md).toContain("> \\<\\!-- hide what follows")
     expect(md).toContain("> \\&lt;b\\&gt; and a \\\\\\<i>")
     expect(md.split("\n").filter((line) => line.startsWith("**#"))).toHaveLength(3)
   })

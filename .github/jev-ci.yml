@@ -520,7 +520,10 @@ jobs:
       Also web lib/log-export.test.ts: a channel's log, downloaded from channel settings any time or before it closes, one JSON line per message
       with its key and signature, under a file name from the channel's title and the local date and time (two downloads a minute apart
       don't collide); a transcript to read without tools (T967): when it was downloaded and how many messages, then each message's
-      number, local date and time, sender and text, its kind when it isn't a plain message, its pictures by name; every seq from the
+      number, local date and time, sender and text, its kind when it isn't a plain message, its pictures by name, only for messages
+      the app verifies (from a whole log, the owner's snapshot or the app's own fold; forged, refused and uncheckable ones left out and
+      counted), each body quoted with \\, &, <, [, ] and ! escaped so no tag, comment, link, link definition, reference or image
+      survives (T1374); every seq from the
       first the relay kept to the head either in the file or named as missing, and those the relay dropped
       under its storage cap said apart; with test/log-export.test.ts, a stored message this build can't read
       named as missing instead of the download passing for the whole log.

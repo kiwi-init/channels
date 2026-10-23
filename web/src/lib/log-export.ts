@@ -75,7 +75,7 @@ function utcOffset(at: Date): string {
   return `UTC${sign}${pad(Math.floor(Math.abs(minutes) / 60))}:${pad(Math.abs(minutes) % 60)}`
 }
 
-const inert = (s: string): string => s.replace(/[\\&<]/g, (c) => `\\${c}`)
+const inert = (s: string): string => s.replace(/[\\&<[\]!]/g, (c) => `\\${c}`)
 
 const quoted = (text: string): string =>
   inert(cleanBody(text))
