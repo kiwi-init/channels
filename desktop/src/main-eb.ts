@@ -102,6 +102,7 @@ async function createWindow(): Promise<BrowserWindow | null> {
     (frame) => view?.executeJavascript(toPageScript(frame)),
     () => {
       keys.pageGone();
+      refreshPreload();
       bridge.push("store", snapshot());
     },
     (session, req) => keys.request(session, req),
@@ -113,7 +114,7 @@ async function createWindow(): Promise<BrowserWindow | null> {
     frame: { width: WINDOW_SIZE.width, height: WINDOW_SIZE.height },
     titleBarStyle: "hiddenInset",
     hidden: true,
-    preload: preloadSource(snapshot(), bundled),
+    preload: preloadSource({ snapshot: snapshot(), session: bridge.nextSession() }, bundled),
     rpc: bridge,
   });
   const webview = win.webview;
@@ -139,7 +140,8 @@ async function createWindow(): Promise<BrowserWindow | null> {
     ours = true;
     webview.loadURL(PAGE_URL);
   };
-  const refreshPreload = (): void => core.updatePreloadScriptToWebView(webview.id, ptr(PRELOAD_ID), ptr(cString(preloadSource(snapshot(), bundled))), true);
+  const refreshPreload = (): void =>
+    core.updatePreloadScriptToWebView(webview.id, ptr(PRELOAD_ID), ptr(cString(preloadSource({ snapshot: snapshot(), session: bridge.nextSession() }, bundled))), false);
   attachWindow({
     win,
     view: webview,
