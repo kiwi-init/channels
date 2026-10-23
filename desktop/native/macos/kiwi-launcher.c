@@ -14,7 +14,7 @@ extern char **environ;
 static const char *const KEEP[] = {"HOME", "USER", "LOGNAME", "TMPDIR", "PATH", "SHELL", "LANG", "__CF_USER_TEXT_ENCODING", "XPC_SERVICE_NAME", "XPC_FLAGS", NULL};
 static const char *const KEEP_PREFIXES[] = {"LC_", NULL};
 #ifdef KIWI_EB_TEST
-static const char *const KEEP_IN_TEST_BUILDS[] = {"KIWI_EB_DRIVER", "KIWI_EB_RELAY", "CFFIXED_USER_HOME", NULL};
+static const char *const KEEP_IN_TEST_BUILDS[] = {"KIWI_EB_DRIVER", "KIWI_EB_RELAY", "CFFIXED_USER_HOME", "KIWI_HOME", NULL};
 #else
 static const char *const KEEP_IN_TEST_BUILDS[] = {NULL};
 #endif

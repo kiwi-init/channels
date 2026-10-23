@@ -1,4 +1,4 @@
-import { dlopen, FFIType, ptr, suffix } from "bun:ffi";
+import { dlopen, FFIType, JSCallback, ptr, suffix } from "bun:ffi";
 import fs from "node:fs";
 import path from "node:path";
 import Electrobun, { BrowserView, BrowserWindow, PATHS, Utils } from "electrobun/main";
@@ -6,6 +6,7 @@ import Electrobun, { BrowserView, BrowserWindow, PATHS, Utils } from "electrobun
 import { internalRpcHandlers } from "../.hutch/devkit/api/sdks/main/proc/native.ts";
 import { startAppLife } from "./app-life-eb.ts";
 import { handleDeepLink, JOIN_SCHEME } from "./deep-links.ts";
+import { keepDaemon } from "./bundled-daemon.ts";
 import { lockInternalRpc, onOurPage, preloadSource, toPageScript } from "./eb-bridge.ts";
 import { drive } from "./eb-driver.ts";
 import { navigation, openedUrl, PAGE_RULES, PAGE_TEMPLATE, PAGE_URL, pageWithCsp, RULES_CANARY } from "./eb-page.ts";
@@ -16,8 +17,9 @@ import { useHost } from "./host.ts";
 import { handlers } from "./ipc/handlers.ts";
 import { bunWorker, keysController, type KeysFrame } from "./keys-eb.ts";
 import { answerKeys } from "./keys-host.ts";
-import { logMainError } from "./main-log.ts";
+import { catchMainErrors, logMainError } from "./main-log.ts";
 import { openInBrowser } from "./open.ts";
+import { keepPageAlive } from "./page-crash.ts";
 import { claimInstance, handoffFor, type Instance } from "./single-instance.ts";
 import { testHomeProblem } from "./eb-test-home.ts";
 import { bunBridge } from "./rpc-eb.ts";
@@ -28,7 +30,8 @@ import { minWindowWidth } from "./window-size.ts";
 
 declare const KIWI_EB_TEST: boolean;
 
-useHost(ebHost);
+useHost(KIWI_EB_TEST ? { ...ebHost, app: { ...ebHost.app, packaged: () => true } } : ebHost);
+catchMainErrors();
 Electrobun.events.on("open-url", (e: { data?: { url?: unknown } }) => {
   if (typeof e.data?.url === "string") handleDeepLink(e.data.url);
 });
@@ -42,6 +45,7 @@ const shell = dlopen(shellPath, {
   kiwi_deny_permissions: { args: [], returns: FFIType.bool },
   kiwi_watch_commits: { args: [], returns: FFIType.bool },
   kiwi_committed_url: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
+  kiwi_watch_page: { args: [FFIType.function], returns: FFIType.bool },
 }).symbols;
 
 const sandboxPages = mac ? null : dlopen(shellPath, { kiwi_sandbox_pages: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.bool } }).symbols.kiwi_sandbox_pages;
@@ -222,8 +226,27 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
     ebHost.push("update", u);
     tray.refresh(u);
   });
+  watchPage();
+  void keepDaemon(() => quitting).catch(logMainError);
   const broken = brokenStore();
   if (broken) void Utils.showMessageBox({ type: "error", message: "Channels can't read its saved keys", detail: broken.message });
+}
+
+let quitting = false;
+Electrobun.events.on("before-quit", () => void (quitting = true));
+let pageWatch: JSCallback | null = null;
+
+function watchPage(): void {
+  const gone = keepPageAlive({
+    reload: () => ebHost.reload(),
+    ask: async (message, buttons) => (await Utils.showMessageBox({ type: "warning", message, buttons, defaultId: 1, cancelId: 0 })).response === 1,
+    quit: () => void Utils.quit(),
+    log: logMainError,
+    quitting: () => quitting,
+    now: Date.now,
+  });
+  pageWatch = new JSCallback(() => gone("its web content process ended"), { args: [], returns: "void", threadsafe: true });
+  if (!shell.kiwi_watch_page(pageWatch)) logMainError(new Error("Electrobun's navigation delegate wasn't found: a stopped page isn't reloaded or counted"));
 }
 
 function refuse(instance: Extract<Instance, { kind: "first" }>, why: string): void {

@@ -360,6 +360,8 @@ jobs:
         working-directory: desktop
         timeout-minutes: 5
         run: for i in 1 2 3; do bun run prepare:eb && exit 0; echo "electrobun prepare failed ($i of 3)"; [ "$i" -lt 3 ] && sleep 20; done; exit 1
+      - name: the kiwi CLI the app bundles
+        run: mkdir -p dist && bun scripts/build-cli.ts --js dist/kiwi.js
       - working-directory: desktop
         env:
           DASH_RELEASE_OFFLINE: "1"
@@ -593,6 +595,12 @@ jobs:
           done
           codesign --force --sign - dist/kiwi-darwin-arm64 dist/kiwi-darwin-x64
           ./dist/kiwi-darwin-arm64 --version
+          probe="$RUNNER_TEMP/kiwi-autoload"
+          mkdir -p "$probe"
+          printf 'preload = ["./p.js"]\n' > "$probe/bunfig.toml"
+          printf 'require("node:fs").writeFileSync("preload-ran", "")\n' > "$probe/p.js"
+          (cd "$probe" && "$GITHUB_WORKSPACE/dist/kiwi-darwin-arm64" --version)
+          test ! -e "$probe/preload-ran" || { echo "the kiwi CLI ran a bunfig.toml preload from the folder it was started in"; exit 1; }
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         timeout-minutes: 1

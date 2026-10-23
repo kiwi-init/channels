@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { compareVersions } from "@kiwi/core/versions.ts";
+import { childEnv } from "./child-env.ts";
 import { host } from "./host.ts";
 import { moveOver } from "./move.ts";
 import { logMainError } from "./main-log.ts";
@@ -209,7 +210,7 @@ function set(s: UpdateState): UpdateState {
 
 function run(cmd: string, args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
-    const p = spawn(cmd, args, { stdio: "ignore" });
+    const p = spawn(cmd, args, { stdio: "ignore", env: childEnv() });
     p.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`${cmd} exited ${code}`))));
     p.on("error", reject);
   });
@@ -244,7 +245,7 @@ function swapIn(next: { version: string; path: string; url: string }, relaunch: 
     if (!target.endsWith(".app")) return false;
     const script = path.join(dir, "swap.sh");
     fs.writeFileSync(script, swapScript({ pid: process.pid, target, next: next.path, dir, marker: failedMarker(), version: next.version, relaunch }));
-    spawn("/bin/sh", [script], { detached: true, stdio: "ignore" }).unref();
+    spawn("/bin/sh", [script], { detached: true, stdio: "ignore", env: childEnv() }).unref();
   } else {
     const target = runningAppImage();
     if (!target) return false;

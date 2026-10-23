@@ -34,6 +34,7 @@ test("the modules both shells share never reach electron, however deep the impor
     "bundled-daemon.ts",
     "deep-links.ts",
     "main-log.ts",
+    "page-crash.ts",
     "signin.ts",
     "keys-host.ts",
     "keys-eb.ts",

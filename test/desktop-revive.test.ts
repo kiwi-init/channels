@@ -24,10 +24,10 @@ mock.module("electron", () => ({
 
 type FakeWindow = { webContents: EventEmitter & { reload: () => void; forcefullyCrashRenderer: () => void }; on: (ev: string, fn: () => void) => void; isDestroyed: () => boolean };
 const revive = "../desktop/src/revive.ts";
-const { keepRendererAlive, catchMainErrors } = (await import(revive)) as {
+const { keepRendererAlive } = (await import(revive)) as {
   keepRendererAlive: (win: FakeWindow, quitting: () => boolean, now?: () => number) => void;
-  catchMainErrors: () => void;
 };
+const { catchMainErrors } = await import("../desktop/src/main-log.ts");
 
 function fakeWindow(): { win: FakeWindow; wc: EventEmitter; on: EventEmitter; reloads: () => number; crashes: () => number } {
   const wc = Object.assign(new EventEmitter(), { reloads: 0, crashes: 0 });
