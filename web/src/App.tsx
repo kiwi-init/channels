@@ -6,7 +6,7 @@ import { FirstRun } from "@/components/first-run"
 import { JoinWithCode, NewChannel, Welcome } from "@/components/lazy"
 import { ChannelIconTile } from "@/components/channel-icon"
 import { Sidebar } from "@/components/sidebar"
-import { ChannelTabs } from "@/components/channel-tabs"
+import { ChannelsNavContext } from "@/lib/channels-nav"
 import { useMemberIcons } from "@/lib/icons"
 import { useIcons } from "@/lib/icons"
 import type { Command, PaletteActions } from "@/components/ui/palette"
@@ -119,49 +119,51 @@ export default function App() {
         </>
       ) : (
         <div className="flex h-svh flex-col overflow-clip md:bg-rail">
-          <ChannelTabs
-            rows={rows}
-            news={news}
-            active={settings ? "" : code}
-            inChannel={!settings && rows.some((r) => r.code === code && r.state === "member")}
-            onSelect={open}
-            onNew={() => setSheet("new")}
-            onFind={() => setPalette(true)}
-            onComputers={() => setSheet("computers")}
-            onSettings={() => setSettings(true)}
-          />
-          <div className="flex min-h-0 flex-1 overflow-clip">
-            <Sidebar
-              rows={rows}
-              news={news}
-              active={settings ? "" : code}
-              onSelect={open}
-              onNew={() => setSheet("new")}
-              onComputers={() => setSheet("computers")}
-              onSettings={() => setSettings(true)}
-              className={cx(code || settings ? "hidden" : "flex", "md:hidden")}
-            />
-            <main className={cx("relative min-w-0 flex-1 overflow-clip bg-canvas md:bg-rail md:pl-2", code || settings ? "flex" : "hidden md:flex")}>
-              {settings && (
-                <div className="flex min-w-0 flex-1 md:sheet">
-                  <SettingsPage backTo={rows.find((r) => r.code === code)?.title ?? "Channels"} onClose={() => setSettings(false)} />
-                </div>
-              )}
-              <div className={cx("min-w-0 flex-1", settings ? "hidden" : "flex")}>
-                {code ? (
-                  <Boundary resetKey={code}>
-                    <ChannelGate key={code} code={code} listedState={rows.find((r) => r.code === code)?.state} onBack={close} onGone={close} />
-                  </Boundary>
-                ) : (
+          <ChannelsNavContext.Provider
+            value={{
+              rows,
+              news,
+              active: settings ? "" : code,
+              onSelect: open,
+              onNew: () => setSheet("new"),
+              onFind: () => setPalette(true),
+              onComputers: () => setSheet("computers"),
+              onSettings: () => setSettings(true),
+            }}
+          >
+            <div className="flex min-h-0 flex-1 overflow-clip">
+              <Sidebar
+                rows={rows}
+                news={news}
+                active={settings ? "" : code}
+                onSelect={open}
+                onNew={() => setSheet("new")}
+                onComputers={() => setSheet("computers")}
+                onSettings={() => setSettings(true)}
+                className={cx(code || settings ? "hidden" : "flex", "md:bg-rail")}
+              />
+              <main className={cx("relative min-w-0 flex-1 overflow-clip bg-canvas md:bg-rail md:pt-2 md:pl-2", code || settings ? "flex" : "hidden md:flex")}>
+                {settings && (
                   <div className="flex min-w-0 flex-1 md:sheet">
-                    <Welcome onNew={() => setSheet("new")} onJoin={() => setSheet("join")} />
+                    <SettingsPage backTo={rows.find((r) => r.code === code)?.title ?? "Channels"} onClose={() => setSettings(false)} />
                   </div>
                 )}
-              </div>
-              {/* Last in the document, not just on top: the desktop app works out what drags the window
+                <div className={cx("min-w-0 flex-1", settings ? "hidden" : "flex")}>
+                  {code ? (
+                    <Boundary resetKey={code}>
+                      <ChannelGate key={code} code={code} listedState={rows.find((r) => r.code === code)?.state} onBack={close} onGone={close} />
+                    </Boundary>
+                  ) : (
+                    <div className="flex min-w-0 flex-1 md:sheet">
+                      <Welcome onNew={() => setSheet("new")} onJoin={() => setSheet("join")} />
+                    </div>
+                  )}
+                </div>
+                {/* Last in the document, not just on top: the desktop app works out what drags the window
                 in document order, whatever the z-index, so a header after these would swallow their clicks. */}
-            </main>
-          </div>
+              </main>
+            </div>
+          </ChannelsNavContext.Provider>
         </div>
       )}
       <NewChannel

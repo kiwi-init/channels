@@ -1,10 +1,10 @@
-import { ArrowLeft01Icon, Search01Icon } from "@hugeicons/core-free-icons"
+import { ArrowLeft01Icon, Search01Icon, SidebarLeftIcon } from "@hugeicons/core-free-icons"
 import type { Dispatch, ReactNode, SetStateAction } from "react"
 
 import type { ChannelIcon } from "@kiwi/core/protocol.ts"
 
 import { TABS, type Tab } from "@/lib/views"
-import { useSidebarHidden } from "@/lib/sidebar-hidden"
+import { SIDEBAR_KEYS, toggleSidebar, useSidebarHidden } from "@/lib/sidebar-hidden"
 import { cx } from "@/lib/utils"
 import { ChannelIconTile } from "../channel-icon"
 import { HoldBanner } from "../controls"
@@ -47,6 +47,11 @@ export function Header({
   return (
     <header ref={headRef} className="absolute inset-x-0 top-0 z-20 bg-canvas">
       <div className="drag relative flex h-(--chrome-h) items-center gap-1 px-2 sm:gap-3 sm:px-3 md:px-6">
+        {wide && (
+          <IconButton label={`Show the sidebar (${SIDEBAR_KEYS})`} round className="no-drag hidden size-9 text-ink-2 hover:text-ink md:flex" onClick={toggleSidebar}>
+            <Icon icon={SidebarLeftIcon} size={18} />
+          </IconButton>
+        )}
         <IconButton label="Channels" round className="size-9 text-ink md:hidden" onClick={onBack}>
           <Icon icon={ArrowLeft01Icon} size={20} />
         </IconButton>

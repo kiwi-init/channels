@@ -1,13 +1,14 @@
-import { Add01Icon, ArrowDown01Icon, Search01Icon, TaskDone01Icon } from "@hugeicons/core-free-icons"
+import { Add01Icon, ArrowDown01Icon, Search01Icon, SidebarLeftIcon, TaskDone01Icon } from "@hugeicons/core-free-icons"
 import { useState, type ReactNode } from "react"
 
 import type { ChannelIcon } from "@kiwi/core/protocol.ts"
 import { VIEWS, type View } from "@/lib/views"
-import { useSidebarHidden } from "@/lib/sidebar-hidden"
+import { SIDEBAR_KEYS, toggleSidebar, useSidebarHidden } from "@/lib/sidebar-hidden"
 import { cx } from "@/lib/utils"
 import { AgentRow, byBusy, type AgentNow } from "../agent-strip"
-import { ChannelIconTile } from "../channel-icon"
+import { AccountFoot, ChannelSwitcher } from "../channel-tabs"
 import { Icon } from "../icon"
+import { IconButton } from "../kit"
 import { Menu, MenuItem } from "../ui/menu"
 
 export interface Conversation {
@@ -197,14 +198,13 @@ export function ChannelSidebar({
   const hidden = useSidebarHidden()
   if (hidden) return null
   return (
-    <aside aria-label="Channel" className="hidden h-full w-[280px] shrink-0 flex-col overflow-y-auto bg-rail px-3 pt-2 pb-4 md:-ml-2 md:flex">
-      <button type="button" onClick={onTitle} className="flex items-center gap-3 rounded-row px-2 py-1.5 text-left transition-colors hover:bg-wash">
-        <ChannelIconTile icon={icon} title={title} size={36} />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-title">{title}</span>
-          <span className="block truncate text-meta text-ink-3">{people}</span>
-        </span>
-      </button>
+    <aside aria-label="Channel" className="hidden h-full w-[280px] shrink-0 flex-col overflow-y-auto bg-rail px-3 pb-3 md:-mt-2 md:-ml-2 md:flex">
+      <div className="drag flex h-(--chrome-h) shrink-0 items-center justify-end shell-mac:pl-(--lights-w)">
+        <IconButton label={`Hide the sidebar (${SIDEBAR_KEYS})`} round className="no-drag size-9 text-ink-2 hover:text-ink" onClick={toggleSidebar}>
+          <Icon icon={SidebarLeftIcon} size={18} />
+        </IconButton>
+      </div>
+      <ChannelSwitcher title={title} icon={icon} people={people} onDetails={onTitle} />
 
       <nav aria-label="Views" className="mt-4">
         <ul className="space-y-0.5">
@@ -240,6 +240,7 @@ export function ChannelSidebar({
       )}
 
       <Conversations conversations={conversations} current={current} onConversation={onConversation} />
+      <AccountFoot />
     </aside>
   )
 }
