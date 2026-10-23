@@ -1,10 +1,10 @@
 import { ArrowDown01Icon } from "@hugeicons/core-free-icons"
-import { useCallback, useDeferredValue, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react"
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react"
 
 import { permissionReply } from "@kiwi/core/permission.ts"
 import { droppedCount } from "@kiwi/core/format.ts"
 import { memberLoad } from "@kiwi/core/load.ts"
-import { GENERAL_ROOM, isReaction, type ImageAttachment, type Message } from "@kiwi/core/protocol.ts"
+import { GENERAL_ROOM, PROTOCOL_VERSION, isReaction, type ImageAttachment, type Message } from "@kiwi/core/protocol.ts"
 import { taskCards } from "@kiwi/core/standup.ts"
 import { answersDecisions, colorOf, decidersOf, heldBy, outsideRepos, taskId, tasksAwaitingPeople, type Task, humanOf, ownerOf } from "@kiwi/core/state.ts"
 import { channelTitle, loadRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
@@ -81,6 +81,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const [search, setSearch] = useState<string | null>(null)
   const query = useDeferredValue(search?.trim() ? search : null)
   const [replyTo, setReplyTo] = useState<Message | null>(null)
+  const [sending, setSending] = useState<{ key: number; place: string; m: Message; after: number; seq?: number }[]>([])
+  const sendingKey = useRef(0)
   const [picture, setPicture] = useState<{ m: Message; img: ImageAttachment; src: string } | null>(null)
   const [highlight, setHighlight] = useState<number | null>(null)
   const [headRef, headH] = useHeight()
@@ -139,6 +141,13 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     nameOf,
   })
   const { behind, setBehind, isFresh, scroller, stick, toBottom, onScroll } = useScroll({ messages, visible, hereKey })
+  const landed = useCallback(
+    (s: { m: Message; after: number; seq?: number }) => (s.seq !== undefined ? bySeq.get(s.seq) : messages.findLast((x) => x.seq > s.after && x.from === me && x.body === s.m.body)),
+    [bySeq, messages, me]
+  )
+  const sentNow = sending.map((s) => ({ s, real: landed(s) }))
+  const replaced = new Set(sentNow.flatMap(({ real }) => (real ? [real.seq] : [])))
+  const sendingHere = sentNow.filter(({ s, real }) => s.place === hereKey && !real).map(({ s }) => s.m)
 
   const go = useCallback(
     (p: Place) => {
@@ -266,7 +275,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     quoted,
     chosen,
     nameOf,
-    isFresh,
+    isFresh: (seq: number) => seq < 0 || (isFresh(seq) && !replaced.has(seq)),
     summaryOf,
     showsReceipt,
     onReply,
@@ -310,8 +319,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       </div>
     )
   if (tab === "conversation") {
-    if (card && at >= 0) rows.push(...timeline(tail.slice(0, at)), card, ...timeline(tail.slice(at + 1)))
-    else rows.push(...timeline(tail), ...(card ? [card] : []))
+    if (card && at >= 0) rows.push(...timeline(tail.slice(0, at)), card, ...timeline([...tail.slice(at + 1), ...sendingHere]))
+    else rows.push(...timeline([...tail, ...sendingHere]), ...(card ? [card] : []))
   }
 
   const root = threadRoot === null ? undefined : bySeq.get(threadRoot)
@@ -600,7 +609,30 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                               placeholder={place.kind === "main" ? "Message everyone" : `Message ${nameOf(place.with.find((n) => n !== me) ?? "")} privately`}
                               send={async (body, opts) => {
                                 stick()
-                                return send(body, opts)
+                                if (opts.imgs?.length || opts.task !== undefined) return send(body, opts)
+                                const key = ++sendingKey.current
+                                const m: Message = {
+                                  v: PROTOCOL_VERSION,
+                                  id: `sending-${key}`,
+                                  from: me,
+                                  kind: opts.kind ?? "msg",
+                                  body,
+                                  ts: Date.now(),
+                                  seq: -key,
+                                  sigOk: true,
+                                  ...(opts.to ? { to: opts.to } : {}),
+                                  ...(opts.re ? { re: opts.re } : {}),
+                                  ...(opts.dm ? { dm: true } : {}),
+                                }
+                                setSending((all) => [...all, { key, place: hereKey, m, after: messages.at(-1)?.seq ?? 0 }].slice(-50))
+                                try {
+                                  const seq = await send(body, opts)
+                                  setSending((all) => all.map((s) => (s.key === key ? { ...s, seq } : s)))
+                                  return seq
+                                } catch (err) {
+                                  setSending((all) => all.filter((s) => s.key !== key))
+                                  throw err
+                                }
                               }}
                               footer={
                                 <div className="md:hidden">
