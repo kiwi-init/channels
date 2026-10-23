@@ -1,23 +1,13 @@
 import { execFileSync } from "node:child_process";
-import { lstatSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { only, payloadOf, shippedApp } from "./eb-app.ts";
+import { MB, mb, only, payloadOf, shippedApp, sizeOf } from "./eb-app.ts";
 
-const MB = 1024 ** 2;
 const LIMITS = { app: 100 * MB, packed: 40 * MB };
 
 const dir = resolve(process.argv[2] ?? "desktop/release-eb");
-const mb = (bytes: number) => `${(bytes / MB).toFixed(1)}MB`;
-
-function sizeOf(path: string): number {
-  const st = lstatSync(path);
-  if (st.isSymbolicLink()) return 0;
-  if (!st.isDirectory()) return st.size;
-  return readdirSync(path).reduce((sum, name) => sum + sizeOf(join(path, name)), 0);
-}
-
 const builds = join(dir, "build");
 const artifacts = join(dir, "artifacts");
 const wrapper = only(

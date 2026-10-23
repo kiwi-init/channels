@@ -10,9 +10,10 @@
     "mksquashfs",
     "ditto",
     "hdiutil",
+    "kwallet-query",
     "pgrep",
-    "plutil",
-    "kwallet-query"
+    "osascript",
+    "plutil"
   ],
   "workspaces": {
     ".": {
