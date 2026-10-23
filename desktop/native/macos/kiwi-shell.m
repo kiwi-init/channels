@@ -1,6 +1,8 @@
 #import <AppKit/AppKit.h>
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
+#import <os/lock.h>
+#import <string.h>
 
 static void denyMedia(id self, SEL cmd, WKWebView *webView, WKSecurityOrigin *origin, WKFrameInfo *frame, WKMediaCaptureType type,
                       void (^decisionHandler)(WKPermissionDecision)) {
@@ -90,6 +92,34 @@ bool kiwi_allow_only(const char *page) {
   thePage = [p copy];
   if (!electrobunDecideAction) electrobunDecideAction = (DecideAction)method_setImplementation(m, (IMP)onlyThePage);
   return electrobunDecideAction != NULL;
+}
+
+static os_unfair_lock committedLock = OS_UNFAIR_LOCK_INIT;
+static char committed[4096] = "";
+static IMP commitNext = NULL;
+
+static void committedNavigation(id self, SEL cmd, WKWebView *webView, WKNavigation *navigation) {
+  const char *url = webView.URL.absoluteString.UTF8String;
+  os_unfair_lock_lock(&committedLock);
+  if (strlcpy(committed, url ? url : "", sizeof committed) >= sizeof committed) committed[0] = 0;
+  os_unfair_lock_unlock(&committedLock);
+  ((void (*)(id, SEL, WKWebView *, WKNavigation *))commitNext)(self, cmd, webView, navigation);
+}
+
+bool kiwi_watch_commits(void) {
+  if (commitNext) return true;
+  Class cls = objc_getClass("MyNavigationDelegate");
+  Method m = cls ? class_getInstanceMethod(cls, @selector(webView:didCommitNavigation:)) : NULL;
+  if (!m) return false;
+  commitNext = method_setImplementation(m, (IMP)committedNavigation);
+  return true;
+}
+
+size_t kiwi_committed_url(char *out, size_t size) {
+  os_unfair_lock_lock(&committedLock);
+  size_t n = strlcpy(out, committed, size);
+  os_unfair_lock_unlock(&committedLock);
+  return n;
 }
 
 static NSColor *rgb(uint32_t c) {
