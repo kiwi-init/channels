@@ -476,7 +476,7 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
               <Group id="phone" title="Phone">
                 <div data-item className="grid gap-1 px-4 py-2">
                   <p className="pt-1 text-meta leading-snug text-ink-3">
-                    Your iPhone reads and answers your channels as you. Linking hands it your person and channel keys, end to end through the relay.
+                    Your phone reads and answers your channels as you. Linking hands it your person and channel keys, end to end through the relay.
                   </p>
                   <PhoneRows linking={linking} onLinked={() => setLinking(false)} />
                 </div>
