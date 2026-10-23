@@ -87,19 +87,24 @@ export interface PageBridge {
   onKeys(cb: (frame: KeysFrame) => void): () => void;
 }
 
-export function pageBridge(toHost: (frame: Frame) => void, onHost: (receive: (frame: unknown) => void) => void, session: string, doc: string = crypto.randomUUID()): PageBridge {
+const stringify = JSON.stringify;
+
+export function pageBridge(post: (json: string) => void, onHost: (receive: (frame: unknown) => void) => void, session: string, doc: string = crypto.randomUUID()): PageBridge {
+  if (!frameOf({ session, doc })?.doc) throw new Error("a page bridge needs main's session id and its document's nonce");
+  const ids = `"session":"${session}","doc":"${doc}"`;
   const rpc = createRPC<PageSide, BunSide>({
     maxRequestTime: Infinity,
     transport: {
-      send: (packet: unknown) => toHost({ session, doc, packet }),
+      send: (packet: unknown) => post(`{${ids},"packet":${stringify(packet)}}`),
       registerHandler: (h: (packet: unknown) => void) =>
         onHost((raw) => {
-          const frame = frameOf(raw);
-          if (frame?.session === session && frame.doc === doc && frame.packet !== undefined) h(frame.packet);
+          if (typeof raw !== "object" || raw === null) return;
+          const frame = raw as { session?: unknown; doc?: unknown; packet?: unknown };
+          if (frame.session === session && frame.doc === doc && frame.packet !== undefined) h(frame.packet);
         }),
     },
   });
-  toHost({ session, doc });
+  post(`{${ids}}`);
   const calls = rpc as unknown as ReturnType<typeof createRPC<PageSide, CallSide>>;
   function call<K extends Call>(name: K, ...args: CallArgs<K>): Promise<CallValue<K>> {
     return calls.request(name, args) as Promise<CallValue<K>>;

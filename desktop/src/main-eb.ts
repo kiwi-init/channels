@@ -6,7 +6,7 @@ import Electrobun, { BrowserView, BrowserWindow, PATHS, Utils } from "electrobun
 import { internalRpcHandlers } from "../.hutch/devkit/api/sdks/main/proc/native.ts";
 import { startAppLife } from "./app-life-eb.ts";
 import { handleDeepLink, JOIN_SCHEME } from "./deep-links.ts";
-import { committedUrl, lockInternalRpc, preloadSource, stillOurs, toPageScript } from "./eb-bridge.ts";
+import { lockInternalRpc, onOurPage, preloadSource, toPageScript } from "./eb-bridge.ts";
 import { navigationUrl, openedUrl, PAGE_RULES, PAGE_URL, pageWithCsp } from "./eb-page.ts";
 import { externalUrl } from "./guard.ts";
 import { attachKeys, attachWindow, bundle, ebHost } from "./host-eb.ts";
@@ -33,6 +33,8 @@ const binDir = path.dirname(process.execPath);
 
 const shell = dlopen(path.join(binDir, `libkiwi-shell.${suffix}`), {
   kiwi_deny_permissions: { args: [], returns: FFIType.bool },
+  kiwi_watch_commits: { args: [], returns: FFIType.bool },
+  kiwi_committed_url: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
   kiwi_window_look: { args: [FFIType.ptr, FFIType.f64, FFIType.f64, FFIType.u32, FFIType.u32], returns: FFIType.void },
 }).symbols;
 
@@ -40,6 +42,13 @@ const core = dlopen(path.join(binDir, `libElectrobunCore.${suffix}`), {
   setWebviewHTMLContent: { args: [FFIType.u32, FFIType.ptr], returns: FFIType.void },
   updatePreloadScriptToWebView: { args: [FFIType.u32, FFIType.ptr, FFIType.ptr, FFIType.bool], returns: FFIType.void },
 }).symbols;
+
+const committedBuffer = new Uint8Array(4096);
+
+function committedPage(): string | null {
+  const n = Number(shell.kiwi_committed_url(ptr(committedBuffer), committedBuffer.length));
+  return n > 0 && n < committedBuffer.length ? new TextDecoder().decode(committedBuffer.subarray(0, n)) : null;
+}
 
 const cString = (s: string): Uint8Array => new TextEncoder().encode(`${s}\0`);
 
@@ -69,11 +78,10 @@ function createWindow(): BrowserWindow {
   const index = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "internal", "index.html"), "utf8");
   const bundled = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "preload", "index.js"), "utf8");
   const table = handlers(ebHost);
-  let ours = true;
   let view: BrowserView | null = null;
   const bridge = bunBridge(
     table,
-    () => ours,
+    () => onOurPage(committedPage()),
     (frame) => view?.executeJavascript(toPageScript(frame)),
     () => {
       keys.pageGone();
@@ -97,7 +105,6 @@ function createWindow(): BrowserWindow {
   webview.setNavigationRules(PAGE_RULES);
   const load = (): void => {
     core.setWebviewHTMLContent(webview.id, ptr(cString(pageWithCsp(index, store.relayUrl))));
-    ours = true;
     bridge.retire();
     webview.loadURL(PAGE_URL);
   };
@@ -112,7 +119,6 @@ function createWindow(): BrowserWindow {
     },
     reload: () => (refreshPreload(), load()),
   });
-  for (const moved of ["did-commit-navigation", "did-navigate", "did-navigate-in-page"] as const) webview.on(moved, (e) => (ours = stillOurs(ours, committedUrl(detailOf(e)))));
   load();
   const look = win.ptr;
   if (look) shell.kiwi_window_look(look, minWindowWidth(process.platform), WINDOW_SIZE.minHeight, rgb(windowBackground(false)), rgb(windowBackground(true)));
@@ -172,8 +178,8 @@ if (!instance) Utils.quit(1);
 else if (instance.kind === "second") {
   if (!instance.delivered) console.error("Channels: another Channels holds this data folder and didn't answer; quitting");
   Utils.quit(0);
-} else if (!shell.kiwi_deny_permissions()) {
-  console.error("Channels: the web view's permission handler wasn't found; not opening a window that could grant the microphone");
+} else if (!shell.kiwi_deny_permissions() || !shell.kiwi_watch_commits()) {
+  console.error("Channels: the web view's permission handler or navigation delegate wasn't found; not opening a window that could grant the microphone or trust a page it can't see");
   instance.release();
   Utils.quit(1);
 } else

@@ -35,7 +35,7 @@ const main = bunBridge(
 );
 main.setTransport({ registerHandler: (h) => (fromPage = h) });
 const page = pageBridge(
-  (packet) => fromPage(wire(packet)),
+  (json) => fromPage(JSON.parse(json)),
   (receive) => (toPage = receive),
   main.nextSession(),
 );
@@ -43,7 +43,7 @@ const kiwi = makeBridge({ snapshot, channels, call: page.call, listen: page.list
 
 const ownPage = (): ReturnType<typeof pageBridge> =>
   pageBridge(
-    (packet) => fromPage(wire(packet)),
+    (json) => fromPage(JSON.parse(json)),
     (receive) => (toPage = receive),
     main.nextSession(),
   );
@@ -112,13 +112,13 @@ describe("window.kiwi over Electrobun's RPC, both ends as the app wires them", (
     );
     reloading.setTransport({ registerHandler: (h) => (fromAnyPage = h) });
     const first = pageBridge(
-      (frame) => fromAnyPage(wire(frame)),
+      (json) => fromAnyPage(JSON.parse(json)),
       (receive) => (toLoaded = receive),
       reloading.nextSession(),
     );
     const before = first.call("chooseFolder");
     const second = pageBridge(
-      (frame) => fromAnyPage(wire(frame)),
+      (json) => fromAnyPage(JSON.parse(json)),
       (receive) => (toLoaded = receive),
       reloading.nextSession(),
     );
@@ -193,13 +193,13 @@ describe("window.kiwi over Electrobun's RPC, both ends as the app wires them", (
     );
     main2.setTransport({ registerHandler: (h) => (fromPage2 = h) });
     const loadA = pageBridge(
-      (packet) => fromPage2(wire(packet)),
+      (json) => fromPage2(JSON.parse(json)),
       (receive) => (toPage2 = receive),
       main2.nextSession(),
     );
     const fromA = loadA.keys({ id: 1, op: "nudge" } as KeysRequest);
     const loadB = pageBridge(
-      (packet) => fromPage2(wire(packet)),
+      (json) => fromPage2(JSON.parse(json)),
       (receive) => (toPage2 = receive),
       main2.nextSession(),
     );
@@ -237,7 +237,7 @@ function rig(table: Handlers = handlers(shell.host), keys?: KeysHandler) {
   bridge.setTransport({ registerHandler: (h) => (fromAny = h) });
   const load = (session: string = bridge.nextSession()) =>
     pageBridge(
-      (frame) => fromAny(wire(frame)),
+      (json) => fromAny(JSON.parse(json)),
       (receive) => (toLoaded = receive),
       session,
     );
