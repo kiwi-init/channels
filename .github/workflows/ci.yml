@@ -192,7 +192,14 @@ jobs:
           overwrite: true
       - name: cli build
         if: ${{ !cancelled() }}
-        run: bun run build && ./dist/kiwi --version && bun scripts/build-cli.ts --check
+        run: |
+          bun run build && ./dist/kiwi --version && bun scripts/build-cli.ts --check
+          probe="$RUNNER_TEMP/kiwi-autoload"
+          mkdir -p "$probe"
+          printf 'preload = ["./p.js"]\n' > "$probe/bunfig.toml"
+          printf 'require("node:fs").writeFileSync("preload-ran", "")\n' > "$probe/p.js"
+          (cd "$probe" && "$GITHUB_WORKSPACE/dist/kiwi" --version)
+          test ! -e "$probe/preload-ran" || { echo "the kiwi CLI ran a bunfig.toml preload from the folder it was started in"; exit 1; }
       - name: cli smoke
         if: ${{ !cancelled() }}
         run: bun scripts/smoke-cli.ts dist/kiwi

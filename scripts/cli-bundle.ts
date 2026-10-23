@@ -44,6 +44,8 @@ const SH_PROBES: Record<string, string> = {
 
 export const shProbe = (command: string): string => SH_PROBES[command] ?? `${command} /channel/README`;
 
+export const CLI_COMPILE = { autoloadBunfig: false, autoloadDotenv: false } as const;
+
 export const HEAVY = ["run", "sql.js", "turndown", "@mixmark-io/domino"] as const;
 
 export function heavyIn(sources: string[]): string[] {
