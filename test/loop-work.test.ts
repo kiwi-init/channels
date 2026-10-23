@@ -6,6 +6,7 @@ import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identi
 import type { Event, Message } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 import { claudeArgv, claudeSession } from "../src/loop/claude.ts";
+import { codexArgv, codexIdle, codexThread } from "../src/loop/codex.ts";
 import { firstPrompt, nextWork, workOver } from "../src/loop/work.ts";
 
 const ids: Record<string, Identity> = {};
@@ -110,6 +111,30 @@ describe("the work a loop starts a session for", () => {
     expect(workOver(work, fold([t, round, approved], roster), "ana")).toBe(true);
   });
 
+  test("a task whose round is open isn't told to start it, which would withdraw the round", async () => {
+    const t = await ev("jon", { op: "task.add", title: "Sent", owner: "ana", review: "bo" });
+    const round = await ev("ana", { op: "task.update", task: t.seq, state: "review", at: "eee5555" });
+    const text = firstPrompt({ kind: "coding", task: t.seq }, fold([t, round], roster), "ana", "dev");
+    expect(text).toContain(`Its round 1 is with bo: wait here for the verdict, and don't run \`kiwi task start T${t.seq}\``);
+    expect(text).not.toContain("if it isn't doing yet");
+    expect(text).toContain(`kiwi task checkpoint T${t.seq} --file note.md`);
+  });
+
+  test("a reviewed task asks for a checkpoint before its round; a self-reviewed one says nobody else will judge it", async () => {
+    const t = await ev("jon", { op: "task.add", title: "Reviewed", owner: "ana", review: "bo" });
+    const text = firstPrompt({ kind: "coding", task: t.seq }, fold([t], roster), "ana", "dev");
+    expect(text.indexOf(`kiwi task checkpoint T${t.seq}`)).toBeLessThan(text.indexOf(`kiwi task review T${t.seq} --at SHA`));
+    expect(text).not.toContain("You're also its reviewer");
+    const own = await ev("jon", { op: "task.add", title: "Own", owner: "ana", review: "ana" });
+    expect(firstPrompt({ kind: "coding", task: own.seq }, fold([own], roster), "ana", "dev")).toContain("You're also its reviewer, so nobody else will give its verdict");
+  });
+
+  test("a review session answers messages but leaves the seat's own tasks for their sessions", async () => {
+    const t = await ev("jon", { op: "task.add", title: "Bo's", owner: "bo", review: "ana" });
+    const text = firstPrompt({ kind: "reviewing", task: t.seq, round: 1 }, fold([t], roster), "ana", "dev");
+    expect(text).toContain("your own tasks wait for their own session, even if one of them is rejected meanwhile");
+  });
+
   test("the first prompt names the work, how it ends, and carries re-entry", async () => {
     const t = await ev("jon", { op: "task.add", title: "Reviewed", owner: "ana", review: "bo" });
     const note = await ev("ana", { op: "task.update", task: t.seq, note: "branch feat/x at abc1234", checkpoint: true });
@@ -145,6 +170,54 @@ describe("the Claude Code recipe", () => {
       expect(claudeSession(42, env)).toEqual({ sessionId: "s-1", idle: true, since: null });
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("the Codex recipe", () => {
+  const thread = (ms: number, tail: string) => `${ms.toString(16).padStart(12, "0").slice(0, 8)}-${ms.toString(16).padStart(12, "0").slice(8)}-7abc-8def-${tail}`;
+  const day = (home: string, at: number) => {
+    const d = new Date(at);
+    const dir = join(home, "sessions", String(d.getFullYear()), String(d.getMonth() + 1).padStart(2, "0"), String(d.getDate()).padStart(2, "0"));
+    mkdirSync(dir, { recursive: true });
+    return dir;
+  };
+
+  test("the model, the effort as a config override, then the prompt after --", () => {
+    expect(codexArgv({ bin: "codex", model: "gpt-6-astra", effort: "high", prompt: "go" })).toEqual(["codex", "-m", "gpt-6-astra", "-c", 'model_reasoning_effort="high"', "--", "go"]);
+    expect(codexArgv({ bin: "codex", prompt: "go" })).toEqual(["codex", "--", "go"]);
+  });
+
+  test("the launch's thread is the one started after it whose rollout holds its nonce", () => {
+    const home = mkdtempSync(join(tmpdir(), "kiwi-loop-codex-"));
+    try {
+      const env = { CODEX_HOME: home };
+      const now = Date.now();
+      const dir = day(home, now);
+      const older = thread(now - 60_000, "000000000001");
+      const other = thread(now + 100, "000000000002");
+      const mine = thread(now + 200, "000000000003");
+      writeFileSync(join(dir, `rollout-x-${older}.jsonl`), '{"type":"session_meta"}\n{"text":"(Kiwi loop launch abc123)"}\n');
+      writeFileSync(join(dir, `rollout-x-${other}.jsonl`), '{"type":"session_meta"}\n{"text":"another launch"}\n');
+      expect(codexThread("abc123", now, now + 1_000, env)).toBeNull();
+      writeFileSync(join(dir, `rollout-x-${mine}.jsonl`), '{"type":"session_meta"}\n{"text":"(Kiwi loop launch abc123)"}\n');
+      expect(codexThread("abc123", now, now + 1_000, env)).toEqual({ thread: mine, rollout: join(dir, `rollout-x-${mine}.jsonl`) });
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("its rollout says when a turn is over", () => {
+    const home = mkdtempSync(join(tmpdir(), "kiwi-loop-codex-"));
+    try {
+      const file = join(home, "rollout.jsonl");
+      writeFileSync(file, '{"type":"event_msg","payload":{"type":"task_started"}}\n');
+      expect(codexIdle(file).idle).toBe(false);
+      writeFileSync(file, '{"type":"event_msg","payload":{"type":"task_started"}}\n{"type":"event_msg","payload":{"type":"task_complete"}}\n');
+      expect(codexIdle(file)).toMatchObject({ idle: true });
+      expect(codexIdle(file).since).toBeNumber();
+    } finally {
+      rmSync(home, { recursive: true, force: true });
     }
   });
 });
