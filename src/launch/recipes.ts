@@ -16,6 +16,13 @@ interface LaunchRecipe {
   typed?: (screen: string) => Screen;
 }
 
+const GEMINI_MODES: Record<Permission, string | null> = { default: null, "accept-edits": "auto_edit", plan: "plan", bypass: "yolo" };
+
+function geminiArgv(bin: string, prompt: string, { model, permission }: LaunchChoices): string[] {
+  const mode = permission ? GEMINI_MODES[permission] : null;
+  return [bin, ...(model ? ["-m", model] : []), ...(mode ? ["--approval-mode", mode] : []), "-i", prompt];
+}
+
 const OPENCODE_PERMISSIONS: Permission[] = ["default", "plan", "bypass"];
 
 function opencodeArgv(bin: string, prompt: string, { model, permission }: LaunchChoices): string[] {
@@ -39,6 +46,11 @@ const RECIPES: Partial<Record<KnownHarness, LaunchRecipe>> = {
     label: "Grok",
     options: { model: true, effort: GROK_EFFORTS, permission: [...PERMISSIONS], context: [] },
     argv: (bin, prompt, choices) => grokArgv({ ...choices, bin, prompt }),
+  },
+  gemini: {
+    label: "Gemini CLI",
+    options: { model: true, effort: [], permission: [...PERMISSIONS], context: [] },
+    argv: geminiArgv,
   },
   kimi: {
     label: "Kimi Code",

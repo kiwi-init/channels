@@ -58,6 +58,7 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     linkAnswer: (accept) => t.call("linkAnswer", accept),
     linkCancel: () => t.call("linkCancel"),
     daemonStatus: () => t.call("daemonStatus"),
+    doctor: () => t.call("doctor"),
     daemonAdopt: () => t.call("daemonAdopt"),
     installCli: () => t.call("installCli"),
     getUpdate: () => t.call("getUpdate"),

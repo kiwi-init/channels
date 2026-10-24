@@ -14,11 +14,11 @@ on:
         default: ""
 
 # A new push to a pull request cancels its run still in progress: only the newest commit's
-# result matters there. Each merge group has a ref of its own, so groups never cancel each
-# other, and every run on main has a group of its own, so no push or rehearsal cancels another
-# and each commit on main gets a verdict (a cancelled run reads as red).
+# result matters there. So does a new push to main: its run tests what the older one would have,
+# and the older run's ci-ok passes as cancelled for it (jev-ci report). Each merge group has a ref
+# of its own, so groups never cancel each other, and a dispatched run never cancels another.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.run_id }}
+  group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_ref || (github.event_name == 'push' && github.ref) || github.run_id }}
   cancel-in-progress: true
 
 permissions:

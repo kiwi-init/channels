@@ -2,8 +2,10 @@ import type { DaemonStatus } from "../bridge.ts";
 import { adoptDaemon, installCli } from "../bundled-daemon.ts";
 import type { Serves } from "../calls.ts";
 import { daemonHello } from "../daemon-client.ts";
+import { readDoctorFindings } from "../doctor-view.ts";
+import { runKiwi } from "./kiwi.ts";
 
-export function daemonCalls(): Serves<"daemonStatus" | "daemonAdopt" | "installCli"> {
+export function daemonCalls(): Serves<"daemonStatus" | "daemonAdopt" | "installCli" | "doctor"> {
   return {
     daemonStatus: async (): Promise<DaemonStatus> => {
       const hello = await daemonHello();
@@ -12,5 +14,6 @@ export function daemonCalls(): Serves<"daemonStatus" | "daemonAdopt" | "installC
     },
     daemonAdopt: () => adoptDaemon(),
     installCli: () => installCli(),
+    doctor: async () => readDoctorFindings((await runKiwi(["doctor", "--json"])).stdout),
   };
 }

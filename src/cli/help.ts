@@ -113,7 +113,8 @@ This computer
   kiwi launch HARNESS --code CODE [--folder DIR] [--nick NAME] [--persona TOKEN]   start an agent in a terminal you
                                                  can open (the one kiwi terminal prefer names, else Terminal, else tmux): it joins with a launch id the app knows;
                                                  --model ID, --effort LEVEL, --permission default|accept-edits|plan|bypass and --context 1m start it with those
-  kiwi demo · doctor · hooks install|uninstall|status · mcp · channels · relay --help
+  kiwi doctor [--json]                           check this computer: the install, the relay, pairing and hooks, with a fix for each problem
+  kiwi demo · hooks install|uninstall|status · mcp · channels · relay --help
 
 Running a channel (create, approve, remove, personalities, hold, charter, close) is the owner's, in the Channels app.
 
