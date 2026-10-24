@@ -93,9 +93,16 @@ function fromMachine<T>(asked: Asked, read: (result: Record<string, unknown>) =>
   return value === null ? { ok: false, detail: typeof result?.["detail"] === "string" ? result["detail"] : "that computer answered in a shape this app doesn't know" } : { ok: true, value };
 }
 
-export async function harnessesOn(asker: Asker, machine: Machine): Promise<FromMachine<HarnessRow[]>> {
+export async function remoteHarnesses(asker: Asker, machine: Machine): Promise<FromMachine<{ harnesses: HarnessRow[]; bypass: boolean }>> {
   const asked = await askMachine(asker, machine, "harnesses", {}, { timeoutMs: ASK_MS });
-  return fromMachine(asked, (r) => (Array.isArray(r["harnesses"]) ? r["harnesses"].map(readHarnessRow).filter((row): row is HarnessRow => row !== null) : null));
+  return fromMachine(asked, (r) =>
+    Array.isArray(r["harnesses"]) ? { harnesses: r["harnesses"].map(readHarnessRow).filter((row): row is HarnessRow => row !== null), bypass: r["bypass"] === true } : null,
+  );
+}
+
+export async function harnessesOn(asker: Asker, machine: Machine): Promise<FromMachine<HarnessRow[]>> {
+  const got = await remoteHarnesses(asker, machine);
+  return got.ok ? { ok: true, value: got.value.harnesses } : got;
 }
 
 export async function foldersOn(asker: Asker, machine: Machine, roomId: string): Promise<FromMachine<string[]>> {
