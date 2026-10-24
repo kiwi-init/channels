@@ -7,7 +7,8 @@ import type { Push, Pushes } from "./calls.ts";
 import { childEnv } from "./child-env.ts";
 import type { Host } from "./host.ts";
 import type { HostToKeys } from "./keys-server.ts";
-import { notifyLinux, onNoteClick, pastedPng } from "./native-eb.ts";
+import { readDropped } from "./dropped.ts";
+import { droppedPaths, notifyLinux, onNoteClick, pastedPng } from "./native-eb.ts";
 import { relaunchAfter } from "./update-asset.ts";
 import { applyUpdate } from "./updater.ts";
 import { ebDataDir } from "./store-eb.ts";
@@ -71,6 +72,7 @@ export const ebHost: Host = {
     const picked = await Utils.openFileDialog({ canChooseFiles: false, canChooseDirectory: true, allowsMultipleSelection: false });
     return picked.find((p) => p.length > 0) ?? null;
   },
+  droppedFiles: () => readDropped(droppedPaths()),
   pastedImage: async () => {
     const png = pastedPng(MAX_PASTED_BYTES);
     return png ? { type: "image/png", data: Buffer.from(png).toString("base64") } : null;

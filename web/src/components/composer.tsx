@@ -6,6 +6,7 @@ import { MAX_IMAGE_BYTES, RASTER_MIMES, type Color, type Message } from "@kiwi/c
 import { matchCommands, parseCommand, type Command } from "@/lib/commands"
 import { answered } from "@/lib/asks"
 import { draftOf, keepDraft, type DraftFile } from "@/lib/drafts"
+import { fileDrag, takeDropped } from "@/lib/dropped"
 import { takePasted } from "@/lib/pasted"
 import { needsCompressing } from "@/lib/needs-compressing"
 import { excerpt } from "@/lib/format"
@@ -129,7 +130,7 @@ export function Composer({
   // A drop anywhere else in the window must not navigate the dashboard away.
   useEffect(() => {
     const block = (e: DragEvent) => {
-      if (!e.dataTransfer?.types.includes("Files")) return
+      if (!e.dataTransfer || !fileDrag(e.dataTransfer)) return
       e.preventDefault()
     }
     window.addEventListener("dragover", block)
@@ -304,12 +305,12 @@ export function Composer({
             dropping && "shadow-[0_0_0_1.5px_var(--ring)]"
           )}
           onDragEnter={(e) => {
-            if (disabled || !e.dataTransfer.types.includes("Files")) return
+            if (disabled || !fileDrag(e.dataTransfer)) return
             e.preventDefault()
             setDropping(true)
           }}
           onDragOver={(e) => {
-            if (disabled || !e.dataTransfer.types.includes("Files")) return
+            if (disabled || !fileDrag(e.dataTransfer)) return
             e.preventDefault()
             e.dataTransfer.dropEffect = "copy"
           }}
@@ -320,7 +321,11 @@ export function Composer({
           onDrop={(e) => {
             e.preventDefault()
             setDropping(false)
-            pick(e.dataTransfer.files)
+            if (e.dataTransfer.files.length) return pick(e.dataTransfer.files)
+            void takeDropped(e.dataTransfer).then(({ files, refused }) => {
+              for (const why of refused) toast(why, "error")
+              pick(files)
+            })
           }}
         >
           {dropping && <div className="pointer-events-none absolute inset-1 z-10 flex items-center justify-center rounded-dock bg-canvas/90 text-ui text-ink-2">Drop images</div>}

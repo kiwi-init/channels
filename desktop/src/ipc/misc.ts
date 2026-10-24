@@ -5,7 +5,7 @@ import type { Host } from "../host.ts";
 import { openInBrowser } from "../open.ts";
 import { checkForUpdate, updateState } from "../updater.ts";
 
-export function miscCalls(host: Host): Serves<"getUpdate" | "installUpdate" | "checkUpdate" | "notify" | "openExternal" | "getDeepLink" | "takePastedImage"> {
+export function miscCalls(host: Host): Serves<"getUpdate" | "installUpdate" | "checkUpdate" | "notify" | "openExternal" | "getDeepLink" | "takeDroppedFiles" | "takePastedImage"> {
   return {
     getUpdate: () => updateState(),
     installUpdate: () => host.restartToUpdate(),
@@ -17,6 +17,7 @@ export function miscCalls(host: Host): Serves<"getUpdate" | "installUpdate" | "c
       return openInBrowser(ext, (u) => host.openExternal(u));
     },
     getDeepLink: () => takeDeepLink(),
+    takeDroppedFiles: () => host.droppedFiles(),
     takePastedImage: () => host.pastedImage(),
   };
 }

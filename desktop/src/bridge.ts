@@ -14,6 +14,7 @@ import type { LaunchedView, PlacedSeat, ShowResult, TerminalId, TerminalsStatus 
 import type { TextStep } from "./text-size.ts";
 import type { Wire } from "./wire.ts";
 
+export type DroppedFile = { name: string; type: string; data: string } | { name: string; refused: string };
 export type PastedImage = { type: string; data: string };
 
 export type DoctorFinding = { ok: true; what: string } | { ok: false; what: string; how: string };
@@ -335,6 +336,7 @@ export interface KiwiBridge {
   checkUpdate(): Promise<UpdateCheckView>;
   notify(title: string, body: string): Promise<void>;
   openExternal(url: string): Promise<void>;
+  takeDroppedFiles(): Promise<DroppedFile[]>;
   takePastedImage(): Promise<PastedImage | null>;
   /** The kiwi://join/<code> link waiting to be opened, if any; taking it clears it. */
   getDeepLink(): Promise<string | null>;
