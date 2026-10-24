@@ -121,7 +121,7 @@ const REHEARSAL = {
   ).replace("android]", "android, release-rehearsal]"),
   ".github/jev-ci.yml": `${CONFIG_TEXT.trimEnd()}\n\n  release-rehearsal:\n    name: release / rehearsal\n    jev: false\n    push: false\n    version_bumps: true\n    inputs: []\n    always:\n      - ".github/workflows/release-build.yml"\n    description: >-\n      Runs the release build as a rehearsal.\n`,
 };
-const CHECKS = ["static", "test-unit", "test-flows-a", "test-flows-b", "build", "shots", "desktop-mac", "desktop-linux", "cli-macos", "ios", "ios-gestures", "android"];
+const CHECKS = ["static", "test-unit", "test-flows", "build", "shots", "desktop-mac", "desktop-linux", "cli-macos", "ios", "ios-gestures", "android"];
 
 describe("the iPhone jobs wait only on what the iPhone app is built from (T1598)", () => {
   const desktopOnly = {
@@ -158,7 +158,7 @@ describe("ci.yml edits outside the jobs", () => {
     const { result, by } = await planFor({ ".github/workflows/ci.yml": edited });
     expect(ran(result)).toEqual(["static"]);
     expect(by("static").layer).toBe("L0");
-    for (const job of ["test-flows-a", "test-flows-b", "build", "desktop-mac", "cli-macos"]) expect(by(job)).toMatchObject({ run: false, layer: "L0" });
+    for (const job of ["test-flows", "build", "desktop-mac", "cli-macos"]) expect(by(job)).toMatchObject({ run: false, layer: "L0" });
     expect(by("test-unit").layer).toBe("L2");
     expect(result.notes.join(" ")).toContain("concurrency");
   });
@@ -189,7 +189,7 @@ describe("ci.yml edits outside the jobs", () => {
 
 describe("ci.yml edits inside jobs", () => {
   test("a step edited in one job runs that job", async () => {
-    const { result, by } = await planFor({ ".github/workflows/ci.yml": CI.replace("scripts/ci-tests.ts all --shard=", "scripts/ci-tests.ts all --bail --shard=") });
+    const { result, by } = await planFor({ ".github/workflows/ci.yml": CI.replace("scripts/ci-tests.ts all\n", "scripts/ci-tests.ts all --bail\n") });
     expect(by("cli-macos")).toMatchObject({ run: true, layer: "L0" });
     expect(by("cli-macos").reason).toContain("its job in");
     expect(ran(result)).toEqual(["cli-macos", "static"]);
@@ -288,36 +288,31 @@ describe("what each job reads", () => {
     expect(calls).toEqual([]);
   });
 
-  test("a web file no flows test imports skips both flows jobs by rule", async () => {
+  test("a web file no flows test imports skips the flows job by rule", async () => {
     const { by } = await planFor({ "web/src/lib/v.ts": "export const v = 4\n" });
-    expect(by("test-flows-a")).toMatchObject({ run: false, layer: "L0" });
-    expect(by("test-flows-b")).toMatchObject({ run: false, layer: "L0" });
+    expect(by("test-flows")).toMatchObject({ run: false, layer: "L0" });
     expect(by("cli-macos")).toMatchObject({ run: false, layer: "L0" });
     expect(by("static")).toMatchObject({ run: true, layer: "L0" });
   });
 
-  test("a web file a flows-a test imports, even indirectly, reaches flows-a only", async () => {
+  test("a web file a flows test imports, even indirectly, reaches the flows job", async () => {
     const { by } = await planFor({ "web/src/lib/deep.ts": "export const deep = 5\n" });
-    expect(by("test-flows-a").layer).toBe("L2");
-    expect(by("test-flows-b")).toMatchObject({ run: false, layer: "L0" });
+    expect(by("test-flows").layer).toBe("L2");
   });
 
-  test("a workspace package module a flows-a test imports by package name reaches flows-a only", async () => {
+  test("a workspace package module a flows test imports by package name reaches the flows job", async () => {
     const { by } = await planFor({ "packages/kit/src/deeper.ts": "export const deeper = 8\n" });
-    expect(by("test-flows-a").layer).toBe("L2");
-    expect(by("test-flows-b")).toMatchObject({ run: false, layer: "L0" });
+    expect(by("test-flows").layer).toBe("L2");
   });
 
-  test("a workspace package module no flows test imports skips both flows jobs by rule", async () => {
+  test("a workspace package module no flows test imports skips the flows job by rule", async () => {
     const { by } = await planFor({ "packages/kit/src/unused.ts": "export const unused = 9\n" });
-    expect(by("test-flows-a")).toMatchObject({ run: false, layer: "L0" });
-    expect(by("test-flows-b")).toMatchObject({ run: false, layer: "L0" });
+    expect(by("test-flows")).toMatchObject({ run: false, layer: "L0" });
   });
 
   test("a unit test edit doesn't reach the flows jobs", async () => {
     const { by } = await planFor({ "test/unit-only.test.ts": "export const unit = 2\n" });
-    expect(by("test-flows-a")).toMatchObject({ run: false, layer: "L0" });
-    expect(by("test-flows-b")).toMatchObject({ run: false, layer: "L0" });
+    expect(by("test-flows")).toMatchObject({ run: false, layer: "L0" });
     expect(by("test-unit").layer).toBe("L2");
   });
 
@@ -369,7 +364,7 @@ describe("Jev", () => {
     };
     const { by } = await planFor({ "src/a.ts": "export const a = 2\n" }, { ask, calls: [] });
     expect(by("cli-macos")).toMatchObject({ run: true, layer: "fallback" });
-    expect(by("test-flows-a")).toMatchObject({ run: true, layer: "fallback" });
+    expect(by("test-flows")).toMatchObject({ run: true, layer: "fallback" });
   });
 
   test("the pass cache skips a job whose exact inputs already passed", async () => {
@@ -396,15 +391,12 @@ describe("markMoves", () => {
 });
 
 describe("jev-ci.yml matches the repo", () => {
-  test("each flows job's imports_from lists exactly its group's tests", () => {
-    for (const [group, names] of Object.entries(FLOWS)) {
-      const entries = config.jobs[`test-${group}`]!.imports_from!;
-      for (const name of names) expect(matches(entries, `test/${name}.test.ts`)).toBe(true);
-      const others = Object.entries(FLOWS)
-        .filter(([g]) => g !== group)
-        .flatMap(([, n]) => n);
-      for (const name of others) expect(matches(entries, `test/${name}.test.ts`)).toBe(false);
-    }
+  test("the flows job's imports_from lists exactly the flow tests", () => {
+    const entries = config.jobs["test-flows"]!.imports_from!;
+    for (const name of FLOWS) expect(matches(entries, `test/${name}.test.ts`)).toBe(true);
+    const others = [...new Bun.Glob("test/*.test.ts").scanSync(ROOT)].filter((f) => !FLOWS.includes(f.slice("test/".length, -".test.ts".length)));
+    expect(others.length).toBeGreaterThan(0);
+    for (const f of others) expect({ f, listed: matches(entries, f) }).toEqual({ f, listed: false });
   });
 
   test("every check job in ci.yml has an entry or is another's part, and the rest are planner jobs", () => {
@@ -502,10 +494,10 @@ describe("the merge queue (T2034)", () => {
     const head = commit(dir, { "web/src/lib/v.ts": "export const v = 30\n" });
     const by = (r: Plan, job: string) => r.decisions.find((d) => d.job === job)!;
     const group = await plan({ repo: dir, base, head, config, ask: fakeJev(0.9).ask });
-    expect(by(group, "test-flows-b").run).toBe(true);
+    expect(by(group, "test-flows").run).toBe(true);
     expect(by(group, "build").run).toBe(true);
     const lastOnly = await plan({ repo: dir, base: sh(dir, ["rev-parse", "HEAD^1"]), head, config, ask: fakeJev(0.9).ask });
-    expect(by(lastOnly, "test-flows-b")).toMatchObject({ run: false, layer: "L0" });
+    expect(by(lastOnly, "test-flows")).toMatchObject({ run: false, layer: "L0" });
     expect(by(lastOnly, "build").run).toBe(true);
   });
 
