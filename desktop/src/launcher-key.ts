@@ -4,7 +4,7 @@ import { dlopen, FFIType, ptr } from "bun:ffi";
 
 import { legacyPassword } from "./legacy-keys.ts";
 import type { LegacyPassword } from "./legacy-store.ts";
-import { keychainKey, type StoreKey } from "./store-v2.ts";
+import { keychainKey, readyMark, type StoreKey } from "./store-v2.ts";
 
 export const KEY_FD_ENV = "KIWI_KEY_FD";
 
@@ -100,7 +100,7 @@ export function launcherKey(ch: LineChannel): StoreKey {
       if (a.kind === "key") throw new Error("the launcher gave a key where it should say whether the store key is marked ready");
       return a.kind === "ok";
     },
-    finish: async () => ok("finish", "the launcher didn't mark the store key ready"),
+    finish: async (key) => ok(`finish ${readyMark(key)}`, "the launcher didn't mark the store key ready"),
   };
 }
 

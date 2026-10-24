@@ -96,6 +96,8 @@ describe("finding Electron's store", () => {
       { name: "Kiwi", dir: "/Users/ana/Library/Application Support/Kiwi" },
     ]);
     expect(legacyDirs("linux", "/home/ana", {})[0]).toEqual({ name: "kiwi-desktop", dir: "/home/ana/.config/kiwi-desktop" });
+    expect(legacyDirs("linux", "/home/ana", { XDG_CONFIG_HOME: "relative/config" })[0]).toEqual({ name: "kiwi-desktop", dir: "/home/ana/.config/kiwi-desktop" });
+    expect(legacyDirs("linux", "/home/ana", { XDG_CONFIG_HOME: "/cfg" })[0]).toEqual({ name: "kiwi-desktop", dir: "/cfg/kiwi-desktop" });
     expect(legacyDirs("linux", "/home/ana", { XDG_CONFIG_HOME: "/xdg" })[0]).toEqual({ name: "kiwi-desktop", dir: "/xdg/kiwi-desktop" });
   });
 

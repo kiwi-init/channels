@@ -448,6 +448,27 @@ describe("store v2", () => {
     expect(JSON.parse(read(dir).toString("utf8"))).toEqual(STORE);
   });
 
+  test("each refusal names its cause, so the app can say what to do about it (T1710)", async () => {
+    const cause = (o: OpenStore): string => (o.kind === "unreadable" ? o.cause : "open");
+    const sealedDir = folder();
+    const k = keychain();
+    opened(await openStore({ dir: sealedDir, key: k.key, legacy: NO_LEGACY, platform: "darwin" })).save("{}");
+    expect(cause(await openStore({ dir: sealedDir, key: keychain().key, legacy: NO_LEGACY, platform: "darwin" }))).toBe("keyless");
+    expect(cause(await openStore({ dir: sealedDir, key: keychain(null, { get: "locked" }).key, legacy: NO_LEGACY, platform: "darwin" }))).toBe("keychain");
+    rmSync(join(sealedDir, STORE_FILE));
+    rmSync(join(sealedDir, `${STORE_FILE}.bak`));
+    expect(cause(await openStore({ dir: sealedDir, key: k.key, legacy: NO_LEGACY, platform: "darwin" }))).toBe("deleted");
+    const plainOld = async (): Promise<LegacyRead> => ({ kind: "ok", json: STORE, file: "/old/kiwi-store.bin", encrypted: false });
+    expect(cause(await openStore({ dir: folder(), key: keychain().key, legacy: plainOld, platform: "darwin" }))).toBe("legacy-plain");
+    const unreadableOld = async (): Promise<LegacyRead> => ({ kind: "unreadable", file: "/old/kiwi-store.bin", why: "locked" });
+    expect(cause(await openStore({ dir: folder(), key: keychain().key, legacy: unreadableOld, platform: "darwin" }))).toBe("legacy");
+    const keylessOld = async (): Promise<LegacyRead> => ({ kind: "unreadable", file: "/old/kiwi-store.bin", why: "its key is gone", keyless: true });
+    expect(cause(await openStore({ dir: folder(), key: keychain().key, legacy: keylessOld, platform: "darwin" }))).toBe("legacy-keyless");
+    const torn = folder();
+    put(torn, STORE_FILE, "not json");
+    expect(cause(await openStore({ dir: torn, key: keychain(null, { get: "none", set: "none" }).key, legacy: NO_LEGACY, platform: "linux" }))).toBe("copy");
+  });
+
   test("a store that isn't an object is unreadable", async () => {
     const dir = folder();
     put(dir, STORE_FILE, "[1,2]");
@@ -494,10 +515,11 @@ describe("the keychain item", () => {
     try {
       const k = keychainKey("Channels Test", "store-key-test");
       expect(await k.finished()).toBe(false);
-      await expect(k.finish()).rejects.toThrow("no store key to mark ready");
+      await expect(k.finish("a2V5")).rejects.toThrow("no store key to mark ready");
       await k.set("a2V5");
       expect(await k.finished()).toBe(false);
-      await k.finish();
+      await expect(k.finish("b3RoZXI=")).rejects.toThrow("isn't the one Channels sealed its store under");
+      await k.finish("a2V5");
       expect(s.items.get("Channels Test/store-key-test-ready")).toBe(readyMark("a2V5"));
       expect(readyMark("a2V5")).toMatch(/^[0-9a-f]{64}$/);
       expect(await k.finished()).toBe(true);
@@ -508,7 +530,7 @@ describe("the keychain item", () => {
     }
   });
 
-  test("drop takes back only a key this run made, while the keychain still holds it, mark and all", async () => {
+  test("drop takes back only a key this run made, while the keychain still holds it and nothing has marked it ready", async () => {
     const s = secrets();
     try {
       s.items.set("Channels Test/store-key-test", "b2xk");
@@ -517,10 +539,15 @@ describe("the keychain item", () => {
       s.items.clear();
       const mine = keychainKey("Channels Test", "store-key-test");
       await mine.set("bmV3");
-      await mine.finish();
       await mine.drop();
       expect([...s.items.keys()]).toEqual([]);
       await expect(mine.drop()).rejects.toThrow("only a store key it made in this run");
+      const marked = keychainKey("Channels Test", "store-key-test");
+      await marked.set("bWFya2Vk");
+      await keychainKey("Channels Test", "store-key-test").finish("bWFya2Vk");
+      await expect(marked.drop()).rejects.toThrow("marked ready, so Channels keeps it");
+      expect(s.items.get("Channels Test/store-key-test")).toBe("bWFya2Vk");
+      s.items.clear();
       const raced = keychainKey("Channels Test", "store-key-test");
       await raced.set("bWluZQ==");
       s.items.set("Channels Test/store-key-test", "dGhlaXJz");

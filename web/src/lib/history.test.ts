@@ -277,9 +277,9 @@ test("a kept state never opens as a message row, and a row never opens as a kept
   expect(await openKept({ e: row.e, iv: row.iv, ct: row.ct }, ROOM, keys)).toBeNull()
 })
 
-test("openHistory opens the history database at page start, once, and the channel's first read reuses that connection (T2373)", async () => {
-  useHistoryDb(null)
+function fakeIndexedDB(failures: number): { opens: string[]; restore: () => void } {
   const opens: string[] = []
+  let left = failures
   const tx = {
     oncomplete: null as (() => void) | null,
     onerror: null,
@@ -295,27 +295,66 @@ test("openHistory opens the history database at page start, once, and the channe
   const factory = {
     open: (name: string, version: number) => {
       opens.push(`${name} v${version}`)
-      const req = { result: database, onsuccess: null as (() => void) | null, onerror: null, onupgradeneeded: null }
-      queueMicrotask(() => req.onsuccess?.())
+      const fail = left > 0
+      left -= 1
+      const req = {
+        result: database,
+        error: fail ? new DOMException("blocked", "UnknownError") : null,
+        onsuccess: null as (() => void) | null,
+        onerror: null as (() => void) | null,
+        onupgradeneeded: null,
+      }
+      queueMicrotask(() => (fail ? req.onerror?.() : req.onsuccess?.()))
       return req
     },
   }
+  performance.clearMarks("kiwi:history-open")
   Object.defineProperty(globalThis, "indexedDB", { value: factory as unknown as IDBFactory, configurable: true })
   Object.defineProperty(globalThis, "IDBKeyRange", { value: { bound: () => ({}) } as unknown as typeof IDBKeyRange, configurable: true })
+  return {
+    opens,
+    restore: () => {
+      Reflect.deleteProperty(globalThis, "indexedDB")
+      Reflect.deleteProperty(globalThis, "IDBKeyRange")
+      performance.clearMarks("kiwi:history-open")
+    },
+  }
+}
+
+const noRows = async (rows: CachedRow[]) => rows.map(() => null)
+
+test("openHistory opens the history database at page start, once, and the channel's first read reuses that connection (T2373)", async () => {
+  const fake = fakeIndexedDB(0)
+  useHistoryDb(null)
   try {
-    openHistory()
-    expect(opens).toEqual(["mc.history v2"])
-    expect(await openCached(ROOM, PK_A, async (rows) => rows.map(() => null))).toEqual({ stored: 0, opened: [] })
-    expect(opens).toEqual(["mc.history v2"])
+    const opened = openHistory()
+    expect(fake.opens).toEqual(["mc.history v2"])
+    await opened
+    expect(performance.getEntriesByName("kiwi:history-open", "mark")).toHaveLength(1)
+    expect(await openCached(ROOM, PK_A, noRows)).toEqual({ stored: 0, opened: [] })
+    expect(fake.opens).toEqual(["mc.history v2"])
   } finally {
-    Reflect.deleteProperty(globalThis, "indexedDB")
-    Reflect.deleteProperty(globalThis, "IDBKeyRange")
+    fake.restore()
     useHistoryDb(store)
   }
 })
 
-test("openHistory without IndexedDB does nothing (T2373)", () => {
+test("a failed open at page start stays quiet and marks nothing, and the channel's first read opens the database again (T2373)", async () => {
+  const fake = fakeIndexedDB(1)
   useHistoryDb(null)
-  expect(() => openHistory()).not.toThrow()
+  try {
+    await expect(openHistory()).resolves.toBeUndefined()
+    expect(performance.getEntriesByName("kiwi:history-open", "mark")).toHaveLength(0)
+    expect(await openCached(ROOM, PK_A, noRows)).toEqual({ stored: 0, opened: [] })
+    expect(fake.opens).toEqual(["mc.history v2", "mc.history v2"])
+  } finally {
+    fake.restore()
+    useHistoryDb(store)
+  }
+})
+
+test("openHistory without IndexedDB does nothing (T2373)", async () => {
+  useHistoryDb(null)
+  await expect(openHistory()).resolves.toBeUndefined()
   useHistoryDb(store)
 })
