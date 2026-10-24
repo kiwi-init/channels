@@ -24,7 +24,14 @@ export interface PullEvent {
   repository?: { default_branch?: string };
   pull_request?: { number: number; base?: { repo?: { full_name?: string } | null }; head?: { repo?: { full_name?: string } | null } };
   merge_group?: { base_sha?: string; head_sha?: string; head_ref?: string };
+  inputs?: { jobs?: string };
 }
+
+export const dispatchedJobs = (event: PullEvent): string[] =>
+  (event.inputs?.jobs ?? "")
+    .split(/[\s,]+/)
+    .map((j) => j.trim())
+    .filter(Boolean);
 
 export interface QueueRun {
   id: number;
