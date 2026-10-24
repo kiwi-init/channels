@@ -11,7 +11,7 @@ type Separator = { type: "separator" };
 
 export type TrayItem = { type: "normal"; label: string; action: MenuAction } | Separator;
 
-export type AppMenuItem = { role: string } | { label: string; action: MenuAction; accelerator?: string } | { label: string; submenu: AppMenuItem[] } | Separator;
+export type AppMenuItem = { role: string; label?: string; accelerator?: string } | { label: string; action: MenuAction; accelerator?: string } | { label: string; submenu: AppMenuItem[] } | Separator;
 
 const SEPARATOR: Separator = { type: "separator" };
 
@@ -27,8 +27,23 @@ export function trayItems(update: UpdateState | null): TrayItem[] {
 export function appMenu(platform: NodeJS.Platform): AppMenuItem[] {
   const roles = (...names: (string | null)[]): AppMenuItem[] => names.map((role) => (role ? { role } : SEPARATOR));
   return [
-    ...(platform === "darwin" ? [{ label: "Channels", submenu: roles("about", null, "hide", "hideOthers", "showAll", null, "quit") }] : []),
-    { label: "File", submenu: roles("close") },
+    ...(platform === "darwin"
+      ? [
+          {
+            label: "Channels",
+            submenu: [
+              { role: "about", label: "About Channels" },
+              SEPARATOR,
+              { role: "hide", label: "Hide Channels", accelerator: "h" },
+              { role: "hideOthers", accelerator: "Cmd+Alt+h" },
+              { role: "showAll" },
+              SEPARATOR,
+              { role: "quit", label: "Quit Channels", accelerator: "q" },
+            ],
+          },
+        ]
+      : []),
+    { label: "File", submenu: [{ role: "close", label: "Close Window", accelerator: "w" }] },
     { label: "Edit", submenu: roles("undo", "redo", null, "cut", "copy", "paste", "pasteAndMatchStyle", "delete", "selectAll") },
     {
       label: "View",
@@ -40,10 +55,10 @@ export function appMenu(platform: NodeJS.Platform): AppMenuItem[] {
         { label: "Make Text Bigger", action: "text-bigger", accelerator: "=" },
         { label: "Make Text Smaller", action: "text-smaller", accelerator: "-" },
         SEPARATOR,
-        { role: "toggleFullScreen" },
+        { role: "toggleFullScreen", accelerator: "Ctrl+Cmd+f" },
       ],
     },
-    { label: "Window", submenu: roles("minimize", "zoom", null, "bringAllToFront") },
+    { label: "Window", submenu: [{ role: "minimize", accelerator: "m" }, ...roles("zoom", null, "bringAllToFront")] },
   ];
 }
 

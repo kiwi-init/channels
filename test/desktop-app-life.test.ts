@@ -208,7 +208,7 @@ describe("the tray and the app menu say what Electron's did (T438)", () => {
   test("the Mac gets the app menu; every platform gets File, Edit, View and Window", () => {
     expect(labels(appMenu("darwin"))).toEqual(["Channels", "File", "Edit", "View", "Window"]);
     expect(labels(appMenu("linux"))).toEqual(["File", "Edit", "View", "Window"]);
-    expect(labels(sub(appMenu("darwin"), "Channels"))).toEqual(["about", "-", "hide", "hideOthers", "showAll", "-", "quit"]);
+    expect(labels(sub(appMenu("darwin"), "Channels"))).toEqual(["About Channels", "-", "Hide Channels", "hideOthers", "showAll", "-", "Quit Channels"]);
     expect(labels(sub(appMenu("darwin"), "Edit"))).toEqual(["undo", "redo", "-", "cut", "copy", "paste", "pasteAndMatchStyle", "delete", "selectAll"]);
   });
 
@@ -222,7 +222,21 @@ describe("the tray and the app menu say what Electron's did (T438)", () => {
       ["text-bigger", "="],
       ["text-smaller", "-"],
     ]);
-    expect(view.at(-1)).toEqual({ role: "toggleFullScreen" });
+    expect(view.at(-1)).toEqual({ role: "toggleFullScreen", accelerator: "Ctrl+Cmd+f" });
+  });
+
+  test("the Mac's app and window roles carry their keys, which Electrobun gives only the edit roles: ⌘Q quits, ⌘W closes, ⌘H hides (T970)", () => {
+    const keys = appMenu("darwin")
+      .flatMap((m) => ("submenu" in m ? m.submenu : []))
+      .flatMap((i) => ("role" in i && i.accelerator ? [[i.role, i.accelerator]] : []));
+    expect(keys).toEqual([
+      ["hide", "h"],
+      ["hideOthers", "Cmd+Alt+h"],
+      ["quit", "q"],
+      ["close", "w"],
+      ["toggleFullScreen", "Ctrl+Cmd+f"],
+      ["minimize", "m"],
+    ]);
   });
 
   test("a click is read back only as one of the app's own actions", () => {
