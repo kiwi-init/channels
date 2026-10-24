@@ -537,9 +537,18 @@ jobs:
           if [ "$code" -ne 0 ]; then
             echo "::group::weston's log"; cat "$RUNNER_TEMP/weston.log"; echo "::endgroup::"
             for log in $(find /tmp -maxdepth 6 -path '/tmp/kiwi-smoke-eb-*' -name '*.log' 2> /dev/null); do echo "::group::$log"; tail -n 80 "$log"; echo "::endgroup::"; done
-            echo "::group::the test app alone under this Wayland, for 20 s"
-            mkdir -p "$RUNNER_TEMP/wayland-home" && HOME="$RUNNER_TEMP/wayland-home" wayland timeout 20 "${{ steps.test-app.outputs.path }}/bin/electrobun-launcher" > "$RUNNER_TEMP/wayland-app.log" 2>&1 || echo "exited $?"
-            tail -n 120 "$RUNNER_TEMP/wayland-app.log"
+            echo "::group::GTK itself under this Wayland"
+            printf '#include <gtk/gtk.h>\nint main(int c, char **v) { if (!gtk_init_check(&c, &v)) { puts("gtk_init_check failed"); return 1; } printf("GTK opened %%s\\n", G_OBJECT_TYPE_NAME(gdk_display_get_default())); return 0; }\n' > "$RUNNER_TEMP/gtk-probe.c"
+            cc -o "$RUNNER_TEMP/gtk-probe" "$RUNNER_TEMP/gtk-probe.c" $(pkg-config --cflags --libs gtk+-3.0) && wayland "$RUNNER_TEMP/gtk-probe" || true
+            echo "::endgroup::"
+            echo "::group::what in the app pins GDK to a backend"
+            grep -rlaE "GDK_BACKEND|gdk_set_allowed_backends" "${{ steps.test-app.outputs.path }}" 2> /dev/null | head -n 20 || true
+            for lib in $(grep -rlaE "gdk_set_allowed_backends|GDK_BACKEND" "${{ steps.test-app.outputs.path }}" 2> /dev/null | head -n 5); do echo "== $lib"; strings -n 3 "$lib" | grep -E "^(x11|wayland|GDK_BACKEND|gdk_set_allowed_backends)$" | sort | uniq -c; done
+            echo "::endgroup::"
+            echo "::group::the test app alone under this Wayland, for 20 s (WAYLAND_DEBUG=1)"
+            mkdir -p "$RUNNER_TEMP/wayland-home" && HOME="$RUNNER_TEMP/wayland-home" WAYLAND_DEBUG=1 wayland timeout 20 "${{ steps.test-app.outputs.path }}/bin/electrobun-launcher" > "$RUNNER_TEMP/wayland-app.log" 2>&1 || echo "exited $?"
+            echo "Wayland protocol lines: $(grep -c 'wl_display' "$RUNNER_TEMP/wayland-app.log" || true)"
+            grep -v "^\[" "$RUNNER_TEMP/wayland-app.log" | tail -n 60
             echo "::endgroup::"
           fi
           kill "$compositor" 2> /dev/null || true
