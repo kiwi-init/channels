@@ -36,7 +36,9 @@ test("Electron builds only the Intel Mac app: Apple silicon and Linux ship the E
   for (const id of ["desktop-mac-eb", "desktop-linux-eb"]) {
     expect(job(id)).not.toContain("\n    if:");
     expect(job(id)).toContain("bun desktop/scripts/eb-driver-check.ts --release ");
-    expect(job(id)).toContain("        if: ${{ !inputs.rehearsal }}\n        uses: actions/upload-artifact@");
+    expect(job(id)).toContain("        if: ${{ !inputs.rehearsal || github.event_name == 'workflow_dispatch' }}\n        uses: actions/upload-artifact@");
+    expect(job(id)).toContain("          name: ${{ inputs.rehearsal && 'rehearsal' || 'release' }}-desktop-");
+    expect(job(id)).toContain("          retention-days: ${{ inputs.rehearsal && 3 || 0 }}\n");
   }
   expect(job("desktop-linux-eb")).toContain("    runs-on: ubuntu-24.04\n");
   expect(job("desktop-linux-eb")).toContain("bash desktop/scripts/linux-upgrade-check.sh out");

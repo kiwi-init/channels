@@ -1,6 +1,6 @@
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
-import { MAX_EPH_LENGTH, MAX_IV_LENGTH, MORE_REFUSED, type ClientFrame, type Envelope, type ServerFrame } from "@kiwi/core/protocol.ts";
+import { MAX_EPH_LENGTH, MAX_IV_LENGTH, MORE_REFUSED, wellFormedSendId, type ClientFrame, type Envelope, type ServerFrame } from "@kiwi/core/protocol.ts";
 import { isRefusal } from "../failures.ts";
 import { Policy } from "../policy.ts";
 import { RoomStore } from "./db.ts";
@@ -66,12 +66,20 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
   const counted = take(`${db.roomId}:${sender}`, noRateLimits ? Infinity : MESSAGES_PER_MINUTE);
   if ("retryAfter" in counted) return { reply: frame({ t: "err", error: "too many messages; wait a minute", id: f.id, tag: "TooMany", retryAfter: counted.retryAfter }) } satisfies Effects;
   const send = f;
-  const stored = yield* Effect.exit(append(send.iv, send.ct, Number(send.e ?? 0), sender));
+  if (send.cid !== undefined && !wellFormedSendId(send.cid)) {
+    counted.refund();
+    return { reply: frame({ t: "err", error: "bad send id", id: send.id }) } satisfies Effects;
+  }
+  const stored = yield* Effect.exit(append(send.iv, send.ct, Number(send.e ?? 0), sender, {}, send.cid));
   if (stored._tag === "Failure") {
     counted.refund();
     return { reply: frame({ t: "err", error: socketError(stored.cause), id: send.id }) } satisfies Effects;
   }
   const e = stored.value;
+  if ("repeat" in e) {
+    counted.refund();
+    return { reply: frame({ t: "ack", id: send.id, seq: e.seq, ts: e.ts }) } satisfies Effects;
+  }
   const expireAt = yield* touch.pipe(
     Effect.catchCause((cause) =>
       Effect.sync(() => {
