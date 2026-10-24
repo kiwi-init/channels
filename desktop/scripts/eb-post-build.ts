@@ -7,7 +7,7 @@ import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts";
 import { JOIN_SCHEME } from "../src/deep-links.ts";
 import { PAGE_TEMPLATE, pageWithCsp } from "../src/eb-page.ts";
 import type { FromWorker, ToWorker } from "../src/keys-shim.ts";
-import { bundleProblems, testBuildProblems, urlSchemeProblems } from "./eb-bundle.ts";
+import { bundleProblems, keyChannelProblems, testBuildProblems, urlSchemeProblems } from "./eb-bundle.ts";
 import { hostKey, mismatches, pinFor, PINS } from "./eb-pins.ts";
 import { sealApp } from "./eb-seal.ts";
 import { ELECTROBUN_LAUNCHER } from "./linux-files.ts";
@@ -132,6 +132,7 @@ const problems = [
   ...bundleProblems(fs.readFileSync(path.join(app, "bun", "index.js"), "utf8"), fs.readFileSync(path.join(app, "views", "preload", "index.js"), "utf8")),
   ...urlSchemeProblems(fs.readFileSync(path.join(contents, "Info.plist"), "utf8"), bundleId, JOIN_SCHEME),
   ...testBuildProblems(process.env.CHANNELS_EB_TEST === "1", bundleId, fs.readFileSync(path.join(contents, "Resources", "version.json"), "utf8")),
+  ...keyChannelProblems(fs.readFileSync(path.join(app, "bun", "index.js"), "utf8")),
 ];
 if (problems.length) throw new Error(`eb-post-build: ${problems.join("; ")}`);
 if (fs.readdirSync(views).some((n) => n.toLowerCase() === "index.html"))

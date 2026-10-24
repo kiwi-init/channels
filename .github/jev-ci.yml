@@ -556,7 +556,15 @@ jobs:
       store through launcherKey and a stand-in launcher that keeps the key and mark as
       native/macos/kiwi-keys.c does: finished, finish and drop on the wire, a key made just before a
       failed first save opening as a first run, a stale mark, a deleted store refused after only get
-      and finished, and a failed first save taking back only the key that start made (T1076). With test/desktop-legacy-store.test.ts
+      and finished, a failed first save taking back only the key that start made (T1076), a key another
+      start marked never taken back, and finish refused for a key other than the one the store was sealed
+      under (T1582). test/desktop-store-eb.test.ts: the Electrobun app's store (desktop/src/store-eb.ts):
+      no launcher channel means no store, refused with its reason and nothing written; a first start
+      opens sealed, ends the launcher's session once and saves through store.ts's vault; Electron's
+      store is imported once through the launcher's kiwi-desktop password; a deleted store whose key is
+      marked is refused without reading a planted Electron store; and a refused ready mark leaves the
+      store open with a note for the person (T1582); the app's data folder pinned to its bundle
+      identifier, and each refusal's own advice in the broken-store dialog (T1710). With test/desktop-legacy-store.test.ts
       (desktop/src/legacy-store.ts, legacy-keys.ts): Electron's safeStorage format opened from what
       Electron itself wrote, v11 on a GNOME keyring and v10 on the macOS Keychain, Linux v10 with
       Chromium's fixed password (which counts as plain, not encrypted), a torn store read from its .bak asking the keychain once, an old
@@ -713,7 +721,11 @@ jobs:
       reaching a handler, the preload carrying the snapshot and packets going only to our own
       receiver, and every Electrobun internal RPC handler but window dragging doing nothing
       (webviewTagUpdateSrc, SetNavigationRules and ExecuteJavascript included); with
-      test/desktop-eb-bundle.test.ts: the post-build check of the built bundle. And
+      test/desktop-eb-bundle.test.ts: the post-build check of the built bundle, including the key
+      channel taken before any other code (inert preambles pass; a call, a static class
+      initializer, an IIFE, a callback that runs code, an assignment to a global, a loop or a
+      non-builtin import fail), and main-eb.ts bundled with Electrobun stubbed passing while the
+      same bundle with a spawning import put above it fails (T1710). And
       test/desktop-app-life.test.ts: the Electrobun app's single instance (desktop/src/single-instance.ts:
       an exclusive flock on app.lock in the data folder, opened O_CLOEXEC so a child left running
       never keeps it, and dropped by the kernel with the process; a second start hands its kiwi://
@@ -1084,7 +1096,7 @@ jobs:
     name: desktop / mac
     inputs: ["desktop/src/**", "desktop/native/**", "desktop/build/icon.icns", "packages/core/**", "web/src/**", "web/index.html", "web/vite.config.ts", "web/public/**", "web/package.json", "package.json", "bun.lock", "desktop/eb-tests/**", "test/fake-host.ts", "src/relay/**", "scripts/local-relay.ts", "scripts/perf-desktop.ts", "scripts/perf-calibrate.ts", "scripts/perf-budgets.json", "src/**", "scripts/build-cli.ts", "desktop/scripts/pack-cli.ts"]
     imports_from: ["desktop/src/main-eb.ts", "desktop/src/preload-eb.ts", "desktop/scripts/smoke-eb.ts", "scripts/perf-desktop.ts"]
-    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/electrobun-pins.json", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb.ts", "desktop/scripts/eb-pins.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-size.ts", "desktop/scripts/eb-app.ts", "desktop/scripts/eb-release.ts", "desktop/scripts/eb-update-rehearsal.ts", "desktop/scripts/eb-env-check.ts", "desktop/scripts/eb-seal.ts", "desktop/scripts/eb-keys-check.ts", "desktop/scripts/eb-keys-probe.ts", "desktop/scripts/eb-seal-check.ts", "desktop/scripts/eb-bundle.ts", "desktop/scripts/eb-drive.ts", "desktop/scripts/smoke-eb.ts", "desktop/scripts/eb-driver-check.ts", "desktop/scripts/eb-bridge-checks.ts"]
+    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/electrobun-pins.json", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb.ts", "desktop/scripts/eb-pins.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-size.ts", "desktop/scripts/eb-app.ts", "desktop/scripts/eb-release.ts", "desktop/scripts/eb-update-rehearsal.ts", "desktop/scripts/eb-env-check.ts", "desktop/scripts/eb-seal.ts", "desktop/scripts/eb-keys-check.ts", "desktop/scripts/eb-keys-probe.ts", "desktop/scripts/eb-store-probe.ts", "desktop/scripts/eb-seal-check.ts", "desktop/scripts/eb-bundle.ts", "desktop/scripts/eb-drive.ts", "desktop/scripts/smoke-eb.ts", "desktop/scripts/eb-driver-check.ts", "desktop/scripts/eb-bridge-checks.ts"]
     description: >-
       On a macOS runner (Electrobun builds only for the host it runs on), checks the Electrobun
       shell that is replacing Electron (issue #757). Builds web/dist, restores ~/.hutch (the pinned
@@ -1137,9 +1149,16 @@ jobs:
       CFBundleIdentifier or its kiwi:// registration doesn't fit that id (only the release id,
       com.kiwiinit.channels, registers kiwi://; a dev or test build never does), bundles src/keys-worker.ts into app/bun/keys.js
       beside the main bundle and fails unless that bundled keys worker answers a page's request,
-      then checks the bundle (scripts/eb-bundle.ts):
-      the main bundle holds exactly one copy of Electrobun's internal RPC table, the one
-      lockInternalRpc empties, and the preload bundle exists and has no WebSocket. We ship the
+      then checks the bundle (scripts/eb-bundle.ts): the
+      main bundle holds exactly one copy of Electrobun's internal RPC table, the one
+      lockInternalRpc empties, the preload bundle exists and has no WebSocket, and the main bundle
+      takes the launcher's key channel (launcherKeys = keySources(), from launcher-channel-eb.ts)
+      before any other code runs: the launcherKeys declaration itself must call keySources() (a
+      bare declaration means Bun wrapped the module in __esm, as it does when it's also import()ed,
+      and its place no longer says when it runs), every top-level statement before it is a declaration, a constant
+      or the bundler's lazy wrapper (parsed with oxc-parser), and every import in the bundle is a
+      builtin, since an import runs before everything, so an import put above it in main-eb.ts
+      fails the build instead of leaving fd 3 to a child (T1710). We ship the
       plain app, not Electrobun's
       self-extracting wrapper (which would run the app from a folder the user's rights can edit):
       desktop/scripts/eb-size.ts unpacks the plain .app from the build's .app.tar.zst payload,
@@ -1197,16 +1216,28 @@ jobs:
       afterwards gets no socket and no KIWI_KEY_FD, the first
       start makes a key through the launcher (not marked ready until finish, then marked) and the next
       gets the same one, still marked, and can't take it back with drop (T1076), a second key is refused, the legacy key comes through while an
-      unlisted name and an unknown request are refused, and copies with a changed main.js, a
+      unlisted name and an unknown request are refused; that store v2 opens on the Mac as main-eb opens
+      it (scripts/eb-store-probe.ts as main.js, taking the key channel in its first import, then
+      store-eb.ts's openEbStore with its own throwaway Electron folder): a first start makes a sealed
+      store and a key marked ready, the next reads it back with the same key, and with both copies
+      deleted and a plain Electron store planted it's refused as a deleted store with nothing written,
+      and, on CI's temporary keychain only, Electron's kiwi-store.bin is imported once through a
+      kiwi-desktop key (T1582); and copies with a changed main.js, a
       bunfig.toml beside bun, an app.asar, a link or a missing file all stop before bun runs, and
       unless the launcher's check of the whole app takes 500 ms or less (median of 7), and unless,
       built with -fsanitize=address,undefined -fno-sanitize-recover=all into a throwaway sealed
       bundle, native/macos/kiwi-keys-test.c's parser cases (malformed, truncated, oversized, unknown,
       a NUL inside, done ending the session, many requests in one write, the ready mark's finished,
-      finish and drop (drop only for a key made in that session and still the keychain's, a mark
-      left by a key deleted by hand not counting for the next), and 1500 seeded random sessions), the seal check on a sealed and on a changed app, and the launcher itself all run
-      with no sanitizer report; on CI it uses
-      a temporary keychain, and it deletes its items either way. eb-env-check runs the launcher
+      finish and drop (finish naming the key it marks by its SHA-256 and refused for any other; drop
+      only for a key made in that session, never once it's marked ready, and, in a live session, never
+      for a key put in its place, as it deletes by the item reference SecItemAdd gave; a mark left by
+      a key deleted by hand not counting for the next), and 1500 seeded random sessions), the seal check on a sealed and on a changed app, and the launcher itself all run
+      with no sanitizer report, and the harness says that drop deleted the key its session made
+      and left one put in its place (deleting by item reference); on GitHub Actions (CI,
+      GITHUB_ACTIONS and an absolute RUNNER_TEMP, never on a developer's Mac) it uses
+      a temporary keychain, where a second throwaway keychain in the search list holds a store key
+      of the same name and the harness's decoy session makes its own key and takes it back by
+      reference, leaving that one (T1710); it deletes its items either way. eb-env-check runs the launcher
       inside a small sealed bundle and expects KIWI_KEY_FD as the one name it adds.
       Then it starts the app, without CDP (WebKit has none; T442): a second build, `electrobun
       build --env=dev` through desktop/scripts/eb.ts (the pinned Hutch, as every build) with
@@ -1271,7 +1302,7 @@ jobs:
     name: desktop / linux
     inputs: ["desktop/src/**", "desktop/native/linux/**", "desktop/build/icons/**", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "package.json", "bun.lock"]
     imports_from: ["desktop/src/main-eb.ts"]
-    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/electrobun-pins.json", "desktop/scripts/eb.ts", "desktop/scripts/eb-pins.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/package-linux.ts", "desktop/scripts/linux-files.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/native/linux/**", "desktop/scripts/eb-linux-start.sh", "desktop/scripts/eb-pins-check.ts"]
+    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/electrobun-pins.json", "desktop/scripts/eb.ts", "desktop/scripts/eb-pins.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/package-linux.ts", "desktop/scripts/linux-files.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/native/linux/**", "desktop/scripts/eb-linux-start.sh", "desktop/scripts/eb-pins-check.ts", "desktop/scripts/linux-store-check.ts"]
     description: >-
       On two runners at once, Ubuntu 24.04 and 26.04 (a matrix, each part saving its own jev-ci pass;
       T2119: on 24.04 AppArmor's unprivileged user-namespace restriction keeps bubblewrap from setting up
@@ -1293,7 +1324,14 @@ jobs:
       cc -Wall -Wextra -Werror, so the entry, /usr/bin/channels-desktop and the AppImage's AppRun all
       start ours, which keeps the environment to an allowlist (the session, locale, input method,
       proxies, the AppImage's own names, WebKit's DISABLE switches) and sets
-      BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 before it execs Electrobun's (T1548). Then desktop/scripts/package-linux.ts makes today's two
+      BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 before it execs Electrobun's (T1548). Then desktop/scripts/linux-store-check.ts runs the app's
+      store (store-eb.ts openEbStore with keySources' Linux keychain key) twice: inside
+      dbus-run-session with a throwaway gnome-keyring unlocked, it plants the Electron app's
+      kiwi-desktop Safe Storage password under Chromium's libsecret schema and its v11 kiwi-store.bin,
+      and fails unless the first start imports it sealed under a store key the keyring keeps with its
+      ready mark, both copies at 0600, the next start reads store v2 without importing again, and
+      the old file stays; with no session bus, it fails unless the store opens in plain JSON at 0600
+      with the reason main.log gets (T1550). Then desktop/scripts/package-linux.ts makes today's two
       Linux downloads from Electrobun's plain stable artifact (never its self-extracting setup), without
       Electrobun's updater tools (bspatch, zig-zstd: only its Updater uses them, and these packages
       update as a whole file), its uninstall tool or its own Channels.desktop:

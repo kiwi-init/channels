@@ -116,6 +116,95 @@ static void forget(const char *account) {
   CFRelease(a);
 }
 
+static void plant(const char *account, const char *value) {
+  CFStringRef a = CFStringCreateWithCString(kCFAllocatorDefault, account, kCFStringEncodingUTF8);
+  CFDataRef v = CFDataCreate(kCFAllocatorDefault, (const UInt8 *)value, (CFIndex)strlen(value));
+  CFMutableDictionaryRef q = CFDictionaryCreateMutable(kCFAllocatorDefault, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+  CFDictionarySetValue(q, kSecClass, kSecClassGenericPassword);
+  CFDictionarySetValue(q, kSecAttrService, service);
+  CFDictionarySetValue(q, kSecAttrAccount, a);
+  CFDictionarySetValue(q, kSecValueData, v);
+  if (SecItemAdd(q, NULL) != errSecSuccess) {
+    fprintf(stderr, "couldn't plant %s\n", account);
+    exit(2);
+  }
+  CFRelease(q);
+  CFRelease(v);
+  CFRelease(a);
+}
+
+struct live {
+  int fd;
+  struct server s;
+  pthread_t thread;
+};
+
+static void live_open(struct live *l) {
+  int sv[2];
+  if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) != 0) {
+    perror("socketpair");
+    exit(2);
+  }
+  l->fd = sv[1];
+  l->s.fd = sv[0];
+  pthread_create(&l->thread, NULL, serve_thread, &l->s);
+}
+
+static void live_ask(struct live *l, const char *line, char *out, size_t cap) {
+  char req[256];
+  int n = snprintf(req, sizeof req, "%s\n", line);
+  if (write(l->fd, req, (size_t)n) != n) {
+    out[0] = 0;
+    return;
+  }
+  size_t used = 0;
+  while (used < cap - 1) {
+    ssize_t r = read(l->fd, out + used, 1);
+    if (r <= 0) break;
+    if (out[used++] == '\n') break;
+  }
+  out[used] = 0;
+}
+
+static void live_close(struct live *l) {
+  shutdown(l->fd, SHUT_WR);
+  pthread_join(l->thread, NULL);
+  close(l->fd);
+}
+
+static void replaced(void) {
+  struct live l;
+  char made[256], dropped[256], got[256];
+  live_open(&l);
+  live_ask(&l, "set QUJD", made, sizeof made);
+  forget("store-key");
+  plant("store-key", "XYZ");
+  live_ask(&l, "drop", dropped, sizeof dropped);
+  live_ask(&l, "get", got, sizeof got);
+  live_close(&l);
+  forget("store-key");
+  bool ok = strcmp(made, "ok\n") == 0 && strcmp(dropped, "fail the keychain no longer holds the store key this session made\n") == 0 && strcmp(got, "key WFla\n") == 0;
+  printf("%s  a key put in place of the one this session made is never taken back\n", ok ? "ok  " : "FAIL");
+  if (!ok) {
+    printf("      got %s / %s / %s", made, dropped, got);
+    failures++;
+  }
+}
+
+static int decoy(void) {
+  struct live l;
+  char made[256], dropped[256], got[256];
+  live_open(&l);
+  live_ask(&l, "set QUJD", made, sizeof made);
+  live_ask(&l, "drop", dropped, sizeof dropped);
+  live_ask(&l, "get", got, sizeof got);
+  live_close(&l);
+  bool ok = strcmp(made, "ok\n") == 0 && strcmp(dropped, "ok\n") == 0 && strcmp(got, "key ZGVjb3k=\n") == 0;
+  printf("%s  a key taken back by its item reference is the only one removed: a store key of the same name in another keychain stays\n", ok ? "ok  " : "FAIL");
+  if (!ok) printf("      got %s / %s / %s", made, dropped, got);
+  return ok ? 0 : 1;
+}
+
 static uint64_t rng = 0x9e3779b97f4a7c15ULL;
 
 static uint64_t next(void) {
@@ -160,10 +249,11 @@ static int parser(void) {
 
   check("no store key yet: none", "get\n", 4, "none\n");
   check("no store key yet: not marked ready", "finished\n", 9, "none\n");
-  check("no store key yet: nothing to mark ready", "finish\n", 7, "fail there's no store key to mark ready\n");
+  check("no store key yet: nothing to mark ready", "finish 559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd\n", 72, "fail there's no store key to mark ready\n");
+  check("finish with no key named is an unknown request", "finish\n", 7, "fail the launcher doesn't know that request\n");
+  check("finish names the key by its SHA-256 in lower-case hex", "finish ABC\nfinish 559AEAD08264D5795D3909718CDD05ABD49572E84FE55590EEF31A88A08FDFFD\n", 83, "fail finish takes the SHA-256 of the store key in lower-case hex\nfail finish takes the SHA-256 of the store key in lower-case hex\n");
   check("no key made in this session: nothing to take back", "drop\n", 5, "fail the launcher only takes back a store key it made in this session\n");
-  check("a key made, marked and taken back in one session is gone, mark and all", "set QUJD\nfinished\nfinish\nfinished\ndrop\nget\nfinished\n", 52, "ok\nnone\nok\nok\nok\nnone\nnone\n");
-  check("a session takes its key back only once", "set QUJD\ndrop\ndrop\nget\n", 23, "ok\nok\nfail the launcher only takes back a store key it made in this session\nnone\n");
+  check("a key made in this session and not yet marked is taken back, once", "set QUJD\nfinished\ndrop\ndrop\nget\n", 32, "ok\nnone\nok\nfail the launcher only takes back a store key it made in this session\nnone\n");
   check("an unknown request", "dump\n", 5, "fail the launcher doesn't know that request\n");
   check("an empty line", "\n", 1, "fail the launcher doesn't know that request\n");
   check("set with no space", "set\n", 4, "fail the launcher doesn't know that request\n");
@@ -183,11 +273,14 @@ static int parser(void) {
   check("done ends the session: nothing after it is answered", "done\nget\nget\n", 13, "ok\n");
   check("many requests in one write, one answer each", "get\ndump\nget\n", 13, "key QQ==\nfail the launcher doesn't know that request\nkey QQ==\n");
   check("a key saved in an earlier session isn't marked ready yet", "finished\n", 9, "none\n");
-  check("finish marks it, and finished says so", "finish\nfinished\n", 16, "ok\nok\n");
+  check("finish for a key the keychain doesn't hold is refused", "finish 38164fbd17603d73f696b8b4d72664d735bb6a7c88577687fd2ae33fd6964153\n", 72, "fail the keychain's store key isn't the one Channels sealed its store under\n");
+  check("finish marks the key it names, and finished says so", "finish 559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd\nfinished\n", 81, "ok\nok\n");
   check("a later session can't take that key back, and it stays marked", "drop\nget\nfinished\n", 18, "fail the launcher only takes back a store key it made in this session\nkey QQ==\nok\n");
   forget("store-key");
-  check("a mark left by a key deleted by hand doesn't count for the next key", "set QUI=\nfinished\n", 18, "ok\nnone\n");
-  check("finish moves the mark to the new key", "finish\nfinished\n", 16, "ok\nok\n");
+  check("a mark left by a key deleted by hand doesn't count for the next key, and a key marked in its own session stays", "set QUI=\nfinished\nfinish 38164fbd17603d73f696b8b4d72664d735bb6a7c88577687fd2ae33fd6964153\nfinished\ndrop\nget\n", 108, "ok\nnone\nok\nok\nfail the store key is marked ready, so the launcher keeps it\nkey QUI=\n");
+  forget("store-key");
+  forget("store-key-ready");
+  replaced();
   fuzz(1500);
   forget("store-key");
   forget("store-key-ready");
@@ -207,6 +300,7 @@ int main(int argc, char **argv) {
   legacy = names;
   label = CFSTR("kiwi-keys-test store key");
   if (!CFStringGetCString(CFArrayGetValueAtIndex(legacy, 0), legacy_name, sizeof legacy_name, kCFStringEncodingUTF8)) return 2;
+  if (argc > 1 && strcmp(argv[1], "decoy") == 0) return decoy();
   if (argc > 1 && strcmp(argv[1], "seal") == 0) {
     char why[1024];
     if (kiwi_seal_check(why, sizeof why) != 0) {

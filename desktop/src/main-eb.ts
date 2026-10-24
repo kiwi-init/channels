@@ -1,3 +1,5 @@
+import { launcherKeys } from "./launcher-channel-eb.ts";
+
 import { dlopen, FFIType, JSCallback, ptr, suffix } from "bun:ffi";
 import fs from "node:fs";
 import path from "node:path";
@@ -13,7 +15,7 @@ import { navigation, openedUrl, PAGE_RULES, PAGE_TEMPLATE, PAGE_URL, pageWithCsp
 import { mark, startupMarks } from "./eb-startup.ts";
 import { testVault } from "./eb-test-store.ts";
 import { externalUrl, normalizeRelay } from "./guard.ts";
-import { attachKeys, attachWindow, bundle, ebHost } from "./host-eb.ts";
+import { attachKeys, attachWindow, dataDir, ebHost } from "./host-eb.ts";
 import { useHost } from "./host.ts";
 import { handlers } from "./ipc/handlers.ts";
 import { bunWorker, keysController, type KeysFrame } from "./keys-eb.ts";
@@ -24,7 +26,9 @@ import { keepPageAlive } from "./page-crash.ts";
 import { claimInstance, handoffFor, type Instance } from "./single-instance.ts";
 import { testHomeProblem } from "./eb-test-home.ts";
 import { bunBridge } from "./rpc-eb.ts";
-import { brokenStore, mutate, openStore, snapshot, store, type StoreVault } from "./store.ts";
+import { brokenStore, mutate, openStore, snapshot, store } from "./store.ts";
+import { openEbStore, plainNote, unmarkedNote, v2Vault } from "./store-eb.ts";
+import type { OpenStore } from "./store-v2.ts";
 import { startUpdates, updateState } from "./updater.ts";
 import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts";
 import { minWindowWidth } from "./window-size.ts";
@@ -113,12 +117,10 @@ let keysToPage: (frame: KeysFrame) => void = () => {};
 
 const keys = keysController({
   spawn: () => bunWorker(path.join(import.meta.dir, "keys.js")),
-  init: () => ({ type: "init", relay: store.relayUrl, dir: Utils.paths.userData, seats: store.channels, person: store.person?.pk ?? null }),
+  init: () => ({ type: "init", relay: store.relayUrl, dir: dataDir, seats: store.channels, person: store.person?.pk ?? null }),
   answer: answerKeys,
   toPage: (frame) => keysToPage(frame),
 });
-
-const memoryVault: StoreVault = { where: () => `memory, nothing saved (${bundle.identifier})`, load: () => ({ ok: true, file: null, resave: false }), save: () => {} };
 
 async function createWindow(): Promise<BrowserWindow | null> {
   const index = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "..", PAGE_TEMPLATE), "utf8");
@@ -205,14 +207,29 @@ async function createWindow(): Promise<BrowserWindow | null> {
   return win;
 }
 
+function endKeySession(): void {
+  if (launcherKeys instanceof Error) return;
+  try {
+    launcherKeys.done();
+  } catch {
+    // A test build may start without the launcher in front, and then there's no session to end.
+  }
+}
+
 async function start(instance: Extract<Instance, { kind: "first" }>): Promise<void> {
+  let opened: OpenStore | null = null;
   if (KIWI_EB_TEST) {
-    openStore(testVault(Utils.paths.userData));
+    endKeySession();
+    openStore(testVault(dataDir));
     const relay = normalizeRelay(process.env.KIWI_EB_RELAY ?? "");
     if (relay) mutate((s) => void (s.relayUrl = relay));
-  } else openStore(memoryVault);
+  } else {
+    opened = await openEbStore({ dir: dataDir, keys: launcherKeys });
+    openStore(v2Vault(opened));
+  }
   attachKeys((m) => keys.tell(m));
   keys.start();
+  watchPage();
   const win = await createWindow();
   if (!win) {
     instance.release();
@@ -240,10 +257,16 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
     tray.refresh(u);
   });
   mark("updates");
-  watchPage();
   void keepDaemon(() => quitting).catch(logMainError);
   const broken = brokenStore();
   if (broken) void Utils.showMessageBox({ type: "error", message: "Channels can't read its saved keys", detail: broken.message });
+  const plain = opened ? plainNote(opened) : null;
+  if (plain) logMainError(new Error(plain));
+  const unmarked = opened ? unmarkedNote(opened) : null;
+  if (unmarked) {
+    logMainError(new Error(unmarked));
+    void Utils.showMessageBox({ type: "warning", message: "Channels couldn't mark its store key ready", detail: unmarked });
+  }
 }
 
 let quitting = false;
@@ -270,12 +293,12 @@ function refuse(instance: Extract<Instance, { kind: "first" }>, why: string): vo
 
 BrowserView.on("created", (tag) => tag.remove());
 
-const wrongHome = KIWI_EB_TEST ? testHomeProblem(Utils.paths.userData, process.env.CFFIXED_USER_HOME) : null;
+const wrongHome = KIWI_EB_TEST ? testHomeProblem(dataDir, process.env.CFFIXED_USER_HOME) : null;
 if (wrongHome) console.error(`Channels test build: ${wrongHome}; not starting, so nothing lands under the person's home`);
 const instance = wrongHome
   ? null
   : await claimInstance({
-      dir: Utils.paths.userData,
+      dir: dataDir,
       handoff: handoffFor(process.argv, JOIN_SCHEME),
       scheme: JOIN_SCHEME,
       onHandoff: (h) => (h.kind === "link" ? handleDeepLink(h.url) : ebHost.showWindow()),
