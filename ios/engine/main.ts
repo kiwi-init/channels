@@ -7,10 +7,11 @@ import type { LaunchedView } from "@kiwi/core/terminals.ts";
 import type { ChannelIdentityView, FromMachine } from "../../desktop/src/bridge.ts";
 import { Keyring } from "../../desktop/src/keyring.ts";
 import { launchRequestOf } from "../../desktop/src/launch-view.ts";
-import { foldersOn, harnessesOn, launchOn, personMachines, type Asker, type PairedComputer } from "../../desktop/src/remote.ts";
+import { foldersOn, launchOn, personMachines, remoteHarnesses, type Asker, type PairedComputer } from "../../desktop/src/remote.ts";
 import { acceptSeat, migrateEntries, withAccess } from "../../desktop/src/seats.ts";
+import { canonicalHarness, harnessName, monoHarness } from "../../web/src/lib/harness.ts";
 import { Room } from "./room.ts";
-import type { Ask, LaunchAsk, Push, Reply, Saved } from "./wire.ts";
+import type { Ask, HarnessChoice, LaunchAsk, Push, Reply, Saved } from "./wire.ts";
 
 interface Handler {
   postMessage(json: string): void;
@@ -126,6 +127,11 @@ async function listComputers(): Promise<PairedComputer[]> {
   return listed;
 }
 
+function choice(row: HarnessRow): HarnessChoice {
+  const face = canonicalHarness(row.harness) ?? row.harness;
+  return { ...row, name: harnessName(row.harness), face, mono: monoHarness(face) };
+}
+
 function roomIdOf(code: string): string {
   const roomId = seats().find((s) => s.code === code)?.roomId;
   if (!roomId) throw new Error("this phone isn't in that channel");
@@ -203,7 +209,8 @@ async function handle(ask: Ask): Promise<unknown> {
       return listComputers();
     case "harnessesOn": {
       const c = computer(ask.computer);
-      return valueOf<HarnessRow[]>(await harnessesOn(asker(), { pk: c.key, xpk: c.xpk }));
+      const got = valueOf(await remoteHarnesses(asker(), { pk: c.key, xpk: c.xpk }));
+      return { harnesses: got.harnesses.map(choice), bypass: got.bypass };
     }
     case "foldersOn": {
       const c = computer(ask.computer);
