@@ -37,9 +37,16 @@ data class Row(
     val draft: Draft?,
 ) {
     val id: String get() = spot.id
-    val last: MessageView? get() = place?.last
+    val last: MessageView? get() = if (kind == RowKind.Group) room.latest ?: place?.last else place?.last
     val lastAt: Double get() = last?.at ?: 0.0
     val lead: String? get() = if (kind == RowKind.Lead) room.lead else null
+
+    private val origin: String
+        get() {
+            if (kind != RowKind.Group || room.latest == null) return ""
+            if (room.latestIn.startsWith("task:")) room.latestIn.removePrefix("task:").toIntOrNull()?.let { return " in ${taskLabel(it)}" }
+            return if (room.latestIn.startsWith("dm:")) " in a direct thread" else ""
+        }
 
     val working: Boolean
         get() = when (kind) {
@@ -61,7 +68,7 @@ data class Row(
                 newest.body.oneLine()
             }
             if (kind == RowKind.Lead) return if (newest.mine) "You: $body" else body
-            return "${if (newest.mine) "You" else room.display(newest.from)}: $body"
+            return "${if (newest.mine) "You" else room.display(newest.from)}$origin: $body"
         }
 }
 

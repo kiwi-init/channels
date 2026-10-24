@@ -142,6 +142,8 @@ data class RoomView(
     val tasks: List<TaskView> = emptyList(),
     val asks: List<AskView> = emptyList(),
     val last: MessageView? = null,
+    val latest: MessageView? = null,
+    val latestIn: String = "main",
     val place: String = "main",
     val places: List<PlaceView> = emptyList(),
 ) {
