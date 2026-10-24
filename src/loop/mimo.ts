@@ -3,13 +3,20 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 
+import type { Permission } from "@kiwi/core/launch-options.ts";
+
 type Env = Record<string, string | undefined>;
 
 export interface MimoStart {
   bin: string;
   model?: string;
+  permission?: Permission;
   prompt: string;
 }
+
+export const MIMO_PERMISSIONS: Permission[] = ["default", "plan", "bypass"];
+
+const MIMO_FLAGS: Record<Permission, string[]> = { default: [], "accept-edits": [], plan: ["--agent", "plan"], bypass: ["--dangerously-skip-permissions"] };
 
 const CLOCK_MS = 2_000;
 
@@ -32,9 +39,9 @@ function mimoChosenModel(env: Env): string | undefined {
   }
 }
 
-export function mimoArgv({ bin, model, prompt }: MimoStart, env: Env = process.env): string[] {
+export function mimoArgv({ bin, model, permission, prompt }: MimoStart, env: Env = process.env): string[] {
   const chosen = model ?? mimoChosenModel(env);
-  return [bin, ...(chosen ? ["-m", chosen] : []), "--prompt", prompt];
+  return [bin, ...(chosen ? ["-m", chosen] : []), ...(permission ? MIMO_FLAGS[permission] : []), "--prompt", prompt];
 }
 
 function withDb<A>(env: Env, read: (db: Database) => A, none: A): A {

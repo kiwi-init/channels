@@ -1,6 +1,7 @@
 import { closeSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type { Permission } from "@kiwi/core/launch-options.ts";
 
 type Env = Record<string, string | undefined>;
 
@@ -8,8 +9,13 @@ export interface GrokStart {
   bin: string;
   model?: string;
   effort?: string;
+  permission?: Permission;
   prompt: string;
 }
+
+export const GROK_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
+
+const GROK_MODES: Record<Permission, string | null> = { default: null, "accept-edits": "acceptEdits", plan: "plan", bypass: "bypassPermissions" };
 
 export type GrokSession = { session: string; dir: string };
 
@@ -18,8 +24,9 @@ const CLOCK_MS = 2_000;
 const TAIL_BYTES = 64 * 1024;
 const WORKING = new Set(["tool_call", "tool_call_update", "agent_thought_chunk", "agent_message_chunk", "user_message_chunk", "plan"]);
 
-export function grokArgv({ bin, model, effort, prompt }: GrokStart): string[] {
-  return [bin, ...(model ? ["-m", model] : []), ...(effort ? ["--reasoning-effort", effort] : []), "--", prompt];
+export function grokArgv({ bin, model, effort, permission, prompt }: GrokStart): string[] {
+  const mode = permission ? GROK_MODES[permission] : null;
+  return [bin, ...(model ? ["-m", model] : []), ...(effort ? ["--reasoning-effort", effort] : []), ...(mode ? ["--permission-mode", mode] : []), "--", prompt];
 }
 
 function sessionsOf(cwd: string, env: Env): string {
