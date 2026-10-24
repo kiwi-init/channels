@@ -11,7 +11,12 @@ note() { echo "== $*" | tee -a "$OUT/notes.txt"; }
 
 shot() {
   if [ "$D" = gnome ]; then python3 "$HERE/probe.py" gnome-shot "$OUT/$TAG-$1.png" >> "$OUT/probe.log" 2>&1; else python3 "$HERE/probe.py" kwin-shot "$OUT/$TAG-$1.png" >> "$OUT/probe.log" 2>&1; fi
-  note "shot $TAG-$1"
+  if [ ! -s "$OUT/$TAG-$1.png" ] && [ -n "${DISPLAY:-}" ]; then
+    for id in $(xdotool search --name '^Channels$' 2> /dev/null); do
+      xwd -silent -id "$id" 2>> "$OUT/probe.log" | convert xwd:- "$OUT/$TAG-$1-x11-$id.png" 2>> "$OUT/probe.log"
+    done
+  fi
+  note "shot $TAG-$1 $(ls "$OUT/$TAG-$1"*.png 2> /dev/null | xargs -n1 basename 2> /dev/null | tr '\n' ' ')"
 }
 
 windows() {
@@ -38,7 +43,8 @@ EOF
 
 focused() {
   if [ "$D" = gnome ]; then
-    python3 "$HERE/probe.py" gnome-windows 2> /dev/null | python3 -c 'import json,sys; ws=json.load(sys.stdin); print(" ".join(repr(w.get("title")) for w in ws.values() if w.get("has-focus")) or "nothing")'
+    python3 "$HERE/probe.py" gnome-windows 2> /dev/null | python3 -c 'import json,sys; ws=json.load(sys.stdin); print(" ".join(repr(w.get("title")) for w in ws.values() if w.get("has-focus")) or "nothing")' 2> /dev/null
+    echo " x11-active=$(xprop -root _NET_ACTIVE_WINDOW 2> /dev/null | awk '{print $NF}') channels=$(xdotool search --classname '^Channels$' 2> /dev/null | tr '\n' ',')"
   else
     local before
     before=$(wc -l < "$KWIN_LOG")
@@ -52,6 +58,7 @@ wait_window() {
   for _ in $(seq 1 60); do
     if [ "$D" = gnome ]; then
       python3 "$HERE/probe.py" gnome-windows 2> /dev/null | grep -q '"title": "Channels"' && return 0
+      xdotool search --classname '^Channels$' > /dev/null 2>&1 && return 0
     else
       local before
       before=$(wc -l < "$KWIN_LOG")
@@ -82,8 +89,8 @@ stop_app() {
 x11_props() {
   [ -n "${DISPLAY:-}" ] || return
   local id
-  id=$(xdotool search --name '^Channels$' 2> /dev/null | head -n 1)
-  [ -n "$id" ] || { note "no X11 window named Channels"; return; }
+  id=$(xdotool search --classname '^Channels$' 2> /dev/null | head -n 1)
+  [ -n "$id" ] || { note "no X11 window of class Channels"; return; }
   note "X11 window $id props:"
   xprop -id "$id" WM_CLASS _MOTIF_WM_HINTS _GTK_FRAME_EXTENTS _NET_WM_STATE _GTK_APPLICATION_ID _NET_WM_PID 2>&1 | sed 's/^/   /' | tee -a "$OUT/notes.txt"
 }

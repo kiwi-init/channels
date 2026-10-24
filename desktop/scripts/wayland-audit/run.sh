@@ -36,13 +36,20 @@ gsettings set org.gnome.shell introspect true
 gsettings set org.gnome.shell welcome-dialog-last-shown-version '999'
 extra=""
 grep -q -- '--unsafe-mode' "$OUT/gnome-shell-help.txt" && extra="--unsafe-mode"
-gnome-shell --headless --wayland --virtual-monitor 1280x800 \$extra > "$OUT/gnome-shell.log" 2>&1 &
+gnome-shell --headless --wayland --virtual-monitor 1280x800 --debug-control \$extra > "$OUT/gnome-shell.log" 2>&1 &
 shell=\$!
 for _ in \$(seq 1 100); do
   [ -S "\$XDG_RUNTIME_DIR/wayland-0" ] && gdbus introspect --session --dest org.gnome.Shell --object-path /org/gnome/Shell > /dev/null 2>&1 && break
   sleep 0.3
 done
 sleep 3
+for obj in /org/gnome/Shell /org/gnome/Shell/DebugControl /org/gnome/Mutter/DebugControl; do
+  for dest in org.gnome.Shell org.gnome.Shell.DebugControl org.gnome.Mutter.DebugControl; do
+    gdbus introspect --session --dest \$dest --object-path \$obj 2>/dev/null | grep -iE 'interface|unsafe|property' | sed "s|^|\$dest \$obj: |" >> "$OUT/debug-control.txt"
+  done
+done
+gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell/DebugControl --method org.freedesktop.DBus.Properties.Set org.gnome.Shell.DebugControl UnsafeMode "<true>" >> "$OUT/debug-control.txt" 2>&1
+gsettings get org.gnome.shell introspect >> "$OUT/debug-control.txt" 2>&1
 x=\$(grep -oE 'Using public X11 display :[0-9]+' "$OUT/gnome-shell.log" | grep -oE ':[0-9]+' | head -n 1)
 [ -n "\$x" ] || x=\$(ls /tmp/.X11-unix 2> /dev/null | sed 's/^X/:/' | sort | head -n 1)
 auth=\$(ls "\$XDG_RUNTIME_DIR"/.mutter-Xwaylandauth.* 2> /dev/null | head -n 1)
