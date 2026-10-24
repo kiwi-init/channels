@@ -66,7 +66,8 @@ describe("the line an agent is started with", () => {
     expect(recipeArgv("mimo", "/bin/mimo", "P", { model: "xiaomi/mimo-v2.5-pro" })).toEqual(["/bin/mimo", "-m", "xiaomi/mimo-v2.5-pro", "--prompt", "P"]);
     expect(recipeArgv("kimi", "/bin/kimi", "P")).toEqual(["/bin/kimi"]);
     expect(recipeArgv("gemini", "/bin/gemini", "P")).toEqual(["/bin/gemini", "-i", "P"]);
-    for (const h of ["cursor", "opencode", "pi"] as const) {
+    expect(recipeArgv("pi", "/bin/pi", "P")).toEqual(["/bin/pi", "P"]);
+    for (const h of ["cursor", "opencode"] as const) {
       expect(canStart(h)).toBe(false);
       expect(recipeArgv(h, "/bin/x", "P")).toBeNull();
     }
@@ -142,6 +143,14 @@ describe("the line an agent is started with", () => {
     expect(recipeArgv("gemini", "/bin/gemini", "P", { permission: "default" })).toEqual(["/bin/gemini", "-i", "P"]);
     expect(launchChoicesRefusal("gemini", { effort: "high" })).toBe("Gemini CLI doesn't take an effort level from Kiwi");
     expect(launchChoicesRefusal("gemini", { context: 1_000_000 })).toBe("Gemini CLI doesn't take a context size from Kiwi");
+  });
+
+  test("Pi gets the model and its thinking level, with the join line as its first message, and no permission modes", () => {
+    expect(recipeArgv("pi", "/bin/pi", "P", { model: "anthropic/claude-opus-5-5", effort: "xhigh" })).toEqual(["/bin/pi", "--model", "anthropic/claude-opus-5-5", "--thinking", "xhigh", "P"]);
+    expect(recipeArgv("pi", "/bin/pi", "P", { effort: "off" })).toEqual(["/bin/pi", "--thinking", "off", "P"]);
+    expect(launchChoicesRefusal("pi", { effort: "max" })).toBe("Pi takes effort off, minimal, low, medium, high, xhigh, not max");
+    expect(launchChoicesRefusal("pi", { permission: "bypass" })).toBe("Pi doesn't take a permission mode from Kiwi");
+    expect(launchChoicesRefusal("pi", { context: 1_000_000 })).toBe("Pi doesn't take a context size from Kiwi");
   });
 
   test("MiMoCode gets the model, its plan agent, or the flag that skips its permission prompts", () => {
