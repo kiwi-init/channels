@@ -38,8 +38,9 @@ on USB and debugging on:
 adb install -r app-release.apk
 ```
 
-The APK is signed with a debug key the CI job keeps in its cache, so a newer build installs over
-an older one without unlinking.
+The APK is signed with the debug key in `app/debug.p12` (password `android`), the same in every
+build, CI's and yours, so a newer build installs over an older one without unlinking. It's a
+development key, public on purpose: a store release needs its own.
 
 ## Build it yourself
 
