@@ -1,5 +1,5 @@
 // window.kiwi: the main-process bridge the renderer (web/dist) talks to. Shared by
-// main.ts and preload.ts; renderer-neutral on purpose (no electron/node imports),
+// main-eb.ts and preload-eb.ts; renderer-neutral on purpose (no node imports),
 // so web/ can type against it without touching this process.
 
 import type { ComputerSettings } from "@kiwi/core/computer-settings.ts";

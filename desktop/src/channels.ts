@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { MessagePortMain } from "electron";
 
 import { keepRecordsIn, type RecordMemory } from "@kiwi/core/client.ts";
 import type { Member } from "@kiwi/core/membership.ts";
@@ -10,16 +9,17 @@ import type { ChannelIdentityView } from "./bridge.ts";
 import { writePrivate } from "./guard.ts";
 import { Keyring } from "./keyring.ts";
 import { serveKeys, type HostToKeys, type KeysToHost } from "./keys-server.ts";
+import { keysParent, type PagePort } from "./keys-shim.ts";
 
 type Done = Extract<HostToKeys, { type: "done" }>;
-type Ask = KeysToHost extends infer T ? (T extends { id: number } ? Omit<T, "id"> : never) : never;
+type Ask = Exclude<KeysToHost, { type: "flushed" }> extends infer T ? (T extends { id: number } ? Omit<T, "id"> : never) : never;
 
 interface Memory {
   records: Record<string, Member>;
   checks: Record<string, Signed[]>;
 }
 
-const parent = process.parentPort;
+const parent = keysParent();
 let relay = "";
 let dir = "";
 let seats: ChannelIdentityView[] = [];
@@ -100,7 +100,7 @@ const keyring = new Keyring({
   budget,
 });
 
-function attach(port: MessagePortMain): void {
+function attach(port: PagePort): void {
   const session = serveKeys(keyring, (p) => port.postMessage(p));
   port.on("message", (e) => {
     void session.handle(e.data).then((reply) => {
@@ -112,7 +112,7 @@ function attach(port: MessagePortMain): void {
 }
 
 parent.on("message", (e) => {
-  const m = e.data as HostToKeys;
+  const m = e.data;
   switch (m.type) {
     case "init":
       relay = m.relay;

@@ -2,31 +2,22 @@ import { expect, test } from "bun:test";
 
 const workflow = await Bun.file(".github/workflows/release-build.yml").text();
 
-function signingStep(): string {
-  const from = workflow.indexOf("          sign=()\n");
-  const to = workflow.indexOf("          cli bun-darwin-x64 && signcli", from);
-  if (from < 0 || to < 0) throw new Error("the Package step's signing block moved; update this test");
-  return workflow.slice(from, to);
-}
-
-const run = (rehearsal: string) => Bun.spawnSync(["bash", "-c", signingStep()], { env: { PATH: process.env["PATH"] ?? "", REHEARSAL: rehearsal } });
+const run = (rehearsal: string) => Bun.spawnSync(["bun", "desktop/scripts/eb-release.ts", "missing-release-eb", "missing-out"], { env: { PATH: process.env["PATH"] ?? "", REHEARSAL: rehearsal } });
 
 test("a tag release without the Mac signing secrets fails instead of publishing an unsigned app", () => {
   const r = run("false");
   expect(r.exitCode).toBe(1);
-  expect(r.stdout.toString()).toContain("can't publish an unsigned Mac app");
+  expect(r.stderr.toString()).toContain("can't publish an unsigned Mac app");
 });
 
-test("a rehearsal still builds unsigned without the secrets", () => {
-  const r = run("true");
-  expect({ code: r.exitCode, out: r.stdout.toString().trim() }).toEqual({ code: 0, out: "no signing secrets: building unsigned" });
+test("a rehearsal goes on unsigned without the secrets", () => {
+  expect(run("true").stderr.toString()).not.toContain("can't publish an unsigned Mac app");
 });
 
-test("Electron builds only the Intel Mac app: Apple silicon and Linux ship the Electrobun app, built every time (T445)", () => {
+test("the release builds only the Electrobun app, for Apple silicon and Linux, every time (T445, T580)", () => {
   expect(workflow).not.toContain("electrobun_mac");
-  expect(workflow).not.toContain("electron-builder --linux");
-  expect(workflow).not.toContain("electron-builder --mac --arm64");
-  expect(workflow).toContain('bunx electron-builder --mac --x64 --publish never "${sign[@]}"');
+  expect(workflow).not.toContain("electron-builder");
+  expect(workflow).not.toContain("desktop-mac-x64");
   const job = (id: string): string => {
     const from = workflow.indexOf(`\n  ${id}:\n`);
     if (from < 0) throw new Error(`no ${id} job in release-build.yml`);
@@ -44,8 +35,8 @@ test("Electron builds only the Intel Mac app: Apple silicon and Linux ship the E
   expect(job("desktop-linux-eb")).toContain("bash desktop/scripts/linux-upgrade-check.sh out");
 });
 
-test("the Package step gets the rehearsal input", () => {
-  const from = workflow.indexOf("      - name: Package\n");
+test("the Mac app's signing step gets the rehearsal input", () => {
+  const from = workflow.indexOf("      - name: Sign, notarize and package\n");
   const env = workflow.slice(from, workflow.indexOf("        run: |", from));
   expect(env).toContain("          REHEARSAL: ${{ inputs.rehearsal }}\n");
 });

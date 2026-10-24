@@ -37,7 +37,7 @@
       "ignore": ["src/lib/design-tokens.ts", "src/lib/fonts.ts"]
     },
     "desktop": {
-      "entry": ["src/main.ts", "src/main-eb.ts", "src/preload-eb.ts", "src/preload.ts", "src/channels.ts", "src/keys-worker.ts", "scripts/*.ts", "electrobun.config.ts"],
+      "entry": ["src/main-eb.ts", "src/preload-eb.ts", "src/keys-worker.ts", "scripts/*.ts", "electrobun.config.ts"],
       "project": ["src/**/*.ts", "scripts/**/*.ts"]
     }
   }

@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 const { reference, limits: budgets } = (await Bun.file("scripts/perf-budgets.json").json()) as {
   reference: Record<"@1x" | "@4x", number>;
-  limits: Record<string, { what: string; at: string[]; per?: "@1x" | "@4x"; budget: number; gate: number | null; nightly?: boolean; source?: "feel" | "desktop" | "desktop-eb" }>;
+  limits: Record<string, { what: string; at: string[]; per?: "@1x" | "@4x"; budget: number; gate: number | null; nightly?: boolean; source?: "feel" | "desktop-eb" }>;
 };
 const dir = mkdtempSync(join(tmpdir(), "kiwi-perf-check-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -98,9 +98,9 @@ test("a calibrated run left out of just one timing is named, even when enough ru
   expect(r.out).not.toContain("run-30.json has no usable value");
 });
 
-test("every perf-scale timing with a gate is scaled by the calibration at its CPU speed; perf-feel's and the desktop app's rows (Electron's and Electrobun's) aren't scaled", () => {
+test("every perf-scale timing with a gate is scaled by the calibration at its CPU speed; perf-feel's and the desktop app's rows aren't scaled", () => {
   for (const [name, l] of Object.entries(budgets))
-    if (l.source === "feel" || l.source === "desktop" || l.source === "desktop-eb") expect({ name, per: l.per }).toEqual({ name, per: undefined });
+    if (l.source === "feel" || l.source === "desktop-eb") expect({ name, per: l.per }).toEqual({ name, per: undefined });
     else if (l.gate !== null) expect({ name, per: l.per }).toEqual({ name, per: l.at[0] === "@4x" ? "@4x" : "@1x" });
 });
 
@@ -135,12 +135,6 @@ test("without perf-feel runs (the nightly), perf-feel's rows are left out, not f
   expect(r.out).not.toContain(budgets.feelFalseScreens!.what);
 });
 
-test("CI's perf job hands perf-check the perf-feel runs its perf-runs jobs made", () => {
-  const ci = readFileSync(".github/workflows/ci.yml", "utf8");
-  expect(ci).toMatch(/perf-feel\.ts --json "\$RUNNER_TEMP\/feel-\$\{\{ matrix\.run \}\}\.json"/);
-  expect(ci).toContain('perf-check.ts --comment "$RUNNER_TEMP"/perf/perf-*.json "$RUNNER_TEMP"/perf/feel-*.json');
-});
-
 test("the soak's limits count only in the nightly run, and the gap to 0.20 is listed", () => {
   const files = [run(50, 7)];
   expect(check(files).out).not.toContain("Soak: heap growth per hour");
@@ -149,10 +143,10 @@ test("the soak's limits count only in the nightly run, and the gap to 0.20 is li
 });
 
 test("every workflow step that pipes perf-check runs under pipefail, so an over-gate median fails it", () => {
-  const steps = [".github/workflows/ci.yml", ".github/workflows/nightly.yml"].flatMap((path) => {
+  const steps = [".github/workflows/perf.yml"].flatMap((path) => {
     const wf = Bun.YAML.parse(readFileSync(path, "utf8")) as { jobs: Record<string, { steps?: { run?: string; shell?: string }[] }> };
     return Object.values(wf.jobs).flatMap((job) => (job.steps ?? []).filter((step) => step.run?.includes("perf-check.ts")).map((step) => ({ path, ...step })));
   });
-  expect(steps.length).toBeGreaterThanOrEqual(2);
+  expect(steps.length).toBeGreaterThanOrEqual(1);
   for (const { path, run, shell } of steps) if (run!.includes("|")) expect({ path, shell }).toEqual({ path, shell: "bash" });
 });

@@ -12,7 +12,7 @@ interface WorkerScope {
 
 type PortEvent = { data: unknown };
 
-interface PagePort {
+export interface PagePort {
   on(event: "message" | "close", fn: (e: PortEvent) => void): void;
   postMessage(p: KeysReply | KeysPush): void;
   start(): void;
@@ -20,7 +20,19 @@ interface PagePort {
 
 type HostEvent = { data: HostToKeys; ports: PagePort[] };
 
-export function installKeysShim(scope: WorkerScope, target: object = process): void {
+export interface KeysParent {
+  on(event: "message", fn: (e: HostEvent) => void): void;
+  postMessage(m: KeysToHost): void;
+}
+
+let installed: KeysParent | null = null;
+
+export function keysParent(): KeysParent {
+  if (!installed) throw new Error("the keys shim isn't installed");
+  return installed;
+}
+
+export function installKeysShim(scope: WorkerScope): void {
   const hostListeners: ((e: HostEvent) => void)[] = [];
   const early: HostEvent[] = [];
   const ports = new Map<number, { deliver(data: unknown): void; closed(): void }>();
@@ -59,15 +71,12 @@ export function installKeysShim(scope: WorkerScope, target: object = process): v
     port?.closed();
     ports.delete(msg.port);
   });
-  Object.defineProperty(target, "parentPort", {
-    configurable: true,
-    value: {
-      on: (event: "message", fn: (e: HostEvent) => void) => {
-        if (event !== "message") return;
-        hostListeners.push(fn);
-        for (const e of early.splice(0)) fn(e);
-      },
-      postMessage: (m: KeysToHost) => scope.post({ from: "host", m }),
+  installed = {
+    on: (event, fn) => {
+      if (event !== "message") return;
+      hostListeners.push(fn);
+      for (const e of early.splice(0)) fn(e);
     },
-  });
+    postMessage: (m) => scope.post({ from: "host", m }),
+  };
 }

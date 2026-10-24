@@ -1,4 +1,4 @@
-# Channels desktop app (Electron shell)
+# Channels desktop app (Electrobun shell)
 
 The app half of 0.11: it holds the person key, every channel identity, and
 paired computers, and hosts `web/`'s build. Admin lives here; the CLI is for
@@ -7,17 +7,18 @@ agents.
 ## Run
 
 ```sh
-bun install && cd desktop && bun run start
+bun install && cd desktop && bun run start:eb
 ```
 
 This expects `../web/dist` built (`bun run web:build` in the repo root); without it the
 window says so. Closing the window keeps the app in the tray (background auto-approval
 + notifications); Quit lives in the tray menu.
 
-## Electrobun shell (macOS, in progress)
+## Electrobun shell
 
-The app is moving to Electrobun on the system web view (issue #757). Its shell lives next
-to the Electron one and shares every module that doesn't import `electron`:
+The app runs on Electrobun and the system web view (issue #757): WebKit on Apple silicon
+Macs, WebKitGTK on Linux. Electron left the repo in T580; Intel Macs keep Electron's last
+build (0.27.4), which no longer updates.
 
 ```sh
 bun run web:build && cd desktop && bun run start:eb   # dev build, opened
@@ -67,8 +68,8 @@ bun run typecheck:eb                                  # fetches the devkit into 
   most 40 MB (`scripts/eb-release.ts`). `scripts/eb-update-rehearsal.ts` installs the last
   Electron arm64 release and runs its updater's own steps on the new zip, then opens the
   swapped app. `scripts/eb-driver-check.ts --release` fails if the zip or the dmg carries
-  test-only code, or if `CHANNELS_EB_TEST` is set. Every tag ships it; Intel Macs keep
-  Electron's x64 build until a stable Electrobun ships darwin-x64. Never launch a release-id
+  test-only code, or if `CHANNELS_EB_TEST` is set. Every tag ships it; there is no Intel
+  Mac build. Never launch a release-id
   build on a Mac with Channels installed: macOS keeps its preferences and WebKit data under
   the real home whatever `HOME` says.
 
@@ -80,13 +81,11 @@ bun run typecheck:eb                                  # fetches the devkit into 
 
 ## Layout
 
-- `src/main.ts` — window, tray, `kiwi-app://` hosting, safeStorage store, WorkOS device
-  sign-in, pairing sessions, daemon ensure/adopt, `kiwi://join/<code>` links. Identity
-  (`generateIdentity`) and pairing (`newSecret`/`pairCode`/`openMailbox`/`answerPair`)
-  are imported from `@kiwi/core` (`packages/core`) and bundled with `bun build`: one scheme,
-  no copies.
-- `src/preload.ts` — context-isolated `window.kiwi` (see `src/bridge.ts` for the shape).
-- `src/bridge.ts` — the shared bridge type; renderer-neutral, no electron/node imports.
+- Identity (`generateIdentity`) and pairing (`newSecret`/`pairCode`/`openMailbox`/`answerPair`)
+  are imported from `@kiwi/core` (`packages/core`) and bundled into the app: one scheme, no
+  copies.
+- `src/preload-eb.ts` — the page's `window.kiwi` (see `src/bridge.ts` for the shape).
+- `src/bridge.ts` — the shared bridge type; renderer-neutral, no node imports.
 - `src/daemon-client.ts` — the local socket client (`hello`, `adopt`) and the JSON wire
   shape the daemon side must match (documented at the top of the file); starting the daemon
   on the app's relay (`spawnDaemon`).
@@ -95,25 +94,23 @@ bun run typecheck:eb                                  # fetches the devkit into 
   AppImage update).
 - `build/icon.svg` — the app icon. `bun desktop/scripts/icons.ts` (on a Mac) makes every
   size from it: `build/icon.icns`, `build/icons/NxN.png` for Linux, and `assets/icon.png`
-  for the window. On Linux the window finds its icon through `desktopName` in
-  `package.json`: Wayland matches the window's app_id to `channels-desktop.desktop`.
+  for the window. On Linux, `native/linux/kiwi-shell.c` names the program `channels-desktop`,
+  so Wayland matches the window's app_id to `channels-desktop.desktop` and finds its icon.
 
 ## Renderer relay URL
 
 In the app, `web/` takes the relay from `window.kiwi.relayUrl` (main's store, through
 the preload) and never from the page's URL: the sign-in token goes wherever the relay
-is. The app loads `kiwi-app://app/index.html`. In a browser, `web/` takes `?relay=`,
+is. The app loads `views://internal/index.html`. In a browser, `web/` takes `?relay=`,
 else `location.origin` when served by a relay.
 
 ## Typecheck / build
 
 ```sh
-cd desktop && bunx tsc --noEmit   # main + preload + bridge
-bun run build                     # bun-built dist/main.js + dist/preload.js
-bun run dist                      # electron-builder (mac dmg/zip, linux AppImage/deb)
+cd desktop && bunx tsc --noEmit   # shared modules and scripts
+bun run typecheck:eb              # the Electrobun shell (*-eb.ts)
+bun run build:eb                  # release-eb/: the stable build
 ```
 
-The release workflow (`.github/workflows/release.yml`) ships Electron's build only for
-Intel Macs (`Channels-<version>-mac-x64.zip` and `.dmg`), Developer ID signed and
-notarized; Apple silicon and Linux get the Electrobun app above. There is no Windows app
-(the kiwi CLI still ships for Windows).
+The release workflow (`.github/workflows/release.yml`) ships the Electrobun app above for
+Apple silicon Macs and Linux. There is no Intel Mac or Windows app.

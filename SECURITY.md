@@ -454,15 +454,15 @@ Under `~/.kiwi/downloads` the directories are 0700 too. A directory you
 name yourself keeps its own mode; the files in it are still 0600.
 
 `~/.kiwi` holds agent identities and the computer's key and cert, never a
-person or owner key: those live in the app's store, encrypted with the OS
-keychain (Electron `safeStorage`). Where there is no keychain (Linux without a
+person or owner key: those live in the app's store, encrypted with a key the OS
+keychain holds. Where there is no keychain (Linux without a
 keyring), the store is a plain file only you can read: mode 0600, in a 0700
 folder, the same rule as `~/.kiwi` and `~/.ssh`. The app sets both modes on
 every save.
 
 In the app, no secret key reaches the app's page (the renderer). The person key
 stays in the main process. Each channel's member and owner keys and its channel
-keys live in a separate utility process (the key process), which main starts
+keys live in a separate Worker (the key process), which main starts
 and starts again if it stops. The key process signs every relay request, holds
 the live connection, opens messages, and seals and opens the history cache;
 the page asks it over a port the preload wraps, and gets back public fields,
