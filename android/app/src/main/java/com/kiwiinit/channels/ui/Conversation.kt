@@ -21,12 +21,15 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -119,6 +122,7 @@ import java.io.IOException
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 sealed interface Line {
@@ -185,6 +189,7 @@ class Follow {
     var unseen by mutableIntStateOf(0)
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun Conversation(
     model: AppModel,
@@ -222,6 +227,12 @@ fun Conversation(
         } else if (!newest.event) {
             follow.unseen += 1
         }
+    }
+    val typing = WindowInsets.isImeVisible
+    LaunchedEffect(typing) {
+        if (!typing) return@LaunchedEffect
+        delay(250)
+        state.animateScrollToItem(0)
     }
     var pendingCount by remember { mutableIntStateOf(pending.size) }
     LaunchedEffect(pending.size) {
