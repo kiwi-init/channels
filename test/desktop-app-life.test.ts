@@ -199,7 +199,7 @@ describe("the tray and the app menu say what Electron's did (T438)", () => {
     expect(trayItems(ready)[1]).toEqual({ type: "normal", label: "Restart to update to 0.27.0", action: "restart" });
   });
 
-  const labels = (items: AppMenuItem[]): string[] => items.map((i) => ("label" in i ? i.label : "role" in i ? i.role : "-"));
+  const labels = (items: AppMenuItem[]): string[] => items.map((i) => ("label" in i && i.label ? i.label : "role" in i ? i.role : "-"));
   const sub = (items: AppMenuItem[], label: string): AppMenuItem[] => {
     const m = items.find((i) => "label" in i && i.label === label);
     return m && "submenu" in m ? m.submenu : [];
