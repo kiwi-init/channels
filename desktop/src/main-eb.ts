@@ -3,6 +3,7 @@ import Electrobun, { BrowserView, Utils } from "electrobun/main";
 import { internalRpcHandlers } from "../.hutch/devkit/api/sdks/main/proc/native.ts";
 import { handleDeepLink, JOIN_SCHEME } from "./deep-links.ts";
 import { lockInternalRpc } from "./eb-bridge.ts";
+import { mark } from "./eb-startup.ts";
 import { ebHost } from "./host-eb.ts";
 import { useHost } from "./host.ts";
 import { keepAlive } from "./keep-alive-eb.ts";
@@ -16,6 +17,8 @@ import { driveForTests, wrongTestHome } from "./test-build-eb.ts";
 import { createWindow, fail } from "./window-eb.ts";
 
 declare const KIWI_EB_TEST: boolean;
+
+mark("main");
 
 useHost(KIWI_EB_TEST ? { ...ebHost, app: { ...ebHost.app, packaged: () => true } } : ebHost);
 catchMainErrors();

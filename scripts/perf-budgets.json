@@ -1,5 +1,5 @@
 {
-  "reference": { "@1x": 110, "@4x": 430 },
+  "reference": { "@1x": 110, "@4x": 430, "loop": 21 },
   "calibration": { "@1x": [40, 250], "@4x": [160, 1000], "ratio": [3, 5] },
   "limits": {
     "reloadMs": { "what": "Reload to first screen", "at": ["@1x", "reloadToFirstScreenMs"], "per": "@1x", "inPage": ["reload, in page", "firstScreenMs"], "budget": 400, "gate": 820 },

@@ -53,8 +53,8 @@ static bool own_download(const char *uri) {
 
 static bool is_the_page(const char *uri) {
   size_t n = the_page ? strlen(the_page) : 0;
-  if (n == 0 || !uri || strlen(uri) < n || g_ascii_strncasecmp(uri, the_page, n) != 0) return false;
-  return uri[n] == 0 || uri[n] == '#' || uri[n] == '?';
+  if (n == 0 || !uri || strncmp(uri, the_page, n) != 0) return false;
+  return uri[n] == 0 || uri[n] == '#';
 }
 
 static gboolean only_the_page(GSignalInvocationHint *hint, guint n, const GValue *params, gpointer data) {

@@ -6,6 +6,7 @@ import { onOurPage, preloadSource, toPageScript } from "./eb-bridge.ts";
 import { keys, keysToPage } from "./keys-start-eb.ts";
 import { cString, committedPage, mac, setPageHtml, setPreload, windowLook } from "./native-eb.ts";
 import { navigation, openedUrl, PAGE_RULES, PAGE_TEMPLATE, PAGE_URL, pageWithCsp, RULES_CANARY } from "./eb-page.ts";
+import { mark } from "./eb-startup.ts";
 import { externalUrl } from "./guard.ts";
 import { attachWindow, ebHost } from "./host-eb.ts";
 import { handlers } from "./ipc/handlers.ts";
@@ -62,6 +63,7 @@ export async function createWindow(): Promise<BrowserWindow | null> {
     (session, req) => keys.request(session, req),
   );
   keysToPage((frame) => bridge.pushKeys(frame));
+  mark("window");
   const win = new BrowserWindow({
     title: "Channels",
     url: null,
@@ -71,6 +73,7 @@ export async function createWindow(): Promise<BrowserWindow | null> {
     preload: preloadSource({ snapshot: snapshot(), session: bridge.nextSession() }, bundled),
     rpc: bridge,
   });
+  mark("webview");
   const webview = win.webview;
   view = webview;
   let closing = false;
@@ -105,6 +108,7 @@ export async function createWindow(): Promise<BrowserWindow | null> {
     reload: () => (refreshPreload(), load()),
   });
   load(first);
+  mark("load");
   const look = win.ptr;
   if (look && windowLook) windowLook(look, minWindowWidth(process.platform), WINDOW_SIZE.minHeight, rgb(windowBackground(false)), rgb(windowBackground(true)));
   if (mac) win.setWindowButtonPosition(TRAFFIC_LIGHTS.x, TRAFFIC_LIGHTS.y);

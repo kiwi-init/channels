@@ -1,6 +1,7 @@
 import { Utils, type BrowserWindow } from "electrobun/main";
 
 import { drive } from "./eb-driver.ts";
+import { startupMarks } from "./eb-startup.ts";
 import { testHomeProblem } from "./eb-test-home.ts";
 import { testVault } from "./eb-test-store.ts";
 import { normalizeRelay } from "./guard.ts";
@@ -23,6 +24,6 @@ export function openTestStore(): boolean {
 export function driveForTests(win: BrowserWindow): void {
   if (KIWI_EB_TEST) {
     const socket = process.env.KIWI_EB_DRIVER;
-    if (socket) drive(win.webview, socket);
+    if (socket) drive(win.webview, socket, { startup: startupMarks });
   }
 }

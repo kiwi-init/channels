@@ -1,11 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-export interface DriverAsk {
-  id: number;
-  fn: string;
-  arg: string;
-}
+export type DriverAsk = { id: number; fn: string; arg: string } | { id: number; main: string };
 
 export type DriverAnswer = { id: number; ok: true; value: unknown } | { id: number; ok: false; error: string };
 
@@ -22,8 +18,10 @@ export function driverAsk(line: string): DriverAsk | null {
   try {
     const v = JSON.parse(line) as unknown;
     if (!v || typeof v !== "object") return null;
-    const { id, fn, arg } = v as Record<string, unknown>;
-    return typeof id === "number" && typeof fn === "string" && typeof arg === "string" ? { id, fn, arg } : null;
+    const { id, fn, arg, main } = v as Record<string, unknown>;
+    if (typeof id !== "number") return null;
+    if (typeof main === "string") return { id, main };
+    return typeof fn === "string" && typeof arg === "string" ? { id, fn, arg } : null;
   } catch {
     // A line that isn't JSON asks nothing: the driver answers only requests it can read.
     return null;
@@ -68,7 +66,12 @@ export function driverSocketProblem(socketPath: string, uid: number = process.ge
   return there && !there.isSocket() ? `${socketPath} is there and isn't a socket, so the driver won't remove it` : null;
 }
 
-export function drive(view: DrivenView, socketPath: string): void {
+export function mainAnswer(ask: { id: number; main: string }, answers: Readonly<Record<string, () => unknown>>): DriverAnswer {
+  const answer = Object.hasOwn(answers, ask.main) ? answers[ask.main] : undefined;
+  return answer ? { id: ask.id, ok: true, value: answer() } : { id: ask.id, ok: false, error: `main answers no ${ask.main}` };
+}
+
+export function drive(view: DrivenView, socketPath: string, answers: Readonly<Record<string, () => unknown>> = {}): void {
   const wrong = driverSocketProblem(socketPath);
   if (wrong) throw new Error(`the test driver won't listen: ${wrong}`);
   const waiting = new Map<number, (a: DriverAnswer) => void>();
@@ -99,6 +102,10 @@ export function drive(view: DrivenView, socketPath: string): void {
         for (const line of lines) {
           const ask = driverAsk(line);
           if (!ask) continue;
+          if ("main" in ask) {
+            socket.write(`${JSON.stringify(mainAnswer(ask, answers))}\n`);
+            continue;
+          }
           const id = ++next;
           waiting.set(id, (a) => void socket.write(`${JSON.stringify({ ...a, id: ask.id })}\n`));
           view.executeJavascript(pageScript(id, ask.fn, ask.arg));
