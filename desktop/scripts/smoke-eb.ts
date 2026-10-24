@@ -102,6 +102,20 @@ try {
     (v) => v !== "granted",
   );
   await bridgeChecks(d, problems);
+  for (const to of ["views://internal/icon.svg", "views://internal/index.html?x=1", "file:///etc/hosts"]) {
+    await d.evaluate((url: string) => void (location.href = url), to, 2_000).catch(() => undefined);
+    await later(1_000);
+    await check(
+      `a navigation to ${to} is refused (the rules, the native allowlist and the canary that proved them): the page stays and window.kiwi answers`,
+      d,
+      () =>
+        Promise.race([
+          (window as unknown as { kiwi: { getUpdate(): Promise<unknown> } }).kiwi.getUpdate().then(() => location.href),
+          new Promise<string>((r) => setTimeout(() => r(`${location.href} (window.kiwi didn't answer)`), 3_000)),
+        ]),
+      (v) => v === "views://internal/index.html",
+    );
+  }
 
   const hello = await until("the kiwi daemon the app starts", 60_000, () => daemonHello(kiwiHome, 1_000)).catch((e: Error) => (problems.push(e.message), null));
   if (hello) console.log(`kiwi daemon: answering on the test KIWI_HOME (kiwi ${hello.version})`);

@@ -480,6 +480,9 @@ jobs:
         env:
           DASH_RELEASE_OFFLINE: "1"
         run: bun run build:eb
+      - name: the linux-arm64 Hutch and devkit match their pins (no job builds there)
+        if: ${{ !cancelled() }}
+        run: bun desktop/scripts/eb-pins-check.ts linux-arm64
       - name: deb and AppImage, each at most 40 MB
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/package-linux.ts desktop/release-eb desktop/release-eb/linux

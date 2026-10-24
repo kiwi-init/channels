@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { driverAsk, driverSocketProblem, pageAnswer, pageScript, type DriverAnswer } from "../desktop/src/eb-driver.ts";
+import { driverAsk, driverSocketProblem, mainAnswer, pageAnswer, pageScript, type DriverAnswer } from "../desktop/src/eb-driver.ts";
 import { testHomeProblem } from "../desktop/src/eb-test-home.ts";
 
 async function inPage(id: number, fn: string, arg: unknown): Promise<DriverAnswer | null> {
@@ -17,6 +17,8 @@ async function inPage(id: number, fn: string, arg: unknown): Promise<DriverAnswe
 describe("the Electrobun test driver runs a function in the page and hands back its answer (T442)", () => {
   test("a request is a line of JSON with a numeric id, the function's source and its argument as JSON", () => {
     expect(driverAsk(JSON.stringify({ id: 3, fn: "() => 1", arg: "null" }))).toEqual({ id: 3, fn: "() => 1", arg: "null" });
+    expect(driverAsk(JSON.stringify({ id: 4, main: "startup" }))).toEqual({ id: 4, main: "startup" });
+    expect(driverAsk(JSON.stringify({ id: "4", main: "startup" }))).toBeNull();
     expect(driverAsk("not json")).toBeNull();
     expect(driverAsk(JSON.stringify({ id: "3", fn: "() => 1", arg: "null" }))).toBeNull();
     expect(driverAsk(JSON.stringify({ id: 3, fn: () => 1, arg: "null" }))).toBeNull();
@@ -79,5 +81,14 @@ describe("a test build's home (T1820)", () => {
     expect(testHomeProblem("/tmp/run/home", "/tmp/run/home")).toContain("isn't under the temp home");
     expect(testHomeProblem("/tmp/run/home/Library", undefined)).toContain("CFFIXED_USER_HOME");
     expect(testHomeProblem("/tmp/run/home/Library", "relative/home")).toContain("CFFIXED_USER_HOME");
+  });
+});
+
+describe("what the app's main answers the driver itself (T798)", () => {
+  test("a name main has: its value, under the driver's id; any other name, inherited ones too: an error", () => {
+    const answers = { startup: () => ({ bun: 1, main: 2 }) };
+    expect(mainAnswer({ id: 7, main: "startup" }, answers)).toEqual({ id: 7, ok: true, value: { bun: 1, main: 2 } });
+    expect(mainAnswer({ id: 8, main: "toString" }, answers)).toEqual({ id: 8, ok: false, error: "main answers no toString" });
+    expect(mainAnswer({ id: 9, main: "keys" }, answers)).toEqual({ id: 9, ok: false, error: "main answers no keys" });
   });
 });

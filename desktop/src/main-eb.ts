@@ -1,3 +1,5 @@
+import { launcherKeys } from "./launcher-channel-eb.ts";
+
 import { dlopen, FFIType, JSCallback, ptr, suffix } from "bun:ffi";
 import fs from "node:fs";
 import path from "node:path";
@@ -10,9 +12,10 @@ import { keepDaemon } from "./bundled-daemon.ts";
 import { lockInternalRpc, onOurPage, preloadSource, toPageScript } from "./eb-bridge.ts";
 import { drive } from "./eb-driver.ts";
 import { navigation, openedUrl, PAGE_RULES, PAGE_TEMPLATE, PAGE_URL, pageWithCsp, RULES_CANARY } from "./eb-page.ts";
+import { mark, startupMarks } from "./eb-startup.ts";
 import { testVault } from "./eb-test-store.ts";
 import { externalUrl, normalizeRelay } from "./guard.ts";
-import { attachKeys, attachWindow, bundle, ebHost } from "./host-eb.ts";
+import { attachKeys, attachWindow, ebHost } from "./host-eb.ts";
 import { useHost } from "./host.ts";
 import { handlers } from "./ipc/handlers.ts";
 import { bunWorker, keysController, type KeysFrame } from "./keys-eb.ts";
@@ -23,12 +26,16 @@ import { keepPageAlive } from "./page-crash.ts";
 import { claimInstance, handoffFor, type Instance } from "./single-instance.ts";
 import { testHomeProblem } from "./eb-test-home.ts";
 import { bunBridge } from "./rpc-eb.ts";
-import { brokenStore, mutate, openStore, snapshot, store, type StoreVault } from "./store.ts";
+import { brokenStore, mutate, openStore, snapshot, store } from "./store.ts";
+import { openEbStore, unmarkedNote, v2Vault } from "./store-eb.ts";
+import type { OpenStore } from "./store-v2.ts";
 import { startUpdates, updateState } from "./updater.ts";
 import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts";
 import { minWindowWidth } from "./window-size.ts";
 
 declare const KIWI_EB_TEST: boolean;
+
+mark("main");
 
 useHost(KIWI_EB_TEST ? { ...ebHost, app: { ...ebHost.app, packaged: () => true } } : ebHost);
 catchMainErrors();
@@ -115,8 +122,6 @@ const keys = keysController({
   toPage: (frame) => keysToPage(frame),
 });
 
-const memoryVault: StoreVault = { where: () => `memory, nothing saved (${bundle.identifier})`, load: () => ({ ok: true, file: null, resave: false }), save: () => {} };
-
 async function createWindow(): Promise<BrowserWindow | null> {
   const index = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "..", PAGE_TEMPLATE), "utf8");
   const page = (): Uint8Array => cString(pageWithCsp(index, store.relayUrl));
@@ -136,6 +141,7 @@ async function createWindow(): Promise<BrowserWindow | null> {
     (session, req) => keys.request(session, req),
   );
   keysToPage = (frame) => bridge.pushKeys(frame);
+  mark("window");
   const win = new BrowserWindow({
     title: "Channels",
     url: null,
@@ -145,6 +151,7 @@ async function createWindow(): Promise<BrowserWindow | null> {
     preload: preloadSource({ snapshot: snapshot(), session: bridge.nextSession() }, bundled),
     rpc: bridge,
   });
+  mark("webview");
   const webview = win.webview;
   view = webview;
   let closing = false;
@@ -180,6 +187,7 @@ async function createWindow(): Promise<BrowserWindow | null> {
     reload: () => (refreshPreload(), load()),
   });
   load(first);
+  mark("load");
   const look = win.ptr;
   if (look && windowLook) windowLook(look, minWindowWidth(process.platform), WINDOW_SIZE.minHeight, rgb(windowBackground(false)), rgb(windowBackground(true)));
   if (mac) win.setWindowButtonPosition(TRAFFIC_LIGHTS.x, TRAFFIC_LIGHTS.y);
@@ -193,12 +201,26 @@ async function createWindow(): Promise<BrowserWindow | null> {
   return win;
 }
 
+function endKeySession(): void {
+  if (launcherKeys instanceof Error) return;
+  try {
+    launcherKeys.done();
+  } catch {
+    // A test build may start without the launcher in front, and then there's no session to end.
+  }
+}
+
 async function start(instance: Extract<Instance, { kind: "first" }>): Promise<void> {
+  let opened: OpenStore | null = null;
   if (KIWI_EB_TEST) {
+    endKeySession();
     openStore(testVault(Utils.paths.userData));
     const relay = normalizeRelay(process.env.KIWI_EB_RELAY ?? "");
     if (relay) mutate((s) => void (s.relayUrl = relay));
-  } else openStore(memoryVault);
+  } else {
+    opened = await openEbStore({ dir: Utils.paths.userData, keys: launcherKeys });
+    openStore(v2Vault(opened));
+  }
   attachKeys((m) => keys.tell(m));
   keys.start();
   const win = await createWindow();
@@ -208,7 +230,7 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
   }
   if (KIWI_EB_TEST) {
     const socket = process.env.KIWI_EB_DRIVER;
-    if (socket) drive(win.webview, socket);
+    if (socket) drive(win.webview, socket, { startup: startupMarks });
   }
   const tray = startAppLife({
     win,
@@ -230,6 +252,11 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
   void keepDaemon(() => quitting).catch(logMainError);
   const broken = brokenStore();
   if (broken) void Utils.showMessageBox({ type: "error", message: "Channels can't read its saved keys", detail: broken.message });
+  const unmarked = opened ? unmarkedNote(opened) : null;
+  if (unmarked) {
+    logMainError(new Error(unmarked));
+    void Utils.showMessageBox({ type: "warning", message: "Channels couldn't mark its store key ready", detail: unmarked });
+  }
 }
 
 let quitting = false;

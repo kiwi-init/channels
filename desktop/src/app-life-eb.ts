@@ -4,6 +4,7 @@ import { textStepOf, type MenuAction } from "./app-menus.ts";
 import { createTray, setAppMenu, type AppTray } from "./menus-eb.ts";
 import type { TextStep } from "./text-size.ts";
 import type { UpdateState } from "./updater.ts";
+import { mark } from "./eb-startup.ts";
 import { watchWake } from "./wake.ts";
 
 export interface LifeShell {
@@ -59,5 +60,7 @@ export function startAppLife(shell: LifeShell): AppTray {
     flushing ??= flushThenQuit();
   });
   setAppMenu(act);
-  return createTray(act, shell.update());
+  const tray = createTray(act, shell.update());
+  mark("tray");
+  return tray;
 }

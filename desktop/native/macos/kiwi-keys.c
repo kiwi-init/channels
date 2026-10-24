@@ -25,6 +25,7 @@
 #define READY_ACCOUNT "store-key-ready"
 
 static volatile pid_t child_pid = -1;
+static volatile sig_atomic_t serving = 0;
 
 static int fail(char *why, size_t why_len, const char *fmt, ...) {
   va_list ap;
@@ -211,8 +212,19 @@ static CFMutableDictionaryRef item_query(CFStringRef service, CFStringRef accoun
 
 typedef enum { ITEM_OK, ITEM_NONE, ITEM_BAD, ITEM_ERROR } item_result;
 
-static item_result copy_item(CFStringRef service, CFStringRef account, CFDataRef *data, OSStatus *status) {
-  CFMutableDictionaryRef q = item_query(service, account);
+struct session {
+  char made[HEX_LEN + 1];
+  CFTypeRef made_ref;
+};
+
+static CFMutableDictionaryRef ref_query(CFTypeRef ref) {
+  CFMutableDictionaryRef q = CFDictionaryCreateMutable(kCFAllocatorDefault, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+  CFDictionarySetValue(q, kSecClass, kSecClassGenericPassword);
+  CFDictionarySetValue(q, kSecValueRef, ref);
+  return q;
+}
+
+static item_result copy_query(CFMutableDictionaryRef q, CFDataRef *data, OSStatus *status) {
   CFDictionarySetValue(q, kSecReturnData, kCFBooleanTrue);
   CFDictionarySetValue(q, kSecMatchLimit, kSecMatchLimitOne);
   CFTypeRef out = NULL;
@@ -227,6 +239,10 @@ static item_result copy_item(CFStringRef service, CFStringRef account, CFDataRef
   }
   *data = out;
   return ITEM_OK;
+}
+
+static item_result copy_item(CFStringRef service, CFStringRef account, CFDataRef *data, OSStatus *status) {
+  return copy_query(item_query(service, account), data, status);
 }
 
 static void data_hex(CFDataRef data, char out[HEX_LEN + 1]) {
@@ -276,6 +292,10 @@ static bool store_key_or_reply(int fd, CFStringRef service, char out[HEX_LEN + 1
   return r == ITEM_OK;
 }
 
+static bool marks(CFDataRef mark, const char key[HEX_LEN + 1]) {
+  return CFDataGetLength(mark) == HEX_LEN && memcmp(CFDataGetBytePtr(mark), key, HEX_LEN) == 0;
+}
+
 static void serve_finished(int fd, CFStringRef service) {
   char key[HEX_LEN + 1];
   if (!store_key_or_reply(fd, service, key, "none")) return;
@@ -286,14 +306,30 @@ static void serve_finished(int fd, CFStringRef service) {
     reply_status(fd, "reading the store key's ready mark", status);
     return;
   }
-  bool ready = r == ITEM_OK && CFDataGetLength(mark) == HEX_LEN && memcmp(CFDataGetBytePtr(mark), key, HEX_LEN) == 0;
+  bool ready = r == ITEM_OK && marks(mark, key);
   if (mark) CFRelease(mark);
   reply(fd, ready ? "ok" : "none");
 }
 
-static void serve_finish(int fd, CFStringRef service, CFStringRef label) {
+static bool lower_hex(const char *s) {
+  size_t n = strlen(s);
+  if (n != HEX_LEN) return false;
+  for (size_t i = 0; i < n; i++)
+    if (!((s[i] >= '0' && s[i] <= '9') || (s[i] >= 'a' && s[i] <= 'f'))) return false;
+  return true;
+}
+
+static void serve_finish(int fd, CFStringRef service, CFStringRef label, const char *sealed) {
+  if (!lower_hex(sealed)) {
+    reply(fd, "fail finish takes the SHA-256 of the store key in lower-case hex");
+    return;
+  }
   char key[HEX_LEN + 1];
   if (!store_key_or_reply(fd, service, key, "fail there's no store key to mark ready")) return;
+  if (strcmp(key, sealed) != 0) {
+    reply(fd, "fail the keychain's store key isn't the one Channels sealed its store under");
+    return;
+  }
   CFDataRef data = CFDataCreate(kCFAllocatorDefault, (const UInt8 *)key, HEX_LEN);
   CFMutableDictionaryRef q = item_query(service, CFSTR(READY_ACCOUNT));
   CFDictionarySetValue(q, kSecValueData, data);
@@ -317,39 +353,63 @@ static void serve_finish(int fd, CFStringRef service, CFStringRef label) {
     reply_status(fd, "saving the store key's ready mark", status);
 }
 
-static OSStatus delete_item(CFStringRef service, CFStringRef account) {
-  CFMutableDictionaryRef q = item_query(service, account);
-  OSStatus status = SecItemDelete(q);
-  CFRelease(q);
-  return status;
+static void forget_made(struct session *s) {
+  s->made[0] = 0;
+  if (s->made_ref) CFRelease(s->made_ref);
+  s->made_ref = NULL;
 }
 
-static void serve_drop(int fd, CFStringRef service, char made[HEX_LEN + 1]) {
-  if (!made[0]) {
+static void serve_drop(int fd, CFStringRef service, struct session *s) {
+  if (!s->made[0] || !s->made_ref) {
     reply(fd, "fail the launcher only takes back a store key it made in this session");
     return;
   }
+  CFDataRef data = NULL;
+  OSStatus status = errSecSuccess;
+  item_result r = copy_query(ref_query(s->made_ref), &data, &status);
+  if (r == ITEM_ERROR && status != errSecItemNotFound) {
+    reply_status(fd, "reading the store key", status);
+    return;
+  }
+  if (r != ITEM_OK) {
+    reply(fd, "fail the keychain no longer holds the store key this session made");
+    return;
+  }
   char key[HEX_LEN + 1];
-  if (!store_key_or_reply(fd, service, key, "fail the keychain no longer holds the store key this session made")) return;
-  if (strcmp(key, made) != 0) {
+  data_hex(data, key);
+  CFRelease(data);
+  if (strcmp(key, s->made) != 0) {
     reply(fd, "fail the keychain's store key isn't the one this session made, so the launcher leaves it");
     return;
   }
-  OSStatus status = delete_item(service, CFSTR(READY_ACCOUNT));
-  if (status != errSecSuccess && status != errSecItemNotFound) {
-    reply_status(fd, "taking back the store key's ready mark", status);
+  CFDataRef mark = NULL;
+  r = copy_item(service, CFSTR(READY_ACCOUNT), &mark, &status);
+  if (r == ITEM_ERROR) {
+    reply_status(fd, "reading the store key's ready mark", status);
     return;
   }
-  status = delete_item(service, CFSTR(STORE_ACCOUNT));
+  bool marked = r == ITEM_OK && marks(mark, key);
+  if (mark) CFRelease(mark);
+  if (marked) {
+    reply(fd, "fail the store key is marked ready, so the launcher keeps it");
+    return;
+  }
+  CFMutableDictionaryRef q = ref_query(s->made_ref);
+  status = SecItemDelete(q);
+  CFRelease(q);
+  if (status == errSecItemNotFound) {
+    reply(fd, "fail the keychain no longer holds the store key this session made");
+    return;
+  }
   if (status != errSecSuccess) {
     reply_status(fd, "taking back the store key", status);
     return;
   }
-  made[0] = 0;
+  forget_made(s);
   reply(fd, "ok");
 }
 
-static void serve_set(int fd, CFStringRef service, CFStringRef label, const char *b64, char made[HEX_LEN + 1]) {
+static void serve_set(int fd, CFStringRef service, CFStringRef label, const char *b64, struct session *s) {
   UInt8 secret[MAX_SECRET];
   long len = b64_decode(b64, secret, sizeof secret);
   if (len <= 0) {
@@ -361,9 +421,17 @@ static void serve_set(int fd, CFStringRef service, CFStringRef label, const char
   CFMutableDictionaryRef q = item_query(service, CFSTR(STORE_ACCOUNT));
   CFDictionarySetValue(q, kSecValueData, data);
   CFDictionarySetValue(q, kSecAttrLabel, label);
-  OSStatus status = SecItemAdd(q, NULL);
+  CFDictionarySetValue(q, kSecReturnRef, kCFBooleanTrue);
+  CFTypeRef ref = NULL;
+  OSStatus status = SecItemAdd(q, &ref);
   CFRelease(q);
-  if (status == errSecSuccess) data_hex(data, made);
+  if (status == errSecSuccess && ref) {
+    forget_made(s);
+    data_hex(data, s->made);
+    s->made_ref = ref;
+  } else if (ref) {
+    CFRelease(ref);
+  }
   CFRelease(data);
   if (status == errSecSuccess)
     reply(fd, "ok");
@@ -389,9 +457,8 @@ static void serve_legacy(int fd, CFArrayRef names, const char *name) {
   CFRelease(wanted);
 }
 
-void kiwi_serve(int fd, CFStringRef service, CFStringRef label, CFArrayRef legacy) {
+static void serve_lines(int fd, CFStringRef service, CFStringRef label, CFArrayRef legacy, struct session *s) {
   char buf[MAX_LINE + 1];
-  char made[HEX_LEN + 1] = "";
   size_t used = 0;
   for (;;) {
     ssize_t n = read(fd, buf + used, MAX_LINE - used);
@@ -410,13 +477,13 @@ void kiwi_serve(int fd, CFStringRef service, CFStringRef label, CFArrayRef legac
       } else if (strcmp(buf, "get") == 0)
         serve_read(fd, service, CFSTR(STORE_ACCOUNT), "reading the store key");
       else if (strncmp(buf, "set ", 4) == 0)
-        serve_set(fd, service, label, buf + 4, made);
+        serve_set(fd, service, label, buf + 4, s);
       else if (strcmp(buf, "finished") == 0)
         serve_finished(fd, service);
-      else if (strcmp(buf, "finish") == 0)
-        serve_finish(fd, service, label);
+      else if (strncmp(buf, "finish ", 7) == 0)
+        serve_finish(fd, service, label, buf + 7);
       else if (strcmp(buf, "drop") == 0)
-        serve_drop(fd, service, made);
+        serve_drop(fd, service, s);
       else if (strncmp(buf, "legacy ", 7) == 0)
         serve_legacy(fd, legacy, buf + 7);
       else
@@ -432,8 +499,19 @@ void kiwi_serve(int fd, CFStringRef service, CFStringRef label, CFArrayRef legac
   }
 }
 
+void kiwi_serve(int fd, CFStringRef service, CFStringRef label, CFArrayRef legacy) {
+  struct session s = {"", NULL};
+  serve_lines(fd, service, label, legacy, &s);
+  forget_made(&s);
+}
+
 static void forward(int sig) {
-  if (child_pid > 0) kill(child_pid, sig);
+  if (child_pid <= 0) return;
+  if (serving) {
+    kill(-child_pid, SIGKILL);
+    _exit(128 + sig);
+  }
+  kill(-child_pid, sig);
 }
 
 int kiwi_run_with_keys(const char *path, char *const argv[], char *const envp[]) {
@@ -460,7 +538,8 @@ int kiwi_run_with_keys(const char *path, char *const argv[], char *const envp[])
   posix_spawnattr_t attr;
   posix_spawn_file_actions_init(&actions);
   posix_spawnattr_init(&attr);
-  posix_spawnattr_setflags(&attr, POSIX_SPAWN_CLOEXEC_DEFAULT);
+  posix_spawnattr_setflags(&attr, POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETPGROUP);
+  posix_spawnattr_setpgroup(&attr, 0);
   for (int fd = 0; fd <= 2; fd++)
     if (fd != sv[1] && fcntl(fd, F_GETFD) != -1) posix_spawn_file_actions_addinherit_np(&actions, fd);
   if (sv[1] == KIWI_KEY_FD)
@@ -486,7 +565,9 @@ int kiwi_run_with_keys(const char *path, char *const argv[], char *const envp[])
   sigemptyset(&sa.sa_mask);
   int signals[] = {SIGTERM, SIGINT, SIGHUP, SIGQUIT};
   for (size_t i = 0; i < sizeof signals / sizeof signals[0]; i++) sigaction(signals[i], &sa, NULL);
+  serving = 1;
   kiwi_serve(sv[0], id, label, names);
+  serving = 0;
   close(sv[0]);
   CFRelease(label);
   int status = 0;

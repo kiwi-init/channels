@@ -43,7 +43,7 @@ fs.writeFileSync(template, index);
 const views = path.join(app, "views", "internal");
 fs.rmSync(views, { recursive: true, force: true });
 fs.cpSync(web, views, { recursive: true, filter: (src) => src !== path.join(web, "index.html") && path.basename(src) !== "_headers" });
-if (fs.existsSync(path.join(views, "index.html"))) throw new Error("eb-post-build: index.html must not be under views/, where Electrobun would serve it without the CSP");
+if (fs.readdirSync(views).some((n) => n.toLowerCase() === "index.html")) throw new Error("eb-post-build: index.html must not be under views/, where Electrobun would serve it without the CSP");
 const cli = path.resolve(desktop, "../dist/kiwi.js");
 if (!fs.existsSync(cli)) throw new Error("dist/kiwi.js is missing: run `bun scripts/build-cli.ts --js dist/kiwi.js` in the repo root first");
 fs.copyFileSync(cli, path.join(resources[0] as string, "kiwi.js"));
@@ -126,13 +126,16 @@ if (!keysWorker.success || !keysOut) throw new Error(`the keys worker didn't bun
 fs.writeFileSync(path.join(app, "bun", "keys.js"), await keysOut.text());
 const answered = await bundledKeysAnswer(path.join(app, "bun", "keys.js"));
 if (answered !== "ok") throw new Error(`the bundled keys worker didn't answer a page's request: ${answered}`);
+const bundleId = execFileSync("plutil", ["-extract", "CFBundleIdentifier", "raw", path.join(contents, "Info.plist")], { encoding: "utf8" }).trim();
+if (!bundleId) throw new Error("eb-post-build: the app's Info.plist names no CFBundleIdentifier, so its kiwi:// registration can't be checked");
 const problems = [
   ...bundleProblems(fs.readFileSync(path.join(app, "bun", "index.js"), "utf8"), fs.readFileSync(path.join(app, "views", "preload", "index.js"), "utf8")),
-  ...urlSchemeProblems(fs.readFileSync(path.join(contents, "Info.plist"), "utf8"), process.env.ELECTROBUN_APP_IDENTIFIER ?? "", JOIN_SCHEME),
-  ...testBuildProblems(process.env.CHANNELS_EB_TEST === "1", process.env.ELECTROBUN_APP_IDENTIFIER ?? "", fs.readFileSync(path.join(contents, "Resources", "version.json"), "utf8")),
+  ...urlSchemeProblems(fs.readFileSync(path.join(contents, "Info.plist"), "utf8"), bundleId, JOIN_SCHEME),
+  ...testBuildProblems(process.env.CHANNELS_EB_TEST === "1", bundleId, fs.readFileSync(path.join(contents, "Resources", "version.json"), "utf8")),
 ];
 if (problems.length) throw new Error(`eb-post-build: ${problems.join("; ")}`);
-if (fs.existsSync(path.join(views, "index.html"))) throw new Error("eb-post-build: index.html is under views/ again by the seal, where Electrobun would serve it without the CSP");
+if (fs.readdirSync(views).some((n) => n.toLowerCase() === "index.html"))
+  throw new Error("eb-post-build: index.html is under views/ again by the seal, where Electrobun would serve it without the CSP");
 console.log(`eb-post-build: ${sealApp(path.dirname(contents))} files sealed in Info.plist`);
 
 async function bundledKeysAnswer(file: string): Promise<string> {
