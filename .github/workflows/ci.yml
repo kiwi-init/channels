@@ -444,7 +444,7 @@ jobs:
           find "$debs" -maxdepth 1 -name '*.deb' | wc -l > "$RUNNER_TEMP/debs-before"
           echo "Dir::Cache::Archives \"$debs/\";" | sudo tee /etc/apt/apt.conf.d/90linux-debs > /dev/null
           sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus ${{ matrix.drive && 'weston' || '' }}
       - id: debs
         name: keep what apt downloaded, even when it ran out of time
         if: always()
@@ -520,6 +520,22 @@ jobs:
       - name: smoke, under Xvfb
         if: ${{ !cancelled() && matrix.drive }}
         run: xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/smoke-eb.ts "${{ steps.test-app.outputs.path }}"
+      - name: smoke, under Wayland only (headless weston, no X display)
+        if: ${{ !cancelled() && matrix.drive }}
+        timeout-minutes: 10
+        run: |
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/wayland"
+          mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
+          weston --version
+          weston --backend=headless --socket=kiwi-wayland --width=1280 --height=800 --idle-time=0 > "$RUNNER_TEMP/weston.log" 2>&1 &
+          compositor=$!
+          for _ in $(seq 1 50); do [ -S "$XDG_RUNTIME_DIR/kiwi-wayland" ] && break; sleep 0.2; done
+          [ -S "$XDG_RUNTIME_DIR/kiwi-wayland" ] || { echo "weston didn't open its socket:"; cat "$RUNNER_TEMP/weston.log"; exit 1; }
+          code=0
+          env -u DISPLAY -u XAUTHORITY WAYLAND_DISPLAY=kiwi-wayland GDK_BACKEND=wayland bun desktop/scripts/smoke-eb.ts "${{ steps.test-app.outputs.path }}" || code=$?
+          kill "$compositor" 2> /dev/null || true
+          [ "$code" -eq 0 ] || { echo "weston's log:"; cat "$RUNNER_TEMP/weston.log"; }
+          exit "$code"
       - name: dpkg --purge leaves nothing of the app behind
         if: ${{ !cancelled() }}
         run: |
