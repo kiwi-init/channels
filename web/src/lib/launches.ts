@@ -14,6 +14,18 @@ export function launcher(): Launcher | null {
   }
 }
 
+type Settings = Pick<KiwiBridge, "settingsOn">
+
+export function settingsBridge(): Settings | null {
+  try {
+    const k = (window as unknown as { kiwi?: Partial<Settings> }).kiwi
+    return k && typeof k.settingsOn === "function" ? (k as Settings) : null
+  } catch {
+    // No window (a test or a worker): no computer to ask.
+    return null
+  }
+}
+
 export function canStartAgents(): boolean {
   return launcher() !== null
 }

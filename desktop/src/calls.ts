@@ -87,5 +87,6 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     machines: () => t.call("machines"),
     harnessesOn: (machinePk) => t.call("harnessesOn", machinePk),
     foldersOn: (machinePk, roomId) => t.call("foldersOn", machinePk, roomId),
+    settingsOn: (machinePk) => t.call("settingsOn", machinePk),
   };
 }

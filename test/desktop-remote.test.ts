@@ -1,8 +1,9 @@
 import { beforeAll, describe, expect, test } from "bun:test";
+import type { ComputerSettings } from "@kiwi/core/computer-settings.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { readAsk, signAnswer } from "@kiwi/core/machine-ask.ts";
 import { openMailbox } from "@kiwi/core/mailbox.ts";
-import { askMachine, machineOnline, NO_ANSWER, personMachines } from "../desktop/src/remote.ts";
+import { askMachine, machineOnline, NO_ANSWER, personMachines, settingsOn } from "../desktop/src/remote.ts";
 
 const RELAY = "https://relay.test";
 
@@ -118,5 +119,16 @@ describe("listing a person's paired computers through the relay", () => {
       throw new Error("offline");
     }) as unknown as typeof fetch;
     expect(await personMachines({ person, relay: RELAY, fetch: down })).toEqual({ ok: false, detail: "couldn't reach the relay: offline" });
+  });
+});
+
+describe("reading another computer's settings", () => {
+  test("is a settings ask with nothing in it, and only an answer in the settings' own shape reads back", async () => {
+    const settings: ComputerSettings = { launch: "on", prefer: "rex", hooks: [{ harness: "claude", state: "installed", text: "installed" }], seats: [{ channel: "dev", agent: "otter", wake: "on" }] };
+    const good = fakeRelay({ answer: ({ verb, args }) => ({ by: machine, result: verb === "settings" && !Object.keys(args).length ? { ok: true, settings } : { ok: false } }) });
+    expect(await settingsOn({ person, relay: RELAY, fetch: good.relayFetch }, to())).toEqual({ ok: true, value: settings });
+    expect(good.asked.map((a) => a.verb)).toEqual(["settings"]);
+    const odd = fakeRelay({ answer: () => ({ by: machine, result: { ok: true, settings: { launch: "sometimes" } } }) });
+    expect(await settingsOn({ person, relay: RELAY, fetch: odd.relayFetch }, to())).toEqual({ ok: false, detail: "that computer answered in a shape this app doesn't know" });
   });
 });
