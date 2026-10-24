@@ -17,7 +17,7 @@ import { compareVersions } from "@kiwi/core/versions.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const FILE = resolve(ROOT, "CHANGELOG.md");
-const REPO = "https://github.com/ojowwalker77/channels";
+const REPO = "https://github.com/kiwi-init/channels";
 const HEADER = `# Changelog\n\nWritten by \`bun scripts/changelog.ts\` from each squash-merged pull request's title.\n`;
 
 export type Entry = { title: string; pr: number | null };

@@ -395,7 +395,7 @@ describe("jev-ci.yml matches the repo", () => {
 });
 
 describe("pass markers", () => {
-  const repo = { full_name: "ojowwalker77/channels" };
+  const repo = { full_name: "kiwi-init/channels" };
   const fork = { full_name: "someone/channels" };
   const pr = (head: { full_name: string } | null): PullEvent => ({ repository: { default_branch: "main" }, pull_request: { number: 7, base: { repo }, head: { repo: head } } });
   const caches: PassCache[] = [

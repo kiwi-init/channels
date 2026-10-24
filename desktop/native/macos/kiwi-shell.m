@@ -122,6 +122,19 @@ size_t kiwi_committed_url(char *out, size_t size) {
   return n;
 }
 
+static void (*pageGone)(void) = NULL;
+
+static void pageEnded(id self, SEL cmd, WKWebView *webView) {
+  if (pageGone) pageGone();
+}
+
+bool kiwi_watch_page(void (*gone)(void)) {
+  Class cls = objc_getClass("MyNavigationDelegate");
+  if (!cls) return false;
+  pageGone = gone;
+  return replace(cls, @selector(webViewWebContentProcessDidTerminate:), (IMP)pageEnded);
+}
+
 static NSColor *rgb(uint32_t c) {
   return [NSColor colorWithSRGBRed:((c >> 16) & 0xff) / 255.0 green:((c >> 8) & 0xff) / 255.0 blue:(c & 0xff) / 255.0 alpha:1];
 }

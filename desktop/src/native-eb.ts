@@ -1,4 +1,4 @@
-import { dlopen, FFIType, ptr, suffix } from "bun:ffi";
+import { dlopen, FFIType, ptr, suffix, type JSCallback } from "bun:ffi";
 import path from "node:path";
 
 import { PAGE_URL } from "./eb-page.ts";
@@ -12,6 +12,7 @@ const shell = dlopen(shellPath, {
   kiwi_deny_permissions: { args: [], returns: FFIType.bool },
   kiwi_watch_commits: { args: [], returns: FFIType.bool },
   kiwi_committed_url: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
+  kiwi_watch_page: { args: [FFIType.function], returns: FFIType.bool },
 }).symbols;
 
 const sandboxPages = mac ? null : dlopen(shellPath, { kiwi_sandbox_pages: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.bool } }).symbols.kiwi_sandbox_pages;
@@ -20,7 +21,7 @@ export const windowLook = mac
   ? dlopen(shellPath, { kiwi_window_look: { args: [FFIType.ptr, FFIType.f64, FFIType.f64, FFIType.u32, FFIType.u32], returns: FFIType.void } }).symbols.kiwi_window_look
   : null;
 
-const macGuards = mac ? dlopen(shellPath, { kiwi_guard_downloads: { args: [], returns: FFIType.bool }, kiwi_allow_only: { args: [FFIType.ptr], returns: FFIType.bool } }).symbols : null;
+const guards = dlopen(shellPath, { kiwi_guard_downloads: { args: [], returns: FFIType.bool }, kiwi_allow_only: { args: [FFIType.ptr], returns: FFIType.bool } }).symbols;
 
 const core = dlopen(path.join(binDir, `libElectrobunCore.${suffix}`), {
   setWebviewHTMLContent: { args: [FFIType.u32, FFIType.ptr], returns: FFIType.void },
@@ -46,11 +47,13 @@ export const setPreload = (view: number, source: string): void => core.updatePre
 
 export function missingGuard(): string | null {
   if (!shell.kiwi_deny_permissions()) return "the web view's permission handler wasn't found; not opening a window that could grant the microphone";
-  if (macGuards && !macGuards.kiwi_guard_downloads()) return "the web view's download handler wasn't found; not opening a window that could save any file into Downloads";
-  if (macGuards && !macGuards.kiwi_allow_only(ptr(PAGE_ONLY))) return "the web view's navigation handler wasn't found; not opening a window whose page could navigate away";
+  if (!guards.kiwi_guard_downloads()) return "the web view's download handler wasn't found; not opening a window that could save any file into Downloads";
+  if (!guards.kiwi_allow_only(ptr(PAGE_ONLY))) return "the web view's navigation handler wasn't found; not opening a window whose page could navigate away";
   if (!shell.kiwi_watch_commits()) return "the web view's navigation delegate wasn't found; not opening a window that would trust a page it can't see";
   return null;
 }
+
+export const watchPageGone = (gone: JSCallback): boolean => shell.kiwi_watch_page(gone);
 
 export function sandboxOff(): string | null {
   if (!sandboxPages) return null;

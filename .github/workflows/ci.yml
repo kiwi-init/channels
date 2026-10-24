@@ -360,6 +360,8 @@ jobs:
         working-directory: desktop
         timeout-minutes: 5
         run: for i in 1 2 3; do bun run prepare:eb && exit 0; echo "electrobun prepare failed ($i of 3)"; [ "$i" -lt 3 ] && sleep 20; done; exit 1
+      - name: the kiwi CLI the app bundles
+        run: mkdir -p dist && bun scripts/build-cli.ts --js dist/kiwi.js
       - working-directory: desktop
         env:
           DASH_RELEASE_OFFLINE: "1"
@@ -512,7 +514,7 @@ jobs:
         if: ${{ !cancelled() }}
         working-directory: desktop/release-eb/linux
         run: |
-          curl -fsSL -o old.deb https://github.com/ojowwalker77/channels/releases/download/v0.26.0/Channels-0.26.0-linux-amd64.deb
+          curl -fsSL -o old.deb https://github.com/kiwi-init/channels/releases/download/v0.26.0/Channels-0.26.0-linux-amd64.deb
           echo "0fb7656f63f14c5f802b71d6c6f255a13404a73455b407d7f8bb0c05e0b729f2  old.deb" | sha256sum -c -
           sudo apt-get install -y --no-install-recommends ./old.deb
           [ "$(readlink -f /usr/bin/channels-desktop)" = /opt/Channels/channels-desktop ] || { echo "the Electron deb didn't make its link"; exit 1; }
@@ -593,6 +595,12 @@ jobs:
           done
           codesign --force --sign - dist/kiwi-darwin-arm64 dist/kiwi-darwin-x64
           ./dist/kiwi-darwin-arm64 --version
+          probe="$RUNNER_TEMP/kiwi-autoload"
+          mkdir -p "$probe"
+          printf 'preload = ["./p.js"]\n' > "$probe/bunfig.toml"
+          printf 'require("node:fs").writeFileSync("preload-ran", "")\n' > "$probe/p.js"
+          (cd "$probe" && "$GITHUB_WORKSPACE/dist/kiwi-darwin-arm64" --version)
+          test ! -e "$probe/preload-ran" || { echo "the kiwi CLI ran a bunfig.toml preload from the folder it was started in"; exit 1; }
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         timeout-minutes: 1

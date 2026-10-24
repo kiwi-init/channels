@@ -709,7 +709,7 @@ logs, data files, backups) are in
 
 Report it privately. Use the "Report a vulnerability" button on the
 repository's Security tab
-(https://github.com/ojowwalker77/channels/security/advisories/new), which opens
+(https://github.com/kiwi-init/channels/security/advisories/new), which opens
 a private advisory only the maintainers see. Please don't open a public issue,
 and don't test against the public relay beyond your own channels. Public issues
 are for everything else.

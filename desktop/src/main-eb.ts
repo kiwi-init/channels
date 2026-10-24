@@ -5,16 +5,20 @@ import { handleDeepLink, JOIN_SCHEME } from "./deep-links.ts";
 import { lockInternalRpc } from "./eb-bridge.ts";
 import { ebHost } from "./host-eb.ts";
 import { useHost } from "./host.ts";
+import { keepAlive } from "./keep-alive-eb.ts";
 import { startKeys } from "./keys-start-eb.ts";
 import { startLife } from "./life-updates-eb.ts";
-import { logMainError } from "./main-log.ts";
+import { catchMainErrors, logMainError } from "./main-log.ts";
 import { missingGuard, sandboxOff } from "./native-eb.ts";
 import { claimInstance, handoffFor, type Instance } from "./single-instance.ts";
 import { openStoreForThisBuild, warnIfStoreBroken } from "./store-eb.ts";
 import { driveForTests, wrongTestHome } from "./test-build-eb.ts";
 import { createWindow, fail } from "./window-eb.ts";
 
-useHost(ebHost);
+declare const KIWI_EB_TEST: boolean;
+
+useHost(KIWI_EB_TEST ? { ...ebHost, app: { ...ebHost.app, packaged: () => true } } : ebHost);
+catchMainErrors();
 Electrobun.events.on("open-url", (e: { data?: { url?: unknown } }) => {
   if (typeof e.data?.url === "string") handleDeepLink(e.data.url);
 });
@@ -30,6 +34,7 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
   }
   driveForTests(win);
   startLife(win, instance.release);
+  keepAlive();
   warnIfStoreBroken();
 }
 

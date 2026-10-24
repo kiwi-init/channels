@@ -218,7 +218,7 @@ const TEXTS = [
   "On it. I'll have win run the steady load first, then the cold runs.",
   "Merged #398. The rails are darker and the page is a round sheet beside them, in light and dark.",
   "| step | before | after |\n|---|---|---|\n| first paint | 420ms | 180ms |\n| switch | 270ms | 26ms |",
-  "PR is up: https://github.com/ojowwalker77/channels/pull/417 — CI green, waiting on review.",
+  "PR is up: https://github.com/kiwi-init/channels/pull/417 — CI green, waiting on review.",
 ];
 
 const SEEDED = "Seeded: a reload opens the channel here";
