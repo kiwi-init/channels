@@ -6,6 +6,7 @@
 #include <webkit2/webkit2.h>
 
 #define KIWI_APP_ID "channels-desktop"
+#define TRAY_WATCHER "org.kde.StatusNotifierWatcher"
 #define PORTAL "org.freedesktop.portal.Desktop"
 #define PORTAL_PATH "/org/freedesktop/portal/desktop"
 #define PORTAL_SETTINGS "org.freedesktop.portal.Settings"
@@ -247,6 +248,21 @@ bool kiwi_allow_only(const char *page) {
   the_page = g_strdup(page);
   if (!allowing_only) allowing_only = on_main(install_hook, &PAGE_ONLY);
   return allowing_only;
+}
+
+bool kiwi_tray_host(void) {
+  GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, NULL);
+  if (!bus) return false;
+  GVariant *reply = g_dbus_connection_call_sync(bus, TRAY_WATCHER, "/StatusNotifierWatcher", "org.freedesktop.DBus.Properties", "Get", g_variant_new("(ss)", TRAY_WATCHER, "IsStatusNotifierHostRegistered"),
+                                                G_VARIANT_TYPE("(v)"), G_DBUS_CALL_FLAGS_NO_AUTO_START, 1000, NULL, NULL);
+  g_object_unref(bus);
+  if (!reply) return false;
+  GVariant *value = NULL;
+  g_variant_get(reply, "(v)", &value);
+  bool host = g_variant_is_of_type(value, G_VARIANT_TYPE_BOOLEAN) && g_variant_get_boolean(value);
+  g_variant_unref(value);
+  g_variant_unref(reply);
+  return host;
 }
 
 static GDBusConnection *scheme_bus = NULL;
