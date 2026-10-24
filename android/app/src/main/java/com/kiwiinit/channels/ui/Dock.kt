@@ -118,6 +118,8 @@ private suspend fun shrink(context: Context, uri: Uri): Attached? =
         }
     }
 
+private val mentioning = Regex("""(?:^|\s)@([^\s@]*)$""")
+
 @Composable
 fun Dock(
     model: AppModel,
@@ -159,7 +161,7 @@ fun Dock(
     val hasText = value.text.isNotBlank()
     val canSend = !sending && room.connection == Connection.Live && (hasText || attached.isNotEmpty())
     val here = room.placeView(spot.place)
-    val mention = value.text.split(" ").lastOrNull()?.takeIf { it.startsWith("@") }?.drop(1)?.lowercase()
+    val mention = mentioning.find(value.text)?.groupValues?.get(1)?.lowercase()
     val mentionable = if (mention == null) {
         emptyList()
     } else {
@@ -175,10 +177,8 @@ fun Dock(
     }
 
     fun complete(name: String) {
-        val words = value.text.split(" ").toMutableList()
-        if (words.isNotEmpty()) words.removeAt(words.size - 1)
-        words += "@$name "
-        val text = words.joinToString(" ")
+        val word = mentioning.find(value.text)?.groupValues?.get(1) ?: return
+        val text = value.text.dropLast(word.length + 1) + "@$name "
         value = TextFieldValue(text, TextRange(text.length))
         view.buzz(Buzz.Tap)
     }
