@@ -409,6 +409,11 @@ jobs:
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-look-test" desktop/native/linux/kiwi-look-test.c $(pkg-config --cflags --libs gtk+-3.0) -ldl
           xvfb-run -a -s "-screen 0 1280x720x24" "$RUNNER_TEMP/kiwi-look-test" /opt/Channels/bin/libkiwi-shell.so
+      - name: notifications come from Channels over D-Bus, and a click opens the window
+        if: ${{ !cancelled() }}
+        run: |
+          cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-notify-test" desktop/native/linux/kiwi-notify-test.c $(pkg-config --cflags --libs gtk+-3.0) -ldl
+          dbus-run-session -- xvfb-run -a "$RUNNER_TEMP/kiwi-notify-test" /opt/Channels/bin/libkiwi-shell.so
       - name: test build (the test driver in, its own id)
         if: ${{ !cancelled() && matrix.drive }}
         working-directory: desktop

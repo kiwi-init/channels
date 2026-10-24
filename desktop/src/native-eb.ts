@@ -27,6 +27,15 @@ const windowKeys = mac ? null : dlopen(shellPath, { kiwi_window_keys: { args: [F
 
 let shortcuts: JSCallback | null = null;
 
+const notes = mac
+  ? null
+  : dlopen(shellPath, {
+      kiwi_notify: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.bool },
+      kiwi_notify_clicks: { args: [FFIType.ptr, FFIType.function], returns: FFIType.bool },
+    }).symbols;
+
+let noteClicks: JSCallback | null = null;
+
 const guards = dlopen(shellPath, { kiwi_guard_downloads: { args: [], returns: FFIType.bool }, kiwi_allow_only: { args: [FFIType.ptr], returns: FFIType.bool } }).symbols;
 
 const core = dlopen(path.join(binDir, `libElectrobunCore.${suffix}`), {
@@ -67,6 +76,14 @@ export function onShortcut(window: Pointer | null, pressed: (action: number) => 
   if (!windowKeys || !window) return false;
   shortcuts = new JSCallback((action: number) => pressed(action), { args: ["i32"], returns: "void", threadsafe: true });
   return windowKeys(window, shortcuts.ptr);
+}
+
+export const notifyLinux = (title: string, body: string): boolean => notes?.kiwi_notify(ptr(cString(title)), ptr(cString(body))) ?? false;
+
+export function onNoteClick(window: Pointer | null, clicked: () => void): boolean {
+  if (!notes || !window) return false;
+  noteClicks = new JSCallback(() => clicked(), { args: [], returns: "void", threadsafe: true });
+  return notes.kiwi_notify_clicks(window, noteClicks.ptr);
 }
 
 export const watchPageGone = (gone: JSCallback): boolean => shell.kiwi_watch_page(gone);
