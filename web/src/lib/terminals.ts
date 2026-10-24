@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 
 import type { KiwiBridge } from "./secrets"
 
-type Terminals = Pick<KiwiBridge, "terminals" | "terminalHelpers" | "terminalPrefer" | "setLaunches">
+type Terminals = Pick<KiwiBridge, "terminals" | "terminalHelpers" | "terminalPrefer" | "setLaunches"> & Partial<Pick<KiwiBridge, "setRemoteBypass">>
 
 export function terminalsBridge(): Terminals | null {
   try {

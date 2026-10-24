@@ -81,7 +81,9 @@ function seats(stdout: string): PlacedSeat[] {
   return Array.isArray(parsed) ? parsed.map(readPlacedSeat).filter((s): s is PlacedSeat => s !== null) : [];
 }
 
-export function terminalsCalls(): Serves<"terminals" | "terminalHelpers" | "terminalPrefer" | "setLaunches" | "contextLine" | "setContextLine" | "hooks" | "setHooks" | "seatPlaces" | "showSeat"> {
+export function terminalsCalls(): Serves<
+  "terminals" | "terminalHelpers" | "terminalPrefer" | "setLaunches" | "setRemoteBypass" | "contextLine" | "setContextLine" | "hooks" | "setHooks" | "seatPlaces" | "showSeat"
+> {
   return {
     terminals: () => terminals(),
     terminalHelpers: (id: unknown, to: unknown) => {
@@ -95,6 +97,10 @@ export function terminalsCalls(): Serves<"terminals" | "terminalHelpers" | "term
     setLaunches: (to: unknown) => {
       if (!isSwitch(to)) throw new Error("setLaunches takes on or off");
       return change(["launches", to]);
+    },
+    setRemoteBypass: (to: unknown) => {
+      if (!isSwitch(to)) throw new Error("setRemoteBypass takes on or off");
+      return change(["launches", "bypass", to]);
     },
     contextLine: () => contextLine(["context-line", "status", "--json"]),
     setContextLine: (to: unknown) => {

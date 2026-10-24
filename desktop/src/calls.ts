@@ -76,6 +76,7 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     terminalHelpers: (id, to) => t.call("terminalHelpers", id, to),
     terminalPrefer: (id) => t.call("terminalPrefer", id),
     setLaunches: (to) => t.call("setLaunches", to),
+    setRemoteBypass: (to) => t.call("setRemoteBypass", to),
     contextLine: () => t.call("contextLine"),
     setContextLine: (to) => t.call("setContextLine", to),
     hooks: () => t.call("hooks"),
