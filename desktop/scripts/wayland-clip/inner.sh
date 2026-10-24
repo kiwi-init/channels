@@ -9,6 +9,8 @@ unset DISPLAY XAUTHORITY GDK_BACKEND
 echo "session $D: WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-} DISPLAY=${DISPLAY:-} XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-}" | tee -a "$OUT/$D-notes.txt"
 pgrep -a -x Xwayland | sed 's/^/Xwayland before: /' | tee -a "$OUT/$D-notes.txt"
 KIWI_AUDIT_VARIANT=sandboxed bun "$HERE/audit.ts" "$APP" "$OUT" "$D" "$INPUT" 2>&1 | tee "$OUT/$D-sandboxed-audit.log"
-KIWI_AUDIT_VARIANT=unsandboxed KIWI_AUDIT_NO_SANDBOX=1 bun "$HERE/audit.ts" "$APP" "$OUT" "$D" "$INPUT" 2>&1 | tee "$OUT/$D-unsandboxed-audit.log"
+for v in sandboxed unsandboxed; do
+  KIWI_AUDIT_VARIANT=$v bun "$HERE/plain-audit.ts" "$OUT" "$D" "$INPUT" 2>&1 | tee "$OUT/$D-plain-$v-audit.log"
+done
 pgrep -a -x Xwayland | sed 's/^/Xwayland after: /' | tee -a "$OUT/$D-notes.txt"
 pgrep -x Xwayland > /dev/null || echo "no Xwayland ran" | tee -a "$OUT/$D-notes.txt"
