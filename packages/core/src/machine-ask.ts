@@ -4,7 +4,7 @@ import { sign, verify, type Identity } from "./identity.ts";
 import { joinLineRefusal } from "./join-line.ts";
 import { CHOICE_KEYS, readLaunchChoices, type LaunchChoices } from "./launch-options.ts";
 
-const MACHINE_VERBS = ["harnesses", "folders", "launch", "unpair"] as const;
+const MACHINE_VERBS = ["harnesses", "folders", "launch", "unpair", "settings"] as const;
 export type MachineVerb = (typeof MACHINE_VERBS)[number];
 
 export const ASK_MAX_BYTES = 4_096;
@@ -104,6 +104,7 @@ export async function readAnswer(x: unknown, expect: { machine: string; id: stri
 export type MachineArgs =
   | { verb: "harnesses" }
   | { verb: "unpair" }
+  | { verb: "settings" }
   | { verb: "folders"; room?: string }
   | { verb: "launch"; launch: { harness: KnownHarness; folder: string; code: string; relay?: string; nick?: string; persona?: string } & LaunchChoices };
 
@@ -116,7 +117,7 @@ const optionalText = (v: unknown): v is string | undefined => v === undefined ||
 export function readMachineArgs(ask: Pick<MachineAsk, "verb" | "args">): MachineArgs | null {
   const { verb, args } = ask;
   const keys = Object.keys(args);
-  if (verb === "harnesses" || verb === "unpair") return keys.length ? null : { verb };
+  if (verb === "harnesses" || verb === "unpair" || verb === "settings") return keys.length ? null : { verb };
   if (verb === "folders") {
     if (keys.some((k) => k !== "room")) return null;
     if (args.room === undefined) return { verb };

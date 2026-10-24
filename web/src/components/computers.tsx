@@ -7,6 +7,7 @@ import { adoptThisComputer, beginPairing, pairCommands, removeComputer, type Com
 import { formatAgo } from "@/lib/format"
 import { bridge, useSecrets } from "@/lib/secrets"
 import { Command } from "./add-agent"
+import { RemoteSettings } from "./computer-settings"
 import { Button, Modal, Spinner, errorText, toast } from "./kit"
 
 type Adding = { kind: "starting" } | { kind: "waiting"; pairing: Pairing } | { kind: "confirm"; pairing: Pairing; ask: PairAskView } | { kind: "error"; message: string }
@@ -141,22 +142,25 @@ export function ComputerRows({ adding, onAdded }: { adding: boolean; onAdded: ()
       )}
       {!inApp && computers.length === 0 && <p className="text-ui text-ink-3">None yet.</p>}
       {computers.map((c) => (
-        <div key={c.machinePk} className="flex items-center gap-3 rounded-ctl py-1.5">
-          <div className="min-w-0 flex-1">
-            <p className="flex items-center gap-1.5 truncate text-ui font-medium">
-              {online.has(c.machinePk) && online.get(c.machinePk) !== null && (
-                <span aria-label={online.get(c.machinePk) ? "Online" : "Offline"} className={cx("size-2 shrink-0 rounded-full", online.get(c.machinePk) ? "bg-live" : "bg-wash-2")} />
-              )}
-              {c.label}
-              {c.own && <span className="font-normal text-ink-3"> · this computer</span>}
-            </p>
-            <p className="text-meta text-ink-3">
-              {c.os} · paired {formatAgo(c.at, clockNow())}
-            </p>
+        <div key={c.machinePk}>
+          <div className="flex items-center gap-3 rounded-ctl py-1.5">
+            <div className="min-w-0 flex-1">
+              <p className="flex items-center gap-1.5 truncate text-ui font-medium">
+                {online.has(c.machinePk) && online.get(c.machinePk) !== null && (
+                  <span aria-label={online.get(c.machinePk) ? "Online" : "Offline"} className={cx("size-2 shrink-0 rounded-full", online.get(c.machinePk) ? "bg-live" : "bg-wash-2")} />
+                )}
+                {c.label}
+                {c.own && <span className="font-normal text-ink-3"> · this computer</span>}
+              </p>
+              <p className="text-meta text-ink-3">
+                {c.os} · paired {formatAgo(c.at, clockNow())}
+              </p>
+            </div>
+            <Button size="sm" variant="danger" disabled={removing === c.machinePk} onClick={() => void remove(c)}>
+              Remove
+            </Button>
           </div>
-          <Button size="sm" variant="danger" disabled={removing === c.machinePk} onClick={() => void remove(c)}>
-            Remove
-          </Button>
+          {!c.own && <RemoteSettings machinePk={c.machinePk} label={c.label} />}
         </div>
       ))}
     </>

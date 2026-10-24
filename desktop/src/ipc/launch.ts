@@ -1,3 +1,4 @@
+import type { ComputerSettings } from "@kiwi/core/computer-settings.ts";
 import type { HarnessRow } from "@kiwi/core/harnesses.ts";
 import type { LaunchedView } from "@kiwi/core/terminals.ts";
 import type { ComputerView, FromMachine, MachineView } from "../bridge.ts";
@@ -5,7 +6,7 @@ import type { Serves } from "../calls.ts";
 import { daemonHarnesses, daemonHello, daemonLaunch } from "../daemon-client.ts";
 import type { Host } from "../host.ts";
 import { launchRequestOf, MACHINE_PK } from "../launch-view.ts";
-import { foldersOn, harnessesOn, launchOn, machineOnline, type Asker } from "../remote.ts";
+import { foldersOn, harnessesOn, launchOn, machineOnline, settingsOn, type Asker } from "../remote.ts";
 import { requirePerson, store } from "../store.ts";
 import { runKiwi } from "./kiwi.ts";
 
@@ -45,7 +46,7 @@ async function machines(): Promise<MachineView[]> {
 
 const machine = (c: ComputerView) => ({ pk: c.machinePk, xpk: c.machineXpk, label: c.label });
 
-export function launchCalls(host: Host): Serves<"harnesses" | "seatFolders" | "chooseFolder" | "launchAgent" | "machines" | "harnessesOn" | "foldersOn"> {
+export function launchCalls(host: Host): Serves<"harnesses" | "seatFolders" | "chooseFolder" | "launchAgent" | "machines" | "harnessesOn" | "foldersOn" | "settingsOn"> {
   return {
     harnesses: (): Promise<HarnessRow[]> => daemonHarnesses().catch(() => []),
     seatFolders: async (roomId: unknown): Promise<string[]> => {
@@ -67,6 +68,11 @@ export function launchCalls(host: Host): Serves<"harnesses" | "seatFolders" | "c
       const c = paired(machinePk);
       if (!c) return { ok: false, detail: "that isn't one of your paired computers" };
       return harnessesOn(asker(), machine(c));
+    },
+    settingsOn: async (machinePk: unknown): Promise<FromMachine<ComputerSettings>> => {
+      const c = paired(machinePk);
+      if (!c) return { ok: false, detail: "that isn't one of your paired computers" };
+      return settingsOn(asker(), machine(c));
     },
     foldersOn: async (machinePk: unknown, roomId: unknown): Promise<FromMachine<string[]>> => {
       const c = paired(machinePk);
