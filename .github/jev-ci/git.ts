@@ -4,6 +4,13 @@ export function git(repo: string, args: string[]): string {
   return p.stdout.toString();
 }
 
+export function newerOnRemote(repo: string, ref: string, sha: string): string | null {
+  git(repo, ["fetch", "--no-tags", "origin", ref]);
+  const tip = git(repo, ["rev-parse", "FETCH_HEAD"]).trim();
+  if (tip === sha) return null;
+  return Bun.spawnSync(["git", "-C", repo, "merge-base", "--is-ancestor", sha, tip]).exitCode === 0 ? tip : null;
+}
+
 const shown = new Map<string, string | undefined>();
 
 export function show(repo: string, rev: string, path: string): string | undefined {

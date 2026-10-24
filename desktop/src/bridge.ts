@@ -2,6 +2,7 @@
 // main.ts and preload.ts; renderer-neutral on purpose (no electron/node imports),
 // so web/ can type against it without touching this process.
 
+import type { ComputerSettings } from "@kiwi/core/computer-settings.ts";
 import type { HarnessRow, HookRow, KnownHarness } from "@kiwi/core/harnesses.ts";
 import type { LaunchChoices } from "@kiwi/core/launch-options.ts";
 import type { WakeSeat } from "@kiwi/core/wake.ts";
@@ -355,6 +356,7 @@ export interface KiwiBridge {
   machines(): Promise<MachineView[]>;
   harnessesOn(machinePk: string): Promise<FromMachine<HarnessRow[]>>;
   foldersOn(machinePk: string, roomId: string): Promise<FromMachine<string[]>>;
+  settingsOn(machinePk: string): Promise<FromMachine<ComputerSettings>>;
   launchRoots(): Promise<string[]>;
   setLaunchRoot(dir: string, to: "add" | "remove"): Promise<string[]>;
 }

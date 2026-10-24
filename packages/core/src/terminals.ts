@@ -177,7 +177,7 @@ const TERMINAL_IDS = ["app", "tmux", "rex"] as const;
 
 export type TerminalId = (typeof TERMINAL_IDS)[number];
 
-const isTerminalId = (v: unknown): v is TerminalId => typeof v === "string" && (TERMINAL_IDS as readonly string[]).includes(v);
+export const isTerminalId = (v: unknown): v is TerminalId => typeof v === "string" && (TERMINAL_IDS as readonly string[]).includes(v);
 
 export interface TerminalRow {
   id: TerminalId;

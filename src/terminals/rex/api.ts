@@ -91,7 +91,7 @@ export function rexInstance(place: RexPlace, bin: string | null = rexBinary()): 
 }
 
 export function rexScreen(place: RexPlace, bin: string | null = rexBinary()): string | null {
-  const got = blockCall(place, "format", { format: "vt" }, bin);
+  const got = blockCall(place, "format", { format: "text", unwrap: true }, bin);
   if (typeof got === "string") return got;
   for (const key of ["content", "screen", "text", "vt", "data"]) {
     const v = nested(got, key);
