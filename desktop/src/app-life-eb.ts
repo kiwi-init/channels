@@ -1,7 +1,8 @@
 import Electrobun, { Utils, type BrowserView, type BrowserWindow } from "electrobun/main";
 
-import { textStepOf, type MenuAction } from "./app-menus.ts";
+import { shortcutAction, textStepOf, type MenuAction } from "./app-menus.ts";
 import { createTray, setAppMenu, type AppTray } from "./menus-eb.ts";
+import { onShortcut } from "./native-eb.ts";
 import type { TextStep } from "./text-size.ts";
 import type { UpdateState } from "./updater.ts";
 import { mark } from "./eb-startup.ts";
@@ -33,6 +34,8 @@ export function startAppLife(shell: LifeShell): AppTray {
     else if (a === "quit") Utils.quit();
     else if (a === "reload") shell.reload();
     else if (a === "devtools") shell.view.toggleDevTools();
+    else if (a === "close") shell.win.requestClose();
+    else if (a === "fullscreen") shell.win.setFullScreen(!shell.win.isFullScreen());
   };
   Electrobun.events.on("reopen", () => shell.showWindow());
   Electrobun.events.on(`will-close-${shell.win.id}`, (e: { response?: { allow: boolean } }) => {
@@ -61,6 +64,11 @@ export function startAppLife(shell: LifeShell): AppTray {
     flushing ??= flushThenQuit();
   });
   setAppMenu(act);
+  if (process.platform === "linux")
+    onShortcut(shell.win.ptr, (n) => {
+      const a = shortcutAction(n);
+      if (a) act(a);
+    });
   return trayLater({
     make: (u) => {
       const tray = createTray(act, u);
