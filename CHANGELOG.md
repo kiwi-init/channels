@@ -2,6 +2,48 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.27.5 — 2026-10-24
+
+- **Channels for Android: a native Kotlin and Compose app on the iPhone app's engine** ([#755](https://github.com/kiwi-init/channels/pull/755))
+- **The Linux launcher test gives its first compile 30 s, not bun's 5 (T419)** ([#888](https://github.com/kiwi-init/channels/pull/888))
+- **CI drops android / device, the emulator run of the Android app (T543)** ([#889](https://github.com/kiwi-init/channels/pull/889))
+- **Android: a channel's row shows its latest message from anywhere in it, with where it was said, and the list sorts by it, as the iPhone does since #752** ([#890](https://github.com/kiwi-init/channels/pull/890))
+- **Android: reviews waiting on you reach the phone, with Approve and Send back** ([#891](https://github.com/kiwi-init/channels/pull/891))
+- **desktop / linux runs the app's smoke in a Wayland session, weston with XWayland and no Xvfb (T434)** ([#892](https://github.com/kiwi-init/channels/pull/892))
+- **Android: opening the keyboard scrolls the conversation to the newest message** ([#894](https://github.com/kiwi-init/channels/pull/894))
+- **Android: tapping a quote centres the quoted message** ([#895](https://github.com/kiwi-init/channels/pull/895))
+- **Android: www addresses and email addresses become links** ([#896](https://github.com/kiwi-init/channels/pull/896))
+- **Android: TalkBack reads who reacted, and which answer was chosen** ([#897](https://github.com/kiwi-init/channels/pull/897))
+- **New key pairs ride out Linux WebKit's failing generateKey, and the shots' first run says what the page said (T517)** ([#898](https://github.com/kiwi-init/channels/pull/898))
+- **android / build draws every Android screen, light and dark, and keeps the pictures** ([#899](https://github.com/kiwi-init/channels/pull/899))
+- **Android: details' Needs you lists reviews, with Approve and Send back** ([#900](https://github.com/kiwi-init/channels/pull/900))
+- **The phone's engine names each harness and says whether its computer takes bypass (T24's engine part)** ([#901](https://github.com/kiwi-init/channels/pull/901))
+- **ios / gestures: a drag waits for a bubble to show before it measures, so a slow first render isn't a gesture failure (T568)** ([#902](https://github.com/kiwi-init/channels/pull/902))
+- **iPhone: New Agent sheet, from the channel's details, with Face ID before Bypass (T24)** ([#862](https://github.com/kiwi-init/channels/pull/862))
+- **Main's full CI run finishes again: a newer push waits instead of cancelling the run going (T324)** ([#903](https://github.com/kiwi-init/channels/pull/903))
+- **Android: New agent, from a channel's details (T619)** ([#904](https://github.com/kiwi-init/channels/pull/904))
+- **Android: New agent's harness list shows each harness's icon** ([#905](https://github.com/kiwi-init/channels/pull/905))
+- **Electron leaves the repo: the Electrobun app is the only desktop app, Apple silicon and Linux (T580)** ([#906](https://github.com/kiwi-init/channels/pull/906))
+- **Android: the keyboard no longer covers the answer and send-back fields in Details, or Start in New agent** ([#907](https://github.com/kiwi-init/channels/pull/907))
+- **Android: search results scroll above the keyboard** ([#908](https://github.com/kiwi-init/channels/pull/908))
+- **Android: the sample questions in the screenshots carry the engine's labels** ([#910](https://github.com/kiwi-init/channels/pull/910))
+- **CI cleanup 1/4: perf runs leave CI; perf.yml starts by hand (T730)** ([#911](https://github.com/kiwi-init/channels/pull/911))
+- **A launched Channels window can take focus on Wayland: the Linux launcher keeps DESKTOP_STARTUP_ID and passes Plasma's XDG_ACTIVATION_TOKEN on as it (T785)** ([#909](https://github.com/kiwi-init/channels/pull/909))
+- **Channels on Linux follows the desktop's light or dark, live: GNOME's Dark style no longer leaves it light (T768)** ([#912](https://github.com/kiwi-init/channels/pull/912))
+- **CI cleanup 2/4: the release rehearsal runs by hand from rehearsal.yml (T779)** ([#913](https://github.com/kiwi-init/channels/pull/913))
+- **Android: back on the lock screen leaves the app instead of changing the screen behind it, and locking puts the keyboard away** ([#915](https://github.com/kiwi-init/channels/pull/915))
+- **Closing Channels on Linux minimizes it where no tray host runs, instead of hiding a window nothing can bring back (T770)** ([#914](https://github.com/kiwi-init/channels/pull/914))
+- **The Linux app opens natively on Wayland: Electrobun's native wrapper rebuilt from source with a patch (T523)** ([#918](https://github.com/kiwi-init/channels/pull/918))
+- **CI cleanup 3/4: no timing shards; unit, flows and cli / macos run as one job each (T780)** ([#916](https://github.com/kiwi-init/channels/pull/916))
+- **CI cleanup 4/4: CI-config-only tests out; AGENTS.md lists every ci.yml job (T781)** ([#920](https://github.com/kiwi-init/channels/pull/920))
+- **The app menu's shortcuts work on Linux: Ctrl+= / Ctrl+- / Ctrl+0, Ctrl+R, Ctrl+Q, Ctrl+W and F11 (T769)** ([#917](https://github.com/kiwi-init/channels/pull/917))
+- **Android: an answer from details that doesn't send keeps what you typed and says Couldn't send** ([#922](https://github.com/kiwi-init/channels/pull/922))
+- **Channels' first window fits the screen on Linux and keeps a minimum size (T771)** ([#919](https://github.com/kiwi-init/channels/pull/919))
+- **Linux notifications come from Channels over D-Bus, and clicking one opens the window (T772)** ([#921](https://github.com/kiwi-init/channels/pull/921))
+- **The annotator's Copy image works: no fetch of a data: URL, which the CSP blocks (T889)** ([#923](https://github.com/kiwi-init/channels/pull/923))
+- **Android: the jump button counts each new message, not each batch the engine sends** ([#924](https://github.com/kiwi-init/channels/pull/924))
+- **The release's dmg is tried again when hdiutil fails on the macOS runner, and a failure says why (T886)** ([#925](https://github.com/kiwi-init/channels/pull/925))
+
 ## 0.27.4 — 2026-10-24
 
 - **The iPhone engine lists your computers, launches on one, follows it and lets your own agents in (T23)** ([#859](https://github.com/kiwi-init/channels/pull/859))
