@@ -6,6 +6,7 @@ import { testHomeProblem } from "./eb-test-home.ts";
 import { testVault } from "./eb-test-store.ts";
 import { normalizeRelay } from "./guard.ts";
 import { dataDir } from "./host-eb.ts";
+import { navigationTimes } from "./native-eb.ts";
 import { mutate, openStore } from "./store.ts";
 
 declare const KIWI_EB_TEST: boolean;
@@ -26,6 +27,6 @@ export function openTestStore(first: () => void): boolean {
 export function driveForTests(win: BrowserWindow): void {
   if (KIWI_EB_TEST) {
     const socket = process.env.KIWI_EB_DRIVER;
-    if (socket) drive(win.webview, socket, { startup: startupMarks });
+    if (socket) drive(win.webview, socket, { startup: () => ({ ...startupMarks(), ...navigationTimes() }) });
   }
 }

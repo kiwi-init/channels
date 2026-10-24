@@ -2,6 +2,7 @@ import { dlopen, FFIType, ptr, suffix, type JSCallback } from "bun:ffi";
 import path from "node:path";
 
 import { PAGE_URL } from "./eb-page.ts";
+import { mark } from "./eb-startup.ts";
 
 export const mac = process.platform === "darwin";
 
@@ -14,6 +15,23 @@ const shell = dlopen(shellPath, {
   kiwi_committed_url: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
   kiwi_watch_page: { args: [FFIType.function], returns: FFIType.bool },
 }).symbols;
+
+const webkit = mac
+  ? dlopen(shellPath, {
+      kiwi_prewarm_page: { args: [], returns: FFIType.bool },
+      kiwi_navigation_times: { args: [FFIType.u32, FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
+    }).symbols
+  : null;
+
+if (webkit?.kiwi_prewarm_page()) mark("prewarm");
+
+export function navigationTimes(): Record<string, number> {
+  if (!webkit) return {};
+  const times = new Float64Array(4);
+  const named = (which: number, name: string): [string, number][] =>
+    [...times.subarray(0, Number(webkit.kiwi_navigation_times(which, ptr(times), times.length)))].map((t, i) => [`${name}${i + 1}`, t]);
+  return Object.fromEntries([...named(0, "decided"), ...named(1, "committed")]);
+}
 
 const sandboxPages = mac ? null : dlopen(shellPath, { kiwi_sandbox_pages: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.bool } }).symbols.kiwi_sandbox_pages;
 
