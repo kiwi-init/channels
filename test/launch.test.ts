@@ -65,7 +65,8 @@ describe("the line an agent is started with", () => {
     expect(recipeArgv("grok", "/bin/grok", "P")).toEqual(["/bin/grok", "--", "P"]);
     expect(recipeArgv("mimo", "/bin/mimo", "P", { model: "xiaomi/mimo-v2.5-pro" })).toEqual(["/bin/mimo", "-m", "xiaomi/mimo-v2.5-pro", "--prompt", "P"]);
     expect(recipeArgv("kimi", "/bin/kimi", "P")).toEqual(["/bin/kimi"]);
-    for (const h of ["gemini", "cursor", "opencode", "pi"] as const) {
+    expect(recipeArgv("gemini", "/bin/gemini", "P")).toEqual(["/bin/gemini", "-i", "P"]);
+    for (const h of ["cursor", "opencode", "pi"] as const) {
       expect(canStart(h)).toBe(false);
       expect(recipeArgv(h, "/bin/x", "P")).toBeNull();
     }
@@ -124,6 +125,23 @@ describe("the line an agent is started with", () => {
     expect(recipeArgv("grok", "/bin/grok", "P", { permission: "plan" })).toEqual(["/bin/grok", "--permission-mode", "plan", "--", "P"]);
     expect(recipeArgv("grok", "/bin/grok", "P", { permission: "bypass" })).toEqual(["/bin/grok", "--permission-mode", "bypassPermissions", "--", "P"]);
     expect(recipeArgv("grok", "/bin/grok", "P", { permission: "default" })).toEqual(["/bin/grok", "--", "P"]);
+  });
+
+  test("Gemini CLI gets the model and its approval mode, with the join line as its first interactive prompt", () => {
+    expect(recipeArgv("gemini", "/bin/gemini", "P", { model: "gemini-2.5-pro", permission: "accept-edits" })).toEqual([
+      "/bin/gemini",
+      "-m",
+      "gemini-2.5-pro",
+      "--approval-mode",
+      "auto_edit",
+      "-i",
+      "P",
+    ]);
+    expect(recipeArgv("gemini", "/bin/gemini", "P", { permission: "plan" })).toEqual(["/bin/gemini", "--approval-mode", "plan", "-i", "P"]);
+    expect(recipeArgv("gemini", "/bin/gemini", "P", { permission: "bypass" })).toEqual(["/bin/gemini", "--approval-mode", "yolo", "-i", "P"]);
+    expect(recipeArgv("gemini", "/bin/gemini", "P", { permission: "default" })).toEqual(["/bin/gemini", "-i", "P"]);
+    expect(launchChoicesRefusal("gemini", { effort: "high" })).toBe("Gemini CLI doesn't take an effort level from Kiwi");
+    expect(launchChoicesRefusal("gemini", { context: 1_000_000 })).toBe("Gemini CLI doesn't take a context size from Kiwi");
   });
 
   test("MiMoCode gets the model, its plan agent, or the flag that skips its permission prompts", () => {
@@ -234,7 +252,7 @@ printf '/tmp/sock\\tkiwi\\t@7\\t%%9\\t4242\\n'`,
     expect(await launchAgent({ harness: "claude", folder: homedir(), code }, { PATH, tools })).toMatchObject({ ok: false, why: "bad-request", detail: expect.stringContaining("home folder") });
     expect(await launchAgent({ harness: "claude", folder: "/", code }, { PATH, tools })).toMatchObject({ ok: false, why: "bad-request" });
     expect(await launchAgent({ harness: "claude", folder, code: "nope" }, { PATH, tools })).toMatchObject({ ok: false, why: "bad-request" });
-    expect(await launchAgent({ harness: "gemini", folder, code }, { PATH, tools })).toMatchObject({ ok: false, why: "no-recipe" });
+    expect(await launchAgent({ harness: "cursor", folder, code }, { PATH, tools })).toMatchObject({ ok: false, why: "no-recipe" });
     expect(await launchAgent({ harness: "claude", folder, code }, { PATH: "/usr/bin:/bin", tools })).toMatchObject({ ok: false, why: "not-installed" });
     expect(existsSync(calls)).toBe(false);
   });

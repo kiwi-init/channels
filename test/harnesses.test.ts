@@ -118,7 +118,7 @@ describe("the harness inventory", () => {
       context: [128_000, 272_000, 400_000, 1_000_000],
     });
     expect(by.kimi).toMatchObject({ start: true, options: { model: true, effort: [], permission: ["default", "accept-edits", "plan", "bypass"], context: [] } });
-    expect(by.gemini).toMatchObject({ start: false });
+    expect(by.gemini).toMatchObject({ start: false, options: { model: true, effort: [], permission: ["default", "accept-edits", "plan", "bypass"], context: [] } });
     expect(by.kimi).toMatchObject({ path: join(bins, "kimi-code"), version: "1.4.0" });
     expect(by.grok).toMatchObject({ path: null });
     expect(by.gemini).toMatchObject({ path: null, version: null });

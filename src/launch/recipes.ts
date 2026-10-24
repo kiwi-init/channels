@@ -1,6 +1,6 @@
 import type { KnownHarness } from "@kiwi/core/harnesses.ts";
 import type { JoinLine } from "@kiwi/core/join-line.ts";
-import { choicesRefusal, PERMISSIONS, type HarnessOptions, type LaunchChoices } from "@kiwi/core/launch-options.ts";
+import { choicesRefusal, PERMISSIONS, type HarnessOptions, type LaunchChoices, type Permission } from "@kiwi/core/launch-options.ts";
 import { CLAUDE_1M, CLAUDE_EFFORTS, claudeArgv, claudeContextRefusal } from "../loop/claude.ts";
 import { CODEX_CONTEXTS, CODEX_EFFORTS, codexArgv } from "../loop/codex.ts";
 import { GROK_EFFORTS, grokArgv } from "../loop/grok.ts";
@@ -14,6 +14,13 @@ interface LaunchRecipe {
   argv: (bin: string, prompt: string, choices: LaunchChoices) => string[];
   refuse?: (choices: LaunchChoices) => string | null;
   typed?: (screen: string) => Screen;
+}
+
+const GEMINI_MODES: Record<Permission, string | null> = { default: null, "accept-edits": "auto_edit", plan: "plan", bypass: "yolo" };
+
+function geminiArgv(bin: string, prompt: string, { model, permission }: LaunchChoices): string[] {
+  const mode = permission ? GEMINI_MODES[permission] : null;
+  return [bin, ...(model ? ["-m", model] : []), ...(mode ? ["--approval-mode", mode] : []), "-i", prompt];
 }
 
 const RECIPES: Partial<Record<KnownHarness, LaunchRecipe>> = {
@@ -32,6 +39,11 @@ const RECIPES: Partial<Record<KnownHarness, LaunchRecipe>> = {
     label: "Grok",
     options: { model: true, effort: GROK_EFFORTS, permission: [...PERMISSIONS], context: [] },
     argv: (bin, prompt, choices) => grokArgv({ ...choices, bin, prompt }),
+  },
+  gemini: {
+    label: "Gemini CLI",
+    options: { model: true, effort: [], permission: [...PERMISSIONS], context: [] },
+    argv: geminiArgv,
   },
   kimi: {
     label: "Kimi Code",
