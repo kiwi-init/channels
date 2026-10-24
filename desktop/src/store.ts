@@ -19,7 +19,7 @@ export interface StoreFile {
   personalities?: Personality[];
 }
 
-export type VaultRead = { ok: true; file: Partial<StoreFile> | null; resave: boolean } | { ok: false; why: string };
+export type VaultRead = { ok: true; file: Partial<StoreFile> | null; resave: boolean } | { ok: false; why: string; advice?: string };
 
 export interface StoreVault {
   where(): string;
@@ -37,6 +37,8 @@ let vault: StoreVault | null = null;
 
 let storeBroken: string | null = null;
 
+let brokenAdvice: string | null = null;
+
 function loaded(v: StoreVault): VaultRead {
   try {
     return v.load();
@@ -52,13 +54,16 @@ export function openStore(v: StoreVault): void {
   vault = v;
   store = read.ok && read.file ? { ...defaults(), ...read.file } : defaults();
   storeBroken = read.ok ? null : read.why || "an error with no message";
+  brokenAdvice = read.ok ? null : (read.advice ?? null);
   store.relayUrl = normalizeRelay(store.relayUrl) ?? DEFAULT_RELAY;
   const staleVoice = Object.hasOwn(store, "voice") && Reflect.deleteProperty(store, "voice");
   if (read.ok && read.file && (staleVoice || read.resave)) saveStore();
 }
 
 const brokenError = () =>
-  new Error(`Channels can't read its saved keys (${storeBroken}), so it saves nothing over them. Unlock your keychain, then quit and reopen Channels. The file is ${vault?.where()}.`);
+  new Error(
+    `Channels can't read its saved keys (${storeBroken}), so it saves nothing over them. ${brokenAdvice ?? "Unlock your keychain, then quit and reopen Channels."} The file is ${vault?.where()}.`,
+  );
 
 export const brokenStore = (): Error | null => (storeBroken === null ? null : brokenError());
 

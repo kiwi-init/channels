@@ -1,13 +1,14 @@
 import { afterEach, expect, test } from "bun:test";
 import { createCipheriv, pbkdf2Sync } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { KeySources } from "../desktop/src/launcher-key.ts";
 import type { LegacyName } from "../desktop/src/legacy-store.ts";
-import { openEbStore, unmarkedNote, v2Vault } from "../desktop/src/store-eb.ts";
+import { ebDataDir, openEbStore, plainNote, REFUSAL_ADVICE, unmarkedNote, v2Vault } from "../desktop/src/store-eb.ts";
 import { isSealed, STORE_FILE, type StoreKey } from "../desktop/src/store-v2.ts";
+import { brokenStore, openStore as openStoreFile } from "../desktop/src/store.ts";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -67,10 +68,10 @@ function electronStore(home: string, json: unknown, password: string): string {
 test("a Mac app without its launcher's key channel opens no store: refused with the launcher's reason, nothing written", async () => {
   const { dir, home } = place();
   const opened = await openEbStore({ dir, keys: new Error("on a Mac, Channels gets its store key only from its signed launcher"), home, platform: "darwin" });
-  expect(opened).toEqual({ kind: "unreadable", why: "on a Mac, Channels gets its store key only from its signed launcher", file: join(dir, STORE_FILE) });
+  expect(opened).toEqual({ kind: "unreadable", why: "on a Mac, Channels gets its store key only from its signed launcher", file: join(dir, STORE_FILE), cause: "launcher" });
   expect(existsSync(dir)).toBe(false);
   const vault = v2Vault(opened);
-  expect(vault.load()).toEqual({ ok: false, why: "on a Mac, Channels gets its store key only from its signed launcher" });
+  expect(vault.load()).toEqual({ ok: false, why: "on a Mac, Channels gets its store key only from its signed launcher", advice: REFUSAL_ADVICE.launcher });
   expect(() => vault.save({ relayUrl: "https://r.example", person: null, channels: [], computers: [], pending: [] })).toThrow("can't be saved");
 });
 
@@ -131,4 +132,61 @@ test("a launcher that has gone before done still leaves the store open", async (
     },
   };
   expect(await openEbStore({ dir, keys, home, platform: "darwin" })).toMatchObject({ kind: "open", sealed: true });
+});
+
+test("the app's data folder is pinned to its bundle identifier and build channel, not to wherever Electrobun puts userData for this install, so a dev build never opens the stable app's folder (T1710)", () => {
+  expect(ebDataDir("com.kiwiinit.channels", "stable", "darwin", "/Users/a", {})).toBe("/Users/a/Library/Application Support/com.kiwiinit.channels/stable");
+  expect(ebDataDir("com.kiwiinit.channels", "dev", "darwin", "/Users/a", {})).toBe("/Users/a/Library/Application Support/com.kiwiinit.channels/dev");
+  expect(ebDataDir("com.kiwiinit.channels", "stable", "linux", "/home/a", {})).toBe("/home/a/.local/share/com.kiwiinit.channels/stable");
+  expect(ebDataDir("com.kiwiinit.channels", "stable", "linux", "/home/a", { XDG_DATA_HOME: "/data" })).toBe("/data/com.kiwiinit.channels/stable");
+  expect(ebDataDir("com.kiwiinit.channels", "stable", "linux", "/home/a", { XDG_DATA_HOME: "relative/data" })).toBe("/home/a/.local/share/com.kiwiinit.channels/stable");
+  expect(ebDataDir("com.kiwiinit.channels", "stable", "win32", "C:\\Users\\a", { LOCALAPPDATA: "relative" })).toBe("C:\\Users\\a/AppData/Local/com.kiwiinit.channels/stable");
+  expect(ebDataDir("com.kiwiinit.channels", "stable", "win32", "C:\\Users\\a", { LOCALAPPDATA: "/local" })).toBe("/local/com.kiwiinit.channels/stable");
+  expect(() => ebDataDir("../elsewhere", "stable", "darwin", "/Users/a", {})).toThrow("plain identifier and channel");
+  expect(() => ebDataDir("com.kiwiinit.channels", "../stable", "darwin", "/Users/a", {})).toThrow("plain identifier and channel");
+});
+
+test("the broken-store dialog says what to do for its cause, not 'unlock your keychain' for everything (T1710)", async () => {
+  const { dir, home } = place();
+  const s = sources("electron-pw");
+  expect(await openEbStore({ dir, keys: s.keys, home, platform: "darwin" })).toMatchObject({ kind: "open" });
+  rmSync(dir, { recursive: true, force: true });
+  const deleted = await openEbStore({ dir, keys: s.keys, home, platform: "darwin" });
+  expect(deleted).toMatchObject({ kind: "unreadable", cause: "deleted" });
+  openStoreFile(v2Vault(deleted));
+  const message = brokenStore()?.message ?? "";
+  expect(message).toContain("both copies of the store are gone");
+  expect(message).not.toContain("Unlock your keychain");
+  openStoreFile(v2Vault(await openEbStore({ dir, keys: new Error("no launcher"), home, platform: "darwin" })));
+  expect(brokenStore()?.message).toContain("Open Channels from your Applications folder");
+  openStoreFile({ where: () => "/old/kiwi-store.bin", load: () => ({ ok: false, why: "the keyring is locked" }), save: () => {} });
+  expect(brokenStore()?.message).toContain("Unlock your keychain, then quit and reopen Channels.");
+  expect(Object.keys(REFUSAL_ADVICE).sort()).toEqual(["copy", "deleted", "keychain", "keyless", "launcher", "legacy", "legacy-keyless", "legacy-plain", "save"]);
+  expect(REFUSAL_ADVICE["legacy-keyless"]).toContain("Move that file out of its folder");
+  expect(REFUSAL_ADVICE["legacy-plain"]).toContain("move it out of its folder");
+  expect(REFUSAL_ADVICE.copy).not.toContain("Restore the store from a backup, then");
+});
+
+test("a Linux store with no Secret Service opens in plain JSON at 0600, and the note main.log gets says so (T1550)", async () => {
+  const { dir, home } = place();
+  const failing: KeySources = {
+    key: {
+      get: async () => {
+        throw new Error("Cannot autolaunch D-Bus without X11 $DISPLAY");
+      },
+      set: async () => {
+        throw new Error("Cannot autolaunch D-Bus without X11 $DISPLAY");
+      },
+      drop: async () => {},
+      finished: async () => false,
+      finish: async () => {},
+    },
+    legacy: async () => null,
+    done: () => {},
+  };
+  const opened = await openEbStore({ dir, keys: failing, home, platform: "linux" });
+  expect(opened).toMatchObject({ kind: "open", sealed: false, noKeychain: "Cannot autolaunch D-Bus without X11 $DISPLAY" });
+  expect(plainNote(opened)).toContain("without encryption, readable only by you (0600)");
+  expect((statSync(join(dir, STORE_FILE)).mode & 0o777).toString(8)).toBe("600");
+  expect(plainNote(await openEbStore({ dir: place().dir, keys: sources().keys, home, platform: "darwin" }))).toBeNull();
 });
