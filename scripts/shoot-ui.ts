@@ -81,11 +81,13 @@ const chrome = (page: Page) => page.getByRole("banner", { name: "Channels" }).or
 async function firstRunAs(page: Page, name: string) {
   await page.getByRole("textbox", { name: "Your name" }).fill(name);
   await page.getByRole("button", { name: "Continue" }).click();
-  await chrome(page)
+  const me = chrome(page)
     .getByRole("button", { name: new RegExp(name, "i") })
     .filter({ visible: true })
-    .first()
-    .waitFor();
+    .first();
+  const refused = page.getByRole("alert").filter({ hasText: /\S/ }).first();
+  await me.or(refused).first().waitFor();
+  if (!(await me.isVisible())) throw new Error(`the first run didn't make ${name}: the page says "${await refused.innerText()}"`);
 }
 
 async function passkey(page: Page) {

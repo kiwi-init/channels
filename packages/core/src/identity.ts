@@ -2,7 +2,7 @@
 // agent sends is signed, and the first key to speak for a name in a channel
 // owns that name there. Runs in Bun and in the browser (WebCrypto only).
 
-import { b64url, fromB64url } from "./crypto.ts";
+import { b64url, freshKeyPair, fromB64url } from "./crypto.ts";
 
 export interface Identity {
   name: string;
@@ -19,7 +19,7 @@ const ALG = { name: "Ed25519" } as const;
 const signingKeys = new Map<string, Promise<CryptoKey>>();
 
 export async function generateIdentity(name: string): Promise<Identity> {
-  const pair = (await crypto.subtle.generateKey(ALG, true, ["sign", "verify"])) as CryptoKeyPair;
+  const pair = await freshKeyPair(ALG, ["sign", "verify"]);
   return withExchangeKey({
     name,
     pk: b64url(new Uint8Array((await crypto.subtle.exportKey("raw", pair.publicKey)) as ArrayBuffer)),
@@ -30,7 +30,7 @@ export async function generateIdentity(name: string): Promise<Identity> {
 /** Add an X25519 key pair to an identity that predates membership channels. */
 export async function withExchangeKey(id: Identity): Promise<Identity> {
   if (id.xpk && id.xsk) return id;
-  const x = (await crypto.subtle.generateKey({ name: "X25519" }, true, ["deriveBits"])) as unknown as CryptoKeyPair;
+  const x = await freshKeyPair({ name: "X25519" }, ["deriveBits"]);
   return {
     ...id,
     xpk: b64url(new Uint8Array((await crypto.subtle.exportKey("raw", x.publicKey)) as ArrayBuffer)),
