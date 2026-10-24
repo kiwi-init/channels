@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { cantSwap, debAsset, githubHop, ownAppImage, relaunchAfter, releaseFile, releasePage, swapAsset, swapScript } from "../desktop/src/update-asset.ts";
+import { cantSwap, debAsset, githubHop, latestTag, ownAppImage, relaunchAfter, releaseDownload, swapAsset, swapScript } from "../desktop/src/update-asset.ts";
 
 test("a Mac swaps itself for the zip for its CPU", () => {
   expect(swapAsset("0.14.0", "darwin", "arm64")).toBe("Channels-0.14.0-mac-arm64.zip");
@@ -36,24 +36,28 @@ test("it's an AppImage only when its own executable runs from the AppImage's mou
   expect(ownAppImage(image, "/tmp/.mount_ChanXYZ/../..", "/opt/Channels/bin/bun")).toBeUndefined();
 });
 
-test("an update's files come only from this repo's releases on github.com over https, and redirects stay on GitHub's hosts (T1554)", () => {
+test("the latest tag comes only from this repo's releases/latest redirect on github.com over https, the files from its download path, and redirects stay on GitHub's hosts (T1554, T985)", () => {
   const repo = "kiwi-init/channels";
-  const ok = "https://github.com/kiwi-init/channels/releases/download/v0.27.0/SHA256SUMS";
-  expect(releaseFile(repo, ok)).toBe(ok);
+  expect(latestTag(repo, "https://github.com/kiwi-init/channels/releases/tag/v0.27.5")).toBe("v0.27.5");
   for (const bad of [
-    undefined,
-    "http://github.com/kiwi-init/channels/releases/download/v0.27.0/SHA256SUMS",
-    "https://github.com.evil.example/kiwi-init/channels/releases/download/v0.27.0/SHA256SUMS",
-    "https://github.com/someone/channels/releases/download/v0.27.0/SHA256SUMS",
-    "https://github.com/kiwi-init/channels/releases/download/../../../someone/x/releases/download/v1/a",
-    "https://user:pw@github.com/kiwi-init/channels/releases/download/v0.27.0/SHA256SUMS",
-    "https://github.com:8443/kiwi-init/channels/releases/download/v0.27.0/SHA256SUMS",
+    null,
+    "",
+    "/kiwi-init/channels/releases/tag/v0.27.5",
+    "http://github.com/kiwi-init/channels/releases/tag/v0.27.5",
+    "https://github.com.evil.example/kiwi-init/channels/releases/tag/v0.27.5",
+    "https://github.com/someone/channels/releases/tag/v0.27.5",
+    "https://user:pw@github.com/kiwi-init/channels/releases/tag/v0.27.5",
+    "https://github.com:8443/kiwi-init/channels/releases/tag/v0.27.5",
+    "https://github.com/kiwi-init/channels/releases",
+    "https://github.com/kiwi-init/channels/releases/tag/v0.27.5?x=1",
+    "https://github.com/kiwi-init/channels/releases/tag/v0.27.5/../../../x",
+    "https://github.com/kiwi-init/channels/releases/tag/v0.28.0-rc.1",
+    "https://github.com/kiwi-init/channels/releases/tag/v1.0.0%2F..%2Fx",
+    "https://github.com/kiwi-init/channels/releases/tag/0.27.5",
     "not a url",
   ])
-    expect(releaseFile(repo, bad)).toBeNull();
-  expect(releasePage(repo, "https://github.com/kiwi-init/channels/releases/tag/v0.27.0")).toBe("https://github.com/kiwi-init/channels/releases/tag/v0.27.0");
-  expect(releasePage(repo, "javascript:alert(1)")).toBe("https://github.com/kiwi-init/channels/releases/latest");
-  expect(releasePage(repo, "https://evil.example/kiwi-init/channels/releases/tag/v0.27.0")).toBe("https://github.com/kiwi-init/channels/releases/latest");
+    expect(latestTag(repo, bad)).toBeNull();
+  expect(releaseDownload(repo, "v0.27.5", "SHA256SUMS")).toBe("https://github.com/kiwi-init/channels/releases/download/v0.27.5/SHA256SUMS");
   expect(githubHop("https://release-assets.githubusercontent.com/github-production-release-asset/1/2")).toBe(true);
   expect(githubHop("https://objects.githubusercontent.com/github-production-release-asset-2e65be/1")).toBe(true);
   expect(githubHop("https://github.com/kiwi-init/channels/releases/download/v0.27.0/a")).toBe(true);

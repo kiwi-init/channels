@@ -30,17 +30,7 @@ globalThis.fetch = Object.assign(
   async (input: string | URL | Request) => {
     const u = String(input);
     seen.push(u);
-    const name = `Channels-0.20.0-mac-${process.arch === "arm64" ? "arm64" : "x64"}.zip`;
-    return new Response(
-      JSON.stringify({
-        tag_name: "v0.20.0",
-        html_url: "https://github.com/kiwi-init/channels/releases/tag/v0.20.0",
-        assets: [
-          { name, browser_download_url: "https://github.com/kiwi-init/channels/releases/download/v0.20.0/zip" },
-          { name: "SHA256SUMS", browser_download_url: "https://github.com/kiwi-init/channels/releases/download/v0.20.0/sums" },
-        ],
-      }),
-    );
+    return new Response(null, { status: 302, headers: { location: "https://github.com/kiwi-init/channels/releases/tag/v0.20.0" } });
   },
   { preconnect: realFetch.preconnect },
 );
@@ -49,7 +39,7 @@ test.skipIf(process.platform !== "darwin")("a Mac app in a folder it can't write
   chmodSync(parent, 0o555);
   const r = await checkForUpdate();
   expect(r).toEqual({ version: "0.20.0", state: "available", url: "https://github.com/kiwi-init/channels/releases/tag/v0.20.0", blocked: true });
-  expect(seen.filter((u) => !u.includes("api.github.com"))).toEqual([]);
+  expect(seen.filter((u) => !u.endsWith("/releases/latest"))).toEqual([]);
 });
 
 test.skipIf(process.platform !== "darwin")("after a swap of this version failed, the next launch offers the release instead of downloading it again", async () => {
@@ -59,5 +49,5 @@ test.skipIf(process.platform !== "darwin")("after a swap of this version failed,
   const r = await checkForUpdate();
   expect(r.state).toBe("available");
   expect(r.blocked).toBe(true);
-  expect(seen.filter((u) => !u.includes("api.github.com"))).toEqual([]);
+  expect(seen.filter((u) => !u.endsWith("/releases/latest"))).toEqual([]);
 });

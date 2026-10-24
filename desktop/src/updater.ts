@@ -18,7 +18,7 @@ import { logMainError } from "./main-log.ts";
 import { minisignVerifies } from "./minisign.ts";
 import { RELEASE_KEY } from "./release-key.ts";
 import { signedLikeThisApp } from "./signer.ts";
-import { cantSwap, debAsset, githubHop, ownAppImage, releaseFile, releasePage, swapAsset, swapScript } from "./update-asset.ts";
+import { cantSwap, debAsset, githubHop, latestTag, ownAppImage, releaseDownload, swapAsset, swapScript } from "./update-asset.ts";
 
 const REPO = "kiwi-init/channels";
 const EVERY_MS = 6 * 3_600_000;
@@ -106,20 +106,20 @@ const failedBefore = (version: string): boolean => {
 
 async function check(): Promise<UpdateCheck> {
   if (fetching && current) return current;
-  const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
-    headers: { accept: "application/vnd.github+json", "user-agent": "channels-desktop" },
+  const res = await fetch(`https://github.com/${REPO}/releases/latest`, {
+    headers: { "user-agent": "channels-desktop" },
+    redirect: "manual",
     signal: AbortSignal.timeout(ASK_WAIT_MS),
   });
-  if (!res.ok) {
-    retrySoon(`the update check got ${res.status} from GitHub`);
+  if (res.status < 300 || res.status >= 400) {
+    retrySoon(`the update check got ${res.status} from GitHub, not the latest release's redirect`);
     return { state: "failed" };
   }
-  const rel = (await res.json()) as { tag_name?: string; html_url?: string; prerelease?: boolean; draft?: boolean; assets?: { name: string; browser_download_url: string }[] };
-  const tag = rel.tag_name;
-  if (!tag || !/^v\d{1,6}\.\d{1,6}\.\d{1,6}$/.test(tag)) return { state: "failed" };
+  const tag = latestTag(REPO, res.headers.get("location"));
+  if (!tag) return { state: "failed" };
   const version = tag.slice(1);
-  if (rel.prerelease || rel.draft || compareVersions(version, host().app.version()) <= 0) return { state: "current", version: host().app.version() };
-  const url = releasePage(REPO, rel.html_url);
+  if (compareVersions(version, host().app.version()) <= 0) return { state: "current", version: host().app.version() };
+  const url = `https://github.com/${REPO}/releases/tag/${tag}`;
   if (staged && compareVersions(version, staged.version) <= 0) return current ?? set({ version: staged.version, state: "ready", url: staged.url });
   if (staged) {
     fs.rmSync(path.dirname(staged.path), { recursive: true, force: true });
@@ -128,7 +128,7 @@ async function check(): Promise<UpdateCheck> {
   const appImage = runningAppImage();
   const packaged = host().app.packaged();
   const name = packaged ? swapAsset(version, process.platform, process.arch, appImage) : null;
-  const fileOf = (n: string | null) => (n ? releaseFile(REPO, rel.assets?.find((a) => a.name === n)?.browser_download_url) : null);
+  const fileOf = (n: string | null) => (n ? releaseDownload(REPO, tag, n) : null);
   const asset = fileOf(name);
   const sums = fileOf("SHA256SUMS");
   const signature = process.platform === "darwin" ? null : fileOf("SHA256SUMS.minisig");

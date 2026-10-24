@@ -53,18 +53,8 @@ globalThis.fetch = Object.assign(
     const u = String(input);
     const version = tag.slice(1);
     const name = `Channels-${version}-mac-${arch}.zip`;
-    if (u.includes("api.github.com"))
-      return new Response(
-        JSON.stringify({
-          tag_name: tag,
-          html_url: `https://github.com/kiwi-init/channels/releases/tag/v${version}`,
-          assets: [
-            { name, browser_download_url: `https://github.com/kiwi-init/channels/releases/download/v${version}/zip` },
-            { name: "SHA256SUMS", browser_download_url: `https://github.com/kiwi-init/channels/releases/download/v${version}/sums` },
-          ],
-        }),
-      );
-    if (u.endsWith("/sums")) return new Response(`${createHash("sha256").update(zipFor(version)).digest("hex")}  ${name}\n`);
+    if (u.endsWith("/releases/latest")) return new Response(null, { status: 302, headers: { location: `https://github.com/kiwi-init/channels/releases/tag/${tag}` } });
+    if (u.endsWith("/SHA256SUMS")) return new Response(`${createHash("sha256").update(zipFor(version)).digest("hex")}  ${name}\n`);
     if (stall) return new Response(new ReadableStream<Uint8Array>({ start: (c) => void (stalled = c) }));
     return new Response(zipFor(version));
   },

@@ -51,12 +51,12 @@ const OLD = "the 0.26.0 AppImage";
 const sha = (s: string): string => createHash("sha256").update(s).digest("hex");
 
 const DOWNLOAD = "https://github.com/kiwi-init/channels/releases/download/v0.27.0/";
+const LATEST = "https://github.com/kiwi-init/channels/releases/latest";
 const ASSETS = "https://release-assets.githubusercontent.com/github-production-release-asset/";
 
 interface Release {
   sums?: string;
   signature?: string | null;
-  where?: (name: string) => string;
   redirect?: (name: string) => string | null;
 }
 
@@ -70,12 +70,12 @@ function release(o: Release = {}): string[] {
     SHA256SUMS: sums,
     ...(signature === null ? {} : { "SHA256SUMS.minisig": signature }),
   };
-  const where = o.where ?? ((name: string) => `${DOWNLOAD}${name}`);
+  const where = (name: string) => `${DOWNLOAD}${name}`;
   globalThis.fetch = Object.assign(
     async (input: string | URL | Request) => {
       const url = String(input);
       seen.push(url);
-      if (url.endsWith("/releases/latest")) return Response.json({ tag_name: "v0.27.0", html_url: PAGE, assets: Object.keys(files).map((name) => ({ name, browser_download_url: where(name) })) });
+      if (url === LATEST) return new Response(null, { status: 302, headers: { location: PAGE } });
       const name = Object.keys(files).find((n) => url === where(n) || url === `${ASSETS}${n}` || url.endsWith(`/${n}`));
       if (!name) return new Response("", { status: 404 });
       const to = url === where(name) ? (o.redirect?.(name) ?? null) : null;
@@ -178,13 +178,15 @@ test("an AppImage whose SHA256SUMS isn't signed with the pinned release key is n
   }
 });
 
-test("an AppImage whose release has no SHA256SUMS.minisig only offers the release and downloads nothing", async () => {
+test("an AppImage whose release has no SHA256SUMS.minisig is never staged: it fetches SHA256SUMS and the missing signature, never the AppImage, and offers the release", async () => {
   const appImage = installed("NoSignature");
   const seen = release({ signature: null });
   const { u } = await launch(appImage, join(root, "data-no-signature"));
-  expect(await u.checkForUpdate()).toEqual({ version: "0.27.0", state: "available", url: PAGE });
-  expect(seen).toEqual(["https://api.github.com/repos/kiwi-init/channels/releases/latest"]);
+  expect((await u.checkForUpdate()).state).toBe("downloading");
+  expect(await settled(u)).toEqual({ version: "0.27.0", state: "available", url: PAGE });
+  expect(seen).toEqual([LATEST, `${DOWNLOAD}SHA256SUMS`, `${DOWNLOAD}SHA256SUMS.minisig`]);
   expect(readFileSync(appImage, "utf8")).toBe(OLD);
+  expect(downloads()).toEqual([]);
 });
 
 test("an AppImage in a folder it can't write says it can't update itself and downloads nothing", async () => {
@@ -193,14 +195,14 @@ test("an AppImage in a folder it can't write says it can't update itself and dow
   const seen = release();
   const { u } = await launch(appImage, join(root, "data-readonly"));
   expect(await u.checkForUpdate()).toEqual({ version: "0.27.0", state: "available", url: PAGE, blocked: true });
-  expect(seen).toEqual(["https://api.github.com/repos/kiwi-init/channels/releases/latest"]);
+  expect(seen).toEqual([LATEST]);
 });
 
 test("a deb install never swaps itself: it's offered the release's .deb for its CPU and downloads nothing", async () => {
   const seen = release();
   const { u } = await launch(undefined, join(root, "data-deb"));
   expect(await u.checkForUpdate()).toEqual({ version: "0.27.0", state: "available", url: PAGE, deb: `${DOWNLOAD}${debName("0.27.0", arch)}` });
-  expect(seen).toEqual(["https://api.github.com/repos/kiwi-init/channels/releases/latest"]);
+  expect(seen).toEqual([LATEST]);
 });
 
 test("a swap that fails leaves the AppImage, says it can't update itself, and the next launch doesn't download that version again", async () => {
@@ -220,7 +222,7 @@ test("a swap that fails leaves the AppImage, says it can't update itself, and th
   const seen = release();
   const next = await launch(appImage, data);
   expect(await next.u.checkForUpdate()).toEqual({ version: "0.27.0", state: "available", url: PAGE, blocked: true });
-  expect(seen).toEqual(["https://api.github.com/repos/kiwi-init/channels/releases/latest"]);
+  expect(seen).toEqual([LATEST]);
   expect(existsSync(join(data, "update-failed"))).toBe(true);
 });
 
@@ -232,18 +234,14 @@ test("a deb install started from another AppImage app (its APPIMAGE inherited) i
   const seen = release();
   const { fake, u } = await launch(cursor, join(root, "data-inherited"), { appDir: join(root, ".mount_CursorXYZ"), exe: DEB_EXE });
   expect(await u.checkForUpdate()).toEqual({ version: "0.27.0", state: "available", url: PAGE, deb: `${DOWNLOAD}${debName("0.27.0", arch)}` });
-  expect(seen).toEqual(["https://api.github.com/repos/kiwi-init/channels/releases/latest"]);
+  expect(seen).toEqual([LATEST]);
   expect(u.applyUpdate(false)).toBe(false);
   expect(readFileSync(cursor, "utf8")).toBe("the Cursor AppImage");
   expect(fake.did.filter((d) => d.startsWith("relaunch"))).toEqual([]);
 });
 
-test("an AppImage takes its update only from GitHub: an asset off github.com isn't fetched, and a redirect off GitHub's hosts is refused", async () => {
+test("an AppImage takes its update only from GitHub: a redirect off GitHub's hosts is refused", async () => {
   const appImage = installed("OffGithub");
-  const seen = release({ where: (name) => `https://evil.example/${name}` });
-  const first = await launch(appImage, join(root, "data-off"));
-  expect(await first.u.checkForUpdate()).toEqual({ version: "0.27.0", state: "available", url: PAGE });
-  expect(seen).toEqual(["https://api.github.com/repos/kiwi-init/channels/releases/latest"]);
   const hops = release({ redirect: (name) => `https://evil.example/${name}` });
   const next = await launch(appImage, join(root, "data-redirect"));
   expect((await next.u.checkForUpdate()).state).toBe("downloading");

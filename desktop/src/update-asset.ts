@@ -22,15 +22,15 @@ const parsed = (url: string | undefined): URL | null => {
   }
 };
 
-export function releaseFile(repo: string, url: string | undefined): string | null {
-  const u = parsed(url);
-  return u && u.hostname === "github.com" && u.pathname.startsWith(`/${repo}/releases/download/`) ? u.href : null;
+export function latestTag(repo: string, location: string | null): string | null {
+  const u = parsed(location ?? undefined);
+  const prefix = `/${repo}/releases/tag/`;
+  if (!u || u.hostname !== "github.com" || u.search || !u.pathname.startsWith(prefix)) return null;
+  const tag = u.pathname.slice(prefix.length);
+  return /^v\d{1,6}\.\d{1,6}\.\d{1,6}$/.test(tag) ? tag : null;
 }
 
-export function releasePage(repo: string, url: string | undefined): string {
-  const u = parsed(url);
-  return u && u.hostname === "github.com" && u.pathname.startsWith(`/${repo}/releases/`) ? u.href : `https://github.com/${repo}/releases/latest`;
-}
+export const releaseDownload = (repo: string, tag: string, name: string): string => `https://github.com/${repo}/releases/download/${tag}/${name}`;
 
 export const githubHop = (url: string): boolean => {
   const u = parsed(url);
