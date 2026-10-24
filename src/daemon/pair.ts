@@ -49,7 +49,9 @@ export class PairError extends Error {
 }
 
 const pairRefused = (relay: string, err: unknown): PairError => {
-  if (err instanceof MailboxError && err.status === 0) return new PairError(`couldn't reach ${relay}: ${err.message}`);
+  const again = "run the same command again to pick up where it stopped (the code works for ten minutes from your app)";
+  if (err instanceof MailboxError && err.status === 0) return new PairError(`couldn't reach ${relay}: ${err.message}; ${again}`);
+  if (err instanceof MailboxError && err.transient) return new PairError(`the relay kept failing (${err.status}: ${err.message}); ${again}`);
   if (err instanceof MailboxError) return new PairError(`the relay refused (${err.status}): ${err.message}`);
   return new PairError(err instanceof Error ? err.message : String(err));
 };

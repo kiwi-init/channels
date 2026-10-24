@@ -48,11 +48,18 @@ export const setupCommands: Record<string, Command> = {
   pair: () =>
     Effect.gen(function* () {
       const code = (args[1] ?? (yield* die("usage: kiwi pair kp1-… (the code your app shows)"))).trim();
-      const { pairComputer, PairError } = yield* Effect.promise(() => import("../../daemon.ts"));
+      const { ensureDaemon, pairComputer, PairError } = yield* Effect.promise(() => import("../../daemon.ts"));
       yield* Effect.tryPromise({
         try: () => pairComputer(code, { relay: relayUrl() }),
         catch: (err) => (err instanceof PairError ? new Quit({ message: err.message, code: err.code }) : err),
       });
+      const running = yield* Effect.promise(() =>
+        ensureDaemon().then(
+          () => true,
+          () => false,
+        ),
+      );
+      out(running ? "its kiwi daemon is running, so your app can start agents here now." : "its kiwi daemon didn't start: run kiwi daemon here, or your app can't reach this computer.");
     }),
 
   unpair: () =>
@@ -65,6 +72,7 @@ export const setupCommands: Record<string, Command> = {
 
   cleanup: () =>
     Effect.gen(function* () {
+      const quiet = opt.quiet === true;
       const done = cleanup({ home: home(), bin: binDir() });
       const running = yield* Effect.promise(() => daemonHello().catch(() => null));
       if (running && compareVersions(running.version, VERSION) < 0) {
@@ -73,7 +81,7 @@ export const setupCommands: Record<string, Command> = {
       }
       for (const r of done.removed) out(`removed ${r}`);
       for (const w of done.warnings) out(`note: ${w}`);
-      if (!done.removed.length && !done.warnings.length && !opt.quiet) out("nothing to clean up");
+      if (!done.removed.length && !done.warnings.length && !quiet) out("nothing to clean up");
     }),
 
   daemon: () =>
