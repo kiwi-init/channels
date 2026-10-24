@@ -37,6 +37,7 @@ dbus-uuidgen --ensure=/etc/machine-id 2> /dev/null || true
 mkdir -p /var/lib/dbus /run/dbus
 [ -f /var/lib/dbus/machine-id ] || cp /etc/machine-id /var/lib/dbus/machine-id
 dbus-daemon --system --fork && note "system bus up" || note "no system bus"
+sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 > /dev/null 2>&1 && note "the host lets unprivileged user namespaces through (as Fedora and Arch do)" || note "the host still restricts unprivileged user namespaces: $(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>&1)"
 note "$PRETTY_NAME; $(rpm -q webkit2gtk4.1 gtk3 weston kf6-kwallet gnome-keyring 2> /dev/null | tr '\n' ' ')$(pacman -Q webkit2gtk-4.1 gtk3 weston kwallet gnome-keyring 2> /dev/null | tr '\n' ' ')"
 useradd -m tester
 cp "$HERE"/*.py "$HERE"/*.js "$HERE"/session.sh /home/tester/

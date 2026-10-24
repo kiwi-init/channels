@@ -36,6 +36,10 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 if [ -n "$up" ]; then note "Wayland window up after $(($(date +%s) - start)) s"; else note "NO WINDOW in 60 s (app $(kill -0 "$pid" 2> /dev/null && echo running || echo exited))"; fi
+if [ -z "$up" ] && kill -0 "$pid" 2> /dev/null; then
+  for p in $(pgrep -s "$pid"); do note "stuck process $p $(tr '\0' ' ' < "/proc/$p/cmdline" | cut -c1-80): $(cat "/proc/$p/wchan" 2> /dev/null)"; done
+  [ "$KEYRING" = kwallet ] && note "ksecretd/kwalletd log: $(tail -n 8 "$OUT/$TAG-"k*d*.log 2> /dev/null | tr '\n' ' ' | cut -c1-600)"
+fi
 sleep 10
 note "app $(kill -0 "$pid" 2> /dev/null && echo "still running" || echo "EXITED"); web process: $(pgrep -s "$pid" -f WebKitWebProcess | head -n 1 || echo none)"
 note "Secret Service items:"
@@ -50,4 +54,5 @@ sleep 3
 kill -KILL -- "-$pid" 2> /dev/null
 kill "$watcher" "$weston" 2> /dev/null
 gzip -f "$OUT/$TAG-app.log"
+chmod -R a+r "$OUT" 2> /dev/null
 note "done"
