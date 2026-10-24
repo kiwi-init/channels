@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -u
+D=$1
+OUT=$2
+HERE=$(cd "$(dirname "$0")" && pwd)
+mkdir -p "$OUT"
+export XDG_RUNTIME_DIR
+XDG_RUNTIME_DIR=$(mktemp -d)
+chmod 700 "$XDG_RUNTIME_DIR"
+dpkg-query -W -f '${Package} ${Version}\n' libgtk-3-0t64 libgtk-3-0 libwebkit2gtk-4.1-0 kwin-wayland gnome-shell mutter-common xwayland libayatana-appindicator3-1 xdg-desktop-portal kiwi-desktop 2> /dev/null | tee "$OUT/versions.txt"
+
+if [ "$D" = kde ]; then
+  kwin_wayland --help > "$OUT/kwin-help.txt" 2>&1
+  for scale in 1 1.5; do
+    tag=main
+    [ "$scale" = 1 ] || tag="scale${scale/./}"
+    export KWIN_LOG="$OUT/kwin-$tag.log"
+    timeout 600 dbus-run-session -- env KWIN_SCREENSHOT_NO_PERMISSION_CHECKS=1 QT_LOGGING_RULES='kwin_scripting=true;kwin_scripting.debug=true' XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6 XDG_SESSION_TYPE=wayland \
+      kwin_wayland --virtual --xwayland --width 1280 --height 800 --scale "$scale" --socket kiwi-wayland --exit-with-session "bash $HERE/inner.sh kde $OUT $tag" > "$KWIN_LOG" 2>&1
+    echo "kwin ($tag) exited $?" | tee -a "$OUT/notes.txt"
+  done
+  exit 0
+fi
+
+gnome-shell --help > "$OUT/gnome-shell-help.txt" 2>&1
+command -v gdctl > /dev/null && gdctl --help > "$OUT/gdctl-help.txt" 2>&1
+cat > "$OUT/gnome-session.sh" << EOF
+set -u
+gsettings set org.gnome.shell introspect true
+gsettings set org.gnome.shell welcome-dialog-last-shown-version '999'
+extra=""
+grep -q -- '--unsafe-mode' "$OUT/gnome-shell-help.txt" && extra="--unsafe-mode"
+gnome-shell --headless --wayland --virtual-monitor 1280x800 \$extra > "$OUT/gnome-shell.log" 2>&1 &
+shell=\$!
+for _ in \$(seq 1 100); do
+  [ -S "\$XDG_RUNTIME_DIR/wayland-0" ] && gdbus introspect --session --dest org.gnome.Shell --object-path /org/gnome/Shell > /dev/null 2>&1 && break
+  sleep 0.3
+done
+sleep 3
+x=\$(grep -oE 'Using public X11 display :[0-9]+' "$OUT/gnome-shell.log" | grep -oE ':[0-9]+' | head -n 1)
+[ -n "\$x" ] || x=\$(ls /tmp/.X11-unix 2> /dev/null | sed 's/^X/:/' | sort | head -n 1)
+auth=\$(ls "\$XDG_RUNTIME_DIR"/.mutter-Xwaylandauth.* 2> /dev/null | head -n 1)
+echo "gnome-shell up: X display \$x, auth \$auth" | tee -a "$OUT/notes.txt"
+export WAYLAND_DISPLAY=wayland-0 DISPLAY="\$x" XAUTHORITY="\$auth" XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=GNOME
+/usr/libexec/gsd-xsettings > "$OUT/gsd-xsettings.log" 2>&1 &
+/usr/libexec/xdg-desktop-portal > "$OUT/portal.log" 2>&1 &
+sleep 3
+bash "$HERE/inner.sh" gnome "$OUT" main
+kill \$shell
+EOF
+timeout 600 dbus-run-session -- bash "$OUT/gnome-session.sh"
+echo "gnome session exited $?" | tee -a "$OUT/notes.txt"

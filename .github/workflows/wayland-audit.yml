@@ -1,0 +1,49 @@
+name: wayland-audit
+
+on:
+  push:
+    branches: [T689-wayland-audit]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  audit:
+    name: wayland audit, ${{ matrix.desktop }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        desktop: [kde, gnome]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: compositor and tools
+        timeout-minutes: 20
+        run: |
+          sudo apt-get update -q
+          common="python3-gi gir1.2-gtk-3.0 libgtk-3-bin xwayland xdotool x11-utils wmctrl dbus dbus-x11 dconf-service dconf-cli"
+          if [ "${{ matrix.desktop }}" = kde ]; then
+            sudo apt-get install -y --no-install-recommends $common kwin-wayland breeze
+          else
+            sudo apt-get install -y --no-install-recommends $common gnome-shell gnome-settings-daemon gsettings-desktop-schemas xdg-desktop-portal xdg-desktop-portal-gnome adwaita-icon-theme
+          fi
+      - name: main's Linux deb
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 40121776105 -R "${{ github.repository }}" -n linux-packages-ubuntu-26.04 -D "$RUNNER_TEMP/pkgs"
+          ls -la "$RUNNER_TEMP/pkgs"
+          sudo apt-get install -y "$RUNNER_TEMP"/pkgs/Channels-*-linux-amd64.deb
+      - name: audit
+        timeout-minutes: 15
+        run: bash desktop/scripts/wayland-audit/run.sh ${{ matrix.desktop }} "$RUNNER_TEMP/audit"
+      - if: always()
+        run: cat "$RUNNER_TEMP/audit/notes.txt" || true
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: wayland-audit-${{ matrix.desktop }}
+          path: ${{ runner.temp }}/audit
+          retention-days: 3
