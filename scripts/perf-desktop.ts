@@ -3,7 +3,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Page } from "playwright-core";
-import { appExecutable, attach, launch as launchApp, processesOf, stop, testEnv, webkitHelpers, type Driver } from "../desktop/scripts/eb-drive.ts";
+import { appExecutable, attach, launch as launchApp, processesOf, stop, testEnv, webkitHelpers } from "../desktop/scripts/eb-drive.ts";
+import { firstChannel } from "../desktop/scripts/eb-first-run.ts";
 import { daemonStop } from "../desktop/src/daemon-client.ts";
 import type { StartupMarks } from "../desktop/src/eb-startup.ts";
 import { startLocalRelay } from "./local-relay.ts";
@@ -146,54 +147,6 @@ async function launchElectron(): Promise<Running> {
   };
 }
 
-const fillIn = ({ selector, value }: { selector: string; value: string }): boolean => {
-  const el = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector);
-  if (!el) return false;
-  const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-  Object.getOwnPropertyDescriptor(proto, "value")?.set?.call(el, value);
-  el.dispatchEvent(new Event("input", { bubbles: true }));
-  return true;
-};
-
-const clickButton = ({ name, within }: { name: string; within: string }): boolean => {
-  const button = [...document.querySelectorAll<HTMLButtonElement>(`${within} button`)].find(
-    (b) => (b.getAttribute("aria-label") ?? b.textContent ?? "").trim() === name && b.getClientRects().length > 0 && !b.disabled,
-  );
-  button?.click();
-  return !!button;
-};
-
-const sendMessage = (text: string): boolean => {
-  if (document.body.innerText.includes(text)) return true;
-  const el = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]');
-  if (!el || el.disabled) return false;
-  if (el.value === text) el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
-  else {
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(el, text);
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-  }
-  return false;
-};
-
-async function firstRunWithDriver(d: Driver): Promise<void> {
-  const step = (what: string, ms: number, act: () => Promise<boolean>) =>
-    until(what, ms, () =>
-      act().then(
-        (done) => (done ? true : null),
-        () => null,
-      ),
-    );
-  const probe = 2_000;
-  await step("the name field", 60_000, () => d.evaluate(fillIn, { selector: 'input[aria-label="Your name"]', value: "Jonatas" }, probe));
-  await step("Continue", 10_000, () => d.evaluate(clickButton, { name: "Continue", within: "body" }, probe));
-  await step("New channel", 60_000, () => d.evaluate(clickButton, { name: "New channel", within: "body" }, probe));
-  await step("the new channel's name", 10_000, () => d.evaluate(fillIn, { selector: '[role="dialog"] input', value: "cold" }, probe));
-  await step("Create channel", 10_000, () => d.evaluate(clickButton, { name: "Create channel", within: '[role="dialog"]' }, probe));
-  for (let i = 0; i < MESSAGES; i++) {
-    await step(`message ${i + 1}, sent and in the conversation`, 60_000, () => d.evaluate(sendMessage, `Message ${i + 1}: the relay deploy is done, numbers in a minute.`, probe));
-  }
-}
-
 async function settled(): Promise<string> {
   const from = Date.now();
   let left = processesOf(exe);
@@ -216,7 +169,7 @@ async function launchElectrobun(relay: string): Promise<Running> {
   return {
     started,
     evaluate: (fn, arg, ms) => d.evaluate(fn, arg, ms),
-    firstRun: () => firstRunWithDriver(d),
+    firstRun: () => firstChannel(d, MESSAGES),
     where: async () => (await d.evaluate(() => `${location.href}\n${document.body.innerText}`, null).catch(() => null)) ?? "(no page)",
     startup: async () => (await d.main("startup").catch(() => null)) as StartupMarks | null,
     quit: async () => {
