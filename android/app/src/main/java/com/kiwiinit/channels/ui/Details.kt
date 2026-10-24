@@ -46,12 +46,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.kiwiinit.channels.engine.AskView
 import com.kiwiinit.channels.engine.EngineException
 import com.kiwiinit.channels.engine.MemberView
+import com.kiwiinit.channels.engine.ReviewView
 import com.kiwiinit.channels.engine.RoomView
 import com.kiwiinit.channels.model.AppModel
 import com.kiwiinit.channels.model.Buzz
@@ -124,9 +128,10 @@ private fun ChannelDetails(model: AppModel, room: RoomView, current: String, cho
                 }
             }
         }
-        if (room.asks.isNotEmpty()) {
+        if (room.asks.isNotEmpty() || room.reviews.isNotEmpty()) {
             item(key = "needs") { Header("Needs you", tone.decide) }
             items(room.asks, key = { "ask-${it.seq}" }) { ask -> Card { NeedsYouRow(model, room, ask) } }
+            items(room.reviews, key = { "review-${it.task}" }) { review -> Card { ReviewRow(model, room, review) } }
         }
         item(key = "crew") { Header("Crew", tone.ink3) }
         item(key = "crew-list") {
@@ -301,5 +306,100 @@ private fun NeedsYouRow(model: AppModel, room: RoomView, ask: AskView) {
                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { replying = true }.padding(vertical = 6.dp, horizontal = 4.dp),
             )
         }
+    }
+}
+
+@Composable
+private fun ReviewRow(model: AppModel, room: RoomView, review: ReviewView) {
+    val tone = Tone.current
+    val view = LocalView.current
+    val scope = rememberCoroutineScope()
+    var busy by remember(review.task) { mutableStateOf(false) }
+    var failed by remember(review.task) { mutableStateOf(false) }
+    var why by remember(review.task) { mutableStateOf<String?>(null) }
+
+    fun act(work: suspend () -> Unit) {
+        busy = true
+        failed = false
+        view.buzz(Buzz.Tap)
+        scope.launch {
+            try {
+                work()
+                why = null
+                view.buzz(Buzz.Done)
+            } catch (e: EngineException) {
+                failed = true
+                view.buzz(Buzz.Fail)
+            }
+            busy = false
+        }
+    }
+
+    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val by = review.by
+            if (by != null) Face(by, room.member(by), 24.dp)
+            Text(
+                listOfNotNull(by?.let { room.display(it) }, taskLabel(review.task), When.short(review.millis)).joinToString(" · "),
+                style = MaterialTheme.typography.labelMedium,
+                color = tone.ink3,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+            )
+            Text("Review", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = tone.decide)
+        }
+        Text(
+            buildAnnotatedString {
+                withStyle(SpanStyle(color = tone.ink3)) { append(taskLabel(review.task)) }
+                append(" ${review.title}")
+            },
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text("Ready for your review · check the work itself, not just the word", style = MaterialTheme.typography.bodySmall, color = tone.ink3)
+        val writing = why
+        if (writing == null) {
+            Row(
+                Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(tone.wash2)
+                    .clickable(enabled = !busy) { act { model.approve(room.code, review.task) } }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Approve", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+            }
+            Text(
+                "Send back",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(enabled = !busy) { why = "" }.padding(vertical = 6.dp, horizontal = 4.dp),
+            )
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                BasicTextField(
+                    value = writing,
+                    onValueChange = { why = it },
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(tone.wash2).padding(horizontal = 12.dp, vertical = 10.dp),
+                    decorationBox = { inner ->
+                        Box {
+                            if (writing.isEmpty()) Text("What to change", style = MaterialTheme.typography.bodyLarge, color = tone.ink3)
+                            inner()
+                        }
+                    },
+                )
+                FilledIconButton(
+                    onClick = { act { model.sendBack(room.code, review.task, writing.trim()) } },
+                    enabled = writing.isNotBlank() && !busy,
+                    modifier = Modifier.size(40.dp),
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send back", modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+        if (failed) Text("Couldn't send · Try again", style = MaterialTheme.typography.labelMedium, color = tone.alert)
     }
 }
