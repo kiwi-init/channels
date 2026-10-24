@@ -37,7 +37,11 @@ export function FirstRun() {
           It’s how owners see you when you join a channel, and on the computers you pair. Channels makes your key on this computer; it never leaves it.
         </p>
         <TextField className="mt-6" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Ada Lovelace" maxLength={80} autoComplete="name" aria-label="Your name" />
-        {error && <p className="mt-3 text-ui text-alert">{error}</p>}
+        {error && (
+          <p role="alert" className="mt-3 text-ui text-alert">
+            {error}
+          </p>
+        )}
         <Button size="lg" type="submit" className="mt-5" disabled={!ok || busy}>
           {busy ? <Spinner className="border-white/30 border-t-white" /> : "Continue"}
         </Button>

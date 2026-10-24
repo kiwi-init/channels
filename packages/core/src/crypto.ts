@@ -195,6 +195,22 @@ export function newChannelKey(): string {
 
 const X25519 = { name: "X25519" } as const;
 
+type PairAlgorithm = { name: "Ed25519" } | { name: "X25519" };
+type PairUsage = "sign" | "verify" | "deriveBits";
+type Generate = (alg: PairAlgorithm, usages: PairUsage[]) => Promise<CryptoKeyPair>;
+
+const generate: Generate = async (alg, usages) => (await crypto.subtle.generateKey(alg, true, usages)) as unknown as CryptoKeyPair;
+
+export async function freshKeyPair(alg: PairAlgorithm, usages: PairUsage[], make: Generate = generate): Promise<CryptoKeyPair> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await make(alg, usages);
+    } catch (e) {
+      if (attempt >= 5 || !(e instanceof DOMException) || e.name !== "OperationError") throw e;
+    }
+  }
+}
+
 async function wrapKey(shared: ArrayBuffer, info: string): Promise<CryptoKey> {
   const hk = await crypto.subtle.importKey("raw", shared, "HKDF", false, ["deriveKey"]);
   return crypto.subtle.deriveKey({ name: "HKDF", hash: "SHA-256", salt: new Uint8Array(0), info: enc.encode(info) }, hk, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
@@ -202,7 +218,7 @@ async function wrapKey(shared: ArrayBuffer, info: string): Promise<CryptoKey> {
 
 /** Encrypt `data` so only the holder of the X25519 secret for `xpk` can read it. */
 export async function sealTo(xpk: string, data: string, info = "mc/box"): Promise<string> {
-  const eph = (await crypto.subtle.generateKey(X25519, true, ["deriveBits"])) as unknown as CryptoKeyPair;
+  const eph = await freshKeyPair(X25519, ["deriveBits"]);
   const pub = await crypto.subtle.importKey("raw", fromB64url(xpk), X25519, false, []);
   const algorithm = { name: "X25519", public: pub };
   const shared = await crypto.subtle.deriveBits(algorithm, eph.privateKey, 256);
