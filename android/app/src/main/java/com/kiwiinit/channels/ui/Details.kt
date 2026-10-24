@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -102,7 +103,7 @@ private fun ChannelDetails(model: AppModel, room: RoomView, current: String, cho
     val crew = lead + rest + me
     val count = "${room.members.size} ${if (room.members.size == 1) "person" else "people"}"
     val summary = if (room.working > 0) "$count · ${room.working} working" else count
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = padding) {
+    LazyColumn(Modifier.fillMaxSize().imePadding(), contentPadding = padding) {
         item(key = "head") {
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 ChannelAvatar(room, 96.dp)
