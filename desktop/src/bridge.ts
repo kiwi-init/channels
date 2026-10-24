@@ -12,6 +12,8 @@ import type { LaunchedView, PlacedSeat, ShowResult, TerminalId, TerminalsStatus 
 import type { TextStep } from "./text-size.ts";
 import type { Wire } from "./wire.ts";
 
+export type DoctorFinding = { ok: true; what: string } | { ok: false; what: string; how: string };
+
 /** The person's own key. Same JSON shape as Identity in src/identity.ts. */
 export interface PersonView {
   name: string;
@@ -316,6 +318,7 @@ export interface KiwiBridge {
   linkAnswer(accept: boolean): Promise<PhoneView | null>;
   linkCancel(): Promise<void>;
   daemonStatus(): Promise<DaemonStatus>;
+  doctor(): Promise<DoctorFinding[] | null>;
   /** Certify this machine's daemon key with the person key and hand the cert back. */
   daemonAdopt(): Promise<ComputerView>;
   /** Put the bundled kiwi binary in ~/.kiwi/bin and on the PATH (the app also does this on every start). */

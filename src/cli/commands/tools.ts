@@ -2,7 +2,7 @@ import * as Effect from "effect/Effect";
 import { existsSync } from "node:fs";
 import { join as joinPath } from "node:path";
 import { opt } from "../args.ts";
-import { type Command, session } from "../context.ts";
+import { type Command, out, session } from "../context.ts";
 
 export const toolCommands: Record<string, Command> = {
   mcp: () =>
@@ -27,7 +27,9 @@ export const toolCommands: Record<string, Command> = {
 
   doctor: () =>
     Effect.gen(function* () {
-      const { doctor } = yield* Effect.promise(() => import("../doctor.ts"));
-      return yield* doctor();
+      const { checks, doctor } = yield* Effect.promise(() => import("../doctor.ts"));
+      if (!opt.json) return yield* doctor();
+      out(JSON.stringify({ findings: yield* checks() }));
+      return 0;
     }),
 };
