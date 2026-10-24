@@ -66,6 +66,11 @@ export function v2Vault(opened: OpenStore): StoreVault {
   };
 }
 
+export function plainNote(opened: OpenStore): string | null {
+  if (opened.kind !== "open" || opened.noKeychain === null) return null;
+  return `No secret service answered, so Channels keeps your keys in ${opened.file} without encryption, readable only by you (0600), and seals them once a keyring runs: ${opened.noKeychain}`;
+}
+
 export function unmarkedNote(opened: OpenStore): string | null {
   if (opened.kind !== "open" || opened.unmarked === null) return null;
   return `Your keychain didn't keep the mark that says your store key's first save finished (${opened.unmarked}). Your keys are saved, but until the keychain keeps that mark, Channels can't tell a deleted store from a first start.`;

@@ -1,12 +1,12 @@
 import { afterEach, expect, test } from "bun:test";
 import { createCipheriv, pbkdf2Sync } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { KeySources } from "../desktop/src/launcher-key.ts";
 import type { LegacyName } from "../desktop/src/legacy-store.ts";
-import { ebDataDir, openEbStore, REFUSAL_ADVICE, unmarkedNote, v2Vault } from "../desktop/src/store-eb.ts";
+import { ebDataDir, openEbStore, plainNote, REFUSAL_ADVICE, unmarkedNote, v2Vault } from "../desktop/src/store-eb.ts";
 import { isSealed, STORE_FILE, type StoreKey } from "../desktop/src/store-v2.ts";
 import { brokenStore, openStore as openStoreFile } from "../desktop/src/store.ts";
 
@@ -165,4 +165,28 @@ test("the broken-store dialog says what to do for its cause, not 'unlock your ke
   expect(REFUSAL_ADVICE["legacy-keyless"]).toContain("Move that file out of its folder");
   expect(REFUSAL_ADVICE["legacy-plain"]).toContain("move it out of its folder");
   expect(REFUSAL_ADVICE.copy).not.toContain("Restore the store from a backup, then");
+});
+
+test("a Linux store with no Secret Service opens in plain JSON at 0600, and the note main.log gets says so (T1550)", async () => {
+  const { dir, home } = place();
+  const failing: KeySources = {
+    key: {
+      get: async () => {
+        throw new Error("Cannot autolaunch D-Bus without X11 $DISPLAY");
+      },
+      set: async () => {
+        throw new Error("Cannot autolaunch D-Bus without X11 $DISPLAY");
+      },
+      drop: async () => {},
+      finished: async () => false,
+      finish: async () => {},
+    },
+    legacy: async () => null,
+    done: () => {},
+  };
+  const opened = await openEbStore({ dir, keys: failing, home, platform: "linux" });
+  expect(opened).toMatchObject({ kind: "open", sealed: false, noKeychain: "Cannot autolaunch D-Bus without X11 $DISPLAY" });
+  expect(plainNote(opened)).toContain("without encryption, readable only by you (0600)");
+  expect((statSync(join(dir, STORE_FILE)).mode & 0o777).toString(8)).toBe("600");
+  expect(plainNote(await openEbStore({ dir: place().dir, keys: sources().keys, home, platform: "darwin" }))).toBeNull();
 });
