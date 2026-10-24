@@ -1,6 +1,7 @@
 import { closeSync, mkdtempSync, openSync, readdirSync, readFileSync, readSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Permission } from "@kiwi/core/launch-options.ts";
 import { kimiHome } from "../kimi-server.ts";
 import { runNow } from "../terminals/shared/run.ts";
 import { tmuxNow } from "../terminals/shared/tmux.ts";
@@ -10,6 +11,7 @@ type Env = Record<string, string | undefined>;
 export interface KimiStart {
   bin: string;
   model?: string;
+  permission?: Permission;
 }
 
 export type KimiScreen = "ready" | "trust" | "starting";
@@ -23,8 +25,11 @@ const TRUST = "Trust this folder?";
 const IDLE_EVENTS = new Set(["turn.ended", "prompt.completed"]);
 const WORKING_EVENTS = new Set(["turn.prompt", "step.begin", "llm.request", "tool.call", "tool.result", "task.started"]);
 
-export function kimiArgv({ bin, model }: KimiStart): string[] {
-  return [bin, ...(model ? ["-m", model] : [])];
+const KIMI_MODES: Record<Permission, string | null> = { default: null, "accept-edits": "--yolo", plan: "--plan", bypass: "--auto" };
+
+export function kimiArgv({ bin, model, permission }: KimiStart): string[] {
+  const mode = permission ? KIMI_MODES[permission] : null;
+  return [bin, ...(model ? ["-m", model] : []), ...(mode ? [mode] : [])];
 }
 
 export function kimiScreen(text: string): KimiScreen {
