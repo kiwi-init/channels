@@ -1,0 +1,72 @@
+name: wayland-clip-audit
+
+on:
+  push:
+    branches: [T862-wayland-clip-audit]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: clipboard and drag and drop, ${{ matrix.desktop }}, no XWayland
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        desktop: [kde, gnome]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup
+      - name: WebKitGTK, the compositor and the tools
+        timeout-minutes: 20
+        run: |
+          sudo apt-get update -q
+          common="libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bubblewrap xdg-dbus-proxy dbus dbus-x11 python3-gi gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0 libwayland-dev libwayland-bin pkg-config libgl1-mesa-dri libegl-mesa0"
+          if [ "${{ matrix.desktop }}" = kde ]; then
+            sudo apt-get install -y --no-install-recommends $common kwin-wayland plasma-wayland-protocols breeze
+          else
+            sudo apt-get install -y --no-install-recommends $common gnome-shell mutter-common gsettings-desktop-schemas adwaita-icon-theme
+          fi
+      - run: bun run web:build
+      - id: electrobun
+        run: echo "version=$(bun -e 'console.log(require("./desktop/package.json").devDependencies.electrobun)')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.hutch
+          key: hutch-${{ runner.os }}-${{ runner.arch }}-electrobun-${{ steps.electrobun.outputs.version }}
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/kiwi-eb-native
+          key: eb-native-${{ hashFiles('desktop/electrobun-pins.json') }}
+      - name: electrobun toolchain
+        working-directory: desktop
+        run: for i in 1 2 3; do bun run prepare:eb && exit 0; echo "electrobun prepare failed ($i of 3)"; sleep 20; done; exit 1
+      - name: the kiwi CLI the app bundles
+        run: mkdir -p dist && bun scripts/build-cli.ts --js dist/kiwi.js
+      - name: test build (the test driver in, its own id)
+        working-directory: desktop
+        run: bun scripts/eb.ts build --env=dev
+        env:
+          CHANNELS_EB_TEST: "1"
+          DASH_RELEASE_OFFLINE: "1"
+      - id: test-app
+        run: |
+          found=$(ls -d desktop/release-eb/build/dev-linux-*/*/bin/electrobun-launcher)
+          echo "path=$(dirname "$(dirname "$found")")" >> "$GITHUB_OUTPUT"
+      - name: audit
+        timeout-minutes: 20
+        run: bash desktop/scripts/wayland-clip/run.sh "$PWD/${{ steps.test-app.outputs.path }}" "$RUNNER_TEMP/clip" ${{ matrix.desktop }}
+      - if: always()
+        run: |
+          cat "$RUNNER_TEMP"/clip/*-notes.txt "$RUNNER_TEMP"/clip/*-results.json 2> /dev/null || true
+          tail -n 60 "$RUNNER_TEMP"/clip/gnome-shell.log 2> /dev/null || true
+          grep -iE 'error|warn|fake|clipboard|drag' "$RUNNER_TEMP"/clip/kde-kwin.log 2> /dev/null | tail -n 60 || true
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: wayland-clip-${{ matrix.desktop }}
+          path: ${{ runner.temp }}/clip
+          retention-days: 3
+          overwrite: true
