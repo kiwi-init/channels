@@ -1,6 +1,5 @@
 package com.kiwiinit.channels
 
-import android.content.ComponentName
 import android.view.ViewGroup
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,12 +32,10 @@ import kotlin.math.roundToInt
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.ExternalResource
 import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
-import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
@@ -124,13 +121,6 @@ class KeyboardTest {
         val bottom = node.fetchSemanticsNode().boundsInRoot.bottom
         val top = compose.onRoot().fetchSemanticsNode().size.height - keyboard
         assertTrue("It ends at ${bottom.roundToInt()} px, under the keyboard's top at $top px", bottom <= top)
-    }
-
-    private object Registered : ExternalResource() {
-        override fun before() {
-            val app = RuntimeEnvironment.getApplication()
-            shadowOf(app.packageManager).addActivityIfNotPresent(ComponentName(app.packageName, ComponentActivity::class.java.name))
-        }
     }
 
     private companion object {

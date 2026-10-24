@@ -66,11 +66,18 @@ fun Root(model: AppModel, unlock: () -> Unit) {
             when (val phase = model.phase) {
                 Phase.Starting -> Unit
                 Phase.Unlinked -> LinkScreen(model)
-                Phase.Ready -> Ready(model)
+                Phase.Ready -> Guarded(model.lock.locked, unlock) { Ready(model) }
                 is Phase.Broken -> Centered("Channels can't start", phase.why)
             }
-            if (model.lock.locked && model.phase == Phase.Ready) Locked(unlock)
         }
+    }
+}
+
+@Composable
+internal fun Guarded(locked: Boolean, unlock: () -> Unit, content: @Composable () -> Unit) {
+    Box(Modifier.fillMaxSize()) {
+        content()
+        if (locked) Locked(unlock)
     }
 }
 
