@@ -1,4 +1,4 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -17,6 +17,8 @@ const here = import.meta.dir;
 const root = mkdtempSync(join(tmpdir(), "kiwi-clip-"));
 const drop = join(root, "kiwi-drop.png");
 const readBack = join(root, "read.json");
+const variant = process.env["KIWI_AUDIT_VARIANT"] ?? "default";
+const name = `${kind}-${variant}`;
 const later = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 type Rect = [number, number, number, number];
 type Point = [number, number];
@@ -87,7 +89,10 @@ const ask = async (req: Record<string, unknown>): Promise<unknown> => {
 };
 
 let d: Driver | null = null;
-const app = launch(appExecutable(appDir), testEnv(root, join(root, "driver.sock"), `http://127.0.0.1:${port}`));
+const app = launch(
+  appExecutable(appDir),
+  testEnv(root, join(root, "driver.sock"), `http://127.0.0.1:${port}`, process.env["KIWI_AUDIT_NO_SANDBOX"] === "1" ? { WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: "1" } : {}),
+);
 try {
   await within("desk ready", 30_000, fromDesk());
   const ready = await helperEvent("ready", 30_000);
@@ -109,6 +114,9 @@ try {
   const hw = { c: kind === "gnome" ? hg.f : hg.c };
   const cw = { c: kind === "gnome" ? cg.f : cg.c };
   record("no window is an X11 client", Object.values(geo).every((g) => !g.x11 && g.type !== 1), geo);
+  const bwrap = spawnSync("pgrep", ["-a", "bwrap"], { encoding: "utf8" }).stdout.trim().split("\n").filter(Boolean);
+  const portal = spawnSync("gdbus", ["call", "--session", "--dest", "org.freedesktop.DBus", "--object-path", "/org/freedesktop/DBus", "--method", "org.freedesktop.DBus.NameHasOwner", "org.freedesktop.portal.Documents"], { encoding: "utf8" }).stdout.trim();
+  console.log(`variant ${variant}: web pages under bwrap: ${bwrap.length}; document portal on the bus: ${portal}`);
   const page = await driver.evaluate(() => ({ w: innerWidth, h: innerHeight, dpr: devicePixelRatio, href: location.href }), null);
   const offX = cw.c[2] - page.w;
   const offY = cw.c[3] - page.h;
@@ -149,7 +157,7 @@ try {
     await click(onHelper("read"));
     return helperEvent("read");
   };
-  const shot = (name: string) => ask({ op: "shot", path: join(out, `${kind}-${name}.png`) }).catch((e: Error) => console.log(e.message));
+  const shot = (what: string) => ask({ op: "shot", path: join(out, `${name}-${what}.png`) }).catch((e: Error) => console.log(e.message));
   await driver.evaluate(() => {
     const w = window as unknown as { kiwiAuditEvents: unknown[] };
     w.kiwiAuditEvents = [];
@@ -325,11 +333,11 @@ try {
 } catch (e) {
   record("the audit set up", false, e instanceof Error ? e.message : String(e));
 } finally {
-  writeFileSync(join(out, `${kind}-results.json`), JSON.stringify(results, null, 2));
+  writeFileSync(join(out, `${name}-results.json`), JSON.stringify(results, null, 2));
   helper.kill();
   desk.kill();
   d?.close();
   await stop(app).catch(() => undefined);
   relay.kill();
 }
-console.log(`${results.filter((r) => !r.ok).length} of ${results.length} checks failed on ${kind}`);
+console.log(`${results.filter((r) => !r.ok).length} of ${results.length} checks failed on ${name}`);

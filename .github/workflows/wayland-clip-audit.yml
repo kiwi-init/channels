@@ -9,13 +9,14 @@ permissions:
 
 jobs:
   audit:
-    name: clipboard and drag and drop, ${{ matrix.desktop }}, no XWayland
+    name: clipboard and drag and drop, ${{ matrix.desktop }}, portal ${{ matrix.portal }}, no XWayland
     runs-on: ubuntu-26.04
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         desktop: [kde, gnome]
+        portal: [none, installed]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
@@ -29,6 +30,8 @@ jobs:
           else
             sudo apt-get install -y --no-install-recommends $common gnome-shell mutter-common gsettings-desktop-schemas adwaita-icon-theme
           fi
+          if [ "${{ matrix.portal }}" = installed ]; then sudo apt-get install -y --no-install-recommends xdg-desktop-portal fuse3; fi
+          ls /usr/libexec/xdg-document-portal /usr/share/dbus-1/services/*Documents* 2> /dev/null || echo "no document portal"
       - run: bun run web:build
       - id: electrobun
         run: echo "version=$(bun -e 'console.log(require("./desktop/package.json").devDependencies.electrobun)')" >> "$GITHUB_OUTPUT"
@@ -66,7 +69,7 @@ jobs:
       - if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: wayland-clip-${{ matrix.desktop }}
+          name: wayland-clip-${{ matrix.desktop }}-${{ matrix.portal }}
           path: ${{ runner.temp }}/clip
           retention-days: 3
           overwrite: true
