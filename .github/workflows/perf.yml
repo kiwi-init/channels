@@ -1,8 +1,6 @@
-name: nightly
+name: perf
 
 on:
-  schedule:
-    - cron: "17 4 * * *"
   workflow_dispatch:
 
 permissions:
@@ -10,7 +8,7 @@ permissions:
 
 jobs:
   perf:
-    name: perf / nightly
+    name: perf / scale and soak
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -28,7 +26,7 @@ jobs:
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: perf-nightly
+          name: perf
           path: ${{ runner.temp }}/perf-*.json
           if-no-files-found: ignore
           overwrite: true

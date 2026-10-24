@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { FLOWS } from "../scripts/ci-flows.ts";
-import { loadConfig, matches, type Config } from "../.github/jev-ci/config.ts";
+import { loadConfig, matches, parseConfig, type Config } from "../.github/jev-ci/config.ts";
 import { markMoves, size, type FileChange } from "../.github/jev-ci/diff.ts";
 import { dispatchedJobs, mergeGroupRange, passMarkers, superseded, testedByQueue, trustedRef, type PassCache, type PullEvent, type QueueRun } from "../.github/jev-ci/github.ts";
 import { newerOnRemote } from "../.github/jev-ci/git.ts";
@@ -69,14 +69,14 @@ const SEED: Record<string, string> = {
   "docs/notes.md": "# notes\n",
 };
 
-function repo(): { dir: string; base: string } {
+function repo(seed: Record<string, string> = {}): { dir: string; base: string } {
   const dir = mkdtempSync(join(tmpdir(), "jev-ci-test-"));
   dirs.push(dir);
   sh(dir, ["init", "-q", "-b", "main"]);
   sh(dir, ["config", "user.email", "ci@example.com"]);
   sh(dir, ["config", "user.name", "ci"]);
   sh(dir, ["config", "commit.gpgsign", "false"]);
-  return { dir, base: commit(dir, SEED) };
+  return { dir, base: commit(dir, { ...SEED, ...seed }) };
 }
 
 function fakeJev(p: number | ((job: string, req: Request) => number) = 0.05): { ask: Ask; calls: Request[] } {
@@ -89,10 +89,11 @@ function fakeJev(p: number | ((job: string, req: Request) => number) = 0.05): { 
   return { ask, calls };
 }
 
-async function planFor(files: Record<string, string | null>, jev = fakeJev()): Promise<{ result: Plan; calls: Request[]; by: (job: string) => Decision }> {
-  const { dir, base } = repo();
+async function planFor(files: Record<string, string | null>, jev = fakeJev(), seed: Record<string, string> = {}): Promise<{ result: Plan; calls: Request[]; by: (job: string) => Decision }> {
+  const { dir, base } = repo(seed);
   const head = commit(dir, files);
-  const result = await plan({ repo: dir, base, head, config, ask: jev.ask });
+  const planned = seed[".github/jev-ci.yml"];
+  const result = await plan({ repo: dir, base, head, config: planned ? parseConfig(planned) : config, ask: jev.ask });
   const by = (job: string) => {
     const d = result.decisions.find((x) => x.job === job);
     if (!d) throw new Error(`no decision for ${job}`);
@@ -106,7 +107,14 @@ const ran = (r: Plan) =>
     .filter((d) => d.run)
     .map((d) => d.job)
     .sort();
-const CHECKS = ["static", "test-unit", "test-flows-a", "test-flows-b", "build", "shots", "perf-runs", "perf", "desktop-mac", "desktop-linux", "cli-macos", "ios", "ios-gestures", "android"];
+const PARTS_CI = CI.replace(
+  "  ci-ok:\n",
+  "  gate-runs:\n    name: gate / round ${{ matrix.round }}\n    needs: plan\n    if: fromJSON(needs.plan.outputs.run)['gate-runs']\n    runs-on: ubuntu-latest\n    strategy:\n      matrix:\n        round: [1, 2]\n    steps:\n      - run: echo round\n\n  gate:\n    name: gate / medians\n    needs: [plan, gate-runs]\n    if: fromJSON(needs.plan.outputs.run)['gate']\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n    steps:\n      - run: echo medians\n\n  ci-ok:\n",
+).replace("android, release-rehearsal]", "android, release-rehearsal, gate-runs, gate]");
+const PARTS_CONFIG = `${CONFIG_TEXT.trimEnd()}\n\n  gate:\n    name: gate / medians\n    inputs:\n      - "scripts/gate.json"\n    always:\n      - "scripts/gate.json"\n    parts:\n      - "gate-runs"\n    description: >-\n      Collects the rounds' medians.\n`;
+const PARTS = { ".github/workflows/ci.yml": PARTS_CI, ".github/jev-ci.yml": PARTS_CONFIG };
+const partsConfig: Config = parseConfig(PARTS_CONFIG);
+const CHECKS = ["static", "test-unit", "test-flows-a", "test-flows-b", "build", "shots", "desktop-mac", "desktop-linux", "cli-macos", "ios", "ios-gestures", "android"];
 
 describe("the iPhone jobs wait only on what the iPhone app is built from (T1598)", () => {
   const desktopOnly = {
@@ -166,10 +174,10 @@ describe("ci.yml edits outside the jobs", () => {
   });
 
   test("workflow permissions run the jobs that inherit them, and a job whose part inherits them", async () => {
-    const { result, by } = await planFor({ ".github/workflows/ci.yml": CI.replace("permissions:\n  contents: read\n", "permissions:\n  contents: read\n  issues: read\n") });
+    const { result, by } = await planFor({ ".github/workflows/ci.yml": PARTS_CI.replace("permissions:\n  contents: read\n", "permissions:\n  contents: read\n  issues: read\n") }, fakeJev(), PARTS);
     expect(by("cli-macos")).toMatchObject({ run: true, layer: "L0" });
-    expect(by("perf").reason).toContain("perf-runs");
-    expect(ran(result)).toEqual([...CHECKS, "release-rehearsal"].sort());
+    expect(by("gate").reason).toContain("gate-runs");
+    expect(ran(result)).toEqual([...CHECKS, "gate", "gate-runs", "release-rehearsal"].sort());
   });
 });
 
@@ -202,19 +210,19 @@ describe("ci.yml edits inside jobs", () => {
   });
 
   test("a job's parts run and skip with it", async () => {
-    const skipped = await planFor({ "docs/notes.md": "# notes, edited\n" });
-    expect(skipped.by("perf-runs")).toMatchObject({ run: false, layer: "L0" });
-    const forced = await planFor({ "scripts/perf-budgets.json": "{}\n" });
-    expect(forced.by("perf")).toMatchObject({ run: true, layer: "L0" });
-    expect(forced.by("perf-runs")).toMatchObject({ run: true, layer: "L0" });
-    expect(forced.by("perf-runs").reason).toContain("perf / scale");
+    const skipped = await planFor({ "docs/notes.md": "# notes, edited\n" }, fakeJev(), PARTS);
+    expect(skipped.by("gate-runs")).toMatchObject({ run: false, layer: "L0" });
+    const forced = await planFor({ "scripts/gate.json": "{}\n" }, fakeJev(), PARTS);
+    expect(forced.by("gate")).toMatchObject({ run: true, layer: "L0" });
+    expect(forced.by("gate-runs")).toMatchObject({ run: true, layer: "L0" });
+    expect(forced.by("gate-runs").reason).toContain("gate / medians");
   });
 
   test("a change to a part's job runs the job it does part of", async () => {
-    const { result, by } = await planFor({ ".github/workflows/ci.yml": CI.replace("        run: [1, 2, 3]\n", "        run: [1, 2, 3, 4]\n") });
-    expect(by("perf")).toMatchObject({ run: true, layer: "L0" });
-    expect(by("perf").reason).toContain("perf-runs");
-    expect(ran(result)).toEqual(["perf", "perf-runs", "static"]);
+    const { result, by } = await planFor({ ".github/workflows/ci.yml": PARTS_CI.replace("        round: [1, 2]\n", "        round: [1, 2, 3]\n") }, fakeJev(), PARTS);
+    expect(by("gate")).toMatchObject({ run: true, layer: "L0" });
+    expect(by("gate").reason).toContain("gate-runs");
+    expect(ran(result)).toEqual(["gate", "gate-runs", "static"]);
   });
 
   test("a change to the gate job runs nothing else by itself", async () => {
@@ -470,9 +478,9 @@ describe("the merge queue (T2034)", () => {
   });
 
   test("a commit the queue already tested runs no job on main, parts included, and says why", () => {
-    const skipped = skipAll(config, "the merge queue tested this commit as-is (run 41)");
+    const skipped = skipAll(partsConfig, "the merge queue tested this commit as-is (run 41)");
     expect(skipped.decisions.filter((d) => d.run)).toEqual([]);
-    expect(skipped.decisions.map((d) => d.job)).toContain("perf-runs");
+    expect(skipped.decisions.map((d) => d.job)).toContain("gate-runs");
     for (const d of skipped.decisions) expect(d.reason).toMatch(/merge queue tested this commit|does part of/);
   });
 
@@ -483,10 +491,10 @@ describe("the merge queue (T2034)", () => {
     const by = (r: Plan, job: string) => r.decisions.find((d) => d.job === job)!;
     const group = await plan({ repo: dir, base, head, config, ask: fakeJev(0.9).ask });
     expect(by(group, "test-flows-b").run).toBe(true);
-    expect(by(group, "perf").run).toBe(true);
+    expect(by(group, "build").run).toBe(true);
     const lastOnly = await plan({ repo: dir, base: sh(dir, ["rev-parse", "HEAD^1"]), head, config, ask: fakeJev(0.9).ask });
     expect(by(lastOnly, "test-flows-b")).toMatchObject({ run: false, layer: "L0" });
-    expect(by(lastOnly, "perf").run).toBe(true);
+    expect(by(lastOnly, "build").run).toBe(true);
   });
 
   test("ci.yml answers the merge queue: it runs on merge_group's checks_requested, each group in a concurrency group of its own", () => {
@@ -514,15 +522,15 @@ describe("a pull request runs only the fast checks, the merge queue the rest (T2
   });
 
   test("a part goes with the job it belongs to, and a config without pull_request_jobs keeps the whole plan", () => {
-    const all: Plan = { ...skipAll(config, "x"), decisions: skipAll(config, "x").decisions.map((d) => ({ ...d, run: true, reason: "changed" })) };
-    const perf = pullRequestOnly({ ...config, pull_request_jobs: ["perf"] }, all);
+    const all: Plan = { ...skipAll(partsConfig, "x"), decisions: skipAll(partsConfig, "x").decisions.map((d) => ({ ...d, run: true, reason: "changed" })) };
+    const gate = pullRequestOnly({ ...partsConfig, pull_request_jobs: ["gate"] }, all);
     expect(
-      perf.decisions
+      gate.decisions
         .filter((d) => d.run)
         .map((d) => d.job)
         .sort(),
-    ).toEqual(["perf", "perf-runs"]);
-    expect(pullRequestOnly({ ...config, pull_request_jobs: undefined }, all)).toEqual(all);
+    ).toEqual(["gate", "gate-runs"]);
+    expect(pullRequestOnly({ ...partsConfig, pull_request_jobs: undefined }, all)).toEqual(all);
   });
 });
 
@@ -563,13 +571,13 @@ describe("a manual run can pick its jobs", () => {
   test("only the picked jobs run, a picked job's parts with it, and a name that isn't a job is noted and runs nothing", () => {
     const linux = onlyJobs(config, ["desktop-linux"]);
     expect(linux.decisions.filter((d) => d.run).map((d) => d.job)).toEqual(["desktop-linux"]);
-    const perf = onlyJobs(config, ["perf"]);
+    const gate = onlyJobs(partsConfig, ["gate"]);
     expect(
-      perf.decisions
+      gate.decisions
         .filter((d) => d.run)
         .map((d) => d.job)
         .sort(),
-    ).toEqual(["perf", "perf-runs"]);
+    ).toEqual(["gate", "gate-runs"]);
     const typo = onlyJobs(config, ["desktop-linx"]);
     expect(typo.decisions.filter((d) => d.run)).toEqual([]);
     expect(typo.notes.join(" ")).toContain("no job named desktop-linx");

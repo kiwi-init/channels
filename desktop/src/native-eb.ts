@@ -23,6 +23,8 @@ export const windowLook = mac
 
 const trayHost = mac ? null : dlopen(shellPath, { kiwi_tray_host: { args: [], returns: FFIType.bool } }).symbols.kiwi_tray_host;
 
+const colorScheme = mac ? null : dlopen(shellPath, { kiwi_follow_color_scheme: { args: [], returns: FFIType.bool } }).symbols.kiwi_follow_color_scheme;
+
 const guards = dlopen(shellPath, { kiwi_guard_downloads: { args: [], returns: FFIType.bool }, kiwi_allow_only: { args: [FFIType.ptr], returns: FFIType.bool } }).symbols;
 
 const core = dlopen(path.join(binDir, `libElectrobunCore.${suffix}`), {
@@ -56,6 +58,8 @@ export function missingGuard(): string | null {
 }
 
 export const hasTrayHost = (): boolean => trayHost?.() ?? true;
+
+export const followColorScheme = (): void => void colorScheme?.();
 
 export const watchPageGone = (gone: JSCallback): boolean => shell.kiwi_watch_page(gone);
 

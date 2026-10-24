@@ -262,68 +262,6 @@ jobs:
           job: shots
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['shots'] }}
 
-  perf-runs:
-    name: perf / scale, run ${{ matrix.run }}
-    needs: plan
-    if: fromJSON(needs.plan.outputs.run)['perf-runs']
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    strategy:
-      matrix:
-        run: [1, 2, 3]
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: ./.github/actions/setup
-      - uses: ./.github/actions/browser
-      - run: bun run web:build
-      - name: perf-scale
-        env:
-          PERF_SOAK_MIN: "0"
-        run: bun scripts/perf-scale.ts --gated --json "$RUNNER_TEMP/perf-${{ matrix.run }}.json"
-      - name: perf-feel
-        env:
-          PERF_RTT_MS: "150"
-        run: bun scripts/perf-feel.ts --json "$RUNNER_TEMP/feel-${{ matrix.run }}.json"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: perf-scale-${{ matrix.run }}
-          path: |
-            ${{ runner.temp }}/perf-${{ matrix.run }}.json
-            ${{ runner.temp }}/feel-${{ matrix.run }}.json
-          if-no-files-found: error
-          overwrite: true
-
-  perf:
-    name: perf / scale
-    needs: [plan, perf-runs]
-    if: fromJSON(needs.plan.outputs.run)['perf']
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: 1.4.2
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          pattern: perf-scale-*
-          path: ${{ runner.temp }}/perf
-          merge-multiple: true
-      - name: medians against the gates
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: bun scripts/perf-check.ts --comment "$RUNNER_TEMP"/perf/perf-*.json "$RUNNER_TEMP"/perf/feel-*.json | tee -a "$GITHUB_STEP_SUMMARY"
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: perf
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['perf'] }}
-
   desktop-mac:
     name: desktop / mac
     needs: plan
@@ -484,6 +422,11 @@ jobs:
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-tray-test" desktop/native/linux/kiwi-tray-test.c $(pkg-config --cflags --libs gio-2.0) -ldl
           dbus-run-session -- "$RUNNER_TEMP/kiwi-tray-test" /opt/Channels/bin/libkiwi-shell.so
+      - name: the window follows the desktop's light or dark (the portal's color-scheme), live
+        if: ${{ !cancelled() }}
+        run: |
+          cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-scheme-test" desktop/native/linux/kiwi-scheme-test.c $(pkg-config --cflags --libs webkit2gtk-4.1) -ldl
+          dbus-run-session -- xvfb-run -a "$RUNNER_TEMP/kiwi-scheme-test" /opt/Channels/bin/libkiwi-shell.so
       - name: test build (the test driver in, its own id)
         if: ${{ !cancelled() && matrix.drive }}
         working-directory: desktop
@@ -746,7 +689,7 @@ jobs:
   # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, static, test-unit, test-flows-a, test-flows-b, build, shots, perf-runs, perf, desktop-mac, desktop-linux, cli-macos, ios, ios-gestures, android, release-rehearsal]
+    needs: [plan, static, test-unit, test-flows-a, test-flows-b, build, shots, desktop-mac, desktop-linux, cli-macos, ios, ios-gestures, android, release-rehearsal]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

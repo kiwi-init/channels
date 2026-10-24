@@ -1,11 +1,17 @@
 #include <gdk/gdk.h>
 #include <glib-object.h>
+#include <gtk/gtk.h>
 #include <stdbool.h>
 #include <string.h>
 #include <webkit2/webkit2.h>
 
 #define KIWI_APP_ID "channels-desktop"
 #define TRAY_WATCHER "org.kde.StatusNotifierWatcher"
+#define PORTAL "org.freedesktop.portal.Desktop"
+#define PORTAL_PATH "/org/freedesktop/portal/desktop"
+#define PORTAL_SETTINGS "org.freedesktop.portal.Settings"
+#define APPEARANCE "org.freedesktop.appearance"
+#define COLOR_SCHEME "color-scheme"
 
 static void (*page_gone)(void) = NULL;
 static gchar *the_page = NULL;
@@ -257,6 +263,82 @@ bool kiwi_tray_host(void) {
   g_variant_unref(value);
   g_variant_unref(reply);
   return host;
+}
+
+static GDBusConnection *scheme_bus = NULL;
+static gboolean dark_before = FALSE;
+
+static gint scheme_of(GVariant *value) {
+  GVariant *v = g_variant_ref(value);
+  while (g_variant_is_of_type(v, G_VARIANT_TYPE_VARIANT)) {
+    GVariant *inner = g_variant_get_variant(v);
+    g_variant_unref(v);
+    v = inner;
+  }
+  gint scheme = g_variant_is_of_type(v, G_VARIANT_TYPE_UINT32) ? (gint)g_variant_get_uint32(v) : -1;
+  g_variant_unref(v);
+  return scheme;
+}
+
+static void use_scheme(gint scheme) {
+  GtkSettings *settings = gtk_settings_get_default();
+  if (!settings || scheme < 0) return;
+  g_object_set(settings, "gtk-application-prefer-dark-theme", scheme == 1 ? TRUE : scheme == 2 ? FALSE : dark_before, NULL);
+}
+
+static void scheme_changed(GDBusConnection *bus, const gchar *sender, const gchar *path, const gchar *iface, const gchar *signal, GVariant *params, gpointer data) {
+  (void)bus;
+  (void)sender;
+  (void)path;
+  (void)iface;
+  (void)signal;
+  (void)data;
+  if (!g_variant_is_of_type(params, G_VARIANT_TYPE("(ssv)"))) return;
+  const gchar *ns = NULL;
+  const gchar *key = NULL;
+  GVariant *value = NULL;
+  g_variant_get(params, "(&s&sv)", &ns, &key, &value);
+  if (g_strcmp0(ns, APPEARANCE) == 0 && g_strcmp0(key, COLOR_SCHEME) == 0) use_scheme(scheme_of(value));
+  g_variant_unref(value);
+}
+
+static void read_scheme(bool one);
+
+static void scheme_read(GObject *source, GAsyncResult *res, gpointer data) {
+  GError *error = NULL;
+  GVariant *reply = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), res, &error);
+  if (!reply) {
+    if (GPOINTER_TO_INT(data) && g_error_matches(error, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_METHOD)) read_scheme(false);
+    g_error_free(error);
+    return;
+  }
+  GVariant *value = NULL;
+  g_variant_get(reply, "(v)", &value);
+  use_scheme(scheme_of(value));
+  g_variant_unref(value);
+  g_variant_unref(reply);
+}
+
+static void read_scheme(bool one) {
+  g_dbus_connection_call(scheme_bus, PORTAL, PORTAL_PATH, PORTAL_SETTINGS, one ? "ReadOne" : "Read", g_variant_new("(ss)", APPEARANCE, COLOR_SCHEME), G_VARIANT_TYPE("(v)"), G_DBUS_CALL_FLAGS_NONE, 5000,
+                         NULL, scheme_read, GINT_TO_POINTER(one));
+}
+
+static bool follow_on_main(gconstpointer arg) {
+  (void)arg;
+  if (scheme_bus) return true;
+  GtkSettings *settings = gtk_settings_get_default();
+  if (!settings) return false;
+  scheme_bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, NULL);
+  if (!scheme_bus) return false;
+  g_object_get(settings, "gtk-application-prefer-dark-theme", &dark_before, NULL);
+  g_dbus_connection_signal_subscribe(scheme_bus, PORTAL, PORTAL_SETTINGS, "SettingChanged", PORTAL_PATH, APPEARANCE, G_DBUS_SIGNAL_FLAGS_NONE, scheme_changed, NULL, NULL);
+  read_scheme(true);
+  return true;
+}
+
+bool kiwi_follow_color_scheme(void) {
+  return on_main(follow_on_main, NULL);
 }
 
 static bool refuse_sandbox(char *why, size_t size, const char *text) {
