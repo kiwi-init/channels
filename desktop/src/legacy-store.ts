@@ -34,7 +34,8 @@ export async function openLegacy(raw: Uint8Array, password: string, rounds: numb
 }
 
 export function legacyDirs(platform: NodeJS.Platform, home: string = os.homedir(), env: NodeJS.ProcessEnv = process.env): { name: LegacyName; dir: string }[] {
-  const base = platform === "darwin" ? path.join(home, "Library", "Application Support") : env["XDG_CONFIG_HOME"] || path.join(home, ".config");
+  const config = env["XDG_CONFIG_HOME"];
+  const base = platform === "darwin" ? path.join(home, "Library", "Application Support") : config && path.isAbsolute(config) ? config : path.join(home, ".config");
   return LEGACY_NAMES.map((name) => ({ name, dir: path.join(base, name) }));
 }
 

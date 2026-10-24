@@ -448,6 +448,27 @@ describe("store v2", () => {
     expect(JSON.parse(read(dir).toString("utf8"))).toEqual(STORE);
   });
 
+  test("each refusal names its cause, so the app can say what to do about it (T1710)", async () => {
+    const cause = (o: OpenStore): string => (o.kind === "unreadable" ? o.cause : "open");
+    const sealedDir = folder();
+    const k = keychain();
+    opened(await openStore({ dir: sealedDir, key: k.key, legacy: NO_LEGACY, platform: "darwin" })).save("{}");
+    expect(cause(await openStore({ dir: sealedDir, key: keychain().key, legacy: NO_LEGACY, platform: "darwin" }))).toBe("keyless");
+    expect(cause(await openStore({ dir: sealedDir, key: keychain(null, { get: "locked" }).key, legacy: NO_LEGACY, platform: "darwin" }))).toBe("keychain");
+    rmSync(join(sealedDir, STORE_FILE));
+    rmSync(join(sealedDir, `${STORE_FILE}.bak`));
+    expect(cause(await openStore({ dir: sealedDir, key: k.key, legacy: NO_LEGACY, platform: "darwin" }))).toBe("deleted");
+    const plainOld = async (): Promise<LegacyRead> => ({ kind: "ok", json: STORE, file: "/old/kiwi-store.bin", encrypted: false });
+    expect(cause(await openStore({ dir: folder(), key: keychain().key, legacy: plainOld, platform: "darwin" }))).toBe("legacy-plain");
+    const unreadableOld = async (): Promise<LegacyRead> => ({ kind: "unreadable", file: "/old/kiwi-store.bin", why: "locked" });
+    expect(cause(await openStore({ dir: folder(), key: keychain().key, legacy: unreadableOld, platform: "darwin" }))).toBe("legacy");
+    const keylessOld = async (): Promise<LegacyRead> => ({ kind: "unreadable", file: "/old/kiwi-store.bin", why: "its key is gone", keyless: true });
+    expect(cause(await openStore({ dir: folder(), key: keychain().key, legacy: keylessOld, platform: "darwin" }))).toBe("legacy-keyless");
+    const torn = folder();
+    put(torn, STORE_FILE, "not json");
+    expect(cause(await openStore({ dir: torn, key: keychain(null, { get: "none", set: "none" }).key, legacy: NO_LEGACY, platform: "linux" }))).toBe("copy");
+  });
+
   test("a store that isn't an object is unreadable", async () => {
     const dir = folder();
     put(dir, STORE_FILE, "[1,2]");
