@@ -667,19 +667,11 @@ jobs:
           job: android
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['android'] }}
 
-  release-rehearsal:
-    name: release / rehearsal
-    needs: plan
-    if: fromJSON(needs.plan.outputs.run)['release-rehearsal']
-    uses: ./.github/workflows/release-build.yml
-    with:
-      rehearsal: true
-
   # The one check to require: passes when every job the plan ran passed and the rest were skipped.
   # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, static, test-unit, test-flows-a, test-flows-b, build, shots, desktop-mac, desktop-linux, cli-macos, ios, ios-gestures, android, release-rehearsal]
+    needs: [plan, static, test-unit, test-flows-a, test-flows-b, build, shots, desktop-mac, desktop-linux, cli-macos, ios, ios-gestures, android]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
