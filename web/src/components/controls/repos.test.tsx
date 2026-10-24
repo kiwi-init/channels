@@ -8,24 +8,24 @@ mock.module("@/lib/avatars", () => ({ avatarUrl: () => "", robotUrl: () => "", r
 const { ReposView } = await import("./repos")
 
 const repo = (fullName: string, priv = false): GithubRepoView => ({ fullName, private: priv, pushedAt: 1_760_000_000_000 })
-const linked: Reach = { kind: "repos", list: [repo("ojowwalker77/channels"), repo("ojowwalker77/kiwi-site", true), repo("octo/hello")] }
+const linked: Reach = { kind: "repos", list: [repo("kiwi-init/channels"), repo("ojowwalker77/kiwi-site", true), repo("octo/hello")] }
 const save = async () => undefined
 const html = (props: { repos: string[]; reach: Reach; onSave?: (r: string[]) => Promise<void>; initialQuery?: string }) => renderToStaticMarkup(createElement(ReposView, props))
 
 describe("connecting a channel to repos", () => {
   test("lists the repos the linked account reaches, the ones already in the channel marked chosen", () => {
-    const out = html({ repos: ["ojowwalker77/channels"], reach: linked, onSave: save })
+    const out = html({ repos: ["kiwi-init/channels"], reach: linked, onSave: save })
     expect(out).toContain("ojowwalker77/kiwi-site")
     expect(out).toContain("octo/hello")
     expect(out.match(/aria-pressed="true"/g)).toHaveLength(1)
-    expect(out).toContain('aria-label="Remove ojowwalker77/channels"')
+    expect(out).toContain('aria-label="Remove kiwi-init/channels"')
   })
 
   test("the search narrows the list to what matches", () => {
-    const out = html({ repos: [], reach: linked, onSave: save, initialQuery: "kiwi" })
+    const out = html({ repos: [], reach: linked, onSave: save, initialQuery: "site" })
     expect(out).toContain("ojowwalker77/kiwi-site")
     expect(out).not.toContain("octo/hello")
-    expect(out).not.toContain("ojowwalker77/channels")
+    expect(out).not.toContain("kiwi-init/channels")
   })
 
   test("a typed owner/repo the account doesn't list can still be added, a pasted GitHub link too", () => {

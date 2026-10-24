@@ -1,5 +1,7 @@
 import { execFile } from "node:child_process";
 
+import { childEnv } from "./child-env.ts";
+
 export interface ToolRun {
   code: number;
   out: string;
@@ -9,7 +11,7 @@ export type RunTool = (cmd: string, args: string[]) => Promise<ToolRun>;
 
 const runTool: RunTool = (cmd, args) =>
   new Promise((resolve) => {
-    execFile(cmd, args, { encoding: "utf8", timeout: 120_000, maxBuffer: 4 * 1024 * 1024 }, (err, stdout, stderr) => {
+    execFile(cmd, args, { encoding: "utf8", timeout: 120_000, maxBuffer: 4 * 1024 * 1024, env: childEnv() }, (err, stdout, stderr) => {
       resolve({ code: err ? (typeof err.code === "number" ? err.code : 1) : 0, out: `${stdout}${stderr}` });
     });
   });

@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startLocalRelay } from "../../scripts/local-relay.ts";
+import { daemonHello, daemonStop } from "../src/daemon-client.ts";
 import { bridgeChecks } from "./eb-bridge-checks.ts";
 import { appExecutable, appRoot, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
 
@@ -15,7 +16,20 @@ const bundle = appRoot(exe);
 const root = mkdtempSync(join(tmpdir(), "kiwi-smoke-eb-"));
 const problems: string[] = [];
 const later = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-const alive = (): number[] => spawnSync("pgrep", ["-f", bundle], { encoding: "utf8" }).stdout.split("\n").filter(Boolean).map(Number);
+const pids = (pattern: string): number[] => spawnSync("pgrep", ["-f", pattern], { encoding: "utf8" }).stdout.split("\n").filter(Boolean).map(Number);
+const alive = (): number[] => [...pids(bundle), ...pids(root)];
+const linux = process.platform === "linux";
+const webContent = (): number[] => pids(linux ? "WebKitWebProcess" : "com.apple.WebKit.WebContent");
+const logDir = linux ? join(".local", "state") : join("Library", "Logs");
+const kiwiHome = join(root, ".kiwi");
+
+function found(dir: string, name: string): string[] {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).flatMap((n) => {
+    const p = join(dir, n);
+    return statSync(p).isDirectory() ? found(p, name) : n === name ? [p] : [];
+  });
+}
 
 async function check<T>(what: string, d: Driver, fn: () => T | Promise<T>, ok: (v: T) => boolean): Promise<void> {
   try {
@@ -29,6 +43,7 @@ async function check<T>(what: string, d: Driver, fn: () => T | Promise<T>, ok: (
 
 const { relay, port } = await startLocalRelay(join(root, "relay"), null, { rateLimits: false });
 const RELAY = `http://127.0.0.1:${port}`;
+const before = new Set(webContent());
 const app = launch(exe, testEnv(root, join(root, "driver.sock"), RELAY));
 try {
   const d = await attach(join(root, "driver.sock"));
@@ -87,11 +102,36 @@ try {
     (v) => v !== "granted",
   );
   await bridgeChecks(d, problems);
+
+  if (linux) console.log("kiwi daemon and CLI: not checked on Linux, whose app doesn't bundle kiwi.js yet (eb-post-build copies it into the Mac app only)");
+  else {
+    const hello = await until("the kiwi daemon the app starts", 60_000, () => daemonHello(kiwiHome, 1_000)).catch((e: Error) => (problems.push(e.message), null));
+    if (hello) console.log(`kiwi daemon: answering on the test KIWI_HOME (kiwi ${hello.version})`);
+    const cli = join(root, "home", ".kiwi", "bin", "kiwi");
+    const version = existsSync(cli) ? spawnSync(cli, ["--version"], { encoding: "utf8", env: { ...process.env, KIWI_HOME: kiwiHome } }).stdout.trim() : "";
+    if (version) console.log(`kiwi CLI: installed in the test HOME's .kiwi/bin (${version})`);
+    else problems.push(`the app didn't install the kiwi CLI at ${cli}`);
+  }
+
+  const ours = webContent().filter((p) => !before.has(p));
+  if (!ours.length) problems.push("found no web content process of the app's own to stop");
+  else {
+    const origin = await d.evaluate(() => performance.timeOrigin, null);
+    for (const pid of ours) process.kill(pid, "SIGKILL");
+    const back = await until("the page, back after its web content process was killed", 30_000, () =>
+      d.evaluate(() => (document.querySelector("#root")?.childElementCount ? performance.timeOrigin : null), null, 2_000).then((o) => (o !== null && o !== origin ? o : null)),
+    ).catch((e: Error) => (problems.push(e.message), null));
+    const logs = found(join(root, "home", logDir), "main.log");
+    const logged = logs.some((f) => readFileSync(f, "utf8").includes("the window's page stopped"));
+    if (back && logged) console.log(`the app's ${ours.length} web content processes killed: the page reloaded and main.log says so (${logs[0]!.slice(root.length)})`);
+    else if (back) problems.push(`the page reloaded but no main.log under the test HOME's ${logDir} says it stopped (found ${logs.length})`);
+  }
   d.close();
 } catch (e) {
   problems.push(e instanceof Error ? e.message : String(e));
 } finally {
   await stop(app);
+  await daemonStop(kiwiHome, 2_000).catch(() => false);
   relay.kill();
   await later(1_000);
   const left = alive();
