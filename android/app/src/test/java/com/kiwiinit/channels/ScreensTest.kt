@@ -75,7 +75,7 @@ class ScreensTest {
     @Test
     fun newAgentStarted() = shoot("new-agent-started") {
         NewAgentFrame("New agent", root = false, back = null) {
-            StartedList(it.rooms.getValue(DEV), COMPUTERS.first(), HARNESSES.harnesses.first(), Starting.Started("launch-1"), LaunchSeen("asked", "swift-otter"), retry = {}, close = {})
+            StartedList(it.rooms.getValue(DEV), COMPUTERS.first(), HARNESSES.harnesses.first(), Starting.Started("launch-1"), LaunchSeen("joined", "swift-otter"), retry = {}, close = {})
         }
     }
 
