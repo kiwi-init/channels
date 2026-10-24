@@ -2,6 +2,37 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.27.4 — 2026-10-24
+
+- **The iPhone engine lists your computers, launches on one, follows it and lets your own agents in (T23)** ([#859](https://github.com/kiwi-init/channels/pull/859))
+- **Settings shows each harness's hooks on this computer, and installs, updates or removes them (T13)** ([#861](https://github.com/kiwi-init/channels/pull/861))
+- **A fresh computer can start agents: its home folder's git repos and folders you add (T22)** ([#863](https://github.com/kiwi-init/channels/pull/863))
+- **Grok and MiMoCode can be started from New agent and kiwi launch, with their own model, effort and permission flags (T12)** ([#865](https://github.com/kiwi-init/channels/pull/865))
+- **New agent picks the model, effort, context and permissions for each harness, remembered per computer (T11)** ([#860](https://github.com/kiwi-init/channels/pull/860))
+- **Per computer: allow bypass on launches from your other devices, off by default; launch options in remote.log (T25)** ([#867](https://github.com/kiwi-init/channels/pull/867))
+- **People pick their colour in the app, and the owner sets anyone's, as kiwi color already says (T16)** ([#868](https://github.com/kiwi-init/channels/pull/868))
+- **The UI smoke opens the conversation by its row, not the Conversations heading's first button (T281)** ([#869](https://github.com/kiwi-init/channels/pull/869))
+- **The owner turns an agent's wake on or off from its menu in Details, for agents on this computer (T14)** ([#866](https://github.com/kiwi-init/channels/pull/866))
+- **Settings → Computers: each paired computer's settings, read only (T18)** ([#870](https://github.com/kiwi-init/channels/pull/870))
+- **Kimi Code can be started from New agent and kiwi launch: the daemon types its first prompt in once its screen is ready, in Rex or tmux (T222)** ([#871](https://github.com/kiwi-init/channels/pull/871))
+- **Gemini CLI can be started from New agent and kiwi launch, with its model and approval mode (T339)** ([#874](https://github.com/kiwi-init/channels/pull/874))
+- **A newer push to main cancels the older main run, and the cancelled run's ci-ok passes for it (T324)** ([#875](https://github.com/kiwi-init/channels/pull/875))
+- **Settings: every harness on this computer, and a Check this computer panel from kiwi doctor (T17)** ([#873](https://github.com/kiwi-init/channels/pull/873))
+- **Pi can be started from New agent and kiwi launch, with its model and thinking level (T347)** ([#876](https://github.com/kiwi-init/channels/pull/876))
+- **Settings lists the folders agents can start in on this computer, with Add a folder… and Remove (T237)** ([#872](https://github.com/kiwi-init/channels/pull/872))
+- **OpenCode can be started from New agent and kiwi launch, with model and permission choices checked on the real CLI (T346)** ([#877](https://github.com/kiwi-init/channels/pull/877))
+- **kiwi pair rides out the relay's hiccups, starts this computer's daemon, and the app says what to do when it never came online (T358)** ([#878](https://github.com/kiwi-init/channels/pull/878))
+- **Grok's Stop hook counts a monitor named by its [monitor] display line as the listener, and logs the monitors it saw when none is (T386)** ([#879](https://github.com/kiwi-init/channels/pull/879))
+- **A send is stored once however often it arrives: a send id the room remembers (T376)** ([#880](https://github.com/kiwi-init/channels/pull/880))
+- **A flow test starts an agent on a paired computer from another device, on a local relay, with model, effort and permission, and bypass only when that computer allows it (T394)** ([#881](https://github.com/kiwi-init/channels/pull/881))
+- **A rehearsal dispatched by hand keeps its packages for 3 days, so they can be unpacked before a tag (T413)** ([#883](https://github.com/kiwi-init/channels/pull/883))
+- **The app carries a minisign check and Jow's pinned release key, and a hand-run workflow proves the release secret pairs with it (T406)** ([#884](https://github.com/kiwi-init/channels/pull/884))
+- **The rehearsal tries each package with its own parts: a channel made, a message sent and read back (T413)** ([#885](https://github.com/kiwi-init/channels/pull/885))
+- **Linux AppImage updates are checked against the release key pinned in the app: the release signs SHA256SUMS with minisign, the updater verifies it (T406)** ([#882](https://github.com/kiwi-init/channels/pull/882))
+- **The landing page is a channel: agents and people around the app's glass** ([#845](https://github.com/kiwi-init/channels/pull/845))
+- **On KDE, Channels finds the old Electron app's key in the wallet, under every name it could have used, and the dialog names the right file (T472)** ([#886](https://github.com/kiwi-init/channels/pull/886))
+- **The Mac app names its version where Finder and About read it: CFBundleShortVersionString (T496)** ([#887](https://github.com/kiwi-init/channels/pull/887))
+
 ## 0.27.3 — 2026-10-24
 
 - **CI no longer times the desktop app's cold start; smoke-eb keeps the first-run channel and message (T50)** ([#850](https://github.com/kiwi-init/channels/pull/850))
