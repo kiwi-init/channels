@@ -108,6 +108,18 @@ function runEvery(config: Config, reason: string, hashes: Record<string, string>
 
 export const runAll = (config: Config, reason: string, hashes: Record<string, string> = {}, event?: string): Plan => withParts(config, runEvery(config, reason, hashes, event));
 
+export function onlyJobs(config: Config, jobs: string[], hashes: Record<string, string> = {}): Plan {
+  const unknown = jobs.filter((j) => !config.jobs[j]);
+  const picked = jobs.filter((j) => config.jobs[j]);
+  const decisions = Object.keys(config.jobs).map((job) =>
+    picked.includes(job)
+      ? { job, run: true, layer: "L0" as const, reason: "a manual run picked it" }
+      : { job, run: false, layer: "L0" as const, reason: `a manual run of only ${picked.join(", ") || "nothing"}` },
+  );
+  const p = withParts(config, { ...empty(hashes), decisions });
+  return unknown.length ? { ...p, notes: [...p.notes, `no job named ${unknown.join(", ")} in .github/jev-ci.yml; nothing ran for it`] } : p;
+}
+
 export const skipAll = (config: Config, reason: string, hashes: Record<string, string> = {}): Plan =>
   withParts(config, { ...empty(hashes), decisions: Object.keys(config.jobs).map((job) => ({ job, run: false, layer: "L0" as const, reason })) });
 
