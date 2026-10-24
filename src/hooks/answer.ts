@@ -1,11 +1,13 @@
 import * as Effect from "effect/Effect";
 import { writeSync } from "node:fs";
+import { join } from "node:path";
 import type { Relay } from "@kiwi/core/client.ts";
 import { openSession, type AgentSession } from "../agent.ts";
 import { briefText, COMMANDS } from "../brief.ts";
 import { detectWhere } from "../card.ts";
-import { loadConfig, type ChannelConfig } from "../config.ts";
+import { home, loadConfig, type ChannelConfig } from "../config.ts";
 import { wakeHooked, wakeOn } from "../daemon/reach.ts";
+import { appendRotated } from "../daemon/wake.ts";
 import { charterLines, formatMessage, holdLine, leadLine, messageHead } from "@kiwi/core/format.ts";
 import { kimiServer } from "../kimi-server.ts";
 import { here, type Binding, type Here } from "../seats.ts";
@@ -74,12 +76,29 @@ export function backgroundTasks(raw: unknown): BackgroundTask[] | null {
   return raw.flatMap((t) => {
     if (!isRecord(t)) return [];
     const type = typeof t.type === "string" ? t.type : typeof t.kind === "string" ? t.kind : null;
-    return type === null ? [] : [{ type, text: [t.command, t.description].filter((x) => typeof x === "string").join("\n") }];
+    const text = [t.command, t.description, t.displayCommand, t.display_command].filter((x) => typeof x === "string").join("\n");
+    return type === null ? [] : [{ type, text }];
   });
 }
 
+const TAGGED = /^\[[^\]\n]{1,32}\]\s*/;
+
 export function grokMonitorListens(tasks: readonly BackgroundTask[], commands: readonly string[]): boolean {
-  return tasks.some((t) => t.type === "monitor" && t.text.split("\n").some((line) => commands.includes(line.trim())));
+  return tasks.some((t) => t.type === "monitor" && t.text.split("\n").some((line) => commands.includes(line.trim().replace(TAGGED, ""))));
+}
+
+const LOGGED_CHARS = 300;
+
+function noteUnheard(b: Binding, tasks: readonly BackgroundTask[], commands: readonly string[]): void {
+  const monitors = tasks.filter((t) => t.type === "monitor").map((t) => JSON.stringify(t.text.slice(0, LOGGED_CHARS)));
+  try {
+    appendRotated(
+      join(home(), "stop.log"),
+      `${new Date().toISOString()}\t${b.alias}\t${b.as}\tgrok: no listener among ${monitors.length} monitors\t${monitors.join(" ")}\twanted ${JSON.stringify(commands)}\n`,
+    );
+  } catch {
+    // A home Kiwi can't write to keeps no stop log; the reminder still goes to the agent.
+  }
 }
 
 const LISTENER_SETTLE_MS = 1_500;
@@ -96,7 +115,12 @@ function listenCheck(input: HookInput, b: Binding, who: Here, mc: string): Liste
   const tasks = backgroundTasks(input.backgroundTasks);
   if (!tasks) return { kind: "skip" };
   const commands = [COMMANDS.listen(mc), COMMANDS.listen(`${mcBin()} ${channelOption(b.alias)} ${asOption(b.as)}`)];
-  return { kind: "check", listens: () => grokMonitorListens(tasks, commands), settles: false };
+  const listens = () => {
+    const heard = grokMonitorListens(tasks, commands);
+    if (!heard) noteUnheard(b, tasks, commands);
+    return heard;
+  };
+  return { kind: "check", listens, settles: false };
 }
 
 export interface Reminder {

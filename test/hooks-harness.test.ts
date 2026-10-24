@@ -761,8 +761,26 @@ test("Grok's Stop input: a monitor is the listener when it runs this seat's list
   expect(grokMonitorListens([{ type: "monitor", text: "kiwi -c other --as g listen" }], seat)).toBe(false);
   expect(grokMonitorListens([{ type: "monitor", text: "kiwi listen -c other --as other" }], seat)).toBe(false);
   expect(grokMonitorListens([{ type: "monitor", text: "kiwi listen --now" }], seat)).toBe(false);
+  expect(grokMonitorListens([{ type: "monitor", text: "[monitor] kiwi -c ch --as g listen" }], seat)).toBe(true);
+  expect(grokMonitorListens([{ type: "monitor", text: "kiwi messages\n[monitor]kiwi listen" }], seat)).toBe(true);
+  expect(grokMonitorListens([{ type: "monitor", text: "[monitor] kiwi -c ch --as g listen --once" }], seat)).toBe(false);
+  expect(grokMonitorListens([{ type: "monitor", text: "[monitor] kiwi -c other --as g listen" }], seat)).toBe(false);
+  expect(grokMonitorListens([{ type: "monitor", text: `[${"x".repeat(40)}] kiwi listen` }], seat)).toBe(false);
   expect(grokMonitorListens([{ type: "shell", text: "kiwi listen" }], seat)).toBe(false);
   expect(grokMonitorListens([], seat)).toBe(false);
+});
+
+test("a monitor Grok names only by its display line, `[monitor] …`, is read as that line (issue #785)", () => {
+  const tasks = backgroundTasks([
+    { id: "d", type: "monitor", status: "running", display_command: "[monitor] kiwi -c ch --as g listen" },
+    { id: "e", type: "monitor", status: "running", displayCommand: "[monitor] kiwi listen", description: "kiwi messages" },
+  ]);
+  expect(tasks).toEqual([
+    { type: "monitor", text: "[monitor] kiwi -c ch --as g listen" },
+    { type: "monitor", text: "kiwi messages\n[monitor] kiwi listen" },
+  ]);
+  expect(grokMonitorListens(tasks!.slice(0, 1), ["kiwi -c ch --as g listen"])).toBe(true);
+  expect(grokMonitorListens(tasks!.slice(1), ["kiwi listen"])).toBe(true);
 });
 
 test("Grok's Stop input names a task's type as kind, as Grok 1.0.62 sends it, and type wins when both are there", () => {
