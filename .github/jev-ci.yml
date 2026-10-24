@@ -1254,7 +1254,10 @@ jobs:
       with main's own startup marks for each launch through the driver (desktop/src/eb-startup.ts: when the
       app's Worker started, main ran, the window and web view were asked for and made, the page was loaded,
       startAppLife and startUpdates returned, the first will-navigate, did-commit-navigation and dom-ready,
-      the page's first keys request and its reply, and the tray made, 2 s after dom-ready), after checking nothing of the last launch is left running (it fails if something stays
+      the page's first keys request and its reply, the tray made, 2 s after dom-ready, and from libkiwi-shell's own
+      hooks on the Mac the times WebKit asked its first four navigation policies and committed its first four
+      navigations, with a prewarm mark when kiwi_prewarm_page asked WebKit to start a page process before
+      claim, store and keys), after checking nothing of the last launch is left running (it fails if something stays
       5 s, and says how long what lingered took to go) and logging the machine's WebKit helpers; the gates are
       scaled by perf-calibrate.ts's CPU calibration run in the app's page, and the report also scales them by
       loopInPage, a pure-JS loop that doesn't depend on the engine's DOM speed, against the reference runner's

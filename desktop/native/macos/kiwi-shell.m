@@ -1,5 +1,6 @@
 #import <AppKit/AppKit.h>
 #import <WebKit/WebKit.h>
+#import <objc/message.h>
 #import <objc/runtime.h>
 #import <os/lock.h>
 #import <string.h>
@@ -46,7 +47,42 @@ static BOOL ownDownload(WKNavigationAction *action) {
   return action.shouldPerformDownload && ([scheme isEqualToString:@"blob"] || [scheme isEqualToString:@"data"]);
 }
 
+enum { DECIDED, COMMITTED, NOTED = 4 };
+
+static os_unfair_lock timesLock = OS_UNFAIR_LOCK_INIT;
+static double times[2][NOTED];
+static size_t noted[2];
+
+static void noteTime(size_t which) {
+  double now = [NSDate date].timeIntervalSince1970 * 1000.0;
+  os_unfair_lock_lock(&timesLock);
+  if (noted[which] < NOTED) times[which][noted[which]++] = now;
+  os_unfair_lock_unlock(&timesLock);
+}
+
+size_t kiwi_navigation_times(uint32_t which, double *out, size_t size) {
+  if (which > COMMITTED) return 0;
+  os_unfair_lock_lock(&timesLock);
+  size_t n = noted[which] < size ? noted[which] : size;
+  memcpy(out, times[which], n * sizeof(double));
+  os_unfair_lock_unlock(&timesLock);
+  return n;
+}
+
+bool kiwi_prewarm_page(void) {
+  Class pool = objc_getClass("WKProcessPool");
+  SEL shared = NSSelectorFromString(@"_sharedProcessPool");
+  SEL warm = NSSelectorFromString(@"_warmInitialProcess");
+  if (!pool || ![pool respondsToSelector:shared] || ![pool instancesRespondToSelector:warm]) return false;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    id p = ((id (*)(id, SEL))objc_msgSend)(pool, shared);
+    if (p) ((void (*)(id, SEL))objc_msgSend)(p, warm);
+  });
+  return true;
+}
+
 static void onlyThePage(id self, SEL cmd, WKWebView *webView, WKNavigationAction *action, void (^decisionHandler)(WKNavigationActionPolicy)) {
+  noteTime(DECIDED);
   if (isThePage(action.request.URL) || ownDownload(action)) {
     electrobunDecideAction(self, cmd, webView, action, decisionHandler);
     return;
@@ -97,6 +133,7 @@ static char committed[4096] = "";
 static IMP commitNext = NULL;
 
 static void committedNavigation(id self, SEL cmd, WKWebView *webView, WKNavigation *navigation) {
+  noteTime(COMMITTED);
   const char *url = webView.URL.absoluteString.UTF8String;
   os_unfair_lock_lock(&committedLock);
   if (strlcpy(committed, url ? url : "", sizeof committed) >= sizeof committed) committed[0] = 0;

@@ -59,6 +59,23 @@ function sandboxOff(): string | null {
   return sandboxPages(ptr(why), why.length) ? null : new TextDecoder().decode(why.subarray(0, Math.max(0, why.indexOf(0))));
 }
 
+const webkit = mac
+  ? dlopen(shellPath, {
+      kiwi_prewarm_page: { args: [], returns: FFIType.bool },
+      kiwi_navigation_times: { args: [FFIType.u32, FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
+    }).symbols
+  : null;
+
+if (webkit?.kiwi_prewarm_page()) mark("prewarm");
+
+function navigationTimes(): Record<string, number> {
+  if (!webkit) return {};
+  const times = new Float64Array(4);
+  const named = (which: number, name: string): [string, number][] =>
+    [...times.subarray(0, Number(webkit.kiwi_navigation_times(which, ptr(times), times.length)))].map((t, i) => [`${name}${i + 1}`, t]);
+  return Object.fromEntries([...named(0, "decided"), ...named(1, "committed")]);
+}
+
 const windowLook = mac ? dlopen(shellPath, { kiwi_window_look: { args: [FFIType.ptr, FFIType.f64, FFIType.f64, FFIType.u32, FFIType.u32], returns: FFIType.void } }).symbols.kiwi_window_look : null;
 
 const guards = dlopen(shellPath, { kiwi_guard_downloads: { args: [], returns: FFIType.bool }, kiwi_allow_only: { args: [FFIType.ptr], returns: FFIType.bool } }).symbols;
@@ -220,7 +237,7 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
   }
   if (KIWI_EB_TEST) {
     const socket = process.env.KIWI_EB_DRIVER;
-    if (socket) drive(win.webview, socket, { startup: startupMarks });
+    if (socket) drive(win.webview, socket, { startup: () => ({ ...startupMarks(), ...navigationTimes() }) });
   }
   const tray = startAppLife({
     win,

@@ -1,4 +1,4 @@
-export type StartupMark = "main" | "window" | "webview" | "load" | "life" | "updates" | "willNavigate" | "committed" | "domReady" | "keysAsk" | "keysReply" | "tray";
+export type StartupMark = "main" | "prewarm" | "window" | "webview" | "load" | "life" | "updates" | "willNavigate" | "committed" | "domReady" | "keysAsk" | "keysReply" | "tray";
 
 export type StartupMarks = Partial<Record<StartupMark | "bun", number>>;
 
