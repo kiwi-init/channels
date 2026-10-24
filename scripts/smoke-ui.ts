@@ -177,7 +177,7 @@ async function run(part: Part): Promise<string[]> {
     const side = page.getByRole("complementary", { name: "Channel" });
     if (name === "Tasks") return side.getByRole("navigation", { name: "Views" }).getByRole("button", { name: "Tasks", exact: true }).click();
     if (name === "Agents") return side.getByRole("region", { name: "Agents" }).getByRole("button", { name: "Agents", exact: true }).click();
-    return side.getByRole("region", { name: "Conversations" }).getByRole("button").first().click();
+    return side.getByRole("region", { name: "Conversations" }).getByRole("list").getByRole("button").first().click();
   };
 
   const openFromBoard = async (title: RegExp) => {
