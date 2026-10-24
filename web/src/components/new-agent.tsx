@@ -363,7 +363,9 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
             const can = list.filter(startable)
             if (can.length === 0)
               return (
-                <Problem onRetry={retryRows}>Nothing on {where} can start an agent yet. Install Claude Code, Codex, Gemini CLI, Grok, MiMo Code, Kimi Code or OpenCode there, then try again.</Problem>
+                <Problem onRetry={retryRows}>
+                  Nothing on {where} can start an agent yet. Install Claude Code, Codex, Gemini CLI, Grok, MiMo Code, Kimi Code, Pi or OpenCode there, then try again.
+                </Problem>
               )
             return (
               <div role="radiogroup" aria-label="Harness" className="grid grid-cols-2 gap-1.5">

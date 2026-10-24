@@ -26,6 +26,18 @@ export function settingsBridge(): Settings | null {
   }
 }
 
+type Roots = Pick<KiwiBridge, "launchRoots" | "setLaunchRoot" | "chooseFolder">
+
+export function rootsBridge(): Roots | null {
+  try {
+    const k = (window as unknown as { kiwi?: Partial<Roots> }).kiwi
+    return k && typeof k.launchRoots === "function" && typeof k.setLaunchRoot === "function" && typeof k.chooseFolder === "function" ? (k as Roots) : null
+  } catch {
+    // No window (a test or a worker): no folders to add.
+    return null
+  }
+}
+
 export function canStartAgents(): boolean {
   return launcher() !== null
 }

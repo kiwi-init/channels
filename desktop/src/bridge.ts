@@ -360,6 +360,8 @@ export interface KiwiBridge {
   harnessesOn(machinePk: string): Promise<FromMachine<HarnessRow[]>>;
   foldersOn(machinePk: string, roomId: string): Promise<FromMachine<string[]>>;
   settingsOn(machinePk: string): Promise<FromMachine<ComputerSettings>>;
+  launchRoots(): Promise<string[]>;
+  setLaunchRoot(dir: string, to: "add" | "remove"): Promise<string[]>;
 }
 
 export interface UpdateView {
