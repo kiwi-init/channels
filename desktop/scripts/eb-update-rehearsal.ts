@@ -8,6 +8,7 @@ import { compareVersions } from "@kiwi/core/versions.ts";
 import desktopPackage from "../package.json" with { type: "json" };
 import { signedLikeThisApp } from "../src/signer.ts";
 import { swapAsset, swapScript } from "../src/update-asset.ts";
+import { homeKeychain, stuck } from "./eb-home-keychain.ts";
 
 const [oldZip, newZip] = process.argv.slice(2);
 if (!oldZip || !newZip) throw new Error("usage: bun desktop/scripts/eb-update-rehearsal.ts <Electron Channels-…-mac-arm64.zip> <new Channels-…-mac-arm64.zip>");
@@ -53,6 +54,7 @@ function tree(root: number): number[] {
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "eb-update-rehearsal-"));
 let app: ReturnType<typeof spawn> | null = null;
+let dropKeychain: () => void = () => {};
 try {
   const apps = path.join(tmp, "Applications");
   fs.mkdirSync(apps);
@@ -101,12 +103,17 @@ try {
 
   const home = path.join(tmp, "home");
   fs.mkdirSync(home);
+  dropKeychain = homeKeychain(home);
   app = spawn(path.join(target, "Contents", "MacOS", plist(target, "CFBundleExecutable")), [], { stdio: "ignore", env: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: home, TMPDIR: tmp } });
   const started = Date.now();
   const launched = app.pid ?? 0;
-  const win = await until("the updated app's window", 30_000, () => windowOf(tree(launched)));
+  const win = await until("the updated app's window", 30_000, () => windowOf(tree(launched))).catch((e: unknown) => {
+    for (const pid of tree(launched)) console.error(`update rehearsal: where it waits:\n${stuck(pid)}`);
+    throw e;
+  });
   console.log(`the updated app opened its window (${win}) ${Date.now() - started} ms after launch`);
 } finally {
   if (app?.pid) for (const pid of tree(app.pid).reverse()) spawnSync("kill", ["-9", String(pid)]);
+  dropKeychain();
   fs.rmSync(tmp, { recursive: true, force: true });
 }
