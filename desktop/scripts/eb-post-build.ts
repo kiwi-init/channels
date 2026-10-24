@@ -8,6 +8,7 @@ import { JOIN_SCHEME } from "../src/deep-links.ts";
 import { PAGE_TEMPLATE, pageWithCsp } from "../src/eb-page.ts";
 import type { FromWorker, ToWorker } from "../src/keys-shim.ts";
 import { bundleProblems, keyChannelProblems, shortVersion, testBuildProblems, urlSchemeProblems, versionProblems } from "./eb-bundle.ts";
+import { buildNativeWrapper } from "./eb-native-wrapper.ts";
 import { hostKey, mismatches, pinFor, PINS } from "./eb-pins.ts";
 import { sealApp } from "./eb-seal.ts";
 import { ELECTROBUN_LAUNCHER } from "./linux-files.ts";
@@ -62,6 +63,12 @@ if (os === "linux") {
   fs.renameSync(theirs, path.join(bin, ELECTROBUN_LAUNCHER));
   execFileSync("cc", ["-O2", "-Wall", "-Wextra", "-Werror", "-o", theirs, path.join(desktop, "native", "linux", "kiwi-launcher.c")], { stdio: "inherit" });
   console.log(`eb-post-build: bin/launcher keeps the app's environment to an allowlist, then starts Electrobun's (bin/${ELECTROBUN_LAUNCHER})`);
+  const wrapper = path.join(bin, "libNativeWrapper.so");
+  if (!fs.existsSync(wrapper)) throw new Error(`eb-post-build: no Electrobun native wrapper at ${wrapper}`);
+  await buildNativeWrapper(wrapper, path.join(bin, "libasar.so"));
+  console.log(
+    `eb-post-build: bin/libNativeWrapper.so is built from Electrobun ${PINS.electrobun}'s source with desktop/native/linux/electrobun-wayland.patch, so GTK opens Wayland natively when WAYLAND_DISPLAY is set`,
+  );
   const webkit = execFileSync("pkg-config", ["--cflags", "--libs", "webkit2gtk-4.1"], { encoding: "utf8" }).trim().split(/\s+/);
   execFileSync("cc", ["-shared", "-fPIC", "-O2", "-Wall", "-Wextra", "-Werror", "-o", path.join(bin, "libkiwi-shell.so"), path.join(desktop, "native", "linux", "kiwi-shell.c"), ...webkit], {
     stdio: "inherit",
