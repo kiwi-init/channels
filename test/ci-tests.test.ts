@@ -9,13 +9,13 @@ afterAll(() => {
   for (const d of dirs) rmSync(d, { recursive: true, force: true });
 });
 
-function project(tests: Record<string, string>, flows: Record<string, string[]>): string {
+function project(tests: Record<string, string>, flows: string[]): string {
   const dir = mkdtempSync(join(tmpdir(), "kiwi-ci-tests-"));
   dirs.push(dir);
   mkdirSync(join(dir, "scripts"));
   mkdirSync(join(dir, "test"));
-  for (const f of ["ci-tests.ts", "ci-shards.ts"]) copyFileSync(join(SCRIPTS, f), join(dir, "scripts", f));
-  writeFileSync(join(dir, "scripts", "ci-flows.ts"), `export const FLOWS: Record<string, string[]> = ${JSON.stringify(flows)};\n`);
+  copyFileSync(join(SCRIPTS, "ci-tests.ts"), join(dir, "scripts", "ci-tests.ts"));
+  writeFileSync(join(dir, "scripts", "ci-flows.ts"), `export const FLOWS: string[] = ${JSON.stringify(flows)};\n`);
   for (const [name, body] of Object.entries(tests)) writeFileSync(join(dir, "test", `${name}.test.ts`), `import { expect, test } from "bun:test";\n${body}\n`);
   return dir;
 }
@@ -30,28 +30,17 @@ async function run(dir: string, ...args: string[]): Promise<{ code: number; err:
 const passing = `test("adds", () => expect(1 + 1).toBe(2));`;
 
 describe("scripts/ci-tests.ts", () => {
-  test("a group whose files all run passes", async () => {
-    const r = await run(project({ a: passing, b: passing }, { slow: ["b"] }), "all");
-    expect(r.err).toContain("across 2 files");
-    expect(r.code).toBe(0);
-  }, 30_000);
-
-  test("shards run every file once between them, and each checks the files it was dealt", async () => {
-    const dir = project({ a: passing, b: passing, c: passing, d: passing, e: passing }, { slow: [] });
-    writeFileSync(
-      join(dir, "test", "timings.json"),
-      JSON.stringify({ version: 1, files: { "test/a.test.ts": 9000, "test/b.test.ts": 1000, "test/c.test.ts": 1000, "test/d.test.ts": 1000, "test/e.test.ts": 1000 } }),
-    );
-    const [one, two] = [await run(dir, "all", "--shard=1/2"), await run(dir, "all", "--shard=2/2")];
-    expect([one.code, two.code]).toEqual([0, 0]);
-    expect(one.err).toContain("across 1 file.");
-    expect(two.err).toContain("across 4 files.");
-    expect((await run(dir, "all", "--shard=3/2")).code).toBe(2);
-    expect((await run(dir, "all", "--shards=1/2")).code).toBe(2);
+  test("all runs every file, unit leaves the flows out, flows runs only them, and anything else is refused", async () => {
+    const dir = project({ a: passing, b: passing, c: passing }, ["c"]);
+    expect((await run(dir, "all")).err).toContain("across 3 files.");
+    expect((await run(dir, "unit")).err).toContain("across 2 files.");
+    expect((await run(dir, "flows")).err).toContain("across 1 file.");
+    expect((await run(dir, "flows-a")).code).toBe(2);
+    expect((await run(dir, "all", "--shard=1/2")).code).toBe(2);
   }, 30_000);
 
   test("a test that ends the run with exit 0 fails the group: it didn't run every file", async () => {
-    const r = await run(project({ exits: `test("leaves", () => process.exit(0));`, a: passing }, { slow: ["exits"] }), "slow");
+    const r = await run(project({ exits: `test("leaves", () => process.exit(0));`, a: passing }, ["exits"]), "flows");
     expect(r.err).toContain("a test ended the run early");
     expect(r.code).toBe(1);
   }, 30_000);
@@ -62,8 +51,8 @@ describe("scripts/ci-tests.ts", () => {
   sleeper.unref();
   await Bun.write("sleeper.pid", String(sleeper.pid));
 });`;
-    const dir = project({ leaves, a: passing }, { slow: ["leaves"] });
-    const r = await run(dir, "slow");
+    const dir = project({ leaves, a: passing }, ["leaves"]);
+    const r = await run(dir, "flows");
     process.kill(Number(await Bun.file(join(dir, "sleeper.pid")).text()), "SIGKILL");
     expect(r.code).toBe(0);
     expect(r.ms).toBeLessThan(8_000);
@@ -71,7 +60,7 @@ describe("scripts/ci-tests.ts", () => {
 
   test("the file count comes from the last summary, so a test printing one of its own can't stand in for it", async () => {
     const prints = `test("prints a summary", () => console.error("Ran 9 tests across 9 files."));`;
-    const r = await run(project({ prints, a: passing }, { slow: ["prints"] }), "all");
+    const r = await run(project({ prints, a: passing }, ["prints"]), "all");
     expect(r.code).toBe(0);
   }, 30_000);
 });

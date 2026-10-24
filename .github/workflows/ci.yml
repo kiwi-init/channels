@@ -114,66 +114,34 @@ jobs:
     if: fromJSON(needs.plan.outputs.run)['test-unit']
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
-      - run: bun scripts/ci-tests.ts unit --shard=${{ matrix.shard }}/2
+      - run: bun scripts/ci-tests.ts unit
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         timeout-minutes: 1
         with:
           job: test-unit
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['test-unit'] }}
-          shard: ${{ matrix.shard }}of2
 
-  # The slow suites against a real local relay, split in two so they run side by side (scripts/ci-tests.ts).
-  test-flows-a:
-    name: test / flows-a
+  # The slow suites against a real local relay (scripts/ci-flows.ts).
+  test-flows:
+    name: test / flows
     needs: plan
-    if: fromJSON(needs.plan.outputs.run)['test-flows-a']
+    if: fromJSON(needs.plan.outputs.run)['test-flows']
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
-      - run: bun scripts/ci-tests.ts flows-a --shard=${{ matrix.shard }}/2
+      - run: bun scripts/ci-tests.ts flows
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         timeout-minutes: 1
         with:
-          job: test-flows-a
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['test-flows-a'] }}
-          shard: ${{ matrix.shard }}of2
-
-  test-flows-b:
-    name: test / flows-b
-    needs: plan
-    if: fromJSON(needs.plan.outputs.run)['test-flows-b']
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2]
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: ./.github/actions/setup
-      - run: bun scripts/ci-tests.ts flows-b --shard=${{ matrix.shard }}/2
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        timeout-minutes: 1
-        with:
-          job: test-flows-b
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['test-flows-b'] }}
-          shard: ${{ matrix.shard }}of2
+          job: test-flows
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['test-flows'] }}
 
   # The web dashboard, the CLI binary and the worker, each built and smoke-tested.
   build:
@@ -516,17 +484,12 @@ jobs:
     if: fromJSON(needs.plan.outputs.run)['cli-macos']
     runs-on: macos-latest
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
       - run: brew install tmux
-      - run: bun scripts/ci-tests.ts all --shard=${{ matrix.shard }}/3
-      - if: matrix.shard == 1
-        run: |
+      - run: bun scripts/ci-tests.ts all
+      - run: |
           mkdir -p dist
           for t in darwin-arm64 darwin-x64 linux-x64 linux-arm64; do
             bun scripts/build-cli.ts --target "bun-$t" --outfile "dist/kiwi-$t"
@@ -545,7 +508,6 @@ jobs:
         with:
           job: cli-macos
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['cli-macos'] }}
-          shard: ${{ matrix.shard }}of3
 
   # The iPhone app: Swift lint, then an unsigned build for devices with the engine bundled in.
   ios:
@@ -676,7 +638,7 @@ jobs:
   # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, static, test-unit, test-flows-a, test-flows-b, build, shots, desktop-mac, desktop-linux, cli-macos, ios, ios-gestures, android]
+    needs: [plan, static, test-unit, test-flows, build, shots, desktop-mac, desktop-linux, cli-macos, ios, ios-gestures, android]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
