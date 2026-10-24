@@ -71,6 +71,7 @@ export interface Config {
   contextLine?: "on" | "off";
   rex?: "on" | "off";
   launch?: "on" | "off";
+  launchRoots?: string[];
   terminals?: Terminals;
 }
 
