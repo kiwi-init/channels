@@ -49,7 +49,11 @@ With JDK 17 and the Android SDK (`ANDROID_HOME`, platform 36):
 ```bash
 bun install
 cd android && ./gradlew assembleRelease     # app/build/outputs/apk/release/app-release.apk
+./gradlew recordRoborazziRelease            # app/build/screens/*.png: every screen, light and dark
 ```
+
+CI draws the same screens in `android / build` and keeps them as the `android-screens` artifact,
+so a change to a screen can be looked at without a phone.
 
 ## A channel to try it on
 
