@@ -4,6 +4,7 @@ import { dirname, join, resolve } from "node:path";
 
 export interface Driver {
   evaluate<A, R>(fn: (arg: A) => R | Promise<R>, arg: A, ms?: number): Promise<R>;
+  main(name: string, ms?: number): Promise<unknown>;
   close(): void;
 }
 
@@ -22,6 +23,20 @@ export function appExecutable(path: string): string {
   if (!full.endsWith(".app")) return full;
   const name = execFileSync("plutil", ["-extract", "CFBundleExecutable", "raw", join(full, "Contents", "Info.plist")], { encoding: "utf8" }).trim();
   return join(full, "Contents", "MacOS", name);
+}
+
+export function processesOf(app: string): string[] {
+  const contents = `${resolve(app).replace(/\.app(\/.*)?$/, ".app")}/Contents/`;
+  return execFileSync("ps", ["-Ao", "pid=,command="], { encoding: "utf8" })
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.includes(contents));
+}
+
+export function webkitHelpers(): number {
+  return execFileSync("ps", ["-Ao", "comm="], { encoding: "utf8" })
+    .split("\n")
+    .filter((l) => l.includes("/com.apple.WebKit.")).length;
 }
 
 export function testEnv(root: string, socket: string, relay: string, extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
@@ -97,27 +112,29 @@ export async function attach(socketPath: string, ms = 60_000): Promise<Driver> {
           },
         },
       });
-      return {
-        evaluate<A, R>(fn: (arg: A) => R | Promise<R>, arg: A, wait = 30_000): Promise<R> {
-          const id = ++next;
-          return new Promise<R>((ok, fail) => {
-            const timer = setTimeout(() => {
-              waiting.delete(id);
-              fail(new Error(`the page didn't answer in ${wait / 1000}s`));
-            }, wait);
-            waiting.set(id, {
-              ok: (v) => {
-                clearTimeout(timer);
-                ok(v as R);
-              },
-              fail: (e) => {
-                clearTimeout(timer);
-                fail(e);
-              },
-            });
-            socket.write(`${JSON.stringify({ id, fn: fn.toString(), arg: JSON.stringify(arg ?? null) })}\n`);
+      const ask = (fields: Record<string, string>, who: string, wait: number): Promise<unknown> => {
+        const id = ++next;
+        return new Promise<unknown>((ok, fail) => {
+          const timer = setTimeout(() => {
+            waiting.delete(id);
+            fail(new Error(`${who} didn't answer in ${wait / 1000}s`));
+          }, wait);
+          waiting.set(id, {
+            ok: (v) => {
+              clearTimeout(timer);
+              ok(v);
+            },
+            fail: (e) => {
+              clearTimeout(timer);
+              fail(e);
+            },
           });
-        },
+          socket.write(`${JSON.stringify({ id, ...fields })}\n`);
+        });
+      };
+      return {
+        evaluate: <A, R>(fn: (arg: A) => R | Promise<R>, arg: A, wait = 30_000): Promise<R> => ask({ fn: fn.toString(), arg: JSON.stringify(arg ?? null) }, "the page", wait) as Promise<R>,
+        main: (name: string, wait = 5_000): Promise<unknown> => ask({ main: name }, "the app's main", wait),
         close() {
           socket.end();
         },

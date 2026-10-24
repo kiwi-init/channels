@@ -37,10 +37,8 @@ static NSString *thePage = nil;
 static BOOL isThePage(NSURL *url) {
   NSString *s = url.absoluteString;
   NSUInteger n = thePage.length;
-  if (n == 0 || s.length < n || [[s substringToIndex:n] caseInsensitiveCompare:thePage] != NSOrderedSame) return NO;
-  if (s.length == n) return YES;
-  unichar next = [s characterAtIndex:n];
-  return next == '#' || next == '?';
+  if (n == 0 || ![s hasPrefix:thePage]) return NO;
+  return s.length == n || [s characterAtIndex:n] == '#';
 }
 
 static BOOL ownDownload(WKNavigationAction *action) {

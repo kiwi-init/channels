@@ -77,9 +77,19 @@ describe("the Electrobun page carries the app's CSP before any script (T434)", (
 
 describe("the window shows the page and sends everything else to the browser (T434, T804)", () => {
   test("navigation is allowed to the one page only, with its hash or query", () => {
-    expect(PAGE_RULES).toEqual(["^*", PAGE_URL, `${PAGE_URL}#*`, `${PAGE_URL}?*`]);
-    for (const u of [PAGE_URL, `${PAGE_URL}#mc2-abc`, `${PAGE_URL}?relay=http://127.0.0.1:8787`, "views://internal/Index.html"]) expect(isPageUrl(u)).toBe(true);
-    for (const u of ["views://internal/assets/index.js?.html", "views://internal/index.htmlx", "views://internal/", "views://internal/index.html/..", RULES_CANARY, "https://channels.kiwiinit.com/"])
+    expect(PAGE_RULES).toEqual(["^*", PAGE_URL, `${PAGE_URL}#*`]);
+    for (const u of [PAGE_URL, `${PAGE_URL}#mc2-abc`]) expect(isPageUrl(u)).toBe(true);
+    for (const u of [
+      `${PAGE_URL}?relay=http://127.0.0.1:8787`,
+      "views://internal/Index.html",
+      "VIEWS://internal/index.html",
+      "views://internal/assets/index.js?.html",
+      "views://internal/index.htmlx",
+      "views://internal/",
+      "views://internal/index.html/..",
+      RULES_CANARY,
+      "https://channels.kiwiinit.com/",
+    ])
       expect(isPageUrl(u)).toBe(false);
   });
 
@@ -89,6 +99,7 @@ describe("the window shows the page and sends everything else to the browser (T4
     expect(navigation(`{"url":"${RULES_CANARY}","allowed":false}`)).toEqual({ kind: "refused", url: RULES_CANARY });
     expect(navigation('{"url":"https://evil.example/","allowed":true}')).toEqual({ kind: "breach", url: "https://evil.example/" });
     expect(navigation(`{"url":"${RULES_CANARY}","allowed":true}`)).toEqual({ kind: "breach", url: RULES_CANARY });
+    for (const near of [`${PAGE_URL}?x=1`, "views://internal/INDEX.html"]) expect(navigation(JSON.stringify({ url: near, allowed: true }))).toEqual({ kind: "breach", url: near });
     for (const d of ['{"url":"https://x"}', '{"allowed":false}', '{"url":1,"allowed":false}', "not json", "null", 42, null, undefined, { url: "https://x", allowed: false }])
       expect(navigation(d)).toEqual({ kind: "breach", url: null });
   });

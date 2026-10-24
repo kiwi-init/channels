@@ -124,7 +124,7 @@ async function probe(): Promise<ProbeReport> {
     const made = randomBytes(32).toString("base64");
     report["set"] = await step(() => key.set(made).then(() => made));
     report["markedBefore"] = await step(marked);
-    report["finish"] = await step(() => key.finish().then(() => "ok"));
+    report["finish"] = await step(() => key.finish(made).then(() => "ok"));
     report["markedAfter"] = await step(marked);
   } else {
     report["drop"] = await step(() => key.drop().then(() => "dropped"));
