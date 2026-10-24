@@ -147,7 +147,7 @@ describe("store v2", () => {
     const k = keychain();
     const s = await openStore({ dir, key: k.key, legacy, platform: "darwin" });
     expect(s.kind).toBe("unreadable");
-    expect(s.kind === "unreadable" && s.why).toContain("/old/kiwi-store.bin");
+    expect(s.kind === "unreadable" && s.file).toBe("/old/kiwi-store.bin");
     expect(s.kind === "unreadable" && s.why).toContain("the keychain said no");
     expect(existsSync(dir)).toBe(false);
     expect(k.sets()).toBe(0);

@@ -6,7 +6,7 @@ export const LEGACY_NAMES = ["kiwi-desktop", "Kiwi"] as const;
 
 export type LegacyName = (typeof LEGACY_NAMES)[number];
 
-export type LegacyPassword = (name: LegacyName) => Promise<string | null>;
+export type LegacyPassword = (name: LegacyName) => Promise<string[]>;
 
 export type LegacyRead = { kind: "none" } | { kind: "ok"; json: Record<string, unknown>; file: string; encrypted: boolean } | { kind: "unreadable"; file: string; why: string; keyless?: true };
 
@@ -47,10 +47,15 @@ function storeObject(text: string): Record<string, unknown> {
 
 const reason = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
-function legacyKey(prefix: Prefix, name: LegacyName, platform: NodeJS.Platform, password: LegacyPassword): Promise<string | null> {
-  if (platform === "linux" && prefix === "v10") return Promise.resolve(LINUX_V10_PASSWORD);
-  return password(name).catch(() => null);
+function legacyKeys(prefix: Prefix, name: LegacyName, platform: NodeJS.Platform, password: LegacyPassword): Promise<string[]> {
+  if (platform === "linux" && prefix === "v10") return Promise.resolve([LINUX_V10_PASSWORD]);
+  return password(name).catch(() => []);
 }
+
+const noKey = (name: LegacyName, platform: NodeJS.Platform): string =>
+  platform === "linux"
+    ? `Channels found the key the old app saved as "${name} Safe Storage" neither in KDE's wallet nor in your Secret Service (GNOME Keyring or another)`
+    : `the system keychain didn't give Channels the key the old app saved as "${name} Safe Storage"`;
 
 export async function readLegacyAt(file: string, name: LegacyName, platform: NodeJS.Platform, password: LegacyPassword): Promise<LegacyRead> {
   let raw: Uint8Array;
@@ -68,17 +73,21 @@ export async function readLegacyAt(file: string, name: LegacyName, platform: Nod
       return { kind: "unreadable", file, why: reason(e) };
     }
   }
-  const pw = await legacyKey(prefix, name, platform, password);
-  if (pw === null) return { kind: "unreadable", file, why: `the system keychain didn't give Channels the key the old app saved as "${name} Safe Storage"`, keyless: true };
-  try {
-    return { kind: "ok", json: storeObject(await openLegacy(raw, pw, legacyRounds(platform))), file, encrypted: !(platform === "linux" && prefix === "v10") };
-  } catch (e) {
-    return { kind: "unreadable", file, why: `its key didn't open it (${reason(e)})` };
+  const keys = await legacyKeys(prefix, name, platform, password);
+  if (!keys.length) return { kind: "unreadable", file, why: noKey(name, platform), keyless: true };
+  let failed = "";
+  for (const pw of keys) {
+    try {
+      return { kind: "ok", json: storeObject(await openLegacy(raw, pw, legacyRounds(platform))), file, encrypted: !(platform === "linux" && prefix === "v10") };
+    } catch (e) {
+      failed = reason(e);
+    }
   }
+  return { kind: "unreadable", file, why: keys.length > 1 ? `none of the ${keys.length} keys your keychain holds for it opened it (${failed})` : `its key didn't open it (${failed})` };
 }
 
 export async function readLegacyStore(password: LegacyPassword, platform: NodeJS.Platform = process.platform, home: string = os.homedir(), env: NodeJS.ProcessEnv = process.env): Promise<LegacyRead> {
-  const asked = new Map<LegacyName, Promise<string | null>>();
+  const asked = new Map<LegacyName, Promise<string[]>>();
   const once: LegacyPassword = (name) => {
     const had = asked.get(name);
     if (had) return had;

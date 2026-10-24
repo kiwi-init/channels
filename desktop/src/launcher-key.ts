@@ -106,8 +106,10 @@ export function launcherKey(ch: LineChannel): StoreKey {
 
 export const launcherLegacyPassword =
   (ch: LineChannel): LegacyPassword =>
-  async (name) =>
-    keyOrNone(ch.request(`legacy ${name}`));
+  async (name) => {
+    const key = keyOrNone(ch.request(`legacy ${name}`));
+    return key === null ? [] : [key];
+  };
 
 export function keyFd(env: NodeJS.ProcessEnv): number | null {
   const raw = env[KEY_FD_ENV];

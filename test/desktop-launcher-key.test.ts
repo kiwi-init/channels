@@ -80,9 +80,9 @@ describe("the store key through the launcher", () => {
 
   test("the old app's key is asked for by its name", async () => {
     const s = scripted({ legacy: `key ${b64("pw")}` });
-    expect(await launcherLegacyPassword(s.ch)("kiwi-desktop")).toBe("pw");
+    expect(await launcherLegacyPassword(s.ch)("kiwi-desktop")).toEqual(["pw"]);
     expect(s.asked).toEqual(["legacy kiwi-desktop"]);
-    expect(await launcherLegacyPassword(scripted({ legacy: "none" }).ch)("Kiwi")).toBeNull();
+    expect(await launcherLegacyPassword(scripted({ legacy: "none" }).ch)("Kiwi")).toEqual([]);
   });
 });
 
