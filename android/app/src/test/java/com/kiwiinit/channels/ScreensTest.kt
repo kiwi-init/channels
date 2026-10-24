@@ -41,12 +41,16 @@ class ScreensTest {
     fun details() = shoot("details") { DetailsScreen(it, DEV, "main", back = {}, choose = {}) }
 
     @Test
+    fun detailsReview() = shoot("details-review", { it.rooms[DEV] = it.rooms.getValue(DEV).copy(asks = emptyList()) }) { DetailsScreen(it, DEV, "main", back = {}, choose = {}) }
+
+    @Test
     fun settings() = shoot("settings") { SettingsScreen(it) {} }
 
-    private fun shoot(name: String, screen: @Composable (AppModel) -> Unit) {
+    private fun shoot(name: String, prepare: (AppModel) -> Unit = {}, screen: @Composable (AppModel) -> Unit) {
         for ((look, qualifier) in listOf("light" to "+notnight", "dark" to "+night")) {
             RuntimeEnvironment.setQualifiers(qualifier)
             val model = sample(RuntimeEnvironment.getApplication())
+            prepare(model)
             captureRoboImage("build/screens/$name-$look.png") {
                 ChannelsTheme {
                     Surface(Modifier.fillMaxSize()) { screen(model) }
