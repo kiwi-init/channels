@@ -27,7 +27,7 @@ jobs:
           if [ "${{ matrix.desktop }}" = kde ]; then
             sudo apt-get install -y --no-install-recommends $common kwin-wayland breeze libgl1-mesa-dri libegl-mesa0 gdb
           else
-            sudo apt-get install -y --no-install-recommends $common gnome-shell gnome-settings-daemon gsettings-desktop-schemas xdg-desktop-portal xdg-desktop-portal-gnome adwaita-icon-theme x11-apps imagemagick
+            sudo apt-get install -y --no-install-recommends $common gnome-shell gnome-settings-daemon gsettings-desktop-schemas xdg-desktop-portal xdg-desktop-portal-gnome adwaita-icon-theme x11-apps imagemagick gir1.2-webkit2-4.1
           fi
       - name: main's Linux deb
         env:

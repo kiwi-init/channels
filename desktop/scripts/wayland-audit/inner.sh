@@ -112,6 +112,21 @@ note "bus names with the app: $(cat "$OUT/$TAG-names-app.json")"
 [ "$TAG" = main ] || { stop_app; note "done ($TAG)"; exit 0; }
 
 if [ "$D" = gnome ]; then
+  note "2a. what a WebKitGTK page sees for prefers-color-scheme"
+  for backend in x11 wayland; do
+    gsettings reset org.gnome.desktop.interface gtk-theme
+    gsettings reset org.gnome.desktop.interface color-scheme
+    sleep 2
+    GDK_BACKEND=$backend timeout 30 python3 "$HERE/dark.py" "$backend default" 2>> "$OUT/probe.log" | tee -a "$OUT/notes.txt"
+    gsettings set org.gnome.desktop.interface color-scheme prefer-dark
+    sleep 2
+    GDK_BACKEND=$backend timeout 30 python3 "$HERE/dark.py" "$backend color-scheme=prefer-dark (GNOME's Appearance: Dark)" 2>> "$OUT/probe.log" | tee -a "$OUT/notes.txt"
+    gsettings set org.gnome.desktop.interface gtk-theme Adwaita-dark
+    sleep 2
+    GDK_BACKEND=$backend timeout 30 python3 "$HERE/dark.py" "$backend color-scheme=prefer-dark + gtk-theme=Adwaita-dark" 2>> "$OUT/probe.log" | tee -a "$OUT/notes.txt"
+  done
+  gsettings reset org.gnome.desktop.interface gtk-theme
+  gsettings reset org.gnome.desktop.interface color-scheme
   note "2. dark: color-scheme prefer-dark (what GNOME's Appearance panel sets)"
   gsettings set org.gnome.desktop.interface color-scheme prefer-dark
   sleep 4
