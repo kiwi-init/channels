@@ -35,8 +35,6 @@ jobs:
   build:
     needs: on-main
     uses: ./.github/workflows/release-build.yml
-    with:
-      electrobun_mac: false
     secrets: inherit
 
   publish:

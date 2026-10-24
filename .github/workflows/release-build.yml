@@ -6,9 +6,6 @@ on:
       rehearsal:
         type: boolean
         default: false
-      electrobun_mac:
-        type: boolean
-        default: false
     secrets:
       MAC_CERT_P12_BASE64:
         required: false
@@ -123,19 +120,9 @@ jobs:
           path: dist/kiwi-*
           overwrite: true
 
-  # The Electron app builds on each OS for that OS: dmg/zip on macOS, AppImage/deb
-  # on Linux. Unsigned for now. No Windows app, and no Windows CLI.
   desktop:
     needs: version
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            target: macos
-          - os: ubuntu-latest
-            target: linux
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-latest
     environment: ${{ (!inputs.rehearsal || github.ref == 'refs/heads/main') && 'release' || '' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -168,7 +155,6 @@ jobs:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           REHEARSAL: ${{ inputs.rehearsal }}
-          ELECTROBUN_MAC: ${{ inputs.electrobun_mac }}
         run: |
           cli() { bun ../scripts/build-cli.ts --target "$1" --outfile ../dist/kiwi; }
           pack() { bun scripts/pack-cli.ts ../dist/kiwi; }
@@ -182,7 +168,7 @@ jobs:
           mkdir -p ../dist
           bun run build
           sign=()
-          if [ "${{ runner.os }}" = macOS ] && [ -n "$MAC_CERT_P12_BASE64" ] && [ -n "$APPLE_API_KEY_P8" ]; then
+          if [ -n "$MAC_CERT_P12_BASE64" ] && [ -n "$APPLE_API_KEY_P8" ]; then
             # A keychain of our own for this job: the certificate in it, codesign allowed to use its key
             # without asking, and on the search list so codesign finds it. electron-builder then signs the
             # app and everything in it (the bundled kiwi too) with the hardened runtime from that keychain,
@@ -214,7 +200,7 @@ jobs:
             sign=(-c.mac.notarize=true)
             echo "signing and notarizing with the Developer ID"
           else
-            if [ "${{ runner.os }}" = macOS ] && [ "$REHEARSAL" != true ]; then
+            if [ "$REHEARSAL" != true ]; then
               echo "a release can't publish an unsigned Mac app (Macs would never update to it): set MAC_CERT_P12_BASE64, MAC_CERT_PASSWORD and APPLE_API_KEY_P8, or run it as a rehearsal"
               exit 1
             fi
@@ -222,17 +208,7 @@ jobs:
             export CSC_IDENTITY_AUTO_DISCOVERY=false
             echo "no signing secrets: building unsigned"
           fi
-          case "${{ runner.os }}" in
-            macOS)
-              if [ "$ELECTROBUN_MAC" != true ]; then
-                cli bun-darwin-arm64 && signcli && pack && bunx electron-builder --mac --arm64 --publish never "${sign[@]}"
-              fi
-              cli bun-darwin-x64 && signcli && pack && bunx electron-builder --mac --x64 --publish never "${sign[@]}"
-              ;;
-            *)
-              cli bun-linux-x64 && pack && bunx electron-builder --linux --publish never
-              ;;
-          esac
+          cli bun-darwin-x64 && signcli && pack && bunx electron-builder --mac --x64 --publish never "${sign[@]}"
           # Signed: prove it before anything ships. A valid Developer ID signature on every file, the
           # notarization ticket stapled, and Gatekeeper accepting the app as it would on a user's Mac.
           if [ ${#sign[@]} -gt 0 ]; then
@@ -256,29 +232,22 @@ jobs:
               spctl --assess --type execute --verbose=2 "$app"
             done
           fi
-          # The app is useless without these: fail here, not on a user's machine. Every app built
-          # (two on macOS) must carry both: a Mac app keeps them in Contents/Resources, Linux's
-          # unpacked app in resources. No `find | grep -q`: under pipefail, grep quitting early fails it.
-          apps=$(find release -maxdepth 4 -type d \( -path 'release/*-unpacked/resources' -o -path 'release/*/*.app/Contents/Resources' \))
+          # The app is useless without these: fail here, not on a user's machine.
+          # No `find | grep -q`: under pipefail, grep quitting early fails it.
+          apps=$(find release -maxdepth 4 -type d -path 'release/*/*.app/Contents/Resources')
           [ -n "$apps" ] || { echo "no packaged app found under release/"; exit 1; }
           for r in $apps; do
             [ -f "$r/web/dist/index.html" ] || { echo "web/dist missing from $r"; exit 1; }
             [ -f "$r/kiwi.zst" ] || { echo "kiwi.zst missing from $r"; exit 1; }
           done
           echo "checked: $apps"
-          bins=$(find release -maxdepth 2 \( -path 'release/mac*/Channels.app' -o -path 'release/*-unpacked/channels-desktop' \))
+          bins=$(find release -maxdepth 2 -path 'release/mac*/Channels.app')
           [ -n "$bins" ] || { echo "no packaged app found to read the fuses of"; exit 1; }
           bun scripts/fuses.ts $bins
 
       - name: Size
-        if: runner.os == 'macOS'
         shell: bash
         run: bun desktop/scripts/mac-size.ts desktop/release
-
-      - name: AppImage compression
-        if: runner.os == 'Linux'
-        shell: bash
-        run: bun desktop/scripts/appimage-squashfs.ts desktop/release
 
       - name: Collect
         shell: bash
@@ -286,7 +255,7 @@ jobs:
           bun -e '
             const fs = require("fs");
             fs.mkdirSync("out", { recursive: true });
-            const exts = [".dmg", ".zip", ".appimage", ".deb"];
+            const exts = [".dmg", ".zip"];
             const dir = "desktop/release";
             const names = fs.readdirSync(dir).filter((f) => exts.some((e) => f.toLowerCase().endsWith(e)));
             for (const n of names) fs.copyFileSync(`${dir}/${n}`, `out/${n}`);
@@ -298,14 +267,13 @@ jobs:
         if: ${{ !inputs.rehearsal }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: release-desktop-${{ matrix.target }}
+          name: release-desktop-mac-x64
           path: out/*
           if-no-files-found: error
           overwrite: true
 
   desktop-mac-eb:
     needs: version
-    if: ${{ inputs.rehearsal || inputs.electrobun_mac }}
     runs-on: macos-latest
     timeout-minutes: 60
     environment: ${{ (!inputs.rehearsal || github.ref == 'refs/heads/main') && 'release' || '' }}
@@ -378,6 +346,9 @@ jobs:
           unset MAC_CERT_P12_BASE64 MAC_CERT_PASSWORD APPLE_API_KEY_P8
           bun desktop/scripts/eb-release.ts desktop/release-eb out
 
+      - name: No test code in what ships
+        run: bun desktop/scripts/eb-driver-check.ts --release out/Channels-*-mac-arm64.zip out/Channels-*-mac-arm64.dmg
+
       - name: Update from the Electron app
         shell: bash
         env:
@@ -388,10 +359,84 @@ jobs:
           bun desktop/scripts/eb-update-rehearsal.ts "$RUNNER_TEMP/electron/$old" out/Channels-*-mac-arm64.zip
 
       - name: Upload
-        if: ${{ !inputs.rehearsal && inputs.electrobun_mac }}
+        if: ${{ !inputs.rehearsal }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-desktop-mac-eb
           path: out/*
+          if-no-files-found: error
+          overwrite: true
+
+  desktop-linux-eb:
+    needs: version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: ./.github/actions/stamp
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: WebKitGTK, its sandbox, Xvfb and the AppImage tools
+        timeout-minutes: 15
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools
+
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.hutch
+          key: hutch-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/electrobun-pins.json') }}
+
+      - name: Build the renderer
+        run: bun run web:build
+
+      - name: Electrobun toolchain
+        working-directory: desktop
+        timeout-minutes: 5
+        run: for i in 1 2 3; do bun run prepare:eb && exit 0; echo "electrobun prepare failed ($i of 3)"; [ "$i" -lt 3 ] && sleep 20; done; exit 1
+
+      - name: The kiwi CLI the app bundles
+        run: mkdir -p dist && bun scripts/build-cli.ts --js dist/kiwi.js
+
+      - name: Build
+        working-directory: desktop
+        env:
+          CHANNELS_EB_RELEASE: "1"
+          DASH_RELEASE_OFFLINE: "1"
+        run: bun run build:eb
+
+      - name: deb and AppImage, each at most 40 MB
+        run: bun desktop/scripts/package-linux.ts desktop/release-eb out
+
+      - name: No test code in what ships
+        run: bun desktop/scripts/eb-driver-check.ts --release out/Channels-*-linux-amd64.deb out/Channels-*-linux-x86_64.AppImage
+
+      - name: The packages hold the app
+        run: bash desktop/scripts/linux-packages-check.sh out
+
+      - name: Update from the Electron app
+        run: bash desktop/scripts/linux-upgrade-check.sh out
+
+      - name: The installed app and the AppImage start
+        run: |
+          xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh /opt/Channels/bin/launcher unsandboxed
+          xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$PWD/$(ls out/Channels-*-linux-x86_64.AppImage)" unsandboxed --appimage-extract-and-run
+          sudo dpkg --purge kiwi-desktop
+
+      - name: Upload
+        if: ${{ !inputs.rehearsal }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-desktop-linux-eb
+          path: |
+            out/Channels-*-linux-amd64.deb
+            out/Channels-*-linux-x86_64.AppImage
           if-no-files-found: error
           overwrite: true
