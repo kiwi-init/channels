@@ -142,6 +142,15 @@ try {
     if (back && logged) console.log(`the app's ${ours.length} web content processes killed: the page reloaded and main.log says so (${logs[0]!.slice(root.length)})`);
     else if (back) problems.push(`the page reloaded but no main.log under the test HOME's ${logDir} says it stopped (found ${logs.length})`);
   }
+  if (linux) {
+    await d.main("closeWindow");
+    await later(2_000);
+    const shown = (await d.main("window")) as { visible?: unknown; minimized?: unknown };
+    if (shown.visible === true && alive().length)
+      console.log(`closed with no tray host on the session bus: the window stays, minimized (${String(shown.minimized)} here), not hidden with no way back`);
+    else
+      problems.push(`closed with no tray host on the session bus, the window ${shown.visible === false ? "was hidden, with nothing on screen to bring it back" : `answered ${JSON.stringify(shown)}`}`);
+  }
   d.close();
 } catch (e) {
   problems.push(e instanceof Error ? e.message : String(e));
