@@ -65,7 +65,7 @@ if (os === "linux") {
   console.log(`eb-post-build: bin/launcher keeps the app's environment to an allowlist, then starts Electrobun's (bin/${ELECTROBUN_LAUNCHER})`);
   const wrapper = path.join(bin, "libNativeWrapper.so");
   if (!fs.existsSync(wrapper)) throw new Error(`eb-post-build: no Electrobun native wrapper at ${wrapper}`);
-  await buildNativeWrapper(wrapper, path.join(bin, "libasar.so"));
+  buildNativeWrapper(wrapper, path.join(bin, "libasar.so"));
   console.log(
     `eb-post-build: bin/libNativeWrapper.so is built from Electrobun ${PINS.electrobun}'s source with desktop/native/linux/electrobun-wayland.patch, so GTK opens Wayland natively when WAYLAND_DISPLAY is set`,
   );

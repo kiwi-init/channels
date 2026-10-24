@@ -10,19 +10,24 @@ const CACHE = path.join(process.env.XDG_CACHE_HOME ?? path.join(os.homedir(), ".
 const GTK = ["webkit2gtk-4.1", "gtk+-3.0", "ayatana-appindicator3-0.1"];
 const SOURCES = ["nativeWrapper", "wayland_screen_capture", "wayland_pipewire_capture"];
 
-async function pinnedTree(name: string, pin: ArchiveTreePin): Promise<string> {
+function pinnedTree(name: string, pin: ArchiveTreePin): string {
   const dir = path.join(CACHE, `${name}-${pin.tree}`, path.basename(pin.keep));
-  if (fs.existsSync(dir) && treeSha256(dir) === pin.tree) return dir;
+  if (fs.existsSync(dir) && treeSha256(dir) === pin.tree) {
+    console.log(`eb-native-wrapper: ${name} from the cache, ${dir}`);
+    return dir;
+  }
   fs.mkdirSync(CACHE, { recursive: true });
   const tmp = fs.mkdtempSync(path.join(CACHE, `.${name}-`));
   try {
-    const res = await fetch(pin.url, { signal: AbortSignal.timeout(600_000) });
-    if (!res.ok) throw new Error(`eb-native-wrapper: ${pin.url} answered ${res.status}`);
+    const started = Date.now();
     const archive = path.join(tmp, "archive");
-    await Bun.write(archive, res);
+    execFileSync("curl", ["-fsSL", "--retry", "3", "--retry-all-errors", "--connect-timeout", "30", "--speed-limit", "100000", "--speed-time", "60", "-o", archive, pin.url], { stdio: "inherit" });
     execFileSync("tar", ["-xf", archive, "-C", tmp, pin.keep], { stdio: "inherit" });
     const got = treeSha256(path.join(tmp, pin.keep));
     if (got !== pin.tree) throw new Error(`eb-native-wrapper: ${pin.keep} in ${pin.url} hashes to ${got}, pinned ${pin.tree}`);
+    console.log(
+      `eb-native-wrapper: ${name}, ${Math.round(fs.statSync(archive).size / 1024 ** 2)} MB from ${pin.url} in ${Math.round((Date.now() - started) / 1000)} s, its ${pin.keep} matching the pin`,
+    );
     fs.rmSync(path.dirname(dir), { recursive: true, force: true });
     fs.mkdirSync(path.dirname(dir), { recursive: true });
     fs.renameSync(path.join(tmp, pin.keep), dir);
@@ -45,11 +50,11 @@ const exported = (lib: string): string[] =>
     .filter((f) => f.length === 3 && f[1] === "T")
     .map((f) => f[2] as string);
 
-export async function buildNativeWrapper(wrapper: string, asar: string): Promise<void> {
+export function buildNativeWrapper(wrapper: string, asar: string): void {
   const pins = PINS.nativeWrapper;
-  const source = await pinnedTree("source", pins.source);
-  const cef = await pinnedTree("cef", pins.cef);
-  const dawn = await pinnedTree("dawn", pins.dawn);
+  const source = pinnedTree("source", pins.source);
+  const cef = pinnedTree("cef", pins.cef);
+  const dawn = pinnedTree("dawn", pins.dawn);
   const theirs = exported(wrapper);
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "kiwi-eb-native-"));
   try {
@@ -66,8 +71,10 @@ export async function buildNativeWrapper(wrapper: string, asar: string): Promise
       "-DELECTROBUN_ENABLE_WAYLAND_SCREEN_CAPTURE",
     ];
     const objects = SOURCES.map((name) => {
+      const started = Date.now();
       const object = path.join(work, `${name}.o`);
       execFileSync("g++", ["-c", ...flags, "-o", object, path.join(native, "linux", `${name}.cpp`)], { stdio: "inherit" });
+      console.log(`eb-native-wrapper: compiled ${name}.cpp in ${Math.round((Date.now() - started) / 1000)} s`);
       return object;
     });
     const built = path.join(work, "libNativeWrapper.so");
