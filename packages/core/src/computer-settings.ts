@@ -11,6 +11,7 @@ export interface SeatSettings {
 
 export interface ComputerSettings {
   launch: "on" | "off";
+  bypass: "on" | "off";
   prefer: TerminalId;
   hooks: HookRow[];
   seats: SeatSettings[];
@@ -36,6 +37,7 @@ export function readComputerSettings(x: unknown): ComputerSettings | null {
   if ((s.launch !== "on" && s.launch !== "off") || !isTerminalId(s.prefer) || !Array.isArray(s.hooks) || !Array.isArray(s.seats)) return null;
   return {
     launch: s.launch,
+    bypass: s.bypass === "on" ? "on" : "off",
     prefer: s.prefer,
     hooks: s.hooks.map(readHookRow).filter((h): h is HookRow => h !== null),
     seats: s.seats

@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import type { Permission } from "@kiwi/core/launch-options.ts";
+import { claudeTakesLongContext, type Permission } from "@kiwi/core/launch-options.ts";
 
 type Env = Record<string, string | undefined>;
 
@@ -20,12 +20,11 @@ export const CLAUDE_EFFORTS = ["low", "medium", "high", "xhigh", "max"];
 export const CLAUDE_1M = 1_000_000;
 
 const CLAUDE_MODES: Record<Permission, string | null> = { default: null, "accept-edits": "acceptEdits", plan: "plan", bypass: "bypassPermissions" };
-const LONG_CONTEXT = /^(?:opus|sonnet|fable|opusplan)$|^claude-(?:opus|sonnet|fable)-/;
 
 export type ClaudeSession = { sessionId: string; idle: boolean; since: number | null };
 
 export function claudeContextRefusal(model: string | undefined, context: number | undefined): string | null {
-  if (context === undefined || (model && LONG_CONTEXT.test(model))) return null;
+  if (context === undefined || claudeTakesLongContext(model)) return null;
   return "Claude Code's 1M context needs an Opus, Sonnet or Fable model: add --model opus, sonnet, fable or a full id";
 }
 

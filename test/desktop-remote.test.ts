@@ -124,7 +124,13 @@ describe("listing a person's paired computers through the relay", () => {
 
 describe("reading another computer's settings", () => {
   test("is a settings ask with nothing in it, and only an answer in the settings' own shape reads back", async () => {
-    const settings: ComputerSettings = { launch: "on", prefer: "rex", hooks: [{ harness: "claude", state: "installed", text: "installed" }], seats: [{ channel: "dev", agent: "otter", wake: "on" }] };
+    const settings: ComputerSettings = {
+      launch: "on",
+      bypass: "off",
+      prefer: "rex",
+      hooks: [{ harness: "claude", state: "installed", text: "installed" }],
+      seats: [{ channel: "dev", agent: "otter", wake: "on" }],
+    };
     const good = fakeRelay({ answer: ({ verb, args }) => ({ by: machine, result: verb === "settings" && !Object.keys(args).length ? { ok: true, settings } : { ok: false } }) });
     expect(await settingsOn({ person, relay: RELAY, fetch: good.relayFetch }, to())).toEqual({ ok: true, value: settings });
     expect(good.asked.map((a) => a.verb)).toEqual(["settings"]);

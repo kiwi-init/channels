@@ -7,6 +7,7 @@ describe("another computer's settings, read only", () => {
   test("say what it allows, where new agents open, its hooks with installed harnesses only, and each agent's wake", () => {
     const lines = settingsLines({
       launch: "off",
+      bypass: "on",
       prefer: "tmux",
       hooks: [
         { harness: "claude", state: "installed", text: "installed" },
@@ -20,10 +21,11 @@ describe("another computer's settings, read only", () => {
     })
     expect(lines).toEqual([
       ["New agents", ["Off"]],
+      ["Bypass from your other devices", ["Allowed"]],
       ["Opens them in", ["tmux"]],
       ["Hooks", ["Claude Code on", "Codex not installed"]],
       ["Agents", ["otter in channels-dev, wakes on a message", "heron in ops, wakes by webhook"]],
     ])
-    expect(settingsLines({ launch: "on", prefer: "app", hooks: [], seats: [] }).map(([, l]) => l[0])).toEqual(["Allowed", "Terminal", "None", "None yet"])
+    expect(settingsLines({ launch: "on", bypass: "off", prefer: "app", hooks: [], seats: [] }).map(([, l]) => l[0])).toEqual(["Allowed", "Off", "Terminal", "None", "None yet"])
   })
 })

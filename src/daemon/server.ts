@@ -14,7 +14,7 @@ import { DAEMON_PROTOCOL, daemonSock, readListener, type DaemonEvent, type Daemo
 import { activityEnv, reachOf, readsRex, seatRecordFor, wakeOn, type Attached } from "./reach.ts";
 import { readRexInto } from "./rex-reads.ts";
 import type { RexActivity, RexPlace, SeatPlace, TerminalPlugin } from "../terminals/plugin.ts";
-import { helpersOn, marking, terminalPlugin } from "../terminals/registry.ts";
+import { helpersOn, marking, remoteBypassOn, terminalPlugin } from "../terminals/registry.ts";
 import { pruneHookFiles } from "../hooks/delivered.ts";
 import { launchFolders } from "../launch/folders.ts";
 import { hooksRows } from "../hooks/install/extra.ts";
@@ -785,6 +785,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       inventory: () => harnessInventory(),
       folders: (room) => launchFolders(loadConfig(), room),
       launch: (req) => launchAgent(req),
+      bypass: () => remoteBypassOn(loadConfig()),
       settings: async () => computerSettings(loadConfig(), hooksRows()),
       starts: join(dir, "remote-launches.json"),
     }),

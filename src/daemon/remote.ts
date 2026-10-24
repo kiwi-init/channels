@@ -15,6 +15,7 @@ export interface RemoteDeps {
   inventory: () => Promise<HarnessRow[]>;
   folders: (room?: string) => string[];
   launch: (req: LaunchRequest) => Promise<Launched>;
+  bypass?: () => boolean;
   settings?: () => Promise<ComputerSettings>;
   starts?: string;
   now?: () => number;
@@ -51,17 +52,24 @@ function loadStarts(file: string | undefined): number[] {
   }
 }
 
-export type RemoteResult = { ok: true; harnesses: HarnessRow[] } | { ok: true; folders: string[] } | { ok: true; settings: ComputerSettings } | { ok: true } | Launched;
+export type RemoteResult = { ok: true; harnesses: HarnessRow[]; bypass: boolean } | { ok: true; folders: string[] } | { ok: true; settings: ComputerSettings } | { ok: true } | Launched;
+
+export const NO_REMOTE_BYPASS =
+  "this computer doesn't take bypass permissions from another device: turn on Allow bypass from your other devices in its Settings → New agents, or run kiwi launches bypass on there";
 
 const withoutBypass = (row: HarnessRow): HarnessRow => (row.options ? { ...row, options: { ...row.options, permission: row.options.permission.filter((p) => p !== "bypass") } } : row);
 
 export function remoteRunner(deps: RemoteDeps): (args: MachineArgs, id: string) => Promise<RemoteResult> {
   const now = deps.now ?? Date.now;
   const started = loadStarts(deps.starts);
+  const bypass = deps.bypass ?? (() => false);
   return async (args, id) => {
     switch (args.verb) {
-      case "harnesses":
-        return { ok: true, harnesses: (await deps.inventory()).map(withoutBypass) };
+      case "harnesses": {
+        const allowed = bypass();
+        const rows = await deps.inventory();
+        return { ok: true, harnesses: allowed ? rows : rows.map(withoutBypass), bypass: allowed };
+      }
       case "folders":
         return { ok: true, folders: deps.folders(args.room) };
       case "unpair":
@@ -69,7 +77,7 @@ export function remoteRunner(deps: RemoteDeps): (args: MachineArgs, id: string) 
       case "settings":
         return deps.settings ? { ok: true, settings: await deps.settings() } : { ok: false, why: "failed", detail: "this computer's kiwi doesn't share its settings" };
       case "launch": {
-        if (args.launch.permission === "bypass") return { ok: false, why: "not-allowed", detail: "bypass permissions can't be asked for from another device" };
+        if (args.launch.permission === "bypass" && !bypass()) return { ok: false, why: "not-allowed", detail: NO_REMOTE_BYPASS };
         const at = now();
         while (started.length && at - started[0]! >= REMOTE_WINDOW_MS) started.shift();
         if (started.length >= REMOTE_LAUNCHES)
