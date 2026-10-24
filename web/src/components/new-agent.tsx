@@ -3,10 +3,12 @@ import { CancelCircleIcon, CheckmarkCircle02Icon, Folder01Icon, Tick02Icon } fro
 import { useEffect, useRef, useState, type ReactNode, type Ref } from "react"
 
 import type { HarnessRow, KnownHarness } from "@kiwi/core/harnesses.ts"
+import { PERMISSIONS, type HarnessOptions, type LaunchChoices, type Permission } from "@kiwi/core/launch-options.ts"
 import type { Persona, Personality } from "@kiwi/core/personality.ts"
 import { PLACE_NAMES, type LaunchedView } from "@kiwi/core/terminals.ts"
 import type { FromMachine, MachineView } from "../../../desktop/src/bridge.ts"
 import { harnessName } from "@/lib/harness"
+import { choicesProblem, choicesWords, contextLabel, EFFORT_LABEL, fitChoices, MODEL_PICKS, PERMISSION_LABEL, rememberChoices, rememberedChoices } from "@/lib/launch-choices"
 import { followLaunch, sawMembers, type LaunchSeen } from "@/lib/launch-follow"
 import { launcher } from "@/lib/launches"
 import { usePersonalities } from "@/lib/personalities"
@@ -16,7 +18,7 @@ import { useLaunchesHere } from "@/lib/terminals"
 import { cx } from "@/lib/utils"
 import { HarnessFace } from "./harness-face"
 import { Icon } from "./icon"
-import { Button, errorText, Modal, Spinner, TextField } from "./kit"
+import { Button, Checkbox, errorText, Modal, SEGMENT_OFF, SEGMENT_ON, SEGMENTED, Spinner, TextField } from "./kit"
 import { PersonalityPicker } from "./personality-picker"
 
 const NICK = /^[\p{L}\p{N}][\p{L}\p{N} _.-]{0,39}$/u
@@ -24,8 +26,14 @@ const ASK_LATE_MS = 60_000
 const JOIN_LATE_MS = 30_000
 const OS: Record<string, string> = { darwin: "macOS", linux: "Linux", win32: "Windows" }
 
-type StepId = "computer" | "harness" | "folder" | "name"
-const STEP_LABEL: Record<StepId, string> = { computer: "Computer", harness: "Harness", folder: "Folder", name: "Name" }
+type StepId = "computer" | "harness" | "options" | "permissions" | "folder" | "name"
+const STEP_LABEL: Record<StepId, string> = { computer: "Computer", harness: "Harness", options: "Options", permissions: "Permissions", folder: "Folder", name: "Name" }
+const PERMISSION_DETAIL: Record<Permission, string> = {
+  default: "As it’s set up there",
+  "accept-edits": "Edits files without asking",
+  plan: "Asks before it changes anything",
+  bypass: "Never asks before anything",
+}
 
 function launchId(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16))
@@ -76,6 +84,8 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
   const [folder, setFolder] = useState<string | null>(null)
   const [nick, setNick] = useState("")
   const [persona, setPersona] = useState<Persona | null>(null)
+  const [drafts, setDrafts] = useState<Partial<Record<KnownHarness, LaunchChoices>>>({})
+  const [bypassOk, setBypassOk] = useState(false)
   const [chosenStep, setStep] = useState<StepId | null>(null)
   const [launch, setLaunch] = useState<Launch | null>(null)
   const [seen, setSeen] = useState<LaunchSeen | null>(null)
@@ -141,6 +151,8 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
     setHarness(null)
     setFolders(null)
     setFolder(null)
+    setDrafts({})
+    setBypassOk(false)
   }
   const retryRows = () => {
     setRows(null)
@@ -164,10 +176,37 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
   const name = nick.trim()
   const bad = name && !NICK.test(name) ? "A nickname is up to 40 letters, digits, spaces, _ . or -, starting with a letter or digit." : null
 
-  const steps: StepId[] = others.length > 0 ? ["computer", "harness", "folder", "name"] : ["harness", "folder", "name"]
+  const computerKey = machine ?? "here"
+  const options = (harness && rows?.ok ? rows.value.find((r) => r.harness === harness)?.options : null) ?? null
+  const draft: LaunchChoices = harness && options ? (drafts[harness] ?? rememberedChoices(computerKey, harness, options)) : {}
+  const modelText = draft.model ?? ""
+  const model = modelText.trim() || undefined
+  const sent = options ? fitChoices({ ...draft, model }, options) : {}
+  const optionsProblem = harness && options ? choicesProblem(harness, { ...sent, model }) : null
+  const bypassHeld = sent.permission === "bypass" && !bypassOk
+  const tunes = !!options && (options.model || options.effort.length > 0 || options.context.length > 0)
+  const permissions = options ? PERMISSIONS.filter((p) => options.permission.includes(p) || (p === "bypass" && machine !== null)) : []
+  const setDraft = (c: LaunchChoices) => {
+    if (!harness) return
+    if (c.permission !== draft.permission) setBypassOk(false)
+    setDrafts((was) => ({ ...was, [harness]: c }))
+  }
+  const pickHarness = (h: KnownHarness) => {
+    setHarness(h)
+    setBypassOk(false)
+  }
+
+  const steps: StepId[] = [
+    ...(others.length > 0 ? (["computer"] as const) : []),
+    "harness",
+    ...(tunes ? (["options"] as const) : []),
+    ...(permissions.length > 1 ? (["permissions"] as const) : []),
+    "folder",
+    "name",
+  ]
   const step = chosenStep && steps.includes(chosenStep) ? chosenStep : (steps[0] ?? "harness")
   const at = steps.indexOf(step)
-  const done: Record<StepId, boolean> = { computer: ready, harness: harness !== null, folder: folder !== null, name: !bad }
+  const done: Record<StepId, boolean> = { computer: ready, harness: harness !== null, options: !optionsProblem, permissions: !bypassHeld, folder: folder !== null, name: !bad }
   const reachable = (i: number) => steps.slice(0, i).every((s) => done[s])
 
   useEffect(() => {
@@ -177,7 +216,7 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
 
   const start = async () => {
     const b = launcher()
-    if (!b || !harness || !folder || bad || !ready) return
+    if (!b || !harness || !folder || bad || !ready || optionsProblem || bypassHeld) return
     const id = launchId()
     setSeen(null)
     setLaunch({ phase: "sending" })
@@ -191,6 +230,7 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
     try {
       const chosen = persona ? all.find((p) => p.name === persona.name) : undefined
       const pin = chosen && onPin ? await onPin(chosen) : undefined
+      if (options) rememberChoices(computerKey, harness, sent)
       const r = await b.launchAgent({
         ...(machine ? { machinePk: machine } : {}),
         launch: id,
@@ -200,6 +240,7 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
         relay: relayUrl(),
         ...(name ? { nick: name } : {}),
         ...(pin ? { persona: pin } : {}),
+        ...sent,
       })
       if (r.ok) setLaunch({ phase: "started", started: r })
       else fail(r.detail || "Kiwi couldn’t start it.")
@@ -244,7 +285,12 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
       </div>
     )
 
-  const summary = [harness && harnessName(harness), folder && `in ${folderName(folder)}`, others.length > 0 && `on ${remote ? remote.label : (here?.label ?? "this computer")}`]
+  const picks = options ? choicesWords(sent) : []
+  const summary = [
+    harness && `${harnessName(harness)}${picks.length ? ` (${picks.join(", ")})` : ""}`,
+    folder && `in ${folderName(folder)}`,
+    others.length > 0 && `on ${remote ? remote.label : (here?.label ?? "this computer")}`,
+  ]
     .filter(Boolean)
     .join(" ")
   const back = steps[at - 1]
@@ -315,11 +361,11 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
         <Loaded got={rows} waiting={`Looking on ${where}…`} onRetry={retryRows}>
           {(list) => {
             const can = list.filter(startable)
-            if (can.length === 0) return <Problem onRetry={retryRows}>Nothing on {where} can start an agent yet. Install Claude Code or Codex there, then try again.</Problem>
+            if (can.length === 0) return <Problem onRetry={retryRows}>Nothing on {where} can start an agent yet. Install Claude Code, Codex, Grok or MiMo Code there, then try again.</Problem>
             return (
               <div role="radiogroup" aria-label="Harness" className="grid grid-cols-2 gap-1.5">
                 {can.map((r) => (
-                  <Option key={r.harness} on={harness === r.harness} onPick={() => setHarness(r.harness)}>
+                  <Option key={r.harness} on={harness === r.harness} onPick={() => pickHarness(r.harness)}>
                     <span className="size-7 shrink-0">
                       <HarnessFace harness={r.harness} size={28} />
                     </span>
@@ -333,6 +379,32 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
             )
           }}
         </Loaded>
+      )}
+
+      {step === "options" && harness && options && (
+        <OptionsStep
+          harness={harness}
+          options={options}
+          value={sent}
+          model={modelText}
+          onModel={(text) => setDraft({ ...sent, model: text })}
+          onChange={(c) => setDraft({ ...c, model: modelText })}
+          problem={optionsProblem}
+        />
+      )}
+
+      {step === "permissions" && harness && options && (
+        <PermissionsStep
+          harness={harness}
+          allowed={options.permission}
+          shown={permissions}
+          value={sent}
+          onChange={(c) => setDraft({ ...c, model: modelText })}
+          remote={remote?.label ?? null}
+          where={where}
+          bypassOk={bypassOk}
+          onBypassOk={setBypassOk}
+        />
       )}
 
       {step === "folder" && (
@@ -380,6 +452,153 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
         </div>
       )}
     </Frame>
+  )
+}
+
+const patched = (value: LaunchChoices, patch: LaunchChoices): LaunchChoices => {
+  const next: LaunchChoices = { ...value, ...patch }
+  for (const k of Object.keys(patch) as (keyof LaunchChoices)[]) if (patch[k] === undefined) delete next[k]
+  return next
+}
+
+function OptionsStep({
+  harness,
+  options,
+  value,
+  model,
+  onModel,
+  onChange,
+  problem,
+}: {
+  harness: KnownHarness
+  options: HarnessOptions
+  value: LaunchChoices
+  model: string
+  onModel: (text: string) => void
+  onChange: (c: LaunchChoices) => void
+  problem: string | null
+}) {
+  const picks = MODEL_PICKS[harness] ?? []
+  return (
+    <div className="space-y-5">
+      {options.model && (
+        <Field label="Model">
+          <TextField
+            value={model}
+            onChange={(e) => onModel(e.target.value)}
+            placeholder={`${harnessName(harness)}’s default`}
+            maxLength={100}
+            aria-label="Model"
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
+          />
+          {picks.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {picks.map((m) => (
+                <Button key={m} size="sm" variant={model.trim() === m ? "primary" : "secondary"} aria-pressed={model.trim() === m} onClick={() => onModel(model.trim() === m ? "" : m)}>
+                  {m}
+                </Button>
+              ))}
+            </div>
+          )}
+        </Field>
+      )}
+      {options.effort.length > 0 && (
+        <Field label="Effort">
+          <Choice
+            label="Effort"
+            value={value.effort ?? ""}
+            options={[{ value: "", label: "Default" }, ...options.effort.map((e) => ({ value: e, label: EFFORT_LABEL[e] ?? e }))]}
+            onChange={(e) => onChange(patched(value, { effort: e || undefined }))}
+          />
+        </Field>
+      )}
+      {options.context.length > 0 && (
+        <Field label="Context">
+          <Choice
+            label="Context"
+            value={value.context === undefined ? "" : String(value.context)}
+            options={[{ value: "", label: "Default" }, ...options.context.map((c) => ({ value: String(c), label: contextLabel(c) }))]}
+            onChange={(c) => onChange(patched(value, { context: c ? Number(c) : undefined }))}
+          />
+        </Field>
+      )}
+      {problem && <p className="-mt-2 text-meta text-alert">{problem}</p>}
+    </div>
+  )
+}
+
+function PermissionsStep({
+  harness,
+  allowed,
+  shown,
+  value,
+  onChange,
+  remote,
+  where,
+  bypassOk,
+  onBypassOk,
+}: {
+  harness: KnownHarness
+  allowed: readonly Permission[]
+  shown: readonly Permission[]
+  value: LaunchChoices
+  onChange: (c: LaunchChoices) => void
+  remote: string | null
+  where: string
+  bypassOk: boolean
+  onBypassOk: (ok: boolean) => void
+}) {
+  const refusedBypass = remote !== null && shown.includes("bypass") && !allowed.includes("bypass")
+  return (
+    <>
+      <div role="radiogroup" aria-label="Permissions" className="grid grid-cols-2 gap-1.5">
+        {shown.map((p) => {
+          const refused = !allowed.includes(p)
+          return (
+            <Option key={p} on={(value.permission ?? "default") === p} onPick={() => onChange(patched(value, { permission: p === "default" ? undefined : p }))} off={refused}>
+              <span className="min-w-0 flex-1">
+                <span className={cx("block truncate text-ui font-semibold", p === "bypass" && !refused ? "text-alert" : "text-ink")}>{PERMISSION_LABEL[p]}</span>
+                <span className="block truncate text-meta text-ink-3">{refused ? "Not from another device" : PERMISSION_DETAIL[p]}</span>
+              </span>
+            </Option>
+          )
+        })}
+      </div>
+      {refusedBypass && <Quiet>{remote} doesn’t take bypass from another device yet. Start the agent there to use it.</Quiet>}
+      {value.permission === "bypass" && (
+        <div role="alert" className="mt-3 rounded-ctl bg-alert/10 p-3">
+          <p className="text-ui font-semibold text-alert">No permission checks</p>
+          <p className="mt-1 text-meta leading-normal text-ink-2">
+            {harnessName(harness)} will run any command and change any file on {where} without asking, outside the folder too.
+          </p>
+          <label className="mt-2.5 flex cursor-pointer items-center gap-2 text-ui text-ink">
+            <Checkbox checked={bypassOk} onChange={(e) => onBypassOk(e.target.checked)} />
+            Start it without permission checks
+          </label>
+        </div>
+      )}
+    </>
+  )
+}
+
+function Choice({ label, value, options, onChange }: { label: string; value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }) {
+  return (
+    <div role="radiogroup" aria-label={label} className={cx("grid gap-0.5", SEGMENTED)} style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={value === o.value}
+          onClick={() => value !== o.value && onChange(o.value)}
+          className={cx("h-7 truncate rounded-row px-2 text-ui font-medium transition-colors", value === o.value ? SEGMENT_ON : SEGMENT_OFF)}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
   )
 }
 

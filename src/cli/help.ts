@@ -103,8 +103,11 @@ This computer
   kiwi rex on|off|status                         the old name of kiwi terminal download|remove rex and status, for this release
   kiwi harnesses [--json]                        the harnesses on this computer, found on your login shell's PATH: each one's path
                                                  and version, whether kiwi launch starts it, with which options, and whether Kiwi can wake it
-  kiwi folders [--room ROOM] [--json]            the folders this computer's seats work in, a channel's with --room, most
-                                                 recently seen first
+  kiwi folders [--room ROOM] [--json]            the folders an agent can be started in on this computer: where its seats work
+                                                 (a channel's with --room, most recently seen first), the folders you added, and
+                                                 the git repos in your home folder, three levels down
+     folders add|remove DIR                      let agents be started in DIR and the folders inside it, from this
+                                                 computer or another of your devices; or stop that
   kiwi launch HARNESS --code CODE [--folder DIR] [--nick NAME] [--persona TOKEN]   start an agent in a terminal you
                                                  can open (the one kiwi terminal prefer names, else Terminal, else tmux): it joins with a launch id the app knows;
                                                  --model ID, --effort LEVEL, --permission default|accept-edits|plan|bypass and --context 1m start it with those

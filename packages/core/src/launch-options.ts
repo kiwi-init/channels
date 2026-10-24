@@ -25,7 +25,11 @@ const CONTEXT_MAX = 10_000_000;
 
 const isPermission = (v: unknown): v is Permission => typeof v === "string" && (PERMISSIONS as readonly string[]).includes(v);
 
+const CLAUDE_LONG_CONTEXT = /^(?:opus|sonnet|fable|opusplan)$|^claude-(?:opus|sonnet|fable)-/;
+
 const isModel = (v: unknown): v is string => typeof v === "string" && MODEL.test(v);
+
+export const claudeTakesLongContext = (model: string | undefined): boolean => !!model && CLAUDE_LONG_CONTEXT.test(model);
 
 const isEffort = (v: unknown): v is string => typeof v === "string" && EFFORT.test(v);
 

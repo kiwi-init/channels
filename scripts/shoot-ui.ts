@@ -865,13 +865,29 @@ try {
 
       // The desktop app's New agent, with a stand-in for the four launch methods its bridge adds,
       // on only while this tab's flag is set so the other screens stay the browser's.
-      const newAgentShots = ["24-new-agent", "26-new-agent-remote", "24-new-agent-folder", "24-new-agent-name", "25-new-agent-failed", "25-new-agent-started"];
+      const newAgentShots = [
+        "24-new-agent",
+        "24-new-agent-options",
+        "24-new-agent-permissions",
+        "26-new-agent-remote",
+        "26-new-agent-options-remote",
+        "26-new-agent-permissions-remote",
+        "24-new-agent-folder",
+        "24-new-agent-name",
+        "25-new-agent-failed",
+        "25-new-agent-started",
+      ];
       if (newAgentShots.some((n) => takes(tag, n))) {
         if (!launcherStub) {
           launcherStub = true;
           await owner.addInitScript(() => {
             if (sessionStorage.getItem("shots.launcher") !== "1") return;
-            const row = (harness: string, path: string | null, version: string | null, start: boolean) => ({ harness, path, version, start, wake: null, why: null });
+            const permission = ["default", "accept-edits", "plan", "bypass"];
+            const options = {
+              claude: { model: true, effort: ["low", "medium", "high", "xhigh", "max"], permission, context: [1_000_000] },
+              codex: { model: true, effort: ["minimal", "low", "medium", "high", "xhigh"], permission, context: [128_000, 272_000, 400_000, 1_000_000] },
+            } as Record<string, { model: boolean; effort: string[]; permission: string[]; context: number[] }>;
+            const row = (harness: string, path: string | null, version: string | null, start: boolean) => ({ harness, path, version, start, wake: null, why: null, options: options[harness] ?? null });
             const rows = [
               row("claude", "/Users/you/.local/bin/claude", "2.1.304", true),
               row("codex", "/opt/homebrew/bin/codex", "0.98.0", true),
@@ -880,6 +896,11 @@ try {
               row("cursor", null, null, false),
               row("grok", null, null, false),
             ];
+            const remote = (r: ReturnType<typeof row>) => ({
+              ...r,
+              path: r.path?.replace("/Users/you", "/home/you") ?? null,
+              options: r.options && { ...r.options, permission: r.options.permission.filter((p) => p !== "bypass") },
+            });
             const block = "block:01a15ad9-310a-703a-ad0b-3cc137458451";
             const rex = { server: "unix:///Users/you/Library/Application%20Support/rex/server.sock", session: "session:01a15ad9-30f4-7bcb-8455-c3eeb9e1071c", block };
             let launches = 0;
@@ -888,16 +909,18 @@ try {
               harnesses: async () => rows,
               seatFolders: async () => ["/Users/you/code/payments", "/Users/you/code/payments-site"],
               chooseFolder: async () => null,
-              launchAgent: async (req: { launch: string }) =>
+              launchAgent: async (req: { launch: string; model?: string; effort?: string; permission?: string }) =>
                 ++launches === 1
                   ? { ok: false, why: "failed", detail: "No answer yet: it may still be starting on build-box. Check that computer before you try again." }
-                  : { ok: true, launch: req.launch, place: "rex", rex },
+                  : req.model !== "opus" || req.effort !== "high" || req.permission !== undefined
+                    ? { ok: false, why: "bad-request", detail: `the launch lost its options: ${JSON.stringify(req)}` }
+                    : { ok: true, launch: req.launch, place: "rex", rex },
               machines: async () => [
                 { machinePk: "own", label: "jow’s MacBook Air", os: "darwin", own: true, online: true },
                 { machinePk: "build", label: "build-box", os: "linux", own: false, online: true },
                 { machinePk: "old", label: "old-mini", os: "darwin", own: false, online: false },
               ],
-              harnessesOn: async () => ({ ok: true, value: rows.slice(0, 2).map((r) => ({ ...r, path: r.path?.replace("/Users/you", "/home/you") ?? null })) }),
+              harnessesOn: async () => ({ ok: true, value: rows.slice(0, 2).map(remote) }),
               foldersOn: async () => ({ ok: true, value: ["/home/you/payments"] }),
             };
           });
@@ -921,12 +944,62 @@ try {
         await shoot(
           owner,
           tag,
+          "24-new-agent-options",
+          async () => {
+            await dialog.getByRole("button", { name: "Next" }).click();
+            await dialog.getByRole("radiogroup", { name: "Harness" }).waitFor();
+            await dialog.getByRole("button", { name: "Next" }).click();
+            await dialog.getByRole("button", { name: "sonnet" }).click();
+            await dialog.getByRole("radiogroup", { name: "Effort" }).getByText("Max", { exact: true }).click();
+            await dialog.getByRole("radiogroup", { name: "Context" }).getByText("1M", { exact: true }).click();
+          },
+          stay,
+        );
+        await shoot(
+          owner,
+          tag,
+          "24-new-agent-permissions",
+          async () => {
+            await dialog.getByRole("button", { name: "Next" }).click();
+            await dialog.getByRole("radiogroup", { name: "Permissions" }).getByText("Bypass").click();
+            await dialog.getByText("No permission checks").waitFor();
+            if (await dialog.getByRole("button", { name: "Next" }).isEnabled()) throw new Error("New agent goes on with bypass before it's confirmed");
+          },
+          stay,
+        );
+        await shoot(
+          owner,
+          tag,
           "26-new-agent-remote",
           async () => {
+            await dialog.getByRole("checkbox").check();
+            if (!(await dialog.getByRole("button", { name: "Next" }).isEnabled())) throw new Error("New agent stays held after bypass is confirmed");
+            await dialog.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "Computer" }).click();
             await dialog.getByRole("radiogroup", { name: "Computer" }).getByText("build-box").click();
             await dialog.getByText("Sent to build-box").waitFor();
             await dialog.getByRole("button", { name: "Next" }).click();
             await dialog.getByRole("radiogroup", { name: "Harness" }).waitFor();
+          },
+          stay,
+        );
+        await shoot(
+          owner,
+          tag,
+          "26-new-agent-options-remote",
+          async () => {
+            await dialog.getByRole("button", { name: "Next" }).click();
+            await dialog.getByRole("radiogroup", { name: "Effort" }).getByText("High", { exact: true }).click();
+            await dialog.getByRole("textbox", { name: "Model" }).fill("opus");
+          },
+          stay,
+        );
+        await shoot(
+          owner,
+          tag,
+          "26-new-agent-permissions-remote",
+          async () => {
+            await dialog.getByRole("button", { name: "Next" }).click();
+            await dialog.getByText("build-box doesn’t take bypass from another device yet").waitFor();
           },
           stay,
         );
