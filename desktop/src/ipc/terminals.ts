@@ -1,5 +1,7 @@
+import { isKnownHarness, readHookRow, type HookRow, type KnownHarness } from "@kiwi/core/harnesses.ts";
 import { readPlacedSeat, readShowResult, type PlacedSeat, type ShowResult, type TerminalId, type TerminalsStatus } from "@kiwi/core/terminals.ts";
 import type { Serves } from "../calls.ts";
+import { daemonHarnesses } from "../daemon-client.ts";
 import { terminalsOf } from "../terminals-status.ts";
 import { runKiwi } from "./kiwi.ts";
 
@@ -14,7 +16,7 @@ async function terminals(): Promise<TerminalsStatus | null> {
   return got.code === 0 ? terminalsOf(got.stdout) : null;
 }
 
-async function change(args: string[]): Promise<TerminalsStatus | null> {
+async function must(args: string[]): Promise<string> {
   const done = await runKiwi(args);
   if (done.code !== 0)
     throw new Error(
@@ -24,7 +26,37 @@ async function change(args: string[]): Promise<TerminalsStatus | null> {
         .at(-1)
         ?.replace(/^kiwi: /, "") || `kiwi ${args.join(" ")} didn't finish`,
     );
+  return done.stdout;
+}
+
+async function change(args: string[]): Promise<TerminalsStatus | null> {
+  await must(args);
   return terminals();
+}
+
+const isHooked = (v: unknown): v is KnownHarness => isKnownHarness(v) && v !== "opencode";
+
+export type ClaudeHere = "wakes" | "old" | "none" | null;
+
+async function claudeHere(): Promise<ClaudeHere> {
+  const rows = await daemonHarnesses().catch(() => null);
+  if (!rows) return null;
+  const claude = rows.find((r) => r.harness === "claude");
+  return !claude?.path ? "none" : claude.wake !== null ? "wakes" : "old";
+}
+
+export function withClaude(r: HookRow, here: ClaudeHere): HookRow {
+  if (r.harness !== "claude") return r;
+  if (r.state === "partial" && (here === "old" || here === "none")) return { ...r, state: "installed" };
+  return r.state === "missing" && here === "none" ? { ...r, state: "absent" } : r;
+}
+
+async function hooks(): Promise<HookRow[]> {
+  const [stdout, claude] = await Promise.all([must(["hooks", "status", "--json"]), claudeHere()]);
+  const parsed = answer(stdout);
+  const listed = parsed && typeof parsed === "object" ? (parsed as { hooks?: unknown }).hooks : undefined;
+  const rows = Array.isArray(listed) ? listed.map(readHookRow).filter((r): r is HookRow => r !== null) : [];
+  return rows.map((r) => withClaude(r, claude));
 }
 
 function answer(stdout: string): unknown {
@@ -49,7 +81,7 @@ function seats(stdout: string): PlacedSeat[] {
   return Array.isArray(parsed) ? parsed.map(readPlacedSeat).filter((s): s is PlacedSeat => s !== null) : [];
 }
 
-export function terminalsCalls(): Serves<"terminals" | "terminalHelpers" | "terminalPrefer" | "setLaunches" | "contextLine" | "setContextLine" | "seatPlaces" | "showSeat"> {
+export function terminalsCalls(): Serves<"terminals" | "terminalHelpers" | "terminalPrefer" | "setLaunches" | "contextLine" | "setContextLine" | "hooks" | "setHooks" | "seatPlaces" | "showSeat"> {
   return {
     terminals: () => terminals(),
     terminalHelpers: (id: unknown, to: unknown) => {
@@ -68,6 +100,13 @@ export function terminalsCalls(): Serves<"terminals" | "terminalHelpers" | "term
     setContextLine: (to: unknown) => {
       if (!isSwitch(to)) throw new Error("setContextLine takes on or off");
       return contextLine(["context-line", to, "--json"]);
+    },
+    hooks: () => hooks(),
+    setHooks: async (harness: unknown, to: unknown) => {
+      if (!isHooked(harness) || !isSwitch(to)) throw new Error("setHooks takes a harness with hooks, and on or off");
+      const listen = harness === "claude" && to === "on" && (await claudeHere()) === "wakes";
+      await must(["hooks", to === "on" ? "install" : "uninstall", harness, ...(listen ? ["--listen"] : [])]);
+      return hooks();
     },
     seatPlaces: async (): Promise<PlacedSeat[]> => {
       const listed = await runKiwi(["terminal", "seats", "--json"]);

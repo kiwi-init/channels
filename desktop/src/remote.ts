@@ -1,7 +1,12 @@
 import { signRequest } from "@kiwi/core/auth.ts";
+import { readHarnessRow, type HarnessRow } from "@kiwi/core/harnesses.ts";
 import type { Identity } from "@kiwi/core/identity.ts";
+import { choicesOf } from "@kiwi/core/launch-options.ts";
 import { makeAsk, readAnswer, type MachineVerb } from "@kiwi/core/machine-ask.ts";
 import { newSecret, openMailbox } from "@kiwi/core/mailbox.ts";
+import type { LaunchedView } from "@kiwi/core/terminals.ts";
+import type { FromMachine, LaunchAgentRequest } from "./bridge.ts";
+import { launchedView, MACHINE_PK } from "./launch-view.ts";
 
 export interface Asker {
   person: Identity;
@@ -14,6 +19,23 @@ export type Asked = { ok: true; result: unknown } | { ok: false; why: "not-regis
 export const NO_ANSWER = "No answer: that computer is off or offline, its clock is more than 2 minutes off, or it runs a kiwi older than this app.";
 
 const POLL_MS = 1_000;
+const ASK_MS = 10_000;
+const LAUNCH_MS = 150_000;
+const LABEL_MAX = 64;
+
+interface Machine {
+  pk: string;
+  xpk: string;
+}
+
+export interface PairedComputer {
+  key: string;
+  xpk: string;
+  label: string;
+  online: boolean;
+  since?: number;
+  seenAt: number;
+}
 
 export async function askMachine(asker: Asker, machine: { pk: string; xpk: string }, verb: MachineVerb, args: Record<string, unknown>, opts: { timeoutMs: number; id?: string }): Promise<Asked> {
   const fetchImpl = asker.fetch ?? fetch;
@@ -56,4 +78,61 @@ export async function machineOnline(asker: Asker, machinePk: string): Promise<bo
     // An unreachable relay says nothing about the computer: no dot rather than a red one.
     return null;
   }
+}
+
+function fromMachine<T>(asked: Asked, read: (result: Record<string, unknown>) => T | null): FromMachine<T> {
+  if (!asked.ok) return { ok: false, detail: asked.detail };
+  const result = asked.result && typeof asked.result === "object" ? (asked.result as Record<string, unknown>) : null;
+  const value = result?.["ok"] === true ? read(result) : null;
+  return value === null ? { ok: false, detail: typeof result?.["detail"] === "string" ? result["detail"] : "that computer answered in a shape this app doesn't know" } : { ok: true, value };
+}
+
+export async function harnessesOn(asker: Asker, machine: Machine): Promise<FromMachine<HarnessRow[]>> {
+  const asked = await askMachine(asker, machine, "harnesses", {}, { timeoutMs: ASK_MS });
+  return fromMachine(asked, (r) => (Array.isArray(r["harnesses"]) ? r["harnesses"].map(readHarnessRow).filter((row): row is HarnessRow => row !== null) : null));
+}
+
+export async function foldersOn(asker: Asker, machine: Machine, roomId: string): Promise<FromMachine<string[]>> {
+  const asked = await askMachine(asker, machine, "folders", { room: roomId }, { timeoutMs: ASK_MS });
+  return fromMachine(asked, (r) => (Array.isArray(r["folders"]) ? r["folders"].filter((f): f is string => typeof f === "string" && f.startsWith("/")).slice(0, 20) : null));
+}
+
+export async function launchOn(asker: Asker, machine: Machine & { label: string }, req: LaunchAgentRequest): Promise<LaunchedView> {
+  const args = {
+    harness: req.harness,
+    folder: req.folder,
+    code: req.code,
+    relay: req.relay,
+    ...(req.nick ? { nick: req.nick } : {}),
+    ...(req.persona ? { persona: req.persona } : {}),
+    ...choicesOf(req),
+  };
+  const asked = await askMachine(asker, machine, "launch", args, { timeoutMs: LAUNCH_MS, id: req.launch });
+  if (asked.ok) return launchedView(asked.result);
+  if (asked.why === "no-answer") return { ok: false, why: "failed", detail: `No answer yet: it may still be starting on ${machine.label}. Check that computer before you try again.` };
+  return { ok: false, why: "failed", detail: asked.detail };
+}
+
+function readComputer(x: unknown): PairedComputer | null {
+  if (!x || typeof x !== "object") return null;
+  const { key, xpk, label, online, since, seenAt } = x as Record<string, unknown>;
+  if (typeof key !== "string" || !MACHINE_PK.test(key) || typeof xpk !== "string" || !MACHINE_PK.test(xpk)) return null;
+  if (typeof label !== "string" || label.length > LABEL_MAX || typeof online !== "boolean" || typeof seenAt !== "number") return null;
+  return { key, xpk, label, online, ...(online && typeof since === "number" ? { since } : {}), seenAt };
+}
+
+export async function personMachines(asker: Asker): Promise<FromMachine<PairedComputer[]>> {
+  const path = `/v1/person/${asker.person.pk}/machines`;
+  const auth = await signRequest(asker.person, `person:${asker.person.pk}`, "GET", path);
+  let res: Response;
+  try {
+    res = await (asker.fetch ?? fetch)(new URL(path, asker.relay), { headers: { authorization: `Bearer ${auth}` } });
+  } catch (err) {
+    return { ok: false, detail: `couldn't reach the relay: ${err instanceof Error ? err.message : String(err)}` };
+  }
+  if (res.status === 404) return { ok: false, detail: "This relay can't list your computers yet: it needs an update." };
+  if (!res.ok) return { ok: false, detail: `the relay answered ${res.status}` };
+  const body = (await res.json().catch(() => null)) as { machines?: unknown } | null;
+  if (!Array.isArray(body?.machines)) return { ok: false, detail: "the relay answered in a shape this app doesn't know" };
+  return { ok: true, value: body.machines.map(readComputer).filter((c): c is PairedComputer => c !== null) };
 }

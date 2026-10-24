@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { readAsk, signAnswer } from "@kiwi/core/machine-ask.ts";
 import { openMailbox } from "@kiwi/core/mailbox.ts";
-import { askMachine, machineOnline, NO_ANSWER } from "../desktop/src/remote.ts";
+import { askMachine, machineOnline, NO_ANSWER, personMachines } from "../desktop/src/remote.ts";
 
 const RELAY = "https://relay.test";
 
@@ -91,5 +91,32 @@ describe("asking another computer through the relay", () => {
     expect(await machineOnline({ person, relay: RELAY, fetch: fakeRelay({ online: true }).relayFetch }, machine.pk)).toBe(true);
     expect(await machineOnline({ person, relay: RELAY, fetch: fakeRelay({ online: false }).relayFetch }, machine.pk)).toBe(false);
     expect(await machineOnline({ person, relay: RELAY, fetch: fakeRelay().relayFetch }, machine.pk)).toBeNull();
+  });
+});
+
+describe("listing a person's paired computers through the relay", () => {
+  const listing = (status: number, body: unknown) =>
+    (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(String(input));
+      const auth = new Headers(init?.headers).get("authorization");
+      if (url.pathname !== `/v1/person/${person.pk}/machines` || !auth?.startsWith("Bearer ")) return new Response(null, { status: 500 });
+      return status === 200 ? Response.json(body) : new Response(null, { status });
+    }) as typeof fetch;
+
+  test("signed by the person for their own path, it keeps only well-formed computers", async () => {
+    const studio = { key: machine.pk, xpk: machine.xpk!, label: "studio", online: true, since: 5, seenAt: 4 };
+    const asleep = { key: stranger.pk, xpk: stranger.xpk!, label: "", online: false, since: 9, seenAt: 3 };
+    const got = await personMachines({ person, relay: RELAY, fetch: listing(200, { machines: [studio, asleep, { key: "x" }, null, { ...studio, label: "y".repeat(65) }] }) });
+    expect(got).toEqual({ ok: true, value: [studio, { key: stranger.pk, xpk: stranger.xpk!, label: "", online: false, seenAt: 3 }] });
+  });
+
+  test("a relay without the route says it needs an update; other answers say what they were", async () => {
+    expect(await personMachines({ person, relay: RELAY, fetch: listing(404, null) })).toEqual({ ok: false, detail: "This relay can't list your computers yet: it needs an update." });
+    expect(await personMachines({ person, relay: RELAY, fetch: listing(403, null) })).toEqual({ ok: false, detail: "the relay answered 403" });
+    expect(await personMachines({ person, relay: RELAY, fetch: listing(200, { computers: [] }) })).toEqual({ ok: false, detail: "the relay answered in a shape this app doesn't know" });
+    const down = (async () => {
+      throw new Error("offline");
+    }) as unknown as typeof fetch;
+    expect(await personMachines({ person, relay: RELAY, fetch: down })).toEqual({ ok: false, detail: "couldn't reach the relay: offline" });
   });
 });

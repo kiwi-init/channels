@@ -691,7 +691,7 @@ try {
         if (narrow) await toChannel();
       });
       await shoot(owner, tag, "18-settings", openSettings, closeSettings);
-      if (["27-new-agents", "28-new-agents-ready", "29-context-line"].some((n) => takes(tag, n))) {
+      if (["27-new-agents", "28-new-agents-ready", "29-context-line", "30-hooks", "31-hooks-updated"].some((n) => takes(tag, n))) {
         if (!terminalsStub) {
           terminalsStub = true;
           await owner.addInitScript(() => {
@@ -701,6 +701,14 @@ try {
             const row = (id: string, name: string, helpers: Row["helpers"]): Row => ({ id, name, found: true, running: true, helpers });
             let status: Status = { prefer: "app", launch: "on", terminals: [row("rex", "Rex", "off"), row("tmux", "tmux", "off"), row("app", "Terminal", null)] };
             let contextLine: "on" | "off" = "off";
+            type Hook = { harness: string; state: string; text: string };
+            let hooks: Hook[] = [
+              { harness: "claude", state: "partial", text: "installed, without the listening hooks" },
+              { harness: "codex", state: "installed", text: "installed" },
+              { harness: "gemini", state: "outdated", text: "not installed (its hooks are from an older kiwi: kiwi hooks install)" },
+              { harness: "cursor", state: "absent", text: "not detected" },
+              { harness: "grok", state: "off", text: "off" },
+            ];
             const set = async (change: (s: Status) => Status) => (status = change(status));
             const w = window as unknown as { kiwi?: object };
             w.kiwi = Object.assign(w.kiwi ?? {}, {
@@ -711,6 +719,9 @@ try {
               setLaunches: (to: "on" | "off") => set((s) => ({ ...s, launch: to })),
               contextLine: async () => contextLine,
               setContextLine: async (to: "on" | "off") => (contextLine = to),
+              hooks: async () => hooks,
+              setHooks: async (harness: string, to: "on" | "off") =>
+                (hooks = hooks.map((h) => (h.harness === harness ? { ...h, state: to === "on" ? "installed" : "off", text: to === "on" ? "installed" : "off" } : h))),
             });
           });
         }
@@ -750,6 +761,33 @@ try {
             await openSettings();
             await agents().getByRole("radiogroup", { name: "Ask agents for a checkpoint past 250k context" }).waitFor();
             await agents().scrollIntoViewIfNeeded();
+          },
+          closeSettings,
+        );
+        const hooksRow = (name: string) =>
+          agents()
+            .locator("[data-item]")
+            .filter({ has: owner.getByText(name, { exact: true }) });
+        await shoot(
+          owner,
+          tag,
+          "30-hooks",
+          async () => {
+            await openSettings();
+            await hooksRow("Claude Code").getByRole("button", { name: "Update" }).waitFor();
+            await hooksRow("Claude Code").scrollIntoViewIfNeeded();
+          },
+          closeSettings,
+        );
+        await shoot(
+          owner,
+          tag,
+          "31-hooks-updated",
+          async () => {
+            await openSettings();
+            await hooksRow("Claude Code").getByRole("button", { name: "Update" }).click();
+            await hooksRow("Claude Code").getByRole("button", { name: "Remove" }).waitFor();
+            await hooksRow("Claude Code").scrollIntoViewIfNeeded();
           },
           closeSettings,
         );

@@ -1,11 +1,16 @@
+import { b64url } from "@kiwi/core/crypto.ts";
+import type { HarnessRow } from "@kiwi/core/harnesses.ts";
 import { askToLink, dropLink, linkDigits, newLinkKeys, openLink, readLinkCode, waitForLinkChunks, type LinkCode, type LinkKeys } from "@kiwi/core/link.ts";
 import type { Signed, SigningBudget } from "@kiwi/core/sas.ts";
+import type { LaunchedView } from "@kiwi/core/terminals.ts";
 
-import type { ChannelIdentityView } from "../../desktop/src/bridge.ts";
+import type { ChannelIdentityView, FromMachine } from "../../desktop/src/bridge.ts";
 import { Keyring } from "../../desktop/src/keyring.ts";
+import { launchRequestOf } from "../../desktop/src/launch-view.ts";
+import { foldersOn, harnessesOn, launchOn, personMachines, type Asker, type PairedComputer } from "../../desktop/src/remote.ts";
 import { acceptSeat, migrateEntries, withAccess } from "../../desktop/src/seats.ts";
 import { Room } from "./room.ts";
-import type { Ask, Push, Reply, Saved } from "./wire.ts";
+import type { Ask, LaunchAsk, Push, Reply, Saved } from "./wire.ts";
 
 interface Handler {
   postMessage(json: string): void;
@@ -23,6 +28,7 @@ let saved: Saved | null = null;
 let keyring: Keyring | null = null;
 const rooms = new Map<string, Room>();
 let linking: { code: LinkCode; keys: LinkKeys; stop: AbortController } | null = null;
+let computers = new Map<string, PairedComputer>();
 
 const checks = new Map<string, Signed[]>();
 const budget: SigningBudget = {
@@ -69,12 +75,14 @@ function start(next: Saved): number {
   keyring = ring;
   for (const seat of next.seats) {
     if (!seat.code || !seat.access || rooms.has(seat.code)) continue;
-    const room = new Room(
-      ring,
-      seat,
-      (view) => post({ type: "room", room: view }),
-      (code) => post({ type: "gone", code }),
-    );
+    const code = seat.code;
+    const room = new Room(ring, seat, {
+      emit: (view) => post({ type: "room", room: view }),
+      lost: (gone) => post({ type: "gone", code: gone }),
+      launch: (launch, seen) => post({ type: "launch", code, launch, stage: seen.stage, name: seen.name }),
+      person: () => saved?.person?.pk ?? null,
+      log: (line) => post({ type: "log", line }),
+    });
     rooms.set(seat.code, room);
     void room.start();
   }
@@ -85,6 +93,47 @@ function room(code: string): Room {
   const r = rooms.get(code);
   if (!r) throw new Error("this phone isn't in that channel");
   return r;
+}
+
+function asker(): Asker {
+  const person = saved?.person;
+  if (!saved || !person) throw new Error("link this phone with the Mac app first");
+  return { person, relay: saved.relay };
+}
+
+function computer(key: string): PairedComputer {
+  const c = computers.get(key);
+  if (!c) throw new Error("that isn't one of your paired computers");
+  return c;
+}
+
+function valueOf<T>(got: FromMachine<T>): T {
+  if (!got.ok) throw new Error(got.detail);
+  return got.value;
+}
+
+async function listComputers(): Promise<PairedComputer[]> {
+  const listed = valueOf(await personMachines(asker()));
+  computers = new Map(listed.map((c) => [c.key, c]));
+  return listed;
+}
+
+function roomIdOf(code: string): string {
+  const roomId = seats().find((s) => s.code === code)?.roomId;
+  if (!roomId) throw new Error("this phone isn't in that channel");
+  return roomId;
+}
+
+async function launch(ask: LaunchAsk): Promise<LaunchedView> {
+  const c = computer(ask.computer);
+  const r = room(ask.code);
+  const id = b64url(crypto.getRandomValues(new Uint8Array(16)));
+  const req = launchRequestOf({ ...ask, machinePk: c.key, launch: id, relay: asker().relay.replace(/\/+$/, "") });
+  if (!req) throw new Error("that launch has something this phone can't send");
+  r.follow(id);
+  const launched = await launchOn(asker(), { pk: c.key, xpk: c.xpk, label: c.label }, req);
+  if (!launched.ok) r.unfollow(id);
+  return launched;
 }
 
 async function linkAsk(text: string, label: string): Promise<{ digits: string; relay: string }> {
@@ -142,6 +191,18 @@ async function handle(ask: Ask): Promise<unknown> {
     case "nudge":
       keyring?.nudge();
       return null;
+    case "computers":
+      return listComputers();
+    case "harnessesOn": {
+      const c = computer(ask.computer);
+      return valueOf<HarnessRow[]>(await harnessesOn(asker(), { pk: c.key, xpk: c.xpk }));
+    }
+    case "foldersOn": {
+      const c = computer(ask.computer);
+      return valueOf(await foldersOn(asker(), { pk: c.key, xpk: c.xpk }, roomIdOf(ask.code)));
+    }
+    case "launch":
+      return launch(ask);
   }
 }
 

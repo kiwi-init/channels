@@ -138,6 +138,7 @@ export function useControlsHandlers({
           const since = await send(`made the room #${room.name}`, { kind: "event", ev: { op: "room.create", ...room } })
           await folded(room)
           await ch.setRooms({ list: roomsAfter(rooms().values(), room), since })
+          return room.id
         }
       : undefined,
     onRenameRoom: isOwner

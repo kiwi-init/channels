@@ -10,6 +10,8 @@ import { foldRoster } from "../../web/src/lib/channel/fold-roster.ts";
 import { hear, onlineByName, type Online } from "../../web/src/lib/channel/online.ts";
 import { trimmed } from "../../web/src/lib/channel/trim.ts";
 import { approveTask, closedDigest, sendBackTask, type TaskSend } from "../../web/src/lib/task-actions.ts";
+import { TEND_SAFETY_MS, tendOwned } from "../../web/src/lib/approval-tend.ts";
+import { followedLaunches, followLaunch, sawMembers, sawRequests, type LaunchSeen } from "../../web/src/lib/launch-follow.ts";
 import { roomView } from "./view.ts";
 import type { Connection, Picture, RoomView } from "./wire.ts";
 
@@ -23,6 +25,14 @@ const merged = (prev: readonly Message[], more: readonly Message[]): Message[] =
 };
 
 const errorText = (e: WireError): string => (e.kind === "gone" ? `the channel was ${e.why}` : e.message);
+
+interface RoomHooks {
+  emit: (room: RoomView) => void;
+  lost: (code: string) => void;
+  launch: (launch: string, seen: LaunchSeen) => void;
+  person: () => string | null;
+  log: (line: string) => void;
+}
 
 export class Room {
   private messages: Message[] = [];
@@ -44,12 +54,16 @@ export class Room {
   private closed = false;
   private state: ChannelState | null = null;
   private place = "main";
+  private tending: Promise<void> | null = null;
+  private tendAgain = false;
+  private tendedAt = 0;
+  private readonly told = new Set<string>();
+  private readonly following = new Map<string, () => void>();
 
   constructor(
     private readonly keyring: Keyring,
     private readonly seat: ChannelIdentityView,
-    private readonly emit: (room: RoomView) => void,
-    private readonly lost: (code: string) => void,
+    private readonly hooks: RoomHooks,
   ) {
     this.title = seat.name ?? seat.label;
   }
@@ -69,7 +83,10 @@ export class Room {
 
   async start(): Promise<void> {
     this.schedule();
-    this.clock = setInterval(() => this.schedule(), 30_000);
+    this.clock = setInterval(() => {
+      this.schedule();
+      if (Date.now() - this.tendedAt >= TEND_SAFETY_MS) this.kick();
+    }, 30_000);
     try {
       await this.refreshRoster();
       const head = await this.keyring.call(this.code, "head");
@@ -86,7 +103,27 @@ export class Room {
     }
   }
 
+  follow(launch: string): void {
+    this.following.get(launch)?.();
+    let last: LaunchSeen["stage"] | null = null;
+    const stop = followLaunch(this.code, launch, (seen) => {
+      if (seen.stage === last) return;
+      last = seen.stage;
+      this.hooks.launch(launch, seen);
+      if (seen.stage === "joined") this.unfollow(launch);
+    });
+    this.following.set(launch, stop);
+    this.kick();
+  }
+
+  unfollow(launch: string): void {
+    this.following.get(launch)?.();
+    this.following.delete(launch);
+  }
+
   stop(): void {
+    for (const stop of this.following.values()) stop();
+    this.following.clear();
     this.closed = true;
     this.stopLive?.();
     if (this.timer) clearTimeout(this.timer);
@@ -182,10 +219,42 @@ export class Room {
     this.schedule();
   }
 
+  private kick(): void {
+    if (!this.isOwner || this.closed) return;
+    if (this.tending) {
+      this.tendAgain = true;
+      return;
+    }
+    this.tendedAt = Date.now();
+    this.tending = this.tend()
+      .catch(() => {})
+      .finally(() => {
+        this.tending = null;
+        if (!this.tendAgain) return;
+        this.tendAgain = false;
+        this.kick();
+      });
+  }
+
+  private async tend(): Promise<void> {
+    const person = this.hooks.person();
+    if (!person) return;
+    if (followedLaunches(this.code).length) sawRequests(this.code, await this.keyring.call(this.code, "requests", { person }).catch(() => []));
+    const api = {
+      autoApprove: async (p: string) => {
+        const members = await this.keyring.call(this.code, "autoApprove", p, []);
+        sawMembers(this.code, members);
+        return members;
+      },
+      requests: (o: { person: string }) => this.keyring.call(this.code, "requests", o),
+    };
+    await tendOwned(person, this.title, api, (title, body) => this.hooks.log(`${title}: ${body}`), this.told);
+  }
+
   private fail(e: unknown): void {
     if (e instanceof ChannelGone) {
       this.gone = e.why;
-      this.lost(this.code);
+      this.hooks.lost(this.code);
     } else this.error = e instanceof Error ? e.message : String(e);
     this.schedule();
   }
@@ -197,7 +266,11 @@ export class Room {
         this.error = null;
         if (ev.kind !== "page") void this.refreshRoster();
         void this.keyring.presence(this.code, { client: "probe", query: true }).catch(() => {});
+        this.kick();
         break;
+      case "Request":
+        this.kick();
+        return;
       case "Message":
         this.messages = merged(this.messages, [ev.message]);
         this.head = Math.max(this.head, ev.message.seq);
@@ -210,6 +283,7 @@ export class Room {
         break;
       case "Roster":
         void this.refreshRoster();
+        this.kick();
         break;
       case "Info":
         void this.refreshInfo();
@@ -220,7 +294,7 @@ export class Room {
       case "Failed":
         if (ev.error.kind === "gone") {
           this.gone = ev.error.why;
-          this.lost(this.code);
+          this.hooks.lost(this.code);
         } else {
           this.connection = "reconnecting";
           this.error = errorText(ev.error);
@@ -251,7 +325,7 @@ export class Room {
     }
     this.state = fold(this.messages, roster, now, this.rooms, this.guard, this.base);
     const keyOf = new Map(admitted.filter((m) => m.active).map((m) => [m.name, m.pk]));
-    this.emit(
+    this.hooks.emit(
       roomView({
         code: this.code,
         title: this.title,

@@ -6,7 +6,7 @@
 import { TEND_SAFETY_MS, tendOnPush, tendOwned } from "./approval-tend"
 import { loadMember } from "./channel"
 import { linkOf, watches } from "./channel-ops"
-import { followedLaunches, sawMembers, sawRequests } from "./launches"
+import { followedLaunches, sawMembers, sawRequests } from "./launch-follow"
 import { bridge, secrets } from "./secrets"
 
 /** Requests already announced, so each is notified once per run of the app. */

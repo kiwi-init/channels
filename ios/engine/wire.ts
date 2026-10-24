@@ -1,3 +1,4 @@
+import type { LaunchChoices } from "@kiwi/core/launch-options.ts";
 import type { ChannelIdentityView, PersonView } from "../../desktop/src/bridge.ts";
 
 export interface Saved {
@@ -18,7 +19,13 @@ export type Ask =
   | { op: "approve"; code: string; task: number }
   | { op: "sendBack"; code: string; task: number; why: string }
   | { op: "open"; code: string; place: string }
-  | { op: "nudge" };
+  | { op: "nudge" }
+  | { op: "computers" }
+  | { op: "harnessesOn"; computer: string }
+  | { op: "foldersOn"; computer: string; code: string }
+  | LaunchAsk;
+
+export type LaunchAsk = { op: "launch"; code: string; computer: string; harness: string; folder: string; nick?: string } & LaunchChoices;
 
 export interface Picture {
   name: string;
@@ -28,7 +35,12 @@ export interface Picture {
 
 export type Reply = { ok: true; value: unknown } | { ok: false; error: string };
 
-export type Push = { type: "saved"; saved: Saved } | { type: "room"; room: RoomView } | { type: "gone"; code: string } | { type: "log"; line: string };
+export type Push =
+  | { type: "saved"; saved: Saved }
+  | { type: "room"; room: RoomView }
+  | { type: "gone"; code: string }
+  | { type: "log"; line: string }
+  | { type: "launch"; code: string; launch: string; stage: "asked" | "joined"; name: string };
 
 export type Connection = "connecting" | "live" | "reconnecting";
 
