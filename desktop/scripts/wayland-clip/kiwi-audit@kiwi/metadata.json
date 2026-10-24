@@ -1,0 +1,6 @@
+{
+  "uuid": "kiwi-audit@kiwi",
+  "name": "kiwi audit",
+  "description": "Window placement and pointer position for the Wayland clipboard audit.",
+  "shell-version": ["50"]
+}

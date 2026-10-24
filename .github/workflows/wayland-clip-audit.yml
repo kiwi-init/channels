@@ -23,7 +23,7 @@ jobs:
         timeout-minutes: 20
         run: |
           sudo apt-get update -q
-          common="libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bubblewrap xdg-dbus-proxy dbus dbus-x11 python3-gi gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0 libwayland-dev libwayland-bin pkg-config libgl1-mesa-dri libegl-mesa0"
+          common="libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bubblewrap xdg-dbus-proxy dbus dbus-x11 python3-gi gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0 libwayland-dev libwayland-bin pkg-config libgl1-mesa-dri libegl-mesa0 dconf-service dconf-cli"
           if [ "${{ matrix.desktop }}" = kde ]; then
             sudo apt-get install -y --no-install-recommends $common kwin-wayland plasma-wayland-protocols breeze
           else

@@ -24,11 +24,16 @@ if [ "$D" = kde ]; then
 fi
 
 gnome-shell --help > "$OUT/gnome-shell-help.txt" 2>&1
+mkdir -p "$HOME/.local/share/gnome-shell/extensions"
+cp -r "$HERE/kiwi-audit@kiwi" "$HOME/.local/share/gnome-shell/extensions/"
 cat > "$OUT/gnome-session.sh" << EOF
 set -u
 gsettings set org.gnome.shell welcome-dialog-last-shown-version '999'
+gsettings set org.gnome.shell disable-user-extensions false
+gsettings set org.gnome.shell disable-extension-version-validation true
+gsettings set org.gnome.shell enabled-extensions "['kiwi-audit@kiwi']"
+gsettings get org.gnome.shell enabled-extensions
 extra=""
-grep -q -- '--unsafe-mode' "$OUT/gnome-shell-help.txt" && extra="\$extra --unsafe-mode"
 grep -q -- '--no-x11' "$OUT/gnome-shell-help.txt" && extra="\$extra --no-x11"
 echo "gnome-shell flags: \$extra"
 gnome-shell --headless --wayland --virtual-monitor 1920x1080 \$extra > "$OUT/gnome-shell.log" 2>&1 &

@@ -1,5 +1,7 @@
 import json
+import struct
 import sys
+import zlib
 
 import gi
 
@@ -11,6 +13,19 @@ from gi.repository import Gdk, GdkPixbuf, GLib, Gtk
 OUT = sys.argv[1]
 DROP = sys.argv[2]
 TEXT = "kiwi pasted text"
+
+
+def png(path: str, width: int, height: int) -> None:
+    rows = b"".join(b"\x00" + b"\xd0\x30\x30\xff" * width for _ in range(height))
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+
+    with open(path, "wb") as f:
+        f.write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(rows, 6)) + chunk(b"IEND", b""))
+
+
+png(DROP, 48, 32)
 
 
 def say(what: str, **more: object) -> None:

@@ -29,18 +29,23 @@ class Gnome:
         self.session: str = r.unpack()[0]
         self.rd("Start")
         log("remote desktop session", self.session)
-        self.eval("Main.overview.hide(); 'ok'")
+        for _ in range(50):
+            try:
+                self.eval("kiwiMain.overview.hide(); 'ok'")
+                break
+            except GLib.Error:
+                time.sleep(0.2)
 
     def rd(self, method: str, args: GLib.Variant | None = None) -> None:
         call("org.gnome.Mutter.RemoteDesktop", self.session, "org.gnome.Mutter.RemoteDesktop.Session", method, args)
 
     def eval(self, js: str) -> object:
-        r = call("org.gnome.Shell", "/org/gnome/Shell", "org.gnome.Shell", "Eval", GLib.Variant("(s)", (js,)), "(bs)")
+        r = call("org.gnome.Shell", "/com/kiwi/Audit", "com.kiwi.Audit", "Run", GLib.Variant("(s)", (js,)), "(s)")
         assert r is not None
-        ok, out = r.unpack()
-        if not ok:
-            raise RuntimeError(f"Eval failed: {out}")
-        v: object = json.loads(out) if out else None
+        res = json.loads(r.unpack()[0])
+        if "error" in res:
+            raise RuntimeError(f"shell: {res['error']}")
+        v: object = res.get("ok")
         if isinstance(v, str):
             try:
                 v = json.loads(v)
@@ -175,7 +180,9 @@ class Kwin:
         self.send(f"key {code} {1 if down else 0}")
 
     def shot(self, path: str) -> None:
-        subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "shot.py"), "kwin", path], check=False)
+        r = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "shot.py"), "kwin", path], check=False, capture_output=True, text=True)
+        if r.returncode:
+            log("screenshot:", r.stderr.strip().splitlines()[-1] if r.stderr.strip() else r.returncode)
 
 
 desk: Gnome | Kwin = Gnome() if KIND == "gnome" else Kwin()
