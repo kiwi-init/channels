@@ -15,7 +15,7 @@ import { navigation, openedUrl, PAGE_RULES, PAGE_TEMPLATE, PAGE_URL, pageWithCsp
 import { mark, startupMarks } from "./eb-startup.ts";
 import { testVault } from "./eb-test-store.ts";
 import { externalUrl, normalizeRelay } from "./guard.ts";
-import { attachKeys, attachWindow, ebHost } from "./host-eb.ts";
+import { attachKeys, attachWindow, dataDir, ebHost } from "./host-eb.ts";
 import { useHost } from "./host.ts";
 import { handlers } from "./ipc/handlers.ts";
 import { bunWorker, keysController, type KeysFrame } from "./keys-eb.ts";
@@ -117,7 +117,7 @@ let keysToPage: (frame: KeysFrame) => void = () => {};
 
 const keys = keysController({
   spawn: () => bunWorker(path.join(import.meta.dir, "keys.js")),
-  init: () => ({ type: "init", relay: store.relayUrl, dir: Utils.paths.userData, seats: store.channels, person: store.person?.pk ?? null }),
+  init: () => ({ type: "init", relay: store.relayUrl, dir: dataDir, seats: store.channels, person: store.person?.pk ?? null }),
   answer: answerKeys,
   toPage: (frame) => keysToPage(frame),
 });
@@ -214,11 +214,11 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
   let opened: OpenStore | null = null;
   if (KIWI_EB_TEST) {
     endKeySession();
-    openStore(testVault(Utils.paths.userData));
+    openStore(testVault(dataDir));
     const relay = normalizeRelay(process.env.KIWI_EB_RELAY ?? "");
     if (relay) mutate((s) => void (s.relayUrl = relay));
   } else {
-    opened = await openEbStore({ dir: Utils.paths.userData, keys: launcherKeys });
+    opened = await openEbStore({ dir: dataDir, keys: launcherKeys });
     openStore(v2Vault(opened));
   }
   attachKeys((m) => keys.tell(m));
@@ -283,12 +283,12 @@ function refuse(instance: Extract<Instance, { kind: "first" }>, why: string): vo
 
 BrowserView.on("created", (tag) => tag.remove());
 
-const wrongHome = KIWI_EB_TEST ? testHomeProblem(Utils.paths.userData, process.env.CFFIXED_USER_HOME) : null;
+const wrongHome = KIWI_EB_TEST ? testHomeProblem(dataDir, process.env.CFFIXED_USER_HOME) : null;
 if (wrongHome) console.error(`Channels test build: ${wrongHome}; not starting, so nothing lands under the person's home`);
 const instance = wrongHome
   ? null
   : await claimInstance({
-      dir: Utils.paths.userData,
+      dir: dataDir,
       handoff: handoffFor(process.argv, JOIN_SCHEME),
       scheme: JOIN_SCHEME,
       onHandoff: (h) => (h.kind === "link" ? handleDeepLink(h.url) : ebHost.showWindow()),
