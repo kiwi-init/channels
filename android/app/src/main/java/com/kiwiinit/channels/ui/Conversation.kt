@@ -48,6 +48,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -103,6 +104,7 @@ import com.kiwiinit.channels.engine.EngineException
 import com.kiwiinit.channels.engine.MessageView
 import com.kiwiinit.channels.engine.QuoteView
 import com.kiwiinit.channels.engine.ReactionView
+import com.kiwiinit.channels.engine.ReviewView
 import com.kiwiinit.channels.engine.RoomView
 import com.kiwiinit.channels.model.AppModel
 import com.kiwiinit.channels.model.Buzz
@@ -130,20 +132,22 @@ sealed interface Line {
 
     data class Ask(override val id: String, val ask: AskView) : Line
 
+    data class Review(override val id: String, val review: ReviewView) : Line
+
     data class Sending(override val id: String, val item: Pending) : Line
 
     companion object {
-        fun build(messages: List<MessageView>, asks: List<AskView>, pending: List<Pending>, sentAs: Map<Int, String>): List<Line> {
+        fun build(messages: List<MessageView>, asks: List<AskView>, reviews: List<ReviewView>, pending: List<Pending>, sentAs: Map<Int, String>): List<Line> {
             val out = mutableListOf<Line>()
             var prev: MessageView? = null
             var lastAt: MessageView? = null
-            val waiting = ArrayDeque(asks.sortedBy { it.at })
+            val held: List<Pair<Double, Line>> = asks.map { it.at to Ask("a${it.seq}", it) } + reviews.map { it.at to Review("r${it.task}", it) }
+            val waiting = ArrayDeque(held.sortedBy { it.first })
             val answers = messages.mapNotNull { m -> m.chosen?.let { "${it.by}|${it.choice}" } }.toSet()
             for (m in messages) {
                 if (m.choices.isEmpty() && "${m.from}|${m.body}" in answers) continue
-                while (waiting.isNotEmpty() && waiting.first().at < m.at) {
-                    val ask = waiting.removeFirst()
-                    out += Ask("a${ask.seq}", ask)
+                while (waiting.isNotEmpty() && waiting.first().first < m.at) {
+                    out += waiting.removeFirst().second
                     prev = null
                 }
                 val before = lastAt
@@ -167,7 +171,7 @@ sealed interface Line {
                 out += Bubble(sentAs[m.seq]?.let { "p$it" } ?: "b${m.seq}", m, first, true)
                 prev = m
             }
-            out += waiting.map { Ask("a${it.seq}", it) }
+            out += waiting.map { it.second }
             val shown = messages.map { it.seq }.toSet()
             out += pending.filter { item -> item.seq?.let { it !in shown } ?: true }.map { Sending("p${it.id}", it) }
             return out
@@ -189,14 +193,16 @@ fun Conversation(
     state: LazyListState,
     follow: Follow,
     elsewhere: List<AskView>,
+    reviews: List<ReviewView>,
     reply: (MessageView) -> Unit,
     answer: (AskView) -> Unit,
+    sendBack: (ReviewView) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
     val pending = model.pending[spot.id] ?: emptyList()
     val sent = model.sentAs.toMap()
-    val lines = remember(room.messages, elsewhere, pending, sent) { Line.build(room.messages, elsewhere, pending, sent) }
+    val lines = remember(room.messages, elsewhere, reviews, pending, sent) { Line.build(room.messages, elsewhere, reviews, pending, sent) }
     val shown = remember(lines) { lines.asReversed() }
     val solo = room.placeView(room.place)?.let { it.kind == "dm" && it.withMe } ?: false
     var reveal by remember { mutableFloatStateOf(0f) }
@@ -241,6 +247,7 @@ fun Conversation(
                     is Line.Time -> TimeLine(line.at)
                     is Line.Event -> EventLine(room, line.message)
                     is Line.Ask -> AskLine(model, room, line.ask) { answer(line.ask) }
+                    is Line.Review -> ReviewLine(model, room, line.review) { sendBack(line.review) }
                     is Line.Sending -> PendingBubble(model, line.item, spot)
                     is Line.Bubble -> BubbleRow(
                         model = model,
@@ -699,6 +706,92 @@ private fun AskLine(model: AppModel, room: RoomView, ask: AskView, other: () -> 
                 modifier = Modifier.padding(start = 12.dp, bottom = 3.dp),
             )
             PollCard(model, room, Poll.of(ask), other)
+        }
+    }
+}
+
+@Composable
+private fun ReviewLine(model: AppModel, room: RoomView, review: ReviewView, back: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.Bottom) {
+        val by = review.by
+        if (by != null) Face(by, room.member(by), 30.dp) else Spacer(Modifier.size(30.dp))
+        Spacer(Modifier.width(8.dp))
+        Column {
+            Text(
+                listOfNotNull(by?.let { room.display(it) }, "in ${taskLabel(review.task)}").joinToString(" · "),
+                style = MaterialTheme.typography.labelMedium,
+                color = Tone.current.ink3,
+                modifier = Modifier.padding(start = 12.dp, bottom = 3.dp),
+            )
+            ReviewCard(model, room, review, back)
+        }
+    }
+}
+
+@Composable
+private fun ReviewCard(model: AppModel, room: RoomView, review: ReviewView, back: () -> Unit) {
+    val tone = Tone.current
+    val view = LocalView.current
+    val scope = rememberCoroutineScope()
+    var approving by remember(review.task) { mutableStateOf(false) }
+    var failed by remember(review.task) { mutableStateOf(false) }
+    Column(
+        Modifier.widthIn(max = 300.dp)
+            .clip(RoundedCornerShape(Radius.bubble))
+            .background(tone.them)
+            .padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 8.dp),
+    ) {
+        Text(
+            "Ready for your review",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = tone.decide,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
+        Text(
+            buildAnnotatedString {
+                withStyle(SpanStyle(color = tone.ink3)) { append(taskLabel(review.task)) }
+                append(" ${review.title}")
+            },
+            style = MaterialTheme.typography.bodyLarge,
+            color = tone.onThem,
+            modifier = Modifier.padding(bottom = 10.dp),
+        )
+        HorizontalDivider(color = tone.line)
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 44.dp).clickable(enabled = !approving) {
+                approving = true
+                failed = false
+                view.buzz(Buzz.Tap)
+                scope.launch {
+                    try {
+                        model.approve(room.code, review.task)
+                        view.buzz(Buzz.Done)
+                    } catch (e: EngineException) {
+                        failed = true
+                        view.buzz(Buzz.Fail)
+                    }
+                    approving = false
+                }
+            },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = tone.onThem, modifier = Modifier.size(20.dp))
+            Text("Approve", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = tone.onThem, modifier = Modifier.weight(1f))
+            if (approving) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+        }
+        HorizontalDivider(color = tone.line, modifier = Modifier.padding(start = 30.dp))
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 44.dp).clickable(enabled = !approving, onClick = back),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+            Text("Send back…", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
+        }
+        if (failed) {
+            Text("Couldn't send · Try again", style = MaterialTheme.typography.labelMedium, color = tone.alert, modifier = Modifier.padding(top = 4.dp))
         }
     }
 }

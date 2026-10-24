@@ -77,6 +77,7 @@ import com.kiwiinit.channels.engine.Connection
 import com.kiwiinit.channels.engine.EngineException
 import com.kiwiinit.channels.engine.MemberView
 import com.kiwiinit.channels.engine.MessageView
+import com.kiwiinit.channels.engine.ReviewView
 import com.kiwiinit.channels.engine.RoomView
 import com.kiwiinit.channels.model.AppModel
 import com.kiwiinit.channels.model.Attached
@@ -85,6 +86,7 @@ import com.kiwiinit.channels.model.Draft
 import com.kiwiinit.channels.model.Outgoing
 import com.kiwiinit.channels.model.Spot
 import com.kiwiinit.channels.model.oneLine
+import com.kiwiinit.channels.model.taskLabel
 import com.kiwiinit.channels.theme.Tone
 import java.io.ByteArrayOutputStream
 import java.io.IOException
@@ -123,9 +125,11 @@ fun Dock(
     spot: Spot,
     replyTo: MessageView?,
     answering: AskView?,
+    sendingBack: ReviewView?,
     focus: FocusRequester,
     clearReply: () -> Unit,
     clearAnswer: () -> Unit,
+    clearSendBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val tone = Tone.current
@@ -163,6 +167,7 @@ fun Dock(
     }
     val placeholder = when {
         room.connection != Connection.Live -> "Connecting…"
+        sendingBack != null -> "What to change"
         replyTo != null -> "Reply to ${room.display(replyTo.from)}"
         answering != null -> "Answer ${room.display(answering.from)}"
         here != null && here.kind == "dm" && room.other(here) != null -> "Message ${room.display(room.other(here) ?: "")}"
@@ -181,7 +186,7 @@ fun Dock(
     fun send() {
         val text = value.text.trim()
         if (!canSend) return
-        if (attached.isEmpty() && answering == null) {
+        if (attached.isEmpty() && answering == null && sendingBack == null) {
             model.post(spot, text, replyTo?.seq)
             value = TextFieldValue("")
             clearReply()
@@ -194,11 +199,15 @@ fun Dock(
         view.buzz(Buzz.Tap)
         val from = spot
         val ask = answering
+        val review = sendingBack
         val re = replyTo?.seq
         val pictures = attached.mapIndexed { i, a -> Outgoing("photo-${i + 1}.jpg", "image/jpeg", Base64.encodeToString(a.data, Base64.NO_WRAP)) }
         scope.launch {
             try {
-                if (pictures.isEmpty() && ask != null) {
+                if (pictures.isEmpty() && review != null) {
+                    model.sendBack(from.code, review.task, text)
+                    clearSendBack()
+                } else if (pictures.isEmpty() && ask != null) {
                     model.answer(from.code, ask.seq, text)
                     clearAnswer()
                 } else {
@@ -224,7 +233,9 @@ fun Dock(
             Text("Not sent: $it", style = MaterialTheme.typography.labelMedium, color = tone.alert, modifier = Modifier.padding(horizontal = 8.dp))
         }
         if (mentionable.isNotEmpty()) Mentions(mentionable) { complete(it) }
-        if (answering != null) {
+        if (sendingBack != null) {
+            Bar(Icons.AutoMirrored.Filled.Reply, tone.decide, "Send back ${taskLabel(sendingBack.task)}", sendingBack.title, clearSendBack)
+        } else if (answering != null) {
             Bar(Icons.Filled.PanTool, tone.decide, room.display(answering.from), answering.body, clearAnswer)
         } else if (replyTo != null) {
             Bar(Icons.AutoMirrored.Filled.Reply, MaterialTheme.colorScheme.primary, room.display(replyTo.from), replyTo.body, clearReply)
