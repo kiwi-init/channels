@@ -225,6 +225,7 @@ function NewAgentsFields() {
       )
       .finally(() => setBusy(null))
   }
+  const setBypass = b.setRemoteBypass
   const rows = PREFER_ORDER.flatMap((id) => status.terminals.filter((t) => t.id === id))
   const helpers = rows.filter((t): t is TerminalRow & { id: "rex" | "tmux"; helpers: "on" | "off" } => t.id !== "app" && t.helpers !== null && (t.found || t.helpers === "on"))
   return (
@@ -239,6 +240,18 @@ function NewAgentsFields() {
         ]}
         onChange={(to) => run("launch", () => b.setLaunches(to))}
       />
+      {setBypass && status.launch === "on" && (
+        <Choice
+          label="Allow bypass from your other devices"
+          desc="An agent started from your phone or another computer may skip its harness's permission prompts here. Off keeps every prompt."
+          value={status.bypass}
+          options={[
+            { value: "on", label: "On" },
+            { value: "off", label: "Off" },
+          ]}
+          onChange={(to) => run("bypass", () => setBypass(to))}
+        />
+      )}
       <Choice
         label="Prefer"
         desc="Where a new agent opens. If it can't open there, it opens in Terminal."

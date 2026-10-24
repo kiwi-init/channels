@@ -14,6 +14,7 @@ type Handlers = Pick<
   | "onPersona"
   | "onPin"
   | "onNickname"
+  | "onColor"
   | "onPowers"
   | "onDeny"
   | "onCheck"
@@ -89,6 +90,9 @@ export function useControlsHandlers({
     onNickname: async (m, nickname) => {
       await ch.updateNickname(m, nickname)
       await refreshRoster()
+    },
+    onColor: async (m, color) => {
+      await send(color ? `${m.name}'s colour is ${color}` : `cleared ${m.name}'s colour`, { kind: "event", ev: { op: "color.set", member: m.name, color } })
     },
     onPowers: async (m, powers) => {
       await ch.updatePowers(m, powers)

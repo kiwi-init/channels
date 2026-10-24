@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { signRequest } from "@kiwi/core/auth.ts";
 import type { Identity } from "@kiwi/core/identity.ts";
+import { CHOICE_KEYS } from "@kiwi/core/launch-options.ts";
 import { readAsk, readMachineArgs, signAnswer, type MachineArgs } from "@kiwi/core/machine-ask.ts";
 import { openMailbox } from "@kiwi/core/mailbox.ts";
 import { WS_PROTOCOL } from "@kiwi/core/protocol.ts";
@@ -109,11 +110,12 @@ export function startMachineInbox(deps: InboxDeps): { stop(): void; close(): voi
     }
     const args = readMachineArgs(read.ask);
     const where = args?.verb === "launch" ? [args.launch.harness, args.launch.folder] : ["", ""];
+    const options = args?.verb === "launch" ? CHOICE_KEYS.flatMap((k) => (args.launch[k] === undefined ? [] : [`${k}=${args.launch[k]}`])).join(" ") : "";
     const result = args
       ? await deps.run(args, read.ask.id).catch((err: unknown) => ({ ok: false, why: "failed", detail: err instanceof Error ? err.message : String(err) }))
       : { ok: false, why: "bad-args" };
     const ok = !!result && typeof result === "object" && (result as { ok?: unknown }).ok !== false;
-    log([read.ask.verb, ok ? "done" : "refused", ...where, read.ask.id]);
+    log([read.ask.verb, ok ? "done" : "refused", ...where, read.ask.id, ...(options ? [options] : [])]);
     try {
       const mailbox = await openMailbox(m.relay, read.ask.reply);
       await mailbox.put("b", await signAnswer(m.identity, read.ask.id, result));

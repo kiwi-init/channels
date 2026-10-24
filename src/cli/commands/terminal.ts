@@ -2,14 +2,14 @@ import * as Effect from "effect/Effect";
 import { PLACE_NAMES, readPlacedSeat, type TerminalId, type TerminalRow, type TerminalsStatus } from "@kiwi/core/terminals.ts";
 import { loadConfig, updateConfig, type HelperId } from "../../config.ts";
 import { showNeedsYou, type NeedsYou, type ShowWhy } from "../../status.ts";
-import { helpersOn, launchesOn, MANIFESTS, placeTools, preferred, seatPlaces, showSeat, switchHelpers, terminalPlugin, terminalPlugins } from "../../terminals/registry.ts";
+import { helpersOn, launchesOn, remoteBypassOn, MANIFESTS, placeTools, preferred, seatPlaces, showSeat, switchHelpers, terminalPlugin, terminalPlugins } from "../../terminals/registry.ts";
 import { parseJson } from "../../terminals/shared/json.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, out } from "../context.ts";
 
 const USAGE =
   "usage: kiwi terminal [status] [--json] | kiwi terminal download|remove rex|tmux | kiwi terminal prefer app|rex|tmux | kiwi terminal seats [--json] | kiwi terminal show --needs-you | kiwi terminal show --seat SEAT";
-const LAUNCHES_USAGE = "usage: kiwi launches on|off|status [--json]";
+const LAUNCHES_USAGE = "usage: kiwi launches on|off|status [--json] | kiwi launches bypass on|off|status [--json]";
 
 const isHelperId = (id: string | undefined): id is HelperId => id === "rex" || id === "tmux";
 const isTerminalId = (id: string | undefined): id is TerminalId => MANIFESTS.some((m) => m.id === id);
@@ -24,7 +24,7 @@ async function terminalsStatus(): Promise<TerminalsStatus> {
       return { id: p.manifest.id, name: p.manifest.name, found: found.found, running: found.running, helpers: p.manifest.helpers ? (helpersOn(p.manifest.id, cfg) ? "on" : "off") : null };
     }),
   );
-  return { prefer: preferred(cfg), launch: launchesOn(cfg) ? "on" : "off", terminals };
+  return { prefer: preferred(cfg), launch: launchesOn(cfg) ? "on" : "off", bypass: remoteBypassOn(cfg) ? "on" : "off", terminals };
 }
 
 function statusText(s: TerminalsStatus): string {
@@ -32,7 +32,13 @@ function statusText(s: TerminalsStatus): string {
     const state = !t.found ? "not installed" : t.running ? "running" : "installed, not running";
     return `${t.name}: ${state}${t.helpers ? `, helpers ${t.helpers}` : ""}${t.id === s.prefer ? ", new agents open here" : ""}`;
   });
-  return [...rows, launchesText(s.launch)].join("\n");
+  return [...rows, launchesText(s.launch), bypassText(s.bypass)].join("\n");
+}
+
+function bypassText(bypass: "on" | "off"): string {
+  return bypass === "on"
+    ? "Bypass from your other devices is on: a launch from your phone or another computer may skip its harness's permission prompts here (kiwi launches bypass off stops it)"
+    : "Bypass from your other devices is off: a launch from your phone or another computer can't skip its harness's permission prompts here (kiwi launches bypass on allows it)";
 }
 
 function launchesText(launch: "on" | "off"): string {
@@ -111,6 +117,16 @@ export const terminalCommands: Record<string, Command> = {
   launches: () =>
     Effect.gen(function* () {
       const sub = args[1] ?? "status";
+      if (sub === "bypass") {
+        const to = args[2] ?? "status";
+        if (to === "on" || to === "off")
+          updateConfig((c) => {
+            c.remoteBypass = to;
+          });
+        else if (to !== "status") return yield* die(LAUNCHES_USAGE);
+        const bypass = remoteBypassOn(loadConfig()) ? "on" : "off";
+        return out(opt.json ? JSON.stringify({ bypass }) : bypassText(bypass));
+      }
       if (sub === "on" || sub === "off")
         updateConfig((c) => {
           c.launch = sub;
