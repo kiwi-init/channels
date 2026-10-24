@@ -47,6 +47,12 @@ if (fs.readdirSync(views).some((n) => n.toLowerCase() === "index.html")) throw n
 const cli = path.resolve(desktop, "../dist/kiwi.js");
 if (!fs.existsSync(cli)) throw new Error("dist/kiwi.js is missing: run `bun scripts/build-cli.ts --js dist/kiwi.js` in the repo root first");
 fs.copyFileSync(cli, path.join(resources[0] as string, "kiwi.js"));
+const keysWorker = await Bun.build({ entrypoints: [path.join(desktop, "src", "keys-worker.ts")], target: "bun" });
+const keysOut = keysWorker.outputs[0];
+if (!keysWorker.success || !keysOut) throw new Error(`the keys worker didn't bundle: ${keysWorker.logs.join("\n")}`);
+fs.writeFileSync(path.join(app, "bun", "keys.js"), await keysOut.text());
+const answered = await bundledKeysAnswer(path.join(app, "bun", "keys.js"));
+if (answered !== "ok") throw new Error(`the bundled keys worker didn't answer a page's request: ${answered}`);
 if (os === "linux") {
   const host = process.arch === "x64" ? "x64" : process.arch === "arm64" ? "arm64" : process.arch;
   if (host !== arch) throw new Error(`eb-post-build: the Linux launcher is built with this machine's cc, for ${host}, not the ${arch} app`);
@@ -120,12 +126,6 @@ execFileSync(
 );
 execFileSync("plutil", ["-replace", "CFBundleExecutable", "-string", "kiwi-launcher", path.join(contents, "Info.plist")]);
 
-const keysWorker = await Bun.build({ entrypoints: [path.join(desktop, "src", "keys-worker.ts")], target: "bun" });
-const keysOut = keysWorker.outputs[0];
-if (!keysWorker.success || !keysOut) throw new Error(`the keys worker didn't bundle: ${keysWorker.logs.join("\n")}`);
-fs.writeFileSync(path.join(app, "bun", "keys.js"), await keysOut.text());
-const answered = await bundledKeysAnswer(path.join(app, "bun", "keys.js"));
-if (answered !== "ok") throw new Error(`the bundled keys worker didn't answer a page's request: ${answered}`);
 const bundleId = execFileSync("plutil", ["-extract", "CFBundleIdentifier", "raw", path.join(contents, "Info.plist")], { encoding: "utf8" }).trim();
 if (!bundleId) throw new Error("eb-post-build: the app's Info.plist names no CFBundleIdentifier, so its kiwi:// registration can't be checked");
 const problems = [

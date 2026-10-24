@@ -119,7 +119,7 @@ try {
   }
   await firstChannel(d, 1).then(
     () => console.log("first run: a person, a channel and a message sent and in the conversation, on the local relay"),
-    (e: Error) => (linux ? console.log(`first run, reported and not gated on Linux until T92: ${e.message}`) : problems.push(`first run: ${e.message}`)),
+    (e: Error) => problems.push(`first run: ${e.message}`),
   );
 
   const hello = await until("the kiwi daemon the app starts", 60_000, () => daemonHello(kiwiHome, 1_000)).catch((e: Error) => (problems.push(e.message), null));
