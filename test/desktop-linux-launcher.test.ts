@@ -90,3 +90,64 @@ test.skipIf(!linux)("with no Electrobun launcher beside it, it says so and start
   expect(ran.status).toBe(127);
   expect(ran.stderr).toContain("can't start the app");
 });
+
+function wrapped(name: string, osRelease: string, needs: { gone?: string; beside?: string }): string {
+  const bin = join(root, name);
+  const parts = join(root, `${name}-parts`);
+  mkdirSync(bin, { recursive: true });
+  mkdirSync(parts, { recursive: true });
+  writeFileSync(join(parts, "os-release"), osRelease);
+  execFileSync("cc", [
+    "-O2",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    `-DKIWI_OS_RELEASE="${join(parts, "os-release")}"`,
+    "-o",
+    join(bin, "launcher"),
+    join(import.meta.dir, "../desktop/native/linux/kiwi-launcher.c"),
+  ]);
+  writeFileSync(join(parts, "stand-in.c"), STAND_INS.args);
+  execFileSync("cc", ["-O2", "-o", join(bin, ELECTROBUN_LAUNCHER), join(parts, "stand-in.c")]);
+  writeFileSync(join(parts, "lib.c"), "int kiwi_part(void) { return 1; }\n");
+  const linked: string[] = [];
+  for (const [soname, dir] of [
+    [needs.gone, parts],
+    [needs.beside, bin],
+  ] as const) {
+    if (!soname) continue;
+    execFileSync("cc", ["-shared", "-fPIC", `-Wl,-soname,${soname}`, "-o", join(dir, soname), join(parts, "lib.c")]);
+    linked.push(join(dir, soname));
+  }
+  execFileSync("cc", ["-shared", "-fPIC", "-o", join(bin, "libNativeWrapper.so"), join(parts, "lib.c"), ...linked]);
+  if (needs.gone) rmSync(join(parts, needs.gone));
+  return join(bin, "launcher");
+}
+
+const FEDORA = 'NAME="Fedora Linux"\nID=fedora\nVERSION_ID=44\n';
+
+test.skipIf(!linux)("a library the native wrapper needs and this computer lacks is named, with the install line for its distro, and nothing starts (T1066)", () => {
+  const ran = spawnSync(wrapped("gone", FEDORA, { gone: "libkiwi-gone.so.1" }), ["kiwi://join/abc"], { env: { PATH: "/usr/bin:/bin" }, encoding: "utf8" });
+  expect({ status: ran.status, out: ran.stdout }).toEqual({ status: 127, out: "" });
+  expect(ran.stderr).toContain("Channels can't start: this computer is missing libraries it needs:\n  - libkiwi-gone.so.1\n");
+  expect(ran.stderr).toContain("(Fedora/RHEL):\n  sudo dnf install gtk3 webkit2gtk4.1 libayatana-appindicator-gtk3 librsvg2\n");
+  expect(ran.stderr).not.toMatch(/(?<!ayatana-)libappindicator-gtk3/);
+});
+
+test.skipIf(!linux)("the install line follows ID_LIKE, and an unknown distro gets every family's (T1066)", () => {
+  const pop = spawnSync(wrapped("pop", 'ID=pop\nID_LIKE="ubuntu debian"\n', { gone: "libkiwi-gone.so.1" }), [], { env: {}, encoding: "utf8" });
+  expect(pop.stderr).toContain("(Ubuntu/Debian):\n  sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-2\n");
+  const other = spawnSync(wrapped("gentoo", "ID=gentoo\n", { gone: "libkiwi-gone.so.1" }), [], { env: {}, encoding: "utf8" });
+  for (const line of [
+    "sudo apt install",
+    "sudo dnf install gtk3 webkit2gtk4.1 libayatana-appindicator-gtk3 librsvg2",
+    "sudo pacman -S gtk3 webkit2gtk-4.1 libayatana-appindicator librsvg",
+    "sudo zypper install",
+  ])
+    expect(other.stderr).toContain(line);
+});
+
+test.skipIf(!linux)("a wrapper whose libraries are all there, one of them beside it, starts Electrobun's launcher as before (T1066)", () => {
+  const ran = spawnSync(wrapped("whole", FEDORA, { beside: "libkiwi-beside.so.1" }), ["--second"], { env: { PATH: "/usr/bin:/bin" }, encoding: "utf8" });
+  expect({ status: ran.status, out: ran.stdout.trim(), err: ran.stderr }).toEqual({ status: 0, out: "--second", err: "" });
+});
