@@ -8,6 +8,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.roborazzi)
 }
 
 val repoDir: File = rootDir.parentFile
@@ -99,6 +100,10 @@ android {
         abortOnError = true
         checkReleaseBuilds = true
     }
+
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
 }
 
 kotlin {
@@ -139,4 +144,10 @@ dependencies {
     implementation(libs.coroutines.android)
     implementation(libs.code.scanner)
     debugImplementation(libs.compose.tooling)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test)
+    testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
 }

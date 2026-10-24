@@ -693,6 +693,7 @@ jobs:
 
   # The Android app: Gradle bundles the engine, builds a release APK (R8, signed with the debug key in android/app/debug.p12
   # so every build installs over the last one) and runs Android lint on it. The APK is kept as an artifact to install on a phone.
+  # Every screen is drawn on the JVM (Robolectric and Roborazzi), light and dark, and kept as the android-screens artifact.
   # Then the engine runs in Chromium the way Engine.kt hosts it, linked to a dev channel, through the kiwiAndroid bridge.
   android:
     name: android / build
@@ -708,11 +709,12 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
+            ~/.m2/repository/org/robolectric
           key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle.kts', 'android/gradle/libs.versions.toml', 'android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-${{ runner.os }}-
-      - name: app build and lint
+      - name: app build, lint and screens
         working-directory: android
-        run: JAVA_HOME="$JAVA_HOME_17_X64" ./gradlew --no-daemon --stacktrace assembleRelease lintRelease
+        run: JAVA_HOME="$JAVA_HOME_17_X64" ./gradlew --no-daemon --stacktrace assembleRelease lintRelease recordRoborazziRelease
       - uses: ./.github/actions/browser
         if: ${{ !cancelled() }}
       - name: engine bridge
@@ -725,6 +727,13 @@ jobs:
           path: |
             android/app/build/outputs/apk/release/app-release.apk
             android/app/build/reports/lint-results-release.html
+          if-no-files-found: ignore
+          overwrite: true
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: android-screens
+          path: android/app/build/screens
           if-no-files-found: ignore
           overwrite: true
       - uses: ./.github/actions/jev-ci-pass
