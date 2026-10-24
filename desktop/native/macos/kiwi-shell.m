@@ -138,10 +138,18 @@ static NSColor *rgb(uint32_t c) {
   return [NSColor colorWithSRGBRed:((c >> 16) & 0xff) / 255.0 green:((c >> 8) & 0xff) / 255.0 blue:(c & 0xff) / 255.0 alpha:1];
 }
 
+static NSString *const FRAME_NAME = @"Channels";
+
 void kiwi_window_look(void *ptr, double minWidth, double minHeight, uint32_t light, uint32_t dark) {
   NSWindow *window = (__bridge NSWindow *)ptr;
   dispatch_async(dispatch_get_main_queue(), ^{
     window.minSize = NSMakeSize(minWidth, minHeight);
+    if ([window setFrameUsingName:FRAME_NAME]) {
+      NSRect frame = window.frame;
+      if (frame.size.width < minWidth || frame.size.height < minHeight)
+        [window setFrame:NSMakeRect(frame.origin.x, frame.origin.y, MAX(frame.size.width, minWidth), MAX(frame.size.height, minHeight)) display:NO];
+    }
+    window.frameAutosaveName = FRAME_NAME;
     NSAppearanceName name = [NSApp.effectiveAppearance bestMatchFromAppearancesWithNames:@[ NSAppearanceNameAqua, NSAppearanceNameDarkAqua ]];
     window.backgroundColor = rgb([name isEqualToString:NSAppearanceNameDarkAqua] ? dark : light);
   });
