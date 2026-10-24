@@ -29,6 +29,13 @@ function piArgv(bin: string, prompt: string, { model, effort }: LaunchChoices): 
   return [bin, ...(model ? ["--model", model] : []), ...(effort ? ["--thinking", effort] : []), prompt];
 }
 
+const OPENCODE_PERMISSIONS: Permission[] = ["default", "plan", "bypass"];
+
+function opencodeArgv(bin: string, prompt: string, { model, permission }: LaunchChoices): string[] {
+  if (model || permission === "plan") return [bin, "mini", ...(model ? ["--model", model] : []), ...(permission === "plan" ? ["--agent", "plan"] : []), "--prompt", prompt];
+  return [bin, ...(permission === "bypass" ? ["--auto"] : []), "--prompt", prompt];
+}
+
 const RECIPES: Partial<Record<KnownHarness, LaunchRecipe>> = {
   claude: {
     label: "Claude Code",
@@ -61,6 +68,15 @@ const RECIPES: Partial<Record<KnownHarness, LaunchRecipe>> = {
     options: { model: true, effort: [], permission: [...PERMISSIONS], context: [] },
     argv: (bin, _prompt, choices) => kimiArgv({ ...choices, bin }),
     typed: kimiScreen,
+  },
+  opencode: {
+    label: "OpenCode",
+    options: { model: true, effort: [], permission: OPENCODE_PERMISSIONS, context: [] },
+    argv: (bin, prompt, choices) => opencodeArgv(bin, prompt, choices),
+    refuse: (choices) =>
+      choices.model && choices.permission === "bypass"
+        ? "OpenCode skips its permission prompts (--auto) only in its full interface, which can't pick a model: leave the model empty to start it with Bypass"
+        : null,
   },
   mimo: {
     label: "MiMoCode",
