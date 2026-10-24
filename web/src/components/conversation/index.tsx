@@ -416,16 +416,17 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     ...(rooms.length > 1
       ? rooms.map((r) => {
           const u = unreadInRoom(r.id)
-          return { key: roomKey(r.id), label: `# ${r.name}`, unread: u.n, forMe: u.forMe, withMe: true }
+          return { key: roomKey(r.id), label: `# ${r.name}`, unread: u.n, forMe: u.forMe, withMe: true, left: false }
         })
-      : [{ key: "main", label: `# ${GENERAL_ROOM}`, unread: unreadIn("main").n, forMe: unreadIn("main").forMe, withMe: true }]),
+      : [{ key: "main", label: `# ${GENERAL_ROOM}`, unread: unreadIn("main").n, forMe: unreadIn("main").forMe, withMe: true, left: false }]),
     ...[...places]
       .filter(([, p]) => p.place.kind === "dm")
       .map(([key, p]) => {
         const w = p.place.kind === "dm" ? p.place.with : ["", ""]
         const u = unreadIn(key)
         const withMe = w.includes(me)
-        return { key, label: withMe ? nameOf(w.find((n) => n !== me) ?? me) : w.map(nameOf).join(" & "), unread: u.n, forMe: u.forMe, withMe }
+        const left = w.some((n) => n !== me && !state.members.get(n)?.active)
+        return { key, label: withMe ? nameOf(w.find((n) => n !== me) ?? me) : w.map(nameOf).join(" & "), unread: u.n, forMe: u.forMe, withMe, left }
       }),
   ]
   const currentConversation = tab !== "conversation" ? null : hereKey !== "main" ? hereKey : rooms.length > 1 ? roomKey(cardRoom) : "main"
