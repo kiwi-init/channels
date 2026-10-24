@@ -106,24 +106,7 @@ const ran = (r: Plan) =>
     .filter((d) => d.run)
     .map((d) => d.job)
     .sort();
-const CHECKS = [
-  "static",
-  "test-unit",
-  "test-flows-a",
-  "test-flows-b",
-  "build",
-  "shots",
-  "perf-runs",
-  "perf",
-  "desktop",
-  "desktop-mac",
-  "desktop-linux",
-  "cli-macos",
-  "ios",
-  "ios-gestures",
-  "android",
-  "android-device",
-];
+const CHECKS = ["static", "test-unit", "test-flows-a", "test-flows-b", "build", "shots", "perf-runs", "perf", "desktop", "desktop-mac", "desktop-linux", "cli-macos", "ios", "ios-gestures", "android"];
 
 describe("the iPhone jobs wait only on what the iPhone app is built from (T1598)", () => {
   const desktopOnly = {

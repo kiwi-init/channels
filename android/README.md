@@ -29,8 +29,8 @@ A phone gets its keys by linking with the Mac app (Settings → Phone → Link a
 
 ## Install it on a phone
 
-No emulator needed. Every pull request that touches `android/` builds a release APK in CI
-(`android / build`); download the `channels-android` artifact from the run, unzip it, and open
+No emulator needed. Every push to main builds a release APK in CI (`android / build`), and so does
+a branch's ci.yml run dispatched with `jobs: android`; download the `channels-android` artifact from the run, unzip it, and open
 `app-release.apk` on the phone (allow installs from your browser or files app), or with the phone
 on USB and debugging on:
 
