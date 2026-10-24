@@ -14,6 +14,18 @@ export function terminalsBridge(): Terminals | null {
   }
 }
 
+type Hooks = Pick<KiwiBridge, "hooks" | "setHooks">
+
+export function hooksBridge(): Hooks | null {
+  try {
+    const k = (window as unknown as { kiwi?: Partial<Hooks> }).kiwi
+    return k && typeof k.hooks === "function" && typeof k.setHooks === "function" ? (k as Hooks) : null
+  } catch {
+    // No window (a test or a worker): no hooks to set.
+    return null
+  }
+}
+
 type ContextLine = Pick<KiwiBridge, "contextLine" | "setContextLine">
 
 export function contextLineBridge(): ContextLine | null {

@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import type { HookRow } from "@kiwi/core/harnesses.ts";
 import { loadConfig } from "../../config.ts";
 import { here } from "../../seats.ts";
 import { EVENTS, hookCommand, isOurHook, isOurHookCommand, LISTEN, LISTEN_SECONDS, PERMISSION } from "../self.ts";
@@ -104,6 +105,14 @@ function claudeHooksState(): ClaudeHooksState {
       if (!listenWanted()) return "installed";
       return claudeVersion() ? "listen-missing" : "installed-without-listen";
   }
+}
+
+export function claudeHooksRow(): Pick<HookRow, "state" | "text"> {
+  const state = claudeHooksState();
+  const text = claudeHooksStatus();
+  if (state === "installed") return { state: "installed", text };
+  if (state === "installed-without-listen") return { state: "partial", text };
+  return { state: state === "missing" ? "missing" : "outdated", text };
 }
 
 export function claudeHooksStatus(): string {

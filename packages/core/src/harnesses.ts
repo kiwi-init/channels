@@ -19,6 +19,25 @@ export const isKnownHarness = (v: unknown): v is KnownHarness => typeof v === "s
 
 const text = (v: unknown): string | null => (typeof v === "string" && v ? v : null);
 
+const HOOK_STATES = ["installed", "partial", "outdated", "missing", "off", "absent"] as const;
+
+export type HookState = (typeof HOOK_STATES)[number];
+
+export interface HookRow {
+  harness: KnownHarness;
+  state: HookState;
+  text: string;
+}
+
+const isHookState = (v: unknown): v is HookState => typeof v === "string" && (HOOK_STATES as readonly string[]).includes(v);
+
+export function readHookRow(x: unknown): HookRow | null {
+  if (!x || typeof x !== "object") return null;
+  const r = x as Record<string, unknown>;
+  if (!isKnownHarness(r.harness) || !isHookState(r.state)) return null;
+  return { harness: r.harness, state: r.state, text: text(r.text) ?? r.state };
+}
+
 export function readHarnessRow(x: unknown): HarnessRow | null {
   if (!x || typeof x !== "object") return null;
   const r = x as Record<string, unknown>;

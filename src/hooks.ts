@@ -28,6 +28,7 @@ export {
   EXTRA_HARNESSES,
   extraHooksStatus,
   extraInstalled,
+  hooksRows,
   hooksStatus,
   installDetected,
   installExtra,
