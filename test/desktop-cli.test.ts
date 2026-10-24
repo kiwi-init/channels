@@ -73,8 +73,8 @@ test.skipIf(process.platform === "win32")(
     writeFileSync(join(proj, ".env"), "KIWI_FROM_DOTENV=1\n");
     writeFileSync(
       bundle,
-      `import { appendFileSync, existsSync, statSync } from "node:fs";\n` +
-        `const fd3 = existsSync("/dev/fd/3") ? statSync("/dev/fd/3").ino : null;\n` +
+      `import { appendFileSync, fstatSync } from "node:fs";\n` +
+        `const fd3 = (() => { try { return fstatSync(3).ino; } catch { return null; } })();\n` +
         `const env = ["KIWI_KEY_FD", "BUN_OPTIONS", "NODE_OPTIONS", "LD_LIBRARY_PATH", "KIWI_FROM_DOTENV"].filter((n) => process.env[n] !== undefined);\n` +
         `appendFileSync(${JSON.stringify(runs)}, JSON.stringify({ pid: process.pid, args: process.argv.slice(2), fd3, env }) + "\\n");\n` +
         `if (process.argv.includes("--version")) console.log("kiwi 9.9.9");\n`,

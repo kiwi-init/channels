@@ -10,6 +10,9 @@ function errorLine(err: unknown, at: Date): string {
 
 const logFile = (): string => path.join(host().app.path("logs"), "main.log");
 
+export const windowFailure = (err: unknown, log: string = logFile()): string =>
+  `the window couldn't start (${err instanceof Error ? err.message : String(err)}). Open Channels again; if it keeps failing, the details are in ${log}`;
+
 export function logMainError(err: unknown): void {
   try {
     fs.mkdirSync(path.dirname(logFile()), { recursive: true });
