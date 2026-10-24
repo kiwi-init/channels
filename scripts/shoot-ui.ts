@@ -17,7 +17,7 @@
 // the engine of the Mac's and Linux's system web view: bunx playwright-core install webkit.
 
 import { spawn, type ChildProcess } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, webkit, type Page } from "playwright-core";
@@ -372,6 +372,7 @@ try {
   // ---------- shoot ----------
   let launcherStub = false;
   let terminalsStub = false;
+  let wakeStub = false;
   for (const theme of (["dark", "light"] as const).filter((t) => !themeOnly || t === themeOnly)) {
     for (const [vp, size] of (
       [
@@ -569,6 +570,55 @@ try {
         () => toTab("Conversation"),
       );
       await shoot(owner, tag, "07-details", () => detailsBtn().click(), closeDetails);
+      // An agent of this computer in the owner's menu, with a stand-in for the desktop app's two wake calls.
+      if (["07c-agent-wake", "07d-agent-wake-off"].some((n) => takes(tag, n))) {
+        if (!wakeStub) {
+          wakeStub = true;
+          const room = (JSON.parse(readFileSync(join(cli, "home", "config.json"), "utf8")) as { channels: Record<string, { roomId: string }> }).channels.kiwi?.roomId ?? "";
+          await owner.addInitScript((room: string) => {
+            if (sessionStorage.getItem("shots.wake") !== "1") return;
+            let wake: "on" | "off" = "on";
+            const seats = () => [{ room, alias: "kiwi", agent: "atlas", wake }];
+            const w = window as unknown as { kiwi?: object };
+            w.kiwi = Object.assign(w.kiwi ?? {}, {
+              wakeSeats: async () => seats(),
+              setWake: async (_room: string, _agent: string, to: "on" | "off") => ((wake = to), seats()),
+            });
+          }, room);
+        }
+        await owner.evaluate(() => sessionStorage.setItem("shots.wake", "1"));
+        await owner.reload();
+        const menuClosed = async () => {
+          await owner.keyboard.press("Escape");
+          await closeDetails();
+        };
+        await shoot(
+          owner,
+          tag,
+          "07c-agent-wake",
+          async () => {
+            await detailsBtn().click();
+            await owner.getByRole("button", { name: "More for atlas" }).click();
+            await owner.getByRole("menuitem", { name: "Stop waking it on new messages" }).waitFor();
+          },
+          menuClosed,
+        );
+        await shoot(
+          owner,
+          tag,
+          "07d-agent-wake-off",
+          async () => {
+            await detailsBtn().click();
+            await owner.getByRole("button", { name: "More for atlas" }).click();
+            await owner.getByRole("menuitem", { name: "Stop waking it on new messages" }).click();
+            await owner.getByRole("button", { name: "More for atlas" }).click();
+            await owner.getByRole("menuitem", { name: "Wake it on new messages" }).waitFor();
+          },
+          menuClosed,
+        );
+        await owner.evaluate(() => sessionStorage.removeItem("shots.wake"));
+        await owner.reload();
+      }
       const colourDialog = () => owner.getByRole("dialog", { name: "Your colour" });
       await shoot(
         owner,

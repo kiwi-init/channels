@@ -17,6 +17,8 @@ import type { RexActivity, RexPlace, SeatPlace, TerminalPlugin } from "../termin
 import { helpersOn, marking, remoteBypassOn, terminalPlugin } from "../terminals/registry.ts";
 import { pruneHookFiles } from "../hooks/delivered.ts";
 import { launchFolders } from "../launch/folders.ts";
+import { hooksRows } from "../hooks/install/extra.ts";
+import { computerSettings } from "./settings.ts";
 import { harnessInventory } from "../launch/harnesses.ts";
 import { forgetAtRelay, startMachineInbox } from "./inbox.ts";
 import { remoteRunner } from "./remote.ts";
@@ -784,6 +786,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       folders: (room) => launchFolders(loadConfig(), room),
       launch: (req) => launchAgent(req),
       bypass: () => remoteBypassOn(loadConfig()),
+      settings: async () => computerSettings(loadConfig(), hooksRows()),
       starts: join(dir, "remote-launches.json"),
     }),
   });

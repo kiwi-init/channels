@@ -2,8 +2,10 @@
 // main.ts and preload.ts; renderer-neutral on purpose (no electron/node imports),
 // so web/ can type against it without touching this process.
 
+import type { ComputerSettings } from "@kiwi/core/computer-settings.ts";
 import type { HarnessRow, HookRow, KnownHarness } from "@kiwi/core/harnesses.ts";
 import type { LaunchChoices } from "@kiwi/core/launch-options.ts";
+import type { WakeSeat } from "@kiwi/core/wake.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
 import type { CachedKept, CachedRow, Unread } from "@kiwi/core/cache-row.ts";
 import type { Channel, OpenKind, PresenceFields } from "@kiwi/core/client.ts";
@@ -348,6 +350,8 @@ export interface KiwiBridge {
   setContextLine(to: "on" | "off"): Promise<"on" | "off" | null>;
   hooks(): Promise<HookRow[]>;
   setHooks(harness: KnownHarness, to: "on" | "off"): Promise<HookRow[]>;
+  wakeSeats(): Promise<WakeSeat[]>;
+  setWake(room: string, agent: string, to: "on" | "off"): Promise<WakeSeat[]>;
   harnesses(): Promise<HarnessRow[]>;
   seatFolders(roomId: string): Promise<string[]>;
   chooseFolder(): Promise<string | null>;
@@ -355,6 +359,7 @@ export interface KiwiBridge {
   machines(): Promise<MachineView[]>;
   harnessesOn(machinePk: string): Promise<FromMachine<HarnessRow[]>>;
   foldersOn(machinePk: string, roomId: string): Promise<FromMachine<string[]>>;
+  settingsOn(machinePk: string): Promise<FromMachine<ComputerSettings>>;
 }
 
 export interface UpdateView {

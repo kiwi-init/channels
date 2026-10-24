@@ -82,6 +82,8 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     setContextLine: (to) => t.call("setContextLine", to),
     hooks: () => t.call("hooks"),
     setHooks: (harness, to) => t.call("setHooks", harness, to),
+    wakeSeats: () => t.call("wakeSeats"),
+    setWake: (room, agent, to) => t.call("setWake", room, agent, to),
     harnesses: () => t.call("harnesses"),
     seatFolders: (roomId) => t.call("seatFolders", roomId),
     chooseFolder: () => t.call("chooseFolder"),
@@ -89,5 +91,6 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     machines: () => t.call("machines"),
     harnessesOn: (machinePk) => t.call("harnessesOn", machinePk),
     foldersOn: (machinePk, roomId) => t.call("foldersOn", machinePk, roomId),
+    settingsOn: (machinePk) => t.call("settingsOn", machinePk),
   };
 }

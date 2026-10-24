@@ -1,5 +1,6 @@
 import { readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, sep } from "node:path";
+import type { ComputerSettings } from "@kiwi/core/computer-settings.ts";
 import type { HarnessRow } from "@kiwi/core/harnesses.ts";
 import type { MachineArgs } from "@kiwi/core/machine-ask.ts";
 import { writePrivate } from "../config.ts";
@@ -15,6 +16,7 @@ export interface RemoteDeps {
   folders: (room?: string) => string[];
   launch: (req: LaunchRequest) => Promise<Launched>;
   bypass?: () => boolean;
+  settings?: () => Promise<ComputerSettings>;
   starts?: string;
   now?: () => number;
 }
@@ -50,7 +52,7 @@ function loadStarts(file: string | undefined): number[] {
   }
 }
 
-export type RemoteResult = { ok: true; harnesses: HarnessRow[]; bypass: boolean } | { ok: true; folders: string[] } | { ok: true } | Launched;
+export type RemoteResult = { ok: true; harnesses: HarnessRow[]; bypass: boolean } | { ok: true; folders: string[] } | { ok: true; settings: ComputerSettings } | { ok: true } | Launched;
 
 export const NO_REMOTE_BYPASS =
   "this computer doesn't take bypass permissions from another device: turn on Allow bypass from your other devices in its Settings → New agents, or run kiwi launches bypass on there";
@@ -72,6 +74,8 @@ export function remoteRunner(deps: RemoteDeps): (args: MachineArgs, id: string) 
         return { ok: true, folders: deps.folders(args.room) };
       case "unpair":
         return { ok: true };
+      case "settings":
+        return deps.settings ? { ok: true, settings: await deps.settings() } : { ok: false, why: "failed", detail: "this computer's kiwi doesn't share its settings" };
       case "launch": {
         if (args.launch.permission === "bypass" && !bypass()) return { ok: false, why: "not-allowed", detail: NO_REMOTE_BYPASS };
         const at = now();
