@@ -11,6 +11,7 @@
     "mksquashfs",
     "ditto",
     "hdiutil",
+    "lsappinfo",
     "dbus-send",
     "pgrep",
     "xdotool",

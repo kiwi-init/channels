@@ -146,3 +146,9 @@ void kiwi_window_look(void *ptr, double minWidth, double minHeight, uint32_t lig
     window.backgroundColor = rgb([name isEqualToString:NSAppearanceNameDarkAqua] ? dark : light);
   });
 }
+
+void kiwi_badge(int32_t count) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    NSApp.dockTile.badgeLabel = count > 0 ? [NSString stringWithFormat:@"%d", count] : nil;
+  });
+}

@@ -70,6 +70,7 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     getDeepLink: () => t.call("getDeepLink"),
     takeDroppedFiles: () => t.call("takeDroppedFiles"),
     takePastedImage: () => t.call("takePastedImage"),
+    setBadge: (count) => t.call("setBadge", count),
     onDeepLink: (cb) => t.listen("deepLink", cb),
     onTextStep: (cb) => t.listen("textStep", cb),
     setPersonalities: (list) => t.call("setPersonalities", list),

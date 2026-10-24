@@ -114,6 +114,10 @@ export function onShortcut(window: Pointer | null, pressed: (action: number) => 
   return windowKeys(window, shortcuts.ptr);
 }
 
+const badge = dlopen(shellPath, { kiwi_badge: { args: [FFIType.i32], returns: mac ? FFIType.void : FFIType.bool } }).symbols.kiwi_badge;
+
+export const showBadge = (count: number): void => void badge(Math.max(0, Math.min(Math.trunc(count), 1_000_000)));
+
 export const notifyLinux = (title: string, body: string): boolean => notes?.kiwi_notify(ptr(cString(title)), ptr(cString(body))) ?? false;
 
 export function onNoteClick(window: Pointer | null, clicked: () => void): boolean {

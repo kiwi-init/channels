@@ -1,4 +1,5 @@
 import { useEffect, useEffectEvent, useSyncExternalStore } from "react"
+import { bridge } from "@/lib/secrets"
 import { pendingWrite, writeLater } from "@/lib/write-behind"
 
 // What's new where. For each channel this browser keeps the last seq it saw there, and how many
@@ -130,6 +131,9 @@ export function useTabNews(total: number) {
   useEffect(() => {
     document.title = total > 0 ? `(${total}) Channels` : "Channels"
     void markIcon(total > 0)
+    void bridge()
+      ?.setBadge(total)
+      .catch(() => undefined)
   }, [total])
 }
 

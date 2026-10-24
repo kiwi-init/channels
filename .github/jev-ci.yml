@@ -510,6 +510,7 @@ jobs:
       Electrobun's cold-start gate, electrobunColdStartMs, is 1300 ms because on CI its dev test build scales to 900-1070 ms where Electron's scaled to about 680 (its gate was 905):
       T798 finds why, times the stable build, and brings it under 905, then the gate tightens to match.
       Its first-screen gate, electrobunFirstScreenMs, is 1000 ms for the same reason (600-875 ms scaled on CI, against Electron's 745).
+      The smoke also sets the page's news count through window.kiwi.setBadge and fails unless 4 shows on the Dock icon (lsappinfo's StatusLabel, NSDockTile in desktop/native/macos/kiwi-shell.m) and 0 clears it (T971).
 
   desktop-linux:
     name: desktop / linux
@@ -579,6 +580,7 @@ jobs:
       As on the Mac, eb-post-build bundles src/keys-worker.ts into app/bun/keys.js and fails unless that bundled keys worker answers a page's request, before the Linux part ends the script (T92: 0.27.0 to 0.27.2 shipped the Linux app without it, so Create channel failed); smoke-eb's first run (a person, a channel, a message) fails the job on Linux again.
       Each image's packages are kept as linux-packages-<image> for 3 days.
       Then desktop/scripts/wayland-check/kwin.sh runs the test app in a headless KWin with no XWayland (kwin_wayland --virtual, DISPLAY unset, failing if an Xwayland ran) beside a GTK helper app that is a native Wayland client, driving both with real input through KWin's fake input (desktop/scripts/wayland-check/kwin-input.c) and placing them with KWin scripting (kwin.py), and desktop/scripts/wayland-check.ts fails unless text pastes into the composer from the helper, an image the helper copies pastes into the composer as an attachment (pasted.png, through main and kiwi_take_paste, since WebKitGTK's paste event carries nothing, T896), the composer's Ctrl+C and a message's Copy text button reach the helper, an image the page writes with navigator.clipboard.write reaches it, a PNG dragged from the helper onto the composer is attached (WebKitGTK hands the page a dropped file only as a file URL, so desktop/native/linux/kiwi-shell.c keeps the dropped paths and the composer takes them through takeDroppedFiles, T895), and a file dropped elsewhere leaves the page where it was.
+      Then desktop/native/linux/kiwi-badge-test.c, on its own session bus, fails unless kiwi_badge sends the Unity LauncherEntry Update that Plasma's task manager and GNOME's docks read, for application://channels-desktop.desktop: a count of 3 shown, and 0 or a negative count hidden at 0 (the page's news count, T971).
 
   cli-macos:
     name: cli / macos
