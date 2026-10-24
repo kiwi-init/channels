@@ -37,6 +37,20 @@ export function urlSchemeProblems(infoPlist: string, identifier: string, scheme:
   return has ? [`the test build ${identifier} registers ${scheme}://, so it could take links meant for the installed Channels`] : [];
 }
 
+const plistString = (infoPlist: string, key: string): string | null => new RegExp(`<key>${key}</key>\\s*<string>([^<]*)</string>`).exec(infoPlist)?.[1] ?? null;
+
+export function shortVersion(version: string): string {
+  return version.replace(/[-+].*$/, "");
+}
+
+export function versionProblems(infoPlist: string): string[] {
+  const version = plistString(infoPlist, "CFBundleVersion");
+  const short = plistString(infoPlist, "CFBundleShortVersionString");
+  if (!version) return ["Info.plist names no CFBundleVersion"];
+  if (!short) return ["Info.plist names no CFBundleShortVersionString, so Finder and About show no version"];
+  return short === shortVersion(version) && /^\d+\.\d+\.\d+$/.test(short) ? [] : [`Info.plist's CFBundleShortVersionString is ${short}, not ${shortVersion(version)} from CFBundleVersion ${version}`];
+}
+
 const KEY_CHANNEL = "launcherKeys";
 const PURE_CALLS = new Set(["__esm", "__commonJS", "__export", "createRequire", "Symbol"]);
 const PURE_STATICS: Record<string, ReadonlySet<string>> = {

@@ -7,7 +7,7 @@ import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts";
 import { JOIN_SCHEME } from "../src/deep-links.ts";
 import { PAGE_TEMPLATE, pageWithCsp } from "../src/eb-page.ts";
 import type { FromWorker, ToWorker } from "../src/keys-shim.ts";
-import { bundleProblems, keyChannelProblems, testBuildProblems, urlSchemeProblems } from "./eb-bundle.ts";
+import { bundleProblems, keyChannelProblems, shortVersion, testBuildProblems, urlSchemeProblems, versionProblems } from "./eb-bundle.ts";
 import { hostKey, mismatches, pinFor, PINS } from "./eb-pins.ts";
 import { sealApp } from "./eb-seal.ts";
 import { ELECTROBUN_LAUNCHER } from "./linux-files.ts";
@@ -125,12 +125,15 @@ execFileSync(
   { stdio: "inherit" },
 );
 execFileSync("plutil", ["-replace", "CFBundleExecutable", "-string", "kiwi-launcher", path.join(contents, "Info.plist")]);
+const bundleVersion = execFileSync("plutil", ["-extract", "CFBundleVersion", "raw", path.join(contents, "Info.plist")], { encoding: "utf8" }).trim();
+execFileSync("plutil", ["-replace", "CFBundleShortVersionString", "-string", shortVersion(bundleVersion), path.join(contents, "Info.plist")]);
 
 const bundleId = execFileSync("plutil", ["-extract", "CFBundleIdentifier", "raw", path.join(contents, "Info.plist")], { encoding: "utf8" }).trim();
 if (!bundleId) throw new Error("eb-post-build: the app's Info.plist names no CFBundleIdentifier, so its kiwi:// registration can't be checked");
 const problems = [
   ...bundleProblems(fs.readFileSync(path.join(app, "bun", "index.js"), "utf8"), fs.readFileSync(path.join(app, "views", "preload", "index.js"), "utf8")),
   ...urlSchemeProblems(fs.readFileSync(path.join(contents, "Info.plist"), "utf8"), bundleId, JOIN_SCHEME),
+  ...versionProblems(fs.readFileSync(path.join(contents, "Info.plist"), "utf8")),
   ...testBuildProblems(process.env.CHANNELS_EB_TEST === "1", bundleId, fs.readFileSync(path.join(contents, "Resources", "version.json"), "utf8")),
   ...keyChannelProblems(fs.readFileSync(path.join(app, "bun", "index.js"), "utf8")),
 ];
