@@ -223,6 +223,7 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
   }
   attachKeys((m) => keys.tell(m));
   keys.start();
+  watchPage();
   const win = await createWindow();
   if (!win) {
     instance.release();
@@ -248,7 +249,6 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
     ebHost.push("update", u);
     tray.refresh(u);
   });
-  watchPage();
   void keepDaemon(() => quitting).catch(logMainError);
   const broken = brokenStore();
   if (broken) void Utils.showMessageBox({ type: "error", message: "Channels can't read its saved keys", detail: broken.message });
