@@ -78,6 +78,8 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     setLaunches: (to) => t.call("setLaunches", to),
     contextLine: () => t.call("contextLine"),
     setContextLine: (to) => t.call("setContextLine", to),
+    hooks: () => t.call("hooks"),
+    setHooks: (harness, to) => t.call("setHooks", harness, to),
     harnesses: () => t.call("harnesses"),
     seatFolders: (roomId) => t.call("seatFolders", roomId),
     chooseFolder: () => t.call("chooseFolder"),
