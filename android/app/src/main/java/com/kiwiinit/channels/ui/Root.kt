@@ -21,6 +21,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -57,15 +58,17 @@ private fun details(spot: Spot): String = "details/${Uri.encode(spot.code)}/${Ur
 fun Root(model: AppModel, unlock: () -> Unit) {
     val view = LocalView.current
     LaunchedEffect(model) { model.buzz.collect { view.buzz(it) } }
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
-        model.engine?.let { EngineHost(it) }
-        when (val phase = model.phase) {
-            Phase.Starting -> Unit
-            Phase.Unlinked -> LinkScreen(model)
-            Phase.Ready -> Ready(model)
-            is Phase.Broken -> Centered("Channels can't start", phase.why)
+    Surface(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize()) {
+            model.engine?.let { EngineHost(it) }
+            when (val phase = model.phase) {
+                Phase.Starting -> Unit
+                Phase.Unlinked -> LinkScreen(model)
+                Phase.Ready -> Ready(model)
+                is Phase.Broken -> Centered("Channels can't start", phase.why)
+            }
+            if (model.lock.locked && model.phase == Phase.Ready) Locked(unlock)
         }
-        if (model.lock.locked && model.phase == Phase.Ready) Locked(unlock)
     }
 }
 
