@@ -1,6 +1,7 @@
 import {
   ArrowLeft01Icon,
   ArrowRight01Icon,
+  CheckmarkCircle02Icon,
   ComputerIcon,
   GithubIcon,
   Link01Icon,
@@ -19,10 +20,10 @@ import { setAccessibilityOption, useAccessibilityOption } from "@/lib/accessibil
 import { cx } from "@/lib/utils"
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { relayUrl } from "@/lib/relay"
-import { bridge, useSecrets } from "@/lib/secrets"
+import { bridge, useSecrets, type KiwiBridge } from "@/lib/secrets"
 import { contextLineBridge, hooksBridge, terminalsBridge } from "@/lib/terminals"
 import { harnessName } from "@/lib/harness"
-import type { HookRow, HookState } from "@kiwi/core/harnesses.ts"
+import type { HarnessRow, HookRow, HookState } from "@kiwi/core/harnesses.ts"
 import type { TerminalId, TerminalRow, TerminalsStatus } from "@kiwi/core/terminals.ts"
 import { version } from "../../../package.json"
 import { ComputerRows } from "./computers"
@@ -304,16 +305,27 @@ function PersonalitiesField({ onOpen }: { onOpen: () => void }) {
   )
 }
 
+type Daemon = Awaited<ReturnType<KiwiBridge["daemonStatus"]>>
+type Finding = NonNullable<Awaited<ReturnType<KiwiBridge["doctor"]>>>[number]
+
+function abilities(r: HarnessRow): string {
+  if (r.start && r.wake) return "Starts · Wakes"
+  if (r.start) return "Starts"
+  return r.wake ? "Wakes" : "Found"
+}
+
 function KiwiHere() {
   const b = bridge()
-  const [line, setLine] = useState<string | null>(null)
+  const [daemon, setDaemon] = useState<Daemon | null>(null)
+  const [rows, setRows] = useState<HarnessRow[] | null>(null)
   useEffect(() => {
     if (!b?.daemonStatus || !b.harnesses) return
     let live = true
     void Promise.all([b.daemonStatus(), b.harnesses()]).then(
-      ([daemon, rows]) => {
-        const found = rows.filter((r) => r.path && r.start).map((r) => `${r.harness === "claude" ? "Claude Code" : r.harness === "codex" ? "Codex" : r.harness}${r.version ? ` ${r.version}` : ""}`)
-        if (live) setLine([daemon.running && daemon.version ? `kiwi ${daemon.version}` : "kiwi isn't running", ...found].join(" · "))
+      ([d, r]) => {
+        if (!live) return
+        setDaemon(d)
+        setRows(r)
       },
       () => {}
     )
@@ -321,8 +333,90 @@ function KiwiHere() {
       live = false
     }
   }, [b])
-  if (!b?.daemonStatus || !b.harnesses || line === null) return null
-  return <Item tile={<Icon icon={TerminalIcon} size={16} />} title="kiwi on this computer" desc={line} />
+  if (!b?.daemonStatus || !b.harnesses || daemon === null || rows === null) return null
+  const found = rows.filter((r) => r.path)
+  const missing = rows.filter((r) => !r.path)
+  return (
+    <>
+      <Item tile={<Icon icon={TerminalIcon} size={16} />} title="kiwi on this computer" desc={daemon.running && daemon.version ? `kiwi ${daemon.version}, running` : "kiwi isn't running"} />
+      {found.map((r) => (
+        <Item
+          key={r.harness}
+          tile={<HarnessFace harness={r.harness} size={20} />}
+          title={`${harnessName(r.harness)}${r.version ? ` ${r.version}` : ""}`}
+          desc={
+            <>
+              <span className="block truncate font-mono" title={r.path ?? undefined}>
+                {r.path}
+              </span>
+              {!r.start && r.why && <span className="block">{r.why}</span>}
+            </>
+          }
+          aside={<span className="shrink-0 text-meta text-ink-3">{abilities(r)}</span>}
+        />
+      ))}
+      {missing.length > 0 && <Item title="Not on this computer" desc={missing.map((r) => harnessName(r.harness)).join(", ")} />}
+    </>
+  )
+}
+
+function FindingRow({ f }: { f: Finding }) {
+  if (!f.ok) {
+    return (
+      <li className="flex gap-2.5">
+        <span className="flex h-[1lh] w-3.5 shrink-0 items-center justify-center text-meta leading-snug">
+          <span className="size-2 rounded-full bg-alert" />
+        </span>
+        <span className="min-w-0 text-meta leading-snug">
+          <span className="block text-ink">{f.what}</span>
+          <span className="block text-ink-2">{f.how}</span>
+        </span>
+      </li>
+    )
+  }
+  const [, label, value] = /^(\S+)\s{2,}(.*)$/.exec(f.what) ?? [null, null, f.what]
+  return (
+    <li className="flex gap-2.5 text-meta leading-snug">
+      <Icon icon={CheckmarkCircle02Icon} size={14} className="mt-px shrink-0 text-live" />
+      {label && <span className="w-14 shrink-0 text-ink-3">{label}</span>}
+      <span className="min-w-0 break-words text-ink-2">{value}</span>
+    </li>
+  )
+}
+
+function Doctor() {
+  const b = bridge()
+  const [state, setState] = useState<"idle" | "running" | "failed" | Finding[]>("idle")
+  if (!b?.doctor) return null
+  const doctor = b.doctor
+  const run = () => {
+    setState("running")
+    void doctor().then(
+      (f) => setState(f ?? "failed"),
+      () => setState("failed")
+    )
+  }
+  const problems = Array.isArray(state) ? state.filter((f) => !f.ok).length : 0
+  return (
+    <Item
+      title="Check this computer"
+      desc={Array.isArray(state) ? (problems ? `${problems} to fix` : "Nothing to fix") : "Looks at kiwi's install, the relay, pairing and hooks, and says how to fix what isn't right."}
+      aside={
+        <Button variant="secondary" disabled={state === "running"} onClick={run}>
+          {state === "running" ? "Checking…" : Array.isArray(state) ? "Check Again" : "Check"}
+        </Button>
+      }
+    >
+      {Array.isArray(state) && (
+        <ul className="grid gap-1.5">
+          {state.map((f) => (
+            <FindingRow key={f.what} f={f} />
+          ))}
+        </ul>
+      )}
+      {state === "failed" && <p className="text-meta text-ink-2">kiwi doctor didn't answer. Run it in a terminal to see why: kiwi doctor</p>}
+    </Item>
+  )
 }
 
 const HOOK_SAYS: Record<Exclude<HookState, "absent">, { desc: string; action: string; busy: string }> = {
@@ -543,6 +637,7 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
             <Group id="agents" title="Agents">
               <PersonalitiesField onOpen={onPersonalities} />
               <KiwiHere />
+              <Doctor />
               <HooksField />
               <ContextLineField />
             </Group>
