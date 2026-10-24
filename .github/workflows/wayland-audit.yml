@@ -1,4 +1,4 @@
-name: release-check
+name: mac-audit
 
 on:
   push:
@@ -8,12 +8,9 @@ permissions:
   contents: read
   actions: read
 
-env:
-  REHEARSAL_RUN: "40133920995"
-
 jobs:
   mac:
-    name: release check, the shipped Mac app starts
+    name: Mac audit, the 0.27.5 release app
     runs-on: macos-latest
     timeout-minutes: 30
     steps:
@@ -27,29 +24,19 @@ jobs:
         with:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile
-      - name: the rehearsal's Mac zip, unpacked as a person would
+      - name: the 0.27.5 release zip, as a person downloads it
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh run download "$REHEARSAL_RUN" -R "${{ github.repository }}" -n rehearsal-desktop-mac-eb -D "$RUNNER_TEMP/mac"
-          ditto -x -k "$(ls "$RUNNER_TEMP"/mac/Channels-*-mac-arm64.zip)" "$RUNNER_TEMP/app"
-          codesign --verify --deep --strict "$RUNNER_TEMP/app/Channels.app" && echo "signature verifies"
-      - name: the shipped app's launcher starts it and keeps the caller's environment out
-        if: ${{ !cancelled() }}
-        run: bun desktop/scripts/eb-env-check.ts "$RUNNER_TEMP/app/Channels.app"
-      - name: the shipped app opens its window with its own web content
-        if: ${{ !cancelled() }}
-        run: bun audit/.release-check/mac-start.ts "$RUNNER_TEMP/app/Channels.app"
-
-  cli-darwin-x64:
-    name: release check, darwin-x64 CLI
-    runs-on: macos-15-intel
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: the rehearsal's CLIs
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh run download "$REHEARSAL_RUN" -R "${{ github.repository }}" -n rehearsal-cli -D "$RUNNER_TEMP/cli"
-      - name: the darwin-x64 CLI, from each download, runs kiwi demo
-        run: bash .release-check/cli.sh "$RUNNER_TEMP/cli" darwin-x64
+          gh release download v0.27.5 -R "${{ github.repository }}" -p 'Channels-0.27.5-mac-arm64.zip' -D "$RUNNER_TEMP/mac"
+          ditto -x -k "$RUNNER_TEMP/mac/Channels-0.27.5-mac-arm64.zip" "$RUNNER_TEMP/app"
+          codesign -dv "$RUNNER_TEMP/app/Channels.app" 2>&1 | grep -E "Authority|TeamIdentifier" | head -3
+          spctl -a -vv "$RUNNER_TEMP/app/Channels.app" 2>&1 | head -3 || true
+      - name: menus, shortcuts, window restore and kiwi:// links
+        run: bun audit/.release-check/mac-audit.ts "$RUNNER_TEMP/app/Channels.app"
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mac-audit
+          path: ${{ runner.temp }}/mac-audit.json
+          retention-days: 3
