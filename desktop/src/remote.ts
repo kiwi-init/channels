@@ -51,7 +51,12 @@ export async function askMachine(asker: Asker, machine: { pk: string; xpk: strin
   } catch (err) {
     return { ok: false, why: "failed", detail: `couldn't reach the relay: ${err instanceof Error ? err.message : String(err)}` };
   }
-  if (sent.status === 403) return { ok: false, why: "not-registered", detail: "That computer hasn't registered with this relay: update kiwi on it and keep its daemon running." };
+  if (sent.status === 403)
+    return {
+      ok: false,
+      why: "not-registered",
+      detail: "That computer hasn't come online on this relay since it was paired: start kiwi's daemon on it (kiwi daemon), and update kiwi there if it's older than this app.",
+    };
   if (sent.status === 429) return { ok: false, why: "busy", detail: "That computer has too many asks waiting. Try again in a minute." };
   if (sent.status !== 202) return { ok: false, why: "failed", detail: `the relay answered ${sent.status}` };
   const mailbox = await openMailbox(asker.relay, reply, fetchImpl);

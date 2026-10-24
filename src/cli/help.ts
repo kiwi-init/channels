@@ -84,7 +84,7 @@ Agents
 This computer
   kiwi setup                                     set it up once: Claude Code's hooks, the PATH, and how to pair it
   kiwi pair kp1-…                                pair it with your Channels app (approve it there): its agents get in on their own,
-                                                 and the app can start agents here
+                                                 and the app can start agents here: it starts kiwi's daemon, which keeps this computer reachable
   kiwi unpair                                    stop being paired: the relay forgets this computer and it takes no more asks
   kiwi cleanup [--quiet]                         remove what older installs and updates left behind (the installer runs it)
   kiwi daemon                                    this computer's hub: key, cert, and every agent's seat (starts on its own)

@@ -122,3 +122,18 @@ describe("kiwi cleanup", () => {
     expect(existsSync(join(ahead, "kiwi"))).toBe(true);
   });
 });
+
+test("kiwi cleanup --quiet, as the installer runs it, takes --quiet even when it removed something (issue #714)", () => {
+  const s = sandbox();
+  mkdirSync(join(s.home, "listeners"), { recursive: true });
+  writeFileSync(join(s.home, "listeners", `seat.${DEAD}`), "");
+  const r = Bun.spawnSync([process.execPath, join(import.meta.dir, "..", "src", "cli", "main.ts"), "cleanup", "--quiet"], {
+    cwd: s.root,
+    env: { ...process.env, KIWI_HOME: s.home },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  expect(r.exitCode).toBe(0);
+  expect(r.stdout.toString()).toContain("removed");
+  expect(r.stderr.toString()).not.toContain("doesn't use --quiet");
+});
