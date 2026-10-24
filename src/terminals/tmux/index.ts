@@ -12,6 +12,7 @@ import { tmuxPlaceFrom } from "./locate.ts";
 import { tmuxManifest } from "./manifest.ts";
 import { tmuxMarker } from "./mark.ts";
 import { localTmuxSeats, showPane } from "./show.ts";
+import { tmuxPane } from "./type.ts";
 
 const TMUX_SESSION = "kiwi";
 const TMUX_FORMAT = "#{socket_path}\t#{session_name}\t#{window_id}\t#{pane_id}\t#{pane_pid}";
@@ -58,6 +59,7 @@ export function tmuxTerminal(t: PlaceTools): TerminalPlugin {
     mark: tmuxMarker(tmux),
     seats: (cfg) => localTmuxSeats(cfg).map((seat) => ({ place: "tmux", ...seat })),
     show: async (place) => (place.tmux ? showPane(place.tmux, tmux) : { ok: false, why: "failed" }),
+    type: (place) => (place.tmux && t.tmux ? tmuxPane(place.tmux, t.tmux) : null),
     open: async (req) => (t.tmux ? openTmux({ ...t, tmux: t.tmux }, req) : { ok: false, why: "no-place", detail: "tmux isn't installed on this computer" }),
   };
 }

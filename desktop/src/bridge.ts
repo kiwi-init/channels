@@ -2,7 +2,10 @@
 // main.ts and preload.ts; renderer-neutral on purpose (no electron/node imports),
 // so web/ can type against it without touching this process.
 
-import type { HarnessRow, KnownHarness } from "@kiwi/core/harnesses.ts";
+import type { ComputerSettings } from "@kiwi/core/computer-settings.ts";
+import type { HarnessRow, HookRow, KnownHarness } from "@kiwi/core/harnesses.ts";
+import type { LaunchChoices } from "@kiwi/core/launch-options.ts";
+import type { WakeSeat } from "@kiwi/core/wake.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
 import type { CachedKept, CachedRow, Unread } from "@kiwi/core/cache-row.ts";
 import type { Channel, OpenKind, PresenceFields } from "@kiwi/core/client.ts";
@@ -10,6 +13,8 @@ import type { MemberPicture, Message, Presence, ReadMark } from "@kiwi/core/prot
 import type { LaunchedView, PlacedSeat, ShowResult, TerminalId, TerminalsStatus } from "@kiwi/core/terminals.ts";
 import type { TextStep } from "./text-size.ts";
 import type { Wire } from "./wire.ts";
+
+export type DoctorFinding = { ok: true; what: string } | { ok: false; what: string; how: string };
 
 /** The person's own key. Same JSON shape as Identity in src/identity.ts. */
 export interface PersonView {
@@ -101,6 +106,7 @@ export const CHANNEL_CALLS = [
   "guard",
   "setCharter",
   "setHold",
+  "setRooms",
   "setRepos",
   "icon",
   "setIcon",
@@ -264,7 +270,7 @@ export interface MachineView {
 
 export type FromMachine<T> = { ok: true; value: T } | { ok: false; detail: string };
 
-export interface LaunchAgentRequest {
+export interface LaunchAgentRequest extends LaunchChoices {
   machinePk?: string;
   launch: string;
   harness: KnownHarness;
@@ -314,6 +320,7 @@ export interface KiwiBridge {
   linkAnswer(accept: boolean): Promise<PhoneView | null>;
   linkCancel(): Promise<void>;
   daemonStatus(): Promise<DaemonStatus>;
+  doctor(): Promise<DoctorFinding[] | null>;
   /** Certify this machine's daemon key with the person key and hand the cert back. */
   daemonAdopt(): Promise<ComputerView>;
   /** Put the bundled kiwi binary in ~/.kiwi/bin and on the PATH (the app also does this on every start). */
@@ -338,8 +345,13 @@ export interface KiwiBridge {
   terminalHelpers(id: "rex" | "tmux", to: "on" | "off"): Promise<TerminalsStatus | null>;
   terminalPrefer(id: TerminalId): Promise<TerminalsStatus | null>;
   setLaunches(to: "on" | "off"): Promise<TerminalsStatus | null>;
+  setRemoteBypass(to: "on" | "off"): Promise<TerminalsStatus | null>;
   contextLine(): Promise<"on" | "off" | null>;
   setContextLine(to: "on" | "off"): Promise<"on" | "off" | null>;
+  hooks(): Promise<HookRow[]>;
+  setHooks(harness: KnownHarness, to: "on" | "off"): Promise<HookRow[]>;
+  wakeSeats(): Promise<WakeSeat[]>;
+  setWake(room: string, agent: string, to: "on" | "off"): Promise<WakeSeat[]>;
   harnesses(): Promise<HarnessRow[]>;
   seatFolders(roomId: string): Promise<string[]>;
   chooseFolder(): Promise<string | null>;
@@ -347,6 +359,9 @@ export interface KiwiBridge {
   machines(): Promise<MachineView[]>;
   harnessesOn(machinePk: string): Promise<FromMachine<HarnessRow[]>>;
   foldersOn(machinePk: string, roomId: string): Promise<FromMachine<string[]>>;
+  settingsOn(machinePk: string): Promise<FromMachine<ComputerSettings>>;
+  launchRoots(): Promise<string[]>;
+  setLaunchRoot(dir: string, to: "add" | "remove"): Promise<string[]>;
 }
 
 export interface UpdateView {
@@ -355,6 +370,7 @@ export interface UpdateView {
   /** The release's page. */
   url: string;
   blocked?: true;
+  deb?: string;
 }
 
 export type UpdateCheckView = UpdateView | { state: "current"; version: string } | { state: "failed" };

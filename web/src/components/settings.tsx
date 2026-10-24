@@ -1,7 +1,9 @@
 import {
   ArrowLeft01Icon,
   ArrowRight01Icon,
+  CheckmarkCircle02Icon,
   ComputerIcon,
+  Folder01Icon,
   GithubIcon,
   Link01Icon,
   PaintBoardIcon,
@@ -19,11 +21,15 @@ import { setAccessibilityOption, useAccessibilityOption } from "@/lib/accessibil
 import { cx } from "@/lib/utils"
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { relayUrl } from "@/lib/relay"
-import { bridge, useSecrets } from "@/lib/secrets"
-import { contextLineBridge, terminalsBridge } from "@/lib/terminals"
+import { bridge, useSecrets, type KiwiBridge } from "@/lib/secrets"
+import { contextLineBridge, hooksBridge, terminalsBridge } from "@/lib/terminals"
+import { rootsBridge } from "@/lib/launches"
+import { harnessName } from "@/lib/harness"
+import type { HarnessRow, HookRow, HookState } from "@kiwi/core/harnesses.ts"
 import type { TerminalId, TerminalRow, TerminalsStatus } from "@kiwi/core/terminals.ts"
 import { version } from "../../../package.json"
 import { ComputerRows } from "./computers"
+import { HarnessFace } from "./harness-face"
 import { PhoneRows } from "./phones"
 import { Icon, type IconSvgElement } from "./icon"
 import { Button, IconButton, Monogram, SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from "./kit"
@@ -220,6 +226,7 @@ function NewAgentsFields() {
       )
       .finally(() => setBusy(null))
   }
+  const setBypass = b.setRemoteBypass
   const rows = PREFER_ORDER.flatMap((id) => status.terminals.filter((t) => t.id === id))
   const helpers = rows.filter((t): t is TerminalRow & { id: "rex" | "tmux"; helpers: "on" | "off" } => t.id !== "app" && t.helpers !== null && (t.found || t.helpers === "on"))
   return (
@@ -234,6 +241,18 @@ function NewAgentsFields() {
         ]}
         onChange={(to) => run("launch", () => b.setLaunches(to))}
       />
+      {setBypass && status.launch === "on" && (
+        <Choice
+          label="Allow bypass from your other devices"
+          desc="An agent started from your phone or another computer may skip its harness's permission prompts here. Off keeps every prompt."
+          value={status.bypass}
+          options={[
+            { value: "on", label: "On" },
+            { value: "off", label: "Off" },
+          ]}
+          onChange={(to) => run("bypass", () => setBypass(to))}
+        />
+      )}
       <Choice
         label="Prefer"
         desc="Where a new agent opens. If it can't open there, it opens in Terminal."
@@ -272,6 +291,74 @@ function NewAgentsFields() {
   )
 }
 
+function LaunchFoldersField() {
+  const b = rootsBridge()
+  const [roots, setRoots] = useState<string[] | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    if (!b) return
+    let live = true
+    void b.launchRoots().then(
+      (got) => live && setRoots(got),
+      () => live && setRoots([])
+    )
+    return () => {
+      live = false
+    }
+  }, [b])
+  if (!b || roots === null) return null
+  const run = (key: string, go: () => Promise<string[]>) => {
+    if (busy) return
+    setError(null)
+    setBusy(key)
+    go()
+      .then(setRoots, (e: unknown) => setError(e instanceof Error ? e.message.replace(/^.*?Error: /, "") : String(e)))
+      .finally(() => setBusy(null))
+  }
+  const add = async () => {
+    const dir = await b.chooseFolder()
+    if (dir) run("add", () => b.setLaunchRoot(dir, "add"))
+  }
+  return (
+    <>
+      <Item
+        title="Folders agents can start in"
+        desc="New agent, here or from your phone, can start one in these folders and the folders inside them, as well as where agents on this computer already work and your home folder's git repos."
+      />
+      {roots.map((dir) => (
+        <Item
+          key={dir}
+          tile={<Icon icon={Folder01Icon} size={16} />}
+          title={dir.split("/").filter(Boolean).at(-1) ?? dir}
+          desc={dir}
+          aside={
+            <Button variant="secondary" disabled={busy !== null} onClick={() => run(dir, () => b.setLaunchRoot(dir, "remove"))}>
+              {busy === dir ? "Removing…" : "Remove"}
+            </Button>
+          }
+        />
+      ))}
+      <button
+        data-item
+        type="button"
+        disabled={busy !== null}
+        onClick={() => void add()}
+        className="flex w-full items-center px-4 py-3 text-left text-ui font-medium text-accent-text transition-colors hover:bg-wash disabled:opacity-40"
+      >
+        {busy === "add" ? "Adding…" : "Add a folder…"}
+      </button>
+      {error && (
+        <div data-item className="px-4 py-3">
+          <p className="text-ui text-ink-2" role="alert">
+            {error}
+          </p>
+        </div>
+      )}
+    </>
+  )
+}
+
 function PersonalitiesField({ onOpen }: { onOpen: () => void }) {
   const count = useOwnPersonalities().length
   return (
@@ -288,16 +375,27 @@ function PersonalitiesField({ onOpen }: { onOpen: () => void }) {
   )
 }
 
+type Daemon = Awaited<ReturnType<KiwiBridge["daemonStatus"]>>
+type Finding = NonNullable<Awaited<ReturnType<KiwiBridge["doctor"]>>>[number]
+
+function abilities(r: HarnessRow): string {
+  if (r.start && r.wake) return "Starts · Wakes"
+  if (r.start) return "Starts"
+  return r.wake ? "Wakes" : "Found"
+}
+
 function KiwiHere() {
   const b = bridge()
-  const [line, setLine] = useState<string | null>(null)
+  const [daemon, setDaemon] = useState<Daemon | null>(null)
+  const [rows, setRows] = useState<HarnessRow[] | null>(null)
   useEffect(() => {
     if (!b?.daemonStatus || !b.harnesses) return
     let live = true
     void Promise.all([b.daemonStatus(), b.harnesses()]).then(
-      ([daemon, rows]) => {
-        const found = rows.filter((r) => r.path && r.start).map((r) => `${r.harness === "claude" ? "Claude Code" : r.harness === "codex" ? "Codex" : r.harness}${r.version ? ` ${r.version}` : ""}`)
-        if (live) setLine([daemon.running && daemon.version ? `kiwi ${daemon.version}` : "kiwi isn't running", ...found].join(" · "))
+      ([d, r]) => {
+        if (!live) return
+        setDaemon(d)
+        setRows(r)
       },
       () => {}
     )
@@ -305,8 +403,166 @@ function KiwiHere() {
       live = false
     }
   }, [b])
-  if (!b?.daemonStatus || !b.harnesses || line === null) return null
-  return <Item tile={<Icon icon={TerminalIcon} size={16} />} title="kiwi on this computer" desc={line} />
+  if (!b?.daemonStatus || !b.harnesses || daemon === null || rows === null) return null
+  const found = rows.filter((r) => r.path)
+  const missing = rows.filter((r) => !r.path)
+  return (
+    <>
+      <Item tile={<Icon icon={TerminalIcon} size={16} />} title="kiwi on this computer" desc={daemon.running && daemon.version ? `kiwi ${daemon.version}, running` : "kiwi isn't running"} />
+      {found.map((r) => (
+        <Item
+          key={r.harness}
+          tile={<HarnessFace harness={r.harness} size={20} />}
+          title={`${harnessName(r.harness)}${r.version ? ` ${r.version}` : ""}`}
+          desc={
+            <>
+              <span className="block truncate font-mono" title={r.path ?? undefined}>
+                {r.path}
+              </span>
+              {!r.start && r.why && <span className="block">{r.why}</span>}
+            </>
+          }
+          aside={<span className="shrink-0 text-meta text-ink-3">{abilities(r)}</span>}
+        />
+      ))}
+      {missing.length > 0 && <Item title="Not on this computer" desc={missing.map((r) => harnessName(r.harness)).join(", ")} />}
+    </>
+  )
+}
+
+function FindingRow({ f }: { f: Finding }) {
+  if (!f.ok) {
+    return (
+      <li className="flex gap-2.5">
+        <span className="flex h-[1lh] w-3.5 shrink-0 items-center justify-center text-meta leading-snug">
+          <span className="size-2 rounded-full bg-alert" />
+        </span>
+        <span className="min-w-0 text-meta leading-snug">
+          <span className="block text-ink">{f.what}</span>
+          <span className="block text-ink-2">{f.how}</span>
+        </span>
+      </li>
+    )
+  }
+  const [, label, value] = /^(\S+)\s{2,}(.*)$/.exec(f.what) ?? [null, null, f.what]
+  return (
+    <li className="flex gap-2.5 text-meta leading-snug">
+      <Icon icon={CheckmarkCircle02Icon} size={14} className="mt-px shrink-0 text-live" />
+      {label && <span className="w-14 shrink-0 text-ink-3">{label}</span>}
+      <span className="min-w-0 break-words text-ink-2">{value}</span>
+    </li>
+  )
+}
+
+function Doctor() {
+  const b = bridge()
+  const [state, setState] = useState<"idle" | "running" | "failed" | Finding[]>("idle")
+  if (!b?.doctor) return null
+  const doctor = b.doctor
+  const run = () => {
+    setState("running")
+    void doctor().then(
+      (f) => setState(f ?? "failed"),
+      () => setState("failed")
+    )
+  }
+  const problems = Array.isArray(state) ? state.filter((f) => !f.ok).length : 0
+  return (
+    <Item
+      title="Check this computer"
+      desc={Array.isArray(state) ? (problems ? `${problems} to fix` : "Nothing to fix") : "Looks at kiwi's install, the relay, pairing and hooks, and says how to fix what isn't right."}
+      aside={
+        <Button variant="secondary" disabled={state === "running"} onClick={run}>
+          {state === "running" ? "Checking…" : Array.isArray(state) ? "Check Again" : "Check"}
+        </Button>
+      }
+    >
+      {Array.isArray(state) && (
+        <ul className="grid gap-1.5">
+          {state.map((f) => (
+            <FindingRow key={f.what} f={f} />
+          ))}
+        </ul>
+      )}
+      {state === "failed" && <p className="text-meta text-ink-2">kiwi doctor didn't answer. Run it in a terminal to see why: kiwi doctor</p>}
+    </Item>
+  )
+}
+
+const HOOK_SAYS: Record<Exclude<HookState, "absent">, { desc: string; action: string; busy: string }> = {
+  installed: { desc: "Installed", action: "Remove", busy: "Removing…" },
+  partial: { desc: "Installed, but it can't wake Claude Code when a message comes", action: "Update", busy: "Updating…" },
+  outdated: { desc: "From an older kiwi: update them", action: "Update", busy: "Updating…" },
+  missing: { desc: "Not installed", action: "Install", busy: "Installing…" },
+  off: { desc: "Removed. Kiwi won't add them back until you install them", action: "Install", busy: "Installing…" },
+}
+
+function HooksField() {
+  const b = hooksBridge()
+  const [rows, setRows] = useState<HookRow[] | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    if (!b) return
+    let live = true
+    void b.hooks().then(
+      (got) => live && setRows(got),
+      (e: unknown) => live && (setRows([]), setError(e instanceof Error ? e.message.replace(/^.*?Error: /, "") : String(e)))
+    )
+    return () => {
+      live = false
+    }
+  }, [b])
+  if (!b) return null
+  const change = (r: HookRow) => {
+    if (busy) return
+    setError(null)
+    setBusy(r.harness)
+    b.setHooks(r.harness, r.state === "installed" ? "off" : "on")
+      .then(
+        (got) => setRows(got),
+        (e: unknown) => setError(e instanceof Error ? e.message.replace(/^.*?Error: /, "") : String(e))
+      )
+      .finally(() => setBusy(null))
+  }
+  const here = (rows ?? []).filter((r): r is HookRow & { state: Exclude<HookState, "absent"> } => r.state !== "absent")
+  return (
+    <>
+      <Item
+        title="Hooks"
+        desc={
+          rows === null
+            ? "Looking at the harnesses on this computer…"
+            : here.length
+              ? "Hooks bring new messages to the agents on this computer and their permission prompts to Needs you."
+              : "No harness on this computer takes hooks."
+        }
+      />
+      {here.map((r) => {
+        const says = HOOK_SAYS[r.state]
+        return (
+          <Item
+            key={r.harness}
+            tile={<HarnessFace harness={r.harness} size={20} />}
+            title={harnessName(r.harness)}
+            desc={says.desc}
+            aside={
+              <Button variant="secondary" disabled={busy !== null} onClick={() => change(r)}>
+                {busy === r.harness ? says.busy : says.action}
+              </Button>
+            }
+          />
+        )
+      })}
+      {error && (
+        <div data-item className="px-4 py-3">
+          <p className="text-ui text-ink-2" role="alert">
+            {error}
+          </p>
+        </div>
+      )}
+    </>
+  )
 }
 
 function ContextLineField() {
@@ -451,10 +707,13 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
             <Group id="agents" title="Agents">
               <PersonalitiesField onOpen={onPersonalities} />
               <KiwiHere />
+              <Doctor />
+              <HooksField />
               <ContextLineField />
             </Group>
             <Group id="new-agents" title="New agents">
               <NewAgentsFields />
+              <LaunchFoldersField />
             </Group>
             <Group id="services" title="Services">
               <GithubFields />

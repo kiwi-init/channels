@@ -1,7 +1,9 @@
-import { afterAll, expect, mock, test } from "bun:test";
+import { afterAll, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { useHost } from "../desktop/src/host.ts";
+import { fakeHost } from "./fake-host.ts";
 
 const root = mkdtempSync(join(tmpdir(), "kiwi-blocked-"));
 const parent = join(root, "Applications");
@@ -13,14 +15,7 @@ afterAll(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-mock.module("electron", () => ({
-  app: {
-    isPackaged: true,
-    getVersion: () => "0.19.0",
-    getPath: (name: string) => (name === "exe" ? join(parent, "Channels.app", "Contents", "MacOS", "Channels") : userData),
-    on: () => {},
-  },
-}));
+useHost(fakeHost({ packaged: true, version: "0.19.0", paths: { exe: join(parent, "Channels.app", "Contents", "MacOS", "Channels"), data: userData, logs: userData } }).host);
 
 type Checked = { state: string; version?: string; url?: string; blocked?: true };
 const updater = "../desktop/src/updater.ts?blocked";
@@ -39,10 +34,10 @@ globalThis.fetch = Object.assign(
     return new Response(
       JSON.stringify({
         tag_name: "v0.20.0",
-        html_url: "https://example.test/rel",
+        html_url: "https://github.com/kiwi-init/channels/releases/tag/v0.20.0",
         assets: [
-          { name, browser_download_url: "https://example.test/zip" },
-          { name: "SHA256SUMS", browser_download_url: "https://example.test/sums" },
+          { name, browser_download_url: "https://github.com/kiwi-init/channels/releases/download/v0.20.0/zip" },
+          { name: "SHA256SUMS", browser_download_url: "https://github.com/kiwi-init/channels/releases/download/v0.20.0/sums" },
         ],
       }),
     );
@@ -53,7 +48,7 @@ globalThis.fetch = Object.assign(
 test.skipIf(process.platform !== "darwin")("a Mac app in a folder it can't write offers the release, says it can't update itself, and downloads nothing", async () => {
   chmodSync(parent, 0o555);
   const r = await checkForUpdate();
-  expect(r).toEqual({ version: "0.20.0", state: "available", url: "https://example.test/rel", blocked: true });
+  expect(r).toEqual({ version: "0.20.0", state: "available", url: "https://github.com/kiwi-init/channels/releases/tag/v0.20.0", blocked: true });
   expect(seen.filter((u) => !u.includes("api.github.com"))).toEqual([]);
 });
 

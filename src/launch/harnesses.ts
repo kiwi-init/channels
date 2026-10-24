@@ -1,11 +1,12 @@
 import { existsSync, realpathSync, statSync } from "node:fs";
 import { delimiter } from "node:path";
 import { KNOWN_HARNESSES, type HarnessRow, type KnownHarness } from "@kiwi/core/harnesses.ts";
+import { contextWords, type HarnessOptions } from "@kiwi/core/launch-options.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
 import { viaOf, wakePath, wakeWords } from "@kiwi/core/wake.ts";
 import { REWAKE_SINCE } from "../hooks/install/claude.ts";
 import { kimiHome } from "../kimi-server.ts";
-import { canStart } from "./recipes.ts";
+import { canStart, harnessOptions } from "./recipes.ts";
 import { loginPath } from "./shell.ts";
 
 interface Binary {
@@ -114,9 +115,21 @@ export async function harnessInventory(PATH?: string): Promise<HarnessRow[]> {
     KNOWN_HARNESSES.map(async (harness): Promise<HarnessRow> => {
       const found = await binaryOf(harness, dirs);
       const version = found?.text ? versionIn(found.text) : null;
-      return { harness, path: found?.path ?? null, version, start: !!found && canStart(harness), ...wakeOf(harness, version) };
+      return { harness, path: found?.path ?? null, version, start: !!found && canStart(harness), ...wakeOf(harness, version), options: harnessOptions(harness) };
     }),
   );
+}
+
+function optionsWords(o: HarnessOptions | null): string {
+  if (!o) return "";
+  const each = [
+    o.model ? "--model" : "",
+    o.effort.length ? `--effort ${o.effort.join("|")}` : "",
+    o.permission.length ? `--permission ${o.permission.join("|")}` : "",
+    o.context.length ? `--context ${o.context.map(contextWords).join("|")}` : "",
+  ];
+  const said = each.filter(Boolean);
+  return said.length ? ` with ${said.join(", ")}` : "";
 }
 
 export function inventoryText(rows: HarnessRow[]): string {
@@ -124,7 +137,7 @@ export function inventoryText(rows: HarnessRow[]): string {
     .map((r) => {
       if (!r.path) return `${r.harness}: not installed`;
       const wake = r.wake ? `Kiwi wakes it via ${wakeWords(r.wake)}` : `Kiwi can't wake it: ${r.why ?? "no way known"}`;
-      return `${r.harness}: ${r.version ?? "version unknown"} at ${r.path}; ${r.start ? "kiwi launch starts it" : "Kiwi can't start it yet"}; ${wake}`;
+      return `${r.harness}: ${r.version ?? "version unknown"} at ${r.path}; ${r.start ? `kiwi launch starts it${optionsWords(r.options)}` : "Kiwi can't start it yet"}; ${wake}`;
     })
     .join("\n");
 }

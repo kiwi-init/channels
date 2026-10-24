@@ -1,4 +1,4 @@
-import { ChannelGone, RelayError } from "@kiwi/core/client/errors.ts"
+import { ChannelGone, RelayError } from "@kiwi/core/client/relay-errors.ts"
 import type { CachedKept, Unread } from "@kiwi/core/cache-row.ts"
 import type { Message } from "@kiwi/core/protocol.ts"
 

@@ -3,14 +3,17 @@ import { EventEmitter } from "node:events";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { useHost } from "../desktop/src/host.ts";
+import { fakeHost } from "./fake-host.ts";
 
 const logs = mkdtempSync(join(tmpdir(), "kiwi-revive-"));
 afterAll(() => rmSync(logs, { recursive: true, force: true }));
+useHost(fakeHost({ paths: { logs } }).host);
 let answer = 1;
 const asked: string[] = [];
 let quits = 0;
 mock.module("electron", () => ({
-  app: { getPath: () => logs, quit: () => void quits++ },
+  app: { quit: () => void quits++ },
   dialog: {
     showMessageBox: async (_w: unknown, o: { message: string }) => {
       asked.push(o.message);
@@ -21,10 +24,10 @@ mock.module("electron", () => ({
 
 type FakeWindow = { webContents: EventEmitter & { reload: () => void; forcefullyCrashRenderer: () => void }; on: (ev: string, fn: () => void) => void; isDestroyed: () => boolean };
 const revive = "../desktop/src/revive.ts";
-const { keepRendererAlive, catchMainErrors } = (await import(revive)) as {
+const { keepRendererAlive } = (await import(revive)) as {
   keepRendererAlive: (win: FakeWindow, quitting: () => boolean, now?: () => number) => void;
-  catchMainErrors: () => void;
 };
+const { catchMainErrors } = await import("../desktop/src/main-log.ts");
 
 function fakeWindow(): { win: FakeWindow; wc: EventEmitter; on: EventEmitter; reloads: () => number; crashes: () => number } {
   const wc = Object.assign(new EventEmitter(), { reloads: 0, crashes: 0 });

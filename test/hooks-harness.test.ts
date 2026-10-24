@@ -616,6 +616,40 @@ test("an unflagged kiwi hook run rewrites an older kiwi's Codex hooks", () => {
   expect(kiwiCli(["hooks", "status", "codex"], env).out.trim()).toBe("codex: installed");
 });
 
+test("kiwi hooks status --json gives the app each harness's state, and install claude --listen adds the listening hooks from outside Claude Code (T13)", () => {
+  const none = join(scratch("hk-json-none-"), "absent");
+  const env = {
+    KIWI_HOME: scratch("hk-json-home-"),
+    CLAUDE_CONFIG_DIR: scratch("hk-json-claude-"),
+    KIWI_CODEX_DIR: scratch("hk-json-codex-"),
+    KIWI_GEMINI_DIR: none,
+    KIWI_CURSOR_DIR: none,
+    KIWI_GROK_DIR: none,
+    KIWI_KIMI_DIR: none,
+    KIWI_PI_DIR: none,
+    KIWI_MIMO_DIR: none,
+    KIWI_NO_HOOKS: "",
+    CLAUDECODE: "",
+    AI_AGENT: "",
+    CLAUDE_CODE_EXECPATH: "",
+  };
+  const states = () => Object.fromEntries((JSON.parse(kiwiCli(["hooks", "status", "--json"], env).out) as { hooks: { harness: string; state: string }[] }).hooks.map((r) => [r.harness, r.state]));
+  expect(states()).toEqual({ claude: "missing", codex: "missing", gemini: "absent", cursor: "absent", grok: "absent", kimi: "absent", pi: "absent", mimo: "absent" });
+
+  expect(kiwiCli(["hooks", "install", "claude"], env).code).toBe(0);
+  expect(states().claude).toBe("partial");
+  expect(kiwiCli(["hooks", "install", "claude", "--listen"], env).code).toBe(0);
+  expect(states().claude).toBe("installed");
+
+  expect(kiwiCli(["hooks", "install", "codex"], env).code).toBe(0);
+  expect(states().codex).toBe("installed");
+  expect(kiwiCli(["hooks", "uninstall", "codex"], env).code).toBe(0);
+  expect(states().codex).toBe("off");
+
+  expect(JSON.parse(kiwiCli(["hooks", "status", "claude", "--json"], env).out)).toEqual({ hooks: [{ harness: "claude", state: "installed", text: "installed" }] });
+  expect(kiwiCli(["hooks", "status"], env).out.split("\n").slice(0, 3)).toEqual(["claude: installed", "codex: off", "gemini: not detected"]);
+});
+
 test("a harness that passes CLAUDECODE through is never taken for Claude Code by its hooks", () => {
   expect(hooksListen({ CLAUDECODE: "1", MIMOCODE: "1" })).toBe(false);
   expect(rewakeCapable({ CLAUDECODE: "1", MIMOCODE: "1", AI_AGENT: "claude-code_9-9-9_agent" })).toBe(false);
@@ -727,8 +761,26 @@ test("Grok's Stop input: a monitor is the listener when it runs this seat's list
   expect(grokMonitorListens([{ type: "monitor", text: "kiwi -c other --as g listen" }], seat)).toBe(false);
   expect(grokMonitorListens([{ type: "monitor", text: "kiwi listen -c other --as other" }], seat)).toBe(false);
   expect(grokMonitorListens([{ type: "monitor", text: "kiwi listen --now" }], seat)).toBe(false);
+  expect(grokMonitorListens([{ type: "monitor", text: "[monitor] kiwi -c ch --as g listen" }], seat)).toBe(true);
+  expect(grokMonitorListens([{ type: "monitor", text: "kiwi messages\n[monitor]kiwi listen" }], seat)).toBe(true);
+  expect(grokMonitorListens([{ type: "monitor", text: "[monitor] kiwi -c ch --as g listen --once" }], seat)).toBe(false);
+  expect(grokMonitorListens([{ type: "monitor", text: "[monitor] kiwi -c other --as g listen" }], seat)).toBe(false);
+  expect(grokMonitorListens([{ type: "monitor", text: `[${"x".repeat(40)}] kiwi listen` }], seat)).toBe(false);
   expect(grokMonitorListens([{ type: "shell", text: "kiwi listen" }], seat)).toBe(false);
   expect(grokMonitorListens([], seat)).toBe(false);
+});
+
+test("a monitor Grok names only by its display line, `[monitor] …`, is read as that line (issue #785)", () => {
+  const tasks = backgroundTasks([
+    { id: "d", type: "monitor", status: "running", display_command: "[monitor] kiwi -c ch --as g listen" },
+    { id: "e", type: "monitor", status: "running", displayCommand: "[monitor] kiwi listen", description: "kiwi messages" },
+  ]);
+  expect(tasks).toEqual([
+    { type: "monitor", text: "[monitor] kiwi -c ch --as g listen" },
+    { type: "monitor", text: "kiwi messages\n[monitor] kiwi listen" },
+  ]);
+  expect(grokMonitorListens(tasks!.slice(0, 1), ["kiwi -c ch --as g listen"])).toBe(true);
+  expect(grokMonitorListens(tasks!.slice(1), ["kiwi listen"])).toBe(true);
 });
 
 test("Grok's Stop input names a task's type as kind, as Grok 1.0.62 sends it, and type wins when both are there", () => {

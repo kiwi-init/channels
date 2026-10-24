@@ -1,18 +1,21 @@
 import { randomBytes } from "node:crypto";
 import { statSync } from "node:fs";
-import { isAbsolute } from "node:path";
+import { isAbsolute, join } from "node:path";
 import type { KnownHarness } from "@kiwi/core/harnesses.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
-import { loadConfig, type Config } from "../config.ts";
+import { home, loadConfig, type Config } from "../config.ts";
+import { appendRotated } from "../daemon/wake.ts";
 import { installHooks, listenHooksInstalled, REWAKE_SINCE } from "../hooks/install/claude.ts";
 import { EXTRA_HARNESSES, extraInstalled, installExtra, type ExtraHarness } from "../hooks/install/extra.ts";
 import { tooBroad } from "../seats.ts";
 import { harnessInventory } from "./harnesses.ts";
 import type { PlaceTools } from "../terminals/plugin.ts";
 import { launchesOn } from "../terminals/registry.ts";
-import { openPlace } from "./place.ts";
+import { openPlace, paneOf, placeKind } from "./place.ts";
 import { joinLineRefusal } from "@kiwi/core/join-line.ts";
-import { canStart, joinPrompt, recipeArgv } from "./recipes.ts";
+import { choicesOf } from "@kiwi/core/launch-options.ts";
+import { canStart, harnessLabel, joinPrompt, launchChoicesRefusal, recipeArgv, typedPrompt } from "./recipes.ts";
+import { typeWhenReady, type Typed, type TypeOptions } from "./typed.ts";
 import type { Launched } from "@kiwi/core/terminals.ts";
 import type { LaunchRequest } from "./wire.ts";
 
@@ -20,6 +23,18 @@ export interface LaunchOptions {
   PATH?: string;
   tools?: PlaceTools;
   config?: Pick<Config, "launch" | "terminals">;
+  typing?: TypeOptions;
+  onTyped?: (typed: Typed, launch: string) => void;
+}
+
+const TYPED_WORDS: Record<Typed, string> = { typed: "typed its first prompt", failed: "couldn't type its first prompt", late: "its ready screen never showed, so its first prompt wasn't typed" };
+
+function noteTyped(harness: KnownHarness, typed: Typed, launch: string): void {
+  try {
+    appendRotated(join(home(), "launch.log"), `${new Date().toISOString()}\t${launch}\t${harness}\t${TYPED_WORDS[typed]}\n`);
+  } catch {
+    // A home Kiwi can't write to keeps no launch log; the agent's window still shows how it went.
+  }
 }
 
 const isExtra = (h: KnownHarness): h is KnownHarness & ExtraHarness => (EXTRA_HARNESSES as readonly string[]).includes(h);
@@ -48,12 +63,30 @@ export async function launchAgent(req: LaunchRequest, opts: LaunchOptions = {}):
   const refused = joinLineRefusal(req) ?? folderRefusal(req.folder);
   if (refused) return { ok: false, why: "bad-request", detail: refused };
   if (!canStart(req.harness)) return { ok: false, why: "no-recipe", detail: `Kiwi can't start ${req.harness} yet` };
+  const choices = choicesOf(req);
+  const unchosen = launchChoicesRefusal(req.harness, choices);
+  if (unchosen) return { ok: false, why: "bad-request", detail: unchosen };
   const row = (await harnessInventory(opts.PATH)).find((r) => r.harness === req.harness);
-  const argv = row?.path ? recipeArgv(req.harness, row.path, joinPrompt(req)) : null;
+  const argv = row?.path ? recipeArgv(req.harness, row.path, joinPrompt(req), choices) : null;
   if (!row?.path || !argv) return { ok: false, why: "not-installed", detail: `${req.harness} isn't installed on this computer` };
+  const typed = typedPrompt(req.harness);
+  const kind = typed ? await placeKind(opts.tools, cfg) : null;
+  if (typed && kind !== "rex" && kind !== "tmux")
+    return {
+      ok: false,
+      why: "no-place",
+      detail: `${harnessLabel(req.harness)} takes its first prompt typed into its window, so Kiwi starts it only in Rex or tmux: pick one in Settings → New agents (kiwi terminal prefer rex)`,
+    };
   hookUp(req.harness, row.version);
   const launch = req.launch ?? randomBytes(16).toString("base64url");
   const env = { KIWI_LAUNCH: launch, ...(process.env.KIWI_HOME ? { KIWI_HOME: process.env.KIWI_HOME } : {}) };
   const placed = await openPlace({ argv, folder: req.folder, name: req.nick ?? req.harness, env }, opts.tools, cfg);
-  return placed.ok ? { ok: true, launch, placed } : placed;
+  if (!placed.ok) return placed;
+  if (typed) {
+    const pane = await paneOf(placed, opts.tools);
+    if (!pane) return { ok: false, why: "failed", detail: `it opened in ${placed.place}, but Kiwi can't type into that window: type the kiwi join line from the app into it` };
+    const done = opts.onTyped ?? ((t: Typed, id: string) => noteTyped(req.harness, t, id));
+    void typeWhenReady(pane, joinPrompt(req), typed, opts.typing).then((t) => done(t, launch));
+  }
+  return { ok: true, launch, placed };
 }

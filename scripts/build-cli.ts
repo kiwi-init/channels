@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
 import { COMMANDS } from "../src/sh.ts";
-import { coverageChunks, heavyIn, mcpValidatorStub, registryEntries, stubbedChunks, stubPlugin, validatorsIn } from "./cli-bundle.ts";
+import { CLI_COMPILE, coverageChunks, heavyIn, mcpValidatorStub, registryEntries, stubbedChunks, stubPlugin, validatorsIn } from "./cli-bundle.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const BUDGET_BYTES = 2_700_000;
@@ -15,6 +15,7 @@ const { values } = parseArgs({
     target: { type: "string" },
     outfile: { type: "string", default: "dist/kiwi" },
     check: { type: "boolean", default: false },
+    js: { type: "string" },
   },
 });
 
@@ -62,9 +63,20 @@ if (values.check) {
   } finally {
     rmSync(outdir, { recursive: true, force: true });
   }
+} else if (values.js !== undefined) {
+  const outfile = resolve(values.js);
+  const result = await Bun.build({ ...shared, splitting: false, target: "bun" });
+  if (failed(result)) process.exit(1);
+  const [out, ...more] = result.outputs;
+  if (!out || more.length) {
+    console.error(`expected the CLI as one JS file, got ${result.outputs.length}`);
+    process.exit(1);
+  }
+  await Bun.write(outfile, out);
+  console.log(`built ${outfile}: the CLI as one JS file, ${out.size} bytes, for the app to compile with its own Bun`);
 } else {
   const outfile = resolve(values.outfile);
-  const result = await Bun.build({ ...shared, compile: target === undefined ? { outfile } : { target, outfile } });
+  const result = await Bun.build({ ...shared, compile: { ...CLI_COMPILE, ...(target === undefined ? {} : { target }), outfile } });
   if (failed(result)) process.exit(1);
   console.log(`built ${outfile}${target ? ` for ${target}` : ""}, ${stubbed.size} just-bash command chunks left out`);
 }

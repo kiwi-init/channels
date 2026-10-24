@@ -33,9 +33,15 @@ export class MailboxError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    readonly lasting = false,
   ) {
     super(message);
     this.name = "MailboxError";
+  }
+
+  /** The network or the relay failing for a moment: asking again may work. */
+  get transient(): boolean {
+    return !this.lasting && (this.status === 0 || this.status >= 500);
   }
 }
 
@@ -94,7 +100,7 @@ export async function openMailbox(relay: string, secret: string, fetchImpl: type
     const raw = typeof box === "string" ? await openWith(await slotKey(secret, slot), box, ad(id, slot)) : null;
     // Only someone holding the secret seals a box that opens. Anything else is the relay (or a stranger
     // who guessed the id) talking: treat it as an error, never as an answer.
-    if (raw === null) throw new MailboxError(502, "the mailbox holds something this code didn't seal");
+    if (raw === null) throw new MailboxError(502, "the mailbox holds something this code didn't seal", true);
     return JSON.parse(raw) as T;
   };
   return {
@@ -109,9 +115,18 @@ export async function openMailbox(relay: string, secret: string, fetchImpl: type
       const until = Date.now() + (opts.timeoutMs ?? MAILBOX_TTL_MS);
       for (;;) {
         if (opts.signal?.aborted) return null;
-        const v = await get<T>(slot);
-        if (v !== null) return v;
-        if (Date.now() >= until) return null;
+        let failed: MailboxError | null = null;
+        try {
+          const v = await get<T>(slot);
+          if (v !== null) return v;
+        } catch (err) {
+          if (!(err instanceof MailboxError) || !err.transient) throw err;
+          failed = err;
+        }
+        if (Date.now() >= until) {
+          if (failed) throw failed;
+          return null;
+        }
         await new Promise<void>((resolve) => {
           const t = setTimeout(resolve, Math.min(opts.everyMs ?? 1_500, Math.max(0, until - Date.now())));
           opts.signal?.addEventListener("abort", () => (clearTimeout(t), resolve()), { once: true });

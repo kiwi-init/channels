@@ -1,0 +1,81 @@
+#include <limits.h>
+#include <mach-o/dyld.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+#include "kiwi-keys.h"
+
+extern char **environ;
+
+static const char *const KEEP[] = {"HOME", "USER", "LOGNAME", "TMPDIR", "PATH", "SHELL", "LANG", "__CF_USER_TEXT_ENCODING", "XPC_SERVICE_NAME", "XPC_FLAGS", NULL};
+static const char *const KEEP_PREFIXES[] = {"LC_", NULL};
+#ifdef KIWI_EB_TEST
+static const char *const KEEP_IN_TEST_BUILDS[] = {"KIWI_EB_DRIVER", "KIWI_EB_RELAY", "CFFIXED_USER_HOME", "KIWI_HOME", NULL};
+#else
+static const char *const KEEP_IN_TEST_BUILDS[] = {NULL};
+#endif
+static char *const IMPOSED[] = {"BUN_RUNTIME_TRANSPILER_CACHE_PATH=0", KIWI_KEY_FD_ENV, NULL};
+
+static bool listed(const char *entry, size_t len, const char *const *names) {
+  for (const char *const *k = names; *k; k++)
+    if (strlen(*k) == len && strncmp(entry, *k, len) == 0) return true;
+  return false;
+}
+
+static bool kept(const char *entry) {
+  const char *eq = strchr(entry, '=');
+  if (!eq) return false;
+  size_t len = (size_t)(eq - entry);
+  if (listed(entry, len, KEEP) || listed(entry, len, KEEP_IN_TEST_BUILDS)) return true;
+  for (const char *const *p = KEEP_PREFIXES; *p; p++)
+    if (len > strlen(*p) && strncmp(entry, *p, strlen(*p)) == 0) return true;
+  return false;
+}
+
+static char **allowed_env(char **env) {
+  size_t n = 0;
+  while (env[n]) n++;
+  size_t m = 0;
+  while (IMPOSED[m]) m++;
+  char **out = calloc(n + m + 1, sizeof *out);
+  if (!out) return NULL;
+  size_t k = 0;
+  for (size_t i = 0; i < n; i++)
+    if (kept(env[i])) out[k++] = env[i];
+  for (size_t i = 0; i < m; i++) out[k++] = IMPOSED[i];
+  out[k] = NULL;
+  return out;
+}
+
+static bool electrobun_launcher(char *out, size_t size) {
+  char self[PATH_MAX];
+  uint32_t len = sizeof self;
+  if (_NSGetExecutablePath(self, &len) != 0) return false;
+  char real[PATH_MAX];
+  if (!realpath(self, real)) return false;
+  char *slash = strrchr(real, '/');
+  if (!slash) return false;
+  *slash = '\0';
+  int n = snprintf(out, size, "%s/launcher", real);
+  return n > 0 && (size_t)n < size;
+}
+
+int main(int argc, char **argv) {
+  char launcher[PATH_MAX];
+  char **env = allowed_env(environ);
+  if (argc < 1 || !env || !electrobun_launcher(launcher, sizeof launcher)) {
+    fputs("Channels: can't find the app's launcher\n", stderr);
+    return 1;
+  }
+  char why[1024];
+  if (kiwi_seal_check(why, sizeof why) != 0) {
+    fprintf(stderr, "Channels: refusing to start: %s\n", why);
+    return 78;
+  }
+  argv[0] = launcher;
+  return kiwi_run_with_keys(launcher, argv, env);
+}

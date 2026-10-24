@@ -3,7 +3,7 @@
 // first (a lead and an agent working a task, messages, a thread, a task's conversation, a
 // direct one, notes, a pending join request), the same way scripts/smoke-ui.ts walks the flows.
 //
-//   bun run web:build && bun scripts/shoot-ui.ts [outdir] [--only channel,task-thread,…] [--wide] [--phone channel,tasks] [--theme dark|light] [--channels 20]
+//   bun run web:build && bun scripts/shoot-ui.ts [outdir] [--only channel,task-thread,…] [--wide] [--phone channel,tasks] [--theme dark|light] [--channels 20] [--browser chromium|webkit]
 //
 // Shots are taken at 2x (Retina), as most people see the dashboard. --only keeps the screens whose
 // name contains one of the words (and skips the signed-out ones unless named), --wide skips the phone
@@ -13,13 +13,14 @@
 // `build / shots` runs it --wide --phone channel,tasks --theme dark and uploads the shots as the ui-shots artifact.
 //
 // Needs Playwright's Chromium: bunx playwright-core install --only-shell chromium
-// (or set SMOKE_CHROMIUM to a Chrome binary).
+// (or set SMOKE_CHROMIUM to a Chrome binary). --browser webkit shoots in Playwright's WebKit,
+// the engine of the Mac's and Linux's system web view: bunx playwright-core install webkit.
 
 import { spawn, type ChildProcess } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { chromium, type Page } from "playwright-core";
+import { chromium, webkit, type Page } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
@@ -31,6 +32,8 @@ const flag = (name: string) => {
 const only = flag("--only")?.split(",").filter(Boolean);
 const themeOnly = flag("--theme");
 const moreChannels = Number(flag("--channels") ?? 0);
+const engine = flag("--browser") ?? "chromium";
+if (engine !== "chromium" && engine !== "webkit") throw new Error(`--browser is chromium or webkit, not ${engine}`);
 const phone = flag("--phone")?.split(",").filter(Boolean);
 const wideOnly = args.includes("--wide") ? (args.splice(args.indexOf("--wide"), 1), true) : false;
 const OUT = resolve(args[0] ?? join(tmpdir(), "kiwi-shots"));
@@ -62,7 +65,7 @@ const win = (...args: string[]) => kiwi(["-c", "kiwi-w", "--as", "win", ...args]
 const { relay, port } = await startLocalRelay(join(data, "relay"), "web/dist");
 const BASE = `http://localhost:${port}/`;
 
-const browser = await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
+const browser = engine === "webkit" ? await webkit.launch() : await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
 const WIDE = { width: 1440, height: 900 };
 const NARROW = { width: 390, height: 844 };
 const shots: string[] = [];
@@ -86,6 +89,7 @@ async function firstRunAs(page: Page, name: string) {
 }
 
 async function passkey(page: Page) {
+  if (engine === "webkit") return;
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("WebAuthn.enable");
   await cdp.send("WebAuthn.addVirtualAuthenticator", {
@@ -237,7 +241,7 @@ try {
   if (firstTask) {
     await win("send", "--re", firstTask[1]!, "Starting. Rows per message are 6 today; aiming for 4.");
     await bot("send", "--re", firstTask[1]!, "Keep the event rows; fold only the duplicates.");
-    await win("send", "--re", firstTask[1]!, "Down from 6 to 4. https://github.com/ojowwalker77/channels/pull/41");
+    await win("send", "--re", firstTask[1]!, "Down from 6 to 4. https://github.com/kiwi-init/channels/pull/41");
     await win("task", "start", `T${firstTask[1]}`, "steady numbers look fine");
   }
   await bot("set", "relay.version", "667ce081");
@@ -285,7 +289,7 @@ try {
   await details().click();
   const panel = owner.getByRole("complementary", { name: "Details" });
   await panel.getByRole("button", { name: /^Repos/ }).click();
-  await panel.getByRole("textbox", { name: "Find a repo" }).fill("ojowwalker77/channels");
+  await panel.getByRole("textbox", { name: "Find a repo" }).fill("kiwi-init/channels");
   await owner.keyboard.press("Enter");
   await panel.getByRole("button", { name: "Save", exact: true }).click();
   await owner.getByText("Repos saved").first().waitFor({ timeout: 15000 });
@@ -368,6 +372,7 @@ try {
   // ---------- shoot ----------
   let launcherStub = false;
   let terminalsStub = false;
+  let wakeStub = false;
   for (const theme of (["dark", "light"] as const).filter((t) => !themeOnly || t === themeOnly)) {
     for (const [vp, size] of (
       [
@@ -565,6 +570,88 @@ try {
         () => toTab("Conversation"),
       );
       await shoot(owner, tag, "07-details", () => detailsBtn().click(), closeDetails);
+      // An agent of this computer in the owner's menu, with a stand-in for the desktop app's two wake calls.
+      if (["07c-agent-wake", "07d-agent-wake-off"].some((n) => takes(tag, n))) {
+        if (!wakeStub) {
+          wakeStub = true;
+          const room = (JSON.parse(readFileSync(join(cli, "home", "config.json"), "utf8")) as { channels: Record<string, { roomId: string }> }).channels.kiwi?.roomId ?? "";
+          await owner.addInitScript((room: string) => {
+            if (sessionStorage.getItem("shots.wake") !== "1") return;
+            let wake: "on" | "off" = "on";
+            const seats = () => [{ room, alias: "kiwi", agent: "atlas", wake }];
+            const w = window as unknown as { kiwi?: object };
+            w.kiwi = Object.assign(w.kiwi ?? {}, {
+              wakeSeats: async () => seats(),
+              setWake: async (_room: string, _agent: string, to: "on" | "off") => ((wake = to), seats()),
+            });
+          }, room);
+        }
+        await owner.evaluate(() => sessionStorage.setItem("shots.wake", "1"));
+        await owner.reload();
+        const menuClosed = async () => {
+          await owner.keyboard.press("Escape");
+          await closeDetails();
+        };
+        await shoot(
+          owner,
+          tag,
+          "07c-agent-wake",
+          async () => {
+            await detailsBtn().click();
+            await owner.getByRole("button", { name: "More for atlas" }).click();
+            await owner.getByRole("menuitem", { name: "Stop waking it on new messages" }).waitFor();
+          },
+          menuClosed,
+        );
+        await shoot(
+          owner,
+          tag,
+          "07d-agent-wake-off",
+          async () => {
+            await detailsBtn().click();
+            await owner.getByRole("button", { name: "More for atlas" }).click();
+            await owner.getByRole("menuitem", { name: "Stop waking it on new messages" }).click();
+            await owner.getByRole("button", { name: "More for atlas" }).click();
+            await owner.getByRole("menuitem", { name: "Wake it on new messages" }).waitFor();
+          },
+          menuClosed,
+        );
+        await owner.evaluate(() => sessionStorage.removeItem("shots.wake"));
+        await owner.reload();
+      }
+      const colourDialog = () => owner.getByRole("dialog", { name: "Your colour" });
+      await shoot(
+        owner,
+        tag,
+        "07e-your-colour",
+        async () => {
+          await detailsBtn().click();
+          await owner.getByRole("button", { name: "Your colour" }).click();
+          await colourDialog().getByRole("radio", { name: "No colour", checked: true }).waitFor();
+        },
+        async () => {
+          await owner.keyboard.press("Escape");
+          await closeDetails();
+        },
+      );
+      await shoot(
+        owner,
+        tag,
+        "07f-your-colour-teal",
+        async () => {
+          await detailsBtn().click();
+          await owner.getByRole("button", { name: "Your colour" }).click();
+          await colourDialog().getByRole("radio", { name: "teal" }).click();
+          await colourDialog().waitFor({ state: "hidden" });
+          await owner.getByRole("button", { name: "Your colour" }).click();
+          await colourDialog().getByRole("radio", { name: "teal", checked: true }).waitFor({ timeout: 15000 });
+        },
+        async () => {
+          await colourDialog().getByRole("radio", { name: "No colour" }).click();
+          await colourDialog().waitFor({ state: "hidden" });
+          await closeDetails();
+        },
+      );
       if (!narrow)
         await shoot(
           owner,
@@ -630,6 +717,20 @@ try {
       await shoot(
         owner,
         tag,
+        "09c-rooms",
+        async () => {
+          await detailsBtn().click();
+          await details()
+            .getByRole("button", { name: /^Rooms/ })
+            .click();
+          await details().getByRole("heading", { name: "Rooms" }).waitFor();
+          await details().getByRole("textbox", { name: "New room’s name" }).fill("mobile");
+        },
+        toChannel,
+      );
+      await shoot(
+        owner,
+        tag,
         "10-account-menu",
         async () => {
           await toList();
@@ -673,7 +774,7 @@ try {
         if (narrow) await toChannel();
       });
       await shoot(owner, tag, "18-settings", openSettings, closeSettings);
-      if (["27-new-agents", "28-new-agents-ready", "29-context-line"].some((n) => takes(tag, n))) {
+      if (["27-new-agents", "28-new-agents-ready", "29-context-line", "30-hooks", "31-hooks-updated", "32-launch-folders"].some((n) => takes(tag, n))) {
         if (!terminalsStub) {
           terminalsStub = true;
           await owner.addInitScript(() => {
@@ -683,6 +784,15 @@ try {
             const row = (id: string, name: string, helpers: Row["helpers"]): Row => ({ id, name, found: true, running: true, helpers });
             let status: Status = { prefer: "app", launch: "on", terminals: [row("rex", "Rex", "off"), row("tmux", "tmux", "off"), row("app", "Terminal", null)] };
             let contextLine: "on" | "off" = "off";
+            let roots: string[] = ["/Users/you/code"];
+            type Hook = { harness: string; state: string; text: string };
+            let hooks: Hook[] = [
+              { harness: "claude", state: "partial", text: "installed, without the listening hooks" },
+              { harness: "codex", state: "installed", text: "installed" },
+              { harness: "gemini", state: "outdated", text: "not installed (its hooks are from an older kiwi: kiwi hooks install)" },
+              { harness: "cursor", state: "absent", text: "not detected" },
+              { harness: "grok", state: "off", text: "off" },
+            ];
             const set = async (change: (s: Status) => Status) => (status = change(status));
             const w = window as unknown as { kiwi?: object };
             w.kiwi = Object.assign(w.kiwi ?? {}, {
@@ -693,6 +803,12 @@ try {
               setLaunches: (to: "on" | "off") => set((s) => ({ ...s, launch: to })),
               contextLine: async () => contextLine,
               setContextLine: async (to: "on" | "off") => (contextLine = to),
+              launchRoots: async () => roots,
+              setLaunchRoot: async (dir: string, to: "add" | "remove") => (roots = to === "add" ? [...new Set([...roots, dir])] : roots.filter((r) => r !== dir)),
+              chooseFolder: async () => "/Users/you/clients/acme",
+              hooks: async () => hooks,
+              setHooks: async (harness: string, to: "on" | "off") =>
+                (hooks = hooks.map((h) => (h.harness === harness ? { ...h, state: to === "on" ? "installed" : "off", text: to === "on" ? "installed" : "off" } : h))),
             });
           });
         }
@@ -735,6 +851,45 @@ try {
           },
           closeSettings,
         );
+        const hooksRow = (name: string) =>
+          agents()
+            .locator("[data-item]")
+            .filter({ has: owner.getByText(name, { exact: true }) });
+        await shoot(
+          owner,
+          tag,
+          "30-hooks",
+          async () => {
+            await openSettings();
+            await hooksRow("Claude Code").getByRole("button", { name: "Update" }).waitFor();
+            await hooksRow("Claude Code").scrollIntoViewIfNeeded();
+          },
+          closeSettings,
+        );
+        await shoot(
+          owner,
+          tag,
+          "31-hooks-updated",
+          async () => {
+            await openSettings();
+            await hooksRow("Claude Code").getByRole("button", { name: "Update" }).click();
+            await hooksRow("Claude Code").getByRole("button", { name: "Remove" }).waitFor();
+            await hooksRow("Claude Code").scrollIntoViewIfNeeded();
+          },
+          closeSettings,
+        );
+        await shoot(
+          owner,
+          tag,
+          "32-launch-folders",
+          async () => {
+            await openSettings();
+            await newAgents().getByRole("button", { name: "Add a folder…" }).click();
+            await newAgents().getByText("/Users/you/clients/acme", { exact: true }).waitFor();
+            await newAgents().getByRole("button", { name: "Add a folder…" }).scrollIntoViewIfNeeded();
+          },
+          closeSettings,
+        );
         await owner.evaluate(() => sessionStorage.removeItem("shots.terminals"));
         await owner.reload();
       }
@@ -759,12 +914,29 @@ try {
 
       // The desktop app's New agent, with a stand-in for the four launch methods its bridge adds,
       // on only while this tab's flag is set so the other screens stay the browser's.
-      if (["24-new-agent", "26-new-agent-remote", "25-new-agent-started"].some((n) => takes(tag, n))) {
+      const newAgentShots = [
+        "24-new-agent",
+        "24-new-agent-options",
+        "24-new-agent-permissions",
+        "26-new-agent-remote",
+        "26-new-agent-options-remote",
+        "26-new-agent-permissions-remote",
+        "24-new-agent-folder",
+        "24-new-agent-name",
+        "25-new-agent-failed",
+        "25-new-agent-started",
+      ];
+      if (newAgentShots.some((n) => takes(tag, n))) {
         if (!launcherStub) {
           launcherStub = true;
           await owner.addInitScript(() => {
             if (sessionStorage.getItem("shots.launcher") !== "1") return;
-            const row = (harness: string, path: string | null, version: string | null, start: boolean) => ({ harness, path, version, start, wake: null, why: null });
+            const permission = ["default", "accept-edits", "plan", "bypass"];
+            const options = {
+              claude: { model: true, effort: ["low", "medium", "high", "xhigh", "max"], permission, context: [1_000_000] },
+              codex: { model: true, effort: ["minimal", "low", "medium", "high", "xhigh"], permission, context: [128_000, 272_000, 400_000, 1_000_000] },
+            } as Record<string, { model: boolean; effort: string[]; permission: string[]; context: number[] }>;
+            const row = (harness: string, path: string | null, version: string | null, start: boolean) => ({ harness, path, version, start, wake: null, why: null, options: options[harness] ?? null });
             const rows = [
               row("claude", "/Users/you/.local/bin/claude", "2.1.304", true),
               row("codex", "/opt/homebrew/bin/codex", "0.98.0", true),
@@ -773,20 +945,31 @@ try {
               row("cursor", null, null, false),
               row("grok", null, null, false),
             ];
+            const remote = (r: ReturnType<typeof row>) => ({
+              ...r,
+              path: r.path?.replace("/Users/you", "/home/you") ?? null,
+              options: r.options && { ...r.options, permission: r.options.permission.filter((p) => p !== "bypass") },
+            });
             const block = "block:01a15ad9-310a-703a-ad0b-3cc137458451";
             const rex = { server: "unix:///Users/you/Library/Application%20Support/rex/server.sock", session: "session:01a15ad9-30f4-7bcb-8455-c3eeb9e1071c", block };
+            let launches = 0;
             (window as unknown as { kiwi: object }).kiwi = {
               relayUrl: window.location.origin,
               harnesses: async () => rows,
               seatFolders: async () => ["/Users/you/code/payments", "/Users/you/code/payments-site"],
               chooseFolder: async () => null,
-              launchAgent: async (req: { launch: string }) => ({ ok: true, launch: req.launch, place: "rex", rex }),
+              launchAgent: async (req: { launch: string; model?: string; effort?: string; permission?: string }) =>
+                ++launches === 1
+                  ? { ok: false, why: "failed", detail: "No answer yet: it may still be starting on build-box. Check that computer before you try again." }
+                  : req.model !== "opus" || req.effort !== "high" || req.permission !== undefined
+                    ? { ok: false, why: "bad-request", detail: `the launch lost its options: ${JSON.stringify(req)}` }
+                    : { ok: true, launch: req.launch, place: "rex", rex },
               machines: async () => [
-                { machinePk: "own", label: "jow’s MacBook Air", os: "macOS", own: true, online: true },
-                { machinePk: "build", label: "build-box", os: "Linux", own: false, online: true },
-                { machinePk: "old", label: "old-mini", os: "macOS", own: false, online: false },
+                { machinePk: "own", label: "jow’s MacBook Air", os: "darwin", own: true, online: true },
+                { machinePk: "build", label: "build-box", os: "linux", own: false, online: true },
+                { machinePk: "old", label: "old-mini", os: "darwin", own: false, online: false },
               ],
-              harnessesOn: async () => ({ ok: true, value: rows.slice(0, 2).map((r) => ({ ...r, path: r.path?.replace("/Users/you", "/home/you") ?? null })) }),
+              harnessesOn: async () => ({ ok: true, value: rows.slice(0, 2).map(remote) }),
               foldersOn: async () => ({ ok: true, value: ["/home/you/payments"] }),
             };
           });
@@ -796,28 +979,113 @@ try {
         await owner.reload();
         await owner.getByRole("region", { name: "Add an agent" }).waitFor({ timeout: 10000 });
         const dialog = owner.getByRole("dialog");
+        const stay = async () => {};
         await shoot(
           owner,
           tag,
           "24-new-agent",
           async () => {
             await owner.getByRole("region", { name: "Add an agent" }).getByRole("button", { name: "New agent" }).click();
-            await dialog.getByRole("radiogroup", { name: "Harness" }).waitFor();
+            await dialog.getByRole("radiogroup", { name: "Computer" }).waitFor();
           },
-          async () => {},
+          stay,
+        );
+        await shoot(
+          owner,
+          tag,
+          "24-new-agent-options",
+          async () => {
+            await dialog.getByRole("button", { name: "Next" }).click();
+            await dialog.getByRole("radiogroup", { name: "Harness" }).waitFor();
+            await dialog.getByRole("button", { name: "Next" }).click();
+            await dialog.getByRole("button", { name: "sonnet" }).click();
+            await dialog.getByRole("radiogroup", { name: "Effort" }).getByText("Max", { exact: true }).click();
+            await dialog.getByRole("radiogroup", { name: "Context" }).getByText("1M", { exact: true }).click();
+          },
+          stay,
+        );
+        await shoot(
+          owner,
+          tag,
+          "24-new-agent-permissions",
+          async () => {
+            await dialog.getByRole("button", { name: "Next" }).click();
+            await dialog.getByRole("radiogroup", { name: "Permissions" }).getByText("Bypass").click();
+            await dialog.getByText("No permission checks").waitFor();
+            if (await dialog.getByRole("button", { name: "Next" }).isEnabled()) throw new Error("New agent goes on with bypass before it's confirmed");
+          },
+          stay,
         );
         await shoot(
           owner,
           tag,
           "26-new-agent-remote",
           async () => {
+            await dialog.getByRole("checkbox").check();
+            if (!(await dialog.getByRole("button", { name: "Next" }).isEnabled())) throw new Error("New agent stays held after bypass is confirmed");
+            await dialog.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "Computer" }).click();
             await dialog.getByRole("radiogroup", { name: "Computer" }).getByText("build-box").click();
+            await dialog.getByText("Sent to build-box").waitFor();
+            await dialog.getByRole("button", { name: "Next" }).click();
+            await dialog.getByRole("radiogroup", { name: "Harness" }).waitFor();
+          },
+          stay,
+        );
+        await shoot(
+          owner,
+          tag,
+          "26-new-agent-options-remote",
+          async () => {
+            await dialog.getByRole("button", { name: "Next" }).click();
+            await dialog.getByRole("radiogroup", { name: "Effort" }).getByText("High", { exact: true }).click();
+            await dialog.getByRole("textbox", { name: "Model" }).fill("opus");
+          },
+          stay,
+        );
+        await shoot(
+          owner,
+          tag,
+          "26-new-agent-permissions-remote",
+          async () => {
+            await dialog.getByRole("button", { name: "Next" }).click();
+            await dialog.getByText("build-box doesn’t take bypass from another device yet").waitFor();
+          },
+          stay,
+        );
+        await shoot(
+          owner,
+          tag,
+          "24-new-agent-folder",
+          async () => {
+            await dialog.getByRole("button", { name: "Next" }).click();
             await dialog.getByText("/home/you").first().waitFor();
           },
-          async () => {},
+          stay,
+        );
+        await shoot(
+          owner,
+          tag,
+          "24-new-agent-name",
+          async () => {
+            await dialog.getByRole("button", { name: "Next" }).click();
+            await dialog.getByRole("textbox", { name: "Nickname" }).waitFor();
+            const start = await dialog.getByRole("button", { name: "Start" }).boundingBox();
+            if (!start || start.y + start.height > (owner.viewportSize()?.height ?? 0)) throw new Error("New agent's Start is below the window");
+          },
+          stay,
+        );
+        await shoot(
+          owner,
+          tag,
+          "25-new-agent-failed",
+          async () => {
+            await dialog.getByRole("button", { name: "Start" }).click();
+            await dialog.getByText("Didn’t start on build-box").waitFor();
+          },
+          stay,
         );
         await shoot(owner, tag, "25-new-agent-started", async () => {
-          await dialog.getByRole("button", { name: "Start" }).click();
+          await dialog.getByRole("button", { name: "Try again" }).click();
           await dialog.getByText("Started in Rex").waitFor();
         });
         await owner.evaluate(() => sessionStorage.removeItem("shots.launcher"));
@@ -844,6 +1112,32 @@ try {
         .catch(() => {});
       await shoot(out, tag, "22-invite-preview");
       await out.close();
+    }
+  }
+
+  const roomTags = (["dark", "light"] as const).filter((t) => (!themeOnly || t === themeOnly) && takes(`${t}-wide`, "26-room-unread"));
+  if (roomTags.length) {
+    await owner.setViewportSize(WIDE);
+    await owner.goto(channel);
+    await owner.reload();
+    await toTab("Conversation");
+    const details = owner.getByRole("complementary", { name: "Details" });
+    await owner.getByRole("button", { name: /^Details:/ }).click();
+    await details.getByRole("button", { name: /^Rooms/ }).click();
+    await details.getByRole("textbox", { name: "New room’s name" }).fill("mobile");
+    await details.getByRole("button", { name: "New room" }).click();
+    await owner.getByText("Made #mobile").first().waitFor({ timeout: 15000 });
+    await owner.goto(channel);
+    await owner.reload();
+    await toTab("Conversation");
+    await bot("send", "The relay's p95 held overnight.");
+    await bot("send", "--room", "mobile", "@jonatas the iOS build is red: the signing profile expired.");
+    await bot("send", "--room", "mobile", "I'll renew it after lunch.");
+    await owner.getByText("The relay's p95 held overnight.").first().waitFor({ timeout: 15000 });
+    for (const theme of roomTags) {
+      await setTheme(owner, theme);
+      await toTab("Conversation");
+      await shoot(owner, `${theme}-wide`, "26-room-unread", undefined, async () => {});
     }
   }
 } catch (e) {

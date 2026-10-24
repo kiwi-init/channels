@@ -1,10 +1,13 @@
 import { spawn } from "node:child_process";
 
+import type { ExternalUrl } from "./guard.ts";
+import { sessionEnv } from "./child-env.ts";
+
 const KIWI_ONLY = /^(CHROME_DESKTOP|GIO_LAUNCHED_DESKTOP_FILE|GIO_LAUNCHED_DESKTOP_FILE_PID|BAMF_DESKTOP_FILE_HINT|APPDIR|APPIMAGE|ARGV0|OWD|ELECTRON_.+)$/;
 
 export function browserEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(env)) if (v !== undefined && !KIWI_ONLY.test(k)) out[k] = v;
+  for (const [k, v] of Object.entries(sessionEnv(env))) if (v !== undefined && !KIWI_ONLY.test(k)) out[k] = v;
   return out;
 }
 
@@ -19,8 +22,8 @@ export type Launch = (
 };
 
 export function openInBrowser(
-  url: string,
-  fallback: (url: string) => Promise<void>,
+  url: ExternalUrl,
+  fallback: (url: ExternalUrl) => Promise<void>,
   platform: NodeJS.Platform = process.platform,
   env: NodeJS.ProcessEnv = process.env,
   launch: Launch = spawn,

@@ -478,7 +478,7 @@ try {
     "Numbers are in:\n\n- p50 0.3ms, p95 1ms\n- no refusals in 800 rooms\n\nThe change is in `src/relay/route.ts`:\n\n```ts\nconst program = answer(dispatch(routes, guards, otherwise))\n```",
     "On it. I'll have win run the steady load first, then the cold runs.",
     "| step | before | after |\n|---|---|---|\n| first paint | 420ms | 180ms |\n| switch | 270ms | 26ms |",
-    "PR is up: https://github.com/ojowwalker77/channels/pull/417 — CI green, waiting on review.",
+    "PR is up: https://github.com/kiwi-init/channels/pull/417 — CI green, waiting on review.",
   ];
   for (let i = 0; i < MESSAGES; i += 10)
     await Promise.all(

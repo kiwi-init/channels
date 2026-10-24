@@ -307,6 +307,12 @@ describe("Grok keeps its own monitor running", () => {
     expect(await stop({ backgroundTasks: [{ id: "m1", type: "monitor", status: "running", description: listen }] })).toBeNull();
     const elsewhere = `${listen} -c other --as other`;
     expect((await stop({ backgroundTasks: [{ id: "m3", type: "monitor", status: "running", description: elsewhere }] }))?.decision).toBe("block");
+    const logged = readFileSync(join(h, "stop.log"), "utf8").trim().split("\n").at(-1)!;
+    expect(logged).toContain("grok-wake");
+    expect(logged).toContain(`grok: no listener among 1 monitors\t${JSON.stringify(elsewhere)}`);
+    expect(logged).toContain(JSON.stringify(listen));
+    expect(await stop({ backgroundTasks: [{ id: "m6", type: "monitor", status: "running", description: `[monitor] ${listen}` }] })).toBeNull();
+    expect(await stop({ backgroundTasks: [{ id: "m7", type: "monitor", status: "running", display_command: `[monitor] ${listen}` }] })).toBeNull();
 
     const monitor = spawn(h, ["listen"], G);
     shells.push(monitor);

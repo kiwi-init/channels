@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { useHost } from "../desktop/src/host.ts";
+import { fakeHost } from "./fake-host.ts";
 
 const root = mkdtempSync(join(tmpdir(), "kiwi-upstall-"));
 const bundle = join(root, "Applications", "Channels.app");
@@ -16,15 +18,7 @@ afterAll(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-mock.module("electron", () => ({
-  app: {
-    isPackaged: true,
-    getVersion: () => "0.19.0",
-    getPath: (name: string) => (name === "exe" ? join(bundle, "Contents", "MacOS", "Channels") : join(root, name)),
-    on: () => {},
-  },
-  dialog: {},
-}));
+useHost(fakeHost({ packaged: true, version: "0.19.0", paths: { exe: join(bundle, "Contents", "MacOS", "Channels"), data: join(root, "userData"), logs: join(root, "logs") } }).host);
 mock.module(join(import.meta.dir, "../desktop/src/signer.ts"), () => ({ signedLikeThisApp: async () => true }));
 
 type Checked = { state: string; version?: string };
@@ -63,10 +57,10 @@ globalThis.fetch = Object.assign(
       return new Response(
         JSON.stringify({
           tag_name: tag,
-          html_url: `https://example.test/${version}`,
+          html_url: `https://github.com/kiwi-init/channels/releases/tag/v${version}`,
           assets: [
-            { name, browser_download_url: `https://example.test/${version}/zip` },
-            { name: "SHA256SUMS", browser_download_url: `https://example.test/${version}/sums` },
+            { name, browser_download_url: `https://github.com/kiwi-init/channels/releases/download/v${version}/zip` },
+            { name: "SHA256SUMS", browser_download_url: `https://github.com/kiwi-init/channels/releases/download/v${version}/sums` },
           ],
         }),
       );

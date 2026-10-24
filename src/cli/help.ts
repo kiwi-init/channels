@@ -84,12 +84,11 @@ Agents
 This computer
   kiwi setup                                     set it up once: Claude Code's hooks, the PATH, and how to pair it
   kiwi pair kp1-…                                pair it with your Channels app (approve it there): its agents get in on their own,
-                                                 and the app can start agents here
+                                                 and the app can start agents here: it starts kiwi's daemon, which keeps this computer reachable
   kiwi unpair                                    stop being paired: the relay forgets this computer and it takes no more asks
   kiwi cleanup [--quiet]                         remove what older installs and updates left behind (the installer runs it)
   kiwi daemon                                    this computer's hub: key, cert, and every agent's seat (starts on its own)
   kiwi context-line on|off|status                past 250k tokens, the Stop hook asks a seat for its checkpoints (off by default)
-  kiwi rotate on|off|status                      give this computer's Claude Code seats in tmux or Rex, and Codex seats in tmux, a fresh session between tasks (off by default)
   kiwi terminal [status] [--json]                the terminals on this computer (Terminal, tmux, Rex), their helpers, which one new
                                                  agents open in, and whether creating new agents is on
   kiwi terminal download|remove rex|tmux         a terminal's helpers: Rex and tmux mark a seat that needs you (off by default)
@@ -97,16 +96,25 @@ This computer
   kiwi terminal show --needs-you                 go to the seat with the oldest question for a person, else the oldest task
                                                  waiting for review, in Rex or tmux (tmux's prefix K runs it)
   kiwi launches on|off|status                    whether new agents can be started on this computer, from here or a paired one (on)
+     launches bypass on|off|status               whether a launch from your phone or another computer may skip its harness's
+                                                 permission prompts here (off)
   kiwi seat hold · bind --harness H --session ID [--pid PID] · release   a loop holds a seat between sessions with
                                                  KIWI_SEAT_TOKEN (hold prints a new one): nothing else reads for it until bind
+  kiwi loop [--harness claude|codex|grok|mimo|kimi] [--model ID] [--effort LEVEL]   run in a tmux window from a seat's folder: a
+                                                 fresh session for each task, review round or message, ended when that work is done
   kiwi rex on|off|status                         the old name of kiwi terminal download|remove rex and status, for this release
   kiwi harnesses [--json]                        the harnesses on this computer, found on your login shell's PATH: each one's path
-                                                 and version, whether kiwi launch starts it, and whether Kiwi can wake it
-  kiwi folders [--room ROOM] [--json]            the folders this computer's seats work in, a channel's with --room, most
-                                                 recently seen first
+                                                 and version, whether kiwi launch starts it, with which options, and whether Kiwi can wake it
+  kiwi folders [--room ROOM] [--json]            the folders an agent can be started in on this computer: where its seats work
+                                                 (a channel's with --room, most recently seen first), the folders you added, and
+                                                 the git repos in your home folder, three levels down
+     folders add|remove DIR                      let agents be started in DIR and the folders inside it, from this
+                                                 computer or another of your devices; or stop that
   kiwi launch HARNESS --code CODE [--folder DIR] [--nick NAME] [--persona TOKEN]   start an agent in a terminal you
-                                                 can open (the one kiwi terminal prefer names, else Terminal, else tmux): it joins with a launch id the app knows
-  kiwi demo · doctor · hooks install|uninstall|status · mcp · channels · relay --help
+                                                 can open (the one kiwi terminal prefer names, else Terminal, else tmux): it joins with a launch id the app knows;
+                                                 --model ID, --effort LEVEL, --permission default|accept-edits|plan|bypass and --context 1m start it with those
+  kiwi doctor [--json]                           check this computer: the install, the relay, pairing and hooks, with a fix for each problem
+  kiwi demo · hooks install|uninstall|status · mcp · channels · relay --help
 
 Running a channel (create, approve, remove, personalities, hold, charter, close) is the owner's, in the Channels app.
 

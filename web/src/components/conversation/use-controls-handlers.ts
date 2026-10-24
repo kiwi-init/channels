@@ -1,6 +1,9 @@
 import { personaScopes } from "@kiwi/core/personality.ts"
+import { newRoomId } from "@kiwi/core/state.ts"
+import type { Room } from "@kiwi/core/state/types.ts"
 import { describeScopes, SCOPES, wireScopes } from "@kiwi/core/scopes.ts"
 import { forgetChannel, loadMember, renameChannel, type ChannelHandle, type StoredMember } from "@/lib/channel"
+import { cleanRoomName, roomProblem, roomsAfter } from "@/lib/rooms"
 import { secrets } from "@/lib/secrets"
 import type { ControlsProps } from "../controls"
 
@@ -11,6 +14,7 @@ type Handlers = Pick<
   | "onPersona"
   | "onPin"
   | "onNickname"
+  | "onColor"
   | "onPowers"
   | "onDeny"
   | "onCheck"
@@ -20,6 +24,8 @@ type Handlers = Pick<
   | "onRepos"
   | "onGithubWrite"
   | "onBranchPrefix"
+  | "onMakeRoom"
+  | "onRenameRoom"
   | "onRename"
   | "onIcon"
   | "onCloseChannel"
@@ -31,12 +37,14 @@ export function useControlsHandlers({
   live,
   member,
   onGone,
+  rooms,
 }: {
-  live: Pick<ChannelHandle, "ch" | "send" | "isOwner" | "refreshRequests" | "refreshRoster">
+  live: Pick<ChannelHandle, "ch" | "send" | "isOwner" | "refreshRequests" | "refreshRoster" | "foldFrom" | "state">
   member: StoredMember
   onGone: () => void
+  rooms: () => ReadonlyMap<string, Room>
 }): Handlers {
-  const { ch, send, isOwner, refreshRequests, refreshRoster } = live
+  const { ch, send, isOwner, refreshRequests, refreshRoster, foldFrom, state } = live
   const hold = isOwner
     ? async (on: boolean, note?: string) => {
         const ev = { op: "hold.set" as const, on, ...(note ? { note } : {}) }
@@ -44,6 +52,11 @@ export function useControlsHandlers({
         await ch.setHold({ on, ...(note ? { note } : {}), since })
       }
     : undefined
+
+  const folded = async (room: { id: string; name: string }): Promise<void> => {
+    for (const end = Date.now() + 10_000; Date.now() < end; await new Promise((r) => setTimeout(r, 50))) if (rooms().get(room.id)?.name === room.name) return
+    throw new Error(`#${room.name} was sent, but it hasn't come back from the relay yet, so the room list wasn't updated: reopen the channel and look again`)
+  }
 
   return {
     onApprove: async (r, scopes, persona, powers) => {
@@ -77,6 +90,9 @@ export function useControlsHandlers({
     onNickname: async (m, nickname) => {
       await ch.updateNickname(m, nickname)
       await refreshRoster()
+    },
+    onColor: async (m, color) => {
+      await send(color ? `${m.name}'s colour is ${color}` : `cleared ${m.name}'s colour`, { kind: "event", ev: { op: "color.set", member: m.name, color } })
     },
     onPowers: async (m, powers) => {
       await ch.updatePowers(m, powers)
@@ -118,6 +134,27 @@ export function useControlsHandlers({
           await send(prefix ? `branch prefix: ${prefix}` : "cleared the branch prefix", { kind: "event", ev: { op: "branch.prefix.set", prefix } })
         }
       : undefined,
+    onMakeRoom: isOwner
+      ? async (typed) => {
+          const problem = roomProblem(rooms().values(), typed)
+          if (problem) throw new Error(problem)
+          const room = { id: newRoomId(), name: cleanRoomName(typed) }
+          const since = await send(`made the room #${room.name}`, { kind: "event", ev: { op: "room.create", ...room } })
+          await folded(room)
+          await ch.setRooms({ list: roomsAfter(rooms().values(), room), since })
+          return room.id
+        }
+      : undefined,
+    onRenameRoom: isOwner
+      ? async (id, typed) => {
+          const problem = roomProblem(rooms().values(), typed, id)
+          if (problem) throw new Error(problem)
+          const room = { id, name: cleanRoomName(typed) }
+          const since = await send(`renamed a room to #${room.name}`, { kind: "event", ev: { op: "room.rename", ...room } })
+          await folded(room)
+          await ch.setRooms({ list: roomsAfter(rooms().values(), room), since })
+        }
+      : undefined,
     onRename: isOwner
       ? async (name) => {
           await ch.setTitle(name)
@@ -140,6 +177,9 @@ export function useControlsHandlers({
       forgetChannel(member.code)
       onGone()
     },
-    exportLog: async () => (await import("@/lib/log-export")).logExport(await ch.history(0)),
+    exportLog: async () => {
+      const [{ checkedState, logExport }, history] = await Promise.all([import("@/lib/log-export"), ch.history(0)])
+      return { log: logExport(history), state: await checkedState(history, foldFrom, () => ch.snapshot().catch(() => null), state) }
+    },
   }
 }

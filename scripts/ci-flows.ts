@@ -10,6 +10,7 @@ export const FLOWS: Record<string, string[]> = {
     "join-seats-hooks",
     "read-receipts",
     "daemon-pair",
+    "remote-launch-flow",
     "sh-escape",
     "reclaim",
     "wake-yourself",
@@ -23,5 +24,6 @@ export const FLOWS: Record<string, string[]> = {
     "hooks-persona",
     "mimo-wake-restart",
     "held-seat",
+    "loop-flows",
   ],
 };

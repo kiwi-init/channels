@@ -2,8 +2,9 @@ import { b64url, openFrom, sealTo } from "./crypto.ts";
 import { isKnownHarness, type KnownHarness } from "./harnesses.ts";
 import { sign, verify, type Identity } from "./identity.ts";
 import { joinLineRefusal } from "./join-line.ts";
+import { CHOICE_KEYS, readLaunchChoices, type LaunchChoices } from "./launch-options.ts";
 
-const MACHINE_VERBS = ["harnesses", "folders", "launch", "unpair"] as const;
+const MACHINE_VERBS = ["harnesses", "folders", "launch", "unpair", "settings"] as const;
 export type MachineVerb = (typeof MACHINE_VERBS)[number];
 
 export const ASK_MAX_BYTES = 4_096;
@@ -103,11 +104,12 @@ export async function readAnswer(x: unknown, expect: { machine: string; id: stri
 export type MachineArgs =
   | { verb: "harnesses" }
   | { verb: "unpair" }
+  | { verb: "settings" }
   | { verb: "folders"; room?: string }
-  | { verb: "launch"; launch: { harness: KnownHarness; folder: string; code: string; relay?: string; nick?: string; persona?: string } };
+  | { verb: "launch"; launch: { harness: KnownHarness; folder: string; code: string; relay?: string; nick?: string; persona?: string } & LaunchChoices };
 
 const ROOM_RE = /^[0-9a-f]{32}$/;
-const LAUNCH_KEYS = new Set(["harness", "folder", "code", "relay", "nick", "persona"]);
+const LAUNCH_KEYS = new Set<string>(["harness", "folder", "code", "relay", "nick", "persona", ...CHOICE_KEYS]);
 const FOLDER_RE = /^\/[^\u0000-\u001f\u007f]{0,1023}$/;
 
 const optionalText = (v: unknown): v is string | undefined => v === undefined || typeof v === "string";
@@ -115,7 +117,7 @@ const optionalText = (v: unknown): v is string | undefined => v === undefined ||
 export function readMachineArgs(ask: Pick<MachineAsk, "verb" | "args">): MachineArgs | null {
   const { verb, args } = ask;
   const keys = Object.keys(args);
-  if (verb === "harnesses" || verb === "unpair") return keys.length ? null : { verb };
+  if (verb === "harnesses" || verb === "unpair" || verb === "settings") return keys.length ? null : { verb };
   if (verb === "folders") {
     if (keys.some((k) => k !== "room")) return null;
     if (args.room === undefined) return { verb };
@@ -125,6 +127,7 @@ export function readMachineArgs(ask: Pick<MachineAsk, "verb" | "args">): Machine
   const { harness, folder, code, relay, nick, persona } = args;
   if (!isKnownHarness(harness) || typeof folder !== "string" || !FOLDER_RE.test(folder) || typeof code !== "string") return null;
   if (!optionalText(relay) || !optionalText(nick) || !optionalText(persona)) return null;
+  const choices = readLaunchChoices(args);
   const line = { code, ...(relay ? { relay } : {}), ...(nick ? { nick } : {}), ...(persona ? { persona } : {}) };
-  return joinLineRefusal(line) === null ? { verb, launch: { harness, folder, ...line } } : null;
+  return choices && joinLineRefusal(line) === null ? { verb, launch: { harness, folder, ...line, ...choices } } : null;
 }

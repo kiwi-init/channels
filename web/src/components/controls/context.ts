@@ -2,10 +2,10 @@ import { createContext, useContext } from "react"
 
 import type { JoinRequest, Member as RosterMember, PersonPowers } from "@kiwi/core/membership.ts"
 import type { Persona, Personality } from "@kiwi/core/personality.ts"
-import type { ChannelIcon } from "@kiwi/core/protocol.ts"
+import type { ChannelIcon, Color } from "@kiwi/core/protocol.ts"
 import type { Scope } from "@kiwi/core/scopes.ts"
 import type { ChannelState } from "@kiwi/core/state.ts"
-import type { LogExport } from "@/lib/log-export"
+import type { Exported } from "@/lib/log-export"
 
 export type Confirm =
   | { kind: "approve"; req: JoinRequest; powers?: PersonPowers }
@@ -13,6 +13,7 @@ export type Confirm =
   | { kind: "scopes"; member: RosterMember }
   | { kind: "persona"; member: RosterMember }
   | { kind: "nickname"; member: RosterMember }
+  | { kind: "color"; member: RosterMember }
   | { kind: "close" }
   | { kind: "leave" }
   | null
@@ -36,10 +37,11 @@ export interface ControlsProps {
   onPersona?: (m: RosterMember, persona: Persona | null) => Promise<void>
   onPin?: (p: Personality) => Promise<string>
   onNickname?: (m: RosterMember, nickname: string | null) => Promise<void>
+  onColor?: (m: RosterMember, color: Color | null) => Promise<void>
   onPowers?: (m: RosterMember, powers: PersonPowers) => Promise<void>
   onCloseChannel: () => Promise<void>
   onLeaveChannel: () => Promise<void>
-  exportLog: () => Promise<LogExport>
+  exportLog: () => Promise<Exported>
   onRename?: (name: string) => Promise<void>
   onIcon?: (icon: ChannelIcon | null) => Promise<void>
   onHold?: (on: boolean, note?: string) => Promise<void>
@@ -47,6 +49,8 @@ export interface ControlsProps {
   onRepos?: (repos: string[]) => Promise<void>
   onGithubWrite?: (on: boolean) => Promise<void>
   onBranchPrefix?: (prefix: string | null) => Promise<void>
+  onMakeRoom?: (name: string) => Promise<string>
+  onRenameRoom?: (id: string, name: string) => Promise<void>
   title?: string
   roomId?: string
 }
@@ -59,6 +63,7 @@ export interface Api {
   editScopes: (m: RosterMember) => void
   editPersona: (m: RosterMember) => void
   editNickname: (m: RosterMember) => void
+  editColor: (m: RosterMember) => void
   lastSeenOf: (name: string) => number | null
   onlineNow: (name: string) => boolean
   openDialog: (d: "rename" | "charter" | "branch") => void

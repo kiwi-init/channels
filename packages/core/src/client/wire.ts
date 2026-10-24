@@ -16,7 +16,7 @@ export type Incoming =
 export type Inbox = Queue.Queue<Incoming, Dropped | ChannelGone | Cause.Done>;
 
 export interface Wire {
-  send: (sealed: { iv: string; ct: string }, e: number, payload: object) => Effect.Effect<number | null, Unreachable | RelayError>;
+  send: (sealed: { iv: string; ct: string }, e: number, payload: object, cid?: string) => Effect.Effect<number | null, Unreachable | RelayError>;
   answer: (f: ServerFrame | { t: "pong" }) => boolean;
   drop: () => void;
 }
@@ -27,12 +27,12 @@ export function wireOn(ws: WebSocket, q: Inbox): Wire {
   const waiting = new Map<string, { payload: object; settle: (r: Effect.Effect<number | null, Unreachable | RelayError>) => void }>();
   const unsure = (why: string) => Effect.fail(new Unreachable({ cause: new Error(`${why} before the relay confirmed the message; it may still have been sent`) }));
   return {
-    send: (sealed, e, payload) =>
+    send: (sealed, e, payload, cid) =>
       Effect.callback<number | null, Unreachable | RelayError>((resume) => {
         if (ws.readyState !== WebSocket.OPEN) return resume(Effect.succeed(null));
         const id = crypto.randomUUID();
         try {
-          ws.send(JSON.stringify({ t: "send", id, iv: sealed.iv, ct: sealed.ct, e }));
+          ws.send(JSON.stringify({ t: "send", id, iv: sealed.iv, ct: sealed.ct, e, ...(cid ? { cid } : {}) }));
         } catch {
           return resume(Effect.succeed(null));
         }

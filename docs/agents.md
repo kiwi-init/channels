@@ -34,6 +34,7 @@ kiwi pair kp1-…                     # pair this computer with your app (approv
 kiwi unpair                         # stop being paired: the relay forgets this computer, and it takes no more asks
 kiwi harnesses                      # the harnesses here (from your login shell's PATH), their versions, which kiwi launch starts
 kiwi launch claude --code mc2-… --folder ~/src/app --nick Ada   # start an agent in a terminal you can open; it joins by itself
+kiwi loop --harness codex           # in a tmux window in the seat's folder: a fresh session per task (see below)
 kiwi daemon                         # one long-running process per computer, for every local agent
 kiwi setup                          # this computer once: hooks, PATH, and how to pair it
 kiwi card --model …                 # add to the card (does not change the owner-signed seat)
@@ -71,7 +72,26 @@ On **Start**, that computer's daemon does what `kiwi launch` does:
 3. It opens a terminal you can see, where Settings → New agents → **Prefer** says (`kiwi terminal prefer`): Terminal by default, or Rex or tmux once their helpers are downloaded. If that terminal can't open now, it opens in Terminal and says why; on a computer with no terminal app, like a Linux server, it opens a window in tmux's detached `kiwi` session.
 4. It starts the harness there, through your login shell, with one first prompt: a `kiwi join` line built only from the join code, the relay, the nickname and the personality's token.
 
-The new session's `kiwi join` carries the launch's id in its sealed join claims. The app recognises it and lets the agent in with the personality it pinned. Claude Code and Codex can be started so far.
+The new session's `kiwi join` carries the launch's id in its sealed join claims. The app recognises it and lets the agent in with the personality it pinned. Claude Code, Codex, Gemini CLI, Grok, MiMoCode, Kimi Code, Pi and OpenCode can be started so far.
+
+Kimi Code takes no prompt on its command line, so it starts only where Kiwi can type into its window: Rex or tmux (a launch where only Terminal would open is refused, and says to pick Rex or tmux in Settings → New agents). The daemon waits for Kimi's ready screen, types the `kiwi join` line and presses Enter. While Kimi asks "Trust this folder?", it waits for you to answer, for up to 30 minutes; it never answers dialogs. Each outcome is a line in `~/.kiwi/launch.log`.
+
+A launch can also pick the model, effort, permissions and context, where that harness takes them (`kiwi harnesses --json` lists them per harness):
+
+| Harness | Model | Effort | Accept edits / Plan / Bypass | Context |
+| --- | --- | --- | --- | --- |
+| Claude Code | `--model` | `--effort` low … max | `--permission-mode acceptEdits` / `plan` / `bypassPermissions` | 1M, as the model's `[1m]` |
+| Codex | `-m` | `model_reasoning_effort` minimal … xhigh | `--sandbox workspace-write` / `--sandbox read-only`, both `--ask-for-approval on-request` / `--dangerously-bypass-approvals-and-sandbox` | `model_context_window` 128k, 272k, 400k, 1m |
+| Gemini CLI | `-m` | none | `--approval-mode auto_edit` / `plan` / `yolo` | none |
+| Pi | `--model` | `--thinking` off … xhigh | none: Pi never asks before it uses its tools | none |
+| Grok | `-m` | `--reasoning-effort` none … max | `--permission-mode acceptEdits` / `plan` / `bypassPermissions` | none |
+| MiMoCode | `-m provider/model` | none | none / `--agent plan` / `--dangerously-skip-permissions` | none |
+| Kimi Code | `-m` | none | `--yolo` (Ask When Needed: routine edits and commands run by themselves) / `--plan` / `--auto` (Never Ask) | none |
+| OpenCode | `opencode mini --model provider/model` | none | none / `opencode mini --agent plan` / `--auto` | none |
+
+Default permissions send no flag, so the harness's own settings apply. Bypass asked from another device is refused unless that computer allows it (Settings → New agents, or `kiwi launches bypass on`).
+
+OpenCode's full interface takes only `--prompt` and `--auto`; its model and agent flags are on `opencode mini`. So a launch that picks a model or Plan opens OpenCode's mini interface, one with neither opens the full one, and a model with Bypass is refused with that reason. Checked against OpenCode 2.1.2.
 
 **On a paired computer**, the app reaches that computer's daemon through the relay, and the relay can't read, forge or replay what it carries:
 
@@ -86,6 +106,46 @@ The new session's `kiwi join` carries the launch's id in its sealed join claims.
 
 **Terminals.** Terminal, Rex and tmux are terminal plugins (`src/terminals/`, [plans/terminal-plugins.md](plans/terminal-plugins.md)). Settings → New agents downloads or removes a terminal's helpers on this computer (`kiwi terminal download|remove rex|tmux`): they mark a seat that needs you in that terminal (in tmux, its window in the window list, and `prefix K` jumps to it), let Needs you open it (Show in Rex or Show in tmux), and let new agents open there. `kiwi terminal status` says what's found, what's on and what's preferred; `kiwi rex on|off|status` still works this release.
 
+## One session per task: `kiwi loop`
+
+A seat doesn't have to live in one long harness session. `kiwi loop` runs in a tmux window you open in the seat's folder, and starts a fresh session for each piece of work. Each session ends when its work is done, so every task starts with a small context instead of everything the seat has done before. The plan is [plans/per-task-sessions.md](plans/per-task-sessions.md).
+
+```bash
+kiwi loop                                   # Claude Code, with its default model
+kiwi loop --harness codex --model gpt-6-astra --effort high
+kiwi loop --harness kimi                    # inside tmux only: Kimi's first prompt is typed in
+```
+
+What the loop does:
+
+1. **It holds the seat** (`kiwi seat hold`) with a token only the loop has. While the seat is held, nothing else reads its messages or moves its cursor, so what arrives waits for the next session.
+2. **It picks the work.** First a task the seat is doing, then a review round it owes, then its other open tasks, then its own task waiting on a verdict, then messages for it. It watches the channel without marking anything read.
+3. **It starts the harness** with the window's model and effort, in a clean environment: no markers from an outer session and no seat token, with `KIWI_CHANNEL` and `KIWI_AS` set. The first prompt names the work, says how it ends (`kiwi task review T7 --at SHA`, `kiwi task done T7`, or the verdict for round N), carries the re-entry text, and ends with a one-time launch nonce. The harness's Kiwi hooks are installed first if they're missing.
+4. **It binds the seat to that session** (`kiwi seat bind`), found by the nonce or the process, so the session's own hooks and commands act as the seat.
+5. **It ends the session when its work is over.**
+   - A coding session lasts until the task is done, archived or given to someone else. If the task has a reviewer, the same session waits for the verdict and fixes after a rejection. If a review the seat owes comes up while it waits, the session ends so the review gets its own, and a rejection later gets a fresh coding session from the task's checkpoint.
+   - A review session ends when its round closes.
+   - A session for messages ends once it's idle with nothing unread, unless it took on a task.
+   - In every case the loop holds the seat first, waits for the session to go idle (at most 15 minutes), then stops it, and stops any `kiwi listen` the session left running.
+
+| Harness | Started as | Seat bound to | Idle when | Stopped with |
+| --- | --- | --- | --- | --- |
+| Claude Code | `claude [--model] [--effort] -- PROMPT` | the session in `~/.claude/sessions/<pid>.json` | that file says `idle` | SIGTERM |
+| Codex | `codex [-m] [-c model_reasoning_effort=…] -- PROMPT` | the thread whose rollout holds the nonce | the rollout's last turn completed | SIGTERM |
+| Grok | `grok [-m] [--reasoning-effort] -- PROMPT` | the session in the folder whose history holds the nonce | `turn_completed` or the Stop hook ran | SIGTERM |
+| MiMoCode | `mimo [-m] --prompt PROMPT` | the top-level session in the folder holding the nonce | its last answer is finished | SIGINT (it ignores SIGTERM for about 19 s) |
+| Kimi Code | `kimi [-m]`, then the prompt pasted in once its screen is ready | Kimi's process | its wire log says the turn ended | SIGTERM |
+
+Some details per harness:
+
+- **Grok and Kimi Code** are also told in the first prompt to start their `kiwi listen` listener, since nothing else wakes them.
+- **MiMoCode** gets the model chosen in MiMoCode when `--model` isn't given (its own default is a free tier that has ended). MiMoCode and Kimi take no `--effort`.
+- **Kimi Code** must run inside tmux, in the loop's own pane. The loop clears the pane, waits for Kimi's ready screen with bracketed paste on, and pastes the prompt. While Kimi asks "Trust this folder?", the loop waits for you to answer; it never answers dialogs. The same goes for Codex's "Hooks need review" and every harness's permission prompts.
+
+Stopping the loop: Ctrl-C while no session runs, or SIGTERM or SIGHUP at any time. The loop then releases the seat. While a session runs, Ctrl-C goes to the harness. A session that ends by itself is followed by a short pause before the next one starts.
+
+The lead stays one long-running session. Its context is held by the harness's auto-compaction.
+
 ## How agents get woken up
 
 An agent only acts during its turn, so something has to start a turn when a message for it arrives. The daemon does it inside the session the agent is already running, through the harness's own channel, and never starts a new process to wake it (only a person's **New agent** starts one: see below):
@@ -98,7 +158,7 @@ An agent only acts during its turn, so something has to start a turn when a mess
 | Pi | Joining from Pi (or `kiwi hooks install pi`) writes Kiwi's extension to `~/.pi/agent/extensions/kiwi.ts`; Pi loads it at start, or on `/reload` in a session already running. The extension runs `kiwi hook listen` inside Pi and starts a turn when a message arrives, idle or not (after the current one). It also hands the brief to a new session, new messages to each prompt, and unread ones to a turn that would end, and it gives Kiwi Pi's session id and process, so a restart takes its seat back. Until the extension is loaded, the agent runs `kiwi listen --now` at the start of every turn and before ending one. |
 | Kimi Code in `kimi web`, `/web` or `kimi rc` | The daemon posts the prompt to the session through Kimi's server (`POST /api/v1/sessions/<id>/prompts`, with the token in `~/.kimi-code/server.token`); a busy session runs it after its current turn. It does this only when the agent's own Kimi process is a live server in `~/.kimi-code/server/instances`, so it never resumes a session a terminal UI owns. `kiwi join` records the session that is busy in that folder, and Kiwi's Stop hook replaces it with the one Kimi names. |
 | Kimi Code in its terminal | Not woken by the daemon: the terminal UI runs its session in its own process and takes no prompts from outside. The agent is told to keep `kiwi listen --once` running as a background `Bash` task (`run_in_background`, `disable_timeout`); Kimi starts a turn when it ends, and the agent starts it again. Kiwi adds a `Stop` entry to `[[hooks]]` in `~/.kimi-code/config.toml`: a turn that would end with unread messages, or with no Kiwi listener for the agent from that Kimi session, gets one more round that says so, after a restart too. While that listener runs, `kiwi status` shows the seat as `wakes via its background listener`, not `can't be woken`. Kimi doesn't tell the hook which tasks run, so it checks Kiwi's own listeners; a streaming `kiwi listen` the agent started instead of `--once` would count, though it never ends and so never wakes Kimi. Kimi's `SessionStart` output never reaches the agent, so nothing is installed there. |
-| Grok | Not woken by the daemon. The agent is told to start a persistent `monitor` running `kiwi listen`; each message it prints starts a turn. Kiwi installs only a Stop hook for Grok: it hands over new messages when a turn ends, and keeps a turn going, once, while no monitor runs the agent's listener, after a restart too. Grok drops what `SessionStart` and `UserPromptSubmit` hooks print, so Kiwi's own hooks leave messages unread there. |
+| Grok | Not woken by the daemon. The agent is told to start a persistent `monitor` running `kiwi listen`; each message it prints starts a turn. Kiwi installs only a Stop hook for Grok: it hands over new messages when a turn ends, and keeps a turn going, once, while no monitor runs the agent's listener, after a restart too. A monitor counts when its command, description or display line (with Grok's `[monitor] ` tag taken off) is exactly the agent's `kiwi listen`; when none does, the hook writes the monitors it saw to `~/.kiwi/stop.log`. Grok drops what `SessionStart` and `UserPromptSubmit` hooks print, so Kiwi's own hooks leave messages unread there. |
 | Grok Bot | xAI's always-on agent on its own cloud VM, recognised by the VM's hostname (`grok-bot-vm-…`) or `--harness grok-bot`, even though its shell has Cursor's `CURSOR_AGENT` (and Cursor's hooks then act for the Grok Bot). It has no session to reach, but a Grok Bot routine can start a turn from an incoming webhook: once the agent runs `printf %s "$AUTHORIZATION" \| kiwi wake webhook <the routine's URL>` with the routine's Authorization header, the daemon on its VM POSTs `{channel, agent, unread, prompt}` to that URL with that header. The header is read from stdin and kept in `~/.kiwi/config.json`, so it never lands in shell history or the channel; `kiwi wake webhook off` removes it. Until then it runs `kiwi listen --now` at the start and end of each turn. |
 | Cursor | Not woken by the daemon: nothing outside a running Cursor session can start a turn in it. The agent is told to keep `kiwi listen --once` running as a background Shell command (`is_background`); Cursor starts a turn when a background command ends, idle or not, and the agent starts it again. The seat records Cursor's chat (`CURSOR_CONVERSATION_ID`), and Cursor's `stop` hook (the `conversation_id` in its input) hands over unread messages and, while no Kiwi listener of that chat runs, asks the agent to start one, up to its `loop_limit`. While it runs, `kiwi status` shows the seat as `wakes via its background listener`. |
 | MiMoCode | Joining from MiMoCode (or `kiwi hooks install mimo`) writes Kiwi's plugin to `~/.config/mimocode/plugin/kiwi.ts` (`$MIMOCODE_HOME/config/plugin/` when that is set); MiMoCode loads it when it starts, so a session already running is woken from its next start (Kiwi never signals MiMoCode: `SIGUSR2` stops `mimo serve`). The plugin sets `MIMOCODE_SESSION_ID` on the agent's shell commands, the root session for a subagent's, so the seat holds that session. For each session it keeps `kiwi hook listen` running and, when a message arrives, starts a turn with it through MiMoCode's own client (`session.promptAsync`, in-process, no server password); a busy session runs it after its current turn. |

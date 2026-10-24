@@ -1,20 +1,16 @@
-import * as Effect from "effect/Effect"
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react"
 
 import type { CachedRow } from "@kiwi/core/cache-row.ts"
-import { ChannelGone } from "@kiwi/core/client/errors.ts"
+import { ChannelGone } from "@kiwi/core/client/relay-errors.ts"
 import type { HumanSession, RoomsSetting, SendOptions } from "@kiwi/core/client.ts"
 import type { JoinRequest, Member } from "@kiwi/core/membership.ts"
 import { SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts"
 import { fold, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts"
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "../channel-ops"
 import { openCached, planCached, readKept, rememberKept, rememberRow, rememberRows } from "../history"
-import { checksToPost, issuesToPost, linksToPost, setCheckedUpTo, tasksToClose } from "../review-checks"
-import { drain } from "../github-queue"
-import { closeFromGithub } from "../task-actions"
+import { markOnce } from "../marks"
 import { ICON_LIVE } from "../icon-event"
 import { addMarks, type Marks } from "../receipts"
-import { fork } from "../runtime"
 import { noteSignInGone } from "../session"
 import { nextSnapshotTry } from "../snapshot-plan"
 import { untilOpen } from "../until-open"
@@ -24,7 +20,7 @@ import { forgetChannel, loadMember, renameChannel, type StoredMember } from "./s
 import { hear, onlineByName, type Online } from "./online"
 import { trimmed } from "./trim"
 import { foldRoster } from "./fold-roster"
-import { asKept } from "./kept"
+import { asKept, toKept } from "./kept"
 import { handOver, onceEach, openChannel, warmUp } from "./open"
 import { dropWarm, keepWarm, warmOf } from "./warm"
 
@@ -49,6 +45,7 @@ export interface ChannelHandle {
   head: number
   marks: Marks
   pkOf: (name: string) => string | undefined
+  foldFrom: (messages: Message[], base: FoldBase | null) => ChannelState
   snapshotTooBig: boolean
   ready: boolean
 }
@@ -86,7 +83,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
     if (!start || gone) return
     const t = setTimeout(() => {
       void ch
-        .keep({ roster, base, guardFloor, roomsFloor })
+        .keep(toKept({ roster, base, guardFloor, roomsFloor }))
         .then((sealed) => (sealed ? rememberKept(ch.roomId, ch.pk, sealed) : undefined))
         .catch(() => {})
     }, KEEP_DELAY_MS)
@@ -190,6 +187,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
     const onEvent = (ev: FollowEvent) => {
       switch (ev._tag) {
         case "Open":
+          markOnce("kiwi:live")
           setConnection("live")
           lent.emit({ _tag: "Open" })
           if (ev.kind !== "page") {
@@ -239,12 +237,18 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
       roster: loadRoster,
       requests: refreshRequests,
       rotate: () => (ch.isOwner ? ch.rotateIfDue().catch((err: unknown) => (onGone(err), false)) : Promise.resolve(false)),
-      cache: () => openCached(ch.roomId, ch.pk, ch.openRows).catch(() => null),
+      cache: () =>
+        openCached(ch.roomId, ch.pk, ch.openRows)
+          .then((opened) => (markOnce("kiwi:cache-open"), opened))
+          .catch(() => null),
       plan: (opened, head) => planCached(ch.roomId, ch.pk, opened, head, HISTORY).catch(() => null),
       snapshot: () => ch.snapshot().catch(() => null),
       kept: async () => {
         const sealed = await readKept(ch.roomId, ch.pk).catch(() => null)
-        return sealed ? asKept(await ch.openKept(sealed).catch(() => null)) : null
+        markOnce("kiwi:kept-read")
+        const kept = sealed ? asKept(await ch.openKept(sealed).catch(() => null)) : null
+        markOnce("kiwi:kept-open")
+        return kept
       },
       early: (cached, kept) => {
         if (closed || painted) return
@@ -292,28 +296,21 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
       },
     })
     warmUp(steps, was, HISTORY)
-    const opening = untilOpen(
-      Effect.tryPromise({
-        try: () => openChannel(steps, was, HISTORY),
-        catch: (err) => err,
-      }),
-      () => Effect.sync(() => setConnection("reconnecting"))
+    void untilOpen(
+      () => openChannel(steps, was, HISTORY),
+      () => setConnection("reconnecting"),
+      () => closed
     )
-    const stop = fork(
-      opening.pipe(
-        Effect.flatMap((opened) =>
-          Effect.sync(() => {
-            if (closed) return
-            setStart({ head: opened.head, whole: opened.whole })
-            stopLive = ch.follow(opened.since, onEvent)
-          })
-        ),
-        Effect.catch((err) => Effect.sync(() => void onGone(err)))
-      )
-    )
+      .then((opened) => {
+        if (closed) return
+        setStart({ head: opened.head, whole: opened.whole })
+        stopLive = ch.follow(opened.since, onEvent)
+      })
+      .catch((err: unknown) => {
+        if (!closed) onGone(err)
+      })
     return () => {
       closed = true
-      stop()
       stopLive?.()
       clearTimeout(flush)
       lent.release()
@@ -324,6 +321,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
   const keyOf = useMemo(() => new Map(admitted.filter((r) => r.active).map((r) => [r.name, r.pk])), [admitted])
   const rosterForFold: Roster = useMemo(() => foldRoster(admitted), [admitted])
   const state = useMemo(() => fold(messages, rosterForFold, now, roomsFloor, guardFloor, base), [messages, rosterForFold, now, roomsFloor, guardFloor, base])
+  const foldFrom = useCallback((all: Message[], from: FoldBase | null) => fold(all, rosterForFold, Date.now(), roomsFloor, guardFloor, from), [rosterForFold, roomsFloor, guardFloor])
   const trim = useEffectEvent(() => {
     const next = trimmed(messages, rosterForFold, now, roomsFloor, guardFloor, base, HISTORY)
     if (!next) return
@@ -373,50 +371,13 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
   const checksBusy = useRef(false)
   const postReviewChecks = useEffectEvent(() => {
     if (!ch.isOwner || !caughtUp || !state.repos.length || checksBusy.current) return
-    const due = checksToPost(ch.roomId, state, messages)
-    const links = linksToPost(ch.roomId, state)
-    const issues = issuesToPost(ch.roomId, state)
-    const closes = tasksToClose(ch.roomId, state)
-    if (!due.length && !links.length && !issues.length && !closes.length) return
     checksBusy.current = true
-    void (async () => {
-      if (
-        !(await drain(
-          due,
-          (c) => ch.postReviewCheck(c),
-          (seq) => setCheckedUpTo(ch.roomId, seq)
-        ))
-      )
-        return
-      if (
-        !(await drain(
-          links,
-          (l) => ch.commentOnPr(l.repo, l.number, l.body),
-          (seq) => setCheckedUpTo(ch.roomId, seq, "prLinks")
-        ))
-      )
-        return
-      if (
-        !(await drain(
-          issues,
-          (i) => ch.closeIssue(i),
-          (seq) => setCheckedUpTo(ch.roomId, seq, "issueCloses")
-        ))
-      )
-        return
-      await drain(
-        closes,
-        async (c) => {
-          const t = state.tasks.get(c.task)
-          if (!t) return
-          const { body, opts } = closeFromGithub(t, c)
-          await ch.send(body, opts)
-        },
-        (seq) => setCheckedUpTo(ch.roomId, seq, "issueTasks")
-      )
-    })().finally(() => {
-      checksBusy.current = false
-    })
+    void import("./review-chores")
+      .then((m) => m.postReviewChores(ch, state, messages))
+      .catch(() => {})
+      .finally(() => {
+        checksBusy.current = false
+      })
   })
   useEffect(() => postReviewChecks(), [state.head, caughtUp])
   const drainGithub = useEffectEvent(() => {
@@ -444,5 +405,5 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
 
   const pkOf = useCallback((name: string) => keyOf.get(name), [keyOf])
 
-  return { ch, connection, gone, messages, roster, state, online: live, isOwner, requests, send, refreshRequests, refreshRoster, head: start?.head ?? 0, marks, pkOf, snapshotTooBig, ready }
+  return { ch, connection, gone, messages, roster, state, online: live, isOwner, requests, send, refreshRequests, refreshRoster, head: start?.head ?? 0, marks, pkOf, foldFrom, snapshotTooBig, ready }
 }

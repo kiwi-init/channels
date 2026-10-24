@@ -3,13 +3,16 @@ import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 
 mock.module("@/lib/avatars", () => ({ avatarUrl: () => "", robotUrl: () => "", robotFor: () => "blue", harnessUrl: () => "" }))
-const { ChannelSidebar, hiddenConversations } = await import("./channel-sidebar")
+const { ChannelSidebar, afterRooms, hiddenConversations, leftConversations } = await import("./channel-sidebar")
 
-const general = { key: "main", label: "# general", unread: 0, forMe: false, withMe: true }
-const mine = { key: "dm:me:win", label: "win", unread: 1, forMe: false, withMe: true }
-const between = { key: "dm:atlas:win", label: "atlas & win", unread: 2, forMe: false, withMe: false }
-const asking = { key: "dm:atlas:bolt", label: "atlas & bolt", unread: 1, forMe: true, withMe: false }
-const quiet = { key: "dm:bolt:win", label: "bolt & win", unread: 3, forMe: false, withMe: false }
+const general = { key: "main", label: "# general", unread: 0, forMe: false, withMe: true, left: false }
+const mine = { key: "dm:me:win", label: "win", unread: 1, forMe: false, withMe: true, left: false }
+const between = { key: "dm:atlas:win", label: "atlas & win", unread: 2, forMe: false, withMe: false, left: false }
+const asking = { key: "dm:atlas:bolt", label: "atlas & bolt", unread: 1, forMe: true, withMe: false, left: false }
+const quiet = { key: "dm:bolt:win", label: "bolt & win", unread: 3, forMe: false, withMe: false, left: false }
+const gone = { key: "dm:me:oak", label: "oak", unread: 0, forMe: false, withMe: true, left: true }
+const goneAsking = { key: "dm:me:elm", label: "elm", unread: 2, forMe: true, withMe: true, left: true }
+const goneBetween = { key: "dm:atlas:oak", label: "atlas & oak", unread: 4, forMe: false, withMe: false, left: true }
 
 const props = (search: string | null) => ({
   title: "kiwi",
@@ -28,6 +31,7 @@ const props = (search: string | null) => ({
   conversations: [general],
   current: null,
   onConversation: () => {},
+  rooms: [],
 })
 
 const html = (over: Partial<ReturnType<typeof props>> = {}) => renderToStaticMarkup(createElement(ChannelSidebar, { ...props(null), ...over }))
@@ -107,5 +111,38 @@ describe("Conversations keep #general and your own threads; threads between agen
     const list = conversations(html({ conversations: [general, between, quiet], current: between.key }))
     expect(list).toMatch(/aria-current="page"[^>]*><span class="min-w-0 flex-1 truncate">atlas &amp; win<\/span>/)
     expect(list).toContain('aria-label="1 more conversation, 3 unread"')
+  })
+})
+
+describe("conversations with members who left the channel fold under Left the channel", () => {
+  test("a thread whose other side left hides, with you or between others, unless it's open or unread for you", () => {
+    const all = [general, mine, gone, goneAsking, goneBetween, quiet]
+    expect(leftConversations(all, null)).toEqual([gone, goneBetween])
+    expect(leftConversations(all, gone.key)).toEqual([goneBetween])
+    expect(hiddenConversations(all, null)).toEqual([quiet])
+  })
+  test("the fold is one closed row with how many it holds; the left threads aren't listed and don't count in N more", () => {
+    const list = conversations(html({ conversations: [general, mine, gone, goneAsking, goneBetween, quiet] }))
+    const labels = [...list.matchAll(/<span class="min-w-0 flex-1 truncate">([^<]+)<\/span>/g)].map(([, l]) => l)
+    expect(labels).toEqual(["# general", "win", "elm", "1 more", "Left the channel"])
+    expect(list).toContain('aria-label="1 more conversation, 3 unread"')
+    expect(list).toMatch(/aria-expanded="false" aria-label="Left the channel, 2 conversations"/)
+    expect(list).toMatch(/Left the channel<\/span><span class="[^"]*">2<\/span>/)
+  })
+  test("no one left, no fold", () => {
+    expect(conversations(html({ conversations: [general, mine, quiet] }))).not.toContain("Left the channel")
+  })
+})
+
+describe("the owner makes a room from the sidebar", () => {
+  test("a + on the Conversations heading, for the owner only", () => {
+    expect(conversations(html())).not.toContain('aria-label="New room"')
+    expect(html({ onNewRoom: async () => {} })).toMatch(/<section aria-label="Conversations"[^>]*><h2[^>]*>Conversations<button type="button" aria-label="New room" title="New room"/)
+  })
+  test("its field opens right under the rooms, before the direct conversations", () => {
+    const room = (id: string) => ({ key: `room:${id}`, label: `# ${id}`, unread: 0, forMe: false, withMe: true, left: false })
+    expect(afterRooms([general, mine, between])).toBe(1)
+    expect(afterRooms([room("general"), room("mobile"), mine])).toBe(2)
+    expect(afterRooms([mine])).toBe(0)
   })
 })

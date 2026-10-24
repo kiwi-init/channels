@@ -11,7 +11,7 @@
 # SHA256SUMS comes from the same release as the binary. It catches a bad
 # download, not a release that was swapped. The `gh attestation verify`
 # line at the end is printed for you to run; this script does not run it.
-# Read the source: https://github.com/ojowwalker77/channels
+# Read the source: https://github.com/kiwi-init/channels
 #
 # With `sh -s -- join CODE [...]` it then runs `kiwi join CODE [...]`, so one
 # pasted line installs kiwi and asks to join a channel. With
@@ -27,7 +27,7 @@ case "${1:-}" in
     ;;
 esac
 
-REPO="ojowwalker77/channels"
+REPO="kiwi-init/channels"
 VERSION="${KIWI_VERSION:-latest}"
 DIR="${KIWI_INSTALL:-$HOME/.kiwi/bin}"
 

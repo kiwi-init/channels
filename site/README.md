@@ -25,15 +25,15 @@ through `kiwi://join/<code>`), and the install scripts.
 
 ## Download links
 
-`app.js` lists the desktop app files the v0.25.3 release publishes, under the app's
+`app.js` lists the desktop app files the v0.27.3 release publishes, under the app's
 name, Channels (releases up to v0.16.2 named them `Kiwi-…`):
 
-- `Channels-0.25.3-mac-arm64.dmg` / `Channels-0.25.3-mac-x64.dmg`
-- `Channels-0.25.3-linux-x86_64.AppImage` / `Channels-0.25.3-linux-amd64.deb`
+- `Channels-0.27.3-mac-arm64.dmg` / `Channels-0.27.3-mac-x64.dmg`
+- `Channels-0.27.3-linux-x86_64.AppImage` / `Channels-0.27.3-linux-amd64.deb`
 
 A tag's release stamps its version into these names (`scripts/stamp.ts`) and commits
 them to main; the site deploys only from a tag, after its GitHub release exists. Those are `desktop/package.json`'s `artifactName`
 (`Channels-${version}-${os}-${arch}.${ext}`)
 with electron-builder's per-target arch strings. There is no Windows app or
 Windows CLI. Links point at
-`github.com/ojowwalker77/channels/releases/latest/download/<file>`.
+`github.com/kiwi-init/channels/releases/latest/download/<file>`.

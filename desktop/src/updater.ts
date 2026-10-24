@@ -9,15 +9,15 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { app } from "electron";
-
 import { compareVersions } from "@kiwi/core/versions.ts";
+import { childEnv } from "./child-env.ts";
+import { host } from "./host.ts";
 import { moveOver } from "./move.ts";
 import { logMainError } from "./main-log.ts";
 import { signedLikeThisApp } from "./signer.ts";
-import { cantSwap, swapAsset, swapScript } from "./update-asset.ts";
+import { cantSwap, debAsset, githubHop, ownAppImage, releaseFile, releasePage, swapAsset, swapScript } from "./update-asset.ts";
 
-const REPO = "ojowwalker77/channels";
+const REPO = "kiwi-init/channels";
 const EVERY_MS = 6 * 3_600_000;
 const RETRY_MS = 30 * 60_000;
 const ASK_WAIT_MS = 30_000;
@@ -31,6 +31,7 @@ export interface UpdateState {
   state: "downloading" | "ready" | "available";
   url: string;
   blocked?: true;
+  deb?: string;
 }
 
 export type UpdateCheck = UpdateState | { state: "current"; version: string } | { state: "failed" };
@@ -41,7 +42,7 @@ let fetching: Promise<void> | null = null;
 
 function retrySoon(why: string): void {
   logMainError(new Error(why));
-  if (retry || !app.isPackaged) return;
+  if (retry || !host().app.packaged()) return;
   retry = setTimeout(() => {
     retry = null;
     void checkForUpdate();
@@ -52,9 +53,35 @@ let notify: (s: UpdateState) => void = () => {};
 let running: Promise<UpdateCheck> | null = null;
 
 /** The Channels.app this runs from (…/Channels.app/Contents/MacOS/Channels). */
-const macBundle = () => path.resolve(app.getPath("exe"), "..", "..", "..");
+const macBundle = () => path.resolve(host().app.path("exe"), "..", "..", "..");
 
-const failedMarker = () => path.join(app.getPath("userData"), "update-failed");
+const realOr = (p: string): string => {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    // A path that can't be resolved is compared as given.
+    return p;
+  }
+};
+
+const runningAppImage = (): string | undefined => {
+  const dir = process.env["APPDIR"];
+  return ownAppImage(process.env["APPIMAGE"], dir ? realOr(dir) : undefined, realOr(host().app.path("exe")));
+};
+
+async function githubFetch(url: string, signal: AbortSignal): Promise<Response> {
+  let at = url;
+  for (let hop = 0; hop <= 5; hop++) {
+    if (!githubHop(at)) throw new Error(`${at} isn't GitHub's`);
+    const res = await fetch(at, { signal, redirect: "manual" });
+    const to = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+    if (!to) return res;
+    at = new URL(to, at).href;
+  }
+  throw new Error(`${url} redirects more than 5 times`);
+}
+
+const failedMarker = () => path.join(host().app.path("data"), "update-failed");
 
 const writableDir = (dir: string): boolean => {
   try {
@@ -85,22 +112,29 @@ async function check(): Promise<UpdateCheck> {
     return { state: "failed" };
   }
   const rel = (await res.json()) as { tag_name?: string; html_url?: string; prerelease?: boolean; draft?: boolean; assets?: { name: string; browser_download_url: string }[] };
-  const version = rel.tag_name?.replace(/^v/, "");
-  if (!version) return { state: "failed" };
-  if (rel.prerelease || rel.draft || compareVersions(version, app.getVersion()) <= 0) return { state: "current", version: app.getVersion() };
-  const url = rel.html_url ?? `https://github.com/${REPO}/releases/latest`;
+  const tag = rel.tag_name;
+  if (!tag || !/^v\d{1,6}\.\d{1,6}\.\d{1,6}$/.test(tag)) return { state: "failed" };
+  const version = tag.slice(1);
+  if (rel.prerelease || rel.draft || compareVersions(version, host().app.version()) <= 0) return { state: "current", version: host().app.version() };
+  const url = releasePage(REPO, rel.html_url);
   if (staged && compareVersions(version, staged.version) <= 0) return current ?? set({ version: staged.version, state: "ready", url: staged.url });
   if (staged) {
     fs.rmSync(path.dirname(staged.path), { recursive: true, force: true });
     staged = null;
   }
-  const name = app.isPackaged ? swapAsset(version, process.platform, process.arch) : null;
-  const asset = name ? rel.assets?.find((a) => a.name === name) : undefined;
-  const sums = rel.assets?.find((a) => a.name === "SHA256SUMS");
-  if (name && process.platform === "darwin" && cantSwap(macBundle(), writableDir, failedBefore(version))) return set({ version, state: "available", url, blocked: true });
-  if (!asset || !sums) return set({ version, state: "available", url });
+  const appImage = runningAppImage();
+  const packaged = host().app.packaged();
+  const name = packaged ? swapAsset(version, process.platform, process.arch, appImage) : null;
+  const fileOf = (n: string | null) => (n ? releaseFile(REPO, rel.assets?.find((a) => a.name === n)?.browser_download_url) : null);
+  const asset = fileOf(name);
+  const sums = fileOf("SHA256SUMS");
+  const target = process.platform === "darwin" ? macBundle() : appImage;
+  if (name && target && cantSwap(target, writableDir, failedBefore(version))) return set({ version, state: "available", url, blocked: true });
+  const debName = packaged ? debAsset(version, process.platform, process.arch, appImage) : null;
+  const deb = fileOf(debName);
+  if (!asset || !sums) return set({ version, state: "available", url, ...(deb ? { deb } : {}) });
   const shown = set({ version, state: "downloading", url });
-  fetching = fetchUpdate(version, url, asset.browser_download_url, sums.browser_download_url, name!).finally(() => (fetching = null));
+  fetching = fetchUpdate(version, url, asset, sums, name!).finally(() => (fetching = null));
   return shown;
 }
 
@@ -123,7 +157,7 @@ async function save(url: string, file: string, name: string): Promise<string> {
   let idle = setTimeout(quiet, IDLE_MS);
   const fd = fs.openSync(file, "w");
   try {
-    const res = await fetch(url, { signal: ac.signal });
+    const res = await githubFetch(url, ac.signal);
     if (!res.ok || !res.body) throw new Error(`${name} answered ${res.status}`);
     const hash = createHash("sha256");
     const reader = res.body.getReader();
@@ -147,7 +181,7 @@ async function save(url: string, file: string, name: string): Promise<string> {
 
 /** The release's file for this install, checked against its SHA256SUMS and unpacked in `dir`: what goes in place, or null. */
 async function download(assetUrl: string, sumsUrl: string, name: string, dir: string): Promise<string> {
-  const sums = await fetch(sumsUrl, { signal: AbortSignal.timeout(ASK_WAIT_MS) });
+  const sums = await githubFetch(sumsUrl, AbortSignal.timeout(ASK_WAIT_MS));
   if (!sums.ok) throw new Error(`SHA256SUMS answered ${sums.status}`);
   const want = (await sums.text())
     .split("\n")
@@ -176,7 +210,7 @@ function set(s: UpdateState): UpdateState {
 
 function run(cmd: string, args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
-    const p = spawn(cmd, args, { stdio: "ignore" });
+    const p = spawn(cmd, args, { stdio: "ignore", env: childEnv() });
     p.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`${cmd} exited ${code}`))));
     p.on("error", reject);
   });
@@ -204,25 +238,32 @@ export function applyUpdate(relaunch: boolean): boolean {
   }
 }
 
-function swapIn(next: { version: string; path: string }, relaunch: boolean): boolean {
+function swapIn(next: { version: string; path: string; url: string }, relaunch: boolean): boolean {
   const dir = path.dirname(next.path);
   if (process.platform === "darwin") {
     const target = macBundle();
     if (!target.endsWith(".app")) return false;
     const script = path.join(dir, "swap.sh");
     fs.writeFileSync(script, swapScript({ pid: process.pid, target, next: next.path, dir, marker: failedMarker(), version: next.version, relaunch }));
-    spawn("/bin/sh", [script], { detached: true, stdio: "ignore" }).unref();
+    spawn("/bin/sh", [script], { detached: true, stdio: "ignore", env: childEnv() }).unref();
   } else {
-    const target = process.env["APPIMAGE"];
+    const target = runningAppImage();
     if (!target) return false;
     // The download sits in the temp dir, often on another filesystem than the AppImage (moveOver).
     try {
       moveOver(next.path, target);
-    } catch {
+    } catch (e) {
+      // The AppImage stays as it was; the marker keeps the next launch from downloading this version again.
+      logMainError(e);
+      fs.writeFileSync(failedMarker(), next.version);
+      fs.rmSync(dir, { recursive: true, force: true });
+      staged = null;
+      set({ version: next.version, state: "available", url: next.url, blocked: true });
       return false;
     }
+    fs.rmSync(failedMarker(), { force: true });
     fs.rmSync(dir, { recursive: true, force: true });
-    if (relaunch) app.relaunch({ execPath: target });
+    if (relaunch) host().app.relaunch(target);
   }
   staged = null;
   return true;
@@ -231,12 +272,12 @@ function swapIn(next: { version: string; path: string }, relaunch: boolean): boo
 /** Start checking (packaged apps only): `onChange` hears each step, for the window and the tray. */
 export function startUpdates(onChange: (s: UpdateState) => void): void {
   notify = onChange;
-  if (!app.isPackaged) return;
+  if (!host().app.packaged()) return;
   const tick = () => void checkForUpdate();
   setTimeout(tick, 20_000);
   setInterval(tick, EVERY_MS);
   // Whatever's ready goes in when the app quits on its own terms.
-  app.on("will-quit", () => void applyUpdate(false));
+  host().app.onQuit(() => void applyUpdate(false));
 }
 
 export const updateState = (): UpdateState | null => current;

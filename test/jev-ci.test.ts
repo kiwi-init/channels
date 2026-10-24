@@ -5,9 +5,10 @@ import { dirname, join } from "node:path";
 import { FLOWS } from "../scripts/ci-flows.ts";
 import { loadConfig, matches, type Config } from "../.github/jev-ci/config.ts";
 import { markMoves, size, type FileChange } from "../.github/jev-ci/diff.ts";
-import { passMarkers, trustedRef, type PassCache, type PullEvent } from "../.github/jev-ci/github.ts";
+import { dispatchedJobs, mergeGroupRange, passMarkers, superseded, testedByQueue, trustedRef, type PassCache, type PullEvent, type QueueRun } from "../.github/jev-ci/github.ts";
+import { newerOnRemote } from "../.github/jev-ci/git.ts";
 import type { Request } from "../.github/jev-ci/jev.ts";
-import { plan, type Ask, type Decision, type Plan } from "../.github/jev-ci/plan.ts";
+import { onlyJobs, plan, pullRequestOnly, skipAll, type Ask, type Decision, type Plan } from "../.github/jev-ci/plan.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const CI = readFileSync(join(ROOT, ".github/workflows/ci.yml"), "utf8");
@@ -105,7 +106,52 @@ const ran = (r: Plan) =>
     .filter((d) => d.run)
     .map((d) => d.job)
     .sort();
-const CHECKS = ["static", "test-unit", "test-flows-a", "test-flows-b", "build", "shots", "perf-runs", "perf", "desktop", "cli-macos", "ios", "android", "android-device"];
+const CHECKS = [
+  "static",
+  "test-unit",
+  "test-flows-a",
+  "test-flows-b",
+  "build",
+  "shots",
+  "perf-runs",
+  "perf",
+  "desktop",
+  "desktop-mac",
+  "desktop-linux",
+  "cli-macos",
+  "ios",
+  "ios-gestures",
+  "android",
+  "android-device",
+];
+
+describe("the iPhone jobs wait only on what the iPhone app is built from (T1598)", () => {
+  const desktopOnly = {
+    "desktop/package.json": '{\n  "name": "desktop",\n  "devDependencies": { "electrobun": "2.0.4" }\n}\n',
+    "bun.lock": '{\n  "lockfileVersion": 1,\n  "packages": { "electrobun": ["electrobun@2.0.4"] }\n}\n',
+  };
+
+  test("a desktop-only dependency change doesn't queue them by rule: Jev judges it", async () => {
+    const { by } = await planFor(desktopOnly);
+    for (const job of ["ios", "ios-gestures"]) {
+      expect(by(job).run).toBe(false);
+      expect(by(job).layer).not.toBe("L0");
+    }
+  });
+
+  test("Jev can still run them on a manifest change it thinks reaches the bundle", async () => {
+    const { by } = await planFor(
+      desktopOnly,
+      fakeJev((job) => (job.startsWith("ios") ? 0.9 : 0.05)),
+    );
+    for (const job of ["ios", "ios-gestures"]) expect(by(job)).toMatchObject({ run: true, layer: "L2" });
+  });
+
+  test("@kiwi/core's manifest, the exports map the engine resolves through, runs them by rule", async () => {
+    const { by } = await planFor({ "packages/core/package.json": '{\n  "name": "@kiwi/core",\n  "exports": { "./*": "./src/*" }\n}\n' });
+    for (const job of ["ios", "ios-gestures"]) expect(by(job)).toMatchObject({ run: true, layer: "L0" });
+  });
+});
 
 describe("ci.yml edits outside the jobs", () => {
   test("a concurrency-only edit (#315) runs only the static checks, by rule", async () => {
@@ -120,7 +166,7 @@ describe("ci.yml edits outside the jobs", () => {
   });
 
   test("a comment or blank-line edit changes no job", async () => {
-    const { result, by } = await planFor({ ".github/workflows/ci.yml": CI.replace("jobs:\n", "\n# a note\njobs:\n") });
+    const { result, by } = await planFor({ ".github/workflows/ci.yml": CI.replace("\njobs:\n", "\n\n# a note\njobs:\n") });
     expect(ran(result)).toEqual(["static"]);
     expect(by("release-rehearsal").run).toBe(false);
     expect(result.notes).toEqual([]);
@@ -209,7 +255,7 @@ describe("jev-ci.yml edits", () => {
 
   test("a job's inputs edited run that job", async () => {
     const { by } = await planFor({
-      ".github/jev-ci.yml": CONFIG_TEXT.replace('"test/owner.ts", "test/owner-cli.ts", "test/check.ts"]', '"test/owner.ts", "test/owner-cli.ts", "test/check.ts", "test/other.ts"]'),
+      ".github/jev-ci.yml": CONFIG_TEXT.replace('      - "test/check.ts"\n', '      - "test/check.ts"\n      - "test/other.ts"\n'),
     });
     expect(by("build")).toMatchObject({ run: true, layer: "L0" });
     expect(by("build").reason).toContain("inputs");
@@ -367,7 +413,7 @@ describe("jev-ci.yml matches the repo", () => {
 });
 
 describe("pass markers", () => {
-  const repo = { full_name: "ojowwalker77/channels" };
+  const repo = { full_name: "kiwi-init/channels" };
   const fork = { full_name: "someone/channels" };
   const pr = (head: { full_name: string } | null): PullEvent => ({ repository: { default_branch: "main" }, pull_request: { number: 7, base: { repo }, head: { repo: head } } });
   const caches: PassCache[] = [
@@ -394,6 +440,18 @@ describe("pass markers", () => {
     expect([...passMarkers([{ key: "jev-ci-pass-static-eee", ref: "refs/heads/trunk" }, ...caches], jobs, trustedRef(trunk, "refs/pull/7/merge"))].sort()).toEqual(["static:eee", "test-unit:bbb"]);
   });
 
+  test("the merge queue's runs on main's queue are trusted like main's, by pull requests and merge groups alike (T2034)", () => {
+    const queued: PassCache[] = [
+      { key: "jev-ci-pass-build-qqq", ref: "refs/heads/gh-readonly-queue/main/pr-9-0123456789abcdef0123456789abcdef01234567" },
+      { key: "jev-ci-pass-test-unit-rrr", ref: "refs/heads/gh-readonly-queue/release/pr-3-0123456789abcdef0123456789abcdef01234567" },
+      { key: "jev-ci-pass-test-unit-sss", ref: "refs/heads/gh-readonly-queue-main/pr-1" },
+      ...caches,
+    ];
+    expect([...passMarkers(queued, jobs, trustedRef(pr(repo), "refs/pull/7/merge"))].sort()).toEqual(["build:qqq", "static:aaa", "test-unit:bbb"]);
+    const group: PullEvent = { repository: { default_branch: "main" }, merge_group: { base_sha: "a".repeat(40), head_sha: "b".repeat(40), head_ref: "refs/heads/gh-readonly-queue/main/pr-12-x" } };
+    expect([...passMarkers(queued, jobs, trustedRef(group, "refs/heads/gh-readonly-queue/main/pr-12-x"))].sort()).toEqual(["build:qqq", "static:aaa"]);
+  });
+
   test("a job split into shards passed only once every shard's marker is there, each from a trusted run", () => {
     const own = trustedRef(pr(repo), "refs/pull/7/merge");
     const shard = (i: number, ref = "refs/pull/7/merge"): PassCache => ({ key: `jev-ci-pass-cli-macos-fff-shard${i}of3`, ref });
@@ -401,5 +459,190 @@ describe("pass markers", () => {
     expect([...passMarkers([shard(1), shard(2, "refs/heads/main"), shard(3)], ["cli-macos"], own)]).toEqual(["cli-macos:fff"]);
     expect([...passMarkers([shard(1), shard(2, "refs/pull/8/merge"), shard(3)], ["cli-macos"], own)]).toEqual([]);
     expect([...passMarkers([shard(1), { key: "jev-ci-pass-cli-macos-fff-shard2of2", ref: "refs/pull/7/merge" }, shard(3)], ["cli-macos"], own)]).toEqual([]);
+  });
+});
+
+describe("the merge queue (T2034)", () => {
+  const sha = (c: string) => c.repeat(40);
+
+  test("a merge group is read as its base and head commits, and an event without them fails the plan so everything runs", () => {
+    expect(mergeGroupRange({ merge_group: { base_sha: sha("a"), head_sha: sha("b"), head_ref: "refs/heads/gh-readonly-queue/main/pr-1-x" } })).toEqual({ base: sha("a"), head: sha("b") });
+    for (const bad of [
+      {},
+      { merge_group: { head_sha: sha("b") } },
+      { merge_group: { base_sha: "main", head_sha: sha("b") } },
+      { merge_group: { base_sha: sha("a"), head_sha: `${sha("b")}; rm -rf /` } },
+    ])
+      expect(() => mergeGroupRange(bad)).toThrow("names no base_sha and head_sha");
+  });
+
+  test("a push to main skips its run only when a merge_group run of ci.yml passed on that very commit", () => {
+    const run = (o: Partial<QueueRun>): QueueRun => ({ id: 1, event: "merge_group", path: ".github/workflows/ci.yml", head_sha: sha("c"), conclusion: "success", ...o });
+    expect(testedByQueue([run({ id: 41 })], sha("c"), ".github/workflows/ci.yml")).toBe(41);
+    expect(testedByQueue([run({ conclusion: "failure" }), run({ conclusion: null })], sha("c"), ".github/workflows/ci.yml")).toBeNull();
+    expect(testedByQueue([run({ head_sha: sha("d") })], sha("c"), ".github/workflows/ci.yml")).toBeNull();
+    expect(testedByQueue([run({ path: ".github/workflows/release.yml" })], sha("c"), ".github/workflows/ci.yml")).toBeNull();
+    expect(testedByQueue([run({ event: "pull_request" })], sha("c"), ".github/workflows/ci.yml")).toBeNull();
+    expect(testedByQueue([], sha("c"), ".github/workflows/ci.yml")).toBeNull();
+  });
+
+  test("a commit the queue already tested runs no job on main, parts included, and says why", () => {
+    const skipped = skipAll(config, "the merge queue tested this commit as-is (run 41)");
+    expect(skipped.decisions.filter((d) => d.run)).toEqual([]);
+    expect(skipped.decisions.map((d) => d.job)).toContain("perf-runs");
+    for (const d of skipped.decisions) expect(d.reason).toMatch(/merge queue tested this commit|does part of/);
+  });
+
+  test("a merge group is planned on its combined change: every queued pull request's files count, not only the last one's", async () => {
+    const { dir, base } = repo();
+    commit(dir, { "src/a.ts": "export const a = 10\n" });
+    const head = commit(dir, { "web/src/lib/v.ts": "export const v = 30\n" });
+    const by = (r: Plan, job: string) => r.decisions.find((d) => d.job === job)!;
+    const group = await plan({ repo: dir, base, head, config, ask: fakeJev(0.9).ask });
+    expect(by(group, "test-flows-b").run).toBe(true);
+    expect(by(group, "perf").run).toBe(true);
+    const lastOnly = await plan({ repo: dir, base: sh(dir, ["rev-parse", "HEAD^1"]), head, config, ask: fakeJev(0.9).ask });
+    expect(by(lastOnly, "test-flows-b")).toMatchObject({ run: false, layer: "L0" });
+    expect(by(lastOnly, "perf").run).toBe(true);
+  });
+
+  test("ci.yml answers the merge queue: it runs on merge_group's checks_requested, each group in a concurrency group of its own", () => {
+    expect(CI).toMatch(/\n {2}merge_group:\n {4}types: \[checks_requested\]\n/);
+    expect(CI).toContain("group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_ref || (github.event_name == 'push' && github.ref) || github.run_id }}");
+    expect(CI).toMatch(/\n {2}ci-ok:\n(?: .*\n)*? {4}if: always\(\)\n/);
+  });
+});
+
+describe("a pull request runs only the fast checks, the merge queue the rest (T2134)", () => {
+  test("jev-ci.yml names repo / static and test / unit, both jobs it plans", () => {
+    expect(config.pull_request_jobs).toEqual(["static", "test-unit"]);
+    for (const job of config.pull_request_jobs ?? []) expect(config.jobs[job]).toBeDefined();
+  });
+
+  test("on a pull request the fast jobs keep their plan and every other job that would run waits for the queue, with the reason it would run", async () => {
+    const { result, by } = await planFor({ "src/a.ts": "export const a = 5\n", "web/src/lib/v.ts": "export const v = 9\n" }, fakeJev(0.9));
+    const wouldRun = result.decisions.filter((d) => d.run).map((d) => d.job);
+    expect(wouldRun.filter((j) => !["static", "test-unit"].includes(j)).length).toBeGreaterThan(0);
+    const pr = pullRequestOnly(config, result);
+    for (const d of pr.decisions) {
+      if (["static", "test-unit"].includes(d.job) || !by(d.job).run) expect(d).toEqual(by(d.job));
+      else expect(d).toMatchObject({ run: false, layer: "L0", reason: `a pull request runs only static and test-unit; its merge queue group runs this (${by(d.job).reason})` });
+    }
+  });
+
+  test("a part goes with the job it belongs to, and a config without pull_request_jobs keeps the whole plan", () => {
+    const all: Plan = { ...skipAll(config, "x"), decisions: skipAll(config, "x").decisions.map((d) => ({ ...d, run: true, reason: "changed" })) };
+    const perf = pullRequestOnly({ ...config, pull_request_jobs: ["perf"] }, all);
+    expect(
+      perf.decisions
+        .filter((d) => d.run)
+        .map((d) => d.job)
+        .sort(),
+    ).toEqual(["perf", "perf-runs"]);
+    expect(pullRequestOnly({ ...config, pull_request_jobs: undefined }, all)).toEqual(all);
+  });
+});
+
+describe("jev-ci.yml stays merge-friendly (T2212)", () => {
+  const lines = CONFIG_TEXT.split("\n");
+  const jobs = lines.indexOf("jobs:");
+
+  test("each job's inputs, imports_from, always and parts are block lists, one item per line, sorted", () => {
+    const flow = lines.slice(jobs).filter((l) => /^ {4}(inputs|imports_from|always|parts): \[.+\]/.test(l));
+    expect(flow).toEqual([]);
+    for (let i = jobs; i < lines.length; i++) {
+      if (!/^ {4}(inputs|imports_from|always|parts):$/.test(lines[i]!)) continue;
+      const items: string[] = [];
+      for (let j = i + 1; j < lines.length && lines[j]!.startsWith("      - "); j++) items.push(lines[j]!.slice(8));
+      expect(items.length).toBeGreaterThan(0);
+      expect(items).toEqual([...items].sort());
+    }
+  });
+
+  test("each description is one sentence per line", () => {
+    const run: string[] = [];
+    for (let i = jobs; i < lines.length; i++) {
+      if (lines[i] !== "    description: >-") continue;
+      for (let j = i + 1; j < lines.length && lines[j]!.startsWith("      "); j++) if (/[.;:!?)] (?=[A-Z`('"])/.test(lines[j]!)) run.push(lines[j]!.slice(0, 80));
+    }
+    expect(run).toEqual([]);
+  });
+});
+
+describe("a manual run can pick its jobs", () => {
+  test("the jobs input is read as a comma or space separated list", () => {
+    expect(dispatchedJobs({ inputs: { jobs: "desktop-linux, desktop-mac" } })).toEqual(["desktop-linux", "desktop-mac"]);
+    expect(dispatchedJobs({ inputs: { jobs: "  desktop-linux " } })).toEqual(["desktop-linux"]);
+    expect(dispatchedJobs({ inputs: { jobs: "" } })).toEqual([]);
+    expect(dispatchedJobs({})).toEqual([]);
+  });
+
+  test("only the picked jobs run, a picked job's parts with it, and a name that isn't a job is noted and runs nothing", () => {
+    const linux = onlyJobs(config, ["desktop-linux"]);
+    expect(linux.decisions.filter((d) => d.run).map((d) => d.job)).toEqual(["desktop-linux"]);
+    const perf = onlyJobs(config, ["perf"]);
+    expect(
+      perf.decisions
+        .filter((d) => d.run)
+        .map((d) => d.job)
+        .sort(),
+    ).toEqual(["perf", "perf-runs"]);
+    const typo = onlyJobs(config, ["desktop-linx"]);
+    expect(typo.decisions.filter((d) => d.run)).toEqual([]);
+    expect(typo.notes.join(" ")).toContain("no job named desktop-linx");
+  });
+
+  test("ci.yml's workflow_dispatch takes the jobs input", () => {
+    expect(CI).toMatch(/\n {2}workflow_dispatch:\n {4}inputs:\n {6}jobs:\n/);
+  });
+});
+
+describe("a newer push to main cancels the older main run (T324)", () => {
+  test("pushes to main share one concurrency group and cancel the run still going; pull requests, merge groups and dispatched runs keep their own", () => {
+    expect(CI).toContain("group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_ref || (github.event_name == 'push' && github.ref) || github.run_id }}");
+    expect(CI).toMatch(/\nconcurrency:\n {2}group: [^\n]+\n {2}cancel-in-progress: true\n/);
+  });
+
+  test("ci-ok passes a run cancelled for a newer push, and stays red when a job failed or nothing newer came", () => {
+    const newer = "f".repeat(40);
+    const cancelled = { plan: "success", static: "success", "desktop-mac": "cancelled", "desktop-linux": "cancelled", ios: "skipped" };
+    expect(superseded(["desktop-mac", "desktop-linux", "ios"], cancelled, newer)).toBe(true);
+    expect(superseded(["desktop-mac", "desktop-linux", "ios"], cancelled, null)).toBe(false);
+    expect(superseded(["desktop-mac", "static"], { ...cancelled, static: "failure" }, newer)).toBe(false);
+    expect(superseded(["ios"], { plan: "success", ios: "skipped" }, newer)).toBe(false);
+    expect(superseded([], cancelled, newer)).toBe(false);
+  });
+
+  test("the newer push is main's tip when it holds this commit; none when this commit is the tip or isn't in it", () => {
+    const at = mkdtempSync(join(tmpdir(), "jev-ci-newer-"));
+    const run = (dir: string, ...args: string[]) => {
+      const p = Bun.spawnSync(["git", "-C", dir, ...args], {
+        stdout: "pipe",
+        stderr: "pipe",
+        env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" },
+      });
+      if (!p.success) throw new Error(p.stderr.toString());
+      return p.stdout.toString().trim();
+    };
+    try {
+      const origin = join(at, "origin.git");
+      const work = join(at, "work");
+      Bun.spawnSync(["git", "init", "--bare", "-b", "main", origin]);
+      Bun.spawnSync(["git", "init", "-b", "main", work]);
+      run(work, "remote", "add", "origin", origin);
+      run(work, "commit", "--allow-empty", "-m", "one");
+      const one = run(work, "rev-parse", "HEAD");
+      run(work, "push", "origin", "main");
+      expect(newerOnRemote(work, "refs/heads/main", one)).toBeNull();
+      run(work, "commit", "--allow-empty", "-m", "two");
+      const two = run(work, "rev-parse", "HEAD");
+      run(work, "push", "origin", "main");
+      expect(newerOnRemote(work, "refs/heads/main", one)).toBe(two);
+      run(work, "checkout", "-b", "side", one);
+      run(work, "commit", "--allow-empty", "-m", "elsewhere");
+      expect(newerOnRemote(work, "refs/heads/main", run(work, "rev-parse", "HEAD"))).toBeNull();
+    } finally {
+      rmSync(at, { recursive: true, force: true });
+    }
   });
 });

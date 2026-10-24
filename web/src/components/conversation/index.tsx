@@ -10,6 +10,7 @@ import { taskCards } from "@kiwi/core/standup.ts"
 import { answersDecisions, colorOf, decidersOf, heldBy, outsideRepos, taskId, tasksAwaitingPeople, type Task, humanOf, ownerOf } from "@kiwi/core/state.ts"
 import { channelTitle, loadRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
 import { howHere } from "@/lib/presence"
+import { sendsInTurn, withSentQuotes } from "@/lib/send-order"
 import { asksFor, chosenOf, heldAsks } from "@/lib/asks"
 import type { Command } from "@/lib/commands"
 import { approveTask, closedDigest, reviewsFor, sendBackTask, type TaskSend } from "@/lib/task-actions"
@@ -28,6 +29,8 @@ import { Icon } from "../icon"
 import { Button, Harnesses, Pictures, Spinner, errorText, toast } from "../kit"
 import { AddAgent, AgentLanes, CompactBlock, HoldDialog, NewAgent, Presence, ProposalCard, TasksView } from "../lazy"
 import { canStartAgents } from "@/lib/launches"
+import { markOnce } from "@/lib/marks"
+import { roomOfMessage } from "@/lib/rooms"
 import { ALLOW_ONCE, DENY, settledOf } from "@/lib/permission-settled"
 import { isAgent } from "../message"
 import { NeedsYou } from "../needs-you"
@@ -83,7 +86,9 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const query = useDeferredValue(search?.trim() ? search : null)
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [sending, setSending] = useState<{ key: number; place: string; m: Message; after: number; seq?: number }[]>([])
+  const [sendingBase] = useState(() => Date.now())
   const sendingKey = useRef(0)
+  const [inTurn] = useState(sendsInTurn)
   const sendingSeq = useRef(new Map<number, Promise<number>>())
   const [picture, setPicture] = useState<{ m: Message; img: ImageAttachment; src: string } | null>(null)
   const [highlight, setHighlight] = useState<number | null>(null)
@@ -129,7 +134,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   useRecentPreview({ member, messages, others, state, me, nameOf })
 
   const { placeOf, places } = state
-  const { place, hereKey, unreadIn, taskKey } = usePlaces({ here, roomId, messages, me, state, shownTask })
+  const { place, hereKey, openRoom, unreadIn, unreadInRoom, taskKey } = usePlaces({ here, roomId, cardRoom, viewing: tab === "conversation", messages, me, state, shownTask })
+  const sendRoom = openRoom !== null && openRoom !== GENERAL_ROOM ? openRoom : undefined
   const { bySeq, threadRoot, showDropped, setShowDropped, threads, visible, inTask, quoted, summaryOf } = useThreads({
     messages,
     state,
@@ -138,18 +144,24 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     isOwner,
     search: query,
     hereKey,
+    room: openRoom,
+    cards,
     taskKey,
     shownTask,
     nameOf,
   })
-  const { behind, setBehind, isFresh, scroller, stick, toBottom, onScroll } = useScroll({ messages, visible, hereKey })
+  const { behind, setBehind, isFresh, scroller, stick, theirs, toBottom, onScroll } = useScroll({ messages, visible, hereKey })
+  const anyShown = visible.length > 0
+  useEffect(() => {
+    if (anyShown) requestAnimationFrame(() => markOnce("kiwi:first-message"))
+  }, [anyShown])
   const landed = useCallback(
     (s: { m: Message; after: number; seq?: number }) => (s.seq !== undefined ? bySeq.get(s.seq) : messages.findLast((x) => x.seq > s.after && x.from === me && x.body === s.m.body)),
     [bySeq, messages, me]
   )
   const sentNow = sending.map((s) => ({ s, real: landed(s) }))
   const replaced = new Set(sentNow.flatMap(({ real }) => (real ? [real.seq] : [])))
-  const sendingHere = sentNow.filter(({ s, real }) => s.place === hereKey && !real).map(({ s }) => s.m)
+  const sendingHere = sentNow.filter(({ s, real }) => s.place === hereKey && !real && (openRoom === null || roomOfMessage(state, s.m) === openRoom)).map(({ s }) => s.m)
   const quotedHere = useCallback((seq: number) => (seq < 0 ? sending.find((s) => s.key === -seq)?.m : quoted(seq)), [quoted, sending])
 
   const go = useCallback(
@@ -165,6 +177,15 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     [openTask, setBehind]
   )
 
+  const switchRoom = useCallback(
+    (id: string) => {
+      setCardRoom(id)
+      setReplyTo(null)
+      setBehind(0)
+    },
+    [setBehind]
+  )
+
   const jump = useCallback(
     (seq: number) => {
       setHighlight(seq)
@@ -173,7 +194,13 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       const at = placeOf.get(seq)
       const inTask = at?.kind === "task" ? at.task : null
       if (inTask !== null) openTask(inTask)
-      else if (at && placeKey(at) !== hereKey) setHere(placeKey(at))
+      else {
+        setTab("conversation")
+        if (at && placeKey(at) !== hereKey) setHere(placeKey(at))
+      }
+      const m = bySeq.get(seq)
+      const room = m ? roomOfMessage(state, m) : cardRoom
+      if (inTask === null && (at ?? MAIN).kind === "main" && room !== cardRoom && state.rooms.has(room)) switchRoom(room)
       setSearch(null)
       const find = (left: number) => {
         const el = document.getElementById(`${inTask !== null ? "k" : "m"}${seq}`)
@@ -181,11 +208,12 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
           if (left > 0) requestAnimationFrame(() => find(left - 1))
           return
         }
+        theirs()
         el.scrollIntoView({ block: "center", behavior: "smooth" })
       }
       requestAnimationFrame(() => requestAnimationFrame(() => find(3)))
     },
-    [placeOf, hereKey, openTask, state.compact]
+    [placeOf, hereKey, openTask, state, theirs, bySeq, cardRoom, switchRoom]
   )
 
   const onReply = useCallback((m: Message) => setReplyTo(m), [])
@@ -209,7 +237,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const onAnswer = useLatest(answer)
   const onJump = useLatest(jump)
   const onOpenImage = useLatest((pm: Message, img: ImageAttachment, src: string) => setPicture({ m: pm, img, src }))
-  const handlers = useControlsHandlers({ live, member, onGone })
+  const roomsNow = useLatest(() => state.rooms)
+  const handlers = useControlsHandlers({ live, member, onGone, rooms: roomsNow })
   const [newAgent, setNewAgent] = useState(false)
   const onNewAgent = isOwner && canStartAgents() ? () => setNewAgent(true) : undefined
   const addsAgents = !isOwner && !!roster.find((m) => m.active && m.pk === member.identity.pk)?.addsAgents
@@ -385,15 +414,19 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const roomKey = (id: string) => `room:${id}`
   const conversations: ConversationRow[] = [
     ...(rooms.length > 1
-      ? rooms.map((r) => ({ key: roomKey(r.id), label: `# ${r.name}`, unread: r.id === GENERAL_ROOM ? unreadIn("main").n : 0, forMe: r.id === GENERAL_ROOM && unreadIn("main").forMe, withMe: true }))
-      : [{ key: "main", label: `# ${GENERAL_ROOM}`, unread: unreadIn("main").n, forMe: unreadIn("main").forMe, withMe: true }]),
+      ? rooms.map((r) => {
+          const u = unreadInRoom(r.id)
+          return { key: roomKey(r.id), label: `# ${r.name}`, unread: u.n, forMe: u.forMe, withMe: true, left: false }
+        })
+      : [{ key: "main", label: `# ${GENERAL_ROOM}`, unread: unreadIn("main").n, forMe: unreadIn("main").forMe, withMe: true, left: false }]),
     ...[...places]
       .filter(([, p]) => p.place.kind === "dm")
       .map(([key, p]) => {
         const w = p.place.kind === "dm" ? p.place.with : ["", ""]
         const u = unreadIn(key)
         const withMe = w.includes(me)
-        return { key, label: withMe ? nameOf(w.find((n) => n !== me) ?? me) : w.map(nameOf).join(" & "), unread: u.n, forMe: u.forMe, withMe }
+        const left = w.some((n) => n !== me && !state.members.get(n)?.active)
+        return { key, label: withMe ? nameOf(w.find((n) => n !== me) ?? me) : w.map(nameOf).join(" & "), unread: u.n, forMe: u.forMe, withMe, left }
       }),
   ]
   const currentConversation = tab !== "conversation" ? null : hereKey !== "main" ? hereKey : rooms.length > 1 ? roomKey(cardRoom) : "main"
@@ -401,13 +434,14 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const openConversation = (key: string) => {
     setTab("conversation")
     if (key.startsWith("room:")) {
-      setCardRoom(key.slice(5))
       go(MAIN)
+      setCardRoom(key.slice(5))
       return
     }
     go(placeFromKey(key) ?? MAIN)
   }
   const roomName = state.rooms.get(cardRoom)?.name ?? GENERAL_ROOM
+  const makeRoom = handlers.onMakeRoom
   const needsYou = (
     <NeedsYou
       now={now}
@@ -487,6 +521,15 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                 conversations={conversations}
                 current={currentConversation}
                 onConversation={(key) => (leaveInfo(), openConversation(key))}
+                rooms={rooms}
+                onNewRoom={
+                  makeRoom &&
+                  (async (name) => {
+                    const id = await makeRoom(name)
+                    leaveInfo()
+                    openConversation(roomKey(id))
+                  })
+                }
               />
               <div className={cx("@container relative flex min-w-0 flex-1 md:sheet", info ? "hidden" : (root || side?.kind === "tasks") && "hidden md:flex")}>
                 <div className="relative flex min-w-0 flex-1 flex-col bg-canvas" style={{ "--head": `${headH}px`, "--foot": `${footH}px` } as CSSProperties}>
@@ -551,7 +594,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                       >
                         <div className="relative mx-auto w-full max-w-[792px] aside-room px-4 pt-[calc(var(--head)+8px)] pb-[calc(var(--foot)+16px)] [--column:792px]">
                           {hereKey === "main" && needsYou}
-                          {hereKey === "main" && state.rooms.size > 1 && !search && <RoomChips rooms={[...state.rooms.values()]} value={cardRoom} onChange={setCardRoom} />}
+                          {hereKey === "main" && state.rooms.size > 1 && !search && <RoomChips rooms={[...state.rooms.values()]} value={cardRoom} onChange={switchRoom} />}
                           {!ready && messages.length === 0 ? (
                             slowToOpen && (
                               <Centered>
@@ -596,8 +639,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                         <div className="relative aside-room [--column:792px]">
                           {mayWrite ? (
                             <Composer
-                              key={hereKey}
-                              draftKey={`${roomId}:${hereKey}`}
+                              key={`${hereKey}:${sendRoom ?? ""}`}
+                              draftKey={`${roomId}:${hereKey}${sendRoom ? `:${sendRoom}` : ""}`}
                               me={me}
                               people={people}
                               replyTo={replyTo}
@@ -607,20 +650,18 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                               onAnswer={answer}
                               nameOf={nameOf}
                               onClearReply={(answered) => setReplyTo((now) => (!answered || now === answered ? null : now))}
+                              onRestoreReply={(answering) => setReplyTo((now) => now ?? answering)}
                               disabled={connection === "connecting"}
                               extra={extra}
-                              placeholder={place.kind === "main" ? "Message everyone" : `Message ${nameOf(place.with.find((n) => n !== me) ?? "")} privately`}
-                              send={async (body, opts) => {
+                              placeholder={
+                                place.kind === "main" ? (rooms.length > 1 ? `Message #${roomName}` : "Message everyone") : `Message ${nameOf(place.with.find((n) => n !== me) ?? "")} privately`
+                              }
+                              send={async (body, given) => {
                                 stick()
-                                const answering = async (o: SendOptions): Promise<SendOptions> =>
-                                  o.re?.some((seq) => seq < 0)
-                                    ? {
-                                        ...o,
-                                        re: await Promise.all(o.re.map((seq) => (seq < 0 ? (sendingSeq.current.get(-seq) ?? Promise.reject(new Error("the message it answers wasn't sent"))) : seq))),
-                                      }
-                                    : o
-                                if (opts.imgs?.length || opts.task !== undefined) return send(body, await answering(opts))
-                                const key = ++sendingKey.current
+                                const opts: SendOptions = sendRoom && given.task === undefined ? { ...given, room: sendRoom } : given
+                                const answering = (o: SendOptions) => withSentQuotes(o, (k) => sendingSeq.current.get(k))
+                                if (opts.imgs?.length || opts.task !== undefined) return inTurn(async () => send(body, await answering(opts)))
+                                const key = sendingBase + ++sendingKey.current
                                 const m: Message = {
                                   v: PROTOCOL_VERSION,
                                   id: `sending-${key}`,
@@ -633,9 +674,10 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                                   ...(opts.to ? { to: opts.to } : {}),
                                   ...(opts.re ? { re: opts.re } : {}),
                                   ...(opts.dm ? { dm: true } : {}),
+                                  ...(opts.room ? { room: opts.room } : {}),
                                 }
                                 setSending((all) => [...all, { key, place: hereKey, m, after: messages.at(-1)?.seq ?? 0 }].slice(-50))
-                                const going = answering(opts).then((o) => send(body, o))
+                                const going = inTurn(async () => send(body, await answering(opts)))
                                 sendingSeq.current.set(key, going)
                                 sendingSeq.current.delete(key - 50)
                                 try {

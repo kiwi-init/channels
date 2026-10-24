@@ -2,13 +2,16 @@ import { Add01Icon, ArrowDown01Icon, Search01Icon, TaskDone01Icon } from "@hugei
 import { useState, type ReactNode } from "react"
 
 import type { ChannelIcon } from "@kiwi/core/protocol.ts"
+import type { Room } from "@kiwi/core/state/types.ts"
+import { roomProblem } from "@/lib/rooms"
 import { VIEWS, type View } from "@/lib/views"
 import { useSidebarHidden } from "@/lib/sidebar-hidden"
 import { cx } from "@/lib/utils"
 import { AgentRow, byBusy, type AgentNow } from "../agent-strip"
 import { ChannelIconTile } from "../channel-icon"
 import { Icon } from "../icon"
-import { Menu, MenuItem } from "../ui/menu"
+import { errorText } from "../kit"
+import { Menu, MenuItem, MenuNote, MenuSeparator } from "../ui/menu"
 
 export interface Conversation {
   key: string
@@ -16,6 +19,7 @@ export interface Conversation {
   unread: number
   forMe: boolean
   withMe: boolean
+  left: boolean
 }
 
 function Section({ title, onTitle, action, children }: { title: string; onTitle?: () => void; action?: ReactNode; children: ReactNode }) {
@@ -38,6 +42,20 @@ function Section({ title, onTitle, action, children }: { title: string; onTitle?
 
 const ROW = "flex h-9 w-full items-center rounded-ctl px-3 text-left text-ui transition-colors"
 const IDLE = "text-ink-2 hover:bg-wash hover:text-ink"
+
+function Add({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className="-my-1 -mr-1.5 flex size-6 items-center justify-center rounded-row text-ink-3 transition-colors hover:bg-wash hover:text-ink"
+    >
+      <Icon icon={Add01Icon} size={15} />
+    </button>
+  )
+}
 
 function Item({ on, label, count, alert, onClick }: { on: boolean; label: string; count?: number; alert?: boolean; onClick: () => void }) {
   return (
@@ -121,22 +139,94 @@ function TasksRow({ view, counts, onView }: { view: View | null; counts: Record<
   )
 }
 
+const stays = (c: Conversation, current: string | null) => c.forMe || c.key === current
+
 export function hiddenConversations(conversations: Conversation[], current: string | null): Conversation[] {
-  return conversations.filter((c) => !c.withMe && !c.forMe && c.key !== current)
+  return conversations.filter((c) => !c.left && !c.withMe && !stays(c, current))
 }
 
-function Conversations({ conversations, current, onConversation }: { conversations: Conversation[]; current: string | null; onConversation: (key: string) => void }) {
+export function leftConversations(conversations: Conversation[], current: string | null): Conversation[] {
+  return conversations.filter((c) => c.left && !stays(c, current))
+}
+
+export const afterRooms = (conversations: Conversation[]): number => conversations.findLastIndex((c) => c.key === "main" || c.key.startsWith("room:")) + 1
+
+function NewRoom({ rooms, onMake, onClose }: { rooms: readonly Room[]; onMake: (name: string) => Promise<void>; onClose: () => void }) {
+  const [name, setName] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState<string | null>(null)
+  const said = failed ?? (name.trim() ? roomProblem(rooms, name) : null)
+  const make = async () => {
+    setBusy(true)
+    try {
+      await onMake(name)
+      onClose()
+    } catch (err) {
+      setFailed(errorText(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <li>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (name.trim() && !said && !busy) void make()
+        }}
+        className="flex h-9 items-center gap-1 rounded-ctl px-3 text-ui edge focus-within:shadow-[inset_0_0_0_1px_var(--ring)]"
+      >
+        <span className="text-ink-3">#</span>
+        <input
+          autoFocus
+          value={name}
+          disabled={busy}
+          aria-label="New room’s name"
+          placeholder="new room"
+          spellCheck={false}
+          onChange={(e) => {
+            setName(e.target.value)
+            setFailed(null)
+          }}
+          onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), onClose())}
+          onBlur={() => !name.trim() && onClose()}
+          className="min-w-0 flex-1 bg-transparent text-ui text-ink outline-none placeholder:text-ink-3 focus-visible:outline-none disabled:text-ink-3"
+        />
+      </form>
+      {said && <p className="px-3 pt-1 pb-1.5 text-meta text-alert">{said}</p>}
+    </li>
+  )
+}
+
+function Conversations({
+  conversations,
+  current,
+  onConversation,
+  rooms,
+  onNewRoom,
+}: {
+  conversations: Conversation[]
+  current: string | null
+  onConversation: (key: string) => void
+  rooms: readonly Room[]
+  onNewRoom?: ((name: string) => Promise<void>) | undefined
+}) {
   const [open, setOpen] = useState(false)
+  const [openLeft, setOpenLeft] = useState(false)
+  const [making, setMaking] = useState(false)
   const hidden = hiddenConversations(conversations, current)
-  const kept = conversations.filter((c) => !hidden.includes(c))
+  const left = leftConversations(conversations, current)
+  const kept = conversations.filter((c) => !hidden.includes(c) && !left.includes(c))
   const shown = open ? [...kept, ...hidden] : kept
   const unread = hidden.reduce((n, c) => n + c.unread, 0)
+  const item = (c: Conversation) => <Item key={c.key} on={current === c.key} label={c.label} count={c.unread} alert={c.forMe} onClick={() => onConversation(c.key)} />
+  const at = afterRooms(shown)
   return (
-    <Section title="Conversations">
+    <Section title="Conversations" action={onNewRoom && <Add label="New room" onClick={() => setMaking(true)} />}>
       <ul>
-        {shown.map((c) => (
-          <Item key={c.key} on={current === c.key} label={c.label} count={c.unread} alert={c.forMe} onClick={() => onConversation(c.key)} />
-        ))}
+        {shown.slice(0, at).map(item)}
+        {making && onNewRoom && <NewRoom rooms={rooms} onMake={onNewRoom} onClose={() => setMaking(false)} />}
+        {shown.slice(at).map(item)}
         {hidden.length > 0 && (
           <li>
             <button
@@ -152,6 +242,22 @@ function Conversations({ conversations, current, onConversation }: { conversatio
             </button>
           </li>
         )}
+        {left.length > 0 && (
+          <li>
+            <button
+              type="button"
+              onClick={() => setOpenLeft((o) => !o)}
+              aria-expanded={openLeft}
+              aria-label={`Left the channel, ${left.length} ${left.length === 1 ? "conversation" : "conversations"}`}
+              className={cx(ROW, "gap-2 text-ink-3 hover:bg-wash hover:text-ink")}
+            >
+              <Icon icon={ArrowDown01Icon} size={14} className={cx("shrink-0", !openLeft && "-rotate-90")} />
+              <span className="min-w-0 flex-1 truncate">Left the channel</span>
+              <span className="shrink-0 text-meta text-ink-3 tabular-nums">{left.length}</span>
+            </button>
+          </li>
+        )}
+        {openLeft && left.map(item)}
       </ul>
     </Section>
   )
@@ -175,6 +281,8 @@ export function ChannelSidebar({
   conversations,
   current,
   onConversation,
+  rooms,
+  onNewRoom,
 }: {
   title: string
   icon: ChannelIcon | null
@@ -193,6 +301,8 @@ export function ChannelSidebar({
   conversations: Conversation[]
   current: string | null
   onConversation: (key: string) => void
+  rooms: readonly Room[]
+  onNewRoom?: ((name: string) => Promise<void>) | undefined
 }) {
   const hidden = useSidebarHidden()
   if (hidden) return null
@@ -214,23 +324,7 @@ export function ChannelSidebar({
       </nav>
 
       {(agents.length > 0 || onNewAgent) && (
-        <Section
-          title="Agents"
-          onTitle={onAgents}
-          action={
-            onNewAgent && (
-              <button
-                type="button"
-                onClick={onNewAgent}
-                aria-label="New agent"
-                title="New agent"
-                className="-my-1 -mr-1.5 flex size-6 items-center justify-center rounded-row text-ink-3 transition-colors hover:bg-wash hover:text-ink"
-              >
-                <Icon icon={Add01Icon} size={15} />
-              </button>
-            )
-          }
-        >
+        <Section title="Agents" onTitle={onAgents} action={onNewAgent && <Add label="New agent" onClick={onNewAgent} />}>
           <ul>
             {byBusy(agents).map((a) => (
               <AgentRow key={a.name} a={a} onMessage={onMessage} onOpenTask={onOpenTask} />
@@ -239,7 +333,7 @@ export function ChannelSidebar({
         </Section>
       )}
 
-      <Conversations conversations={conversations} current={current} onConversation={onConversation} />
+      <Conversations conversations={conversations} current={current} onConversation={onConversation} rooms={rooms} onNewRoom={onNewRoom} />
     </aside>
   )
 }
@@ -247,6 +341,13 @@ export function ChannelSidebar({
 export function ConversationMenu({ conversations, current, onConversation }: { conversations: Conversation[]; current: string | null; onConversation: (key: string) => void }) {
   const unread = conversations.some((c) => c.key !== current && c.unread > 0)
   const label = conversations.find((c) => c.key === current)?.label ?? "Conversations"
+  const left = leftConversations(conversations, current)
+  const item = (c: Conversation) => (
+    <MenuItem key={c.key} onClick={() => onConversation(c.key)} className={cx(current === c.key && "font-semibold text-ink")}>
+      <span className="min-w-0 flex-1 truncate">{c.label}</span>
+      {c.unread > 0 && <span className={cx("shrink-0 text-meta tabular-nums", c.forMe ? "font-semibold text-decide" : "text-ink-3")}>{c.unread}</span>}
+    </MenuItem>
+  )
   return (
     <Menu
       side="bottom"
@@ -264,12 +365,14 @@ export function ConversationMenu({ conversations, current, onConversation }: { c
         </button>
       }
     >
-      {conversations.map((c) => (
-        <MenuItem key={c.key} onClick={() => onConversation(c.key)} className={cx(current === c.key && "font-semibold text-ink")}>
-          <span className="min-w-0 flex-1 truncate">{c.label}</span>
-          {c.unread > 0 && <span className={cx("shrink-0 text-meta tabular-nums", c.forMe ? "font-semibold text-decide" : "text-ink-3")}>{c.unread}</span>}
-        </MenuItem>
-      ))}
+      {conversations.filter((c) => !left.includes(c)).map(item)}
+      {left.length > 0 && (
+        <>
+          <MenuSeparator />
+          <MenuNote>Left the channel</MenuNote>
+          {left.map(item)}
+        </>
+      )}
     </Menu>
   )
 }

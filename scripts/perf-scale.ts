@@ -11,6 +11,7 @@ import { loadConfig } from "../src/config.ts";
 import { daemonSock } from "../src/daemon/protocol.ts";
 import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
+import { calibrate } from "./perf-calibrate.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`A busy channel, measured: PERF_AGENTS agents (10), PERF_TASKS tasks (100), PERF_MESSAGES messages (2000), then PERF_SOAK_MIN minutes (20) of agents posting.
@@ -162,39 +163,6 @@ async function tab(page: Page, label: string, marker: string): Promise<number> {
   );
 }
 
-async function calibrate(page: Page): Promise<{ ms: number; reps: number[] }> {
-  return page.evaluate(async () => {
-    const times: number[] = [];
-    for (let r = 0; r < 5; r++) {
-      await new Promise((ok) => requestAnimationFrame(() => setTimeout(ok, 0)));
-      const t0 = performance.now();
-      const host = document.createElement("div");
-      host.style.cssText = "position:absolute;left:-20000px;top:0;width:720px";
-      for (let i = 0; i < 2000; i++) {
-        const row = document.createElement("div");
-        row.className = "flex items-start gap-2 px-3 py-1.5 text-ui leading-normal";
-        const who = document.createElement("span");
-        who.className = "font-medium text-ink";
-        who.textContent = `agent-${i % 10}`;
-        const body = document.createElement("p");
-        body.className = "min-w-0 flex-1 text-ink-2 [overflow-wrap:anywhere]";
-        body.textContent = `M${i}: ${"words in a message ".repeat(3 + (i % 9))}`;
-        row.append(who, body);
-        host.append(row);
-      }
-      document.body.append(host);
-      void host.offsetHeight;
-      const items = Array.from({ length: 20000 }, (_, i) => ({ seq: (i * 7919) % 20011, body: `M${i}` }));
-      items.sort((a, b) => a.seq - b.seq);
-      void (JSON.parse(JSON.stringify(items)) as unknown[]).length;
-      host.remove();
-      times.push(performance.now() - t0);
-    }
-    const reps = times.map((t) => Math.round(t * 10) / 10);
-    return { ms: [...reps].sort((a, b) => a - b)[2]!, reps };
-  });
-}
-
 async function work(cdp: CDPSession): Promise<Record<string, number>> {
   const { metrics } = (await cdp.send("Performance.getMetrics")) as { metrics: { name: string; value: number }[] };
   const m = Object.fromEntries(metrics.map((x) => [x.name, x.value]));
@@ -250,7 +218,7 @@ const TEXTS = [
   "On it. I'll have win run the steady load first, then the cold runs.",
   "Merged #398. The rails are darker and the page is a round sheet beside them, in light and dark.",
   "| step | before | after |\n|---|---|---|\n| first paint | 420ms | 180ms |\n| switch | 270ms | 26ms |",
-  "PR is up: https://github.com/ojowwalker77/channels/pull/417 — CI green, waiting on review.",
+  "PR is up: https://github.com/kiwi-init/channels/pull/417 — CI green, waiting on review.",
 ];
 
 const SEEDED = "Seeded: a reload opens the channel here";

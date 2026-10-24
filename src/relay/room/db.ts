@@ -35,6 +35,8 @@ const READS_TABLE = "CREATE TABLE reads (pk TEXT PRIMARY KEY, seq INTEGER NOT NU
 
 const SLOTS_TABLE = "CREATE TABLE slots (id TEXT PRIMARY KEY, holder TEXT NOT NULL, seq INTEGER NOT NULL, until INTEGER NOT NULL)";
 
+const SENDS_TABLE = "CREATE TABLE sends (sender TEXT NOT NULL, cid TEXT NOT NULL, seq INTEGER NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (sender, cid))";
+
 const REQUEST_COLUMNS = [
   ["kind", "TEXT NOT NULL DEFAULT 'agent'"],
   ["sponsor_user", "TEXT"],
@@ -125,6 +127,7 @@ export class RoomDb {
     );
     this.sql.run(READS_TABLE);
     this.sql.run(SLOTS_TABLE);
+    this.sql.run(SENDS_TABLE);
   }
 
   migrate(): void {
@@ -140,6 +143,7 @@ export class RoomDb {
     }
     this.sql.run(READS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
     this.sql.run(SLOTS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
+    this.sql.run(SENDS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
     migrated.add(this.sql);
   }
 
@@ -201,6 +205,15 @@ export class RoomDb {
   insert(seq: number, ts: number, iv: string, ct: string, e: number): void {
     this.sql.run("INSERT INTO msgs (seq, ts, iv, ct, e) VALUES (?, ?, ?, ?, ?)", seq, ts, packed(iv), packed(ct), e);
     this.warm.head = seq;
+  }
+
+  claimSend(sender: string, cid: string, seq: number, ts: number): { seq: number; ts: number } | null {
+    if (this.sql.all<{ seq: number }>("INSERT OR IGNORE INTO sends (sender, cid, seq, ts) VALUES (?, ?, ?, ?) RETURNING seq", sender, cid, seq, ts).length) return null;
+    return this.sql.all<{ seq: number; ts: number }>("SELECT seq, ts FROM sends WHERE sender = ? AND cid = ?", sender, cid)[0] ?? null;
+  }
+
+  pruneSends(before: number): void {
+    this.sql.run("DELETE FROM sends WHERE ts < ?", before);
   }
 
   slotHolder(id: string, now: number): { holder: string; seq: number } | null {

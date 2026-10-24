@@ -4,13 +4,21 @@ on:
   push:
     branches: [main]
   pull_request:
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
+    inputs:
+      jobs:
+        description: "Only these .github/jev-ci.yml jobs, comma-separated (desktop-linux, desktop-mac, …); empty runs everything"
+        required: false
+        default: ""
 
 # A new push to a pull request cancels its run still in progress: only the newest commit's
-# result matters there. Every run on main has a group of its own, so no push or rehearsal
-# cancels another and each commit on main gets a verdict (a cancelled run reads as red).
+# result matters there. So does a new push to main: its run tests what the older one would have,
+# and the older run's ci-ok passes as cancelled for it (jev-ci report). Each merge group has a ref
+# of its own, so groups never cancel each other, and a dispatched run never cancels another.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_ref || (github.event_name == 'push' && github.ref) || github.run_id }}
   cancel-in-progress: true
 
 permissions:
@@ -19,9 +27,12 @@ permissions:
 # One job per area, its checks as steps: each job pays for one checkout and one install.
 # A step that fails doesn't stop the checks after it (`!cancelled()`), so one run shows every failure.
 jobs:
-  # Decides which jobs this pull request can break (.github/jev-ci.yml): rules first, then a
-  # cache of inputs that already passed, then Jev for the rest. Pushes to main run everything,
-  # and if planning fails, everything runs. Every check below runs only if the plan says so.
+  # Decides which jobs this pull request or merge group can break (.github/jev-ci.yml): rules
+  # first, then a cache of inputs that already passed, then Jev for the rest. A pull request runs
+  # only its pull_request_jobs (repo / static, test / unit); a merge group is planned on its
+  # combined change (merge_group.base_sha..head_sha) and runs every job that plan picks. A push to main runs
+  # nothing when the merge queue already tested that commit as-is, and everything otherwise;
+  # if planning fails, everything runs. Every check below runs only if the plan says so.
   plan:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -192,7 +203,14 @@ jobs:
           overwrite: true
       - name: cli build
         if: ${{ !cancelled() }}
-        run: bun run build && ./dist/kiwi --version && bun scripts/build-cli.ts --check
+        run: |
+          bun run build && ./dist/kiwi --version && bun scripts/build-cli.ts --check
+          probe="$RUNNER_TEMP/kiwi-autoload"
+          mkdir -p "$probe"
+          printf 'preload = ["./p.js"]\n' > "$probe/bunfig.toml"
+          printf 'require("node:fs").writeFileSync("preload-ran", "")\n' > "$probe/p.js"
+          (cd "$probe" && "$GITHUB_WORKSPACE/dist/kiwi" --version)
+          test ! -e "$probe/preload-ran" || { echo "the kiwi CLI ran a bunfig.toml preload from the folder it was started in"; exit 1; }
       - name: cli smoke
         if: ${{ !cancelled() }}
         run: bun scripts/smoke-cli.ts dist/kiwi
@@ -215,14 +233,26 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/browser
+        with:
+          webkit: "true"
       - run: bun run web:build
       - name: ui shots
         run: bun scripts/shoot-ui.ts --wide --phone channel,tasks --theme dark "$RUNNER_TEMP/shots"
+      - name: ui shots in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/shoot-ui.ts --browser webkit --wide --theme light "$RUNNER_TEMP/shots-webkit"
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ui-shots
           path: ${{ runner.temp }}/shots
+          if-no-files-found: ignore
+          overwrite: true
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ui-shots-webkit
+          path: ${{ runner.temp }}/shots-webkit
           if-no-files-found: ignore
           overwrite: true
       - uses: ./.github/actions/jev-ci-pass
@@ -316,6 +346,220 @@ jobs:
           job: desktop
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop'] }}
 
+  desktop-mac:
+    name: desktop / mac
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['desktop-mac']
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup
+      - run: bun run web:build
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.hutch
+          key: hutch-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/electrobun-pins.json') }}
+      - name: electrobun toolchain
+        working-directory: desktop
+        timeout-minutes: 5
+        run: for i in 1 2 3; do bun run prepare:eb && exit 0; echo "electrobun prepare failed ($i of 3)"; [ "$i" -lt 3 ] && sleep 20; done; exit 1
+      - name: the kiwi CLI the app bundles
+        run: mkdir -p dist && bun scripts/build-cli.ts --js dist/kiwi.js
+      - working-directory: desktop
+        env:
+          DASH_RELEASE_OFFLINE: "1"
+        run: bun run typecheck:eb
+      - working-directory: desktop
+        if: ${{ !cancelled() }}
+        run: bun test --tsconfig-override tsconfig.eb.json ./eb-tests
+      - working-directory: desktop
+        if: ${{ !cancelled() }}
+        env:
+          DASH_RELEASE_OFFLINE: "1"
+        run: bun run build:eb
+      - if: ${{ !cancelled() }}
+        run: bun desktop/scripts/eb-size.ts desktop/release-eb
+      - if: ${{ !cancelled() }}
+        run: bun desktop/scripts/eb-seal-check.ts
+      - name: the launcher keeps BUN_*, NODE_*, DYLD_* and JSC_* out of the app
+        if: ${{ !cancelled() }}
+        run: bun desktop/scripts/eb-env-check.ts desktop/release-eb
+      - name: the launcher holds the store key for one session, refuses a changed app, and its C runs clean under ASan and UBSan
+        if: ${{ !cancelled() }}
+        run: bun desktop/scripts/eb-keys-check.ts desktop/release-eb
+      - name: test build (the test driver in, its own bundle id)
+        if: ${{ !cancelled() }}
+        working-directory: desktop
+        run: bun scripts/eb.ts build --env=dev
+        env:
+          CHANNELS_EB_TEST: "1"
+          DASH_RELEASE_OFFLINE: "1"
+      - name: no test driver in the release build
+        if: ${{ !cancelled() }}
+        run: bun desktop/scripts/eb-driver-check.ts desktop/release-eb
+      - name: smoke
+        if: ${{ !cancelled() }}
+        run: bun desktop/scripts/smoke-eb.ts desktop/release-eb/build/dev-macos-*/*.app
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        timeout-minutes: 1
+        with:
+          job: desktop-mac
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-mac'] }}
+
+  desktop-linux:
+    name: desktop / linux, ${{ matrix.os }}
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['desktop-linux']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            part: 1
+            sandbox: unsandboxed
+            drive: false
+          - os: ubuntu-26.04
+            part: 2
+            sandbox: sandboxed
+            drive: true
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup
+      - id: image
+        run: echo "key=$ImageOS-$ImageVersion" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/linux-debs
+          key: linux-debs-${{ runner.arch }}-${{ steps.image.outputs.key }}-${{ github.run_id }}
+          restore-keys: linux-debs-${{ runner.arch }}-${{ steps.image.outputs.key }}-
+      - name: WebKitGTK, its sandbox, Xvfb and the AppImage tools, from cached .debs when the mirror is slow
+        timeout-minutes: 15
+        run: |
+          debs="$RUNNER_TEMP/linux-debs"
+          mkdir -p "$debs/partial"
+          find "$debs" -maxdepth 1 -name '*.deb' | wc -l > "$RUNNER_TEMP/debs-before"
+          echo "Dir::Cache::Archives \"$debs/\";" | sudo tee /etc/apt/apt.conf.d/90linux-debs > /dev/null
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus
+      - id: debs
+        name: keep what apt downloaded, even when it ran out of time
+        if: always()
+        run: |
+          debs="$RUNNER_TEMP/linux-debs"
+          sudo rm -rf "$debs/partial" "$debs/lock"
+          sudo chown -R "$(id -u):$(id -g)" "$debs"
+          echo "new=$([ "$(find "$debs" -maxdepth 1 -name '*.deb' | wc -l)" -gt "$(cat "$RUNNER_TEMP/debs-before" 2> /dev/null || echo 0)" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - if: always() && steps.debs.outputs.new == 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/linux-debs
+          key: linux-debs-${{ runner.arch }}-${{ steps.image.outputs.key }}-${{ github.run_id }}
+      - run: bun run web:build
+      - id: electrobun
+        run: echo "version=$(bun -e 'console.log(require("./desktop/package.json").devDependencies.electrobun)')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.hutch
+          key: hutch-${{ runner.os }}-${{ runner.arch }}-electrobun-${{ steps.electrobun.outputs.version }}
+      - name: electrobun toolchain
+        working-directory: desktop
+        run: for i in 1 2 3; do bun run prepare:eb && exit 0; echo "electrobun prepare failed ($i of 3)"; sleep 20; done; exit 1
+      - name: the kiwi CLI the app bundles
+        run: mkdir -p dist && bun scripts/build-cli.ts --js dist/kiwi.js
+      - working-directory: desktop
+        env:
+          DASH_RELEASE_OFFLINE: "1"
+        run: bun run build:eb
+      - name: the linux-arm64 Hutch and devkit match their pins (no job builds there)
+        if: ${{ !cancelled() }}
+        run: bun desktop/scripts/eb-pins-check.ts linux-arm64
+      - name: the store on Linux, through a throwaway GNOME keyring and with no Secret Service
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
+        run: |
+          dbus-run-session -- sh -c 'printf throwaway | gnome-keyring-daemon --unlock --components=secrets >/dev/null && bun desktop/scripts/linux-store-check.ts keyring'
+          env -u DBUS_SESSION_BUS_ADDRESS bun desktop/scripts/linux-store-check.ts none
+      - name: deb and AppImage, each at most 40 MB
+        if: ${{ !cancelled() }}
+        run: bun desktop/scripts/package-linux.ts desktop/release-eb desktop/release-eb/linux
+      - name: the packages hold the app
+        if: ${{ !cancelled() }}
+        run: bash desktop/scripts/linux-packages-check.sh desktop/release-eb/linux
+      - name: the deb installs over today's Electron deb and keeps its launcher link
+        if: ${{ !cancelled() }}
+        run: bash desktop/scripts/linux-upgrade-check.sh desktop/release-eb/linux
+      - name: the installed app starts on WebKitGTK, with the .desktop entry's names, and its permission and page hooks work
+        if: ${{ !cancelled() }}
+        run: |
+          cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-shell-test" desktop/native/linux/kiwi-shell-test.c $(pkg-config --cflags --libs webkit2gtk-4.1) -ldl
+          xvfb-run -a "$RUNNER_TEMP/kiwi-shell-test" /opt/Channels/bin/libkiwi-shell.so ${{ matrix.sandbox }}
+          echo "for WebKitGTK's sandbox: kernel.apparmor_restrict_unprivileged_userns=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo unset)"
+          xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh /opt/Channels/bin/launcher ${{ matrix.sandbox }}
+          img=$(ls "$PWD"/desktop/release-eb/linux/Channels-*-linux-x86_64.AppImage)
+          xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$img" ${{ matrix.sandbox }} --appimage-extract-and-run
+      - name: test build (the test driver in, its own id)
+        if: ${{ !cancelled() && matrix.drive }}
+        working-directory: desktop
+        run: bun scripts/eb.ts build --env=dev
+        env:
+          CHANNELS_EB_TEST: "1"
+          DASH_RELEASE_OFFLINE: "1"
+      - id: test-app
+        if: ${{ !cancelled() && matrix.drive }}
+        run: |
+          found=$(ls -d desktop/release-eb/build/dev-linux-*/*/bin/electrobun-launcher)
+          [ "$(echo "$found" | wc -l)" = 1 ] || { echo "expected one test build, found: $found"; exit 1; }
+          echo "path=$(dirname "$(dirname "$found")")" >> "$GITHUB_OUTPUT"
+      - name: no test driver in the release build (the installed deb)
+        if: ${{ !cancelled() && matrix.drive }}
+        run: bun desktop/scripts/eb-driver-check.ts desktop/release-eb /opt/Channels
+      - name: smoke, under Xvfb
+        if: ${{ !cancelled() && matrix.drive }}
+        run: xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/smoke-eb.ts "${{ steps.test-app.outputs.path }}"
+      - name: dpkg --purge leaves nothing of the app behind
+        if: ${{ !cancelled() }}
+        run: |
+          sudo dpkg --purge kiwi-desktop
+          left=$(ls -d /opt/Channels /usr/bin/channels-desktop /usr/share/applications/channels-desktop.desktop /usr/share/icons/hicolor/*/apps/channels-desktop.png 2> /dev/null || true)
+          [ -z "$left" ] || { echo "left after --purge:"; echo "$left"; exit 1; }
+          echo "purged: no files, link, entry or icons left"
+      - name: what bwrap can do under this AppArmor, for an app profile later (prints only)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          try() { out=$("$@" 2>&1) && echo "ok" || echo "refused: $(echo "$out" | head -n 1)"; }
+          echo "kernel.apparmor_restrict_unprivileged_userns=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo unset)"
+          echo "profiles in /etc/apparmor.d naming bwrap or userns: $(grep -lE 'bwrap|userns' /etc/apparmor.d/* 2>/dev/null | tr '\n' ' ')"
+          echo "loaded profiles naming bwrap or userns: $(sudo grep -E 'bwrap|userns' /sys/kernel/security/apparmor/profiles | tr '\n' ';')"
+          echo "bwrap --unshare-all, unprofiled: $(try bwrap --unshare-all --die-with-parent --ro-bind / / true)"
+          printf 'abi <abi/4.0>,\ninclude <tunables/global>\nprofile kiwi-userns-probe flags=(unconfined) {\n  userns,\n}\n' > "$RUNNER_TEMP/kiwi-userns-probe"
+          sudo apparmor_parser -r "$RUNNER_TEMP/kiwi-userns-probe" && echo "loaded kiwi-userns-probe (unconfined, userns)"
+          echo "under kiwi-userns-probe, bwrap itself: $(try aa-exec -p kiwi-userns-probe -- bwrap --unshare-all --die-with-parent --ro-bind / / true)"
+          echo "under kiwi-userns-probe, bwrap exec'd from sh: $(try aa-exec -p kiwi-userns-probe -- sh -c 'bwrap --unshare-all --die-with-parent --ro-bind / / true')"
+          echo "label of sh under kiwi-userns-probe, and of what it execs: $(aa-exec -p kiwi-userns-probe -- sh -c 'cat /proc/self/attr/current; echo; cat /proc/$$/attr/current' | tr '\n' ' ')"
+          echo "label of bwrap's child under kiwi-userns-probe: $(aa-exec -p kiwi-userns-probe -- bwrap --unshare-all --die-with-parent --ro-bind / / cat /proc/self/attr/current 2>&1 | head -n 1)"
+          echo "unshare -Urn under kiwi-userns-probe: $(try aa-exec -p kiwi-userns-probe -- unshare -Urn ip link set lo up)"
+          echo "unshare -Urn, unprofiled: $(try unshare -Urn ip link set lo up)"
+          sudo apparmor_parser -R "$RUNNER_TEMP/kiwi-userns-probe" || true
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: linux-packages-${{ matrix.os }}
+          path: desktop/release-eb/linux/*
+          if-no-files-found: warn
+          retention-days: 3
+          overwrite: true
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: desktop-linux
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-linux'] }}
+          shard: ${{ matrix.part }}of2
+
   cli-macos:
     name: cli / macos
     needs: plan
@@ -329,6 +573,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
+      - run: brew install tmux
       - run: bun scripts/ci-tests.ts all --shard=${{ matrix.shard }}/3
       - if: matrix.shard == 1
         run: |
@@ -338,6 +583,12 @@ jobs:
           done
           codesign --force --sign - dist/kiwi-darwin-arm64 dist/kiwi-darwin-x64
           ./dist/kiwi-darwin-arm64 --version
+          probe="$RUNNER_TEMP/kiwi-autoload"
+          mkdir -p "$probe"
+          printf 'preload = ["./p.js"]\n' > "$probe/bunfig.toml"
+          printf 'require("node:fs").writeFileSync("preload-ran", "")\n' > "$probe/p.js"
+          (cd "$probe" && "$GITHUB_WORKSPACE/dist/kiwi-darwin-arm64" --version)
+          test ! -e "$probe/preload-ran" || { echo "the kiwi CLI ran a bunfig.toml preload from the folder it was started in"; exit 1; }
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         timeout-minutes: 1
@@ -361,7 +612,7 @@ jobs:
           sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
           xcodebuild -version
       - name: swift lint
-        run: xcrun swift-format lint -r --strict --configuration ios/.swift-format ios/Channels
+        run: xcrun swift-format lint -r --strict --configuration ios/.swift-format ios/Channels ios/ChannelsUITests
       - name: app build
         if: ${{ !cancelled() }}
         run: xcodebuild -project ios/Channels.xcodeproj -scheme Channels -configuration Release -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/ios" CODE_SIGNING_ALLOWED=NO build
@@ -371,6 +622,45 @@ jobs:
         with:
           job: ios
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['ios'] }}
+
+  # The iPhone app's gestures, with real touches: ios/ChannelsUITests in a simulator, on a canned channel.
+  ios-gestures:
+    name: ios / gestures
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['ios-gestures']
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup
+      - name: newest xcode
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+          xcodebuild -version
+      - name: simulator
+        run: |
+          SIM=$(xcrun simctl list devices available --json | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          runtimes = sorted((k for k in devices if ".iOS-" in k), key=lambda k: [int(x) for x in k.rsplit(".iOS-", 1)[1].split("-")])
+          print(next(d["udid"] for d in devices[runtimes[-1]] if d["name"].startswith("iPhone")))')
+          echo "SIM=$SIM" >> "$GITHUB_ENV"
+          xcrun simctl boot "$SIM"
+          xcrun simctl bootstatus "$SIM"
+      - name: gestures
+        run: |
+          set +e
+          xcodebuild test -project ios/Channels.xcodeproj -scheme Channels -destination "id=$SIM" -derivedDataPath "$RUNNER_TEMP/ios-ui" CODE_SIGNING_ALLOWED=NO > "$RUNNER_TEMP/gestures.log" 2>&1
+          code=$?
+          grep -E "GESTURE|error:|Test Case .*(passed|failed)|\*\* TEST" "$RUNNER_TEMP/gestures.log"
+          [ "$code" -eq 0 ] || tail -80 "$RUNNER_TEMP/gestures.log"
+          exit "$code"
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        timeout-minutes: 1
+        with:
+          job: ios-gestures
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['ios-gestures'] }}
 
   # The Android app: Gradle bundles the engine, builds a release APK (R8, signed with a debug key kept in the cache so
   # installs update in place) and runs Android lint on it. The APK is kept as an artifact to install on a phone.
@@ -485,7 +775,7 @@ jobs:
   # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, static, test-unit, test-flows-a, test-flows-b, build, shots, perf-runs, perf, desktop, cli-macos, ios, android, android-device, release-rehearsal]
+    needs: [plan, static, test-unit, test-flows-a, test-flows-b, build, shots, perf-runs, perf, desktop, desktop-mac, desktop-linux, cli-macos, ios, ios-gestures, android, android-device, release-rehearsal]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

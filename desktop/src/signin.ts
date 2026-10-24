@@ -1,6 +1,5 @@
-import { shell } from "electron";
-
 import type { SignInResult } from "./bridge.ts";
+import { externalUrl, type ExternalUrl } from "./guard.ts";
 import { held } from "./held.ts";
 import { openInBrowser } from "./open.ts";
 import { mutate, store, type StoreFile } from "./store.ts";
@@ -20,7 +19,7 @@ export const relayConfig = held(10 * 60_000, async (relay: string): Promise<Rela
   return (await res.json()) as RelayConfig;
 });
 
-async function workosDeviceSignIn(clientId: string): Promise<{ access: string; refresh: string; exp: number }> {
+async function workosDeviceSignIn(clientId: string, open: (url: ExternalUrl) => Promise<void>): Promise<{ access: string; refresh: string; exp: number }> {
   const start = (await (
     await fetch(WORKOS_DEVICE_URL, {
       method: "POST",
@@ -30,9 +29,9 @@ async function workosDeviceSignIn(clientId: string): Promise<{ access: string; r
   ).json()) as { device_code?: string; user_code?: string; verification_uri?: string; verification_uri_complete?: string; expires_in?: number; interval?: number };
   if (!start.device_code) throw new Error("the relay's sign-in didn't start");
   const given = start.verification_uri_complete ?? (start.verification_uri ? `${start.verification_uri}?user_code=${encodeURIComponent(start.user_code ?? "")}` : null);
-  const verifyUrl = given && URL.canParse(given) && new URL(given).protocol === "https:" ? given : null;
+  const verifyUrl = given && URL.canParse(given) && new URL(given).protocol === "https:" ? externalUrl(given) : null;
   if (!verifyUrl) throw new Error("the relay's sign-in didn't start");
-  await openInBrowser(verifyUrl, (u) => shell.openExternal(u));
+  await openInBrowser(verifyUrl, open);
   const until = Date.now() + (start.expires_in ?? 600) * 1000;
   for (;;) {
     await new Promise((r) => setTimeout(r, (start.interval ?? 5) * 1000));
@@ -56,11 +55,11 @@ async function workosDeviceSignIn(clientId: string): Promise<{ access: string; r
   }
 }
 
-export async function signInMain(): Promise<SignInResult> {
+export async function signInMain(open: (url: ExternalUrl) => Promise<void>): Promise<SignInResult> {
   const config = await relayConfig(store.relayUrl);
   if (config.dev) return { dev: true };
   if (!config.workosClientId) throw new Error("this relay has no sign-in");
-  const sess = await workosDeviceSignIn(config.workosClientId);
+  const sess = await workosDeviceSignIn(config.workosClientId, open);
   mutate((s) => (s.signin = sess));
   return { token: sess.access };
 }

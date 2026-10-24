@@ -5,12 +5,15 @@ import type { Scope } from "@kiwi/core/scopes.ts"
 import { usePinned } from "@/lib/pinned"
 import { memberName } from "@/lib/format"
 import { AgentFacts } from "../agent-facts"
-import { Alert, Button, errorText, TextField, toast } from "../kit"
-import { exportNote, logFileName } from "@/lib/log-export"
+import { Alert, Button, TextField } from "../kit"
 import type { Persona } from "@kiwi/core/personality.ts"
+import { isPerson } from "@kiwi/core/state/people.ts"
+import type { Color } from "@kiwi/core/protocol.ts"
+import { ColorChoice } from "../color-choice"
 import { PersonalityPicker } from "../personality-picker"
 import { PowersPicker, ScopePicker } from "../scopes"
 import type { Confirm, ControlsProps } from "./context"
+import { useDownload } from "./use-download"
 
 export function ConfirmDialogs({
   p,
@@ -40,25 +43,7 @@ export function ConfirmDialogs({
   setPersonaDraft: Dispatch<SetStateAction<Persona | null>>
 }) {
   const chosen = personaDraft
-  const [saving, setSaving] = useState(false)
-  const download = async () => {
-    setSaving(true)
-    try {
-      const log = await p.exportLog()
-      const url = URL.createObjectURL(new Blob([log.text], { type: "application/jsonl" }))
-      const a = document.createElement("a")
-      a.href = url
-      a.download = logFileName(p.title, new Date())
-      a.click()
-      setTimeout(() => URL.revokeObjectURL(url), 60_000)
-      const note = exportNote(log)
-      toast(note.text, note.complete ? undefined : "error")
-    } catch (err) {
-      toast(`Not downloaded: ${errorText(err)}`, "error")
-    } finally {
-      setSaving(false)
-    }
-  }
+  const { saving, download } = useDownload(p)
   const pinnedAs = usePinned(confirm?.kind === "approve" ? confirm.req.pin : undefined)
   useEffect(() => {
     if (pinnedAs) setPersonaDraft(pinnedAs)
@@ -102,6 +87,39 @@ export function ConfirmDialogs({
             Save
           </Button>
         )}
+      </Alert>
+
+      <Alert
+        open={confirm?.kind === "color"}
+        onClose={() => setConfirm(null)}
+        title={confirm?.kind === "color" ? (confirm.member.pk === p.myKey ? "Your colour" : `${memberName(confirm.member)}’s colour`) : ""}
+        message={
+          confirm?.kind === "color" && (
+            <span className="mt-3 grid gap-3">
+              <ColorChoice
+                value={p.state.members.get(confirm.member.name)?.color ?? null}
+                taken={
+                  new Map(
+                    [...p.state.members.values()].filter((x) => x.active && isPerson(x) && x.name !== confirm.member.name && x.color).map((x): [Color, string] => [x.color!, x.display ?? x.name])
+                  )
+                }
+                disabled={busy}
+                onPick={(color) => {
+                  const m = confirm.member
+                  const who = m.pk === p.myKey ? "Your" : `${memberName(m)}’s`
+                  if (p.onColor) void run(() => p.onColor!(m, color), color ? `${who} colour is ${color}` : `${who} colour is cleared`)
+                }}
+              />
+              <span className="text-meta text-ink-3">
+                It marks {confirm.member.pk === p.myKey ? "you" : "them"} and the agents {confirm.member.pk === p.myKey ? "you add" : "they add"}. Each person has their own.
+              </span>
+            </span>
+          )
+        }
+      >
+        <Button variant="secondary" onClick={() => setConfirm(null)}>
+          Done
+        </Button>
       </Alert>
 
       <Alert
@@ -226,7 +244,7 @@ export function ConfirmDialogs({
               <span>Every message, member and key is deleted on the relay, and everyone’s copy is wiped the next time they connect. It can’t be recovered.</span>
               <span>Download the log first to keep it: every message with its author’s signature, so a message cited by number can still be checked.</span>
               <span>
-                <Button variant="secondary" disabled={busy || saving} onClick={() => void download()}>
+                <Button variant="secondary" disabled={busy || !!saving} onClick={() => void download("log")}>
                   {saving ? "Downloading…" : "Download log"}
                 </Button>
               </span>
@@ -241,7 +259,7 @@ export function ConfirmDialogs({
         </Button>
         <Button
           className="bg-alert"
-          disabled={busy || saving}
+          disabled={busy || !!saving}
           onClick={() => run(confirm?.kind === "close" ? p.onCloseChannel : p.onLeaveChannel, confirm?.kind === "close" ? "Channel closed" : "You left the channel")}
         >
           {confirm?.kind === "close" ? "Close channel" : "Leave channel"}

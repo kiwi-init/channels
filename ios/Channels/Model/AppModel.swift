@@ -57,7 +57,7 @@ final class AppModel {
     @ObservationIgnored private let pictures = NSCache<NSString, UIImage>()
 
     var channels: [RoomView] {
-        rooms.values.filter { $0.gone == nil }.sorted { ($0.last?.at ?? 0) > ($1.last?.at ?? 0) }
+        rooms.values.filter { $0.gone == nil }.sorted { (($0.latest ?? $0.last)?.at ?? 0) > (($1.latest ?? $1.last)?.at ?? 0) }
     }
 
     func fresh(_ room: RoomView, _ key: String) -> Bool {
@@ -88,6 +88,13 @@ final class AppModel {
             phase = .broken(error.localizedDescription)
             return
         }
+        #if DEBUG
+            if let json = ProcessInfo.processInfo.environment["CHANNELS_FIXTURE"], let room = try? JSONDecoder().decode(RoomView.self, from: Data(json.utf8)) {
+                rooms[room.code] = room
+                phase = .ready
+                return
+            }
+        #endif
         guard let saved = Vault.load() else {
             phase = .unlinked
             return
@@ -117,7 +124,8 @@ final class AppModel {
         case .room(let room):
             if let before = rooms[room.code], before.connection == .live {
                 let known = Set(before.asks.map(\.seq))
-                if room.asks.contains(where: { !known.contains($0.seq) }) {
+                let reviewed = Set(before.reviews.map(\.task))
+                if room.asks.contains(where: { !known.contains($0.seq) }) || room.reviews.contains(where: { !reviewed.contains($0.task) }) {
                     UINotificationFeedbackGenerator().notificationOccurred(.warning)
                 }
             }
@@ -186,6 +194,14 @@ final class AppModel {
 
     func answer(_ code: String, seq: Int, text: String) async throws {
         try await engine.ask(["op": "answer", "code": code, "seq": seq, "text": text])
+    }
+
+    func approve(_ code: String, task: Int) async throws {
+        try await engine.ask(["op": "approve", "code": code, "task": task])
+    }
+
+    func sendBack(_ code: String, task: Int, why: String) async throws {
+        try await engine.ask(["op": "sendBack", "code": code, "task": task, "why": why])
     }
 
     func nudge() {
