@@ -7,7 +7,7 @@ import { Button, errorText, toast } from "../kit"
 
 const field = "min-w-0 flex-1 bg-transparent text-ui text-ink outline-none placeholder:text-ink-3 focus-visible:outline-none"
 
-export function Rooms({ rooms, onMake, onRename }: { rooms: readonly Room[]; onMake?: (name: string) => Promise<void>; onRename?: (id: string, name: string) => Promise<void> }) {
+export function Rooms({ rooms, onMake, onRename }: { rooms: readonly Room[]; onMake?: (name: string) => Promise<string>; onRename?: (id: string, name: string) => Promise<void> }) {
   const [name, setName] = useState("")
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null)
   const [busy, setBusy] = useState(false)
@@ -15,7 +15,7 @@ export function Rooms({ rooms, onMake, onRename }: { rooms: readonly Room[]; onM
   const problem = name.trim() ? roomProblem(rooms, name) : null
   const renameProblem = renaming && renaming.name.trim() ? roomProblem(rooms, renaming.name, renaming.id) : null
   const unchanged = !!renaming && cleanRoomName(renaming.name) === rooms.find((r) => r.id === renaming.id)?.name
-  const act = async (fn: () => Promise<void>, done: string, after: () => void) => {
+  const act = async (fn: () => Promise<unknown>, done: string, after: () => void) => {
     setBusy(true)
     try {
       await fn()

@@ -47,7 +47,7 @@ export interface ControlsProps {
   onRepos?: (repos: string[]) => Promise<void>
   onGithubWrite?: (on: boolean) => Promise<void>
   onBranchPrefix?: (prefix: string | null) => Promise<void>
-  onMakeRoom?: (name: string) => Promise<void>
+  onMakeRoom?: (name: string) => Promise<string>
   onRenameRoom?: (id: string, name: string) => Promise<void>
   title?: string
   roomId?: string

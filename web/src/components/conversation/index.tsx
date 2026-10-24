@@ -441,6 +441,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     go(placeFromKey(key) ?? MAIN)
   }
   const roomName = state.rooms.get(cardRoom)?.name ?? GENERAL_ROOM
+  const makeRoom = handlers.onMakeRoom
   const needsYou = (
     <NeedsYou
       now={now}
@@ -520,6 +521,15 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                 conversations={conversations}
                 current={currentConversation}
                 onConversation={(key) => (leaveInfo(), openConversation(key))}
+                rooms={rooms}
+                onNewRoom={
+                  makeRoom &&
+                  (async (name) => {
+                    const id = await makeRoom(name)
+                    leaveInfo()
+                    openConversation(roomKey(id))
+                  })
+                }
               />
               <div className={cx("@container relative flex min-w-0 flex-1 md:sheet", info ? "hidden" : (root || side?.kind === "tasks") && "hidden md:flex")}>
                 <div className="relative flex min-w-0 flex-1 flex-col bg-canvas" style={{ "--head": `${headH}px`, "--foot": `${footH}px` } as CSSProperties}>
