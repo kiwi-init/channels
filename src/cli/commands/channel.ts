@@ -1,7 +1,7 @@
 import * as Effect from "effect/Effect";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join as joinPath } from "node:path";
-import { home, Keystore, updateConfig } from "../../config.ts";
+import { home, Keystore, loadConfig, updateConfig } from "../../config.ts";
 import { describeMember } from "@kiwi/core/membership.ts";
 import { daemonSeat, type DaemonSeat } from "../../daemon.ts";
 import { isWakeVia, wakeKey, wakeWords } from "@kiwi/core/wake.ts";
@@ -9,6 +9,7 @@ import { ago, holdLine, formatRooms, formatStatus, presenceWords, statusJson } f
 import { describeScopes, presetOf } from "@kiwi/core/scopes.ts";
 import { bindDirectory, seatsFor } from "../../hooks.ts";
 import { heldText, seatHeldAway } from "../../hold.ts";
+import { setWake, wakeSeats } from "../../wake-seats.ts";
 import { args, opt } from "../args.ts";
 import { agentName, type Command, die, noteRead, out, seatHere, session } from "../context.ts";
 import { ADMIN_GONE } from "./admin.ts";
@@ -71,6 +72,15 @@ export const channelCommands: Record<string, Command> = {
 
   wake: () =>
     Effect.gen(function* () {
+      if (args[1] === "seats" || args[1] === "seat") {
+        if (args[1] === "seat") {
+          const [, , room, agent, turn] = args;
+          if (!room || !agent || (turn !== "on" && turn !== "off")) return yield* die("usage: kiwi wake seat ROOM_ID AGENT on|off [--json]");
+          if (!setWake(room, agent, turn)) return yield* die(`no seat for ${agent} in that channel on this computer`);
+        }
+        const seats = wakeSeats(loadConfig());
+        return out(opt.json ? JSON.stringify({ seats }) : seats.map((s) => `${s.alias}/${s.agent}: ${s.wake}`).join("\n") || "no seats on this computer");
+      }
       const s = yield* session();
       const turn = args[1];
       if (turn === "on" || turn === "off") {
@@ -103,7 +113,7 @@ export const channelCommands: Record<string, Command> = {
           `Kiwi wakes ${s.me} in "${s.alias}" by POSTing to ${new URL(url).host}${piped ? " with the Authorization header from stdin" : " (no Authorization header: pipe one in if the webhook needs it)"}`,
         );
       }
-      if (turn !== undefined) return yield* die("usage: kiwi wake [on|off|webhook URL|webhook off]");
+      if (turn !== undefined) return yield* die("usage: kiwi wake [on|off|webhook URL|webhook off|seats|seat ROOM_ID AGENT on|off]");
       const seat = yield* Effect.promise(() => daemonSeat(s.alias, s.me));
       out(seat ? wakeLine(seat.wake) : `the daemon holds no seat for ${s.me} in "${s.alias}" yet`);
     }),

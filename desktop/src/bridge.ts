@@ -4,6 +4,7 @@
 
 import type { HarnessRow, KnownHarness } from "@kiwi/core/harnesses.ts";
 import type { LaunchChoices } from "@kiwi/core/launch-options.ts";
+import type { WakeSeat } from "@kiwi/core/wake.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
 import type { CachedKept, CachedRow, Unread } from "@kiwi/core/cache-row.ts";
 import type { Channel, OpenKind, PresenceFields } from "@kiwi/core/client.ts";
@@ -342,6 +343,8 @@ export interface KiwiBridge {
   setLaunches(to: "on" | "off"): Promise<TerminalsStatus | null>;
   contextLine(): Promise<"on" | "off" | null>;
   setContextLine(to: "on" | "off"): Promise<"on" | "off" | null>;
+  wakeSeats(): Promise<WakeSeat[]>;
+  setWake(room: string, agent: string, to: "on" | "off"): Promise<WakeSeat[]>;
   harnesses(): Promise<HarnessRow[]>;
   seatFolders(roomId: string): Promise<string[]>;
   chooseFolder(): Promise<string | null>;
