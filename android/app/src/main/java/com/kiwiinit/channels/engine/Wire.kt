@@ -100,6 +100,16 @@ data class AskView(
 }
 
 @Serializable
+data class ReviewView(
+    val task: Int,
+    val title: String,
+    val by: String? = null,
+    val at: Double,
+) {
+    val millis: Long get() = at.toLong()
+}
+
+@Serializable
 data class PlaceView(
     val key: String,
     val kind: String,
@@ -141,6 +151,7 @@ data class RoomView(
     val sideKey: String? = null,
     val tasks: List<TaskView> = emptyList(),
     val asks: List<AskView> = emptyList(),
+    val reviews: List<ReviewView> = emptyList(),
     val last: MessageView? = null,
     val latest: MessageView? = null,
     val latestIn: String = "main",

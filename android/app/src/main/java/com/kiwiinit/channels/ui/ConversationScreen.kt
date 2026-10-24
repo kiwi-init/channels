@@ -72,6 +72,7 @@ import com.kiwiinit.channels.engine.Connection
 import com.kiwiinit.channels.engine.MemberView
 import com.kiwiinit.channels.engine.MessageView
 import com.kiwiinit.channels.engine.PlaceView
+import com.kiwiinit.channels.engine.ReviewView
 import com.kiwiinit.channels.engine.RoomView
 import com.kiwiinit.channels.model.AppModel
 import com.kiwiinit.channels.model.Buzz
@@ -102,6 +103,7 @@ fun ConversationScreen(
     var toLead by remember { mutableStateOf(true) }
     var replyTo by remember { mutableStateOf<MessageView?>(null) }
     var answering by remember { mutableStateOf<AskView?>(null) }
+    var sendingBack by remember { mutableStateOf<ReviewView?>(null) }
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     val view = LocalView.current
@@ -114,6 +116,7 @@ fun ConversationScreen(
         previous = spot
         replyTo = null
         answering = null
+        sendingBack = null
         toLead = !next.general
         spot = next
     }
@@ -175,14 +178,23 @@ fun ConversationScreen(
                             state = state,
                             follow = follow,
                             elsewhere = if (at.general) shown.elsewhere() else emptyList(),
+                            reviews = if (at.general) shown.reviews else emptyList(),
                             reply = { m ->
                                 answering = null
+                                sendingBack = null
                                 replyTo = m
                                 type()
                             },
                             answer = { ask ->
                                 replyTo = null
+                                sendingBack = null
                                 answering = ask
+                                type()
+                            },
+                            sendBack = { review ->
+                                replyTo = null
+                                answering = null
+                                sendingBack = review
                                 type()
                             },
                         )
@@ -199,9 +211,11 @@ fun ConversationScreen(
             spot = spot,
             replyTo = replyTo,
             answering = answering,
+            sendingBack = sendingBack,
             focus = focus,
             clearReply = { replyTo = null },
             clearAnswer = { answering = null },
+            clearSendBack = { sendingBack = null },
         )
     }
 }
@@ -301,12 +315,13 @@ private fun Status(room: RoomView, place: PlaceView?) {
     val dm: MemberView? = dmName?.let { room.member(it) }
     val busy = if (dm != null && dm.working) dm.doing.firstOrNull()?.let { "working on ${taskLabel(it)}" } ?: "working" else null
     val main = place?.kind == "main"
+    val needs = if (main) room.asks.size + room.reviews.size else 0
     val parts = listOfNotNull(
         if (place?.kind == "dm") (busy ?: (if (dm?.here == true) "here" else "away")) else null,
         if (room.connection == Connection.Connecting) "Connecting…" else null,
         if (room.connection == Connection.Reconnecting) "Reconnecting…" else null,
         if (main && room.working > 0) "${room.working} working" else null,
-        if (main && room.asks.isNotEmpty()) "${room.asks.size} ${if (room.asks.size == 1) "needs" else "need"} you" else null,
+        if (needs > 0) "$needs ${if (needs == 1) "needs" else "need"} you" else null,
     )
     if (parts.isEmpty()) return
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -315,7 +330,7 @@ private fun Status(room: RoomView, place: PlaceView?) {
             parts.joinToString(" · "),
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Medium,
-            color = if (main && room.asks.isNotEmpty()) tone.decide else tone.ink3,
+            color = if (needs > 0) tone.decide else tone.ink3,
             maxLines = 1,
         )
     }
@@ -324,7 +339,7 @@ private fun Status(room: RoomView, place: PlaceView?) {
 @Composable
 private fun Flip(model: AppModel, room: RoomView, other: Spot, go: () -> Unit) {
     val tone = Tone.current
-    val asks = room.asksIn(other.place).isNotEmpty()
+    val asks = room.asksIn(other.place).isNotEmpty() || (other.general && room.reviews.isNotEmpty())
     val fresh = model.unread(other)
     val lead = room.lead
     Box(

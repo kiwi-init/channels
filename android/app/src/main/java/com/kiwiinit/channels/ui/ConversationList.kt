@@ -496,12 +496,12 @@ private fun preview(row: ConversationRow): androidx.compose.ui.text.AnnotatedStr
 }
 
 private fun androidx.compose.ui.text.AnnotatedString.Builder.words(row: ConversationRow, tone: com.kiwiinit.channels.theme.Tones) {
-    val ask = row.asks.firstOrNull()
+    val need = row.need
     val line = row.line
-    if (ask != null) {
+    if (need != null) {
         withStyle(SpanStyle(color = tone.decide, fontWeight = FontWeight.SemiBold)) { append("Needs you: ") }
-        append(ask.body.oneLine())
-        if (row.asks.size > 1) append(" · ${row.asks.size}")
+        append(need)
+        if (row.needs > 1) append(" · ${row.needs}")
     } else if (row.draft != null && line.startsWith("Draft: ")) {
         withStyle(SpanStyle(color = tone.alert)) { append("Draft: ") }
         append(line.removePrefix("Draft: "))

@@ -6,6 +6,7 @@ import com.kiwiinit.channels.engine.AskView
 import com.kiwiinit.channels.engine.Connection
 import com.kiwiinit.channels.engine.MessageView
 import com.kiwiinit.channels.engine.PlaceView
+import com.kiwiinit.channels.engine.ReviewView
 import com.kiwiinit.channels.engine.RoomView
 
 data class Spot(val code: String, val place: String = "main") {
@@ -34,11 +35,14 @@ data class Row(
     val qualifier: String?,
     val unread: Boolean,
     val asks: List<AskView>,
+    val reviews: List<ReviewView>,
     val draft: Draft?,
 ) {
     val id: String get() = spot.id
     val last: MessageView? get() = if (kind == RowKind.Group) room.latest ?: place?.last else place?.last
     val lastAt: Double get() = last?.at ?: 0.0
+    val needs: Int get() = asks.size + reviews.size
+    val need: String? get() = (asks.firstOrNull()?.body ?: reviews.firstOrNull()?.let { "${taskLabel(it.task)} ${it.title}" })?.oneLine()
     val lead: String? get() = if (kind == RowKind.Lead) room.lead else null
 
     private val origin: String
@@ -59,7 +63,7 @@ data class Row(
     val line: String
         get() {
             if (room.connection == Connection.Connecting && last == null) return "Connecting…"
-            asks.firstOrNull()?.let { return "Needs you: ${it.body.oneLine()}" }
+            need?.let { return "Needs you: $it" }
             draft?.let { return "Draft: ${if (it.text.isEmpty()) "Photo" else it.text.oneLine()}" }
             val newest = last ?: return if (kind == RowKind.Lead) "Message $title directly" else "No messages yet"
             val body = if (newest.body.isEmpty() && newest.images > 0) {
@@ -107,6 +111,7 @@ fun AppModel.rows(filter: Filter = Filter.All): List<Row> {
             qualifier = null,
             unread = fresh(room, "main"),
             asks = room.asksIn("main"),
+            reviews = room.reviews,
             draft = drafts[general.id],
         )
         val spot = room.leadSpot
@@ -121,13 +126,14 @@ fun AppModel.rows(filter: Filter = Filter.All): List<Row> {
                 qualifier = if (many) room.title else null,
                 unread = fresh(room, spot.place),
                 asks = room.asksIn(spot.place),
+                reviews = emptyList(),
                 draft = drafts[spot.id],
             )
         }
     }
     val kept = when (filter) {
         Filter.All -> out
-        Filter.Needs -> out.filter { it.asks.isNotEmpty() }
+        Filter.Needs -> out.filter { it.needs > 0 }
         Filter.Unread -> out.filter { it.unread }
     }
     return kept.sortedWith(compareByDescending<Row> { it.lastAt }.thenByDescending { it.title })
@@ -135,4 +141,4 @@ fun AppModel.rows(filter: Filter = Filter.All): List<Row> {
 
 fun AppModel.row(spot: Spot): Row? = rows(Filter.All).firstOrNull { it.spot == spot }
 
-val AppModel.waiting: Int get() = channels.sumOf { it.asks.size }
+val AppModel.waiting: Int get() = channels.sumOf { it.asks.size + it.reviews.size }

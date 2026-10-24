@@ -115,7 +115,7 @@ class AppModel(private val app: Application) {
         get() = phase == Phase.Ready && (relinkAsked || linking != Linking.Idle)
 
     val channels: List<RoomView>
-        get() = rooms.values.filter { it.gone == null }.sortedByDescending { it.last?.at ?: 0.0 }
+        get() = rooms.values.filter { it.gone == null }.sortedByDescending { (it.latest ?: it.last)?.at ?: 0.0 }
 
     fun boot() {
         if (booted) return
@@ -187,7 +187,8 @@ class AppModel(private val app: Application) {
                 val before = rooms[room.code]
                 if (before != null && before.connection == Connection.Live) {
                     val known = before.asks.map { it.seq }.toSet()
-                    if (room.asks.any { it.seq !in known }) buzz.tryEmit(Buzz.Warn)
+                    val reviewed = before.reviews.map { it.task }.toSet()
+                    if (room.asks.any { it.seq !in known } || room.reviews.any { it.task !in reviewed }) buzz.tryEmit(Buzz.Warn)
                 }
                 feeds["${room.code}|${room.place}"] = Feed(room.messages, room.whole)
                 rooms[room.code] = room
@@ -335,6 +336,27 @@ class AppModel(private val app: Application) {
                 put("code", code)
                 put("seq", seq)
                 put("text", text)
+            },
+        )
+    }
+
+    suspend fun approve(code: String, task: Int) {
+        ask(
+            buildJsonObject {
+                put("op", "approve")
+                put("code", code)
+                put("task", task)
+            },
+        )
+    }
+
+    suspend fun sendBack(code: String, task: Int, why: String) {
+        ask(
+            buildJsonObject {
+                put("op", "sendBack")
+                put("code", code)
+                put("task", task)
+                put("why", why)
             },
         )
     }
