@@ -62,6 +62,7 @@ describe("the Options step", () => {
   test("sums up what was picked in a few words, leaving out the defaults", () => {
     expect(choicesWords({ model: "opus", effort: "xhigh", permission: "bypass", context: 1_000_000 })).toEqual(["opus", "extra high", "bypass", "1M"])
     expect(choicesWords({ permission: "default", context: 272_000 })).toEqual(["272K"])
+    expect(choicesWords({ effort: "off" })).toEqual(["off"])
     expect(choicesWords({})).toEqual([])
   })
 })

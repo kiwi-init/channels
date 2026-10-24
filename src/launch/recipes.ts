@@ -23,6 +23,12 @@ function geminiArgv(bin: string, prompt: string, { model, permission }: LaunchCh
   return [bin, ...(model ? ["-m", model] : []), ...(mode ? ["--approval-mode", mode] : []), "-i", prompt];
 }
 
+const PI_THINKING = ["off", "minimal", "low", "medium", "high", "xhigh"];
+
+function piArgv(bin: string, prompt: string, { model, effort }: LaunchChoices): string[] {
+  return [bin, ...(model ? ["--model", model] : []), ...(effort ? ["--thinking", effort] : []), prompt];
+}
+
 const RECIPES: Partial<Record<KnownHarness, LaunchRecipe>> = {
   claude: {
     label: "Claude Code",
@@ -44,6 +50,11 @@ const RECIPES: Partial<Record<KnownHarness, LaunchRecipe>> = {
     label: "Gemini CLI",
     options: { model: true, effort: [], permission: [...PERMISSIONS], context: [] },
     argv: geminiArgv,
+  },
+  pi: {
+    label: "Pi",
+    options: { model: true, effort: PI_THINKING, permission: [], context: [] },
+    argv: piArgv,
   },
   kimi: {
     label: "Kimi Code",
