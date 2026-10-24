@@ -580,10 +580,10 @@ describe("a manual run can pick its jobs", () => {
   });
 });
 
-describe("a newer push to main cancels the older main run (T324)", () => {
-  test("pushes to main share one concurrency group and cancel the run still going; pull requests, merge groups and dispatched runs keep their own", () => {
+describe("pushes to main wait their turn instead of piling up, and the run going always finishes (T324)", () => {
+  test("pushes to main share one concurrency group that never cancels the run going, only the one waiting; pull requests cancel theirs; merge groups and dispatched runs keep their own", () => {
     expect(CI).toContain("group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_ref || (github.event_name == 'push' && github.ref) || github.run_id }}");
-    expect(CI).toMatch(/\nconcurrency:\n {2}group: [^\n]+\n {2}cancel-in-progress: true\n/);
+    expect(CI).toMatch(/\nconcurrency:\n {2}group: [^\n]+\n {2}cancel-in-progress: \$\{\{ github\.event_name != 'push' \}\}\n/);
   });
 
   test("ci-ok passes a run cancelled for a newer push, and stays red when a job failed or nothing newer came", () => {
