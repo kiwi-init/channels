@@ -23,7 +23,7 @@ import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(qualifiers = RobolectricDeviceQualifiers.Pixel7)
+@Config(sdk = [34], qualifiers = RobolectricDeviceQualifiers.Pixel7)
 class ScreensTest {
     @Test
     fun link() = shoot("link") { LinkScreen(it) }
