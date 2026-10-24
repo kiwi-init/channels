@@ -9,6 +9,17 @@ XDG_RUNTIME_DIR=$(mktemp -d)
 chmod 700 "$XDG_RUNTIME_DIR"
 dpkg-query -W -f '${Package} ${Version}\n' libgtk-3-0t64 libgtk-3-0 libwebkit2gtk-4.1-0 kwin-wayland gnome-shell mutter-common xwayland libayatana-appindicator3-1 xdg-desktop-portal kiwi-desktop 2> /dev/null | tee "$OUT/versions.txt"
 
+if [ "$D" = kde-focus ]; then
+  export XDG_CONFIG_HOME KWIN_LOG="$OUT/kwin-focus.log"
+  XDG_CONFIG_HOME=$(mktemp -d)
+  printf '[Windows]\nFocusStealingPreventionLevel=%s\n' "${FSP:-3}" > "$XDG_CONFIG_HOME/kwinrc"
+  timeout 600 dbus-run-session -- env LIBGL_ALWAYS_SOFTWARE=1 QT_LOGGING_RULES='kwin_*=true;kwin_scripting.debug=true' QT_QPA_PLATFORMTHEME=generic XDG_SESSION_TYPE=wayland \
+    kwin_wayland --virtual --xwayland --width 1280 --height 800 --socket kiwi-wayland --exit-with-session "bash $HERE/focus.sh $OUT" > "$KWIN_LOG" 2>&1
+  echo "kwin (focus) exited $?" | tee -a "$OUT/focus.txt"
+  grep -iE 'activat|token|focus steal' "$KWIN_LOG" | grep -v 'js:' | head -n 60 > "$OUT/kwin-activation-lines.txt"
+  exit 0
+fi
+
 if [ "$D" = kde ]; then
   kwin_wayland --help > "$OUT/kwin-help.txt" 2>&1
   for scale in 1 1.5; do

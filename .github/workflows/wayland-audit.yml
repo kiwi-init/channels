@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        desktop: [gnome]
+        desktop: [kde-focus]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: compositor and tools
@@ -24,8 +24,8 @@ jobs:
         run: |
           sudo apt-get update -q
           common="python3-gi gir1.2-gtk-3.0 libgtk-3-bin xwayland xdotool x11-utils wmctrl dbus dbus-x11 dconf-service dconf-cli"
-          if [ "${{ matrix.desktop }}" = kde ]; then
-            sudo apt-get install -y --no-install-recommends $common kwin-wayland breeze libgl1-mesa-dri libegl-mesa0 gdb
+          if [ "${{ matrix.desktop }}" != gnome ]; then
+            sudo apt-get install -y --no-install-recommends $common kwin-wayland breeze libgl1-mesa-dri libegl-mesa0 gdb x11-apps imagemagick
           else
             sudo apt-get install -y --no-install-recommends $common gnome-shell gnome-settings-daemon gsettings-desktop-schemas xdg-desktop-portal xdg-desktop-portal-gnome adwaita-icon-theme x11-apps imagemagick gir1.2-webkit2-4.1
           fi
@@ -40,7 +40,7 @@ jobs:
         timeout-minutes: 15
         run: bash desktop/scripts/wayland-audit/run.sh ${{ matrix.desktop }} "$RUNNER_TEMP/audit"
       - if: always()
-        run: cat "$RUNNER_TEMP/audit/notes.txt" || true
+        run: cat "$RUNNER_TEMP/audit/notes.txt" "$RUNNER_TEMP/audit/focus.txt" || true
       - if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
