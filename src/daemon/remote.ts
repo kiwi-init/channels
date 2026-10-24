@@ -1,8 +1,9 @@
 import { readFileSync, realpathSync } from "node:fs";
-import { sep } from "node:path";
+import { isAbsolute, sep } from "node:path";
 import type { HarnessRow } from "@kiwi/core/harnesses.ts";
 import type { MachineArgs } from "@kiwi/core/machine-ask.ts";
 import { writePrivate } from "../config.ts";
+import { isFolder } from "../launch/folders.ts";
 import type { Launched } from "@kiwi/core/terminals.ts";
 import type { LaunchRequest } from "../launch/wire.ts";
 
@@ -27,8 +28,9 @@ function real(path: string): string | null {
 }
 
 function underRoots(folder: string, roots: string[]): string | null {
+  if (!isAbsolute(folder) || folder.split(/[\\/]/).includes("..")) return null;
   const target = real(folder);
-  if (!target) return null;
+  if (!target || !isFolder(target)) return null;
   const inside = roots.some((root) => {
     const r = real(root);
     return !!r && (target === r || target.startsWith(r + sep));
@@ -69,7 +71,7 @@ export function remoteRunner(deps: RemoteDeps): (args: MachineArgs, id: string) 
         if (started.length >= REMOTE_LAUNCHES)
           return { ok: false, why: "failed", detail: `at most ${REMOTE_LAUNCHES} agents are started from another computer every ${REMOTE_WINDOW_MS / 60_000} minutes` };
         const folder = underRoots(args.launch.folder, deps.folders());
-        if (!folder) return { ok: false, why: "bad-request", detail: "that folder isn't one this computer's agents work in" };
+        if (!folder) return { ok: false, why: "bad-request", detail: "that folder isn't one this computer starts agents in" };
         started.push(at);
         if (deps.starts) writePrivate(deps.starts, JSON.stringify(started));
         return deps.launch({ ...args.launch, folder, launch: id });
