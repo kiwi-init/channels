@@ -3,6 +3,8 @@ import type { JoinLine } from "@kiwi/core/join-line.ts";
 import { choicesRefusal, PERMISSIONS, type HarnessOptions, type LaunchChoices } from "@kiwi/core/launch-options.ts";
 import { CLAUDE_1M, CLAUDE_EFFORTS, claudeArgv, claudeContextRefusal } from "../loop/claude.ts";
 import { CODEX_CONTEXTS, CODEX_EFFORTS, codexArgv } from "../loop/codex.ts";
+import { GROK_EFFORTS, grokArgv } from "../loop/grok.ts";
+import { MIMO_PERMISSIONS, mimoArgv } from "../loop/mimo.ts";
 
 interface LaunchRecipe {
   label: string;
@@ -22,6 +24,16 @@ const RECIPES: Partial<Record<KnownHarness, LaunchRecipe>> = {
     label: "Codex",
     options: { model: true, effort: CODEX_EFFORTS, permission: [...PERMISSIONS], context: CODEX_CONTEXTS },
     argv: (bin, prompt, choices) => codexArgv({ ...choices, bin, prompt }),
+  },
+  grok: {
+    label: "Grok",
+    options: { model: true, effort: GROK_EFFORTS, permission: [...PERMISSIONS], context: [] },
+    argv: (bin, prompt, choices) => grokArgv({ ...choices, bin, prompt }),
+  },
+  mimo: {
+    label: "MiMoCode",
+    options: { model: true, effort: [], permission: MIMO_PERMISSIONS, context: [] },
+    argv: (bin, prompt, choices) => mimoArgv({ ...choices, bin, prompt }),
   },
 };
 

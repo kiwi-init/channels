@@ -145,7 +145,7 @@ describe("the phone's engine starts agents on the person's own computers", () =>
 
   test("a launch the computer refuses comes back with its reason, and isn't followed", async () => {
     const got = await ask<LaunchedView>({ op: "launch", code, computer: machine.pk, harness: "claude", folder: root, nick: "nowhere" });
-    expect(got).toEqual({ ok: false, why: "bad-request", detail: "that folder isn't one this computer's agents work in" });
+    expect(got).toEqual({ ok: false, why: "bad-request", detail: "that folder isn't one this computer starts agents in" });
     await expect(ask({ op: "launch", code, computer: machine.pk, harness: "not-a-harness", folder: project })).rejects.toThrow("that launch has something this phone can't send");
   });
 

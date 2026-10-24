@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { signRequest } from "@kiwi/core/auth.ts";
@@ -211,5 +211,31 @@ describe("the launch cap", () => {
     for (let i = 0; i < 3; i++) expect(await first({ verb: "launch", launch: { harness: "claude", folder: project, code } }, `restartTest_${i}`)).toMatchObject({ ok: true });
     const again = runner();
     expect(await again({ verb: "launch", launch: { harness: "claude", folder: project, code } }, "restartTest_3")).toMatchObject({ ok: false, why: "failed" });
+  });
+});
+
+describe("where a launch from another device may start", () => {
+  test("inside a folder this computer starts agents in, by its real path: never through .., a symlink out, a file or a relative path", async () => {
+    const roots = join(root, "roots");
+    const inside = join(roots, "repo", "sub");
+    mkdirSync(inside, { recursive: true });
+    mkdirSync(join(root, "secret"), { recursive: true });
+    symlinkSync(join(root, "secret"), join(roots, "repo", "out"));
+    writeFileSync(join(roots, "repo", "notes.txt"), "x");
+    const seen: LaunchRequest[] = [];
+    const code = "mc2-AAAAAAAAAAAAAAAAAAAAAA-BBBBBBBBBBBBBBBB";
+    const runner = remoteRunner({
+      inventory: async () => [],
+      folders: () => [join(roots, "repo")],
+      launch: async (req) => (seen.push(req), { ok: true, launch: req.launch!, placed: { ok: true, place: "terminal" } }),
+    });
+    const at = (folder: string, id: string) => runner({ verb: "launch", launch: { harness: "claude", folder, code } }, id);
+    const refused = { ok: false, why: "bad-request", detail: "that folder isn't one this computer starts agents in" } as const;
+    expect(await at(join(roots, "repo", "out"), "rootsAsk_01")).toEqual(refused);
+    expect(await at(`${inside}/..`, "rootsAsk_02")).toEqual(refused);
+    expect(await at(join(roots, "repo", "notes.txt"), "rootsAsk_03")).toEqual(refused);
+    expect(await at("repo/sub", "rootsAsk_04")).toEqual(refused);
+    expect(await at(inside, "rootsAsk_05")).toMatchObject({ ok: true });
+    expect(seen.map((r) => r.folder)).toEqual([realpathSync(inside)]);
   });
 });

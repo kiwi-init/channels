@@ -57,10 +57,12 @@ describe("the line an agent is started with", () => {
     expect(joinPrompt({ code })).toContain(`kiwi join ${code}. If it asks for your model, run it again with --model`);
   });
 
-  test("Claude Code and Codex start with it as their first prompt; the others wait for their own recipe", () => {
+  test("Claude Code, Codex, Grok and MiMoCode start with it as their first prompt; the others wait for their own recipe", () => {
     expect(recipeArgv("claude", "/bin/claude", "P")).toEqual(["/bin/claude", "--allowedTools", "Bash(kiwi join:*)", "--", "P"]);
     expect(recipeArgv("codex", "/bin/codex", "P")).toEqual(["/bin/codex", "--", "P"]);
-    for (const h of ["gemini", "cursor", "grok", "opencode", "kimi", "mimo", "pi"] as const) {
+    expect(recipeArgv("grok", "/bin/grok", "P")).toEqual(["/bin/grok", "--", "P"]);
+    expect(recipeArgv("mimo", "/bin/mimo", "P", { model: "xiaomi/mimo-v2.5-pro" })).toEqual(["/bin/mimo", "-m", "xiaomi/mimo-v2.5-pro", "--prompt", "P"]);
+    for (const h of ["gemini", "cursor", "opencode", "kimi", "pi"] as const) {
       expect(canStart(h)).toBe(false);
       expect(recipeArgv(h, "/bin/x", "P")).toBeNull();
     }
@@ -104,6 +106,30 @@ describe("the line an agent is started with", () => {
     expect(recipeArgv("codex", "/bin/codex", "P", { permission: "default" })).toEqual(["/bin/codex", "--", "P"]);
   });
 
+  test("Grok gets the model, reasoning effort and Claude Code's permission modes", () => {
+    expect(recipeArgv("grok", "/bin/grok", "P", { model: "grok-4.7", effort: "xhigh", permission: "accept-edits" })).toEqual([
+      "/bin/grok",
+      "-m",
+      "grok-4.7",
+      "--reasoning-effort",
+      "xhigh",
+      "--permission-mode",
+      "acceptEdits",
+      "--",
+      "P",
+    ]);
+    expect(recipeArgv("grok", "/bin/grok", "P", { permission: "plan" })).toEqual(["/bin/grok", "--permission-mode", "plan", "--", "P"]);
+    expect(recipeArgv("grok", "/bin/grok", "P", { permission: "bypass" })).toEqual(["/bin/grok", "--permission-mode", "bypassPermissions", "--", "P"]);
+    expect(recipeArgv("grok", "/bin/grok", "P", { permission: "default" })).toEqual(["/bin/grok", "--", "P"]);
+  });
+
+  test("MiMoCode gets the model, its plan agent, or the flag that skips its permission prompts", () => {
+    const m = { model: "xiaomi/mimo-v2.5-pro" };
+    expect(recipeArgv("mimo", "/bin/mimo", "P", { ...m, permission: "plan" })).toEqual(["/bin/mimo", "-m", m.model, "--agent", "plan", "--prompt", "P"]);
+    expect(recipeArgv("mimo", "/bin/mimo", "P", { ...m, permission: "bypass" })).toEqual(["/bin/mimo", "-m", m.model, "--dangerously-skip-permissions", "--prompt", "P"]);
+    expect(recipeArgv("mimo", "/bin/mimo", "P", { ...m, permission: "default" })).toEqual(["/bin/mimo", "-m", m.model, "--prompt", "P"]);
+  });
+
   test("each harness takes only the efforts, permissions and context sizes it knows", () => {
     expect(launchChoicesRefusal("claude", { model: "opus", effort: "max", permission: "bypass", context: 1_000_000 })).toBeNull();
     expect(launchChoicesRefusal("codex", { model: "o3", effort: "minimal", permission: "plan", context: 272_000 })).toBeNull();
@@ -114,6 +140,11 @@ describe("the line an agent is started with", () => {
     expect(launchChoicesRefusal("claude", { context: 1_000_000 })).toContain("needs an Opus, Sonnet or Fable model");
     expect(launchChoicesRefusal("claude", { model: "haiku", context: 1_000_000 })).toContain("needs an Opus, Sonnet or Fable model");
     expect(launchChoicesRefusal("claude", { model: "claude-sonnet-5-5", context: 1_000_000 })).toBeNull();
+    expect(launchChoicesRefusal("grok", { model: "grok-4.7", effort: "none", permission: "bypass" })).toBeNull();
+    expect(launchChoicesRefusal("grok", { context: 1_000_000 })).toBe("Grok doesn't take a context size from Kiwi");
+    expect(launchChoicesRefusal("mimo", { model: "xiaomi/mimo-v2.5-pro", permission: "plan" })).toBeNull();
+    expect(launchChoicesRefusal("mimo", { effort: "high" })).toBe("MiMoCode doesn't take an effort level from Kiwi");
+    expect(launchChoicesRefusal("mimo", { permission: "accept-edits" })).toBe("MiMoCode takes permission default, plan, bypass, not accept-edits");
     const bare = { model: false, effort: [], permission: [], context: [] };
     expect([
       choicesRefusal("Mo", bare, { model: "m" }),
