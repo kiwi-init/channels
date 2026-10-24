@@ -191,6 +191,20 @@ static void replaced(void) {
   }
 }
 
+static int decoy(void) {
+  struct live l;
+  char made[256], dropped[256], got[256];
+  live_open(&l);
+  live_ask(&l, "set QUJD", made, sizeof made);
+  live_ask(&l, "drop", dropped, sizeof dropped);
+  live_ask(&l, "get", got, sizeof got);
+  live_close(&l);
+  bool ok = strcmp(made, "ok\n") == 0 && strcmp(dropped, "ok\n") == 0 && strcmp(got, "key ZGVjb3k=\n") == 0;
+  printf("%s  a key taken back by its item reference is the only one removed: a store key of the same name in another keychain stays\n", ok ? "ok  " : "FAIL");
+  if (!ok) printf("      got %s / %s / %s", made, dropped, got);
+  return ok ? 0 : 1;
+}
+
 static uint64_t rng = 0x9e3779b97f4a7c15ULL;
 
 static uint64_t next(void) {
@@ -286,6 +300,7 @@ int main(int argc, char **argv) {
   legacy = names;
   label = CFSTR("kiwi-keys-test store key");
   if (!CFStringGetCString(CFArrayGetValueAtIndex(legacy, 0), legacy_name, sizeof legacy_name, kCFStringEncodingUTF8)) return 2;
+  if (argc > 1 && strcmp(argv[1], "decoy") == 0) return decoy();
   if (argc > 1 && strcmp(argv[1], "seal") == 0) {
     char why[1024];
     if (kiwi_seal_check(why, sizeof why) != 0) {

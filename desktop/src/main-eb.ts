@@ -6,7 +6,7 @@ import { internalRpcHandlers } from "../.hutch/devkit/api/sdks/main/proc/native.
 import { handleDeepLink, JOIN_SCHEME } from "./deep-links.ts";
 import { lockInternalRpc } from "./eb-bridge.ts";
 import { mark } from "./eb-startup.ts";
-import { ebHost } from "./host-eb.ts";
+import { dataDir, ebHost } from "./host-eb.ts";
 import { useHost } from "./host.ts";
 import { keepAlive } from "./keep-alive-eb.ts";
 import { startKeys } from "./keys-start-eb.ts";
@@ -55,7 +55,7 @@ if (wrongHome) console.error(`Channels test build: ${wrongHome}; not starting, s
 const instance = wrongHome
   ? null
   : await claimInstance({
-      dir: Utils.paths.userData,
+      dir: dataDir,
       handoff: handoffFor(process.argv, JOIN_SCHEME),
       scheme: JOIN_SCHEME,
       onHandoff: (h) => (h.kind === "link" ? handleDeepLink(h.url) : ebHost.showWindow()),

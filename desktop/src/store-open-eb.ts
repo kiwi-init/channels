@@ -1,8 +1,9 @@
 import { Utils } from "electrobun/main";
 
+import { dataDir } from "./host-eb.ts";
 import { launcherKeys } from "./launcher-channel-eb.ts";
 import { logMainError } from "./main-log.ts";
-import { openEbStore, unmarkedNote, v2Vault } from "./store-eb.ts";
+import { openEbStore, plainNote, unmarkedNote, v2Vault } from "./store-eb.ts";
 import type { OpenStore } from "./store-v2.ts";
 import { brokenStore, openStore } from "./store.ts";
 import { openTestStore } from "./test-build-eb.ts";
@@ -20,13 +21,15 @@ function endKeySession(): void {
 
 export async function openStoreForThisBuild(): Promise<void> {
   if (openTestStore(endKeySession)) return;
-  opened = await openEbStore({ dir: Utils.paths.userData, keys: launcherKeys });
+  opened = await openEbStore({ dir: dataDir, keys: launcherKeys });
   openStore(v2Vault(opened));
 }
 
 export function warnIfStoreBroken(): void {
   const broken = brokenStore();
   if (broken) void Utils.showMessageBox({ type: "error", message: "Channels can't read its saved keys", detail: broken.message });
+  const plain = opened ? plainNote(opened) : null;
+  if (plain) logMainError(new Error(plain));
   const unmarked = opened ? unmarkedNote(opened) : null;
   if (unmarked) {
     logMainError(new Error(unmarked));

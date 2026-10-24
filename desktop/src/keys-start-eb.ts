@@ -1,7 +1,6 @@
 import path from "node:path";
-import { Utils } from "electrobun/main";
 
-import { attachKeys } from "./host-eb.ts";
+import { attachKeys, dataDir } from "./host-eb.ts";
 import { bunWorker, keysController, type KeysFrame } from "./keys-eb.ts";
 import { answerKeys } from "./keys-host.ts";
 import { store } from "./store.ts";
@@ -10,7 +9,7 @@ let toPage: (frame: KeysFrame) => void = () => {};
 
 export const keys = keysController({
   spawn: () => bunWorker(path.join(import.meta.dir, "keys.js")),
-  init: () => ({ type: "init", relay: store.relayUrl, dir: Utils.paths.userData, seats: store.channels, person: store.person?.pk ?? null }),
+  init: () => ({ type: "init", relay: store.relayUrl, dir: dataDir, seats: store.channels, person: store.person?.pk ?? null }),
   answer: answerKeys,
   toPage: (frame) => toPage(frame),
 });

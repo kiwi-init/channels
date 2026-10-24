@@ -16,10 +16,10 @@ const asanId = `${id}-asan`;
 const legacy = `kiwi-keys-check-${tag}`;
 const legacyValue = randomBytes(16).toString("base64");
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "eb-keys-"));
-const dataDir = path.join(os.homedir(), "Library", "Application Support", id);
 const storeId = `${id}-store`;
 const importId = `${id}-import`;
-const CI = process.env["CI"] === "true";
+const runnerTemp = process.env["RUNNER_TEMP"] ?? "";
+const CI = process.env["CI"] === "true" && process.env["GITHUB_ACTIONS"] === "true" && path.isAbsolute(runnerTemp) && fs.existsSync(runnerTemp);
 const failures: string[] = [];
 const SEAL_GATE_MS = 500;
 
@@ -100,9 +100,15 @@ function keychain(args: string[]): void {
 
 const unquote = (line: string): string => line.trim().replace(/^"|"$/g, "");
 
-function ciKeychain(): () => void {
-  if (process.env["CI"] !== "true") return () => {};
-  const kc = path.join(tmp, "keys-check.keychain-db");
+interface CiKeychains {
+  restore: () => void;
+  first: string | null;
+  rest: string[];
+}
+
+function ciKeychain(): CiKeychains {
+  if (!CI) return { restore: () => {}, first: null, rest: [] };
+  const kc = path.join(runnerTemp, `keys-check-${tag}.keychain-db`);
   const list = execFileSync("security", ["list-keychains", "-d", "user"], { encoding: "utf8" }).split("\n").map(unquote).filter(Boolean);
   const def = unquote(execFileSync("security", ["default-keychain", "-d", "user"], { encoding: "utf8" }));
   execFileSync("security", ["create-keychain", "-p", "", kc]);
@@ -110,14 +116,23 @@ function ciKeychain(): () => void {
   execFileSync("security", ["unlock-keychain", "-p", "", kc]);
   execFileSync("security", ["list-keychains", "-d", "user", "-s", kc, ...list]);
   execFileSync("security", ["default-keychain", "-d", "user", "-s", kc]);
-  return () => {
-    keychain(["list-keychains", "-d", "user", "-s", ...list]);
-    if (def) keychain(["default-keychain", "-d", "user", "-s", def]);
-    keychain(["delete-keychain", kc]);
+  return {
+    restore: () => {
+      keychain(["list-keychains", "-d", "user", "-s", ...list]);
+      if (def) keychain(["default-keychain", "-d", "user", "-s", def]);
+      keychain(["delete-keychain", kc]);
+    },
+    first: kc,
+    rest: list,
   };
 }
 
-const restoreKeychain = ciKeychain();
+const ci = ciKeychain();
+for (const signal of ["SIGINT", "SIGTERM"] as const)
+  process.on(signal, () => {
+    ci.restore();
+    process.exit(signal === "SIGINT" ? 130 : 143);
+  });
 try {
   const base = shippedApp(payloadOf(path.join(release, "artifacts")), tmp);
   const probe = await Bun.build({ entrypoints: [path.join(import.meta.dirname, "eb-keys-probe.ts")], target: "bun" });
@@ -188,7 +203,11 @@ try {
     return app;
   };
   const store = await storeApp("store", storeId, [legacy]);
-  const places = storePlaces(storeId);
+  const builtVersion: unknown = JSON.parse(fs.readFileSync(path.join(contents(store), "Resources", "version.json"), "utf8"));
+  const builtChannel = typeof builtVersion === "object" && builtVersion !== null && "channel" in builtVersion ? builtVersion.channel : null;
+  const channel = typeof builtChannel === "string" ? builtChannel : "";
+  if (!channel) throw new Error("the built app's version.json names no channel");
+  const places = storePlaces(storeId, channel);
   const fresh = storeRun(store);
   expect(
     "store v2 on the Mac, first start: a sealed store and a key made through the launcher and marked ready",
@@ -217,7 +236,7 @@ try {
   if (CI) {
     execFileSync("security", ["add-generic-password", "-s", "kiwi-desktop Safe Storage", "-a", "kiwi-desktop Key", "-w", legacyValue, "-A"]);
     const imports = await storeApp("import", importId, ["kiwi-desktop"]);
-    const file = electronStore(storePlaces(importId).legacyHome, { relayUrl: "https://old.example", channels: [] }, legacyValue);
+    const file = electronStore(storePlaces(importId, channel).legacyHome, { relayUrl: "https://old.example", channels: [] }, legacyValue);
     const first = storeRun(imports);
     const next = storeRun(imports);
     expect(
@@ -322,6 +341,29 @@ try {
     parser.status === 0 && clean(parser),
     `status ${parser.status}: ${parser.stderr.slice(-1200)}`,
   );
+  const said = (line: string): boolean => parser.stdout.split("\n").includes(`ok    ${line}`);
+  expect(
+    `drop deletes by the item reference SecItemAdd gave, on ${ci.first ? "CI's temporary keychain" : "this Mac's keychain"}: the key the session made goes, and a key put in its place stays`,
+    said("a key made in this session and not yet marked is taken back, once") && said("a key put in place of the one this session made is never taken back"),
+    parser.stdout.slice(-1500),
+  );
+  if (ci.first) {
+    const second = path.join(runnerTemp, `keys-check-decoy-${tag}.keychain-db`);
+    execFileSync("security", ["create-keychain", "-p", "", second]);
+    execFileSync("security", ["set-keychain-settings", second]);
+    execFileSync("security", ["unlock-keychain", "-p", "", second]);
+    execFileSync("security", ["list-keychains", "-d", "user", "-s", ci.first, second, ...ci.rest]);
+    execFileSync("security", ["add-generic-password", "-s", asanId, "-a", "store-key", "-w", "decoy", "-A", second]);
+    const decoy = sanRun(harness, ["decoy"]);
+    const kept = spawnSync("security", ["find-generic-password", "-s", asanId, "-a", "store-key", "-w", second], { encoding: "utf8" }).stdout.trim();
+    keychain(["list-keychains", "-d", "user", "-s", ci.first, ...ci.rest]);
+    keychain(["delete-keychain", second]);
+    expect(
+      "on the real Security framework, a key taken back by its item reference is the only one removed: a store key of the same name in another keychain of the search list stays",
+      decoy.status === 0 && clean(decoy) && kept === "decoy",
+      `${decoy.stdout} ${decoy.stderr.slice(-600)} kept ${JSON.stringify(kept)}`,
+    );
+  } else console.log("skip  the store key of the same name in a second keychain: it changes the keychain search list, so it runs only on CI's temporary keychains");
   const sealedRun = sanRun(harness, ["seal"]);
   expect(
     "the seal check under ASan and UBSan passes a sealed app",
@@ -344,9 +386,9 @@ try {
 } finally {
   for (const service of [id, asanId, storeId, importId]) for (const account of ["store-key", "store-key-ready"]) keychain(["delete-generic-password", "-s", service, "-a", account]);
   keychain(["delete-generic-password", "-s", `${legacy} Safe Storage`, "-a", `${legacy} Key`]);
-  restoreKeychain();
+  ci.restore();
   fs.rmSync(tmp, { recursive: true, force: true });
-  for (const dir of [dataDir, storePlaces(storeId).data, storePlaces(importId).data]) fs.rmSync(dir, { recursive: true, force: true });
+  for (const appId of [id, storeId, importId]) fs.rmSync(path.join(os.homedir(), "Library", "Application Support", appId), { recursive: true, force: true });
 }
 
 if (failures.length) {

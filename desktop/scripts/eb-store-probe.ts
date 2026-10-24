@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { openEbStore, unmarkedNote } from "../src/store-eb.ts";
+import { ebDataDir, openEbStore, unmarkedNote } from "../src/store-eb.ts";
 
 export type StoreProbe =
   | { kind: "open"; sealed: boolean; imported: string | null; unmarked: string | null; note: string | null; json: Record<string, unknown> | null }
@@ -13,15 +13,16 @@ export type StoreProbe =
 
 export const STORE_PROBE_PREFIX = "kiwi-store-probe:";
 
-export function storePlaces(id: string, home: string = os.homedir()): { data: string; legacyHome: string } {
-  const data = path.join(home, "Library", "Application Support", id);
+export function storePlaces(id: string, channel: string, home: string = os.homedir()): { data: string; legacyHome: string } {
+  const data = ebDataDir(id, channel, "darwin", home);
   return { data, legacyHome: path.join(data, "legacy-home") };
 }
 
 async function probe(): Promise<StoreProbe> {
   const plist = path.join(path.dirname(process.execPath), "..", "Info.plist");
   const id = execFileSync("plutil", ["-extract", "CFBundleIdentifier", "raw", plist], { encoding: "utf8" }).trim();
-  const { data, legacyHome } = storePlaces(id);
+  const version = JSON.parse(fs.readFileSync(path.join(path.dirname(process.execPath), "..", "Resources", "version.json"), "utf8")) as { channel?: unknown };
+  const { data, legacyHome } = storePlaces(id, typeof version.channel === "string" ? version.channel : "");
   const opened = await openEbStore({ dir: data, keys: launcherKeys, home: legacyHome });
   if (opened.kind === "unreadable") return { kind: "unreadable", why: opened.why };
   const runs = opened.json?.["probeRuns"];
