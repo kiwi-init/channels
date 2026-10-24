@@ -170,6 +170,44 @@ data class RoomView(
 }
 
 @Serializable
+data class ComputerView(
+    val key: String,
+    val xpk: String,
+    val label: String = "",
+    val online: Boolean = false,
+    val since: Double? = null,
+    val seenAt: Double = 0.0,
+) {
+    val name: String get() = label.ifEmpty { "Your computer" }
+}
+
+@Serializable
+data class HarnessOptions(
+    val model: Boolean = false,
+    val effort: List<String> = emptyList(),
+    val permission: List<String> = emptyList(),
+    val context: List<Int> = emptyList(),
+)
+
+@Serializable
+data class HarnessChoice(
+    val harness: String,
+    val name: String,
+    val face: String = "",
+    val mono: Boolean = false,
+    val version: String? = null,
+    val start: Boolean = false,
+    val why: String? = null,
+    val options: HarnessOptions? = null,
+)
+
+@Serializable
+data class HarnessesOn(val harnesses: List<HarnessChoice>, val bypass: Boolean = false)
+
+@Serializable
+data class Launched(val ok: Boolean, val launch: String? = null, val detail: String? = null)
+
+@Serializable
 data class LinkStart(val digits: String, val relay: String)
 
 @Serializable
@@ -189,4 +227,8 @@ sealed interface Push {
     @Serializable
     @SerialName("log")
     data class Log(val line: String) : Push
+
+    @Serializable
+    @SerialName("launch")
+    data class Launch(val code: String, val launch: String, val stage: String, val name: String) : Push
 }

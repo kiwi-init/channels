@@ -54,6 +54,8 @@ private fun chat(spot: Spot): String = "chat/${Uri.encode(spot.code)}/${Uri.enco
 
 private fun details(spot: Spot): String = "details/${Uri.encode(spot.code)}/${Uri.encode(spot.place)}"
 
+private fun newAgent(code: String): String = "new-agent/${Uri.encode(code)}"
+
 @Composable
 fun Root(model: AppModel, unlock: () -> Unit) {
     val view = LocalView.current
@@ -127,7 +129,11 @@ private fun Ready(model: AppModel) {
                     nav.previousBackStackEntry?.savedStateHandle?.set(CHOOSE, key)
                     nav.popBackStack()
                 },
+                newAgent = { nav.navigate(newAgent(code)) },
             )
+        }
+        composable("new-agent/{code}", arguments = listOf(navArgument("code") { type = NavType.StringType })) { entry ->
+            NewAgentScreen(model, entry.arguments?.getString("code") ?: "") { nav.popBackStack() }
         }
         composable("settings") {
             SettingsScreen(model) { nav.popBackStack() }

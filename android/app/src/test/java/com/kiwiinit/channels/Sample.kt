@@ -4,7 +4,11 @@ import android.app.Application
 import com.kiwiinit.channels.engine.ActivityView
 import com.kiwiinit.channels.engine.AskView
 import com.kiwiinit.channels.engine.Chosen
+import com.kiwiinit.channels.engine.ComputerView
 import com.kiwiinit.channels.engine.Connection
+import com.kiwiinit.channels.engine.HarnessChoice
+import com.kiwiinit.channels.engine.HarnessOptions
+import com.kiwiinit.channels.engine.HarnessesOn
 import com.kiwiinit.channels.engine.MemberView
 import com.kiwiinit.channels.engine.MessageView
 import com.kiwiinit.channels.engine.PlaceView
@@ -19,6 +23,29 @@ const val DEV = "dev"
 const val LEAD_CHAT = "dm:jow~lively-swan"
 
 private const val MINUTE = 60_000.0
+
+val COMPUTERS = listOf(
+    ComputerView("pk-mac", "xpk-mac", "Jow's MacBook Air", online = true, seenAt = System.currentTimeMillis().toDouble()),
+    ComputerView("pk-linux", "xpk-linux", "jwalker-kde", online = false, seenAt = System.currentTimeMillis() - 3 * 60 * MINUTE),
+)
+
+val HARNESSES = HarnessesOn(
+    harnesses = listOf(
+        HarnessChoice(
+            "claude",
+            "Claude Code",
+            face = "claude",
+            version = "2.4.1",
+            start = true,
+            options = HarnessOptions(model = true, effort = listOf("low", "medium", "high"), permission = listOf("default", "accept-edits", "plan"), context = listOf(200_000, 1_000_000)),
+        ),
+        HarnessChoice("codex", "Codex", face = "codex", version = "0.98.0", start = true, options = HarnessOptions(model = true, effort = listOf("low", "medium", "high"))),
+        HarnessChoice("opencode", "OpenCode", face = "opencode", start = false, why = "Not installed on this computer"),
+    ),
+    bypass = false,
+)
+
+val FOLDERS = listOf("/Users/jow/www/channels", "/Users/jow/www/kiwi-site")
 
 fun sample(app: Application): AppModel {
     val model = AppModel(app)

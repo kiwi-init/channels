@@ -7,13 +7,22 @@ import androidx.compose.ui.Modifier
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.kiwiinit.channels.model.AppModel
+import com.kiwiinit.channels.model.LaunchSeen
 import com.kiwiinit.channels.model.Spot
 import com.kiwiinit.channels.theme.ChannelsTheme
+import com.kiwiinit.channels.ui.ComputerList
 import com.kiwiinit.channels.ui.ConversationList
 import com.kiwiinit.channels.ui.ConversationScreen
 import com.kiwiinit.channels.ui.DetailsScreen
+import com.kiwiinit.channels.ui.FolderList
+import com.kiwiinit.channels.ui.HarnessList
 import com.kiwiinit.channels.ui.LinkScreen
+import com.kiwiinit.channels.ui.Loaded
+import com.kiwiinit.channels.ui.NewAgentFrame
+import com.kiwiinit.channels.ui.OptionsForm
 import com.kiwiinit.channels.ui.SettingsScreen
+import com.kiwiinit.channels.ui.StartedList
+import com.kiwiinit.channels.ui.Starting
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -38,10 +47,37 @@ class ScreensTest {
     fun leadChat() = shoot("lead-chat") { ConversationScreen(it, Spot(DEV, LEAD_CHAT), chosen = null, consumeChosen = {}, back = {}, details = {}) }
 
     @Test
-    fun details() = shoot("details") { DetailsScreen(it, DEV, "main", back = {}, choose = {}) }
+    fun details() = shoot("details") { DetailsScreen(it, DEV, "main", back = {}, choose = {}, newAgent = {}) }
 
     @Test
-    fun detailsReview() = shoot("details-review", { it.rooms[DEV] = it.rooms.getValue(DEV).copy(asks = emptyList()) }) { DetailsScreen(it, DEV, "main", back = {}, choose = {}) }
+    fun detailsReview() = shoot("details-review", { it.rooms[DEV] = it.rooms.getValue(DEV).copy(asks = emptyList()) }) { DetailsScreen(it, DEV, "main", back = {}, choose = {}, newAgent = {}) }
+
+    @Test
+    fun newAgentComputers() = shoot("new-agent-computers") {
+        NewAgentFrame("New agent", root = true, back = {}) { ComputerList(it.rooms.getValue(DEV), Loaded.Ready(COMPUTERS), retry = {}, pick = {}) }
+    }
+
+    @Test
+    fun newAgentHarness() = shoot("new-agent-harness") {
+        NewAgentFrame("Harness", root = false, back = {}) { HarnessList(COMPUTERS.first(), Loaded.Ready(HARNESSES), retry = {}, pick = { _, _ -> }) }
+    }
+
+    @Test
+    fun newAgentFolder() = shoot("new-agent-folder") {
+        NewAgentFrame("Folder", root = false, back = {}) { FolderList(COMPUTERS.first(), Loaded.Ready(FOLDERS), retry = {}, pick = {}) }
+    }
+
+    @Test
+    fun newAgentOptions() = shoot("new-agent-options") {
+        NewAgentFrame("Options", root = false, back = {}) { OptionsForm(COMPUTERS.first(), HARNESSES.harnesses.first(), HARNESSES.bypass, FOLDERS.first(), start = {}) }
+    }
+
+    @Test
+    fun newAgentStarted() = shoot("new-agent-started") {
+        NewAgentFrame("New agent", root = false, back = null) {
+            StartedList(it.rooms.getValue(DEV), COMPUTERS.first(), HARNESSES.harnesses.first(), Starting.Started("launch-1"), LaunchSeen("asked", "swift-otter"), retry = {}, close = {})
+        }
+    }
 
     @Test
     fun settings() = shoot("settings") { SettingsScreen(it) {} }

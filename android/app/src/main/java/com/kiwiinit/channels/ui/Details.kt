@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.outlined.Chat
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.outlined.PushPin
@@ -68,7 +69,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DetailsScreen(model: AppModel, code: String, current: String, back: () -> Unit, choose: (String) -> Unit) {
+fun DetailsScreen(model: AppModel, code: String, current: String, back: () -> Unit, choose: (String) -> Unit, newAgent: () -> Unit) {
     val room = model.rooms[code]
     Scaffold(
         topBar = {
@@ -83,13 +84,13 @@ fun DetailsScreen(model: AppModel, code: String, current: String, back: () -> Un
         if (room == null) {
             Centered("This channel is gone", "Its owner closed it, or this phone was removed from it.", Modifier.padding(padding))
         } else {
-            ChannelDetails(model, room, current, choose, PaddingValues(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding() + 24.dp))
+            ChannelDetails(model, room, current, choose, newAgent, PaddingValues(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding() + 24.dp))
         }
     }
 }
 
 @Composable
-private fun ChannelDetails(model: AppModel, room: RoomView, current: String, choose: (String) -> Unit, padding: PaddingValues) {
+private fun ChannelDetails(model: AppModel, room: RoomView, current: String, choose: (String) -> Unit, newAgent: () -> Unit, padding: PaddingValues) {
     val tone = Tone.current
     val view = LocalView.current
     val spot = Spot(room.code, current)
@@ -124,6 +125,12 @@ private fun ChannelDetails(model: AppModel, room: RoomView, current: String, cho
                     Action(if (pinned) Icons.Outlined.PushPin else Icons.Filled.PushPin, if (pinned) "Unpin" else "Pin", Modifier.weight(1f)) {
                         view.buzz(Buzz.Tap)
                         model.togglePin(spot)
+                    }
+                    if (room.isOwner) {
+                        Action(Icons.Filled.Add, "New agent", Modifier.weight(1f)) {
+                            view.buzz(Buzz.Tap)
+                            newAgent()
+                        }
                     }
                 }
             }
