@@ -26,15 +26,15 @@ export function contextLineBridge(): ContextLine | null {
   }
 }
 
-export function useLaunchesHere(): boolean {
-  const [on, setOn] = useState(true)
+export function useLaunchesHere(): boolean | null {
+  const [on, setOn] = useState<boolean | null>(() => (terminalsBridge() ? null : true))
   useEffect(() => {
     const b = terminalsBridge()
     if (!b) return
     let live = true
     void b.terminals().then(
       (s) => live && setOn(s?.launch !== "off"),
-      () => {}
+      () => live && setOn(true)
     )
     return () => {
       live = false
