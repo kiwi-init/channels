@@ -4,7 +4,6 @@ const INSTALL = `${location.origin}/install`;
 
 const DOWNLOADS = [
   { id: "mac-arm64", os: "macOS", detail: "Apple silicon", file: "Channels-0.27.4-mac-arm64.dmg" },
-  { id: "mac-x64", os: "macOS", detail: "Intel", file: "Channels-0.27.4-mac-x64.dmg" },
   { id: "linux-appimage", os: "Linux", detail: "AppImage", file: "Channels-0.27.4-linux-x86_64.AppImage" },
   { id: "linux-deb", os: "Linux", detail: "Debian / Ubuntu (.deb)", file: "Channels-0.27.4-linux-amd64.deb" },
 ];
@@ -42,7 +41,7 @@ async function refinePlatform(nav, guess) {
   if (guess !== "mac-arm64" || typeof hints?.getHighEntropyValues !== "function") return guess;
   try {
     const { architecture } = await hints.getHighEntropyValues(["architecture"]);
-    return architecture === "x86" ? "mac-x64" : guess;
+    return architecture === "x86" ? "" : guess;
   } catch {
     // Client hints can be refused; Apple silicon is the likelier Mac, and the list below has the rest.
     return guess;
@@ -105,8 +104,6 @@ const code = inviteCode();
 if (code) showInvite(code);
 else {
   renderDownloads();
-  const guess = guessPlatform(navigator);
-  renderPrimary(guess);
-  refinePlatform(navigator, guess).then(renderPrimary);
+  refinePlatform(navigator, guessPlatform(navigator)).then(renderPrimary);
 }
 wireCopy();

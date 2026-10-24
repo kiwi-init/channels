@@ -20,7 +20,7 @@ test("every job that reads a signing or deploy secret runs in the release enviro
       reading.push(`${file}:${id}`);
       expect({ file, id, environment: job.environment }).toEqual({ file, id, environment: file.endsWith("release-build.yml") ? REHEARSAL : "release" });
     }
-  expect(reading).toEqual([".github/workflows/release.yml:deploy-relay", ".github/workflows/release-build.yml:desktop", ".github/workflows/release-build.yml:desktop-mac-eb"]);
+  expect(reading).toEqual([".github/workflows/release.yml:deploy-relay", ".github/workflows/release-build.yml:desktop-mac-eb"]);
 });
 
 test("no caller hands a signing secret to the build by name: a PR's or a branch's rehearsal gets none", async () => {

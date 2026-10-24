@@ -12,6 +12,6 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["src", "scripts/fuses.ts", "scripts/smoke.ts", "scripts/linux-files.ts", "scripts/package-linux.ts", "scripts/smoke-eb.ts", "scripts/eb-drive.ts", "scripts/eb-bridge-checks.ts", "scripts/eb-driver-check.ts"],
+  "include": ["src", "scripts/linux-files.ts", "scripts/package-linux.ts", "scripts/smoke-eb.ts", "scripts/eb-drive.ts", "scripts/eb-bridge-checks.ts", "scripts/eb-driver-check.ts"],
   "exclude": ["src/*-eb.ts"]
 }

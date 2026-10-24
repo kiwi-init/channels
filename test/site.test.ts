@@ -51,13 +51,13 @@ test("a malformed percent escape in the path shows the landing page instead of t
   const page = load("/join/%E0%A4%A");
   expect(page.landing.hidden).toBe(false);
   expect(page.invite.hidden).toBe(false);
-  expect(page.downloads.children.length).toBe(4);
+  expect(page.downloads.children.length).toBe(3);
 });
 
 test("a path that isn't a join code is not shown as one", () => {
   const page = load("/join/<script>");
   expect(page["open-app"].href).toBe("");
-  expect(page.downloads.children.length).toBe(4);
+  expect(page.downloads.children.length).toBe(3);
 });
 
 test("the renderer's hash invite still works", () => {
@@ -74,10 +74,11 @@ test("a Mac downloads the Apple silicon build when the browser can't say which c
   expect(page["download-for"].textContent).toBe("macOS · Apple silicon");
 });
 
-test("a Mac whose browser reports an x86 chip downloads the Intel build", async () => {
+test("an Intel Mac gets no app: the button stays on the full list, where the CLI is", async () => {
   const page = load("/", "", { userAgent: MAC, userAgentData: { getHighEntropyValues: async () => ({ architecture: "x86" }) } });
   await settle();
-  expect(page.download.href).toMatch(/\/Channels-[\d.]+-mac-x64\.dmg$/);
+  expect(page.download.href).toBe("");
+  expect(page["download-for"].textContent).toBe("");
 });
 
 test("a Mac whose browser refuses the chip hint still gets Apple silicon", async () => {
@@ -103,6 +104,6 @@ test("Windows, phones and ARM Linux keep the button on the full list", async () 
     const page = load("/", "", { userAgent });
     await settle();
     expect(page.download.href).toBe("");
-    expect(page.downloads.children.length).toBe(4);
+    expect(page.downloads.children.length).toBe(3);
   }
 });

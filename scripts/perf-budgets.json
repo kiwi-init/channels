@@ -6,8 +6,6 @@
     "tasksMs": { "what": "Tasks tab @4x", "at": ["@4x", "switchMedianMs", "Tasks"], "per": "@4x", "budget": 100, "gate": 220 },
     "agentsMs": { "what": "Agents tab @4x", "at": ["@4x", "switchMedianMs", "Agents"], "per": "@4x", "budget": 100, "gate": 115 },
     "conversationMs": { "what": "Conversation tab @4x", "at": ["@4x", "switchMedianMs", "Conversation"], "per": "@4x", "budget": 100, "gate": 330 },
-    "desktopFirstScreenMs": { "what": "Desktop app: launch to the first screen", "at": ["firstScreenMs"], "budget": 400, "gate": 745, "source": "desktop" },
-    "coldStartMs": { "what": "Desktop app: launch to the first cached message of the channel it reopens", "at": ["firstMessageMs"], "budget": 500, "gate": 905, "source": "desktop" },
     "electrobunFirstScreenMs": { "what": "Desktop app on Electrobun: launch to the first screen", "at": ["firstScreenMs"], "budget": 400, "gate": 1000, "source": "desktop-eb" },
     "electrobunColdStartMs": {
       "what": "Desktop app on Electrobun: launch to the first cached message of the channel it reopens",

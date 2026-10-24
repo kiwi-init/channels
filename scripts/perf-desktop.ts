@@ -1,8 +1,7 @@
-import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import type { ChildProcess } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { chromium, type Page } from "playwright-core";
 import { appExecutable, attach, launch as launchApp, processesOf, stop, testEnv, webkitHelpers } from "../desktop/scripts/eb-drive.ts";
 import { firstChannel } from "../desktop/scripts/eb-first-run.ts";
 import { daemonStop } from "../desktop/src/daemon-client.ts";
@@ -13,21 +12,18 @@ import { calibrateInPage, loopInPage } from "./perf-calibrate.ts";
 if (process.argv.includes("--help") || !process.argv[2]) {
   console.log(`The packaged desktop app's cold start, measured: from launching the executable to its window, its first screen, the first cached message
 of the channel it reopens on screen, and live, PERF_RUNS times (5) after one run that makes a channel with PERF_MESSAGES messages (20) on a local relay,
-and leaves it open. A launch that doesn't reopen that channel fails. It runs in a temp user data dir and a temp KIWI_HOME (and on Linux a temp HOME), with a mock keychain on a Mac: it never touches
-the real app. Each launch also times perf-scale's CPU calibration in the app's page; the medians are scaled by it to the reference runner in
+and leaves it open. A launch that doesn't reopen that channel fails. Each launch also times perf-scale's CPU calibration in the app's page; the medians are scaled by it to the reference runner in
 scripts/perf-budgets.json, and it fails when one is over its gate there (the limits whose source is desktop). The report also has loopMs, a
 pure-JS loop timed in the same page that doesn't depend on the engine's DOM speed, for comparing runners; nothing is gated on it.
 
-With --electrobun, the app is a Channels.app built with CHANNELS_EB_TEST=1 (so com.kiwiinit.channels.test), driven through its test
-driver's socket instead of CDP, with ~/Library and HOME in one temp home (CFFIXED_USER_HOME and HOME) and the relay given by KIWI_EB_RELAY.
+The app is a Channels.app built with CHANNELS_EB_TEST=1 (so com.kiwiinit.channels.test), driven through its test driver's socket,
+with ~/Library and HOME in one temp home (CFFIXED_USER_HOME and HOME) and the relay given by KIWI_EB_RELAY: it never touches the real app.
 
-  bun scripts/perf-desktop.ts <packaged app executable> [--json out.json]
-  bun scripts/perf-desktop.ts <Channels.app> --electrobun [--json out.json]`);
+  bun scripts/perf-desktop.ts <Channels.app> [--json out.json]`);
   process.exit(process.argv[2] ? 0 : 2);
 }
 
-const ELECTROBUN = process.argv.includes("--electrobun");
-const exe = ELECTROBUN ? appExecutable(process.argv[2]) : resolve(process.argv[2]);
+const exe = appExecutable(process.argv[2]);
 if (!existsSync(exe)) {
   console.error(`no app at ${exe}`);
   process.exit(2);
@@ -39,18 +35,6 @@ const OUT = at > 0 ? process.argv[at + 1] : undefined;
 
 const root = mkdtempSync(join(tmpdir(), "kiwi-perf-desktop-"));
 const home = join(root, ".kiwi");
-const userData = join(root, "user-data");
-mkdirSync(userData, { recursive: true });
-const env: NodeJS.ProcessEnv = { ...process.env, KIWI_HOME: home };
-if (process.platform === "linux") Object.assign(env, { HOME: root, XDG_CONFIG_HOME: join(root, ".config"), XDG_DATA_HOME: join(root, ".local", "share") });
-delete env["ELECTRON_RUN_AS_NODE"];
-delete env["NODE_OPTIONS"];
-const flags = [
-  `--user-data-dir=${userData}`,
-  "--remote-debugging-port=0",
-  ...(process.platform === "linux" ? ["--no-sandbox"] : []),
-  ...(process.platform === "darwin" ? ["--use-mock-keychain"] : []),
-];
 
 const later = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const median = (xs: number[]) => {
@@ -82,69 +66,6 @@ async function stopApp(app: ChildProcess): Promise<void> {
   await stop(app);
   await daemonStop(home, 2_000).catch(() => undefined);
   await later(500);
-}
-
-async function firstRunWithPlaywright(page: Page, relay: string): Promise<void> {
-  await page.waitForLoadState("domcontentloaded");
-  type Bridge = { kiwi: { relayUrl: string; setRelayUrl: (u: string) => Promise<string> } };
-  await page.evaluate((url) => void (window as unknown as Bridge).kiwi.setRelayUrl(url), relay).catch(() => undefined);
-  await until("the app on the local relay", 30_000, () =>
-    page
-      .evaluate(() => (window as unknown as Bridge).kiwi.relayUrl)
-      .then((url) => (url.startsWith(relay) ? true : null))
-      .catch(() => null),
-  );
-  await page.getByRole("textbox", { name: "Your name" }).fill("Jonatas", { timeout: 60_000 });
-  await page.getByRole("button", { name: "Continue" }).click();
-  const chrome = page.getByRole("banner", { name: "Channels" }).or(page.getByRole("complementary"));
-  await chrome.getByRole("button", { name: "New channel", exact: true }).filter({ visible: true }).first().click({ timeout: 60_000 });
-  await page.getByRole("dialog").getByRole("textbox").fill("cold");
-  await page.getByRole("button", { name: "Create channel" }).click();
-  const composer = page.getByRole("textbox", { name: "Message" });
-  for (let i = 0; i < MESSAGES; i++) {
-    await composer.fill(`Message ${i + 1}: the relay deploy is done, numbers in a minute.`);
-    await composer.press("Enter");
-    await page
-      .getByText(`Message ${i + 1}:`)
-      .filter({ visible: true })
-      .first()
-      .waitFor({ timeout: 15_000 });
-  }
-}
-
-async function launchElectron(): Promise<Running> {
-  rmSync(join(userData, "DevToolsActivePort"), { force: true });
-  const started = Date.now();
-  const app = spawn(exe, flags, { env, stdio: "ignore", detached: true });
-  const port = await until("the app's DevTools port", 60_000, () => {
-    try {
-      return Number(readFileSync(join(userData, "DevToolsActivePort"), "utf8").split("\n")[0]) || null;
-    } catch {
-      // Not written yet: the app is still starting.
-      return null;
-    }
-  });
-  const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
-  const page = await until(
-    "the window",
-    60_000,
-    () =>
-      browser
-        .contexts()
-        .flatMap((c) => c.pages())
-        .find((p) => !p.url().startsWith("devtools:")) ?? null,
-  );
-  return {
-    started,
-    evaluate: <A, R>(fn: (arg: A) => R | Promise<R>, arg: A) => page.evaluate(fn as (arg: unknown) => R | Promise<R>, arg as unknown),
-    firstRun: (relay) => firstRunWithPlaywright(page, relay),
-    where: async () => `${page.url()}\n${(await page.evaluate(() => document.body.innerText).catch(() => null)) ?? "(no page text)"}`,
-    startup: async () => null,
-    quit: async () => {
-      await browser.close().catch(() => undefined);
-      await stopApp(app);
-    },
-  };
 }
 
 async function settled(): Promise<string> {
@@ -181,7 +102,7 @@ async function launchElectrobun(relay: string): Promise<Running> {
 
 const { relay, port } = await startLocalRelay(join(root, "relay"), null, { rateLimits: false });
 const RELAY = `http://127.0.0.1:${port}`;
-const launch = (): Promise<Running> => (ELECTROBUN ? launchElectrobun(RELAY) : launchElectron());
+const launch = (): Promise<Running> => launchElectrobun(RELAY);
 const runs: {
   windowMs: number;
   firstScreenMs: number;
@@ -287,7 +208,7 @@ const loopScaled = Object.fromEntries(Object.entries(measured).map(([k, v]) => [
 const marks = [...new Set(runs.flatMap((r) => Object.keys(r.startup ?? {})))];
 const startup = Object.fromEntries(marks.map((k) => [k, median(runs.flatMap((r) => (r.startup?.[k] === undefined ? [] : [r.startup[k]])))]));
 const report = {
-  app: ELECTROBUN ? "electrobun" : "electron",
+  app: "electrobun",
   runs: runs.length,
   calibrationMs,
   loopMs,
@@ -303,7 +224,7 @@ console.log(JSON.stringify(report, null, 2));
 if (OUT) writeFileSync(OUT, JSON.stringify(report, null, 2));
 
 const over = Object.values(limits).flatMap((l) => {
-  const v = l.source === (ELECTROBUN ? "desktop-eb" : "desktop") ? scaled[l.at[0] ?? ""] : undefined;
+  const v = l.source === "desktop-eb" ? scaled[l.at[0] ?? ""] : undefined;
   return v !== undefined && l.gate !== null && v > l.gate
     ? [`${l.what}: ${v} ms scaled to the reference runner (calibration ${calibrationMs} ms against ${reference["@1x"]}), over its gate ${l.gate} (budget ${l.budget})`]
     : [];

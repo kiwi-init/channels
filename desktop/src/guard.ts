@@ -1,6 +1,5 @@
-// The main process's rules about what may load, open and be read, as plain functions (no electron
-// here), so they can be tested without an app. main.ts wires them to the window, the kiwi-app://
-// handler and the secrets store.
+// The main process's rules about what may load, open and be read, as plain functions, so they can
+// be tested without an app.
 
 import { cleanPersonalities } from "@kiwi/core/personalities.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
@@ -15,19 +14,6 @@ import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, PhoneV
 import { publicChannel } from "./seats.ts";
 
 export { acceptSeat, mergeChannels, mergePublicChannels, migrateEntries, movedRelay, withAccess } from "./seats.ts";
-
-export const APP_SCHEME = "kiwi-app";
-export const APP_HOST = "app";
-
-/** Whether `url` is the app's own page (kiwi-app://app/…): the only thing the window may show. */
-export function isAppUrl(url: string): boolean {
-  try {
-    const u = new URL(url);
-    return u.protocol === `${APP_SCHEME}:` && u.host === APP_HOST;
-  } catch {
-    return false;
-  }
-}
 
 /** `url`, if it may go to the system browser: http(s) only (never file:, javascript:, a custom scheme). */
 export type ExternalUrl = string & { readonly checked: "http(s)" };
@@ -55,27 +41,7 @@ export function normalizeRelay(url: string): string | null {
 }
 
 /**
- * The file under `root` that a kiwi-app:// path names, or null when it doesn't name one inside it
- * (a `..` that climbs out, a sibling folder that merely starts with root's name, a bad %-escape).
- * Paths without an extension are the single-page app's routes: index.html.
- */
-export function fileFor(root: string, pathname: string): string | null {
-  let p: string;
-  try {
-    p = decodeURIComponent(pathname);
-  } catch {
-    return null;
-  }
-  if (p.includes("\0")) return null;
-  if (p === "/" || !path.extname(p)) p = "/index.html";
-  const base = path.resolve(root);
-  const file = path.resolve(base, `.${path.posix.normalize(`/${p}`)}`);
-  const rel = path.relative(base, file);
-  return rel && !rel.startsWith("..") && !path.isAbsolute(rel) ? file : null;
-}
-
-/**
- * The Content-Security-Policy for every kiwi-app:// response: the hosted web's (web/public/_headers),
+ * The Content-Security-Policy for the app's page: the hosted web's (web/public/_headers),
  * with the relay this app talks to, over HTTP and its WebSocket, as the only place to connect. Not
  * WorkOS: in the app, sign-in runs in main (the device flow), never in the page. No eval, no inline
  * script, nothing framed, no form posts: script that got in some other way can't phone anywhere else.
@@ -97,42 +63,6 @@ export function csp(relay: string): string {
     "frame-ancestors 'none'",
     "worker-src 'self'",
   ].join("; ");
-}
-
-const ALLOWED = new Set(["clipboard-sanitized-write"]);
-
-export function permissionAllowed(url: string, permission: string): boolean {
-  return ALLOWED.has(permission) && isAppUrl(url);
-}
-
-/** What reading the store found: nothing yet (a first run), the saved JSON, or a file it couldn't read. */
-export type StoreRead = { kind: "none" } | { kind: "ok"; json: unknown; encrypted: boolean } | { kind: "unreadable"; why: string };
-
-/**
- * Read the store's bytes: decrypted when encryption works (and they were encrypted), else as the plain
- * JSON a run without a keychain writes. Anything else is unreadable, never an empty store: an empty
- * store saved over it would wipe every key.
- */
-export function readStore(raw: Buffer | null, decrypt: ((b: Buffer) => string) | null): StoreRead {
-  if (raw === null) return { kind: "none" };
-  const parse = (s: string): unknown => {
-    const v = JSON.parse(s) as unknown;
-    if (!v || typeof v !== "object" || Array.isArray(v)) throw new Error("not a store");
-    return v;
-  };
-  let why = "";
-  if (decrypt) {
-    try {
-      return { kind: "ok", json: parse(decrypt(raw)), encrypted: true };
-    } catch (e) {
-      why = e instanceof Error ? e.message : String(e);
-    }
-  }
-  try {
-    return { kind: "ok", json: parse(raw.toString("utf8")), encrypted: false };
-  } catch (e) {
-    return { kind: "unreadable", why: why || (e instanceof Error ? e.message : String(e)) };
-  }
 }
 
 export function publicPerson(p: PersonView): PublicPerson;
@@ -199,63 +129,7 @@ export function writePrivate(file: string, raw: Buffer, platform: NodeJS.Platfor
   }
 }
 
-export interface StoreChoice {
-  read: StoreRead;
-  restore: Buffer | null;
-}
-
-export type KeyringState = "keyring" | "plain";
-
-export function keyringState(platform: NodeJS.Platform, available: boolean, backend: string | null): KeyringState {
-  if (!available) return "plain";
-  if (platform !== "linux") return "keyring";
-  return backend !== null && backend !== "basic_text" && backend !== "unknown" ? "keyring" : "plain";
-}
-
-export function needsResave(platform: NodeJS.Platform, raw: Buffer | null, read: StoreRead, state: KeyringState): boolean {
-  if (state !== "keyring" || read.kind !== "ok" || raw === null) return false;
-  return !read.encrypted || (platform === "linux" && raw.subarray(0, 3).toString("latin1") === "v10");
-}
-
-export function chooseStore(main: Buffer | null, backup: Buffer | null, decrypt: ((b: Buffer) => string) | null): StoreChoice {
-  const read = readStore(main, decrypt);
-  if (read.kind === "ok" || !backup) return { read, restore: null };
-  const saved = readStore(backup, decrypt);
-  if (saved.kind === "ok") return { read: saved, restore: backup };
-  return { read: read.kind === "none" ? saved : read, restore: null };
-}
-
 export const errorText = (e: unknown): string => (e instanceof Error ? e.message : String(e)) || "an error with no message";
-
-export type StoreLoad = { ok: true; choice: StoreChoice; raw: Buffer | null } | { ok: false; why: string };
-
-function readCopy(file: string): Buffer | null {
-  try {
-    return fs.readFileSync(file);
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === "ENOENT") return null;
-    throw e;
-  }
-}
-
-export function loadCopies(file: string, decrypt: ((b: Buffer) => string) | null): StoreLoad {
-  let raw: Buffer | null;
-  try {
-    raw = readCopy(file);
-  } catch (e) {
-    return { ok: false, why: errorText(e) };
-  }
-  let backup: Buffer | null = null;
-  let backupWhy: string | null = null;
-  try {
-    backup = readCopy(`${file}.bak`);
-  } catch (e) {
-    backupWhy = errorText(e);
-  }
-  const choice = chooseStore(raw, backup, decrypt);
-  if (choice.read.kind === "none" && backupWhy !== null) return { ok: false, why: `its backup can't be read: ${backupWhy}` };
-  return { ok: true, choice, raw };
-}
 
 export function claimFor(person: Identity, code: unknown, memberPk: unknown): Promise<PersonClaim> {
   if (typeof code !== "string" || typeof memberPk !== "string") throw new Error("bad person claim request");

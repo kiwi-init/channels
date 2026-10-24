@@ -181,7 +181,7 @@ test("every spawn the Electrobun main and the keys code can reach passes an env 
   const built = await Bun.build({
     entrypoints: [join(src, "main-eb.ts"), join(src, "channels.ts")],
     target: "bun",
-    external: ["electrobun", "electrobun/*", "electron"],
+    external: ["electrobun", "electrobun/*"],
     plugins: [{ name: "electrobun-internals", setup: (b) => void b.onResolve({ filter: /\/\.hutch\// }, (a) => ({ path: a.path, external: true })) }],
     throw: false,
   });
