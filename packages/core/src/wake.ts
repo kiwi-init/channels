@@ -130,3 +130,18 @@ export function wakeArgv(via: Exclude<WakeCommand, "webhook" | "kimi-server">, s
 export function wakeKey(alias: string, agent: string): string {
   return `${alias}/${agent}`;
 }
+
+export interface WakeSeat {
+  room: string;
+  alias: string;
+  agent: string;
+  wake: "on" | "off";
+}
+
+export function readWakeSeat(x: unknown): WakeSeat | null {
+  if (!x || typeof x !== "object") return null;
+  const r = x as Record<string, unknown>;
+  if (typeof r.room !== "string" || !/^[0-9a-f]{32}$/.test(r.room) || typeof r.alias !== "string" || !r.alias || typeof r.agent !== "string" || !r.agent) return null;
+  if (r.wake !== "on" && r.wake !== "off") return null;
+  return { room: r.room, alias: r.alias, agent: r.agent, wake: r.wake };
+}
