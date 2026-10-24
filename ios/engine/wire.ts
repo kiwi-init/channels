@@ -1,3 +1,4 @@
+import type { HarnessRow } from "@kiwi/core/harnesses.ts";
 import type { LaunchChoices } from "@kiwi/core/launch-options.ts";
 import type { ChannelIdentityView, PersonView } from "../../desktop/src/bridge.ts";
 
@@ -24,6 +25,8 @@ export type Ask =
   | { op: "harnessesOn"; computer: string }
   | { op: "foldersOn"; computer: string; code: string }
   | LaunchAsk;
+
+export type HarnessChoice = HarnessRow & { name: string; face: string; mono: boolean };
 
 export type LaunchAsk = { op: "launch"; code: string; computer: string; harness: string; folder: string; nick?: string } & LaunchChoices;
 
