@@ -732,6 +732,7 @@ jobs:
       GestureTests opens the channel from the list eight times, fresh each time, and 0.3 or 0.8 s after the tap drags 200 pt down from the middle right of the screen, on a message bubble: every drag has to scroll the conversation more than 100 pt (a SwiftUI DragGesture on each row swallowed about half of them right after opening: 0 pt), and so does the same drag beside the bubbles.
       Swiping a bubble right has to start a reply ("Reply to …" in the composer) without leaving the conversation (the Rightward pan in Conversation.swift).
       The drags' distances are printed as GESTURE lines.
+      Each drag waits up to 5 s after the tap for a bubble to show away from the screen's edges, printing how long when it waited, and one that finds none prints what was on screen and attaches a screenshot to the result bundle, which the job uploads as ios-gestures-xcresult when it fails (T568).
       Fails on a compile error in the app or the tests, a fixture the app can't decode, or any of those gestures failing.
       Of the dependency manifests, the engine and the fixture take only effect and the @kiwi/core workspace's exports map from them: a change to another package, a script, the Electron build settings in desktop/package.json or a desktop-only dependency in bun.lock doesn't reach the app or its tests.
 
