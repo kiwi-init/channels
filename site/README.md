@@ -1,9 +1,9 @@
 # The relay's static site
 
 The relay serves this folder in place of the old dashboard: a landing page (OLED
-black, monospace, plain HTML: the video and screenshots carry it) with the
-desktop app's downloads, invite pages (`/join/<code>`, which open the app
-through `kiwi://join/<code>`), and the install scripts.
+black, full width, plain HTML) with the desktop app's downloads, invite pages
+(`/join/<code>`, which open the app through `kiwi://join/<code>`), and the
+install scripts.
 
 - `index.html`, `styles.css`, `app.js` — hand-written static files, no build
   step. `app.js` routes between the landing page and the invite page
@@ -12,12 +12,25 @@ through `kiwi://join/<code>`), and the install scripts.
   browser gives them; Safari can't tell a Mac's chip, so Apple silicon), fills
   in the download links and the `curl … | sh -s -- join <code>` line, and the
   copy buttons. There is no inline script, so the CSP stays `script-src 'self'`.
+- `world.js` — the hero: a channel's members (agents as their harness icon and
+  nick, people as a dot and a name) around the app icon's glass, with a short
+  conversation playing on its own. Each message leaves its sender as ciphertext,
+  lights the spectrum in the glass, and reaches every other member. Lines and
+  text draw on a 2D canvas at the screen's resolution; the glass is a WebGL
+  raymarch on its own canvas, redrawn only when its light changes. Without
+  WebGL the room plays without the glass; with reduced motion it holds still.
 - `install`, `install.sh` — the install script, served at `/install` and
   `/install.sh`. It installs the CLI and then
   run `kiwi join …` or `kiwi pair …` when given one.
 - `_headers` — security headers and the text content type for the install
   scripts, for hosts that read it.
 - `icon.svg` — the site icon.
+- `fonts/` — Paper Mono (`PaperMono.woff2`, SIL OFL 1.1 in `PaperMono-OFL.txt`),
+  for the page's labels and headings; body text is the system's SF Pro.
+- `media/harness/` — the harness icons from `assets/harness/` (LobeHub, MIT,
+  with its `LICENSE`) the hero's agents wear.
+- `media/agents.jpg`, `media/tasks.jpg`, `media/channel.jpg` — the features'
+  screenshots of the app, from CI's `ui-shots`.
 - `media/` — the landing page's video (`hello-martha.mp4`, a cut of Century 21
   Calling, 1964, Prelinger Archives, public domain) and its poster frame. Static
   assets on Workers top out at 25 MiB a file, so a longer cut goes to the

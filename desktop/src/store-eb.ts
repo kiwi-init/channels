@@ -44,10 +44,9 @@ export const REFUSAL_ADVICE: Record<Refusal, string> = {
   keyless: "Its key is no longer in your keychain. Restore your keychain from a backup, then reopen Channels.",
   deleted:
     "Your keychain still holds its key, but both copies of the store are gone. Put the store back from a backup, then reopen Channels: it won't start over by itself, so a deleted store can't be replaced without you noticing.",
-  legacy:
-    "Unlock your keychain so Channels can read what the earlier Channels app saved, then quit and reopen Channels. If it still can't, move that file out of its folder and reopen Channels to start without it.",
+  legacy: "Nothing was changed: that file stays as it is. Unlock your keychain (KDE's wallet, or GNOME Keyring), then quit and reopen Channels.",
   "legacy-keyless":
-    "The earlier Channels app's key is no longer in your keychain, so the file it saved can't be opened by anyone. Move that file out of its folder, then reopen Channels to start without it.",
+    "Nothing was changed: that file stays as it is. If your keychain (KDE's wallet, or GNOME Keyring) is locked or wasn't running, unlock or start it, then quit and reopen Channels. Only if its key is gone for good, from a reinstalled system or a deleted wallet, move that file out of its folder to start without those keys.",
   "legacy-plain":
     "The earlier Channels app always encrypted that file on a Mac, so Channels won't take a plain copy. If you didn't put it there, someone else may have: move it out of its folder, then reopen Channels.",
   save: "Make sure your disk has room and Channels' data folder can be written, then reopen Channels.",

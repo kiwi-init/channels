@@ -159,7 +159,7 @@ async function dropMade(key: StoreKey): Promise<void> {
 export async function openStore({ dir, key, legacy, platform = process.platform }: StoreOptions): Promise<OpenStore> {
   const file = path.join(dir, STORE_FILE);
   const backup = `${file}.bak`;
-  const refuse = (why: string, cause: Refusal): OpenStore => ({ kind: "unreadable", why, file, cause });
+  const refuse = (why: string, cause: Refusal, at: string = file): OpenStore => ({ kind: "unreadable", why, file: at, cause });
   const keychainWhy = (why: string): string => `the system keychain didn't give Channels its store key: ${why}`;
   const saver =
     (k: Buffer | null) =>
@@ -199,9 +199,9 @@ export async function openStore({ dir, key, legacy, platform = process.platform 
           );
       }
       const old = await legacy();
-      if (old.kind === "unreadable") return refuse(`the keys the Electron app saved in ${old.file} can't be read: ${old.why}`, old.keyless ? "legacy-keyless" : "legacy");
+      if (old.kind === "unreadable") return refuse(`the keys the Electron app saved can't be read: ${old.why}`, old.keyless ? "legacy-keyless" : "legacy", old.file);
       if (old.kind === "ok" && !old.encrypted && platform !== "linux")
-        return refuse(`the keys in ${old.file} are in plain text, and the Electron app only ever kept them encrypted here, so Channels won't take them`, "legacy-plain");
+        return refuse("the keys the Electron app left are in plain text, and it only ever kept them encrypted here, so Channels won't take them", "legacy-plain", old.file);
       const made = found.kind === "none" ? await create(key) : found;
       if (made.kind === "failed" && platform !== "linux") return refuse(keychainWhy(made.why), "keychain");
       const k = made.kind === "key" ? made.key : null;
