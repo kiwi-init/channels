@@ -72,7 +72,7 @@ On **Start**, that computer's daemon does what `kiwi launch` does:
 3. It opens a terminal you can see, where Settings → New agents → **Prefer** says (`kiwi terminal prefer`): Terminal by default, or Rex or tmux once their helpers are downloaded. If that terminal can't open now, it opens in Terminal and says why; on a computer with no terminal app, like a Linux server, it opens a window in tmux's detached `kiwi` session.
 4. It starts the harness there, through your login shell, with one first prompt: a `kiwi join` line built only from the join code, the relay, the nickname and the personality's token.
 
-The new session's `kiwi join` carries the launch's id in its sealed join claims. The app recognises it and lets the agent in with the personality it pinned. Claude Code, Codex, Grok, MiMoCode and Kimi Code can be started so far.
+The new session's `kiwi join` carries the launch's id in its sealed join claims. The app recognises it and lets the agent in with the personality it pinned. Claude Code, Codex, Grok, MiMoCode, Kimi Code and OpenCode can be started so far.
 
 Kimi Code takes no prompt on its command line, so it starts only where Kiwi can type into its window: Rex or tmux (a launch where only Terminal would open is refused, and says to pick Rex or tmux in Settings → New agents). The daemon waits for Kimi's ready screen, types the `kiwi join` line and presses Enter. While Kimi asks "Trust this folder?", it waits for you to answer, for up to 30 minutes; it never answers dialogs. Each outcome is a line in `~/.kiwi/launch.log`.
 
@@ -85,8 +85,11 @@ A launch can also pick the model, effort, permissions and context, where that ha
 | Grok | `-m` | `--reasoning-effort` none … max | `--permission-mode acceptEdits` / `plan` / `bypassPermissions` | none |
 | MiMoCode | `-m provider/model` | none | none / `--agent plan` / `--dangerously-skip-permissions` | none |
 | Kimi Code | `-m` | none | `--yolo` (Ask When Needed: routine edits and commands run by themselves) / `--plan` / `--auto` (Never Ask) | none |
+| OpenCode | `opencode mini --model provider/model` | none | none / `opencode mini --agent plan` / `--auto` | none |
 
-Default permissions send no flag, so the harness's own settings apply. Bypass asked from another device is refused.
+Default permissions send no flag, so the harness's own settings apply. Bypass asked from another device is refused unless that computer allows it (Settings → New agents, or `kiwi launches bypass on`).
+
+OpenCode's full interface takes only `--prompt` and `--auto`; its model and agent flags are on `opencode mini`. So a launch that picks a model or Plan opens OpenCode's mini interface, one with neither opens the full one, and a model with Bypass is refused with that reason. Checked against OpenCode 2.1.2.
 
 **On a paired computer**, the app reaches that computer's daemon through the relay, and the relay can't read, forge or replay what it carries:
 

@@ -1,6 +1,6 @@
 import type { KnownHarness } from "@kiwi/core/harnesses.ts";
 import type { JoinLine } from "@kiwi/core/join-line.ts";
-import { choicesRefusal, PERMISSIONS, type HarnessOptions, type LaunchChoices } from "@kiwi/core/launch-options.ts";
+import { choicesRefusal, PERMISSIONS, type HarnessOptions, type LaunchChoices, type Permission } from "@kiwi/core/launch-options.ts";
 import { CLAUDE_1M, CLAUDE_EFFORTS, claudeArgv, claudeContextRefusal } from "../loop/claude.ts";
 import { CODEX_CONTEXTS, CODEX_EFFORTS, codexArgv } from "../loop/codex.ts";
 import { GROK_EFFORTS, grokArgv } from "../loop/grok.ts";
@@ -14,6 +14,13 @@ interface LaunchRecipe {
   argv: (bin: string, prompt: string, choices: LaunchChoices) => string[];
   refuse?: (choices: LaunchChoices) => string | null;
   typed?: (screen: string) => Screen;
+}
+
+const OPENCODE_PERMISSIONS: Permission[] = ["default", "plan", "bypass"];
+
+function opencodeArgv(bin: string, prompt: string, { model, permission }: LaunchChoices): string[] {
+  if (model || permission === "plan") return [bin, "mini", ...(model ? ["--model", model] : []), ...(permission === "plan" ? ["--agent", "plan"] : []), "--prompt", prompt];
+  return [bin, ...(permission === "bypass" ? ["--auto"] : []), "--prompt", prompt];
 }
 
 const RECIPES: Partial<Record<KnownHarness, LaunchRecipe>> = {
@@ -38,6 +45,15 @@ const RECIPES: Partial<Record<KnownHarness, LaunchRecipe>> = {
     options: { model: true, effort: [], permission: [...PERMISSIONS], context: [] },
     argv: (bin, _prompt, choices) => kimiArgv({ ...choices, bin }),
     typed: kimiScreen,
+  },
+  opencode: {
+    label: "OpenCode",
+    options: { model: true, effort: [], permission: OPENCODE_PERMISSIONS, context: [] },
+    argv: (bin, prompt, choices) => opencodeArgv(bin, prompt, choices),
+    refuse: (choices) =>
+      choices.model && choices.permission === "bypass"
+        ? "OpenCode skips its permission prompts (--auto) only in its full interface, which can't pick a model: leave the model empty to start it with Bypass"
+        : null,
   },
   mimo: {
     label: "MiMoCode",

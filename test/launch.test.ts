@@ -59,13 +59,14 @@ describe("the line an agent is started with", () => {
     expect(joinPrompt({ code })).toContain(`kiwi join ${code}. If it asks for your model, run it again with --model`);
   });
 
-  test("Claude Code, Codex, Grok and MiMoCode start with it as their first prompt; the others wait for their own recipe", () => {
+  test("Claude Code, Codex, Grok, MiMoCode and OpenCode start with it as their first prompt; the others wait for their own recipe", () => {
     expect(recipeArgv("claude", "/bin/claude", "P")).toEqual(["/bin/claude", "--allowedTools", "Bash(kiwi join:*)", "--", "P"]);
     expect(recipeArgv("codex", "/bin/codex", "P")).toEqual(["/bin/codex", "--", "P"]);
     expect(recipeArgv("grok", "/bin/grok", "P")).toEqual(["/bin/grok", "--", "P"]);
     expect(recipeArgv("mimo", "/bin/mimo", "P", { model: "xiaomi/mimo-v2.5-pro" })).toEqual(["/bin/mimo", "-m", "xiaomi/mimo-v2.5-pro", "--prompt", "P"]);
     expect(recipeArgv("kimi", "/bin/kimi", "P")).toEqual(["/bin/kimi"]);
-    for (const h of ["gemini", "cursor", "opencode", "pi"] as const) {
+    expect(recipeArgv("opencode", "/bin/opencode", "P")).toEqual(["/bin/opencode", "--prompt", "P"]);
+    for (const h of ["gemini", "cursor", "pi"] as const) {
       expect(canStart(h)).toBe(false);
       expect(recipeArgv(h, "/bin/x", "P")).toBeNull();
     }
@@ -131,6 +132,12 @@ describe("the line an agent is started with", () => {
     expect(recipeArgv("mimo", "/bin/mimo", "P", { ...m, permission: "plan" })).toEqual(["/bin/mimo", "-m", m.model, "--agent", "plan", "--prompt", "P"]);
     expect(recipeArgv("mimo", "/bin/mimo", "P", { ...m, permission: "bypass" })).toEqual(["/bin/mimo", "-m", m.model, "--dangerously-skip-permissions", "--prompt", "P"]);
     expect(recipeArgv("mimo", "/bin/mimo", "P", { ...m, permission: "default" })).toEqual(["/bin/mimo", "-m", m.model, "--prompt", "P"]);
+    const oc = { model: "anthropic/claude-sonnet-4" };
+    expect(recipeArgv("opencode", "/bin/opencode", "P", { permission: "bypass" })).toEqual(["/bin/opencode", "--auto", "--prompt", "P"]);
+    expect(recipeArgv("opencode", "/bin/opencode", "P", { permission: "default" })).toEqual(["/bin/opencode", "--prompt", "P"]);
+    expect(recipeArgv("opencode", "/bin/opencode", "P", oc)).toEqual(["/bin/opencode", "mini", "--model", oc.model, "--prompt", "P"]);
+    expect(recipeArgv("opencode", "/bin/opencode", "P", { ...oc, permission: "plan" })).toEqual(["/bin/opencode", "mini", "--model", oc.model, "--agent", "plan", "--prompt", "P"]);
+    expect(recipeArgv("opencode", "/bin/opencode", "P", { permission: "plan" })).toEqual(["/bin/opencode", "mini", "--agent", "plan", "--prompt", "P"]);
   });
 
   test("each harness takes only the efforts, permissions and context sizes it knows", () => {
@@ -148,6 +155,10 @@ describe("the line an agent is started with", () => {
     expect(launchChoicesRefusal("mimo", { model: "xiaomi/mimo-v2.5-pro", permission: "plan" })).toBeNull();
     expect(launchChoicesRefusal("mimo", { effort: "high" })).toBe("MiMoCode doesn't take an effort level from Kiwi");
     expect(launchChoicesRefusal("mimo", { permission: "accept-edits" })).toBe("MiMoCode takes permission default, plan, bypass, not accept-edits");
+    expect(launchChoicesRefusal("opencode", { model: "anthropic/claude-sonnet-4", permission: "plan" })).toBeNull();
+    expect(launchChoicesRefusal("opencode", { permission: "accept-edits" })).toBe("OpenCode takes permission default, plan, bypass, not accept-edits");
+    expect(launchChoicesRefusal("opencode", { effort: "high" })).toBe("OpenCode doesn't take an effort level from Kiwi");
+    expect(launchChoicesRefusal("opencode", { model: "anthropic/claude-sonnet-4", permission: "bypass" })).toContain("leave the model empty to start it with Bypass");
     const bare = { model: false, effort: [], permission: [], context: [] };
     expect([
       choicesRefusal("Mo", bare, { model: "m" }),
