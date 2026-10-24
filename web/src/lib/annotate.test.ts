@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import { arrowHead, base64Bytes, fitSide, markedName, meaningful, penPath, rect, strokeWidth, textSize, toImage, TOOL_KEYS } from "./annotate"
+import { Glob } from "bun"
+import { readFileSync } from "node:fs"
+import { fileURLToPath } from "node:url"
+import { arrowHead, base64Blob, base64Bytes, fitSide, markedName, meaningful, penPath, rect, strokeWidth, textSize, toImage, TOOL_KEYS } from "./annotate"
 
 describe("annotate geometry", () => {
   test("a rect from any two corners", () => {
@@ -62,6 +65,18 @@ describe("annotate export", () => {
     expect(base64Bytes(btoa("abc"))).toBe(3)
     expect(base64Bytes(btoa("abcd"))).toBe(4)
     expect(base64Bytes(btoa("abcde"))).toBe(5)
+  })
+
+  test("an image's base64 becomes a Blob of its bytes, with no fetch of a data: URL, which the app's and the site's CSP block", async () => {
+    const blob = base64Blob(btoa("\x89PNG\r\n"), "image/png")
+    expect(blob.type).toBe("image/png")
+    expect([...new Uint8Array(await blob.arrayBuffer())]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a])
+    const connect = (headers: string) => /connect-src ([^;]*)/.exec(headers)?.[1] ?? ""
+    expect(connect(readFileSync(new URL("../../public/_headers", import.meta.url), "utf8"))).not.toContain("data:")
+    const fetchesData = [...new Glob("**/*.{ts,tsx}").scanSync(fileURLToPath(new URL("..", import.meta.url)))].filter((f) =>
+      /fetch\(\s*[`"']data:/.test(readFileSync(new URL(`../${f}`, import.meta.url), "utf8"))
+    )
+    expect(fetchesData).toEqual([])
   })
 
   test("every tool has a single-letter shortcut", () => {

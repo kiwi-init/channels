@@ -72,6 +72,10 @@ export function markedName(name: string, mime: string): string {
   return `${base}-marked.${ext}`
 }
 
+export function base64Blob(data: string, mime: string): Blob {
+  return new Blob([Uint8Array.from(atob(data), (c) => c.charCodeAt(0))], { type: mime })
+}
+
 export function base64Bytes(data: string): number {
   const pad = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0
   return Math.floor((data.length * 3) / 4) - pad
