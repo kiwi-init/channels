@@ -78,19 +78,19 @@ static const Case CASES[] = {
 
 int main(int argc, char **argv) {
   if (argc != 2) {
-    fprintf(stderr, "usage: kiwi-keys-test <libkiwi-shell.so> (under Xvfb)\n");
+    fprintf(stderr, "usage: kiwi-shortcuts-test <libkiwi-shell.so> (under Xvfb)\n");
     return 2;
   }
   gtk_init(&argc, &argv);
   loop = g_main_loop_new(NULL, FALSE);
   void *lib = dlopen(argv[1], RTLD_NOW);
   if (!lib) {
-    fprintf(stderr, "kiwi-keys-test: %s\n", dlerror());
+    fprintf(stderr, "kiwi-shortcuts-test: %s\n", dlerror());
     return 1;
   }
   bool (*keys)(void *, void (*)(int32_t)) = (bool (*)(void *, void (*)(int32_t)))dlsym(lib, "kiwi_window_keys");
   if (!keys) {
-    fprintf(stderr, "kiwi-keys-test: kiwi_window_keys isn't exported\n");
+    fprintf(stderr, "kiwi-shortcuts-test: kiwi_window_keys isn't exported\n");
     return 1;
   }
   GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
@@ -103,7 +103,7 @@ int main(int argc, char **argv) {
   g_idle_add(install_from_worker, &install);
   g_main_loop_run(loop);
   if (!install.ok) {
-    fprintf(stderr, "kiwi-keys-test: kiwi_window_keys, asked from another thread, didn't take the window\n");
+    fprintf(stderr, "kiwi-shortcuts-test: kiwi_window_keys, asked from another thread, didn't take the window\n");
     return 1;
   }
   int bad = 0;
@@ -111,7 +111,7 @@ int main(int argc, char **argv) {
     last = 0;
     press(window, CASES[i].keyval, CASES[i].state);
     if (last != CASES[i].want) {
-      fprintf(stderr, "kiwi-keys-test: %s, with a text field focused, gave action %d, not %d\n", CASES[i].what, last, CASES[i].want);
+      fprintf(stderr, "kiwi-shortcuts-test: %s, with a text field focused, gave action %d, not %d\n", CASES[i].what, last, CASES[i].want);
       bad++;
     } else
       printf("%s: action %d\n", CASES[i].what, last);
@@ -122,7 +122,7 @@ int main(int argc, char **argv) {
   press(window, GDK_KEY_equal, 0);
   const char *typed = gtk_entry_get_text(GTK_ENTRY(entry));
   if (pressed != before || g_strcmp0(typed, "rq=") != 0) {
-    fprintf(stderr, "kiwi-keys-test: r, q and = without Ctrl gave %d actions and the field holds '%s', not 'rq='\n", pressed - before, typed);
+    fprintf(stderr, "kiwi-shortcuts-test: r, q and = without Ctrl gave %d actions and the field holds '%s', not 'rq='\n", pressed - before, typed);
     bad++;
   } else
     printf("r, q and = without Ctrl: typed into the focused field, no action\n");
