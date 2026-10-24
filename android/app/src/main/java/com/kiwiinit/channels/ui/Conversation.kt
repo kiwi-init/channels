@@ -16,6 +16,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Arrangement
@@ -230,7 +231,14 @@ fun Conversation(
     }
     val jump: (Int) -> Unit = { seq ->
         val at = shown.indexOfFirst { it is Line.Bubble && it.message.seq == seq }
-        if (at >= 0) scope.launch { state.animateScrollToItem(at) }
+        if (at >= 0) {
+            scope.launch {
+                state.animateScrollToItem(at)
+                val item = state.layoutInfo.visibleItemsInfo.firstOrNull { it.index == at } ?: return@launch
+                val viewport = state.layoutInfo.viewportEndOffset - state.layoutInfo.viewportStartOffset
+                state.animateScrollBy(-(viewport - item.size) / 2f)
+            }
+        }
     }
     val revealEnd: () -> Unit = {
         scope.launch { animate(reveal, 0f, animationSpec = spring(dampingRatio = 0.8f, stiffness = 500f)) { v, _ -> reveal = v } }
