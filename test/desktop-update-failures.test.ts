@@ -40,18 +40,8 @@ afterAll(() => {
 globalThis.fetch = Object.assign(
   async (input: string | URL | Request) => {
     const u = String(input);
-    if (u.includes("api.github.com"))
-      return new Response(
-        JSON.stringify({
-          tag_name: "v0.20.0",
-          html_url: "https://github.com/kiwi-init/channels/releases/tag/v0.20.0",
-          assets: [
-            { name, browser_download_url: "https://github.com/kiwi-init/channels/releases/download/v0.20.0/zip" },
-            { name: "SHA256SUMS", browser_download_url: "https://github.com/kiwi-init/channels/releases/download/v0.20.0/sums" },
-          ],
-        }),
-      );
-    if (u.endsWith("/sums")) return new Response(sums);
+    if (u.endsWith("/releases/latest")) return new Response(null, { status: 302, headers: { location: "https://github.com/kiwi-init/channels/releases/tag/v0.20.0" } });
+    if (u.endsWith("/SHA256SUMS")) return new Response(sums);
     return new Response(zip);
   },
   { preconnect: realFetch.preconnect },
