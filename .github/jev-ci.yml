@@ -100,6 +100,7 @@ jobs:
       - ".github/jev-ci/**"
       - ".github/workflows/ci.yml"
       - ".github/workflows/perf.yml"
+      - ".github/workflows/rehearsal.yml"
       - ".github/workflows/release-build.yml"
       - ".github/workflows/release.yml"
       - "desktop/build/entitlements.app.plist"
@@ -258,7 +259,7 @@ jobs:
       And test/untrusted-messages.test.ts: an owner-only event a member sent is refused by the fold and not handed to agents (src/agent/wants.ts), and kiwi log flags it (packages/core/src/format.ts); a reply naming a later seq answers nothing and roots no thread there (packages/core/src/state/fold.ts).
       And test/history-progress.test.ts: a relay serving the same page forever can't keep history() looping (packages/core/src/client/history.ts).
       And web components/mermaid.test.tsx: a diagram's click links open in a new tab with noopener.
-      And test/release-environment.test.ts: every job that reads a signing or deploy secret (MAC_*, APPLE_*, CLOUDFLARE_*) runs in the release environment, a rehearsal off main runs in none, and no caller of release-build.yml passes those secrets by name.
+      And test/release-environment.test.ts: every job that reads a signing or deploy secret (MAC_*, APPLE_*, CLOUDFLARE_*) runs in the release environment, a rehearsal off main runs in none, and no caller of release-build.yml (rehearsal.yml, started by hand) passes those secrets by name.
       And test/bun-relay-store.test.ts: the Bun relay keeps one store per room (src/relay/bun.ts), so a message costs at most 4 SQL statements (its send id among them), a row another connection commits is read rather than a warm copy, and the idle sweep closes the rooms it opened only to check them.
       And test/human.test.ts's relay cases: a failed WorkOS key refetch is forgotten, so the next token loads the keys again (src/relay/human.ts); a create with one bad member writes nothing (src/relay/room/lifecycle.ts); and a channel's idle days count from when its last socket closes.
       And test/github-relay.test.ts: on a relay without the App's key, connecting a repo still takes the owner's token and push access to it (src/relay/route.ts, GithubPush).
@@ -697,59 +698,3 @@ jobs:
       Fails on any of those.
       It does not run the Android app itself.
       Of the dependency manifests, the bundle takes only effect and the @kiwi/core workspace's exports map from them: a change to another package, a script, the Electron build settings in desktop/package.json or a desktop-only dependency (Electron, Electrobun) in bun.lock doesn't reach the Android app.
-
-  release-rehearsal:
-    name: release / rehearsal
-    jev: false
-    push: false
-    version_bumps: true
-    inputs: []
-    always:
-      - ".github/actions/stamp/action.yml"
-      - ".github/workflows/release-build.yml"
-      - ".github/workflows/release.yml"
-      - "CHANGELOG.md"
-      - "desktop/build/entitlements.app.plist"
-      - "desktop/electrobun-pins.json"
-      - "desktop/electrobun.config.ts"
-      - "desktop/native/linux/**"
-      - "desktop/native/macos/kiwi-shell.m"
-      - "desktop/package.json"
-      - "desktop/scripts/appimage-squashfs.ts"
-      - "desktop/scripts/eb-app.ts"
-      - "desktop/scripts/eb-driver-check.ts"
-      - "desktop/scripts/eb-home-keychain.ts"
-      - "desktop/scripts/eb-linux-start.sh"
-      - "desktop/scripts/eb-pins.ts"
-      - "desktop/scripts/eb-post-build.ts"
-      - "desktop/scripts/eb-pre-build.ts"
-      - "desktop/scripts/eb-release.ts"
-      - "desktop/scripts/eb-test-marks.ts"
-      - "desktop/scripts/eb-update-rehearsal.ts"
-      - "desktop/scripts/eb.ts"
-      - "desktop/scripts/linux-files.ts"
-      - "desktop/scripts/linux-packages-check.sh"
-      - "desktop/scripts/linux-upgrade-check.sh"
-      - "desktop/scripts/package-linux.ts"
-      - "desktop/scripts/package-probe.ts"
-      - "desktop/src/signer.ts"
-      - "desktop/src/update-asset.ts"
-      - "scripts/build-cli.ts"
-      - "scripts/changelog.ts"
-      - "scripts/cli-downloads.ts"
-      - "scripts/stamp.ts"
-      - "src/version.ts"
-    description: >-
-      Runs .github/workflows/release-build.yml, the build a tag's release.yml runs, with rehearsal: true and a read-only token, publishing nothing: scripts/stamp.ts stamping the tag after src/version.ts (stamp.ts --next, v0.20.6 after 0.20.5) into src/version.ts, both package.json files and site/app.js and site/README.md's download names, and writing CHANGELOG.md's section from the commits since the last release tag, as a tag does; the version and changelog checks on the stamped tree; every job below building that tree (the .github/actions/stamp action applies the stamp the version job uploads); the cli job on macOS (bun test, four builds, each packed as .gz and .xz, held to 30 MB by scripts/cli-downloads.ts), and the Electrobun app for Apple silicon and Linux only (no Intel Mac app since T580).
-      Each package is then tried with its own parts by desktop/scripts/package-probe.ts, on the installed deb and the extracted AppImage (desktop-linux-eb) and the unzipped Mac app (desktop-mac-eb): its bun starts a relay from its kiwi.js and drives its keys worker (keys.js) to make a channel, send a message and read it back, and hand the channel's seat to the app to keep.
-      A rehearsal someone dispatched by hand (workflow_dispatch) keeps what it built as rehearsal-cli, rehearsal-desktop-mac-eb and rehearsal-desktop-linux-eb artifacts for 3 days, so the packages can be unpacked and tried before a tag; one a pull request or merge group runs uploads nothing, and a release's release-* artifacts are never made by a rehearsal.
-      The desktop-mac-eb job (every rehearsal and every tag, T445) builds dist/kiwi.js (scripts/build-cli.ts --js; eb-post-build copies it into the app, which installs the kiwi CLI from it, T2317), then the Electrobun app with the release bundle id (CHANNELS_EB_RELEASE=1) through the pinned toolchain, then desktop/scripts/eb-release.ts unpacks the plain Channels.app from the build's payload, fails unless it is com.kiwiinit.channels at desktop/package.json's version, signs every Mach-O, re-seals the app (T544's KiwiSeal, which skips the stapled Contents/CodeResources) and then signs the bundle, all with the Developer ID and the hardened runtime (Bun alone gets entitlements.app.plist's allow-jit), notarizes and staples it, zips it with ditto (Channels.app at the zip's root) under the name the Electron updater asks for (update-asset.ts swapAsset:
-      Channels-<version>-mac-arm64.zip), makes a ULMO dmg with an Applications link, signs, notarizes and staples that, and fails on a binary carrying audio-input, camera, disable-library-validation, allow-dyld-environment-variables or disable-executable-page-protection, on a designated requirement that isn't Developer ID for com.kiwiinit.channels (signer.ts developerIdRequirement), on codesign --verify, stapler or Gatekeeper refusing the app or the dmg, on a shipped file that no longer matches the seal (eb-seal.ts sealProblems, after stapling), or on a dmg or zip over 40 MB; without the secrets (a pull request) it ad-hoc signs and skips notarization.
-      Then desktop/scripts/eb-update-rehearsal.ts installs the last Electron arm64 release (ELECTRON_LAST_MAC_ARM64, v0.26.0) into a temp Applications folder and runs its updater's own steps on the new zip: the asset name, the SHA256SUMS line, ditto -x, Channels.app at the root, a newer version, signedLikeThisApp (codesign -R the installed app's designated requirement, then spctl) when signed, and update-asset.ts swapScript swapping the bundle in place; it fails unless the swapped app is com.kiwiinit.channels at the new version with no leftovers, and unless it opens its window within 30 s.
-      Then desktop/scripts/eb-driver-check.ts --release unpacks the zip (ditto) and mounts the dmg (hdiutil) and fails if either carries test-only code (desktop/scripts/eb-test-marks.ts) or if CHANNELS_EB_TEST is set.
-      The desktop-linux-eb job builds the Electrobun app for Linux on ubuntu-24.04 (the glibc libkiwi-shell.so and bin/launcher are compiled against, the oldest Ubuntu it runs on) with the release id, packages the deb and AppImage (desktop/scripts/package-linux.ts, each at most 40 MB), runs eb-driver-check --release on both (dpkg-deb -x, --appimage-extract), desktop/scripts/linux-packages-check.sh (what each package holds and leaves out, and bin/launcher's allowlist), desktop/scripts/linux-upgrade-check.sh (the v0.26.0 Electron deb installed, then this deb over it), and starts the installed app and the AppImage under Xvfb (desktop/scripts/eb-linux-start.sh, unsandboxed on 24.04, the app saying why).
-      On a pull request, and on a manual run of ci.yml from any branch but main, the macOS app is unsigned: no caller passes the signing secrets, and only the release environment (main and v* tags) holds them.
-      A manual run on main takes them from that environment, so the app is signed, notarized and checked as on a tag.
-      Fails where the tag would: a stamped file with no version for the stamp to find, versions that disagree after it, no changelog section, a test failing on macOS, a Mac package over 40 MB, a Linux package over 40 MB or missing what it must hold, test-only code in what ships, the deb not installing over the Electron one, the Linux app not starting, and on a manual run on main a signing or notarization error.
-      Runs on a pull request that changes the release workflows, the stamp or CHANGELOG.md, on any change that only bumps a version number, and on manual runs of ci.yml, never on a push to main (release.yml's "kiwi X.Y.Z" stamp commit included).
-
