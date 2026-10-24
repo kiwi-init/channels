@@ -13,20 +13,23 @@ const dir = resolve(process.argv[2] ?? "desktop/release-eb");
 const builds = join(dir, "build");
 const tmp = mkdtempSync(join(tmpdir(), "eb-driver-check-"));
 
-function scripts(path: string): string[] {
+function scripts(path: string, views: boolean): string[] {
   const st = statSync(path);
-  if (st.isDirectory()) return readdirSync(path).flatMap((n) => (n === "views" ? [] : scripts(join(path, n))));
+  if (st.isDirectory()) return readdirSync(path).flatMap((n) => (n === "views" && !views ? [] : scripts(join(path, n), views)));
   return /\.(c|m)?js$/.test(path) ? [path] : [];
 }
 
 function marks(app: string): { code: string[]; launcher: string[]; unread: string[] } {
-  const code = scripts(join(app, "Contents", "Resources"))
-    .map((f) => readFileSync(f, "utf8"))
-    .join("\n");
+  const read = (views: boolean): string =>
+    scripts(join(app, "Contents", "Resources"), views)
+      .map((f) => readFileSync(f, "utf8"))
+      .join("\n");
+  const code = read(false);
+  const all = read(true);
   const exe = execFileSync("plutil", ["-extract", "CFBundleExecutable", "raw", join(app, "Contents", "Info.plist")], { encoding: "utf8" }).trim();
   const launcher = readFileSync(join(app, "Contents", "MacOS", exe)).toString("latin1");
   return {
-    code: IN_CODE.filter((m) => code.includes(m)),
+    code: IN_CODE.filter((m) => all.includes(m)),
     launcher: IN_LAUNCHER.filter((m) => launcher.includes(m)),
     unread: [...IN_BOTH_CODE.filter((m) => !code.includes(m)), ...IN_BOTH_LAUNCHER.filter((m) => !launcher.includes(m)).map((m) => `${m} in its launcher`)],
   };

@@ -3,8 +3,9 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Page } from "playwright-core";
-import { appExecutable, attach, launch as launchApp, stop, testEnv, type Driver } from "../desktop/scripts/eb-drive.ts";
+import { appExecutable, attach, launch as launchApp, processesOf, stop, testEnv, webkitHelpers, type Driver } from "../desktop/scripts/eb-drive.ts";
 import { daemonStop } from "../desktop/src/daemon-client.ts";
+import type { StartupMarks } from "../desktop/src/eb-startup.ts";
 import { startLocalRelay } from "./local-relay.ts";
 import { calibrateInPage, loopInPage } from "./perf-calibrate.ts";
 
@@ -72,6 +73,7 @@ interface Running {
   evaluate<A, R>(fn: (arg: A) => R | Promise<R>, arg: A, ms?: number): Promise<R>;
   firstRun(relay: string): Promise<void>;
   where(): Promise<string>;
+  startup(): Promise<StartupMarks | null>;
   quit(): Promise<void>;
 }
 
@@ -136,6 +138,7 @@ async function launchElectron(): Promise<Running> {
     evaluate: <A, R>(fn: (arg: A) => R | Promise<R>, arg: A) => page.evaluate(fn as (arg: unknown) => R | Promise<R>, arg as unknown),
     firstRun: (relay) => firstRunWithPlaywright(page, relay),
     where: async () => `${page.url()}\n${(await page.evaluate(() => document.body.innerText).catch(() => null)) ?? "(no page text)"}`,
+    startup: async () => null,
     quit: async () => {
       await browser.close().catch(() => undefined);
       await stopApp(app);
@@ -191,7 +194,21 @@ async function firstRunWithDriver(d: Driver): Promise<void> {
   }
 }
 
+async function settled(): Promise<string> {
+  const from = Date.now();
+  let left = processesOf(exe);
+  const lingered = left.length;
+  while (left.length && Date.now() - from < 5_000) {
+    await later(100);
+    left = processesOf(exe);
+  }
+  if (left.length) throw new Error(`the last launch left ${left.length} process(es) of the app running: ${left.join("; ")}`);
+  const waited = lingered ? `, after ${lingered} of its processes took ${Date.now() - from} ms to go` : "";
+  return `nothing of the app left running${waited}, ${webkitHelpers()} WebKit helpers on the machine`;
+}
+
 async function launchElectrobun(relay: string): Promise<Running> {
+  log(await settled());
   const socket = join(root, "driver.sock");
   const started = Date.now();
   const app = launchApp(exe, testEnv(root, socket, relay));
@@ -201,6 +218,7 @@ async function launchElectrobun(relay: string): Promise<Running> {
     evaluate: (fn, arg, ms) => d.evaluate(fn, arg, ms),
     firstRun: () => firstRunWithDriver(d),
     where: async () => (await d.evaluate(() => `${location.href}\n${document.body.innerText}`, null).catch(() => null)) ?? "(no page)",
+    startup: async () => (await d.main("startup").catch(() => null)) as StartupMarks | null,
     quit: async () => {
       d.close();
       await stopApp(app);
@@ -211,7 +229,15 @@ async function launchElectrobun(relay: string): Promise<Running> {
 const { relay, port } = await startLocalRelay(join(root, "relay"), null, { rateLimits: false });
 const RELAY = `http://127.0.0.1:${port}`;
 const launch = (): Promise<Running> => (ELECTROBUN ? launchElectrobun(RELAY) : launchElectron());
-const runs: { windowMs: number; firstScreenMs: number; firstMessageMs: number; liveMs: number; calibrationMs: number; loopMs: number }[] = [];
+const runs: {
+  windowMs: number;
+  firstScreenMs: number;
+  firstMessageMs: number;
+  liveMs: number;
+  calibrationMs: number;
+  loopMs: number;
+  startup?: Record<string, number>;
+}[] = [];
 let running: Running | null = null;
 try {
   log("first run: a person, a channel and its messages on the local relay");
@@ -257,6 +283,7 @@ try {
       liveMs: Math.round(screen.origin + reopened.live - app.started),
       calibrationMs: (await app.evaluate(calibrateInPage, null)).ms,
       loopMs: await app.evaluate(loopInPage, null),
+      ...(await app.startup().then((marks) => (marks ? { startup: Object.fromEntries(Object.entries(marks).map(([k, v]) => [k, Math.round(v - app.started)])) } : {}))),
     };
     runs.push(run);
     log(`run ${i + 1}`, JSON.stringify(run));
@@ -274,11 +301,13 @@ try {
 }
 
 const { reference, limits } = JSON.parse(readFileSync(resolve(import.meta.dir, "perf-budgets.json"), "utf8")) as {
-  reference: { "@1x": number };
+  reference: { "@1x": number; loop: number };
   limits: Record<string, { what: string; at: string[]; budget: number; gate: number | null; source?: string }>;
 };
 const calibrationMs = median(runs.map((r) => r.calibrationMs));
+const loopMs = median(runs.map((r) => r.loopMs));
 const factor = reference["@1x"] / calibrationMs;
+const loopFactor = reference.loop / loopMs;
 const measured: Record<string, number> = {
   windowMs: median(runs.map((r) => r.windowMs)),
   firstScreenMs: median(runs.map((r) => r.firstScreenMs)),
@@ -286,8 +315,22 @@ const measured: Record<string, number> = {
   liveMs: median(runs.map((r) => r.liveMs)),
 };
 const scaled = Object.fromEntries(Object.entries(measured).map(([k, v]) => [k, Math.round(v * factor)]));
-const loopMs = median(runs.map((r) => r.loopMs));
-const report = { app: ELECTROBUN ? "electrobun" : "electron", runs: runs.length, calibrationMs, loopMs, reference: reference["@1x"], measured, scaled, each: runs };
+const loopScaled = Object.fromEntries(Object.entries(measured).map(([k, v]) => [k, Math.round(v * loopFactor)]));
+const marks = [...new Set(runs.flatMap((r) => Object.keys(r.startup ?? {})))];
+const startup = Object.fromEntries(marks.map((k) => [k, median(runs.flatMap((r) => (r.startup?.[k] === undefined ? [] : [r.startup[k]])))]));
+const report = {
+  app: ELECTROBUN ? "electrobun" : "electron",
+  runs: runs.length,
+  calibrationMs,
+  loopMs,
+  reference: reference["@1x"],
+  loopReference: reference.loop,
+  measured,
+  scaled,
+  loopScaled,
+  ...(marks.length ? { startup } : {}),
+  each: runs,
+};
 console.log(JSON.stringify(report, null, 2));
 if (OUT) writeFileSync(OUT, JSON.stringify(report, null, 2));
 

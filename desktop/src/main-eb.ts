@@ -10,6 +10,7 @@ import { keepDaemon } from "./bundled-daemon.ts";
 import { lockInternalRpc, onOurPage, preloadSource, toPageScript } from "./eb-bridge.ts";
 import { drive } from "./eb-driver.ts";
 import { navigation, openedUrl, PAGE_RULES, PAGE_TEMPLATE, PAGE_URL, pageWithCsp, RULES_CANARY } from "./eb-page.ts";
+import { mark, startupMarks } from "./eb-startup.ts";
 import { testVault } from "./eb-test-store.ts";
 import { externalUrl, normalizeRelay } from "./guard.ts";
 import { attachKeys, attachWindow, bundle, ebHost } from "./host-eb.ts";
@@ -29,6 +30,8 @@ import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts"
 import { minWindowWidth } from "./window-size.ts";
 
 declare const KIWI_EB_TEST: boolean;
+
+mark("main");
 
 useHost(KIWI_EB_TEST ? { ...ebHost, app: { ...ebHost.app, packaged: () => true } } : ebHost);
 catchMainErrors();
@@ -136,6 +139,7 @@ async function createWindow(): Promise<BrowserWindow | null> {
     (session, req) => keys.request(session, req),
   );
   keysToPage = (frame) => bridge.pushKeys(frame);
+  mark("window");
   const win = new BrowserWindow({
     title: "Channels",
     url: null,
@@ -145,6 +149,7 @@ async function createWindow(): Promise<BrowserWindow | null> {
     preload: preloadSource({ snapshot: snapshot(), session: bridge.nextSession() }, bundled),
     rpc: bridge,
   });
+  mark("webview");
   const webview = win.webview;
   view = webview;
   let closing = false;
@@ -180,6 +185,7 @@ async function createWindow(): Promise<BrowserWindow | null> {
     reload: () => (refreshPreload(), load()),
   });
   load(first);
+  mark("load");
   const look = win.ptr;
   if (look && windowLook) windowLook(look, minWindowWidth(process.platform), WINDOW_SIZE.minHeight, rgb(windowBackground(false)), rgb(windowBackground(true)));
   if (mac) win.setWindowButtonPosition(TRAFFIC_LIGHTS.x, TRAFFIC_LIGHTS.y);
@@ -208,7 +214,7 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
   }
   if (KIWI_EB_TEST) {
     const socket = process.env.KIWI_EB_DRIVER;
-    if (socket) drive(win.webview, socket);
+    if (socket) drive(win.webview, socket, { startup: startupMarks });
   }
   const tray = startAppLife({
     win,
