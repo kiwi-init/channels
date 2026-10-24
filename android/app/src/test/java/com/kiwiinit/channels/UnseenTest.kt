@@ -44,14 +44,17 @@ class UnseenTest {
         }
         compose.onNode(hasScrollToIndexAction()).performScrollToIndex(5)
         compose.waitForIdle()
+        val scrolled = jumps()
         val room = model.rooms.getValue(DEV)
         val at = room.messages.last().at
         val more = (1..3).map { MessageView(100 + it, "gentle-jaguar", at + it * 1000.0, "msg", "Update $it") }
         compose.runOnUiThread { model.rooms[DEV] = room.copy(messages = room.messages + more) }
         compose.waitForIdle()
-        val jumps = compose.onAllNodes(hasContentDescription("jump to the latest", substring = true))
+        assertEquals("after scrolling: $scrolled", listOf("3 new, jump to the latest"), jumps())
+    }
+
+    private fun jumps(): List<String> =
+        compose.onAllNodes(hasContentDescription("jump to the latest", substring = true, ignoreCase = true))
             .fetchSemanticsNodes()
             .flatMap { it.config.getOrNull(SemanticsProperties.ContentDescription) ?: emptyList() }
-        assertEquals(listOf("3 new, jump to the latest"), jumps)
-    }
 }
