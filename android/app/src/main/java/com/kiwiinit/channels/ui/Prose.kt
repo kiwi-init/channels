@@ -63,6 +63,8 @@ sealed interface Block {
 data class Inks(val ink: Color, val link: Color, val code: Color, val underline: Boolean)
 
 private val url = Regex("""https?://[^\s<>()\[\]]+[^\s<>()\[\].,;:!?'"]""")
+private val web = Regex("""www\.[^\s<>()\[\]]+[^\s<>()\[\].,;:!?'"]""")
+private val mailbox = Regex("""[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}""")
 
 private fun AnnotatedString.Builder.words(s: String, inks: Inks) {
     var i = 0
@@ -118,7 +120,7 @@ private fun AnnotatedString.Builder.words(s: String, inks: Inks) {
             val end = if (close > i) s.indexOf(')', close + 2) else -1
             if (close > i + 1 && end > close + 2) {
                 val target = s.substring(close + 2, end)
-                if (target.startsWith("http://") || target.startsWith("https://")) {
+                if (target.startsWith("http://") || target.startsWith("https://") || target.startsWith("mailto:")) {
                     flush()
                     withLink(LinkAnnotation.Url(target, styles(inks))) { words(s.substring(i + 1, close), inks) }
                     i = end + 1
@@ -132,6 +134,18 @@ private fun AnnotatedString.Builder.words(s: String, inks: Inks) {
                 flush()
                 withLink(LinkAnnotation.Url(match.value, styles(inks))) { append(match.value) }
                 i += match.value.length
+                continue
+            }
+        }
+        if (c.isLetterOrDigit() && !before.isLetterOrDigit() && before !in "._%+-@/") {
+            val site = if (s.startsWith("www.", i)) web.matchAt(s, i) else null
+            val mail = if (site == null) mailbox.matchAt(s, i) else null
+            val found = site ?: mail
+            if (found != null) {
+                flush()
+                val target = if (site != null) "https://${site.value}" else "mailto:${found.value}"
+                withLink(LinkAnnotation.Url(target, styles(inks))) { append(found.value) }
+                i += found.value.length
                 continue
             }
         }
