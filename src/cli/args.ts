@@ -72,6 +72,7 @@ const parsed = parseArgs({
     all: { type: "boolean" },
     global: { type: "boolean" },
     json: { type: "boolean" },
+    listen: { type: "boolean" },
     timeout: { type: "string" },
     yes: { type: "boolean", short: "y" },
     push: { type: "boolean" },

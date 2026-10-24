@@ -6,7 +6,8 @@ import { loadConfig } from "../../config.ts";
 import type { NamedHookHarness } from "../../seats.ts";
 import { isRecord, readJson, writeJson } from "../files.ts";
 import { EVENTS, hookCommand, isOurHook, isOurHookCommand } from "../self.ts";
-import { claudeHooksStatus, hooksInstalled, installHooks, uninstallHooks, withoutOurs, type Settings } from "./claude.ts";
+import type { HookRow } from "@kiwi/core/harnesses.ts";
+import { claudeHooksRow, hooksInstalled, installHooks, uninstallHooks, withoutOurs, type Settings } from "./claude.ts";
 import { editKimiConfig, kimiConfigInstalled } from "./kimi-toml.ts";
 import { installMimo, mimoConfigRoot, mimoInstalled, mimoPluginPath, uninstallMimo } from "./mimo.ts";
 import { installPi, piExtensionPath, piInstalled, piRoot, uninstallPi } from "./pi.ts";
@@ -220,8 +221,8 @@ export function autoInstallExtraHooks(): string | null {
   return wrote.length ? wrote.join(", ") : null;
 }
 
-export function installDetected(): string[] {
-  const paths = [installHooks()];
+export function installDetected(listen = false): string[] {
+  const paths = [installHooks(listen)];
   const choice = loadConfig().harnessHooks ?? {};
   for (const h of EXTRA_HARNESSES) {
     if (choice[h] === "off" || !harnessPresent(h)) continue;
@@ -236,16 +237,24 @@ export function uninstallDetected(): string[] {
   return paths;
 }
 
-export function hooksStatus(): string {
+export function hooksRows(): HookRow[] {
   const choice = loadConfig().harnessHooks ?? {};
-  const claude = loadConfig().claudeHooks === "off" && !hooksInstalled() ? "off" : claudeHooksStatus();
-  const lines = [`claude: ${claude}`];
-  for (const h of EXTRA_HARNESSES) {
-    const status = extraHooksStatus(h);
-    if (status !== "not installed") lines.push(`${h}: ${status}`);
-    else if (choice[h] === "off") lines.push(`${h}: off`);
-    else if (!harnessPresent(h)) lines.push(`${h}: not detected`);
-    else lines.push(`${h}: not installed`);
-  }
-  return lines.join("\n");
+  const claude: HookRow = loadConfig().claudeHooks === "off" && !hooksInstalled() ? { harness: "claude", state: "off", text: "off" } : { harness: "claude", ...claudeHooksRow() };
+  return [
+    claude,
+    ...EXTRA_HARNESSES.map((h): HookRow => {
+      const text = extraHooksStatus(h);
+      if (text === "installed") return { harness: h, state: "installed", text };
+      if (text !== "not installed") return { harness: h, state: "outdated", text };
+      if (choice[h] === "off") return { harness: h, state: "off", text: "off" };
+      if (!harnessPresent(h)) return { harness: h, state: "absent", text: "not detected" };
+      return { harness: h, state: "missing", text };
+    }),
+  ];
+}
+
+export function hooksStatus(): string {
+  return hooksRows()
+    .map((r) => `${r.harness}: ${r.text}`)
+    .join("\n");
 }

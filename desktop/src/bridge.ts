@@ -2,7 +2,7 @@
 // main.ts and preload.ts; renderer-neutral on purpose (no electron/node imports),
 // so web/ can type against it without touching this process.
 
-import type { HarnessRow, KnownHarness } from "@kiwi/core/harnesses.ts";
+import type { HarnessRow, HookRow, KnownHarness } from "@kiwi/core/harnesses.ts";
 import type { LaunchChoices } from "@kiwi/core/launch-options.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
 import type { CachedKept, CachedRow, Unread } from "@kiwi/core/cache-row.ts";
@@ -342,6 +342,8 @@ export interface KiwiBridge {
   setLaunches(to: "on" | "off"): Promise<TerminalsStatus | null>;
   contextLine(): Promise<"on" | "off" | null>;
   setContextLine(to: "on" | "off"): Promise<"on" | "off" | null>;
+  hooks(): Promise<HookRow[]>;
+  setHooks(harness: KnownHarness, to: "on" | "off"): Promise<HookRow[]>;
   harnesses(): Promise<HarnessRow[]>;
   seatFolders(roomId: string): Promise<string[]>;
   chooseFolder(): Promise<string | null>;
