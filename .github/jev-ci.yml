@@ -1251,7 +1251,7 @@ jobs:
 
   desktop-linux:
     name: desktop / linux
-    inputs: ["desktop/src/**", "desktop/native/linux/**", "desktop/build/icons/**", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "package.json", "bun.lock", "desktop/eb-tests/**", "src/relay/**", "scripts/local-relay.ts", "scripts/perf-desktop.ts", "scripts/perf-calibrate.ts", "scripts/perf-budgets.json"]
+    inputs: ["desktop/src/**", "desktop/native/linux/**", "desktop/build/icons/**", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "package.json", "bun.lock", "desktop/eb-tests/**", "src/relay/**", "scripts/local-relay.ts", "scripts/perf-desktop.ts", "scripts/perf-calibrate.ts", "scripts/perf-budgets.json", "src/**", "scripts/build-cli.ts"]
     imports_from: ["desktop/src/main-eb.ts", "desktop/src/preload-eb.ts", "desktop/scripts/smoke-eb.ts", "scripts/perf-desktop.ts"]
     always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/electrobun-pins.json", "desktop/scripts/eb.ts", "desktop/scripts/eb-pins.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/package-linux.ts", "desktop/scripts/linux-files.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/native/linux/**", "desktop/scripts/eb-linux-start.sh", "desktop/scripts/eb-drive.ts", "desktop/scripts/eb-driver-check.ts", "desktop/scripts/smoke-eb.ts"]
     description: >-
@@ -1284,7 +1284,9 @@ jobs:
       and Channels-<v>-linux-x86_64.AppImage (zstd squashfs in 128 KiB blocks on AppImage's type2
       runtime, release 20251108 checked against its pinned sha256), and fails when either is over
       40 MB. scripts/appimage-squashfs.ts checks the AppImage's compression, and the job fails when
-      the deb or the extracted AppImage lacks either launcher, Bun, the page template (Resources/app/page/index.html),
+      the deb or the extracted AppImage lacks either launcher, Bun, Resources/kiwi.js (the kiwi CLI the app installs
+      and its daemon keeper starts: scripts/build-cli.ts --js builds dist/kiwi.js before the build, and eb-post-build
+      copies it on either OS, T2317), the page template (Resources/app/page/index.html),
       the page's assets, the .desktop entry or the icon, or carries what it leaves out (an index.html under views/ among it),
       or when the built bin/launcher, put in front of env, passes on LD_PRELOAD, LD_LIBRARY_PATH, BUN_OPTIONS,
       NODE_OPTIONS or GTK_MODULES (T1548). It then installs the v0.26.0 Electron deb (pinned by sha256) and this
@@ -1321,8 +1323,8 @@ jobs:
       test store in its code, all three in the test build's), desktop/scripts/smoke-eb.ts under Xvfb
       (eb-drive.ts starts a Linux app folder's bin/electrobun-launcher, since bin/launcher keeps
       KIWI_EB_* out of the environment, with HOME and the XDG dirs in a temp root; its web-process check stops
-      WebKitWebProcess and reads main.log under .local/state, and it skips the daemon and CLI checks, since
-      the Linux app doesn't bundle kiwi.js yet) and scripts/perf-desktop.ts
+      WebKitWebProcess and reads main.log under .local/state, and the kiwi daemon must answer on the test
+      KIWI_HOME and the kiwi CLI be installed in the test HOME's .kiwi/bin, as on the Mac: T2317) and scripts/perf-desktop.ts
       --electrobun under Xvfb, reported against the desktop-eb gates without failing the job until T798
       rescales and sets them (its numbers are the perf-desktop-eb-linux artifact).
       Then dpkg --purge must leave nothing behind: no /opt/Channels, /usr/bin/channels-desktop, entry or icons;
@@ -1431,7 +1433,7 @@ jobs:
     push: false
     version_bumps: true
     inputs: []
-    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/actions/stamp/action.yml", "scripts/stamp.ts", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/scripts/fuses.ts", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/scripts/pack-cli.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "scripts/changelog.ts", "scripts/cli-downloads.ts", "desktop/electrobun.config.ts", "desktop/electrobun-pins.json", "desktop/native/macos/kiwi-shell.m", "desktop/scripts/eb.ts", "desktop/scripts/eb-pins.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-app.ts", "desktop/scripts/eb-release.ts", "desktop/scripts/eb-update-rehearsal.ts", "desktop/src/signer.ts", "desktop/src/update-asset.ts"]
+    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/actions/stamp/action.yml", "scripts/stamp.ts", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/scripts/fuses.ts", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/scripts/pack-cli.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "scripts/changelog.ts", "scripts/cli-downloads.ts", "desktop/electrobun.config.ts", "desktop/electrobun-pins.json", "desktop/native/macos/kiwi-shell.m", "desktop/scripts/eb.ts", "desktop/scripts/eb-pins.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-app.ts", "desktop/scripts/eb-release.ts", "desktop/scripts/eb-update-rehearsal.ts", "desktop/src/signer.ts", "desktop/src/update-asset.ts", "scripts/build-cli.ts"]
     description: >-
       Runs .github/workflows/release-build.yml, the build a tag's release.yml runs, with
       rehearsal: true and a read-only token, publishing nothing: scripts/stamp.ts stamping the tag
@@ -1449,7 +1451,8 @@ jobs:
       desktop/scripts/appimage-squashfs.ts failing an AppImage not packed with gzip, lz4 or zstd in
       blocks of at most 128 KiB. The desktop-mac-eb job (rehearsals always; a tag only once
       release.yml passes electrobun_mac: true, which also drops Electron's arm64 build so Intel
-      Macs keep Electron's mac-x64 files) builds the Electrobun app with the release bundle id
+      Macs keep Electron's mac-x64 files) builds dist/kiwi.js (scripts/build-cli.ts --js; eb-post-build copies it
+      into the app, which installs the kiwi CLI from it, T2317), then the Electrobun app with the release bundle id
       (CHANNELS_EB_RELEASE=1) through the pinned toolchain, then desktop/scripts/eb-release.ts unpacks
       the plain Channels.app from the build's payload, fails unless it is com.kiwiinit.channels at
       desktop/package.json's version, signs every Mach-O, re-seals the app (T544's KiwiSeal, which skips the stapled Contents/CodeResources) and then signs the bundle, all with the Developer ID

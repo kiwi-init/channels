@@ -103,15 +103,12 @@ try {
   );
   await bridgeChecks(d, problems);
 
-  if (linux) console.log("kiwi daemon and CLI: not checked on Linux, whose app doesn't bundle kiwi.js yet (eb-post-build copies it into the Mac app only)");
-  else {
-    const hello = await until("the kiwi daemon the app starts", 60_000, () => daemonHello(kiwiHome, 1_000)).catch((e: Error) => (problems.push(e.message), null));
-    if (hello) console.log(`kiwi daemon: answering on the test KIWI_HOME (kiwi ${hello.version})`);
-    const cli = join(root, "home", ".kiwi", "bin", "kiwi");
-    const version = existsSync(cli) ? spawnSync(cli, ["--version"], { encoding: "utf8", env: { ...process.env, KIWI_HOME: kiwiHome } }).stdout.trim() : "";
-    if (version) console.log(`kiwi CLI: installed in the test HOME's .kiwi/bin (${version})`);
-    else problems.push(`the app didn't install the kiwi CLI at ${cli}`);
-  }
+  const hello = await until("the kiwi daemon the app starts", 60_000, () => daemonHello(kiwiHome, 1_000)).catch((e: Error) => (problems.push(e.message), null));
+  if (hello) console.log(`kiwi daemon: answering on the test KIWI_HOME (kiwi ${hello.version})`);
+  const cli = join(root, "home", ".kiwi", "bin", "kiwi");
+  const version = existsSync(cli) ? spawnSync(cli, ["--version"], { encoding: "utf8", env: { ...process.env, KIWI_HOME: kiwiHome } }).stdout.trim() : "";
+  if (version) console.log(`kiwi CLI: installed in the test HOME's .kiwi/bin (${version})`);
+  else problems.push(`the app didn't install the kiwi CLI at ${cli}`);
 
   const ours = webContent().filter((p) => !before.has(p));
   if (!ours.length) problems.push("found no web content process of the app's own to stop");
