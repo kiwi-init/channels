@@ -162,7 +162,33 @@ try {
     else
       problems.push(`closed with no tray host on the session bus, the window ${shown.visible === false ? "was hidden, with nothing on screen to bring it back" : `answered ${JSON.stringify(shown)}`}`);
   }
+  const mac = process.platform === "darwin";
+  const id = mac ? spawnSync("/usr/libexec/PlistBuddy", ["-c", "Print :CFBundleIdentifier", join(bundle, "Contents", "Info.plist")], { encoding: "utf8" }).stdout.trim() : "";
+  const proc = `first process whose bundle identifier is "${id}"`;
+  const osa = (script: string): string => spawnSync("osascript", ["-e", script], { encoding: "utf8", timeout: 30_000 }).stdout.trim();
+  const command = (key: string): void => {
+    osa(`tell application "System Events" to set frontmost of (${proc}) to true`);
+    osa(`tell application "System Events" to keystroke "${key}" using {command down}`);
+  };
+  const visible = (want: boolean) => () => d.main("window").then((w) => ((w as { visible?: unknown }).visible === want ? true : null));
+  if (mac) {
+    const quitKey = osa(`tell application "System Events" to get value of attribute "AXMenuItemCmdChar" of menu item "Quit Channels" of menu 1 of menu bar item 2 of menu bar 1 of (${proc})`);
+    if (quitKey === "Q") console.log("the app menu: Quit Channels on ⌘Q");
+    else problems.push(`the app menu's Quit Channels has key ${JSON.stringify(quitKey)}, not ⌘Q`);
+    command("w");
+    const closed = await until("⌘W closing the window", 10_000, visible(false)).catch(() => null);
+    spawnSync("open", [bundle]);
+    const back = await until("the window, back on opening the app again", 15_000, visible(true)).catch(() => null);
+    if (closed && back) console.log("⌘W closes the window to the menu bar, and opening the app again brings it back");
+    else problems.push(`⌘W ${closed ? "closed the window" : "left the window open"}, and opening the app again ${back ? "brought it back" : "didn't bring it back"}`);
+  }
   d.close();
+  if (mac) {
+    command("q");
+    const quit = await until("⌘Q quitting the app", 20_000, () => Promise.resolve(app.exitCode !== null || app.signalCode !== null ? true : null)).catch(() => null);
+    if (quit) console.log(`⌘Q quits the app (exit ${app.exitCode ?? app.signalCode})`);
+    else problems.push("⌘Q left the app running");
+  }
 } catch (e) {
   problems.push(e instanceof Error ? e.message : String(e));
 } finally {
