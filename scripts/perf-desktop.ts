@@ -237,6 +237,7 @@ const runs: {
   calibrationMs: number;
   loopMs: number;
   startup?: Record<string, number>;
+  page?: Record<string, number>;
 }[] = [];
 let running: Running | null = null;
 try {
@@ -283,6 +284,20 @@ try {
       liveMs: Math.round(screen.origin + reopened.live - app.started),
       calibrationMs: (await app.evaluate(calibrateInPage, null)).ms,
       loopMs: await app.evaluate(loopInPage, null),
+      page: Object.fromEntries(
+        Object.entries(
+          await app.evaluate(
+            () =>
+              Object.fromEntries(
+                performance
+                  .getEntriesByType("mark")
+                  .filter((m) => m.name.startsWith("kiwi:"))
+                  .map((m) => [m.name.slice(5), performance.timeOrigin + m.startTime]),
+              ),
+            null,
+          ),
+        ).map(([k, v]) => [k, Math.round(v - app.started)]),
+      ),
       ...(await app.startup().then((marks) => (marks ? { startup: Object.fromEntries(Object.entries(marks).map(([k, v]) => [k, Math.round(v - app.started)])) } : {}))),
     };
     runs.push(run);

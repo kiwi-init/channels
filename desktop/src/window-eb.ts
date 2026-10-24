@@ -60,7 +60,10 @@ export async function createWindow(): Promise<BrowserWindow | null> {
       refreshPreload();
       bridge.push("store", snapshot());
     },
-    (session, req) => keys.request(session, req),
+    (session, req) => {
+      mark("keysAsk");
+      return keys.request(session, req).then((reply) => (mark("keysReply"), reply));
+    },
   );
   keysToPage((frame) => bridge.pushKeys(frame));
   mark("window");
@@ -109,6 +112,8 @@ export async function createWindow(): Promise<BrowserWindow | null> {
   });
   load(first);
   mark("load");
+  webview.on("will-navigate", () => mark("willNavigate"));
+  webview.on("did-commit-navigation", () => mark("committed"));
   const look = win.ptr;
   if (look && windowLook) windowLook(look, minWindowWidth(process.platform), WINDOW_SIZE.minHeight, rgb(windowBackground(false)), rgb(windowBackground(true)));
   if (mac) win.setWindowButtonPosition(TRAFFIC_LIGHTS.x, TRAFFIC_LIGHTS.y);
@@ -117,6 +122,7 @@ export async function createWindow(): Promise<BrowserWindow | null> {
     if (url) openOutside(url);
   });
   webview.on("dom-ready", () => {
+    mark("domReady");
     if (!closing && !win.isVisible()) win.show();
   });
   return win;
