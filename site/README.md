@@ -36,4 +36,4 @@ them to main; the site deploys only from a tag, after its GitHub release exists.
 (`Channels-${version}-${os}-${arch}.${ext}`)
 with electron-builder's per-target arch strings. There is no Windows app or
 Windows CLI. Links point at
-`github.com/ojowwalker77/channels/releases/latest/download/<file>`.
+`github.com/kiwi-init/channels/releases/latest/download/<file>`.
