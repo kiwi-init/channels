@@ -7,6 +7,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 APPHOME=$(mktemp -d)
 mkdir -p "$APPHOME/.local/share/applications"
 note() { echo "== $*" | tee -a "$OUT/notes.txt"; }
+[ "$D" = kde ] && export XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6 && unset QT_QPA_PLATFORMTHEME
 
 shot() {
   if [ "$D" = gnome ]; then python3 "$HERE/probe.py" gnome-shot "$OUT/$TAG-$1.png" >> "$OUT/probe.log" 2>&1; else python3 "$HERE/probe.py" kwin-shot "$OUT/$TAG-$1.png" >> "$OUT/probe.log" 2>&1; fi
