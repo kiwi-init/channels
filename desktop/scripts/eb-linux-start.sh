@@ -10,6 +10,30 @@ home=$(mktemp -d)
 out="$home/app.log"
 problems=()
 
+parent() { sed 's/.*) //' "/proc/$1/stat" 2> /dev/null | cut -d' ' -f2; }
+label() { tr -d '\0' < "/proc/$1/attr/apparmor/current" 2> /dev/null || tr -d '\0' < "/proc/$1/attr/current" 2> /dev/null || echo none; }
+app_processes() {
+  ps -e -o pid=,ppid=,sid= | awk -v root="$pid" '
+    { up[$1] = $2; sid[$1] = $3; all[NR] = $1 }
+    END {
+      for (i = 1; i <= NR; i++) {
+        p = all[i]; mine = sid[p] == root; q = p
+        while (!mine && q > 1 && (q in up)) { mine = q == root; q = up[q] }
+        if (mine) print p
+      }
+    }'
+}
+bwrap_above() {
+  local p
+  p=$(parent "$1")
+  while [ -n "$p" ] && [ "$p" -gt 1 ]; do
+    [ "$(cat "/proc/$p/comm" 2> /dev/null)" = bwrap ] && { echo "$p"; return 0; }
+    [ "$p" = "$pid" ] && return 1
+    p=$(parent "$p")
+  done
+  return 1
+}
+
 HOME="$home" setsid "$launcher" "$@" > "$out" 2>&1 &
 pid=$!
 
@@ -30,17 +54,30 @@ else
   [ "$class" = 'WM_CLASS(STRING) = "Channels", "Channels"' ] || problems+=("the window's $class isn't Channels, Channels (the .desktop entry's StartupWMClass)")
   [[ "$name" == *'"Channels"'* ]] || problems+=("the window is titled $name, not Channels")
   sleep 5
-  web=$(pgrep -s "$pid" -f WebKitWebProcess | head -n 1)
-  if [ -z "$web" ]; then
+  echo "the app's processes, with their AppArmor label:"
+  webs=()
+  for p in $(app_processes); do
+    exe=$(readlink "/proc/$p/exe" 2> /dev/null || echo "?")
+    echo "  $p (parent $(parent "$p")): $(label "$p"): $exe"
+    [ "${exe##*/}" = WebKitWebProcess ] && webs+=("$p")
+  done
+  echo "every WebKit and bwrap process on the runner (pid ppid sid label args):"
+  for p in $(pgrep -f 'WebKit|bwrap|xdg-dbus-proxy'); do echo "  $p $(parent "$p") $(ps -o sid= -p "$p" | tr -d ' ') $(label "$p") $(tr '\0' ' ' < "/proc/$p/cmdline" 2> /dev/null | cut -c1-200)"; done
+  if [ ${#webs[@]} -eq 0 ]; then
     problems+=("no WebKitWebProcess of the app's own is running 5s after its window opened")
   else
-    echo "WebKitWebProcess $web: $(tr '\0' ' ' < "/proc/$web/cmdline" | cut -c1-160)"
-    sandbox=$(pgrep -s "$pid" -a bwrap | head -n 1 | cut -c1-160)
     off=$(grep -h "WebKitGTK's sandbox is off" "$out" 2> /dev/null | head -n 1)
-    if [ "$want" = sandboxed ]; then
-      if [ -n "$sandbox" ]; then echo "sandbox: $sandbox"; else problems+=("no bwrap of the app's own: WebKitGTK's web process isn't sandboxed${off:+ ($off)}"); fi
-    else
-      [ -z "$sandbox" ] || problems+=("bwrap runs ($sandbox), though here it can't build the sandbox")
+    for web in "${webs[@]}"; do
+      sandbox=$(bwrap_above "$web")
+      if [ -n "$sandbox" ]; then
+        echo "WebKitWebProcess $web runs in bwrap $sandbox: $(tr '\0' ' ' < "/proc/$sandbox/cmdline" 2> /dev/null | cut -c1-160)"
+        [ "$want" = sandboxed ] || problems+=("WebKitWebProcess $web runs in bwrap $sandbox, though here bwrap can't build the sandbox")
+      else
+        echo "WebKitWebProcess $web runs without bwrap: $(tr '\0' ' ' < "/proc/$web/cmdline" 2> /dev/null | cut -c1-160)"
+        [ "$want" = unsandboxed ] || problems+=("WebKitWebProcess $web isn't in a bwrap of the app's own: WebKitGTK's web process isn't sandboxed${off:+ ($off)}")
+      fi
+    done
+    if [ "$want" = unsandboxed ]; then
       if [ -n "$off" ]; then echo "the app says: $off"; else problems+=("the web process runs without the sandbox, but the app doesn't say why"); fi
     fi
   fi
