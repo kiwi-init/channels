@@ -1129,7 +1129,9 @@ jobs:
       delegate, before load, whatever rules the page's internal RPC sets, records each committed
       navigation's URL natively so the bridge answers only while the view is on our page whatever
       events the page posts (T1855), and sets the window's minimum size and background), fails if any Electrobun file in the app differs from its pin
-      or Contents/MacOS holds a file nobody pinned, bundles src/keys-worker.ts into app/bun/keys.js
+      or Contents/MacOS holds a file nobody pinned, fails when the app's Info.plist names no
+      CFBundleIdentifier or its kiwi:// registration doesn't fit that id (only the release id,
+      com.kiwiinit.channels, registers kiwi://; a dev or test build never does), bundles src/keys-worker.ts into app/bun/keys.js
       beside the main bundle and fails unless that bundled keys worker answers a page's request,
       then checks the bundle (scripts/eb-bundle.ts):
       the main bundle holds exactly one copy of Electrobun's internal RPC table, the one
@@ -1221,7 +1223,12 @@ jobs:
       mean it read the wrong files. A CHANNELS_EB_TEST=1 build is always com.kiwiinit.channels.test, and
       eb-post-build.ts refuses one built for the stable or canary channel; the test build won't start unless its data folder
       is under the temp CFFIXED_USER_HOME it was given, and its driver listens only in a folder only this user can open,
-      never over a file that isn't a socket, and removes the socket on exit. desktop/scripts/smoke-eb.ts (through desktop/scripts/eb-drive.ts,
+      never over a file that isn't a socket, and removes the socket on exit. desktop/scripts/smoke-eb.ts (it also has the page navigate to views://internal/icon.svg,
+      views://internal/index.html?x=1 and file:///etc/hosts, and fails unless each is refused: the
+      page stays on views://internal/index.html and window.kiwi still answers, which the rules
+      the canary proved, the native allowlist and the one strict notion of our page (exactly
+      views://internal/index.html, with an optional #fragment, in PAGE_RULES, isPageUrl, the bridge's
+      onOurPage, kiwi-shell.m and Linux's kiwi-shell.c) all have to hold for; through desktop/scripts/eb-drive.ts,
       ~/Library and HOME in one temp home, since Bun follows HOME, a local relay) fails unless the window shows the
       dashboard from views://internal/index.html with a first paint, the relay it was given reaches the page as
       window.kiwi.relayUrl and answers through the CSP, an inline script and a fetch to another origin are refused, the microphone
@@ -1253,7 +1260,7 @@ jobs:
     name: desktop / linux
     inputs: ["desktop/src/**", "desktop/native/linux/**", "desktop/build/icons/**", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "package.json", "bun.lock"]
     imports_from: ["desktop/src/main-eb.ts"]
-    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/electrobun-pins.json", "desktop/scripts/eb.ts", "desktop/scripts/eb-pins.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/package-linux.ts", "desktop/scripts/linux-files.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/native/linux/**", "desktop/scripts/eb-linux-start.sh"]
+    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/electrobun-pins.json", "desktop/scripts/eb.ts", "desktop/scripts/eb-pins.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/package-linux.ts", "desktop/scripts/linux-files.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/native/linux/**", "desktop/scripts/eb-linux-start.sh", "desktop/scripts/eb-pins-check.ts"]
     description: >-
       On two runners at once, Ubuntu 24.04 and 26.04 (a matrix, each part saving its own jev-ci pass;
       T2119: on 24.04 AppArmor's unprivileged user-namespace restriction keeps bubblewrap from setting up
@@ -1261,7 +1268,11 @@ jobs:
       shell for Linux on WebKitGTK (issue #757, T444): web/dist, `bun run prepare:eb` (Hutch's
       devkit, cached under ~/.hutch), then `bun run build:eb` (electrobun build --env=stable), both
       through desktop/scripts/eb.ts, which runs only the Hutch desktop/electrobun-pins.json pins for
-      this host (its archive and files checked by sha256); scripts/eb-pre-build.ts fails unless the
+      this host (its archive and files checked by sha256), and desktop/scripts/eb-pins-check.ts
+      linux-arm64 downloads the linux-arm64 Hutch archive and Electrobun's linux-arm64 core
+      archive (only hashing them, never running anything) and fails unless the archive, its three
+      files and the core's api tree match desktop/electrobun-pins.json, since no job builds on
+      linux-arm64; scripts/eb-pre-build.ts fails unless the
       build runs that Hutch and desktop/.hutch/devkit/api hashes to its pin (the same tree for
       macOS and Linux) and makes the Mac iconset only on macOS, and scripts/eb-post-build.ts puts
       web/dist/index.html (checked by pageWithCsp) at Resources/app/page/ and the rest of web/dist

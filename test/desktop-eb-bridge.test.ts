@@ -15,7 +15,17 @@ describe("which page the Electrobun view is on", () => {
   test("only our own page counts, whatever its hash", () => {
     expect(onOurPage(PAGE_URL)).toBe(true);
     expect(onOurPage(`${PAGE_URL}#mc2-abc`)).toBe(true);
-    for (const off of [null, "", "views://internal/other.html", "views://internal/index.html?x=1", "views://evil/index.html", "https://evil.example/", "about:blank", "file:///etc/passwd"])
+    for (const off of [
+      null,
+      "",
+      "views://internal/other.html",
+      "views://internal/index.html?x=1",
+      "views://internal/INDEX.html",
+      "views://evil/index.html",
+      "https://evil.example/",
+      "about:blank",
+      "file:///etc/passwd",
+    ])
       expect(onOurPage(off)).toBe(false);
   });
 });
