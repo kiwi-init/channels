@@ -27,7 +27,7 @@ import { claimInstance, handoffFor, type Instance } from "./single-instance.ts";
 import { testHomeProblem } from "./eb-test-home.ts";
 import { bunBridge } from "./rpc-eb.ts";
 import { brokenStore, mutate, openStore, snapshot, store } from "./store.ts";
-import { openEbStore, unmarkedNote, v2Vault } from "./store-eb.ts";
+import { openEbStore, plainNote, unmarkedNote, v2Vault } from "./store-eb.ts";
 import type { OpenStore } from "./store-v2.ts";
 import { startUpdates, updateState } from "./updater.ts";
 import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts";
@@ -252,6 +252,8 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
   void keepDaemon(() => quitting).catch(logMainError);
   const broken = brokenStore();
   if (broken) void Utils.showMessageBox({ type: "error", message: "Channels can't read its saved keys", detail: broken.message });
+  const plain = opened ? plainNote(opened) : null;
+  if (plain) logMainError(new Error(plain));
   const unmarked = opened ? unmarkedNote(opened) : null;
   if (unmarked) {
     logMainError(new Error(unmarked));
