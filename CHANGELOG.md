@@ -2,6 +2,11 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.27.2 — 2026-10-24
+
+- **The window gets its preload when it's made again, right after a full collection (T50, #847)** ([#849](https://github.com/kiwi-init/channels/pull/849))
+- **The window no longer fails to start on "Failed to parse webview secret key byte" (T50, #847)** ([#848](https://github.com/kiwi-init/channels/pull/848))
+
 ## 0.27.0 — 2026-10-24
 
 - **WebKit pass: the conversation opens on its newest message in WebKit too, and build / shots shoots every screen in WebKit (T441)** ([#761](https://github.com/kiwi-init/channels/pull/761))
