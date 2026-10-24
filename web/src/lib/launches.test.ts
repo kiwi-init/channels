@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
-import { canStartAgents, followLaunch, followedLaunches, sawMembers, sawRequests } from "./launches"
+import { followLaunch, followedLaunches, sawMembers, sawRequests } from "./launch-follow"
+import { canStartAgents } from "./launches"
 
 describe("following a launch from the app that started it", () => {
   test("only a window whose kiwi has every launch method can start agents", () => {
