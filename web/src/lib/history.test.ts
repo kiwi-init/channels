@@ -6,7 +6,21 @@ import { b64url, seal } from "@kiwi/core/crypto.ts"
 import { generateIdentity, sign } from "@kiwi/core/identity.ts"
 import { PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts"
 import { openKept, openRow, openRows, packKept, packRow, packEnvelope } from "@kiwi/core/cache-row.ts"
-import { forgetAllHistory, forgetHistory, readCached, readKept, rememberKept, rememberRow, rememberRows, useHistoryDb, type CachedKept, type CachedRow, type HistoryDb } from "./history.ts"
+import {
+  forgetAllHistory,
+  forgetHistory,
+  openCached,
+  openHistory,
+  readCached,
+  readKept,
+  rememberKept,
+  rememberRow,
+  rememberRows,
+  useHistoryDb,
+  type CachedKept,
+  type CachedRow,
+  type HistoryDb,
+} from "./history.ts"
 
 const SENTINEL = "SENTINEL-plain-text-should-not-rest"
 const ROOM = "a".repeat(32)
@@ -261,4 +275,47 @@ test("a kept state never opens as a message row, and a row never opens as a kept
   expect(await openRow({ seq: 1, ...kept }, ROOM, keys)).toBeNull()
   const row = await packRow(key, ROOM, 1, msg(1, "a"))
   expect(await openKept({ e: row.e, iv: row.iv, ct: row.ct }, ROOM, keys)).toBeNull()
+})
+
+test("openHistory opens the history database at page start, once, and the channel's first read reuses that connection (T2373)", async () => {
+  useHistoryDb(null)
+  const opens: string[] = []
+  const tx = {
+    oncomplete: null as (() => void) | null,
+    onerror: null,
+    onabort: null,
+    objectStore: () => ({
+      getAll: () => {
+        queueMicrotask(() => tx.oncomplete?.())
+        return { result: [] }
+      },
+    }),
+  }
+  const database = { objectStoreNames: { contains: () => true }, transaction: () => tx, onversionchange: null, onclose: null }
+  const factory = {
+    open: (name: string, version: number) => {
+      opens.push(`${name} v${version}`)
+      const req = { result: database, onsuccess: null as (() => void) | null, onerror: null, onupgradeneeded: null }
+      queueMicrotask(() => req.onsuccess?.())
+      return req
+    },
+  }
+  Object.defineProperty(globalThis, "indexedDB", { value: factory as unknown as IDBFactory, configurable: true })
+  Object.defineProperty(globalThis, "IDBKeyRange", { value: { bound: () => ({}) } as unknown as typeof IDBKeyRange, configurable: true })
+  try {
+    openHistory()
+    expect(opens).toEqual(["mc.history v2"])
+    expect(await openCached(ROOM, PK_A, async (rows) => rows.map(() => null))).toEqual({ stored: 0, opened: [] })
+    expect(opens).toEqual(["mc.history v2"])
+  } finally {
+    Reflect.deleteProperty(globalThis, "indexedDB")
+    Reflect.deleteProperty(globalThis, "IDBKeyRange")
+    useHistoryDb(store)
+  }
+})
+
+test("openHistory without IndexedDB does nothing (T2373)", () => {
+  useHistoryDb(null)
+  expect(() => openHistory()).not.toThrow()
+  useHistoryDb(store)
 })

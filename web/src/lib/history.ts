@@ -47,7 +47,7 @@ function rangeAbove(roomId: string, memberPk: string, newestKept: number): IDBKe
   return IDBKeyRange.bound([roomId, memberPk, newestKept], [roomId, memberPk, Number.MAX_SAFE_INTEGER], true, false)
 }
 
-function idb(): HistoryDb {
+function idb(): { db: HistoryDb; open: () => Promise<IDBDatabase> } {
   let open: Promise<IDBDatabase> | null = null
   const openDb = (): Promise<IDBDatabase> =>
     (open ??= new Promise<IDBDatabase>((resolve, reject) => {
@@ -95,7 +95,7 @@ function idb(): HistoryDb {
     }
   }
 
-  return {
+  const db: HistoryDb = {
     put: (roomId, memberPk, row) => run<void>("readwrite", (s) => void s.put(row, [roomId, memberPk, row.seq])),
     putRows: (roomId, memberPk, rows, oldestKept) =>
       run<void>("readwrite", (s) => {
@@ -116,21 +116,35 @@ function idb(): HistoryDb {
     putKept: (roomId, memberPk, kept) => run<void>("readwrite", (s) => void s.put(kept, [roomId, memberPk]), KEPT),
     kept: async (roomId, memberPk) => (await run<CachedKept | undefined>("readonly", (s) => s.get([roomId, memberPk]), KEPT)) ?? null,
   }
+  return { db, open: openDb }
 }
 
 let backing: HistoryDb | null = null
+let opening: (() => Promise<IDBDatabase>) | null = null
 
 function db(): HistoryDb {
   if (!backing) {
     if (typeof indexedDB === "undefined") throw new Error("no indexedDB")
-    backing = idb()
+    const made = idb()
+    backing = made.db
+    opening = made.open
   }
   return backing
+}
+
+export function openHistory(): void {
+  if (typeof indexedDB === "undefined") return
+  db()
+  void opening?.().then(
+    () => markOnce("kiwi:history-open"),
+    () => {}
+  )
 }
 
 /** Tests substitute a memory database. Pass null to go back to IndexedDB. */
 export function useHistoryDb(next: HistoryDb | null): void {
   backing = next
+  opening = null
 }
 
 export async function rememberRows(roomId: string, memberPk: string, rows: CachedRow[], limit: number): Promise<void> {
