@@ -18,7 +18,15 @@ interface Handler {
 
 const LINK_WAIT_MS = 10 * 60_000;
 
-const handler = (): Handler | null => (globalThis as { webkit?: { messageHandlers?: { kiwi?: Handler } } }).webkit?.messageHandlers?.kiwi ?? null;
+interface Hosts {
+  webkit?: { messageHandlers?: { kiwi?: Handler } };
+  kiwiAndroid?: Handler;
+}
+
+const handler = (): Handler | null => {
+  const hosts = globalThis as Hosts;
+  return hosts.webkit?.messageHandlers?.kiwi ?? hosts.kiwiAndroid ?? null;
+};
 
 let sink: (p: Push) => void = (p) => handler()?.postMessage(JSON.stringify(p));
 
