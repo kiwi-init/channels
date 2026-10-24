@@ -250,22 +250,25 @@ private fun NeedsYouRow(model: AppModel, room: RoomView, ask: AskView) {
     var sending by remember(ask.seq) { mutableStateOf<String?>(null) }
     var replying by remember(ask.seq) { mutableStateOf(false) }
     var text by remember(ask.seq) { mutableStateOf("") }
+    var failed by remember(ask.seq) { mutableStateOf(false) }
 
     fun submit(words: String) {
         val said = words.trim()
         if (said.isEmpty()) return
         sending = said
+        failed = false
         view.buzz(Buzz.Tap)
         scope.launch {
             try {
                 model.answer(room.code, ask.seq, said)
                 view.buzz(Buzz.Done)
+                text = ""
+                replying = false
             } catch (e: EngineException) {
+                failed = true
                 view.buzz(Buzz.Fail)
             }
             sending = null
-            text = ""
-            replying = false
         }
     }
 
@@ -322,6 +325,7 @@ private fun NeedsYouRow(model: AppModel, room: RoomView, ask: AskView) {
                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { replying = true }.padding(vertical = 6.dp, horizontal = 4.dp),
             )
         }
+        if (failed) Text("Couldn't send · Try again", style = MaterialTheme.typography.labelMedium, color = tone.alert)
     }
 }
 

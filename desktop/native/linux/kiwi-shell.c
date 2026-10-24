@@ -344,6 +344,124 @@ bool kiwi_follow_color_scheme(void) {
 }
 
 typedef struct {
+  guint key;
+  GdkModifierType mods;
+  gint action;
+} Shortcut;
+
+static const Shortcut SHORTCUTS[] = {
+    {GDK_KEY_equal, GDK_CONTROL_MASK, 1}, {GDK_KEY_plus, GDK_CONTROL_MASK, 1}, {GDK_KEY_KP_Add, GDK_CONTROL_MASK, 1}, {GDK_KEY_minus, GDK_CONTROL_MASK, 2},
+    {GDK_KEY_KP_Subtract, GDK_CONTROL_MASK, 2}, {GDK_KEY_0, GDK_CONTROL_MASK, 3}, {GDK_KEY_KP_0, GDK_CONTROL_MASK, 3}, {GDK_KEY_r, GDK_CONTROL_MASK, 4},
+    {GDK_KEY_q, GDK_CONTROL_MASK, 5}, {GDK_KEY_w, GDK_CONTROL_MASK, 6}, {GDK_KEY_F11, 0, 7},
+};
+
+static void (*shortcut_pressed)(int32_t action) = NULL;
+
+static gboolean shortcut(GtkAccelGroup *group, GObject *target, guint key, GdkModifierType mods, gpointer data) {
+  (void)group;
+  (void)target;
+  (void)key;
+  (void)mods;
+  if (shortcut_pressed) shortcut_pressed(GPOINTER_TO_INT(data));
+  return TRUE;
+}
+
+static bool keys_on_main(gconstpointer arg) {
+  gpointer window = (gpointer)arg;
+  if (!GTK_IS_WINDOW(window)) return false;
+  GtkAccelGroup *group = gtk_accel_group_new();
+  for (size_t i = 0; i < G_N_ELEMENTS(SHORTCUTS); i++)
+    gtk_accel_group_connect(group, SHORTCUTS[i].key, SHORTCUTS[i].mods, 0, g_cclosure_new(G_CALLBACK(shortcut), GINT_TO_POINTER(SHORTCUTS[i].action), NULL));
+  gtk_window_add_accel_group(GTK_WINDOW(window), group);
+  g_object_unref(group);
+  return true;
+}
+
+bool kiwi_window_keys(void *window, void (*pressed)(int32_t action)) {
+  if (!window || !pressed) return false;
+  shortcut_pressed = pressed;
+  return on_main(keys_on_main, window);
+}
+
+typedef struct {
+  gpointer window;
+  gint min_width;
+  gint min_height;
+  guint32 light;
+  guint32 dark;
+} Look;
+
+static GtkCssProvider *look_css = NULL;
+static guint32 look_light = 0;
+static guint32 look_dark = 0;
+
+static void paint_background(void) {
+  gboolean dark = FALSE;
+  g_object_get(gtk_settings_get_default(), "gtk-application-prefer-dark-theme", &dark, NULL);
+  gchar *css = g_strdup_printf("window { background-color: #%06x; }", (dark ? look_dark : look_light) & 0xffffff);
+  gtk_css_provider_load_from_data(look_css, css, -1, NULL);
+  g_free(css);
+}
+
+static void dark_flipped(GObject *settings, GParamSpec *spec, gpointer data) {
+  (void)settings;
+  (void)spec;
+  (void)data;
+  paint_background();
+}
+
+static void fit_to_screen(GtkWindow *window, gint min_width, gint min_height) {
+  GdkDisplay *display = gtk_widget_get_display(GTK_WIDGET(window));
+  GdkMonitor *monitor = gdk_display_get_primary_monitor(display);
+  if (!monitor && gdk_display_get_n_monitors(display) > 0) monitor = gdk_display_get_monitor(display, 0);
+  if (!monitor) return;
+  GdkRectangle area;
+  gdk_monitor_get_workarea(monitor, &area);
+  gint width = 0;
+  gint height = 0;
+  gtk_window_get_default_size(window, &width, &height);
+  gint fit_width = MAX(min_width, MIN(width, area.width * 9 / 10));
+  gint fit_height = MAX(min_height, MIN(height, area.height * 9 / 10));
+  if (fit_width == width && fit_height == height) return;
+  gtk_window_set_default_size(window, fit_width, fit_height);
+  gtk_window_resize(window, fit_width, fit_height);
+}
+
+static bool look_on_main(gconstpointer arg) {
+  Look *look = (Look *)arg;
+  bool ok = GTK_IS_WINDOW(look->window);
+  if (ok) {
+    GtkWindow *window = GTK_WINDOW(look->window);
+    GdkGeometry hints = {0};
+    hints.min_width = look->min_width;
+    hints.min_height = look->min_height;
+    gtk_window_set_geometry_hints(window, NULL, &hints, GDK_HINT_MIN_SIZE);
+    fit_to_screen(window, look->min_width, look->min_height);
+    look_light = look->light;
+    look_dark = look->dark;
+    if (!look_css) {
+      look_css = gtk_css_provider_new();
+      gtk_style_context_add_provider(gtk_widget_get_style_context(GTK_WIDGET(window)), GTK_STYLE_PROVIDER(look_css), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+      g_signal_connect(gtk_settings_get_default(), "notify::gtk-application-prefer-dark-theme", G_CALLBACK(dark_flipped), NULL);
+    }
+    paint_background();
+  }
+  g_free(look);
+  return ok;
+}
+
+void kiwi_window_look(void *window, double min_width, double min_height, uint32_t light, uint32_t dark) {
+  if (!window) return;
+  Look *look = g_new0(Look, 1);
+  look->window = window;
+  look->min_width = (gint)min_width;
+  look->min_height = (gint)min_height;
+  look->light = light;
+  look->dark = dark;
+  on_main(look_on_main, look);
+}
+
+typedef struct {
   gchar *title;
   gchar *body;
 } Note;

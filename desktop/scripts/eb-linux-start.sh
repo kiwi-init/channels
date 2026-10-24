@@ -30,6 +30,13 @@ else
   [ "$class" = 'WM_CLASS(STRING) = "Channels", "Channels"' ] || problems+=("the window's $class isn't Channels, Channels (the .desktop entry's StartupWMClass)")
   [[ "$name" == *'"Channels"'* ]] || problems+=("the window is titled $name, not Channels")
   sleep 5
+  eval "$(xdotool getwindowgeometry --shell "$win")"
+  read -r sw sh < <(xdotool getdisplaygeometry)
+  if [ "$WIDTH" -gt $((sw * 9 / 10)) ] || [ "$HEIGHT" -gt $((sh * 9 / 10)) ] || [ "$WIDTH" -lt 720 ] || [ "$HEIGHT" -lt 480 ]; then
+    problems+=("the window opened at ${WIDTH}x${HEIGHT} on a ${sw}x${sh} screen, not within 90% of it and at least 720x480")
+  else
+    echo "window size: ${WIDTH}x${HEIGHT} on a ${sw}x${sh} screen"
+  fi
   web=$(pgrep -s "$pid" -f WebKitWebProcess | head -n 1)
   if [ -z "$web" ]; then
     problems+=("no WebKitWebProcess of the app's own is running 5s after its window opened")

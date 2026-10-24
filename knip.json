@@ -13,9 +13,13 @@
     "hdiutil",
     "dbus-send",
     "pgrep",
+    "xdotool",
     "osascript",
     "plutil",
-    "secret-tool"
+    "secret-tool",
+    "nm",
+    "patch",
+    "^g\\+\\+$"
   ],
   "workspaces": {
     ".": {

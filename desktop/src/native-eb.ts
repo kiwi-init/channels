@@ -17,13 +17,15 @@ const shell = dlopen(shellPath, {
 
 const sandboxPages = mac ? null : dlopen(shellPath, { kiwi_sandbox_pages: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.bool } }).symbols.kiwi_sandbox_pages;
 
-export const windowLook = mac
-  ? dlopen(shellPath, { kiwi_window_look: { args: [FFIType.ptr, FFIType.f64, FFIType.f64, FFIType.u32, FFIType.u32], returns: FFIType.void } }).symbols.kiwi_window_look
-  : null;
+export const windowLook = dlopen(shellPath, { kiwi_window_look: { args: [FFIType.ptr, FFIType.f64, FFIType.f64, FFIType.u32, FFIType.u32], returns: FFIType.void } }).symbols.kiwi_window_look;
 
 const trayHost = mac ? null : dlopen(shellPath, { kiwi_tray_host: { args: [], returns: FFIType.bool } }).symbols.kiwi_tray_host;
 
 const colorScheme = mac ? null : dlopen(shellPath, { kiwi_follow_color_scheme: { args: [], returns: FFIType.bool } }).symbols.kiwi_follow_color_scheme;
+
+const windowKeys = mac ? null : dlopen(shellPath, { kiwi_window_keys: { args: [FFIType.ptr, FFIType.function], returns: FFIType.bool } }).symbols.kiwi_window_keys;
+
+let shortcuts: JSCallback | null = null;
 
 const notes = mac
   ? null
@@ -69,6 +71,12 @@ export function missingGuard(): string | null {
 export const hasTrayHost = (): boolean => trayHost?.() ?? true;
 
 export const followColorScheme = (): void => void colorScheme?.();
+
+export function onShortcut(window: Pointer | null, pressed: (action: number) => void): boolean {
+  if (!windowKeys || !window) return false;
+  shortcuts = new JSCallback((action: number) => pressed(action), { args: ["i32"], returns: "void", threadsafe: true });
+  return windowKeys(window, shortcuts.ptr);
+}
 
 export const notifyLinux = (title: string, body: string): boolean => notes?.kiwi_notify(ptr(cString(title)), ptr(cString(body))) ?? false;
 

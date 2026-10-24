@@ -40,10 +40,26 @@ async function problemsOf(key: string, tmp: string): Promise<string[]> {
   return devkit === pinned ? bad : [...bad, `${key}: the devkit api tree in ${coreUrl(key)} is ${devkit}, pinned ${pinned}`];
 }
 
+function wrapperSourceProblems(): string[] {
+  const commit = /\/tar\.gz\/([0-9a-f]{40})$/.exec(PINS.nativeWrapper.source.url)?.[1];
+  const tag = `refs/tags/v${PINS.electrobun}`;
+  const ls = spawnSync("git", ["ls-remote", "https://github.com/blackboardsh/electrobun", tag, `${tag}^{}`], { encoding: "utf8", timeout: 60_000 });
+  if (ls.status !== 0) return [`native wrapper: git ls-remote couldn't read Electrobun's ${tag}: ${ls.stderr.trim()}`];
+  const refs = new Map(
+    ls.stdout
+      .trim()
+      .split("\n")
+      .map((l) => [l.split("\t")[1], l.split("\t")[0]]),
+  );
+  const tagged = refs.get(`${tag}^{}`) ?? refs.get(tag);
+  return commit && tagged === commit ? [] : [`native wrapper: its source pin is ${commit ?? PINS.nativeWrapper.source.url}, but Electrobun's ${tag} is ${tagged ?? "missing"}`];
+}
+
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "eb-pins-check-"));
 try {
-  const problems = (await Promise.all(keys.map((k) => problemsOf(k, tmp)))).flat();
+  const problems = [...(await Promise.all(keys.map((k) => problemsOf(k, tmp)))).flat(), ...wrapperSourceProblems()];
   for (const k of keys) if (!problems.some((p) => p.startsWith(k))) console.log(`${k}: Hutch ${PINS.hutch.version} and the Electrobun ${PINS.electrobun} devkit match their pins`);
+  if (!problems.some((p) => p.startsWith("native wrapper"))) console.log(`the native wrapper's source is Electrobun's v${PINS.electrobun} tag`);
   for (const p of problems) console.error(`eb-pins-check: ${p}`);
   process.exitCode = problems.length ? 1 : 0;
 } finally {
