@@ -285,6 +285,10 @@ jobs:
       - name: smoke
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/smoke-eb.ts desktop/release-eb/build/dev-macos-*/*.app
+      - name: the window opens where it was left, at the size it was left (NSWindow frame autosave)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
+        run: bun desktop/scripts/eb-frame-check.ts desktop/release-eb/build/dev-macos-*/*.app
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         timeout-minutes: 1

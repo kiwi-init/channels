@@ -466,6 +466,7 @@ jobs:
       - "desktop/scripts/eb-drive.ts"
       - "desktop/scripts/eb-driver-check.ts"
       - "desktop/scripts/eb-env-check.ts"
+      - "desktop/scripts/eb-frame-check.ts"
       - "desktop/scripts/eb-home-keychain.ts"
       - "desktop/scripts/eb-keys-check.ts"
       - "desktop/scripts/eb-keys-probe.ts"
@@ -511,6 +512,7 @@ jobs:
       T798 finds why, times the stable build, and brings it under 905, then the gate tightens to match.
       Its first-screen gate, electrobunFirstScreenMs, is 1000 ms for the same reason (600-875 ms scaled on CI, against Electron's 745).
       The smoke also sets the page's news count through window.kiwi.setBadge and fails unless 4 shows on the Dock icon (lsappinfo's StatusLabel, NSDockTile in desktop/native/macos/kiwi-shell.m) and 0 clears it (T971).
+      Then desktop/scripts/eb-frame-check.ts starts the test app three times with one home: a first start opens at 1200x800, and after the window is moved and resized and the app quits through Electrobun's quit sequence, the next start opens where it was left at that size (desktop/native/macos/kiwi-shell.m restores the frame AppKit autosaves under the name Channels, kept at least the minimum size, T972).
 
   desktop-linux:
     name: desktop / linux
