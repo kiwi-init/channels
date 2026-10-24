@@ -679,11 +679,19 @@ jobs:
       - name: gestures
         run: |
           set +e
-          xcodebuild test -project ios/Channels.xcodeproj -scheme Channels -destination "id=$SIM" -derivedDataPath "$RUNNER_TEMP/ios-ui" CODE_SIGNING_ALLOWED=NO > "$RUNNER_TEMP/gestures.log" 2>&1
+          xcodebuild test -project ios/Channels.xcodeproj -scheme Channels -destination "id=$SIM" -derivedDataPath "$RUNNER_TEMP/ios-ui" -resultBundlePath "$RUNNER_TEMP/gestures.xcresult" CODE_SIGNING_ALLOWED=NO > "$RUNNER_TEMP/gestures.log" 2>&1
           code=$?
           grep -E "GESTURE|error:|Test Case .*(passed|failed)|\*\* TEST" "$RUNNER_TEMP/gestures.log"
           [ "$code" -eq 0 ] || tail -80 "$RUNNER_TEMP/gestures.log"
           exit "$code"
+      - if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-gestures-xcresult
+          path: ${{ runner.temp }}/gestures.xcresult
+          if-no-files-found: ignore
+          retention-days: 3
+          overwrite: true
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         timeout-minutes: 1

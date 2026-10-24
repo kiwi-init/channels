@@ -47,6 +47,13 @@ struct Screen {
         XCTAssertEqual(under != nil, onBubble, onBubble ? "the drag doesn't start on a bubble" : "the drag starts on a bubble")
         let window = window
         let visible = bodies.filter { $0.frame.minY > window.minY + 100 && $0.frame.maxY < window.maxY - 100 }
+        if under == nil && visible.isEmpty {
+            print("GESTURE no bubble to measure in \(window): \(shown.count) texts, bodies \(bodies.map { "\($0.label.prefix(24)) at \($0.frame)" })")
+            let shot = XCTAttachment(screenshot: app.screenshot())
+            shot.name = "no bubble to measure"
+            shot.lifetime = .keepAlways
+            XCTContext.runActivity(named: "no bubble to measure") { $0.add(shot) }
+        }
         let probe = try XCTUnwrap(under ?? visible.first, "no bubble on the screen to measure")
         drag(from: start, by: CGVector(dx: 0, dy: 200))
         try await Task.sleep(for: .milliseconds(800))
