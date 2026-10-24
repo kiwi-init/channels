@@ -86,6 +86,10 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -556,7 +560,10 @@ private fun BubbleBody(model: AppModel, room: RoomView, message: MessageView, fi
 private fun Badges(reactions: List<ReactionView>, modifier: Modifier = Modifier) {
     val tone = Tone.current
     val ring = MaterialTheme.colorScheme.surface
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy((-8).dp)) {
+    Row(
+        modifier.clearAndSetSemantics { contentDescription = reactions.joinToString("; ") { "${it.emoji} ${it.who.joinToString(", ")}" } },
+        horizontalArrangement = Arrangement.spacedBy((-8).dp),
+    ) {
         for (r in reactions.take(3)) {
             Box(
                 Modifier.size(28.dp).clip(CircleShape).background(ring).padding(2.dp).clip(CircleShape).background(if (r.mine) tone.mine else tone.them),
@@ -619,7 +626,7 @@ fun PollCard(model: AppModel, room: RoomView, poll: Poll, other: () -> Unit) {
         for (choice in poll.choices) {
             val chosen = picked == choice
             Column(
-                Modifier.fillMaxWidth().clickable(enabled = open && sending == null) {
+                Modifier.fillMaxWidth().semantics { selected = chosen }.clickable(enabled = open && sending == null) {
                     sending = choice
                     failed = false
                     view.buzz(Buzz.Tap)
