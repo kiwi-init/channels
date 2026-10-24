@@ -11,13 +11,14 @@ runs:
       shell: bash
       run: |
         echo "key=$ImageOS-$ImageVersion" >> "$GITHUB_OUTPUT"
+        echo "os=$ImageOS" >> "$GITHUB_OUTPUT"
         echo "engines=chromium-headless-shell${{ inputs.webkit == 'true' && ' webkit' || '' }}" >> "$GITHUB_OUTPUT"
         echo "suffix=${{ inputs.webkit == 'true' && '-webkit' || '' }}" >> "$GITHUB_OUTPUT"
     - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: ${{ runner.temp }}/browser-debs
         key: browser-debs-${{ runner.arch }}-${{ steps.image.outputs.key }}-${{ hashFiles('bun.lock') }}${{ steps.image.outputs.suffix }}
-        restore-keys: browser-debs-${{ runner.arch }}-
+        restore-keys: browser-debs-${{ runner.arch }}-${{ steps.image.outputs.key }}-
     - shell: bash
       run: |
         debs="$RUNNER_TEMP/browser-debs"
@@ -32,7 +33,7 @@ runs:
       uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: ~/.cache/ms-playwright
-        key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}${{ steps.image.outputs.suffix }}
+        key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.image.outputs.os }}-${{ hashFiles('bun.lock') }}${{ steps.image.outputs.suffix }}
     - if: steps.shell.outputs.cache-hit != 'true'
       shell: bash
       run: bunx playwright-core install --only-shell chromium

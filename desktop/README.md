@@ -25,17 +25,46 @@ bun run build:eb                                      # release-eb/: the stable 
 bun run typecheck:eb                                  # fetches the devkit into .hutch/, then tsc
 ```
 
-- `electrobun.config.ts` — Electrobun 2.0.4, pinned exact, `mainProcess: "bun"`. The
-  `CHANNELS_EB_IDENTIFIER` variable gives a test build its own bundle id, so it never shares
-  state with an installed Channels.
+- `scripts/eb.ts` — every Electrobun command goes through it (`start:eb`, `build:eb`,
+  `typecheck:eb`). It runs only the Hutch whose archive and files `electrobun-pins.json`
+  pins, downloaded from the pinned URL, so the npm shim never falls back to an unpinned
+  installer. `eb-pre-build.ts` refuses a build that didn't start this way, or whose devkit
+  (bundled into the main process) isn't the pinned one; `eb-post-build.ts` checks every
+  Electrobun file that ships against its pin, and lets nothing unpinned into
+  `Contents/MacOS`. A new Electrobun means new pins, reviewed like code.
+- `electrobun.config.ts` — Electrobun 2.0.4, pinned exact, `mainProcess: "bun"`. A build
+  is `com.kiwiinit.channels.dev` unless `CHANNELS_EB_RELEASE=1` (the release) or
+  `CHANNELS_EB_IDENTIFIER` (a test's own id) says otherwise, so a local run never shares
+  state with an installed Channels; a `CHANNELS_EB_TEST=1` build is always
+  `com.kiwiinit.channels.test`, on the dev channel only.
 - `src/main-eb.ts` — the window. The page is `web/dist/index.html` with `csp(relay)` from
-  `guard.ts` as a `<meta>` first in `<head>`, kept in memory and served at
-  `views://internal/index.html` (Electrobun's scheme sends fixed headers, so no CSP header);
-  the rest of `web/dist` is in the bundle under `views/internal/`. Navigation stays on
-  `views://internal/*`; links and `window.open` go to the browser through `open.ts`.
+  `guard.ts` as a `<meta>` first in `<head>` (found by the page's structure, and checked at
+  build time), kept in memory and served at `views://internal/index.html` (Electrobun's
+  scheme sends fixed headers, so no CSP header). The template sits outside `views/`, so no
+  copy of the page is served without its CSP; the rest of `web/dist` is under
+  `views/internal/`. Navigation stays on that one page (its hash and query); before the
+  page loads, a canary navigation proves the rules took effect, and any navigation they
+  should have refused closes the app. Links and `window.open` go to the browser through
+  `open.ts`.
 - `native/macos/kiwi-shell.m` — built into the app by `scripts/eb-post-build.ts`: denies
   the microphone, camera and location that Electrobun's WebKit delegate grants our page,
-  and sets the window's minimum size and background on the main thread.
+  lets only downloads of the page's own `blob:` and `data:` URLs through (Electrobun would
+  save any download into Downloads, past the navigation rules), cancels every navigation
+  but the page in Electrobun's own navigation delegate, before load (rules the page's
+  internal RPC could change don't decide it), and sets the window's
+  minimum size and background on the main thread. The shell opens no window if any of
+  these patches can't apply.
+
+- Release (`.github/workflows/release-build.yml`, job `desktop-mac-eb`): the plain
+  `Channels.app` from the build's payload, signed with the Developer ID (Bun alone gets the
+  JIT entitlements), notarized and stapled, as `Channels-<version>-mac-arm64.zip` (ditto,
+  `Channels.app` at its root, the name the Electron app's updater asks for) and `.dmg`, each at
+  most 40 MB (`scripts/eb-release.ts`). `scripts/eb-update-rehearsal.ts` installs the last
+  Electron arm64 release and runs its updater's own steps on the new zip, then opens the
+  swapped app. Rehearsals always run it; a tag publishes it only once `release.yml` passes
+  `electrobun_mac: true`, and Intel Macs keep Electron's x64 build until a stable Electrobun
+  ships darwin-x64. Never launch a release-id build on a Mac with Channels installed: macOS
+  keeps its preferences and WebKit data under the real home whatever `HOME` says.
 
 ## Layout
 

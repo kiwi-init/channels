@@ -12,6 +12,7 @@ import { pipeline } from "node:stream/promises";
 import zlib from "node:zlib";
 import { ensureOnPath as ensureShellPath } from "@kiwi/core/node/shell-path.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
+import { childEnv } from "./child-env.ts";
 
 /** Where the CLI lives: the install script's place (KIWI_INSTALL moves both). */
 function cliPath(): string {
@@ -21,7 +22,7 @@ function cliPath(): string {
 /** What a kiwi binary says it is, or null when it won't run. */
 function versionOf(bin: string): Promise<string | null> {
   return new Promise((resolve) => {
-    execFile(bin, ["--version"], { timeout: 5_000 }, (err, stdout) => resolve(err ? null : stdout.trim().split(/\s+/).pop() || null));
+    execFile(bin, ["--version"], { timeout: 5_000, env: childEnv() }, (err, stdout) => resolve(err ? null : stdout.trim().split(/\s+/).pop() || null));
   });
 }
 
@@ -49,18 +50,44 @@ export function place(bundled: string, dest: string): Promise<void> {
   return done;
 }
 
+const CLI_EXTERNAL = ["node-liblzma", "@mongodb-js/zstd"];
+
+const CHILD_ENV = (): NodeJS.ProcessEnv => ({ PATH: "/usr/bin:/bin", HOME: os.homedir(), TMPDIR: os.tmpdir() });
+
+function run(file: string, args: string[], what: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    execFile(file, args, { timeout: 120_000, cwd: "/", env: CHILD_ENV() }, (err, _out, stderr) => (err ? reject(new Error(`${what}: ${stderr.trim() || err.message}`)) : resolve()));
+  });
+}
+
+async function compile(bundle: string, out: string): Promise<void> {
+  await run(
+    process.execPath,
+    ["build", "--compile", "--no-macros", "--no-compile-autoload-bunfig", "--no-compile-autoload-dotenv", bundle, "--outfile", out, ...CLI_EXTERNAL.flatMap((e) => ["--external", e])],
+    `the kiwi CLI didn't build from ${bundle}`,
+  );
+  if (process.platform === "darwin") await run("/usr/bin/codesign", ["--force", "--sign", "-", out], "codesign failed");
+  await run(out, ["--version"], "the kiwi CLI built from the app doesn't run");
+}
+
 async function unpack(bundled: string, dest: string): Promise<void> {
   await fs.promises.mkdir(path.dirname(dest), { recursive: true });
   const tmp = `${dest}.new-${process.pid}-${randomUUID()}`;
-  if (bundled.endsWith(".zst")) await pipeline(fs.createReadStream(bundled), zlib.createZstdDecompress(), fs.createWriteStream(tmp));
-  else await fs.promises.copyFile(bundled, tmp);
-  if (process.platform !== "win32") await fs.promises.chmod(tmp, 0o755);
-  await fs.promises.rename(tmp, dest);
+  try {
+    if (bundled.endsWith(".js")) await compile(bundled, tmp);
+    else if (bundled.endsWith(".zst")) await pipeline(fs.createReadStream(bundled), zlib.createZstdDecompress(), fs.createWriteStream(tmp));
+    else await fs.promises.copyFile(bundled, tmp);
+    if (process.platform !== "win32") await fs.promises.chmod(tmp, 0o755);
+    await fs.promises.rename(tmp, dest);
+  } catch (e) {
+    await fs.promises.rm(tmp, { force: true });
+    throw e;
+  }
 }
 
 function tidy(bin: string): Promise<void> {
   return new Promise((resolve) => {
-    execFile(bin, ["cleanup", "--quiet"], { timeout: 15_000 }, () => resolve());
+    execFile(bin, ["cleanup", "--quiet"], { timeout: 15_000, env: childEnv() }, () => resolve());
   });
 }
 

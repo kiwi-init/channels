@@ -44,10 +44,10 @@ globalThis.fetch = Object.assign(
       return new Response(
         JSON.stringify({
           tag_name: "v0.20.0",
-          html_url: "https://example.test/rel",
+          html_url: "https://github.com/kiwi-init/channels/releases/tag/v0.20.0",
           assets: [
-            { name, browser_download_url: "https://example.test/zip" },
-            { name: "SHA256SUMS", browser_download_url: "https://example.test/sums" },
+            { name, browser_download_url: "https://github.com/kiwi-init/channels/releases/download/v0.20.0/zip" },
+            { name: "SHA256SUMS", browser_download_url: "https://github.com/kiwi-init/channels/releases/download/v0.20.0/sums" },
           ],
         }),
       );

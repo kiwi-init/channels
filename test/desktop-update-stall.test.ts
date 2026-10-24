@@ -57,10 +57,10 @@ globalThis.fetch = Object.assign(
       return new Response(
         JSON.stringify({
           tag_name: tag,
-          html_url: `https://example.test/${version}`,
+          html_url: `https://github.com/kiwi-init/channels/releases/tag/v${version}`,
           assets: [
-            { name, browser_download_url: `https://example.test/${version}/zip` },
-            { name: "SHA256SUMS", browser_download_url: `https://example.test/${version}/sums` },
+            { name, browser_download_url: `https://github.com/kiwi-init/channels/releases/download/v${version}/zip` },
+            { name: "SHA256SUMS", browser_download_url: `https://github.com/kiwi-init/channels/releases/download/v${version}/sums` },
           ],
         }),
       );

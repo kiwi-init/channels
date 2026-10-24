@@ -1,21 +1,45 @@
 import type {} from "electrobun/view";
 
-import type { StoreSnapshot } from "./bridge.ts";
 import { makeBridge } from "./calls.ts";
-import { BOOT_GLOBAL, RECEIVE_GLOBAL } from "./eb-bridge.ts";
+import { BOOT_GLOBAL, bootOf, RECEIVE_GLOBAL } from "./eb-bridge.ts";
 import { keysPort } from "./keys-page.ts";
 import { pageBridge } from "./rpc-eb.ts";
 
-const boot: unknown = Reflect.get(globalThis, BOOT_GLOBAL);
+interface MessageHandler {
+  postMessage(message: string): void;
+}
+
+const isHandler = (v: unknown): v is MessageHandler => typeof v === "object" && v !== null && typeof (v as { postMessage?: unknown }).postMessage === "function";
+
+function nativeHandler(): MessageHandler | null {
+  const webkit: unknown = Reflect.get(window, "webkit");
+  const handlers: unknown = typeof webkit === "object" && webkit !== null ? Reflect.get(webkit, "messageHandlers") : null;
+  for (const name of ["hostBridge", "bunBridge"]) {
+    const handler: unknown = typeof handlers === "object" && handlers !== null ? Reflect.get(handlers, name) : null;
+    if (isHandler(handler)) return handler;
+  }
+  const alias: unknown = window.__electrobunHostBridge;
+  return isHandler(alias) ? alias : null;
+}
+
+const boot = bootOf(Reflect.get(globalThis, BOOT_GLOBAL));
 Reflect.deleteProperty(globalThis, BOOT_GLOBAL);
-if (!boot || typeof boot !== "object") throw new Error("Channels' window started without the app's snapshot");
+const handler = nativeHandler();
+const postMessage = handler?.postMessage;
+const apply = Reflect.apply;
+const defineProperty = Object.defineProperty;
+const freeze = Object.freeze;
 
-const bridge = pageBridge(
-  (packet) => window.__electrobunHostBridge?.postMessage(JSON.stringify(packet)),
-  (receive) => Object.defineProperty(globalThis, RECEIVE_GLOBAL, { value: receive }),
-);
-const { call, listen } = bridge;
+function expose(): void {
+  if (!boot || !handler || !postMessage) throw new Error("Channels' window started without the app's snapshot or its bridge");
+  const bridge = pageBridge(
+    (json) => void apply(postMessage, handler, [json]),
+    (receive) => defineProperty(window, RECEIVE_GLOBAL, { value: receive }),
+    boot.session,
+  );
+  const { call, listen } = bridge;
+  const channels = keysPort(bridge);
+  defineProperty(window, "kiwi", { value: freeze(makeBridge({ snapshot: boot.snapshot, channels, call, listen })), enumerable: true });
+}
 
-const channels = keysPort(bridge);
-
-Object.defineProperty(window, "kiwi", { value: Object.freeze(makeBridge({ snapshot: boot as StoreSnapshot, channels, call, listen })), enumerable: true });
+if (window.self === window.top) expose();

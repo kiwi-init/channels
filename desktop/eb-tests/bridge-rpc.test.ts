@@ -7,7 +7,8 @@ import { onOurPage } from "../src/eb-bridge.ts";
 import { PAGE_URL } from "../src/eb-page.ts";
 import { useHost } from "../src/host.ts";
 import { handlers } from "../src/ipc/handlers.ts";
-import { bunBridge, pageBridge } from "../src/rpc-eb.ts";
+import type { Frame } from "../src/eb-bridge.ts";
+import { bunBridge, pageBridge, type KeysHandler } from "../src/rpc-eb.ts";
 import { openStore } from "../src/store.ts";
 
 const shell = fakeHost();
@@ -34,15 +35,17 @@ const main = bunBridge(
 );
 main.setTransport({ registerHandler: (h) => (fromPage = h) });
 const page = pageBridge(
-  (packet) => fromPage(wire(packet)),
+  (json) => fromPage(JSON.parse(json)),
   (receive) => (toPage = receive),
+  main.nextSession(),
 );
 const kiwi = makeBridge({ snapshot, channels, call: page.call, listen: page.listen });
 
 const ownPage = (): ReturnType<typeof pageBridge> =>
   pageBridge(
-    (packet) => fromPage(wire(packet)),
+    (json) => fromPage(JSON.parse(json)),
     (receive) => (toPage = receive),
+    main.nextSession(),
   );
 
 const settled = (p: Promise<unknown>, ms = 100): Promise<string> =>
@@ -109,13 +112,15 @@ describe("window.kiwi over Electrobun's RPC, both ends as the app wires them", (
     );
     reloading.setTransport({ registerHandler: (h) => (fromAnyPage = h) });
     const first = pageBridge(
-      (frame) => fromAnyPage(wire(frame)),
+      (json) => fromAnyPage(JSON.parse(json)),
       (receive) => (toLoaded = receive),
+      reloading.nextSession(),
     );
     const before = first.call("chooseFolder");
     const second = pageBridge(
-      (frame) => fromAnyPage(wire(frame)),
+      (json) => fromAnyPage(JSON.parse(json)),
       (receive) => (toLoaded = receive),
+      reloading.nextSession(),
     );
     const deep = second.call("getDeepLink");
     release("/the/previous/load's/room");
@@ -188,13 +193,15 @@ describe("window.kiwi over Electrobun's RPC, both ends as the app wires them", (
     );
     main2.setTransport({ registerHandler: (h) => (fromPage2 = h) });
     const loadA = pageBridge(
-      (packet) => fromPage2(wire(packet)),
+      (json) => fromPage2(JSON.parse(json)),
       (receive) => (toPage2 = receive),
+      main2.nextSession(),
     );
     const fromA = loadA.keys({ id: 1, op: "nudge" } as KeysRequest);
     const loadB = pageBridge(
-      (packet) => fromPage2(wire(packet)),
+      (json) => fromPage2(JSON.parse(json)),
       (receive) => (toPage2 = receive),
+      main2.nextSession(),
     );
     const fromB = loadB.keys({ id: 1, op: "nudge" } as KeysRequest);
     await Bun.sleep(0);
@@ -205,5 +212,123 @@ describe("window.kiwi over Electrobun's RPC, both ends as the app wires them", (
       a: "no answer",
       opened: 2,
     });
+  });
+});
+
+function rig(table: Handlers = handlers(shell.host), keys?: KeysHandler) {
+  const events: string[] = [];
+  const sent: Frame[] = [];
+  let fromAny: (frame: unknown) => void = () => {};
+  let toLoaded: (frame: unknown) => void = () => {};
+  const bridge = bunBridge(
+    table,
+    () => true,
+    (frame) => {
+      sent.push(frame);
+      toLoaded(wire(frame));
+    },
+    (session) => void events.push(`opened ${session}`),
+    keys ??
+      (async (session, req) => {
+        events.push(`keys ${session}`);
+        return { id: req.id, ok: true, value: null };
+      }),
+  );
+  bridge.setTransport({ registerHandler: (h) => (fromAny = h) });
+  const load = (session: string = bridge.nextSession()) =>
+    pageBridge(
+      (json) => fromAny(JSON.parse(json)),
+      (receive) => (toLoaded = receive),
+      session,
+    );
+  return { bridge, events, sent, load, raw: (frame: unknown) => fromAny(wire(frame)) };
+}
+
+describe("sessions are main's (T1230)", () => {
+  test("only a session main minted opens: a thousand hellos with ids of the page's own choosing open nothing, and the real page keeps its answers", async () => {
+    const r = rig();
+    const real = r.load();
+    for (let i = 0; i < 1000; i++) r.raw({ session: crypto.randomUUID(), doc: crypto.randomUUID() });
+    r.raw({ session: crypto.randomUUID(), doc: crypto.randomUUID(), packet: { type: "request", id: 1, method: "notify", params: ["forged", "session"] } });
+    expect(await settled(real.call("getDeepLink"))).toBe("answered null");
+    expect(r.events).toEqual([`opened ${real.session}`]);
+    expect(shell.did).not.toContain("notify forged: session");
+  });
+
+  test("main mints a fresh id for the next load each time one opens, so every load has its own", () => {
+    const r = rig();
+    const ids = [r.bridge.nextSession()];
+    for (let i = 0; i < 3; i++) {
+      r.load();
+      ids.push(r.bridge.nextSession());
+    }
+    expect(new Set(ids).size).toBe(4);
+    expect(r.events).toEqual(ids.slice(0, 3).map((id) => `opened ${id}`));
+  });
+
+  test("a retired session's late reply never leaves main, so nothing from an old load is evaluated in the new one", async () => {
+    let release: (folder: string) => void = () => {};
+    const slow = new Promise<string>((done) => (release = done));
+    const r = rig({ ...handlers(shell.host), chooseFolder: () => slow });
+    const first = r.load();
+    void first.call("chooseFolder");
+    const second = r.load();
+    expect(await settled(second.call("getDeepLink"))).toBe("answered null");
+    release("/picked/by/the/old/load");
+    await Bun.sleep(10);
+    expect(r.sent.filter((f) => f.session === first.session && JSON.stringify(f.packet ?? null).includes("/picked/by/the/old/load"))).toEqual([]);
+  });
+
+  test("a page's first frame can be its first keys request: its session opens before the keys see it (#789 round 3)", async () => {
+    const r = rig();
+    const session = r.bridge.nextSession();
+    r.raw({ session, doc: crypto.randomUUID(), packet: { type: "request", id: 1, method: "keys", params: { id: 7, op: "nudge" } } });
+    await Bun.sleep(10);
+    expect(r.events).toEqual([`opened ${session}`, `keys ${session}`]);
+  });
+});
+
+describe("each document is its own session (T1741)", () => {
+  test("two documents that boot from one preload's id get their own sessions, so neither takes the other's reply", async () => {
+    const picks: ((folder: string) => void)[] = [];
+    const r = rig({ ...handlers(shell.host), chooseFolder: () => new Promise<string>((done) => picks.push(done)) });
+    const id = r.bridge.nextSession();
+    const first = r.load(id);
+    const askedFirst = first.call("chooseFolder");
+    const second = r.load(id);
+    const askedSecond = second.call("chooseFolder");
+    await Bun.sleep(0);
+    picks[0]?.("/the/first/document's/dialog");
+    picks[1]?.("/the/second/document's/dialog");
+    expect(await settled(askedSecond)).toBe('answered "/the/second/document\'s/dialog"');
+    expect(await settled(askedFirst)).toBe("no answer");
+    expect(r.events).toEqual([`opened ${id}`, `opened ${id}`]);
+  });
+
+  test("load() retires the session at once: nothing for the old load leaves main before the new page says hello", async () => {
+    const picks: ((folder: string) => void)[] = [];
+    const r = rig({ ...handlers(shell.host), chooseFolder: () => new Promise<string>((done) => picks.push(done)) });
+    const first = r.load();
+    void first.call("chooseFolder");
+    await Bun.sleep(0);
+    r.bridge.retire();
+    const before = r.sent.length;
+    picks[0]?.("/the/old/load's/dialog");
+    r.bridge.push("deepLink", "kiwi://join/mc2-in-the-gap");
+    await Bun.sleep(10);
+    expect(r.sent.slice(before)).toEqual([]);
+    const second = r.load();
+    expect(await settled(second.call("getDeepLink"))).toBe("answered null");
+  });
+
+  test("an id takes one second document at most: a third nonce opens nothing, so page script can retire the live session once at most, and never again without the next id", async () => {
+    const r = rig();
+    const id = r.bridge.nextSession();
+    r.load(id);
+    const second = r.load(id);
+    for (let i = 0; i < 100; i++) r.raw({ session: id, doc: crypto.randomUUID(), packet: { type: "request", id: 1, method: "notify", params: ["forged", "nonce"] } });
+    expect(await settled(second.call("getDeepLink"))).toBe("answered null");
+    expect(r.events).toEqual([`opened ${id}`, `opened ${id}`]);
+    expect(shell.did).not.toContain("notify forged: nonce");
   });
 });

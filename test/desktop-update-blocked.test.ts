@@ -34,10 +34,10 @@ globalThis.fetch = Object.assign(
     return new Response(
       JSON.stringify({
         tag_name: "v0.20.0",
-        html_url: "https://example.test/rel",
+        html_url: "https://github.com/kiwi-init/channels/releases/tag/v0.20.0",
         assets: [
-          { name, browser_download_url: "https://example.test/zip" },
-          { name: "SHA256SUMS", browser_download_url: "https://example.test/sums" },
+          { name, browser_download_url: "https://github.com/kiwi-init/channels/releases/download/v0.20.0/zip" },
+          { name: "SHA256SUMS", browser_download_url: "https://github.com/kiwi-init/channels/releases/download/v0.20.0/sums" },
         ],
       }),
     );
@@ -48,7 +48,7 @@ globalThis.fetch = Object.assign(
 test.skipIf(process.platform !== "darwin")("a Mac app in a folder it can't write offers the release, says it can't update itself, and downloads nothing", async () => {
   chmodSync(parent, 0o555);
   const r = await checkForUpdate();
-  expect(r).toEqual({ version: "0.20.0", state: "available", url: "https://example.test/rel", blocked: true });
+  expect(r).toEqual({ version: "0.20.0", state: "available", url: "https://github.com/kiwi-init/channels/releases/tag/v0.20.0", blocked: true });
   expect(seen.filter((u) => !u.includes("api.github.com"))).toEqual([]);
 });
 

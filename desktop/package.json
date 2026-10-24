@@ -3,7 +3,7 @@
   "version": "0.26.0",
   "private": true,
   "description": "Channels desktop app: an Electron shell hosting web/ for people (auto-approval, pairing, admin).",
-  "homepage": "https://github.com/ojowwalker77/channels",
+  "homepage": "https://github.com/kiwi-init/channels",
   "author": {
     "name": "Jow",
     "email": "ojowwalker77@users.noreply.github.com"
@@ -17,9 +17,9 @@
     "build": "bun run build:main && bun run build:preload && bun run build:channels",
     "start": "bun run build && electron dist/main.js",
     "dist": "bun run build && electron-builder",
-    "prepare:eb": "electrobun prepare",
-    "start:eb": "electrobun dev",
-    "build:eb": "electrobun build --env=stable",
+    "prepare:eb": "bun scripts/eb.ts prepare",
+    "start:eb": "bun scripts/eb.ts dev",
+    "build:eb": "bun scripts/eb.ts build --env=stable",
     "typecheck": "bunx tsc --noEmit",
     "typecheck:eb": "bun run prepare:eb && bunx tsc --noEmit -p tsconfig.eb.json"
   },

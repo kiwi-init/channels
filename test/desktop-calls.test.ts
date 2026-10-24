@@ -82,7 +82,7 @@ describe("window.kiwi on any transport", () => {
     ];
     const moved = { ...snapshot, relayUrl: "https://moved.example" };
     bus.emit("store", moved);
-    bus.emit("update", { version: "0.27.0", state: "ready", url: "https://github.com/ojowwalker77/channels/releases/tag/v0.27.0" });
+    bus.emit("update", { version: "0.27.0", state: "ready", url: "https://github.com/kiwi-init/channels/releases/tag/v0.27.0" });
     bus.emit("githubCode", { code: "ABCD-1234", url: "https://github.com/login/device" });
     bus.emit("deepLink", "kiwi://join/mc2-abc");
     bus.emit("textStep", "bigger");

@@ -4,74 +4,37 @@
     "oxfmt",
     "iconutil",
     "clang",
+    "cc",
+    "sample",
+    "pkg-config",
     "dpkg-deb",
     "mksquashfs",
     "ditto",
     "hdiutil",
+    "kwallet-query",
     "pgrep",
-    "plutil",
-    "kwallet-query"
+    "osascript",
+    "plutil"
   ],
   "workspaces": {
     ".": {
-      "entry": [
-        "scripts/*.ts",
-        "scripts/bench-sh/run.ts",
-        "test/**/*.test.ts",
-        "test/owner-cli.ts",
-        "test/fixtures/home-probe.ts",
-        "ios/engine/main.ts",
-        "ios/scripts/*.ts"
-      ],
-      "project": [
-        "src/**/*.ts",
-        "scripts/**/*.ts",
-        "test/**/*.ts",
-        ".github/jev-ci/**/*.ts",
-        "ios/**/*.ts"
-      ],
-      "ignoreDependencies": [
-        "cloudflare"
-      ],
-      "ignoreUnresolved": [
-        "src/cli/main.ts",
-        "src/relay/bun.ts"
-      ]
+      "entry": ["scripts/*.ts", "scripts/bench-sh/run.ts", "test/**/*.test.ts", "test/owner-cli.ts", "test/fixtures/home-probe.ts", "ios/engine/main.ts", "ios/scripts/*.ts"],
+      "project": ["src/**/*.ts", "scripts/**/*.ts", "test/**/*.ts", ".github/jev-ci/**/*.ts", "ios/**/*.ts"],
+      "ignoreDependencies": ["cloudflare"],
+      "ignoreUnresolved": ["src/cli/main.ts", "src/relay/bun.ts"]
     },
     "packages/core": {
       "includeEntryExports": true,
-      "project": [
-        "src/**/*.ts"
-      ]
+      "project": ["src/**/*.ts"]
     },
     "web": {
-      "entry": [
-        "src/**/*.test.{ts,tsx}",
-        "src/lib/no-elk.ts"
-      ],
-      "project": [
-        "src/**/*.{ts,tsx,css}"
-      ],
-      "ignore": [
-        "src/lib/design-tokens.ts",
-        "src/lib/fonts.ts"
-      ]
+      "entry": ["src/**/*.test.{ts,tsx}", "src/lib/no-elk.ts"],
+      "project": ["src/**/*.{ts,tsx,css}"],
+      "ignore": ["src/lib/design-tokens.ts", "src/lib/fonts.ts"]
     },
     "desktop": {
-      "entry": [
-        "src/main.ts",
-        "src/main-eb.ts",
-        "src/preload-eb.ts",
-        "src/preload.ts",
-        "src/channels.ts",
-        "src/keys-worker.ts",
-        "scripts/*.ts",
-        "electrobun.config.ts"
-      ],
-      "project": [
-        "src/**/*.ts",
-        "scripts/**/*.ts"
-      ]
+      "entry": ["src/main.ts", "src/main-eb.ts", "src/preload-eb.ts", "src/preload.ts", "src/channels.ts", "src/keys-worker.ts", "scripts/*.ts", "electrobun.config.ts"],
+      "project": ["src/**/*.ts", "scripts/**/*.ts"]
     }
   }
 }

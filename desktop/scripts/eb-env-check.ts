@@ -43,6 +43,30 @@ function forgedCacheHome(target: string, bun: string): string {
 const problems: string[] = [];
 const later = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+function homeKeychain(home: string): () => void {
+  const env = { ...process.env, HOME: home };
+  const kc = join(home, "Library", "Keychains", "login.keychain");
+  for (const args of [
+    ["create-keychain", "-p", "", kc],
+    ["set-keychain-settings", kc],
+    ["default-keychain", "-d", "user", "-s", kc],
+    ["list-keychains", "-d", "user", "-s", kc],
+  ])
+    execFileSync("security", args, { env, stdio: "ignore" });
+  return () => void spawnSync("security", ["delete-keychain", kc], { env, stdio: "ignore" });
+}
+
+function stuck(pid: number): string {
+  const ps = spawnSync("ps", ["-o", "stat=,command=", "-p", String(pid)], { encoding: "utf8" }).stdout.trim();
+  const sampled = spawnSync("sample", [String(pid), "1", "-mayDie"], { encoding: "utf8", timeout: 15_000 }).stdout;
+  const frames = sampled
+    .split("\n")
+    .filter((l) => /^\s+[+!:|\s]*\d+ /.test(l))
+    .slice(0, 25)
+    .join("\n");
+  return `${pid} ${ps}\n${frames}`;
+}
+
 const IMPOSED: Record<string, string> = { BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0", KIWI_KEY_FD: "3" };
 const KEPT = ["HOME", "USER", "LOGNAME", "TMPDIR", "PATH", "SHELL", "LANG", "LC_ALL", "LC_CTYPE", "__CF_USER_TEXT_ENCODING", "XPC_SERVICE_NAME", "XPC_FLAGS"];
 const DROPPED = [
@@ -58,6 +82,9 @@ const DROPPED = [
   "JSC_dumpOptions",
   "ELECTRON_RUN_AS_NODE",
   "KIWI_HOME",
+  "KIWI_EB_DRIVER",
+  "KIWI_EB_RELAY",
+  "CFFIXED_USER_HOME",
   "XDG_CACHE_HOME",
   "BUN_INSTALL",
   "BUN_RUNTIME_TRANSPILER_CACHE_PATH",
@@ -132,6 +159,7 @@ if (id === "com.kiwiinit.channels" && !process.env.CI) {
     });
   });
   const home = forgedCacheHome(join(app, "Contents", "Resources", "app", "bun", "index.js"), join(macos, "bun"));
+  const dropKeychain = homeKeychain(home);
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     HOME: home,
@@ -167,8 +195,10 @@ if (id === "com.kiwiinit.channels" && !process.env.CI) {
   }
   await later(2_000);
   const left = spawnSync("pgrep", ["-f", app], { encoding: "utf8" }).stdout.split("\n").filter(Boolean).map(Number);
+  for (const pid of left) console.error(`eb-env-check: still running after SIGTERM, where it waits:\n${stuck(pid)}`);
   for (const pid of left) process.kill(pid, "SIGKILL");
   if (left.length) problems.push(`still running after the check: ${left.join(", ")}`);
+  dropKeychain();
 }
 
 rmSync(tmp, { recursive: true, force: true });

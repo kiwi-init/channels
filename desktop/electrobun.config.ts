@@ -1,10 +1,10 @@
 import type { ElectrobunConfig } from "electrobun";
 
 import pkg from "./package.json" with { type: "json" };
-import { RELEASE_ID } from "./scripts/eb-bundle.ts";
+import { RELEASE_ID, TEST_ID } from "./scripts/eb-bundle.ts";
 import { JOIN_SCHEME } from "./src/deep-links.ts";
 
-const identifier = process.env.CHANNELS_EB_IDENTIFIER ?? RELEASE_ID;
+const identifier = process.env.CHANNELS_EB_TEST === "1" ? TEST_ID : (process.env.CHANNELS_EB_IDENTIFIER ?? (process.env.CHANNELS_EB_RELEASE === "1" ? RELEASE_ID : `${RELEASE_ID}.dev`));
 
 export default {
   app: {
@@ -15,7 +15,7 @@ export default {
   },
   build: {
     mainProcess: "bun",
-    bun: { entrypoint: "src/main-eb.ts" },
+    bun: { entrypoint: "src/main-eb.ts", define: { KIWI_EB_TEST: process.env.CHANNELS_EB_TEST === "1" ? "true" : "false" } },
     views: { preload: { entrypoint: "src/preload-eb.ts" } },
     buildFolder: "release-eb/build",
     artifactFolder: "release-eb/artifacts",

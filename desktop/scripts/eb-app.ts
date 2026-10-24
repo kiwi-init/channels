@@ -1,8 +1,19 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { sealApp } from "./eb-seal.ts";
+
+export const MB = 1024 ** 2;
+
+export const mb = (bytes: number): string => `${(bytes / MB).toFixed(1)}MB`;
+
+export function sizeOf(path: string): number {
+  const st = lstatSync(path);
+  if (st.isSymbolicLink()) return 0;
+  if (!st.isDirectory()) return st.size;
+  return readdirSync(path).reduce((sum, name) => sum + sizeOf(join(path, name)), 0);
+}
 
 export function only(found: string[], what: string): string {
   if (found.length !== 1) throw new Error(`expected one ${what}, found ${found.length}`);

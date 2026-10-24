@@ -1,6 +1,6 @@
 import { launcherKeys } from "./launcher-channel-eb.ts";
 
-import { dlopen, FFIType, ptr, suffix } from "bun:ffi";
+import { dlopen, FFIType, JSCallback, ptr, suffix } from "bun:ffi";
 import fs from "node:fs";
 import path from "node:path";
 import Electrobun, { BrowserView, BrowserWindow, PATHS, Utils } from "electrobun/main";
@@ -8,41 +8,76 @@ import Electrobun, { BrowserView, BrowserWindow, PATHS, Utils } from "electrobun
 import { internalRpcHandlers } from "../.hutch/devkit/api/sdks/main/proc/native.ts";
 import { startAppLife } from "./app-life-eb.ts";
 import { handleDeepLink, JOIN_SCHEME } from "./deep-links.ts";
-import { committedUrl, lockInternalRpc, preloadSource, stillOurs, toPageScript } from "./eb-bridge.ts";
-import { navigationUrl, openedUrl, PAGE_RULES, PAGE_URL, pageWithCsp } from "./eb-page.ts";
-import { externalUrl } from "./guard.ts";
+import { keepDaemon } from "./bundled-daemon.ts";
+import { lockInternalRpc, onOurPage, preloadSource, toPageScript } from "./eb-bridge.ts";
+import { drive } from "./eb-driver.ts";
+import { navigation, openedUrl, PAGE_RULES, PAGE_TEMPLATE, PAGE_URL, pageWithCsp, RULES_CANARY } from "./eb-page.ts";
+import { mark, startupMarks } from "./eb-startup.ts";
+import { testVault } from "./eb-test-store.ts";
+import { externalUrl, normalizeRelay } from "./guard.ts";
 import { attachKeys, attachWindow, dataDir, ebHost } from "./host-eb.ts";
 import { useHost } from "./host.ts";
 import { handlers } from "./ipc/handlers.ts";
 import { bunWorker, keysController, type KeysFrame } from "./keys-eb.ts";
 import { answerKeys } from "./keys-host.ts";
-import { logMainError } from "./main-log.ts";
+import { catchMainErrors, logMainError } from "./main-log.ts";
 import { openInBrowser } from "./open.ts";
+import { keepPageAlive } from "./page-crash.ts";
 import { claimInstance, handoffFor, type Instance } from "./single-instance.ts";
+import { testHomeProblem } from "./eb-test-home.ts";
 import { bunBridge } from "./rpc-eb.ts";
-import { brokenStore, openStore, snapshot, store } from "./store.ts";
+import { brokenStore, mutate, openStore, snapshot, store } from "./store.ts";
 import { openEbStore, unmarkedNote, v2Vault } from "./store-eb.ts";
-import { updateState } from "./updater.ts";
+import type { OpenStore } from "./store-v2.ts";
+import { startUpdates, updateState } from "./updater.ts";
 import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts";
 import { minWindowWidth } from "./window-size.ts";
 
-useHost(ebHost);
+declare const KIWI_EB_TEST: boolean;
+
+mark("main");
+
+useHost(KIWI_EB_TEST ? { ...ebHost, app: { ...ebHost.app, packaged: () => true } } : ebHost);
+catchMainErrors();
 Electrobun.events.on("open-url", (e: { data?: { url?: unknown } }) => {
   if (typeof e.data?.url === "string") handleDeepLink(e.data.url);
 });
 lockInternalRpc(internalRpcHandlers);
 
 const binDir = path.dirname(process.execPath);
+const mac = process.platform === "darwin";
+const shellPath = path.join(binDir, `libkiwi-shell.${suffix}`);
 
-const shell = dlopen(path.join(binDir, `libkiwi-shell.${suffix}`), {
+const shell = dlopen(shellPath, {
   kiwi_deny_permissions: { args: [], returns: FFIType.bool },
-  kiwi_window_look: { args: [FFIType.ptr, FFIType.f64, FFIType.f64, FFIType.u32, FFIType.u32], returns: FFIType.void },
+  kiwi_watch_commits: { args: [], returns: FFIType.bool },
+  kiwi_committed_url: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
+  kiwi_watch_page: { args: [FFIType.function], returns: FFIType.bool },
 }).symbols;
+
+const sandboxPages = mac ? null : dlopen(shellPath, { kiwi_sandbox_pages: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.bool } }).symbols.kiwi_sandbox_pages;
+
+function sandboxOff(): string | null {
+  if (!sandboxPages) return null;
+  const why = new Uint8Array(1024);
+  return sandboxPages(ptr(why), why.length) ? null : new TextDecoder().decode(why.subarray(0, Math.max(0, why.indexOf(0))));
+}
+
+const windowLook = mac ? dlopen(shellPath, { kiwi_window_look: { args: [FFIType.ptr, FFIType.f64, FFIType.f64, FFIType.u32, FFIType.u32], returns: FFIType.void } }).symbols.kiwi_window_look : null;
+
+const guards = dlopen(shellPath, { kiwi_guard_downloads: { args: [], returns: FFIType.bool }, kiwi_allow_only: { args: [FFIType.ptr], returns: FFIType.bool } }).symbols;
 
 const core = dlopen(path.join(binDir, `libElectrobunCore.${suffix}`), {
   setWebviewHTMLContent: { args: [FFIType.u32, FFIType.ptr], returns: FFIType.void },
   updatePreloadScriptToWebView: { args: [FFIType.u32, FFIType.ptr, FFIType.ptr, FFIType.bool], returns: FFIType.void },
 }).symbols;
+
+const committedBuffer = new Uint8Array(4096);
+
+function committedPage(): string | null {
+  const n = Number(shell.kiwi_committed_url(ptr(committedBuffer), committedBuffer.length));
+  return n > 0 && n < committedBuffer.length ? new TextDecoder().decode(committedBuffer.subarray(0, n)) : null;
+}
 
 const cString = (s: string): Uint8Array => new TextEncoder().encode(`${s}\0`);
 
@@ -50,11 +85,32 @@ const rgb = (hex: string): number => Number.parseInt(hex.slice(1), 16);
 
 const PRELOAD_ID = cString("electrobun_custom_preload_script");
 
+const PAGE_ONLY = cString(PAGE_URL);
+
 const detailOf = (e: unknown): unknown => (e as { data?: { detail?: unknown } }).data?.detail;
 
 function openOutside(url: string): void {
   const ext = externalUrl(url);
   if (ext) void openInBrowser(ext, (u) => ebHost.openExternal(u)).catch(() => {});
+}
+
+function fail(why: string): void {
+  console.error(`Channels: ${why}`);
+  Utils.quit(1);
+}
+
+function rulesHold(view: BrowserView): Promise<boolean> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), 5000);
+    view.on("will-navigate", (e) => {
+      const nav = navigation(detailOf(e));
+      if (nav.kind === "refused" && nav.url === RULES_CANARY) {
+        clearTimeout(timer);
+        resolve(true);
+      }
+    });
+    view.loadURL(RULES_CANARY);
+  });
 }
 
 let keysToPage: (frame: KeysFrame) => void = () => {};
@@ -66,41 +122,61 @@ const keys = keysController({
   toPage: (frame) => keysToPage(frame),
 });
 
-function createWindow(): BrowserWindow {
-  const index = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "internal", "index.html"), "utf8");
+async function createWindow(): Promise<BrowserWindow | null> {
+  const index = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "..", PAGE_TEMPLATE), "utf8");
+  const page = (): Uint8Array => cString(pageWithCsp(index, store.relayUrl));
+  const first = page();
   const bundled = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "preload", "index.js"), "utf8");
   const table = handlers(ebHost);
-  let ours = true;
   let view: BrowserView | null = null;
   const bridge = bunBridge(
     table,
-    () => ours,
+    () => onOurPage(committedPage()),
     (frame) => view?.executeJavascript(toPageScript(frame)),
     () => {
       keys.pageGone();
+      refreshPreload();
       bridge.push("store", snapshot());
     },
     (session, req) => keys.request(session, req),
   );
   keysToPage = (frame) => bridge.pushKeys(frame);
+  mark("window");
   const win = new BrowserWindow({
     title: "Channels",
     url: null,
     frame: { width: WINDOW_SIZE.width, height: WINDOW_SIZE.height },
-    titleBarStyle: "hiddenInset",
+    titleBarStyle: mac ? "hiddenInset" : "default",
     hidden: true,
-    preload: preloadSource(snapshot(), bundled),
+    preload: preloadSource({ snapshot: snapshot(), session: bridge.nextSession() }, bundled),
     rpc: bridge,
   });
+  mark("webview");
   const webview = win.webview;
   view = webview;
+  let closing = false;
+  webview.on("will-navigate", (e) => {
+    const nav = navigation(detailOf(e));
+    if (nav.kind === "refused") openOutside(nav.url);
+    if (nav.kind !== "breach") return;
+    closing = true;
+    win.hide();
+    fail(`a navigation the rules should have refused went through (${nav.url ?? "unreadable"}); closing`);
+  });
   webview.setNavigationRules(PAGE_RULES);
-  const load = (): void => {
-    core.setWebviewHTMLContent(webview.id, ptr(cString(pageWithCsp(index, store.relayUrl))));
-    ours = true;
+  if (!(await rulesHold(webview))) {
+    closing = true;
+    win.hide();
+    fail("the window's navigation rules didn't take effect; not opening it");
+    return null;
+  }
+  const load = (html: Uint8Array = page()): void => {
+    core.setWebviewHTMLContent(webview.id, ptr(html));
+    bridge.retire();
     webview.loadURL(PAGE_URL);
   };
-  const refreshPreload = (): void => core.updatePreloadScriptToWebView(webview.id, ptr(PRELOAD_ID), ptr(cString(preloadSource(snapshot(), bundled))), true);
+  const refreshPreload = (): void =>
+    core.updatePreloadScriptToWebView(webview.id, ptr(PRELOAD_ID), ptr(cString(preloadSource({ snapshot: snapshot(), session: bridge.nextSession() }, bundled))), false);
   attachWindow({
     win,
     view: webview,
@@ -110,32 +186,53 @@ function createWindow(): BrowserWindow {
     },
     reload: () => (refreshPreload(), load()),
   });
-  for (const moved of ["did-commit-navigation", "did-navigate", "did-navigate-in-page"] as const) webview.on(moved, (e) => (ours = stillOurs(ours, committedUrl(detailOf(e)))));
-  load();
+  load(first);
+  mark("load");
   const look = win.ptr;
-  if (look) shell.kiwi_window_look(look, minWindowWidth(process.platform), WINDOW_SIZE.minHeight, rgb(windowBackground(false)), rgb(windowBackground(true)));
-  win.setWindowButtonPosition(TRAFFIC_LIGHTS.x, TRAFFIC_LIGHTS.y);
-  webview.on("will-navigate", (e) => {
-    const nav = navigationUrl(detailOf(e));
-    if (nav && !nav.allowed) openOutside(nav.url);
-  });
+  if (look && windowLook) windowLook(look, minWindowWidth(process.platform), WINDOW_SIZE.minHeight, rgb(windowBackground(false)), rgb(windowBackground(true)));
+  if (mac) win.setWindowButtonPosition(TRAFFIC_LIGHTS.x, TRAFFIC_LIGHTS.y);
   Electrobun.events.on(`new-window-open-${webview.id}`, (e: { data?: { detail?: unknown } }) => {
     const url = openedUrl(e.data?.detail);
     if (url) openOutside(url);
   });
   webview.on("dom-ready", () => {
-    if (!win.isVisible()) win.show();
+    if (!closing && !win.isVisible()) win.show();
   });
   return win;
 }
 
+function endKeySession(): void {
+  if (launcherKeys instanceof Error) return;
+  try {
+    launcherKeys.done();
+  } catch {
+    // A test build may start without the launcher in front, and then there's no session to end.
+  }
+}
+
 async function start(instance: Extract<Instance, { kind: "first" }>): Promise<void> {
-  const opened = await openEbStore({ dir: dataDir, keys: launcherKeys });
-  openStore(v2Vault(opened));
+  let opened: OpenStore | null = null;
+  if (KIWI_EB_TEST) {
+    endKeySession();
+    openStore(testVault(dataDir));
+    const relay = normalizeRelay(process.env.KIWI_EB_RELAY ?? "");
+    if (relay) mutate((s) => void (s.relayUrl = relay));
+  } else {
+    opened = await openEbStore({ dir: dataDir, keys: launcherKeys });
+    openStore(v2Vault(opened));
+  }
   attachKeys((m) => keys.tell(m));
   keys.start();
-  const win = createWindow();
-  startAppLife({
+  const win = await createWindow();
+  if (!win) {
+    instance.release();
+    return;
+  }
+  if (KIWI_EB_TEST) {
+    const socket = process.env.KIWI_EB_DRIVER;
+    if (socket) drive(win.webview, socket, { startup: startupMarks });
+  }
+  const tray = startAppLife({
     win,
     view: win.webview,
     showWindow: () => ebHost.showWindow(),
@@ -147,36 +244,74 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
     flushKeys: () => keys.flush(),
     release: instance.release,
   });
+  startUpdates((u) => {
+    ebHost.push("update", u);
+    tray.refresh(u);
+  });
+  watchPage();
+  void keepDaemon(() => quitting).catch(logMainError);
   const broken = brokenStore();
   if (broken) void Utils.showMessageBox({ type: "error", message: "Channels can't read its saved keys", detail: broken.message });
-  const unmarked = unmarkedNote(opened);
+  const unmarked = opened ? unmarkedNote(opened) : null;
   if (unmarked) {
     logMainError(new Error(unmarked));
     void Utils.showMessageBox({ type: "warning", message: "Channels couldn't mark its store key ready", detail: unmarked });
   }
 }
 
+let quitting = false;
+Electrobun.events.on("before-quit", () => void (quitting = true));
+let pageWatch: JSCallback | null = null;
+
+function watchPage(): void {
+  const gone = keepPageAlive({
+    reload: () => ebHost.reload(),
+    ask: async (message, buttons) => (await Utils.showMessageBox({ type: "warning", message, buttons, defaultId: 1, cancelId: 0 })).response === 1,
+    quit: () => void Utils.quit(),
+    log: logMainError,
+    quitting: () => quitting,
+    now: Date.now,
+  });
+  pageWatch = new JSCallback(() => gone("its web content process ended"), { args: [], returns: "void", threadsafe: true });
+  if (!shell.kiwi_watch_page(pageWatch)) logMainError(new Error("Electrobun's navigation delegate wasn't found: a stopped page isn't reloaded or counted"));
+}
+
+function refuse(instance: Extract<Instance, { kind: "first" }>, why: string): void {
+  instance.release();
+  fail(why);
+}
+
 BrowserView.on("created", (tag) => tag.remove());
 
-const instance = await claimInstance({
-  dir: dataDir,
-  handoff: handoffFor(process.argv, JOIN_SCHEME),
-  scheme: JOIN_SCHEME,
-  onHandoff: (h) => (h.kind === "link" ? handleDeepLink(h.url) : ebHost.showWindow()),
-}).catch((e: unknown) => {
-  logMainError(e);
-  console.error("Channels: couldn't take the single-instance lock in its data folder", e);
-  return null;
-});
+const wrongHome = KIWI_EB_TEST ? testHomeProblem(dataDir, process.env.CFFIXED_USER_HOME) : null;
+if (wrongHome) console.error(`Channels test build: ${wrongHome}; not starting, so nothing lands under the person's home`);
+const instance = wrongHome
+  ? null
+  : await claimInstance({
+      dir: dataDir,
+      handoff: handoffFor(process.argv, JOIN_SCHEME),
+      scheme: JOIN_SCHEME,
+      onHandoff: (h) => (h.kind === "link" ? handleDeepLink(h.url) : ebHost.showWindow()),
+    }).catch((e: unknown) => {
+      logMainError(e);
+      console.error("Channels: couldn't take the single-instance lock in its data folder", e);
+      return null;
+    });
 if (!instance) Utils.quit(1);
 else if (instance.kind === "second") {
   if (!instance.delivered) console.error("Channels: another Channels holds this data folder and didn't answer; quitting");
   Utils.quit(0);
-} else if (!shell.kiwi_deny_permissions()) {
-  console.error("Channels: the web view's permission handler wasn't found; not opening a window that could grant the microphone");
-  instance.release();
-  Utils.quit(1);
-} else
+} else if (!shell.kiwi_deny_permissions()) refuse(instance, "the web view's permission handler wasn't found; not opening a window that could grant the microphone");
+else if (!guards.kiwi_guard_downloads()) refuse(instance, "the web view's download handler wasn't found; not opening a window that could save any file into Downloads");
+else if (!guards.kiwi_allow_only(ptr(PAGE_ONLY))) refuse(instance, "the web view's navigation handler wasn't found; not opening a window whose page could navigate away");
+else if (!shell.kiwi_watch_commits()) refuse(instance, "the web view's navigation delegate wasn't found; not opening a window that would trust a page it can't see");
+else {
+  const off = sandboxOff();
+  if (off !== null) {
+    const why = `WebKitGTK's sandbox is off: ${off}, so the page runs without it`;
+    console.error(`Channels: ${why}`);
+    logMainError(new Error(why));
+  }
   try {
     await start(instance);
   } catch (e) {
@@ -186,3 +321,4 @@ else if (instance.kind === "second") {
     instance.release();
     Utils.quit(1);
   }
+}

@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import { CString, dlopen, FFIType, ptr, type Pointer } from "bun:ffi";
 
 import type { LegacyName, LegacyPassword } from "./legacy-store.ts";
+import { childEnv } from "./child-env.ts";
 
 const SCHEMA = "chrome_libsecret_os_crypt_password_v2";
 const DONT_MATCH_NAME = 2;
@@ -55,7 +56,7 @@ function libsecretLookup(application: string): string | null {
 
 function kwalletLookup(name: LegacyName): Promise<string | null> {
   return new Promise((resolve) => {
-    execFile("kwallet-query", ["-r", `${name} Safe Storage`, "-f", `${name} Keys`, "kdewallet"], { timeout: 30_000 }, (err, stdout) => {
+    execFile("kwallet-query", ["-r", `${name} Safe Storage`, "-f", `${name} Keys`, "kdewallet"], { timeout: 30_000, env: childEnv() }, (err, stdout) => {
       const v = stdout.trim();
       resolve(err || !v || v.startsWith("Failed") ? null : v);
     });

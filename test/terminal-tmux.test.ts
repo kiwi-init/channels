@@ -5,7 +5,6 @@ import { join } from "node:path";
 import type { Message } from "@kiwi/core/protocol.ts";
 import { fold, type ChannelState, type Roster, type Task } from "@kiwi/core/state.ts";
 import { loadConfig, updateConfig, type Config, type SeatRecord } from "../src/config.ts";
-import { paneOf } from "../src/hooks/rotate.ts";
 import { notePlace } from "../src/seats.ts";
 import { showNeedsYou } from "../src/status.ts";
 import type { ShowResult, StatusRecord, TerminalId } from "../src/terminals/plugin.ts";
@@ -42,7 +41,6 @@ describe("where a seat runs in tmux", () => {
     const env = { TMUX: `${SOCKET},4242,0`, TMUX_PANE: "%3", TERM_PROGRAM: "tmux", REX_SERVER: "unix:///s", REX_SESSION: "session:01a15963-bacc-7426-91e9-4d98757dcd0c" };
     expect(tmuxPlaceFrom(env)).toEqual({ tmux: { socket: SOCKET, pane: "%3" } });
     expect(locate(env)).toEqual({ tmux: { socket: SOCKET, pane: "%3" } });
-    expect(paneOf(env)).toEqual({ socket: SOCKET, pane: "%3" });
     expect(locate({ TERM_PROGRAM: "ghostty" })).toEqual({ term: { program: "ghostty" } });
   });
 
