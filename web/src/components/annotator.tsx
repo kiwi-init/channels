@@ -17,7 +17,25 @@ import {
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react"
 
 import { MAX_IMAGE_BYTES } from "@kiwi/core/protocol.ts"
-import { arrowHead, base64Bytes, fitSide, INKS, markedName, meaningful, penPath, rect, strokeWidth, textSize, toImage, TOOL_KEYS, type Ink, type Mark, type Point, type Tool } from "@/lib/annotate"
+import {
+  arrowHead,
+  base64Blob,
+  base64Bytes,
+  fitSide,
+  INKS,
+  markedName,
+  meaningful,
+  penPath,
+  rect,
+  strokeWidth,
+  textSize,
+  toImage,
+  TOOL_KEYS,
+  type Ink,
+  type Mark,
+  type Point,
+  type Tool,
+} from "@/lib/annotate"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
 import { errorText, Monogram, toast } from "./kit"
@@ -361,17 +379,23 @@ export function Annotator({ picture, sender, agent, when, replyTo, onSend, onClo
       toast(`Not saved: ${errorText(err)}`, "error")
     }
   }
-  const copy = async () => {
-    try {
-      const out = marks.length ? await exportNow() : { name: picture.name, mime: picture.mime, data: picture.src.slice(picture.src.indexOf(",") + 1) }
-      const blob = await (await fetch(`data:${out.mime};base64,${out.data}`)).blob()
-      const png = out.mime === "image/png" ? blob : await toPng(blob)
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": png })])
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1500)
-    } catch (err) {
-      toast(`Not copied: ${errorText(err)}`, "error")
+  const copy = () => {
+    if (!navigator.clipboard) {
+      toast("Not copied: this window has no clipboard", "error")
+      return
     }
+    const png = (async () => {
+      const out = marks.length ? await exportNow() : { name: picture.name, mime: picture.mime, data: picture.src.slice(picture.src.indexOf(",") + 1) }
+      const blob = base64Blob(out.data, out.mime)
+      return out.mime === "image/png" ? blob : toPng(blob)
+    })()
+    navigator.clipboard.write([new ClipboardItem({ "image/png": png })]).then(
+      () => {
+        setCopied(true)
+        window.setTimeout(() => setCopied(false), 1500)
+      },
+      (err: unknown) => toast(`Not copied: ${errorText(err)}`, "error")
+    )
   }
   const send = async () => {
     if (!onSend || !marks.length || sending) return
@@ -413,7 +437,7 @@ export function Annotator({ picture, sender, agent, when, replyTo, onSend, onClo
             {full ? "100%" : `Fit · ${Math.round(scale * 100)}%`}
           </button>
           <span className="max-md:hidden">
-            <ToolButton label={copied ? "Copied" : "Copy image"} onClick={() => void copy()}>
+            <ToolButton label={copied ? "Copied" : "Copy image"} onClick={copy}>
               <Icon icon={copied ? Tick02Icon : Copy01Icon} size={18} />
             </ToolButton>
           </span>
