@@ -11,7 +11,7 @@ let quitting = false;
 Electrobun.events.on("before-quit", () => void (quitting = true));
 let pageWatch: JSCallback | null = null;
 
-function watchPage(): void {
+export function watchPage(): void {
   const gone = keepPageAlive({
     reload: () => ebHost.reload(),
     ask: async (message, buttons) => (await Utils.showMessageBox({ type: "warning", message, buttons, defaultId: 1, cancelId: 0 })).response === 1,
@@ -24,7 +24,6 @@ function watchPage(): void {
   if (!watchPageGone(pageWatch)) logMainError(new Error("Electrobun's navigation delegate wasn't found: a stopped page isn't reloaded or counted"));
 }
 
-export function keepAlive(): void {
-  watchPage();
+export function keepDaemonAlive(): void {
   void keepDaemon(() => quitting).catch(logMainError);
 }

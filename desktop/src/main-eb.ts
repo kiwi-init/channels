@@ -8,7 +8,7 @@ import { lockInternalRpc } from "./eb-bridge.ts";
 import { mark } from "./eb-startup.ts";
 import { dataDir, ebHost } from "./host-eb.ts";
 import { useHost } from "./host.ts";
-import { keepAlive } from "./keep-alive-eb.ts";
+import { keepDaemonAlive, watchPage } from "./keep-alive-eb.ts";
 import { startKeys } from "./keys-start-eb.ts";
 import { startLife } from "./life-updates-eb.ts";
 import { catchMainErrors, logMainError } from "./main-log.ts";
@@ -32,6 +32,7 @@ lockInternalRpc(internalRpcHandlers);
 async function start(instance: Extract<Instance, { kind: "first" }>): Promise<void> {
   await openStoreForThisBuild();
   startKeys();
+  watchPage();
   const win = await createWindow();
   if (!win) {
     instance.release();
@@ -39,7 +40,7 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
   }
   driveForTests(win);
   startLife(win, instance.release);
-  keepAlive();
+  keepDaemonAlive();
   warnIfStoreBroken();
 }
 
