@@ -8,6 +8,9 @@ permissions:
   contents: read
   actions: read
 
+env:
+  AFTER_RUN: "40130272238"
+
 jobs:
   audit:
     name: wayland audit, ${{ matrix.desktop }}
@@ -16,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        desktop: [gnome-focus]
+        desktop: [shots]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: compositor and tools
@@ -24,12 +27,23 @@ jobs:
         run: |
           sudo apt-get update -q
           common="python3-gi gir1.2-gtk-3.0 libgtk-3-bin xwayland xdotool x11-utils wmctrl dbus dbus-x11 dconf-service dconf-cli"
-          if [ "${{ matrix.desktop }}" = kde ] || [ "${{ matrix.desktop }}" = kde-focus ]; then
+          if [ "${{ matrix.desktop }}" = shots ]; then
+            sudo apt-get install -y --no-install-recommends python3-gi dbus xvfb xauth imagemagick
+          elif [ "${{ matrix.desktop }}" = kde ] || [ "${{ matrix.desktop }}" = kde-focus ]; then
             sudo apt-get install -y --no-install-recommends $common kwin-wayland breeze libgl1-mesa-dri libegl-mesa0 gdb x11-apps imagemagick
           else
             sudo apt-get install -y --no-install-recommends $common gnome-shell gnome-settings-daemon gsettings-desktop-schemas xdg-desktop-portal xdg-desktop-portal-gnome adwaita-icon-theme x11-apps imagemagick gir1.2-webkit2-4.1
           fi
+      - name: the two debs to compare
+        if: matrix.desktop == 'shots'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 40121776105 -R "${{ github.repository }}" -n linux-packages-ubuntu-26.04 -D "$RUNNER_TEMP/before"
+          gh run download "$AFTER_RUN" -R "${{ github.repository }}" -n linux-packages-ubuntu-26.04 -D "$RUNNER_TEMP/after"
+          bash desktop/scripts/wayland-audit/shots.sh "$RUNNER_TEMP/audit" "$(ls "$RUNNER_TEMP"/before/Channels-*-linux-amd64.deb)" "$(ls "$RUNNER_TEMP"/after/Channels-*-linux-amd64.deb)"
       - name: main's Linux deb
+        if: matrix.desktop != 'shots'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -37,6 +51,7 @@ jobs:
           ls -la "$RUNNER_TEMP/pkgs"
           sudo apt-get install -y "$RUNNER_TEMP"/pkgs/Channels-*-linux-amd64.deb
       - name: audit
+        if: matrix.desktop != 'shots'
         timeout-minutes: 15
         run: bash desktop/scripts/wayland-audit/run.sh ${{ matrix.desktop }} "$RUNNER_TEMP/audit"
       - if: always()
