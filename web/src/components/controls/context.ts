@@ -2,7 +2,7 @@ import { createContext, useContext } from "react"
 
 import type { JoinRequest, Member as RosterMember, PersonPowers } from "@kiwi/core/membership.ts"
 import type { Persona, Personality } from "@kiwi/core/personality.ts"
-import type { ChannelIcon } from "@kiwi/core/protocol.ts"
+import type { ChannelIcon, Color } from "@kiwi/core/protocol.ts"
 import type { Scope } from "@kiwi/core/scopes.ts"
 import type { ChannelState } from "@kiwi/core/state.ts"
 import type { Exported } from "@/lib/log-export"
@@ -13,6 +13,7 @@ export type Confirm =
   | { kind: "scopes"; member: RosterMember }
   | { kind: "persona"; member: RosterMember }
   | { kind: "nickname"; member: RosterMember }
+  | { kind: "color"; member: RosterMember }
   | { kind: "close" }
   | { kind: "leave" }
   | null
@@ -36,6 +37,7 @@ export interface ControlsProps {
   onPersona?: (m: RosterMember, persona: Persona | null) => Promise<void>
   onPin?: (p: Personality) => Promise<string>
   onNickname?: (m: RosterMember, nickname: string | null) => Promise<void>
+  onColor?: (m: RosterMember, color: Color | null) => Promise<void>
   onPowers?: (m: RosterMember, powers: PersonPowers) => Promise<void>
   onCloseChannel: () => Promise<void>
   onLeaveChannel: () => Promise<void>
@@ -61,6 +63,7 @@ export interface Api {
   editScopes: (m: RosterMember) => void
   editPersona: (m: RosterMember) => void
   editNickname: (m: RosterMember) => void
+  editColor: (m: RosterMember) => void
   lastSeenOf: (name: string) => number | null
   onlineNow: (name: string) => boolean
   openDialog: (d: "rename" | "charter" | "branch") => void
