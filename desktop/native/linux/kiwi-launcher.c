@@ -27,6 +27,7 @@ static const char *const KEEP[] = {
     "KDE_FULL_SESSION",
     "KDE_SESSION_VERSION",
     "GNOME_DESKTOP_SESSION_ID",
+    "DESKTOP_STARTUP_ID",
     "SSH_AUTH_SOCK",
     "GDK_SCALE",
     "GDK_DPI_SCALE",
@@ -57,6 +58,8 @@ static const char *const KEEP[] = {
 };
 static const char *const KEEP_PREFIXES[] = {"LC_", "XDG_", "WEBKIT_DISABLE_", NULL};
 static char *const IMPOSED[] = {"BUN_RUNTIME_TRANSPILER_CACHE_PATH=0", NULL};
+static const char STARTUP_ID[] = "DESKTOP_STARTUP_ID=";
+static const char ACTIVATION_TOKEN[] = "XDG_ACTIVATION_TOKEN=";
 
 static bool imposed(const char *entry, size_t len) {
   for (char *const *i = IMPOSED; *i; i++)
@@ -69,6 +72,7 @@ static bool kept(const char *entry) {
   if (!eq) return false;
   size_t len = (size_t)(eq - entry);
   if (imposed(entry, len)) return false;
+  if (strcmp(entry, STARTUP_ID) == 0) return false;
   for (const char *const *k = KEEP; *k; k++)
     if (strlen(*k) == len && strncmp(entry, *k, len) == 0) return true;
   for (const char *const *p = KEEP_PREFIXES; *p; p++)
@@ -76,16 +80,31 @@ static bool kept(const char *entry) {
   return false;
 }
 
+static char *startup_id_from(char **env) {
+  const char *token = NULL;
+  for (size_t i = 0; env && env[i]; i++) {
+    if (strncmp(env[i], STARTUP_ID, sizeof STARTUP_ID - 1) == 0 && env[i][sizeof STARTUP_ID - 1]) return NULL;
+    if (strncmp(env[i], ACTIVATION_TOKEN, sizeof ACTIVATION_TOKEN - 1) == 0) token = env[i] + sizeof ACTIVATION_TOKEN - 1;
+  }
+  if (!token || !*token) return NULL;
+  size_t size = sizeof STARTUP_ID + strlen(token);
+  char *entry = malloc(size);
+  if (entry) snprintf(entry, size, "%s%s", STARTUP_ID, token);
+  return entry;
+}
+
 static char **allowed_env(char **env) {
   size_t n = 0;
   while (env && env[n]) n++;
   size_t m = 0;
   while (IMPOSED[m]) m++;
-  char **out = calloc(n + m + 1, sizeof *out);
+  char **out = calloc(n + m + 2, sizeof *out);
   if (!out) return NULL;
   size_t k = 0;
   for (size_t i = 0; i < n; i++)
     if (kept(env[i])) out[k++] = env[i];
+  char *startup = startup_id_from(env);
+  if (startup) out[k++] = startup;
   for (size_t i = 0; i < m; i++) out[k++] = IMPOSED[i];
   out[k] = NULL;
   return out;
