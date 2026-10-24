@@ -31,5 +31,14 @@ cc -O2 -o "$probe/electrobun-launcher" "$probe/env.c"
 seen=$(env -i HOME=/home/ana DISPLAY=:0 LD_PRELOAD=/tmp/evil.so LD_LIBRARY_PATH=. BUN_OPTIONS=--preload=/tmp/evil.ts NODE_OPTIONS=--require=/tmp/evil.js GTK_MODULES=evil XDG_RUNTIME_DIR=/run/user/1000 "$probe/launcher")
 want=$(printf 'HOME=/home/ana\nDISPLAY=:0\nXDG_RUNTIME_DIR=/run/user/1000\nBUN_RUNTIME_TRANSPILER_CACHE_PATH=0')
 [ "$seen" = "$want" ] || { echo "the built bin/launcher passed on:"; echo "$seen"; exit 1; }
+seen=$(env -i HOME=/home/ana WAYLAND_DISPLAY=wayland-0 XDG_ACTIVATION_TOKEN=kwin-42 "$probe/launcher")
+want=$(printf 'HOME=/home/ana\nWAYLAND_DISPLAY=wayland-0\nXDG_ACTIVATION_TOKEN=kwin-42\nDESKTOP_STARTUP_ID=kwin-42\nBUN_RUNTIME_TRANSPILER_CACHE_PATH=0')
+[ "$seen" = "$want" ] || { echo "with only XDG_ACTIVATION_TOKEN (as Plasma launches), bin/launcher passed on:"; echo "$seen"; exit 1; }
+seen=$(env -i HOME=/home/ana DESKTOP_STARTUP_ID=gnome-7_TIME99 XDG_ACTIVATION_TOKEN=gnome-7_TIME99 "$probe/launcher")
+want=$(printf 'HOME=/home/ana\nDESKTOP_STARTUP_ID=gnome-7_TIME99\nXDG_ACTIVATION_TOKEN=gnome-7_TIME99\nBUN_RUNTIME_TRANSPILER_CACHE_PATH=0')
+[ "$seen" = "$want" ] || { echo "with both launch tokens (as GLib launches), bin/launcher passed on:"; echo "$seen"; exit 1; }
+seen=$(env -i HOME=/home/ana DESKTOP_STARTUP_ID= XDG_ACTIVATION_TOKEN=kwin-43 "$probe/launcher")
+want=$(printf 'HOME=/home/ana\nXDG_ACTIVATION_TOKEN=kwin-43\nDESKTOP_STARTUP_ID=kwin-43\nBUN_RUNTIME_TRANSPILER_CACHE_PATH=0')
+[ "$seen" = "$want" ] || { echo "with an empty DESKTOP_STARTUP_ID and a Wayland token, bin/launcher passed on:"; echo "$seen"; exit 1; }
 rm -rf "$probe" squashfs-root
-echo "checked: $deb and $img; bin/launcher keeps the app's environment to its allowlist"
+echo "checked: $deb and $img; bin/launcher keeps the app's environment to its allowlist and gives GTK the launch token as DESKTOP_STARTUP_ID"
