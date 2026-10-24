@@ -360,6 +360,13 @@ jobs:
           gh release download "$ELECTRON_LAST_MAC_ARM64" --repo "$GITHUB_REPOSITORY" --pattern "$old" --dir "$RUNNER_TEMP/electron"
           bun desktop/scripts/eb-update-rehearsal.ts "$RUNNER_TEMP/electron/$old" out/Channels-*-mac-arm64.zip
 
+      - name: The app makes a channel and sends
+        run: |
+          ditto -x -k "$(ls out/Channels-*-mac-arm64.zip)" "$RUNNER_TEMP/probe"
+          app="$RUNNER_TEMP/probe/Channels.app/Contents"
+          bun desktop/scripts/package-probe.ts "$app/MacOS/bun" "$app/Resources/kiwi.js" "$app/Resources/app/bun/keys.js"
+          rm -rf "$RUNNER_TEMP/probe"
+
       - name: Upload
         if: ${{ !inputs.rehearsal || github.event_name == 'workflow_dispatch' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -426,6 +433,15 @@ jobs:
 
       - name: Update from the Electron app
         run: bash desktop/scripts/linux-upgrade-check.sh out
+
+      - name: The installed app and the AppImage make a channel and send
+        run: |
+          bun desktop/scripts/package-probe.ts /opt/Channels/bin/bun /opt/Channels/Resources/kiwi.js /opt/Channels/Resources/app/bun/keys.js
+          img="$PWD/$(ls out/Channels-*-linux-x86_64.AppImage)"
+          (cd "$RUNNER_TEMP" && "$img" --appimage-extract > /dev/null)
+          root="$RUNNER_TEMP/squashfs-root/Channels"
+          bun desktop/scripts/package-probe.ts "$root/bin/bun" "$root/Resources/kiwi.js" "$root/Resources/app/bun/keys.js"
+          rm -rf "$RUNNER_TEMP/squashfs-root"
 
       - name: The installed app and the AppImage start
         run: |
