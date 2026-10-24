@@ -4,15 +4,18 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performScrollToIndex
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.kiwiinit.channels.engine.MessageView
 import com.kiwiinit.channels.model.Spot
 import com.kiwiinit.channels.theme.ChannelsTheme
 import com.kiwiinit.channels.ui.ConversationScreen
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -46,6 +49,9 @@ class UnseenTest {
         val more = (1..3).map { MessageView(100 + it, "gentle-jaguar", at + it * 1000.0, "msg", "Update $it") }
         compose.runOnUiThread { model.rooms[DEV] = room.copy(messages = room.messages + more) }
         compose.waitForIdle()
-        compose.onNodeWithContentDescription("3 new, jump to the latest").assertExists()
+        val jumps = compose.onAllNodes(hasContentDescription("jump to the latest", substring = true))
+            .fetchSemanticsNodes()
+            .flatMap { it.config.getOrNull(SemanticsProperties.ContentDescription) ?: emptyList() }
+        assertEquals(listOf("3 new, jump to the latest"), jumps)
     }
 }
