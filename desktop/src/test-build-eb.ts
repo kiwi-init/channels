@@ -32,7 +32,11 @@ export function driveForTests(win: BrowserWindow): void {
         closeWindow: () => (win.requestClose(), true),
         window: () => ({ visible: win.isVisible(), minimized: win.isMinimized() }),
         frame: () => win.getFrame(),
-        placeForTest: () => (win.setFrame(150, 140, 1000, 690), win.getFrame()),
+        placeForTest: () => {
+          const f = win.getFrame();
+          win.setFrame(f.x + 40, f.y + 30, f.width - 160, f.height - 90);
+          return win.getFrame();
+        },
       });
   }
 }

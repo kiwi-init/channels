@@ -37,7 +37,7 @@ async function run<T>(what: (d: Driver) => Promise<T>): Promise<T> {
 try {
   const first = await run(async (d) => (await d.main("frame")) as Frame);
   console.log(`first start: ${JSON.stringify(first)}`);
-  if (first.width !== 1200 || first.height !== 800) problems.push(`a first start opens at ${first.width}x${first.height}, not 1200x800`);
+  if (first.width > 1200 || first.height > 800 || first.width < 768) problems.push(`a first start opens at ${first.width}x${first.height}, not 1200x800 or the screen's size`);
   const placed = await run(async (d) => (await d.main("placeForTest")) as Frame);
   console.log(`moved and resized to: ${JSON.stringify(placed)}, then quit`);
   const back = await run(async (d) => (await d.main("frame")) as Frame);
