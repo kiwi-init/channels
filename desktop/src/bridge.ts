@@ -338,6 +338,7 @@ export interface KiwiBridge {
   openExternal(url: string): Promise<void>;
   takeDroppedFiles(): Promise<DroppedFile[]>;
   takePastedImage(): Promise<PastedImage | null>;
+  setBadge(count: number): Promise<void>;
   /** The kiwi://join/<code> link waiting to be opened, if any; taking it clears it. */
   getDeepLink(): Promise<string | null>;
   /** A link came in while the app runs (it waits for getDeepLink too, so it's opened once). */

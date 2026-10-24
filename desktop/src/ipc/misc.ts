@@ -5,7 +5,7 @@ import type { Host } from "../host.ts";
 import { openInBrowser } from "../open.ts";
 import { checkForUpdate, updateState } from "../updater.ts";
 
-export function miscCalls(host: Host): Serves<"getUpdate" | "installUpdate" | "checkUpdate" | "notify" | "openExternal" | "getDeepLink" | "takeDroppedFiles" | "takePastedImage"> {
+export function miscCalls(host: Host): Serves<"getUpdate" | "installUpdate" | "checkUpdate" | "notify" | "openExternal" | "getDeepLink" | "takeDroppedFiles" | "takePastedImage" | "setBadge"> {
   return {
     getUpdate: () => updateState(),
     installUpdate: () => host.restartToUpdate(),
@@ -19,5 +19,9 @@ export function miscCalls(host: Host): Serves<"getUpdate" | "installUpdate" | "c
     getDeepLink: () => takeDeepLink(),
     takeDroppedFiles: () => host.droppedFiles(),
     takePastedImage: () => host.pastedImage(),
+    setBadge: (count: number) => {
+      if (!Number.isSafeInteger(count) || count < 0) throw new Error("a badge is a count of zero or more");
+      host.badge(count);
+    },
   };
 }

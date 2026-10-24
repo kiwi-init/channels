@@ -187,3 +187,9 @@ bool kiwi_notify_clicks(void *window, void (*clicked)(void)) {
   });
   return true;
 }
+
+void kiwi_badge(int32_t count) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    NSApp.dockTile.badgeLabel = count > 0 ? [NSString stringWithFormat:@"%d", count] : nil;
+  });
+}

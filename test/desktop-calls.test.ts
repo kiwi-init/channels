@@ -109,6 +109,14 @@ describe("main's handlers reach the shell only through the host", () => {
     expect(did).toEqual(["notify T484: done", "restart"]);
   });
 
+  test("the page's news count goes to the app icon's badge; anything but a whole count of zero or more is refused", async () => {
+    did.length = 0;
+    await bridge.setBadge(3);
+    await bridge.setBadge(0);
+    for (const bad of [-1, 2.5, Number.NaN]) await expect(bridge.setBadge(bad)).rejects.toThrow("a badge is a count of zero or more");
+    expect(did).toEqual(["badge 3", "badge 0"]);
+  });
+
   test("a link that isn't http(s) never reaches the host's browser", async () => {
     did.length = 0;
     await expect(bridge.openExternal("file:///etc/passwd")).rejects.toThrow("only http(s) links open outside");

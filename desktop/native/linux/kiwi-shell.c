@@ -399,6 +399,22 @@ size_t kiwi_paste_bytes(uint8_t *out, size_t size) {
   return n;
 }
 
+#define LAUNCHER_ENTRY "com.canonical.Unity.LauncherEntry"
+#define LAUNCHER_PATH "/com/canonical/unity/launcherentry/channels_desktop"
+
+bool kiwi_badge(int32_t count) {
+  GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, NULL);
+  if (!bus) return false;
+  GVariantBuilder props;
+  g_variant_builder_init(&props, G_VARIANT_TYPE("a{sv}"));
+  g_variant_builder_add(&props, "{sv}", "count", g_variant_new_int64(count > 0 ? count : 0));
+  g_variant_builder_add(&props, "{sv}", "count-visible", g_variant_new_boolean(count > 0));
+  bool sent = g_dbus_connection_emit_signal(bus, NULL, LAUNCHER_PATH, LAUNCHER_ENTRY, "Update", g_variant_new("(sa{sv})", "application://" KIWI_APP_ID ".desktop", &props), NULL);
+  g_dbus_connection_flush_sync(bus, NULL, NULL);
+  g_object_unref(bus);
+  return sent;
+}
+
 bool kiwi_tray_host(void) {
   GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, NULL);
   if (!bus) return false;
