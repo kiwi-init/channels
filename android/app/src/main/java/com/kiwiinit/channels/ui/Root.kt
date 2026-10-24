@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,8 +34,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
@@ -160,12 +162,14 @@ private fun Ready(model: AppModel) {
 @Composable
 private fun Locked(unlock: () -> Unit) {
     val activity = LocalActivity.current
-    val focus = LocalFocusManager.current
+    val focus = remember { FocusRequester() }
     BackHandler { activity?.moveTaskToBack(true) }
-    LaunchedEffect(Unit) { focus.clearFocus(force = true) }
+    LaunchedEffect(Unit) { focus.requestFocus() }
     Column(
         Modifier.fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
+            .focusRequester(focus)
+            .focusable()
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
         verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
