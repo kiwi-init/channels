@@ -1,17 +1,46 @@
 import type { KnownHarness } from "@kiwi/core/harnesses.ts";
 import type { JoinLine } from "@kiwi/core/join-line.ts";
+import { choicesRefusal, PERMISSIONS, type HarnessOptions, type LaunchChoices } from "@kiwi/core/launch-options.ts";
+import { CLAUDE_1M, CLAUDE_EFFORTS, claudeArgv, claudeContextRefusal } from "../loop/claude.ts";
+import { CODEX_CONTEXTS, CODEX_EFFORTS, codexArgv } from "../loop/codex.ts";
 
-const RECIPES: Partial<Record<KnownHarness, (bin: string, prompt: string) => string[]>> = {
-  claude: (bin, prompt) => [bin, "--allowedTools", "Bash(kiwi join:*)", "--", prompt],
-  codex: (bin, prompt) => [bin, prompt],
+interface LaunchRecipe {
+  label: string;
+  options: HarnessOptions;
+  argv: (bin: string, prompt: string, choices: LaunchChoices) => string[];
+  refuse?: (choices: LaunchChoices) => string | null;
+}
+
+const RECIPES: Partial<Record<KnownHarness, LaunchRecipe>> = {
+  claude: {
+    label: "Claude Code",
+    options: { model: true, effort: CLAUDE_EFFORTS, permission: [...PERMISSIONS], context: [CLAUDE_1M] },
+    argv: (bin, prompt, choices) => claudeArgv({ ...choices, bin, tools: "Bash(kiwi join:*)", prompt }),
+    refuse: (choices) => claudeContextRefusal(choices.model, choices.context),
+  },
+  codex: {
+    label: "Codex",
+    options: { model: true, effort: CODEX_EFFORTS, permission: [...PERMISSIONS], context: CODEX_CONTEXTS },
+    argv: (bin, prompt, choices) => codexArgv({ ...choices, bin, prompt }),
+  },
 };
 
 export function canStart(harness: KnownHarness): boolean {
   return harness in RECIPES;
 }
 
-export function recipeArgv(harness: KnownHarness, bin: string, prompt: string): string[] | null {
-  return RECIPES[harness]?.(bin, prompt) ?? null;
+export function harnessOptions(harness: KnownHarness): HarnessOptions | null {
+  return RECIPES[harness]?.options ?? null;
+}
+
+export function launchChoicesRefusal(harness: KnownHarness, choices: LaunchChoices): string | null {
+  const recipe = RECIPES[harness];
+  if (!recipe) return null;
+  return choicesRefusal(recipe.label, recipe.options, choices) ?? recipe.refuse?.(choices) ?? null;
+}
+
+export function recipeArgv(harness: KnownHarness, bin: string, prompt: string, choices: LaunchChoices = {}): string[] | null {
+  return RECIPES[harness]?.argv(bin, prompt, choices) ?? null;
 }
 
 export function joinPrompt(j: JoinLine): string {

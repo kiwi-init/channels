@@ -36,6 +36,14 @@ describe("the launch the renderer asks for", () => {
     expect(launchRequestOf(null)).toBeNull();
   });
 
+  test("model, effort, permission and context pass when well-formed, and refuse the launch whole when not", () => {
+    const chosen = { ...good, model: "claude-opus-5-5", effort: "max", permission: "bypass" as const, context: 1_000_000 };
+    expect(launchRequestOf(chosen)).toEqual(chosen);
+    for (const over of [{ model: "--yolo" }, { effort: "max!" }, { permission: "auto" }, { context: "1m" }, { context: -1 }]) {
+      expect(launchRequestOf({ ...chosen, ...over })).toBeNull();
+    }
+  });
+
   test("a launch on another computer names it by its key, and nothing that isn't one", () => {
     const there = { ...good, machinePk: "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-abcde" };
     expect(launchRequestOf(there)).toEqual(there);

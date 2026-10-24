@@ -49,18 +49,21 @@ function loadStarts(file: string | undefined): number[] {
 
 export type RemoteResult = { ok: true; harnesses: HarnessRow[] } | { ok: true; folders: string[] } | { ok: true } | Launched;
 
+const withoutBypass = (row: HarnessRow): HarnessRow => (row.options ? { ...row, options: { ...row.options, permission: row.options.permission.filter((p) => p !== "bypass") } } : row);
+
 export function remoteRunner(deps: RemoteDeps): (args: MachineArgs, id: string) => Promise<RemoteResult> {
   const now = deps.now ?? Date.now;
   const started = loadStarts(deps.starts);
   return async (args, id) => {
     switch (args.verb) {
       case "harnesses":
-        return { ok: true, harnesses: await deps.inventory() };
+        return { ok: true, harnesses: (await deps.inventory()).map(withoutBypass) };
       case "folders":
         return { ok: true, folders: deps.folders(args.room) };
       case "unpair":
         return { ok: true };
       case "launch": {
+        if (args.launch.permission === "bypass") return { ok: false, why: "not-allowed", detail: "bypass permissions can't be asked for from another device" };
         const at = now();
         while (started.length && at - started[0]! >= REMOTE_WINDOW_MS) started.shift();
         if (started.length >= REMOTE_LAUNCHES)

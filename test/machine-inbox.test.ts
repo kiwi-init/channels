@@ -3,6 +3,8 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { signRequest } from "@kiwi/core/auth.ts";
+import type { HarnessRow } from "@kiwi/core/harnesses.ts";
+import { PERMISSIONS, type HarnessOptions } from "@kiwi/core/launch-options.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { makeAsk, readAnswer, type MachineVerb } from "@kiwi/core/machine-ask.ts";
 import { newSecret, openMailbox } from "@kiwi/core/mailbox.ts";
@@ -170,6 +172,32 @@ describe("a paired computer's daemon", () => {
     expect(await answer).toEqual({ ok: true });
     await until("unpaired", () => unpaired === 1);
     await until("the relay forgot it", async () => ((await status()) as { status?: number }).status === 403);
+  });
+});
+
+describe("choices asked from another device", () => {
+  const code = "mc2-AAAAAAAAAAAAAAAAAAAAAA-BBBBBBBBBBBBBBBB";
+  const options: HarnessOptions = { model: true, effort: ["high"], permission: [...PERMISSIONS], context: [1_000_000] };
+  const row: HarnessRow = { harness: "claude", path: "/bin/claude", version: "2.1.310", start: true, wake: null, why: null, options };
+  const seen: LaunchRequest[] = [];
+  const runner = remoteRunner({
+    inventory: async () => [row],
+    folders: () => [project],
+    launch: async (req) => (seen.push(req), { ok: true, launch: req.launch!, placed: { ok: true, place: "terminal" } }),
+  });
+
+  test("reach the harness, except bypass, which this computer doesn't list or start", async () => {
+    expect(await runner({ verb: "harnesses" }, "harnessesAsk_1")).toEqual({ ok: true, harnesses: [{ ...row, options: { ...options, permission: ["default", "accept-edits", "plan"] } }] });
+    expect(
+      await runner({ verb: "launch", launch: { harness: "claude", folder: project, code, model: "opus", effort: "high", permission: "plan", context: 1_000_000 } }, "choicesAsk_01"),
+    ).toMatchObject({ ok: true });
+    expect(seen.at(-1)).toMatchObject({ model: "opus", effort: "high", permission: "plan", context: 1_000_000, launch: "choicesAsk_01" });
+    expect(await runner({ verb: "launch", launch: { harness: "claude", folder: project, code, permission: "bypass" } }, "choicesAsk_02")).toEqual({
+      ok: false,
+      why: "not-allowed",
+      detail: "bypass permissions can't be asked for from another device",
+    });
+    expect(seen).toHaveLength(1);
   });
 });
 

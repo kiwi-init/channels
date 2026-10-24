@@ -102,11 +102,12 @@ This computer
                                                  fresh session for each task, review round or message, ended when that work is done
   kiwi rex on|off|status                         the old name of kiwi terminal download|remove rex and status, for this release
   kiwi harnesses [--json]                        the harnesses on this computer, found on your login shell's PATH: each one's path
-                                                 and version, whether kiwi launch starts it, and whether Kiwi can wake it
+                                                 and version, whether kiwi launch starts it, with which options, and whether Kiwi can wake it
   kiwi folders [--room ROOM] [--json]            the folders this computer's seats work in, a channel's with --room, most
                                                  recently seen first
   kiwi launch HARNESS --code CODE [--folder DIR] [--nick NAME] [--persona TOKEN]   start an agent in a terminal you
-                                                 can open (the one kiwi terminal prefer names, else Terminal, else tmux): it joins with a launch id the app knows
+                                                 can open (the one kiwi terminal prefer names, else Terminal, else tmux): it joins with a launch id the app knows;
+                                                 --model ID, --effort LEVEL, --permission default|accept-edits|plan|bypass and --context 1m start it with those
   kiwi demo · doctor · hooks install|uninstall|status · mcp · channels · relay --help
 
 Running a channel (create, approve, remove, personalities, hold, charter, close) is the owner's, in the Channels app.

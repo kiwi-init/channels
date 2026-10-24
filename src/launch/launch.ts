@@ -12,7 +12,8 @@ import type { PlaceTools } from "../terminals/plugin.ts";
 import { launchesOn } from "../terminals/registry.ts";
 import { openPlace } from "./place.ts";
 import { joinLineRefusal } from "@kiwi/core/join-line.ts";
-import { canStart, joinPrompt, recipeArgv } from "./recipes.ts";
+import { choicesOf } from "@kiwi/core/launch-options.ts";
+import { canStart, joinPrompt, launchChoicesRefusal, recipeArgv } from "./recipes.ts";
 import type { Launched } from "@kiwi/core/terminals.ts";
 import type { LaunchRequest } from "./wire.ts";
 
@@ -48,8 +49,11 @@ export async function launchAgent(req: LaunchRequest, opts: LaunchOptions = {}):
   const refused = joinLineRefusal(req) ?? folderRefusal(req.folder);
   if (refused) return { ok: false, why: "bad-request", detail: refused };
   if (!canStart(req.harness)) return { ok: false, why: "no-recipe", detail: `Kiwi can't start ${req.harness} yet` };
+  const choices = choicesOf(req);
+  const unchosen = launchChoicesRefusal(req.harness, choices);
+  if (unchosen) return { ok: false, why: "bad-request", detail: unchosen };
   const row = (await harnessInventory(opts.PATH)).find((r) => r.harness === req.harness);
-  const argv = row?.path ? recipeArgv(req.harness, row.path, joinPrompt(req)) : null;
+  const argv = row?.path ? recipeArgv(req.harness, row.path, joinPrompt(req), choices) : null;
   if (!row?.path || !argv) return { ok: false, why: "not-installed", detail: `${req.harness} isn't installed on this computer` };
   hookUp(req.harness, row.version);
   const launch = req.launch ?? randomBytes(16).toString("base64url");

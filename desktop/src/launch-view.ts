@@ -1,4 +1,5 @@
 import { isKnownHarness } from "@kiwi/core/harnesses.ts";
+import { readLaunchChoices } from "@kiwi/core/launch-options.ts";
 import { readLaunch } from "@kiwi/core/membership.ts";
 import { readLaunched, type LaunchedView } from "@kiwi/core/terminals.ts";
 import type { LaunchAgentRequest } from "./bridge.ts";
@@ -23,7 +24,9 @@ export function launchRequestOf(v: unknown): LaunchAgentRequest | null {
   if ((x["nick"] !== undefined && (!nick || !NICK.test(nick))) || (x["persona"] !== undefined && (!persona || !TOKEN.test(persona)))) return null;
   const machinePk = x["machinePk"];
   if (machinePk !== undefined && (typeof machinePk !== "string" || !MACHINE_PK.test(machinePk))) return null;
-  return { ...(machinePk ? { machinePk } : {}), launch, harness: x["harness"], folder, code, relay, ...(nick ? { nick } : {}), ...(persona ? { persona } : {}) };
+  const choices = readLaunchChoices(x);
+  if (!choices) return null;
+  return { ...(machinePk ? { machinePk } : {}), launch, harness: x["harness"], folder, code, relay, ...(nick ? { nick } : {}), ...(persona ? { persona } : {}), ...choices };
 }
 
 export function launchedView(v: unknown): LaunchedView {

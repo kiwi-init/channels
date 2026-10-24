@@ -89,6 +89,8 @@ const parsed = parseArgs({
     main: { type: "boolean" },
     model: { type: "string" },
     effort: { type: "string" },
+    permission: { type: "string" },
+    context: { type: "string" },
     harness: { type: "string" },
     persona: { type: "string" },
     folder: { type: "string" },
