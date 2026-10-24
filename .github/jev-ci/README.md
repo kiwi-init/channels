@@ -11,8 +11,8 @@ CI's `plan` job decides which checks a pull request can break, and only those ru
      read every workflow). Workflow `permissions` run the jobs that inherit them; any other
      top-level change (`env`, `defaults`) runs every job. A job in `ci.yml` with no entry in
      `.github/jev-ci.yml` always runs, so a new job can't be skipped by accident, unless a
-     job's `parts` name it: then it does part of that job's work (the runs `perf / scale`
-     takes the medians of), runs or skips with it, and a change to it runs that job.
+     job's `parts` name it: then it does part of that job's work (a matrix of runs whose
+     results the job collects), runs or skips with it, and a change to it runs that job.
    - `.github/jev-ci.yml` is compared parsed too. A change to a job's `description` or
      `name` runs nothing by itself (the plan already uses the new wording); a change to its
      other fields runs that job; a change to a setting above `jobs` runs everything.
