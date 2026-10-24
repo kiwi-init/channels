@@ -1,6 +1,8 @@
 package com.kiwiinit.channels.ui
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -32,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
@@ -156,6 +159,10 @@ private fun Ready(model: AppModel) {
 
 @Composable
 private fun Locked(unlock: () -> Unit) {
+    val activity = LocalActivity.current
+    val focus = LocalFocusManager.current
+    BackHandler { activity?.moveTaskToBack(true) }
+    LaunchedEffect(Unit) { focus.clearFocus(force = true) }
     Column(
         Modifier.fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
