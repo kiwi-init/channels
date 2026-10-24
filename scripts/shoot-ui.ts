@@ -777,7 +777,8 @@ try {
 
       // The desktop app's New agent, with a stand-in for the four launch methods its bridge adds,
       // on only while this tab's flag is set so the other screens stay the browser's.
-      if (["24-new-agent", "26-new-agent-remote", "25-new-agent-started"].some((n) => takes(tag, n))) {
+      const newAgentShots = ["24-new-agent", "26-new-agent-remote", "24-new-agent-folder", "24-new-agent-name", "25-new-agent-failed", "25-new-agent-started"];
+      if (newAgentShots.some((n) => takes(tag, n))) {
         if (!launcherStub) {
           launcherStub = true;
           await owner.addInitScript(() => {
@@ -793,16 +794,20 @@ try {
             ];
             const block = "block:01a15ad9-310a-703a-ad0b-3cc137458451";
             const rex = { server: "unix:///Users/you/Library/Application%20Support/rex/server.sock", session: "session:01a15ad9-30f4-7bcb-8455-c3eeb9e1071c", block };
+            let launches = 0;
             (window as unknown as { kiwi: object }).kiwi = {
               relayUrl: window.location.origin,
               harnesses: async () => rows,
               seatFolders: async () => ["/Users/you/code/payments", "/Users/you/code/payments-site"],
               chooseFolder: async () => null,
-              launchAgent: async (req: { launch: string }) => ({ ok: true, launch: req.launch, place: "rex", rex }),
+              launchAgent: async (req: { launch: string }) =>
+                ++launches === 1
+                  ? { ok: false, why: "failed", detail: "No answer yet: it may still be starting on build-box. Check that computer before you try again." }
+                  : { ok: true, launch: req.launch, place: "rex", rex },
               machines: async () => [
-                { machinePk: "own", label: "jow’s MacBook Air", os: "macOS", own: true, online: true },
-                { machinePk: "build", label: "build-box", os: "Linux", own: false, online: true },
-                { machinePk: "old", label: "old-mini", os: "macOS", own: false, online: false },
+                { machinePk: "own", label: "jow’s MacBook Air", os: "darwin", own: true, online: true },
+                { machinePk: "build", label: "build-box", os: "linux", own: false, online: true },
+                { machinePk: "old", label: "old-mini", os: "darwin", own: false, online: false },
               ],
               harnessesOn: async () => ({ ok: true, value: rows.slice(0, 2).map((r) => ({ ...r, path: r.path?.replace("/Users/you", "/home/you") ?? null })) }),
               foldersOn: async () => ({ ok: true, value: ["/home/you/payments"] }),
@@ -814,15 +819,16 @@ try {
         await owner.reload();
         await owner.getByRole("region", { name: "Add an agent" }).waitFor({ timeout: 10000 });
         const dialog = owner.getByRole("dialog");
+        const stay = async () => {};
         await shoot(
           owner,
           tag,
           "24-new-agent",
           async () => {
             await owner.getByRole("region", { name: "Add an agent" }).getByRole("button", { name: "New agent" }).click();
-            await dialog.getByRole("radiogroup", { name: "Harness" }).waitFor();
+            await dialog.getByRole("radiogroup", { name: "Computer" }).waitFor();
           },
-          async () => {},
+          stay,
         );
         await shoot(
           owner,
@@ -830,12 +836,46 @@ try {
           "26-new-agent-remote",
           async () => {
             await dialog.getByRole("radiogroup", { name: "Computer" }).getByText("build-box").click();
+            await dialog.getByText("Sent to build-box").waitFor();
+            await dialog.getByRole("button", { name: "Next" }).click();
+            await dialog.getByRole("radiogroup", { name: "Harness" }).waitFor();
+          },
+          stay,
+        );
+        await shoot(
+          owner,
+          tag,
+          "24-new-agent-folder",
+          async () => {
+            await dialog.getByRole("button", { name: "Next" }).click();
             await dialog.getByText("/home/you").first().waitFor();
           },
-          async () => {},
+          stay,
+        );
+        await shoot(
+          owner,
+          tag,
+          "24-new-agent-name",
+          async () => {
+            await dialog.getByRole("button", { name: "Next" }).click();
+            await dialog.getByRole("textbox", { name: "Nickname" }).waitFor();
+            const start = await dialog.getByRole("button", { name: "Start" }).boundingBox();
+            if (!start || start.y + start.height > (owner.viewportSize()?.height ?? 0)) throw new Error("New agent's Start is below the window");
+          },
+          stay,
+        );
+        await shoot(
+          owner,
+          tag,
+          "25-new-agent-failed",
+          async () => {
+            await dialog.getByRole("button", { name: "Start" }).click();
+            await dialog.getByText("Didn’t start on build-box").waitFor();
+          },
+          stay,
         );
         await shoot(owner, tag, "25-new-agent-started", async () => {
-          await dialog.getByRole("button", { name: "Start" }).click();
+          await dialog.getByRole("button", { name: "Try again" }).click();
           await dialog.getByText("Started in Rex").waitFor();
         });
         await owner.evaluate(() => sessionStorage.removeItem("shots.launcher"));
