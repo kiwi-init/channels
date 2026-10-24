@@ -1,5 +1,5 @@
 import * as Effect from "effect/Effect";
-import { seal, slotId } from "../crypto.ts";
+import { b64url, seal, slotId } from "../crypto.ts";
 import { sign, verify } from "../identity.ts";
 import {
   CHOICE_MAX_LENGTH,
@@ -29,7 +29,7 @@ import {
 import type { PermissionReply, PermissionSettled, PermissionShown } from "../permission.ts";
 import { MissingKey, Rejected } from "../refusals.ts";
 import type { ChannelCore } from "./core.ts";
-import { RelayError, type Refused } from "./errors.ts";
+import { RelayError, Unreachable, type Refused } from "./errors.ts";
 import { received } from "./history.ts";
 import type { ChannelImages } from "./images.ts";
 import type { ChannelLive } from "./live.ts";
@@ -63,6 +63,7 @@ export interface SendFx {
 }
 
 const RATE_RETRIES = 2;
+const UNSURE_RETRIES = 2;
 const RATE_WAIT_MAX_S = 60;
 
 const rateWait = (err: unknown): number | null => (err instanceof RelayError && err.status === 429 && err.retryAfter !== null && err.retryAfter <= RATE_WAIT_MAX_S ? err.retryAfter : null);
@@ -73,6 +74,15 @@ const behind = (err: unknown, held: number): Rejected | null => {
     ? new Rejected(`the relay is behind this channel's key (it says epoch ${named}, this device holds ${held}): it may have been restored from a backup`)
     : null;
 };
+
+const unsure = (err: unknown): boolean => err instanceof Unreachable || (err instanceof RelayError && err.status === 503);
+
+const again = <A, E, R>(attempt: Effect.Effect<A, E, R>, left: number, wait = 1): Effect.Effect<A, E, R> =>
+  Effect.catchIf(
+    attempt,
+    (err) => left > 0 && unsure(err),
+    () => Effect.andThen(Effect.sleep(`${wait} seconds`), again(attempt, left - 1, wait * 2)),
+  );
 
 const patient = <A, E, R>(attempt: Effect.Effect<A, E, R>, left: number): Effect.Effect<A, E, R> =>
   Effect.catchIf(
@@ -129,6 +139,7 @@ export class ChannelSending {
       };
       if ((payload.permission || payload.perm || payload.settled) && !wellFormed(payload)) return yield* new Rejected("a permission prompt, its answer or its close is malformed");
       const signed = yield* Effect.promise(() => sign(this.ch.identity, payload));
+      const cid = b64url(crypto.getRandomValues(new Uint8Array(16)));
       const sealNow = Effect.gen({ self: this }, function* () {
         if (!this.ch.access.keys[String(this.ch.access.epoch)]) yield* this.ch.fx.refreshKeys();
         const e = this.ch.access.epoch;
@@ -144,10 +155,10 @@ export class ChannelSending {
         const roomId = this.ch.roomId;
         const slot = take ? { slot: { id: yield* Effect.promise(() => slotId(key, roomId, take.name)), ttl: take.ttl } } : {};
         const free = freeing.length ? { free: yield* Effect.promise(() => Promise.all(freeing.map((n) => slotId(key, roomId, n)))) } : {};
-        return yield* this.ch.request<{ seq: number; ts?: number }>("/messages", { method: "POST", body: JSON.stringify({ ...sealed, e, ...slot, ...free }) });
+        return yield* this.ch.request<{ seq: number; ts?: number }>("/messages", { method: "POST", body: JSON.stringify({ ...sealed, e, ...slot, ...free, cid }) });
       });
       const posted = Effect.gen({ self: this }, function* () {
-        const stored = yield* post.pipe(
+        const stored = yield* again(post, UNSURE_RETRIES).pipe(
           Effect.catchIf(
             (err) => err instanceof RelayError && err.status === 409,
             () => Effect.andThen(this.ch.fx.refreshKeys(), post).pipe(Effect.mapError((err) => behind(err, this.ch.access.epoch) ?? err)),
@@ -164,7 +175,12 @@ export class ChannelSending {
         const wire = slotted ? undefined : [...this.live.wires].at(-1);
         if (!wire) return yield* posted;
         const { e, sealed } = yield* sealNow;
-        const acked = yield* wire.send(sealed, e, signed);
+        const acked = yield* wire.send(sealed, e, signed, cid).pipe(
+          Effect.catchIf(
+            (err) => err instanceof Unreachable,
+            () => Effect.succeed(null),
+          ),
+        );
         if (acked === null) return yield* posted;
         this.onSent?.(acked, null);
         return acked;

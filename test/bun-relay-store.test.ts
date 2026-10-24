@@ -18,7 +18,7 @@ const scratch = () => {
   return d;
 };
 
-test("a message on the Bun relay runs its two writes and one check that nothing else changed the file: the room's store stays warm between requests", async () => {
+test("a message on the Bun relay runs its three writes (the message, its send id, the counters) and one check that nothing else changed the file: the room's store stays warm between requests", async () => {
   const r = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: scratch() });
   try {
     const owner = await generateIdentity("store");
@@ -27,7 +27,7 @@ test("a message on the Bun relay runs its two writes and one check that nothing 
     const queries = spyOn(Database.prototype, "query");
     try {
       for (let i = 0; i < 10; i++) await ch.send(`message ${i}`);
-      expect(queries.mock.calls.length / 10).toBeLessThanOrEqual(3);
+      expect(queries.mock.calls.length / 10).toBeLessThanOrEqual(4);
     } finally {
       queries.mockRestore();
     }
