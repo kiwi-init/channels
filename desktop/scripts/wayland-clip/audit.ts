@@ -35,7 +35,8 @@ const step = async (check: string, fn: () => Promise<{ ok: boolean; detail: unkn
   }
 };
 
-function lines(p: ChildProcessWithoutNullStreams, name: string): () => Promise<Record<string, unknown>> {
+const helperLog: Record<string, unknown>[] = [];
+function lines(p: ChildProcessWithoutNullStreams, name: string, all?: Record<string, unknown>[]): () => Promise<Record<string, unknown>> {
   const queue: Record<string, unknown>[] = [];
   const waiting: ((v: Record<string, unknown>) => void)[] = [];
   createInterface({ input: p.stdout }).on("line", (l) => {
@@ -46,6 +47,7 @@ function lines(p: ChildProcessWithoutNullStreams, name: string): () => Promise<R
       console.log(`[${name}] ${l}`);
       return;
     }
+    all?.push(v);
     const w = waiting.shift();
     if (w) w(v);
     else queue.push(v);
@@ -67,7 +69,8 @@ const { relay, port } = await startLocalRelay(join(root, "relay"), null, { rateL
 const env: NodeJS.ProcessEnv = { ...process.env, GDK_BACKEND: "wayland" };
 delete env["DISPLAY"];
 const helper = spawn("python3", [join(here, "helper.py"), readBack, drop], { env }) as ChildProcessWithoutNullStreams;
-const fromHelper = lines(helper, "helper");
+const fromHelper = lines(helper, "helper", helperLog);
+const helperSince = (n: number) => helperLog.slice(n).map((e) => e["event"]);
 const helperEvent = async (event: string, ms = 10_000): Promise<Record<string, unknown>> => {
   for (;;) {
     const e = await within(`helper ${event}`, ms, fromHelper());
@@ -95,14 +98,16 @@ try {
   const driver = d;
   await firstChannel(driver, 1);
   await until("the composer", 30_000, () => driver.evaluate(() => (document.querySelector('textarea[aria-label="Message"]') ? true : null), null, 2_000));
-  const geo = (await ask({ op: "layout", windows: { "kiwi-helper": [0, 0, helperSize[0], helperSize[1]], Channels: [420, 0, 1200, 800] } })) as Record<
+  const geo = (await ask({ op: "layout", windows: { "kiwi-helper": [0, 100, helperSize[0], helperSize[1]], Channels: [420, 100, 1200, 800] } })) as Record<
     string,
     { f: Rect; c: Rect; focus: boolean; type?: number; x11?: boolean }
   >;
   console.log(`windows: ${JSON.stringify(geo)}`);
-  const hw = geo["kiwi-helper"];
-  const cw = geo["Channels"];
-  if (!hw || !cw) throw new Error(`windows not found: ${JSON.stringify(Object.keys(geo))}`);
+  const hg = geo["kiwi-helper"];
+  const cg = geo["Channels"];
+  if (!hg || !cg) throw new Error(`windows not found: ${JSON.stringify(Object.keys(geo))}`);
+  const hw = { c: kind === "gnome" ? hg.f : hg.c };
+  const cw = { c: kind === "gnome" ? cg.f : cg.c };
   record("no window is an X11 client", Object.values(geo).every((g) => !g.x11 && g.type !== 1), geo);
   const page = await driver.evaluate(() => ({ w: innerWidth, h: innerHeight, dpr: devicePixelRatio, href: location.href }), null);
   const offX = cw.c[2] - page.w;
@@ -145,6 +150,37 @@ try {
     return helperEvent("read");
   };
   const shot = (name: string) => ask({ op: "shot", path: join(out, `${kind}-${name}.png`) }).catch((e: Error) => console.log(e.message));
+  await driver.evaluate(() => {
+    const w = window as unknown as { kiwiAuditEvents: unknown[] };
+    w.kiwiAuditEvents = [];
+    const seen: Record<string, number> = {};
+    for (const t of ["paste", "dragenter", "dragover", "dragleave", "drop"])
+      window.addEventListener(
+        t,
+        (e) => {
+          seen[t] = (seen[t] ?? 0) + 1;
+          if (t === "dragover" && seen[t]! > 3) return;
+          const dt = (e as ClipboardEvent).clipboardData ?? (e as DragEvent).dataTransfer ?? null;
+          const target = e.target instanceof Element ? (e.target.getAttribute("aria-label") ?? e.target.tagName) : String(e.target);
+          w.kiwiAuditEvents.push({
+            t,
+            target,
+            types: dt ? [...dt.types] : null,
+            items: dt ? [...dt.items].map((i) => `${i.kind}:${i.type}`) : null,
+            files: dt ? [...dt.files].map((f) => `${f.name}:${f.type}:${f.size}`) : null,
+          });
+        },
+        true,
+      );
+    return true;
+  }, null);
+  const events = () =>
+    driver.evaluate(() => {
+      const w = window as unknown as { kiwiAuditEvents: unknown[] };
+      const e = w.kiwiAuditEvents;
+      w.kiwiAuditEvents = [];
+      return e;
+    }, null);
   const box = await rectOf('textarea[aria-label="Message"]');
   if (!box) throw new Error("no composer rect");
   const at = onPage(box);
@@ -172,6 +208,8 @@ try {
 
   await step("an image copied in another app pastes into the composer as an attachment", async () => {
     await setComposer("");
+    await events();
+    const mark = helperLog.length;
     const before = (await state()).files.length;
     await click(onHelper("copy-image"));
     await helperEvent("copied-image");
@@ -181,7 +219,7 @@ try {
     await keys("ctrl", "v");
     await later(1500);
     const s = await state();
-    return { ok: s.files.length > before, detail: { before, s } };
+    return { ok: s.files.length > before, detail: { before, s, page: await events(), helper: helperSince(mark) } };
   });
   await shot("02-pasted");
 
@@ -215,64 +253,74 @@ try {
     return { ok: typeof got["text"] === "string" && String(got["text"]).startsWith("Message 1:"), detail: { got, toasts } };
   });
 
-  await step("an image copied as the annotator copies it (navigator.clipboard.write, image/png) reaches another app", async () => {
-    await driver.evaluate(() => {
-      const b = document.createElement("button");
-      b.id = "kiwi-audit-copy-image";
-      b.textContent = "copy image";
-      Object.assign(b.style, { position: "fixed", left: "8px", top: "8px", zIndex: "99999", width: "140px", height: "40px" });
-      b.addEventListener("click", () => {
-        const w = window as unknown as { kiwiAuditCopy?: string };
-        w.kiwiAuditCopy = "pending";
-        void (async () => {
-          try {
-            const c = document.createElement("canvas");
-            c.width = 32;
-            c.height = 24;
-            const x = c.getContext("2d");
-            if (x) {
-              x.fillStyle = "#0a0";
-              x.fillRect(0, 0, 32, 24);
-            }
-            const blob = await (await fetch(c.toDataURL("image/png"))).blob();
-            await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-            w.kiwiAuditCopy = "written";
-          } catch (e) {
-            w.kiwiAuditCopy = String(e);
+  for (const way of ["annotator", "toBlob"] as const) {
+    await step(`an image copied with navigator.clipboard.write (image/png, ${way === "annotator" ? "the annotator's fetch of a data: URL" : "canvas.toBlob"}) reaches another app`, async () => {
+      await driver.evaluate((how: string) => {
+        const b = document.createElement("button");
+        b.id = "kiwi-audit-copy-image";
+        b.textContent = "copy image";
+        Object.assign(b.style, { position: "fixed", left: "8px", top: "8px", zIndex: "99999", width: "140px", height: "40px" });
+        b.addEventListener("click", () => {
+          const w = window as unknown as { kiwiAuditCopy?: string };
+          w.kiwiAuditCopy = "pending";
+          const c = document.createElement("canvas");
+          c.width = 32;
+          c.height = 24;
+          const x = c.getContext("2d");
+          if (x) {
+            x.fillStyle = "#0a0";
+            x.fillRect(0, 0, 32, 24);
           }
-        })();
-      });
-      document.body.append(b);
-      return true;
-    }, null);
-    const r = await rectOf("#kiwi-audit-copy-image");
-    if (!r) return { ok: false, detail: "no injected button" };
-    await click(onPage(r));
-    await later(1200);
-    const copied = await driver.evaluate(() => (window as unknown as { kiwiAuditCopy?: string }).kiwiAuditCopy ?? null, null);
-    const got = await read();
-    await driver.evaluate(() => void document.getElementById("kiwi-audit-copy-image")?.remove(), null);
-    return { ok: Array.isArray(got["image"]), detail: { page: copied, read: got } };
-  });
+          const blob: Promise<Blob> =
+            how === "annotator"
+              ? fetch(c.toDataURL("image/png")).then((r) => r.blob())
+              : new Promise((ok, no) => c.toBlob((b) => (b ? ok(b) : no(new Error("toBlob gave nothing"))), "image/png"));
+          void (async () => {
+            try {
+              await navigator.clipboard.write([new ClipboardItem({ "image/png": how === "annotator" ? await blob : blob })]);
+              w.kiwiAuditCopy = "written";
+            } catch (e) {
+              w.kiwiAuditCopy = String(e);
+            }
+          })();
+        });
+        document.body.append(b);
+        return true;
+      }, way);
+      const r = await rectOf("#kiwi-audit-copy-image");
+      if (!r) return { ok: false, detail: "no injected button" };
+      await click(onPage(r));
+      await later(1200);
+      const copied = await driver.evaluate(() => (window as unknown as { kiwiAuditCopy?: string }).kiwiAuditCopy ?? null, null);
+      const got = await read();
+      await driver.evaluate(() => void document.getElementById("kiwi-audit-copy-image")?.remove(), null);
+      return { ok: Array.isArray(got["image"]), detail: { page: copied, read: got } };
+    });
+  }
 
   await step("a PNG dragged from another app onto the composer becomes an attachment", async () => {
     const before = (await state()).files.length;
+    await events();
+    const mark = helperLog.length;
     await ask({ op: "drag", from: onHelper("drag"), to: at, steps: 30 });
     await later(1500);
     const s = await state();
-    return { ok: s.files.length > before, detail: { before, s } };
+    return { ok: s.files.length > before, detail: { before, s, page: await events(), helper: helperSince(mark) } };
   });
   await shot("03-dropped");
 
   await step("a file dropped elsewhere in the window leaves the page where it was, and the app running", async () => {
     const elsewhere = onPage([page.w / 2 - 100, page.h / 3 - 50, 200, 100]);
+    await events();
+    const mark = helperLog.length;
     await ask({ op: "drag", from: onHelper("drag"), to: elsewhere, steps: 30 });
     await later(2000);
+    const seen = await events().catch(() => null);
     const href = await driver.evaluate(() => location.href, null, 5_000).then(
       (h) => h,
       (e: Error) => `gone: ${e.message}`,
     );
-    return { ok: href.startsWith("views://internal/index.html") && app.exitCode === null, detail: { href, exit: app.exitCode } };
+    return { ok: href.startsWith("views://internal/index.html") && app.exitCode === null, detail: { href, exit: app.exitCode, page: seen, helper: helperSince(mark) } };
   });
 } catch (e) {
   record("the audit set up", false, e instanceof Error ? e.message : String(e));
