@@ -3,7 +3,7 @@ import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 
 mock.module("@/lib/avatars", () => ({ avatarUrl: () => "", robotUrl: () => "", robotFor: () => "blue", harnessUrl: () => "" }))
-const { ChannelSidebar, hiddenConversations, leftConversations } = await import("./channel-sidebar")
+const { ChannelSidebar, afterRooms, hiddenConversations, leftConversations } = await import("./channel-sidebar")
 
 const general = { key: "main", label: "# general", unread: 0, forMe: false, withMe: true, left: false }
 const mine = { key: "dm:me:win", label: "win", unread: 1, forMe: false, withMe: true, left: false }
@@ -31,6 +31,7 @@ const props = (search: string | null) => ({
   conversations: [general],
   current: null,
   onConversation: () => {},
+  rooms: [],
 })
 
 const html = (over: Partial<ReturnType<typeof props>> = {}) => renderToStaticMarkup(createElement(ChannelSidebar, { ...props(null), ...over }))
@@ -130,5 +131,18 @@ describe("conversations with members who left the channel fold under Left the ch
   })
   test("no one left, no fold", () => {
     expect(conversations(html({ conversations: [general, mine, quiet] }))).not.toContain("Left the channel")
+  })
+})
+
+describe("the owner makes a room from the sidebar", () => {
+  test("a + on the Conversations heading, for the owner only", () => {
+    expect(conversations(html())).not.toContain('aria-label="New room"')
+    expect(html({ onNewRoom: async () => {} })).toMatch(/<section aria-label="Conversations"[^>]*><h2[^>]*>Conversations<button type="button" aria-label="New room" title="New room"/)
+  })
+  test("its field opens right under the rooms, before the direct conversations", () => {
+    const room = (id: string) => ({ key: `room:${id}`, label: `# ${id}`, unread: 0, forMe: false, withMe: true, left: false })
+    expect(afterRooms([general, mine, between])).toBe(1)
+    expect(afterRooms([room("general"), room("mobile"), mine])).toBe(2)
+    expect(afterRooms([mine])).toBe(0)
   })
 })
