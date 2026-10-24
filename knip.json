@@ -11,7 +11,7 @@
     "mksquashfs",
     "ditto",
     "hdiutil",
-    "kwallet-query",
+    "dbus-send",
     "pgrep",
     "osascript",
     "plutil",
