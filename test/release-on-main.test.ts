@@ -1,11 +1,14 @@
 import { afterAll, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { FILES } from "../scripts/stamp.ts";
 
 interface Step {
   name?: string;
+  id?: string;
+  if?: string;
+  uses?: string;
   run?: string;
   env?: Record<string, string>;
 }
@@ -84,6 +87,28 @@ test("nothing in the release starts before the on-main check passes", () => {
   expect(needs("build")).toContain("on-main");
   const reaches = (job: string, seen: Set<string> = new Set()): boolean => job === "on-main" || needs(job).some((n) => !seen.has(n) && (seen.add(n), reaches(n, seen)));
   for (const job of Object.keys(release.jobs)) expect({ job, gated: reaches(job) }).toEqual({ job, gated: true });
+});
+
+test("a tag on the stamp's commit passes bump-main without the bus app's token: nothing after the empty-patch check runs", () => {
+  const steps = release.jobs["bump-main"]?.steps ?? [];
+  const at = steps.findIndex((s) => s.name === "Is there a stamp to commit");
+  expect(steps.slice(0, at).map((s) => s.uses?.split("@")[0])).toEqual(["actions/download-artifact"]);
+  const token = steps.findIndex((s) => s.uses?.startsWith("actions/create-github-app-token@"));
+  expect(token).toBeGreaterThan(at);
+  for (const s of steps.slice(at + 1)) expect({ step: s.name ?? s.uses, if: s.if }).toEqual({ step: s.name ?? s.uses, if: "steps.stamp.outputs.needed == 'true'" });
+  const check = step("bump-main", "Is there a stamp to commit");
+  const temp = join(root, "stamp-check");
+  mkdirSync(join(temp, "stamp"), { recursive: true });
+  for (const [patch, needed] of [
+    ["", "false"],
+    ["diff --git a/src/version.ts b/src/version.ts\n", "true"],
+  ] as const) {
+    writeFileSync(join(temp, "stamp", "stamp.patch"), patch);
+    writeFileSync(join(temp, "output"), "");
+    const r = bash(check.run, temp, { RUNNER_TEMP: temp, GITHUB_OUTPUT: join(temp, "output"), GITHUB_REF_NAME: "v1.2.3" });
+    expect({ patch, code: r.code, output: readFileSync(join(temp, "output"), "utf8").trim() }).toEqual({ patch, code: 0, output: `needed=${needed}` });
+    if (needed === "false") expect(r.out).toContain("already says 1.2.3");
+  }
 });
 
 test("bump-main's list of stamped files is scripts/stamp.ts's, plus CHANGELOG.md", () => {

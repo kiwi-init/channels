@@ -82,10 +82,10 @@ KIWI_TEST_RELAY=http://localhost:8787 bun test # same suite against `wrangler de
 bun run typecheck                            # CLI, Worker and web lint
 bun run build                                # single-file binary in dist/kiwi
 bun run web:build                            # the app's renderer, web/dist (needed by desktop/)
-bun scripts/stamp.ts v0.21.0                 # what tagging v0.21.0 does, on a clean tree (git checkout . undoes it)
+bun scripts/stamp.ts v0.21.0                 # a release's stamp, in its own PR before the tag
 ```
 
-A release is a tag on main: `git tag v0.21.0 && git push origin v0.21.0`. The release workflow stamps the tag's version into `src/version.ts`, both `package.json` files and the site's download names, writes CHANGELOG.md's section from the commits since the last release (`scripts/stamp.ts`), builds and publishes from that, and then commits the stamp to main as `kiwi 0.21.0`. No release PR, no bump by hand. A section already in CHANGELOG.md for that version is kept, so one can be written by hand in a PR before tagging.
+A release is its stamp, then a tag. `bun scripts/stamp.ts v0.21.0` writes the version into `src/version.ts`, both `package.json` files and the site's download names, and CHANGELOG.md's section from the commits since the last release. Open that as a PR titled `kiwi 0.21.0` and merge it on its green ci-ok. Then tag that commit: `git tag v0.21.0 <the stamp's commit> && git push origin v0.21.0`. The release workflow builds and publishes from the tag, and its bump-main job finds nothing left to commit. A tag on a commit that isn't stamped still releases: the workflow stamps it and commits the stamp to main itself, which needs the bus app's token. A section already in CHANGELOG.md for that version is kept, so it can be edited in the stamp's PR.
 
 [CHANGELOG.md](CHANGELOG.md) is written from each squash-merged PR's title and description, so a PR needs one: CI fails a PR none of whose commits has a body.
 
