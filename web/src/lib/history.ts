@@ -132,13 +132,15 @@ function db(): HistoryDb {
   return backing
 }
 
-export function openHistory(): void {
+export async function openHistory(): Promise<void> {
   if (typeof indexedDB === "undefined") return
   db()
-  void opening?.().then(
-    () => markOnce("kiwi:history-open"),
-    () => {}
-  )
+  try {
+    await opening?.()
+    markOnce("kiwi:history-open")
+  } catch {
+    // A failed open resets itself: the channel's first read opens it again and reports its own error.
+  }
 }
 
 /** Tests substitute a memory database. Pass null to go back to IndexedDB. */

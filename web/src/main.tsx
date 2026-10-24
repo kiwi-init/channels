@@ -17,7 +17,7 @@ import { ops } from "@/lib/channel-ops"
 import { nudgeOnWake } from "@/lib/wake"
 import { openHistory } from "@/lib/history"
 
-openHistory()
+void openHistory()
 applyStoredAppearance()
 bridge()?.onTextStep(stepTextSize)
 // The desktop app on a Mac has no title bar: its traffic lights sit on the list's header (index.css shell-mac).
