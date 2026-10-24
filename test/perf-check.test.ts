@@ -135,12 +135,6 @@ test("without perf-feel runs (the nightly), perf-feel's rows are left out, not f
   expect(r.out).not.toContain(budgets.feelFalseScreens!.what);
 });
 
-test("CI's perf job hands perf-check the perf-feel runs its perf-runs jobs made", () => {
-  const ci = readFileSync(".github/workflows/ci.yml", "utf8");
-  expect(ci).toMatch(/perf-feel\.ts --json "\$RUNNER_TEMP\/feel-\$\{\{ matrix\.run \}\}\.json"/);
-  expect(ci).toContain('perf-check.ts --comment "$RUNNER_TEMP"/perf/perf-*.json "$RUNNER_TEMP"/perf/feel-*.json');
-});
-
 test("the soak's limits count only in the nightly run, and the gap to 0.20 is listed", () => {
   const files = [run(50, 7)];
   expect(check(files).out).not.toContain("Soak: heap growth per hour");
@@ -149,10 +143,10 @@ test("the soak's limits count only in the nightly run, and the gap to 0.20 is li
 });
 
 test("every workflow step that pipes perf-check runs under pipefail, so an over-gate median fails it", () => {
-  const steps = [".github/workflows/ci.yml", ".github/workflows/nightly.yml"].flatMap((path) => {
+  const steps = [".github/workflows/perf.yml"].flatMap((path) => {
     const wf = Bun.YAML.parse(readFileSync(path, "utf8")) as { jobs: Record<string, { steps?: { run?: string; shell?: string }[] }> };
     return Object.values(wf.jobs).flatMap((job) => (job.steps ?? []).filter((step) => step.run?.includes("perf-check.ts")).map((step) => ({ path, ...step })));
   });
-  expect(steps.length).toBeGreaterThanOrEqual(2);
+  expect(steps.length).toBeGreaterThanOrEqual(1);
   for (const { path, run, shell } of steps) if (run!.includes("|")) expect({ path, shell }).toEqual({ path, shell: "bash" });
 });

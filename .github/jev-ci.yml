@@ -99,7 +99,7 @@ jobs:
       - ".github/jev-ci.yml"
       - ".github/jev-ci/**"
       - ".github/workflows/ci.yml"
-      - ".github/workflows/nightly.yml"
+      - ".github/workflows/perf.yml"
       - ".github/workflows/release-build.yml"
       - ".github/workflows/release.yml"
       - "desktop/build/entitlements.app.plist"
@@ -249,7 +249,7 @@ jobs:
       Bun reads the old password only on Linux.
       And test/desktop-guard.test.ts's writePrivate: a link at the file's path or at a guessable temp name is never written through (the temp file is created exclusively under a random name).
       And web lib/channel/trim.test.ts: a long session folds the messages past the 2000-message window (plus 500 of slack) into the fold base, and tasks and facts from before it stay; lib/channel/warm.test.ts: only the last four channels stay warm; lib/threads.test.ts: what's been seen where keeps the newest 500 places.
-      And test/perf-check.test.ts: perf-check compares the median of the runs with each gate after scaling each timing by its run's CPU calibration (a slow runner's numbers pass, a timing without its calibration counts as not measured, a run whose calibration or 4x/1x ratio is out of range is left out and named, the scaled gates need two usable runs, and Reload scales only its in-page first screen), counts the soak's limits only in the nightly run and lists what isn't at its 0.20 budget yet, and every step in ci.yml and nightly.yml that pipes perf-check into tee runs with shell: bash (pipefail), so an over-gate median fails the job; test/artifact-overwrite.test.ts: every upload-artifact step in the workflows sets overwrite: true, so a re-run's artifact replaces the one the attempt before it left and a later download (perf / scale's runs, the release's stamp and binaries) reads the re-run, not the first attempt; test/appimage-squashfs.test.ts: desktop/scripts/appimage-squashfs.ts (run by release-build on Linux) fails an AppImage whose squashfs is not gzip, lz4 or zstd in blocks of at most 128 KiB (xz in 1 MiB blocks made the app take most of a minute to appear).
+      And test/perf-check.test.ts: perf-check compares the median of the runs with each gate after scaling each timing by its run's CPU calibration (a slow runner's numbers pass, a timing without its calibration counts as not measured, a run whose calibration or 4x/1x ratio is out of range is left out and named, the scaled gates need two usable runs, and Reload scales only its in-page first screen), counts the soak's limits only with --nightly and lists what isn't at its 0.20 budget yet, and every step in perf.yml that pipes perf-check into tee runs with shell: bash (pipefail), so an over-gate median fails the job; test/artifact-overwrite.test.ts: every upload-artifact step in the workflows sets overwrite: true, so a re-run's artifact replaces the one the attempt before it left and a later download (the release's stamp and binaries) reads the re-run, not the first attempt; test/appimage-squashfs.test.ts: desktop/scripts/appimage-squashfs.ts (run by release-build on Linux) fails an AppImage whose squashfs is not gzip, lz4 or zstd in blocks of at most 128 KiB (xz in 1 MiB blocks made the app take most of a minute to appear).
       And test/retry-after.test.ts: the relay's 429 carries Retry-After (header and body, on the socket too), a refused attempt isn't counted, and a rate-limited send waits it out and goes in, over the socket without an extra try over HTTP; test/dev-rate-limits.test.ts: the Bun relay's --dev-no-rate-limits (refused off localhost, never read from the environment or a policy alone) lets a member on this machine post and read past the per-minute caps, over HTTP and the socket, while a request or socket upgrade a proxy passed on keeps them, and neither it nor --dev-sign-in starts with --trust-proxy or KIWI_TRUST_PROXY, and the relay refuses any --flag=value it would otherwise ignore; web lib/github-queue.test.ts: the owner's GitHub posts keep a rate-limited or unreachable item to try again.
       And test/desktop-daemon-keeper.test.ts: the app checks its daemon every 30s and starts it again when it stops answering, retrying a daemon that won't start from 5s up to every 5 minutes, and test/desktop-daemon-spawn.test.ts: its output and the app's restarts land in KIWI_HOME/daemon.log, rotated at 1 MB.
       And test/release-signing.test.ts: release-build.yml's Package step fails a tag release that has no Mac signing secrets, while a rehearsal still builds unsigned;
@@ -443,41 +443,6 @@ jobs:
       The shots are uploaded as the ui-shots artifact, WebKit's as ui-shots-webkit.
       The seed's first run fails at once with the error the page shows (role alert) rather than waiting out its timeout.
       Fails when the conversation isn't at its newest message (within 80px of the bottom) once the channel opens and again back from the Tasks tab (which it visits itself), at the wide size and, in the same run (--phone channel,tasks: the channel and Tasks screens on the channel already seeded), at phone size too (web/src/components/conversation/use-scroll.ts), or when the window's drag band would take a control of the open viewer (each app-region box added or taken away in document order, as Electron does), or when the seeding can't drive the dashboard or any screen can't be reached (a control renamed, moved or gone), so the shots keep up with the UI; each of these in either engine, so a screen or the conversation's place that works in Chromium but not in WebKit fails too.
-      Headless Chromium and the apt packages it needs come from .github/actions/browser, which installs the packages from .deb files cached for this very runner image (and Playwright's browsers cached per Ubuntu release, since its WebKit is built for one) and fails the job if they can't be installed.
-
-  perf:
-    name: perf / scale
-    inputs:
-      - "desktop/**"
-      - "packages/core/**"
-      - "scripts/local-relay.ts"
-      - "scripts/perf-budgets.json"
-      - "scripts/perf-calibrate.ts"
-      - "scripts/perf-check.ts"
-      - "scripts/perf-feel.ts"
-      - "scripts/perf-scale.ts"
-      - "src/relay/**"
-      - "web/**"
-    always:
-      - "bun.lock"
-      - "package.json"
-      - "scripts/local-relay.ts"
-      - "scripts/perf-budgets.json"
-      - "scripts/perf-check.ts"
-      - "scripts/perf-feel.ts"
-      - "scripts/perf-scale.ts"
-      - "web/package.json"
-      - "web/vite.config.ts"
-    imports_from:
-      - "scripts/perf-feel.ts"
-      - "scripts/perf-scale.ts"
-    parts:
-      - "perf-runs"
-    description: >-
-      Three perf-runs jobs, side by side on their own runners, each build the web dashboard and run scripts/perf-scale.ts --gated once without the soak (only what perf-check gates: no 1x tab switches, details toggles, profiles or second reload; the nightly runs it whole): a local relay and headless Chromium with 10 agents, 100 tasks and 2000 messages (the agents join at once and the seeding sends through each agent's own session, src/agent.ts, on a local relay started with --dev-no-rate-limits, so no per-minute cap slows it), timing the reload to the first screen (the conversation a channel opens on, down to the last message seeded), the Tasks, Agents and Conversation tabs at 4x CPU and typing while the agents post (their burst sent through those same in-process sessions, so no ten CLI start-ups compete with the browser for the CPU; the p95 is over every key event typed, those under 16 ms, which Event Timing doesn't report, counted at 16), then run scripts/perf-feel.ts with PERF_RTT_MS=150 (one channel of 400 messages and 12 tasks behind a proxy that delays HTTP and the WebSocket by half the round trip each way: reload to the first screen, Enter to an empty composer and to the bubble, layout shift switching Tasks / #general and opening tasks, false screens like Add an agent during five reloads, frames over 33 ms scrolling the channel), and upload both as the perf-scale-N artifact (overwrite: a re-run of a run job replaces it, so perf / scale reads the new measurement), perf-scale's with a CPU calibration (a fixed in-page workload) at 1x and 4x.
-      A run that crashes fails its job.
-      Then perf / scale downloads the three runs, and scripts/perf-check.ts tells the perf-feel runs apart by their rttMs and grades their medians unscaled (their timings wait mostly on the round trip; shifts and screens aren't times), and scales each perf-scale timing by its run's calibration to the reference runner in scripts/perf-budgets.json (Reload only its in-page first screen; a run whose calibration is out of the ranges there is left out and named, and fewer than two usable runs fail the scaled gates), takes the medians and fails when one is over its gate there (a ratchet: each gate starts at today's median plus 20% and comes down to its 0.20 budget as fixes land), writing the table and the gaps to the 0.20 budgets to the job summary and a perf-scale comment on the pull request.
-      The soak's memory slopes are gated by the nightly workflow (.github/workflows/nightly.yml), not here.
       Headless Chromium and the apt packages it needs come from .github/actions/browser, which installs the packages from .deb files cached for this very runner image (and Playwright's browsers cached per Ubuntu release, since its WebKit is built for one) and fails the job if they can't be installed.
 
   desktop-mac:
