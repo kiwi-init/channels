@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -u
 
-usage="usage: eb-wayland-start.sh ELECTROBUN_LAUNCHER (in a Wayland session: WAYLAND_DISPLAY set)"
+usage="usage: eb-wayland-start.sh ELECTROBUN_LAUNCHER [OUTPUT_SCALE] (in a Wayland session: WAYLAND_DISPLAY set)"
 launcher=${1:?$usage}
+scale=${2:-}
 [ -n "${WAYLAND_DISPLAY:-}" ] || { echo "$usage" >&2; exit 2; }
 home=$(mktemp -d)
 out="$home/app.log"
@@ -30,6 +31,13 @@ else
     x11=$(xdotool search --class '^Channels$' 2> /dev/null | head -n 1)
     if [ -n "$x11" ]; then problems+=("the app also opened an X11 window ($x11) on XWayland ($DISPLAY)"); else echo "XWayland ($DISPLAY) holds no Channels window"; fi
   fi
+  if [ -n "$scale" ]; then
+    outputs=$(grep -oE 'wl_output[@#][0-9]+\.scale\([0-9]+\)' "$out" | grep -oE '[0-9]+\)$' | tr -d ')' | sort -u | tr '\n' ' ')
+    buffers=$(grep -oE 'wl_surface[@#][0-9]+\.set_buffer_scale\([0-9]+\)' "$out" | grep -oE '[0-9]+\)$' | tr -d ')' | sort -u | tr '\n' ' ')
+    echo "output scale: ${outputs:-none}; the app's buffer scales: ${buffers:-none}"
+    [ "$outputs" = "$scale " ] || problems+=("the compositor's output scale is ${outputs:-not sent}, not $scale")
+    [[ " $buffers" == *" $scale "* ]] || problems+=("the app never drew at the output scale $scale (buffer scales: ${buffers:-none}), so the compositor enlarges a blurry window")
+  fi
   kill -0 "$pid" 2> /dev/null || problems+=("the app exited while its window was open")
 fi
 
@@ -52,5 +60,6 @@ if [ ${#problems[@]} -gt 0 ]; then
   exit 1
 fi
 if [ -n "${DISPLAY:-}" ]; then ran="though XWayland was there too"; else ran="with no X server at all"; fi
+[ -n "$scale" ] && ran="$ran, drawn at the output scale $scale"
 echo "the app started natively on Wayland ($WAYLAND_DISPLAY), $ran: its window is an xdg_toplevel, its web process ran, and it stopped cleanly"
 rm -rf "$home"
