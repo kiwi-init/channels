@@ -328,7 +328,7 @@ jobs:
           find "$debs" -maxdepth 1 -name '*.deb' | wc -l > "$RUNNER_TEMP/debs-before"
           echo "Dir::Cache::Archives \"$debs/\";" | sudo tee /etc/apt/apt.conf.d/90linux-debs > /dev/null
           sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus ${{ matrix.drive && 'weston xwayland' || '' }}
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus ${{ matrix.drive && 'weston xwayland kwin-wayland plasma-wayland-protocols libwayland-dev python3-gi gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0' || '' }}
       - id: debs
         name: keep what apt downloaded, even when it ran out of time
         if: always()
@@ -490,6 +490,10 @@ jobs:
           fi
           kill "$compositor" 2> /dev/null || true
           exit "$code"
+      - name: clipboard and file drops, natively on Wayland (headless KWin with no XWayland, input through KWin's fake input)
+        if: ${{ !cancelled() && matrix.drive }}
+        timeout-minutes: 12
+        run: bash desktop/scripts/wayland-check/kwin.sh "$PWD/${{ steps.test-app.outputs.path }}" "$RUNNER_TEMP/wayland-check"
       - name: dpkg --purge leaves nothing of the app behind
         if: ${{ !cancelled() }}
         run: |

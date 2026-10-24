@@ -19,6 +19,10 @@ static void (*page_gone)(void) = NULL;
 static gchar *the_page = NULL;
 static GMutex committed_lock;
 static char committed[4096] = "";
+static GMutex drop_lock;
+static gchar **dropped = NULL;
+static gint64 dropped_at = 0;
+static gint64 drop_landed = 0;
 
 __attribute__((constructor)) static void kiwi_identity(void) {
   g_set_prgname(KIWI_APP_ID);
@@ -207,12 +211,50 @@ static bool sandbox_default_context(gconstpointer arg) {
   return webkit_web_context_get_sandbox_enabled(context);
 }
 
+static gboolean drag_data(GSignalInvocationHint *hint, guint n, const GValue *params, gpointer data) {
+  (void)hint;
+  (void)data;
+  if (n < 5 || !WEBKIT_IS_WEB_VIEW(g_value_get_object(&params[0]))) return TRUE;
+  GtkSelectionData *selection = g_value_get_boxed(&params[4]);
+  gchar **uris = selection ? gtk_selection_data_get_uris(selection) : NULL;
+  if (!uris) return TRUE;
+  GPtrArray *paths = g_ptr_array_new();
+  for (gchar **uri = uris; *uri && paths->len < 8; uri++) {
+    gchar *path = g_filename_from_uri(*uri, NULL, NULL);
+    if (path && g_file_test(path, G_FILE_TEST_IS_REGULAR))
+      g_ptr_array_add(paths, path);
+    else
+      g_free(path);
+  }
+  g_strfreev(uris);
+  g_ptr_array_add(paths, NULL);
+  g_mutex_lock(&drop_lock);
+  g_strfreev(dropped);
+  dropped = (gchar **)g_ptr_array_free(paths, FALSE);
+  dropped_at = g_get_monotonic_time();
+  g_mutex_unlock(&drop_lock);
+  return TRUE;
+}
+
+static gboolean drag_drop(GSignalInvocationHint *hint, guint n, const GValue *params, gpointer data) {
+  (void)hint;
+  (void)data;
+  if (n < 1 || !WEBKIT_IS_WEB_VIEW(g_value_get_object(&params[0]))) return TRUE;
+  g_mutex_lock(&drop_lock);
+  drop_landed = g_get_monotonic_time();
+  g_mutex_unlock(&drop_lock);
+  return TRUE;
+}
+
 static const Hook DENY = {webkit_web_view_get_type, "permission-request", deny_request};
 static const Hook WATCH = {webkit_web_view_get_type, "web-process-terminated", process_ended};
 static const Hook COMMITS = {webkit_web_view_get_type, "load-changed", load_changed};
 static const Hook PAGE_ONLY = {webkit_web_view_get_type, "decide-policy", only_the_page};
 static const Hook DOWNLOADS = {webkit_web_context_get_type, "download-started", download_started};
 static const Hook DESTINATIONS = {webkit_download_get_type, "decide-destination", decide_destination};
+static const Hook DROP_DATA = {gtk_widget_get_type, "drag-data-received", drag_data};
+static const Hook DROPS = {gtk_widget_get_type, "drag-drop", drag_drop};
+static bool watching_drops = false;
 static bool guarding_downloads = false;
 static bool allowing_only = false;
 static bool watching_commits = false;
@@ -250,6 +292,29 @@ bool kiwi_allow_only(const char *page) {
   the_page = g_strdup(page);
   if (!allowing_only) allowing_only = on_main(install_hook, &PAGE_ONLY);
   return allowing_only;
+}
+
+bool kiwi_watch_drops(void) {
+  if (!watching_drops) watching_drops = on_main(install_hook, &DROP_DATA) && on_main(install_hook, &DROPS);
+  return watching_drops;
+}
+
+size_t kiwi_take_drop(char *out, size_t size) {
+  g_mutex_lock(&drop_lock);
+  gint64 now = g_get_monotonic_time();
+  gint64 window = 10 * G_TIME_SPAN_SECOND;
+  size_t n = 0;
+  if (dropped && *dropped && drop_landed && now - drop_landed < window && now - dropped_at < window) {
+    gchar *joined = g_strjoinv("\n", dropped);
+    n = g_strlcpy(out, joined, size);
+    g_free(joined);
+  }
+  g_strfreev(dropped);
+  dropped = NULL;
+  dropped_at = 0;
+  drop_landed = 0;
+  g_mutex_unlock(&drop_lock);
+  return n;
 }
 
 bool kiwi_tray_host(void) {

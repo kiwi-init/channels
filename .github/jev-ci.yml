@@ -528,6 +528,7 @@ jobs:
       - "web/src/**"
     imports_from:
       - "desktop/scripts/smoke-eb.ts"
+      - "desktop/scripts/wayland-check.ts"
       - "desktop/src/main-eb.ts"
       - "desktop/src/preload-eb.ts"
     always:
@@ -552,6 +553,8 @@ jobs:
       - "desktop/scripts/linux-upgrade-check.sh"
       - "desktop/scripts/package-linux.ts"
       - "desktop/scripts/smoke-eb.ts"
+      - "desktop/scripts/wayland-check.ts"
+      - "desktop/scripts/wayland-check/**"
     description: >-
       On two runners at once, Ubuntu 24.04 and 26.04 (a matrix, each part saving its own jev-ci pass;
       T2119: on 24.04 AppArmor's unprivileged user-namespace restriction keeps bubblewrap from setting up its loopback, so WebKitGTK's sandbox can't start there)
@@ -573,6 +576,7 @@ jobs:
       A last step, which only prints and never fails, records what bwrap can do under the runner's AppArmor (the restriction, the profiles naming bwrap or userns, and bwrap and unshare -Urn with and without a scratch unconfined profile granting userns), for a deb profile that brings the sandbox to 24.04 later.
       As on the Mac, eb-post-build bundles src/keys-worker.ts into app/bun/keys.js and fails unless that bundled keys worker answers a page's request, before the Linux part ends the script (T92: 0.27.0 to 0.27.2 shipped the Linux app without it, so Create channel failed); smoke-eb's first run (a person, a channel, a message) fails the job on Linux again.
       Each image's packages are kept as linux-packages-<image> for 3 days.
+      Then desktop/scripts/wayland-check/kwin.sh runs the test app in a headless KWin with no XWayland (kwin_wayland --virtual, DISPLAY unset, failing if an Xwayland ran) beside a GTK helper app that is a native Wayland client, driving both with real input through KWin's fake input (desktop/scripts/wayland-check/kwin-input.c) and placing them with KWin scripting (kwin.py), and desktop/scripts/wayland-check.ts fails unless text pastes into the composer from the helper, the composer's Ctrl+C and a message's Copy text button reach the helper, an image the page writes with navigator.clipboard.write reaches it, a PNG dragged from the helper onto the composer is attached (WebKitGTK hands the page a dropped file only as a file URL, so desktop/native/linux/kiwi-shell.c keeps the dropped paths and the composer takes them through takeDroppedFiles, T895), and a file dropped elsewhere leaves the page where it was.
 
   cli-macos:
     name: cli / macos
