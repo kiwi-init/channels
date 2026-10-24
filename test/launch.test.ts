@@ -5,7 +5,9 @@ import { join } from "node:path";
 import { readLaunch } from "@kiwi/core/membership.ts";
 import { daemonSock, stopDaemon } from "../src/daemon.ts";
 import { launchAgent } from "../src/launch/launch.ts";
-import type { PlaceTools } from "../src/terminals/plugin.ts";
+import type { Pane, PlaceTools } from "../src/terminals/plugin.ts";
+import { typeWhenReady, type Typed } from "../src/launch/typed.ts";
+import { kimiScreen } from "../src/loop/kimi.ts";
 import { joinLineRefusal } from "@kiwi/core/join-line.ts";
 import { choicesRefusal, contextWords, readContext } from "@kiwi/core/launch-options.ts";
 import { canStart, joinPrompt, launchChoicesRefusal, recipeArgv } from "../src/launch/recipes.ts";
@@ -62,7 +64,8 @@ describe("the line an agent is started with", () => {
     expect(recipeArgv("codex", "/bin/codex", "P")).toEqual(["/bin/codex", "--", "P"]);
     expect(recipeArgv("grok", "/bin/grok", "P")).toEqual(["/bin/grok", "--", "P"]);
     expect(recipeArgv("mimo", "/bin/mimo", "P", { model: "xiaomi/mimo-v2.5-pro" })).toEqual(["/bin/mimo", "-m", "xiaomi/mimo-v2.5-pro", "--prompt", "P"]);
-    for (const h of ["gemini", "cursor", "opencode", "kimi", "pi"] as const) {
+    expect(recipeArgv("kimi", "/bin/kimi", "P")).toEqual(["/bin/kimi"]);
+    for (const h of ["gemini", "cursor", "opencode", "pi"] as const) {
       expect(canStart(h)).toBe(false);
       expect(recipeArgv(h, "/bin/x", "P")).toBeNull();
     }
@@ -318,6 +321,96 @@ printf '/tmp/sock\\tkiwi\\t@7\\t%%9\\t4242\\n'`,
     expect(readLaunchRequest({ harness: "claude", folder, code, launch: "short" })).toBeNull();
     expect(readLaunchRequest({ harness: "claude", folder, code, launch: "has spaces in it" })).toBeNull();
     expect(readLaunchRequest({ harness: "claude", code })).toBeNull();
+  });
+});
+
+describe("starting Kimi Code, whose first prompt is typed into its window", () => {
+  const READY = "Welcome to Kimi Code. No session yet: one will be created on your first message";
+  const pane = (screens: (string | null)[]) => {
+    const did: string[] = [];
+    const p: Pane = {
+      screen: () => (screens.length > 1 ? screens.shift()! : (screens[0] ?? null)),
+      type: (text) => (did.push(`type ${text}`), true),
+      enter: () => (did.push("enter"), true),
+      erase: () => true,
+    };
+    return { p, did };
+  };
+
+  test("its model and Ask When Needed, plan or Never Ask modes are its own flags, with no prompt on the command line", () => {
+    expect(recipeArgv("kimi", "/bin/kimi", "P", { model: "kimi-k3", permission: "accept-edits" })).toEqual(["/bin/kimi", "-m", "kimi-k3", "--yolo"]);
+    expect(recipeArgv("kimi", "/bin/kimi", "P", { permission: "plan" })).toEqual(["/bin/kimi", "--plan"]);
+    expect(recipeArgv("kimi", "/bin/kimi", "P", { permission: "bypass" })).toEqual(["/bin/kimi", "--auto"]);
+    expect(recipeArgv("kimi", "/bin/kimi", "P", { permission: "default" })).toEqual(["/bin/kimi"]);
+    expect(launchChoicesRefusal("kimi", { effort: "high" })).toBe("Kimi Code doesn't take an effort level from Kiwi");
+  });
+
+  test("the prompt goes in once its ready screen shows, colours and all, and waits while it asks to trust the folder", async () => {
+    const { p, did } = pane([null, "starting…", "\x1b[1mTrust this folder?\x1b[0m", "\x1b[2mone will be created\x1b[0m on your \x1b]8;;x\x07first\x1b]8;;\x07 message"]);
+    expect(await typeWhenReady(p, "kiwi join line", kimiScreen, { everyMs: 1 })).toBe("typed");
+    expect(did).toEqual(["type kiwi join line", "enter"]);
+  });
+
+  test("gives up when the ready screen never shows, or the folder's trust is never answered", async () => {
+    let clock = 0;
+    const now = () => (clock += 1_000);
+    const never = pane(["Signing in…"]);
+    expect(await typeWhenReady(never.p, "x", kimiScreen, { everyMs: 1, startingMs: 5_000, now })).toBe("late");
+    expect(never.did).toEqual([]);
+    clock = 0;
+    const asking = pane(["Trust this folder?"]);
+    expect(await typeWhenReady(asking.p, "x", kimiScreen, { everyMs: 1, startingMs: 5_000, trustMs: 20_000, now })).toBe("late");
+    expect(clock).toBeGreaterThan(20_000);
+    expect(asking.did).toEqual([]);
+  });
+
+  test("opens in tmux and types the join line in, and is refused before anything runs where only Terminal can open", async () => {
+    const dir = join(root, "kimi");
+    const calls = join(dir, "calls");
+    const bins = join(dir, "bins");
+    script(bins, "kimi-code", "echo 'kimi-code 2.3.1'");
+    const tmux = script(
+      join(dir, "tools"),
+      "tmux",
+      `for a in "$@"; do printf '%s\\n' "$a" >> '${calls}'; done
+printf '%s\\n' --- >> '${calls}'
+case " $* " in
+  *" capture-pane "*) printf '%s\\n' '${READY}' ;;
+  *" new-window "*) printf '/tmp/sock\\tkiwi\\t@7\\t%%9\\t4242\\n' ;;
+esac`,
+    );
+    const folder = join(dir, "project");
+    mkdirSync(folder, { recursive: true });
+    process.env.KIWI_NO_HOOKS = "1";
+    const PATH = `${bins}:/usr/bin:/bin`;
+    const typed = Promise.withResolvers<Typed>();
+    const r = await launchAgent(
+      { harness: "kimi", folder, code, nick: "Kim", permission: "plan" },
+      { PATH, tools: { platform: "linux", shell: "/bin/sh", rex: null, tmux, osascript: null }, typing: { everyMs: 5 }, onTyped: (t) => typed.resolve(t) },
+    );
+    expect(r).toMatchObject({ ok: true, placed: { place: "tmux", socket: "/tmp/sock", pane: "%9" } });
+    expect(await typed.promise).toBe("typed");
+    const runs = readFileSync(calls, "utf8")
+      .split("---\n")
+      .map((c) => c.split("\n").filter(Boolean));
+    expect(runs[0]).toContain(join(bins, "kimi-code"));
+    expect(runs[0]).toContain("--plan");
+    expect(runs[0]!.some((a) => a.includes("kiwi join"))).toBe(false);
+    const set = runs.find((c) => c.includes("set-buffer"))!;
+    expect(set.slice(0, 2)).toEqual(["-S", "/tmp/sock"]);
+    expect(set.at(-1)).toContain(`kiwi join ${code} --nick 'Kim'`);
+    expect(runs.find((c) => c.includes("paste-buffer"))).toEqual(expect.arrayContaining(["-p", "-t", "%9"]));
+    expect(runs.find((c) => c.includes("send-keys"))).toEqual(["-S", "/tmp/sock", "send-keys", "-t", "%9", "Enter"]);
+
+    rmSync(calls, { force: true });
+    const osascript = script(join(dir, "tools"), "osascript", "exit 0");
+    const mac = { platform: "darwin" as const, shell: "/bin/sh", rex: null, tmux, osascript };
+    expect(await launchAgent({ harness: "kimi", folder, code }, { PATH, tools: mac, config: {} })).toMatchObject({
+      ok: false,
+      why: "no-place",
+      detail: expect.stringContaining("only in Rex or tmux"),
+    });
+    expect(existsSync(calls)).toBe(false);
   });
 });
 

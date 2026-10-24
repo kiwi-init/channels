@@ -1,8 +1,8 @@
 import { statSync } from "node:fs";
 import { isAbsolute } from "node:path";
-import type { PlaceKind } from "@kiwi/core/terminals.ts";
+import type { Opened, PlaceKind } from "@kiwi/core/terminals.ts";
 import { loadConfig, type Config } from "../config.ts";
-import type { PlaceRequest, Placed, PlaceTools, TerminalId, TerminalPlugin } from "../terminals/plugin.ts";
+import type { Pane, PlaceRequest, Placed, PlaceTools, TerminalId, TerminalPlugin } from "../terminals/plugin.ts";
 import { placeTools, preferred, terminalPlugins } from "../terminals/registry.ts";
 
 const KIND: Record<TerminalId, PlaceKind> = { rex: "rex", tmux: "tmux", app: "terminal" };
@@ -32,6 +32,14 @@ function badRequest(req: PlaceRequest): string | null {
 export async function placeKind(tools?: PlaceTools, cfg: Pick<Config, "terminals"> = loadConfig()): Promise<PlaceKind | null> {
   const picked = await pick(await terminalPlugins(tools ?? (await placeTools())), cfg);
   return picked ? KIND[picked.plugin.manifest.id] : null;
+}
+
+export async function paneOf(placed: Opened, tools?: PlaceTools): Promise<Pane | null> {
+  const plugins = await terminalPlugins(tools ?? (await placeTools()));
+  const typer = (id: TerminalId) => plugins.find((p) => p.manifest.id === id)?.type;
+  if (placed.place === "rex") return typer("rex")?.({ rex: placed.rex }) ?? null;
+  if (placed.place === "tmux") return typer("tmux")?.({ tmux: { socket: placed.socket, pane: placed.pane } }) ?? null;
+  return null;
 }
 
 export async function openPlace(req: PlaceRequest, tools?: PlaceTools, cfg: Pick<Config, "terminals"> = loadConfig()): Promise<Placed> {

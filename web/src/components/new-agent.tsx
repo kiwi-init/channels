@@ -315,7 +315,8 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
         <Loaded got={rows} waiting={`Looking on ${where}…`} onRetry={retryRows}>
           {(list) => {
             const can = list.filter(startable)
-            if (can.length === 0) return <Problem onRetry={retryRows}>Nothing on {where} can start an agent yet. Install Claude Code, Codex, Grok or MiMo Code there, then try again.</Problem>
+            if (can.length === 0)
+              return <Problem onRetry={retryRows}>Nothing on {where} can start an agent yet. Install Claude Code, Codex, Grok, MiMo Code or Kimi Code there, then try again.</Problem>
             return (
               <div role="radiogroup" aria-label="Harness" className="grid grid-cols-2 gap-1.5">
                 {can.map((r) => (
