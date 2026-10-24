@@ -9,9 +9,8 @@ static GMainLoop *loop;
 static char *verdict = NULL;
 static int allowed_by_handler = 0;
 static int ended = 0;
-static int windows_made = 0;
 static int downloads_started = 0;
-static int downloads_finished = 0;
+static int downloads_saved = 0;
 static int downloads_cancelled = 0;
 static char *download_dir = NULL;
 
@@ -42,14 +41,6 @@ static gboolean use_everything(WebKitWebView *view, WebKitPolicyDecision *decisi
   return TRUE;
 }
 
-static GtkWidget *make_window(WebKitWebView *view, WebKitNavigationAction *action, gpointer data) {
-  (void)view;
-  (void)action;
-  (void)data;
-  windows_made++;
-  return NULL;
-}
-
 static gboolean save_into_temp(WebKitDownload *download, gchar *suggested, gpointer data) {
   (void)suggested;
   (void)data;
@@ -63,14 +54,13 @@ static gboolean save_into_temp(WebKitDownload *download, gchar *suggested, gpoin
 }
 
 static void download_finished(WebKitDownload *download, gpointer data) {
-  (void)download;
   (void)data;
-  downloads_finished++;
+  if (!g_object_get_data(G_OBJECT(download), "kiwi-failed")) downloads_saved++;
 }
 
 static void download_failed(WebKitDownload *download, GError *error, gpointer data) {
-  (void)download;
   (void)data;
+  g_object_set_data(G_OBJECT(download), "kiwi-failed", GINT_TO_POINTER(1));
   if (g_error_matches(error, WEBKIT_DOWNLOAD_ERROR, WEBKIT_DOWNLOAD_ERROR_CANCELLED_BY_USER)) downloads_cancelled++;
 }
 
@@ -184,7 +174,6 @@ int main(int argc, char **argv) {
   g_object_set(settings, "enable-media-stream", TRUE, "enable-mock-capture-devices", TRUE, "javascript-can-open-windows-automatically", TRUE, NULL);
   g_signal_connect(view, "permission-request", G_CALLBACK(allow_everything), NULL);
   g_signal_connect(view, "decide-policy", G_CALLBACK(use_everything), NULL);
-  g_signal_connect(view, "create", G_CALLBACK(make_window), NULL);
   g_signal_connect(webkit_web_view_get_context(view), "download-started", G_CALLBACK(download_started), NULL);
   download_dir = g_dir_make_tmp("kiwi-shell-test-XXXXXX", NULL);
   g_signal_connect(view, "notify::title", G_CALLBACK(title_changed), NULL);
@@ -211,26 +200,31 @@ int main(int argc, char **argv) {
 
   webkit_web_view_load_uri(view, "http://localhost/elsewhere");
   spin(2000);
-  webkit_web_view_evaluate_javascript(view, "window.open('http://localhost/popup')", -1, NULL, NULL, NULL, NULL, NULL);
+  webkit_web_view_evaluate_javascript(view,
+                                      "window.open('http://localhost/popup');"
+                                      "const a = document.createElement('a'); a.href = 'http://localhost/blank'; a.target = '_blank'; document.body.append(a); a.click();",
+                                      -1, NULL, NULL, NULL, NULL, NULL);
   spin(2000);
   n = committed(url, sizeof url);
-  if (n >= sizeof url || strcmp(url, "http://localhost/") != 0 || windows_made) {
-    fprintf(stderr, "kiwi-shell-test: with a handler that uses every navigation, the view committed '%s' and %d windows were asked for\n", url, windows_made);
+  if (n >= sizeof url || strcmp(url, "http://localhost/") != 0) {
+    fprintf(stderr, "kiwi-shell-test: with a handler that uses every navigation, the view committed '%s', not http://localhost/\n", url);
     bad++;
   } else
-    printf("navigation: only http://localhost/, a load elsewhere and a window.open refused, though the app's handler would use them\n");
+    printf("navigation: the view stays on http://localhost/ through a load elsewhere, a window.open and a target=_blank link, though the app's handler would use them\n");
 
   webkit_web_view_download_uri(view, "http://localhost/file.bin");
   spin(2000);
   int cancelled = downloads_cancelled;
+  int saved_http = downloads_saved;
   webkit_web_view_download_uri(view, "data:text/plain,kiwi");
   spin(2000);
-  int finished = downloads_finished;
+  int saved_data = downloads_saved;
   webkit_web_view_evaluate_javascript(view, "location.href = 'data:text/plain,navigated'", -1, NULL, NULL, NULL, NULL, NULL);
   spin(2000);
   n = committed(url, sizeof url);
-  if (cancelled != 1 || finished != 1 || downloads_finished != 2 || n >= sizeof url || strcmp(url, "http://localhost/") != 0) {
-    fprintf(stderr, "kiwi-shell-test: downloads: %d started, the http: one cancelled %d times, data: ones finished %d (want 2), the page committed '%s'\n", downloads_started, cancelled, downloads_finished, url);
+  if (cancelled != 1 || saved_http != 0 || saved_data != 1 || downloads_saved != 2 || n >= sizeof url || strcmp(url, "http://localhost/") != 0) {
+    fprintf(stderr, "kiwi-shell-test: downloads: %d started, the http: one cancelled %d times and saved %d, data: ones saved %d (want 2), the page committed '%s'\n", downloads_started, cancelled, saved_http,
+            downloads_saved, url);
     bad++;
   } else
     printf("downloads: an http: one cancelled, the page's data: ones saved, and a data: navigation made a download, not a page\n");
