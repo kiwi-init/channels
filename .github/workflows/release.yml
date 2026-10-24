@@ -85,17 +85,7 @@ jobs:
       - name: Sign SHA256SUMS
         env:
           MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
-        run: |
-          if [ -z "$MINISIGN_SECRET_KEY" ]; then
-            echo "::error::MINISIGN_SECRET_KEY isn't set: without SHA256SUMS.minisig no Linux app updates itself to $GITHUB_REF_NAME"
-            exit 1
-          fi
-          sudo apt-get update -qq && sudo apt-get install -y -qq minisign
-          key="$RUNNER_TEMP/minisign.key"
-          (umask 077 && printf '%s\n' "$MINISIGN_SECRET_KEY" > "$key")
-          minisign -S -s "$key" -m artifacts/SHA256SUMS -x artifacts/SHA256SUMS.minisig -t "kiwi $GITHUB_REF_NAME SHA256SUMS"
-          rm -f "$key"
-          bun repo/desktop/scripts/verify-sums.ts artifacts/SHA256SUMS artifacts/SHA256SUMS.minisig
+        run: bash repo/desktop/scripts/sign-sums.sh artifacts/SHA256SUMS "kiwi $GITHUB_REF_NAME SHA256SUMS"
 
       - name: Publish
         env:

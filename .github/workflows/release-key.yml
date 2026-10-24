@@ -1,0 +1,33 @@
+# Run by hand (gh workflow run release-key.yml) after the MINISIGN_SECRET_KEY secret or the key
+# pinned in desktop/src/release-key.ts changes: it signs a sample SHA256SUMS the way release.yml
+# does and verifies it with the pinned key, so a secret and a pinned key that aren't one pair show
+# here rather than on a release.
+name: release key
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pair:
+    name: release / key pair
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Sign a sample SHA256SUMS with the secret and verify it with the pinned key
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+        run: |
+          sums="$RUNNER_TEMP/SHA256SUMS"
+          printf '%s  %s\n' "$(printf 'release key check %s' "$GITHUB_RUN_ID" | sha256sum | cut -d' ' -f1)" "release-key-check" > "$sums"
+          bash desktop/scripts/sign-sums.sh "$sums" "release key check, run $GITHUB_RUN_ID"
