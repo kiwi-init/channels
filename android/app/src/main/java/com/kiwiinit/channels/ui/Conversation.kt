@@ -229,8 +229,8 @@ fun Conversation(
         if (before == null || newest == null || newest.seq == before) return@LaunchedEffect
         if (follow.atBottom || newest.mine) {
             state.animateScrollToItem(0)
-        } else if (!newest.event) {
-            follow.unseen += 1
+        } else {
+            follow.unseen += room.messages.count { it.seq > before && !it.mine && !it.event }
         }
     }
     val typing = WindowInsets.isImeVisible
