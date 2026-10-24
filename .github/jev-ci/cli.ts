@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { parseArgs } from "node:util";
 import { loadConfig } from "./config.ts";
-import { git } from "./git.ts";
+import { git, newerOnRemote } from "./git.ts";
 import {
   dispatchedJobs,
   headline,
@@ -15,6 +15,7 @@ import {
   queueRuns,
   setOutput,
   summary,
+  superseded,
   testedByQueue,
   trustedRef,
   upsertComment,
@@ -76,6 +77,18 @@ function plannerFailed(e: unknown): Plan {
   return event === "pull_request" ? pullRequestOnly(config, all) : all;
 }
 
+function newerPush(): string | null {
+  const sha = process.env.GITHUB_SHA;
+  const ref = process.env.GITHUB_REF;
+  if (process.env.GITHUB_EVENT_NAME !== "push" || !sha || !ref) return null;
+  try {
+    return newerOnRemote(values.repo, ref, sha);
+  } catch (e) {
+    note(e);
+    return null;
+  }
+}
+
 type Planned = Pick<Plan, "decisions" | "jevCalls" | "inputTokens" | "changed" | "moved" | "notes">;
 
 if (positionals[0] === "plan" && values.github) {
@@ -98,12 +111,25 @@ if (positionals[0] === "plan" && values.github) {
   }
   const results = Object.fromEntries(Object.entries(needs).map(([job, n]) => [job, n.result]));
   const bad = planned.decisions.filter((d: Decision) => (d.run ? results[d.job] !== "success" : results[d.job] !== "skipped"));
-  const verdict = bad.length ? `❌ **${bad.map((d) => nameOf(d.job)).join(", ")}** did not pass.` : "✅ Every job that ran passed.";
+  const newer = bad.length ? newerPush() : null;
+  const replaced =
+    newer !== null &&
+    superseded(
+      bad.map((d) => d.job),
+      results,
+      newer,
+    );
+  const verdict =
+    replaced && newer
+      ? `⏭ Cancelled for ${newer.slice(0, 7)}, a newer push to ${process.env.GITHUB_REF_NAME ?? "this branch"}: its run gives the verdict.`
+      : bad.length
+        ? `❌ **${bad.map((d) => nameOf(d.job)).join(", ")}** did not pass.`
+        : "✅ Every job that ran passed.";
   const body = `### jev-ci\n${headline(planned)} ${verdict}\n${notesBlock(planned.notes)}\n${planTable(planned.decisions, names, results)}\n\n${LEGEND}\n`;
   summary(body);
   await comment(body);
   console.log(body);
-  process.exit(bad.length ? 1 : 0);
+  process.exit(bad.length && !replaced ? 1 : 0);
 } else if (positionals[0] === "plan") {
   const head = git(values.repo, ["rev-parse", values.head]).trim();
   const base = git(values.repo, ["merge-base", values.base, head]).trim();

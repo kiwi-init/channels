@@ -54,6 +54,11 @@ export function testedByQueue(runs: readonly QueueRun[], sha: string, workflow: 
   return runs.find((r) => r.event === "merge_group" && r.path === workflow && r.head_sha === sha && r.conclusion === "success")?.id ?? null;
 }
 
+export function superseded(bad: readonly string[], results: Readonly<Record<string, string>>, newer: string | null): boolean {
+  if (!newer || !bad.length || !Object.values(results).includes("cancelled")) return false;
+  return bad.every((job) => results[job] === "cancelled" || results[job] === "skipped");
+}
+
 export async function queueRuns(repo: string, sha: string): Promise<QueueRun[]> {
   const res = await api(`/repos/${repo}/actions/runs?event=merge_group&head_sha=${sha}&status=success&per_page=50`);
   if (!res.ok) throw new Error(`listing merge queue runs: ${res.status}`);
