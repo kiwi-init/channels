@@ -444,7 +444,7 @@ jobs:
           find "$debs" -maxdepth 1 -name '*.deb' | wc -l > "$RUNNER_TEMP/debs-before"
           echo "Dir::Cache::Archives \"$debs/\";" | sudo tee /etc/apt/apt.conf.d/90linux-debs > /dev/null
           sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus ${{ matrix.drive && 'weston xwayland' || '' }}
       - id: debs
         name: keep what apt downloaded, even when it ran out of time
         if: always()
@@ -520,6 +520,35 @@ jobs:
       - name: smoke, under Xvfb
         if: ${{ !cancelled() && matrix.drive }}
         run: xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/smoke-eb.ts "${{ steps.test-app.outputs.path }}"
+      - name: smoke, in a Wayland session as desktops run it (headless weston with XWayland, no Xvfb)
+        if: ${{ !cancelled() && matrix.drive }}
+        timeout-minutes: 10
+        run: |
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/wayland"
+          mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
+          weston --version
+          weston --backend=headless --xwayland --socket=kiwi-wayland --width=1280 --height=800 --idle-time=0 > "$RUNNER_TEMP/weston.log" 2>&1 &
+          compositor=$!
+          x=""
+          for _ in $(seq 1 50); do
+            x=$(grep -oE 'listening on display :[0-9]+' "$RUNNER_TEMP/weston.log" | grep -oE ':[0-9]+$' | head -n 1 || true)
+            [ -S "$XDG_RUNTIME_DIR/kiwi-wayland" ] && [ -n "$x" ] && break
+            sleep 0.2
+          done
+          [ -S "$XDG_RUNTIME_DIR/kiwi-wayland" ] && [ -n "$x" ] || { echo "weston didn't open its Wayland socket and XWayland display:"; cat "$RUNNER_TEMP/weston.log"; exit 1; }
+          echo "Wayland socket kiwi-wayland, XWayland display $x"
+          session() { env -u XAUTHORITY -u GDK_BACKEND DISPLAY="$x" WAYLAND_DISPLAY=kiwi-wayland XDG_SESSION_TYPE=wayland "$@"; }
+          code=0
+          session bun desktop/scripts/smoke-eb.ts "${{ steps.test-app.outputs.path }}" || code=$?
+          if [ "$code" -ne 0 ]; then
+            echo "::group::weston's log"; cat "$RUNNER_TEMP/weston.log"; echo "::endgroup::"
+            echo "::group::the test app alone in this session, for 20 s"
+            mkdir -p "$RUNNER_TEMP/wayland-home" && HOME="$RUNNER_TEMP/wayland-home" session timeout 20 "${{ steps.test-app.outputs.path }}/bin/electrobun-launcher" > "$RUNNER_TEMP/wayland-app.log" 2>&1 || echo "exited $?"
+            tail -n 120 "$RUNNER_TEMP/wayland-app.log"
+            echo "::endgroup::"
+          fi
+          kill "$compositor" 2> /dev/null || true
+          exit "$code"
       - name: dpkg --purge leaves nothing of the app behind
         if: ${{ !cancelled() }}
         run: |
