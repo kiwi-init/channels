@@ -13,6 +13,7 @@ win = Gtk.Window(title="Launcher")
 win.set_default_size(600, 400)
 win.add(Gtk.Label(label="the app that launches, focused"))
 win.connect("destroy", Gtk.main_quit)
+win.connect("notify::is-active", lambda w, _s: w.is_active() and print(f"ACTIVE {w.get_title()}", file=sys.stderr, flush=True))
 win.show_all()
 win.present()
 

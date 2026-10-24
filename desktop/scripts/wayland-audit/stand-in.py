@@ -14,6 +14,7 @@ win.set_default_size(500, 300)
 win.move(100, 100)
 win.add(Gtk.Label(label=name))
 win.connect("destroy", Gtk.main_quit)
+win.connect("notify::is-active", lambda w, _s: w.is_active() and print(f"ACTIVE {w.get_title()}", file=sys.stderr, flush=True))
 win.show_all()
 print(f"{name}: up, DESKTOP_STARTUP_ID={os.environ.get('DESKTOP_STARTUP_ID')!r}", file=sys.stderr, flush=True)
 

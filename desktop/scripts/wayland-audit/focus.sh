@@ -1,13 +1,21 @@
 #!/usr/bin/env bash
 set -u
 OUT=$1
+MODE=${2:-kde-focus}
 HERE=$(cd "$(dirname "$0")" && pwd)
 APPHOME=$(mktemp -d)
-export XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6
+[ "$MODE" = kde-focus ] && export XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6
 unset QT_QPA_PLATFORMTHEME
 note() { echo "== $*" | tee -a "$OUT/focus.txt"; }
 
 active() {
+  if [ "$MODE" = gnome-focus ]; then
+    local x
+    x=$(xdotool getwindowfocus getwindowname 2> /dev/null)
+    [ "$x" = Channels ] && { echo '"caption":"Channels" (X11 focus)'; return; }
+    echo "\"caption\":\"$(grep -o 'ACTIVE .*' "$OUT/focus-launcher.log" | tail -n 1 | cut -c8-)\" (x11 focus: ${x:-none})"
+    return
+  fi
   local before
   before=$(wc -l < "$KWIN_LOG")
   python3 "$HERE/probe.py" kwin-script "$HERE/list.js" > /dev/null 2>&1
@@ -32,7 +40,8 @@ case_run() {
   note "$label -> active: $(active)"
 }
 
-note "KWin focus stealing prevention: $(grep -A1 '\[Windows\]' "$XDG_CONFIG_HOME/kwinrc" | tail -n 1)"
+[ "$MODE" = kde-focus ] && note "KWin focus stealing prevention: $(grep -A1 '\[Windows\]' "$XDG_CONFIG_HOME/kwinrc" | tail -n 1)"
+note "mode $MODE"
 note "A. a native GTK3 window started by the focused app"
 export GDK_BACKEND=wayland
 case_run "A1 no token" "none:GDK_BACKEND=wayland python3 $HERE/stand-in.py 'B none'"

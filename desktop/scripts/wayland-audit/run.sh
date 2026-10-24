@@ -39,6 +39,7 @@ if [ "$D" = kde ]; then
   exit 0
 fi
 
+[ "$D" = gnome-focus ] && export FOCUS_ONLY=1
 gnome-shell --help > "$OUT/gnome-shell-help.txt" 2>&1
 command -v gdctl > /dev/null && gdctl --help > "$OUT/gdctl-help.txt" 2>&1
 cat > "$OUT/gnome-session.sh" << EOF
@@ -69,7 +70,7 @@ export WAYLAND_DISPLAY=wayland-0 DISPLAY="\$x" XAUTHORITY="\$auth" XDG_SESSION_T
 /usr/libexec/gsd-xsettings > "$OUT/gsd-xsettings.log" 2>&1 &
 /usr/libexec/xdg-desktop-portal > "$OUT/portal.log" 2>&1 &
 sleep 3
-bash "$HERE/inner.sh" gnome "$OUT" main
+if [ -n "\${FOCUS_ONLY:-}" ]; then bash "$HERE/focus.sh" "$OUT" gnome-focus; else bash "$HERE/inner.sh" gnome "$OUT" main; fi
 kill \$shell
 EOF
 timeout 600 dbus-run-session -- bash "$OUT/gnome-session.sh"
