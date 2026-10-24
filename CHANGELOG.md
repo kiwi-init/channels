@@ -2,6 +2,19 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.27.6 — 2026-10-24
+
+- **Android: @mentions are offered on a new line, and completing one keeps the line break** ([#928](https://github.com/kiwi-init/channels/pull/928))
+- **Linux: files dropped on the composer attach (T895)** ([#927](https://github.com/kiwi-init/channels/pull/927))
+- **Linux: an image pasted from another app attaches: the composer asks main, which reads the clipboard only right after a real Ctrl+V (T896)** ([#926](https://github.com/kiwi-init/channels/pull/926))
+- **desktop / linux's Wayland-only session runs at scale 2, and the app must draw at it (T840)** ([#930](https://github.com/kiwi-init/channels/pull/930))
+- **Mac: ⌘Q quits, ⌘W closes, ⌘H hides, and the app menu says About, Hide and Quit Channels (T970)** ([#931](https://github.com/kiwi-init/channels/pull/931))
+- **Mac: the window opens where it was left, at the size it was left (T972)** ([#933](https://github.com/kiwi-init/channels/pull/933))
+- **Mac notifications show while Channels is in front, and clicking one shows the window (T973)** ([#932](https://github.com/kiwi-init/channels/pull/932))
+- **Dock and taskbar badge: the app icon shows the news count the tab title shows (T971)** ([#934](https://github.com/kiwi-init/channels/pull/934))
+- **The updater finds the latest release from github.com's redirect, not api.github.com (T985)** ([#935](https://github.com/kiwi-init/channels/pull/935))
+- **Releases end green: the stamp lands as a PR before the tag, and bump-main passes on its empty patch (T1032)** ([#936](https://github.com/kiwi-init/channels/pull/936))
+
 ## 0.27.5 — 2026-10-24
 
 - **Channels for Android: a native Kotlin and Compose app on the iPhone app's engine** ([#755](https://github.com/kiwi-init/channels/pull/755))
