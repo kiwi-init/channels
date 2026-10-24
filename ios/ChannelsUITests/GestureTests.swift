@@ -53,12 +53,13 @@ struct Screen {
         let clock = ContinuousClock()
         let from = clock.now
         var shown = try texts()
+        var looks = 1
         while measurable(bubbles(in: shown)).isEmpty && clock.now - from < limit {
             try await Task.sleep(for: .milliseconds(100))
             shown = try texts()
+            looks += 1
         }
-        let waited = clock.now - from
-        if waited > .milliseconds(150) { print("GESTURE waited \(Int(waited / .milliseconds(1))) ms for a bubble to measure") }
+        if looks > 1 { print("GESTURE waited \(Int((clock.now - from) / .milliseconds(1))) ms (\(looks) looks) for a bubble to measure") }
         return shown
     }
 
