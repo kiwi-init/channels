@@ -45,7 +45,7 @@ let keysTell: (m: HostToKeys) => void = () => {};
 
 export function attachWindow(next: Shown): void {
   shown = next;
-  if (process.platform === "linux") onNoteClick(next.win.ptr, () => ebHost.showWindow());
+  onNoteClick(next.win.ptr, () => ebHost.showWindow());
 }
 
 export function attachKeys(tell: (m: HostToKeys) => void): void {

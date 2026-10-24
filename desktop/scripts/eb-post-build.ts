@@ -102,6 +102,8 @@ execFileSync(
     "AppKit",
     "-framework",
     "WebKit",
+    "-framework",
+    "UserNotifications",
     "-o",
     path.join(contents, "MacOS", "libkiwi-shell.dylib"),
     path.join(desktop, "native", "macos", "kiwi-shell.m"),

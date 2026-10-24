@@ -282,6 +282,15 @@ jobs:
       - name: no test driver in the release build
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-driver-check.ts desktop/release-eb
+      - name: notifications show while the app is in front, and a click on one shows the window
+        if: ${{ !cancelled() }}
+        run: |
+          t="$RUNNER_TEMP/KiwiNotesTest.app/Contents"
+          mkdir -p "$t/MacOS"
+          printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>com.kiwiinit.channels.notes-test</string><key>CFBundleExecutable</key><string>kiwi-notes-test</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>\n' > "$t/Info.plist"
+          clang -fobjc-arc -O2 -Wall -Wextra -Werror -arch arm64 -mmacosx-version-min=12.0 -framework AppKit -framework UserNotifications -o "$t/MacOS/kiwi-notes-test" desktop/native/macos/kiwi-notes-test.m
+          codesign --force --sign - "$RUNNER_TEMP/KiwiNotesTest.app"
+          "$t/MacOS/kiwi-notes-test" "$(ls -d desktop/release-eb/build/dev-macos-*/*.app)/Contents/MacOS/libkiwi-shell.dylib"
       - name: smoke
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/smoke-eb.ts desktop/release-eb/build/dev-macos-*/*.app
