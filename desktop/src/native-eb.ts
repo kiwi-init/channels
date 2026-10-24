@@ -23,6 +23,24 @@ const trayHost = mac ? null : dlopen(shellPath, { kiwi_tray_host: { args: [], re
 
 const colorScheme = mac ? null : dlopen(shellPath, { kiwi_follow_color_scheme: { args: [], returns: FFIType.bool } }).symbols.kiwi_follow_color_scheme;
 
+const drops = mac
+  ? null
+  : dlopen(shellPath, {
+      kiwi_watch_drops: { args: [], returns: FFIType.bool },
+      kiwi_take_drop: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
+    }).symbols;
+
+const dropBuffer = new Uint8Array(65536);
+
+export const watchDrops = (): void => void drops?.kiwi_watch_drops();
+
+export function droppedPaths(): string[] {
+  if (!drops) return [];
+  const n = Number(drops.kiwi_take_drop(ptr(dropBuffer), dropBuffer.length));
+  if (n <= 0 || n >= dropBuffer.length) return [];
+  return new TextDecoder().decode(dropBuffer.subarray(0, n)).split("\n").filter(Boolean);
+}
+
 const windowKeys = mac ? null : dlopen(shellPath, { kiwi_window_keys: { args: [FFIType.ptr, FFIType.function], returns: FFIType.bool } }).symbols.kiwi_window_keys;
 
 let shortcuts: JSCallback | null = null;
