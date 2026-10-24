@@ -2,6 +2,17 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.27.3 — 2026-10-24
+
+- **CI no longer times the desktop app's cold start; smoke-eb keeps the first-run channel and message (T50)** ([#850](https://github.com/kiwi-init/channels/pull/850))
+- **Sidebar folds conversations with members who left the channel (T20)** ([#851](https://github.com/kiwi-init/channels/pull/851))
+- **smoke-eb reports the first-run channel on Linux instead of failing on it, until T92** ([#853](https://github.com/kiwi-init/channels/pull/853))
+- **New agent is a few short steps with Start always in view, and says how a launch is going (T9)** ([#855](https://github.com/kiwi-init/channels/pull/855))
+- **The relay lists a person's paired computers: GET /v1/person/:pk/machines (T21)** ([#854](https://github.com/kiwi-init/channels/pull/854))
+- **kiwi launch takes --model, --effort, --permission and --context, carried to claude and codex as their own flags (T10)** ([#856](https://github.com/kiwi-init/channels/pull/856))
+- **Sidebar: a + on Conversations makes a new room, for the owner (T19)** ([#857](https://github.com/kiwi-init/channels/pull/857))
+- **The Linux app carries its keys worker again, so Create channel works there (T92)** ([#858](https://github.com/kiwi-init/channels/pull/858))
+
 ## 0.27.2 — 2026-10-24
 
 - **The window gets its preload when it's made again, right after a full collection (T50, #847)** ([#849](https://github.com/kiwi-init/channels/pull/849))
