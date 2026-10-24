@@ -1,9 +1,11 @@
 import type { TextStep } from "./text-size.ts";
 import type { UpdateState } from "./updater.ts";
 
-export type MenuAction = "open" | "restart" | "quit" | "reload" | "devtools" | `text-${TextStep}`;
+export type MenuAction = "open" | "restart" | "quit" | "reload" | "devtools" | "close" | "fullscreen" | `text-${TextStep}`;
 
-const ACTIONS: readonly MenuAction[] = ["open", "restart", "quit", "reload", "devtools", "text-bigger", "text-smaller", "text-reset"];
+const ACTIONS: readonly MenuAction[] = ["open", "restart", "quit", "reload", "devtools", "close", "fullscreen", "text-bigger", "text-smaller", "text-reset"];
+
+const LINUX_SHORTCUTS: readonly MenuAction[] = ["text-bigger", "text-smaller", "text-reset", "reload", "quit", "close", "fullscreen"];
 
 type Separator = { type: "separator" };
 
@@ -52,5 +54,7 @@ export function menuAction(event: unknown): MenuAction | null {
   const action = (data as { action?: unknown }).action;
   return ACTIONS.find((a) => a === action) ?? null;
 }
+
+export const shortcutAction = (n: number): MenuAction | null => LINUX_SHORTCUTS[n - 1] ?? null;
 
 export const textStepOf = (action: MenuAction): TextStep | null => (action === "text-bigger" ? "bigger" : action === "text-smaller" ? "smaller" : action === "text-reset" ? "reset" : null);

@@ -142,6 +142,26 @@ try {
     if (back && logged) console.log(`the app's ${ours.length} web content processes killed: the page reloaded and main.log says so (${logs[0]!.slice(root.length)})`);
     else if (back) problems.push(`the page reloaded but no main.log under the test HOME's ${logDir} says it stopped (found ${logs.length})`);
   }
+  if (linux && !process.env.WAYLAND_DISPLAY) {
+    const scale = () => d.evaluate(() => document.documentElement.style.getPropertyValue("--text-scale"), null) as Promise<string>;
+    const key = (combo: string) => spawnSync("xdotool", ["search", "--sync", "--onlyvisible", "--limit", "1", "--name", "^Channels$", "windowfocus", "--sync", "key", "--clearmodifiers", combo]);
+    const was = await scale();
+    key("ctrl+equal");
+    const bigger = await until("Ctrl+= reaching the page", 5_000, () => scale().then((v) => (v && v !== was ? v : null))).catch(() => null);
+    key("ctrl+0");
+    const reset = await until("Ctrl+0 reaching the page", 5_000, () => scale().then((v) => (v === "" ? "reset" : null))).catch(() => null);
+    if (bigger && reset) console.log(`Ctrl+= then Ctrl+0 (libkiwi-shell's shortcuts; Electrobun has no app menu on Linux): the page's text scale went to ${bigger}, then back`);
+    else problems.push(`Ctrl+= then Ctrl+0 gave the page's --text-scale ${JSON.stringify(bigger)}, then ${JSON.stringify(reset)} (it was ${JSON.stringify(was)})`);
+  }
+  if (linux) {
+    await d.main("closeWindow");
+    await later(2_000);
+    const shown = (await d.main("window")) as { visible?: unknown; minimized?: unknown };
+    if (shown.visible === true && alive().length)
+      console.log(`closed with no tray host on the session bus: the window stays, minimized (${String(shown.minimized)} here), not hidden with no way back`);
+    else
+      problems.push(`closed with no tray host on the session bus, the window ${shown.visible === false ? "was hidden, with nothing on screen to bring it back" : `answered ${JSON.stringify(shown)}`}`);
+  }
   d.close();
 } catch (e) {
   problems.push(e instanceof Error ? e.message : String(e));

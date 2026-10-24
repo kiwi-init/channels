@@ -26,6 +26,11 @@ export function openTestStore(first: () => void): boolean {
 export function driveForTests(win: BrowserWindow): void {
   if (KIWI_EB_TEST) {
     const socket = process.env.KIWI_EB_DRIVER;
-    if (socket) drive(win.webview, socket, { startup: startupMarks });
+    if (socket)
+      drive(win.webview, socket, {
+        startup: startupMarks,
+        closeWindow: () => (win.requestClose(), true),
+        window: () => ({ visible: win.isVisible(), minimized: win.isMinimized() }),
+      });
   }
 }

@@ -6,6 +6,7 @@
 #include <webkit2/webkit2.h>
 
 #define KIWI_APP_ID "channels-desktop"
+#define TRAY_WATCHER "org.kde.StatusNotifierWatcher"
 #define PORTAL "org.freedesktop.portal.Desktop"
 #define PORTAL_PATH "/org/freedesktop/portal/desktop"
 #define PORTAL_SETTINGS "org.freedesktop.portal.Settings"
@@ -249,6 +250,21 @@ bool kiwi_allow_only(const char *page) {
   return allowing_only;
 }
 
+bool kiwi_tray_host(void) {
+  GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, NULL);
+  if (!bus) return false;
+  GVariant *reply = g_dbus_connection_call_sync(bus, TRAY_WATCHER, "/StatusNotifierWatcher", "org.freedesktop.DBus.Properties", "Get", g_variant_new("(ss)", TRAY_WATCHER, "IsStatusNotifierHostRegistered"),
+                                                G_VARIANT_TYPE("(v)"), G_DBUS_CALL_FLAGS_NO_AUTO_START, 1000, NULL, NULL);
+  g_object_unref(bus);
+  if (!reply) return false;
+  GVariant *value = NULL;
+  g_variant_get(reply, "(v)", &value);
+  bool host = g_variant_is_of_type(value, G_VARIANT_TYPE_BOOLEAN) && g_variant_get_boolean(value);
+  g_variant_unref(value);
+  g_variant_unref(reply);
+  return host;
+}
+
 static GDBusConnection *scheme_bus = NULL;
 static gboolean dark_before = FALSE;
 
@@ -323,6 +339,46 @@ static bool follow_on_main(gconstpointer arg) {
 
 bool kiwi_follow_color_scheme(void) {
   return on_main(follow_on_main, NULL);
+}
+
+typedef struct {
+  guint key;
+  GdkModifierType mods;
+  gint action;
+} Shortcut;
+
+static const Shortcut SHORTCUTS[] = {
+    {GDK_KEY_equal, GDK_CONTROL_MASK, 1}, {GDK_KEY_plus, GDK_CONTROL_MASK, 1}, {GDK_KEY_KP_Add, GDK_CONTROL_MASK, 1}, {GDK_KEY_minus, GDK_CONTROL_MASK, 2},
+    {GDK_KEY_KP_Subtract, GDK_CONTROL_MASK, 2}, {GDK_KEY_0, GDK_CONTROL_MASK, 3}, {GDK_KEY_KP_0, GDK_CONTROL_MASK, 3}, {GDK_KEY_r, GDK_CONTROL_MASK, 4},
+    {GDK_KEY_q, GDK_CONTROL_MASK, 5}, {GDK_KEY_w, GDK_CONTROL_MASK, 6}, {GDK_KEY_F11, 0, 7},
+};
+
+static void (*shortcut_pressed)(int32_t action) = NULL;
+
+static gboolean shortcut(GtkAccelGroup *group, GObject *target, guint key, GdkModifierType mods, gpointer data) {
+  (void)group;
+  (void)target;
+  (void)key;
+  (void)mods;
+  if (shortcut_pressed) shortcut_pressed(GPOINTER_TO_INT(data));
+  return TRUE;
+}
+
+static bool keys_on_main(gconstpointer arg) {
+  gpointer window = (gpointer)arg;
+  if (!GTK_IS_WINDOW(window)) return false;
+  GtkAccelGroup *group = gtk_accel_group_new();
+  for (size_t i = 0; i < G_N_ELEMENTS(SHORTCUTS); i++)
+    gtk_accel_group_connect(group, SHORTCUTS[i].key, SHORTCUTS[i].mods, 0, g_cclosure_new(G_CALLBACK(shortcut), GINT_TO_POINTER(SHORTCUTS[i].action), NULL));
+  gtk_window_add_accel_group(GTK_WINDOW(window), group);
+  g_object_unref(group);
+  return true;
+}
+
+bool kiwi_window_keys(void *window, void (*pressed)(int32_t action)) {
+  if (!window || !pressed) return false;
+  shortcut_pressed = pressed;
+  return on_main(keys_on_main, window);
 }
 
 typedef struct {

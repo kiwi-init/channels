@@ -114,66 +114,34 @@ jobs:
     if: fromJSON(needs.plan.outputs.run)['test-unit']
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
-      - run: bun scripts/ci-tests.ts unit --shard=${{ matrix.shard }}/2
+      - run: bun scripts/ci-tests.ts unit
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         timeout-minutes: 1
         with:
           job: test-unit
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['test-unit'] }}
-          shard: ${{ matrix.shard }}of2
 
-  # The slow suites against a real local relay, split in two so they run side by side (scripts/ci-tests.ts).
-  test-flows-a:
-    name: test / flows-a
+  # The slow suites against a real local relay (scripts/ci-flows.ts).
+  test-flows:
+    name: test / flows
     needs: plan
-    if: fromJSON(needs.plan.outputs.run)['test-flows-a']
+    if: fromJSON(needs.plan.outputs.run)['test-flows']
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
-      - run: bun scripts/ci-tests.ts flows-a --shard=${{ matrix.shard }}/2
+      - run: bun scripts/ci-tests.ts flows
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         timeout-minutes: 1
         with:
-          job: test-flows-a
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['test-flows-a'] }}
-          shard: ${{ matrix.shard }}of2
-
-  test-flows-b:
-    name: test / flows-b
-    needs: plan
-    if: fromJSON(needs.plan.outputs.run)['test-flows-b']
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2]
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: ./.github/actions/setup
-      - run: bun scripts/ci-tests.ts flows-b --shard=${{ matrix.shard }}/2
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        timeout-minutes: 1
-        with:
-          job: test-flows-b
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['test-flows-b'] }}
-          shard: ${{ matrix.shard }}of2
+          job: test-flows
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['test-flows'] }}
 
   # The web dashboard, the CLI binary and the worker, each built and smoke-tested.
   build:
@@ -360,7 +328,7 @@ jobs:
           find "$debs" -maxdepth 1 -name '*.deb' | wc -l > "$RUNNER_TEMP/debs-before"
           echo "Dir::Cache::Archives \"$debs/\";" | sudo tee /etc/apt/apt.conf.d/90linux-debs > /dev/null
           sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus ${{ matrix.drive && 'weston xwayland' || '' }}
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus ${{ matrix.drive && 'weston xwayland' || '' }}
       - id: debs
         name: keep what apt downloaded, even when it ran out of time
         if: always()
@@ -381,6 +349,10 @@ jobs:
         with:
           path: ~/.hutch
           key: hutch-${{ runner.os }}-${{ runner.arch }}-electrobun-${{ steps.electrobun.outputs.version }}
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/kiwi-eb-native
+          key: eb-native-${{ hashFiles('desktop/electrobun-pins.json') }}
       - name: electrobun toolchain
         working-directory: desktop
         run: for i in 1 2 3; do bun run prepare:eb && exit 0; echo "electrobun prepare failed ($i of 3)"; sleep 20; done; exit 1
@@ -390,7 +362,7 @@ jobs:
         env:
           DASH_RELEASE_OFFLINE: "1"
         run: bun run build:eb
-      - name: the linux-arm64 Hutch and devkit match their pins (no job builds there)
+      - name: the linux-arm64 Hutch and devkit match their pins (no job builds there), and the native wrapper's source is Electrobun's release tag
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-pins-check.ts linux-arm64
       - name: the store on Linux, through a throwaway GNOME keyring and with no Secret Service
@@ -417,11 +389,21 @@ jobs:
           xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh /opt/Channels/bin/launcher ${{ matrix.sandbox }}
           img=$(ls "$PWD"/desktop/release-eb/linux/Channels-*-linux-x86_64.AppImage)
           xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$img" ${{ matrix.sandbox }} --appimage-extract-and-run
+      - name: closing hides to the tray only where a tray host runs
+        if: ${{ !cancelled() }}
+        run: |
+          cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-tray-test" desktop/native/linux/kiwi-tray-test.c $(pkg-config --cflags --libs gio-2.0) -ldl
+          dbus-run-session -- "$RUNNER_TEMP/kiwi-tray-test" /opt/Channels/bin/libkiwi-shell.so
       - name: the window follows the desktop's light or dark (the portal's color-scheme), live
         if: ${{ !cancelled() }}
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-scheme-test" desktop/native/linux/kiwi-scheme-test.c $(pkg-config --cflags --libs webkit2gtk-4.1) -ldl
           dbus-run-session -- xvfb-run -a "$RUNNER_TEMP/kiwi-scheme-test" /opt/Channels/bin/libkiwi-shell.so
+      - name: the app menu's shortcuts work on Linux, where Electrobun has no app menu
+        if: ${{ !cancelled() }}
+        run: |
+          cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-shortcuts-test" desktop/native/linux/kiwi-shortcuts-test.c $(pkg-config --cflags --libs gtk+-3.0) -ldl
+          xvfb-run -a "$RUNNER_TEMP/kiwi-shortcuts-test" /opt/Channels/bin/libkiwi-shell.so
       - name: the first window fits a small screen, keeps its minimum size and has the page's background
         if: ${{ !cancelled() }}
         run: |
@@ -466,11 +448,39 @@ jobs:
           session() { env -u XAUTHORITY -u GDK_BACKEND DISPLAY="$x" WAYLAND_DISPLAY=kiwi-wayland XDG_SESSION_TYPE=wayland "$@"; }
           code=0
           session bun desktop/scripts/smoke-eb.ts "${{ steps.test-app.outputs.path }}" || code=$?
+          session bash desktop/scripts/eb-wayland-start.sh /opt/Channels/bin/electrobun-launcher || code=$?
           if [ "$code" -ne 0 ]; then
             echo "::group::weston's log"; cat "$RUNNER_TEMP/weston.log"; echo "::endgroup::"
             echo "::group::the test app alone in this session, for 20 s"
             mkdir -p "$RUNNER_TEMP/wayland-home" && HOME="$RUNNER_TEMP/wayland-home" session timeout 20 "${{ steps.test-app.outputs.path }}/bin/electrobun-launcher" > "$RUNNER_TEMP/wayland-app.log" 2>&1 || echo "exited $?"
             tail -n 120 "$RUNNER_TEMP/wayland-app.log"
+            echo "::endgroup::"
+          fi
+          kill "$compositor" 2> /dev/null || true
+          exit "$code"
+      - name: smoke, natively on Wayland (headless weston with no XWayland, DISPLAY unset)
+        if: ${{ !cancelled() && matrix.drive }}
+        timeout-minutes: 10
+        run: |
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/wayland-native"
+          mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
+          weston --backend=headless --socket=kiwi-native --width=1280 --height=800 --idle-time=0 > "$RUNNER_TEMP/weston-native.log" 2>&1 &
+          compositor=$!
+          for _ in $(seq 1 50); do
+            [ -S "$XDG_RUNTIME_DIR/kiwi-native" ] && break
+            sleep 0.2
+          done
+          [ -S "$XDG_RUNTIME_DIR/kiwi-native" ] || { echo "weston didn't open its Wayland socket:"; cat "$RUNNER_TEMP/weston-native.log"; exit 1; }
+          if pgrep -x Xwayland > /dev/null; then echo "an Xwayland is running, so this session isn't Wayland-only: $(pgrep -a -x Xwayland)"; exit 1; fi
+          session() { env -u DISPLAY -u XAUTHORITY -u GDK_BACKEND WAYLAND_DISPLAY=kiwi-native XDG_SESSION_TYPE=wayland "$@"; }
+          code=0
+          session bun desktop/scripts/smoke-eb.ts "${{ steps.test-app.outputs.path }}" || code=$?
+          session bash desktop/scripts/eb-wayland-start.sh /opt/Channels/bin/electrobun-launcher || code=$?
+          if [ "$code" -ne 0 ]; then
+            echo "::group::weston's log"; cat "$RUNNER_TEMP/weston-native.log"; echo "::endgroup::"
+            echo "::group::the test app alone in this session, for 20 s"
+            mkdir -p "$RUNNER_TEMP/wayland-native-home" && HOME="$RUNNER_TEMP/wayland-native-home" session timeout 20 "${{ steps.test-app.outputs.path }}/bin/electrobun-launcher" > "$RUNNER_TEMP/wayland-native-app.log" 2>&1 || echo "exited $?"
+            tail -n 120 "$RUNNER_TEMP/wayland-native-app.log"
             echo "::endgroup::"
           fi
           kill "$compositor" 2> /dev/null || true
@@ -521,17 +531,12 @@ jobs:
     if: fromJSON(needs.plan.outputs.run)['cli-macos']
     runs-on: macos-latest
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
       - run: brew install tmux
-      - run: bun scripts/ci-tests.ts all --shard=${{ matrix.shard }}/3
-      - if: matrix.shard == 1
-        run: |
+      - run: bun scripts/ci-tests.ts all
+      - run: |
           mkdir -p dist
           for t in darwin-arm64 darwin-x64 linux-x64 linux-arm64; do
             bun scripts/build-cli.ts --target "bun-$t" --outfile "dist/kiwi-$t"
@@ -550,7 +555,6 @@ jobs:
         with:
           job: cli-macos
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['cli-macos'] }}
-          shard: ${{ matrix.shard }}of3
 
   # The iPhone app: Swift lint, then an unsigned build for devices with the engine bundled in.
   ios:
@@ -681,7 +685,7 @@ jobs:
   # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, static, test-unit, test-flows-a, test-flows-b, build, shots, desktop-mac, desktop-linux, cli-macos, ios, ios-gestures, android]
+    needs: [plan, static, test-unit, test-flows, build, shots, desktop-mac, desktop-linux, cli-macos, ios, ios-gestures, android]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
