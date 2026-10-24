@@ -1,4 +1,4 @@
-name: wayland-audit
+name: release-check
 
 on:
   push:
@@ -9,56 +9,99 @@ permissions:
   actions: read
 
 env:
-  AFTER_RUN: "40130272238"
+  REHEARSAL_RUN: "40133920995"
 
 jobs:
-  audit:
-    name: wayland audit, ${{ matrix.desktop }}
-    runs-on: ubuntu-26.04
-    timeout-minutes: 40
+  linux:
+    name: release check, ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        desktop: [shots]
+        include:
+          - os: ubuntu-26.04
+            sandbox: sandboxed
+          - os: ubuntu-24.04
+            sandbox: unsandboxed
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: compositor and tools
-        timeout-minutes: 20
+        with:
+          ref: main
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: audit
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+      - name: tools
         run: |
           sudo apt-get update -q
-          common="python3-gi gir1.2-gtk-3.0 libgtk-3-bin xwayland xdotool x11-utils wmctrl dbus dbus-x11 dconf-service dconf-cli"
-          if [ "${{ matrix.desktop }}" = shots ]; then
-            sudo apt-get install -y --no-install-recommends python3-gi dbus xvfb xauth imagemagick
-          elif [ "${{ matrix.desktop }}" = kde ] || [ "${{ matrix.desktop }}" = kde-focus ]; then
-            sudo apt-get install -y --no-install-recommends $common kwin-wayland breeze libgl1-mesa-dri libegl-mesa0 gdb x11-apps imagemagick
-          else
-            sudo apt-get install -y --no-install-recommends $common gnome-shell gnome-settings-daemon gsettings-desktop-schemas xdg-desktop-portal xdg-desktop-portal-gnome adwaita-icon-theme x11-apps imagemagick gir1.2-webkit2-4.1
-          fi
-      - name: the two debs to compare
-        if: matrix.desktop == 'shots'
+          sudo apt-get install -y --no-install-recommends xvfb xauth xdotool x11-utils weston dbus
+      - name: the rehearsal's packages and CLIs
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh run download 40121776105 -R "${{ github.repository }}" -n linux-packages-ubuntu-26.04 -D "$RUNNER_TEMP/before"
-          gh run download "$AFTER_RUN" -R "${{ github.repository }}" -n linux-packages-ubuntu-26.04 -D "$RUNNER_TEMP/after"
-          bash desktop/scripts/wayland-audit/shots.sh "$RUNNER_TEMP/audit" "$(ls "$RUNNER_TEMP"/before/Channels-*-linux-amd64.deb)" "$(ls "$RUNNER_TEMP"/after/Channels-*-linux-amd64.deb)"
-      - name: main's Linux deb
-        if: matrix.desktop != 'shots'
+          gh run download "$REHEARSAL_RUN" -R "${{ github.repository }}" -n rehearsal-desktop-linux-eb -D "$RUNNER_TEMP/pkg"
+          gh run download "$REHEARSAL_RUN" -R "${{ github.repository }}" -n rehearsal-cli -D "$RUNNER_TEMP/cli"
+          ls -la "$RUNNER_TEMP/pkg" "$RUNNER_TEMP/cli"
+      - name: the deb installs on a clean runner (apt resolves its Depends)
+        run: sudo apt-get install -y "$RUNNER_TEMP"/pkg/Channels-*-linux-amd64.deb && dpkg-query -W kiwi-desktop
+      - name: the installed app and the AppImage make a channel, send and read back
+        if: ${{ !cancelled() }}
+        run: |
+          bun desktop/scripts/package-probe.ts /opt/Channels/bin/bun /opt/Channels/Resources/kiwi.js /opt/Channels/Resources/app/bun/keys.js
+          img=$(ls "$RUNNER_TEMP"/pkg/Channels-*-linux-x86_64.AppImage)
+          chmod +x "$img"
+          (cd "$RUNNER_TEMP" && "$img" --appimage-extract > /dev/null)
+          root="$RUNNER_TEMP/squashfs-root/Channels"
+          bun desktop/scripts/package-probe.ts "$root/bin/bun" "$root/Resources/kiwi.js" "$root/Resources/app/bun/keys.js"
+      - name: the installed app and the AppImage start under X11
+        if: ${{ !cancelled() }}
+        run: |
+          xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh /opt/Channels/bin/launcher ${{ matrix.sandbox }}
+          xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$(ls "$RUNNER_TEMP"/pkg/Channels-*-linux-x86_64.AppImage)" ${{ matrix.sandbox }} --appimage-extract-and-run
+      - name: the installed app starts natively on Wayland (weston, no XWayland, no DISPLAY)
+        if: ${{ !cancelled() }}
+        run: |
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/wl" && mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
+          weston --backend=headless --socket=kiwi-native --width=1280 --height=800 --idle-time=0 > "$RUNNER_TEMP/weston.log" 2>&1 &
+          for _ in $(seq 1 50); do [ -S "$XDG_RUNTIME_DIR/kiwi-native" ] && break; sleep 0.2; done
+          home=$(mktemp -d)
+          env -u DISPLAY -u XAUTHORITY WAYLAND_DISPLAY=kiwi-native XDG_SESSION_TYPE=wayland HOME="$home" setsid /opt/Channels/bin/launcher > "$RUNNER_TEMP/native.log" 2>&1 &
+          pid=$!
+          sleep 20
+          problems=""
+          kill -0 "$pid" 2> /dev/null || problems="$problems the app exited;"
+          grep -qi "cannot open display" "$RUNNER_TEMP/native.log" && problems="$problems it asked for an X display;"
+          web=$(pgrep -s "$pid" -f WebKitWebProcess | head -n 1)
+          [ -n "$web" ] || problems="$problems no WebKitWebProcess of its own;"
+          main=$(pgrep -s "$pid" -f '/opt/Channels/bin/bun' | head -n 1)
+          seen=$( [ -n "$main" ] && tr '\0' '\n' < "/proc/$main/environ" | grep -E '^(GDK_BACKEND|DISPLAY|WAYLAND_DISPLAY)=' | tr '\n' ' ')
+          echo "app env: ${seen:-unread}; web process: ${web:-none}"
+          kill -TERM -- -"$pid" 2> /dev/null || kill -TERM "$pid"
+          sleep 10
+          left=$(pgrep -s "$pid" | tr '\n' ' ')
+          [ -z "$left" ] || problems="$problems still running 10 s after SIGTERM ($left);"
+          tail -n 40 "$RUNNER_TEMP/native.log"
+          [ -z "$problems" ] || { echo "native Wayland:$problems"; exit 1; }
+          echo "native Wayland: the installed app ran 20 s with its own web process and no X display, and stopped on SIGTERM"
+      - name: the linux-x64 CLI, from each download, runs kiwi demo
+        if: ${{ !cancelled() }}
+        run: bash audit/.release-check/cli.sh "$RUNNER_TEMP/cli" linux-x64
+      - name: dpkg --purge leaves nothing behind
+        if: ${{ !cancelled() }}
+        run: sudo dpkg --purge kiwi-desktop && ! ls -d /opt/Channels /usr/bin/channels-desktop 2> /dev/null
+
+  cli-arm64:
+    name: release check, linux-arm64 CLI
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: the rehearsal's CLIs
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          gh run download 40121776105 -R "${{ github.repository }}" -n linux-packages-ubuntu-26.04 -D "$RUNNER_TEMP/pkgs"
-          ls -la "$RUNNER_TEMP/pkgs"
-          sudo apt-get install -y "$RUNNER_TEMP"/pkgs/Channels-*-linux-amd64.deb
-      - name: audit
-        if: matrix.desktop != 'shots'
-        timeout-minutes: 15
-        run: bash desktop/scripts/wayland-audit/run.sh ${{ matrix.desktop }} "$RUNNER_TEMP/audit"
-      - if: always()
-        run: cat "$RUNNER_TEMP/audit/notes.txt" "$RUNNER_TEMP/audit/focus.txt" || true
-      - if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: wayland-audit-${{ matrix.desktop }}
-          path: ${{ runner.temp }}/audit
-          retention-days: 3
+        run: gh run download "$REHEARSAL_RUN" -R "${{ github.repository }}" -n rehearsal-cli -D "$RUNNER_TEMP/cli"
+      - name: the linux-arm64 CLI, from each download, runs kiwi demo
+        run: bash .release-check/cli.sh "$RUNNER_TEMP/cli" linux-arm64
