@@ -11,8 +11,9 @@ declare const KIWI_EB_TEST: boolean;
 
 export const wrongTestHome = (): string | null => (KIWI_EB_TEST ? testHomeProblem(Utils.paths.userData, process.env.CFFIXED_USER_HOME) : null);
 
-export function openTestStore(): boolean {
+export function openTestStore(first: () => void): boolean {
   if (KIWI_EB_TEST) {
+    first();
     openStore(testVault(Utils.paths.userData));
     const relay = normalizeRelay(process.env.KIWI_EB_RELAY ?? "");
     if (relay) mutate((s) => void (s.relayUrl = relay));

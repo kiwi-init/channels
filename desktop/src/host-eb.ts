@@ -21,7 +21,7 @@ function bundleInfo(): Bundle {
   return { identifier: raw.identifier, version: raw.version };
 }
 
-export const bundle: Bundle = bundleInfo();
+const bundle: Bundle = bundleInfo();
 
 interface Shown {
   win: BrowserWindow;

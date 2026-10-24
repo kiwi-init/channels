@@ -38,7 +38,7 @@ bun run typecheck:eb                                  # fetches the devkit into 
   state with an installed Channels; a `CHANNELS_EB_TEST=1` build is always
   `com.kiwiinit.channels.test`, on the dev channel only.
 - `src/main-eb.ts` — only the order things start in: one instance, the native guards
-  (`native-eb.ts`), the store (`store-eb.ts`), the keys Worker (`keys-start-eb.ts`), the
+  (`native-eb.ts`), the store (`store-open-eb.ts`), the keys Worker (`keys-start-eb.ts`), the
   window (`window-eb.ts`), the test build's driver (`test-build-eb.ts`), then app life and
   updates (`life-updates-eb.ts`). Each feature's wiring lives in its own module, so pull requests that
   add features don't all edit one file.

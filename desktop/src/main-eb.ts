@@ -1,3 +1,5 @@
+import "./launcher-channel-eb.ts";
+
 import Electrobun, { BrowserView, Utils } from "electrobun/main";
 
 import { internalRpcHandlers } from "../.hutch/devkit/api/sdks/main/proc/native.ts";
@@ -12,7 +14,7 @@ import { startLife } from "./life-updates-eb.ts";
 import { catchMainErrors, logMainError } from "./main-log.ts";
 import { missingGuard, sandboxOff } from "./native-eb.ts";
 import { claimInstance, handoffFor, type Instance } from "./single-instance.ts";
-import { openStoreForThisBuild, warnIfStoreBroken } from "./store-eb.ts";
+import { openStoreForThisBuild, warnIfStoreBroken } from "./store-open-eb.ts";
 import { driveForTests, wrongTestHome } from "./test-build-eb.ts";
 import { createWindow, fail } from "./window-eb.ts";
 
@@ -28,7 +30,7 @@ Electrobun.events.on("open-url", (e: { data?: { url?: unknown } }) => {
 lockInternalRpc(internalRpcHandlers);
 
 async function start(instance: Extract<Instance, { kind: "first" }>): Promise<void> {
-  openStoreForThisBuild();
+  await openStoreForThisBuild();
   startKeys();
   const win = await createWindow();
   if (!win) {
