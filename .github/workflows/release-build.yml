@@ -113,10 +113,11 @@ jobs:
           bun ../scripts/cli-downloads.ts .
 
       - name: Upload
-        if: ${{ !inputs.rehearsal }}
+        if: ${{ !inputs.rehearsal || github.event_name == 'workflow_dispatch' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: release-cli
+          name: ${{ inputs.rehearsal && 'rehearsal' || 'release' }}-cli
+          retention-days: ${{ inputs.rehearsal && 3 || 0 }}
           path: dist/kiwi-*
           overwrite: true
 
@@ -264,10 +265,11 @@ jobs:
           '
 
       - name: Upload
-        if: ${{ !inputs.rehearsal }}
+        if: ${{ !inputs.rehearsal || github.event_name == 'workflow_dispatch' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: release-desktop-mac-x64
+          name: ${{ inputs.rehearsal && 'rehearsal' || 'release' }}-desktop-mac-x64
+          retention-days: ${{ inputs.rehearsal && 3 || 0 }}
           path: out/*
           if-no-files-found: error
           overwrite: true
@@ -359,10 +361,11 @@ jobs:
           bun desktop/scripts/eb-update-rehearsal.ts "$RUNNER_TEMP/electron/$old" out/Channels-*-mac-arm64.zip
 
       - name: Upload
-        if: ${{ !inputs.rehearsal }}
+        if: ${{ !inputs.rehearsal || github.event_name == 'workflow_dispatch' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: release-desktop-mac-eb
+          name: ${{ inputs.rehearsal && 'rehearsal' || 'release' }}-desktop-mac-eb
+          retention-days: ${{ inputs.rehearsal && 3 || 0 }}
           path: out/*
           if-no-files-found: error
           overwrite: true
@@ -431,10 +434,11 @@ jobs:
           sudo dpkg --purge kiwi-desktop
 
       - name: Upload
-        if: ${{ !inputs.rehearsal }}
+        if: ${{ !inputs.rehearsal || github.event_name == 'workflow_dispatch' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: release-desktop-linux-eb
+          name: ${{ inputs.rehearsal && 'rehearsal' || 'release' }}-desktop-linux-eb
+          retention-days: ${{ inputs.rehearsal && 3 || 0 }}
           path: |
             out/Channels-*-linux-amd64.deb
             out/Channels-*-linux-x86_64.AppImage
