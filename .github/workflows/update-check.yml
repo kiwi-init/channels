@@ -9,8 +9,8 @@ permissions:
   attestations: read
 
 env:
-  FROM: "0.27.3"
-  TO: "0.27.4"
+  FROM: "0.27.4"
+  TO: "0.27.5"
 
 jobs:
   mac:
