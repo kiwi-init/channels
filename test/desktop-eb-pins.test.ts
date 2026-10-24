@@ -30,6 +30,22 @@ describe("Electrobun's toolchain and what it ships are pinned in the repo (T804)
     for (const key of ["linux-x64", "linux-arm64"]) expect(pinFor(PINS.devkit, key, "devkit")).toBe(pinFor(PINS.devkit, "macos-arm64", "devkit"));
   });
 
+  test("Linux's native wrapper is built from pinned Electrobun source, CEF and Dawn headers and one patch (T523)", () => {
+    const { source, cef, dawn } = PINS.nativeWrapper;
+    const commit = /^https:\/\/codeload\.github\.com\/blackboardsh\/electrobun\/tar\.gz\/([0-9a-f]{40})$/.exec(source.url)?.[1];
+    expect(commit).toBeString();
+    expect(source.keep).toBe(`electrobun-${commit}/package/src/native`);
+    expect(cef.url).toStartWith("https://cef-builds.spotifycdn.com/cef_binary_");
+    expect(cef.keep).toEndWith("_linux64_minimal/include");
+    expect(dawn.url).toStartWith("https://electrobun-artifacts.blackboard.sh/electrobun-dawn/releases/");
+    expect(dawn.keep).toBe("linux-x64/include");
+    for (const pin of [source, cef, dawn]) expect(pin.tree).toMatch(/^[0-9a-f]{64}$/);
+    const patch = fs.readFileSync(path.join(import.meta.dirname, "..", "desktop", "native", "linux", "electrobun-wayland.patch"), "utf8");
+    expect(patch.match(/^\+\+\+ .*$/gm)).toEqual(["+++ b/package/src/native/linux/nativeWrapper.cpp"]);
+    expect(patch).toContain('\n-            setenv("GDK_BACKEND", "x11", 1);\n');
+    expect(patch).toContain('\n+            if (isCEFAvailable()) {\n+                setenv("GDK_BACKEND", "x11", 1);\n+            }\n');
+  });
+
   test("a host without pins is refused by name", () => {
     expect(() => pinFor(PINS.app, "linux-x64", "app files")).toThrow("pins no app files for linux-x64");
     expect(hostKey("darwin", "arm64")).toBe("macos-arm64");

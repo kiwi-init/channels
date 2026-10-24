@@ -40,6 +40,23 @@
     "linux-x64": "aa91d8834bb00ec25e7f8886b8988446a9842be4339ef7033b1bc7cd5e4808ca",
     "linux-arm64": "aa91d8834bb00ec25e7f8886b8988446a9842be4339ef7033b1bc7cd5e4808ca"
   },
+  "nativeWrapper": {
+    "source": {
+      "url": "https://codeload.github.com/blackboardsh/electrobun/tar.gz/c54c0c14876455d43a25af0f9cd41a4b14e21854",
+      "keep": "electrobun-c54c0c14876455d43a25af0f9cd41a4b14e21854/package/src/native",
+      "tree": "ca10518cf0b8f58bd9a8a5c37745b19bdd2983be3cbca8911450ac6d7d87641e"
+    },
+    "cef": {
+      "url": "https://cef-builds.spotifycdn.com/cef_binary_147.0.10%2Bgd58e84d%2Bchromium-147.0.7727.118_linux64_minimal.tar.bz2",
+      "keep": "cef_binary_147.0.10+gd58e84d+chromium-147.0.7727.118_linux64_minimal/include",
+      "tree": "a3203ecd71251d0bfb91a59278d81f35f92360ac899598611d0cd39bde50bec5"
+    },
+    "dawn": {
+      "url": "https://electrobun-artifacts.blackboard.sh/electrobun-dawn/releases/0.2.6/electrobun-dawn-linux-x64.tar.gz",
+      "keep": "linux-x64/include",
+      "tree": "61e7c61ed667e833011d5dd9744a83ad701e78bd0b587f7d3c2819499df63891"
+    }
+  },
   "app": {
     "macos-arm64": {
       "Contents/MacOS/launcher": "612aafd40e4727b542bfa12d289bada96fdd19e3781ff27a4c6d573a5f48e1dc",

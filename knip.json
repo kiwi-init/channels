@@ -15,7 +15,10 @@
     "pgrep",
     "osascript",
     "plutil",
-    "secret-tool"
+    "secret-tool",
+    "nm",
+    "patch",
+    "^g\\+\\+$"
   ],
   "workspaces": {
     ".": {
