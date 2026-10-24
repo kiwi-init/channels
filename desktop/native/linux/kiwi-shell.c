@@ -6,6 +6,8 @@
 #include <webkit2/webkit2.h>
 
 #define KIWI_APP_ID "channels-desktop"
+#define NOTES "org.freedesktop.Notifications"
+#define NOTES_PATH "/org/freedesktop/Notifications"
 #define PORTAL "org.freedesktop.portal.Desktop"
 #define PORTAL_PATH "/org/freedesktop/portal/desktop"
 #define PORTAL_SETTINGS "org.freedesktop.portal.Settings"
@@ -323,6 +325,121 @@ static bool follow_on_main(gconstpointer arg) {
 
 bool kiwi_follow_color_scheme(void) {
   return on_main(follow_on_main, NULL);
+}
+
+typedef struct {
+  gchar *title;
+  gchar *body;
+} Note;
+
+static GDBusConnection *notes_bus = NULL;
+static GHashTable *notes_ours = NULL;
+static gpointer notes_window = NULL;
+static void (*notes_clicked)(void) = NULL;
+
+static void note_signal(GDBusConnection *bus, const gchar *sender, const gchar *path, const gchar *iface, const gchar *signal, GVariant *params, gpointer data) {
+  (void)bus;
+  (void)sender;
+  (void)path;
+  (void)iface;
+  (void)data;
+  guint32 id = 0;
+  const gchar *text = NULL;
+  if (g_strcmp0(signal, "ActivationToken") == 0 && g_variant_is_of_type(params, G_VARIANT_TYPE("(us)"))) {
+    g_variant_get(params, "(u&s)", &id, &text);
+    if (g_hash_table_contains(notes_ours, GUINT_TO_POINTER(id))) g_hash_table_replace(notes_ours, GUINT_TO_POINTER(id), g_strdup(text));
+  } else if (g_strcmp0(signal, "ActionInvoked") == 0 && g_variant_is_of_type(params, G_VARIANT_TYPE("(us)"))) {
+    g_variant_get(params, "(u&s)", &id, &text);
+    if (g_strcmp0(text, "default") != 0 || !g_hash_table_contains(notes_ours, GUINT_TO_POINTER(id))) return;
+    const gchar *token = g_hash_table_lookup(notes_ours, GUINT_TO_POINTER(id));
+    if (token && *token && GTK_IS_WINDOW(notes_window)) gtk_window_set_startup_id(GTK_WINDOW(notes_window), token);
+    if (notes_clicked) notes_clicked();
+  } else if (g_strcmp0(signal, "NotificationClosed") == 0 && g_variant_is_of_type(params, G_VARIANT_TYPE("(uu)"))) {
+    g_variant_get(params, "(uu)", &id, NULL);
+    g_hash_table_remove(notes_ours, GUINT_TO_POINTER(id));
+  }
+}
+
+static void note_shown(GObject *source, GAsyncResult *res, gpointer data) {
+  (void)data;
+  GVariant *reply = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), res, NULL);
+  if (!reply) return;
+  guint32 id = 0;
+  g_variant_get(reply, "(u)", &id);
+  g_variant_unref(reply);
+  if (id) g_hash_table_insert(notes_ours, GUINT_TO_POINTER(id), g_strdup(""));
+}
+
+static void note_free(Note *note) {
+  g_free(note->title);
+  g_free(note->body);
+  g_free(note);
+}
+
+static void note_capabilities(GObject *source, GAsyncResult *res, gpointer data) {
+  Note *note = data;
+  GVariant *reply = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), res, NULL);
+  bool markup = false;
+  if (reply) {
+    GVariantIter *caps = NULL;
+    const gchar *cap = NULL;
+    g_variant_get(reply, "(as)", &caps);
+    while (g_variant_iter_next(caps, "&s", &cap))
+      if (strcmp(cap, "body-markup") == 0) markup = true;
+    g_variant_iter_free(caps);
+    g_variant_unref(reply);
+  }
+  gchar *body = markup ? g_markup_escape_text(note->body, -1) : g_strdup(note->body);
+  GVariantBuilder actions;
+  g_variant_builder_init(&actions, G_VARIANT_TYPE("as"));
+  g_variant_builder_add(&actions, "s", "default");
+  g_variant_builder_add(&actions, "s", "Open Channels");
+  GVariantBuilder hints;
+  g_variant_builder_init(&hints, G_VARIANT_TYPE("a{sv}"));
+  g_variant_builder_add(&hints, "{sv}", "desktop-entry", g_variant_new_string(KIWI_APP_ID));
+  g_variant_builder_add(&hints, "{sv}", "urgency", g_variant_new_byte(1));
+  g_dbus_connection_call(notes_bus, NOTES, NOTES_PATH, NOTES, "Notify", g_variant_new("(susssasa{sv}i)", "Channels", 0, KIWI_APP_ID, note->title, body, &actions, &hints, -1), G_VARIANT_TYPE("(u)"),
+                         G_DBUS_CALL_FLAGS_NONE, 10000, NULL, note_shown, NULL);
+  g_free(body);
+  note_free(note);
+}
+
+static bool notes_ready(void) {
+  if (notes_bus) return true;
+  notes_bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, NULL);
+  if (!notes_bus) return false;
+  notes_ours = g_hash_table_new_full(NULL, NULL, NULL, g_free);
+  g_dbus_connection_signal_subscribe(notes_bus, NOTES, NOTES, NULL, NOTES_PATH, NULL, G_DBUS_SIGNAL_FLAGS_NONE, note_signal, NULL, NULL);
+  return true;
+}
+
+static bool notify_on_main(gconstpointer arg) {
+  Note *note = (Note *)arg;
+  if (!notes_ready()) {
+    note_free(note);
+    return false;
+  }
+  g_dbus_connection_call(notes_bus, NOTES, NOTES_PATH, NOTES, "GetCapabilities", NULL, G_VARIANT_TYPE("(as)"), G_DBUS_CALL_FLAGS_NONE, 5000, NULL, note_capabilities, note);
+  return true;
+}
+
+bool kiwi_notify(const char *title, const char *body) {
+  if (!title) return false;
+  Note *note = g_new0(Note, 1);
+  note->title = g_strdup(title);
+  note->body = g_strdup(body ? body : "");
+  return on_main(notify_on_main, note);
+}
+
+static bool clicks_on_main(gconstpointer arg) {
+  notes_window = (gpointer)arg;
+  return notes_ready();
+}
+
+bool kiwi_notify_clicks(void *window, void (*clicked)(void)) {
+  if (!window || !clicked) return false;
+  notes_clicked = clicked;
+  return on_main(clicks_on_main, window);
 }
 
 static bool refuse_sandbox(char *why, size_t size, const char *text) {

@@ -1,4 +1,4 @@
-import { dlopen, FFIType, ptr, suffix, type JSCallback } from "bun:ffi";
+import { dlopen, FFIType, JSCallback, ptr, suffix, type Pointer } from "bun:ffi";
 import path from "node:path";
 
 import { PAGE_URL } from "./eb-page.ts";
@@ -22,6 +22,15 @@ export const windowLook = mac
   : null;
 
 const colorScheme = mac ? null : dlopen(shellPath, { kiwi_follow_color_scheme: { args: [], returns: FFIType.bool } }).symbols.kiwi_follow_color_scheme;
+
+const notes = mac
+  ? null
+  : dlopen(shellPath, {
+      kiwi_notify: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.bool },
+      kiwi_notify_clicks: { args: [FFIType.ptr, FFIType.function], returns: FFIType.bool },
+    }).symbols;
+
+let noteClicks: JSCallback | null = null;
 
 const guards = dlopen(shellPath, { kiwi_guard_downloads: { args: [], returns: FFIType.bool }, kiwi_allow_only: { args: [FFIType.ptr], returns: FFIType.bool } }).symbols;
 
@@ -56,6 +65,14 @@ export function missingGuard(): string | null {
 }
 
 export const followColorScheme = (): void => void colorScheme?.();
+
+export const notifyLinux = (title: string, body: string): boolean => notes?.kiwi_notify(ptr(cString(title)), ptr(cString(body))) ?? false;
+
+export function onNoteClick(window: Pointer | null, clicked: () => void): boolean {
+  if (!notes || !window) return false;
+  noteClicks = new JSCallback(() => clicked(), { args: [], returns: "void", threadsafe: true });
+  return notes.kiwi_notify_clicks(window, noteClicks.ptr);
+}
 
 export const watchPageGone = (gone: JSCallback): boolean => shell.kiwi_watch_page(gone);
 
