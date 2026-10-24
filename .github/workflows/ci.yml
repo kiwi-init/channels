@@ -414,6 +414,11 @@ jobs:
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-notify-test" desktop/native/linux/kiwi-notify-test.c $(pkg-config --cflags --libs gtk+-3.0) -ldl
           dbus-run-session -- xvfb-run -a "$RUNNER_TEMP/kiwi-notify-test" /opt/Channels/bin/libkiwi-shell.so
+      - name: an image pasted from another app is served to the page only right after a real Ctrl+V or Shift+Insert
+        if: ${{ !cancelled() }}
+        run: |
+          cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-paste-test" desktop/native/linux/kiwi-paste-test.c $(pkg-config --cflags --libs webkit2gtk-4.1) -ldl
+          xvfb-run -a "$RUNNER_TEMP/kiwi-paste-test" /opt/Channels/bin/libkiwi-shell.so
       - name: test build (the test driver in, its own id)
         if: ${{ !cancelled() && matrix.drive }}
         working-directory: desktop

@@ -12,7 +12,7 @@ import { keepDaemonAlive, watchPage } from "./keep-alive-eb.ts";
 import { startKeys } from "./keys-start-eb.ts";
 import { startLife } from "./life-updates-eb.ts";
 import { catchMainErrors, logMainError, windowFailure } from "./main-log.ts";
-import { followColorScheme, missingGuard, sandboxOff } from "./native-eb.ts";
+import { followColorScheme, missingGuard, sandboxOff, watchPaste } from "./native-eb.ts";
 import { claimInstance, handoffFor, type Instance } from "./single-instance.ts";
 import { openStoreForThisBuild, warnIfStoreBroken } from "./store-open-eb.ts";
 import { driveForTests, wrongTestHome } from "./test-build-eb.ts";
@@ -34,6 +34,7 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
   startKeys();
   watchPage();
   followColorScheme();
+  watchPaste();
   const win = await createWindow();
   if (!win) {
     instance.release();

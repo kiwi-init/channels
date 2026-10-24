@@ -68,6 +68,7 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     notify: (title, body) => t.call("notify", title, body),
     openExternal: (url) => t.call("openExternal", url),
     getDeepLink: () => t.call("getDeepLink"),
+    takePastedImage: () => t.call("takePastedImage"),
     onDeepLink: (cb) => t.listen("deepLink", cb),
     onTextStep: (cb) => t.listen("textStep", cb),
     setPersonalities: (list) => t.call("setPersonalities", list),

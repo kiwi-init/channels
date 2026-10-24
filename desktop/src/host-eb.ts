@@ -7,7 +7,7 @@ import type { Push, Pushes } from "./calls.ts";
 import { childEnv } from "./child-env.ts";
 import type { Host } from "./host.ts";
 import type { HostToKeys } from "./keys-server.ts";
-import { notifyLinux, onNoteClick } from "./native-eb.ts";
+import { notifyLinux, onNoteClick, pastedPng } from "./native-eb.ts";
 import { relaunchAfter } from "./update-asset.ts";
 import { applyUpdate } from "./updater.ts";
 import { ebDataDir } from "./store-eb.ts";
@@ -26,6 +26,8 @@ function bundleInfo(): Bundle {
 }
 
 const bundle: Bundle = bundleInfo();
+
+const MAX_PASTED_BYTES = 25 * 1024 * 1024;
 
 export const dataDir: string = ebDataDir(bundle.identifier, bundle.channel);
 
@@ -68,6 +70,10 @@ export const ebHost: Host = {
   pickFolder: async () => {
     const picked = await Utils.openFileDialog({ canChooseFiles: false, canChooseDirectory: true, allowsMultipleSelection: false });
     return picked.find((p) => p.length > 0) ?? null;
+  },
+  pastedImage: async () => {
+    const png = pastedPng(MAX_PASTED_BYTES);
+    return png ? { type: "image/png", data: Buffer.from(png).toString("base64") } : null;
   },
   notify: (title, body) => {
     if (process.platform === "linux") notifyLinux(title, body);

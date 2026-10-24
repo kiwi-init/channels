@@ -14,6 +14,8 @@ import type { LaunchedView, PlacedSeat, ShowResult, TerminalId, TerminalsStatus 
 import type { TextStep } from "./text-size.ts";
 import type { Wire } from "./wire.ts";
 
+export type PastedImage = { type: string; data: string };
+
 export type DoctorFinding = { ok: true; what: string } | { ok: false; what: string; how: string };
 
 /** The person's own key. Same JSON shape as Identity in src/identity.ts. */
@@ -333,6 +335,7 @@ export interface KiwiBridge {
   checkUpdate(): Promise<UpdateCheckView>;
   notify(title: string, body: string): Promise<void>;
   openExternal(url: string): Promise<void>;
+  takePastedImage(): Promise<PastedImage | null>;
   /** The kiwi://join/<code> link waiting to be opened, if any; taking it clears it. */
   getDeepLink(): Promise<string | null>;
   /** A link came in while the app runs (it waits for getDeepLink too, so it's opened once). */

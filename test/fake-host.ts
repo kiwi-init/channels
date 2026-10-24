@@ -30,6 +30,7 @@ export function fakeHost(app: FakeApp = {}): FakeHost {
     push: (name) => void did.push(`push ${name}`),
     openExternal: async (url) => void did.push(`open ${url}`),
     pickFolder: async () => "/Users/someone/app",
+    pastedImage: async () => null,
     notify: (title, body) => void did.push(`notify ${title}: ${body}`),
     showWindow: () => void did.push("show"),
     reload: () => void did.push("reload"),
