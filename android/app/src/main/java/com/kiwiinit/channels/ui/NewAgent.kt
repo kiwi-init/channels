@@ -6,6 +6,7 @@ import androidx.activity.compose.BackHandler
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
 import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
 import androidx.biometric.BiometricPrompt
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -58,8 +59,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -278,7 +281,7 @@ internal fun HarnessList(computer: ComputerView, harnesses: Loaded<HarnessesOn>,
         } else {
             items(got.harnesses, key = { it.harness }) { h ->
                 Choice(
-                    icon = { Icon(Icons.Outlined.Terminal, contentDescription = null) },
+                    icon = { HarnessIcon(h) },
                     title = h.name,
                     detail = if (h.start) h.version else h.why ?: "Kiwi can't start it yet",
                     enabled = h.start,
@@ -471,6 +474,21 @@ private fun Choice(
         colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
         modifier = Modifier.clickable(enabled = enabled, onClick = tap).alpha(if (enabled) 1f else 0.5f),
     )
+}
+
+@Composable
+private fun HarnessIcon(harness: HarnessChoice) {
+    val art = harnesses[harness.face]
+    if (art == null) {
+        Icon(Icons.Outlined.Terminal, contentDescription = null)
+    } else {
+        Image(
+            painter = painterResource(art),
+            contentDescription = null,
+            modifier = Modifier.size(24.dp),
+            colorFilter = if (harness.mono) ColorFilter.tint(MaterialTheme.colorScheme.onSurface) else null,
+        )
+    }
 }
 
 @Composable
