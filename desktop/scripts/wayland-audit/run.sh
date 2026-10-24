@@ -15,9 +15,15 @@ if [ "$D" = kde ]; then
     tag=main
     [ "$scale" = 1 ] || tag="scale${scale/./}"
     export KWIN_LOG="$OUT/kwin-$tag.log"
-    timeout 600 dbus-run-session -- env KWIN_SCREENSHOT_NO_PERMISSION_CHECKS=1 QT_LOGGING_RULES='kwin_scripting=true;kwin_scripting.debug=true' XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6 XDG_SESSION_TYPE=wayland \
-      kwin_wayland --virtual --xwayland --width 1280 --height 800 --scale "$scale" --socket kiwi-wayland --exit-with-session "bash $HERE/inner.sh kde $OUT $tag" > "$KWIN_LOG" 2>&1
-    echo "kwin ($tag) exited $?" | tee -a "$OUT/notes.txt"
+    kenv=(env KWIN_COMPOSE=Q KWIN_SCREENSHOT_NO_PERMISSION_CHECKS=1 QT_LOGGING_RULES='kwin_*=true;kwin_scripting.debug=true' XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6 XDG_SESSION_TYPE=wayland)
+    kargs=(kwin_wayland --virtual --xwayland --width 1280 --height 800 --scale "$scale" --socket kiwi-wayland --exit-with-session "bash $HERE/inner.sh kde $OUT $tag")
+    timeout 600 dbus-run-session -- "${kenv[@]}" "${kargs[@]}" > "$KWIN_LOG" 2>&1
+    code=$?
+    echo "kwin ($tag) exited $code" | tee -a "$OUT/notes.txt"
+    if [ "$code" -ge 128 ] && [ "$tag" = main ]; then
+      timeout 300 dbus-run-session -- "${kenv[@]}" gdb -batch -ex run -ex 'thread apply all bt 20' --args "${kargs[@]}" > "$OUT/kwin-gdb.log" 2>&1
+      grep -A40 'SIGSEGV\|SIGABRT' "$OUT/kwin-gdb.log" | head -n 80 | tee -a "$OUT/notes.txt"
+    fi
   done
   exit 0
 fi

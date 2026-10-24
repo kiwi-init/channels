@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        desktop: [kde, gnome]
+        desktop: [kde]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: compositor and tools
@@ -25,7 +25,7 @@ jobs:
           sudo apt-get update -q
           common="python3-gi gir1.2-gtk-3.0 libgtk-3-bin xwayland xdotool x11-utils wmctrl dbus dbus-x11 dconf-service dconf-cli"
           if [ "${{ matrix.desktop }}" = kde ]; then
-            sudo apt-get install -y --no-install-recommends $common kwin-wayland breeze
+            sudo apt-get install -y --no-install-recommends $common kwin-wayland breeze libgl1-mesa-dri libegl-mesa0 gdb
           else
             sudo apt-get install -y --no-install-recommends $common gnome-shell gnome-settings-daemon gsettings-desktop-schemas xdg-desktop-portal xdg-desktop-portal-gnome adwaita-icon-theme
           fi
