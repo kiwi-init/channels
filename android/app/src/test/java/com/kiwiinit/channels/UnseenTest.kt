@@ -45,12 +45,15 @@ class UnseenTest {
         compose.onNode(hasScrollToIndexAction()).performScrollToIndex(5)
         compose.waitForIdle()
         val scrolled = jumps()
+        val list = compose.onNode(hasScrollToIndexAction()).fetchSemanticsNode().config
+        val range = list.getOrNull(SemanticsProperties.VerticalScrollAxisRange)
+        val where = "range ${range?.value?.invoke()} of ${range?.maxValue?.invoke()}, items ${list.getOrNull(SemanticsProperties.CollectionInfo)?.rowCount}"
         val room = model.rooms.getValue(DEV)
         val at = room.messages.last().at
         val more = (1..3).map { MessageView(100 + it, "gentle-jaguar", at + it * 1000.0, "msg", "Update $it") }
         compose.runOnUiThread { model.rooms[DEV] = room.copy(messages = room.messages + more) }
         compose.waitForIdle()
-        assertEquals("after scrolling: $scrolled", listOf("3 new, jump to the latest"), jumps())
+        assertEquals("after scrolling: $scrolled, $where", listOf("3 new, jump to the latest"), jumps())
     }
 
     private fun jumps(): List<String> =
