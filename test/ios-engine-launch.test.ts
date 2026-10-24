@@ -123,7 +123,7 @@ describe("the phone's engine starts agents on the person's own computers", () =>
   test("it lists their paired computers, what each can start and the folders it works in", async () => {
     await until("the computer online", async () => (await ask<PairedComputer[]>({ op: "computers" })).some((c) => c.key === machine.pk && c.online));
     expect(await ask<PairedComputer[]>({ op: "computers" })).toEqual([{ key: machine.pk, xpk: machine.xpk!, label: "studio", online: true, since: expect.any(Number), seenAt: expect.any(Number) }]);
-    expect(await ask<HarnessRow[]>({ op: "harnessesOn", computer: machine.pk })).toEqual([claude]);
+    expect(await ask<HarnessRow[]>({ op: "harnessesOn", computer: machine.pk })).toEqual([{ ...claude, name: "Claude Code", face: "claude-code", mono: false }]);
     expect(await ask<string[]>({ op: "foldersOn", computer: machine.pk, code })).toEqual([project]);
     await expect(ask({ op: "harnessesOn", computer: owner.pk })).rejects.toThrow("that isn't one of your paired computers");
     await expect(ask({ op: "foldersOn", computer: machine.pk, code: "not-a-channel" })).rejects.toThrow("this phone isn't in that channel");

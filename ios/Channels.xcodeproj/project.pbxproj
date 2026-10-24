@@ -264,7 +264,7 @@
 				INFOPLIST_FILE = Channels/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Channels;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Channels uses the camera to read the link code your Mac shows.";
-				INFOPLIST_KEY_NSFaceIDUsageDescription = "Channels asks for Face ID before it shows your channels.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Channels asks for Face ID before it shows your channels, and before it starts an agent that acts without asking.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Channels talks to a relay on your own network when you run one there.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
@@ -418,7 +418,7 @@
 				INFOPLIST_FILE = Channels/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Channels;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Channels uses the camera to read the link code your Mac shows.";
-				INFOPLIST_KEY_NSFaceIDUsageDescription = "Channels asks for Face ID before it shows your channels.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Channels asks for Face ID before it shows your channels, and before it starts an agent that acts without asking.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Channels talks to a relay on your own network when you run one there.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
