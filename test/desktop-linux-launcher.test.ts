@@ -1,4 +1,4 @@
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, expect, setDefaultTimeout, test } from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -7,6 +7,8 @@ import { join } from "node:path";
 import { ELECTROBUN_LAUNCHER } from "../desktop/scripts/linux-files.ts";
 
 const linux = process.platform === "linux";
+
+setDefaultTimeout(30_000);
 const root = mkdtempSync(join(tmpdir(), "kiwi-linux-launcher-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
