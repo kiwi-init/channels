@@ -1,8 +1,9 @@
 import { expect, test } from "bun:test";
+import type { DoctorFinding } from "../desktop/src/bridge.ts";
 import { readDoctorFindings } from "../desktop/src/doctor-view.ts";
 
 test("Settings reads kiwi doctor --json: each check that passed, each problem with its fix, and anything else as no answer", () => {
-  const findings = [
+  const findings: DoctorFinding[] = [
     { ok: true, what: "version  0.27.3" },
     { ok: false, what: "Claude Code hooks are not installed.", how: "Run kiwi hooks install." },
   ];
