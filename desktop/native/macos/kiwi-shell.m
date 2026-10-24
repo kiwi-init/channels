@@ -1,4 +1,5 @@
 #import <AppKit/AppKit.h>
+#import <UserNotifications/UserNotifications.h>
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
 #import <os/lock.h>
@@ -145,4 +146,36 @@ void kiwi_window_look(void *ptr, double minWidth, double minHeight, uint32_t lig
     NSAppearanceName name = [NSApp.effectiveAppearance bestMatchFromAppearancesWithNames:@[ NSAppearanceNameAqua, NSAppearanceNameDarkAqua ]];
     window.backgroundColor = rgb([name isEqualToString:NSAppearanceNameDarkAqua] ? dark : light);
   });
+}
+
+static void (*noteClicked)(void) = NULL;
+
+@interface KiwiNotes : NSObject <UNUserNotificationCenterDelegate>
+@end
+
+@implementation KiwiNotes
+- (void)userNotificationCenter:(UNUserNotificationCenter *)center
+       willPresentNotification:(UNNotification *)notification
+         withCompletionHandler:(void (^)(UNNotificationPresentationOptions))completionHandler {
+  completionHandler(UNNotificationPresentationOptionBanner | UNNotificationPresentationOptionList | UNNotificationPresentationOptionSound);
+}
+
+- (void)userNotificationCenter:(UNUserNotificationCenter *)center
+    didReceiveNotificationResponse:(UNNotificationResponse *)response
+             withCompletionHandler:(void (^)(void))completionHandler {
+  if (noteClicked && ![response.actionIdentifier isEqualToString:UNNotificationDismissActionIdentifier]) noteClicked();
+  completionHandler();
+}
+@end
+
+static KiwiNotes *notes = nil;
+
+bool kiwi_notify_clicks(void *window, void (*clicked)(void)) {
+  if (!clicked) return false;
+  noteClicked = clicked;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    if (!notes) notes = [KiwiNotes new];
+    [UNUserNotificationCenter currentNotificationCenter].delegate = notes;
+  });
+  return true;
 }

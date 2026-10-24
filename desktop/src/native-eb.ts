@@ -63,12 +63,9 @@ const windowKeys = mac ? null : dlopen(shellPath, { kiwi_window_keys: { args: [F
 
 let shortcuts: JSCallback | null = null;
 
-const notes = mac
-  ? null
-  : dlopen(shellPath, {
-      kiwi_notify: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.bool },
-      kiwi_notify_clicks: { args: [FFIType.ptr, FFIType.function], returns: FFIType.bool },
-    }).symbols;
+const notes = mac ? null : dlopen(shellPath, { kiwi_notify: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.bool } }).symbols;
+
+const noteClicksOf = dlopen(shellPath, { kiwi_notify_clicks: { args: [FFIType.ptr, FFIType.function], returns: FFIType.bool } }).symbols.kiwi_notify_clicks;
 
 let noteClicks: JSCallback | null = null;
 
@@ -117,9 +114,9 @@ export function onShortcut(window: Pointer | null, pressed: (action: number) => 
 export const notifyLinux = (title: string, body: string): boolean => notes?.kiwi_notify(ptr(cString(title)), ptr(cString(body))) ?? false;
 
 export function onNoteClick(window: Pointer | null, clicked: () => void): boolean {
-  if (!notes || !window) return false;
+  if (!window) return false;
   noteClicks = new JSCallback(() => clicked(), { args: [], returns: "void", threadsafe: true });
-  return notes.kiwi_notify_clicks(window, noteClicks.ptr);
+  return noteClicksOf(window, noteClicks.ptr);
 }
 
 export const watchPageGone = (gone: JSCallback): boolean => shell.kiwi_watch_page(gone);
