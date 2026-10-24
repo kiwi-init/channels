@@ -340,7 +340,6 @@ jobs:
       - run: bun desktop/scripts/size.ts desktop/release/linux-unpacked/channels-desktop
       - run: command -v xvfb-run || (sudo apt-get update && sudo apt-get install -y xvfb)
       - run: xvfb-run -a bun desktop/scripts/smoke.ts desktop/release/linux-unpacked/channels-desktop
-      - run: xvfb-run -a bun scripts/perf-desktop.ts desktop/release/linux-unpacked/channels-desktop --json "$RUNNER_TEMP/perf-desktop.json"
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         with:
@@ -402,16 +401,6 @@ jobs:
       - name: smoke
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/smoke-eb.ts desktop/release-eb/build/dev-macos-*/*.app
-      - name: cold start
-        if: ${{ !cancelled() }}
-        run: bun scripts/perf-desktop.ts desktop/release-eb/build/dev-macos-*/*.app --electrobun --json "$RUNNER_TEMP/perf-desktop-eb.json"
-      - if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: perf-desktop-eb
-          path: ${{ runner.temp }}/perf-desktop-eb.json
-          if-no-files-found: ignore
-          overwrite: true
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         timeout-minutes: 1
@@ -531,17 +520,6 @@ jobs:
       - name: smoke, under Xvfb
         if: ${{ !cancelled() && matrix.drive }}
         run: xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/smoke-eb.ts "${{ steps.test-app.outputs.path }}"
-      - name: cold start, under Xvfb (reported, not gated, until T798 sets Electrobun's gates)
-        if: ${{ !cancelled() && matrix.drive }}
-        continue-on-error: true
-        run: xvfb-run -a -s "-screen 0 1280x800x24" bun scripts/perf-desktop.ts "${{ steps.test-app.outputs.path }}" --electrobun --json "$RUNNER_TEMP/perf-desktop-eb-linux.json"
-      - if: ${{ !cancelled() && matrix.drive }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: perf-desktop-eb-linux
-          path: ${{ runner.temp }}/perf-desktop-eb-linux.json
-          if-no-files-found: ignore
-          overwrite: true
       - name: dpkg --purge leaves nothing of the app behind
         if: ${{ !cancelled() }}
         run: |

@@ -6,6 +6,7 @@ import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { daemonHello, daemonStop } from "../src/daemon-client.ts";
 import { bridgeChecks } from "./eb-bridge-checks.ts";
 import { appExecutable, appRoot, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
+import { firstChannel } from "./eb-first-run.ts";
 
 if (!process.argv[2]) {
   console.error("usage: bun desktop/scripts/smoke-eb.ts <Channels.app, or on Linux its app folder, built with CHANNELS_EB_TEST=1>");
@@ -116,6 +117,10 @@ try {
       (v) => v === "views://internal/index.html",
     );
   }
+  await firstChannel(d, 1).then(
+    () => console.log("first run: a person, a channel and a message sent and in the conversation, on the local relay"),
+    (e: Error) => problems.push(`first run: ${e.message}`),
+  );
 
   const hello = await until("the kiwi daemon the app starts", 60_000, () => daemonHello(kiwiHome, 1_000)).catch((e: Error) => (problems.push(e.message), null));
   if (hello) console.log(`kiwi daemon: answering on the test KIWI_HOME (kiwi ${hello.version})`);
