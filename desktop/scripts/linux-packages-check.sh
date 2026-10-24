@@ -10,7 +10,7 @@ bun "$here/appimage-squashfs.ts" .
 deb=$(ls Channels-*-linux-amd64.deb)
 dpkg-deb --field "$deb" Package Version Architecture Depends
 files=$(dpkg-deb --contents "$deb")
-for p in ./opt/Channels/bin/launcher ./opt/Channels/bin/electrobun-launcher ./opt/Channels/bin/bun ./opt/Channels/Resources/app/page/index.html ./opt/Channels/Resources/app/views/internal/assets ./usr/bin/channels-desktop ./usr/share/applications/channels-desktop.desktop ./usr/share/icons/hicolor/512x512/apps/channels-desktop.png; do
+for p in ./opt/Channels/bin/launcher ./opt/Channels/bin/electrobun-launcher ./opt/Channels/bin/bun ./opt/Channels/Resources/kiwi.js ./opt/Channels/Resources/app/page/index.html ./opt/Channels/Resources/app/views/internal/assets ./usr/bin/channels-desktop ./usr/share/applications/channels-desktop.desktop ./usr/share/icons/hicolor/512x512/apps/channels-desktop.png; do
   [[ "$files" == *" $p"* ]] || { echo "$deb lacks $p"; exit 1; }
 done
 for p in ./opt/Channels/bin/bspatch ./opt/Channels/bin/zig-zstd ./opt/Channels/Resources/uninstall ./opt/Channels/Channels.desktop ./opt/Channels/Resources/app/views/internal/index.html; do
@@ -18,7 +18,7 @@ for p in ./opt/Channels/bin/bspatch ./opt/Channels/bin/zig-zstd ./opt/Channels/R
 done
 img=$(ls Channels-*-linux-x86_64.AppImage)
 "./$img" --appimage-extract > /dev/null
-for p in AppRun channels-desktop.desktop channels-desktop.png Channels/bin/launcher Channels/bin/electrobun-launcher Channels/bin/bun Channels/Resources/app/page/index.html Channels/Resources/app/views/internal/assets; do
+for p in AppRun channels-desktop.desktop channels-desktop.png Channels/bin/launcher Channels/bin/electrobun-launcher Channels/bin/bun Channels/Resources/kiwi.js Channels/Resources/app/page/index.html Channels/Resources/app/views/internal/assets; do
   [ -e "squashfs-root/$p" ] || { echo "$img lacks $p"; exit 1; }
 done
 for p in Channels/bin/bspatch Channels/bin/zig-zstd Channels/Resources/uninstall Channels/Channels.desktop Channels/Resources/app/views/internal/index.html; do

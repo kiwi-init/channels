@@ -432,9 +432,11 @@ jobs:
           - os: ubuntu-24.04
             part: 1
             sandbox: unsandboxed
+            drive: false
           - os: ubuntu-26.04
             part: 2
             sandbox: sandboxed
+            drive: true
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
@@ -477,6 +479,8 @@ jobs:
       - name: electrobun toolchain
         working-directory: desktop
         run: for i in 1 2 3; do bun run prepare:eb && exit 0; echo "electrobun prepare failed ($i of 3)"; sleep 20; done; exit 1
+      - name: the kiwi CLI the app bundles
+        run: mkdir -p dist && bun scripts/build-cli.ts --js dist/kiwi.js
       - working-directory: desktop
         env:
           DASH_RELEASE_OFFLINE: "1"
@@ -508,7 +512,43 @@ jobs:
           xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh /opt/Channels/bin/launcher ${{ matrix.sandbox }}
           img=$(ls "$PWD"/desktop/release-eb/linux/Channels-*-linux-x86_64.AppImage)
           xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$img" ${{ matrix.sandbox }} --appimage-extract-and-run
+      - name: test build (the test driver in, its own id)
+        if: ${{ !cancelled() && matrix.drive }}
+        working-directory: desktop
+        run: bun scripts/eb.ts build --env=dev
+        env:
+          CHANNELS_EB_TEST: "1"
+          DASH_RELEASE_OFFLINE: "1"
+      - id: test-app
+        if: ${{ !cancelled() && matrix.drive }}
+        run: |
+          found=$(ls -d desktop/release-eb/build/dev-linux-*/*/bin/electrobun-launcher)
+          [ "$(echo "$found" | wc -l)" = 1 ] || { echo "expected one test build, found: $found"; exit 1; }
+          echo "path=$(dirname "$(dirname "$found")")" >> "$GITHUB_OUTPUT"
+      - name: no test driver in the release build (the installed deb)
+        if: ${{ !cancelled() && matrix.drive }}
+        run: bun desktop/scripts/eb-driver-check.ts desktop/release-eb /opt/Channels
+      - name: smoke, under Xvfb
+        if: ${{ !cancelled() && matrix.drive }}
+        run: xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/smoke-eb.ts "${{ steps.test-app.outputs.path }}"
+      - name: cold start, under Xvfb (reported, not gated, until T798 sets Electrobun's gates)
+        if: ${{ !cancelled() && matrix.drive }}
+        continue-on-error: true
+        run: xvfb-run -a -s "-screen 0 1280x800x24" bun scripts/perf-desktop.ts "${{ steps.test-app.outputs.path }}" --electrobun --json "$RUNNER_TEMP/perf-desktop-eb-linux.json"
+      - if: ${{ !cancelled() && matrix.drive }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: perf-desktop-eb-linux
+          path: ${{ runner.temp }}/perf-desktop-eb-linux.json
+          if-no-files-found: ignore
+          overwrite: true
+      - name: dpkg --purge leaves nothing of the app behind
+        if: ${{ !cancelled() }}
+        run: |
           sudo dpkg --purge kiwi-desktop
+          left=$(ls -d /opt/Channels /usr/bin/channels-desktop /usr/share/applications/channels-desktop.desktop /usr/share/icons/hicolor/*/apps/channels-desktop.png 2> /dev/null || true)
+          [ -z "$left" ] || { echo "left after --purge:"; echo "$left"; exit 1; }
+          echo "purged: no files, link, entry or icons left"
       - name: what bwrap can do under this AppArmor, for an app profile later (prints only)
         if: ${{ !cancelled() }}
         continue-on-error: true

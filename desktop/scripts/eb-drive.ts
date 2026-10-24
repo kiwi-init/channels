@@ -1,6 +1,6 @@
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 export interface Driver {
   evaluate<A, R>(fn: (arg: A) => R | Promise<R>, arg: A, ms?: number): Promise<R>;
@@ -15,8 +15,11 @@ interface Waiting {
 
 const later = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+export const LINUX_ENTRY = join("bin", "electrobun-launcher");
+
 export function appExecutable(path: string): string {
   const full = resolve(path);
+  if (existsSync(join(full, LINUX_ENTRY))) return join(full, LINUX_ENTRY);
   if (!full.endsWith(".app")) return full;
   const name = execFileSync("plutil", ["-extract", "CFBundleExecutable", "raw", join(full, "Contents", "Info.plist")], { encoding: "utf8" }).trim();
   return join(full, "Contents", "MacOS", name);
@@ -39,9 +42,18 @@ export function webkitHelpers(): number {
 export function testEnv(root: string, socket: string, relay: string, extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   const home = join(root, "home");
   mkdirSync(home, { recursive: true });
-  const env: NodeJS.ProcessEnv = { ...process.env, HOME: home, CFFIXED_USER_HOME: home, KIWI_HOME: join(root, ".kiwi"), KIWI_EB_DRIVER: socket, KIWI_EB_RELAY: relay, ...extra };
+  const linux =
+    process.platform === "linux"
+      ? { XDG_CONFIG_HOME: join(home, ".config"), XDG_DATA_HOME: join(home, ".local", "share"), XDG_CACHE_HOME: join(home, ".cache"), XDG_STATE_HOME: join(home, ".local", "state") }
+      : {};
+  const env: NodeJS.ProcessEnv = { ...process.env, HOME: home, CFFIXED_USER_HOME: home, ...linux, KIWI_HOME: join(root, ".kiwi"), KIWI_EB_DRIVER: socket, KIWI_EB_RELAY: relay, ...extra };
   for (const name of ["BUN_OPTIONS", "BUN_INSPECT", "NODE_OPTIONS"]) if (!(name in extra)) delete env[name];
   return env;
+}
+
+export function appRoot(exe: string): string {
+  if (exe.includes(".app/")) return exe.slice(0, exe.indexOf(".app/") + 4);
+  return exe.endsWith(`/${LINUX_ENTRY}`) ? dirname(dirname(exe)) : exe;
 }
 
 export function launch(exe: string, env: NodeJS.ProcessEnv): ChildProcess {

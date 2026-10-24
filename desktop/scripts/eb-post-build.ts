@@ -44,6 +44,9 @@ const views = path.join(app, "views", "internal");
 fs.rmSync(views, { recursive: true, force: true });
 fs.cpSync(web, views, { recursive: true, filter: (src) => src !== path.join(web, "index.html") && path.basename(src) !== "_headers" });
 if (fs.readdirSync(views).some((n) => n.toLowerCase() === "index.html")) throw new Error("eb-post-build: index.html must not be under views/, where Electrobun would serve it without the CSP");
+const cli = path.resolve(desktop, "../dist/kiwi.js");
+if (!fs.existsSync(cli)) throw new Error("dist/kiwi.js is missing: run `bun scripts/build-cli.ts --js dist/kiwi.js` in the repo root first");
+fs.copyFileSync(cli, path.join(resources[0] as string, "kiwi.js"));
 if (os === "linux") {
   const host = process.arch === "x64" ? "x64" : process.arch === "arm64" ? "arm64" : process.arch;
   if (host !== arch) throw new Error(`eb-post-build: the Linux launcher is built with this machine's cc, for ${host}, not the ${arch} app`);
@@ -60,9 +63,6 @@ if (os === "linux") {
   process.exit(0);
 }
 const contents = path.dirname(resources[0] as string);
-const cli = path.resolve(desktop, "../dist/kiwi.js");
-if (!fs.existsSync(cli)) throw new Error("dist/kiwi.js is missing: run `bun scripts/build-cli.ts --js dist/kiwi.js` in the repo root first");
-fs.copyFileSync(cli, path.join(contents, "Resources", "kiwi.js"));
 
 const key = hostKey("darwin", arch === "x64" ? "x64" : "arm64");
 const bundle = path.dirname(contents);

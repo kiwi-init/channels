@@ -5,20 +5,22 @@ import { join } from "node:path";
 import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { daemonHello, daemonStop } from "../src/daemon-client.ts";
 import { bridgeChecks } from "./eb-bridge-checks.ts";
-import { appExecutable, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
+import { appExecutable, appRoot, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
 
 if (!process.argv[2]) {
-  console.error("usage: bun desktop/scripts/smoke-eb.ts <Channels.app built with CHANNELS_EB_TEST=1>");
+  console.error("usage: bun desktop/scripts/smoke-eb.ts <Channels.app, or on Linux its app folder, built with CHANNELS_EB_TEST=1>");
   process.exit(2);
 }
 const exe = appExecutable(process.argv[2]);
-const bundle = exe.includes(".app/") ? exe.slice(0, exe.indexOf(".app/") + 4) : exe;
+const bundle = appRoot(exe);
 const root = mkdtempSync(join(tmpdir(), "kiwi-smoke-eb-"));
 const problems: string[] = [];
 const later = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const pids = (pattern: string): number[] => spawnSync("pgrep", ["-f", pattern], { encoding: "utf8" }).stdout.split("\n").filter(Boolean).map(Number);
 const alive = (): number[] => [...pids(bundle), ...pids(root)];
-const webContent = (): number[] => pids("com.apple.WebKit.WebContent");
+const linux = process.platform === "linux";
+const webContent = (): number[] => pids(linux ? "WebKitWebProcess" : "com.apple.WebKit.WebContent");
+const logDir = linux ? join(".local", "state") : join("Library", "Logs");
 const kiwiHome = join(root, ".kiwi");
 
 function found(dir: string, name: string): string[] {
@@ -130,10 +132,10 @@ try {
     const back = await until("the page, back after its web content process was killed", 30_000, () =>
       d.evaluate(() => (document.querySelector("#root")?.childElementCount ? performance.timeOrigin : null), null, 2_000).then((o) => (o !== null && o !== origin ? o : null)),
     ).catch((e: Error) => (problems.push(e.message), null));
-    const logs = found(join(root, "home", "Library", "Logs"), "main.log");
+    const logs = found(join(root, "home", logDir), "main.log");
     const logged = logs.some((f) => readFileSync(f, "utf8").includes("the window's page stopped"));
     if (back && logged) console.log(`the app's ${ours.length} web content processes killed: the page reloaded and main.log says so (${logs[0]!.slice(root.length)})`);
-    else if (back) problems.push(`the page reloaded but no main.log under the test HOME's Library/Logs says it stopped (found ${logs.length})`);
+    else if (back) problems.push(`the page reloaded but no main.log under the test HOME's ${logDir} says it stopped (found ${logs.length})`);
   }
   d.close();
 } catch (e) {

@@ -5,6 +5,7 @@ import { createTray, setAppMenu, type AppTray } from "./menus-eb.ts";
 import type { TextStep } from "./text-size.ts";
 import type { UpdateState } from "./updater.ts";
 import { mark } from "./eb-startup.ts";
+import { trayLater } from "./tray-later.ts";
 import { watchWake } from "./wake.ts";
 
 export interface LifeShell {
@@ -60,7 +61,14 @@ export function startAppLife(shell: LifeShell): AppTray {
     flushing ??= flushThenQuit();
   });
   setAppMenu(act);
-  const tray = createTray(act, shell.update());
-  mark("tray");
-  return tray;
+  return trayLater({
+    make: (u) => {
+      const tray = createTray(act, u);
+      mark("tray");
+      return tray;
+    },
+    update: shell.update(),
+    onReady: (f) => shell.view.on("dom-ready", f),
+    later: (f, ms) => void setTimeout(f, ms),
+  });
 }
