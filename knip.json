@@ -14,7 +14,8 @@
     "kwallet-query",
     "pgrep",
     "osascript",
-    "plutil"
+    "plutil",
+    "secret-tool"
   ],
   "workspaces": {
     ".": {

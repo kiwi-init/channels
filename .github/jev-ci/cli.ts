@@ -2,8 +2,24 @@
 import { parseArgs } from "node:util";
 import { loadConfig } from "./config.ts";
 import { git } from "./git.ts";
-import { headline, LEGEND, mergeGroupRange, notesBlock, passedJobs, planTable, pullEvent, pullRequest, queueRuns, setOutput, summary, testedByQueue, trustedRef, upsertComment } from "./github.ts";
-import { allHashes, plan, pullRequestOnly, runAll, skipAll, type Decision, type Plan } from "./plan.ts";
+import {
+  dispatchedJobs,
+  headline,
+  LEGEND,
+  mergeGroupRange,
+  notesBlock,
+  passedJobs,
+  planTable,
+  pullEvent,
+  pullRequest,
+  queueRuns,
+  setOutput,
+  summary,
+  testedByQueue,
+  trustedRef,
+  upsertComment,
+} from "./github.ts";
+import { allHashes, onlyJobs, plan, pullRequestOnly, runAll, skipAll, type Decision, type Plan } from "./plan.ts";
 
 const { positionals, values } = parseArgs({
   allowPositionals: true,
@@ -44,6 +60,8 @@ async function planInCI(): Promise<Plan> {
     const passed = await passedJobs(slug, Object.keys(config.jobs), trustedRef(payload, process.env.GITHUB_REF)).catch((e: unknown) => (note(e), new Set<string>()));
     return plan({ repo: values.repo, base: group.base, head, config, configPath: values.config, passed });
   }
+  const picked = event === "workflow_dispatch" ? dispatchedJobs(payload) : [];
+  if (picked.length) return onlyJobs(config, picked, allHashes(values.repo, head, config));
   if (event !== "pull_request") return runAll(config, `${event} run: everything runs`, allHashes(values.repo, head, config), event);
   const trusted = trustedRef(payload, process.env.GITHUB_REF);
   const passed = await passedJobs(slug, Object.keys(config.jobs), trusted).catch((e: unknown) => (note(e), new Set<string>()));

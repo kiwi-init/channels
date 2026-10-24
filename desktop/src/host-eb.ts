@@ -9,19 +9,24 @@ import type { Host } from "./host.ts";
 import type { HostToKeys } from "./keys-server.ts";
 import { relaunchAfter } from "./update-asset.ts";
 import { applyUpdate } from "./updater.ts";
+import { ebDataDir } from "./store-eb.ts";
 
 interface Bundle {
   identifier: string;
   version: string;
+  channel: string;
 }
 
 function bundleInfo(): Bundle {
-  const raw = JSON.parse(fs.readFileSync(path.join(PATHS.RESOURCES_FOLDER, "version.json"), "utf8")) as { identifier?: unknown; version?: unknown };
-  if (typeof raw.identifier !== "string" || typeof raw.version !== "string") throw new Error("the app bundle's version.json names no identifier or version");
-  return { identifier: raw.identifier, version: raw.version };
+  const raw = JSON.parse(fs.readFileSync(path.join(PATHS.RESOURCES_FOLDER, "version.json"), "utf8")) as { identifier?: unknown; version?: unknown; channel?: unknown };
+  if (typeof raw.identifier !== "string" || typeof raw.version !== "string" || typeof raw.channel !== "string")
+    throw new Error("the app bundle's version.json names no identifier, version or channel");
+  return { identifier: raw.identifier, version: raw.version, channel: raw.channel };
 }
 
 const bundle: Bundle = bundleInfo();
+
+export const dataDir: string = ebDataDir(bundle.identifier, bundle.channel);
 
 interface Shown {
   win: BrowserWindow;
@@ -46,7 +51,7 @@ export const ebHost: Host = {
   app: {
     packaged: () => BuildConfig.getSync().isPackaged,
     version: () => bundle.version,
-    path: (name) => (name === "data" ? Utils.paths.userData : name === "logs" ? Utils.paths.userLogs : name === "exe" ? process.execPath : PATHS.RESOURCES_FOLDER),
+    path: (name) => (name === "data" ? dataDir : name === "logs" ? Utils.paths.userLogs : name === "exe" ? process.execPath : PATHS.RESOURCES_FOLDER),
     ready: () => true,
     relaunch: (execPath) => {
       const after = relaunchAfter(process.pid, execPath, process.env);

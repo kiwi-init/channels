@@ -7,6 +7,11 @@ on:
   merge_group:
     types: [checks_requested]
   workflow_dispatch:
+    inputs:
+      jobs:
+        description: "Only these .github/jev-ci.yml jobs, comma-separated (desktop-linux, desktop-mac, …); empty runs everything"
+        required: false
+        default: ""
 
 # A new push to a pull request cancels its run still in progress: only the newest commit's
 # result matters there. Each merge group has a ref of its own, so groups never cancel each
@@ -450,7 +455,7 @@ jobs:
           find "$debs" -maxdepth 1 -name '*.deb' | wc -l > "$RUNNER_TEMP/debs-before"
           echo "Dir::Cache::Archives \"$debs/\";" | sudo tee /etc/apt/apt.conf.d/90linux-debs > /dev/null
           sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus
       - id: debs
         name: keep what apt downloaded, even when it ran out of time
         if: always()
@@ -483,6 +488,12 @@ jobs:
       - name: the linux-arm64 Hutch and devkit match their pins (no job builds there)
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-pins-check.ts linux-arm64
+      - name: the store on Linux, through a throwaway GNOME keyring and with no Secret Service
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
+        run: |
+          dbus-run-session -- sh -c 'printf throwaway | gnome-keyring-daemon --unlock --components=secrets >/dev/null && bun desktop/scripts/linux-store-check.ts keyring'
+          env -u DBUS_SESSION_BUS_ADDRESS bun desktop/scripts/linux-store-check.ts none
       - name: deb and AppImage, each at most 40 MB
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/package-linux.ts desktop/release-eb desktop/release-eb/linux
@@ -549,10 +560,9 @@ jobs:
       - name: test build (the test driver in, its own id)
         if: ${{ !cancelled() && matrix.drive }}
         working-directory: desktop
-        run: bunx electrobun build --env=dev
+        run: bun scripts/eb.ts build --env=dev
         env:
           CHANNELS_EB_TEST: "1"
-          CHANNELS_EB_IDENTIFIER: com.kiwiinit.channels.test
           DASH_RELEASE_OFFLINE: "1"
       - id: test-app
         if: ${{ !cancelled() && matrix.drive }}
