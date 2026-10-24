@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { bundleProblems, keyChannelProblems, RELEASE_ID, testBuildProblems, TEST_ID, urlSchemeProblems } from "../desktop/scripts/eb-bundle.ts";
+import { bundleProblems, keyChannelProblems, RELEASE_ID, shortVersion, testBuildProblems, TEST_ID, urlSchemeProblems, versionProblems } from "../desktop/scripts/eb-bundle.ts";
 
 const table = "var internalRpcHandlers = { message: { webviewTagExecuteJavascript: (params) => {} } };";
 
@@ -135,3 +135,18 @@ test("main-eb.ts as built: its first import takes the key channel before any oth
   expect(keyChannelProblems(await bundleMain("side", true))).toEqual([expect.stringContaining("without calling keySources() there")]);
   expect(keyChannelProblems(await bundleMain(null, true))).toEqual([expect.stringContaining("import launcher-channel-eb.ts only statically")]);
 }, 60_000);
+
+test("the Mac app names its version where Finder and About read it: CFBundleShortVersionString, the x.y.z of CFBundleVersion", () => {
+  const info = (keys: Record<string, string>) =>
+    `<dict>${Object.entries(keys)
+      .map(([k, v]) => `<key>${k}</key>\n  <string>${v}</string>`)
+      .join("")}</dict>`;
+  expect(versionProblems(info({ CFBundleVersion: "0.28.0", CFBundleShortVersionString: "0.28.0" }))).toEqual([]);
+  expect(versionProblems(info({ CFBundleVersion: "0.28.0-rc.1", CFBundleShortVersionString: "0.28.0" }))).toEqual([]);
+  expect(versionProblems(info({ CFBundleVersion: "0.28.0" }))).toEqual(["Info.plist names no CFBundleShortVersionString, so Finder and About show no version"]);
+  expect(versionProblems(info({ CFBundleVersion: "0.28.0", CFBundleShortVersionString: "0.27.4" }))).toEqual([
+    "Info.plist's CFBundleShortVersionString is 0.27.4, not 0.28.0 from CFBundleVersion 0.28.0",
+  ]);
+  expect(versionProblems(info({ CFBundleShortVersionString: "0.28.0" }))).toEqual(["Info.plist names no CFBundleVersion"]);
+  expect([shortVersion("1.2.3"), shortVersion("1.2.3-rc.4"), shortVersion("1.2.3+build.5")]).toEqual(["1.2.3", "1.2.3", "1.2.3"]);
+});
