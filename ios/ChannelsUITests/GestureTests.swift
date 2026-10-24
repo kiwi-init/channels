@@ -40,13 +40,35 @@ struct Screen {
         a.press(forDuration: 0.02, thenDragTo: b, withVelocity: XCUIGestureVelocity(500), thenHoldForDuration: hold)
     }
 
+    func bubbles(in shown: [(label: String, frame: CGRect)]) -> [(label: String, frame: CGRect)] {
+        shown.filter { $0.label.hasPrefix("Round ") || $0.label.hasPrefix("progress update") }
+    }
+
+    func measurable(_ bubbles: [(label: String, frame: CGRect)]) -> [(label: String, frame: CGRect)] {
+        let window = window
+        return bubbles.filter { $0.frame.minY > window.minY + 100 && $0.frame.maxY < window.maxY - 100 }
+    }
+
+    func shownOnceABubbleIs(within limit: Duration = .seconds(5)) async throws -> [(label: String, frame: CGRect)] {
+        let clock = ContinuousClock()
+        let from = clock.now
+        var shown = try texts()
+        while measurable(bubbles(in: shown)).isEmpty && clock.now - from < limit {
+            try await Task.sleep(for: .milliseconds(100))
+            shown = try texts()
+        }
+        let waited = clock.now - from
+        if waited > .milliseconds(150) { print("GESTURE waited \(Int(waited / .milliseconds(1))) ms for a bubble to measure") }
+        return shown
+    }
+
     func scrolled(from start: CGPoint, onBubble: Bool) async throws -> CGFloat {
-        let shown = try texts()
-        let bodies = shown.filter { $0.label.hasPrefix("Round ") || $0.label.hasPrefix("progress update") }
+        let shown = try await shownOnceABubbleIs()
+        let bodies = bubbles(in: shown)
         let under = bodies.first { $0.frame.contains(start) }
         XCTAssertEqual(under != nil, onBubble, onBubble ? "the drag doesn't start on a bubble" : "the drag starts on a bubble")
         let window = window
-        let visible = bodies.filter { $0.frame.minY > window.minY + 100 && $0.frame.maxY < window.maxY - 100 }
+        let visible = measurable(bodies)
         if under == nil && visible.isEmpty {
             print("GESTURE no bubble to measure in \(window): \(shown.count) texts, bodies \(bodies.map { "\($0.label.prefix(24)) at \($0.frame)" })")
             let shot = XCTAttachment(screenshot: app.screenshot())
