@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.outlined.Chat
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.outlined.PushPin
@@ -50,6 +51,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.kiwiinit.channels.engine.AskView
@@ -68,7 +70,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DetailsScreen(model: AppModel, code: String, current: String, back: () -> Unit, choose: (String) -> Unit) {
+fun DetailsScreen(model: AppModel, code: String, current: String, back: () -> Unit, choose: (String) -> Unit, newAgent: () -> Unit) {
     val room = model.rooms[code]
     Scaffold(
         topBar = {
@@ -83,13 +85,13 @@ fun DetailsScreen(model: AppModel, code: String, current: String, back: () -> Un
         if (room == null) {
             Centered("This channel is gone", "Its owner closed it, or this phone was removed from it.", Modifier.padding(padding))
         } else {
-            ChannelDetails(model, room, current, choose, PaddingValues(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding() + 24.dp))
+            ChannelDetails(model, room, current, choose, newAgent, PaddingValues(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding() + 24.dp))
         }
     }
 }
 
 @Composable
-private fun ChannelDetails(model: AppModel, room: RoomView, current: String, choose: (String) -> Unit, padding: PaddingValues) {
+private fun ChannelDetails(model: AppModel, room: RoomView, current: String, choose: (String) -> Unit, newAgent: () -> Unit, padding: PaddingValues) {
     val tone = Tone.current
     val view = LocalView.current
     val spot = Spot(room.code, current)
@@ -124,6 +126,12 @@ private fun ChannelDetails(model: AppModel, room: RoomView, current: String, cho
                     Action(if (pinned) Icons.Outlined.PushPin else Icons.Filled.PushPin, if (pinned) "Unpin" else "Pin", Modifier.weight(1f)) {
                         view.buzz(Buzz.Tap)
                         model.togglePin(spot)
+                    }
+                    if (room.isOwner) {
+                        Action(Icons.Filled.Add, "New agent", Modifier.weight(1f)) {
+                            view.buzz(Buzz.Tap)
+                            newAgent()
+                        }
                     }
                 }
             }
@@ -192,7 +200,14 @@ private fun Action(icon: ImageVector, title: String, modifier: Modifier, tap: ()
         verticalArrangement = Arrangement.Center,
     ) {
         Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-        Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, maxLines = 1, modifier = Modifier.padding(top = 4.dp, start = 8.dp, end = 8.dp))
+        Text(
+            title,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 4.dp, start = 8.dp, end = 8.dp),
+        )
     }
 }
 
