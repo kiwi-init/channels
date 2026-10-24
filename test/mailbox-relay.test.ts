@@ -43,6 +43,38 @@ describe("the relay's pairing mailbox", () => {
     expect(await here.get("a")).toBeNull();
   });
 
+  test("waiting for the answer rides out the relay's 5xx and dropped connections, as kiwi pair's wait must (issue #714)", async () => {
+    const person = await generateIdentity("Ada Lovelace");
+    const machine = await generateIdentity("devbox");
+    const secret = newSecret();
+    let reads = 0;
+    const flaky: typeof fetch = Object.assign(
+      async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+        if ((init?.method ?? "GET") === "GET" && String(input).endsWith("/b")) {
+          reads++;
+          if (reads === 2 || reads === 3) return new Response("worker threw", { status: 500 });
+          if (reads === 4) throw new TypeError("connection reset");
+        }
+        return fetch(input, init);
+      },
+      { preconnect: fetch.preconnect },
+    );
+    const there = await openMailbox(relay, secret, flaky);
+    await askToPair(machine, there, "devbox", "linux");
+    const here = await openMailbox(relay, secret);
+    setTimeout(() => void (async () => answerPair(person, here, (await readPairAsk(await here.get("a"), here))!))(), 300);
+    const answer = await readPairAnswer(await there.wait("b", { timeoutMs: 10_000, everyMs: 50 }), machine.pk);
+    expect(answer?.person.pk).toBe(person.pk);
+    expect(reads).toBeGreaterThan(4);
+  });
+
+  test("a wait still ends on what can't heal: a box the code didn't seal, and a relay failing until the time is up", async () => {
+    const forged: typeof fetch = Object.assign(async () => Response.json({ box: "not-sealed-by-this-code" }), { preconnect: fetch.preconnect });
+    await expect((await openMailbox(relay, newSecret(), forged)).wait("b", { timeoutMs: 2_000, everyMs: 50 })).rejects.toThrow(/didn't seal/);
+    const down: typeof fetch = Object.assign(async () => new Response("bad gateway", { status: 502 }), { preconnect: fetch.preconnect });
+    await expect((await openMailbox(relay, newSecret(), down)).wait("b", { timeoutMs: 300, everyMs: 50 })).rejects.toThrow(/502/);
+  });
+
   test("slots are written once, empty reads 404, drops clear", async () => {
     const mb = await openMailbox(relay, newSecret());
     expect(await mb.get("a")).toBeNull();

@@ -58,6 +58,7 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     linkAnswer: (accept) => t.call("linkAnswer", accept),
     linkCancel: () => t.call("linkCancel"),
     daemonStatus: () => t.call("daemonStatus"),
+    doctor: () => t.call("doctor"),
     daemonAdopt: () => t.call("daemonAdopt"),
     installCli: () => t.call("installCli"),
     getUpdate: () => t.call("getUpdate"),
@@ -91,5 +92,7 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     harnessesOn: (machinePk) => t.call("harnessesOn", machinePk),
     foldersOn: (machinePk, roomId) => t.call("foldersOn", machinePk, roomId),
     settingsOn: (machinePk) => t.call("settingsOn", machinePk),
+    launchRoots: () => t.call("launchRoots"),
+    setLaunchRoot: (dir, to) => t.call("setLaunchRoot", dir, to),
   };
 }

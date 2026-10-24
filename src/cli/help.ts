@@ -84,7 +84,7 @@ Agents
 This computer
   kiwi setup                                     set it up once: Claude Code's hooks, the PATH, and how to pair it
   kiwi pair kp1-…                                pair it with your Channels app (approve it there): its agents get in on their own,
-                                                 and the app can start agents here
+                                                 and the app can start agents here: it starts kiwi's daemon, which keeps this computer reachable
   kiwi unpair                                    stop being paired: the relay forgets this computer and it takes no more asks
   kiwi cleanup [--quiet]                         remove what older installs and updates left behind (the installer runs it)
   kiwi daemon                                    this computer's hub: key, cert, and every agent's seat (starts on its own)
@@ -113,7 +113,8 @@ This computer
   kiwi launch HARNESS --code CODE [--folder DIR] [--nick NAME] [--persona TOKEN]   start an agent in a terminal you
                                                  can open (the one kiwi terminal prefer names, else Terminal, else tmux): it joins with a launch id the app knows;
                                                  --model ID, --effort LEVEL, --permission default|accept-edits|plan|bypass and --context 1m start it with those
-  kiwi demo · doctor · hooks install|uninstall|status · mcp · channels · relay --help
+  kiwi doctor [--json]                           check this computer: the install, the relay, pairing and hooks, with a fix for each problem
+  kiwi demo · hooks install|uninstall|status · mcp · channels · relay --help
 
 Running a channel (create, approve, remove, personalities, hold, charter, close) is the owner's, in the Channels app.
 

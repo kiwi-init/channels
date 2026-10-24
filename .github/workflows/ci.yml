@@ -14,11 +14,11 @@ on:
         default: ""
 
 # A new push to a pull request cancels its run still in progress: only the newest commit's
-# result matters there. Each merge group has a ref of its own, so groups never cancel each
-# other, and every run on main has a group of its own, so no push or rehearsal cancels another
-# and each commit on main gets a verdict (a cancelled run reads as red).
+# result matters there. So does a new push to main: its run tests what the older one would have,
+# and the older run's ci-ok passes as cancelled for it (jev-ci report). Each merge group has a ref
+# of its own, so groups never cancel each other, and a dispatched run never cancels another.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.run_id }}
+  group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_ref || (github.event_name == 'push' && github.ref) || github.run_id }}
   cancel-in-progress: true
 
 permissions:
@@ -77,9 +77,9 @@ jobs:
       - name: desktop types
         if: ${{ !cancelled() }}
         run: cd desktop && bunx tsc --noEmit
-      - name: ios engine types
+      - name: phone engine types
         if: ${{ !cancelled() }}
-        run: bunx tsc --noEmit -p ios/engine/tsconfig.json && bunx tsc --noEmit -p ios/scripts/tsconfig.json
+        run: bunx tsc --noEmit -p ios/engine/tsconfig.json && bunx tsc --noEmit -p ios/scripts/tsconfig.json && bunx tsc --noEmit -p android/scripts/tsconfig.json
       - name: ui tokens
         if: ${{ !cancelled() }}
         run: bun scripts/ui-tokens.ts
@@ -444,7 +444,7 @@ jobs:
           find "$debs" -maxdepth 1 -name '*.deb' | wc -l > "$RUNNER_TEMP/debs-before"
           echo "Dir::Cache::Archives \"$debs/\";" | sudo tee /etc/apt/apt.conf.d/90linux-debs > /dev/null
           sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus ${{ matrix.drive && 'weston xwayland' || '' }}
       - id: debs
         name: keep what apt downloaded, even when it ran out of time
         if: always()
@@ -520,6 +520,35 @@ jobs:
       - name: smoke, under Xvfb
         if: ${{ !cancelled() && matrix.drive }}
         run: xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/smoke-eb.ts "${{ steps.test-app.outputs.path }}"
+      - name: smoke, in a Wayland session as desktops run it (headless weston with XWayland, no Xvfb)
+        if: ${{ !cancelled() && matrix.drive }}
+        timeout-minutes: 10
+        run: |
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/wayland"
+          mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
+          weston --version
+          weston --backend=headless --xwayland --socket=kiwi-wayland --width=1280 --height=800 --idle-time=0 > "$RUNNER_TEMP/weston.log" 2>&1 &
+          compositor=$!
+          x=""
+          for _ in $(seq 1 50); do
+            x=$(grep -oE 'listening on display :[0-9]+' "$RUNNER_TEMP/weston.log" | grep -oE ':[0-9]+$' | head -n 1 || true)
+            [ -S "$XDG_RUNTIME_DIR/kiwi-wayland" ] && [ -n "$x" ] && break
+            sleep 0.2
+          done
+          [ -S "$XDG_RUNTIME_DIR/kiwi-wayland" ] && [ -n "$x" ] || { echo "weston didn't open its Wayland socket and XWayland display:"; cat "$RUNNER_TEMP/weston.log"; exit 1; }
+          echo "Wayland socket kiwi-wayland, XWayland display $x"
+          session() { env -u XAUTHORITY -u GDK_BACKEND DISPLAY="$x" WAYLAND_DISPLAY=kiwi-wayland XDG_SESSION_TYPE=wayland "$@"; }
+          code=0
+          session bun desktop/scripts/smoke-eb.ts "${{ steps.test-app.outputs.path }}" || code=$?
+          if [ "$code" -ne 0 ]; then
+            echo "::group::weston's log"; cat "$RUNNER_TEMP/weston.log"; echo "::endgroup::"
+            echo "::group::the test app alone in this session, for 20 s"
+            mkdir -p "$RUNNER_TEMP/wayland-home" && HOME="$RUNNER_TEMP/wayland-home" session timeout 20 "${{ steps.test-app.outputs.path }}/bin/electrobun-launcher" > "$RUNNER_TEMP/wayland-app.log" 2>&1 || echo "exited $?"
+            tail -n 120 "$RUNNER_TEMP/wayland-app.log"
+            echo "::endgroup::"
+          fi
+          kill "$compositor" 2> /dev/null || true
+          exit "$code"
       - name: dpkg --purge leaves nothing of the app behind
         if: ${{ !cancelled() }}
         run: |
@@ -662,6 +691,58 @@ jobs:
           job: ios-gestures
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['ios-gestures'] }}
 
+  # The Android app: Gradle bundles the engine, builds a release APK (R8, signed with the debug key in android/app/debug.p12
+  # so every build installs over the last one) and runs Android lint on it. The APK is kept as an artifact to install on a phone.
+  # Every screen is drawn on the JVM (Robolectric and Roborazzi), light and dark, and kept as the android-screens artifact.
+  # Then the engine runs in Chromium the way Engine.kt hosts it, linked to a dev channel, through the kiwiAndroid bridge.
+  android:
+    name: android / build
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['android']
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.m2/repository/org/robolectric
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle.kts', 'android/gradle/libs.versions.toml', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+      - name: app build, lint and screens
+        working-directory: android
+        run: JAVA_HOME="$JAVA_HOME_17_X64" ./gradlew --no-daemon --stacktrace assembleRelease lintRelease recordRoborazziRelease
+      - uses: ./.github/actions/browser
+        if: ${{ !cancelled() }}
+      - name: engine bridge
+        if: ${{ !cancelled() }}
+        run: bun android/scripts/bridge-check.ts
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: channels-android
+          path: |
+            android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/reports/lint-results-release.html
+          if-no-files-found: ignore
+          overwrite: true
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: android-screens
+          path: android/app/build/screens
+          if-no-files-found: ignore
+          overwrite: true
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        timeout-minutes: 1
+        with:
+          job: android
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['android'] }}
+
   release-rehearsal:
     name: release / rehearsal
     needs: plan
@@ -674,7 +755,7 @@ jobs:
   # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, static, test-unit, test-flows-a, test-flows-b, build, shots, perf-runs, perf, desktop, desktop-mac, desktop-linux, cli-macos, ios, ios-gestures, release-rehearsal]
+    needs: [plan, static, test-unit, test-flows-a, test-flows-b, build, shots, perf-runs, perf, desktop, desktop-mac, desktop-linux, cli-macos, ios, ios-gestures, android, release-rehearsal]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

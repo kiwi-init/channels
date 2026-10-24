@@ -6,7 +6,8 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadPairedMachine, pairComputer, PairError } from "../src/daemon.ts";
+import { daemonHello, daemonSock, loadPairedMachine, pairComputer, PairError, stopDaemon } from "../src/daemon.ts";
+import { machineOnline } from "../desktop/src/remote.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 import { loadMachine } from "../src/machine.ts";
 import { answerPair, newSecret, openMailbox, pairCode, readPairAsk } from "@kiwi/core/mailbox.ts";
@@ -91,5 +92,34 @@ describe("kiwi pair", () => {
     expect(err).toBeInstanceOf(PairError);
     expect((err as PairError).code).toBe(3);
     expect((err as PairError).message).toMatch(/in time/);
+  });
+});
+
+describe("kiwi pair, the command (issue #714)", () => {
+  test("once the app approves, kiwi pair starts this computer's daemon, which registers it so the app can reach it", async () => {
+    const there = mkdtempSync(join(tmpdir(), "kiwi-pair-cli-"));
+    const person = await generateIdentity("Ada Lovelace");
+    const secret = newSecret();
+    const cli = Bun.spawn([process.execPath, join(import.meta.dir, "..", "src", "cli", "main.ts"), "pair", pairCode(secret)], {
+      cwd: there,
+      env: { ...process.env, KIWI_HOME: there, KIWI_RELAY: relay },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    try {
+      const app = await openMailbox(relay, secret);
+      const ask = await readPairAsk(await app.wait("a", { timeoutMs: 15_000 }), app);
+      await answerPair(person, app, ask!);
+      expect(await cli.exited).toBe(0);
+      expect(await new Response(cli.stdout).text()).toContain("its kiwi daemon is running, so your app can start agents here now.");
+      expect((await daemonHello(daemonSock(there))).version).toBeTruthy();
+      const until = Date.now() + 15_000;
+      while ((await machineOnline({ person, relay }, ask!.pk)) !== true && Date.now() < until) await Bun.sleep(200);
+      expect(await machineOnline({ person, relay }, ask!.pk)).toBe(true);
+    } finally {
+      cli.kill();
+      await stopDaemon(daemonSock(there)).catch(() => {});
+      rmSync(there, { recursive: true, force: true });
+    }
   });
 });

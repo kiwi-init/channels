@@ -1,4 +1,4 @@
-import { b64url, fromB64url, openBytes, sealBytes } from "./crypto.ts";
+import { b64url, freshKeyPair, fromB64url, openBytes, sealBytes } from "./crypto.ts";
 import { newSecret, openMailbox, type Mailbox } from "./mailbox.ts";
 
 export const LINK_PREFIX = "kl1-";
@@ -94,7 +94,7 @@ export function readLinkCode(text: string): LinkCode | null {
 export const newLinkSecret = newSecret;
 
 export async function newLinkKeys(): Promise<LinkKeys> {
-  const pair = (await crypto.subtle.generateKey(X25519, true, ["deriveBits"])) as unknown as CryptoKeyPair;
+  const pair = await freshKeyPair(X25519, ["deriveBits"]);
   return {
     xpk: b64url(new Uint8Array((await crypto.subtle.exportKey("raw", pair.publicKey)) as ArrayBuffer)),
     xsk: b64url(new Uint8Array((await crypto.subtle.exportKey("pkcs8", pair.privateKey)) as ArrayBuffer)),

@@ -8,7 +8,7 @@ type Saved = Record<string, Partial<Record<KnownHarness, Record<string, unknown>
 
 export const PERMISSION_LABEL: Record<Permission, string> = { default: "Default", "accept-edits": "Accept edits", plan: "Plan", bypass: "Bypass" }
 
-export const EFFORT_LABEL: Record<string, string> = { minimal: "Minimal", low: "Low", medium: "Medium", high: "High", xhigh: "Extra high", max: "Max" }
+export const EFFORT_LABEL: Record<string, string> = { none: "None", off: "Off", minimal: "Minimal", low: "Low", medium: "Medium", high: "High", xhigh: "Extra high", max: "Max" }
 
 export const MODEL_PICKS: Partial<Record<KnownHarness, string[]>> = { claude: ["opus", "sonnet", "fable", "haiku"] }
 

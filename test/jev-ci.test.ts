@@ -5,7 +5,8 @@ import { dirname, join } from "node:path";
 import { FLOWS } from "../scripts/ci-flows.ts";
 import { loadConfig, matches, type Config } from "../.github/jev-ci/config.ts";
 import { markMoves, size, type FileChange } from "../.github/jev-ci/diff.ts";
-import { dispatchedJobs, mergeGroupRange, passMarkers, testedByQueue, trustedRef, type PassCache, type PullEvent, type QueueRun } from "../.github/jev-ci/github.ts";
+import { dispatchedJobs, mergeGroupRange, passMarkers, superseded, testedByQueue, trustedRef, type PassCache, type PullEvent, type QueueRun } from "../.github/jev-ci/github.ts";
+import { newerOnRemote } from "../.github/jev-ci/git.ts";
 import type { Request } from "../.github/jev-ci/jev.ts";
 import { onlyJobs, plan, pullRequestOnly, skipAll, type Ask, type Decision, type Plan } from "../.github/jev-ci/plan.ts";
 
@@ -105,7 +106,7 @@ const ran = (r: Plan) =>
     .filter((d) => d.run)
     .map((d) => d.job)
     .sort();
-const CHECKS = ["static", "test-unit", "test-flows-a", "test-flows-b", "build", "shots", "perf-runs", "perf", "desktop", "desktop-mac", "desktop-linux", "cli-macos", "ios", "ios-gestures"];
+const CHECKS = ["static", "test-unit", "test-flows-a", "test-flows-b", "build", "shots", "perf-runs", "perf", "desktop", "desktop-mac", "desktop-linux", "cli-macos", "ios", "ios-gestures", "android"];
 
 describe("the iPhone jobs wait only on what the iPhone app is built from (T1598)", () => {
   const desktopOnly = {
@@ -490,7 +491,7 @@ describe("the merge queue (T2034)", () => {
 
   test("ci.yml answers the merge queue: it runs on merge_group's checks_requested, each group in a concurrency group of its own", () => {
     expect(CI).toMatch(/\n {2}merge_group:\n {4}types: \[checks_requested\]\n/);
-    expect(CI).toContain("group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.run_id }}");
+    expect(CI).toContain("group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_ref || (github.event_name == 'push' && github.ref) || github.run_id }}");
     expect(CI).toMatch(/\n {2}ci-ok:\n(?: .*\n)*? {4}if: always\(\)\n/);
   });
 });
@@ -576,5 +577,55 @@ describe("a manual run can pick its jobs", () => {
 
   test("ci.yml's workflow_dispatch takes the jobs input", () => {
     expect(CI).toMatch(/\n {2}workflow_dispatch:\n {4}inputs:\n {6}jobs:\n/);
+  });
+});
+
+describe("a newer push to main cancels the older main run (T324)", () => {
+  test("pushes to main share one concurrency group and cancel the run still going; pull requests, merge groups and dispatched runs keep their own", () => {
+    expect(CI).toContain("group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_ref || (github.event_name == 'push' && github.ref) || github.run_id }}");
+    expect(CI).toMatch(/\nconcurrency:\n {2}group: [^\n]+\n {2}cancel-in-progress: true\n/);
+  });
+
+  test("ci-ok passes a run cancelled for a newer push, and stays red when a job failed or nothing newer came", () => {
+    const newer = "f".repeat(40);
+    const cancelled = { plan: "success", static: "success", "desktop-mac": "cancelled", "desktop-linux": "cancelled", ios: "skipped" };
+    expect(superseded(["desktop-mac", "desktop-linux", "ios"], cancelled, newer)).toBe(true);
+    expect(superseded(["desktop-mac", "desktop-linux", "ios"], cancelled, null)).toBe(false);
+    expect(superseded(["desktop-mac", "static"], { ...cancelled, static: "failure" }, newer)).toBe(false);
+    expect(superseded(["ios"], { plan: "success", ios: "skipped" }, newer)).toBe(false);
+    expect(superseded([], cancelled, newer)).toBe(false);
+  });
+
+  test("the newer push is main's tip when it holds this commit; none when this commit is the tip or isn't in it", () => {
+    const at = mkdtempSync(join(tmpdir(), "jev-ci-newer-"));
+    const run = (dir: string, ...args: string[]) => {
+      const p = Bun.spawnSync(["git", "-C", dir, ...args], {
+        stdout: "pipe",
+        stderr: "pipe",
+        env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" },
+      });
+      if (!p.success) throw new Error(p.stderr.toString());
+      return p.stdout.toString().trim();
+    };
+    try {
+      const origin = join(at, "origin.git");
+      const work = join(at, "work");
+      Bun.spawnSync(["git", "init", "--bare", "-b", "main", origin]);
+      Bun.spawnSync(["git", "init", "-b", "main", work]);
+      run(work, "remote", "add", "origin", origin);
+      run(work, "commit", "--allow-empty", "-m", "one");
+      const one = run(work, "rev-parse", "HEAD");
+      run(work, "push", "origin", "main");
+      expect(newerOnRemote(work, "refs/heads/main", one)).toBeNull();
+      run(work, "commit", "--allow-empty", "-m", "two");
+      const two = run(work, "rev-parse", "HEAD");
+      run(work, "push", "origin", "main");
+      expect(newerOnRemote(work, "refs/heads/main", one)).toBe(two);
+      run(work, "checkout", "-b", "side", one);
+      run(work, "commit", "--allow-empty", "-m", "elsewhere");
+      expect(newerOnRemote(work, "refs/heads/main", run(work, "rev-parse", "HEAD"))).toBeNull();
+    } finally {
+      rmSync(at, { recursive: true, force: true });
+    }
   });
 });

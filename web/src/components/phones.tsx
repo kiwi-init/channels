@@ -48,7 +48,7 @@ function LinkPhone({ onDone }: { onDone: () => void }) {
   if (state.kind === "waiting") {
     return (
       <>
-        <p className="text-ui leading-normal text-ink-2">On your iPhone, open Channels and choose Scan the code. No camera? Copy the code and choose Paste the code there.</p>
+        <p className="text-ui leading-normal text-ink-2">On your iPhone or Android phone, open Channels and choose Scan the code. No camera? Copy the code and choose Paste the code there.</p>
         <div className="mt-3 flex justify-center">
           <QrCode text={state.linking.code} label="Code to link a phone" />
         </div>
@@ -102,7 +102,7 @@ function LinkPhone({ onDone }: { onDone: () => void }) {
 export function PhoneRows({ linking, onLinked }: { linking: boolean; onLinked: () => void }) {
   const { phones } = useSecrets()
   if (linking) return <LinkPhone onDone={onLinked} />
-  if (!phones.length) return <p className="text-ui text-ink-3">None yet. Install Channels on your iPhone, then link it here.</p>
+  if (!phones.length) return <p className="text-ui text-ink-3">None yet. Install Channels on your iPhone or Android phone, then link it here.</p>
   return (
     <>
       {phones.map((p) => (

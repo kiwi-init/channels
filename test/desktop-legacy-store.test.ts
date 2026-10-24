@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { createCipheriv, pbkdf2Sync } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { legacyPassword } from "../desktop/src/legacy-keys.ts";
+import { kwalletKeys, legacyPairs, legacyPassword, replyValue, type DBusCall } from "../desktop/src/legacy-keys.ts";
 import { legacyDirs, legacyPrefix, legacyRounds, openLegacy, readLegacyAt, readLegacyStore, type LegacyName } from "../desktop/src/legacy-store.ts";
 
 const ELECTRON_LINUX = {
@@ -57,8 +57,10 @@ function put(dir: string, raw: Buffer | string, name: string = "kiwi-store.bin")
 
 const keychain =
   (entries: Partial<Record<LegacyName, string>>) =>
-  async (name: LegacyName): Promise<string | null> =>
-    entries[name] ?? null;
+  async (name: LegacyName): Promise<string[]> => {
+    const key = entries[name];
+    return key ? [key] : [];
+  };
 
 const linuxStore = (): Buffer => Buffer.from(ELECTRON_LINUX.vectors[0]!.b64, "base64");
 
@@ -119,7 +121,7 @@ describe("finding Electron's store", () => {
     const read = await readLegacyStore(
       async () => {
         asked++;
-        return null;
+        return [];
       },
       "linux",
       h,
@@ -174,7 +176,7 @@ describe("finding Electron's store", () => {
     const read = await readLegacyStore(
       async () => {
         asked++;
-        return "pw";
+        return ["pw"];
       },
       "darwin",
       h,
@@ -218,7 +220,122 @@ describe("finding Electron's store", () => {
 
 describe("the old password's lookup", () => {
   test("Bun looks up the old password only on Linux: on a Mac the signed launcher reads it (T544), and elsewhere there was no Electron app", async () => {
-    expect(await legacyPassword("darwin")("kiwi-desktop")).toBeNull();
-    expect(await legacyPassword("win32")("kiwi-desktop")).toBeNull();
+    expect(await legacyPassword("darwin")("kiwi-desktop")).toEqual([]);
+    expect(await legacyPassword("win32")("kiwi-desktop")).toEqual([]);
+  });
+});
+
+describe("the old app's key in KDE's wallet (T472, Jow's KDE machine)", () => {
+  type Wallet = { service: string; enabled?: boolean; wallet?: string; handle?: number; entries: Record<string, string> };
+  const fakeBus = (wallets: Wallet[]) => {
+    const calls: string[] = [];
+    const call: DBusCall = async (dest, _path, method, args) => {
+      calls.push([dest, method, ...args].join(" "));
+      const w = wallets.find((x) => x.service === dest);
+      if (!w) return null;
+      const say = (line: string) => `method return time=1 sender=:1.9 -> destination=:1.42 serial=7 reply_serial=2\n   ${line}\n`;
+      if (method === "isEnabled") return say(`boolean ${w.enabled !== false}`);
+      if (method === "networkWallet") return say(`string "${w.wallet ?? "kdewallet"}"`);
+      if (method === "open") return say(`int32 ${w.handle ?? 7}`);
+      if (method === "readPassword") return say(`string "${w.entries[`${args[1]!.slice(7)}/${args[2]!.slice(7)}`] ?? ""}"`);
+      if (method === "close") return say("int32 0");
+      return null;
+    };
+    return { call, calls };
+  };
+
+  test("every folder and entry name the old app could have used is tried: Electron's own, and Chromium's defaults", () => {
+    expect(legacyPairs("kiwi-desktop")).toEqual([
+      ["kiwi-desktop Keys", "kiwi-desktop Safe Storage"],
+      ["kiwi-desktop Keys", "Chromium Safe Storage"],
+      ["Chromium Keys", "kiwi-desktop Safe Storage"],
+      ["Chromium Keys", "Chromium Safe Storage"],
+    ]);
+  });
+
+  test("Plasma 6's wallet answers with the key kept under Chromium's names, read from the network wallet the person named, and closed after", async () => {
+    const bus = fakeBus([{ service: "org.kde.kwalletd6", wallet: "Personal", handle: 12, entries: { "Chromium Keys/Chromium Safe Storage": "gk2sW4WabwOsnX/FPdTgOw==" } }]);
+    expect(await kwalletKeys("kiwi-desktop", bus.call)).toEqual(["gk2sW4WabwOsnX/FPdTgOw=="]);
+    expect(bus.calls).toContain("org.kde.kwalletd6 open string:Personal int64:0 string:kiwi-desktop");
+    expect(bus.calls).toContain("org.kde.kwalletd6 readPassword int32:12 string:Chromium Keys string:Chromium Safe Storage string:kiwi-desktop");
+    expect(bus.calls.at(-1)).toBe("org.kde.kwalletd6 close int32:12 boolean:false string:kiwi-desktop");
+  });
+
+  test("Plasma 5's wallet is asked when Plasma 6's isn't there, and both of the old app's entries come back, its own first", async () => {
+    const bus = fakeBus([{ service: "org.kde.kwalletd5", entries: { "kiwi-desktop Keys/kiwi-desktop Safe Storage": "own", "Chromium Keys/Chromium Safe Storage": "chromium" } }]);
+    expect(await kwalletKeys("kiwi-desktop", bus.call)).toEqual(["own", "chromium"]);
+    expect(bus.calls[0]).toBe("org.kde.kwalletd6 isEnabled");
+  });
+
+  test("a wallet that's off, or a locked one whose prompt the person dismissed, gives no key rather than an error", async () => {
+    expect(await kwalletKeys("kiwi-desktop", fakeBus([{ service: "org.kde.kwalletd6", enabled: false, entries: { "Chromium Keys/Chromium Safe Storage": "x" } }]).call)).toEqual([]);
+    expect(await kwalletKeys("kiwi-desktop", fakeBus([{ service: "org.kde.kwalletd6", handle: -1, entries: { "Chromium Keys/Chromium Safe Storage": "x" } }]).call)).toEqual([]);
+    expect(await kwalletKeys("kiwi-desktop", fakeBus([]).call)).toEqual([]);
+  });
+
+  test("dbus-send's replies read back as their value", () => {
+    expect(replyValue('method return time=1 sender=:1.9 -> destination=:1.42 serial=7 reply_serial=2\n   string "kdewallet"\n')).toBe("kdewallet");
+    expect(replyValue("method return time=1\n   int32 -1\n")).toBe("-1");
+    expect(replyValue("method return time=1\n   boolean true\n")).toBe("true");
+    expect(replyValue(null)).toBeNull();
+  });
+
+  test("the real call goes through dbus-send on the session bus, with the wallet's prompt given two minutes", async () => {
+    const bin = mkdtempSync(join(tmpdir(), "kiwi-dbus-send-"));
+    homes.push(bin);
+    const log = join(bin, "calls");
+    writeFileSync(
+      join(bin, "dbus-send"),
+      `#!/bin/sh
+printf '%s\\n' "$*" >> '${log}'
+case "$6" in
+  *.isEnabled) printf 'method return\\n   boolean true\\n' ;;
+  *.networkWallet) printf 'method return\\n   string "kdewallet"\\n' ;;
+  *.open) printf 'method return\\n   int32 3\\n' ;;
+  *.readPassword) [ "$9" = "string:Chromium Safe Storage" ] && printf 'method return\\n   string "the-key"\\n' || printf 'method return\\n   string ""\\n' ;;
+  *) printf 'method return\\n   int32 0\\n' ;;
+esac
+`,
+    );
+    chmodSync(join(bin, "dbus-send"), 0o755);
+    const path = process.env.PATH;
+    process.env.PATH = `${bin}:${path ?? ""}`;
+    try {
+      expect(await kwalletKeys("kiwi-desktop")).toEqual(["the-key"]);
+    } finally {
+      process.env.PATH = path;
+    }
+    const calls = readFileSync(log, "utf8").trim().split("\n");
+    expect(calls).toContain("--session --print-reply --reply-timeout=120000 --dest=org.kde.kwalletd6 /modules/kwalletd6 org.kde.KWallet.open string:kdewallet int64:0 string:kiwi-desktop");
+  });
+
+  test("on Linux the old store opens with the wallet's key even when the Secret Service gives a wrong one first", async () => {
+    const h = home();
+    put(join(h, ".config", "kiwi-desktop"), linuxStore());
+    const password = legacyPassword(
+      "linux",
+      async () => [ELECTRON_LINUX.keyring],
+      () => ["not-this-one"],
+    );
+    const read = await readLegacyStore(password, "linux", h, {});
+    expect(read.kind).toBe("ok");
+    expect(read.kind === "ok" && read.encrypted).toBe(true);
+  });
+
+  test("with no key anywhere, it says where Channels looked, and that nothing was opened", async () => {
+    const h = home();
+    put(join(h, ".config", "kiwi-desktop"), linuxStore());
+    const read = await readLegacyStore(
+      legacyPassword(
+        "linux",
+        async () => [],
+        () => [],
+      ),
+      "linux",
+      h,
+      {},
+    );
+    expect(read).toMatchObject({ kind: "unreadable", keyless: true });
+    expect(read.kind === "unreadable" && read.why).toContain("neither in KDE's wallet nor in your Secret Service");
   });
 });

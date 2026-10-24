@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { createCipheriv, pbkdf2Sync } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import type { KeySources } from "../desktop/src/launcher-key.ts";
 import type { LegacyName } from "../desktop/src/legacy-store.ts";
@@ -47,7 +47,7 @@ function sources(password: string | null = null, finish: string | null = null): 
       key,
       legacy: async (name) => {
         asked.push(name);
-        return password;
+        return password === null ? [] : [password];
       },
       done: () => void done++,
     },
@@ -100,6 +100,20 @@ test("Electron's store is imported once, through the launcher's password for kiw
   expect(await openEbStore({ dir, keys: s.keys, home, platform: "darwin" })).toMatchObject({ kind: "open", json: { relayUrl: "https://old.example" }, imported: null });
   expect(s.asked).toEqual(["kiwi-desktop"]);
   expect(readdirSync(join(home, "Library", "Application Support", "kiwi-desktop"))).toEqual(["kiwi-store.bin"]);
+});
+
+test("an Electron store whose key can't be found: the dialog names that file, says nothing changed, and puts unlocking before starting without it (T472)", async () => {
+  const { dir, home } = place();
+  const file = electronStore(home, { relayUrl: "https://old.example", channels: [] }, "electron-pw");
+  const opened = await openEbStore({ dir, keys: sources(null).keys, home, platform: "darwin" });
+  expect(opened).toMatchObject({ kind: "unreadable", cause: "legacy-keyless", file });
+  openStoreFile(v2Vault(opened));
+  const message = brokenStore()?.message ?? "";
+  expect(message).toContain(`The file is ${file}.`);
+  expect(message).not.toContain(STORE_FILE);
+  expect(message).toContain("Nothing was changed: that file stays as it is.");
+  expect(readdirSync(dirname(file))).toEqual(["kiwi-store.bin"]);
+  expect(existsSync(dir)).toBe(false);
 });
 
 test("a deleted store whose key is marked is refused, and Electron's store planted beside it isn't read", async () => {
@@ -162,7 +176,10 @@ test("the broken-store dialog says what to do for its cause, not 'unlock your ke
   openStoreFile({ where: () => "/old/kiwi-store.bin", load: () => ({ ok: false, why: "the keyring is locked" }), save: () => {} });
   expect(brokenStore()?.message).toContain("Unlock your keychain, then quit and reopen Channels.");
   expect(Object.keys(REFUSAL_ADVICE).sort()).toEqual(["copy", "deleted", "keychain", "keyless", "launcher", "legacy", "legacy-keyless", "legacy-plain", "save"]);
-  expect(REFUSAL_ADVICE["legacy-keyless"]).toContain("Move that file out of its folder");
+  const keyless = REFUSAL_ADVICE["legacy-keyless"];
+  expect(keyless).toStartWith("Nothing was changed: that file stays as it is.");
+  expect(keyless.indexOf("unlock or start it")).toBeLessThan(keyless.indexOf("move that file out of its folder"));
+  expect(keyless).toContain("Only if its key is gone for good");
   expect(REFUSAL_ADVICE["legacy-plain"]).toContain("move it out of its folder");
   expect(REFUSAL_ADVICE.copy).not.toContain("Restore the store from a backup, then");
 });
@@ -181,7 +198,7 @@ test("a Linux store with no Secret Service opens in plain JSON at 0600, and the 
       finished: async () => false,
       finish: async () => {},
     },
-    legacy: async () => null,
+    legacy: async () => [],
     done: () => {},
   };
   const opened = await openEbStore({ dir, keys: failing, home, platform: "linux" });

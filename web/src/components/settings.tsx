@@ -1,7 +1,9 @@
 import {
   ArrowLeft01Icon,
   ArrowRight01Icon,
+  CheckmarkCircle02Icon,
   ComputerIcon,
+  Folder01Icon,
   GithubIcon,
   Link01Icon,
   PaintBoardIcon,
@@ -19,10 +21,11 @@ import { setAccessibilityOption, useAccessibilityOption } from "@/lib/accessibil
 import { cx } from "@/lib/utils"
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { relayUrl } from "@/lib/relay"
-import { bridge, useSecrets } from "@/lib/secrets"
+import { bridge, useSecrets, type KiwiBridge } from "@/lib/secrets"
 import { contextLineBridge, hooksBridge, terminalsBridge } from "@/lib/terminals"
+import { rootsBridge } from "@/lib/launches"
 import { harnessName } from "@/lib/harness"
-import type { HookRow, HookState } from "@kiwi/core/harnesses.ts"
+import type { HarnessRow, HookRow, HookState } from "@kiwi/core/harnesses.ts"
 import type { TerminalId, TerminalRow, TerminalsStatus } from "@kiwi/core/terminals.ts"
 import { version } from "../../../package.json"
 import { ComputerRows } from "./computers"
@@ -288,6 +291,74 @@ function NewAgentsFields() {
   )
 }
 
+function LaunchFoldersField() {
+  const b = rootsBridge()
+  const [roots, setRoots] = useState<string[] | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    if (!b) return
+    let live = true
+    void b.launchRoots().then(
+      (got) => live && setRoots(got),
+      () => live && setRoots([])
+    )
+    return () => {
+      live = false
+    }
+  }, [b])
+  if (!b || roots === null) return null
+  const run = (key: string, go: () => Promise<string[]>) => {
+    if (busy) return
+    setError(null)
+    setBusy(key)
+    go()
+      .then(setRoots, (e: unknown) => setError(e instanceof Error ? e.message.replace(/^.*?Error: /, "") : String(e)))
+      .finally(() => setBusy(null))
+  }
+  const add = async () => {
+    const dir = await b.chooseFolder()
+    if (dir) run("add", () => b.setLaunchRoot(dir, "add"))
+  }
+  return (
+    <>
+      <Item
+        title="Folders agents can start in"
+        desc="New agent, here or from your phone, can start one in these folders and the folders inside them, as well as where agents on this computer already work and your home folder's git repos."
+      />
+      {roots.map((dir) => (
+        <Item
+          key={dir}
+          tile={<Icon icon={Folder01Icon} size={16} />}
+          title={dir.split("/").filter(Boolean).at(-1) ?? dir}
+          desc={dir}
+          aside={
+            <Button variant="secondary" disabled={busy !== null} onClick={() => run(dir, () => b.setLaunchRoot(dir, "remove"))}>
+              {busy === dir ? "Removing…" : "Remove"}
+            </Button>
+          }
+        />
+      ))}
+      <button
+        data-item
+        type="button"
+        disabled={busy !== null}
+        onClick={() => void add()}
+        className="flex w-full items-center px-4 py-3 text-left text-ui font-medium text-accent-text transition-colors hover:bg-wash disabled:opacity-40"
+      >
+        {busy === "add" ? "Adding…" : "Add a folder…"}
+      </button>
+      {error && (
+        <div data-item className="px-4 py-3">
+          <p className="text-ui text-ink-2" role="alert">
+            {error}
+          </p>
+        </div>
+      )}
+    </>
+  )
+}
+
 function PersonalitiesField({ onOpen }: { onOpen: () => void }) {
   const count = useOwnPersonalities().length
   return (
@@ -304,16 +375,27 @@ function PersonalitiesField({ onOpen }: { onOpen: () => void }) {
   )
 }
 
+type Daemon = Awaited<ReturnType<KiwiBridge["daemonStatus"]>>
+type Finding = NonNullable<Awaited<ReturnType<KiwiBridge["doctor"]>>>[number]
+
+function abilities(r: HarnessRow): string {
+  if (r.start && r.wake) return "Starts · Wakes"
+  if (r.start) return "Starts"
+  return r.wake ? "Wakes" : "Found"
+}
+
 function KiwiHere() {
   const b = bridge()
-  const [line, setLine] = useState<string | null>(null)
+  const [daemon, setDaemon] = useState<Daemon | null>(null)
+  const [rows, setRows] = useState<HarnessRow[] | null>(null)
   useEffect(() => {
     if (!b?.daemonStatus || !b.harnesses) return
     let live = true
     void Promise.all([b.daemonStatus(), b.harnesses()]).then(
-      ([daemon, rows]) => {
-        const found = rows.filter((r) => r.path && r.start).map((r) => `${r.harness === "claude" ? "Claude Code" : r.harness === "codex" ? "Codex" : r.harness}${r.version ? ` ${r.version}` : ""}`)
-        if (live) setLine([daemon.running && daemon.version ? `kiwi ${daemon.version}` : "kiwi isn't running", ...found].join(" · "))
+      ([d, r]) => {
+        if (!live) return
+        setDaemon(d)
+        setRows(r)
       },
       () => {}
     )
@@ -321,8 +403,90 @@ function KiwiHere() {
       live = false
     }
   }, [b])
-  if (!b?.daemonStatus || !b.harnesses || line === null) return null
-  return <Item tile={<Icon icon={TerminalIcon} size={16} />} title="kiwi on this computer" desc={line} />
+  if (!b?.daemonStatus || !b.harnesses || daemon === null || rows === null) return null
+  const found = rows.filter((r) => r.path)
+  const missing = rows.filter((r) => !r.path)
+  return (
+    <>
+      <Item tile={<Icon icon={TerminalIcon} size={16} />} title="kiwi on this computer" desc={daemon.running && daemon.version ? `kiwi ${daemon.version}, running` : "kiwi isn't running"} />
+      {found.map((r) => (
+        <Item
+          key={r.harness}
+          tile={<HarnessFace harness={r.harness} size={20} />}
+          title={`${harnessName(r.harness)}${r.version ? ` ${r.version}` : ""}`}
+          desc={
+            <>
+              <span className="block truncate font-mono" title={r.path ?? undefined}>
+                {r.path}
+              </span>
+              {!r.start && r.why && <span className="block">{r.why}</span>}
+            </>
+          }
+          aside={<span className="shrink-0 text-meta text-ink-3">{abilities(r)}</span>}
+        />
+      ))}
+      {missing.length > 0 && <Item title="Not on this computer" desc={missing.map((r) => harnessName(r.harness)).join(", ")} />}
+    </>
+  )
+}
+
+function FindingRow({ f }: { f: Finding }) {
+  if (!f.ok) {
+    return (
+      <li className="flex gap-2.5">
+        <span className="flex h-[1lh] w-3.5 shrink-0 items-center justify-center text-meta leading-snug">
+          <span className="size-2 rounded-full bg-alert" />
+        </span>
+        <span className="min-w-0 text-meta leading-snug">
+          <span className="block text-ink">{f.what}</span>
+          <span className="block text-ink-2">{f.how}</span>
+        </span>
+      </li>
+    )
+  }
+  const [, label, value] = /^(\S+)\s{2,}(.*)$/.exec(f.what) ?? [null, null, f.what]
+  return (
+    <li className="flex gap-2.5 text-meta leading-snug">
+      <Icon icon={CheckmarkCircle02Icon} size={14} className="mt-px shrink-0 text-live" />
+      {label && <span className="w-14 shrink-0 text-ink-3">{label}</span>}
+      <span className="min-w-0 break-words text-ink-2">{value}</span>
+    </li>
+  )
+}
+
+function Doctor() {
+  const b = bridge()
+  const [state, setState] = useState<"idle" | "running" | "failed" | Finding[]>("idle")
+  if (!b?.doctor) return null
+  const doctor = b.doctor
+  const run = () => {
+    setState("running")
+    void doctor().then(
+      (f) => setState(f ?? "failed"),
+      () => setState("failed")
+    )
+  }
+  const problems = Array.isArray(state) ? state.filter((f) => !f.ok).length : 0
+  return (
+    <Item
+      title="Check this computer"
+      desc={Array.isArray(state) ? (problems ? `${problems} to fix` : "Nothing to fix") : "Looks at kiwi's install, the relay, pairing and hooks, and says how to fix what isn't right."}
+      aside={
+        <Button variant="secondary" disabled={state === "running"} onClick={run}>
+          {state === "running" ? "Checking…" : Array.isArray(state) ? "Check Again" : "Check"}
+        </Button>
+      }
+    >
+      {Array.isArray(state) && (
+        <ul className="grid gap-1.5">
+          {state.map((f) => (
+            <FindingRow key={f.what} f={f} />
+          ))}
+        </ul>
+      )}
+      {state === "failed" && <p className="text-meta text-ink-2">kiwi doctor didn't answer. Run it in a terminal to see why: kiwi doctor</p>}
+    </Item>
+  )
 }
 
 const HOOK_SAYS: Record<Exclude<HookState, "absent">, { desc: string; action: string; busy: string }> = {
@@ -543,11 +707,13 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
             <Group id="agents" title="Agents">
               <PersonalitiesField onOpen={onPersonalities} />
               <KiwiHere />
+              <Doctor />
               <HooksField />
               <ContextLineField />
             </Group>
             <Group id="new-agents" title="New agents">
               <NewAgentsFields />
+              <LaunchFoldersField />
             </Group>
             <Group id="services" title="Services">
               <GithubFields />
@@ -569,7 +735,7 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
               <Group id="phone" title="Phone">
                 <div data-item className="grid gap-1 px-4 py-2">
                   <p className="pt-1 text-meta leading-snug text-ink-3">
-                    Your iPhone reads and answers your channels as you. Linking hands it your person and channel keys, end to end through the relay.
+                    Your phone reads and answers your channels as you. Linking hands it your person and channel keys, end to end through the relay.
                   </p>
                   <PhoneRows linking={linking} onLinked={() => setLinking(false)} />
                 </div>
