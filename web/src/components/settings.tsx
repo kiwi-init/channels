@@ -2,6 +2,7 @@ import {
   ArrowLeft01Icon,
   ArrowRight01Icon,
   ComputerIcon,
+  Folder01Icon,
   GithubIcon,
   Link01Icon,
   PaintBoardIcon,
@@ -21,6 +22,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { relayUrl } from "@/lib/relay"
 import { bridge, useSecrets } from "@/lib/secrets"
 import { contextLineBridge, hooksBridge, terminalsBridge } from "@/lib/terminals"
+import { rootsBridge } from "@/lib/launches"
 import { harnessName } from "@/lib/harness"
 import type { HookRow, HookState } from "@kiwi/core/harnesses.ts"
 import type { TerminalId, TerminalRow, TerminalsStatus } from "@kiwi/core/terminals.ts"
@@ -264,6 +266,74 @@ function NewAgentsFields() {
           </Item>
         )
       })}
+      {error && (
+        <div data-item className="px-4 py-3">
+          <p className="text-ui text-ink-2" role="alert">
+            {error}
+          </p>
+        </div>
+      )}
+    </>
+  )
+}
+
+function LaunchFoldersField() {
+  const b = rootsBridge()
+  const [roots, setRoots] = useState<string[] | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    if (!b) return
+    let live = true
+    void b.launchRoots().then(
+      (got) => live && setRoots(got),
+      () => live && setRoots([])
+    )
+    return () => {
+      live = false
+    }
+  }, [b])
+  if (!b || roots === null) return null
+  const run = (key: string, go: () => Promise<string[]>) => {
+    if (busy) return
+    setError(null)
+    setBusy(key)
+    go()
+      .then(setRoots, (e: unknown) => setError(e instanceof Error ? e.message.replace(/^.*?Error: /, "") : String(e)))
+      .finally(() => setBusy(null))
+  }
+  const add = async () => {
+    const dir = await b.chooseFolder()
+    if (dir) run("add", () => b.setLaunchRoot(dir, "add"))
+  }
+  return (
+    <>
+      <Item
+        title="Folders agents can start in"
+        desc="New agent, here or from your phone, can start one in these folders and the folders inside them, as well as where agents on this computer already work and your home folder's git repos."
+      />
+      {roots.map((dir) => (
+        <Item
+          key={dir}
+          tile={<Icon icon={Folder01Icon} size={16} />}
+          title={dir.split("/").filter(Boolean).at(-1) ?? dir}
+          desc={dir}
+          aside={
+            <Button variant="secondary" disabled={busy !== null} onClick={() => run(dir, () => b.setLaunchRoot(dir, "remove"))}>
+              {busy === dir ? "Removing…" : "Remove"}
+            </Button>
+          }
+        />
+      ))}
+      <button
+        data-item
+        type="button"
+        disabled={busy !== null}
+        onClick={() => void add()}
+        className="flex w-full items-center px-4 py-3 text-left text-ui font-medium text-accent-text transition-colors hover:bg-wash disabled:opacity-40"
+      >
+        {busy === "add" ? "Adding…" : "Add a folder…"}
+      </button>
       {error && (
         <div data-item className="px-4 py-3">
           <p className="text-ui text-ink-2" role="alert">
@@ -535,6 +605,7 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
             </Group>
             <Group id="new-agents" title="New agents">
               <NewAgentsFields />
+              <LaunchFoldersField />
             </Group>
             <Group id="services" title="Services">
               <GithubFields />

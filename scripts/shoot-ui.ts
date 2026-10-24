@@ -691,7 +691,7 @@ try {
         if (narrow) await toChannel();
       });
       await shoot(owner, tag, "18-settings", openSettings, closeSettings);
-      if (["27-new-agents", "28-new-agents-ready", "29-context-line", "30-hooks", "31-hooks-updated"].some((n) => takes(tag, n))) {
+      if (["27-new-agents", "28-new-agents-ready", "29-context-line", "30-hooks", "31-hooks-updated", "32-launch-folders"].some((n) => takes(tag, n))) {
         if (!terminalsStub) {
           terminalsStub = true;
           await owner.addInitScript(() => {
@@ -701,6 +701,7 @@ try {
             const row = (id: string, name: string, helpers: Row["helpers"]): Row => ({ id, name, found: true, running: true, helpers });
             let status: Status = { prefer: "app", launch: "on", terminals: [row("rex", "Rex", "off"), row("tmux", "tmux", "off"), row("app", "Terminal", null)] };
             let contextLine: "on" | "off" = "off";
+            let roots: string[] = ["/Users/you/code"];
             type Hook = { harness: string; state: string; text: string };
             let hooks: Hook[] = [
               { harness: "claude", state: "partial", text: "installed, without the listening hooks" },
@@ -719,6 +720,9 @@ try {
               setLaunches: (to: "on" | "off") => set((s) => ({ ...s, launch: to })),
               contextLine: async () => contextLine,
               setContextLine: async (to: "on" | "off") => (contextLine = to),
+              launchRoots: async () => roots,
+              setLaunchRoot: async (dir: string, to: "add" | "remove") => (roots = to === "add" ? [...new Set([...roots, dir])] : roots.filter((r) => r !== dir)),
+              chooseFolder: async () => "/Users/you/clients/acme",
               hooks: async () => hooks,
               setHooks: async (harness: string, to: "on" | "off") =>
                 (hooks = hooks.map((h) => (h.harness === harness ? { ...h, state: to === "on" ? "installed" : "off", text: to === "on" ? "installed" : "off" } : h))),
@@ -788,6 +792,18 @@ try {
             await hooksRow("Claude Code").getByRole("button", { name: "Update" }).click();
             await hooksRow("Claude Code").getByRole("button", { name: "Remove" }).waitFor();
             await hooksRow("Claude Code").scrollIntoViewIfNeeded();
+          },
+          closeSettings,
+        );
+        await shoot(
+          owner,
+          tag,
+          "32-launch-folders",
+          async () => {
+            await openSettings();
+            await newAgents().getByRole("button", { name: "Add a folder…" }).click();
+            await newAgents().getByText("/Users/you/clients/acme", { exact: true }).waitFor();
+            await newAgents().getByRole("button", { name: "Add a folder…" }).scrollIntoViewIfNeeded();
           },
           closeSettings,
         );

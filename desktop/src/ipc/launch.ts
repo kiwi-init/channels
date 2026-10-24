@@ -23,6 +23,27 @@ function folders(stdout: string): string[] {
   return Array.isArray(parsed) ? parsed.filter((f): f is string => typeof f === "string" && f.startsWith("/")).slice(0, 20) : [];
 }
 
+async function launchRoots(args: string[]): Promise<string[]> {
+  const done = await runKiwi(args);
+  if (done.code !== 0)
+    throw new Error(
+      done.stderr
+        .trim()
+        .split("\n")
+        .at(-1)
+        ?.replace(/^kiwi: /, "") || `kiwi ${args.join(" ")} didn't finish`,
+    );
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(done.stdout) as unknown;
+  } catch {
+    // The CLI writes one JSON value and nothing else; anything else is no folders.
+    return [];
+  }
+  const roots = parsed && typeof parsed === "object" ? (parsed as { roots?: unknown }).roots : undefined;
+  return Array.isArray(roots) ? roots.filter((f): f is string => typeof f === "string" && f.startsWith("/")) : [];
+}
+
 const asker = (): Asker => ({ person: requirePerson(), relay: store.relayUrl });
 
 function paired(machinePk: unknown): ComputerView | null {
@@ -45,7 +66,7 @@ async function machines(): Promise<MachineView[]> {
 
 const machine = (c: ComputerView) => ({ pk: c.machinePk, xpk: c.machineXpk, label: c.label });
 
-export function launchCalls(host: Host): Serves<"harnesses" | "seatFolders" | "chooseFolder" | "launchAgent" | "machines" | "harnessesOn" | "foldersOn"> {
+export function launchCalls(host: Host): Serves<"harnesses" | "seatFolders" | "chooseFolder" | "launchAgent" | "machines" | "harnessesOn" | "foldersOn" | "launchRoots" | "setLaunchRoot"> {
   return {
     harnesses: (): Promise<HarnessRow[]> => daemonHarnesses().catch(() => []),
     seatFolders: async (roomId: unknown): Promise<string[]> => {
@@ -72,6 +93,11 @@ export function launchCalls(host: Host): Serves<"harnesses" | "seatFolders" | "c
       const c = paired(machinePk);
       if (!c || typeof roomId !== "string" || !ROOM_ID.test(roomId)) return { ok: false, detail: "that isn't one of your paired computers" };
       return foldersOn(asker(), machine(c), roomId);
+    },
+    launchRoots: () => launchRoots(["folders", "added", "--json"]),
+    setLaunchRoot: (dir: unknown, to: unknown) => {
+      if (typeof dir !== "string" || !dir.startsWith("/") || (to !== "add" && to !== "remove")) throw new Error("setLaunchRoot takes a folder's full path, and add or remove");
+      return launchRoots(["folders", to, dir, "--json"]);
     },
   };
 }

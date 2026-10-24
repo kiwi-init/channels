@@ -88,3 +88,23 @@ describe("the folders an agent can be started in on a computer none has worked o
     expect(withoutLaunchRoot({ channels: {}, launchRoots: [join(dir, "gone")] }, join(dir, "gone"))).toEqual({ channels: {} });
   });
 });
+
+describe("kiwi folders for the app's Settings (T237)", () => {
+  const MAIN_TS = join(import.meta.dir, "..", "src", "cli", "main.ts");
+  const home = mkdtempSync(join(tmpdir(), "kiwi-folders-cli-"));
+  afterAll(() => rmSync(home, { recursive: true, force: true }));
+  const kiwi = (args: string[]) => {
+    const r = Bun.spawnSync([process.execPath, MAIN_TS, ...args], { cwd: home, env: { ...process.env, KIWI_HOME: home }, stdout: "pipe", stderr: "pipe" });
+    return { code: r.exitCode, out: r.stdout.toString() };
+  };
+
+  test("kiwi folders added --json lists the added folders, and add and remove answer with the list they leave", () => {
+    const work = realpathSync(folder("cli-work"));
+    expect(JSON.parse(kiwi(["folders", "added", "--json"]).out)).toEqual({ roots: [] });
+    expect(JSON.parse(kiwi(["folders", "add", work, "--json"]).out)).toEqual({ roots: [work] });
+    expect(JSON.parse(kiwi(["folders", "added", "--json"]).out)).toEqual({ roots: [work] });
+    expect(kiwi(["folders", "add", join(dir, "not-there"), "--json"]).code).not.toBe(0);
+    expect(JSON.parse(kiwi(["folders", "remove", work, "--json"]).out)).toEqual({ roots: [] });
+    expect(kiwi(["folders", "added"]).out.trim()).toBe("no folders added");
+  });
+});

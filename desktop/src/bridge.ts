@@ -351,6 +351,8 @@ export interface KiwiBridge {
   machines(): Promise<MachineView[]>;
   harnessesOn(machinePk: string): Promise<FromMachine<HarnessRow[]>>;
   foldersOn(machinePk: string, roomId: string): Promise<FromMachine<string[]>>;
+  launchRoots(): Promise<string[]>;
+  setLaunchRoot(dir: string, to: "add" | "remove"): Promise<string[]>;
 }
 
 export interface UpdateView {
