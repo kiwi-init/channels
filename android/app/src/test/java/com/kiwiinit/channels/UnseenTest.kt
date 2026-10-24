@@ -1,6 +1,5 @@
 package com.kiwiinit.channels
 
-import android.view.ViewGroup
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -10,9 +9,8 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.performScrollToIndex
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.kiwiinit.channels.engine.MessageView
 import com.kiwiinit.channels.model.Spot
@@ -45,8 +43,8 @@ class UnseenTest {
                 }
             }
         }
-        noKeyboard()
-        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(5)
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNode(hasScrollToIndexAction()).performTouchInput { swipeDown() }
         compose.waitForIdle()
         val room = model.rooms.getValue(DEV)
         val at = room.messages.last().at
@@ -54,14 +52,6 @@ class UnseenTest {
         compose.runOnUiThread { model.rooms[DEV] = room.copy(messages = room.messages + more) }
         compose.waitForIdle()
         assertEquals(listOf("3 new, jump to the latest"), jumps())
-    }
-
-    private fun noKeyboard() {
-        compose.runOnUiThread {
-            val content = compose.activity.findViewById<ViewGroup>(android.R.id.content).getChildAt(0)
-            ViewCompat.dispatchApplyWindowInsets(content, WindowInsetsCompat.Builder().setVisible(WindowInsetsCompat.Type.ime(), false).build())
-        }
-        compose.waitForIdle()
     }
 
     private fun jumps(): List<String> =
