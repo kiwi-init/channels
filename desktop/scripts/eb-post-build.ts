@@ -60,6 +60,9 @@ if (os === "linux") {
   process.exit(0);
 }
 const contents = path.dirname(resources[0] as string);
+const cli = path.resolve(desktop, "../dist/kiwi.js");
+if (!fs.existsSync(cli)) throw new Error("dist/kiwi.js is missing: run `bun scripts/build-cli.ts --js dist/kiwi.js` in the repo root first");
+fs.copyFileSync(cli, path.join(contents, "Resources", "kiwi.js"));
 
 const key = hostKey("darwin", arch === "x64" ? "x64" : "arm64");
 const bundle = path.dirname(contents);

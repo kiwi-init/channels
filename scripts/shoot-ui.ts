@@ -241,7 +241,7 @@ try {
   if (firstTask) {
     await win("send", "--re", firstTask[1]!, "Starting. Rows per message are 6 today; aiming for 4.");
     await bot("send", "--re", firstTask[1]!, "Keep the event rows; fold only the duplicates.");
-    await win("send", "--re", firstTask[1]!, "Down from 6 to 4. https://github.com/ojowwalker77/channels/pull/41");
+    await win("send", "--re", firstTask[1]!, "Down from 6 to 4. https://github.com/kiwi-init/channels/pull/41");
     await win("task", "start", `T${firstTask[1]}`, "steady numbers look fine");
   }
   await bot("set", "relay.version", "667ce081");
@@ -289,7 +289,7 @@ try {
   await details().click();
   const panel = owner.getByRole("complementary", { name: "Details" });
   await panel.getByRole("button", { name: /^Repos/ }).click();
-  await panel.getByRole("textbox", { name: "Find a repo" }).fill("ojowwalker77/channels");
+  await panel.getByRole("textbox", { name: "Find a repo" }).fill("kiwi-init/channels");
   await owner.keyboard.press("Enter");
   await panel.getByRole("button", { name: "Save", exact: true }).click();
   await owner.getByText("Repos saved").first().waitFor({ timeout: 15000 });

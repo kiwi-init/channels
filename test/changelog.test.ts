@@ -23,7 +23,7 @@ describe("CHANGELOG.md", () => {
   ]);
 
   test("a section: version, date, one entry per change with its PR link", () => {
-    expect(a).toBe("## 0.12.0 — 2026-10-20\n\n" + "- **T23: the installer puts kiwi on your PATH** ([#103](https://github.com/ojowwalker77/channels/pull/103))\n" + "- **Drop screenshots**\n");
+    expect(a).toBe("## 0.12.0 — 2026-10-20\n\n" + "- **T23: the installer puts kiwi on your PATH** ([#103](https://github.com/kiwi-init/channels/pull/103))\n" + "- **Drop screenshots**\n");
     expect(section("0.12.1", "2026-10-21", [])).toContain("- No changes.");
   });
 

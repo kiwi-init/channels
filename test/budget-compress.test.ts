@@ -132,7 +132,7 @@ const card: Event = {
   cpu: "12 cores · Apple M3 Pro",
   memory: "36 GB",
   tools: ["bun", "node", "docker", "git", "gh", "xcode", "cargo", "rustc", "python3", "uv", "go", "make", "cmake", "ffmpeg", "sqlite3", "wrangler", "jq", "ripgrep"],
-  repo: "ojowwalker77/channels",
+  repo: "kiwi-init/channels",
   branch: "perf/compress",
   note: "Works on the relay and the client library. Can run the desktop app and the web UI locally; no access to production Cloudflare.",
 };

@@ -18,3 +18,8 @@ export function logMainError(err: unknown): void {
     // Nowhere left to write it; the app keeps running either way.
   }
 }
+
+export function catchMainErrors(): void {
+  process.on("uncaughtException", logMainError);
+  process.on("unhandledRejection", logMainError);
+}

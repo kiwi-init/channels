@@ -58,6 +58,9 @@ if [ -n "$left" ]; then
   kill -KILL -- "-$pid" 2> /dev/null
 fi
 
+if grep -q "navigation rules didn't take effect" "$out"; then problems+=("the rules canary wasn't reported refused on WebKitGTK, so the app quit"); fi
+if grep -qE "download handler wasn't found|navigation handler wasn't found" "$out"; then problems+=("libkiwi-shell's download or navigation guard didn't install, so the app refused its window"); fi
+
 if [ ${#problems[@]} -gt 0 ]; then
   echo "the app's output:"
   tail -n 60 "$out"
