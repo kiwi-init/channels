@@ -8,19 +8,24 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTextInput
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.kiwiinit.channels.model.AppModel
 import com.kiwiinit.channels.theme.ChannelsTheme
+import com.kiwiinit.channels.ui.ConversationList
 import com.kiwiinit.channels.ui.DetailsScreen
 import com.kiwiinit.channels.ui.NewAgentFrame
 import com.kiwiinit.channels.ui.OptionsForm
@@ -74,8 +79,24 @@ class KeyboardTest {
         aboveKeyboard(compose.onNodeWithText("Start").performScrollTo(), keyboard)
     }
 
-    private fun show(screen: @Composable (AppModel) -> Unit) {
+    @Test
+    fun lastSearchResultScrollsAboveTheKeyboard() {
+        show({ model ->
+            val site = model.rooms.getValue("site")
+            for (i in 1..8) {
+                model.rooms["site$i"] = site.copy(code = "site$i", title = "kiwi-site $i", messages = site.messages.map { it.copy(at = it.at - i * 60_000.0) })
+            }
+        }) { ConversationList(it, open = {}, settings = {}) }
+        compose.onNode(hasSetTextAction()).performClick().performTextInput("landing")
+        val keyboard = keyboard()
+        val last = hasText("kiwi-site 8", substring = true)
+        compose.onNode(hasScrollToIndexAction()).performScrollToNode(last)
+        aboveKeyboard(compose.onNode(last), keyboard)
+    }
+
+    private fun show(prepare: (AppModel) -> Unit = {}, screen: @Composable (AppModel) -> Unit) {
         val model = sample(RuntimeEnvironment.getApplication())
+        prepare(model)
         compose.setContent {
             ChannelsTheme {
                 Surface(Modifier.fillMaxSize()) { screen(model) }

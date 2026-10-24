@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
@@ -221,7 +222,7 @@ fun ConversationList(model: AppModel, open: (Spot) -> Unit, settings: () -> Unit
         }
         PullToRefreshBox(isRefreshing = refreshing, onRefresh = { refreshing = true }, modifier = Modifier.weight(1f).fillMaxWidth()) {
             val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 6.dp, bottom = 24.dp + bottom)) {
+            LazyColumn(Modifier.fillMaxSize().imePadding(), contentPadding = PaddingValues(top = 6.dp, bottom = 24.dp + bottom)) {
                 if (model.channels.isEmpty()) {
                     item(key = "empty") { Empty(model) }
                 } else if (rows.isEmpty() && hits.isEmpty()) {
