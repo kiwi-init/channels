@@ -3,12 +3,17 @@ import type { JoinLine } from "@kiwi/core/join-line.ts";
 import { choicesRefusal, PERMISSIONS, type HarnessOptions, type LaunchChoices } from "@kiwi/core/launch-options.ts";
 import { CLAUDE_1M, CLAUDE_EFFORTS, claudeArgv, claudeContextRefusal } from "../loop/claude.ts";
 import { CODEX_CONTEXTS, CODEX_EFFORTS, codexArgv } from "../loop/codex.ts";
+import { GROK_EFFORTS, grokArgv } from "../loop/grok.ts";
+import { kimiArgv, kimiScreen } from "../loop/kimi.ts";
+import { MIMO_PERMISSIONS, mimoArgv } from "../loop/mimo.ts";
+import type { Screen } from "./typed.ts";
 
 interface LaunchRecipe {
   label: string;
   options: HarnessOptions;
   argv: (bin: string, prompt: string, choices: LaunchChoices) => string[];
   refuse?: (choices: LaunchChoices) => string | null;
+  typed?: (screen: string) => Screen;
 }
 
 const RECIPES: Partial<Record<KnownHarness, LaunchRecipe>> = {
@@ -23,10 +28,34 @@ const RECIPES: Partial<Record<KnownHarness, LaunchRecipe>> = {
     options: { model: true, effort: CODEX_EFFORTS, permission: [...PERMISSIONS], context: CODEX_CONTEXTS },
     argv: (bin, prompt, choices) => codexArgv({ ...choices, bin, prompt }),
   },
+  grok: {
+    label: "Grok",
+    options: { model: true, effort: GROK_EFFORTS, permission: [...PERMISSIONS], context: [] },
+    argv: (bin, prompt, choices) => grokArgv({ ...choices, bin, prompt }),
+  },
+  kimi: {
+    label: "Kimi Code",
+    options: { model: true, effort: [], permission: [...PERMISSIONS], context: [] },
+    argv: (bin, _prompt, choices) => kimiArgv({ ...choices, bin }),
+    typed: kimiScreen,
+  },
+  mimo: {
+    label: "MiMoCode",
+    options: { model: true, effort: [], permission: MIMO_PERMISSIONS, context: [] },
+    argv: (bin, prompt, choices) => mimoArgv({ ...choices, bin, prompt }),
+  },
 };
 
 export function canStart(harness: KnownHarness): boolean {
   return harness in RECIPES;
+}
+
+export function harnessLabel(harness: KnownHarness): string {
+  return RECIPES[harness]?.label ?? harness;
+}
+
+export function typedPrompt(harness: KnownHarness): ((screen: string) => Screen) | null {
+  return RECIPES[harness]?.typed ?? null;
 }
 
 export function harnessOptions(harness: KnownHarness): HarnessOptions | null {

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { signRequest } from "@kiwi/core/auth.ts";
@@ -12,7 +12,7 @@ import { certifyMachine } from "@kiwi/core/person.ts";
 import { sealTo } from "@kiwi/core/crypto.ts";
 import { deliveredFrom, forgetAtRelay, startMachineInbox } from "../src/daemon/inbox.ts";
 import type { PairedMachine } from "../src/daemon/pair.ts";
-import { remoteRunner } from "../src/daemon/remote.ts";
+import { NO_REMOTE_BYPASS, remoteRunner } from "../src/daemon/remote.ts";
 import type { LaunchRequest } from "../src/launch/wire.ts";
 import { startRelay } from "../src/relay/bun.ts";
 
@@ -110,7 +110,7 @@ describe("a paired computer's daemon", () => {
 
   test("runs one box once, however many times it arrives", async () => {
     const { answer, box, id } = await ask("harnesses", {});
-    expect(await answer).toEqual({ ok: true, harnesses: [] });
+    expect(await answer).toEqual({ ok: true, harnesses: [], bypass: false });
     expect(await post(box)).toBe(202);
     await until("the second copy refused", () => log().includes(`\trefused\treplayed\t\t\t`));
     expect(
@@ -145,6 +145,9 @@ describe("a paired computer's daemon", () => {
     expect(await fourth.answer).toMatchObject({ ok: false, why: "failed" });
     expect(launched).toHaveLength(3);
     expect(log()).toContain(`\tlaunch\tdone\tclaude\t${project}\t${ids[0]}\n`);
+    const bypass = await ask("launch", { harness: "claude", folder: project, code, model: "opus", permission: "bypass" });
+    expect(await bypass.answer).toEqual({ ok: false, why: "not-allowed", detail: NO_REMOTE_BYPASS });
+    expect(log()).toContain(`\tlaunch\trefused\tclaude\t${project}\t${bypass.id}\tmodel=opus permission=bypass\n`);
   });
 
   test("a box signed with a key that isn't base64 is refused, logged and taken out, never retried", async () => {
@@ -186,8 +189,12 @@ describe("choices asked from another device", () => {
     launch: async (req) => (seen.push(req), { ok: true, launch: req.launch!, placed: { ok: true, place: "terminal" } }),
   });
 
-  test("reach the harness, except bypass, which this computer doesn't list or start", async () => {
-    expect(await runner({ verb: "harnesses" }, "harnessesAsk_1")).toEqual({ ok: true, harnesses: [{ ...row, options: { ...options, permission: ["default", "accept-edits", "plan"] } }] });
+  test("reach the harness, except bypass, which this computer doesn't list or start while its switch is off", async () => {
+    expect(await runner({ verb: "harnesses" }, "harnessesAsk_1")).toEqual({
+      ok: true,
+      harnesses: [{ ...row, options: { ...options, permission: ["default", "accept-edits", "plan"] } }],
+      bypass: false,
+    });
     expect(
       await runner({ verb: "launch", launch: { harness: "claude", folder: project, code, model: "opus", effort: "high", permission: "plan", context: 1_000_000 } }, "choicesAsk_01"),
     ).toMatchObject({ ok: true });
@@ -195,7 +202,33 @@ describe("choices asked from another device", () => {
     expect(await runner({ verb: "launch", launch: { harness: "claude", folder: project, code, permission: "bypass" } }, "choicesAsk_02")).toEqual({
       ok: false,
       why: "not-allowed",
-      detail: "bypass permissions can't be asked for from another device",
+      detail: NO_REMOTE_BYPASS,
+    });
+    expect(seen).toHaveLength(1);
+  });
+});
+
+describe("bypass from another device, with this computer's switch on", () => {
+  test("is listed and reaches the harness, and turning the switch off refuses it again", async () => {
+    const code = "mc2-AAAAAAAAAAAAAAAAAAAAAA-BBBBBBBBBBBBBBBB";
+    const options: HarnessOptions = { model: true, effort: [], permission: [...PERMISSIONS], context: [] };
+    const row: HarnessRow = { harness: "claude", path: "/bin/claude", version: "2.1.310", start: true, wake: null, why: null, options };
+    const seen: LaunchRequest[] = [];
+    let on = true;
+    const runner = remoteRunner({
+      inventory: async () => [row],
+      folders: () => [project],
+      bypass: () => on,
+      launch: async (req) => (seen.push(req), { ok: true, launch: req.launch!, placed: { ok: true, place: "terminal" } }),
+    });
+    expect(await runner({ verb: "harnesses" }, "bypassAsk_01")).toEqual({ ok: true, harnesses: [row], bypass: true });
+    expect(await runner({ verb: "launch", launch: { harness: "claude", folder: project, code, permission: "bypass" } }, "bypassAsk_02")).toMatchObject({ ok: true });
+    expect(seen.at(-1)).toMatchObject({ permission: "bypass", launch: "bypassAsk_02" });
+    on = false;
+    expect(await runner({ verb: "launch", launch: { harness: "claude", folder: project, code, permission: "bypass" } }, "bypassAsk_03")).toEqual({
+      ok: false,
+      why: "not-allowed",
+      detail: NO_REMOTE_BYPASS,
     });
     expect(seen).toHaveLength(1);
   });
@@ -211,5 +244,31 @@ describe("the launch cap", () => {
     for (let i = 0; i < 3; i++) expect(await first({ verb: "launch", launch: { harness: "claude", folder: project, code } }, `restartTest_${i}`)).toMatchObject({ ok: true });
     const again = runner();
     expect(await again({ verb: "launch", launch: { harness: "claude", folder: project, code } }, "restartTest_3")).toMatchObject({ ok: false, why: "failed" });
+  });
+});
+
+describe("where a launch from another device may start", () => {
+  test("inside a folder this computer starts agents in, by its real path: never through .., a symlink out, a file or a relative path", async () => {
+    const roots = join(root, "roots");
+    const inside = join(roots, "repo", "sub");
+    mkdirSync(inside, { recursive: true });
+    mkdirSync(join(root, "secret"), { recursive: true });
+    symlinkSync(join(root, "secret"), join(roots, "repo", "out"));
+    writeFileSync(join(roots, "repo", "notes.txt"), "x");
+    const seen: LaunchRequest[] = [];
+    const code = "mc2-AAAAAAAAAAAAAAAAAAAAAA-BBBBBBBBBBBBBBBB";
+    const runner = remoteRunner({
+      inventory: async () => [],
+      folders: () => [join(roots, "repo")],
+      launch: async (req) => (seen.push(req), { ok: true, launch: req.launch!, placed: { ok: true, place: "terminal" } }),
+    });
+    const at = (folder: string, id: string) => runner({ verb: "launch", launch: { harness: "claude", folder, code } }, id);
+    const refused = { ok: false, why: "bad-request", detail: "that folder isn't one this computer starts agents in" } as const;
+    expect(await at(join(roots, "repo", "out"), "rootsAsk_01")).toEqual(refused);
+    expect(await at(`${inside}/..`, "rootsAsk_02")).toEqual(refused);
+    expect(await at(join(roots, "repo", "notes.txt"), "rootsAsk_03")).toEqual(refused);
+    expect(await at("repo/sub", "rootsAsk_04")).toEqual(refused);
+    expect(await at(inside, "rootsAsk_05")).toMatchObject({ ok: true });
+    expect(seen.map((r) => r.folder)).toEqual([realpathSync(inside)]);
   });
 });

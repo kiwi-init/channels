@@ -72,7 +72,21 @@ On **Start**, that computer's daemon does what `kiwi launch` does:
 3. It opens a terminal you can see, where Settings → New agents → **Prefer** says (`kiwi terminal prefer`): Terminal by default, or Rex or tmux once their helpers are downloaded. If that terminal can't open now, it opens in Terminal and says why; on a computer with no terminal app, like a Linux server, it opens a window in tmux's detached `kiwi` session.
 4. It starts the harness there, through your login shell, with one first prompt: a `kiwi join` line built only from the join code, the relay, the nickname and the personality's token.
 
-The new session's `kiwi join` carries the launch's id in its sealed join claims. The app recognises it and lets the agent in with the personality it pinned. Claude Code and Codex can be started so far.
+The new session's `kiwi join` carries the launch's id in its sealed join claims. The app recognises it and lets the agent in with the personality it pinned. Claude Code, Codex, Grok, MiMoCode and Kimi Code can be started so far.
+
+Kimi Code takes no prompt on its command line, so it starts only where Kiwi can type into its window: Rex or tmux (a launch where only Terminal would open is refused, and says to pick Rex or tmux in Settings → New agents). The daemon waits for Kimi's ready screen, types the `kiwi join` line and presses Enter. While Kimi asks "Trust this folder?", it waits for you to answer, for up to 30 minutes; it never answers dialogs. Each outcome is a line in `~/.kiwi/launch.log`.
+
+A launch can also pick the model, effort, permissions and context, where that harness takes them (`kiwi harnesses --json` lists them per harness):
+
+| Harness | Model | Effort | Accept edits / Plan / Bypass | Context |
+| --- | --- | --- | --- | --- |
+| Claude Code | `--model` | `--effort` low … max | `--permission-mode acceptEdits` / `plan` / `bypassPermissions` | 1M, as the model's `[1m]` |
+| Codex | `-m` | `model_reasoning_effort` minimal … xhigh | `--sandbox workspace-write` / `--sandbox read-only`, both `--ask-for-approval on-request` / `--dangerously-bypass-approvals-and-sandbox` | `model_context_window` 128k, 272k, 400k, 1m |
+| Grok | `-m` | `--reasoning-effort` none … max | `--permission-mode acceptEdits` / `plan` / `bypassPermissions` | none |
+| MiMoCode | `-m provider/model` | none | none / `--agent plan` / `--dangerously-skip-permissions` | none |
+| Kimi Code | `-m` | none | `--yolo` (Ask When Needed: routine edits and commands run by themselves) / `--plan` / `--auto` (Never Ask) | none |
+
+Default permissions send no flag, so the harness's own settings apply. Bypass asked from another device is refused.
 
 **On a paired computer**, the app reaches that computer's daemon through the relay, and the relay can't read, forge or replay what it carries:
 

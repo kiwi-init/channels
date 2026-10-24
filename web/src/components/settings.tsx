@@ -20,10 +20,13 @@ import { cx } from "@/lib/utils"
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { relayUrl } from "@/lib/relay"
 import { bridge, useSecrets } from "@/lib/secrets"
-import { contextLineBridge, terminalsBridge } from "@/lib/terminals"
+import { contextLineBridge, hooksBridge, terminalsBridge } from "@/lib/terminals"
+import { harnessName } from "@/lib/harness"
+import type { HookRow, HookState } from "@kiwi/core/harnesses.ts"
 import type { TerminalId, TerminalRow, TerminalsStatus } from "@kiwi/core/terminals.ts"
 import { version } from "../../../package.json"
 import { ComputerRows } from "./computers"
+import { HarnessFace } from "./harness-face"
 import { PhoneRows } from "./phones"
 import { Icon, type IconSvgElement } from "./icon"
 import { Button, IconButton, Monogram, SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from "./kit"
@@ -220,6 +223,7 @@ function NewAgentsFields() {
       )
       .finally(() => setBusy(null))
   }
+  const setBypass = b.setRemoteBypass
   const rows = PREFER_ORDER.flatMap((id) => status.terminals.filter((t) => t.id === id))
   const helpers = rows.filter((t): t is TerminalRow & { id: "rex" | "tmux"; helpers: "on" | "off" } => t.id !== "app" && t.helpers !== null && (t.found || t.helpers === "on"))
   return (
@@ -234,6 +238,18 @@ function NewAgentsFields() {
         ]}
         onChange={(to) => run("launch", () => b.setLaunches(to))}
       />
+      {setBypass && status.launch === "on" && (
+        <Choice
+          label="Allow bypass from your other devices"
+          desc="An agent started from your phone or another computer may skip its harness's permission prompts here. Off keeps every prompt."
+          value={status.bypass}
+          options={[
+            { value: "on", label: "On" },
+            { value: "off", label: "Off" },
+          ]}
+          onChange={(to) => run("bypass", () => setBypass(to))}
+        />
+      )}
       <Choice
         label="Prefer"
         desc="Where a new agent opens. If it can't open there, it opens in Terminal."
@@ -307,6 +323,82 @@ function KiwiHere() {
   }, [b])
   if (!b?.daemonStatus || !b.harnesses || line === null) return null
   return <Item tile={<Icon icon={TerminalIcon} size={16} />} title="kiwi on this computer" desc={line} />
+}
+
+const HOOK_SAYS: Record<Exclude<HookState, "absent">, { desc: string; action: string; busy: string }> = {
+  installed: { desc: "Installed", action: "Remove", busy: "Removing…" },
+  partial: { desc: "Installed, but it can't wake Claude Code when a message comes", action: "Update", busy: "Updating…" },
+  outdated: { desc: "From an older kiwi: update them", action: "Update", busy: "Updating…" },
+  missing: { desc: "Not installed", action: "Install", busy: "Installing…" },
+  off: { desc: "Removed. Kiwi won't add them back until you install them", action: "Install", busy: "Installing…" },
+}
+
+function HooksField() {
+  const b = hooksBridge()
+  const [rows, setRows] = useState<HookRow[] | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    if (!b) return
+    let live = true
+    void b.hooks().then(
+      (got) => live && setRows(got),
+      (e: unknown) => live && (setRows([]), setError(e instanceof Error ? e.message.replace(/^.*?Error: /, "") : String(e)))
+    )
+    return () => {
+      live = false
+    }
+  }, [b])
+  if (!b) return null
+  const change = (r: HookRow) => {
+    if (busy) return
+    setError(null)
+    setBusy(r.harness)
+    b.setHooks(r.harness, r.state === "installed" ? "off" : "on")
+      .then(
+        (got) => setRows(got),
+        (e: unknown) => setError(e instanceof Error ? e.message.replace(/^.*?Error: /, "") : String(e))
+      )
+      .finally(() => setBusy(null))
+  }
+  const here = (rows ?? []).filter((r): r is HookRow & { state: Exclude<HookState, "absent"> } => r.state !== "absent")
+  return (
+    <>
+      <Item
+        title="Hooks"
+        desc={
+          rows === null
+            ? "Looking at the harnesses on this computer…"
+            : here.length
+              ? "Hooks bring new messages to the agents on this computer and their permission prompts to Needs you."
+              : "No harness on this computer takes hooks."
+        }
+      />
+      {here.map((r) => {
+        const says = HOOK_SAYS[r.state]
+        return (
+          <Item
+            key={r.harness}
+            tile={<HarnessFace harness={r.harness} size={20} />}
+            title={harnessName(r.harness)}
+            desc={says.desc}
+            aside={
+              <Button variant="secondary" disabled={busy !== null} onClick={() => change(r)}>
+                {busy === r.harness ? says.busy : says.action}
+              </Button>
+            }
+          />
+        )
+      })}
+      {error && (
+        <div data-item className="px-4 py-3">
+          <p className="text-ui text-ink-2" role="alert">
+            {error}
+          </p>
+        </div>
+      )}
+    </>
+  )
 }
 
 function ContextLineField() {
@@ -451,6 +543,7 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
             <Group id="agents" title="Agents">
               <PersonalitiesField onOpen={onPersonalities} />
               <KiwiHere />
+              <HooksField />
               <ContextLineField />
             </Group>
             <Group id="new-agents" title="New agents">

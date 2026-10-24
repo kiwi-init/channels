@@ -6,6 +6,7 @@ import {
   EXTRA_HARNESSES,
   claudeHooksStatus,
   extraHooksStatus,
+  hooksRows,
   hooksStatus,
   installDetected,
   installExtra,
@@ -35,7 +36,7 @@ export const hookCommands: Record<string, Command> = {
       const keys = yield* Keystore;
       const sub = args[1] ?? "status";
       const raw = args[2];
-      const usage = "usage: kiwi hooks install|uninstall|status [claude|codex|gemini|cursor|grok|kimi|pi|mimo]";
+      const usage = "usage: kiwi hooks install|uninstall|status [claude|codex|gemini|cursor|grok|kimi|pi|mimo] [--listen] [--json]";
       let name: "claude" | ExtraHarness | undefined;
       if (raw) {
         if (raw !== "claude" && !EXTRA_HARNESSES.includes(raw as ExtraHarness)) return yield* die(usage);
@@ -53,7 +54,7 @@ export const hookCommands: Record<string, Command> = {
           yield* keys.update((c) => {
             c.harnessHooks = allOn();
           });
-          return out(`installed hooks in ${installDetected().join(", ")}`);
+          return out(`installed hooks in ${installDetected(opt.listen === true).join(", ")}`);
         }
         if (name !== "claude") {
           const h = name;
@@ -62,7 +63,7 @@ export const hookCommands: Record<string, Command> = {
           });
           return out(`installed hooks in ${installExtra(h)}`);
         }
-        return out(`installed hooks in ${installHooks()}`);
+        return out(`installed hooks in ${installHooks(opt.listen === true)}`);
       }
       if (sub === "uninstall") {
         if (!name) {
@@ -85,6 +86,7 @@ export const hookCommands: Record<string, Command> = {
         return out(`removed hooks from ${uninstallExtra(h)}`);
       }
       if (sub === "status") {
+        if (opt.json) return out(JSON.stringify({ hooks: hooksRows().filter((r) => !name || r.harness === name) }));
         if (!name) return out(hooksStatus());
         if (name === "claude") return out(`claude: ${claudeHooksStatus()}`);
         return out(`${name}: ${extraHooksStatus(name)}`);

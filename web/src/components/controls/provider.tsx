@@ -65,6 +65,7 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
       setNickDraft(m.display ?? "")
       setConfirm({ kind: "nickname", member: m })
     },
+    editColor: (m) => setConfirm({ kind: "color", member: m }),
     lastSeenOf,
     onlineNow,
     openDialog: setDialog,

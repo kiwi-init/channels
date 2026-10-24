@@ -1,8 +1,10 @@
 import { readFileSync, realpathSync } from "node:fs";
-import { sep } from "node:path";
+import { isAbsolute, sep } from "node:path";
+import type { ComputerSettings } from "@kiwi/core/computer-settings.ts";
 import type { HarnessRow } from "@kiwi/core/harnesses.ts";
 import type { MachineArgs } from "@kiwi/core/machine-ask.ts";
 import { writePrivate } from "../config.ts";
+import { isFolder } from "../launch/folders.ts";
 import type { Launched } from "@kiwi/core/terminals.ts";
 import type { LaunchRequest } from "../launch/wire.ts";
 
@@ -13,6 +15,8 @@ export interface RemoteDeps {
   inventory: () => Promise<HarnessRow[]>;
   folders: (room?: string) => string[];
   launch: (req: LaunchRequest) => Promise<Launched>;
+  bypass?: () => boolean;
+  settings?: () => Promise<ComputerSettings>;
   starts?: string;
   now?: () => number;
 }
@@ -27,8 +31,9 @@ function real(path: string): string | null {
 }
 
 function underRoots(folder: string, roots: string[]): string | null {
+  if (!isAbsolute(folder) || folder.split(/[\\/]/).includes("..")) return null;
   const target = real(folder);
-  if (!target) return null;
+  if (!target || !isFolder(target)) return null;
   const inside = roots.some((root) => {
     const r = real(root);
     return !!r && (target === r || target.startsWith(r + sep));
@@ -47,29 +52,38 @@ function loadStarts(file: string | undefined): number[] {
   }
 }
 
-export type RemoteResult = { ok: true; harnesses: HarnessRow[] } | { ok: true; folders: string[] } | { ok: true } | Launched;
+export type RemoteResult = { ok: true; harnesses: HarnessRow[]; bypass: boolean } | { ok: true; folders: string[] } | { ok: true; settings: ComputerSettings } | { ok: true } | Launched;
+
+export const NO_REMOTE_BYPASS =
+  "this computer doesn't take bypass permissions from another device: turn on Allow bypass from your other devices in its Settings → New agents, or run kiwi launches bypass on there";
 
 const withoutBypass = (row: HarnessRow): HarnessRow => (row.options ? { ...row, options: { ...row.options, permission: row.options.permission.filter((p) => p !== "bypass") } } : row);
 
 export function remoteRunner(deps: RemoteDeps): (args: MachineArgs, id: string) => Promise<RemoteResult> {
   const now = deps.now ?? Date.now;
   const started = loadStarts(deps.starts);
+  const bypass = deps.bypass ?? (() => false);
   return async (args, id) => {
     switch (args.verb) {
-      case "harnesses":
-        return { ok: true, harnesses: (await deps.inventory()).map(withoutBypass) };
+      case "harnesses": {
+        const allowed = bypass();
+        const rows = await deps.inventory();
+        return { ok: true, harnesses: allowed ? rows : rows.map(withoutBypass), bypass: allowed };
+      }
       case "folders":
         return { ok: true, folders: deps.folders(args.room) };
       case "unpair":
         return { ok: true };
+      case "settings":
+        return deps.settings ? { ok: true, settings: await deps.settings() } : { ok: false, why: "failed", detail: "this computer's kiwi doesn't share its settings" };
       case "launch": {
-        if (args.launch.permission === "bypass") return { ok: false, why: "not-allowed", detail: "bypass permissions can't be asked for from another device" };
+        if (args.launch.permission === "bypass" && !bypass()) return { ok: false, why: "not-allowed", detail: NO_REMOTE_BYPASS };
         const at = now();
         while (started.length && at - started[0]! >= REMOTE_WINDOW_MS) started.shift();
         if (started.length >= REMOTE_LAUNCHES)
           return { ok: false, why: "failed", detail: `at most ${REMOTE_LAUNCHES} agents are started from another computer every ${REMOTE_WINDOW_MS / 60_000} minutes` };
         const folder = underRoots(args.launch.folder, deps.folders());
-        if (!folder) return { ok: false, why: "bad-request", detail: "that folder isn't one this computer's agents work in" };
+        if (!folder) return { ok: false, why: "bad-request", detail: "that folder isn't one this computer starts agents in" };
         started.push(at);
         if (deps.starts) writePrivate(deps.starts, JSON.stringify(started));
         return deps.launch({ ...args.launch, folder, launch: id });

@@ -177,7 +177,7 @@ const TERMINAL_IDS = ["app", "tmux", "rex"] as const;
 
 export type TerminalId = (typeof TERMINAL_IDS)[number];
 
-const isTerminalId = (v: unknown): v is TerminalId => typeof v === "string" && (TERMINAL_IDS as readonly string[]).includes(v);
+export const isTerminalId = (v: unknown): v is TerminalId => typeof v === "string" && (TERMINAL_IDS as readonly string[]).includes(v);
 
 export interface TerminalRow {
   id: TerminalId;
@@ -190,6 +190,7 @@ export interface TerminalRow {
 export interface TerminalsStatus {
   prefer: TerminalId;
   launch: "on" | "off";
+  bypass: "on" | "off";
   terminals: TerminalRow[];
 }
 
@@ -204,5 +205,5 @@ export function readTerminalsStatus(x: unknown): TerminalsStatus | null {
   const s = record(x);
   if (!s || !isTerminalId(s.prefer) || (s.launch !== "on" && s.launch !== "off") || !Array.isArray(s.terminals)) return null;
   const terminals = s.terminals.map(readTerminalRow).filter((t): t is TerminalRow => t !== null);
-  return { prefer: s.prefer, launch: s.launch, terminals };
+  return { prefer: s.prefer, launch: s.launch, bypass: s.bypass === "on" ? "on" : "off", terminals };
 }

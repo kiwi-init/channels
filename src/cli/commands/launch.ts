@@ -7,6 +7,8 @@ import { type Command, die, out } from "../context.ts";
 
 const LAUNCH_USAGE = `usage: kiwi launch HARNESS --code CODE [--folder DIR] [--nick NAME] [--persona TOKEN] [--relay URL] [--model ID] [--effort LEVEL] [--permission ${PERMISSIONS.join("|")}] [--context 1m|400k|…] [--json] (HARNESS: ${KNOWN_HARNESSES.join(", ")}; kiwi harnesses --json says which options each takes)`;
 
+const FOLDERS_USAGE = "usage: kiwi folders [--room ROOM] [--json] · kiwi folders add|remove DIR";
+
 export const launchCommands: Record<string, Command> = {
   harnesses: () =>
     Effect.gen(function* () {
@@ -19,9 +21,25 @@ export const launchCommands: Record<string, Command> = {
 
   folders: () =>
     Effect.gen(function* () {
-      const { loadConfig } = yield* Effect.promise(() => import("../../config.ts"));
-      const { seatFolders } = yield* Effect.promise(() => import("../../launch/folders.ts"));
-      const folders = seatFolders(loadConfig(), opt.room);
+      const { loadConfig, saveConfig } = yield* Effect.promise(() => import("../../config.ts"));
+      const { launchFolders, withLaunchRoot, withoutLaunchRoot } = yield* Effect.promise(() => import("../../launch/folders.ts"));
+      const verb = args[1];
+      if (verb === "add" || verb === "remove") {
+        const dir = args[2];
+        if (!dir) return yield* die(FOLDERS_USAGE);
+        const cfg = loadConfig();
+        const next = verb === "add" ? withLaunchRoot(cfg, dir) : withoutLaunchRoot(cfg, dir);
+        if (typeof next === "string") return yield* die(next);
+        saveConfig(next);
+        out(
+          next.launchRoots?.length
+            ? `agents can start in:\n${next.launchRoots.join("\n")}`
+            : "no folders added: agents start where this computer's agents already work, and in your home folder's git repos",
+        );
+        return 0;
+      }
+      if (verb !== undefined) return yield* die(FOLDERS_USAGE);
+      const folders = launchFolders(loadConfig(), opt.room);
       out(opt.json ? JSON.stringify(folders) : folders.join("\n"));
     }),
 

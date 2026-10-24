@@ -59,13 +59,14 @@ describe("window.kiwi on any transport", () => {
     const isCall = (key: keyof KiwiBridge): key is Call => typeof bridge[key] === "function" && key !== "getSnapshot" && !/^on[A-Z]/.test(key);
     const called: Call[] = [];
     for (const name of (Object.keys(bridge) as (keyof KiwiBridge)[]).filter(isCall)) {
-      const out: unknown = Reflect.apply(bridge[name], bridge, [`${name} 1`, `${name} 2`]);
+      const out: unknown = Reflect.apply(bridge[name], bridge, [`${name} 1`, `${name} 2`, `${name} 3`]);
       await expect(out).rejects.toThrow(name);
       called.push(name);
     }
     expect(seen.map((s) => s.name)).toEqual(called);
     for (const s of seen) for (const arg of s.args) expect(String(arg).startsWith(`${s.name} `)).toBe(true);
     expect(seen.find((s) => s.name === "foldersOn")?.args).toEqual(["foldersOn 1", "foldersOn 2"]);
+    expect(seen.find((s) => s.name === "setWake")?.args).toEqual(["setWake 1", "setWake 2", "setWake 3"]);
     expect(Object.keys(handlers(shell.host)).sort()).toEqual([...called].sort());
   });
 

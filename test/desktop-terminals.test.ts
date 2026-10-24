@@ -2,10 +2,11 @@ import { expect, test } from "bun:test";
 import type { TerminalsStatus } from "@kiwi/core/terminals.ts";
 import { terminalsOf } from "../desktop/src/terminals-status.ts";
 
-test("Settings reads kiwi terminal status --json, keeps only terminals it knows, and anything else as no group", () => {
+test("Settings reads kiwi terminal status --json, keeps only terminals it knows, reads bypass as off unless it says on, and anything else as no group", () => {
   const known: TerminalsStatus = {
     prefer: "rex",
     launch: "on",
+    bypass: "on",
     terminals: [
       { id: "rex", name: "Rex", found: true, running: true, helpers: "on" },
       { id: "tmux", name: "tmux", found: true, running: true, helpers: null },
@@ -16,5 +17,7 @@ test("Settings reads kiwi terminal status --json, keeps only terminals it knows,
   expect(terminalsOf(JSON.stringify(raw))).toEqual(known);
   expect(terminalsOf(JSON.stringify({ ...known, prefer: "moon" }))).toBeNull();
   expect(terminalsOf(JSON.stringify({ ...known, launch: "maybe" }))).toBeNull();
+  expect(terminalsOf(JSON.stringify({ prefer: known.prefer, launch: known.launch, terminals: known.terminals }))).toEqual({ ...known, bypass: "off" });
+  expect(terminalsOf(JSON.stringify({ ...known, bypass: "maybe" }))).toEqual({ ...known, bypass: "off" });
   expect(terminalsOf("kiwi: not a channel")).toBeNull();
 });

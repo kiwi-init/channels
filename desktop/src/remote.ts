@@ -1,4 +1,5 @@
 import { signRequest } from "@kiwi/core/auth.ts";
+import { readComputerSettings, type ComputerSettings } from "@kiwi/core/computer-settings.ts";
 import { readHarnessRow, type HarnessRow } from "@kiwi/core/harnesses.ts";
 import type { Identity } from "@kiwi/core/identity.ts";
 import { choicesOf } from "@kiwi/core/launch-options.ts";
@@ -95,6 +96,11 @@ export async function harnessesOn(asker: Asker, machine: Machine): Promise<FromM
 export async function foldersOn(asker: Asker, machine: Machine, roomId: string): Promise<FromMachine<string[]>> {
   const asked = await askMachine(asker, machine, "folders", { room: roomId }, { timeoutMs: ASK_MS });
   return fromMachine(asked, (r) => (Array.isArray(r["folders"]) ? r["folders"].filter((f): f is string => typeof f === "string" && f.startsWith("/")).slice(0, 20) : null));
+}
+
+export async function settingsOn(asker: Asker, machine: Machine): Promise<FromMachine<ComputerSettings>> {
+  const asked = await askMachine(asker, machine, "settings", {}, { timeoutMs: ASK_MS });
+  return fromMachine(asked, (r) => readComputerSettings(r["settings"]));
 }
 
 export async function launchOn(asker: Asker, machine: Machine & { label: string }, req: LaunchAgentRequest): Promise<LaunchedView> {

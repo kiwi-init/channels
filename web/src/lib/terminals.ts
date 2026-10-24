@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 
 import type { KiwiBridge } from "./secrets"
 
-type Terminals = Pick<KiwiBridge, "terminals" | "terminalHelpers" | "terminalPrefer" | "setLaunches">
+type Terminals = Pick<KiwiBridge, "terminals" | "terminalHelpers" | "terminalPrefer" | "setLaunches"> & Partial<Pick<KiwiBridge, "setRemoteBypass">>
 
 export function terminalsBridge(): Terminals | null {
   try {
@@ -10,6 +10,18 @@ export function terminalsBridge(): Terminals | null {
     return k && typeof k.terminals === "function" && typeof k.terminalHelpers === "function" && typeof k.terminalPrefer === "function" && typeof k.setLaunches === "function" ? (k as Terminals) : null
   } catch {
     // No window (a test or a worker): no terminals to set.
+    return null
+  }
+}
+
+type Hooks = Pick<KiwiBridge, "hooks" | "setHooks">
+
+export function hooksBridge(): Hooks | null {
+  try {
+    const k = (window as unknown as { kiwi?: Partial<Hooks> }).kiwi
+    return k && typeof k.hooks === "function" && typeof k.setHooks === "function" ? (k as Hooks) : null
+  } catch {
+    // No window (a test or a worker): no hooks to set.
     return null
   }
 }
