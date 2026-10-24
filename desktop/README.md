@@ -55,16 +55,23 @@ bun run typecheck:eb                                  # fetches the devkit into 
   minimum size and background on the main thread. The shell opens no window if any of
   these patches can't apply.
 
-- Release (`.github/workflows/release-build.yml`, job `desktop-mac-eb`): the plain
+- Release, Mac (`.github/workflows/release-build.yml`, job `desktop-mac-eb`): the plain
   `Channels.app` from the build's payload, signed with the Developer ID (Bun alone gets the
   JIT entitlements), notarized and stapled, as `Channels-<version>-mac-arm64.zip` (ditto,
   `Channels.app` at its root, the name the Electron app's updater asks for) and `.dmg`, each at
   most 40 MB (`scripts/eb-release.ts`). `scripts/eb-update-rehearsal.ts` installs the last
   Electron arm64 release and runs its updater's own steps on the new zip, then opens the
-  swapped app. Rehearsals always run it; a tag publishes it only once `release.yml` passes
-  `electrobun_mac: true`, and Intel Macs keep Electron's x64 build until a stable Electrobun
-  ships darwin-x64. Never launch a release-id build on a Mac with Channels installed: macOS
-  keeps its preferences and WebKit data under the real home whatever `HOME` says.
+  swapped app. `scripts/eb-driver-check.ts --release` fails if the zip or the dmg carries
+  test-only code, or if `CHANNELS_EB_TEST` is set. Every tag ships it; Intel Macs keep
+  Electron's x64 build until a stable Electrobun ships darwin-x64. Never launch a release-id
+  build on a Mac with Channels installed: macOS keeps its preferences and WebKit data under
+  the real home whatever `HOME` says.
+
+- Release, Linux (job `desktop-linux-eb`, on ubuntu-24.04, the oldest glibc it runs on):
+  `Channels-<version>-linux-amd64.deb` and `Channels-<version>-linux-x86_64.AppImage`
+  (`scripts/package-linux.ts`), checked by `eb-driver-check.ts --release`,
+  `scripts/linux-packages-check.sh` and `scripts/linux-upgrade-check.sh` (the v0.26.0 Electron
+  deb, then this one over it), and started under Xvfb.
 
 ## Layout
 
@@ -101,7 +108,7 @@ bun run build                     # bun-built dist/main.js + dist/preload.js
 bun run dist                      # electron-builder (mac dmg/zip, linux AppImage/deb)
 ```
 
-The release workflow (`.github/workflows/release.yml`) builds those on each `v*` tag,
-next to the CLI binaries. macOS is Developer ID signed and notarized when the repo
-secrets are set; Linux is unsigned. There is no Windows app (the kiwi CLI still ships
-for Windows).
+The release workflow (`.github/workflows/release.yml`) ships Electron's build only for
+Intel Macs (`Channels-<version>-mac-x64.zip` and `.dmg`), Developer ID signed and
+notarized; Apple silicon and Linux get the Electrobun app above. There is no Windows app
+(the kiwi CLI still ships for Windows).

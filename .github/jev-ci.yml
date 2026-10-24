@@ -85,7 +85,7 @@ jobs:
 
   test-unit:
     name: test / unit
-    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/workflows/nightly.yml", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "desktop/package.json", "desktop/scripts/eb-pins.ts", "desktop/electrobun-pins.json", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml", "ios/engine/**"]
+    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/workflows/nightly.yml", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "desktop/package.json", "desktop/scripts/eb-pins.ts", "desktop/electrobun-pins.json", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml", "ios/engine/**", "desktop/scripts/eb-test-marks.ts", "desktop/scripts/eb-driver-check.ts", "desktop/scripts/eb-app.ts", "desktop/scripts/eb-seal.ts"]
     always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts", "scripts/ci-flows.ts", "scripts/ci-shards.ts"]
     description: >-
       test/desktop-linux-launcher.test.ts (Linux): desktop/native/linux/kiwi-launcher.c, compiled with
@@ -599,7 +599,15 @@ jobs:
       test/desktop-daemon-spawn.test.ts: its output and the app's restarts land in
       KIWI_HOME/daemon.log, rotated at 1 MB. And
       test/release-signing.test.ts: release-build.yml's Package step fails a tag release that has no
-      Mac signing secrets, while a rehearsal and the Linux build still build unsigned. And
+      Mac signing secrets, while a rehearsal still builds unsigned; Electron builds only the Intel Mac
+      app, and the Electrobun Mac and Linux jobs run on every rehearsal and tag, check what they ship
+      with eb-driver-check --release and upload only outside a rehearsal, the Linux one on
+      ubuntu-24.04 (T445). And test/desktop-eb-driver-check.test.ts: eb-driver-check's release half
+      (desktop/scripts/eb-test-marks.ts) reads a Mac app's code and launcher through its Info.plist
+      and a Linux install's under opt/Channels, passes a clean one, fails one carrying test-only code
+      in its main bundle, a page script or its launcher, fails files that lack what every build has,
+      and fails before reading anything when CHANNELS_EB_TEST is set; --release reads a real .deb
+      where dpkg-deb runs and a ditto zip on macOS (T445). And
       test/untrusted-messages.test.ts: an owner-only event a member sent is refused by the fold and
       not handed to agents (src/agent/wants.ts), and kiwi log flags it (packages/core/src/format.ts);
       a reply naming a later seq answers nothing and roots no thread there
@@ -1093,7 +1101,7 @@ jobs:
     name: desktop / mac
     inputs: ["desktop/src/**", "desktop/native/**", "desktop/build/icon.icns", "packages/core/**", "web/src/**", "web/index.html", "web/vite.config.ts", "web/public/**", "web/package.json", "package.json", "bun.lock", "desktop/eb-tests/**", "test/fake-host.ts", "src/relay/**", "scripts/local-relay.ts", "scripts/perf-desktop.ts", "scripts/perf-calibrate.ts", "scripts/perf-budgets.json", "src/**", "scripts/build-cli.ts", "desktop/scripts/pack-cli.ts"]
     imports_from: ["desktop/src/main-eb.ts", "desktop/src/preload-eb.ts", "desktop/scripts/smoke-eb.ts", "scripts/perf-desktop.ts"]
-    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/electrobun-pins.json", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb.ts", "desktop/scripts/eb-pins.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-size.ts", "desktop/scripts/eb-app.ts", "desktop/scripts/eb-release.ts", "desktop/scripts/eb-update-rehearsal.ts", "desktop/scripts/eb-env-check.ts", "desktop/scripts/eb-seal.ts", "desktop/scripts/eb-keys-check.ts", "desktop/scripts/eb-keys-probe.ts", "desktop/scripts/eb-store-probe.ts", "desktop/scripts/eb-seal-check.ts", "desktop/scripts/eb-bundle.ts", "desktop/scripts/eb-drive.ts", "desktop/scripts/smoke-eb.ts", "desktop/scripts/eb-driver-check.ts", "desktop/scripts/eb-bridge-checks.ts"]
+    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/electrobun-pins.json", "desktop/tsconfig.json", "desktop/tsconfig.eb.json", "desktop/scripts/eb.ts", "desktop/scripts/eb-pins.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-size.ts", "desktop/scripts/eb-app.ts", "desktop/scripts/eb-release.ts", "desktop/scripts/eb-update-rehearsal.ts", "desktop/scripts/eb-env-check.ts", "desktop/scripts/eb-seal.ts", "desktop/scripts/eb-keys-check.ts", "desktop/scripts/eb-keys-probe.ts", "desktop/scripts/eb-store-probe.ts", "desktop/scripts/eb-seal-check.ts", "desktop/scripts/eb-bundle.ts", "desktop/scripts/eb-drive.ts", "desktop/scripts/smoke-eb.ts", "desktop/scripts/eb-driver-check.ts", "desktop/scripts/eb-bridge-checks.ts", "desktop/scripts/eb-test-marks.ts"]
     description: >-
       On a macOS runner (Electrobun builds only for the host it runs on), checks the Electrobun
       shell that is replacing Electron (issue #757). Builds web/dist, restores ~/.hutch (the pinned
@@ -1247,7 +1255,7 @@ jobs:
       store (so the page's CSP and window.kiwi.relayUrl, from #791's bridge, both name the local relay), and the test
       build keeps its store as plain JSON (desktop/src/eb-test-store.ts: kiwi-eb-test-store.json, 0600 in a 0700
       folder through guard.ts writePrivate, a torn or non-object file refused whole) where the release build keeps
-      only memory, so a relaunch reopens the channel; the test build's launcher holds the store key as the release one does. desktop/scripts/eb-driver-check.ts fails if the shipped release .app (unpacked
+      only memory, so a relaunch reopens the channel; the test build's launcher holds the store key as the release one does. desktop/scripts/eb-driver-check.ts (its marks in desktop/scripts/eb-test-marks.ts, which its --release half applies to the files the release jobs ship) fails if the shipped release .app (unpacked
       and sealed by eb-app.ts shippedApp) carries the driver, the relay override or the plain-JSON store in its code (kiwiDriver,
       KIWI_EB_DRIVER, KIWI_EB_RELAY, kiwi-eb-test-store.json) or lets them or CFFIXED_USER_HOME through its launcher, or if
       the test build lacks any of them, or if either build lacks what every build has (views://internal/index.html and
@@ -1298,7 +1306,7 @@ jobs:
     name: desktop / linux
     inputs: ["desktop/src/**", "desktop/native/linux/**", "desktop/build/icons/**", "packages/core/**", "web/src/**", "web/index.html", "web/package.json", "package.json", "bun.lock"]
     imports_from: ["desktop/src/main-eb.ts"]
-    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/electrobun-pins.json", "desktop/scripts/eb.ts", "desktop/scripts/eb-pins.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/package-linux.ts", "desktop/scripts/linux-files.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/native/linux/**", "desktop/scripts/eb-linux-start.sh", "desktop/scripts/eb-pins-check.ts", "desktop/scripts/linux-store-check.ts"]
+    always: ["desktop/package.json", "desktop/electrobun.config.ts", "desktop/electrobun-pins.json", "desktop/scripts/eb.ts", "desktop/scripts/eb-pins.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/package-linux.ts", "desktop/scripts/linux-files.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/native/linux/**", "desktop/scripts/eb-linux-start.sh", "desktop/scripts/eb-pins-check.ts", "desktop/scripts/linux-store-check.ts", "desktop/scripts/linux-packages-check.sh", "desktop/scripts/linux-upgrade-check.sh"]
     description: >-
       On two runners at once, Ubuntu 24.04 and 26.04 (a matrix, each part saving its own jev-ci pass;
       T2119: on 24.04 AppArmor's unprivileged user-namespace restriction keeps bubblewrap from setting up
@@ -1339,11 +1347,13 @@ jobs:
       channels-desktop alternative and a postinst that restores the link if an old postrm took it)
       and Channels-<v>-linux-x86_64.AppImage (zstd squashfs in 128 KiB blocks on AppImage's type2
       runtime, release 20251108 checked against its pinned sha256), and fails when either is over
-      40 MB. scripts/appimage-squashfs.ts checks the AppImage's compression, and the job fails when
+      40 MB. desktop/scripts/linux-packages-check.sh (which the release's desktop-linux-eb job runs too):
+      scripts/appimage-squashfs.ts checks the AppImage's compression, and the job fails when
       the deb or the extracted AppImage lacks either launcher, Bun, the page template (Resources/app/page/index.html),
       the page's assets, the .desktop entry or the icon, or carries what it leaves out (an index.html under views/ among it),
       or when the built bin/launcher, put in front of env, passes on LD_PRELOAD, LD_LIBRARY_PATH, BUN_OPTIONS,
-      NODE_OPTIONS or GTK_MODULES (T1548). It then installs the v0.26.0 Electron deb (pinned by sha256) and this
+      NODE_OPTIONS or GTK_MODULES (T1548). desktop/scripts/linux-upgrade-check.sh (the release runs it too)
+      then installs the v0.26.0 Electron deb (pinned by sha256) and this
       deb over it, and fails unless /usr/bin/channels-desktop leads to /opt/Channels/bin/launcher, the
       Electron app is gone, the entry runs the launcher and dpkg --verify finds nothing; it prints the runner's
       AppArmor user-namespace setting for WebKitGTK's sandbox.
@@ -1475,7 +1485,7 @@ jobs:
     push: false
     version_bumps: true
     inputs: []
-    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/actions/stamp/action.yml", "scripts/stamp.ts", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/scripts/fuses.ts", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/scripts/pack-cli.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "scripts/changelog.ts", "scripts/cli-downloads.ts", "desktop/electrobun.config.ts", "desktop/electrobun-pins.json", "desktop/native/macos/kiwi-shell.m", "desktop/scripts/eb.ts", "desktop/scripts/eb-pins.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-app.ts", "desktop/scripts/eb-release.ts", "desktop/scripts/eb-update-rehearsal.ts", "desktop/src/signer.ts", "desktop/src/update-asset.ts"]
+    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/actions/stamp/action.yml", "scripts/stamp.ts", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/scripts/fuses.ts", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/scripts/pack-cli.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "scripts/changelog.ts", "scripts/cli-downloads.ts", "desktop/electrobun.config.ts", "desktop/electrobun-pins.json", "desktop/native/macos/kiwi-shell.m", "desktop/scripts/eb.ts", "desktop/scripts/eb-pins.ts", "desktop/scripts/eb-pre-build.ts", "desktop/scripts/eb-post-build.ts", "desktop/scripts/eb-app.ts", "desktop/scripts/eb-release.ts", "desktop/scripts/eb-update-rehearsal.ts", "desktop/src/signer.ts", "desktop/src/update-asset.ts", "desktop/scripts/eb-driver-check.ts", "desktop/scripts/eb-test-marks.ts", "desktop/scripts/package-linux.ts", "desktop/scripts/linux-files.ts", "desktop/scripts/linux-packages-check.sh", "desktop/scripts/linux-upgrade-check.sh", "desktop/scripts/eb-linux-start.sh", "desktop/native/linux/**"]
     description: >-
       Runs .github/workflows/release-build.yml, the build a tag's release.yml runs, with
       rehearsal: true and a read-only token, publishing nothing: scripts/stamp.ts stamping the tag
@@ -1485,15 +1495,12 @@ jobs:
       version and changelog checks on the stamped tree; every job below building that tree (the
       .github/actions/stamp action applies the stamp the version job uploads); the cli job on macOS (bun test, four builds, each
       packed as .gz and .xz, held to 30 MB by scripts/cli-downloads.ts), and
-      the desktop app packaged on macOS (arm64 and x64) and Linux (AppImage and deb), with each
-      package's contents and fuses checked (release/mac*/Channels.app and
-      release/*-unpacked/channels-desktop), the kiwi binary bundled zstd-packed by
-      desktop/scripts/pack-cli.ts (which checks it unpacks to the same bytes), and on macOS
-      desktop/scripts/mac-size.ts failing a dmg or zip over 150 MiB or an app over 320 MiB, and on Linux
-      desktop/scripts/appimage-squashfs.ts failing an AppImage not packed with gzip, lz4 or zstd in
-      blocks of at most 128 KiB. The desktop-mac-eb job (rehearsals always; a tag only once
-      release.yml passes electrobun_mac: true, which also drops Electron's arm64 build so Intel
-      Macs keep Electron's mac-x64 files) builds the Electrobun app with the release bundle id
+      Electron's app packaged only for Intel Macs (x64: Apple silicon and Linux ship the Electrobun
+      app, T445; #950 keeps Electron for Intel), its contents and fuses checked
+      (release/mac/Channels.app), the kiwi binary bundled zstd-packed by
+      desktop/scripts/pack-cli.ts (which checks it unpacks to the same bytes), and
+      desktop/scripts/mac-size.ts failing a dmg or zip over 150 MiB or an app over 320 MiB. The
+      desktop-mac-eb job (every rehearsal and every tag, T445) builds the Electrobun app with the release bundle id
       (CHANNELS_EB_RELEASE=1) through the pinned toolchain, then desktop/scripts/eb-release.ts unpacks
       the plain Channels.app from the build's payload, fails unless it is com.kiwiinit.channels at
       desktop/package.json's version, signs every Mach-O, re-seals the app (T544's KiwiSeal, which skips the stapled Contents/CodeResources) and then signs the bundle, all with the Developer ID
@@ -1512,12 +1519,24 @@ jobs:
       a newer version, signedLikeThisApp (codesign -R the installed app's designated requirement, then
       spctl) when signed, and update-asset.ts swapScript swapping the bundle in place; it fails unless
       the swapped app is com.kiwiinit.channels at the new version with no leftovers, and unless it
-      opens its window within 30 s. On a pull request, and on a manual run of ci.yml from any
+      opens its window within 30 s. Then desktop/scripts/eb-driver-check.ts --release unpacks the
+      zip (ditto) and mounts the dmg (hdiutil) and fails if either carries test-only code
+      (desktop/scripts/eb-test-marks.ts) or if CHANNELS_EB_TEST is set. The desktop-linux-eb job
+      builds the Electrobun app for Linux on ubuntu-24.04 (the glibc libkiwi-shell.so and
+      bin/launcher are compiled against, the oldest Ubuntu it runs on) with the release id,
+      packages the deb and AppImage (desktop/scripts/package-linux.ts, each at most 40 MB), runs
+      eb-driver-check --release on both (dpkg-deb -x, --appimage-extract),
+      desktop/scripts/linux-packages-check.sh (what each package holds and leaves out, and
+      bin/launcher's allowlist), desktop/scripts/linux-upgrade-check.sh (the v0.26.0 Electron deb
+      installed, then this deb over it), and starts the installed app and the AppImage under Xvfb
+      (desktop/scripts/eb-linux-start.sh, unsandboxed on 24.04, the app saying why). On a pull request, and on a manual run of ci.yml from any
       branch but main, the macOS app is unsigned: no caller passes the signing secrets, and only
       the release environment (main and v* tags) holds them. A manual run on main takes them from
       that environment, so the app is signed, notarized and checked as on a tag. Fails where the tag would: a stamped file with no version for the stamp
       to find, versions that disagree after it, no changelog section, a test failing on macOS, an electron-builder error, a package missing the web
-      app or the kiwi binary, a Mac package over its size gate, an AppImage packed slow to page in, and on a manual run on main a signing or notarization error. Runs on
+      app or the kiwi binary, a Mac package over its size gate, a Linux package over 40 MB or missing
+      what it must hold, test-only code in what ships, the deb not installing over the Electron one,
+      the Linux app not starting, and on a manual run on main a signing or notarization error. Runs on
       a pull request that changes the release workflows, the stamp or CHANGELOG.md, on any change
       that only bumps a version number, and on manual runs of ci.yml, never on a push to main
       (release.yml's "kiwi X.Y.Z" stamp commit included).
