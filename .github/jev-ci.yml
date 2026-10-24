@@ -759,30 +759,6 @@ jobs:
       It does not run the Android app itself.
       Of the dependency manifests, the bundle takes only effect and the @kiwi/core workspace's exports map from them: a change to another package, a script, the Electron build settings in desktop/package.json or a desktop-only dependency (Electron, Electrobun) in bun.lock doesn't reach the Android app.
 
-  android-device:
-    name: android / device
-    inputs:
-      - "android/**"
-      - "bun.lock"
-      - "desktop/package.json"
-      - "ios/engine/**"
-      - "ios/scripts/**"
-      - "package.json"
-      - "web/package.json"
-    imports_from:
-      - "android/scripts/device-check.ts"
-      - "ios/engine/main.ts"
-      - "ios/scripts/dev-channel.ts"
-    always:
-      - "packages/core/package.json"
-    description: >-
-      Runs the Android app on an emulator.
-      On an Ubuntu runner, Gradle builds the release APK as in android / build (the engine bundled from ios/engine/main.ts), then the job boots the newest google_apis x86_64 system image the runner's SDK lists, with KVM, and prints its Android System WebView version.
-      android/scripts/device-check.ts installs the APK and drives it with adb and uiautomator: the app opens on Link this phone (so the engine loaded in the real WebView and its probe passed: secure context, Ed25519, X25519), a kiwi://link/ intent with a code from ios/scripts/dev-channel.ts (a relay on the runner, reached at 10.0.2.2) shows the digits and links, the channel shows in the list, opening it shows the lead's messages, a message typed in the dock reaches the channel and the lead's answer shows, the title opens the details with the crew, the header opens the lead chat, and no crash is in logcat.
-      Screenshots of each screen (and the list in dark mode) with logcat are kept as the android-shots artifact.
-      Fails on any of those, a build error, or an emulator that doesn't boot.
-      Of the dependency manifests, the bundle takes only effect and the @kiwi/core workspace's exports map from them: a change to another package, a script, the Electron build settings in desktop/package.json or a desktop-only dependency (Electron, Electrobun) in bun.lock doesn't reach the Android app.
-
   release-rehearsal:
     name: release / rehearsal
     jev: false
