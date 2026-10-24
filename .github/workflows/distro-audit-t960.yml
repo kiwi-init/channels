@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   audit:
-    name: T960 audit, ${{ matrix.distro }} ${{ matrix.desktop }}
+    name: T960 audit, ${{ matrix.distro }} ${{ matrix.keyring }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     container:
@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         distro: [fedora, arch]
-        desktop: [kde, gnome]
+        keyring: [gnome-keyring, kwallet, none]
     steps:
       - name: git and tar for checkout
         run: |
@@ -27,12 +27,12 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: audit the released AppImage
         timeout-minutes: 30
-        run: bash desktop/scripts/distro-audit/audit.sh ${{ matrix.distro }} ${{ matrix.desktop }} /tmp/audit 0.27.5
+        run: bash desktop/scripts/distro-audit/audit.sh ${{ matrix.distro }} ${{ matrix.keyring }} /tmp/audit 0.27.5
       - if: always()
         run: cat /tmp/audit/notes.txt || true
       - if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: t960-${{ matrix.distro }}-${{ matrix.desktop }}
+          name: t960-${{ matrix.distro }}-${{ matrix.keyring }}
           path: /tmp/audit
           retention-days: 3
