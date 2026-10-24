@@ -51,6 +51,7 @@ final class AppModel {
     var pending: [String: [Pending]] = [:]
     var sentAs: [Int: UUID] = [:]
     var visited: [Spot] = []
+    var launches: [String: LaunchSeen] = [:]
 
     @ObservationIgnored let engine = Engine()
     @ObservationIgnored private var booted = false
@@ -141,6 +142,8 @@ final class AppModel {
             rooms[code] = nil
         case .log:
             return
+        case .launch(let launch, let seen):
+            launches[launch] = seen
         }
     }
 
@@ -202,6 +205,23 @@ final class AppModel {
 
     func sendBack(_ code: String, task: Int, why: String) async throws {
         try await engine.ask(["op": "sendBack", "code": code, "task": task, "why": why])
+    }
+
+    func computers() async throws -> [ComputerView] {
+        try await engine.ask(["op": "computers"], as: [ComputerView].self)
+    }
+
+    func harnesses(on computer: String) async throws -> HarnessesOn {
+        try await engine.ask(["op": "harnessesOn", "computer": computer], as: HarnessesOn.self)
+    }
+
+    func folders(on computer: String, code: String) async throws -> [String] {
+        try await engine.ask(["op": "foldersOn", "computer": computer, "code": code], as: [String].self)
+    }
+
+    func launch(_ code: String, on computer: String, harness: String, folder: String, choices: [String: Any]) async throws -> Launched {
+        let ask: [String: Any] = ["op": "launch", "code": code, "computer": computer, "harness": harness, "folder": folder].merging(choices) { first, _ in first }
+        return try await engine.ask(ask, as: Launched.self)
     }
 
     func nudge() {

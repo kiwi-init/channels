@@ -5,6 +5,7 @@ struct ChannelDetails: View {
     let current: String
     let choose: (String) -> Void
     @Environment(AppModel.self) private var model
+    @State private var newAgent = false
 
     private var crew: [MemberView] {
         let lead = room.members.filter { $0.lead }
@@ -50,6 +51,9 @@ struct ChannelDetails: View {
             }
         }
         .listStyle(.insetGrouped)
+        .sheet(isPresented: $newAgent) {
+            NewAgentSheet(room: room)
+        }
     }
 
     private var header: some View {
@@ -70,6 +74,14 @@ struct ChannelDetails: View {
                     withAnimation(Motion.ease) { model.togglePin(spot) }
                 } label: {
                     Action(symbol: pinned ? "pin.slash.fill" : "pin.fill", title: pinned ? "Unpin" : "Pin")
+                }
+                if room.isOwner {
+                    Button {
+                        Haptic.tap()
+                        newAgent = true
+                    } label: {
+                        Action(symbol: "plus", title: "New Agent")
+                    }
                 }
             }
             .buttonStyle(.plain)

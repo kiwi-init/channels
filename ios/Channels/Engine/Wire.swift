@@ -183,6 +183,55 @@ struct RoomView: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
+struct ComputerView: Codable, Sendable, Hashable, Identifiable {
+    let key: String
+    let xpk: String
+    let label: String
+    let online: Bool
+    let since: Double?
+    let seenAt: Double
+
+    var id: String { key }
+    var name: String { label.isEmpty ? "Your computer" : label }
+    var seen: Date { Date(timeIntervalSince1970: seenAt / 1000) }
+}
+
+struct HarnessOptions: Codable, Sendable, Hashable {
+    let model: Bool
+    let effort: [String]
+    let permission: [String]
+    let context: [Int]
+}
+
+struct HarnessChoice: Codable, Sendable, Hashable, Identifiable {
+    let harness: String
+    let name: String
+    let face: String
+    let mono: Bool
+    let version: String?
+    let start: Bool
+    let why: String?
+    let options: HarnessOptions?
+
+    var id: String { harness }
+}
+
+struct HarnessesOn: Codable, Sendable {
+    let harnesses: [HarnessChoice]
+    let bypass: Bool
+}
+
+struct Launched: Decodable, Sendable {
+    let ok: Bool
+    let launch: String?
+    let detail: String?
+}
+
+struct LaunchSeen: Equatable, Sendable {
+    let stage: String
+    let name: String
+}
+
 struct LinkStart: Codable, Sendable {
     let digits: String
     let relay: String
