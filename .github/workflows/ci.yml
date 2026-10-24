@@ -468,13 +468,13 @@ jobs:
           fi
           kill "$compositor" 2> /dev/null || true
           exit "$code"
-      - name: smoke, natively on Wayland (headless weston with no XWayland, DISPLAY unset)
+      - name: smoke, natively on Wayland (headless weston at scale 2 with no XWayland, DISPLAY unset)
         if: ${{ !cancelled() && matrix.drive }}
         timeout-minutes: 10
         run: |
           export XDG_RUNTIME_DIR="$RUNNER_TEMP/wayland-native"
           mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
-          weston --backend=headless --socket=kiwi-native --width=1280 --height=800 --idle-time=0 > "$RUNNER_TEMP/weston-native.log" 2>&1 &
+          weston --backend=headless --socket=kiwi-native --width=2560 --height=1600 --scale=2 --idle-time=0 > "$RUNNER_TEMP/weston-native.log" 2>&1 &
           compositor=$!
           for _ in $(seq 1 50); do
             [ -S "$XDG_RUNTIME_DIR/kiwi-native" ] && break
@@ -485,7 +485,7 @@ jobs:
           session() { env -u DISPLAY -u XAUTHORITY -u GDK_BACKEND WAYLAND_DISPLAY=kiwi-native XDG_SESSION_TYPE=wayland "$@"; }
           code=0
           session bun desktop/scripts/smoke-eb.ts "${{ steps.test-app.outputs.path }}" || code=$?
-          session bash desktop/scripts/eb-wayland-start.sh /opt/Channels/bin/electrobun-launcher || code=$?
+          session bash desktop/scripts/eb-wayland-start.sh /opt/Channels/bin/electrobun-launcher 2 || code=$?
           if [ "$code" -ne 0 ]; then
             echo "::group::weston's log"; cat "$RUNNER_TEMP/weston-native.log"; echo "::endgroup::"
             echo "::group::the test app alone in this session, for 20 s"
