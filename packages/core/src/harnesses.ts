@@ -19,7 +19,7 @@ export const isKnownHarness = (v: unknown): v is KnownHarness => typeof v === "s
 
 const text = (v: unknown): string | null => (typeof v === "string" && v ? v : null);
 
-export const HOOK_STATES = ["installed", "partial", "outdated", "missing", "off", "absent"] as const;
+const HOOK_STATES = ["installed", "partial", "outdated", "missing", "off", "absent"] as const;
 
 export type HookState = (typeof HOOK_STATES)[number];
 
