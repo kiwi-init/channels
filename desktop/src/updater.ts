@@ -1,7 +1,8 @@
 // Keeping the app itself current, from proper releases only: GitHub's "latest release" never names a
 // pre-release, so release candidates never reach anyone who didn't download one. Checked at start and
 // every few hours; a newer one is downloaded in the background, checked against the release's
-// SHA256SUMS, and put in place the next time the app quits (or now, from "Restart to update").
+// SHA256SUMS (on Linux, only once SHA256SUMS.minisig verifies it with the key pinned in
+// release-key.ts), and put in place the next time the app quits (or now, from "Restart to update").
 
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -14,6 +15,8 @@ import { childEnv } from "./child-env.ts";
 import { host } from "./host.ts";
 import { moveOver } from "./move.ts";
 import { logMainError } from "./main-log.ts";
+import { minisignVerifies } from "./minisign.ts";
+import { RELEASE_KEY } from "./release-key.ts";
 import { signedLikeThisApp } from "./signer.ts";
 import { cantSwap, debAsset, githubHop, ownAppImage, releaseFile, releasePage, swapAsset, swapScript } from "./update-asset.ts";
 
@@ -128,21 +131,22 @@ async function check(): Promise<UpdateCheck> {
   const fileOf = (n: string | null) => (n ? releaseFile(REPO, rel.assets?.find((a) => a.name === n)?.browser_download_url) : null);
   const asset = fileOf(name);
   const sums = fileOf("SHA256SUMS");
+  const signature = process.platform === "darwin" ? null : fileOf("SHA256SUMS.minisig");
   const target = process.platform === "darwin" ? macBundle() : appImage;
   if (name && target && cantSwap(target, writableDir, failedBefore(version))) return set({ version, state: "available", url, blocked: true });
   const debName = packaged ? debAsset(version, process.platform, process.arch, appImage) : null;
   const deb = fileOf(debName);
-  if (!asset || !sums) return set({ version, state: "available", url, ...(deb ? { deb } : {}) });
+  if (!asset || !sums || (process.platform !== "darwin" && !signature)) return set({ version, state: "available", url, ...(deb ? { deb } : {}) });
   const shown = set({ version, state: "downloading", url });
-  fetching = fetchUpdate(version, url, asset, sums, name!).finally(() => (fetching = null));
+  fetching = fetchUpdate(version, url, asset, sums, signature, name!).finally(() => (fetching = null));
   return shown;
 }
 
-async function fetchUpdate(version: string, url: string, assetUrl: string, sumsUrl: string, name: string): Promise<void> {
+async function fetchUpdate(version: string, url: string, assetUrl: string, sumsUrl: string, signatureUrl: string | null, name: string): Promise<void> {
   let dir: string | null = null;
   try {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), "kiwi-update-"));
-    staged = { version, path: await download(assetUrl, sumsUrl, name, dir), url };
+    staged = { version, path: await download(assetUrl, sumsUrl, signatureUrl, name, dir), url };
   } catch (e) {
     retrySoon(`couldn't put Channels ${version} in place: ${e instanceof Error ? e.message : String(e)}`);
   } finally {
@@ -179,11 +183,20 @@ async function save(url: string, file: string, name: string): Promise<string> {
   }
 }
 
-/** The release's file for this install, checked against its SHA256SUMS and unpacked in `dir`: what goes in place, or null. */
-async function download(assetUrl: string, sumsUrl: string, name: string, dir: string): Promise<string> {
+async function signedSums(sums: Uint8Array, signatureUrl: string): Promise<void> {
+  const signature = await githubFetch(signatureUrl, AbortSignal.timeout(ASK_WAIT_MS));
+  if (!signature.ok) throw new Error(`SHA256SUMS.minisig answered ${signature.status}`);
+  if (!minisignVerifies(sums, await signature.text(), RELEASE_KEY)) throw new Error("SHA256SUMS isn't signed with the Channels release key");
+}
+
+/** The release's file for this install, checked against its SHA256SUMS (signed, when a signature is asked for) and unpacked in `dir`: what goes in place, or null. */
+async function download(assetUrl: string, sumsUrl: string, signatureUrl: string | null, name: string, dir: string): Promise<string> {
   const sums = await githubFetch(sumsUrl, AbortSignal.timeout(ASK_WAIT_MS));
   if (!sums.ok) throw new Error(`SHA256SUMS answered ${sums.status}`);
-  const want = (await sums.text())
+  const listed = new Uint8Array(await sums.arrayBuffer());
+  if (signatureUrl) await signedSums(listed, signatureUrl);
+  const want = new TextDecoder()
+    .decode(listed)
     .split("\n")
     .map((l) => l.trim().split(/\s+/))
     .find(([, f]) => f === name)?.[0];

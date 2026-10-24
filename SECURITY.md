@@ -499,6 +499,17 @@ GitHub release as the binary, so it detects a bad download, not a release
 that was swapped for another. They print `gh attestation verify` for you
 to run. They do not run it, and they still install if you skip it.
 
+The desktop app updates itself only from GitHub's latest release. On a Mac,
+the new bundle must be signed like the running one. On Linux, an AppImage
+swaps itself in only once `SHA256SUMS.minisig` verifies the release's
+`SHA256SUMS` with the minisign key pinned in `desktop/src/release-key.ts`;
+otherwise, and for a .deb, it only offers the release. The release signs
+`SHA256SUMS` with that key's secret (the `MINISIGN_SECRET_KEY` GitHub secret)
+and checks its own signature with the pinned key before publishing. A new key
+reaches installed apps only in a release signed with the old one, so a lost
+key means Linux AppImages update by hand until they install a release that
+pins the next key.
+
 ## `kiwi sh`: querying the channel with a shell
 
 `kiwi sh` and the MCP `sh` tool run a shell script over the channel shown as

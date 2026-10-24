@@ -1,4 +1,4 @@
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, expect, mock, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -7,6 +7,11 @@ import { join } from "node:path";
 import { appImageName, debName, type LinuxArch } from "../desktop/scripts/linux-files.ts";
 import { useHost } from "../desktop/src/host.ts";
 import { fakeHost, type FakeHost } from "./fake-host.ts";
+import { throwawayKey } from "./minisign-sign.ts";
+
+const releaseKey = throwawayKey();
+const otherKey = throwawayKey();
+void mock.module("../desktop/src/release-key.ts", () => ({ RELEASE_KEY: releaseKey.publicKey }));
 
 type Checked = { state: string; version?: string; url?: string; blocked?: true; deb?: string };
 interface Updater {
@@ -50,16 +55,20 @@ const ASSETS = "https://release-assets.githubusercontent.com/github-production-r
 
 interface Release {
   sums?: string;
+  signature?: string | null;
   where?: (name: string) => string;
   redirect?: (name: string) => string | null;
 }
 
 function release(o: Release = {}): string[] {
   const seen: string[] = [];
+  const sums = o.sums ?? `${sha(NEW)}  ${appImageName("0.27.0", arch)}\n`;
+  const signature = o.signature === undefined ? releaseKey.sign(sums) : o.signature;
   const files: Record<string, string> = {
     [appImageName("0.27.0", arch)]: NEW,
     [debName("0.27.0", arch)]: "the 0.27.0 deb",
-    SHA256SUMS: o.sums ?? `${sha(NEW)}  ${appImageName("0.27.0", arch)}\n`,
+    SHA256SUMS: sums,
+    ...(signature === null ? {} : { "SHA256SUMS.minisig": signature }),
   };
   const where = o.where ?? ((name: string) => `${DOWNLOAD}${name}`);
   globalThis.fetch = Object.assign(
@@ -145,6 +154,37 @@ test("an AppImage whose download doesn't match SHA256SUMS stays as it is and onl
   expect(readFileSync(appImage, "utf8")).toBe(OLD);
   expect(fake.did.filter((d) => d.startsWith("relaunch"))).toEqual([]);
   expect(downloads()).toEqual([]);
+});
+
+test("an AppImage whose SHA256SUMS isn't signed with the pinned release key is never staged (issue #203)", async () => {
+  const name = appImageName("0.27.0", arch);
+  const good = `${sha(NEW)}  ${name}\n`;
+  for (const [i, bad] of [
+    { signature: otherKey.sign(good) },
+    { signature: releaseKey.sign(`${sha("something else")}  ${name}\n`) },
+    { signature: releaseKey.sign(good).replace(/\n[A-Za-z0-9+/=]+\n$/, `\n${"A".repeat(86)}==\n`) },
+    { signature: "not a signature" },
+  ].entries()) {
+    const appImage = installed(`Unsigned${i}`);
+    const seen = release(bad);
+    const { fake, u } = await launch(appImage, join(root, `data-unsigned-${i}`));
+    expect((await u.checkForUpdate()).state).toBe("downloading");
+    expect(await settled(u)).toEqual({ version: "0.27.0", state: "available", url: PAGE });
+    expect(seen.some((url) => url.endsWith(`/${name}`))).toBe(false);
+    expect(u.applyUpdate(true)).toBe(false);
+    expect(readFileSync(appImage, "utf8")).toBe(OLD);
+    expect(fake.did.filter((d) => d.startsWith("relaunch"))).toEqual([]);
+    expect(downloads()).toEqual([]);
+  }
+});
+
+test("an AppImage whose release has no SHA256SUMS.minisig only offers the release and downloads nothing", async () => {
+  const appImage = installed("NoSignature");
+  const seen = release({ signature: null });
+  const { u } = await launch(appImage, join(root, "data-no-signature"));
+  expect(await u.checkForUpdate()).toEqual({ version: "0.27.0", state: "available", url: PAGE });
+  expect(seen).toEqual(["https://api.github.com/repos/kiwi-init/channels/releases/latest"]);
+  expect(readFileSync(appImage, "utf8")).toBe(OLD);
 });
 
 test("an AppImage in a folder it can't write says it can't update itself and downloads nothing", async () => {
