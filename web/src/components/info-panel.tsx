@@ -60,7 +60,7 @@ export function InfoPanel({
   onJoins?: () => void
   onNewAgent?: (() => void) | undefined
 }) {
-  const { p, ask, openDialog } = useControls()
+  const { p, ask, openDialog, editColor } = useControls()
   const { saving, download } = useDownload(p)
   const [view, setView] = useState<"details" | "invite" | "repos" | "rooms" | "agent">("details")
   const [picking, setPicking] = useState(false)
@@ -215,7 +215,7 @@ export function InfoPanel({
                     tag={m.owner ? "owner" : lead === m.name ? "lead" : null}
                     line={mine ? "You" : memberDetail(p, m)}
                     title={m.kind !== "human" ? loadDetail(memberLoad(p.state, m.name)) : undefined}
-                    more={p.isOwner && !m.owner}
+                    more={(p.isOwner && !m.owner) || (mine && !!p.onColor)}
                   />
                 )
                 return p.isOwner && !m.owner ? (
@@ -229,6 +229,10 @@ export function InfoPanel({
                       </button>
                     }
                   />
+                ) : mine && p.onColor ? (
+                  <button key={m.pk} type="button" aria-label="Your colour" onClick={() => editColor(m)} className="block w-full text-left transition-colors hover:bg-wash">
+                    {row}
+                  </button>
                 ) : onMessage && !mine ? (
                   <button
                     key={m.pk}

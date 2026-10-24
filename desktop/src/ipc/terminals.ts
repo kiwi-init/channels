@@ -92,7 +92,7 @@ function seats(stdout: string): PlacedSeat[] {
 }
 
 export function terminalsCalls(): Serves<
-  "terminals" | "terminalHelpers" | "terminalPrefer" | "setLaunches" | "contextLine" | "setContextLine" | "hooks" | "setHooks" | "wakeSeats" | "setWake" | "seatPlaces" | "showSeat"
+  "terminals" | "terminalHelpers" | "terminalPrefer" | "setLaunches" | "setRemoteBypass" | "contextLine" | "setContextLine" | "hooks" | "setHooks" | "wakeSeats" | "setWake" | "seatPlaces" | "showSeat"
 > {
   return {
     terminals: () => terminals(),
@@ -107,6 +107,10 @@ export function terminalsCalls(): Serves<
     setLaunches: (to: unknown) => {
       if (!isSwitch(to)) throw new Error("setLaunches takes on or off");
       return change(["launches", to]);
+    },
+    setRemoteBypass: (to: unknown) => {
+      if (!isSwitch(to)) throw new Error("setRemoteBypass takes on or off");
+      return change(["launches", "bypass", to]);
     },
     contextLine: () => contextLine(["context-line", "status", "--json"]),
     setContextLine: (to: unknown) => {

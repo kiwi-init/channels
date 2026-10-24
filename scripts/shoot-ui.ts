@@ -619,6 +619,39 @@ try {
         await owner.evaluate(() => sessionStorage.removeItem("shots.wake"));
         await owner.reload();
       }
+      const colourDialog = () => owner.getByRole("dialog", { name: "Your colour" });
+      await shoot(
+        owner,
+        tag,
+        "07e-your-colour",
+        async () => {
+          await detailsBtn().click();
+          await owner.getByRole("button", { name: "Your colour" }).click();
+          await colourDialog().getByRole("radio", { name: "No colour", checked: true }).waitFor();
+        },
+        async () => {
+          await owner.keyboard.press("Escape");
+          await closeDetails();
+        },
+      );
+      await shoot(
+        owner,
+        tag,
+        "07f-your-colour-teal",
+        async () => {
+          await detailsBtn().click();
+          await owner.getByRole("button", { name: "Your colour" }).click();
+          await colourDialog().getByRole("radio", { name: "teal" }).click();
+          await colourDialog().waitFor({ state: "hidden" });
+          await owner.getByRole("button", { name: "Your colour" }).click();
+          await colourDialog().getByRole("radio", { name: "teal", checked: true }).waitFor({ timeout: 15000 });
+        },
+        async () => {
+          await colourDialog().getByRole("radio", { name: "No colour" }).click();
+          await colourDialog().waitFor({ state: "hidden" });
+          await closeDetails();
+        },
+      );
       if (!narrow)
         await shoot(
           owner,

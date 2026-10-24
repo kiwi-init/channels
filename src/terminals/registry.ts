@@ -67,6 +67,10 @@ export function launchesOn(cfg: Pick<Config, "launch">): boolean {
   return cfg.launch !== "off";
 }
 
+export function remoteBypassOn(cfg: Pick<Config, "remoteBypass">): boolean {
+  return cfg.remoteBypass === "on";
+}
+
 interface Plugins {
   manifests: readonly TerminalManifest[];
   load(id: TerminalId): Promise<TerminalPlugin>;

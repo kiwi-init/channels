@@ -19,7 +19,7 @@ export function loadDetail(l: Load): string {
 }
 
 export function MemberActions({ m, trigger, onMessage }: { m: RosterMember; trigger: Parameters<typeof Menu>[0]["trigger"]; onMessage?: () => void }) {
-  const { p, run, ask, editScopes, editPersona, editNickname } = useControls()
+  const { p, run, ask, editScopes, editPersona, editNickname, editColor } = useControls()
   const now = p.state.members.get(m.name)
   const seat = useWakeSeat(p.roomId, m.name)
   return (
@@ -49,6 +49,7 @@ export function MemberActions({ m, trigger, onMessage }: { m: RosterMember; trig
           {now && scopesLine(now.scopes) === "read only" ? "Let them write…" : now && scopesLine(now.scopes) ? "Let them do everything…" : "Make read-only…"}
         </MenuItem>
       )}
+      {m.kind === "human" && p.onColor && <MenuItem onClick={() => editColor(m)}>{now?.color ? `Colour: ${now.color}…` : "Give a colour…"}</MenuItem>}
       {m.kind === "human" && p.onPowers && (
         <>
           <MenuItem onClick={() => void run(() => p.onPowers!(m, { addsAgents: !m.addsAgents }), m.addsAgents ? `${memberName(m)}’s agents wait for you now` : `${memberName(m)} can add agents`)}>

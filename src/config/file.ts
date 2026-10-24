@@ -72,6 +72,7 @@ export interface Config {
   rex?: "on" | "off";
   launch?: "on" | "off";
   launchRoots?: string[];
+  remoteBypass?: "on" | "off";
   terminals?: Terminals;
 }
 
