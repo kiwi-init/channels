@@ -1,4 +1,5 @@
 import { isKnownHarness, readHookRow, type HookRow, type KnownHarness } from "@kiwi/core/harnesses.ts";
+import { readWakeSeat, type WakeSeat } from "@kiwi/core/wake.ts";
 import { readPlacedSeat, readShowResult, type PlacedSeat, type ShowResult, type TerminalId, type TerminalsStatus } from "@kiwi/core/terminals.ts";
 import type { Serves } from "../calls.ts";
 import { daemonHarnesses } from "../daemon-client.ts";
@@ -59,6 +60,15 @@ async function hooks(): Promise<HookRow[]> {
   return rows.map((r) => withClaude(r, claude));
 }
 
+const ROOM_ID = /^[0-9a-f]{32}$/;
+const isAgentName = (v: unknown): v is string => typeof v === "string" && v.length > 0 && v.length <= 64 && !v.startsWith("-");
+
+function wakeSeatsOf(stdout: string): WakeSeat[] {
+  const parsed = answer(stdout);
+  const listed = parsed && typeof parsed === "object" ? (parsed as { seats?: unknown }).seats : undefined;
+  return Array.isArray(listed) ? listed.map(readWakeSeat).filter((s): s is WakeSeat => s !== null) : [];
+}
+
 function answer(stdout: string): unknown {
   try {
     return JSON.parse(stdout) as unknown;
@@ -81,7 +91,9 @@ function seats(stdout: string): PlacedSeat[] {
   return Array.isArray(parsed) ? parsed.map(readPlacedSeat).filter((s): s is PlacedSeat => s !== null) : [];
 }
 
-export function terminalsCalls(): Serves<"terminals" | "terminalHelpers" | "terminalPrefer" | "setLaunches" | "contextLine" | "setContextLine" | "hooks" | "setHooks" | "seatPlaces" | "showSeat"> {
+export function terminalsCalls(): Serves<
+  "terminals" | "terminalHelpers" | "terminalPrefer" | "setLaunches" | "contextLine" | "setContextLine" | "hooks" | "setHooks" | "wakeSeats" | "setWake" | "seatPlaces" | "showSeat"
+> {
   return {
     terminals: () => terminals(),
     terminalHelpers: (id: unknown, to: unknown) => {
@@ -100,6 +112,11 @@ export function terminalsCalls(): Serves<"terminals" | "terminalHelpers" | "term
     setContextLine: (to: unknown) => {
       if (!isSwitch(to)) throw new Error("setContextLine takes on or off");
       return contextLine(["context-line", to, "--json"]);
+    },
+    wakeSeats: async () => wakeSeatsOf(await must(["wake", "seats", "--json"])),
+    setWake: async (room: unknown, agent: unknown, to: unknown) => {
+      if (typeof room !== "string" || !ROOM_ID.test(room) || !isAgentName(agent) || !isSwitch(to)) throw new Error("setWake takes a room id, an agent's name, and on or off");
+      return wakeSeatsOf(await must(["wake", "seat", room, agent, to, "--json"]));
     },
     hooks: () => hooks(),
     setHooks: async (harness: unknown, to: unknown) => {
