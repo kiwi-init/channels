@@ -8,7 +8,7 @@ import { cx } from "@/lib/utils"
 import { AgentRow, byBusy, type AgentNow } from "../agent-strip"
 import { ChannelIconTile } from "../channel-icon"
 import { Icon } from "../icon"
-import { Menu, MenuItem } from "../ui/menu"
+import { Menu, MenuItem, MenuNote, MenuSeparator } from "../ui/menu"
 
 export interface Conversation {
   key: string
@@ -16,6 +16,7 @@ export interface Conversation {
   unread: number
   forMe: boolean
   withMe: boolean
+  left: boolean
 }
 
 function Section({ title, onTitle, action, children }: { title: string; onTitle?: () => void; action?: ReactNode; children: ReactNode }) {
@@ -121,22 +122,29 @@ function TasksRow({ view, counts, onView }: { view: View | null; counts: Record<
   )
 }
 
+const stays = (c: Conversation, current: string | null) => c.forMe || c.key === current
+
 export function hiddenConversations(conversations: Conversation[], current: string | null): Conversation[] {
-  return conversations.filter((c) => !c.withMe && !c.forMe && c.key !== current)
+  return conversations.filter((c) => !c.left && !c.withMe && !stays(c, current))
+}
+
+export function leftConversations(conversations: Conversation[], current: string | null): Conversation[] {
+  return conversations.filter((c) => c.left && !stays(c, current))
 }
 
 function Conversations({ conversations, current, onConversation }: { conversations: Conversation[]; current: string | null; onConversation: (key: string) => void }) {
   const [open, setOpen] = useState(false)
+  const [openLeft, setOpenLeft] = useState(false)
   const hidden = hiddenConversations(conversations, current)
-  const kept = conversations.filter((c) => !hidden.includes(c))
+  const left = leftConversations(conversations, current)
+  const kept = conversations.filter((c) => !hidden.includes(c) && !left.includes(c))
   const shown = open ? [...kept, ...hidden] : kept
   const unread = hidden.reduce((n, c) => n + c.unread, 0)
+  const item = (c: Conversation) => <Item key={c.key} on={current === c.key} label={c.label} count={c.unread} alert={c.forMe} onClick={() => onConversation(c.key)} />
   return (
     <Section title="Conversations">
       <ul>
-        {shown.map((c) => (
-          <Item key={c.key} on={current === c.key} label={c.label} count={c.unread} alert={c.forMe} onClick={() => onConversation(c.key)} />
-        ))}
+        {shown.map(item)}
         {hidden.length > 0 && (
           <li>
             <button
@@ -152,6 +160,22 @@ function Conversations({ conversations, current, onConversation }: { conversatio
             </button>
           </li>
         )}
+        {left.length > 0 && (
+          <li>
+            <button
+              type="button"
+              onClick={() => setOpenLeft((o) => !o)}
+              aria-expanded={openLeft}
+              aria-label={`Left the channel, ${left.length} ${left.length === 1 ? "conversation" : "conversations"}`}
+              className={cx(ROW, "gap-2 text-ink-3 hover:bg-wash hover:text-ink")}
+            >
+              <Icon icon={ArrowDown01Icon} size={14} className={cx("shrink-0", !openLeft && "-rotate-90")} />
+              <span className="min-w-0 flex-1 truncate">Left the channel</span>
+              <span className="shrink-0 text-meta text-ink-3 tabular-nums">{left.length}</span>
+            </button>
+          </li>
+        )}
+        {openLeft && left.map(item)}
       </ul>
     </Section>
   )
@@ -247,6 +271,13 @@ export function ChannelSidebar({
 export function ConversationMenu({ conversations, current, onConversation }: { conversations: Conversation[]; current: string | null; onConversation: (key: string) => void }) {
   const unread = conversations.some((c) => c.key !== current && c.unread > 0)
   const label = conversations.find((c) => c.key === current)?.label ?? "Conversations"
+  const left = leftConversations(conversations, current)
+  const item = (c: Conversation) => (
+    <MenuItem key={c.key} onClick={() => onConversation(c.key)} className={cx(current === c.key && "font-semibold text-ink")}>
+      <span className="min-w-0 flex-1 truncate">{c.label}</span>
+      {c.unread > 0 && <span className={cx("shrink-0 text-meta tabular-nums", c.forMe ? "font-semibold text-decide" : "text-ink-3")}>{c.unread}</span>}
+    </MenuItem>
+  )
   return (
     <Menu
       side="bottom"
@@ -264,12 +295,14 @@ export function ConversationMenu({ conversations, current, onConversation }: { c
         </button>
       }
     >
-      {conversations.map((c) => (
-        <MenuItem key={c.key} onClick={() => onConversation(c.key)} className={cx(current === c.key && "font-semibold text-ink")}>
-          <span className="min-w-0 flex-1 truncate">{c.label}</span>
-          {c.unread > 0 && <span className={cx("shrink-0 text-meta tabular-nums", c.forMe ? "font-semibold text-decide" : "text-ink-3")}>{c.unread}</span>}
-        </MenuItem>
-      ))}
+      {conversations.filter((c) => !left.includes(c)).map(item)}
+      {left.length > 0 && (
+        <>
+          <MenuSeparator />
+          <MenuNote>Left the channel</MenuNote>
+          {left.map(item)}
+        </>
+      )}
     </Menu>
   )
 }
