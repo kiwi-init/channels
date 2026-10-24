@@ -1,0 +1,50 @@
+name: update-check
+
+on:
+  push:
+    branches: [T936-update-check]
+
+permissions:
+  contents: read
+  attestations: read
+
+env:
+  FROM: "0.27.3"
+  TO: "0.27.4"
+
+jobs:
+  mac:
+    name: the installed app updates itself, Mac arm64
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash desktop/scripts/update-check/mac.sh "$FROM" "$TO" "$RUNNER_TEMP/mac"
+
+  linux:
+    name: the installed app updates itself, Linux ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-26.04]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - run: sudo apt-get update -q && sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-2 bubblewrap xdg-dbus-proxy xvfb xauth fuse3 dbus-x11
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: dbus-run-session -- bash desktop/scripts/update-check/linux.sh "$FROM" "$TO" "$RUNNER_TEMP/linux"
+
+  release:
+    name: the release's files, signature, attestations, site and install script
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - run: sudo apt-get update -q && sudo apt-get install -y --no-install-recommends minisign
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash desktop/scripts/update-check/release.sh "$TO" "$RUNNER_TEMP/release" "$(grep -oE '"[^"]+"' desktop/src/release-key.ts | tr -d '"')"
