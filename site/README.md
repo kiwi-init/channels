@@ -41,12 +41,11 @@ install scripts.
 `app.js` lists the desktop app files the v0.27.4 release publishes, under the app's
 name, Channels (releases up to v0.16.2 named them `Kiwi-…`):
 
-- `Channels-0.27.4-mac-arm64.dmg` / `Channels-0.27.4-mac-x64.dmg`
+- `Channels-0.27.4-mac-arm64.dmg` (Apple silicon only: Intel Macs get the CLI)
 - `Channels-0.27.4-linux-x86_64.AppImage` / `Channels-0.27.4-linux-amd64.deb`
 
 A tag's release stamps its version into these names (`scripts/stamp.ts`) and commits
-them to main; the site deploys only from a tag, after its GitHub release exists. Those are `desktop/package.json`'s `artifactName`
-(`Channels-${version}-${os}-${arch}.${ext}`)
-with electron-builder's per-target arch strings. There is no Windows app or
-Windows CLI. Links point at
+them to main; the site deploys only from a tag, after its GitHub release exists. The names
+come from `desktop/src/update-asset.ts` (Mac) and `desktop/scripts/linux-files.ts` (Linux).
+There is no Windows app or Windows CLI. Links point at
 `github.com/kiwi-init/channels/releases/latest/download/<file>`.

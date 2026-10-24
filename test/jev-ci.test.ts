@@ -106,7 +106,7 @@ const ran = (r: Plan) =>
     .filter((d) => d.run)
     .map((d) => d.job)
     .sort();
-const CHECKS = ["static", "test-unit", "test-flows-a", "test-flows-b", "build", "shots", "perf-runs", "perf", "desktop", "desktop-mac", "desktop-linux", "cli-macos", "ios", "ios-gestures", "android"];
+const CHECKS = ["static", "test-unit", "test-flows-a", "test-flows-b", "build", "shots", "perf-runs", "perf", "desktop-mac", "desktop-linux", "cli-macos", "ios", "ios-gestures", "android"];
 
 describe("the iPhone jobs wait only on what the iPhone app is built from (T1598)", () => {
   const desktopOnly = {
@@ -143,7 +143,7 @@ describe("ci.yml edits outside the jobs", () => {
     const { result, by } = await planFor({ ".github/workflows/ci.yml": edited });
     expect(ran(result)).toEqual(["static"]);
     expect(by("static").layer).toBe("L0");
-    for (const job of ["test-flows-a", "test-flows-b", "build", "desktop", "cli-macos", "release-rehearsal"]) expect(by(job)).toMatchObject({ run: false, layer: "L0" });
+    for (const job of ["test-flows-a", "test-flows-b", "build", "desktop-mac", "cli-macos", "release-rehearsal"]) expect(by(job)).toMatchObject({ run: false, layer: "L0" });
     expect(by("test-unit").layer).toBe("L2");
     expect(result.notes.join(" ")).toContain("concurrency");
   });
@@ -242,7 +242,7 @@ describe("jev-ci.yml edits", () => {
     });
     expect(by("build")).toMatchObject({ run: true, layer: "L0" });
     expect(by("build").reason).toContain("inputs");
-    expect(by("desktop").run).toBe(false);
+    expect(by("desktop-mac").run).toBe(false);
   });
 
   test("a planner setting edited runs every job", async () => {

@@ -55,14 +55,14 @@ describe("links leave the app for the person's own browser", () => {
     expect(fallback).toEqual([]);
   });
 
-  test("on Linux without xdg-open, Electron's own opener still opens it", async () => {
+  test("on Linux without xdg-open, the shell's own opener still opens it", async () => {
     const { launch } = fakeLaunch(true);
     const fallback: string[] = [];
     await openInBrowser(web("https://example.com/b"), async (u) => void fallback.push(u), "linux", KIWI_ENV, launch);
     expect(fallback).toEqual(["https://example.com/b"]);
   });
 
-  test("on a Mac or Windows, Electron's own opener opens it", async () => {
+  test("on a Mac or Windows, the shell's own opener opens it", async () => {
     for (const platform of ["darwin", "win32"] as const) {
       const { launch, calls } = fakeLaunch();
       const fallback: string[] = [];

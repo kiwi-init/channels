@@ -2,21 +2,13 @@
   "name": "kiwi-desktop",
   "version": "0.27.4",
   "private": true,
-  "description": "Channels desktop app: an Electron shell hosting web/ for people (auto-approval, pairing, admin).",
+  "description": "Channels desktop app: an Electrobun shell hosting web/ for people (auto-approval, pairing, admin).",
   "homepage": "https://github.com/kiwi-init/channels",
   "author": {
     "name": "Jow",
     "email": "ojowwalker77@users.noreply.github.com"
   },
-  "main": "dist/main.js",
-  "desktopName": "channels-desktop.desktop",
   "scripts": {
-    "build:main": "bun build src/main.ts --outfile dist/main.js --target node --format cjs --external electron",
-    "build:preload": "bun build src/preload.ts --outfile dist/preload.js --target node --format cjs --external electron",
-    "build:channels": "bun build src/channels.ts --outfile dist/channels.js --target node --format cjs --external electron",
-    "build": "bun run build:main && bun run build:preload && bun run build:channels",
-    "start": "bun run build && electron dist/main.js",
-    "dist": "bun run build && electron-builder",
     "prepare:eb": "bun scripts/eb.ts prepare",
     "start:eb": "bun scripts/eb.ts dev",
     "build:eb": "bun scripts/eb.ts build --env=stable",
@@ -27,91 +19,9 @@
     "@kiwi/core": "workspace:*"
   },
   "devDependencies": {
-    "@electron/fuses": "^1.8.0",
     "@types/bun": "^1.4.3",
     "@types/node": "^26.6.5",
     "electrobun": "2.0.4",
-    "electron": "^44.7.2",
-    "electron-builder": "^26.15.3",
     "typescript": "^7.0.2"
-  },
-  "build": {
-    "appId": "com.kiwiinit.channels",
-    "productName": "Channels",
-    "files": [
-      "dist/**",
-      "!**/node_modules/**/*"
-    ],
-    "compression": "maximum",
-    "electronLanguages": [
-      "en",
-      "en-US"
-    ],
-    "extraResources": [
-      {
-        "from": "../web/dist",
-        "to": "web/dist"
-      },
-      {
-        "from": "assets",
-        "to": "assets"
-      }
-    ],
-    "electronFuses": {
-      "runAsNode": false,
-      "enableCookieEncryption": true,
-      "enableNodeOptionsEnvironmentVariable": false,
-      "enableNodeCliInspectArguments": false,
-      "enableEmbeddedAsarIntegrityValidation": true,
-      "onlyLoadAppFromAsar": true,
-      "resetAdHocDarwinSignature": true
-    },
-    "protocols": {
-      "name": "Channels",
-      "schemes": [
-        "kiwi"
-      ]
-    },
-    "mac": {
-      "category": "public.app-category.productivity",
-      "target": [
-        "dmg",
-        "zip"
-      ],
-      "extraResources": [
-        {
-          "from": "../dist/kiwi.zst",
-          "to": "kiwi.zst"
-        }
-      ],
-      "icon": "build/icon.icns",
-      "hardenedRuntime": true,
-      "gatekeeperAssess": false,
-      "entitlements": "build/entitlements.app.plist",
-      "entitlementsInherit": "build/entitlements.app.plist"
-    },
-    "linux": {
-      "category": "Utility",
-      "icon": "build/icons",
-      "executableName": "channels-desktop",
-      "syncDesktopName": true,
-      "target": [
-        "AppImage",
-        "deb"
-      ],
-      "extraResources": [
-        {
-          "from": "../dist/kiwi.zst",
-          "to": "kiwi.zst"
-        }
-      ]
-    },
-    "appImage": {
-      "compression": "gzip"
-    },
-    "artifactName": "Channels-${version}-${os}-${arch}.${ext}",
-    "directories": {
-      "output": "release"
-    }
   }
 }

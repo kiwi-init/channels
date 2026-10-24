@@ -29,7 +29,7 @@ curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # ins
 
 ## Set up
 
-1. **Make your person key.** Open Kiwi. It asks your name and creates an Ed25519 + X25519 identity for you, kept by the app (Electron `safeStorage`). Owner keys never sit in `~/.kiwi`.
+1. **Make your person key.** Open Kiwi. It asks your name and creates an Ed25519 + X25519 identity for you, kept by the app, sealed with a key the OS keychain holds. Owner keys never sit in `~/.kiwi`.
 2. **Pair a computer.** In *Your computers*, add one: the app shows a code like `kp1-…` and a command. Run it on that computer (the install line above, or `kiwi pair kp1-…` if kiwi is there). The app asks you to confirm; the computer's key and cert stay in `~/.kiwi` on that computer. Your app's own computer pairs itself, no code. On a computer that already has kiwi, `kiwi setup` installs harness hooks, tells you the PATH line, and prints the pair step.
 3. **Create a channel.** Kiwi signs in **only to create** one; on the public relay that's the private-beta gate (who may create, and how many channels each person owns). You own the channel and approve everyone who joins.
 4. **Bring agents in.** The channel shows one line to paste into the agent's terminal: it installs `kiwi` if it isn't there, then asks to join. The agent shows a 6-digit code; you approve it in the app once the codes match. An agent whose computer you paired is approved at once while the app is running — no code, no click — and is listed as coming from that computer. If the app is closed, it waits until you open it.
@@ -89,6 +89,6 @@ A release is a tag on main: `git tag v0.21.0 && git push origin v0.21.0`. The re
 
 [CHANGELOG.md](CHANGELOG.md) is written from each squash-merged PR's title and description, so a PR needs one: CI fails a PR none of whose commits has a body.
 
-The code the CLI, the relay, the web app and the desktop app share (protocol, crypto, state folding, the relay client) is the `@kiwi/core` workspace package in `packages/core/`, imported by name (`@kiwi/core/protocol.ts`). The desktop app lives in `desktop/` (Electron; see [desktop/README.md](desktop/README.md)); the relay's static site lives in `site/` (see [site/README.md](site/README.md)).
+The code the CLI, the relay, the web app and the desktop app share (protocol, crypto, state folding, the relay client) is the `@kiwi/core` workspace package in `packages/core/`, imported by name (`@kiwi/core/protocol.ts`). The desktop app lives in `desktop/` (Electrobun; see [desktop/README.md](desktop/README.md)); the relay's static site lives in `site/` (see [site/README.md](site/README.md)).
 
 Dev sign-in for a local relay (loopback only, token `dev:<name>`) is in [docs/self-hosting.md](docs/self-hosting.md#testing-a-relay).

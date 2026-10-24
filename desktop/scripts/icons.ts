@@ -1,5 +1,5 @@
 // The app's icons, every size, from build/icon.svg: build/icon.icns for the Mac (iconutil, so on a Mac),
-// build/icons/NxN.png for Linux (electron-builder installs them under hicolor, named after the app), and
+// build/icons/NxN.png for Linux (scripts/package-linux.ts installs them under hicolor, named after the app), and
 // assets/icon.png for the window itself. Run it after changing the SVG, and commit what it makes:
 //
 //   bun desktop/scripts/icons.ts
