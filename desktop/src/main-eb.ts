@@ -11,7 +11,7 @@ import { useHost } from "./host.ts";
 import { keepDaemonAlive, watchPage } from "./keep-alive-eb.ts";
 import { startKeys } from "./keys-start-eb.ts";
 import { startLife } from "./life-updates-eb.ts";
-import { catchMainErrors, logMainError } from "./main-log.ts";
+import { catchMainErrors, logMainError, windowFailure } from "./main-log.ts";
 import { missingGuard, sandboxOff } from "./native-eb.ts";
 import { claimInstance, handoffFor, type Instance } from "./single-instance.ts";
 import { openStoreForThisBuild, warnIfStoreBroken } from "./store-open-eb.ts";
@@ -83,7 +83,7 @@ else {
   } catch (e) {
     // Nothing on screen can say what went wrong: main.log and the console carry it, and the app quits instead of running windowless.
     logMainError(e);
-    console.error("Channels: the window couldn't start", e);
+    console.error(`Channels: ${windowFailure(e)}`, e);
     instance.release();
     Utils.quit(1);
   }

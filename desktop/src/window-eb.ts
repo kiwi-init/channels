@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import Electrobun, { BrowserWindow, PATHS, Utils, type BrowserView } from "electrobun/main";
 
-import { onOurPage, preloadSource, toPageScript } from "./eb-bridge.ts";
+import { FIRST_PRELOAD, onOurPage, preloadSource, toPageScript } from "./eb-bridge.ts";
 import { keys, keysToPage } from "./keys-start-eb.ts";
 import { cString, committedPage, mac, setPageHtml, setPreload, windowLook } from "./native-eb.ts";
 import { navigation, openedUrl, PAGE_RULES, PAGE_TEMPLATE, PAGE_URL, pageWithCsp, RULES_CANARY } from "./eb-page.ts";
@@ -73,12 +73,14 @@ export async function createWindow(): Promise<BrowserWindow | null> {
     frame: { width: WINDOW_SIZE.width, height: WINDOW_SIZE.height },
     titleBarStyle: mac ? "hiddenInset" : "default",
     hidden: true,
-    preload: preloadSource({ snapshot: snapshot(), session: bridge.nextSession() }, bundled),
+    preload: FIRST_PRELOAD,
     rpc: bridge,
   });
   mark("webview");
   const webview = win.webview;
   view = webview;
+  const refreshPreload = (): void => setPreload(webview.id, preloadSource({ snapshot: snapshot(), session: bridge.nextSession() }, bundled));
+  refreshPreload();
   let closing = false;
   webview.on("will-navigate", (e) => {
     const nav = navigation(detailOf(e));
@@ -100,7 +102,6 @@ export async function createWindow(): Promise<BrowserWindow | null> {
     bridge.retire();
     webview.loadURL(PAGE_URL);
   };
-  const refreshPreload = (): void => setPreload(webview.id, preloadSource({ snapshot: snapshot(), session: bridge.nextSession() }, bundled));
   attachWindow({
     win,
     view: webview,

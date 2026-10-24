@@ -77,6 +77,8 @@ export function answer(table: Handlers, method: unknown, params: unknown): Promi
   return run(table, method, params as CallArgs<typeof method>);
 }
 
+export const FIRST_PRELOAD = ";";
+
 export const preloadSource = (boot: Boot, bundle: string): string => `globalThis.${BOOT_GLOBAL} = ${JSON.stringify(boot)};\n${bundle}`;
 
 export const PAGE_INTERNAL_RPC: ReadonlySet<string> = new Set(["startWindowMove", "stopWindowMove", "restoreWindowFocusAfterExternalDrop"]);
