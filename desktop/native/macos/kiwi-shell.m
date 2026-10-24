@@ -130,7 +130,8 @@ bool kiwi_watch_page(void (*gone)(void)) {
   Class cls = objc_getClass("MyNavigationDelegate");
   if (!cls) return false;
   pageGone = gone;
-  return replace(cls, @selector(webViewWebContentProcessDidTerminate:), (IMP)pageEnded);
+  SEL ended = @selector(webViewWebContentProcessDidTerminate:);
+  return replace(cls, ended, (IMP)pageEnded) || class_addMethod(cls, ended, (IMP)pageEnded, "v@:@");
 }
 
 static NSColor *rgb(uint32_t c) {

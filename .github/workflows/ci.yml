@@ -553,10 +553,9 @@ jobs:
       - name: test build (the test driver in, its own id)
         if: ${{ !cancelled() && matrix.drive }}
         working-directory: desktop
-        run: bunx electrobun build --env=dev
+        run: bun scripts/eb.ts build --env=dev
         env:
           CHANNELS_EB_TEST: "1"
-          CHANNELS_EB_IDENTIFIER: com.kiwiinit.channels.test
           DASH_RELEASE_OFFLINE: "1"
       - id: test-app
         if: ${{ !cancelled() && matrix.drive }}
