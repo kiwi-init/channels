@@ -1,4 +1,4 @@
-import type { DroppedFile } from "./bridge.ts";
+import type { DroppedFile, PastedImage } from "./bridge.ts";
 import type { Push, Pushes } from "./calls.ts";
 import type { ExternalUrl } from "./guard.ts";
 import type { HostToKeys } from "./keys-server.ts";
@@ -20,6 +20,7 @@ export interface Host {
   openExternal(url: ExternalUrl): Promise<void>;
   pickFolder(): Promise<string | null>;
   droppedFiles(): Promise<DroppedFile[]>;
+  pastedImage(): Promise<PastedImage | null>;
   notify(title: string, body: string): void;
   showWindow(): void;
   reload(): void;

@@ -8,7 +8,7 @@ import { childEnv } from "./child-env.ts";
 import type { Host } from "./host.ts";
 import type { HostToKeys } from "./keys-server.ts";
 import { readDropped } from "./dropped.ts";
-import { droppedPaths, notifyLinux, onNoteClick } from "./native-eb.ts";
+import { droppedPaths, notifyLinux, onNoteClick, pastedPng } from "./native-eb.ts";
 import { relaunchAfter } from "./update-asset.ts";
 import { applyUpdate } from "./updater.ts";
 import { ebDataDir } from "./store-eb.ts";
@@ -27,6 +27,8 @@ function bundleInfo(): Bundle {
 }
 
 const bundle: Bundle = bundleInfo();
+
+const MAX_PASTED_BYTES = 25 * 1024 * 1024;
 
 export const dataDir: string = ebDataDir(bundle.identifier, bundle.channel);
 
@@ -71,6 +73,10 @@ export const ebHost: Host = {
     return picked.find((p) => p.length > 0) ?? null;
   },
   droppedFiles: () => readDropped(droppedPaths()),
+  pastedImage: async () => {
+    const png = pastedPng(MAX_PASTED_BYTES);
+    return png ? { type: "image/png", data: Buffer.from(png).toString("base64") } : null;
+  },
   notify: (title, body) => {
     if (process.platform === "linux") notifyLinux(title, body);
     else Utils.showNotification({ title, body });

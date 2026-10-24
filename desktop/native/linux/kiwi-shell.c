@@ -23,6 +23,9 @@ static GMutex drop_lock;
 static gchar **dropped = NULL;
 static gint64 dropped_at = 0;
 static gint64 drop_landed = 0;
+static GMutex paste_lock;
+static gint64 paste_key_at = 0;
+static GBytes *pasted = NULL;
 
 __attribute__((constructor)) static void kiwi_identity(void) {
   g_set_prgname(KIWI_APP_ID);
@@ -246,6 +249,49 @@ static gboolean drag_drop(GSignalInvocationHint *hint, guint n, const GValue *pa
   return TRUE;
 }
 
+static bool is_paste_key(GdkEventKey *key) {
+  GdkModifierType mods = key->state & gtk_accelerator_get_default_mod_mask();
+  guint latin = 0;
+  if (key->window) gdk_keymap_translate_keyboard_state(gdk_keymap_get_for_display(gdk_window_get_display(key->window)), key->hardware_keycode, key->state, 0, &latin, NULL, NULL, NULL);
+  guint typed = gdk_keyval_to_lower(key->keyval);
+  latin = gdk_keyval_to_lower(latin);
+  if (mods == GDK_CONTROL_MASK) return typed == GDK_KEY_v || latin == GDK_KEY_v;
+  return mods == GDK_SHIFT_MASK && (key->keyval == GDK_KEY_Insert || key->keyval == GDK_KEY_KP_Insert);
+}
+
+static gboolean paste_key(GSignalInvocationHint *hint, guint n, const GValue *params, gpointer data) {
+  (void)hint;
+  (void)data;
+  if (n < 2 || !WEBKIT_IS_WEB_VIEW(g_value_get_object(&params[0]))) return TRUE;
+  GdkEvent *event = g_value_get_boxed(&params[1]);
+  if (!event || event->type != GDK_KEY_PRESS || !is_paste_key(&event->key)) return TRUE;
+  g_mutex_lock(&paste_lock);
+  paste_key_at = g_get_monotonic_time();
+  g_mutex_unlock(&paste_lock);
+  return TRUE;
+}
+
+static bool read_paste(gconstpointer arg) {
+  (void)arg;
+  GtkClipboard *clipboard = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
+  GBytes *bytes = NULL;
+  GtkSelectionData *png = gtk_clipboard_wait_for_contents(clipboard, gdk_atom_intern_static_string("image/png"));
+  if (png && gtk_selection_data_get_length(png) > 0) bytes = g_bytes_new(gtk_selection_data_get_data(png), (gsize)gtk_selection_data_get_length(png));
+  if (png) gtk_selection_data_free(png);
+  if (!bytes) {
+    GdkPixbuf *image = gtk_clipboard_wait_for_image(clipboard);
+    gchar *buffer = NULL;
+    gsize size = 0;
+    if (image && gdk_pixbuf_save_to_buffer(image, &buffer, &size, "png", NULL, NULL)) bytes = g_bytes_new_take(buffer, size);
+    if (image) g_object_unref(image);
+  }
+  g_mutex_lock(&paste_lock);
+  if (pasted) g_bytes_unref(pasted);
+  pasted = bytes;
+  g_mutex_unlock(&paste_lock);
+  return bytes != NULL;
+}
+
 static const Hook DENY = {webkit_web_view_get_type, "permission-request", deny_request};
 static const Hook WATCH = {webkit_web_view_get_type, "web-process-terminated", process_ended};
 static const Hook COMMITS = {webkit_web_view_get_type, "load-changed", load_changed};
@@ -255,6 +301,8 @@ static const Hook DESTINATIONS = {webkit_download_get_type, "decide-destination"
 static const Hook DROP_DATA = {gtk_widget_get_type, "drag-data-received", drag_data};
 static const Hook DROPS = {gtk_widget_get_type, "drag-drop", drag_drop};
 static bool watching_drops = false;
+static const Hook PASTE_KEYS = {webkit_web_view_get_type, "key-press-event", paste_key};
+static bool watching_paste = false;
 static bool guarding_downloads = false;
 static bool allowing_only = false;
 static bool watching_commits = false;
@@ -314,6 +362,40 @@ size_t kiwi_take_drop(char *out, size_t size) {
   dropped_at = 0;
   drop_landed = 0;
   g_mutex_unlock(&drop_lock);
+  return n;
+}
+
+bool kiwi_watch_paste(void) {
+  if (!watching_paste) watching_paste = on_main(install_hook, &PASTE_KEYS);
+  return watching_paste;
+}
+
+size_t kiwi_take_paste(void) {
+  g_mutex_lock(&paste_lock);
+  gint64 at = paste_key_at;
+  paste_key_at = 0;
+  g_mutex_unlock(&paste_lock);
+  if (!at || g_get_monotonic_time() - at > 2 * G_TIME_SPAN_SECOND || !on_main(read_paste, NULL)) return 0;
+  g_mutex_lock(&paste_lock);
+  size_t n = pasted ? g_bytes_get_size(pasted) : 0;
+  g_mutex_unlock(&paste_lock);
+  return n;
+}
+
+size_t kiwi_paste_bytes(uint8_t *out, size_t size) {
+  g_mutex_lock(&paste_lock);
+  size_t n = 0;
+  if (pasted) {
+    gsize len = 0;
+    const void *data = g_bytes_get_data(pasted, &len);
+    if (out && len <= size) {
+      memcpy(out, data, len);
+      n = len;
+    }
+    g_bytes_unref(pasted);
+    pasted = NULL;
+  }
+  g_mutex_unlock(&paste_lock);
   return n;
 }
 

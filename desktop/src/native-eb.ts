@@ -41,6 +41,24 @@ export function droppedPaths(): string[] {
   return new TextDecoder().decode(dropBuffer.subarray(0, n)).split("\n").filter(Boolean);
 }
 
+const paste = mac
+  ? null
+  : dlopen(shellPath, {
+      kiwi_watch_paste: { args: [], returns: FFIType.bool },
+      kiwi_take_paste: { args: [], returns: FFIType.u64 },
+      kiwi_paste_bytes: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
+    }).symbols;
+
+export const watchPaste = (): void => void paste?.kiwi_watch_paste();
+
+export function pastedPng(max: number): Uint8Array | null {
+  if (!paste) return null;
+  const n = Number(paste.kiwi_take_paste());
+  if (n <= 0) return null;
+  const out = new Uint8Array(n <= max ? n : 1);
+  return Number(paste.kiwi_paste_bytes(ptr(out), n <= max ? n : 0)) === n ? out : null;
+}
+
 const windowKeys = mac ? null : dlopen(shellPath, { kiwi_window_keys: { args: [FFIType.ptr, FFIType.function], returns: FFIType.bool } }).symbols.kiwi_window_keys;
 
 let shortcuts: JSCallback | null = null;

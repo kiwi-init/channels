@@ -156,6 +156,30 @@ try {
     return { ok: s.value === "kiwi pasted text", detail: s };
   });
 
+  await step("an image copied in another app pastes into the composer as an attachment (T896)", async () => {
+    await setComposer("");
+    const before = (await state()).files.length;
+    await driver.evaluate(() => {
+      const w = window as unknown as { kiwiCheckPastes?: unknown[] };
+      w.kiwiCheckPastes = [];
+      window.addEventListener(
+        "paste",
+        (e) => w.kiwiCheckPastes?.push({ types: [...(e.clipboardData?.types ?? [])], files: e.clipboardData?.files.length ?? null, items: e.clipboardData?.items.length ?? null }),
+        { capture: true, once: true },
+      );
+      return true;
+    }, null);
+    await click(onHelper("copy-image"));
+    await helperEvent("copied-image");
+    await click(composer);
+    await later(300);
+    await keys("ctrl", "v");
+    await later(1500);
+    const s = await state();
+    const pastes = await driver.evaluate(() => (window as unknown as { kiwiCheckPastes?: unknown[] }).kiwiCheckPastes ?? null, null);
+    return { ok: s.files.length === before + 1 && s.files.includes("Remove pasted.png"), detail: { before, s, pastes } };
+  });
+
   await step("text copied from the composer (Ctrl+C) pastes in another app", async () => {
     await setComposer("kiwi copied out");
     await click(composer);

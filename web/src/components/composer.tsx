@@ -7,6 +7,7 @@ import { matchCommands, parseCommand, type Command } from "@/lib/commands"
 import { answered } from "@/lib/asks"
 import { draftOf, keepDraft, type DraftFile } from "@/lib/drafts"
 import { fileDrag, takeDropped } from "@/lib/dropped"
+import { takePasted } from "@/lib/pasted"
 import { needsCompressing } from "@/lib/needs-compressing"
 import { excerpt } from "@/lib/format"
 import { composerMentions, mentionText, withHandles } from "@/lib/mentions"
@@ -395,7 +396,7 @@ export function Composer({
                     .map((item) => item.getAsFile())
                     .filter((file): file is File => !!file)
                   const images = (e.clipboardData.files.length ? [...e.clipboardData.files] : fromItems).filter((f) => f.type.startsWith("image/"))
-                  if (!images.length) return
+                  if (!images.length) return void takePasted(e.clipboardData).then((f) => f && pick([f]))
                   if (!e.clipboardData.getData("text/plain")) e.preventDefault()
                   pick(images)
                 }}
