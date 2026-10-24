@@ -531,10 +531,18 @@ jobs:
           compositor=$!
           for _ in $(seq 1 50); do [ -S "$XDG_RUNTIME_DIR/kiwi-wayland" ] && break; sleep 0.2; done
           [ -S "$XDG_RUNTIME_DIR/kiwi-wayland" ] || { echo "weston didn't open its socket:"; cat "$RUNNER_TEMP/weston.log"; exit 1; }
+          wayland() { env -u DISPLAY -u XAUTHORITY WAYLAND_DISPLAY=kiwi-wayland GDK_BACKEND=wayland "$@"; }
           code=0
-          env -u DISPLAY -u XAUTHORITY WAYLAND_DISPLAY=kiwi-wayland GDK_BACKEND=wayland bun desktop/scripts/smoke-eb.ts "${{ steps.test-app.outputs.path }}" || code=$?
+          wayland bun desktop/scripts/smoke-eb.ts "${{ steps.test-app.outputs.path }}" || code=$?
+          if [ "$code" -ne 0 ]; then
+            echo "::group::weston's log"; cat "$RUNNER_TEMP/weston.log"; echo "::endgroup::"
+            for log in $(find /tmp -maxdepth 6 -path '/tmp/kiwi-smoke-eb-*' -name '*.log' 2> /dev/null); do echo "::group::$log"; tail -n 80 "$log"; echo "::endgroup::"; done
+            echo "::group::the test app alone under this Wayland, for 20 s"
+            mkdir -p "$RUNNER_TEMP/wayland-home" && HOME="$RUNNER_TEMP/wayland-home" wayland timeout 20 "${{ steps.test-app.outputs.path }}/bin/electrobun-launcher" > "$RUNNER_TEMP/wayland-app.log" 2>&1 || echo "exited $?"
+            tail -n 120 "$RUNNER_TEMP/wayland-app.log"
+            echo "::endgroup::"
+          fi
           kill "$compositor" 2> /dev/null || true
-          [ "$code" -eq 0 ] || { echo "weston's log:"; cat "$RUNNER_TEMP/weston.log"; }
           exit "$code"
       - name: dpkg --purge leaves nothing of the app behind
         if: ${{ !cancelled() }}
