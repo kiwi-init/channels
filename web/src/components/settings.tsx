@@ -524,7 +524,7 @@ export function SettingsPage({ backTo, onClose }: { backTo: string; onClose: () 
       }}
     >
       <header className="drag flex h-(--chrome-h) shrink-0 items-center gap-2 px-3">
-        <IconButton label={inner ? "Back to Settings" : "Close settings"} round className="glass size-9 text-ink" onClick={back}>
+        <IconButton label={inner ? "Back to Settings" : "Close settings"} className="afloat size-9 text-ink" onClick={back}>
           <Icon icon={ArrowLeft01Icon} size={18} />
         </IconButton>
         <span className="min-w-0 flex-1 truncate text-ui font-semibold">{inner ? "Settings" : backTo}</span>

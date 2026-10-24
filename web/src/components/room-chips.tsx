@@ -10,7 +10,7 @@ export function RoomChips({ rooms, value, onChange }: { rooms: readonly { id: st
           aria-pressed={r.id === value}
           onClick={() => onChange(r.id)}
           className={cx(
-            "inline-flex h-6 items-center rounded-full px-2.5 text-meta font-medium transition-colors",
+            "inline-flex h-6 items-center rounded-row px-2.5 text-meta font-medium transition-colors",
             r.id === value ? "bg-accent-wash text-accent-text" : "bg-wash-2 text-ink-2 hover:bg-wash"
           )}
         >

@@ -616,7 +616,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                         <button
                           type="button"
                           onClick={toBottom}
-                          className="glass animate-rise absolute bottom-[calc(var(--foot)+10px)] left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full py-1.5 pr-3.5 pl-2.5 text-ui font-medium text-accent-text"
+                          className="afloat animate-rise absolute bottom-[calc(var(--foot)+10px)] left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-row py-1.5 pr-3.5 pl-2.5 text-ui font-medium text-accent-text"
                         >
                           <Icon icon={ArrowDown01Icon} size={15} />
                           {behind === 1 ? "1 new message" : `${behind} new messages`}

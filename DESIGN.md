@@ -6,17 +6,18 @@ hard-code hex in components.
 
 Canonical sources: `web/src/index.css` (`:root`, `:root[data-theme]`,
 `@theme inline`), `web/src/lib/design-tokens.ts`, `web/src/lib/fonts.ts`,
+`web/src/fonts/` (Paper Mono and its licence),
 `web/src/lib/accessibility.ts`, `web/src/components/kit.tsx`,
 `web/src/components/ui/*`, `web/src/components/composer.tsx`.
 `scripts/ui-tokens.ts` enforces the type steps and radii below.
 
 ## 1. Identity in one line
 
-A quiet Messages-like conversation. White `#ffffff` / near-black `#161618`
-canvas, Apple system blue `#007aff` (light) / `#0a84ff` (dark), Inter only,
-small purposeful motion, one pop shadow. One intentional mark: the open
-channel and the chosen view wear lit prism glass, after the app icon and the
-agents' heads; everything around them is plain, so it reads as meant.
+The landing page's look: simple and clean. Black and white, Paper Mono for
+every word, thin lines, sharp corners, nothing that blurs, glows or
+decorates. The accent is ink (a white button on black, a black one on
+white); links are the landing's soft blue. The only other colours are the
+status colours, and they always say something.
 
 ## 2. Theme architecture
 
@@ -31,7 +32,7 @@ agents' heads; everything around them is plain, so it reads as meant.
   the side, unless `lib/theme.ts` set `data-theme` because the person chose
   light or dark. `system` leaves `data-theme` unset so the media query
   decides.
-- There is one accent, not a pack: Apple blue. A theme switcher (system /
+- There is one accent, not a pack: ink. A theme switcher (system /
   light / dark) and a text-size switcher live in Settings. No accent
   switcher.
 - New surface bootstrap: copy the `index.css` `:root` + `[data-theme]` +
@@ -44,39 +45,40 @@ Light / dark are the two sides of each `light-dark()` in `index.css`:
 
 | Token | Light | Dark |
 |---|---|---|
-| `canvas` (conversation) | `#ffffff` | `#0d0d0e` |
-| `rail` (the tab bar, the channel list and a channel's sidebar, a step darker) | `#f2f2f5` | `#000000` |
+| `canvas` (conversation) | `#ffffff` | `#050505` |
+| `rail` (the tab bar, the channel list and a channel's sidebar) | `#f4f4f4` | `#000000` |
 | `raised` (cards, popovers) | the canvas | the canvas |
 | `field` (inputs) | the canvas | the canvas |
-| `ink` | `#0f0f11` | `#f3f3f5` |
-| `ink-2` | `#4a4a52` | `#bcbcc3` |
-| `ink-3` (quiet floor, still 4.5:1) | `#6b6b73` | `#8f8f97` |
-| `accent` (Apple system blue) | `#007aff` | `#0a84ff` |
-| `accent-ink` (on the accent) | `#ffffff` | `#ffffff` |
+| `ink` | `#0a0a0a` | `#ececec` |
+| `ink-2` | `#4f4f4f` | `#9c9c9c` |
+| `ink-3` (quiet floor, still 4.5:1) | `#6b6b6b` | `#7a7a7a` |
+| `accent` (ink) | `#0a0a0a` | `#ececec` |
+| `accent-ink` (on the accent) | `#ffffff` | `#000000` |
+| `link`, `accent-text` (links, text you act on) | `#2c5bc9` | `#8ab4ff` |
 | `alert` | `#d1342a` | `#ff6259` |
 | `alert-fill` (under white text) | `#d1342a` | `#d1342a` |
 | `decide` (amber, someone waits) | `#a35a00` | `#f5b041` |
 | `live` (3:1 on the surfaces, a dot or a word beside one, not body text) | `#1f9a55` | `#32d074` |
 | `doing` (in-progress blue) | `#2f6fe4` | `#5b9bff` |
 
-Supporting chrome: `line` (7% ink/white), `wash` (4/5%), `wash-2` (7/8%),
-`accent-wash` (10/16%), `pick` (the open channel: a neutral step, never a
-block of colour), `bubble-them` (Messages grey `#e9e9eb` / `#1f1f21`).
-
-White on the light accent is ~4:1, Apple's own choice and just under AA 4.5
-for small text; the owner asked to mirror Apple, so it stays. As text on the
-dark canvas the dark side clears 4.5:1.
+Supporting chrome: `line` (10/11%), `edge-strong` (18/17%), `wash` (4/5%),
+`wash-2` (7/9%), `accent-wash` (6/10%), `pick` (what's chosen in the
+sidebar: a neutral step, never a block of colour), `bubble-them`
+(`#ededed` / `#161616`).
 
 White on the dark `alert` is ~2.9:1, so a red surface under white text (the
 error toast) uses `alert-fill`, the light red in both themes (~5:1).
 
 ## 4. Typography
 
-- Sans: `"Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI",
-  system-ui, sans-serif` (`@fontsource-variable/inter`). Mono:
-  `ui-monospace, "SF Mono", Menlo, monospace`.
-- Body: `-0.006em` letter-spacing, `calt/kern/cv05/cv08`, antialiased,
-  `optimizeLegibility`. Display/title set tighter at `-0.014em`.
+- One face: Paper Mono (SIL OFL, the landing's), served with the app from
+  `web/src/fonts/`, a variable weight from 100 to 800. `--font-sans` and
+  `--font-mono` are both `"Paper Mono", ui-monospace, "SF Mono", Menlo,
+  monospace`; the system mono stands in only until it loads or for a glyph
+  it lacks.
+- Body: no letter-spacing, `calt/kern`, antialiased, `optimizeLegibility`.
+  Display set tighter at `-0.03em`, title at `-0.01em`. Buttons are
+  semibold; the wordmark bold.
 - Six type steps and nothing between them (`scripts/ui-tokens.ts` keeps it
   that way; 4 documented exceptions for the pairing code, wordmark and
   swatch initials): `stamp 11px` (times between messages), `meta 12px`
@@ -89,17 +91,17 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   edge (`code-more`) so cut-off lines read as "scroll for more".
 - A `mermaid` code block draws as a diagram on a `raised` card in the
   bubble, in the tokens of the current theme (`field` nodes, `ink-3`
-  lines, `accent-wash` notes, Inter 13px, `row`-round nodes, no shadows).
+  lines, `accent-wash` notes, Paper Mono 13px, `row`-round nodes, no shadows).
   It fits the bubble down to 70%, then scrolls with the same `code-more`
   fade. Mermaid that doesn't parse stays a code block with its error.
-- No additional font families. Hierarchy comes from weight, size and
-  spacing, not font swaps.
+- No other font family, anywhere. Hierarchy comes from weight, size and
+  spacing, not font swaps. `test/look.test.ts` keeps it that way.
 
 ## 5. Radius, shadow, blur
 
-- Steps: `row 8px`, `ctl 10px`, `card 16px`, `bubble 20px` (pictures in
-  a message and the annotator) and `dock 26px` (the composer, soft without a pill's half-moon
-  ends once it grows to several lines).
+- Steps: `row 6px`, `ctl 6px`, `card 10px`, `bubble 10px` (pictures in
+  a message and the annotator) and `dock 10px` (the composer). No pills:
+  only faces and status dots are round.
 - Buttons and rows use `row`; controls and inputs `ctl`; cards `card`;
   pictures `bubble`; the composer `dock`. Arbitrary `rounded-[Npx]` fails
   `ui-tokens.ts`.
@@ -121,26 +123,19 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   `line` (the `edge` utility). Popovers and dialogs lift off the canvas
   with the `pop` shadow only. A phone has no sheet: one screen at a time,
   on the canvas.
-- Liquid glass (`glass`), for what floats over the conversation (the
-  header's round controls, the place pills, the composer): a translucent
-  `glass-fill` over a blur, a bright `glass-rim` on top, a hairline round it.
-- Prism glass (`index.css`, `@layer components`): one class, `prism-lit`, on
-  what's chosen in the sidebar and nothing else: the open channel (its tab
-  in the tab bar, its row in the list) and the channel sidebar's chosen view or
-  conversation. A brighter fill, a lit edge bright at one corner
-  (`prism-glint-lit`), and a thin spectrum band (`spectrum-1..7`) inside it
-  at `--band` (70% by default), the way light splits in the heads. Search,
-  the tab bar's buttons, idle tabs and counts are plain, so the one lit thing
-  reads as meant. `test/prism.test.ts` keeps it that way. Under
-  `prefers-contrast: more` it falls back to a solid fill with a 2px `ink`
-  ring: no band, no glint.
-- Fall back to solid fills under `prefers-contrast: more`.
-- On a machine that draws without a GPU (WebGL's renderer is SwiftShader,
-  llvmpipe or a basic render driver, or there's no WebGL: `lib/drawing.ts`
-  marks `html[data-drawing=software]` once the app is idle), the scrims under
-  the header and over the composer drop their blur and mask and keep only
-  their fade: re-blurring them on every keystroke made typing take 128 ms
-  at p95 there, 32 ms without (`PERF_GL=swiftshader bun scripts/perf-scale.ts`).
+- No glass. What floats over the conversation (the header's controls, the
+  place pills, the account plate, the composer) is `afloat`: the canvas,
+  opaque, with a 1px `edge-strong` ring; hover steps the fill and the ring.
+  Nothing uses `backdrop-filter`. The scrims under the header and over the
+  composer are a plain fade of the canvas.
+- What's chosen in the sidebar (the open channel's tab and row, the chosen
+  view or conversation) is a plain `pick` fill and semibold ink.
+- Code blocks and a permission's command are outlined (`edge`), never
+  filled, like the landing's copy box. Inline code keeps a `wash-2` fill:
+  with every word in mono, it's the one cue left that marks code.
+- Under `prefers-contrast: more` the `afloat` ring is solid `ink`.
+- `test/look.test.ts` keeps it this way: no glass, blur, prism or spectrum
+  in `web/src`.
 
 ## 6. Motion
 
@@ -192,7 +187,7 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   appearance), `panel`, `popover`, `tooltip` (500ms delay).
 - Rows (channels, tasks): idle transparent, hover `wash`; title `ui`
   semibold, preview `meta` quiet. In the sidebar the open channel and the
-  chosen view or conversation are `prism-lit`. The header's tabs are text,
+  chosen view or conversation are `bg-pick`. The header's tabs are text,
   the current one in ink with a 2px `accent` mark under it.
 - A chosen option you pick from a set (role chips, personality rows, Joins
   as, an ask's options, room chips) wears `accent-wash` with an `accent`
@@ -200,8 +195,9 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   glance, not just as having a thin ring. Segmented controls are a `wash`
   track with the chosen segment on `segment` (white / `#3a3a3c`), so it
   rises off the track in both themes.
-- Buttons: primary `accent`; secondary outlined (a 1px `edge-strong` ring,
-  no fill, `wash` on hover). The kit's `Checkbox` is the one checkbox, in
+- Buttons: primary `accent` (ink fill, `accent-ink` text, the landing's
+  Download button); secondary outlined (a 1px `edge-strong` ring, no fill,
+  `wash` on hover). Icon buttons are `ctl` squares, never circles. The kit's `Checkbox` is the one checkbox, in
   `accent`.
 - Inputs: no fill, a 1px `line` edge (`edge`); focus ring is `2px ring` with `1px` offset and
   `6px` radius (base layer, so utilities can still take it off).
@@ -278,7 +274,7 @@ From `design-tokens.ts`:
   92px in on a Mac), the sidebar toggle, then each channel as a `ctl`-round
   tab in the order you joined them: its 20px face, its name, a blue dot or
   a count for news and questions, a lock on a channel you can't open yet,
-  and `prism-lit` when open. A channel with a lead wears the lead's head
+  and `bg-pick` when open. A channel with a lead wears the lead's head
   there, in its own sidebar and in its details, the same face everywhere.
   A hover card says what the full row says: name, time, last line. Tabs
   that don't fit go under "N more" (a blue dot when one of them has news):
@@ -404,7 +400,7 @@ actions row with send.
 ## 12. Brand illustration (optional)
 
 The lead's head (`robot-heads`, blue shell) in `muted` contexts is the
-only mascot. The wordmark is set in Inter, never an image. New surfaces may
+only mascot. The wordmark is set in Paper Mono bold, never an image. New surfaces may
 omit the head; never replace it with stock art.
 
 ## 13. Do and don't
@@ -412,11 +408,9 @@ omit the head; never replace it with stock art.
 Do: use vars, tabular numerals for times and counts, one accent at a time,
 a flat sidebar on `rail` beside the page's round sheet, inline composer panels, quiet placeholders, `Boundary` around
 channel views.
-Don't: hard-code hex, add font families, ship gradient marketing styling,
-build floating composer menus, use colored shadows, put prism on anything
-but what's chosen in the sidebar, spread the spectrum beyond a thin band
-in it, or put hairlines
-between the rails.
+Don't: hard-code hex, add font families, blur anything, bring back glass or
+a spectrum, ship gradient marketing styling, build floating composer menus,
+use coloured shadows, draw pills, or put hairlines between the rails.
 
 ## 14. The iPhone app
 

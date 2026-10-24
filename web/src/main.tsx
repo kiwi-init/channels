@@ -9,7 +9,6 @@ import { applyStoredAppearance, stepTextSize } from "@/lib/theme"
 import { bridge } from "@/lib/secrets"
 import { migrateChannelsToStore } from "@/lib/channel"
 import { initAccessibility } from "@/lib/accessibility"
-import { noteSoftwareDrawing } from "@/lib/drawing"
 import { hasBridge } from "@/lib/relay"
 import { whenIdle } from "@/lib/later"
 import { loadMarkdown, loadPermission, loadSurfaces } from "@/components/lazy"
@@ -43,6 +42,5 @@ requestAnimationFrame(() =>
     loadMarkdown()
     loadPermission()
     whenIdle(loadSurfaces)
-    whenIdle(noteSoftwareDrawing)
   }, 0)
 )

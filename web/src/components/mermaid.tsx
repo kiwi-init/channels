@@ -2,6 +2,7 @@ import { Copy01Icon, Flowchart01Icon, CodeSquareIcon, Tick02Icon } from "@hugeic
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { cx } from "../lib/utils"
 import { Icon } from "./icon"
+import { FONT_STACK } from "../lib/fonts"
 
 type Mermaid = (typeof import("mermaid"))["default"]
 type Drawn = { kind: "svg"; svg: string } | { kind: "error"; message: string } | null
@@ -20,8 +21,6 @@ let queue: Promise<unknown> = Promise.resolve()
 let next = 0
 
 const MIN_SCALE = 0.7
-
-const FONT = '"Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif'
 
 function resolver(): { color: (token: string) => string; done: () => void } {
   const probe = document.createElement("span")
@@ -79,7 +78,7 @@ function themeVariables(): Record<string, string> {
     activationBkgColor: c("field"),
     activationBorderColor: c("ink-3"),
     sequenceNumberColor: c("accent-ink"),
-    fontFamily: FONT,
+    fontFamily: FONT_STACK,
     fontSize: "13px",
   }
   done()
@@ -112,7 +111,7 @@ function draw(source: string): Promise<Drawn> {
       securityLevel: "strict",
       theme: "base",
       themeVariables: themeVariables(),
-      fontFamily: FONT,
+      fontFamily: FONT_STACK,
       look: "classic",
       themeCSS: CSS,
       flowchart: { useMaxWidth: false, curve: "basis", padding: 8, nodeSpacing: 24, rankSpacing: 28, diagramPadding: 4 },
@@ -128,12 +127,12 @@ function draw(source: string): Promise<Drawn> {
         diagramMarginX: 4,
         diagramMarginY: 4,
         mirrorActors: false,
-        actorFontFamily: FONT,
+        actorFontFamily: FONT_STACK,
         actorFontSize: 13,
-        messageFontFamily: FONT,
+        messageFontFamily: FONT_STACK,
         messageFontSize: 13,
         messageFontWeight: 400,
-        noteFontFamily: FONT,
+        noteFontFamily: FONT_STACK,
         noteFontSize: 13,
       },
     })

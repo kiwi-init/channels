@@ -308,7 +308,7 @@ function AskItem({
       icon={handoff ? Globe02Icon : m.esc ? Key01Icon : HelpCircleIcon}
       title={
         <>
-          {m.esc && <span className="mr-1.5 rounded-full bg-decide-wash px-1.5 align-middle text-meta font-semibold text-decide">{askLabel(m, me)}</span>}
+          {m.esc && <span className="mr-1.5 rounded-row bg-decide-wash px-1.5 align-middle text-meta font-semibold text-decide">{askLabel(m, me)}</span>}
           <span className="font-semibold">{nameOf(m.from)}</span> {excerpt(m.body, 220)}
         </>
       }

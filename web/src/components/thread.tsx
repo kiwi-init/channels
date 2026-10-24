@@ -44,7 +44,7 @@ export function ThreadPanel({ count, children, composer, onClose }: { count: num
           <span className="text-ui font-semibold">
             Thread <span className="font-normal text-ink-3">{count === 1 ? "1 reply" : `${count} replies`}</span>
           </span>
-          <IconButton label="Close thread" round className="glass size-9 text-ink" onClick={onClose}>
+          <IconButton label="Close thread" className="afloat size-9 text-ink" onClick={onClose}>
             <Icon icon={Cancel01Icon} size={17} />
           </IconButton>
         </header>

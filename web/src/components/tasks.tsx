@@ -19,7 +19,7 @@ export function StateMark({ state }: { state: TaskState }) {
 }
 
 export function DecisionMark() {
-  return <span className="shrink-0 rounded-full bg-decide-wash px-1.5 text-meta font-semibold whitespace-nowrap text-decide">{DECISION}</span>
+  return <span className="shrink-0 rounded-row bg-decide-wash px-1.5 text-meta font-semibold whitespace-nowrap text-decide">{DECISION}</span>
 }
 
 /**

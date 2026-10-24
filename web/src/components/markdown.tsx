@@ -129,7 +129,7 @@ function CodeBlock({ children }: { children?: ReactNode }) {
         ref={preRef}
         onScroll={measure}
         className={cx(
-          "overflow-x-auto rounded-ctl bg-wash-2 px-3 py-2.5 font-mono text-ui leading-relaxed text-ink max-sm:break-all max-sm:whitespace-pre-wrap [&>code]:bg-transparent [&>code]:p-0",
+          "overflow-x-auto rounded-ctl px-3 py-2.5 font-mono text-ui leading-relaxed text-ink edge max-sm:break-all max-sm:whitespace-pre-wrap [&>code]:bg-transparent [&>code]:p-0",
           more && "code-more"
         )}
       >

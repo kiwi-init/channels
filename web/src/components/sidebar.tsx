@@ -86,7 +86,7 @@ export function Sidebar({
               onClick={() => onSelect(c.code)}
               aria-current={selected ? "page" : undefined}
               title={rowNote(c)}
-              className={cx("flex h-16 w-full items-center gap-3 rounded-card px-3 text-left transition-colors", selected ? "prism-lit" : "hover:bg-wash")}
+              className={cx("flex h-16 w-full items-center gap-3 rounded-card px-3 text-left transition-colors", selected ? "bg-pick" : "hover:bg-wash")}
             >
               <ChannelIconTile icon={icons.get(c.room) ?? null} title={c.title} size={40} />
               <span className="min-w-0 flex-1">
@@ -103,7 +103,7 @@ export function Sidebar({
                   {n?.needs ? (
                     <span
                       aria-label={n.needs === 1 ? "1 needs you" : `${n.needs} need you`}
-                      className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-stamp font-semibold text-accent-ink tabular-nums"
+                      className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-row bg-accent px-1.5 text-stamp font-semibold text-accent-ink tabular-nums"
                     >
                       {n.needs}
                     </span>
@@ -119,7 +119,7 @@ export function Sidebar({
         {rows.length === 0 && <p className="px-3 py-4 text-ui leading-normal text-ink-3">Channels you create or join show up here.</p>}
       </nav>
 
-      {/* Who you are, at the foot of the list as Grok keeps it: your face and name on a glass pill that
+      {/* Who you are, at the foot of the list as Grok keeps it: your face and name on an outlined plate that
           floats over the list, the menu above it; an update of the app, when there is one, above that. */}
       {person && (
         <div className="scrim-bottom absolute inset-x-0 bottom-0 flex flex-col items-start gap-2 px-3 pt-6 pb-3 [&>*]:pointer-events-auto">
@@ -128,7 +128,7 @@ export function Sidebar({
             side="top"
             className="w-60"
             trigger={
-              <button type="button" className="glass flex h-10 max-w-full items-center gap-2 rounded-full pr-4 pl-1 transition-colors">
+              <button type="button" className="afloat flex h-10 max-w-full items-center gap-2 rounded-row pr-4 pl-1 transition-colors">
                 <Monogram name={person.name} size={32} picture={picture} />
                 <span className="truncate text-ui font-semibold">{person.name}</span>
               </button>

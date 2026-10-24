@@ -1,24 +1,24 @@
 @import "tailwindcss";
-@import "@fontsource-variable/inter/opsz.css";
+
+@font-face {
+  font-family: "Paper Mono";
+  src: url("./fonts/PaperMono.woff2") format("woff2");
+  font-weight: 100 800;
+  font-display: swap;
+}
 
 /*
- * Kiwi's look: Apple Messages' conversation, in a room as quiet as Grok's. The conversation is the
- * product and everything else stays out of its way: no bars or hairlines between areas, round
- * controls, a pill composer, and big friendly faces in the list.
+ * Channels' look is the landing page's: black and white, Paper Mono for every word, thin lines and
+ * sharp corners. Nothing blurs, nothing glows, nothing decorates. The only colours are the status colours,
+ * which say something (red for alerts, amber for a decision someone waits on, green and blue for work).
  *
- * The accent is Apple system blue, mirroring Messages: it marks what's yours and what's new, and
- * nothing else. Your bubbles, the send button, unread counts, and the one primary action on a page.
- * Never more than three on a screen. White on the light accent is ~4:1, Apple's own choice and just
- * under AA 4.5 for small text; the owner asked to mirror Apple, so it stays. Red is for alerts, amber for
- * a decision someone is waiting on; neither decorates.
+ * The accent is ink: the one primary action on a page, unread dots and counts, the current tab's
+ * mark. Links and text you can act on are the landing's soft blue.
  *
- * Two tones: the rails (the tab bar, the channel list and a channel's sidebar) sit on the darker rail, and the
- * page beside them is one sheet of canvas with round corners, holding the conversation, its header
- * and the panels beside it. Raised is for cards, popovers and grouped lists. What
- * floats over the conversation (its header, the composer) is liquid glass: the canvas blurred and
- * saturated through a translucent fill, a bright rim on top. The sidebar alone is prism glass, after the
- * app icon and the agents' heads. Others' bubbles are Messages grey, a step
- * from the canvas, so their words read as bubbles and yours as the blue answer.
+ * Two tones: the rails (the tab bar, the channel list and a channel's sidebar) sit on the rail, and
+ * the page beside them is one sheet of canvas framed by a line, holding the conversation, its header
+ * and the panels beside it. What floats over the conversation (its header's controls, the composer)
+ * is afloat: the canvas, opaque, outlined. What's chosen in the sidebar is a plain step of fill.
  *
  * Each token is written once as light-dark(day, night). The system picks the side, unless
  * lib/theme.ts has set data-theme because the person chose one.
@@ -26,25 +26,23 @@
 :root,
 .dark-stage {
   color-scheme: light dark;
-  --canvas: light-dark(#ffffff, #0d0d0e);
-  --rail: light-dark(#f2f2f5, #000000);
+  --canvas: light-dark(#ffffff, #050505);
+  --rail: light-dark(#f4f4f4, #000000);
   --raised: var(--canvas);
   --field: var(--canvas);
-  --ink: light-dark(#0f0f11, #f3f3f5);
+  --ink: light-dark(#0a0a0a, #ececec);
   /* Quiet text still clears 4.5:1 on canvas, rail, raised and field. ink-3 is that floor; ink-2 a step stronger. */
-  --ink-2: light-dark(#4a4a52, #bcbcc3);
-  --ink-3: light-dark(#6b6b73, #8f8f97);
-  --line: light-dark(rgba(15, 15, 17, 0.08), rgba(255, 255, 255, 0.08));
-  --wash: light-dark(rgba(15, 15, 17, 0.045), rgba(255, 255, 255, 0.055));
-  --wash-2: light-dark(rgba(15, 15, 17, 0.075), rgba(255, 255, 255, 0.09));
-  /* Apple system blue. White on the light accent is ~4:1, Apple's own choice and just under AA 4.5
-     for small text; as text on the dark canvas the dark side clears 4.5:1. */
-  --accent: light-dark(#007aff, #0a84ff);
-  --accent-ink: #ffffff;
-  --accent-text: light-dark(#007aff, #0a84ff);
-  --accent-wash: light-dark(rgba(0, 122, 255, 0.1), rgba(10, 132, 255, 0.18));
-  --link: light-dark(#007aff, #0a84ff);
-  --ring: light-dark(rgba(0, 122, 255, 0.55), rgba(10, 132, 255, 0.6));
+  --ink-2: light-dark(#4f4f4f, #9c9c9c);
+  --ink-3: light-dark(#6b6b6b, #7a7a7a);
+  --line: light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.11));
+  --wash: light-dark(rgba(0, 0, 0, 0.04), rgba(255, 255, 255, 0.05));
+  --wash-2: light-dark(rgba(0, 0, 0, 0.07), rgba(255, 255, 255, 0.09));
+  --accent: var(--ink);
+  --accent-ink: light-dark(#ffffff, #000000);
+  --accent-text: var(--link);
+  --accent-wash: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.1));
+  --link: light-dark(#2c5bc9, #8ab4ff);
+  --ring: light-dark(rgba(10, 10, 10, 0.7), rgba(236, 236, 236, 0.75));
   --alert: light-dark(#d1342a, #ff6259);
   --alert-fill: #d1342a;
   --decide: light-dark(#a35a00, #f5b041);
@@ -53,44 +51,29 @@
   /* A task in progress: the one status colour that isn't green, amber or red. */
   --doing: light-dark(#2f6fe4, #5b9bff);
   --warn: light-dark(#a35a00, #f5b041);
-  --overlay: light-dark(rgba(20, 20, 22, 0.32), rgba(0, 0, 0, 0.62));
+  --overlay: light-dark(rgba(0, 0, 0, 0.32), rgba(0, 0, 0, 0.7));
   --bubble-me: var(--accent);
-  --bubble-me-ink: #ffffff;
-  /* Others' bubbles: Messages grey by day, Grok's soft charcoal by night. */
-  --bubble-them: light-dark(#e9e9eb, #1f1f21);
+  --bubble-me-ink: var(--accent-ink);
+  --bubble-them: light-dark(#ededed, #161616);
   --bubble-them-ink: var(--ink);
   --frame: var(--rail);
   --panel: var(--canvas);
   --edge: var(--line);
-  --edge-strong: light-dark(rgba(15, 15, 17, 0.14), rgba(255, 255, 255, 0.14));
-  /* The open channel in the list: a soft filled pill, as Grok marks the open chat. */
-  --pick: light-dark(rgba(15, 15, 17, 0.07), rgba(255, 255, 255, 0.08));
+  --edge-strong: light-dark(rgba(0, 0, 0, 0.18), rgba(255, 255, 255, 0.17));
+  --pick: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.07));
   --pick-edge: transparent;
-  --segment: light-dark(#ffffff, #3a3a3c);
-  /* A contact without a picture: a soft neutral gradient, as Messages draws one. */
-  --avatar-top: light-dark(#a8a8b0, #78787f);
-  --avatar-bottom: light-dark(#8a8a92, #55555c);
-  --pop-edge: light-dark(rgba(15, 15, 17, 0.08), rgba(255, 255, 255, 0.09));
-  --pop-shade: light-dark(rgba(15, 15, 17, 0.16), rgba(0, 0, 0, 0.65));
+  --segment: light-dark(#ffffff, #262626);
+  /* A contact without a picture: a soft neutral gradient. */
+  --avatar-top: light-dark(#a8a8a8, #787878);
+  --avatar-bottom: light-dark(#8a8a8a, #555555);
+  --pop-edge: light-dark(rgba(0, 0, 0, 0.12), rgba(255, 255, 255, 0.15));
+  --pop-shade: light-dark(rgba(0, 0, 0, 0.16), rgba(0, 0, 0, 0.8));
   --shadow-pop: 0 0 0 1px var(--pop-edge), 0 16px 40px -12px var(--pop-shade);
-  /* The composer: a hairline round it, lifted a touch off the canvas. */
-  --shadow-dock: 0 0 0 1px var(--line), 0 6px 20px -12px var(--pop-shade);
-  /* Liquid glass: a translucent fill over a blur, a bright rim on its top edge, a hairline round it, a soft drop. */
-  --glass-fill: light-dark(rgba(255, 255, 255, 0.64), rgba(40, 40, 44, 0.52));
-  --glass-fill-hover: light-dark(rgba(255, 255, 255, 0.8), rgba(52, 52, 57, 0.62));
-  --glass-rim: light-dark(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.11));
-  --glass-edge: light-dark(rgba(15, 15, 17, 0.07), rgba(255, 255, 255, 0.07));
-  --glass-shade: light-dark(rgba(15, 15, 17, 0.14), rgba(0, 0, 0, 0.55));
-  --prism-fill-lit: light-dark(rgba(15, 15, 17, 0.045), rgba(255, 255, 255, 0.09));
-  --prism-edge: light-dark(rgba(15, 15, 17, 0.1), rgba(255, 255, 255, 0.08));
-  --prism-glint-lit: light-dark(rgba(15, 15, 17, 0.72), #ffffff);
-  --spectrum-1: #ff3b5c;
-  --spectrum-2: #ffb02e;
-  --spectrum-3: #f5ff5a;
-  --spectrum-4: #5dff8f;
-  --spectrum-5: #39d4ff;
-  --spectrum-6: #3d5bff;
-  --spectrum-7: #b04dff;
+  --shadow-dock: 0 0 0 1px var(--edge-strong);
+  --afloat-fill: var(--canvas);
+  --afloat-fill-hover: light-dark(#f2f2f2, #0d0d0d);
+  --afloat-edge: var(--edge-strong);
+  --afloat-edge-hover: light-dark(rgba(0, 0, 0, 0.32), rgba(255, 255, 255, 0.34));
   /*
    * The chrome's grid, on 4px: one header row every column shares (52px), every round control on it
    * 36px (8px above and below), 8px between controls, a 12px gutter from every edge (header, rows,
@@ -117,13 +100,8 @@
 @custom-variant shell-mac (&:where([data-shell="mac"], [data-shell="mac"] *));
 
 @theme inline {
-  /*
-   * Inter, everywhere: the same letters on a Mac, Windows and Linux (the system stacks differ a lot
-   * there), a variable optical size (Inter Display at the big sizes, Text at the small ones), and
-   * tabular figures for times and counts. The system face stands in only until it loads.
-   */
-  --font-sans: "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --font-sans: "Paper Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-mono: "Paper Mono", ui-monospace, "SF Mono", Menlo, monospace;
   /*
    * Six type steps and nothing between them (scripts/ui-tokens.ts keeps it that way):
    * stamp for the times between messages; meta for counts, previews' dates and section heads; ui for
@@ -142,13 +120,11 @@
   --text-title--line-height: calc(21px * var(--text-scale, 1));
   --text-display: calc(26px * var(--text-scale, 1));
   --text-display--line-height: calc(32px * var(--text-scale, 1));
-  --radius-row: 8px;
-  --radius-ctl: 10px;
-  --radius-card: 16px;
-  /* A message bubble: rounder than anything else, so a conversation reads as one at a glance. */
-  --radius-bubble: 20px;
-  /* The composer: soft, Grok-round, without a pill's half-moon ends once it grows to several lines. */
-  --radius-dock: 26px;
+  --radius-row: 6px;
+  --radius-ctl: 6px;
+  --radius-card: 10px;
+  --radius-bubble: 10px;
+  --radius-dock: 10px;
   --color-frame: var(--frame);
   --color-panel: var(--panel);
   --color-edge: var(--edge);
@@ -219,10 +195,7 @@ body {
   font-family: var(--font-sans);
   font-size: calc(15px * var(--text-scale, 1));
   line-height: calc(21px * var(--text-scale, 1));
-  /* Inter's open digits and a tailed l: easier to tell 1, l and I apart in names and keys. */
-  font-feature-settings: "calt", "kern", "cv05", "cv08";
-  font-optical-sizing: auto;
-  letter-spacing: -0.006em;
+  font-feature-settings: "calt", "kern";
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -250,9 +223,11 @@ time,
 }
 
 /* Big type is set a little tighter, as display sizes should be. */
-.text-display,
+.text-display {
+  letter-spacing: -0.03em;
+}
 .text-title {
-  letter-spacing: -0.014em;
+  letter-spacing: -0.01em;
 }
 
 ::selection {
@@ -347,97 +322,30 @@ html.reduce-motion ::after {
 }
 
 @layer components {
-  .glass {
-    background: var(--glass-fill);
-    -webkit-backdrop-filter: blur(20px) saturate(1.8);
-    backdrop-filter: blur(20px) saturate(1.8);
-    box-shadow:
-      inset 0 1px 0 var(--glass-rim),
-      inset 0 0 0 1px var(--glass-edge),
-      0 8px 24px -12px var(--glass-shade);
+  .afloat {
+    background: var(--afloat-fill);
+    box-shadow: inset 0 0 0 1px var(--afloat-edge);
+    transition:
+      background-color 0.2s,
+      box-shadow 0.2s;
   }
-  button.glass:hover,
-  .glass-hover:hover {
-    background: var(--glass-fill-hover);
-  }
-  .prism-lit {
-    position: relative;
-    isolation: isolate;
-    background: var(--prism-fill-lit);
-    box-shadow: inset 0 0 0 1px var(--prism-edge);
-  }
-  .prism-lit::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    border-radius: inherit;
-    padding: 1px;
-    -webkit-mask:
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    pointer-events: none;
-    background: linear-gradient(
-      var(--glint-angle, 140deg),
-      var(--prism-glint-lit),
-      color-mix(in srgb, var(--prism-glint-lit) 30%, transparent) 26%,
-      color-mix(in srgb, var(--prism-glint-lit) 12%, transparent) 62%,
-      color-mix(in srgb, var(--prism-glint-lit) 60%, transparent)
-    );
-  }
-  .prism-lit::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    border-radius: inherit;
-    opacity: 0.3;
-    pointer-events: none;
-    background: linear-gradient(
-      112deg,
-      transparent calc(var(--band, 70%) - 8%),
-      color-mix(in srgb, var(--prism-glint-lit) 40%, transparent) calc(var(--band, 70%) - 6.5%),
-      transparent calc(var(--band, 70%) - 5%),
-      var(--spectrum-1) calc(var(--band, 70%) - 3.5%),
-      var(--spectrum-2) calc(var(--band, 70%) - 2%),
-      var(--spectrum-3) calc(var(--band, 70%) - 0.5%),
-      var(--spectrum-4) calc(var(--band, 70%) + 1%),
-      var(--spectrum-5) calc(var(--band, 70%) + 2.5%),
-      var(--spectrum-6) calc(var(--band, 70%) + 4%),
-      var(--spectrum-7) calc(var(--band, 70%) + 5.5%),
-      transparent calc(var(--band, 70%) + 8%)
-    );
+  button.afloat:hover,
+  .afloat-hover:hover {
+    background: var(--afloat-fill-hover);
+    box-shadow: inset 0 0 0 1px var(--afloat-edge-hover);
   }
 }
 
 @media (prefers-contrast: more) {
-  .prism-lit,
-  .glass {
-    background: var(--canvas);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-    box-shadow: inset 0 0 0 1px var(--edge-strong);
-  }
-  .prism-lit {
-    box-shadow: inset 0 0 0 2px var(--ink);
-  }
-  .prism-lit::before,
-  .prism-lit::after {
-    content: none;
+  .afloat {
+    box-shadow: inset 0 0 0 1px var(--ink);
   }
 }
 
-/*
- * Behind what floats: the canvas fading out (and blurring a little) toward the content, so text that
- * scrolls under the header or the composer never fights with it.
- */
+/* Behind what floats: the canvas fading out toward the content, so text that scrolls under the header or the composer never fights with it. */
 .scrim-top,
 .scrim-bottom {
   pointer-events: none;
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
 }
 .scrim-top {
   background: linear-gradient(to bottom, var(--canvas) 30%, transparent);
@@ -446,12 +354,6 @@ html.reduce-motion ::after {
 .scrim-bottom {
   background: linear-gradient(to top, var(--canvas) 35%, transparent);
   mask-image: linear-gradient(to top, #000 55%, transparent);
-}
-html[data-drawing="software"] .scrim-top,
-html[data-drawing="software"] .scrim-bottom {
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  mask-image: none;
 }
 
 /* The desktop app draws no title bar: the header row moves the window, and what's on it still clicks. */

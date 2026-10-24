@@ -23,12 +23,12 @@ import { Tooltip } from "./ui/tooltip"
 type Entry = { c: ChannelRow; n: RowNews | undefined }
 
 const GAP = 4
-const BAR_BUTTON = "no-drag flex size-9 shrink-0 items-center justify-center rounded-full text-ink-2 transition-colors hover:bg-wash hover:text-ink"
+const BAR_BUTTON = "no-drag flex size-9 shrink-0 items-center justify-center rounded-ctl text-ink-2 transition-colors hover:bg-wash hover:text-ink"
 
 const hasNews = (n: RowNews | undefined) => !!n?.fresh || (n?.needs ?? 0) > 0
 
 function NewsMark({ n }: { n: RowNews | undefined }) {
-  if (n?.needs) return <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-stamp font-semibold text-accent-ink tabular-nums">{n.needs}</span>
+  if (n?.needs) return <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-row bg-accent px-1.5 text-stamp font-semibold text-accent-ink tabular-nums">{n.needs}</span>
   if (n?.fresh) return <span className="size-2 shrink-0 rounded-full bg-accent" />
   return null
 }
@@ -56,7 +56,7 @@ function TabBody({ c, n, open, icon }: Entry & { open: boolean; icon: ChannelIco
   )
 }
 
-const TAB = "flex h-9 shrink-0 items-center gap-2 rounded-ctl px-2.5 text-ui transition-colors [--band:58%]"
+const TAB = "flex h-9 shrink-0 items-center gap-2 rounded-ctl px-2.5 text-ui transition-colors"
 
 function Tab({ c, n, open, icon, onSelect }: Entry & { open: boolean; icon: ChannelIcon | null; onSelect: () => void }) {
   const needs = n?.needs ?? 0
@@ -80,7 +80,7 @@ function Tab({ c, n, open, icon, onSelect }: Entry & { open: boolean; icon: Chan
         onClick={onSelect}
         aria-current={open ? "page" : undefined}
         aria-label={`${c.title}, ${when(c)}: ${note}${needs ? `, ${needs} ${needs === 1 ? "needs" : "need"} you` : n?.fresh && !open ? ", new messages" : ""}`}
-        className={cx(TAB, open ? "prism-lit font-semibold text-ink" : "text-ink-2 hover:bg-wash hover:text-ink")}
+        className={cx(TAB, open ? "bg-pick font-semibold text-ink" : "text-ink-2 hover:bg-wash hover:text-ink")}
       >
         <TabBody c={c} n={n} open={open} icon={icon} />
       </button>
@@ -186,7 +186,7 @@ export function ChannelTabs({
   return (
     <header aria-label="Channels" className="drag relative hidden h-(--chrome-h) shrink-0 items-center gap-2 bg-rail px-3 md:flex shell-mac:pl-(--lights-w)">
       {inChannel && (
-        <IconButton label={`${hidden ? "Show" : "Hide"} the sidebar (${SIDEBAR_KEYS})`} round className="no-drag size-9 text-ink-2 hover:text-ink" onClick={toggleSidebar}>
+        <IconButton label={`${hidden ? "Show" : "Hide"} the sidebar (${SIDEBAR_KEYS})`} className="no-drag size-9 text-ink-2 hover:text-ink" onClick={toggleSidebar}>
           <Icon icon={SidebarLeftIcon} size={18} />
         </IconButton>
       )}
