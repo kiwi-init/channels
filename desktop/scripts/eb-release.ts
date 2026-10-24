@@ -7,6 +7,7 @@ import desktopPackage from "../package.json" with { type: "json" };
 import { developerIdRequirement } from "../src/signer.ts";
 import { swapAsset } from "../src/update-asset.ts";
 import { MB, mb, payloadOf, shippedApp, sizeOf } from "./eb-app.ts";
+import { makeDmg } from "./eb-dmg.ts";
 import { sealApp, sealProblems } from "./eb-seal.ts";
 
 const PACKED_LIMIT = 40 * MB;
@@ -127,7 +128,7 @@ try {
   fs.mkdirSync(stage);
   must("ditto", [app, path.join(stage, "Channels.app")], "staging the dmg");
   fs.symlinkSync("/Applications", path.join(stage, "Applications"));
-  must("hdiutil", ["create", "-quiet", "-volname", "Channels", "-srcfolder", stage, "-format", "ULMO", "-o", dmg], "making the dmg");
+  makeDmg(stage, dmg, tool);
   if (signed) {
     must("codesign", ["--force", "--timestamp", "--keychain", keychain, "--sign", "Developer ID Application", dmg], "signing the dmg");
     notarize(dmg);
