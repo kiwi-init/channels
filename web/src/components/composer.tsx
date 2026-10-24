@@ -289,7 +289,7 @@ export function Composer({
             type="button"
             aria-label="Cancel reply"
             onClick={() => onClearReply()}
-            className="ml-auto flex size-6 shrink-0 items-center justify-center rounded-full text-ink-3 hover:bg-wash-2 hover:text-ink"
+            className="ml-auto flex size-6 shrink-0 items-center justify-center rounded-row text-ink-3 hover:bg-wash-2 hover:text-ink"
           >
             <Icon icon={Cancel01Icon} size={12} />
           </button>
@@ -333,7 +333,7 @@ export function Composer({
                     type="button"
                     aria-label={`Remove ${f.name}`}
                     onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
-                    className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-ink text-canvas"
+                    className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-row bg-ink text-canvas"
                   >
                     <Icon icon={Cancel01Icon} size={11} strokeWidth={2.2} />
                   </button>
@@ -349,7 +349,7 @@ export function Composer({
               title="Attach images"
               onClick={() => picker.current?.click()}
               disabled={disabled || files.length >= 8}
-              className="m-1.5 flex size-9 shrink-0 items-center justify-center rounded-full text-ink-2 transition-colors hover:bg-wash hover:text-ink disabled:opacity-40"
+              className="m-1.5 flex size-9 shrink-0 items-center justify-center rounded-ctl text-ink-2 transition-colors hover:bg-wash hover:text-ink disabled:opacity-40"
             >
               <Icon icon={Add01Icon} size={17} strokeWidth={2} />
             </button>
@@ -451,7 +451,7 @@ export function Composer({
               disabled={!canSend}
               onClick={() => void submit()}
               className={cx(
-                "m-1.5 flex size-9 shrink-0 items-center justify-center rounded-full transition-[background-color,color,transform] duration-150",
+                "m-1.5 flex size-9 shrink-0 items-center justify-center rounded-ctl transition-[background-color,color,transform] duration-150",
                 canSend ? "bg-accent text-accent-ink hover:opacity-90 active:scale-95" : "text-ink-3 shadow-[inset_0_0_0_1px_var(--line)]"
               )}
             >

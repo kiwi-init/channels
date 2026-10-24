@@ -16,7 +16,7 @@ export function UpdatePill({ update }: { update: UpdateView }) {
       type="button"
       disabled={update.state === "downloading"}
       onClick={() => act(update)}
-      className={cx("glass flex h-9 items-center gap-2 rounded-full pr-4 pl-3 text-ui font-medium", update.state === "ready" ? "text-accent-text" : "text-ink-2")}
+      className={cx("afloat flex h-9 items-center gap-2 rounded-row pr-4 pl-3 text-ui font-medium", update.state === "ready" ? "text-accent-text" : "text-ink-2")}
     >
       <Icon icon={Download04Icon} size={16} className="shrink-0" />
       {words(update)}

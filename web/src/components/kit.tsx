@@ -36,7 +36,7 @@ export function Button({
     <button
       type={type}
       className={cx(
-        "inline-flex shrink-0 items-center justify-center gap-1.5 font-medium whitespace-nowrap transition-[opacity,background-color,color] duration-120 select-none disabled:pointer-events-none disabled:opacity-40",
+        "inline-flex shrink-0 items-center justify-center gap-1.5 font-semibold whitespace-nowrap transition-[opacity,background-color,color] duration-120 select-none disabled:pointer-events-none disabled:opacity-40",
         size === "sm" && "h-7 rounded-row px-2.5 text-ui",
         size === "md" && "h-8 rounded-ctl px-3.5 text-ui",
         size === "lg" && "h-10 rounded-ctl px-5 text-body",
@@ -53,31 +53,26 @@ export function IconButton({
   className,
   label,
   active,
-  round,
   type = "button",
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   label: string
   active?: boolean
-  /** A round button: the header bar's actions. Ghost, like the rest: no outline, a fill only on hover. */
-  round?: boolean
   ref?: Ref<HTMLButtonElement>
 }) {
-  // On glass (the floating header), the glass is its fill: hover brightens it, and on reads as ink.
-  const glass = /(^|\s)glass(\s|$)/.test(className ?? "")
+  const afloat = /(^|\s)afloat(\s|$)/.test(className ?? "")
   return (
     <Tooltip label={label}>
       <button
         type={type}
         aria-label={label}
         className={cx(
-          "relative inline-flex shrink-0 items-center justify-center transition-colors duration-120 disabled:opacity-40",
-          round ? "rounded-full" : "rounded-ctl",
+          "relative inline-flex shrink-0 items-center justify-center rounded-ctl transition-colors duration-120 disabled:opacity-40",
           !/(^|\s)size-/.test(className ?? "") && "size-8",
-          glass
+          afloat
             ? active
               ? "bg-ink text-canvas"
-              : "data-popup-open:bg-(--glass-fill-hover)"
+              : "data-popup-open:bg-(--afloat-fill-hover)"
             : active
               ? "bg-wash-2 text-ink"
               : "text-ink-2 hover:bg-wash hover:text-ink data-popup-open:bg-wash-2 data-popup-open:text-ink",
@@ -325,7 +320,7 @@ export function Toaster() {
 export function Wordmark({ className, byline = true }: { className?: string; byline?: boolean }) {
   return (
     <span className={cx("inline-flex items-baseline gap-[0.35em] whitespace-nowrap", className)}>
-      <span className="font-semibold tracking-[-0.03em] text-ink">Channels</span>
+      <span className="font-bold tracking-[-0.01em] text-ink">Channels</span>
       {byline && <span className="text-[max(0.42em,11px)] font-medium tracking-[-0.01em] text-ink-3">by Kiwi Init</span>}
     </span>
   )

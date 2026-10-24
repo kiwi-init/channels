@@ -47,7 +47,7 @@ export function Header({
   return (
     <header ref={headRef} className="absolute inset-x-0 top-0 z-20 bg-canvas">
       <div className="drag relative flex h-(--chrome-h) items-center gap-1 px-2 sm:gap-3 sm:px-3 md:px-6">
-        <IconButton label="Channels" round className="size-9 text-ink md:hidden" onClick={onBack}>
+        <IconButton label="Channels" className="size-9 text-ink md:hidden" onClick={onBack}>
           <Icon icon={ArrowLeft01Icon} size={20} />
         </IconButton>
         <button type="button" aria-label={headingLabel} onClick={onTitle} className="no-drag shrink-0 rounded-full sm:hidden">
@@ -60,13 +60,7 @@ export function Header({
         {wide && places}
         {status.length > 0 && <span className="hidden min-w-0 truncate text-meta text-ink-3 lg:block">{status.join(" · ")}</span>}
         <span className="flex-1" />
-        <IconButton
-          label="Search"
-          round
-          className={cx("size-9", !wide && "md:hidden", search === null && "text-ink")}
-          active={search !== null}
-          onClick={() => setSearch((s) => (s === null ? "" : null))}
-        >
+        <IconButton label="Search" className={cx("size-9", !wide && "md:hidden", search === null && "text-ink")} active={search !== null} onClick={() => setSearch((s) => (s === null ? "" : null))}>
           <Icon icon={Search01Icon} size={18} />
         </IconButton>
         <nav aria-label="Views of the channel" className={cx("no-drag flex items-center gap-1", !wide && "md:hidden")}>
@@ -88,7 +82,7 @@ export function Header({
       </div>
       {search !== null && (
         <div className={cx("relative mx-auto w-full max-w-[792px] px-3 pb-2", !wide && "md:hidden")}>
-          <label className="flex h-9 items-center gap-2 rounded-full px-3.5 text-ink-3 edge">
+          <label className="flex h-9 items-center gap-2 rounded-ctl px-3.5 text-ink-3 edge">
             <Icon icon={Search01Icon} size={16} className="shrink-0" />
             <input
               autoFocus

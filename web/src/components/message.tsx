@@ -437,7 +437,7 @@ export const MessageRow = memo(function MessageRow({
   const permission = m.permission
   const handoff = handoffOf(m)
   const quotes = adjacentReply ? [] : (m.re ?? []).map((seq) => ({ seq, q: quoted(seq) })).filter(({ q }) => !q || q.kind !== "event")
-  const action = "flex size-7 items-center justify-center rounded-full text-ink-3 transition-colors hover:text-ink"
+  const action = "flex size-7 items-center justify-center rounded-row text-ink-3 transition-colors hover:text-ink"
 
   return (
     <div
@@ -524,7 +524,7 @@ export const MessageRow = memo(function MessageRow({
                 title={chipLabel(c)}
                 aria-label={chipLabel(c)}
                 className={cx(
-                  "inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-stamp tabular-nums",
+                  "inline-flex h-5 items-center gap-1 rounded-row px-1.5 text-stamp tabular-nums",
                   c.mine ? "text-accent-text shadow-[inset_0_0_0_1px_var(--accent)]" : "text-ink-2 shadow-[inset_0_0_0_1px_var(--line)]"
                 )}
               >
@@ -554,7 +554,7 @@ export const MessageRow = memo(function MessageRow({
         )}
       </div>
 
-      <div className="pointer-events-none absolute -top-3 right-2 flex items-center gap-0.5 rounded-full bg-canvas px-0.5 opacity-0 shadow-[0_0_0_1px_var(--line)] group-focus-within/b:pointer-events-auto group-focus-within/b:opacity-100 group-hover/b:pointer-events-auto group-hover/b:opacity-100">
+      <div className="pointer-events-none absolute -top-3 right-2 flex items-center gap-0.5 rounded-row bg-canvas px-0.5 opacity-0 shadow-[0_0_0_1px_var(--line)] group-focus-within/b:pointer-events-auto group-focus-within/b:opacity-100 group-hover/b:pointer-events-auto group-hover/b:opacity-100">
         {onReply && (
           <button type="button" aria-label="Reply" title="Reply" onClick={() => onReply(m)} className={action}>
             <ReplyGlyph />

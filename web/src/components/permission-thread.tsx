@@ -37,7 +37,7 @@ export function PermissionInThread({ p, settled, nameOf }: { p: PermissionShown;
   const { text, tone } = said(p, settled, expired, nameOf)
   return (
     <div className="mt-2">
-      <pre className="rounded-ctl bg-wash px-3 py-2 font-mono text-ui [overflow-wrap:anywhere] whitespace-pre-wrap text-ink">{permissionCode(p)}</pre>
+      <pre className="rounded-ctl px-3 py-2 font-mono text-ui [overflow-wrap:anywhere] whitespace-pre-wrap text-ink edge">{permissionCode(p)}</pre>
       <p className={cx("mt-1.5 flex items-center gap-1.5 text-meta", tone === "live" ? "text-live" : tone === "alert" ? "text-alert" : "text-ink-3")}>
         <Icon icon={tone === "live" ? CheckmarkCircle02Icon : tone === "alert" ? Cancel01Icon : CommandLineIcon} size={14} className="shrink-0" />
         {text}

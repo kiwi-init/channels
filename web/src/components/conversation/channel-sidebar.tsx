@@ -42,7 +42,7 @@ const IDLE = "text-ink-2 hover:bg-wash hover:text-ink"
 function Item({ on, label, count, alert, onClick }: { on: boolean; label: string; count?: number; alert?: boolean; onClick: () => void }) {
   return (
     <li>
-      <button type="button" onClick={onClick} aria-current={on ? "page" : undefined} className={cx(ROW, "gap-2", on ? "prism-lit font-semibold text-ink" : IDLE)}>
+      <button type="button" onClick={onClick} aria-current={on ? "page" : undefined} className={cx(ROW, "gap-2", on ? "bg-pick font-semibold text-ink" : IDLE)}>
         <span className="min-w-0 flex-1 truncate">{label}</span>
         {!!count && <span className={cx("shrink-0 text-meta tabular-nums", alert ? "font-semibold text-decide" : "text-ink-3")}>{count}</span>}
       </button>
@@ -83,7 +83,7 @@ const DOT: Partial<Record<View, string>> = { needs: "bg-alert", doing: "bg-doing
 
 function TasksRow({ view, counts, onView }: { view: View | null; counts: Record<View, number>; onView: (v: View) => void }) {
   return (
-    <li className={cx("flex h-9 items-center rounded-ctl transition-colors [--band:46%]", view ? "prism-lit" : "hover:bg-wash")}>
+    <li className={cx("flex h-9 items-center rounded-ctl transition-colors", view ? "bg-pick" : "hover:bg-wash")}>
       <button
         type="button"
         onClick={() => onView("everything")}
@@ -256,7 +256,7 @@ export function ConversationMenu({ conversations, current, onConversation }: { c
         <button
           type="button"
           aria-label={`Conversations${unread ? ", with unread messages" : ""}`}
-          className="no-drag relative hidden h-9 shrink-0 items-center gap-1 rounded-full pr-2.5 pl-3.5 text-ui text-ink-2 edge transition-colors hover:bg-wash hover:text-ink md:flex"
+          className="no-drag relative hidden h-9 shrink-0 items-center gap-1 rounded-ctl pr-2.5 pl-3.5 text-ui text-ink-2 edge transition-colors hover:bg-wash hover:text-ink md:flex"
         >
           <span className="max-w-40 truncate">{label}</span>
           <Icon icon={ArrowDown01Icon} size={14} />

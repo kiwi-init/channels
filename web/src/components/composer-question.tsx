@@ -25,7 +25,7 @@ export function ComposerQuestion({
   return (
     <section aria-label="Question" className="mb-2 flex flex-col gap-2 rounded-card bg-raised px-3.5 py-3 shadow-[0_0_0_1px_var(--decide)]">
       <p className="flex flex-wrap items-start gap-x-2 gap-y-1 text-ui">
-        <span className="shrink-0 rounded-full bg-decide-wash px-1.5 text-meta font-semibold text-decide">{m.esc ? decisionLabel(m) : "Question for you"}</span>
+        <span className="shrink-0 rounded-row bg-decide-wash px-1.5 text-meta font-semibold text-decide">{m.esc ? decisionLabel(m) : "Question for you"}</span>
         {held?.length ? (
           <span className="shrink-0 text-meta text-ink-3 tabular-nums">holds {held.join(", ")}</span>
         ) : (

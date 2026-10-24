@@ -19,7 +19,7 @@
 body {
   background: var(--canvas);
   color: var(--ink);
-  font: 13px/18px "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  font: 13px/18px "Paper Mono", ui-monospace, "SF Mono", Menlo, monospace;
   letter-spacing: -0.006em;
   -webkit-font-smoothing: antialiased;
   width: 1440px;

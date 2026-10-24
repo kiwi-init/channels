@@ -420,7 +420,7 @@ export function Annotator({ picture, sender, agent, when, replyTo, onSend, onClo
           <ToolButton label="Download" onClick={() => void download()}>
             <Icon icon={Download04Icon} size={18} />
           </ToolButton>
-          <button ref={closeButton} type="button" aria-label="Close" onClick={leave} className="ml-1 inline-flex size-8 items-center justify-center rounded-full bg-wash-2 text-ink hover:bg-wash">
+          <button ref={closeButton} type="button" aria-label="Close" onClick={leave} className="ml-1 inline-flex size-8 items-center justify-center rounded-ctl bg-wash-2 text-ink hover:bg-wash">
             <Icon icon={Cancel01Icon} size={18} />
           </button>
         </div>
@@ -540,7 +540,7 @@ export function Annotator({ picture, sender, agent, when, replyTo, onSend, onClo
               type="submit"
               aria-label="Send with marks"
               disabled={!marks.length || sending}
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-ink transition-opacity disabled:opacity-40"
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-ctl bg-accent text-accent-ink transition-opacity disabled:opacity-40"
             >
               <Icon icon={ArrowUp02Icon} size={18} />
             </button>
