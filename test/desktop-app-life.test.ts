@@ -4,7 +4,7 @@ import net from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { appMenu, menuAction, textStepOf, trayItems, type AppMenuItem } from "../desktop/src/app-menus.ts";
+import { appMenu, menuAction, shortcutAction, textStepOf, trayItems, type AppMenuItem } from "../desktop/src/app-menus.ts";
 import { claimInstance, handoffFor, LOCK_FILE, readHandoff, SOCKET_FILE, type Handoff, type Instance } from "../desktop/src/single-instance.ts";
 import { slept, watchWake, type WakeClock } from "../desktop/src/wake.ts";
 
@@ -230,5 +230,10 @@ describe("the tray and the app menu say what Electron's did (T438)", () => {
     expect(menuAction({ data: { action: "text-bigger" } })).toBe("text-bigger");
     for (const e of [null, {}, { data: null }, { data: { action: "rm" } }, { data: { action: 1 } }, "quit"]) expect(menuAction(e)).toBeNull();
     expect([textStepOf("text-bigger"), textStepOf("text-smaller"), textStepOf("text-reset"), textStepOf("quit")]).toEqual(["bigger", "smaller", "reset", null]);
+  });
+
+  test("Linux has no app menu, so libkiwi-shell's shortcuts (numbered as kiwi-shell.c sends them) carry the menu's actions (T769)", () => {
+    expect([1, 2, 3, 4, 5, 6, 7].map(shortcutAction)).toEqual(["text-bigger", "text-smaller", "text-reset", "reload", "quit", "close", "fullscreen"]);
+    for (const n of [0, 8, -1, 1.5]) expect(shortcutAction(n)).toBeNull();
   });
 });

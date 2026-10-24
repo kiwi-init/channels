@@ -1,4 +1,4 @@
-import { dlopen, FFIType, ptr, suffix, type JSCallback } from "bun:ffi";
+import { dlopen, FFIType, JSCallback, ptr, suffix, type Pointer } from "bun:ffi";
 import path from "node:path";
 
 import { PAGE_URL } from "./eb-page.ts";
@@ -24,6 +24,10 @@ export const windowLook = mac
 const trayHost = mac ? null : dlopen(shellPath, { kiwi_tray_host: { args: [], returns: FFIType.bool } }).symbols.kiwi_tray_host;
 
 const colorScheme = mac ? null : dlopen(shellPath, { kiwi_follow_color_scheme: { args: [], returns: FFIType.bool } }).symbols.kiwi_follow_color_scheme;
+
+const windowKeys = mac ? null : dlopen(shellPath, { kiwi_window_keys: { args: [FFIType.ptr, FFIType.function], returns: FFIType.bool } }).symbols.kiwi_window_keys;
+
+let shortcuts: JSCallback | null = null;
 
 const guards = dlopen(shellPath, { kiwi_guard_downloads: { args: [], returns: FFIType.bool }, kiwi_allow_only: { args: [FFIType.ptr], returns: FFIType.bool } }).symbols;
 
@@ -60,6 +64,12 @@ export function missingGuard(): string | null {
 export const hasTrayHost = (): boolean => trayHost?.() ?? true;
 
 export const followColorScheme = (): void => void colorScheme?.();
+
+export function onShortcut(window: Pointer | null, pressed: (action: number) => void): boolean {
+  if (!windowKeys || !window) return false;
+  shortcuts = new JSCallback((action: number) => pressed(action), { args: ["i32"], returns: "void", threadsafe: true });
+  return windowKeys(window, shortcuts.ptr);
+}
 
 export const watchPageGone = (gone: JSCallback): boolean => shell.kiwi_watch_page(gone);
 
