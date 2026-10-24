@@ -216,6 +216,11 @@ struct HarnessChoice: Codable, Sendable, Hashable, Identifiable {
     var id: String { harness }
 }
 
+struct HarnessesOn: Codable, Sendable {
+    let harnesses: [HarnessChoice]
+    let bypass: Bool
+}
+
 struct Launched: Decodable, Sendable {
     let ok: Bool
     let launch: String?

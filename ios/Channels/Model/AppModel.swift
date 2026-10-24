@@ -211,8 +211,8 @@ final class AppModel {
         try await engine.ask(["op": "computers"], as: [ComputerView].self)
     }
 
-    func harnesses(on computer: String) async throws -> [HarnessChoice] {
-        try await engine.ask(["op": "harnessesOn", "computer": computer], as: [HarnessChoice].self)
+    func harnesses(on computer: String) async throws -> HarnessesOn {
+        try await engine.ask(["op": "harnessesOn", "computer": computer], as: HarnessesOn.self)
     }
 
     func folders(on computer: String, code: String) async throws -> [String] {

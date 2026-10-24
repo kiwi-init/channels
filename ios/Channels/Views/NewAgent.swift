@@ -9,8 +9,8 @@ enum Loaded<Value> {
 
 enum AgentStep: Hashable {
     case harness(ComputerView)
-    case folder(ComputerView, HarnessChoice)
-    case options(ComputerView, HarnessChoice, String)
+    case folder(ComputerView, HarnessChoice, Bool)
+    case options(ComputerView, HarnessChoice, Bool, String)
 }
 
 struct NewAgentSheet: View {
@@ -56,10 +56,10 @@ struct NewAgentSheet: View {
                 switch step {
                 case .harness(let c):
                     HarnessStep(computer: c)
-                case .folder(let c, let h):
-                    FolderStep(room: room, computer: c, harness: h)
-                case .options(let c, let h, let folder):
-                    OptionsStep(room: room, computer: c, harness: h, folder: folder) { dismiss() }
+                case .folder(let c, let h, let bypass):
+                    FolderStep(room: room, computer: c, harness: h, bypass: bypass)
+                case .options(let c, let h, let bypass, let folder):
+                    OptionsStep(room: room, computer: c, harness: h, bypass: bypass, folder: folder) { dismiss() }
                 }
             }
         }
@@ -94,7 +94,7 @@ private struct ComputerRow: View {
 private struct HarnessStep: View {
     let computer: ComputerView
     @Environment(AppModel.self) private var model
-    @State private var harnesses: Loaded<[HarnessChoice]> = .loading
+    @State private var harnesses: Loaded<HarnessesOn> = .loading
 
     var body: some View {
         List {
@@ -103,16 +103,16 @@ private struct HarnessStep: View {
                 Waiting(text: "Asking \(computer.name)…")
             case .failed(let why):
                 Failed(why: why) { Task { await load() } }
-            case .ready(let list) where list.isEmpty:
+            case .ready(let got) where got.harnesses.isEmpty:
                 Section {
                     Text("Nothing to start on \(computer.name)").type(.body).foregroundStyle(Tone.ink2)
                 } footer: {
                     Text("Install Claude Code or Codex there, then try again.")
                 }
-            case .ready(let list):
+            case .ready(let got):
                 Section {
-                    ForEach(list) { h in
-                        NavigationLink(value: AgentStep.folder(computer, h)) { HarnessRow(harness: h) }
+                    ForEach(got.harnesses) { h in
+                        NavigationLink(value: AgentStep.folder(computer, h, got.bypass)) { HarnessRow(harness: h) }
                             .disabled(!h.start)
                     }
                 } footer: {
@@ -162,6 +162,7 @@ private struct FolderStep: View {
     let room: RoomView
     let computer: ComputerView
     let harness: HarnessChoice
+    let bypass: Bool
     @Environment(AppModel.self) private var model
     @State private var folders: Loaded<[String]> = .loading
 
@@ -181,7 +182,7 @@ private struct FolderStep: View {
             case .ready(let list):
                 Section {
                     ForEach(list, id: \.self) { folder in
-                        NavigationLink(value: AgentStep.options(computer, harness, folder)) { FolderRow(folder: folder) }
+                        NavigationLink(value: AgentStep.options(computer, harness, bypass, folder)) { FolderRow(folder: folder) }
                     }
                 } footer: {
                     Text("Where this channel's agents work on \(computer.name).")
@@ -227,6 +228,7 @@ private struct OptionsStep: View {
     let room: RoomView
     let computer: ComputerView
     let harness: HarnessChoice
+    let bypass: Bool
     let folder: String
     let close: () -> Void
     @Environment(AppModel.self) private var model
@@ -295,6 +297,8 @@ private struct OptionsStep: View {
                     if permission == "bypass" {
                         Text("The agent runs commands and changes files on \(computer.name) without asking first. You'll confirm with Face ID.")
                             .foregroundStyle(Tone.decide)
+                    } else if !bypass && !modes.isEmpty {
+                        Text("Bypass is off on \(computer.name). Turn on Allow bypass from your other devices in its Settings → New agents to start one from here.")
                     }
                 }
             }
