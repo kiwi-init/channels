@@ -79,8 +79,8 @@ private fun dev(): RoomView {
         MessageView(21, "jow", at(9), "msg", "ok", mine = true),
     )
     val asks = listOf(
-        AskView(7, "lively-swan", "Remove the emulator job, or fix it?", at(6), "T535", listOf("Remove it", "Fix it"), task = 535, place = "main"),
-        AskView(30, "trusty-vole", "Ship the iPhone build to TestFlight tonight?", at(5), "T24", listOf("Yes", "Tomorrow"), task = 24, place = "task:24"),
+        AskView(7, "lively-swan", "Remove the emulator job, or fix it?", at(6), "Decision for you", listOf("Remove it", "Fix it"), task = 535, place = "main"),
+        AskView(30, "trusty-vole", "Ship the iPhone build to TestFlight tonight?", at(5), "Question for you", listOf("Yes", "Tomorrow"), task = 24, place = "task:24"),
     )
     return RoomView(
         code = DEV,
