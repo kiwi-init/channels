@@ -5,9 +5,9 @@ import { dirname, join } from "node:path";
 import { FLOWS } from "../scripts/ci-flows.ts";
 import { loadConfig, matches, type Config } from "../.github/jev-ci/config.ts";
 import { markMoves, size, type FileChange } from "../.github/jev-ci/diff.ts";
-import { mergeGroupRange, passMarkers, testedByQueue, trustedRef, type PassCache, type PullEvent, type QueueRun } from "../.github/jev-ci/github.ts";
+import { dispatchedJobs, mergeGroupRange, passMarkers, testedByQueue, trustedRef, type PassCache, type PullEvent, type QueueRun } from "../.github/jev-ci/github.ts";
 import type { Request } from "../.github/jev-ci/jev.ts";
-import { plan, pullRequestOnly, skipAll, type Ask, type Decision, type Plan } from "../.github/jev-ci/plan.ts";
+import { onlyJobs, plan, pullRequestOnly, skipAll, type Ask, type Decision, type Plan } from "../.github/jev-ci/plan.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const CI = readFileSync(join(ROOT, ".github/workflows/ci.yml"), "utf8");
@@ -148,7 +148,7 @@ describe("ci.yml edits outside the jobs", () => {
   });
 
   test("a comment or blank-line edit changes no job", async () => {
-    const { result, by } = await planFor({ ".github/workflows/ci.yml": CI.replace("jobs:\n", "\n# a note\njobs:\n") });
+    const { result, by } = await planFor({ ".github/workflows/ci.yml": CI.replace("\njobs:\n", "\n\n# a note\njobs:\n") });
     expect(ran(result)).toEqual(["static"]);
     expect(by("release-rehearsal").run).toBe(false);
     expect(result.notes).toEqual([]);
@@ -548,5 +548,33 @@ describe("jev-ci.yml stays merge-friendly (T2212)", () => {
       for (let j = i + 1; j < lines.length && lines[j]!.startsWith("      "); j++) if (/[.;:!?)] (?=[A-Z`('"])/.test(lines[j]!)) run.push(lines[j]!.slice(0, 80));
     }
     expect(run).toEqual([]);
+  });
+});
+
+describe("a manual run can pick its jobs", () => {
+  test("the jobs input is read as a comma or space separated list", () => {
+    expect(dispatchedJobs({ inputs: { jobs: "desktop-linux, desktop-mac" } })).toEqual(["desktop-linux", "desktop-mac"]);
+    expect(dispatchedJobs({ inputs: { jobs: "  desktop-linux " } })).toEqual(["desktop-linux"]);
+    expect(dispatchedJobs({ inputs: { jobs: "" } })).toEqual([]);
+    expect(dispatchedJobs({})).toEqual([]);
+  });
+
+  test("only the picked jobs run, a picked job's parts with it, and a name that isn't a job is noted and runs nothing", () => {
+    const linux = onlyJobs(config, ["desktop-linux"]);
+    expect(linux.decisions.filter((d) => d.run).map((d) => d.job)).toEqual(["desktop-linux"]);
+    const perf = onlyJobs(config, ["perf"]);
+    expect(
+      perf.decisions
+        .filter((d) => d.run)
+        .map((d) => d.job)
+        .sort(),
+    ).toEqual(["perf", "perf-runs"]);
+    const typo = onlyJobs(config, ["desktop-linx"]);
+    expect(typo.decisions.filter((d) => d.run)).toEqual([]);
+    expect(typo.notes.join(" ")).toContain("no job named desktop-linx");
+  });
+
+  test("ci.yml's workflow_dispatch takes the jobs input", () => {
+    expect(CI).toMatch(/\n {2}workflow_dispatch:\n {4}inputs:\n {6}jobs:\n/);
   });
 });
