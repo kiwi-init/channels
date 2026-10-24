@@ -110,10 +110,17 @@ const ran = (r: Plan) =>
 const PARTS_CI = CI.replace(
   "  ci-ok:\n",
   "  gate-runs:\n    name: gate / round ${{ matrix.round }}\n    needs: plan\n    if: fromJSON(needs.plan.outputs.run)['gate-runs']\n    runs-on: ubuntu-latest\n    strategy:\n      matrix:\n        round: [1, 2]\n    steps:\n      - run: echo round\n\n  gate:\n    name: gate / medians\n    needs: [plan, gate-runs]\n    if: fromJSON(needs.plan.outputs.run)['gate']\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n    steps:\n      - run: echo medians\n\n  ci-ok:\n",
-).replace("android, release-rehearsal]", "android, release-rehearsal, gate-runs, gate]");
+).replace("android]", "android, gate-runs, gate]");
 const PARTS_CONFIG = `${CONFIG_TEXT.trimEnd()}\n\n  gate:\n    name: gate / medians\n    inputs:\n      - "scripts/gate.json"\n    always:\n      - "scripts/gate.json"\n    parts:\n      - "gate-runs"\n    description: >-\n      Collects the rounds' medians.\n`;
 const PARTS = { ".github/workflows/ci.yml": PARTS_CI, ".github/jev-ci.yml": PARTS_CONFIG };
 const partsConfig: Config = parseConfig(PARTS_CONFIG);
+const REHEARSAL = {
+  ".github/workflows/ci.yml": CI.replace(
+    "  ci-ok:\n",
+    "  release-rehearsal:\n    name: release / rehearsal\n    needs: plan\n    if: fromJSON(needs.plan.outputs.run)['release-rehearsal']\n    uses: ./.github/workflows/release-build.yml\n    with:\n      rehearsal: true\n\n  ci-ok:\n",
+  ).replace("android]", "android, release-rehearsal]"),
+  ".github/jev-ci.yml": `${CONFIG_TEXT.trimEnd()}\n\n  release-rehearsal:\n    name: release / rehearsal\n    jev: false\n    push: false\n    version_bumps: true\n    inputs: []\n    always:\n      - ".github/workflows/release-build.yml"\n    description: >-\n      Runs the release build as a rehearsal.\n`,
+};
 const CHECKS = ["static", "test-unit", "test-flows-a", "test-flows-b", "build", "shots", "desktop-mac", "desktop-linux", "cli-macos", "ios", "ios-gestures", "android"];
 
 describe("the iPhone jobs wait only on what the iPhone app is built from (T1598)", () => {
@@ -151,15 +158,14 @@ describe("ci.yml edits outside the jobs", () => {
     const { result, by } = await planFor({ ".github/workflows/ci.yml": edited });
     expect(ran(result)).toEqual(["static"]);
     expect(by("static").layer).toBe("L0");
-    for (const job of ["test-flows-a", "test-flows-b", "build", "desktop-mac", "cli-macos", "release-rehearsal"]) expect(by(job)).toMatchObject({ run: false, layer: "L0" });
+    for (const job of ["test-flows-a", "test-flows-b", "build", "desktop-mac", "cli-macos"]) expect(by(job)).toMatchObject({ run: false, layer: "L0" });
     expect(by("test-unit").layer).toBe("L2");
     expect(result.notes.join(" ")).toContain("concurrency");
   });
 
   test("a comment or blank-line edit changes no job", async () => {
-    const { result, by } = await planFor({ ".github/workflows/ci.yml": CI.replace("\njobs:\n", "\n\n# a note\njobs:\n") });
+    const { result } = await planFor({ ".github/workflows/ci.yml": CI.replace("\njobs:\n", "\n\n# a note\njobs:\n") });
     expect(ran(result)).toEqual(["static"]);
-    expect(by("release-rehearsal").run).toBe(false);
     expect(result.notes).toEqual([]);
   });
 
@@ -170,14 +176,14 @@ describe("ci.yml edits outside the jobs", () => {
 
   test("a workflow-wide env runs every job", async () => {
     const { result } = await planFor({ ".github/workflows/ci.yml": CI.replace("permissions:\n", "env:\n  FOO: bar\n\npermissions:\n") });
-    expect(ran(result)).toEqual([...CHECKS, "release-rehearsal"].sort());
+    expect(ran(result)).toEqual(CHECKS.slice().sort());
   });
 
   test("workflow permissions run the jobs that inherit them, and a job whose part inherits them", async () => {
     const { result, by } = await planFor({ ".github/workflows/ci.yml": PARTS_CI.replace("permissions:\n  contents: read\n", "permissions:\n  contents: read\n  issues: read\n") }, fakeJev(), PARTS);
     expect(by("cli-macos")).toMatchObject({ run: true, layer: "L0" });
     expect(by("gate").reason).toContain("gate-runs");
-    expect(ran(result)).toEqual([...CHECKS, "gate", "gate-runs", "release-rehearsal"].sort());
+    expect(ran(result)).toEqual([...CHECKS, "gate", "gate-runs"].sort());
   });
 });
 
@@ -190,16 +196,22 @@ describe("ci.yml edits inside jobs", () => {
   });
 
   test("a change to a local action runs the jobs that use it, not the release rehearsal", async () => {
-    const { result, by } = await planFor({ ".github/actions/setup/action.yml": "name: setup\nruns:\n  using: composite\n  steps:\n    - shell: bash\n      run: bun install --frozen-lockfile\n" });
+    const { result, by } = await planFor(
+      { ".github/actions/setup/action.yml": "name: setup\nruns:\n  using: composite\n  steps:\n    - shell: bash\n      run: bun install --frozen-lockfile\n" },
+      fakeJev(),
+      REHEARSAL,
+    );
     expect(by("build").reason).toContain("local action");
     expect(by("release-rehearsal").run).toBe(false);
     expect(ran(result)).toEqual(CHECKS.slice().sort());
   });
 
   test("a change to the reusable release workflow runs the rehearsal", async () => {
-    const { result } = await planFor({
-      ".github/workflows/release-build.yml": "name: release-build\non: workflow_call\njobs:\n  version:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo other\n",
-    });
+    const { result } = await planFor(
+      { ".github/workflows/release-build.yml": "name: release-build\non: workflow_call\njobs:\n  version:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo other\n" },
+      fakeJev(),
+      REHEARSAL,
+    );
     expect(ran(result)).toEqual(["release-rehearsal", "static"]);
   });
 
@@ -255,12 +267,12 @@ describe("jev-ci.yml edits", () => {
 
   test("a planner setting edited runs every job", async () => {
     const { result } = await planFor({ ".github/jev-ci.yml": CONFIG_TEXT.replace("threshold: 0.3", "threshold: 0.4") });
-    expect(ran(result)).toEqual([...CHECKS, "release-rehearsal"].sort());
+    expect(ran(result)).toEqual(CHECKS.slice().sort());
   });
 
   test("a planner code change runs every job", async () => {
     const { result } = await planFor({ ".github/jev-ci/plan.ts": "export const planner = 2\n" });
-    expect(ran(result)).toEqual([...CHECKS, "release-rehearsal"].sort());
+    expect(ran(result)).toEqual(CHECKS.slice().sort());
   });
 
   test("a planner README change doesn't run every job", async () => {
@@ -310,7 +322,7 @@ describe("what each job reads", () => {
   });
 
   test("a version bump runs only the release rehearsal", async () => {
-    const { result } = await planFor({ "src/version.ts": 'export const VERSION = "1.0.1"\n', "package.json": '{\n  "name": "fixture",\n  "version": "1.0.1"\n}\n' });
+    const { result } = await planFor({ "src/version.ts": 'export const VERSION = "1.0.1"\n', "package.json": '{\n  "name": "fixture",\n  "version": "1.0.1"\n}\n' }, fakeJev(), REHEARSAL);
     expect(ran(result)).toEqual(["release-rehearsal"]);
   });
 

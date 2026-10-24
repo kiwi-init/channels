@@ -417,6 +417,11 @@ jobs:
           xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh /opt/Channels/bin/launcher ${{ matrix.sandbox }}
           img=$(ls "$PWD"/desktop/release-eb/linux/Channels-*-linux-x86_64.AppImage)
           xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$img" ${{ matrix.sandbox }} --appimage-extract-and-run
+      - name: closing hides to the tray only where a tray host runs
+        if: ${{ !cancelled() }}
+        run: |
+          cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-tray-test" desktop/native/linux/kiwi-tray-test.c $(pkg-config --cflags --libs gio-2.0) -ldl
+          dbus-run-session -- "$RUNNER_TEMP/kiwi-tray-test" /opt/Channels/bin/libkiwi-shell.so
       - name: the window follows the desktop's light or dark (the portal's color-scheme), live
         if: ${{ !cancelled() }}
         run: |
@@ -677,19 +682,11 @@ jobs:
           job: android
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['android'] }}
 
-  release-rehearsal:
-    name: release / rehearsal
-    needs: plan
-    if: fromJSON(needs.plan.outputs.run)['release-rehearsal']
-    uses: ./.github/workflows/release-build.yml
-    with:
-      rehearsal: true
-
   # The one check to require: passes when every job the plan ran passed and the rest were skipped.
   # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, static, test-unit, test-flows-a, test-flows-b, build, shots, desktop-mac, desktop-linux, cli-macos, ios, ios-gestures, android, release-rehearsal]
+    needs: [plan, static, test-unit, test-flows-a, test-flows-b, build, shots, desktop-mac, desktop-linux, cli-macos, ios, ios-gestures, android]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
