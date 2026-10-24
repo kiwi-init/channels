@@ -51,6 +51,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.kiwiinit.channels.engine.AskView
@@ -199,7 +200,14 @@ private fun Action(icon: ImageVector, title: String, modifier: Modifier, tap: ()
         verticalArrangement = Arrangement.Center,
     ) {
         Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-        Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, maxLines = 1, modifier = Modifier.padding(top = 4.dp, start = 8.dp, end = 8.dp))
+        Text(
+            title,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 4.dp, start = 8.dp, end = 8.dp),
+        )
     }
 }
 
