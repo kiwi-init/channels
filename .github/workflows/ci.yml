@@ -479,6 +479,11 @@ jobs:
           xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh /opt/Channels/bin/launcher ${{ matrix.sandbox }}
           img=$(ls "$PWD"/desktop/release-eb/linux/Channels-*-linux-x86_64.AppImage)
           xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$img" ${{ matrix.sandbox }} --appimage-extract-and-run
+      - name: the window follows the desktop's light or dark (the portal's color-scheme), live
+        if: ${{ !cancelled() }}
+        run: |
+          cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-scheme-test" desktop/native/linux/kiwi-scheme-test.c $(pkg-config --cflags --libs webkit2gtk-4.1) -ldl
+          dbus-run-session -- xvfb-run -a "$RUNNER_TEMP/kiwi-scheme-test" /opt/Channels/bin/libkiwi-shell.so
       - name: test build (the test driver in, its own id)
         if: ${{ !cancelled() && matrix.drive }}
         working-directory: desktop
