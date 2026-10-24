@@ -46,6 +46,20 @@ describe("Electrobun's toolchain and what it ships are pinned in the repo (T804)
     expect(patch).toContain('\n+            if (isCEFAvailable()) {\n+                setenv("GDK_BACKEND", "x11", 1);\n+            }\n');
   });
 
+  test("the wrapper loads AppIndicator at run time, so the AppImage starts where it isn't installed (T1065)", () => {
+    const tray = fs.readFileSync(path.join(import.meta.dirname, "..", "desktop", "native", "linux", "electrobun-tray.patch"), "utf8");
+    expect(tray.match(/^\+\+\+ .*$/gm)).toEqual(["+++ b/package/src/native/linux/nativeWrapper.cpp"]);
+    expect(tray).toContain('+        void* lib = dlopen("libayatana-appindicator3.so.1", RTLD_NOW | RTLD_LOCAL);\n');
+    for (const fn of ["app_indicator_new", "app_indicator_set_status", "app_indicator_set_title", "app_indicator_set_icon_full", "app_indicator_set_menu"])
+      expect(tray).toContain(`dlsym(lib, "${fn}")`);
+    expect(tray).toContain("+    if (!appIndicatorApi()) {\n+        return nullptr;\n+    }\n");
+    const build = fs.readFileSync(path.join(import.meta.dirname, "..", "desktop", "scripts", "eb-native-wrapper.ts"), "utf8");
+    expect(build).toContain('const GTK = ["webkit2gtk-4.1", "gtk+-3.0"];');
+    const shell = fs.readFileSync(path.join(import.meta.dirname, "..", "desktop", "native", "linux", "kiwi-shell.c"), "utf8");
+    expect(shell).toContain('#define TRAY_LIBRARY "libayatana-appindicator3.so.1"');
+    expect(shell).toContain("  if (!tray_library()) return false;\n");
+  });
+
   test("a host without pins is refused by name", () => {
     expect(() => pinFor(PINS.app, "linux-x64", "app files")).toThrow("pins no app files for linux-x64");
     expect(hostKey("darwin", "arm64")).toBe("macos-arm64");

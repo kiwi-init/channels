@@ -2,6 +2,7 @@
 #include <gio/gio.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
 
 #define WATCHER "org.kde.StatusNotifierWatcher"
 
@@ -61,8 +62,9 @@ static bool ask(bool (*tray_host)(void)) {
 }
 
 int main(int argc, char **argv) {
-  if (argc != 2) {
-    fprintf(stderr, "usage: kiwi-tray-test <libkiwi-shell.so> (on a private session bus: dbus-run-session)\n");
+  bool no_indicator = argc == 3 && strcmp(argv[2], "no-indicator") == 0;
+  if (argc != 2 && !no_indicator) {
+    fprintf(stderr, "usage: kiwi-tray-test <libkiwi-shell.so> [no-indicator] (on a private session bus: dbus-run-session)\n");
     return 2;
   }
   loop = g_main_loop_new(NULL, FALSE);
@@ -99,7 +101,13 @@ int main(int argc, char **argv) {
     printf("a StatusNotifierWatcher with no host registered: no tray host either\n");
 
   host_registered = TRUE;
-  if (!ask(tray_host)) {
+  if (no_indicator) {
+    if (ask(tray_host)) {
+      fprintf(stderr, "kiwi-tray-test: with no libayatana-appindicator3 to make a tray icon, a watcher with a host registered counted as a tray host\n");
+      bad++;
+    } else
+      printf("a StatusNotifierWatcher with a host registered, but no libayatana-appindicator3 (stock Fedora, Arch): no tray icon can show, so closing minimizes\n");
+  } else if (!ask(tray_host)) {
     fprintf(stderr, "kiwi-tray-test: a watcher with a host registered didn't count as a tray host\n");
     bad++;
   } else
