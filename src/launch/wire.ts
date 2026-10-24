@@ -2,8 +2,9 @@ import { isKnownHarness, type KnownHarness } from "@kiwi/core/harnesses.ts";
 import { readLaunch } from "@kiwi/core/membership.ts";
 import { PLACE_NAMES, type Launched } from "@kiwi/core/terminals.ts";
 import type { JoinLine } from "@kiwi/core/join-line.ts";
+import { readLaunchChoices, type LaunchChoices } from "@kiwi/core/launch-options.ts";
 
-export interface LaunchRequest extends JoinLine {
+export interface LaunchRequest extends JoinLine, LaunchChoices {
   harness: KnownHarness;
   folder: string;
   launch?: string;
@@ -20,7 +21,9 @@ export function readLaunchRequest(x: Record<string, unknown>): LaunchRequest | n
   const persona = text(x.persona);
   if (x.launch !== undefined && !readLaunch(x.launch)) return null;
   const launch = readLaunch(x.launch);
-  return { harness: x.harness, folder, code, ...(relay ? { relay } : {}), ...(nick ? { nick } : {}), ...(persona ? { persona } : {}), ...(launch ? { launch } : {}) };
+  const choices = readLaunchChoices(x);
+  if (!choices) return null;
+  return { harness: x.harness, folder, code, ...(relay ? { relay } : {}), ...(nick ? { nick } : {}), ...(persona ? { persona } : {}), ...(launch ? { launch } : {}), ...choices };
 }
 
 export function launchedText(r: Launched): string {

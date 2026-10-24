@@ -1,10 +1,11 @@
 import * as Effect from "effect/Effect";
 import { resolve } from "node:path";
 import { isKnownHarness, KNOWN_HARNESSES } from "@kiwi/core/harnesses.ts";
+import { PERMISSIONS, readContext, readLaunchChoices } from "@kiwi/core/launch-options.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, out } from "../context.ts";
 
-const LAUNCH_USAGE = `usage: kiwi launch HARNESS --code CODE [--folder DIR] [--nick NAME] [--persona TOKEN] [--relay URL] [--json] (HARNESS: ${KNOWN_HARNESSES.join(", ")})`;
+const LAUNCH_USAGE = `usage: kiwi launch HARNESS --code CODE [--folder DIR] [--nick NAME] [--persona TOKEN] [--relay URL] [--model ID] [--effort LEVEL] [--permission ${PERMISSIONS.join("|")}] [--context 1m|400k|…] [--json] (HARNESS: ${KNOWN_HARNESSES.join(", ")}; kiwi harnesses --json says which options each takes)`;
 
 export const launchCommands: Record<string, Command> = {
   harnesses: () =>
@@ -28,7 +29,9 @@ export const launchCommands: Record<string, Command> = {
     Effect.gen(function* () {
       const harness = args[1];
       const code = opt.code?.trim();
-      if (!isKnownHarness(harness) || !code) return yield* die(LAUNCH_USAGE);
+      const context = opt.context === undefined ? undefined : readContext(opt.context);
+      const choices = context === null ? null : readLaunchChoices({ model: opt.model, effort: opt.effort, permission: opt.permission, context });
+      if (!isKnownHarness(harness) || !code || !choices) return yield* die(LAUNCH_USAGE);
       const relay = opt.relay ?? process.env.KIWI_RELAY;
       const req = {
         harness,
@@ -37,6 +40,7 @@ export const launchCommands: Record<string, Command> = {
         ...(relay ? { relay: relay.replace(/\/+$/, "") } : {}),
         ...(opt.nick ? { nick: opt.nick } : {}),
         ...(opt.persona ? { persona: opt.persona } : {}),
+        ...choices,
       };
       const { daemonLaunch, ensureDaemon } = yield* Effect.promise(() => import("../../daemon.ts"));
       const { launchedText } = yield* Effect.promise(() => import("../../launch/wire.ts"));

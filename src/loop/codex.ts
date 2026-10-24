@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type { Permission } from "@kiwi/core/launch-options.ts";
 import { codexTurn } from "../harness.ts";
 
 type Env = Record<string, string | undefined>;
@@ -9,16 +10,36 @@ export interface CodexStart {
   bin: string;
   model?: string;
   effort?: string;
+  permission?: Permission;
+  context?: number;
   prompt: string;
 }
+
+export const CODEX_EFFORTS = ["minimal", "low", "medium", "high", "xhigh"];
+export const CODEX_CONTEXTS = [128_000, 272_000, 400_000, 1_000_000];
+
+const CODEX_PERMISSIONS: Record<Permission, string[]> = {
+  default: [],
+  "accept-edits": ["--sandbox", "workspace-write", "--ask-for-approval", "on-request"],
+  plan: ["--sandbox", "read-only", "--ask-for-approval", "on-request"],
+  bypass: ["--dangerously-bypass-approvals-and-sandbox"],
+};
 
 export type CodexThread = { thread: string; rollout: string };
 
 const THREAD = /-([0-9a-f]{8})-([0-9a-f]{4})-(7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i;
 const CLOCK_MS = 2_000;
 
-export function codexArgv({ bin, model, effort, prompt }: CodexStart): string[] {
-  return [bin, ...(model ? ["-m", model] : []), ...(effort ? ["-c", `model_reasoning_effort="${effort}"`] : []), "--", prompt];
+export function codexArgv({ bin, model, effort, permission, context, prompt }: CodexStart): string[] {
+  return [
+    bin,
+    ...(model ? ["-m", model] : []),
+    ...(effort ? ["-c", `model_reasoning_effort="${effort}"`] : []),
+    ...(context ? ["-c", `model_context_window=${context}`] : []),
+    ...(permission ? CODEX_PERMISSIONS[permission] : []),
+    "--",
+    prompt,
+  ];
 }
 
 function codexHome(env: Env): string {

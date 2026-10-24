@@ -121,6 +121,31 @@ describe("an ask's arguments, per verb", () => {
       expect(readMachineArgs({ verb: "launch", args: bad })).toBeNull();
     }
   });
+
+  test("launch carries a model, effort, permission and context, each checked", () => {
+    const chosen = { harness: "codex" as const, folder: "/w", code, model: "gpt-5.3-codex", effort: "high", permission: "plan" as const, context: 400_000 };
+    expect(readMachineArgs({ verb: "launch", args: chosen })).toEqual({ verb: "launch", launch: chosen });
+    for (const bad of [{ model: "-c x=1" }, { effort: "high\n" }, { permission: "bypassPermissions" }, { context: "400k" }]) {
+      expect(readMachineArgs({ verb: "launch", args: { ...chosen, ...bad } })).toBeNull();
+    }
+  });
+
+  test("a launch with every choice and a long persona still fits in one sealed ask", async () => {
+    const args = {
+      harness: "claude",
+      folder: `/${"f".repeat(400)}`,
+      code,
+      relay: "https://relay.example",
+      nick: "n".repeat(40),
+      persona: "p".repeat(800),
+      model: "m".repeat(100),
+      effort: "xhigh",
+      permission: "accept-edits",
+      context: 1_000_000,
+    };
+    const { box } = await makeAsk(person, to(machine), { verb: "launch", args, reply: newSecret() });
+    expect(box.length).toBeLessThanOrEqual(ASK_MAX_BYTES);
+  });
 });
 
 describe("a paired computer's answer", () => {

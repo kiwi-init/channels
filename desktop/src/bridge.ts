@@ -3,6 +3,7 @@
 // so web/ can type against it without touching this process.
 
 import type { HarnessRow, KnownHarness } from "@kiwi/core/harnesses.ts";
+import type { LaunchChoices } from "@kiwi/core/launch-options.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
 import type { CachedKept, CachedRow, Unread } from "@kiwi/core/cache-row.ts";
 import type { Channel, OpenKind, PresenceFields } from "@kiwi/core/client.ts";
@@ -265,7 +266,7 @@ export interface MachineView {
 
 export type FromMachine<T> = { ok: true; value: T } | { ok: false; detail: string };
 
-export interface LaunchAgentRequest {
+export interface LaunchAgentRequest extends LaunchChoices {
   machinePk?: string;
   launch: string;
   harness: KnownHarness;

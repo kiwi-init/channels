@@ -1,4 +1,5 @@
 import { readHarnessRow, type HarnessRow } from "@kiwi/core/harnesses.ts";
+import { choicesOf } from "@kiwi/core/launch-options.ts";
 import type { LaunchedView } from "@kiwi/core/terminals.ts";
 import type { ComputerView, FromMachine, LaunchAgentRequest, MachineView } from "../bridge.ts";
 import type { Serves } from "../calls.ts";
@@ -54,7 +55,15 @@ async function machines(): Promise<MachineView[]> {
 }
 
 async function launchOn(c: ComputerView, req: LaunchAgentRequest): Promise<LaunchedView> {
-  const args = { harness: req.harness, folder: req.folder, code: req.code, relay: req.relay, ...(req.nick ? { nick: req.nick } : {}), ...(req.persona ? { persona: req.persona } : {}) };
+  const args = {
+    harness: req.harness,
+    folder: req.folder,
+    code: req.code,
+    relay: req.relay,
+    ...(req.nick ? { nick: req.nick } : {}),
+    ...(req.persona ? { persona: req.persona } : {}),
+    ...choicesOf(req),
+  };
   const asked = await askMachine(asker(), { pk: c.machinePk, xpk: c.machineXpk }, "launch", args, { timeoutMs: LAUNCH_MS, id: req.launch });
   if (asked.ok) return launchedView(asked.result);
   if (asked.why === "no-answer") return { ok: false, why: "failed", detail: `No answer yet: it may still be starting on ${c.label}. Check that computer before you try again.` };

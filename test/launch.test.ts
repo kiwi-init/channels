@@ -7,7 +7,8 @@ import { daemonSock, stopDaemon } from "../src/daemon.ts";
 import { launchAgent } from "../src/launch/launch.ts";
 import type { PlaceTools } from "../src/terminals/plugin.ts";
 import { joinLineRefusal } from "@kiwi/core/join-line.ts";
-import { canStart, joinPrompt, recipeArgv } from "../src/launch/recipes.ts";
+import { choicesRefusal, contextWords, readContext } from "@kiwi/core/launch-options.ts";
+import { canStart, joinPrompt, launchChoicesRefusal, recipeArgv } from "../src/launch/recipes.ts";
 import { readLaunched } from "@kiwi/core/terminals.ts";
 import { launchedText, readLaunchRequest } from "../src/launch/wire.ts";
 import { startRelay } from "../src/relay/bun.ts";
@@ -58,10 +59,114 @@ describe("the line an agent is started with", () => {
 
   test("Claude Code and Codex start with it as their first prompt; the others wait for their own recipe", () => {
     expect(recipeArgv("claude", "/bin/claude", "P")).toEqual(["/bin/claude", "--allowedTools", "Bash(kiwi join:*)", "--", "P"]);
-    expect(recipeArgv("codex", "/bin/codex", "P")).toEqual(["/bin/codex", "P"]);
+    expect(recipeArgv("codex", "/bin/codex", "P")).toEqual(["/bin/codex", "--", "P"]);
     for (const h of ["gemini", "cursor", "grok", "opencode", "kimi", "mimo", "pi"] as const) {
       expect(canStart(h)).toBe(false);
       expect(recipeArgv(h, "/bin/x", "P")).toBeNull();
+    }
+  });
+
+  test("Claude Code gets the model, effort, permission mode and 1M context as its own flags", () => {
+    const join = ["--allowedTools", "Bash(kiwi join:*)", "--", "P"];
+    expect(recipeArgv("claude", "/bin/claude", "P", { model: "opus", effort: "high", permission: "bypass", context: 1_000_000 })).toEqual([
+      "/bin/claude",
+      "--model",
+      "opus[1m]",
+      "--effort",
+      "high",
+      "--permission-mode",
+      "bypassPermissions",
+      ...join,
+    ]);
+    expect(recipeArgv("claude", "/bin/claude", "P", { permission: "accept-edits" })).toEqual(["/bin/claude", "--permission-mode", "acceptEdits", ...join]);
+    expect(recipeArgv("claude", "/bin/claude", "P", { permission: "plan" })).toEqual(["/bin/claude", "--permission-mode", "plan", ...join]);
+    expect(recipeArgv("claude", "/bin/claude", "P", { permission: "default", model: "claude-opus-5-5" })).toEqual(["/bin/claude", "--model", "claude-opus-5-5", ...join]);
+  });
+
+  test("Codex gets the model, effort, context window and sandbox and approval flags, or the bypass one", () => {
+    expect(recipeArgv("codex", "/bin/codex", "P", { model: "gpt-5.3-codex", effort: "xhigh", permission: "plan", context: 400_000 })).toEqual([
+      "/bin/codex",
+      "-m",
+      "gpt-5.3-codex",
+      "-c",
+      'model_reasoning_effort="xhigh"',
+      "-c",
+      "model_context_window=400000",
+      "--sandbox",
+      "read-only",
+      "--ask-for-approval",
+      "on-request",
+      "--",
+      "P",
+    ]);
+    expect(recipeArgv("codex", "/bin/codex", "P", { permission: "accept-edits" })).toEqual(["/bin/codex", "--sandbox", "workspace-write", "--ask-for-approval", "on-request", "--", "P"]);
+    expect(recipeArgv("codex", "/bin/codex", "P", { permission: "bypass" })).toEqual(["/bin/codex", "--dangerously-bypass-approvals-and-sandbox", "--", "P"]);
+    expect(recipeArgv("codex", "/bin/codex", "P", { permission: "default" })).toEqual(["/bin/codex", "--", "P"]);
+  });
+
+  test("each harness takes only the efforts, permissions and context sizes it knows", () => {
+    expect(launchChoicesRefusal("claude", { model: "opus", effort: "max", permission: "bypass", context: 1_000_000 })).toBeNull();
+    expect(launchChoicesRefusal("codex", { model: "o3", effort: "minimal", permission: "plan", context: 272_000 })).toBeNull();
+    expect(launchChoicesRefusal("claude", { effort: "minimal" })).toBe("Claude Code takes effort low, medium, high, xhigh, max, not minimal");
+    expect(launchChoicesRefusal("codex", { effort: "max" })).toBe("Codex takes effort minimal, low, medium, high, xhigh, not max");
+    expect(launchChoicesRefusal("claude", { model: "opus", context: 400_000 })).toBe("Claude Code takes context 1m, not 400k");
+    expect(launchChoicesRefusal("codex", { context: 300_000 })).toBe("Codex takes context 128k, 272k, 400k, 1m, not 300k");
+    expect(launchChoicesRefusal("claude", { context: 1_000_000 })).toContain("needs an Opus, Sonnet or Fable model");
+    expect(launchChoicesRefusal("claude", { model: "haiku", context: 1_000_000 })).toContain("needs an Opus, Sonnet or Fable model");
+    expect(launchChoicesRefusal("claude", { model: "claude-sonnet-5-5", context: 1_000_000 })).toBeNull();
+    const bare = { model: false, effort: [], permission: [], context: [] };
+    expect([
+      choicesRefusal("Mo", bare, { model: "m" }),
+      choicesRefusal("Mo", bare, { effort: "high" }),
+      choicesRefusal("Mo", bare, { permission: "plan" }),
+      choicesRefusal("Mo", bare, { context: 1_000_000 }),
+    ]).toEqual(["Mo doesn't take a model from Kiwi", "Mo doesn't take an effort level from Kiwi", "Mo doesn't take a permission mode from Kiwi", "Mo doesn't take a context size from Kiwi"]);
+  });
+
+  test("kiwi launch reads --context as 1m, 400k or a token count, and stops at a choice it can't read before reaching the daemon", async () => {
+    expect([readContext("1m"), readContext("400K"), readContext("272000"), readContext("1.5m"), readContext("12"), readContext("lots")]).toEqual([1_000_000, 400_000, 272_000, null, null, null]);
+    expect([1_000_000, 400_000, 272_500].map(contextWords)).toEqual(["1m", "400k", "272500"]);
+    for (const bad of [
+      ["--permission", "yolo"],
+      ["--context", "huge"],
+      ["--model", "opus --permission-mode bypassPermissions"],
+    ]) {
+      const p = Bun.spawn([process.execPath, join(import.meta.dir, "../src/cli/main.ts"), "launch", "claude", "--code", code, ...bad], {
+        env: { ...process.env, KIWI_HOME: join(root, "cli-home") },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(await p.exited).not.toBe(0);
+      expect(await new Response(p.stderr).text()).toContain("usage: kiwi launch HARNESS");
+    }
+    expect(existsSync(daemonSock(join(root, "cli-home")))).toBe(false);
+  });
+
+  test("a choice is a known word or a plain model id, never an extra argument", () => {
+    const base = { harness: "claude", folder: "/w", code };
+    expect(readLaunchRequest({ ...base, model: "us.anthropic.claude-opus-5-5-v1:0", effort: "high", permission: "plan", context: 1_000_000 })).toEqual({
+      harness: "claude",
+      folder: "/w",
+      code,
+      model: "us.anthropic.claude-opus-5-5-v1:0",
+      effort: "high",
+      permission: "plan",
+      context: 1_000_000,
+    });
+    for (const bad of [
+      { model: "--dangerously-skip-permissions" },
+      { model: "opus --permission-mode bypassPermissions" },
+      { model: "$(id)" },
+      { model: "" },
+      { effort: "high; rm -rf ~" },
+      { effort: "HIGH" },
+      { permission: "yolo" },
+      { permission: "bypassPermissions" },
+      { context: "1m" },
+      { context: 12 },
+      { context: 1.5e6 + 0.5 },
+    ]) {
+      expect(readLaunchRequest({ ...base, ...bad })).toBeNull();
     }
   });
 });
@@ -121,6 +226,34 @@ printf '/tmp/sock\\tkiwi\\t@7\\t%%9\\t4242\\n'`,
     expect(launched()).toContain("KIWI_LAUNCH=fromTheApp_0123456789");
     expect(launched()).toContain(join(bins, "codex"));
     expect(launched()).toContain("codex");
+  });
+
+  test("starts it with the choices it was asked for, and refuses one its harness doesn't take before anything opens", async () => {
+    process.env.KIWI_NO_HOOKS = "1";
+    const PATH = `${bins}:/usr/bin:/bin`;
+    expect(await launchAgent({ harness: "claude", folder, code, model: "sonnet", effort: "xhigh", permission: "plan", context: 1_000_000 }, { PATH, tools })).toMatchObject({ ok: true });
+    expect(launched().slice(-11, -1)).toEqual([
+      "--model",
+      "sonnet[1m]",
+      "--effort",
+      "xhigh",
+      "--permission-mode",
+      "plan",
+      "--allowedTools",
+      "Bash(kiwi join:*)",
+      "--",
+      expect.stringContaining(`kiwi join ${code}`),
+    ]);
+    expect(await launchAgent({ harness: "codex", folder, code, permission: "bypass", context: 128_000 }, { PATH, tools })).toMatchObject({ ok: true });
+    expect(launched().slice(-6, -1)).toEqual(["-c", "model_context_window=128000", "--dangerously-bypass-approvals-and-sandbox", "--", expect.stringContaining(`kiwi join ${code}`)]);
+    const before = readFileSync(calls, "utf8");
+    expect(await launchAgent({ harness: "codex", folder, code, effort: "max" }, { PATH, tools })).toEqual({
+      ok: false,
+      why: "bad-request",
+      detail: "Codex takes effort minimal, low, medium, high, xhigh, not max",
+    });
+    expect(await launchAgent({ harness: "claude", folder, code, context: 1_000_000 }, { PATH, tools })).toMatchObject({ ok: false, why: "bad-request" });
+    expect(readFileSync(calls, "utf8")).toBe(before);
   });
 
   test("puts the harness's hooks in before it starts, unless they're off", async () => {
