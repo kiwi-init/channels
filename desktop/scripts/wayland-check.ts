@@ -211,10 +211,21 @@ try {
 
   await step("a PNG dragged from another app onto the composer is attached (T895)", async () => {
     const before = (await state()).files.length;
+    await driver.evaluate(() => {
+      const w = window as unknown as { kiwiCheckDrops?: unknown[] };
+      w.kiwiCheckDrops = [];
+      window.addEventListener(
+        "drop",
+        (e) => w.kiwiCheckDrops?.push({ types: [...(e.dataTransfer?.types ?? [])], files: e.dataTransfer?.files.length ?? null, uris: e.dataTransfer?.getData("text/uri-list") ?? null }),
+        { capture: true, once: true },
+      );
+      return true;
+    }, null);
     await ask({ op: "drag", from: onHelper("drag"), to: composer });
     await later(1500);
     const s = await state();
-    return { ok: s.files.includes("Remove kiwi-drop.png") && s.files.length === before + 1, detail: { before, s } };
+    const page = await driver.evaluate(() => ({ platform: navigator.platform, agent: navigator.userAgent, drops: (window as unknown as { kiwiCheckDrops?: unknown[] }).kiwiCheckDrops ?? null }), null);
+    return { ok: s.files.includes("Remove kiwi-drop.png") && s.files.length === before + 1, detail: { before, s, page } };
   });
 
   await step("a file dropped elsewhere in the window leaves the page where it was", async () => {
