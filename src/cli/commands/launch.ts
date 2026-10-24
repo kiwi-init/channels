@@ -7,7 +7,7 @@ import { type Command, die, out } from "../context.ts";
 
 const LAUNCH_USAGE = `usage: kiwi launch HARNESS --code CODE [--folder DIR] [--nick NAME] [--persona TOKEN] [--relay URL] [--model ID] [--effort LEVEL] [--permission ${PERMISSIONS.join("|")}] [--context 1m|400k|…] [--json] (HARNESS: ${KNOWN_HARNESSES.join(", ")}; kiwi harnesses --json says which options each takes)`;
 
-const FOLDERS_USAGE = "usage: kiwi folders [--room ROOM] [--json] · kiwi folders add|remove DIR";
+const FOLDERS_USAGE = "usage: kiwi folders [--room ROOM] [--json] · kiwi folders added [--json] · kiwi folders add|remove DIR [--json]";
 
 export const launchCommands: Record<string, Command> = {
   harnesses: () =>
@@ -31,12 +31,17 @@ export const launchCommands: Record<string, Command> = {
         const next = verb === "add" ? withLaunchRoot(cfg, dir) : withoutLaunchRoot(cfg, dir);
         if (typeof next === "string") return yield* die(next);
         saveConfig(next);
+        if (opt.json) return out(JSON.stringify({ roots: next.launchRoots ?? [] }));
         out(
           next.launchRoots?.length
             ? `agents can start in:\n${next.launchRoots.join("\n")}`
             : "no folders added: agents start where this computer's agents already work, and in your home folder's git repos",
         );
         return 0;
+      }
+      if (verb === "added") {
+        const roots = loadConfig().launchRoots ?? [];
+        return out(opt.json ? JSON.stringify({ roots }) : roots.join("\n") || "no folders added");
       }
       if (verb !== undefined) return yield* die(FOLDERS_USAGE);
       const folders = launchFolders(loadConfig(), opt.room);

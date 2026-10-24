@@ -92,5 +92,7 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     harnessesOn: (machinePk) => t.call("harnessesOn", machinePk),
     foldersOn: (machinePk, roomId) => t.call("foldersOn", machinePk, roomId),
     settingsOn: (machinePk) => t.call("settingsOn", machinePk),
+    launchRoots: () => t.call("launchRoots"),
+    setLaunchRoot: (dir, to) => t.call("setLaunchRoot", dir, to),
   };
 }
