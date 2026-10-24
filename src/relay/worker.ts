@@ -583,6 +583,9 @@ async function toRoom(env: Env, roomId: string, req: Request): Promise<Response>
         console.error(JSON.stringify({ at: "room-stub-retry", method: req.method, error: (again as Error).message }));
       }
     }
-    return withCors(errorResponse(new Refused({ status: 503, message: "the channel is busy or restarting; try again in a moment", tag: "Internal" })));
+    const busy = read
+      ? new Refused({ status: 503, message: "the channel is busy or restarting; try again in a moment", tag: "Internal" })
+      : new Refused({ status: 503, message: "the channel is busy or restarting, and this may have gone through: look before you send it again", tag: "Internal" });
+    return withCors(errorResponse(busy));
   }
 }

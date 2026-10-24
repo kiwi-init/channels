@@ -11,13 +11,20 @@ import type { Effects } from "./directory.ts";
 import { formatBytes, untilUtcMidnight, utcDay } from "./limits.ts";
 
 const READ_ONLY = "the owner lets you only read in this channel";
+const SEND_MEMORY_MS = 3_600_000;
+
+export interface Repeat {
+  repeat: true;
+  seq: number;
+  ts: number;
+}
 
 export interface Slots {
   take?: SlotTake;
   free?: readonly string[];
 }
 
-export const append = Effect.fn("Room.append")(function* (iv: string, ct: string, e: number, sender: string, slots: Slots = {}) {
+export const append = Effect.fn("Room.append")(function* (iv: string, ct: string, e: number, sender: string, slots: Slots = {}, cid?: string) {
   const db = yield* RoomStore;
   const policy = yield* Policy;
   if (db.isReadOnly(sender)) return yield* new ReadOnly({ message: READ_ONLY });
@@ -39,6 +46,8 @@ export const append = Effect.fn("Room.append")(function* (iv: string, ct: string
   const cap = policy.bytesPerChannel;
   if (ct.length > cap) return yield* new TooLarge({ message: `that message is bigger than this channel may hold (${formatBytes(cap)})` });
   const seq = db.head() + 1;
+  const prior = cid ? db.claimSend(sender, cid, seq, ts) : null;
+  if (prior) return { repeat: true, seq: prior.seq, ts: prior.ts } satisfies Repeat;
   let bytes = db.storedBytes();
   if (bytes + ct.length > cap) bytes -= db.dropOldest(bytes + ct.length - cap) + db.pruneBlobs();
   if (bytes + ct.length > cap) bytes -= db.dropOldestBlobs(bytes + ct.length - cap);
@@ -51,6 +60,7 @@ export const append = Effect.fn("Room.append")(function* (iv: string, ct: string
   if (seq % 100 === 0) {
     const freed = db.dropThrough(seq - ROOM_RETENTION);
     if (freed) bytes -= freed + db.pruneBlobs();
+    db.pruneSends(ts - SEND_MEMORY_MS);
   }
   db.setCounters({ bytes, day, n: today + 1, head: seq });
   const stored: Envelope = { seq, ts, iv, ct, e };

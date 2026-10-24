@@ -95,6 +95,8 @@ export function wellFormedSlot(x: unknown): x is SlotTake {
   return typeof t.id === "string" && SLOT_ID_RE.test(t.id) && Number.isSafeInteger(t.ttl) && (t.ttl as number) >= 1_000 && (t.ttl as number) <= MAX_SLOT_TTL;
 }
 
+export const wellFormedSendId = (x: unknown): x is string => typeof x === "string" && SLOT_ID_RE.test(x);
+
 export function wellFormedFreed(x: unknown): x is string[] {
   return Array.isArray(x) && x.length <= MAX_SLOTS_FREED && x.every((id) => typeof id === "string" && SLOT_ID_RE.test(id));
 }
@@ -160,7 +162,7 @@ export function wellFormedRead(x: unknown): ReadMark | null {
  * sequence number; `eph` is relayed to the other sockets and never stored.
  */
 export type ClientFrame =
-  | { t: "send"; id: string; iv: string; ct: string; e?: number }
+  | { t: "send"; id: string; iv: string; ct: string; e?: number; cid?: string }
   | { t: "eph"; iv: string; ct: string }
   /** This member has read up to `seq` (a listener says it on the socket it already has: cheaper than a request). */
   | { t: "read"; seq: number }
