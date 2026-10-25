@@ -99,7 +99,8 @@ sealed_home=$(runuser -u tester -- mktemp -d)
 session gnome-keyring gnome-keyring tray "$sealed_home"
 session kwallet kwallet tray
 session kwallet-unanswered kwallet-unanswered tray
-session cancel cancel-first-run tray
+session cancel cancel-locked-first-run tray
+session cancel-no-keyring cancel-no-keyring-first-run tray
 session cancel-holds-key cancel-sealed tray "$sealed_home"
 lib_test kiwi-scheme-test xvfb-run -a "$tests/kiwi-scheme-test" "$lib"
 lib_test kiwi-notify-test xvfb-run -a "$tests/kiwi-notify-test" "$lib"

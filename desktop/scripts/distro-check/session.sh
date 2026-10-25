@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -u
 
-usage="usage: session.sh none|gnome-keyring|kwallet|kwallet-unanswered|cancel|cancel-holds-key TAG APPIMAGE RESULTS LOGS tray|no-tray [HOME] (as the desktop user, under dbus-run-session)"
+usage="usage: session.sh none|gnome-keyring|kwallet|kwallet-unanswered|cancel|cancel-no-keyring|cancel-holds-key TAG APPIMAGE RESULTS LOGS tray|no-tray [HOME] (as the desktop user, under dbus-run-session)"
 keyring=${1:?$usage}
 tag=${2:?$usage}
 image=${3:?$usage}
@@ -42,10 +42,10 @@ case "$keyring" in
     sleep 3
     info "$(basename "$daemon") with no wallet yet: its first-use dialog is offscreen, so nobody answers it"
     ;;
-  cancel | cancel-holds-key)
-    python3 "$here/secrets-cancel.py" $([ "$keyring" = cancel-holds-key ] && echo holds-key) > "$logs/$tag-secrets.log" 2>&1 &
+  cancel | cancel-no-keyring | cancel-holds-key)
+    python3 "$here/secrets-cancel.py" "$(case "$keyring" in cancel-holds-key) echo holds-key ;; cancel-no-keyring) echo no-keyring ;; *) echo locked ;; esac)" > "$logs/$tag-secrets.log" 2>&1 &
     sleep 1
-    info "a Secret Service whose every prompt is cancelled, as a person clicking Cancel does$([ "$keyring" = cancel-holds-key ] && echo ", holding Channels' store key locked")"
+    info "a Secret Service whose every prompt is cancelled, as a person clicking Cancel does: $(head -n 1 "$logs/$tag-secrets.log")"
     ;;
 esac
 owner=$(gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.GetNameOwner org.freedesktop.secrets 2> /dev/null)
@@ -99,7 +99,7 @@ case "$keyring" in
   none)
     if [ -n "$plain" ]; then ok "no Secret Service: the app keeps its keys unencrypted (0600) and says so"; else bad "no Secret Service, and the app didn't say where its keys went"; fi
     ;;
-  cancel | cancel-holds-key)
+  cancel | cancel-no-keyring | cancel-holds-key)
     info "prompts asked and cancelled: $(grep -c dismissed "$logs/$tag-secrets.log"); calls: $(grep -oE '[A-Za-z]+\.[A-Za-z]+ on' "$logs/$tag-secrets.log" | sort | uniq -c | tr -s ' ' | tr '\n' ',' | cut -c1-300)"
     info "the app said: $(grep -hE '^Channels' "$logs/$tag-app.log" | tr '\n' ' ' | cut -c1-400)"
     info "main.log: $(cat "$logs/$tag-main.log" 2> /dev/null | tr '\n' ' ' | cut -c1-600)"

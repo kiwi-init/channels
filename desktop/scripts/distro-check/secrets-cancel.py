@@ -5,6 +5,7 @@ from gi.repository import Gio, GLib
 BASE = "/org/freedesktop/secrets"
 LOGIN = f"{BASE}/collection/login"
 ITEM = f"{LOGIN}/1"
+DEFAULT = f"{BASE}/aliases/default"
 XML = """<node>
 <interface name="org.freedesktop.Secret.Service">
 <method name="OpenSession"><arg type="s" direction="in"/><arg type="v" direction="in"/><arg type="v" direction="out"/><arg type="o" direction="out"/></method>
@@ -52,9 +53,10 @@ LOCKED_ERROR = "org.freedesktop.Secret.Error.IsLocked"
 
 
 class Keyring:
-    def __init__(self, conn: Gio.DBusConnection, holds_key: bool) -> None:
+    def __init__(self, conn: Gio.DBusConnection, holds_key: bool, has_keyring: bool) -> None:
         self.conn = conn
         self.holds_key = holds_key
+        self.has_keyring = has_keyring
         self.prompts = 0
         self.sessions = 0
 
@@ -99,7 +101,7 @@ class Keyring:
         elif method == "GetSecret":
             inv.return_dbus_error(LOCKED_ERROR, "the item is locked")
         elif method == "ReadAlias":
-            inv.return_value(GLib.Variant("(o)", (LOGIN if params.unpack()[0] in ("default", "login") else "/",)))
+            inv.return_value(GLib.Variant("(o)", (LOGIN if self.has_keyring and params.unpack()[0] in ("default", "login") else "/",)))
         elif method == "Prompt":
             inv.return_value(None)
             self.log(f"prompt {path} dismissed")
@@ -111,7 +113,7 @@ class Keyring:
 
     def prop(self, conn: Gio.DBusConnection, sender: str, path: str, iface: str, name: str) -> GLib.Variant:
         if name == "Collections":
-            return GLib.Variant("ao", [LOGIN])
+            return GLib.Variant("ao", [LOGIN] if self.has_keyring else [])
         if name == "Items":
             return GLib.Variant("ao", self.matches({"service": "Channels"}))
         if name == "Locked":
@@ -125,12 +127,15 @@ class Keyring:
 
 def main() -> None:
     conn = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-    keyring = Keyring(conn, sys.argv[1:] == ["holds-key"])
+    mode = sys.argv[1] if len(sys.argv) > 1 else "locked"
+    keyring = Keyring(conn, mode == "holds-key", mode != "no-keyring")
     keyring.register(BASE, "org.freedesktop.Secret.Service")
-    keyring.register(LOGIN, "org.freedesktop.Secret.Collection")
-    keyring.register(ITEM, "org.freedesktop.Secret.Item")
+    if keyring.has_keyring:
+        keyring.register(LOGIN, "org.freedesktop.Secret.Collection")
+        keyring.register(DEFAULT, "org.freedesktop.Secret.Collection")
+        keyring.register(ITEM, "org.freedesktop.Secret.Item")
     Gio.bus_own_name_on_connection(conn, "org.freedesktop.secrets", Gio.BusNameOwnerFlags.NONE, None, None)
-    keyring.log("up, every prompt is cancelled")
+    keyring.log(f"up ({mode}), every prompt is cancelled")
     GLib.MainLoop().run()
 
 
