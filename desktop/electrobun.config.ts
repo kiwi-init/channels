@@ -20,7 +20,8 @@ export default {
     // CHANNELS_EB_RUNTIME=bun only lets `eb.ts prepare` fetch the Bun toolchain too.
     mainProcess: process.env.CHANNELS_EB_RUNTIME === "bun" ? "bun" : "cottontail",
     bun: { entrypoint: "src/main-eb.ts", define: { KIWI_EB_TEST: process.env.CHANNELS_EB_TEST === "1" ? "true" : "false", KIWI_EB_LIVEWIRE: livewire ? "true" : "false" } },
-    cottontail: { entrypoint: "src/main-eb.ts", define: { KIWI_EB_TEST: process.env.CHANNELS_EB_TEST === "1" ? "true" : "false", KIWI_EB_LIVEWIRE: livewire ? "true" : "false" } },
+    // Hutch's scan finds only [ffi, compression]; Bun.secrets (store-v2.ts) needs "secrets".
+    cottontail: { entrypoint: "src/main-eb.ts", capabilities: ["secrets"], define: { KIWI_EB_TEST: process.env.CHANNELS_EB_TEST === "1" ? "true" : "false", KIWI_EB_LIVEWIRE: livewire ? "true" : "false" } },
     views: { preload: { entrypoint: "src/preload-eb.ts" } },
     buildFolder: "release-eb/build",
     artifactFolder: "release-eb/artifacts",

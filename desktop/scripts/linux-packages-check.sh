@@ -10,7 +10,7 @@ bun "$here/appimage-squashfs.ts" .
 deb=$(ls Channels-*-linux-amd64.deb)
 dpkg-deb --field "$deb" Package Version Architecture Depends
 files=$(dpkg-deb --contents "$deb")
-for p in ./opt/ChannelsLivewire/bin/launcher ./opt/ChannelsLivewire/bin/electrobun-launcher ./opt/ChannelsLivewire/bin/bun ./opt/ChannelsLivewire/Resources/kiwi.js ./opt/ChannelsLivewire/Resources/app/bun/index.js ./opt/ChannelsLivewire/Resources/app/bun/keys.js ./opt/ChannelsLivewire/Resources/app/page/index.html ./opt/ChannelsLivewire/Resources/app/views/internal/assets ./usr/bin/channels-livewire ./usr/share/applications/channels-livewire.desktop ./usr/share/icons/hicolor/512x512/apps/channels-livewire.png; do
+for p in ./opt/ChannelsLivewire/bin/launcher ./opt/ChannelsLivewire/bin/electrobun-launcher ./opt/ChannelsLivewire/bin/cottontail ./opt/ChannelsLivewire/Resources/kiwi.js ./opt/ChannelsLivewire/Resources/app/bun/index.js ./opt/ChannelsLivewire/Resources/app/bun/keys.js ./opt/ChannelsLivewire/Resources/app/page/index.html ./opt/ChannelsLivewire/Resources/app/views/internal/assets ./usr/bin/channels-livewire ./usr/share/applications/channels-livewire.desktop ./usr/share/icons/hicolor/512x512/apps/channels-livewire.png; do
   [[ "$files" == *" $p"* ]] || { echo "$deb lacks $p"; exit 1; }
 done
 for p in ./opt/ChannelsLivewire/bin/bspatch ./opt/ChannelsLivewire/bin/zig-zstd ./opt/ChannelsLivewire/Resources/uninstall ./opt/ChannelsLivewire/ChannelsLivewire.desktop ./opt/ChannelsLivewire/Resources/app/views/internal/index.html; do
@@ -18,7 +18,7 @@ for p in ./opt/ChannelsLivewire/bin/bspatch ./opt/ChannelsLivewire/bin/zig-zstd 
 done
 img=$(ls Channels-*-linux-x86_64.AppImage)
 "./$img" --appimage-extract > /dev/null
-for p in AppRun channels-livewire.desktop channels-livewire.png ChannelsLivewire/bin/launcher ChannelsLivewire/bin/electrobun-launcher ChannelsLivewire/bin/bun ChannelsLivewire/Resources/kiwi.js ChannelsLivewire/Resources/app/bun/index.js ChannelsLivewire/Resources/app/bun/keys.js ChannelsLivewire/Resources/app/page/index.html ChannelsLivewire/Resources/app/views/internal/assets; do
+for p in AppRun channels-livewire.desktop channels-livewire.png ChannelsLivewire/bin/launcher ChannelsLivewire/bin/electrobun-launcher ChannelsLivewire/bin/cottontail ChannelsLivewire/Resources/kiwi.js ChannelsLivewire/Resources/app/bun/index.js ChannelsLivewire/Resources/app/bun/keys.js ChannelsLivewire/Resources/app/page/index.html ChannelsLivewire/Resources/app/views/internal/assets; do
   [ -e "squashfs-root/$p" ] || { echo "$img lacks $p"; exit 1; }
 done
 for p in ChannelsLivewire/bin/bspatch ChannelsLivewire/bin/zig-zstd ChannelsLivewire/Resources/uninstall ChannelsLivewire/ChannelsLivewire.desktop ChannelsLivewire/Resources/app/views/internal/index.html; do
