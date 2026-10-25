@@ -173,8 +173,13 @@ try {
   await owner.waitForURL(/#mc2-/);
   const channel = owner.url();
   const code = decodeURIComponent(new URL(channel).hash.slice(1));
-  /** The header's tabs on a phone; on a wide screen the sidebar is the navigation. */
+  /** The header's tabs on a phone; on a wide screen the toolbar's icons, and the conversations in the sidebar. Details covers the header, so it closes first. */
   const toTab = async (name: "Tasks" | "Agents" | "Conversation") => {
+    const details = owner.getByRole("complementary", { name: "Details" });
+    if (await details.isVisible()) {
+      await details.getByRole("button", { name: "Close details" }).click();
+      await details.waitFor({ state: "detached" });
+    }
     const tabs = owner.getByRole("navigation", { name: "Views of the channel" });
     if (await tabs.isVisible()) return tabs.getByRole("button", { name, exact: true }).click();
     if (name === "Tasks") {
