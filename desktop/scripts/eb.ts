@@ -36,6 +36,23 @@ const bad = mismatches(root, pin.files);
 if (bad.length) throw new Error(`eb: the pinned Hutch in ${root} changed: ${bad.join("; ")}`);
 
 const hutch = path.join(root, "bin", "hutch");
+// T892 spike: a Cottontail build still needs the Bun toolchain (offline builds
+// fail with ToolchainNotInstalledOffline), and prepare only fetches it for a Bun
+// main process, so prepare once as Bun first.
+if (process.argv[2] === "prepare") {
+  spawnSync(hutch, ["electrobun", "prepare"], {
+    stdio: "inherit",
+    cwd: desktop,
+    env: {
+      ...process.env,
+      CHANNELS_EB_RUNTIME: "bun",
+      ELECTROBUN_HUTCH_BINARY: hutch,
+      ELECTROBUN_RELEASES_BASE_URL: PINS.releasesBaseUrl,
+      HUTCH_DEFAULT_CLI: PINS.hutch.version,
+      HUTCH_DEFAULT_ELECTROBUN: PINS.electrobun,
+    },
+  });
+}
 const run = spawnSync(hutch, ["electrobun", ...process.argv.slice(2)], {
   stdio: "inherit",
   cwd: desktop,
