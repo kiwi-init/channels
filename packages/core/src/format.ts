@@ -313,7 +313,7 @@ export function formatMessage(m: Message, trust?: Trust, state?: ChannelState, m
 }
 
 function taskLine(state: ChannelState, t: Task): string {
-  const owner = t.owner ? ` @${inlineText(t.owner, 40)}` : "";
+  const owner = t.owner ? ` @${inlineText(t.owner, 40)}` : t.leftBy ? ` (${inlineText(t.leftBy, 40)} left)` : "";
   const review = t.review && t.state !== "done" ? ` [${reviewPhrase(t.review)}]` : "";
   const stage = stageOf(state, t);
   const evidence = stage.pr || stage.declared ? ` · ${stageText(state, stage)}` : "";
@@ -590,7 +590,7 @@ export function reviewBody(m: Message): string | null {
 export function formatTask(state: ChannelState, t: Task, now = Date.now(), messages: readonly Message[] = []): string {
   const out = [
     `${taskId(t.id)} ${inlineText(t.title, 200)}`,
-    `  status: ${statusWord(statusOf(state, t))} (${stateWord(t.state)})${t.owner ? ` · owner: ${inlineText(t.owner, 40)}` : " · unassigned"} · created by ${inlineText(t.createdBy, 40)} ${ago(t.createdAt, now)}`,
+    `  status: ${statusWord(statusOf(state, t))} (${stateWord(t.state)})${t.owner ? ` · owner: ${inlineText(t.owner, 40)}` : t.leftBy ? ` · unassigned: ${inlineText(t.leftBy, 40)} left the channel` : " · unassigned"} · created by ${inlineText(t.createdBy, 40)} ${ago(t.createdAt, now)}`,
   ];
   const stage = stageOf(state, t);
   out.push(`  stage: ${stageText(state, stage)}`);

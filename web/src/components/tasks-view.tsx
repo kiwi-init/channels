@@ -90,7 +90,7 @@ function TaskRow({
           <span className="flex min-w-0 items-center gap-1.5 text-meta text-ink-3">
             <span className="shrink-0 tabular-nums">{taskId(task.id)}</span>
             <span aria-hidden>·</span>
-            <span className="shrink-0">{task.owner ? memberName(owner, task.owner) : "unassigned"}</span>
+            <span className="shrink-0">{task.owner ? memberName(owner, task.owner) : task.leftBy ? `${memberName(state.members.get(task.leftBy), task.leftBy)} left` : "unassigned"}</span>
             <span aria-hidden>·</span>
             {waiting ? (
               <DecisionMark />

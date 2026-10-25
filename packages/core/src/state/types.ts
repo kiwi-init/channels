@@ -120,6 +120,7 @@ export interface Task {
   ask?: number;
   posters?: string[];
   archived?: boolean;
+  leftBy?: string;
 }
 
 export interface AskHead {
