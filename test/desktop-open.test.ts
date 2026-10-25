@@ -31,12 +31,12 @@ const KIWI_ENV = {
   KIWI_KEY_FD: "3",
 };
 
-function fakeLaunch(fail = false) {
+function fakeLaunch(fail = false, missing: readonly string[] = fail ? ["xdg-open", "gio"] : []) {
   const calls: { cmd: string; args: string[]; env: Record<string, string>; detached: boolean }[] = [];
   const launch: Launch = (cmd, args, opts) => {
     calls.push({ cmd, args, env: opts.env, detached: opts.detached });
     const child = Object.assign(new EventEmitter(), { unref: () => {} });
-    queueMicrotask(() => (fail ? child.emit("error", new Error("ENOENT")) : child.emit("spawn")));
+    queueMicrotask(() => (missing.includes(cmd) ? child.emit("error", new Error("ENOENT")) : child.emit("spawn")));
     return child;
   };
   return { launch, calls };
@@ -55,11 +55,23 @@ describe("links leave the app for the person's own browser", () => {
     expect(fallback).toEqual([]);
   });
 
-  test("on Linux without xdg-open, the shell's own opener still opens it", async () => {
+  test("on Linux without xdg-open, gio opens it, each with the link as one argument and no shell, never through Electrobun's opener (Livewire #236, T839)", async () => {
+    const { launch, calls } = fakeLaunch(false, ["xdg-open"]);
+    const fallback: string[] = [];
+    const link = web("https://example.com/b/$(touch%20x)'`");
+    await openInBrowser(link, async (u) => void fallback.push(u), "linux", KIWI_ENV, launch);
+    expect(calls.map((c) => [c.cmd, ...c.args])).toEqual([
+      ["xdg-open", link],
+      ["gio", "open", "--", link],
+    ]);
+    expect(fallback).toEqual([]);
+  });
+
+  test("on Linux with neither xdg-open nor gio, the link fails to open rather than reach Electrobun's opener", async () => {
     const { launch } = fakeLaunch(true);
     const fallback: string[] = [];
-    await openInBrowser(web("https://example.com/b"), async (u) => void fallback.push(u), "linux", KIWI_ENV, launch);
-    expect(fallback).toEqual(["https://example.com/b"]);
+    await expect(openInBrowser(web("https://example.com/c"), async (u) => void fallback.push(u), "linux", KIWI_ENV, launch)).rejects.toThrow("neither xdg-open nor gio");
+    expect(fallback).toEqual([]);
   });
 
   test("on a Mac or Windows, the shell's own opener opens it", async () => {
