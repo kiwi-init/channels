@@ -45,7 +45,7 @@ chmod +x "$extract/Channels.AppImage"
 [ -x "$extract/squashfs-root/Channels/bin/launcher" ] || { bad "the AppImage didn't extract: no Channels/bin/launcher in it"; exit 1; }
 missing=""
 for f in "$extract"/squashfs-root/Channels/bin/*.so "$extract"/squashfs-root/Channels/bin/bun "$extract"/squashfs-root/Channels/bin/electrobun-launcher "$extract"/squashfs-root/Channels/bin/launcher; do
-  m=$(ldd "$f" 2> /dev/null | awk '/not found/ { print $1 }' | tr '\n' ' ')
+  m=$(ldd "$f" 2> /dev/null | awk '/not found/ { print $1 }' | while read -r l; do [ -e "$extract/squashfs-root/Channels/bin/$l" ] || echo "$l"; done | tr '\n' ' ')
   [ -n "$m" ] && missing+="$(basename "$f"): $m; "
 done
 if [ -n "$missing" ]; then bad "libraries the app can't find on a stock install: $missing"; else ok "every library the app's binaries link is there on a stock install"; fi
