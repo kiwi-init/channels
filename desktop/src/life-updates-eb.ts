@@ -1,4 +1,4 @@
-import type { BrowserWindow } from "electrobun/main";
+import Electrobun, { type BrowserWindow } from "electrobun/main";
 
 import { startAppLife } from "./app-life-eb.ts";
 import { mark } from "./eb-startup.ts";
@@ -25,4 +25,5 @@ export function startLife(win: BrowserWindow, release: () => void): void {
     tray.refresh(u);
   });
   mark("updates");
+  Electrobun.events.on("accent-color-changed", (e) => ebHost.push("accent", e.data.color));
 }

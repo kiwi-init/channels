@@ -7,7 +7,7 @@ import { checkForUpdate, updateState } from "../updater.ts";
 
 export function miscCalls(
   host: Host,
-): Serves<"getUpdate" | "installUpdate" | "checkUpdate" | "notify" | "openExternal" | "getDeepLink" | "takeDroppedFiles" | "takePastedImage" | "setBadge" | "setAppearance"> {
+): Serves<"getUpdate" | "installUpdate" | "checkUpdate" | "notify" | "openExternal" | "getDeepLink" | "takeDroppedFiles" | "takePastedImage" | "setBadge" | "setAppearance" | "getAccentColor"> {
   return {
     getUpdate: () => updateState(),
     installUpdate: () => host.restartToUpdate(),
@@ -29,5 +29,6 @@ export function miscCalls(
       if (appearance !== "system" && appearance !== "light" && appearance !== "dark") throw new Error("an appearance is system, light or dark");
       host.appearance(appearance);
     },
+    getAccentColor: () => host.accentColor(),
   };
 }

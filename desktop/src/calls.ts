@@ -15,6 +15,7 @@ export interface Pushes {
   deepLink: string;
   textStep: TextStep;
   frost: boolean;
+  accent: string | null;
 }
 
 export type Push = keyof Pushes;
@@ -76,6 +77,8 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     onDeepLink: (cb) => t.listen("deepLink", cb),
     onTextStep: (cb) => t.listen("textStep", cb),
     onFrost: (cb) => t.listen("frost", cb),
+    getAccentColor: () => t.call("getAccentColor"),
+    onAccent: (cb) => t.listen("accent", cb),
     setPersonalities: (list) => t.call("setPersonalities", list),
     seatPlaces: () => t.call("seatPlaces"),
     showSeat: (seat) => t.call("showSeat", seat),
