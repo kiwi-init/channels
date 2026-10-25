@@ -28,7 +28,7 @@ else
   name=$(xprop -id "$win" _NET_WM_NAME)
   echo "window: $class; $name"
   [ "$class" = 'WM_CLASS(STRING) = "ChannelsLivewire", "ChannelsLivewire"' ] || problems+=("the window's $class isn't ChannelsLivewire, ChannelsLivewire (the .desktop entry's StartupWMClass)")
-  [[ "$name" == *'"Channels"'* ]] || problems+=("the window is titled $name, not Channels")
+  [[ "$name" == *'"Channels Livewire"'* ]] || problems+=("the window is titled $name, not Channels Livewire")
   sleep 5
   eval "$(xdotool getwindowgeometry --shell "$win")"
   read -r sw sh < <(xdotool getdisplaygeometry)

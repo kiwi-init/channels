@@ -15,30 +15,30 @@ export type AppMenuItem = { role: string; label?: string; accelerator?: string }
 
 const SEPARATOR: Separator = { type: "separator" };
 
-export function trayItems(update: UpdateState | null): TrayItem[] {
+export function trayItems(update: UpdateState | null, name: string = "Channels"): TrayItem[] {
   return [
-    { type: "normal", label: "Open Channels", action: "open" },
+    { type: "normal", label: `Open ${name}`, action: "open" },
     ...(update?.state === "ready" ? [{ type: "normal" as const, label: `Restart to update to ${update.version}`, action: "restart" as const }] : []),
     SEPARATOR,
     { type: "normal", label: "Quit", action: "quit" },
   ];
 }
 
-export function appMenu(platform: NodeJS.Platform): AppMenuItem[] {
+export function appMenu(platform: NodeJS.Platform, name: string = "Channels"): AppMenuItem[] {
   const roles = (...names: (string | null)[]): AppMenuItem[] => names.map((role) => (role ? { role } : SEPARATOR));
   return [
     ...(platform === "darwin"
       ? [
           {
-            label: "Channels",
+            label: name,
             submenu: [
-              { role: "about", label: "About Channels" },
+              { role: "about", label: `About ${name}` },
               SEPARATOR,
-              { role: "hide", label: "Hide Channels", accelerator: "h" },
+              { role: "hide", label: `Hide ${name}`, accelerator: "h" },
               { role: "hideOthers", accelerator: "Cmd+Alt+h" },
               { role: "showAll" },
               SEPARATOR,
-              { role: "quit", label: "Quit Channels", accelerator: "q" },
+              { role: "quit", label: `Quit ${name}`, accelerator: "q" },
             ],
           },
         ]
