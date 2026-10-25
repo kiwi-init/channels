@@ -25,7 +25,7 @@ if [ -z "$toplevel" ]; then
 else
   echo "Wayland window: $(grep -oE 'xdg_toplevel[@#][0-9]+\.set_(app_id|title)\("[^"]*"\)' "$out" | sort -u | tr '\n' ' ')"
   sleep 5
-  web=$(pgrep -s "$pid" -f WebKitWebProcess | head -n 1)
+  web=$(pgrep -s "$pid" -x WebKitWebProces | head -n 1)
   [ -n "$web" ] || problems+=("no WebKitWebProcess of the app's own is running 5s after its window opened")
   if [ -n "${DISPLAY:-}" ]; then
     x11=$(xdotool search --class '^Channels$' 2> /dev/null | head -n 1)

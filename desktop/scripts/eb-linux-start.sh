@@ -37,7 +37,7 @@ else
   else
     echo "window size: ${WIDTH}x${HEIGHT} on a ${sw}x${sh} screen"
   fi
-  web=$(pgrep -s "$pid" -f WebKitWebProcess | head -n 1)
+  web=$(pgrep -s "$pid" -x WebKitWebProces | head -n 1)
   if [ -z "$web" ]; then
     problems+=("no WebKitWebProcess of the app's own is running 5s after its window opened")
   else
