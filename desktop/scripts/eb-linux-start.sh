@@ -79,6 +79,24 @@ fi
 if grep -q "navigation rules didn't take effect" "$out"; then problems+=("the rules canary wasn't reported refused on WebKitGTK, so the app quit"); fi
 if grep -qE "download handler wasn't found|navigation handler wasn't found" "$out"; then problems+=("libkiwi-shell's download or navigation guard didn't install, so the app refused its window"); fi
 
+probe() {
+  local h
+  h=$(mktemp -d)
+  HOME="$h" setsid "$@" > "$h/out" 2>&1 &
+  local p=$!
+  sleep 10
+  echo "kiwi-probe: $*"
+  ps -e -o pid=,ppid=,sid=,comm= --forest | awk -v s="$p" '$3 == s' | sed 's/^/kiwi-probe:   /'
+  kill -TERM -- "-$p" 2> /dev/null
+  sleep 3
+  kill -KILL -- "-$p" 2> /dev/null
+  rm -rf "$h"
+}
+if [ "$want" = sandboxed ] && [ -x /opt/Channels/bin/electrobun-launcher ] && [ "$launcher" = /opt/Channels/bin/launcher ]; then
+  probe /opt/Channels/bin/electrobun-launcher
+  probe /opt/Channels/bin/bun /opt/Channels/Resources/main.js
+fi
+
 if [ ${#problems[@]} -gt 0 ]; then
   echo "the app's output:"
   [ -z "${tree:-}" ] || printf 'its processes (pid, parent, session):\n%s\n' "$tree"
