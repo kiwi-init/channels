@@ -564,6 +564,7 @@ jobs:
       - "desktop/native/linux/**"
       - "desktop/package.json"
       - "desktop/scripts/appimage-squashfs.ts"
+      - "desktop/scripts/distro-check/**"
       - "desktop/scripts/eb-drive.ts"
       - "desktop/scripts/eb-driver-check.ts"
       - "desktop/scripts/eb-linux-start.sh"
@@ -582,6 +583,8 @@ jobs:
       - "desktop/scripts/smoke-eb.ts"
       - "desktop/scripts/wayland-check.ts"
       - "desktop/scripts/wayland-check/**"
+    parts:
+      - "desktop-distros"
     description: >-
       On two runners at once, Ubuntu 24.04 and 26.04 (a matrix, each part saving its own jev-ci pass;
       T2119: on 24.04 AppArmor's unprivileged user-namespace restriction keeps bubblewrap from setting up its loopback, so WebKitGTK's sandbox can't start there)
@@ -607,7 +610,13 @@ jobs:
       Each image's packages are kept as linux-packages-<image> for 3 days.
       Then desktop/scripts/wayland-check/kwin.sh runs the test app in a headless KWin with no XWayland (kwin_wayland --virtual, DISPLAY unset, failing if an Xwayland ran) beside a GTK helper app that is a native Wayland client, driving both with real input through KWin's fake input (desktop/scripts/wayland-check/kwin-input.c) and placing them with KWin scripting (kwin.py), and desktop/scripts/wayland-check.ts fails unless text pastes into the composer from the helper, an image the helper copies pastes into the composer as an attachment (pasted.png, through main and kiwi_take_paste, since WebKitGTK's paste event carries nothing, T896), the composer's Ctrl+C and a message's Copy text button reach the helper, an image the page writes with navigator.clipboard.write reaches it, a PNG dragged from the helper onto the composer is attached (WebKitGTK hands the page a dropped file only as a file URL, so desktop/native/linux/kiwi-shell.c keeps the dropped paths and the composer takes them through takeDroppedFiles, T895), and a file dropped elsewhere leaves the page where it was.
       Then desktop/native/linux/kiwi-badge-test.c, on its own session bus, fails unless kiwi_badge sends the Unity LauncherEntry Update that Plasma's task manager and GNOME's docks read, for application://channels-desktop.desktop: a count of 3 shown, and 0 or a negative count hidden at 0 (the page's news count, T971).
-
+      Its part desktop / distros (T960) takes the AppImage built on 24.04 into fedora:44 and archlinux:latest containers (privileged, so bwrap gets the unprivileged user namespaces Fedora and Arch allow) and runs desktop/scripts/distro-check/check.sh, which fails on any FAIL line it collects.
+      With only the packages Channels names installed (no libayatana-appindicator), ldd must find every library the app's binaries link, in the system or shipped beside them in Channels/bin (libasar.so, which libNativeWrapper.so links).
+      Under headless weston on native Wayland, desktop/scripts/distro-check/session.sh starts the AppImage with --appimage-extract-and-run, through AppRun and kiwi-launcher, three times: with no Secret Service and no ayatana, then with ayatana and GNOME Keyring, then with KWallet's Secret Service (ksecretd, its wallet made and opened at login as Plasma's kwallet-pam does, through desktop/scripts/distro-check/kwallet-login.py).
+      Each start must open an xdg_toplevel (seen through weston-debug proto) within 60 s, keep running 15 s, run its WebKitWebProcess with a bwrap among its parents, register a tray icon with a StatusNotifierWatcher only when ayatana is installed, keep its store key in the Secret Service when one runs (secret-tool search service Channels) or say in main.log that it keeps it unencrypted when none does, and stop (exited processes the container's init leaves unreaped don't count) within 10 s of SIGTERM.
+      kiwi-tray-test (with and without ayatana), kiwi-scheme-test and kiwi-notify-test are built in each container and run against the AppImage's libkiwi-shell.so.
+      A run dispatched with update_from=VERSION also runs desktop/scripts/distro-check/update.sh: that release's AppImage must stage the latest release's AppImage matching its SHA256SUMS, replace itself with it on quitting, and the updated AppImage must start.
+      Its shards save desktop-linux's pass marker as 3of4 and 4of4, so desktop-linux counts as passed only once both distros pass too.
   cli-macos:
     name: cli / macos
     inputs:
