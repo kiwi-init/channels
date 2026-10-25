@@ -5,7 +5,9 @@ import type { Host } from "../host.ts";
 import { openInBrowser } from "../open.ts";
 import { checkForUpdate, updateState } from "../updater.ts";
 
-export function miscCalls(host: Host): Serves<"getUpdate" | "installUpdate" | "checkUpdate" | "notify" | "openExternal" | "getDeepLink" | "takeDroppedFiles" | "takePastedImage" | "setBadge"> {
+export function miscCalls(
+  host: Host,
+): Serves<"getUpdate" | "installUpdate" | "checkUpdate" | "notify" | "openExternal" | "getDeepLink" | "takeDroppedFiles" | "takePastedImage" | "setBadge" | "setAppearance"> {
   return {
     getUpdate: () => updateState(),
     installUpdate: () => host.restartToUpdate(),
@@ -22,6 +24,10 @@ export function miscCalls(host: Host): Serves<"getUpdate" | "installUpdate" | "c
     setBadge: (count: number) => {
       if (!Number.isSafeInteger(count) || count < 0) throw new Error("a badge is a count of zero or more");
       host.badge(count);
+    },
+    setAppearance: (appearance: string) => {
+      if (appearance !== "system" && appearance !== "light" && appearance !== "dark") throw new Error("an appearance is system, light or dark");
+      host.appearance(appearance);
     },
   };
 }
