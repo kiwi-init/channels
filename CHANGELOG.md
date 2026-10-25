@@ -2,6 +2,11 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.10.3 — 2026-10-25
+
+- **Tiling, scale and closing on wlroots, with screenshots (headless sway)** ([#975](https://github.com/kiwi-init/channels/pull/975))
+- **On Linux, links open through xdg-open or gio directly, never Electrobun's opener (T990)** ([#976](https://github.com/kiwi-init/channels/pull/976))
+
 ## 2026.10.2 — 2026-10-25
 
 - **One shell, and the page floats on it, as in Interlinked (T297)** ([#973](https://github.com/kiwi-init/channels/pull/973))
