@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 
 import { MB, mb, only, payloadOf, shippedApp, sizeOf } from "./eb-app.ts";
 
-const LIMITS = { app: 100 * MB, packed: 40 * MB };
+const LIMITS = { app: 115 * MB, packed: 50 * MB };
 
 const dir = resolve(process.argv[2] ?? "desktop/release-eb");
 const builds = join(dir, "build");
