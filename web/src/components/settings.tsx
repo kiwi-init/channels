@@ -16,7 +16,7 @@ import {
 import { useOwnPersonalities } from "@/lib/personalities"
 import { Personalities } from "./personalities"
 
-import { setAppearance, setTextSize, useAppearance, useTextSize, type Appearance, type TextSize } from "@/lib/theme"
+import { setAppearance, setTextSize, setTint, TINTS, tintSwatch, useAppearance, useSystemAccent, useTextSize, useTint, type Appearance, type TextSize } from "@/lib/theme"
 import { setAccessibilityOption, useAccessibilityOption } from "@/lib/accessibility"
 import { cx } from "@/lib/utils"
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
@@ -68,6 +68,36 @@ function Choice<T extends string>({
             className={cx("h-7 rounded-row px-3 text-ui font-medium transition-colors disabled:opacity-40", value === o.value ? SEGMENT_ON : SEGMENT_OFF)}
           >
             {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function TintPicker() {
+  const tint = useTint()
+  const accent = useSystemAccent()
+  return (
+    <div data-item className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-ui font-medium text-ink">Tint</p>
+        <p className="text-meta leading-snug text-ink-3">In dark mode, the shell and the accent take this color.</p>
+      </div>
+      <div role="radiogroup" aria-label="Tint" className="flex items-center gap-1.5">
+        {TINTS.map((t) => (
+          <button
+            key={t.value}
+            type="button"
+            role="radio"
+            aria-checked={tint === t.value}
+            aria-label={t.label}
+            title={t.label}
+            data-tint-option={t.value}
+            onClick={() => setTint(t.value)}
+            className={cx("grid size-7 place-items-center rounded-full border-[1.5px] transition-colors", tint === t.value ? "border-ink" : "border-transparent hover:border-line")}
+          >
+            <span className="size-[18px] rounded-full border border-black/15" style={{ background: tintSwatch(t.value, accent) }} />
           </button>
         ))}
       </div>
@@ -683,6 +713,7 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
                   { value: "dark", label: "Dark" },
                 ]}
               />
+              <TintPicker />
               <Choice<TextSize>
                 label="Text size"
                 value={size}

@@ -32,9 +32,11 @@ reads as meant.
   the side, unless `lib/theme.ts` set `data-theme` because the person chose
   light or dark. `system` leaves `data-theme` unset so the media query
   decides.
-- There is one accent, not a pack: Apple blue. A theme switcher (system /
-  light / dark) and a text-size switcher live in Settings. No accent
-  switcher.
+- In light mode the accent is Apple blue. In dark mode the Tint (Ink,
+  Violet, Moss, Amber, Pine or Accent Color, as Interlinked has them) sets
+  the accent and washes the shell at 8%; Ink, the default, keeps the shell
+  clear. Theme, Tint and text size live in Settings (Channels Livewire,
+  T1278).
 - New surface bootstrap: copy the `index.css` `:root` + `[data-theme]` +
   `@theme inline` blocks, plus `design-tokens.ts`, `fonts.ts`,
   `accessibility.ts`, `kit.tsx`.
@@ -46,8 +48,8 @@ Light / dark are the two sides of each `light-dark()` in `index.css`:
 | Token | Light | Dark |
 |---|---|---|
 | `canvas` (conversation) | `#ffffff` | `#161618` |
-| `rail` (the window's sidebar and the phone's channel list, a step darker) | `#f2f2f5` | `#000000` |
-| `shell` (the window surface: the rail, or the Mac's vibrancy under `html[data-frost]`, with a grey wash in dark) | the rail / `transparent` | the rail / `rgb(40 40 44 / 0.55)` |
+| `rail` (the window's sidebar and the phone's channel list, a step darker) | `#f2f2f5` | `#000000`, with the tint at 8% |
+| `shell` (the window surface: the rail, or the Mac's vibrancy under `html[data-frost]`, with a grey wash in dark) | the rail / `transparent` | the rail / `rgb(40 40 44 / 0.55)`, with the tint at 8% |
 | `well` (a field's quiet solid fill) | `#f2f2f5` | `#232327` |
 | `chosen` (a selected row's quiet fill) | ink at 12% | white at 12% |
 | `raised` (cards, popovers) | the canvas | the canvas |
@@ -55,7 +57,7 @@ Light / dark are the two sides of each `light-dark()` in `index.css`:
 | `ink` | `#0f0f11` | `#f3f3f5` |
 | `ink-2` | `#4a4a52` | `#bcbcc3` |
 | `ink-3` (quiet floor, still 4.5:1) | `#6b6b73` | `#8f8f97` |
-| `accent` (Apple system blue) | `#007aff` | `#0a84ff` |
+| `accent` (Apple system blue; in dark, the tint's hue at 46% lightness, saturation up to 75%, and text and links at 72%) | `#007aff` | the tint's |
 | `accent-ink` (on the accent) | `#ffffff` | `#ffffff` |
 | `alert` | `#d1342a` | `#ff6259` |
 | `alert-fill` (under white text) | `#d1342a` | `#d1342a` |

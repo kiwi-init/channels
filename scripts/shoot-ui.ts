@@ -3,7 +3,7 @@
 // first (a lead and an agent working a task, messages, a thread, a task's conversation, a
 // direct one, notes, a pending join request), the same way scripts/smoke-ui.ts walks the flows.
 //
-//   bun run web:build && bun scripts/shoot-ui.ts [outdir] [--only channel,task-thread,…] [--wide] [--phone channel,tasks] [--theme dark|light] [--channels 20] [--browser chromium|webkit]
+//   bun run web:build && bun scripts/shoot-ui.ts [outdir] [--only channel,task-thread,…] [--wide] [--phone channel,tasks] [--theme dark|light] [--channels 20] [--browser chromium|webkit] [--tint pine] [--frost]
 //
 // Shots are taken at 2x (Retina), as most people see the dashboard. --only keeps the screens whose
 // name contains one of the words (and skips the signed-out ones unless named), --wide skips the phone
@@ -31,6 +31,8 @@ const flag = (name: string) => {
 };
 const only = flag("--only")?.split(",").filter(Boolean);
 const themeOnly = flag("--theme");
+const tint = flag("--tint") ?? "";
+const frostStandIn = args.includes("--frost") ? (args.splice(args.indexOf("--frost"), 1), true) : false;
 const moreChannels = Number(flag("--channels") ?? 0);
 const engine = flag("--browser") ?? "chromium";
 if (engine !== "chromium" && engine !== "webkit") throw new Error(`--browser is chromium or webkit, not ${engine}`);
@@ -99,8 +101,24 @@ async function passkey(page: Page) {
   } as never);
 }
 
+const frosted = new WeakSet<Page>();
+
 async function setTheme(page: Page, theme: "dark" | "light") {
-  await page.evaluate((t) => localStorage.setItem("mc.appearance", t), theme);
+  await page.evaluate(
+    ([t, chosen]) => {
+      localStorage.setItem("mc.appearance", t);
+      if (chosen) localStorage.setItem("mc.tint", chosen);
+      else localStorage.removeItem("mc.tint");
+    },
+    [theme, tint] as const,
+  );
+  if (frostStandIn && !frosted.has(page)) {
+    frosted.add(page);
+    await page.addInitScript(() => {
+      document.documentElement.dataset.frost = "";
+      document.documentElement.style.background = "linear-gradient(135deg, #59606b, #8a8076)";
+    });
+  }
   await page.reload();
   await page.waitForLoadState("networkidle");
 }

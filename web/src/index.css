@@ -26,7 +26,7 @@
 .dark-stage {
   color-scheme: light dark;
   --canvas: light-dark(#ffffff, #161618);
-  --rail: light-dark(#f2f2f5, #000000);
+  --rail: light-dark(#f2f2f5, color-mix(in srgb, var(--tint-glass, #000000) 8%, #000000));
   --raised: var(--canvas);
   --field: var(--canvas);
   --ink: light-dark(#0f0f11, #f3f3f5);
@@ -38,12 +38,12 @@
   --wash-2: light-dark(rgba(15, 15, 17, 0.075), rgba(255, 255, 255, 0.09));
   /* Apple system blue. White on the light accent is ~4:1, Apple's own choice and just under AA 4.5
      for small text; as text on the dark canvas the dark side clears 4.5:1. */
-  --accent: light-dark(#007aff, #0a84ff);
+  --accent: light-dark(#007aff, var(--tint-accent, #0a84ff));
   --accent-ink: #ffffff;
-  --accent-text: light-dark(#007aff, #0a84ff);
-  --accent-wash: light-dark(rgba(0, 122, 255, 0.1), rgba(10, 132, 255, 0.18));
-  --link: light-dark(#007aff, #0a84ff);
-  --ring: light-dark(rgba(0, 122, 255, 0.55), rgba(10, 132, 255, 0.6));
+  --accent-text: light-dark(#007aff, var(--tint-text, #0a84ff));
+  --accent-wash: light-dark(rgba(0, 122, 255, 0.1), var(--tint-wash, rgba(10, 132, 255, 0.18)));
+  --link: light-dark(#007aff, var(--tint-text, #0a84ff));
+  --ring: light-dark(rgba(0, 122, 255, 0.55), var(--tint-ring, rgba(10, 132, 255, 0.6)));
   --alert: light-dark(#d1342a, #ff6259);
   --alert-fill: #d1342a;
   --decide: light-dark(#a35a00, #f5b041);
@@ -111,6 +111,10 @@
 
 html[data-frost] {
   --shell: light-dark(transparent, rgb(40 40 44 / 0.55));
+}
+
+html[data-frost][data-glass] {
+  --shell: light-dark(transparent, color-mix(in srgb, var(--tint-glass) 8%, rgb(40 40 44 / 0.55)));
 }
 
 /* In the desktop app on a Mac (main.tsx sets data-shell): the traffic lights sit on the list's header. */
