@@ -574,6 +574,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                       setTab("tasks")
                       setSearch(null)
                     }}
+                    reviewing={[...state.tasks.values()].some((t) => !!t.review && t.state !== "done")}
                   />
 
                   {pausing && hold && <HoldDialog onClose={() => setPausing(false)} onSave={(note) => hold(true, note)} />}

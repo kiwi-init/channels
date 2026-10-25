@@ -3,7 +3,7 @@ import type { Dispatch, ReactNode, SetStateAction } from "react"
 
 import type { ChannelIcon } from "@kiwi/core/protocol.ts"
 
-import { TABS, VIEWS, type Tab, type View } from "@/lib/views"
+import { TABS, type Tab, type View } from "@/lib/views"
 import { useSidebarHidden } from "@/lib/sidebar-hidden"
 import { cx } from "@/lib/utils"
 import { ChannelIconTile } from "../channel-icon"
@@ -31,6 +31,7 @@ export function Header({
   view,
   counts,
   onView,
+  reviewing,
 }: {
   headRef: (el: HTMLElement | null) => void
   onBack: () => void
@@ -51,10 +52,12 @@ export function Header({
   view: View
   counts: Record<View, number>
   onView: (v: View) => void
+  reviewing: boolean
 }) {
   const wide = useSidebarHidden()
   const place = wideHeading !== face.title ? wideHeading : null
   const toggle = (t: Tab) => onTab(tab === t ? "conversation" : t)
+  const views: [View, string][] = [["everything", "Everything"], ["needs", "Needs you"], ["doing", "Working"], ...(reviewing ? ([["review", "In review"]] as [View, string][]) : []), ["done", "Done"]]
   return (
     <header ref={headRef} className="absolute inset-x-0 top-0 z-20 bg-canvas">
       <div className={cx("drag relative hidden h-(--card-head) items-center gap-(--step) px-(--step) md:flex", wide && "shell-mac:pl-[calc(var(--lights-w)-var(--step))]")}>
@@ -64,7 +67,7 @@ export function Header({
         </span>
         {tab === "tasks" ? (
           <nav aria-label="Views" className="no-drag flex h-(--control) min-w-0 shrink items-center gap-0.5 rounded-full bg-(--well) p-0.5">
-            {VIEWS.map(([v, label]) => (
+            {views.map(([v, label]) => (
               <button
                 key={v}
                 type="button"
