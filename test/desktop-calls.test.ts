@@ -80,6 +80,7 @@ describe("window.kiwi on any transport", () => {
       bridge.onGithubCode((c) => heard.push(`githubCode ${c.code}`)),
       bridge.onDeepLink((url) => heard.push(`deepLink ${url}`)),
       bridge.onTextStep((step) => heard.push(`textStep ${step}`)),
+      bridge.onFrost((on) => heard.push(`frost ${on}`)),
     ];
     const moved = { ...snapshot, relayUrl: "https://moved.example" };
     bus.emit("store", moved);
@@ -87,12 +88,13 @@ describe("window.kiwi on any transport", () => {
     bus.emit("githubCode", { code: "ABCD-1234", url: "https://github.com/login/device" });
     bus.emit("deepLink", "kiwi://join/mc2-abc");
     bus.emit("textStep", "bigger");
-    expect(heard).toEqual(["store https://moved.example", "update 0.27.0", "githubCode ABCD-1234", "deepLink kiwi://join/mc2-abc", "textStep bigger"]);
+    bus.emit("frost", false);
+    expect(heard).toEqual(["store https://moved.example", "update 0.27.0", "githubCode ABCD-1234", "deepLink kiwi://join/mc2-abc", "textStep bigger", "frost false"]);
     expect(bridge.getSnapshot()).toBe(moved);
     expect(bridge.relayUrl).toBe("https://relay.example");
     for (const off of offs) off();
     bus.emit("deepLink", "kiwi://join/mc2-later");
-    expect(heard).toHaveLength(5);
+    expect(heard).toHaveLength(6);
     expect(bus.subs.get("store")?.size).toBe(1);
   });
 });

@@ -21,24 +21,27 @@ export const windowLook = dlopen(shellPath, { kiwi_window_look: { args: [FFIType
 
 const frostShell = mac
   ? dlopen(shellPath, {
-      kiwi_window_frost: { args: [FFIType.ptr], returns: FFIType.bool },
-      kiwi_look_setting: { args: [FFIType.ptr, FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
+      kiwi_window_frost: { args: [FFIType.ptr, FFIType.function], returns: FFIType.bool },
+      kiwi_frost_allowed: { args: [], returns: FFIType.bool },
+      kiwi_frost_solid_for_test: { args: [FFIType.bool], returns: FFIType.void },
       kiwi_window_appearance: { args: [FFIType.ptr, FFIType.i32], returns: FFIType.void },
       kiwi_window_looks: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
     }).symbols
   : null;
 
-export const frostWindow = (win: Pointer): boolean => frostShell?.kiwi_window_frost(win) ?? false;
+let frostChanges: JSCallback | null = null;
+
+export function frostWindow(win: Pointer, changed: (on: boolean) => void): boolean {
+  if (!frostShell) return false;
+  frostChanges = new JSCallback((on: boolean) => changed(on), { args: ["bool"], returns: "void", threadsafe: true });
+  return frostShell.kiwi_window_frost(win, frostChanges.ptr);
+}
+
+export const frostAllowed = (): boolean => frostShell?.kiwi_frost_allowed() ?? false;
+
+export const solidForTest = (solid: boolean): void => void frostShell?.kiwi_frost_solid_for_test(solid);
 
 export const windowAppearance = (win: Pointer, appearance: number): void => void frostShell?.kiwi_window_appearance(win, appearance);
-
-const settingBuffer = new Uint8Array(256);
-
-export function lookSetting(key: string): string {
-  if (!frostShell) return "";
-  const n = Number(frostShell.kiwi_look_setting(ptr(cString(key)), ptr(settingBuffer), settingBuffer.length));
-  return n > 0 && n < settingBuffer.length ? new TextDecoder().decode(settingBuffer.subarray(0, n)) : "";
-}
 
 const looksBuffer = new Uint8Array(64);
 

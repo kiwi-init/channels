@@ -298,7 +298,7 @@ jobs:
         if: ${{ !cancelled() }}
         timeout-minutes: 5
         run: bun desktop/scripts/eb-frame-check.ts desktop/release-eb/build/dev-macos-*/*.app
-      - name: with the frost switched on, the sidebar material sits behind a clear page and follows the page's theme
+      - name: the sidebar material sits behind a clear page, follows the page's theme, and turns solid under Reduce Transparency
         if: ${{ !cancelled() }}
         timeout-minutes: 5
         run: bun desktop/scripts/eb-frost-check.ts desktop/release-eb/build/dev-macos-*/*.app

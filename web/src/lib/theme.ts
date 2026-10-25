@@ -24,6 +24,11 @@ function apply(a: Appearance) {
     .catch(() => undefined)
 }
 
+export function showFrost(on: boolean) {
+  if (on) document.documentElement.dataset.frost = ""
+  else delete document.documentElement.dataset.frost
+}
+
 export function setAppearance(a: Appearance) {
   if (a === "system") localStorage.removeItem(KEY)
   else localStorage.setItem(KEY, a)

@@ -1,9 +1,7 @@
-import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startLocalRelay } from "../../scripts/local-relay.ts";
-import { TEST_ID } from "./eb-bundle.ts";
 import { appExecutable, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
 
 if (!process.argv[2] || process.platform !== "darwin") {
@@ -15,7 +13,6 @@ const root = mkdtempSync(join(tmpdir(), "kiwi-frost-check-"));
 const { relay, port } = await startLocalRelay(join(root, "relay"), null, { rateLimits: false });
 const env = testEnv(root, join(root, "driver.sock"), `http://127.0.0.1:${port}`);
 const problems: string[] = [];
-const frostSetting = (on: boolean) => spawnSync("defaults", on ? ["write", TEST_ID, "ChannelsFrost", "-bool", "YES"] : ["delete", TEST_ID, "ChannelsFrost"], { stdio: "ignore" });
 
 async function run<T>(what: (d: Driver) => Promise<T>): Promise<T> {
   const app = launch(exe, env);
@@ -41,36 +38,42 @@ const looks = async (d: Driver, want: string): Promise<void> => {
   }
 };
 const frostMark = (d: Driver) => d.evaluate(() => "frost" in document.documentElement.dataset, null);
+const shellPaint = (d: Driver) => d.evaluate(() => getComputedStyle(document.body).backgroundColor, null);
+const marked = async (d: Driver, want: boolean, why: string): Promise<void> => {
+  try {
+    await until(why, 10_000, async () => ((await frostMark(d)) === want ? true : null));
+  } catch {
+    problems.push(want ? "the page isn't marked data-frost" : "the page is still marked data-frost");
+  }
+};
 const pageTheme = (d: Driver, appearance: string) => d.evaluate((a: string) => (window as unknown as { kiwi: { setAppearance(a: string): Promise<void> } }).kiwi.setAppearance(a), appearance);
 
 try {
-  frostSetting(false);
-  await run(async (d) => {
-    await new Promise((r) => setTimeout(r, 1_000));
-    const look = await d.main("looks");
-    if (look !== "") problems.push(`with the frost off the window still changed: "${String(look)}"`);
-    if (await frostMark(d)) problems.push("with the frost off the page is marked data-frost");
-  });
-  console.log("frost off: the window and the page are as they were");
-
-  frostSetting(true);
   await run(async (d) => {
     await looks(d, "frost clear system");
-    if (!(await frostMark(d))) problems.push("with the frost on the page isn't marked data-frost");
+    await marked(d, true, "the page marked data-frost");
     for (const appearance of ["dark", "light", "system"]) {
       await pageTheme(d, appearance);
       await looks(d, `frost clear ${appearance}`);
     }
+    await pageTheme(d, "dark");
+    await d.main("solidForTest");
+    await looks(d, "solid clear dark");
+    await marked(d, false, "the page unmarked under Reduce Transparency");
+    const solid = await shellPaint(d);
+    if (solid !== "rgb(0, 0, 0)") problems.push(`under Reduce Transparency the shell paints ${solid}, not the solid rail rgb(0, 0, 0)`);
+    await d.main("frostForTest");
+    await looks(d, "frost clear dark");
+    await marked(d, true, "the page marked data-frost again");
     await d.evaluate(() => localStorage.setItem("mc.appearance", "dark"), null);
   });
-  console.log("frost on: the sidebar material behind a clear page, following the page's dark, light and system");
+  console.log("the sidebar material behind a clear page, following the page's dark, light and system; solid under Reduce Transparency or Increase Contrast, and back");
 
   await run((d) => looks(d, "frost clear dark"));
   console.log("a restart with the page set to dark opens the window dark");
 } catch (e) {
   problems.push(e instanceof Error ? e.message : String(e));
 } finally {
-  frostSetting(false);
   relay.kill();
   rmSync(root, { recursive: true, force: true });
 }
@@ -78,4 +81,4 @@ if (problems.length) {
   for (const p of problems) console.error(`FAIL ${p}`);
   process.exit(1);
 }
-console.log("ok: the frost is off by default, and on, it follows the page's theme");
+console.log("ok: the frost is behind the page and follows the page's theme");

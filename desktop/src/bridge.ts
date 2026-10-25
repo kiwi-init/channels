@@ -347,6 +347,7 @@ export interface KiwiBridge {
   /** A link came in while the app runs (it waits for getDeepLink too, so it's opened once). */
   onDeepLink(cb: (url: string) => void): () => void;
   onTextStep(cb: (step: TextStep) => void): () => void;
+  onFrost(cb: (on: boolean) => void): () => void;
   setPersonalities(list: Personality[]): Promise<void>;
   seatPlaces(): Promise<PlacedSeat[]>;
   showSeat(seat: PlacedSeat): Promise<ShowResult>;

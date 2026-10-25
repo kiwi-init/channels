@@ -173,19 +173,39 @@ static NSAppearance *appearanceFor(int32_t appearance) {
 
 static os_unfair_lock lookLock = OS_UNFAIR_LOCK_INIT;
 static char look[64] = "";
+static __weak NSWindow *frosted = nil;
+static void (*frostChanged)(bool) = NULL;
+static id displayOptions = nil;
+static BOOL solidForTest = NO;
+
+static NSVisualEffectView *frostOf(NSWindow *window) {
+  for (NSView *child in window.contentView.subviews)
+    if ([child isKindOfClass:[NSVisualEffectView class]]) return (NSVisualEffectView *)child;
+  return nil;
+}
+
+static BOOL frostAllowed(void) {
+  NSWorkspace *workspace = NSWorkspace.sharedWorkspace;
+  return !solidForTest && !workspace.accessibilityDisplayShouldReduceTransparency && !workspace.accessibilityDisplayShouldIncreaseContrast;
+}
 
 static void noteLook(NSWindow *window) {
-  NSView *content = window.contentView;
-  BOOL frosted = NO;
-  for (NSView *child in content.subviews)
-    if ([child isKindOfClass:[NSVisualEffectView class]] && ((NSVisualEffectView *)child).material == NSVisualEffectMaterialSidebar) frosted = YES;
-  WKWebView *web = (WKWebView *)findWebView(content);
+  NSVisualEffectView *frost = frostOf(window);
+  BOOL shown = frost && !frost.hidden && frost.material == NSVisualEffectMaterialSidebar;
+  WKWebView *web = (WKWebView *)findWebView(window.contentView);
   BOOL clear = web && ![[web valueForKey:@"drawsBackground"] boolValue];
   NSAppearanceName name = window.appearance.name;
   const char *appearance = !name ? "system" : [name isEqualToString:NSAppearanceNameDarkAqua] ? "dark" : "light";
   os_unfair_lock_lock(&lookLock);
-  snprintf(look, sizeof look, "%s %s %s", frosted ? "frost" : "plain", clear ? "clear" : "drawn", appearance);
+  snprintf(look, sizeof look, "%s %s %s", shown ? "frost" : "solid", clear ? "clear" : "drawn", appearance);
   os_unfair_lock_unlock(&lookLock);
+}
+
+static void showFrost(NSWindow *window, BOOL tell) {
+  BOOL on = frostAllowed();
+  frostOf(window).hidden = !on;
+  noteLook(window);
+  if (tell && frostChanged) frostChanged(on);
 }
 
 size_t kiwi_window_looks(char *out, size_t size) {
@@ -195,14 +215,17 @@ size_t kiwi_window_looks(char *out, size_t size) {
   return n;
 }
 
-bool kiwi_window_frost(void *ptr) {
+bool kiwi_frost_allowed(void) {
+  return frostAllowed();
+}
+
+bool kiwi_window_frost(void *ptr, void (*changed)(bool)) {
   NSWindow *window = (__bridge NSWindow *)ptr;
   if (!window) return false;
+  frostChanged = changed;
   dispatch_async(dispatch_get_main_queue(), ^{
     NSView *content = window.contentView;
-    NSVisualEffectView *frost = nil;
-    for (NSView *child in content.subviews)
-      if ([child isKindOfClass:[NSVisualEffectView class]]) frost = (NSVisualEffectView *)child;
+    NSVisualEffectView *frost = frostOf(window);
     if (!frost) {
       frost = [[NSVisualEffectView alloc] initWithFrame:content.bounds];
       frost.material = NSVisualEffectMaterialSidebar;
@@ -214,16 +237,26 @@ bool kiwi_window_frost(void *ptr) {
     WKWebView *web = (WKWebView *)findWebView(content);
     [web setValue:@NO forKey:@"drawsBackground"];
     web.underPageBackgroundColor = NSColor.clearColor;
-    noteLook(window);
+    frosted = window;
+    if (!displayOptions)
+      displayOptions = [NSWorkspace.sharedWorkspace.notificationCenter addObserverForName:NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification
+                                                                                   object:nil
+                                                                                    queue:NSOperationQueue.mainQueue
+                                                                               usingBlock:^(NSNotification *note) {
+                                                                                 NSWindow *shown = frosted;
+                                                                                 if (shown) showFrost(shown, YES);
+                                                                               }];
+    showFrost(window, NO);
   });
   return true;
 }
 
-size_t kiwi_look_setting(const char *key, char *out, size_t size) {
-  NSString *name = key ? [NSString stringWithUTF8String:key] : nil;
-  id value = name.length ? [NSUserDefaults.standardUserDefaults objectForKey:name] : nil;
-  const char *text = value ? [[value description] UTF8String] : "";
-  return strlcpy(out, text ? text : "", size);
+void kiwi_frost_solid_for_test(bool solid) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    solidForTest = solid;
+    NSWindow *shown = frosted;
+    if (shown) showFrost(shown, YES);
+  });
 }
 
 void kiwi_window_appearance(void *ptr, int32_t appearance) {
