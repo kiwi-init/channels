@@ -1,28 +1,14 @@
-# A release, YYYY.M.PATCH (a date: the patch counts up within the month and starts at 0 the next;
-# bun scripts/stamp.ts --next prints the next tag): stamp it in a pull request first, then tag the
-# stamp's commit on main.
-#   bun scripts/stamp.ts vYYYY.M.PATCH   # the version in src/version.ts, both package.json files and
-#                                        # the site's download names, and CHANGELOG.md's section; open
-#                                        # a PR, merge it on its green ci-ok
-#   git tag vYYYY.M.PATCH <that commit> && git push origin vYYYY.M.PATCH
-# Builds kiwi and the Channels desktop app for every platform from the tagged commit stamped
-# with the tag's version (scripts/stamp.ts, which then changes nothing), on GitHub's machines,
-# publishes the files with checksums and a signed build-provenance attestation, so anyone can
-# check a binary came from this exact source:
-#   gh attestation verify ~/.kiwi/bin/kiwi --repo kiwi-init/channels
-# A tag on a commit that isn't stamped still releases, and bump-main then commits the stamp to
-# main itself, which needs the bus app's token.
 name: release
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["v*-livewire.*"]
 
 permissions:
   contents: read
 
 jobs:
-  on-main:
+  on-livewire:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -31,16 +17,20 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Check the tagged commit is on main
+      - name: Check the tag is a Livewire RC on the Livewire branch
         run: |
-          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
-            echo "::error::$GITHUB_REF_NAME is on $GITHUB_SHA, which isn't on main: a release is a tag on a commit of main, so nothing is built, signed or published"
+          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]{1,6}\.[0-9]{1,6}\.[0-9]{1,6}-livewire\.[0-9]{1,6}$ ]] || {
+            echo "::error::$GITHUB_REF_NAME isn't vYYYY.M.PATCH-livewire.N: a Channels Livewire release is tagged like v2026.10.2-livewire.1, so nothing is built, signed or published"
             exit 1
           }
-          echo "$GITHUB_REF_NAME is on $GITHUB_SHA, on main"
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/T377-livewire-rc || {
+            echo "::error::$GITHUB_REF_NAME is on $GITHUB_SHA, which isn't on T377-livewire-rc: a Channels Livewire release is a tag on that branch, so nothing is built, signed or published"
+            exit 1
+          }
+          echo "$GITHUB_REF_NAME is on $GITHUB_SHA, on T377-livewire-rc"
 
   build:
-    needs: on-main
+    needs: on-livewire
     uses: ./.github/workflows/release-build.yml
     secrets: inherit
 
@@ -87,8 +77,6 @@ jobs:
           sha256sum * > SHA256SUMS
           cat SHA256SUMS
 
-      # A Linux app swaps in a new AppImage only once SHA256SUMS.minisig verifies with the key pinned
-      # in desktop/src/release-key.ts, so the release checks its own signature with that key.
       - name: Sign SHA256SUMS
         env:
           MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
@@ -99,189 +87,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mapfile -t files < <(find artifacts -maxdepth 1 -type f | sort)
-          # A release candidate (v0.11.0-rc.3) is a prerelease: the install scripts fetch
-          # releases/latest, which must stay on the last real release.
-          pre=(); [[ "$GITHUB_REF_NAME" == *-* ]] && pre=(--prerelease)
-          # The notes: this version's changelog (scripts/changelog.ts), then where to get it.
+          version="${GITHUB_REF_NAME#v}"
           bun repo/scripts/changelog.ts --notes "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
-          printf '\n---\n\n%s\n' "Channels desktop app (macOS dmg/zip, Linux AppImage/deb) and the kiwi CLI. Download the app at https://channels.kiwiinit.com/; install the CLI with: curl -fsSL https://channels.kiwiinit.com/install | sh (macOS, Linux). Every file is checksummed in SHA256SUMS, signed in SHA256SUMS.minisig (minisign -Vm SHA256SUMS -P <the key in desktop/src/release-key.ts>), and has a build-provenance attestation: gh attestation verify <file> --repo $GITHUB_REPOSITORY" >> "$RUNNER_TEMP/notes.md"
-          gh release create "$GITHUB_REF_NAME" "${files[@]}" "${pre[@]}" \
+          printf '\n---\n\n%s\n' "Channels Livewire $version: a release candidate of the Channels desktop app on Electrobun Livewire, installed beside Channels with its own data, keychain items and ~/.kiwi-livewire, and updated only to later Livewire releases. Every file is checksummed in SHA256SUMS, signed in SHA256SUMS.minisig (minisign -Vm SHA256SUMS -P <the key in desktop/src/release-key.ts>), and has a build-provenance attestation: gh attestation verify <file> --repo $GITHUB_REPOSITORY" >> "$RUNNER_TEMP/notes.md"
+          gh release create "$GITHUB_REF_NAME" "${files[@]}" --prerelease --latest=false \
             --repo "$GITHUB_REPOSITORY" \
-            --title "kiwi $GITHUB_REF_NAME" \
+            --title "Channels Livewire $version" \
             --notes-file "$RUNNER_TEMP/notes.md"
-
-  # The Worker (relay + site/) ships after the GitHub release exists: the site's download links
-  # name this version's files, which 404 until the release is up (docs/0.13-release.md). Release
-  # candidates don't deploy: the public relay stays on the last real release. Nothing waits on this
-  # job, so a failed deploy never holds back the binaries or the app.
-  deploy-relay:
-    needs: publish
-    if: ${{ !contains(github.ref_name, '-') }}
-    runs-on: ubuntu-latest
-    environment: release
-    concurrency:
-      group: deploy-relay
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-
-      - uses: ./.github/actions/stamp
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: 1.4.2
-
-      - name: Install
-        run: bun install --frozen-lockfile
-
-      - name: Deploy the Worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: bun run relay:deploy
-
-  # main learns the release. A tag on the stamp's commit (the stamp landed as a PR) leaves an empty
-  # patch, and the job passes there without asking for the bus app's token. Otherwise the stamp lands
-  # as one "kiwi YYYY.M.PATCH" commit (scripts/changelog.ts leaves those out), pushed by the GitHub App that
-  # may bypass main's pull request rule. Skipped for a release candidate, when main already says this
-  # version, and when main is past it (a fix released from an older commit). If main moved and the
-  # stamp no longer applies, this job fails after the release is out: run bun scripts/stamp.ts
-  # vYYYY.M.PATCH on main in a PR.
-  bump-main:
-    needs: publish
-    if: ${{ !contains(github.ref_name, '-') }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: stamp
-          path: ${{ runner.temp }}/stamp
-
-      - id: stamp
-        name: Is there a stamp to commit
-        run: |
-          if [ -s "$RUNNER_TEMP/stamp/stamp.patch" ]; then
-            echo "needed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "the tagged commit already says ${GITHUB_REF_NAME#v} (its stamp landed as a pull request): nothing to commit"
-            echo "needed=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - id: app
-        if: steps.stamp.outputs.needed == 'true'
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
-        with:
-          client-id: ${{ vars.BUS_APP_CLIENT_ID }}
-          private-key: ${{ secrets.BUS_APP_PRIVATE_KEY }}
-          permission-contents: write
-
-      - if: steps.stamp.outputs.needed == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: main
-          fetch-depth: 0
-          token: ${{ steps.app.outputs.token }}
-
-      - if: steps.stamp.outputs.needed == 'true'
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: 1.4.2
-
-      - name: Check the stamp only edits the stamped files
-        if: steps.stamp.outputs.needed == 'true'
-        env:
-          STAMPED: |
-            src/version.ts
-            package.json
-            desktop/package.json
-            site/app.js
-            site/README.md
-            CHANGELOG.md
-        run: |
-          patch="$RUNNER_TEMP/stamp/stamp.patch"
-          [ -s "$patch" ] || exit 0
-          summary=$(git apply --summary "$patch")
-          [ -z "$summary" ] || { echo "::error::the stamp creates, deletes, renames or changes the mode of a file, so it isn't pushed to main: $summary"; exit 1; }
-          stat=$(git apply --numstat "$patch")
-          while IFS=$'\t' read -r _ _ file; do
-            grep -qxF -- "$file" <<<"$STAMPED" || { echo "::error::the stamp edits $file, which scripts/stamp.ts never writes, so it isn't pushed to main"; exit 1; }
-          done <<<"$stat"
-
-      - name: Commit the stamp to main
-        if: steps.stamp.outputs.needed == 'true'
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-          APP: ${{ steps.app.outputs.app-slug }}
-        run: |
-          v="${GITHUB_REF_NAME#v}"
-          patch="$RUNNER_TEMP/stamp/stamp.patch"
-          [ -s "$patch" ] || { echo "the tagged commit already said $v: nothing to commit"; exit 0; }
-          id=$(gh api "users/$APP%5Bbot%5D" --jq .id)
-          who=$(gh api "users/$GITHUB_ACTOR" --jq '.name // .login')
-          git config user.name "$APP[bot]"
-          git config user.email "$id+$APP[bot]@users.noreply.github.com"
-          for attempt in 1 2 3; do
-            git fetch -q origin main && git reset -q --hard origin/main
-            cmp=$(V="$v" bun -e 'const { compareVersions } = await import("./packages/core/src/versions.ts"); const { VERSION } = await import("./src/version.ts"); console.log(compareVersions(VERSION, process.env.V ?? ""))')
-            [ "$cmp" -lt 0 ] || { echo "main already says $v or later: nothing to commit"; exit 0; }
-            git apply --3way "$patch"
-            git commit -q -a -m "kiwi $v" -m "The release's stamp from $GITHUB_REF_NAME: the version in src/version.ts, package.json, desktop/package.json and the site's download names, and CHANGELOG.md's section." -m "Agent: release.yml on behalf of $who"
-            git push origin HEAD:main && exit 0
-          done
-          exit 1
-
-  bump-tap:
-    needs: publish
-    if: ${{ !contains(github.ref_name, '-') }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          persist-credentials: false
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: 1.4.2
-
-      - name: Download SHA256SUMS
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS --dir "$RUNNER_TEMP"
-
-      - id: app
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
-        with:
-          client-id: ${{ vars.BUS_APP_CLIENT_ID }}
-          private-key: ${{ secrets.BUS_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: homebrew-tap
-          permission-contents: write
-
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          repository: ${{ github.repository_owner }}/homebrew-tap
-          ref: main
-          path: tap
-          token: ${{ steps.app.outputs.token }}
-
-      - name: Bump the cask and the formula
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-          APP: ${{ steps.app.outputs.app-slug }}
-        run: |
-          v="${GITHUB_REF_NAME#v}"
-          id=$(gh api "users/$APP%5Bbot%5D" --jq .id)
-          who=$(gh api "users/$GITHUB_ACTOR" --jq '.name // .login')
-          cd tap
-          git config user.name "$APP[bot]"
-          git config user.email "$id+$APP[bot]@users.noreply.github.com"
-          for attempt in 1 2 3; do
-            git fetch -q origin main && git reset -q --hard origin/main
-            bun ../scripts/brew-bump.ts "$GITHUB_REF_NAME" "$RUNNER_TEMP/SHA256SUMS" .
-            git diff --quiet && { echo "the tap already installs $v: nothing to commit"; exit 0; }
-            git commit -q -a -m "channels $v, kiwi $v" -m "From $GITHUB_REF_NAME's SHA256SUMS: the version and sha256 of Casks/channels.rb and Formula/kiwi.rb." -m "Agent: release.yml on behalf of $who"
-            git push origin HEAD:main && exit 0
-          done
-          exit 1
