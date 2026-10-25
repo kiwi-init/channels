@@ -2,7 +2,9 @@
 #include <gtk/gtk.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <webkit2/webkit2.h>
 
 static GMainLoop *loop;
@@ -84,6 +86,42 @@ static gboolean stop(gpointer data) {
   (void)data;
   g_main_loop_quit(loop);
   return G_SOURCE_REMOVE;
+}
+
+static bool proc_stat(long pid, char *comm, size_t size, long *ppid) {
+  char path[64];
+  snprintf(path, sizeof path, "/proc/%ld/stat", pid);
+  gchar *text = NULL;
+  if (!g_file_get_contents(path, &text, NULL, NULL)) return false;
+  char *lp = strchr(text, '(');
+  char *rp = strrchr(text, ')');
+  bool ok = lp && rp && rp > lp && sscanf(rp + 2, "%*c %ld", ppid) == 1;
+  if (ok) g_strlcpy(comm, lp + 1, MIN(size, (size_t)(rp - lp)));
+  g_free(text);
+  return ok;
+}
+
+static int web_processes(int *in_bwrap) {
+  *in_bwrap = 0;
+  int found = 0;
+  long self = (long)getpid();
+  GDir *dir = g_dir_open("/proc", 0, NULL);
+  if (!dir) return 0;
+  const gchar *name;
+  while ((name = g_dir_read_name(dir))) {
+    char *end;
+    long pid = strtol(name, &end, 10);
+    char comm[64];
+    long up;
+    if (*end || !proc_stat(pid, comm, sizeof comm, &up) || strcmp(comm, "WebKitWebProces") != 0) continue;
+    bool bwrap = false;
+    while (up > 1 && up != self && proc_stat(up, comm, sizeof comm, &up)) bwrap = bwrap || strcmp(comm, "bwrap") == 0;
+    if (up != self) continue;
+    found++;
+    if (bwrap) (*in_bwrap)++;
+  }
+  g_dir_close(dir);
+  return found;
 }
 
 typedef struct {
@@ -189,6 +227,20 @@ int main(int argc, char **argv) {
     bad++;
   } else
     printf("microphone: %s, and the handler that would allow it never ran\n", verdict);
+
+  int in_bwrap = 0;
+  int webs = web_processes(&in_bwrap);
+  if (webs == 0) {
+    fprintf(stderr, "kiwi-shell-test: no WebKitWebProcess of this test's own is running\n");
+    bad++;
+  } else if (want_sandbox && in_bwrap != webs) {
+    fprintf(stderr, "kiwi-shell-test: %d of its %d WebKitWebProcess run outside bwrap, though the default context has the sandbox on\n", webs - in_bwrap, webs);
+    bad++;
+  } else if (!want_sandbox && in_bwrap) {
+    fprintf(stderr, "kiwi-shell-test: %d WebKitWebProcess run in bwrap, though here it can't build the sandbox\n", in_bwrap);
+    bad++;
+  } else
+    printf("web process: %d, %s\n", webs, want_sandbox ? "each with bwrap among its parents" : "none in bwrap");
 
   char url[4096];
   size_t n = committed(url, sizeof url);
