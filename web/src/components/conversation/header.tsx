@@ -116,7 +116,7 @@ export function Header({
             className="no-drag size-(--control)"
             active={tab === "tasks"}
             aria-pressed={tab === "tasks"}
-            onClick={() => toggle("tasks")}
+            onClick={() => (tab === "tasks" ? onTab("conversation") : onView("everything"))}
           >
             <Icon icon={TaskDone01Icon} size={15} />
             {needs > 0 && <span aria-hidden className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-alert" />}
