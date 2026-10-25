@@ -42,7 +42,17 @@ else
     problems+=("no WebKitWebProcess of the app's own is running 5s after its window opened")
   else
     echo "WebKitWebProcess $web: $(tr '\0' ' ' < "/proc/$web/cmdline" | cut -c1-160)"
-    sandbox=$(pgrep -s "$pid" -a bwrap | head -n 1 | cut -c1-160)
+    sandbox=""
+    up=$web
+    while [ -n "$up" ] && [ "$up" -gt 1 ] && [ "$up" != "$pid" ]; do
+      up=$(ps -o ppid= -p "$up" | tr -d ' ')
+      if [ -n "$up" ] && [ "$(ps -o comm= -p "$up")" = bwrap ]; then
+        sandbox="$up $(tr '\0' ' ' < "/proc/$up/cmdline" | cut -c1-400)"
+        break
+      fi
+    done
+    others=$(pgrep -s "$pid" -a bwrap | cut -c1-400)
+    [ -z "$others" ] || echo "bwrap in the app's session: $others"
     off=$(grep -h "WebKitGTK's sandbox is off" "$out" 2> /dev/null | head -n 1)
     if [ "$want" = sandboxed ]; then
       if [ -n "$sandbox" ]; then echo "sandbox: $sandbox"; else problems+=("no bwrap of the app's own: WebKitGTK's web process isn't sandboxed${off:+ ($off)}"); fi
