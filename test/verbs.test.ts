@@ -84,6 +84,17 @@ describe("ten verbs", () => {
     await ok(agent, "listen", "--now");
   });
 
+  test("kiwi lock status lists the leases, and lock release is refused with how to let one go: neither takes a lease by that name", async () => {
+    expect(await ok(agent, "lock", "status")).toContain("no leases");
+    expect(await ok(agent, "lock", "build", "--note", "the tests")).toContain("build: you");
+    for (const word of ["status", "list", "ls"]) expect(await ok(agent, "lock", word)).toMatch(/^build: you, .*: the tests\n$/);
+    const release = await run(agent, "lock", "release", "build");
+    expect(release.code).toBe(1);
+    expect(release.err).toContain('kiwi lock release takes no lease named "release": let one go with kiwi unlock build');
+    expect(await ok(agent, "lock")).not.toMatch(/^(status|release|list):/m);
+    expect(await ok(agent, "unlock", "build")).toBe("let go of build\n");
+  });
+
   test("help shows the new verbs and says the old names still work", async () => {
     const help = await ok(agent, "help");
     for (const v of ["kiwi join", "kiwi listen", "kiwi send", "kiwi reply", "kiwi show", "kiwi log", "kiwi status", "kiwi task", "kiwi note", "kiwi leave"]) expect(help).toContain(v);
