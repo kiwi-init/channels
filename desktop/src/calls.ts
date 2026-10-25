@@ -73,6 +73,8 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     takePastedImage: () => t.call("takePastedImage"),
     setBadge: (count) => t.call("setBadge", count),
     setAppearance: (appearance) => t.call("setAppearance", appearance),
+    uiReady: () => t.call("uiReady"),
+    uiError: (message) => t.call("uiError", message),
     onDeepLink: (cb) => t.listen("deepLink", cb),
     onTextStep: (cb) => t.listen("textStep", cb),
     onFrost: (cb) => t.listen("frost", cb),

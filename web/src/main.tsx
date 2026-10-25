@@ -1,4 +1,4 @@
-import { StrictMode } from "react"
+import { StrictMode, useEffect } from "react"
 import { createRoot } from "react-dom/client"
 
 import "./index.css"
@@ -15,6 +15,14 @@ import { whenIdle } from "@/lib/later"
 import { loadMarkdown, loadPermission, loadSurfaces } from "@/components/lazy"
 import { ops } from "@/lib/channel-ops"
 import { nudgeOnWake } from "@/lib/wake"
+import { uiBooted, watchUiBoot } from "@/lib/ui-boot"
+
+watchUiBoot()
+
+function Booted() {
+  useEffect(uiBooted, [])
+  return null
+}
 
 applyStoredAppearance()
 bridge()?.onTextStep(stepTextSize)
@@ -35,6 +43,7 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <Boundary whole>
       <App />
+      <Booted />
     </Boundary>
   </StrictMode>
 )
