@@ -5,13 +5,16 @@ import { args, opt } from "../args.ts";
 import { type Command, die, out, session } from "../context.ts";
 
 const DEFAULT_LEASE = "30m";
+const LISTS = new Set(["status", "list", "ls"]);
+const LETS_GO = new Set(["release", "unlock", "free"]);
 
 export const leaseCommands: Record<string, Command> = {
   lock: () =>
     Effect.gen(function* () {
       const s = yield* session();
       const name = args[1];
-      if (!name) {
+      if (name && LETS_GO.has(name)) return yield* die(`kiwi lock ${name} takes no lease named "${name}": let one go with kiwi unlock ${args[2] ?? "NAME"}`);
+      if (!name || LISTS.has(name)) {
         const { state } = yield* s.state();
         if (!state.leases.size) return out("no leases: kiwi lock NAME [--ttl 30m] [--note why] takes one");
         for (const l of [...state.leases.values()].sort((a, b) => a.name.localeCompare(b.name))) out(leaseLine(l, s.me));
