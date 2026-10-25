@@ -190,12 +190,16 @@ int main(int argc, char **argv) {
   g_idle_add(install_from_worker, &hooks);
   g_main_loop_run(loop);
   if (hooks.ok) printf("hooks: installed on GTK's main loop when asked from another thread, as main-eb's worker asks\n");
-  bool enabled = webkit_web_context_get_sandbox_enabled(webkit_web_context_get_default());
+  gchar *data_dir = g_dir_make_tmp("kiwi-shell-test-data-XXXXXX", NULL);
+  WebKitWebsiteDataManager *data = webkit_website_data_manager_new("base-data-directory", data_dir, "base-cache-directory", data_dir, NULL);
+  WebKitWebContext *partition = webkit_web_context_new_with_website_data_manager(data);
+  g_object_unref(data);
+  bool enabled = webkit_web_context_get_sandbox_enabled(partition);
   if (want_sandbox && (!hooks.sandboxed || !enabled)) {
-    fprintf(stderr, "kiwi-shell-test: kiwi_sandbox_pages didn't turn WebKitGTK's sandbox on: %s\n", hooks.why[0] ? hooks.why : "no reason given");
+    fprintf(stderr, "kiwi-shell-test: kiwi_sandbox_pages didn't turn WebKitGTK's sandbox on for a context made after it, as Electrobun's persist:default one is: %s\n", hooks.why[0] ? hooks.why : "no reason given");
     bad++;
   } else if (want_sandbox)
-    printf("sandbox: on for the default context before its first web view, so the page below runs in bubblewrap\n");
+    printf("sandbox: on for a context made after it was asked for, as Electrobun makes one for its persist:default partition, so the page below runs in bubblewrap\n");
   else if (hooks.sandboxed || enabled || !strstr(hooks.why, "bwrap can't build it here")) {
     fprintf(stderr, "kiwi-shell-test: with bwrap unable to build its namespaces here, kiwi_sandbox_pages left the sandbox %s and said '%s'\n", enabled ? "on" : "off", hooks.why);
     bad++;
@@ -207,7 +211,7 @@ int main(int argc, char **argv) {
   }
 
   GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-  WebKitWebView *view = WEBKIT_WEB_VIEW(webkit_web_view_new());
+  WebKitWebView *view = WEBKIT_WEB_VIEW(webkit_web_view_new_with_context(partition));
   WebKitSettings *settings = webkit_web_view_get_settings(view);
   g_object_set(settings, "enable-media-stream", TRUE, "enable-mock-capture-devices", TRUE, "javascript-can-open-windows-automatically", TRUE, NULL);
   g_signal_connect(view, "permission-request", G_CALLBACK(allow_everything), NULL);
@@ -234,7 +238,7 @@ int main(int argc, char **argv) {
     fprintf(stderr, "kiwi-shell-test: no WebKitWebProcess of this test's own is running\n");
     bad++;
   } else if (want_sandbox && in_bwrap != webs) {
-    fprintf(stderr, "kiwi-shell-test: %d of its %d WebKitWebProcess run outside bwrap, though the default context has the sandbox on\n", webs - in_bwrap, webs);
+    fprintf(stderr, "kiwi-shell-test: %d of its %d WebKitWebProcess run outside bwrap, though its context has the sandbox on\n", webs - in_bwrap, webs);
     bad++;
   } else if (!want_sandbox && in_bwrap) {
     fprintf(stderr, "kiwi-shell-test: %d WebKitWebProcess run in bwrap, though here it can't build the sandbox\n", in_bwrap);

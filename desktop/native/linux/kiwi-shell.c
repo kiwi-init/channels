@@ -237,8 +237,20 @@ static gchar *started_webkit(void) {
   return found;
 }
 
-static bool sandbox_default_context(gconstpointer arg) {
+static void (*context_constructed)(GObject *) = NULL;
+
+static void sandboxed_constructed(GObject *object) {
+  if (context_constructed) context_constructed(object);
+  webkit_web_context_set_sandbox_enabled(WEBKIT_WEB_CONTEXT(object), TRUE);
+}
+
+static bool sandbox_contexts(gconstpointer arg) {
   (void)arg;
+  GObjectClass *contexts = g_type_class_ref(WEBKIT_TYPE_WEB_CONTEXT);
+  if (contexts->constructed != sandboxed_constructed) {
+    context_constructed = contexts->constructed;
+    contexts->constructed = sandboxed_constructed;
+  }
   WebKitWebContext *context = webkit_web_context_get_default();
   webkit_web_context_set_sandbox_enabled(context, TRUE);
   return webkit_web_context_get_sandbox_enabled(context);
@@ -799,5 +811,5 @@ bool kiwi_sandbox_pages(char *why, size_t size) {
     g_free(early);
     return false;
   }
-  return on_main(sandbox_default_context, NULL) || refuse_sandbox(why, size, "WebKitGTK's default context didn't turn it on");
+  return on_main(sandbox_contexts, NULL) || refuse_sandbox(why, size, "WebKitGTK's default context didn't turn it on");
 }
