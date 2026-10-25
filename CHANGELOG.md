@@ -19,6 +19,7 @@ Written by `bun scripts/changelog.ts` from each squash-merged pull request's tit
 - **kiwi finds the channel from any git worktree of the folder it joined in (T1115)** ([#956](https://github.com/kiwi-init/channels/pull/956))
 - **The Linux app's pages run in WebKitGTK's bubblewrap sandbox: every context is sandboxed, Electrobun's persist:default one included (T1193)** ([#954](https://github.com/kiwi-init/channels/pull/954))
 - **kiwi lock exits 3 while you're only in line, and --wait blocks until the lease is yours (T1111)** ([#957](https://github.com/kiwi-init/channels/pull/957))
+- **The daemon test's "newer" daemon is newer than VERSION under any scheme, so the date version passes (T1472)** ([#962](https://github.com/kiwi-init/channels/pull/962))
 
 ## 0.27.7 — 2026-10-25
 
