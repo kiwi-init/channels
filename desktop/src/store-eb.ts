@@ -63,12 +63,13 @@ export function v2Vault(opened: OpenStore): StoreVault {
       if (opened.kind !== "open") throw new Error(`the store can't be saved: ${opened.why}`);
       opened.save(JSON.stringify(file));
     },
+    atRest: () => (opened.kind === "open" ? { sealed: opened.sealed, why: opened.noKeychain } : { sealed: true, why: null }),
   };
 }
 
 export function plainNote(opened: OpenStore): string | null {
   if (opened.kind !== "open" || opened.noKeychain === null) return null;
-  return `No secret service answered, so Channels keeps your keys in ${opened.file} without encryption, readable only by you (0600), and seals them once a keyring runs: ${opened.noKeychain}`;
+  return `Channels keeps your keys in ${opened.file} without encryption, readable only by you (0600), because no keyring took them (${opened.noKeychain}); it seals them on a start when one does`;
 }
 
 export function unmarkedNote(opened: OpenStore): string | null {

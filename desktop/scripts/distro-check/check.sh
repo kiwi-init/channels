@@ -91,13 +91,15 @@ lib_test() {
   if as_tester "$@" > "$out/logs/$name.log" 2>&1; then ok "$name: $(tail -n 1 "$out/logs/$name.log" | cut -c1-200)"; else bad "$name: $(grep -h "$name" "$out/logs/$name.log" | tail -n 3 | tr '\n' ' ' | cut -c1-300)"; fi
 }
 
-session none stock no-tray
+plain_home=$(runuser -u tester -- mktemp -d)
+session none stock no-tray "$plain_home"
 lib_test kiwi-tray-test "$tests/kiwi-tray-test" "$lib" no-indicator
 install "${ayatana[@]}" || exit 1
 lib_test kiwi-tray-test "$tests/kiwi-tray-test" "$lib"
 sealed_home=$(runuser -u tester -- mktemp -d)
 session gnome-keyring gnome-keyring tray "$sealed_home"
 session kwallet kwallet tray
+session gnome-keyring migrate tray "$plain_home"
 session kwallet-unanswered kwallet-unanswered tray
 session cancel cancel-locked-first-run tray
 session cancel-no-keyring cancel-no-keyring-first-run tray

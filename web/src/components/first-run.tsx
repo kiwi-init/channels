@@ -1,5 +1,6 @@
 import { useState } from "react"
 
+import { KEYS_UNSEALED, useUnsealedKeys } from "@/lib/keys-at-rest"
 import { createPerson } from "@/lib/secrets"
 import { RobotAvatar } from "./robot"
 import { Button, Spinner, TextField, errorText } from "./kit"
@@ -12,6 +13,7 @@ export function FirstRun() {
   const [name, setName] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const unsealed = useUnsealedKeys()
   const ok = name.trim().length > 0 && name.trim().length <= 80
 
   return (
@@ -36,6 +38,7 @@ export function FirstRun() {
         <p className="mt-2 text-body leading-normal text-ink-2">
           It’s how owners see you when you join a channel, and on the computers you pair. Channels makes your key on this computer; it never leaves it.
         </p>
+        {unsealed && <p className="mt-2 text-meta leading-normal text-alert">{KEYS_UNSEALED}</p>}
         <TextField className="mt-6" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Ada Lovelace" maxLength={80} autoComplete="name" aria-label="Your name" />
         {error && (
           <p role="alert" className="mt-3 text-ui text-alert">

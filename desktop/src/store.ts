@@ -1,7 +1,7 @@
 import type { Identity } from "@kiwi/core/identity.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
 import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts";
-import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, PhoneView, StoreSnapshot } from "./bridge.ts";
+import type { ChannelIdentityView, ComputerView, KeysAtRest, PendingItem, PersonView, PhoneView, StoreSnapshot } from "./bridge.ts";
 import { errorText, normalizeRelay, snapshotOf } from "./guard.ts";
 import { host } from "./host.ts";
 import { logMainError } from "./main-log.ts";
@@ -25,6 +25,7 @@ export interface StoreVault {
   where(): string;
   load(): VaultRead;
   save(file: StoreFile): void;
+  atRest?(): KeysAtRest;
 }
 
 function defaults(): StoreFile {
@@ -64,6 +65,8 @@ const brokenError = () =>
   new Error(
     `Channels can't read its saved keys (${storeBroken}), so it saves nothing over them. ${brokenAdvice ?? "Unlock your keychain, then quit and reopen Channels."} The file is ${vault?.where()}.`,
   );
+
+export const keysAtRest = (): KeysAtRest => vault?.atRest?.() ?? { sealed: true, why: null };
 
 export const brokenStore = (): Error | null => (storeBroken === null ? null : brokenError());
 

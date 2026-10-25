@@ -61,6 +61,7 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     doctor: () => t.call("doctor"),
     daemonAdopt: () => t.call("daemonAdopt"),
     installCli: () => t.call("installCli"),
+    keysAtRest: () => t.call("keysAtRest"),
     getUpdate: () => t.call("getUpdate"),
     onUpdate: (cb) => t.listen("update", cb),
     installUpdate: () => t.call("installUpdate"),

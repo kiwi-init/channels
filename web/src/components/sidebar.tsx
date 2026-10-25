@@ -7,10 +7,11 @@ import { useOwnPicture } from "@/lib/own-picture"
 import { formatShort } from "@/lib/format"
 import { useSecrets } from "@/lib/secrets"
 import { useUpdate } from "@/lib/update"
+import { KEYS_UNSEALED, useUnsealedKeys } from "@/lib/keys-at-rest"
 import { cx } from "@/lib/utils"
 import { ChannelIconTile } from "./channel-icon"
 import { Icon } from "./icon"
-import { Monogram, Wordmark } from "./kit"
+import { Monogram, toast, Wordmark } from "./kit"
 import { AccountItems, UpdatePill } from "./lazy"
 import { Menu } from "./ui/menu"
 
@@ -47,6 +48,7 @@ export function Sidebar({
   const person = useSecrets().person
   const picture = useOwnPicture()
   const update = useUpdate()
+  const unsealed = useUnsealedKeys()
   const newsOf = new Map(rows.map((c, i) => [c.room, news[i]]))
   const icons = useIcons()
 
@@ -124,6 +126,12 @@ export function Sidebar({
       {person && (
         <div className="scrim-bottom absolute inset-x-0 bottom-0 flex flex-col items-start gap-2 px-3 pt-6 pb-3 [&>*]:pointer-events-auto">
           {update && <UpdatePill update={update} />}
+          {unsealed && (
+            <button type="button" onClick={() => toast(KEYS_UNSEALED, "error")} className="glass flex h-9 items-center gap-2 rounded-full pr-4 pl-3 text-ui font-medium text-alert">
+              <Icon icon={LockIcon} size={16} className="shrink-0" />
+              Keys not encrypted
+            </button>
+          )}
           <Menu
             side="top"
             className="w-60"

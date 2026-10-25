@@ -93,7 +93,7 @@ fi
 
 main_log=$(find "$home" -name main.log 2> /dev/null | head -n 1)
 [ -z "$main_log" ] || cp "$main_log" "$logs/$tag-main.log"
-plain=$(grep -h "No secret service answered" "$logs/$tag-app.log" ${main_log:+"$main_log"} | head -n 1)
+plain=$(grep -h "keeps your keys in .* without encryption" "$logs/$tag-app.log" ${main_log:+"$main_log"} | head -n 1)
 stored=$(timeout 20 secret-tool search --all service Channels 2>&1 | grep -E '^(label|attribute\.)' | tr '\n' ' ')
 case "$keyring" in
   none)
@@ -120,6 +120,11 @@ case "$keyring" in
     if [ -n "$stored" ]; then ok "its store key is in the Secret Service ($keyring): $(echo "$stored" | cut -c1-200)"; else bad "nothing of Channels' in the Secret Service ($keyring)${plain:+; the app says: $(echo "$plain" | cut -c1-160)}"; fi
     ;;
 esac
+if [ "$tag" = migrate ]; then
+  stores=$(find "$home" -name 'kiwi-store-v2.bin*' 2> /dev/null)
+  unsealed=$(for f in $stores; do [ "$(head -c 12 "$f")" = kiwi-store/2 ] || echo "$f"; done)
+  if [ -n "$stores" ] && [ -z "$unsealed" ]; then ok "the plain store a start without a keyring left is sealed once a keyring answers"; else bad "the plain store wasn't sealed once a keyring answered: ${unsealed:-no store}"; fi
+fi
 grep -iE 'error|critical|fail' "$logs/$tag-app.log" | grep -viE 'AT-SPI|DRI3|GLXBadWindow|dbind-WARNING' | sort | uniq -c | sort -rn | head -n 8 | cut -c1-220 | while IFS= read -r line; do info "app said: $line"; done
 
 alive() { ps -e -o pid=,sid=,stat=,args= | awk -v s="$pid" '$2 == s && $3 !~ /^Z/' | cut -c1-120; }
