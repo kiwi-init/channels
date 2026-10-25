@@ -2,6 +2,10 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.10.2 — 2026-10-25
+
+- **One shell, and the page floats on it, as in Interlinked (T297)** ([#973](https://github.com/kiwi-init/channels/pull/973))
+
 ## 2026.10.1 — 2026-10-25
 
 - **A reply refused while another agent answers says how to add to the thread instead, with the exact command (T1113)** ([#958](https://github.com/kiwi-init/channels/pull/958))
