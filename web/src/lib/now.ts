@@ -1,5 +1,5 @@
 import { prChecks, type ChannelState, type Task } from "@kiwi/core/state.ts"
-import { stageOf } from "@kiwi/core/stage.ts"
+import { statusOf, type TaskStatus } from "@kiwi/core/status.ts"
 import { FAILED } from "@kiwi/core/prs.ts"
 import { startOfDay } from "./views"
 
@@ -13,6 +13,7 @@ export interface NowTask {
   owner: string | null
   stage: string
   red: boolean
+  needsYou: boolean
 }
 
 export interface NowCard {
@@ -23,8 +24,7 @@ export interface NowCard {
   doneCount: number
 }
 
-function stageWords(state: ChannelState, t: Task): { text: string; red: boolean } {
-  const s = stageOf(state, t)
+function stageWords(state: ChannelState, { stage: s, release }: TaskStatus): { text: string; red: boolean } {
   const pr = s.pr ? `PR #${s.pr.number}` : null
   const runs = s.pr ? prChecks(state.github, s.pr) : []
   switch (s.stage) {
@@ -39,29 +39,32 @@ function stageWords(state: ChannelState, t: Task): { text: string; red: boolean 
     case "yours":
       return { text: pr ? `${pr} · review owed` : "review owed", red: false }
     case "done":
+      if (release) return { text: pr ? `${pr} · shipped in ${release}` : `shipped in ${release}`, red: false }
       return { text: pr && s.pr?.state === "merged" ? `${pr} merged` : "done", red: false }
     default:
       return { text: pr ?? "no PR yet", red: false }
   }
 }
 
-function row(state: ChannelState, t: Task): NowTask {
-  const { text, red } = stageWords(state, t)
-  return { id: t.id, title: t.title, owner: t.owner ?? null, stage: text, red }
+function row(state: ChannelState, t: Task, status: TaskStatus): NowTask {
+  const { text, red } = stageWords(state, status)
+  return { id: t.id, title: t.title, owner: t.owner ?? null, stage: text, red, needsYou: status.status === "needs you" }
 }
+
+const doneAt = (t: Task, s: TaskStatus): number => (s.stage.pr?.state === "merged" ? s.stage.pr.at : t.updatedAt)
 
 export function nowCard(state: ChannelState, now: number): NowCard {
   const note = state.facts.get(NEXT_NOTE)
   const next = note && (!note.expires || note.expires > now) ? note.value.trim() || null : null
-  const tasks = [...state.tasks.values()].filter((t) => !t.archived)
-  const working = tasks.filter((t) => t.state !== "done" && t.owner).sort((a, b) => b.updatedAt - a.updatedAt)
+  const tasks = [...state.tasks.values()].filter((t) => !t.archived).map((t) => ({ t, s: statusOf(state, t) }))
+  const working = tasks.filter(({ s }) => s.status === "working" || s.status === "needs you").sort((a, b) => b.t.updatedAt - a.t.updatedAt)
   const since = startOfDay(now)
-  const done = tasks.filter((t) => t.state === "done" && !t.cancelled && t.updatedAt >= since).sort((a, b) => b.updatedAt - a.updatedAt)
+  const done = tasks.filter(({ t, s }) => (s.status === "done" || s.status === "shipped") && doneAt(t, s) >= since).sort((a, b) => doneAt(b.t, b.s) - doneAt(a.t, a.s))
   return {
     next,
-    working: working.slice(0, WORKING_SHOWN).map((t) => row(state, t)),
+    working: working.slice(0, WORKING_SHOWN).map(({ t, s }) => row(state, t, s)),
     moreWorking: Math.max(0, working.length - WORKING_SHOWN),
-    done: done.slice(0, DONE_SHOWN).map((t) => row(state, t)),
+    done: done.slice(0, DONE_SHOWN).map(({ t, s }) => row(state, t, s)),
     doneCount: done.length,
   }
 }

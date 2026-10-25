@@ -43,6 +43,7 @@ function TaskLine({ t, nameOf, onOpenTask }: { t: NowTask; nameOf: (name: string
     >
       <span className="shrink-0 text-ink-3 tabular-nums">{taskId(t.id)}</span>
       <span className="min-w-0 flex-1 truncate text-ink">{t.title}</span>
+      {t.needsYou && <span className="shrink-0 text-meta font-semibold text-decide">needs you</span>}
       <span className={cx("hidden max-w-[45%] shrink-0 truncate text-meta @lg:block", t.red ? "text-alert" : "text-ink-2")}>
         {[t.owner ? nameOf(t.owner) : null, t.stage].filter(Boolean).join(" · ")}
       </span>

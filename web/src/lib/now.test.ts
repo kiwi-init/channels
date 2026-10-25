@@ -13,23 +13,31 @@ const R = "o/r"
 const ids: Record<string, Identity> = { jow: await generateIdentity("jow"), ann: await generateIdentity("ann") }
 const roster: Roster = [
   { name: "jow", pk: ids.jow!.pk, owner: true, at: 0, active: true, kind: "human" },
-  { name: "ann", pk: ids.ann!.pk, owner: false, at: 0, active: true, kind: "agent", scopes: ["post", "tasks", "facts"] },
+  { name: "ann", pk: ids.ann!.pk, owner: false, at: 0, active: true, kind: "agent", scopes: ["post", "ask", "tasks", "facts"] },
 ]
 const log: Message[] = []
 let clock = YESTERDAY
 
-async function say(from: string, ev: Event): Promise<number> {
+async function post(from: string, more: Pick<Payload, "kind" | "body"> & Partial<Payload>): Promise<number> {
   const seq = log.length + 1
   clock += 1_000
-  const payload: Payload = { v: PROTOCOL_VERSION, id: `s${seq}`, from, kind: "event", body: "", ts: clock, ev }
+  const payload: Payload = { v: PROTOCOL_VERSION, id: `s${seq}`, from, ts: clock, ...more }
   const p = await sign(ids[from]!, payload)
   log.push({ ...p, seq, rts: clock, sigOk: await verify(p) })
   return seq
 }
 
+const say = (from: string, ev: Event) => post(from, { kind: "event", body: "", ev })
+
 const github = (items: Record<string, unknown>[]) => say("jow", { op: "github", items: items.map((i) => ({ repo: R, at: clock, ...i })) } as Event)
 const add = (title: string, owner?: string) => say("ann", { op: "task.add", title, ...(owner ? { owner } : {}) })
 const done = (task: number) => say("ann", { op: "task.update", task, state: "done" })
+const start = (task: number) => say("ann", { op: "task.update", task, state: "doing" })
+const working = async (title: string) => {
+  const id = await add(title, "ann")
+  await start(id)
+  return id
+}
 const card = () => nowCard(fold(log, roster, clock), clock)
 
 await say("jow", { op: "branch.prefix.set", prefix: "T" })
@@ -52,46 +60,59 @@ describe("the Now card", () => {
     expect(card().next).toBeNull()
   })
 
-  test("working rows say each task's stage from its PR, newest first; unowned tasks aren't working", async () => {
-    const quiet = await add("No PR yet", "ann")
-    const red = await add("Red one", "ann")
+  test("working rows say each task's stage from its PR, newest first; a task only assigned or unowned is planned, not working", async () => {
+    const quiet = await working("No PR yet")
+    const red = await working("Red one")
     const green = await add("Green one", "ann")
+    await add("Assigned, not started", "ann")
     await add("Nobody holds this")
     await github([{ event: "pull_request", action: "opened", number: 7, state: "open", branch: `T${red}-red`, sha: "r1" }])
     await github([{ event: "check_run", action: "completed", name: "test / unit", status: "completed", conclusion: "failure", sha: "r1", run: 1 }])
     await github([{ event: "pull_request", action: "opened", number: 8, state: "open", branch: `T${green}-green`, sha: "g1" }])
     await github([{ event: "check_run", action: "created", name: "ci-ok", status: "queued", sha: "g1", run: 2 }])
-    await say("ann", { op: "task.update", task: green, state: "doing" })
+    await start(green)
     const c = card()
-    expect(c.working.map((t) => [t.id, t.owner, t.stage, t.red])).toEqual([
-      [green, "ann", "PR #8 · checks running", false],
-      [red, "ann", "PR #7 · test / unit failed", true],
-      [quiet, "ann", "no PR yet", false],
+    expect(c.working.map((t) => [t.id, t.owner, t.stage, t.red, t.needsYou])).toEqual([
+      [green, "ann", "PR #8 · checks running", false, false],
+      [red, "ann", "PR #7 · test / unit failed", true, false],
+      [quiet, "ann", "no PR yet", false, false],
     ])
     await github([{ event: "check_run", action: "completed", name: "ci-ok", status: "completed", conclusion: "success", sha: "g1", run: 2 }])
     expect(card().working[0]?.stage).toBe("PR #8 · checks passed")
   })
 
-  test("a merged PR moves its task to done today; yesterday's done and cancelled tasks aren't counted", async () => {
+  test("a task waiting on a person stays in Working, marked as needing you", async () => {
+    const quiet = card().working.find((t) => t.title === "No PR yet")!.id
+    await post("ann", { kind: "blocking", body: "Ship it behind a flag, or wait?", to: ["jow"], esc: true, holds: [quiet] })
+    expect(card().working.find((t) => t.id === quiet)).toMatchObject({ needsYou: true, stage: "no PR yet" })
+  })
+
+  test("a merged PR puts its task in done today even before anyone marks it done; yesterday's done and cancelled tasks aren't counted", async () => {
     const green = card().working[0]!.id
-    await github([{ event: "pull_request", action: "closed", number: 8, state: "closed", merged: true }])
-    await done(green)
-    const dropped = await add("Dropped", "ann")
+    await github([{ event: "pull_request", action: "closed", number: 8, state: "closed", merged: true, merge: "m8m8m8m8m8m8" }])
+    const dropped = await working("Dropped")
     await say("ann", { op: "task.update", task: dropped, state: "cancelled" })
     const c = card()
     expect(c.working.map((t) => t.id)).not.toContain(green)
+    expect(c.working.map((t) => t.id)).not.toContain(dropped)
     expect(c.doneCount).toBe(1)
     expect(c.done.map((t) => [t.title, t.stage])).toEqual([["Green one", "PR #8 merged"]])
   })
 
+  test("a released merge says which release it shipped in", async () => {
+    await say("jow", { op: "github.release", repo: R, tag: "v0.8.12", at: clock, shas: ["m8m8m8m8m8m8"], prs: [8] })
+    expect(card().done.map((t) => [t.title, t.stage])).toEqual([["Green one", "PR #8 · shipped in v0.8.12"]])
+  })
+
   test(`on a busy day it keeps to the top ${WORKING_SHOWN} working and the last ${DONE_SHOWN} done, with counts for the rest`, async () => {
-    for (let i = 0; i < WORKING_SHOWN + 2; i++) await add(`Busy ${i}`, "ann")
-    for (let i = 0; i < DONE_SHOWN + 3; i++) await done(await add(`Shipped ${i}`, "ann"))
+    const before = card()
+    for (let i = 0; i < WORKING_SHOWN + 2; i++) await working(`Busy ${i}`)
+    for (let i = 0; i < DONE_SHOWN + 3; i++) await done(await working(`Shipped ${i}`))
     const c = card()
     expect(c.working).toHaveLength(WORKING_SHOWN)
     expect(c.working[0]?.title).toBe(`Busy ${WORKING_SHOWN + 1}`)
-    expect(c.moreWorking).toBe(4)
+    expect(c.moreWorking).toBe(before.working.length + before.moreWorking + WORKING_SHOWN + 2 - WORKING_SHOWN)
     expect(c.done.map((t) => t.title)).toEqual(["Shipped 5", "Shipped 4", "Shipped 3"])
-    expect(c.doneCount).toBe(DONE_SHOWN + 4)
+    expect(c.doneCount).toBe(before.doneCount + DONE_SHOWN + 3)
   })
 })
