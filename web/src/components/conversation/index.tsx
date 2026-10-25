@@ -405,11 +405,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       : !ready
         ? []
         : [working ? `${working} working` : null, merged ? `${merged} merged today` : null, needsMe ? `${needsMe} ${needsMe === 1 ? "needs" : "need"} you` : null].filter((x): x is string => !!x)
-  const agentCount = active.filter((m) => isAgent(m)).length
-  const personCount = active.length - agentCount
-  const peopleLine = [agentCount ? `${agentCount} ${agentCount === 1 ? "agent" : "agents"}` : null, personCount ? `${personCount} ${personCount === 1 ? "person" : "people"}` : null]
-    .filter(Boolean)
-    .join(" · ")
   const rooms = [...state.rooms.values()]
   const roomKey = (id: string) => `room:${id}`
   const conversations: ConversationRow[] = [
@@ -505,33 +500,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
             {onNewAgent && <NewAgent open={newAgent} onClose={() => setNewAgent(false)} code={member.code} roomId={roomId} channel={title} lead={state.lead} onPin={handlers.onPin} roster={roster} />}
             <div className="relative flex h-full min-w-0 flex-1">
               <ChannelSidebar
-                title={title}
-                icon={icon}
-                people={peopleLine}
-                onTitle={() => setSide((s) => (s?.kind === "info" ? null : { kind: "info" }))}
-                search={search}
-                onSearch={(q) => {
-                  if (q !== null) setTab("conversation")
-                  if (q !== null) leaveInfo()
-                  setSearch(q)
-                }}
-                onAgents={() => {
-                  leaveInfo()
-                  setTab("agents")
-                  setSearch(null)
-                }}
-                onNewAgent={onNewAgent}
-                view={tab === "tasks" ? view : null}
-                counts={counts}
-                onView={(v) => {
-                  leaveInfo()
-                  setView(v)
-                  setTab("tasks")
-                  setSearch(null)
-                }}
-                agents={agentsNow}
-                onMessage={(name) => (leaveInfo(), go(dmPlace(me, name)))}
-                onOpenTask={openTask}
                 conversations={conversations}
                 current={currentConversation}
                 onConversation={(key) => (leaveInfo(), openConversation(key))}
@@ -565,6 +533,16 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                     onTitle={() => setSide((s) => (s?.kind === "info" ? null : { kind: "info" }))}
                     searchHint={place.kind === "main" ? "Search this channel" : `Search ${placeTitle}`}
                     places={<ConversationMenu conversations={conversations} current={currentConversation} onConversation={(key) => (leaveInfo(), openConversation(key))} />}
+                    needs={counts.needs}
+                    view={view}
+                    counts={counts}
+                    onView={(v) => {
+                      leaveInfo()
+                      setView(v)
+                      setTab("tasks")
+                      setSearch(null)
+                    }}
+                    reviewing={[...state.tasks.values()].some((t) => !!t.review && t.state !== "done")}
                   />
 
                   {pausing && hold && <HoldDialog onClose={() => setPausing(false)} onSave={(note) => hold(true, note)} />}
@@ -603,7 +581,16 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                             />
                           </>
                         ) : agentsNow.length ? (
-                          <AgentLanes agents={agentsNow} state={state} messages={messages} now={now} nameOf={nameOf} onOpenTask={openTask} />
+                          <>
+                            <AgentLanes agents={agentsNow} state={state} messages={messages} now={now} nameOf={nameOf} onOpenTask={openTask} />
+                            {onNewAgent && (
+                              <div className="mt-6 flex justify-center">
+                                <Button variant="secondary" onClick={onNewAgent}>
+                                  New agent
+                                </Button>
+                              </div>
+                            )}
+                          </>
                         ) : (
                           <AddAgent code={member.code} isOwner={isOwner} addsAgents={addsAgents} onNewAgent={onNewAgent} />
                         )}
@@ -623,7 +610,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                           {hereKey === "main" && !search && ready && (
                             <div className="sticky top-(--head) z-10 -mt-2 bg-canvas pt-2 pb-2">
                               {nowNode("", true)}
-                              <div aria-hidden className="pointer-events-none absolute inset-x-0 top-full h-6 bg-linear-to-b from-canvas to-transparent" />
+                              <div aria-hidden className="scrim-top absolute inset-x-0 top-full h-12" />
                             </div>
                           )}
                           {hereKey === "main" && needsYou}

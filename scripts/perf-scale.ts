@@ -257,7 +257,7 @@ try {
   await page.getByRole("textbox", { name: "Your name" }).fill("Jonatas");
   await page.getByRole("button", { name: "Continue" }).click();
   await page
-    .getByRole("banner", { name: "Channels" })
+    .getByRole("complementary", { name: "Channels" })
     .getByRole("button", { name: /Jonatas/i })
     .first()
     .waitFor();
@@ -267,7 +267,7 @@ try {
     options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true, hasPrf: true },
   } as never);
 
-  await page.getByRole("banner", { name: "Channels" }).getByRole("button", { name: "New channel", exact: true }).click();
+  await page.getByRole("complementary", { name: "Channels" }).getByRole("button", { name: "New channel", exact: true }).click();
   await page.getByRole("dialog").getByRole("textbox").fill("scale");
   const before = page.url();
   await page.getByRole("button", { name: "Create channel" }).click();

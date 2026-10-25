@@ -50,7 +50,7 @@ const BASE = `http://localhost:${port}/`;
 const browser = await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
 
 async function channel(page: Page, title: string): Promise<string> {
-  await page.getByRole("banner", { name: "Channels" }).getByRole("button", { name: "New channel", exact: true }).click();
+  await page.getByRole("complementary", { name: "Channels" }).getByRole("button", { name: "New channel", exact: true }).click();
   await page.getByRole("dialog").getByRole("textbox").fill(title);
   const before = page.url();
   await page.getByRole("button", { name: "Create channel" }).click();
@@ -83,7 +83,7 @@ async function channel(page: Page, title: string): Promise<string> {
     await saving.getByRole("button", { name: "Done" }).click();
     await saving.waitFor({ state: "hidden" });
   }
-  await page.getByRole("complementary", { name: "Channel" }).getByRole("region", { name: "Conversations" }).getByRole("button").first().click();
+  await page.getByRole("complementary", { name: "Channels" }).getByRole("region", { name: "Conversations" }).getByRole("button").first().click();
   await page.getByRole("textbox", { name: "Message" }).fill(`Plan the ${title} board`);
   await page.keyboard.press("Enter");
   return code;
@@ -118,11 +118,11 @@ async function seed(alias: string, prefix: string): Promise<void> {
   for (let i = 0; i < MESSAGES; i += 10) await Promise.all(Array.from({ length: Math.min(10, MESSAGES - i) }, (_, j) => send(`${prefix}${i + j}: ${texts[(i + j) % texts.length]}`)));
 }
 
-// A click on the channel's tab, timed in the page until the target's first screen (its task board) is painted.
+// A click on the channel's row in the sidebar, timed in the page until the target's first screen (its task board) is painted.
 async function switchTo(page: Page, title: string, last: string): Promise<number> {
   return page.evaluate(
     async ([name, text]) => {
-      const tile = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Channel tabs"] button')].find((b) => (b.getAttribute("aria-label") ?? "").startsWith(`${name},`));
+      const tile = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Your channels"] button')].find((b) => b.textContent?.trim().startsWith(name));
       if (!tile) return -1;
       const t0 = performance.now();
       tile.click();
@@ -168,7 +168,7 @@ try {
   await page.getByRole("textbox", { name: "Your name" }).fill("Jonatas");
   await page.getByRole("button", { name: "Continue" }).click();
   await page
-    .getByRole("banner", { name: "Channels" })
+    .getByRole("complementary", { name: "Channels" })
     .getByRole("button", { name: /Jonatas/i })
     .first()
     .waitFor();

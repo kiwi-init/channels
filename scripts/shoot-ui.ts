@@ -8,7 +8,7 @@
 // Shots are taken at 2x (Retina), as most people see the dashboard. --only keeps the screens whose
 // name contains one of the words (and skips the signed-out ones unless named), --wide skips the phone
 // size but for the screens --phone names, --theme keeps one theme: for a quick look at a few screens while working on them. --channels
-// adds that many more channels (one with news), to see a crowded tab bar and its More menu.
+// adds that many more channels (one with news), to see a crowded sidebar.
 // A screen that can't be reached is saved as skipped-<name>.png and fails the run. CI's
 // `build / shots` runs it --wide --phone channel,tasks --theme dark and uploads the shots as the ui-shots artifact.
 //
@@ -76,7 +76,7 @@ const wanted = (name: string) => !only || only.some((w) => name.includes(w));
 const takes = (tag: string, name: string) => wanted(name) && (!tag.endsWith("-narrow") || !wideOnly || !!phone?.some((w) => name.includes(w)));
 if (phone && !wideOnly) console.error("--phone narrows a --wide run; without --wide every screen is shot at both sizes");
 
-const chrome = (page: Page) => page.getByRole("banner", { name: "Channels" }).or(page.getByRole("complementary"));
+const chrome = (page: Page) => page.getByRole("complementary");
 
 async function firstRunAs(page: Page, name: string) {
   await page.getByRole("textbox", { name: "Your name" }).fill(name);
@@ -177,10 +177,15 @@ try {
   const toTab = async (name: "Tasks" | "Agents" | "Conversation") => {
     const tabs = owner.getByRole("navigation", { name: "Views of the channel" });
     if (await tabs.isVisible()) return tabs.getByRole("button", { name, exact: true }).click();
-    const side = owner.getByRole("complementary", { name: "Channel" });
-    if (name === "Tasks") return side.getByRole("navigation", { name: "Views" }).getByRole("button", { name: "Tasks", exact: true }).click();
-    if (name === "Agents") return side.getByRole("region", { name: "Agents" }).getByRole("button", { name: "Agents", exact: true }).click();
-    return side.getByRole("region", { name: "Conversations" }).getByRole("button", { name: /^# / }).first().click();
+    if (name === "Tasks") {
+      if (await owner.getByRole("navigation", { name: "Views" }).first().isVisible()) return;
+      return owner
+        .getByRole("button", { name: /^Tasks(,|$)/ })
+        .first()
+        .click();
+    }
+    if (name === "Agents") return owner.getByRole("button", { name: "Agents", exact: true }).first().click();
+    return owner.getByRole("region", { name: "Conversations" }).getByRole("button", { name: /^# / }).first().click();
   };
 
   const needs = owner.getByRole("region", { name: "Needs you" });
@@ -274,12 +279,9 @@ try {
   await win("task", "review", reviewed, "reload fetches only what is new");
   await win("escalate", "--holds", reviewed, "--kind", "irreversible", "Should I delete the 800 test rooms on the old relay? It frees space, and it can't be undone.");
   const askPermission = (tool: string, given: object) => kiwi(["-c", "kiwi-w", "--as", "win", tool, JSON.stringify(given), "/Users/jonatas/www/channels"], undefined, "scripts/seed-permission.ts");
-  const needsView = () =>
-    owner
-      .getByRole("complementary", { name: "Channel" })
-      .getByRole("navigation", { name: "Views" })
-      .getByRole("button", { name: /^Needs you/ });
+  const needsView = () => owner.getByRole("navigation", { name: "Views" }).getByRole("button", { name: /^Needs you/ });
   await askPermission("Bash", { command: "rm -rf web/dist && bun run web:build", description: "Rebuild the web bundle from scratch to check the size budget" });
+  await toTab("Tasks");
   await needsView().click();
   await needs.getByText("rm -rf web/dist", { exact: false }).first().waitFor({ timeout: 15000 });
   await needs.getByRole("button", { name: "Deny" }).first().click();
@@ -484,7 +486,7 @@ try {
         tag,
         "01b-search",
         async () => {
-          await owner.getByRole("complementary", { name: "Channel" }).getByRole("button", { name: "Search", exact: true }).click();
+          await owner.getByRole("button", { name: "Search", exact: true }).first().click();
           await owner.getByRole("textbox", { name: "Search this channel" }).first().fill("rows");
         },
         async () => void (await owner.keyboard.press("Escape")),
@@ -495,12 +497,12 @@ try {
         "01c-conversations-open",
         async () => {
           await owner
-            .getByRole("complementary", { name: "Channel" })
+            .getByRole("region", { name: "Conversations" })
             .getByRole("button", { name: /^\d+ more conversations?\b/ })
             .click();
         },
         async () => {
-          await owner.getByRole("complementary", { name: "Channel" }).getByRole("button", { name: "Show less" }).click();
+          await owner.getByRole("region", { name: "Conversations" }).getByRole("button", { name: "Show less" }).click();
         },
       );
       if (!narrow) {
@@ -514,17 +516,11 @@ try {
         await shoot(
           owner,
           tag,
-          "01f-mac-tab-bar",
+          "01f-mac-window",
           () => owner.evaluate(macWindow, true),
           () => owner.evaluate(macWindow, false),
         );
-        if (moreChannels > 0)
-          await shoot(owner, tag, "01e-more-channels", () =>
-            owner
-              .getByRole("banner", { name: "Channels" })
-              .getByRole("button", { name: /^\d+ more channels?\b/ })
-              .click(),
-          );
+        if (moreChannels > 0) await shoot(owner, tag, "01e-more-channels");
       }
       await owner.mouse.wheel(0, -4000);
       await shoot(owner, tag, "02-channel-top");
@@ -609,10 +605,9 @@ try {
         tag,
         "15-needs-you",
         async () => {
-          if (narrow) await toTab("Tasks");
-          else
+          await toTab("Tasks");
+          if (!narrow)
             await owner
-              .getByRole("complementary", { name: "Channel" })
               .getByRole("navigation", { name: "Views" })
               .getByRole("button", { name: /^Needs you/ })
               .click();
