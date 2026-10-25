@@ -1,14 +1,11 @@
-import { Add01Icon, ArrowDown01Icon, Search01Icon, TaskDone01Icon } from "@hugeicons/core-free-icons"
-import { useState, type ReactNode } from "react"
+import { Add01Icon, ArrowDown01Icon } from "@hugeicons/core-free-icons"
+import { useState } from "react"
+import { createPortal } from "react-dom"
 
-import type { ChannelIcon } from "@kiwi/core/protocol.ts"
 import type { Room } from "@kiwi/core/state/types.ts"
 import { roomProblem } from "@/lib/rooms"
-import { VIEWS, type View } from "@/lib/views"
-import { useSidebarHidden } from "@/lib/sidebar-hidden"
 import { cx } from "@/lib/utils"
-import { AgentRow, byBusy, type AgentNow } from "../agent-strip"
-import { ChannelIconTile } from "../channel-icon"
+import { useChannelSlot } from "../shell-sidebar"
 import { Icon } from "../icon"
 import { errorText } from "../kit"
 import { Menu, MenuItem, MenuNote, MenuSeparator } from "../ui/menu"
@@ -22,119 +19,16 @@ export interface Conversation {
   left: boolean
 }
 
-function Section({ title, onTitle, action, children }: { title: string; onTitle?: () => void; action?: ReactNode; children: ReactNode }) {
-  return (
-    <section aria-label={title} className="mt-6">
-      <h2 className="flex items-center justify-between px-3 pb-1.5 text-meta font-medium text-ink-3">
-        {onTitle ? (
-          <button type="button" onClick={onTitle} className="transition-colors hover:text-ink">
-            {title}
-          </button>
-        ) : (
-          title
-        )}
-        {action}
-      </h2>
-      {children}
-    </section>
-  )
-}
-
 const ROW = "flex h-9 w-full items-center rounded-ctl px-3 text-left text-ui transition-colors"
 const IDLE = "text-ink-2 hover:bg-wash hover:text-ink"
-
-function Add({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      className="-my-1 -mr-1.5 flex size-6 items-center justify-center rounded-row text-ink-3 transition-colors hover:bg-wash hover:text-ink"
-    >
-      <Icon icon={Add01Icon} size={15} />
-    </button>
-  )
-}
 
 function Item({ on, label, count, alert, onClick }: { on: boolean; label: string; count?: number; alert?: boolean; onClick: () => void }) {
   return (
     <li>
-      <button type="button" onClick={onClick} aria-current={on ? "page" : undefined} className={cx(ROW, "gap-2", on ? "prism-lit font-semibold text-ink" : IDLE)}>
+      <button type="button" onClick={onClick} aria-current={on ? "page" : undefined} className={cx(ROW, "gap-2", on ? "bg-(--chosen) font-semibold text-ink" : IDLE)}>
         <span className="min-w-0 flex-1 truncate">{label}</span>
         {!!count && <span className={cx("shrink-0 text-meta tabular-nums", alert ? "font-semibold text-decide" : "text-ink-3")}>{count}</span>}
       </button>
-    </li>
-  )
-}
-
-function SearchRow({ search, onSearch }: { search: string | null; onSearch: (q: string | null) => void }) {
-  if (search === null)
-    return (
-      <li>
-        <button type="button" onClick={() => onSearch("")} className={cx(ROW, "gap-2.5", IDLE)}>
-          <Icon icon={Search01Icon} size={16} className="shrink-0 text-ink-3" />
-          Search
-        </button>
-      </li>
-    )
-  return (
-    <li>
-      <label className="flex h-9 items-center gap-2.5 rounded-ctl px-3 text-ui text-ink-3 edge transition-colors focus-within:text-ink-2">
-        <Icon icon={Search01Icon} size={16} className="shrink-0" />
-        <input
-          autoFocus
-          value={search}
-          aria-label="Search this channel"
-          placeholder="Search this channel"
-          onChange={(e) => onSearch(e.target.value)}
-          onBlur={(e) => !e.target.value && onSearch(null)}
-          onKeyDown={(e) => e.key === "Escape" && onSearch(null)}
-          className="min-w-0 flex-1 bg-transparent text-ui text-ink outline-none placeholder:text-ink-3 focus-visible:outline-none"
-        />
-      </label>
-    </li>
-  )
-}
-
-const DOT: Partial<Record<View, string>> = { needs: "bg-alert", doing: "bg-doing", review: "bg-decide" }
-
-function TasksRow({ view, counts, onView }: { view: View | null; counts: Record<View, number>; onView: (v: View) => void }) {
-  return (
-    <li className={cx("flex h-9 items-center rounded-ctl transition-colors [--band:46%]", view ? "prism-lit" : "hover:bg-wash")}>
-      <button
-        type="button"
-        onClick={() => onView("everything")}
-        aria-current={view === "everything" ? "page" : undefined}
-        className={cx("flex h-full min-w-0 flex-1 items-center gap-2.5 px-3 text-left text-ui", view ? "font-semibold text-ink" : "text-ink-2 hover:text-ink")}
-      >
-        <Icon icon={TaskDone01Icon} size={16} className="shrink-0 text-ink-3" />
-        <span className="truncate">Tasks</span>
-      </button>
-      <span className="flex shrink-0 items-center gap-0.5 pr-1.5">
-        {VIEWS.flatMap(([v, label]) => {
-          const dot = DOT[v]
-          return dot && counts[v] > 0
-            ? [
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => onView(v)}
-                  aria-label={`${label}, ${counts[v]}`}
-                  aria-current={view === v ? "page" : undefined}
-                  title={label}
-                  className={cx(
-                    "flex h-6 items-center gap-1 rounded-row px-1 text-stamp font-semibold tabular-nums transition-colors hover:bg-wash hover:text-ink",
-                    view === v ? "text-ink" : "text-ink-2"
-                  )}
-                >
-                  <span className={cx("size-2 rounded-full", dot)} />
-                  {counts[v]}
-                </button>,
-              ]
-            : []
-        })}
-      </span>
     </li>
   )
 }
@@ -198,19 +92,15 @@ function NewRoom({ rooms, onMake, onClose }: { rooms: readonly Room[]; onMake: (
   )
 }
 
-function Conversations({
-  conversations,
-  current,
-  onConversation,
-  rooms,
-  onNewRoom,
-}: {
+interface ConversationsProps {
   conversations: Conversation[]
   current: string | null
   onConversation: (key: string) => void
   rooms: readonly Room[]
   onNewRoom?: ((name: string) => Promise<void>) | undefined
-}) {
+}
+
+export function Conversations({ conversations, current, onConversation, rooms, onNewRoom }: ConversationsProps) {
   const [open, setOpen] = useState(false)
   const [openLeft, setOpenLeft] = useState(false)
   const [making, setMaking] = useState(false)
@@ -222,8 +112,8 @@ function Conversations({
   const item = (c: Conversation) => <Item key={c.key} on={current === c.key} label={c.label} count={c.unread} alert={c.forMe} onClick={() => onConversation(c.key)} />
   const at = afterRooms(shown)
   return (
-    <Section title="Conversations" action={onNewRoom && <Add label="New room" onClick={() => setMaking(true)} />}>
-      <ul>
+    <section aria-label="Conversations">
+      <ul className="mt-0.5 space-y-0.5 pl-7.5">
         {shown.slice(0, at).map(item)}
         {making && onNewRoom && <NewRoom rooms={rooms} onMake={onNewRoom} onClose={() => setMaking(false)} />}
         {shown.slice(at).map(item)}
@@ -258,84 +148,22 @@ function Conversations({
           </li>
         )}
         {openLeft && left.map(item)}
+        {onNewRoom && !making && (
+          <li>
+            <button type="button" onClick={() => setMaking(true)} className={cx(ROW, "gap-2 text-ink-3 hover:bg-wash hover:text-ink")}>
+              <Icon icon={Add01Icon} size={14} className="shrink-0" />
+              <span className="min-w-0 flex-1 truncate">New room</span>
+            </button>
+          </li>
+        )}
       </ul>
-    </Section>
+    </section>
   )
 }
 
-export function ChannelSidebar({
-  title,
-  icon,
-  people,
-  onTitle,
-  search,
-  onSearch,
-  onAgents,
-  onNewAgent,
-  view,
-  counts,
-  onView,
-  agents,
-  onMessage,
-  onOpenTask,
-  conversations,
-  current,
-  onConversation,
-  rooms,
-  onNewRoom,
-}: {
-  title: string
-  icon: ChannelIcon | null
-  people: string
-  onTitle: () => void
-  search: string | null
-  onSearch: (q: string | null) => void
-  onAgents: () => void
-  onNewAgent?: (() => void) | undefined
-  view: View | null
-  counts: Record<View, number>
-  onView: (v: View) => void
-  agents: AgentNow[]
-  onMessage: (name: string) => void
-  onOpenTask: (id: number) => void
-  conversations: Conversation[]
-  current: string | null
-  onConversation: (key: string) => void
-  rooms: readonly Room[]
-  onNewRoom?: ((name: string) => Promise<void>) | undefined
-}) {
-  const hidden = useSidebarHidden()
-  if (hidden) return null
-  return (
-    <aside aria-label="Channel" className="hidden h-full w-[280px] shrink-0 flex-col overflow-y-auto bg-(--shell) px-3 pt-2 pb-4 md:-ml-2 md:flex">
-      <button type="button" onClick={onTitle} className="flex items-center gap-3 rounded-row px-2 py-1.5 text-left transition-colors hover:bg-wash">
-        <ChannelIconTile icon={icon} title={title} size={36} />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-title">{title}</span>
-          <span className="block truncate text-meta text-ink-3">{people}</span>
-        </span>
-      </button>
-
-      <nav aria-label="Views" className="mt-4">
-        <ul className="space-y-0.5">
-          <SearchRow search={search} onSearch={onSearch} />
-          <TasksRow view={view} counts={counts} onView={onView} />
-        </ul>
-      </nav>
-
-      {(agents.length > 0 || onNewAgent) && (
-        <Section title="Agents" onTitle={onAgents} action={onNewAgent && <Add label="New agent" onClick={onNewAgent} />}>
-          <ul>
-            {byBusy(agents).map((a) => (
-              <AgentRow key={a.name} a={a} onMessage={onMessage} onOpenTask={onOpenTask} />
-            ))}
-          </ul>
-        </Section>
-      )}
-
-      <Conversations conversations={conversations} current={current} onConversation={onConversation} rooms={rooms} onNewRoom={onNewRoom} />
-    </aside>
-  )
+export function ChannelSidebar(props: ConversationsProps) {
+  const slot = useChannelSlot()
+  return slot && createPortal(<Conversations {...props} />, slot)
 }
 
 export function ConversationMenu({ conversations, current, onConversation }: { conversations: Conversation[]; current: string | null; onConversation: (key: string) => void }) {

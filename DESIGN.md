@@ -14,9 +14,8 @@ Canonical sources: `web/src/index.css` (`:root`, `:root[data-theme]`,
 
 A quiet Messages-like conversation. White `#ffffff` / near-black `#161618`
 canvas, Apple system blue `#007aff` (light) / `#0a84ff` (dark), the system font,
-small purposeful motion, one pop shadow. One intentional mark: the open
-channel and the chosen view wear lit prism glass, after the app icon and the
-agents' heads; everything around them is plain, so it reads as meant.
+small purposeful motion, one pop shadow. What's chosen wears one quiet solid
+fill; everything around it is plain, so it reads as meant.
 
 ## 2. Theme architecture
 
@@ -46,7 +45,7 @@ Light / dark are the two sides of each `light-dark()` in `index.css`:
 | Token | Light | Dark |
 |---|---|---|
 | `canvas` (conversation) | `#ffffff` | `#161618` |
-| `rail` (the tab bar, the channel list and a channel's sidebar, a step darker) | `#f2f2f5` | `#000000` |
+| `rail` (the window's sidebar and the phone's channel list, a step darker) | `#f2f2f5` | `#000000` |
 | `shell` (the window surface: the rail, or the Mac's vibrancy under `html[data-frost]`, with a grey wash in dark) | the rail / `transparent` | the rail / `rgb(40 40 44 / 0.55)` |
 | `well` (a field's quiet solid fill) | `#f2f2f5` | `#232327` |
 | `chosen` (a selected row's quiet fill) | ink at 12% | white at 12% |
@@ -115,35 +114,29 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   `ui-tokens.ts`.
 - One shadow: `pop` (`0 0 0 1px pop-edge, 0 16px 40px -12px pop-shade`).
   No other shadows, and no coloured ones.
-- Two tones: the rails (the tab bar, the channel list and a channel's
-  sidebar) sit on `rail`, a step darker, and the page beside them is a
-  sheet of `canvas` (the `sheet` utility: right under the tab bar, 8px in
-  from the window's other edges, `card` radius, a 1px `line` ring), holding
-  the header, the
-  conversation and the tasks. Details is a sheet of its own beside it, 8px
-  apart. A thread and the tasks panel slide over the page's right side as a
-  sheet lifted with the `pop` shadow (`sheet-over`): the page keeps its width
-  and scroll, and its centered column (`aside-room`) slides left only as far
-  as its margin allows, so nothing reflows. `raised` and `field`
-  are the canvas. Inside a sheet,
-  rows, cards, search, inputs and the composer have no grey fill and no
+- Two tones: the sidebar sits on `shell` (the `rail`, or the Mac's vibrancy
+  under `data-frost`), and the page beside it is a sheet of `canvas` (the
+  `sheet` utility: `step` in from the window's edges and from the sidebar,
+  `card` radius, the `pop` shadow), holding the header, the conversation
+  and the tasks. Details is a sheet of its own beside it, 8px apart. A
+  thread and the tasks panel slide over the page's right side as a sheet
+  lifted with the `pop` shadow (`sheet-over`): the page keeps its width and
+  scroll, and its centered column (`aside-room`) slides left only as far as
+  its margin allows, so nothing reflows. `raised` and `field` are the
+  canvas. Inside a sheet, rows, cards and search have no grey fill and no
   background of their own; they are separated by spacing and a thin 1px
-  `line` (the `edge` utility). Popovers and dialogs lift off the canvas
-  with the `pop` shadow only. A phone has no sheet: one screen at a time,
-  on the canvas.
+  `line` (the `edge` utility). Fields, the composer first, are `well`, a
+  quiet solid fill; focus adds a hairline (`edge-strong`), never the accent
+  ring. Popovers and dialogs lift off the canvas with the `pop` shadow only.
+  A phone has no sheet: one screen at a time, on the canvas.
 - Liquid glass (`glass`), for what floats over the conversation (the
   header's round controls, the place pills, the composer): a translucent
   `glass-fill` over a blur, a bright `glass-rim` on top, a hairline round it.
-- Prism glass (`index.css`, `@layer components`): one class, `prism-lit`, on
-  what's chosen in the sidebar and nothing else: the open channel (its tab
-  in the tab bar, its row in the list) and the channel sidebar's chosen view or
-  conversation. A brighter fill, a lit edge bright at one corner
-  (`prism-glint-lit`), and a thin spectrum band (`spectrum-1..7`) inside it
-  at `--band` (70% by default), the way light splits in the heads. Search,
-  the tab bar's buttons, idle tabs and counts are plain, so the one lit thing
-  reads as meant. `test/prism.test.ts` keeps it that way. Under
-  `prefers-contrast: more` it falls back to a solid fill with a 2px `ink`
-  ring: no band, no glint.
+- Chosen (`chosen`, ink at 12%): what's chosen in a list wears one quiet
+  solid fill and nothing else does: the open conversation under its
+  channel, the open channel's row while none of its conversations is open,
+  and the phone list's open channel. Idle rows, Search and counts are
+  plain. `test/chosen.test.ts` keeps it that way.
 - Fall back to solid fills under `prefers-contrast: more`.
 - On a machine that draws without a GPU (WebGL's renderer is SwiftShader,
   llvmpipe or a basic render driver, or there's no WebGL: `lib/drawing.ts`
@@ -201,9 +194,10 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 - `ui/`: `menu`, `palette` (command palette: channels, actions,
   appearance), `panel`, `popover`, `tooltip` (500ms delay).
 - Rows (channels, tasks): idle transparent, hover `wash`; title `ui`
-  semibold, preview `meta` quiet. In the sidebar the open channel and the
-  chosen view or conversation are `prism-lit`. The header's tabs are text,
-  the current one in ink with a 2px `accent` mark under it.
+  semibold, preview `meta` quiet. In the sidebar what's open is bold and
+  wears `chosen`. On a phone the header's tabs are text, the current one in
+  ink with a 2px `accent` mark under it; on a wide window the toolbar's
+  task views are a segmented control.
 - A chosen option you pick from a set (role chips, personality rows, Joins
   as, an ask's options, room chips) wears `accent-wash` with an `accent`
   edge, and its label in `accent-text` or a check: it reads as chosen at a
@@ -235,26 +229,29 @@ From `design-tokens.ts`:
 
 ## 9. App patterns
 
-- Shell: the tab bar on top, then inside a channel its own sidebar (280px,
-  from 768px wide), both on `rail`; ⌘\ or the toggle at the start of the
-  tab bar hides the sidebar, and the page's header then takes its views (a
-  conversation menu, Search, and the Tasks / Agents / Conversation tabs).
-  Hidden stays hidden across reloads. The page is the round `sheet` beside
-  them: the channel's name and who is here, a Search row (a tap turns it
-  into the field; Escape, or leaving it empty, turns it back), one Tasks
-  row (it opens Everything, with Done this week at its foot) and beside it a
-  quiet dot and number for each state that waits (`alert` Needs you, `doing`
-  In progress, `decide` In review, only when above zero, each opening its
-  view), the agents with what each is doing now (a click opens your direct
-  conversation with it; the task id beside it opens its task), and the
-  conversations: the rooms, your own direct ones, one that asks for you and
-  the open one stay; threads between agents fold behind an "N more" row
-  carrying their unread total, which opens to "Show less". The page
-  beside it has one header row: what is shown, the channel's status
-  (working, merged today, needs you), and the
-  Tasks / Agents / Conversation tabs. A channel opens on its conversation
-  (Needs you's rows at its top while something waits); a view opens Tasks;
-  a conversation opens Conversation. The approved mockups are in `docs/ui/`.
+- Shell: from 768px wide, one sidebar (280px) on `shell` beside the page's
+  round `sheet`. Its top row is `card-head` tall: the sidebar toggle in a
+  channel (the Mac's traffic lights before it) and New channel at its end.
+  Under it one list, "Your channels": each channel's row (its 20px face,
+  its name, a blue dot or a count for news and questions, a lock on one you
+  can't open yet), and under the open channel its conversations, indented:
+  the rooms, your own direct ones, one that asks for you and the open one
+  stay; threads between agents fold behind an "N more" row carrying their
+  unread total, which opens to "Show less"; the owner's New room at the
+  foot. Your account, the app update and Settings sit at the bottom. ⌘\ or
+  the toggle hides the sidebar in a channel, and the toolbar then starts
+  with the toggle and a conversation menu; hidden stays hidden across
+  reloads.
+- The page's header is one toolbar, `card-head` tall, its controls
+  `control` round on its centre line: in the middle a pill on `well` with
+  the channel's face, name and status (working, merged today, needs you),
+  which opens Details; on the right Search, Tasks (an `alert` dot while
+  something needs you) and Agents as icons that toggle. With Tasks open, the
+  task views take the pill's place as a segmented control: Everything,
+  Needs you, Working, In review (only while a task has a reviewer) and
+  Done, each with its count. A channel opens on its conversation (Needs
+  you's rows at its top while something waits). The approved mockups are
+  in `docs/ui/`.
 - Needs you says one line per thing: a face or icon, what it is in one
   truncated line (a permission's command in mono, a join request's code
   beside it), and its answer buttons on the right (Allow once / Deny, let in /
@@ -283,20 +280,13 @@ From `design-tokens.ts`:
   files with their additions and deletions (four, then "+n more"), each
   check by name with how it went, and See the diff and GitHub as outlined
   buttons.
-- On a wide window the channels are tabs in a 52px bar across the top, as
-  a browser's: the Mac traffic lights at its start (its controls start
-  92px in on a Mac), the sidebar toggle, then each channel as a `ctl`-round
-  tab in the order you joined them: its 20px face, its name, a blue dot or
-  a count for news and questions, a lock on a channel you can't open yet,
-  and `prism-lit` when open. A channel with a lead wears the lead's head
-  there, in its own sidebar and in its details, the same face everywhere.
-  A hover card says what the full row says: name, time, last line. Tabs
-  that don't fit go under "N more" (a blue dot when one of them has news):
-  Find a channel (⌘K), then those channels, news first. The open channel
-  always keeps its tab. New follows the tabs; the app update and your
-  account sit at the bar's end. A phone always shows the full list. The
-  Mac app's window is never narrower than 768px, so it always has the tab
-  bar: the phone layout's headers would sit under the traffic lights.
+- A channel with a lead wears the lead's head in the sidebar, in its
+  details and in the toolbar's pill, the same face everywhere. A hover on a
+  channel's row says its last line, or why it can't open yet. A
+  phone always shows the full list. The Mac app's window is never narrower
+  than 768px, so it always has the sidebar: the phone layout's headers
+  would sit under the traffic lights. On Linux the window buttons stay in
+  the desktop's own title bar, so the top row starts at the sidebar's edge.
 - Conversation: no bubbles, everyone on the left, on the shell's one
   background. A message is a row: a 32px face, then the name in `ui`
   semibold, a quiet `owner` or `lead` tag and the time in `stamp`, the
@@ -423,10 +413,8 @@ Do: use vars, tabular numerals for times and counts, one accent at a time,
 a flat sidebar on `rail` beside the page's round sheet, inline composer panels, quiet placeholders, `Boundary` around
 channel views.
 Don't: hard-code hex, add font families, ship gradient marketing styling,
-build floating composer menus, use colored shadows, put prism on anything
-but what's chosen in the sidebar, spread the spectrum beyond a thin band
-in it, or put hairlines
-between the rails.
+build floating composer menus, use colored shadows, fill anything but
+what's chosen with `chosen`, or put hairlines between the rails.
 
 ## 14. The iPhone app
 

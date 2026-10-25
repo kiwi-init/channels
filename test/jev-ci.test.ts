@@ -121,7 +121,7 @@ const REHEARSAL = {
   ).replace("android]", "android, release-rehearsal]"),
   ".github/jev-ci.yml": `${CONFIG_TEXT.trimEnd()}\n\n  release-rehearsal:\n    name: release / rehearsal\n    jev: false\n    push: false\n    version_bumps: true\n    inputs: []\n    always:\n      - ".github/workflows/release-build.yml"\n    description: >-\n      Runs the release build as a rehearsal.\n`,
 };
-const CHECKS = ["static", "test-unit", "test-flows", "build", "shots", "desktop-mac", "desktop-linux", "cli-macos", "ios", "ios-gestures", "android"];
+const CHECKS = ["static", "test-unit", "test-flows", "build", "shots", "desktop-mac", "desktop-linux", "desktop-distros", "cli-macos", "ios", "ios-gestures", "android"];
 
 describe("the iPhone jobs wait only on what the iPhone app is built from (T1598)", () => {
   const desktopOnly = {
@@ -574,7 +574,7 @@ describe("a manual run can pick its jobs", () => {
 
   test("only the picked jobs run, a picked job's parts with it, and a name that isn't a job is noted and runs nothing", () => {
     const linux = onlyJobs(config, ["desktop-linux"]);
-    expect(linux.decisions.filter((d) => d.run).map((d) => d.job)).toEqual(["desktop-linux"]);
+    expect(linux.decisions.filter((d) => d.run).map((d) => d.job)).toEqual(["desktop-linux", "desktop-distros"]);
     const gate = onlyJobs(partsConfig, ["gate"]);
     expect(
       gate.decisions

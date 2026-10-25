@@ -96,12 +96,14 @@ async function run(part: Part): Promise<string[]> {
       });
   }
 
-  const tabBar = page.getByRole("banner", { name: "Channels" });
-  const account = tabBar.locator('button[aria-haspopup="menu"]', { hasText: "smoke" });
-  const newChannel = tabBar.getByRole("button", { name: "New channel", exact: true });
+  const shell = page.getByRole("complementary", { name: "Channels" });
+  const account = shell.locator('button[aria-haspopup="menu"]', { hasText: "smoke" });
+  const newChannel = shell.getByRole("button", { name: "New channel", exact: true });
+  const conversations = shell.getByRole("region", { name: "Conversations" });
   const details = page.getByRole("button", { name: /^Details:/ });
   const panel = page.getByRole("complementary", { name: "Details" });
   const inDetails = async (fn: () => Promise<void>) => {
+    if (!(await panel.isVisible()) && !(await details.isVisible())) await toTab("Conversation");
     if (!(await panel.isVisible())) await details.click();
     await panel.waitFor();
     await fn();
@@ -134,22 +136,20 @@ async function run(part: Part): Promise<string[]> {
   };
 
   const macLights = async () => {
-    at = "Mac: the traffic lights sit on the tab bar, clear of its controls and of the page";
+    at = "Mac: the traffic lights sit on the sidebar's top row, clear of its controls and of the page";
     await page.evaluate(() => (document.documentElement.dataset.shell = "mac"));
-    await account.click();
-    await page.getByRole("menuitem", { name: "Settings" }).click();
-    const settings = page.getByRole("region", { name: "Settings" });
-    const [room, bar] = await page.evaluate(() => ["--lights-w", "--chrome-h"].map((v) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(v))));
-    const first = await tabBar
-      .getByRole("button")
+    const room = await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--lights-w")));
+    const start = await newChannel.evaluate((el) => {
+      const row = el.parentElement!;
+      return row.getBoundingClientRect().left + parseFloat(getComputedStyle(row).paddingLeft);
+    });
+    const left = await page
+      .locator("main")
       .first()
       .evaluate((el) => el.getBoundingClientRect().left);
-    const top = await settings.evaluate((el) => el.getBoundingClientRect().top);
-    if (!(room! > 0) || first < room!) throw new Error(`on a Mac the tab bar's first control starts ${Math.round(first)}px in, under the traffic lights (they need ${room}px)`);
-    if (!(bar! > 0) || top < bar!) throw new Error(`on a Mac the page starts ${Math.round(top)}px down, under the tab bar (it takes ${bar}px)`);
+    if (!(room > 0) || start < room) throw new Error(`on a Mac the sidebar's top row starts ${Math.round(start)}px in, under the traffic lights (they need ${room}px)`);
+    if (left < room) throw new Error(`on a Mac the page starts ${Math.round(left)}px in, under the traffic lights (they need ${room}px)`);
     if (process.env.SMOKE_SHOTS) await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "mac-lights.png"), clip: { x: 0, y: 0, width: 400, height: 160 } });
-    await settings.getByRole("button", { name: "Close settings" }).click();
-    await settings.waitFor({ state: "detached" });
     await page.evaluate(() => delete document.documentElement.dataset.shell);
     log(`ok  ${at}`);
   };
@@ -170,14 +170,20 @@ async function run(part: Part): Promise<string[]> {
     log(`ok  ${at}`);
   };
 
-  /** The header's tabs on a phone; on a wide screen the sidebar is the navigation. */
+  /** The header's tabs on a phone; on a wide screen the toolbar's Tasks and Agents, which toggle, and the conversation in the sidebar. */
   const toTab = async (name: "Tasks" | "Agents" | "Conversation") => {
     const tabs = page.getByRole("navigation", { name: "Views of the channel" });
     if (await tabs.isVisible()) return tabs.getByRole("button", { name, exact: true }).click();
-    const side = page.getByRole("complementary", { name: "Channel" });
-    if (name === "Tasks") return side.getByRole("navigation", { name: "Views" }).getByRole("button", { name: "Tasks", exact: true }).click();
-    if (name === "Agents") return side.getByRole("region", { name: "Agents" }).getByRole("button", { name: "Agents", exact: true }).click();
-    return side.getByRole("region", { name: "Conversations" }).getByRole("list").getByRole("button").first().click();
+    if (await panel.isVisible()) {
+      await panel.getByRole("button", { name: "Close details" }).click();
+      await panel.waitFor({ state: "detached" });
+    }
+    const tasks = page.getByRole("button", { name: /^Tasks(,|$)/ });
+    const agents = page.getByRole("button", { name: "Agents", exact: true });
+    if (name === "Tasks") return (await tasks.getAttribute("aria-pressed")) === "true" ? undefined : tasks.click();
+    if (name === "Agents") return (await agents.getAttribute("aria-pressed")) === "true" ? undefined : agents.click();
+    if (await conversations.isVisible()) return conversations.getByRole("list").getByRole("button").first().click();
+    for (const on of [tasks, agents]) if ((await on.getAttribute("aria-pressed")) === "true") await on.click();
   };
 
   const openFromBoard = async (title: RegExp) => {
@@ -229,18 +235,18 @@ async function run(part: Part): Promise<string[]> {
     if (!card.includes(`--relay ${new URL(BASE).origin}`)) throw new Error("the Add an agent command doesn't name this relay");
     log(`ok  ${at}`);
 
-    at = "tab bar: the open channel's tab is current, and ⌘\\ hides the channel's sidebar and gives its views to the header";
-    await tabBar.getByRole("navigation", { name: "Channel tabs" }).locator('button[aria-current="page"]', { hasText: "smoke" }).waitFor();
-    const channelSide = page.getByRole("complementary", { name: "Channel" });
-    await channelSide.waitFor();
+    at = "sidebar: the open channel's row is current with its conversations under it, and ⌘\\ hides the sidebar and leaves the toolbar to show it again";
+    await shell.getByRole("navigation", { name: "Your channels" }).locator('button[aria-current="page"]', { hasText: "smoke" }).waitFor();
+    await conversations.waitFor();
     await page.keyboard.press("ControlOrMeta+Backslash");
-    await channelSide.waitFor({ state: "detached" });
-    await page.getByRole("navigation", { name: "Views of the channel" }).waitFor();
+    await shell.waitFor({ state: "hidden" });
+    const showSidebar = page.getByRole("button", { name: /^Show the sidebar/ });
+    await showSidebar.waitFor();
     await page.reload();
-    await page.getByRole("navigation", { name: "Views of the channel" }).waitFor();
-    if (await channelSide.isVisible()) throw new Error("the hidden sidebar came back after a reload");
-    await tabBar.getByRole("button", { name: /^Show the sidebar/ }).click();
-    await channelSide.waitFor();
+    await showSidebar.waitFor();
+    if (await shell.isVisible()) throw new Error("the hidden sidebar came back after a reload");
+    await showSidebar.click();
+    await conversations.waitFor();
     await toTab("Conversation");
     await page.getByRole("textbox", { name: "Message" }).waitFor();
     log(`ok  ${at}`);
@@ -300,7 +306,6 @@ async function run(part: Part): Promise<string[]> {
     if (process.env.SMOKE_SHOTS) await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "rooms.png") });
     await panel.getByRole("button", { name: "Back to details" }).click();
     await panel.getByRole("button", { name: /^Rooms.*#mobile/ }).waitFor();
-    const conversations = page.getByRole("complementary", { name: "Channel" }).getByRole("region", { name: "Conversations" });
     await conversations.getByRole("button", { name: /# mobile/ }).waitFor();
     await panel.getByRole("button", { name: /^Rooms/ }).click();
     await panel.getByRole("button", { name: "Rename #mobile" }).click();
@@ -478,7 +483,6 @@ async function run(part: Part): Promise<string[]> {
     await createChannel();
     await send("smoke test");
 
-    const sidebar = page.getByRole("complementary", { name: "Channel" });
     const addAgent = page.getByRole("region", { name: "Add an agent" });
     const channel = page.url();
     const code = new URL(channel).hash.slice(1);
@@ -637,7 +641,7 @@ async function run(part: Part): Promise<string[]> {
     await typed.fill("/tasks");
     await typed.press("Enter");
     await page
-      .locator('nav[aria-label="Views of the channel"]:visible button[aria-current="page"]:text-is("Tasks"), aside[aria-label="Channel"] nav[aria-label="Views"] button[aria-current="page"]')
+      .locator('nav[aria-label="Views of the channel"]:visible button[aria-current="page"]:text-is("Tasks"), nav[aria-label="Views"]:visible button[aria-current="page"]')
       .first()
       .waitFor({ timeout: 15000 });
     if (await tasksPanel.count()) throw new Error("/tasks opened a task list in the side panel instead of the Tasks tab");
@@ -751,7 +755,7 @@ async function run(part: Part): Promise<string[]> {
     await page.getByRole("textbox", { name: "Message" }).fill("smoke, privately");
     await page.keyboard.press("Enter");
     await page.getByText("smoke, privately", { exact: true }).first().waitFor({ timeout: 15000 });
-    const general = sidebar.getByRole("region", { name: "Conversations" }).getByRole("button", { name: /^# general/ });
+    const general = conversations.getByRole("button", { name: /^# general/ });
     await general.click();
     await general.and(page.locator("[aria-current=page]")).waitFor();
     log(`ok  ${at} and a direct conversation`);
@@ -770,8 +774,6 @@ async function run(part: Part): Promise<string[]> {
     log(`ok  ${at}`);
 
     at = "Tasks panel";
-    await sidebar.getByRole("region", { name: "Agents" }).waitFor();
-    await sidebar.getByRole("navigation", { name: "Views" }).getByRole("button", { name: "Tasks", exact: true }).click();
     await openFromBoard(/Smoke task/);
     await page.keyboard.press("Escape");
     await tasksPanel.waitFor({ state: "detached" });

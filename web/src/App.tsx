@@ -6,7 +6,7 @@ import { FirstRun } from "@/components/first-run"
 import { JoinWithCode, NewChannel, Welcome } from "@/components/lazy"
 import { ChannelIconTile } from "@/components/channel-icon"
 import { Sidebar } from "@/components/sidebar"
-import { ChannelTabs } from "@/components/channel-tabs"
+import { ShellSidebar } from "@/components/shell-sidebar"
 import { useMemberIcons } from "@/lib/icons"
 import { useIcons } from "@/lib/icons"
 import type { Command, PaletteActions } from "@/components/ui/palette"
@@ -132,19 +132,17 @@ export default function App() {
           <FirstRun />
         </>
       ) : (
-        <div className="flex h-svh flex-col overflow-clip md:bg-(--shell)">
-          <ChannelTabs
-            rows={rows}
-            news={news}
-            active={settings ? "" : code}
-            inChannel={!settings && rows.some((r) => r.code === code && r.state === "member")}
-            onSelect={open}
-            onNew={() => setSheet("new")}
-            onFind={() => setPalette(true)}
-            onComputers={() => setSheet("computers")}
-            onSettings={() => setSettings(true)}
-          />
-          <div className="flex min-h-0 flex-1 overflow-clip">
+        <ShellSidebar
+          rows={rows}
+          news={news}
+          active={settings ? "" : code}
+          inChannel={!settings && rows.some((r) => r.code === code && r.state === "member")}
+          onSelect={open}
+          onNew={() => setSheet("new")}
+          onComputers={() => setSheet("computers")}
+          onSettings={() => setSettings(true)}
+        >
+          <div className="flex min-h-0 min-w-0 flex-1 overflow-clip">
             <Sidebar
               rows={rows}
               news={news}
@@ -155,7 +153,7 @@ export default function App() {
               onSettings={() => setSettings(true)}
               className={cx(code || settings ? "hidden" : "flex", "md:hidden")}
             />
-            <main className={cx("relative min-w-0 flex-1 overflow-clip bg-canvas md:bg-(--shell) md:pl-2", code || settings ? "flex" : "hidden md:flex")}>
+            <main className={cx("relative min-w-0 flex-1 overflow-clip bg-canvas md:bg-transparent md:pl-(--step)", code || settings ? "flex" : "hidden md:flex")}>
               {settings && (
                 <div className="flex min-w-0 flex-1 md:sheet">
                   <SettingsPage backTo={rows.find((r) => r.code === code)?.title ?? "Channels"} onClose={() => setSettings(false)} />
@@ -176,7 +174,7 @@ export default function App() {
                 in document order, whatever the z-index, so a header after these would swallow their clicks. */}
             </main>
           </div>
-        </div>
+        </ShellSidebar>
       )}
       <NewChannel
         open={sheet === "new"}

@@ -301,7 +301,7 @@ export function Composer({
       <div>
         <div
           className={cx(
-            "relative min-w-0 overflow-hidden rounded-dock bg-canvas shadow-[inset_0_0_0_1px_var(--edge-strong)] transition-shadow focus-within:shadow-[inset_0_0_0_1px_var(--ring)]",
+            "relative min-w-0 overflow-hidden rounded-card bg-(--well) transition-shadow focus-within:shadow-[inset_0_0_0_1px_var(--edge-strong)]",
             dropping && "shadow-[0_0_0_1.5px_var(--ring)]"
           )}
           onDragEnter={(e) => {
@@ -328,7 +328,7 @@ export function Composer({
             })
           }}
         >
-          {dropping && <div className="pointer-events-none absolute inset-1 z-10 flex items-center justify-center rounded-dock bg-canvas/90 text-ui text-ink-2">Drop images</div>}
+          {dropping && <div className="pointer-events-none absolute inset-1 z-10 flex items-center justify-center rounded-card bg-canvas/90 text-ui text-ink-2">Drop images</div>}
 
           {files.length > 0 && (
             <div className="flex gap-2 overflow-x-auto px-3 pt-2.5">
