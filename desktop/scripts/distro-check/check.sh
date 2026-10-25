@@ -97,6 +97,7 @@ install "${ayatana[@]}" || exit 1
 lib_test kiwi-tray-test "$tests/kiwi-tray-test" "$lib"
 session gnome-keyring gnome-keyring tray
 session kwallet kwallet tray
+session kwallet-unanswered kwallet-unanswered tray
 lib_test kiwi-scheme-test xvfb-run -a "$tests/kiwi-scheme-test" "$lib"
 lib_test kiwi-notify-test xvfb-run -a "$tests/kiwi-notify-test" "$lib"
 [ -z "$from" ] || as_tester bash /home/tester/update.sh "$from" "$results" "$out/logs"

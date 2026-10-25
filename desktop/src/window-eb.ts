@@ -10,6 +10,7 @@ import { mark } from "./eb-startup.ts";
 import { externalUrl } from "./guard.ts";
 import { attachWindow, ebHost } from "./host-eb.ts";
 import { handlers } from "./ipc/handlers.ts";
+import { waitingPage } from "./keyring-wait.ts";
 import { openInBrowser } from "./open.ts";
 import { bunBridge } from "./rpc-eb.ts";
 import { snapshot, store } from "./store.ts";
@@ -44,10 +45,10 @@ function rulesHold(view: BrowserView): Promise<boolean> {
   });
 }
 
-export async function createWindow(): Promise<BrowserWindow | null> {
+export async function createWindow(waiting: boolean = false): Promise<BrowserWindow | null> {
   const index = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "..", PAGE_TEMPLATE), "utf8");
   const page = (): Uint8Array => cString(pageWithCsp(index, store.relayUrl));
-  const first = page();
+  const first = waiting ? cString(pageWithCsp(waitingPage(index, process.platform), store.relayUrl)) : page();
   const bundled = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "preload", "index.js"), "utf8");
   const table = handlers(ebHost);
   let view: BrowserView | null = null;
