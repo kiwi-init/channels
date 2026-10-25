@@ -107,7 +107,7 @@ const core = dlopen(path.join(binDir, `libElectrobunCore.${suffix}`), {
   updatePreloadScriptToWebView: { args: [FFIType.u32, FFIType.ptr, FFIType.ptr, FFIType.bool], returns: FFIType.void },
 }).symbols;
 
-export const cString = (s: string): Uint8Array => new TextEncoder().encode(`${s}\0`);
+export const cString = (s: string): Uint8Array<ArrayBuffer> => new TextEncoder().encode(`${s}\0`);
 
 const PRELOAD_ID = cString("electrobun_custom_preload_script");
 
@@ -120,14 +120,14 @@ export function committedPage(): string | null {
   return n > 0 && n < committedBuffer.length ? new TextDecoder().decode(committedBuffer.subarray(0, n)) : null;
 }
 
-export const setPageHtml = (view: number, html: Uint8Array): void => core.setWebviewHTMLContent(view, ptr(html));
+export const setPageHtml = (view: number, html: Uint8Array<ArrayBuffer>): void => core.setWebviewHTMLContent(view, html);
 
-export const setPreload = (view: number, source: string): void => core.updatePreloadScriptToWebView(view, ptr(PRELOAD_ID), ptr(cString(source)), false);
+export const setPreload = (view: number, source: string): void => core.updatePreloadScriptToWebView(view, PRELOAD_ID, cString(source), false);
 
 export function missingGuard(): string | null {
   if (!shell.kiwi_deny_permissions()) return "the web view's permission handler wasn't found; not opening a window that could grant the microphone";
   if (!guards.kiwi_guard_downloads()) return "the web view's download handler wasn't found; not opening a window that could save any file into Downloads";
-  if (!guards.kiwi_allow_only(ptr(PAGE_ONLY))) return "the web view's navigation handler wasn't found; not opening a window whose page could navigate away";
+  if (!guards.kiwi_allow_only(PAGE_ONLY)) return "the web view's navigation handler wasn't found; not opening a window whose page could navigate away";
   if (!shell.kiwi_watch_commits()) return "the web view's navigation delegate wasn't found; not opening a window that would trust a page it can't see";
   return null;
 }
@@ -146,7 +146,7 @@ const badge = dlopen(shellPath, { kiwi_badge: { args: [FFIType.i32], returns: ma
 
 export const showBadge = (count: number): void => void badge(Math.max(0, Math.min(Math.trunc(count), 1_000_000)));
 
-export const notifyLinux = (title: string, body: string): boolean => notes?.kiwi_notify(ptr(cString(title)), ptr(cString(body))) ?? false;
+export const notifyLinux = (title: string, body: string): boolean => notes?.kiwi_notify(cString(title), cString(body)) ?? false;
 
 export function onNoteClick(window: Pointer | null, clicked: () => void): boolean {
   if (!window) return false;

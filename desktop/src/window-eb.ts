@@ -48,7 +48,7 @@ function rulesHold(view: BrowserView): Promise<boolean> {
 
 export async function createWindow(waiting: boolean = false): Promise<BrowserWindow | null> {
   const index = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "..", PAGE_TEMPLATE), "utf8");
-  const page = (): Uint8Array => cString(pageWithCsp(index, store.relayUrl));
+  const page = (): Uint8Array<ArrayBuffer> => cString(pageWithCsp(index, store.relayUrl));
   const first = waiting ? cString(pageWithCsp(waitingPage(index, process.platform), store.relayUrl)) : page();
   const bundled = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "preload", "index.js"), "utf8");
   const table = handlers(ebHost);
@@ -99,7 +99,7 @@ export async function createWindow(waiting: boolean = false): Promise<BrowserWin
     fail("the window's navigation rules didn't take effect; not opening it");
     return null;
   }
-  const load = (html: Uint8Array = page()): void => {
+  const load = (html: Uint8Array<ArrayBuffer> = page()): void => {
     setPageHtml(webview.id, html);
     bridge.retire();
     webview.loadURL(PAGE_URL);

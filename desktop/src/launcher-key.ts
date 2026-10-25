@@ -1,6 +1,6 @@
 import fs from "node:fs";
 
-import { dlopen, FFIType, ptr } from "bun:ffi";
+import { dlopen, FFIType } from "bun:ffi";
 
 import { legacyPassword } from "./legacy-keys.ts";
 import type { LegacyPassword } from "./legacy-store.ts";
@@ -17,7 +17,7 @@ const LIBC = process.platform === "darwin" ? "/usr/lib/libSystem.B.dylib" : "lib
 function unsetenv(name: string): void {
   const libc = dlopen(LIBC, { unsetenv: { args: [FFIType.ptr], returns: FFIType.i32 } });
   try {
-    libc.symbols.unsetenv(ptr(Buffer.from(`${name}\0`, "utf8")));
+    libc.symbols.unsetenv(new TextEncoder().encode(`${name}\0`));
   } finally {
     libc.close();
   }
