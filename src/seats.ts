@@ -13,9 +13,9 @@
 //     replaced its seat (the listener records which session started it);
 //   - a seat an agent joined from a plain terminal is never taken over by a session.
 
-import { realpathSync } from "node:fs";
+import { readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir, hostname } from "node:os";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { kimiAncestor, kimiCodePid, mimoHere, piHere, type ProcessTree } from "./ancestry.ts";
 import { loadConfig, updateConfig, type Config, type SeatRecord } from "./config.ts";
 import { holdsSeat, seatHeldAway, seatHolds, seatRefusal } from "./hold.ts";
@@ -144,6 +144,45 @@ export function tooBroad(dir: string): boolean {
   return d === real(homedir()) || dirname(d) === d;
 }
 
+function mainCheckout(dir: string): string | null {
+  for (let d = resolve(dir); dirname(d) !== d; d = dirname(d)) {
+    const dot = join(d, ".git");
+    let folder: boolean;
+    try {
+      folder = statSync(dot).isDirectory();
+    } catch {
+      // No .git at this level: the checkout's top is further up.
+      continue;
+    }
+    if (folder) return null;
+    const gitdir = /^gitdir:\s*(.+)$/m.exec(readFileSync(dot, "utf8"))?.[1]?.trim();
+    if (!gitdir) return null;
+    const at = resolve(d, gitdir);
+    try {
+      const common = resolve(at, readFileSync(join(at, "commondir"), "utf8").trim());
+      return basename(common) === ".git" ? dirname(common) : null;
+    } catch {
+      // A .git file without a commondir is a submodule's, not a worktree's: it has no main checkout to look in.
+      return null;
+    }
+  }
+  return null;
+}
+
+function seatedUp(cfg: Config, dir: string): boolean {
+  for (let d = resolve(dir); !tooBroad(d); d = dirname(d)) if (seatsAt(cfg, d).some((b) => cfg.channels[b.alias])) return true;
+  return false;
+}
+
+/** Where to look for `dir`'s seats: `dir` itself, or, when no seat is anywhere up from a git worktree, its main checkout. */
+function seatHome(cfg: Config, dir: string): string {
+  if (seatedUp(cfg, dir)) return dir;
+  const main = mainCheckout(dir);
+  if (!main) return dir;
+  const bound = Object.keys(cfg.bindings ?? {}).find((d) => real(d) === real(main)) ?? main;
+  return seatedUp(cfg, bound) ? bound : dir;
+}
+
 /** The seats kept for one directory. One seat is stored as a plain object, which clients before 0.10 read too. */
 export function seatsAt(cfg: Config, dir: string): Binding[] {
   const v = cfg.bindings?.[dir];
@@ -215,7 +254,8 @@ export interface SeatOptions {
   claim?: boolean;
 }
 
-export function seatsFor(dir: string, opts: SeatOptions = {}): Binding[] {
+export function seatsFor(from: string, opts: SeatOptions = {}): Binding[] {
+  const dir = seatHome(loadConfig(), from);
   const who = opts.who ?? here();
   const live = opts.listeners?.() ?? [];
   const listening = (alias: string, as: string) => live.some((l) => l.alias === alias && l.as === as);
@@ -402,9 +442,9 @@ function within(path: string, dir: string): boolean {
 }
 
 /** The seats in `dir` or its nearest ancestor that has any, whoever holds them. */
-export function seatsNear(dir: string): Binding[] {
+export function seatsNear(from: string): Binding[] {
   const cfg = loadConfig();
-  for (let d = resolve(dir); !tooBroad(d); d = dirname(d)) {
+  for (let d = resolve(seatHome(cfg, from)); !tooBroad(d); d = dirname(d)) {
     const seats = seatsAt(cfg, d).filter((b) => cfg.channels[b.alias]);
     if (seats.length) return seats;
   }
