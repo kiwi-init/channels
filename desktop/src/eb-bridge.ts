@@ -82,8 +82,8 @@ export const preloadSource = (boot: Boot, bundle: string): string => `globalThis
 export const PAGE_INTERNAL_RPC: ReadonlySet<string> = new Set(["startWindowMove", "stopWindowMove", "restoreWindowFocusAfterExternalDrop"]);
 
 export interface InternalRpc {
-  request: Record<string, (params: never) => unknown>;
-  message: Record<string, (params: never) => unknown>;
+  request: Record<string, (...args: never[]) => unknown>;
+  message: Record<string, (...args: never[]) => unknown>;
 }
 
 export function lockInternalRpc(rpc: InternalRpc, keep: ReadonlySet<string> = PAGE_INTERNAL_RPC): string[] {

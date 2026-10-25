@@ -44,7 +44,7 @@
   "app": {
     "macos-arm64": {
       "Contents/MacOS/launcher": "cb56c4ccfa6d2c1a3596e44d143af212b5af3e196199a83c19d511506f28ff4f",
-      "Contents/MacOS/bun": "539598c775882420b9d8deb7dc14d845f20f7d26f5600c50ab067dde6ac3f3bf",
+      "Contents/MacOS/bun": "0a2237cdcfa0d16ef501d9acca9f0026309ef348bea7393a64e8d1e3609565cc",
       "Contents/MacOS/libElectrobunCore.dylib": "6575313685d45fa3ac82598fd55d09c9228fbb8ab135e455d19112f3bf59a7c2",
       "Contents/MacOS/libNativeWrapper.dylib": "9eaa4cdfabe6c3947e617a4de58888888a7f099787f0dca02b4313904481344b",
       "Contents/MacOS/libasar.dylib": "775e92fed7238ea1da09ec5ae54a72a19baaccf602a4467f16bb2e36cff9cfbc",
@@ -53,7 +53,7 @@
       "Contents/Resources/main.js": "8afb61682280f0f2bd82abaad23996d043781cf23cd132a2bbfa2a8b8cd001c7",
       "Contents/Resources/preload-full.js": "0c9f9ff20749edffc2768f4a89c08bd5af916d3471dda8af6e5d05510a9630ac",
       "Contents/Resources/preload-sandboxed.js": "d358fa4e85148ae6059eca9cfb398faf7a6c0710a03cdc972275f6a61670f3f9",
-      "Contents/Resources/uninstall": "1445e6d53835578651faec6a4bc306be7a191aee5bb5240a924965433bf63717"
+      "Contents/Resources/uninstall": "45da8d9b9e20000b6794167fc35c67aae86a61a7b1183985d237c7dadd2dab52"
     }
   }
 }
