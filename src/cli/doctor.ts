@@ -6,9 +6,9 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import { spawn } from "node:child_process";
 import { lookup } from "node:dns/promises";
-import { existsSync, realpathSync } from "node:fs";
+import { accessSync, constants, existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { delimiter, isAbsolute, join, sep } from "node:path";
 import { DEFAULT_RELAY, loadConfig } from "../config.ts";
 import { EXTRA_HARNESSES, extraInstalled, hooksInstalled } from "../hooks.ts";
 import { loadMachine, type MachineFile } from "../machine.ts";
@@ -67,6 +67,60 @@ const checkInstall = Effect.fn("Doctor.install")(function* () {
   if (reported === null) found.push({ ok: false, what: "the kiwi on PATH did not print a version.", how: "Reinstall kiwi so `kiwi version` works." });
   else if (reported !== VERSION) found.push({ ok: false, what: `the kiwi on PATH is ${reported}; this command is ${VERSION}.`, how: "Reinstall so the shell and this checkout are the same version." });
   return found;
+});
+
+const PATH_MARKS = ["# Added by the Channels app", "# Added by the kiwi installer"];
+
+function kiwisOnPath(pathVar: string): { path: string; real: string }[] {
+  const seen = new Set<string>();
+  const out: { path: string; real: string }[] = [];
+  for (const dir of pathVar.split(delimiter)) {
+    if (!dir || !isAbsolute(dir)) continue;
+    const bin = join(dir, "kiwi");
+    try {
+      accessSync(bin, constants.X_OK);
+      const real = realpathSync(bin);
+      if (seen.has(real)) continue;
+      seen.add(real);
+      out.push({ path: bin, real });
+    } catch {
+      // No runnable kiwi in this PATH folder.
+    }
+  }
+  return out;
+}
+
+function markedProfiles(home: string, env: Record<string, string | undefined>): string[] {
+  const zsh = env["ZDOTDIR"] || home;
+  const files = [join(zsh, ".zshrc"), join(zsh, ".zprofile"), join(home, ".bash_profile"), join(home, ".bashrc"), join(home, ".profile"), join(home, ".config", "fish", "config.fish")];
+  return files.filter((f) => {
+    try {
+      const text = readFileSync(f, "utf8");
+      return PATH_MARKS.some((m) => text.includes(m));
+    } catch {
+      // No such profile.
+      return false;
+    }
+  });
+}
+
+const tilde = (p: string, home: string) => (p === home || p.startsWith(home + sep) ? `~${p.slice(home.length)}` : p);
+
+/** An older kiwi ahead of Homebrew's on PATH (a leftover ~/.kiwi/bin/kiwi and its PATH line): a shell runs the old one. */
+export const checkShadowed = Effect.fn("Doctor.shadowed")(function* (pathVar: string = process.env.PATH ?? "", home: string = homedir(), env: Record<string, string | undefined> = process.env) {
+  const bins = kiwisOnPath(pathVar);
+  const brewAt = bins.findIndex((b) => b.real.includes(`${sep}Cellar${sep}kiwi${sep}`));
+  if (brewAt <= 0) return null;
+  const first = bins[0]!;
+  const [old, brew] = yield* Effect.promise(() => Promise.all([binVersion(first.path), binVersion(bins[brewAt]!.path)]));
+  const shown = tilde(first.path, home);
+  const lines = markedProfiles(home, env).map((f) => tilde(f, home));
+  const finding: Finding = {
+    ok: false,
+    what: `${shown}${old ? ` (${old})` : ""} comes before Homebrew's kiwi${brew ? ` (${brew})` : ""} on PATH, so a shell runs the old one.`,
+    how: `Remove it: rm ${shown}${lines.length ? `, and delete the marked PATH lines in ${lines.join(", ")} (each "# Added by …" line and the export under it)` : ""}, then open a new terminal. Your keys and seats in ~/.kiwi stay as they are.`,
+  };
+  return finding;
 });
 
 /** What a step that couldn't finish said, in words. */
@@ -158,6 +212,8 @@ export const checks = Effect.fn("Doctor.checks")(function* () {
   })();
   const relay = (process.env.KIWI_RELAY ?? machineRelay ?? DEFAULT_RELAY).replace(/\/+$/, "");
   const found = yield* checkInstall();
+  const shadowed = yield* checkShadowed();
+  if (shadowed) found.push(shadowed);
   const relayCheck = yield* checkRelay(relay);
   found.push(relayCheck.finding);
   found.push(checkPaired());

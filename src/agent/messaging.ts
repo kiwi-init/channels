@@ -35,6 +35,8 @@ const ANSWERING_TTL = 600_000;
 
 const answeringKey = (seq: number): string => `answering #${seq}`;
 
+const shellQuoted = (text: string): string => `'${text.replace(/'/g, "'\\''")}'`;
+
 export class SessionMessaging extends SessionListen {
   readonly resolveTo = Effect.fn("AgentSession.resolveTo")({ self: this }, function* (this: SessionMessaging, to: string[] | undefined, state?: ChannelState) {
     if (to?.some((t) => EVERYONE.has(t.toLowerCase()))) return ["*"];
@@ -63,7 +65,7 @@ export class SessionMessaging extends SessionListen {
       const room = opts.ev ? undefined : (parent ?? (yield* this.roomId(opts.room)));
       if (opts.task !== undefined && !state.tasks.has(opts.task)) return yield* new Rejected(`no task ${taskId(opts.task)}`);
       if (opts.dm && (to?.length !== 1 || to[0] === this.me || !state.members.get(to[0]!)?.active)) return yield* new Rejected("a direct message goes to exactly one other member: --to @name");
-      if (opts.kind !== "event") for (const re of opts.re ?? []) yield* this.notAnsweredByOthers(state, re);
+      if (opts.kind !== "event") for (const re of opts.re ?? []) yield* this.notAnsweredByOthers(state, re, body);
       const inThread = !!opts.re?.length;
       const seq = yield* this.ch.fx.send(body, { ...opts, to, room, ...(inThread ? { task: undefined, dm: undefined } : {}) });
       return seq;
@@ -143,7 +145,7 @@ export class SessionMessaging extends SessionListen {
       const { messages, state } = yield* this.state();
       const orig = yield* this.message(seq, messages);
       if (!orig) return yield* new Rejected(`no message #${seq}`);
-      yield* this.notAnsweredByOthers(state, seq);
+      yield* this.notAnsweredByOthers(state, seq, body);
       const to = orig.from === this.me ? orig.to : [orig.from];
       yield* this.mayI({ kind, to });
       const sent = yield* this.ch.fx.send(body, { to, kind, re: [seq], imgs, room: state.roomOf.get(seq) ?? orig.room, ...extra });
@@ -166,11 +168,20 @@ export class SessionMessaging extends SessionListen {
     oneLook,
   );
 
-  private notAnsweredByOthers(state: ChannelState, seq: number) {
+  private notAnsweredByOthers(state: ChannelState, seq: number, body?: string) {
     const held = state.facts.get(answeringKey(seq));
     const me = state.members.get(this.me);
     if (!held || held.value === this.me || (me && isPerson(me))) return Effect.void;
-    return Effect.fail(new Rejected(`${held.value} is answering #${seq}: leave it to them, or react to it`));
+    const heldByOther = (s: number) => {
+      const h = state.facts.get(answeringKey(s));
+      return !!h && h.value !== this.me;
+    };
+    const root = state.threadOf.get(seq) ?? seq;
+    const under = [...state.threadOf].filter(([s, r]) => r === root && s !== seq && !heldByOther(s) && !ignored(state.trust.get(s))).reduce((top, [s]) => Math.max(top, s), 0);
+    const add = under
+      ? `to add to its thread, post under #${under} instead: kiwi send --to '#${under}' ${body === undefined ? '"…"' : shellQuoted(body)}`
+      : `nothing else is in its thread yet: react to it (kiwi react ${seq} 👍), or add to the thread under ${held.value}'s answer once it's there`;
+    return Effect.fail(new Rejected(`${held.value} is answering #${seq}: leave the answer to them; ${add}`));
   }
 
   protected taken(what: (who: string) => string) {

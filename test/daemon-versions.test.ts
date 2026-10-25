@@ -32,6 +32,8 @@ function fakeDaemon(sock: string, version: string): { stops: () => number; close
   return { stops: () => stops, close: () => server.stop(true) };
 }
 
+const NEWER = `${Number(VERSION.split(".")[0]) + 1}.0.0`;
+
 const DAEMON_ARGV = [process.execPath, join(import.meta.dir, "../src/cli/main.ts"), "daemon"];
 
 test("versions order as releases do: numbers by value, a release above its own pre-releases", () => {
@@ -44,10 +46,11 @@ test("versions order as releases do: numbers by value, a release above its own p
 
 test("an older kiwi keeps a newer daemon running instead of replacing it", async () => {
   const dir = mkdtempSync(join(tmpdir(), "kiwi-daemon-newer-"));
-  const fake = fakeDaemon(daemonSock(dir), "999.0.0");
+  const fake = fakeDaemon(daemonSock(dir), NEWER);
   try {
+    expect(compareVersions(NEWER, VERSION)).toBe(1);
     const hello = await ensureDaemon(dir, DAEMON_ARGV);
-    expect(hello.version).toBe("999.0.0");
+    expect(hello.version).toBe(NEWER);
     expect(fake.stops()).toBe(0);
   } finally {
     fake.close();
