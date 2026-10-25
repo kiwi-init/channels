@@ -12,6 +12,10 @@ on:
         description: "Only these .github/jev-ci.yml jobs, comma-separated (desktop-linux, desktop-mac, …); empty runs everything"
         required: false
         default: ""
+      update_from:
+        description: "desktop / distros also updates this released version's AppImage to the latest release (update.sh)"
+        required: false
+        default: ""
 
 # A new push to a pull request cancels its run still in progress: only the newest commit's
 # result matters there. Pushes to main share one group but never cancel the run in progress: it
@@ -568,7 +572,52 @@ jobs:
         with:
           job: desktop-linux
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-linux'] }}
-          shard: ${{ matrix.part }}of2
+          shard: ${{ matrix.part }}of4
+
+  desktop-distros:
+    name: desktop / distros, ${{ matrix.distro }}
+    needs: [plan, desktop-linux]
+    if: ${{ !cancelled() && fromJSON(needs.plan.outputs.run)['desktop-distros'] && needs.desktop-linux.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    container:
+      image: ${{ matrix.image }}
+      options: --privileged
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: fedora
+            image: fedora:44
+            part: 3
+          - distro: arch
+            image: archlinux:latest
+            part: 4
+    steps:
+      - name: git and tar for the checkout
+        run: if command -v dnf > /dev/null; then dnf -y -q install git tar gzip; else pacman -Sy --noconfirm git tar gzip; fi
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: linux-packages-ubuntu-24.04
+          path: ${{ runner.temp }}/packages
+      - name: the AppImage on a stock ${{ matrix.distro }}, under headless weston on native Wayland
+        env:
+          UPDATE_FROM: ${{ inputs.update_from }}
+        run: bash desktop/scripts/distro-check/check.sh ${{ matrix.distro }} "$(ls "$RUNNER_TEMP"/packages/Channels-*-linux-x86_64.AppImage)" "$RUNNER_TEMP/distro-check" "$UPDATE_FROM"
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: distro-check-${{ matrix.distro }}
+          path: ${{ runner.temp }}/distro-check
+          if-no-files-found: warn
+          retention-days: 3
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: desktop-linux
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-linux'] }}
+          shard: ${{ matrix.part }}of4
 
   cli-macos:
     name: cli / macos
@@ -730,7 +779,7 @@ jobs:
   # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, static, test-unit, test-flows, build, shots, desktop-mac, desktop-linux, cli-macos, ios, ios-gestures, android]
+    needs: [plan, static, test-unit, test-flows, build, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, ios, ios-gestures, android]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
