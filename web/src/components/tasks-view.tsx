@@ -1,11 +1,11 @@
 import { CancelCircleIcon, CheckmarkCircle02Icon, Loading03Icon } from "@hugeicons/core-free-icons"
 import { Component, createRef, type ReactNode } from "react"
 
-import { colorOf, taskId, tasksAwaitingPeople, type AskHead, type ChannelState, type Task } from "@kiwi/core/state.ts"
+import { colorOf, taskId, tasksAwaitingPeople, type ChannelState, type Task } from "@kiwi/core/state.ts"
 import { taskPr, type PrChecks } from "@kiwi/core/work.ts"
 import { formatAgoShort, memberName } from "@/lib/format"
 import { labelOf } from "@/lib/task-labels"
-import { taskGroups, type View } from "@/lib/views"
+import { taskGroups, type GroupHead, type View } from "@/lib/views"
 import { cx } from "@/lib/utils"
 import { doingNow, type AgentNow } from "./agent-strip"
 import { Icon } from "./icon"
@@ -116,14 +116,33 @@ function TaskRow({
   )
 }
 
-function AskGroup({ ask, count, state, children }: { ask: AskHead | null; count: number; state: ChannelState; children: ReactNode }) {
-  const words = ask?.words.trim() ?? ""
-  const label = ask ? (words ? `“${words}”` : `#${ask.id}`) : "Unfiled"
-  const meta = ask ? `${memberName(state.members.get(ask.by), ask.by)} · #${ask.id}` : "No person's message holds these"
+function headText(head: GroupHead, state: ChannelState): { label: string; meta: string; title?: string; slide: string } {
+  switch (head.kind) {
+    case "ask": {
+      const { ask } = head
+      const words = ask?.words.trim() ?? ""
+      return {
+        label: ask ? (words ? `“${words}”` : `#${ask.id}`) : "Unfiled",
+        meta: ask ? `${memberName(state.members.get(ask.by), ask.by)} · #${ask.id}` : "No person's message holds these",
+        ...(words ? { title: words } : {}),
+        slide: `g${ask?.id ?? "unfiled"}`,
+      }
+    }
+    case "next":
+      return { label: head.name ? `Next: ${head.name}` : "Next release", meta: "Merged, not in a release yet", slide: "gnext" }
+    case "release":
+      return { label: `Shipped in ${head.tag}`, meta: `Released ${new Date(head.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`, slide: `grelease:${head.tag}` }
+    case "cancelled":
+      return { label: "Cancelled", meta: "Closed without shipping", slide: "gcancelled" }
+  }
+}
+
+function Group({ head, count, state, children }: { head: GroupHead; count: number; state: ChannelState; children: ReactNode }) {
+  const { label, meta, title, slide } = headText(head, state)
   return (
     <section aria-label={label} className="pt-4">
-      <div data-slide={`g${ask?.id ?? "unfiled"}`}>
-        <h2 title={words || undefined} className="flex min-w-0 items-baseline gap-2 px-3 text-ui font-semibold">
+      <div data-slide={slide}>
+        <h2 title={title} className="flex min-w-0 items-baseline gap-2 px-3 text-ui font-semibold">
           <span className="truncate">{label}</span>
           <span className="shrink-0 font-normal text-ink-3 tabular-nums">{count}</span>
         </h2>
@@ -219,13 +238,13 @@ export function TasksView({
       {showNeeds && <div className="px-3">{needs}</div>}
       {view === "needs" && !needs && <p className="px-3 pt-6 text-ui text-ink-3">Nothing needs you right now.</p>}
       {groups.map((g) => (
-        <AskGroup key={g.key} ask={g.ask} count={g.tasks.length} state={state}>
+        <Group key={g.key} head={g.head} count={g.tasks.length} state={state}>
           <ul className="divide-y divide-line">
             {g.tasks.map((t) => (
               <TaskRow key={t.id} task={t} state={state} now={now} agent={t.owner ? byName.get(t.owner) : undefined} waiting={waiting.has(t.id)} open={open === t.id} prs={prs} onOpen={onOpen} />
             ))}
           </ul>
-        </AskGroup>
+        </Group>
       ))}
       {!groups.length && view !== "everything" && view !== "needs" && <p className="px-3 pt-6 text-ui text-ink-3">Nothing here right now.</p>}
     </Reorder>
