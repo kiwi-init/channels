@@ -177,7 +177,7 @@ export function ComputersModal({ open, onClose }: { open: boolean; onClose: () =
   const inApp = !!bridge()
 
   return (
-    <Modal open={open} onClose={onClose}>
+    <Modal open={open} onClose={onClose} closeLabel="Close Your computers">
       <div className="p-5">
         <h2 className="text-title font-semibold">Your computers</h2>
         <p className="mt-1 text-ui leading-normal text-ink-2">

@@ -247,7 +247,7 @@ export function Tabs<T extends string>({
   )
 }
 
-type ModalProps = { open: boolean; onClose: () => void; children: ReactNode; wide?: boolean; roomy?: boolean }
+type ModalProps = { open: boolean; onClose: () => void; children: ReactNode; wide?: boolean; roomy?: boolean; closeLabel?: string }
 type AlertProps = { open: boolean; onClose: () => void; title: ReactNode; message?: ReactNode; children: ReactNode }
 
 const dialogs = () => import("./kit-dialog")

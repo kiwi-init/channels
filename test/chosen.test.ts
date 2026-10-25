@@ -31,8 +31,10 @@ test("the kit is the quiet look: an accent primary, an outlined secondary, a was
   expect(kit).toContain('type="checkbox" className={cx("size-4 shrink-0 accent-[var(--accent)]"');
 });
 
-test("what's chosen in a list wears the one quiet fill: the open channel's row, the open conversation and the phone list's open channel, and nothing wears a prism", () => {
-  const lists = ["components/shell-sidebar.tsx", "components/sidebar.tsx", "components/conversation/channel-sidebar.tsx"].map((f) => resolve(web, f));
+test("what's chosen in a list wears the one quiet fill: the open channel's row, the open conversation, the phone list's open channel, Settings' open section and the personality being edited, and nothing wears a prism", () => {
+  const lists = ["components/shell-sidebar.tsx", "components/sidebar.tsx", "components/conversation/channel-sidebar.tsx", "components/settings.tsx", "components/personalities.tsx"].map((f) =>
+    resolve(web, f),
+  );
   const chosen = files(web).filter((f) => readFileSync(f, "utf8").includes("bg-(--chosen)"));
   expect(chosen.sort()).toEqual(lists.sort());
   const prism = files(web).filter((f) => /\b(prism|prism-lit|orb|orb-pill)\b/.test(readFileSync(f, "utf8")));

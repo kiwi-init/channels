@@ -29,6 +29,8 @@ const CAPABILITY_TEXT: Record<Capability, [string, string]> = {
 
 const BLANK: Omit<Personality, "id"> = { name: "New personality", glyph: "✳", role: "builder", capabilities: ["write", "tasks", "notes"], areas: [], instructions: "" }
 
+const FIELD = "bg-(--well) text-ink transition-shadow outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--edge-strong)] focus-visible:outline-none"
+
 function tagline(p: Personality): string {
   if (PRESET_IDS.has(p.id)) return TAGLINE[p.id] ?? ROLE_LABEL[p.role]
   return `${ROLE_LABEL[p.role]}${p.areas.length ? `, limited to ${p.areas.join(", ")}` : ""}`
@@ -49,7 +51,7 @@ function Row({ p, picked, onPick }: { p: Personality; picked: boolean; onPick: (
         type="button"
         aria-current={picked}
         onClick={onPick}
-        className={cx("flex w-full items-start gap-3 rounded-ctl border px-3 py-2 text-left transition-colors", picked ? "border-accent bg-accent-wash" : "border-transparent hover:bg-wash")}
+        className={cx("flex w-full items-start gap-3 rounded-ctl px-3 py-2 text-left transition-colors", picked ? "bg-(--chosen)" : "hover:bg-wash")}
       >
         <Tile glyph={p.glyph} />
         <span className="min-w-0">
@@ -86,7 +88,7 @@ function Editor({ p, onChange, onDuplicate, onDelete }: { p: Personality; onChan
             value={glyph}
             onChange={(e) => setGlyph(e.target.value)}
             onBlur={() => ([...glyph.trim()].length === 1 ? glyph.trim() !== p.glyph && set({ glyph: glyph.trim() }) : setGlyph(p.glyph))}
-            className="size-11 shrink-0 rounded-row border border-edge-strong bg-transparent text-center text-title text-ink"
+            className={cx("size-11 shrink-0 rounded-row text-center text-title", FIELD)}
           />
         )}
         <div className="min-w-0 flex-1">
@@ -180,7 +182,7 @@ function Editor({ p, onChange, onDuplicate, onDelete }: { p: Personality; onChan
               onChange={(e) => setArea(e.target.value)}
               onBlur={addArea}
               placeholder="+ add a path, like web/"
-              className="w-48 rounded-row border border-dashed border-edge-strong bg-transparent px-2.5 py-1 font-mono text-ui text-ink placeholder:text-ink-3"
+              className={cx("w-48 rounded-row px-2.5 py-1 font-mono text-ui", FIELD)}
             />
           </form>
         </div>
@@ -196,7 +198,7 @@ function Editor({ p, onChange, onDuplicate, onDelete }: { p: Personality; onChan
           maxLength={MAX_INSTRUCTIONS}
           onChange={(e) => setInstructions(e.target.value)}
           onBlur={() => instructions !== p.instructions && set({ instructions })}
-          className="min-h-40 flex-1 resize-none rounded-ctl border border-edge-strong bg-transparent p-3 text-ui leading-relaxed text-ink"
+          className={cx("min-h-40 flex-1 resize-none rounded-ctl p-3 text-ui leading-relaxed", FIELD)}
         />
       </div>
     </section>
