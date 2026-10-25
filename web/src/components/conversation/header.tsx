@@ -10,6 +10,7 @@ import { ChannelIconTile } from "../channel-icon"
 import { HoldBanner } from "../controls"
 import { Icon } from "../icon"
 import { IconButton } from "../kit"
+import { SidebarToggle } from "../shell-sidebar"
 
 export function Header({
   headRef,
@@ -46,14 +47,24 @@ export function Header({
   const wide = useSidebarHidden()
   return (
     <header ref={headRef} className="absolute inset-x-0 top-0 z-20 bg-canvas">
-      <div className="drag relative flex h-(--chrome-h) items-center gap-1 px-2 sm:gap-3 sm:px-3 md:px-6">
+      <div
+        className={cx(
+          "drag relative flex h-(--chrome-h) items-center gap-1 px-2 sm:gap-3 sm:px-3 md:h-(--card-head) md:gap-(--step) md:px-(--step)",
+          wide && "md:shell-mac:pl-[calc(var(--lights-w)-var(--step))]"
+        )}
+      >
+        {wide && (
+          <span className="hidden md:flex">
+            <SidebarToggle />
+          </span>
+        )}
         <IconButton label="Channels" round className="size-9 text-ink md:hidden" onClick={onBack}>
           <Icon icon={ArrowLeft01Icon} size={20} />
         </IconButton>
         <button type="button" aria-label={headingLabel} onClick={onTitle} className="no-drag shrink-0 rounded-full sm:hidden">
           <ChannelIconTile icon={face.icon} title={face.title} size={28} />
         </button>
-        <button type="button" aria-label={headingLabel} onClick={onTitle} className="no-drag hidden min-w-0 truncate text-left text-title sm:block">
+        <button type="button" aria-label={headingLabel} onClick={onTitle} className="no-drag hidden min-w-0 truncate text-left text-title sm:block md:text-ui md:font-semibold">
           <span className="md:hidden">{heading}</span>
           <span className="hidden md:inline">{wideHeading}</span>
         </button>
@@ -63,7 +74,7 @@ export function Header({
         <IconButton
           label="Search"
           round
-          className={cx("size-9", !wide && "md:hidden", search === null && "text-ink")}
+          className={cx("size-9 md:size-(--control)", !wide && "md:hidden", search === null && "text-ink")}
           active={search !== null}
           onClick={() => setSearch((s) => (s === null ? "" : null))}
         >
@@ -77,7 +88,7 @@ export function Header({
               aria-current={tab === t ? "page" : undefined}
               onClick={() => onTab(t)}
               className={cx(
-                "relative h-9 rounded-row px-2 text-ui transition-colors hover:text-ink sm:px-2.5",
+                "relative h-9 rounded-row px-2 text-ui transition-colors hover:text-ink sm:px-2.5 md:h-(--control)",
                 tab === t ? "font-semibold text-ink after:absolute after:inset-x-2 after:bottom-0.5 after:h-0.5 after:rounded-full after:bg-accent sm:after:inset-x-2.5" : "text-ink-2"
               )}
             >

@@ -1,5 +1,6 @@
 import { Add01Icon, ArrowDown01Icon, Search01Icon, TaskDone01Icon } from "@hugeicons/core-free-icons"
 import { useState, type ReactNode } from "react"
+import { createPortal } from "react-dom"
 
 import type { ChannelIcon } from "@kiwi/core/protocol.ts"
 import type { Room } from "@kiwi/core/state/types.ts"
@@ -9,6 +10,7 @@ import { useSidebarHidden } from "@/lib/sidebar-hidden"
 import { cx } from "@/lib/utils"
 import { AgentRow, byBusy, type AgentNow } from "../agent-strip"
 import { ChannelIconTile } from "../channel-icon"
+import { useChannelSlot } from "../shell-sidebar"
 import { Icon } from "../icon"
 import { errorText } from "../kit"
 import { Menu, MenuItem, MenuNote, MenuSeparator } from "../ui/menu"
@@ -305,18 +307,11 @@ export function ChannelSidebar({
   onNewRoom?: ((name: string) => Promise<void>) | undefined
 }) {
   const hidden = useSidebarHidden()
+  const slot = useChannelSlot()
   if (hidden) return null
-  return (
-    <aside aria-label="Channel" className="hidden h-full w-[280px] shrink-0 flex-col overflow-y-auto bg-rail px-3 pt-2 pb-4 md:-ml-2 md:flex">
-      <button type="button" onClick={onTitle} className="flex items-center gap-3 rounded-row px-2 py-1.5 text-left transition-colors hover:bg-wash">
-        <ChannelIconTile icon={icon} title={title} size={36} />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-title">{title}</span>
-          <span className="block truncate text-meta text-ink-3">{people}</span>
-        </span>
-      </button>
-
-      <nav aria-label="Views" className="mt-4">
+  const views = (
+    <>
+      <nav aria-label="Views" className={slot ? "mt-2" : "mt-4"}>
         <ul className="space-y-0.5">
           <SearchRow search={search} onSearch={onSearch} />
           <TasksRow view={view} counts={counts} onView={onView} />
@@ -334,6 +329,25 @@ export function ChannelSidebar({
       )}
 
       <Conversations conversations={conversations} current={current} onConversation={onConversation} rooms={rooms} onNewRoom={onNewRoom} />
+    </>
+  )
+  if (slot)
+    return createPortal(
+      <section aria-label="Channel" className="pb-4">
+        {views}
+      </section>,
+      slot
+    )
+  return (
+    <aside aria-label="Channel" className="hidden h-full w-[280px] shrink-0 flex-col overflow-y-auto bg-rail px-3 pt-2 pb-4 md:-ml-2 md:flex">
+      <button type="button" onClick={onTitle} className="flex items-center gap-3 rounded-row px-2 py-1.5 text-left transition-colors hover:bg-wash">
+        <ChannelIconTile icon={icon} title={title} size={36} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-title">{title}</span>
+          <span className="block truncate text-meta text-ink-3">{people}</span>
+        </span>
+      </button>
+      {views}
     </aside>
   )
 }

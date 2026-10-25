@@ -99,6 +99,11 @@
    */
   --chrome-h: 52px;
   --lights-w: 92px;
+  --shell: var(--rail);
+  --step: 8px;
+  --card-head: 30px;
+  --control: 26px;
+  --well: light-dark(#f2f2f5, #1c1c1f);
 }
 
 :root[data-theme="light"] {
@@ -111,6 +116,10 @@
 
 .dark-stage {
   color-scheme: dark;
+}
+
+html[data-frost] {
+  --shell: transparent;
 }
 
 /* In the desktop app on a Mac (main.tsx sets data-shell): the traffic lights sit on the list's header. */
@@ -214,7 +223,7 @@ select {
 
 body {
   margin: 0;
-  background: var(--rail);
+  background: var(--shell);
   color: var(--ink);
   font-family: var(--font-sans);
   font-size: calc(15px * var(--text-scale, 1));
@@ -476,10 +485,10 @@ html[data-drawing="software"] .scrim-bottom {
 }
 
 @utility sheet {
-  margin: 0 8px 8px 0;
+  margin: var(--step) var(--step) var(--step) 0;
   border-radius: var(--radius-card);
   background: var(--canvas);
-  box-shadow: 0 0 0 1px var(--line);
+  box-shadow: var(--shadow-pop);
   overflow: clip;
 }
 
