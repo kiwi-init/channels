@@ -12,7 +12,6 @@ const shell = dlopen(shellPath, {
   kiwi_deny_permissions: { args: [], returns: FFIType.bool },
   kiwi_watch_commits: { args: [], returns: FFIType.bool },
   kiwi_committed_url: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
-  kiwi_watch_page: { args: [FFIType.function], returns: FFIType.bool },
 }).symbols;
 
 const sandboxPages = mac ? null : dlopen(shellPath, { kiwi_sandbox_pages: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.bool } }).symbols.kiwi_sandbox_pages;
@@ -154,8 +153,6 @@ export function onNoteClick(window: Pointer | null, clicked: () => void): boolea
   noteClicks = new JSCallback(() => clicked(), { args: [], returns: "void", threadsafe: true });
   return noteClicksOf(window, noteClicks.ptr);
 }
-
-export const watchPageGone = (gone: JSCallback): boolean => shell.kiwi_watch_page(gone);
 
 export function sandboxOff(): string | null {
   if (!sandboxPages) return null;
