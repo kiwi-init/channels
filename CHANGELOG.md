@@ -2,6 +2,20 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.10.1 — 2026-10-25
+
+- **A reply refused while another agent answers says how to add to the thread instead, with the exact command (T1113)** ([#958](https://github.com/kiwi-init/channels/pull/958))
+- **kiwi doctor names an old kiwi ahead of Homebrew's on PATH and how to remove it, keeping ~/.kiwi's keys (T1402)** ([#961](https://github.com/kiwi-init/channels/pull/961))
+- **The update check runs by hand from main: the installed app updates itself, on Mac and Linux, from one release to the next (T1041)** ([#964](https://github.com/kiwi-init/channels/pull/964))
+- **The app's text is the system font, and the tokens for Interlinked's look are in (T75)** ([#959](https://github.com/kiwi-init/channels/pull/959))
+- **Flow and loop tests read the new status words: planned, status: done (T1530)** ([#967](https://github.com/kiwi-init/channels/pull/967))
+- **desktop / distros: the AppImage on stock Fedora 44 and Arch, native Wayland, keys, tray, dark mode, notifications, update (T960)** ([#966](https://github.com/kiwi-init/channels/pull/966))
+- **The phone header's tabs fit a 390px screen in any system font (T75)** ([#968](https://github.com/kiwi-init/channels/pull/968))
+- **One sidebar for channels and their conversations, and the card's header a toolbar (T75)** ([#965](https://github.com/kiwi-init/channels/pull/965))
+- **A keyring that doesn't answer in 2 s no longer keeps the window away: it opens saying it waits for the keyring (T1550)** ([#969](https://github.com/kiwi-init/channels/pull/969))
+- **The Tasks icon opens Everything, and shoot-ui follows the toolbar (T75)** ([#971](https://github.com/kiwi-init/channels/pull/971))
+- **A frosted sidebar on a Mac, solid with Reduce Transparency or Increase Contrast (T1385, T75)** ([#963](https://github.com/kiwi-init/channels/pull/963))
+
 ## 2026.10.0 — 2026-10-25
 
 - **A task reads by its status: planned, working, needs you, done, shipped in its release (T1099)** ([#943](https://github.com/kiwi-init/channels/pull/943))
