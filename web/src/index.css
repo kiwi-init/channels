@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import "@fontsource-variable/inter/opsz.css";
 
 /*
  * Kiwi's look: Apple Messages' conversation, in a room as quiet as Grok's. The conversation is the
@@ -26,7 +25,7 @@
 :root,
 .dark-stage {
   color-scheme: light dark;
-  --canvas: light-dark(#ffffff, #0d0d0e);
+  --canvas: light-dark(#ffffff, #161618);
   --rail: light-dark(#f2f2f5, #000000);
   --raised: var(--canvas);
   --field: var(--canvas);
@@ -99,6 +98,12 @@
    */
   --chrome-h: 52px;
   --lights-w: 92px;
+  --shell: var(--rail);
+  --step: 8px;
+  --card-head: 30px;
+  --control: 26px;
+  --well: light-dark(#f2f2f5, #232327);
+  --chosen: light-dark(rgba(15, 15, 17, 0.12), rgba(255, 255, 255, 0.12));
 }
 
 :root[data-theme="light"] {
@@ -113,16 +118,15 @@
   color-scheme: dark;
 }
 
+html[data-frost] {
+  --shell: light-dark(transparent, rgb(40 40 44 / 0.55));
+}
+
 /* In the desktop app on a Mac (main.tsx sets data-shell): the traffic lights sit on the list's header. */
 @custom-variant shell-mac (&:where([data-shell="mac"], [data-shell="mac"] *));
 
 @theme inline {
-  /*
-   * Inter, everywhere: the same letters on a Mac, Windows and Linux (the system stacks differ a lot
-   * there), a variable optical size (Inter Display at the big sizes, Text at the small ones), and
-   * tabular figures for times and counts. The system face stands in only until it loads.
-   */
-  --font-sans: "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
   /*
    * Six type steps and nothing between them (scripts/ui-tokens.ts keeps it that way):
@@ -214,13 +218,12 @@ select {
 
 body {
   margin: 0;
-  background: var(--rail);
+  background: var(--shell);
   color: var(--ink);
   font-family: var(--font-sans);
   font-size: calc(15px * var(--text-scale, 1));
   line-height: calc(21px * var(--text-scale, 1));
-  /* Inter's open digits and a tailed l: easier to tell 1, l and I apart in names and keys. */
-  font-feature-settings: "calt", "kern", "cv05", "cv08";
+  font-feature-settings: "calt", "kern";
   font-optical-sizing: auto;
   letter-spacing: -0.006em;
   text-rendering: optimizeLegibility;

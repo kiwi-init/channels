@@ -21,7 +21,7 @@ let next = 0
 
 const MIN_SCALE = 0.7
 
-const FONT = '"Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif'
+const FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif'
 
 function resolver(): { color: (token: string) => string; done: () => void } {
   const probe = document.createElement("span")

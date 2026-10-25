@@ -13,7 +13,7 @@ Canonical sources: `web/src/index.css` (`:root`, `:root[data-theme]`,
 ## 1. Identity in one line
 
 A quiet Messages-like conversation. White `#ffffff` / near-black `#161618`
-canvas, Apple system blue `#007aff` (light) / `#0a84ff` (dark), Inter only,
+canvas, Apple system blue `#007aff` (light) / `#0a84ff` (dark), the system font,
 small purposeful motion, one pop shadow. One intentional mark: the open
 channel and the chosen view wear lit prism glass, after the app icon and the
 agents' heads; everything around them is plain, so it reads as meant.
@@ -25,8 +25,9 @@ agents' heads; everything around them is plain, so it reads as meant.
   accent, accent-ink, accent-text, accent-wash, link, ring, alert,
   alert-fill, live,
   doing, warn, overlay, bubble-me, bubble-them, pick, head-*, avatar-*,
-  pop-edge, pop-shade, shadow-pop`, plus `frame, panel, edge, edge-strong`
-  aliases.
+  pop-edge, pop-shade, shadow-pop, shell, well, chosen`, plus `frame, panel,
+  edge, edge-strong` aliases, and the sizes `step, card-head, control`
+  (section 5).
 - Each token is written once as `light-dark(day, night)`. The system picks
   the side, unless `lib/theme.ts` set `data-theme` because the person chose
   light or dark. `system` leaves `data-theme` unset so the media query
@@ -44,8 +45,11 @@ Light / dark are the two sides of each `light-dark()` in `index.css`:
 
 | Token | Light | Dark |
 |---|---|---|
-| `canvas` (conversation) | `#ffffff` | `#0d0d0e` |
+| `canvas` (conversation) | `#ffffff` | `#161618` |
 | `rail` (the tab bar, the channel list and a channel's sidebar, a step darker) | `#f2f2f5` | `#000000` |
+| `shell` (the window surface: the rail, or the Mac's vibrancy under `html[data-frost]`, with a grey wash in dark) | the rail / `transparent` | the rail / `rgb(40 40 44 / 0.55)` |
+| `well` (a field's quiet solid fill) | `#f2f2f5` | `#232327` |
+| `chosen` (a selected row's quiet fill) | ink at 12% | white at 12% |
 | `raised` (cards, popovers) | the canvas | the canvas |
 | `field` (inputs) | the canvas | the canvas |
 | `ink` | `#0f0f11` | `#f3f3f5` |
@@ -72,10 +76,12 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 
 ## 4. Typography
 
-- Sans: `"Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI",
-  system-ui, sans-serif` (`@fontsource-variable/inter`). Mono:
-  `ui-monospace, "SF Mono", Menlo, monospace`.
-- Body: `-0.006em` letter-spacing, `calt/kern/cv05/cv08`, antialiased,
+- Apps use the system font, websites use Paper Mono (the owner, T75).
+  The app's text is `-apple-system, BlinkMacSystemFont, "Segoe UI",
+  system-ui, sans-serif` (SF Pro on a Mac, the desktop's own sans on
+  Linux); code is `ui-monospace, "SF Mono", Menlo, monospace`. The sites
+  (kiwiinit.com and the landing pages) set their headings in Paper Mono.
+- Body: `-0.006em` letter-spacing, `calt/kern`, antialiased,
   `optimizeLegibility`. Display/title set tighter at `-0.014em`.
 - Six type steps and nothing between them (`scripts/ui-tokens.ts` keeps it
   that way; 4 documented exceptions for the pairing code, wordmark and
@@ -92,10 +98,14 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   lines, `accent-wash` notes, Inter 13px, `row`-round nodes, no shadows).
   It fits the bubble down to 70%, then scrolls with the same `code-more`
   fade. Mermaid that doesn't parse stays a code block with its error.
-- No additional font families. Hierarchy comes from weight, size and
-  spacing, not font swaps.
+- No additional font families in the app: the system face and the code
+  face. Hierarchy comes from weight, size and spacing, not font swaps.
 
 ## 5. Radius, shadow, blur
+
+- Spacing: one step, `step 8px`, between groups and from the window's and
+  a card's edges. A card's header is `card-head 30px`, its controls
+  `control 26px`, all on the header's one centre line.
 
 - Steps: `row 8px`, `ctl 10px`, `card 16px`, `bubble 20px` (pictures in
   a message and the annotator) and `dock 26px` (the composer, soft without a pill's half-moon
