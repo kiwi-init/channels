@@ -63,11 +63,6 @@ else
     fi
   fi
   kill -0 "$pid" 2> /dev/null || problems+=("the app exited while its window was open")
-  b=$(pgrep -s "$pid" -x bun | head -n 1)
-  if [ "$want" = sandboxed ] && [ -n "$b" ] && [ "$launcher" = /opt/Channels/bin/launcher ]; then
-    kept_env="$home.env"
-    tr '\0' '\n' < "/proc/$b/environ" | grep -v '^HOME=' > "$kept_env"
-  fi
 fi
 
 kill -TERM -- "-$pid" 2> /dev/null
@@ -83,42 +78,6 @@ fi
 
 if grep -q "navigation rules didn't take effect" "$out"; then problems+=("the rules canary wasn't reported refused on WebKitGTK, so the app quit"); fi
 if grep -qE "download handler wasn't found|navigation handler wasn't found" "$out"; then problems+=("libkiwi-shell's download or navigation guard didn't install, so the app refused its window"); fi
-
-boxed_with() {
-  local h p ok=no w up
-  h=$(mktemp -d)
-  env -i "$@" HOME="$h" setsid /opt/Channels/bin/electrobun-launcher > "$h/out" 2>&1 &
-  p=$!
-  sleep 9
-  for w in $(pgrep -s "$p" -f WebKitWebProcess); do
-    up=$w
-    while [ -n "$up" ] && [ "$up" -gt 1 ] && [ "$up" != "$p" ]; do
-      up=$(ps -o ppid= -p "$up" | tr -d ' ')
-      [ -n "$up" ] && [ "$(ps -o comm= -p "$up")" = bwrap ] && ok=yes
-    done
-  done
-  kill -TERM -- "-$p" 2> /dev/null
-  sleep 2
-  kill -KILL -- "-$p" 2> /dev/null
-  rm -rf "$h"
-  [ "$ok" = yes ]
-}
-if [ -n "${kept_env:-}" ]; then
-  mapfile -t kept < "$kept_env"
-  mapfile -t dropped < <(env | grep -v '^HOME=' | while IFS= read -r line; do n=${line%%=*}; grep -q "^$n=" "$kept_env" || printf '%s\n' "$line"; done)
-  echo "kiwi-probe: ${#kept[@]} kept, ${#dropped[@]} dropped: $(printf '%s ' "${dropped[@]%%=*}")"
-  if boxed_with "${kept[@]}"; then echo "kiwi-probe: kept only: sandboxed"; else echo "kiwi-probe: kept only: not sandboxed"; fi
-  if boxed_with "${kept[@]}" "${dropped[@]}"; then echo "kiwi-probe: kept + all dropped: sandboxed"; else echo "kiwi-probe: kept + all dropped: not sandboxed"; fi
-  set_=("${dropped[@]}")
-  while [ ${#set_[@]} -gt 1 ]; do
-    half=$(( ${#set_[@]} / 2 ))
-    a=("${set_[@]:0:$half}")
-    b=("${set_[@]:$half}")
-    if boxed_with "${kept[@]}" "${a[@]}"; then set_=("${a[@]}"); elif boxed_with "${kept[@]}" "${b[@]}"; then set_=("${b[@]}"); else echo "kiwi-probe: neither half alone sandboxes: $(printf '%s ' "${set_[@]%%=*}")"; break; fi
-    echo "kiwi-probe: narrowed to ${#set_[@]}: $(printf '%s ' "${set_[@]%%=*}" | cut -c1-300)"
-  done
-  echo "kiwi-probe: result: $(printf '%s | ' "${set_[@]}" | cut -c1-400)"
-fi
 
 if [ ${#problems[@]} -gt 0 ]; then
   echo "the app's output:"
