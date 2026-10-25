@@ -2,6 +2,12 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.27.7 — 2026-10-25
+
+- **Linux: a missing library is named with the right install line for the distro, before the app tries to start (T1066)** ([#939](https://github.com/kiwi-init/channels/pull/939))
+- **A task's checks follow its repo's own merge rules: the required checks decide red and green (T1097)** ([#940](https://github.com/kiwi-init/channels/pull/940))
+- **The Linux app starts without libayatana-appindicator (stock Fedora and Arch), with no tray (T1065)** ([#938](https://github.com/kiwi-init/channels/pull/938))
+
 ## 0.27.6 — 2026-10-24
 
 - **Android: @mentions are offered on a new line, and completing one keeps the line break** ([#928](https://github.com/kiwi-init/channels/pull/928))
