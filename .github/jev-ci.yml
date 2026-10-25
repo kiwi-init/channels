@@ -488,6 +488,7 @@ jobs:
       - "desktop/scripts/eb-driver-check.ts"
       - "desktop/scripts/eb-env-check.ts"
       - "desktop/scripts/eb-frame-check.ts"
+      - "desktop/scripts/eb-frost-check.ts"
       - "desktop/scripts/eb-home-keychain.ts"
       - "desktop/scripts/eb-keys-check.ts"
       - "desktop/scripts/eb-keys-probe.ts"
@@ -535,6 +536,7 @@ jobs:
       Its first-screen gate, electrobunFirstScreenMs, is 1000 ms for the same reason (600-875 ms scaled on CI, against Electron's 745).
       The smoke also sets the page's news count through window.kiwi.setBadge and fails unless 4 shows on the Dock icon (lsappinfo's StatusLabel, NSDockTile in desktop/native/macos/kiwi-shell.m) and 0 clears it (T971).
       Then desktop/scripts/eb-frame-check.ts starts the test app three times with one home: a first start opens at 1200x800, and after the window is moved and resized and the app quits through Electrobun's quit sequence, the next start opens where it was left at that size (desktop/native/macos/kiwi-shell.m restores the frame AppKit autosaves under the name Channels, kept at least the minimum size, T972).
+      Then desktop/scripts/eb-frost-check.ts starts the test app twice with one home (T1385): at startup the window looks the way the Mac's accessibility display options ask (a CI runner asks for solid), then the test driver's frostForTest and solidForTest force each way; forced to frost, the window has the sidebar material (an NSVisualEffectView, .sidebar) behind a web view that draws no background, the page is marked data-frost, and window.kiwi.setAppearance with dark, light and system sets the window's appearance to darkAqua, aqua and the system's (kiwi_window_looks in desktop/native/macos/kiwi-shell.m reports what the window has after each change); with Reduce Transparency or Increase Contrast (NSWorkspace's accessibility display options, followed live; solidForTest takes the same path) the material is hidden, the page loses the data-frost mark through the frost push and the shell paints the solid rail, and it comes back when they're off; and a restart with the page's stored theme dark opens the window dark, from the page's own startup call.
 
   desktop-linux:
     name: desktop / linux

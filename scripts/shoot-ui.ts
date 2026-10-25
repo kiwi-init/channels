@@ -183,13 +183,19 @@ try {
     const tabs = owner.getByRole("navigation", { name: "Views of the channel" });
     if (await tabs.isVisible()) return tabs.getByRole("button", { name, exact: true }).click();
     if (name === "Tasks") {
-      if (await owner.getByRole("navigation", { name: "Views" }).first().isVisible()) return;
-      return owner
-        .getByRole("button", { name: /^Tasks(,|$)/ })
-        .first()
-        .click();
+      const views = owner.getByRole("navigation", { name: "Views" }).first();
+      if (!(await views.isVisible()))
+        await owner
+          .getByRole("button", { name: /^Tasks(,|$)/ })
+          .first()
+          .click();
+      return views.getByRole("button", { name: "Everything", exact: true }).click();
     }
-    if (name === "Agents") return owner.getByRole("button", { name: "Agents", exact: true }).first().click();
+    if (name === "Agents") {
+      const agents = owner.getByRole("button", { name: "Agents", exact: true }).first();
+      if ((await agents.getAttribute("aria-pressed")) !== "true") await agents.click();
+      return;
+    }
     return owner.getByRole("region", { name: "Conversations" }).getByRole("button", { name: /^# / }).first().click();
   };
 
@@ -492,7 +498,7 @@ try {
         "01b-search",
         async () => {
           await owner.getByRole("button", { name: "Search", exact: true }).first().click();
-          await owner.getByRole("textbox", { name: "Search this channel" }).first().fill("rows");
+          await owner.getByRole("textbox", { name: "Search messages" }).first().fill("rows");
         },
         async () => void (await owner.keyboard.press("Escape")),
       );
