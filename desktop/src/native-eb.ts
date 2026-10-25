@@ -19,6 +19,23 @@ const sandboxPages = mac ? null : dlopen(shellPath, { kiwi_sandbox_pages: { args
 
 export const windowLook = dlopen(shellPath, { kiwi_window_look: { args: [FFIType.ptr, FFIType.f64, FFIType.f64, FFIType.u32, FFIType.u32], returns: FFIType.void } }).symbols.kiwi_window_look;
 
+const frostShell = mac
+  ? dlopen(shellPath, {
+      kiwi_window_frost: { args: [FFIType.ptr, FFIType.i32], returns: FFIType.bool },
+      kiwi_look_setting: { args: [FFIType.ptr, FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
+    }).symbols
+  : null;
+
+export const frostWindow = (win: Pointer, appearance: number): boolean => frostShell?.kiwi_window_frost(win, appearance) ?? false;
+
+const settingBuffer = new Uint8Array(256);
+
+export function lookSetting(key: string): string {
+  if (!frostShell) return "";
+  const n = Number(frostShell.kiwi_look_setting(ptr(cString(key)), ptr(settingBuffer), settingBuffer.length));
+  return n > 0 && n < settingBuffer.length ? new TextDecoder().decode(settingBuffer.subarray(0, n)) : "";
+}
+
 const trayHost = mac ? null : dlopen(shellPath, { kiwi_tray_host: { args: [], returns: FFIType.bool } }).symbols.kiwi_tray_host;
 
 const colorScheme = mac ? null : dlopen(shellPath, { kiwi_follow_color_scheme: { args: [], returns: FFIType.bool } }).symbols.kiwi_follow_color_scheme;
