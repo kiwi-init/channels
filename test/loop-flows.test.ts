@@ -327,7 +327,7 @@ test("the loop holds the seat, starts a fresh Claude Code session for a task, bi
   await until(() => seen().some((s) => s.kind === "term" && s.pid === start.pid), "the session's end").catch(fail);
   const done = seen().find((s) => s.kind === "done" && s.pid === start.pid);
   expect(done?.kind === "done" && done.out).toContain(id);
-  expect(await ok(owner, ["--as", "human", "task", "show", id], { CLAUDECODE: "" })).toContain("state: done");
+  expect(await ok(owner, ["--as", "human", "task", "show", id], { CLAUDECODE: "" })).toContain("status: done");
   expect(seatOf(agent)?.pid).not.toBe(start.pid);
 
   loop.kill("SIGTERM");
@@ -382,7 +382,7 @@ test("with --harness codex, the loop finds the new thread by the nonce in its fi
     .slice(before)
     .find((s) => s.kind === "done" && s.pid === start.pid);
   expect(done?.kind === "done" && done.out).toContain(id);
-  expect(await ok(owner, ["--as", "human", "task", "show", id], { CLAUDECODE: "" })).toContain("state: done");
+  expect(await ok(owner, ["--as", "human", "task", "show", id], { CLAUDECODE: "" })).toContain("status: done");
 
   loop.kill("SIGTERM");
   await loop.exited;
@@ -436,7 +436,7 @@ test("with --harness grok, the loop asks for a listener, finds the session by it
     .slice(before)
     .find((s) => s.kind === "done" && s.pid === start.pid);
   expect(done?.kind === "done" && done.out).toContain(id);
-  expect(await ok(owner, ["--as", "human", "task", "show", id], { CLAUDECODE: "" })).toContain("state: done");
+  expect(await ok(owner, ["--as", "human", "task", "show", id], { CLAUDECODE: "" })).toContain("status: done");
 
   loop.kill("SIGTERM");
   await loop.exited;
@@ -487,7 +487,7 @@ test("with --harness mimo, the loop passes MiMoCode's chosen model, finds the se
   expect(seen().some((s) => s.kind === "ignored-term" && s.pid === start.pid)).toBe(false);
   const done = seen().find((s) => s.kind === "done" && s.pid === start.pid);
   expect(done?.kind === "done" && done.out).toContain(id);
-  expect(await ok(owner, ["--as", "human", "task", "show", id], { CLAUDECODE: "" })).toContain("state: done");
+  expect(await ok(owner, ["--as", "human", "task", "show", id], { CLAUDECODE: "" })).toContain("status: done");
 
   loop.kill("SIGTERM");
   await loop.exited;
@@ -547,7 +547,7 @@ test.skipIf(!tmuxPastes)("with --harness kimi in tmux 3.7 or newer, the loop typ
     await until(() => seen().some((s) => s.kind === "term" && s.pid === start.pid), "the Kimi session's end").catch(fail);
     const done = seen().find((s) => s.kind === "done" && s.pid === start.pid);
     expect(done?.kind === "done" && done.out).toContain(id);
-    expect(await ok(owner, ["--as", "human", "task", "show", id], { CLAUDECODE: "" })).toContain("state: done");
+    expect(await ok(owner, ["--as", "human", "task", "show", id], { CLAUDECODE: "" })).toContain("status: done");
     await until(() => !pidAlive(typed.stray), "the stray listener stopped").catch(fail);
 
     const loopPid = Number(new TextDecoder().decode(tmux("display-message", "-p", "-t", "loop", "#{pane_pid}").stdout).trim());

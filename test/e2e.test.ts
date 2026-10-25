@@ -265,7 +265,7 @@ describe("agents coordinating through the CLI", () => {
     expect(await ok(lead, "read")).toContain(`finished ${t1} “Define protocol v2”: spec in docs/v2.md`);
 
     const board = await ok(win, "tasks", "--all");
-    expect(board).toMatch(new RegExp(`${t2}\\s+open\\s+@win Windows client for v2`));
+    expect(board).toMatch(new RegExp(`${t2}\\s+planned\\s+@win Windows client for v2`));
     expect(board).toMatch(new RegExp(`${t1}\\s+done\\s+@mac Define protocol v2`));
 
     // Handing it over is giving it to someone with where it stands.
