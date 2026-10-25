@@ -62,7 +62,7 @@ function Add({ label, onClick }: { label: string; onClick: () => void }) {
 function Item({ on, label, count, alert, onClick }: { on: boolean; label: string; count?: number; alert?: boolean; onClick: () => void }) {
   return (
     <li>
-      <button type="button" onClick={onClick} aria-current={on ? "page" : undefined} className={cx(ROW, "gap-2", on ? "prism-lit font-semibold text-ink" : IDLE)}>
+      <button type="button" onClick={onClick} aria-current={on ? "page" : undefined} className={cx(ROW, "gap-2", on ? "bg-(--chosen) font-semibold text-ink" : IDLE)}>
         <span className="min-w-0 flex-1 truncate">{label}</span>
         {!!count && <span className={cx("shrink-0 text-meta tabular-nums", alert ? "font-semibold text-decide" : "text-ink-3")}>{count}</span>}
       </button>
@@ -206,12 +206,14 @@ function Conversations({
   onConversation,
   rooms,
   onNewRoom,
+  nested,
 }: {
   conversations: Conversation[]
   current: string | null
   onConversation: (key: string) => void
   rooms: readonly Room[]
   onNewRoom?: ((name: string) => Promise<void>) | undefined
+  nested?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [openLeft, setOpenLeft] = useState(false)
@@ -223,44 +225,56 @@ function Conversations({
   const unread = hidden.reduce((n, c) => n + c.unread, 0)
   const item = (c: Conversation) => <Item key={c.key} on={current === c.key} label={c.label} count={c.unread} alert={c.forMe} onClick={() => onConversation(c.key)} />
   const at = afterRooms(shown)
+  const list = (
+    <ul className={nested ? "mt-0.5 space-y-0.5 pl-7.5" : undefined}>
+      {shown.slice(0, at).map(item)}
+      {making && onNewRoom && <NewRoom rooms={rooms} onMake={onNewRoom} onClose={() => setMaking(false)} />}
+      {shown.slice(at).map(item)}
+      {hidden.length > 0 && (
+        <li>
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
+            aria-label={open ? undefined : `${hidden.length} more ${hidden.length === 1 ? "conversation" : "conversations"}${unread ? `, ${unread} unread` : ""}`}
+            className={cx(ROW, "gap-2 text-ink-3 hover:bg-wash hover:text-ink")}
+          >
+            <Icon icon={ArrowDown01Icon} size={14} className={cx("shrink-0", open ? "rotate-180" : "-rotate-90")} />
+            <span className="min-w-0 flex-1 truncate">{open ? "Show less" : `${hidden.length} more`}</span>
+            {!open && unread > 0 && <span className="shrink-0 text-meta text-ink-3 tabular-nums">{unread}</span>}
+          </button>
+        </li>
+      )}
+      {left.length > 0 && (
+        <li>
+          <button
+            type="button"
+            onClick={() => setOpenLeft((o) => !o)}
+            aria-expanded={openLeft}
+            aria-label={`Left the channel, ${left.length} ${left.length === 1 ? "conversation" : "conversations"}`}
+            className={cx(ROW, "gap-2 text-ink-3 hover:bg-wash hover:text-ink")}
+          >
+            <Icon icon={ArrowDown01Icon} size={14} className={cx("shrink-0", !openLeft && "-rotate-90")} />
+            <span className="min-w-0 flex-1 truncate">Left the channel</span>
+            <span className="shrink-0 text-meta text-ink-3 tabular-nums">{left.length}</span>
+          </button>
+        </li>
+      )}
+      {openLeft && left.map(item)}
+      {nested && onNewRoom && !making && (
+        <li>
+          <button type="button" onClick={() => setMaking(true)} className={cx(ROW, "gap-2 text-ink-3 hover:bg-wash hover:text-ink")}>
+            <Icon icon={Add01Icon} size={14} className="shrink-0" />
+            <span className="min-w-0 flex-1 truncate">New room</span>
+          </button>
+        </li>
+      )}
+    </ul>
+  )
+  if (nested) return <section aria-label="Conversations">{list}</section>
   return (
     <Section title="Conversations" action={onNewRoom && <Add label="New room" onClick={() => setMaking(true)} />}>
-      <ul>
-        {shown.slice(0, at).map(item)}
-        {making && onNewRoom && <NewRoom rooms={rooms} onMake={onNewRoom} onClose={() => setMaking(false)} />}
-        {shown.slice(at).map(item)}
-        {hidden.length > 0 && (
-          <li>
-            <button
-              type="button"
-              onClick={() => setOpen((o) => !o)}
-              aria-expanded={open}
-              aria-label={open ? undefined : `${hidden.length} more ${hidden.length === 1 ? "conversation" : "conversations"}${unread ? `, ${unread} unread` : ""}`}
-              className={cx(ROW, "gap-2 text-ink-3 hover:bg-wash hover:text-ink")}
-            >
-              <Icon icon={ArrowDown01Icon} size={14} className={cx("shrink-0", open ? "rotate-180" : "-rotate-90")} />
-              <span className="min-w-0 flex-1 truncate">{open ? "Show less" : `${hidden.length} more`}</span>
-              {!open && unread > 0 && <span className="shrink-0 text-meta text-ink-3 tabular-nums">{unread}</span>}
-            </button>
-          </li>
-        )}
-        {left.length > 0 && (
-          <li>
-            <button
-              type="button"
-              onClick={() => setOpenLeft((o) => !o)}
-              aria-expanded={openLeft}
-              aria-label={`Left the channel, ${left.length} ${left.length === 1 ? "conversation" : "conversations"}`}
-              className={cx(ROW, "gap-2 text-ink-3 hover:bg-wash hover:text-ink")}
-            >
-              <Icon icon={ArrowDown01Icon} size={14} className={cx("shrink-0", !openLeft && "-rotate-90")} />
-              <span className="min-w-0 flex-1 truncate">Left the channel</span>
-              <span className="shrink-0 text-meta text-ink-3 tabular-nums">{left.length}</span>
-            </button>
-          </li>
-        )}
-        {openLeft && left.map(item)}
-      </ul>
+      {list}
     </Section>
   )
 }
@@ -311,7 +325,7 @@ export function ChannelSidebar({
   if (hidden) return null
   const views = (
     <>
-      <nav aria-label="Views" className={slot ? "mt-2" : "mt-4"}>
+      <nav aria-label="Views" className="mt-4">
         <ul className="space-y-0.5">
           <SearchRow search={search} onSearch={onSearch} />
           <TasksRow view={view} counts={counts} onView={onView} />
@@ -331,13 +345,7 @@ export function ChannelSidebar({
       <Conversations conversations={conversations} current={current} onConversation={onConversation} rooms={rooms} onNewRoom={onNewRoom} />
     </>
   )
-  if (slot)
-    return createPortal(
-      <section aria-label="Channel" className="pb-4">
-        {views}
-      </section>,
-      slot
-    )
+  if (slot) return createPortal(<Conversations nested conversations={conversations} current={current} onConversation={onConversation} rooms={rooms} onNewRoom={onNewRoom} />, slot)
   return (
     <aside aria-label="Channel" className="hidden h-full w-[280px] shrink-0 flex-col overflow-y-auto bg-rail px-3 pt-2 pb-4 md:-ml-2 md:flex">
       <button type="button" onClick={onTitle} className="flex items-center gap-3 rounded-row px-2 py-1.5 text-left transition-colors hover:bg-wash">

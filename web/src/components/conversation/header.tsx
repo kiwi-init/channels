@@ -1,9 +1,9 @@
-import { ArrowLeft01Icon, Search01Icon } from "@hugeicons/core-free-icons"
+import { ArrowLeft01Icon, BotIcon, Search01Icon, TaskDone01Icon } from "@hugeicons/core-free-icons"
 import type { Dispatch, ReactNode, SetStateAction } from "react"
 
 import type { ChannelIcon } from "@kiwi/core/protocol.ts"
 
-import { TABS, type Tab } from "@/lib/views"
+import { TABS, VIEWS, type Tab, type View } from "@/lib/views"
 import { useSidebarHidden } from "@/lib/sidebar-hidden"
 import { cx } from "@/lib/utils"
 import { ChannelIconTile } from "../channel-icon"
@@ -27,6 +27,10 @@ export function Header({
   onTitle,
   searchHint,
   places,
+  needs,
+  view,
+  counts,
+  onView,
 }: {
   headRef: (el: HTMLElement | null) => void
   onBack: () => void
@@ -43,44 +47,81 @@ export function Header({
   onTitle: () => void
   searchHint: string
   places: ReactNode
+  needs: number
+  view: View
+  counts: Record<View, number>
+  onView: (v: View) => void
 }) {
   const wide = useSidebarHidden()
+  const place = wideHeading !== face.title ? wideHeading : null
+  const toggle = (t: Tab) => onTab(tab === t ? "conversation" : t)
   return (
     <header ref={headRef} className="absolute inset-x-0 top-0 z-20 bg-canvas">
-      <div
-        className={cx(
-          "drag relative flex h-(--chrome-h) items-center gap-1 px-2 sm:gap-3 sm:px-3 md:h-(--card-head) md:gap-(--step) md:px-(--step)",
-          wide && "md:shell-mac:pl-[calc(var(--lights-w)-var(--step))]"
+      <div className={cx("drag relative hidden h-(--card-head) items-center gap-(--step) px-(--step) md:flex", wide && "shell-mac:pl-[calc(var(--lights-w)-var(--step))]")}>
+        <span className="flex min-w-0 flex-1 items-center gap-(--step)">
+          {wide && <SidebarToggle />}
+          {wide && places}
+        </span>
+        {tab === "tasks" ? (
+          <nav aria-label="Views" className="no-drag flex h-(--control) min-w-0 shrink items-center gap-0.5 rounded-full bg-(--well) p-0.5">
+            {VIEWS.map(([v, label]) => (
+              <button
+                key={v}
+                type="button"
+                aria-current={view === v ? "page" : undefined}
+                onClick={() => onView(v)}
+                className={cx(
+                  "flex h-full shrink-0 items-center gap-1.5 rounded-full px-2.5 text-ui transition-colors",
+                  view === v ? "bg-segment font-semibold text-ink" : "text-ink-2 hover:text-ink"
+                )}
+              >
+                {label}
+                {v !== "everything" && counts[v] > 0 && <span className="text-meta text-ink-3 tabular-nums">{counts[v]}</span>}
+              </button>
+            ))}
+          </nav>
+        ) : (
+          <button
+            type="button"
+            aria-label={headingLabel}
+            onClick={onTitle}
+            className="no-drag flex h-(--control) max-w-[60%] min-w-0 items-center gap-2 rounded-full bg-(--well) px-3 text-ui transition-colors hover:bg-wash-2"
+          >
+            <ChannelIconTile icon={face.icon} title={face.title} size={20} />
+            <span className="shrink-0 font-semibold">{face.title}</span>
+            {place && <span className="shrink-0 text-ink-2">{place}</span>}
+            {status.length > 0 && <span className="min-w-0 truncate text-meta text-ink-3">{status.join(" · ")}</span>}
+          </button>
         )}
-      >
-        {wide && (
-          <span className="hidden md:flex">
-            <SidebarToggle />
-          </span>
-        )}
-        <IconButton label="Channels" round className="size-9 text-ink md:hidden" onClick={onBack}>
+        <span className="flex flex-1 items-center justify-end gap-0.5">
+          <IconButton label="Search" round className="no-drag size-(--control)" active={search !== null} onClick={() => setSearch((s) => (s === null ? "" : null))}>
+            <Icon icon={Search01Icon} size={15} />
+          </IconButton>
+          <IconButton label={needs ? `Tasks, ${needs} need you` : "Tasks"} round className="no-drag size-(--control)" active={tab === "tasks"} onClick={() => toggle("tasks")}>
+            <Icon icon={TaskDone01Icon} size={15} />
+            {needs > 0 && <span aria-hidden className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-alert" />}
+          </IconButton>
+          <IconButton label="Agents" round className="no-drag size-(--control)" active={tab === "agents"} onClick={() => toggle("agents")}>
+            <Icon icon={BotIcon} size={15} />
+          </IconButton>
+        </span>
+      </div>
+      <div className="drag relative flex h-(--chrome-h) items-center gap-1 px-2 sm:gap-3 sm:px-3 md:hidden">
+        <IconButton label="Channels" round className="size-9 text-ink" onClick={onBack}>
           <Icon icon={ArrowLeft01Icon} size={20} />
         </IconButton>
         <button type="button" aria-label={headingLabel} onClick={onTitle} className="no-drag shrink-0 rounded-full sm:hidden">
           <ChannelIconTile icon={face.icon} title={face.title} size={28} />
         </button>
-        <button type="button" aria-label={headingLabel} onClick={onTitle} className="no-drag hidden min-w-0 truncate text-left text-title sm:block md:text-ui md:font-semibold">
-          <span className="md:hidden">{heading}</span>
-          <span className="hidden md:inline">{wideHeading}</span>
+        <button type="button" aria-label={headingLabel} onClick={onTitle} className="no-drag hidden min-w-0 truncate text-left text-title sm:block">
+          {heading}
         </button>
         {wide && places}
-        {status.length > 0 && <span className="hidden min-w-0 truncate text-meta text-ink-3 lg:block">{status.join(" · ")}</span>}
         <span className="flex-1" />
-        <IconButton
-          label="Search"
-          round
-          className={cx("size-9 md:size-(--control)", !wide && "md:hidden", search === null && "text-ink")}
-          active={search !== null}
-          onClick={() => setSearch((s) => (s === null ? "" : null))}
-        >
+        <IconButton label="Search" round className={cx("size-9", search === null && "text-ink")} active={search !== null} onClick={() => setSearch((s) => (s === null ? "" : null))}>
           <Icon icon={Search01Icon} size={18} />
         </IconButton>
-        <nav aria-label="Views of the channel" className={cx("no-drag flex items-center gap-1", !wide && "md:hidden")}>
+        <nav aria-label="Views of the channel" className="no-drag flex items-center gap-1">
           {TABS.map(([t, label]) => (
             <button
               key={t}
@@ -88,7 +129,7 @@ export function Header({
               aria-current={tab === t ? "page" : undefined}
               onClick={() => onTab(t)}
               className={cx(
-                "relative h-9 rounded-row px-2 text-ui transition-colors hover:text-ink sm:px-2.5 md:h-(--control)",
+                "relative h-9 rounded-row px-2 text-ui transition-colors hover:text-ink sm:px-2.5",
                 tab === t ? "font-semibold text-ink after:absolute after:inset-x-2 after:bottom-0.5 after:h-0.5 after:rounded-full after:bg-accent sm:after:inset-x-2.5" : "text-ink-2"
               )}
             >
@@ -98,7 +139,7 @@ export function Header({
         </nav>
       </div>
       {search !== null && (
-        <div className={cx("relative mx-auto w-full max-w-[792px] px-3 pb-2", !wide && "md:hidden")}>
+        <div className="relative mx-auto w-full max-w-[792px] px-3 pb-2">
           <label className="flex h-9 items-center gap-2 rounded-full px-3.5 text-ink-3 edge">
             <Icon icon={Search01Icon} size={16} className="shrink-0" />
             <input

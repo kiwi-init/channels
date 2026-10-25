@@ -26,7 +26,7 @@
 :root,
 .dark-stage {
   color-scheme: light dark;
-  --canvas: light-dark(#ffffff, #0d0d0e);
+  --canvas: light-dark(#ffffff, #161618);
   --rail: light-dark(#f2f2f5, #000000);
   --raised: var(--canvas);
   --field: var(--canvas);
@@ -103,7 +103,8 @@
   --step: 8px;
   --card-head: 30px;
   --control: 26px;
-  --well: light-dark(#f2f2f5, #1c1c1f);
+  --well: light-dark(#f2f2f5, #232327);
+  --chosen: light-dark(rgba(15, 15, 17, 0.12), rgba(255, 255, 255, 0.12));
 }
 
 :root[data-theme="light"] {
@@ -119,7 +120,7 @@
 }
 
 html[data-frost] {
-  --shell: transparent;
+  --shell: light-dark(transparent, rgb(40 40 44 / 0.55));
 }
 
 /* In the desktop app on a Mac (main.tsx sets data-shell): the traffic lights sit on the list's header. */

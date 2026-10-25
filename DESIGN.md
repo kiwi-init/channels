@@ -13,7 +13,7 @@ Canonical sources: `web/src/index.css` (`:root`, `:root[data-theme]`,
 ## 1. Identity in one line
 
 A quiet Messages-like conversation. White `#ffffff` / near-black `#161618`
-canvas, Apple system blue `#007aff` (light) / `#0a84ff` (dark), Inter only,
+canvas, Apple system blue `#007aff` (light) / `#0a84ff` (dark), Paper Mono,
 small purposeful motion, one pop shadow. One intentional mark: the open
 channel and the chosen view wear lit prism glass, after the app icon and the
 agents' heads; everything around them is plain, so it reads as meant.
@@ -72,9 +72,10 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 
 ## 4. Typography
 
-- Sans: `"Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI",
-  system-ui, sans-serif` (`@fontsource-variable/inter`). Mono:
-  `ui-monospace, "SF Mono", Menlo, monospace`.
+- Text: Paper Mono, everywhere, the owner's pick in T75 (kiwi-init #138),
+  set on `<html>` as `data-font="mono"` (the default). Inter
+  (`@fontsource-variable/inter`) and the system face stand in only until it
+  loads. Code: `ui-monospace, "SF Mono", Menlo, monospace`.
 - Body: `-0.006em` letter-spacing, `calt/kern/cv05/cv08`, antialiased,
   `optimizeLegibility`. Display/title set tighter at `-0.014em`.
 - Six type steps and nothing between them (`scripts/ui-tokens.ts` keeps it
@@ -89,11 +90,12 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   edge (`code-more`) so cut-off lines read as "scroll for more".
 - A `mermaid` code block draws as a diagram on a `raised` card in the
   bubble, in the tokens of the current theme (`field` nodes, `ink-3`
-  lines, `accent-wash` notes, Inter 13px, `row`-round nodes, no shadows).
+  lines, `accent-wash` notes, the text face at 13px, `row`-round nodes, no shadows).
   It fits the bubble down to 70%, then scrolls with the same `code-more`
   fade. Mermaid that doesn't parse stays a code block with its error.
-- No additional font families. Hierarchy comes from weight, size and
-  spacing, not font swaps.
+- No additional font families beyond Paper Mono and the code face.
+  Hierarchy comes from weight, size and spacing, not font swaps; the six
+  steps above are unchanged by the switch.
 
 ## 5. Radius, shadow, blur
 
@@ -404,7 +406,7 @@ actions row with send.
 ## 12. Brand illustration (optional)
 
 The lead's head (`robot-heads`, blue shell) in `muted` contexts is the
-only mascot. The wordmark is set in Inter, never an image. New surfaces may
+only mascot. The wordmark is set in the text face, never an image. New surfaces may
 omit the head; never replace it with stock art.
 
 ## 13. Do and don't

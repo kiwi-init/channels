@@ -86,22 +86,21 @@ export function ShellSidebar({
             </IconButton>
           </div>
 
-          <nav aria-label="Your channels" className="mt-(--step) shrink-0">
-            <p className="px-3 pb-1.5 text-meta font-medium text-ink-3">Channels</p>
+          <nav aria-label="Your channels" className="mt-(--step) min-h-0 flex-1 overflow-y-auto">
             <ul className="space-y-0.5">
               {rows.map((c) => {
                 const open = c.code === active
                 const n = newsOf.get(c.room)
                 return (
-                  <li key={c.room}>
+                  <li key={c.room} className="group/channel">
                     <button
                       type="button"
                       onClick={() => onSelect(c.code)}
                       aria-current={open ? "page" : undefined}
                       title={rowNote(c)}
                       className={cx(
-                        "flex h-9 w-full items-center gap-2.5 rounded-ctl px-3 text-left text-ui transition-colors [--band:46%]",
-                        open ? "prism-lit font-semibold text-ink" : "text-ink-2 hover:bg-wash hover:text-ink"
+                        "flex h-9 w-full items-center gap-2.5 rounded-ctl px-3 text-left text-ui transition-colors",
+                        open ? "bg-(--chosen) font-semibold text-ink group-has-[section_[aria-current=page]]/channel:bg-transparent" : "text-ink-2 hover:bg-wash hover:text-ink"
                       )}
                     >
                       <span className={cx("flex", c.state !== "member" && "grayscale")}>
@@ -111,13 +110,12 @@ export function ShellSidebar({
                       {c.state !== "member" && c.state !== "pending" && <Icon icon={LockIcon} size={12} className="shrink-0 text-ink-3" />}
                       {!open && <News n={n} />}
                     </button>
+                    {open && <div ref={setSlot} />}
                   </li>
                 )
               })}
             </ul>
           </nav>
-
-          <div ref={setSlot} className="mt-(--step) min-h-0 flex-1 overflow-y-auto" />
 
           <div className="flex h-(--card-head) shrink-0 items-center gap-1 px-2">
             {person && (

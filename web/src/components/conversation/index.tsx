@@ -565,6 +565,15 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                     onTitle={() => setSide((s) => (s?.kind === "info" ? null : { kind: "info" }))}
                     searchHint={place.kind === "main" ? "Search this channel" : `Search ${placeTitle}`}
                     places={<ConversationMenu conversations={conversations} current={currentConversation} onConversation={(key) => (leaveInfo(), openConversation(key))} />}
+                    needs={counts.needs}
+                    view={view}
+                    counts={counts}
+                    onView={(v) => {
+                      leaveInfo()
+                      setView(v)
+                      setTab("tasks")
+                      setSearch(null)
+                    }}
                   />
 
                   {pausing && hold && <HoldDialog onClose={() => setPausing(false)} onSave={(note) => hold(true, note)} />}
