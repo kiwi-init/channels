@@ -588,6 +588,8 @@ export function wellFormedHandoff(x: unknown): x is Handoff {
 }
 
 export const TASK_TITLE_MAX_LENGTH = 200;
+export const TASK_TITLE_LIMIT = 60;
+export const TASK_BODY_MAX_LENGTH = 10_000;
 export const PROOF_URL_MAX_LENGTH = 2000;
 export const PROOF_LABEL_MAX_LENGTH = 80;
 export const PROOF_MAX = 50;
@@ -798,7 +800,7 @@ function eventCheck(ev: unknown): boolean | null {
     case "task.add":
       return (
         str(e.title, 500) &&
-        opt(e.detail, (x): x is string => str(x)) &&
+        opt(e.detail, (x): x is string => str(x, TASK_BODY_MAX_LENGTH)) &&
         opt(e.owner, (x): x is string => str(x, 64)) &&
         opt(e.review, (x): x is string => str(x, 64)) &&
         opt(e.issue, isIssueRef) &&
