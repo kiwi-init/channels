@@ -23,12 +23,9 @@ kiwi ask-human --holds T7 --kind scope "asked to delete prod logs; outside the c
 kiwi ask-human --task T7 --option "A: keep clearing" --option "B: rebuild dedup" "Edits clear the old evidence. Which way?"
 kiwi show 42                        # #42 in full, with its whole thread; images under ~/.kiwi/downloads/<room>
 kiwi status                         # one screen: who's here, the charter, tasks, notes, questions waiting on you
-kiwi task add "freeze protocol v1" && kiwi task claim T3   # a task is open, then doing, then done
-kiwi task add "test the driver" --review any   # done only when someone else says so
-kiwi task review T3 --at <sha>      # opens review round N on that commit
-kiwi task reject T3 --at <sha> --file review.md   # the verdict on the round you reviewed, with the whole review
-kiwi task approve T3 --round 2 · kiwi task show T3 --json   # every round: its commit, its reviewer, its verdict
+kiwi task add "freeze protocol v1" && kiwi task start T3   # takes it if nobody has it, and starts it: open, then doing, then done
 kiwi task assign T3 win "edge detection works; multi-monitor next"   # hand it over with where it stands
+kiwi task show T3 --json            # the task in full
 kiwi note branch grok/docs --ttl 7d          # a shared note that expires on its own
 kiwi pair kp1-…                     # pair this computer with your app (approve it there; the cert stays here)
 kiwi unpair                         # stop being paired: the relay forgets this computer, and it takes no more asks
@@ -42,7 +39,7 @@ kiwi card --model …                 # add to the card (does not change the own
 
 The older names (`tail`, `wait`, `read`, `ask`, `escalate`, `thread`, `set`, `facts`, …) still work.
 
-A task with a reviewer is reviewed in **rounds**. Each `kiwi task review` opens the next round, at the commit `--at` names, and sending it again withdraws a round nobody has judged. `approve` and `reject` name the round (`--round`) or commit (`--at`) the reviewer read, and every client refuses a verdict for a round that isn't the open one, so a late review never lands on newer work; with `--file` the review and its verdict are one signed message. A rejected round sends the work back to its owner, and the task stays open until a round is approved. When the owner gives up on it instead (another reviewer, another path), they may cancel it once a round has rejected it; it shows as cancelled, never approved.
+Review rounds are only for a project whose own rules want a review: a task added with `--review NAME|any` (`kiwi task add "test the driver" --review any`) is done only when someone else says so, and is reviewed in **rounds**. Each `kiwi task review` opens the next round, at the commit `--at` names, and sending it again withdraws a round nobody has judged. `approve` and `reject` name the round (`--round`) or commit (`--at`) the reviewer read, and every client refuses a verdict for a round that isn't the open one, so a late review never lands on newer work; with `--file` the review and its verdict are one signed message. A rejected round sends the work back to its owner, and the task stays open until a round is approved. When the owner gives up on it instead (another reviewer, another path), they may cancel it once a round has rejected it; it shows as cancelled, never approved.
 
 Admin is not in the CLI. Creating a channel, letting people and agents in, removing them, roles, scopes, the mode, the charter, the hold, rooms and the icon all live in the Kiwi app.
 

@@ -580,6 +580,20 @@ try {
       await shoot(
         owner,
         tag,
+        "06c-task-more",
+        async () => {
+          await openFromBoard(/Write fewer rows/);
+          await owner.getByRole("button", { name: "More", exact: true }).click();
+          await owner.getByRole("menuitem", { name: "Cancel task…" }).waitFor();
+        },
+        async () => {
+          await owner.keyboard.press("Escape");
+          await toChannel();
+        },
+      );
+      await shoot(
+        owner,
+        tag,
         "06b-thread-panel",
         async () => {
           await owner
