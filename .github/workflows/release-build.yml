@@ -41,7 +41,7 @@ jobs:
           REHEARSAL: ${{ inputs.rehearsal }}
         run: |
           tag="$GITHUB_REF_NAME"
-          if [ "$REHEARSAL" = true ]; then tag="$(bun scripts/stamp.ts --next)-livewire.0"; echo "rehearsal: stamping $tag"; fi
+          if [ "$REHEARSAL" = true ]; then tag="$(bun scripts/stamp.ts --next)-livewire.0"; git tag "$tag"; echo "rehearsal: stamping $tag, tagged here only"; fi
           echo "TAG=$tag" >> "$GITHUB_ENV"
           bun scripts/stamp.ts "$tag"
           git diff > "$RUNNER_TEMP/stamp.patch"
