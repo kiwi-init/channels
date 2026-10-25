@@ -12,14 +12,15 @@ interface MessageHandler {
 const isHandler = (v: unknown): v is MessageHandler => typeof v === "object" && v !== null && typeof (v as { postMessage?: unknown }).postMessage === "function";
 
 function nativeHandler(): MessageHandler | null {
+  const signed: unknown = window.__electrobunHostBridge;
+  if (isHandler(signed)) return signed;
   const webkit: unknown = Reflect.get(window, "webkit");
   const handlers: unknown = typeof webkit === "object" && webkit !== null ? Reflect.get(webkit, "messageHandlers") : null;
   for (const name of ["hostBridge", "bunBridge"]) {
     const handler: unknown = typeof handlers === "object" && handlers !== null ? Reflect.get(handlers, name) : null;
     if (isHandler(handler)) return handler;
   }
-  const alias: unknown = window.__electrobunHostBridge;
-  return isHandler(alias) ? alias : null;
+  return null;
 }
 
 const boot = bootOf(Reflect.get(globalThis, BOOT_GLOBAL));
