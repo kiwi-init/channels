@@ -257,6 +257,7 @@ try {
   }
   await bot("set", "relay.version", "667ce081");
   await bot("set", "canary", "off");
+  await bot("goal", ask, "Steady Effect router numbers before 0.8.12");
   await bot("set", "next", "0.8.12 · the relay and the web ship together");
   await bot("set", "release.next", "0.8.12");
   await bot("send", "--to", "@win", "Can you take the cold runs after lunch?");
@@ -557,6 +558,20 @@ try {
             .scrollIntoViewIfNeeded();
         },
         () => toTab("Conversation"),
+      );
+      await shoot(
+        owner,
+        tag,
+        "04c-tasks-goal-rename",
+        async () => {
+          await toTab("Tasks");
+          await owner.getByRole("button", { name: "Rename" }).first().click();
+          await owner.getByRole("textbox", { name: /^Goal of #/ }).fill("Effect router: steady numbers, then 0.8.12");
+        },
+        async () => {
+          await owner.getByRole("textbox", { name: /^Goal of #/ }).press("Escape");
+          await toTab("Conversation");
+        },
       );
       await toTab("Tasks");
       await toTab("Conversation");

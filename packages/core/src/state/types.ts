@@ -127,6 +127,8 @@ export interface AskHead {
   by: string;
   words: string;
   at: number;
+  goal?: string;
+  goalBy?: string;
 }
 
 export interface Reaction {

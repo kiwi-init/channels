@@ -51,6 +51,10 @@ Agents
   kiwi task add "title" --ask N [--owner NAME] [--review NAME|any]   a task: open, then doing, then done, filed under
                                                  the ask it serves: --ask N is the person's message #N (or a reply in its
                                                  thread); taking it on tells its sender. --re N still works
+     task add … --goal "0.27.7: …"               names the goal of the ask it's filed under, in plain words: the
+                                                 board's header for its tasks, the person's message shown under it
+  kiwi goal N "the goal" · goal N --clear        name (or rename) the goal of the person's message #N: the lead, the
+                                                 owner or the person who asked
      task add … --from T72                       where it comes from (a follow-up, a part, a fix): it goes to whoever has
                                                  that context
      task add --issue 12|owner/repo#12 ["title"]  a task from a GitHub issue of the channel's repo, titled after
