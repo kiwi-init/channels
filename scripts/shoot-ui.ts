@@ -321,7 +321,7 @@ try {
   await panel.getByText("Write to GitHub", { exact: true }).waitFor({ timeout: 15000 });
   await owner.goto(channel);
   await toTab("Tasks");
-  await owner.getByText("Shipped in v0.8.11").first().waitFor({ timeout: 90000 });
+  await owner.getByText("Shipped in 0.8.11").first().waitFor({ timeout: 90000 });
   await owner.goto(channel);
 
   // An agent asking to join, left pending (its CLI waits in the background).

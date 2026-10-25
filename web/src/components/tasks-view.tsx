@@ -2,6 +2,7 @@ import { CancelCircleIcon, CheckmarkCircle02Icon, Loading03Icon } from "@hugeico
 import { Component, createRef, type ReactNode } from "react"
 
 import { colorOf, taskId, tasksAwaitingPeople, type ChannelState, type Task } from "@kiwi/core/state.ts"
+import { versionName } from "@kiwi/core/status.ts"
 import { taskPr, type PrChecks } from "@kiwi/core/work.ts"
 import { formatAgoShort, memberName } from "@/lib/format"
 import { labelOf } from "@/lib/task-labels"
@@ -129,9 +130,9 @@ function headText(head: GroupHead, state: ChannelState): { label: string; meta: 
       }
     }
     case "next":
-      return { label: head.name ? `Next: ${head.name}` : "Next release", meta: "Merged, not in a release yet", slide: "gnext" }
+      return { label: head.name ? `Next: ${versionName(head.name)}` : "Next release", meta: "Merged, not in a release yet", slide: "gnext" }
     case "release":
-      return { label: `Shipped in ${head.tag}`, meta: `Released ${new Date(head.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`, slide: `grelease:${head.tag}` }
+      return { label: `Shipped in ${versionName(head.tag)}`, meta: `Released ${new Date(head.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`, slide: `grelease:${head.tag}` }
     case "cancelled":
       return { label: "Cancelled", meta: "Closed without shipping", slide: "gcancelled" }
   }

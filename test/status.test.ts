@@ -7,7 +7,7 @@ import { describeEvent, formatTask, formatTasks } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { isQuiet, PROTOCOL_VERSION, wellFormed, type Event, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
 import { fold, releaseOf, toRoster, type ChannelState, type Roster } from "@kiwi/core/state.ts";
-import { needsYou, statusOf, statusWord } from "@kiwi/core/status.ts";
+import { needsYou, statusOf, statusWord, versionName } from "@kiwi/core/status.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { githubItem } from "../src/relay/github.ts";
 import { githubAppFrom, releaseFrom } from "../src/relay/github-app.ts";
@@ -66,10 +66,10 @@ describe("a task's status, in the words people use", () => {
     expect(word(t)).toBe("done");
     await ev("jow", { op: "github.release", repo: R, tag: "v1.1.0", at: T0 + 1, shas: [MERGE.slice(0, 12)], prs: [] });
     await ev("jow", { op: "github.release", repo: R, tag: "v1.2.0", at: T0 + 2, shas: [MERGE.slice(0, 12)], prs: [] });
-    expect(word(t)).toBe("shipped in v1.1.0");
+    expect(word(t)).toBe("shipped in 1.1.0");
     const s = state();
-    expect(formatTask(s, s.tasks.get(t)!, T0)).toContain("  status: shipped in v1.1.0 (doing) · owner: ann");
-    expect(formatTasks(s)).toContain(`  T${t}    shipped in v1.1.0 @ann Write the docs`);
+    expect(formatTask(s, s.tasks.get(t)!, T0)).toContain("  status: shipped in 1.1.0 (doing) · owner: ann");
+    expect(formatTasks(s)).toContain(`  T${t}    shipped in 1.1.0 @ann Write the docs`);
   });
 
   test("a release names a squashed or merged PR by number when its merge commit is unknown; a cancelled task says cancelled", async () => {
@@ -81,6 +81,7 @@ describe("a task's status, in the words people use", () => {
     const c = await add("Not needed");
     await ev("ann", { op: "task.update", task: c, state: "cancelled" });
     expect(word(c)).toBe("cancelled");
+    expect(["v1.2.3", "2026.10.0", "release-7", "vNext"].map(versionName)).toEqual(["1.2.3", "2026.10.0", "release-7", "vNext"]);
   });
 
   test("only the owner's app posts releases; the event is quiet, says what it holds, and the same tag posted again replaces the first", async () => {
