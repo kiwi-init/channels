@@ -10,7 +10,7 @@ const livewire = identifier === LIVEWIRE_ID || identifier === `${LIVEWIRE_ID}.de
 
 export default {
   app: {
-    name: identifier === LIVEWIRE_ID ? LIVEWIRE_NAME : "Channels",
+    name: livewire ? LIVEWIRE_NAME : "Channels",
     identifier,
     version: pkg.version,
     ...(identifier === RELEASE_ID ? { urlSchemes: [JOIN_SCHEME] } : {}),

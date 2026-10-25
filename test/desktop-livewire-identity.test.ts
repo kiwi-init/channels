@@ -22,9 +22,10 @@ test("a release build of the Livewire branch is Channels Livewire: its own id an
   expect(release.build.bun.define["KIWI_EB_LIVEWIRE"]).toBe("true");
 });
 
-test("dev builds are Livewire's too, and test builds stay the test identity", () => {
+test("dev builds (what CI packages) are Channels Livewire too, and test builds stay the test identity named Channels", () => {
   const dev = configWith({});
   expect(dev.app.identifier).toBe("com.kiwiinit.channels.livewire.dev");
+  expect(dev.app.name).toBe("Channels Livewire");
   expect(dev.app.urlSchemes).toBeUndefined();
   expect(dev.build.bun.define["KIWI_EB_LIVEWIRE"]).toBe("true");
   const testBuild = configWith({ CHANNELS_EB_TEST: "1" });

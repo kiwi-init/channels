@@ -28,8 +28,8 @@ else
   web=$(pgrep -s "$pid" -x WebKitWebProces | head -n 1)
   [ -n "$web" ] || problems+=("no WebKitWebProcess of the app's own is running 5s after its window opened")
   if [ -n "${DISPLAY:-}" ]; then
-    x11=$(xdotool search --class '^Channels$' 2> /dev/null | head -n 1)
-    if [ -n "$x11" ]; then problems+=("the app also opened an X11 window ($x11) on XWayland ($DISPLAY)"); else echo "XWayland ($DISPLAY) holds no Channels window"; fi
+    x11=$(xdotool search --class '^ChannelsLivewire$' 2> /dev/null | head -n 1)
+    if [ -n "$x11" ]; then problems+=("the app also opened an X11 window ($x11) on XWayland ($DISPLAY)"); else echo "XWayland ($DISPLAY) holds no Channels Livewire window"; fi
   fi
   if [ -n "$scale" ]; then
     outputs=$(grep -oE 'wl_output[@#][0-9]+\.scale\([0-9]+\)' "$out" | grep -oE '[0-9]+\)$' | tr -d ')' | sort -u | tr '\n' ' ')

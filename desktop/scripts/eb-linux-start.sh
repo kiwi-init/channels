@@ -15,19 +15,19 @@ pid=$!
 
 win=""
 for _ in $(seq 1 60); do
-  win=$(xdotool search --class '^Channels$' 2> /dev/null | head -n 1)
+  win=$(xdotool search --class '^ChannelsLivewire$' 2> /dev/null | head -n 1)
   [ -n "$win" ] && break
   kill -0 "$pid" 2> /dev/null || break
   sleep 0.5
 done
 
 if [ -z "$win" ]; then
-  problems+=("no window with WM_CLASS Channels within 30s")
+  problems+=("no window with WM_CLASS ChannelsLivewire within 30s")
 else
   class=$(xprop -id "$win" WM_CLASS)
   name=$(xprop -id "$win" _NET_WM_NAME)
   echo "window: $class; $name"
-  [ "$class" = 'WM_CLASS(STRING) = "Channels", "Channels"' ] || problems+=("the window's $class isn't Channels, Channels (the .desktop entry's StartupWMClass)")
+  [ "$class" = 'WM_CLASS(STRING) = "ChannelsLivewire", "ChannelsLivewire"' ] || problems+=("the window's $class isn't ChannelsLivewire, ChannelsLivewire (the .desktop entry's StartupWMClass)")
   [[ "$name" == *'"Channels"'* ]] || problems+=("the window is titled $name, not Channels")
   sleep 5
   eval "$(xdotool getwindowgeometry --shell "$win")"
@@ -89,5 +89,5 @@ if [ ${#problems[@]} -gt 0 ]; then
   exit 1
 fi
 if [ "$want" = sandboxed ]; then ran="in WebKitGTK's bubblewrap sandbox"; else ran="without the sandbox bwrap can't build here, and the app says why"; fi
-echo "the app started: its window's WM_CLASS is Channels (the .desktop entry's StartupWMClass), its web process ran $ran, and it stopped cleanly"
+echo "the app started: its window's WM_CLASS is ChannelsLivewire (the .desktop entry's StartupWMClass), its web process ran $ran, and it stopped cleanly"
 rm -rf "$home"

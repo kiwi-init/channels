@@ -161,3 +161,92 @@ jobs:
           path: out/*
           if-no-files-found: error
           overwrite: true
+
+  desktop-linux-eb:
+    needs: version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: ./.github/actions/stamp
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: WebKitGTK, its sandbox, Xvfb and the AppImage tools
+        timeout-minutes: 15
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools
+
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.hutch
+          key: hutch-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/electrobun-pins.json') }}
+
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/kiwi-eb-native
+          key: eb-native-${{ hashFiles('desktop/electrobun-pins.json') }}
+
+      - name: Build the renderer
+        run: bun run web:build
+
+      - name: Electrobun toolchain
+        working-directory: desktop
+        timeout-minutes: 5
+        run: for i in 1 2 3; do bun run prepare:eb && exit 0; echo "electrobun prepare failed ($i of 3)"; [ "$i" -lt 3 ] && sleep 20; done; exit 1
+
+      - name: The kiwi CLI the app bundles
+        run: mkdir -p dist && bun scripts/build-cli.ts --js dist/kiwi.js
+
+      - name: Build
+        working-directory: desktop
+        env:
+          CHANNELS_EB_RELEASE: "1"
+          DASH_RELEASE_OFFLINE: "1"
+        run: bun run build:eb
+
+      - name: deb and AppImage, each at most 55 MB (Livewire RC branch, T892)
+        run: bun desktop/scripts/package-linux.ts desktop/release-eb out
+
+      - name: No test code in what ships
+        run: bun desktop/scripts/eb-driver-check.ts --release out/Channels-*-linux-amd64.deb out/Channels-*-linux-x86_64.AppImage
+
+      - name: The packages hold the app
+        run: bash desktop/scripts/linux-packages-check.sh out
+
+      - name: The deb installs beside stable Channels' deb and leaves it alone
+        run: bash desktop/scripts/linux-beside-check.sh out
+
+      - name: The installed app and the AppImage make a channel and send
+        run: |
+          bun desktop/scripts/package-probe.ts /opt/ChannelsLivewire/bin/bun /opt/ChannelsLivewire/Resources/kiwi.js /opt/ChannelsLivewire/Resources/app/bun/keys.js
+          img="$PWD/$(ls out/Channels-*-linux-x86_64.AppImage)"
+          (cd "$RUNNER_TEMP" && "$img" --appimage-extract > /dev/null)
+          root="$RUNNER_TEMP/squashfs-root/ChannelsLivewire"
+          bun desktop/scripts/package-probe.ts "$root/bin/bun" "$root/Resources/kiwi.js" "$root/Resources/app/bun/keys.js"
+          rm -rf "$RUNNER_TEMP/squashfs-root"
+
+      - name: The installed app and the AppImage start
+        run: |
+          xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh /opt/ChannelsLivewire/bin/launcher unsandboxed
+          xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$PWD/$(ls out/Channels-*-linux-x86_64.AppImage)" unsandboxed --appimage-extract-and-run
+          sudo dpkg --purge channels-livewire
+
+      - name: Upload
+        if: ${{ !inputs.rehearsal || github.event_name == 'workflow_dispatch' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ inputs.rehearsal && 'rehearsal' || 'release' }}-desktop-linux-eb
+          retention-days: ${{ inputs.rehearsal && 3 || 0 }}
+          path: |
+            out/Channels-*-linux-amd64.deb
+            out/Channels-*-linux-x86_64.AppImage
+          if-no-files-found: error
+          overwrite: true

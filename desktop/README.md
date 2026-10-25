@@ -76,8 +76,8 @@ bun run typecheck:eb                                  # fetches the devkit into 
 - Release, Linux (job `desktop-linux-eb`, on ubuntu-24.04, the oldest glibc it runs on):
   `Channels-<version>-linux-amd64.deb` and `Channels-<version>-linux-x86_64.AppImage`
   (`scripts/package-linux.ts`), checked by `eb-driver-check.ts --release`,
-  `scripts/linux-packages-check.sh` and `scripts/linux-upgrade-check.sh` (the v0.26.0 Electron
-  deb, then this one over it), and started under Xvfb.
+  `scripts/linux-packages-check.sh` and `scripts/linux-beside-check.sh` (the v0.26.0 Electron
+  deb, then this one beside it), and started under Xvfb.
 
 ## Layout
 
