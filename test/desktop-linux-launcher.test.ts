@@ -119,7 +119,7 @@ function wrapped(name: string, osRelease: string, needs: { gone?: string; beside
     execFileSync("cc", ["-shared", "-fPIC", `-Wl,-soname,${soname}`, "-o", join(dir, soname), join(parts, "lib.c")]);
     linked.push(join(dir, soname));
   }
-  execFileSync("cc", ["-shared", "-fPIC", "-o", join(bin, "libNativeWrapper.so"), join(parts, "lib.c"), ...linked]);
+  execFileSync("cc", ["-shared", "-fPIC", "-o", join(bin, "libNativeWrapper.so"), join(parts, "lib.c"), "-Wl,--no-as-needed", ...linked]);
   if (needs.gone) rmSync(join(parts, needs.gone));
   return join(bin, "launcher");
 }
