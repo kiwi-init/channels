@@ -95,20 +95,20 @@ describe("tasks are filed under the ask they serve", () => {
     ]);
     expect(formatTasks(s).split("\n")).toEqual([
       "#1 jow: “UI ideas so we can keep up”",
-      "  T6    open      compare the two",
-      "  T8    open      trim the board",
+      "  T6    planned   compare the two",
+      "  T8    planned   trim the board",
       "#2 jow: “Screenshot 1.png”",
-      "  T4    open      explore a delegate board",
-      "  T9    open      a follow-up",
-      "  T11   open      fix task who",
+      "  T4    planned   explore a delegate board",
+      "  T9    planned   a follow-up",
+      "  T11   planned   fix task who",
       "#13 jow: “jow's own task”",
-      "  T13   open      jow's own task",
+      "  T13   planned   jow's own task",
       "unfiled (no person's message holds these)",
-      "  T12   open      an agent's own finding",
-      "  T14   open      from an older client",
+      "  T12   planned   an agent's own finding",
+      "  T14   planned   from an older client",
     ]);
     const status = formatStatus({ alias: "dev", me: "lead", state: s, online: new Map(), unread: 0, now: T0 + 60_000 });
-    expect(status).toContain("tasks (8 open, 1 done), by the ask each serves:\n  #1 jow: “UI ideas so we can keep up”\n    T6    open      compare the two");
+    expect(status).toContain("tasks (8 open, 1 done), by the ask each serves:\n  #1 jow: “UI ideas so we can keep up”\n    T6    planned   compare the two");
   });
 });
 

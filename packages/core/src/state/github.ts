@@ -18,6 +18,7 @@ export interface GithubPr {
   state: "open" | "closed" | "merged";
   branch?: string;
   sha?: string;
+  merge?: string;
   by?: string;
   additions?: number;
   deletions?: number;
@@ -46,12 +47,24 @@ export interface GithubRules {
   seq: number;
 }
 
+export interface GithubRelease {
+  repo: string;
+  tag: string;
+  at: number;
+  shas: string[];
+  prs: number[];
+  seq: number;
+}
+
 export interface GithubState {
   prs: Map<string, GithubPr>;
   checks: Map<string, Map<string, GithubCheck>>;
   issues: Map<string, GithubIssue>;
   rules: Map<string, GithubRules>;
+  releases: Map<string, GithubRelease[]>;
 }
+
+const MAX_RELEASES = 30;
 
 const MAX_SHAS = 300;
 
@@ -80,6 +93,7 @@ export function applyGithub(g: GithubState, items: readonly GithubNote[], seq: n
         ...(i.url ? { url: i.url } : {}),
         ...(i.branch ? { branch: i.branch } : {}),
         ...(i.sha ? { sha: i.sha } : {}),
+        ...(i.merge && i.merged ? { merge: i.merge } : {}),
         ...(i.by && !was?.by ? { by: i.by } : {}),
         ...(i.additions !== undefined ? { additions: i.additions } : {}),
         ...(i.deletions !== undefined ? { deletions: i.deletions } : {}),
@@ -132,6 +146,27 @@ export const repoKey = (repo: string): string => repo.toLowerCase();
 
 export function rulesOf(g: GithubState, repo: string): GithubRules | undefined {
   return g.rules.get(repoKey(repo));
+}
+
+export function releasesFrom(list: readonly GithubRelease[] | undefined): Map<string, GithubRelease[]> {
+  const g = { releases: new Map<string, GithubRelease[]>() };
+  for (const r of list ?? []) addRelease(g, r);
+  return g.releases;
+}
+
+export function addRelease(g: Pick<GithubState, "releases">, r: GithubRelease): void {
+  const key = repoKey(r.repo);
+  const kept = (g.releases.get(key) ?? []).filter((x) => x.tag !== r.tag);
+  kept.push(r);
+  kept.sort((a, b) => a.at - b.at);
+  g.releases.set(key, kept.slice(-MAX_RELEASES));
+}
+
+const sameCommit = (a: string, b: string): boolean => a.length >= 7 && b.length >= 7 && (a.startsWith(b) || b.startsWith(a));
+
+export function releaseOf(g: GithubState, pr: GithubPr): GithubRelease | undefined {
+  if (pr.state !== "merged") return undefined;
+  return g.releases.get(repoKey(pr.repo))?.find((r) => r.prs.includes(pr.number) || (!!pr.merge && r.shas.some((s) => sameCommit(s, pr.merge!))));
 }
 
 export function issueOf(g: GithubState, ref: { repo: string; number: number }): GithubIssue | undefined {

@@ -98,7 +98,7 @@ function TaskRow({
                 <span className="truncate">{doing.text}</span>
               </span>
             ) : (
-              <span className="truncate">{labelOf(task)}</span>
+              <span className="truncate">{labelOf(state, task)}</span>
             )}
           </span>
         </span>

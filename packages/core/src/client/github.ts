@@ -1,6 +1,6 @@
 import * as Effect from "effect/Effect";
-import { cleanGithubNote, MAX_GITHUB_ITEMS, type GithubNote, type MergeMethod } from "../protocol.ts";
-import type { GithubRules } from "../state.ts";
+import { cleanGithubNote, MAX_GITHUB_ITEMS, wellFormedEvent, type GithubNote, type MergeMethod } from "../protocol.ts";
+import type { GithubRelease, GithubRules } from "../state.ts";
 import type { ChannelCore } from "./core.ts";
 import type { Refused } from "./errors.ts";
 import type { Relay } from "./relay.ts";
@@ -41,6 +41,7 @@ export interface GithubFx {
   setGithubRepos(repos: string[], token?: string | null): Effect.Effect<string[], Refused, Relay>;
   drainGithub(): Effect.Effect<number, Refused, Relay>;
   syncGithubRules(repos: readonly string[], known: readonly GithubRules[]): Effect.Effect<number, Refused, Relay>;
+  syncGithubReleases(repos: readonly string[], known: readonly GithubRelease[]): Effect.Effect<number, Refused, Relay>;
   githubDiff(repo: string, sha: string): Effect.Effect<GithubDiff, Refused, Relay>;
   postReviewCheck(c: ReviewCheck): Effect.Effect<{ url: string | null }, Refused, Relay>;
   commentOnPr(repo: string, number: number, body: string): Effect.Effect<{ url: string | null }, Refused, Relay>;
@@ -105,6 +106,22 @@ export class ChannelGithub {
           continue;
         yield* this.ch.fx.send(`GitHub: ${repo}'s merge rules`, { kind: "event", ev: { op: "github.rules", repo, branch: r.branch, required: r.required, merge: r.merge } });
         sent++;
+      }
+      return sent;
+    }),
+
+    syncGithubReleases: Effect.fn("Channel.syncGithubReleases")({ self: this }, function* (this: ChannelGithub, repos: readonly string[], known: readonly GithubRelease[]) {
+      yield* this.ch.ownerOnly();
+      let sent = 0;
+      for (const repo of repos) {
+        const tags = known.filter((k) => k.repo.toLowerCase() === repo.toLowerCase()).map((k) => k.tag);
+        const { releases } = yield* this.ch.request<{ releases: { tag: string; at: number; shas: string[]; prs: number[] }[] }>("/github/releases", {}, { repo, known: tags.slice(-50).join("\n") });
+        for (const r of releases) {
+          const ev = { op: "github.release" as const, repo, tag: r.tag, at: r.at, shas: r.shas, prs: r.prs };
+          if (tags.includes(r.tag) || !wellFormedEvent(ev)) continue;
+          yield* this.ch.fx.send(`GitHub: ${repo} released ${r.tag}`, { kind: "event", ev });
+          sent++;
+        }
       }
       return sent;
     }),
