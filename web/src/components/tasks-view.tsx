@@ -3,10 +3,11 @@ import { Component, createRef, useRef, useState, type ReactNode } from "react"
 
 import { MAX_GOAL_NAME } from "@kiwi/core/protocol.ts"
 import { colorOf, mayNameGoal, taskId, tasksAwaitingPeople, type AskHead, type ChannelState, type Task } from "@kiwi/core/state.ts"
+import { versionName } from "@kiwi/core/status.ts"
 import { taskPr, type PrChecks } from "@kiwi/core/work.ts"
 import { formatAgoShort, memberName } from "@/lib/format"
 import { labelOf } from "@/lib/task-labels"
-import { taskGroups, type View } from "@/lib/views"
+import { taskGroups, type GroupHead, type View } from "@/lib/views"
 import { cx } from "@/lib/utils"
 import { doingNow, type AgentNow } from "./agent-strip"
 import { Icon } from "./icon"
@@ -223,6 +224,35 @@ function AskGroup({
   )
 }
 
+type DoneHead = Exclude<GroupHead, { kind: "ask" }>
+
+function doneText(head: DoneHead): { label: string; meta: string; slide: string } {
+  switch (head.kind) {
+    case "next":
+      return { label: head.name ? `Next: ${versionName(head.name)}` : "Next release", meta: "Merged, not in a release yet", slide: "gnext" }
+    case "release":
+      return { label: `Shipped in ${versionName(head.tag)}`, meta: `Released ${new Date(head.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`, slide: `grelease:${head.tag}` }
+    case "cancelled":
+      return { label: "Cancelled", meta: "Closed without shipping", slide: "gcancelled" }
+  }
+}
+
+function DoneGroup({ head, count, children }: { head: DoneHead; count: number; children: ReactNode }) {
+  const { label, meta, slide } = doneText(head)
+  return (
+    <section aria-label={label} className="pt-4">
+      <div data-slide={slide}>
+        <h2 className="flex min-w-0 items-baseline gap-2 px-3 text-ui font-semibold">
+          <span className="truncate">{label}</span>
+          <span className="shrink-0 font-normal text-ink-3 tabular-nums">{count}</span>
+        </h2>
+        <p className="truncate px-3 pb-1.5 text-meta text-ink-3">{meta}</p>
+      </div>
+      {children}
+    </section>
+  )
+}
+
 const SLIDE: KeyframeAnimationOptions = { duration: 280, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" }
 
 function slides(box: HTMLElement): Map<string, HTMLElement> {
@@ -313,15 +343,24 @@ export function TasksView({
     <Reorder order={order} rows={groups.reduce((n, g) => n + g.tasks.length, 0)}>
       {showNeeds && <div className="px-3">{needs}</div>}
       {view === "needs" && !needs && <p className="px-3 pt-6 text-ui text-ink-3">Nothing needs you right now.</p>}
-      {groups.map((g) => (
-        <AskGroup key={g.key} ask={g.ask} count={g.tasks.length} state={state} me={me} onJump={onJump} onNameGoal={onNameGoal}>
+      {groups.map((g) => {
+        const rows = (
           <ul className="divide-y divide-line">
             {g.tasks.map((t) => (
               <TaskRow key={t.id} task={t} state={state} now={now} agent={t.owner ? byName.get(t.owner) : undefined} waiting={waiting.has(t.id)} open={open === t.id} prs={prs} onOpen={onOpen} />
             ))}
           </ul>
-        </AskGroup>
-      ))}
+        )
+        return g.head.kind === "ask" ? (
+          <AskGroup key={g.key} ask={g.head.ask} count={g.tasks.length} state={state} me={me} onJump={onJump} onNameGoal={onNameGoal}>
+            {rows}
+          </AskGroup>
+        ) : (
+          <DoneGroup key={g.key} head={g.head} count={g.tasks.length}>
+            {rows}
+          </DoneGroup>
+        )
+      })}
       {!groups.length && view !== "everything" && view !== "needs" && <p className="px-3 pt-6 text-ui text-ink-3">Nothing here right now.</p>}
     </Reorder>
   )

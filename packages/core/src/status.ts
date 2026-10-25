@@ -29,4 +29,6 @@ export function statusOf(state: ChannelState, t: Task): TaskStatus {
   return { status: "planned", stage };
 }
 
-export const statusWord = (s: Pick<TaskStatus, "status" | "release">): string => (s.status === "shipped" && s.release ? `shipped in ${s.release}` : s.status);
+export const versionName = (tag: string): string => tag.replace(/^v(?=\d)/, "");
+
+export const statusWord = (s: Pick<TaskStatus, "status" | "release">): string => (s.status === "shipped" && s.release ? `shipped in ${versionName(s.release)}` : s.status);

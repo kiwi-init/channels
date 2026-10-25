@@ -259,6 +259,7 @@ try {
   await bot("set", "canary", "off");
   await bot("goal", ask, "Steady Effect router numbers before 0.8.12");
   await bot("set", "next", "0.8.12 · the relay and the web ship together");
+  await bot("set", "release.next", "0.8.12");
   await bot("send", "--to", "@win", "Can you take the cold runs after lunch?");
   await win("send", "--to", "@atlas", "Yes, after the steady load.");
   await owner.reload();
@@ -301,7 +302,7 @@ try {
   await owner.goto(channel);
   await details().click();
   const panel = owner.getByRole("complementary", { name: "Details" });
-  // GitHub as the owner's app reads it through the relay: both PRs merged, and #40 is in v0.8.12.
+  // GitHub as the owner's app reads it through the relay: both PRs merged, and #40 is in v0.8.11.
   const at = Date.now();
   const merged = (id: number, number: number, title: string) => ({ id, event: "pull_request", repo: "kiwi-init/channels", action: "closed", number, title, state: "closed", merged: true, at });
   let drained = false;
@@ -311,7 +312,7 @@ try {
     }),
   );
   await owner.route(/\/github\/rules\?/, (r) => r.fulfill({ json: { branch: "main", required: ["ci-ok"], merge: ["squash"] } }));
-  await owner.route(/\/github\/releases\?/, (r) => r.fulfill({ json: { releases: [{ tag: "v0.8.12", at, shas: [], prs: [40] }] } }));
+  await owner.route(/\/github\/releases\?/, (r) => r.fulfill({ json: { releases: [{ tag: "v0.8.11", at, shas: [], prs: [40] }] } }));
   await panel.getByRole("button", { name: /^Repos/ }).click();
   await panel.getByRole("textbox", { name: "Find a repo" }).fill("kiwi-init/channels");
   await owner.keyboard.press("Enter");
@@ -321,7 +322,7 @@ try {
   await panel.getByText("Write to GitHub", { exact: true }).waitFor({ timeout: 15000 });
   await owner.goto(channel);
   await toTab("Tasks");
-  await owner.getByText("Shipped in v0.8.12").first().waitFor({ timeout: 90000 });
+  await owner.getByText("Shipped in 0.8.11").first().waitFor({ timeout: 90000 });
   await owner.goto(channel);
 
   // An agent asking to join, left pending (its CLI waits in the background).
@@ -543,6 +544,19 @@ try {
         tag,
         "04-tasks",
         () => toTab("Tasks"),
+        () => toTab("Conversation"),
+      );
+      await shoot(
+        owner,
+        tag,
+        "04b-tasks-releases",
+        async () => {
+          await toTab("Tasks");
+          await owner
+            .getByRole("region", { name: /^Shipped in / })
+            .first()
+            .scrollIntoViewIfNeeded();
+        },
         () => toTab("Conversation"),
       );
       await shoot(
