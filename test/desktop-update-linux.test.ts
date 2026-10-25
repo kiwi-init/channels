@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { appImageName, debName, type LinuxArch } from "../desktop/scripts/linux-files.ts";
 import { useHost } from "../desktop/src/host.ts";
 import { fakeHost, type FakeHost } from "./fake-host.ts";
+import { FEED, releasePage, releasesFeed } from "./livewire-feed.ts";
 import { throwawayKey } from "./minisign-sign.ts";
 
 const releaseKey = throwawayKey();
@@ -45,13 +46,12 @@ afterAll(() => {
 });
 
 const arch: LinuxArch = process.arch === "arm64" ? "arm64" : "x64";
-const PAGE = "https://github.com/kiwi-init/channels/releases/tag/v0.27.0";
+const PAGE = releasePage("livewire-v0.27.0-livewire.1");
 const NEW = "the 0.27.0 AppImage";
 const OLD = "the 0.26.0 AppImage";
 const sha = (s: string): string => createHash("sha256").update(s).digest("hex");
 
-const DOWNLOAD = "https://github.com/kiwi-init/channels/releases/download/v0.27.0/";
-const LATEST = "https://github.com/kiwi-init/channels/releases/latest";
+const DOWNLOAD = "https://github.com/kiwi-init/channels/releases/download/livewire-v0.27.0-livewire.1/";
 const ASSETS = "https://release-assets.githubusercontent.com/github-production-release-asset/";
 
 interface Release {
@@ -62,11 +62,11 @@ interface Release {
 
 function release(o: Release = {}): string[] {
   const seen: string[] = [];
-  const sums = o.sums ?? `${sha(NEW)}  ${appImageName("0.27.0", arch)}\n`;
+  const sums = o.sums ?? `${sha(NEW)}  ${appImageName("0.27.0-livewire.1", arch)}\n`;
   const signature = o.signature === undefined ? releaseKey.sign(sums) : o.signature;
   const files: Record<string, string> = {
-    [appImageName("0.27.0", arch)]: NEW,
-    [debName("0.27.0", arch)]: "the 0.27.0 deb",
+    [appImageName("0.27.0-livewire.1", arch)]: NEW,
+    [debName("0.27.0-livewire.1", arch)]: "the 0.27.0 deb",
     SHA256SUMS: sums,
     ...(signature === null ? {} : { "SHA256SUMS.minisig": signature }),
   };
@@ -75,7 +75,7 @@ function release(o: Release = {}): string[] {
     async (input: string | URL | Request) => {
       const url = String(input);
       seen.push(url);
-      if (url === LATEST) return new Response(null, { status: 302, headers: { location: PAGE } });
+      if (url === FEED) return new Response(releasesFeed("livewire-v0.27.0-livewire.1"));
       const name = Object.keys(files).find((n) => url === where(n) || url === `${ASSETS}${n}` || url.endsWith(`/${n}`));
       if (!name) return new Response("", { status: 404 });
       const to = url === where(name) ? (o.redirect?.(name) ?? null) : null;
@@ -135,7 +135,7 @@ test("an AppImage downloads the release's AppImage, checks it against SHA256SUMS
   release({ redirect: (name) => `${ASSETS}${name}` });
   const { fake, u } = await launch(appImage, join(root, "data-swap"));
   expect((await u.checkForUpdate()).state).toBe("downloading");
-  expect(await settled(u)).toEqual({ version: "0.27.0", state: "ready", url: PAGE });
+  expect(await settled(u)).toEqual({ version: "0.27.0-livewire.1", state: "ready", url: PAGE });
   expect(readFileSync(appImage, "utf8")).toBe(OLD);
   expect(u.applyUpdate(true)).toBe(true);
   expect(readFileSync(appImage, "utf8")).toBe(NEW);
@@ -146,10 +146,10 @@ test("an AppImage downloads the release's AppImage, checks it against SHA256SUMS
 
 test("an AppImage whose download doesn't match SHA256SUMS stays as it is and only offers the release", async () => {
   const appImage = installed("Mismatch");
-  release({ sums: `${"0".repeat(64)}  ${appImageName("0.27.0", arch)}\n` });
+  release({ sums: `${"0".repeat(64)}  ${appImageName("0.27.0-livewire.1", arch)}\n` });
   const { fake, u } = await launch(appImage, join(root, "data-mismatch"));
   expect((await u.checkForUpdate()).state).toBe("downloading");
-  expect(await settled(u)).toEqual({ version: "0.27.0", state: "available", url: PAGE });
+  expect(await settled(u)).toEqual({ version: "0.27.0-livewire.1", state: "available", url: PAGE });
   expect(u.applyUpdate(true)).toBe(false);
   expect(readFileSync(appImage, "utf8")).toBe(OLD);
   expect(fake.did.filter((d) => d.startsWith("relaunch"))).toEqual([]);
@@ -157,7 +157,7 @@ test("an AppImage whose download doesn't match SHA256SUMS stays as it is and onl
 });
 
 test("an AppImage whose SHA256SUMS isn't signed with the pinned release key is never staged (issue #203)", async () => {
-  const name = appImageName("0.27.0", arch);
+  const name = appImageName("0.27.0-livewire.1", arch);
   const good = `${sha(NEW)}  ${name}\n`;
   for (const [i, bad] of [
     { signature: otherKey.sign(good) },
@@ -169,7 +169,7 @@ test("an AppImage whose SHA256SUMS isn't signed with the pinned release key is n
     const seen = release(bad);
     const { fake, u } = await launch(appImage, join(root, `data-unsigned-${i}`));
     expect((await u.checkForUpdate()).state).toBe("downloading");
-    expect(await settled(u)).toEqual({ version: "0.27.0", state: "available", url: PAGE });
+    expect(await settled(u)).toEqual({ version: "0.27.0-livewire.1", state: "available", url: PAGE });
     expect(seen.some((url) => url.endsWith(`/${name}`))).toBe(false);
     expect(u.applyUpdate(true)).toBe(false);
     expect(readFileSync(appImage, "utf8")).toBe(OLD);
@@ -183,8 +183,8 @@ test("an AppImage whose release has no SHA256SUMS.minisig is never staged: it fe
   const seen = release({ signature: null });
   const { u } = await launch(appImage, join(root, "data-no-signature"));
   expect((await u.checkForUpdate()).state).toBe("downloading");
-  expect(await settled(u)).toEqual({ version: "0.27.0", state: "available", url: PAGE });
-  expect(seen).toEqual([LATEST, `${DOWNLOAD}SHA256SUMS`, `${DOWNLOAD}SHA256SUMS.minisig`]);
+  expect(await settled(u)).toEqual({ version: "0.27.0-livewire.1", state: "available", url: PAGE });
+  expect(seen).toEqual([FEED, `${DOWNLOAD}SHA256SUMS`, `${DOWNLOAD}SHA256SUMS.minisig`]);
   expect(readFileSync(appImage, "utf8")).toBe(OLD);
   expect(downloads()).toEqual([]);
 });
@@ -194,15 +194,15 @@ test("an AppImage in a folder it can't write says it can't update itself and dow
   chmodSync(join(root, "ReadOnly"), 0o555);
   const seen = release();
   const { u } = await launch(appImage, join(root, "data-readonly"));
-  expect(await u.checkForUpdate()).toEqual({ version: "0.27.0", state: "available", url: PAGE, blocked: true });
-  expect(seen).toEqual([LATEST]);
+  expect(await u.checkForUpdate()).toEqual({ version: "0.27.0-livewire.1", state: "available", url: PAGE, blocked: true });
+  expect(seen).toEqual([FEED]);
 });
 
 test("a deb install never swaps itself: it's offered the release's .deb for its CPU and downloads nothing", async () => {
   const seen = release();
   const { u } = await launch(undefined, join(root, "data-deb"));
-  expect(await u.checkForUpdate()).toEqual({ version: "0.27.0", state: "available", url: PAGE, deb: `${DOWNLOAD}${debName("0.27.0", arch)}` });
-  expect(seen).toEqual([LATEST]);
+  expect(await u.checkForUpdate()).toEqual({ version: "0.27.0-livewire.1", state: "available", url: PAGE, deb: `${DOWNLOAD}${debName("0.27.0-livewire.1", arch)}` });
+  expect(seen).toEqual([FEED]);
 });
 
 test("a swap that fails leaves the AppImage, says it can't update itself, and the next launch doesn't download that version again", async () => {
@@ -215,14 +215,14 @@ test("a swap that fails leaves the AppImage, says it can't update itself, and th
   chmodSync(join(root, "Locked"), 0o555);
   expect(first.u.applyUpdate(true)).toBe(false);
   expect(readFileSync(appImage, "utf8")).toBe(OLD);
-  expect(first.u.updateState()).toEqual({ version: "0.27.0", state: "available", url: PAGE, blocked: true });
+  expect(first.u.updateState()).toEqual({ version: "0.27.0-livewire.1", state: "available", url: PAGE, blocked: true });
   expect(first.fake.did.filter((d) => d.startsWith("relaunch"))).toEqual([]);
   expect(downloads()).toEqual([]);
   chmodSync(join(root, "Locked"), 0o755);
   const seen = release();
   const next = await launch(appImage, data);
-  expect(await next.u.checkForUpdate()).toEqual({ version: "0.27.0", state: "available", url: PAGE, blocked: true });
-  expect(seen).toEqual([LATEST]);
+  expect(await next.u.checkForUpdate()).toEqual({ version: "0.27.0-livewire.1", state: "available", url: PAGE, blocked: true });
+  expect(seen).toEqual([FEED]);
   expect(existsSync(join(data, "update-failed"))).toBe(true);
 });
 
@@ -233,8 +233,8 @@ test("a deb install started from another AppImage app (its APPIMAGE inherited) i
   writeFileSync(cursor, "the Cursor AppImage");
   const seen = release();
   const { fake, u } = await launch(cursor, join(root, "data-inherited"), { appDir: join(root, ".mount_CursorXYZ"), exe: DEB_EXE });
-  expect(await u.checkForUpdate()).toEqual({ version: "0.27.0", state: "available", url: PAGE, deb: `${DOWNLOAD}${debName("0.27.0", arch)}` });
-  expect(seen).toEqual([LATEST]);
+  expect(await u.checkForUpdate()).toEqual({ version: "0.27.0-livewire.1", state: "available", url: PAGE, deb: `${DOWNLOAD}${debName("0.27.0-livewire.1", arch)}` });
+  expect(seen).toEqual([FEED]);
   expect(u.applyUpdate(false)).toBe(false);
   expect(readFileSync(cursor, "utf8")).toBe("the Cursor AppImage");
   expect(fake.did.filter((d) => d.startsWith("relaunch"))).toEqual([]);
@@ -245,7 +245,7 @@ test("an AppImage takes its update only from GitHub: a redirect off GitHub's hos
   const hops = release({ redirect: (name) => `https://evil.example/${name}` });
   const next = await launch(appImage, join(root, "data-redirect"));
   expect((await next.u.checkForUpdate()).state).toBe("downloading");
-  expect(await settled(next.u)).toEqual({ version: "0.27.0", state: "available", url: PAGE });
+  expect(await settled(next.u)).toEqual({ version: "0.27.0-livewire.1", state: "available", url: PAGE });
   expect(hops.some((h) => h.startsWith("https://evil.example/"))).toBe(false);
   expect(readFileSync(appImage, "utf8")).toBe(OLD);
   expect(downloads()).toEqual([]);

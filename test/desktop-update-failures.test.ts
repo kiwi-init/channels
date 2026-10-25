@@ -5,9 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { useHost } from "../desktop/src/host.ts";
 import { fakeHost } from "./fake-host.ts";
+import { FEED, releasesFeed } from "./livewire-feed.ts";
 
 const root = mkdtempSync(join(tmpdir(), "kiwi-upfail-"));
-const bundle = join(root, "Applications", "Channels.app");
+const bundle = join(root, "Applications", "Channels Livewire.app");
 const logs = join(root, "logs");
 const tmp = join(root, "tmp");
 mkdirSync(join(bundle, "Contents", "MacOS"), { recursive: true });
@@ -30,7 +31,7 @@ const { checkForUpdate, applyUpdate, updateState } = (await import(updater)) as 
   updateState: () => Checked | null;
 };
 
-const name = `Channels-0.20.0-mac-${process.arch === "arm64" ? "arm64" : "x64"}.zip`;
+const name = `Channels-0.20.0-livewire.1-mac-${process.arch === "arm64" ? "arm64" : "x64"}.zip`;
 let zip: Uint8Array = new Uint8Array();
 let sums = "";
 const realFetch = globalThis.fetch;
@@ -40,7 +41,7 @@ afterAll(() => {
 globalThis.fetch = Object.assign(
   async (input: string | URL | Request) => {
     const u = String(input);
-    if (u.endsWith("/releases/latest")) return new Response(null, { status: 302, headers: { location: "https://github.com/kiwi-init/channels/releases/tag/v0.20.0" } });
+    if (u === FEED) return new Response(releasesFeed("livewire-v0.20.0-livewire.1"));
     if (u.endsWith("/SHA256SUMS")) return new Response(sums);
     return new Response(zip);
   },
@@ -49,10 +50,10 @@ globalThis.fetch = Object.assign(
 
 function release(): void {
   const src = join(root, "src");
-  mkdirSync(join(src, "Channels.app", "Contents", "MacOS"), { recursive: true });
-  writeFileSync(join(src, "Channels.app", "Contents", "MacOS", "Channels"), "new");
+  mkdirSync(join(src, "Channels Livewire.app", "Contents", "MacOS"), { recursive: true });
+  writeFileSync(join(src, "Channels Livewire.app", "Contents", "MacOS", "Channels"), "new");
   const out = join(root, name);
-  Bun.spawnSync(["/usr/bin/ditto", "-c", "-k", "--keepParent", join(src, "Channels.app"), out]);
+  Bun.spawnSync(["/usr/bin/ditto", "-c", "-k", "--keepParent", join(src, "Channels Livewire.app"), out]);
   zip = new Uint8Array(readFileSync(out));
   sums = `${createHash("sha256").update(zip).digest("hex")}  ${name}\n`;
 }
@@ -75,7 +76,7 @@ test.skipIf(mac)("a temp folder that can't be made ends at available, not stuck 
     process.env["TMPDIR"] = tmp;
   }
   expect(updateState()?.state).toBe("available");
-  expect(readFileSync(join(logs, "main.log"), "utf8")).toContain("couldn't put Channels 0.20.0 in place");
+  expect(readFileSync(join(logs, "main.log"), "utf8")).toContain("couldn't put Channels 0.20.0-livewire.1 in place");
 });
 
 test.skipIf(mac)("a download that doesn't match its checksum is logged with that reason", async () => {
@@ -93,5 +94,5 @@ test.skipIf(mac)("a staged update whose folder went away doesn't throw at quit: 
   for (const d of readdirSync(tmp)) rmSync(join(tmp, d), { recursive: true, force: true });
   expect(applyUpdate(false)).toBe(false);
   expect(updateState()?.state).toBe("available");
-  expect(readFileSync(join(logs, "main.log"), "utf8")).toContain("the staged Channels 0.20.0 is gone");
+  expect(readFileSync(join(logs, "main.log"), "utf8")).toContain("the staged Channels 0.20.0-livewire.1 is gone");
 });

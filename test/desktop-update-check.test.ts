@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import { useHost } from "../desktop/src/host.ts";
 import { fakeHost } from "./fake-host.ts";
+import { FEED, releasePage, releasesFeed } from "./livewire-feed.ts";
 
 useHost(fakeHost({ packaged: false, version: "0.19.0" }).host);
 
@@ -13,52 +14,68 @@ afterEach(() => {
   globalThis.fetch = realFetch;
 });
 
-const LATEST = "https://github.com/kiwi-init/channels/releases/latest";
-const page = (tag: string) => `https://github.com/kiwi-init/channels/releases/tag/${tag}`;
-
-function answer(status: number, location: string | null, seen: string[] = []): void {
+function answer(status: number, body: string | null, seen: string[] = []): void {
   globalThis.fetch = Object.assign(
     async (input: string | URL | Request, init?: RequestInit) => {
-      seen.push(`${String(input)}${init?.redirect === "manual" ? " (redirect: manual)" : ""}`);
-      return new Response(null, { status, headers: location ? { location } : {} });
+      seen.push(`${String(input)}${init?.redirect === "error" ? " (redirect: error)" : ""}`);
+      return new Response(body, { status });
     },
     { preconnect: realFetch.preconnect },
   );
 }
 
-test("the latest release is read off github.com's releases/latest redirect, never api.github.com and its 60 calls an hour per IP (T985)", async () => {
+const asked = `${FEED} (redirect: error)`;
+
+test("RCs are read off github.com's releases feed, never api.github.com and its 60 calls an hour per IP (T985), and only livewire-v tags count, so a stable release is never offered (T839)", async () => {
   const seen: string[] = [];
-  answer(302, page("v0.19.0"), seen);
+  answer(200, releasesFeed("v0.30.0", "v0.31.0-rc.1", "livewire-v0.19.0-livewire.1"), seen);
   expect(await checkForUpdate()).toEqual({ state: "current", version: "0.19.0" });
-  expect(seen).toEqual([`${LATEST} (redirect: manual)`]);
+  expect(seen).toEqual([asked]);
 });
 
-test("a newer release is only offered with its link when the app isn't packaged: nothing is downloaded", async () => {
+test("the newest livewire-v tag in the feed wins, whatever its place, and is only offered with its link when the app isn't packaged: nothing is downloaded", async () => {
   const seen: string[] = [];
-  answer(302, page("v0.20.0"), seen);
-  expect(await checkForUpdate()).toEqual({ version: "0.20.0", state: "available", url: page("v0.20.0") });
-  expect(seen).toEqual([`${LATEST} (redirect: manual)`]);
+  answer(200, releasesFeed("livewire-v0.20.0-livewire.2", "v0.40.0", "livewire-v0.20.0-livewire.10", "livewire-v0.20.0-livewire.9"), seen);
+  expect(await checkForUpdate()).toEqual({ version: "0.20.0-livewire.10", state: "available", url: releasePage("livewire-v0.20.0-livewire.10") });
+  expect(seen).toEqual([asked]);
 });
 
-test("a tag that isn't v and a plain version, or a redirect anywhere but this repo's release tag, is a failed check: it never reaches a file name or the swap script (T1554)", async () => {
-  for (const tag of ["v9.9.9/../../x", "v99.0.0'; rm -rf ~; '", "v1.0.0-rc.1", "v0.27", "latest", "0.27.0", "V0.27.0"]) {
+test("a feed with no Livewire release yet is current, not a failure", async () => {
+  answer(200, releasesFeed("v0.30.0"));
+  expect(await checkForUpdate()).toEqual({ state: "current", version: "0.19.0" });
+});
+
+test("a tag that isn't livewire-v and a plain RC version, or a link anywhere but this repo's release tag, is never picked: it never reaches a file name or the swap script (T1554)", async () => {
+  for (const tag of [
+    "livewire-v9.9.9-livewire.1/../../x",
+    "livewire-v99.0.0-livewire.1'; rm -rf ~; '",
+    "livewire-v1.0.0",
+    "livewire-v1.0.0-rc.1",
+    "livewire-v0.27-livewire.1",
+    "v99.0.0-livewire.1",
+    "LIVEWIRE-v99.0.0-livewire.1",
+  ]) {
     const seen: string[] = [];
-    answer(302, page(tag), seen);
-    expect(await checkForUpdate()).toEqual({ state: "failed" });
-    expect(seen).toEqual([`${LATEST} (redirect: manual)`]);
+    answer(200, releasesFeed(tag), seen);
+    expect(await checkForUpdate()).toEqual({ state: "current", version: "0.19.0" });
+    expect(seen).toEqual([asked]);
   }
-  for (const to of ["https://github.com/kiwi-init/channels/releases", "https://evil.example/kiwi-init/channels/releases/tag/v0.20.0", "https://github.com/someone/else/releases/tag/v0.20.0"]) {
-    answer(302, to);
-    expect(await checkForUpdate()).toEqual({ state: "failed" });
+  for (const href of [
+    "https://evil.example/kiwi-init/channels/releases/tag/livewire-v99.0.0-livewire.1",
+    "https://github.com/someone/else/releases/tag/livewire-v99.0.0-livewire.1",
+    "http://github.com/kiwi-init/channels/releases/tag/livewire-v99.0.0-livewire.1",
+  ]) {
+    answer(200, `<feed><entry><link rel="alternate" href="${href}"/></entry></feed>`);
+    expect(await checkForUpdate()).toEqual({ state: "current", version: "0.19.0" });
   }
 });
 
-test("GitHub not answering, answering without a redirect, or rate-limiting is a failed check", async () => {
+test("GitHub not answering, answering with something that isn't a feed, or rate-limiting is a failed check", async () => {
   answer(503, null);
   expect(await checkForUpdate()).toEqual({ state: "failed" });
-  answer(200, null);
+  answer(200, "<html>sign in</html>");
   expect(await checkForUpdate()).toEqual({ state: "failed" });
-  answer(429, null);
+  answer(429, releasesFeed("livewire-v0.20.0-livewire.1"));
   expect(await checkForUpdate()).toEqual({ state: "failed" });
   answer(302, null);
   expect(await checkForUpdate()).toEqual({ state: "failed" });
@@ -73,7 +90,7 @@ test("GitHub not answering, answering without a redirect, or rate-limiting is a 
 
 test("a check already under way is shared, not started twice", async () => {
   const seen: string[] = [];
-  answer(302, page("v0.19.0"), seen);
+  answer(200, releasesFeed("livewire-v0.19.0-livewire.1"), seen);
   const [a, b] = await Promise.all([checkForUpdate(), checkForUpdate()]);
   expect(a).toEqual(b);
   expect(seen).toHaveLength(1);

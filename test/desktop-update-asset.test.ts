@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { cantSwap, debAsset, githubHop, latestTag, ownAppImage, relaunchAfter, releaseDownload, swapAsset, swapScript } from "../desktop/src/update-asset.ts";
+import { cantSwap, debAsset, githubHop, livewireVersion, newestLivewireTag, ownAppImage, relaunchAfter, releaseDownload, swapAsset, swapScript } from "../desktop/src/update-asset.ts";
 
 test("a Mac swaps itself for the zip for its CPU", () => {
   expect(swapAsset("0.14.0", "darwin", "arm64")).toBe("Channels-0.14.0-mac-arm64.zip");
@@ -36,27 +36,35 @@ test("it's an AppImage only when its own executable runs from the AppImage's mou
   expect(ownAppImage(image, "/tmp/.mount_ChanXYZ/../..", "/opt/Channels/bin/bun")).toBeUndefined();
 });
 
-test("the latest tag comes only from this repo's releases/latest redirect on github.com over https, the files from its download path, and redirects stay on GitHub's hosts (T1554, T985)", () => {
+test("an RC's tag comes only from this repo's release links on github.com over https and is livewire-vYYYY.M.PATCH-livewire.N, the files from its download path, and redirects stay on GitHub's hosts (T1554, T985, T839)", () => {
   const repo = "kiwi-init/channels";
-  expect(latestTag(repo, "https://github.com/kiwi-init/channels/releases/tag/v0.27.5")).toBe("v0.27.5");
+  const link = (href: string) => `<entry><link rel="alternate" type="text/html" href="${href}"/></entry>`;
+  const tag = (t: string) => link(`https://github.com/kiwi-init/channels/releases/tag/${t}`);
+  expect(newestLivewireTag(repo, `<feed>${tag("livewire-v0.27.5-livewire.3")}</feed>`)).toBe("livewire-v0.27.5-livewire.3");
+  expect(newestLivewireTag(repo, `<feed>${tag("livewire-v0.27.5-livewire.3")}${tag("v0.30.0")}${tag("livewire-v0.28.0-livewire.1")}${tag("livewire-v0.27.5-livewire.12")}</feed>`)).toBe(
+    "livewire-v0.28.0-livewire.1",
+  );
+  expect(livewireVersion("livewire-v0.28.0-livewire.1")).toBe("0.28.0-livewire.1");
+  expect(livewireVersion("v0.28.0")).toBe("");
   for (const bad of [
-    null,
     "",
-    "/kiwi-init/channels/releases/tag/v0.27.5",
-    "http://github.com/kiwi-init/channels/releases/tag/v0.27.5",
-    "https://github.com.evil.example/kiwi-init/channels/releases/tag/v0.27.5",
-    "https://github.com/someone/channels/releases/tag/v0.27.5",
-    "https://user:pw@github.com/kiwi-init/channels/releases/tag/v0.27.5",
-    "https://github.com:8443/kiwi-init/channels/releases/tag/v0.27.5",
-    "https://github.com/kiwi-init/channels/releases",
-    "https://github.com/kiwi-init/channels/releases/tag/v0.27.5?x=1",
-    "https://github.com/kiwi-init/channels/releases/tag/v0.27.5/../../../x",
-    "https://github.com/kiwi-init/channels/releases/tag/v0.28.0-rc.1",
-    "https://github.com/kiwi-init/channels/releases/tag/v1.0.0%2F..%2Fx",
-    "https://github.com/kiwi-init/channels/releases/tag/0.27.5",
-    "not a url",
+    link("/kiwi-init/channels/releases/tag/livewire-v0.27.5-livewire.1"),
+    link("http://github.com/kiwi-init/channels/releases/tag/livewire-v0.27.5-livewire.1"),
+    link("https://github.com.evil.example/kiwi-init/channels/releases/tag/livewire-v0.27.5-livewire.1"),
+    link("https://github.com/someone/channels/releases/tag/livewire-v0.27.5-livewire.1"),
+    link("https://user:pw@github.com/kiwi-init/channels/releases/tag/livewire-v0.27.5-livewire.1"),
+    link("https://github.com:8443/kiwi-init/channels/releases/tag/livewire-v0.27.5-livewire.1"),
+    link("https://github.com/kiwi-init/channels/releases"),
+    tag("livewire-v0.27.5-livewire.1?x=1"),
+    tag("livewire-v0.27.5-livewire.1/../../../x"),
+    tag("livewire-v0.27.5"),
+    tag("livewire-v0.27.5-rc.1"),
+    tag("v0.27.5"),
+    tag("v0.27.5-livewire.1"),
+    tag("livewire-v1.0.0-livewire.1%2F..%2Fx"),
+    "not a feed",
   ])
-    expect(latestTag(repo, bad)).toBeNull();
+    expect(newestLivewireTag(repo, `<feed>${bad}</feed>`)).toBeNull();
   expect(releaseDownload(repo, "v0.27.5", "SHA256SUMS")).toBe("https://github.com/kiwi-init/channels/releases/download/v0.27.5/SHA256SUMS");
   expect(githubHop("https://release-assets.githubusercontent.com/github-production-release-asset/1/2")).toBe(true);
   expect(githubHop("https://objects.githubusercontent.com/github-production-release-asset-2e65be/1")).toBe(true);
