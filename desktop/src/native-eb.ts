@@ -23,7 +23,7 @@ const frostShell = mac
   ? dlopen(shellPath, {
       kiwi_window_frost: { args: [FFIType.ptr, FFIType.function], returns: FFIType.bool },
       kiwi_frost_allowed: { args: [], returns: FFIType.bool },
-      kiwi_frost_solid_for_test: { args: [FFIType.bool], returns: FFIType.void },
+      kiwi_frost_force_for_test: { args: [FFIType.i32], returns: FFIType.void },
       kiwi_window_appearance: { args: [FFIType.ptr, FFIType.i32], returns: FFIType.void },
       kiwi_window_looks: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
     }).symbols
@@ -39,7 +39,7 @@ export function frostWindow(win: Pointer, changed: (on: boolean) => void): boole
 
 export const frostAllowed = (): boolean => frostShell?.kiwi_frost_allowed() ?? false;
 
-export const solidForTest = (solid: boolean): void => void frostShell?.kiwi_frost_solid_for_test(solid);
+export const forceFrostForTest = (frost: boolean): void => void frostShell?.kiwi_frost_force_for_test(frost ? 1 : 0);
 
 export const windowAppearance = (win: Pointer, appearance: number): void => void frostShell?.kiwi_window_appearance(win, appearance);
 

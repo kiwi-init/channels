@@ -6,7 +6,7 @@ import { testHomeProblem } from "./eb-test-home.ts";
 import { testVault } from "./eb-test-store.ts";
 import { normalizeRelay } from "./guard.ts";
 import { dataDir } from "./host-eb.ts";
-import { solidForTest, windowLooks } from "./native-eb.ts";
+import { forceFrostForTest, frostAllowed, windowLooks } from "./native-eb.ts";
 import { mutate, openStore } from "./store.ts";
 
 declare const KIWI_EB_TEST: boolean;
@@ -34,8 +34,9 @@ export function driveForTests(win: BrowserWindow): void {
         window: () => ({ visible: win.isVisible(), minimized: win.isMinimized() }),
         frame: () => win.getFrame(),
         looks: () => windowLooks(),
-        solidForTest: () => (solidForTest(true), true),
-        frostForTest: () => (solidForTest(false), true),
+        frostAllowed: () => frostAllowed(),
+        solidForTest: () => (forceFrostForTest(false), true),
+        frostForTest: () => (forceFrostForTest(true), true),
         placeForTest: () => {
           const f = win.getFrame();
           win.setFrame(f.x + 40, f.y + 30, f.width - 160, f.height - 90);

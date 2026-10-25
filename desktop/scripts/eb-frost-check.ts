@@ -49,7 +49,13 @@ const marked = async (d: Driver, want: boolean, why: string): Promise<void> => {
 const pageTheme = (d: Driver, appearance: string) => d.evaluate((a: string) => (window as unknown as { kiwi: { setAppearance(a: string): Promise<void> } }).kiwi.setAppearance(a), appearance);
 
 try {
+  const asked = async (d: Driver) => ((await d.main("frostAllowed")) === true ? "frost" : "solid");
   await run(async (d) => {
+    const system = await asked(d);
+    console.log(`this Mac's accessibility display options ask for: ${system}`);
+    await looks(d, `${system} clear system`);
+    await marked(d, system === "frost", "the page marked as the system asks");
+    await d.main("frostForTest");
     await looks(d, "frost clear system");
     await marked(d, true, "the page marked data-frost");
     for (const appearance of ["dark", "light", "system"]) {
@@ -69,7 +75,7 @@ try {
   });
   console.log("the sidebar material behind a clear page, following the page's dark, light and system; solid under Reduce Transparency or Increase Contrast, and back");
 
-  await run((d) => looks(d, "frost clear dark"));
+  await run(async (d) => looks(d, `${await asked(d)} clear dark`));
   console.log("a restart with the page set to dark opens the window dark");
 } catch (e) {
   problems.push(e instanceof Error ? e.message : String(e));

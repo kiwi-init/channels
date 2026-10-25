@@ -176,7 +176,7 @@ static char look[64] = "";
 static __weak NSWindow *frosted = nil;
 static void (*frostChanged)(bool) = NULL;
 static id displayOptions = nil;
-static BOOL solidForTest = NO;
+static int32_t forcedForTest = -1;
 
 static NSVisualEffectView *frostOf(NSWindow *window) {
   for (NSView *child in window.contentView.subviews)
@@ -185,8 +185,9 @@ static NSVisualEffectView *frostOf(NSWindow *window) {
 }
 
 static BOOL frostAllowed(void) {
+  if (forcedForTest >= 0) return forcedForTest == 1;
   NSWorkspace *workspace = NSWorkspace.sharedWorkspace;
-  return !solidForTest && !workspace.accessibilityDisplayShouldReduceTransparency && !workspace.accessibilityDisplayShouldIncreaseContrast;
+  return !workspace.accessibilityDisplayShouldReduceTransparency && !workspace.accessibilityDisplayShouldIncreaseContrast;
 }
 
 static void noteLook(NSWindow *window) {
@@ -251,9 +252,9 @@ bool kiwi_window_frost(void *ptr, void (*changed)(bool)) {
   return true;
 }
 
-void kiwi_frost_solid_for_test(bool solid) {
+void kiwi_frost_force_for_test(int32_t frost) {
   dispatch_async(dispatch_get_main_queue(), ^{
-    solidForTest = solid;
+    forcedForTest = frost;
     NSWindow *shown = frosted;
     if (shown) showFrost(shown, YES);
   });
