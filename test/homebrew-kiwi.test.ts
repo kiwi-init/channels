@@ -105,7 +105,7 @@ console.log(JSON.stringify(out));
     expect(run("install")).toEqual([{ cli: brew, daemon: bundled }]);
     expect(existsSync(join(home, ".zshrc"))).toBe(false);
     expect(run("drop", "install")).toEqual([{ cli: join(dir, "install", "kiwi"), daemon: join(dir, "install", "kiwi") }]);
-    expect(readFileSync(join(home, ".zshrc"), "utf8")).toContain("/install:$PATH");
+    expect(existsSync(join(home, ".zshrc"))).toBe(false);
   });
 
   test("hooks name a Homebrew kiwi by the link that survives brew upgrade, not its versioned Cellar folder", () => {
