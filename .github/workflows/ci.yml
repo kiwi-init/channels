@@ -349,7 +349,7 @@ jobs:
           find "$debs" -maxdepth 1 -name '*.deb' | wc -l > "$RUNNER_TEMP/debs-before"
           echo "Dir::Cache::Archives \"$debs/\";" | sudo tee /etc/apt/apt.conf.d/90linux-debs > /dev/null
           sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus ${{ matrix.drive && 'weston xwayland kwin-wayland plasma-wayland-protocols libwayland-dev python3-gi gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0' || '' }}
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus ${{ matrix.drive && 'weston xwayland kwin-wayland plasma-wayland-protocols sway grim libwayland-dev python3-gi gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0' || '' }}
       - id: debs
         name: keep what apt downloaded, even when it ran out of time
         if: always()
@@ -538,6 +538,20 @@ jobs:
         if: ${{ !cancelled() && matrix.drive }}
         timeout-minutes: 12
         run: bash desktop/scripts/wayland-check/kwin.sh "$PWD/${{ steps.test-app.outputs.path }}" "$RUNNER_TEMP/wayland-check"
+      - name: tiling, scale and closing on wlroots as Hyprland and sway run it (headless sway with no XWayland), with screenshots
+        if: ${{ !cancelled() && matrix.drive }}
+        timeout-minutes: 12
+        run: bash desktop/scripts/wlroots-check/sway.sh "$PWD/${{ steps.test-app.outputs.path }}" "$RUNNER_TEMP/wlroots-check"
+      - if: ${{ !cancelled() && matrix.drive }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: wlroots-check
+          path: |
+            ${{ runner.temp }}/wlroots-check/*.png
+            ${{ runner.temp }}/wlroots-check/*.json
+            ${{ runner.temp }}/wlroots-check/*.log
+          if-no-files-found: warn
+          retention-days: 3
       - name: dpkg --purge leaves nothing of the app behind
         if: ${{ !cancelled() }}
         run: |
