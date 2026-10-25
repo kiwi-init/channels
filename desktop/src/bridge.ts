@@ -341,7 +341,6 @@ export interface KiwiBridge {
   takeDroppedFiles(): Promise<DroppedFile[]>;
   takePastedImage(): Promise<PastedImage | null>;
   setBadge(count: number): Promise<void>;
-  /** The page's light, dark or system theme, for the window around it. */
   setAppearance(appearance: "system" | "light" | "dark"): Promise<void>;
   /** The kiwi://join/<code> link waiting to be opened, if any; taking it clears it. */
   getDeepLink(): Promise<string | null>;
