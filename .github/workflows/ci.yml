@@ -387,7 +387,7 @@ jobs:
         timeout-minutes: 5
         run: |
           dbus-run-session -- sh -c 'printf throwaway | gnome-keyring-daemon --unlock --components=secrets >/dev/null && bun desktop/scripts/linux-store-check.ts keyring'
-          env -u DBUS_SESSION_BUS_ADDRESS bun desktop/scripts/linux-store-check.ts none
+          DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent/kiwi-no-session-bus bun desktop/scripts/linux-store-check.ts none
       - name: deb and AppImage, each at most 40 MB
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/package-linux.ts desktop/release-eb desktop/release-eb/linux
