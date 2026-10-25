@@ -19,6 +19,7 @@
     "plutil",
     "secret-tool",
     "nm",
+    "readelf",
     "patch",
     "^g\\+\\+$"
   ],

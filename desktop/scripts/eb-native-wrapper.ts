@@ -5,9 +5,10 @@ import path from "node:path";
 
 import { type ArchiveTreePin, PINS, treeSha256 } from "./eb-pins.ts";
 
-const WAYLAND_PATCH = path.resolve(import.meta.dirname, "..", "native", "linux", "electrobun-wayland.patch");
+const PATCHES = ["electrobun-wayland.patch", "electrobun-tray.patch"].map((name) => path.resolve(import.meta.dirname, "..", "native", "linux", name));
 const CACHE = path.join(process.env.XDG_CACHE_HOME ?? path.join(os.homedir(), ".cache"), "kiwi-eb-native");
-const GTK = ["webkit2gtk-4.1", "gtk+-3.0", "ayatana-appindicator3-0.1"];
+const GTK = ["webkit2gtk-4.1", "gtk+-3.0"];
+const INDICATOR = "ayatana-appindicator3-0.1";
 const SOURCES = ["nativeWrapper", "wayland_screen_capture", "wayland_pipewire_capture"];
 
 function pinnedTree(name: string, pin: ArchiveTreePin): string {
@@ -50,6 +51,12 @@ const exported = (lib: string): string[] =>
     .filter((f) => f.length === 3 && f[1] === "T")
     .map((f) => f[2] as string);
 
+const needed = (lib: string): string[] =>
+  execFileSync("readelf", ["-d", lib], { encoding: "utf8" })
+    .split("\n")
+    .map((l) => /\(NEEDED\)\s+Shared library: \[([^\]]+)\]/.exec(l)?.[1])
+    .filter((n): n is string => n !== undefined);
+
 export function buildNativeWrapper(wrapper: string, asar: string): void {
   const pins = PINS.nativeWrapper;
   const source = pinnedTree("source", pins.source);
@@ -60,11 +67,11 @@ export function buildNativeWrapper(wrapper: string, asar: string): void {
   try {
     const native = path.join(work, "package", "src", "native");
     fs.cpSync(source, native, { recursive: true });
-    execFileSync("patch", ["-p1", "--forward", "--batch", "--fuzz=0", "-d", work, "-i", WAYLAND_PATCH], { stdio: "inherit" });
+    for (const patch of PATCHES) execFileSync("patch", ["-p1", "--forward", "--batch", "--fuzz=0", "-d", work, "-i", patch], { stdio: "inherit" });
     const flags = [
       "-std=c++20",
       "-fPIC",
-      ...pkgConfig("--cflags", GTK),
+      ...pkgConfig("--cflags", [...GTK, INDICATOR]),
       ...pkgConfig("--cflags", ["libpipewire-0.3"]),
       `-I${path.dirname(cef)}`,
       `-I${dawn}`,
@@ -79,6 +86,8 @@ export function buildNativeWrapper(wrapper: string, asar: string): void {
     });
     const built = path.join(work, "libNativeWrapper.so");
     execFileSync("g++", ["-shared", "-o", built, ...objects, asar, ...pkgConfig("--libs", GTK), "-ldl", "-lpthread"], { stdio: "inherit" });
+    const linked = needed(built).filter((n) => /appindicator/.test(n));
+    if (linked.length) throw new Error(`eb-native-wrapper: the patched libNativeWrapper.so links ${linked.join(", ")}, so it won't start where AppIndicator isn't installed`);
     const ours = new Set(exported(built));
     const lost = theirs.filter((s) => !ours.has(s));
     if (lost.length) throw new Error(`eb-native-wrapper: the patched libNativeWrapper.so doesn't export ${lost.length} of Electrobun's functions: ${lost.slice(0, 10).join(", ")}`);

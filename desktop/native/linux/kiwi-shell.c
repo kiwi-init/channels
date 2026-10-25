@@ -1,3 +1,4 @@
+#include <dlfcn.h>
 #include <gdk/gdk.h>
 #include <glib-object.h>
 #include <gtk/gtk.h>
@@ -9,6 +10,7 @@
 #define NOTES "org.freedesktop.Notifications"
 #define NOTES_PATH "/org/freedesktop/Notifications"
 #define TRAY_WATCHER "org.kde.StatusNotifierWatcher"
+#define TRAY_LIBRARY "libayatana-appindicator3.so.1"
 #define PORTAL "org.freedesktop.portal.Desktop"
 #define PORTAL_PATH "/org/freedesktop/portal/desktop"
 #define PORTAL_SETTINGS "org.freedesktop.portal.Settings"
@@ -415,7 +417,15 @@ bool kiwi_badge(int32_t count) {
   return sent;
 }
 
+static bool tray_library(void) {
+  void *lib = dlopen(TRAY_LIBRARY, RTLD_LAZY | RTLD_LOCAL);
+  if (!lib) return false;
+  dlclose(lib);
+  return true;
+}
+
 bool kiwi_tray_host(void) {
+  if (!tray_library()) return false;
   GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, NULL);
   if (!bus) return false;
   GVariant *reply = g_dbus_connection_call_sync(bus, TRAY_WATCHER, "/StatusNotifierWatcher", "org.freedesktop.DBus.Properties", "Get", g_variant_new("(ss)", TRAY_WATCHER, "IsStatusNotifierHostRegistered"),
