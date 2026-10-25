@@ -1,4 +1,4 @@
-import type { GithubNote } from "../protocol.ts";
+import type { GithubNote, MergeMethod } from "../protocol.ts";
 
 export interface GithubCheck {
   name: string;
@@ -38,10 +38,19 @@ export interface GithubIssue {
   seq: number;
 }
 
+export interface GithubRules {
+  repo: string;
+  branch: string;
+  required: string[];
+  merge: MergeMethod[];
+  seq: number;
+}
+
 export interface GithubState {
   prs: Map<string, GithubPr>;
   checks: Map<string, Map<string, GithubCheck>>;
   issues: Map<string, GithubIssue>;
+  rules: Map<string, GithubRules>;
 }
 
 const MAX_SHAS = 300;
@@ -117,6 +126,12 @@ export function applyGithub(g: GithubState, items: readonly GithubNote[], seq: n
       for (const [key, pr] of g.prs) if (pr.state === "open" && pr.branch === i.branch && pr.repo.toLowerCase() === i.repo.toLowerCase()) g.prs.set(key, { ...pr, sha: i.sha, at: i.at });
     }
   }
+}
+
+export const repoKey = (repo: string): string => repo.toLowerCase();
+
+export function rulesOf(g: GithubState, repo: string): GithubRules | undefined {
+  return g.rules.get(repoKey(repo));
 }
 
 export function issueOf(g: GithubState, ref: { repo: string; number: number }): GithubIssue | undefined {

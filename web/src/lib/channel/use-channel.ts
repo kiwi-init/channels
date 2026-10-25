@@ -388,6 +388,22 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
     const every = setInterval(drainGithub, 60_000)
     return () => clearInterval(every)
   }, [])
+  const rulesBusy = useRef(false)
+  const syncGithubRules = useEffectEvent(() => {
+    if (!ch.isOwner || !caughtUp || !state.repos.length || rulesBusy.current) return
+    rulesBusy.current = true
+    ch.syncGithubRules(state.repos, [...state.github.rules.values()])
+      .catch(() => {})
+      .finally(() => {
+        rulesBusy.current = false
+      })
+  })
+  const repoList = state.repos.join(",")
+  useEffect(() => {
+    syncGithubRules()
+    const every = setInterval(syncGithubRules, 10 * 60_000)
+    return () => clearInterval(every)
+  }, [caughtUp, repoList])
   const live = useMemo(() => onlineByName(online, keyOf, now), [online, keyOf, now])
 
   const chRef = useRef(ch)

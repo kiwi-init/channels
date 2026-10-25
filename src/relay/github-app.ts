@@ -1,4 +1,5 @@
 import * as Context from "effect/Context";
+import { MAX_REQUIRED_CHECKS, MERGE_METHODS, type MergeMethod } from "@kiwi/core/protocol.ts";
 
 export const REVIEW_CHECK = "kiwi/review";
 const MAX_DIFF = 2 << 20;
@@ -42,6 +43,42 @@ interface GithubIssueInfo {
   state: "open" | "closed";
 }
 
+export interface GithubRulesInfo {
+  branch: string;
+  required: string[];
+  merge: MergeMethod[];
+}
+
+interface RepoMeta {
+  default_branch?: string;
+  allow_merge_commit?: boolean | null;
+  allow_squash_merge?: boolean | null;
+  allow_rebase_merge?: boolean | null;
+}
+
+type BranchRule = { type?: string; parameters?: { required_status_checks?: { context?: string }[]; allowed_merge_methods?: string[] } };
+
+type BranchInfo = { protection?: { required_status_checks?: { contexts?: string[]; checks?: { context?: string }[] } } };
+
+export function rulesFrom(meta: RepoMeta, rules: readonly BranchRule[], branch: BranchInfo): GithubRulesInfo {
+  const allows: Record<MergeMethod, boolean | null | undefined> = { merge: meta.allow_merge_commit, squash: meta.allow_squash_merge, rebase: meta.allow_rebase_merge };
+  const known = MERGE_METHODS.some((m) => typeof allows[m] === "boolean");
+  let merge = MERGE_METHODS.filter((m) => !known || allows[m] === true);
+  const required = new Set<string>();
+  const add = (c: unknown) => {
+    if (typeof c === "string" && c.trim() && c.length <= 200) required.add(c.trim());
+  };
+  for (const r of rules) {
+    if (r.type === "required_status_checks") for (const c of r.parameters?.required_status_checks ?? []) add(c.context);
+    const allowed = r.type === "pull_request" ? r.parameters?.allowed_merge_methods : undefined;
+    if (allowed) merge = merge.filter((m) => allowed.includes(m));
+  }
+  const classic = branch.protection?.required_status_checks;
+  for (const c of classic?.contexts ?? []) add(c);
+  for (const c of classic?.checks ?? []) add(c.context);
+  return { branch: meta.default_branch ?? "main", required: [...required].slice(0, MAX_REQUIRED_CHECKS), merge };
+}
+
 export type GithubReply<T> = { ok: true; value: T } | { ok: false; status: number; error: string };
 
 export interface GithubAppApi {
@@ -50,6 +87,7 @@ export interface GithubAppApi {
   comment(repo: string, number: number, body: string): Promise<GithubReply<{ url: string | null }>>;
   issue(repo: string, number: number): Promise<GithubReply<GithubIssueInfo>>;
   closeIssue(repo: string, number: number, reason: "completed" | "not_planned", body: string): Promise<GithubReply<{ url: string | null }>>;
+  rules(repo: string): Promise<GithubReply<GithubRulesInfo>>;
   canPush(repo: string, userToken: string): Promise<GithubReply<boolean>>;
 }
 
@@ -183,6 +221,20 @@ export function githubAppFrom(opts: { appId?: string | null; privateKey?: string
           state: i.state === "closed" ? "closed" : "open",
         },
       };
+    },
+    rules: async (repo) => {
+      const t = await token(repo);
+      if (!t.ok) return t;
+      const meta = await get(`${api}/repos/${repo}`, { headers: headers(t.value) });
+      if (!meta.ok) return fail(meta, "repo");
+      const m = (await meta.json()) as RepoMeta;
+      const branch = encodeURIComponent(m.default_branch ?? "main");
+      const [rules, info] = await Promise.all([
+        get(`${api}/repos/${repo}/rules/branches/${branch}`, { headers: headers(t.value) }),
+        get(`${api}/repos/${repo}/branches/${branch}`, { headers: headers(t.value) }),
+      ]);
+      const list = rules.ok ? ((await rules.json()) as unknown) : [];
+      return { ok: true, value: rulesFrom(m, Array.isArray(list) ? (list as BranchRule[]) : [], info.ok ? ((await info.json()) as BranchInfo) : {}) };
     },
     closeIssue: async (repo, number, reason, body) => {
       const t = await token(repo);

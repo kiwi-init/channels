@@ -24,7 +24,8 @@ import {
   type ReviewRound,
   type Task,
 } from "./state.ts";
-import { evidenceOf, refText, stageOf, stageText } from "./stage.ts";
+import { evidenceOf, prLines, refText, stageOf, stageText } from "./stage.ts";
+import { rulesText } from "./prs.ts";
 import { isWakeVia, wakesInSession, wakeWords, type WakeVia } from "./wake.ts";
 
 export function tokensWord(n: number): string {
@@ -185,6 +186,8 @@ export function describeEvent(m: Message, state?: ChannelState): string {
       return `compacted the history through #${ev.through}: ${inlineText(ev.summary, 200)}`;
     case "github":
       return githubLine(ev.items);
+    case "github.rules":
+      return `read ${ev.repo}'s rules for ${inlineText(ev.branch, 60)}: ${rulesText(ev)}`;
     case "repos.set":
       return ev.repos.length ? `set the channel's repos: ${ev.repos.join(", ")}` : "cleared the channel's repos";
     case "hold.set":
@@ -583,7 +586,9 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now(), messa
     `${taskId(t.id)} ${inlineText(t.title, 200)}`,
     `  state: ${taskStateWord(t)}${t.owner ? ` · owner: ${inlineText(t.owner, 40)}` : " · unassigned"} · created by ${inlineText(t.createdBy, 40)} ${ago(t.createdAt, now)}`,
   ];
-  out.push(`  stage: ${stageText(state, stageOf(state, t))}`);
+  const stage = stageOf(state, t);
+  out.push(`  stage: ${stageText(state, stage)}`);
+  if (stage.pr) out.push(...prLines(state, stage.pr));
   const evidence = evidenceOf(state, t, messages);
   if (evidence.length) out.push(`  evidence: ${evidence.map((r) => refText(state, r)).join(" · ")}`);
   out.push(`  ask: ${askLine(t.ask !== undefined ? (state.askHeads.get(t.ask) ?? null) : null)}`);

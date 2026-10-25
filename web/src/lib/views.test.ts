@@ -44,6 +44,7 @@ describe("the sidebar's views", () => {
       prs: new Map([pr(1, "merged", NOW - 60_000), pr(2, "merged", NOW - 2 * DAY), pr(3, "open", NOW)].map((p) => [String(p.number), p])),
       checks: new Map(),
       issues: new Map(),
+      rules: new Map(),
     }
     expect(mergedSince({ github }, startOfDay(NOW))).toBe(1)
   })
