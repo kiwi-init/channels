@@ -655,6 +655,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     {
       description:
         "Add a task to the shared board: it's open until someone takes it, then doing, then done. Returns its id (like T12), and warns when an open task has a near-identical title. " +
+        "The `title` is for people, at most 60 characters: the outcome in plain words. The spec (what to do, where the code is, why) goes in `detail`, its body, shown on the task page. " +
         "Every task is filed under the ask it serves: `ask` is the person's message it answers (18 for #18), or give `from` or `issue`. " +
         "`goal` names the goal of the ask it's filed under in plain words (the board's header for its tasks, like \"0.27.7: the AppImage runs on Fedora\"): the lead, the owner or the person who asked may name it. " +
         "`review` is who must approve it before it's done (a member, or any). " +

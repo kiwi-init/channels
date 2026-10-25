@@ -13,7 +13,7 @@ import { type Command, die, keepDaemon, offlineOk, out, session } from "../conte
 import { firstLine, readText, taskArg, text } from "../input.ts";
 
 const CLAIMS_GONE = "claims are gone: say what you're working on in the task, or post it";
-const ANCHORS = "--ask N (the person's message #N it answers), --from T7 (the task it comes from) or --issue 12 (a GitHub issue)";
+const ANCHORS = "--ask N (the person's message #N it answers), --from T… (the task it comes from) or --issue N (a GitHub issue)";
 
 export const taskCommands: Record<string, Command> = {
   task: () =>
@@ -28,11 +28,14 @@ export const taskCommands: Record<string, Command> = {
           const from = opt.from === undefined ? undefined : (parseTaskId(opt.from) ?? (yield* die("--from takes a task: --from T72")));
           const unfiled = askRefusal((yield* s.state()).state, s.me, { re, from, issue: opt.issue !== undefined }, ANCHORS);
           if (unfiled) return yield* die(unfiled);
+          const given = [opt.body !== undefined, opt.file !== undefined, opt.detail !== undefined].filter(Boolean).length;
+          if (given > 1) return yield* die('give the task\'s body once: --body "…", --file spec.md or --detail "…"');
+          const body = opt.file !== undefined ? (yield* readText(opt.file)).trim() || (yield* die(`${opt.file} is empty`)) : (opt.body ?? opt.detail);
           if (opt.issue !== undefined) {
             const made = yield* s.taskFromIssue(opt.issue, {
               title: args.slice(2).join(" ") || undefined,
               owner: opt.owner,
-              detail: opt.detail,
+              detail: body,
               ...(opt.review !== undefined ? { review: opt.review } : {}),
               ...(re !== undefined ? { re } : {}),
               ...(from !== undefined ? { from } : {}),
@@ -40,14 +43,14 @@ export const taskCommands: Record<string, Command> = {
             const { state: after } = yield* s.state();
             return out(`added ${taskId(made.id)} from ${made.issue}: ${made.title}\n${issueLinkText(after)}`);
           }
-          const title = yield* text(2);
-          if (!title.trim()) return yield* die('usage: kiwi task add "title" --ask N|--from T7|--issue 12 [--owner NAME] [--review NAME|any]');
+          const title = opt.file !== undefined ? args.slice(2).join(" ") : yield* text(2);
+          if (!title.trim()) return yield* die('usage: kiwi task add "title" --ask N|--from T…|--issue N [--body "the spec" | --file spec.md] [--owner NAME] [--review NAME|any]');
           for (const gone of ["after", "needs"] as const)
-            if (opt[gone] !== undefined) process.stderr.write(`kiwi: --${gone} is gone (tasks don't wait on or match anything now); put it in the title or --detail\n`);
+            if (opt[gone] !== undefined) process.stderr.write(`kiwi: --${gone} is gone (tasks don't wait on or match anything now); put it in the body (--body)\n`);
           const { state: before } = yield* s.state();
           const id = yield* s.taskAdd(title, {
             owner: opt.owner,
-            detail: opt.detail,
+            detail: body,
             ...(opt.review !== undefined ? { review: opt.review } : {}),
             ...(re !== undefined ? { re } : {}),
             ...(from !== undefined ? { from } : {}),

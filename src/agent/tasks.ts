@@ -5,7 +5,8 @@ import {
   PROOF_LABEL_MAX_LENGTH,
   PROOF_URL_MAX_LENGTH,
   TASK_STATES,
-  TASK_TITLE_MAX_LENGTH,
+  TASK_BODY_MAX_LENGTH,
+  TASK_TITLE_LIMIT,
   ignored,
   type IssueRef,
   type TaskState,
@@ -21,6 +22,19 @@ import { SessionMessaging } from "./messaging.ts";
 import { oneLook } from "./shared.ts";
 
 const CLAIM_TTL = 120_000;
+
+function titleRefusal(title: string): string | null {
+  if (title.length <= TASK_TITLE_LIMIT) return null;
+  return `the title is ${title.length} characters, and a task's title is at most ${TASK_TITLE_LIMIT} so people can read the board: keep the outcome in the title and move the rest into the body (--body "…" or --file spec.md)`;
+}
+
+function shortTitle(title: string): string {
+  const flat = title.replace(/\s+/g, " ").trim();
+  if (flat.length <= TASK_TITLE_LIMIT) return flat;
+  const cut = flat.slice(0, TASK_TITLE_LIMIT - 1);
+  const word = cut.lastIndexOf(" ");
+  return `${(word > TASK_TITLE_LIMIT / 2 ? cut.slice(0, word) : cut).trimEnd()}…`;
+}
 
 function judgedRound(t: Task, open: ReviewRound | undefined, round: number | undefined, at: string | undefined): Effect.Effect<ReviewRound, Rejected> {
   const id = taskId(t.id);
@@ -40,8 +54,10 @@ export class SessionTasks extends SessionMessaging {
   readonly taskAdd = Effect.fn("AgentSession.taskAdd")(
     { self: this },
     function* (this: SessionTasks, title: string, opts: { detail?: string; owner?: string; review?: string; re?: number; issue?: IssueRef; from?: number } = {}) {
-      if (title.length > TASK_TITLE_MAX_LENGTH)
-        return yield* new Rejected(`the title is ${title.length} characters, the most a task takes is ${TASK_TITLE_MAX_LENGTH}: shorten it and put the rest in --detail`);
+      const long = titleRefusal(title);
+      if (long) return yield* new Rejected(long);
+      if (opts.detail && opts.detail.length > TASK_BODY_MAX_LENGTH)
+        return yield* new Rejected(`the body is ${opts.detail.length} characters, the most a task's body takes is ${TASK_BODY_MAX_LENGTH}: link the rest (a doc, an issue) instead`);
       const { state } = yield* this.state();
       if (opts.re !== undefined && (!state.placeOf.has(opts.re) || ignored(state.trust.get(opts.re)))) return yield* new Rejected(`no message #${opts.re}`);
       if (opts.from !== undefined && !state.tasks.has(opts.from)) return yield* new Rejected(`no task ${taskId(opts.from)} to come from`);
@@ -91,8 +107,10 @@ export class SessionTasks extends SessionMessaging {
       if (already) return yield* new Rejected(`${name} is already ${taskId(already.id)}: ${inlineText(already.title, 80)}`);
       const found = yield* this.ch.fx.githubIssue(issue.repo, issue.number);
       if (found.state === "closed") return yield* new Rejected(`${name} is closed on GitHub: reopen it first, or add the task without --issue`);
-      const title = (opts.title?.trim() || found.title.trim() || name).slice(0, TASK_TITLE_MAX_LENGTH);
-      const detail = opts.detail ?? [found.body.trim(), found.url].filter(Boolean).join("\n\n");
+      const full = opts.title?.trim() || found.title.trim() || name;
+      const title = opts.title?.trim() ? full : shortTitle(full);
+      const cut = title !== full.replace(/\s+/g, " ").trim();
+      const detail = opts.detail ?? [cut ? full : "", found.body.trim(), found.url].filter(Boolean).join("\n\n").slice(0, TASK_BODY_MAX_LENGTH);
       const id = yield* this.taskAdd(title, { ...opts, detail, issue });
       return { id, title, issue: name };
     },
@@ -146,8 +164,8 @@ export class SessionTasks extends SessionMessaging {
       const { state } = yield* this.state();
       const t = state.tasks.get(id);
       if (!t) return yield* new Rejected(`no task ${taskId(id)}`);
-      if (change.title !== undefined && change.title.length > TASK_TITLE_MAX_LENGTH)
-        return yield* new Rejected(`the title is ${change.title.length} characters, the most a task takes is ${TASK_TITLE_MAX_LENGTH}: shorten it and put the rest in a note`);
+      const long = change.title === undefined ? null : titleRefusal(change.title);
+      if (long) return yield* new Rejected(long);
       if (change.checkpoint && !change.note?.trim()) return yield* new Rejected("a checkpoint says where the work stands: give its text, or --file note.md");
       if (change.checkpoint && change.note && change.note.length > CHECKPOINT_MAX_LENGTH)
         return yield* new Rejected(`the checkpoint is ${change.note.length} characters, the most it takes is ${CHECKPOINT_MAX_LENGTH}: keep what a new session needs to carry on`);

@@ -51,6 +51,9 @@ Agents
   kiwi task add "title" --ask N [--owner NAME] [--review NAME|any]   a task: open, then doing, then done, filed under
                                                  the ask it serves: --ask N is the person's message #N (or a reply in its
                                                  thread); taking it on tells its sender. --re N still works
+     task add … --body "the spec" · --file spec.md   the title stays short (60 characters at most, for people);
+                                                 what to do, where the code is and why go in the body, shown on
+                                                 the task page and in task show (--detail still works)
      task add … --goal "0.27.7: …"               names the goal of the ask it's filed under, in plain words: the
                                                  board's header for its tasks, the person's message shown under it
   kiwi goal N "the goal" · goal N --clear        name (or rename) the goal of the person's message #N: the lead, the
