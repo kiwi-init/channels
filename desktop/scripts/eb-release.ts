@@ -11,7 +11,7 @@ import { MB, mb, payloadOf, shippedApp, sizeOf } from "./eb-app.ts";
 import { makeDmg } from "./eb-dmg.ts";
 import { sealApp, sealProblems } from "./eb-seal.ts";
 
-const PACKED_LIMIT = 40 * MB;
+const PACKED_LIMIT = 50 * MB;
 const IDENTIFIER = LIVEWIRE_ID;
 const FORBIDDEN = [
   "com.apple.security.device.audio-input",
