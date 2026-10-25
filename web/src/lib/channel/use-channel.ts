@@ -394,6 +394,8 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
     rulesBusy.current = true
     ch.syncGithubRules(state.repos, [...state.github.rules.values()])
       .catch(() => {})
+      .then(() => ch.syncGithubReleases(state.repos, [...state.github.releases.values()].flat()))
+      .catch(() => {})
       .finally(() => {
         rulesBusy.current = false
       })

@@ -72,17 +72,17 @@ describe("open, doing, done", () => {
     const cancel = await msg(a, "a", { op: "task.update", task: t.seq, state: "cancelled" });
     const s = fold([t, cancel]);
     expect(formatTasks(s, { all: true })).toBe(`unfiled (no person's message holds these)\n  T${t.seq}   cancelled not needed after all`);
-    expect(formatTask(s, s.tasks.get(t.seq)!)).toContain("state: done (cancelled)");
+    expect(formatTask(s, s.tasks.get(t.seq)!)).toContain("status: cancelled (done)");
     expect(formatStatus({ alias: "c", me: "a", state: s, online: new Map(), unread: 0, now: T0 })).toContain("0 open, 1 done (1 cancelled)");
   });
 
-  test("done tasks stay off the open board unless --all; the board says open", async () => {
+  test("done tasks stay off the open board unless --all; the board says planned", async () => {
     const a = await member("a");
     const t = await msg(a, "a", { op: "task.add", title: "drop me" });
     const open = await msg(a, "a", { op: "task.add", title: "still open" });
     const finish = await msg(a, "a", { op: "task.update", task: t.seq, state: "done" });
     const s = fold([t, open, finish]);
-    expect(formatTasks(s)).toBe(`unfiled (no person's message holds these)\n  T${open.seq}   open      still open`);
+    expect(formatTasks(s)).toBe(`unfiled (no person's message holds these)\n  T${open.seq}   planned   still open`);
     expect(formatTasks(s, { all: true })).toContain("done");
     expect(formatStatus({ alias: "c", me: "a", state: s, online: new Map(), unread: 0, now: T0 })).toContain("1 open, 1 done");
   });

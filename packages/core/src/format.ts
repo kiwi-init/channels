@@ -26,6 +26,7 @@ import {
 } from "./state.ts";
 import { evidenceOf, prLines, refText, stageOf, stageText } from "./stage.ts";
 import { rulesText } from "./prs.ts";
+import { statusOf, statusWord } from "./status.ts";
 import { isWakeVia, wakesInSession, wakeWords, type WakeVia } from "./wake.ts";
 
 export function tokensWord(n: number): string {
@@ -186,6 +187,8 @@ export function describeEvent(m: Message, state?: ChannelState): string {
       return `compacted the history through #${ev.through}: ${inlineText(ev.summary, 200)}`;
     case "github":
       return githubLine(ev.items);
+    case "github.release":
+      return `${ev.repo} released ${inlineText(ev.tag, 60)}: ${ev.prs.length ? `${ev.prs.length} PR${ev.prs.length === 1 ? "" : "s"}, ` : ""}${ev.shas.length} commit${ev.shas.length === 1 ? "" : "s"}`;
     case "github.rules":
       return `read ${ev.repo}'s rules for ${inlineText(ev.branch, 60)}: ${rulesText(ev)}`;
     case "repos.set":
@@ -312,7 +315,7 @@ function taskLine(state: ChannelState, t: Task): string {
   const review = t.review && t.state !== "done" ? ` [${reviewPhrase(t.review)}]` : "";
   const stage = stageOf(state, t);
   const evidence = stage.pr || stage.declared ? ` · ${stageText(state, stage)}` : "";
-  return `  ${taskId(t.id).padEnd(5)} ${(t.state === "done" && t.cancelled ? "cancelled" : stateWord(t.state)).padEnd(9)}${owner} ${inlineText(t.title, 200)}${review}${evidence}`;
+  return `  ${taskId(t.id).padEnd(5)} ${statusWord(statusOf(state, t)).padEnd(9)}${owner} ${inlineText(t.title, 200)}${review}${evidence}`;
 }
 
 export function askLine(head: AskHead | null): string {
@@ -584,7 +587,7 @@ export function reviewBody(m: Message): string | null {
 export function formatTask(state: ChannelState, t: Task, now = Date.now(), messages: readonly Message[] = []): string {
   const out = [
     `${taskId(t.id)} ${inlineText(t.title, 200)}`,
-    `  state: ${taskStateWord(t)}${t.owner ? ` · owner: ${inlineText(t.owner, 40)}` : " · unassigned"} · created by ${inlineText(t.createdBy, 40)} ${ago(t.createdAt, now)}`,
+    `  status: ${statusWord(statusOf(state, t))} (${stateWord(t.state)})${t.owner ? ` · owner: ${inlineText(t.owner, 40)}` : " · unassigned"} · created by ${inlineText(t.createdBy, 40)} ${ago(t.createdAt, now)}`,
   ];
   const stage = stageOf(state, t);
   out.push(`  stage: ${stageText(state, stage)}`);

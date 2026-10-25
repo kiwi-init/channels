@@ -45,6 +45,7 @@ describe("the sidebar's views", () => {
       checks: new Map(),
       issues: new Map(),
       rules: new Map(),
+      releases: new Map(),
     }
     expect(mergedSince({ github }, startOfDay(NOW))).toBe(1)
   })

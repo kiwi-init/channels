@@ -81,6 +81,7 @@ export function githubItem(event: string, payload: unknown, now: number): Github
       files: count(pr.changed_files),
       branch: str(obj(pr.head).ref),
       sha: str(obj(pr.head).sha, 40),
+      merge: pr.merged === true ? str(pr.merge_commit_sha, 40) : undefined,
     });
   }
   if (event === "issues") {
