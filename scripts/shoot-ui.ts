@@ -246,6 +246,15 @@ try {
     await win("send", "--re", firstTask[1]!, "Down from 6 to 4. https://github.com/kiwi-init/channels/pull/41");
     await win("task", "start", `T${firstTask[1]}`, "steady numbers look fine");
   }
+  // Two tasks whose PRs merged: one is in a release, one waits for the next.
+  for (const [title, pr] of [
+    ["Prebuild one router program per request", 40],
+    ["Fold duplicate event rows", 42],
+  ] as const) {
+    const id = /T\d+/.exec(await win("task", "add", title, "--owner", "win", "--ask", ask))?.[0] ?? "T0";
+    await win("task", "start", id);
+    await win("task", "proof", id, `https://github.com/kiwi-init/channels/pull/${pr}`);
+  }
   await bot("set", "relay.version", "667ce081");
   await bot("set", "canary", "off");
   await bot("goal", ask, "Steady Effect router numbers before 0.8.12");
@@ -292,6 +301,17 @@ try {
   await owner.goto(channel);
   await details().click();
   const panel = owner.getByRole("complementary", { name: "Details" });
+  // GitHub as the owner's app reads it through the relay: both PRs merged, and #40 is in v0.8.12.
+  const at = Date.now();
+  const merged = (id: number, number: number, title: string) => ({ id, event: "pull_request", repo: "kiwi-init/channels", action: "closed", number, title, state: "closed", merged: true, at });
+  let drained = false;
+  await owner.route(/\/github\/queue(\?|$)/, (r) =>
+    r.fulfill({
+      json: { repos: ["kiwi-init/channels"], items: drained ? [] : ((drained = true), [merged(1, 40, "Prebuild one router program per request"), merged(2, 42, "Fold duplicate event rows")]) },
+    }),
+  );
+  await owner.route(/\/github\/rules\?/, (r) => r.fulfill({ json: { branch: "main", required: ["ci-ok"], merge: ["squash"] } }));
+  await owner.route(/\/github\/releases\?/, (r) => r.fulfill({ json: { releases: [{ tag: "v0.8.12", at, shas: [], prs: [40] }] } }));
   await panel.getByRole("button", { name: /^Repos/ }).click();
   await panel.getByRole("textbox", { name: "Find a repo" }).fill("kiwi-init/channels");
   await owner.keyboard.press("Enter");
@@ -299,6 +319,9 @@ try {
   await owner.getByText("Repos saved").first().waitFor({ timeout: 15000 });
   await owner.getByRole("button", { name: "Back to details" }).click();
   await panel.getByText("Write to GitHub", { exact: true }).waitFor({ timeout: 15000 });
+  await owner.goto(channel);
+  await toTab("Tasks");
+  await owner.getByText("Shipped in v0.8.12").first().waitFor({ timeout: 90000 });
   await owner.goto(channel);
 
   // An agent asking to join, left pending (its CLI waits in the background).
