@@ -17,7 +17,7 @@ describe("kiwi demo", () => {
     const all = lines.join("\n");
     expect(all).toContain("set the charter");
     expect(all).toContain("described itself: codex · windows x64");
-    expect(all).toMatch(/T\d+\s+open\s+Inject mouse input on Windows/);
+    expect(all).toMatch(/T\d+\s+planned\s+Inject mouse input on Windows/);
     expect(all).toContain("needs review by someone who hasn't worked on it");
     expect(all).toContain("approved T");
     expect(all).toMatch(/assigned T\d+ “Capture input at the screen edge on the Mac” to lead: edge detection works/);
