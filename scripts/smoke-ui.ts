@@ -659,7 +659,7 @@ async function run(part: Part): Promise<string[]> {
     at =
       "ask-human: the question sits in the composer with its options, is one row of Needs you, Tasks' Needs you shows it as one row with its options, and the task waits on a person until one is picked";
     await kiwi(["-c", "smoke", "--as", "bot", "ask-human", "--task", smokeTask, "--option", "A: ship it", "--option", "B: wait a day", "Ship the smoke build now?"]);
-    const awaiting = page.getByText("Needs a decision");
+    const awaiting = page.getByRole("button", { name: new RegExp(`^${smokeTask}, Smoke task`) }).getByText("Needs you", { exact: true });
     await toTab("Tasks");
     await awaiting.first().waitFor({ timeout: 15000 });
     await needs.getByText("Ship the smoke build now?").waitFor({ timeout: 15000 });

@@ -6,7 +6,7 @@ export const STATE_LABEL: Record<TaskState, string> = { todo: "Up next", doing: 
 
 export const DONE_RECENTLY = "Done this week"
 
-export const DECISION = "Needs a decision"
+export const DECISION = "Needs you"
 
 export const YOUR_REVIEW = "Ready for your review"
 
