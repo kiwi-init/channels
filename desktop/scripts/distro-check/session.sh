@@ -29,14 +29,10 @@ case "$keyring" in
     ;;
   kwallet)
     export XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6
-    for d in ksecretd kwalletd6; do
-      if command -v "$d" > /dev/null; then
-        QT_QPA_PLATFORM=offscreen "$d" > "$logs/$tag-$d.log" 2>&1 &
-        info "started $d"
-        break
-      fi
-    done
-    sleep 3
+    daemon=$(command -v ksecretd || command -v kwalletd6)
+    python3 "$here/kwallet-login.py" "$daemon" "$logs/$tag-wallet.log"
+    for _ in $(seq 1 50); do grep -q "opened by PAM" "$logs/$tag-wallet.log" && break; sleep 0.2; done
+    info "$(basename "$daemon"), its wallet made and opened at login as kwallet-pam does: $(grep -m1 -E "opened by PAM|PAM" "$logs/$tag-wallet.log" | cut -c1-120)"
     ;;
 esac
 owner=$(gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.GetNameOwner org.freedesktop.secrets 2> /dev/null)
@@ -74,7 +70,9 @@ else
   bad "a tray icon registered without libayatana-appindicator"
 fi
 
-plain=$(grep -h "No secret service answered" "$logs/$tag-app.log" | head -n 1)
+main_log=$(find "$home" -name main.log 2> /dev/null | head -n 1)
+[ -z "$main_log" ] || cp "$main_log" "$logs/$tag-main.log"
+plain=$(grep -h "No secret service answered" "$logs/$tag-app.log" ${main_log:+"$main_log"} | head -n 1)
 stored=$(timeout 20 secret-tool search --all service Channels 2>&1 | grep -E '^(label|attribute\.)' | tr '\n' ' ')
 case "$keyring" in
   none)
@@ -86,10 +84,11 @@ case "$keyring" in
 esac
 grep -iE 'error|critical|fail' "$logs/$tag-app.log" | grep -viE 'AT-SPI|DRI3|GLXBadWindow|dbind-WARNING' | sort | uniq -c | sort -rn | head -n 8 | cut -c1-220 | while IFS= read -r line; do info "app said: $line"; done
 
+alive() { ps -e -o pid=,sid=,stat=,args= | awk -v s="$pid" '$2 == s && $3 !~ /^Z/' | cut -c1-120; }
 kill -TERM -- "-$pid" 2> /dev/null
-for _ in $(seq 1 20); do pgrep -s "$pid" > /dev/null || break; sleep 0.5; done
-if pgrep -s "$pid" > /dev/null; then
-  bad "still running 10 s after SIGTERM: $(pgrep -s "$pid" -a | cut -c1-120 | tr '\n' ';')"
+for _ in $(seq 1 20); do [ -z "$(alive)" ] && break; sleep 0.5; done
+if [ -n "$(alive)" ]; then
+  bad "still running 10 s after SIGTERM: $(alive | tr '\n' ';')"
   kill -KILL -- "-$pid" 2> /dev/null
 else
   ok "stopped cleanly on SIGTERM"

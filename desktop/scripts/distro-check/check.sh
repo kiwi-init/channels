@@ -39,7 +39,10 @@ install "${stock[@]}" || exit 1
 . /etc/os-release
 info "$PRETTY_NAME, with only the packages Channels names: ${stock[*]}"
 extract=$(mktemp -d)
-(cd "$extract" && "$image" --appimage-extract > /dev/null 2>&1)
+cp "$image" "$extract/Channels.AppImage"
+chmod +x "$extract/Channels.AppImage"
+(cd "$extract" && ./Channels.AppImage --appimage-extract > /dev/null 2>&1)
+[ -x "$extract/squashfs-root/Channels/bin/launcher" ] || { bad "the AppImage didn't extract: no Channels/bin/launcher in it"; exit 1; }
 missing=""
 for f in "$extract"/squashfs-root/Channels/bin/*.so "$extract"/squashfs-root/Channels/bin/bun "$extract"/squashfs-root/Channels/bin/electrobun-launcher "$extract"/squashfs-root/Channels/bin/launcher; do
   m=$(ldd "$f" 2> /dev/null | awk '/not found/ { print $1 }' | tr '\n' ' ')
@@ -66,8 +69,8 @@ for t in tray:gio-2.0 scheme:webkit2gtk-4.1 notify:gtk+-3.0; do
 done
 
 id tester > /dev/null 2>&1 || useradd -m tester
-cp "$image" /home/tester/Channels.AppImage
-cp "$here/session.sh" "$here/update.sh" "$here/watcher.py" /home/tester/
+cp "$extract/Channels.AppImage" /home/tester/Channels.AppImage
+cp "$here/session.sh" "$here/update.sh" "$here/watcher.py" "$here/kwallet-login.py" /home/tester/
 chmod +x /home/tester/Channels.AppImage
 chown -R tester: /home/tester
 
