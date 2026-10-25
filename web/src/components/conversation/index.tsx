@@ -590,6 +590,16 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                               empty={noAgents ? <AddAgent code={member.code} isOwner={isOwner} addsAgents={addsAgents} onNewAgent={onNewAgent} /> : null}
                               open={shownTask}
                               onOpen={openTask}
+                              me={me}
+                              onJump={jump}
+                              onNameGoal={async (ask, name) => {
+                                try {
+                                  await send(name ? `named the goal of #${ask}: ${name}` : `#${ask}'s goal unnamed`, { kind: "event", ev: { op: "ask.name", ask, name } })
+                                } catch (err) {
+                                  toast(`Not renamed: ${errorText(err)}`, "error")
+                                  throw err
+                                }
+                              }}
                             />
                           </>
                         ) : agentsNow.length ? (

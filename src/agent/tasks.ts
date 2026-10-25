@@ -1,5 +1,16 @@
 import * as Effect from "effect/Effect";
-import { CHECKPOINT_MAX_LENGTH, PROOF_LABEL_MAX_LENGTH, PROOF_URL_MAX_LENGTH, TASK_STATES, TASK_TITLE_MAX_LENGTH, ignored, type IssueRef, type TaskState, type Verdict } from "@kiwi/core/protocol.ts";
+import {
+  CHECKPOINT_MAX_LENGTH,
+  MAX_GOAL_NAME,
+  PROOF_LABEL_MAX_LENGTH,
+  PROOF_URL_MAX_LENGTH,
+  TASK_STATES,
+  TASK_TITLE_MAX_LENGTH,
+  ignored,
+  type IssueRef,
+  type TaskState,
+  type Verdict,
+} from "@kiwi/core/protocol.ts";
 import { omit } from "@kiwi/core/omit.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { isPerson, openRound, revisedOut, taskId, type ChannelState, type ReviewRound, type Task } from "@kiwi/core/state.ts";
@@ -50,6 +61,21 @@ export class SessionTasks extends SessionMessaging {
         [...(owner ? [owner] : []), ...(review && review !== "*" ? [review] : [])],
         opts.re,
       );
+    },
+    oneLook,
+  );
+
+  readonly nameGoal = Effect.fn("AgentSession.nameGoal")(
+    { self: this },
+    function* (this: SessionTasks, ask: number, name: string | null) {
+      const goal = name === null ? null : inlineText(name, 10_000);
+      if (goal !== null && !goal) return yield* new Rejected('a goal needs a name: kiwi goal 18 "0.27.7: the AppImage runs on Fedora"');
+      if (goal !== null && goal.length > MAX_GOAL_NAME) return yield* new Rejected(`a goal's name is at most ${MAX_GOAL_NAME} characters: say the outcome, the rest goes in the tasks`);
+      const { state } = yield* this.state();
+      if (!state.askHeads.has(ask)) return yield* new Rejected(`#${ask} isn't a person's message that tasks are filed under`);
+      const seq = yield* this.event({ op: "ask.name", ask, name: goal }, goal ? `goal of #${ask}: ${goal}` : `#${ask}'s goal unnamed`);
+      const after = yield* this.confirm(seq);
+      return after.askHeads.get(ask)!;
     },
     oneLook,
   );
