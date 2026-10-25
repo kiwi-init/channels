@@ -88,9 +88,16 @@ describe("answering #N", () => {
     const name = a.ok ? "ann" : "bob";
     const lost = a.ok ? b : a;
     expect(lost.ok ? "" : lost.why).toStartWith(`${name} is answering #${q}: leave it to them`);
-    await expect(run(other.reply(q, "me too"))).rejects.toThrow(`${name} is answering #${q}`);
+    await expect(run(other.reply(q, "me too"))).rejects.toThrow(
+      `${name} is answering #${q}: leave the answer to them; nothing else is in its thread yet: react to it (kiwi react ${q} 👍), or add to the thread under ${name}'s answer once it's there`,
+    );
     await expect(run(other.send("me too", { re: [q] }))).rejects.toThrow(`${name} is answering #${q}`);
-    expect(await run(winner.reply(q, "on it"))).toBeGreaterThan(q);
+    const answer = await run(winner.reply(q, "on it"));
+    expect(answer).toBeGreaterThan(q);
+    await expect(run(other.reply(q, "I'll pair, it's the 'cold' run"))).rejects.toThrow(
+      `${name} is answering #${q}: leave the answer to them; to add to its thread, post under #${answer} instead: kiwi send --to '#${answer}' 'I'\\''ll pair, it'\\''s the '\\''cold'\\'' run'`,
+    );
+    expect(await run(other.send("I'll pair", { re: [answer] }))).toBeGreaterThan(answer);
   });
 
   test("the marker doesn't count as an answer to an ask", async () => {
