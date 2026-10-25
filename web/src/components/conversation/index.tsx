@@ -27,7 +27,7 @@ import { AgentStrip, agentNow, type AgentNow } from "../agent-strip"
 import { ChannelControls } from "../controls"
 import { Icon } from "../icon"
 import { Button, Harnesses, Pictures, Spinner, errorText, toast } from "../kit"
-import { AddAgent, AgentLanes, CompactBlock, HoldDialog, NewAgent, Presence, ProposalCard, TasksView } from "../lazy"
+import { AddAgent, AgentLanes, CompactBlock, HoldDialog, NewAgent, NowCard, Presence, ProposalCard, TasksView } from "../lazy"
 import { canStartAgents } from "@/lib/launches"
 import { markOnce } from "@/lib/marks"
 import { roomOfMessage } from "@/lib/rooms"
@@ -442,6 +442,20 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   }
   const roomName = state.rooms.get(cardRoom)?.name ?? GENERAL_ROOM
   const makeRoom = handlers.onMakeRoom
+  const nowNode = (className: string, needsRow: boolean) =>
+    ready && (
+      <NowCard
+        state={state}
+        clock={now}
+        needs={needsMe}
+        nameOf={nameOf}
+        onOpenTask={openTask}
+        onNeeds={() => (setTab("tasks"), setView("needs"))}
+        onDone={() => (setTab("tasks"), setView("done"))}
+        needsRow={needsRow}
+        className={className}
+      />
+    )
   const needsYou = (
     <NeedsYou
       now={now}
@@ -565,16 +579,19 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                             </Centered>
                           )
                         ) : tab === "tasks" ? (
-                          <TasksView
-                            state={state}
-                            now={now}
-                            view={view}
-                            agents={agentsNow}
-                            needs={needsMe ? needsYou : null}
-                            empty={noAgents ? <AddAgent code={member.code} isOwner={isOwner} addsAgents={addsAgents} onNewAgent={onNewAgent} /> : null}
-                            open={shownTask}
-                            onOpen={openTask}
-                          />
+                          <>
+                            {view === "everything" && nowNode("mx-1 mb-2", false)}
+                            <TasksView
+                              state={state}
+                              now={now}
+                              view={view}
+                              agents={agentsNow}
+                              needs={needsMe ? needsYou : null}
+                              empty={noAgents ? <AddAgent code={member.code} isOwner={isOwner} addsAgents={addsAgents} onNewAgent={onNewAgent} /> : null}
+                              open={shownTask}
+                              onOpen={openTask}
+                            />
+                          </>
                         ) : agentsNow.length ? (
                           <AgentLanes agents={agentsNow} state={state} messages={messages} now={now} nameOf={nameOf} onOpenTask={openTask} />
                         ) : (
@@ -593,6 +610,12 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                         }}
                       >
                         <div className="relative mx-auto w-full max-w-[792px] aside-room px-4 pt-[calc(var(--head)+8px)] pb-[calc(var(--foot)+16px)] [--column:792px]">
+                          {hereKey === "main" && !search && ready && (
+                            <div className="sticky top-(--head) z-10 -mt-2 bg-canvas pt-2 pb-2">
+                              {nowNode("", true)}
+                              <div aria-hidden className="pointer-events-none absolute inset-x-0 top-full h-6 bg-linear-to-b from-canvas to-transparent" />
+                            </div>
+                          )}
                           {hereKey === "main" && needsYou}
                           {hereKey === "main" && state.rooms.size > 1 && !search && <RoomChips rooms={[...state.rooms.values()]} value={cardRoom} onChange={switchRoom} />}
                           {!ready && messages.length === 0 ? (

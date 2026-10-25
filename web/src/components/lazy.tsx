@@ -32,6 +32,7 @@ const updateButton = later(() => updateParts().then((m) => m.UpdateButton))
 const info = later(() => import("./info-panel").then((m) => m.InfoPanel))
 const tasks = later(() => import("./tasks-panel").then((m) => m.TasksPanel))
 const taskDetails = later(() => import("./task-details").then((m) => m.TaskDetails))
+const nowCard = later(() => import("./now-card").then((m) => m.NowCard))
 const tasksView = later(() => import("./tasks-view").then((m) => m.TasksView))
 const thread = later(() => import("./thread").then((m) => m.ThreadPanel))
 const annotator = later(() => import("./annotator").then((m) => m.Annotator))
@@ -82,6 +83,7 @@ export const CopyGlyph = copyGlyph.View
 export const InfoPanel = info.View
 export const TasksPanel = tasks.View
 export const TaskDetails = taskDetails.View
+export const NowCard = nowCard.View
 export const TasksView = tasksView.View
 export const ThreadPanel = thread.View
 export const Annotator = annotator.View
