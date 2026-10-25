@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { linuxLayout, macLayout, marksOf, releaseProblems, testEnvProblem } from "../desktop/scripts/eb-test-marks.ts";
+import { INSTALL_DIR } from "../desktop/scripts/linux-files.ts";
 
 const root = mkdtempSync(join(tmpdir(), "kiwi-eb-driver-check-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -26,7 +27,7 @@ function macApp(name: string, main = MAIN, launcher = LAUNCHER, view = "export c
 
 function linuxTree(name: string, main = MAIN, launcher = LAUNCHER): string {
   const tree = join(root, name);
-  const app = join(tree, "opt", "Channels");
+  const app = join(tree, INSTALL_DIR);
   mkdirSync(join(app, "bin"), { recursive: true });
   mkdirSync(join(app, "Resources", "app", "bun"), { recursive: true });
   writeFileSync(join(app, "bin", "launcher"), launcher);
@@ -38,20 +39,20 @@ test("a release app with none of the test-only names passes, read from the files
   const mac = macLayout(macApp("clean"));
   expect(mac.launcher.endsWith(join("Contents", "MacOS", "launcher"))).toBe(true);
   expect(releaseProblems("the zip", marksOf(mac))).toEqual([]);
-  const linux = linuxLayout(join(linuxTree("clean-linux"), "opt", "Channels"));
+  const linux = linuxLayout(join(linuxTree("clean-linux"), INSTALL_DIR));
   expect(releaseProblems("the deb", marksOf(linux))).toEqual([]);
 });
 
 test("test-only code fails it, in the main bundle, in a page script, or let through by the launcher (T445)", () => {
   expect(releaseProblems("the zip", marksOf(macLayout(macApp("relay", `${MAIN}; process.env.KIWI_EB_RELAY`))))).toEqual(["the zip carries test-only code: KIWI_EB_RELAY"]);
   expect(releaseProblems("the dmg", marksOf(macLayout(macApp("view", MAIN, LAUNCHER, "window.kiwiDriver = {};"))))).toEqual(["the dmg carries test-only code: kiwiDriver"]);
-  expect(releaseProblems("the deb", marksOf(linuxLayout(join(linuxTree("home", MAIN, `${LAUNCHER}KIWI_HOME\0`), "opt", "Channels"))))).toEqual([
+  expect(releaseProblems("the deb", marksOf(linuxLayout(join(linuxTree("home", MAIN, `${LAUNCHER}KIWI_HOME\0`), INSTALL_DIR))))).toEqual([
     "the deb carries test-only code: KIWI_HOME through its launcher",
   ]);
 });
 
 test("files that lack what every build has fail it as unread, so a check of the wrong files can't pass (T445)", () => {
-  expect(releaseProblems("the AppImage", marksOf(linuxLayout(join(linuxTree("empty", "var x = 1;", "\x7fELF\0"), "opt", "Channels"))))).toEqual([
+  expect(releaseProblems("the AppImage", marksOf(linuxLayout(join(linuxTree("empty", "var x = 1;", "\x7fELF\0"), INSTALL_DIR))))).toEqual([
     "the AppImage lacks views://internal/index.html, restoreWindowFocusAfterExternalDrop, BUN_RUNTIME_TRANSPILER_CACHE_PATH in its launcher, which every build has, so the check read the wrong files and proves nothing",
   ]);
   const plain = join(root, "no-exe", "Channels.app");
