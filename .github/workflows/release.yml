@@ -1,8 +1,10 @@
-# A release, X.Y.Z: stamp it in a pull request first, then tag the stamp's commit on main.
-#   bun scripts/stamp.ts vX.Y.Z      # the version in src/version.ts, both package.json files and the
-#                                    # site's download names, and CHANGELOG.md's section; open a PR,
-#                                    # merge it on its green ci-ok
-#   git tag vX.Y.Z <that commit> && git push origin vX.Y.Z
+# A release, YYYY.M.PATCH (a date: the patch counts up within the month and starts at 0 the next;
+# bun scripts/stamp.ts --next prints the next tag): stamp it in a pull request first, then tag the
+# stamp's commit on main.
+#   bun scripts/stamp.ts vYYYY.M.PATCH   # the version in src/version.ts, both package.json files and
+#                                        # the site's download names, and CHANGELOG.md's section; open
+#                                        # a PR, merge it on its green ci-ok
+#   git tag vYYYY.M.PATCH <that commit> && git push origin vYYYY.M.PATCH
 # Builds kiwi and the Channels desktop app for every platform from the tagged commit stamped
 # with the tag's version (scripts/stamp.ts, which then changes nothing), on GitHub's machines,
 # publishes the files with checksums and a signed build-provenance attestation, so anyone can
@@ -140,11 +142,11 @@ jobs:
 
   # main learns the release. A tag on the stamp's commit (the stamp landed as a PR) leaves an empty
   # patch, and the job passes there without asking for the bus app's token. Otherwise the stamp lands
-  # as one "kiwi X.Y.Z" commit (scripts/changelog.ts leaves those out), pushed by the GitHub App that
+  # as one "kiwi YYYY.M.PATCH" commit (scripts/changelog.ts leaves those out), pushed by the GitHub App that
   # may bypass main's pull request rule. Skipped for a release candidate, when main already says this
   # version, and when main is past it (a fix released from an older commit). If main moved and the
   # stamp no longer applies, this job fails after the release is out: run bun scripts/stamp.ts
-  # vX.Y.Z on main in a PR.
+  # vYYYY.M.PATCH on main in a PR.
   bump-main:
     needs: publish
     if: ${{ !contains(github.ref_name, '-') }}

@@ -82,10 +82,12 @@ KIWI_TEST_RELAY=http://localhost:8787 bun test # same suite against `wrangler de
 bun run typecheck                            # CLI, Worker and web lint
 bun run build                                # single-file binary in dist/kiwi
 bun run web:build                            # the app's renderer, web/dist (needed by desktop/)
-bun scripts/stamp.ts v0.21.0                 # a release's stamp, in its own PR before the tag
+bun scripts/stamp.ts "$(bun scripts/stamp.ts --next)"  # a release's stamp, in its own PR before the tag
 ```
 
-A release is its stamp, then a tag. `bun scripts/stamp.ts v0.21.0` writes the version into `src/version.ts`, both `package.json` files and the site's download names, and CHANGELOG.md's section from the commits since the last release. Open that as a PR titled `kiwi 0.21.0` and merge it on its green ci-ok. Then tag that commit: `git tag v0.21.0 <the stamp's commit> && git push origin v0.21.0`. The release workflow builds and publishes from the tag, and its bump-main job finds nothing left to commit. A tag on a commit that isn't stamped still releases: the workflow stamps it and commits the stamp to main itself, which needs the bus app's token. A section already in CHANGELOG.md for that version is kept, so it can be edited in the stamp's PR.
+Versions are dates: YYYY.M.PATCH, the year and month (no leading zero), then a patch that counts up within the month and starts again at 0 the next (2026.10.0, 2026.10.1, then 2026.11.0). `bun scripts/stamp.ts --next` prints the next tag, in UTC; it follows the last 0.x release with the month's first.
+
+A release is its stamp, then a tag. `bun scripts/stamp.ts v2026.10.0` writes the version into `src/version.ts`, both `package.json` files and the site's download names, and CHANGELOG.md's section from the commits since the last release. It takes only date tags, vYYYY.M.PATCH or vYYYY.M.PATCH-rc.N. Open that as a PR titled `kiwi 2026.10.0` and merge it on its green ci-ok. Then tag that commit: `git tag v2026.10.0 <the stamp's commit> && git push origin v2026.10.0`. The release workflow builds and publishes from the tag, and its bump-main job finds nothing left to commit. A tag on a commit that isn't stamped still releases: the workflow stamps it and commits the stamp to main itself, which needs the bus app's token. A section already in CHANGELOG.md for that version is kept, so it can be edited in the stamp's PR.
 
 [CHANGELOG.md](CHANGELOG.md) is written from each squash-merged PR's title and description, so a PR needs one: CI fails a PR none of whose commits has a body.
 

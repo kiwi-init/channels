@@ -1,17 +1,26 @@
 import { expect, test } from "bun:test";
 import { section, sectionIn, upsert } from "../scripts/changelog.ts";
-import { FILES, nextPatch, stampChangelog, stampText, versionOf } from "../scripts/stamp.ts";
+import { FILES, nextVersion, stampChangelog, stampText, versionOf } from "../scripts/stamp.ts";
 import { VERSION } from "../src/version.ts";
 
-test("versionOf: a release or pre-release tag, nothing else", () => {
-  expect(versionOf("v0.21.0")).toBe("0.21.0");
-  expect(versionOf("v0.21.0-rc.2")).toBe("0.21.0-rc.2");
-  for (const bad of ["0.21.0", "v0.21", "v0.21.0 x", "release-0.21.0", "v0.21.0-", "v0.21.0-mac"]) expect(() => versionOf(bad)).toThrow();
+test("versionOf: a date release or pre-release tag, vYYYY.M.PATCH, nothing else", () => {
+  expect(versionOf("v2026.10.0")).toBe("2026.10.0");
+  expect(versionOf("v2026.3.12")).toBe("2026.3.12");
+  expect(versionOf("v2026.10.0-rc.2")).toBe("2026.10.0-rc.2");
+  const bad = ["2026.10.0", "v2026.10", "v2026.10.0 x", "release-2026.10.0", "v2026.10.0-", "v2026.10.0-mac", "v2026.03.0", "v2026.13.0", "v2026.0.1", "v2026.10.01", "v0.27.8", "v1999.1.0"];
+  for (const tag of bad) expect(() => versionOf(tag)).toThrow();
 });
 
-test("nextPatch: the tag a rehearsal stamps", () => {
-  expect(nextPatch("0.20.5")).toBe("0.20.6");
-  expect(nextPatch("0.21.0-rc.3")).toBe("0.21.0");
+test("nextVersion: this month's next patch, or the month's first, from an old 0.x version too", () => {
+  const october = new Date("2026-10-24T12:00:00Z");
+  expect(nextVersion("0.27.7", october)).toBe("2026.10.0");
+  expect(nextVersion("2026.10.0", october)).toBe("2026.10.1");
+  expect(nextVersion("2026.10.9", october)).toBe("2026.10.10");
+  expect(nextVersion("2026.9.4", october)).toBe("2026.10.0");
+  expect(nextVersion("2026.12.3", new Date("2027-01-01T00:00:00Z"))).toBe("2027.1.0");
+  expect(nextVersion("2026.10.1-rc.3", october)).toBe("2026.10.1");
+  expect(nextVersion("0.28.0-rc.1", october)).toBe("2026.10.0");
+  expect(versionOf(`v${nextVersion(VERSION, october)}`)).toBeTruthy();
 });
 
 test("every stamped file in the repo takes the tag's version, and only its version", async () => {
