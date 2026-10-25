@@ -62,6 +62,7 @@ static gboolean load_changed(GSignalInvocationHint *hint, guint n, const GValue 
   if (n < 2 || g_value_get_enum(&params[1]) != WEBKIT_LOAD_COMMITTED) return TRUE;
   GObject *view = g_value_get_object(&params[0]);
   const char *uri = view ? webkit_web_view_get_uri(WEBKIT_WEB_VIEW(view)) : NULL;
+  if (view) fprintf(stderr, "kiwi-probe: committed %s in context %p, sandbox %d\n", uri ? uri : "-", (void *)webkit_web_view_get_context(WEBKIT_WEB_VIEW(view)), webkit_web_context_get_sandbox_enabled(webkit_web_view_get_context(WEBKIT_WEB_VIEW(view))));
   g_mutex_lock(&committed_lock);
   if (g_strlcpy(committed, uri ? uri : "", sizeof committed) >= sizeof committed) committed[0] = 0;
   g_mutex_unlock(&committed_lock);
@@ -242,6 +243,7 @@ static void (*context_constructed)(GObject *) = NULL;
 static void sandboxed_constructed(GObject *object) {
   if (context_constructed) context_constructed(object);
   webkit_web_context_set_sandbox_enabled(WEBKIT_WEB_CONTEXT(object), TRUE);
+  fprintf(stderr, "kiwi-probe: context %p constructed after the sandbox, now %d\n", (void *)object, webkit_web_context_get_sandbox_enabled(WEBKIT_WEB_CONTEXT(object)));
 }
 
 static bool sandbox_contexts(gconstpointer arg) {
@@ -253,6 +255,7 @@ static bool sandbox_contexts(gconstpointer arg) {
   }
   WebKitWebContext *context = webkit_web_context_get_default();
   webkit_web_context_set_sandbox_enabled(context, TRUE);
+  fprintf(stderr, "kiwi-probe: sandbox asked, default %p, constructed hook %p\n", (void *)context, (void *)context_constructed);
   return webkit_web_context_get_sandbox_enabled(context);
 }
 
