@@ -81,6 +81,7 @@ describe("window.kiwi on any transport", () => {
       bridge.onDeepLink((url) => heard.push(`deepLink ${url}`)),
       bridge.onTextStep((step) => heard.push(`textStep ${step}`)),
       bridge.onFrost((on) => heard.push(`frost ${on}`)),
+      bridge.onAccent((color) => heard.push(`accent ${color}`)),
     ];
     const moved = { ...snapshot, relayUrl: "https://moved.example" };
     bus.emit("store", moved);
@@ -89,12 +90,14 @@ describe("window.kiwi on any transport", () => {
     bus.emit("deepLink", "kiwi://join/mc2-abc");
     bus.emit("textStep", "bigger");
     bus.emit("frost", false);
-    expect(heard).toEqual(["store https://moved.example", "update 0.27.0", "githubCode ABCD-1234", "deepLink kiwi://join/mc2-abc", "textStep bigger", "frost false"]);
+    bus.emit("accent", "#0a84ff");
+    bus.emit("accent", null);
+    expect(heard).toEqual(["store https://moved.example", "update 0.27.0", "githubCode ABCD-1234", "deepLink kiwi://join/mc2-abc", "textStep bigger", "frost false", "accent #0a84ff", "accent null"]);
     expect(bridge.getSnapshot()).toBe(moved);
     expect(bridge.relayUrl).toBe("https://relay.example");
     for (const off of offs) off();
     bus.emit("deepLink", "kiwi://join/mc2-later");
-    expect(heard).toHaveLength(6);
+    expect(heard).toHaveLength(8);
     expect(bus.subs.get("store")?.size).toBe(1);
   });
 });
@@ -125,6 +128,12 @@ describe("main's handlers reach the shell only through the host", () => {
     await bridge.setAppearance("system");
     for (const bad of ["Dark", "", "aqua"]) await expect(bridge.setAppearance(bad as "dark")).rejects.toThrow("an appearance is system, light or dark");
     expect(did).toEqual(["appearance dark", "appearance system"]);
+  });
+
+  test("the page gets the system's accent color as the host reads it, or null where there's none (T1278)", async () => {
+    expect(await bridge.getAccentColor()).toBeNull();
+    const tinted = makeBridge({ snapshot, channels, listen: bus.listen, call: inProcess(handlers({ ...host, accentColor: () => "#0a84ff" })) });
+    expect(await tinted.getAccentColor()).toBe("#0a84ff");
   });
 
   test("a link that isn't http(s) never reaches the host's browser", async () => {

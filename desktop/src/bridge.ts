@@ -352,6 +352,8 @@ export interface KiwiBridge {
   onDeepLink(cb: (url: string) => void): () => void;
   onTextStep(cb: (step: TextStep) => void): () => void;
   onFrost(cb: (on: boolean) => void): () => void;
+  getAccentColor(): Promise<string | null>;
+  onAccent(cb: (color: string | null) => void): () => void;
   setPersonalities(list: Personality[]): Promise<void>;
   seatPlaces(): Promise<PlacedSeat[]>;
   showSeat(seat: PlacedSeat): Promise<ShowResult>;

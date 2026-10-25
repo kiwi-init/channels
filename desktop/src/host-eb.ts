@@ -79,6 +79,7 @@ export const ebHost: Host = {
     return png ? { type: "image/png", data: Buffer.from(png).toString("base64") } : null;
   },
   badge: (count) => showBadge(count),
+  accentColor: () => Utils.getAccentColor(),
   appearance: (appearance) => {
     if (shown?.win.ptr) followTheme(shown.win.ptr, appearance);
   },
