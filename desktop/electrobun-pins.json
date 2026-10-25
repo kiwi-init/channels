@@ -1,5 +1,5 @@
 {
-  "electrobun": "2.1.0-livewire.rc.2",
+  "electrobun": "2.1.0-livewire.rc.3",
   "releasesBaseUrl": "https://github.com/kiwi-init/electrobun-livewire/releases/download",
   "hutch": {
     "version": "0.28.2-canary.8",
@@ -37,9 +37,9 @@
     }
   },
   "devkit": {
-    "macos-arm64": "397294a38bd9b6426ddc161a4aaf329699baf72c738b31c6616f72db5ddb29eb",
-    "linux-x64": "397294a38bd9b6426ddc161a4aaf329699baf72c738b31c6616f72db5ddb29eb",
-    "linux-arm64": "397294a38bd9b6426ddc161a4aaf329699baf72c738b31c6616f72db5ddb29eb"
+    "macos-arm64": "28d61fe63d5a5bb83452ddc854a2ebf0c73e089fa65fb0504db6a1af65d68ce5",
+    "linux-x64": "28d61fe63d5a5bb83452ddc854a2ebf0c73e089fa65fb0504db6a1af65d68ce5",
+    "linux-arm64": "28d61fe63d5a5bb83452ddc854a2ebf0c73e089fa65fb0504db6a1af65d68ce5"
   },
   "app": {
     "macos-arm64": {
