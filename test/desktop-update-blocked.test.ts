@@ -31,7 +31,7 @@ globalThis.fetch = Object.assign(
   async (input: string | URL | Request) => {
     const u = String(input);
     seen.push(u);
-    return new Response(releasesFeed("livewire-v0.20.0-livewire.1"));
+    return new Response(releasesFeed("v0.20.0-livewire.1"));
   },
   { preconnect: realFetch.preconnect },
 );
@@ -39,7 +39,7 @@ globalThis.fetch = Object.assign(
 test.skipIf(process.platform !== "darwin")("a Mac app in a folder it can't write offers the release, says it can't update itself, and downloads nothing", async () => {
   chmodSync(parent, 0o555);
   const r = await checkForUpdate();
-  expect(r).toEqual({ version: "0.20.0-livewire.1", state: "available", url: releasePage("livewire-v0.20.0-livewire.1"), blocked: true });
+  expect(r).toEqual({ version: "0.20.0-livewire.1", state: "available", url: releasePage("v0.20.0-livewire.1"), blocked: true });
   expect(seen.filter((u) => u !== FEED)).toEqual([]);
 });
 

@@ -36,32 +36,32 @@ test("it's an AppImage only when its own executable runs from the AppImage's mou
   expect(ownAppImage(image, "/tmp/.mount_ChanXYZ/../..", "/opt/Channels/bin/bun")).toBeUndefined();
 });
 
-test("an RC's tag comes only from this repo's release links on github.com over https and is livewire-vYYYY.M.PATCH-livewire.N, the files from its download path, and redirects stay on GitHub's hosts (T1554, T985, T839)", () => {
+test("an RC's tag comes only from this repo's release links on github.com over https and is vYYYY.M.PATCH-livewire.N, the files from its download path, and redirects stay on GitHub's hosts (T1554, T985, T839)", () => {
   const repo = "kiwi-init/channels";
   const link = (href: string) => `<entry><link rel="alternate" type="text/html" href="${href}"/></entry>`;
   const tag = (t: string) => link(`https://github.com/kiwi-init/channels/releases/tag/${t}`);
-  expect(newestLivewireTag(repo, `<feed>${tag("livewire-v0.27.5-livewire.3")}</feed>`)).toBe("livewire-v0.27.5-livewire.3");
-  expect(newestLivewireTag(repo, `<feed>${tag("livewire-v0.27.5-livewire.3")}${tag("v0.30.0")}${tag("livewire-v0.28.0-livewire.1")}${tag("livewire-v0.27.5-livewire.12")}</feed>`)).toBe(
-    "livewire-v0.28.0-livewire.1",
-  );
-  expect(livewireVersion("livewire-v0.28.0-livewire.1")).toBe("0.28.0-livewire.1");
+  expect(newestLivewireTag(repo, `<feed>${tag("v0.27.5-livewire.3")}</feed>`)).toBe("v0.27.5-livewire.3");
+  expect(newestLivewireTag(repo, `<feed>${tag("v0.27.5-livewire.3")}${tag("v0.30.0")}${tag("v0.28.0-livewire.1")}${tag("v0.27.5-livewire.12")}</feed>`)).toBe("v0.28.0-livewire.1");
+  expect(livewireVersion("v0.28.0-livewire.1")).toBe("0.28.0-livewire.1");
   expect(livewireVersion("v0.28.0")).toBe("");
   for (const bad of [
     "",
-    link("/kiwi-init/channels/releases/tag/livewire-v0.27.5-livewire.1"),
-    link("http://github.com/kiwi-init/channels/releases/tag/livewire-v0.27.5-livewire.1"),
-    link("https://github.com.evil.example/kiwi-init/channels/releases/tag/livewire-v0.27.5-livewire.1"),
-    link("https://github.com/someone/channels/releases/tag/livewire-v0.27.5-livewire.1"),
-    link("https://user:pw@github.com/kiwi-init/channels/releases/tag/livewire-v0.27.5-livewire.1"),
-    link("https://github.com:8443/kiwi-init/channels/releases/tag/livewire-v0.27.5-livewire.1"),
+    link("/kiwi-init/channels/releases/tag/v0.27.5-livewire.1"),
+    link("http://github.com/kiwi-init/channels/releases/tag/v0.27.5-livewire.1"),
+    link("https://github.com.evil.example/kiwi-init/channels/releases/tag/v0.27.5-livewire.1"),
+    link("https://github.com/someone/channels/releases/tag/v0.27.5-livewire.1"),
+    link("https://user:pw@github.com/kiwi-init/channels/releases/tag/v0.27.5-livewire.1"),
+    link("https://github.com:8443/kiwi-init/channels/releases/tag/v0.27.5-livewire.1"),
     link("https://github.com/kiwi-init/channels/releases"),
-    tag("livewire-v0.27.5-livewire.1?x=1"),
-    tag("livewire-v0.27.5-livewire.1/../../../x"),
-    tag("livewire-v0.27.5"),
-    tag("livewire-v0.27.5-rc.1"),
+    tag("v0.27.5-livewire.1?x=1"),
+    tag("v0.27.5-livewire.1/../../../x"),
     tag("v0.27.5"),
-    tag("v0.27.5-livewire.1"),
-    tag("livewire-v1.0.0-livewire.1%2F..%2Fx"),
+    tag("v0.27.5-rc.1"),
+    tag("v0.27.5"),
+    tag("V0.27.5-livewire.1"),
+    tag("LIVEWIRE-v0.27.5-livewire.1"),
+    tag("livewire-v0.27.5-livewire.1"),
+    tag("v1.0.0-livewire.1%2F..%2Fx"),
     "not a feed",
   ])
     expect(newestLivewireTag(repo, `<feed>${bad}</feed>`)).toBeNull();

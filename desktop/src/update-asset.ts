@@ -24,7 +24,7 @@ const parsed = (url: string | undefined): URL | null => {
   }
 };
 
-const LIVEWIRE_TAG = /^livewire-v(\d{1,6}\.\d{1,6}\.\d{1,6}-livewire\.\d{1,6})$/;
+const LIVEWIRE_TAG = /^v(\d{1,6}\.\d{1,6}\.\d{1,6}-livewire\.\d{1,6})$/;
 
 export const livewireVersion = (tag: string): string => LIVEWIRE_TAG.exec(tag)?.[1] ?? "";
 

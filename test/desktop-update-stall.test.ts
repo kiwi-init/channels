@@ -27,7 +27,7 @@ const updater = "../desktop/src/updater.ts?stall";
 const { checkForUpdate, updateState } = (await import(updater)) as { checkForUpdate: () => Promise<Checked>; updateState: () => Checked | null };
 
 const arch = process.arch === "arm64" ? "arm64" : "x64";
-let tag = "livewire-v0.20.0-livewire.1";
+let tag = "v0.20.0-livewire.1";
 let stall = false;
 let stalled: ReadableStreamDefaultController<Uint8Array> | null = null;
 const zips = new Map<string, Uint8Array>();
@@ -52,9 +52,9 @@ function zipFor(version: string): Uint8Array {
 globalThis.fetch = Object.assign(
   async (input: string | URL | Request) => {
     const u = String(input);
-    const version = tag.slice("livewire-v".length);
+    const version = tag.slice("v".length);
     const name = `Channels-${version}-mac-${arch}.zip`;
-    if (u === FEED) return new Response(releasesFeed("livewire-v0.19.0-livewire.1", tag));
+    if (u === FEED) return new Response(releasesFeed("v0.19.0-livewire.1", tag));
     if (u.endsWith("/SHA256SUMS")) return new Response(`${createHash("sha256").update(zipFor(version)).digest("hex")}  ${name}\n`);
     if (stall) return new Response(new ReadableStream<Uint8Array>({ start: (c) => void (stalled = c) }));
     return new Response(zipFor(version));
@@ -85,7 +85,7 @@ test.skipIf(notMac)("a newer release replaces a staged one instead of hiding beh
   await checkForUpdate();
   expect(await settled()).toMatchObject({ state: "ready", version: "0.20.0-livewire.1" });
   const before = readdirSync(tmp);
-  tag = "livewire-v0.21.0-livewire.1";
+  tag = "v0.21.0-livewire.1";
   expect(await checkForUpdate()).toMatchObject({ state: "downloading", version: "0.21.0-livewire.1" });
   expect(await settled()).toMatchObject({ state: "ready", version: "0.21.0-livewire.1" });
   for (const d of before) expect(existsSync(join(tmp, d))).toBe(false);

@@ -46,12 +46,12 @@ afterAll(() => {
 });
 
 const arch: LinuxArch = process.arch === "arm64" ? "arm64" : "x64";
-const PAGE = releasePage("livewire-v0.27.0-livewire.1");
+const PAGE = releasePage("v0.27.0-livewire.1");
 const NEW = "the 0.27.0 AppImage";
 const OLD = "the 0.26.0 AppImage";
 const sha = (s: string): string => createHash("sha256").update(s).digest("hex");
 
-const DOWNLOAD = "https://github.com/kiwi-init/channels/releases/download/livewire-v0.27.0-livewire.1/";
+const DOWNLOAD = "https://github.com/kiwi-init/channels/releases/download/v0.27.0-livewire.1/";
 const ASSETS = "https://release-assets.githubusercontent.com/github-production-release-asset/";
 
 interface Release {
@@ -75,7 +75,7 @@ function release(o: Release = {}): string[] {
     async (input: string | URL | Request) => {
       const url = String(input);
       seen.push(url);
-      if (url === FEED) return new Response(releasesFeed("livewire-v0.27.0-livewire.1"));
+      if (url === FEED) return new Response(releasesFeed("v0.27.0-livewire.1"));
       const name = Object.keys(files).find((n) => url === where(n) || url === `${ASSETS}${n}` || url.endsWith(`/${n}`));
       if (!name) return new Response("", { status: 404 });
       const to = url === where(name) ? (o.redirect?.(name) ?? null) : null;

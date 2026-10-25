@@ -41,7 +41,7 @@ afterAll(() => {
 globalThis.fetch = Object.assign(
   async (input: string | URL | Request) => {
     const u = String(input);
-    if (u === FEED) return new Response(releasesFeed("livewire-v0.20.0-livewire.1"));
+    if (u === FEED) return new Response(releasesFeed("v0.20.0-livewire.1"));
     if (u.endsWith("/SHA256SUMS")) return new Response(sums);
     return new Response(zip);
   },
