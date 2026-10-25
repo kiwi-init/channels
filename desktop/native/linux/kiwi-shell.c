@@ -3,7 +3,10 @@
 #include <glib-object.h>
 #include <gtk/gtk.h>
 #include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <webkit2/webkit2.h>
 
 #define KIWI_APP_ID "channels-desktop"
@@ -209,8 +212,45 @@ static gchar *bwrap_refusal(void) {
   return refusal;
 }
 
-static bool sandbox_default_context(gconstpointer arg) {
+static gchar *started_webkit(void) {
+  gchar *found = NULL;
+  long self = (long)getpid();
+  GDir *dir = g_dir_open("/proc", 0, NULL);
+  if (!dir) return NULL;
+  const gchar *name;
+  while (!found && (name = g_dir_read_name(dir))) {
+    char *end;
+    long pid = strtol(name, &end, 10);
+    if (*end) continue;
+    gchar *path = g_strdup_printf("/proc/%ld/stat", pid);
+    gchar *text = NULL;
+    if (g_file_get_contents(path, &text, NULL, NULL)) {
+      char *lp = strchr(text, '(');
+      char *rp = strrchr(text, ')');
+      long ppid = 0;
+      if (lp && rp && rp > lp && sscanf(rp + 2, "%*c %ld", &ppid) == 1 && ppid == self && g_str_has_prefix(lp + 1, "WebKit")) found = g_strndup(lp + 1, (gsize)(rp - lp - 1));
+    }
+    g_free(text);
+    g_free(path);
+  }
+  g_dir_close(dir);
+  return found;
+}
+
+static void (*context_constructed)(GObject *) = NULL;
+
+static void sandboxed_constructed(GObject *object) {
+  if (context_constructed) context_constructed(object);
+  webkit_web_context_set_sandbox_enabled(WEBKIT_WEB_CONTEXT(object), TRUE);
+}
+
+static bool sandbox_contexts(gconstpointer arg) {
   (void)arg;
+  GObjectClass *contexts = g_type_class_ref(WEBKIT_TYPE_WEB_CONTEXT);
+  if (contexts->constructed != sandboxed_constructed) {
+    context_constructed = contexts->constructed;
+    contexts->constructed = sandboxed_constructed;
+  }
   WebKitWebContext *context = webkit_web_context_get_default();
   webkit_web_context_set_sandbox_enabled(context, TRUE);
   return webkit_web_context_get_sandbox_enabled(context);
@@ -763,5 +803,13 @@ bool kiwi_sandbox_pages(char *why, size_t size) {
     g_free(refusal);
     return false;
   }
-  return on_main(sandbox_default_context, NULL) || refuse_sandbox(why, size, "WebKitGTK's default context didn't turn it on");
+  gchar *early = started_webkit();
+  if (early) {
+    gchar *text = g_strdup_printf("WebKitGTK started its %s before the sandbox was asked for, and its processes stay outside it", early);
+    refuse_sandbox(why, size, text);
+    g_free(text);
+    g_free(early);
+    return false;
+  }
+  return on_main(sandbox_contexts, NULL) || refuse_sandbox(why, size, "WebKitGTK's default context didn't turn it on");
 }
