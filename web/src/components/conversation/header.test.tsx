@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 import type { Tab } from "@/lib/views"
 
 mock.module("@/lib/avatars", () => ({ avatarUrl: () => "", robotUrl: () => "", robotFor: () => "blue", harnessUrl: () => "" }))
-const { Header } = await import("./header")
+const { Header, Toolbar } = await import("./header")
 const { Ctx } = await import("../controls/context")
 
 const controls = { p: { state: { hold: null } } } as unknown as NonNullable<Parameters<typeof Ctx.Provider>[0]["value"]>
@@ -32,12 +32,13 @@ const props = {
   reviewing: false,
 }
 
-const html = (over: Partial<typeof props> = {}) => renderToStaticMarkup(createElement(Ctx.Provider, { value: controls }, createElement(Header, { ...props, ...over })))
-const toolbar = (markup: string) => /<header[^>]*><div class="drag relative hidden[^"]*">(.*?)<\/div><div class="drag relative flex/.exec(markup)?.[1] ?? ""
+const html = (over: Partial<typeof props> = {}) => renderToStaticMarkup(createElement(Ctx.Provider, { value: controls }, createElement(Toolbar, { ...props, ...over })))
+const header = (over: Partial<typeof props> = {}) => renderToStaticMarkup(createElement(Ctx.Provider, { value: controls }, createElement(Header, { ...props, ...over })))
+const toolbar = (markup: string) => /^<div role="toolbar" aria-label="kiwi"[^>]*>(.*)<\/div>$/.exec(markup)?.[1] ?? ""
 const nav = (markup: string) => /<nav aria-label="Views"[^>]*>(.*?)<\/nav>/.exec(markup)?.[1] ?? ""
 const views = (markup: string) => [...nav(markup).matchAll(/<button[^>]*>([^<]+)/g)].map(([, label]) => label)
 
-describe("the card's header is one toolbar on a wide screen", () => {
+describe("on a wide screen the toolbar sits on the shell, above the card", () => {
   test("the channel's name and status sit in a pill that opens Details, with Search, Tasks and Agents as icons beside it", () => {
     const bar = toolbar(html())
     expect(bar).toMatch(/<button type="button" aria-label="kiwi, open details"[^>]*>.*kiwi.*2 merged today · 4 need you/)
@@ -66,5 +67,17 @@ describe("with Tasks open, the task views take the pill's place", () => {
     expect(views.match(/aria-current="page"/g)).toHaveLength(1)
     expect(views).toMatch(/aria-current="page"[^>]*>Needs you<span[^>]*>4<\/span>/)
     expect(views).toMatch(/>Everything<\/button>/)
+  })
+})
+
+describe("inside the card, the header keeps only the phone's row, search and the hold banner", () => {
+  test("the wide toolbar's pill and icons are not in it", () => {
+    const markup = header()
+    expect(markup).not.toContain('role="toolbar"')
+    expect(markup).not.toContain('aria-label="Agents"')
+    expect(markup).toMatch(/^<header[^>]*><div class="drag relative flex h-\(--chrome-h\)[^"]*md:hidden">/)
+  })
+  test("search opens a step below the card's top edge", () => {
+    expect(header({ search: "" })).toMatch(/<div class="relative mx-auto w-full max-w-\[792px\][^"]*md:pt-\(--step\)"><label/)
   })
 })

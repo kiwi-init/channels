@@ -35,7 +35,7 @@ import { ALLOW_ONCE, DENY, settledOf } from "@/lib/permission-settled"
 import { isAgent } from "../message"
 import { NeedsYou } from "../needs-you"
 import { ChannelSidebar, ConversationMenu, type Conversation as ConversationRow } from "./channel-sidebar"
-import { Header } from "./header"
+import { Header, type HeaderProps, Toolbar } from "./header"
 import { InfoSide, PictureSide, TasksSide, ThreadSide } from "./side-panels"
 import { Centered, rowMakers, threadRowsOf } from "./timeline"
 import type { Side } from "./types"
@@ -479,6 +479,39 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   )
   const heading = tab === "tasks" ? (VIEWS.find(([v]) => v === view)?.[1] ?? "Tasks") : tab === "agents" ? "Agents" : place.kind === "dm" ? placeTitle : rooms.length > 1 ? `# ${roomName}` : title
 
+  const bar: HeaderProps = {
+    headRef,
+    onBack,
+    search,
+    setSearch: (next) => {
+      leaveInfo()
+      setSearch(next)
+    },
+    tab,
+    onTab: (t) => {
+      leaveInfo()
+      setTab(t)
+      if (t !== "conversation") setSearch(null)
+    },
+    heading,
+    wideHeading: place.kind === "dm" ? placeTitle : rooms.length > 1 ? `# ${roomName}` : title,
+    headingLabel: `Details: ${title}${subtitle ? `, ${subtitle}` : ""}`,
+    face: { icon, title },
+    status,
+    onTitle: () => setSide((s) => (s?.kind === "info" ? null : { kind: "info" })),
+    searchHint: place.kind === "main" ? "Search this channel" : `Search ${placeTitle}`,
+    places: <ConversationMenu conversations={conversations} current={currentConversation} onConversation={(key) => (leaveInfo(), openConversation(key))} />,
+    needs: counts.needs,
+    view,
+    counts,
+    onView: (v) => {
+      leaveInfo()
+      setView(v)
+      setTab("tasks")
+      setSearch(null)
+    },
+    reviewing: [...state.tasks.values()].some((t) => !!t.review && t.state !== "done"),
+  }
   return (
     <Pictures.Provider value={pictures}>
       <Harnesses.Provider value={harnesses}>
@@ -498,296 +531,271 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
             {...handlers}
           >
             {onNewAgent && <NewAgent open={newAgent} onClose={() => setNewAgent(false)} code={member.code} roomId={roomId} channel={title} lead={state.lead} onPin={handlers.onPin} roster={roster} />}
-            <div className="relative flex h-full min-w-0 flex-1">
-              <ChannelSidebar
-                conversations={conversations}
-                current={currentConversation}
-                onConversation={(key) => (leaveInfo(), openConversation(key))}
-                rooms={rooms}
-                onNewRoom={
-                  makeRoom &&
-                  (async (name) => {
-                    const id = await makeRoom(name)
-                    leaveInfo()
-                    openConversation(roomKey(id))
-                  })
-                }
-              />
-              <div className={cx("@container relative flex min-w-0 flex-1 md:sheet", info ? "hidden" : (root || side?.kind === "tasks") && "hidden md:flex")}>
-                <div className="relative flex min-w-0 flex-1 flex-col bg-canvas" style={{ "--head": `${headH}px`, "--foot": `${footH}px` } as CSSProperties}>
-                  <Header
-                    headRef={headRef}
-                    onBack={onBack}
-                    search={search}
-                    setSearch={setSearch}
-                    tab={tab}
-                    onTab={(t) => {
-                      setTab(t)
-                      if (t !== "conversation") setSearch(null)
-                    }}
-                    heading={heading}
-                    wideHeading={place.kind === "dm" ? placeTitle : rooms.length > 1 ? `# ${roomName}` : title}
-                    headingLabel={`Details: ${title}${subtitle ? `, ${subtitle}` : ""}`}
-                    face={{ icon, title }}
-                    status={status}
-                    onTitle={() => setSide((s) => (s?.kind === "info" ? null : { kind: "info" }))}
-                    searchHint={place.kind === "main" ? "Search this channel" : `Search ${placeTitle}`}
-                    places={<ConversationMenu conversations={conversations} current={currentConversation} onConversation={(key) => (leaveInfo(), openConversation(key))} />}
-                    needs={counts.needs}
-                    view={view}
-                    counts={counts}
-                    onView={(v) => {
+            <div className="flex h-full min-w-0 flex-1 flex-col">
+              <Toolbar {...bar} />
+              <div className="relative flex min-h-0 min-w-0 flex-1 md:[--sheet-top:calc(var(--step)/2)]">
+                <ChannelSidebar
+                  conversations={conversations}
+                  current={currentConversation}
+                  onConversation={(key) => (leaveInfo(), openConversation(key))}
+                  rooms={rooms}
+                  onNewRoom={
+                    makeRoom &&
+                    (async (name) => {
+                      const id = await makeRoom(name)
                       leaveInfo()
-                      setView(v)
-                      setTab("tasks")
-                      setSearch(null)
-                    }}
-                    reviewing={[...state.tasks.values()].some((t) => !!t.review && t.state !== "done")}
-                  />
+                      openConversation(roomKey(id))
+                    })
+                  }
+                />
+                <div className={cx("@container relative flex min-w-0 flex-1 md:sheet", info ? "hidden" : (root || side?.kind === "tasks") && "hidden md:flex")}>
+                  <div className="relative flex min-w-0 flex-1 flex-col bg-canvas" style={{ "--head": `${headH}px`, "--foot": `${footH}px` } as CSSProperties}>
+                    <Header {...bar} />
 
-                  {pausing && hold && <HoldDialog onClose={() => setPausing(false)} onSave={(note) => hold(true, note)} />}
+                    {pausing && hold && <HoldDialog onClose={() => setPausing(false)} onSave={(note) => hold(true, note)} />}
 
-                  {tab === "tasks" || tab === "agents" ? (
-                    <div className="absolute inset-0 overflow-y-auto pt-[calc(var(--head)+8px)]">
-                      <div className={cx("mx-auto w-full aside-room px-2 md:px-4", tab === "tasks" && "max-w-[960px] [--column:960px]")}>
-                        {!ready ? (
-                          slowToOpen && (
-                            <Centered>
-                              <Spinner />
-                            </Centered>
-                          )
-                        ) : tab === "tasks" ? (
-                          <>
-                            {view === "everything" && nowNode("mx-1 mb-2", false)}
-                            <TasksView
-                              state={state}
-                              now={now}
-                              view={view}
-                              agents={agentsNow}
-                              needs={needsMe ? needsYou : null}
-                              empty={noAgents ? <AddAgent code={member.code} isOwner={isOwner} addsAgents={addsAgents} onNewAgent={onNewAgent} /> : null}
-                              open={shownTask}
-                              onOpen={openTask}
-                              me={me}
-                              onJump={jump}
-                              onNameGoal={async (ask, name) => {
-                                try {
-                                  await send(name ? `named the goal of #${ask}: ${name}` : `#${ask}'s goal unnamed`, { kind: "event", ev: { op: "ask.name", ask, name } })
-                                } catch (err) {
-                                  toast(`Not renamed: ${errorText(err)}`, "error")
-                                  throw err
-                                }
-                              }}
-                            />
-                          </>
-                        ) : agentsNow.length ? (
-                          <>
-                            <AgentLanes agents={agentsNow} state={state} messages={messages} now={now} nameOf={nameOf} onOpenTask={openTask} />
-                            {onNewAgent && (
-                              <div className="mt-6 flex justify-center">
-                                <Button variant="secondary" onClick={onNewAgent}>
-                                  New agent
-                                </Button>
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          <AddAgent code={member.code} isOwner={isOwner} addsAgents={addsAgents} onNewAgent={onNewAgent} />
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div
-                        ref={scroller}
-                        className="absolute inset-0 overflow-y-auto"
-                        onScroll={(e) => {
-                          onScroll(e)
-                          onScrolled(e.currentTarget)
-                        }}
-                      >
-                        <div className="relative mx-auto w-full max-w-[792px] aside-room px-4 pt-[calc(var(--head)+8px)] pb-[calc(var(--foot)+16px)] [--column:792px]">
-                          {hereKey === "main" && !search && ready && (
-                            <div className="sticky top-(--head) z-10 -mt-2 bg-canvas pt-2 pb-2">
-                              {nowNode("", true)}
-                              <div aria-hidden className="scrim-top absolute inset-x-0 top-full h-12" />
-                            </div>
-                          )}
-                          {hereKey === "main" && needsYou}
-                          {hereKey === "main" && state.rooms.size > 1 && !search && <RoomChips rooms={[...state.rooms.values()]} value={cardRoom} onChange={switchRoom} />}
-                          {!ready && messages.length === 0 ? (
+                    {tab === "tasks" || tab === "agents" ? (
+                      <div className="absolute inset-0 overflow-y-auto pt-[calc(var(--head)+8px)]">
+                        <div className={cx("mx-auto w-full aside-room px-2 md:px-4", tab === "tasks" && "max-w-[960px] [--column:960px]")}>
+                          {!ready ? (
                             slowToOpen && (
                               <Centered>
                                 <Spinner />
                               </Centered>
                             )
-                          ) : hereKey === "main" && noAgents && !search ? (
+                          ) : tab === "tasks" ? (
                             <>
-                              <AddAgent code={member.code} isOwner={isOwner} addsAgents={addsAgents} onNewAgent={onNewAgent} />
-                              {!quiet && rows}
+                              {view === "everything" && nowNode("mx-1 mb-2", false)}
+                              <TasksView
+                                state={state}
+                                now={now}
+                                view={view}
+                                agents={agentsNow}
+                                needs={needsMe ? needsYou : null}
+                                empty={noAgents ? <AddAgent code={member.code} isOwner={isOwner} addsAgents={addsAgents} onNewAgent={onNewAgent} /> : null}
+                                open={shownTask}
+                                onOpen={openTask}
+                                me={me}
+                                onJump={jump}
+                                onNameGoal={async (ask, name) => {
+                                  try {
+                                    await send(name ? `named the goal of #${ask}: ${name}` : `#${ask}'s goal unnamed`, { kind: "event", ev: { op: "ask.name", ask, name } })
+                                  } catch (err) {
+                                    toast(`Not renamed: ${errorText(err)}`, "error")
+                                    throw err
+                                  }
+                                }}
+                              />
                             </>
-                          ) : visible.length === 0 ? (
-                            <Centered>
-                              <p className="text-body font-semibold">{search ? "No results" : "No messages yet"}</p>
-                              <p className="mt-1 max-w-xs text-ui leading-normal text-ink-2">
-                                {search
-                                  ? `No message here mentions “${search}”.`
-                                  : place.kind === "dm"
-                                    ? "What these two say to each other shows up here."
-                                    : "What’s said here shows up the moment it’s sent."}
-                              </p>
-                            </Centered>
-                          ) : (
-                            rows
-                          )}
-                        </div>
-                      </div>
-
-                      {behind > 0 && (
-                        <button
-                          type="button"
-                          onClick={toBottom}
-                          className="glass animate-rise absolute bottom-[calc(var(--foot)+10px)] left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full py-1.5 pr-3.5 pl-2.5 text-ui font-medium text-accent-text"
-                        >
-                          <Icon icon={ArrowDown01Icon} size={15} />
-                          {behind === 1 ? "1 new message" : `${behind} new messages`}
-                        </button>
-                      )}
-
-                      <div ref={footRef} className="absolute inset-x-0 bottom-0 z-20">
-                        <div aria-hidden className="scrim-bottom absolute inset-x-0 -top-6 bottom-0" />
-                        <div className="relative aside-room [--column:792px]">
-                          {mayWrite ? (
-                            <Composer
-                              key={`${hereKey}:${sendRoom ?? ""}`}
-                              draftKey={`${roomId}:${hereKey}${sendRoom ? `:${sendRoom}` : ""}`}
-                              me={me}
-                              people={people}
-                              replyTo={replyTo}
-                              commands={commands}
-                              asking={place.kind === "main" ? composerAsks[0] : undefined}
-                              more={Math.max(composerAsks.length - 1, 0)}
-                              onAnswer={answer}
-                              nameOf={nameOf}
-                              onClearReply={(answered) => setReplyTo((now) => (!answered || now === answered ? null : now))}
-                              onRestoreReply={(answering) => setReplyTo((now) => now ?? answering)}
-                              disabled={connection === "connecting"}
-                              extra={extra}
-                              placeholder={
-                                place.kind === "main" ? (rooms.length > 1 ? `Message #${roomName}` : "Message everyone") : `Message ${nameOf(place.with.find((n) => n !== me) ?? "")} privately`
-                              }
-                              send={async (body, given) => {
-                                stick()
-                                const opts: SendOptions = sendRoom && given.task === undefined ? { ...given, room: sendRoom } : given
-                                const answering = (o: SendOptions) => withSentQuotes(o, (k) => sendingSeq.current.get(k))
-                                if (opts.imgs?.length || opts.task !== undefined) return inTurn(async () => send(body, await answering(opts)))
-                                const key = sendingBase + ++sendingKey.current
-                                const m: Message = {
-                                  v: PROTOCOL_VERSION,
-                                  id: `sending-${key}`,
-                                  from: me,
-                                  kind: opts.kind ?? "msg",
-                                  body,
-                                  ts: Date.now(),
-                                  seq: -key,
-                                  sigOk: true,
-                                  ...(opts.to ? { to: opts.to } : {}),
-                                  ...(opts.re ? { re: opts.re } : {}),
-                                  ...(opts.dm ? { dm: true } : {}),
-                                  ...(opts.room ? { room: opts.room } : {}),
-                                }
-                                setSending((all) => [...all, { key, place: hereKey, m, after: messages.at(-1)?.seq ?? 0 }].slice(-50))
-                                const going = inTurn(async () => send(body, await answering(opts)))
-                                sendingSeq.current.set(key, going)
-                                sendingSeq.current.delete(key - 50)
-                                try {
-                                  const seq = await going
-                                  setSending((all) => all.map((s) => (s.key === key ? { ...s, seq } : s)))
-                                  return seq
-                                } catch (err) {
-                                  setSending((all) => all.filter((s) => s.key !== key))
-                                  throw err
-                                }
-                              }}
-                              footer={
-                                <div className="md:hidden">
-                                  <AgentStrip agents={agentsNow} now={now} onOpenTask={openTask} />
+                          ) : agentsNow.length ? (
+                            <>
+                              <AgentLanes agents={agentsNow} state={state} messages={messages} now={now} nameOf={nameOf} onOpenTask={openTask} />
+                              {onNewAgent && (
+                                <div className="mt-6 flex justify-center">
+                                  <Button variant="secondary" onClick={onNewAgent}>
+                                    New agent
+                                  </Button>
                                 </div>
-                              }
-                            />
+                              )}
+                            </>
                           ) : (
-                            <p className="shrink-0 px-6 pt-2 pb-4 text-center text-meta text-ink-3">
-                              Between {place.kind === "dm" ? place.with.map(nameOf).join(" and ") : ""}. You can read along; talk with them in the main conversation.
-                            </p>
+                            <AddAgent code={member.code} isOwner={isOwner} addsAgents={addsAgents} onNewAgent={onNewAgent} />
                           )}
                         </div>
                       </div>
-                    </>
-                  )}
+                    ) : (
+                      <>
+                        <div
+                          ref={scroller}
+                          className="absolute inset-0 overflow-y-auto"
+                          onScroll={(e) => {
+                            onScroll(e)
+                            onScrolled(e.currentTarget)
+                          }}
+                        >
+                          <div className="relative mx-auto w-full max-w-[792px] aside-room px-4 pt-[calc(var(--head)+8px)] pb-[calc(var(--foot)+16px)] [--column:792px]">
+                            {hereKey === "main" && !search && ready && (
+                              <div className="sticky top-(--head) z-10 -mt-2 bg-canvas pt-2 pb-2">
+                                {nowNode("", true)}
+                                <div aria-hidden className="scrim-top absolute inset-x-0 top-full h-12" />
+                              </div>
+                            )}
+                            {hereKey === "main" && needsYou}
+                            {hereKey === "main" && state.rooms.size > 1 && !search && <RoomChips rooms={[...state.rooms.values()]} value={cardRoom} onChange={switchRoom} />}
+                            {!ready && messages.length === 0 ? (
+                              slowToOpen && (
+                                <Centered>
+                                  <Spinner />
+                                </Centered>
+                              )
+                            ) : hereKey === "main" && noAgents && !search ? (
+                              <>
+                                <AddAgent code={member.code} isOwner={isOwner} addsAgents={addsAgents} onNewAgent={onNewAgent} />
+                                {!quiet && rows}
+                              </>
+                            ) : visible.length === 0 ? (
+                              <Centered>
+                                <p className="text-body font-semibold">{search ? "No results" : "No messages yet"}</p>
+                                <p className="mt-1 max-w-xs text-ui leading-normal text-ink-2">
+                                  {search
+                                    ? `No message here mentions “${search}”.`
+                                    : place.kind === "dm"
+                                      ? "What these two say to each other shows up here."
+                                      : "What’s said here shows up the moment it’s sent."}
+                                </p>
+                              </Centered>
+                            ) : (
+                              rows
+                            )}
+                          </div>
+                        </div>
+
+                        {behind > 0 && (
+                          <button
+                            type="button"
+                            onClick={toBottom}
+                            className="glass animate-rise absolute bottom-[calc(var(--foot)+10px)] left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full py-1.5 pr-3.5 pl-2.5 text-ui font-medium text-accent-text"
+                          >
+                            <Icon icon={ArrowDown01Icon} size={15} />
+                            {behind === 1 ? "1 new message" : `${behind} new messages`}
+                          </button>
+                        )}
+
+                        <div ref={footRef} className="absolute inset-x-0 bottom-0 z-20">
+                          <div aria-hidden className="scrim-bottom absolute inset-x-0 -top-6 bottom-0" />
+                          <div className="relative aside-room [--column:792px]">
+                            {mayWrite ? (
+                              <Composer
+                                key={`${hereKey}:${sendRoom ?? ""}`}
+                                draftKey={`${roomId}:${hereKey}${sendRoom ? `:${sendRoom}` : ""}`}
+                                me={me}
+                                people={people}
+                                replyTo={replyTo}
+                                commands={commands}
+                                asking={place.kind === "main" ? composerAsks[0] : undefined}
+                                more={Math.max(composerAsks.length - 1, 0)}
+                                onAnswer={answer}
+                                nameOf={nameOf}
+                                onClearReply={(answered) => setReplyTo((now) => (!answered || now === answered ? null : now))}
+                                onRestoreReply={(answering) => setReplyTo((now) => now ?? answering)}
+                                disabled={connection === "connecting"}
+                                extra={extra}
+                                placeholder={
+                                  place.kind === "main" ? (rooms.length > 1 ? `Message #${roomName}` : "Message everyone") : `Message ${nameOf(place.with.find((n) => n !== me) ?? "")} privately`
+                                }
+                                send={async (body, given) => {
+                                  stick()
+                                  const opts: SendOptions = sendRoom && given.task === undefined ? { ...given, room: sendRoom } : given
+                                  const answering = (o: SendOptions) => withSentQuotes(o, (k) => sendingSeq.current.get(k))
+                                  if (opts.imgs?.length || opts.task !== undefined) return inTurn(async () => send(body, await answering(opts)))
+                                  const key = sendingBase + ++sendingKey.current
+                                  const m: Message = {
+                                    v: PROTOCOL_VERSION,
+                                    id: `sending-${key}`,
+                                    from: me,
+                                    kind: opts.kind ?? "msg",
+                                    body,
+                                    ts: Date.now(),
+                                    seq: -key,
+                                    sigOk: true,
+                                    ...(opts.to ? { to: opts.to } : {}),
+                                    ...(opts.re ? { re: opts.re } : {}),
+                                    ...(opts.dm ? { dm: true } : {}),
+                                    ...(opts.room ? { room: opts.room } : {}),
+                                  }
+                                  setSending((all) => [...all, { key, place: hereKey, m, after: messages.at(-1)?.seq ?? 0 }].slice(-50))
+                                  const going = inTurn(async () => send(body, await answering(opts)))
+                                  sendingSeq.current.set(key, going)
+                                  sendingSeq.current.delete(key - 50)
+                                  try {
+                                    const seq = await going
+                                    setSending((all) => all.map((s) => (s.key === key ? { ...s, seq } : s)))
+                                    return seq
+                                  } catch (err) {
+                                    setSending((all) => all.filter((s) => s.key !== key))
+                                    throw err
+                                  }
+                                }}
+                                footer={
+                                  <div className="md:hidden">
+                                    <AgentStrip agents={agentsNow} now={now} onOpenTask={openTask} />
+                                  </div>
+                                }
+                              />
+                            ) : (
+                              <p className="shrink-0 px-6 pt-2 pb-4 text-center text-meta text-ink-3">
+                                Between {place.kind === "dm" ? place.with.map(nameOf).join(" and ") : ""}. You can read along; talk with them in the main conversation.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              {picture && <PictureSide picture={picture} nameOf={nameOf} state={state} mayWrite={mayWrite} me={me} extra={extra} send={send} onClose={() => setPicture(null)} />}
+                {picture && <PictureSide picture={picture} nameOf={nameOf} state={state} mayWrite={mayWrite} me={me} extra={extra} send={send} onClose={() => setPicture(null)} />}
 
-              {info && (
-                <InfoSide
-                  title={title}
-                  icon={icon}
-                  subtitle={subtitle}
-                  onClose={() => setSide(null)}
-                  onPause={hold && !state.hold ? () => setPausing(true) : undefined}
-                  onMessage={(name) => go(dmPlace(me, name))}
-                  onJoins={() => {
-                    setSide(null)
-                    setView("everything")
-                    setTab("tasks")
-                  }}
-                  onNewAgent={onNewAgent}
-                  state={state}
-                  now={now}
-                  send={send}
-                />
-              )}
-
-              <Presence>
-                {root && (
-                  <ThreadSide
-                    key="thread"
-                    root={root}
-                    count={replies.length}
-                    rows={threadRows}
+                {info && (
+                  <InfoSide
+                    title={title}
+                    icon={icon}
+                    subtitle={subtitle}
                     onClose={() => setSide(null)}
-                    me={me}
-                    people={people}
-                    nameOf={nameOf}
-                    connecting={connection === "connecting"}
-                    send={send}
-                  />
-                )}
-                {side?.kind === "tasks" && (
-                  <TasksSide
-                    key="tasks"
-                    side={side}
-                    setSide={setSide}
-                    task={task}
-                    taskKey={taskKey}
-                    inTask={inTask}
-                    rows={taskRows}
-                    me={me}
-                    people={people}
-                    nameOf={nameOf}
-                    connecting={connection === "connecting"}
-                    send={send}
-                    sendTask={sendTask}
-                    githubDiff={ch.githubDiff}
+                    onPause={hold && !state.hold ? () => setPausing(true) : undefined}
+                    onMessage={(name) => go(dmPlace(me, name))}
+                    onJoins={() => {
+                      setSide(null)
+                      setView("everything")
+                      setTab("tasks")
+                    }}
+                    onNewAgent={onNewAgent}
                     state={state}
-                    messages={messages}
                     now={now}
-                    highlight={highlight}
-                    iAmPerson={iAmPerson}
+                    send={send}
                   />
                 )}
-              </Presence>
+
+                <Presence>
+                  {root && (
+                    <ThreadSide
+                      key="thread"
+                      root={root}
+                      count={replies.length}
+                      rows={threadRows}
+                      onClose={() => setSide(null)}
+                      me={me}
+                      people={people}
+                      nameOf={nameOf}
+                      connecting={connection === "connecting"}
+                      send={send}
+                    />
+                  )}
+                  {side?.kind === "tasks" && (
+                    <TasksSide
+                      key="tasks"
+                      side={side}
+                      setSide={setSide}
+                      task={task}
+                      taskKey={taskKey}
+                      inTask={inTask}
+                      rows={taskRows}
+                      me={me}
+                      people={people}
+                      nameOf={nameOf}
+                      connecting={connection === "connecting"}
+                      send={send}
+                      sendTask={sendTask}
+                      githubDiff={ch.githubDiff}
+                      state={state}
+                      messages={messages}
+                      now={now}
+                      highlight={highlight}
+                      iAmPerson={iAmPerson}
+                    />
+                  )}
+                </Presence>
+              </div>
             </div>
           </ChannelControls>
         </MentionNames.Provider>
