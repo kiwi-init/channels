@@ -69,7 +69,7 @@ export function Header({
         >
           <Icon icon={Search01Icon} size={18} />
         </IconButton>
-        <nav aria-label="Views of the channel" className={cx("no-drag flex items-center gap-1", !wide && "md:hidden")}>
+        <nav aria-label="Views of the channel" className={cx("no-drag flex min-w-0 items-center gap-1", !wide && "md:hidden")}>
           {TABS.map(([t, label]) => (
             <button
               key={t}
@@ -77,8 +77,8 @@ export function Header({
               aria-current={tab === t ? "page" : undefined}
               onClick={() => onTab(t)}
               className={cx(
-                "relative h-9 rounded-row px-2 text-ui transition-colors hover:text-ink sm:px-2.5",
-                tab === t ? "font-semibold text-ink after:absolute after:inset-x-2 after:bottom-0.5 after:h-0.5 after:rounded-full after:bg-accent sm:after:inset-x-2.5" : "text-ink-2"
+                "relative h-9 min-w-0 truncate rounded-row px-1.5 text-ui transition-colors hover:text-ink sm:px-2.5",
+                tab === t ? "font-semibold text-ink after:absolute after:inset-x-1.5 after:bottom-0.5 after:h-0.5 after:rounded-full after:bg-accent sm:after:inset-x-2.5" : "text-ink-2"
               )}
             >
               {label}
