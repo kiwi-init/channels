@@ -1,3 +1,4 @@
+import "./livewire-eb.ts";
 import "./launcher-channel-eb.ts";
 
 import Electrobun, { BrowserView, Utils } from "electrobun/main";
