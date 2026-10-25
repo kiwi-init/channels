@@ -60,7 +60,8 @@ export const taskCommands: Record<string, Command> = {
           if (opt.goal !== undefined) {
             if (ask === undefined) lines.push(`no goal named: ${taskId(id)} isn't filed under a person's message`);
             else lines.push(`goal of #${ask}: ${(yield* s.nameGoal(ask, opt.goal)).goal}`);
-          } else if (ask !== undefined && !added.askHeads.get(ask)?.goal && mayNameGoal(added, s.me, added.askHeads.get(ask)!)) lines.push(`#${ask} has no goal yet: name it in plain words for the board, kiwi goal ${ask} "0.27.7: …"`);
+          } else if (ask !== undefined && !added.askHeads.get(ask)?.goal && mayNameGoal(added, s.me, added.askHeads.get(ask)!))
+            lines.push(`#${ask} has no goal yet: name it in plain words for the board, kiwi goal ${ask} "0.27.7: …"`);
           return out(lines.join("\n"));
         }
         if (sub === "list") return yield* taskCommands.tasks!();

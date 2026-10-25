@@ -43,7 +43,7 @@ function TaskLine({ entry, task, state, urgent, onOpen, anchor }: { entry: TaskE
         <span className="min-w-0 truncate">{task.title}</span>
       </button>
       {owner && <span className="shrink-0">· {owner}</span>}
-      <span className={cx("shrink-0", urgent ? "font-semibold text-decide" : toneOf(task))}>· {urgent ?? stateWord(task)}</span>
+      <span className={cx("shrink-0", urgent ? "font-semibold text-decide" : toneOf(task))}>· {urgent ?? stateWord(state, task)}</span>
       {entry.prs.map((pr) => (
         <a
           key={`${pr.repo}#${pr.number}`}
@@ -73,7 +73,7 @@ function Label({ entry, state, onOpen }: { entry: Activity; state: ChannelState;
         >
           {taskId(entry.id)}
         </button>{" "}
-        {task && <span className={toneOf(task)}>{stateWord(task)}</span>}
+        {task && <span className={toneOf(task)}>{stateWord(state, task)}</span>}
       </>
     )
   }

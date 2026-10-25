@@ -99,7 +99,7 @@ function TaskRow({
                 <span className="truncate">{doing.text}</span>
               </span>
             ) : (
-              <span className="truncate">{labelOf(task)}</span>
+              <span className="truncate">{labelOf(state, task)}</span>
             )}
           </span>
         </span>
@@ -203,19 +203,16 @@ function AskGroup({
         </h2>
         {ask ? (
           <p className="flex min-w-0 items-baseline gap-1.5 px-3 pb-1.5 text-meta text-ink-3">
-            <button type="button" onClick={() => onJump(ask.id)} className="shrink-0 tabular-nums underline decoration-line underline-offset-2 hover:text-ink hover:decoration-ink-3">
+            <button
+              type="button"
+              title={ask.goal ? words || undefined : undefined}
+              onClick={() => onJump(ask.id)}
+              className="shrink-0 tabular-nums underline decoration-line underline-offset-2 hover:text-ink hover:decoration-ink-3"
+            >
               from #{ask.id}
             </button>
             <span aria-hidden>·</span>
             <span className="shrink-0">{by}</span>
-            {ask.goal && words && (
-              <>
-                <span aria-hidden>·</span>
-                <span title={words} className="truncate">
-                  {said}
-                </span>
-              </>
-            )}
           </p>
         ) : (
           <p className="truncate px-3 pb-1.5 text-meta text-ink-3">No person's message holds these</p>

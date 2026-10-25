@@ -115,7 +115,7 @@ const play = Effect.fn("Demo.run")(function* (opts: DemoOptions) {
   yield* lead.hello();
   yield* human.givePersona("lead", personaOf(PRESETS.find((p) => p.role === "lead")!));
 
-  yield* say("The planner puts work on the board: open, then doing, then done.");
+  yield* say("The planner puts work on the board: planned, then working, then done.");
   const proto = yield* lead.taskAdd("Freeze protocol v1 wire format", { review: "any" });
   const inject = yield* lead.taskAdd("Inject mouse input on Windows");
   const capture = yield* lead.taskAdd("Capture input at the screen edge on the Mac");

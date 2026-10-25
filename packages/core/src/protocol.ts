@@ -277,6 +277,8 @@ export type Event =
   | { op: "github"; items: GithubNote[] }
   /** Owner only: what a connected repo asks before a pull request merges into its default branch, read from GitHub by the owner's app. */
   | { op: "github.rules"; repo: string; branch: string; required: string[]; merge: MergeMethod[] }
+  /** Owner only: a published GitHub release of a connected repo, with the commits it added (shas, and the PR numbers their messages name), read by the owner's app. */
+  | { op: "github.release"; repo: string; tag: string; at: number; shas: string[]; prs: number[] }
   /**
    * Owner only: stop every agent (on) or let them carry on (off). While on hold, every client refuses
    * an agent's work (tasks, facts, messages to other agents); agents may still answer people.
@@ -314,7 +316,21 @@ export function isReaction(m: Pick<Message, "kind" | "ev">): boolean {
   return m.kind === "event" && m.ev?.op === "react";
 }
 
-const QUIET_OPS: ReadonlySet<string> = new Set(["hello", "card", "picture.set", "react", "fact.set", "fact.del", "lease.take", "lease.free", "task.claim", "claim", "release", "github.rules"]);
+const QUIET_OPS: ReadonlySet<string> = new Set([
+  "hello",
+  "card",
+  "picture.set",
+  "react",
+  "fact.set",
+  "fact.del",
+  "lease.take",
+  "lease.free",
+  "task.claim",
+  "claim",
+  "release",
+  "github.rules",
+  "github.release",
+]);
 
 export const isRunning = (i: GithubNote): boolean => (i.event === "check_run" || i.event === "workflow_run") && i.conclusion === undefined;
 
@@ -405,6 +421,7 @@ export interface GithubNote {
   attempt?: number;
   branch?: string;
   sha?: string;
+  merge?: string;
   name?: string;
   status?: string;
   conclusion?: string;
@@ -416,6 +433,8 @@ export interface GithubNote {
 export const MERGE_METHODS = ["merge", "squash", "rebase"] as const;
 export type MergeMethod = (typeof MERGE_METHODS)[number];
 export const MAX_REQUIRED_CHECKS = 50;
+export const MAX_RELEASE_COMMITS = 250;
+const SHA_RE = /^[0-9a-f]{7,40}$/;
 
 export interface IssueRef {
   repo: string;
@@ -432,7 +451,7 @@ function isIssueRef(x: unknown): x is IssueRef {
   return !!r && typeof r === "object" && typeof r.repo === "string" && REPO_RE.test(r.repo) && Number.isSafeInteger(r.number) && (r.number as number) > 0;
 }
 
-const GITHUB_TEXT: Record<string, number> = { action: 40, title: 200, url: 300, state: 20, branch: 200, sha: 40, name: 200, status: 20, conclusion: 20, reason: 20, by: 100 };
+const GITHUB_TEXT: Record<string, number> = { action: 40, title: 200, url: 300, state: 20, branch: 200, sha: 40, merge: 40, name: 200, status: 20, conclusion: 20, reason: 20, by: 100 };
 
 export function cleanGithubNote(x: unknown): GithubNote | null {
   if (!x || typeof x !== "object") return null;
@@ -651,7 +670,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 4;
+export const EVENT_OPS_VERSION = 5;
 const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 
 export const knownOp = (op: string): boolean => eventCheck({ op }) !== null;
@@ -875,6 +894,21 @@ function eventCheck(ev: unknown): boolean | null {
         e.required.every((c) => str(c, 200) && !!c.trim() && !/[\u0000-\u001f\u007f]/.test(c)) &&
         Array.isArray(e.merge) &&
         e.merge.every((m) => (MERGE_METHODS as readonly unknown[]).includes(m))
+      );
+    case "github.release":
+      return (
+        typeof e.repo === "string" &&
+        REPO_RE.test(e.repo) &&
+        str(e.tag, 200) &&
+        !!(e.tag as string).trim() &&
+        !/[\u0000-\u001f\u007f]/.test(e.tag as string) &&
+        n(e.at) &&
+        Array.isArray(e.shas) &&
+        e.shas.length <= MAX_RELEASE_COMMITS &&
+        e.shas.every((s) => typeof s === "string" && SHA_RE.test(s)) &&
+        Array.isArray(e.prs) &&
+        e.prs.length <= MAX_RELEASE_COMMITS &&
+        e.prs.every((p) => n(p) && (p as number) > 0)
       );
     case "repos.set":
       return Array.isArray(e.repos) && e.repos.length <= MAX_REPOS && e.repos.every((r) => typeof r === "string" && REPO_RE.test(r));

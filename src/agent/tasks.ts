@@ -1,5 +1,16 @@
 import * as Effect from "effect/Effect";
-import { CHECKPOINT_MAX_LENGTH, MAX_GOAL_NAME, PROOF_LABEL_MAX_LENGTH, PROOF_URL_MAX_LENGTH, TASK_STATES, TASK_TITLE_MAX_LENGTH, ignored, type IssueRef, type TaskState, type Verdict } from "@kiwi/core/protocol.ts";
+import {
+  CHECKPOINT_MAX_LENGTH,
+  MAX_GOAL_NAME,
+  PROOF_LABEL_MAX_LENGTH,
+  PROOF_URL_MAX_LENGTH,
+  TASK_STATES,
+  TASK_TITLE_MAX_LENGTH,
+  ignored,
+  type IssueRef,
+  type TaskState,
+  type Verdict,
+} from "@kiwi/core/protocol.ts";
 import { omit } from "@kiwi/core/omit.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { isPerson, openRound, revisedOut, taskId, type ChannelState, type ReviewRound, type Task } from "@kiwi/core/state.ts";

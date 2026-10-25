@@ -171,7 +171,7 @@ function Properties({
     <dl className="grid grid-cols-2 gap-4">
       <Prop label="Status">
         <StateMark state={task.state} />
-        {labelOf(task)}
+        {labelOf(state, task)}
       </Prop>
       <Prop label="Assignee">
         {task.owner ? (

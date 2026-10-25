@@ -6,7 +6,7 @@ import { allowedOnHold, answersDecisions, isLeadRole, isPerson, LEAD, ON_HOLD } 
 import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
 import { askHeadOf, fileTask } from "./asks.ts";
-import { prKey, repoKey } from "./github.ts";
+import { prKey, releasesFrom, repoKey } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { roomName } from "./rooms.ts";
 import { settle } from "./leases.ts";
@@ -248,6 +248,7 @@ export function fold(
       checks: new Map(from?.github?.checks.map(([k, runs]) => [k, new Map(runs.map((r) => [r.name, r]))])),
       issues: new Map(from?.github?.issues?.map((i) => [prKey(i.repo, i.number), i])),
       rules: new Map(from?.github?.rules?.map((r) => [repoKey(r.repo), r])),
+      releases: releasesFrom(from?.github?.releases),
     },
     hold: from?.hold ?? null,
     githubWrite: from?.githubWrite ?? null,
@@ -410,7 +411,8 @@ export function fold(
         const head = askHeads.get(ev.ask);
         const goal = ev.name === null ? null : inlineText(ev.name, MAX_GOAL_NAME);
         if (!head) reject(`#${ev.ask} isn't a person's message that tasks are filed under`);
-        else if (!member.owner && !isLeadRole(member.role) && !(signed.has(member.name) && member.persona?.role === "lead") && head.by !== m.from) reject("only the lead, the owner or the person who asked names a goal");
+        else if (!member.owner && !isLeadRole(member.role) && !(signed.has(member.name) && member.persona?.role === "lead") && head.by !== m.from)
+          reject("only the lead, the owner or the person who asked names a goal");
         else if (goal === "") reject("a goal needs a name");
         else if (goal === null) askHeads.set(head.id, omit(head, "goal", "goalBy"));
         else askHeads.set(head.id, { ...head, goal, goalBy: m.from });
@@ -467,6 +469,7 @@ export function fold(
         checks: [...ctx.github.checks].map(([k, runs]) => [k, [...runs.values()]]),
         issues: [...ctx.github.issues.values()].filter((i) => i.state === "open" || !closedLongAgo(i.at, hw) || taskIssues.has(prKey(i.repo, i.number))),
         rules: [...ctx.github.rules.values()],
+        releases: [...ctx.github.releases.values()].flat(),
       },
       hold: ctx.hold,
       githubWrite: ctx.githubWrite,

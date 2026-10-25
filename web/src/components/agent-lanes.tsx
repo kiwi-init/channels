@@ -37,12 +37,12 @@ function PrLine({ pr }: { pr: PrRef }) {
   )
 }
 
-function TaskBlock({ c, now, onOpen }: { c: LaneTask; now: number; onOpen: (id: number) => void }) {
+function TaskBlock({ c, state, now, onOpen }: { c: LaneTask; state: ChannelState; now: number; onOpen: (id: number) => void }) {
   return (
     <li className="rounded-card border border-line px-3 py-2.5">
       <button type="button" onClick={() => onOpen(c.task.id)} className="block w-full text-left">
         <span className="block text-meta text-ink-3">
-          <span className="tabular-nums">{taskId(c.task.id)}</span> · {stateWord(c.task)} · {formatAgo(c.since, now)}
+          <span className="tabular-nums">{taskId(c.task.id)}</span> · {stateWord(state, c.task)} · {formatAgo(c.since, now)}
         </span>
         <span className="mt-0.5 line-clamp-2 block text-ui font-semibold hover:underline">{c.task.title}</span>
       </button>
@@ -94,7 +94,7 @@ function Lane({
       {work.current.length > 0 && (
         <ul className="flex flex-col gap-2">
           {work.current.map((c) => (
-            <TaskBlock key={c.task.id} c={c} now={now} onOpen={onOpenTask} />
+            <TaskBlock key={c.task.id} c={c} state={state} now={now} onOpen={onOpenTask} />
           ))}
         </ul>
       )}
