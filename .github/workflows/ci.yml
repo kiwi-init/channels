@@ -12,6 +12,10 @@ on:
         description: "Only these .github/jev-ci.yml jobs, comma-separated (desktop-linux, desktop-mac, …); empty runs everything"
         required: false
         default: ""
+      update_from:
+        description: "desktop / distros also updates this released version's AppImage to the latest release (update.sh)"
+        required: false
+        default: ""
 
 # A new push to a pull request cancels its run still in progress: only the newest commit's
 # result matters there. Pushes to main share one group but never cancel the run in progress: it
@@ -598,7 +602,9 @@ jobs:
           name: linux-packages-ubuntu-24.04
           path: ${{ runner.temp }}/packages
       - name: the AppImage on a stock ${{ matrix.distro }}, under headless weston on native Wayland
-        run: bash desktop/scripts/distro-check/check.sh ${{ matrix.distro }} "$(ls "$RUNNER_TEMP"/packages/Channels-*-linux-x86_64.AppImage)" "$RUNNER_TEMP/distro-check"
+        env:
+          UPDATE_FROM: ${{ inputs.update_from }}
+        run: bash desktop/scripts/distro-check/check.sh ${{ matrix.distro }} "$(ls "$RUNNER_TEMP"/packages/Channels-*-linux-x86_64.AppImage)" "$RUNNER_TEMP/distro-check" "$UPDATE_FROM"
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

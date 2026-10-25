@@ -79,7 +79,7 @@ as_tester() {
   rt=$(mktemp -d)
   chown tester: "$rt"
   chmod 700 "$rt"
-  runuser -u tester -- env XDG_RUNTIME_DIR="$rt" timeout 300 dbus-run-session -- "$@"
+  runuser -u tester -- env XDG_RUNTIME_DIR="$rt" timeout 900 dbus-run-session -- "$@"
   local code=$?
   rm -rf "$rt"
   return $code
