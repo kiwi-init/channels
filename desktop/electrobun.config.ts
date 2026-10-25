@@ -16,8 +16,9 @@ export default {
     ...(identifier === RELEASE_ID ? { urlSchemes: [JOIN_SCHEME] } : {}),
   },
   build: {
-    mainProcess: "bun",
-    bun: { entrypoint: "src/main-eb.ts", define: { KIWI_EB_TEST: process.env.CHANNELS_EB_TEST === "1" ? "true" : "false", KIWI_EB_LIVEWIRE: livewire ? "true" : "false" } },
+    // T892 spike: Cottontail is ~43 MB smaller than Bun 1.4.4 on Linux, ~27 MB on macOS.
+    mainProcess: "cottontail",
+    cottontail: { entrypoint: "src/main-eb.ts", define: { KIWI_EB_TEST: process.env.CHANNELS_EB_TEST === "1" ? "true" : "false", KIWI_EB_LIVEWIRE: livewire ? "true" : "false" } },
     views: { preload: { entrypoint: "src/preload-eb.ts" } },
     buildFolder: "release-eb/build",
     artifactFolder: "release-eb/artifacts",

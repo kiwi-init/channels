@@ -19,7 +19,7 @@ mkdir -p "$HOME/Applications"
 curl -fsSL -o "$img" "$release/download/v$from/Channels-$from-linux-x86_64.AppImage" || { bad "can't download $from's AppImage"; exit 0; }
 chmod +x "$img"
 sum() { sha256sum "$img" | cut -d' ' -f1; }
-bun_of() { pgrep -f "appimage_extracted.*/Channels/bin/bun" | head -n 1; }
+bun_of() { pgrep -f "appimage_extracted.*/Channels/bin/cottontail" | head -n 1; }
 
 APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a -s "-screen 0 1280x800x24" "$img" > "$logs/update-$from.log" 2>&1 &
 staged=""

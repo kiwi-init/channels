@@ -7,7 +7,7 @@ mkdir -p "$OUT/dl"
 problems=()
 app=/Applications/Channels.app
 version() { /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$app/Contents/Info.plist" 2> /dev/null; }
-main_pid() { pgrep -f "$app/Contents/MacOS/bun" | head -n 1; }
+main_pid() { pgrep -f "$app/Contents/MacOS/cottontail" | head -n 1; }
 
 gh release download "v$FROM" -R "$GITHUB_REPOSITORY" -p "Channels-$FROM-mac-arm64.zip" -D "$OUT/dl" || exit 1
 rm -rf "$app"

@@ -44,7 +44,7 @@
   "app": {
     "macos-arm64": {
       "Contents/MacOS/launcher": "cb56c4ccfa6d2c1a3596e44d143af212b5af3e196199a83c19d511506f28ff4f",
-      "Contents/MacOS/bun": "0a2237cdcfa0d16ef501d9acca9f0026309ef348bea7393a64e8d1e3609565cc",
+      "Contents/MacOS/cottontail": "c4472f2cde54ce1395cfd77db94e20a1edc0d3a19fc9f0988b108a1252ead5ab",
       "Contents/MacOS/libElectrobunCore.dylib": "fabb7954d71f66f508422fc0c432ba9ccde36394b9ccab02a8ba4aeaaa597243",
       "Contents/MacOS/libNativeWrapper.dylib": "e60d09537dfa5dfffe951235cacd5da815a013905f90597c49c39a1cf0e6ebce",
       "Contents/MacOS/libasar.dylib": "775e92fed7238ea1da09ec5ae54a72a19baaccf602a4467f16bb2e36cff9cfbc",
