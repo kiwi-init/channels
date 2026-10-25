@@ -26,18 +26,44 @@ function versionOf(bin: string): Promise<string | null> {
   });
 }
 
+function brewPrefixes(): string[] {
+  return [...new Set([process.env["HOMEBREW_PREFIX"], "/opt/homebrew", "/home/linuxbrew/.linuxbrew"].filter((p): p is string => !!p && path.isAbsolute(p)))];
+}
+
+export function homebrewKiwi(prefixes: readonly string[]): string | null {
+  for (const prefix of prefixes) {
+    const bin = path.join(prefix, "bin", "kiwi");
+    try {
+      if (fs.realpathSync(bin).startsWith(path.join(fs.realpathSync(prefix), "Cellar", "kiwi") + path.sep)) return bin;
+    } catch {
+      // No kiwi from Homebrew under this prefix.
+    }
+  }
+  return null;
+}
+
+export interface KeptCli {
+  path: string;
+  version: string;
+  updated: boolean;
+  homebrew: boolean;
+}
+
 /**
  * The CLI here at least as new as the app's: copies the bundled one into place (a new file renamed
  * over the old, so a daemon running the old one keeps running until it's restarted) when it's missing,
  * broken or older. Returns where it is and what version it is now.
  */
-export async function keepCli(bundled: string, bundledVersion: string): Promise<{ path: string; version: string; updated: boolean }> {
+export async function keepCli(bundled: string, bundledVersion: string, prefixes: readonly string[] = brewPrefixes()): Promise<KeptCli> {
+  const brew = homebrewKiwi(prefixes);
+  const brewVersion = brew ? await versionOf(brew) : null;
+  if (brew && brewVersion) return { path: brew, version: brewVersion, updated: false, homebrew: true };
   const dest = cliPath();
   const was = fs.existsSync(dest) ? await versionOf(dest) : null;
-  if (was && compareVersions(was, bundledVersion) >= 0) return { path: dest, version: was, updated: false };
+  if (was && compareVersions(was, bundledVersion) >= 0) return { path: dest, version: was, updated: false, homebrew: false };
   await place(bundled, dest);
   void tidy(dest);
-  return { path: dest, version: bundledVersion, updated: true };
+  return { path: dest, version: bundledVersion, updated: true, homebrew: false };
 }
 
 const placing = new Map<string, Promise<void>>();
