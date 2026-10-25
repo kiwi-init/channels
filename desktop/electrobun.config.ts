@@ -17,7 +17,7 @@ export default {
   },
   build: {
     mainProcess: "bun",
-    bun: { entrypoint: "src/main-eb.ts", define: { KIWI_EB_TEST: process.env.CHANNELS_EB_TEST === "1" ? "true" : "false", KIWI_EB_LIVEWIRE: livewire ? "true" : "false" } },
+    bun: { entrypoint: "src/main-eb.ts", define: { KIWI_EB_TEST: process.env.CHANNELS_EB_TEST === "1" ? "true" : "false", KIWI_EB_LIVEWIRE: livewire ? "true" : "false", KIWI_UI_SEQ: String(Date.now()) } },
     views: { preload: { entrypoint: "src/preload-eb.ts" } },
     buildFolder: "release-eb/build",
     artifactFolder: "release-eb/artifacts",

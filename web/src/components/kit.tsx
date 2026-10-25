@@ -5,6 +5,7 @@ import { PALETTE } from "@/lib/characters"
 import { initials } from "@/lib/format"
 import { noteSignInGone } from "@/lib/session"
 import { later, onLoadFailed } from "@/lib/later"
+import { uiFailed } from "@/lib/ui-boot"
 import { cx } from "@/lib/utils"
 import { HarnessFace } from "./harness-face"
 import { Tooltip } from "./ui/tooltip"
@@ -336,6 +337,9 @@ export class Boundary extends Component<{ children: ReactNode; resetKey?: string
   state = { failed: false }
   static getDerivedStateFromError() {
     return { failed: true }
+  }
+  componentDidCatch(error: unknown) {
+    if (this.props.whole) uiFailed(error)
   }
   componentDidUpdate(prev: { resetKey?: string }) {
     if (prev.resetKey !== this.props.resetKey && this.state.failed) this.setState({ failed: false })

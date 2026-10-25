@@ -10,6 +10,7 @@ import { blursBehind } from "./compositor.ts";
 import { clearWindow, cString, committedPage, mac, setPageHtml, setPreload, windowLook } from "./native-eb.ts";
 import { navigation, openedUrl, PAGE_RULES, PAGE_TEMPLATE, PAGE_URL, pageWithCsp, RULES_CANARY } from "./eb-page.ts";
 import { mark } from "./eb-startup.ts";
+import { logMainError } from "./main-log.ts";
 import { externalUrl } from "./guard.ts";
 import { attachWindow, ebHost } from "./host-eb.ts";
 import { handlers } from "./ipc/handlers.ts";
@@ -19,6 +20,7 @@ import { bunBridge } from "./rpc-eb.ts";
 import { snapshot, store } from "./store.ts";
 import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts";
 import { ownAppImage } from "./update-asset.ts";
+import { channelUi, uiFromChannel, uiViewsRoot } from "./ui-engine-eb.ts";
 import { minWindowWidth } from "./window-size.ts";
 
 const rgb = (hex: string): number => Number.parseInt(hex.slice(1), 16);
@@ -60,7 +62,8 @@ function rulesHold(view: BrowserView): Promise<boolean> {
 
 export async function createWindow(keyring: KeyringState | null = null): Promise<BrowserWindow | null> {
   const index = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "..", PAGE_TEMPLATE), "utf8");
-  const page = (): Uint8Array<ArrayBuffer> => cString(pageWithCsp(index, store.relayUrl));
+  let current = index;
+  const page = (): Uint8Array<ArrayBuffer> => cString(pageWithCsp(current, store.relayUrl));
   const note = (state: KeyringState): Uint8Array<ArrayBuffer> => cString(pageWithCsp(keyringPage(index, process.platform, state), store.relayUrl));
   const first = keyring ? note(keyring) : page();
   const bundled = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "preload", "index.js"), "utf8");
@@ -92,6 +95,7 @@ export async function createWindow(keyring: KeyringState | null = null): Promise
     hidden: true,
     preload,
     rpc: bridge,
+    ...(uiFromChannel ? { viewsRoot: uiViewsRoot() } : {}),
   });
   mark("webview");
   const webview = win.webview;
@@ -119,6 +123,20 @@ export async function createWindow(keyring: KeyringState | null = null): Promise
     webview.loadURL(PAGE_URL);
   };
   const refreshPreload = (): void => setPreload(webview.id, preloadSource({ snapshot: snapshot(), session: bridge.nextSession() }, lookMarks() + bundled));
+  let shown = false;
+  let quiet = false;
+  const ui = uiFromChannel
+    ? channelUi({
+        win,
+        show: (html) => {
+          current = html;
+          quiet = shown && !win.isVisible();
+          refreshPreload();
+          load();
+        },
+      })
+    : null;
+  const startUi = (): Promise<void> => (ui ? ui.start() : Promise.resolve()).catch(logMainError);
   attachWindow({
     win,
     view: webview,
@@ -126,10 +144,18 @@ export async function createWindow(keyring: KeyringState | null = null): Promise
       if (name === "store") refreshPreload();
       bridge.push(name, value);
     },
-    reload: () => (refreshPreload(), load()),
+    reload: () => {
+      refreshPreload();
+      if (ui && !ui.started()) void startUi();
+      else load();
+    },
   });
   showNote = (state) => load(note(state));
-  load(first);
+  if (ui && !keyring) await startUi();
+  else {
+    ui?.placeBuiltIn();
+    load(first);
+  }
   mark("load");
   webview.on("will-navigate", () => mark("willNavigate"));
   webview.on("did-commit-navigation", () => mark("committed"));
@@ -144,7 +170,11 @@ export async function createWindow(keyring: KeyringState | null = null): Promise
   });
   webview.on("dom-ready", () => {
     mark("domReady");
-    if (!closing && !win.isVisible()) win.show();
+    const stayHidden = quiet;
+    quiet = false;
+    if (closing || stayHidden || win.isVisible()) return;
+    shown = true;
+    win.show();
   });
   return win;
 }

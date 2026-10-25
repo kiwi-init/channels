@@ -1,8 +1,8 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-export const IN_CODE = ["kiwiDriver", "KIWI_EB_DRIVER", "KIWI_EB_RELAY", "kiwi-eb-test-store.json"];
-export const IN_LAUNCHER = ["KIWI_EB_DRIVER", "KIWI_EB_RELAY", "CFFIXED_USER_HOME", "KIWI_HOME"];
+export const IN_CODE = ["kiwiDriver", "KIWI_EB_DRIVER", "KIWI_EB_RELAY", "KIWI_EB_UI_CHANNEL", "kiwi-eb-test-store.json"];
+export const IN_LAUNCHER = ["KIWI_EB_DRIVER", "KIWI_EB_RELAY", "KIWI_EB_UI_CHANNEL", "CFFIXED_USER_HOME", "KIWI_HOME"];
 const IN_BOTH_CODE = ["views://internal/index.html", "restoreWindowFocusAfterExternalDrop"];
 const IN_BOTH_LAUNCHER = ["BUN_RUNTIME_TRANSPILER_CACHE_PATH"];
 
