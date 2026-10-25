@@ -2,6 +2,25 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.10.0 — 2026-10-25
+
+- **A task reads by its status: planned, working, needs you, done, shipped in its release (T1099)** ([#943](https://github.com/kiwi-init/channels/pull/943))
+- **A task waiting on a person says Needs you, and the UI shots show Done and Shipped rows (T1258)** ([#944](https://github.com/kiwi-init/channels/pull/944))
+- **Releases are dates, YYYY.M.PATCH, from 2026.10.0 on (T1232)** ([#945](https://github.com/kiwi-init/channels/pull/945))
+- **The board heads a person's ask with a goal the lead names in plain words, their message under it as "from #956" (T1095)** ([#946](https://github.com/kiwi-init/channels/pull/946))
+- **The board groups finished work by release: Next, then each release it shipped in (T1101)** ([#947](https://github.com/kiwi-init/channels/pull/947))
+- **The Now card reads each task's status: a merged task is done today, one waiting on a person is marked (T1288)** ([#948](https://github.com/kiwi-init/channels/pull/948))
+- **Each release bumps the Homebrew tap: the Channels cask and the kiwi formula get its version and sha256s (T1234)** ([#949](https://github.com/kiwi-init/channels/pull/949))
+- **A new task's title is at most 60 characters, for people; the spec goes in its body (--body or --file spec.md) (T1103)** ([#950](https://github.com/kiwi-init/channels/pull/950))
+- **The app's kiwi defers to Homebrew's: no copy in ~/.kiwi/bin, no PATH line, and hooks that survive brew upgrade (T1236)** ([#951](https://github.com/kiwi-init/channels/pull/951))
+- **One way to take a task, and review rounds only when a task asks for them (T1107)** ([#953](https://github.com/kiwi-init/channels/pull/953))
+- **A task outlives the agent who leaves: its open tasks are back on the board, "left by" it, and the lead is told (T1105)** ([#952](https://github.com/kiwi-init/channels/pull/952))
+- **kiwi lock status lists the leases, and kiwi lock release is refused with how to let one go (T1109)** ([#955](https://github.com/kiwi-init/channels/pull/955))
+- **kiwi finds the channel from any git worktree of the folder it joined in (T1115)** ([#956](https://github.com/kiwi-init/channels/pull/956))
+- **The Linux app's pages run in WebKitGTK's bubblewrap sandbox: every context is sandboxed, Electrobun's persist:default one included (T1193)** ([#954](https://github.com/kiwi-init/channels/pull/954))
+- **kiwi lock exits 3 while you're only in line, and --wait blocks until the lease is yours (T1111)** ([#957](https://github.com/kiwi-init/channels/pull/957))
+- **The daemon test's "newer" daemon is newer than VERSION under any scheme, so the date version passes (T1472)** ([#962](https://github.com/kiwi-init/channels/pull/962))
+
 ## 0.27.7 — 2026-10-25
 
 - **Linux: a missing library is named with the right install line for the distro, before the app tries to start (T1066)** ([#939](https://github.com/kiwi-init/channels/pull/939))

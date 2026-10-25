@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { doctorChecks, type Finding } from "../src/cli/doctor.ts";
+import { delimiter, join } from "node:path";
+import * as Effect from "effect/Effect";
+import { checkShadowed, doctorChecks, type Finding } from "../src/cli/doctor.ts";
 import { newMachine, saveMachine, type MachineFile } from "../src/machine.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { workosHumanAuth } from "../src/relay/human.ts";
@@ -88,5 +89,43 @@ describe("kiwi doctor", () => {
       if (prev.KIWI_RELAY === undefined) delete process.env.KIWI_RELAY;
       else process.env.KIWI_RELAY = prev.KIWI_RELAY;
     }
+  });
+});
+
+describe("kiwi doctor and a Homebrew kiwi", () => {
+  const root = mkdtempSync(join(tmpdir(), "kiwi-doctor-brew-"));
+  const home = join(root, "home");
+  const old = join(home, ".kiwi", "bin");
+  const prefix = join(root, "brew");
+  const cellar = join(prefix, "Cellar", "kiwi", "2026.10.0", "bin");
+  const tool = (dir: string, version: string) => {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "kiwi"), `#!/bin/sh\necho ${version}\n`);
+    chmodSync(join(dir, "kiwi"), 0o755);
+  };
+
+  beforeAll(() => {
+    tool(old, "0.27.6");
+    tool(cellar, "2026.10.0");
+    mkdirSync(join(prefix, "bin"), { recursive: true });
+    symlinkSync(join(cellar, "kiwi"), join(prefix, "bin", "kiwi"));
+    writeFileSync(join(home, ".zshrc"), `alias ll="ls -l"\n\n# Added by the Channels app: it keeps the kiwi CLI in ~/.kiwi/bin current.\nexport PATH="${old}:$PATH"\n`);
+    writeFileSync(join(home, ".bash_profile"), "export EDITOR=vi\n");
+  });
+  afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+  const shadowed = (path: string) => Effect.runPromise(checkShadowed(path, home, {}));
+
+  test("an old ~/.kiwi/bin/kiwi ahead of Homebrew's is named with the fix, and the keys stay", async () => {
+    expect(await shadowed([old, join(prefix, "bin"), "/usr/bin"].join(delimiter))).toEqual({
+      ok: false,
+      what: "~/.kiwi/bin/kiwi (0.27.6) comes before Homebrew's kiwi (2026.10.0) on PATH, so a shell runs the old one.",
+      how: 'Remove it: rm ~/.kiwi/bin/kiwi, and delete the marked PATH lines in ~/.zshrc (each "# Added by …" line and the export under it), then open a new terminal. Your keys and seats in ~/.kiwi stay as they are.',
+    });
+  });
+
+  test("with Homebrew's first, or no Homebrew kiwi at all, there's nothing to fix", async () => {
+    expect(await shadowed([join(prefix, "bin"), old].join(delimiter))).toBeNull();
+    expect(await shadowed([old, "/usr/bin"].join(delimiter))).toBeNull();
   });
 });

@@ -37,7 +37,7 @@ else
   else
     echo "window size: ${WIDTH}x${HEIGHT} on a ${sw}x${sh} screen"
   fi
-  web=$(pgrep -s "$pid" -f WebKitWebProcess | head -n 1)
+  web=$(pgrep -s "$pid" -x WebKitWebProces | head -n 1)
   if [ -z "$web" ]; then
     problems+=("no WebKitWebProcess of the app's own is running 5s after its window opened")
   else
@@ -53,6 +53,7 @@ else
     done
     others=$(pgrep -s "$pid" -a bwrap | cut -c1-400)
     [ -z "$others" ] || echo "bwrap in the app's session: $others"
+    tree=$(ps -e -o pid=,ppid=,sid=,args= --forest | grep -E "bwrap|WebKit|xdg-dbus-proxy|glycin|launcher|/bun " | grep -v grep | cut -c1-300)
     off=$(grep -h "WebKitGTK's sandbox is off" "$out" 2> /dev/null | head -n 1)
     if [ "$want" = sandboxed ]; then
       if [ -n "$sandbox" ]; then echo "sandbox: $sandbox"; else problems+=("no bwrap of the app's own: WebKitGTK's web process isn't sandboxed${off:+ ($off)}"); fi
@@ -80,6 +81,7 @@ if grep -qE "download handler wasn't found|navigation handler wasn't found" "$ou
 
 if [ ${#problems[@]} -gt 0 ]; then
   echo "the app's output:"
+  [ -z "${tree:-}" ] || printf 'its processes (pid, parent, session):\n%s\n' "$tree"
   tail -n 60 "$out"
   find "$home" -name main.log -exec tail -n 20 {} + 2> /dev/null
   for p in "${problems[@]}"; do echo "eb-linux-start: $p" >&2; done

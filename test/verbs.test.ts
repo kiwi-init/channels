@@ -95,6 +95,26 @@ describe("ten verbs", () => {
     expect(await ok(agent, "unlock", "build")).toBe("let go of build\n");
   });
 
+  test("kiwi lock exits 3 while you're only in line, --wait blocks until the lease is yours, and a --wait that runs out leaves the line with exit 2", async () => {
+    expect(await ok(owner, "lock", "heavy", "--note", "a build")).toContain("heavy: you");
+    const queued = await run(agent, "lock", "heavy");
+    expect(queued.code).toBe(3);
+    expect(queued.out).toContain("heavy: lead");
+    expect(queued.err).toContain("you're next for heavy, not holding it: you'll be told when it's yours (kiwi lock heavy --wait 30m waits for it)");
+    const waiting = spawn(agent, ["lock", "heavy", "--wait", "30s"]);
+    await Bun.sleep(1_000);
+    await ok(owner, "unlock", "heavy");
+    expect(await waiting.exited).toBe(0);
+    expect(await new Response(waiting.stdout).text()).toMatch(/heavy: you, /);
+    await ok(agent, "unlock", "heavy");
+    await ok(owner, "lock", "heavy");
+    const late = await run(agent, "lock", "heavy", "--wait", "3s");
+    expect(late.code).toBe(2);
+    expect(late.err).toContain("heavy wasn't yours within 3s: you left the line");
+    expect(await ok(owner, "lock")).not.toContain("next: dev");
+    await ok(owner, "unlock", "heavy");
+  });
+
   test("help shows the new verbs and says the old names still work", async () => {
     const help = await ok(agent, "help");
     for (const v of ["kiwi join", "kiwi listen", "kiwi send", "kiwi reply", "kiwi show", "kiwi log", "kiwi status", "kiwi task", "kiwi note", "kiwi leave"]) expect(help).toContain(v);
