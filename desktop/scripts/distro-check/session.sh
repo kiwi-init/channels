@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 set -u
 
-usage="usage: session.sh none|gnome-keyring|kwallet|kwallet-unanswered TAG APPIMAGE RESULTS LOGS tray|no-tray (as the desktop user, under dbus-run-session)"
+usage="usage: session.sh none|gnome-keyring|kwallet|kwallet-unanswered|cancel|cancel-holds-key TAG APPIMAGE RESULTS LOGS tray|no-tray [HOME] (as the desktop user, under dbus-run-session)"
 keyring=${1:?$usage}
 tag=${2:?$usage}
 image=${3:?$usage}
 results=${4:?$usage}
 logs=${5:?$usage}
 tray=${6:?$usage}
+kept_home=${7:-}
 here=$(cd "$(dirname "$0")" && pwd)
 ok() { echo "ok   [$tag] $*" | tee -a "$results"; }
 bad() { echo "FAIL [$tag] $*" | tee -a "$results"; }
@@ -41,11 +42,16 @@ case "$keyring" in
     sleep 3
     info "$(basename "$daemon") with no wallet yet: its first-use dialog is offscreen, so nobody answers it"
     ;;
+  cancel | cancel-holds-key)
+    python3 "$here/secrets-cancel.py" $([ "$keyring" = cancel-holds-key ] && echo holds-key) > "$logs/$tag-secrets.log" 2>&1 &
+    sleep 1
+    info "a Secret Service whose every prompt is cancelled, as a person clicking Cancel does$([ "$keyring" = cancel-holds-key ] && echo ", holding Channels' store key locked")"
+    ;;
 esac
 owner=$(gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.GetNameOwner org.freedesktop.secrets 2> /dev/null)
 info "Secret Service: ${owner:-nobody owns org.freedesktop.secrets}"
 
-home=$(mktemp -d)
+home=${kept_home:-$(mktemp -d)}
 start=$(date +%s)
 HOME="$home" setsid "$image" --appimage-extract-and-run > "$logs/$tag-app.log" 2>&1 &
 pid=$!
@@ -75,7 +81,7 @@ done
 if [ -z "$web" ]; then bad "no WebKitWebProcess of the app's"; elif [ -n "$boxed" ]; then ok "its web process runs in WebKitGTK's bubblewrap sandbox (bwrap $boxed)"; else bad "its web process $web runs without bwrap: $(grep -h "sandbox is off" "$logs/$tag-app.log" | head -n 1 | cut -c1-200)"; fi
 
 registered=$(grep -c 'RegisterStatusNotifierItem' "$logs/$tag-watcher.log")
-if [ "$keyring" = kwallet-unanswered ]; then
+if [ "$keyring" = kwallet-unanswered ] || [ "${keyring#cancel}" != "$keyring" ]; then
   :
 elif [ "$tray" = tray ]; then
   if [ "$registered" -gt 0 ]; then ok "its tray icon registered with the StatusNotifierWatcher"; else bad "no tray icon registered, though libayatana-appindicator is installed and a watcher runs"; fi
@@ -92,6 +98,12 @@ stored=$(timeout 20 secret-tool search --all service Channels 2>&1 | grep -E '^(
 case "$keyring" in
   none)
     if [ -n "$plain" ]; then ok "no Secret Service: the app keeps its keys unencrypted (0600) and says so"; else bad "no Secret Service, and the app didn't say where its keys went"; fi
+    ;;
+  cancel | cancel-holds-key)
+    info "prompts asked and cancelled: $(grep -c dismissed "$logs/$tag-secrets.log"); calls: $(grep -oE '[A-Za-z]+\.[A-Za-z]+ on' "$logs/$tag-secrets.log" | sort | uniq -c | tr -s ' ' | tr '\n' ',' | cut -c1-300)"
+    info "the app said: $(grep -hE '^Channels' "$logs/$tag-app.log" | tr '\n' ' ' | cut -c1-400)"
+    info "main.log: $(cat "$logs/$tag-main.log" 2> /dev/null | tr '\n' ' ' | cut -c1-600)"
+    info "store files: $(find "$home" -name 'kiwi-store-v2.bin*' -printf '%f %s %p\n' 2> /dev/null | while read -r f n p; do echo "$f $n bytes, starts $(head -c 13 "$p" | tr -c '[:print:]' '.')"; done | tr '\n' ';')"
     ;;
   kwallet-unanswered)
     if [ -n "$plain" ]; then bad "while the keyring hasn't answered, the app kept its keys unencrypted: $(echo "$plain" | cut -c1-160)"; else ok "while the keyring hasn't answered, the app keeps no keys unencrypted"; fi
@@ -112,4 +124,4 @@ else
   ok "stopped cleanly on SIGTERM"
 fi
 kill "$watcher" "$proto" "$weston" 2> /dev/null
-rm -rf "$home"
+[ -n "$kept_home" ] || rm -rf "$home"

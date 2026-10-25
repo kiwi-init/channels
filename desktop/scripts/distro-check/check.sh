@@ -70,7 +70,7 @@ done
 
 id tester > /dev/null 2>&1 || useradd -m tester
 cp "$extract/Channels.AppImage" /home/tester/Channels.AppImage
-cp "$here/session.sh" "$here/update.sh" "$here/watcher.py" "$here/kwallet-login.py" /home/tester/
+cp "$here/session.sh" "$here/update.sh" "$here/watcher.py" "$here/kwallet-login.py" "$here/secrets-cancel.py" /home/tester/
 chmod +x /home/tester/Channels.AppImage
 chown -R tester: /home/tester
 
@@ -84,7 +84,7 @@ as_tester() {
   rm -rf "$rt"
   return $code
 }
-session() { as_tester bash /home/tester/session.sh "$1" "$2" /home/tester/Channels.AppImage "$results" "$out/logs" "$3"; }
+session() { as_tester bash /home/tester/session.sh "$1" "$2" /home/tester/Channels.AppImage "$results" "$out/logs" "$3" "${4:-}"; }
 lib_test() {
   local name=$1
   shift
@@ -95,9 +95,12 @@ session none stock no-tray
 lib_test kiwi-tray-test "$tests/kiwi-tray-test" "$lib" no-indicator
 install "${ayatana[@]}" || exit 1
 lib_test kiwi-tray-test "$tests/kiwi-tray-test" "$lib"
-session gnome-keyring gnome-keyring tray
+sealed_home=$(runuser -u tester -- mktemp -d)
+session gnome-keyring gnome-keyring tray "$sealed_home"
 session kwallet kwallet tray
 session kwallet-unanswered kwallet-unanswered tray
+session cancel cancel-first-run tray
+session cancel-holds-key cancel-sealed tray "$sealed_home"
 lib_test kiwi-scheme-test xvfb-run -a "$tests/kiwi-scheme-test" "$lib"
 lib_test kiwi-notify-test xvfb-run -a "$tests/kiwi-notify-test" "$lib"
 [ -z "$from" ] || as_tester bash /home/tester/update.sh "$from" "$results" "$out/logs"
