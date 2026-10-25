@@ -85,6 +85,7 @@ const OPS: Record<Event["op"], true> = {
   "github.rules": true,
   "github.write.set": true,
   "branch.prefix.set": true,
+  "ask.name": true,
   "hold.set": true,
   "voice.set": true,
   react: true,
@@ -124,6 +125,7 @@ const OPS_AT: Record<number, readonly string[]> = {
   1: V1,
   2: [...V1, "branch.prefix.set"],
   3: [...V1, "branch.prefix.set", "github.rules"],
+  4: [...V1, "branch.prefix.set", "github.rules", "ask.name"],
 };
 
 describe("events from a newer client", () => {

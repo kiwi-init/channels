@@ -57,6 +57,7 @@ const parsed = parseArgs({
     owner: { type: "string" },
     after: { type: "string" },
     detail: { type: "string" },
+    goal: { type: "string" },
     issue: { type: "string" },
     from: { type: "string" },
     ttl: { type: "string" },

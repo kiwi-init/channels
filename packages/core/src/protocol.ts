@@ -285,6 +285,8 @@ export type Event =
   | { op: "voice.set"; on: boolean }
   | { op: "github.write.set"; on: boolean }
   | { op: "branch.prefix.set"; prefix: string | null }
+  /** The goal a person's message #ask stands for, in plain words, as its tasks' header (null: their own words again). The lead, the owner or who asked names it. */
+  | { op: "ask.name"; ask: number; name: string | null }
   /**
    * A member's reaction to message #seq: one short emoji per member per message, the latest wins, null
    * takes it back. Not news: it's no unread, no notification, no line in a feed. Its body is throwaway
@@ -475,6 +477,7 @@ export const GENERAL_ROOM = "general";
 export const ROOM_ID_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
 /** Longest room name. */
 export const MAX_ROOM_NAME = 40;
+export const MAX_GOAL_NAME = 80;
 /** Most rooms a channel holds (general included): the list must fit the sealed settings. */
 export const MAX_ROOMS = 50;
 
@@ -648,7 +651,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 3;
+export const EVENT_OPS_VERSION = 4;
 const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 
 export const knownOp = (op: string): boolean => eventCheck({ op }) !== null;
@@ -884,6 +887,8 @@ function eventCheck(ev: unknown): boolean | null {
       return e.prefix === null || (typeof e.prefix === "string" && BRANCH_PREFIX_RE.test(e.prefix));
     case "react":
       return n(e.seq) && (e.seq as number) > 0 && (e.emoji === null || wellFormedReaction(e.emoji));
+    case "ask.name":
+      return n(e.ask) && (e.ask as number) > 0 && (e.name === null || str(e.name, MAX_GOAL_NAME * 4));
     default:
       return null;
   }

@@ -1,4 +1,5 @@
-import { EVENT_OPS_VERSION, GENERAL_ROOM, ignored, isOldGifKey, isReaction, MAX_ROOMS, ROOM_ID_RE, type Message, type Trust } from "../protocol.ts";
+import { EVENT_OPS_VERSION, GENERAL_ROOM, ignored, isOldGifKey, isReaction, MAX_GOAL_NAME, MAX_ROOMS, ROOM_ID_RE, type Message, type Trust } from "../protocol.ts";
+import { inlineText } from "../membership.ts";
 import { refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
 import { allowedOnHold, answersDecisions, isLeadRole, isPerson, LEAD, ON_HOLD } from "./people.ts";
@@ -402,6 +403,17 @@ export function fold(
           on.set(m.from, { emoji: ev.emoji, seq: m.seq, at });
         }
         if (on && !on.size) reactions.delete(ev.seq);
+        continue;
+      }
+      if (ev.op === "ask.name") {
+        placeOf.set(m.seq, MAIN);
+        const head = askHeads.get(ev.ask);
+        const goal = ev.name === null ? null : inlineText(ev.name, MAX_GOAL_NAME);
+        if (!head) reject(`#${ev.ask} isn't a person's message that tasks are filed under`);
+        else if (!member.owner && !isLeadRole(member.role) && !(signed.has(member.name) && member.persona?.role === "lead") && head.by !== m.from) reject("only the lead, the owner or the person who asked names a goal");
+        else if (goal === "") reject("a goal needs a name");
+        else if (goal === null) askHeads.set(head.id, omit(head, "goal", "goalBy"));
+        else askHeads.set(head.id, { ...head, goal, goalBy: m.from });
         continue;
       }
       placeOf.set(m.seq, ev.op === "task.add" ? { kind: "task", task: m.seq } : (ev.op === "task.update" || ev.op === "task.claim") && tasks.has(ev.task) ? { kind: "task", task: ev.task } : MAIN);

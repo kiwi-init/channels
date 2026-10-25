@@ -51,6 +51,10 @@ export function askRefusal(
   return `#${anchors.re} isn't a person's message or a reply under one, so no ask holds it: ${fix}`;
 }
 
+export function mayNameGoal(state: Pick<ChannelState, "members" | "lead">, me: string, head: AskHead): boolean {
+  return state.lead === me || !!state.members.get(me)?.owner || head.by === me;
+}
+
 export interface AskGroup {
   head: AskHead | null;
   tasks: Task[];

@@ -202,6 +202,8 @@ export function describeEvent(m: Message, state?: ChannelState): string {
         : "cleared the branch prefix: a PR shows on a task only when someone posts its link";
     case "react":
       return ev.emoji ? `reacted ${ev.emoji} to #${ev.seq}` : `took back the reaction on #${ev.seq}`;
+    case "ask.name":
+      return ev.name ? `named the goal of #${ev.ask}: ${inlineText(ev.name, 80)}` : `took back the goal's name of #${ev.ask}`;
   }
 }
 
@@ -317,8 +319,9 @@ function taskLine(state: ChannelState, t: Task): string {
 
 export function askLine(head: AskHead | null): string {
   if (!head) return "unfiled (no person's message holds these)";
-  const words = inlineText(head.words, 120);
-  return `#${head.id} ${inlineText(head.by, 40)}: ${words ? `“${words}”` : "(no text)"}`;
+  const words = inlineText(head.words, head.goal ? 60 : 120);
+  const said = `#${head.id} ${inlineText(head.by, 40)}: ${words ? `“${words}”` : "(no text)"}`;
+  return head.goal ? `${inlineText(head.goal, 80)} (from ${said})` : said;
 }
 
 function groupedLines(state: ChannelState, tasks: Task[], indent: string): string[] {

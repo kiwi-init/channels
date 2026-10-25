@@ -5,7 +5,7 @@ import { inlineText } from "@kiwi/core/membership.ts";
 import { formatTask, formatTasks, issueLinkText, looksLikeLine, taskStateWord } from "@kiwi/core/format.ts";
 import type { TaskState } from "@kiwi/core/protocol.ts";
 import { leadCheckpointRefusal } from "@kiwi/core/reentry.ts";
-import { askRefusal, isPerson, leadCheckpointKey, openRound, parseTaskId, similarOpenTasks, taskId, type ChannelState } from "@kiwi/core/state.ts";
+import { askRefusal, isPerson, leadCheckpointKey, mayNameGoal, openRound, parseTaskId, similarOpenTasks, taskId, type ChannelState } from "@kiwi/core/state.ts";
 import { formatCandidates, pickFor, taskCandidates } from "@kiwi/core/routing.ts";
 import { bindingFor } from "../../hooks.ts";
 import { args, opt } from "../args.ts";
@@ -55,6 +55,12 @@ export const taskCommands: Record<string, Command> = {
           const like = similarOpenTasks(before, title).map((t) => t.id);
           const lines = [`added ${taskId(id)}`];
           if (like.length) lines.push(looksLikeLine(like));
+          const { state: added } = yield* s.state();
+          const ask = added.tasks.get(id)?.ask;
+          if (opt.goal !== undefined) {
+            if (ask === undefined) lines.push(`no goal named: ${taskId(id)} isn't filed under a person's message`);
+            else lines.push(`goal of #${ask}: ${(yield* s.nameGoal(ask, opt.goal)).goal}`);
+          } else if (ask !== undefined && !added.askHeads.get(ask)?.goal && mayNameGoal(added, s.me, added.askHeads.get(ask)!)) lines.push(`#${ask} has no goal yet: name it in plain words for the board, kiwi goal ${ask} "0.27.7: …"`);
           return out(lines.join("\n"));
         }
         if (sub === "list") return yield* taskCommands.tasks!();
@@ -166,6 +172,18 @@ export const taskCommands: Record<string, Command> = {
         const s = yield* session();
         const { state } = yield* s.state();
         out(formatTasks(state, { all: opt.all, owner: opt.mine ? s.me : opt.owner }));
+      }),
+    ),
+
+  goal: () =>
+    oneLook(
+      Effect.gen(function* () {
+        const s = yield* session();
+        const usage = 'usage: kiwi goal N "the goal in plain words" (the person\'s message #N its tasks are filed under) · kiwi goal N --clear';
+        const ask = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die(usage));
+        const name = opt.clear ? null : args.slice(2).join(" ").trim() || (yield* die(usage));
+        const head = yield* s.nameGoal(ask, name);
+        return out(head.goal ? `#${ask}'s goal: ${head.goal}` : `#${ask} is headed by its own words again`);
       }),
     ),
 
