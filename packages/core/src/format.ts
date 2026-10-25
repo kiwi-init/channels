@@ -26,6 +26,7 @@ import {
 } from "./state.ts";
 import { evidenceOf, prLines, refText, stageOf, stageText } from "./stage.ts";
 import { rulesText } from "./prs.ts";
+import { statusOf, statusWord } from "./status.ts";
 import { isWakeVia, wakesInSession, wakeWords, type WakeVia } from "./wake.ts";
 
 export function tokensWord(n: number): string {
@@ -186,6 +187,8 @@ export function describeEvent(m: Message, state?: ChannelState): string {
       return `compacted the history through #${ev.through}: ${inlineText(ev.summary, 200)}`;
     case "github":
       return githubLine(ev.items);
+    case "github.release":
+      return `${ev.repo} released ${inlineText(ev.tag, 60)}: ${ev.prs.length ? `${ev.prs.length} PR${ev.prs.length === 1 ? "" : "s"}, ` : ""}${ev.shas.length} commit${ev.shas.length === 1 ? "" : "s"}`;
     case "github.rules":
       return `read ${ev.repo}'s rules for ${inlineText(ev.branch, 60)}: ${rulesText(ev)}`;
     case "repos.set":
@@ -202,6 +205,8 @@ export function describeEvent(m: Message, state?: ChannelState): string {
         : "cleared the branch prefix: a PR shows on a task only when someone posts its link";
     case "react":
       return ev.emoji ? `reacted ${ev.emoji} to #${ev.seq}` : `took back the reaction on #${ev.seq}`;
+    case "ask.name":
+      return ev.name ? `named the goal of #${ev.ask}: ${inlineText(ev.name, 80)}` : `took back the goal's name of #${ev.ask}`;
   }
 }
 
@@ -308,17 +313,18 @@ export function formatMessage(m: Message, trust?: Trust, state?: ChannelState, m
 }
 
 function taskLine(state: ChannelState, t: Task): string {
-  const owner = t.owner ? ` @${inlineText(t.owner, 40)}` : "";
+  const owner = t.owner ? ` @${inlineText(t.owner, 40)}` : t.leftBy ? ` (${inlineText(t.leftBy, 40)} left)` : "";
   const review = t.review && t.state !== "done" ? ` [${reviewPhrase(t.review)}]` : "";
   const stage = stageOf(state, t);
   const evidence = stage.pr || stage.declared ? ` · ${stageText(state, stage)}` : "";
-  return `  ${taskId(t.id).padEnd(5)} ${(t.state === "done" && t.cancelled ? "cancelled" : stateWord(t.state)).padEnd(9)}${owner} ${inlineText(t.title, 200)}${review}${evidence}`;
+  return `  ${taskId(t.id).padEnd(5)} ${statusWord(statusOf(state, t)).padEnd(9)}${owner} ${inlineText(t.title, 200)}${review}${evidence}`;
 }
 
 export function askLine(head: AskHead | null): string {
   if (!head) return "unfiled (no person's message holds these)";
-  const words = inlineText(head.words, 120);
-  return `#${head.id} ${inlineText(head.by, 40)}: ${words ? `“${words}”` : "(no text)"}`;
+  const words = inlineText(head.words, head.goal ? 60 : 120);
+  const said = `#${head.id} ${inlineText(head.by, 40)}: ${words ? `“${words}”` : "(no text)"}`;
+  return head.goal ? `${inlineText(head.goal, 80)} (from ${said})` : said;
 }
 
 function groupedLines(state: ChannelState, tasks: Task[], indent: string): string[] {
@@ -584,7 +590,7 @@ export function reviewBody(m: Message): string | null {
 export function formatTask(state: ChannelState, t: Task, now = Date.now(), messages: readonly Message[] = []): string {
   const out = [
     `${taskId(t.id)} ${inlineText(t.title, 200)}`,
-    `  state: ${taskStateWord(t)}${t.owner ? ` · owner: ${inlineText(t.owner, 40)}` : " · unassigned"} · created by ${inlineText(t.createdBy, 40)} ${ago(t.createdAt, now)}`,
+    `  status: ${statusWord(statusOf(state, t))} (${stateWord(t.state)})${t.owner ? ` · owner: ${inlineText(t.owner, 40)}` : t.leftBy ? ` · unassigned: ${inlineText(t.leftBy, 40)} left the channel` : " · unassigned"} · created by ${inlineText(t.createdBy, 40)} ${ago(t.createdAt, now)}`,
   ];
   const stage = stageOf(state, t);
   out.push(`  stage: ${stageText(state, stage)}`);

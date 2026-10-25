@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join as joinPath } from "node:path";
 import { home, Keystore, loadConfig, updateConfig } from "../../config.ts";
 import { describeMember } from "@kiwi/core/membership.ts";
+import { taskId } from "@kiwi/core/state.ts";
 import { daemonSeat, type DaemonSeat } from "../../daemon.ts";
 import { isWakeVia, wakeKey, wakeWords } from "@kiwi/core/wake.ts";
 import { ago, holdLine, formatRooms, formatStatus, presenceWords, statusJson } from "@kiwi/core/format.ts";
@@ -39,6 +40,15 @@ export const channelCommands: Record<string, Command> = {
     Effect.gen(function* () {
       const s = yield* session();
       if (s.identity.pk === s.cfg.ownerPk) return yield* die("this key owns the channel; close it from the Channels app");
+      const back = yield* s.handBack().pipe(
+        Effect.catch((e) =>
+          Effect.sync((): number[] => {
+            process.stderr.write(`kiwi: couldn't hand your tasks back (${e instanceof Error ? e.message : String(e)}); the board shows them as open once you're gone\n`);
+            return [];
+          }),
+        ),
+      );
+      if (back.length) out(`back on the board, the lead told: ${back.map(taskId).join(", ")}`);
       yield* s.ch.fx.leave();
       yield* (yield* Keystore).forgetMember(s.alias, s.me);
       out(`${s.me} left "${s.alias}"; its key is gone from this machine`);

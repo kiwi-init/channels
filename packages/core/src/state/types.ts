@@ -1,6 +1,6 @@
 import type { Member as MemberRecord, Runs } from "../membership.ts";
 import type { Card, Color, IssueRef, MemberPicture, Message, TaskState, Trust, Verdict } from "../protocol.ts";
-import type { GithubCheck, GithubIssue, GithubPr, GithubRules, GithubState } from "./github.ts";
+import type { GithubCheck, GithubIssue, GithubPr, GithubRelease, GithubRules, GithubState } from "./github.ts";
 import type { Persona } from "../personality.ts";
 import type { Scope } from "../scopes.ts";
 
@@ -120,6 +120,7 @@ export interface Task {
   ask?: number;
   posters?: string[];
   archived?: boolean;
+  leftBy?: string;
 }
 
 export interface AskHead {
@@ -127,6 +128,8 @@ export interface AskHead {
   by: string;
   words: string;
   at: number;
+  goal?: string;
+  goalBy?: string;
 }
 
 export interface Reaction {
@@ -232,7 +235,7 @@ export interface FoldBase {
   lead: string | null;
   charter: Charter | null;
   repos?: string[];
-  github?: { prs: GithubPr[]; checks: [string, GithubCheck[]][]; issues?: GithubIssue[]; rules?: GithubRules[] };
+  github?: { prs: GithubPr[]; checks: [string, GithubCheck[]][]; issues?: GithubIssue[]; rules?: GithubRules[]; releases?: GithubRelease[] };
   hold: Hold | null;
   voice?: boolean;
   githubWrite?: number | null;

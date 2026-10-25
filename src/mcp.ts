@@ -655,7 +655,9 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     {
       description:
         "Add a task to the shared board: it's open until someone takes it, then doing, then done. Returns its id (like T12), and warns when an open task has a near-identical title. " +
+        "The `title` is for people, at most 60 characters: the outcome in plain words. The spec (what to do, where the code is, why) goes in `detail`, its body, shown on the task page. " +
         "Every task is filed under the ask it serves: `ask` is the person's message it answers (18 for #18), or give `from` or `issue`. " +
+        "`goal` names the goal of the ask it's filed under in plain words (the board's header for its tasks, like \"0.27.7: the AppImage runs on Fedora\"): the lead, the owner or the person who asked may name it. " +
         "`review` is who must approve it before it's done (a member, or any). " +
         "`from` names the task this one comes from (a follow-up, a part, a fix), so it goes to whoever has that context. " +
         "`issue` imports a GitHub issue of the channel's repo (12, owner/repo#12 or its link): the title defaults to the issue's. The issue closing on GitHub closes the task; the task closing closes the issue only while the owner has Write to GitHub on. " +
@@ -668,9 +670,10 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         issue: z.string().optional().describe("a GitHub issue to import: 12, owner/repo#12 or its link"),
         from: z.number().int().positive().optional().describe("the task this one comes from (a follow-up, a part, a fix): its number, 72 for T72"),
         ask: z.number().int().positive().optional().describe("the person's message this task serves: its number, 18 for #18"),
+        goal: z.string().optional().describe("the goal of the ask it's filed under, in plain words: the board's header for its tasks"),
       },
     },
-    tool(({ title, detail, owner, review, issue, from, ask }) =>
+    tool(({ title, detail, owner, review, issue, from, ask, goal }) =>
       Effect.gen(function* () {
         const anchors = { ...(from !== undefined ? { from } : {}), ...(ask !== undefined ? { re: ask } : {}) };
         if (issue !== undefined) {
@@ -686,6 +689,11 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         const like = similarOpenTasks(state, title).map((t) => t.id);
         const lines = [`added ${taskId(id)}`];
         if (like.length) lines.push(looksLikeLine(like));
+        if (goal !== undefined) {
+          const filed = (yield* s.state()).state.tasks.get(id)?.ask;
+          if (filed === undefined) lines.push(`no goal named: ${taskId(id)} isn't filed under a person's message`);
+          else lines.push(`goal of #${filed}: ${(yield* s.nameGoal(filed, goal)).goal}`);
+        }
         return lines.join("\n");
       }),
     ),

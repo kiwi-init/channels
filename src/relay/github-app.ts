@@ -1,5 +1,5 @@
 import * as Context from "effect/Context";
-import { MAX_REQUIRED_CHECKS, MERGE_METHODS, type MergeMethod } from "@kiwi/core/protocol.ts";
+import { MAX_RELEASE_COMMITS, MAX_REQUIRED_CHECKS, MERGE_METHODS, type MergeMethod } from "@kiwi/core/protocol.ts";
 
 export const REVIEW_CHECK = "kiwi/review";
 const MAX_DIFF = 2 << 20;
@@ -79,6 +79,32 @@ export function rulesFrom(meta: RepoMeta, rules: readonly BranchRule[], branch: 
   return { branch: meta.default_branch ?? "main", required: [...required].slice(0, MAX_REQUIRED_CHECKS), merge };
 }
 
+export interface GithubReleaseInfo {
+  tag: string;
+  at: number;
+  shas: string[];
+  prs: number[];
+}
+
+type Commit = { sha?: string; commit?: { message?: string } };
+
+const SQUASHED = /\(#(\d{1,9})\)$/;
+const MERGED = /^Merge pull request #(\d{1,9})\b/;
+
+export function releaseFrom(tag: string, at: number, commits: readonly Commit[]): GithubReleaseInfo {
+  const shas: string[] = [];
+  const prs = new Set<number>();
+  for (const c of commits.slice(-MAX_RELEASE_COMMITS)) {
+    if (typeof c.sha === "string" && /^[0-9a-f]{40}$/.test(c.sha)) shas.push(c.sha.slice(0, 12));
+    const first = (c.commit?.message ?? "").split("\n", 1)[0]?.trim() ?? "";
+    const n = SQUASHED.exec(first)?.[1] ?? MERGED.exec(first)?.[1];
+    if (n) prs.add(Number(n));
+  }
+  return { tag, at, shas, prs: [...prs].slice(0, MAX_RELEASE_COMMITS) };
+}
+
+const RELEASES_READ = 5;
+
 export type GithubReply<T> = { ok: true; value: T } | { ok: false; status: number; error: string };
 
 export interface GithubAppApi {
@@ -88,6 +114,7 @@ export interface GithubAppApi {
   issue(repo: string, number: number): Promise<GithubReply<GithubIssueInfo>>;
   closeIssue(repo: string, number: number, reason: "completed" | "not_planned", body: string): Promise<GithubReply<{ url: string | null }>>;
   rules(repo: string): Promise<GithubReply<GithubRulesInfo>>;
+  releases(repo: string, known: readonly string[]): Promise<GithubReply<GithubReleaseInfo[]>>;
   canPush(repo: string, userToken: string): Promise<GithubReply<boolean>>;
 }
 
@@ -235,6 +262,28 @@ export function githubAppFrom(opts: { appId?: string | null; privateKey?: string
       ]);
       const list = rules.ok ? ((await rules.json()) as unknown) : [];
       return { ok: true, value: rulesFrom(m, Array.isArray(list) ? (list as BranchRule[]) : [], info.ok ? ((await info.json()) as BranchInfo) : {}) };
+    },
+    releases: async (repo, known) => {
+      const t = await token(repo);
+      if (!t.ok) return t;
+      const res = await get(`${api}/repos/${repo}/releases?per_page=${RELEASES_READ + 1}`, { headers: headers(t.value) });
+      if (!res.ok) return fail(res, "releases");
+      const list = ((await res.json()) as { tag_name?: string; draft?: boolean; published_at?: string | null }[]).flatMap((r) =>
+        !r.draft && typeof r.tag_name === "string" && r.tag_name.trim() && r.published_at ? [{ tag: r.tag_name, at: Date.parse(r.published_at) || 0 }] : [],
+      );
+      const out: GithubReleaseInfo[] = [];
+      for (const [i, { tag, at }] of list.slice(0, RELEASES_READ).entries()) {
+        if (known.includes(tag)) continue;
+        const prev = list[i + 1]?.tag;
+        const url = prev
+          ? `${api}/repos/${repo}/compare/${encodeURIComponent(prev)}...${encodeURIComponent(tag)}?per_page=${MAX_RELEASE_COMMITS}`
+          : `${api}/repos/${repo}/commits?sha=${encodeURIComponent(tag)}&per_page=100`;
+        const commits = await get(url, { headers: headers(t.value) });
+        if (!commits.ok) return fail(commits, `the commits of ${tag}`);
+        const body = (await commits.json()) as { commits?: Commit[] } | Commit[];
+        out.push(releaseFrom(tag, at, Array.isArray(body) ? body : (body.commits ?? [])));
+      }
+      return { ok: true, value: out.reverse() };
     },
     closeIssue: async (repo, number, reason, body) => {
       const t = await token(repo);

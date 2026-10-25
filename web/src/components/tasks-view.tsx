@@ -1,11 +1,13 @@
 import { CancelCircleIcon, CheckmarkCircle02Icon, Loading03Icon } from "@hugeicons/core-free-icons"
-import { Component, createRef, type ReactNode } from "react"
+import { Component, createRef, useRef, useState, type ReactNode } from "react"
 
-import { colorOf, taskId, tasksAwaitingPeople, type AskHead, type ChannelState, type Task } from "@kiwi/core/state.ts"
+import { MAX_GOAL_NAME } from "@kiwi/core/protocol.ts"
+import { colorOf, mayNameGoal, taskId, tasksAwaitingPeople, type AskHead, type ChannelState, type Task } from "@kiwi/core/state.ts"
+import { versionName } from "@kiwi/core/status.ts"
 import { taskPr, type PrChecks } from "@kiwi/core/work.ts"
 import { formatAgoShort, memberName } from "@/lib/format"
 import { labelOf } from "@/lib/task-labels"
-import { taskGroups, type View } from "@/lib/views"
+import { taskGroups, type GroupHead, type View } from "@/lib/views"
 import { cx } from "@/lib/utils"
 import { doingNow, type AgentNow } from "./agent-strip"
 import { Icon } from "./icon"
@@ -88,7 +90,7 @@ function TaskRow({
           <span className="flex min-w-0 items-center gap-1.5 text-meta text-ink-3">
             <span className="shrink-0 tabular-nums">{taskId(task.id)}</span>
             <span aria-hidden>·</span>
-            <span className="shrink-0">{task.owner ? memberName(owner, task.owner) : "unassigned"}</span>
+            <span className="shrink-0">{task.owner ? memberName(owner, task.owner) : task.leftBy ? `${memberName(state.members.get(task.leftBy), task.leftBy)} left` : "unassigned"}</span>
             <span aria-hidden>·</span>
             {waiting ? (
               <DecisionMark />
@@ -98,7 +100,7 @@ function TaskRow({
                 <span className="truncate">{doing.text}</span>
               </span>
             ) : (
-              <span className="truncate">{labelOf(task)}</span>
+              <span className="truncate">{labelOf(state, task)}</span>
             )}
           </span>
         </span>
@@ -116,14 +118,131 @@ function TaskRow({
   )
 }
 
-function AskGroup({ ask, count, state, children }: { ask: AskHead | null; count: number; state: ChannelState; children: ReactNode }) {
+function GoalName({ ask, onSave, onDone }: { ask: AskHead; onSave: (name: string | null) => Promise<void>; onDone: () => void }) {
+  const [value, setValue] = useState(ask.goal ?? "")
+  const [saving, setSaving] = useState(false)
+  const busy = useRef(false)
+  const save = async () => {
+    if (busy.current) return
+    const name = value.trim()
+    if (name === (ask.goal ?? "")) return onDone()
+    busy.current = true
+    setSaving(true)
+    try {
+      await onSave(name || null)
+      onDone()
+    } catch {
+      // The send failed and onSave said so: keep the field open with what was typed.
+      busy.current = false
+      setSaving(false)
+    }
+  }
+  return (
+    <input
+      autoFocus
+      aria-label={`Goal of #${ask.id}`}
+      value={value}
+      maxLength={MAX_GOAL_NAME}
+      disabled={saving}
+      placeholder="The goal in plain words"
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={() => void save()}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault()
+          void save()
+        } else if (e.key === "Escape") {
+          e.preventDefault()
+          e.stopPropagation()
+          busy.current = true
+          onDone()
+        }
+      }}
+      className="min-w-0 flex-1 rounded-ctl bg-transparent px-2 py-0.5 text-ui font-semibold text-ink edge placeholder:font-normal placeholder:text-ink-3"
+    />
+  )
+}
+
+function AskGroup({
+  ask,
+  count,
+  state,
+  me,
+  onJump,
+  onNameGoal,
+  children,
+}: {
+  ask: AskHead | null
+  count: number
+  state: ChannelState
+  me: string
+  onJump: (seq: number) => void
+  onNameGoal: (ask: number, name: string | null) => Promise<void>
+  children: ReactNode
+}) {
+  const [naming, setNaming] = useState(false)
   const words = ask?.words.trim() ?? ""
-  const label = ask ? (words ? `“${words}”` : `#${ask.id}`) : "Unfiled"
-  const meta = ask ? `${memberName(state.members.get(ask.by), ask.by)} · #${ask.id}` : "No person's message holds these"
+  const said = words ? `“${words}”` : `#${ask?.id}`
+  const label = ask ? (ask.goal ?? said) : "Unfiled"
+  const by = ask ? memberName(state.members.get(ask.by), ask.by) : ""
+  const may = !!ask && mayNameGoal(state, me, ask)
+  return (
+    <section aria-label={label} className="group/goal pt-4">
+      <div data-slide={`g${ask?.id ?? "unfiled"}`}>
+        <h2 title={ask?.goal ? undefined : words || undefined} className={cx("flex min-w-0 items-baseline gap-2 px-3 text-ui font-semibold", naming && "pb-1.5")}>
+          {ask && naming ? <GoalName ask={ask} onSave={(name) => onNameGoal(ask.id, name)} onDone={() => setNaming(false)} /> : <span className="truncate">{label}</span>}
+          {!naming && <span className="shrink-0 font-normal text-ink-3 tabular-nums">{count}</span>}
+          {may && !naming && (
+            <button
+              type="button"
+              onClick={() => setNaming(true)}
+              className="ml-auto shrink-0 rounded-row px-1.5 text-meta font-normal text-ink-3 opacity-0 transition-opacity group-hover/goal:opacity-100 hover:text-ink focus-visible:opacity-100 pointer-coarse:opacity-100"
+            >
+              {ask.goal ? "Rename" : "Name the goal"}
+            </button>
+          )}
+        </h2>
+        {ask ? (
+          <p className="flex min-w-0 items-baseline gap-1.5 px-3 pb-1.5 text-meta text-ink-3">
+            <button
+              type="button"
+              title={ask.goal ? words || undefined : undefined}
+              onClick={() => onJump(ask.id)}
+              className="shrink-0 tabular-nums underline decoration-line underline-offset-2 hover:text-ink hover:decoration-ink-3"
+            >
+              from #{ask.id}
+            </button>
+            <span aria-hidden>·</span>
+            <span className="shrink-0">{by}</span>
+          </p>
+        ) : (
+          <p className="truncate px-3 pb-1.5 text-meta text-ink-3">No person's message holds these</p>
+        )}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+type DoneHead = Exclude<GroupHead, { kind: "ask" }>
+
+function doneText(head: DoneHead): { label: string; meta: string; slide: string } {
+  switch (head.kind) {
+    case "next":
+      return { label: head.name ? `Next: ${versionName(head.name)}` : "Next release", meta: "Merged, not in a release yet", slide: "gnext" }
+    case "release":
+      return { label: `Shipped in ${versionName(head.tag)}`, meta: `Released ${new Date(head.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`, slide: `grelease:${head.tag}` }
+    case "cancelled":
+      return { label: "Cancelled", meta: "Closed without shipping", slide: "gcancelled" }
+  }
+}
+
+function DoneGroup({ head, count, children }: { head: DoneHead; count: number; children: ReactNode }) {
+  const { label, meta, slide } = doneText(head)
   return (
     <section aria-label={label} className="pt-4">
-      <div data-slide={`g${ask?.id ?? "unfiled"}`}>
-        <h2 title={words || undefined} className="flex min-w-0 items-baseline gap-2 px-3 text-ui font-semibold">
+      <div data-slide={slide}>
+        <h2 className="flex min-w-0 items-baseline gap-2 px-3 text-ui font-semibold">
           <span className="truncate">{label}</span>
           <span className="shrink-0 font-normal text-ink-3 tabular-nums">{count}</span>
         </h2>
@@ -182,6 +301,9 @@ export function TasksView({
   empty,
   open,
   onOpen,
+  me,
+  onJump,
+  onNameGoal,
 }: {
   state: ChannelState
   now: number
@@ -191,6 +313,9 @@ export function TasksView({
   empty?: ReactNode
   open: number | null
   onOpen: (id: number) => void
+  me: string
+  onJump: (seq: number) => void
+  onNameGoal: (ask: number, name: string | null) => Promise<void>
 }) {
   const groups = taskGroups(state, view, now)
   const prs = groups.some((g) => g.tasks.some((t) => taskPr(state, t.id)))
@@ -218,15 +343,24 @@ export function TasksView({
     <Reorder order={order} rows={groups.reduce((n, g) => n + g.tasks.length, 0)}>
       {showNeeds && <div className="px-3">{needs}</div>}
       {view === "needs" && !needs && <p className="px-3 pt-6 text-ui text-ink-3">Nothing needs you right now.</p>}
-      {groups.map((g) => (
-        <AskGroup key={g.key} ask={g.ask} count={g.tasks.length} state={state}>
+      {groups.map((g) => {
+        const rows = (
           <ul className="divide-y divide-line">
             {g.tasks.map((t) => (
               <TaskRow key={t.id} task={t} state={state} now={now} agent={t.owner ? byName.get(t.owner) : undefined} waiting={waiting.has(t.id)} open={open === t.id} prs={prs} onOpen={onOpen} />
             ))}
           </ul>
-        </AskGroup>
-      ))}
+        )
+        return g.head.kind === "ask" ? (
+          <AskGroup key={g.key} ask={g.head.ask} count={g.tasks.length} state={state} me={me} onJump={onJump} onNameGoal={onNameGoal}>
+            {rows}
+          </AskGroup>
+        ) : (
+          <DoneGroup key={g.key} head={g.head} count={g.tasks.length}>
+            {rows}
+          </DoneGroup>
+        )
+      })}
       {!groups.length && view !== "everything" && view !== "needs" && <p className="px-3 pt-6 text-ui text-ink-3">Nothing here right now.</p>}
     </Reorder>
   )

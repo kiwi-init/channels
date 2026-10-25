@@ -6,10 +6,10 @@
 // Conflicts resolve deterministically: the earlier sequence number wins.
 
 export { fold } from "./state/fold.ts";
-export { askGroups, askRefusal, heldBy, holdsWork, type AskGroup } from "./state/asks.ts";
+export { askGroups, askRefusal, heldBy, holdsWork, mayNameGoal, type AskGroup } from "./state/asks.ts";
 export { allowedOnHold, answersDecisions, colorOf, decidersOf, humanOf, isLeadRole, isPerson, ON_HOLD, ownerOf } from "./state/people.ts";
 export { chooseThread, dmPlace, inGeneral, longForGeneral, MAIN, placeFromKey, placeKey, tasksAwaitingPeople, threadMembers, wentTo } from "./state/places.ts";
-export { issueOf, prChecks, prKey, rulesOf, type GithubPr, type GithubRules } from "./state/github.ts";
+export { issueOf, prChecks, prKey, releaseOf, rulesOf, type GithubPr, type GithubRelease, type GithubRules } from "./state/github.ts";
 export { outsideRepos, reposOf } from "./state/repos.ts";
 export { LEASE_WAIT_MS, nextIn, placeIn } from "./state/leases.ts";
 export { unnamedAsks, unnamedTasks } from "./state/compact.ts";

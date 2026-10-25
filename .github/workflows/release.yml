@@ -1,8 +1,10 @@
-# A release, X.Y.Z: stamp it in a pull request first, then tag the stamp's commit on main.
-#   bun scripts/stamp.ts vX.Y.Z      # the version in src/version.ts, both package.json files and the
-#                                    # site's download names, and CHANGELOG.md's section; open a PR,
-#                                    # merge it on its green ci-ok
-#   git tag vX.Y.Z <that commit> && git push origin vX.Y.Z
+# A release, YYYY.M.PATCH (a date: the patch counts up within the month and starts at 0 the next;
+# bun scripts/stamp.ts --next prints the next tag): stamp it in a pull request first, then tag the
+# stamp's commit on main.
+#   bun scripts/stamp.ts vYYYY.M.PATCH   # the version in src/version.ts, both package.json files and
+#                                        # the site's download names, and CHANGELOG.md's section; open
+#                                        # a PR, merge it on its green ci-ok
+#   git tag vYYYY.M.PATCH <that commit> && git push origin vYYYY.M.PATCH
 # Builds kiwi and the Channels desktop app for every platform from the tagged commit stamped
 # with the tag's version (scripts/stamp.ts, which then changes nothing), on GitHub's machines,
 # publishes the files with checksums and a signed build-provenance attestation, so anyone can
@@ -140,11 +142,11 @@ jobs:
 
   # main learns the release. A tag on the stamp's commit (the stamp landed as a PR) leaves an empty
   # patch, and the job passes there without asking for the bus app's token. Otherwise the stamp lands
-  # as one "kiwi X.Y.Z" commit (scripts/changelog.ts leaves those out), pushed by the GitHub App that
+  # as one "kiwi YYYY.M.PATCH" commit (scripts/changelog.ts leaves those out), pushed by the GitHub App that
   # may bypass main's pull request rule. Skipped for a release candidate, when main already says this
   # version, and when main is past it (a fix released from an older commit). If main moved and the
   # stamp no longer applies, this job fails after the release is out: run bun scripts/stamp.ts
-  # vX.Y.Z on main in a PR.
+  # vYYYY.M.PATCH on main in a PR.
   bump-main:
     needs: publish
     if: ${{ !contains(github.ref_name, '-') }}
@@ -225,6 +227,61 @@ jobs:
             [ "$cmp" -lt 0 ] || { echo "main already says $v or later: nothing to commit"; exit 0; }
             git apply --3way "$patch"
             git commit -q -a -m "kiwi $v" -m "The release's stamp from $GITHUB_REF_NAME: the version in src/version.ts, package.json, desktop/package.json and the site's download names, and CHANGELOG.md's section." -m "Agent: release.yml on behalf of $who"
+            git push origin HEAD:main && exit 0
+          done
+          exit 1
+
+  bump-tap:
+    needs: publish
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Download SHA256SUMS
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS --dir "$RUNNER_TEMP"
+
+      - id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.BUS_APP_CLIENT_ID }}
+          private-key: ${{ secrets.BUS_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: homebrew-tap
+          permission-contents: write
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: ${{ github.repository_owner }}/homebrew-tap
+          ref: main
+          path: tap
+          token: ${{ steps.app.outputs.token }}
+
+      - name: Bump the cask and the formula
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          APP: ${{ steps.app.outputs.app-slug }}
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          id=$(gh api "users/$APP%5Bbot%5D" --jq .id)
+          who=$(gh api "users/$GITHUB_ACTOR" --jq '.name // .login')
+          cd tap
+          git config user.name "$APP[bot]"
+          git config user.email "$id+$APP[bot]@users.noreply.github.com"
+          for attempt in 1 2 3; do
+            git fetch -q origin main && git reset -q --hard origin/main
+            bun ../scripts/brew-bump.ts "$GITHUB_REF_NAME" "$RUNNER_TEMP/SHA256SUMS" .
+            git diff --quiet && { echo "the tap already installs $v: nothing to commit"; exit 0; }
+            git commit -q -a -m "channels $v, kiwi $v" -m "From $GITHUB_REF_NAME's SHA256SUMS: the version and sha256 of Casks/channels.rb and Formula/kiwi.rb." -m "Agent: release.yml on behalf of $who"
             git push origin HEAD:main && exit 0
           done
           exit 1

@@ -5,20 +5,25 @@ import { sectionFor, sectionIn, upsert } from "./changelog.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const VERSION_RE = String.raw`\d+\.\d+\.\d+(?:-[a-z]+\.\d+)?`;
+const DATE_RE = String.raw`20\d\d\.(?:[1-9]|1[0-2])\.(?:0|[1-9]\d*)`;
 
 export const FILES = ["src/version.ts", "package.json", "desktop/package.json", "site/app.js", "site/README.md"] as const;
 export type Stamped = (typeof FILES)[number];
 
 export function versionOf(tag: string): string {
-  const m = new RegExp(`^v(${VERSION_RE})$`).exec(tag.trim());
-  if (!m?.[1]) throw new Error(`${tag} isn't a release tag: vX.Y.Z, or vX.Y.Z-rc.N for a pre-release`);
+  const m = new RegExp(`^v(${DATE_RE}(?:-[a-z]+\\.\\d+)?)$`).exec(tag.trim());
+  if (!m?.[1]) {
+    throw new Error(`${tag} isn't a release tag: vYYYY.M.PATCH, like v2026.10.0, or vYYYY.M.PATCH-rc.N for a pre-release`);
+  }
   return m[1];
 }
 
-export function nextPatch(version: string): string {
+export function nextVersion(version: string, now: Date): string {
   const [core = "", pre] = version.split("-", 2);
-  const [major = 0, minor = 0, patch = 0] = core.split(".").map(Number);
-  return pre ? core : `${major}.${minor}.${patch + 1}`;
+  if (pre && new RegExp(`^${DATE_RE}$`).test(core)) return core;
+  const month = `${now.getUTCFullYear()}.${now.getUTCMonth() + 1}`;
+  const [year = 0, mon = 0, patch = 0] = core.split(".").map(Number);
+  return `${year}.${mon}` === month ? `${month}.${patch + 1}` : `${month}.0`;
 }
 
 const NAMES = new RegExp(`Channels-${VERSION_RE}-`, "g");
@@ -54,12 +59,12 @@ if (import.meta.main) {
   const { values, positionals } = parseArgs({ args: Bun.argv.slice(2), allowPositionals: true, options: { next: { type: "boolean" } } });
   if (values.next) {
     const { VERSION } = await import("../src/version.ts");
-    console.log(`v${nextPatch(VERSION)}`);
+    console.log(`v${nextVersion(VERSION, new Date())}`);
     process.exit(0);
   }
   const tag = positionals[0];
   if (!tag) {
-    console.error("usage: bun scripts/stamp.ts vX.Y.Z   (or --next: the tag after src/version.ts's version)");
+    console.error("usage: bun scripts/stamp.ts vYYYY.M.PATCH   (or --next: the tag after src/version.ts's version)");
     process.exit(2);
   }
   const version = versionOf(tag);

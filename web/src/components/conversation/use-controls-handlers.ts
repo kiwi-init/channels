@@ -1,4 +1,5 @@
 import { personaScopes } from "@kiwi/core/personality.ts"
+import { handBackText, heldBy } from "@kiwi/core/handback.ts"
 import { newRoomId } from "@kiwi/core/state.ts"
 import type { Room } from "@kiwi/core/state/types.ts"
 import { describeScopes, SCOPES, wireScopes } from "@kiwi/core/scopes.ts"
@@ -107,6 +108,9 @@ export function useControlsHandlers({
       await refreshRequests()
     },
     onRemove: async (m) => {
+      const held = heldBy(state, m.name)
+      const lead = state.lead && state.lead !== m.name ? [state.lead] : undefined
+      if (held.length) await send(handBackText(state, m.name, "removed", held), lead ? { to: lead } : {})
       await ch.remove(m.pk)
       await refreshRoster()
     },

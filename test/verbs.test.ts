@@ -198,6 +198,23 @@ describe("ten verbs", () => {
     expect((await run(agent, "note", "branch", "--ttl", "7d")).code).toBe(1);
   });
 
+  test("task add keeps titles short: a long one exits 1 with no id on stdout, and the spec goes in --body or --file", async () => {
+    const want = /#(\d+)/.exec(await ok(owner, "--as", "human", "send", "the launcher names the wrong package"))![1]!;
+    const long = await run(agent, "task", "add", "Linux: the missing-library message names the wrong Fedora package", "--ask", want);
+    expect(long.code).toBe(1);
+    expect(long.out).not.toMatch(/T\d+/);
+    expect(long.err).toContain("move the rest into the body (--body");
+    const spec = "Electrobun's launcher names libappindicator-gtk3 (linux_dependencies.zig:136).";
+    const withBody = /^added (T\d+)/m.exec(await ok(agent, "task", "add", "Name the right Fedora package", "--ask", want, "--body", spec))![1]!;
+    expect(await ok(agent, "task", "show", withBody)).toContain(spec);
+    const file = join(scratch("spec"), "spec.md");
+    writeFileSync(file, "## What\nName libayatana-appindicator-gtk3.\n");
+    const fromFile = /^added (T\d+)/m.exec(await ok(agent, "task", "add", "Fedora's install line", "--ask", want, "--file", file))![1]!;
+    expect(await ok(agent, "task", "show", fromFile)).toContain("Name libayatana-appindicator-gtk3.");
+    const twice = await run(agent, "task", "add", "Twice", "--ask", want, "--body", "a", "--file", file);
+    expect([twice.code, twice.err]).toEqual([1, expect.stringContaining("give the task's body once")]);
+  });
+
   test("status is one screen; task alone is the board, by ask; the old names still answer", async () => {
     const unfiled = await run(agent, "task", "add", "write the docs");
     expect(unfiled.code).toBe(1);
@@ -251,6 +268,19 @@ describe("review rounds through the CLI", () => {
     expect(insecure.code).not.toBe(0);
     expect(insecure.err).toContain("starts with https");
     expect((await run(dev, "task", "proof", `T${t}`)).err).toContain("usage: kiwi task proof");
+  });
+
+  test("start is the one way to take a task: two racing for an unowned one get one winner, the other is told who has it, and on your own task it only starts it", async () => {
+    const t = taskNo(await ok(dev, "task", "add", "take me", "--ask", want));
+    const [a, b] = await Promise.all([run(dev, "task", "start", `T${t}`), run(rev, "task", "start", `T${t}`)]);
+    expect([a.code, b.code].sort()).toEqual([0, 1]);
+    const won = a.code === 0 ? "dev" : "rev";
+    expect((a.code === 0 ? b : a).err).toMatch(new RegExp(`T${t} is (taken|owned) by ${won}`));
+    expect(JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"))).toMatchObject({ state: "doing", owner: won });
+    expect(await ok(won === "dev" ? dev : rev, "task", "start", `T${t}`, "back on it")).toContain(`T${t} doing @${won}`);
+    const unowned = taskNo(await ok(dev, "task", "add", "start with a note", "--ask", want));
+    expect(await ok(dev, "task", "start", `T${unowned}`, "on it")).toContain(`T${unowned} doing @dev`);
+    expect(JSON.parse(await ok(dev, "task", "show", `T${unowned}`, "--json")).notes.at(-1)).toMatchObject({ by: "dev", text: "on it" });
   });
 
   test("review --review NAME from the reviewer hands the open round on: same round, same commit, and the new reviewer is told", async () => {

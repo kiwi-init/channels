@@ -91,7 +91,9 @@ describe("a PR finds its task by its branch", () => {
 describe("a task's PR, looked up from one index per fold", () => {
   const pr = (number: number, branch: string, state: "open" | "closed" | "merged", at: number) => ({ repo: "o/r", number, branch, state, at, seq: number });
   const stateWith = (prs: ReturnType<typeof pr>[]) =>
-    ({ branchPrefix: "T", github: { prs: new Map(prs.map((p) => [`o/r#${p.number}`, p])), checks: new Map(), issues: new Map(), rules: new Map() } }) as unknown as Parameters<typeof taskPr>[0];
+    ({ branchPrefix: "T", github: { prs: new Map(prs.map((p) => [`o/r#${p.number}`, p])), checks: new Map(), issues: new Map(), rules: new Map(), releases: new Map() } }) as unknown as Parameters<
+      typeof taskPr
+    >[0];
 
   test("an open PR wins over a newer closed one, the newest wins among equals, and the first stays on a tie", () => {
     const s = stateWith([pr(1, "T7-a", "merged", 30), pr(2, "T7-b", "open", 10), pr(3, "T8-a", "closed", 5), pr(4, "T8-b", "closed", 9), pr(5, "T9", "open", 4), pr(6, "T9-x", "open", 4)]);

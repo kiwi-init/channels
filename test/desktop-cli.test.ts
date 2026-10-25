@@ -28,11 +28,11 @@ test("the app's kiwi.js becomes a working kiwi in the install folder, built with
   const bundle = join(dir, "kiwi.js");
   writeFileSync(bundle, 'if (process.argv.includes("--version")) console.log("kiwi 9.9.9");\n');
   process.env["KIWI_INSTALL"] = join(dir, "bin");
-  const kept = await keepCli(bundle, "9.9.9");
-  expect(kept).toEqual({ path: join(dir, "bin", "kiwi"), version: "9.9.9", updated: true });
+  const kept = await keepCli(bundle, "9.9.9", []);
+  expect(kept).toEqual({ path: join(dir, "bin", "kiwi"), version: "9.9.9", updated: true, homebrew: false });
   expect(execFileSync(kept.path, ["--version"], { encoding: "utf8" }).trim()).toBe("kiwi 9.9.9");
   expect(readdirSync(join(dir, "bin"))).toEqual(["kiwi"]);
-  expect(await keepCli(bundle, "9.9.9")).toEqual({ path: kept.path, version: "9.9.9", updated: false });
+  expect(await keepCli(bundle, "9.9.9", [])).toEqual({ path: kept.path, version: "9.9.9", updated: false, homebrew: false });
 }, 30_000);
 
 test("a kiwi.js that doesn't build leaves nothing in the install folder", async () => {
@@ -40,7 +40,7 @@ test("a kiwi.js that doesn't build leaves nothing in the install folder", async 
   const bundle = join(dir, "kiwi.js");
   writeFileSync(bundle, 'import "./missing-module.js";\n');
   process.env["KIWI_INSTALL"] = join(dir, "bin");
-  await expect(keepCli(bundle, "9.9.9")).rejects.toThrow("didn't build");
+  await expect(keepCli(bundle, "9.9.9", [])).rejects.toThrow("didn't build");
   expect(readdirSync(join(dir, "bin"))).toEqual([]);
 }, 30_000);
 
@@ -51,7 +51,7 @@ test("a kiwi.js with a macro doesn't build: the compile refuses macros, so none 
   writeFileSync(join(dir, "m.ts"), `import { writeFileSync } from "node:fs";\nexport function m(): string {\n  writeFileSync(${JSON.stringify(seen)}, String(process.pid));\n  return "x";\n}\n`);
   writeFileSync(bundle, 'import { m } from "./m.ts" with { type: "macro" };\nif (process.argv.includes("--version")) console.log(`kiwi 9.9.9 ${m()}`);\n');
   process.env["KIWI_INSTALL"] = join(dir, "bin");
-  await expect(keepCli(bundle, "9.9.9")).rejects.toThrow("didn't build");
+  await expect(keepCli(bundle, "9.9.9", [])).rejects.toThrow("didn't build");
   expect(existsSync(seen)).toBe(false);
   expect(readdirSync(join(dir, "bin"))).toEqual([]);
 }, 30_000);
@@ -85,8 +85,8 @@ test.skipIf(process.platform === "win32")(
       `import { existsSync, readFileSync } from "node:fs";\n` +
         `import { keepCli } from ${JSON.stringify(join(import.meta.dir, "../desktop/src/cli.ts"))};\n` +
         `process.chdir(${JSON.stringify(proj)});\n` +
-        `await keepCli(${JSON.stringify(bundle)}, "9.9.9");\n` +
-        `await keepCli(${JSON.stringify(bundle)}, "9.9.9");\n` +
+        `await keepCli(${JSON.stringify(bundle)}, "9.9.9", []);\n` +
+        `await keepCli(${JSON.stringify(bundle)}, "9.9.9", []);\n` +
         `for (let i = 0; i < 100 && !(existsSync(${JSON.stringify(runs)}) && readFileSync(${JSON.stringify(runs)}, "utf8").includes("cleanup")); i++) await Bun.sleep(100);\n`,
     );
     const keyFd = openSync(key, "r");

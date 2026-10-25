@@ -1,15 +1,41 @@
 import * as Effect from "effect/Effect";
-import { CHECKPOINT_MAX_LENGTH, PROOF_LABEL_MAX_LENGTH, PROOF_URL_MAX_LENGTH, TASK_STATES, TASK_TITLE_MAX_LENGTH, ignored, type IssueRef, type TaskState, type Verdict } from "@kiwi/core/protocol.ts";
+import {
+  CHECKPOINT_MAX_LENGTH,
+  MAX_GOAL_NAME,
+  PROOF_LABEL_MAX_LENGTH,
+  PROOF_URL_MAX_LENGTH,
+  TASK_STATES,
+  TASK_BODY_MAX_LENGTH,
+  TASK_TITLE_LIMIT,
+  ignored,
+  type IssueRef,
+  type TaskState,
+  type Verdict,
+} from "@kiwi/core/protocol.ts";
 import { omit } from "@kiwi/core/omit.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { isPerson, openRound, revisedOut, taskId, type ChannelState, type ReviewRound, type Task } from "@kiwi/core/state.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { parseIssueRef, taskDigest, taskOfIssue } from "@kiwi/core/work.ts";
+import { handBackText, heldBy } from "@kiwi/core/handback.ts";
 import { branchAreas } from "../areas.ts";
 import { SessionMessaging } from "./messaging.ts";
 import { oneLook } from "./shared.ts";
 
 const CLAIM_TTL = 120_000;
+
+function titleRefusal(title: string): string | null {
+  if (title.length <= TASK_TITLE_LIMIT) return null;
+  return `the title is ${title.length} characters, and a task's title is at most ${TASK_TITLE_LIMIT} so people can read the board: keep the outcome in the title and move the rest into the body (--body "…" or --file spec.md)`;
+}
+
+function shortTitle(title: string): string {
+  const flat = title.replace(/\s+/g, " ").trim();
+  if (flat.length <= TASK_TITLE_LIMIT) return flat;
+  const cut = flat.slice(0, TASK_TITLE_LIMIT - 1);
+  const word = cut.lastIndexOf(" ");
+  return `${(word > TASK_TITLE_LIMIT / 2 ? cut.slice(0, word) : cut).trimEnd()}…`;
+}
 
 function judgedRound(t: Task, open: ReviewRound | undefined, round: number | undefined, at: string | undefined): Effect.Effect<ReviewRound, Rejected> {
   const id = taskId(t.id);
@@ -29,8 +55,10 @@ export class SessionTasks extends SessionMessaging {
   readonly taskAdd = Effect.fn("AgentSession.taskAdd")(
     { self: this },
     function* (this: SessionTasks, title: string, opts: { detail?: string; owner?: string; review?: string; re?: number; issue?: IssueRef; from?: number } = {}) {
-      if (title.length > TASK_TITLE_MAX_LENGTH)
-        return yield* new Rejected(`the title is ${title.length} characters, the most a task takes is ${TASK_TITLE_MAX_LENGTH}: shorten it and put the rest in --detail`);
+      const long = titleRefusal(title);
+      if (long) return yield* new Rejected(long);
+      if (opts.detail && opts.detail.length > TASK_BODY_MAX_LENGTH)
+        return yield* new Rejected(`the body is ${opts.detail.length} characters, the most a task's body takes is ${TASK_BODY_MAX_LENGTH}: link the rest (a doc, an issue) instead`);
       const { state } = yield* this.state();
       if (opts.re !== undefined && (!state.placeOf.has(opts.re) || ignored(state.trust.get(opts.re)))) return yield* new Rejected(`no message #${opts.re}`);
       if (opts.from !== undefined && !state.tasks.has(opts.from)) return yield* new Rejected(`no task ${taskId(opts.from)} to come from`);
@@ -54,6 +82,21 @@ export class SessionTasks extends SessionMessaging {
     oneLook,
   );
 
+  readonly nameGoal = Effect.fn("AgentSession.nameGoal")(
+    { self: this },
+    function* (this: SessionTasks, ask: number, name: string | null) {
+      const goal = name === null ? null : inlineText(name, 10_000);
+      if (goal !== null && !goal) return yield* new Rejected('a goal needs a name: kiwi goal 18 "0.27.7: the AppImage runs on Fedora"');
+      if (goal !== null && goal.length > MAX_GOAL_NAME) return yield* new Rejected(`a goal's name is at most ${MAX_GOAL_NAME} characters: say the outcome, the rest goes in the tasks`);
+      const { state } = yield* this.state();
+      if (!state.askHeads.has(ask)) return yield* new Rejected(`#${ask} isn't a person's message that tasks are filed under`);
+      const seq = yield* this.event({ op: "ask.name", ask, name: goal }, goal ? `goal of #${ask}: ${goal}` : `#${ask}'s goal unnamed`);
+      const after = yield* this.confirm(seq);
+      return after.askHeads.get(ask)!;
+    },
+    oneLook,
+  );
+
   readonly taskFromIssue = Effect.fn("AgentSession.taskFromIssue")(
     { self: this },
     function* (this: SessionTasks, ref: string, opts: { title?: string; detail?: string; owner?: string; review?: string; re?: number; from?: number } = {}) {
@@ -65,8 +108,10 @@ export class SessionTasks extends SessionMessaging {
       if (already) return yield* new Rejected(`${name} is already ${taskId(already.id)}: ${inlineText(already.title, 80)}`);
       const found = yield* this.ch.fx.githubIssue(issue.repo, issue.number);
       if (found.state === "closed") return yield* new Rejected(`${name} is closed on GitHub: reopen it first, or add the task without --issue`);
-      const title = (opts.title?.trim() || found.title.trim() || name).slice(0, TASK_TITLE_MAX_LENGTH);
-      const detail = opts.detail ?? [found.body.trim(), found.url].filter(Boolean).join("\n\n");
+      const full = opts.title?.trim() || found.title.trim() || name;
+      const title = opts.title?.trim() ? full : shortTitle(full);
+      const cut = title !== full.replace(/\s+/g, " ").trim();
+      const detail = opts.detail ?? [cut ? full : "", found.body.trim(), found.url].filter(Boolean).join("\n\n").slice(0, TASK_BODY_MAX_LENGTH);
       const id = yield* this.taskAdd(title, { ...opts, detail, issue });
       return { id, title, issue: name };
     },
@@ -120,8 +165,8 @@ export class SessionTasks extends SessionMessaging {
       const { state } = yield* this.state();
       const t = state.tasks.get(id);
       if (!t) return yield* new Rejected(`no task ${taskId(id)}`);
-      if (change.title !== undefined && change.title.length > TASK_TITLE_MAX_LENGTH)
-        return yield* new Rejected(`the title is ${change.title.length} characters, the most a task takes is ${TASK_TITLE_MAX_LENGTH}: shorten it and put the rest in a note`);
+      const long = change.title === undefined ? null : titleRefusal(change.title);
+      if (long) return yield* new Rejected(long);
       if (change.checkpoint && !change.note?.trim()) return yield* new Rejected("a checkpoint says where the work stands: give its text, or --file note.md");
       if (change.checkpoint && change.note && change.note.length > CHECKPOINT_MAX_LENGTH)
         return yield* new Rejected(`the checkpoint is ${change.note.length} characters, the most it takes is ${CHECKPOINT_MAX_LENGTH}: keep what a new session needs to carry on`);
@@ -176,6 +221,19 @@ export class SessionTasks extends SessionMessaging {
         yield* Effect.ignoreCause(this.send(taskDigest(after, messages, closed), { kind: "done", task: id }));
       }
       return after;
+    },
+    oneLook,
+  );
+
+  readonly handBack = Effect.fn("AgentSession.handBack")(
+    { self: this },
+    function* (this: SessionTasks) {
+      const { state } = yield* this.state();
+      const mine = heldBy(state, this.me);
+      if (!mine.length) return [];
+      const lead = state.lead && state.lead !== this.me ? [state.lead] : undefined;
+      yield* this.send(handBackText(state, this.me, "left", mine), lead ? { to: lead } : {});
+      return mine.map((t) => t.id);
     },
     oneLook,
   );

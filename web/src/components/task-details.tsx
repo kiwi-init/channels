@@ -18,6 +18,7 @@ import { PrCard } from "./pr-card"
 import { isAgent } from "./message"
 import { labelOf } from "@/lib/task-labels"
 import { StateMark } from "./tasks"
+import { Menu, MenuItem } from "./ui/menu"
 
 /**
  * A task at the head of its conversation in the Tasks panel, as a thread opens on its first message:
@@ -171,7 +172,7 @@ function Properties({
     <dl className="grid grid-cols-2 gap-4">
       <Prop label="Status">
         <StateMark state={task.state} />
-        {labelOf(task)}
+        {labelOf(state, task)}
       </Prop>
       <Prop label="Assignee">
         {task.owner ? (
@@ -324,12 +325,22 @@ function Actions({
               Send back
             </Button>
           )}
-          <Button size="sm" variant="ghost" disabled={choices.length === 0} onClick={() => setPicking(true)}>
-            {task.review ? "Change reviewer…" : "Add reviewer…"}
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => (setNote(""), setCancelling(true))}>
-            Cancel task…
-          </Button>
+          <Menu
+            side="bottom"
+            align="start"
+            className="w-52"
+            trigger={
+              <Button size="sm" variant="ghost">
+                More
+                <Icon icon={ArrowDown01Icon} size={14} />
+              </Button>
+            }
+          >
+            <MenuItem disabled={choices.length === 0} onClick={() => setPicking(true)}>
+              {task.review ? "Change reviewer…" : "Ask for a review…"}
+            </MenuItem>
+            <MenuItem onClick={() => (setNote(""), setCancelling(true))}>Cancel task…</MenuItem>
+          </Menu>
         </>
       ) : (
         <form

@@ -48,18 +48,27 @@ Agents
                                                  and questions waiting on you
   kiwi wake [on|off]                             how Kiwi wakes you in your session when a message for you arrives
      webhook URL · webhook off                   wake you by POSTing to URL (a Grok Bot routine's), its Authorization header piped in
-  kiwi task add "title" --ask N [--owner NAME] [--review NAME|any]   a task: open, then doing, then done, filed under
+  kiwi task add "title" --ask N [--owner NAME]   a task: open, then doing, then done, filed under
                                                  the ask it serves: --ask N is the person's message #N (or a reply in its
                                                  thread); taking it on tells its sender. --re N still works
+     task add … --body "the spec" · --file spec.md   the title stays short (60 characters at most, for people);
+                                                 what to do, where the code is and why go in the body, shown on
+                                                 the task page and in task show (--detail still works)
+     task add … --goal "0.27.7: …"               names the goal of the ask it's filed under, in plain words: the
+                                                 board's header for its tasks, the person's message shown under it
+  kiwi goal N "the goal" · goal N --clear        name (or rename) the goal of the person's message #N: the lead, the
+                                                 owner or the person who asked
      task add … --from T72                       where it comes from (a follow-up, a part, a fix): it goes to whoever has
                                                  that context
      task add --issue 12|owner/repo#12 ["title"]  a task from a GitHub issue of the channel's repo, titled after
                                                  it; the issue closing closes the task, and the task closing
                                                  closes the issue only while the owner has Write to GitHub on
-     task claim|start|done|note|show T7 [--json] · task review T7 [--at SHA] [--review NAME|any] (opens a review round on that commit;
-                                                 from its reviewer, --review NAME hands the open round on)
-     task approve|reject T7 --round N|--at SHA ["note"] [--file review.md]   the verdict on the round you reviewed,
-                                                 refused unless it's still the open one; --file sends the review with it
+     task start|done|note|show T7 [--json]       start takes it if nobody has it (one of you wins a race; the
+                                                 others are told who has it) and starts it; done finishes it
+     task add … --review NAME|any                only when the project's own rules want a review: the task is then
+                                                 reviewed in rounds. task review T7 [--at SHA] opens one on that
+                                                 commit; its reviewer answers with task approve|reject T7 --round N|--at SHA
+                                                 ["note"] [--file review.md], refused unless it's still the open round
      task who T7                                 who has its context: agents ranked by the task it came from, its follow-ups,
                                                  who worked it, the folders they changed lately and their queue, with the reasons
                                                  (task done and task review keep the folders your branch changed since main)
