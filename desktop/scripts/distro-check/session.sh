@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -u
 
-usage="usage: session.sh none|gnome-keyring|kwallet TAG APPIMAGE RESULTS LOGS tray|no-tray (as the desktop user, under dbus-run-session)"
+usage="usage: session.sh none|gnome-keyring|kwallet|kwallet-unanswered TAG APPIMAGE RESULTS LOGS tray|no-tray (as the desktop user, under dbus-run-session)"
 keyring=${1:?$usage}
 tag=${2:?$usage}
 image=${3:?$usage}
@@ -13,7 +13,7 @@ ok() { echo "ok   [$tag] $*" | tee -a "$results"; }
 bad() { echo "FAIL [$tag] $*" | tee -a "$results"; }
 info() { echo "     [$tag] $*" | tee -a "$results"; }
 
-weston --backend=headless --socket=kiwi --width=1280 --height=800 --idle-time=0 --debug > "$logs/$tag-weston.log" 2>&1 &
+weston --backend=headless --socket=kiwi --width=1280 --height=800 --idle-time=0 --renderer=pixman --debug > "$logs/$tag-weston.log" 2>&1 &
 weston=$!
 for _ in $(seq 1 50); do [ -S "$XDG_RUNTIME_DIR/kiwi" ] && break; sleep 0.2; done
 [ -S "$XDG_RUNTIME_DIR/kiwi" ] || { bad "weston didn't start: $(tail -n 3 "$logs/$tag-weston.log" | tr '\n' ' ')"; exit 0; }
@@ -34,6 +34,13 @@ case "$keyring" in
     for _ in $(seq 1 50); do grep -q "opened by PAM" "$logs/$tag-wallet.log" && break; sleep 0.2; done
     info "$(basename "$daemon"), its wallet made and opened at login as kwallet-pam does: $(grep -m1 -E "opened by PAM|PAM" "$logs/$tag-wallet.log" | cut -c1-120)"
     ;;
+  kwallet-unanswered)
+    export XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6
+    daemon=$(command -v ksecretd || command -v kwalletd6)
+    HOME=$(mktemp -d) QT_QPA_PLATFORM=offscreen "$daemon" > "$logs/$tag-wallet.log" 2>&1 &
+    sleep 3
+    info "$(basename "$daemon") with no wallet yet: its first-use dialog is offscreen, so nobody answers it"
+    ;;
 esac
 owner=$(gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.GetNameOwner org.freedesktop.secrets 2> /dev/null)
 info "Secret Service: ${owner:-nobody owns org.freedesktop.secrets}"
@@ -49,7 +56,13 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 if [ -n "$up" ]; then ok "a native Wayland window (xdg_toplevel) after $(($(date +%s) - start)) s"; else bad "no Wayland window in 60 s, the app $(kill -0 "$pid" 2> /dev/null && echo "still runs" || echo "exited")"; fi
+if [ "$keyring" = kwallet-unanswered ]; then
+  if [ -n "$up" ] && [ $(($(date +%s) - start)) -le 10 ]; then ok "the window came without waiting on the keyring"; else bad "the window waited on a keyring that doesn't answer"; fi
+  if grep -q "hasn't answered" "$logs/$tag-app.log"; then ok "the app says it's waiting for the keyring"; else bad "the app didn't say it's waiting for the keyring"; fi
+fi
 sleep 15
+shot=$(cd "$logs" && timeout 10 weston-screenshooter > /dev/null 2>&1; ls -t wayland-screenshot-*.png 2> /dev/null | head -n 1)
+if [ -n "$shot" ]; then mv "$logs/$shot" "$logs/$tag-window.png"; info "screenshot: $tag-window.png"; else info "no screenshot: weston-screenshooter didn't write one"; fi
 if kill -0 "$pid" 2> /dev/null; then ok "still running 15 s later"; else bad "the app exited: $(tail -n 5 "$logs/$tag-app.log" | tr '\n' ' ' | cut -c1-300)"; fi
 
 web=$(pgrep -s "$pid" -x WebKitWebProces | head -n 1)
@@ -62,7 +75,9 @@ done
 if [ -z "$web" ]; then bad "no WebKitWebProcess of the app's"; elif [ -n "$boxed" ]; then ok "its web process runs in WebKitGTK's bubblewrap sandbox (bwrap $boxed)"; else bad "its web process $web runs without bwrap: $(grep -h "sandbox is off" "$logs/$tag-app.log" | head -n 1 | cut -c1-200)"; fi
 
 registered=$(grep -c 'RegisterStatusNotifierItem' "$logs/$tag-watcher.log")
-if [ "$tray" = tray ]; then
+if [ "$keyring" = kwallet-unanswered ]; then
+  :
+elif [ "$tray" = tray ]; then
   if [ "$registered" -gt 0 ]; then ok "its tray icon registered with the StatusNotifierWatcher"; else bad "no tray icon registered, though libayatana-appindicator is installed and a watcher runs"; fi
 elif [ "$registered" -eq 0 ]; then
   ok "no tray icon, as expected without libayatana-appindicator, and the app runs on"
@@ -77,6 +92,9 @@ stored=$(timeout 20 secret-tool search --all service Channels 2>&1 | grep -E '^(
 case "$keyring" in
   none)
     if [ -n "$plain" ]; then ok "no Secret Service: the app keeps its keys unencrypted (0600) and says so"; else bad "no Secret Service, and the app didn't say where its keys went"; fi
+    ;;
+  kwallet-unanswered)
+    if [ -n "$plain" ]; then bad "while the keyring hasn't answered, the app kept its keys unencrypted: $(echo "$plain" | cut -c1-160)"; else ok "while the keyring hasn't answered, the app keeps no keys unencrypted"; fi
     ;;
   *)
     if [ -n "$stored" ]; then ok "its store key is in the Secret Service ($keyring): $(echo "$stored" | cut -c1-200)"; else bad "nothing of Channels' in the Secret Service ($keyring)${plain:+; the app says: $(echo "$plain" | cut -c1-160)}"; fi

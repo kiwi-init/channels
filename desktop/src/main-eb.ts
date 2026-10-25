@@ -9,6 +9,7 @@ import { mark } from "./eb-startup.ts";
 import { dataDir, ebHost } from "./host-eb.ts";
 import { useHost } from "./host.ts";
 import { keepDaemonAlive, watchPage } from "./keep-alive-eb.ts";
+import { KEYRING_GRACE_MS, openedWithin } from "./keyring-wait.ts";
 import { startKeys } from "./keys-start-eb.ts";
 import { startLife } from "./life-updates-eb.ts";
 import { catchMainErrors, logMainError, windowFailure } from "./main-log.ts";
@@ -30,16 +31,25 @@ Electrobun.events.on("open-url", (e: { data?: { url?: unknown } }) => {
 lockInternalRpc(internalRpcHandlers);
 
 async function start(instance: Extract<Instance, { kind: "first" }>): Promise<void> {
-  await openStoreForThisBuild();
-  startKeys();
+  const asked = performance.now();
+  const opening = openStoreForThisBuild();
+  const inTime = await openedWithin(opening, KEYRING_GRACE_MS);
+  if (inTime) startKeys();
+  else console.error(`Channels: the keyring hasn't answered in ${KEYRING_GRACE_MS / 1000} s, so the window says it's waiting for it`);
   watchPage();
   followColorScheme();
   watchDrops();
   watchPaste();
-  const win = await createWindow();
+  const win = await createWindow(!inTime);
   if (!win) {
     instance.release();
     return;
+  }
+  if (!inTime) {
+    await opening;
+    console.error(`Channels: the keyring answered after ${Math.round((performance.now() - asked) / 1000)} s; opening the app`);
+    startKeys();
+    ebHost.reload();
   }
   driveForTests(win);
   startLife(win, instance.release);
