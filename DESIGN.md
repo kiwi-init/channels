@@ -14,8 +14,9 @@ Canonical sources: `web/src/index.css` (`:root`, `:root[data-theme]`,
 
 A quiet Messages-like conversation. White `#ffffff` / near-black `#161618`
 canvas, Apple system blue `#007aff` (light) / `#0a84ff` (dark), the system font,
-small purposeful motion, one pop shadow. What's chosen wears one quiet solid
-fill; everything around it is plain, so it reads as meant.
+small purposeful motion, one shell with the page floating on it. What's
+chosen wears one quiet solid fill; everything around it is plain, so it
+reads as meant.
 
 ## 2. Theme architecture
 
@@ -24,8 +25,8 @@ fill; everything around it is plain, so it reads as meant.
   accent, accent-ink, accent-text, accent-wash, link, ring, alert,
   alert-fill, live,
   doing, warn, overlay, bubble-me, bubble-them, pick, head-*, avatar-*,
-  pop-edge, pop-shade, shadow-pop, shell, well, chosen`, plus `frame, panel,
-  edge, edge-strong` aliases, and the sizes `step, card-head, control`
+  pop-edge, pop-shade, shadow-pop, shadow-sheet, shell, well, chosen`, plus
+  `frame, panel, edge, edge-strong` aliases, and the sizes `step, card-head, control`
   (section 5).
 - Each token is written once as `light-dark(day, night)`. The system picks
   the side, unless `lib/theme.ts` set `data-theme` because the person chose
@@ -112,16 +113,21 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 - Buttons and rows use `row`; controls and inputs `ctl`; cards `card`;
   pictures `bubble`; the composer `dock`. Arbitrary `rounded-[Npx]` fails
   `ui-tokens.ts`.
-- One shadow: `pop` (`0 0 0 1px pop-edge, 0 16px 40px -12px pop-shade`).
-  No other shadows, and no coloured ones.
-- Two tones: the sidebar sits on `shell` (the `rail`, or the Mac's vibrancy
-  under `data-frost`), and the page beside it is a sheet of `canvas` (the
-  `sheet` utility: `step` in from the window's edges and from the sidebar,
-  `card` radius, the `pop` shadow), holding the header, the conversation
-  and the tasks. Details is a sheet of its own beside it, 8px apart. A
-  thread and the tasks panel slide over the page's right side as a sheet
-  lifted with the `pop` shadow (`sheet-over`): the page keeps its width and
-  scroll, and its centered column (`aside-room`) slides left only as far as
+- Two shadows, no coloured ones: `pop` (`0 0 0 1px pop-edge, 0 16px 40px
+  -12px pop-shade`) for what lifts over the canvas (popovers, dialogs, a
+  sheet sliding over the page), and `sheet` for the page itself: the same
+  hairline, a 1px contact shadow and a short drop that stays under it
+  (`0 6px 14px -8px`), so the gutters beside the page keep the shell's
+  own colour.
+- One shell: the sidebar, the page's toolbar and the gutters are one
+  surface, `shell` (the `rail`, or the Mac's vibrancy under `data-frost`),
+  with no fill, edge or shade of their own. Only the page floats: a sheet
+  of `canvas` (the `sheet` utility: `step` in from the window's edges and
+  from the sidebar, half a step under the toolbar, `card` radius, the
+  `sheet` shadow), holding the conversation and the tasks. Details is a
+  sheet of its own in the page's place. A thread and the tasks panel
+  slide over the page's right side as a sheet lifted with the `pop` shadow
+  (`sheet-over`), under the toolbar: the page keeps its width and scroll, and its centered column (`aside-room`) slides left only as far as
   its margin allows, so nothing reflows. `raised` and `field` are the
   canvas. Inside a sheet, rows, cards and search have no grey fill and no
   background of their own; they are separated by spacing and a thin 1px
@@ -242,8 +248,12 @@ From `design-tokens.ts`:
   the toggle hides the sidebar in a channel, and the toolbar then starts
   with the toggle and a conversation menu; hidden stays hidden across
   reloads.
-- The page's header is one toolbar, `card-head` tall, its controls
-  `control` round on its centre line: in the middle a pill on `well` with
+- The page's toolbar sits on the shell above the page, on the sidebar's
+  top line: `step` from the window's top, `card-head` tall, `step` in from
+  the page's edges, its controls `control` round on its centre line. A
+  sheet's own header (Details, a thread, the tasks panel) has the same
+  metrics: `step` from the sheet's top, `card-head` tall, `control`
+  buttons. In the middle of the toolbar a pill on `wash` with
   the channel's face, name and status (working, merged today, needs you),
   which opens Details; on the right Search, Tasks (an `alert` dot while
   something needs you) and Agents as icons that toggle. With Tasks open, the

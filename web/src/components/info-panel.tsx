@@ -95,9 +95,9 @@ export function InfoPanel({
 
   return (
     <aside aria-label="Details" className="flex min-w-0 flex-1 flex-col bg-canvas md:sheet" onKeyDown={(e) => e.key === "Escape" && back()}>
-      <header className="drag flex h-(--chrome-h) shrink-0 items-center gap-2 px-3">
-        <IconButton label={view === "details" ? "Close details" : "Back to details"} round className="glass size-9 text-ink" onClick={back}>
-          <Icon icon={ArrowLeft01Icon} size={18} />
+      <header className="drag flex h-(--chrome-h) shrink-0 items-center gap-2 px-3 md:mt-(--step) md:h-(--card-head) md:gap-(--step) md:px-(--step)">
+        <IconButton label={view === "details" ? "Close details" : "Back to details"} round className="no-drag size-9 md:size-(--control)" onClick={back}>
+          <Icon icon={ArrowLeft01Icon} size={15} />
         </IconButton>
         <span className="truncate text-ui font-semibold">{view === "details" || view === "agent" ? title : "Channel settings"}</span>
       </header>

@@ -72,6 +72,7 @@
   --pop-edge: light-dark(rgba(15, 15, 17, 0.08), rgba(255, 255, 255, 0.09));
   --pop-shade: light-dark(rgba(15, 15, 17, 0.16), rgba(0, 0, 0, 0.65));
   --shadow-pop: 0 0 0 1px var(--pop-edge), 0 16px 40px -12px var(--pop-shade);
+  --shadow-sheet: 0 0 0 1px var(--pop-edge), 0 1px 3px light-dark(rgba(15, 15, 17, 0.08), rgba(0, 0, 0, 0.35)), 0 6px 14px -8px light-dark(rgba(15, 15, 17, 0.16), rgba(0, 0, 0, 0.5));
   /* The composer: a hairline round it, lifted a touch off the canvas. */
   --shadow-dock: 0 0 0 1px var(--line), 0 6px 20px -12px var(--pop-shade);
   /* Liquid glass: a translucent fill over a blur, a bright rim on its top edge, a hairline round it, a soft drop. */
@@ -411,10 +412,10 @@ html[data-drawing="software"] .scrim-bottom {
 }
 
 @utility sheet {
-  margin: var(--step) var(--step) var(--step) 0;
+  margin: var(--sheet-top, var(--step)) var(--step) var(--step) 0;
   border-radius: var(--radius-card);
   background: var(--canvas);
-  box-shadow: var(--shadow-pop);
+  box-shadow: var(--shadow-sheet);
   overflow: clip;
 }
 

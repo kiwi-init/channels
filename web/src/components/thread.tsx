@@ -40,12 +40,12 @@ export function ThreadPanel({ count, children, composer, onClose }: { count: num
           onClose()
         }}
       >
-        <header className="drag flex h-(--chrome-h) shrink-0 items-center justify-between px-3">
+        <header className="drag flex h-(--chrome-h) shrink-0 items-center justify-between px-3 md:mt-(--step) md:h-(--card-head) md:gap-(--step) md:px-(--step)">
           <span className="text-ui font-semibold">
             Thread <span className="font-normal text-ink-3">{count === 1 ? "1 reply" : `${count} replies`}</span>
           </span>
-          <IconButton label="Close thread" round className="glass size-9 text-ink" onClick={onClose}>
-            <Icon icon={Cancel01Icon} size={17} />
+          <IconButton label="Close thread" round className="no-drag size-9 md:size-(--control)" onClick={onClose}>
+            <Icon icon={Cancel01Icon} size={15} />
           </IconButton>
         </header>
         <div ref={scroller} className="flex-1 overflow-y-auto">
