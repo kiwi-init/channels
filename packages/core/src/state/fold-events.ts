@@ -2,7 +2,7 @@ import { GENERAL_ROOM, MAX_CHARTER, MAX_ROOMS, MAX_TAGS, PROOF_MAX, TASK_TITLE_M
 import { free, take } from "./leases.ts";
 import { unnamedTasks } from "./compact.ts";
 import { leadCheckpointKeyRefusal } from "./lead.ts";
-import { applyGithub, type GithubState } from "./github.ts";
+import { applyGithub, repoKey, type GithubState } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { omit } from "../omit.ts";
 import { readScopes, SCOPES, type Scope } from "../scopes.ts";
@@ -114,6 +114,15 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         break;
       }
       applyGithub(c.github, ev.items, m.seq);
+      break;
+    }
+
+    case "github.rules": {
+      if (!member.owner) {
+        reject("only the owner's app posts a repo's merge rules");
+        break;
+      }
+      c.github.rules.set(repoKey(ev.repo), { repo: ev.repo, branch: ev.branch, required: [...new Set(ev.required)], merge: [...new Set(ev.merge)], seq: m.seq });
       break;
     }
 

@@ -518,6 +518,20 @@ const routes: RoomRoute[] = [
       }),
   },
   {
+    method: "GET",
+    path: "/github/rules",
+    guard: "owner",
+    run: ({ me }) =>
+      Effect.gen(function* () {
+        const db = yield* RoomStore;
+        if (!allow(`gh:${db.roomId}:${me}`, GITHUB_READS_PER_MINUTE)) return yield* new TooMany({ message: "too many GitHub lookups; wait a minute" });
+        const repo = (yield* Request_).url.searchParams.get("repo")?.toLowerCase();
+        if (!repo || !db.githubRepos().includes(repo)) return yield* new BadRequest({ message: "repo: one of the channel's connected repos" });
+        const app = yield* githubApp;
+        return { data: yield* replied(yield* Effect.promise(() => app.rules(repo))) };
+      }),
+  },
+  {
     method: "POST",
     path: "/github/issue/close",
     guard: "owner",

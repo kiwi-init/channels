@@ -1,6 +1,6 @@
 import type { Member as MemberRecord, Runs } from "../membership.ts";
 import type { Card, Color, IssueRef, MemberPicture, Message, TaskState, Trust, Verdict } from "../protocol.ts";
-import type { GithubCheck, GithubIssue, GithubPr, GithubState } from "./github.ts";
+import type { GithubCheck, GithubIssue, GithubPr, GithubRules, GithubState } from "./github.ts";
 import type { Persona } from "../personality.ts";
 import type { Scope } from "../scopes.ts";
 
@@ -232,7 +232,7 @@ export interface FoldBase {
   lead: string | null;
   charter: Charter | null;
   repos?: string[];
-  github?: { prs: GithubPr[]; checks: [string, GithubCheck[]][]; issues?: GithubIssue[] };
+  github?: { prs: GithubPr[]; checks: [string, GithubCheck[]][]; issues?: GithubIssue[]; rules?: GithubRules[] };
   hold: Hold | null;
   voice?: boolean;
   githubWrite?: number | null;

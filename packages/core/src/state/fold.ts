@@ -5,7 +5,7 @@ import { allowedOnHold, answersDecisions, isLeadRole, isPerson, LEAD, ON_HOLD } 
 import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
 import { askHeadOf, fileTask } from "./asks.ts";
-import { prKey } from "./github.ts";
+import { prKey, repoKey } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { roomName } from "./rooms.ts";
 import { settle } from "./leases.ts";
@@ -246,6 +246,7 @@ export function fold(
       prs: new Map(from?.github?.prs.map((p) => [prKey(p.repo, p.number), p])),
       checks: new Map(from?.github?.checks.map(([k, runs]) => [k, new Map(runs.map((r) => [r.name, r]))])),
       issues: new Map(from?.github?.issues?.map((i) => [prKey(i.repo, i.number), i])),
+      rules: new Map(from?.github?.rules?.map((r) => [repoKey(r.repo), r])),
     },
     hold: from?.hold ?? null,
     githubWrite: from?.githubWrite ?? null,
@@ -453,6 +454,7 @@ export function fold(
         prs: [...ctx.github.prs.values()].filter((p) => p.state === "open" || !closedLongAgo(p.at, hw)),
         checks: [...ctx.github.checks].map(([k, runs]) => [k, [...runs.values()]]),
         issues: [...ctx.github.issues.values()].filter((i) => i.state === "open" || !closedLongAgo(i.at, hw) || taskIssues.has(prKey(i.repo, i.number))),
+        rules: [...ctx.github.rules.values()],
       },
       hold: ctx.hold,
       githubWrite: ctx.githubWrite,

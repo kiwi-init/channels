@@ -210,7 +210,7 @@ describe("what's kept of an event", () => {
     expect(note).toMatchObject({ additions: 30, deletions: 0, files: 2 });
     expect(cleanGithubNote({ event: "pull_request", repo: "o/r", additions: -1, at: 1 })).toBeNull();
     expect(cleanGithubNote({ event: "pull_request", repo: "o/r", deletions: 1.5, at: 1 })).toBeNull();
-    const g: GithubState = { prs: new Map(), checks: new Map(), issues: new Map() };
+    const g: GithubState = { prs: new Map(), checks: new Map(), issues: new Map(), rules: new Map() };
     applyGithub(g, [note!], 5);
     expect(g.prs.get(prKey("o/r", 7))).toMatchObject({ additions: 30, deletions: 0, files: 2 });
   });

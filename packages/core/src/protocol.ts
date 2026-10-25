@@ -275,6 +275,8 @@ export type Event =
   | { op: "compact"; summary: string; through: number; proposal?: number }
   | { op: "repos.set"; repos: string[] }
   | { op: "github"; items: GithubNote[] }
+  /** Owner only: what a connected repo asks before a pull request merges into its default branch, read from GitHub by the owner's app. */
+  | { op: "github.rules"; repo: string; branch: string; required: string[]; merge: MergeMethod[] }
   /**
    * Owner only: stop every agent (on) or let them carry on (off). While on hold, every client refuses
    * an agent's work (tasks, facts, messages to other agents); agents may still answer people.
@@ -310,7 +312,7 @@ export function isReaction(m: Pick<Message, "kind" | "ev">): boolean {
   return m.kind === "event" && m.ev?.op === "react";
 }
 
-const QUIET_OPS: ReadonlySet<string> = new Set(["hello", "card", "picture.set", "react", "fact.set", "fact.del", "lease.take", "lease.free", "task.claim", "claim", "release"]);
+const QUIET_OPS: ReadonlySet<string> = new Set(["hello", "card", "picture.set", "react", "fact.set", "fact.del", "lease.take", "lease.free", "task.claim", "claim", "release", "github.rules"]);
 
 export const isRunning = (i: GithubNote): boolean => (i.event === "check_run" || i.event === "workflow_run") && i.conclusion === undefined;
 
@@ -408,6 +410,10 @@ export interface GithubNote {
   by?: string;
   at: number;
 }
+
+export const MERGE_METHODS = ["merge", "squash", "rebase"] as const;
+export type MergeMethod = (typeof MERGE_METHODS)[number];
+export const MAX_REQUIRED_CHECKS = 50;
 
 export interface IssueRef {
   repo: string;
@@ -642,7 +648,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 2;
+export const EVENT_OPS_VERSION = 3;
 const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 
 export const knownOp = (op: string): boolean => eventCheck({ op }) !== null;
@@ -855,6 +861,18 @@ function eventCheck(ev: unknown): boolean | null {
       return str(e.summary, MAX_SUMMARY) && !!(e.summary as string).trim() && n(e.through) && (e.through as number) > 0 && opt(e.proposal, (x): x is number => n(x) && x > 0);
     case "github":
       return Array.isArray(e.items) && e.items.length > 0 && e.items.length <= MAX_GITHUB_ITEMS && e.items.every((i) => cleanGithubNote(i) !== null);
+    case "github.rules":
+      return (
+        typeof e.repo === "string" &&
+        REPO_RE.test(e.repo) &&
+        str(e.branch, 200) &&
+        !!(e.branch as string).trim() &&
+        Array.isArray(e.required) &&
+        e.required.length <= MAX_REQUIRED_CHECKS &&
+        e.required.every((c) => str(c, 200) && !!c.trim() && !/[\u0000-\u001f\u007f]/.test(c)) &&
+        Array.isArray(e.merge) &&
+        e.merge.every((m) => (MERGE_METHODS as readonly unknown[]).includes(m))
+      );
     case "repos.set":
       return Array.isArray(e.repos) && e.repos.length <= MAX_REPOS && e.repos.every((r) => typeof r === "string" && REPO_RE.test(r));
     case "hold.set":

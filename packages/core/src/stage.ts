@@ -1,7 +1,7 @@
 import { inlineText } from "./membership.ts";
 import { ignored, type Message } from "./protocol.ts";
-import { FAILED, prLinks, taskPr } from "./prs.ts";
-import { openRound, prChecks, prKey, type ChannelState, type GithubPr, type ReviewRound, type Task } from "./state.ts";
+import { checksOf, prLinks, rulesText, taskPr } from "./prs.ts";
+import { openRound, prKey, rulesOf, type ChannelState, type GithubPr, type ReviewRound, type Task } from "./state.ts";
 
 type Stage = "open" | "building" | "proving" | "red" | "yours" | "done" | "dropped";
 
@@ -36,7 +36,7 @@ function linkedPr(state: ChannelState, t: Task): GithubPr | undefined {
   return undefined;
 }
 
-const failedAt = (state: ChannelState, pr: GithubPr): string[] => prChecks(state.github, pr).flatMap((r) => (r.conclusion && FAILED.has(r.conclusion) ? [r.name] : []));
+const failedAt = (state: ChannelState, pr: GithubPr): string[] => checksOf(state, pr)?.failed ?? [];
 
 export function stageOf(state: ChannelState, t: Task): TaskStage {
   const pr = linkedPr(state, t);
@@ -55,6 +55,26 @@ export function stageOf(state: ChannelState, t: Task): TaskStage {
   if (verdict?.result.kind === "rejected" && verdict.at && head && sameHead(verdict.at, head)) return { stage: "building", ...withPr, judgedAt: verdict.at };
   if (pr?.state === "open") return { stage: "proving", pr };
   return { stage: t.owner ? "building" : "open", ...withPr };
+}
+
+function checksText(state: ChannelState, pr: GithubPr): string {
+  const c = checksOf(state, pr);
+  if (!c) return "none yet";
+  const parts = [
+    c.passed ? `${c.passed} passed` : "",
+    c.failed.length ? `${c.failed.length} failed (${c.failed.map((n) => inlineText(n, 60)).join(", ")})` : "",
+    c.running ? `${c.running} ${c.waiting ? "waiting" : "running"}${c.waiting ? ` (${c.waiting.map((n) => inlineText(n, 60)).join(", ")})` : ""}` : "",
+  ].filter(Boolean);
+  return `${parts.join(", ")}${c.required ? `, of the required ${c.required.map((n) => inlineText(n, 60)).join(", ")}` : ", of every check (no merge rules read)"}`;
+}
+
+export function prLines(state: ChannelState, pr: GithubPr): string[] {
+  const rules = rulesOf(state.github, pr.repo);
+  return [
+    `  pr: ${pr.repo}#${pr.number} ${pr.state}${pr.branch ? ` from ${inlineText(pr.branch, 120)}` : ""}${pr.url ? ` · ${inlineText(pr.url, 300)}` : ""}`,
+    `  checks: ${checksText(state, pr)}`,
+    ...(rules ? [`  merge rules (${inlineText(rules.branch, 60)}): ${rulesText(rules)}`] : []),
+  ];
 }
 
 export function evidenceOf(state: ChannelState, t: Task, messages: readonly Message[] = []): Ref[] {
@@ -98,7 +118,7 @@ export function refText(state: ChannelState, r: Ref): string {
 
 export function stageText(state: ChannelState, s: TaskStage): string {
   const ref = s.pr ? `#${s.pr.number}` : "";
-  const runs = s.pr ? prChecks(state.github, s.pr) : [];
+  const checks = s.pr ? checksOf(state, s.pr) : undefined;
   switch (s.stage) {
     case "dropped":
       return "dropped";
@@ -116,8 +136,9 @@ export function stageText(state: ChannelState, s: TaskStage): string {
     case "building":
       return s.judgedAt ? `building: changes asked at ${short(s.judgedAt)}${ref ? ` (${ref})` : ""}` : `building${ref ? ` (${ref})` : ""}`;
     case "proving": {
-      const running = runs.filter((r) => !r.conclusion).length;
-      return `proving: ${ref} ${running ? `${running} check${running === 1 ? "" : "s"} running` : runs.length ? "checks green, not merged" : "no checks yet"}`;
+      if (checks?.waiting && checks.required) return `proving: ${ref} ${checks.waiting.length ? `waiting on ${checks.waiting.join(", ")}` : `${checks.required.join(", ")} green, not merged`}`;
+      const running = checks?.running ?? 0;
+      return `proving: ${ref} ${running ? `${running} check${running === 1 ? "" : "s"} running` : checks ? "checks green, not merged" : "no checks yet"}`;
     }
     default:
       return `${s.stage}${ref ? ` (${ref})` : ""}`;

@@ -16,7 +16,7 @@ import type { JoinClaims, JoinRequest, Member, MemberInfo, PersonPowers } from "
 import type { ChannelIcon, Envelope, ImageAttachment, Message } from "./protocol.ts";
 import type { SigningBudget } from "./sas.ts";
 import type { Scope } from "./scopes.ts";
-import type { ChannelState, FoldBase, GuardFloor } from "./state.ts";
+import type { ChannelState, FoldBase, GithubRules, GuardFloor } from "./state.ts";
 import { ChannelCore, type ChannelFx } from "./client/core.ts";
 import { ChannelGithub, type GithubDiff, type GithubIssueInfo, type ReviewCheck } from "./client/github.ts";
 import { ChannelHistory } from "./client/history.ts";
@@ -364,6 +364,10 @@ export class Channel {
 
   drainGithub(): Promise<number> {
     return run(this.fx.drainGithub());
+  }
+
+  syncGithubRules(repos: readonly string[], known: readonly GithubRules[]): Promise<number> {
+    return run(this.fx.syncGithubRules(repos, known));
   }
 
   githubDiff(repo: string, sha: string): Promise<GithubDiff> {

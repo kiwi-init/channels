@@ -1,5 +1,6 @@
 import * as Effect from "effect/Effect";
-import { cleanGithubNote, MAX_GITHUB_ITEMS, type GithubNote } from "../protocol.ts";
+import { cleanGithubNote, MAX_GITHUB_ITEMS, type GithubNote, type MergeMethod } from "../protocol.ts";
+import type { GithubRules } from "../state.ts";
 import type { ChannelCore } from "./core.ts";
 import type { Refused } from "./errors.ts";
 import type { Relay } from "./relay.ts";
@@ -19,6 +20,15 @@ export interface GithubIssueInfo {
   state: "open" | "closed";
 }
 
+interface GithubRulesInfo {
+  branch: string;
+  required: string[];
+  merge: MergeMethod[];
+}
+
+const sameRules = (a: GithubRulesInfo, b: GithubRulesInfo | undefined): boolean =>
+  !!b && a.branch === b.branch && a.required.join("\n") === b.required.join("\n") && a.merge.join(",") === b.merge.join(",");
+
 export interface ReviewCheck {
   repo: string;
   sha: string;
@@ -30,6 +40,7 @@ export interface ReviewCheck {
 export interface GithubFx {
   setGithubRepos(repos: string[], token?: string | null): Effect.Effect<string[], Refused, Relay>;
   drainGithub(): Effect.Effect<number, Refused, Relay>;
+  syncGithubRules(repos: readonly string[], known: readonly GithubRules[]): Effect.Effect<number, Refused, Relay>;
   githubDiff(repo: string, sha: string): Effect.Effect<GithubDiff, Refused, Relay>;
   postReviewCheck(c: ReviewCheck): Effect.Effect<{ url: string | null }, Refused, Relay>;
   commentOnPr(repo: string, number: number, body: string): Effect.Effect<{ url: string | null }, Refused, Relay>;
@@ -78,6 +89,24 @@ export class ChannelGithub {
     closeIssue: Effect.fn("Channel.closeIssue")({ self: this }, function* (this: ChannelGithub, c: { repo: string; number: number; reason: "completed" | "not_planned"; body: string }) {
       yield* this.ch.ownerOnly();
       return yield* this.ch.request<{ url: string | null }>("/github/issue/close", { method: "POST", body: JSON.stringify(c) });
+    }),
+
+    syncGithubRules: Effect.fn("Channel.syncGithubRules")({ self: this }, function* (this: ChannelGithub, repos: readonly string[], known: readonly GithubRules[]) {
+      yield* this.ch.ownerOnly();
+      let sent = 0;
+      for (const repo of repos) {
+        const r = yield* this.ch.request<GithubRulesInfo>("/github/rules", {}, { repo });
+        if (
+          sameRules(
+            r,
+            known.find((k) => k.repo.toLowerCase() === repo.toLowerCase()),
+          )
+        )
+          continue;
+        yield* this.ch.fx.send(`GitHub: ${repo}'s merge rules`, { kind: "event", ev: { op: "github.rules", repo, branch: r.branch, required: r.required, merge: r.merge } });
+        sent++;
+      }
+      return sent;
     }),
 
     drainGithub: Effect.fn("Channel.drainGithub")({ self: this }, function* (this: ChannelGithub) {

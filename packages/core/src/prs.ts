@@ -1,19 +1,34 @@
-import { prChecks, type ChannelState, type GithubPr } from "./state.ts";
+import { inlineText } from "./membership.ts";
+import { prChecks, rulesOf, type ChannelState, type GithubPr } from "./state.ts";
 
 export interface PrChecks {
   passed: number;
   failed: string[];
   running: number;
+  required?: string[];
+  waiting?: string[];
 }
 
 export const FAILED = new Set(["failure", "timed_out", "cancelled", "action_required", "startup_failure"]);
 
 export function checksOf(state: ChannelState, pr: GithubPr): PrChecks | undefined {
   const runs = prChecks(state.github, pr);
+  const required = rulesOf(state.github, pr.repo)?.required;
+  if (required?.length) {
+    const ran = new Map(runs.map((r) => [r.name, r.conclusion]));
+    const failed = required.filter((n) => FAILED.has(ran.get(n) ?? ""));
+    const waiting = required.filter((n) => !ran.get(n));
+    return { passed: required.length - failed.length - waiting.length, failed, running: waiting.length, required, waiting };
+  }
   if (!runs.length) return undefined;
   const failed = runs.filter((r) => r.conclusion && FAILED.has(r.conclusion)).map((r) => r.name);
   const running = runs.filter((r) => !r.conclusion).length;
   return { passed: runs.length - failed.length - running, failed, running };
+}
+
+export function rulesText(r: { required: readonly string[]; merge: readonly string[] }): string {
+  const checks = r.required.length ? `${r.required.map((c) => inlineText(c, 60)).join(", ")} must pass` : "no required checks";
+  return `${checks}; merges by ${r.merge.length ? r.merge.join(" or ") : "no method GitHub allows"}`;
 }
 
 const PR_URL = /https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)/g;
