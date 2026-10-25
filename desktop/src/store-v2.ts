@@ -14,6 +14,8 @@ const KEY_BYTES = 32;
 
 export interface StoreKey {
   get(): Promise<string | null>;
+  locked?(): Promise<boolean>;
+  running?(): Promise<boolean>;
   set(value: string): Promise<void>;
   drop(): Promise<void>;
   finished(): Promise<boolean>;
@@ -54,7 +56,7 @@ export type OpenStore =
   | { kind: "open"; json: Record<string, unknown> | null; sealed: boolean; noKeychain: string | null; unmarked: string | null; imported: string | null; file: string; save: (json: string) => void }
   | { kind: "unreadable"; why: string; file: string; cause: Refusal };
 
-export type Refusal = "keychain" | "keyless" | "deleted" | "legacy" | "legacy-keyless" | "legacy-plain" | "save" | "copy" | "launcher";
+export type Refusal = "keychain" | "locked" | "keyless" | "deleted" | "legacy" | "legacy-keyless" | "legacy-plain" | "save" | "copy" | "launcher";
 
 export interface StoreOptions {
   dir: string;
@@ -63,7 +65,7 @@ export interface StoreOptions {
   platform?: NodeJS.Platform;
 }
 
-type Lookup = { kind: "key"; key: Buffer } | { kind: "none" } | { kind: "failed"; why: string };
+type Lookup = { kind: "key"; key: Buffer } | { kind: "none" } | { kind: "locked" } | { kind: "failed"; why: string };
 
 type Copy = { kind: "none" } | { kind: "ok"; json: Record<string, unknown>; sealed: boolean } | { kind: "unreadable"; why: string };
 
@@ -98,7 +100,7 @@ async function lookup(source: StoreKey): Promise<Lookup> {
   } catch (e) {
     return { kind: "failed", why: reason(e) };
   }
-  if (value === null) return { kind: "none" };
+  if (value === null) return (await source.locked?.().catch(() => false)) ? { kind: "locked" } : { kind: "none" };
   const key = Buffer.from(value, "base64");
   return key.length === KEY_BYTES && key.toString("base64") === value ? { kind: "key", key } : { kind: "failed", why: "the key it holds isn't 32 bytes in base64" };
 }
@@ -183,6 +185,7 @@ export async function openStore({ dir, key, legacy, platform = process.platform 
     const back = bytes(backup);
     const sealed = [main, back].some((b) => b !== null && isSealed(b));
     const found = await lookup(key);
+    if (found.kind === "locked") return refuse("your keyring holds Channels' store key but stayed locked, so it didn't give it", "locked");
     if (found.kind === "failed" && (sealed || platform !== "linux")) return refuse(keychainWhy(found.why), "keychain");
     if (found.kind === "none" && sealed) return refuse(keychainWhy("it holds no store key"), "keyless");
     if (main === null && back === null) {
@@ -204,6 +207,7 @@ export async function openStore({ dir, key, legacy, platform = process.platform 
         return refuse("the keys the Electron app left are in plain text, and it only ever kept them encrypted here, so Channels won't take them", "legacy-plain", old.file);
       const made = found.kind === "none" ? await create(key) : found;
       if (made.kind === "failed" && platform !== "linux") return refuse(keychainWhy(made.why), "keychain");
+      if (made.kind === "failed" && (await key.running?.().catch(() => false))) return refuse(keychainWhy(made.why), "locked");
       const k = made.kind === "key" ? made.key : null;
       const noKeychain = made.kind === "failed" ? made.why : null;
       const takeBack = async (why: string): Promise<OpenStore> => {

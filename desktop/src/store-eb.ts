@@ -41,6 +41,7 @@ export async function openEbStore({ dir, keys, home = os.homedir(), platform = p
 
 export const REFUSAL_ADVICE: Record<Refusal, string> = {
   keychain: "Unlock your keychain, then quit and reopen Channels.",
+  locked: "Unlock your keyring, then ask again.",
   keyless: "Its key is no longer in your keychain. Restore your keychain from a backup, then reopen Channels.",
   deleted:
     "Your keychain still holds its key, but both copies of the store are gone. Put the store back from a backup, then reopen Channels: it won't start over by itself, so a deleted store can't be replaced without you noticing.",

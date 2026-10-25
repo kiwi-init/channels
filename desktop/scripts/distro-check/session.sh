@@ -102,8 +102,16 @@ case "$keyring" in
   cancel | cancel-no-keyring | cancel-holds-key)
     info "prompts asked and cancelled: $(grep -c dismissed "$logs/$tag-secrets.log"); calls: $(grep -oE '[A-Za-z]+\.[A-Za-z]+ on' "$logs/$tag-secrets.log" | sort | uniq -c | tr -s ' ' | tr '\n' ',' | cut -c1-300)"
     info "the app said: $(grep -hE '^Channels' "$logs/$tag-app.log" | tr '\n' ' ' | cut -c1-400)"
-    info "main.log: $(cat "$logs/$tag-main.log" 2> /dev/null | tr '\n' ' ' | cut -c1-600)"
-    info "store files: $(find "$home" -name 'kiwi-store-v2.bin*' -printf '%f %s %p\n' 2> /dev/null | while read -r f n p; do echo "$f $n bytes, starts $(head -c 13 "$p" | tr -c '[:print:]' '.')"; done | tr '\n' ';')"
+    unsealed=$(find "$home" -name 'kiwi-store-v2.bin*' 2> /dev/null | while read -r f; do [ "$(head -c 12 "$f")" = kiwi-store/2 ] || echo "$f"; done)
+    if [ -z "$plain" ] && [ -z "$unsealed" ]; then ok "with the keyring's prompt cancelled, nothing of Channels' is kept unencrypted"; else bad "with the keyring's prompt cancelled, the app kept its keys unencrypted: ${plain:-$unsealed}"; fi
+    case "$tag" in
+      keyless-dialog)
+        if grep -q "the keyring stayed locked\|prompt was cancelled" "$logs/$tag-app.log"; then bad "a keyring that holds no key for a sealed store was taken for a locked or cancelled one"; else ok "a sealed store whose key is gone shows the can't-read dialog, not the keyring notes"; fi
+        ;;
+      *)
+        if grep -q "the keyring stayed locked\|prompt was cancelled" "$logs/$tag-app.log"; then ok "the window says the keyring stayed locked or its prompt was cancelled, and offers to ask again: $(grep -ohE 'the keyring stayed locked|prompt was cancelled' "$logs/$tag-app.log" | sort -u | tr '\n' ',')"; else bad "the app didn't say the keyring's prompt was cancelled or stayed locked"; fi
+        ;;
+    esac
     ;;
   kwallet-unanswered)
     if [ -n "$plain" ]; then bad "while the keyring hasn't answered, the app kept its keys unencrypted: $(echo "$plain" | cut -c1-160)"; else ok "while the keyring hasn't answered, the app keeps no keys unencrypted"; fi

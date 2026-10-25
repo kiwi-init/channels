@@ -102,6 +102,7 @@ session kwallet-unanswered kwallet-unanswered tray
 session cancel cancel-locked-first-run tray
 session cancel-no-keyring cancel-no-keyring-first-run tray
 session cancel-holds-key cancel-sealed tray "$sealed_home"
+session cancel keyless-dialog tray "$sealed_home"
 lib_test kiwi-scheme-test xvfb-run -a "$tests/kiwi-scheme-test" "$lib"
 lib_test kiwi-notify-test xvfb-run -a "$tests/kiwi-notify-test" "$lib"
 [ -z "$from" ] || as_tester bash /home/tester/update.sh "$from" "$results" "$out/logs"

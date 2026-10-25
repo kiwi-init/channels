@@ -1,8 +1,7 @@
-import { Utils } from "electrobun/main";
-
 import { dataDir } from "./host-eb.ts";
 import { launcherKeys } from "./launcher-channel-eb.ts";
 import { logMainError } from "./main-log.ts";
+import { messageBox } from "./message-box-eb.ts";
 import { openEbStore, plainNote, unmarkedNote, v2Vault } from "./store-eb.ts";
 import type { OpenStore } from "./store-v2.ts";
 import { brokenStore, openStore } from "./store.ts";
@@ -25,14 +24,16 @@ export async function openStoreForThisBuild(): Promise<void> {
   openStore(v2Vault(opened));
 }
 
+export const keyringLocked = (): boolean => opened?.kind === "unreadable" && opened.cause === "locked";
+
 export function warnIfStoreBroken(): void {
   const broken = brokenStore();
-  if (broken) void Utils.showMessageBox({ type: "error", message: "Channels can't read its saved keys", detail: broken.message });
+  if (broken) void messageBox({ type: "error", message: "Channels can't read its saved keys", detail: broken.message });
   const plain = opened ? plainNote(opened) : null;
   if (plain) logMainError(new Error(plain));
   const unmarked = opened ? unmarkedNote(opened) : null;
   if (unmarked) {
     logMainError(new Error(unmarked));
-    void Utils.showMessageBox({ type: "warning", message: "Channels couldn't mark its store key ready", detail: unmarked });
+    void messageBox({ type: "warning", message: "Channels couldn't mark its store key ready", detail: unmarked });
   }
 }
