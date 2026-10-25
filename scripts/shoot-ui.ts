@@ -248,6 +248,7 @@ try {
   }
   await bot("set", "relay.version", "667ce081");
   await bot("set", "canary", "off");
+  await bot("set", "next", "0.8.12 · the relay and the web ship together");
   await bot("send", "--to", "@win", "Can you take the cold runs after lunch?");
   await win("send", "--to", "@atlas", "Yes, after the steady load.");
   await owner.reload();
