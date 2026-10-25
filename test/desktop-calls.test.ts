@@ -117,6 +117,14 @@ describe("main's handlers reach the shell only through the host", () => {
     expect(did).toEqual(["badge 3", "badge 0"]);
   });
 
+  test("the page's theme reaches the window's appearance; anything but system, light or dark is refused", async () => {
+    did.length = 0;
+    await bridge.setAppearance("dark");
+    await bridge.setAppearance("system");
+    for (const bad of ["Dark", "", "aqua"]) await expect(bridge.setAppearance(bad as "dark")).rejects.toThrow("an appearance is system, light or dark");
+    expect(did).toEqual(["appearance dark", "appearance system"]);
+  });
+
   test("a link that isn't http(s) never reaches the host's browser", async () => {
     did.length = 0;
     await expect(bridge.openExternal("file:///etc/passwd")).rejects.toThrow("only http(s) links open outside");

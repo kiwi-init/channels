@@ -99,6 +99,7 @@
    */
   --chrome-h: 52px;
   --lights-w: 92px;
+  --shell: var(--rail);
 }
 
 :root[data-theme="light"] {
@@ -111,6 +112,10 @@
 
 .dark-stage {
   color-scheme: dark;
+}
+
+html[data-frost] {
+  --shell: light-dark(transparent, rgb(40 40 44 / 0.55));
 }
 
 /* In the desktop app on a Mac (main.tsx sets data-shell): the traffic lights sit on the list's header. */
@@ -214,7 +219,7 @@ select {
 
 body {
   margin: 0;
-  background: var(--rail);
+  background: var(--shell);
   color: var(--ink);
   font-family: var(--font-sans);
   font-size: calc(15px * var(--text-scale, 1));

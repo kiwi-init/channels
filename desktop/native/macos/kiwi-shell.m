@@ -156,6 +156,85 @@ void kiwi_window_look(void *ptr, double minWidth, double minHeight, uint32_t lig
   });
 }
 
+static NSView *findWebView(NSView *view) {
+  if ([view isKindOfClass:[WKWebView class]]) return view;
+  for (NSView *child in view.subviews) {
+    NSView *found = findWebView(child);
+    if (found) return found;
+  }
+  return nil;
+}
+
+static NSAppearance *appearanceFor(int32_t appearance) {
+  if (appearance == 1) return [NSAppearance appearanceNamed:NSAppearanceNameAqua];
+  if (appearance == 2) return [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
+  return nil;
+}
+
+static os_unfair_lock lookLock = OS_UNFAIR_LOCK_INIT;
+static char look[64] = "";
+
+static void noteLook(NSWindow *window) {
+  NSView *content = window.contentView;
+  BOOL frosted = NO;
+  for (NSView *child in content.subviews)
+    if ([child isKindOfClass:[NSVisualEffectView class]] && ((NSVisualEffectView *)child).material == NSVisualEffectMaterialSidebar) frosted = YES;
+  WKWebView *web = (WKWebView *)findWebView(content);
+  BOOL clear = web && ![[web valueForKey:@"drawsBackground"] boolValue];
+  NSAppearanceName name = window.appearance.name;
+  const char *appearance = !name ? "system" : [name isEqualToString:NSAppearanceNameDarkAqua] ? "dark" : "light";
+  os_unfair_lock_lock(&lookLock);
+  snprintf(look, sizeof look, "%s %s %s", frosted ? "frost" : "plain", clear ? "clear" : "drawn", appearance);
+  os_unfair_lock_unlock(&lookLock);
+}
+
+size_t kiwi_window_looks(char *out, size_t size) {
+  os_unfair_lock_lock(&lookLock);
+  size_t n = strlcpy(out, look, size);
+  os_unfair_lock_unlock(&lookLock);
+  return n;
+}
+
+bool kiwi_window_frost(void *ptr) {
+  NSWindow *window = (__bridge NSWindow *)ptr;
+  if (!window) return false;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    NSView *content = window.contentView;
+    NSVisualEffectView *frost = nil;
+    for (NSView *child in content.subviews)
+      if ([child isKindOfClass:[NSVisualEffectView class]]) frost = (NSVisualEffectView *)child;
+    if (!frost) {
+      frost = [[NSVisualEffectView alloc] initWithFrame:content.bounds];
+      frost.material = NSVisualEffectMaterialSidebar;
+      frost.blendingMode = NSVisualEffectBlendingModeBehindWindow;
+      frost.state = NSVisualEffectStateFollowsWindowActiveState;
+      frost.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+      [content addSubview:frost positioned:NSWindowBelow relativeTo:nil];
+    }
+    WKWebView *web = (WKWebView *)findWebView(content);
+    [web setValue:@NO forKey:@"drawsBackground"];
+    web.underPageBackgroundColor = NSColor.clearColor;
+    noteLook(window);
+  });
+  return true;
+}
+
+size_t kiwi_look_setting(const char *key, char *out, size_t size) {
+  NSString *name = key ? [NSString stringWithUTF8String:key] : nil;
+  id value = name.length ? [NSUserDefaults.standardUserDefaults objectForKey:name] : nil;
+  const char *text = value ? [[value description] UTF8String] : "";
+  return strlcpy(out, text ? text : "", size);
+}
+
+void kiwi_window_appearance(void *ptr, int32_t appearance) {
+  NSWindow *window = (__bridge NSWindow *)ptr;
+  if (!window) return;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    window.appearance = appearanceFor(appearance);
+    noteLook(window);
+  });
+}
+
 static void (*noteClicked)(void) = NULL;
 
 @interface KiwiNotes : NSObject <UNUserNotificationCenterDelegate>

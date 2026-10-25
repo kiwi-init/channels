@@ -23,6 +23,7 @@ export interface Host {
   pastedImage(): Promise<PastedImage | null>;
   notify(title: string, body: string): void;
   badge(count: number): void;
+  appearance(appearance: "system" | "light" | "dark"): void;
   showWindow(): void;
   reload(): void;
   restartToUpdate(): void;

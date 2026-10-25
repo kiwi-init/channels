@@ -132,7 +132,7 @@ export default function App() {
           <FirstRun />
         </>
       ) : (
-        <div className="flex h-svh flex-col overflow-clip md:bg-rail">
+        <div className="flex h-svh flex-col overflow-clip md:bg-(--shell)">
           <ChannelTabs
             rows={rows}
             news={news}
@@ -155,7 +155,7 @@ export default function App() {
               onSettings={() => setSettings(true)}
               className={cx(code || settings ? "hidden" : "flex", "md:hidden")}
             />
-            <main className={cx("relative min-w-0 flex-1 overflow-clip bg-canvas md:bg-rail md:pl-2", code || settings ? "flex" : "hidden md:flex")}>
+            <main className={cx("relative min-w-0 flex-1 overflow-clip bg-canvas md:bg-(--shell) md:pl-2", code || settings ? "flex" : "hidden md:flex")}>
               {settings && (
                 <div className="flex min-w-0 flex-1 md:sheet">
                   <SettingsPage backTo={rows.find((r) => r.code === code)?.title ?? "Channels"} onClose={() => setSettings(false)} />

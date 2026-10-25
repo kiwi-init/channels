@@ -184,7 +184,7 @@ export function ChannelTabs({
   const rest = entries.filter((_, i) => !shown.includes(i))
 
   return (
-    <header aria-label="Channels" className="drag relative hidden h-(--chrome-h) shrink-0 items-center gap-2 bg-rail px-3 md:flex shell-mac:pl-(--lights-w)">
+    <header aria-label="Channels" className="drag relative hidden h-(--chrome-h) shrink-0 items-center gap-2 bg-(--shell) px-3 md:flex shell-mac:pl-(--lights-w)">
       {inChannel && (
         <IconButton label={`${hidden ? "Show" : "Hide"} the sidebar (${SIDEBAR_KEYS})`} round className="no-drag size-9 text-ink-2 hover:text-ink" onClick={toggleSidebar}>
           <Icon icon={SidebarLeftIcon} size={18} />

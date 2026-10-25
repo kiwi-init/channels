@@ -298,6 +298,10 @@ jobs:
         if: ${{ !cancelled() }}
         timeout-minutes: 5
         run: bun desktop/scripts/eb-frame-check.ts desktop/release-eb/build/dev-macos-*/*.app
+      - name: with the frost switched on, the sidebar material sits behind a clear page and follows the page's theme
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
+        run: bun desktop/scripts/eb-frost-check.ts desktop/release-eb/build/dev-macos-*/*.app
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         timeout-minutes: 1

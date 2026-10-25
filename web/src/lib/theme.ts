@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react"
+import { bridge } from "@/lib/secrets"
 import type { TextStep } from "../../../desktop/src/text-size.ts"
 
 // Light, dark, or whatever the system says, and how large the text reads.
@@ -18,6 +19,9 @@ function read(): Appearance {
 function apply(a: Appearance) {
   if (a === "system") delete document.documentElement.dataset.theme
   else document.documentElement.dataset.theme = a
+  void bridge()
+    ?.setAppearance(a)
+    .catch(() => undefined)
 }
 
 export function setAppearance(a: Appearance) {
