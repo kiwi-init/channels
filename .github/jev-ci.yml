@@ -103,6 +103,7 @@ jobs:
       - ".github/workflows/rehearsal.yml"
       - ".github/workflows/release-build.yml"
       - ".github/workflows/release.yml"
+      - ".github/workflows/update-check.yml"
       - "desktop/build/entitlements.app.plist"
       - "desktop/electrobun-pins.json"
       - "desktop/package.json"
@@ -114,6 +115,7 @@ jobs:
       - "desktop/scripts/eb-release.ts"
       - "desktop/scripts/eb-seal.ts"
       - "desktop/scripts/eb-test-marks.ts"
+      - "desktop/scripts/update-check/**"
       - "desktop/src/**"
       - "ios/engine/**"
       - "packages/core/**"
@@ -282,6 +284,7 @@ jobs:
       And test/verbs.test.ts: kiwi task start is the one way to take a task (src/cli/commands/tasks.ts): two agents racing for an unowned task get one winner through the relay's claim, the other is told who has it, a note given with start lands on the task, and on your own task start only starts it, while claim and handoff stay as aliases.
       And test/verbs.test.ts: kiwi lock status (and list, ls) lists the leases like bare kiwi lock (src/cli/commands/leases.ts), and kiwi lock release (and unlock, free) is refused with how to let one go, so neither takes a lease by that name.
       And test/verbs.test.ts: kiwi lock exits 3 while you're only in line, so kiwi lock heavy && build never runs inside someone else's lease; --wait blocks until the lease is yours, and a --wait that runs out leaves the line and exits 2.
+      And test/update-check.test.ts: the update check (.github/workflows/update-check.yml, desktop/scripts/update-check) runs only when dispatched by hand, every job has a time limit and checks the two versions first without pasting inputs into a shell, each script parses, and versions.sh refuses anything but two plain release versions before touching the network.
       And test/persona-line.test.ts: the hook's word on a personality change (src/hooks/persona-line.ts) comes only when the personality differs from the one this session was told, says what it became or that it was taken away, and is cut to the hook's room with where to read all of it.
       And test/desktop-update-asset.test.ts: a Mac that can't replace itself (translocated, on its disk image, in a folder it can't write, or after this version's swap failed) offers the release before downloading, and the swap script leaves the old app and a marker when the move fails; an AppImage swaps for the AppImage for its CPU, a deb install is offered the .deb for its CPU, and a relaunch waits for the running app to end and drops the old AppImage's APPDIR, APPIMAGE, ARGV0, OWD and LD_* variables (T1554); test/desktop-update-blocked.test.ts (macOS): such an app offers the release and downloads nothing.
       And test/desktop-update-linux.test.ts (as a packaged Linux app against a fake GitHub release): an AppImage downloads the release's AppImage, checks it against SHA256SUMS, moves it over itself with its mode and relaunches it, only once SHA256SUMS.minisig verifies with the pinned release key (a throwaway key in the test), and stages nothing for a signature by another key, over other sums, with a broken global signature, or none at all (issue #203); test/desktop-minisign.test.ts: the app's minisign check (desktop/src/minisign.ts) against signatures minisign 0.12 made with a throwaway key whose secret was thrown away (test/fixtures/minisign), prehashed and legacy, failing for a changed file, another key, an edited trusted comment or a broken line, and the key pinned in desktop/src/release-key.ts being a minisign key; a mismatched download leaves it and offers the release; an AppImage in a folder it can't write, or after a failed swap of that version, says it can't update itself and downloads nothing; a deb install gets the .deb's link and downloads nothing, also when it inherited another AppImage app's APPIMAGE (it's an AppImage only when its own executable runs from APPDIR); the latest tag comes only from this repo's releases/latest redirect on github.com over https and the files from its download path, a redirect off GitHub's hosts is refused, and a tag that isn't v and a plain X.Y.Z is a failed check (latestTag, releaseDownload, T985).
