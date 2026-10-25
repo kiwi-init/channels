@@ -62,15 +62,15 @@ export function TasksPanel({
           onClose()
         }}
       >
-        <header className="drag flex h-(--chrome-h) shrink-0 items-center gap-2 px-3">
+        <header className="drag flex h-(--card-head) shrink-0 items-center gap-(--step) px-(--step)">
           {onBack && (
-            <IconButton label={backLabel} round className="glass size-9 text-ink" onClick={onBack}>
-              <Icon icon={ArrowLeft01Icon} size={18} />
+            <IconButton label={backLabel} round className="no-drag size-(--control)" onClick={onBack}>
+              <Icon icon={ArrowLeft01Icon} size={15} />
             </IconButton>
           )}
           <span className="min-w-0 flex-1 truncate text-ui font-semibold">{title}</span>
-          <IconButton label="Close tasks" round className="glass size-9 text-ink" onClick={onClose}>
-            <Icon icon={Cancel01Icon} size={17} />
+          <IconButton label="Close tasks" round className="no-drag size-(--control)" onClick={onClose}>
+            <Icon icon={Cancel01Icon} size={15} />
           </IconButton>
         </header>
         <div ref={scroller} className="flex flex-1 flex-col overflow-y-auto">
