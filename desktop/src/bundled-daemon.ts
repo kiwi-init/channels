@@ -4,7 +4,7 @@ import path from "node:path";
 import { certifyMachine } from "@kiwi/core/person.ts";
 import type { ComputerView } from "./bridge.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
-import { ensureOnPath, keepCli, place } from "./cli.ts";
+import { ensureOnPath, keepCli, place, type KeptCli } from "./cli.ts";
 import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, noteDaemon, spawnDaemon, type HelloResult } from "./daemon-client.ts";
 import { keepAlive } from "./daemon-keeper.ts";
 import { host } from "./host.ts";
@@ -70,17 +70,21 @@ export async function adoptDaemon(): Promise<ComputerView> {
   return c;
 }
 
+async function keepOwnCli(): Promise<KeptCli> {
+  const kept = await keepCli(bundledKiwi(), host().app.version());
+  if (!kept.homebrew) ensureOnPath();
+  kiwiBin = !kept.homebrew || compareVersions(kept.version, host().app.version()) >= 0 ? kept : { path: await runnableKiwi(), version: host().app.version() };
+  return kept;
+}
+
 export async function installCli(): Promise<{ path: string }> {
-  kiwiBin = await keepCli(bundledKiwi(), host().app.version());
-  ensureOnPath();
-  return { path: kiwiBin.path };
+  return { path: (await keepOwnCli()).path };
 }
 
 export async function keepDaemon(stopped: () => boolean): Promise<void> {
   if (host().app.packaged()) {
     try {
-      kiwiBin = await keepCli(bundledKiwi(), host().app.version());
-      ensureOnPath();
+      await keepOwnCli();
     } catch {
       // The daemon still runs from the app's own copy below.
     }

@@ -14,10 +14,23 @@ export const PERMISSION = "permission";
 export const KIMI_STOP = "kimi-stop";
 export const LISTEN_SECONDS = 7 * 24 * 3600;
 
+export function stableBin(exe: string): string {
+  const m = /^(.*)\/Cellar\/([^/]+)\/[^/]+\/bin\/([^/]+)$/.exec(exe);
+  if (!m?.[1] || !m[2] || !m[3]) return exe;
+  for (const link of [join(m[1], "bin", m[3]), join(m[1], "opt", m[2], "bin", m[3])]) {
+    try {
+      if (realpathSync(link) === realpathSync(exe)) return link;
+    } catch {
+      // Not linked there: try the next place, else keep the Cellar path.
+    }
+  }
+  return exe;
+}
+
 export function selfCommand(): string {
   const compiled = !/\.(ts|js)$/.test(Bun.main);
   const bun = Bun.which("bun") ?? process.execPath;
-  return compiled ? shellQuote(process.execPath) : `${shellQuote(bun)} ${shellQuote(Bun.main)}`;
+  return compiled ? shellQuote(stableBin(process.execPath)) : `${shellQuote(bun)} ${shellQuote(Bun.main)}`;
 }
 
 function shellQuote(s: string): string {
