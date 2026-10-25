@@ -5,7 +5,7 @@ export const PACKAGE = "kiwi-desktop";
 export const INSTALL_DIR = "/opt/Channels";
 export const ELECTROBUN_LAUNCHER = "electrobun-launcher";
 export const DEPENDS = ["libwebkit2gtk-4.1-0", "libgtk-3-0", "libayatana-appindicator3-1", "librsvg2-2", "bubblewrap", "xdg-dbus-proxy"] as const;
-export const MAX_DOWNLOAD = 40 * 1024 ** 2;
+export const MAX_DOWNLOAD = 55 * 1024 ** 2;
 export const LEFT_OUT = ["bin/bspatch", "bin/zig-zstd", "Resources/uninstall", "Channels.desktop"] as const;
 
 export const RUNTIME_RELEASE = "20251108";
