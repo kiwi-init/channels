@@ -86,7 +86,7 @@ export function Sidebar({
               onClick={() => onSelect(c.code)}
               aria-current={selected ? "page" : undefined}
               title={rowNote(c)}
-              className={cx("flex h-16 w-full items-center gap-3 rounded-card px-3 text-left transition-colors", selected ? "prism-lit" : "hover:bg-wash")}
+              className={cx("flex h-16 w-full items-center gap-3 rounded-card px-3 text-left transition-colors", selected ? "bg-(--chosen)" : "hover:bg-wash")}
             >
               <ChannelIconTile icon={icons.get(c.room) ?? null} title={c.title} size={40} />
               <span className="min-w-0 flex-1">

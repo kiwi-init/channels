@@ -121,16 +121,15 @@ try {
   await page.goto(BASE);
   await page.getByRole("textbox", { name: "Your name" }).fill("Jonatas");
   await page.getByRole("button", { name: "Continue" }).click();
-  const chrome = page.getByRole("banner", { name: "Channels" }).or(page.getByRole("complementary"));
-  await chrome.getByRole("button", { name: "New channel", exact: true }).filter({ visible: true }).first().click();
+  const side = page.getByRole("complementary", { name: "Channels" });
+  await side.getByRole("button", { name: "New channel", exact: true }).click();
   await page.getByRole("dialog").getByRole("textbox").fill("motion");
   await page.getByRole("button", { name: "Create channel" }).click();
   await page.waitForURL(/#mc2-/);
   const channel = page.url();
   const code = decodeURIComponent(new URL(channel).hash.slice(1));
-  const side = page.getByRole("complementary", { name: "Channel" });
   const toConversation = () => side.getByRole("region", { name: "Conversations" }).getByRole("button", { name: /^# / }).first().click();
-  const toTasks = () => side.getByRole("navigation", { name: "Views" }).getByRole("button", { name: "Tasks", exact: true }).click();
+  const toTasks = () => page.getByRole("button", { name: /^Tasks(,|$)/ }).click();
   const needs = page.getByRole("region", { name: "Needs you" });
   const joining = kiwi(["join", code, "motion", "--as", "atlas", "--model", "claude-opus-5-5", "--relay", BASE]);
   const letIn = needs.getByRole("button", { name: "It matches: let in" });
@@ -222,16 +221,16 @@ try {
       await page.waitForFunction((first) => document.querySelector("main ul [role='button']")?.getAttribute("aria-label")?.startsWith(first), `T${id}, `, { polling: 50, timeout: 15000 });
     },
   );
-  const views = side.getByRole("navigation", { name: "Views" });
+  const views = page.getByRole("navigation", { name: "Views" });
   await measure(
     "board views",
     async () => undefined,
-    () => views.getByRole("button", { name: /^In progress/ }).click(),
-    () => views.getByRole("button", { name: "Tasks", exact: true }).click(),
+    () => views.getByRole("button", { name: /^Working/ }).click(),
+    () => views.getByRole("button", { name: "Everything", exact: true }).click(),
   );
 
   await toConversation();
-  const newChannel = chrome.getByRole("button", { name: "New channel", exact: true }).filter({ visible: true }).first();
+  const newChannel = side.getByRole("button", { name: "New channel", exact: true });
   await measure(
     "dialog close",
     () => newChannel.click().then(() => page.getByRole("dialog").waitFor()),

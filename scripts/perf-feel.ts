@@ -422,7 +422,7 @@ try {
   await page.getByRole("textbox", { name: "Your name" }).fill("Jonatas");
   await page.getByRole("button", { name: "Continue" }).click();
   await page
-    .getByRole("banner", { name: "Channels" })
+    .getByRole("complementary", { name: "Channels" })
     .getByRole("button", { name: /Jonatas/i })
     .first()
     .waitFor();
@@ -432,7 +432,7 @@ try {
     options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true, hasPrf: true },
   } as never);
 
-  await page.getByRole("banner", { name: "Channels" }).getByRole("button", { name: "New channel", exact: true }).click();
+  await page.getByRole("complementary", { name: "Channels" }).getByRole("button", { name: "New channel", exact: true }).click();
   await page.getByRole("dialog").getByRole("textbox").fill("feel");
   const before = page.url();
   await page.getByRole("button", { name: "Create channel" }).click();
@@ -458,7 +458,7 @@ try {
     await saving.getByRole("button", { name: "Done" }).click();
     await saving.waitFor({ state: "hidden" });
   }
-  await page.getByRole("complementary", { name: "Channel" }).getByRole("region", { name: "Conversations" }).getByRole("button").first().click();
+  await page.getByRole("complementary", { name: "Channels" }).getByRole("region", { name: "Conversations" }).getByRole("button").first().click();
   await page.getByRole("textbox", { name: "Message" }).fill("Make it feel fast");
   await page.keyboard.press("Enter");
 
