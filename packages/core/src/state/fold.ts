@@ -526,6 +526,11 @@ export function fold(
     if (!lease.holder && !lease.queue.length) leases.delete(name);
   }
 
+  for (const t of [...tasks.values()]) {
+    if (t.state === "done" || !t.owner || members.get(t.owner)?.active !== false) continue;
+    tasks.set(t.id, { ...omit(t, "owner"), leftBy: t.owner, ...(t.state === "doing" ? { state: "todo" as const } : {}) });
+  }
+
   passGuard(Infinity);
 
   return {
