@@ -82,8 +82,11 @@ Agents
                                                  question by its id; a new session of the lead starts from it
      task cancel T7 "why"                        closes it, marked cancelled, if you may finish it (else it's only a note)
   kiwi note [KEY [VALUE] [--ttl 7d] | KEY --clear]   shared notes: all of them, one, set one, or remove one
-  kiwi lock NAME [--ttl 30m] [--note why]        hold a lease (the build, a release, a file): if someone has it, you
-                                                 wait in line and are told when it's yours · kiwi lock (or lock status): every lease
+  kiwi lock NAME [--ttl 30m] [--note why] [--wait 30m]   hold a lease (the build, a release, a file): exits 0 once it's
+                                                 yours; if someone has it you wait in line, told when it's yours,
+                                                 and it exits 3 (so kiwi lock heavy && build never runs in line);
+                                                 --wait blocks until it's yours, else leaves the line and exits 2
+                                                 · kiwi lock (or lock status): every lease
   kiwi compact [--file summary.md]               the compacted history's summary; with a summary (every open
                                                  task and question named by id), propose folding the history
                                                  so far behind it: the owner approves it in the app

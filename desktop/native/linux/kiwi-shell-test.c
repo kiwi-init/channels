@@ -2,7 +2,9 @@
 #include <gtk/gtk.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <webkit2/webkit2.h>
 
 static GMainLoop *loop;
@@ -86,6 +88,42 @@ static gboolean stop(gpointer data) {
   return G_SOURCE_REMOVE;
 }
 
+static bool proc_stat(long pid, char *comm, size_t size, long *ppid) {
+  char path[64];
+  snprintf(path, sizeof path, "/proc/%ld/stat", pid);
+  gchar *text = NULL;
+  if (!g_file_get_contents(path, &text, NULL, NULL)) return false;
+  char *lp = strchr(text, '(');
+  char *rp = strrchr(text, ')');
+  bool ok = lp && rp && rp > lp && sscanf(rp + 2, "%*c %ld", ppid) == 1;
+  if (ok) g_strlcpy(comm, lp + 1, MIN(size, (size_t)(rp - lp)));
+  g_free(text);
+  return ok;
+}
+
+static int web_processes(int *in_bwrap) {
+  *in_bwrap = 0;
+  int found = 0;
+  long self = (long)getpid();
+  GDir *dir = g_dir_open("/proc", 0, NULL);
+  if (!dir) return 0;
+  const gchar *name;
+  while ((name = g_dir_read_name(dir))) {
+    char *end;
+    long pid = strtol(name, &end, 10);
+    char comm[64];
+    long up;
+    if (*end || !proc_stat(pid, comm, sizeof comm, &up) || strcmp(comm, "WebKitWebProces") != 0) continue;
+    bool bwrap = false;
+    while (up > 1 && up != self && proc_stat(up, comm, sizeof comm, &up)) bwrap = bwrap || strcmp(comm, "bwrap") == 0;
+    if (up != self) continue;
+    found++;
+    if (bwrap) (*in_bwrap)++;
+  }
+  g_dir_close(dir);
+  return found;
+}
+
 typedef struct {
   bool (*deny)(void);
   bool (*watch)(void (*)(void));
@@ -152,12 +190,16 @@ int main(int argc, char **argv) {
   g_idle_add(install_from_worker, &hooks);
   g_main_loop_run(loop);
   if (hooks.ok) printf("hooks: installed on GTK's main loop when asked from another thread, as main-eb's worker asks\n");
-  bool enabled = webkit_web_context_get_sandbox_enabled(webkit_web_context_get_default());
+  gchar *data_dir = g_dir_make_tmp("kiwi-shell-test-data-XXXXXX", NULL);
+  WebKitWebsiteDataManager *data = webkit_website_data_manager_new("base-data-directory", data_dir, "base-cache-directory", data_dir, NULL);
+  WebKitWebContext *partition = webkit_web_context_new_with_website_data_manager(data);
+  g_object_unref(data);
+  bool enabled = webkit_web_context_get_sandbox_enabled(partition);
   if (want_sandbox && (!hooks.sandboxed || !enabled)) {
-    fprintf(stderr, "kiwi-shell-test: kiwi_sandbox_pages didn't turn WebKitGTK's sandbox on: %s\n", hooks.why[0] ? hooks.why : "no reason given");
+    fprintf(stderr, "kiwi-shell-test: kiwi_sandbox_pages didn't turn WebKitGTK's sandbox on for a context made after it, as Electrobun's persist:default one is: %s\n", hooks.why[0] ? hooks.why : "no reason given");
     bad++;
   } else if (want_sandbox)
-    printf("sandbox: on for the default context before its first web view, so the page below runs in bubblewrap\n");
+    printf("sandbox: on for a context made after it was asked for, as Electrobun makes one for its persist:default partition, so the page below runs in bubblewrap\n");
   else if (hooks.sandboxed || enabled || !strstr(hooks.why, "bwrap can't build it here")) {
     fprintf(stderr, "kiwi-shell-test: with bwrap unable to build its namespaces here, kiwi_sandbox_pages left the sandbox %s and said '%s'\n", enabled ? "on" : "off", hooks.why);
     bad++;
@@ -169,7 +211,7 @@ int main(int argc, char **argv) {
   }
 
   GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-  WebKitWebView *view = WEBKIT_WEB_VIEW(webkit_web_view_new());
+  WebKitWebView *view = WEBKIT_WEB_VIEW(webkit_web_view_new_with_context(partition));
   WebKitSettings *settings = webkit_web_view_get_settings(view);
   g_object_set(settings, "enable-media-stream", TRUE, "enable-mock-capture-devices", TRUE, "javascript-can-open-windows-automatically", TRUE, NULL);
   g_signal_connect(view, "permission-request", G_CALLBACK(allow_everything), NULL);
@@ -189,6 +231,20 @@ int main(int argc, char **argv) {
     bad++;
   } else
     printf("microphone: %s, and the handler that would allow it never ran\n", verdict);
+
+  int in_bwrap = 0;
+  int webs = web_processes(&in_bwrap);
+  if (webs == 0) {
+    fprintf(stderr, "kiwi-shell-test: no WebKitWebProcess of this test's own is running\n");
+    bad++;
+  } else if (want_sandbox && in_bwrap != webs) {
+    fprintf(stderr, "kiwi-shell-test: %d of its %d WebKitWebProcess run outside bwrap, though its context has the sandbox on\n", webs - in_bwrap, webs);
+    bad++;
+  } else if (!want_sandbox && in_bwrap) {
+    fprintf(stderr, "kiwi-shell-test: %d WebKitWebProcess run in bwrap, though here it can't build the sandbox\n", in_bwrap);
+    bad++;
+  } else
+    printf("web process: %d, %s\n", webs, want_sandbox ? "each with bwrap among its parents" : "none in bwrap");
 
   char url[4096];
   size_t n = committed(url, sizeof url);
