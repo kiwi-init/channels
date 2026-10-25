@@ -24,9 +24,16 @@ test("every job checks the two versions before it downloads or runs anything, an
   }
 });
 
-test("each script parses, and the version check refuses anything but two plain release versions before touching the network", () => {
+test("each script parses, and the version check refuses anything but two Channels Livewire versions before touching the network (T1192)", () => {
   for (const f of readdirSync(SCRIPTS)) expect({ f, code: Bun.spawnSync(["bash", "-n", join(SCRIPTS, f)]).exitCode }).toEqual({ f, code: 0 });
-  for (const args of [["0.27.7; rm -rf /", "2026.10.0"], ["0.27.7", "v2026.10.0"], ["0.27.7"], ["0.27", "2026.10.0"]]) {
+  for (const args of [
+    ["2026.10.2-livewire.2; rm -rf /", "2026.10.2-livewire.3"],
+    ["2026.10.2-livewire.2", "v2026.10.2-livewire.3"],
+    ["2026.10.2-livewire.2"],
+    ["2026.10.2", "2026.10.3"],
+    ["2026.10.2-livewire.2", "2026.10.2-rc.1"],
+    ["2026.10-livewire.2", "2026.10.2-livewire.3"],
+  ]) {
     const r = Bun.spawnSync(["bash", join(SCRIPTS, "versions.sh"), ...args], { env: { PATH: "/usr/bin:/bin", GITHUB_REPOSITORY: "o/r" } });
     expect({ args, code: r.exitCode }).toEqual({ args, code: 1 });
     expect(r.stdout.toString()).not.toContain("checking that");

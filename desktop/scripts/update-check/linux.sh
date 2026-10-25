@@ -5,8 +5,8 @@ TO=$2
 OUT=$3
 mkdir -p "$OUT/dl" "$HOME/Applications"
 problems=()
-img="$HOME/Applications/Channels.AppImage"
-main_pid() { pgrep -f '/Channels/bin/bun' | head -n 1; }
+img="$HOME/Applications/ChannelsLivewire.AppImage"
+main_pid() { pgrep -f '/ChannelsLivewire/bin/bun' | head -n 1; }
 
 gh release download "v$FROM" -R "$GITHUB_REPOSITORY" -p "Channels-$FROM-linux-x86_64.AppImage" -p "Channels-$FROM-linux-amd64.deb" -D "$OUT/dl" || exit 1
 gh release download "v$TO" -R "$GITHUB_REPOSITORY" -p SHA256SUMS -p "Channels-$TO-linux-amd64.deb" -D "$OUT/to" || exit 1
@@ -45,13 +45,13 @@ sleep 3
 pkill -KILL -f "$img" 2> /dev/null
 
 sudo apt-get install -y "$OUT/dl/Channels-$FROM-linux-amd64.deb" > /dev/null || problems+=("the $FROM deb didn't install")
-echo "deb installed: $(dpkg-query -W -f '${Version}' kiwi-desktop)"
+echo "deb installed: $(dpkg-query -W -f '${Version}' channels-livewire)"
 sudo apt-get install -y "$OUT/to/Channels-$TO-linux-amd64.deb" > /dev/null || problems+=("the $TO deb didn't install over $FROM's")
-got=$(dpkg-query -W -f '${Version}' kiwi-desktop)
+got=$(dpkg-query -W -f '${Version}' channels-livewire)
 echo "deb after installing $TO over it: $got"
 [ "$got" = "$TO" ] || problems+=("dpkg says $got, not $TO")
-sudo dpkg --verify kiwi-desktop || problems+=("dpkg --verify finds changed files")
-sudo dpkg --purge kiwi-desktop > /dev/null
+sudo dpkg --verify channels-livewire || problems+=("dpkg --verify finds changed files")
+sudo dpkg --purge channels-livewire > /dev/null
 
 find "$HOME/.local/state" -name main.log 2> /dev/null | while read -r f; do
   echo "::group::$f"
@@ -62,4 +62,4 @@ if [ ${#problems[@]} -gt 0 ]; then
   printf 'FAIL %s\n' "${problems[@]}"
   exit 1
 fi
-echo "ok: an installed $FROM AppImage updated itself to $TO, and $TO's deb installs over $FROM's"
+echo "ok: an installed Channels Livewire $FROM AppImage updated itself to $TO, and $TO's deb installs over $FROM's"
