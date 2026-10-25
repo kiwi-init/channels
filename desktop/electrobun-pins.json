@@ -37,21 +37,21 @@
     }
   },
   "devkit": {
-    "macos-arm64": "adbb8270ea52bf55fce3d4347d45bb1c1e8c246cb302471d37eb7bc9ccc60814",
-    "linux-x64": "adbb8270ea52bf55fce3d4347d45bb1c1e8c246cb302471d37eb7bc9ccc60814",
-    "linux-arm64": "adbb8270ea52bf55fce3d4347d45bb1c1e8c246cb302471d37eb7bc9ccc60814"
+    "macos-arm64": "28fb2d607311305c12d7139fab871e63e992f91b23508877a4a86ab229ce9ad2",
+    "linux-x64": "28fb2d607311305c12d7139fab871e63e992f91b23508877a4a86ab229ce9ad2",
+    "linux-arm64": "28fb2d607311305c12d7139fab871e63e992f91b23508877a4a86ab229ce9ad2"
   },
   "app": {
     "macos-arm64": {
       "Contents/MacOS/launcher": "cb56c4ccfa6d2c1a3596e44d143af212b5af3e196199a83c19d511506f28ff4f",
       "Contents/MacOS/bun": "539598c775882420b9d8deb7dc14d845f20f7d26f5600c50ab067dde6ac3f3bf",
-      "Contents/MacOS/libElectrobunCore.dylib": "e59f8d814bac48dc2203efcccfd72c0a1d6ed26a39d98346995680fcadfae3f6",
-      "Contents/MacOS/libNativeWrapper.dylib": "c4e89577c2796bceffe656ffa880d53c675f8d0206741bc0c3907e0fe3bcbc0a",
+      "Contents/MacOS/libElectrobunCore.dylib": "6575313685d45fa3ac82598fd55d09c9228fbb8ab135e455d19112f3bf59a7c2",
+      "Contents/MacOS/libNativeWrapper.dylib": "9eaa4cdfabe6c3947e617a4de58888888a7f099787f0dca02b4313904481344b",
       "Contents/MacOS/libasar.dylib": "775e92fed7238ea1da09ec5ae54a72a19baaccf602a4467f16bb2e36cff9cfbc",
       "Contents/MacOS/zig-zstd": "581944e9e8cac153581cf17109f1f58b5b87202524909d11803bfce2402c2548",
       "Contents/MacOS/bspatch": "a722fd1cf674012f25eb192c84b154bb753ec62422eb5d568907c44405cc81dd",
       "Contents/Resources/main.js": "8afb61682280f0f2bd82abaad23996d043781cf23cd132a2bbfa2a8b8cd001c7",
-      "Contents/Resources/preload-full.js": "bc5f66846ab52b877cea81e0131c1433d8509707f2867c84713968703069b70e",
+      "Contents/Resources/preload-full.js": "0c9f9ff20749edffc2768f4a89c08bd5af916d3471dda8af6e5d05510a9630ac",
       "Contents/Resources/preload-sandboxed.js": "d358fa4e85148ae6059eca9cfb398faf7a6c0710a03cdc972275f6a61670f3f9",
       "Contents/Resources/uninstall": "1445e6d53835578651faec6a4bc306be7a191aee5bb5240a924965433bf63717"
     }
