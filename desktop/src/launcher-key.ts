@@ -133,8 +133,8 @@ export function endSession(ch: LineChannel): void {
   }
 }
 
-export function keySources(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env): KeySources {
-  if (platform !== "darwin") return { key: keychainKey(), legacy: legacyPassword(platform), done: () => {} };
+export function keySources(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env, service: string = "Channels"): KeySources {
+  if (platform !== "darwin") return { key: keychainKey(service), legacy: legacyPassword(platform), done: () => {} };
   const ch = launcherChannel(env);
   if (!ch) throw new Error("on a Mac, Channels gets its store key only from its signed launcher, and it wasn't started by it");
   return { key: launcherKey(ch), legacy: launcherLegacyPassword(ch), done: () => endSession(ch) };

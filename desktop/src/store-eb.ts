@@ -24,12 +24,13 @@ export interface EbStoreOptions {
   keys: KeySources | Error;
   home?: string;
   platform?: NodeJS.Platform;
+  importLegacy?: boolean;
 }
 
-export async function openEbStore({ dir, keys, home = os.homedir(), platform = process.platform }: EbStoreOptions): Promise<OpenStore> {
+export async function openEbStore({ dir, keys, home = os.homedir(), platform = process.platform, importLegacy = true }: EbStoreOptions): Promise<OpenStore> {
   if (keys instanceof Error) return { kind: "unreadable", why: keys.message, file: path.join(dir, STORE_FILE), cause: "launcher" };
   try {
-    return await openStore({ dir, key: keys.key, legacy: () => readLegacyStore(keys.legacy, platform, home), platform });
+    return await openStore({ dir, key: keys.key, legacy: () => (importLegacy ? readLegacyStore(keys.legacy, platform, home) : Promise.resolve({ kind: "none" })), platform });
   } finally {
     try {
       keys.done();

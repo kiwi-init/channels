@@ -8,6 +8,8 @@ import type { OpenStore } from "./store-v2.ts";
 import { brokenStore, openStore } from "./store.ts";
 import { openTestStore } from "./test-build-eb.ts";
 
+declare const KIWI_EB_LIVEWIRE: boolean;
+
 let opened: OpenStore | null = null;
 
 function endKeySession(): void {
@@ -21,7 +23,7 @@ function endKeySession(): void {
 
 export async function openStoreForThisBuild(): Promise<void> {
   if (openTestStore(endKeySession)) return;
-  opened = await openEbStore({ dir: dataDir, keys: launcherKeys });
+  opened = await openEbStore({ dir: dataDir, keys: launcherKeys, importLegacy: !KIWI_EB_LIVEWIRE });
   openStore(v2Vault(opened));
 }
 
