@@ -38,11 +38,11 @@ install scripts.
 
 ## Download links
 
-`app.js` lists the desktop app files the v0.27.7 release publishes, under the app's
+`app.js` lists the desktop app files the v2026.10.0 release publishes, under the app's
 name, Channels (releases up to v0.16.2 named them `Kiwi-…`):
 
-- `Channels-0.27.7-mac-arm64.dmg` (Apple silicon only: Intel Macs get the CLI)
-- `Channels-0.27.7-linux-x86_64.AppImage` / `Channels-0.27.7-linux-amd64.deb`
+- `Channels-2026.10.0-mac-arm64.dmg` (Apple silicon only: Intel Macs get the CLI)
+- `Channels-2026.10.0-linux-x86_64.AppImage` / `Channels-2026.10.0-linux-amd64.deb`
 
 A tag's release stamps its version into these names (`scripts/stamp.ts`) and commits
 them to main; the site deploys only from a tag, after its GitHub release exists. The names
