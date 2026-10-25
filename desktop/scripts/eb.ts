@@ -35,11 +35,16 @@ if (mismatches(root, pin.files).length) await fetchHutch();
 const bad = mismatches(root, pin.files);
 if (bad.length) throw new Error(`eb: the pinned Hutch in ${root} changed: ${bad.join("; ")}`);
 
-const shim = [path.join(desktop, "node_modules"), path.join(desktop, "..", "node_modules")].map((d) => path.join(d, "electrobun", "bin", "electrobun.cjs")).find((f) => fs.existsSync(f));
-if (!shim) throw new Error("eb: the electrobun package isn't installed: run bun install");
-const run = spawnSync(process.execPath, [shim, ...process.argv.slice(2)], {
+const hutch = path.join(root, "bin", "hutch");
+const run = spawnSync(hutch, ["electrobun", ...process.argv.slice(2)], {
   stdio: "inherit",
   cwd: desktop,
-  env: { ...process.env, ELECTROBUN_HUTCH_BINARY: path.join(root, "bin", "hutch") },
+  env: {
+    ...process.env,
+    ELECTROBUN_HUTCH_BINARY: hutch,
+    ELECTROBUN_RELEASES_BASE_URL: PINS.releasesBaseUrl,
+    HUTCH_DEFAULT_CLI: PINS.hutch.version,
+    HUTCH_DEFAULT_ELECTROBUN: PINS.electrobun,
+  },
 });
 process.exit(run.status ?? 1);

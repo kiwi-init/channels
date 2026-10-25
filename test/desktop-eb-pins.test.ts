@@ -3,7 +3,6 @@ import fs from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import desktopPackage from "../desktop/package.json" with { type: "json" };
 import { hostKey, mismatches, pinFor, PINS, sha256, treeSha256 } from "../desktop/scripts/eb-pins.ts";
 
 const dirs: string[] = [];
@@ -17,11 +16,12 @@ afterEach(() => {
 });
 
 describe("Electrobun's toolchain and what it ships are pinned in the repo (T804)", () => {
-  test("the pins move with the electrobun dependency", () => {
-    expect(PINS.electrobun).toBe(desktopPackage.devDependencies.electrobun);
+  test("the app builds against a Livewire release candidate and the Hutch it pairs with (T377)", () => {
+    expect(PINS.electrobun).toMatch(/^\d+\.\d+\.\d+-livewire\.rc\.\d+$/);
+    expect(PINS.releasesBaseUrl).toBe("https://github.com/kiwi-init/electrobun-livewire/releases/download");
     for (const key of ["macos-arm64", "linux-x64", "linux-arm64"]) {
       const h = pinFor(PINS.hutch.platforms, key, "Hutch archive");
-      expect(h.url).toBe(`https://github.com/blackboardsh/electrobun/releases/download/v${PINS.electrobun}/electrobun-hutch-${key}.tar.gz`);
+      expect(h.url).toMatch(new RegExp(`^https://hutch\\.blackboard\\.sh/hutch/builds/[0-9a-f]{40}/${key}/hutch\\.tar\\.gz$`));
       expect(h.sha256).toMatch(/^[0-9a-f]{64}$/);
       expect(Object.keys(h.files).sort()).toEqual(["bin/hutch", "bin/hutch-engine", "hutch-release.json"]);
     }
@@ -30,31 +30,12 @@ describe("Electrobun's toolchain and what it ships are pinned in the repo (T804)
     for (const key of ["linux-x64", "linux-arm64"]) expect(pinFor(PINS.devkit, key, "devkit")).toBe(pinFor(PINS.devkit, "macos-arm64", "devkit"));
   });
 
-  test("Linux's native wrapper is built from pinned Electrobun source, CEF and Dawn headers and one patch (T523)", () => {
-    const { source, cef, dawn } = PINS.nativeWrapper;
-    const commit = /^https:\/\/codeload\.github\.com\/blackboardsh\/electrobun\/tar\.gz\/([0-9a-f]{40})$/.exec(source.url)?.[1];
-    expect(commit).toBeString();
-    expect(source.keep).toBe(`electrobun-${commit}/package/src/native`);
-    expect(cef.url).toStartWith("https://cef-builds.spotifycdn.com/cef_binary_");
-    expect(cef.keep).toEndWith("_linux64_minimal/include");
-    expect(dawn.url).toStartWith("https://electrobun-artifacts.blackboard.sh/electrobun-dawn/releases/");
-    expect(dawn.keep).toBe("linux-x64/include");
-    for (const pin of [source, cef, dawn]) expect(pin.tree).toMatch(/^[0-9a-f]{64}$/);
-    const patch = fs.readFileSync(path.join(import.meta.dirname, "..", "desktop", "native", "linux", "electrobun-wayland.patch"), "utf8");
-    expect(patch.match(/^\+\+\+ .*$/gm)).toEqual(["+++ b/package/src/native/linux/nativeWrapper.cpp"]);
-    expect(patch).toContain('\n-            setenv("GDK_BACKEND", "x11", 1);\n');
-    expect(patch).toContain('\n+            if (isCEFAvailable()) {\n+                setenv("GDK_BACKEND", "x11", 1);\n+            }\n');
-  });
-
-  test("the wrapper loads AppIndicator at run time, so the AppImage starts where it isn't installed (T1065)", () => {
-    const tray = fs.readFileSync(path.join(import.meta.dirname, "..", "desktop", "native", "linux", "electrobun-tray.patch"), "utf8");
-    expect(tray.match(/^\+\+\+ .*$/gm)).toEqual(["+++ b/package/src/native/linux/nativeWrapper.cpp"]);
-    expect(tray).toContain('+        void* lib = dlopen("libayatana-appindicator3.so.1", RTLD_NOW | RTLD_LOCAL);\n');
-    for (const fn of ["app_indicator_new", "app_indicator_set_status", "app_indicator_set_title", "app_indicator_set_icon_full", "app_indicator_set_menu"])
-      expect(tray).toContain(`dlsym(lib, "${fn}")`);
-    expect(tray).toContain("+    if (!appIndicatorApi()) {\n+        return nullptr;\n+    }\n");
-    const build = fs.readFileSync(path.join(import.meta.dirname, "..", "desktop", "scripts", "eb-native-wrapper.ts"), "utf8");
-    expect(build).toContain('const GTK = ["webkit2gtk-4.1", "gtk+-3.0"];');
+  test("Livewire's own native wrapper ships, checked for an AppIndicator link (T377)", () => {
+    expect(fs.existsSync(path.join(import.meta.dirname, "..", "desktop", "native", "linux", "electrobun-wayland.patch"))).toBe(false);
+    expect(fs.existsSync(path.join(import.meta.dirname, "..", "desktop", "native", "linux", "electrobun-tray.patch"))).toBe(false);
+    const postBuild = fs.readFileSync(path.join(import.meta.dirname, "..", "desktop", "scripts", "eb-post-build.ts"), "utf8");
+    expect(postBuild).toContain('execFileSync("readelf", ["-d", wrapper]');
+    expect(postBuild).toContain('line.includes("appindicator")');
     const shell = fs.readFileSync(path.join(import.meta.dirname, "..", "desktop", "native", "linux", "kiwi-shell.c"), "utf8");
     expect(shell).toContain('#define TRAY_LIBRARY "libayatana-appindicator3.so.1"');
     expect(shell).toContain("  if (!tray_library()) return false;\n");

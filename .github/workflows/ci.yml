@@ -365,15 +365,11 @@ jobs:
           key: linux-debs-${{ runner.arch }}-${{ steps.image.outputs.key }}-${{ github.run_id }}
       - run: bun run web:build
       - id: electrobun
-        run: echo "version=$(bun -e 'console.log(require("./desktop/package.json").devDependencies.electrobun)')" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(bun -e 'console.log(require("./desktop/electrobun-pins.json").electrobun)')" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.hutch
           key: hutch-${{ runner.os }}-${{ runner.arch }}-electrobun-${{ steps.electrobun.outputs.version }}
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ~/.cache/kiwi-eb-native
-          key: eb-native-${{ hashFiles('desktop/electrobun-pins.json') }}
       - name: electrobun toolchain
         working-directory: desktop
         run: for i in 1 2 3; do bun run prepare:eb && exit 0; echo "electrobun prepare failed ($i of 3)"; sleep 20; done; exit 1
@@ -383,7 +379,7 @@ jobs:
         env:
           DASH_RELEASE_OFFLINE: "1"
         run: bun run build:eb
-      - name: the linux-arm64 Hutch and devkit match their pins (no job builds there), and the native wrapper's source is Electrobun's release tag
+      - name: the linux-arm64 Hutch and Livewire devkit match their pins (no job builds there)
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-pins-check.ts linux-arm64
       - name: the store on Linux, through a throwaway GNOME keyring and with no Secret Service
