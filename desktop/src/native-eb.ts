@@ -23,10 +23,13 @@ const frostShell = mac
   ? dlopen(shellPath, {
       kiwi_window_frost: { args: [FFIType.ptr, FFIType.i32], returns: FFIType.bool },
       kiwi_look_setting: { args: [FFIType.ptr, FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
+      kiwi_window_appearance: { args: [FFIType.ptr, FFIType.i32], returns: FFIType.void },
     }).symbols
   : null;
 
 export const frostWindow = (win: Pointer, appearance: number): boolean => frostShell?.kiwi_window_frost(win, appearance) ?? false;
+
+export const windowAppearance = (win: Pointer, appearance: number): void => void frostShell?.kiwi_window_appearance(win, appearance);
 
 const settingBuffer = new Uint8Array(256);
 

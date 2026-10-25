@@ -1,6 +1,6 @@
 import type { Pointer } from "bun:ffi";
 
-import { frostWindow, lookSetting, mac } from "./native-eb.ts";
+import { frostWindow, lookSetting, mac, windowAppearance } from "./native-eb.ts";
 
 const APPEARANCES: Record<string, number> = { light: 1, dark: 2 };
 const FONTS = new Set(["mono", "sf"]);
@@ -16,6 +16,10 @@ export function lookMarks(): string {
   return marks.length ? `${marks.join("\n")}\n` : "";
 }
 
+export function followTheme(win: Pointer, appearance: string): void {
+  if (frostOn) windowAppearance(win, APPEARANCES[appearance] ?? 0);
+}
+
 export function frost(win: Pointer): void {
-  if (frostOn) frostWindow(win, APPEARANCES[lookSetting("ChannelsAppearance")] ?? 0);
+  if (frostOn) frostWindow(win, 0);
 }

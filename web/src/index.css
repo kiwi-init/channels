@@ -249,7 +249,7 @@ body {
 }
 
 :root[data-frost] {
-  --rail: transparent;
+  --rail: light-dark(transparent, rgb(40 40 44 / 0.55));
 }
 
 :root[data-frost],
