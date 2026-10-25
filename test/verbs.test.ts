@@ -270,6 +270,19 @@ describe("review rounds through the CLI", () => {
     expect((await run(dev, "task", "proof", `T${t}`)).err).toContain("usage: kiwi task proof");
   });
 
+  test("start is the one way to take a task: two racing for an unowned one get one winner, the other is told who has it, and on your own task it only starts it", async () => {
+    const t = taskNo(await ok(dev, "task", "add", "take me", "--ask", want));
+    const [a, b] = await Promise.all([run(dev, "task", "start", `T${t}`), run(rev, "task", "start", `T${t}`)]);
+    expect([a.code, b.code].sort()).toEqual([0, 1]);
+    const won = a.code === 0 ? "dev" : "rev";
+    expect((a.code === 0 ? b : a).err).toMatch(new RegExp(`T${t} is (taken|owned) by ${won}`));
+    expect(JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"))).toMatchObject({ state: "doing", owner: won });
+    expect(await ok(won === "dev" ? dev : rev, "task", "start", `T${t}`, "back on it")).toContain(`T${t} doing @${won}`);
+    const unowned = taskNo(await ok(dev, "task", "add", "start with a note", "--ask", want));
+    expect(await ok(dev, "task", "start", `T${unowned}`, "on it")).toContain(`T${unowned} doing @dev`);
+    expect(JSON.parse(await ok(dev, "task", "show", `T${unowned}`, "--json")).notes.at(-1)).toMatchObject({ by: "dev", text: "on it" });
+  });
+
   test("review --review NAME from the reviewer hands the open round on: same round, same commit, and the new reviewer is told", async () => {
     const at = "3333333333333333333333333333333333333333";
     const t = taskNo(await ok(dev, "task", "add", "hand the review on", "--review", "rev", "--ask", want));

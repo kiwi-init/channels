@@ -699,20 +699,22 @@ async function run(part: Part): Promise<string[]> {
     const reviewed = tasksPanel.getByRole("region", { name: `Task ${added}` });
     await reviewed.getByRole("button", { name: "Send back" }).waitFor({ timeout: 15000 });
     if (await reviewed.getByRole("button", { name: "Approve" }).count()) throw new Error("Approve showed for a review waiting on an agent");
-    await reviewed.getByRole("button", { name: "Change reviewer…" }).click();
+    await reviewed.getByRole("button", { name: "More", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Change reviewer…" }).click();
     const picking = page.getByRole("dialog", { name: `Who reviews ${added}?` });
     const shots = process.env.SMOKE_SHOTS;
     if (shots) await page.waitForTimeout(400).then(() => page.screenshot({ path: join(shots, "change-reviewer.png") }));
     await picking.getByRole("button", { name: /\(you\)/ }).click();
     await picking.waitFor({ state: "detached" });
     await reviewed.getByRole("button", { name: "Approve" }).waitFor({ timeout: 15000 });
-    await reviewed.getByRole("button", { name: "Cancel task…" }).click();
+    await reviewed.getByRole("button", { name: "More", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Cancel task…" }).click();
     const cancelling = page.getByRole("dialog", { name: `Cancel ${added}?` });
     await cancelling.getByRole("textbox", { name: "Why it’s cancelled" }).fill("smoke: stale");
     if (shots) await page.waitForTimeout(400).then(() => page.screenshot({ path: join(shots, "cancel-task.png") }));
     await cancelling.getByRole("button", { name: "Cancel task" }).click();
     await cancelling.waitFor({ state: "detached" });
-    await reviewed.getByRole("button", { name: "Cancel task…" }).waitFor({ state: "detached", timeout: 15000 });
+    await reviewed.getByRole("button", { name: "More", exact: true }).waitFor({ state: "detached", timeout: 15000 });
     await tasksPanel.getByRole("button", { name: "Close tasks" }).click();
     log(`ok  ${at}`);
 
