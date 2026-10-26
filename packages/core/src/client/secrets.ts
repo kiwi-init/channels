@@ -1,8 +1,8 @@
 import * as Effect from "effect/Effect";
 import { keepSeen } from "../crypto.ts";
-import type { Member } from "../membership.ts";
 import { MissingKey, Rejected } from "../refusals.ts";
 import {
+  grantable,
   MAX_SECRETS,
   newSecretId,
   openSecret,
@@ -35,8 +35,6 @@ export interface SecretsFx {
   setSecret(input: SecretInput): Effect.Effect<SecretView, Refused, Relay>;
   deleteSecret(id: string): Effect.Effect<void, Refused, Relay>;
 }
-
-const grantable = (m: Member): boolean => m.active && !m.unverified && !m.owner && m.kind !== "human";
 
 type Held = SecretPlain & { sealed: string };
 
