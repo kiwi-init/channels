@@ -3,12 +3,14 @@ import { takeDeepLink } from "../deep-links.ts";
 import { externalUrl } from "../guard.ts";
 import type { Host } from "../host.ts";
 import { openInBrowser } from "../open.ts";
+import { keysAtRest } from "../store.ts";
 import { checkForUpdate, updateState } from "../updater.ts";
 
 export function miscCalls(
   host: Host,
-): Serves<"getUpdate" | "installUpdate" | "checkUpdate" | "notify" | "openExternal" | "getDeepLink" | "takeDroppedFiles" | "takePastedImage" | "setBadge" | "setAppearance"> {
+): Serves<"keysAtRest" | "getUpdate" | "installUpdate" | "checkUpdate" | "notify" | "openExternal" | "getDeepLink" | "takeDroppedFiles" | "takePastedImage" | "setBadge" | "setAppearance"> {
   return {
+    keysAtRest: () => keysAtRest(),
     getUpdate: () => updateState(),
     installUpdate: () => host.restartToUpdate(),
     checkUpdate: () => checkForUpdate(),

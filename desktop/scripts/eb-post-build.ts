@@ -52,6 +52,10 @@ const keysWorker = await Bun.build({ entrypoints: [path.join(desktop, "src", "ke
 const keysOut = keysWorker.outputs[0];
 if (!keysWorker.success || !keysOut) throw new Error(`the keys worker didn't bundle: ${keysWorker.logs.join("\n")}`);
 fs.writeFileSync(path.join(app, "bun", "keys.js"), await keysOut.text());
+const boxWorker = await Bun.build({ entrypoints: [path.join(desktop, "src", "message-box-worker.ts")], target: "bun" });
+const boxOut = boxWorker.outputs[0];
+if (!boxWorker.success || !boxOut) throw new Error(`the message box worker didn't bundle: ${boxWorker.logs.join("\n")}`);
+fs.writeFileSync(path.join(app, "bun", "message-box.js"), await boxOut.text());
 const answered = await bundledKeysAnswer(path.join(app, "bun", "keys.js"));
 if (answered !== "ok") throw new Error(`the bundled keys worker didn't answer a page's request: ${answered}`);
 if (os === "linux") {
