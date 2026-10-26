@@ -59,6 +59,7 @@ class Keyring:
         self.has_keyring = has_keyring
         self.prompts = 0
         self.sessions = 0
+        self.results: dict[str, GLib.Variant] = {}
 
     def log(self, line: str) -> None:
         print(f"secrets-cancel: {line}", file=sys.stderr, flush=True)
@@ -66,9 +67,10 @@ class Keyring:
     def register(self, path: str, iface: str) -> None:
         self.conn.register_object(path, IFACES[iface], self.call, self.prop, None)
 
-    def prompt(self) -> str:
+    def prompt(self, result: GLib.Variant) -> str:
         self.prompts += 1
         path = f"{BASE}/prompt/p{self.prompts}"
+        self.results[path] = result
         self.register(path, "org.freedesktop.Secret.Prompt")
         return path
 
@@ -91,9 +93,9 @@ class Keyring:
         elif method == "SearchItems":
             inv.return_value(GLib.Variant("(ao)", ([],)))
         elif method in ("Unlock", "Lock"):
-            inv.return_value(GLib.Variant("(aoo)", ([], self.prompt())))
+            inv.return_value(GLib.Variant("(aoo)", ([], self.prompt(GLib.Variant("ao", [])))))
         elif method == "CreateCollection":
-            inv.return_value(GLib.Variant("(oo)", ("/", self.prompt())))
+            inv.return_value(GLib.Variant("(oo)", ("/", self.prompt(GLib.Variant("o", "/")))))
         elif method == "CreateItem":
             inv.return_dbus_error(LOCKED_ERROR, "the collection is locked")
         elif method == "GetSecrets":
@@ -105,9 +107,9 @@ class Keyring:
         elif method == "Prompt":
             inv.return_value(None)
             self.log(f"prompt {path} dismissed")
-            conn.emit_signal(None, path, iface, "Completed", GLib.Variant("(bv)", (True, GLib.Variant("ao", []))))
+            conn.emit_signal(None, path, iface, "Completed", GLib.Variant("(bv)", (True, self.results[path])))
         elif method == "Delete":
-            inv.return_value(GLib.Variant("(o)", (self.prompt(),)))
+            inv.return_value(GLib.Variant("(o)", (self.prompt(GLib.Variant("s", "")),)))
         else:
             inv.return_value(None)
 

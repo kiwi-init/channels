@@ -92,7 +92,10 @@ lib_test() {
 }
 
 plain_home=$(runuser -u tester -- mktemp -d)
+activatable=$(grep -lE 'org\.freedesktop\.secrets|org\.gnome\.keyring' /usr/share/dbus-1/services/*.service 2> /dev/null)
+for f in $activatable; do mv "$f" "$f.off"; done
 session none stock no-tray "$plain_home"
+for f in $activatable; do mv "$f.off" "$f"; done
 lib_test kiwi-tray-test "$tests/kiwi-tray-test" "$lib" no-indicator
 install "${ayatana[@]}" || exit 1
 lib_test kiwi-tray-test "$tests/kiwi-tray-test" "$lib"

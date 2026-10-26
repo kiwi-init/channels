@@ -34,29 +34,32 @@ lockInternalRpc(internalRpcHandlers);
 async function start(instance: Extract<Instance, { kind: "first" }>): Promise<void> {
   ebHost.app.onQuit(instance.release);
   const asked = performance.now();
-  const opening = openStoreForThisBuild();
+  let cancelled = false;
+  const stop =
+    process.platform === "linux"
+      ? watchCancels(() => {
+          if (cancelled) return;
+          cancelled = true;
+          console.error("Channels: the keyring prompt was cancelled; the window says so and offers to ask again");
+          showKeyringNote("cancelled");
+        })
+      : () => {};
+  const opening = openStoreForThisBuild().finally(stop);
   const inTime = await openedWithin(opening, KEYRING_GRACE_MS);
   if (!inTime) console.error(`Channels: the keyring hasn't answered in ${KEYRING_GRACE_MS / 1000} s, so the window says it's waiting for it`);
   watchPage();
   followColorScheme();
   watchDrops();
   watchPaste();
-  const win = await createWindow(!inTime ? "waiting" : keyringLocked() ? "locked" : null);
+  const win = await createWindow(cancelled && (!inTime || keyringLocked()) ? "cancelled" : !inTime ? "waiting" : keyringLocked() ? "locked" : null);
   if (!win) {
     instance.release();
     return;
   }
   if (!inTime) {
-    const stop =
-      process.platform === "linux"
-        ? watchCancels(() => {
-            console.error("Channels: the keyring prompt was cancelled; the window says so and offers to ask again");
-            showKeyringNote("cancelled");
-          })
-        : () => {};
-    await opening.finally(stop);
+    await opening;
     console.error(`Channels: the keyring answered after ${Math.round((performance.now() - asked) / 1000)} s`);
-    if (keyringLocked()) showKeyringNote("locked");
+    if (keyringLocked() && !cancelled) showKeyringNote("locked");
   }
   if (keyringLocked()) {
     console.error("Channels: the keyring stayed locked, so the window asks to unlock it and nothing is kept unencrypted");
