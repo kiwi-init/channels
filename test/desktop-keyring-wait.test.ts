@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { pageWithCsp } from "../desktop/src/eb-page.ts";
-import { openedWithin, waitingNote, waitingPage } from "../desktop/src/keyring-wait.ts";
+import { ASK_AGAIN_URL, keyringNote, keyringPage, openedWithin } from "../desktop/src/keyring-wait.ts";
 
 const INDEX = `<!doctype html>
 <html lang="en">
@@ -38,7 +38,7 @@ describe("a keyring that doesn't answer doesn't keep the window away (T1550)", (
   });
 
   test("the waiting page takes the app's stylesheet and none of its scripts", () => {
-    const page = waitingPage(INDEX, "linux");
+    const page = keyringPage(INDEX, "linux", "waiting");
     expect(page).toContain(`<link rel="stylesheet" crossorigin href="./assets/index-ghi.css">`);
     expect(page).not.toContain("<script");
     expect(page).not.toContain("modulepreload");
@@ -46,14 +46,27 @@ describe("a keyring that doesn't answer doesn't keep the window away (T1550)", (
   });
 
   test("the waiting page takes the CSP first in <head>, as the app's page does", () => {
-    const page = pageWithCsp(waitingPage(INDEX, "linux"), "https://channels.kiwiinit.com");
+    const page = pageWithCsp(keyringPage(INDEX, "linux", "waiting"), "https://channels.kiwiinit.com");
     expect(page).toMatch(/^<!doctype html>\n<html lang="en">\n<head><meta http-equiv="Content-Security-Policy"/);
   });
 
   test("it says what it waits for in each platform's words", () => {
-    expect(waitingPage(INDEX, "linux")).toContain("Waiting for your keyring");
-    expect(waitingPage(INDEX, "linux")).toContain("GNOME Keyring or KDE Wallet");
-    expect(waitingPage(INDEX, "darwin")).toContain("Waiting for your keychain");
-    expect(waitingNote("darwin").detail).not.toContain("GNOME");
+    expect(keyringPage(INDEX, "linux", "waiting")).toContain("Waiting for your keyring");
+    expect(keyringPage(INDEX, "linux", "waiting")).toContain("GNOME Keyring or KDE Wallet");
+    expect(keyringPage(INDEX, "darwin", "waiting")).toContain("Waiting for your keychain");
+    expect(keyringNote("darwin", "waiting").detail).not.toContain("GNOME");
+  });
+
+  test("a cancelled prompt and a keyring that stayed locked each say so, and ask again", () => {
+    expect(keyringPage(INDEX, "linux", "cancelled")).toContain("You cancelled the keyring prompt");
+    expect(keyringPage(INDEX, "linux", "locked")).toContain("Your keyring stayed locked");
+    for (const state of ["waiting", "cancelled", "locked"] as const) expect(keyringPage(INDEX, "linux", state)).toContain(`<a class="ask" href="${ASK_AGAIN_URL}">Ask again</a>`);
+    expect(keyringPage(INDEX, "darwin", "waiting")).not.toContain(ASK_AGAIN_URL);
+  });
+
+  test("Ask again is a link the page rules refuse, so main hears of it and the page runs no script", () => {
+    expect(ASK_AGAIN_URL.startsWith("views://internal/")).toBe(true);
+    expect(ASK_AGAIN_URL).not.toBe("views://internal/index.html");
+    expect(keyringPage(INDEX, "linux", "cancelled")).not.toContain("<script");
   });
 });

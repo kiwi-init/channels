@@ -558,3 +558,45 @@ describe("the keychain item", () => {
     }
   });
 });
+
+describe("a keyring that's there but cancelled or locked never costs the keys their sealing (T1566)", () => {
+  const withKeyring = (k: Keychain, keyring: { locked?: boolean; running?: boolean }): StoreKey => ({
+    ...k.key,
+    locked: async () => keyring.locked ?? false,
+    running: async () => keyring.running ?? false,
+  });
+
+  test("a sealed store whose key the keyring holds but kept locked is refused as locked, not as a lost key", async () => {
+    const dir = folder();
+    const raw = seal(JSON.stringify(STORE), randomBytes(32));
+    put(dir, STORE_FILE, raw);
+    const k = keychain();
+    const s = await openStore({ dir, key: withKeyring(k, { locked: true, running: true }), legacy: NO_LEGACY, platform: "linux" });
+    expect(s.kind === "unreadable" && s.cause).toBe("locked");
+    expect(k.sets()).toBe(0);
+    expect(read(dir).equals(raw)).toBe(true);
+  });
+
+  test("a sealed store with no key anywhere is still the lost-key refusal", async () => {
+    const dir = folder();
+    put(dir, STORE_FILE, seal(JSON.stringify(STORE), randomBytes(32)));
+    const s = await openStore({ dir, key: withKeyring(keychain(), { locked: false, running: true }), legacy: NO_LEGACY, platform: "linux" });
+    expect(s.kind === "unreadable" && s.cause).toBe("keyless");
+  });
+
+  test("a first run whose new key a running keyring refused is refused as locked, and writes no store", async () => {
+    const dir = folder();
+    const k = keychain(null, { set: "the prompt was dismissed" });
+    const s = await openStore({ dir, key: withKeyring(k, { running: true }), legacy: NO_LEGACY, platform: "linux" });
+    expect(s.kind === "unreadable" && s.cause).toBe("locked");
+    expect(existsSync(join(dir, STORE_FILE))).toBe(false);
+  });
+
+  test("a first run with no keyring running keeps the unencrypted store it always did, and says so", async () => {
+    const dir = folder();
+    const k = keychain(null, { get: "no secret service", set: "no secret service" });
+    const s = opened(await openStore({ dir, key: withKeyring(k, { running: false }), legacy: NO_LEGACY, platform: "linux" }));
+    expect(s.sealed).toBe(false);
+    expect(s.noKeychain).toBe("no secret service");
+  });
+});

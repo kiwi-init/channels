@@ -335,6 +335,7 @@ export interface KiwiBridge {
   /** Put the bundled kiwi binary in ~/.kiwi/bin and on the PATH (the app also does this on every start). */
   installCli(): Promise<{ path: string }>;
   /** A newer proper release: being downloaded, ready to restart into, or only available (a .deb). */
+  keysAtRest(): Promise<KeysAtRest>;
   getUpdate(): Promise<UpdateView | null>;
   onUpdate(cb: (u: UpdateView) => void): () => void;
   /** Restart into the downloaded update. */
@@ -376,6 +377,11 @@ export interface KiwiBridge {
   settingsOn(machinePk: string): Promise<FromMachine<ComputerSettings>>;
   launchRoots(): Promise<string[]>;
   setLaunchRoot(dir: string, to: "add" | "remove"): Promise<string[]>;
+}
+
+export interface KeysAtRest {
+  sealed: boolean;
+  why: string | null;
 }
 
 export interface UpdateView {
