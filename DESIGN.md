@@ -126,7 +126,11 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   of `canvas` (the `sheet` utility: `step` in from the window's edges and
   from the sidebar, half a step under the toolbar, `card` radius, the
   `sheet` shadow), holding the conversation and the tasks. Details is a
-  sheet of its own in the page's place. A thread and the tasks panel
+  sheet of its own in the page's place, headed "Details": one centered
+  column like Settings, the channel's face and its actions on top, then
+  Members, Channel, Notes, Download and Close, each a box of rows whose
+  header is a 16px icon, the name and one quiet line. A choice sits at the
+  right of its row, `control` tall. A thread and the tasks panel
   slide over the page's right side as a sheet lifted with the `pop` shadow
   (`sheet-over`), under the toolbar: the page keeps its width and scroll, and its centered column (`aside-room`) slides left only as far as
   its margin allows, so nothing reflows. `raised` and `field` are the
