@@ -273,6 +273,10 @@ jobs:
         if: ${{ !cancelled() }}
         timeout-minutes: 5
         run: bun desktop/scripts/eb-frost-check.ts desktop/release-eb/build/dev-macos-*/*.app
+      - name: the UI boots from a signed channel, swaps while the window is closed, survives restarts, and one that fails is banned (T1246)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 10
+        run: bun desktop/scripts/eb-ui-check.ts desktop/release-eb/build/dev-macos-*/*.app
 
   desktop-linux:
     name: desktop / linux, ${{ matrix.os }}
