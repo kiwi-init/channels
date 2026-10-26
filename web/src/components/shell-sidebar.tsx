@@ -1,4 +1,4 @@
-import { Add01Icon, ArrowLeft01Icon, LockIcon, Settings02Icon, SidebarLeftIcon } from "@hugeicons/core-free-icons"
+import { Add01Icon, ArrowLeft01Icon, ArrowRight01Icon, LockIcon, Settings02Icon, SidebarLeftIcon } from "@hugeicons/core-free-icons"
 import { createContext, useContext, useState, type ReactNode } from "react"
 
 import type { ChannelRow } from "@/lib/channel"
@@ -109,6 +109,7 @@ export function ShellSidebar({
             </div>
 
             <nav aria-label="Your channels" className={cx("mt-(--step) min-h-0 flex-1 overflow-y-auto", place && "hidden")}>
+              <p className="px-2.5 pb-1.5 text-meta font-semibold text-ink-3">Channels</p>
               <ul className="space-y-0.5">
                 {rows.map((c) => {
                   const open = c.code === active
@@ -121,11 +122,12 @@ export function ShellSidebar({
                         aria-current={open ? "page" : undefined}
                         title={rowNote(c)}
                         className={cx(
-                          "flex h-9 w-full items-center gap-2.5 rounded-ctl px-3 text-left text-ui transition-colors",
+                          "flex h-8 w-full items-center gap-2 rounded-ctl px-2.5 text-left text-ui transition-colors",
                           open ? "bg-(--chosen) font-semibold text-ink group-has-[section_[aria-current=page]]/channel:bg-transparent" : "text-ink-2 hover:bg-wash hover:text-ink"
                         )}
                       >
-                        <span className={cx("flex", c.state !== "member" && "grayscale")}>
+                        <Icon icon={ArrowRight01Icon} size={12} className={cx("shrink-0 text-ink-3 transition-transform", open && "rotate-90")} />
+                        <span className={cx("flex w-5 shrink-0 justify-center", c.state !== "member" && "grayscale")}>
                           <ChannelIconTile icon={icons.get(c.room) ?? null} title={c.title} size={20} />
                         </span>
                         <span className="min-w-0 flex-1 truncate">{c.title}</span>

@@ -1,4 +1,4 @@
-import { Add01Icon, ArrowDown01Icon } from "@hugeicons/core-free-icons"
+import { Add01Icon, ArrowDown01Icon, HashtagIcon, UserIcon } from "@hugeicons/core-free-icons"
 import { useState } from "react"
 import { createPortal } from "react-dom"
 
@@ -19,14 +19,19 @@ export interface Conversation {
   left: boolean
 }
 
-const ROW = "flex h-9 w-full items-center rounded-ctl px-3 text-left text-ui transition-colors"
+const ROW = "flex h-8 w-full items-center rounded-ctl px-2.5 text-left text-ui transition-colors"
+
+const isRoom = (key: string): boolean => key === "main" || key.startsWith("room:")
 const IDLE = "text-ink-2 hover:bg-wash hover:text-ink"
 
-function Item({ on, label, count, alert, onClick }: { on: boolean; label: string; count?: number; alert?: boolean; onClick: () => void }) {
+function Item({ room, on, label, count, alert, onClick }: { room: boolean; on: boolean; label: string; count?: number; alert?: boolean; onClick: () => void }) {
   return (
     <li>
-      <button type="button" onClick={onClick} aria-current={on ? "page" : undefined} className={cx(ROW, "gap-2", on ? "bg-(--chosen) font-semibold text-ink" : IDLE)}>
-        <span className="min-w-0 flex-1 truncate">{label}</span>
+      <button type="button" onClick={onClick} aria-current={on ? "page" : undefined} aria-label={label} className={cx(ROW, "gap-2", on ? "bg-(--chosen) font-semibold text-ink" : IDLE)}>
+        <span className="flex w-5 shrink-0 justify-center">
+          <Icon icon={room ? HashtagIcon : UserIcon} size={15} className={on ? "text-ink" : "text-ink-3"} />
+        </span>
+        <span className="min-w-0 flex-1 truncate">{room ? label.replace(/^# /, "") : label}</span>
         {!!count && <span className={cx("shrink-0 text-meta tabular-nums", alert ? "font-semibold text-decide" : "text-ink-3")}>{count}</span>}
       </button>
     </li>
@@ -68,7 +73,7 @@ function NewRoom({ rooms, onMake, onClose }: { rooms: readonly Room[]; onMake: (
           e.preventDefault()
           if (name.trim() && !said && !busy) void make()
         }}
-        className="flex h-9 items-center gap-1 rounded-ctl px-3 text-ui edge focus-within:shadow-[inset_0_0_0_1px_var(--ring)]"
+        className="flex h-8 items-center gap-1 rounded-ctl px-2.5 text-ui edge focus-within:shadow-[inset_0_0_0_1px_var(--ring)]"
       >
         <span className="text-ink-3">#</span>
         <input
@@ -109,11 +114,11 @@ export function Conversations({ conversations, current, onConversation, rooms, o
   const kept = conversations.filter((c) => !hidden.includes(c) && !left.includes(c))
   const shown = open ? [...kept, ...hidden] : kept
   const unread = hidden.reduce((n, c) => n + c.unread, 0)
-  const item = (c: Conversation) => <Item key={c.key} on={current === c.key} label={c.label} count={c.unread} alert={c.forMe} onClick={() => onConversation(c.key)} />
+  const item = (c: Conversation) => <Item key={c.key} room={isRoom(c.key)} on={current === c.key} label={c.label} count={c.unread} alert={c.forMe} onClick={() => onConversation(c.key)} />
   const at = afterRooms(shown)
   return (
     <section aria-label="Conversations">
-      <ul className="mt-0.5 space-y-0.5 pl-7.5">
+      <ul className="mt-0.5 space-y-0.5 pl-5">
         {shown.slice(0, at).map(item)}
         {making && onNewRoom && <NewRoom rooms={rooms} onMake={onNewRoom} onClose={() => setMaking(false)} />}
         {shown.slice(at).map(item)}
@@ -126,7 +131,9 @@ export function Conversations({ conversations, current, onConversation, rooms, o
               aria-label={open ? undefined : `${hidden.length} more ${hidden.length === 1 ? "conversation" : "conversations"}${unread ? `, ${unread} unread` : ""}`}
               className={cx(ROW, "gap-2 text-ink-3 hover:bg-wash hover:text-ink")}
             >
-              <Icon icon={ArrowDown01Icon} size={14} className={cx("shrink-0", open ? "rotate-180" : "-rotate-90")} />
+              <span className="flex w-5 shrink-0 justify-center">
+                <Icon icon={ArrowDown01Icon} size={14} className={open ? "rotate-180" : "-rotate-90"} />
+              </span>
               <span className="min-w-0 flex-1 truncate">{open ? "Show less" : `${hidden.length} more`}</span>
               {!open && unread > 0 && <span className="shrink-0 text-meta text-ink-3 tabular-nums">{unread}</span>}
             </button>
@@ -141,7 +148,9 @@ export function Conversations({ conversations, current, onConversation, rooms, o
               aria-label={`Left the channel, ${left.length} ${left.length === 1 ? "conversation" : "conversations"}`}
               className={cx(ROW, "gap-2 text-ink-3 hover:bg-wash hover:text-ink")}
             >
-              <Icon icon={ArrowDown01Icon} size={14} className={cx("shrink-0", !openLeft && "-rotate-90")} />
+              <span className="flex w-5 shrink-0 justify-center">
+                <Icon icon={ArrowDown01Icon} size={14} className={cx(!openLeft && "-rotate-90")} />
+              </span>
               <span className="min-w-0 flex-1 truncate">Left the channel</span>
               <span className="shrink-0 text-meta text-ink-3 tabular-nums">{left.length}</span>
             </button>
@@ -151,7 +160,9 @@ export function Conversations({ conversations, current, onConversation, rooms, o
         {onNewRoom && !making && (
           <li>
             <button type="button" onClick={() => setMaking(true)} className={cx(ROW, "gap-2 text-ink-3 hover:bg-wash hover:text-ink")}>
-              <Icon icon={Add01Icon} size={14} className="shrink-0" />
+              <span className="flex w-5 shrink-0 justify-center">
+                <Icon icon={Add01Icon} size={14} />
+              </span>
               <span className="min-w-0 flex-1 truncate">New room</span>
             </button>
           </li>

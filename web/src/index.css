@@ -25,7 +25,7 @@
 :root,
 .dark-stage {
   color-scheme: light dark;
-  --canvas: light-dark(#ffffff, #161618);
+  --canvas: light-dark(#ffffff, #0f0f0f);
   --rail: light-dark(#f2f2f5, #000000);
   --raised: var(--canvas);
   --field: var(--canvas);
@@ -72,7 +72,8 @@
   --pop-edge: light-dark(rgba(15, 15, 17, 0.08), rgba(255, 255, 255, 0.09));
   --pop-shade: light-dark(rgba(15, 15, 17, 0.16), rgba(0, 0, 0, 0.65));
   --shadow-pop: 0 0 0 1px var(--pop-edge), 0 16px 40px -12px var(--pop-shade);
-  --shadow-sheet: 0 0 0 1px var(--pop-edge), 0 1px 3px light-dark(rgba(15, 15, 17, 0.08), rgba(0, 0, 0, 0.35)), 0 6px 14px -8px light-dark(rgba(15, 15, 17, 0.16), rgba(0, 0, 0, 0.5));
+  --shadow-sheet:
+    0 0 0 1px light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.08)), 0 1px 4px light-dark(rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.3)), 0 6px 36px light-dark(rgba(0, 0, 0, 0.16), rgba(0, 0, 0, 0.5));
   /* The composer: a hairline round it, lifted a touch off the canvas. */
   --shadow-dock: 0 0 0 1px var(--line), 0 6px 20px -12px var(--pop-shade);
   /* Liquid glass: a translucent fill over a blur, a bright rim on its top edge, a hairline round it, a soft drop. */
@@ -110,7 +111,7 @@
 }
 
 html[data-frost] {
-  --shell: light-dark(transparent, rgb(40 40 44 / 0.55));
+  --shell: transparent;
 }
 
 /* In the desktop app on a Mac (main.tsx sets data-shell): the traffic lights sit on the list's header. */
