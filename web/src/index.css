@@ -137,6 +137,11 @@ html[data-frost="image"][data-tint] {
   --shell: color-mix(in srgb, var(--tint) 10%, light-dark(rgb(246 246 248 / 0.6), rgb(22 22 24 / 0.6)));
 }
 
+html.reduce-transparency {
+  --shell: var(--rail) !important;
+  background: var(--rail) !important;
+}
+
 html[data-frost="tint"][data-tint] {
   --shell: color-mix(in srgb, var(--tint) 10%, light-dark(rgb(246 246 248 / 0.62), rgb(22 22 24 / 0.58)));
 }

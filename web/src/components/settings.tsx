@@ -25,6 +25,7 @@ import {
   Sun03Icon,
   TerminalIcon,
   TextFontIcon,
+  TransparencyIcon,
   UserAdd01Icon,
   WebhookIcon,
 } from "@hugeicons/core-free-icons"
@@ -722,6 +723,7 @@ function General({ onPersonalities, onClose }: { onPersonalities: () => void; on
   const appearance = useAppearance()
   const size = useTextSize()
   const reduceMotion = useAccessibilityOption("reduce-motion")
+  const reduceTransparency = useAccessibilityOption("reduce-transparency")
   const { person } = useSecrets()
   const b = bridge()
   const [on, setOn] = useState("appearance")
@@ -797,6 +799,17 @@ function General({ onPersonalities, onClose }: { onPersonalities: () => void; on
                 label="Motion"
                 value={reduceMotion ? "on" : "off"}
                 onChange={(v) => setAccessibilityOption("reduce-motion", v === "on")}
+                options={[
+                  { value: "off", label: "Full" },
+                  { value: "on", label: "Reduced" },
+                ]}
+              />
+              <Choice<"on" | "off">
+                tile={glyph(TransparencyIcon)}
+                label="Transparency"
+                desc="Reduced makes the sidebar and toolbar solid"
+                value={reduceTransparency ? "on" : "off"}
+                onChange={(v) => setAccessibilityOption("reduce-transparency", v === "on")}
                 options={[
                   { value: "off", label: "Full" },
                   { value: "on", label: "Reduced" },
