@@ -1,12 +1,12 @@
 import { b64url, openFrom, sealTo, toBase64 } from "./crypto.ts";
 import { signText, verifyText, type Identity } from "./identity.ts";
-import { inlineText } from "./membership.ts";
+import { inlineText, type Member } from "./membership.ts";
 
 const SECRET_NAME_RE = /^[A-Z][A-Z0-9_]{0,63}$/;
 export const SECRET_ID_RE = /^[A-Za-z0-9_-]{22}$/;
 const MIN_SECRET_VALUE = 8;
-const MAX_SECRET_VALUE = 8_192;
-const MAX_SECRET_NOTE = 200;
+export const MAX_SECRET_VALUE = 8_192;
+export const MAX_SECRET_NOTE = 200;
 export const MAX_SECRETS = 64;
 export const MAX_SECRET_BOX = 16_384;
 export const MAX_SECRET_BYTES = 4 * 1024 * 1024;
@@ -54,6 +54,8 @@ export interface SecretView {
   grants: string[];
   had: string[];
 }
+
+export const grantable = (m: Member): boolean => m.active && !m.unverified && !m.owner && m.kind !== "human";
 
 export function newSecretId(): string {
   return b64url(crypto.getRandomValues(new Uint8Array(16)));

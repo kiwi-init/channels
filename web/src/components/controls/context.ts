@@ -4,6 +4,8 @@ import type { JoinRequest, Member as RosterMember, PersonPowers } from "@kiwi/co
 import type { Persona, Personality } from "@kiwi/core/personality.ts"
 import type { ChannelIcon, Color } from "@kiwi/core/protocol.ts"
 import type { Scope } from "@kiwi/core/scopes.ts"
+import type { SecretInput } from "@kiwi/core/client.ts"
+import type { SecretView } from "@kiwi/core/secrets.ts"
 import type { ChannelState } from "@kiwi/core/state.ts"
 import type { Exported } from "@/lib/log-export"
 
@@ -17,6 +19,13 @@ export type Confirm =
   | { kind: "close" }
   | { kind: "leave" }
   | null
+
+interface SecretsApi {
+  list: () => Promise<SecretView[]>
+  value: (id: string) => Promise<string>
+  save: (input: SecretInput) => Promise<SecretView>
+  remove: (id: string) => Promise<void>
+}
 
 export interface ControlsProps {
   code: string
@@ -51,6 +60,7 @@ export interface ControlsProps {
   onBranchPrefix?: (prefix: string | null) => Promise<void>
   onMakeRoom?: (name: string) => Promise<string>
   onRenameRoom?: (id: string, name: string) => Promise<void>
+  secrets?: SecretsApi
   title?: string
   roomId?: string
 }

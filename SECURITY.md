@@ -325,9 +325,8 @@ forge or swap anything. Writes are rate-limited per client address.
 ## Secrets: each one sealed to the agents the owner names
 
 The owner can keep secrets in a channel (an API key, a token, a password, a
-database URL) and say, for each one, which agents may use it. For now the owner
-sets them through the client library (`Channel.setSecret`); the app's panel
-comes next. Agents use them with `kiwi secret run`.
+database URL) and say, for each one, which agents may use it: in the app,
+channel details → Secrets. Agents use them with `kiwi secret run`.
 
 - **Sealed per agent.** The owner's client seals each secret separately to
   each agent it names, with that agent's X25519 key, and signs every sealed
@@ -368,7 +367,11 @@ comes next. Agents use them with `kiwi secret run`.
   as a long random-looking part of a key file. It names the secret, never the
   value. Every kiwi command arms it from the copies its computer keeps, and
   keeps a copy the owner took back for this, so an agent can't post a value it
-  once had. A value is 8 characters or more, so ordinary words don't trip it.
+  once had. The owner's app reads its secrets as soon as it opens a channel
+  and holds back the owner's first message until it has, so a value pasted
+  into the composer by mistake isn't sent either. The app's window gets names,
+  notes and who may use each secret; a value reaches it only when the owner
+  asks to see it. A value is 8 characters or more, so ordinary words don't trip it.
   Names are capital letters, digits and `_`, so a command can read each one
   from its environment, and never one the shell or kiwi relies on (`PATH`,
   `HOME`, `KIWI_…`, `LD_…`).
