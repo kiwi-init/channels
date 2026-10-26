@@ -139,6 +139,8 @@ jobs:
       - "test/upgrade.test.ts"
       - "web/public/**"
       - "web/src/**"
+      - "web/src/components/update-check.test.tsx"
+      - "web/src/components/update-check.tsx"
     always:
       - "bun.lock"
       - "bunfig.toml"
@@ -147,6 +149,7 @@ jobs:
       - "scripts/ci-tests.ts"
       - "web/package.json"
     description: >-
+      web/src/components/update-check.test.tsx and test/desktop-update-linux.test.ts check desktop update recovery, which keeps a manual check beside a fallback release or deb download, disables checks while downloading, and offers restart when ready; a Linux AppImage retries a failed download, verifies the signature and checksum, and swaps successfully.
       test/upgrade.test.ts checks stable CLI upgrades, checksum and executable validation, atomic replacement, custom paths, managed-install refusals, no downgrades, and failure recovery.
       test/desktop-linux-launcher.test.ts (Linux): desktop/native/linux/kiwi-launcher.c, compiled with cc, hands Electrobun's launcher only the names it keeps (never LD_*, BUN_*, NODE_OPTIONS, JSC_*, GTK_MODULES, GTK_PATH, GIO_MODULE_DIR, GST_PLUGIN_PATH, QT_PLUGIN_PATH, WebKit's injected bundle or KIWI_KEY_FD), sets BUN_RUNTIME_TRANSPILER_CACHE_PATH=0 itself, finds Electrobun's launcher beside itself when started through a link, passes the arguments on, and refuses with 127 when it isn't there (T1548).
       And it reads the DT_NEEDED list of bin/libNativeWrapper.so beside it and, when one of those libraries is in none of the system's library folders, beside it or through dlopen, names it with the runtime install line for the distro /etc/os-release names (apt, dnf with libayatana-appindicator-gtk3, pacman or zypper; every family's for one it doesn't know), exits 127 and starts nothing, where Electrobun's launcher names libappindicator-gtk3 for Fedora (T1066).

@@ -52,14 +52,17 @@ export function UpdateCheck() {
           <Button size="sm" variant="secondary" onClick={restartToUpdate}>
             Restart to update
           </Button>
-        ) : live?.state === "available" ? (
-          <Button size="sm" variant="secondary" onClick={() => openRelease(live)}>
-            {live.deb ? "Download .deb" : "Open release"}
-          </Button>
         ) : (
-          <Button size="sm" variant="secondary" onClick={check} disabled={busy || live?.state === "downloading"}>
-            Check for updates
-          </Button>
+          <div className="flex flex-wrap justify-end gap-2">
+            {live?.state === "available" && (
+              <Button size="sm" variant="secondary" onClick={() => openRelease(live)}>
+                {live.deb ? "Download .deb" : "Open release"}
+              </Button>
+            )}
+            <Button size="sm" variant="secondary" onClick={check} disabled={busy || live?.state === "downloading"}>
+              Check for updates
+            </Button>
+          </div>
         )}
       </div>
     </div>
