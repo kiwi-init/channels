@@ -1,6 +1,7 @@
 import Electrobun, { Utils, type BrowserView, type BrowserWindow } from "electrobun/main";
 
 import { shortcutAction, textStepOf, type MenuAction } from "./app-menus.ts";
+import { closeAction } from "./close-action.ts";
 import { createTray, setAppMenu, type AppTray } from "./menus-eb.ts";
 import { hasTrayHost, onShortcut } from "./native-eb.ts";
 import type { TextStep } from "./text-size.ts";
@@ -41,7 +42,7 @@ export function startAppLife(shell: LifeShell): AppTray {
   Electrobun.events.on(`will-close-${shell.win.id}`, (e: { response?: { allow: boolean } }) => {
     if (quitting) return;
     e.response = { allow: false };
-    if (hasTrayHost()) shell.win.hide();
+    if (closeAction(hasTrayHost(), process.env) === "hide") shell.win.hide();
     else shell.win.minimize();
   });
   const stopWake = watchWake(() => shell.nudgeKeys());

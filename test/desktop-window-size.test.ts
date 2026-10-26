@@ -14,3 +14,7 @@ test("a Mac window is never narrower than the dashboard's md breakpoint: below i
   expect(md).not.toBeNull();
   expect(minWindowWidth("darwin")).toBeGreaterThanOrEqual(md ?? Infinity);
 });
+
+test("a Linux window fits half a 1366px laptop screen, as tiling compositors size it, and below md the dashboard is the phone layout", () => {
+  expect(minWindowWidth("linux")).toBeLessThanOrEqual(1366 / 2 - 8);
+});

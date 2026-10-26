@@ -142,7 +142,7 @@ try {
     return { ok: n.window_rect.width < 800 && follows(n, p) && drawn(px), detail: { tile: n.window_rect, other: other.rect, page: p, pixels: px } };
   });
 
-  await step("tiled beside another window on a 1366x768 laptop screen (a tile under the 720x480 minimum), the page fills its tile and is drawn (half-small.png)", async () => {
+  await step("tiled beside another window on a 1366x768 laptop screen (a tile narrower than 720), the page fills its tile and is drawn (half-small.png)", async () => {
     output(1366, 768, 1);
     const { n, p } = await settled("the page at the small half tile's size", (w, q) => w.window_rect.width < 700 && follows(w, q));
     const px = await shot("half-small", n.rect, painted);
