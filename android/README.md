@@ -44,7 +44,7 @@ development key, public on purpose: a store release needs its own.
 
 ## Build it yourself
 
-With JDK 17 and the Android SDK (`ANDROID_HOME`, platform 36):
+With JDK 17 and the Android SDK (`ANDROID_HOME`, platform 37):
 
 ```bash
 bun install
