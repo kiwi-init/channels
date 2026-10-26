@@ -370,13 +370,14 @@ From `design-tokens.ts`:
   floats over it takes it back: a dialog, its backdrop and a menu are
   `no-drag`, and a full-window stage brings its own `drag` row.
 
-- Settings: a page on the card, its toolbar `card-head` tall with a close
-  button. The section list on the left is the sidebar's rows, the open
-  section on `chosen`, your profile on the same columns above it. Each
+- One sidebar, aware of where you are. In Settings the app's sidebar
+  trades the channels for a back button, the title and Settings'
+  sections (the open one on `chosen`); in Personalities, for the presets
+  and Yours with New. The card holds only the page, never a second list. Each
   group is a rounded box of rows with one 20px icon column, so the labels
   line up down the group; Add a computer and Link a phone are action rows
   in that column. Segmented choices and row buttons are `control` tall.
-- Settings → Personalities: the list on the left (presets for code work,
+- Settings → Personalities: the list in the sidebar (presets for code work,
   then Yours, each a 36px outlined glyph tile, the name in `ui` semibold
   and one quiet line; the one being edited on `chosen`) and the editor on
   the right: role as outlined chips (the picked one `accent`-bordered),

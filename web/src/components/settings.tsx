@@ -2,7 +2,6 @@ import {
   Add01Icon,
   ArrowLeft01Icon,
   ArrowRight01Icon,
-  Cancel01Icon,
   CheckmarkCircle02Icon,
   CommandLineIcon,
   ComputerIcon,
@@ -35,6 +34,7 @@ import { setAppearance, setTextSize, useAppearance, useTextSize, type Appearance
 import { setAccessibilityOption, useAccessibilityOption } from "@/lib/accessibility"
 import { cx } from "@/lib/utils"
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
+import { createPortal } from "react-dom"
 import { relayUrl } from "@/lib/relay"
 import { bridge, useSecrets, type KiwiBridge } from "@/lib/secrets"
 import { contextLineBridge, hooksBridge, terminalsBridge } from "@/lib/terminals"
@@ -47,7 +47,8 @@ import { ComputerRows } from "./computers"
 import { HarnessFace } from "./harness-face"
 import { PhoneRows } from "./phones"
 import { Icon, type IconSvgElement } from "./icon"
-import { Button, IconButton, Monogram, SEGMENTED, SEGMENT_OFF, SEGMENT_ON, TextField } from "./kit"
+import { Button, IconButton, SEGMENTED, SEGMENT_OFF, SEGMENT_ON, TextField } from "./kit"
+import { PlaceHead, usePlaceSlot } from "./shell-sidebar"
 import { UpdateCheck } from "./update-check"
 
 // Both apply at once and stay in this browser; nothing here leaves it.
@@ -649,7 +650,7 @@ const SECTIONS: { id: string; label: string; icon: IconSvgElement }[] = [
   { id: "app", label: "This app", icon: Settings02Icon },
 ]
 
-function General({ onPersonalities }: { onPersonalities: () => void }) {
+function General({ onPersonalities, onClose }: { onPersonalities: () => void; onClose: () => void }) {
   const appearance = useAppearance()
   const size = useTextSize()
   const reduceMotion = useAccessibilityOption("reduce-motion")
@@ -658,6 +659,7 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
   const [on, setOn] = useState("appearance")
   const [adding, setAdding] = useState(false)
   const [linking, setLinking] = useState(false)
+  const place = usePlaceSlot()
   const shown = SECTIONS.filter((s) =>
     s.id === "services" ? !!b?.githubStatus : s.id === "new-agents" ? !!terminalsBridge() : s.id === "computers" ? !!person : s.id === "phone" ? !!person && !!b : true
   )
@@ -667,40 +669,36 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
   }
   return (
     <div className="flex min-h-0 flex-1">
-      <nav aria-label="Settings sections" className="hidden w-[232px] shrink-0 flex-col gap-0.5 px-(--step) pt-(--step) md:flex">
-        {person && (
-          <div className="flex items-center gap-2.5 px-3 pb-4">
-            <span className="flex size-5 shrink-0 items-center justify-center">
-              <Monogram name={person.name} hue={person.name} agent={false} size={20} />
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-ui font-semibold">{person.name}</p>
-              <p className="truncate text-meta text-ink-3">key {person.pk.slice(0, 8)}</p>
-            </div>
-          </div>
+      {place &&
+        createPortal(
+          <>
+            <PlaceHead title="Settings" back="Close settings" onBack={onClose} />
+            <nav aria-label="Settings sections" className="mt-(--step) flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
+              {shown.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  aria-current={on === s.id ? "true" : undefined}
+                  onClick={() => go(s.id)}
+                  className={cx(
+                    "flex h-9 w-full items-center gap-2.5 rounded-ctl px-3 text-left text-ui transition-colors",
+                    on === s.id ? "bg-(--chosen) font-semibold text-ink" : "text-ink-2 hover:bg-wash hover:text-ink"
+                  )}
+                >
+                  <span className="flex size-5 shrink-0 items-center justify-center">
+                    <Icon icon={s.icon} size={16} className={on === s.id ? "text-ink" : "text-ink-3"} />
+                  </span>
+                  {s.label}
+                </button>
+              ))}
+            </nav>
+          </>,
+          place
         )}
-        {shown.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            aria-current={on === s.id ? "true" : undefined}
-            onClick={() => go(s.id)}
-            className={cx(
-              "flex h-9 items-center gap-2.5 rounded-ctl px-3 text-left text-ui transition-colors",
-              on === s.id ? "bg-(--chosen) font-semibold text-ink" : "text-ink-2 hover:bg-wash hover:text-ink"
-            )}
-          >
-            <span className="flex size-5 shrink-0 items-center justify-center">
-              <Icon icon={s.icon} size={16} className={on === s.id ? "text-ink" : "text-ink-3"} />
-            </span>
-            {s.label}
-          </button>
-        ))}
-      </nav>
       <div className="min-w-0 flex-1 overflow-y-auto">
-        <div className="w-full max-w-[680px] px-6 pt-(--step) pb-12 md:pl-10">
-          <h1 className="text-display font-semibold tracking-[-0.014em]">Settings</h1>
-          <div className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-7">
+        <div className="mx-auto w-full max-w-[680px] px-6 pt-(--step) pb-12">
+          <h1 className="text-display font-semibold tracking-[-0.014em] md:sr-only">Settings</h1>
+          <div className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-7 md:mt-0">
             <Group id="appearance" title="Appearance">
               <Choice<Appearance>
                 tile={glyph(Sun03Icon)}
@@ -810,19 +808,14 @@ export function SettingsPage({ backTo, onClose }: { backTo: string; onClose: () 
         back()
       }}
     >
-      <header className="drag hidden h-(--card-head) shrink-0 items-center px-(--step) md:flex">
-        <span className="flex-1" />
-        <IconButton label={inner ? "Back to Settings" : "Close settings"} round className="no-drag size-(--control) text-ink-2 hover:text-ink" onClick={back}>
-          <Icon icon={Cancel01Icon} size={15} />
-        </IconButton>
-      </header>
+      <div aria-hidden className="drag hidden h-(--card-head) shrink-0 md:mt-(--step) md:block" />
       <header className="drag flex h-(--chrome-h) shrink-0 items-center gap-2 px-3 md:hidden">
         <IconButton label={inner ? "Back to Settings" : "Close settings"} round className="glass size-9 text-ink" onClick={back}>
           <Icon icon={ArrowLeft01Icon} size={18} />
         </IconButton>
         <span className="min-w-0 flex-1 truncate text-ui font-semibold">{inner ? "Settings" : backTo}</span>
       </header>
-      {inner ? <Personalities /> : <General onPersonalities={() => setView("personalities")} />}
+      {inner ? <Personalities onBack={back} /> : <General onPersonalities={() => setView("personalities")} onClose={onClose} />}
     </section>
   )
 }
