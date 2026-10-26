@@ -5,7 +5,7 @@ import "./index.css"
 import App from "./App.tsx"
 import { Boundary } from "@/components/kit"
 import { noteSignInGone } from "@/lib/session"
-import { applyStoredAppearance, showFrost, stepTextSize } from "@/lib/theme"
+import { applyStoredAppearance, followAccent, showFrost, stepTextSize } from "@/lib/theme"
 import { startBackdrop } from "@/lib/backdrop"
 import { bridge } from "@/lib/secrets"
 import { migrateChannelsToStore } from "@/lib/channel"
@@ -26,6 +26,7 @@ function Booted() {
 }
 
 applyStoredAppearance()
+followAccent()
 startBackdrop()
 bridge()?.onTextStep(stepTextSize)
 bridge()?.onFrost(showFrost)

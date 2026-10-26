@@ -78,18 +78,30 @@ export function stepTextSize(step: TextStep) {
 }
 
 const TINT_KEY = "mc.tint"
+// The tint "accent" is the system's accent colour (System Settings on a Mac, the
+// desktop's Settings portal on Linux), followed as it changes. Only an app whose
+// bridge reads it (Channels Livewire) offers it. The last one seen is kept, so the
+// first paint has it before the bridge answers.
+export const ACCENT_TINT = "accent"
+const ACCENT_KEY = "mc.accent"
 const HEX = /^#[0-9a-f]{6}$/
 
 function readTint(): string | null {
   const v = localStorage.getItem(TINT_KEY)
+  return v && (HEX.test(v) || v === ACCENT_TINT) ? v : null
+}
+
+function readAccent(): string | null {
+  const v = localStorage.getItem(ACCENT_KEY)
   return v && HEX.test(v) ? v : null
 }
 
 function applyTint(t: string | null) {
+  const color = t === ACCENT_TINT ? readAccent() : t
   const root = document.documentElement
-  if (t) {
+  if (color) {
     root.dataset.tint = ""
-    root.style.setProperty("--tint", t)
+    root.style.setProperty("--tint", color)
   } else {
     delete root.dataset.tint
     root.style.removeProperty("--tint")
@@ -97,10 +109,33 @@ function applyTint(t: string | null) {
 }
 
 export function setTint(t: string | null) {
-  if (t && HEX.test(t)) localStorage.setItem(TINT_KEY, t)
+  if (t && (HEX.test(t) || t === ACCENT_TINT)) localStorage.setItem(TINT_KEY, t)
   else localStorage.removeItem(TINT_KEY)
-  applyTint(t && HEX.test(t) ? t : null)
+  applyTint(readTint())
   for (const l of listeners) l()
+}
+
+function setAccent(color: string | null) {
+  if (color && HEX.test(color)) localStorage.setItem(ACCENT_KEY, color)
+  else localStorage.removeItem(ACCENT_KEY)
+  if (readTint() === ACCENT_TINT) applyTint(ACCENT_TINT)
+  for (const l of listeners) l()
+}
+
+/** Reads the system accent and follows it, when the bridge has one. */
+export function followAccent() {
+  const b = bridge()
+  if (!b?.getAccentColor) return
+  void b.getAccentColor().then(setAccent, () => {})
+  b.onAccent(setAccent)
+}
+
+/** The system accent colour, or null when this app can't read one. */
+export function useAccent(): string | null {
+  return useSyncExternalStore((l) => {
+    listeners.add(l)
+    return () => listeners.delete(l)
+  }, readAccent)
 }
 
 export function useTint(): string | null {
