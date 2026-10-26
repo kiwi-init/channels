@@ -2,6 +2,14 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.10.6 — 2026-10-26
+
+- **Remove jev-ci: CI picks its jobs with plain rules instead of a model** ([#997](https://github.com/kiwi-init/channels/pull/997))
+- **Another channel's Details gear shows only on hover, so build / shots finds one** ([#998](https://github.com/kiwi-init/channels/pull/998))
+- **The scrims under the header and over the composer no longer blur the text: they only fade it, on every platform** ([#1000](https://github.com/kiwi-init/channels/pull/1000))
+- **Linux ships only the AppImage, tested on Arch: no .deb, no Fedora** ([#996](https://github.com/kiwi-init/channels/pull/996))
+- **Linux looks like the Mac on every desktop: frost, wallpaper tints, Inter, no GTK title bar, Reduce transparency** ([#1006](https://github.com/kiwi-init/channels/pull/1006))
+
 ## 2026.10.5 — 2026-10-26
 
 - **Add kiwi upgrade for standalone CLI installs** ([#984](https://github.com/kiwi-init/channels/pull/984))
