@@ -112,7 +112,7 @@ async function bundleMain(before: string | null, lazy = false): Promise<string> 
   const stub = join(dir, "electrobun-stub.ts");
   writeFileSync(
     stub,
-    "export default {}; export const BrowserView = class {}; export const BrowserWindow = class {}; export const PATHS = {}; export const Utils = {}; export const BuildConfig = {}; export const ApplicationMenu = {}; export const Tray = class {}; export const internalRpcHandlers = {};\n",
+    "export default {}; export const BrowserView = class {}; export const BrowserWindow = class {}; export const PATHS = {}; export const Utils = {}; export const BuildConfig = {}; export const ApplicationMenu = {}; export const Tray = class {}; export const internalRpcHandlers = {}; export const AppEngine = class {}; export const placeFiles = () => {}; export const readFolder = () => new Map();\n",
   );
   const entry = join(dir, "entry.ts");
   const side = join(dir, "side.ts");
