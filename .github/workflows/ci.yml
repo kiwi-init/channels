@@ -308,7 +308,7 @@ jobs:
           find "$debs" -maxdepth 1 -name '*.deb' | wc -l > "$RUNNER_TEMP/debs-before"
           echo "Dir::Cache::Archives \"$debs/\";" | sudo tee /etc/apt/apt.conf.d/90linux-debs > /dev/null
           sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus ${{ matrix.drive && 'weston xwayland kwin-wayland plasma-wayland-protocols sway swaybg grim libwayland-dev python3-gi gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0' || '' }}
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus ${{ matrix.drive && 'weston xwayland kwin-wayland plasma-wayland-protocols sway swaybg grim gsettings-desktop-schemas libglib2.0-bin libwayland-dev python3-gi gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0' || '' }}
       - id: debs
         name: keep what apt downloaded, even when it ran out of time
         if: always()
@@ -506,6 +506,20 @@ jobs:
         if: ${{ !cancelled() && matrix.drive }}
         timeout-minutes: 12
         run: bash desktop/scripts/wlroots-check/sway.sh "$PWD/${{ steps.test-app.outputs.path }}" "$RUNNER_TEMP/wlroots-check"
+      - name: on a floating desktop (headless weston) the shell draws GNOME's wallpaper, with no GTK title bar and close, minimize and maximize top left, with screenshots
+        if: ${{ !cancelled() && matrix.drive }}
+        timeout-minutes: 8
+        run: bash desktop/scripts/floating-check/weston.sh "$PWD/${{ steps.test-app.outputs.path }}" "$RUNNER_TEMP/floating-check"
+      - if: ${{ !cancelled() && matrix.drive }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: floating-check
+          path: |
+            ${{ runner.temp }}/floating-check/*.png
+            ${{ runner.temp }}/floating-check/*.json
+            ${{ runner.temp }}/floating-check/*.log
+          if-no-files-found: warn
+          retention-days: 3
       - name: on Hyprland the shell frosts over the wallpaper and the tints come from it (headless Hyprland on vkms, blur on, over swaybg), with screenshots
         if: ${{ !cancelled() && matrix.drive }}
         timeout-minutes: 12
