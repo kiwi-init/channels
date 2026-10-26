@@ -190,3 +190,8 @@ test("every spawn the Electrobun main and the keys code can reach passes an env 
   expect(found.flatMap((f) => f.bad)).toEqual([]);
   expect(found.reduce((n, f) => n + f.spawns, 0)).toBeGreaterThanOrEqual(5);
 }, 60_000);
+
+test("gsettings in a child reads the same settings the desktop does: its backend and schema folder pass through", () => {
+  const kept = childEnv({ GSETTINGS_BACKEND: "keyfile", GSETTINGS_SCHEMA_DIR: "/nix/store/x/share/glib-2.0/schemas", PATH: "/usr/bin" });
+  expect(kept).toEqual({ GSETTINGS_BACKEND: "keyfile", GSETTINGS_SCHEMA_DIR: "/nix/store/x/share/glib-2.0/schemas", PATH: "/usr/bin" });
+});

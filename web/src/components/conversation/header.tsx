@@ -10,7 +10,7 @@ import { ChannelIconTile } from "../channel-icon"
 import { HoldBanner } from "../controls"
 import { Icon } from "../icon"
 import { IconButton } from "../kit"
-import { SidebarToggle } from "../shell-sidebar"
+import { SidebarToggle, WindowControls } from "../shell-sidebar"
 
 export type HeaderProps = {
   headRef: (el: HTMLElement | null) => void
@@ -48,6 +48,7 @@ export function Toolbar({ search, setSearch, tab, onTab, headingLabel, face, onT
       className={cx("drag relative mt-(--step) mr-(--step) hidden h-(--card-head) shrink-0 items-center gap-(--step) px-(--step) md:flex", wide && "shell-mac:pl-[calc(var(--lights-w)-var(--step))]")}
     >
       <span className="flex min-w-0 flex-1 items-center gap-(--step)">
+        {wide && <WindowControls />}
         {wide && <SidebarToggle />}
         {wide && places}
         {wide && (

@@ -607,12 +607,14 @@ typedef struct {
 
 static GtkCssProvider *look_css = NULL;
 static guint32 look_light = 0;
+static gboolean look_clear = FALSE;
 static guint32 look_dark = 0;
 
 static void paint_background(void) {
   gboolean dark = FALSE;
   g_object_get(gtk_settings_get_default(), "gtk-application-prefer-dark-theme", &dark, NULL);
-  gchar *css = g_strdup_printf("window { background-color: #%06x; }", (dark ? look_dark : look_light) & 0xffffff);
+  gchar *css = look_clear ? g_strdup("window { background-color: transparent; }")
+                          : g_strdup_printf("window { background-color: #%06x; }", (dark ? look_dark : look_light) & 0xffffff);
   gtk_css_provider_load_from_data(look_css, css, -1, NULL);
   g_free(css);
 }
@@ -815,23 +817,22 @@ bool kiwi_sandbox_pages(char *why, size_t size) {
   return on_main(sandbox_contexts, NULL) || refuse_sandbox(why, size, "WebKitGTK's default context didn't turn it on");
 }
 
-size_t kiwi_image_pixels(const char *path, uint8_t *out, size_t size) {
-  const int side = 24;
-  size_t need = (size_t)side * side * 4;
-  if (!path || !out || size < need) return 0;
-  GdkPixbuf *loaded = gdk_pixbuf_new_from_file_at_scale(path, 64, 64, TRUE, NULL);
+size_t kiwi_image_pixels_sized(const char *path, int width, int height, uint8_t *out, size_t size) {
+  size_t need = (size_t)width * height * 4;
+  if (!path || !out || width <= 0 || height <= 0 || size < need) return 0;
+  GdkPixbuf *loaded = gdk_pixbuf_new_from_file_at_scale(path, width * 4, height * 4, FALSE, NULL);
   if (!loaded) return 0;
-  GdkPixbuf *small = gdk_pixbuf_scale_simple(loaded, side, side, GDK_INTERP_BILINEAR);
+  GdkPixbuf *small = gdk_pixbuf_scale_simple(loaded, width, height, GDK_INTERP_BILINEAR);
   g_object_unref(loaded);
   if (!small) return 0;
   int channels = gdk_pixbuf_get_n_channels(small);
   int stride = gdk_pixbuf_get_rowstride(small);
   const guchar *pixels = gdk_pixbuf_get_pixels(small);
   bool ok = gdk_pixbuf_get_bits_per_sample(small) == 8 && channels >= 3;
-  for (int y = 0; ok && y < side; y++) {
-    for (int x = 0; x < side; x++) {
+  for (int y = 0; ok && y < height; y++) {
+    for (int x = 0; x < width; x++) {
       const guchar *p = pixels + y * stride + x * channels;
-      uint8_t *o = out + ((size_t)y * side + x) * 4;
+      uint8_t *o = out + ((size_t)y * width + x) * 4;
       o[0] = p[0];
       o[1] = p[1];
       o[2] = p[2];
@@ -840,4 +841,19 @@ size_t kiwi_image_pixels(const char *path, uint8_t *out, size_t size) {
   }
   g_object_unref(small);
   return ok ? need : 0;
+}
+
+static bool clear_on_main(gconstpointer arg) {
+  (void)arg;
+  look_clear = TRUE;
+  if (look_css) paint_background();
+  return true;
+}
+
+void kiwi_window_clear(void) {
+  on_main(clear_on_main, NULL);
+}
+
+size_t kiwi_image_pixels(const char *path, uint8_t *out, size_t size) {
+  return kiwi_image_pixels_sized(path, 24, 24, out, size);
 }

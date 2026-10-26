@@ -1,4 +1,5 @@
 import { dlopen, FFIType, JSCallback, ptr, suffix, type Pointer } from "bun:ffi";
+import fs from "node:fs";
 import path from "node:path";
 
 import { PAGE_URL } from "./eb-page.ts";
@@ -19,6 +20,10 @@ const shell = dlopen(shellPath, {
 const sandboxPages = mac ? null : dlopen(shellPath, { kiwi_sandbox_pages: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.bool } }).symbols.kiwi_sandbox_pages;
 
 export const windowLook = dlopen(shellPath, { kiwi_window_look: { args: [FFIType.ptr, FFIType.f64, FFIType.f64, FFIType.u32, FFIType.u32], returns: FFIType.void } }).symbols.kiwi_window_look;
+
+const clearShell = mac ? null : dlopen(shellPath, { kiwi_window_clear: { args: [], returns: FFIType.void } }).symbols;
+
+export const clearWindow = (): void => void clearShell?.kiwi_window_clear();
 
 const frostShell = mac
   ? dlopen(shellPath, {
@@ -54,16 +59,48 @@ export function windowLooks(): string {
 
 const wallpaperShell = mac
   ? dlopen(shellPath, { kiwi_wallpaper_pixels: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.u64 } }).symbols
-  : dlopen(shellPath, { kiwi_image_pixels: { args: [FFIType.cstring, FFIType.ptr, FFIType.u64], returns: FFIType.u64 } }).symbols;
+  : dlopen(shellPath, {
+      kiwi_image_pixels: { args: [FFIType.cstring, FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
+      kiwi_image_pixels_sized: { args: [FFIType.cstring, FFIType.i32, FFIType.i32, FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
+    }).symbols;
 
 const WALLPAPER_BYTES = 24 * 24 * 4;
 
-export function wallpaperPixels(dark: boolean): Uint8Array | null {
-  const out = new Uint8Array(WALLPAPER_BYTES);
-  if ("kiwi_wallpaper_pixels" in wallpaperShell) return Number(wallpaperShell.kiwi_wallpaper_pixels(ptr(out), out.length)) === out.length ? out : null;
-  const file = linuxWallpaper(dark);
-  if (!file) return null;
-  return Number(wallpaperShell.kiwi_image_pixels(ptr(Buffer.from(`${file}\0`)), ptr(out), out.length)) === out.length ? out : null;
+const decoded = new Map<string, Uint8Array | null>();
+
+function stampOf(file: string): string | null {
+  try {
+    return String(fs.statSync(file).mtimeMs);
+  } catch {
+    // The wallpaper moved or went away since its path was read: nothing to draw.
+    return null;
+  }
+}
+
+function decodeOnce(file: string, width: number, height: number): Uint8Array | null {
+  if (!("kiwi_image_pixels_sized" in wallpaperShell)) return null;
+  const stamp = stampOf(file);
+  if (stamp === null) return null;
+  const key = `${file}\0${stamp}\0${width}x${height}`;
+  if (decoded.has(key)) return decoded.get(key) ?? null;
+  const out = new Uint8Array(width * height * 4);
+  const got = Number(wallpaperShell.kiwi_image_pixels_sized(ptr(Buffer.from(`${file}\0`)), width, height, ptr(out), out.length)) === out.length ? out : null;
+  decoded.set(key, got);
+  return got;
+}
+
+export async function wallpaperImage(dark: boolean, width: number, height: number): Promise<Uint8Array | null> {
+  const file = await linuxWallpaper(dark);
+  return file ? decodeOnce(file, width, height) : null;
+}
+
+export async function wallpaperPixels(dark: boolean): Promise<Uint8Array | null> {
+  if ("kiwi_wallpaper_pixels" in wallpaperShell) {
+    const out = new Uint8Array(WALLPAPER_BYTES);
+    return Number(wallpaperShell.kiwi_wallpaper_pixels(ptr(out), out.length)) === out.length ? out : null;
+  }
+  const file = await linuxWallpaper(dark);
+  return file ? decodeOnce(file, 24, 24) : null;
 }
 
 const trayHost = mac ? null : dlopen(shellPath, { kiwi_tray_host: { args: [], returns: FFIType.bool } }).symbols.kiwi_tray_host;

@@ -1,11 +1,11 @@
-import { Add01Icon, ArrowLeft01Icon, ArrowRight01Icon, LockIcon, Settings02Icon, SidebarLeftIcon } from "@hugeicons/core-free-icons"
+import { Add01Icon, ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon, LockIcon, MinusSignIcon, Settings02Icon, SidebarLeftIcon, SquareIcon } from "@hugeicons/core-free-icons"
 import { createContext, useContext, useState, type ReactNode } from "react"
 
 import type { ChannelRow } from "@/lib/channel"
 import type { RowNews } from "@/lib/news"
 import { useIcons } from "@/lib/icons"
 import { useOwnPicture } from "@/lib/own-picture"
-import { useSecrets } from "@/lib/secrets"
+import { bridge, useSecrets } from "@/lib/secrets"
 import { SIDEBAR_KEYS, toggleSidebar, useSidebarHidden } from "@/lib/sidebar-hidden"
 import { useUpdate } from "@/lib/update"
 import { cx } from "@/lib/utils"
@@ -37,9 +37,40 @@ export function SidebarToggle() {
   )
 }
 
+const WINDOW_ACTIONS = [
+  ["close", Cancel01Icon, "Close window"],
+  ["minimize", MinusSignIcon, "Minimize window"],
+  ["maximize", SquareIcon, "Maximize window"],
+] as const
+
+export function WindowControls() {
+  const b = bridge()
+  if (!b?.windowControl) return null
+  return (
+    <span className="no-drag mr-1 hidden shrink-0 items-center gap-1.5 shell-float:flex">
+      {WINDOW_ACTIONS.map(([action, icon, label]) => (
+        <button
+          key={action}
+          type="button"
+          aria-label={label}
+          title={label}
+          onClick={() => void b.windowControl(action).catch(() => undefined)}
+          className={cx(
+            "flex size-5 items-center justify-center rounded-full bg-wash text-ink-2 transition-colors hover:text-ink",
+            action === "close" ? "hover:bg-alert hover:text-white" : "hover:bg-wash-2"
+          )}
+        >
+          <Icon icon={icon} size={11} strokeWidth={2.2} />
+        </button>
+      ))}
+    </span>
+  )
+}
+
 export function PlaceHead({ title, back, onBack, children }: { title: string; back: string; onBack: () => void; children?: ReactNode }) {
   return (
     <div className={SIDEBAR_HEAD}>
+      <WindowControls />
       <IconButton label={back} round className={CONTROL} onClick={onBack}>
         <Icon icon={ArrowLeft01Icon} size={16} />
       </IconButton>
@@ -99,10 +130,11 @@ export function ShellSidebar({
   return (
     <ChannelSlot.Provider value={hidden ? null : slot}>
       <PlaceSlot.Provider value={place ? placeSlot : null}>
-        <div className="flex h-svh overflow-clip md:bg-(--shell)">
+        <div className="flex h-svh overflow-clip">
           <aside aria-label="Channels" className={cx("w-[280px] shrink-0 flex-col py-(--step) pl-(--step)", hidden ? "hidden" : "hidden md:flex")}>
             {place && <div ref={setPlaceSlot} className="flex min-h-0 flex-1 flex-col" />}
             <div className={cx(SIDEBAR_HEAD, place && "hidden")}>
+              <WindowControls />
               {inChannel && <SidebarToggle />}
               <span className="flex-1" />
               <IconButton label="New channel" round className={CONTROL} onClick={onNew}>

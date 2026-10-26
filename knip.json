@@ -3,6 +3,8 @@
   "ignoreBinaries": [
     "oxfmt",
     "gsettings",
+    "hyprctl",
+    "weston-screenshooter",
     "iconutil",
     "clang",
     "cc",

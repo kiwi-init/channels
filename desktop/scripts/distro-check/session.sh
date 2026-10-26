@@ -52,6 +52,19 @@ owner=$(gdbus call --session --dest org.freedesktop.DBus --object-path /org/free
 info "Secret Service: ${owner:-nobody owns org.freedesktop.secrets}"
 
 home=${kept_home:-$(mktemp -d)}
+export GSETTINGS_BACKEND=keyfile
+python3 -c '
+import sys
+w, h = 1280, 800
+px = bytearray()
+for y in range(h):
+    row = bytes([240, 120, 30]) * (w // 2) + bytes([40, 90, 230]) * (w - w // 2)
+    px += row
+open(sys.argv[1], "wb").write(b"P6\n%d %d\n255\n" % (w, h) + bytes(px))
+' "$home/wall.ppm"
+HOME="$home" gsettings set org.gnome.desktop.background picture-uri "file://$home/wall.ppm" 2> /dev/null || info "no gsettings: the app has no GNOME wallpaper to draw"
+HOME="$home" gsettings set org.gnome.desktop.background picture-uri-dark "file://$home/wall.ppm" 2> /dev/null || true
+HOME="$home" gsettings set org.gnome.desktop.interface color-scheme prefer-dark 2> /dev/null || true
 start=$(date +%s)
 HOME="$home" setsid "$image" --appimage-extract-and-run > "$logs/$tag-app.log" 2>&1 &
 pid=$!
