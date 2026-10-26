@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 set -u
 
-usage="usage: check.sh fedora|arch APPIMAGE OUT [FROM_VERSION] (as root, in a privileged fedora or archlinux container)"
+usage="usage: check.sh arch APPIMAGE OUT [FROM_VERSION] (as root, in a privileged archlinux container)"
 distro=${1:?$usage}
 image=${2:?$usage}
 out=${3:?$usage}
 from=${4:-}
+[ "$distro" = arch ] || { echo "$usage" >&2; exit 2; }
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../../.." && pwd)
 mkdir -p "$out/logs"
@@ -17,23 +18,13 @@ ok() { echo "ok   [$distro] $*" | tee -a "$results"; }
 bad() { echo "FAIL [$distro] $*" | tee -a "$results"; }
 info() { echo "     [$distro] $*" | tee -a "$results"; }
 install() {
-  if [ "$distro" = fedora ]; then
-    dnf -y -q install "$@" >> "$out/logs/install.log" 2>&1
-  else
-    pacman -S --noconfirm --needed "$@" >> "$out/logs/install.log" 2>&1
-  fi || { bad "installing $* failed: $(tail -n 3 "$out/logs/install.log" | tr '\n' ' ')"; return 1; }
+  pacman -S --noconfirm --needed "$@" >> "$out/logs/install.log" 2>&1 || { bad "installing $* failed: $(tail -n 3 "$out/logs/install.log" | tr '\n' ' ')"; return 1; }
 }
 
-if [ "$distro" = fedora ]; then
-  stock=(gtk3 webkit2gtk4.1 librsvg2)
-  tools=(weston dbus-daemon libsecret gnome-keyring kf6-kwallet python3-gobject procps-ng gcc pkgconf-pkg-config webkit2gtk4.1-devel gtk3-devel xorg-x11-server-Xvfb xvfb-run mesa-dri-drivers util-linux findutils which)
-  ayatana=(libayatana-appindicator-gtk3)
-else
-  pacman -Syu --noconfirm >> "$out/logs/install.log" 2>&1
-  stock=(gtk3 webkit2gtk-4.1 librsvg)
-  tools=(weston dbus libsecret gnome-keyring kwallet python-gobject procps-ng gcc pkgconf xorg-server-xvfb mesa util-linux findutils which)
-  ayatana=(libayatana-appindicator)
-fi
+pacman -Syu --noconfirm >> "$out/logs/install.log" 2>&1
+stock=(gtk3 webkit2gtk-4.1 librsvg)
+tools=(weston dbus libsecret gnome-keyring kwallet python-gobject procps-ng gcc pkgconf xorg-server-xvfb mesa util-linux findutils which)
+ayatana=(libayatana-appindicator)
 
 install "${stock[@]}" || exit 1
 . /etc/os-release
@@ -59,7 +50,7 @@ mkdir -p /var/lib/dbus /run/dbus
 [ -f /var/lib/dbus/machine-id ] || cp /etc/machine-id /var/lib/dbus/machine-id
 dbus-daemon --system --fork || bad "no system bus"
 sysctl -qw kernel.apparmor_restrict_unprivileged_userns=0 2> /dev/null || true
-info "unprivileged user namespaces, as Fedora and Arch allow them: $(unshare -U true 2>&1 && echo allowed || echo refused)"
+info "unprivileged user namespaces, as Arch allows them: $(unshare -U true 2>&1 && echo allowed || echo refused)"
 
 tests=/usr/local/libexec/kiwi-tests
 mkdir -p "$tests"

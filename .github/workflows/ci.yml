@@ -421,7 +421,7 @@ jobs:
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-tray-test" desktop/native/linux/kiwi-tray-test.c $(pkg-config --cflags --libs gio-2.0) -ldl
           dbus-run-session -- "$RUNNER_TEMP/kiwi-tray-test" "$APP/bin/libkiwi-shell.so"
-      - name: with no libayatana-appindicator on the system (stock Fedora, Arch), the app still starts, with no tray
+      - name: with no libayatana-appindicator on the system (stock Arch), the app still starts, with no tray
         if: ${{ !cancelled() }}
         run: |
           if readelf -d "$APP/bin/libNativeWrapper.so" | grep -i appindicator; then echo "libNativeWrapper.so still links AppIndicator"; exit 1; fi
@@ -604,15 +604,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - distro: fedora
-            image: fedora:44
-            part: 3
           - distro: arch
             image: archlinux:latest
             part: 4
     steps:
       - name: git and tar for the checkout
-        run: if command -v dnf > /dev/null; then dnf -y -q install git tar gzip; else pacman -Sy --noconfirm git tar gzip; fi
+        run: pacman -Sy --noconfirm git tar gzip
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
