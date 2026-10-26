@@ -120,10 +120,6 @@ export const CHANNEL_CALLS = [
   "send",
   "image",
   "history",
-  "secrets",
-  "secretValue",
-  "setSecret",
-  "deleteSecret",
 ] as const;
 
 export type ChannelCallName = (typeof CHANNEL_CALLS)[number];

@@ -410,7 +410,7 @@ export class ChannelLive {
   private presenceOn(ws: WebSocket) {
     return (p: PresenceFields): Effect.Effect<void> =>
       Effect.gen({ self: this }, function* () {
-        if (ws.readyState !== WebSocket.OPEN || this.ch.leak(p)) return;
+        if (ws.readyState !== WebSocket.OPEN) return;
         const ts = Math.max(Date.now(), this.lastBeacon + 1);
         this.lastBeacon = ts;
         const full = yield* Effect.promise(() => sign(this.ch.identity, { v: PROTOCOL_VERSION, type: "presence", from: this.ch.name, ts, ...p } as Presence));

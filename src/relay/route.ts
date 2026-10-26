@@ -34,7 +34,6 @@ import {
   GITHUB_READS_PER_MINUTE,
   PAGES_PER_MINUTE,
   create,
-  putSecret,
   directory,
   Directory,
   errorResponse,
@@ -177,8 +176,6 @@ const ID = "([0-9a-f-]{36})";
 
 const BLOB = /^\/blobs\/([0-9a-f]{64})$/;
 
-const SECRET = /^\/secrets\/([A-Za-z0-9_-]{22})$/;
-
 /** A handler that only reads the room. */
 const withRoom = <A>(f: (db: RoomDb) => A) => Effect.map(RoomStore, f);
 
@@ -233,7 +230,6 @@ const routes: RoomRoute[] = [
           iconAt: db.iconAt(),
           blobs: true,
           sealedEpoch: true,
-          secrets: true,
         }));
       }),
   },
@@ -381,28 +377,6 @@ const routes: RoomRoute[] = [
       }),
   },
   { method: "GET", path: "/keys", guard: "member", run: ({ me }) => Effect.map(keysFor(me), (data) => ({ data })) },
-  {
-    method: "GET",
-    path: "/secrets",
-    guard: "member",
-    run: ({ me }) =>
-      Effect.gen(function* () {
-        const db = yield* RoomStore;
-        if (!allow(`secrets:${db.roomId}:${me}`, READS_PER_MINUTE)) return yield* new TooMany({ message: "too many secret reads; wait a minute" });
-        return { data: { secrets: db.secretsFor(me) } };
-      }),
-  },
-  {
-    method: "PUT",
-    path: SECRET,
-    guard: "owner",
-    run: (_, m) =>
-      Effect.gen(function* () {
-        const { boxes } = yield* json<{ boxes?: unknown }>();
-        return { data: yield* putSecret(m[1]!, boxes) };
-      }),
-  },
-  { method: "DELETE", path: SECRET, guard: "owner", run: (_, m) => withRoom((db) => ({ data: { deleted: db.dropSecret(m[1]!) } })) },
   { method: "GET", path: "/icon", guard: "member", run: () => withRoom((db) => ({ data: { icon: db.icon(), at: db.iconAt() } })) },
   {
     method: "PUT",

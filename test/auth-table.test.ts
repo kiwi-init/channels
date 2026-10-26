@@ -69,7 +69,6 @@ describe("member routes refuse anyone who isn't a member", () => {
     ["GET", "/messages"],
     ["POST", "/messages"],
     ["GET", "/keys"],
-    ["GET", "/secrets"],
     ["GET", "/icon"],
     ["GET", "/snapshot"],
     ["GET", "/members"],
@@ -119,8 +118,6 @@ describe("owner routes need the owner key's signature, and nothing else", () => 
     ["POST", "/members"],
     ["DELETE", `/members/${pk}`],
     ["POST", "/epochs"],
-    ["PUT", `/secrets/${"A".repeat(22)}`],
-    ["DELETE", `/secrets/${"A".repeat(22)}`],
     ["DELETE", "/"],
   ];
   for (const [method, path] of routes) {

@@ -12,6 +12,7 @@ import * as ManagedRuntime from "effect/ManagedRuntime";
 import { AgentLive } from "../agent.ts";
 import { VERSION } from "../version.ts";
 import { refreshListeners } from "../hooks.ts";
+import { forgetSecretCopies } from "../config/wipe.ts";
 import { HELP } from "./help.ts";
 import { args, ignoredOptions, opt, unexpectedOptions } from "./args.ts";
 import { type Command, die, out } from "./context.ts";
@@ -30,7 +31,6 @@ import { taskCommands } from "./commands/tasks.ts";
 import { toolCommands } from "./commands/tools.ts";
 import { contextLineCommands } from "./commands/context-line.ts";
 import { seatCommands } from "./commands/seat.ts";
-import { secretCommands } from "./commands/secrets.ts";
 import { rexCommands } from "./commands/rex.ts";
 import { terminalCommands } from "./commands/terminal.ts";
 import { launchCommands } from "./commands/launch.ts";
@@ -74,7 +74,6 @@ const commands: Record<string, Command> = {
   ...toolCommands,
   ...contextLineCommands,
   ...seatCommands,
-  ...secretCommands,
   ...rexCommands,
   ...terminalCommands,
   ...launchCommands,
@@ -106,6 +105,7 @@ if (import.meta.main) {
   }
   const shortcuts: Record<string, string> = { s: "status", t: "tasks" };
   const command = commands[shortcuts[cmd] ?? cmd];
+  if (command && cmd !== "relay") forgetSecretCopies();
   if (command && cmd !== "daemon" && cmd !== "relay" && cmd !== "hook") await refreshListeners();
   // One runtime for the whole command: the relay over HTTP, and this computer's files.
   const runtime = ManagedRuntime.make(AgentLive);

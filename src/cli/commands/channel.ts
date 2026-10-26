@@ -7,7 +7,6 @@ import { taskId } from "@kiwi/core/state.ts";
 import { daemonSeat, type DaemonSeat } from "../../daemon.ts";
 import { isWakeVia, wakeKey, wakeWords } from "@kiwi/core/wake.ts";
 import { ago, holdLine, formatRooms, formatStatus, presenceWords, statusJson } from "@kiwi/core/format.ts";
-import { freshSecrets } from "../../secrets.ts";
 import { describeScopes, presetOf } from "@kiwi/core/scopes.ts";
 import { bindDirectory, seatsFor } from "../../hooks.ts";
 import { heldText, seatHeldAway } from "../../hold.ts";
@@ -132,7 +131,7 @@ export const channelCommands: Record<string, Command> = {
   status: () =>
     Effect.gen(function* () {
       const s = yield* session();
-      const [{ messages, state }, online, secrets] = yield* Effect.all([s.state(), s.who(), Effect.orElseSucceed(freshSecrets(s), () => [])], { concurrency: "unbounded" });
+      const [{ messages, state }, online] = yield* Effect.all([s.state(), s.who()], { concurrency: "unbounded" });
       const on = new Map(
         [...online].map(([n, p]) => [
           n,
@@ -140,9 +139,7 @@ export const channelCommands: Record<string, Command> = {
         ]),
       );
       const snap = { alias: s.alias, me: s.me, state, online: on, unread: yield* s.unreadCount(state, messages) };
-      const names = secrets.map((x) => x.name);
-      out(opt.json ? JSON.stringify({ ...statusJson(snap), secrets: names }) : formatStatus(snap));
-      if (!opt.json && names.length) out(`Secrets for you: ${names.join(", ")} (kiwi secret says how to use them)`);
+      out(opt.json ? JSON.stringify(statusJson(snap)) : formatStatus(snap));
       yield* noteRead(s);
     }),
 
