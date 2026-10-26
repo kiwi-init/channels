@@ -83,6 +83,7 @@ export const remove = Effect.fn("Room.remove")(function* (pk: string, how: GoneH
   db.sql.run("DELETE FROM keys WHERE pk = ?", pk);
   db.sql.run("DELETE FROM requests WHERE pk = ?", pk);
   db.sql.run("DELETE FROM reads WHERE pk = ?", pk);
+  db.dropSecretsOf(pk);
   db.membersChanged(pk);
   db.changed("roster");
   db.set("rotate", 1);

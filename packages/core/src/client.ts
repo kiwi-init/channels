@@ -16,6 +16,7 @@ import type { JoinClaims, JoinRequest, Member, MemberInfo, PersonPowers } from "
 import type { ChannelIcon, Envelope, ImageAttachment, Message } from "./protocol.ts";
 import type { SigningBudget } from "./sas.ts";
 import type { Scope } from "./scopes.ts";
+import type { Secret, SecretView } from "./secrets.ts";
 import type { ChannelState, FoldBase, GithubRelease, GithubRules, GuardFloor } from "./state.ts";
 import { ChannelCore, type ChannelFx } from "./client/core.ts";
 import { ChannelGithub, type GithubDiff, type GithubIssueInfo, type ReviewCheck } from "./client/github.ts";
@@ -28,6 +29,7 @@ import { ChannelLive, type StreamOptions } from "./client/live.ts";
 import { ChannelMembers } from "./client/members.ts";
 import { run, runUntil } from "./client/relay.ts";
 import { ChannelRequests } from "./client/requests.ts";
+import { ChannelSecrets, type SecretInput } from "./client/secrets.ts";
 import { ChannelSending, type SendOptions } from "./client/send.ts";
 import { ChannelSettings, type RoomsSetting } from "./client/settings.ts";
 import { ChannelSnapshots } from "./client/snapshots.ts";
@@ -43,6 +45,7 @@ export { keepHeld } from "./client/sealed.ts";
 export type { RoomsSetting } from "./client/settings.ts";
 export type { JoinStatus } from "./client/join.ts";
 export type { SendOptions } from "./client/send.ts";
+export type { SecretInput } from "./client/secrets.ts";
 export type { ChannelFx } from "./client/core.ts";
 export type { GithubDiff, GithubIssueInfo, ReviewCheck } from "./client/github.ts";
 
@@ -74,6 +77,7 @@ export class Channel {
       ...images.fx,
       ...live.fx,
       ...new ChannelGithub(this.core).fx,
+      ...new ChannelSecrets(this.core).fx,
     };
     this.core.fx = this.fx;
   }
@@ -404,6 +408,30 @@ export class Channel {
 
   snapshotAt(): Promise<number | null> {
     return run(this.fx.snapshotAt());
+  }
+
+  mySecrets(): Promise<Secret[]> {
+    return run(this.fx.mySecrets());
+  }
+
+  secrets(): Promise<SecretView[]> {
+    return run(this.fx.secrets());
+  }
+
+  secretValue(id: string): Promise<string> {
+    return run(this.fx.secretValue(id));
+  }
+
+  setSecret(input: SecretInput): Promise<SecretView> {
+    return run(this.fx.setSecret(input));
+  }
+
+  deleteSecret(id: string): Promise<void> {
+    return run(this.fx.deleteSecret(id));
+  }
+
+  guardSecrets(secrets: readonly Pick<Secret, "name" | "value">[]): void {
+    this.core.guardWith(secrets);
   }
 
   /** Delete the channel at the relay: messages, members, keys, everything. */
