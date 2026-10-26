@@ -53,7 +53,7 @@ abstract class BundleEngine : DefaultTask() {
 
 android {
     namespace = "com.kiwiinit.channels"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.kiwiinit.channels"

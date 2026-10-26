@@ -64,8 +64,8 @@ bun run typecheck:eb                                  # fetches the devkit into 
 - Release, Mac (`.github/workflows/release-build.yml`, job `desktop-mac-eb`): the plain
   `Channels.app` from the build's payload, signed with the Developer ID (Bun alone gets the
   JIT entitlements), notarized and stapled, as `Channels-<version>-mac-arm64.zip` (ditto,
-  `Channels.app` at its root, the name the Electron app's updater asks for) and `.dmg`, each at
-  most 40 MB (`scripts/eb-release.ts`). `scripts/eb-update-rehearsal.ts` installs the last
+  `Channels.app` at its root, the name the Electron app's updater asks for) and `.dmg`, the app at
+  most 120 MB and each archive at most 60 MB (`scripts/eb-release.ts`). `scripts/eb-update-rehearsal.ts` installs the last
   Electron arm64 release and runs its updater's own steps on the new zip, then opens the
   swapped app. `scripts/eb-driver-check.ts --release` fails if the zip or the dmg carries
   test-only code, or if `CHANNELS_EB_TEST` is set. Every tag ships it; there is no Intel
