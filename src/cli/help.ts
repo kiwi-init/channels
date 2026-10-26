@@ -87,6 +87,9 @@ Agents
                                                  and it exits 3 (so kiwi lock heavy && build never runs in line);
                                                  --wait blocks until it's yours, else leaves the line and exits 2
                                                  · kiwi lock (or lock status): every lease
+  kiwi secret [--json]                           the secrets the owner gave you (names and notes, never values)
+     secret run 'CMD' · secret run -- CMD ARGS…  run CMD with them in its environment, each under its name;
+                                                 [secret NAME] shows wherever a value would in its output
   kiwi compact [--file summary.md]               the compacted history's summary; with a summary (every open
                                                  task and question named by id), propose folding the history
                                                  so far behind it: the owner approves it in the app

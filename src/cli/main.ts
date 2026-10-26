@@ -30,6 +30,7 @@ import { taskCommands } from "./commands/tasks.ts";
 import { toolCommands } from "./commands/tools.ts";
 import { contextLineCommands } from "./commands/context-line.ts";
 import { seatCommands } from "./commands/seat.ts";
+import { secretCommands } from "./commands/secrets.ts";
 import { rexCommands } from "./commands/rex.ts";
 import { terminalCommands } from "./commands/terminal.ts";
 import { launchCommands } from "./commands/launch.ts";
@@ -73,6 +74,7 @@ const commands: Record<string, Command> = {
   ...toolCommands,
   ...contextLineCommands,
   ...seatCommands,
+  ...secretCommands,
   ...rexCommands,
   ...terminalCommands,
   ...launchCommands,
