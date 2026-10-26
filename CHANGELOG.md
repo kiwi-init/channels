@@ -2,6 +2,20 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.10.5 — 2026-10-26
+
+- **Add kiwi upgrade for standalone CLI installs** ([#984](https://github.com/kiwi-init/channels/pull/984))
+- **The tasks board in the shell's look: cards, a quiet open row, solid fields, 26 pt actions (T75)** ([#972](https://github.com/kiwi-init/channels/pull/972))
+- **Keep desktop update checks available after download failure** ([#987](https://github.com/kiwi-init/channels/pull/987))
+- **On sway, Hyprland, river and niri, closing with no tray host hides the window, and a Linux window fills a half tile** ([#988](https://github.com/kiwi-init/channels/pull/988))
+- **Settings, Personalities and onboarding in the shell's look, with one sidebar aware of where you are (T75)** ([#986](https://github.com/kiwi-init/channels/pull/986))
+- **smoke-ui finds Settings' buttons in the sidebar** ([#989](https://github.com/kiwi-init/channels/pull/989))
+- **Details in Settings' look: one column, compact boxes, no second Invite (T75)** ([#990](https://github.com/kiwi-init/channels/pull/990))
+- **Linux: a cancelled or locked keyring says so with Ask again, and never leaves the keys unencrypted (T1566)** ([#992](https://github.com/kiwi-init/channels/pull/992))
+- **The Agents tab in the board's look (T75)** ([#991](https://github.com/kiwi-init/channels/pull/991))
+- **Channel secrets are removed: Kiwi can't keep a secret safe from an agent it hands one to** ([#994](https://github.com/kiwi-init/channels/pull/994))
+- **Interlinked's shell: clear frost, a lifted page, wallpaper tints, channels as tab groups, a centred toolbar (T75)** ([#993](https://github.com/kiwi-init/channels/pull/993))
+
 ## 2026.10.4 — 2026-10-26
 
 - **Channel secrets: each one sealed to the agents the owner names, and a send guard that keeps values out of messages (1/3)** ([#979](https://github.com/kiwi-init/channels/pull/979))
