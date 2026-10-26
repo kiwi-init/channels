@@ -2,6 +2,12 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.10.4 — 2026-10-26
+
+- **Channel secrets: each one sealed to the agents the owner names, and a send guard that keeps values out of messages (1/3)** ([#979](https://github.com/kiwi-init/channels/pull/979))
+- **Channel secrets for agents: kiwi secret lists them, kiwi secret run puts them in a command's environment and redacts them from its output (2/3)** ([#980](https://github.com/kiwi-init/channels/pull/980))
+- **Channel secrets in the app: the owner adds a secret and ticks which agents may use it (3/3)** ([#981](https://github.com/kiwi-init/channels/pull/981))
+
 ## 2026.10.3 — 2026-10-25
 
 - **Tiling, scale and closing on wlroots, with screenshots (headless sway)** ([#975](https://github.com/kiwi-init/channels/pull/975))
