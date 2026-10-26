@@ -138,6 +138,8 @@ export class ChannelSending {
         ts: Date.now(),
       };
       if ((payload.permission || payload.perm || payload.settled) && !wellFormed(payload)) return yield* new Rejected("a permission prompt, its answer or its close is malformed");
+      const leaked = this.ch.leak({ ...payload, imgs: payload.imgs?.map((i) => i.name) });
+      if (leaked) return yield* new Rejected(`this holds the value of the secret ${leaked}, so it wasn't sent: name the secret (${leaked}), never write its value`);
       const signed = yield* Effect.promise(() => sign(this.ch.identity, payload));
       const cid = b64url(crypto.getRandomValues(new Uint8Array(16)));
       const sealNow = Effect.gen({ self: this }, function* () {
