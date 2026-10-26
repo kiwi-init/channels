@@ -345,15 +345,16 @@ From `design-tokens.ts`:
   on the row's right as outlined buttons (below it on a phone). Rows are
   split by `line`, not by fills. `Pause agents` in the header stops every
   agent at once.
-- Agents tab: one lane per agent, side by side on the canvas, split by
-  `line` (no cards, no fills; the lead's lane last). A lane: face, name,
-  `@handle · for person · model`; a mono `meta` line of what it runs now
-  between two `line`s (a steady `doing` dot while a tool runs, `live` while
-  it thinks); its tasks in progress and in review as `card`-round outlined
-  blocks (`T7 · in progress · 41 min`, the title in `ui` semibold, `PR #n`
-  and a tick per check: `alert` failed, `doing` running, `live` passed);
-  Up next; Watching (the lead's other open PRs); and its last three moves
-  at the foot, times in tabular `meta`.
+- Agents tab: one lane per agent, side by side, each a card like the
+  board's groups (`card` radius, a `line` border, 6px inside, 16px apart;
+  the lead's lane last). A lane: face, name, `@handle · for person ·
+  model`; a `meta` line of what it runs now (a steady `doing` dot while a
+  tool runs, `live` while it thinks); its tasks in progress and in review
+  as `ctl`-round rows with no rules (the title in `body`, `T7 · in
+  progress · 41 min` under it, `PR #n` and a tick per check when there is
+  one: `alert` failed, `doing` running, `live` passed); Up next; Watching
+  (the lead's other open PRs); and its last three moves at the foot,
+  times in tabular `meta`.
 - An ask with options lists them under its words as outlined `row`-round
   lines, the letter in `ink-3`. While it waits on you it says so in
   `decide` under the bubble and its options answer it; once answered, the
