@@ -148,14 +148,16 @@ export function ShellSidebar({
                           {!open && <News n={n} />}
                         </button>
                         {c.state === "member" && (
-                          <IconButton
-                            label={`Details: ${c.title}`}
-                            round
-                            className={cx("no-drag mr-1 size-6 shrink-0 text-ink-3 hover:text-ink", !open && "opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100")}
-                            onClick={() => (open ? requestDetails(c.code) : (requestDetails(c.code), onSelect(c.code)))}
-                          >
-                            <Icon icon={Settings02Icon} size={14} />
-                          </IconButton>
+                          <span className={cx("mr-1 shrink-0", open ? "flex" : "hidden group-hover/row:flex")}>
+                            <IconButton
+                              label={`Details: ${c.title}`}
+                              round
+                              className="no-drag size-6 text-ink-3 hover:text-ink"
+                              onClick={() => (open ? requestDetails(c.code) : (requestDetails(c.code), onSelect(c.code)))}
+                            >
+                              <Icon icon={Settings02Icon} size={14} />
+                            </IconButton>
+                          </span>
                         )}
                       </div>
                       {open && <div ref={setSlot} className={cx(folded && "hidden")} />}
