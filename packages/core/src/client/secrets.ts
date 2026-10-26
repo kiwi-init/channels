@@ -38,6 +38,8 @@ export interface SecretsFx {
 
 const grantable = (m: Member): boolean => m.active && !m.unverified && !m.owner && m.kind !== "human";
 
+type Held = SecretPlain & { sealed: string };
+
 const view = (p: SecretPlain): SecretView => ({ id: p.id, name: p.name, note: p.note ?? null, rev: p.rev, at: p.at, grants: p.grants ?? [], had: p.had ?? p.grants ?? [] });
 
 const NO_SECRETS = "this relay doesn't keep secrets yet: whoever runs it needs to update it";
@@ -49,7 +51,7 @@ export class ChannelSecrets {
 
   readonly fx: SecretsFx = {
     mySecrets: Effect.fn("Channel.mySecrets")({ self: this }, function* (this: ChannelSecrets) {
-      return (yield* this.held()).map((p): Secret => ({ id: p.id, name: p.name, value: p.value, note: p.note ?? null, rev: p.rev, at: p.at }));
+      return (yield* this.held()).map((p): Secret => ({ id: p.id, name: p.name, value: p.value, note: p.note ?? null, rev: p.rev, at: p.at, sealed: p.sealed }));
     }),
 
     secrets: Effect.fn("Channel.secrets")({ self: this }, function* (this: ChannelSecrets) {
@@ -113,15 +115,22 @@ export class ChannelSecrets {
     }),
   };
 
-  private held(): Effect.Effect<SecretPlain[], Refused, Relay> {
+  private held(): Effect.Effect<Held[], Refused, Relay> {
     return Effect.gen({ self: this }, function* () {
       const r = yield* this.ch.request<{ secrets?: unknown }>("/secrets").pipe(Effect.mapError(older));
       const rows = (Array.isArray(r.secrets) ? r.secrets : []).slice(0, MAX_SECRETS * 2) as SecretRow[];
       const floor = this.ch.access.seenSecrets ?? {};
-      const opened = yield* Effect.promise(() => Promise.all(rows.map((row) => openSecret(this.ch.identity, this.ch.roomId, this.ch.access.ownerPk, row))));
-      const newest = new Map<string, SecretPlain>();
+      const opened = yield* Effect.promise(() =>
+        Promise.all(
+          rows.map(async (row): Promise<Held | null> => {
+            const p = await openSecret(this.ch.identity, this.ch.roomId, this.ch.access.ownerPk, row);
+            return p && { ...p, sealed: row.box };
+          }),
+        ),
+      );
+      const newest = new Map<string, Held>();
       for (const p of opened) if (p && p.rev >= (floor[p.id] ?? 0) && p.rev > (newest.get(p.id)?.rev ?? 0)) newest.set(p.id, p);
-      const byName = new Map<string, SecretPlain>();
+      const byName = new Map<string, Held>();
       for (const p of newest.values()) if (p.at > (byName.get(p.name)?.at ?? 0)) byName.set(p.name, p);
       const fresh = [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
       this.note(fresh);

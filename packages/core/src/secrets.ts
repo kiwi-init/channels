@@ -42,6 +42,7 @@ export interface Secret {
   note: string | null;
   rev: number;
   at: number;
+  sealed: string;
 }
 
 export interface SecretView {

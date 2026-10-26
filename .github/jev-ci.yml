@@ -331,6 +331,7 @@ jobs:
       Fails if any of that breaks.
       And web lib/annotate.test.ts: an image's base64 becomes a Blob without fetching a data URL (the app's and the site's CSP connect-src have no data:, so the annotator's Copy image failed with Load failed), and no file in web/src fetches one.
       And test/secrets.test.ts: a channel secret the owner gives to one agent opens for that agent alone (sealed to its key and signed by the owner, never under the channel key), a copy the owner didn't sign or one moved to another key, room or an older revision is refused, taking an agent off or removing it drops its copy at the relay, and a client that has read a secret refuses to send its value plain, JSON-escaped, URL-encoded, in hex or inside base64.
+      And test/secret-run.test.ts: kiwi secret lists an agent's secrets by name and note only, kiwi secret run puts them in a command's environment and writes [secret NAME] for any value in its stdout or stderr however the output is split, kiwi status names them, no subcommand prints a value, the computer keeps only the owner's sealed copies at 0600, every kiwi command refuses to send a value it once read, and leaving deletes the copies.
 
   test-flows:
     name: test / flows
