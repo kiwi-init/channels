@@ -330,7 +330,7 @@ export interface KiwiBridge {
   daemonAdopt(): Promise<ComputerView>;
   /** Put the bundled kiwi binary in ~/.kiwi/bin and on the PATH (the app also does this on every start). */
   installCli(): Promise<{ path: string }>;
-  /** A newer proper release: being downloaded, ready to restart into, or only available (a .deb). */
+  /** A newer proper release: being downloaded, ready to restart into, or only available. */
   keysAtRest(): Promise<KeysAtRest>;
   wallpaperTints(dark: boolean): Promise<string[]>;
   getUpdate(): Promise<UpdateView | null>;
@@ -387,7 +387,6 @@ export interface UpdateView {
   /** The release's page. */
   url: string;
   blocked?: true;
-  deb?: string;
 }
 
 export type UpdateCheckView = UpdateView | { state: "current"; version: string } | { state: "failed" };

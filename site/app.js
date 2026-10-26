@@ -5,7 +5,6 @@ const INSTALL = `${location.origin}/install`;
 const DOWNLOADS = [
   { id: "mac-arm64", os: "macOS", detail: "Apple silicon", file: "Channels-2026.10.5-mac-arm64.dmg" },
   { id: "linux-appimage", os: "Linux", detail: "AppImage", file: "Channels-2026.10.5-linux-x86_64.AppImage" },
-  { id: "linux-deb", os: "Linux", detail: "Debian / Ubuntu (.deb)", file: "Channels-2026.10.5-linux-amd64.deb" },
 ];
 
 const fileUrl = (d) => `${RELEASE}/${encodeURIComponent(d.file)}`;
@@ -31,7 +30,6 @@ function guessPlatform(nav) {
   if (/iPhone|iPad|iPod|Android/i.test(ua)) return "";
   if (/Macintosh|Mac OS X/i.test(ua)) return "mac-arm64";
   if (/aarch64|arm/i.test(ua)) return "";
-  if (/Ubuntu|Debian/i.test(ua)) return "linux-deb";
   if (/Linux|X11/i.test(ua)) return "linux-appimage";
   return "";
 }

@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { appImageName, debName, type LinuxArch } from "../scripts/linux-files.ts";
+import { appImageName, type LinuxArch } from "../scripts/linux-files.ts";
 
 const linuxArch = (arch: string): LinuxArch | null => (arch === "x64" || arch === "arm64" ? arch : null);
 
@@ -42,11 +42,6 @@ export function swapAsset(version: string, platform: NodeJS.Platform, arch: stri
   const linux = linuxArch(arch);
   if (platform === "linux" && appImage && linux) return appImageName(version, linux);
   return null;
-}
-
-export function debAsset(version: string, platform: NodeJS.Platform, arch: string, appImage?: string): string | null {
-  const linux = linuxArch(arch);
-  return platform === "linux" && !appImage && linux ? debName(version, linux) : null;
 }
 
 export function cantSwap(bundle: string, writable: (dir: string) => boolean, failedBefore: boolean): boolean {

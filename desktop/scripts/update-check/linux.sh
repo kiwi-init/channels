@@ -8,8 +8,8 @@ problems=()
 img="$HOME/Applications/Channels.AppImage"
 main_pid() { pgrep -f '/Channels/bin/bun' | head -n 1; }
 
-gh release download "v$FROM" -R "$GITHUB_REPOSITORY" -p "Channels-$FROM-linux-x86_64.AppImage" -p "Channels-$FROM-linux-amd64.deb" -D "$OUT/dl" || exit 1
-gh release download "v$TO" -R "$GITHUB_REPOSITORY" -p SHA256SUMS -p "Channels-$TO-linux-amd64.deb" -D "$OUT/to" || exit 1
+gh release download "v$FROM" -R "$GITHUB_REPOSITORY" -p "Channels-$FROM-linux-x86_64.AppImage" -D "$OUT/dl" || exit 1
+gh release download "v$TO" -R "$GITHUB_REPOSITORY" -p SHA256SUMS -D "$OUT/to" || exit 1
 want=$(awk -v f="Channels-$TO-linux-x86_64.AppImage" '$2 == f { print $1 }' "$OUT/to/SHA256SUMS")
 [ -n "$want" ] || { echo "SHA256SUMS of $TO lists no AppImage"; exit 1; }
 cp "$OUT/dl/Channels-$FROM-linux-x86_64.AppImage" "$img"
@@ -44,15 +44,6 @@ if [ -n "$pid" ]; then echo "$TO's AppImage runs (bun $pid)"; else problems+=("t
 sleep 3
 pkill -KILL -f "$img" 2> /dev/null
 
-sudo apt-get install -y "$OUT/dl/Channels-$FROM-linux-amd64.deb" > /dev/null || problems+=("the $FROM deb didn't install")
-echo "deb installed: $(dpkg-query -W -f '${Version}' kiwi-desktop)"
-sudo apt-get install -y "$OUT/to/Channels-$TO-linux-amd64.deb" > /dev/null || problems+=("the $TO deb didn't install over $FROM's")
-got=$(dpkg-query -W -f '${Version}' kiwi-desktop)
-echo "deb after installing $TO over it: $got"
-[ "$got" = "$TO" ] || problems+=("dpkg says $got, not $TO")
-sudo dpkg --verify kiwi-desktop || problems+=("dpkg --verify finds changed files")
-sudo dpkg --purge kiwi-desktop > /dev/null
-
 find "$HOME/.local/state" -name main.log 2> /dev/null | while read -r f; do
   echo "::group::$f"
   tail -n 60 "$f"
@@ -62,4 +53,4 @@ if [ ${#problems[@]} -gt 0 ]; then
   printf 'FAIL %s\n' "${problems[@]}"
   exit 1
 fi
-echo "ok: an installed $FROM AppImage updated itself to $TO, and $TO's deb installs over $FROM's"
+echo "ok: an installed $FROM AppImage updated itself to $TO"

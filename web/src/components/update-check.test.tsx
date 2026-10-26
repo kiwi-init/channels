@@ -17,18 +17,6 @@ test("a failed automatic update keeps a manual retry beside the release download
   expect(html).not.toContain('disabled=""')
 })
 
-test("a package install keeps its download link and can check again", () => {
-  current = {
-    state: "available",
-    version: "2026.10.4",
-    url: "https://github.com/kiwi-init/channels/releases/tag/v2026.10.4",
-    deb: "https://github.com/kiwi-init/channels/releases/download/v2026.10.4/Channels.deb",
-  }
-  const html = renderToStaticMarkup(createElement(UpdateCheck))
-  expect(html).toContain("Download .deb")
-  expect(html).toContain("Check for updates")
-})
-
 test("downloading disables another check and a ready update offers restart", () => {
   current = { state: "downloading", version: "2026.10.4", url: "https://github.com/kiwi-init/channels/releases/tag/v2026.10.4" }
   expect(renderToStaticMarkup(createElement(UpdateCheck))).toMatch(/disabled=""[^>]*>Check for updates/)
