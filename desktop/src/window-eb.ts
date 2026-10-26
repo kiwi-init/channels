@@ -3,6 +3,7 @@ import path from "node:path";
 import Electrobun, { BrowserWindow, PATHS, Utils, type BrowserView } from "electrobun/main";
 
 import { onOurPage, preloadSource, toPageScript } from "./eb-bridge.ts";
+import { frost, lookMarks } from "./frost-eb.ts";
 import { keys, keysToPage } from "./keys-start-eb.ts";
 import { cString, committedPage, mac, setPageHtml, setPreload, windowLook } from "./native-eb.ts";
 import { navigation, openedUrl, PAGE_RULES, PAGE_TEMPLATE, PAGE_URL, pageWithCsp, RULES_CANARY } from "./eb-page.ts";
@@ -79,7 +80,7 @@ export async function createWindow(keyring: KeyringState | null = null): Promise
   );
   keysToPage((frame) => bridge.pushKeys(frame));
   mark("window");
-  const preload = preloadSource({ snapshot: snapshot(), session: bridge.nextSession() }, bundled);
+  const preload = preloadSource({ snapshot: snapshot(), session: bridge.nextSession() }, lookMarks() + bundled);
   Bun.gc(true);
   const win = new BrowserWindow({
     title: "Channels",
@@ -115,7 +116,7 @@ export async function createWindow(keyring: KeyringState | null = null): Promise
     bridge.retire();
     webview.loadURL(PAGE_URL);
   };
-  const refreshPreload = (): void => setPreload(webview.id, preloadSource({ snapshot: snapshot(), session: bridge.nextSession() }, bundled));
+  const refreshPreload = (): void => setPreload(webview.id, preloadSource({ snapshot: snapshot(), session: bridge.nextSession() }, lookMarks() + bundled));
   attachWindow({
     win,
     view: webview,
@@ -132,6 +133,7 @@ export async function createWindow(keyring: KeyringState | null = null): Promise
   webview.on("did-commit-navigation", () => mark("committed"));
   const look = win.ptr;
   if (look) windowLook(look, minWindowWidth(process.platform), WINDOW_SIZE.minHeight, rgb(windowBackground(false)), rgb(windowBackground(true)));
+  if (look) frost(look, (on) => bridge.push("frost", on));
   if (mac) win.setWindowButtonPosition(TRAFFIC_LIGHTS.x, TRAFFIC_LIGHTS.y);
   Electrobun.events.on(`new-window-open-${webview.id}`, (e: { data?: { detail?: unknown } }) => {
     const url = openedUrl(e.data?.detail);

@@ -9,6 +9,7 @@ import {
   GithubIcon,
   GitPullRequestIcon,
   HashtagIcon,
+  Key01Icon,
   Note01Icon,
   PauseIcon,
   PencilEdit01Icon,
@@ -34,7 +35,7 @@ import { Rooms } from "./controls/rooms"
 import { useDownload } from "./controls/use-download"
 import { Icon, type IconSvgElement } from "./icon"
 import { Button, IconButton, Monogram, SEGMENTED, SEGMENT_OFF, SEGMENT_ON, errorText, toast } from "./kit"
-import { AddAgent, Invite } from "./lazy"
+import { AddAgent, Invite, Secrets } from "./lazy"
 import { defaultScopes, saveDefaultScopes } from "./scopes"
 
 export function InfoPanel({
@@ -62,7 +63,7 @@ export function InfoPanel({
 }) {
   const { p, ask, openDialog, editColor } = useControls()
   const { saving, download } = useDownload(p)
-  const [view, setView] = useState<"details" | "invite" | "repos" | "rooms" | "agent">("details")
+  const [view, setView] = useState<"details" | "invite" | "repos" | "rooms" | "agent" | "secrets">("details")
   const [picking, setPicking] = useState(false)
   const [savingIcon, setSavingIcon] = useState(false)
   const [readOnly, setReadOnly] = useState(() => (p.roomId ? presetOf(defaultScopes(p.roomId)) === "read-only" : false))
@@ -95,9 +96,9 @@ export function InfoPanel({
 
   return (
     <aside aria-label="Details" className="flex min-w-0 flex-1 flex-col bg-canvas md:sheet" onKeyDown={(e) => e.key === "Escape" && back()}>
-      <header className="drag flex h-(--chrome-h) shrink-0 items-center gap-2 px-3">
-        <IconButton label={view === "details" ? "Close details" : "Back to details"} round className="glass size-9 text-ink" onClick={back}>
-          <Icon icon={ArrowLeft01Icon} size={18} />
+      <header className="drag flex h-(--chrome-h) shrink-0 items-center gap-2 px-3 md:mt-(--step) md:h-(--card-head) md:gap-(--step) md:px-(--step)">
+        <IconButton label={view === "details" ? "Close details" : "Back to details"} round className="no-drag size-9 md:size-(--control)" onClick={back}>
+          <Icon icon={ArrowLeft01Icon} size={15} />
         </IconButton>
         <span className="truncate text-ui font-semibold">{view === "details" || view === "agent" ? title : "Channel settings"}</span>
       </header>
@@ -113,6 +114,8 @@ export function InfoPanel({
               </div>
             ) : view === "rooms" ? (
               <Rooms rooms={[...p.state.rooms.values()]} onMake={p.onMakeRoom} onRename={p.onRenameRoom} />
+            ) : view === "secrets" ? (
+              <Secrets />
             ) : (
               <Repos repos={p.state.repos} onSave={p.isOwner ? p.onRepos : undefined} />
             )}
@@ -282,6 +285,11 @@ export function InfoPanel({
                 {(p.isOwner || p.state.repos.length > 0) && (
                   <Row icon={GithubIcon} onClick={() => setView("repos")} detail={p.state.repos.join(", ") || "None yet"}>
                     Repos
+                  </Row>
+                )}
+                {p.isOwner && p.secrets && (
+                  <Row icon={Key01Icon} onClick={() => setView("secrets")} detail="Keys and tokens only the agents you pick can use">
+                    Secrets
                   </Row>
                 )}
                 {(p.isOwner ? p.state.repos.length > 0 : p.state.githubWrite !== null) &&

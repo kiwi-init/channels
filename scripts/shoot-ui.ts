@@ -183,13 +183,19 @@ try {
     const tabs = owner.getByRole("navigation", { name: "Views of the channel" });
     if (await tabs.isVisible()) return tabs.getByRole("button", { name, exact: true }).click();
     if (name === "Tasks") {
-      if (await owner.getByRole("navigation", { name: "Views" }).first().isVisible()) return;
-      return owner
-        .getByRole("button", { name: /^Tasks(,|$)/ })
-        .first()
-        .click();
+      const views = owner.getByRole("navigation", { name: "Views" }).first();
+      if (!(await views.isVisible()))
+        await owner
+          .getByRole("button", { name: /^Tasks(,|$)/ })
+          .first()
+          .click();
+      return views.getByRole("button", { name: "Everything", exact: true }).click();
     }
-    if (name === "Agents") return owner.getByRole("button", { name: "Agents", exact: true }).first().click();
+    if (name === "Agents") {
+      const agents = owner.getByRole("button", { name: "Agents", exact: true }).first();
+      if ((await agents.getAttribute("aria-pressed")) !== "true") await agents.click();
+      return;
+    }
     return owner.getByRole("region", { name: "Conversations" }).getByRole("button", { name: /^# / }).first().click();
   };
 
@@ -327,6 +333,19 @@ try {
   await owner.getByText("Repos saved").first().waitFor({ timeout: 15000 });
   await owner.getByRole("button", { name: "Back to details" }).click();
   await panel.getByText("Write to GitHub", { exact: true }).waitFor({ timeout: 15000 });
+  const secret = async (name: string, value: string, note: string, agents: string[]) => {
+    await panel.getByRole("button", { name: /^Secrets/ }).click();
+    await panel.getByRole("button", { name: "New secret" }).click();
+    await panel.getByRole("textbox", { name: "Name" }).fill(name);
+    await panel.getByRole("textbox", { name: "Value" }).fill(value);
+    await panel.getByRole("textbox", { name: "Note" }).fill(note);
+    for (const a of agents) await panel.getByRole("checkbox", { name: `${a} can use it` }).check();
+    await panel.getByRole("button", { name: "Save", exact: true }).click();
+    await owner.getByText(`${name} saved`).first().waitFor({ timeout: 15000 });
+    await owner.getByRole("button", { name: "Back to details" }).click();
+  };
+  await secret("STRIPE_KEY", "sk_test_51HxQ2bLkdIu7Gf9aZ0pQwE", "Test mode, for the billing task", ["atlas"]);
+  await secret("DATABASE_URL", "postgres://billing:Wd8p2Lq7xNe3@db.internal:5432/billing", "The staging database", []);
   await owner.goto(channel);
   await toTab("Tasks");
   await owner.getByText("Shipped in 0.8.11").first().waitFor({ timeout: 90000 });
@@ -492,7 +511,7 @@ try {
         "01b-search",
         async () => {
           await owner.getByRole("button", { name: "Search", exact: true }).first().click();
-          await owner.getByRole("textbox", { name: "Search this channel" }).first().fill("rows");
+          await owner.getByRole("textbox", { name: "Search messages" }).first().fill("rows");
         },
         async () => void (await owner.keyboard.press("Escape")),
       );
@@ -639,6 +658,47 @@ try {
         () => toTab("Conversation"),
       );
       await shoot(owner, tag, "07-details", () => detailsBtn().click(), closeDetails);
+      const secrets = async () => {
+        await detailsBtn().click();
+        await details()
+          .getByRole("button", { name: /^Secrets/ })
+          .click();
+        await details().getByText("STRIPE_KEY").waitFor({ timeout: 15000 });
+      };
+      const leaveSecrets = async () => {
+        await owner.getByRole("button", { name: "Back to details" }).click();
+        await closeDetails();
+      };
+      await shoot(owner, tag, "07e-secrets", secrets, leaveSecrets);
+      await shoot(
+        owner,
+        tag,
+        "07f-secret",
+        async () => {
+          await secrets();
+          await details()
+            .getByRole("button", { name: /^STRIPE_KEY/ })
+            .click();
+          await details().getByRole("checkbox", { name: "atlas can use it" }).waitFor();
+        },
+        leaveSecrets,
+      );
+      await shoot(
+        owner,
+        tag,
+        "07g-secret-taken-back",
+        async () => {
+          await secrets();
+          await details()
+            .getByRole("button", { name: /^STRIPE_KEY/ })
+            .click();
+          await details().getByRole("checkbox", { name: "atlas can use it" }).uncheck();
+          await details()
+            .getByText(/has seen this value/)
+            .waitFor();
+        },
+        leaveSecrets,
+      );
       // An agent of this computer in the owner's menu, with a stand-in for the desktop app's two wake calls.
       if (["07c-agent-wake", "07d-agent-wake-off"].some((n) => takes(tag, n))) {
         if (!wakeStub) {

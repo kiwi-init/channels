@@ -14,6 +14,7 @@ export interface Pushes {
   githubCode: { code: string; url: string };
   deepLink: string;
   textStep: TextStep;
+  frost: boolean;
 }
 
 export type Push = keyof Pushes;
@@ -72,8 +73,10 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     takeDroppedFiles: () => t.call("takeDroppedFiles"),
     takePastedImage: () => t.call("takePastedImage"),
     setBadge: (count) => t.call("setBadge", count),
+    setAppearance: (appearance) => t.call("setAppearance", appearance),
     onDeepLink: (cb) => t.listen("deepLink", cb),
     onTextStep: (cb) => t.listen("textStep", cb),
+    onFrost: (cb) => t.listen("frost", cb),
     setPersonalities: (list) => t.call("setPersonalities", list),
     seatPlaces: () => t.call("seatPlaces"),
     showSeat: (seat) => t.call("showSeat", seat),

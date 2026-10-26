@@ -5,6 +5,7 @@ import { cursorDir, cursorPath, seenPath } from "./cursors.ts";
 import { dropSeats, loadConfig, updateConfig, type ChannelConfig } from "./file.ts";
 import { forgetIdentity, identitiesIn, identityDir } from "./identities.ts";
 import { home, safe } from "./paths.ts";
+import { forgetSecrets, secretsDir } from "./secrets.ts";
 
 export function wipeChannel(alias: string): void {
   let c: ChannelConfig | undefined;
@@ -16,6 +17,7 @@ export function wipeChannel(alias: string): void {
   });
   if (c) {
     rmSync(identityDir(c.roomId), { recursive: true, force: true });
+    rmSync(secretsDir(c.roomId), { recursive: true, force: true });
     for (const suffix of ["", ".seq", ".base"]) rmSync(cachePath(c.roomId) + suffix, { force: true });
     rmSync(join(home(), "downloads", c.roomId), { recursive: true, force: true });
     rmSync(join(home(), "answers", safe(c.roomId)), { recursive: true, force: true });
@@ -28,6 +30,7 @@ export function forgetMember(alias: string, name: string): void {
   const c = loadConfig().channels[alias];
   if (!c) return;
   forgetIdentity(name, c.roomId);
+  forgetSecrets(c.roomId, name);
   rmSync(cursorPath(alias, name), { force: true });
   rmSync(seenPath(alias, name), { force: true });
   const left = identitiesIn(c.roomId).filter((n) => n !== c.owner && n !== c.person);

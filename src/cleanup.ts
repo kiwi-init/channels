@@ -49,7 +49,10 @@ function entries(dir: string): string[] {
 }
 
 function updateDebris(bin: string, out: Cleaned): void {
-  for (const f of entries(bin)) if (/^kiwi(\.exe)?\.new-\d+$/.test(f)) remove(join(bin, f), out);
+  for (const f of entries(bin)) {
+    const upgrade = /^\.kiwi-upgrade-(\d+)-[A-Za-z0-9]+$/.exec(f);
+    if (/^kiwi(\.exe)?\.new-\d+$/.test(f) || (upgrade && !alive(Number(upgrade[1])))) remove(join(bin, f), out);
+  }
 }
 
 function deadListenerFiles(home: string, out: Cleaned): void {

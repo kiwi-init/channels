@@ -16,6 +16,8 @@
     "gdbus",
     "pgrep",
     "xdotool",
+    "swaymsg",
+    "grim",
     "osascript",
     "plutil",
     "secret-tool",

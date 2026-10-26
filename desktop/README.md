@@ -114,3 +114,26 @@ bun run build:eb                  # release-eb/: the stable build
 
 The release workflow (`.github/workflows/release.yml`) ships the Electrobun app above for
 Apple silicon Macs and Linux. There is no Intel Mac or Windows app.
+
+## Linux screenshots from a Mac (wlroots, as Hyprland runs it)
+
+`scripts/wlroots-check/sway.sh` runs the test build in a Wayland-only headless sway, the
+wlroots family Hyprland (Omarchy) belongs to, checks tiling, floating, scale 2 and closing,
+and leaves a PNG of each state with `results.json` in the folder it is given. CI runs it on
+Ubuntu 26.04 and keeps the PNGs as the `wlroots-check` artifact.
+
+On an Apple silicon Mac, run it in an Ubuntu 26.04 arm64 VM (UTM or Lume). Hutch and the
+devkit are pinned for linux-arm64, but no CI job builds there, so an arm64 build is the
+first to try it.
+
+```sh
+sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev \
+  bubblewrap xdg-dbus-proxy dbus sway grim python3-gi gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0
+bun install && bun run web:build && bun scripts/build-cli.ts --js dist/kiwi.js
+cd desktop && bun run prepare:eb && CHANNELS_EB_TEST=1 bun scripts/eb.ts build --env=dev && cd ..
+bash desktop/scripts/wlroots-check/sway.sh desktop/release-eb/build/dev-linux-*/*/ /tmp/wlroots
+```
+
+An agent on the Mac runs the last line over `ssh` and copies `/tmp/wlroots/*.png` back with
+`scp`. For Hyprland itself, an Omarchy VM on Arch Linux ARM:
+https://cua.ai/docs/how-to-guides/lume/run-omarchy-arm64

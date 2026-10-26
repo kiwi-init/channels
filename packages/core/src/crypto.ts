@@ -28,11 +28,12 @@ export interface ChannelAccess {
   seenTitleAt?: number;
   seenSettingsAt?: number;
   seenIconAt?: number;
+  seenSecrets?: Record<string, number>;
 }
 
 const SEEN_MARKS = ["seenTitleAt", "seenSettingsAt", "seenIconAt"] as const;
 export type SeenMark = (typeof SEEN_MARKS)[number];
-export type Seen = Pick<ChannelAccess, SeenMark>;
+export type Seen = Pick<ChannelAccess, SeenMark | "seenSecrets">;
 
 export function seenAt(at: unknown): number {
   return typeof at === "number" && Number.isSafeInteger(at) && at > 0 ? at : 0;
@@ -44,7 +45,21 @@ export function keepSeen(held: Seen, fetched: Seen): Seen {
     const at = Math.max(seenAt(held[mark]), seenAt(fetched[mark]));
     if (at) out[mark] = at;
   }
+  const revs = keepRevs(held.seenSecrets, fetched.seenSecrets);
+  if (revs) out.seenSecrets = revs;
   return out;
+}
+
+const MAX_SEEN_SECRETS = 256;
+
+function keepRevs(held: unknown, fetched: unknown): Record<string, number> | undefined {
+  const out: Record<string, number> = {};
+  for (const revs of [held, fetched]) {
+    if (!revs || typeof revs !== "object" || Array.isArray(revs)) continue;
+    for (const [id, rev] of Object.entries(revs)) if (/^[A-Za-z0-9_-]{22}$/.test(id) && seenAt(rev)) out[id] = Math.max(out[id] ?? 0, seenAt(rev));
+  }
+  const kept = Object.entries(out).slice(-MAX_SEEN_SECRETS);
+  return kept.length ? Object.fromEntries(kept) : undefined;
 }
 
 // Plain implementations (no Buffer) so this module also runs in the browser.

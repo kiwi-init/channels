@@ -156,6 +156,119 @@ void kiwi_window_look(void *ptr, double minWidth, double minHeight, uint32_t lig
   });
 }
 
+static NSView *findWebView(NSView *view) {
+  if ([view isKindOfClass:[WKWebView class]]) return view;
+  for (NSView *child in view.subviews) {
+    NSView *found = findWebView(child);
+    if (found) return found;
+  }
+  return nil;
+}
+
+static NSAppearance *appearanceFor(int32_t appearance) {
+  if (appearance == 1) return [NSAppearance appearanceNamed:NSAppearanceNameAqua];
+  if (appearance == 2) return [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
+  return nil;
+}
+
+static os_unfair_lock lookLock = OS_UNFAIR_LOCK_INIT;
+static char look[64] = "";
+static __weak NSWindow *frosted = nil;
+static void (*frostChanged)(bool) = NULL;
+static id displayOptions = nil;
+static int32_t forcedForTest = -1;
+
+static NSVisualEffectView *frostOf(NSWindow *window) {
+  for (NSView *child in window.contentView.subviews)
+    if ([child isKindOfClass:[NSVisualEffectView class]]) return (NSVisualEffectView *)child;
+  return nil;
+}
+
+static BOOL frostAllowed(void) {
+  if (forcedForTest >= 0) return forcedForTest == 1;
+  NSWorkspace *workspace = NSWorkspace.sharedWorkspace;
+  return !workspace.accessibilityDisplayShouldReduceTransparency && !workspace.accessibilityDisplayShouldIncreaseContrast;
+}
+
+static void noteLook(NSWindow *window) {
+  NSVisualEffectView *frost = frostOf(window);
+  BOOL shown = frost && !frost.hidden && frost.material == NSVisualEffectMaterialSidebar;
+  WKWebView *web = (WKWebView *)findWebView(window.contentView);
+  BOOL clear = web && ![[web valueForKey:@"drawsBackground"] boolValue];
+  NSAppearanceName name = window.appearance.name;
+  const char *appearance = !name ? "system" : [name isEqualToString:NSAppearanceNameDarkAqua] ? "dark" : "light";
+  os_unfair_lock_lock(&lookLock);
+  snprintf(look, sizeof look, "%s %s %s", shown ? "frost" : "solid", clear ? "clear" : "drawn", appearance);
+  os_unfair_lock_unlock(&lookLock);
+}
+
+static void showFrost(NSWindow *window, BOOL tell) {
+  BOOL on = frostAllowed();
+  frostOf(window).hidden = !on;
+  noteLook(window);
+  if (tell && frostChanged) frostChanged(on);
+}
+
+size_t kiwi_window_looks(char *out, size_t size) {
+  os_unfair_lock_lock(&lookLock);
+  size_t n = strlcpy(out, look, size);
+  os_unfair_lock_unlock(&lookLock);
+  return n;
+}
+
+bool kiwi_frost_allowed(void) {
+  return frostAllowed();
+}
+
+bool kiwi_window_frost(void *ptr, void (*changed)(bool)) {
+  NSWindow *window = (__bridge NSWindow *)ptr;
+  if (!window) return false;
+  frostChanged = changed;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    NSView *content = window.contentView;
+    NSVisualEffectView *frost = frostOf(window);
+    if (!frost) {
+      frost = [[NSVisualEffectView alloc] initWithFrame:content.bounds];
+      frost.material = NSVisualEffectMaterialSidebar;
+      frost.blendingMode = NSVisualEffectBlendingModeBehindWindow;
+      frost.state = NSVisualEffectStateFollowsWindowActiveState;
+      frost.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+      [content addSubview:frost positioned:NSWindowBelow relativeTo:nil];
+    }
+    WKWebView *web = (WKWebView *)findWebView(content);
+    [web setValue:@NO forKey:@"drawsBackground"];
+    web.underPageBackgroundColor = NSColor.clearColor;
+    frosted = window;
+    if (!displayOptions)
+      displayOptions = [NSWorkspace.sharedWorkspace.notificationCenter addObserverForName:NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification
+                                                                                   object:nil
+                                                                                    queue:NSOperationQueue.mainQueue
+                                                                               usingBlock:^(NSNotification *note) {
+                                                                                 NSWindow *shown = frosted;
+                                                                                 if (shown) showFrost(shown, YES);
+                                                                               }];
+    showFrost(window, NO);
+  });
+  return true;
+}
+
+void kiwi_frost_force_for_test(int32_t frost) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    forcedForTest = frost;
+    NSWindow *shown = frosted;
+    if (shown) showFrost(shown, YES);
+  });
+}
+
+void kiwi_window_appearance(void *ptr, int32_t appearance) {
+  NSWindow *window = (__bridge NSWindow *)ptr;
+  if (!window) return;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    window.appearance = appearanceFor(appearance);
+    noteLook(window);
+  });
+}
+
 static void (*noteClicked)(void) = NULL;
 
 @interface KiwiNotes : NSObject <UNUserNotificationCenterDelegate>

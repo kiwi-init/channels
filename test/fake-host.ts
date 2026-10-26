@@ -34,6 +34,7 @@ export function fakeHost(app: FakeApp = {}): FakeHost {
     pastedImage: async () => null,
     notify: (title, body) => void did.push(`notify ${title}: ${body}`),
     badge: (count) => void did.push(`badge ${count}`),
+    appearance: (appearance) => void did.push(`appearance ${appearance}`),
     showWindow: () => void did.push("show"),
     reload: () => void did.push("reload"),
     restartToUpdate: () => void did.push("restart"),

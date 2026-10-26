@@ -8,7 +8,7 @@ import { checkForUpdate, updateState } from "../updater.ts";
 
 export function miscCalls(
   host: Host,
-): Serves<"keysAtRest" | "getUpdate" | "installUpdate" | "checkUpdate" | "notify" | "openExternal" | "getDeepLink" | "takeDroppedFiles" | "takePastedImage" | "setBadge"> {
+): Serves<"keysAtRest" | "getUpdate" | "installUpdate" | "checkUpdate" | "notify" | "openExternal" | "getDeepLink" | "takeDroppedFiles" | "takePastedImage" | "setBadge" | "setAppearance"> {
   return {
     keysAtRest: () => keysAtRest(),
     getUpdate: () => updateState(),
@@ -26,6 +26,10 @@ export function miscCalls(
     setBadge: (count: number) => {
       if (!Number.isSafeInteger(count) || count < 0) throw new Error("a badge is a count of zero or more");
       host.badge(count);
+    },
+    setAppearance: (appearance: string) => {
+      if (appearance !== "system" && appearance !== "light" && appearance !== "dark") throw new Error("an appearance is system, light or dark");
+      host.appearance(appearance);
     },
   };
 }
