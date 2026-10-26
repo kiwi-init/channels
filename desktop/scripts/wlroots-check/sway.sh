@@ -13,6 +13,16 @@ XDG_RUNTIME_DIR=$(mktemp -d)
 chmod 700 "$XDG_RUNTIME_DIR"
 unset DISPLAY XAUTHORITY GDK_BACKEND WAYLAND_DISPLAY SWAYSOCK
 
+bun -e '
+const [w, h] = [1440, 900];
+const px = new Uint8Array(w * h * 3);
+for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+  const i = (y * w + x) * 3, warm = x < w / 2;
+  px[i] = warm ? 240 : 40; px[i + 1] = warm ? 120 : 90; px[i + 2] = warm ? 30 : 230;
+}
+await Bun.write(process.argv[1], new Blob([`P6\n${w} ${h}\n255\n`, px]));
+' "$out/wall.ppm"
+
 cat > "$out/run.sh" << EOF
 #!/usr/bin/env bash
 bun "$here/../wlroots-check.ts" "$app" "$out" > "$out/check.log" 2>&1
@@ -23,7 +33,7 @@ cat > "$out/sway.config" << EOF
 xwayland disable
 default_border pixel 2
 for_window [title="kiwi-helper"] floating disable
-output HEADLESS-1 resolution 1440x900 bg #1e1e2e solid_color
+output HEADLESS-1 resolution 1440x900 bg $out/wall.ppm fill
 exec "$out/run.sh"
 EOF
 

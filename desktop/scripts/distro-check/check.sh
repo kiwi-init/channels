@@ -31,7 +31,7 @@ if [ "$distro" = fedora ]; then
 else
   pacman -Syu --noconfirm >> "$out/logs/install.log" 2>&1
   stock=(gtk3 webkit2gtk-4.1 librsvg)
-  tools=(weston dbus libsecret gnome-keyring kwallet python-gobject procps-ng gcc pkgconf xorg-server-xvfb mesa util-linux findutils which)
+  tools=(weston dbus libsecret gnome-keyring kwallet python-gobject procps-ng gcc pkgconf xorg-server-xvfb mesa util-linux findutils which gsettings-desktop-schemas)
   ayatana=(libayatana-appindicator)
 fi
 

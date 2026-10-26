@@ -112,6 +112,13 @@ try {
     return { ok: n.shell === "xdg_shell", detail: { app_id: n.app_id, shell: n.shell, title: n.name } };
   });
 
+  await step("sway doesn't blur, so the page draws the wallpaper swaybg shows behind its shell", async () => {
+    const got = await until("the wallpaper behind the shell", 20_000, () =>
+      driver.evaluate(() => (document.documentElement.style.getPropertyValue("--backdrop") ? { frost: document.documentElement.dataset["frost"] ?? null } : null), null, 5_000),
+    ).catch(() => null);
+    return { ok: got?.frost === "image", detail: got };
+  });
+
   await step("tiled alone on a 1440x900 screen, the page fills the tile and is drawn (tiled.png)", async () => {
     output(1440, 900, 1);
     const { n, p } = await settled("the page at the tile's size", follows);
