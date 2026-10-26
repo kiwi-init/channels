@@ -1,4 +1,5 @@
 #import <AppKit/AppKit.h>
+#import <ImageIO/ImageIO.h>
 #import <UserNotifications/UserNotifications.h>
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
@@ -305,4 +306,43 @@ void kiwi_badge(int32_t count) {
   dispatch_async(dispatch_get_main_queue(), ^{
     NSApp.dockTile.badgeLabel = count > 0 ? [NSString stringWithFormat:@"%d", count] : nil;
   });
+}
+
+static const size_t wallpaperSide = 24;
+
+size_t kiwi_wallpaper_pixels(uint8_t *out, size_t size) {
+  size_t need = wallpaperSide * wallpaperSide * 4;
+  if (!out || size < need) return 0;
+  @autoreleasepool {
+    NSScreen *screen = NSScreen.screens.firstObject;
+    NSURL *url = screen ? [NSWorkspace.sharedWorkspace desktopImageURLForScreen:screen] : nil;
+    if (!url.isFileURL) return 0;
+    NSString *home = NSHomeDirectory();
+    for (NSString *guarded in @[ @"Desktop", @"Documents", @"Downloads", @"Library/Mobile Documents" ]) {
+      if ([url.path hasPrefix:[[home stringByAppendingPathComponent:guarded] stringByAppendingString:@"/"]]) return 0;
+    }
+    CGImageSourceRef source = CGImageSourceCreateWithURL((__bridge CFURLRef)url, NULL);
+    if (!source) return 0;
+    NSDictionary *options = @{
+      (id)kCGImageSourceCreateThumbnailFromImageAlways : @YES,
+      (id)kCGImageSourceThumbnailMaxPixelSize : @64,
+      (id)kCGImageSourceCreateThumbnailWithTransform : @YES,
+    };
+    CGImageRef thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, (__bridge CFDictionaryRef)options);
+    CFRelease(source);
+    if (!thumb) return 0;
+    CGColorSpaceRef rgb = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    CGContextRef context = CGBitmapContextCreate(out, wallpaperSide, wallpaperSide, 8, wallpaperSide * 4, rgb,
+                                                 kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
+    CGColorSpaceRelease(rgb);
+    if (!context) {
+      CGImageRelease(thumb);
+      return 0;
+    }
+    CGContextSetInterpolationQuality(context, kCGInterpolationMedium);
+    CGContextDrawImage(context, CGRectMake(0, 0, wallpaperSide, wallpaperSide), thumb);
+    CGContextRelease(context);
+    CGImageRelease(thumb);
+  }
+  return need;
 }

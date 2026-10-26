@@ -15,10 +15,11 @@ import { startKeys } from "./keys-start-eb.ts";
 import { startLife } from "./life-updates-eb.ts";
 import { catchMainErrors, logMainError, windowFailure } from "./main-log.ts";
 import { followColorScheme, missingGuard, sandboxOff, watchDrops, watchPaste } from "./native-eb.ts";
+import { watchCancels } from "./secret-service.ts";
 import { claimInstance, handoffFor, type Instance } from "./single-instance.ts";
-import { openStoreForThisBuild, warnIfStoreBroken } from "./store-open-eb.ts";
+import { keyringLocked, openStoreForThisBuild, warnIfStoreBroken } from "./store-open-eb.ts";
 import { driveForTests, wrongTestHome } from "./test-build-eb.ts";
-import { createWindow, fail } from "./window-eb.ts";
+import { createWindow, fail, showKeyringNote } from "./window-eb.ts";
 
 declare const KIWI_EB_TEST: boolean;
 
@@ -32,26 +33,41 @@ Electrobun.events.on("open-url", (e: { data?: { url?: unknown } }) => {
 lockInternalRpc(internalRpcHandlers);
 
 async function start(instance: Extract<Instance, { kind: "first" }>): Promise<void> {
+  ebHost.app.onQuit(instance.release);
   const asked = performance.now();
-  const opening = openStoreForThisBuild();
+  let cancelled = false;
+  const stop =
+    process.platform === "linux"
+      ? watchCancels(() => {
+          if (cancelled) return;
+          cancelled = true;
+          console.error("Channels: the keyring prompt was cancelled; the window says so and offers to ask again");
+          showKeyringNote("cancelled");
+        })
+      : () => {};
+  const opening = openStoreForThisBuild().finally(stop);
   const inTime = await openedWithin(opening, KEYRING_GRACE_MS);
-  if (inTime) startKeys();
-  else console.error(`Channels: the keyring hasn't answered in ${KEYRING_GRACE_MS / 1000} s, so the window says it's waiting for it`);
+  if (!inTime) console.error(`Channels: the keyring hasn't answered in ${KEYRING_GRACE_MS / 1000} s, so the window says it's waiting for it`);
   watchPage();
   followColorScheme();
   watchDrops();
   watchPaste();
-  const win = await createWindow(!inTime);
+  const win = await createWindow(cancelled && (!inTime || keyringLocked()) ? "cancelled" : !inTime ? "waiting" : keyringLocked() ? "locked" : null);
   if (!win) {
     instance.release();
     return;
   }
   if (!inTime) {
     await opening;
-    console.error(`Channels: the keyring answered after ${Math.round((performance.now() - asked) / 1000)} s; opening the app`);
-    startKeys();
-    ebHost.reload();
+    console.error(`Channels: the keyring answered after ${Math.round((performance.now() - asked) / 1000)} s`);
+    if (keyringLocked() && !cancelled) showKeyringNote("locked");
   }
+  if (keyringLocked()) {
+    console.error("Channels: the keyring stayed locked, so the window asks to unlock it and nothing is kept unencrypted");
+    return;
+  }
+  startKeys();
+  if (!inTime) ebHost.reload();
   driveForTests(win);
   startLife(win, instance.release);
   keepDaemonAlive();

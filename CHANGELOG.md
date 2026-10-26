@@ -2,6 +2,39 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.10.6 — 2026-10-26
+
+- **Remove jev-ci: CI picks its jobs with plain rules instead of a model** ([#997](https://github.com/kiwi-init/channels/pull/997))
+- **Another channel's Details gear shows only on hover, so build / shots finds one** ([#998](https://github.com/kiwi-init/channels/pull/998))
+- **The scrims under the header and over the composer no longer blur the text: they only fade it, on every platform** ([#1000](https://github.com/kiwi-init/channels/pull/1000))
+- **Linux ships only the AppImage, tested on Arch: no .deb, no Fedora** ([#996](https://github.com/kiwi-init/channels/pull/996))
+- **Linux looks like the Mac on every desktop: frost, wallpaper tints, Inter, no GTK title bar, Reduce transparency** ([#1006](https://github.com/kiwi-init/channels/pull/1006))
+
+## 2026.10.5 — 2026-10-26
+
+- **Add kiwi upgrade for standalone CLI installs** ([#984](https://github.com/kiwi-init/channels/pull/984))
+- **The tasks board in the shell's look: cards, a quiet open row, solid fields, 26 pt actions (T75)** ([#972](https://github.com/kiwi-init/channels/pull/972))
+- **Keep desktop update checks available after download failure** ([#987](https://github.com/kiwi-init/channels/pull/987))
+- **On sway, Hyprland, river and niri, closing with no tray host hides the window, and a Linux window fills a half tile** ([#988](https://github.com/kiwi-init/channels/pull/988))
+- **Settings, Personalities and onboarding in the shell's look, with one sidebar aware of where you are (T75)** ([#986](https://github.com/kiwi-init/channels/pull/986))
+- **smoke-ui finds Settings' buttons in the sidebar** ([#989](https://github.com/kiwi-init/channels/pull/989))
+- **Details in Settings' look: one column, compact boxes, no second Invite (T75)** ([#990](https://github.com/kiwi-init/channels/pull/990))
+- **Linux: a cancelled or locked keyring says so with Ask again, and never leaves the keys unencrypted (T1566)** ([#992](https://github.com/kiwi-init/channels/pull/992))
+- **The Agents tab in the board's look (T75)** ([#991](https://github.com/kiwi-init/channels/pull/991))
+- **Channel secrets are removed: Kiwi can't keep a secret safe from an agent it hands one to** ([#994](https://github.com/kiwi-init/channels/pull/994))
+- **Interlinked's shell: clear frost, a lifted page, wallpaper tints, channels as tab groups, a centred toolbar (T75)** ([#993](https://github.com/kiwi-init/channels/pull/993))
+
+## 2026.10.4 — 2026-10-26
+
+- **Channel secrets: each one sealed to the agents the owner names, and a send guard that keeps values out of messages (1/3)** ([#979](https://github.com/kiwi-init/channels/pull/979))
+- **Channel secrets for agents: kiwi secret lists them, kiwi secret run puts them in a command's environment and redacts them from its output (2/3)** ([#980](https://github.com/kiwi-init/channels/pull/980))
+- **Channel secrets in the app: the owner adds a secret and ticks which agents may use it (3/3)** ([#981](https://github.com/kiwi-init/channels/pull/981))
+
+## 2026.10.3 — 2026-10-25
+
+- **Tiling, scale and closing on wlroots, with screenshots (headless sway)** ([#975](https://github.com/kiwi-init/channels/pull/975))
+- **On Linux, links open through xdg-open or gio directly, never Electrobun's opener (T990)** ([#976](https://github.com/kiwi-init/channels/pull/976))
+
 ## 2026.10.2 — 2026-10-25
 
 - **One shell, and the page floats on it, as in Interlinked (T297)** ([#973](https://github.com/kiwi-init/channels/pull/973))

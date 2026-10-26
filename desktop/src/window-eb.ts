@@ -6,17 +6,19 @@ import { APP_NAME } from "./app-name-eb.ts";
 import { onOurPage, preloadSource, toPageScript } from "./eb-bridge.ts";
 import { frost, lookMarks } from "./frost-eb.ts";
 import { keys, keysToPage } from "./keys-start-eb.ts";
-import { cString, committedPage, mac, setPageHtml, setPreload, windowLook } from "./native-eb.ts";
+import { blursBehind } from "./compositor.ts";
+import { clearWindow, cString, committedPage, mac, setPageHtml, setPreload, windowLook } from "./native-eb.ts";
 import { navigation, openedUrl, PAGE_RULES, PAGE_TEMPLATE, PAGE_URL, pageWithCsp, RULES_CANARY } from "./eb-page.ts";
 import { mark } from "./eb-startup.ts";
 import { externalUrl } from "./guard.ts";
 import { attachWindow, ebHost } from "./host-eb.ts";
 import { handlers } from "./ipc/handlers.ts";
-import { waitingPage } from "./keyring-wait.ts";
+import { ASK_AGAIN_URL, keyringPage, type KeyringState } from "./keyring-wait.ts";
 import { openInBrowser } from "./open.ts";
 import { bunBridge } from "./rpc-eb.ts";
 import { snapshot, store } from "./store.ts";
 import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts";
+import { ownAppImage } from "./update-asset.ts";
 import { minWindowWidth } from "./window-size.ts";
 
 const rgb = (hex: string): number => Number.parseInt(hex.slice(1), 16);
@@ -26,6 +28,15 @@ const detailOf = (e: unknown): unknown => (e as { data?: { detail?: unknown } })
 function openOutside(url: string): void {
   const ext = externalUrl(url);
   if (ext) void openInBrowser(ext, (u) => ebHost.openExternal(u)).catch(() => {});
+}
+
+let showNote: (state: KeyringState) => void = () => {};
+
+export const showKeyringNote = (state: KeyringState): void => showNote(state);
+
+function askAgain(): void {
+  ebHost.app.relaunch(ownAppImage(process.env["APPIMAGE"], process.env["APPDIR"], process.execPath) ?? path.join(path.dirname(process.execPath), "launcher"));
+  Utils.quit();
 }
 
 export function fail(why: string): void {
@@ -47,10 +58,11 @@ function rulesHold(view: BrowserView): Promise<boolean> {
   });
 }
 
-export async function createWindow(waiting: boolean = false): Promise<BrowserWindow | null> {
+export async function createWindow(keyring: KeyringState | null = null): Promise<BrowserWindow | null> {
   const index = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "..", PAGE_TEMPLATE), "utf8");
   const page = (): Uint8Array<ArrayBuffer> => cString(pageWithCsp(index, store.relayUrl));
-  const first = waiting ? cString(pageWithCsp(waitingPage(index, process.platform), store.relayUrl)) : page();
+  const note = (state: KeyringState): Uint8Array<ArrayBuffer> => cString(pageWithCsp(keyringPage(index, process.platform, state), store.relayUrl));
+  const first = keyring ? note(keyring) : page();
   const bundled = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "preload", "index.js"), "utf8");
   const table = handlers(ebHost);
   let view: BrowserView | null = null;
@@ -76,7 +88,7 @@ export async function createWindow(waiting: boolean = false): Promise<BrowserWin
     title: APP_NAME,
     url: null,
     frame: { width: WINDOW_SIZE.width, height: WINDOW_SIZE.height },
-    titleBarStyle: mac ? "hiddenInset" : "default",
+    titleBarStyle: mac ? "hiddenInset" : "hidden",
     hidden: true,
     preload,
     rpc: bridge,
@@ -87,6 +99,7 @@ export async function createWindow(waiting: boolean = false): Promise<BrowserWin
   let closing = false;
   webview.on("will-navigate", (e) => {
     const nav = navigation(detailOf(e));
+    if (nav.kind === "refused" && nav.url === ASK_AGAIN_URL) return askAgain();
     if (nav.kind === "refused") openOutside(nav.url);
     if (nav.kind !== "breach") return;
     closing = true;
@@ -115,12 +128,14 @@ export async function createWindow(waiting: boolean = false): Promise<BrowserWin
     },
     reload: () => (refreshPreload(), load()),
   });
+  showNote = (state) => load(note(state));
   load(first);
   mark("load");
   webview.on("will-navigate", () => mark("willNavigate"));
   webview.on("did-commit-navigation", () => mark("committed"));
   const look = win.ptr;
   if (look) windowLook(look, minWindowWidth(process.platform), WINDOW_SIZE.minHeight, rgb(windowBackground(false)), rgb(windowBackground(true)));
+  if (look && blursBehind(process.env, process.platform)) clearWindow();
   if (look) frost(look, (on) => bridge.push("frost", on));
   if (mac) win.setWindowButtonPosition(TRAFFIC_LIGHTS.x, TRAFFIC_LIGHTS.y);
   Electrobun.events.on(`new-window-open-${webview.id}`, (e: { data?: { detail?: unknown } }) => {

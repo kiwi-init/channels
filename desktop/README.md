@@ -74,10 +74,10 @@ bun run typecheck:eb                                  # fetches the devkit into 
   the real home whatever `HOME` says.
 
 - Release, Linux (job `desktop-linux-eb`, on ubuntu-24.04, the oldest glibc it runs on):
-  `Channels-<version>-linux-amd64.deb` and `Channels-<version>-linux-x86_64.AppImage`
-  (`scripts/package-linux.ts`), checked by `eb-driver-check.ts --release`,
-  `scripts/linux-packages-check.sh` and `scripts/linux-beside-check.sh` (the v0.26.0 Electron
-  deb, then this one beside it), and started under Xvfb.
+  `Channels-<version>-linux-x86_64.AppImage` only (`scripts/package-linux.ts`), checked by
+  `eb-driver-check.ts --release` and `scripts/linux-packages-check.sh`, probed extracted
+  (`scripts/package-probe.ts`) and started under Xvfb. Linux support is Arch only: there is
+  no .deb, and CI checks the AppImage on a stock Arch container (`scripts/distro-check`).
 
 ## Layout
 

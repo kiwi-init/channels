@@ -212,32 +212,25 @@ jobs:
           DASH_RELEASE_OFFLINE: "1"
         run: bun run build:eb
 
-      - name: deb and AppImage, each at most 55 MB (Livewire RC branch, T892)
+      - name: AppImage, at most 55 MB (Livewire RC branch, T892)
         run: bun desktop/scripts/package-linux.ts desktop/release-eb out
 
       - name: No test code in what ships
-        run: bun desktop/scripts/eb-driver-check.ts --release out/Channels-*-linux-amd64.deb out/Channels-*-linux-x86_64.AppImage
+        run: bun desktop/scripts/eb-driver-check.ts --release out/Channels-*-linux-x86_64.AppImage
 
-      - name: The packages hold the app
+      - name: The AppImage holds the app
         run: bash desktop/scripts/linux-packages-check.sh out
 
-      - name: The deb installs beside stable Channels' deb and leaves it alone
-        run: bash desktop/scripts/linux-beside-check.sh out
-
-      - name: The installed app and the AppImage make a channel and send
+      - name: The AppImage makes a channel and sends
         run: |
-          bun desktop/scripts/package-probe.ts /opt/ChannelsLivewire/bin/bun /opt/ChannelsLivewire/Resources/kiwi.js /opt/ChannelsLivewire/Resources/app/bun/keys.js
           img="$PWD/$(ls out/Channels-*-linux-x86_64.AppImage)"
           (cd "$RUNNER_TEMP" && "$img" --appimage-extract > /dev/null)
           root="$RUNNER_TEMP/squashfs-root/ChannelsLivewire"
           bun desktop/scripts/package-probe.ts "$root/bin/bun" "$root/Resources/kiwi.js" "$root/Resources/app/bun/keys.js"
           rm -rf "$RUNNER_TEMP/squashfs-root"
 
-      - name: The installed app and the AppImage start
-        run: |
-          xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh /opt/ChannelsLivewire/bin/launcher unsandboxed
-          xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$PWD/$(ls out/Channels-*-linux-x86_64.AppImage)" unsandboxed --appimage-extract-and-run
-          sudo dpkg --purge channels-livewire
+      - name: The AppImage starts
+        run: xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$PWD/$(ls out/Channels-*-linux-x86_64.AppImage)" unsandboxed --appimage-extract-and-run
 
       - name: Upload
         if: ${{ !inputs.rehearsal || github.event_name == 'workflow_dispatch' }}
@@ -245,8 +238,6 @@ jobs:
         with:
           name: ${{ inputs.rehearsal && 'rehearsal' || 'release' }}-desktop-linux-eb
           retention-days: ${{ inputs.rehearsal && 3 || 0 }}
-          path: |
-            out/Channels-*-linux-amd64.deb
-            out/Channels-*-linux-x86_64.AppImage
+          path: out/Channels-*-linux-x86_64.AppImage
           if-no-files-found: error
           overwrite: true

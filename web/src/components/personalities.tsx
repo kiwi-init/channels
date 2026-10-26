@@ -1,11 +1,13 @@
 import { useState } from "react"
+import { createPortal } from "react-dom"
 
 import { copyOf, freeId, PRESET_IDS } from "@kiwi/core/personalities.ts"
 import { CAPABILITIES, MAX_AREA, MAX_AREAS, MAX_INSTRUCTIONS, MAX_NAME, ROLE_LABEL, ROLES, type Capability, type Personality } from "@kiwi/core/personality.ts"
 import { PRESETS } from "@kiwi/core/presets.ts"
 import { savePersonalities, useOwnPersonalities, usePersonalities } from "@/lib/personalities"
 import { cx } from "@/lib/utils"
-import { Button, Checkbox, TextField, errorText, toast } from "./kit"
+import { Button, Checkbox, FIELD, TextField, errorText, toast } from "./kit"
+import { PlaceHead, usePlaceSlot } from "./shell-sidebar"
 
 const TAGLINE: Record<string, string> = {
   builder: "Takes a task from start to done",
@@ -49,7 +51,7 @@ function Row({ p, picked, onPick }: { p: Personality; picked: boolean; onPick: (
         type="button"
         aria-current={picked}
         onClick={onPick}
-        className={cx("flex w-full items-start gap-3 rounded-ctl border px-3 py-2 text-left transition-colors", picked ? "border-accent bg-accent-wash" : "border-transparent hover:bg-wash")}
+        className={cx("flex w-full items-start gap-3 rounded-ctl px-3 py-2 text-left transition-colors", picked ? "bg-(--chosen)" : "hover:bg-wash")}
       >
         <Tile glyph={p.glyph} />
         <span className="min-w-0">
@@ -86,7 +88,7 @@ function Editor({ p, onChange, onDuplicate, onDelete }: { p: Personality; onChan
             value={glyph}
             onChange={(e) => setGlyph(e.target.value)}
             onBlur={() => ([...glyph.trim()].length === 1 ? glyph.trim() !== p.glyph && set({ glyph: glyph.trim() }) : setGlyph(p.glyph))}
-            className="size-11 shrink-0 rounded-row border border-edge-strong bg-transparent text-center text-title text-ink"
+            className={cx("size-11 shrink-0 rounded-row text-center text-title", FIELD)}
           />
         )}
         <div className="min-w-0 flex-1">
@@ -180,7 +182,7 @@ function Editor({ p, onChange, onDuplicate, onDelete }: { p: Personality; onChan
               onChange={(e) => setArea(e.target.value)}
               onBlur={addArea}
               placeholder="+ add a path, like web/"
-              className="w-48 rounded-row border border-dashed border-edge-strong bg-transparent px-2.5 py-1 font-mono text-ui text-ink placeholder:text-ink-3"
+              className={cx("w-48 rounded-row px-2.5 py-1 font-mono text-ui", FIELD)}
             />
           </form>
         </div>
@@ -196,14 +198,15 @@ function Editor({ p, onChange, onDuplicate, onDelete }: { p: Personality; onChan
           maxLength={MAX_INSTRUCTIONS}
           onChange={(e) => setInstructions(e.target.value)}
           onBlur={() => instructions !== p.instructions && set({ instructions })}
-          className="min-h-40 flex-1 resize-none rounded-ctl border border-edge-strong bg-transparent p-3 text-ui leading-relaxed text-ink"
+          className={cx("min-h-40 flex-1 resize-none rounded-ctl p-3 text-ui leading-relaxed", FIELD)}
         />
       </div>
     </section>
   )
 }
 
-export function Personalities() {
+export function Personalities({ onBack }: { onBack: () => void }) {
+  const place = usePlaceSlot()
   const own = useOwnPersonalities()
   const all = usePersonalities()
   const [pickedId, setPickedId] = useState<string>(PRESETS[0]!.id)
@@ -234,32 +237,52 @@ export function Personalities() {
       PRESETS[0]!.id
     )
 
+  const list = (
+    <>
+      <p className="px-3 text-meta text-ink-3">What an agent can be when you let it in: its role, what it may do, where it works, what it's told.</p>
+      <p className="mt-3 px-3 text-meta font-medium text-ink-3">Presets for code work</p>
+      <ul className="flex flex-col gap-0.5">
+        {PRESETS.map((p) => (
+          <Row key={p.id} p={p} picked={p.id === picked.id} onPick={() => setPickedId(p.id)} />
+        ))}
+      </ul>
+      <p className="mt-3 px-3 text-meta font-medium text-ink-3">Yours</p>
+      {own.length ? (
+        <ul aria-label="Yours" className="flex flex-col gap-0.5">
+          {own.map((p) => (
+            <Row key={p.id} p={p} picked={p.id === picked.id} onPick={() => setPickedId(p.id)} />
+          ))}
+        </ul>
+      ) : (
+        <p className="px-3 text-meta text-ink-3">None yet. Edit a preset or press New.</p>
+      )}
+    </>
+  )
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
-      <aside className="flex w-full shrink-0 flex-col gap-2 border-b border-line px-4 pt-2 pb-4 md:w-80 md:overflow-y-auto md:border-r md:border-b-0">
-        <div className="flex items-center justify-between">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:overflow-hidden">
+      {place &&
+        createPortal(
+          <>
+            <PlaceHead title="Personalities" back="Back to Settings" onBack={onBack}>
+              <Button size="sm" variant="secondary" className="no-drag" onClick={() => void create()}>
+                New
+              </Button>
+            </PlaceHead>
+            <nav aria-label="Personalities" className="mt-(--step) flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
+              {list}
+            </nav>
+          </>,
+          place
+        )}
+      <aside className="flex w-full shrink-0 flex-col gap-1 border-b border-line px-1 pt-2 pb-4 md:hidden">
+        <div className="flex items-center justify-between px-3">
           <h1 className="text-display font-semibold tracking-[-0.014em]">Personalities</h1>
           <Button size="sm" variant="secondary" onClick={() => void create()}>
             New
           </Button>
         </div>
-        <p className="text-meta text-ink-3">What an agent can be when you let it in: its role, what it may do, where it works, what it's told.</p>
-        <p className="mt-2 text-meta font-medium text-ink-3">Presets for code work</p>
-        <ul className="flex flex-col gap-0.5">
-          {PRESETS.map((p) => (
-            <Row key={p.id} p={p} picked={p.id === picked.id} onPick={() => setPickedId(p.id)} />
-          ))}
-        </ul>
-        <p className="mt-3 border-t border-line pt-3 text-meta font-medium text-ink-3">Yours</p>
-        {own.length ? (
-          <ul aria-label="Yours" className="flex flex-col gap-0.5">
-            {own.map((p) => (
-              <Row key={p.id} p={p} picked={p.id === picked.id} onPick={() => setPickedId(p.id)} />
-            ))}
-          </ul>
-        ) : (
-          <p className="text-meta text-ink-3">None yet. Edit a preset or press New.</p>
-        )}
+        {list}
       </aside>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col md:overflow-y-auto">
         <Editor key={picked.id} p={picked} onChange={(n) => void change(n)} onDuplicate={() => void duplicate()} onDelete={PRESET_IDS.has(picked.id) ? undefined : () => void remove()} />

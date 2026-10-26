@@ -129,7 +129,7 @@ async function run(part: Part): Promise<string[]> {
       await page.waitForTimeout(400);
       await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "settings.png") });
     }
-    await settings.getByRole("button", { name: "Close settings" }).click();
+    await page.getByRole("button", { name: "Close settings" }).click();
     await settings.waitFor({ state: "detached" });
     if ((await page.evaluate(() => document.documentElement.style.getPropertyValue("--text-scale"))) !== "1.22") throw new Error("the text size didn't apply");
     log(`ok  ${at}`);
@@ -162,10 +162,10 @@ async function run(part: Part): Promise<string[]> {
     await settings.getByRole("button", { name: /^Personalities/ }).click();
     const editor = page.getByRole("region", { name: "Personalities" });
     await editor.getByRole("button", { name: "Duplicate" }).click();
-    await editor.getByRole("list", { name: "Yours" }).getByText("Builder copy").waitFor({ timeout: 10000 });
+    await page.getByRole("list", { name: "Yours" }).getByText("Builder copy").waitFor({ timeout: 10000 });
     if (process.env.SMOKE_SHOTS) await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "personalities.png") });
-    await editor.getByRole("button", { name: "Back to Settings" }).click();
-    await settings.getByRole("button", { name: "Close settings" }).click();
+    await page.getByRole("button", { name: "Back to Settings" }).click();
+    await page.getByRole("button", { name: "Close settings" }).click();
     await settings.waitFor({ state: "detached" });
     log(`ok  ${at}`);
   };

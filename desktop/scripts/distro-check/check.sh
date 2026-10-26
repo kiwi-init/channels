@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 set -u
 
-usage="usage: check.sh fedora|arch APPIMAGE OUT [FROM_VERSION] (as root, in a privileged fedora or archlinux container)"
+usage="usage: check.sh arch APPIMAGE OUT [FROM_VERSION] (as root, in a privileged archlinux container)"
 distro=${1:?$usage}
 image=${2:?$usage}
 out=${3:?$usage}
 from=${4:-}
+[ "$distro" = arch ] || { echo "$usage" >&2; exit 2; }
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../../.." && pwd)
 mkdir -p "$out/logs"
@@ -17,23 +18,13 @@ ok() { echo "ok   [$distro] $*" | tee -a "$results"; }
 bad() { echo "FAIL [$distro] $*" | tee -a "$results"; }
 info() { echo "     [$distro] $*" | tee -a "$results"; }
 install() {
-  if [ "$distro" = fedora ]; then
-    dnf -y -q install "$@" >> "$out/logs/install.log" 2>&1
-  else
-    pacman -S --noconfirm --needed "$@" >> "$out/logs/install.log" 2>&1
-  fi || { bad "installing $* failed: $(tail -n 3 "$out/logs/install.log" | tr '\n' ' ')"; return 1; }
+  pacman -S --noconfirm --needed "$@" >> "$out/logs/install.log" 2>&1 || { bad "installing $* failed: $(tail -n 3 "$out/logs/install.log" | tr '\n' ' ')"; return 1; }
 }
 
-if [ "$distro" = fedora ]; then
-  stock=(gtk3 webkit2gtk4.1 librsvg2)
-  tools=(weston dbus-daemon libsecret gnome-keyring kf6-kwallet python3-gobject procps-ng gcc pkgconf-pkg-config webkit2gtk4.1-devel gtk3-devel xorg-x11-server-Xvfb xvfb-run mesa-dri-drivers util-linux findutils which)
-  ayatana=(libayatana-appindicator-gtk3)
-else
-  pacman -Syu --noconfirm >> "$out/logs/install.log" 2>&1
-  stock=(gtk3 webkit2gtk-4.1 librsvg)
-  tools=(weston dbus libsecret gnome-keyring kwallet python-gobject procps-ng gcc pkgconf xorg-server-xvfb mesa util-linux findutils which)
-  ayatana=(libayatana-appindicator)
-fi
+pacman -Syu --noconfirm >> "$out/logs/install.log" 2>&1
+stock=(gtk3 webkit2gtk-4.1 librsvg)
+tools=(weston dbus libsecret gnome-keyring kwallet python-gobject procps-ng gcc pkgconf xorg-server-xvfb mesa util-linux findutils which gsettings-desktop-schemas)
+ayatana=(libayatana-appindicator)
 
 install "${stock[@]}" || exit 1
 . /etc/os-release
@@ -59,7 +50,7 @@ mkdir -p /var/lib/dbus /run/dbus
 [ -f /var/lib/dbus/machine-id ] || cp /etc/machine-id /var/lib/dbus/machine-id
 dbus-daemon --system --fork || bad "no system bus"
 sysctl -qw kernel.apparmor_restrict_unprivileged_userns=0 2> /dev/null || true
-info "unprivileged user namespaces, as Fedora and Arch allow them: $(unshare -U true 2>&1 && echo allowed || echo refused)"
+info "unprivileged user namespaces, as Arch allows them: $(unshare -U true 2>&1 && echo allowed || echo refused)"
 
 tests=/usr/local/libexec/kiwi-tests
 mkdir -p "$tests"
@@ -70,7 +61,7 @@ done
 
 id tester > /dev/null 2>&1 || useradd -m tester
 cp "$extract/Channels.AppImage" /home/tester/Channels.AppImage
-cp "$here/session.sh" "$here/update.sh" "$here/watcher.py" "$here/kwallet-login.py" /home/tester/
+cp "$here/session.sh" "$here/update.sh" "$here/watcher.py" "$here/kwallet-login.py" "$here/secrets-cancel.py" /home/tester/
 chmod +x /home/tester/Channels.AppImage
 chown -R tester: /home/tester
 
@@ -84,20 +75,30 @@ as_tester() {
   rm -rf "$rt"
   return $code
 }
-session() { as_tester bash /home/tester/session.sh "$1" "$2" /home/tester/Channels.AppImage "$results" "$out/logs" "$3"; }
+session() { as_tester bash /home/tester/session.sh "$1" "$2" /home/tester/Channels.AppImage "$results" "$out/logs" "$3" "${4:-}"; }
 lib_test() {
   local name=$1
   shift
   if as_tester "$@" > "$out/logs/$name.log" 2>&1; then ok "$name: $(tail -n 1 "$out/logs/$name.log" | cut -c1-200)"; else bad "$name: $(grep -h "$name" "$out/logs/$name.log" | tail -n 3 | tr '\n' ' ' | cut -c1-300)"; fi
 }
 
-session none stock no-tray
+plain_home=$(runuser -u tester -- mktemp -d)
+activatable=$(grep -lE 'org\.freedesktop\.secrets|org\.gnome\.keyring' /usr/share/dbus-1/services/*.service 2> /dev/null)
+for f in $activatable; do mv "$f" "$f.off"; done
+session none stock no-tray "$plain_home"
+for f in $activatable; do mv "$f.off" "$f"; done
 lib_test kiwi-tray-test "$tests/kiwi-tray-test" "$lib" no-indicator
 install "${ayatana[@]}" || exit 1
 lib_test kiwi-tray-test "$tests/kiwi-tray-test" "$lib"
-session gnome-keyring gnome-keyring tray
+sealed_home=$(runuser -u tester -- mktemp -d)
+session gnome-keyring gnome-keyring tray "$sealed_home"
 session kwallet kwallet tray
+session gnome-keyring migrate tray "$plain_home"
 session kwallet-unanswered kwallet-unanswered tray
+session cancel cancel-locked-first-run tray
+session cancel-no-keyring cancel-no-keyring-first-run tray
+session cancel-holds-key cancel-sealed tray "$sealed_home"
+session cancel keyless-dialog tray "$sealed_home"
 lib_test kiwi-scheme-test xvfb-run -a "$tests/kiwi-scheme-test" "$lib"
 lib_test kiwi-notify-test xvfb-run -a "$tests/kiwi-notify-test" "$lib"
 [ -z "$from" ] || as_tester bash /home/tester/update.sh "$from" "$results" "$out/logs"

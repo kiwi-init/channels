@@ -11,10 +11,12 @@ import { taskGroups, type GroupHead, type View } from "@/lib/views"
 import { cx } from "@/lib/utils"
 import { doingNow, type AgentNow } from "./agent-strip"
 import { Icon } from "./icon"
-import { Monogram } from "./kit"
+import { FIELD, Monogram } from "./kit"
 import { isAgent } from "./message"
 import { PrCell, type Pr } from "./pr-cell"
 import { DecisionMark, StateMark } from "./tasks"
+
+const CARD = "mt-4 rounded-card border border-line bg-canvas p-1.5"
 
 function checksWords(checks: PrChecks): { icon: typeof CheckmarkCircle02Icon; tone: string; text: string } {
   const total = checks.passed + checks.failed.length + checks.running
@@ -73,9 +75,9 @@ function TaskRow({
         onClick={() => onOpen(task.id)}
         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onOpen(task.id))}
         className={cx(
-          "relative grid cursor-pointer grid-cols-[28px_minmax(0,1fr)_44px] items-center gap-x-3.5 rounded-row px-3 py-2.5 transition-colors hover:bg-wash",
+          "relative grid cursor-pointer grid-cols-[28px_minmax(0,1fr)_44px] items-center gap-x-3 rounded-ctl px-2 py-2 transition-colors",
           prs && "@lg:grid-cols-[28px_minmax(0,1fr)_168px_44px] @2xl:grid-cols-[28px_minmax(0,1fr)_168px_128px_44px]",
-          open && "before:absolute before:inset-y-2.5 before:left-0 before:w-0.5 before:rounded-full before:bg-accent"
+          open ? "bg-(--chosen)" : "hover:bg-wash"
         )}
       >
         {task.owner ? (
@@ -158,7 +160,7 @@ function GoalName({ ask, onSave, onDone }: { ask: AskHead; onSave: (name: string
           onDone()
         }
       }}
-      className="min-w-0 flex-1 rounded-ctl bg-transparent px-2 py-0.5 text-ui font-semibold text-ink edge placeholder:font-normal placeholder:text-ink-3"
+      className={cx("min-w-0 flex-1 rounded-ctl px-2 py-0.5 text-ui font-semibold placeholder:font-normal", FIELD)}
     />
   )
 }
@@ -187,9 +189,9 @@ function AskGroup({
   const by = ask ? memberName(state.members.get(ask.by), ask.by) : ""
   const may = !!ask && mayNameGoal(state, me, ask)
   return (
-    <section aria-label={label} className="group/goal pt-4">
+    <section aria-label={label} className={cx("group/goal", CARD)}>
       <div data-slide={`g${ask?.id ?? "unfiled"}`}>
-        <h2 title={ask?.goal ? undefined : words || undefined} className={cx("flex min-w-0 items-baseline gap-2 px-3 text-ui font-semibold", naming && "pb-1.5")}>
+        <h2 title={ask?.goal ? undefined : words || undefined} className={cx("flex min-w-0 items-baseline gap-2 px-2 pt-1 text-ui font-semibold", naming && "pb-1.5")}>
           {ask && naming ? <GoalName ask={ask} onSave={(name) => onNameGoal(ask.id, name)} onDone={() => setNaming(false)} /> : <span className="truncate">{label}</span>}
           {!naming && <span className="shrink-0 font-normal text-ink-3 tabular-nums">{count}</span>}
           {may && !naming && (
@@ -203,7 +205,7 @@ function AskGroup({
           )}
         </h2>
         {ask ? (
-          <p className="flex min-w-0 items-baseline gap-1.5 px-3 pb-1.5 text-meta text-ink-3">
+          <p className="flex min-w-0 items-baseline gap-1.5 px-2 pb-1.5 text-meta text-ink-3">
             <button
               type="button"
               title={ask.goal ? words || undefined : undefined}
@@ -216,7 +218,7 @@ function AskGroup({
             <span className="shrink-0">{by}</span>
           </p>
         ) : (
-          <p className="truncate px-3 pb-1.5 text-meta text-ink-3">No person's message holds these</p>
+          <p className="truncate px-2 pb-1.5 text-meta text-ink-3">No person's message holds these</p>
         )}
       </div>
       {children}
@@ -240,13 +242,13 @@ function doneText(head: DoneHead): { label: string; meta: string; slide: string 
 function DoneGroup({ head, count, children }: { head: DoneHead; count: number; children: ReactNode }) {
   const { label, meta, slide } = doneText(head)
   return (
-    <section aria-label={label} className="pt-4">
+    <section aria-label={label} className={CARD}>
       <div data-slide={slide}>
-        <h2 className="flex min-w-0 items-baseline gap-2 px-3 text-ui font-semibold">
+        <h2 className="flex min-w-0 items-baseline gap-2 px-2 pt-1 text-ui font-semibold">
           <span className="truncate">{label}</span>
           <span className="shrink-0 font-normal text-ink-3 tabular-nums">{count}</span>
         </h2>
-        <p className="truncate px-3 pb-1.5 text-meta text-ink-3">{meta}</p>
+        <p className="truncate px-2 pb-1.5 text-meta text-ink-3">{meta}</p>
       </div>
       {children}
     </section>
@@ -325,7 +327,7 @@ export function TasksView({
   if (!state.tasks.size && empty)
     return (
       <div className="pb-8">
-        {showNeeds && needs && <div className="px-3">{needs}</div>}
+        {showNeeds && needs}
         {empty}
       </div>
     )
@@ -341,11 +343,11 @@ export function TasksView({
   const order = groups.map((g) => `${g.key}:${g.tasks.map((t) => t.id).join(",")}`).join(" ")
   return (
     <Reorder order={order} rows={groups.reduce((n, g) => n + g.tasks.length, 0)}>
-      {showNeeds && <div className="px-3">{needs}</div>}
-      {view === "needs" && !needs && <p className="px-3 pt-6 text-ui text-ink-3">Nothing needs you right now.</p>}
+      {showNeeds && needs}
+      {view === "needs" && !needs && <p className="px-3.5 pt-6 text-ui text-ink-3">Nothing needs you right now.</p>}
       {groups.map((g) => {
         const rows = (
-          <ul className="divide-y divide-line">
+          <ul className="space-y-0.5">
             {g.tasks.map((t) => (
               <TaskRow key={t.id} task={t} state={state} now={now} agent={t.owner ? byName.get(t.owner) : undefined} waiting={waiting.has(t.id)} open={open === t.id} prs={prs} onOpen={onOpen} />
             ))}
@@ -361,7 +363,7 @@ export function TasksView({
           </DoneGroup>
         )
       })}
-      {!groups.length && view !== "everything" && view !== "needs" && <p className="px-3 pt-6 text-ui text-ink-3">Nothing here right now.</p>}
+      {!groups.length && view !== "everything" && view !== "needs" && <p className="px-3.5 pt-6 text-ui text-ink-3">Nothing here right now.</p>}
     </Reorder>
   )
 }

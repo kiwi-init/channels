@@ -19,7 +19,7 @@ import { logMainError } from "./main-log.ts";
 import { minisignVerifies } from "./minisign.ts";
 import { RELEASE_KEY } from "./release-key.ts";
 import { signedLikeThisApp } from "./signer.ts";
-import { cantSwap, debAsset, githubHop, livewireVersion, newestLivewireTag, ownAppImage, releaseDownload, swapAsset, swapScript } from "./update-asset.ts";
+import { cantSwap, githubHop, livewireVersion, newestLivewireTag, ownAppImage, releaseDownload, swapAsset, swapScript } from "./update-asset.ts";
 
 const REPO = "kiwi-init/channels";
 const EVERY_MS = 6 * 3_600_000;
@@ -31,11 +31,10 @@ const MAX_BYTES = 1_000_000_000;
 export interface UpdateState {
   /** The newer release's version. */
   version: string;
-  /** downloading, ready to restart into, or only available (a .deb: install it from the release). */
+  /** downloading, ready to restart into, or only available (install it from the release page). */
   state: "downloading" | "ready" | "available";
   url: string;
   blocked?: true;
-  deb?: string;
 }
 
 export type UpdateCheck = UpdateState | { state: "current"; version: string } | { state: "failed" };
@@ -136,9 +135,7 @@ async function check(): Promise<UpdateCheck> {
   const signature = process.platform === "darwin" ? null : fileOf("SHA256SUMS.minisig");
   const target = process.platform === "darwin" ? macBundle() : appImage;
   if (name && target && cantSwap(target, writableDir, failedBefore(version))) return set({ version, state: "available", url, blocked: true });
-  const debName = packaged ? debAsset(version, process.platform, process.arch, appImage) : null;
-  const deb = fileOf(debName);
-  if (!asset || !sums || (process.platform !== "darwin" && !signature)) return set({ version, state: "available", url, ...(deb ? { deb } : {}) });
+  if (!asset || !sums || (process.platform !== "darwin" && !signature)) return set({ version, state: "available", url });
   const shown = set({ version, state: "downloading", url });
   fetching = fetchUpdate(version, url, asset, sums, signature, name!).finally(() => (fetching = null));
   return shown;

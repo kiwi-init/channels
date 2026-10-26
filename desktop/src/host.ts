@@ -24,6 +24,9 @@ export interface Host {
   notify(title: string, body: string): void;
   badge(count: number): void;
   appearance(appearance: "system" | "light" | "dark"): void;
+  wallpaper(dark: boolean): Promise<Uint8Array | null>;
+  wallpaperImage(dark: boolean, width: number, height: number): Promise<Uint8Array | null>;
+  windowControl(action: "minimize" | "maximize" | "close"): void;
   showWindow(): void;
   reload(): void;
   restartToUpdate(): void;

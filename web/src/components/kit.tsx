@@ -37,7 +37,7 @@ export function Button({
       type={type}
       className={cx(
         "inline-flex shrink-0 items-center justify-center gap-1.5 font-medium whitespace-nowrap transition-[opacity,background-color,color] duration-120 select-none disabled:pointer-events-none disabled:opacity-40",
-        size === "sm" && "h-7 rounded-row px-2.5 text-ui",
+        size === "sm" && "h-(--control) rounded-row px-2.5 text-ui",
         size === "md" && "h-8 rounded-ctl px-3.5 text-ui",
         size === "lg" && "h-10 rounded-ctl px-5 text-body",
         BUTTON[variant],
@@ -93,16 +93,10 @@ export function Checkbox({ className, ...props }: Omit<InputHTMLAttributes<HTMLI
   return <input type="checkbox" className={cx("size-4 shrink-0 accent-[var(--accent)]", className)} {...props} />
 }
 
+export const FIELD = "bg-(--well) text-ink transition-shadow outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--edge-strong)] focus-visible:outline-none"
+
 export function TextField({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <input
-      className={cx(
-        "h-9 w-full rounded-ctl bg-canvas px-3 text-body text-ink shadow-[inset_0_0_0_1px_var(--line)] transition-shadow outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--ring),0_0_0_3px_var(--wash-2)] focus-visible:outline-none",
-        className
-      )}
-      {...props}
-    />
-  )
+  return <input className={cx("h-9 w-full rounded-ctl px-3 text-body", FIELD, className)} {...props} />
 }
 
 /** People's pictures in the open channel, by member name: a person with one wears it instead of initials. */
@@ -247,7 +241,7 @@ export function Tabs<T extends string>({
   )
 }
 
-type ModalProps = { open: boolean; onClose: () => void; children: ReactNode; wide?: boolean; roomy?: boolean }
+type ModalProps = { open: boolean; onClose: () => void; children: ReactNode; wide?: boolean; roomy?: boolean; closeLabel?: string }
 type AlertProps = { open: boolean; onClose: () => void; title: ReactNode; message?: ReactNode; children: ReactNode }
 
 const dialogs = () => import("./kit-dialog")

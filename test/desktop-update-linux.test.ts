@@ -4,7 +4,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { appImageName, debName, type LinuxArch } from "../desktop/scripts/linux-files.ts";
+import { appImageName, type LinuxArch } from "../desktop/scripts/linux-files.ts";
 import { useHost } from "../desktop/src/host.ts";
 import { fakeHost, type FakeHost } from "./fake-host.ts";
 import { FEED, releasePage, releasesFeed } from "./livewire-feed.ts";
@@ -14,7 +14,7 @@ const releaseKey = throwawayKey();
 const otherKey = throwawayKey();
 void mock.module("../desktop/src/release-key.ts", () => ({ RELEASE_KEY: releaseKey.publicKey }));
 
-type Checked = { state: string; version?: string; url?: string; blocked?: true; deb?: string };
+type Checked = { state: string; version?: string; url?: string; blocked?: true };
 interface Updater {
   checkForUpdate(): Promise<Checked>;
   updateState(): Checked | null;
@@ -66,7 +66,6 @@ function release(o: Release = {}): string[] {
   const signature = o.signature === undefined ? releaseKey.sign(sums) : o.signature;
   const files: Record<string, string> = {
     [appImageName("0.27.0-livewire.1", arch)]: NEW,
-    [debName("0.27.0-livewire.1", arch)]: "the 0.27.0 deb",
     SHA256SUMS: sums,
     ...(signature === null ? {} : { "SHA256SUMS.minisig": signature }),
   };
@@ -100,11 +99,15 @@ function mounted(name: string): { appDir: string; exe: string } {
   return { appDir, exe };
 }
 
-const DEB_EXE = join(root, "opt", "Channels", "bin", "bun");
-mkdirSync(join(root, "opt", "Channels", "bin"), { recursive: true });
-writeFileSync(DEB_EXE, "bun");
+const UNPACKED_EXE = join(root, "unpacked", "Channels", "bin", "bun");
+mkdirSync(join(root, "unpacked", "Channels", "bin"), { recursive: true });
+writeFileSync(UNPACKED_EXE, "bun");
 
-async function launch(appImage: string | undefined, data: string, run: { appDir?: string; exe: string } = appImage ? mounted(`${loaded}`) : { exe: DEB_EXE }): Promise<{ fake: FakeHost; u: Updater }> {
+async function launch(
+  appImage: string | undefined,
+  data: string,
+  run: { appDir?: string; exe: string } = appImage ? mounted(`${loaded}`) : { exe: UNPACKED_EXE },
+): Promise<{ fake: FakeHost; u: Updater }> {
   setEnv("APPIMAGE", appImage);
   setEnv("APPDIR", run.appDir);
   mkdirSync(data, { recursive: true });
@@ -156,6 +159,23 @@ test("an AppImage whose download doesn't match SHA256SUMS stays as it is and onl
   expect(downloads()).toEqual([]);
 });
 
+test("an AppImage can retry after a failed download and restart into the verified update", async () => {
+  const appImage = installed("Retry");
+  release({ sums: `${"0".repeat(64)}  ${appImageName("0.27.0", arch)}\n` });
+  const { fake, u } = await launch(appImage, join(root, "data-retry"));
+  await u.checkForUpdate();
+  expect((await settled(u))?.state).toBe("available");
+  expect(readFileSync(appImage, "utf8")).toBe(OLD);
+  release();
+  expect((await u.checkForUpdate()).state).toBe("downloading");
+  expect((await settled(u))?.state).toBe("ready");
+  expect(readFileSync(appImage, "utf8")).toBe(OLD);
+  expect(u.applyUpdate(true)).toBe(true);
+  expect(readFileSync(appImage, "utf8")).toBe(NEW);
+  expect(fake.did).toContain(`relaunch ${appImage}`);
+  expect(downloads()).toEqual([]);
+});
+
 test("an AppImage whose SHA256SUMS isn't signed with the pinned release key is never staged (issue #203)", async () => {
   const name = appImageName("0.27.0-livewire.1", arch);
   const good = `${sha(NEW)}  ${name}\n`;
@@ -198,10 +218,10 @@ test("an AppImage in a folder it can't write says it can't update itself and dow
   expect(seen).toEqual([FEED]);
 });
 
-test("a deb install never swaps itself: it's offered the release's .deb for its CPU and downloads nothing", async () => {
+test("a Linux app that isn't an AppImage never swaps itself: it's offered the release page and downloads nothing", async () => {
   const seen = release();
-  const { u } = await launch(undefined, join(root, "data-deb"));
-  expect(await u.checkForUpdate()).toEqual({ version: "0.27.0-livewire.1", state: "available", url: PAGE, deb: `${DOWNLOAD}${debName("0.27.0-livewire.1", arch)}` });
+  const { u } = await launch(undefined, join(root, "data-unpacked"));
+  expect(await u.checkForUpdate()).toEqual({ version: "0.27.0-livewire.1", state: "available", url: PAGE });
   expect(seen).toEqual([FEED]);
 });
 
@@ -226,14 +246,14 @@ test("a swap that fails leaves the AppImage, says it can't update itself, and th
   expect(existsSync(join(data, "update-failed"))).toBe(true);
 });
 
-test("a deb install started from another AppImage app (its APPIMAGE inherited) is offered its .deb and never touches that app", async () => {
+test("a Linux app that isn't an AppImage, started from another AppImage app (its APPIMAGE inherited), is offered the release page and never touches that app", async () => {
   const other = join(root, "Other");
   mkdirSync(other);
   const cursor = join(other, "Cursor.AppImage");
   writeFileSync(cursor, "the Cursor AppImage");
   const seen = release();
-  const { fake, u } = await launch(cursor, join(root, "data-inherited"), { appDir: join(root, ".mount_CursorXYZ"), exe: DEB_EXE });
-  expect(await u.checkForUpdate()).toEqual({ version: "0.27.0-livewire.1", state: "available", url: PAGE, deb: `${DOWNLOAD}${debName("0.27.0-livewire.1", arch)}` });
+  const { fake, u } = await launch(cursor, join(root, "data-inherited"), { appDir: join(root, ".mount_CursorXYZ"), exe: UNPACKED_EXE });
+  expect(await u.checkForUpdate()).toEqual({ version: "0.27.0-livewire.1", state: "available", url: PAGE });
   expect(seen).toEqual([FEED]);
   expect(u.applyUpdate(false)).toBe(false);
   expect(readFileSync(cursor, "utf8")).toBe("the Cursor AppImage");

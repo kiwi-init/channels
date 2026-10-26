@@ -76,7 +76,7 @@ export function TaskDetails({
     <section
       id={`k${id}`}
       aria-label={`Task ${taskId(id)}`}
-      className={cx("mt-1 rounded-card bg-raised px-4 py-3.5 shadow-[0_0_0_1px_var(--line)]", highlighted && "animate-flash outline-2 outline-offset-2 outline-[var(--ring)]")}
+      className={cx("mt-1 rounded-card border border-line bg-canvas px-3.5 py-3", highlighted && "animate-flash outline-2 outline-offset-2 outline-[var(--ring)]")}
     >
       <h2 className="flex items-start gap-2 text-title font-semibold">
         <span className="mt-0.5">

@@ -9,7 +9,7 @@ import type { Host } from "./host.ts";
 import type { HostToKeys } from "./keys-server.ts";
 import { readDropped } from "./dropped.ts";
 import { followTheme } from "./frost-eb.ts";
-import { droppedPaths, notifyLinux, onNoteClick, pastedPng, showBadge } from "./native-eb.ts";
+import { droppedPaths, notifyLinux, onNoteClick, pastedPng, showBadge, wallpaperImage, wallpaperPixels } from "./native-eb.ts";
 import { relaunchAfter } from "./update-asset.ts";
 import { applyUpdate } from "./updater.ts";
 import { ebDataDir } from "./store-eb.ts";
@@ -81,6 +81,16 @@ export const ebHost: Host = {
   badge: (count) => showBadge(count),
   appearance: (appearance) => {
     if (shown?.win.ptr) followTheme(shown.win.ptr, appearance);
+  },
+  wallpaper: (dark) => wallpaperPixels(dark),
+  wallpaperImage: (dark, width, height) => wallpaperImage(dark, width, height),
+  windowControl: (action) => {
+    const win = shown?.win;
+    if (!win) return;
+    if (action === "minimize") win.minimize();
+    else if (action === "close") win.requestClose();
+    else if (win.isMaximized()) win.unmaximize();
+    else win.maximize();
   },
   notify: (title, body) => {
     if (process.platform === "linux") notifyLinux(title, body);

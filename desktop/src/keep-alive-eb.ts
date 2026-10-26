@@ -3,6 +3,7 @@ import Electrobun, { Utils } from "electrobun/main";
 import { keepDaemon } from "./bundled-daemon.ts";
 import { ebHost } from "./host-eb.ts";
 import { logMainError } from "./main-log.ts";
+import { messageBox } from "./message-box-eb.ts";
 import { keepPageAlive } from "./page-crash.ts";
 
 let quitting = false;
@@ -11,7 +12,7 @@ Electrobun.events.on("before-quit", () => void (quitting = true));
 export function watchPage(): void {
   const gone = keepPageAlive({
     reload: () => ebHost.reload(),
-    ask: async (message, buttons) => (await Utils.showMessageBox({ type: "warning", message, buttons, defaultId: 1, cancelId: 0 })).response === 1,
+    ask: async (message, buttons) => (await messageBox({ type: "warning", message, buttons, defaultId: 1, cancelId: 0 })) === 1,
     quit: () => void Utils.quit(),
     log: logMainError,
     quitting: () => quitting,

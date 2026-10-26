@@ -137,12 +137,13 @@ export default function App() {
           news={news}
           active={settings ? "" : code}
           inChannel={!settings && rows.some((r) => r.code === code && r.state === "member")}
+          place={settings}
           onSelect={open}
           onNew={() => setSheet("new")}
           onComputers={() => setSheet("computers")}
           onSettings={() => setSettings(true)}
         >
-          <div className="flex min-h-0 min-w-0 flex-1 overflow-clip">
+          <div className="flex min-h-0 min-w-0 flex-1 overflow-clip md:overflow-visible">
             <Sidebar
               rows={rows}
               news={news}
@@ -153,7 +154,7 @@ export default function App() {
               onSettings={() => setSettings(true)}
               className={cx(code || settings ? "hidden" : "flex", "md:hidden")}
             />
-            <main className={cx("relative min-w-0 flex-1 overflow-clip bg-canvas md:bg-transparent md:pl-(--step)", code || settings ? "flex" : "hidden md:flex")}>
+            <main className={cx("relative min-w-0 flex-1 overflow-clip bg-canvas md:overflow-visible md:bg-transparent md:pl-(--step)", code || settings ? "flex" : "hidden md:flex")}>
               {settings && (
                 <div className="flex min-w-0 flex-1 md:sheet">
                   <SettingsPage backTo={rows.find((r) => r.code === code)?.title ?? "Channels"} onClose={() => setSettings(false)} />

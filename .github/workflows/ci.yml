@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       jobs:
-        description: "Only these .github/jev-ci.yml jobs, comma-separated (desktop-linux, desktop-mac, …); empty runs everything"
+        description: "Only these jobs, comma-separated (static, test-unit, test-flows, build, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, ios, ios-gestures, android); empty runs everything"
         required: false
         default: ""
       update_from:
@@ -32,35 +32,28 @@ permissions:
 # One job per area, its checks as steps: each job pays for one checkout and one install.
 # A step that fails doesn't stop the checks after it (`!cancelled()`), so one run shows every failure.
 jobs:
-  # Decides which jobs this pull request or merge group can break (.github/jev-ci.yml): rules
-  # first, then a cache of inputs that already passed, then Jev for the rest. A pull request runs
-  # only its pull_request_jobs (repo / static, test / unit); a merge group is planned on its
-  # combined change (merge_group.base_sha..head_sha) and runs every job that plan picks. A push to main runs
-  # nothing when the merge queue already tested that commit as-is, and everything otherwise;
-  # if planning fails, everything runs. Every check below runs only if the plan says so.
+  # Which jobs run: a pull request runs repo / static and test / unit; a dispatch runs the jobs it
+  # names (all when it names none); a push to main and a merge group run everything.
   plan:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      actions: read
-      pull-requests: write
+    timeout-minutes: 2
     outputs:
       run: ${{ steps.plan.outputs.run }}
-      hashes: ${{ steps.plan.outputs.hashes }}
-      plan: ${{ steps.plan.outputs.plan }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          fetch-depth: 2
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: 1.4.2
       - id: plan
-        run: bun .github/jev-ci/cli.ts plan --github
         env:
-          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
-          GITHUB_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          JOBS: ${{ inputs.jobs }}
+        run: |
+          all="static test-unit test-flows build shots desktop-mac desktop-linux desktop-distros cli-macos ios ios-gestures android"
+          case "$EVENT" in
+            pull_request) pick="static test-unit" ;;
+            workflow_dispatch) pick=$(echo "${JOBS:-$all}" | tr ',' ' ') ;;
+            *) pick="$all" ;;
+          esac
+          for j in $pick; do case " $all " in *" $j "*) ;; *) echo "no job named $j; the jobs are: $all"; exit 1 ;; esac; done
+          json=$(for j in $all; do case " $pick " in *" $j "*) v=true ;; *) v=false ;; esac; printf '"%s":%s,' "$j" "$v"; done)
+          echo "run={${json%,}}" >> "$GITHUB_OUTPUT"
 
   # Types, lint, format, unused code and action pins.
   static:
@@ -106,11 +99,6 @@ jobs:
       - name: action pins
         if: ${{ !cancelled() }}
         run: bun scripts/action-pins.ts
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: static
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['static'] }}
 
   test-unit:
     name: test / unit
@@ -121,13 +109,8 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
-      - run: bun scripts/ci-tests.ts unit
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        timeout-minutes: 1
-        with:
-          job: test-unit
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['test-unit'] }}
+      - name: unit tests including CLI upgrades and desktop update recovery
+        run: bun scripts/ci-tests.ts unit
 
   # The slow suites against a real local relay (scripts/ci-flows.ts).
   test-flows:
@@ -140,12 +123,6 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
       - run: bun scripts/ci-tests.ts flows
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        timeout-minutes: 1
-        with:
-          job: test-flows
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['test-flows'] }}
 
   # The web dashboard, the CLI binary and the worker, each built and smoke-tested.
   build:
@@ -190,11 +167,6 @@ jobs:
       - name: relay worker
         if: ${{ !cancelled() }}
         run: bunx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/worker"
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: build
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['build'] }}
 
   shots:
     name: build / shots
@@ -228,11 +200,6 @@ jobs:
           path: ${{ runner.temp }}/shots-webkit
           if-no-files-found: ignore
           overwrite: true
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: shots
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['shots'] }}
 
   desktop-mac:
     name: desktop / mac
@@ -306,12 +273,6 @@ jobs:
         if: ${{ !cancelled() }}
         timeout-minutes: 5
         run: bun desktop/scripts/eb-frost-check.ts desktop/release-eb/build/dev-macos-*/*.app
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        timeout-minutes: 1
-        with:
-          job: desktop-mac
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-mac'] }}
 
   desktop-linux:
     name: desktop / linux, ${{ matrix.os }}
@@ -324,11 +285,9 @@ jobs:
       matrix:
         include:
           - os: ubuntu-24.04
-            part: 1
             sandbox: unsandboxed
             drive: false
           - os: ubuntu-26.04
-            part: 2
             sandbox: sandboxed
             drive: true
     steps:
@@ -349,7 +308,7 @@ jobs:
           find "$debs" -maxdepth 1 -name '*.deb' | wc -l > "$RUNNER_TEMP/debs-before"
           echo "Dir::Cache::Archives \"$debs/\";" | sudo tee /etc/apt/apt.conf.d/90linux-debs > /dev/null
           sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus ${{ matrix.drive && 'weston xwayland kwin-wayland plasma-wayland-protocols sway grim libwayland-dev python3-gi gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0' || '' }}
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus ${{ matrix.drive && 'weston xwayland kwin-wayland plasma-wayland-protocols sway swaybg grim gsettings-desktop-schemas libglib2.0-bin libwayland-dev python3-gi gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0' || '' }}
       - id: debs
         name: keep what apt downloaded, even when it ran out of time
         if: always()
@@ -387,73 +346,78 @@ jobs:
         timeout-minutes: 5
         run: |
           dbus-run-session -- sh -c 'printf throwaway | gnome-keyring-daemon --unlock --components=secrets >/dev/null && bun desktop/scripts/linux-store-check.ts keyring'
-          env -u DBUS_SESSION_BUS_ADDRESS bun desktop/scripts/linux-store-check.ts none
-      - name: deb and AppImage, each at most 55 MB (Livewire RC branch, T892)
+          DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent/kiwi-no-session-bus bun desktop/scripts/linux-store-check.ts none
+      - name: the AppImage, at most 55 MB (Livewire RC branch, T892)
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/package-linux.ts desktop/release-eb desktop/release-eb/linux
-      - name: the packages hold the app
+      - name: the AppImage holds the app
         if: ${{ !cancelled() }}
         run: bash desktop/scripts/linux-packages-check.sh desktop/release-eb/linux
-      - name: the deb installs beside stable Channels' deb and leaves its files and link alone (T839)
+      - name: the AppImage, extracted, is the app the checks below load and start
         if: ${{ !cancelled() }}
-        run: bash desktop/scripts/linux-beside-check.sh desktop/release-eb/linux
-      - name: the installed app starts on WebKitGTK, with the .desktop entry's names, and its permission and page hooks work
+        run: |
+          img=$(ls "$PWD"/desktop/release-eb/linux/Channels-*-linux-x86_64.AppImage)
+          rm -rf "$RUNNER_TEMP/appimage" && mkdir -p "$RUNNER_TEMP/appimage"
+          (cd "$RUNNER_TEMP/appimage" && "$img" --appimage-extract > /dev/null)
+          [ -x "$RUNNER_TEMP/appimage/squashfs-root/ChannelsLivewire/bin/launcher" ] || { echo "the AppImage has no ChannelsLivewire/bin/launcher"; exit 1; }
+          echo "APP=$RUNNER_TEMP/appimage/squashfs-root/ChannelsLivewire" >> "$GITHUB_ENV"
+      - name: the app starts on WebKitGTK, with the .desktop entry's names, and its permission and page hooks work
         if: ${{ !cancelled() }}
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-shell-test" desktop/native/linux/kiwi-shell-test.c $(pkg-config --cflags --libs webkit2gtk-4.1) -ldl
-          xvfb-run -a "$RUNNER_TEMP/kiwi-shell-test" /opt/ChannelsLivewire/bin/libkiwi-shell.so ${{ matrix.sandbox }}
+          xvfb-run -a "$RUNNER_TEMP/kiwi-shell-test" "$APP/bin/libkiwi-shell.so" ${{ matrix.sandbox }}
           echo "for WebKitGTK's sandbox: kernel.apparmor_restrict_unprivileged_userns=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo unset)"
-          xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh /opt/ChannelsLivewire/bin/launcher ${{ matrix.sandbox }}
+          xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$APP/bin/launcher" ${{ matrix.sandbox }}
           img=$(ls "$PWD"/desktop/release-eb/linux/Channels-*-linux-x86_64.AppImage)
           xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$img" ${{ matrix.sandbox }} --appimage-extract-and-run
       - name: closing hides to the tray only where a tray host runs
         if: ${{ !cancelled() }}
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-tray-test" desktop/native/linux/kiwi-tray-test.c $(pkg-config --cflags --libs gio-2.0) -ldl
-          dbus-run-session -- "$RUNNER_TEMP/kiwi-tray-test" /opt/ChannelsLivewire/bin/libkiwi-shell.so
-      - name: with no libayatana-appindicator on the system (stock Fedora, Arch), the app still starts, with no tray
+          dbus-run-session -- "$RUNNER_TEMP/kiwi-tray-test" "$APP/bin/libkiwi-shell.so"
+      - name: with no libayatana-appindicator on the system (stock Arch), the app still starts, with no tray
         if: ${{ !cancelled() }}
         run: |
-          if readelf -d /opt/ChannelsLivewire/bin/libNativeWrapper.so | grep -i appindicator; then echo "libNativeWrapper.so still links AppIndicator"; exit 1; fi
+          if readelf -d "$APP/bin/libNativeWrapper.so" | grep -i appindicator; then echo "libNativeWrapper.so still links AppIndicator"; exit 1; fi
           echo "libNativeWrapper.so doesn't link AppIndicator"
           hidden="$RUNNER_TEMP/hidden-appindicator"
           mkdir -p "$hidden"
           sudo mv /usr/lib/x86_64-linux-gnu/libayatana-appindicator3.so.1* "$hidden/"
           code=0
-          dbus-run-session -- "$RUNNER_TEMP/kiwi-tray-test" /opt/ChannelsLivewire/bin/libkiwi-shell.so no-indicator || code=$?
-          xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh /opt/ChannelsLivewire/bin/launcher ${{ matrix.sandbox }} || code=$?
+          dbus-run-session -- "$RUNNER_TEMP/kiwi-tray-test" "$APP/bin/libkiwi-shell.so" no-indicator || code=$?
+          xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$APP/bin/launcher" ${{ matrix.sandbox }} || code=$?
           sudo mv "$hidden"/* /usr/lib/x86_64-linux-gnu/
           exit "$code"
       - name: the window follows the desktop's light or dark (the portal's color-scheme), live
         if: ${{ !cancelled() }}
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-scheme-test" desktop/native/linux/kiwi-scheme-test.c $(pkg-config --cflags --libs webkit2gtk-4.1) -ldl
-          dbus-run-session -- xvfb-run -a "$RUNNER_TEMP/kiwi-scheme-test" /opt/ChannelsLivewire/bin/libkiwi-shell.so
+          dbus-run-session -- xvfb-run -a "$RUNNER_TEMP/kiwi-scheme-test" "$APP/bin/libkiwi-shell.so"
       - name: the app menu's shortcuts work on Linux, where Electrobun has no app menu
         if: ${{ !cancelled() }}
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-shortcuts-test" desktop/native/linux/kiwi-shortcuts-test.c $(pkg-config --cflags --libs gtk+-3.0) -ldl
-          xvfb-run -a "$RUNNER_TEMP/kiwi-shortcuts-test" /opt/ChannelsLivewire/bin/libkiwi-shell.so
+          xvfb-run -a "$RUNNER_TEMP/kiwi-shortcuts-test" "$APP/bin/libkiwi-shell.so"
       - name: the first window fits a small screen, keeps its minimum size and has the page's background
         if: ${{ !cancelled() }}
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-look-test" desktop/native/linux/kiwi-look-test.c $(pkg-config --cflags --libs gtk+-3.0) -ldl
-          xvfb-run -a -s "-screen 0 1280x720x24" "$RUNNER_TEMP/kiwi-look-test" /opt/ChannelsLivewire/bin/libkiwi-shell.so
+          xvfb-run -a -s "-screen 0 1280x720x24" "$RUNNER_TEMP/kiwi-look-test" "$APP/bin/libkiwi-shell.so"
       - name: notifications come from Channels over D-Bus, and a click opens the window
         if: ${{ !cancelled() }}
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-notify-test" desktop/native/linux/kiwi-notify-test.c $(pkg-config --cflags --libs gtk+-3.0) -ldl
-          dbus-run-session -- xvfb-run -a "$RUNNER_TEMP/kiwi-notify-test" /opt/ChannelsLivewire/bin/libkiwi-shell.so
+          dbus-run-session -- xvfb-run -a "$RUNNER_TEMP/kiwi-notify-test" "$APP/bin/libkiwi-shell.so"
       - name: an image pasted from another app is served to the page only right after a real Ctrl+V or Shift+Insert
         if: ${{ !cancelled() }}
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-paste-test" desktop/native/linux/kiwi-paste-test.c $(pkg-config --cflags --libs webkit2gtk-4.1) -ldl
-          xvfb-run -a "$RUNNER_TEMP/kiwi-paste-test" /opt/ChannelsLivewire/bin/libkiwi-shell.so
+          xvfb-run -a "$RUNNER_TEMP/kiwi-paste-test" "$APP/bin/libkiwi-shell.so"
       - name: the taskbar badge shows the page's news count (LauncherEntry over D-Bus)
         if: ${{ !cancelled() }}
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-badge-test" desktop/native/linux/kiwi-badge-test.c $(pkg-config --cflags --libs gio-2.0) -ldl
-          dbus-run-session -- "$RUNNER_TEMP/kiwi-badge-test" /opt/ChannelsLivewire/bin/libkiwi-shell.so
+          dbus-run-session -- "$RUNNER_TEMP/kiwi-badge-test" "$APP/bin/libkiwi-shell.so"
       - name: test build (the test driver in, its own id)
         if: ${{ !cancelled() && matrix.drive }}
         working-directory: desktop
@@ -467,9 +431,9 @@ jobs:
           found=$(ls -d desktop/release-eb/build/dev-linux-*/*/bin/electrobun-launcher)
           [ "$(echo "$found" | wc -l)" = 1 ] || { echo "expected one test build, found: $found"; exit 1; }
           echo "path=$(dirname "$(dirname "$found")")" >> "$GITHUB_OUTPUT"
-      - name: no test driver in the release build (the installed deb)
+      - name: no test driver in the release build (the extracted AppImage)
         if: ${{ !cancelled() && matrix.drive }}
-        run: bun desktop/scripts/eb-driver-check.ts desktop/release-eb /opt/ChannelsLivewire
+        run: bun desktop/scripts/eb-driver-check.ts desktop/release-eb "$APP"
       - name: smoke, under Xvfb
         if: ${{ !cancelled() && matrix.drive }}
         run: xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/smoke-eb.ts "${{ steps.test-app.outputs.path }}"
@@ -493,7 +457,7 @@ jobs:
           session() { env -u XAUTHORITY -u GDK_BACKEND DISPLAY="$x" WAYLAND_DISPLAY=kiwi-wayland XDG_SESSION_TYPE=wayland "$@"; }
           code=0
           session bun desktop/scripts/smoke-eb.ts "${{ steps.test-app.outputs.path }}" || code=$?
-          session bash desktop/scripts/eb-wayland-start.sh /opt/ChannelsLivewire/bin/electrobun-launcher || code=$?
+          session bash desktop/scripts/eb-wayland-start.sh "$APP/bin/electrobun-launcher" || code=$?
           if [ "$code" -ne 0 ]; then
             echo "::group::weston's log"; cat "$RUNNER_TEMP/weston.log"; echo "::endgroup::"
             echo "::group::the test app alone in this session, for 20 s"
@@ -520,7 +484,7 @@ jobs:
           session() { env -u DISPLAY -u XAUTHORITY -u GDK_BACKEND WAYLAND_DISPLAY=kiwi-native XDG_SESSION_TYPE=wayland "$@"; }
           code=0
           session bun desktop/scripts/smoke-eb.ts "${{ steps.test-app.outputs.path }}" || code=$?
-          session bash desktop/scripts/eb-wayland-start.sh /opt/ChannelsLivewire/bin/electrobun-launcher 2 || code=$?
+          session bash desktop/scripts/eb-wayland-start.sh "$APP/bin/electrobun-launcher" 2 || code=$?
           if [ "$code" -ne 0 ]; then
             echo "::group::weston's log"; cat "$RUNNER_TEMP/weston-native.log"; echo "::endgroup::"
             echo "::group::the test app alone in this session, for 20 s"
@@ -538,6 +502,37 @@ jobs:
         if: ${{ !cancelled() && matrix.drive }}
         timeout-minutes: 12
         run: bash desktop/scripts/wlroots-check/sway.sh "$PWD/${{ steps.test-app.outputs.path }}" "$RUNNER_TEMP/wlroots-check"
+      - name: on a floating desktop (headless weston) the shell draws GNOME's wallpaper, with no GTK title bar and close, minimize and maximize top left, with screenshots
+        if: ${{ !cancelled() && matrix.drive }}
+        timeout-minutes: 8
+        run: bash desktop/scripts/floating-check/weston.sh "$PWD/${{ steps.test-app.outputs.path }}" "$RUNNER_TEMP/floating-check"
+      - if: ${{ !cancelled() && matrix.drive }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: floating-check
+          path: |
+            ${{ runner.temp }}/floating-check/*.png
+            ${{ runner.temp }}/floating-check/*.json
+            ${{ runner.temp }}/floating-check/*.log
+          if-no-files-found: warn
+          retention-days: 3
+      - name: on Hyprland the shell frosts over the wallpaper and the tints come from it (headless Hyprland on vkms, blur on, over swaybg), with screenshots
+        if: ${{ !cancelled() && matrix.drive }}
+        timeout-minutes: 12
+        run: |
+          sudo apt-get install -y --no-install-recommends hyprland grim swaybg seatd
+          bash desktop/scripts/hyprland-check/hyprland.sh "$PWD/${{ steps.test-app.outputs.path }}" "$RUNNER_TEMP/hyprland-check"
+      - if: ${{ !cancelled() && matrix.drive }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: hyprland-check
+          path: |
+            ${{ runner.temp }}/hyprland-check/*.png
+            ${{ runner.temp }}/hyprland-check/*.json
+            ${{ runner.temp }}/hyprland-check/*.log
+            ${{ runner.temp }}/hyprland-check/*.conf
+          if-no-files-found: warn
+          retention-days: 3
       - if: ${{ !cancelled() && matrix.drive }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -548,13 +543,6 @@ jobs:
             ${{ runner.temp }}/wlroots-check/*.log
           if-no-files-found: warn
           retention-days: 3
-      - name: dpkg --purge leaves nothing of the app behind
-        if: ${{ !cancelled() }}
-        run: |
-          sudo dpkg --purge channels-livewire
-          left=$(ls -d /opt/ChannelsLivewire /usr/bin/channels-livewire /usr/share/applications/channels-livewire.desktop /usr/share/icons/hicolor/*/apps/channels-livewire.png 2> /dev/null || true)
-          [ -z "$left" ] || { echo "left after --purge:"; echo "$left"; exit 1; }
-          echo "purged: no files, link, entry or icons left"
       - name: what bwrap can do under this AppArmor, for an app profile later (prints only)
         if: ${{ !cancelled() }}
         continue-on-error: true
@@ -581,12 +569,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 3
           overwrite: true
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: desktop-linux
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-linux'] }}
-          shard: ${{ matrix.part }}of4
 
   desktop-distros:
     name: desktop / distros, ${{ matrix.distro }}
@@ -601,15 +583,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - distro: fedora
-            image: fedora:44
-            part: 3
           - distro: arch
             image: archlinux:latest
-            part: 4
     steps:
       - name: git and tar for the checkout
-        run: if command -v dnf > /dev/null; then dnf -y -q install git tar gzip; else pacman -Sy --noconfirm git tar gzip; fi
+        run: pacman -Sy --noconfirm git tar gzip
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -626,12 +604,6 @@ jobs:
           path: ${{ runner.temp }}/distro-check
           if-no-files-found: warn
           retention-days: 3
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: desktop-linux
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-linux'] }}
-          shard: ${{ matrix.part }}of4
 
   cli-macos:
     name: cli / macos
@@ -657,12 +629,6 @@ jobs:
           printf 'require("node:fs").writeFileSync("preload-ran", "")\n' > "$probe/p.js"
           (cd "$probe" && "$GITHUB_WORKSPACE/dist/kiwi-darwin-arm64" --version)
           test ! -e "$probe/preload-ran" || { echo "the kiwi CLI ran a bunfig.toml preload from the folder it was started in"; exit 1; }
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        timeout-minutes: 1
-        with:
-          job: cli-macos
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['cli-macos'] }}
 
   # The iPhone app: Swift lint, then an unsigned build for devices with the engine bundled in.
   ios:
@@ -683,12 +649,6 @@ jobs:
       - name: app build
         if: ${{ !cancelled() }}
         run: xcodebuild -project ios/Channels.xcodeproj -scheme Channels -configuration Release -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/ios" CODE_SIGNING_ALLOWED=NO build
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        timeout-minutes: 1
-        with:
-          job: ios
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['ios'] }}
 
   # The iPhone app's gestures, with real touches: ios/ChannelsUITests in a simulator, on a canned channel.
   ios-gestures:
@@ -730,12 +690,6 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
           overwrite: true
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        timeout-minutes: 1
-        with:
-          job: ios-gestures
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['ios-gestures'] }}
 
   # The Android app: Gradle bundles the engine, builds a release APK (R8, signed with the debug key in android/app/debug.p12
   # so every build installs over the last one) and runs Android lint on it. The APK is kept as an artifact to install on a phone.
@@ -782,32 +736,18 @@ jobs:
           path: android/app/build/screens
           if-no-files-found: ignore
           overwrite: true
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        timeout-minutes: 1
-        with:
-          job: android
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['android'] }}
 
   # The one check to require: passes when every job the plan ran passed and the rest were skipped.
-  # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
     needs: [plan, static, test-unit, test-flows, build, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, ios, ios-gestures, android]
     if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      pull-requests: write
+    timeout-minutes: 2
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          fetch-depth: 0
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: 1.4.2
-      - run: bun .github/jev-ci/cli.ts report --github
-        env:
+      - env:
           NEEDS: ${{ toJSON(needs) }}
-          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          bad=$(echo "$NEEDS" | jq -r 'to_entries[] | select(.value.result != "success" and .value.result != "skipped") | "\(.key): \(.value.result)"')
+          if [ -n "$bad" ]; then echo "$bad"; exit 1; fi
+          echo "every job that ran passed"

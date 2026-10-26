@@ -42,6 +42,7 @@ export async function openEbStore({ dir, keys, home = os.homedir(), platform = p
 
 export const REFUSAL_ADVICE: Record<Refusal, string> = {
   keychain: "Unlock your keychain, then quit and reopen Channels.",
+  locked: "Unlock your keyring, then ask again.",
   keyless: "Its key is no longer in your keychain. Restore your keychain from a backup, then reopen Channels.",
   deleted:
     "Your keychain still holds its key, but both copies of the store are gone. Put the store back from a backup, then reopen Channels: it won't start over by itself, so a deleted store can't be replaced without you noticing.",
@@ -63,12 +64,13 @@ export function v2Vault(opened: OpenStore): StoreVault {
       if (opened.kind !== "open") throw new Error(`the store can't be saved: ${opened.why}`);
       opened.save(JSON.stringify(file));
     },
+    atRest: () => (opened.kind === "open" ? { sealed: opened.sealed, why: opened.noKeychain } : { sealed: true, why: null }),
   };
 }
 
 export function plainNote(opened: OpenStore): string | null {
   if (opened.kind !== "open" || opened.noKeychain === null) return null;
-  return `No secret service answered, so Channels keeps your keys in ${opened.file} without encryption, readable only by you (0600), and seals them once a keyring runs: ${opened.noKeychain}`;
+  return `Channels keeps your keys in ${opened.file} without encryption, readable only by you (0600), because no keyring took them (${opened.noKeychain}); it seals them on a start when one does`;
 }
 
 export function unmarkedNote(opened: OpenStore): string | null {

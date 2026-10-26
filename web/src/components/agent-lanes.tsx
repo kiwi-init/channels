@@ -28,7 +28,7 @@ function Ticks({ checks }: { checks: PrChecks }) {
 
 function PrLine({ pr }: { pr: PrRef }) {
   return (
-    <span className="mt-1.5 flex items-center gap-2 text-meta text-ink-3">
+    <span className="mt-1 flex items-center gap-2 text-meta text-ink-3">
       <a href={pr.url} target="_blank" rel="noreferrer" className="tabular-nums hover:text-ink hover:underline">
         PR #{pr.number}
       </a>
@@ -39,14 +39,14 @@ function PrLine({ pr }: { pr: PrRef }) {
 
 function TaskBlock({ c, state, now, onOpen }: { c: LaneTask; state: ChannelState; now: number; onOpen: (id: number) => void }) {
   return (
-    <li className="rounded-card border border-line px-3 py-2.5">
+    <li className="rounded-ctl px-2 py-2 transition-colors hover:bg-wash">
       <button type="button" onClick={() => onOpen(c.task.id)} className="block w-full text-left">
+        <span className="line-clamp-2 block text-body leading-snug text-ink">{c.task.title}</span>
         <span className="block text-meta text-ink-3">
           <span className="tabular-nums">{taskId(c.task.id)}</span> · {stateWord(state, c.task)} · {formatAgo(c.since, now)}
         </span>
-        <span className="mt-0.5 line-clamp-2 block text-ui font-semibold hover:underline">{c.task.title}</span>
       </button>
-      {c.pr ? <PrLine pr={c.pr} /> : <span className="mt-1.5 block text-meta text-ink-3">no PR yet</span>}
+      {c.pr && <PrLine pr={c.pr} />}
     </li>
   )
 }
@@ -73,9 +73,9 @@ function Lane({
   const context = contextNow(a)
   const sponsor = state.members.get(a.name)?.sponsor?.name
   return (
-    <section aria-label={a.label} className="flex min-h-0 w-72 shrink-0 flex-col gap-4 px-4 py-3 md:w-auto md:min-w-64 md:flex-1">
-      <header className="flex items-center gap-3">
-        <Monogram name={a.label} hue={a.name} agent color={a.color} size={36} online={!!a.here} />
+    <section aria-label={a.label} className="flex min-h-0 w-72 shrink-0 flex-col gap-3 rounded-card border border-line bg-canvas p-1.5 md:w-auto md:min-w-64 md:flex-1">
+      <header className="flex items-center gap-3 px-2 pt-1.5">
+        <Monogram name={a.label} hue={a.name} agent color={a.color} size={28} online={!!a.here} />
         <span className="min-w-0">
           <span className="block truncate text-ui font-semibold">
             {a.label}
@@ -85,14 +85,14 @@ function Lane({
         </span>
       </header>
 
-      <p className="flex items-center gap-2 border-y border-line py-2 font-mono text-meta">
+      <p className="flex items-center gap-2 px-2 text-meta">
         <span className={cx("size-1.5 shrink-0 rounded-full", line.busy ? "bg-doing" : a.here ? "bg-live" : "bg-ink-3")} />
         <span className={cx("truncate", line.busy ? "text-ink" : "text-ink-3")}>{line.text}</span>
         {context && <span className={cx("ml-auto shrink-0 tabular-nums", context.over ? "text-alert" : "text-ink-3")}>{context.text}</span>}
       </p>
 
       {work.current.length > 0 && (
-        <ul className="flex flex-col gap-2">
+        <ul className="flex flex-col">
           {work.current.map((c) => (
             <TaskBlock key={c.task.id} c={c} state={state} now={now} onOpen={onOpenTask} />
           ))}
@@ -101,11 +101,11 @@ function Lane({
 
       {work.next.length > 0 && (
         <div>
-          <p className="mb-1 text-meta font-medium text-ink-3">{STATE_LABEL.todo}</p>
+          <p className="mb-1 px-2 text-meta font-medium text-ink-3">{STATE_LABEL.todo}</p>
           <ul>
             {work.next.map((t) => (
               <li key={t.id}>
-                <button type="button" onClick={() => onOpenTask(t.id)} className="flex w-full gap-3 py-1 text-left text-ui hover:underline">
+                <button type="button" onClick={() => onOpenTask(t.id)} className="flex w-full gap-3 rounded-ctl px-2 py-1.5 text-left text-ui transition-colors hover:bg-wash">
                   <span className="w-12 shrink-0 text-ink-3 tabular-nums">{taskId(t.id)}</span>
                   <span className="min-w-0 truncate">{t.title}</span>
                 </button>
@@ -117,10 +117,10 @@ function Lane({
 
       {work.watching.length > 0 && (
         <div>
-          <p className="mb-1 text-meta font-medium text-ink-3">Watching</p>
+          <p className="mb-1 px-2 text-meta font-medium text-ink-3">Watching</p>
           <ul>
             {work.watching.map((pr) => (
-              <li key={pr.url} className="flex gap-3 py-1 text-ui">
+              <li key={pr.url} className="flex gap-3 px-2 py-1.5 text-ui">
                 <a href={pr.url} target="_blank" rel="noreferrer" className="w-12 shrink-0 text-ink-3 tabular-nums hover:underline">
                   #{pr.number}
                 </a>
@@ -136,10 +136,10 @@ function Lane({
         </div>
       )}
 
-      {!work.current.length && !work.next.length && !work.watching.length && <p className="text-ui text-ink-3">Nothing on its plate.</p>}
+      {!work.current.length && !work.next.length && !work.watching.length && <p className="px-2 text-ui text-ink-3">Nothing on its plate.</p>}
 
       {work.events.length > 0 && (
-        <ul aria-label="Recent" className="mt-auto border-t border-line pt-2">
+        <ul aria-label="Recent" className="mt-auto px-2 pt-2 pb-1">
           {work.events.map((e) => (
             <li key={e.seq} className="flex gap-3 py-0.5 text-meta">
               <time className="w-16 shrink-0 whitespace-nowrap text-ink-3 tabular-nums">{formatTime(e.at)}</time>
@@ -171,7 +171,7 @@ export function AgentLanes({
   if (!agents.length) return <p className="py-12 text-center text-ui text-ink-3">No agent has joined yet.</p>
   const ordered = byBusy(agents).sort((a, b) => Number(a.lead) - Number(b.lead))
   return (
-    <div role="region" aria-label="Agent lanes" className="-mx-4 flex min-h-[calc(100dvh-var(--head)-16px)] divide-x divide-line overflow-x-auto">
+    <div role="region" aria-label="Agent lanes" className="flex min-h-[calc(100dvh-var(--head)-16px)] gap-4 overflow-x-auto pb-4">
       {ordered.map((a) => (
         <Lane key={a.name} a={a} state={state} messages={messages} prs={prs} now={now} nameOf={nameOf} onOpenTask={onOpenTask} />
       ))}

@@ -41,3 +41,7 @@ export function forgetMember(alias: string, name: string): void {
     if (ch?.as === name) ch.as = left[0] ?? ch.owner;
   });
 }
+
+export function forgetSecretCopies(): void {
+  rmSync(join(home(), "secrets"), { recursive: true, force: true });
+}

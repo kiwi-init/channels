@@ -144,6 +144,7 @@ export class RoomDb {
     this.sql.run(READS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
     this.sql.run(SLOTS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
     this.sql.run(SENDS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
+    this.sql.run("DROP TABLE IF EXISTS secrets");
     migrated.add(this.sql);
   }
 

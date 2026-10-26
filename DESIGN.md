@@ -12,7 +12,7 @@ Canonical sources: `web/src/index.css` (`:root`, `:root[data-theme]`,
 
 ## 1. Identity in one line
 
-A quiet Messages-like conversation. White `#ffffff` / near-black `#161618`
+A quiet Messages-like conversation. White `#ffffff` / near-black `#0f0f0f`
 canvas, Apple system blue `#007aff` (light) / `#0a84ff` (dark), the system font,
 small purposeful motion, one shell with the page floating on it. What's
 chosen wears one quiet solid fill; everything around it is plain, so it
@@ -45,9 +45,9 @@ Light / dark are the two sides of each `light-dark()` in `index.css`:
 
 | Token | Light | Dark |
 |---|---|---|
-| `canvas` (conversation) | `#ffffff` | `#161618` |
+| `canvas` (conversation) | `#ffffff` | `#0f0f0f` |
 | `rail` (the window's sidebar and the phone's channel list, a step darker) | `#f2f2f5` | `#000000` |
-| `shell` (the window surface: the rail, or the Mac's vibrancy under `html[data-frost]`, with a grey wash in dark) | the rail / `transparent` | the rail / `rgb(40 40 44 / 0.55)` |
+| `shell` (the window surface: the rail, or the Mac's vibrancy under `html[data-frost]`, clear, washed 10% with the tint when one is picked) | the rail / `transparent` | the rail / `transparent` |
 | `well` (a field's quiet solid fill) | `#f2f2f5` | `#232327` |
 | `chosen` (a selected row's quiet fill) | ink at 12% | white at 12% |
 | `raised` (cards, popovers) | the canvas | the canvas |
@@ -105,7 +105,8 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 
 - Spacing: one step, `step 8px`, between groups and from the window's and
   a card's edges. A card's header is `card-head 30px`, its controls
-  `control 26px`, all on the header's one centre line.
+  `control 26px`, all on the header's one centre line. The kit's small
+  button is `control` tall too, so a row's actions match the header's.
 
 - Steps: `row 8px`, `ctl 10px`, `card 16px`, `bubble 20px` (pictures in
   a message and the annotator) and `dock 26px` (the composer, soft without a pill's half-moon
@@ -115,17 +116,26 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   `ui-tokens.ts`.
 - Two shadows, no coloured ones: `pop` (`0 0 0 1px pop-edge, 0 16px 40px
   -12px pop-shade`) for what lifts over the canvas (popovers, dialogs, a
-  sheet sliding over the page), and `sheet` for the page itself: the same
-  hairline, a 1px contact shadow and a short drop that stays under it
-  (`0 6px 14px -8px`), so the gutters beside the page keep the shell's
-  own colour.
+  sheet sliding over the page), and `sheet` for the page itself, as in
+  Interlinked: `0 1px 4px` at 30% and `0 6px 36px` at 50% black (dark), with
+  the `sheet-edge` hairline drawn inside the page over its content. The
+  page's ancestors don't clip on a wide window, so the shadow falls over the
+  sidebar and fades, never cut at the gutter.
+- Tint: Settings → Appearance offers the main colours of the desktop's
+  wallpaper (read live on a Mac and on GNOME and KDE, never a fixed
+  palette; the row hides when none can be read). A tint washes the frost
+  10% and becomes `accent`, `accent-text` and `accent-wash`.
 - One shell: the sidebar, the page's toolbar and the gutters are one
   surface, `shell` (the `rail`, or the Mac's vibrancy under `data-frost`),
   with no fill, edge or shade of their own. Only the page floats: a sheet
   of `canvas` (the `sheet` utility: `step` in from the window's edges and
   from the sidebar, half a step under the toolbar, `card` radius, the
   `sheet` shadow), holding the conversation and the tasks. Details is a
-  sheet of its own in the page's place. A thread and the tasks panel
+  sheet of its own in the page's place, headed "Details": one centered
+  column like Settings, the channel's face and its actions on top, then
+  Members, Channel, Notes, Download and Close, each a box of rows whose
+  header is a 16px icon, the name and one quiet line. A choice sits at the
+  right of its row, `control` tall. A thread and the tasks panel
   slide over the page's right side as a sheet lifted with the `pop` shadow
   (`sheet-over`), under the toolbar: the page keeps its width and scroll, and its centered column (`aside-room`) slides left only as far as
   its margin allows, so nothing reflows. `raised` and `field` are the
@@ -133,7 +143,7 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   background of their own; they are separated by spacing and a thin 1px
   `line` (the `edge` utility). Fields, the composer first, are `well`, a
   quiet solid fill; focus adds a hairline (`edge-strong`), never the accent
-  ring. Popovers and dialogs lift off the canvas with the `pop` shadow only.
+  ring (`FIELD` in `kit.tsx`, which `TextField` uses). Popovers and dialogs lift off the canvas with the `pop` shadow only.
   A phone has no sheet: one screen at a time, on the canvas.
 - Liquid glass (`glass`), for what floats over the conversation (the
   header's round controls, the place pills, the composer): a translucent
@@ -141,15 +151,15 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 - Chosen (`chosen`, ink at 12%): what's chosen in a list wears one quiet
   solid fill and nothing else does: the open conversation under its
   channel, the open channel's row while none of its conversations is open,
-  and the phone list's open channel. Idle rows, Search and counts are
-  plain. `test/chosen.test.ts` keeps it that way.
+  the phone list's open channel and the open task on the board. Idle rows,
+  Search and counts are plain. `test/chosen.test.ts` keeps it that way.
 - Fall back to solid fills under `prefers-contrast: more`.
 - On a machine that draws without a GPU (WebGL's renderer is SwiftShader,
   llvmpipe or a basic render driver, or there's no WebGL: `lib/drawing.ts`
   marks `html[data-drawing=software]` once the app is idle), the scrims under
-  the header and over the composer drop their blur and mask and keep only
-  their fade: re-blurring them on every keystroke made typing take 128 ms
-  at p95 there, 32 ms without (`PERF_GL=swiftshader bun scripts/perf-scale.ts`).
+  the header and over the composer drop their mask and keep only their fade.
+- The scrims never blur: text scrolling under the header or above the
+  composer fades but stays sharp, on every platform.
 
 ## 6. Motion
 
@@ -202,8 +212,8 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 - Rows (channels, tasks): idle transparent, hover `wash`; title `ui`
   semibold, preview `meta` quiet. In the sidebar what's open is bold and
   wears `chosen`. On a phone the header's tabs are text, the current one in
-  ink with a 2px `accent` mark under it; on a wide window the toolbar's
-  task views are a segmented control.
+  ink with a 2px `accent` mark under it; on a wide window the board's task
+  views are a segmented control.
 - A chosen option you pick from a set (role chips, personality rows, Joins
   as, an ask's options, room chips) wears `accent-wash` with an `accent`
   edge, and its label in `accent-text` or a check: it reads as chosen at a
@@ -213,8 +223,8 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 - Buttons: primary `accent`; secondary outlined (a 1px `edge-strong` ring,
   no fill, `wash` on hover). The kit's `Checkbox` is the one checkbox, in
   `accent`.
-- Inputs: no fill, a 1px `line` edge (`edge`); focus ring is `2px ring` with `1px` offset and
-  `6px` radius (base layer, so utilities can still take it off).
+- Inputs are `FIELD`: the `well` fill, no edge at rest, and an `edge-strong`
+  hairline on focus, never an accent ring.
 - Placeholders and empty states use quiet ink, never reduced-opacity text.
 - A dialog is for one decision (an `Alert`, a confirm, a short form). What you
   work in opens in place: Settings and Personalities as a page in the main
@@ -238,9 +248,13 @@ From `design-tokens.ts`:
 - Shell: from 768px wide, one sidebar (280px) on `shell` beside the page's
   round `sheet`. Its top row is `card-head` tall: the sidebar toggle in a
   channel (the Mac's traffic lights before it) and New channel at its end.
-  Under it one list, "Your channels": each channel's row (its 20px face,
-  its name, a blue dot or a count for news and questions, a lock on one you
-  can't open yet), and under the open channel its conversations, indented:
+  Under it a "Channels" label and the channels as tab groups, 32px rows: a
+  chevron that folds the group, its 20px face and name (which open it), a
+  blue dot or a count for news and questions, a lock on one you can't open
+  yet, and a gear at the row's end that opens Details (always on the open
+  channel, on hover on the others). Under the open channel its
+  conversations are its tabs, a 20px icon column (`#` for a room, a person
+  for a direct one) and the name, the open one on `chosen`:
   the rooms, your own direct ones, one that asks for you and the open one
   stay; threads between agents fold behind an "N more" row carrying their
   unread total, which opens to "Show less"; the owner's New room at the
@@ -253,13 +267,13 @@ From `design-tokens.ts`:
   the page's edges, its controls `control` round on its centre line. A
   sheet's own header (Details, a thread, the tasks panel) has the same
   metrics: `step` from the sheet's top, `card-head` tall, `control`
-  buttons. In the middle of the toolbar a pill on `wash` with
-  the channel's face, name and status (working, merged today, needs you),
-  which opens Details; on the right Search, Tasks (an `alert` dot while
-  something needs you) and Agents as icons that toggle. With Tasks open, the
-  task views take the pill's place as a segmented control: Everything,
-  Needs you, Working, In review (only while a task has a reviewer) and
-  Done, each with its count. A channel opens on its conversation (Needs
+  buttons. In the toolbar's centre Search, Tasks (an `alert` dot while
+  something needs you) and Agents, each an icon and its label, on the frost
+  with no pill round them; the open one on `wash-2`. With the sidebar
+  hidden, a gear after the conversation menu opens Details. With Tasks
+  open, the task views sit at the top of the board as a segmented control:
+  Everything, Needs you, Working, In review (only while a task has a
+  reviewer) and Done, each with its count. A channel opens on its conversation (Needs
   you's rows at its top while something waits). The approved mockups are
   in `docs/ui/`.
 - Needs you says one line per thing: a face or icon, what it is in one
@@ -270,13 +284,16 @@ From `design-tokens.ts`:
   when, Show in the conversation, Show in Rex) opens under it on a click of
   the line.
 - Tasks: Needs you's rows first, then the
-  board grouped by the person's message each task serves: the group's
+  board grouped by the person's message each task serves. Needs you and
+  each group are a card like the Now card (`card` radius, a `line` border,
+  6px inside, 16px apart) with its heading inside it: the group's
   heading is their own words in quotes, under it who said it and #N, the
   ask that moved last first and Unfiled (no person's message holds these)
   at the foot; inside a group, in progress, in review, up next, then done
   this week. A view (In progress, In review, Done) keeps the same groups
-  with only its own tasks. A row is two lines on the canvas,
-  split from the next by `line`: the owner's face, the title in `body`, and
+  with only its own tasks. A row is two lines in its card, `ctl` round,
+  filling `wash` on hover and `chosen` while its task is open: the owner's
+  face, the title in `body`, and
   under it the task id, the owner and what the agent is doing now (in
   `doing` with a steady dot while it works) or the task's state; then its PR
   (number, a 48px diff bar in `live` and `alert`, the additions), its
@@ -291,7 +308,7 @@ From `design-tokens.ts`:
   check by name with how it went, and See the diff and GitHub as outlined
   buttons.
 - A channel with a lead wears the lead's head in the sidebar, in its
-  details and in the toolbar's pill, the same face everywhere. A hover on a
+  details and in its row's tab group, the same face everywhere. A hover on a
   channel's row says its last line, or why it can't open yet. A
   phone always shows the full list. The Mac app's window is never narrower
   than 768px, so it always has the sidebar: the phone layout's headers
@@ -337,15 +354,16 @@ From `design-tokens.ts`:
   on the row's right as outlined buttons (below it on a phone). Rows are
   split by `line`, not by fills. `Pause agents` in the header stops every
   agent at once.
-- Agents tab: one lane per agent, side by side on the canvas, split by
-  `line` (no cards, no fills; the lead's lane last). A lane: face, name,
-  `@handle · for person · model`; a mono `meta` line of what it runs now
-  between two `line`s (a steady `doing` dot while a tool runs, `live` while
-  it thinks); its tasks in progress and in review as `card`-round outlined
-  blocks (`T7 · in progress · 41 min`, the title in `ui` semibold, `PR #n`
-  and a tick per check: `alert` failed, `doing` running, `live` passed);
-  Up next; Watching (the lead's other open PRs); and its last three moves
-  at the foot, times in tabular `meta`.
+- Agents tab: one lane per agent, side by side, each a card like the
+  board's groups (`card` radius, a `line` border, 6px inside, 16px apart;
+  the lead's lane last). A lane: face, name, `@handle · for person ·
+  model`; a `meta` line of what it runs now (a steady `doing` dot while a
+  tool runs, `live` while it thinks); its tasks in progress and in review
+  as `ctl`-round rows with no rules (the title in `body`, `T7 · in
+  progress · 41 min` under it, `PR #n` and a tick per check when there is
+  one: `alert` failed, `doing` running, `live` passed); Up next; Watching
+  (the lead's other open PRs); and its last three moves at the foot,
+  times in tabular `meta`.
 - An ask with options lists them under its words as outlined `row`-round
   lines, the letter in `ink-3`. While it waits on you it says so in
   `decide` under the bubble and its options answer it; once answered, the
@@ -366,13 +384,24 @@ From `design-tokens.ts`:
   floats over it takes it back: a dialog, its backdrop and a menu are
   `no-drag`, and a full-window stage brings its own `drag` row.
 
-- Settings → Personalities: a roomy modal, the list on the left (presets
-  for code work, then Yours, each a 36px outlined glyph tile, the name in
-  `ui` semibold and one quiet line) and the editor on the right: role as
-  outlined chips (the picked one `accent`-bordered), capabilities as
-  checkboxes with a quiet line each, areas as mono chips with a dashed
-  "+ add a path", instructions in an outlined field. A preset reads
-  "edit it to make your own copy": changing it makes one.
+- One sidebar, aware of where you are. In Settings the app's sidebar
+  trades the channels for a back button, the title and Settings'
+  sections (the open one on `chosen`); in Personalities, for the presets
+  and Yours with New. The card holds only the page, never a second list. Each
+  group is a rounded box of rows with one 20px icon column, so the labels
+  line up down the group; Add a computer and Link a phone are action rows
+  in that column. Segmented choices and row buttons are `control` tall.
+- Settings → Personalities: the list in the sidebar (presets for code work,
+  then Yours, each a 36px outlined glyph tile, the name in `ui` semibold
+  and one quiet line; the one being edited on `chosen`) and the editor on
+  the right: role as outlined chips (the picked one `accent`-bordered),
+  capabilities as checkboxes with a quiet line each, areas as mono chips
+  with "+ add a path", and the glyph, area and instructions fields in
+  `FIELD`. A preset reads "edit it to make your own copy": changing it
+  makes one.
+- Onboarding dialogs (New channel, Join with a code, Your computers) have a
+  close button; Add an agent's command sits in a `well` box with a
+  `control` tall Copy.
 - Picking a personality (Let in, an agent's menu, Invite → Joins as): one
   outlined row each, a 28px glyph tile, the name in `ui` semibold and its
   role and capabilities in one quiet line; the picked row `accent`-bordered,
@@ -468,7 +497,7 @@ same gestures, the same speed. The owner asked for it, so on the phone it wins o
   reply carries its quote. A conversation loaded from its start opens on an intro (face, name,
   a quiet line). Gestures are Messages': swipe a bubble right to reply, drag left for times,
   double-tap or long-press for tapbacks, tap a picture to zoom. The top fades the content under
-  the header; the bottom never blurs the last bubble.
+  the header; the bottom never covers the last bubble.
 - **Questions are polls** (Messages iOS 26): one grey card with "Question for you" in
   `decide`, the question, a row per option (a radio circle, ≥44pt) and "Something else…" in
   `accent`, which puts the composer in answer mode ("Answer win", with a bar you can cancel).

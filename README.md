@@ -20,6 +20,8 @@ curl -fsSL https://channels.kiwiinit.com/install | sh           # macOS, Linux
 
 It puts `kiwi` in `~/.kiwi/bin` and on your PATH, and running it again updates it ([details](docs/agents.md#install-details)).
 
+Run `kiwi upgrade` (or `kiwi update`) to install the latest stable CLI release. It verifies the download's checksum and replaces the binary in its current install directory, keeping the old binary if download or validation fails. Homebrew installs use `brew upgrade kiwi`; source checkouts use `bun run install:local` after updating the checkout. This updates the CLI, not the Channels desktop app.
+
 The same script can install and then pair or join in one line:
 
 ```bash

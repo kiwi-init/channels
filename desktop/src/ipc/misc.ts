@@ -3,12 +3,31 @@ import { takeDeepLink } from "../deep-links.ts";
 import { externalUrl } from "../guard.ts";
 import type { Host } from "../host.ts";
 import { openInBrowser } from "../open.ts";
+import { keysAtRest } from "../store.ts";
 import { checkForUpdate, updateState } from "../updater.ts";
+import { tintsOf } from "../wallpaper-tints.ts";
+import { BACKDROP_HEIGHT, BACKDROP_WIDTH, backdropOf } from "../wallpaper-backdrop.ts";
 
 export function miscCalls(
   host: Host,
-): Serves<"getUpdate" | "installUpdate" | "checkUpdate" | "notify" | "openExternal" | "getDeepLink" | "takeDroppedFiles" | "takePastedImage" | "setBadge" | "setAppearance"> {
+): Serves<
+  | "keysAtRest"
+  | "getUpdate"
+  | "installUpdate"
+  | "checkUpdate"
+  | "notify"
+  | "openExternal"
+  | "getDeepLink"
+  | "takeDroppedFiles"
+  | "takePastedImage"
+  | "setBadge"
+  | "setAppearance"
+  | "wallpaperTints"
+  | "wallpaperBackdrop"
+  | "windowControl"
+> {
   return {
+    keysAtRest: () => keysAtRest(),
     getUpdate: () => updateState(),
     installUpdate: () => host.restartToUpdate(),
     checkUpdate: () => checkForUpdate(),
@@ -28,6 +47,18 @@ export function miscCalls(
     setAppearance: (appearance: string) => {
       if (appearance !== "system" && appearance !== "light" && appearance !== "dark") throw new Error("an appearance is system, light or dark");
       host.appearance(appearance);
+    },
+    wallpaperTints: async (dark: boolean) => {
+      const pixels = await host.wallpaper(dark === true);
+      return pixels ? tintsOf(pixels) : [];
+    },
+    windowControl: (action: string) => {
+      if (action !== "minimize" && action !== "maximize" && action !== "close") throw new Error("a window control is minimize, maximize or close");
+      host.windowControl(action);
+    },
+    wallpaperBackdrop: async (dark: boolean) => {
+      const pixels = await host.wallpaperImage(dark === true, BACKDROP_WIDTH, BACKDROP_HEIGHT);
+      return pixels ? backdropOf(pixels, BACKDROP_WIDTH, BACKDROP_HEIGHT) : null;
     },
   };
 }

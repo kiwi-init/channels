@@ -9,6 +9,7 @@ import { GENERAL_ROOM, PROTOCOL_VERSION, isReaction, type ImageAttachment, type 
 import { taskCards } from "@kiwi/core/standup.ts"
 import { answersDecisions, colorOf, decidersOf, heldBy, outsideRepos, taskId, tasksAwaitingPeople, type Task, humanOf, ownerOf } from "@kiwi/core/state.ts"
 import { channelTitle, loadRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
+import { onDetailsRequest, takeDetailsRequest } from "@/lib/details-request"
 import { howHere } from "@/lib/presence"
 import { sendsInTurn, withSentQuotes } from "@/lib/send-order"
 import { asksFor, chosenOf, heldAsks } from "@/lib/asks"
@@ -35,7 +36,7 @@ import { ALLOW_ONCE, DENY, settledOf } from "@/lib/permission-settled"
 import { isAgent } from "../message"
 import { NeedsYou } from "../needs-you"
 import { ChannelSidebar, ConversationMenu, type Conversation as ConversationRow } from "./channel-sidebar"
-import { Header, type HeaderProps, Toolbar } from "./header"
+import { Header, type HeaderProps, Toolbar, ViewsNav } from "./header"
 import { InfoSide, PictureSide, TasksSide, ThreadSide } from "./side-panels"
 import { Centered, rowMakers, threadRowsOf } from "./timeline"
 import type { Side } from "./types"
@@ -73,6 +74,11 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const [here, setHere] = useState<string>("main")
   const [cardRoom, setCardRoom] = useState<string>(GENERAL_ROOM)
   const [side, setSide] = useState<Side>(null)
+  useEffect(() => {
+    const open = () => setSide({ kind: "info" })
+    if (takeDetailsRequest(member.code)) open()
+    return onDetailsRequest(member.code, open)
+  }, [member.code])
   const [tab, setTab] = useState<Tab>("conversation")
   const [view, setView] = useState<View>("everything")
   const [earlier, setEarlier] = useState(false)
@@ -565,7 +571,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                             )
                           ) : tab === "tasks" ? (
                             <>
-                              {view === "everything" && nowNode("mx-1 mb-2", false)}
+                              <ViewsNav view={view} counts={counts} onView={bar.onView} reviewing={bar.reviewing} />
+                              {view === "everything" && nowNode("", false)}
                               <TasksView
                                 state={state}
                                 now={now}

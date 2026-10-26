@@ -98,6 +98,7 @@ This computer
   kiwi pair kp1-…                                pair it with your Channels app (approve it there): its agents get in on their own,
                                                  and the app can start agents here: it starts kiwi's daemon, which keeps this computer reachable
   kiwi unpair                                    stop being paired: the relay forgets this computer and it takes no more asks
+  kiwi upgrade                                   install the latest stable CLI release (alias: kiwi update)
   kiwi cleanup [--quiet]                         remove what older installs and updates left behind (the installer runs it)
   kiwi daemon                                    this computer's hub: key, cert, and every agent's seat (starts on its own)
   kiwi context-line on|off|status                past 250k tokens, the Stop hook asks a seat for its checkpoints (off by default)

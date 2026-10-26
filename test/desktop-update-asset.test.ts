@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { cantSwap, debAsset, githubHop, livewireVersion, newestLivewireTag, ownAppImage, relaunchAfter, releaseDownload, swapAsset, swapScript } from "../desktop/src/update-asset.ts";
+import { cantSwap, githubHop, livewireVersion, newestLivewireTag, ownAppImage, relaunchAfter, releaseDownload, swapAsset, swapScript } from "../desktop/src/update-asset.ts";
 
 test("a Mac swaps itself for the zip for its CPU", () => {
   expect(swapAsset("0.14.0", "darwin", "arm64")).toBe("Channels-0.14.0-mac-arm64.zip");
@@ -16,14 +16,10 @@ test("an AppImage swaps itself for the AppImage for its CPU (T1554)", () => {
   expect(swapAsset("0.27.0", "linux", "ia32", "/home/a/Applications/Channels.AppImage")).toBeNull();
 });
 
-test("a deb install and Windows never swap themselves; a deb install is offered the release's .deb for its CPU (T1554)", () => {
+test("a Linux app that isn't an AppImage and Windows never swap themselves (T1554)", () => {
   expect(swapAsset("0.27.0", "linux", "x64")).toBeNull();
+  expect(swapAsset("0.27.0", "linux", "arm64")).toBeNull();
   expect(swapAsset("0.27.0", "win32", "x64")).toBeNull();
-  expect(debAsset("0.27.0", "linux", "x64")).toBe("Channels-0.27.0-linux-amd64.deb");
-  expect(debAsset("0.27.0", "linux", "arm64")).toBe("Channels-0.27.0-linux-arm64.deb");
-  expect(debAsset("0.27.0", "linux", "x64", "/home/a/Channels.AppImage")).toBeNull();
-  expect(debAsset("0.27.0", "darwin", "arm64")).toBeNull();
-  expect(debAsset("0.27.0", "win32", "x64")).toBeNull();
 });
 
 test("it's an AppImage only when its own executable runs from the AppImage's mount: an inherited APPIMAGE names someone else's app (T1554)", () => {
