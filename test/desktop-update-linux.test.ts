@@ -103,7 +103,11 @@ const UNPACKED_EXE = join(root, "unpacked", "Channels", "bin", "bun");
 mkdirSync(join(root, "unpacked", "Channels", "bin"), { recursive: true });
 writeFileSync(UNPACKED_EXE, "bun");
 
-async function launch(appImage: string | undefined, data: string, run: { appDir?: string; exe: string } = appImage ? mounted(`${loaded}`) : { exe: UNPACKED_EXE }): Promise<{ fake: FakeHost; u: Updater }> {
+async function launch(
+  appImage: string | undefined,
+  data: string,
+  run: { appDir?: string; exe: string } = appImage ? mounted(`${loaded}`) : { exe: UNPACKED_EXE },
+): Promise<{ fake: FakeHost; u: Updater }> {
   setEnv("APPIMAGE", appImage);
   setEnv("APPDIR", run.appDir);
   mkdirSync(data, { recursive: true });
