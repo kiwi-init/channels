@@ -9,7 +9,7 @@ import type { Host } from "./host.ts";
 import type { HostToKeys } from "./keys-server.ts";
 import { readDropped } from "./dropped.ts";
 import { followTheme } from "./frost-eb.ts";
-import { droppedPaths, notifyLinux, onNoteClick, pastedPng, showBadge } from "./native-eb.ts";
+import { droppedPaths, notifyLinux, onNoteClick, pastedPng, showBadge, wallpaperPixels } from "./native-eb.ts";
 import { relaunchAfter } from "./update-asset.ts";
 import { applyUpdate } from "./updater.ts";
 import { ebDataDir } from "./store-eb.ts";
@@ -82,6 +82,7 @@ export const ebHost: Host = {
   appearance: (appearance) => {
     if (shown?.win.ptr) followTheme(shown.win.ptr, appearance);
   },
+  wallpaper: (dark) => wallpaperPixels(dark),
   notify: (title, body) => {
     if (process.platform === "linux") notifyLinux(title, body);
     else Utils.showNotification({ title, body });

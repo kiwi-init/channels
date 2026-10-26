@@ -3,6 +3,7 @@ import {
   ArrowLeft01Icon,
   ArrowRight01Icon,
   CheckmarkCircle02Icon,
+  ColorsIcon,
   CommandLineIcon,
   ComputerIcon,
   ComputerRemoveIcon,
@@ -30,7 +31,7 @@ import {
 import { useOwnPersonalities } from "@/lib/personalities"
 import { Personalities } from "./personalities"
 
-import { setAppearance, setTextSize, useAppearance, useTextSize, type Appearance, type TextSize } from "@/lib/theme"
+import { setAppearance, setTextSize, setTint, useAppearance, useTextSize, useTint, type Appearance, type TextSize } from "@/lib/theme"
 import { setAccessibilityOption, useAccessibilityOption } from "@/lib/accessibility"
 import { cx } from "@/lib/utils"
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
@@ -58,6 +59,73 @@ function Lead({ children, className }: { children: ReactNode; className?: string
 }
 
 const glyph = (icon: IconSvgElement) => <Icon icon={icon} size={16} />
+
+function useWallpaperTints(appearance: Appearance): string[] {
+  const [tints, setTints] = useState<string[]>([])
+  useEffect(() => {
+    const b = bridge()
+    if (!b?.wallpaperTints) return
+    let live = true
+    const dark = appearance === "dark" || (appearance === "system" && matchMedia("(prefers-color-scheme: dark)").matches)
+    const load = () =>
+      void b.wallpaperTints(dark).then(
+        (got) => live && setTints(got),
+        () => {}
+      )
+    load()
+    window.addEventListener("focus", load)
+    return () => {
+      live = false
+      window.removeEventListener("focus", load)
+    }
+  }, [appearance])
+  return tints
+}
+
+function Swatch({ color, on, label, onPick }: { color: string | null; on: boolean; label: string; onPick: () => void }) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={on}
+      aria-label={label}
+      title={label}
+      onClick={onPick}
+      className={cx(
+        "flex size-6 items-center justify-center rounded-full transition-shadow",
+        on ? "shadow-[0_0_0_2px_var(--canvas),0_0_0_4px_var(--ink)]" : "hover:shadow-[0_0_0_2px_var(--canvas),0_0_0_4px_var(--edge-strong)]"
+      )}
+    >
+      {color ? (
+        <span className="size-6 rounded-full shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)]" style={{ background: color }} />
+      ) : (
+        <span className="size-6 rounded-full bg-[linear-gradient(135deg,transparent_45%,var(--ink-3)_45%,var(--ink-3)_55%,transparent_55%)] shadow-[inset_0_0_0_1px_var(--edge-strong)]" />
+      )}
+    </button>
+  )
+}
+
+function TintField({ appearance }: { appearance: Appearance }) {
+  const tint = useTint()
+  const tints = useWallpaperTints(appearance)
+  const shown = tint && !tints.includes(tint) ? [tint, ...tints] : tints
+  if (!shown.length) return null
+  return (
+    <div data-item className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+      <Lead>{glyph(ColorsIcon)}</Lead>
+      <div className="min-w-0 flex-1">
+        <p className="text-ui font-medium text-ink">Tint</p>
+        <p className="text-meta leading-snug text-ink-3">The main colours of your wallpaper</p>
+      </div>
+      <div role="radiogroup" aria-label="Tint" className="flex items-center gap-2.5">
+        <Swatch color={null} on={!tint} label="No tint" onPick={() => setTint(null)} />
+        {shown.map((t) => (
+          <Swatch key={t} color={t} on={tint === t} label={`Tint ${t}`} onPick={() => setTint(t)} />
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function Choice<T extends string>({
   tile,
@@ -711,6 +779,7 @@ function General({ onPersonalities, onClose }: { onPersonalities: () => void; on
                   { value: "dark", label: "Dark" },
                 ]}
               />
+              <TintField appearance={appearance} />
               <Choice<TextSize>
                 tile={glyph(TextFontIcon)}
                 label="Text size"

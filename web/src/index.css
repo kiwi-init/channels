@@ -114,6 +114,16 @@ html[data-frost] {
   --shell: transparent;
 }
 
+html[data-tint] {
+  --accent: var(--tint);
+  --accent-text: light-dark(color-mix(in oklab, var(--tint) 80%, black), color-mix(in oklab, var(--tint) 65%, white));
+  --accent-wash: color-mix(in srgb, var(--tint) 16%, transparent);
+}
+
+html[data-frost][data-tint] {
+  --shell: color-mix(in srgb, var(--tint) 10%, transparent);
+}
+
 /* In the desktop app on a Mac (main.tsx sets data-shell): the traffic lights sit on the list's header. */
 @custom-variant shell-mac (&:where([data-shell="mac"], [data-shell="mac"] *));
 

@@ -63,6 +63,7 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     daemonAdopt: () => t.call("daemonAdopt"),
     installCli: () => t.call("installCli"),
     keysAtRest: () => t.call("keysAtRest"),
+    wallpaperTints: (dark) => t.call("wallpaperTints", dark),
     getUpdate: () => t.call("getUpdate"),
     onUpdate: (cb) => t.listen("update", cb),
     installUpdate: () => t.call("installUpdate"),

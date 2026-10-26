@@ -35,6 +35,7 @@ export function fakeHost(app: FakeApp = {}): FakeHost {
     notify: (title, body) => void did.push(`notify ${title}: ${body}`),
     badge: (count) => void did.push(`badge ${count}`),
     appearance: (appearance) => void did.push(`appearance ${appearance}`),
+    wallpaper: () => null,
     showWindow: () => void did.push("show"),
     reload: () => void did.push("reload"),
     restartToUpdate: () => void did.push("restart"),

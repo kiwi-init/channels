@@ -118,7 +118,7 @@ export function Conversations({ conversations, current, onConversation, rooms, o
   const at = afterRooms(shown)
   return (
     <section aria-label="Conversations">
-      <ul className="mt-0.5 space-y-0.5 pl-5">
+      <ul className="mt-0.5 space-y-0.5 pl-[18px]">
         {shown.slice(0, at).map(item)}
         {making && onNewRoom && <NewRoom rooms={rooms} onMake={onNewRoom} onClose={() => setMaking(false)} />}
         {shown.slice(at).map(item)}

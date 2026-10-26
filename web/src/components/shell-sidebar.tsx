@@ -9,6 +9,7 @@ import { useSecrets } from "@/lib/secrets"
 import { SIDEBAR_KEYS, toggleSidebar, useSidebarHidden } from "@/lib/sidebar-hidden"
 import { useUpdate } from "@/lib/update"
 import { cx } from "@/lib/utils"
+import { requestDetails } from "@/lib/details-request"
 import { ChannelIconTile } from "./channel-icon"
 import { Icon } from "./icon"
 import { IconButton, Monogram } from "./kit"
@@ -87,6 +88,7 @@ export function ShellSidebar({
 }) {
   const [slot, setSlot] = useState<HTMLElement | null>(null)
   const [placeSlot, setPlaceSlot] = useState<HTMLElement | null>(null)
+  const [folded, setFolded] = useState(false)
   const hidden = useSidebarHidden() && inChannel
   const person = useSecrets().person
   const picture = useOwnPicture()
@@ -116,25 +118,47 @@ export function ShellSidebar({
                   const n = newsOf.get(c.room)
                   return (
                     <li key={c.room} className="group/channel">
-                      <button
-                        type="button"
-                        onClick={() => onSelect(c.code)}
-                        aria-current={open ? "page" : undefined}
-                        title={rowNote(c)}
+                      <div
                         className={cx(
-                          "flex h-8 w-full items-center gap-2 rounded-ctl px-2.5 text-left text-ui transition-colors",
+                          "group/row flex h-8 w-full items-center rounded-ctl text-ui transition-colors",
                           open ? "bg-(--chosen) font-semibold text-ink group-has-[section_[aria-current=page]]/channel:bg-transparent" : "text-ink-2 hover:bg-wash hover:text-ink"
                         )}
                       >
-                        <Icon icon={ArrowRight01Icon} size={12} className={cx("shrink-0 text-ink-3 transition-transform", open && "rotate-90")} />
-                        <span className={cx("flex w-5 shrink-0 justify-center", c.state !== "member" && "grayscale")}>
-                          <ChannelIconTile icon={icons.get(c.room) ?? null} title={c.title} size={20} />
-                        </span>
-                        <span className="min-w-0 flex-1 truncate">{c.title}</span>
-                        {c.state !== "member" && c.state !== "pending" && <Icon icon={LockIcon} size={12} className="shrink-0 text-ink-3" />}
-                        {!open && <News n={n} />}
-                      </button>
-                      {open && <div ref={setSlot} />}
+                        <button
+                          type="button"
+                          aria-label={`${open && !folded ? "Collapse" : "Expand"} ${c.title}`}
+                          aria-expanded={open && !folded}
+                          onClick={() => (open ? setFolded((f) => !f) : (setFolded(false), onSelect(c.code)))}
+                          className="flex h-full w-7 shrink-0 items-center justify-center rounded-l-ctl text-ink-3 hover:text-ink"
+                        >
+                          <Icon icon={ArrowRight01Icon} size={12} className={cx("transition-transform", open && !folded && "rotate-90")} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => (setFolded(false), onSelect(c.code))}
+                          aria-current={open ? "page" : undefined}
+                          title={rowNote(c)}
+                          className="flex h-full min-w-0 flex-1 items-center gap-2 text-left"
+                        >
+                          <span className={cx("flex w-5 shrink-0 justify-center", c.state !== "member" && "grayscale")}>
+                            <ChannelIconTile icon={icons.get(c.room) ?? null} title={c.title} size={20} />
+                          </span>
+                          <span className="min-w-0 flex-1 truncate">{c.title}</span>
+                          {c.state !== "member" && c.state !== "pending" && <Icon icon={LockIcon} size={12} className="shrink-0 text-ink-3" />}
+                          {!open && <News n={n} />}
+                        </button>
+                        {c.state === "member" && (
+                          <IconButton
+                            label={`Details: ${c.title}`}
+                            round
+                            className={cx("no-drag mr-1 size-6 shrink-0 text-ink-3 hover:text-ink", !open && "opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100")}
+                            onClick={() => (open ? requestDetails(c.code) : (requestDetails(c.code), onSelect(c.code)))}
+                          >
+                            <Icon icon={Settings02Icon} size={14} />
+                          </IconButton>
+                        )}
+                      </div>
+                      {open && <div ref={setSlot} className={cx(folded && "hidden")} />}
                     </li>
                   )
                 })}

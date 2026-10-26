@@ -24,6 +24,7 @@ export interface Host {
   notify(title: string, body: string): void;
   badge(count: number): void;
   appearance(appearance: "system" | "light" | "dark"): void;
+  wallpaper(dark: boolean): Uint8Array | null;
   showWindow(): void;
   reload(): void;
   restartToUpdate(): void;
