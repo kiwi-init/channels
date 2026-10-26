@@ -40,7 +40,7 @@ const SEGMENT = "no-drag relative flex h-full shrink-0 items-center gap-1.5 roun
 export function Toolbar({ search, setSearch, tab, onTab, headingLabel, face, onTitle, places, needs, onView }: HeaderProps) {
   const wide = useSidebarHidden()
   const toggle = (t: Tab) => onTab(tab === t ? "conversation" : t)
-  const on = (yes: boolean) => (yes ? "bg-segment font-semibold text-ink" : "text-ink-2 hover:text-ink")
+  const on = (yes: boolean) => (yes ? "bg-wash-2 font-semibold text-ink" : "text-ink-2 hover:bg-wash hover:text-ink")
   return (
     <div
       role="toolbar"
@@ -56,7 +56,7 @@ export function Toolbar({ search, setSearch, tab, onTab, headingLabel, face, onT
           </IconButton>
         )}
       </span>
-      <nav aria-label="Sections" className="absolute left-1/2 flex h-(--control) -translate-x-1/2 items-center gap-0.5 rounded-full bg-wash p-0.5">
+      <nav aria-label="Sections" className="absolute left-1/2 flex h-(--control) -translate-x-1/2 items-center gap-1">
         <button
           type="button"
           aria-pressed={search !== null}
