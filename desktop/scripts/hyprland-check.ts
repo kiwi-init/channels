@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { appExecutable, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
 import { firstChannel } from "./eb-first-run.ts";
+import { EXECUTABLE } from "./linux-files.ts";
 
 const appDir = process.argv[2] ?? "";
 const out = process.argv[3] ?? "";
@@ -57,7 +58,7 @@ try {
   const painted = () => driver.evaluate(() => new Promise<boolean>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true)))), null, 30_000);
 
   await step("the window is a native Wayland client of Hyprland, not XWayland", async () => {
-    const c = await until("the window in Hyprland's clients", 30_000, async () => windowOf("channels-desktop"));
+    const c = await until("the window in Hyprland's clients", 30_000, async () => windowOf(EXECUTABLE));
     return { ok: !c.xwayland, detail: { class: c.class, at: c.at, size: c.size } };
   });
 
@@ -81,8 +82,8 @@ try {
     await later(1_500);
     await painted();
     await later(2_000);
-    const c = windowOf("channels-desktop");
-    if (!c) throw new Error("no channels-desktop window");
+    const c = windowOf(EXECUTABLE);
+    if (!c) throw new Error(`no ${EXECUTABLE} window`);
     execFileSync("grim", [join(out, "frost.png")]);
     const s = screen();
     const sidebar = s.at(c.at[0] + 140, c.at[1] + Math.round(c.size[1] * 0.75));
