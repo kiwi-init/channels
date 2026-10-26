@@ -12,7 +12,7 @@ Canonical sources: `web/src/index.css` (`:root`, `:root[data-theme]`,
 
 ## 1. Identity in one line
 
-A quiet Messages-like conversation. White `#ffffff` / near-black `#161618`
+A quiet Messages-like conversation. White `#ffffff` / near-black `#0f0f0f`
 canvas, Apple system blue `#007aff` (light) / `#0a84ff` (dark), the system font,
 small purposeful motion, one shell with the page floating on it. What's
 chosen wears one quiet solid fill; everything around it is plain, so it
@@ -45,9 +45,9 @@ Light / dark are the two sides of each `light-dark()` in `index.css`:
 
 | Token | Light | Dark |
 |---|---|---|
-| `canvas` (conversation) | `#ffffff` | `#161618` |
+| `canvas` (conversation) | `#ffffff` | `#0f0f0f` |
 | `rail` (the window's sidebar and the phone's channel list, a step darker) | `#f2f2f5` | `#000000` |
-| `shell` (the window surface: the rail, or the Mac's vibrancy under `html[data-frost]`, with a grey wash in dark) | the rail / `transparent` | the rail / `rgb(40 40 44 / 0.55)` |
+| `shell` (the window surface: the rail, or the Mac's vibrancy under `html[data-frost]`, clear, washed 10% with the tint when one is picked) | the rail / `transparent` | the rail / `transparent` |
 | `well` (a field's quiet solid fill) | `#f2f2f5` | `#232327` |
 | `chosen` (a selected row's quiet fill) | ink at 12% | white at 12% |
 | `raised` (cards, popovers) | the canvas | the canvas |
@@ -116,10 +116,15 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   `ui-tokens.ts`.
 - Two shadows, no coloured ones: `pop` (`0 0 0 1px pop-edge, 0 16px 40px
   -12px pop-shade`) for what lifts over the canvas (popovers, dialogs, a
-  sheet sliding over the page), and `sheet` for the page itself: the same
-  hairline, a 1px contact shadow and a short drop that stays under it
-  (`0 6px 14px -8px`), so the gutters beside the page keep the shell's
-  own colour.
+  sheet sliding over the page), and `sheet` for the page itself, as in
+  Interlinked: `0 1px 4px` at 30% and `0 6px 36px` at 50% black (dark), with
+  the `sheet-edge` hairline drawn inside the page over its content. The
+  page's ancestors don't clip on a wide window, so the shadow falls over the
+  sidebar and fades, never cut at the gutter.
+- Tint: Settings → Appearance offers the main colours of the desktop's
+  wallpaper (read live on a Mac and on GNOME and KDE, never a fixed
+  palette; the row hides when none can be read). A tint washes the frost
+  10% and becomes `accent`, `accent-text` and `accent-wash`.
 - One shell: the sidebar, the page's toolbar and the gutters are one
   surface, `shell` (the `rail`, or the Mac's vibrancy under `data-frost`),
   with no fill, edge or shade of their own. Only the page floats: a sheet
@@ -207,8 +212,8 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 - Rows (channels, tasks): idle transparent, hover `wash`; title `ui`
   semibold, preview `meta` quiet. In the sidebar what's open is bold and
   wears `chosen`. On a phone the header's tabs are text, the current one in
-  ink with a 2px `accent` mark under it; on a wide window the toolbar's
-  task views are a segmented control.
+  ink with a 2px `accent` mark under it; on a wide window the board's task
+  views are a segmented control.
 - A chosen option you pick from a set (role chips, personality rows, Joins
   as, an ask's options, room chips) wears `accent-wash` with an `accent`
   edge, and its label in `accent-text` or a check: it reads as chosen at a
@@ -243,9 +248,13 @@ From `design-tokens.ts`:
 - Shell: from 768px wide, one sidebar (280px) on `shell` beside the page's
   round `sheet`. Its top row is `card-head` tall: the sidebar toggle in a
   channel (the Mac's traffic lights before it) and New channel at its end.
-  Under it one list, "Your channels": each channel's row (its 20px face,
-  its name, a blue dot or a count for news and questions, a lock on one you
-  can't open yet), and under the open channel its conversations, indented:
+  Under it a "Channels" label and the channels as tab groups, 32px rows: a
+  chevron that folds the group, its 20px face and name (which open it), a
+  blue dot or a count for news and questions, a lock on one you can't open
+  yet, and a gear at the row's end that opens Details (always on the open
+  channel, on hover on the others). Under the open channel its
+  conversations are its tabs, a 20px icon column (`#` for a room, a person
+  for a direct one) and the name, the open one on `chosen`:
   the rooms, your own direct ones, one that asks for you and the open one
   stay; threads between agents fold behind an "N more" row carrying their
   unread total, which opens to "Show less"; the owner's New room at the
@@ -258,13 +267,13 @@ From `design-tokens.ts`:
   the page's edges, its controls `control` round on its centre line. A
   sheet's own header (Details, a thread, the tasks panel) has the same
   metrics: `step` from the sheet's top, `card-head` tall, `control`
-  buttons. In the middle of the toolbar a pill on `wash` with
-  the channel's face, name and status (working, merged today, needs you),
-  which opens Details; on the right Search, Tasks (an `alert` dot while
-  something needs you) and Agents as icons that toggle. With Tasks open, the
-  task views take the pill's place as a segmented control: Everything,
-  Needs you, Working, In review (only while a task has a reviewer) and
-  Done, each with its count. A channel opens on its conversation (Needs
+  buttons. In the toolbar's centre Search, Tasks (an `alert` dot while
+  something needs you) and Agents, each an icon and its label, on the frost
+  with no pill round them; the open one on `wash-2`. With the sidebar
+  hidden, a gear after the conversation menu opens Details. With Tasks
+  open, the task views sit at the top of the board as a segmented control:
+  Everything, Needs you, Working, In review (only while a task has a
+  reviewer) and Done, each with its count. A channel opens on its conversation (Needs
   you's rows at its top while something waits). The approved mockups are
   in `docs/ui/`.
 - Needs you says one line per thing: a face or icon, what it is in one
@@ -299,7 +308,7 @@ From `design-tokens.ts`:
   check by name with how it went, and See the diff and GitHub as outlined
   buttons.
 - A channel with a lead wears the lead's head in the sidebar, in its
-  details and in the toolbar's pill, the same face everywhere. A hover on a
+  details and in its row's tab group, the same face everywhere. A hover on a
   channel's row says its last line, or why it can't open yet. A
   phone always shows the full list. The Mac app's window is never narrower
   than 768px, so it always has the sidebar: the phone layout's headers
