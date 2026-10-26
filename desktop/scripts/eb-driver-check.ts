@@ -22,7 +22,7 @@ function testBuild(dir: string, installed: string | null): number {
         .filter((app) => (linux ? existsSync(join(app, LINUX_ENTRY)) : app.endsWith(".app"))),
     );
   if (tests.length !== 1) throw new Error(`expected one dev (CHANNELS_EB_TEST=1) app under ${builds}, found ${tests.length}`);
-  if (linux && !installed) throw new Error("on Linux, name the installed release app (/opt/Channels, from the deb) after the build folder");
+  if (linux && !installed) throw new Error("on Linux, name the release app (the extracted AppImage's Channels folder) after the build folder");
   let bad = 0;
   const release = onLinux(marksOf(linux ? linuxLayout(installed!) : macLayout(shippedApp(payloadOf(join(dir, "artifacts")), tmp))));
   const test = onLinux(marksOf(linux ? linuxLayout(tests[0]!) : macLayout(tests[0]!)));
@@ -63,10 +63,6 @@ function shipped(file: string, into: string, cleanups: (() => void)[]): Layout {
     cleanups.push(() => execFileSync("hdiutil", ["detach", "-force", mount], { stdio: "ignore" }));
     return macLayout(appIn(mount));
   }
-  if (file.endsWith(".deb")) {
-    execFileSync("dpkg-deb", ["-x", file, into]);
-    return linuxLayout(join(into, "opt", "Channels"));
-  }
   if (file.endsWith(".AppImage")) {
     chmodSync(file, 0o755);
     execFileSync(file, ["--appimage-extract"], { cwd: into, stdio: "ignore" });
@@ -74,7 +70,7 @@ function shipped(file: string, into: string, cleanups: (() => void)[]): Layout {
     if (!existsSync(root)) throw new Error(`${basename(file)} has no Channels folder at its root`);
     return linuxLayout(root);
   }
-  throw new Error(`${basename(file)} isn't a .zip, .dmg, .deb or .AppImage`);
+  throw new Error(`${basename(file)} isn't a .zip, .dmg or .AppImage`);
 }
 
 function shippedFiles(files: string[]): number {

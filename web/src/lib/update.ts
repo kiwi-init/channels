@@ -19,4 +19,4 @@ export function useUpdate(): UpdateView | null {
 }
 
 export const restartToUpdate = () => void bridge()?.installUpdate()
-export const openRelease = (u: UpdateView) => void bridge()?.openExternal(u.deb ?? u.url)
+export const openRelease = (u: UpdateView) => void bridge()?.openExternal(u.url)

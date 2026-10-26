@@ -2,26 +2,8 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import {
-  APP_RUN,
-  appImageName,
-  archOfArtifact,
-  DEB_POSTINST,
-  DEB_POSTRM,
-  DEB_PREINST,
-  debControl,
-  ELECTROBUN_LAUNCHER,
-  debName,
-  desktopEntry,
-  EXECUTABLE,
-  INSTALL_DIR,
-  LEFT_OUT,
-  MAX_DOWNLOAD,
-  md5sums,
-  RUNTIME_SHA256,
-  runtimeUrl,
-  type LinuxArch,
-} from "./linux-files.ts";
+
+import { APP_RUN, appImageName, archOfArtifact, desktopEntry, ELECTROBUN_LAUNCHER, EXECUTABLE, LEFT_OUT, MAX_DOWNLOAD, RUNTIME_SHA256, runtimeUrl, type LinuxArch } from "./linux-files.ts";
 
 const desktop = resolve(import.meta.dirname, "..");
 const dir = resolve(process.argv[2] ?? join(desktop, "release-eb"));
@@ -33,14 +15,6 @@ function sizeOf(path: string): number {
   if (st.isSymbolicLink()) return 0;
   if (!st.isDirectory()) return st.size;
   return readdirSync(path).reduce((sum, name) => sum + sizeOf(join(path, name)), 0);
-}
-
-function filesUnder(root: string, at: string): string[] {
-  return readdirSync(join(root, at), { withFileTypes: true }).flatMap((d) => {
-    const path = at ? `${at}/${d.name}` : d.name;
-    if (d.isDirectory()) return filesUnder(root, path);
-    return d.isFile() ? [path] : [];
-  });
 }
 
 function plainApp(tmp: string): { app: string; arch: LinuxArch; version: string } {
@@ -76,38 +50,6 @@ function icons(root: string, share: string): void {
   }
 }
 
-function deb(app: string, arch: LinuxArch, version: string, tmp: string): string {
-  const root = join(tmp, "deb");
-  cpSync(app, join(root, INSTALL_DIR), { recursive: true, verbatimSymlinks: true });
-  mkdirSync(join(root, "usr", "bin"), { recursive: true });
-  symlinkSync(`${INSTALL_DIR}/bin/launcher`, join(root, "usr", "bin", EXECUTABLE));
-  mkdirSync(join(root, "usr", "share", "applications"), { recursive: true });
-  writeFileSync(join(root, "usr", "share", "applications", `${EXECUTABLE}.desktop`), desktopEntry(`${INSTALL_DIR}/bin/launcher`));
-  icons(root, "usr/share");
-  const { author } = JSON.parse(readFileSync(join(desktop, "package.json"), "utf8")) as { author: { name: string; email: string } };
-  mkdirSync(join(root, "DEBIAN"));
-  writeFileSync(join(root, "DEBIAN", "control"), debControl({ version, arch, maintainer: `${author.name} <${author.email}>`, installedKiB: sizeOf(root) / 1024 }));
-  writeFileSync(
-    join(root, "DEBIAN", "md5sums"),
-    md5sums(
-      filesUnder(root, "")
-        .filter((f) => !f.startsWith("DEBIAN/"))
-        .map((path) => ({ path, md5: new Bun.CryptoHasher("md5").update(readFileSync(join(root, path))).digest("hex") })),
-    ),
-  );
-  for (const [hook, script] of [
-    ["preinst", DEB_PREINST],
-    ["postinst", DEB_POSTINST],
-    ["postrm", DEB_POSTRM],
-  ] as const) {
-    writeFileSync(join(root, "DEBIAN", hook), script);
-    chmodSync(join(root, "DEBIAN", hook), 0o755);
-  }
-  const file = join(out, debName(version, arch));
-  execFileSync("dpkg-deb", ["--root-owner-group", "-Zxz", "-z9", "--build", root, file], { stdio: "inherit" });
-  return file;
-}
-
 async function runtime(arch: LinuxArch): Promise<Buffer> {
   const res = await fetch(runtimeUrl(arch));
   if (!res.ok) throw new Error(`package-linux: the AppImage runtime didn't download (${res.status} from ${runtimeUrl(arch)})`);
@@ -141,12 +83,11 @@ try {
   mkdirSync(out, { recursive: true });
   const { app, arch, version } = plainApp(tmp);
   console.log(`package-linux: Channels ${version} for linux-${arch}, ${(sizeOf(app) / MB).toFixed(1)}MB unpacked`);
-  for (const file of [deb(app, arch, version, tmp), await appImage(app, arch, version, tmp)]) {
-    const size = statSync(file).size;
-    const fits = size <= MAX_DOWNLOAD;
-    if (!fits) over++;
-    console.log(`${file}: ${(size / MB).toFixed(1)}MB${fits ? "" : ` (over the ${MAX_DOWNLOAD / MB}MB download gate)`}`);
-  }
+  const file = await appImage(app, arch, version, tmp);
+  const size = statSync(file).size;
+  const fits = size <= MAX_DOWNLOAD;
+  if (!fits) over++;
+  console.log(`${file}: ${(size / MB).toFixed(1)}MB${fits ? "" : ` (over the ${MAX_DOWNLOAD / MB}MB download gate)`}`);
 } finally {
   rmSync(tmp, { recursive: true, force: true });
 }

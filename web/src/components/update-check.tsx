@@ -19,7 +19,7 @@ function said(u: UpdateCheckView | null): string {
       return `Channels ${u.version} is ready. It goes in when you restart.`
     case "available":
       if (u.blocked) return "Channels can't update itself here. Get it from the release."
-      return u.deb ? `Channels ${u.version} is out. Download the new .deb and open it to install.` : `Channels ${u.version} is out. Install it from the release.`
+      return `Channels ${u.version} is out. Install it from the release.`
   }
 }
 
@@ -56,7 +56,7 @@ export function UpdateCheck() {
           <div className="flex flex-wrap justify-end gap-2">
             {live?.state === "available" && (
               <Button size="sm" variant="secondary" onClick={() => openRelease(live)}>
-                {live.deb ? "Download .deb" : "Open release"}
+                Open release
               </Button>
             )}
             <Button size="sm" variant="secondary" onClick={check} disabled={busy || live?.state === "downloading"}>

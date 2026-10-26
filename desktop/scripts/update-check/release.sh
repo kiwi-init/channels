@@ -17,6 +17,7 @@ for f in $present; do
   gh attestation verify "$f" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1 && echo "attested: $f" || problems+=("no build-provenance attestation verifies $f")
 done
 ls | grep -q -- '-mac-x64' && problems+=("the release still ships an Intel Mac app")
+ls | grep -q -- '\.deb$' && problems+=("the release still ships a .deb: Linux gets the AppImage only")
 
 page=$(curl -fsSL https://channels.kiwiinit.com/app.js) || problems+=("the site's app.js didn't load")
 names=$(echo "$page" | grep -oE 'Channels-[0-9]+\.[0-9]+\.[0-9]+-[A-Za-z0-9_.-]+' | sort -u)

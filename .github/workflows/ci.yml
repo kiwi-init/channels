@@ -285,11 +285,9 @@ jobs:
       matrix:
         include:
           - os: ubuntu-24.04
-            part: 1
             sandbox: unsandboxed
             drive: false
           - os: ubuntu-26.04
-            part: 2
             sandbox: sandboxed
             drive: true
     steps:
@@ -353,72 +351,77 @@ jobs:
         run: |
           dbus-run-session -- sh -c 'printf throwaway | gnome-keyring-daemon --unlock --components=secrets >/dev/null && bun desktop/scripts/linux-store-check.ts keyring'
           DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent/kiwi-no-session-bus bun desktop/scripts/linux-store-check.ts none
-      - name: deb and AppImage, each at most 40 MB
+      - name: the AppImage, at most 40 MB
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/package-linux.ts desktop/release-eb desktop/release-eb/linux
-      - name: the packages hold the app
+      - name: the AppImage holds the app
         if: ${{ !cancelled() }}
         run: bash desktop/scripts/linux-packages-check.sh desktop/release-eb/linux
-      - name: the deb installs over today's Electron deb and keeps its launcher link
+      - name: the AppImage, extracted, is the app the checks below load and start
         if: ${{ !cancelled() }}
-        run: bash desktop/scripts/linux-upgrade-check.sh desktop/release-eb/linux
-      - name: the installed app starts on WebKitGTK, with the .desktop entry's names, and its permission and page hooks work
+        run: |
+          img=$(ls "$PWD"/desktop/release-eb/linux/Channels-*-linux-x86_64.AppImage)
+          rm -rf "$RUNNER_TEMP/appimage" && mkdir -p "$RUNNER_TEMP/appimage"
+          (cd "$RUNNER_TEMP/appimage" && "$img" --appimage-extract > /dev/null)
+          [ -x "$RUNNER_TEMP/appimage/squashfs-root/Channels/bin/launcher" ] || { echo "the AppImage has no Channels/bin/launcher"; exit 1; }
+          echo "APP=$RUNNER_TEMP/appimage/squashfs-root/Channels" >> "$GITHUB_ENV"
+      - name: the app starts on WebKitGTK, with the .desktop entry's names, and its permission and page hooks work
         if: ${{ !cancelled() }}
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-shell-test" desktop/native/linux/kiwi-shell-test.c $(pkg-config --cflags --libs webkit2gtk-4.1) -ldl
-          xvfb-run -a "$RUNNER_TEMP/kiwi-shell-test" /opt/Channels/bin/libkiwi-shell.so ${{ matrix.sandbox }}
+          xvfb-run -a "$RUNNER_TEMP/kiwi-shell-test" "$APP/bin/libkiwi-shell.so" ${{ matrix.sandbox }}
           echo "for WebKitGTK's sandbox: kernel.apparmor_restrict_unprivileged_userns=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo unset)"
-          xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh /opt/Channels/bin/launcher ${{ matrix.sandbox }}
+          xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$APP/bin/launcher" ${{ matrix.sandbox }}
           img=$(ls "$PWD"/desktop/release-eb/linux/Channels-*-linux-x86_64.AppImage)
           xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$img" ${{ matrix.sandbox }} --appimage-extract-and-run
       - name: closing hides to the tray only where a tray host runs
         if: ${{ !cancelled() }}
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-tray-test" desktop/native/linux/kiwi-tray-test.c $(pkg-config --cflags --libs gio-2.0) -ldl
-          dbus-run-session -- "$RUNNER_TEMP/kiwi-tray-test" /opt/Channels/bin/libkiwi-shell.so
-      - name: with no libayatana-appindicator on the system (stock Fedora, Arch), the app still starts, with no tray
+          dbus-run-session -- "$RUNNER_TEMP/kiwi-tray-test" "$APP/bin/libkiwi-shell.so"
+      - name: with no libayatana-appindicator on the system (stock Arch), the app still starts, with no tray
         if: ${{ !cancelled() }}
         run: |
-          if readelf -d /opt/Channels/bin/libNativeWrapper.so | grep -i appindicator; then echo "libNativeWrapper.so still links AppIndicator"; exit 1; fi
+          if readelf -d "$APP/bin/libNativeWrapper.so" | grep -i appindicator; then echo "libNativeWrapper.so still links AppIndicator"; exit 1; fi
           echo "libNativeWrapper.so doesn't link AppIndicator"
           hidden="$RUNNER_TEMP/hidden-appindicator"
           mkdir -p "$hidden"
           sudo mv /usr/lib/x86_64-linux-gnu/libayatana-appindicator3.so.1* "$hidden/"
           code=0
-          dbus-run-session -- "$RUNNER_TEMP/kiwi-tray-test" /opt/Channels/bin/libkiwi-shell.so no-indicator || code=$?
-          xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh /opt/Channels/bin/launcher ${{ matrix.sandbox }} || code=$?
+          dbus-run-session -- "$RUNNER_TEMP/kiwi-tray-test" "$APP/bin/libkiwi-shell.so" no-indicator || code=$?
+          xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$APP/bin/launcher" ${{ matrix.sandbox }} || code=$?
           sudo mv "$hidden"/* /usr/lib/x86_64-linux-gnu/
           exit "$code"
       - name: the window follows the desktop's light or dark (the portal's color-scheme), live
         if: ${{ !cancelled() }}
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-scheme-test" desktop/native/linux/kiwi-scheme-test.c $(pkg-config --cflags --libs webkit2gtk-4.1) -ldl
-          dbus-run-session -- xvfb-run -a "$RUNNER_TEMP/kiwi-scheme-test" /opt/Channels/bin/libkiwi-shell.so
+          dbus-run-session -- xvfb-run -a "$RUNNER_TEMP/kiwi-scheme-test" "$APP/bin/libkiwi-shell.so"
       - name: the app menu's shortcuts work on Linux, where Electrobun has no app menu
         if: ${{ !cancelled() }}
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-shortcuts-test" desktop/native/linux/kiwi-shortcuts-test.c $(pkg-config --cflags --libs gtk+-3.0) -ldl
-          xvfb-run -a "$RUNNER_TEMP/kiwi-shortcuts-test" /opt/Channels/bin/libkiwi-shell.so
+          xvfb-run -a "$RUNNER_TEMP/kiwi-shortcuts-test" "$APP/bin/libkiwi-shell.so"
       - name: the first window fits a small screen, keeps its minimum size and has the page's background
         if: ${{ !cancelled() }}
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-look-test" desktop/native/linux/kiwi-look-test.c $(pkg-config --cflags --libs gtk+-3.0) -ldl
-          xvfb-run -a -s "-screen 0 1280x720x24" "$RUNNER_TEMP/kiwi-look-test" /opt/Channels/bin/libkiwi-shell.so
+          xvfb-run -a -s "-screen 0 1280x720x24" "$RUNNER_TEMP/kiwi-look-test" "$APP/bin/libkiwi-shell.so"
       - name: notifications come from Channels over D-Bus, and a click opens the window
         if: ${{ !cancelled() }}
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-notify-test" desktop/native/linux/kiwi-notify-test.c $(pkg-config --cflags --libs gtk+-3.0) -ldl
-          dbus-run-session -- xvfb-run -a "$RUNNER_TEMP/kiwi-notify-test" /opt/Channels/bin/libkiwi-shell.so
+          dbus-run-session -- xvfb-run -a "$RUNNER_TEMP/kiwi-notify-test" "$APP/bin/libkiwi-shell.so"
       - name: an image pasted from another app is served to the page only right after a real Ctrl+V or Shift+Insert
         if: ${{ !cancelled() }}
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-paste-test" desktop/native/linux/kiwi-paste-test.c $(pkg-config --cflags --libs webkit2gtk-4.1) -ldl
-          xvfb-run -a "$RUNNER_TEMP/kiwi-paste-test" /opt/Channels/bin/libkiwi-shell.so
+          xvfb-run -a "$RUNNER_TEMP/kiwi-paste-test" "$APP/bin/libkiwi-shell.so"
       - name: the taskbar badge shows the page's news count (LauncherEntry over D-Bus)
         if: ${{ !cancelled() }}
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-badge-test" desktop/native/linux/kiwi-badge-test.c $(pkg-config --cflags --libs gio-2.0) -ldl
-          dbus-run-session -- "$RUNNER_TEMP/kiwi-badge-test" /opt/Channels/bin/libkiwi-shell.so
+          dbus-run-session -- "$RUNNER_TEMP/kiwi-badge-test" "$APP/bin/libkiwi-shell.so"
       - name: test build (the test driver in, its own id)
         if: ${{ !cancelled() && matrix.drive }}
         working-directory: desktop
@@ -432,9 +435,9 @@ jobs:
           found=$(ls -d desktop/release-eb/build/dev-linux-*/*/bin/electrobun-launcher)
           [ "$(echo "$found" | wc -l)" = 1 ] || { echo "expected one test build, found: $found"; exit 1; }
           echo "path=$(dirname "$(dirname "$found")")" >> "$GITHUB_OUTPUT"
-      - name: no test driver in the release build (the installed deb)
+      - name: no test driver in the release build (the extracted AppImage)
         if: ${{ !cancelled() && matrix.drive }}
-        run: bun desktop/scripts/eb-driver-check.ts desktop/release-eb /opt/Channels
+        run: bun desktop/scripts/eb-driver-check.ts desktop/release-eb "$APP"
       - name: smoke, under Xvfb
         if: ${{ !cancelled() && matrix.drive }}
         run: xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/smoke-eb.ts "${{ steps.test-app.outputs.path }}"
@@ -458,7 +461,7 @@ jobs:
           session() { env -u XAUTHORITY -u GDK_BACKEND DISPLAY="$x" WAYLAND_DISPLAY=kiwi-wayland XDG_SESSION_TYPE=wayland "$@"; }
           code=0
           session bun desktop/scripts/smoke-eb.ts "${{ steps.test-app.outputs.path }}" || code=$?
-          session bash desktop/scripts/eb-wayland-start.sh /opt/Channels/bin/electrobun-launcher || code=$?
+          session bash desktop/scripts/eb-wayland-start.sh "$APP/bin/electrobun-launcher" || code=$?
           if [ "$code" -ne 0 ]; then
             echo "::group::weston's log"; cat "$RUNNER_TEMP/weston.log"; echo "::endgroup::"
             echo "::group::the test app alone in this session, for 20 s"
@@ -485,7 +488,7 @@ jobs:
           session() { env -u DISPLAY -u XAUTHORITY -u GDK_BACKEND WAYLAND_DISPLAY=kiwi-native XDG_SESSION_TYPE=wayland "$@"; }
           code=0
           session bun desktop/scripts/smoke-eb.ts "${{ steps.test-app.outputs.path }}" || code=$?
-          session bash desktop/scripts/eb-wayland-start.sh /opt/Channels/bin/electrobun-launcher 2 || code=$?
+          session bash desktop/scripts/eb-wayland-start.sh "$APP/bin/electrobun-launcher" 2 || code=$?
           if [ "$code" -ne 0 ]; then
             echo "::group::weston's log"; cat "$RUNNER_TEMP/weston-native.log"; echo "::endgroup::"
             echo "::group::the test app alone in this session, for 20 s"
@@ -530,13 +533,6 @@ jobs:
             ${{ runner.temp }}/wlroots-check/*.log
           if-no-files-found: warn
           retention-days: 3
-      - name: dpkg --purge leaves nothing of the app behind
-        if: ${{ !cancelled() }}
-        run: |
-          sudo dpkg --purge kiwi-desktop
-          left=$(ls -d /opt/Channels /usr/bin/channels-desktop /usr/share/applications/channels-desktop.desktop /usr/share/icons/hicolor/*/apps/channels-desktop.png 2> /dev/null || true)
-          [ -z "$left" ] || { echo "left after --purge:"; echo "$left"; exit 1; }
-          echo "purged: no files, link, entry or icons left"
       - name: what bwrap can do under this AppArmor, for an app profile later (prints only)
         if: ${{ !cancelled() }}
         continue-on-error: true
@@ -577,15 +573,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - distro: fedora
-            image: fedora:44
-            part: 3
           - distro: arch
             image: archlinux:latest
-            part: 4
     steps:
       - name: git and tar for the checkout
-        run: if command -v dnf > /dev/null; then dnf -y -q install git tar gzip; else pacman -Sy --noconfirm git tar gzip; fi
+        run: pacman -Sy --noconfirm git tar gzip
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
