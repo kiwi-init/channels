@@ -14,8 +14,9 @@ Canonical sources: `web/src/index.css` (`:root`, `:root[data-theme]`,
 
 A quiet Messages-like conversation. White `#ffffff` / near-black `#161618`
 canvas, Apple system blue `#007aff` (light) / `#0a84ff` (dark), the system font,
-small purposeful motion, one pop shadow. What's chosen wears one quiet solid
-fill; everything around it is plain, so it reads as meant.
+small purposeful motion, one shell with the page floating on it. What's
+chosen wears one quiet solid fill; everything around it is plain, so it
+reads as meant.
 
 ## 2. Theme architecture
 
@@ -24,8 +25,8 @@ fill; everything around it is plain, so it reads as meant.
   accent, accent-ink, accent-text, accent-wash, link, ring, alert,
   alert-fill, live,
   doing, warn, overlay, bubble-me, bubble-them, pick, head-*, avatar-*,
-  pop-edge, pop-shade, shadow-pop, shell, well, chosen`, plus `frame, panel,
-  edge, edge-strong` aliases, and the sizes `step, card-head, control`
+  pop-edge, pop-shade, shadow-pop, shadow-sheet, shell, well, chosen`, plus
+  `frame, panel, edge, edge-strong` aliases, and the sizes `step, card-head, control`
   (section 5).
 - Each token is written once as `light-dark(day, night)`. The system picks
   the side, unless `lib/theme.ts` set `data-theme` because the person chose
@@ -104,7 +105,8 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 
 - Spacing: one step, `step 8px`, between groups and from the window's and
   a card's edges. A card's header is `card-head 30px`, its controls
-  `control 26px`, all on the header's one centre line.
+  `control 26px`, all on the header's one centre line. The kit's small
+  button is `control` tall too, so a row's actions match the header's.
 
 - Steps: `row 8px`, `ctl 10px`, `card 16px`, `bubble 20px` (pictures in
   a message and the annotator) and `dock 26px` (the composer, soft without a pill's half-moon
@@ -112,22 +114,27 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 - Buttons and rows use `row`; controls and inputs `ctl`; cards `card`;
   pictures `bubble`; the composer `dock`. Arbitrary `rounded-[Npx]` fails
   `ui-tokens.ts`.
-- One shadow: `pop` (`0 0 0 1px pop-edge, 0 16px 40px -12px pop-shade`).
-  No other shadows, and no coloured ones.
-- Two tones: the sidebar sits on `shell` (the `rail`, or the Mac's vibrancy
-  under `data-frost`), and the page beside it is a sheet of `canvas` (the
-  `sheet` utility: `step` in from the window's edges and from the sidebar,
-  `card` radius, the `pop` shadow), holding the header, the conversation
-  and the tasks. Details is a sheet of its own beside it, 8px apart. A
-  thread and the tasks panel slide over the page's right side as a sheet
-  lifted with the `pop` shadow (`sheet-over`): the page keeps its width and
-  scroll, and its centered column (`aside-room`) slides left only as far as
+- Two shadows, no coloured ones: `pop` (`0 0 0 1px pop-edge, 0 16px 40px
+  -12px pop-shade`) for what lifts over the canvas (popovers, dialogs, a
+  sheet sliding over the page), and `sheet` for the page itself: the same
+  hairline, a 1px contact shadow and a short drop that stays under it
+  (`0 6px 14px -8px`), so the gutters beside the page keep the shell's
+  own colour.
+- One shell: the sidebar, the page's toolbar and the gutters are one
+  surface, `shell` (the `rail`, or the Mac's vibrancy under `data-frost`),
+  with no fill, edge or shade of their own. Only the page floats: a sheet
+  of `canvas` (the `sheet` utility: `step` in from the window's edges and
+  from the sidebar, half a step under the toolbar, `card` radius, the
+  `sheet` shadow), holding the conversation and the tasks. Details is a
+  sheet of its own in the page's place. A thread and the tasks panel
+  slide over the page's right side as a sheet lifted with the `pop` shadow
+  (`sheet-over`), under the toolbar: the page keeps its width and scroll, and its centered column (`aside-room`) slides left only as far as
   its margin allows, so nothing reflows. `raised` and `field` are the
   canvas. Inside a sheet, rows, cards and search have no grey fill and no
   background of their own; they are separated by spacing and a thin 1px
   `line` (the `edge` utility). Fields, the composer first, are `well`, a
   quiet solid fill; focus adds a hairline (`edge-strong`), never the accent
-  ring. Popovers and dialogs lift off the canvas with the `pop` shadow only.
+  ring (`FIELD` in `kit.tsx`, which `TextField` uses). Popovers and dialogs lift off the canvas with the `pop` shadow only.
   A phone has no sheet: one screen at a time, on the canvas.
 - Liquid glass (`glass`), for what floats over the conversation (the
   header's round controls, the place pills, the composer): a translucent
@@ -135,8 +142,8 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 - Chosen (`chosen`, ink at 12%): what's chosen in a list wears one quiet
   solid fill and nothing else does: the open conversation under its
   channel, the open channel's row while none of its conversations is open,
-  and the phone list's open channel. Idle rows, Search and counts are
-  plain. `test/chosen.test.ts` keeps it that way.
+  the phone list's open channel and the open task on the board. Idle rows,
+  Search and counts are plain. `test/chosen.test.ts` keeps it that way.
 - Fall back to solid fills under `prefers-contrast: more`.
 - On a machine that draws without a GPU (WebGL's renderer is SwiftShader,
   llvmpipe or a basic render driver, or there's no WebGL: `lib/drawing.ts`
@@ -242,8 +249,12 @@ From `design-tokens.ts`:
   the toggle hides the sidebar in a channel, and the toolbar then starts
   with the toggle and a conversation menu; hidden stays hidden across
   reloads.
-- The page's header is one toolbar, `card-head` tall, its controls
-  `control` round on its centre line: in the middle a pill on `well` with
+- The page's toolbar sits on the shell above the page, on the sidebar's
+  top line: `step` from the window's top, `card-head` tall, `step` in from
+  the page's edges, its controls `control` round on its centre line. A
+  sheet's own header (Details, a thread, the tasks panel) has the same
+  metrics: `step` from the sheet's top, `card-head` tall, `control`
+  buttons. In the middle of the toolbar a pill on `wash` with
   the channel's face, name and status (working, merged today, needs you),
   which opens Details; on the right Search, Tasks (an `alert` dot while
   something needs you) and Agents as icons that toggle. With Tasks open, the
@@ -260,13 +271,16 @@ From `design-tokens.ts`:
   when, Show in the conversation, Show in Rex) opens under it on a click of
   the line.
 - Tasks: Needs you's rows first, then the
-  board grouped by the person's message each task serves: the group's
+  board grouped by the person's message each task serves. Needs you and
+  each group are a card like the Now card (`card` radius, a `line` border,
+  6px inside, 16px apart) with its heading inside it: the group's
   heading is their own words in quotes, under it who said it and #N, the
   ask that moved last first and Unfiled (no person's message holds these)
   at the foot; inside a group, in progress, in review, up next, then done
   this week. A view (In progress, In review, Done) keeps the same groups
-  with only its own tasks. A row is two lines on the canvas,
-  split from the next by `line`: the owner's face, the title in `body`, and
+  with only its own tasks. A row is two lines in its card, `ctl` round,
+  filling `wash` on hover and `chosen` while its task is open: the owner's
+  face, the title in `body`, and
   under it the task id, the owner and what the agent is doing now (in
   `doing` with a steady dot while it works) or the task's state; then its PR
   (number, a 48px diff bar in `live` and `alert`, the additions), its

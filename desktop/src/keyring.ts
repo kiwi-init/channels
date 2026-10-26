@@ -99,6 +99,7 @@ function watched(ev: Live): FollowEvent | null {
 
 export class Keyring implements ChannelOps {
   private readonly open = new Map<string, Channel>();
+  private readonly armed = new Map<Channel, Promise<void>>();
   private readonly follows = new Map<number, Follow>();
   private nextSub = 1;
 
@@ -129,12 +130,21 @@ export class Keyring implements ChannelOps {
     }
     const ch = new Channel(access, relay, identityOf(seat), (a) => void this.host.access(code, seat.pk, a).catch(() => {}));
     this.open.set(key, ch);
+    if (ch.isOwner)
+      this.armed.set(
+        ch,
+        ch.secrets().then(
+          () => {},
+          () => {},
+        ),
+      );
     return ch;
   }
 
   async callRaw(code: string, op: ChannelCallName, args: readonly unknown[]): Promise<unknown> {
     if (!isCall(op)) throw new Error("no such call");
     const ch = this.channel(code);
+    if (op === "send") await this.armed.get(ch);
     const list = await this.trusted(ch, op, args);
     const fn = ch[op] as unknown as (...a: unknown[]) => Promise<unknown>;
     return fn.apply(ch, list);

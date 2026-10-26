@@ -21,7 +21,7 @@ export type Launch = (
   unref(): void;
 };
 
-export function openInBrowser(
+export async function openInBrowser(
   url: ExternalUrl,
   fallback: (url: ExternalUrl) => Promise<void>,
   platform: NodeJS.Platform = process.platform,
@@ -29,12 +29,19 @@ export function openInBrowser(
   launch: Launch = spawn,
 ): Promise<void> {
   if (platform !== "linux") return fallback(url);
-  return new Promise((resolve, reject) => {
-    const child = launch("xdg-open", [url], { env: browserEnv(env), detached: true, stdio: "ignore" });
+  const opener = browserEnv(env);
+  if (await spawned(launch, "xdg-open", [url], opener)) return;
+  if (await spawned(launch, "gio", ["open", "--", url], opener)) return;
+  throw new Error("neither xdg-open nor gio is here to open the link");
+}
+
+function spawned(launch: Launch, cmd: string, args: string[], env: Record<string, string>): Promise<boolean> {
+  return new Promise((resolve) => {
+    const child = launch(cmd, args, { env, detached: true, stdio: "ignore" });
     child.once("spawn", () => {
       child.unref();
-      resolve();
+      resolve(true);
     });
-    child.once("error", () => fallback(url).then(resolve, reject));
+    child.once("error", () => resolve(false));
   });
 }

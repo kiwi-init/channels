@@ -5,7 +5,7 @@ import { CAPABILITIES, MAX_AREA, MAX_AREAS, MAX_INSTRUCTIONS, MAX_NAME, ROLE_LAB
 import { PRESETS } from "@kiwi/core/presets.ts"
 import { savePersonalities, useOwnPersonalities, usePersonalities } from "@/lib/personalities"
 import { cx } from "@/lib/utils"
-import { Button, Checkbox, TextField, errorText, toast } from "./kit"
+import { Button, Checkbox, FIELD, TextField, errorText, toast } from "./kit"
 
 const TAGLINE: Record<string, string> = {
   builder: "Takes a task from start to done",
@@ -29,7 +29,6 @@ const CAPABILITY_TEXT: Record<Capability, [string, string]> = {
 
 const BLANK: Omit<Personality, "id"> = { name: "New personality", glyph: "✳", role: "builder", capabilities: ["write", "tasks", "notes"], areas: [], instructions: "" }
 
-const FIELD = "bg-(--well) text-ink transition-shadow outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--edge-strong)] focus-visible:outline-none"
 
 function tagline(p: Personality): string {
   if (PRESET_IDS.has(p.id)) return TAGLINE[p.id] ?? ROLE_LABEL[p.role]
