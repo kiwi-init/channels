@@ -21,6 +21,7 @@ bridge()?.onTextStep(stepTextSize)
 bridge()?.onFrost(showFrost)
 // The desktop app on a Mac has no title bar: its traffic lights sit on the list's header (index.css shell-mac).
 if (hasBridge() && /Mac/.test(navigator.platform)) document.documentElement.dataset.shell = "mac"
+else if (hasBridge() && /Linux/.test(navigator.platform)) document.documentElement.dataset.shell = "linux"
 // Member keys an older renderer left in localStorage move to the app's secrets store, once.
 void migrateChannelsToStore().catch(() => {})
 initAccessibility()

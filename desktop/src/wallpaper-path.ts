@@ -41,9 +41,70 @@ function gnomeWallpaper(dark: boolean): string | null {
   return null;
 }
 
+export function swaybgImage(argv: readonly string[]): string | null {
+  if (!/(^|\/)swaybg$/.test(argv[0] ?? "")) return null;
+  for (let i = 1; i < argv.length; i++) {
+    const a = argv[i] ?? "";
+    if ((a === "-i" || a === "--image") && argv[i + 1]) return argv[i + 1] ?? null;
+    if (a.startsWith("--image=")) return a.slice("--image=".length);
+  }
+  return null;
+}
+
+export function hyprpaperActive(out: string): string | null {
+  for (const line of out.split("\n")) {
+    const m = /^\s*\S*\s*=\s*(\/.+?)\s*$/.exec(line);
+    if (m?.[1]) return m[1];
+  }
+  return null;
+}
+
+export function swwwImage(out: string): string | null {
+  return /image:\s*(\/.+?)\s*$/m.exec(out)?.[1] ?? null;
+}
+
+function run(cmd: string, args: string[]): string {
+  try {
+    return execFileSync(cmd, args, { encoding: "utf8", timeout: 2000, env: childEnv(), stdio: ["ignore", "pipe", "ignore"] });
+  } catch {
+    // Not installed or not running: this wallpaper tool isn't the one in use.
+    return "";
+  }
+}
+
+function processIds(): string[] {
+  try {
+    return fs.readdirSync("/proc").filter((d) => /^\d+$/.test(d));
+  } catch {
+    // No /proc to read: no swaybg to find.
+    return [];
+  }
+}
+
+function swaybgRunning(): string | null {
+  const pids = processIds();
+  for (const pid of pids) {
+    try {
+      const found = swaybgImage(fs.readFileSync(`/proc/${pid}/cmdline`, "utf8").split("\0").filter(Boolean));
+      if (found) return found;
+    } catch {
+      // The process ended or isn't ours to read: look at the next one.
+    }
+  }
+  return null;
+}
+
+function wlrootsWallpaper(): string | null {
+  const omarchy = path.join(process.env["XDG_CONFIG_HOME"] ?? path.join(os.homedir(), ".config"), "omarchy", "current", "background");
+  if (fs.existsSync(omarchy)) return fs.realpathSync(omarchy);
+  return swaybgRunning() ?? hyprpaperActive(run("hyprctl", ["hyprpaper", "listactive"])) ?? swwwImage(run("swww", ["query"]));
+}
+
 export function linuxWallpaper(dark: boolean): string | null {
+  const desktop = process.env["XDG_CURRENT_DESKTOP"] ?? "";
   const kde = path.join(process.env["XDG_CONFIG_HOME"] ?? path.join(os.homedir(), ".config"), "plasma-org.kde.plasma.desktop-appletsrc");
-  const fromKde = /kde/i.test(process.env["XDG_CURRENT_DESKTOP"] ?? "") && fs.existsSync(kde) ? kdeWallpaper(fs.readFileSync(kde, "utf8")) : null;
-  const found = fromKde ?? gnomeWallpaper(dark);
+  const fromKde = /kde/i.test(desktop) && fs.existsSync(kde) ? kdeWallpaper(fs.readFileSync(kde, "utf8")) : null;
+  const fromWlroots = !fromKde && !/gnome|kde/i.test(desktop) ? wlrootsWallpaper() : null;
+  const found = fromKde ?? fromWlroots ?? gnomeWallpaper(dark);
   return found && fs.existsSync(found) && fs.statSync(found).isFile() ? found : null;
 }

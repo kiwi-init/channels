@@ -3,6 +3,8 @@
   "ignoreBinaries": [
     "oxfmt",
     "gsettings",
+    "hyprctl",
+    "swww",
     "iconutil",
     "clang",
     "cc",
