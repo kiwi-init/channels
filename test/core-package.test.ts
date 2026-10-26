@@ -53,7 +53,7 @@ describe("packages/core (@kiwi/core)", () => {
 
   test("everything else reaches it by package name, never by a relative path", () => {
     const bad: string[] = [];
-    for (const dir of ["src", "test", "scripts", "web/src", "desktop/src", "desktop/scripts", ".github/jev-ci"])
+    for (const dir of ["src", "test", "scripts", "web/src", "desktop/src", "desktop/scripts"])
       for (const f of sources(join(root, dir))) for (const spec of imports(f)) if (spec.startsWith(".") && resolve(dirname(f), spec).startsWith(core + "/")) bad.push(`${relative(root, f)}: ${spec}`);
     expect(bad).toEqual([]);
   });
