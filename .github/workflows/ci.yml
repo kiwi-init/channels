@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       jobs:
-        description: "Only these .github/jev-ci.yml jobs, comma-separated (desktop-linux, desktop-mac, …); empty runs everything"
+        description: "Only these jobs, comma-separated (static, test-unit, test-flows, build, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, ios, ios-gestures, android); empty runs everything"
         required: false
         default: ""
       update_from:
@@ -32,35 +32,28 @@ permissions:
 # One job per area, its checks as steps: each job pays for one checkout and one install.
 # A step that fails doesn't stop the checks after it (`!cancelled()`), so one run shows every failure.
 jobs:
-  # Decides which jobs this pull request or merge group can break (.github/jev-ci.yml): rules
-  # first, then a cache of inputs that already passed, then Jev for the rest. A pull request runs
-  # only its pull_request_jobs (repo / static, test / unit); a merge group is planned on its
-  # combined change (merge_group.base_sha..head_sha) and runs every job that plan picks. A push to main runs
-  # nothing when the merge queue already tested that commit as-is, and everything otherwise;
-  # if planning fails, everything runs. Every check below runs only if the plan says so.
+  # Which jobs run: a pull request runs repo / static and test / unit; a dispatch runs the jobs it
+  # names (all when it names none); a push to main and a merge group run everything.
   plan:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      actions: read
-      pull-requests: write
+    timeout-minutes: 2
     outputs:
       run: ${{ steps.plan.outputs.run }}
-      hashes: ${{ steps.plan.outputs.hashes }}
-      plan: ${{ steps.plan.outputs.plan }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          fetch-depth: 2
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: 1.4.2
       - id: plan
-        run: bun .github/jev-ci/cli.ts plan --github
         env:
-          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
-          GITHUB_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          JOBS: ${{ inputs.jobs }}
+        run: |
+          all="static test-unit test-flows build shots desktop-mac desktop-linux desktop-distros cli-macos ios ios-gestures android"
+          case "$EVENT" in
+            pull_request) pick="static test-unit" ;;
+            workflow_dispatch) pick=$(echo "${JOBS:-$all}" | tr ',' ' ') ;;
+            *) pick="$all" ;;
+          esac
+          for j in $pick; do case " $all " in *" $j "*) ;; *) echo "no job named $j; the jobs are: $all"; exit 1 ;; esac; done
+          json=$(for j in $all; do case " $pick " in *" $j "*) v=true ;; *) v=false ;; esac; printf '"%s":%s,' "$j" "$v"; done)
+          echo "run={${json%,}}" >> "$GITHUB_OUTPUT"
 
   # Types, lint, format, unused code and action pins.
   static:
@@ -106,11 +99,6 @@ jobs:
       - name: action pins
         if: ${{ !cancelled() }}
         run: bun scripts/action-pins.ts
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: static
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['static'] }}
 
   test-unit:
     name: test / unit
@@ -123,12 +111,6 @@ jobs:
       - uses: ./.github/actions/setup
       - name: unit tests including CLI upgrades and desktop update recovery
         run: bun scripts/ci-tests.ts unit
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        timeout-minutes: 1
-        with:
-          job: test-unit
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['test-unit'] }}
 
   # The slow suites against a real local relay (scripts/ci-flows.ts).
   test-flows:
@@ -141,12 +123,6 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
       - run: bun scripts/ci-tests.ts flows
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        timeout-minutes: 1
-        with:
-          job: test-flows
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['test-flows'] }}
 
   # The web dashboard, the CLI binary and the worker, each built and smoke-tested.
   build:
@@ -191,11 +167,6 @@ jobs:
       - name: relay worker
         if: ${{ !cancelled() }}
         run: bunx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/worker"
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: build
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['build'] }}
 
   shots:
     name: build / shots
@@ -229,11 +200,6 @@ jobs:
           path: ${{ runner.temp }}/shots-webkit
           if-no-files-found: ignore
           overwrite: true
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: shots
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['shots'] }}
 
   desktop-mac:
     name: desktop / mac
@@ -307,12 +273,6 @@ jobs:
         if: ${{ !cancelled() }}
         timeout-minutes: 5
         run: bun desktop/scripts/eb-frost-check.ts desktop/release-eb/build/dev-macos-*/*.app
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        timeout-minutes: 1
-        with:
-          job: desktop-mac
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-mac'] }}
 
   desktop-linux:
     name: desktop / linux, ${{ matrix.os }}
@@ -603,12 +563,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 3
           overwrite: true
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: desktop-linux
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-linux'] }}
-          shard: ${{ matrix.part }}of4
 
   desktop-distros:
     name: desktop / distros, ${{ matrix.distro }}
@@ -648,12 +602,6 @@ jobs:
           path: ${{ runner.temp }}/distro-check
           if-no-files-found: warn
           retention-days: 3
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: desktop-linux
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-linux'] }}
-          shard: ${{ matrix.part }}of4
 
   cli-macos:
     name: cli / macos
@@ -679,12 +627,6 @@ jobs:
           printf 'require("node:fs").writeFileSync("preload-ran", "")\n' > "$probe/p.js"
           (cd "$probe" && "$GITHUB_WORKSPACE/dist/kiwi-darwin-arm64" --version)
           test ! -e "$probe/preload-ran" || { echo "the kiwi CLI ran a bunfig.toml preload from the folder it was started in"; exit 1; }
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        timeout-minutes: 1
-        with:
-          job: cli-macos
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['cli-macos'] }}
 
   # The iPhone app: Swift lint, then an unsigned build for devices with the engine bundled in.
   ios:
@@ -705,12 +647,6 @@ jobs:
       - name: app build
         if: ${{ !cancelled() }}
         run: xcodebuild -project ios/Channels.xcodeproj -scheme Channels -configuration Release -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/ios" CODE_SIGNING_ALLOWED=NO build
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        timeout-minutes: 1
-        with:
-          job: ios
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['ios'] }}
 
   # The iPhone app's gestures, with real touches: ios/ChannelsUITests in a simulator, on a canned channel.
   ios-gestures:
@@ -752,12 +688,6 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
           overwrite: true
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        timeout-minutes: 1
-        with:
-          job: ios-gestures
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['ios-gestures'] }}
 
   # The Android app: Gradle bundles the engine, builds a release APK (R8, signed with the debug key in android/app/debug.p12
   # so every build installs over the last one) and runs Android lint on it. The APK is kept as an artifact to install on a phone.
@@ -804,32 +734,18 @@ jobs:
           path: android/app/build/screens
           if-no-files-found: ignore
           overwrite: true
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        timeout-minutes: 1
-        with:
-          job: android
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['android'] }}
 
   # The one check to require: passes when every job the plan ran passed and the rest were skipped.
-  # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
     needs: [plan, static, test-unit, test-flows, build, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, ios, ios-gestures, android]
     if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      pull-requests: write
+    timeout-minutes: 2
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          fetch-depth: 0
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: 1.4.2
-      - run: bun .github/jev-ci/cli.ts report --github
-        env:
+      - env:
           NEEDS: ${{ toJSON(needs) }}
-          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          bad=$(echo "$NEEDS" | jq -r 'to_entries[] | select(.value.result != "success" and .value.result != "skipped") | "\(.key): \(.value.result)"')
+          if [ -n "$bad" ]; then echo "$bad"; exit 1; fi
+          echo "every job that ran passed"
