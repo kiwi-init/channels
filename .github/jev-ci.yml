@@ -565,6 +565,7 @@ jobs:
       - "desktop/scripts/smoke-eb.ts"
       - "desktop/scripts/wayland-check.ts"
       - "desktop/scripts/wlroots-check.ts"
+      - "desktop/scripts/hyprland-check.ts"
       - "desktop/src/main-eb.ts"
       - "desktop/src/preload-eb.ts"
     always:
@@ -594,6 +595,8 @@ jobs:
       - "desktop/scripts/wayland-check/**"
       - "desktop/scripts/wlroots-check.ts"
       - "desktop/scripts/wlroots-check/**"
+      - "desktop/scripts/hyprland-check.ts"
+      - "desktop/scripts/hyprland-check/**"
     parts:
       - "desktop-distros"
     description: >-
@@ -622,6 +625,7 @@ jobs:
       Then desktop/scripts/wayland-check/kwin.sh runs the test app in a headless KWin with no XWayland (kwin_wayland --virtual, DISPLAY unset, failing if an Xwayland ran) beside a GTK helper app that is a native Wayland client, driving both with real input through KWin's fake input (desktop/scripts/wayland-check/kwin-input.c) and placing them with KWin scripting (kwin.py), and desktop/scripts/wayland-check.ts fails unless text pastes into the composer from the helper, an image the helper copies pastes into the composer as an attachment (pasted.png, through main and kiwi_take_paste, since WebKitGTK's paste event carries nothing, T896), the composer's Ctrl+C and a message's Copy text button reach the helper, an image the page writes with navigator.clipboard.write reaches it, a PNG dragged from the helper onto the composer is attached (WebKitGTK hands the page a dropped file only as a file URL, so desktop/native/linux/kiwi-shell.c keeps the dropped paths and the composer takes them through takeDroppedFiles, T895), and a file dropped elsewhere leaves the page where it was.
       Then desktop/scripts/wlroots-check/sway.sh runs the test app in a headless sway with no XWayland (WLR_BACKENDS=headless, the pixman renderer, xwayland disable, DISPLAY unset, failing if an Xwayland ran), the wlroots compositor family Hyprland (Omarchy) belongs to, and desktop/scripts/wlroots-check.ts fails unless the window is an xdg_shell toplevel whose app_id is channels-desktop; tiled alone on a 1440x900 output, floating at 1000x700, tiled beside the wayland-check GTK helper (half tiles on 1440x900 and on a 1366x768 laptop, both narrower than 720, which the Linux window's 360x480 minimum lets it fill), the page's innerWidth and innerHeight follow sway's window_rect, so nothing is cropped; at output scale 2 the page's devicePixelRatio is 2; closed from the compositor (swaymsg kill, as Super+W) with no tray host, the window leaves the screen (sway and Hyprland ignore xdg_toplevel minimize); and launched again, the window is back.
       Each state is captured with grim once the page has run two animation frames and two grabs 2 s apart match and hold more than 16 colors (WebKit paints in software there, and an old frame holds still for seconds before the new one lands), as tiled.png, half.png, half-small.png, floating.png, scale2.png and reopened.png, kept with results.json and check.log as wlroots-check for 3 days.
+      Then desktop/scripts/hyprland-check/hyprland.sh loads vkms for a DRM node, starts seatd, and runs Hyprland on it with llvmpipe, blur on and a half orange, half blue swaybg wallpaper, and desktop/scripts/hyprland-check.ts fails unless the window is a native Wayland client, the page marks its shell frost tint, Settings gets tints from the wallpaper swaybg shows, and in a dark, fullscreen window the sidebar comes out warm from the orange behind it while the page stays near black, captured as frost.png and kept as hyprland-check for 3 days.
       Then desktop/native/linux/kiwi-badge-test.c, on its own session bus, fails unless kiwi_badge sends the Unity LauncherEntry Update that Plasma's task manager and GNOME's docks read, for application://channels-desktop.desktop: a count of 3 shown, and 0 or a negative count hidden at 0 (the page's news count, T971).
       Its part desktop / distros (T960) takes the AppImage built on 24.04 into fedora:44 and archlinux:latest containers (privileged, so bwrap gets the unprivileged user namespaces Fedora and Arch allow) and runs desktop/scripts/distro-check/check.sh, which fails on any FAIL line it collects.
       With only the packages Channels names installed (no libayatana-appindicator), ldd must find every library the app's binaries link, in the system or shipped beside them in Channels/bin (libasar.so, which libNativeWrapper.so links).

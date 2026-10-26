@@ -543,6 +543,23 @@ jobs:
         if: ${{ !cancelled() && matrix.drive }}
         timeout-minutes: 12
         run: bash desktop/scripts/wlroots-check/sway.sh "$PWD/${{ steps.test-app.outputs.path }}" "$RUNNER_TEMP/wlroots-check"
+      - name: on Hyprland the shell frosts over the wallpaper and the tints come from it (headless Hyprland on vkms, blur on, over swaybg), with screenshots
+        if: ${{ !cancelled() && matrix.drive }}
+        timeout-minutes: 12
+        run: |
+          sudo apt-get install -y --no-install-recommends hyprland grim swaybg seatd
+          bash desktop/scripts/hyprland-check/hyprland.sh "$PWD/${{ steps.test-app.outputs.path }}" "$RUNNER_TEMP/hyprland-check"
+      - if: ${{ !cancelled() && matrix.drive }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: hyprland-check
+          path: |
+            ${{ runner.temp }}/hyprland-check/*.png
+            ${{ runner.temp }}/hyprland-check/*.json
+            ${{ runner.temp }}/hyprland-check/*.log
+            ${{ runner.temp }}/hyprland-check/*.conf
+          if-no-files-found: warn
+          retention-days: 3
       - if: ${{ !cancelled() && matrix.drive }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
