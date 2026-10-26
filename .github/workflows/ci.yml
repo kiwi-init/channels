@@ -285,11 +285,9 @@ jobs:
       matrix:
         include:
           - os: ubuntu-24.04
-            part: 1
             sandbox: unsandboxed
             drive: false
           - os: ubuntu-26.04
-            part: 2
             sandbox: sandboxed
             drive: true
     steps:
@@ -560,7 +558,6 @@ jobs:
         include:
           - distro: arch
             image: archlinux:latest
-            part: 4
     steps:
       - name: git and tar for the checkout
         run: pacman -Sy --noconfirm git tar gzip
