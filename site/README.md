@@ -42,7 +42,7 @@ install scripts.
 name, Channels (releases up to v0.16.2 named them `Kiwi-…`):
 
 - `Channels-2026.10.5-mac-arm64.dmg` (Apple silicon only: Intel Macs get the CLI)
-- `Channels-2026.10.5-linux-x86_64.AppImage` / `Channels-2026.10.5-linux-amd64.deb`
+- `Channels-2026.10.5-linux-x86_64.AppImage` (Linux: Arch is the supported distribution)
 
 A tag's release stamps its version into these names (`scripts/stamp.ts`) and commits
 them to main; the site deploys only from a tag, after its GitHub release exists. The names

@@ -51,13 +51,13 @@ test("a malformed percent escape in the path shows the landing page instead of t
   const page = load("/join/%E0%A4%A");
   expect(page.landing.hidden).toBe(false);
   expect(page.invite.hidden).toBe(false);
-  expect(page.downloads.children.length).toBe(3);
+  expect(page.downloads.children.length).toBe(2);
 });
 
 test("a path that isn't a join code is not shown as one", () => {
   const page = load("/join/<script>");
   expect(page["open-app"].href).toBe("");
-  expect(page.downloads.children.length).toBe(3);
+  expect(page.downloads.children.length).toBe(2);
 });
 
 test("the renderer's hash invite still works", () => {
@@ -87,11 +87,11 @@ test("a Mac whose browser refuses the chip hint still gets Apple silicon", async
   expect(page.download.href).toMatch(/\/Channels-[\d.]+-mac-arm64\.dmg$/);
 });
 
-test("Ubuntu gets the .deb and other Linux the AppImage", async () => {
+test("every Linux, Ubuntu too, gets the AppImage: there is no .deb", async () => {
   const ubuntu = load("/", "", { userAgent: "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:131.0) Gecko/20100101 Firefox/131.0" });
   const linux = load("/", "", { userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36" });
   await settle();
-  expect(ubuntu.download.href).toMatch(/\/Channels-[\d.]+-linux-amd64\.deb$/);
+  expect(ubuntu.download.href).toMatch(/\/Channels-[\d.]+-linux-x86_64\.AppImage$/);
   expect(linux.download.href).toMatch(/\/Channels-[\d.]+-linux-x86_64\.AppImage$/);
 });
 
@@ -104,6 +104,6 @@ test("Windows, phones and ARM Linux keep the button on the full list", async () 
     const page = load("/", "", { userAgent });
     await settle();
     expect(page.download.href).toBe("");
-    expect(page.downloads.children.length).toBe(3);
+    expect(page.downloads.children.length).toBe(2);
   }
 });
