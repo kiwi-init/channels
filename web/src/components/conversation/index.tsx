@@ -565,7 +565,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                             )
                           ) : tab === "tasks" ? (
                             <>
-                              {view === "everything" && nowNode("mx-1 mb-2", false)}
+                              {view === "everything" && nowNode("", false)}
                               <TasksView
                                 state={state}
                                 now={now}

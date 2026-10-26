@@ -105,7 +105,8 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 
 - Spacing: one step, `step 8px`, between groups and from the window's and
   a card's edges. A card's header is `card-head 30px`, its controls
-  `control 26px`, all on the header's one centre line.
+  `control 26px`, all on the header's one centre line. The kit's small
+  button is `control` tall too, so a row's actions match the header's.
 
 - Steps: `row 8px`, `ctl 10px`, `card 16px`, `bubble 20px` (pictures in
   a message and the annotator) and `dock 26px` (the composer, soft without a pill's half-moon
@@ -133,7 +134,7 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   background of their own; they are separated by spacing and a thin 1px
   `line` (the `edge` utility). Fields, the composer first, are `well`, a
   quiet solid fill; focus adds a hairline (`edge-strong`), never the accent
-  ring. Popovers and dialogs lift off the canvas with the `pop` shadow only.
+  ring (`FIELD` in `kit.tsx`, which `TextField` uses). Popovers and dialogs lift off the canvas with the `pop` shadow only.
   A phone has no sheet: one screen at a time, on the canvas.
 - Liquid glass (`glass`), for what floats over the conversation (the
   header's round controls, the place pills, the composer): a translucent
@@ -141,8 +142,8 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 - Chosen (`chosen`, ink at 12%): what's chosen in a list wears one quiet
   solid fill and nothing else does: the open conversation under its
   channel, the open channel's row while none of its conversations is open,
-  and the phone list's open channel. Idle rows, Search and counts are
-  plain. `test/chosen.test.ts` keeps it that way.
+  the phone list's open channel and the open task on the board. Idle rows,
+  Search and counts are plain. `test/chosen.test.ts` keeps it that way.
 - Fall back to solid fills under `prefers-contrast: more`.
 - On a machine that draws without a GPU (WebGL's renderer is SwiftShader,
   llvmpipe or a basic render driver, or there's no WebGL: `lib/drawing.ts`
@@ -213,8 +214,8 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 - Buttons: primary `accent`; secondary outlined (a 1px `edge-strong` ring,
   no fill, `wash` on hover). The kit's `Checkbox` is the one checkbox, in
   `accent`.
-- Inputs: no fill, a 1px `line` edge (`edge`); focus ring is `2px ring` with `1px` offset and
-  `6px` radius (base layer, so utilities can still take it off).
+- Inputs are `FIELD`: the `well` fill, no edge at rest, and an `edge-strong`
+  hairline on focus, never an accent ring.
 - Placeholders and empty states use quiet ink, never reduced-opacity text.
 - A dialog is for one decision (an `Alert`, a confirm, a short form). What you
   work in opens in place: Settings and Personalities as a page in the main
@@ -270,13 +271,16 @@ From `design-tokens.ts`:
   when, Show in the conversation, Show in Rex) opens under it on a click of
   the line.
 - Tasks: Needs you's rows first, then the
-  board grouped by the person's message each task serves: the group's
+  board grouped by the person's message each task serves. Needs you and
+  each group are a card like the Now card (`card` radius, a `line` border,
+  6px inside, 16px apart) with its heading inside it: the group's
   heading is their own words in quotes, under it who said it and #N, the
   ask that moved last first and Unfiled (no person's message holds these)
   at the foot; inside a group, in progress, in review, up next, then done
   this week. A view (In progress, In review, Done) keeps the same groups
-  with only its own tasks. A row is two lines on the canvas,
-  split from the next by `line`: the owner's face, the title in `body`, and
+  with only its own tasks. A row is two lines in its card, `ctl` round,
+  filling `wash` on hover and `chosen` while its task is open: the owner's
+  face, the title in `body`, and
   under it the task id, the owner and what the agent is doing now (in
   `doing` with a steady dot while it works) or the task's state; then its PR
   (number, a 48px diff bar in `live` and `alert`, the additions), its
@@ -366,13 +370,24 @@ From `design-tokens.ts`:
   floats over it takes it back: a dialog, its backdrop and a menu are
   `no-drag`, and a full-window stage brings its own `drag` row.
 
-- Settings → Personalities: a roomy modal, the list on the left (presets
-  for code work, then Yours, each a 36px outlined glyph tile, the name in
-  `ui` semibold and one quiet line) and the editor on the right: role as
-  outlined chips (the picked one `accent`-bordered), capabilities as
-  checkboxes with a quiet line each, areas as mono chips with a dashed
-  "+ add a path", instructions in an outlined field. A preset reads
-  "edit it to make your own copy": changing it makes one.
+- One sidebar, aware of where you are. In Settings the app's sidebar
+  trades the channels for a back button, the title and Settings'
+  sections (the open one on `chosen`); in Personalities, for the presets
+  and Yours with New. The card holds only the page, never a second list. Each
+  group is a rounded box of rows with one 20px icon column, so the labels
+  line up down the group; Add a computer and Link a phone are action rows
+  in that column. Segmented choices and row buttons are `control` tall.
+- Settings → Personalities: the list in the sidebar (presets for code work,
+  then Yours, each a 36px outlined glyph tile, the name in `ui` semibold
+  and one quiet line; the one being edited on `chosen`) and the editor on
+  the right: role as outlined chips (the picked one `accent`-bordered),
+  capabilities as checkboxes with a quiet line each, areas as mono chips
+  with "+ add a path", and the glyph, area and instructions fields in
+  `FIELD`. A preset reads "edit it to make your own copy": changing it
+  makes one.
+- Onboarding dialogs (New channel, Join with a code, Your computers) have a
+  close button; Add an agent's command sits in a `well` box with a
+  `control` tall Copy.
 - Picking a personality (Let in, an agent's menu, Invite → Joins as): one
   outlined row each, a 28px glyph tile, the name in `ui` semibold and its
   role and capabilities in one quiet line; the picked row `accent`-bordered,

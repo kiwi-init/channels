@@ -1,7 +1,9 @@
+import { Download04Icon } from "@hugeicons/core-free-icons"
 import { useState } from "react"
 
 import { bridge } from "@/lib/secrets"
 import { openRelease, restartToUpdate, useUpdate, type UpdateCheckView } from "@/lib/update"
+import { Icon } from "./icon"
 import { Button } from "./kit"
 
 function said(u: UpdateCheckView | null): string {
@@ -37,6 +39,9 @@ export function UpdateCheck() {
   return (
     <div data-item className="px-4 py-3">
       <div className="flex items-center gap-3">
+        <span className="flex size-5 shrink-0 items-center justify-center text-ink-2">
+          <Icon icon={Download04Icon} size={16} />
+        </span>
         <div className="min-w-0 flex-1">
           <p className="text-ui font-medium text-ink">Updates</p>
           <p className="text-meta leading-snug text-ink-3" role="status">
@@ -44,17 +49,20 @@ export function UpdateCheck() {
           </p>
         </div>
         {live?.state === "ready" ? (
-          <Button variant="secondary" onClick={restartToUpdate}>
+          <Button size="sm" variant="secondary" onClick={restartToUpdate}>
             Restart to update
           </Button>
-        ) : live?.state === "available" ? (
-          <Button variant="secondary" onClick={() => openRelease(live)}>
-            {live.deb ? "Download .deb" : "Open release"}
-          </Button>
         ) : (
-          <Button variant="secondary" onClick={check} disabled={busy || live?.state === "downloading"}>
-            Check for updates
-          </Button>
+          <div className="flex flex-wrap justify-end gap-2">
+            {live?.state === "available" && (
+              <Button size="sm" variant="secondary" onClick={() => openRelease(live)}>
+                {live.deb ? "Download .deb" : "Open release"}
+              </Button>
+            )}
+            <Button size="sm" variant="secondary" onClick={check} disabled={busy || live?.state === "downloading"}>
+              Check for updates
+            </Button>
+          </div>
         )}
       </div>
     </div>

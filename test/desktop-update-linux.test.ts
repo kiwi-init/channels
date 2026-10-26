@@ -156,6 +156,23 @@ test("an AppImage whose download doesn't match SHA256SUMS stays as it is and onl
   expect(downloads()).toEqual([]);
 });
 
+test("an AppImage can retry after a failed download and restart into the verified update", async () => {
+  const appImage = installed("Retry");
+  release({ sums: `${"0".repeat(64)}  ${appImageName("0.27.0", arch)}\n` });
+  const { fake, u } = await launch(appImage, join(root, "data-retry"));
+  await u.checkForUpdate();
+  expect((await settled(u))?.state).toBe("available");
+  expect(readFileSync(appImage, "utf8")).toBe(OLD);
+  release();
+  expect((await u.checkForUpdate()).state).toBe("downloading");
+  expect((await settled(u))?.state).toBe("ready");
+  expect(readFileSync(appImage, "utf8")).toBe(OLD);
+  expect(u.applyUpdate(true)).toBe(true);
+  expect(readFileSync(appImage, "utf8")).toBe(NEW);
+  expect(fake.did).toContain(`relaunch ${appImage}`);
+  expect(downloads()).toEqual([]);
+});
+
 test("an AppImage whose SHA256SUMS isn't signed with the pinned release key is never staged (issue #203)", async () => {
   const name = appImageName("0.27.0", arch);
   const good = `${sha(NEW)}  ${name}\n`;

@@ -121,7 +121,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
-      - name: unit tests including CLI upgrades
+      - name: unit tests including CLI upgrades and desktop update recovery
         run: bun scripts/ci-tests.ts unit
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true

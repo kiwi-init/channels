@@ -1,17 +1,31 @@
 import {
+  Add01Icon,
   ArrowLeft01Icon,
   ArrowRight01Icon,
   CheckmarkCircle02Icon,
+  CommandLineIcon,
   ComputerIcon,
+  ComputerRemoveIcon,
   Folder01Icon,
+  FolderAddIcon,
   GithubIcon,
+  InformationCircleIcon,
   Link01Icon,
+  Motion02Icon,
+  Note01Icon,
   PaintBoardIcon,
   Robot01Icon,
+  ServerStack01Icon,
   Settings02Icon,
+  Shield01Icon,
   SmartPhone01Icon,
   SparklesIcon,
+  StethoscopeIcon,
+  Sun03Icon,
   TerminalIcon,
+  TextFontIcon,
+  UserAdd01Icon,
+  WebhookIcon,
 } from "@hugeicons/core-free-icons"
 import { useOwnPersonalities } from "@/lib/personalities"
 import { Personalities } from "./personalities"
@@ -20,6 +34,7 @@ import { setAppearance, setTextSize, useAppearance, useTextSize, type Appearance
 import { setAccessibilityOption, useAccessibilityOption } from "@/lib/accessibility"
 import { cx } from "@/lib/utils"
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
+import { createPortal } from "react-dom"
 import { relayUrl } from "@/lib/relay"
 import { bridge, useSecrets, type KiwiBridge } from "@/lib/secrets"
 import { contextLineBridge, hooksBridge, terminalsBridge } from "@/lib/terminals"
@@ -32,18 +47,27 @@ import { ComputerRows } from "./computers"
 import { HarnessFace } from "./harness-face"
 import { PhoneRows } from "./phones"
 import { Icon, type IconSvgElement } from "./icon"
-import { Button, IconButton, Monogram, SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from "./kit"
+import { Button, IconButton, SEGMENTED, SEGMENT_OFF, SEGMENT_ON, TextField } from "./kit"
+import { PlaceHead, usePlaceSlot } from "./shell-sidebar"
 import { UpdateCheck } from "./update-check"
 
 // Both apply at once and stay in this browser; nothing here leaves it.
 
+function Lead({ children, className }: { children: ReactNode; className?: string }) {
+  return <span className={cx("flex size-5 shrink-0 items-center justify-center text-ink-2", className)}>{children}</span>
+}
+
+const glyph = (icon: IconSvgElement) => <Icon icon={icon} size={16} />
+
 function Choice<T extends string>({
+  tile,
   label,
   desc,
   value,
   options,
   onChange,
 }: {
+  tile: ReactNode
   label: string
   desc?: string
   value: T
@@ -51,12 +75,13 @@ function Choice<T extends string>({
   onChange: (v: T) => void
 }) {
   return (
-    <div data-item className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+    <div data-item className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+      <Lead>{tile}</Lead>
       <div className="min-w-0 flex-1">
         <p className="text-ui font-medium text-ink">{label}</p>
         {desc && <p className="text-meta leading-snug text-ink-3">{desc}</p>}
       </div>
-      <div role="radiogroup" aria-label={label} className={cx("grid w-full gap-0.5 sm:w-auto", SEGMENTED)} style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
+      <div role="radiogroup" aria-label={label} className={cx("grid h-(--control) w-full gap-0.5 sm:w-auto", SEGMENTED)} style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
         {options.map((o) => (
           <button
             key={o.value}
@@ -65,7 +90,7 @@ function Choice<T extends string>({
             aria-checked={value === o.value}
             disabled={o.disabled}
             onClick={() => onChange(o.value)}
-            className={cx("h-7 rounded-row px-3 text-ui font-medium transition-colors disabled:opacity-40", value === o.value ? SEGMENT_ON : SEGMENT_OFF)}
+            className={cx("h-full rounded-row px-3 text-ui font-medium transition-colors disabled:opacity-40", value === o.value ? SEGMENT_ON : SEGMENT_OFF)}
           >
             {o.label}
           </button>
@@ -75,18 +100,43 @@ function Choice<T extends string>({
   )
 }
 
-function Item({ tile, title, desc, aside, children }: { tile?: ReactNode; title: string; desc?: ReactNode; aside?: ReactNode; children?: ReactNode }) {
+function Item({ tile, title, desc, aside, children }: { tile: ReactNode; title: string; desc?: ReactNode; aside?: ReactNode; children?: ReactNode }) {
   return (
     <div data-item className="px-4 py-3">
       <div className="flex items-center gap-3">
-        {tile && <span className="flex size-8 shrink-0 items-center justify-center rounded-row text-ink edge">{tile}</span>}
+        <Lead>{tile}</Lead>
         <div className="min-w-0 flex-1">
           <p className="text-ui font-medium text-ink">{title}</p>
           {desc && <p className="text-meta leading-snug text-ink-3">{desc}</p>}
         </div>
         {aside}
       </div>
-      {children && <div className={cx("mt-2.5", !!tile && "sm:pl-11")}>{children}</div>}
+      {children && <div className="mt-2.5 pl-8">{children}</div>}
+    </div>
+  )
+}
+
+function Action({ icon, label, disabled, onClick }: { icon: IconSvgElement; label: string; disabled?: boolean; onClick: () => void }) {
+  return (
+    <button
+      data-item
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="flex w-full items-center gap-3 px-4 py-3 text-left text-ui font-medium text-accent-text transition-colors hover:bg-wash disabled:opacity-40"
+    >
+      <Lead className="text-accent-text">{glyph(icon)}</Lead>
+      {label}
+    </button>
+  )
+}
+
+function Problem({ children }: { children: ReactNode }) {
+  return (
+    <div data-item className="py-3 pr-4 pl-12">
+      <p className="text-ui text-ink-2" role="alert">
+        {children}
+      </p>
     </div>
   )
 }
@@ -113,17 +163,18 @@ function RelayField() {
     bridge.setRelayUrl!(value.trim()).catch((e: unknown) => setError(e instanceof Error ? e.message.replace(/^.*?Error: /, "") : String(e)))
   }
   return (
-    <Item title="Relay" desc="Where this app's channels live. Changing it reloads the app.">
-      <div className="flex gap-2">
-        <input
+    <Item tile={glyph(ServerStack01Icon)} title="Relay" desc="Where this app's channels live. Changing it reloads the app.">
+      <div className="flex items-center gap-2">
+        <TextField
           id="relay-url"
+          aria-label="Relay"
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && save()}
           spellCheck={false}
-          className="h-8 min-w-0 flex-1 rounded-row border border-line bg-transparent px-2 font-mono text-ui text-ink"
+          className="min-w-0 flex-1 font-mono"
         />
-        <Button variant="secondary" onClick={save} disabled={value.trim() === relayUrl()}>
+        <Button size="sm" variant="secondary" onClick={save} disabled={value.trim() === relayUrl()}>
           Use
         </Button>
       </div>
@@ -157,7 +208,7 @@ function GithubFields() {
   }
   return (
     <Item
-      tile={<Icon icon={GithubIcon} size={18} />}
+      tile={glyph(GithubIcon)}
       title="GitHub"
       desc={
         status.account
@@ -166,11 +217,11 @@ function GithubFields() {
       }
       aside={
         status.account ? (
-          <Button variant="secondary" disabled={busy} onClick={() => run(b.githubUnlink)}>
+          <Button size="sm" variant="secondary" disabled={busy} onClick={() => run(b.githubUnlink)}>
             Unlink
           </Button>
         ) : (
-          <Button variant="secondary" disabled={busy} onClick={() => run(b.githubLink)}>
+          <Button size="sm" variant="secondary" disabled={busy} onClick={() => run(b.githubLink)}>
             {busy ? "Waiting for GitHub…" : "Link GitHub"}
           </Button>
         )
@@ -232,6 +283,7 @@ function NewAgentsFields() {
   return (
     <>
       <Choice
+        tile={glyph(UserAdd01Icon)}
         label="Allow creating new agents"
         desc="New agent starts an agent on this computer, from this app or from a computer paired with it."
         value={status.launch}
@@ -243,6 +295,7 @@ function NewAgentsFields() {
       />
       {setBypass && status.launch === "on" && (
         <Choice
+          tile={glyph(Shield01Icon)}
           label="Allow bypass from your other devices"
           desc="An agent started from your phone or another computer may skip its harness's permission prompts here. Off keeps every prompt."
           value={status.bypass}
@@ -254,6 +307,7 @@ function NewAgentsFields() {
         />
       )}
       <Choice
+        tile={glyph(CommandLineIcon)}
         label="Prefer"
         desc="Where a new agent opens. If it can't open there, it opens in Terminal."
         value={status.prefer}
@@ -267,11 +321,11 @@ function NewAgentsFields() {
         return (
           <Item
             key={t.id}
-            tile={<span className="text-stamp font-bold tracking-tight">{t.id}</span>}
+            tile={glyph(TerminalIcon)}
             title={t.name}
             desc={on ? HELPERS[t.id].on : HELPERS[t.id].off}
             aside={
-              <Button variant="secondary" disabled={busy !== null} onClick={() => run(t.id, () => b.terminalHelpers(t.id, on ? "off" : "on"))}>
+              <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => run(t.id, () => b.terminalHelpers(t.id, on ? "off" : "on"))}>
                 {busy === t.id ? (on ? "Removing…" : "Downloading…") : on ? "Remove" : HELPERS[t.id].download}
               </Button>
             }
@@ -280,13 +334,7 @@ function NewAgentsFields() {
           </Item>
         )
       })}
-      {error && (
-        <div data-item className="px-4 py-3">
-          <p className="text-ui text-ink-2" role="alert">
-            {error}
-          </p>
-        </div>
-      )}
+      {error && <Problem>{error}</Problem>}
     </>
   )
 }
@@ -323,38 +371,25 @@ function LaunchFoldersField() {
   return (
     <>
       <Item
+        tile={glyph(Folder01Icon)}
         title="Folders agents can start in"
         desc="New agent, here or from your phone, can start one in these folders and the folders inside them, as well as where agents on this computer already work and your home folder's git repos."
       />
       {roots.map((dir) => (
         <Item
           key={dir}
-          tile={<Icon icon={Folder01Icon} size={16} />}
+          tile={glyph(Folder01Icon)}
           title={dir.split("/").filter(Boolean).at(-1) ?? dir}
           desc={dir}
           aside={
-            <Button variant="secondary" disabled={busy !== null} onClick={() => run(dir, () => b.setLaunchRoot(dir, "remove"))}>
+            <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => run(dir, () => b.setLaunchRoot(dir, "remove"))}>
               {busy === dir ? "Removing…" : "Remove"}
             </Button>
           }
         />
       ))}
-      <button
-        data-item
-        type="button"
-        disabled={busy !== null}
-        onClick={() => void add()}
-        className="flex w-full items-center px-4 py-3 text-left text-ui font-medium text-accent-text transition-colors hover:bg-wash disabled:opacity-40"
-      >
-        {busy === "add" ? "Adding…" : "Add a folder…"}
-      </button>
-      {error && (
-        <div data-item className="px-4 py-3">
-          <p className="text-ui text-ink-2" role="alert">
-            {error}
-          </p>
-        </div>
-      )}
+      <Action icon={FolderAddIcon} label={busy === "add" ? "Adding…" : "Add a folder…"} disabled={busy !== null} onClick={() => void add()} />
+      {error && <Problem>{error}</Problem>}
     </>
   )
 }
@@ -363,9 +398,7 @@ function PersonalitiesField({ onOpen }: { onOpen: () => void }) {
   const count = useOwnPersonalities().length
   return (
     <button data-item type="button" onClick={onOpen} className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-wash">
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-row text-ink edge">
-        <Icon icon={SparklesIcon} size={16} />
-      </span>
+      <Lead>{glyph(SparklesIcon)}</Lead>
       <span className="min-w-0 flex-1">
         <span className="block text-ui font-medium text-ink">Personalities</span>
         <span className="block text-meta leading-snug text-ink-3">Six presets for code work{count ? `, and ${count} of your own` : ""}. An agent takes one when you let it in.</span>
@@ -408,7 +441,7 @@ function KiwiHere() {
   const missing = rows.filter((r) => !r.path)
   return (
     <>
-      <Item tile={<Icon icon={TerminalIcon} size={16} />} title="kiwi on this computer" desc={daemon.running && daemon.version ? `kiwi ${daemon.version}, running` : "kiwi isn't running"} />
+      <Item tile={glyph(TerminalIcon)} title="kiwi on this computer" desc={daemon.running && daemon.version ? `kiwi ${daemon.version}, running` : "kiwi isn't running"} />
       {found.map((r) => (
         <Item
           key={r.harness}
@@ -425,7 +458,7 @@ function KiwiHere() {
           aside={<span className="shrink-0 text-meta text-ink-3">{abilities(r)}</span>}
         />
       ))}
-      {missing.length > 0 && <Item title="Not on this computer" desc={missing.map((r) => harnessName(r.harness)).join(", ")} />}
+      {missing.length > 0 && <Item tile={glyph(ComputerRemoveIcon)} title="Not on this computer" desc={missing.map((r) => harnessName(r.harness)).join(", ")} />}
     </>
   )
 }
@@ -469,10 +502,11 @@ function Doctor() {
   const problems = Array.isArray(state) ? state.filter((f) => !f.ok).length : 0
   return (
     <Item
+      tile={glyph(StethoscopeIcon)}
       title="Check this computer"
       desc={Array.isArray(state) ? (problems ? `${problems} to fix` : "Nothing to fix") : "Looks at kiwi's install, the relay, pairing and hooks, and says how to fix what isn't right."}
       aside={
-        <Button variant="secondary" disabled={state === "running"} onClick={run}>
+        <Button size="sm" variant="secondary" disabled={state === "running"} onClick={run}>
           {state === "running" ? "Checking…" : Array.isArray(state) ? "Check Again" : "Check"}
         </Button>
       }
@@ -529,6 +563,7 @@ function HooksField() {
   return (
     <>
       <Item
+        tile={glyph(WebhookIcon)}
         title="Hooks"
         desc={
           rows === null
@@ -547,20 +582,14 @@ function HooksField() {
             title={harnessName(r.harness)}
             desc={says.desc}
             aside={
-              <Button variant="secondary" disabled={busy !== null} onClick={() => change(r)}>
+              <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => change(r)}>
                 {busy === r.harness ? says.busy : says.action}
               </Button>
             }
           />
         )
       })}
-      {error && (
-        <div data-item className="px-4 py-3">
-          <p className="text-ui text-ink-2" role="alert">
-            {error}
-          </p>
-        </div>
-      )}
+      {error && <Problem>{error}</Problem>}
     </>
   )
 }
@@ -596,6 +625,7 @@ function ContextLineField() {
   return (
     <>
       <Choice
+        tile={glyph(Note01Icon)}
         label="Ask agents for a checkpoint past 250k context"
         desc="Off by default. On, an agent on this computer past 250k tokens is asked to write where its work stands before it ends its turn."
         value={on}
@@ -605,11 +635,7 @@ function ContextLineField() {
         ]}
         onChange={change}
       />
-      {error && (
-        <p className="px-4 pb-3 text-ui text-ink-2" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <Problem>{error}</Problem>}
     </>
   )
 }
@@ -624,7 +650,7 @@ const SECTIONS: { id: string; label: string; icon: IconSvgElement }[] = [
   { id: "app", label: "This app", icon: Settings02Icon },
 ]
 
-function General({ onPersonalities }: { onPersonalities: () => void }) {
+function General({ onPersonalities, onClose }: { onPersonalities: () => void; onClose: () => void }) {
   const appearance = useAppearance()
   const size = useTextSize()
   const reduceMotion = useAccessibilityOption("reduce-motion")
@@ -633,6 +659,7 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
   const [on, setOn] = useState("appearance")
   const [adding, setAdding] = useState(false)
   const [linking, setLinking] = useState(false)
+  const place = usePlaceSlot()
   const shown = SECTIONS.filter((s) =>
     s.id === "services" ? !!b?.githubStatus : s.id === "new-agents" ? !!terminalsBridge() : s.id === "computers" ? !!person : s.id === "phone" ? !!person && !!b : true
   )
@@ -642,38 +669,39 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
   }
   return (
     <div className="flex min-h-0 flex-1">
-      <nav aria-label="Settings sections" className="hidden w-[232px] shrink-0 flex-col gap-0.5 px-3 pt-2 md:flex">
-        {person && (
-          <div className="flex items-center gap-2.5 px-2 pb-4">
-            <Monogram name={person.name} hue={person.name} agent={false} size={36} />
-            <div className="min-w-0">
-              <p className="truncate text-ui font-semibold">{person.name}</p>
-              <p className="truncate text-meta text-ink-3">key {person.pk.slice(0, 8)}</p>
-            </div>
-          </div>
+      {place &&
+        createPortal(
+          <>
+            <PlaceHead title="Settings" back="Close settings" onBack={onClose} />
+            <nav aria-label="Settings sections" className="mt-(--step) flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
+              {shown.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  aria-current={on === s.id ? "true" : undefined}
+                  onClick={() => go(s.id)}
+                  className={cx(
+                    "flex h-9 w-full items-center gap-2.5 rounded-ctl px-3 text-left text-ui transition-colors",
+                    on === s.id ? "bg-(--chosen) font-semibold text-ink" : "text-ink-2 hover:bg-wash hover:text-ink"
+                  )}
+                >
+                  <span className="flex size-5 shrink-0 items-center justify-center">
+                    <Icon icon={s.icon} size={16} className={on === s.id ? "text-ink" : "text-ink-3"} />
+                  </span>
+                  {s.label}
+                </button>
+              ))}
+            </nav>
+          </>,
+          place
         )}
-        {shown.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            aria-current={on === s.id ? "true" : undefined}
-            onClick={() => go(s.id)}
-            className={cx(
-              "flex h-9 items-center gap-2.5 rounded-row px-2.5 text-left text-ui transition-colors",
-              on === s.id ? "bg-pick font-semibold text-ink" : "text-ink-2 hover:bg-wash hover:text-ink"
-            )}
-          >
-            <Icon icon={s.icon} size={16} className={on === s.id ? "text-ink" : "text-ink-3"} />
-            {s.label}
-          </button>
-        ))}
-      </nav>
       <div className="min-w-0 flex-1 overflow-y-auto">
-        <div className="w-full max-w-[680px] px-6 pt-2 pb-12 md:pl-10">
-          <h1 className="text-display font-semibold tracking-[-0.014em]">Settings</h1>
-          <div className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-7">
+        <div className="mx-auto w-full max-w-[680px] px-6 pt-(--step) pb-12">
+          <h1 className="text-display font-semibold tracking-[-0.014em] md:sr-only">Settings</h1>
+          <div className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-7 md:mt-0">
             <Group id="appearance" title="Appearance">
               <Choice<Appearance>
+                tile={glyph(Sun03Icon)}
                 label="Theme"
                 value={appearance}
                 onChange={setAppearance}
@@ -684,6 +712,7 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
                 ]}
               />
               <Choice<TextSize>
+                tile={glyph(TextFontIcon)}
                 label="Text size"
                 value={size}
                 onChange={setTextSize}
@@ -695,6 +724,7 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
                 ]}
               />
               <Choice<"on" | "off">
+                tile={glyph(Motion02Icon)}
                 label="Motion"
                 value={reduceMotion ? "on" : "off"}
                 onChange={(v) => setAccessibilityOption("reduce-motion", v === "on")}
@@ -720,36 +750,32 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
             </Group>
             {person && (
               <Group id="computers" title="Computers">
-                <div data-item className="grid gap-1 px-4 py-2">
-                  <p className="pt-1 text-meta leading-snug text-ink-3">Agents on a paired computer join your channels as yours. Removing one takes its agents out of the channels you own.</p>
-                  <ComputerRows adding={adding} onAdded={() => setAdding(false)} />
-                </div>
-                {!adding && b && (
-                  <button type="button" onClick={() => setAdding(true)} className="flex w-full items-center px-4 py-3 text-left text-ui font-medium text-accent-text transition-colors hover:bg-wash">
-                    Add a computer
-                  </button>
-                )}
+                <Item tile={glyph(ComputerIcon)} title="Paired computers" desc="Agents on a paired computer join your channels as yours. Removing one takes its agents out of the channels you own.">
+                  <div className="grid gap-1">
+                    <ComputerRows adding={adding} onAdded={() => setAdding(false)} />
+                  </div>
+                </Item>
+                {!adding && b && <Action icon={Add01Icon} label="Add a computer" onClick={() => setAdding(true)} />}
               </Group>
             )}
             {person && b && (
               <Group id="phone" title="Phone">
-                <div data-item className="grid gap-1 px-4 py-2">
-                  <p className="pt-1 text-meta leading-snug text-ink-3">
-                    Your phone reads and answers your channels as you. Linking hands it your person and channel keys, end to end through the relay.
-                  </p>
-                  <PhoneRows linking={linking} onLinked={() => setLinking(false)} />
-                </div>
-                {!linking && (
-                  <button type="button" onClick={() => setLinking(true)} className="flex w-full items-center px-4 py-3 text-left text-ui font-medium text-accent-text transition-colors hover:bg-wash">
-                    Link a phone
-                  </button>
-                )}
+                <Item
+                  tile={glyph(SmartPhone01Icon)}
+                  title="Linked phones"
+                  desc="Your phone reads and answers your channels as you. Linking hands it your person and channel keys, end to end through the relay."
+                >
+                  <div className="grid gap-1">
+                    <PhoneRows linking={linking} onLinked={() => setLinking(false)} />
+                  </div>
+                </Item>
+                {!linking && <Action icon={Add01Icon} label="Link a phone" onClick={() => setLinking(true)} />}
               </Group>
             )}
             <Group id="app" title="This app">
               <UpdateCheck />
               <RelayField />
-              <Item title="Version" desc={`Channels ${version}`} />
+              <Item tile={glyph(InformationCircleIcon)} title="Version" desc={`Channels ${version}`} />
             </Group>
           </div>
         </div>
@@ -782,13 +808,14 @@ export function SettingsPage({ backTo, onClose }: { backTo: string; onClose: () 
         back()
       }}
     >
-      <header className="drag flex h-(--chrome-h) shrink-0 items-center gap-2 px-3">
+      <div aria-hidden className="drag hidden h-(--card-head) shrink-0 md:mt-(--step) md:block" />
+      <header className="drag flex h-(--chrome-h) shrink-0 items-center gap-2 px-3 md:hidden">
         <IconButton label={inner ? "Back to Settings" : "Close settings"} round className="glass size-9 text-ink" onClick={back}>
           <Icon icon={ArrowLeft01Icon} size={18} />
         </IconButton>
         <span className="min-w-0 flex-1 truncate text-ui font-semibold">{inner ? "Settings" : backTo}</span>
       </header>
-      {inner ? <Personalities /> : <General onPersonalities={() => setView("personalities")} />}
+      {inner ? <Personalities onBack={back} /> : <General onPersonalities={() => setView("personalities")} onClose={onClose} />}
     </section>
   )
 }

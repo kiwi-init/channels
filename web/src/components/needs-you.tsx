@@ -107,12 +107,12 @@ export function NeedsYou({
   ]
   if (!items.length) return null
   return (
-    <section aria-label="Needs you" className="pt-3 pb-2">
-      <h2 className={cx("flex items-baseline gap-2 text-ui font-semibold", titled && "max-md:hidden")}>
+    <section aria-label="Needs you" className="mt-4 rounded-card border border-line bg-canvas p-1.5">
+      <h2 className={cx("flex items-baseline gap-2 px-2 pt-1 pb-0.5 text-ui font-semibold", titled && "max-md:hidden")}>
         Needs you <span className="font-normal text-ink-3 tabular-nums">{items.length}</span>
       </h2>
-      {requests.some((r) => r.check === "unchecked") && <p className="mt-1 text-meta leading-normal text-ink-3">{TOO_MANY_REQUESTS}</p>}
-      <ul className="divide-y divide-line border-b border-line">
+      {requests.some((r) => r.check === "unchecked") && <p className="mt-1 px-2 text-meta leading-normal text-ink-3">{TOO_MANY_REQUESTS}</p>}
+      <ul className="space-y-0.5">
         {items.map((i) => (
           <li key={i.key}>{i.node}</li>
         ))}
@@ -140,7 +140,7 @@ export function Row({
 }) {
   const [open, setOpen] = useState(false)
   return (
-    <div className="py-2">
+    <div className="px-2 py-2">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           {lead ?? <span className="flex size-7 shrink-0 items-center justify-center rounded-row border border-edge-strong text-decide">{icon && <Icon icon={icon} size={15} />}</span>}
