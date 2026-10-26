@@ -137,6 +137,7 @@ export default function App() {
           news={news}
           active={settings ? "" : code}
           inChannel={!settings && rows.some((r) => r.code === code && r.state === "member")}
+          place={settings}
           onSelect={open}
           onNew={() => setSheet("new")}
           onComputers={() => setSheet("computers")}

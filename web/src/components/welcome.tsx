@@ -144,7 +144,7 @@ export function NewChannel({
   }
 
   return (
-    <Modal open={open} onClose={onClose}>
+    <Modal open={open} onClose={onClose} closeLabel="Close New channel">
       <form
         className="p-5"
         onSubmit={(e) => {
@@ -188,7 +188,7 @@ export function JoinWithCode({ open, onClose, onJoin }: { open: boolean; onClose
   const [code, setCode] = useState("")
   const valid = isJoinCode(code.trim())
   return (
-    <Modal open={open} onClose={onClose}>
+    <Modal open={open} onClose={onClose} closeLabel="Close Join with a code">
       <form
         className="p-5"
         onSubmit={(e) => {

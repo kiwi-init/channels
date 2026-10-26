@@ -1,10 +1,12 @@
 import { Dialog } from "@base-ui/react/dialog"
+import { Cancel01Icon } from "@hugeicons/core-free-icons"
 import type { ReactNode } from "react"
 
 import { cx } from "@/lib/utils"
+import { Icon } from "./icon"
 
 /** A centered modal: alerts, small forms. Escape or a click outside closes it; focus stays inside while open. */
-export function Modal({ open, onClose, children, wide, roomy }: { open: boolean; onClose: () => void; children: ReactNode; wide?: boolean; roomy?: boolean }) {
+export function Modal({ open, onClose, children, wide, roomy, closeLabel }: { open: boolean; onClose: () => void; children: ReactNode; wide?: boolean; roomy?: boolean; closeLabel?: string }) {
   return (
     <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
       <Dialog.Portal>
@@ -17,6 +19,14 @@ export function Modal({ open, onClose, children, wide, roomy }: { open: boolean;
           )}
         >
           {children}
+          {closeLabel && (
+            <Dialog.Close
+              aria-label={closeLabel}
+              className="absolute top-3 right-3 flex size-(--control) items-center justify-center rounded-full text-ink-2 transition-colors hover:bg-wash hover:text-ink"
+            >
+              <Icon icon={Cancel01Icon} size={15} />
+            </Dialog.Close>
+          )}
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>
