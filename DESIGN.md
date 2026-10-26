@@ -214,8 +214,8 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 - Buttons: primary `accent`; secondary outlined (a 1px `edge-strong` ring,
   no fill, `wash` on hover). The kit's `Checkbox` is the one checkbox, in
   `accent`.
-- Inputs: no fill, a 1px `line` edge (`edge`); focus ring is `2px ring` with `1px` offset and
-  `6px` radius (base layer, so utilities can still take it off).
+- Inputs are `FIELD`: the `well` fill, no edge at rest, and an `edge-strong`
+  hairline on focus, never an accent ring.
 - Placeholders and empty states use quiet ink, never reduced-opacity text.
 - A dialog is for one decision (an `Alert`, a confirm, a short form). What you
   work in opens in place: Settings and Personalities as a page in the main
@@ -370,13 +370,23 @@ From `design-tokens.ts`:
   floats over it takes it back: a dialog, its backdrop and a menu are
   `no-drag`, and a full-window stage brings its own `drag` row.
 
-- Settings → Personalities: a roomy modal, the list on the left (presets
-  for code work, then Yours, each a 36px outlined glyph tile, the name in
-  `ui` semibold and one quiet line) and the editor on the right: role as
-  outlined chips (the picked one `accent`-bordered), capabilities as
-  checkboxes with a quiet line each, areas as mono chips with a dashed
-  "+ add a path", instructions in an outlined field. A preset reads
-  "edit it to make your own copy": changing it makes one.
+- Settings: a page on the card, its toolbar `card-head` tall with a close
+  button. The section list on the left is the sidebar's rows, the open
+  section on `chosen`, your profile on the same columns above it. Each
+  group is a rounded box of rows with one 20px icon column, so the labels
+  line up down the group; Add a computer and Link a phone are action rows
+  in that column. Segmented choices and row buttons are `control` tall.
+- Settings → Personalities: the list on the left (presets for code work,
+  then Yours, each a 36px outlined glyph tile, the name in `ui` semibold
+  and one quiet line; the one being edited on `chosen`) and the editor on
+  the right: role as outlined chips (the picked one `accent`-bordered),
+  capabilities as checkboxes with a quiet line each, areas as mono chips
+  with "+ add a path", and the glyph, area and instructions fields in
+  `FIELD`. A preset reads "edit it to make your own copy": changing it
+  makes one.
+- Onboarding dialogs (New channel, Join with a code, Your computers) have a
+  close button; Add an agent's command sits in a `well` box with a
+  `control` tall Copy.
 - Picking a personality (Let in, an agent's menu, Invite → Joins as): one
   outlined row each, a 28px glyph tile, the name in `ui` semibold and its
   role and capabilities in one quiet line; the picked row `accent`-bordered,
