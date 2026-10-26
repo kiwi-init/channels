@@ -1,4 +1,4 @@
-import { ArrowLeft01Icon, BotIcon, Search01Icon, TaskDone01Icon } from "@hugeicons/core-free-icons"
+import { ArrowLeft01Icon, BotIcon, Search01Icon, Settings02Icon, TaskDone01Icon } from "@hugeicons/core-free-icons"
 import type { Dispatch, ReactNode, SetStateAction } from "react"
 
 import type { ChannelIcon } from "@kiwi/core/protocol.ts"
@@ -35,11 +35,12 @@ export type HeaderProps = {
   reviewing: boolean
 }
 
-export function Toolbar({ search, setSearch, tab, onTab, wideHeading, headingLabel, face, status, onTitle, places, needs, view, counts, onView, reviewing }: HeaderProps) {
+const SEGMENT = "no-drag relative flex h-full shrink-0 items-center gap-1.5 rounded-full px-2.5 text-ui transition-colors"
+
+export function Toolbar({ search, setSearch, tab, onTab, headingLabel, face, onTitle, places, needs, onView }: HeaderProps) {
   const wide = useSidebarHidden()
-  const place = wideHeading !== face.title ? wideHeading : null
   const toggle = (t: Tab) => onTab(tab === t ? "conversation" : t)
-  const views: [View, string][] = [["everything", "Everything"], ["needs", "Needs you"], ["doing", "Working"], ...(reviewing ? ([["review", "In review"]] as [View, string][]) : []), ["done", "Done"]]
+  const on = (yes: boolean) => (yes ? "bg-wash-2 font-semibold text-ink" : "text-ink-2 hover:bg-wash hover:text-ink")
   return (
     <div
       role="toolbar"
@@ -49,65 +50,63 @@ export function Toolbar({ search, setSearch, tab, onTab, wideHeading, headingLab
       <span className="flex min-w-0 flex-1 items-center gap-(--step)">
         {wide && <SidebarToggle />}
         {wide && places}
+        {wide && (
+          <IconButton label={headingLabel} round className="no-drag size-(--control) text-ink-2 hover:text-ink" onClick={onTitle}>
+            <Icon icon={Settings02Icon} size={15} />
+          </IconButton>
+        )}
       </span>
-      {tab === "tasks" ? (
-        <nav aria-label="Views" className="no-drag flex h-(--control) min-w-0 shrink items-center gap-0.5 rounded-full bg-wash p-0.5">
-          {views.map(([v, label]) => (
-            <button
-              key={v}
-              type="button"
-              aria-current={view === v ? "page" : undefined}
-              onClick={() => onView(v)}
-              className={cx("flex h-full shrink-0 items-center gap-1.5 rounded-full px-2.5 text-ui transition-colors", view === v ? "bg-segment font-semibold text-ink" : "text-ink-2 hover:text-ink")}
-            >
-              {label}
-              {v !== "everything" && counts[v] > 0 && <span className="text-meta text-ink-3 tabular-nums">{counts[v]}</span>}
-            </button>
-          ))}
-        </nav>
-      ) : (
+      <nav aria-label="Sections" className="absolute left-1/2 flex h-(--control) -translate-x-1/2 items-center gap-1">
         <button
           type="button"
-          aria-label={headingLabel}
-          onClick={onTitle}
-          className="no-drag flex h-(--control) max-w-[60%] min-w-0 items-center gap-2 rounded-full bg-wash pr-3 pl-1 text-ui transition-colors hover:bg-wash-2"
-        >
-          <ChannelIconTile icon={face.icon} title={face.title} size={20} />
-          <span className="shrink-0 font-semibold">{face.title}</span>
-          {place && <span className="shrink-0 text-ink-2">{place}</span>}
-          {status.length > 0 && <span className="min-w-0 truncate text-meta text-ink-3">{status.join(" · ")}</span>}
-        </button>
-      )}
-      <span className="flex flex-1 items-center justify-end gap-0.5">
-        <IconButton
-          label="Search"
-          round
-          className="no-drag size-(--control)"
-          active={search !== null}
           aria-pressed={search !== null}
+          className={cx(SEGMENT, on(search !== null))}
           onClick={() => {
             if (search === null && tab !== "conversation") onTab("conversation")
             setSearch((s) => (s === null ? "" : null))
           }}
         >
-          <Icon icon={Search01Icon} size={15} />
-        </IconButton>
-        <IconButton
-          label={needs ? `Tasks, ${needs} need you` : "Tasks"}
-          round
-          className="no-drag size-(--control)"
-          active={tab === "tasks"}
+          <Icon icon={Search01Icon} size={14} />
+          Search
+        </button>
+        <button
+          type="button"
           aria-pressed={tab === "tasks"}
+          aria-label={needs ? `Tasks, ${needs} need you` : "Tasks"}
+          className={cx(SEGMENT, on(tab === "tasks"))}
           onClick={() => (tab === "tasks" ? onTab("conversation") : onView("everything"))}
         >
-          <Icon icon={TaskDone01Icon} size={15} />
-          {needs > 0 && <span aria-hidden className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-alert" />}
-        </IconButton>
-        <IconButton label="Agents" round className="no-drag size-(--control)" active={tab === "agents"} aria-pressed={tab === "agents"} onClick={() => toggle("agents")}>
-          <Icon icon={BotIcon} size={15} />
-        </IconButton>
-      </span>
+          <Icon icon={TaskDone01Icon} size={14} />
+          Tasks
+          {needs > 0 && <span aria-hidden className="size-1.5 rounded-full bg-alert" />}
+        </button>
+        <button type="button" aria-pressed={tab === "agents"} className={cx(SEGMENT, on(tab === "agents"))} onClick={() => toggle("agents")}>
+          <Icon icon={BotIcon} size={14} />
+          Agents
+        </button>
+      </nav>
+      <span className="flex-1" />
     </div>
+  )
+}
+
+export function ViewsNav({ view, counts, onView, reviewing }: Pick<HeaderProps, "view" | "counts" | "onView" | "reviewing">) {
+  const views: [View, string][] = [["everything", "Everything"], ["needs", "Needs you"], ["doing", "Working"], ...(reviewing ? ([["review", "In review"]] as [View, string][]) : []), ["done", "Done"]]
+  return (
+    <nav aria-label="Views" className="mx-auto mb-3 hidden h-(--control) w-fit items-center gap-0.5 rounded-full bg-wash p-0.5 md:flex">
+      {views.map(([v, label]) => (
+        <button
+          key={v}
+          type="button"
+          aria-current={view === v ? "page" : undefined}
+          onClick={() => onView(v)}
+          className={cx("flex h-full shrink-0 items-center gap-1.5 rounded-full px-2.5 text-ui transition-colors", view === v ? "bg-segment font-semibold text-ink" : "text-ink-2 hover:text-ink")}
+        >
+          {label}
+          {v !== "everything" && counts[v] > 0 && <span className="text-meta text-ink-3 tabular-nums">{counts[v]}</span>}
+        </button>
+      ))}
+    </nav>
   )
 }
 

@@ -2,6 +2,7 @@ import { dlopen, FFIType, JSCallback, ptr, suffix, type Pointer } from "bun:ffi"
 import path from "node:path";
 
 import { PAGE_URL } from "./eb-page.ts";
+import { linuxWallpaper } from "./wallpaper-path.ts";
 
 export const mac = process.platform === "darwin";
 
@@ -49,6 +50,20 @@ export function windowLooks(): string {
   if (!frostShell) return "";
   const n = Number(frostShell.kiwi_window_looks(ptr(looksBuffer), looksBuffer.length));
   return n > 0 && n < looksBuffer.length ? new TextDecoder().decode(looksBuffer.subarray(0, n)) : "";
+}
+
+const wallpaperShell = mac
+  ? dlopen(shellPath, { kiwi_wallpaper_pixels: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.u64 } }).symbols
+  : dlopen(shellPath, { kiwi_image_pixels: { args: [FFIType.cstring, FFIType.ptr, FFIType.u64], returns: FFIType.u64 } }).symbols;
+
+const WALLPAPER_BYTES = 24 * 24 * 4;
+
+export function wallpaperPixels(dark: boolean): Uint8Array | null {
+  const out = new Uint8Array(WALLPAPER_BYTES);
+  if ("kiwi_wallpaper_pixels" in wallpaperShell) return Number(wallpaperShell.kiwi_wallpaper_pixels(ptr(out), out.length)) === out.length ? out : null;
+  const file = linuxWallpaper(dark);
+  if (!file) return null;
+  return Number(wallpaperShell.kiwi_image_pixels(ptr(Buffer.from(`${file}\0`)), ptr(out), out.length)) === out.length ? out : null;
 }
 
 const trayHost = mac ? null : dlopen(shellPath, { kiwi_tray_host: { args: [], returns: FFIType.bool } }).symbols.kiwi_tray_host;

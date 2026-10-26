@@ -332,6 +332,7 @@ export interface KiwiBridge {
   installCli(): Promise<{ path: string }>;
   /** A newer proper release: being downloaded, ready to restart into, or only available (a .deb). */
   keysAtRest(): Promise<KeysAtRest>;
+  wallpaperTints(dark: boolean): Promise<string[]>;
   getUpdate(): Promise<UpdateView | null>;
   onUpdate(cb: (u: UpdateView) => void): () => void;
   /** Restart into the downloaded update. */

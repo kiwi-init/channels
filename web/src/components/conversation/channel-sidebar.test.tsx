@@ -34,7 +34,7 @@ describe("Conversations keep #general and your own threads; threads between agen
   test("folded, the list ends in an 'N more' row carrying the hidden unread total", () => {
     const list = conversations(html({ conversations: [general, mine, between, asking, quiet] }))
     const labels = [...list.matchAll(/<span class="min-w-0 flex-1 truncate">([^<]+)<\/span>/g)].map(([, l]) => l)
-    expect(labels).toEqual(["# general", "win", "atlas &amp; bolt", "2 more"])
+    expect(labels).toEqual(["general", "win", "atlas &amp; bolt", "2 more"])
     expect(list).toMatch(/aria-expanded="false" aria-label="2 more conversations, 5 unread"/)
     expect(list).toMatch(/2 more<\/span><span class="[^"]*">5<\/span>/)
   })
@@ -45,7 +45,7 @@ describe("Conversations keep #general and your own threads; threads between agen
   })
   test("the open thread stays even between agents, and stays lit", () => {
     const list = conversations(html({ conversations: [general, between, quiet], current: between.key }))
-    expect(list).toMatch(/aria-current="page"[^>]*><span class="min-w-0 flex-1 truncate">atlas &amp; win<\/span>/)
+    expect(list).toMatch(/aria-current="page"[^>]*>.*?<span class="min-w-0 flex-1 truncate">atlas &amp; win<\/span>/)
     expect(list).toContain('aria-label="1 more conversation, 3 unread"')
   })
 })
@@ -60,7 +60,7 @@ describe("conversations with members who left the channel fold under Left the ch
   test("the fold is one closed row with how many it holds; the left threads aren't listed and don't count in N more", () => {
     const list = conversations(html({ conversations: [general, mine, gone, goneAsking, goneBetween, quiet] }))
     const labels = [...list.matchAll(/<span class="min-w-0 flex-1 truncate">([^<]+)<\/span>/g)].map(([, l]) => l)
-    expect(labels).toEqual(["# general", "win", "elm", "1 more", "Left the channel"])
+    expect(labels).toEqual(["general", "win", "elm", "1 more", "Left the channel"])
     expect(list).toContain('aria-label="1 more conversation, 3 unread"')
     expect(list).toMatch(/aria-expanded="false" aria-label="Left the channel, 2 conversations"/)
     expect(list).toMatch(/Left the channel<\/span><span class="[^"]*">2<\/span>/)

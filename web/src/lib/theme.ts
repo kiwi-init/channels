@@ -77,10 +77,44 @@ export function stepTextSize(step: TextStep) {
   setTextSize(nextTextSize(readSize(), step))
 }
 
+const TINT_KEY = "mc.tint"
+const HEX = /^#[0-9a-f]{6}$/
+
+function readTint(): string | null {
+  const v = localStorage.getItem(TINT_KEY)
+  return v && HEX.test(v) ? v : null
+}
+
+function applyTint(t: string | null) {
+  const root = document.documentElement
+  if (t) {
+    root.dataset.tint = ""
+    root.style.setProperty("--tint", t)
+  } else {
+    delete root.dataset.tint
+    root.style.removeProperty("--tint")
+  }
+}
+
+export function setTint(t: string | null) {
+  if (t && HEX.test(t)) localStorage.setItem(TINT_KEY, t)
+  else localStorage.removeItem(TINT_KEY)
+  applyTint(t && HEX.test(t) ? t : null)
+  for (const l of listeners) l()
+}
+
+export function useTint(): string | null {
+  return useSyncExternalStore((l) => {
+    listeners.add(l)
+    return () => listeners.delete(l)
+  }, readTint)
+}
+
 /** Run once before the first render, so the page never paints in the wrong theme or size. */
 export function applyStoredAppearance() {
   apply(read())
   applySize(readSize())
+  applyTint(readTint())
 }
 
 export function useAppearance(): Appearance {

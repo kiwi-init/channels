@@ -3,6 +3,7 @@
 #include <glib-object.h>
 #include <gtk/gtk.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -812,4 +813,31 @@ bool kiwi_sandbox_pages(char *why, size_t size) {
     return false;
   }
   return on_main(sandbox_contexts, NULL) || refuse_sandbox(why, size, "WebKitGTK's default context didn't turn it on");
+}
+
+size_t kiwi_image_pixels(const char *path, uint8_t *out, size_t size) {
+  const int side = 24;
+  size_t need = (size_t)side * side * 4;
+  if (!path || !out || size < need) return 0;
+  GdkPixbuf *loaded = gdk_pixbuf_new_from_file_at_scale(path, 64, 64, TRUE, NULL);
+  if (!loaded) return 0;
+  GdkPixbuf *small = gdk_pixbuf_scale_simple(loaded, side, side, GDK_INTERP_BILINEAR);
+  g_object_unref(loaded);
+  if (!small) return 0;
+  int channels = gdk_pixbuf_get_n_channels(small);
+  int stride = gdk_pixbuf_get_rowstride(small);
+  const guchar *pixels = gdk_pixbuf_get_pixels(small);
+  bool ok = gdk_pixbuf_get_bits_per_sample(small) == 8 && channels >= 3;
+  for (int y = 0; ok && y < side; y++) {
+    for (int x = 0; x < side; x++) {
+      const guchar *p = pixels + y * stride + x * channels;
+      uint8_t *o = out + ((size_t)y * side + x) * 4;
+      o[0] = p[0];
+      o[1] = p[1];
+      o[2] = p[2];
+      o[3] = channels == 4 ? p[3] : 255;
+    }
+  }
+  g_object_unref(small);
+  return ok ? need : 0;
 }
