@@ -1,5 +1,5 @@
 {
-  "electrobun": "2.1.0-livewire.rc.4",
+  "electrobun": "2.1.0-livewire.rc.5",
   "releasesBaseUrl": "https://github.com/kiwi-init/electrobun-livewire/releases/download",
   "hutch": {
     "version": "0.28.2-canary.8",
@@ -37,16 +37,16 @@
     }
   },
   "devkit": {
-    "macos-arm64": "0f70aa4ca1163cc709a95707aaee42f644be89de9ade82b3509005204ba66ef2",
-    "linux-x64": "0f70aa4ca1163cc709a95707aaee42f644be89de9ade82b3509005204ba66ef2",
-    "linux-arm64": "0f70aa4ca1163cc709a95707aaee42f644be89de9ade82b3509005204ba66ef2"
+    "macos-arm64": "d689fd91c40017f80e144886716c8237d2167fc6e7703ed18958ad6e255354c1",
+    "linux-x64": "d689fd91c40017f80e144886716c8237d2167fc6e7703ed18958ad6e255354c1",
+    "linux-arm64": "d689fd91c40017f80e144886716c8237d2167fc6e7703ed18958ad6e255354c1"
   },
   "app": {
     "macos-arm64": {
       "Contents/MacOS/launcher": "cb56c4ccfa6d2c1a3596e44d143af212b5af3e196199a83c19d511506f28ff4f",
       "Contents/MacOS/bun": "0a2237cdcfa0d16ef501d9acca9f0026309ef348bea7393a64e8d1e3609565cc",
       "Contents/MacOS/libElectrobunCore.dylib": "fabb7954d71f66f508422fc0c432ba9ccde36394b9ccab02a8ba4aeaaa597243",
-      "Contents/MacOS/libNativeWrapper.dylib": "d4cae5e5b16c51f744465517a99e3e98a9adc1622a9dbb91a7443750cf69eca2",
+      "Contents/MacOS/libNativeWrapper.dylib": "81164dfdfb750a561e38e2dfd1396f007b8c1d819bed49147997ac7312a41b98",
       "Contents/MacOS/libasar.dylib": "775e92fed7238ea1da09ec5ae54a72a19baaccf602a4467f16bb2e36cff9cfbc",
       "Contents/MacOS/zig-zstd": "581944e9e8cac153581cf17109f1f58b5b87202524909d11803bfce2402c2548",
       "Contents/MacOS/bspatch": "a722fd1cf674012f25eb192c84b154bb753ec62422eb5d568907c44405cc81dd",
