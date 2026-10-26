@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -28,15 +28,13 @@ export function kdeWallpaper(appletsrc: string): string | null {
   return null;
 }
 
-function gnomeWallpaper(dark: boolean): string | null {
+const run = (cmd: string, args: string[]): Promise<string> =>
+  new Promise((resolve) => execFile(cmd, args, { encoding: "utf8", timeout: 2000, env: childEnv() }, (err, stdout) => resolve(err ? "" : stdout)));
+
+async function gnomeWallpaper(dark: boolean): Promise<string | null> {
   for (const key of dark ? ["picture-uri-dark", "picture-uri"] : ["picture-uri"]) {
-    try {
-      const out = execFileSync("gsettings", ["get", "org.gnome.desktop.background", key], { encoding: "utf8", timeout: 2000, env: childEnv() });
-      const p = pathOfUri(out);
-      if (p) return p;
-    } catch {
-      // No gsettings or no GNOME schema: another desktop may still name its wallpaper.
-    }
+    const p = pathOfUri(await run("gsettings", ["get", "org.gnome.desktop.background", key]));
+    if (p) return p;
   }
   return null;
 }
@@ -63,15 +61,6 @@ export function swwwImage(out: string): string | null {
   return /image:\s*(\/.+?)\s*$/m.exec(out)?.[1] ?? null;
 }
 
-function run(cmd: string, args: string[]): string {
-  try {
-    return execFileSync(cmd, args, { encoding: "utf8", timeout: 2000, env: childEnv(), stdio: ["ignore", "pipe", "ignore"] });
-  } catch {
-    // Not installed or not running: this wallpaper tool isn't the one in use.
-    return "";
-  }
-}
-
 function processIds(): string[] {
   try {
     return fs.readdirSync("/proc").filter((d) => /^\d+$/.test(d));
@@ -94,17 +83,17 @@ function swaybgRunning(): string | null {
   return null;
 }
 
-function wlrootsWallpaper(): string | null {
+async function wlrootsWallpaper(): Promise<string | null> {
   const omarchy = path.join(process.env["XDG_CONFIG_HOME"] ?? path.join(os.homedir(), ".config"), "omarchy", "current", "background");
   if (fs.existsSync(omarchy)) return fs.realpathSync(omarchy);
-  return swaybgRunning() ?? hyprpaperActive(run("hyprctl", ["hyprpaper", "listactive"])) ?? swwwImage(run("swww", ["query"]));
+  return swaybgRunning() ?? hyprpaperActive(await run("hyprctl", ["hyprpaper", "listactive"])) ?? swwwImage(await run("swww", ["query"]));
 }
 
-export function linuxWallpaper(dark: boolean): string | null {
+export async function linuxWallpaper(dark: boolean): Promise<string | null> {
   const desktop = process.env["XDG_CURRENT_DESKTOP"] ?? "";
   const kde = path.join(process.env["XDG_CONFIG_HOME"] ?? path.join(os.homedir(), ".config"), "plasma-org.kde.plasma.desktop-appletsrc");
   const fromKde = /kde/i.test(desktop) && fs.existsSync(kde) ? kdeWallpaper(fs.readFileSync(kde, "utf8")) : null;
-  const fromWlroots = !fromKde && !/gnome|kde/i.test(desktop) ? wlrootsWallpaper() : null;
-  const found = fromKde ?? fromWlroots ?? gnomeWallpaper(dark);
+  const fromWlroots = !fromKde && !/gnome|kde/i.test(desktop) ? await wlrootsWallpaper() : null;
+  const found = fromKde ?? fromWlroots ?? (await gnomeWallpaper(dark));
   return found && fs.existsSync(found) && fs.statSync(found).isFile() ? found : null;
 }

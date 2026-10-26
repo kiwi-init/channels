@@ -48,16 +48,16 @@ export function miscCalls(
       if (appearance !== "system" && appearance !== "light" && appearance !== "dark") throw new Error("an appearance is system, light or dark");
       host.appearance(appearance);
     },
-    wallpaperTints: (dark: boolean) => {
-      const pixels = host.wallpaper(dark === true);
+    wallpaperTints: async (dark: boolean) => {
+      const pixels = await host.wallpaper(dark === true);
       return pixels ? tintsOf(pixels) : [];
     },
     windowControl: (action: string) => {
       if (action !== "minimize" && action !== "maximize" && action !== "close") throw new Error("a window control is minimize, maximize or close");
       host.windowControl(action);
     },
-    wallpaperBackdrop: (dark: boolean) => {
-      const pixels = host.wallpaperImage(dark === true, BACKDROP_WIDTH, BACKDROP_HEIGHT);
+    wallpaperBackdrop: async (dark: boolean) => {
+      const pixels = await host.wallpaperImage(dark === true, BACKDROP_WIDTH, BACKDROP_HEIGHT);
       return pixels ? backdropOf(pixels, BACKDROP_WIDTH, BACKDROP_HEIGHT) : null;
     },
   };
