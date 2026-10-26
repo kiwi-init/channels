@@ -157,9 +157,9 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 - On a machine that draws without a GPU (WebGL's renderer is SwiftShader,
   llvmpipe or a basic render driver, or there's no WebGL: `lib/drawing.ts`
   marks `html[data-drawing=software]` once the app is idle), the scrims under
-  the header and over the composer drop their blur and mask and keep only
-  their fade: re-blurring them on every keystroke made typing take 128 ms
-  at p95 there, 32 ms without (`PERF_GL=swiftshader bun scripts/perf-scale.ts`).
+  the header and over the composer drop their mask and keep only their fade.
+- The scrims never blur: text scrolling under the header or above the
+  composer fades but stays sharp, on every platform.
 
 ## 6. Motion
 
@@ -497,7 +497,7 @@ same gestures, the same speed. The owner asked for it, so on the phone it wins o
   reply carries its quote. A conversation loaded from its start opens on an intro (face, name,
   a quiet line). Gestures are Messages': swipe a bubble right to reply, drag left for times,
   double-tap or long-press for tapbacks, tap a picture to zoom. The top fades the content under
-  the header; the bottom never blurs the last bubble.
+  the header; the bottom never covers the last bubble.
 - **Questions are polls** (Messages iOS 26): one grey card with "Question for you" in
   `decide`, the question, a row per option (a radio circle, ≥44pt) and "Something else…" in
   `accent`, which puts the composer in answer mode ("Answer win", with a bar you can cancel).
