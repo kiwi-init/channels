@@ -377,14 +377,12 @@ html.reduce-motion ::after {
 }
 
 /*
- * Behind what floats: the canvas fading out (and blurring a little) toward the content, so text that
- * scrolls under the header or the composer never fights with it.
+ * Behind what floats: the canvas fading out toward the content, so text that scrolls under the
+ * header or the composer never fights with it. No blur: the text under it stays sharp.
  */
 .scrim-top,
 .scrim-bottom {
   pointer-events: none;
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
 }
 .scrim-top {
   background: linear-gradient(to bottom, var(--canvas) 30%, transparent);
@@ -396,8 +394,6 @@ html.reduce-motion ::after {
 }
 html[data-drawing="software"] .scrim-top,
 html[data-drawing="software"] .scrim-bottom {
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
   mask-image: none;
 }
 
