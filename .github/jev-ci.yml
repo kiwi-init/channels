@@ -562,10 +562,10 @@ jobs:
       - "web/package.json"
       - "web/src/**"
     imports_from:
+      - "desktop/scripts/hyprland-check.ts"
       - "desktop/scripts/smoke-eb.ts"
       - "desktop/scripts/wayland-check.ts"
       - "desktop/scripts/wlroots-check.ts"
-      - "desktop/scripts/hyprland-check.ts"
       - "desktop/src/main-eb.ts"
       - "desktop/src/preload-eb.ts"
     always:
@@ -595,8 +595,6 @@ jobs:
       - "desktop/scripts/wayland-check/**"
       - "desktop/scripts/wlroots-check.ts"
       - "desktop/scripts/wlroots-check/**"
-      - "desktop/scripts/hyprland-check.ts"
-      - "desktop/scripts/hyprland-check/**"
     parts:
       - "desktop-distros"
     description: >-
