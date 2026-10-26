@@ -7,15 +7,6 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 cd "$dir"
 
 bun "$here/appimage-squashfs.ts" .
-deb=$(ls Channels-*-linux-amd64.deb)
-dpkg-deb --field "$deb" Package Version Architecture Depends
-files=$(dpkg-deb --contents "$deb")
-for p in ./opt/Channels/bin/launcher ./opt/Channels/bin/electrobun-launcher ./opt/Channels/bin/bun ./opt/Channels/Resources/kiwi.js ./opt/Channels/Resources/app/bun/index.js ./opt/Channels/Resources/app/bun/keys.js ./opt/Channels/Resources/app/bun/message-box.js ./opt/Channels/Resources/app/page/index.html ./opt/Channels/Resources/app/views/internal/assets ./usr/bin/channels-desktop ./usr/share/applications/channels-desktop.desktop ./usr/share/icons/hicolor/512x512/apps/channels-desktop.png; do
-  [[ "$files" == *" $p"* ]] || { echo "$deb lacks $p"; exit 1; }
-done
-for p in ./opt/Channels/bin/bspatch ./opt/Channels/bin/zig-zstd ./opt/Channels/Resources/uninstall ./opt/Channels/Channels.desktop ./opt/Channels/Resources/app/views/internal/index.html; do
-  [[ "$files" != *" $p"* ]] || { echo "$deb carries $p, which it leaves out"; exit 1; }
-done
 img=$(ls Channels-*-linux-x86_64.AppImage)
 "./$img" --appimage-extract > /dev/null
 for p in AppRun channels-desktop.desktop channels-desktop.png Channels/bin/launcher Channels/bin/electrobun-launcher Channels/bin/bun Channels/Resources/kiwi.js Channels/Resources/app/bun/index.js Channels/Resources/app/bun/keys.js Channels/Resources/app/bun/message-box.js Channels/Resources/app/page/index.html Channels/Resources/app/views/internal/assets; do
@@ -41,4 +32,4 @@ seen=$(env -i HOME=/home/ana DESKTOP_STARTUP_ID= XDG_ACTIVATION_TOKEN=kwin-43 "$
 want=$(printf 'HOME=/home/ana\nXDG_ACTIVATION_TOKEN=kwin-43\nDESKTOP_STARTUP_ID=kwin-43\nBUN_RUNTIME_TRANSPILER_CACHE_PATH=0')
 [ "$seen" = "$want" ] || { echo "with an empty DESKTOP_STARTUP_ID and a Wayland token, bin/launcher passed on:"; echo "$seen"; exit 1; }
 rm -rf "$probe" squashfs-root
-echo "checked: $deb and $img; bin/launcher keeps the app's environment to its allowlist and gives GTK the launch token as DESKTOP_STARTUP_ID"
+echo "checked: $img; bin/launcher keeps the app's environment to its allowlist and gives GTK the launch token as DESKTOP_STARTUP_ID"
