@@ -1,58 +1,58 @@
 {
-  "electrobun": "2.0.4",
+  "electrobun": "2.0.5",
   "hutch": {
-    "version": "0.28.1",
+    "version": "0.28.2",
     "platforms": {
       "macos-arm64": {
-        "url": "https://github.com/blackboardsh/electrobun/releases/download/v2.0.4/electrobun-hutch-macos-arm64.tar.gz",
-        "size": 1239170,
-        "sha256": "1d1e7b1b51d0fe276f543043faabab0d22416a9994821de3a6357570f2f88bc4",
+        "url": "https://github.com/blackboardsh/electrobun/releases/download/v2.0.5/electrobun-hutch-macos-arm64.tar.gz",
+        "size": 1248735,
+        "sha256": "7ae8a04e338631240b9a6dd4e703cebeed418af4009b8884024585fb226cf9da",
         "files": {
-          "bin/hutch": "b228cda0706c5bccd6a6cfb5cd0f41139e5a84891696d2b0d34b726a4f003aea",
-          "bin/hutch-engine": "817ea96568da1f57005df8a6b7976809656ea6e267119490afb319cfdff38cc3",
-          "hutch-release.json": "9354415cb44202d995dc62cec7f813012db9ea466cbeec31930a354e779fabeb"
+          "bin/hutch": "3d6df96bb0887ea90a99a28291b37fe9a8ce49f7ff83225e2c20c9aa4452b1dd",
+          "bin/hutch-engine": "f4119ff1e317f923e6bf4fbac35e28ee0323b06867797649486385056089d01a",
+          "hutch-release.json": "20902329c12f677408f99e45aa7d58f888fadda740ad26fa80ac318f210bda5d"
         }
       },
       "linux-x64": {
-        "url": "https://github.com/blackboardsh/electrobun/releases/download/v2.0.4/electrobun-hutch-linux-x64.tar.gz",
-        "size": 1228933,
-        "sha256": "0682359296439fab962e708104c2b1dcff2be7e8cc6bfda43ee414fa12fed84b",
+        "url": "https://github.com/blackboardsh/electrobun/releases/download/v2.0.5/electrobun-hutch-linux-x64.tar.gz",
+        "size": 1237677,
+        "sha256": "50ea299f8dd59ca50e83a9098b72ed2ea1dbdd8b4def9a44d21a11fd45199417",
         "files": {
-          "bin/hutch": "c9f4e9c3a7c254338d5779fe7849e577ace69bf7535c4ab15dbaa102d51cd539",
-          "bin/hutch-engine": "66f3cccc340b9194d1f8c239380ad2887fde7847306c7b810dd6e12710b5f166",
-          "hutch-release.json": "6584bf427c04c7adf76b2d74fa408f90f36b38c98c84c4b63f104762fee060f0"
+          "bin/hutch": "d68da4e1021d38e7923356c2bdf796f06aac8b1186f9b417136a5b2ca0b812bb",
+          "bin/hutch-engine": "4bd98fb2e3bd61623d7d43e3f2b4279bd86bf279d9a2b548612bdca73081d728",
+          "hutch-release.json": "bb68668f84ec2fc1c2f53ae7a20427951a32fb0933868b18d2893e509b47ae7f"
         }
       },
       "linux-arm64": {
-        "url": "https://github.com/blackboardsh/electrobun/releases/download/v2.0.4/electrobun-hutch-linux-arm64.tar.gz",
-        "size": 1285599,
-        "sha256": "ac486a73544a34e7ab33535930ef90b0356b777e06018708865ca44d2c0a1a45",
+        "url": "https://github.com/blackboardsh/electrobun/releases/download/v2.0.5/electrobun-hutch-linux-arm64.tar.gz",
+        "size": 1297280,
+        "sha256": "a1de942592c32cdd0d67eb663e1c1b69fdf3a6b028f537937b3514b93524e999",
         "files": {
-          "bin/hutch": "36f4f66b08be1b1faffad4ab1d18edb35d59387945f5e48341e792c817448e08",
-          "bin/hutch-engine": "e4b04fc7d6f49927f0f0024d08ac987775e780580ad58fea509de2b7406a23f1",
-          "hutch-release.json": "657cb5ff07a53657f9f387b91573d23c18a9103c193900f220a33ac7b5c6b510"
+          "bin/hutch": "fa9ab649a2219adb9772801b9251264c9691df64c32202daab7d2253b4a8b9b0",
+          "bin/hutch-engine": "3d428a233fbab56c129005b3ead0dd17738fcc8413f7412ed2ee76302f80ed0c",
+          "hutch-release.json": "29df6647a03b13f14d6c3f99334e60e3f4e9ee2cd3eff46de79b8f2ac01a856d"
         }
       }
     }
   },
   "devkit": {
-    "macos-arm64": "aa91d8834bb00ec25e7f8886b8988446a9842be4339ef7033b1bc7cd5e4808ca",
-    "linux-x64": "aa91d8834bb00ec25e7f8886b8988446a9842be4339ef7033b1bc7cd5e4808ca",
-    "linux-arm64": "aa91d8834bb00ec25e7f8886b8988446a9842be4339ef7033b1bc7cd5e4808ca"
+    "macos-arm64": "d448759129d75122564b3163ac9802db9e8f5446834b15094d2bd16d9d427954",
+    "linux-x64": "d448759129d75122564b3163ac9802db9e8f5446834b15094d2bd16d9d427954",
+    "linux-arm64": "d448759129d75122564b3163ac9802db9e8f5446834b15094d2bd16d9d427954"
   },
   "nativeWrapper": {
     "source": {
-      "url": "https://codeload.github.com/blackboardsh/electrobun/tar.gz/c54c0c14876455d43a25af0f9cd41a4b14e21854",
-      "keep": "electrobun-c54c0c14876455d43a25af0f9cd41a4b14e21854/package/src/native",
-      "tree": "ca10518cf0b8f58bd9a8a5c37745b19bdd2983be3cbca8911450ac6d7d87641e"
+      "url": "https://codeload.github.com/blackboardsh/electrobun/tar.gz/d06abc9edf0b4e55116129cabbfe17bf89e11791",
+      "keep": "electrobun-d06abc9edf0b4e55116129cabbfe17bf89e11791/package/src/native",
+      "tree": "ebcfc6c63f41b729ebe25bd63dc36b4d71d5ab0cda69fdf9c18340510bbcdd0d"
     },
     "cef": {
-      "url": "https://cef-builds.spotifycdn.com/cef_binary_147.0.10%2Bgd58e84d%2Bchromium-147.0.7727.118_linux64_minimal.tar.bz2",
-      "keep": "cef_binary_147.0.10+gd58e84d+chromium-147.0.7727.118_linux64_minimal/include",
-      "tree": "a3203ecd71251d0bfb91a59278d81f35f92360ac899598611d0cd39bde50bec5"
+      "url": "https://cef-builds.spotifycdn.com/cef_binary_156.0.7%2Bg47dbc1d%2Bchromium-156.0.8078.17_linux64_minimal.tar.bz2",
+      "keep": "cef_binary_156.0.7+g47dbc1d+chromium-156.0.8078.17_linux64_minimal/include",
+      "tree": "01056439b08c53fd2646452d4ea7413c73d089f7737e23966cc385fdf5f2113e"
     },
     "dawn": {
-      "url": "https://electrobun-artifacts.blackboard.sh/electrobun-dawn/releases/0.2.6/electrobun-dawn-linux-x64.tar.gz",
+      "url": "https://electrobun-artifacts.blackboard.sh/electrobun-dawn/releases/0.2.7/electrobun-dawn-linux-x64.tar.gz",
       "keep": "linux-x64/include",
       "tree": "61e7c61ed667e833011d5dd9744a83ad701e78bd0b587f7d3c2819499df63891"
     }
@@ -60,13 +60,13 @@
   "app": {
     "macos-arm64": {
       "Contents/MacOS/launcher": "612aafd40e4727b542bfa12d289bada96fdd19e3781ff27a4c6d573a5f48e1dc",
-      "Contents/MacOS/bun": "539598c775882420b9d8deb7dc14d845f20f7d26f5600c50ab067dde6ac3f3bf",
+      "Contents/MacOS/bun": "3d6df96bb0887ea90a99a28291b37fe9a8ce49f7ff83225e2c20c9aa4452b1dd",
       "Contents/MacOS/libElectrobunCore.dylib": "aaecf5a471458bc76769a251cafd5670ad92f1e94c15bd9c4b55e4db0868a5c8",
-      "Contents/MacOS/libNativeWrapper.dylib": "96f914a18e652a78a140f7c9ee0628709a77e64d240fe0f48050e858b4764dfa",
+      "Contents/MacOS/libNativeWrapper.dylib": "6e7d038ebb7dc22b48f59a4a392dc1ff8b74ba85bb8b10bf32bf66f48f3a6561",
       "Contents/MacOS/libasar.dylib": "775e92fed7238ea1da09ec5ae54a72a19baaccf602a4467f16bb2e36cff9cfbc",
       "Contents/MacOS/zig-zstd": "581944e9e8cac153581cf17109f1f58b5b87202524909d11803bfce2402c2548",
       "Contents/MacOS/bspatch": "a722fd1cf674012f25eb192c84b154bb753ec62422eb5d568907c44405cc81dd",
-      "Contents/Resources/main.js": "33af6c6ad224d43625e7c165f6977a3d061fef1f4e745895e31cfe4351faad05",
+      "Contents/Resources/main.js": "8afb61682280f0f2bd82abaad23996d043781cf23cd132a2bbfa2a8b8cd001c7",
       "Contents/Resources/preload-full.js": "95e086d77313d4ee21f7c1581dc02300fdbddd807978f8b73f6d534a01e42884",
       "Contents/Resources/preload-sandboxed.js": "d358fa4e85148ae6059eca9cfb398faf7a6c0710a03cdc972275f6a61670f3f9",
       "Contents/Resources/uninstall": "1445e6d53835578651faec6a4bc306be7a191aee5bb5240a924965433bf63717"

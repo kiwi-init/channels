@@ -19,9 +19,9 @@
     "@kiwi/core": "workspace:*"
   },
   "devDependencies": {
-    "@types/bun": "^1.4.3",
+    "@types/bun": "^1.4.4",
     "@types/node": "^26.6.5",
-    "electrobun": "2.0.4",
+    "electrobun": "2.0.5",
     "typescript": "^7.0.2"
   }
 }
