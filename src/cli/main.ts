@@ -13,7 +13,7 @@ import { AgentLive } from "../agent.ts";
 import { VERSION } from "../version.ts";
 import { refreshListeners } from "../hooks.ts";
 import { HELP } from "./help.ts";
-import { args, ignoredOptions, opt } from "./args.ts";
+import { args, ignoredOptions, opt, unexpectedOptions } from "./args.ts";
 import { type Command, die, out } from "./context.ts";
 import { joinCommands } from "./commands/join.ts";
 import { adminCommands } from "./commands/admin.ts";
@@ -90,6 +90,19 @@ if (import.meta.main) {
   if (!cmd || opt.help || cmd === "help") {
     out(HELP);
     process.exit(0);
+  }
+  if (cmd === "upgrade" || cmd === "update") {
+    try {
+      if (args.length !== 1) throw new Error("usage: kiwi upgrade (or kiwi update)");
+      const extra = unexpectedOptions([]);
+      if (extra.length) throw new Error(`kiwi ${cmd} does not accept ${extra.map((name) => `--${name}`).join(", ")}`);
+      const { upgrade } = await import("./upgrade.ts");
+      await upgrade({ executable: process.execPath, source: /\.(ts|js)$/.test(Bun.main), version: VERSION, platform: process.platform, arch: process.arch, report: out });
+      process.exit(0);
+    } catch (error) {
+      process.stderr.write(`kiwi: ${error instanceof Error ? error.message : String(error)}\n`);
+      process.exit(1);
+    }
   }
   const shortcuts: Record<string, string> = { s: "status", t: "tasks" };
   const command = commands[shortcuts[cmd] ?? cmd];
