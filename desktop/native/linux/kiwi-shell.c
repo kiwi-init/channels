@@ -607,12 +607,14 @@ typedef struct {
 
 static GtkCssProvider *look_css = NULL;
 static guint32 look_light = 0;
+static gboolean look_clear = FALSE;
 static guint32 look_dark = 0;
 
 static void paint_background(void) {
   gboolean dark = FALSE;
   g_object_get(gtk_settings_get_default(), "gtk-application-prefer-dark-theme", &dark, NULL);
-  gchar *css = g_strdup_printf("window { background-color: #%06x; }", (dark ? look_dark : look_light) & 0xffffff);
+  gchar *css = look_clear ? g_strdup("window { background-color: transparent; }")
+                          : g_strdup_printf("window { background-color: #%06x; }", (dark ? look_dark : look_light) & 0xffffff);
   gtk_css_provider_load_from_data(look_css, css, -1, NULL);
   g_free(css);
 }
@@ -840,4 +842,15 @@ size_t kiwi_image_pixels(const char *path, uint8_t *out, size_t size) {
   }
   g_object_unref(small);
   return ok ? need : 0;
+}
+
+static bool clear_on_main(gconstpointer arg) {
+  (void)arg;
+  look_clear = TRUE;
+  if (look_css) paint_background();
+  return true;
+}
+
+void kiwi_window_clear(void) {
+  on_main(clear_on_main, NULL);
 }

@@ -124,6 +124,14 @@ html[data-frost][data-tint] {
   --shell: color-mix(in srgb, var(--tint) 10%, transparent);
 }
 
+html[data-frost="tint"] {
+  --shell: light-dark(rgb(246 246 248 / 0.62), rgb(22 22 24 / 0.58));
+}
+
+html[data-frost="tint"][data-tint] {
+  --shell: color-mix(in srgb, var(--tint) 10%, light-dark(rgb(246 246 248 / 0.62), rgb(22 22 24 / 0.58)));
+}
+
 /* In the desktop app on a Mac (main.tsx sets data-shell): the traffic lights sit on the list's header. */
 @custom-variant shell-mac (&:where([data-shell="mac"], [data-shell="mac"] *));
 

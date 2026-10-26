@@ -20,6 +20,10 @@ const sandboxPages = mac ? null : dlopen(shellPath, { kiwi_sandbox_pages: { args
 
 export const windowLook = dlopen(shellPath, { kiwi_window_look: { args: [FFIType.ptr, FFIType.f64, FFIType.f64, FFIType.u32, FFIType.u32], returns: FFIType.void } }).symbols.kiwi_window_look;
 
+const clearShell = mac ? null : dlopen(shellPath, { kiwi_window_clear: { args: [], returns: FFIType.void } }).symbols;
+
+export const clearWindow = (): void => void clearShell?.kiwi_window_clear();
+
 const frostShell = mac
   ? dlopen(shellPath, {
       kiwi_window_frost: { args: [FFIType.ptr, FFIType.function], returns: FFIType.bool },
