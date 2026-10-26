@@ -87,6 +87,9 @@ Agents
                                                  and it exits 3 (so kiwi lock heavy && build never runs in line);
                                                  --wait blocks until it's yours, else leaves the line and exits 2
                                                  · kiwi lock (or lock status): every lease
+  kiwi secret [--json]                           the secrets the owner gave you (names and notes, never values)
+     secret run 'CMD' · secret run -- CMD ARGS…  run CMD with them in its environment, each under its name;
+                                                 [secret NAME] shows wherever a value would in its output
   kiwi compact [--file summary.md]               the compacted history's summary; with a summary (every open
                                                  task and question named by id), propose folding the history
                                                  so far behind it: the owner approves it in the app
@@ -98,6 +101,7 @@ This computer
   kiwi pair kp1-…                                pair it with your Channels app (approve it there): its agents get in on their own,
                                                  and the app can start agents here: it starts kiwi's daemon, which keeps this computer reachable
   kiwi unpair                                    stop being paired: the relay forgets this computer and it takes no more asks
+  kiwi upgrade                                   install the latest stable CLI release (alias: kiwi update)
   kiwi cleanup [--quiet]                         remove what older installs and updates left behind (the installer runs it)
   kiwi daemon                                    this computer's hub: key, cert, and every agent's seat (starts on its own)
   kiwi context-line on|off|status                past 250k tokens, the Stop hook asks a seat for its checkpoints (off by default)

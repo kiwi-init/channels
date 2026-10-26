@@ -15,6 +15,7 @@ import { keepAnswersIn, keepBlobsIn, keepRecordsIn } from "@kiwi/core/client.ts"
 import { Keystore, type ChannelConfig } from "./config.ts";
 import type { Presence } from "@kiwi/core/protocol.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
+import { openSecret } from "@kiwi/core/secrets.ts";
 import { runAgent } from "./agent/shared.ts";
 import { SessionTasks } from "./agent/tasks.ts";
 
@@ -41,7 +42,10 @@ export const openSession = Effect.fn("AgentSession.open")(function* (alias: stri
     return yield* Effect.fail(new Error(`${name} has no key in "${alias}" on this machine`));
   }
   const identity = yield* keys.identity(name, cfg.roomId);
-  return new AgentSession(alias, cfg, identity, (a) => Effect.runSync(keys.saveAccess(alias, a)));
+  const session = new AgentSession(alias, cfg, identity, (a) => Effect.runSync(keys.saveAccess(alias, a)));
+  const kept = yield* keys.secrets(cfg.roomId, name);
+  if (kept.length) session.ch.guardSecrets((yield* Effect.promise(() => Promise.all(kept.map((r) => openSecret(identity, cfg.roomId, cfg.ownerPk, r))))).filter((s) => s !== null));
+  return session;
 });
 
 export type { Presence };

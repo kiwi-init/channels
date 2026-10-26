@@ -36,6 +36,17 @@ describe("kiwi cleanup", () => {
     expect(existsSync(join(s.bin, "kiwi"))).toBe(true);
   });
 
+  test("interrupted CLI upgrade staging goes while a running upgrade and other folders stay", () => {
+    const s = sandbox();
+    const dead = join(s.bin, `.kiwi-upgrade-${DEAD}-abc123`);
+    const live = join(s.bin, `.kiwi-upgrade-${process.pid}-abc123`);
+    const other = join(s.bin, ".kiwi-upgrade-unrelated");
+    for (const dir of [dead, live, other]) mkdirSync(dir);
+    expect(cleanup(s).removed).toEqual([dead]);
+    expect(existsSync(live)).toBe(true);
+    expect(existsSync(other)).toBe(true);
+  });
+
   test("older clients' listener files go once their process is gone; live ones and handed-over marks stay", () => {
     const s = sandbox();
     const listeners = join(s.home, "listeners");

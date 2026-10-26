@@ -6,12 +6,14 @@ import type { ChannelAccess } from "@kiwi/core/crypto.ts";
 import type { Identity } from "@kiwi/core/identity.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import type { SigningBudget } from "@kiwi/core/sas.ts";
+import type { SecretRow } from "@kiwi/core/secrets.ts";
 import type { FoldBase } from "@kiwi/core/state.ts";
 import { appendCache, dropBase, fileAnswerMemory, fileBlobMemory, fileRecordMemory, keepBase, readBase, readCache, replaceCache, trimCache } from "./cache.ts";
 import { markSeen, readCursor, readSeen, writeCursor } from "./cursors.ts";
 import { loadConfig, saveAccess, updateConfig, type Config } from "./file.ts";
 import { forgetIdentities, forgetIdentity, identitiesIn, loadIdentity, saveIdentity } from "./identities.ts";
 import { signingBudget } from "./paths.ts";
+import { keepSecrets, readSecrets } from "./secrets.ts";
 import { forgetMember, wipeChannel } from "./wipe.ts";
 import { seatHeldAway } from "../hold.ts";
 
@@ -26,6 +28,8 @@ export interface KeystoreApi {
   readonly saveAccess: (alias: string, access: ChannelAccess) => Effect.Effect<void>;
   readonly forgetMember: (alias: string, name: string) => Effect.Effect<void>;
   readonly wipeChannel: (alias: string) => Effect.Effect<void>;
+  readonly secrets: (roomId: string, name: string) => Effect.Effect<SecretRow[]>;
+  readonly keepSecrets: (roomId: string, name: string, rows: readonly SecretRow[]) => Effect.Effect<void>;
   readonly budget: SigningBudget;
   readonly records: RecordMemory;
   readonly answers?: AnswerMemory;
@@ -68,6 +72,8 @@ const fileKeystore: KeystoreApi = {
   saveAccess: (alias, access) => Effect.sync(() => saveAccess(alias, access)),
   forgetMember: (alias, name) => Effect.sync(() => forgetMember(alias, name)),
   wipeChannel: (alias) => Effect.sync(() => wipeChannel(alias)),
+  secrets: (roomId, name) => Effect.sync(() => readSecrets(roomId, name)),
+  keepSecrets: (roomId, name, rows) => Effect.sync(() => keepSecrets(roomId, name, rows)),
   budget: signingBudget,
   records: fileRecordMemory,
   answers: fileAnswerMemory,

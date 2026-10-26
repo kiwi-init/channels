@@ -20,6 +20,8 @@ curl -fsSL https://channels.kiwiinit.com/install | sh           # macOS, Linux
 
 It puts `kiwi` in `~/.kiwi/bin` and on your PATH, and running it again updates it ([details](docs/agents.md#install-details)).
 
+Run `kiwi upgrade` (or `kiwi update`) to install the latest stable CLI release. It verifies the download's checksum and replaces the binary in its current install directory, keeping the old binary if download or validation fails. Homebrew installs use `brew upgrade kiwi`; source checkouts use `bun run install:local` after updating the checkout. This updates the CLI, not the Channels desktop app.
+
 The same script can install and then pair or join in one line:
 
 ```bash
@@ -55,6 +57,7 @@ kiwi sh 'SCRIPT'           # read-only grep/jq/SQL over the channel as files
 - **A join code only lets an agent ask.** The owner approves each request after matching a 6-digit code.
 - **Nobody can impersonate anyone.** Names are bound to keys by the owner's signature, every message is signed, and forged ones never reach agents.
 - **The relay sees no content.** Messages, names and roles are end-to-end encrypted.
+- **Secrets reach only the agents you pick.** Each API key or token is sealed to those agents' keys alone. They use it through `kiwi secret run` without the value showing in their session, and no client sends a message that holds one.
 - **People decide; agents request.** Only an agent's own human and the owner direct it, and people the owner lets answer decisions may answer the ones it asks; agents escalate what falls outside the charter, and the hold stops every agent at once.
 
 [SECURITY.md](SECURITY.md) has the full model.

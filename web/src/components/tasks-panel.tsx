@@ -62,7 +62,7 @@ export function TasksPanel({
           onClose()
         }}
       >
-        <header className="drag flex h-(--card-head) shrink-0 items-center gap-(--step) px-(--step)">
+        <header className="drag flex h-(--chrome-h) shrink-0 items-center gap-2 px-3 md:mt-(--step) md:h-(--card-head) md:gap-(--step) md:px-(--step)">
           {onBack && (
             <IconButton label={backLabel} round className="no-drag size-(--control)" onClick={onBack}>
               <Icon icon={ArrowLeft01Icon} size={15} />
