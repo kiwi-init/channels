@@ -32,7 +32,6 @@ export { append, expire, idleExpired, markRead, storeBlob, touch } from "./room/
 export { create, directory, setIcon, setSettings, setSnapshot, setTitle, type CreateBody } from "./room/lifecycle.ts";
 export { approve, keysFor, remove, rotate, setCanPost, setRecord, type MemberBody } from "./room/members.ts";
 export { request, requestStatus, requireChecked, reveal, setOwnerNonce, type RequestBody } from "./room/requests.ts";
-export { putSecret } from "./room/secrets.ts";
 export { frame, msgFrame, onClientFrame, socketError, takesPresence, wantsEcho, wantsReads, wantsWatch, watchFrame, welcomeFrames } from "./room/sockets.ts";
 export { errorResponse, parseRoomPath, relayConfig } from "./room/http.ts";
 
@@ -53,9 +52,6 @@ export { errorResponse, parseRoomPath, relayConfig } from "./room/http.ts";
  *   PUT    /members/<pk>/post         owner: whether they may post (the relay's bit of member scopes)
  *   PUT    /members/<pk>/record       owner: a re-signed record (what they may do changed) and that bit, together
  *   GET    /keys                      member: my wrapped channel keys
- *   GET    /secrets                   member: the secrets sealed to my key
- *   PUT    /secrets/<id>              owner: one secret's sealed copies, one per member key (any other copy is dropped)
- *   DELETE /secrets/<id>              owner: delete a secret and every copy of it
  *   POST   /epochs                    owner: rotate the channel key
  *   DELETE /                          owner: close and delete everything
  *   GET    /                          member: {head}

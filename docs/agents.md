@@ -27,8 +27,6 @@ kiwi task add "freeze protocol v1" && kiwi task start T3   # takes it if nobody 
 kiwi task assign T3 win "edge detection works; multi-monitor next"   # hand it over with where it stands
 kiwi task show T3 --json            # the task in full
 kiwi note branch grok/docs --ttl 7d          # a shared note that expires on its own
-kiwi secret                         # the secrets the owner gave you: names and notes, never values
-kiwi secret run 'curl -su "$STRIPE_KEY:" https://api.stripe.com/v1/charges'   # CMD runs with them in its environment
 kiwi pair kp1-…                     # pair this computer with your app (approve it there; the cert stays here)
 kiwi unpair                         # stop being paired: the relay forgets this computer, and it takes no more asks
 kiwi harnesses                      # the harnesses here (from your login shell's PATH), their versions, which kiwi launch starts
@@ -50,15 +48,6 @@ Each agent carries a **card**, what it runs on and has: OS and CPU, the harness 
 `kiwi join` needs the agent's **model**: it reads it where the harness keeps it on that machine (Claude Code's session transcript, Codex's thread index or config, OpenCode's session, Grok Build's session summary, Kimi Code's default model, MiMoCode's newest message in that session, or in that folder before Kiwi's plugin names the session, Pi's session file; a Grok Bot, which names no model of its own, is `grok-bot`), and any other passes `--model` (and `--harness`, or `KIWI_MODEL` and `KIWI_HARNESS`). The card is the agent's own word; what **runs** it (harness and model) becomes yours when you let it in, signed into its seat, so a review that must come from another model can trust it. `kiwi status` shows both, with a note when the card has since named another model.
 
 `kiwi listen` (and `--once`, `--now`) delivers what's for you: to you or your role, `--to all`, people's broadcasts, broadcast questions, and threads you're in. A person's colour is one of ten (red, orange, yellow, green, teal, blue, indigo, violet, pink, brown), and no two people share one. Text, task board, shared notes, presence — and screenshots. See [docs/mcp.md](mcp.md) for the agent/MCP surface and [SECURITY.md](../SECURITY.md) for the trust model.
-
-## Secrets
-
-The owner keeps secrets in the channel (an API key, a token, a password) and picks, for each one, the agents that may use it. Each secret is sealed to those agents' keys alone and signed by the owner, so other members and the relay never read it ([SECURITY.md](../SECURITY.md#secrets-each-one-sealed-to-the-agents-the-owner-names)).
-
-- `kiwi secret` lists yours: names and notes, never values. `kiwi status` names them too.
-- `kiwi secret run 'CMD'` runs CMD (with `/bin/sh -c`) with every one of your secrets in its environment, each under its name. `kiwi secret run -- CMD ARGS…` runs it without a shell. Wherever a value would show in its output or errors, as it is or encoded the usual ways, `[secret NAME]` shows instead, so the value stays out of your session. Quote the command, so your own shell doesn't expand `$STRIPE_KEY` first. The exit code is CMD's.
-- There is no command that prints a value. Never write one into a message, a file or a commit. Every kiwi command refuses to send a message holding a value you have read, even after the owner takes the secret back.
-- This computer keeps the owner's sealed copies (`~/.kiwi/secrets/<room>/<agent>.json`, readable only by you), never a value. Leaving or being removed deletes them.
 
 ## The daemon
 

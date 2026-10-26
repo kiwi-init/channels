@@ -26,7 +26,6 @@ export interface Info {
   settings?: SealedBlob | null;
   blobs?: boolean;
   sealedEpoch?: boolean;
-  secrets?: boolean;
 }
 
 export type MemberRow = { pk: string; xpk: string; rec: string; e: number; active: number; read_only?: number };

@@ -37,8 +37,6 @@ const SLOTS_TABLE = "CREATE TABLE slots (id TEXT PRIMARY KEY, holder TEXT NOT NU
 
 const SENDS_TABLE = "CREATE TABLE sends (sender TEXT NOT NULL, cid TEXT NOT NULL, seq INTEGER NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (sender, cid))";
 
-const SECRETS_TABLE = "CREATE TABLE secrets (id TEXT NOT NULL, pk TEXT NOT NULL, box TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (id, pk))";
-
 const REQUEST_COLUMNS = [
   ["kind", "TEXT NOT NULL DEFAULT 'agent'"],
   ["sponsor_user", "TEXT"],
@@ -130,7 +128,6 @@ export class RoomDb {
     this.sql.run(READS_TABLE);
     this.sql.run(SLOTS_TABLE);
     this.sql.run(SENDS_TABLE);
-    this.sql.run(SECRETS_TABLE);
   }
 
   migrate(): void {
@@ -147,7 +144,7 @@ export class RoomDb {
     this.sql.run(READS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
     this.sql.run(SLOTS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
     this.sql.run(SENDS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
-    this.sql.run(SECRETS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
+    this.sql.run("DROP TABLE IF EXISTS secrets");
     migrated.add(this.sql);
   }
 
@@ -349,45 +346,6 @@ export class RoomDb {
     }
     for (const id of gone) this.sql.run("DELETE FROM blobs WHERE id = ?", id);
     return freed;
-  }
-
-  secretsFor(pk: string): { id: string; box: string; at: number }[] {
-    this.migrate();
-    return this.sql.all("SELECT id, box, at FROM secrets WHERE pk = ? ORDER BY id", pk);
-  }
-
-  secretCount(): number {
-    this.migrate();
-    return this.sql.all<{ n: number }>("SELECT COUNT(DISTINCT id) AS n FROM secrets")[0]?.n ?? 0;
-  }
-
-  hasSecret(id: string): boolean {
-    this.migrate();
-    return this.sql.all("SELECT 1 FROM secrets WHERE id = ? LIMIT 1", id).length > 0;
-  }
-
-  secretBytesBesides(id: string): number {
-    this.migrate();
-    return this.sql.all<{ n: number }>("SELECT COALESCE(SUM(LENGTH(box)), 0) AS n FROM secrets WHERE id != ?", id)[0]?.n ?? 0;
-  }
-
-  putSecret(id: string, boxes: readonly (readonly [string, string])[], at: number): string[] {
-    this.migrate();
-    this.sql.run("DELETE FROM secrets WHERE id = ?", id);
-    for (const [pk, box] of boxes) this.sql.run("INSERT INTO secrets (id, pk, box, at) VALUES (?, ?, ?, ?)", id, pk, box, at);
-    return this.sql.all<{ pk: string }>("SELECT pk FROM secrets WHERE id = ? ORDER BY pk", id).map((r) => r.pk);
-  }
-
-  dropSecret(id: string): number {
-    this.migrate();
-    const n = this.sql.all<{ n: number }>("SELECT COUNT(*) AS n FROM secrets WHERE id = ?", id)[0]?.n ?? 0;
-    if (n) this.sql.run("DELETE FROM secrets WHERE id = ?", id);
-    return n;
-  }
-
-  dropSecretsOf(pk: string): void {
-    this.migrate();
-    this.sql.run("DELETE FROM secrets WHERE pk = ?", pk);
   }
 
   activeMembers(): number {

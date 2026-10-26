@@ -8,7 +8,6 @@ import {
   GithubIcon,
   GitPullRequestIcon,
   HashtagIcon,
-  Key01Icon,
   Note01Icon,
   PauseIcon,
   PencilEdit01Icon,
@@ -34,7 +33,7 @@ import { Rooms } from "./controls/rooms"
 import { useDownload } from "./controls/use-download"
 import { Icon, type IconSvgElement } from "./icon"
 import { Button, IconButton, Monogram, SEGMENTED, SEGMENT_OFF, SEGMENT_ON, errorText, toast } from "./kit"
-import { AddAgent, Invite, Secrets } from "./lazy"
+import { AddAgent, Invite } from "./lazy"
 import { defaultScopes, saveDefaultScopes } from "./scopes"
 
 export function InfoPanel({
@@ -62,7 +61,7 @@ export function InfoPanel({
 }) {
   const { p, ask, openDialog, editColor } = useControls()
   const { saving, download } = useDownload(p)
-  const [view, setView] = useState<"details" | "invite" | "repos" | "rooms" | "agent" | "secrets">("details")
+  const [view, setView] = useState<"details" | "invite" | "repos" | "rooms" | "agent">("details")
   const [picking, setPicking] = useState(false)
   const [savingIcon, setSavingIcon] = useState(false)
   const [readOnly, setReadOnly] = useState(() => (p.roomId ? presetOf(defaultScopes(p.roomId)) === "read-only" : false))
@@ -113,8 +112,6 @@ export function InfoPanel({
               </div>
             ) : view === "rooms" ? (
               <Rooms rooms={[...p.state.rooms.values()]} onMake={p.onMakeRoom} onRename={p.onRenameRoom} />
-            ) : view === "secrets" ? (
-              <Secrets />
             ) : (
               <Repos repos={p.state.repos} onSave={p.isOwner ? p.onRepos : undefined} />
             )}
@@ -278,11 +275,6 @@ export function InfoPanel({
                   {(p.isOwner || p.state.repos.length > 0) && (
                     <Row icon={GithubIcon} onClick={() => setView("repos")} detail={p.state.repos.join(", ") || "None yet"}>
                       Repos
-                    </Row>
-                  )}
-                  {p.isOwner && p.secrets && (
-                    <Row icon={Key01Icon} onClick={() => setView("secrets")} detail="Keys and tokens only the agents you pick can use">
-                      Secrets
                     </Row>
                   )}
                   {(p.isOwner ? p.state.repos.length > 0 : p.state.githubWrite !== null) &&

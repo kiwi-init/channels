@@ -27,7 +27,6 @@ type Handlers = Pick<
   | "onBranchPrefix"
   | "onMakeRoom"
   | "onRenameRoom"
-  | "secrets"
   | "onRename"
   | "onIcon"
   | "onCloseChannel"
@@ -134,7 +133,6 @@ export function useControlsHandlers({
           await send(on ? "turned on Write to GitHub" : "turned off Write to GitHub", { kind: "event", ev: { op: "github.write.set", on } })
         }
       : undefined,
-    secrets: isOwner ? { list: () => ch.secrets(), value: (id) => ch.secretValue(id), save: (input) => ch.setSecret(input), remove: (id) => ch.deleteSecret(id) } : undefined,
     onBranchPrefix: isOwner
       ? async (prefix) => {
           await send(prefix ? `branch prefix: ${prefix}` : "cleared the branch prefix", { kind: "event", ev: { op: "branch.prefix.set", prefix } })
