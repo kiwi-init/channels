@@ -2,6 +2,11 @@ name: ui-publish
 
 on:
   workflow_dispatch:
+  # Dispatch needs this file on main, which stays stable's. On the Livewire branch,
+  # a commit that changes ui-publish-request publishes the UI at that commit.
+  push:
+    branches: [T377-livewire-rc]
+    paths: [.github/ui-publish-request]
 
 permissions:
   contents: read
