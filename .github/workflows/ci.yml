@@ -668,29 +668,52 @@ jobs:
         run: |
           sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
           xcodebuild -version
-      - name: simulator
+      - name: simulators
         run: |
-          SIM=$(xcrun simctl list devices available --json | python3 -c '
+          SIMS=($(xcrun simctl list devices available --json | python3 -c '
           import json, sys
           devices = json.load(sys.stdin)["devices"]
           runtimes = sorted((k for k in devices if ".iOS-" in k), key=lambda k: [int(x) for x in k.rsplit(".iOS-", 1)[1].split("-")])
-          print(next(d["udid"] for d in devices[runtimes[-1]] if d["name"].startswith("iPhone")))')
-          echo "SIM=$SIM" >> "$GITHUB_ENV"
-          xcrun simctl boot "$SIM"
-          xcrun simctl bootstatus "$SIM"
+          phones = [d["udid"] for d in devices[runtimes[-1]] if d["name"].startswith("iPhone")]
+          print("\n".join(phones[:2]))'))
+          [ "${#SIMS[@]}" -ge 2 ] || { echo "two available iPhone simulators are required"; exit 1; }
+          echo "SIM_A=${SIMS[0]}" >> "$GITHUB_ENV"
+          echo "SIM_B=${SIMS[1]}" >> "$GITHUB_ENV"
+          for SIM in "${SIMS[@]}"; do xcrun simctl boot "$SIM"; done
+          for SIM in "${SIMS[@]}"; do xcrun simctl bootstatus "$SIM"; done
       - name: gestures
         run: |
+          run_gestures() {
+            local sim="$1" name="$2"
+            shift 2
+            xcodebuild test-without-building -project ios/Channels.xcodeproj -scheme Channels -destination "id=$sim" -derivedDataPath "$RUNNER_TEMP/ios-ui" -resultBundlePath "$RUNNER_TEMP/$name.xcresult" "$@" CODE_SIGNING_ALLOWED=NO > "$RUNNER_TEMP/$name.log" 2>&1
+          }
+          if ! xcodebuild build-for-testing -project ios/Channels.xcodeproj -scheme Channels -destination "id=$SIM_A" -derivedDataPath "$RUNNER_TEMP/ios-ui" CODE_SIGNING_ALLOWED=NO > "$RUNNER_TEMP/gestures-build.log" 2>&1; then
+            tail -80 "$RUNNER_TEMP/gestures-build.log"
+            exit 1
+          fi
+          run_gestures "$SIM_A" gestures-beside -only-testing:ChannelsUITests/GestureTests/testDragStartingBesideTheBubblesScrolls &
+          beside=$!
+          run_gestures "$SIM_B" gestures-bubble -only-testing:ChannelsUITests/GestureTests/testDragStartingOnABubbleScrolls -only-testing:ChannelsUITests/GestureTests/testSwipingABubbleRightReplies &
+          bubble=$!
           set +e
-          xcodebuild test -project ios/Channels.xcodeproj -scheme Channels -destination "id=$SIM" -derivedDataPath "$RUNNER_TEMP/ios-ui" -resultBundlePath "$RUNNER_TEMP/gestures.xcresult" CODE_SIGNING_ALLOWED=NO > "$RUNNER_TEMP/gestures.log" 2>&1
-          code=$?
-          grep -E "GESTURE|error:|Test Case .*(passed|failed)|\*\* TEST" "$RUNNER_TEMP/gestures.log"
-          [ "$code" -eq 0 ] || tail -80 "$RUNNER_TEMP/gestures.log"
-          exit "$code"
+          wait "$beside"
+          beside_code=$?
+          wait "$bubble"
+          bubble_code=$?
+          set -e
+          grep -E "GESTURE|error:|Test Case .*(passed|failed)|\*\* TEST" "$RUNNER_TEMP/gestures-beside.log"
+          grep -E "GESTURE|error:|Test Case .*(passed|failed)|\*\* TEST" "$RUNNER_TEMP/gestures-bubble.log"
+          if [ "$beside_code" -ne 0 ] || [ "$bubble_code" -ne 0 ]; then
+            tail -80 "$RUNNER_TEMP/gestures-beside.log"
+            tail -80 "$RUNNER_TEMP/gestures-bubble.log"
+            exit 1
+          fi
       - if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ios-gestures-xcresult
-          path: ${{ runner.temp }}/gestures.xcresult
+          path: ${{ runner.temp }}/gestures-*.xcresult
           if-no-files-found: ignore
           retention-days: 3
           overwrite: true
