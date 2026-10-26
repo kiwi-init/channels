@@ -333,6 +333,8 @@ export interface KiwiBridge {
   /** A newer proper release: being downloaded, ready to restart into, or only available (a .deb). */
   keysAtRest(): Promise<KeysAtRest>;
   wallpaperTints(dark: boolean): Promise<string[]>;
+  wallpaperBackdrop(dark: boolean): Promise<string | null>;
+  windowControl(action: "minimize" | "maximize" | "close"): Promise<void>;
   getUpdate(): Promise<UpdateView | null>;
   onUpdate(cb: (u: UpdateView) => void): () => void;
   /** Restart into the downloaded update. */

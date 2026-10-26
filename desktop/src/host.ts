@@ -25,6 +25,8 @@ export interface Host {
   badge(count: number): void;
   appearance(appearance: "system" | "light" | "dark"): void;
   wallpaper(dark: boolean): Uint8Array | null;
+  wallpaperImage(dark: boolean, width: number, height: number): Uint8Array | null;
+  windowControl(action: "minimize" | "maximize" | "close"): void;
   showWindow(): void;
   reload(): void;
   restartToUpdate(): void;

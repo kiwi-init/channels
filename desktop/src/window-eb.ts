@@ -87,7 +87,7 @@ export async function createWindow(keyring: KeyringState | null = null): Promise
     title: "Channels",
     url: null,
     frame: { width: WINDOW_SIZE.width, height: WINDOW_SIZE.height },
-    titleBarStyle: mac ? "hiddenInset" : "default",
+    titleBarStyle: mac ? "hiddenInset" : "hidden",
     hidden: true,
     preload,
     rpc: bridge,

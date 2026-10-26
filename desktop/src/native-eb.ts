@@ -58,9 +58,20 @@ export function windowLooks(): string {
 
 const wallpaperShell = mac
   ? dlopen(shellPath, { kiwi_wallpaper_pixels: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.u64 } }).symbols
-  : dlopen(shellPath, { kiwi_image_pixels: { args: [FFIType.cstring, FFIType.ptr, FFIType.u64], returns: FFIType.u64 } }).symbols;
+  : dlopen(shellPath, {
+      kiwi_image_pixels: { args: [FFIType.cstring, FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
+      kiwi_image_pixels_sized: { args: [FFIType.cstring, FFIType.i32, FFIType.i32, FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
+    }).symbols;
 
 const WALLPAPER_BYTES = 24 * 24 * 4;
+
+export function wallpaperImage(dark: boolean, width: number, height: number): Uint8Array | null {
+  if (!("kiwi_image_pixels_sized" in wallpaperShell)) return null;
+  const file = linuxWallpaper(dark);
+  if (!file) return null;
+  const out = new Uint8Array(width * height * 4);
+  return Number(wallpaperShell.kiwi_image_pixels_sized(ptr(Buffer.from(`${file}\0`)), width, height, ptr(out), out.length)) === out.length ? out : null;
+}
 
 export function wallpaperPixels(dark: boolean): Uint8Array | null {
   const out = new Uint8Array(WALLPAPER_BYTES);

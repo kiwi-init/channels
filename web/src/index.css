@@ -128,6 +128,15 @@ html[data-frost="tint"] {
   --shell: light-dark(rgb(246 246 248 / 0.62), rgb(22 22 24 / 0.58));
 }
 
+html[data-frost="image"] {
+  background: var(--backdrop, var(--rail)) center / cover no-repeat fixed;
+  --shell: light-dark(rgb(246 246 248 / 0.6), rgb(22 22 24 / 0.6));
+}
+
+html[data-frost="image"][data-tint] {
+  --shell: color-mix(in srgb, var(--tint) 10%, light-dark(rgb(246 246 248 / 0.6), rgb(22 22 24 / 0.6)));
+}
+
 html[data-frost="tint"][data-tint] {
   --shell: color-mix(in srgb, var(--tint) 10%, light-dark(rgb(246 246 248 / 0.62), rgb(22 22 24 / 0.58)));
 }
@@ -162,6 +171,8 @@ html[data-shell="linux"] body {
 
 /* In the desktop app on a Mac (main.tsx sets data-shell): the traffic lights sit on the list's header. */
 @custom-variant shell-mac (&:where([data-shell="mac"], [data-shell="mac"] *));
+
+@custom-variant shell-float (&:where([data-shell="linux"][data-wm="floating"], [data-shell="linux"][data-wm="floating"] *));
 
 @theme inline {
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
