@@ -29,7 +29,6 @@ const CAPABILITY_TEXT: Record<Capability, [string, string]> = {
 
 const BLANK: Omit<Personality, "id"> = { name: "New personality", glyph: "✳", role: "builder", capabilities: ["write", "tasks", "notes"], areas: [], instructions: "" }
 
-
 function tagline(p: Personality): string {
   if (PRESET_IDS.has(p.id)) return TAGLINE[p.id] ?? ROLE_LABEL[p.role]
   return `${ROLE_LABEL[p.role]}${p.areas.length ? `, limited to ${p.areas.join(", ")}` : ""}`
