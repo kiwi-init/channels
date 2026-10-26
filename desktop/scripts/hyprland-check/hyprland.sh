@@ -24,7 +24,7 @@ echo "Hyprland renders on $card"
 export XDG_RUNTIME_DIR
 XDG_RUNTIME_DIR=$(mktemp -d)
 chmod 700 "$XDG_RUNTIME_DIR"
-sudo seatd -n 3 -u "$(id -un)" -g "$(id -gn)" > "$out/seatd.log" 2>&1 3> "$out/seatd.ready" &
+sudo env SEATD_VTBOUND=0 seatd -u "$(id -un)" -g "$(id -gn)" > "$out/seatd.log" 2>&1 &
 for _ in $(seq 1 50); do [ -S /run/seatd.sock ] && break; sleep 0.2; done
 [ -S /run/seatd.sock ] || { echo "seatd didn't start:"; cat "$out/seatd.log"; exit 1; }
 unset DISPLAY XAUTHORITY GDK_BACKEND WAYLAND_DISPLAY
@@ -67,15 +67,16 @@ exec-once = $out/run.sh
 CONF
 
 rm -f "$out/results.json"
-timeout 600 dbus-run-session -- env LIBSEAT_BACKEND=seatd SEATD_SOCK=/run/seatd.sock AQ_DRM_DEVICES="$card" LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=Hyprland \
+timeout 300 dbus-run-session -- env LIBSEAT_BACKEND=seatd SEATD_SOCK=/run/seatd.sock AQ_DRM_DEVICES="$card" GBM_ALWAYS_SOFTWARE=1 AQ_TRACE=1 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=Hyprland \
   Hyprland -c "$out/hyprland.conf" > "$out/hyprland.log" 2>&1
 echo "Hyprland exited $?"
 sudo pkill -x seatd 2> /dev/null || true
 cat "$out/check.log" 2> /dev/null
-[ -s "$out/results.json" ] || { echo "the check left no results:"; tail -n 80 "$out/hyprland.log"; exit 1; }
+[ -s "$out/results.json" ] || { echo "the check left no results:"; tail -n 80 "$out/hyprland.log"; cat ~/.cache/hyprland/hyprlandCrashReport*.txt 2> /dev/null | head -n 60; exit 1; }
 bun -e 'const r = JSON.parse(await Bun.file(process.argv[1]).text()); process.exit(r.length > 0 && r.every((c) => c.ok) ? 0 : 1)' "$out/results.json" || {
   echo "::group::Hyprland's log"
   tail -n 120 "$out/hyprland.log"
+  cat ~/.cache/hyprland/hyprlandCrashReport*.txt 2> /dev/null | head -n 60
   echo "::endgroup::"
   exit 1
 }
