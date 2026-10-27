@@ -12,7 +12,7 @@ import { markSeen, readCursor, readSeen, writeCursor } from "./cursors.ts";
 import { loadConfig, saveAccess, updateConfig, type Config } from "./file.ts";
 import { forgetIdentities, forgetIdentity, identitiesIn, loadIdentity, saveIdentity } from "./identities.ts";
 import { signingBudget } from "./paths.ts";
-import { forgetMember, wipeChannel } from "./wipe.ts";
+import { forgetMember, renameMember, wipeChannel } from "./wipe.ts";
 import { seatHeldAway } from "../hold.ts";
 
 export interface KeystoreApi {
@@ -25,6 +25,7 @@ export interface KeystoreApi {
   readonly forgetIdentities: (roomId: string) => Effect.Effect<void>;
   readonly saveAccess: (alias: string, access: ChannelAccess) => Effect.Effect<void>;
   readonly forgetMember: (alias: string, name: string) => Effect.Effect<void>;
+  readonly renameMember: (alias: string, id: Identity, to: string) => Effect.Effect<void>;
   readonly wipeChannel: (alias: string) => Effect.Effect<void>;
   readonly budget: SigningBudget;
   readonly records: RecordMemory;
@@ -67,6 +68,7 @@ const fileKeystore: KeystoreApi = {
   forgetIdentities: (roomId) => Effect.sync(() => forgetIdentities(roomId)),
   saveAccess: (alias, access) => Effect.sync(() => saveAccess(alias, access)),
   forgetMember: (alias, name) => Effect.sync(() => forgetMember(alias, name)),
+  renameMember: (alias, id, to) => Effect.sync(() => renameMember(alias, id, to)),
   wipeChannel: (alias) => Effect.sync(() => wipeChannel(alias)),
   budget: signingBudget,
   records: fileRecordMemory,

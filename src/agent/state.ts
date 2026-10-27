@@ -39,6 +39,7 @@ export class SessionState {
   private roomsCheckedAt = 0;
   private rosterCheckedAt = 0;
   private healed = false;
+  private toldRenamed = false;
   private log: Message[] | null = null;
   private saved = 0;
   private owed = 0;
@@ -80,6 +81,11 @@ export class SessionState {
 
   readonly members = Effect.fn("AgentSession.members")({ self: this }, function* (this: SessionState, refresh = false, rows?: readonly MemberRow[]) {
     if (!this.roster || refresh) this.roster = rosterOf(yield* this.ch.fx.members(refresh ? undefined : rows));
+    const now = this.roster.find((r) => r.pk === this.identity.pk && r.active)?.name;
+    if (now && now !== this.me && !this.toldRenamed) {
+      this.toldRenamed = true;
+      process.stderr.write(`kiwi: the owner renamed ${this.me} to ${now} in "${this.alias}": run kiwi seat rename ${now} so this computer answers as ${now}\n`);
+    }
     return this.roster;
   });
 

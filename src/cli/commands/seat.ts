@@ -1,10 +1,38 @@
 import * as Effect from "effect/Effect";
+import { NAME_RE, nameKey, namesOf, RESERVED_NAMES } from "@kiwi/core/membership.ts";
+import { rosterOf } from "@kiwi/core/state.ts";
 import { Keystore } from "../../config.ts";
 import { bindHeldSeat, holdSeat, isSeatHarness, newSeatToken, releaseSeat, SEAT_TOKEN, type HeldSession, type HoldChange } from "../../hold.ts";
 import { args, opt } from "../args.ts";
-import { agentName, channelAlias, type Command, config, die, out, type Quit } from "../context.ts";
+import { agentName, channelAlias, type Command, config, die, out, type Quit, session } from "../context.ts";
 
-const USAGE = `usage: kiwi seat hold | bind --harness HARNESS (--session ID [--pid PID] | --pid PID for kimi) | release (bind and release read ${SEAT_TOKEN})`;
+const USAGE = `usage: kiwi seat hold | bind --harness HARNESS (--session ID [--pid PID] | --pid PID for kimi) | release (bind and release read ${SEAT_TOKEN}) | rename NEW`;
+
+const rename = Effect.fn("kiwi.seat.rename")(function* (wanted: string | undefined) {
+  const to = wanted?.trim().replace(/^@/, "");
+  if (!to) return yield* die("usage: kiwi seat rename NEW");
+  if (!NAME_RE.test(to)) return yield* die(`"${to}" isn't a valid handle (1-32 letters, digits, _ . or -)`);
+  if (RESERVED_NAMES.has(nameKey(to))) return yield* die(`"${to}" is a reserved name`);
+  const s = yield* session();
+  const roster = rosterOf(yield* s.ch.fx.members());
+  const mine = roster.find((r) => r.pk === s.identity.pk);
+  if (!mine?.active) return yield* die(`${s.me} has no seat in "${s.alias}" any more`);
+  if (mine.name === to) {
+    if (s.me === to) return out(`${to} is already this seat's handle in "${s.alias}"`);
+    yield* (yield* Keystore).renameMember(s.alias, s.identity, to);
+    out(`${s.me} in "${s.alias}" is ${to} on this computer too: same key, tasks and history`);
+    process.stderr.write(`kiwi: restart anything listening as ${s.me} (kiwi listen, a loop, a harness session) so it answers as ${to}\n`);
+    return;
+  }
+  if (roster.some((r) => r.pk !== mine.pk && namesOf(r).some((n) => nameKey(n) === nameKey(to)))) return yield* die(`"${to}" is, or was, someone else's name in "${s.alias}"`);
+  const owner = roster.find((r) => r.owner);
+  if (!owner) return yield* die(`"${s.alias}" has no owner to ask`);
+  const seq = yield* s.send(`@${owner.name}: please rename my handle @${mine.name} to @${to}. In the app, open my menu and choose Change handle; I keep my key, tasks and history.`, {
+    kind: "ask",
+    to: [owner.name],
+  });
+  out(`asked the owner to rename ${mine.name} to ${to} in "${s.alias}" (#${seq}); once they have, run kiwi seat rename ${to} again`);
+});
 
 export const seatNamed = Effect.gen(function* () {
   const alias = yield* channelAlias();
@@ -71,6 +99,7 @@ export const seatCommands: Record<string, Command> = {
           `${name} in ${alias} is bound to ${to.harness} ${to.harness === "kimi" ? `process ${to.pid}` : `session ${to.session}`}`,
         );
       }
+      if (sub === "rename") return yield* rename(args[2]);
       if (sub === "release") {
         const token = yield* tokenOrUsage;
         const { alias, name } = yield* seatNamed;

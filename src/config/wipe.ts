@@ -1,9 +1,11 @@
-import { rmSync } from "node:fs";
+import { existsSync, renameSync, rmSync } from "node:fs";
+import { wakeKey } from "@kiwi/core/wake.ts";
 import { join } from "node:path";
 import { blobDir, cachePath } from "./cache.ts";
 import { cursorDir, cursorPath, seenPath } from "./cursors.ts";
 import { dropSeats, loadConfig, updateConfig, type ChannelConfig } from "./file.ts";
-import { forgetIdentity, identitiesIn, identityDir } from "./identities.ts";
+import { forgetIdentity, identitiesIn, identityDir, saveIdentity } from "./identities.ts";
+import type { Identity } from "@kiwi/core/identity.ts";
 import { home, safe } from "./paths.ts";
 
 export function wipeChannel(alias: string): void {
@@ -39,6 +41,31 @@ export function forgetMember(alias: string, name: string): void {
     const ch = cfg.channels[alias];
     if (ch?.person === name) delete ch.person;
     if (ch?.as === name) ch.as = left[0] ?? ch.owner;
+  });
+}
+
+export function renameMember(alias: string, id: Identity, to: string): void {
+  const c = loadConfig().channels[alias];
+  const from = id.name;
+  if (!c || from === to) return;
+  saveIdentity({ ...id, name: to }, c.roomId);
+  forgetIdentity(from, c.roomId);
+  for (const [was, now] of [
+    [cursorPath(alias, from), cursorPath(alias, to)],
+    [seenPath(alias, from), seenPath(alias, to)],
+  ] as const)
+    if (existsSync(was)) renameSync(was, now);
+  updateConfig((cfg) => {
+    for (const v of Object.values(cfg.bindings ?? {})) for (const b of Array.isArray(v) ? v : [v]) if (b.alias === alias && b.as === from) b.as = to;
+    const ch = cfg.channels[alias];
+    if (ch?.as === from) ch.as = to;
+    const [off, on] = [wakeKey(alias, from), wakeKey(alias, to)];
+    if (cfg.wakeOff?.includes(off)) cfg.wakeOff = cfg.wakeOff.map((k) => (k === off ? on : k));
+    const hook = cfg.wakeHooks?.[off];
+    if (hook) {
+      delete cfg.wakeHooks![off];
+      cfg.wakeHooks![on] = hook;
+    }
   });
 }
 
