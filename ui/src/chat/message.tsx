@@ -1,6 +1,7 @@
 import { lazy, memo, Suspense, useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
 import { PermissionCard, PrChip, QuestionCard, TaskChip } from "~/chat/cards"
+import { parsedFor } from "~/chat/parsed"
 import { preview, useReplying } from "~/chat/reply"
 import { Avatar, cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
@@ -8,7 +9,7 @@ import { ago, clock } from "~/kit/time"
 import type { Channel, Message, Person } from "~/model"
 import { useAct } from "~/nav"
 import { nickname } from "~/names"
-import { named, withNames } from "~/chat/linked"
+import { linked, named, withNames } from "~/chat/linked"
 
 const Markdown = lazy(() => import("~/chat/markdown"))
 const Annotator = lazy(() => import("~/chat/annotator"))
@@ -18,6 +19,7 @@ const CLAMP_PX = 12 * 22
 
 function Body({ text, names, tasks, onImage }: { text: string; names: ReadonlyMap<string, string>; tasks: ReadonlySet<number>; onImage: (url: string, alt: string) => void }) {
   const { go, toast } = useAct()
+  const markdown = useMemo(() => linked(text, names, tasks), [text, names, tasks])
   const [shown, setShown] = useState(false)
   const onShown = useCallback(() => setShown(true), [])
   const onMention = useCallback((name: string) => go({ to: "panel", panel: { kind: "person", name } }), [go])
@@ -25,9 +27,9 @@ function Body({ text, names, tasks, onImage }: { text: string; names: ReadonlyMa
   const copied = useCallback(() => toast("Copied"), [toast])
   return (
     <div className="msg-text">
-      {!shown && <p className="md-plain">{named(text, names)}</p>}
+      {!shown && !parsedFor(markdown) && <p className="md-plain">{named(text, names)}</p>}
       <Suspense fallback={null}>
-        <Markdown text={text} names={names} tasks={tasks} onMention={onMention} onTask={onTask} onImage={onImage} onShown={onShown} copied={copied} />
+        <Markdown markdown={markdown} onMention={onMention} onTask={onTask} onImage={onImage} onShown={onShown} copied={copied} />
       </Suspense>
     </div>
   )
