@@ -227,7 +227,7 @@ test("while a loop holds the seat, no hook, kiwi command, MCP tool or running li
     ["wait_for_messages", { timeout_seconds: 1 }],
     ["read", {}],
     ["log", {}],
-    ["sh", { script: "cat /channel/log.jsonl" }],
+    ["query", { sql: "select body from messages" }],
   ] satisfies [string, object][]) {
     const said = await tools.call(name, args);
     expect(said).toContain(heldText(alias, me));

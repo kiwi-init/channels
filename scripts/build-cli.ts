@@ -3,8 +3,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
-import { COMMANDS } from "../src/sh.ts";
-import { CLI_COMPILE, coverageChunks, heavyIn, mcpValidatorStub, registryEntries, stubbedChunks, stubPlugin, validatorsIn } from "./cli-bundle.ts";
+import { CLI_COMPILE, mcpValidatorStub, validatorsIn } from "./cli-bundle.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const BUDGET_BYTES = 2_800_000;
@@ -25,14 +24,11 @@ if (values.target !== undefined && target === undefined) {
   process.exit(2);
 }
 
-const registry = await Bun.file(join(ROOT, "node_modules/just-bash/dist/bundle/index.js")).text();
-const stubbed = stubbedChunks(registryEntries(registry), new Set(COMMANDS), coverageChunks(registry));
 const shared = {
   entrypoints: [join(ROOT, "src/cli/main.ts")],
   minify: true,
   splitting: true,
-  external: ["node-liblzma", "@mongodb-js/zstd"],
-  plugins: [stubPlugin(stubbed), mcpValidatorStub()],
+  plugins: [mcpValidatorStub()],
 };
 
 function failed(result: Bun.BuildOutput): boolean {
@@ -53,13 +49,11 @@ if (values.check) {
       const map: unknown = await o.json();
       if (typeof map === "object" && map !== null && "sources" in map && Array.isArray(map.sources)) sources.push(...map.sources.filter((s): s is string => typeof s === "string"));
     }
-    const heavy = heavyIn(sources);
     const validators = validatorsIn(sources);
-    console.log(`kiwi JS: ${bytes} bytes in ${code.length} files, ${entry} in the entry (budget ${BUDGET_BYTES}), ${stubbed.size} just-bash command chunks left out`);
-    if (heavy.length) console.error(`the CLI bundle contains ${heavy.join(", ")}: only kiwi sh's allowed commands may be bundled`);
+    console.log(`kiwi JS: ${bytes} bytes in ${code.length} files, ${entry} in the entry (budget ${BUDGET_BYTES})`);
     if (validators.length) console.error(`the CLI bundle contains ${validators.join(", ")}: the MCP SDK's JSON Schema validator is stubbed out (scripts/cli-bundle.ts), so something else imports it`);
     if (bytes > BUDGET_BYTES) console.error(`the CLI bundle is ${bytes} bytes, over its ${BUDGET_BYTES}-byte budget`);
-    if (heavy.length || validators.length || bytes > BUDGET_BYTES) process.exit(1);
+    if (validators.length || bytes > BUDGET_BYTES) process.exit(1);
   } finally {
     rmSync(outdir, { recursive: true, force: true });
   }
@@ -78,5 +72,5 @@ if (values.check) {
   const outfile = resolve(values.outfile);
   const result = await Bun.build({ ...shared, compile: { ...CLI_COMPILE, ...(target === undefined ? {} : { target }), outfile } });
   if (failed(result)) process.exit(1);
-  console.log(`built ${outfile}${target ? ` for ${target}` : ""}, ${stubbed.size} just-bash command chunks left out`);
+  console.log(`built ${outfile}${target ? ` for ${target}` : ""}`);
 }
