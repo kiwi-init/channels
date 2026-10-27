@@ -1,0 +1,130 @@
+import { useEffect, useRef, type CSSProperties, type ReactNode } from "react"
+
+import { HarnessLogo, Icon } from "~/kit/icons"
+import type { Person, TaskStatus } from "~/model"
+
+export const cx = (...parts: (string | false | null | undefined)[]): string => parts.filter(Boolean).join(" ")
+
+export function Avatar({ person, size = "md", pip }: { person: Pick<Person, "name" | "kind" | "harness" | "presence" | "color"> | undefined; size?: "sm" | "md" | "lg"; pip?: boolean }) {
+  if (!person) return <span className={cx("av", `av-${size}`, "av-gone")} aria-hidden="true" />
+  const face = (
+    <span
+      className={cx("av", `av-${size}`, person.kind === "agent" ? "av-agent" : "av-human", person.presence === "offline" && "is-off")}
+      data-color={person.kind === "human" && person.color ? person.color : undefined}
+      data-harness={person.kind === "agent" ? person.harness : undefined}
+      style={person.kind === "human" && person.color ? ({ "--member": `var(--c-${person.color})` } as CSSProperties) : undefined}
+      aria-hidden="true"
+    >
+      {person.kind === "agent" ? <HarnessLogo harness={person.harness} /> : person.name.slice(0, 1).toUpperCase()}
+    </span>
+  )
+  if (!pip) return face
+  return (
+    <span className="av-wrap" aria-hidden="true">
+      {face}
+      <span className={cx("pip", `is-${person.presence}`)} />
+    </span>
+  )
+}
+
+export const STATUS_WORDS: Record<TaskStatus, string> = { todo: "to do", doing: "working", review: "in review", done: "done", waiting: "needs you" }
+
+export function Dot({ status }: { status: TaskStatus }) {
+  return <span className={cx("dot", `is-${status}`)} aria-hidden="true" />
+}
+
+export function Count({ n, loud }: { n: number; loud?: boolean }) {
+  if (!n) return null
+  return <span className={cx("count", loud && "is-loud")}>{n > 99 ? "99+" : n}</span>
+}
+
+export function Heading({ children, action }: { children: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="heading">
+      <h3>{children}</h3>
+      {action}
+    </div>
+  )
+}
+
+export function IconButton({ icon, label, onClick, pressed }: { icon: Parameters<typeof Icon>[0]["name"]; label: string; onClick: () => void; pressed?: boolean }) {
+  return (
+    <button type="button" className="icon-btn" aria-label={label} title={label} aria-pressed={pressed} onClick={onClick}>
+      <Icon name={icon} />
+    </button>
+  )
+}
+
+export function Dialog({ open, onClose, label, children, wide }: { open: boolean; onClose: () => void; label: string; children: ReactNode; wide?: boolean }) {
+  const ref = useRef<HTMLDialogElement>(null)
+  const wanted = useRef(open)
+  useEffect(() => {
+    wanted.current = open
+    const el = ref.current
+    if (!el) return
+    if (open && !el.open) {
+      el.showModal()
+      el.querySelector<HTMLElement>("input:not([type=hidden]), textarea, select")?.focus()
+    }
+    if (!open && el.open) el.close()
+  }, [open])
+  return (
+    <dialog
+      ref={ref}
+      className={cx("dialog", wide && "is-wide")}
+      aria-label={label}
+      onClose={() => {
+        if (wanted.current) onClose()
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      {open && <div className="dialog-body">{children}</div>}
+    </dialog>
+  )
+}
+
+export function DialogHead({ title, onClose, sub }: { title: string; sub?: string; onClose: () => void }) {
+  return (
+    <header className="dialog-head">
+      <div>
+        <h2>{title}</h2>
+        {sub && <p className="dim">{sub}</p>}
+      </div>
+      <IconButton icon="close" label="Close" onClick={onClose} />
+    </header>
+  )
+}
+
+export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+  return (
+    <label className="field">
+      <span className="field-label">{label}</span>
+      {children}
+      {hint && <span className="field-hint">{hint}</span>}
+    </label>
+  )
+}
+
+export function Empty({ title, children }: { title: string; children?: ReactNode }) {
+  return (
+    <div className="empty">
+      <p className="empty-title">{title}</p>
+      {children && <div className="empty-text">{children}</div>}
+    </div>
+  )
+}
+
+export function Toggle({ on, onChange, label, id }: { on: boolean; onChange: (on: boolean) => void; label?: string; id?: string }) {
+  return (
+    <button id={id} type="button" role="switch" aria-checked={on} aria-label={label} className={cx("toggle", on && "is-on")} onClick={() => onChange(!on)}>
+      <span className="toggle-word" aria-hidden="true">
+        {on ? "On" : "Off"}
+      </span>
+      <span className="toggle-track" aria-hidden="true">
+        <span className="toggle-knob" />
+      </span>
+    </button>
+  )
+}
