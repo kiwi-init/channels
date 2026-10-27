@@ -1,0 +1,253 @@
+import "~/styles/channel-panel.css"
+
+import { useState, type ReactNode } from "react"
+
+import { Field, Heading, IconButton } from "~/kit/bits"
+import { Icon } from "~/kit/icons"
+import { ago } from "~/kit/time"
+import type { Channel } from "~/model"
+import { useApp } from "~/nav"
+import { PanelHead } from "~/panels/frame"
+import { Toggle } from "~/kit/bits"
+import { Confirm, InlineEdit } from "~/settings/controls"
+
+const REPO = /^[\w.-]+\/[\w.-]+$/
+
+export function ChannelPanel({ channel }: { channel: Channel }) {
+  const { app, go, toast } = useApp()
+  const { actions } = app
+  const own = channel.youOwn
+  const owner = channel.people.find((p) => p.owner && !p.you)
+  const [ending, setEnding] = useState(false)
+
+  const save = (ext: "md" | "jsonl") => toast(`Saving ${channel.code}.${ext} to Downloads`)
+
+  return (
+    <>
+      <PanelHead title={channel.title} />
+      <div className="panel-body cpanel">
+        <Part title="Name">
+          {own ? (
+            <InlineEdit value={channel.title} label="Channel name" verb="Rename" onSave={(title) => actions.renameChannel(channel.code, title)} />
+          ) : (
+            <p className="cpanel-value">{channel.title}</p>
+          )}
+          {!own && owner && <p className="cpanel-hint">{owner.name} owns this channel.</p>}
+        </Part>
+
+        <Part title="Goal">{own ? <GoalEditor channel={channel} /> : channel.goal ? <p className="cpanel-goal">{channel.goal}</p> : <p className="cpanel-none">No goal yet.</p>}</Part>
+
+        <Part title="Repos">
+          <Repos channel={channel} />
+        </Part>
+
+        <Part title="Agents">
+          <Hold channel={channel} />
+        </Part>
+
+        <Part title="History">
+          <div className="cpanel-downloads">
+            <button type="button" className="btn is-quiet cpanel-download" onClick={() => save("md")}>
+              <Icon name="download" size={14} />
+              Download the transcript (.md)
+            </button>
+            <button type="button" className="btn is-quiet cpanel-download" onClick={() => save("jsonl")}>
+              <Icon name="download" size={14} />
+              Download the signed log (.jsonl)
+            </button>
+          </div>
+        </Part>
+
+        <div className="panel-section cpanel-end">
+          <button type="button" className="btn is-danger" onClick={() => setEnding(true)}>
+            {own ? "Close this channel" : "Leave this channel"}
+          </button>
+        </div>
+      </div>
+      <End
+        channel={channel}
+        open={ending}
+        onClose={() => setEnding(false)}
+        onDone={() => {
+          setEnding(false)
+          if (own) actions.closeChannel(channel.code)
+          else actions.leaveChannel(channel.code)
+          const next = app.channels.find((c) => c.code !== channel.code && c.state === "member")
+          if (next) go({ to: "channel", code: next.code })
+          else go({ to: "panel", panel: null })
+          toast(own ? `Closed ${channel.title}` : `Left ${channel.title}`)
+        }}
+      />
+    </>
+  )
+}
+
+function Part({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="panel-section cpanel-part" aria-label={title}>
+      <Heading>{title}</Heading>
+      {children}
+    </section>
+  )
+}
+
+function GoalEditor({ channel }: { channel: Channel }) {
+  const { app, toast } = useApp()
+  const [draft, setDraft] = useState(channel.goal ?? "")
+  const changed = draft.trim() !== (channel.goal ?? "")
+  return (
+    <form
+      className="cpanel-goal-form"
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (!changed) return
+        app.actions.setGoal(channel.code, draft.trim())
+        toast("Goal saved")
+      }}
+    >
+      <textarea
+        className="textarea"
+        aria-label="Goal"
+        placeholder="What this channel is for and what done looks like."
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault()
+            e.currentTarget.form?.requestSubmit()
+          }
+        }}
+      />
+      <div className="cpanel-row">
+        <p className="cpanel-hint">Every agent reads this first.</p>
+        <button type="submit" className="btn is-small" disabled={!changed}>
+          Save
+        </button>
+      </div>
+    </form>
+  )
+}
+
+function Repos({ channel }: { channel: Channel }) {
+  const { app } = useApp()
+  const own = channel.youOwn
+  const [draft, setDraft] = useState("")
+  const valid = REPO.test(draft.trim())
+  return (
+    <>
+      {channel.repos.length > 0 ? (
+        <ul className="cpanel-list">
+          {channel.repos.map((r) => (
+            <li key={r} className="cpanel-item">
+              <a className="cpanel-repo" href={`https://github.com/${r}`} target="_blank" rel="noreferrer">
+                {r}
+              </a>
+              {own && <IconButton icon="close" label={`Remove ${r}`} onClick={() => app.actions.removeRepo(channel.code, r)} />}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="cpanel-none">{own ? "No repos yet. Agents work in the repos you add here." : "No repos yet."}</p>
+      )}
+      {own && (
+        <form
+          className="cpanel-add"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (!valid) return
+            app.actions.addRepo(channel.code, draft.trim())
+            setDraft("")
+          }}
+        >
+          <input className="input is-mono" placeholder="owner/repo" aria-label="Add a repo" value={draft} onChange={(e) => setDraft(e.target.value)} />
+          <button type="submit" className="btn is-small" disabled={!valid}>
+            Add
+          </button>
+        </form>
+      )}
+    </>
+  )
+}
+
+function Hold({ channel }: { channel: Channel }) {
+  const { app } = useApp()
+  const hold = channel.hold
+  const own = channel.youOwn
+  const [note, setNote] = useState(hold?.note ?? "")
+  const by = hold ? (hold.by === channel.you ? "you" : hold.by) : ""
+
+  if (!own)
+    return hold ? (
+      <div className="cpanel-held">
+        <p className="cpanel-held-line">
+          Paused by {by} · {ago(hold.at)}
+        </p>
+        {hold.note && <p className="cpanel-note">{hold.note}</p>}
+      </div>
+    ) : (
+      <p className="cpanel-value">Not paused</p>
+    )
+
+  return (
+    <div className="cpanel-hold">
+      <div className="cpanel-row">
+        <span className="cpanel-value">Pause agents</span>
+        <Toggle
+          label="Pause agents"
+          on={!!hold}
+          onChange={(on) => {
+            app.actions.setHold(channel.code, on, on ? note.trim() || undefined : undefined)
+            if (!on) setNote("")
+          }}
+        />
+      </div>
+      {hold ? (
+        <>
+          <p className="cpanel-held-line">
+            Paused by {by} · {ago(hold.at)}
+          </p>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (note.trim() !== (hold.note ?? "")) app.actions.setHold(channel.code, true, note.trim() || undefined)
+              e.currentTarget.querySelector("input")?.blur()
+            }}
+          >
+            <Field label="Note for the agents" hint="Press Enter to save.">
+              <input className="input is-mono" placeholder="Why they should wait" value={note} onChange={(e) => setNote(e.target.value)} />
+            </Field>
+          </form>
+        </>
+      ) : (
+        <p className="cpanel-hint">Agents keep reading but don't act until you resume.</p>
+      )}
+    </div>
+  )
+}
+
+function End({ channel, open, onClose, onDone }: { channel: Channel; open: boolean; onClose: () => void; onDone: () => void }) {
+  const [typed, setTyped] = useState("")
+  const close = () => {
+    setTyped("")
+    onClose()
+  }
+  if (!channel.youOwn)
+    return (
+      <Confirm open={open} title={`Leave ${channel.title}?`} sub="You stop getting its messages. To come back, someone has to let you in again." action="Leave" onClose={close} onConfirm={onDone} />
+    )
+  return (
+    <Confirm
+      open={open}
+      title={`Close ${channel.title}?`}
+      sub="Everyone is removed and agents stop for good. Download the history first if you want to keep it."
+      action="Close the channel"
+      ready={typed.trim() === channel.title}
+      onClose={close}
+      onConfirm={onDone}
+    >
+      <Field label={`Type ${channel.title} to confirm`}>
+        <input autoFocus className="input is-mono" value={typed} onChange={(e) => setTyped(e.target.value)} />
+      </Field>
+    </Confirm>
+  )
+}

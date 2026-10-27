@@ -1,6 +1,6 @@
 import fs from "node:fs";
 
-import { dlopen, FFIType, ptr } from "bun:ffi";
+import { dlopen, FFIType } from "bun:ffi";
 
 import { legacyPassword } from "./legacy-keys.ts";
 import type { LegacyPassword } from "./legacy-store.ts";
@@ -18,7 +18,7 @@ const LIBC = process.platform === "darwin" ? "/usr/lib/libSystem.B.dylib" : "lib
 function unsetenv(name: string): void {
   const libc = dlopen(LIBC, { unsetenv: { args: [FFIType.ptr], returns: FFIType.i32 } });
   try {
-    libc.symbols.unsetenv(ptr(Buffer.from(`${name}\0`, "utf8")));
+    libc.symbols.unsetenv(new TextEncoder().encode(`${name}\0`));
   } finally {
     libc.close();
   }
@@ -134,8 +134,8 @@ export function endSession(ch: LineChannel): void {
   }
 }
 
-export function keySources(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env): KeySources {
-  if (platform !== "darwin") return { key: { ...keychainKey(), locked: storeKeyHeld, running: keyringRunning }, legacy: legacyPassword(platform), done: () => {} };
+export function keySources(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env, service: string = "Channels"): KeySources {
+  if (platform !== "darwin") return { key: { ...keychainKey(service), locked: () => storeKeyHeld(service), running: keyringRunning }, legacy: legacyPassword(platform), done: () => {} };
   const ch = launcherChannel(env);
   if (!ch) throw new Error("on a Mac, Channels gets its store key only from its signed launcher, and it wasn't started by it");
   return { key: launcherKey(ch), legacy: launcherLegacyPassword(ch), done: () => endSession(ch) };

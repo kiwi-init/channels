@@ -26,6 +26,7 @@ export function miscCalls(
   | "wallpaperTints"
   | "wallpaperBackdrop"
   | "windowControl"
+  | "getAccentColor"
 > {
   return {
     keysAtRest: () => keysAtRest(),
@@ -69,5 +70,6 @@ export function miscCalls(
       const pixels = await host.wallpaperImage(dark === true, BACKDROP_WIDTH, BACKDROP_HEIGHT);
       return pixels ? backdropOf(pixels, BACKDROP_WIDTH, BACKDROP_HEIGHT) : null;
     },
+    getAccentColor: () => host.accentColor(),
   };
 }

@@ -1,0 +1,125 @@
+.cpanel .panel-section + .panel-section {
+  margin-top: 0;
+}
+
+.cpanel-part {
+  display: grid;
+  gap: 10px;
+  padding: 18px 0;
+}
+
+.cpanel-part:first-child {
+  padding-top: 0;
+}
+
+.cpanel-part > .heading {
+  margin: 0;
+}
+
+.cpanel-part > .seg {
+  justify-self: start;
+}
+
+.cpanel-value {
+  color: var(--ink);
+  font: var(--t-ui) var(--ui);
+}
+
+.cpanel-hint,
+.cpanel-none {
+  color: var(--ink-3);
+  font: var(--t-meta) / 1.45 var(--ui);
+}
+
+.cpanel-none {
+  color: var(--ink-2);
+}
+
+.cpanel-goal {
+  color: var(--ink);
+  font: var(--t-body) / 1.5 var(--sans);
+}
+
+.cpanel-goal-form {
+  display: grid;
+  gap: 8px;
+}
+
+.cpanel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cpanel-list {
+}
+
+.cpanel-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 38px;
+}
+
+.cpanel-repo {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font: var(--t-ui) var(--ui);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cpanel-add {
+  display: flex;
+  gap: 8px;
+}
+
+.cpanel-add .input {
+  flex: 1;
+  height: 30px;
+  padding: 5px 10px;
+}
+
+.cpanel-add .btn {
+  height: 30px;
+}
+
+.cpanel-hold {
+  display: grid;
+  gap: 10px;
+}
+
+.cpanel-held {
+  display: grid;
+  gap: 8px;
+}
+
+.cpanel-held-line {
+  color: var(--decide);
+  font: var(--t-meta) var(--ui);
+}
+
+.cpanel-note {
+  padding-left: 10px;
+  border-left: 2px solid var(--line-3);
+  color: var(--ink-2);
+  font: var(--t-body) / 1.45 var(--sans);
+}
+
+.cpanel-downloads {
+  display: grid;
+  justify-items: start;
+  margin: 0 -9px;
+}
+
+.cpanel-download {
+  gap: 10px;
+  padding: 0 9px;
+}
+
+.cpanel-end {
+  padding: 22px 0 8px;
+}

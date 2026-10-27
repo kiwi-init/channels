@@ -160,13 +160,13 @@ int main(int argc, char **argv) {
   g_main_loop_run(loop);
   for (int i = 0; i < 30 && !shown; i++) spin(100);
   int bad = 0;
-  if (!calls.ok || shown != 1 || g_strcmp0(app_name, "Channels") != 0 || g_strcmp0(app_icon, "channels-desktop") != 0 || g_strcmp0(entry, "channels-desktop") != 0 || !has_default ||
+  if (!calls.ok || shown != 1 || g_strcmp0(app_name, "Channels Livewire") != 0 || g_strcmp0(app_icon, "channels-livewire") != 0 || g_strcmp0(entry, "channels-livewire") != 0 || !has_default ||
       g_strcmp0(summary, "Ana asks to join kiwi-dev") != 0 || g_strcmp0(body, "Ana &amp; Bo &lt;want in&gt;") != 0) {
     fprintf(stderr, "kiwi-notify-test: %s; the server got %d notifications: app '%s', icon '%s', desktop-entry '%s', %s default action, summary '%s', body '%s'\n",
             calls.ok ? "sent" : "kiwi_notify or kiwi_notify_clicks refused", shown, app_name, app_icon, entry, has_default ? "a" : "no", summary, body);
     bad++;
   } else
-    printf("notification: from Channels (icon and desktop-entry channels-desktop), with a default action, its body escaped for a server that reads markup\n");
+    printf("notification: from Channels Livewire (icon and desktop-entry channels-livewire), with a default action, its body escaped for a server that reads markup\n");
 
   emit("ActivationToken", g_variant_new("(us)", 99, "someone-else"));
   emit("ActionInvoked", g_variant_new("(us)", 99, "default"));

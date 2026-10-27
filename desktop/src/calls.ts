@@ -1,4 +1,4 @@
-import type { KeysPort, KiwiBridge, StoreSnapshot, UpdateView } from "./bridge.ts";
+import type { KeysPort, KiwiBridge, StoreSnapshot, UiUpdateView, UpdateView } from "./bridge.ts";
 import type { TextStep } from "./text-size.ts";
 
 export type Call = { [K in keyof KiwiBridge]: KiwiBridge[K] extends (...args: never[]) => Promise<unknown> ? K : never }[keyof KiwiBridge];
@@ -15,6 +15,8 @@ export interface Pushes {
   deepLink: string;
   textStep: TextStep;
   frost: boolean;
+  accent: string | null;
+  uiUpdate: UiUpdateView | null;
 }
 
 export type Push = keyof Pushes;
@@ -77,9 +79,16 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     takePastedImage: () => t.call("takePastedImage"),
     setBadge: (count) => t.call("setBadge", count),
     setAppearance: (appearance) => t.call("setAppearance", appearance),
+    uiReady: () => t.call("uiReady"),
+    uiError: (message) => t.call("uiError", message),
+    getUiUpdate: () => t.call("getUiUpdate"),
+    onUiUpdate: (cb) => t.listen("uiUpdate", cb),
+    applyUi: () => t.call("applyUi"),
     onDeepLink: (cb) => t.listen("deepLink", cb),
     onTextStep: (cb) => t.listen("textStep", cb),
     onFrost: (cb) => t.listen("frost", cb),
+    getAccentColor: () => t.call("getAccentColor"),
+    onAccent: (cb) => t.listen("accent", cb),
     setPersonalities: (list) => t.call("setPersonalities", list),
     seatPlaces: () => t.call("seatPlaces"),
     showSeat: (seat) => t.call("showSeat", seat),

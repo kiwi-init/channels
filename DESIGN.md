@@ -123,8 +123,9 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   sidebar and fades, never cut at the gutter.
 - Tint: Settings → Appearance offers the main colours of the desktop's
   wallpaper (read live on a Mac and on GNOME and KDE, never a fixed
-  palette; the row hides when none can be read). A tint washes the frost
-  10% and becomes `accent`, `accent-text` and `accent-wash`.
+  palette; the row hides when none can be read). Channels Livewire also
+  offers the system accent first, followed live as it changes. A tint washes
+  the frost 10% and becomes `accent`, `accent-text` and `accent-wash`.
 - One shell: the sidebar, the page's toolbar and the gutters are one
   surface, `shell` (the `rail`, or the Mac's vibrancy under `data-frost`),
   with no fill, edge or shade of their own. Only the page floats: a sheet

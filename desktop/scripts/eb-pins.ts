@@ -11,17 +11,11 @@ export interface HutchPin {
   files: Record<string, string>;
 }
 
-export interface ArchiveTreePin {
-  url: string;
-  keep: string;
-  tree: string;
-}
-
 export interface Pins {
   electrobun: string;
+  releasesBaseUrl: string;
   hutch: { version: string; platforms: Record<string, HutchPin> };
   devkit: Record<string, string>;
-  nativeWrapper: { source: ArchiveTreePin; cef: ArchiveTreePin; dawn: ArchiveTreePin };
   app: Record<string, Record<string, string>>;
 }
 

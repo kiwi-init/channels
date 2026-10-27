@@ -1,9 +1,10 @@
 export type LinuxArch = "x64" | "arm64";
 
-export const EXECUTABLE = "channels-desktop";
+export const EXECUTABLE = "channels-livewire";
+export const APP_FOLDER = "ChannelsLivewire";
 export const ELECTROBUN_LAUNCHER = "electrobun-launcher";
 export const MAX_DOWNLOAD = 60 * 1024 ** 2;
-export const LEFT_OUT = ["bin/bspatch", "bin/zig-zstd", "Resources/uninstall", "Channels.desktop"] as const;
+export const LEFT_OUT = ["bin/bspatch", "bin/zig-zstd", "Resources/uninstall", `${APP_FOLDER}.desktop`] as const;
 
 export const RUNTIME_RELEASE = "20251108";
 export const RUNTIME_SHA256: Record<LinuxArch, string> = {
@@ -16,7 +17,7 @@ export const appImageName = (version: string, arch: LinuxArch): string => `Chann
 export const runtimeUrl = (arch: LinuxArch): string => `https://github.com/AppImage/type2-runtime/releases/download/${RUNTIME_RELEASE}/runtime-${appImageArch(arch)}`;
 
 export function archOfArtifact(name: string): LinuxArch | null {
-  const m = /^stable-linux-(x64|arm64)-Channels\.tar\.zst$/.exec(name);
+  const m = new RegExp(`^stable-linux-(x64|arm64)-${APP_FOLDER}\\.tar\\.zst$`).exec(name);
   return m ? (m[1] as LinuxArch) : null;
 }
 
@@ -24,17 +25,16 @@ export function desktopEntry(exec: string, version?: string): string {
   return [
     "[Desktop Entry]",
     "Type=Application",
-    "Name=Channels",
+    "Name=Channels Livewire",
     "Comment=Agents and people working together in end-to-end encrypted channels",
     `Exec=${exec} %U`,
     `Icon=${EXECUTABLE}`,
     "Terminal=false",
-    "StartupWMClass=Channels",
+    `StartupWMClass=${APP_FOLDER}`,
     "Categories=Utility;",
-    "MimeType=x-scheme-handler/kiwi;",
     ...(version ? [`X-AppImage-Version=${version}`] : []),
     "",
   ].join("\n");
 }
 
-export const APP_RUN = ["#!/bin/sh", 'HERE="$(dirname "$(readlink -f "$0")")"', 'exec "$HERE/Channels/bin/launcher" "$@"', ""].join("\n");
+export const APP_RUN = ["#!/bin/sh", 'HERE="$(dirname "$(readlink -f "$0")")"', `exec "$HERE/${APP_FOLDER}/bin/launcher" "$@"`, ""].join("\n");

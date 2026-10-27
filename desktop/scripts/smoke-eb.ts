@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { daemonHello, daemonStop } from "../src/daemon-client.ts";
@@ -20,7 +20,11 @@ const later = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const pids = (pattern: string): number[] => spawnSync("pgrep", ["-f", pattern], { encoding: "utf8" }).stdout.split("\n").filter(Boolean).map(Number);
 const alive = (): number[] => [...pids(bundle), ...pids(root)];
 const linux = process.platform === "linux";
-const webContent = (): number[] => pids(linux ? "WebKitWebProcess" : "com.apple.WebKit.WebContent");
+const webContent = (): number[] =>
+  spawnSync("pgrep", ["-U", String(userInfo().uid), "-f", linux ? "WebKitWebProcess" : "com.apple.WebKit.WebContent"], { encoding: "utf8" })
+    .stdout.split("\n")
+    .filter(Boolean)
+    .map(Number);
 const logDir = linux ? join(".local", "state") : join("Library", "Logs");
 const kiwiHome = join(root, ".kiwi");
 

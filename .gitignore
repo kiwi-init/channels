@@ -20,3 +20,9 @@ ios/**/xcuserdata/
 # Electrobun shell (desktop/: bun run build:eb): its build, artifacts and the devkit Hutch projects
 desktop/release-eb/
 desktop/.hutch/
+
+# Electrobun dev runs leave this behind
+desktop/.cottontail-tmp/
+
+# scripts/ui-dev-channel.ts: the local signing key
+desktop/.ui-dev/

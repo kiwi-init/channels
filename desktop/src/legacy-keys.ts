@@ -8,17 +8,18 @@ import { childEnv } from "./child-env.ts";
 const SCHEMA = "chrome_libsecret_os_crypt_password_v2";
 const DONT_MATCH_NAME = 2;
 
-const cstr = (s: string): Buffer => Buffer.from(`${s}\0`, "utf8");
+const SCHEMA_SIZE = 592;
+
+const cstr = (s: string): Uint8Array<ArrayBuffer> => new TextEncoder().encode(`${s}\0`);
 
 function libsecretLookup(application: string): string | null {
   const libc = dlopen("libc.so.6", {
     dlopen: { args: [FFIType.cstring, FFIType.i32], returns: FFIType.ptr },
     dlsym: { args: [FFIType.ptr, FFIType.cstring], returns: FFIType.ptr },
   });
-  const glibPath = cstr("libglib-2.0.so.0");
-  const glib = libc.symbols.dlopen(ptr(glibPath), 2);
-  const strHash = glib ? libc.symbols.dlsym(glib, ptr(cstr("g_str_hash"))) : null;
-  const strEqual = glib ? libc.symbols.dlsym(glib, ptr(cstr("g_str_equal"))) : null;
+  const glib = libc.symbols.dlopen(cstr("libglib-2.0.so.0"), 2);
+  const strHash = glib ? libc.symbols.dlsym(glib, cstr("g_str_hash")) : null;
+  const strEqual = glib ? libc.symbols.dlsym(glib, cstr("g_str_equal")) : null;
   libc.close();
   if (!strHash || !strEqual) return null;
   const g = dlopen("libglib-2.0.so.0", {
@@ -33,16 +34,25 @@ function libsecretLookup(application: string): string | null {
   const schemaName = cstr(SCHEMA);
   const attrName = cstr("application");
   const attrValue = cstr(application);
-  const schema = Buffer.alloc(592);
-  schema.writeBigUInt64LE(BigInt(ptr(schemaName)), 0);
-  schema.writeInt32LE(DONT_MATCH_NAME, 8);
-  schema.writeBigUInt64LE(BigInt(ptr(attrName)), 16);
-  schema.writeInt32LE(0, 24);
+  const nameAt = SCHEMA_SIZE;
+  const keyAt = nameAt + schemaName.length;
+  const valueAt = keyAt + attrName.length;
+  const arena = new Uint8Array(valueAt + attrValue.length);
+  arena.set(schemaName, nameAt);
+  arena.set(attrName, keyAt);
+  arena.set(attrValue, valueAt);
+  const base = ptr(arena);
+  const at = (offset: number): Pointer => (base + offset) as Pointer;
+  const fields = new DataView(arena.buffer);
+  fields.setBigUint64(0, BigInt(at(nameAt)), true);
+  fields.setInt32(8, DONT_MATCH_NAME, true);
+  fields.setBigUint64(16, BigInt(at(keyAt)), true);
+  fields.setInt32(24, 0, true);
   const table = g.symbols.g_hash_table_new(strHash, strEqual);
   try {
     if (!table) return null;
-    g.symbols.g_hash_table_insert(table, ptr(attrName), ptr(attrValue));
-    const found = s.symbols.secret_password_lookupv_sync(ptr(schema), table, null, null);
+    g.symbols.g_hash_table_insert(table, at(keyAt), at(valueAt));
+    const found = s.symbols.secret_password_lookupv_sync(arena, table, null, null);
     if (!found) return null;
     const value = new CString(found as Pointer).toString();
     s.symbols.secret_password_free(found);

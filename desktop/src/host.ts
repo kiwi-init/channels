@@ -27,6 +27,7 @@ export interface Host {
   wallpaper(dark: boolean): Promise<Uint8Array | null>;
   wallpaperImage(dark: boolean, width: number, height: number): Promise<Uint8Array | null>;
   windowControl(action: "minimize" | "maximize" | "close"): void;
+  accentColor(): string | null;
   showWindow(): void;
   reload(): void;
   restartToUpdate(): void;

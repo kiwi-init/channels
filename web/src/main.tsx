@@ -1,11 +1,11 @@
-import { StrictMode } from "react"
+import { StrictMode, useEffect } from "react"
 import { createRoot } from "react-dom/client"
 
 import "./index.css"
 import App from "./App.tsx"
 import { Boundary } from "@/components/kit"
 import { noteSignInGone } from "@/lib/session"
-import { applyStoredAppearance, showFrost, stepTextSize } from "@/lib/theme"
+import { applyStoredAppearance, followAccent, showFrost, stepTextSize } from "@/lib/theme"
 import { startBackdrop } from "@/lib/backdrop"
 import { bridge } from "@/lib/secrets"
 import { migrateChannelsToStore } from "@/lib/channel"
@@ -16,8 +16,17 @@ import { whenIdle } from "@/lib/later"
 import { loadMarkdown, loadPermission, loadSurfaces } from "@/components/lazy"
 import { ops } from "@/lib/channel-ops"
 import { nudgeOnWake } from "@/lib/wake"
+import { uiBooted, watchUiBoot } from "@/lib/ui-boot"
+
+watchUiBoot()
+
+function Booted() {
+  useEffect(uiBooted, [])
+  return null
+}
 
 applyStoredAppearance()
+followAccent()
 startBackdrop()
 bridge()?.onTextStep(stepTextSize)
 bridge()?.onFrost(showFrost)
@@ -38,6 +47,7 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <Boundary whole>
       <App />
+      <Booted />
     </Boundary>
   </StrictMode>
 )

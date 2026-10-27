@@ -3,19 +3,29 @@ import type { ElectrobunConfig } from "electrobun";
 import pkg from "./package.json" with { type: "json" };
 import { RELEASE_ID, TEST_ID } from "./scripts/eb-bundle.ts";
 import { JOIN_SCHEME } from "./src/deep-links.ts";
+import { LIVEWIRE_ID, LIVEWIRE_NAME } from "./src/livewire-id.ts";
 
-const identifier = process.env.CHANNELS_EB_TEST === "1" ? TEST_ID : (process.env.CHANNELS_EB_IDENTIFIER ?? (process.env.CHANNELS_EB_RELEASE === "1" ? RELEASE_ID : `${RELEASE_ID}.dev`));
+const identifier = process.env.CHANNELS_EB_TEST === "1" ? TEST_ID : (process.env.CHANNELS_EB_IDENTIFIER ?? (process.env.CHANNELS_EB_RELEASE === "1" ? LIVEWIRE_ID : `${LIVEWIRE_ID}.dev`));
+const livewire = identifier === LIVEWIRE_ID || identifier === `${LIVEWIRE_ID}.dev`;
 
 export default {
   app: {
-    name: "Channels",
+    name: livewire ? LIVEWIRE_NAME : "Channels",
     identifier,
     version: pkg.version,
     ...(identifier === RELEASE_ID ? { urlSchemes: [JOIN_SCHEME] } : {}),
   },
   build: {
     mainProcess: "bun",
-    bun: { entrypoint: "src/main-eb.ts", define: { KIWI_EB_TEST: process.env.CHANNELS_EB_TEST === "1" ? "true" : "false" } },
+    bun: {
+      entrypoint: "src/main-eb.ts",
+      define: {
+        KIWI_EB_TEST: process.env.CHANNELS_EB_TEST === "1" ? "true" : "false",
+        KIWI_EB_LIVEWIRE: livewire ? "true" : "false",
+        KIWI_EB_DEV: identifier === `${LIVEWIRE_ID}.dev` || process.env.CHANNELS_EB_LOCAL_UI === "1" ? "true" : "false",
+        KIWI_UI_SEQ: String(Date.now()),
+      },
+    },
     views: { preload: { entrypoint: "src/preload-eb.ts" } },
     buildFolder: "release-eb/build",
     artifactFolder: "release-eb/artifacts",

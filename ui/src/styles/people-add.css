@@ -1,0 +1,338 @@
+.invite-box {
+  padding: 4px 4px 4px 12px;
+  min-height: 38px;
+}
+
+.invite-box code {
+  scrollbar-width: none;
+}
+
+.invite-box .icon-btn:disabled {
+  color: var(--ink-3);
+  background: none;
+  cursor: default;
+}
+
+.invite-box.is-off code {
+  color: var(--ink-3);
+}
+
+.invite-note,
+.add-note {
+  margin-top: 10px;
+  color: var(--ink-2);
+  font: var(--t-meta) / 1.55 var(--ui);
+}
+
+.invite-failed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 38px;
+  padding: 4px 4px 4px 12px;
+  border: 1px dashed var(--line-3);
+  border-radius: var(--r-ctl);
+  color: var(--ink-2);
+  font: var(--t-ui) var(--ui);
+}
+
+.invite-seg,
+.add-way .seg,
+.add-seg {
+  display: flex;
+}
+
+.invite-seg button,
+.add-way .seg button,
+.add-seg button {
+  flex: 1;
+}
+
+.add-way {
+  padding: 14px 18px 10px;
+}
+
+.add-way + .add-body,
+.add-way + .add-form > .add-body {
+  padding-top: 12px;
+}
+
+.add-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.add-body {
+  display: grid;
+  align-content: start;
+  gap: 22px;
+}
+
+.add-body .add-note {
+  margin-top: -10px;
+}
+
+.add-group {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.add-group legend {
+  margin-bottom: 6px;
+  padding: 0;
+}
+
+.add-choices {
+  display: grid;
+  gap: 2px;
+}
+
+.add-choice {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 5px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--r-ctl);
+  color: var(--ink-2);
+  font: var(--t-ui) var(--ui);
+  cursor: pointer;
+  transition:
+    background var(--fast),
+    border-color var(--fast),
+    color var(--fast);
+}
+
+.add-choice:hover {
+  background: var(--wash);
+  color: var(--ink);
+}
+
+.add-choice.is-on {
+  border-color: var(--line-3);
+  background: none;
+  color: var(--ink);
+}
+
+.add-choice:has(input:focus-visible) {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.add-choice.is-off {
+  color: var(--ink-3);
+  cursor: default;
+}
+
+.add-choice.is-off:hover {
+  background: none;
+}
+
+.add-choice > .icon {
+  color: var(--ink-3);
+}
+
+.add-choice.is-on > .icon {
+  color: var(--ink-2);
+}
+
+.add-choice-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.add-choice-tag {
+  color: var(--ink-3);
+  font-size: var(--t-stamp);
+}
+
+.add-choice-text {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+  padding: 3px 0;
+}
+
+.add-choice-about {
+  color: var(--ink-3);
+  font: var(--t-meta) / 1.45 var(--ui);
+}
+
+.add-choice.is-on .add-choice-about {
+  color: var(--ink-2);
+}
+
+.add-choice-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  color: var(--ink-3);
+  font: var(--t-stamp) var(--ui);
+}
+
+.add-choice-tick {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 14px;
+  color: var(--ink);
+}
+
+.add-pip {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ink-3);
+}
+
+.add-pip.is-online {
+  background: var(--live);
+}
+
+.add-none {
+  padding: 8px 10px;
+  border: 1px dashed var(--line-3);
+  border-radius: var(--r-ctl);
+  color: var(--ink-2);
+  font: var(--t-meta) / 1.5 var(--ui);
+}
+
+.add-folder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.add-folder .btn {
+  height: 38px;
+}
+
+.add-warn {
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--alert) 45%, transparent);
+  border-radius: var(--r-ctl);
+  color: var(--alert);
+  font: var(--t-meta) / 1.5 var(--ui);
+}
+
+.add-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.add-check input {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--ink);
+}
+
+.add-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px;
+}
+
+.add-who {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.add-who-text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.add-who-name {
+  font: 600 var(--t-title) var(--ui);
+}
+
+.add-who-meta {
+  overflow: hidden;
+  color: var(--ink-2);
+  font: var(--t-meta) var(--ui);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.add-steps {
+  display: grid;
+  gap: 0;
+  font: var(--t-ui) var(--ui);
+}
+
+.add-step {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 34px;
+  color: var(--ink-3);
+}
+
+.add-step + .add-step::before {
+  content: "";
+  position: absolute;
+  bottom: calc(50% + 9px);
+  left: 8px;
+  height: 16px;
+  border-left: 1px solid var(--line-3);
+}
+
+.add-step-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 17px;
+  height: 17px;
+  border: 1px solid var(--line-3);
+  border-radius: 50%;
+}
+
+.add-step.is-now {
+  color: var(--ink);
+}
+
+.add-step.is-now .add-step-mark {
+  border: 1.5px dashed var(--doing);
+  animation: spin 2.4s linear infinite;
+}
+
+.add-step.is-done {
+  color: var(--ink-2);
+}
+
+.add-step.is-done .add-step-mark {
+  border-color: var(--live);
+  background: var(--live);
+  color: var(--on-ink);
+}
+
+.add-step.is-done:last-child {
+  color: var(--ink);
+}
+
+.add-body .input[aria-invalid="true"] {
+  border-color: color-mix(in srgb, var(--alert) 60%, transparent);
+}

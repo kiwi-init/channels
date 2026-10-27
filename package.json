@@ -7,6 +7,7 @@
   "workspaces": [
     "packages/*",
     "web",
+    "ui",
     "desktop"
   ],
   "bin": {
@@ -24,13 +25,15 @@
     "lint": "oxlint src packages/core/src desktop/src desktop/scripts scripts test site/app.js site/world.js ios/engine ios/scripts android/scripts",
     "format": "oxfmt src packages/core/src desktop/src desktop/scripts scripts test site/app.js site/world.js ios/engine ios/scripts android/scripts",
     "format:check": "oxfmt --check src packages/core/src desktop/src desktop/scripts scripts test site/app.js site/world.js ios/engine ios/scripts android/scripts",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json && bun run lint && bun run format:check && bun scripts/ui-tokens.ts && cd web && tsc -b && bun oxlint src && bun oxfmt --check src && cd ../desktop && tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json && bun run lint && bun run format:check && bun scripts/ui-tokens.ts && cd web && tsc -b && bun oxlint src && bun oxfmt --check src && cd ../ui && tsc -b && bun oxlint src && bun oxfmt --check src && cd ../desktop && tsc --noEmit",
     "web:dev": "cd web && bun run dev",
     "web:build": "cd web && bun run build",
     "demo": "bun scripts/demo.ts",
     "changelog": "bun scripts/changelog.ts",
     "knip": "knip",
-    "install:local": "scripts/install.sh"
+    "install:local": "scripts/install.sh",
+    "ui:dev": "cd ui && bun run dev",
+    "ui:build": "cd ui && bun run build"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261026.1",
@@ -52,5 +55,8 @@
     "mdast-util-gfm": "3.1.0",
     "micromark-extension-gfm": "3.0.0",
     "zod": "^4.6.7"
+  },
+  "overrides": {
+    "react-native": "file:./ui/stubs/react-native"
   }
 }

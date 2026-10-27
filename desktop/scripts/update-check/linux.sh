@@ -5,8 +5,8 @@ TO=$2
 OUT=$3
 mkdir -p "$OUT/dl" "$HOME/Applications"
 problems=()
-img="$HOME/Applications/Channels.AppImage"
-main_pid() { pgrep -f '/Channels/bin/bun' | head -n 1; }
+img="$HOME/Applications/ChannelsLivewire.AppImage"
+main_pid() { pgrep -f '/ChannelsLivewire/bin/bun' | head -n 1; }
 
 gh release download "v$FROM" -R "$GITHUB_REPOSITORY" -p "Channels-$FROM-linux-x86_64.AppImage" -D "$OUT/dl" || exit 1
 gh release download "v$TO" -R "$GITHUB_REPOSITORY" -p SHA256SUMS -D "$OUT/to" || exit 1
@@ -53,4 +53,4 @@ if [ ${#problems[@]} -gt 0 ]; then
   printf 'FAIL %s\n' "${problems[@]}"
   exit 1
 fi
-echo "ok: an installed $FROM AppImage updated itself to $TO"
+echo "ok: an installed Channels Livewire $FROM AppImage updated itself to $TO"

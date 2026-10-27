@@ -38,6 +38,7 @@ export function fakeHost(app: FakeApp = {}): FakeHost {
     wallpaper: async () => null,
     wallpaperImage: async () => null,
     windowControl: (action) => void did.push(`window ${action}`),
+    accentColor: () => null,
     showWindow: () => void did.push("show"),
     reload: () => void did.push("reload"),
     restartToUpdate: () => void did.push("restart"),

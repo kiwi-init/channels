@@ -32,7 +32,7 @@ import {
 import { useOwnPersonalities } from "@/lib/personalities"
 import { Personalities } from "./personalities"
 
-import { setAppearance, setTextSize, setTint, useAppearance, useTextSize, useTint, type Appearance, type TextSize } from "@/lib/theme"
+import { ACCENT_TINT, setAppearance, setTextSize, setTint, useAccent, useAppearance, useTextSize, useTint, type Appearance, type TextSize } from "@/lib/theme"
 import { setAccessibilityOption, useAccessibilityOption } from "@/lib/accessibility"
 import { cx } from "@/lib/utils"
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
@@ -109,17 +109,20 @@ function Swatch({ color, on, label, onPick }: { color: string | null; on: boolea
 function TintField({ appearance }: { appearance: Appearance }) {
   const tint = useTint()
   const tints = useWallpaperTints(appearance)
-  const shown = tint && !tints.includes(tint) ? [tint, ...tints] : tints
-  if (!shown.length) return null
+  const accent = useAccent()
+  const followsAccent = !!bridge()?.getAccentColor && (accent !== null || tint === ACCENT_TINT)
+  const shown = tint && tint !== ACCENT_TINT && !tints.includes(tint) ? [tint, ...tints] : tints
+  if (!shown.length && !followsAccent) return null
   return (
     <div data-item className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
       <Lead>{glyph(ColorsIcon)}</Lead>
       <div className="min-w-0 flex-1">
         <p className="text-ui font-medium text-ink">Tint</p>
-        <p className="text-meta leading-snug text-ink-3">The main colours of your wallpaper</p>
+        <p className="text-meta leading-snug text-ink-3">{followsAccent ? "Your system accent, or the main colours of your wallpaper" : "The main colours of your wallpaper"}</p>
       </div>
       <div role="radiogroup" aria-label="Tint" className="flex items-center gap-2.5">
         <Swatch color={null} on={!tint} label="No tint" onPick={() => setTint(null)} />
+        {followsAccent && <Swatch color={accent ?? "var(--accent)"} on={tint === ACCENT_TINT} label="System accent" onPick={() => setTint(ACCENT_TINT)} />}
         {shown.map((t) => (
           <Swatch key={t} color={t} on={tint === t} label={`Tint ${t}`} onPick={() => setTint(t)} />
         ))}

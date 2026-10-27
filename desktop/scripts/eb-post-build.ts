@@ -8,7 +8,6 @@ import { JOIN_SCHEME } from "../src/deep-links.ts";
 import { PAGE_TEMPLATE, pageWithCsp } from "../src/eb-page.ts";
 import type { FromWorker, ToWorker } from "../src/keys-shim.ts";
 import { bundleProblems, keyChannelProblems, shortVersion, testBuildProblems, urlSchemeProblems, versionProblems } from "./eb-bundle.ts";
-import { buildNativeWrapper } from "./eb-native-wrapper.ts";
 import { hostKey, mismatches, pinFor, PINS } from "./eb-pins.ts";
 import { sealApp } from "./eb-seal.ts";
 import { ELECTROBUN_LAUNCHER } from "./linux-files.ts";
@@ -20,8 +19,8 @@ if (!buildDir || !os || !arch) throw new Error("run by electrobun build: ELECTRO
 if (os !== "macos" && os !== "linux") throw new Error(`the Electrobun shell builds only on macOS and Linux, not ${os}`);
 
 const desktop = path.resolve(import.meta.dirname, "..");
-const web = path.resolve(desktop, "../web/dist");
-if (!fs.existsSync(path.join(web, "index.html"))) throw new Error("web/dist/index.html is missing: run `bun run web:build` in the repo root first");
+const web = path.resolve(desktop, process.env.KIWI_UI_DIST ?? "../ui/dist");
+if (!fs.existsSync(path.join(web, "index.html"))) throw new Error(`${web}/index.html is missing: run \`bun run ui:build\` in the repo root first`);
 const index = fs.readFileSync(path.join(web, "index.html"), "utf8");
 pageWithCsp(index, DEFAULT_RELAY);
 
@@ -69,10 +68,11 @@ if (os === "linux") {
   console.log(`eb-post-build: bin/launcher keeps the app's environment to an allowlist, then starts Electrobun's (bin/${ELECTROBUN_LAUNCHER})`);
   const wrapper = path.join(bin, "libNativeWrapper.so");
   if (!fs.existsSync(wrapper)) throw new Error(`eb-post-build: no Electrobun native wrapper at ${wrapper}`);
-  buildNativeWrapper(wrapper, path.join(bin, "libasar.so"));
-  console.log(
-    `eb-post-build: bin/libNativeWrapper.so is built from Electrobun ${PINS.electrobun}'s source with desktop/native/linux/electrobun-wayland.patch (GTK opens Wayland natively when WAYLAND_DISPLAY is set), electrobun-titlebar.patch (custom title bars request client-side decorations), and electrobun-tray.patch (AppIndicator loaded at run time, with themed symbolic icons, so the app starts without it)`,
-  );
+  const linked = execFileSync("readelf", ["-d", wrapper], { encoding: "utf8" })
+    .split("\n")
+    .filter((line) => line.includes("(NEEDED)") && line.includes("appindicator"));
+  if (linked.length) throw new Error(`eb-post-build: Livewire ${PINS.electrobun}'s libNativeWrapper.so links AppIndicator, so the app won't start where it isn't installed: ${linked.join("; ")}`);
+  console.log(`eb-post-build: bin/libNativeWrapper.so is Livewire ${PINS.electrobun}'s own (native Wayland, AppIndicator loaded at run time)`);
   const webkit = execFileSync("pkg-config", ["--cflags", "--libs", "webkit2gtk-4.1"], { encoding: "utf8" }).trim().split(/\s+/);
   execFileSync("cc", ["-shared", "-fPIC", "-O2", "-Wall", "-Wextra", "-Werror", "-o", path.join(bin, "libkiwi-shell.so"), path.join(desktop, "native", "linux", "kiwi-shell.c"), ...webkit], {
     stdio: "inherit",

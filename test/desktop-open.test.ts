@@ -55,7 +55,7 @@ describe("links leave the app for the person's own browser", () => {
     expect(fallback).toEqual([]);
   });
 
-  test("on Linux without xdg-open, gio opens it, each with the link as one argument and no shell, never through Electrobun's opener (T990)", async () => {
+  test("on Linux without xdg-open, gio opens it, each with the link as one argument and no shell, never through Electrobun's opener (Livewire #236, T990)", async () => {
     const { launch, calls } = fakeLaunch(false, ["xdg-open"]);
     const fallback: string[] = [];
     const link = web("https://example.com/b/$(touch%20x)'`");

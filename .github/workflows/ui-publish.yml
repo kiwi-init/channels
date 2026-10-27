@@ -1,0 +1,90 @@
+name: ui-publish
+
+on:
+  workflow_dispatch:
+  # Dispatch needs this file on main, which stays stable's. On the Livewire branch,
+  # a commit that changes ui-publish-request publishes the UI at that commit.
+  push:
+    branches: [T377-livewire-rc]
+    paths: [.github/ui-publish-request]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ui-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/T377-livewire-rc'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: livewire-ui
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.hutch
+          key: hutch-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/electrobun-pins.json') }}
+
+      - name: Electrobun toolchain
+        working-directory: desktop
+        timeout-minutes: 5
+        run: for i in 1 2 3; do bun run prepare:eb && exit 0; echo "electrobun prepare failed ($i of 3)"; [ "$i" -lt 3 ] && sleep 20; done; exit 1
+
+      - name: The app pins the key this environment signs with
+        env:
+          KEY_ID: ${{ vars.LIVEWIRE_UI_KEY_ID }}
+          PUBLIC_KEY: ${{ vars.LIVEWIRE_UI_PUBLIC_KEY }}
+        run: bun -e 'import { UI_TRUSTED_KEYS } from "./desktop/src/ui-channel.ts"; const { KEY_ID, PUBLIC_KEY } = process.env; if (!KEY_ID || UI_TRUSTED_KEYS[KEY_ID] !== PUBLIC_KEY) { console.error(`::error::desktop/src/ui-channel.ts does not pin ${KEY_ID} = ${PUBLIC_KEY}, so the app would refuse what this run signs`); process.exit(1); }'
+
+      - name: Build the renderer
+        run: bun run ui:build
+
+      - name: Stage the UI
+        run: bun desktop/scripts/ui-stage.ts ui/dist "$RUNNER_TEMP/ui" "$GITHUB_SHA"
+
+      - name: Sign
+        env:
+          LIVEWIRE_UI_SIGNING_KEY: ${{ secrets.LIVEWIRE_UI_SIGNING_KEY }}
+        run: |
+          key="$RUNNER_TEMP/ui-key/key.pem"
+          trap 'rm -rf "$RUNNER_TEMP/ui-key"' EXIT
+          (umask 077 && mkdir -p "$RUNNER_TEMP/ui-key" && printf '%s\n' "$LIVEWIRE_UI_SIGNING_KEY" > "$key")
+          bun desktop/.hutch/devkit/api/sdks/main/appengine/cli.ts publish "$RUNNER_TEMP/ui" \
+            --key "$key" --out "$RUNNER_TEMP/site" --flat \
+            --previous "https://github.com/$GITHUB_REPOSITORY/releases/download/livewire-ui/manifest.json"
+
+      - name: Verify
+        env:
+          KEY_ID: ${{ vars.LIVEWIRE_UI_KEY_ID }}
+          PUBLIC_KEY: ${{ vars.LIVEWIRE_UI_PUBLIC_KEY }}
+        run: |
+          bun desktop/.hutch/devkit/api/sdks/main/appengine/cli.ts verify "$RUNNER_TEMP/site" --public-key "$PUBLIC_KEY" --key-id "$KEY_ID"
+          ls -la "$RUNNER_TEMP/site"
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view livewire-ui --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 || gh release create livewire-ui \
+            --repo "$GITHUB_REPOSITORY" --target T377-livewire-rc --prerelease --latest=false \
+            --title "Channels Livewire UI" \
+            --notes "The UI channel Channels Livewire boots its UI from: manifest.json (signed, livewire-manifest/1) and the uipack bundles it points to. Published by ui-publish.yml; the app checks the signature against the key pinned in desktop/src/ui-channel.ts. Not an app release: nothing here updates the app."
+          mapfile -t packs < <(find "$RUNNER_TEMP/site" -maxdepth 1 -name '*.uipack' | sort)
+          gh release upload livewire-ui "${packs[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+          gh release upload livewire-ui "$RUNNER_TEMP/site/manifest.json" --repo "$GITHUB_REPOSITORY" --clobber
+          jq -r '"published \(.uiVersion) as seq \(.seq)"' "$RUNNER_TEMP/site/manifest.json"

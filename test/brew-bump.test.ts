@@ -49,14 +49,8 @@ describe("each release bumps the Homebrew tap's cask and formula from its SHA256
     expect(() => bumpCask(cask.replaceAll("#{version}", "0.27.7"), "2026.10.0", sumsOf(SUMS))).toThrow("doesn't name #{version}");
   });
 
-  test("release.yml bumps the tap after publishing a release, never a release candidate, with the bus app's token for that repo alone", () => {
-    type Step = { uses?: string; with?: Record<string, string>; run?: string };
-    const jobs = (Bun.YAML.parse(readFileSync(resolve(import.meta.dir, "../.github/workflows/release.yml"), "utf8")) as { jobs: Record<string, { needs?: string; if?: string; steps: Step[] }> }).jobs;
-    const job = jobs["bump-tap"];
-    expect(job?.needs).toBe("publish");
-    expect(job?.if).toBe("${{ !contains(github.ref_name, '-') }}");
-    const app = job?.steps.find((s) => s.uses?.startsWith("actions/create-github-app-token@"));
-    expect(app?.with).toMatchObject({ repositories: "homebrew-tap", "permission-contents": "write" });
-    expect(job?.steps.some((s) => s.run?.includes("bun ../scripts/brew-bump.ts"))).toBe(true);
+  test("a Channels Livewire release never touches the Homebrew tap, the relay or main: release.yml has only the gate, the build and the prerelease (T839)", () => {
+    const jobs = (Bun.YAML.parse(readFileSync(resolve(import.meta.dir, "../.github/workflows/release.yml"), "utf8")) as { jobs: Record<string, unknown> }).jobs;
+    expect(Object.keys(jobs)).toEqual(["on-livewire", "build", "publish"]);
   });
 });

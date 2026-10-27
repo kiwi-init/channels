@@ -1,5 +1,7 @@
 import path from "node:path";
 
+import { compareVersions } from "@kiwi/core/versions.ts";
+
 import { appImageName, type LinuxArch } from "../scripts/linux-files.ts";
 
 const linuxArch = (arch: string): LinuxArch | null => (arch === "x64" || arch === "arm64" ? arch : null);
@@ -22,12 +24,18 @@ const parsed = (url: string | undefined): URL | null => {
   }
 };
 
-export function latestTag(repo: string, location: string | null): string | null {
-  const u = parsed(location ?? undefined);
-  const prefix = `/${repo}/releases/tag/`;
-  if (!u || u.hostname !== "github.com" || u.search || !u.pathname.startsWith(prefix)) return null;
-  const tag = u.pathname.slice(prefix.length);
-  return /^v\d{1,6}\.\d{1,6}\.\d{1,6}$/.test(tag) ? tag : null;
+const LIVEWIRE_TAG = /^v(\d{1,6}\.\d{1,6}\.\d{1,6}-livewire\.\d{1,6})$/;
+
+export const livewireVersion = (tag: string): string => LIVEWIRE_TAG.exec(tag)?.[1] ?? "";
+
+export function newestLivewireTag(repo: string, atom: string): string | null {
+  const prefix = `https://github.com/${repo}/releases/tag/`;
+  let newest: string | null = null;
+  for (const [, href = ""] of atom.matchAll(/<link\b[^>]*\bhref="([^"]*)"/g)) {
+    const tag = href.startsWith(prefix) ? href.slice(prefix.length) : "";
+    if (LIVEWIRE_TAG.test(tag) && (!newest || compareVersions(livewireVersion(tag), livewireVersion(newest)) > 0)) newest = tag;
+  }
+  return newest;
 }
 
 export const releaseDownload = (repo: string, tag: string, name: string): string => `https://github.com/${repo}/releases/download/${tag}/${name}`;

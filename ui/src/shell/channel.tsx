@@ -1,0 +1,132 @@
+import { useEffect, useState } from "react"
+
+import { Conversation } from "~/chat/conversation"
+import { cx, Count, IconButton } from "~/kit/bits"
+import { Icon } from "~/kit/icons"
+import type { Channel } from "~/model"
+import { NeedsYou, openAsks } from "~/needs/needs"
+import { useApp } from "~/nav"
+import { ChannelPanel } from "~/panels/channel-panel"
+import { InvitePanel } from "~/panels/invite"
+import { AddAgentPanel } from "~/panels/add-agent"
+import { PersonPanel } from "~/panels/person"
+import { TaskPanel } from "~/panels/task"
+import { ThreadPanel } from "~/panels/thread"
+import { Sidebar } from "~/shell/sidebar"
+import { Waiting } from "~/start/waiting"
+import { Board, openTasks } from "~/tasks/board"
+
+export function ChannelScreen({ channel }: { channel: Channel }) {
+  const { nav, go } = useApp()
+  const [search, setSearch] = useState("")
+  const [searching, setSearching] = useState(false)
+  const [drawer, setDrawer] = useState(false)
+  const [seen, setSeen] = useState(nav.where)
+  if (seen !== nav.where) {
+    setSeen(nav.where)
+    setDrawer(false)
+  }
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && nav.panel && !document.querySelector("dialog[open]")) go({ to: "panel", panel: null })
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
+        e.preventDefault()
+        setSearching(true)
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [nav.panel, go])
+
+  if (channel.waiting) return <Waiting channel={channel} />
+
+  const needs = openAsks(channel).length
+  const tasks = openTasks(channel).length
+  const here =
+    nav.where.kind === "room"
+      ? `# ${channel.rooms.find((r) => r.id === (nav.where as { room: string }).room)?.name ?? "general"}`
+      : nav.where.kind === "dm"
+        ? `@ ${nav.where.with}`
+        : `T${nav.where.task}`
+
+  return (
+    <div className={cx("chan", nav.panel && "has-panel", drawer && "is-drawer")}>
+      <header className="top">
+        <button type="button" className="icon-btn top-drawer" aria-label="Rooms and people" aria-pressed={drawer} onClick={() => setDrawer(!drawer)}>
+          <Icon name="sidebar" />
+        </button>
+        <button
+          type="button"
+          className="top-title"
+          onClick={() => go({ to: "panel", panel: nav.panel?.kind === "channel" ? null : { kind: "channel" } })}
+          aria-label={`${channel.title}: channel settings`}
+        >
+          <span className="top-name">{channel.title}</span>
+        </button>
+        <nav className="tabs" aria-label="Views">
+          <button type="button" aria-pressed={nav.tab === "chat"} onClick={() => go({ to: "tab", tab: "chat" })}>
+            {here}
+          </button>
+          <button type="button" aria-pressed={nav.tab === "tasks"} onClick={() => go({ to: "tab", tab: "tasks" })}>
+            Tasks <Count n={tasks} />
+          </button>
+          {(needs > 0 || nav.tab === "needs") && (
+            <button type="button" className="is-needs" aria-pressed={nav.tab === "needs"} onClick={() => go({ to: "tab", tab: "needs" })}>
+              Needs you <Count n={needs} loud />
+            </button>
+          )}
+        </nav>
+        <div className="top-tools">
+          {channel.hold && (
+            <span className="top-hold" title={channel.hold.note}>
+              paused
+            </span>
+          )}
+          {searching ? (
+            <input
+              autoFocus
+              className="input is-mono top-search"
+              placeholder="Search this channel"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onBlur={() => !search && setSearching(false)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setSearch("")
+                  setSearching(false)
+                }
+              }}
+            />
+          ) : (
+            <IconButton icon="search" label="Search this channel (⌘F)" onClick={() => setSearching(true)} />
+          )}
+        </div>
+      </header>
+      <Sidebar channel={channel} />
+      <main className="main">{nav.tab === "tasks" ? <Board channel={channel} /> : nav.tab === "needs" ? <NeedsYou channel={channel} /> : <Conversation channel={channel} search={search} />}</main>
+      {channel.connection !== "live" && (
+        <p className="conn" role="status">
+          <span className="dot is-doing" aria-hidden="true" />
+          {channel.connection === "connecting" ? "Connecting…" : "Reconnecting…"}
+        </p>
+      )}
+      {nav.panel && (
+        <aside className="panel" aria-label="Details">
+          {nav.panel.kind === "thread" ? (
+            <ThreadPanel channel={channel} seq={nav.panel.seq} />
+          ) : nav.panel.kind === "task" ? (
+            <TaskPanel channel={channel} id={nav.panel.task} />
+          ) : nav.panel.kind === "person" ? (
+            <PersonPanel channel={channel} name={nav.panel.name} />
+          ) : nav.panel.kind === "channel" ? (
+            <ChannelPanel channel={channel} />
+          ) : nav.panel.kind === "invite" ? (
+            <InvitePanel channel={channel} />
+          ) : (
+            <AddAgentPanel channel={channel} />
+          )}
+        </aside>
+      )}
+    </div>
+  )
+}

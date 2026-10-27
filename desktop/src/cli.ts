@@ -10,7 +10,6 @@ import os from "node:os";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import zlib from "node:zlib";
-import { ensureOnPath as ensureShellPath } from "@kiwi/core/node/shell-path.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
 import { childEnv } from "./child-env.ts";
 
@@ -123,5 +122,5 @@ function tidy(bin: string): Promise<void> {
  * it changed, if any. Shared with the install script's logic and `kiwi setup` (src/shell-path.ts).
  */
 export function ensureOnPath(): string | null {
-  return ensureShellPath({ dir: path.dirname(cliPath()), mark: "# Added by the Channels app: it keeps the kiwi CLI in ~/.kiwi/bin current." });
+  return null;
 }

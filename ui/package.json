@@ -1,0 +1,31 @@
+{
+  "name": "ui",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint src",
+    "format": "oxfmt src",
+    "format:check": "oxfmt --check src",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@kiwi/core": "workspace:*",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-native-enriched-markdown": "1.1.1",
+    "react-native": "file:./stubs/react-native"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "oxfmt": "0.71.0",
+    "oxlint": "1.86.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4"
+  }
+}

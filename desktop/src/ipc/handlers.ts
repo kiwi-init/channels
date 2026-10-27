@@ -10,6 +10,7 @@ import { personalitiesCalls } from "./personalities.ts";
 import { signInCalls } from "./signin.ts";
 import { storeCalls } from "./store.ts";
 import { terminalsCalls } from "./terminals.ts";
+import { uiCalls } from "./ui.ts";
 
 export function handlers(host: Host): Handlers {
   return {
@@ -23,5 +24,6 @@ export function handlers(host: Host): Handlers {
     ...personalitiesCalls(),
     ...terminalsCalls(),
     ...launchCalls(host),
+    ...uiCalls(),
   };
 }

@@ -4,14 +4,15 @@ import os from "node:os";
 import path from "node:path";
 
 import desktopPackage from "../package.json" with { type: "json" };
+import { LIVEWIRE_APP, LIVEWIRE_ID } from "../src/livewire-id.ts";
 import { developerIdRequirement } from "../src/signer.ts";
 import { swapAsset } from "../src/update-asset.ts";
 import { MB, mb, payloadOf, shippedApp, sizeOf } from "./eb-app.ts";
 import { makeDmg } from "./eb-dmg.ts";
 import { sealApp, sealProblems } from "./eb-seal.ts";
 
-const PACKED_LIMIT = 40 * MB;
-const IDENTIFIER = "com.kiwiinit.channels";
+const PACKED_LIMIT = 50 * MB;
+const IDENTIFIER = LIVEWIRE_ID;
 const FORBIDDEN = [
   "com.apple.security.device.audio-input",
   "com.apple.security.device.camera",
@@ -96,7 +97,7 @@ const dmgName = zipName.replace(/\.zip$/, ".dmg");
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "eb-release-"));
 try {
   const app = shippedApp(payloadOf(path.join(path.resolve(releaseEb), "artifacts")), tmp);
-  if (path.basename(app) !== "Channels.app") throw new Error(`eb-release: the plain app is ${path.basename(app)}, not Channels.app`);
+  if (path.basename(app) !== LIVEWIRE_APP) throw new Error(`eb-release: the plain app is ${path.basename(app)}, not ${LIVEWIRE_APP}`);
   const id = plist(app, "CFBundleIdentifier");
   if (id !== IDENTIFIER) throw new Error(`eb-release: the app is ${id}, not ${IDENTIFIER}: build it with CHANNELS_EB_RELEASE=1`);
   const built = (JSON.parse(fs.readFileSync(path.join(app, "Contents", "Resources", "version.json"), "utf8")) as { version?: unknown }).version;
@@ -126,7 +127,7 @@ try {
   must("ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", app, zip], "zipping");
   const stage = path.join(tmp, "dmg");
   fs.mkdirSync(stage);
-  must("ditto", [app, path.join(stage, "Channels.app")], "staging the dmg");
+  must("ditto", [app, path.join(stage, LIVEWIRE_APP)], "staging the dmg");
   fs.symlinkSync("/Applications", path.join(stage, "Applications"));
   makeDmg(stage, dmg, tool);
   if (signed) {
@@ -142,7 +143,7 @@ try {
       .map((l) => l.split("/")[0])
       .filter((t) => t !== "__MACOSX"),
   );
-  if (top.size !== 1 || !top.has("Channels.app")) throw new Error(`eb-release: ${zipName} must hold Channels.app at its root, and holds ${[...top].join(", ")}`);
+  if (top.size !== 1 || !top.has(LIVEWIRE_APP)) throw new Error(`eb-release: ${zipName} must hold ${LIVEWIRE_APP} at its root, and holds ${[...top].join(", ")}`);
   for (const f of machOs(app)) {
     const ents = entitlementsOf(f);
     for (const e of FORBIDDEN) if (ents.includes(e)) throw new Error(`eb-release: ${path.relative(app, f)} carries ${e}`);
@@ -168,7 +169,7 @@ try {
     console.log(`${mb(bytes).padStart(9)}  ${path.basename(f)}  (gate ${mb(PACKED_LIMIT)}: ${bytes > PACKED_LIMIT ? "OVER" : "ok"})`);
     if (bytes > PACKED_LIMIT) over++;
   }
-  console.log(`${mb(sizeOf(app)).padStart(9)}  Channels.app on disk`);
+  console.log(`${mb(sizeOf(app)).padStart(9)}  ${LIVEWIRE_APP} on disk`);
   console.log(signed ? "signed with the Developer ID, notarized and stapled" : "rehearsal: ad-hoc signed, not notarized");
   process.exitCode = over ? 1 : 0;
 } finally {

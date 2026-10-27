@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       from:
-        description: "The release installed first, as a version: 0.27.7"
+        description: "The Channels Livewire release installed first, as a version: 2026.10.2-livewire.2"
         required: true
       to:
-        description: "The release it must update itself to, now GitHub's latest: 2026.10.0"
+        description: "The release it must update itself to, the newest Channels Livewire release: 2026.10.2-livewire.3"
         required: true
 
 permissions:
@@ -49,17 +49,3 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
         run: dbus-run-session -- bash desktop/scripts/update-check/linux.sh "$FROM" "$TO" "$RUNNER_TEMP/linux"
-
-  release:
-    name: the release's files, signature, attestations, site and install script
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          persist-credentials: false
-      - run: bash desktop/scripts/update-check/versions.sh "$FROM" "$TO"
-      - run: sudo apt-get update -q && sudo apt-get install -y --no-install-recommends minisign
-      - env:
-          GH_TOKEN: ${{ github.token }}
-        run: bash desktop/scripts/update-check/release.sh "$TO" "$RUNNER_TEMP/release" "$(grep -oE '"[^"]+"' desktop/src/release-key.ts | tr -d '"')"
