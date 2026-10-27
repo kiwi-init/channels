@@ -3,7 +3,7 @@ import * as Exit from "effect/Exit";
 import { SNAPSHOT_EVERY, SNAPSHOT_TOO_LARGE } from "../protocol.ts";
 import { MissingKey } from "../refusals.ts";
 import { openSnapshot, sealSnapshot, wellFormedSnapshot } from "../snapshot.ts";
-import { fold, rosterOf, type FoldBase } from "../state.ts";
+import { fold, namesMoved, rosterOf, type FoldBase } from "../state.ts";
 import type { ChannelCore } from "./core.ts";
 import type { MemberRefusal, Refused } from "./errors.ts";
 import type { ChannelHistory } from "./history.ts";
@@ -47,17 +47,22 @@ export class ChannelSnapshots {
     snapshotIfDue: Effect.fn("Channel.snapshotIfDue")({ self: this }, function* (this: ChannelSnapshots, every: number = SNAPSHOT_EVERY) {
       yield* this.ch.ownerOnly();
       const at = (yield* this.ch.fx.snapshotAt()) ?? 0;
-      if ((yield* this.ch.fx.head()) - at < Math.max(every, 1)) return null;
-      const from = at ? yield* this.ch.fx.snapshot() : null;
-      const since = from?.n ?? 0;
-      const [{ messages, head: top, through }, members, rooms, guard] = yield* Effect.all(
-        [this.ch.fx.history(since), this.ch.fx.members(), Effect.orElseSucceed(this.ch.fx.rooms(), () => null), Effect.orElseSucceed(this.ch.fx.guard(), () => null)],
+      const head = yield* this.ch.fx.head();
+      const [prior, members, rooms, guard] = yield* Effect.all(
+        [at ? this.ch.fx.snapshot() : Effect.succeed(null), this.ch.fx.members(), Effect.orElseSucceed(this.ch.fx.rooms(), () => null), Effect.orElseSucceed(this.ch.fx.guard(), () => null)],
         { concurrency: "unbounded" },
       );
+      const roster = rosterOf(members);
+      const moved = !!prior && namesMoved(prior, roster);
+      if (!moved && head - at < Math.max(every, 1)) return null;
+      const whole = moved ? yield* this.ch.fx.history(0) : null;
+      const from = whole?.first === 1 && whole.through === whole.head ? null : prior;
+      const since = from?.n ?? 0;
+      const { messages, head: top, through } = from === null && whole ? whole : yield* this.ch.fx.history(since);
       if (through !== top || messages.some((m) => m.seq <= since || m.seq > top)) return null;
       const kept: { base?: FoldBase } = {};
-      fold(messages, rosterOf(members), Date.now(), rooms, guard, from, (b) => void (kept.base = b));
-      return kept.base && kept.base.n > at ? yield* this.ch.fx.putSnapshot(kept.base) : null;
+      fold(messages, roster, Date.now(), rooms, guard, from, (b) => void (kept.base = b));
+      return kept.base && (kept.base.n > at || (moved && kept.base.n === at)) ? yield* this.ch.fx.putSnapshot(kept.base) : null;
     }),
   };
 }

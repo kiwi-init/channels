@@ -19,7 +19,10 @@ const rename = Effect.fn("kiwi.seat.rename")(function* (wanted: string | undefin
   if (!mine?.active) return yield* die(`${s.me} has no seat in "${s.alias}" any more`);
   if (mine.name === to) {
     if (s.me === to) return out(`${to} is already this seat's handle in "${s.alias}"`);
-    yield* (yield* Keystore).renameMember(s.alias, s.identity, to);
+    const keys = yield* Keystore;
+    if ((yield* keys.identitiesIn(s.cfg.roomId)).includes(to) && (yield* keys.identity(to, s.cfg.roomId)).pk !== s.identity.pk)
+      return yield* die(`this computer already has another key named ${to} in "${s.alias}": remove it first`);
+    yield* keys.renameMember(s.alias, s.identity, to);
     out(`${s.me} in "${s.alias}" is ${to} on this computer too: same key, tasks and history`);
     process.stderr.write(`kiwi: restart anything listening as ${s.me} (kiwi listen, a loop, a harness session) so it answers as ${to}\n`);
     return;

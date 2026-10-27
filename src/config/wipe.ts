@@ -48,13 +48,12 @@ export function renameMember(alias: string, id: Identity, to: string): void {
   const c = loadConfig().channels[alias];
   const from = id.name;
   if (!c || from === to) return;
-  saveIdentity({ ...id, name: to }, c.roomId);
-  forgetIdentity(from, c.roomId);
+  if (!identitiesIn(c.roomId).includes(to)) saveIdentity({ ...id, name: to }, c.roomId);
   for (const [was, now] of [
     [cursorPath(alias, from), cursorPath(alias, to)],
     [seenPath(alias, from), seenPath(alias, to)],
   ] as const)
-    if (existsSync(was)) renameSync(was, now);
+    if (existsSync(was) && !existsSync(now)) renameSync(was, now);
   updateConfig((cfg) => {
     for (const v of Object.values(cfg.bindings ?? {})) for (const b of Array.isArray(v) ? v : [v]) if (b.alias === alias && b.as === from) b.as = to;
     const ch = cfg.channels[alias];
@@ -67,6 +66,7 @@ export function renameMember(alias: string, id: Identity, to: string): void {
       cfg.wakeHooks![on] = hook;
     }
   });
+  forgetIdentity(from, c.roomId);
 }
 
 export function forgetSecretCopies(): void {

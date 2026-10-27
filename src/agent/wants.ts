@@ -14,7 +14,7 @@ export function narrows(d: Delivery): boolean {
   return d.thread !== undefined || d.room !== undefined || !!d.forMe;
 }
 
-export function wants(me: string, m: Message, state: ChannelState | null, d: Delivery = {}): boolean {
+export function wants(me: string, m: Message, state: ChannelState | null, d: Delivery = {}, earlier: readonly string[] = []): boolean {
   if (m.from === me) return false;
   if (ignored(state?.trust.get(m.seq))) return false;
   if (m.kind === "event" && !d.all && state?.rejected.has(m.seq)) return false;
@@ -26,7 +26,8 @@ export function wants(me: string, m: Message, state: ChannelState | null, d: Del
   if (m.kind === "event")
     return addressed || m.ev?.op === "hello" || m.ev?.op === "room.create" || m.ev?.op === "room.rename" || m.ev?.op === "charter.set" || m.ev?.op === "repos.set" || m.ev?.op === "hold.set";
   if (d.chat) return true;
-  if (mentionsOf(m.body).has(me.toLowerCase())) return true;
+  const mentioned = mentionsOf(m.body);
+  if ([me, ...earlier].some((n) => mentioned.has(n.toLowerCase()))) return true;
   const place = state?.placeOf.get(m.seq);
   const inMyThread = !!state?.threadPeople.get(state.threadOf.get(m.seq) ?? m.seq)?.has(me);
   if (state && place && place.kind !== "main") return isDirectedAt(m, me) || threadMembers(state, place).includes(me) || inMyThread;

@@ -241,7 +241,7 @@ export class ChannelRequests {
 
   private assertNamesFree(names: string[]): Effect.Effect<void, Refused, Relay> {
     return Effect.gen({ self: this }, function* () {
-      const taken = new Set((yield* this.ch.fx.members()).flatMap((m) => (m.active ? namesOf(m) : (m.was ?? []))).map(nameKey));
+      const taken = new Set((yield* this.ch.fx.members()).flatMap((m) => (m.active || m.was?.length ? namesOf(m) : [])).map(nameKey));
       const seen = new Set<string>();
       for (const n of names) {
         if (!NAME_RE.test(n)) return yield* new BadName(`"${inlineText(n, 40)}" isn't a valid name (1-32 letters, digits, _ . or -); they need to ask again under another name`);

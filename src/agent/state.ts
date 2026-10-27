@@ -9,7 +9,21 @@ import { seatHolds, seatRefusal } from "../hold.ts";
 import { daemonMark, daemonPeek } from "../daemon/rpc.ts";
 import { GENERAL_ROOM, knownOp, outgrown, PAGE_LIMIT, type Message } from "@kiwi/core/protocol.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
-import { findRoom, fold, rosterOf, type ChannelState, type FoldBase, type GuardFloor, type Roster, type RoomsFloor } from "@kiwi/core/state.ts";
+import {
+  aliasesOf,
+  currentName,
+  findRoom,
+  fold,
+  namesMoved,
+  renamedLog,
+  renamedMessage,
+  rosterOf,
+  type ChannelState,
+  type FoldBase,
+  type GuardFloor,
+  type Roster,
+  type RoomsFloor,
+} from "@kiwi/core/state.ts";
 import { LAST_MARK_MS, lastSeq, Look, orNone, type Agent, type Delivery } from "./shared.ts";
 import { narrows, wants } from "./wants.ts";
 
@@ -20,7 +34,7 @@ const NOT_A_MEMBER = " isn't a member";
 
 function poisoned(base: FoldBase, roster: Roster): boolean {
   const names = new Set(roster.filter((r) => r.kind !== "computer").map((r) => r.name));
-  return base.rejected.some(([, why]) => why.endsWith(NOT_A_MEMBER) && names.has(why.slice(0, -NOT_A_MEMBER.length)));
+  return namesMoved(base, roster) || base.rejected.some(([, why]) => why.endsWith(NOT_A_MEMBER) && names.has(why.slice(0, -NOT_A_MEMBER.length)));
 }
 
 export const outgrownCache = (cached: readonly Message[], base: FoldBase | null): boolean => cached.some((m) => m.newer !== undefined && knownOp(m.newer.op)) || (!!base && outgrown(base));
@@ -172,7 +186,7 @@ export class SessionState {
     const look = yield* Look;
     const prior = look?.seen.get(this);
     if (prior && prior.messages === messages && prior.roster === roster && prior.rooms === this.roomsFloor && prior.guard === this.guardFloor) return prior.view;
-    const view = { messages, state: yield* this.foldState(messages, roster, seen?.info ?? undefined) };
+    const view = { messages: renamedLog(aliasesOf(roster), messages), state: yield* this.foldState(messages, roster, seen?.info ?? undefined) };
     look?.seen.set(this, { messages, roster, rooms: this.roomsFloor, guard: this.guardFloor, view });
     return view;
   });
@@ -299,7 +313,9 @@ export class SessionState {
   });
 
   wants(m: Message, state: ChannelState | null, d: Delivery = {}): boolean {
-    return wants(this.me, m, state, d);
+    const aliases = aliasesOf(this.roster ?? []);
+    const earlier = this.roster?.find((r) => r.pk === this.identity.pk)?.was ?? [];
+    return wants(currentName(aliases, this.me), renamedMessage(aliases, m), state, d, earlier);
   }
 
   readonly unread = Effect.fn("AgentSession.unread")({ self: this }, function* (this: SessionState, d: Delivery = {}) {

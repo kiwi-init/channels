@@ -107,9 +107,10 @@ export class ChannelMembers {
       if (!NAME_RE.test(next)) return yield* new Rejected(`"${inlineText(next, 40)}" isn't a valid handle (1-32 letters, digits, _ . or -)`);
       if (RESERVED_NAMES.has(nameKey(next))) return yield* new Rejected(`"${next}" is a reserved name`);
       if (next === m.name) return;
+      if (namesOf(m).some((n) => n !== next && nameKey(n) === nameKey(next))) return yield* new Rejected(`"${next}" differs from ${m.name}'s own handles only in case or form: pick another`);
       const others = (yield* this.ch.fx.members()).filter((x) => x.pk !== m.pk);
       if (others.some((x) => namesOf(x).some((n) => nameKey(n) === nameKey(next)))) return yield* new Rejected(`"${next}" is, or was, someone else's name in this channel`);
-      const was = [...(m.was ?? []), m.name].filter((n) => nameKey(n) !== nameKey(next));
+      const was = [...(m.was ?? []), m.name].filter((n) => n !== next);
       if (was.length > MAX_EARLIER_NAMES) return yield* new Rejected(`${m.name} has had ${MAX_EARLIER_NAMES} handles already: that's the most a seat keeps`);
       const e = this.ch.access.epoch;
       const key = this.ch.access.keys[String(e)]!;
@@ -117,6 +118,7 @@ export class ChannelMembers {
       const rec = yield* Effect.promise(async () => sealRecord(key, await makeRecord(this.ch.identity, this.ch.roomId, { ...info, name: next, was })));
       const scopes = m.later?.scopes ?? scopesOf(m);
       yield* this.ch.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: canPost(scopes) }) });
+      yield* Effect.ignoreCause(this.ch.fx.snapshotIfDue(1));
     }),
 
     updatePowers: Effect.fn("Channel.updatePowers")({ self: this }, function* (this: ChannelMembers, m: Member, powers: PersonPowers) {

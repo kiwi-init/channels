@@ -4,7 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
-import { aliasesOf, fold, renamedMessage, rosterOf, type FoldBase } from "@kiwi/core/state.ts";
+import { PERMISSION_CHOICES, permissionReply } from "@kiwi/core/permission.ts";
+import { aliasesOf, fold, namesMoved, renamedMessage, rosterOf, type FoldBase } from "@kiwi/core/state.ts";
+import { runAgent } from "../src/agent.ts";
+import { wants } from "../src/agent/wants.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { readCursor, writeCursor } from "../src/config/cursors.ts";
 import { loadConfig, updateConfig } from "../src/config/file.ts";
@@ -134,6 +137,97 @@ describe("seat rename", () => {
       "patient-otter",
     );
     expect((await ownerCh.members()).find((m) => m.pk === otter.pk)).toMatchObject({ name: "patient-otter", was: ["opus-vm-coder"] });
+    await expect(
+      ownerCh.updateHandle(
+        (await ownerCh.members()).find((m) => m.pk === otter.pk)!,
+        "Patient-Otter",
+      ),
+    ).rejects.toThrow(/only in case/);
+  });
+
+  test("a renamed seat's handles stay taken after it leaves", async () => {
+    const { code, ownerCh, otter } = await team();
+    await ownerCh.updateHandle(
+      (await ownerCh.members()).find((m) => m.pk === otter.pk)!,
+      "opus-vm-coder",
+    );
+    await ownerCh.remove(otter.pk);
+    const asks = [];
+    for (const handle of ["opus-vm-coder", "patient-otter"]) {
+      const id = await generateIdentity(handle);
+      asks.push({ id, requestId: (await Channel.requestJoin(relay, code, id, { name: handle })).requestId });
+    }
+    for (const r of await checked(ownerCh, relay, code, asks)) await expect(ownerCh.approve(r)).rejects.toThrow(/already someone's name/);
+  });
+});
+
+describe("a fold resumed from before a rename", () => {
+  test("agrees with a full fold on permission answers and padded reviewers, and knows it predates the rename", async () => {
+    const { ownerCh, otter, otterCh } = await team();
+    const task = await ownerCh.send("task", { kind: "event", ev: { op: "task.add", title: "padded", review: " patient-otter " } });
+    const asked = await otterCh.send("run pwd?", {
+      kind: "blocking",
+      to: ["human"],
+      esc: true,
+      choices: [...PERMISSION_CHOICES],
+      permission: { tool: "Bash", command: "pwd", cwd: "/work", nonce: "abcdefgh", expiresAt: Date.now() + 60_000, canAllow: true },
+    });
+    const early = (await ownerCh.history(0)).messages;
+    const before = rosterOf(await ownerCh.members());
+    const perm = permissionReply(
+      early.find((m) => m.seq === asked)!,
+      false,
+      fold(early, before),
+    )!;
+    await ownerCh.send("B: Deny", { to: ["patient-otter"], re: [asked], perm });
+    const { messages } = await ownerCh.history(0);
+    const kept: { base?: FoldBase } = {};
+    fold(messages, before, Date.now(), undefined, undefined, null, (b) => void (kept.base = b));
+    expect(namesMoved(kept.base!, before)).toBe(false);
+
+    await ownerCh.updateHandle(
+      (await ownerCh.members()).find((m) => m.pk === otter.pk)!,
+      "opus-vm-coder",
+    );
+    const roster = rosterOf(await ownerCh.members());
+    expect(namesMoved(kept.base!, roster)).toBe(true);
+    const now = Date.now();
+    const full = fold(messages, roster, now);
+    const resumed = fold(messages, roster, now, undefined, undefined, kept.base);
+    expect(full.openAsks).toEqual([]);
+    expect(resumed.openAsks).toEqual([]);
+    expect(full.tasks.get(task)?.review).toBe("opus-vm-coder");
+    expect(resumed.tasks.get(task)?.review).toBe("opus-vm-coder");
+    const after: { base?: FoldBase } = {};
+    fold(messages, roster, now, undefined, undefined, kept.base, (b) => void (after.base = b));
+    expect(namesMoved(after.base!, roster)).toBe(false);
+  });
+
+  test("the owner's next snapshot is folded again from the whole log", async () => {
+    const { ownerCh, otter } = await team();
+    const task = await ownerCh.send("task", { kind: "event", ev: { op: "task.add", title: "for later", review: "opus-vm-coder" } });
+    await runAgent(ownerCh.fx.snapshotIfDue(1));
+    expect(namesMoved((await ownerCh.snapshot())!, rosterOf(await ownerCh.members()))).toBe(false);
+    await ownerCh.updateHandle(
+      (await ownerCh.members()).find((m) => m.pk === otter.pk)!,
+      "opus-vm-coder",
+    );
+    const snap = (await ownerCh.snapshot())!;
+    expect(snap.aliases).toEqual([["patient-otter", "opus-vm-coder"]]);
+    expect(snap.tasks.find((t) => t.id === task)?.review).toBe("opus-vm-coder");
+  });
+});
+
+describe("an agent's inbox", () => {
+  test("a message to or mentioning an earlier handle is for the renamed seat", () => {
+    const aliases = new Map([["patient-otter", "opus-vm-coder"]]);
+    const base = { v: 1 as const, id: "x", kind: "msg" as const, ts: 1, seq: 9, sigOk: true };
+    const to = renamedMessage(aliases, { ...base, from: "honest-wren", to: ["patient-otter"], body: "hi" });
+    expect(wants("opus-vm-coder", to, null, { forMe: true })).toBe(true);
+    const named = renamedMessage(aliases, { ...base, from: "honest-wren", body: "@patient-otter look" });
+    expect(wants("opus-vm-coder", named, null, {}, ["patient-otter"])).toBe(true);
+    const own = renamedMessage(aliases, { ...base, from: "patient-otter", body: "mine" });
+    expect(wants("opus-vm-coder", own, null, { all: true })).toBe(false);
   });
 });
 
@@ -152,6 +246,7 @@ describe("this computer's seat", () => {
       });
       saveIdentity(otter, access.roomId);
       writeCursor("team", "patient-otter", 41);
+      renameMember("team", otter, "opus-vm-coder");
       renameMember("team", otter, "opus-vm-coder");
       expect(identitiesIn(access.roomId)).toEqual(["opus-vm-coder"]);
       expect(readCursor("team", "opus-vm-coder")).toBe(41);

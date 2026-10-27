@@ -30,6 +30,14 @@ export function aliasesOf(roster: readonly Pick<Roster[number], "name" | "pk" | 
   return aliases.size ? aliases : NO_ALIASES;
 }
 
+export function aliasPairs(aliases: Aliases): [string, string][] {
+  return [...aliases].sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0));
+}
+
+export function namesMoved(base: Pick<FoldBase, "aliases">, roster: readonly Pick<Roster[number], "name" | "pk" | "was">[]): boolean {
+  return JSON.stringify(base.aliases ?? []) !== JSON.stringify(aliasPairs(aliasesOf(roster)));
+}
+
 export function currentName(aliases: Aliases, name: string): string {
   return aliases.get(name) ?? name;
 }
@@ -42,13 +50,18 @@ function renamedKey(a: Aliases, key: string): string {
   return to ? leadCheckpointKey(to) : key;
 }
 
+function renamedReview(a: Aliases, review: string): string {
+  const named = review.trim();
+  return named ? currentName(a, named) : review;
+}
+
 function renamedEvent(a: Aliases, ev: Event): Event {
   const n = (x: string) => currentName(a, x);
   switch (ev.op) {
     case "task.add":
-      return { ...ev, ...(ev.owner ? { owner: n(ev.owner) } : {}), ...(ev.review ? { review: n(ev.review) } : {}) };
+      return { ...ev, ...(ev.owner ? { owner: n(ev.owner) } : {}), ...(ev.review ? { review: renamedReview(a, ev.review) } : {}) };
     case "task.update":
-      return { ...ev, ...(ev.owner ? { owner: n(ev.owner) } : {}), ...(ev.review ? { review: n(ev.review) } : {}) };
+      return { ...ev, ...(ev.owner ? { owner: n(ev.owner) } : {}), ...(ev.review ? { review: renamedReview(a, ev.review) } : {}) };
     case "role.set":
     case "role.refuse":
     case "seat.reclaim":
@@ -97,6 +110,7 @@ export function renamedMessage<M extends Payload>(a: Aliases, m: M): M {
     from: currentName(a, m.from),
     ...(m.to ? { to: m.to.map((x) => currentName(a, x)) } : {}),
     ...(m.ev ? { ev: renamedEvent(a, m.ev) } : {}),
+    ...(m.perm ? { perm: { ...m.perm, by: currentName(a, m.perm.by) } } : {}),
   };
 }
 

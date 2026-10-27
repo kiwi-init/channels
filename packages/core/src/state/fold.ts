@@ -2,7 +2,7 @@ import { EVENT_OPS_VERSION, GENERAL_ROOM, ignored, isOldGifKey, isReaction, MAX_
 import { inlineText } from "../membership.ts";
 import { refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
-import { aliasesOf, renamedBase, renamedLog } from "./names.ts";
+import { aliasesOf, aliasPairs, renamedBase, renamedLog } from "./names.ts";
 import { allowedOnHold, answersDecisions, isLeadRole, isPerson, LEAD, ON_HOLD } from "./people.ts";
 import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
@@ -504,6 +504,7 @@ export function fold(
       placeOf: recent(placeOf),
       folded: EVENT_OPS_VERSION,
       ...(skipped ? { skipped: true as const } : {}),
+      ...(aliases.size ? { aliases: aliasPairs(aliases) } : {}),
     }),
   );
 
