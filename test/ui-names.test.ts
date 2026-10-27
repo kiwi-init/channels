@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { describeEvent } from "@kiwi/core/format.ts";
+import type { Event } from "@kiwi/core/protocol.ts";
 import { linked, named } from "../ui/src/chat/linked.ts";
 
 const nicknames = new Map([
@@ -35,6 +37,28 @@ describe("people read nicknames, never handles", () => {
   test("a plain line, like a task event, reads with nicknames and no links", () => {
     expect(named("added task T12 “Ship it” for patient-otter; review by @cheery-fox", nicknames)).toBe("added task T12 “Ship it” for opus-vm-coder; review by @lead");
     expect(named("run `kiwi send --to patient-otter`", nicknames)).toBe("run `kiwi send --to patient-otter`");
+  });
+
+  test("code blocks of every form, reference links and task links next to a word keep what they say", () => {
+    for (const text of ["say:\n\n    kiwi send --to patient-otter hi", "> ```\n> patient-otter\n> ```", "see [patient-otter][ref]\n\n[ref]: https://example.com", "``patient-otter ` x``"])
+      expect(linked(text, nicknames, tasks)).toBe(text);
+    expect(linked("foo.T12 and T12", nicknames, tasks)).toBe("foo.[T12](kiwi-task:12) and [T12](kiwi-task:12)");
+  });
+
+  test("a nickname is shown as written, never read as markdown", () => {
+    const odd = new Map([["patient-otter", "*lead* `x` [a](b) &amp;"]]);
+    expect(linked("ask patient-otter", odd, tasks)).toBe("ask [\\*lead\\* \\`x\\` \\[a\\]\\(b\\) \\&amp;](kiwi-mention:patient-otter)");
+    expect(named("ask patient-otter", odd)).toBe("ask *lead* `x` [a](b) &amp;");
+  });
+
+  test("an event line names its members by nickname and leaves facts, leases and paths as they were set", () => {
+    const nameOf = (handle: string) => nicknames.get(handle) ?? handle;
+    const line = (ev: Event) => describeEvent({ v: 1, id: "x", ts: 0, rts: 0, seq: 9, from: "jow", kind: "event", body: "", ev, sigOk: true }, undefined, nameOf);
+    expect(line({ op: "task.add", title: "Ship it", owner: "patient-otter", review: "cheery-fox" })).toBe("added task T9 “Ship it” for opus-vm-coder; review by lead");
+    expect(line({ op: "task.update", task: 12, owner: "honest-wren" })).toBe("assigned T12 to opus-local-coder");
+    expect(line({ op: "fact.set", key: "target", value: "patient-otter" })).toBe("set target = patient-otter");
+    expect(line({ op: "lease.free", name: "patient-otter" })).toBe("let go of patient-otter");
+    expect(line({ op: "release", paths: ["patient-otter"] })).toBe("released patient-otter");
   });
 
   test("an unknown @name and a plain-word handle stay as written", () => {

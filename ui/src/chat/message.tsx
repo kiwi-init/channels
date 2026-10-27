@@ -8,6 +8,7 @@ import { ago, clock } from "~/kit/time"
 import type { Channel, Message } from "~/model"
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
+import { named } from "~/chat/linked"
 
 const Markdown = lazy(() => import("~/chat/markdown"))
 
@@ -24,7 +25,7 @@ function Body({ channel, text, names, onImage }: { channel: Channel; text: strin
   const copied = useCallback(() => toast("Copied"), [toast])
   return (
     <div className="msg-text">
-      {!shown && <p className="md-plain">{text}</p>}
+      {!shown && <p className="md-plain">{named(text, names)}</p>}
       <Suspense fallback={null}>
         <Markdown text={text} names={names} tasks={tasks} onMention={onMention} onTask={onTask} onImage={onImage} onShown={onShown} copied={copied} />
       </Suspense>
@@ -77,8 +78,8 @@ function Clamp({ on, children }: { on: boolean; children: ReactNode }) {
   )
 }
 
-function Quote({ quoted, who, onClick }: { quoted: Message; who: string; onClick?: () => void }) {
-  const line = preview(quoted.text)
+function Quote({ quoted, who, names, onClick }: { quoted: Message; who: string; names: ReadonlyMap<string, string>; onClick?: () => void }) {
+  const line = preview(named(quoted.text, names))
   return (
     <button type="button" className="msg-quote" onClick={onClick} aria-label={`Replying to ${who}: ${line.slice(0, 80)}. Show it`}>
       <Icon name="reply" size={12} />
@@ -149,7 +150,7 @@ export const MessageRow = memo(function MessageRow({
             </time>
           </p>
         )}
-        {quote && <Quote quoted={quote} who={nickname(channel, quote.from)} onClick={onQuote ? () => onQuote(quote.seq) : undefined} />}
+        {quote && <Quote quoted={quote} who={nickname(channel, quote.from)} names={names} onClick={onQuote ? () => onQuote(quote.seq) : undefined} />}
         <Clamp on={who?.kind === "agent" && !inThread}>{m.text && <Body channel={channel} text={m.text} names={names} onImage={openImage} />}</Clamp>
         {m.images && (
           <div className="msg-images">

@@ -6,7 +6,7 @@ import { Field, Heading, IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import type { Channel } from "~/model"
-import { nickname } from "~/names"
+import { nickname, shown } from "~/names"
 import { useApp } from "~/nav"
 import { PanelHead } from "~/panels/frame"
 import { Toggle } from "~/kit/bits"
@@ -33,7 +33,7 @@ export function ChannelPanel({ channel }: { channel: Channel }) {
           ) : (
             <p className="cpanel-value">{channel.title}</p>
           )}
-          {!own && owner && <p className="cpanel-hint">{owner.name} owns this channel.</p>}
+          {!own && owner && <p className="cpanel-hint">{shown(owner)} owns this channel.</p>}
         </Part>
 
         <Part title="Goal">{own ? <GoalEditor channel={channel} /> : channel.goal ? <p className="cpanel-goal">{channel.goal}</p> : <p className="cpanel-none">No goal yet.</p>}</Part>

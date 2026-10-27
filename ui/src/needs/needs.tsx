@@ -300,7 +300,7 @@ function ReviewAskCard({ channel, ask, link }: { channel: Channel; ask: ReviewAs
             <blockquote className="needs-note">
               {note.text}{" "}
               <span className="needs-note-by">
-                {note.by === channel.you ? "you" : note.by} · {ago(note.at)}
+                {note.by === channel.you ? "you" : nickname(channel, note.by)} · {ago(note.at)}
               </span>
             </blockquote>
           )}

@@ -5,6 +5,7 @@ import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import type { App, Channel, Computer, Harness, NewAgent } from "~/model"
 import { useApp } from "~/nav"
+import { shown } from "~/names"
 import { PanelHead } from "~/panels/frame"
 import { CopyBox, inviteCode, useInviteLink } from "~/panels/invite"
 
@@ -359,7 +360,8 @@ function Progress({ channel, run, onDone, onMessage }: { channel: Channel; run: 
   const n = agent.name
   const done = channel.people.some((p) => p.name === n)
   const step = done ? 3 : run.step
-  const owner = channel.people.find((p) => p.owner && !p.you)?.name ?? "the owner"
+  const found = channel.people.find((p) => p.owner && !p.you)
+  const owner = found ? shown(found) : "the owner"
   const rows = [
     { now: `Starting ${n} on ${on}`, done: `Started ${n} on ${on}` },
     { now: `${n} is asking to join`, done: `${n} asked to join` },

@@ -6,6 +6,7 @@ import { Icon } from "~/kit/icons"
 import type { Channel, Where } from "~/model"
 import { useApp } from "~/nav"
 import { nickname, shown } from "~/names"
+import { named } from "~/chat/linked"
 
 const SUGGEST = ["hey team, what's everyone on?", "who's working on what?", "add a dark mode toggle"]
 
@@ -73,7 +74,7 @@ export function Composer({ channel, where, placeholder, inThread, suggest }: { c
     })
   }
 
-  const quoteLine = replyTo ? preview(replyTo.text) : ""
+  const quoteLine = replyTo ? preview(named(replyTo.text, channel.nicknames)) : ""
 
   return (
     <div className="compose">

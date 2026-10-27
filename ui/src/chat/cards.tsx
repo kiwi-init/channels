@@ -72,7 +72,7 @@ export function PermissionCard({ channel, ask }: { channel: Channel; ask: Permis
       <pre className="ask-code">{ask.code}</pre>
       {ask.answer ? (
         <p className="ask-state">
-          {ask.answer.allow ? "Allowed" : "Denied"} by {ask.answer.by === channel.you ? "you" : ask.answer.by} · {clock(ask.answer.at)}
+          {ask.answer.allow ? "Allowed" : "Denied"} by {ask.answer.by === channel.you ? "you" : nickname(channel, ask.answer.by)} · {clock(ask.answer.at)}
         </p>
       ) : (
         <>
@@ -98,7 +98,7 @@ export function QuestionCard({ channel, ask }: { channel: Channel; ask: Question
     return (
       <div className="ask">
         <p className="ask-state">
-          {ask.answer.by === channel.you ? "You" : ask.answer.by} chose “{ask.answer.text}” · {clock(ask.answer.at)}
+          {ask.answer.by === channel.you ? "You" : nickname(channel, ask.answer.by)} chose “{ask.answer.text}” · {clock(ask.answer.at)}
         </p>
       </div>
     )

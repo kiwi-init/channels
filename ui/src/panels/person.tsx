@@ -25,7 +25,7 @@ export function PersonPanel({ channel, name }: { channel: Channel; name: string 
     return (
       <>
         <PanelHead title="Profile" />
-        <Empty title={`${name} isn't in this channel.`}>They may have left or been removed.</Empty>
+        <Empty title={`${nickname(channel, name)} isn't in this channel.`}>They may have left or been removed.</Empty>
       </>
     )
   return (

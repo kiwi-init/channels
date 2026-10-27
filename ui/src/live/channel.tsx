@@ -21,6 +21,7 @@ import { closeOpened, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
 import type { Channel, Where } from "~/model"
 import { nicknamesOf } from "~/names"
+import { named as withNicknames } from "~/chat/linked"
 
 export interface View {
   where: Where | null
@@ -243,7 +244,7 @@ function useNotify(messages: readonly Wire[], me: string, title: string, members
     const last = worth.at(-1)
     if (!last) return
     const b = bridge()
-    const body = last.body.slice(0, 200)
+    const body = withNicknames(last.body, nicknamesOf(members.values())).slice(0, 200)
     const who = members.get(last.from)?.display || last.from
     if (b) void b.notify(`${who} in ${title}`, body).catch(() => {})
     else if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification(`${who} in ${title}`, { body })
