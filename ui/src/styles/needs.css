@@ -228,6 +228,84 @@ button.needs-name:hover {
   font: var(--t-meta) var(--ui);
 }
 
+.needs-said {
+  color: var(--ink-3);
+  font: var(--t-meta) / 1.45 var(--ui);
+  overflow-wrap: anywhere;
+}
+
+.needs-repo {
+  color: var(--ink-2);
+  font-family: var(--mono);
+}
+
+.needs-warn {
+  color: var(--decide);
+}
+
+.needs-strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.needs-opts {
+  display: grid;
+  max-width: 520px;
+}
+
+.needs-opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+}
+
+.needs-opt + .needs-opt {
+  border-top: 1px solid var(--line);
+}
+
+.needs-opt-text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.needs-opt-label {
+  font: var(--t-ui) var(--ui);
+}
+
+.needs-opt-hint {
+  color: var(--ink-3);
+  font: var(--t-meta) / 1.45 var(--ui);
+}
+
+.needs-select {
+  position: relative;
+  flex: none;
+}
+
+.needs-select select {
+  appearance: none;
+  min-width: 168px;
+  padding-right: 34px;
+  cursor: pointer;
+}
+
+.needs-select .icon {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  color: var(--ink-2);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.needs-name-input {
+  flex: none;
+  width: 180px;
+}
+
 .needs-done {
   margin-top: 10px;
   font: var(--t-meta) var(--ui);
