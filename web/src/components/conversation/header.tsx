@@ -27,6 +27,7 @@ export type HeaderProps = {
   status: string[]
   onTitle: () => void
   searchHint: string
+  onSearchEnter?: () => void
   places: ReactNode
   needs: number
   view: View
@@ -111,7 +112,7 @@ export function ViewsNav({ view, counts, onView, reviewing }: Pick<HeaderProps, 
   )
 }
 
-export function Header({ headRef, onBack, search, setSearch, tab, onTab, heading, headingLabel, face, onTitle, searchHint, places }: HeaderProps) {
+export function Header({ headRef, onBack, search, setSearch, tab, onTab, heading, headingLabel, face, onTitle, searchHint, onSearchEnter, places }: HeaderProps) {
   const wide = useSidebarHidden()
   return (
     <header ref={headRef} className="absolute inset-x-0 top-0 z-20 bg-canvas">
@@ -154,10 +155,16 @@ export function Header({ headRef, onBack, search, setSearch, tab, onTab, heading
             <input
               autoFocus
               value={search}
-              aria-label="Search messages"
+              aria-label="Search messages and tasks"
               placeholder={searchHint}
               onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === "Escape" && setSearch(null)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setSearch(null)
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  onSearchEnter?.()
+                }
+              }}
               className="min-w-0 flex-1 bg-transparent text-body text-ink outline-none placeholder:text-ink-3 focus-visible:outline-none"
             />
           </label>

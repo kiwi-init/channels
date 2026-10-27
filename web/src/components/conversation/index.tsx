@@ -32,9 +32,11 @@ import { AddAgent, AgentLanes, CompactBlock, HoldDialog, NewAgent, NowCard, Pres
 import { canStartAgents } from "@/lib/launches"
 import { markOnce } from "@/lib/marks"
 import { roomOfMessage } from "@/lib/rooms"
+import { matchingTasks } from "@/lib/task-search"
 import { ALLOW_ONCE, DENY, settledOf } from "@/lib/permission-settled"
 import { isAgent } from "../message"
 import { NeedsYou } from "../needs-you"
+import { TaskSearchResults } from "../task-search-results"
 import { ChannelSidebar, ConversationMenu, type Conversation as ConversationRow } from "./channel-sidebar"
 import { Header, type HeaderProps, Toolbar, ViewsNav } from "./header"
 import { InfoSide, PictureSide, TasksSide, ThreadSide } from "./side-panels"
@@ -90,6 +92,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const [pausing, setPausing] = useState(false)
   const [search, setSearch] = useState<string | null>(null)
   const query = useDeferredValue(search?.trim() ? search : null)
+  const taskResults = useMemo(() => matchingTasks(state.tasks.values(), query), [state.tasks, query])
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [sending, setSending] = useState<{ key: number; place: string; m: Message; after: number; seq?: number }[]>([])
   const [sendingBase] = useState(() => Date.now())
@@ -141,6 +144,10 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
 
   const { placeOf, places } = state
   const { place, hereKey, openRoom, unreadIn, unreadInRoom, taskKey } = usePlaces({ here, roomId, cardRoom, viewing: tab === "conversation", messages, me, state, shownTask })
+  const openFirstTask = useCallback(() => {
+    const first = hereKey === "main" ? taskResults[0] : undefined
+    if (first) openTask(first.id)
+  }, [hereKey, openTask, taskResults])
   const sendRoom = openRoom !== null && openRoom !== GENERAL_ROOM ? openRoom : undefined
   const { bySeq, threadRoot, showDropped, setShowDropped, threads, visible, inTask, quoted, summaryOf } = useThreads({
     messages,
@@ -157,6 +164,9 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     nameOf,
   })
   const { behind, setBehind, isFresh, scroller, stick, theirs, toBottom, onScroll } = useScroll({ messages, visible, hereKey })
+  useEffect(() => {
+    if (query && taskResults.length) scroller.current?.scrollTo({ top: 0, behavior: "instant" })
+  }, [query, scroller, taskResults])
   const anyShown = visible.length > 0
   useEffect(() => {
     if (anyShown) requestAnimationFrame(() => markOnce("kiwi:first-message"))
@@ -506,6 +516,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     status,
     onTitle: () => setSide((s) => (s?.kind === "info" ? null : { kind: "info" })),
     searchHint: place.kind === "main" ? "Search this channel" : `Search ${placeTitle}`,
+    onSearchEnter: openFirstTask,
     places: <ConversationMenu conversations={conversations} current={currentConversation} onConversation={(key) => (leaveInfo(), openConversation(key))} />,
     needs: counts.needs,
     view,
@@ -575,6 +586,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                               {view === "everything" && nowNode("", false)}
                               <TasksView
                                 state={state}
+                                query={query}
+                                onQuery={setSearch}
                                 now={now}
                                 view={view}
                                 agents={agentsNow}
@@ -629,6 +642,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                             )}
                             {hereKey === "main" && needsYou}
                             {hereKey === "main" && state.rooms.size > 1 && !search && <RoomChips rooms={[...state.rooms.values()]} value={cardRoom} onChange={switchRoom} />}
+                            {hereKey === "main" && taskResults.length > 0 && <TaskSearchResults state={state} tasks={taskResults} onOpen={openTask} />}
                             {!ready && messages.length === 0 ? (
                               slowToOpen && (
                                 <Centered>
@@ -640,7 +654,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                                 <AddAgent code={member.code} isOwner={isOwner} addsAgents={addsAgents} onNewAgent={onNewAgent} />
                                 {!quiet && rows}
                               </>
-                            ) : visible.length === 0 ? (
+                            ) : visible.length === 0 && (hereKey !== "main" || taskResults.length === 0) ? (
                               <Centered>
                                 <p className="text-body font-semibold">{search ? "No results" : "No messages yet"}</p>
                                 <p className="mt-1 max-w-xs text-ui leading-normal text-ink-2">
