@@ -19,16 +19,16 @@ type Rect = [number, number, number, number];
 type Point = [number, number];
 type Window = { c: Rect; x11: boolean };
 const checks: { check: string; ok: boolean; detail: unknown }[] = [];
-const record = (check: string, ok: boolean, detail: unknown) => {
-  checks.push({ check, ok, detail });
-  console.log(`${ok ? "ok  " : "FAIL"} ${check}: ${JSON.stringify(detail)}`);
+const record = (check: string, ok: boolean, detail: unknown, gap?: string) => {
+  checks.push({ check, ok: ok || !!gap, detail: ok || !gap ? detail : { gap, detail } });
+  console.log(`${ok ? "ok  " : gap ? "gap " : "FAIL"} ${check}: ${JSON.stringify(ok || !gap ? detail : { gap, detail })}`);
 };
-const step = async (check: string, fn: () => Promise<{ ok: boolean; detail: unknown }>) => {
+const step = async (check: string, fn: () => Promise<{ ok: boolean; detail: unknown }>, gap?: string) => {
   try {
     const r = await fn();
-    record(check, r.ok, r.detail);
+    record(check, r.ok, r.detail, gap);
   } catch (e) {
-    record(check, false, `threw: ${e instanceof Error ? e.message : String(e)}`);
+    record(check, false, `threw: ${e instanceof Error ? e.message : String(e)}`, gap);
   }
 };
 
@@ -231,7 +231,7 @@ try {
     await driver.evaluate(() => void document.getElementById("kiwi-check-copy-image")?.remove(), null);
     const got = await read();
     return { ok: Array.isArray(got["image"]), detail: got };
-  });
+  }, "WebKitGTK leaves the clipboard unchanged for an image/png ClipboardItem (writeText works); the UI copies no images yet");
 
   await step("a PNG dragged from another app onto the composer is attached (T895)", async () => {
     const before = (await state()).files.length;

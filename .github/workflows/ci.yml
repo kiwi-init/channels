@@ -404,10 +404,14 @@ jobs:
           xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$APP/bin/launcher" ${{ matrix.sandbox }}
           img=$(ls "$PWD"/desktop/release-eb/linux/Channels-*-linux-x86_64.AppImage)
           xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$img" ${{ matrix.sandbox }} --appimage-extract-and-run
-      - name: with no libayatana-appindicator on the system (stock Arch), the app still starts, with no tray
+      - name: the tray uses Channels' symbolic icon and title where a tray host runs
         if: ${{ !cancelled() }}
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-tray-test" desktop/native/linux/kiwi-tray-test.c $(pkg-config --cflags --libs gio-2.0) -ldl
+          dbus-run-session -- sh -c 'printf throwaway | gnome-keyring-daemon --unlock --components=secrets >/dev/null && xvfb-run -a "$1" "$2" "$3"' sh "$RUNNER_TEMP/kiwi-tray-test" "$APP/bin/libkiwi-shell.so" "$APP/bin/launcher"
+      - name: with no libayatana-appindicator on the system (stock Arch), the app still starts, with no tray
+        if: ${{ !cancelled() }}
+        run: |
           if readelf -d "$APP/bin/libNativeWrapper.so" | grep -i appindicator; then echo "libNativeWrapper.so still links AppIndicator"; exit 1; fi
           echo "libNativeWrapper.so doesn't link AppIndicator"
           hidden="$RUNNER_TEMP/hidden-appindicator"
