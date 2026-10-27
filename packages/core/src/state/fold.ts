@@ -2,6 +2,7 @@ import { EVENT_OPS_VERSION, GENERAL_ROOM, ignored, isOldGifKey, isReaction, MAX_
 import { inlineText } from "../membership.ts";
 import { refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
+import { aliasesOf, renamedBase, renamedLog } from "./names.ts";
 import { allowedOnHold, answersDecisions, isLeadRole, isPerson, LEAD, ON_HOLD } from "./people.ts";
 import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
@@ -47,7 +48,7 @@ function touch(task: Task | undefined, name: string, at: number): void {
 }
 
 export function fold(
-  messages: Message[],
+  logged: Message[],
   roster: Roster,
   now = Date.now(),
   roomsFloor?: RoomsFloor | null,
@@ -55,7 +56,9 @@ export function fold(
   given?: FoldBase | null,
   keep?: (base: FoldBase) => void,
 ): ChannelState {
-  const from = given ? structuredClone(given) : null;
+  const aliases = aliasesOf(roster);
+  const messages = renamedLog(aliases, logged);
+  const from = given ? structuredClone(renamedBase(aliases, given)) : null;
   const after = from?.n ?? -1;
   const ahead = <F extends { since: number }>(f: F | null | undefined): F | null => (f && f.since >= after ? f : null);
   const members = new Map<string, FoldMember>();

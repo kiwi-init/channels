@@ -326,6 +326,10 @@ export class Channel {
     return run(this.fx.updateNickname(m, nickname));
   }
 
+  updateHandle(m: Member, handle: string): Promise<void> {
+    return run(this.fx.updateHandle(m, handle));
+  }
+
   updatePowers(m: Member, powers: PersonPowers): Promise<void> {
     return run(this.fx.updatePowers(m, powers));
   }

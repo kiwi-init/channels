@@ -44,6 +44,7 @@ export type Roster = {
   runs?: Runs;
   persona?: Persona;
   answersDecisions?: boolean;
+  was?: string[];
 }[];
 
 export const toRoster = (m: MemberRecord): Roster[number] => ({
@@ -64,6 +65,7 @@ export const toRoster = (m: MemberRecord): Roster[number] => ({
   ...(m.runs ? { runs: m.runs } : {}),
   ...(m.persona ? { persona: m.persona } : {}),
   ...(m.answersDecisions ? { answersDecisions: true } : {}),
+  ...(m.was?.length ? { was: m.was } : {}),
 });
 
 export const rosterOf = (members: readonly MemberRecord[]): Roster => members.filter((m) => !m.unverified).map(toRoster);

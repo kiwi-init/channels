@@ -1,4 +1,4 @@
-import { freeAgentName, nameKey, RESERVED_NAMES, type Member } from "./membership.ts";
+import { freeAgentName, nameKey, namesOf, RESERVED_NAMES, type Member } from "./membership.ts";
 
 const ANIMALS = [
   "otter",
@@ -151,8 +151,8 @@ function randomHandle(pick: (n: number) => number = randomIndex): string {
   return `${adjective}-${ANIMALS[pick(ANIMALS.length)]}`;
 }
 
-export function freeHandle(members: readonly Pick<Member, "name">[], pick: (n: number) => number = randomIndex): string {
-  const taken = new Set(members.map((m) => nameKey(m.name)));
+export function freeHandle(members: readonly Pick<Member, "name" | "was">[], pick: (n: number) => number = randomIndex): string {
+  const taken = new Set(members.flatMap(namesOf).map(nameKey));
   for (let i = 0; i < 64; i++) {
     const h = randomHandle(pick);
     if (!taken.has(nameKey(h)) && !RESERVED_NAMES.has(nameKey(h))) return h;

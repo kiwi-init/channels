@@ -1,7 +1,7 @@
 import { cleanPersona, personaScopes, type Persona } from "../personality.ts";
 import * as Effect from "effect/Effect";
 import { newChannelKey } from "../crypto.ts";
-import { inlineText, makeRecord, sealRecord, type Member, type PersonPowers } from "../membership.ts";
+import { inlineText, makeRecord, MAX_EARLIER_NAMES, NAME_RE, nameKey, namesOf, RESERVED_NAMES, sealRecord, type Member, type PersonPowers } from "../membership.ts";
 import { omit } from "../omit.ts";
 import { Rejected } from "../refusals.ts";
 import { canPost, SCOPES, scopesOf, type Scope } from "../scopes.ts";
@@ -22,6 +22,7 @@ export interface MembersFx {
   updateRole(m: Member, role: string | null, about: string | null | undefined, since: number): Effect.Effect<void, Refused, Relay>;
   updatePersona(m: Member, persona: Persona | null, since: number): Effect.Effect<void, Refused, Relay>;
   updateNickname(m: Member, nickname: string | null): Effect.Effect<void, Refused, Relay>;
+  updateHandle(m: Member, handle: string): Effect.Effect<void, Refused, Relay>;
   updatePowers(m: Member, powers: PersonPowers): Effect.Effect<void, Refused, Relay>;
   reconcilePosting(state: Pick<ChannelState, "members" | "scopeSets" | "roleSets">, members?: Member[]): Effect.Effect<string[], Refused, Relay>;
   remove(pk: string): Effect.Effect<void, Refused, Relay>;
@@ -93,6 +94,27 @@ export class ChannelMembers {
       const info = omit(m, "active", "readOnly", "unverified", "at", "display");
       const display = inlineText(nickname ?? "", 40);
       const rec = yield* Effect.promise(async () => sealRecord(key, await makeRecord(this.ch.identity, this.ch.roomId, { ...info, ...(display ? { display } : {}) })));
+      const scopes = m.later?.scopes ?? scopesOf(m);
+      yield* this.ch.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: canPost(scopes) }) });
+    }),
+
+    updateHandle: Effect.fn("Channel.updateHandle")({ self: this }, function* (this: ChannelMembers, m: Member, handle: string) {
+      yield* this.ch.ownerOnly();
+      if (m.unverified) return yield* new Rejected(NO_RECORD);
+      if (m.owner || m.kind === "human") return yield* new Rejected("only an agent's handle is changed this way");
+      if (!m.active) return yield* new Rejected(`${m.name} has left the channel`);
+      const next = handle.trim();
+      if (!NAME_RE.test(next)) return yield* new Rejected(`"${inlineText(next, 40)}" isn't a valid handle (1-32 letters, digits, _ . or -)`);
+      if (RESERVED_NAMES.has(nameKey(next))) return yield* new Rejected(`"${next}" is a reserved name`);
+      if (next === m.name) return;
+      const others = (yield* this.ch.fx.members()).filter((x) => x.pk !== m.pk);
+      if (others.some((x) => namesOf(x).some((n) => nameKey(n) === nameKey(next)))) return yield* new Rejected(`"${next}" is, or was, someone else's name in this channel`);
+      const was = [...(m.was ?? []), m.name].filter((n) => nameKey(n) !== nameKey(next));
+      if (was.length > MAX_EARLIER_NAMES) return yield* new Rejected(`${m.name} has had ${MAX_EARLIER_NAMES} handles already: that's the most a seat keeps`);
+      const e = this.ch.access.epoch;
+      const key = this.ch.access.keys[String(e)]!;
+      const info = omit(m, "active", "readOnly", "unverified", "at", "was");
+      const rec = yield* Effect.promise(async () => sealRecord(key, await makeRecord(this.ch.identity, this.ch.roomId, { ...info, name: next, was })));
       const scopes = m.later?.scopes ?? scopesOf(m);
       yield* this.ch.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: canPost(scopes) }) });
     }),

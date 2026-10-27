@@ -79,6 +79,7 @@ export interface MemberInfo {
    */
   runs?: Runs;
   persona?: Persona;
+  was?: string[];
 }
 
 export type PersonPowers = Pick<MemberInfo, "addsAgents" | "answersDecisions">;
@@ -200,6 +201,7 @@ export async function makeRecord(owner: Identity, room: string, m: MemberInfo & 
     // An agent's only: never the owner's or a person's record.
     ...(!m.owner && m.kind !== "human" && m.runs ? { runs: { harness: m.runs.harness, model: m.runs.model } } : {}),
     ...(!m.owner && m.kind !== "human" && m.persona ? { persona: m.persona } : {}),
+    ...(!m.owner && m.kind !== "human" && m.was?.length ? { was: m.was } : {}),
     at: Date.now(),
   });
 }
@@ -231,6 +233,7 @@ export async function readRecord(key: string, sealed: string, room: string, pk: 
     // What runs it is the owner's to attest, and only for an agent: kept from the owner's record alone.
     const runs = owner || kind === "human" || rec.pk !== ownerPk ? undefined : readRuns((rec as { runs?: unknown }).runs);
     const persona = owner || kind === "human" || rec.pk !== ownerPk ? undefined : (cleanPersona((rec as { persona?: unknown }).persona) ?? undefined);
+    const was = owner || kind === "human" || rec.pk !== ownerPk ? undefined : readWas((rec as { was?: unknown }).was, rec.name);
     const person = typeof rec.person === "string" && rec.person.length <= 64 ? rec.person : undefined;
     const addsAgents = !owner && kind === "human" && rec.pk === ownerPk && (rec as { addsAgents?: unknown }).addsAgents === true;
     const answersDecisions = !owner && kind === "human" && rec.pk === ownerPk && (rec as { answersDecisions?: unknown }).answersDecisions === true;
@@ -257,6 +260,7 @@ export async function readRecord(key: string, sealed: string, room: string, pk: 
         ...(laterRole ? { laterRole } : {}),
         ...(runs ? { runs } : {}),
         ...(persona ? { persona } : {}),
+        ...(was ? { was } : {}),
         owner,
         at: rec.at,
         active: true,
@@ -318,12 +322,30 @@ function readFrom(x: unknown): { pk: string; label: string } | undefined {
  * A name for an agent nobody holds: `base`, else base-2, base-3… Pass every member, active or departed:
  * a name anyone ever held stays taken, so nobody new reads as someone who left.
  */
-export function freeAgentName(base: string, members: readonly Pick<Member, "name">[]): string {
-  const taken = new Set(members.map((m) => nameKey(m.name)));
+export function freeAgentName(base: string, members: readonly Pick<Member, "name" | "was">[]): string {
+  const taken = new Set(members.flatMap(namesOf).map(nameKey));
   if (!taken.has(nameKey(base)) && !RESERVED_NAMES.has(nameKey(base))) return base;
   // Names are at most 32 characters, suffix included.
   const named = (n: number) => `${base.slice(0, 31 - String(n).length)}-${n}`;
   for (let n = 2; ; n++) if (!taken.has(nameKey(named(n)))) return named(n);
+}
+
+export const MAX_EARLIER_NAMES = 16;
+
+function readWas(x: unknown, name: string): string[] | undefined {
+  if (!Array.isArray(x) || x.length > MAX_EARLIER_NAMES) return undefined;
+  const keys = new Set([nameKey(name)]);
+  const was: string[] = [];
+  for (const n of x) {
+    if (typeof n !== "string" || !NAME_RE.test(n) || keys.has(nameKey(n))) return undefined;
+    keys.add(nameKey(n));
+    was.push(n);
+  }
+  return was.length ? was : undefined;
+}
+
+export function namesOf(m: Pick<MemberInfo, "name" | "was">): string[] {
+  return [m.name, ...(m.was ?? [])];
 }
 
 /** A record's later role, if it reads as one: a role string (or null for none), rules likewise, and where it took effect. */

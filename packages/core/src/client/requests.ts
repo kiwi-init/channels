@@ -10,6 +10,7 @@ import {
   makeRecord,
   NAME_RE,
   nameKey,
+  namesOf,
   readLaunch,
   readRuns,
   RESERVED_NAMES,
@@ -149,7 +150,7 @@ export class ChannelRequests {
         }
       }
       if (kind === "agent" && req.askedAs && !as?.name) {
-        as = { ...as, name: members.some((m) => nameKey(m.name) === nameKey(req.name)) ? freeHandle(members, seededPick(req.pk)) : req.name };
+        as = { ...as, name: members.some((m) => namesOf(m).some((n) => nameKey(n) === nameKey(req.name))) ? freeHandle(members, seededPick(req.pk)) : req.name };
       }
       const nick = inlineText(as?.display ?? req.display, 40);
       yield* this.assertNamesFree([as?.name ?? req.name]);
@@ -240,7 +241,7 @@ export class ChannelRequests {
 
   private assertNamesFree(names: string[]): Effect.Effect<void, Refused, Relay> {
     return Effect.gen({ self: this }, function* () {
-      const taken = new Set((yield* this.ch.fx.members()).filter((m) => m.active).map((m) => nameKey(m.name)));
+      const taken = new Set((yield* this.ch.fx.members()).flatMap((m) => (m.active ? namesOf(m) : (m.was ?? []))).map(nameKey));
       const seen = new Set<string>();
       for (const n of names) {
         if (!NAME_RE.test(n)) return yield* new BadName(`"${inlineText(n, 40)}" isn't a valid name (1-32 letters, digits, _ . or -); they need to ask again under another name`);
