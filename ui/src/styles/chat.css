@@ -136,7 +136,12 @@
 }
 
 .msg.is-for-you {
-  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  border-radius: 0;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 9%, transparent) 4%, color-mix(in srgb, var(--accent) 5%, transparent) 45%, transparent 85%);
+}
+
+.msg.is-for-you:hover {
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 12%, transparent) 4%, color-mix(in srgb, var(--accent) 7%, transparent) 45%, transparent 85%);
 }
 
 .msg.is-for-you::before {
@@ -152,7 +157,8 @@
 }
 
 .msg.is-failed {
-  background: var(--alert-wash);
+  border-radius: 0;
+  background: linear-gradient(90deg, transparent, var(--alert-wash) 4%, transparent 85%);
 }
 
 .msg.is-flash {

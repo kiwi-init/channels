@@ -87,7 +87,6 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               paused
             </span>
           )}
-          {channel.connection !== "live" && <span className="top-conn">{channel.connection}…</span>}
           {searching ? (
             <input
               autoFocus
@@ -110,6 +109,12 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
       </header>
       <Sidebar channel={channel} />
       <main className="main">{nav.tab === "tasks" ? <Board channel={channel} /> : nav.tab === "needs" ? <NeedsYou channel={channel} /> : <Conversation channel={channel} search={search} />}</main>
+      {channel.connection !== "live" && (
+        <p className="conn" role="status">
+          <span className="dot is-doing" aria-hidden="true" />
+          {channel.connection === "connecting" ? "Connecting…" : "Reconnecting…"}
+        </p>
+      )}
       {nav.panel && (
         <aside className="panel" aria-label="Details">
           {nav.panel.kind === "thread" ? (

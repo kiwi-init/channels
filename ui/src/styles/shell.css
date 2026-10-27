@@ -278,8 +278,7 @@
   padding: 5px 10px;
 }
 
-.top-hold,
-.top-conn {
+.top-hold {
   padding: 4px 10px;
   border-radius: 999px;
   background: var(--bg-3);
@@ -290,6 +289,28 @@
 .top-hold {
   background: var(--decide-wash);
   color: var(--decide);
+}
+
+.conn {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--bg-2);
+  box-shadow: var(--shadow-pop);
+  color: var(--ink-2);
+  font: 500 var(--t-meta) var(--ui);
+  pointer-events: none;
+  animation: rise var(--slow) var(--ease);
+}
+
+.chan.has-panel .conn {
+  bottom: 96px;
 }
 
 .side {
