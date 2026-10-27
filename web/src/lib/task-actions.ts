@@ -15,7 +15,11 @@ export interface TaskSend {
 }
 
 function reviewsMe(t: Task, me: string): boolean {
-  return t.state === "review" && !!t.review && (t.review === me || (t.review === ANYONE && t.owner !== me && !t.workedBy.includes(me)))
+  return t.state === "review" && t.review === me
+}
+
+function mayReview(t: Task, me: string): boolean {
+  return reviewsMe(t, me) || (t.state === "review" && t.review === ANYONE && t.owner !== me && !t.workedBy.includes(me))
 }
 
 export function reviewsFor(tasks: Iterable<Task>, me: string, person: boolean): Task[] {
@@ -25,7 +29,7 @@ export function reviewsFor(tasks: Iterable<Task>, me: string, person: boolean): 
 export function taskActions(t: Task, me: string, person: boolean): TaskActions {
   if (!person || t.state === "done") return { kind: "hidden" }
   if (t.state !== "review") return { kind: "open", review: "none" }
-  const judges = (!t.review || reviewsMe(t, me)) && (!!openRound(t) || t.rounds.length === 0)
+  const judges = (!t.review || mayReview(t, me)) && (!!openRound(t) || t.rounds.length === 0)
   return { kind: "open", review: judges ? "verdict" : "send-back" }
 }
 

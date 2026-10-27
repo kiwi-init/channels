@@ -777,6 +777,18 @@ async function run(part: Part): Promise<string[]> {
     await tasksPanel.getByRole("button", { name: "Close tasks" }).click();
     log(`ok  ${at}`);
 
+    at = "A review open to anyone stays optional for a person, with its actions available";
+    const optional = /added (T\d+)/.exec(await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke optional review", "--owner", "bot", "--review", "any", "--from", smokeTask]))?.[1];
+    if (!optional) throw new Error("kiwi task add printed no optional review task id");
+    await kiwi(["-c", "smoke", "--as", "bot", "task", "review", optional]);
+    const optionalCard = (await openFromBoard(/Smoke optional review/)).getByRole("region", { name: `Task ${optional}` });
+    await optionalCard.getByRole("button", { name: "Approve" }).waitFor({ timeout: 15000 });
+    await optionalCard.getByRole("button", { name: "Send back" }).waitFor();
+    if (await needs.getByText("Smoke optional review").count()) throw new Error("an any-reviewer task landed in Needs you");
+    if (await page.getByText("Ready for your review", { exact: true }).count()) throw new Error("an any-reviewer task says it is ready for the person's review");
+    await tasksPanel.getByRole("button", { name: "Close tasks" }).click();
+    log(`ok  ${at}`);
+
     for (const item of ["Change nickname…", "Remove from channel…"])
       await opens(`Details → bot → ${item}`, () =>
         inDetails(async () => {
