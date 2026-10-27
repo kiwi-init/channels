@@ -20,7 +20,8 @@ if (os !== "macos" && os !== "linux") throw new Error(`the Electrobun shell buil
 
 const desktop = path.resolve(import.meta.dirname, "..");
 const web = path.resolve(desktop, process.env.KIWI_UI_DIST ?? "../web/dist");
-if (!fs.existsSync(path.join(web, "index.html"))) throw new Error(`${web}/index.html is missing: run \`bun run web:build\` (or \`bun run ui:build\` with KIWI_UI_DIST=../ui/dist) in the repo root first`);
+if (!fs.existsSync(path.join(web, "index.html")))
+  throw new Error(`${web}/index.html is missing: run \`bun run web:build\` (or \`bun run ui:build\` with KIWI_UI_DIST=../ui/dist) in the repo root first`);
 const index = fs.readFileSync(path.join(web, "index.html"), "utf8");
 pageWithCsp(index, DEFAULT_RELAY);
 
