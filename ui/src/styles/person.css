@@ -1,0 +1,218 @@
+.person {
+  display: grid;
+  align-content: start;
+  gap: 22px;
+}
+
+.person-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.person-id {
+  min-width: 0;
+}
+
+.person-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font: 700 var(--t-title) var(--mono);
+}
+
+.person-name-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.person-tag {
+  padding: 1px 6px;
+  border: 1px solid var(--line-3);
+  border-radius: var(--r-row);
+  color: var(--ink-2);
+  font: 400 var(--t-stamp) var(--mono);
+}
+
+.person-kind {
+  margin-top: 4px;
+  color: var(--ink-2);
+  font: var(--t-meta) var(--mono);
+  overflow-wrap: anywhere;
+}
+
+.person-now {
+  display: grid;
+  gap: 10px;
+}
+
+.person-presence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font: var(--t-ui) var(--mono);
+}
+
+.person-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-right: 2px;
+  border-radius: 50%;
+  background: var(--ink-3);
+}
+
+.person-dot.is-online {
+  background: var(--live);
+}
+
+.person-dot.is-away {
+  background: var(--decide);
+}
+
+.person-about {
+  padding-left: 12px;
+  border-left: 2px solid var(--line-3);
+  color: var(--ink-2);
+  font: 14px / 1.5 var(--sans);
+}
+
+.person-doing {
+  display: grid;
+  gap: 6px;
+}
+
+.person-doing .chip {
+  margin-top: 0;
+}
+
+.person-label {
+  color: var(--ink-3);
+  font: var(--t-meta) var(--mono);
+}
+
+.person-me {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  font: var(--t-ui) var(--mono);
+}
+
+.person-facts {
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.person-prop {
+  display: contents;
+}
+
+.person-prop code {
+  font-size: 12.5px;
+}
+
+.person-ref {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.person-ref:hover {
+  text-decoration-style: solid;
+}
+
+.person-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.person-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.person-manage {
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.person-manage > .heading {
+  padding: 0;
+  margin-bottom: 6px;
+}
+
+.person-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+}
+
+.person-row + .person-row {
+  border-top: 1px solid var(--line);
+}
+
+.person-row.is-stacked {
+  display: grid;
+  justify-content: stretch;
+  gap: 8px;
+}
+
+.person-row-text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.person-row-label {
+  font: var(--t-ui) var(--mono);
+}
+
+.person-row-hint {
+  color: var(--ink-3);
+  font: var(--t-meta) / 1.45 var(--mono);
+}
+
+.person-row-control {
+  flex: none;
+}
+
+.person-remove {
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.person-confirm {
+  color: var(--ink-2);
+  font: var(--t-body) / 1.5 var(--sans);
+}
+
+.person-select {
+  position: relative;
+  display: block;
+}
+
+.person-select select {
+  appearance: none;
+  padding-right: 34px;
+  cursor: pointer;
+}
+
+.person-select .icon {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  color: var(--ink-2);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
