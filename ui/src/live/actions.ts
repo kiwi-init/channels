@@ -405,6 +405,10 @@ export function makeActions(): Actions {
       }),
     linkGithub: () => attempt("GitHub not linked", linkGithub),
     unlinkGithub: () => attempt("GitHub not unlinked", unlinkGithub),
+    windowControl: (action) =>
+      void bridge()
+        ?.windowControl(action)
+        .catch(() => {}),
     installUpdate: () =>
       attempt("Couldn't update", async () => {
         const b = bridge()

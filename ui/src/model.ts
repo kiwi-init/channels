@@ -337,6 +337,7 @@ export interface Actions {
   linkGithub(): void
   unlinkGithub(): void
   installUpdate(): void
+  windowControl(action: "minimize" | "maximize" | "close"): void
   applyUi(): void
   signOut(): void
   setNewMembers(code: string, can: "read" | "write"): void
