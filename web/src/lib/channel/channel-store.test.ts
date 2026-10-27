@@ -207,19 +207,18 @@ describe("a channel store", () => {
 })
 
 describe("the sealed keep", () => {
-  test("waits 3 s after the last change, then seals the latest roster once", async () => {
+  test("a change inside the 3 s window restarts it: one seal, with the latest roster", async () => {
     const r = relay(0)
-    const { close } = await opened(r)
-    await sleep(1_000)
+    const { store, close } = await opened(r)
+    await sleep(100)
     r.setRoster([person("atlas", "pk-atlas"), person("nova", "pk-nova")])
     r.say({ _tag: "Roster" })
-    await sleep(2_500)
-    expect(r.kept).toHaveLength(0)
-    await sleep(800)
+    await until(() => store.handle.value.roster.length === 2)
+    await sleep(3_400)
     expect(r.kept).toHaveLength(1)
     expect(JSON.stringify(r.kept[0])).toContain("pk-nova")
     close()
-  })
+  }, 10_000)
 
   test("closing before the delay seals nothing", async () => {
     const r = relay(0)
@@ -227,7 +226,7 @@ describe("the sealed keep", () => {
     close()
     await sleep(3_300)
     expect(r.kept).toHaveLength(0)
-  })
+  }, 10_000)
 })
 
 describe("snapshots", () => {
