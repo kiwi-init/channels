@@ -5,7 +5,7 @@ import type { SendOptions } from "@kiwi/core/client.ts"
 import { permissionReply } from "@kiwi/core/permission.ts"
 import { droppedCount } from "@kiwi/core/format.ts"
 import { memberLoad } from "@kiwi/core/load.ts"
-import { GENERAL_ROOM, PROTOCOL_VERSION, isReaction, type ImageAttachment, type Message } from "@kiwi/core/protocol.ts"
+import { GENERAL_ROOM, PROTOCOL_VERSION, isReaction, type ImageAttachment, type Message, type StepReply } from "@kiwi/core/protocol.ts"
 import { taskCards } from "@kiwi/core/standup.ts"
 import { answersDecisions, colorOf, decidersOf, heldBy, outsideRepos, taskId, tasksAwaitingPeople, type Task, humanOf, ownerOf } from "@kiwi/core/state.ts"
 import { channelTitle, loadRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
@@ -243,8 +243,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const composerAsks = useMemo(() => decisions.filter((m) => !m.permission), [decisions])
   const permissionSettled = useCallback((m: Message) => (m.permission ? settledOf(m, repliesTo.get(m.seq) ?? [], state, bySeq) : undefined), [repliesTo, state, bySeq])
   const answer = useCallback(
-    (m: Message, text: string): Promise<boolean> =>
-      send(text, { to: [m.from], re: [m.seq], kind: "msg" }).then(
+    (m: Message, text: string, stepReply?: StepReply): Promise<boolean> =>
+      send(text, { to: [m.from], re: [m.seq], kind: "msg", ...(stepReply ? { stepReply } : {}) }).then(
         () => (toast(`Answered ${nameOf(m.from)}`), true),
         (err) => (toast(`Not sent: ${errorText(err)}`, "error"), false)
       ),
@@ -479,7 +479,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       nameOf={nameOf}
       agentOf={(name) => isAgent(state.members.get(name))}
       heldOf={(m) => heldBy(state, m).map((id) => (state.tasks.has(id) ? taskId(id) : `#${id}`))}
-      onReply={async (m, text) => void (await send(text, { to: [m.from], re: [m.seq], kind: "msg" }))}
+      onReply={async (m, text, stepReply) => void (await send(text, { to: [m.from], re: [m.seq], kind: "msg", ...(stepReply ? { stepReply } : {}) }))}
       permissionOf={(m) => ({ human: humanOf(state, m.from), owner: ownerOf(state) })}
       onPermission={async (m, allow) => {
         const perm = permissionReply(m, allow, state)

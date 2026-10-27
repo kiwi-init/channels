@@ -58,13 +58,55 @@ async function until(pred: () => boolean | Promise<boolean>, label: string, ms =
 }
 
 const seqOf = (out: string) => /#(\d+)/.exec(out)![1]!;
-import { wellFormed, type Payload } from "@kiwi/core/protocol.ts";
+import { decisionNeedsStep, wellFormed, type Payload } from "@kiwi/core/protocol.ts";
 
 const LINK = "https://live.example.com/devtools/inspector.html?jwt=SECRET-TOKEN-1234";
 
 const payload = (extra: Record<string, unknown>): Payload => ({ v: 1, id: "x", from: "dev", kind: "blocking", body: "log in", ts: 1, ...extra }) as Payload;
 
 const handoff = (over: Record<string, unknown> = {}) => ({ url: LINK, vendor: "cloudflare", expiresAt: Date.now() + 600_000, ...over });
+const step = (over: Record<string, unknown> = {}) => ({
+  why: "The deploy is waiting",
+  needsPerson: "Only the owner has production access",
+  do: ["Open the production dashboard"],
+  run: ["curl -sI https://example.com/catalog"],
+  expect: "cf-cache-status: BYPASS",
+  links: ["https://example.com/dashboard"],
+  ...over,
+});
+
+describe("step payloads", () => {
+  test("a held escalation carries the how, and structured answers carry output or a required reason", () => {
+    expect(wellFormed(payload({ esc: true, holds: [7], step: step() }))).toBe(true);
+    expect(wellFormed(payload({ esc: true, holds: [7], step: step({ links: undefined }) }))).toBe(true);
+    expect(wellFormed(payload({ esc: true, holds: [7], step: step({ do: undefined, run: undefined, links: ["https://example.com"] }) }))).toBe(true);
+    expect(wellFormed(payload({ re: [7], stepReply: { outcome: "done", output: "cf-cache-status: BYPASS" } }))).toBe(true);
+    expect(wellFormed(payload({ re: [7], stepReply: { outcome: "cant", reason: "No production access here" } }))).toBe(true);
+    expect(wellFormed(payload({ re: [7], stepReply: { outcome: "not-needed", reason: "The deploy already purged it" } }))).toBe(true);
+  });
+
+  test("a step without its context or how, unsafe links, mixed card kinds and incomplete answers are malformed", () => {
+    expect(wellFormed(payload({ holds: [7], step: step() }))).toBe(false);
+    expect(wellFormed(payload({ esc: true, step: step() }))).toBe(false);
+    expect(wellFormed(payload({ esc: true, holds: [7], step: step({ why: " " }) }))).toBe(false);
+    expect(wellFormed(payload({ esc: true, holds: [7], step: step({ needsPerson: "" }) }))).toBe(false);
+    expect(wellFormed(payload({ esc: true, holds: [7], step: step({ do: undefined, run: undefined, links: undefined }) }))).toBe(false);
+    expect(wellFormed(payload({ esc: true, holds: [7], step: step({ links: ["http://example.com"] }) }))).toBe(false);
+    expect(wellFormed(payload({ esc: true, holds: [7], step: step(), decision: "choice" }))).toBe(false);
+    expect(wellFormed(payload({ esc: true, holds: [7], step: step(), choices: ["A", "B"] }))).toBe(false);
+    expect(wellFormed(payload({ stepReply: { outcome: "done" } }))).toBe(false);
+    expect(wellFormed(payload({ re: [7], stepReply: { outcome: "done", reason: "not a reason field" } }))).toBe(false);
+    expect(wellFormed(payload({ re: [7], stepReply: { outcome: "cant" } }))).toBe(false);
+    expect(wellFormed(payload({ re: [7], stepReply: { outcome: "not-needed", reason: " " } }))).toBe(false);
+  });
+
+  test("Done and Not yet decisions are steps missing their how, unlike real choices", () => {
+    expect(decisionNeedsStep(["A: Done — purged", "B: Not yet — no access"])).toBe(true);
+    expect(decisionNeedsStep(["Done", "Not yet"])).toBe(true);
+    expect(decisionNeedsStep(["A: keep clearing", "B: rebuild dedup"])).toBe(false);
+    expect(decisionNeedsStep(["Done"])).toBe(false);
+  });
+});
 
 describe("handoff payload", () => {
   test("only an escalation carries a browser link, and it has to be https without credentials", () => {
@@ -260,6 +302,61 @@ describe("kiwi ask-human", () => {
     expect((await run(agent, "ask-human", "--holds", "T99999", "Which?")).err).toContain("99999 is neither a task nor a person's message here");
     expect((await run(agent, "ask-human", "--holds", "soon", "Which?")).code).toBe(1);
     expect((await run(agent, "ask-human", "--holds", task, "--kind", "vibes", "Which?")).code).toBe(1);
+  });
+
+  test("a step carries its instructions, commands and links, and Done returns the pasted output", async () => {
+    const sent = await ok(
+      agent,
+      "ask-human",
+      "--step",
+      "--holds",
+      task,
+      "--why",
+      "The catalog deploy is waiting",
+      "--needs-person",
+      "Only the owner has Cloudflare access",
+      "--do",
+      "Purge the /catalog/ prefix",
+      "--run",
+      "curl -sI https://example.com/catalog | grep -i cf-cache-status",
+      "--expect",
+      "cf-cache-status: BYPASS",
+      "--link",
+      "https://dash.cloudflare.com/",
+      "Purge the catalog cache",
+    );
+    const seq = seqOf(sent);
+    expect(sent).toContain("with a step");
+    const shown = await ok(agent, "show", seq);
+    expect(shown).toContain("why: The catalog deploy is waiting");
+    expect(shown).toContain("needs a person: Only the owner has Cloudflare access");
+    expect(shown).toContain("1. Purge the /catalog/ prefix");
+    expect(shown).toContain("curl -sI https://example.com/catalog | grep -i cf-cache-status");
+    expect(shown).toContain("expect: cf-cache-status: BYPASS");
+    expect(shown).toContain("link: https://dash.cloudflare.com/");
+    expect(await ok(owner, "--as", "human", "status")).toContain(`#${seq} dev [blocking] [step]`);
+    await ok(owner, "--as", "human", "reply", seq, "Done\n\ncf-cache-status: BYPASS");
+    expect(await ok(agent, "show", seq)).toContain("cf-cache-status: BYPASS");
+  });
+
+  test("step cards and Done/Not-yet decisions without the how are refused", async () => {
+    const required = ["--why", "The deploy waits", "--needs-person", "Only the owner has access"];
+    const noHow = await run(agent, "ask-human", "--step", "--holds", task, ...required, "Purge the cache");
+    expect(noHow.code).toBe(1);
+    expect(noHow.err).toContain("at least one --do, --run or --link");
+    const noHolds = await run(agent, "ask-human", "--step", ...required, "--do", "Purge it", "Purge the cache");
+    expect(noHolds.code).toBe(1);
+    expect(noHolds.err).toContain("needs --holds");
+    const noPerson = await run(agent, "ask-human", "--step", "--holds", task, "--why", "The deploy waits", "--do", "Purge it", "Purge the cache");
+    expect(noPerson.code).toBe(1);
+    expect(noPerson.err).toContain("needs --needs-person");
+    const unsafe = await run(agent, "ask-human", "--step", "--holds", task, ...required, "--link", "http://example.com", "Purge the cache");
+    expect(unsafe.code).toBe(1);
+    expect(unsafe.err).toContain("https URL");
+    const disguised = await run(agent, "ask-human", "--holds", task, "--option", "A: Done", "--option", "B: Not yet", "Purge the cache");
+    expect(disguised.code).toBe(1);
+    expect(disguised.err).toContain("give no command or link");
+    expect(disguised.err).toContain("use --step");
   });
 
   test("the flags are refused where they don't fit", async () => {

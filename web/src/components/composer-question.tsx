@@ -1,8 +1,9 @@
-import type { Message } from "@kiwi/core/protocol.ts"
+import type { Message, StepReply } from "@kiwi/core/protocol.ts"
 import { taskId } from "@kiwi/core/state.ts"
 import { decisionLabel } from "@/lib/asks"
 import { useChoosing } from "@/lib/choosing"
 import { excerpt } from "@/lib/format"
+import { StepDetails, StepResponse } from "./step-card"
 
 export function ComposerQuestion({
   m,
@@ -11,6 +12,7 @@ export function ComposerQuestion({
   nameOf,
   disabled,
   onChoose,
+  onStep,
   onElse,
 }: {
   m: Message
@@ -19,11 +21,12 @@ export function ComposerQuestion({
   nameOf: (name: string) => string
   disabled: boolean
   onChoose: (choice: string) => Promise<boolean>
+  onStep?: (reply: StepReply) => Promise<boolean>
   onElse: () => void
 }) {
   const choose = useChoosing(m.seq, onChoose)
   return (
-    <section aria-label="Question" className="mb-2 flex flex-col gap-2 rounded-card bg-raised px-3.5 py-3 shadow-[0_0_0_1px_var(--decide)]">
+    <section aria-label="Question" className="mb-2 flex max-h-[70dvh] flex-col gap-2 overflow-y-auto rounded-card bg-raised px-3.5 py-3 shadow-[0_0_0_1px_var(--decide)]">
       <p className="flex flex-wrap items-start gap-x-2 gap-y-1 text-ui">
         <span className="shrink-0 rounded-full bg-decide-wash px-1.5 text-meta font-semibold text-decide">{m.esc ? decisionLabel(m) : "Question for you"}</span>
         {held?.length ? (
@@ -36,7 +39,10 @@ export function ComposerQuestion({
         </span>
         {more > 0 && <span className="ml-auto shrink-0 text-meta text-ink-3 tabular-nums">+{more} more</span>}
       </p>
-      {m.choices?.length ? (
+      {m.step && <StepDetails step={m.step} />}
+      {m.step ? (
+        <StepResponse id={m.seq} disabled={disabled} onAnswer={onStep ?? (() => Promise.resolve(false))} onElse={onElse} />
+      ) : m.choices?.length ? (
         <ul aria-label="Options" className="flex flex-col gap-1.5">
           {m.choices.map((c) => (
             <li key={c}>

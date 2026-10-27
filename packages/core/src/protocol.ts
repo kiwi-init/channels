@@ -604,11 +604,65 @@ export const isDecisionKind = (x: unknown): x is DecisionKind => DECISION_KINDS.
 export const CHOICES_MIN = 2;
 export const CHOICES_MAX = 6;
 export const CHOICE_MAX_LENGTH = 200;
+export const STEP_ITEMS_MAX = 20;
+export const STEP_LINKS_MAX = 10;
+
+export interface Step {
+  why: string;
+  needsPerson: string;
+  do?: string[];
+  run?: string[];
+  expect?: string;
+  links?: string[];
+}
+
+export type StepOutcome = "done" | "cant" | "not-needed";
+
+export interface StepReply {
+  outcome: StepOutcome;
+  output?: string;
+  reason?: string;
+}
+
+const stepText = (x: unknown, max: number): x is string => str(x, max) && x.trim().length > 0;
+const stepItems = (x: unknown, max: number): x is string[] => Array.isArray(x) && x.length > 0 && x.length <= STEP_ITEMS_MAX && x.every((item) => stepText(item, max));
+
+export function wellFormedStep(x: unknown): x is Step {
+  if (!x || typeof x !== "object") return false;
+  const s = x as Record<string, unknown>;
+  return (
+    stepText(s.why, 4000) &&
+    stepText(s.needsPerson, 4000) &&
+    (s.do === undefined || stepItems(s.do, 4000)) &&
+    (s.run === undefined || stepItems(s.run, 10_000)) &&
+    (s.expect === undefined || stepText(s.expect, 4000)) &&
+    (s.links === undefined || (Array.isArray(s.links) && s.links.length > 0 && s.links.length <= STEP_LINKS_MAX && s.links.every(handoffUrl))) &&
+    stepItems(s.do ?? s.run ?? s.links, 10_000)
+  );
+}
+
+export function wellFormedStepReply(x: unknown): x is StepReply {
+  if (!x || typeof x !== "object") return false;
+  const r = x as Record<string, unknown>;
+  if (r.outcome === "done") return r.reason === undefined && (r.output === undefined || stepText(r.output, MAX_BODY_LENGTH));
+  return (r.outcome === "cant" || r.outcome === "not-needed") && r.output === undefined && stepText(r.reason, 4000);
+}
 
 export function wellFormedChoices(x: unknown): x is string[] {
   if (!Array.isArray(x) || x.length < CHOICES_MIN || x.length > CHOICES_MAX) return false;
   if (!x.every((c) => typeof c === "string" && c.trim().length > 0 && c.length <= CHOICE_MAX_LENGTH && !/[\r\n]/.test(c))) return false;
   return new Set(x.map((c: string) => c.trim().toLowerCase())).size === x.length;
+}
+
+export function decisionNeedsStep(choices: readonly string[] | undefined): boolean {
+  if (choices?.length !== 2) return false;
+  const [done, waiting] = choices.map((choice) =>
+    choice
+      .replace(/^[A-Z]\s*[:.)-]\s*/i, "")
+      .trim()
+      .toLowerCase(),
+  );
+  return /^done(?:\s|$)/.test(done!) && /^not yet(?:\s|$)/.test(waiting!);
 }
 
 /** The decrypted message body. */
@@ -636,14 +690,16 @@ export interface Payload {
   /** A chat message to exactly one member, in the direct thread between the two. Older clients see a message to that member. */
   dm?: true;
   /**
-   * An agent handing a decision to people instead of acting (`kiwi escalate`): a blocking question to
-   * its own human and the owner. Older clients see it as the blocking question it also is.
+   * An agent handing a decision or a step to people instead of acting (`kiwi escalate`): a blocking
+   * question to its own human and the owner. Older clients see it as the blocking question it also is.
    */
   esc?: true;
   handoff?: Handoff;
   choices?: string[];
   holds?: number[];
   decision?: DecisionKind;
+  step?: Step;
+  stepReply?: StepReply;
   permission?: PermissionShown;
   perm?: PermissionReply;
   settled?: PermissionSettled;
@@ -955,6 +1011,8 @@ export function wellFormed(p: unknown): p is WirePayload {
     (m.choices === undefined || (m.esc === true && m.handoff === undefined && wellFormedChoices(m.choices))) &&
     (m.holds === undefined || (m.esc === true && wellFormedHolds(m.holds))) &&
     (m.decision === undefined || (m.esc === true && isDecisionKind(m.decision))) &&
+    (m.step === undefined || (m.esc === true && m.handoff === undefined && m.choices === undefined && m.decision === undefined && wellFormedHolds(m.holds) && wellFormedStep(m.step))) &&
+    (m.stepReply === undefined || (m.kind !== "event" && Array.isArray(m.re) && m.re.length > 0 && wellFormedStepReply(m.stepReply))) &&
     (m.permission === undefined || (m.esc === true && permissionChoices(m.choices) && wellFormedPermission(m.permission))) &&
     (m.perm === undefined || (m.kind !== "event" && Array.isArray(m.re) && m.re.length > 0 && wellFormedPermReply(m.perm))) &&
     (m.settled === undefined || (m.kind !== "event" && Array.isArray(m.re) && m.re.length > 0 && wellFormedSettled(m.settled))) &&
