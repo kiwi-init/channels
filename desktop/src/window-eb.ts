@@ -94,6 +94,7 @@ export async function createWindow(keyring: KeyringState | null = null): Promise
     frame: { width: WINDOW_SIZE.width, height: WINDOW_SIZE.height },
     titleBarStyle: mac ? "hiddenInset" : "hidden",
     hidden: true,
+    spellCheck: true,
     preload,
     rpc: bridge,
   });

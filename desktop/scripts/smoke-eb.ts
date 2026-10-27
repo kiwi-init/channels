@@ -65,6 +65,9 @@ try {
     (e: Error) => (problems.push(e.message), null),
   );
   if (paint !== null) console.log(`first paint: ${paint}`);
+  const spellCheck = await d.main("spellCheck");
+  if (spellCheck === true) console.log("spell checking: enabled on the window's native web view");
+  else problems.push(`spell checking on the window's native web view: ${JSON.stringify(spellCheck)}`);
   await check(
     "the relay it was given reaches the page through the store (window.kiwi.relayUrl) and answers through the CSP",
     d,
@@ -145,6 +148,15 @@ try {
       .catch((e: Error) => (problems.push(`message link opens the system browser: ${e.message}`), null));
     if (linkOpened) console.log("a clicked markdown link reached the fake xdg-open with its exact URL");
   }
+  await check(
+    "the composer checks spelling and fields that opt out stay unchecked",
+    d,
+    () => ({
+      composer: document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]')?.spellcheck ?? null,
+      optedOut: [...document.querySelectorAll<HTMLElement>('[spellcheck="false"]')].every((el) => !el.spellcheck),
+    }),
+    (v) => v.composer === true && v.optedOut,
+  );
 
   const hello = await until("the kiwi daemon the app starts", 60_000, () => daemonHello(kiwiHome, 1_000)).catch((e: Error) => (problems.push(e.message), null));
   if (hello) console.log(`kiwi daemon: answering on the test KIWI_HOME (kiwi ${hello.version})`);
