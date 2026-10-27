@@ -1,22 +1,21 @@
-import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
 
 import { PermissionCard, PrChip, QuestionCard, TaskChip } from "~/chat/cards"
 import { preview, useReplying } from "~/chat/reply"
 import { Avatar, cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago, clock } from "~/kit/time"
-import type { Channel, Message } from "~/model"
-import { useApp } from "~/nav"
+import type { Channel, Message, Person } from "~/model"
+import { useAct } from "~/nav"
 
 const Markdown = lazy(() => import("~/chat/markdown"))
 
 const QUICK = ["👍", "🔥", "👀", "✅"]
 const CLAMP_PX = 12 * 22
 
-function Body({ channel, text, names, onImage }: { channel: Channel; text: string; names: ReadonlySet<string>; onImage: (url: string, alt: string) => void }) {
-  const { go, toast } = useApp()
+function Body({ text, names, tasks, onImage }: { text: string; names: ReadonlySet<string>; tasks: ReadonlySet<number>; onImage: (url: string, alt: string) => void }) {
+  const { go, toast } = useAct()
   const [shown, setShown] = useState(false)
-  const tasks = useMemo(() => new Set(channel.tasks.map((t) => t.id)), [channel.tasks])
   const onShown = useCallback(() => setShown(true), [])
   const onMention = useCallback((name: string) => go({ to: "panel", panel: { kind: "person", name } }), [go])
   const onTask = useCallback((task: number) => go({ to: "panel", panel: { kind: "task", task } }), [go])
@@ -87,24 +86,41 @@ function Quote({ quoted, onClick }: { quoted: Message; onClick?: () => void }) {
   )
 }
 
-export const MessageRow = memo(function MessageRow({
-  channel,
-  m,
-  compact,
-  names,
-  inThread,
-  quote,
-  onQuote,
-}: {
+interface RowProps {
   channel: Channel
   m: Message
   compact: boolean
-  names: Set<string>
+  names: ReadonlySet<string>
+  tasks: ReadonlySet<number>
   inThread?: boolean
   quote?: Message
   onQuote?: (seq: number) => void
-}) {
-  const { app, go } = useApp()
+}
+
+const face = (p: Person | undefined): string => (p ? [p.kind, p.harness, p.presence, p.color, p.role, p.runs].join("\n") : "")
+
+const chip = (c: Channel, id: number | undefined): string => {
+  const t = id === undefined ? undefined : c.tasks.find((t) => t.id === id)
+  return t ? [t.status, t.title, t.owner, t.pr?.number].join("\n") : ""
+}
+
+function sameRow(a: RowProps, b: RowProps): boolean {
+  if (a.m !== b.m || a.compact !== b.compact || a.names !== b.names || a.tasks !== b.tasks || a.inThread !== b.inThread || a.quote !== b.quote || a.onQuote !== b.onQuote) return false
+  const x = a.channel
+  const y = b.channel
+  if (x === y) return true
+  const { from, ask, task } = b.m
+  return (
+    x.code === y.code &&
+    x.you === y.you &&
+    face(x.people.find((p) => p.name === from)) === face(y.people.find((p) => p.name === from)) &&
+    (ask === undefined || x.asks.find((k) => k.id === ask) === y.asks.find((k) => k.id === ask)) &&
+    chip(x, task) === chip(y, task)
+  )
+}
+
+export const MessageRow = memo(function MessageRow({ channel, m, compact, names, tasks, inThread, quote, onQuote }: RowProps) {
+  const { actions, go } = useAct()
   const replying = useReplying()
   const [image, setImage] = useState<{ url: string; alt: string } | null>(null)
   const openImage = useCallback((url: string, alt: string) => setImage({ url, alt }), [])
@@ -149,7 +165,7 @@ export const MessageRow = memo(function MessageRow({
           </p>
         )}
         {quote && <Quote quoted={quote} onClick={onQuote ? () => onQuote(quote.seq) : undefined} />}
-        <Clamp on={who?.kind === "agent" && !inThread}>{m.text && <Body channel={channel} text={m.text} names={names} onImage={openImage} />}</Clamp>
+        <Clamp on={who?.kind === "agent" && !inThread}>{m.text && <Body text={m.text} names={names} tasks={tasks} onImage={openImage} />}</Clamp>
         {m.images && (
           <div className="msg-images">
             {m.images.map((img) => (
@@ -162,10 +178,10 @@ export const MessageRow = memo(function MessageRow({
         {m.failed !== undefined && (
           <p className="msg-failed" role="status" title={m.failed}>
             Couldn't send
-            <button type="button" className="msg-failed-act" onClick={() => app.actions.retry(channel.code, m.seq)}>
+            <button type="button" className="msg-failed-act" onClick={() => actions.retry(channel.code, m.seq)}>
               Retry
             </button>
-            <button type="button" className="msg-failed-act" onClick={() => app.actions.discard(channel.code, m.seq)}>
+            <button type="button" className="msg-failed-act" onClick={() => actions.discard(channel.code, m.seq)}>
               Delete
             </button>
           </p>
@@ -183,7 +199,7 @@ export const MessageRow = memo(function MessageRow({
                 className={cx("react", r.by.includes(channel.you) && "is-mine")}
                 title={r.by.join(", ")}
                 aria-pressed={r.by.includes(channel.you)}
-                onClick={() => app.actions.react(channel.code, m.seq, r.emoji)}
+                onClick={() => actions.react(channel.code, m.seq, r.emoji)}
               >
                 {r.emoji} <span className="num">{r.by.length}</span>
               </button>
@@ -204,7 +220,7 @@ export const MessageRow = memo(function MessageRow({
       {!m.pending && m.failed === undefined && (
         <div className="msg-tools" role="toolbar" aria-label="Message actions">
           {QUICK.map((e) => (
-            <button key={e} type="button" className="msg-tool" aria-label={`React ${e}`} onClick={() => app.actions.react(channel.code, m.seq, e)}>
+            <button key={e} type="button" className="msg-tool" aria-label={`React ${e}`} onClick={() => actions.react(channel.code, m.seq, e)}>
               {e}
             </button>
           ))}
@@ -226,4 +242,4 @@ export const MessageRow = memo(function MessageRow({
       {image && <Viewer image={image} onClose={() => setImage(null)} />}
     </article>
   )
-})
+}, sameRow)
