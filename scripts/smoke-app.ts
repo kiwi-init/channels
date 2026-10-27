@@ -83,9 +83,9 @@ try {
   at = "the invite carries the join code";
   await page.getByRole("button", { name: "invite", exact: true }).click();
   const panel = page.getByRole("complementary", { name: "Details" });
-  const link = panel.locator("code").filter({ hasText: "kiwi://join/" }).first();
+  const link = panel.locator("code").filter({ hasText: "#mc2-" }).first();
   await link.waitFor({ timeout: 15000 });
-  const code = (await link.innerText()).trim().replace("kiwi://join/", "");
+  const code = (await link.innerText()).trim().replace(/^.*#/, "");
   if (!/^mc2-[A-Za-z0-9_-]+-[A-Za-z0-9_-]+$/.test(code)) throw new Error(`the invite link carries no join code: ${code}`);
   await page.keyboard.press("Escape");
   step(at);
