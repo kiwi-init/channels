@@ -69,6 +69,19 @@ describe("a closed task's digest", () => {
     expect(taskDigest(s, log, s.tasks.get(add.seq)!)).toBe(`T${add.seq} cancelled: Old idea · superseded by T9 · by mac`);
   });
 
+  test("an assign note is the brief the task was handed over with, not what came of it (T150)", async () => {
+    const add = await ev("jon", { op: "task.add", title: "Joining screens", owner: "mac" });
+    const t = add.seq;
+    const log = [
+      add,
+      await ev("mac", { op: "task.update", task: t, state: "doing", note: "invite step first" }),
+      await ev("jon", { op: "task.update", task: t, owner: "win", note: "moved off mac's queue: read the gap list first" }),
+      await ev("win", { op: "task.update", task: t, state: "done" }),
+    ];
+    const s = fold(log, roster);
+    expect(taskDigest(s, log, s.tasks.get(t)!)).toBe(`T${t} done: Joining screens · invite step first · by mac, win`);
+  });
+
   test("a checkpoint is the agent's own notes, so the digest says the last note before it", async () => {
     const add = await ev("jon", { op: "task.add", title: "Fix the bar", owner: "mac" });
     const t = add.seq;

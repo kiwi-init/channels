@@ -86,6 +86,6 @@ describe("inside the card, the header keeps only the phone's row, search and the
     expect(markup).toMatch(/^<header[^>]*><div class="drag relative flex h-\(--chrome-h\)[^"]*md:hidden">/)
   })
   test("search opens a step below the card's top edge", () => {
-    expect(header({ search: "" })).toMatch(/<div class="relative mx-auto w-full max-w-\[792px\][^"]*md:pt-\(--step\)"><label/)
+    expect(header({ search: "" })).toMatch(/<div class="relative mx-auto w-full max-w-\[792px\][^"]*md:pt-\(--step\)"><div role="search"/)
   })
 })

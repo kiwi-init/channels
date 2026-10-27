@@ -380,7 +380,7 @@ export function taskDigest(state: ChannelState, messages: Message[], t: Task): s
   const feed = taskFeed(state, messages, t.id);
   const prs = [...new Map(ownPrs(state, messages, t.id).map((p) => [p.url, `${p.repo}#${p.number}`])).values()];
   const said = feed.reduce((n, i) => n + (i.type === "thread" ? i.messages.length : 0), 0);
-  const note = [...t.notes].reverse().find((n) => !n.checkpoint && n.text.trim().toLowerCase() !== "approved")?.text;
+  const note = [...t.notes].reverse().find((n) => !n.checkpoint && !n.assign && n.text.trim().toLowerCase() !== "approved")?.text;
   const by = [...new Set([...t.workedBy, ...(t.owner ? [t.owner] : [])])];
   return [
     `${taskId(t.id)} ${t.cancelled ? "cancelled" : "done"}: ${inlineText(t.title, 120)}`,

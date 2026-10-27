@@ -15,7 +15,6 @@ export const FLOWS: string[] = [
   "read-receipts",
   "daemon-pair",
   "remote-launch-flow",
-  "sh-escape",
   "reclaim",
   "wake-yourself",
   "seats",
