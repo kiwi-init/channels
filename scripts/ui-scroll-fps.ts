@@ -6,15 +6,17 @@ import { chromium, webkit, type Page } from "playwright-core";
 
 if (process.argv.includes("--help")) {
   console.log(`Frame times while the new UI's conversation scrolls: the long-feed demo shot (1500 messages in #general) at 1440x900@2x,
-scrolled up and down by script every frame (a trackpad pace, then a fling), PERF_RUNS times (3). Reports the frame interval and the
-main-thread work per frame (p50/p95/max), frames over 25 ms, content that jumped on screen while scrolling, long tasks where the
-engine has them, how long the feed takes to show, and the frames after sending a message at the bottom and while scrolled up.
+left idle (the noise floor), then scrolled up and down by script every frame (a trackpad pace, a short fling and a fling through
+48,000 px), PERF_RUNS times (3). Reports the frame interval, the
+frames dropped at the display's rate, the main-thread work per frame (p50/p95/max) and how many frames' work misses the --hz budget
+(120: 8.3 ms, whatever rate the display gives WebKit), content that jumped on screen while scrolling, long tasks where the engine has
+them, how long the feed takes to show, and the frames after sending a message at the bottom and while scrolled up.
 
-  bun scripts/ui-scroll-fps.ts [--browser webkit|chromium] [--dist ui/dist] [--theme dark|light] [--css try.css] [--json out.json] [--check]
+  bun scripts/ui-scroll-fps.ts [--browser webkit|chromium] [--dist ui/dist] [--hz 120] [--theme dark|light] [--css try.css] [--json out.json] [--check]
 
 Without --dist it builds ui/ into a temporary folder first. --css adds a stylesheet before measuring, to try a change without
-a rebuild. --check fails when the page throws, renders the whole history at once, or the content jumps while scrolling; it
-never fails on timings. WebKit is the engine of the Mac and Linux apps: bunx playwright-core install webkit.`);
+a rebuild. --check fails when the page throws, renders the whole history at once or keeps hundreds of rows on a long fling,
+or the content jumps while scrolling; it never fails on timings. WebKit is the engine of the Mac and Linux apps: bunx playwright-core install webkit.`);
   process.exit(0);
 }
 
@@ -29,6 +31,8 @@ if (engine !== "webkit" && engine !== "chromium") throw new Error(`--browser is 
 const theme = flag("--theme") ?? "dark";
 const out = flag("--json");
 const css = flag("--css");
+const HZ = Number(flag("--hz") ?? 120);
+const BUDGET = 1000 / HZ;
 const check = process.argv.includes("--check");
 
 const scratch = mkdtempSync(join(tmpdir(), "kiwi-ui-scroll-"));
@@ -55,6 +59,7 @@ interface Frames {
   work: number[];
   long: number[];
   jumps: number[];
+  most: number;
 }
 
 interface Stats {
@@ -63,15 +68,15 @@ interface Stats {
   p95: number;
   max: number;
   fps: number;
-  slow: number;
+  dropped: number;
   workP50: number;
   workP95: number;
   workMax: number;
+  overBudget: number;
   longTasks: number | null;
   longTaskMs: number | null;
 }
 
-const VSYNC = 1000 / 60;
 const pct = (list: number[], p: number): number => {
   const sorted = [...list].sort((a, b) => a - b);
   return sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))] ?? 0;
@@ -94,10 +99,11 @@ function stats(all: Frames[], longSupported: boolean): Stats {
           intervals.reduce((a, b) => a + b, 0),
         ),
     ),
-    slow: intervals.filter((d) => d > VSYNC * 1.5).length,
+    dropped: intervals.filter((d) => d > pct(intervals, 50) * 1.5).length,
     workP50: round(pct(work, 50)),
     workP95: round(pct(work, 95)),
     workMax: round(Math.max(0, ...work)),
+    overBudget: work.filter((w) => w > BUDGET).length,
     longTasks: longSupported ? long.length : null,
     longTaskMs: longSupported ? round(long.reduce((a, b) => a + b, 0)) : null,
   };
@@ -131,6 +137,7 @@ async function scroll(page: Page, phases: { dy: number; frames: number }[], jump
       const probe = document.body.appendChild(document.createElement("div"));
       probe.style.cssText = "position:fixed;top:0;left:0;height:1px;width:1px;pointer-events:none";
       let watched: { el: Element; top: number } | null = null;
+      let most = 0;
       let applied = 0;
       const painted = new ResizeObserver(() => {
         if (watched?.el.isConnected) {
@@ -160,6 +167,7 @@ async function scroll(page: Page, phases: { dy: number; frames: number }[], jump
           last = t;
           const step = steps[phase];
           if (!step) return done();
+          most = Math.max(most, list.children.length);
           const before = feed.scrollTop;
           feed.scrollTop += step.dy;
           applied = feed.scrollTop - before;
@@ -176,7 +184,7 @@ async function scroll(page: Page, phases: { dy: number; frames: number }[], jump
       painted.disconnect();
       probe.remove();
       await new Promise((r) => setTimeout(r, 50));
-      return { intervals, work, jumps, long: [...w.__long] };
+      return { intervals, work, jumps, most, long: [...w.__long] };
     },
     { steps: phases, jumpy },
   );
@@ -209,7 +217,7 @@ async function watch(page: Page, ms: number, act: () => Promise<void>): Promise<
   return page.evaluate(async () => {
     const w = window as unknown as { __long: number[]; __watch: Promise<{ intervals: number[]; work: number[] }> };
     const f = await w.__watch;
-    return { ...f, jumps: [], long: [...w.__long] };
+    return { ...f, jumps: [], most: 0, long: [...w.__long] };
   });
 }
 
@@ -237,16 +245,27 @@ try {
     { dy: -120, frames: 90 },
     { dy: 120, frames: 90 },
   ];
+  const far = [
+    { dy: -120, frames: 400 },
+    { dy: 120, frames: 400 },
+  ];
+  const idles: Frames[] = [];
   const runs: Frames[] = [];
   const flings: Frames[] = [];
+  const fars: Frames[] = [];
   for (let i = 0; i < RUNS; i++) {
+    idles.push(await scroll(page, [{ dy: 0, frames: 180 }]));
     runs.push(await scroll(page, trackpad));
     flings.push(await scroll(page, fling));
+    fars.push(await scroll(page, far));
     await page.waitForTimeout(300);
   }
-  const jumps = [await scroll(page, trackpad, true), await scroll(page, fling, true)];
+  const jumps = [await scroll(page, trackpad, true), await scroll(page, fling, true), await scroll(page, far, true)];
+  report.idle = stats(idles, longOn);
   report.trackpad = stats(runs, longOn);
   report.fling = stats(flings, longOn);
+  report.flingFar = stats(fars, longOn);
+  report.mostRows = Math.max(...fars.map((f) => f.most));
   report.jumps = jumps.flatMap((f) => f.jumps).length;
   report.jumpMax = round(Math.max(0, ...jumps.flatMap((f) => f.jumps)));
 
@@ -275,17 +294,19 @@ try {
 console.log(`${engine}, 1440x900@2x, ${theme}: ${report.rows} rows, ${report.nodes} nodes, feed ready in ${report.readyMs} ms`);
 const line = (name: string, s: Stats) =>
   console.log(
-    `${name.padEnd(16)} frames ${String(s.frames).padStart(4)}  interval p50 ${s.p50} p95 ${s.p95} max ${s.max} ms  ${s.fps} fps  over 25 ms ${s.slow}  work p50 ${s.workP50} p95 ${s.workP95} max ${s.workMax} ms${s.longTasks === null ? "" : `  long tasks ${s.longTasks} (${s.longTaskMs} ms)`}`,
+    `${name.padEnd(16)} frames ${String(s.frames).padStart(4)}  interval p50 ${s.p50} p95 ${s.p95} max ${s.max} ms  ${s.fps} fps  dropped ${s.dropped}  work p50 ${s.workP50} p95 ${s.workP95} max ${s.workMax} ms, over ${round(BUDGET)} ms ${s.overBudget}${s.longTasks === null ? "" : `  long tasks ${s.longTasks} (${s.longTaskMs} ms)`}`,
   );
-for (const key of ["trackpad", "fling", "sendAtBottom", "sendScrolledUp"]) {
+for (const key of ["idle", "trackpad", "fling", "flingFar", "sendAtBottom", "sendScrolledUp"]) {
   const s = report[key];
   if (typeof s === "object") line(key, s);
 }
+console.log(`at most ${report.mostRows} children in the feed during the long fling`);
 console.log(report.jumps ? `content jumped ${report.jumps} times while scrolling, up to ${report.jumpMax} px` : "content never jumped while scrolling");
 if (out) writeFileSync(out, JSON.stringify({ engine, theme, ...report }, null, 2));
 if (check) {
   const failed = [
     ...(typeof report.rows === "number" && report.rows < 1000 ? [] : [`the feed rendered ${report.rows} rows at once: it should render the latest ones and add older ones on the way up`]),
+    ...(typeof report.mostRows === "number" && report.mostRows < 400 ? [] : [`the feed held ${report.mostRows} children during the long fling: it should drop rows far from the screen`]),
     ...(report.jumpMax === 0 ? [] : [`the content jumped ${report.jumps} times while scrolling, up to ${report.jumpMax} px`]),
   ];
   if (failed.length) {
