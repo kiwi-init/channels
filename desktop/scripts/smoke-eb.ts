@@ -214,10 +214,14 @@ try {
   if (mac) {
     const label = () => spawnSync("lsappinfo", ["info", "-only", "StatusLabel", id], { encoding: "utf8" }).stdout;
     const setBadge = (n: number) => d.evaluate((count: number) => (window as unknown as { kiwi: { setBadge(c: number): Promise<void> } }).kiwi.setBadge(count), n);
-    await setBadge(4);
-    const four = await until("the Dock badge", 5_000, async () => (/"label"="4"/.test(label()) ? true : null)).catch(() => null);
-    await setBadge(0);
-    const cleared = await until("the Dock badge to clear", 5_000, async () => (/"label"="[^"]+"/.test(label()) ? null : true)).catch(() => null);
+    const four = await until("the Dock badge", 5_000, async () => {
+      await setBadge(4);
+      return /"label"="4"/.test(label()) ? true : null;
+    }).catch(() => null);
+    const cleared = await until("the Dock badge to clear", 5_000, async () => {
+      await setBadge(0);
+      return /"label"="[^"]+"/.test(label()) ? null : true;
+    }).catch(() => null);
     if (four && cleared) console.log("the page's count 4 shows on the Dock icon (lsappinfo's StatusLabel), and 0 clears it");
     else problems.push(`the Dock badge after a count of 4 then 0: ${JSON.stringify(label().trim())} (shown: ${String(!!four)}, cleared: ${String(!!cleared)})`);
     const quitKey = osa(`tell application "System Events" to get value of attribute "AXMenuItemCmdChar" of menu item "Quit Channels" of menu 1 of menu bar item 2 of menu bar 1 of (${proc})`);

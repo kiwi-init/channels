@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react"
 import { EnrichedMarkdownText, type EnrichedMarkdownTextProps, type MarkdownStyle } from "react-native-enriched-markdown/lib/module/index.web.js"
+import { bridge } from "@/lib/secrets"
 
 import { linked } from "~/chat/linked"
 import { Icon } from "~/kit/icons"
@@ -134,7 +135,10 @@ export default function Markdown({ text, names, tasks, onMention, onTask, onImag
     ({ url }: { url: string }) => {
       if (url.startsWith("kiwi-mention:")) return onMention(decodeURIComponent(url.slice("kiwi-mention:".length)))
       if (url.startsWith("kiwi-task:")) return onTask(Number(url.slice("kiwi-task:".length)))
-      if (/^https?:\/\//i.test(url) || url.startsWith("mailto:")) window.open(url, "_blank", "noopener,noreferrer")
+      if (!/^https?:\/\//i.test(url) && !url.startsWith("mailto:")) return
+      const b = bridge()
+      if (b) void b.openExternal(url).catch(() => {})
+      else window.open(url, "_blank", "noopener,noreferrer")
     },
     [onMention, onTask]
   )
