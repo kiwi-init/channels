@@ -1,7 +1,10 @@
-import { useId, useState } from "react"
+import { useEffect, useId, useRef, useState } from "react"
+
+import { handleFor, NAME_RE, RESERVED_NAMES } from "@kiwi/core/membership.ts"
 
 import "~/styles/start.css"
 import { cx, Dialog, DialogHead } from "~/kit/bits"
+import type { InviteInfo } from "~/model"
 import { useApp } from "~/nav"
 
 const CODE = /^[A-Za-z0-9._~-]+$/
@@ -38,21 +41,98 @@ export function JoinDialog() {
 }
 
 function JoinForm({ onClose }: { onClose: () => void }) {
-  const { app, go } = useApp()
-  const [text, setText] = useState("")
-  const [busy, setBusy] = useState(false)
-  const [failed, setFailed] = useState(false)
+  const { app, nav, go } = useApp()
+  const [text, setText] = useState(nav.invite ?? "")
+  const [busy, setBusy] = useState(!!nav.invite)
+  const [error, setError] = useState<string | null>(null)
+  const [invite, setInvite] = useState<InviteInfo | null>(null)
+  const [name, setName] = useState(() => (app.account ? handleFor(app.account.name) : ""))
   const inputId = useId()
   const hintId = useId()
+  const nameId = useId()
   const code = inviteCode(text)
   const bad = text.trim() !== "" && !code
-  const hint = failed
-    ? "Couldn't send the request. Check the code and try again."
-    : bad
-      ? "That isn't an invite. It looks like kiwi://join/… or a short code."
-      : code && code !== text.trim()
-        ? `Code ${code}. Next, the owner lets you in.`
-        : "Next, the owner lets you in. You'll get a code to tell them."
+  const nameProblem = !NAME_RE.test(name.trim())
+    ? "Letters, numbers, dots, dashes or underscores, up to 32"
+    : RESERVED_NAMES.has(name.trim().toLowerCase())
+      ? "That name is kept for Channels itself"
+      : null
+
+  const inspect = async (c: string) => {
+    try {
+      const info = await app.actions.inviteInfo(c)
+      if (info.state === "member") return go({ to: "channel", code: info.code })
+      if (info.state === "gone") setError("This invite no longer works: the channel was closed, or the code is wrong. Ask whoever sent it for a new one.")
+      else setInvite(info)
+    } catch (err) {
+      setError(`Couldn't check the invite: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+  const first = useRef(nav.invite)
+  useEffect(() => {
+    if (first.current) void inspect(first.current)
+    first.current = undefined
+  })
+
+  if (invite) {
+    const owner = invite.owner
+    return (
+      <>
+        <DialogHead
+          title={owner ? `${owner} invited you to a channel` : "You're invited to a channel"}
+          sub={`A code only lets you ask. ${owner ?? "The owner"} approves every member, person or agent.`}
+          onClose={onClose}
+        />
+        <form
+          className="start-form"
+          onSubmit={async (e) => {
+            e.preventDefault()
+            if (busy || nameProblem) return
+            setBusy(true)
+            setError(null)
+            try {
+              const joined = await app.actions.joinChannel(invite.code, name.trim())
+              go({ to: "channel", code: joined })
+            } catch (err) {
+              setError(`Couldn't send the request: ${err instanceof Error ? err.message : String(err)}`)
+              setBusy(false)
+            }
+          }}
+        >
+          <label className="field" htmlFor={nameId}>
+            <span className="field-label">Your name in this channel</span>
+            <input
+              id={nameId}
+              ref={focusFirst}
+              className="input is-mono"
+              autoComplete="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              aria-invalid={nameProblem ? true : undefined}
+            />
+          </label>
+          <p className={cx("start-hint", (nameProblem || error) && "is-error")} aria-live="polite">
+            {error ?? nameProblem ?? `${owner ?? "The owner"} sees this name and a code to check, then lets you in.`}
+          </p>
+          <div className="dialog-foot start-foot">
+            <button type="button" className="btn is-quiet" onClick={() => (setInvite(null), setError(null))}>
+              Back
+            </button>
+            <button type="submit" className="btn is-primary" disabled={busy || !!nameProblem}>
+              {busy ? "Asking…" : "Ask to join"}
+            </button>
+          </div>
+        </form>
+      </>
+    )
+  }
+
+  const hint =
+    error ?? (bad ? "That isn't an invite. It looks like kiwi://join/…, a link with #mc2-…, or a code." : busy ? "Checking the invite…" : "Next you choose your name, then the owner lets you in.")
   return (
     <>
       <DialogHead title="Join a channel" sub="Paste the invite link or code someone sent you." onClose={onClose} />
@@ -62,15 +142,8 @@ function JoinForm({ onClose }: { onClose: () => void }) {
           e.preventDefault()
           if (!code || busy) return
           setBusy(true)
-          setFailed(false)
-          try {
-            const joined = await app.actions.joinChannel(code)
-            go({ to: "channel", code: joined })
-          } catch {
-            // The dialog stays open with the link kept, so they can fix it or try again.
-            setFailed(true)
-            setBusy(false)
-          }
+          setError(null)
+          await inspect(code)
         }}
       >
         <label className="field" htmlFor={inputId}>
@@ -86,18 +159,18 @@ function JoinForm({ onClose }: { onClose: () => void }) {
             value={text}
             onChange={(e) => {
               setText(e.target.value)
-              setFailed(false)
+              setError(null)
             }}
-            aria-invalid={bad || failed ? true : undefined}
+            aria-invalid={bad || error ? true : undefined}
             aria-describedby={hintId}
           />
         </label>
-        <p id={hintId} className={cx("start-hint", (bad || failed) && "is-error")} aria-live="polite">
+        <p id={hintId} className={cx("start-hint", (bad || error) && "is-error")} aria-live="polite">
           {hint}
         </p>
         <div className="dialog-foot start-foot">
           <button type="submit" className="btn is-primary" disabled={!code || busy}>
-            {busy ? "Asking…" : "Ask to join"}
+            {busy ? "Checking…" : "Continue"}
           </button>
         </div>
       </form>

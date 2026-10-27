@@ -12,7 +12,7 @@ import { newRoomId, taskId } from "@kiwi/core/state.ts"
 import type { KnownHarness } from "@kiwi/core/harnesses.ts"
 import type { Permission } from "@kiwi/core/launch-options.ts"
 import { tokenForCreate } from "@/lib/auth"
-import { askToJoin, createChannel, forgetChannel, forgetPending, isJoinCode, loadMember, loadPending, renameChannel } from "@/lib/channel"
+import { askToJoin, createChannel, forgetChannel, forgetPending, inviteInfo, isJoinCode, loadMember, loadPending, renameChannel } from "@/lib/channel"
 import { linkOf, type ChannelLink } from "@/lib/channel-ops"
 import { removeComputer } from "@/lib/computers"
 import { joinCodeFromLink } from "@/lib/deep-link"
@@ -28,7 +28,8 @@ import { newMemberPowers, newMemberScopes, setNewMemberPowers, setNewMemberScope
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
 import { closeOpened, openedRun, type Run } from "~/live/store"
 import { setWake } from "~/live/wakes"
-import type { Actions, Harness, JoinChoice, NewAgent, TaskStatus } from "~/model"
+import { rememberOwner } from "~/live/invites"
+import type { Actions, Harness, InviteInfo, JoinChoice, NewAgent, TaskStatus } from "~/model"
 
 const say = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
@@ -166,13 +167,23 @@ async function newChannel(title: string): Promise<string> {
   return m.code
 }
 
-export async function joinChannel(typed: string): Promise<string> {
+export async function lookUpInvite(typed: string): Promise<InviteInfo> {
   const code = joinCodeOf(typed)
-  if (!code) throw new Error("That isn't a join code. Codes start with mc2-")
+  if (!code) throw new Error("That isn't an invite. Codes start with mc2-")
+  if (loadMember(code) || loadPending(code)) return { code, owner: null, state: "member" }
+  const info = await inviteInfo(code)
+  if (!info) return { code, owner: null, state: "gone" }
+  if (info.ownerName) rememberOwner(code, info.ownerName)
+  return { code, owner: info.ownerName, state: "ok" }
+}
+
+export async function joinChannel(typed: string, name?: string): Promise<string> {
+  const code = joinCodeOf(typed)
+  if (!code) throw new Error("That isn't an invite. Codes start with mc2-")
   if (loadMember(code) || loadPending(code)) return code
   const person = secrets().person
   if (!person) throw new Error("Say your name first")
-  await askToJoin(code, handleFor(person.name))
+  await askToJoin(code, name?.trim() || handleFor(person.name))
   return code
 }
 
@@ -381,6 +392,7 @@ export function makeActions(): Actions {
         await forgetChannel(code)
       }),
     newChannel,
+    inviteInfo: lookUpInvite,
     joinChannel,
     setName: (name) =>
       attempt("Name not saved", async () => {

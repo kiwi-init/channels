@@ -205,6 +205,12 @@ export interface ChannelTile {
   last: number
 }
 
+export interface InviteInfo {
+  code: string
+  owner: string | null
+  state: "ok" | "gone" | "member"
+}
+
 export interface Channel {
   code: string
   title: string
@@ -224,7 +230,7 @@ export interface Channel {
   tasks: Task[]
   asks: Ask[]
   connection: "connecting" | "live" | "reconnecting"
-  waiting?: { code: string; since: number }
+  waiting?: { code: string; since: number; state?: "waiting" | "unreachable" | "declined"; owner?: string }
 }
 
 export interface Computer {
@@ -328,7 +334,8 @@ export interface Actions {
   inviteLink(code: string): Promise<string>
   leaveChannel(code: string): void
   newChannel(title: string): Promise<string>
-  joinChannel(code: string): Promise<string>
+  inviteInfo(typed: string): Promise<InviteInfo>
+  joinChannel(code: string, name?: string): Promise<string>
   setName(name: string): void
   setPrefs(prefs: Partial<Prefs>): void
   pairBegin(kind: "computer" | "phone"): Promise<string>

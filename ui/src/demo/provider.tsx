@@ -199,10 +199,18 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         })
         return code
       },
+      inviteInfo: async (typed) => {
+        const code = typed
+          .trim()
+          .replace(/^kiwi:\/\/join\//, "")
+          .replace(/^https?:\/\/\S*#/, "")
+        if (code.includes("gone")) return { code, owner: null, state: "gone" }
+        return { code, owner: "maya", state: "ok" }
+      },
       joinChannel: async (code) => {
         setState((s) => {
           const channels = new Map(s.channels)
-          channels.set(code, { ...DEMO_WAITING, code, title: code })
+          channels.set(code, { ...DEMO_WAITING, code, title: "maya's channel", waiting: { code: "", since: Date.now(), owner: "maya" } })
           return { ...s, channels, tiles: [...s.tiles, { code, title: code, state: "waiting", unread: 0, needsYou: 0, last: Date.now() }] }
         })
         return code
