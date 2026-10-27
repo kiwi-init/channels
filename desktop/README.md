@@ -109,7 +109,7 @@ else `location.origin` when served by a relay.
 ## Typecheck / build
 
 ```sh
-cd desktop && bunx tsc --noEmit   # shared modules and scripts
+cd desktop && bunx tsrs --noEmit   # shared modules and scripts
 bun run typecheck:eb              # the Electrobun shell (*-eb.ts)
 bun run build:eb                  # release-eb/: the stable build
 ```

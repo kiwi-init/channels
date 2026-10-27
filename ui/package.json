@@ -9,7 +9,7 @@
     "lint": "oxlint src",
     "format": "oxfmt src",
     "format:check": "oxfmt --check src",
-    "typecheck": "tsc -b"
+    "typecheck": "tsrs -b"
   },
   "dependencies": {
     "@kiwi/core": "workspace:*",
@@ -25,6 +25,7 @@
     "@vitejs/plugin-react": "^6.1.2",
     "oxfmt": "0.71.0",
     "oxlint": "1.86.0",
+    "tsrs": "0.20.0-ts7.1.0-beta",
     "typescript": "^7.0.2",
     "vite": "^8.3.4"
   }

@@ -12,7 +12,7 @@
     "prepare:eb": "bun scripts/eb.ts prepare",
     "start:eb": "bun scripts/eb.ts dev",
     "build:eb": "bun scripts/eb.ts build --env=stable",
-    "typecheck": "bunx tsc --noEmit",
+    "typecheck": "bunx tsrs --noEmit",
     "typecheck:eb": "bun run prepare:eb && bunx tsc --noEmit -p tsconfig.eb.json"
   },
   "dependencies": {
@@ -22,6 +22,7 @@
     "@types/bun": "^1.4.4",
     "@types/node": "^26.6.5",
     "electrobun": "2.0.5",
+    "tsrs": "0.20.0-ts7.1.0-beta",
     "typescript": "^7.0.2"
   }
 }
