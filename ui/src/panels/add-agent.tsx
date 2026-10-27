@@ -6,7 +6,7 @@ import { ago } from "~/kit/time"
 import type { App, Channel, Computer, Harness, NewAgent } from "~/model"
 import { useApp } from "~/nav"
 import { PanelHead } from "~/panels/frame"
-import { CopyBox, inviteCode, useInviteLink } from "~/panels/invite"
+import { CopyBox } from "~/panels/invite"
 
 type Way = "here" | "command"
 type Mode = NonNullable<NewAgent["mode"]>
@@ -329,26 +329,79 @@ function StartHere({ channel, name, setName, taken, onStart }: NameProps & { onS
   )
 }
 
+function useJoinCommand(code: string, nick: string, persona: string): { line: string | null; failed: boolean; retry: () => void } {
+  const { app } = useApp()
+  const key = JSON.stringify([code, nick, persona])
+  const [got, setGot] = useState<{ key: string; line: string } | { key: string; failed: true } | null>(null)
+  const [attempt, setAttempt] = useState(0)
+  useEffect(() => {
+    let live = true
+    const as = { ...(nick ? { nick } : {}), ...(persona ? { persona } : {}) }
+    app.actions
+      .joinCommand(code, as)
+      .then((line) => live && setGot({ key: JSON.stringify([code, nick, persona]), line }))
+      .catch(() => live && setGot({ key: JSON.stringify([code, nick, persona]), failed: true }))
+    return () => {
+      live = false
+    }
+  }, [app.actions, code, nick, persona, attempt])
+  const mine = got?.key === key ? got : null
+  return {
+    line: mine && "line" in mine ? mine.line : null,
+    failed: !!mine && "failed" in mine,
+    retry: () => {
+      setGot(null)
+      setAttempt((n) => n + 1)
+    },
+  }
+}
+
 function RunCommand({ channel, name, setName, taken }: NameProps) {
-  const { link, failed, retry } = useInviteLink(channel.code)
+  const { app } = useApp()
+  const id = useId()
+  const [persona, setPersona] = useState("")
   const problem = nameProblem(name, taken)
+  const { line, failed, retry } = useJoinCommand(channel.code, name, channel.youOwn ? persona : "")
   return (
     <div className="panel-body add-body">
       <NameField name={name} setName={setName} problem={problem} />
+      {channel.youOwn ? (
+        <Group label="Personality">
+          <Choice group={`${id}-persona`} on={persona === ""} pick={() => setPersona("")}>
+            <span className="add-choice-text">
+              <span className="add-choice-label">None</span>
+              <span className="add-choice-about">The harness as it comes. You can still pick one when you let it in.</span>
+            </span>
+          </Choice>
+          {app.personas.map((p) => (
+            <Choice key={p.id} group={`${id}-persona`} on={persona === p.id} pick={() => setPersona(p.id)}>
+              <span className="add-choice-text">
+                <span className="add-choice-label">{p.label}</span>
+                <span className="add-choice-about">{p.about}</span>
+              </span>
+            </Choice>
+          ))}
+        </Group>
+      ) : (
+        <p className="add-note">The owner picks its personality when they let it in.</p>
+      )}
       <div className="field">
         <span className="field-label">Command</span>
         {failed ? (
           <div className="invite-failed">
-            <span>Couldn't get the invite code.</span>
+            <span>Couldn't make the command.</span>
             <button type="button" className="btn is-small" onClick={retry}>
               Try again
             </button>
           </div>
         ) : (
-          <CopyBox text={link && `kiwi join ${inviteCode(link)} --nick ${name || "<name>"}`} label="Copy command" disabled={!!problem} />
+          <CopyBox text={line} label="Copy command" disabled={!!problem} wrap />
         )}
       </div>
-      <p className="add-note">Run it in the folder the agent should work in. It asks to join; you'll check its code in Needs you.</p>
+      <p className="add-note">
+        Run it in the folder the agent should work in. It asks to join{persona && channel.youOwn ? ` as ${app.personas.find((p) => p.id === persona)?.label ?? "that personality"}` : ""}; you'll check
+        its code in Needs you.
+      </p>
     </div>
   )
 }

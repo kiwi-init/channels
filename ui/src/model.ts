@@ -326,6 +326,7 @@ export interface Actions {
   addRepo(code: string, repo: string): void
   removeRepo(code: string, repo: string): void
   inviteLink(code: string): Promise<string>
+  joinCommand(code: string, as: { nick?: string; persona?: string }): Promise<string>
   leaveChannel(code: string): void
   newChannel(title: string): Promise<string>
   joinChannel(code: string): Promise<string>

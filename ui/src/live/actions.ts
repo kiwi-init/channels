@@ -16,6 +16,7 @@ import { askToJoin, createChannel, forgetChannel, forgetPending, isJoinCode, loa
 import { linkOf, type ChannelLink } from "@/lib/channel-ops"
 import { removeComputer } from "@/lib/computers"
 import { joinCodeFromLink } from "@/lib/deep-link"
+import { kiwiJoin } from "@/lib/join-line"
 import { relayUrl } from "@/lib/relay"
 import { cleanRoomName, roomProblem, roomsAfter } from "@/lib/rooms"
 import { ALLOW_ONCE, DENY } from "@/lib/permission-settled"
@@ -359,6 +360,13 @@ export function makeActions(): Actions {
           owner(code).state.repos.filter((r) => r !== repo)
         )
       ),
+    joinCommand: async (code, as) => {
+      if (!loadMember(code)) throw new Error("you're not in that channel")
+      const picked = as.persona ? personalities().find((p) => p.id === as.persona) : undefined
+      if (as.persona && !picked) throw new Error("that personality isn't on this computer")
+      const pin = picked ? await owner(code).ch.pinPersona(picked) : null
+      return `kiwi ${kiwiJoin(relayUrl(), code, { ...(as.nick ? { nick: as.nick } : {}), persona: pin })}`
+    },
     inviteLink: async (code) => {
       if (!loadMember(code)) throw new Error("you're not in that channel")
       return `${relayUrl()}/#${code}`

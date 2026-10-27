@@ -188,6 +188,15 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       setHold: (code, on, note) => edit(code, (c) => ({ ...c, hold: on ? { note, by: c.you, at: Date.now() } : undefined })),
       addRepo: (code, repo) => edit(code, (c) => ({ ...c, repos: [...new Set([...c.repos, repo])] })),
       removeRepo: (code, repo) => edit(code, (c) => ({ ...c, repos: c.repos.filter((r) => r !== repo) })),
+      joinCommand: async (code, as) =>
+        [
+          `kiwi join ${code}-x7Qp2LmR`,
+          as.nick && `--nick ${as.nick}`,
+          as.persona &&
+            "--persona eyJyb29tIjoicjdLcTJtWGEiLCJwaW4iOnsiaWQiOiJsZWFkIiwibmFtZSI6IkxlYWQiLCJoYXNoIjoiOGYzYTYxYzI5ZDRlMGI3MWE1YzhmMDNkMmU5YjZhNDcifSwicGsiOiJRbTl2TFhCckxXVjRZVzF3YkdVdFptOXlMV1JsYlc4dGIyNXNlUzB3TVEiLCJzaWciOiJjMmxuYm1GMGRYSmxMV1Y0WVcxd2JHVXRabTl5TFdSbGJXOHRiMjVzZVMxdWIzUXRjbVZoYkMwd01USXpORFUyTnpnNVlXSmpaR1ZtIn0",
+        ]
+          .filter(Boolean)
+          .join(" "),
       inviteLink: async (code) => `https://channels.kiwiinit.com/#${code}-x7Qp2LmR`,
       leaveChannel: (code) => setState((s) => ({ ...s, tiles: s.tiles.filter((t) => t.code !== code) })),
       newChannel: async (title) => {
