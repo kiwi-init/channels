@@ -49,8 +49,8 @@ function fateIn(text: string, pr: { url: string; number: number }): "merged" | "
   return near("merged") ? "merged" : near("closed") ? "closed" : null;
 }
 
-/** The text a message carries for links: its body, or a task note. */
-export const textOf = (m: Message): string => (m.ev?.op === "task.update" ? (m.ev.note ?? "") : m.kind === "event" ? "" : m.body);
+/** The text a message carries for links: its body, or a task note and review summary. */
+export const textOf = (m: Message): string => (m.ev?.op === "task.update" ? `${m.ev.note ?? ""}${m.ev.summary ? `\n${m.ev.summary}` : ""}` : m.kind === "event" ? "" : m.body);
 
 /** PRs linked in these messages, with what later messages (any visible one) say happened to them. */
 export function prsIn(state: ChannelState, messages: Message[], linkedBy: (m: Message) => boolean): PrRef[] {
@@ -250,7 +250,7 @@ const VERB: Record<TaskState | OldTaskState, string> = {
 /** A task's own event, told from the task's page: "started it", "assigned it to ann", "created the task". */
 function onTask(m: Message, state: ChannelState): { text: string; mark: EventMark; note?: string; review?: string } {
   const ev = m.ev!;
-  const review = reviewBody(m);
+  const review = reviewBody(m) ?? (ev.op === "task.update" ? ev.summary : undefined);
   const note = { ...(ev.op === "task.update" && ev.note ? { note: inlineText(ev.note, 2000) } : {}), ...(review ? { review: cleanBody(review) } : {}) };
   const round = ev.op === "task.update" ? roundTag(state.tasks.get(ev.task), m.seq, ev.round) : "";
   switch (ev.op) {

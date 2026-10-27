@@ -314,7 +314,15 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
               : { kind: "withdrawn", seq: m.seq };
       if (state === "review") {
         if (open) open.result = { kind: "withdrawn", seq: m.seq };
-        task.rounds.push({ n: (task.rounds.at(-1)?.n ?? 0) + 1, ...(ev.at ? { at: ev.at.trim() } : {}), by: m.from, seq: m.seq, ts: at, result: { kind: "open" } });
+        task.rounds.push({
+          n: (task.rounds.at(-1)?.n ?? 0) + 1,
+          ...(ev.at ? { at: ev.at.trim() } : {}),
+          ...(ev.summary ? { summary: ev.summary.trim() } : {}),
+          by: m.from,
+          seq: m.seq,
+          ts: at,
+          result: { kind: "open" },
+        });
       }
       const note = ev.note || (ev.state === "blocked" ? "blocked" : ev.state === "cancelled" ? "cancelled" : undefined);
       if (ev.review !== undefined) task.review = review;

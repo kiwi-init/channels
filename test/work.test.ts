@@ -154,6 +154,17 @@ describe("a task's feed", () => {
     ]);
   });
 
+  test("a review summary stays in activity and carries its PR link after the round closes", async () => {
+    const add = await msg(coord, { ev: { op: "task.add", title: "Review summary", owner: "ann" } });
+    const review = await msg(ann, { ev: { op: "task.update", task: add.seq, state: "review", summary: "Changed the card: https://github.com/o/r/pull/50" } });
+    const approved = await msg(coord, { ev: { op: "task.update", task: add.seq, state: "done", round: 1 } });
+    const ms = [add, review, approved];
+    const s = fold(ms, roster);
+    const feed = taskFeed(s, ms, add.seq);
+    expect(feed.find((i) => i.seq === review.seq)).toMatchObject({ review: "Changed the card: https://github.com/o/r/pull/50" });
+    expect(taskPrs(feed).map((p) => p.number)).toEqual([50]);
+  });
+
   test("a thread between agents shows in everyone's task feed, whatever an old mode.set said", async () => {
     const mode = await msg(owner, { ev: { op: "mode.set", coordinatorOnly: true, strict: true } });
     const add = await msg(coord, { ev: { op: "task.add", title: "Quiet", owner: "ann" } });

@@ -4,6 +4,7 @@ import {
   MAX_GOAL_NAME,
   PROOF_LABEL_MAX_LENGTH,
   PROOF_URL_MAX_LENGTH,
+  REVIEW_SUMMARY_MAX_LENGTH,
   TASK_STATES,
   TASK_BODY_MAX_LENGTH,
   TASK_TITLE_LIMIT,
@@ -156,6 +157,7 @@ export class SessionTasks extends SessionMessaging {
         review?: string | null;
         verdict?: Verdict;
         at?: string;
+        summary?: string;
         round?: number;
         proof?: { url: string; label?: string };
         checkpoint?: true;
@@ -167,6 +169,9 @@ export class SessionTasks extends SessionMessaging {
       if (!t) return yield* new Rejected(`no task ${taskId(id)}`);
       const long = change.title === undefined ? null : titleRefusal(change.title);
       if (long) return yield* new Rejected(long);
+      if (change.summary !== undefined && (change.state !== "review" || !change.summary.trim())) return yield* new Rejected("a review summary needs text and a new review round");
+      if (change.summary && change.summary.length > REVIEW_SUMMARY_MAX_LENGTH)
+        return yield* new Rejected(`the review summary is ${change.summary.length} characters, the most it takes is ${REVIEW_SUMMARY_MAX_LENGTH}: keep what changed and how it was proven`);
       if (change.checkpoint && !change.note?.trim()) return yield* new Rejected("a checkpoint says where the work stands: give its text, or --file note.md");
       if (change.checkpoint && change.note && change.note.length > CHECKPOINT_MAX_LENGTH)
         return yield* new Rejected(`the checkpoint is ${change.note.length} characters, the most it takes is ${CHECKPOINT_MAX_LENGTH}: keep what a new session needs to carry on`);

@@ -89,6 +89,7 @@ type RoundResult = { kind: "open" } | { kind: Verdict; by: string; seq: number; 
 export interface ReviewRound {
   n: number;
   at?: string;
+  summary?: string;
   by: string;
   seq: number;
   ts: number;

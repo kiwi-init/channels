@@ -231,6 +231,7 @@ export type Event =
       verdict?: Verdict;
       round?: number;
       at?: string;
+      summary?: string;
       body?: "review";
       proof?: { url: string; label?: string };
       areas?: string[];
@@ -594,6 +595,7 @@ export const PROOF_URL_MAX_LENGTH = 2000;
 export const PROOF_LABEL_MAX_LENGTH = 80;
 export const PROOF_MAX = 50;
 export const CHECKPOINT_MAX_LENGTH = 4000;
+export const REVIEW_SUMMARY_MAX_LENGTH = 4000;
 export const DECISION_KINDS = ["intent", "taste", "irreversible", "scope", "choice"] as const;
 export type DecisionKind = (typeof DECISION_KINDS)[number];
 export const MAX_HOLDS = 20;
@@ -819,6 +821,7 @@ function eventCheck(ev: unknown): boolean | null {
         (e.verdict === undefined || e.verdict === "approved" || e.verdict === "rejected") &&
         (e.round === undefined || (Number.isSafeInteger(e.round) && (e.round as number) > 0)) &&
         opt(e.at, (x): x is string => str(x, 200) && x.trim().length > 0 && !/[\r\n]/.test(x)) &&
+        (e.summary === undefined || (e.state === "review" && str(e.summary, REVIEW_SUMMARY_MAX_LENGTH) && e.summary.trim().length > 0)) &&
         (e.body === undefined || (e.body === "review" && e.verdict !== undefined)) &&
         opt(e.areas, isAreas) &&
         (e.checkpoint === undefined || (e.checkpoint === true && str(e.note, CHECKPOINT_MAX_LENGTH) && e.note.trim().length > 0)) &&
