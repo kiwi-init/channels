@@ -534,6 +534,8 @@ try {
         if (moreChannels > 0) await shoot(owner, tag, "01e-more-channels");
       }
       await owner.mouse.wheel(0, -4000);
+      const nowFade = owner.locator('section[aria-label="Now"] + .scrim-top');
+      if ((await nowFade.count()) && (await nowFade.evaluate((el) => el.getBoundingClientRect().height)) > 16) throw new Error(`${tag}: the Now card's scroll fade wastes more than 16px`);
       await shoot(owner, tag, "02-channel-top");
       await shoot(owner, tag, "03-reply", async () => {
         await owner.locator("button[aria-label='Reply']").last().dispatchEvent("click");

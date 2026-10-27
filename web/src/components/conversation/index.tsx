@@ -637,7 +637,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                             {hereKey === "main" && !search && ready && (
                               <div className="sticky top-(--head) z-10 -mt-2 bg-canvas pt-2 pb-2">
                                 {nowNode("", true)}
-                                <div aria-hidden className="scrim-top absolute inset-x-0 top-full h-12" />
+                                <div aria-hidden className="scrim-top absolute inset-x-0 top-full h-4" />
                               </div>
                             )}
                             {hereKey === "main" && needsYou}
