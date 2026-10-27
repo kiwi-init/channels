@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { bareHandleNote, fold, type Roster } from "@kiwi/core/state.ts";
+import { fold, type Roster } from "@kiwi/core/state.ts";
+import { bareHandleNote } from "../src/cli/handles.ts";
 
 const roster: Roster = [
   { name: "jow", pk: "pk-jow", owner: true, at: 0, active: true, kind: "human", display: "Jow" },
@@ -14,6 +15,10 @@ describe("a bare handle in what an agent sends", () => {
     expect(bareHandleNote(state, "patient-otter continues T88; cheery-fox and patient-otter. review it")).toBe(
       "People see nicknames, not handles: write @patient-otter (opus-vm-coder), @cheery-fox (lead) and the app shows the name. Inside code, keep the bare handle.",
     );
+  });
+
+  test("reads the text as the app renders it: prose after a longer closing fence or a lazy paragraph line still counts", () => {
+    for (const body of ["~~~\nx\n~~~~\npatient-otter here", "paragraph\n    patient-otter here"]) expect(bareHandleNote(state, body)).toContain("@patient-otter (opus-vm-coder)");
   });
 
   test("leaves @mentions, code, longer words, handles without a nickname and plain-word handles alone", () => {
@@ -32,6 +37,10 @@ describe("a bare handle in what an agent sends", () => {
       "say:\n\n    kiwi send --to patient-otter hi",
       "a span ``patient-otter ` x`` here",
       "~~~~\npatient-otter\n~~~~",
+      ">     patient-otter",
+      "> ~~~\n> patient-otter\n> ~~~",
+      "`` unmatched `patient-otter`",
+      "patient-otter./file",
     ])
       expect(bareHandleNote(state, body)).toBeNull();
   });

@@ -23,7 +23,8 @@ import {
   type Message,
   type Step,
 } from "@kiwi/core/protocol.ts";
-import { bareHandleNote, chooseThread, inGeneral, longForGeneral, parseTaskId, wentTo } from "@kiwi/core/state.ts";
+import { chooseThread, inGeneral, longForGeneral, parseTaskId, wentTo } from "@kiwi/core/state.ts";
+import { bareHandleNote } from "../handles.ts";
 import { args, opt, unexpectedOptions } from "../args.ts";
 import { parseWhere } from "../where.ts";
 import { type Command, die, noteRead, offlineOk, out, type Quit, session } from "../context.ts";
