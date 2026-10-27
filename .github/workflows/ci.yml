@@ -181,11 +181,19 @@ jobs:
         with:
           webkit: "true"
       - run: bun run web:build
-      - name: ui shots
-        run: bun scripts/shoot-ui.ts --wide --phone channel,tasks --theme dark "$RUNNER_TEMP/shots"
-      - name: ui shots in WebKit
-        if: ${{ !cancelled() }}
-        run: bun scripts/shoot-ui.ts --browser webkit --wide --theme light "$RUNNER_TEMP/shots-webkit"
+      - name: ui shots in Chromium and WebKit
+        run: |
+          bun scripts/shoot-ui.ts --wide --phone channel,tasks --theme dark "$RUNNER_TEMP/shots" &
+          chromium=$!
+          bun scripts/shoot-ui.ts --browser webkit --wide --theme light "$RUNNER_TEMP/shots-webkit" &
+          webkit=$!
+          set +e
+          wait "$chromium"
+          chromium_code=$?
+          wait "$webkit"
+          webkit_code=$?
+          set -e
+          [ "$chromium_code" -eq 0 ] && [ "$webkit_code" -eq 0 ]
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
