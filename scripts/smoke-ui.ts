@@ -660,6 +660,54 @@ async function run(part: Part): Promise<string[]> {
     await tasksPanel.waitFor({ state: "detached" });
     log(`ok  ${at}`);
 
+    at = "Search finds a task by id or title, and Tasks filters by the same query";
+    await toTab("Conversation");
+    await page.getByRole("button", { name: "Search", exact: true }).first().click();
+    const search = page.getByRole("textbox", { name: "Search messages and tasks" });
+    await search.fill(smokeTask);
+    const matches = page.getByRole("region", { name: "Matching tasks" });
+    await matches.getByRole("button", { name: new RegExp(smokeTask) }).waitFor({ timeout: 15000 });
+    const resultScroll = await page.evaluate(() => document.querySelector<HTMLElement>("div.absolute.inset-0.overflow-y-auto")?.scrollTop ?? -1);
+    if (resultScroll !== 0) throw new Error(`task results stayed above the transcript's scroll position: ${resultScroll}`);
+    await search.press("Enter");
+    await tasksPanel.getByRole("region", { name: new RegExp(`^Task ${smokeTask}`) }).waitFor({ timeout: 15000 });
+    await tasksPanel.getByRole("button", { name: "Close tasks" }).click();
+    await search.fill("Smoke task");
+    await matches.getByRole("button", { name: new RegExp(smokeTask) }).click();
+    await tasksPanel.getByRole("region", { name: new RegExp(`^Task ${smokeTask}`) }).waitFor({ timeout: 15000 });
+    await tasksPanel.getByRole("button", { name: "Close tasks" }).click();
+    await search.fill("no-such-task");
+    await page.getByText("No results", { exact: true }).waitFor();
+    await search.press("Escape");
+    await toTab("Tasks");
+    const filter = page.getByRole("textbox", { name: "Filter tasks" });
+    await filter.fill(smokeTask);
+    await page
+      .getByRole("button", { name: new RegExp(`^${smokeTask}, Smoke task`) })
+      .first()
+      .waitFor({ timeout: 15000 });
+    await filter.fill("no-such-task");
+    await page.getByText("No tasks match “no-such-task”.", { exact: true }).waitFor();
+    await filter.fill("");
+    await page
+      .getByRole("navigation", { name: "Views" })
+      .getByRole("button", { name: /^Needs you/ })
+      .click();
+    if (await filter.count()) throw new Error("Needs you shows a filter that doesn't filter its rows");
+    await page.getByRole("navigation", { name: "Views" }).getByRole("button", { name: "Everything", exact: true }).click();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await filter.fill("stale");
+    await page.getByRole("button", { name: "Search", exact: true }).first().click();
+    await search.fill(smokeTask);
+    await page.waitForFunction((want) => document.querySelector<HTMLInputElement>('input[aria-label="Filter tasks"]')?.value === want, smokeTask);
+    await filter.fill("Smoke task");
+    if ((await search.inputValue()) !== "Smoke task") throw new Error("editing the mobile filter doesn't update the header query");
+    await filter.fill("");
+    if (await page.getByText(/No tasks match/).count()) throw new Error("clearing the shared query restored an older local filter");
+    await search.press("Escape");
+    await page.setViewportSize({ width: 1280, height: 800 });
+    log(`ok  ${at}`);
+
     at =
       "ask-human: the question sits in the composer with its options, is one row of Needs you, Tasks' Needs you shows it as one row with its options, and the task waits on a person until one is picked";
     await kiwi(["-c", "smoke", "--as", "bot", "ask-human", "--task", smokeTask, "--option", "A: ship it", "--option", "B: wait a day", "Ship the smoke build now?"]);
@@ -755,6 +803,12 @@ async function run(part: Part): Promise<string[]> {
     await page.getByRole("textbox", { name: "Message" }).fill("smoke, privately");
     await page.keyboard.press("Enter");
     await page.getByText("smoke, privately", { exact: true }).first().waitFor({ timeout: 15000 });
+    await page.getByRole("button", { name: "Search", exact: true }).first().click();
+    await search.fill(smokeTask);
+    if (await matches.count()) throw new Error("a direct conversation showed channel-wide task results");
+    await search.press("Enter");
+    if (await tasksPanel.count()) throw new Error("Enter opened an invisible task from a direct conversation");
+    await search.press("Escape");
     const general = conversations.getByRole("button", { name: /^# general/ });
     await general.click();
     await general.and(page.locator("[aria-current=page]")).waitFor();
