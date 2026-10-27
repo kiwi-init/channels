@@ -16,8 +16,8 @@ afterEach(() => {
 });
 
 describe("Electrobun's toolchain and what it ships are pinned in the repo (T804)", () => {
-  test("the app builds against a Livewire release candidate and the Hutch it pairs with (T377)", () => {
-    expect(PINS.electrobun).toMatch(/^\d+\.\d+\.\d+-livewire\.rc\.\d+$/);
+  test("the app builds against a CalVer Livewire release and the Hutch it pairs with (T377)", () => {
+    expect(PINS.electrobun).toMatch(/^20\d\d\.(?:[1-9]|1[0-2])\.(?:0|[1-9]\d*)$/);
     expect(PINS.releasesBaseUrl).toBe("https://github.com/kiwi-init/electrobun-livewire/releases/download");
     for (const key of ["macos-arm64", "linux-x64", "linux-arm64"]) {
       const h = pinFor(PINS.hutch.platforms, key, "Hutch archive");

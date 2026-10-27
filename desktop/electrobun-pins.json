@@ -1,5 +1,5 @@
 {
-  "electrobun": "2.1.0-livewire.rc.5",
+  "electrobun": "2026.10.0",
   "releasesBaseUrl": "https://github.com/kiwi-init/electrobun-livewire/releases/download",
   "hutch": {
     "version": "0.28.2-canary.8",
@@ -53,7 +53,7 @@
       "Contents/Resources/main.js": "8afb61682280f0f2bd82abaad23996d043781cf23cd132a2bbfa2a8b8cd001c7",
       "Contents/Resources/preload-full.js": "0c9f9ff20749edffc2768f4a89c08bd5af916d3471dda8af6e5d05510a9630ac",
       "Contents/Resources/preload-sandboxed.js": "d358fa4e85148ae6059eca9cfb398faf7a6c0710a03cdc972275f6a61670f3f9",
-      "Contents/Resources/uninstall": "c73357f2add76e885e611cba5ff564f964016eb4689822aa85f53e5018f1a257"
+      "Contents/Resources/uninstall": "476f3b6fa7f795b7d3b1476999b7c1201c2ffd0e945624d16b5e0ff5f21cac15"
     }
   }
 }
