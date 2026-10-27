@@ -24,6 +24,18 @@
   text-align: left;
 }
 
+.needs-idle {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.needs-idle .needs-sum {
+  color: var(--ink-2);
+}
+
 .needs-cards {
   display: grid;
   gap: 12px;
