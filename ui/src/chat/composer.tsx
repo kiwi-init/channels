@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { MAX_IMAGE_BYTES, RASTER_MIMES } from "@kiwi/core/protocol.ts"
 import { fileDrag, takeDropped } from "@/lib/dropped"
@@ -9,6 +9,8 @@ import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { Channel, Task, Upload, Where } from "~/model"
 import { useApp } from "~/nav"
+import { nickname, shown } from "~/names"
+import { withNames } from "~/chat/linked"
 
 const MENTION = /(^|\s)@([\p{L}\p{N}_.-]*)$/u
 const TASK_REF = /(^|\s)#([^#\n]{0,40})$/u
@@ -165,7 +167,7 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
     })
   }
 
-  const quoteLine = replyTo ? preview(replyTo.text) : ""
+  const quoteLine = useMemo(() => (replyTo ? withNames(replyTo.text, channel.nicknames, preview) : ""), [replyTo, channel.nicknames])
 
   return (
     <div className="compose">
@@ -177,7 +179,7 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
                 <Dot status={t.status} />
                 <span className="task-row-id">T{t.id}</span>
                 <span className="task-row-title">{t.title}</span>
-                <span className="dim">{t.owner ?? STATUS_WORDS[t.status]}</span>
+                <span className="dim">{t.owner ? nickname(channel, t.owner) : STATUS_WORDS[t.status]}</span>
               </button>
             </li>
           ))}
@@ -189,7 +191,7 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
             <li key={p.name} role="option" aria-selected={i === pick}>
               <button type="button" tabIndex={-1} className={cx("mention-row", i === pick && "is-on")} onMouseDown={(e) => e.preventDefault()} onClick={() => complete(p.name)}>
                 <Avatar person={p} size="sm" pip />
-                <span className="mention-name">{p.name}</span>
+                <span className="mention-name">{shown(p)}</span>
                 <span className="dim">{p.role ?? p.runs ?? (p.kind === "human" ? "person" : "agent")}</span>
               </button>
             </li>
@@ -243,7 +245,7 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
           <div className="compose-reply">
             <Icon name="reply" size={13} />
             <span className="compose-reply-text">
-              Replying to <b>{replyTo.from}</b> <span className="dim">{quoteLine.slice(0, 160)}</span>
+              Replying to <b>{nickname(channel, replyTo.from)}</b> <span className="dim">{quoteLine.slice(0, 160)}</span>
             </span>
             <button type="button" className="compose-reply-x" aria-label="Cancel reply" title="Cancel reply (Esc)" onClick={() => replying?.set(null)}>
               <Icon name="close" size={13} />
@@ -273,7 +275,7 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
             aria-autocomplete="list"
             aria-expanded={options > 0}
             aria-controls={matches.length > 0 ? `${key}-people` : taskOptions.length > 0 ? `${key}-tasks` : undefined}
-            placeholder={replyTo ? `Reply to ${replyTo.from}` : placeholder}
+            placeholder={replyTo ? `Reply to ${nickname(channel, replyTo.from)}` : placeholder}
             onChange={(e) => update(e.target.value, e.target.selectionStart)}
             onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
             onPaste={(e) => {

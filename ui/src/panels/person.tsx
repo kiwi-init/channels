@@ -8,6 +8,7 @@ import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import type { App, Channel, Person } from "~/model"
 import { useApp } from "~/nav"
+import { nickname, shown } from "~/names"
 import { PanelHead } from "~/panels/frame"
 
 const since = (at: number, on = "on "): string => {
@@ -24,7 +25,7 @@ export function PersonPanel({ channel, name }: { channel: Channel; name: string 
     return (
       <>
         <PanelHead title="Profile" />
-        <Empty title={`${name} isn't in this channel.`}>They may have left or been removed.</Empty>
+        <Empty title={`${nickname(channel, name)} isn't in this channel.`}>They may have left or been removed.</Empty>
       </>
     )
   return (
@@ -49,7 +50,7 @@ function Hero({ person }: { person: Person }) {
       <Avatar person={person} size="lg" pip />
       <div className="person-id">
         <h3 className="person-name">
-          <span className="person-name-text">{person.display ?? person.name}</span>
+          <span className="person-name-text">{shown(person)}</span>
           {tags.map((t) => (
             <span key={t} className="person-tag">
               {t}
@@ -125,10 +126,12 @@ function Facts({ channel, person }: { channel: Channel; person: Person }) {
             "Brought by",
             sponsor ? (
               <button type="button" className="person-ref" onClick={() => go({ to: "panel", panel: { kind: "person", name: sponsor.name } })}>
-                {sponsor.you ? "you" : sponsor.name}
+                {sponsor.you ? "you" : shown(sponsor)}
               </button>
+            ) : person.sponsor ? (
+              nickname(channel, person.sponsor)
             ) : (
-              (person.sponsor ?? "unknown")
+              "unknown"
             ),
           ],
           ...(editable ? [] : [["Personality", persona?.label ?? person.persona ?? "none"] satisfies [string, ReactNode]]),
@@ -175,7 +178,7 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
     app.actions.removeMember(channel.code, person.name)
     setConfirm(false)
     go({ to: "panel", panel: null })
-    toast(`Removed ${person.name}`)
+    toast(`Removed ${shown(person)}`)
   }
   return (
     <section className="person-manage" aria-label="Manage">
@@ -224,8 +227,8 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
           Remove from channel
         </button>
       </div>
-      <Dialog open={confirm} onClose={() => setConfirm(false)} label={`Remove ${person.name}`}>
-        <DialogHead title={`Remove ${person.name}?`} onClose={() => setConfirm(false)} />
+      <Dialog open={confirm} onClose={() => setConfirm(false)} label={`Remove ${shown(person)}`}>
+        <DialogHead title={`Remove ${shown(person)}?`} onClose={() => setConfirm(false)} />
         <p className="person-confirm">{it} loses access to this channel's messages from now on.</p>
         <div className="dialog-foot">
           <button type="button" className="btn" onClick={() => setConfirm(false)}>

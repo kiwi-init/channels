@@ -60,6 +60,7 @@ export const OpenPending = memo(function OpenPending({ pending }: { pending: Pen
       rooms: [],
       directs: [],
       people: [],
+      nicknames: new Map(),
       messages: [],
       tasks: [],
       asks: [],

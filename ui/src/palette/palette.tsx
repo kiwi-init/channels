@@ -5,6 +5,7 @@ import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { App, Task, TaskStatus, Theme } from "~/model"
 import { useApp, type Go, type Nav, type Panel } from "~/nav"
+import { nickname, shown } from "~/names"
 import { statusOf } from "~/shell/sidebar"
 
 type Group = "Channels" | "Rooms" | "People" | "Tasks" | "Actions"
@@ -281,8 +282,8 @@ function collect(app: App, nav: Nav, go: (go: Go) => void): Item[] {
       items.push({
         id: `person:${person.name}`,
         group: "People",
-        label: person.name,
-        keys: [person.display ?? "", person.role ?? "", person.runs ?? "", person.kind === "agent" ? "agent" : "person"],
+        label: shown(person),
+        keys: [person.name, person.role ?? "", person.runs ?? "", person.kind === "agent" ? "agent" : "person"],
         lead: <Avatar person={person} size="sm" />,
         meta: [person.you ? "you" : person.role, status].filter(Boolean).join(" · "),
         run: () => toPanel({ kind: "person", name: person.name }),
@@ -295,11 +296,11 @@ function collect(app: App, nav: Nav, go: (go: Go) => void): Item[] {
         group: "Tasks",
         label: task.title,
         tag: `T${task.id}`,
-        keys: [String(task.id), task.owner ?? ""],
+        keys: [String(task.id), task.owner ?? "", task.owner ? nickname(channel, task.owner) : ""],
         lead: <Dot status={task.status} />,
         meta: (
           <>
-            {task.owner && `${task.owner} · `}
+            {task.owner && `${nickname(channel, task.owner)} · `}
             <span className={TONE[task.status]}>{STATUS_WORDS[task.status]}</span>
           </>
         ),

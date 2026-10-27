@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react"
 import { EnrichedMarkdownText, type EnrichedMarkdownTextProps, type MarkdownStyle } from "react-native-enriched-markdown/lib/module/index.web.js"
 
+import { linked } from "~/chat/linked"
 import { Icon } from "~/kit/icons"
 
 const Enriched: (props: EnrichedMarkdownTextProps & { ref?: Ref<HTMLDivElement> }) => ReactNode = EnrichedMarkdownText
@@ -79,29 +80,9 @@ const STYLE: MarkdownStyle = {
 
 const FLAGS = { latexMath: false, underline: false }
 
-const TOKEN = /(`+)[\s\S]*?\1|\[[^\]\n]*\]\([^)\n]*\)|<[^>\s]+>|https?:\/\/[^\s<>()]+|(?<![\p{L}\p{N}_.@-])@([\p{L}\p{N}_.-]+)|\bT(\d+)\b/gu
-
-function linked(text: string, names: ReadonlySet<string>, tasks: ReadonlySet<number>): string {
-  return text
-    .split(/(^(?:```|~~~)[^\n]*\n[\s\S]*?^(?:```|~~~)[ \t]*$)/m)
-    .map((part, i) =>
-      i % 2 === 1
-        ? part
-        : part.replace(TOKEN, (whole: string, _tick: string | undefined, name: string | undefined, task: string | undefined) => {
-            if (name !== undefined) {
-              const known = names.has(name.toLowerCase()) ? name : names.has(name.replace(/\.+$/, "").toLowerCase()) ? name.replace(/\.+$/, "") : null
-              return known ? `[@${known}](kiwi-mention:${known})${name.slice(known.length)}` : whole
-            }
-            if (task !== undefined && tasks.has(Number(task))) return `[T${task}](kiwi-task:${task})`
-            return whole
-          })
-    )
-    .join("")
-}
-
 export interface MarkdownProps {
   text: string
-  names: ReadonlySet<string>
+  names: ReadonlyMap<string, string>
   tasks: ReadonlySet<number>
   onMention: (name: string) => void
   onTask: (id: number) => void

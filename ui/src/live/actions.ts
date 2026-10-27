@@ -111,7 +111,7 @@ async function letIn(run: Run, r: JoinRequest, choice: JoinChoice): Promise<stri
   } finally {
     await Promise.all([run.refreshRequests(), run.refreshRoster()])
   }
-  return persona ? `${name} joined as ${persona.name}` : `${name} joined`
+  return persona ? `${r.display || name} joined as ${persona.name}` : `${r.display || name} joined`
 }
 
 async function scopesFor(run: Run, name: string, scopes: Scope[]): Promise<void> {
@@ -228,14 +228,14 @@ export function makeActions(): Actions {
         if (!yes) {
           await run.ch.deny(r.id)
           await run.refreshRequests()
-          return announce(`Turned ${r.name} away`)
+          return announce(`Turned ${r.display || r.name} away`)
         }
         if (r.check === "unchecked") {
           await run.ch.checkRequest(r)
           await run.refreshRequests()
-          return announce(`Asked ${r.name} for its code: compare it, then let it in`)
+          return announce(`Asked ${r.display || r.name} for its code: compare it, then let it in`)
         }
-        if (r.check !== "ready" || !r.code) return announce(`Waiting for ${r.name}'s code`)
+        if (r.check !== "ready" || !r.code) return announce(`Waiting for ${r.display || r.name}'s code`)
         announce(await letIn(run, r, choice ?? {}))
       }),
     approveTask: (code, id, approve) =>
@@ -279,7 +279,7 @@ export function makeActions(): Actions {
         if (held.length) await run.send(handBackText(run.state, name, "removed", held), lead ? { to: lead } : {})
         await run.ch.remove(m.pk)
         await run.refreshRoster()
-        announce(`Removed ${name}`)
+        announce(`Removed ${m.display || name}`)
       }),
     setPersona: (code, name, id) =>
       attempt("Personality not changed", async () => {
