@@ -2,7 +2,7 @@ import { Add01Icon, ArrowUp02Icon, Cancel01Icon } from "@hugeicons/core-free-ico
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
 import type { SendOptions } from "@kiwi/core/client.ts"
-import { MAX_IMAGE_BYTES, RASTER_MIMES, type Color, type Message } from "@kiwi/core/protocol.ts"
+import { MAX_IMAGE_BYTES, RASTER_MIMES, type Color, type Message, type StepReply } from "@kiwi/core/protocol.ts"
 import { matchCommands, parseCommand, type Command } from "@/lib/commands"
 import { answered } from "@/lib/asks"
 import { draftOf, keepDraft, type DraftFile } from "@/lib/drafts"
@@ -15,6 +15,7 @@ import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
 import { CommandBar, CommandList, ComposerQuestion } from "./lazy"
 import { Monogram, errorText, toast } from "./kit"
+import { stepReplyText } from "./step-card"
 import { useLater } from "@/hooks/use-later"
 
 const MENTION = /(^|\s)@([\p{L}\p{N}_.-]*)$/u
@@ -38,12 +39,12 @@ interface Props {
   me: string
   people: Person[]
   replyTo: Message | null
-  /** The oldest open decision for you: it sits above the field, can't be dismissed, and what you send answers it. */
+  /** The oldest open decision or step for you: it sits above the field, can't be dismissed, and what you send answers it. */
   asking?: Message
   /** Typing a slash at the start lists these; one run with its arguments instead of sending a message. */
   commands?: readonly Command[]
   more?: number
-  onAnswer?: (m: Message, text: string) => Promise<boolean>
+  onAnswer?: (m: Message, text: string, stepReply?: StepReply) => Promise<boolean>
   nameOf: (name: string) => string
   onClearReply: (answered?: Message) => void
   onRestoreReply?: (answering: Message) => void
@@ -275,7 +276,15 @@ export function Composer({
       )}
 
       {asking && !thread && (
-        <ComposerQuestion m={asking} more={more} nameOf={nameOf} disabled={disabled} onChoose={(c) => onAnswer?.(asking, c) ?? Promise.resolve(false)} onElse={() => area.current?.focus()} />
+        <ComposerQuestion
+          m={asking}
+          more={more}
+          nameOf={nameOf}
+          disabled={disabled}
+          onChoose={(c) => onAnswer?.(asking, c) ?? Promise.resolve(false)}
+          onStep={(reply) => onAnswer?.(asking, stepReplyText(reply), reply) ?? Promise.resolve(false)}
+          onElse={() => area.current?.focus()}
+        />
       )}
 
       {listed.length > 0 && picked && <CommandList commands={listed} picked={picked} onPick={(c) => setBody(`/${c.name} `)} />}

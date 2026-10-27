@@ -285,7 +285,7 @@ export function droppedCount(state: ChannelState): number {
 
 export function messageHead(m: Message, trust?: Trust, state?: ChannelState, me?: string): string {
   const to = m.to?.includes("*") ? "everyone" : m.to?.length ? m.to.map((t) => inlineText(t, 40)).join(",") : "all";
-  const kind = m.esc ? " [escalation]" : m.kind === "msg" ? "" : ` [${inlineText(m.kind, 20)}]`;
+  const kind = m.step ? " [step]" : m.stepReply ? ` [step: ${m.stepReply.outcome}]` : m.esc ? " [escalation]" : m.kind === "msg" ? "" : ` [${inlineText(m.kind, 20)}]`;
   const re = m.re?.length ? ` re #${m.re.map((n) => Number(n) || 0).join(",#")}` : "";
   // Which room, once there's more than one: every chat line then says it, general included.
   const roomId = m.kind === "event" ? undefined : (state?.roomOf.get(m.seq) ?? m.room ?? GENERAL_ROOM);
@@ -462,7 +462,7 @@ export function charterLines(state: ChannelState): string | null {
 
 function heldLine(state: ChannelState, a: Message): string {
   const held = heldBy(state, a).map((id) => (state.tasks.has(id) ? taskId(id) : `#${id}`));
-  return `${a.decision ? ` [${a.decision}]` : ""}${held.length ? ` · holds ${held.join(", ")}` : ""}`;
+  return `${a.step ? " [step]" : a.decision ? ` [${a.decision}]` : ""}${held.length ? ` · holds ${held.join(", ")}` : ""}`;
 }
 
 export function formatStatus({ alias, me, state, online, unread, now = Date.now() }: Snapshot): string {
@@ -628,6 +628,14 @@ export function missingImages(seq: number, want: number, got: number): string | 
 
 export function formatShown(m: Message, messages: Message[], state: ChannelState, savedImages: string[] = [], me?: string, reveal = false): string {
   const out = [formatMessage(m, state.trust.get(m.seq), state, me)];
+  if (m.step) {
+    out.push(`  why: ${cleanBody(m.step.why).replace(/\n/g, "\n    ")}`);
+    out.push(`  needs a person: ${cleanBody(m.step.needsPerson).replace(/\n/g, "\n    ")}`);
+    m.step.do?.forEach((item, i) => out.push(`  ${i + 1}. ${cleanBody(item).replace(/\n/g, "\n     ")}`));
+    m.step.run?.forEach((command) => out.push(`  run:\n    ${cleanBody(command).replace(/\n/g, "\n    ")}`));
+    if (m.step.expect) out.push(`  expect: ${cleanBody(m.step.expect).replace(/\n/g, "\n    ")}`);
+    for (const link of m.step.links ?? []) out.push(`  link: ${link}`);
+  }
   if (m.handoff && reveal) out.push(`  browser link (${inlineText(m.handoff.vendor, 40)}, opens until ${new Date(m.handoff.expiresAt).toISOString()}): ${m.handoff.url}`);
   if (savedImages.length) out.push(`  images saved: ${savedImages.join(", ")}`);
   const missing = m.imgs?.length ? missingImages(m.seq, m.imgs.length, savedImages.length) : null;
@@ -640,7 +648,8 @@ export function formatShown(m: Message, messages: Message[], state: ChannelState
   const replies = messages.filter((x) => x.re?.includes(m.seq) && !ignored(state.trust.get(x.seq)));
   if (replies.length) {
     out.push(`replies (${replies.length}):`);
-    for (const x of replies) out.push(`  #${x.seq} ${who(x.from, state)}: ${inlineText(x.body, 140)}`);
+    for (const x of replies)
+      out.push(`  #${x.seq} ${who(x.from, state)}${x.stepReply ? ` [step: ${x.stepReply.outcome}]` : ""}: ${x.stepReply ? cleanBody(x.body).replace(/\n/g, "\n    ") : inlineText(x.body, 140)}`);
   }
   return out.join("\n");
 }

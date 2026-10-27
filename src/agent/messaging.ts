@@ -24,6 +24,7 @@ import {
   type ImageAttachment,
   type Kind,
   type Message,
+  type Step,
 } from "@kiwi/core/protocol.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { canPost, describeScopes, refusal } from "@kiwi/core/scopes.ts";
@@ -221,9 +222,9 @@ export class SessionMessaging extends SessionListen {
       body: string,
       re?: number,
       handoff?: Handoff,
-      ask: { choices?: string[]; task?: number; holds?: number[]; decision?: DecisionKind } & Pick<SendOptions, "id" | "permission"> = {},
+      ask: { choices?: string[]; task?: number; holds?: number[]; decision?: DecisionKind; step?: Step } & Pick<SendOptions, "id" | "permission"> = {},
     ) {
-      if (!body.trim()) return yield* new Rejected("say what needs deciding: the text is empty");
+      if (!body.trim()) return yield* new Rejected(`say what needs ${ask.step ? "doing" : "deciding"}: the text is empty`);
       const { messages, state } = yield* this.state();
       const me = state.members.get(this.me);
       if (me && isPerson(me)) return yield* new Rejected("escalating is for agents: you're a person, so you decide");
@@ -250,6 +251,7 @@ export class SessionMessaging extends SessionListen {
         ...(ask.task !== undefined ? { task: ask.task } : {}),
         ...(ask.holds?.length ? { holds: ask.holds } : {}),
         ...(ask.decision ? { decision: ask.decision } : {}),
+        ...(ask.step ? { step: ask.step } : {}),
         ...(ask.id ? { id: ask.id } : {}),
         ...(ask.permission ? { permission: ask.permission } : {}),
         ...(re !== undefined ? { re: [re] } : {}),

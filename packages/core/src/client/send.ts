@@ -6,6 +6,7 @@ import {
   CHOICES_MAX,
   CHOICES_MIN,
   DECISION_KINDS,
+  decisionNeedsStep,
   GENERAL_ROOM,
   isDecisionKind,
   isRasterMime,
@@ -25,6 +26,8 @@ import {
   type Kind,
   type Message,
   type Payload,
+  type Step,
+  type StepReply,
 } from "../protocol.ts";
 import type { PermissionReply, PermissionSettled, PermissionShown } from "../permission.ts";
 import { MissingKey, Rejected } from "../refusals.ts";
@@ -48,6 +51,8 @@ export interface SendOptions {
   choices?: string[];
   holds?: number[];
   decision?: DecisionKind;
+  step?: Step;
+  stepReply?: StepReply;
   id?: string;
   permission?: PermissionShown;
   perm?: PermissionReply;
@@ -110,8 +115,15 @@ export class ChannelSending {
       if (opts.handoff && (!opts.esc || !wellFormedHandoff(opts.handoff))) return yield* new Rejected("a browser handoff goes only on an escalation, with an https link, a vendor and an expiry");
       if (opts.choices && (!opts.esc || opts.handoff || !wellFormedChoices(opts.choices)))
         return yield* new Rejected(`options go only on an escalation without a browser link: ${CHOICES_MIN} to ${CHOICES_MAX} different ones, one line of up to ${CHOICE_MAX_LENGTH} characters each`);
+      if (decisionNeedsStep(opts.choices))
+        return yield* new Rejected(
+          "Done and Not yet ask a person to act, not decide, and give no command or link: use --step with --holds, --why, --needs-person and at least one --do, --run or --link",
+        );
       if (opts.holds && (!opts.esc || !wellFormedHolds(opts.holds))) return yield* new Rejected(`what an escalation holds is 1 to ${MAX_HOLDS} task or ask numbers, on an escalation only`);
       if (opts.decision && (!opts.esc || !isDecisionKind(opts.decision))) return yield* new Rejected(`a decision's kind is one of ${DECISION_KINDS.join(", ")}, on an escalation only`);
+      if (opts.step && (!opts.esc || opts.ev || opts.handoff || opts.choices || opts.decision))
+        return yield* new Rejected("a step goes only on an escalation, without a decision kind, options or browser handoff");
+      if (opts.stepReply && (!opts.re?.length || opts.ev)) return yield* new Rejected("a step answer goes on a reply to its step");
       if (opts.id !== undefined && opts.id.length > 100) return yield* new Rejected("a message id is at most 100 characters");
       const attached = imgs?.length ? yield* this.images.stored(imgs) : undefined;
       const payload: Payload = {
@@ -130,6 +142,8 @@ export class ChannelSending {
         ...(opts.esc && opts.choices && !opts.ev ? { choices: opts.choices } : {}),
         ...(opts.esc && opts.holds?.length && !opts.ev ? { holds: opts.holds } : {}),
         ...(opts.esc && opts.decision && !opts.ev ? { decision: opts.decision } : {}),
+        ...(opts.esc && opts.step && !opts.ev ? { step: opts.step } : {}),
+        ...(opts.stepReply && opts.re?.length && !opts.ev ? { stepReply: opts.stepReply } : {}),
         ...(opts.esc && opts.choices && opts.permission && !opts.ev ? { permission: opts.permission } : {}),
         ...(opts.perm && opts.re?.length && !opts.ev ? { perm: opts.perm } : {}),
         ...(opts.settled && opts.re?.length && !opts.ev ? { settled: opts.settled } : {}),
@@ -137,6 +151,11 @@ export class ChannelSending {
         ...(opts.dm && !opts.ev && opts.to?.length === 1 ? { dm: true as const } : {}),
         ts: Date.now(),
       };
+      if (payload.step && !wellFormed(payload))
+        return yield* new Rejected(
+          "a step needs what it holds, why, why a person must do it, and at least one instruction, command or https link; it has no decision kind, options or browser handoff",
+        );
+      if (payload.stepReply && !wellFormed(payload)) return yield* new Rejected("a step answer needs a reply target and either Done with optional output, or Can't do it or Not needed with a reason");
       if ((payload.permission || payload.perm || payload.settled) && !wellFormed(payload)) return yield* new Rejected("a permission prompt, its answer or its close is malformed");
       const signed = yield* Effect.promise(() => sign(this.ch.identity, payload));
       const cid = b64url(crypto.getRandomValues(new Uint8Array(16)));

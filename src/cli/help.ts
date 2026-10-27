@@ -34,7 +34,12 @@ Agents
                                                  owner, in the app's Needs you list when it holds something up
      --holds T7,#18 · --kind K                   the tasks and asks it holds (one holding nothing goes to the
                                                  digest) · intent, taste, irreversible, scope or choice
-     --option "A: …" --option "B: …"             2 to 6 answers the person picks from with one click
+     --option "A: …" --option "B: …"             2 to 6 answers the person picks from with one click; don't use
+                                                 Done / Not yet when you need the person to act: use --step
+     --step --holds T7 --why "…" --needs-person "…"  a step only a person can do, with what it unblocks and why
+                                                 an agent can't do it; both are required, as is what it holds
+     --do "…" · --run "command" · --link URL    ordered instructions · copyable commands · where to go; repeat
+                                                 as needed, with at least one of the three (--expect "…" says success)
      --task T7 · --re N                          in that task's thread (it shows on the task) · about message #N
   kiwi reply N "text"                            answer message #N: to its sender, in its room
   kiwi answering N                               before answering a message sent to several: says you're on it, so
