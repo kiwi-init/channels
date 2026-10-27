@@ -6,13 +6,11 @@ import { Icon } from "~/kit/icons"
 import type { Channel, Where } from "~/model"
 import { useApp } from "~/nav"
 
-const SUGGEST = ["hey team, what's everyone on?", "who's working on what?", "add a dark mode toggle"]
-
 const MENTION = /(^|\s)@([\p{L}\p{N}_.-]*)$/u
 
 const drafts = new Map<string, string>()
 
-export function Composer({ channel, where, placeholder, inThread, suggest }: { channel: Channel; where: Where; placeholder: string; inThread?: number; suggest?: boolean }) {
+export function Composer({ channel, where, placeholder, inThread }: { channel: Channel; where: Where; placeholder: string; inThread?: number }) {
   const { app } = useApp()
   const replying = useReplying()
   const replyTo = replying?.to ?? null
@@ -76,15 +74,6 @@ export function Composer({ channel, where, placeholder, inThread, suggest }: { c
 
   return (
     <div className="compose">
-      {suggest && !text && (
-        <div className="suggests">
-          {SUGGEST.map((s) => (
-            <button key={s} type="button" className="suggest" onClick={() => send(s)}>
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
       {matches.length > 0 && (
         <ul className="mentions" role="listbox" aria-label="People" id={`${key}-people`}>
           {matches.map((p, i) => (

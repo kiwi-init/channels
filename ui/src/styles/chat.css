@@ -750,27 +750,6 @@
   pointer-events: auto;
 }
 
-.suggests {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 10px;
-}
-
-.suggest {
-  padding: 7px 12px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--bg-2);
-  color: var(--ink-2);
-  font: var(--t-ui) var(--ui);
-}
-
-.suggest:hover {
-  background: var(--bg-3);
-  color: var(--ink);
-}
-
 .composer {
   display: flex;
   flex-direction: column;
