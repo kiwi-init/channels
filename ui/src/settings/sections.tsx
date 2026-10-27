@@ -6,6 +6,7 @@ import type { Prefs, Theme } from "~/model"
 import { useApp } from "~/nav"
 import { Toggle } from "~/kit/bits"
 import { Confirm, Group, InlineEdit, Row, Seg } from "~/settings/controls"
+import { Themes } from "~/settings/themes"
 
 export function Page({ title, lede, children }: { title: string; lede?: ReactNode; children: ReactNode }) {
   return (
@@ -126,8 +127,8 @@ export function AppearanceSection() {
   return (
     <Page title="Appearance" lede="Changes apply right away, on this computer only.">
       <Group>
-        <Row label="Theme" hint="System follows your computer's light or dark setting.">
-          <Seg label="Theme" value={prefs.theme} options={THEMES} onChange={(theme) => set({ theme })} />
+        <Row label="Mode" hint="System follows your computer's light or dark setting.">
+          <Seg label="Mode" value={prefs.theme} options={THEMES} onChange={(theme) => set({ theme })} />
         </Row>
         <Row label="Text size">
           <Seg<number> label="Text size" value={prefs.textSize} options={SIZES} onChange={(textSize) => set({ textSize })} />
@@ -136,6 +137,7 @@ export function AppearanceSection() {
           <Seg label="Motion" value={prefs.reduceMotion ? "reduced" : "full"} options={MOTION} onChange={(m) => set({ reduceMotion: m === "reduced" })} />
         </Row>
       </Group>
+      <Themes />
     </Page>
   )
 }

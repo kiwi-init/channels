@@ -5,11 +5,15 @@ import "~/styles/tokens.css"
 import "~/styles/base.css"
 import "~/styles/shell.css"
 import "~/styles/chat.css"
+import { DEMO_PREFS } from "~/demo/data"
 import { useDemo } from "~/demo/provider"
 import { SHOTS } from "~/demo/shots"
 import { LiveDuties, useLive } from "~/live/live"
+import type { Prefs } from "~/model"
+import { storedThemePrefs } from "~/live/prefs"
 import { navigate, startNav, type Go, type Nav } from "~/nav"
 import { Root } from "~/shell/root"
+import { bootTheme } from "~/theme/apply"
 import { migrateChannelsToStore } from "@/lib/channel"
 import { ops } from "@/lib/channel-ops"
 import { hasBridge } from "@/lib/relay"
@@ -25,13 +29,14 @@ const params = new URLSearchParams(location.search)
 const demo = params.has("demo") || params.has("shot") || import.meta.env.VITE_KIWI_DEMO === "1"
 const shot = SHOTS[params.get("shot") ?? ""] ?? SHOTS.channel
 const theme = params.get("theme")
+const look: Partial<Prefs> = { ...shot?.prefs, ...(theme === "light" || theme === "dark" ? { theme } : {}) }
 
 if (hasBridge() && /Mac/.test(navigator.platform)) document.documentElement.dataset.shell = "mac"
 else if (hasBridge() && /Linux/.test(navigator.platform)) document.documentElement.dataset.shell = "linux"
 
 function DemoApp() {
   const [nav, setNav] = useState<Nav>(() => ({ ...startNav(shot?.channel ?? null), ...shot?.nav }))
-  const app = useDemo(shot?.scenario ?? "full", nav.channel, { ...shot?.prefs, ...(theme === "light" || theme === "dark" ? { theme } : {}) })
+  const app = useDemo(shot?.scenario ?? "full", nav.channel, look)
   const go = useCallback((g: Go) => setNav((n) => navigate(n, g)), [])
   useEffect(uiBooted, [])
   return <Root app={app} nav={nav} go={go} />
@@ -62,6 +67,8 @@ if (!demo) {
     if (noteSignInGone(e.reason)) e.preventDefault()
   })
 }
+
+bootTheme(demo ? { ...DEMO_PREFS, ...look } : storedThemePrefs())
 
 const root = document.getElementById("root")
 if (root) createRoot(root).render(<StrictMode>{demo ? <DemoApp /> : <LiveApp />}</StrictMode>)

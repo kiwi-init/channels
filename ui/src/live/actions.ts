@@ -25,7 +25,7 @@ import { approveTask, closedDigest, sendBackTask, type TaskSend } from "@/lib/ta
 import { announce } from "~/kit/toasts"
 import { answerPair, cancelPair, linkGithub, pairBegin, unlinkGithub } from "~/live/account"
 import { newMemberScopes, setNewMemberScopes } from "~/live/defaults"
-import { setPrefs } from "~/live/prefs"
+import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
 import { closeOpened, openedRun, type Run } from "~/live/store"
 import { setWake } from "~/live/wakes"
 import type { Actions, Harness, NewAgent, TaskStatus } from "~/model"
@@ -157,7 +157,25 @@ export async function joinChannel(typed: string): Promise<string> {
 
 export function makeActions(): Actions {
   return {
-    send: (code, where, text, opts) => attempt("Not sent", () => need(code).post(where, text, opts ?? {})),
+    send: (code, where, text, opts) =>
+      attempt("Not sent", async () => {
+        const run = need(code)
+        try {
+          await run.post(where, text, opts ?? {})
+        } catch {
+          // The message stays in the feed as "Couldn't send", with Retry.
+        }
+      }),
+    retry: (code, seq) =>
+      attempt("Not sent", async () => {
+        const run = need(code)
+        try {
+          await run.retry(-seq)
+        } catch {
+          // A retry that fails again is marked "Couldn't send" once more.
+        }
+      }),
+    discard: (code, seq) => attempt("Couldn't remove it", async () => need(code).discard(-seq)),
     react: (code, seq, emoji) =>
       attempt("Couldn't react", async () => {
         const run = need(code)
@@ -384,6 +402,8 @@ export function makeActions(): Actions {
       }),
     answerPair: (accept) => attempt("Pairing failed", () => answerPair(accept)),
     cancelPair: () => attempt("Couldn't cancel", cancelPair),
+    saveTheme,
+    deleteTheme,
   }
 }
 

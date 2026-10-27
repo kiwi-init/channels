@@ -81,12 +81,14 @@ export interface Room {
   name: string
   unread: number
   mentions: number
+  seen?: number
 }
 
 export interface Direct {
   with: string
   unread: number
   last: number
+  seen?: number
 }
 
 export interface Image {
@@ -117,6 +119,7 @@ export interface Message {
   ask?: string
   system?: boolean
   pending?: boolean
+  failed?: string
   mentionsYou?: boolean
 }
 
@@ -226,6 +229,31 @@ export interface Account {
 
 export type Theme = "system" | "dark" | "light"
 
+export type Appearance = "dark" | "light"
+
+export interface ThemeBase {
+  background: string
+  text: string
+  accent: string
+  success?: string
+  warning?: string
+  danger?: string
+  info?: string
+  red?: string
+  yellow?: string
+  green?: string
+  cyan?: string
+  blue?: string
+  magenta?: string
+}
+
+export interface CustomTheme {
+  id: string
+  name: string
+  appearance: Appearance
+  base: ThemeBase
+}
+
 export interface Prefs {
   theme: Theme
   textSize: number
@@ -233,6 +261,9 @@ export interface Prefs {
   notify: "all" | "mentions" | "none"
   sound: boolean
   enterSends: boolean
+  darkTheme: string
+  lightTheme: string
+  customThemes: CustomTheme[]
 }
 
 export interface NewAgent {
@@ -247,6 +278,8 @@ export interface NewAgent {
 
 export interface Actions {
   send(code: string, where: Where, text: string, opts?: { replyTo?: number; inThread?: number }): void
+  retry(code: string, seq: number): void
+  discard(code: string, seq: number): void
   react(code: string, seq: number, emoji: string): void
   answerPermission(code: string, id: string, allow: boolean): void
   answerQuestion(code: string, id: string, text: string): void
@@ -283,6 +316,8 @@ export interface Actions {
   answerPair(accept: boolean): void
   cancelPair(): void
   closeChannel(code: string): void
+  saveTheme(theme: CustomTheme): void
+  deleteTheme(id: string): void
 }
 
 export interface App {

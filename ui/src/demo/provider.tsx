@@ -2,6 +2,7 @@ import { useMemo, useState } from "react"
 
 import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_EMPTY, DEMO_GUEST, DEMO_PREFS, DEMO_TILES, DEMO_WAITING } from "~/demo/data"
 import type { Account, Actions, App, Channel, ChannelTile, Message, Prefs, Task } from "~/model"
+import { deletedTheme, savedTheme } from "~/theme/themes"
 
 interface State {
   account: Account | null
@@ -51,17 +52,26 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
     const editTask = (code: string, id: number, f: (t: Task) => Task) => edit(code, (c) => ({ ...c, tasks: c.tasks.map((t) => (t.id === id ? f(t) : t)) }))
     const post = (c: Channel, seq: number, m: Omit<Message, "seq" | "at">): Channel => ({ ...c, messages: [...c.messages, { ...m, seq, at: Date.now() }] })
     return {
-      send: (code, where, text, opts) =>
+      send: (code, where, text, opts) => {
+        let sent = 0
         edit(code, (c, seq) => {
-          const next = post(c, seq, { from: c.you, text, where, replyTo: opts?.replyTo, inThread: opts?.inThread })
-          if (!opts?.inThread) return next
+          sent = seq
+          const target = opts?.replyTo !== undefined ? c.messages.find((m) => m.seq === opts.replyTo) : undefined
+          const root = opts?.inThread ?? (target ? (target.inThread ?? target.seq) : undefined)
+          const replyTo = opts?.replyTo !== undefined && opts.replyTo !== root ? opts.replyTo : undefined
+          const next = post(c, seq, { from: c.you, text, where, replyTo, inThread: root, pending: true })
+          if (root === undefined) return next
           return {
             ...next,
             messages: next.messages.map((m) =>
-              m.seq === opts.inThread ? { ...m, thread: { replies: (m.thread?.replies ?? 0) + 1, last: Date.now(), people: [...new Set([...(m.thread?.people ?? []), c.you])] } } : m
+              m.seq === root ? { ...m, thread: { replies: (m.thread?.replies ?? 0) + 1, last: Date.now(), people: [...new Set([...(m.thread?.people ?? []), c.you])] } } : m
             ),
           }
-        }),
+        })
+        window.setTimeout(() => edit(code, (c) => ({ ...c, messages: c.messages.map((m) => (m.seq === sent ? { ...m, pending: undefined } : m)) })), 700)
+      },
+      retry: (code, seq) => edit(code, (c) => ({ ...c, messages: c.messages.map((m) => (m.seq === seq ? { ...m, failed: undefined } : m)) })),
+      discard: (code, seq) => edit(code, (c) => ({ ...c, messages: c.messages.filter((m) => m.seq !== seq) })),
       react: (code, seq, emoji) =>
         edit(code, (c) => ({
           ...c,
@@ -200,6 +210,8 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       closeChannel: (code) => setState((s) => ({ ...s, tiles: s.tiles.filter((t) => t.code !== code) })),
       answerPair: () => setState((s) => (s.account ? { ...s, account: { ...s.account, pairAsk: undefined } } : s)),
       cancelPair: () => setState((s) => (s.account ? { ...s, account: { ...s.account, pairAsk: undefined } } : s)),
+      saveTheme: (theme) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...savedTheme(s.prefs, theme) } })),
+      deleteTheme: (id) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...deletedTheme(s.prefs, id) } })),
     }
   }, [])
 

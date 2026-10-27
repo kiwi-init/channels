@@ -43,6 +43,18 @@ export const SHOTS: Record<string, Shot> = {
   waiting: { scenario: "full", channel: "ops" },
   settings: kiwi({ page: "settings", section: "account" }),
   "settings-appearance": kiwi({ page: "settings", section: "appearance" }),
+  "settings-themes": {
+    ...kiwi({ page: "settings", section: "appearance" }),
+    prefs: {
+      customThemes: [{ id: "mine-dusk", name: "Dusk", appearance: "dark", base: { background: "#15131a", text: "#e8e2f0", accent: "#f0a86b" } }],
+    },
+  },
+  "theme-editor": kiwi({ page: "settings", section: "appearance" }),
+  "channel-merino": { ...kiwi(), prefs: { darkTheme: "merino-dark", lightTheme: "merino-light" } },
+  "channel-abyssal": { ...kiwi(), prefs: { darkTheme: "abyssal-trench", lightTheme: "glacier-mint" } },
+  "channel-cathode": { ...kiwi(), prefs: { darkTheme: "cathode-amber", lightTheme: "sunlit-parchment" } },
+  "channel-silver": { ...kiwi(), prefs: { darkTheme: "silver-point-dark", lightTheme: "silver-point-light" } },
+  "channel-heliotrope": { ...kiwi(), prefs: { darkTheme: "heliotrope-haze", lightTheme: "lavender-postcard" } },
   "settings-agents": kiwi({ page: "settings", section: "agents" }),
   "settings-computers": kiwi({ page: "settings", section: "computers" }),
   "settings-notifications": kiwi({ page: "settings", section: "notifications" }),

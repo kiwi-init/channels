@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo } from "react"
 
 import { Toasts, useToasts } from "~/kit/toasts"
 import type { App } from "~/model"
@@ -11,6 +11,8 @@ import { FirstRun } from "~/start/first-run"
 import { JoinDialog } from "~/start/join"
 import { NewChannelDialog } from "~/start/new-channel"
 import { Welcome } from "~/start/welcome"
+import { applyTheme, colorsOf, usePreview, useSystemDark } from "~/theme/apply"
+import { activeTheme } from "~/theme/themes"
 
 export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => void }) {
   const [toasts, toast] = useToasts()
@@ -54,13 +56,18 @@ function usePaletteKey(toggle: () => void) {
 }
 
 function useTheme(app: App) {
-  const { theme, reduceMotion, textSize } = app.prefs
-  useEffect(() => {
+  const { theme, reduceMotion, textSize, darkTheme, lightTheme, customThemes } = app.prefs
+  const systemDark = useSystemDark()
+  const preview = usePreview()
+  const active = useMemo(() => activeTheme({ theme, darkTheme, lightTheme, customThemes }, systemDark), [theme, darkTheme, lightTheme, customThemes, systemDark])
+  useLayoutEffect(() => {
     const root = document.documentElement
-    if (theme === "system") delete root.dataset.theme
-    else root.dataset.theme = theme
+    const mode = preview?.appearance ?? theme
+    if (mode === "system") delete root.dataset.theme
+    else root.dataset.theme = mode
+    applyTheme(colorsOf(preview ?? active))
     if (reduceMotion) root.dataset.motion = "reduced"
     else delete root.dataset.motion
     root.style.setProperty("--zoom", String(1 + textSize * 0.08))
-  }, [theme, reduceMotion, textSize])
+  }, [theme, reduceMotion, textSize, active, preview])
 }
