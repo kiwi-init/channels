@@ -604,8 +604,8 @@ export const isDecisionKind = (x: unknown): x is DecisionKind => DECISION_KINDS.
 export const CHOICES_MIN = 2;
 export const CHOICES_MAX = 6;
 export const CHOICE_MAX_LENGTH = 200;
-export const STEP_ITEMS_MAX = 20;
-export const STEP_LINKS_MAX = 10;
+const STEP_ITEMS_MAX = 20;
+const STEP_LINKS_MAX = 10;
 
 export interface Step {
   why: string;
@@ -616,7 +616,7 @@ export interface Step {
   links?: string[];
 }
 
-export type StepOutcome = "done" | "cant" | "not-needed";
+type StepOutcome = "done" | "cant" | "not-needed";
 
 export interface StepReply {
   outcome: StepOutcome;
@@ -627,7 +627,7 @@ export interface StepReply {
 const stepText = (x: unknown, max: number): x is string => str(x, max) && x.trim().length > 0;
 const stepItems = (x: unknown, max: number): x is string[] => Array.isArray(x) && x.length > 0 && x.length <= STEP_ITEMS_MAX && x.every((item) => stepText(item, max));
 
-export function wellFormedStep(x: unknown): x is Step {
+function wellFormedStep(x: unknown): x is Step {
   if (!x || typeof x !== "object") return false;
   const s = x as Record<string, unknown>;
   return (
@@ -641,7 +641,7 @@ export function wellFormedStep(x: unknown): x is Step {
   );
 }
 
-export function wellFormedStepReply(x: unknown): x is StepReply {
+function wellFormedStepReply(x: unknown): x is StepReply {
   if (!x || typeof x !== "object") return false;
   const r = x as Record<string, unknown>;
   if (r.outcome === "done") return r.reason === undefined && (r.output === undefined || stepText(r.output, MAX_BODY_LENGTH));
