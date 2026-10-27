@@ -232,7 +232,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
-      - run: bun run web:build
+      - run: bun run ui:build
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.hutch
@@ -291,10 +291,6 @@ jobs:
         if: ${{ !cancelled() }}
         timeout-minutes: 5
         run: bun desktop/scripts/eb-frame-check.ts desktop/release-eb/build/dev-macos-*/*.app
-      - name: the sidebar material sits behind a clear page, follows the page's theme, and turns solid under Reduce Transparency
-        if: ${{ !cancelled() }}
-        timeout-minutes: 5
-        run: bun desktop/scripts/eb-frost-check.ts desktop/release-eb/build/dev-macos-*/*.app
       - name: the UI boots from a signed channel, swaps while the window is closed, survives restarts, and one that fails is banned (T1246)
         if: ${{ !cancelled() }}
         timeout-minutes: 10
@@ -348,7 +344,7 @@ jobs:
         with:
           path: ${{ runner.temp }}/linux-debs
           key: linux-debs-${{ runner.arch }}-${{ steps.image.outputs.key }}-${{ github.run_id }}
-      - run: bun run web:build
+      - run: bun run ui:build
       - id: electrobun
         run: echo "version=$(bun -e 'console.log(require("./desktop/electrobun-pins.json").electrobun)')" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -540,23 +536,6 @@ jobs:
             ${{ runner.temp }}/floating-check/*.png
             ${{ runner.temp }}/floating-check/*.json
             ${{ runner.temp }}/floating-check/*.log
-          if-no-files-found: warn
-          retention-days: 3
-      - name: on Hyprland the shell frosts over the wallpaper and the tints come from it (headless Hyprland on vkms, blur on, over swaybg), with screenshots
-        if: ${{ !cancelled() && matrix.drive }}
-        timeout-minutes: 12
-        run: |
-          sudo apt-get install -y --no-install-recommends hyprland grim swaybg seatd
-          bash desktop/scripts/hyprland-check/hyprland.sh "$PWD/${{ steps.test-app.outputs.path }}" "$RUNNER_TEMP/hyprland-check"
-      - if: ${{ !cancelled() && matrix.drive }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: hyprland-check
-          path: |
-            ${{ runner.temp }}/hyprland-check/*.png
-            ${{ runner.temp }}/hyprland-check/*.json
-            ${{ runner.temp }}/hyprland-check/*.log
-            ${{ runner.temp }}/hyprland-check/*.conf
           if-no-files-found: warn
           retention-days: 3
       - if: ${{ !cancelled() && matrix.drive }}

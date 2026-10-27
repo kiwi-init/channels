@@ -91,7 +91,7 @@ jobs:
           key: hutch-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/electrobun-pins.json') }}
 
       - name: Build the renderer
-        run: bun run web:build
+        run: bun run ui:build
 
       - name: Electrobun toolchain
         working-directory: desktop
@@ -195,7 +195,7 @@ jobs:
           key: eb-native-${{ hashFiles('desktop/electrobun-pins.json') }}
 
       - name: Build the renderer
-        run: bun run web:build
+        run: bun run ui:build
 
       - name: Electrobun toolchain
         working-directory: desktop

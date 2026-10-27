@@ -18,7 +18,7 @@ export function uiJson(sha: string): UiJson {
 }
 
 export function stageUi(dist: string, out: string, sha: string): UiJson {
-  if (!fs.existsSync(path.join(dist, "index.html"))) throw new Error(`${dist}/index.html is missing: run \`bun run web:build\` in the repo root first`);
+  if (!fs.existsSync(path.join(dist, "index.html"))) throw new Error(`${dist}/index.html is missing: run \`bun run ui:build\` in the repo root first`);
   if (fs.existsSync(out)) throw new Error(`${out} already exists`);
   fs.cpSync(dist, out, { recursive: true, filter: (src) => !SKIPPED.has(path.basename(src)) });
   const json = uiJson(sha);
