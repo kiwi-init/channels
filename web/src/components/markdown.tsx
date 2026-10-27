@@ -5,6 +5,7 @@ import remarkBreaks from "remark-breaks"
 import remarkGfm from "remark-gfm"
 import { compareCells, knownRefs, mentionParts, messageRefs, nextSort, Recent, sanitizeMarkdownUrl, type SortDir } from "../lib/markdown"
 import { MentionNames } from "../lib/mentions"
+import { bridge } from "../lib/secrets"
 import { cx } from "../lib/utils"
 import { Icon } from "./icon"
 import { MermaidBlock } from "./mermaid"
@@ -17,8 +18,15 @@ const components: Components = {
     const safe = typeof href === "string" ? sanitizeMarkdownUrl(href) : undefined
     if (!safe) return <span className="underline decoration-dotted underline-offset-2">{children}</span>
     if (/^https?:\/\//i.test(safe)) {
+      const b = bridge()
       return (
-        <a href={safe} target="_blank" rel="noopener noreferrer nofollow" className="[overflow-wrap:anywhere] text-link underline decoration-link/30 underline-offset-2 hover:decoration-link">
+        <a
+          href={safe}
+          target={b ? "_self" : "_blank"}
+          onClick={b ? (e) => (e.preventDefault(), void b.openExternal(safe)) : undefined}
+          rel="noopener noreferrer nofollow"
+          className="[overflow-wrap:anywhere] text-link underline decoration-link/30 underline-offset-2 hover:decoration-link"
+        >
           {children}
         </a>
       )
@@ -336,7 +344,18 @@ export const Markdown = memo(function Markdown({ children, refs }: { children: s
   const labelOf = useContext(MentionNames)
   const tree = useMemo(() => renderMarkdown(children, known, labelOf), [children, known, labelOf])
   return (
-    <div className="[overflow-wrap:anywhere] break-words">
+    <div
+      className="[overflow-wrap:anywhere] break-words"
+      onClick={(e) => {
+        const b = bridge()
+        if (e.defaultPrevented || !b || !(e.target instanceof Element)) return
+        const a = e.target.closest("a")
+        const safe = sanitizeMarkdownUrl(a?.getAttribute("href") ?? "")
+        if (!a || !e.currentTarget.contains(a) || !safe || !/^https?:\/\//i.test(safe)) return
+        e.preventDefault()
+        void b.openExternal(safe)
+      }}
+    >
       <OpenRef.Provider value={refs?.open}>{tree}</OpenRef.Provider>
     </div>
   )
