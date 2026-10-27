@@ -9,7 +9,7 @@ home=$(mktemp -d)
 out="$home/app.log"
 problems=()
 
-HOME="$home" WAYLAND_DEBUG=client setsid "$launcher" > "$out" 2>&1 &
+HOME="$home" CFFIXED_USER_HOME="$home" WAYLAND_DEBUG=client setsid "$launcher" > "$out" 2>&1 &
 pid=$!
 
 toplevel=""
@@ -24,6 +24,11 @@ if [ -z "$toplevel" ]; then
   problems+=("no Wayland window (xdg_toplevel) within 30s")
 else
   echo "Wayland window: $(grep -oE 'xdg_toplevel[@#][0-9]+\.set_(app_id|title)\("[^"]*"\)' "$out" | sort -u | tr '\n' ' ')"
+  decorations=$(grep -oE 'org_kde_kwin_server_decoration[^ ]*\.request_mode\([0-9]+\)' "$out" | sort -u | tr '\n' ' ')
+  [ -z "$decorations" ] || echo "KWin decoration requests: $decorations"
+  if grep -qE 'org_kde_kwin_server_decoration[^ ]*\.request_mode\(2\)' "$out"; then
+    problems+=("the app asked KWin for a server-side title bar (request_mode(2))")
+  fi
   sleep 5
   web=$(pgrep -s "$pid" -x WebKitWebProces | head -n 1)
   [ -n "$web" ] || problems+=("no WebKitWebProcess of the app's own is running 5s after its window opened")

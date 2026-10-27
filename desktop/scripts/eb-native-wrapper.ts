@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { type ArchiveTreePin, PINS, treeSha256 } from "./eb-pins.ts";
 
-const PATCHES = ["electrobun-wayland.patch", "electrobun-tray.patch"].map((name) => path.resolve(import.meta.dirname, "..", "native", "linux", name));
+const PATCHES = ["electrobun-wayland.patch", "electrobun-titlebar.patch", "electrobun-tray.patch"].map((name) => path.resolve(import.meta.dirname, "..", "native", "linux", name));
 const CACHE = path.join(process.env.XDG_CACHE_HOME ?? path.join(os.homedir(), ".cache"), "kiwi-eb-native");
 const GTK = ["webkit2gtk-4.1", "gtk+-3.0"];
 const INDICATOR = "ayatana-appindicator3-0.1";
