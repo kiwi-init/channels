@@ -14,7 +14,7 @@ export { outsideRepos, reposOf } from "./state/repos.ts";
 export { LEASE_WAIT_MS, nextIn, placeIn } from "./state/leases.ts";
 export { unnamedAsks, unnamedTasks } from "./state/compact.ts";
 export { leadCheckpointKey } from "./state/lead.ts";
-export { aliasesOf, aliasPairs, currentName, namesMoved, renamedLog, renamedMessage, type Aliases } from "./state/names.ts";
+export { aliasesOf, aliasPairs, currentName, namesMoved, renamedLog, renamedMessage } from "./state/names.ts";
 export { findRoom, newRoomId } from "./state/rooms.ts";
 export { currentState, openRound, parseTaskId, revisedOut, similarOpenTasks, taskId, titlesLookAlike } from "./state/tasks.ts";
 export {
