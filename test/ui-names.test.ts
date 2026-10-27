@@ -74,6 +74,16 @@ describe("people read nicknames, never handles", () => {
     expect(withNames("**Heads up:** @patient-otter is `ready`", odd, preview)).toBe("Heads up: @team_ops *lead* [a](b) is ready");
   });
 
+  test("an escape next to a handle leaves it as written, and never names a shorter member", () => {
+    const both = new Map([...nicknames, ["patient", "Wrong person"]]);
+    for (const text of ["\\@patient-otter is here", "@patient\\-otter is here", "patient\\-otter is here"]) expect(linked(text, both, tasks)).toBe(text);
+  });
+
+  test("text that already holds private-use characters keeps them in a preview", () => {
+    const text = "literal 0 then `0` and @patient-otter";
+    expect(withNames(text, nicknames, preview)).toBe("literal 0 then 0 and @opus-vm-coder");
+  });
+
   test("an unknown @name and a plain-word handle stay as written", () => {
     expect(linked("@nobody and jow said so", nicknames, tasks)).toBe("@nobody and jow said so");
   });

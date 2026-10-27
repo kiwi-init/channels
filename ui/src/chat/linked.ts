@@ -52,7 +52,8 @@ function found(text: string, nicknames: ReadonlyMap<string, string>): Found[] {
     }
   }
   const kept: Found[] = []
-  for (const hit of hits.sort((a, b) => a.start - b.start)) if (!kept.length || hit.start >= (kept.at(-1)?.end ?? 0)) kept.push(hit)
+  const escaped = (hit: Found) => text[hit.start - 1] === "\\" || text[hit.end] === "\\"
+  for (const hit of hits.sort((a, b) => a.start - b.start)) if (!escaped(hit) && (!kept.length || hit.start >= (kept.at(-1)?.end ?? 0))) kept.push(hit)
   return kept
 }
 
@@ -80,12 +81,19 @@ export function named(text: string, nicknames: ReadonlyMap<string, string>): str
   return swap(text, nicknames, (hit) => (hit.kind === "task" ? null : `${hit.kind === "mention" ? "@" : ""}${hit.label}`))
 }
 
+function unused(text: string): [string, string] {
+  const free: string[] = []
+  for (let code = 0xe000; free.length < 2; code++) if (!text.includes(String.fromCharCode(code))) free.push(String.fromCharCode(code))
+  return [free[0] ?? "", free[1] ?? ""]
+}
+
 export function withNames(text: string, nicknames: ReadonlyMap<string, string>, plain: (text: string) => string): string {
+  const [open, close] = unused(text)
   const labels: string[] = []
   const marked = swap(text, nicknames, (hit) => {
     if (hit.kind === "task") return null
     labels.push(`${hit.kind === "mention" ? "@" : ""}${hit.label}`)
-    return `${labels.length - 1}`
+    return `${open}${labels.length - 1}${close}`
   })
-  return plain(marked).replace(/(\d+)/g, (whole: string, i: string) => labels[Number(i)] ?? whole)
+  return plain(marked).replace(new RegExp(`${open}(\\d+)${close}`, "g"), (whole: string, i: string) => labels[Number(i)] ?? whole)
 }
