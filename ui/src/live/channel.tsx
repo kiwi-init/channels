@@ -21,7 +21,7 @@ import { usePictures } from "~/live/pictures"
 import { ownPrefs } from "~/live/prefs"
 import { closeOpened, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
-import type { Channel, Where } from "~/model"
+import type { Channel, Upload, Where } from "~/model"
 
 export interface View {
   where: Where | null
@@ -135,10 +135,10 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   )
 
   const post = useCallback(
-    async (where: Where, text: string, opts: { replyTo?: number; inThread?: number }): Promise<number> => {
+    async (where: Where, text: string, opts: { replyTo?: number; inThread?: number; images?: Upload[] }): Promise<number> => {
       const key = ++counter.current
       const body = text.trim()
-      const sending = sendOptions(state, messages, me, where, body, opts)
+      const sending = { ...sendOptions(state, messages, me, where, body, opts), ...(opts.images?.length ? { imgs: opts.images } : {}) }
       const landed = new Set(messages.map((m) => m.seq))
       const next: Pending = {
         key,
@@ -147,6 +147,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
         at: Date.now(),
         ...(opts.inThread !== undefined ? { inThread: opts.inThread } : {}),
         ...(opts.replyTo !== undefined ? { replyTo: opts.replyTo } : {}),
+        ...(opts.images?.length ? { images: opts.images } : {}),
       }
       setPending((list) => [...list.filter((p) => p.seq === undefined || !landed.has(p.seq)), next].slice(-PENDING_MAX))
       try {
@@ -167,7 +168,11 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       const p = pending.find((x) => x.key === key)
       if (!p) throw new Error("that message is gone")
       discard(key)
-      return post(p.where, p.text, { ...(p.inThread !== undefined ? { inThread: p.inThread } : {}), ...(p.replyTo !== undefined ? { replyTo: p.replyTo } : {}) })
+      return post(p.where, p.text, {
+        ...(p.inThread !== undefined ? { inThread: p.inThread } : {}),
+        ...(p.replyTo !== undefined ? { replyTo: p.replyTo } : {}),
+        ...(p.images?.length ? { images: p.images } : {}),
+      })
     },
     [pending, discard, post]
   )
