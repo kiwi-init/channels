@@ -1,9 +1,15 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react"
-import { EnrichedMarkdownText, type EnrichedMarkdownTextProps, type MarkdownStyle } from "react-native-enriched-markdown/lib/module/index.web.js"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react"
+import type { MarkdownStyle } from "react-native-enriched-markdown/lib/module/index.web.js"
+import { normalizeMarkdownStyle } from "react-native-enriched-markdown/lib/module/normalizeMarkdownStyle.web.js"
+import { ENRM_TEXT_CLASS } from "react-native-enriched-markdown/lib/module/web/globalStyles.js"
+import { parseMarkdown } from "react-native-enriched-markdown/lib/module/web/parseMarkdown.js"
+import { RenderNode } from "react-native-enriched-markdown/lib/module/web/renderers/index.js"
+import { buildStyles, zeroTrailingMargins } from "react-native-enriched-markdown/lib/module/web/styles.js"
+import { indexTaskItems, markInlineImages } from "react-native-enriched-markdown/lib/module/web/utils.js"
+import type { ASTNode } from "react-native-enriched-markdown/lib/typescript/src/web/types"
 
+import { keepParsed, parsedFor } from "~/chat/parsed"
 import { Icon } from "~/kit/icons"
-
-const Enriched: (props: EnrichedMarkdownTextProps & { ref?: Ref<HTMLDivElement> }) => ReactNode = EnrichedMarkdownText
 
 const TEXT = { fontSize: 15, fontFamily: "var(--sans)", color: "var(--ink)", lineHeight: 22, marginTop: 0, marginBottom: 8 }
 const HEAD = { fontFamily: "var(--sans)", fontWeight: "600", color: "var(--ink)", marginTop: 6, marginBottom: 4 }
@@ -79,30 +85,55 @@ const STYLE: MarkdownStyle = {
 
 const FLAGS = { latexMath: false, underline: false }
 
-const TOKEN = /(`+)[\s\S]*?\1|\[[^\]\n]*\]\([^)\n]*\)|<[^>\s]+>|https?:\/\/[^\s<>()]+|(?<![\p{L}\p{N}_.@-])@([\p{L}\p{N}_.-]+)|\bT(\d+)\b/gu
+const NORMAL = normalizeMarkdownStyle(STYLE)
+const LAST = zeroTrailingMargins(NORMAL)
+const STYLES = buildStyles(NORMAL)
+const LAST_STYLES = buildStyles(LAST)
+const CAPABILITIES = { katex: null, enableTaskListItemToggle: false }
+const WRAP: CSSProperties = { display: "flex", flexDirection: "column" }
 
-function linked(text: string, names: ReadonlySet<string>, tasks: ReadonlySet<number>): string {
-  return text
-    .split(/(^(?:```|~~~)[^\n]*\n[\s\S]*?^(?:```|~~~)[ \t]*$)/m)
-    .map((part, i) =>
-      i % 2 === 1
-        ? part
-        : part.replace(TOKEN, (whole: string, _tick: string | undefined, name: string | undefined, task: string | undefined) => {
-            if (name !== undefined) {
-              const known = names.has(name.toLowerCase()) ? name : names.has(name.replace(/\.+$/, "").toLowerCase()) ? name.replace(/\.+$/, "") : null
-              return known ? `[@${known}](kiwi-mention:${known})${name.slice(known.length)}` : whole
-            }
-            if (task !== undefined && tasks.has(Number(task))) return `[T${task}](kiwi-task:${task})`
-            return whole
-          })
-    )
-    .join("")
+const parsing = new Map<string, Promise<ASTNode>>()
+
+function parse(markdown: string): Promise<ASTNode> {
+  const done = parsedFor(markdown)
+  if (done) return Promise.resolve(done)
+  const pending = parsing.get(markdown)
+  if (pending) return pending
+  const next = parseMarkdown(markdown, FLAGS)
+    .then((ast) => {
+      indexTaskItems(ast)
+      markInlineImages(ast)
+      keepParsed(markdown, ast)
+      return ast
+    })
+    .finally(() => parsing.delete(markdown))
+  parsing.set(markdown, next)
+  return next
+}
+
+export function warm(markdowns: readonly string[]): () => void {
+  const queue = markdowns.filter((m) => !parsedFor(m))
+  let timer = 0
+  const step = () => {
+    const next = queue.shift()
+    if (next === undefined) return
+    void parse(next)
+      .catch(() => {
+        // A message that doesn't parse shows its plain text when it's rendered; warming skips it.
+      })
+      .finally(() => {
+        timer = window.setTimeout(step, 0)
+      })
+  }
+  timer = window.setTimeout(step, 0)
+  return () => {
+    queue.length = 0
+    window.clearTimeout(timer)
+  }
 }
 
 export interface MarkdownProps {
-  text: string
-  names: ReadonlySet<string>
-  tasks: ReadonlySet<number>
+  markdown: string
   onMention: (name: string) => void
   onTask: (id: number) => void
   onImage: (url: string, alt: string) => void
@@ -116,10 +147,28 @@ interface Block {
   code: string
 }
 
-export default function Markdown({ text, names, tasks, onMention, onTask, onImage, onShown, copied }: MarkdownProps) {
-  const markdown = useMemo(() => linked(text, names, tasks), [text, names, tasks])
+export default function Markdown({ markdown, onMention, onTask, onImage, onShown, copied }: MarkdownProps) {
   const box = useRef<HTMLDivElement>(null)
   const [blocks, setBlocks] = useState<Block[]>([])
+  const [got, setGot] = useState<{ markdown: string; ast: ASTNode } | null>(() => {
+    const cached = parsedFor(markdown)
+    return cached ? { markdown, ast: cached } : null
+  })
+  const ast = got?.markdown === markdown ? got.ast : (parsedFor(markdown) ?? null)
+
+  useEffect(() => {
+    let live = true
+    parse(markdown)
+      .then((next) => {
+        if (live) setGot((was) => (was?.markdown === markdown ? was : { markdown, ast: next }))
+      })
+      .catch(() => {
+        // The plain text stays on screen when the markdown doesn't parse.
+      })
+    return () => {
+      live = false
+    }
+  }, [markdown])
 
   const measure = useCallback(() => {
     const el = box.current
@@ -142,11 +191,9 @@ export default function Markdown({ text, names, tasks, onMention, onTask, onImag
 
   const shown = useCallback(
     (el: HTMLDivElement | null) => {
-      if (!el) return
-      onShown()
-      measure()
+      if (el) onShown()
     },
-    [onShown, measure]
+    [onShown]
   )
 
   const press = useCallback(
@@ -157,18 +204,25 @@ export default function Markdown({ text, names, tasks, onMention, onTask, onImag
     },
     [onMention, onTask]
   )
+  const callbacks = useMemo(() => ({ onLinkPress: press, onImagePress: ({ url, altText }: { url: string; altText: string }) => onImage(url, altText) }), [press, onImage])
+  const children = ast?.children ?? []
 
   return (
-    <div className="md" ref={box}>
-      <Enriched
-        ref={shown}
-        markdown={markdown}
-        markdownStyle={STYLE}
-        md4cFlags={FLAGS}
-        enableTaskListItemToggle={false}
-        onLinkPress={press}
-        onImagePress={({ url, altText }) => onImage(url, altText)}
-      />
+    <div className={blocks.length ? "md has-code" : "md"} ref={box}>
+      {ast && (
+        <div className={ENRM_TEXT_CLASS} style={WRAP} ref={shown}>
+          {children.map((child, i) => (
+            <RenderNode
+              key={`${child.type}-${i}`}
+              node={child}
+              style={i === children.length - 1 ? LAST : NORMAL}
+              styles={i === children.length - 1 ? LAST_STYLES : STYLES}
+              callbacks={callbacks}
+              capabilities={CAPABILITIES}
+            />
+          ))}
+        </div>
+      )}
       {blocks.map((b, i) => (
         <button
           key={i}

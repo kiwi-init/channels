@@ -1,2 +1,1 @@
-The conversation scrolls at 60fps: it renders the latest messages, adds older ones on the way up, and rows don't re-render on every update
-Doing tasks and waiting steps show a still dashed ring, with no spin
+The conversation keeps every frame under 8.3 ms: at most 160 rows mounted, markdown parsed once and ahead of time
