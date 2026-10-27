@@ -704,3 +704,48 @@
   color: var(--ink-3);
   font: 11.5px var(--mono);
 }
+
+.panel-grip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -5px;
+  z-index: 6;
+  width: 10px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.panel-grip::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  width: 4px;
+  height: 40px;
+  margin-top: -20px;
+  border-radius: 2px;
+  background: var(--line-3);
+  opacity: 0;
+  transition: opacity var(--fast);
+}
+
+.panel-grip:hover::after,
+.panel-grip:focus-visible::after,
+:root[data-resizing="panel"] .panel-grip::after {
+  opacity: 1;
+}
+
+:root[data-resizing="panel"],
+:root[data-resizing="panel"] * {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
+:root[data-resizing="panel"] .panel {
+  animation: none;
+}
+
+.panel:has(> .compose) .panel-body {
+  padding-bottom: var(--compose-space);
+}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, type CSSProperties } from "react"
 
 import { Conversation } from "~/chat/conversation"
 import { cx, Count, IconButton } from "~/kit/bits"
@@ -12,12 +12,14 @@ import { AddAgentPanel } from "~/panels/add-agent"
 import { PersonPanel } from "~/panels/person"
 import { TaskPanel } from "~/panels/task"
 import { ThreadPanel } from "~/panels/thread"
+import { usePanelWidth } from "~/shell/panel-width"
 import { Sidebar } from "~/shell/sidebar"
 import { Waiting } from "~/start/waiting"
 import { Board, openTasks } from "~/tasks/board"
 
 export function ChannelScreen({ channel }: { channel: Channel }) {
   const { nav, go } = useApp()
+  const panel = usePanelWidth()
   const [search, setSearch] = useState("")
   const [searching, setSearching] = useState(false)
   const [drawer, setDrawer] = useState(false)
@@ -50,7 +52,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
         : `T${nav.where.task}`
 
   return (
-    <div className={cx("chan", nav.panel && "has-panel", drawer && "is-drawer")}>
+    <div className={cx("chan", nav.panel && "has-panel", drawer && "is-drawer")} style={{ "--panel-w": `${panel.width}px` } as CSSProperties}>
       <header className="top">
         <button type="button" className="icon-btn top-drawer" aria-label="Rooms and people" aria-pressed={drawer} onClick={() => setDrawer(!drawer)}>
           <Icon name="sidebar" />
@@ -112,6 +114,18 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
       )}
       {nav.panel && (
         <aside className="panel" aria-label="Details">
+          <div
+            className="panel-grip"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize the panel"
+            aria-valuemin={panel.min}
+            aria-valuemax={panel.max}
+            aria-valuenow={panel.width}
+            tabIndex={0}
+            title="Drag to resize · double-click to reset"
+            {...panel.grip}
+          />
           {nav.panel.kind === "thread" ? (
             <ThreadPanel channel={channel} seq={nav.panel.seq} />
           ) : nav.panel.kind === "task" ? (
