@@ -24,6 +24,7 @@ import {
   type Step,
 } from "@kiwi/core/protocol.ts";
 import { chooseThread, inGeneral, longForGeneral, parseTaskId, wentTo } from "@kiwi/core/state.ts";
+import { bareHandleNote } from "../handles.ts";
 import { args, opt, unexpectedOptions } from "../args.ts";
 import { parseWhere } from "../where.ts";
 import { type Command, die, noteRead, offlineOk, out, type Quit, session } from "../context.ts";
@@ -79,13 +80,13 @@ export const messageCommands: Record<string, Command> = {
         });
         const room = opt.room ?? where.room;
         const general = chosen.task === undefined && !chosen.dm && (!room || room.toLowerCase() === "general") && (re.length === 0 || inGeneral(state, re[0]!));
-        const long = general ? longForGeneral(state, s.me, body) : null;
+        const notes = [general ? longForGeneral(state, s.me, body) : null, bareHandleNote(state, body)].filter((n) => n !== null);
         if (!asking || !opt.wait) {
           out(`${asking ? "asked" : "sent"} #${seq}${wentTo(chosen)}`);
-          if (long) out(long);
+          for (const n of notes) out(n);
           return;
         }
-        if (long) out(long);
+        for (const n of notes) out(n);
         const replies = yield* s.awaitReplies(seq, head, parseDuration(opt.wait));
         if (!replies.length) return yield* die(`no answer to #${seq} within ${opt.wait}; replies will still arrive when you listen`, 2);
         for (const r of replies) out(render(r));
@@ -111,8 +112,8 @@ export const messageCommands: Record<string, Command> = {
         const imgs = yield* images;
         const { state } = yield* s.state();
         out(`sent #${yield* s.reply(seq, body, kind, imgs)}`);
-        const long = inGeneral(state, seq) ? longForGeneral(state, s.me, body) : null;
-        if (long) out(long);
+        const notes = [inGeneral(state, seq) ? longForGeneral(state, s.me, body) : null, bareHandleNote(state, body)].filter((n) => n !== null);
+        for (const n of notes) out(n);
       }),
     ),
 

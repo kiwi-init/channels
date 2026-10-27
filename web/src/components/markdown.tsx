@@ -286,7 +286,9 @@ const OPAQUE = new Set(["link", "linkReference", "definition", "code", "inlineCo
 
 function mentionNodes(text: string, labelOf: (name: string) => string | undefined): MdNode[] {
   return mentionParts(text, labelOf).map((part) =>
-    part.kind === "text" ? { type: "text", value: part.text } : { type: "mention", data: { hName: "mark", hProperties: { title: part.text } }, children: [{ type: "text", value: `@${part.label}` }] }
+    part.kind === "text"
+      ? { type: "text", value: part.text }
+      : { type: "mention", data: { hName: "mark", hProperties: { title: part.text } }, children: [{ type: "text", value: part.kind === "mention" ? `@${part.label}` : part.label }] }
   )
 }
 
@@ -316,7 +318,7 @@ const rendered = new Recent<ReactElement>(500)
 
 export function renderMarkdown(body: string, known?: (seq: number) => boolean, labelOf?: (name: string) => string | undefined): ReactElement {
   const linked = known ? knownRefs(body, known) : ""
-  const named = labelOf ? mentionParts(body, labelOf).flatMap((p) => (p.kind === "mention" ? [[p.name, p.label] as const] : [])) : []
+  const named = labelOf ? mentionParts(body, labelOf).flatMap((p) => (p.kind === "text" ? [] : [[p.name, p.label] as const])) : []
   const key = `${linked}\u0000${JSON.stringify(named)}\u0000${body}`
   const hit = rendered.get(key)
   if (hit) return hit
