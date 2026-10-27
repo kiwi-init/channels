@@ -2,6 +2,32 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.10.7 — 2026-10-27
+
+- **Deps: refresh JavaScript, Android, and Electrobun** ([#1016](https://github.com/kiwi-init/channels/pull/1016))
+- **CI: disable the iOS gestures gate** ([#1018](https://github.com/kiwi-init/channels/pull/1018))
+- **CI: run browser screenshots concurrently** ([#1021](https://github.com/kiwi-init/channels/pull/1021))
+- **Grok: log Stop skips and recover missing task metadata** ([#1022](https://github.com/kiwi-init/channels/pull/1022))
+- **App: find tasks by number or title** ([#1023](https://github.com/kiwi-init/channels/pull/1023))
+- **Tasks: carry review round summaries** ([#1024](https://github.com/kiwi-init/channels/pull/1024))
+- **Tasks: keep any-reviewer work out of Needs you** ([#1025](https://github.com/kiwi-init/channels/pull/1025))
+- **Desktop: restore composer spell checking** ([#1026](https://github.com/kiwi-init/channels/pull/1026))
+- **Desktop: open message links externally** ([#1027](https://github.com/kiwi-init/channels/pull/1027))
+- **Desktop: request client decorations on Wayland** ([#1028](https://github.com/kiwi-init/channels/pull/1028))
+- **App: shorten the Now card's scroll fade** ([#1030](https://github.com/kiwi-init/channels/pull/1030))
+- **Cards: add actionable steps for people** ([#1035](https://github.com/kiwi-init/channels/pull/1035))
+- **Tasks: let leads reassign reviewers** ([#1037](https://github.com/kiwi-init/channels/pull/1037))
+- **App: pilot a signals ChannelStore behind useChannel** ([#1036](https://github.com/kiwi-init/channels/pull/1036))
+- **Desktop: use the Channels mark in the tray** ([#1038](https://github.com/kiwi-init/channels/pull/1038))
+- **Tasks: open the review when the named reviewer leaves** ([#1040](https://github.com/kiwi-init/channels/pull/1040))
+- **Names: show a bare handle as its nickname and note it on send** ([#1041](https://github.com/kiwi-init/channels/pull/1041))
+- **Channels Livewire with the new desktop UI** ([#1042](https://github.com/kiwi-init/channels/pull/1042))
+- **Livewire ships from main** ([#1044](https://github.com/kiwi-init/channels/pull/1044))
+- **Brief: tell agents to name members by @handle** ([#1043](https://github.com/kiwi-init/channels/pull/1043))
+- **One Channels: the Livewire build is stable Channels** ([#1046](https://github.com/kiwi-init/channels/pull/1046))
+- **Brief: tell agents to name members by @handle** ([#1043](https://github.com/kiwi-init/channels/pull/1043))
+- **One Channels: the Livewire build is stable Channels** ([#1046](https://github.com/kiwi-init/channels/pull/1046))
+
 ## 2026.10.6 — 2026-10-26
 
 - **Remove jev-ci: CI picks its jobs with plain rules instead of a model** ([#997](https://github.com/kiwi-init/channels/pull/997))
