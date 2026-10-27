@@ -18,7 +18,7 @@ export function Welcome() {
         <p className="start-sub">{none ? "Start your first channel, or join one you were invited to." : "Pick one on the left, start a new one, or join with a code."}</p>
         <div className="start-choices">
           {CHOICES.map((c) => (
-            <button key={c.title} type="button" className="start-choice" onClick={() => go({ to: "dialog", dialog: c.dialog })}>
+            <button key={c.title} type="button" className="start-choice" aria-label={c.title} aria-describedby={`start-${c.dialog}`} onClick={() => go({ to: "dialog", dialog: c.dialog })}>
               <span className="start-choice-icon">
                 <Icon name={c.icon} size={18} />
               </span>
@@ -26,7 +26,9 @@ export function Welcome() {
                 {c.title}
                 <Icon name="chevron" size={14} />
               </span>
-              <span className="start-choice-text">{c.text}</span>
+              <span className="start-choice-text" id={`start-${c.dialog}`}>
+                {c.text}
+              </span>
             </button>
           ))}
         </div>

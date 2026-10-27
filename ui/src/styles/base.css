@@ -383,7 +383,6 @@ kbd {
 
 .dot.is-doing {
   border: 1.5px dashed var(--doing);
-  animation: spin 2.4s linear infinite;
 }
 
 .dot.is-review {

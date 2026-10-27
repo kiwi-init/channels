@@ -43,6 +43,7 @@ export function FirstRun() {
         <div className="start-row">
           <input
             id={inputId}
+            aria-label="Your name"
             className="input is-mono"
             autoFocus
             autoComplete="nickname"
