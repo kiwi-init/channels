@@ -342,7 +342,7 @@ const asks: Ask[] = [
     pin: { name: "Reviewer", persona: null },
     code: "482-193",
   },
-  { kind: "join", id: "join-2", at: m(1), name: "Sam Ortiz", handle: "sam", who: "human", key: "9f3a61c2", code: "", check: "unchecked" },
+  { kind: "join", id: "join-2", at: m(1), name: "Sam Ortiz", who: "human", key: "9f3a61c2", code: "", check: "unchecked" },
   {
     kind: "join",
     id: "join-3",

@@ -395,7 +395,6 @@ export function asksOf(
         id: r.id,
         at: r.ts,
         name: r.display || r.name,
-        ...(r.display && r.display !== r.name ? { handle: r.name } : {}),
         who: r.kind === "human" ? "human" : "agent",
         ...(harness ? { harness } : {}),
         ...(r.kind === "human" ? (r.person ? { key: r.person.slice(0, 8) } : {}) : { said: saidOf(state, r.card) }),

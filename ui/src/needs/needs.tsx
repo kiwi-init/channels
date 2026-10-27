@@ -258,30 +258,23 @@ function Said({ said }: { said: NonNullable<JoinAsk["said"]> }) {
 function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; link: ReactNode }) {
   const { app } = useApp()
   const agent = ask.who === "agent"
-  const it = agent ? "it" : "they"
   const [persona, setPersona] = useState<string | null | undefined>(undefined)
   const [readOnly, setReadOnly] = useState<boolean | undefined>(undefined)
   const [powers, setPowers] = useState<Powers | undefined>(undefined)
-  const [rename, setRename] = useState(ask.freeName ?? "")
   const face: Face = { name: ask.name, kind: ask.who, harness: ask.harness, presence: "online" }
   const ready = (ask.check ?? "ready") === "ready" && ask.code !== ""
   const unchecked = ask.check === "unchecked"
-  const line = [ask.handle && `@${ask.handle}`, agent ? "Agent" : "Person", ask.key && `key ${ask.key}`, ask.runs, ask.machine && `on ${ask.machine}`, ask.sponsor && `brought by ${ask.sponsor}`]
-    .filter(Boolean)
-    .join(" · ")
+  const line = [agent ? "Agent" : "Person", ask.key && `key ${ask.key}`, ask.runs, ask.machine && `on ${ask.machine}`, ask.sponsor && `brought by ${ask.sponsor}`].filter(Boolean).join(" · ")
   const chosen = agent ? (persona === undefined ? (ask.pin?.persona ?? null) : persona) : null
   const pinWaits = agent && persona === undefined && !!ask.pin && ask.pin.persona === undefined
   const pinGone = agent && persona === undefined && !!ask.pin && ask.pin.persona === null
   const label = app.personas.find((p) => p.id === chosen)?.label
   const only = readOnly ?? channel.newMembers === "read"
   const can = powers ?? channel.newPowers ?? { addsAgents: false, answersDecisions: false }
-  const name = rename.trim()
-  const nameTaken = !!ask.freeName && (!name || channel.people.some((p) => p.name.toLowerCase() === name.toLowerCase()))
-  const blocked = pinWaits || pinGone || nameTaken
-  const shownAs = ask.freeName ? name || ask.freeName : ask.name
+  const blocked = pinWaits || pinGone
   const letIn = () =>
     app.actions.answerJoin(channel.code, ask.id, true, {
-      ...(ask.freeName ? { as: name } : {}),
+      ...(ask.freeName ? { as: ask.freeName } : {}),
       ...(agent ? { persona: chosen } : { powers: can }),
       ...(chosen ? {} : { readOnly: only }),
     })
@@ -301,7 +294,7 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
             </button>
           ) : (
             <button type="button" className="btn is-primary" disabled={!ready || blocked} onClick={letIn}>
-              {!ready ? `Waiting for ${ask.name}'s code…` : pinGone ? "Pick a personality first" : label ? `It matches: let in as ${label}` : `It matches: let ${shownAs} in`}
+              {!ready ? `Waiting for ${ask.name}'s code…` : pinGone ? "Pick a personality first" : label ? `It matches: let in as ${label}` : `It matches: let ${ask.name} in`}
             </button>
           )}
           <button type="button" className="btn is-danger" onClick={() => app.actions.answerJoin(channel.code, ask.id, false)}>
@@ -348,11 +341,6 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
       </div>
       {ready && (
         <div className="needs-opts">
-          {ask.freeName && (
-            <Opt label="Name" hint={`${ask.handle ?? ask.name} is taken here. Let ${it} in under another.`}>
-              {(id) => <input id={id} className="input is-mono needs-name-input" value={rename} maxLength={32} spellCheck={false} onChange={(e) => setRename(e.target.value)} />}
-            </Opt>
-          )}
           {agent && (
             <Opt label="Personality" hint={app.personas.find((p) => p.id === chosen)?.about ?? "Works the way its harness does by default."}>
               {(id) => (

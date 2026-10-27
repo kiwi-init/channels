@@ -301,11 +301,6 @@ button.needs-name:hover {
   pointer-events: none;
 }
 
-.needs-name-input {
-  flex: none;
-  width: 180px;
-}
-
 .needs-done {
   margin-top: 10px;
   font: var(--t-meta) var(--ui);

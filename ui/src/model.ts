@@ -152,7 +152,6 @@ export interface JoinAsk {
   id: string
   at: number
   name: string
-  handle?: string
   who: Kind
   harness?: Harness
   runs?: string
