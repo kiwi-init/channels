@@ -5,6 +5,7 @@ import { mark } from "./eb-startup.ts";
 import { keys } from "./keys-start-eb.ts";
 import { ebHost } from "./host-eb.ts";
 import { startUpdates, updateState } from "./updater.ts";
+import { onUiWaiting } from "./ui-signals.ts";
 
 export function startLife(win: BrowserWindow, release: () => void): void {
   const tray = startAppLife({
@@ -25,5 +26,6 @@ export function startLife(win: BrowserWindow, release: () => void): void {
     tray.refresh(u);
   });
   mark("updates");
+  onUiWaiting((u) => ebHost.push("uiUpdate", u));
   Electrobun.events.on("accent-color-changed", (e) => ebHost.push("accent", e.data.color));
 }

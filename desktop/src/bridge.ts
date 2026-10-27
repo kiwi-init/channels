@@ -350,6 +350,11 @@ export interface KiwiBridge {
   uiReady(): Promise<void>;
   /** An uncaught error while the UI boots, or one that brought the whole UI down. */
   uiError(message: string): Promise<void>;
+  /** A new UI from the channel, downloaded and waiting for the person to accept it (it also starts on the next launch). */
+  getUiUpdate(): Promise<UiUpdateView | null>;
+  onUiUpdate(cb: (u: UiUpdateView | null) => void): () => void;
+  /** Swap to the waiting UI now: the page reloads into it. */
+  applyUi(): Promise<void>;
   /** The kiwi://join/<code> link waiting to be opened, if any; taking it clears it. */
   getDeepLink(): Promise<string | null>;
   /** A link came in while the app runs (it waits for getDeepLink too, so it's opened once). */
@@ -387,6 +392,10 @@ export interface KiwiBridge {
 export interface KeysAtRest {
   sealed: boolean;
   why: string | null;
+}
+
+export interface UiUpdateView {
+  version: string;
 }
 
 export interface UpdateView {

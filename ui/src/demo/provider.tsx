@@ -26,11 +26,13 @@ const PERSONAS: App["personas"] = [
   { id: "designer", label: "Designer", about: "Owns how it looks: shots on every PR, no slop." },
 ]
 
-export type Scenario = "full" | "signed-out" | "no-channels" | "update-ready"
+export type Scenario = "full" | "signed-out" | "no-channels" | "updates" | "update-ready"
 
 function initial(scenario: Scenario, look: Partial<Prefs>): State {
   const prefs = { ...DEMO_PREFS, ...look }
   const channels = new Map([DEMO_CHANNEL, DEMO_EMPTY, DEMO_WAITING, { ...DEMO_EMPTY, code: "interlinked", title: "interlinked" }, DEMO_GUEST].map((c) => [c.code, c]))
+  if (scenario === "updates")
+    return { account: { ...DEMO_ACCOUNT, uiUpdate: { version: "dev-1542" }, update: { version: "2026.10.7", ready: true, state: "ready" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "update-ready") return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.7", ready: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "signed-out") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000 }
   if (scenario === "no-channels") return { account: DEMO_ACCOUNT, tiles: [], channels: new Map(), prefs, seq: 1000 }
@@ -204,6 +206,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       forgetComputer: (id) => setState((s) => (s.account ? { ...s, account: { ...s.account, computers: s.account.computers.filter((c) => c.id !== id) } } : s)),
       linkGithub: () => setState((s) => (s.account ? { ...s, account: { ...s.account, github: { login: "ojowwalker77" } } } : s)),
       unlinkGithub: () => setState((s) => (s.account ? { ...s, account: { ...s.account, github: undefined } } : s)),
+      applyUi: () => setState((s) => (s.account ? { ...s, account: { ...s.account, uiUpdate: undefined } } : s)),
       installUpdate: () => setState((s) => (s.account?.update ? { ...s, account: { ...s.account, version: s.account.update.version, update: undefined } } : s)),
       signOut: () => setState((s) => ({ ...s, account: null, tiles: [] })),
       setNewMembers: (code, can) => edit(code, (c) => ({ ...c, newMembers: can })),

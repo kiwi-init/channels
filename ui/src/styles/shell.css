@@ -615,3 +615,92 @@
     display: none;
   }
 }
+
+.rail-foot {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+}
+
+.dock {
+  position: relative;
+}
+
+.dock-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent-wash);
+  color: var(--accent);
+  -webkit-app-region: no-drag;
+}
+
+.dock-btn:hover {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.dock-btn.is-ready::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.dock-card {
+  position: absolute;
+  bottom: 0;
+  left: calc(100% + 14px);
+  z-index: 40;
+  display: grid;
+  gap: 14px;
+  width: 300px;
+  padding: 14px;
+  border-radius: var(--r-card);
+  background: var(--bg-2);
+  box-shadow: var(--shadow-pop);
+  --raise: var(--bg-3);
+  animation: rise var(--slow) var(--ease);
+}
+
+.dock-part {
+  display: grid;
+  gap: 8px;
+}
+
+.dock-part + .dock-part {
+  padding-top: 14px;
+}
+
+.dock-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 600 var(--t-ui) var(--ui);
+}
+
+.dock-title .icon {
+  color: var(--accent);
+}
+
+.dock-text {
+  color: var(--ink-2);
+  font: var(--t-ui) / 1.45 var(--ui);
+}
+
+.dock-wait {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-3);
+  font: 11.5px var(--mono);
+}

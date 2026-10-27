@@ -2,6 +2,7 @@ import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { ChannelTile } from "~/model"
 import { useApp } from "~/nav"
+import { UpdateDock } from "~/shell/updates"
 
 export function Rail() {
   const { app, nav, go } = useApp()
@@ -20,15 +21,18 @@ export function Rail() {
           </button>
         </li>
       </ul>
-      <button
-        type="button"
-        className={cx("rail-me", nav.page === "settings" && "is-on", app.account?.update?.ready && "has-update")}
-        aria-label={app.account?.update?.ready ? "Settings, an update is ready" : "Settings"}
-        title="Settings"
-        onClick={() => (nav.page === "settings" ? go({ to: "back" }) : go({ to: "settings" }))}
-      >
-        {app.account?.name.slice(0, 1).toUpperCase()}
-      </button>
+      <div className="rail-foot">
+        <UpdateDock />
+        <button
+          type="button"
+          className={cx("rail-me", nav.page === "settings" && "is-on")}
+          aria-label="Settings"
+          title="Settings"
+          onClick={() => (nav.page === "settings" ? go({ to: "back" }) : go({ to: "settings" }))}
+        >
+          {app.account?.name.slice(0, 1).toUpperCase()}
+        </button>
+      </div>
     </nav>
   )
 }

@@ -220,7 +220,8 @@ export interface Account {
   github?: { login: string }
   computers: Computer[]
   version: string
-  update?: { version: string; ready: boolean }
+  update?: { version: string; ready: boolean; state?: "downloading" | "ready" | "available" }
+  uiUpdate?: { version: string }
   key?: string
   relay?: string
   pairAsk?: { kind: "computer" | "phone"; label: string; os?: string; digits?: string }
@@ -311,6 +312,7 @@ export interface Actions {
   linkGithub(): void
   unlinkGithub(): void
   installUpdate(): void
+  applyUi(): void
   signOut(): void
   setNewMembers(code: string, can: "read" | "write"): void
   answerPair(accept: boolean): void

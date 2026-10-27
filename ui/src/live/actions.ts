@@ -387,6 +387,12 @@ export function makeActions(): Actions {
         if (u.state === "downloading") return announce("The update is still downloading")
         await b.openExternal(u.url)
       }),
+    applyUi: () =>
+      attempt("Couldn't switch to the new look", async () => {
+        const b = bridge()
+        if (!b) throw new Error("the new look comes with the Channels desktop app")
+        await b.applyUi()
+      }),
     signOut: () =>
       attempt("Couldn't sign out", async () => {
         const b = bridge()

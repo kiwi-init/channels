@@ -191,6 +191,35 @@ function useOwnAgents(): number {
   return n
 }
 
+const uiUpdate = (() => {
+  let value: { version: string } | null = null
+  const listeners = new Set<Listener>()
+  let started = false
+  const set = (next: { version: string } | null) => {
+    value = next
+    for (const l of listeners) l()
+  }
+  const start = () => {
+    if (started) return
+    started = true
+    const b = bridge()
+    if (!b?.getUiUpdate) return
+    void b
+      .getUiUpdate()
+      .then(set)
+      .catch(() => {})
+    b.onUiUpdate(set)
+  }
+  return {
+    get: () => value,
+    subscribe: (l: Listener) => {
+      start()
+      listeners.add(l)
+      return () => void listeners.delete(l)
+    },
+  }
+})()
+
 export function useAccount(): Account | null {
   const { person, computers, phones } = useSecrets()
   const update = useUpdate()
@@ -199,6 +228,7 @@ export function useAccount(): Account | null {
   const linked = useSyncExternalStore(github.subscribe, github.get)
   const asking = useSyncExternalStore(pairAsk.subscribe, pairAsk.get)
   const code = useSyncExternalStore(githubCode.subscribe, githubCode.get)
+  const look = useSyncExternalStore(uiUpdate.subscribe, uiUpdate.get)
   useEffect(() => {
     if (person) void refreshGithub().catch(() => {})
   }, [person])
@@ -210,11 +240,12 @@ export function useAccount(): Account | null {
       ...(linked ? { github: linked } : {}),
       computers: [...computers.map((c) => computerOf(c, online, agents)), ...phones.map(phoneOf)],
       version,
-      ...(update && !update.blocked ? { update: { version: update.version, ready: update.state === "ready" } } : {}),
+      ...(update && !update.blocked ? { update: { version: update.version, ready: update.state === "ready", state: update.state } } : {}),
+      ...(look ? { uiUpdate: look } : {}),
       key: person.pk.slice(0, 8),
       relay: relayUrl(),
       ...(asking ? { pairAsk: asking } : {}),
       ...(code ? { githubCode: code } : {}),
     }
-  }, [person, linked, computers, phones, online, agents, update, asking, code])
+  }, [person, linked, computers, phones, online, agents, update, asking, code, look])
 }

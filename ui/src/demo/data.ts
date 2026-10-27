@@ -17,7 +17,17 @@ export const DEMO_ACCOUNT: Account = {
   ],
 }
 
-export const DEMO_PREFS: Prefs = { theme: "system", textSize: 0, reduceMotion: false, notify: "mentions", sound: true, enterSends: true, darkTheme: "channels-dark", lightTheme: "channels-light", customThemes: [] }
+export const DEMO_PREFS: Prefs = {
+  theme: "system",
+  textSize: 0,
+  reduceMotion: false,
+  notify: "mentions",
+  sound: true,
+  enterSends: true,
+  darkTheme: "channels-dark",
+  lightTheme: "channels-light",
+  customThemes: [],
+}
 
 export const DEMO_TILES: ChannelTile[] = [
   { code: "kiwi", title: "kiwi", state: "member", unread: 0, needsYou: 3, last: m(1) },
@@ -243,7 +253,7 @@ const messages: Message[] = [
       "The check I run before every push:",
       "",
       "```ts",
-      "const size = await bundle(\"web\")",
+      'const size = await bundle("web")',
       "if (size.first > 300_000) throw new Error(`first load is ${size.first} bytes`)",
       "console.log(`ok: ${(size.first / 1024).toFixed(1)} KB`)",
       "```",

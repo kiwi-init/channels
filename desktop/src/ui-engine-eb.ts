@@ -7,7 +7,7 @@ import pkg from "../package.json" with { type: "json" };
 import { PAGE_TEMPLATE } from "./eb-page.ts";
 import { UI_MANIFEST_URL, UI_POLL_MS, UI_PREFIX, UI_READY_MS, UI_TRUSTED_KEYS } from "./ui-channel.ts";
 import { UI_CONTRACT } from "./ui-contract.ts";
-import { hearUi } from "./ui-signals.ts";
+import { hearApply, hearUi, setUiWaiting } from "./ui-signals.ts";
 import { dataDir } from "./host-eb.ts";
 
 declare const KIWI_EB_DEV: boolean;
@@ -56,7 +56,7 @@ function say(event: AppEngineEvent): void {
   if (event.type === "failed") console.error(`Channels UI: ${event.manifest.uiVersion} failed (${event.reason})${event.banned ? "; it won't boot again" : ""}`);
   else if (event.type === "safe-mode") console.error(`Channels UI: ${event.reason}`);
   else if (event.type === "built-in") console.log(`Channels UI: the built-in UI (${event.reason})`);
-  else if (event.type === "waiting") console.log(`Channels UI: ${event.manifest.uiVersion} waits for the window to close or the next start`);
+  else if (event.type === "waiting") console.log(`Channels UI: ${event.manifest.uiVersion} waits for the person to accept it, or the next start`);
   else if (event.type === "booting") console.log(`Channels UI: booting ${event.manifest.uiVersion} (${event.reason})`);
   else console.log(`Channels UI: ${event.manifest.uiVersion} ${event.type}`);
 }
@@ -83,10 +83,22 @@ export function channelUi(w: UiWindow): ChannelUi {
       prefix: UI_PREFIX,
       builtIn: { uiVersion: `built-in-${pkg.version}`, seq: KIWI_UI_SEQ, files: builtInFiles },
       show: (ui) => w.show(new TextDecoder().decode(ui.index)),
-      canSwap: () => devChannel !== null || !w.win.isVisible(),
+      canSwap: () => devChannel !== null || accepted,
     },
   });
+  let accepted = false;
   engine.on(say);
+  engine.on((event) => {
+    if (event.type === "waiting") setUiWaiting({ version: event.manifest.uiVersion });
+    else if (event.type === "booting") {
+      accepted = false;
+      setUiWaiting(null);
+    }
+  });
+  hearApply(() => {
+    accepted = true;
+    engine.applyUpdate();
+  });
   hearUi({ ready: () => engine.ready(), error: (message) => engine.error(message) });
   Electrobun.events.on("render-process-gone", () => engine.rendererGone());
   Electrobun.events.on(`will-close-${w.win.id}`, () =>

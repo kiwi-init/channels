@@ -62,6 +62,7 @@ export const SHOTS: Record<string, Shot> = {
   "settings-update-ready": { scenario: "update-ready", channel: "kiwi", nav: { page: "settings", section: "updates" } },
   "settings-about": kiwi({ page: "settings", section: "about" }),
   "channel-settings-guest": { scenario: "full", channel: "studio", nav: { panel: { kind: "channel" } } },
+  updates: { scenario: "updates", channel: "kiwi" },
   "first-run": { scenario: "signed-out", channel: null },
   welcome: { scenario: "no-channels", channel: null },
 }
