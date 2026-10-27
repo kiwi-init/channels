@@ -97,9 +97,10 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           tasks: c.tasks.map((t) => (c.asks.some((a) => a.kind === "permission" && a.id === id && a.task === t.id) ? { ...t, status: allow ? "doing" : "todo" } : t)),
         })),
       answerQuestion: (code, id, text) => edit(code, (c) => ({ ...c, asks: c.asks.map((a) => (a.kind === "question" && a.id === id ? { ...a, answer: { text, by: c.you, at: Date.now() } } : a)) })),
-      answerJoin: (code, id, letIn) =>
+      answerJoin: (code, id, letIn, choice) =>
         edit(code, (c) => {
           const ask = c.asks.find((a) => a.kind === "join" && a.id === id)
+          if (ask?.kind === "join" && letIn && ask.check === "unchecked") return { ...c, asks: c.asks.map((a) => (a === ask ? { ...ask, check: "ready" as const, code: "205-318" } : a)) }
           const asks = c.asks.map((a) => (a.kind === "join" && a.id === id ? { ...a, answer: { letIn, by: c.you, at: Date.now() } } : a))
           if (!ask || ask.kind !== "join" || !letIn) return { ...c, asks }
           return {
@@ -108,8 +109,10 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
             people: [
               ...c.people,
               {
-                name: ask.name,
+                name: choice?.as || ask.name,
                 kind: ask.who,
+                ...(choice?.persona ? { persona: choice.persona } : {}),
+                ...(choice?.readOnly ? { readOnly: true } : {}),
                 owner: false,
                 you: false,
                 presence: "online",
@@ -185,7 +188,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       addRepo: (code, repo) => edit(code, (c) => ({ ...c, repos: [...new Set([...c.repos, repo])] })),
       removeRepo: (code, repo) => edit(code, (c) => ({ ...c, repos: c.repos.filter((r) => r !== repo) })),
       joinCommand: async (code, as) => [`kiwi join ${code}-x7Qp2LmR`, as.nick && `--nick ${as.nick}`, as.persona && "--persona eyJyb29tIjoia2l3aSJ9"].filter(Boolean).join(" "),
-      inviteLink: async (code) => `kiwi://join/${code}-x7Qp2LmR`,
+      inviteLink: async (code) => `https://channels.kiwiinit.com/#${code}-x7Qp2LmR`,
       leaveChannel: (code) => setState((s) => ({ ...s, tiles: s.tiles.filter((t) => t.code !== code) })),
       newChannel: async (title) => {
         const code = title.toLowerCase().replace(/[^a-z0-9]+/g, "-")
@@ -214,6 +217,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       installUpdate: () => setState((s) => (s.account?.update ? { ...s, account: { ...s.account, version: s.account.update.version, update: undefined } } : s)),
       signOut: () => setState((s) => ({ ...s, account: null, tiles: [] })),
       setNewMembers: (code, can) => edit(code, (c) => ({ ...c, newMembers: can })),
+      setNewPowers: (code, powers) => edit(code, (c) => ({ ...c, newPowers: powers })),
       closeChannel: (code) => setState((s) => ({ ...s, tiles: s.tiles.filter((t) => t.code !== code) })),
       answerPair: () => setState((s) => (s.account ? { ...s, account: { ...s.account, pairAsk: undefined } } : s)),
       cancelPair: () => setState((s) => (s.account ? { ...s, account: { ...s.account, pairAsk: undefined } } : s)),
