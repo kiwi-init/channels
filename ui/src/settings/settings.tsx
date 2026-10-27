@@ -1,0 +1,90 @@
+import { useEffect } from "react"
+
+import { cx } from "~/kit/bits"
+import { Icon } from "~/kit/icons"
+import { useApp, type Section } from "~/nav"
+import { AgentsSection } from "~/settings/agents"
+import { ComputersSection } from "~/settings/computers"
+import { AboutSection, AccountSection, AppearanceSection, NotificationsSection, UpdatesSection } from "~/settings/sections"
+
+const SECTIONS: readonly (readonly [Section, string])[] = [
+  ["account", "Account"],
+  ["appearance", "Appearance"],
+  ["notifications", "Notifications"],
+  ["computers", "Computers and phones"],
+  ["agents", "Agents"],
+  ["updates", "Updates"],
+  ["about", "About"],
+]
+
+export function Settings() {
+  const { app, nav, go } = useApp()
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented || document.querySelector("dialog[open]")) return
+      go({ to: "back" })
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [go])
+  const updateReady = !!app.account?.update?.ready
+
+  return (
+    <div className="set">
+      <header className="top set-top">
+        <h1 className="set-top-title">Settings</h1>
+        <span />
+        <div className="top-tools">
+          <button type="button" className="btn is-quiet is-small set-back" title="Back (Esc)" onClick={() => go({ to: "back" })}>
+            <Icon name="back" size={14} />
+            Back
+          </button>
+        </div>
+      </header>
+      <nav className="set-nav" aria-label="Settings sections">
+        <ul>
+          {SECTIONS.map(([id, label]) => {
+            const on = nav.section === id
+            return (
+              <li key={id}>
+                <button type="button" className={cx("side-row", on && "is-on")} aria-current={on ? "page" : undefined} onClick={() => go({ to: "settings", section: id })}>
+                  <span className="side-label">{label}</span>
+                  {id === "updates" && updateReady && (
+                    <>
+                      <span className="set-nav-pip" aria-hidden="true" />
+                      <span className="sr">, an update is ready</span>
+                    </>
+                  )}
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      </nav>
+      <main className="set-main">
+        <div className="set-body" key={nav.section}>
+          <Current section={nav.section} />
+        </div>
+      </main>
+    </div>
+  )
+}
+
+function Current({ section }: { section: Section }) {
+  switch (section) {
+    case "account":
+      return <AccountSection />
+    case "appearance":
+      return <AppearanceSection />
+    case "notifications":
+      return <NotificationsSection />
+    case "computers":
+      return <ComputersSection />
+    case "agents":
+      return <AgentsSection />
+    case "updates":
+      return <UpdatesSection />
+    case "about":
+      return <AboutSection />
+  }
+}
