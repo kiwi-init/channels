@@ -79,6 +79,11 @@ describe("people read nicknames, never handles", () => {
     for (const text of ["\\@patient-otter is here", "@patient\\-otter is here", "patient\\-otter is here"]) expect(linked(text, both, tasks)).toBe(text);
   });
 
+  test("an escaped handle keeps its whole span, so a task number inside it stays text", () => {
+    const tasky = new Map([["patient-T12-otter", "Alice"]]);
+    for (const text of ["\\@patient-T12-otter", "@patient-T12-otter\\!", "\\patient-T12-otter"]) expect(linked(text, tasky, tasks)).toBe(text);
+  });
+
   test("text that already holds private-use characters keeps them in a preview", () => {
     const text = "literal 0 then `0` and @patient-otter";
     expect(withNames(text, nicknames, preview)).toBe("literal 0 then 0 and @opus-vm-coder");

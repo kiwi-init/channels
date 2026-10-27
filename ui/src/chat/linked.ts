@@ -53,8 +53,8 @@ function found(text: string, nicknames: ReadonlyMap<string, string>): Found[] {
   }
   const kept: Found[] = []
   const escaped = (hit: Found) => text[hit.start - 1] === "\\" || text[hit.end] === "\\"
-  for (const hit of hits.sort((a, b) => a.start - b.start)) if (!escaped(hit) && (!kept.length || hit.start >= (kept.at(-1)?.end ?? 0))) kept.push(hit)
-  return kept
+  for (const hit of hits.sort((a, b) => a.start - b.start)) if (!kept.length || hit.start >= (kept.at(-1)?.end ?? 0)) kept.push(hit)
+  return kept.filter((hit) => !escaped(hit))
 }
 
 function swap(text: string, nicknames: ReadonlyMap<string, string>, out: (hit: Found) => string | null): string {
