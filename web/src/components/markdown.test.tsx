@@ -43,7 +43,7 @@ describe("mentions", () => {
       { kind: "handle", text: "zesty-owl", name: "zesty-owl", label: "grokbot" },
       { kind: "text", text: "." },
     ])
-    for (const text of ["jovial-geckos", "jovial-gecko@example.com", "x/jovial-gecko", "a.jovial-gecko", "jow said so"]) {
+    for (const text of ["jovial-geckos", "jovial-gecko@example.com", "x/jovial-gecko", "a.jovial-gecko", "jow said so", "jovial-gecko/src/main.ts", "on jovial-gecko/fix-cache", "?q=jovial-gecko"]) {
       expect(mentionParts(text, labelOf)).toEqual([{ kind: "text", text }])
     }
   })

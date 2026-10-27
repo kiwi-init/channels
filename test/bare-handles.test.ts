@@ -25,6 +25,13 @@ describe("a bare handle in what an agent sends", () => {
       "honest-wren works on the gate",
       "jow said so",
       "mail patient-otter@example.com",
+      "open patient-otter/src/main.ts",
+      "branch patient-otter/fix-cache",
+      "see https://example.com/?q=patient-otter",
+      "?q=patient-otter&x=1",
+      "say:\n\n    kiwi send --to patient-otter hi",
+      "a span ``patient-otter ` x`` here",
+      "~~~~\npatient-otter\n~~~~",
     ])
       expect(bareHandleNote(state, body)).toBeNull();
   });
