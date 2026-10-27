@@ -20,27 +20,14 @@ const sandboxPages = mac ? null : dlopen(shellPath, { kiwi_sandbox_pages: { args
 
 export const windowLook = dlopen(shellPath, { kiwi_window_look: { args: [FFIType.ptr, FFIType.f64, FFIType.f64, FFIType.u32, FFIType.u32], returns: FFIType.void } }).symbols.kiwi_window_look;
 
-const clearShell = mac ? null : dlopen(shellPath, { kiwi_window_clear: { args: [], returns: FFIType.void } }).symbols;
-
-export const clearWindow = (): void => void clearShell?.kiwi_window_clear();
-
 const frostShell = mac
   ? dlopen(shellPath, {
-      kiwi_window_frost: { args: [FFIType.ptr, FFIType.function], returns: FFIType.bool },
       kiwi_frost_allowed: { args: [], returns: FFIType.bool },
       kiwi_frost_force_for_test: { args: [FFIType.i32], returns: FFIType.void },
       kiwi_window_appearance: { args: [FFIType.ptr, FFIType.i32], returns: FFIType.void },
       kiwi_window_looks: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
     }).symbols
   : null;
-
-let frostChanges: JSCallback | null = null;
-
-export function frostWindow(win: Pointer, changed: (on: boolean) => void): boolean {
-  if (!frostShell) return false;
-  frostChanges = new JSCallback((on: boolean) => changed(on), { args: ["bool"], returns: "void", threadsafe: true });
-  return frostShell.kiwi_window_frost(win, frostChanges.ptr);
-}
 
 export const frostAllowed = (): boolean => frostShell?.kiwi_frost_allowed() ?? false;
 

@@ -3,10 +3,9 @@ import path from "node:path";
 import Electrobun, { BrowserWindow, PATHS, Utils, type BrowserView } from "electrobun/main";
 
 import { onOurPage, preloadSource, toPageScript } from "./eb-bridge.ts";
-import { frost, lookMarks } from "./frost-eb.ts";
+import { lookMarks } from "./frost-eb.ts";
 import { keys, keysToPage } from "./keys-start-eb.ts";
-import { blursBehind } from "./compositor.ts";
-import { clearWindow, cString, committedPage, mac, setPageHtml, setPreload, windowLook } from "./native-eb.ts";
+import { cString, committedPage, mac, setPageHtml, setPreload, windowLook } from "./native-eb.ts";
 import { navigation, openedUrl, PAGE_RULES, PAGE_TEMPLATE, PAGE_URL, pageWithCsp, RULES_CANARY } from "./eb-page.ts";
 import { mark } from "./eb-startup.ts";
 import { logMainError } from "./main-log.ts";
@@ -165,8 +164,6 @@ export async function createWindow(keyring: KeyringState | null = null): Promise
   webview.on("did-commit-navigation", () => mark("committed"));
   const look = win.ptr;
   if (look) windowLook(look, minWindowWidth(process.platform), WINDOW_SIZE.minHeight, rgb(windowBackground(false)), rgb(windowBackground(true)));
-  if (look && blursBehind(process.env, process.platform)) clearWindow();
-  if (look) frost(look, (on) => bridge.push("frost", on));
   if (mac) win.setWindowButtonPosition(TRAFFIC_LIGHTS.x, TRAFFIC_LIGHTS.y);
   Electrobun.events.on(`new-window-open-${webview.id}`, (e: { data?: { detail?: unknown } }) => {
     const url = openedUrl(e.data?.detail);
