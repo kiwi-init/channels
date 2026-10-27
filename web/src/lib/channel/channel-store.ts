@@ -148,7 +148,7 @@ export class ChannelStore {
     this.head = computed(() => this.state.value.head)
     this.count = computed(() => this.messages.value.length)
     const scopesKey = computed(() => [...this.state.value.members.values()].map((m) => `${m.pk}:${m.scopes.join(",")}`).join("|"))
-    const bitsKey = computed(() => this.roster.value.map((m) => `${m.pk}:${m.readOnly ? 0 : 1}`).join("|"))
+    const bitsKey = computed(() => this.roster.value.map((m) => `${m.pk}:${m.readOnly ? 0 : 1}:${m.renames ?? 0}`).join("|"))
     const repoList = computed(() => this.state.value.repos.join(","))
     this.reconcileDue = computed(() => `${scopesKey.value}\n${bitsKey.value}\n${this.caughtUp.value}`)
     this.checksDue = computed(() => `${this.head.value}\n${this.caughtUp.value}`)
@@ -207,6 +207,7 @@ export class ChannelStore {
       this.roster.value = await this.ch.members()
       this.rosterIn = true
       if (this.ch.isOwner && (await this.ch.rotateIfDue())) this.roster.value = await this.ch.members()
+      void this.rebase(this.namesDue.peek())
     } catch (err) {
       this.onGone(err)
     }
@@ -477,8 +478,7 @@ export class ChannelStore {
   }
 
   private async rebase(key: string): Promise<void> {
-    if (!key || key === this.rebasedFor) return
-    this.rebasedFor = key
+    if (!key || key === this.rebasedFor || key === this.rebasing) return
     this.rebasing = key
     try {
       const roster = this.rosterForFold.peek()
@@ -487,6 +487,7 @@ export class ChannelStore {
       const since = from?.n ?? 0
       const page = await this.ch.history(since).catch(() => null)
       if (!page || this.rebasing !== key || this.namesDue.peek() !== key) return
+      this.rebasedFor = key
       if (page.head > since && page.first !== since + 1) return
       batch(() => {
         this.base.value = from
@@ -496,9 +497,11 @@ export class ChannelStore {
         )
       })
     } finally {
-      if (this.rebasing === key) this.rebasing = null
+      if (this.rebasing === key) {
+        this.rebasing = null
+        this.trim()
+      }
     }
-    this.trim()
   }
 
   private trimSoon(): () => void {
@@ -523,7 +526,7 @@ export class ChannelStore {
       (changed) => {
         if (changed.length) void this.refreshRoster()
       },
-      () => {}
+      () => void this.refreshRoster()
     )
   }
 

@@ -334,4 +334,29 @@ describe("a renamed seat", () => {
     expect(store.handle.value.state.members.get("atlas-coder")?.messages).toBe(3)
     close()
   })
+
+  test("a rebase whose history didn't arrive is tried again on the next roster refresh", async () => {
+    const log = [1, 2, 3].map((seq) => ({ ...msg(seq), pk: "pk-atlas" }))
+    const kept: { base?: FoldBase } = {}
+    fold(log.slice(0, 2), rosterOf([person("atlas", "pk-atlas")]), Date.now(), null, null, null, (b) => void (kept.base = b))
+    let down = true
+    const history = (since: unknown) => {
+      if (down) throw new Error("relay down")
+      return { head: 3, messages: log.filter((m) => m.seq > Number(since)), first: Number(since) + 1 }
+    }
+    const r = relay(2_002, { answers: { snapshot: () => kept.base, history } })
+    const { store, close } = await opened(r)
+    r.say({ _tag: "Message", message: log[2]!, row: null })
+    await until(() => store.handle.value.state.head === 3)
+    r.setRoster([{ ...person("atlas-coder", "pk-atlas"), was: ["atlas"] }])
+    await store.refreshRoster()
+    await until(() => r.called("history").length === 1)
+    await sleep(5)
+    expect(store.handle.value.messages).toHaveLength(1)
+    down = false
+    await store.refreshRoster()
+    await until(() => store.handle.value.messages.length === 3)
+    expect(store.handle.value.state.members.get("atlas-coder")?.messages).toBe(3)
+    close()
+  })
 })
