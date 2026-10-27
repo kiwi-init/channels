@@ -3,7 +3,7 @@ const K1 = 1.2
 const B = 0.75
 const PREFIX = 0.6
 
-export type Field = { text: string; weight: number }
+type Field = { text: string; weight: number }
 export type Doc<T> = { item: T; fields: Field[] }
 export type Index<T> = { docs: { item: T; tokens: Map<string, number>; length: number }[]; average: number }
 export type Ranked<T> = { item: T; score: number }

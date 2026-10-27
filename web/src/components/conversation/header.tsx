@@ -37,7 +37,7 @@ export type HeaderProps = {
   reviewing: boolean
 }
 
-export type SearchKey = "up" | "down" | "enter"
+type SearchKey = "up" | "down" | "enter"
 const KEYS: Record<string, SearchKey> = { ArrowUp: "up", ArrowDown: "down", Enter: "enter" }
 
 const SEGMENT = "no-drag relative flex h-full shrink-0 items-center gap-1.5 rounded-full px-2.5 text-ui transition-colors"
