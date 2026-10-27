@@ -186,9 +186,10 @@ export function Composer({ channel, where, placeholder, inThread, suggest }: { c
           if (!fileDrag(e.dataTransfer)) return
           e.preventDefault()
           setDropping(false)
+          if (e.dataTransfer.files.length) return attach([...e.dataTransfer.files])
           void takeDropped(e.dataTransfer).then(({ files: dropped, refused }) => {
+            for (const why of refused) toast(why)
             attach(dropped)
-            for (const name of refused) toast(`${name} isn't an image`)
           })
         }}
       >
