@@ -71,11 +71,14 @@ function relay(head = 0, opts: { owner?: boolean; answers?: Record<string, Answe
   const lend = () => ({ emit: (e: { _tag: string }) => void lent.emitted.push(e._tag), release: () => void lent.released++ })
   const live = () => follows.at(-1)!
   const say = (e: FollowEvent) => live().on(e)
+  let rosterAt = 0
   const setRoster = (next: Member[]) => {
+    rosterAt = Date.now()
     roster = next
   }
+  const changedAt = () => rosterAt
   const called = (op: string) => calls.filter((c) => c.op === op)
-  return { link, lend, follows, lent, live, say, setRoster, called, kept }
+  return { link, lend, follows, lent, live, say, setRoster, changedAt, called, kept }
 }
 
 const opened = async (r: ReturnType<typeof relay>, human?: null) => {
@@ -214,11 +217,10 @@ describe("the sealed keep", () => {
     r.setRoster([person("atlas", "pk-atlas"), person("nova", "pk-nova")])
     r.say({ _tag: "Roster" })
     await until(() => store.handle.value.roster.length === 2)
-    const changed = Date.now()
     await sleep(3_400)
-    const after = r.kept.filter((k) => k.at >= changed)
+    const after = r.kept.filter((k) => k.at >= r.changedAt())
     expect(after).toHaveLength(1)
-    expect(after[0]!.at - changed).toBeGreaterThanOrEqual(2_900)
+    expect(after[0]!.at - r.changedAt()).toBeGreaterThanOrEqual(2_990)
     expect(JSON.stringify(after[0]!.state)).toContain("pk-nova")
     close()
   }, 10_000)
