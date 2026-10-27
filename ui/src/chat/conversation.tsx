@@ -1,4 +1,4 @@
-import { Fragment, startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { Component, Fragment, startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
 import { Composer } from "~/chat/composer"
 import { MessageRow } from "~/chat/message"
@@ -131,12 +131,32 @@ export function useStick(following = true) {
     box.scrollTo({ top: box.scrollHeight, behavior: smooth && !matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "auto" })
   }, [])
 
+  const pin = useCallback(() => {
+    const box = scroller.current
+    const list = content.current
+    if (!box || !list || stuck.current) return
+    anchor.current = anchorIn(box, list)
+  }, [])
+
   const toOffset = useCallback((top: number) => {
     const box = scroller.current
     if (box) box.scrollTop = top
   }, [])
 
-  return { scroller, content, stuck, live, remember, settle, toBottom, toOffset }
+  return { scroller, content, stuck, live, remember, settle, pin, toBottom, toOffset }
+}
+
+class Anchored extends Component<{ before: () => void; after: () => void; children: ReactNode }> {
+  override getSnapshotBeforeUpdate(): null {
+    this.props.before()
+    return null
+  }
+  override componentDidUpdate(): void {
+    this.props.after()
+  }
+  override render(): ReactNode {
+    return this.props.children
+  }
 }
 
 export function Conversation({ channel, search }: { channel: Channel; search: string }) {
@@ -194,7 +214,7 @@ function Feed({ channel, where, search }: { channel: Channel; where: Where; sear
   const start = firstAt >= 0 && firstAt < end ? firstAt : Math.max(0, end - TAIL)
   const following = end === list.length
   const latest = useRef(false)
-  const { scroller, content, stuck, live, remember, settle, toBottom, toOffset } = useStick(following)
+  const { scroller, content, stuck, live, remember, settle, pin, toBottom, toOffset } = useStick(following)
 
   useEffect(() => {
     const near = [...list.slice(Math.max(0, start - MORE), start), ...list.slice(end, end + MORE)]
@@ -300,24 +320,26 @@ function Feed({ channel, where, search }: { channel: Channel; where: Where; sear
           {list.length === 0 ? (
             <Start channel={channel} where={where} searching={!!q} />
           ) : (
-            list.slice(start, end).map((m, k) => {
-              const i = start + k
-              return (
-                <Fragment key={m.seq}>
-                  {(i === 0 || !sameDay(list[i - 1]?.at ?? 0, m.at)) && (
-                    <p className="day">
-                      <span>{day(m.at)}</span>
-                    </p>
-                  )}
-                  {m.seq === mark && (
-                    <p className="feed-new" role="separator">
-                      <span>New</span>
-                    </p>
-                  )}
-                  <MessageRow channel={channel} m={m} compact={m.seq !== mark && compactAt(list, i)} names={names} tasks={tasks} quote={quoteOf(list, i, bySeq)} onQuote={onQuote} />
-                </Fragment>
-              )
-            })
+            <Anchored before={pin} after={settle}>
+              {list.slice(start, end).map((m, k) => {
+                const i = start + k
+                return (
+                  <Fragment key={m.seq}>
+                    {(i === 0 || !sameDay(list[i - 1]?.at ?? 0, m.at)) && (
+                      <p className="day">
+                        <span>{day(m.at)}</span>
+                      </p>
+                    )}
+                    {m.seq === mark && (
+                      <p className="feed-new" role="separator">
+                        <span>New</span>
+                      </p>
+                    )}
+                    <MessageRow channel={channel} m={m} compact={m.seq !== mark && compactAt(list, i)} names={names} tasks={tasks} quote={quoteOf(list, i, bySeq)} onQuote={onQuote} />
+                  </Fragment>
+                )
+              })}
+            </Anchored>
           )}
           {typing.length > 0 && (
             <p className="typing">
