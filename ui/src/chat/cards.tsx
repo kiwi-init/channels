@@ -4,11 +4,11 @@ import { cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { clock } from "~/kit/time"
 import type { Channel, PermissionAsk, PullRequest, QuestionAsk } from "~/model"
-import { useApp } from "~/nav"
+import { useAct } from "~/nav"
 import { nickname } from "~/names"
 
 export function TaskChip({ channel, id }: { channel: Channel; id: number }) {
-  const { go } = useApp()
+  const { go } = useAct()
   const t = channel.tasks.find((t) => t.id === id)
   if (!t) return null
   return (
@@ -63,7 +63,7 @@ export function PrChip({ pr }: { pr: PullRequest }) {
 }
 
 export function PermissionCard({ channel, ask }: { channel: Channel; ask: PermissionAsk }) {
-  const { app } = useApp()
+  const { actions } = useAct()
   return (
     <div className={cx("ask", !ask.answer && "is-open")}>
       <p className="ask-title">
@@ -78,10 +78,10 @@ export function PermissionCard({ channel, ask }: { channel: Channel; ask: Permis
         <>
           <p className="ask-state is-waiting">Waiting on you</p>
           <div className="actions">
-            <button type="button" className="btn is-primary is-small" onClick={() => app.actions.answerPermission(channel.code, ask.id, true)}>
+            <button type="button" className="btn is-primary is-small" onClick={() => actions.answerPermission(channel.code, ask.id, true)}>
               Allow
             </button>
-            <button type="button" className="btn is-small" onClick={() => app.actions.answerPermission(channel.code, ask.id, false)}>
+            <button type="button" className="btn is-small" onClick={() => actions.answerPermission(channel.code, ask.id, false)}>
               Deny
             </button>
           </div>
@@ -92,7 +92,7 @@ export function PermissionCard({ channel, ask }: { channel: Channel; ask: Permis
 }
 
 export function QuestionCard({ channel, ask }: { channel: Channel; ask: QuestionAsk }) {
-  const { app } = useApp()
+  const { actions } = useAct()
   const [other, setOther] = useState<string | null>(null)
   if (ask.answer)
     return (
@@ -107,7 +107,7 @@ export function QuestionCard({ channel, ask }: { channel: Channel; ask: Question
       <ol className="ask-options">
         {ask.options.map((o, i) => (
           <li key={o}>
-            <button type="button" className="ask-option" onClick={() => app.actions.answerQuestion(channel.code, ask.id, o)}>
+            <button type="button" className="ask-option" onClick={() => actions.answerQuestion(channel.code, ask.id, o)}>
               <span className="ask-letter">{String.fromCharCode(65 + i)}</span>
               {o}
             </button>
@@ -123,7 +123,7 @@ export function QuestionCard({ channel, ask }: { channel: Channel; ask: Question
           className="ask-other"
           onSubmit={(e) => {
             e.preventDefault()
-            if (other.trim()) app.actions.answerQuestion(channel.code, ask.id, other.trim())
+            if (other.trim()) actions.answerQuestion(channel.code, ask.id, other.trim())
           }}
         >
           <input autoFocus className="input" value={other} onChange={(e) => setOther(e.target.value)} placeholder="Your answer" onKeyDown={(e) => e.key === "Escape" && setOther(null)} />

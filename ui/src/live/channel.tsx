@@ -13,6 +13,7 @@ import { sendsInTurn } from "@/lib/send-order"
 import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@/lib/threads"
 import { announce } from "~/kit/toasts"
 import { useNewMembers } from "~/live/defaults"
+import { kept } from "~/live/keep"
 import { asksOf, directsOf, messagesOf, peopleOf, roomsOf, tasksOf, type Pending } from "~/live/map"
 import { iconUrl } from "~/live/icon"
 import { usePictures } from "~/live/pictures"
@@ -98,7 +99,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const people = useMemo(() => peopleOf(state, roster, online, me, wakes), [state, roster, online, me, wakes])
   const nicknames = useMemo(() => nicknamesOf(state.members.values()), [state.members])
   const asks = useMemo(() => asksOf(state, messages, me, isOwner, requests), [state, messages, me, isOwner, requests])
-  const mapped = useMemo(() => messagesOf(state, messages, me, asks.askOf, pictures, pending), [state, messages, me, asks.askOf, pictures, pending])
+  const mapped = useMemo(() => kept(code, messagesOf(state, messages, me, asks.askOf, pictures, pending)), [code, state, messages, me, asks.askOf, pictures, pending])
   const tasks = useMemo(() => tasksOf(state, asks.held), [state, asks.held])
   const from = roomsFrom(roomId)
   const rooms = useMemo(() => roomsOf(state, messages, me, seen, from), [state, messages, me, seen, from])

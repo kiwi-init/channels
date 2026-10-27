@@ -2,7 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { CHECKS } from "~/chat/cards"
 import { Composer } from "~/chat/composer"
-import { compactAt, namesOf } from "~/chat/conversation"
+import { compactAt, useNames, useTaskIds } from "~/chat/conversation"
 import { MessageRow } from "~/chat/message"
 import { Avatar, Dot, Empty, Heading, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
@@ -30,7 +30,8 @@ const holds = (a: Ask, id: number): a is PermissionAsk | QuestionAsk =>
 export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
   const task = channel.tasks.find((t) => t.id === id)
   const talk = useMemo(() => channel.messages.filter((m) => m.where.kind === "task" && m.where.task === id && m.inThread === undefined), [channel.messages, id])
-  const names = useMemo(() => namesOf(channel), [channel])
+  const names = useNames(channel)
+  const tasks = useTaskIds(channel)
   const body = useRef<HTMLDivElement>(null)
   const last = talk.at(-1)?.seq
   const seen = useRef({ id, last })
@@ -82,7 +83,7 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
           {talk.length === 0 ? (
             <p className="task-quiet">No messages about this task yet.</p>
           ) : (
-            talk.map((m, i) => <MessageRow key={m.seq} channel={channel} m={m} compact={compactAt(talk, i)} names={names} inThread />)
+            talk.map((m, i) => <MessageRow key={m.seq} channel={channel} m={m} compact={compactAt(talk, i)} names={names} tasks={tasks} inThread />)
           )}
         </section>
       </div>

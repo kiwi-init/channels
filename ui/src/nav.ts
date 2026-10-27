@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react"
 
-import type { App, Where } from "~/model"
+import type { Actions, App, Where } from "~/model"
 
 type Tab = "chat" | "tasks" | "needs"
 
@@ -75,4 +75,18 @@ export function useApp(): Ctx {
   const ctx = useContext(AppContext)
   if (!ctx) throw new Error("useApp outside the app")
   return ctx
+}
+
+export interface Act {
+  actions: Actions
+  go: (go: Go) => void
+  toast: (text: string) => void
+}
+
+export const ActContext = createContext<Act | null>(null)
+
+export function useAct(): Act {
+  const act = useContext(ActContext)
+  if (!act) throw new Error("useAct outside the app")
+  return act
 }

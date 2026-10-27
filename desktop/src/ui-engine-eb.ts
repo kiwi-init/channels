@@ -27,16 +27,18 @@ const testChannel = (value: string | undefined): Channel | null => {
 
 const official = (): Channel => ({ manifestUrl: UI_MANIFEST_URL, trustedKeys: { ...UI_TRUSTED_KEYS } });
 
-function devChannelLine(): string | undefined {
-  try {
-    return fs.readFileSync(path.join(dataDir, "ui-dev-channel"), "utf8").trim();
-  } catch {
-    // No file: a dev build without a local channel shows its built-in UI.
-    return process.env.KIWI_EB_UI_CHANNEL;
-  }
-}
-
-const devChannel: Channel | null = KIWI_EB_DEV ? testChannel(devChannelLine()) : null;
+const devChannel: Channel | null = KIWI_EB_DEV
+  ? testChannel(
+      (() => {
+        try {
+          return fs.readFileSync(path.join(dataDir, "ui-dev-channel"), "utf8").trim();
+        } catch {
+          // No file: a dev build without a local channel shows its built-in UI.
+          return undefined;
+        }
+      })(),
+    )
+  : null;
 
 const channel: Channel | null = KIWI_EB_TEST ? testChannel(process.env.KIWI_EB_UI_CHANNEL) : devChannel ? devChannel : KIWI_EB_OFFICIAL_UI ? official() : null;
 

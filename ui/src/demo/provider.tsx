@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
 
 import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_EMPTY, DEMO_GUEST, DEMO_PREFS, DEMO_TILES, DEMO_WAITING } from "~/demo/data"
+import { longFeed } from "~/demo/long"
 import type { Account, Actions, App, Channel, ChannelTile, Message, Prefs, Task } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 
@@ -26,11 +27,13 @@ const PERSONAS: App["personas"] = [
   { id: "designer", label: "Designer", about: "Owns how it looks: shots on every PR, no slop." },
 ]
 
-export type Scenario = "full" | "signed-out" | "no-channels" | "updates" | "update-ready"
+export type Scenario = "full" | "long" | "signed-out" | "no-channels" | "updates" | "update-ready"
 
 function initial(scenario: Scenario, look: Partial<Prefs>): State {
   const prefs = { ...DEMO_PREFS, ...look }
-  const channels = new Map([DEMO_CHANNEL, DEMO_EMPTY, DEMO_WAITING, { ...DEMO_EMPTY, code: "interlinked", title: "interlinked" }, DEMO_GUEST].map((c) => [c.code, c]))
+  const channels = new Map(
+    [scenario === "long" ? longFeed(DEMO_CHANNEL) : DEMO_CHANNEL, DEMO_EMPTY, DEMO_WAITING, { ...DEMO_EMPTY, code: "interlinked", title: "interlinked" }, DEMO_GUEST].map((c) => [c.code, c])
+  )
   if (scenario === "updates")
     return { account: { ...DEMO_ACCOUNT, uiUpdate: { version: "dev-1542" }, update: { version: "2026.10.7", ready: true, state: "ready" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "update-ready") return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.7", ready: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }

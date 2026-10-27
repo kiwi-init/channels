@@ -13,6 +13,7 @@ const kiwi = (nav: Partial<Nav> = {}): Shot => ({ scenario: "full", channel: "ki
 
 export const SHOTS: Record<string, Shot> = {
   channel: kiwi(),
+  "long-feed": { scenario: "long", channel: "kiwi" },
   thread: kiwi({ panel: { kind: "thread", seq: 112 } }),
   dm: kiwi({ where: { kind: "dm", with: "atlas" } }),
   room: kiwi({ where: { kind: "room", room: "releases" } }),

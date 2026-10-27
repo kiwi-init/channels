@@ -1,1 +1,2 @@
-Panels resize, the task panel clears the composer, activity lines read in the system font
+The conversation scrolls at 60fps: it renders the latest messages, adds older ones on the way up, and rows don't re-render on every update
+Doing tasks and waiting steps show a still dashed ring, with no spin

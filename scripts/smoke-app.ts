@@ -65,7 +65,7 @@ const send = async (text: string) => {
 try {
   at = "first run";
   await page.goto(BASE);
-  await page.getByRole("textbox", { name: "What should people call you?" }).fill("smoke");
+  await page.getByRole("textbox", { name: "Your name" }).fill("smoke");
   await page.getByRole("button", { name: "Continue" }).click();
   const addChannel = page.getByRole("button", { name: "New channel or join one" });
   await addChannel.waitFor({ timeout: 15000 });
