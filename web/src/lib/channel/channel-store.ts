@@ -104,7 +104,8 @@ export class ChannelStore {
   private readonly rulesDue: ReadonlySignal<string>
   private readonly namesDue: ReadonlySignal<string>
   private repair: string | null = null
-  private rebasing: string | null = null
+  private rebasing: { key: string; n: number } | null = null
+  private attempts = 0
 
   private guardIn = false
   private roomsIn = false
@@ -483,15 +484,16 @@ export class ChannelStore {
 
   private async rebase(): Promise<void> {
     const key = this.repair
-    if (!key || key === this.rebasing) return
-    this.rebasing = key
+    if (!key || this.rebasing?.key === key) return
+    const mine = { key, n: ++this.attempts }
+    this.rebasing = mine
     try {
       const roster = this.rosterForFold.peek()
       const snap = await this.ch.snapshot().catch(() => null)
       const from = snap && !namesMoved(snap, roster) ? snap : null
       const since = from?.n ?? 0
       const page = await this.ch.history(since).catch(() => null)
-      if (!page || this.rebasing !== key || this.repair !== key) return
+      if (!page || this.rebasing !== mine || this.repair !== key) return
       if (page.head > since && page.first !== since + 1) return
       batch(() => {
         this.base.value = from
@@ -502,7 +504,7 @@ export class ChannelStore {
       })
       this.repair = null
     } finally {
-      if (this.rebasing === key) {
+      if (this.rebasing === mine) {
         this.rebasing = null
         this.trim()
       }
@@ -515,7 +517,7 @@ export class ChannelStore {
   }
 
   private trim(): void {
-    if (this.rebasing) return
+    if (this.rebasing || this.repair) return
     const next = trimmed(this.messages.peek(), this.rosterForFold.peek(), this.now.peek(), this.roomsFloor.peek(), this.guardFloor.peek(), this.base.peek(), HISTORY)
     if (!next) return
     batch(() => {
