@@ -203,6 +203,10 @@ const tasks: Task[] = [
 
 const general = { kind: "room", room: "general" } as const
 
+const ICONS_SHOT = `data:image/svg+xml,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270"><rect width="480" height="270" fill="#18181b"/>${["#5b9bff", "#f5b041", "#32d074", "#b48cff", "#ff6259"].map((c, i) => `<rect x="${36 + i * 86}" y="95" width="64" height="64" rx="16" fill="${c}"/>`).join("")}<rect x="36" y="190" width="200" height="10" rx="5" fill="#3f3f46"/></svg>`
+)}`
+
 const messages: Message[] = [
   { seq: 101, from: "maya", at: m(60 * 20), text: "morning! anything blocking the release?", where: general },
   { seq: 102, from: "atlas", at: m(60 * 20 - 1), text: "Nothing blocking. T9 is merged, the rest is polish.", where: general, task: 9 },
@@ -222,7 +226,17 @@ const messages: Message[] = [
   { seq: 121, from: "atlas", at: m(6), text: "T13 for win. It can't be undone, so it waits for you.", where: general, task: 13 },
   { seq: 122, from: "win", at: m(5), text: "This needs your OK first:", where: general, ask: "perm-1" },
   { seq: 123, from: "win", at: m(5), text: "Done with T12: PR #43 is up. @atlas can you review?", where: general, pr: pr43 },
-  { seq: 124, from: "pixel", at: m(3), text: "New channel icons for T14. @jow they need your eyes before I merge.", where: general, pr: pr44, mentionsYou: true, ask: "rev-14" },
+  {
+    seq: 124,
+    from: "pixel",
+    at: m(3),
+    text: "New channel icons for T14. @jow they need your eyes before I merge.",
+    where: general,
+    pr: pr44,
+    mentionsYou: true,
+    ask: "rev-14",
+    images: [{ url: ICONS_SHOT, width: 480, height: 270, alt: "channel-icons.png" }],
+  },
   { seq: 125, from: "atlas", at: m(2), text: "Should the redesign go to everyone at once, or behind a setting first?", where: general, ask: "q-1", mentionsYou: true },
   { seq: 126, from: "maya", at: m(1), text: "nice, thanks!", where: general },
   {

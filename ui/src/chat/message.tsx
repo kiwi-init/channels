@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { lazy, memo, Suspense, useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
 import { PermissionCard, PrChip, QuestionCard, TaskChip } from "~/chat/cards"
 import { preview, useReplying } from "~/chat/reply"
@@ -11,6 +11,7 @@ import { nickname } from "~/names"
 import { named, withNames } from "~/chat/linked"
 
 const Markdown = lazy(() => import("~/chat/markdown"))
+const Annotator = lazy(() => import("~/chat/annotator"))
 
 const QUICK = ["👍", "🔥", "👀", "✅"]
 const CLAMP_PX = 12 * 22
@@ -29,22 +30,6 @@ function Body({ text, names, tasks, onImage }: { text: string; names: ReadonlyMa
         <Markdown text={text} names={names} tasks={tasks} onMention={onMention} onTask={onTask} onImage={onImage} onShown={onShown} copied={copied} />
       </Suspense>
     </div>
-  )
-}
-
-function Viewer({ image, onClose }: { image: { url: string; alt: string }; onClose: () => void }) {
-  const ref = useRef<HTMLDialogElement>(null)
-  useEffect(() => {
-    const el = ref.current
-    if (el && !el.open) el.showModal()
-  }, [])
-  return (
-    <dialog ref={ref} className="viewer" aria-label={image.alt || "Image"} onClose={onClose} onClick={onClose}>
-      <img src={image.url} alt={image.alt} />
-      <button type="button" className="icon-btn viewer-close" aria-label="Close" autoFocus>
-        <Icon name="close" />
-      </button>
-    </dialog>
   )
 }
 
@@ -241,7 +226,22 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
           </button>
         </div>
       )}
-      {image && <Viewer image={image} onClose={() => setImage(null)} />}
+      {image && (
+        <Suspense fallback={null}>
+          <Annotator
+            image={image}
+            sender={nickname(channel, m.from)}
+            face={who}
+            at={m.at}
+            onSend={
+              channel.people.find((p) => p.you)?.readOnly
+                ? undefined
+                : (note, upload) => actions.send(channel.code, m.where, note || upload.name, { replyTo: m.seq, ...(m.inThread !== undefined ? { inThread: m.inThread } : {}), images: [upload] })
+            }
+            onClose={() => setImage(null)}
+          />
+        </Suspense>
+      )}
     </article>
   )
 }, sameRow)
