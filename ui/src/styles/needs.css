@@ -13,7 +13,7 @@
 }
 
 .needs-sum {
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
 }
 
 .needs-list > .empty {
@@ -32,21 +32,15 @@
   position: relative;
   display: grid;
   gap: 14px;
-  padding: 14px 18px 16px;
-  border: 1px solid var(--line-3);
+  padding: 16px 18px;
+  border: 0;
   border-radius: var(--r-card);
+  background: var(--bg-2);
   animation: rise var(--slow) var(--ease);
 }
 
 .needs-card.is-open::before {
-  content: "";
-  position: absolute;
-  top: 14px;
-  bottom: 14px;
-  left: -1px;
-  width: 2px;
-  border-radius: 0 2px 2px 0;
-  background: var(--decide);
+  content: none;
 }
 
 .needs-head {
@@ -54,7 +48,7 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
 }
 
 .needs-head .av {
@@ -66,7 +60,7 @@
   border: 0;
   background: none;
   color: var(--ink);
-  font: 700 var(--t-ui) var(--mono);
+  font: 600 var(--t-ui) var(--ui);
   white-space: nowrap;
 }
 
@@ -118,7 +112,7 @@ button.needs-name:hover {
   border: 0;
   background: none;
   color: var(--ink-3);
-  font: var(--t-meta) var(--mono);
+  font: var(--t-meta) var(--ui);
 }
 
 .needs-link:hover {
@@ -128,7 +122,7 @@ button.needs-name:hover {
 }
 
 .needs-title {
-  font: 700 var(--t-ui) var(--mono);
+  font: 600 var(--t-ui) var(--ui);
 }
 
 .needs-text {
@@ -138,18 +132,18 @@ button.needs-name:hover {
 
 .needs-id {
   color: var(--ink-2);
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
 }
 
 .needs-line {
   color: var(--ink-2);
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
 }
 
 .needs-label {
   margin-top: 2px;
   color: var(--ink-3);
-  font: var(--t-meta) var(--mono);
+  font: var(--t-meta) var(--ui);
 }
 
 .needs-code {
@@ -178,6 +172,8 @@ button.needs-name:hover {
   margin: 0;
   padding: 0;
   border: 0;
+  background: none;
+  box-shadow: none;
 }
 
 .needs-note {
@@ -191,7 +187,7 @@ button.needs-name:hover {
 
 .needs-note-by {
   color: var(--ink-3);
-  font: var(--t-meta) var(--mono);
+  font: var(--t-meta) var(--ui);
   white-space: nowrap;
 }
 
@@ -207,7 +203,7 @@ button.needs-name:hover {
 }
 
 .needs-check-q {
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
 }
 
 .needs-pin {
@@ -222,18 +218,18 @@ button.needs-name:hover {
   height: 52px;
   border: 1px solid var(--line-3);
   border-radius: var(--r-ctl);
-  font: 700 26px var(--mono);
+  font: 600 26px var(--ui);
   font-variant-numeric: tabular-nums;
 }
 
 .needs-check-hint {
   color: var(--ink-3);
-  font: var(--t-meta) var(--mono);
+  font: var(--t-meta) var(--ui);
 }
 
 .needs-done {
   margin-top: 10px;
-  font: var(--t-meta) var(--mono);
+  font: var(--t-meta) var(--ui);
 }
 
 .needs-done summary {
@@ -242,7 +238,7 @@ button.needs-name:hover {
   gap: 8px;
   padding: 4px 0;
   color: var(--ink-3);
-  font: var(--t-stamp) var(--mono);
+  font: var(--t-stamp) var(--ui);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   list-style: none;

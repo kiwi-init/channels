@@ -12,6 +12,8 @@ body,
 }
 
 body {
+  --raise: var(--bg-2);
+  --raise-2: var(--bg-3);
   background: var(--bg);
   color: var(--ink);
   font: var(--t-body) / 1.45 var(--sans);
@@ -66,7 +68,7 @@ a:hover {
 code,
 pre,
 kbd {
-  font-family: var(--mono);
+  font-family: var(--ui);
 }
 
 :focus-visible {
@@ -85,7 +87,7 @@ kbd {
 }
 
 .mono {
-  font-family: var(--mono);
+  font-family: var(--ui);
 }
 
 .dim {
@@ -120,63 +122,58 @@ kbd {
   justify-content: center;
   gap: 8px;
   height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--line-3);
+  padding: 0 14px;
+  border: 0;
   border-radius: var(--r-ctl);
-  background: none;
+  background: var(--bg-3);
   color: var(--ink);
-  font: var(--t-ui) var(--mono);
+  font: 500 var(--t-ui) var(--ui);
   white-space: nowrap;
   transition:
-    border-color var(--fast),
     background var(--fast),
     color var(--fast);
 }
 
 .btn:hover:not(:disabled) {
-  border-color: var(--ink);
+  background: color-mix(in srgb, var(--bg-3) 90%, var(--ink));
 }
 
 .btn:disabled {
   color: var(--ink-3);
-  border-color: var(--line-2);
+  background: var(--wash);
 }
 
 .btn.is-primary {
   background: var(--ink);
-  border-color: var(--ink);
   color: var(--on-ink);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .btn.is-primary:hover:not(:disabled) {
-  background: var(--ink-2);
-  border-color: var(--ink-2);
+  background: var(--ink);
+  opacity: 0.88;
 }
 
 .btn.is-primary:disabled {
-  background: var(--line-2);
-  border-color: var(--line-2);
+  background: var(--bg-3);
   color: var(--ink-3);
 }
 
 .btn.is-danger {
-  border-color: color-mix(in srgb, var(--alert) 50%, transparent);
+  background: var(--alert-wash);
   color: var(--alert);
 }
 
 .btn.is-danger:hover:not(:disabled) {
-  border-color: var(--alert);
-  background: var(--alert-wash);
+  background: color-mix(in srgb, var(--alert) 24%, transparent);
 }
 
 .btn.is-quiet {
-  border-color: transparent;
+  background: none;
   color: var(--ink-2);
 }
 
 .btn.is-quiet:hover:not(:disabled) {
-  border-color: transparent;
   background: var(--wash);
   color: var(--ink);
 }
@@ -218,18 +215,19 @@ kbd {
 .textarea {
   width: 100%;
   min-width: 0;
-  padding: 8px 10px;
-  border: 1px solid var(--line-3);
+  padding: 8px 12px;
+  border: 0;
   border-radius: var(--r-ctl);
-  background: none;
+  background: var(--bg-3);
   color: var(--ink);
   font: var(--t-body) var(--sans);
   outline: none;
-  transition: border-color var(--fast);
+  box-shadow: inset 0 0 0 1px transparent;
+  transition: box-shadow var(--fast);
 }
 
 .input.is-mono {
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
   padding: 9px 10px;
 }
 
@@ -241,7 +239,7 @@ kbd {
 
 .input:focus,
 .textarea:focus {
-  border-color: var(--ink-2);
+  box-shadow: inset 0 0 0 1px var(--line-3);
 }
 
 .input::placeholder,
@@ -256,12 +254,12 @@ kbd {
 
 .field-label {
   color: var(--ink-2);
-  font: var(--t-meta) var(--mono);
+  font: var(--t-meta) var(--ui);
 }
 
 .field-hint {
   color: var(--ink-3);
-  font: var(--t-meta) var(--mono);
+  font: var(--t-meta) var(--ui);
 }
 
 .heading {
@@ -275,9 +273,7 @@ kbd {
 
 .heading h3 {
   color: var(--ink-3);
-  font: 400 var(--t-stamp) var(--mono);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font: 600 var(--t-meta) var(--ui);
 }
 
 .heading .icon-btn {
@@ -299,20 +295,20 @@ kbd {
   padding: 0 5px;
   border-radius: 9px;
   color: var(--ink-2);
-  font: var(--t-stamp) var(--mono);
+  font: var(--t-stamp) var(--ui);
   font-variant-numeric: tabular-nums;
 }
 
 .count.is-loud {
   background: var(--decide);
   color: var(--on-ink);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .count.is-mention {
   background: var(--accent);
   color: var(--on-ink);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .av {
@@ -321,10 +317,10 @@ kbd {
   flex: none;
   width: 34px;
   height: 34px;
-  border: 1px solid var(--line-3);
-  color: var(--ink);
-  font: 700 var(--t-meta) var(--mono);
-  background: var(--bg);
+  border: 0;
+  color: var(--ink-2);
+  font: 600 var(--t-ui) var(--ui);
+  background: var(--bg-3);
 }
 
 .av-sm {
@@ -361,15 +357,15 @@ kbd {
 }
 
 .av.is-off {
-  border-style: dashed;
+  opacity: 0.5;
 }
 
 .av-gone {
-  border-style: dashed;
+  background: var(--wash);
 }
 
 .logo-letter {
-  font: 700 inherit var(--mono);
+  font: 600 inherit var(--ui);
 }
 
 .dot {
@@ -435,7 +431,7 @@ kbd {
 }
 
 .av[data-color] {
-  border-color: color-mix(in srgb, var(--member) 55%, transparent);
+  background: color-mix(in srgb, var(--member) 18%, transparent);
   color: var(--member);
 }
 
@@ -502,11 +498,12 @@ kbd {
   width: min(480px, calc(100vw - 32px));
   max-height: min(720px, calc(100vh - 48px));
   padding: 0;
-  border: 1px solid var(--line-3);
+  border: 0;
   border-radius: var(--r-win);
-  background: var(--bg);
+  background: var(--bg-2);
   color: var(--ink);
   overflow: auto;
+  box-shadow: var(--shadow-pop);
 }
 
 .dialog.is-wide {
@@ -536,12 +533,12 @@ kbd {
 }
 
 .dialog-head h2 {
-  font: 700 var(--t-title) var(--mono);
+  font: 600 var(--t-title) var(--ui);
 }
 
 .dialog-head p {
   margin-top: 4px;
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
 }
 
 .dialog-foot {
@@ -561,21 +558,22 @@ kbd {
 }
 
 .empty-title {
-  font: 700 var(--t-ui) var(--mono);
+  font: 600 var(--t-ui) var(--ui);
 }
 
 .empty-text {
   max-width: 360px;
   color: var(--ink-2);
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
 }
 
 .seg {
   display: inline-flex;
   padding: 3px;
   gap: 2px;
-  border: 1px solid var(--line-3);
+  border: 0;
   border-radius: var(--r-ctl);
+  background: var(--bg-3);
 }
 
 .seg button {
@@ -585,7 +583,7 @@ kbd {
   border-radius: var(--r-row);
   background: none;
   color: var(--ink-2);
-  font: var(--t-meta) var(--mono);
+  font: var(--t-meta) var(--ui);
 }
 
 .seg button:hover {
@@ -593,9 +591,9 @@ kbd {
 }
 
 .seg button[aria-pressed="true"] {
-  background: var(--ink);
-  color: var(--on-ink);
-  font-weight: 700;
+  background: var(--wash-2);
+  color: var(--ink);
+  font-weight: 600;
 }
 
 .codebox {
@@ -603,8 +601,9 @@ kbd {
   align-items: center;
   gap: 8px;
   padding: 8px 8px 8px 12px;
-  border: 1px solid var(--line-2);
+  border: 0;
   border-radius: var(--r-ctl);
+  background: var(--bg-3);
   font: var(--t-ui) var(--mono);
 }
 
@@ -628,11 +627,12 @@ kbd {
 }
 
 .toast {
-  padding: 8px 14px;
-  border: 1px solid var(--line-3);
+  padding: 9px 16px;
+  border: 0;
   border-radius: var(--r-ctl);
-  background: var(--bg);
-  font: var(--t-ui) var(--mono);
+  background: var(--ink);
+  color: var(--on-ink);
+  font: 500 var(--t-ui) var(--ui);
   animation: rise var(--slow) var(--ease);
 }
 
@@ -664,7 +664,7 @@ kbd {
   border-radius: var(--r-row);
   background: none;
   color: var(--ink-3);
-  font: var(--t-meta) var(--mono);
+  font: var(--t-meta) var(--ui);
 }
 
 .toggle.is-on {
@@ -680,37 +680,65 @@ kbd {
   position: relative;
   display: block;
   width: 36px;
-  height: 20px;
-  border: 1px solid var(--line-3);
-  border-radius: var(--r-row);
-  transition:
-    background var(--fast),
-    border-color var(--fast);
+  height: 22px;
+  border: 0;
+  border-radius: 11px;
+  background: var(--bg-3);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  transition: background var(--fast);
 }
 
 .toggle:hover .toggle-track {
-  border-color: var(--ink-2);
+  box-shadow: inset 0 0 0 1px var(--line-3);
 }
 
 .toggle-knob {
   position: absolute;
   top: 3px;
   left: 3px;
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
-  background: var(--ink-3);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--ink-2);
   transition:
     transform var(--fast) var(--ease),
     background var(--fast);
 }
 
 .toggle.is-on .toggle-track {
-  border-color: var(--ink);
-  background: var(--ink);
+  background: var(--live);
+  box-shadow: none;
 }
 
 .toggle.is-on .toggle-knob {
-  background: var(--on-ink);
-  transform: translateX(16px);
+  background: var(--white);
+  transform: translateX(14px);
+}
+
+code,
+pre,
+kbd,
+.mono,
+.codebox,
+.text-code,
+.ask-code,
+.input.is-mono,
+.needs-code,
+.needs-digit,
+.invite-box code,
+.start-code,
+.set-key,
+.set-pair-code,
+.set-folder-path,
+.palette-kbd,
+.person-prop code {
+  font-family: var(--mono);
+}
+
+.panel,
+.dialog,
+.needs-card,
+.side {
+  --raise: var(--bg-3);
+  --raise-2: color-mix(in srgb, var(--bg-3) 86%, var(--ink));
 }

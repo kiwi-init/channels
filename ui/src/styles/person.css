@@ -20,7 +20,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 8px;
-  font: 700 var(--t-title) var(--mono);
+  font: 600 var(--t-title) var(--ui);
 }
 
 .person-name-text {
@@ -33,13 +33,13 @@
   border: 1px solid var(--line-3);
   border-radius: var(--r-row);
   color: var(--ink-2);
-  font: 400 var(--t-stamp) var(--mono);
+  font: 400 var(--t-stamp) var(--ui);
 }
 
 .person-kind {
   margin-top: 4px;
   color: var(--ink-2);
-  font: var(--t-meta) var(--mono);
+  font: var(--t-meta) var(--ui);
   overflow-wrap: anywhere;
 }
 
@@ -53,7 +53,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
 }
 
 .person-dot {
@@ -91,14 +91,14 @@
 
 .person-label {
   color: var(--ink-3);
-  font: var(--t-meta) var(--mono);
+  font: var(--t-meta) var(--ui);
 }
 
 .person-me {
   display: grid;
   justify-items: start;
   gap: 10px;
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
 }
 
 .person-facts {
@@ -175,12 +175,12 @@
 }
 
 .person-row-label {
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
 }
 
 .person-row-hint {
   color: var(--ink-3);
-  font: var(--t-meta) / 1.45 var(--mono);
+  font: var(--t-meta) / 1.45 var(--ui);
 }
 
 .person-row-control {

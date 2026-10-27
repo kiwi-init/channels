@@ -57,7 +57,7 @@
   align-items: baseline;
   gap: 8px;
   margin: 0 0 6px;
-  font: 700 var(--t-ui) var(--mono);
+  font: 600 var(--t-ui) var(--ui);
 }
 
 .board-n {
@@ -112,8 +112,8 @@
 }
 
 .board-row.is-on {
-  border-color: var(--line-3);
-  background: none;
+  border-color: transparent;
+  background: var(--wash-2);
 }
 
 .board-row > .dot {
@@ -134,7 +134,7 @@
 .board-meta {
   grid-column: 2;
   color: var(--ink-2);
-  font: var(--t-meta) var(--mono);
+  font: var(--t-meta) var(--ui);
   font-variant-numeric: tabular-nums;
 }
 
@@ -150,7 +150,7 @@
   border: 0;
   background: none;
   color: var(--ink-2);
-  font: var(--t-meta) var(--mono);
+  font: var(--t-meta) var(--ui);
 }
 
 .board-more:hover {
@@ -189,7 +189,7 @@
   padding: 0;
   border: 0;
   background: none;
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
   text-align: left;
 }
 
@@ -226,12 +226,12 @@
 .task-wait-meta {
   margin-top: 2px;
   color: var(--ink-2);
-  font: var(--t-meta) var(--mono);
+  font: var(--t-meta) var(--ui);
 }
 
 .task-pr {
   gap: 6px;
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
 }
 
 .task-pr-title {
@@ -278,7 +278,7 @@
 }
 
 .task-review-ask {
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
 }
 
 .task-sendback {
@@ -295,7 +295,7 @@
   display: grid;
   gap: 4px;
   color: var(--ink-2);
-  font: var(--t-meta) var(--mono);
+  font: var(--t-meta) var(--ui);
 }
 
 .task-review + .task-rounds {
@@ -311,7 +311,7 @@
 
 .task-note-meta {
   color: var(--ink-2);
-  font: var(--t-meta) var(--mono);
+  font: var(--t-meta) var(--ui);
 }
 
 .task-note-text {
@@ -332,7 +332,7 @@
 .task-quiet {
   margin-top: 6px;
   color: var(--ink-3);
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
 }
 
 @media (max-width: 760px) {

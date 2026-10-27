@@ -21,7 +21,7 @@
 .add-note {
   margin-top: 10px;
   color: var(--ink-2);
-  font: var(--t-meta) / 1.55 var(--mono);
+  font: var(--t-meta) / 1.55 var(--ui);
 }
 
 .invite-failed {
@@ -34,7 +34,7 @@
   border: 1px dashed var(--line-3);
   border-radius: var(--r-ctl);
   color: var(--ink-2);
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
 }
 
 .invite-seg,
@@ -102,7 +102,7 @@
   border: 1px solid transparent;
   border-radius: var(--r-ctl);
   color: var(--ink-2);
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
   cursor: pointer;
   transition:
     background var(--fast),
@@ -166,7 +166,7 @@
 
 .add-choice-about {
   color: var(--ink-3);
-  font: var(--t-meta) / 1.45 var(--mono);
+  font: var(--t-meta) / 1.45 var(--ui);
 }
 
 .add-choice.is-on .add-choice-about {
@@ -179,7 +179,7 @@
   gap: 6px;
   flex: none;
   color: var(--ink-3);
-  font: var(--t-stamp) var(--mono);
+  font: var(--t-stamp) var(--ui);
 }
 
 .add-choice-tick {
@@ -206,7 +206,7 @@
   border: 1px dashed var(--line-3);
   border-radius: var(--r-ctl);
   color: var(--ink-2);
-  font: var(--t-meta) / 1.5 var(--mono);
+  font: var(--t-meta) / 1.5 var(--ui);
 }
 
 .add-folder {
@@ -226,7 +226,7 @@
   border: 1px solid color-mix(in srgb, var(--alert) 45%, transparent);
   border-radius: var(--r-ctl);
   color: var(--alert);
-  font: var(--t-meta) / 1.5 var(--mono);
+  font: var(--t-meta) / 1.5 var(--ui);
 }
 
 .add-check {
@@ -266,13 +266,13 @@
 }
 
 .add-who-name {
-  font: 700 var(--t-title) var(--mono);
+  font: 600 var(--t-title) var(--ui);
 }
 
 .add-who-meta {
   overflow: hidden;
   color: var(--ink-2);
-  font: var(--t-meta) var(--mono);
+  font: var(--t-meta) var(--ui);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -280,7 +280,7 @@
 .add-steps {
   display: grid;
   gap: 0;
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
 }
 
 .add-step {

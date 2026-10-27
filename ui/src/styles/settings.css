@@ -12,7 +12,7 @@
 
 .set-top-title {
   padding: 0 18px;
-  font: 700 14px var(--mono);
+  font: 600 14px var(--ui);
 }
 
 .set-back {
@@ -52,13 +52,13 @@
 }
 
 .set-title {
-  font: 700 var(--t-title) var(--mono);
+  font: 600 var(--t-title) var(--ui);
 }
 
 .set-lede {
   margin-top: 6px;
   color: var(--ink-2);
-  font: var(--t-ui) / 1.5 var(--mono);
+  font: var(--t-ui) / 1.5 var(--ui);
 }
 
 .set-group + .set-group,
@@ -104,12 +104,12 @@
 
 .set-row-label {
   color: var(--ink);
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
 }
 
 .set-row-hint {
   color: var(--ink-3);
-  font: var(--t-meta) / 1.45 var(--mono);
+  font: var(--t-meta) / 1.45 var(--ui);
 }
 
 .set-row-ctl {
@@ -121,7 +121,7 @@
 
 .set-value {
   color: var(--ink);
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
 }
 
 .set-key {
@@ -132,7 +132,7 @@
   padding: 14px 0;
   border-bottom: 1px solid var(--line);
   color: var(--ink-2);
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
 }
 
 .set-inline {
@@ -145,7 +145,7 @@
 .set-inline-value {
   overflow: hidden;
   color: var(--ink);
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -187,7 +187,7 @@
 .set-fine {
   margin-top: 16px;
   color: var(--ink-3);
-  font: var(--t-meta) / 1.5 var(--mono);
+  font: var(--t-meta) / 1.5 var(--ui);
 }
 
 .set-devices {
@@ -226,7 +226,7 @@
   gap: 8px;
   min-width: 0;
   color: var(--ink);
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
 }
 
 .set-tag {
@@ -234,7 +234,7 @@
   border: 1px solid var(--line-3);
   border-radius: 4px;
   color: var(--ink-2);
-  font: var(--t-stamp) var(--mono);
+  font: var(--t-stamp) var(--ui);
 }
 
 .set-device-meta {
@@ -242,7 +242,7 @@
   align-items: center;
   gap: 6px;
   color: var(--ink-3);
-  font: var(--t-meta) var(--mono);
+  font: var(--t-meta) var(--ui);
 }
 
 .set-pip {
@@ -281,7 +281,7 @@
 
 .set-pair-what {
   color: var(--ink-3);
-  font: var(--t-stamp) var(--mono);
+  font: var(--t-stamp) var(--ui);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -293,13 +293,13 @@
 }
 
 .set-pair-code code {
-  font: 700 var(--t-display) var(--mono);
+  font: 600 var(--t-display) var(--ui);
   letter-spacing: 0.08em;
 }
 
 .set-pair-how {
   color: var(--ink-2);
-  font: var(--t-ui) / 1.5 var(--mono);
+  font: var(--t-ui) / 1.5 var(--ui);
 }
 
 .set-pair-how code {
@@ -323,7 +323,7 @@
   align-items: center;
   gap: 8px;
   color: var(--doing);
-  font: var(--t-meta) var(--mono);
+  font: var(--t-meta) var(--ui);
 }
 
 .set-harness {
@@ -334,7 +334,7 @@
 
 .set-harness-state {
   color: var(--ink-3);
-  font: var(--t-meta) var(--mono);
+  font: var(--t-meta) var(--ui);
 }
 
 .set-harness-state.tone-live {
@@ -371,7 +371,7 @@
   gap: 10px;
   min-height: 48px;
   color: var(--ink-3);
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
 }
 
 .set-add:hover {

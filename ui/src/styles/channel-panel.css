@@ -23,13 +23,13 @@
 
 .cpanel-value {
   color: var(--ink);
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
 }
 
 .cpanel-hint,
 .cpanel-none {
   color: var(--ink-3);
-  font: var(--t-meta) / 1.45 var(--mono);
+  font: var(--t-meta) / 1.45 var(--ui);
 }
 
 .cpanel-none {
@@ -70,7 +70,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--ink);
-  font: var(--t-ui) var(--mono);
+  font: var(--t-ui) var(--ui);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -102,7 +102,7 @@
 
 .cpanel-held-line {
   color: var(--decide);
-  font: var(--t-meta) var(--mono);
+  font: var(--t-meta) var(--ui);
 }
 
 .cpanel-note {
