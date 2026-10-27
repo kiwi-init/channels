@@ -22,7 +22,7 @@ export default {
       define: {
         KIWI_EB_TEST: process.env.CHANNELS_EB_TEST === "1" ? "true" : "false",
         KIWI_EB_LIVEWIRE: livewire ? "true" : "false",
-        KIWI_EB_DEV: identifier === `${LIVEWIRE_ID}.dev` ? "true" : "false",
+        KIWI_EB_DEV: identifier === `${LIVEWIRE_ID}.dev` || process.env.CHANNELS_EB_LOCAL_UI === "1" ? "true" : "false",
         KIWI_UI_SEQ: String(Date.now()),
       },
     },

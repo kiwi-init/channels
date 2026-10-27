@@ -80,6 +80,12 @@ Bun.serve({
 });
 
 console.log(`local UI channel on http://127.0.0.1:${PORT}\n  KIWI_EB_UI_CHANNEL="${channelLine}"`);
+const dataFlag = args.indexOf("--data");
+const dataDir = dataFlag >= 0 ? args[dataFlag + 1] : undefined;
+if (dataDir) {
+  writeFileSync(join(dataDir, "ui-dev-channel"), `${channelLine}\n`);
+  console.log(`the app with data in ${dataDir} follows this channel`);
+}
 publish();
 
 if (args.includes("--launch")) {

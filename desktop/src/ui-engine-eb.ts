@@ -8,6 +8,7 @@ import { PAGE_TEMPLATE } from "./eb-page.ts";
 import { UI_MANIFEST_URL, UI_POLL_MS, UI_PREFIX, UI_READY_MS, UI_TRUSTED_KEYS } from "./ui-channel.ts";
 import { UI_CONTRACT } from "./ui-contract.ts";
 import { hearUi } from "./ui-signals.ts";
+import { dataDir } from "./host-eb.ts";
 
 declare const KIWI_EB_DEV: boolean;
 declare const KIWI_EB_LIVEWIRE: boolean;
@@ -26,7 +27,16 @@ const testChannel = (value: string | undefined): Channel | null => {
 
 const official = (): Channel => ({ manifestUrl: UI_MANIFEST_URL, trustedKeys: { ...UI_TRUSTED_KEYS } });
 
-const devChannel: Channel | null = KIWI_EB_DEV ? testChannel(process.env.KIWI_EB_UI_CHANNEL) : null;
+function devChannelLine(): string | undefined {
+  try {
+    return fs.readFileSync(path.join(dataDir, "ui-dev-channel"), "utf8").trim();
+  } catch {
+    // No file: a dev build without a local channel shows its built-in UI.
+    return process.env.KIWI_EB_UI_CHANNEL;
+  }
+}
+
+const devChannel: Channel | null = KIWI_EB_DEV ? testChannel(devChannelLine()) : null;
 
 const channel: Channel | null = KIWI_EB_TEST ? testChannel(process.env.KIWI_EB_UI_CHANNEL) : devChannel ? devChannel : KIWI_EB_LIVEWIRE ? official() : null;
 
@@ -73,7 +83,7 @@ export function channelUi(w: UiWindow): ChannelUi {
       prefix: UI_PREFIX,
       builtIn: { uiVersion: `built-in-${pkg.version}`, seq: KIWI_UI_SEQ, files: builtInFiles },
       show: (ui) => w.show(new TextDecoder().decode(ui.index)),
-      canSwap: () => !w.win.isVisible(),
+      canSwap: () => devChannel !== null || !w.win.isVisible(),
     },
   });
   engine.on(say);
