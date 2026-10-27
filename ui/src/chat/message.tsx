@@ -8,7 +8,7 @@ import { ago, clock } from "~/kit/time"
 import type { Channel, Message } from "~/model"
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
-import { named } from "~/chat/linked"
+import { named, withNames } from "~/chat/linked"
 
 const Markdown = lazy(() => import("~/chat/markdown"))
 
@@ -79,7 +79,7 @@ function Clamp({ on, children }: { on: boolean; children: ReactNode }) {
 }
 
 function Quote({ quoted, who, names, onClick }: { quoted: Message; who: string; names: ReadonlyMap<string, string>; onClick?: () => void }) {
-  const line = preview(named(quoted.text, names))
+  const line = useMemo(() => withNames(quoted.text, names, preview), [quoted.text, names])
   return (
     <button type="button" className="msg-quote" onClick={onClick} aria-label={`Replying to ${who}: ${line.slice(0, 80)}. Show it`}>
       <Icon name="reply" size={12} />

@@ -6,7 +6,7 @@ import { jumpTo, ReplyContext, type Replying } from "~/chat/reply"
 import { day, sameDay } from "~/kit/time"
 import type { Channel, Message, Where } from "~/model"
 import { sameWhere, useApp } from "~/nav"
-import { nickname } from "~/names"
+import { nickname, shown } from "~/names"
 
 const GROUP_MS = 5 * 60_000
 const NEAR_BOTTOM = 48
@@ -208,7 +208,7 @@ function Feed({ channel, where, search }: { channel: Channel; where: Where; sear
                 <i />
                 <i />
               </span>
-              {typing.map((p) => p.name).join(", ")} {typing.length === 1 ? "is" : "are"} typing
+              {typing.map((p) => shown(p)).join(", ")} {typing.length === 1 ? "is" : "are"} typing
             </p>
           )}
         </div>

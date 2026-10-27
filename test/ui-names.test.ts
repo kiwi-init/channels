@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { describeEvent } from "@kiwi/core/format.ts";
 import type { Event } from "@kiwi/core/protocol.ts";
-import { linked, named } from "../ui/src/chat/linked.ts";
+import { linked, named, withNames } from "../ui/src/chat/linked.ts";
+import { preview } from "../ui/src/chat/preview.ts";
 
 const nicknames = new Map([
   ["cheery-fox", "lead"],
@@ -59,6 +60,18 @@ describe("people read nicknames, never handles", () => {
     expect(line({ op: "fact.set", key: "target", value: "patient-otter" })).toBe("set target = patient-otter");
     expect(line({ op: "lease.free", name: "patient-otter" })).toBe("let go of patient-otter");
     expect(line({ op: "release", paths: ["patient-otter"] })).toBe("released patient-otter");
+  });
+
+  test("a line with an entity, an escape or a quote prefix still reads nicknames and links tasks", () => {
+    expect(linked("@patient-otter &amp; T12", nicknames, tasks)).toBe("[@opus-vm-coder](kiwi-mention:patient-otter) &amp; [T12](kiwi-task:12)");
+    expect(linked("hello \\* @patient-otter T12", nicknames, tasks)).toBe("hello \\* [@opus-vm-coder](kiwi-mention:patient-otter) [T12](kiwi-task:12)");
+    expect(linked("> @patient-otter\n> T12", nicknames, tasks)).toBe("> [@opus-vm-coder](kiwi-mention:patient-otter)\n> [T12](kiwi-task:12)");
+    expect(linked("| a | b \\| c |\n| - | - |\n| patient-otter | T12 |", nicknames, tasks)).toBe("| a | b \\| c |\n| - | - |\n| [opus-vm-coder](kiwi-mention:patient-otter) | [T12](kiwi-task:12) |");
+  });
+
+  test("a preview keeps a nickname exactly as written, even when it looks like markdown", () => {
+    const odd = new Map([["patient-otter", "team_ops *lead* [a](b)"]]);
+    expect(withNames("**Heads up:** @patient-otter is `ready`", odd, preview)).toBe("Heads up: @team_ops *lead* [a](b) is ready");
   });
 
   test("an unknown @name and a plain-word handle stay as written", () => {

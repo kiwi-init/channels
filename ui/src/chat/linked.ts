@@ -12,20 +12,33 @@ const MENTION = /(?<![\p{L}\p{N}_.@-])@([\p{L}\p{N}_.-]+)/gu
 const TASK = /\bT(\d+)\b/g
 const WORD = /(?<![\p{L}\p{N}\p{M}_/.@-])[\p{L}\p{N}_.-]+/gu
 
-function prose(node: MdNode, text: string): { start: number; end: number }[] {
+type Span = { start: number; end: number }
+
+function prose(node: MdNode): Span[] {
   if (NOT_PROSE.has(node.type)) return []
   if (node.type === "text") {
     const start = node.position?.start.offset
     const end = node.position?.end.offset
-    return start !== undefined && end !== undefined && text.slice(start, end) === node.value ? [{ start, end }] : []
+    return start !== undefined && end !== undefined ? [{ start, end }] : []
   }
-  return (node.children ?? []).flatMap((child) => prose(child, text))
+  return (node.children ?? []).flatMap(prose)
+}
+
+const parsed = new Map<string, Span[]>()
+
+function spansOf(text: string): Span[] {
+  const known = parsed.get(text)
+  if (known) return known
+  const spans = prose(fromMarkdown(text, { extensions: [gfm()], mdastExtensions: [gfmFromMarkdown()] }))
+  if (parsed.size >= 500) parsed.delete(parsed.keys().next().value ?? "")
+  parsed.set(text, spans)
+  return spans
 }
 
 function found(text: string, nicknames: ReadonlyMap<string, string>): Found[] {
   const labelOf = (name: string) => nicknames.get(name) ?? nicknames.get(name.toLowerCase())
   const hits: Found[] = []
-  for (const span of prose(fromMarkdown(text, { extensions: [gfm()], mdastExtensions: [gfmFromMarkdown()] }), text)) {
+  for (const span of spansOf(text)) {
     const part = text.slice(span.start, span.end)
     for (const m of part.matchAll(MENTION)) {
       const who = memberNamed(m[1] ?? "", labelOf)
@@ -65,4 +78,14 @@ export function linked(text: string, nicknames: ReadonlyMap<string, string>, tas
 
 export function named(text: string, nicknames: ReadonlyMap<string, string>): string {
   return swap(text, nicknames, (hit) => (hit.kind === "task" ? null : `${hit.kind === "mention" ? "@" : ""}${hit.label}`))
+}
+
+export function withNames(text: string, nicknames: ReadonlyMap<string, string>, plain: (text: string) => string): string {
+  const labels: string[] = []
+  const marked = swap(text, nicknames, (hit) => {
+    if (hit.kind === "task") return null
+    labels.push(`${hit.kind === "mention" ? "@" : ""}${hit.label}`)
+    return `${labels.length - 1}`
+  })
+  return plain(marked).replace(/(\d+)/g, (whole: string, i: string) => labels[Number(i)] ?? whole)
 }
