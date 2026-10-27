@@ -395,7 +395,7 @@ function RunCommand({ channel, name, setName, taken }: NameProps) {
             </button>
           </div>
         ) : (
-          <CopyBox text={line} label="Copy command" disabled={!!problem} />
+          <CopyBox text={line} label="Copy command" disabled={!!problem} wrap />
         )}
       </div>
       <p className="add-note">

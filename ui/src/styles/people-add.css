@@ -13,6 +13,22 @@
   cursor: default;
 }
 
+.invite-box.is-wrap {
+  align-items: flex-start;
+}
+
+.invite-box.is-wrap code {
+  padding-top: 6px;
+  line-height: 1.55;
+  white-space: normal;
+}
+
+.invite-part {
+  display: inline-block;
+  max-width: 100%;
+  word-break: break-all;
+}
+
 .invite-box.is-off code {
   color: var(--ink-3);
 }

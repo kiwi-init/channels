@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { Fragment, useEffect, useState } from "react"
 
 import "~/styles/people-add.css"
 import { cx, Heading, Toggle } from "~/kit/bits"
@@ -34,11 +34,22 @@ function useInviteLink(code: string): { link: string | null; failed: boolean; re
   }
 }
 
-export function CopyBox({ text, label, disabled }: { text: string | null; label: string; disabled?: boolean }) {
+export function CopyBox({ text, label, disabled, wrap }: { text: string | null; label: string; disabled?: boolean; wrap?: boolean }) {
   const { toast } = useApp()
   return (
-    <div className={cx("codebox invite-box", disabled && "is-off")}>
-      <code>{text ?? "…"}</code>
+    <div className={cx("codebox invite-box", disabled && "is-off", wrap && "is-wrap")}>
+      <code>
+        {text === null
+          ? "…"
+          : wrap
+            ? text.split(/\s(?=--)/).map((part, i) => (
+                <Fragment key={i}>
+                  {i > 0 && " "}
+                  <span className="invite-part">{part}</span>
+                </Fragment>
+              ))
+            : text}
+      </code>
       <button
         type="button"
         className="icon-btn"
