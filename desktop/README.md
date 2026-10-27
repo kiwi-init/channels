@@ -92,10 +92,12 @@ bun run typecheck:eb                                  # fetches the devkit into 
 - `src/updater.ts` — checks GitHub releases for a newer app.
 - `src/move.ts` — moves a download over the file it replaces, across filesystems too (the
   AppImage update).
-- `build/icon.svg` — the app icon. `bun desktop/scripts/icons.ts` (on a Mac) makes every
-  size from it: `build/icon.icns`, `build/icons/NxN.png` for Linux, and `assets/icon.png`
-  for the window. On Linux, `native/linux/kiwi-shell.c` names the program `channels-desktop`,
-  so Wayland matches the window's app_id to `channels-desktop.desktop` and finds its icon.
+- `build/icon.svg` — the app icon, and `build/tray.svg` — its one-color tray mark.
+  `bun desktop/scripts/icons.ts` (on a Mac) makes every app size (`build/icon.icns`,
+  `build/icons/NxN.png` for Linux, and `assets/icon.png` for the window), the macOS tray
+  template PNGs, and Linux's `assets/channels-tray-symbolic.svg`. On Linux,
+  `native/linux/kiwi-shell.c` names the program `channels-desktop`, so Wayland matches the
+  window's app_id to `channels-desktop.desktop` and finds its icon.
 
 ## Renderer relay URL
 

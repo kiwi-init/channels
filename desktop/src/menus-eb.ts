@@ -18,9 +18,11 @@ export interface AppTray {
 
 export function createTray(on: (a: MenuAction) => void, update: UpdateState | null): AppTray {
   const mac = process.platform === "darwin";
+  const linux = process.platform === "linux";
   const tray = new Tray({
-    image: path.join(PATHS.VIEWS_FOLDER, "..", "assets", mac ? "trayTemplate@2x.png" : "tray@2x.png"),
-    template: mac,
+    title: linux ? "Channels" : "",
+    image: path.join(PATHS.VIEWS_FOLDER, "..", "assets", mac || !linux ? "trayTemplate@2x.png" : "channels-tray-symbolic.svg"),
+    template: mac || linux,
     width: 16,
     height: 16,
   });

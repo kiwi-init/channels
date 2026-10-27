@@ -71,7 +71,7 @@ if (os === "linux") {
   if (!fs.existsSync(wrapper)) throw new Error(`eb-post-build: no Electrobun native wrapper at ${wrapper}`);
   buildNativeWrapper(wrapper, path.join(bin, "libasar.so"));
   console.log(
-    `eb-post-build: bin/libNativeWrapper.so is built from Electrobun ${PINS.electrobun}'s source with desktop/native/linux/electrobun-wayland.patch (GTK opens Wayland natively when WAYLAND_DISPLAY is set), electrobun-titlebar.patch (custom title bars request client-side decorations), and electrobun-tray.patch (AppIndicator loaded at run time, so the app starts without it)`,
+    `eb-post-build: bin/libNativeWrapper.so is built from Electrobun ${PINS.electrobun}'s source with desktop/native/linux/electrobun-wayland.patch (GTK opens Wayland natively when WAYLAND_DISPLAY is set), electrobun-titlebar.patch (custom title bars request client-side decorations), and electrobun-tray.patch (AppIndicator loaded at run time, with themed symbolic icons, so the app starts without it)`,
   );
   const webkit = execFileSync("pkg-config", ["--cflags", "--libs", "webkit2gtk-4.1"], { encoding: "utf8" }).trim().split(/\s+/);
   execFileSync("cc", ["-shared", "-fPIC", "-O2", "-Wall", "-Wextra", "-Werror", "-o", path.join(bin, "libkiwi-shell.so"), path.join(desktop, "native", "linux", "kiwi-shell.c"), ...webkit], {

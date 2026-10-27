@@ -3,14 +3,23 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #define WATCHER "org.kde.StatusNotifierWatcher"
+#define ITEM "org.kde.StatusNotifierItem"
 
 static GMainLoop *loop;
 static gboolean host_registered = FALSE;
 static bool owned = false;
+static bool registered = false;
+static char icon_name[256];
+static char title[256];
+static int bad = 0;
 
 static const char *WATCHER_XML = "<node><interface name='org.kde.StatusNotifierWatcher'>"
+                                 "<method name='RegisterStatusNotifierItem'><arg name='service' type='s' direction='in'/></method>"
                                  "<property name='IsStatusNotifierHostRegistered' type='b' access='read'/>"
                                  "</interface></node>";
 
@@ -25,7 +34,53 @@ static GVariant *watcher_property(GDBusConnection *c, const gchar *sender, const
   return g_variant_new_boolean(host_registered);
 }
 
-static const GDBusInterfaceVTable WATCHER_VTABLE = {NULL, watcher_property, NULL, {0}};
+static void copy_property(GVariant *properties, const char *name, char *out, size_t size) {
+  GVariant *value = g_variant_lookup_value(properties, name, G_VARIANT_TYPE_STRING);
+  if (!value) {
+    fprintf(stderr, "kiwi-tray-test: the tray item has no %s string\n", name);
+    bad++;
+    return;
+  }
+  const char *text = NULL;
+  g_variant_get(value, "&s", &text);
+  snprintf(out, size, "%s", text);
+  g_variant_unref(value);
+}
+
+static void item_properties(GObject *source, GAsyncResult *result, gpointer data) {
+  (void)data;
+  GError *error = NULL;
+  GVariant *reply = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), result, &error);
+  if (!reply) {
+    fprintf(stderr, "kiwi-tray-test: couldn't read the tray item: %s\n", error->message);
+    g_error_free(error);
+    bad++;
+  } else {
+    GVariant *properties = NULL;
+    g_variant_get(reply, "(@a{sv})", &properties);
+    copy_property(properties, "IconName", icon_name, sizeof(icon_name));
+    copy_property(properties, "Title", title, sizeof(title));
+    g_variant_unref(properties);
+    g_variant_unref(reply);
+  }
+  registered = true;
+  g_main_loop_quit(loop);
+}
+
+static void item_registered(GDBusConnection *c, const gchar *sender, const gchar *path, const gchar *iface, const gchar *method, GVariant *parameters, GDBusMethodInvocation *invocation, gpointer data) {
+  (void)path;
+  (void)iface;
+  (void)method;
+  (void)data;
+  const gchar *service = NULL;
+  g_variant_get(parameters, "(&s)", &service);
+  const gchar *item_path = service[0] == '/' ? service : "/StatusNotifierItem";
+  const gchar *item_service = service[0] == '/' ? sender : service;
+  g_dbus_method_invocation_return_value(invocation, NULL);
+  g_dbus_connection_call(c, item_service, item_path, "org.freedesktop.DBus.Properties", "GetAll", g_variant_new("(s)", ITEM), NULL, G_DBUS_CALL_FLAGS_NONE, 5000, NULL, item_properties, NULL);
+}
+
+static const GDBusInterfaceVTable WATCHER_VTABLE = {item_registered, watcher_property, NULL, {0}};
 
 static void acquired(GDBusConnection *c, const gchar *name, gpointer data) {
   (void)c;
@@ -61,19 +116,35 @@ static bool ask(bool (*tray_host)(void)) {
   return a.host;
 }
 
+static void stop_app(GPid app) {
+  kill(-app, SIGTERM);
+  int status = 0;
+  for (int i = 0; i < 50; i++) {
+    waitpid(app, &status, WNOHANG);
+    if (kill(-app, 0) != 0) {
+      g_spawn_close_pid(app);
+      return;
+    }
+    g_usleep(100000);
+  }
+  kill(-app, SIGKILL);
+  waitpid(app, &status, 0);
+  g_spawn_close_pid(app);
+}
+
 int main(int argc, char **argv) {
   bool no_indicator = argc == 3 && strcmp(argv[2], "no-indicator") == 0;
-  if (argc != 2 && !no_indicator) {
-    fprintf(stderr, "usage: kiwi-tray-test <libkiwi-shell.so> [no-indicator] (on a private session bus: dbus-run-session)\n");
+  if (argc != 3) {
+    fprintf(stderr, "usage: kiwi-tray-test <libkiwi-shell.so> <launcher|no-indicator> (on a private session bus: dbus-run-session)\n");
     return 2;
   }
   loop = g_main_loop_new(NULL, FALSE);
-  void *lib = dlopen(argv[1], RTLD_NOW);
-  if (!lib) {
+  void *shell = dlopen(argv[1], RTLD_NOW);
+  if (!shell) {
     fprintf(stderr, "kiwi-tray-test: %s\n", dlerror());
     return 1;
   }
-  bool (*tray_host)(void) = (bool (*)(void))dlsym(lib, "kiwi_tray_host");
+  bool (*tray_host)(void) = (bool (*)(void))dlsym(shell, "kiwi_tray_host");
   if (!tray_host) {
     fprintf(stderr, "kiwi-tray-test: kiwi_tray_host isn't exported\n");
     return 1;
@@ -83,7 +154,6 @@ int main(int argc, char **argv) {
     fprintf(stderr, "kiwi-tray-test: no session bus; run it under dbus-run-session\n");
     return 1;
   }
-  int bad = 0;
   if (ask(tray_host)) {
     fprintf(stderr, "kiwi-tray-test: with no StatusNotifierWatcher on the bus, kiwi_tray_host said a tray host runs\n");
     bad++;
@@ -107,10 +177,40 @@ int main(int argc, char **argv) {
       bad++;
     } else
       printf("a StatusNotifierWatcher with a host registered, but no libayatana-appindicator3 (stock Fedora, Arch): no tray icon can show, so closing minimizes\n");
-  } else if (!ask(tray_host)) {
-    fprintf(stderr, "kiwi-tray-test: a watcher with a host registered didn't count as a tray host\n");
-    bad++;
-  } else
-    printf("a StatusNotifierWatcher with a host registered (Plasma, GNOME's AppIndicator extension): a tray host, so closing hides to it\n");
+  } else {
+    if (!ask(tray_host)) {
+      fprintf(stderr, "kiwi-tray-test: a watcher with a host registered didn't count as a tray host\n");
+      bad++;
+    } else
+      printf("a StatusNotifierWatcher with a host registered (Plasma, GNOME's AppIndicator extension): a tray host, so closing hides to it\n");
+    gchar *command[] = {"setsid", argv[2], NULL};
+    GPid app = 0;
+    GError *error = NULL;
+    if (!g_spawn_async(NULL, command, NULL, G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD, NULL, NULL, &app, &error)) {
+      fprintf(stderr, "kiwi-tray-test: couldn't start the app: %s\n", error->message);
+      g_error_free(error);
+      bad++;
+    } else {
+      if (!registered) {
+        g_timeout_add_seconds(30, stop, NULL);
+        g_main_loop_run(loop);
+      }
+      if (!registered) {
+        fprintf(stderr, "kiwi-tray-test: the tray item didn't register\n");
+        bad++;
+      } else {
+        if (strcmp(icon_name, "channels-tray-symbolic") != 0) {
+          fprintf(stderr, "kiwi-tray-test: IconName is %s, not channels-tray-symbolic\n", icon_name);
+          bad++;
+        }
+        if (strcmp(title, "Channels") != 0) {
+          fprintf(stderr, "kiwi-tray-test: Title is %s, not Channels\n", title);
+          bad++;
+        }
+        if (!bad) printf("tray item: IconName=%s, Title=%s\n", icon_name, title);
+      }
+      stop_app(app);
+    }
+  }
   return bad ? 1 : 0;
 }
