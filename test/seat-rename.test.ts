@@ -171,6 +171,22 @@ describe("seat rename", () => {
     expect((await ownerCh.members()).find((m) => m.pk === otter.pk)).toMatchObject({ name: "opus-vm-coder", display: "vm coder", was: ["patient-otter"] });
   });
 
+  test("a record read before a rename can't be written back over it", async () => {
+    const { ownerCh, otter } = await team();
+    const stale = (await ownerCh.members()).find((m) => m.pk === otter.pk)!;
+    await ownerCh.updateHandle(stale, "opus-vm-coder");
+    await expect(ownerCh.updateNickname(stale, "vm coder")).rejects.toThrow(/reload the members/);
+    await expect(ownerCh.updateHandle(stale, "opus-local-coder")).rejects.toThrow(/reload the members/);
+    const now = (await ownerCh.members()).find((m) => m.pk === otter.pk)!;
+    expect(now).toMatchObject({ name: "opus-vm-coder", was: ["patient-otter"], renames: 1 });
+    await ownerCh.updateNickname(now, "vm coder");
+    await ownerCh.updateHandle(
+      (await ownerCh.members()).find((m) => m.pk === otter.pk)!,
+      "opus-local-coder",
+    );
+    expect((await ownerCh.members()).find((m) => m.pk === otter.pk)).toMatchObject({ name: "opus-local-coder", display: "vm coder", was: ["patient-otter", "opus-vm-coder"], renames: 2 });
+  });
+
   test("a renamed seat's handles stay taken after it leaves", async () => {
     const { code, ownerCh, otter } = await team();
     await ownerCh.updateHandle(

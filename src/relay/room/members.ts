@@ -7,10 +7,11 @@ import { readMeta } from "./auth.ts";
 import { RoomStore, type RoomDb } from "./db.ts";
 
 const OLDER_APP = "this member was renamed: change its record from an up-to-date Channels app, which keeps its earlier handles";
+const STALE = "this member was renamed since this app read its record: reload the members and try again";
 
-function renamed(db: RoomDb, pk: string): boolean {
+function renames(db: RoomDb, pk: string): number {
   db.migrate();
-  return db.sql.all<{ renamed: number }>("SELECT renamed FROM members WHERE pk = ?", pk)[0]?.renamed === 1;
+  return db.sql.all<{ renamed: number }>("SELECT renamed FROM members WHERE pk = ?", pk)[0]?.renamed ?? 0;
 }
 
 export function memberFits(m: MemberBody, epoch: number): boolean {
@@ -40,7 +41,7 @@ export const approve = Effect.fn("Room.approve")(function* (body: MemberBody & {
   const policy = yield* Policy;
   const { epoch } = yield* readMeta;
   if (body && Object.hasOwn(body, "replaces")) return yield* new BadRequest({ message: "bad member" });
-  if (body.names !== true && renamed(db, body.pk)) return yield* new Conflict({ message: OLDER_APP });
+  if (renames(db, body.pk) > 0) return yield* new Conflict({ message: OLDER_APP });
   const most = policy.membersPerChannel;
   if (most && !db.isMember(body.pk) && db.activeMembers() >= most) {
     return yield* new TooMany({ message: `this channel has ${most} members, the most this relay allows; remove someone to let another in` });
@@ -59,14 +60,16 @@ export const keysFor = Effect.fn("Room.keysFor")(function* (pk: string) {
   return { epoch: (yield* readMeta).epoch, keys: Object.fromEntries(rows.map((r) => [String(r.e), r.wrapped])) as Record<string, string> };
 });
 
-export const setRecord = Effect.fn("Room.setRecord")(function* (pk: string, rec: string, e: number, post: boolean, names?: { renamed: boolean }) {
+export const setRecord = Effect.fn("Room.setRecord")(function* (pk: string, rec: string, e: number, post: boolean, names?: { at: number; next: number }) {
   const db = yield* RoomStore;
   if (pk === (yield* readMeta).ownerPk) return yield* new BadRequest({ message: "the owner's record isn't changed this way" });
   if (!db.isMember(pk)) return yield* new NotFound({ message: "not a member" });
   if (!Number.isInteger(e) || e < 0 || e > (yield* readMeta).epoch) return yield* new BadRequest({ message: "no such epoch" });
   if (rec.length > MAX_RECORD) return yield* new TooLarge({ message: "record too large" });
-  if (!names && renamed(db, pk)) return yield* new Conflict({ message: OLDER_APP });
-  db.sql.run("UPDATE members SET rec = ?, rec_e = ?, read_only = ?, admitted_by = NULL, renamed = MAX(renamed, ?) WHERE pk = ?", rec, e, post ? 0 : 1, names?.renamed ? 1 : 0, pk);
+  const stored = renames(db, pk);
+  if (!names && stored > 0) return yield* new Conflict({ message: OLDER_APP });
+  if (names && (names.at !== stored || (names.next !== stored && names.next !== stored + 1))) return yield* new Conflict({ message: STALE });
+  db.sql.run("UPDATE members SET rec = ?, rec_e = ?, read_only = ?, admitted_by = NULL, renamed = ? WHERE pk = ?", rec, e, post ? 0 : 1, names?.next ?? stored, pk);
   db.membersChanged(pk);
   db.changed("roster");
 });
@@ -116,5 +119,4 @@ export interface MemberBody {
   rec: string;
   keys?: Record<string, string>;
   post?: boolean;
-  names?: boolean;
 }

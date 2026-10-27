@@ -80,6 +80,7 @@ export interface MemberInfo {
   runs?: Runs;
   persona?: Persona;
   was?: string[];
+  renames?: number;
 }
 
 export type PersonPowers = Pick<MemberInfo, "addsAgents" | "answersDecisions">;
@@ -202,6 +203,7 @@ export async function makeRecord(owner: Identity, room: string, m: MemberInfo & 
     ...(!m.owner && m.kind !== "human" && m.runs ? { runs: { harness: m.runs.harness, model: m.runs.model } } : {}),
     ...(!m.owner && m.kind !== "human" && m.persona ? { persona: m.persona } : {}),
     ...(!m.owner && m.kind !== "human" && m.was?.length ? { was: m.was } : {}),
+    ...(!m.owner && m.kind !== "human" && m.renames ? { renames: m.renames } : {}),
     at: Date.now(),
   });
 }
@@ -234,6 +236,7 @@ export async function readRecord(key: string, sealed: string, room: string, pk: 
     const runs = owner || kind === "human" || rec.pk !== ownerPk ? undefined : readRuns((rec as { runs?: unknown }).runs);
     const persona = owner || kind === "human" || rec.pk !== ownerPk ? undefined : (cleanPersona((rec as { persona?: unknown }).persona) ?? undefined);
     const was = owner || kind === "human" || rec.pk !== ownerPk ? undefined : readWas((rec as { was?: unknown }).was, rec.name);
+    const renames = (rec as { renames?: unknown }).renames;
     const person = typeof rec.person === "string" && rec.person.length <= 64 ? rec.person : undefined;
     const addsAgents = !owner && kind === "human" && rec.pk === ownerPk && (rec as { addsAgents?: unknown }).addsAgents === true;
     const answersDecisions = !owner && kind === "human" && rec.pk === ownerPk && (rec as { answersDecisions?: unknown }).answersDecisions === true;
@@ -261,6 +264,7 @@ export async function readRecord(key: string, sealed: string, room: string, pk: 
         ...(runs ? { runs } : {}),
         ...(persona ? { persona } : {}),
         ...(was ? { was } : {}),
+        ...(was && Number.isSafeInteger(renames) && Number(renames) > 0 ? { renames: Number(renames) } : {}),
         owner,
         at: rec.at,
         active: true,

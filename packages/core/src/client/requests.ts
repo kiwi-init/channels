@@ -175,7 +175,7 @@ export class ChannelRequests {
       const keys = yield* Effect.promise(() => wrapAllFor(this.ch.identity, this.ch.roomId, this.ch.access.keys, req.pk, req.xpk));
       const post = canPost(scopesOf(info));
       const sealed = yield* Effect.promise(() => sealRecord(current, rec));
-      yield* this.ch.request("/members", { method: "POST", body: JSON.stringify({ pk: req.pk, xpk: req.xpk, rec: sealed, keys, request: req.id, names: true, ...(post ? {} : { post }) }) });
+      yield* this.ch.request("/members", { method: "POST", body: JSON.stringify({ pk: req.pk, xpk: req.xpk, rec: sealed, keys, request: req.id, ...(post ? {} : { post }) }) });
       return { pk: req.pk, xpk: req.xpk, ...info, owner: false, at: rec.at, active: true } satisfies Member;
     }),
 

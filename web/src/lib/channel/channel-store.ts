@@ -104,6 +104,7 @@ export class ChannelStore {
   private readonly rulesDue: ReadonlySignal<string>
   private readonly namesDue: ReadonlySignal<string>
   private rebasedFor = ""
+  private rebasing: string | null = null
 
   private guardIn = false
   private roomsIn = false
@@ -478,19 +479,26 @@ export class ChannelStore {
   private async rebase(key: string): Promise<void> {
     if (!key || key === this.rebasedFor) return
     this.rebasedFor = key
-    const roster = this.rosterForFold.peek()
-    const snap = await this.ch.snapshot().catch(() => null)
-    const from = snap && !namesMoved(snap, roster) ? snap : null
-    const since = from?.n ?? 0
-    const page = await this.ch.history(since).catch(() => null)
-    if (!page || (page.head > since && page.first !== since + 1)) return
-    batch(() => {
-      this.base.value = from
-      this.messages.value = merged(
-        page.messages,
-        this.messages.peek().filter((m) => m.seq > since)
-      )
-    })
+    this.rebasing = key
+    try {
+      const roster = this.rosterForFold.peek()
+      const snap = await this.ch.snapshot().catch(() => null)
+      const from = snap && !namesMoved(snap, roster) ? snap : null
+      const since = from?.n ?? 0
+      const page = await this.ch.history(since).catch(() => null)
+      if (!page || this.rebasing !== key || this.namesDue.peek() !== key) return
+      if (page.head > since && page.first !== since + 1) return
+      batch(() => {
+        this.base.value = from
+        this.messages.value = merged(
+          page.messages,
+          this.messages.peek().filter((m) => m.seq > since)
+        )
+      })
+    } finally {
+      if (this.rebasing === key) this.rebasing = null
+    }
+    this.trim()
   }
 
   private trimSoon(): () => void {
@@ -499,6 +507,7 @@ export class ChannelStore {
   }
 
   private trim(): void {
+    if (this.rebasing) return
     const next = trimmed(this.messages.peek(), this.rosterForFold.peek(), this.now.peek(), this.roomsFloor.peek(), this.guardFloor.peek(), this.base.peek(), HISTORY)
     if (!next) return
     batch(() => {
