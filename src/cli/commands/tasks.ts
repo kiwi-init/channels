@@ -112,7 +112,7 @@ export const taskCommands: Record<string, Command> = {
         const asker = before?.members.get(s.me);
         if (reviewed && !reviewed.review && opt.review === undefined && asker && !isPerson(asker))
           return yield* die(`${taskId(id)} has no reviewer: kiwi task review ${taskId(id)} --review NAME (or any)`);
-        const kept = reviewed && opt.review !== undefined && !opt.at?.trim() && reviewed.owner !== s.me ? openRound(reviewed) : undefined;
+        const kept = reviewed && opt.review !== undefined && !opt.at?.trim() ? openRound(reviewed) : undefined;
         const keptAt = kept ? `round ${kept.n} stays open ${kept.at ? `at ${kept.at}` : "at no commit"}` : "";
         let state: ChannelState;
         const takes = (sub === "start" || sub === "claim") && before?.tasks.get(id)?.owner !== s.me;
