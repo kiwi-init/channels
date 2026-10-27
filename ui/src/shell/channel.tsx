@@ -40,8 +40,6 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
 
   if (channel.waiting) return <Waiting channel={channel} />
 
-  const humans = channel.people.filter((p) => p.kind === "human").length
-  const agents = channel.people.length - humans
   const needs = openAsks(channel).length
   const tasks = openTasks(channel).length
   const here =
@@ -64,9 +62,6 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           aria-label={`${channel.title}: channel settings`}
         >
           <span className="top-name">{channel.title}</span>
-          <span className="top-meta">
-            {humans} {humans === 1 ? "person" : "people"} · {agents} {agents === 1 ? "agent" : "agents"}
-          </span>
         </button>
         <nav className="tabs" aria-label="Views">
           <button type="button" aria-pressed={nav.tab === "chat"} onClick={() => go({ to: "tab", tab: "chat" })}>
