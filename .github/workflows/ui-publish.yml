@@ -2,10 +2,16 @@ name: ui-publish
 
 on:
   workflow_dispatch:
-  # A commit on main that changes ui-publish-request publishes the UI at that commit.
   push:
     branches: [main]
-    paths: [.github/ui-publish-request]
+    paths:
+      - ui/**
+      - web/src/lib/**
+      - packages/core/**
+      - desktop/src/ui-channel.ts
+      - desktop/scripts/ui-stage.ts
+      - .github/workflows/ui-publish.yml
+      - bun.lock
 
 permissions:
   contents: read
@@ -16,7 +22,7 @@ concurrency:
 
 jobs:
   publish:
-    if: github.ref == 'refs/heads/main'
+    if: "github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, 'UI-publish: no')"
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: livewire-ui
