@@ -126,7 +126,6 @@ export function Conversation({ channel, search }: { channel: Channel; search: st
   const [reply, setReply] = useState<{ key: string; to: Message } | null>(null)
   const replying = useMemo((): Replying => ({ to: reply?.key === key ? reply.to : null, set: (to) => setReply(to ? { key, to } : null) }), [reply, key])
   const placeName = where.kind === "room" ? `#${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}` : where.kind === "dm" ? nickname(channel, where.with) : `T${where.task}`
-  const empty = !channel.messages.some((m) => sameWhere(m.where, where))
 
   return (
     <ReplyContext.Provider value={replying}>
@@ -136,7 +135,7 @@ export function Conversation({ channel, search }: { channel: Channel; search: st
         </p>
       )}
       <Feed key={key} channel={channel} where={where} search={search} />
-      <Composer channel={channel} where={where} placeholder={where.kind === "dm" ? `Message ${placeName} privately` : `Message ${placeName}`} suggest={empty && !search.trim()} />
+      <Composer channel={channel} where={where} placeholder={where.kind === "dm" ? `Message ${placeName} privately` : `Message ${placeName}`} />
     </ReplyContext.Provider>
   )
 }
