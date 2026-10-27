@@ -47,7 +47,6 @@
       "version": "0.0.1",
       "dependencies": {
         "@kiwi/core": "workspace:*",
-        "effect": "4.0.5",
         "react": "^19.3.1",
         "react-dom": "^19.3.1",
       },

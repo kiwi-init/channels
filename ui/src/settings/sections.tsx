@@ -45,6 +45,24 @@ export function AccountSection() {
             </button>
           )}
         </Row>
+        {account.githubCode && !account.github && (
+          <Row label="GitHub code" hint="Type it on the GitHub page that opened, then come back.">
+            <code className="set-value set-key">{account.githubCode.code}</code>
+            <IconButton
+              icon="copy"
+              label="Copy the GitHub code"
+              onClick={() => {
+                void navigator.clipboard.writeText(account.githubCode?.code ?? "").then(
+                  () => toast("Code copied"),
+                  () => toast("Could not copy")
+                )
+              }}
+            />
+            <a className="btn is-quiet is-small" href={account.githubCode.url} target="_blank" rel="noreferrer noopener">
+              Open GitHub
+            </a>
+          </Row>
+        )}
         {account.key && (
           <Row label="Your key" hint="Signs everything you send. Others can check it against this.">
             <code className="set-value set-key">{account.key}</code>
@@ -62,7 +80,7 @@ export function AccountSection() {
         )}
       </Group>
       <Group>
-        <Row label="Sign out" hint="Channels on this computer goes back to the first screen.">
+        <Row label="Sign out" hint="Signs this computer out of the relay. Your keys and channels stay here.">
           <button type="button" className="btn is-danger is-small" onClick={() => setLeaving(true)}>
             Sign out
           </button>
@@ -71,7 +89,7 @@ export function AccountSection() {
       <Confirm
         open={leaving}
         title="Sign out?"
-        sub="Your channels and their history stay. Sign in again to pick up where you left off."
+        sub="Your keys, channels and their history stay on this computer. Sign in again to pick up where you left off."
         action="Sign out"
         onClose={() => setLeaving(false)}
         onConfirm={() => {

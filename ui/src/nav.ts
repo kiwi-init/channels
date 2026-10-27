@@ -2,7 +2,7 @@ import { createContext, useContext } from "react"
 
 import type { App, Where } from "~/model"
 
-export type Tab = "chat" | "tasks" | "needs"
+type Tab = "chat" | "tasks" | "needs"
 
 export type Panel = { kind: "person"; name: string } | { kind: "task"; task: number } | { kind: "thread"; seq: number } | { kind: "channel" } | { kind: "invite" } | { kind: "add-agent" }
 
@@ -30,7 +30,7 @@ export type Go =
   | { to: "back" }
   | { to: "home" }
 
-export const GENERAL: Where = { kind: "room", room: "general" }
+const GENERAL: Where = { kind: "room", room: "general" }
 
 export const startNav = (channel: string | null): Nav => ({ page: "channel", channel, where: GENERAL, tab: "chat", panel: null, dialog: null, section: "account" })
 

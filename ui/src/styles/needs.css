@@ -289,3 +289,10 @@ button.needs-name:hover {
     flex-wrap: wrap;
   }
 }
+
+.needs-dash {
+  align-self: center;
+  padding: 0 4px;
+  color: var(--ink-3);
+  font: 600 var(--t-title) var(--mono);
+}

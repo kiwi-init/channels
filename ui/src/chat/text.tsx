@@ -2,7 +2,7 @@ import { Fragment, type ReactNode } from "react"
 
 const INLINE = /(`[^`\n]+`)|(\*\*[^*\n]+\*\*)|(@[\w.-]+)|(https?:\/\/[^\s)]+)|(\bT\d+\b)|(#\d+\b)/g
 
-export function Inline({ text, names, onTask }: { text: string; names: Set<string>; onTask?: (id: number) => void }) {
+function Inline({ text, names, onTask }: { text: string; names: Set<string>; onTask?: (id: number) => void }) {
   const out: ReactNode[] = []
   let last = 0
   for (const m of text.matchAll(INLINE)) {

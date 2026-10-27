@@ -209,6 +209,7 @@ function QuestionAskCard({ channel, ask, link }: { channel: Channel; ask: Questi
 function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; link: ReactNode }) {
   const { app } = useApp()
   const face: Face = { name: ask.name, kind: ask.who, harness: ask.harness, presence: "online" }
+  const ready = (ask.check ?? "ready") === "ready" && ask.code !== ""
   const line = [ask.who === "agent" ? "Agent" : "Person", ask.runs, ask.machine && `on ${ask.machine}`, ask.sponsor && `brought by ${ask.sponsor}`].filter(Boolean).join(" · ")
   return (
     <Shell
@@ -220,8 +221,8 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
       link={link}
       actions={
         <>
-          <button type="button" className="btn is-primary" onClick={() => app.actions.answerJoin(channel.code, ask.id, true)}>
-            It matches: let {ask.name} in
+          <button type="button" className="btn is-primary" disabled={!ready} onClick={() => app.actions.answerJoin(channel.code, ask.id, true)}>
+            {ready ? `It matches: let ${ask.name} in` : `Waiting for ${ask.name}'s code…`}
           </button>
           <button type="button" className="btn is-danger" onClick={() => app.actions.answerJoin(channel.code, ask.id, false)}>
             Turn away
@@ -231,16 +232,28 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
     >
       <p className="needs-line">{line}</p>
       <div className="needs-check">
-        <p className="needs-check-q">Does their screen show this code?</p>
-        <p className="needs-pin">
-          <span className="sr">{ask.code}</span>
-          {ask.code.split("").map((d, i) => (
-            <span key={i} className="needs-digit" aria-hidden="true">
-              {d}
-            </span>
-          ))}
-        </p>
-        <p className="needs-check-hint">If it doesn't match, someone else has the link. Turn them away.</p>
+        {ready ? (
+          <>
+            <p className="needs-check-q">Does their screen show this code?</p>
+            <p className="needs-pin">
+              <span className="sr">{ask.code}</span>
+              {ask.code.split("").map((d, i) =>
+                d === "-" ? (
+                  <span key={i} className="needs-dash" aria-hidden="true">
+                    –
+                  </span>
+                ) : (
+                  <span key={i} className="needs-digit" aria-hidden="true">
+                    {d}
+                  </span>
+                )
+              )}
+            </p>
+            <p className="needs-check-hint">If it doesn't match, someone else has the link. Turn them away.</p>
+          </>
+        ) : (
+          <p className="needs-check-q">Their code shows up here as soon as {ask.name} has it on screen. Then you compare.</p>
+        )}
       </div>
     </Shell>
   )
