@@ -150,6 +150,7 @@ export interface QuestionAsk {
   options: string[]
   holds: number[]
   task?: number
+  idle?: true
   answer?: { text: string; by: string; at: number }
 }
 

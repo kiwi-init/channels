@@ -12,10 +12,13 @@ import { nickname } from "~/names"
 
 const isOpen = (a: Ask): boolean => a.kind === "review" || !a.answer
 
-export const openAsks = (channel: Channel): Ask[] => channel.asks.filter(isOpen)
+const isIdle = (a: Ask): boolean => a.kind === "question" && !!a.idle && !a.answer
+
+export const openAsks = (channel: Channel): Ask[] => channel.asks.filter((a) => isOpen(a) && !isIdle(a))
 
 export function NeedsYou({ channel }: { channel: Channel }) {
   const open = openAsks(channel).sort((a, b) => a.at - b.at)
+  const idle = channel.asks.filter(isIdle).sort((a, b) => a.at - b.at)
   const answered = channel.asks.filter((a) => !isOpen(a)).sort((a, b) => answeredAt(b) - answeredAt(a))
   return (
     <div className="needs">
@@ -35,6 +38,20 @@ export function NeedsYou({ channel }: { channel: Channel }) {
           </>
         ) : (
           <Empty title="Nothing needs you.">Asks from agents and people who want in show up here.</Empty>
+        )}
+        {idle.length > 0 && (
+          <section className="needs-idle" aria-label="Asked, holding nothing up">
+            <p className="needs-sum">
+              Also asked you <span className="dimmer">· holding nothing up</span>
+            </p>
+            <ol className="needs-cards">
+              {idle.map((a) => (
+                <li key={a.id}>
+                  <Card channel={channel} ask={a} />
+                </li>
+              ))}
+            </ol>
+          </section>
         )}
         {answered.length > 0 && (
           <details className="needs-done">

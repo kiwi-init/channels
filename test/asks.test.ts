@@ -167,6 +167,18 @@ describe("decisions name the work they hold", () => {
     expect(status).not.toContain("Coffee or tea?");
   });
 
+  test("an escalation and a blocker to everyone that hold nothing are still listed in status, as asks holding nothing up (#1034)", async () => {
+    const log = await signedLog([esc("Can I restart the VM?"), { from: "dev", kind: "blocking", body: "Anyone know the staging password?", to: ["*"] }]);
+    const s = fold(log, roster, T0);
+    expect(s.openAsks.map((m) => [m.seq, holdsWork(s, m)])).toEqual([
+      [1, false],
+      [2, false],
+    ]);
+    const status = formatStatus({ alias: "c", me: "jow", state: s, online: new Map(), unread: 0 });
+    expect(status).toContain("also asked, holding nothing up (2): #1, #2");
+    expect(status).not.toContain("waiting on you");
+  });
+
   test("a done task holds nothing, so the decision on it leaves Needs you while one on its ask stays", async () => {
     const log = await signedLog([
       say("jow", "Make the avatars glass"),

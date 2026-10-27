@@ -514,7 +514,7 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
   }
   if (left.length) out.push(`  left or removed: ${left.sort().join(", ")}`);
 
-  const toMe = state.openAsks.filter((a) => a.from !== me && (!a.to || a.to.includes(me)));
+  const toMe = state.openAsks.filter((a) => a.from !== me && (!a.to?.length || a.to.includes(me) || a.to.includes("*")));
   const self = state.members.get(me);
   const asks = self && isPerson(self) ? toMe.filter((a) => holdsWork(state, a)) : toMe;
   const digest = toMe.filter((a) => !asks.includes(a));
