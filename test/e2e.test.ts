@@ -713,12 +713,12 @@ describe("MCP server", () => {
         "log",
         "members",
         "message",
+        "query",
         "read",
         "reply",
         "rooms",
         "save",
         "send",
-        "sh",
         "status",
         "task_add",
         "task_update",
@@ -734,7 +734,7 @@ describe("MCP server", () => {
       expect(await call("status")).toContain("agent-a (you) — builder");
       expect(await call("facts", { set: "docs.url", value: "https://example.com" })).toContain("docs.url = https://example.com");
       expect(await ok(other, "tasks")).toContain("write docs");
-      expect(await call("sh", { script: "grep -h '^T' tasks/*.md; cat facts/docs.url" })).toContain("write docs\nhttps://example.com");
+      expect(await call("query", { sql: "select t.title, f.value from tasks t, facts f where f.key = 'docs.url'" })).toContain('{"title":"write docs","value":"https://example.com"}');
 
       // Images round-trip: send with a file, read back pixels, save to disk.
       const png = join(home("img"), "shot.png");

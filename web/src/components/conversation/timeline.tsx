@@ -33,7 +33,6 @@ export interface RowsContext {
   hereKey: string
   cardRoom: string
   cards: TaskCards
-  search: string | null
   highlight: number | null
   bySeq: Map<number, Message>
   quoted: (seq: number) => Message | undefined
@@ -67,7 +66,6 @@ export function rowMakers(c: RowsContext) {
     hereKey,
     cardRoom,
     cards: taskCards,
-    search,
     highlight,
     bySeq,
     quoted,
@@ -126,7 +124,7 @@ export function rowMakers(c: RowsContext) {
         settled={settledOf(m)}
         prs={prsOf(m)}
         onJump={onJump}
-        thread={search || anchor ? undefined : threadOf(m, next)}
+        thread={anchor ? undefined : threadOf(m, next)}
         onOpenThread={openThread}
         receipt={showsReceipt(m, anchor) ? (receipt(m, state, marks, pkOf, formatTime) ?? undefined) : undefined}
         reactions={chipsFor(state, m.seq, me, nameOf)}

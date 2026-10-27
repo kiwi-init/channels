@@ -364,6 +364,11 @@ button {
   animation: flash 1.6s ease-out;
 }
 
+::highlight(search-hit) {
+  background-color: var(--accent-wash);
+  color: inherit;
+}
+
 /* A message you send lands with a small give, as in Messages; one that arrives rises into place. */
 @keyframes sent {
   from {

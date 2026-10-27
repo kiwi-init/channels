@@ -364,22 +364,24 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
   );
 
   server.registerTool(
-    "sh",
+    "query",
     {
       description:
-        "Query the channel as read-only files with a sandboxed shell (grep, jq, awk, sed, find…), in one script. " +
-        "/channel has log.jsonl, msgs/, inbox/, tasks/T<n>.md, members/<name>.json, facts/<key>, status, status.json; " +
-        "/channels/<alias>/ is every OTHER channel you're in, not this one. All channels: /channel plus /channels/*. `cat README` for the layout. " +
-        'Read-only: no disk, no network, no writes; use the other tools to send or change anything. Example: sh {"script":"cat status"}.',
-      inputSchema: { script: z.string().describe("a bash script, e.g. jq -r 'select(.kind==\"ask\") | .body' log.jsonl") },
+        "One read-only SQL select over the channel: tables messages, tasks, rounds, members and facts, one JSON object per row. " +
+        'Call with schema: true for the columns. Example: query {"sql":"select seq, sender, body from messages where esc=1"}.',
+      inputSchema: {
+        sql: z.string().optional().describe("one select, with or values statement"),
+        schema: z.boolean().optional().describe("list the tables and their columns instead"),
+      },
     },
-    shaped(({ script }) =>
+    shaped(({ sql, schema }) =>
       Effect.gen(function* () {
-        const { channelFiles, runSh, sessionViews, channelTables } = yield* Effect.promise(() => import("./sh.ts"));
-        const views = yield* sessionViews(s, script);
-        const r = yield* Effect.promise(() => runSh(channelFiles(views), script, { tables: channelTables(views) }));
-        const text = [r.stdout.trimEnd(), r.stderr.trimEnd() && `[stderr]\n${r.stderr.trimEnd()}`, r.exitCode && `[exit ${r.exitCode}]`].filter(Boolean).join("\n");
-        return r.exitCode ? fail(text) : ok(text || "(no output)");
+        const { schemaText, sessionQuery, USAGE } = yield* Effect.promise(() => import("./query.ts"));
+        if (schema) return ok(schemaText().trimEnd());
+        if (!sql) return fail(USAGE);
+        const r = yield* sessionQuery(s, sql);
+        const text = [r.stdout.trimEnd(), r.stderr.trimEnd() && `[stderr]\n${r.stderr.trimEnd()}`].filter(Boolean).join("\n");
+        return r.exitCode ? fail(text) : ok(text || "(no rows)");
       }),
     ),
   );

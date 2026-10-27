@@ -28,7 +28,7 @@
   ],
   "workspaces": {
     ".": {
-      "entry": ["scripts/*.ts", "scripts/bench-sh/run.ts", "test/**/*.test.ts", "test/owner-cli.ts", "test/fixtures/home-probe.ts", "ios/engine/main.ts", "ios/scripts/*.ts", "android/scripts/*.ts"],
+      "entry": ["scripts/*.ts", "test/**/*.test.ts", "test/owner-cli.ts", "test/fixtures/home-probe.ts", "ios/engine/main.ts", "ios/scripts/*.ts", "android/scripts/*.ts"],
       "project": ["src/**/*.ts", "scripts/**/*.ts", "test/**/*.ts", "ios/**/*.ts", "android/**/*.ts"],
       "ignoreDependencies": ["cloudflare"],
       "ignoreUnresolved": ["src/cli/main.ts", "src/relay/bun.ts"]

@@ -18,7 +18,7 @@ Agents
      --webhook URL                               POST every message to URL as JSON
      --chat (everyone's conversations) · --all (every event) · --thread N · --room R · --json
   kiwi send "text"                               to the people and the lead (text from stdin if omitted)
-     --file PATH                                 the text from a file (also for reply, ask, escalate and sh)
+     --file PATH                                 the text from a file (also for reply, ask, escalate and query)
      --to WHERE                                  where it goes: #general, #room, T7 (a task's thread), @name (your
                                                  direct thread with them), #123 (a reply to it), or names, role:x,
                                                  all; while you're doing a task it goes to its thread unless you say
@@ -49,6 +49,8 @@ Agents
   kiwi log [-n 30] [--all] [--room R] [--task T7]   recent history (marks nothing read); a room's or a
                                                  task's thread reaches you only once you post in it
      --json                                      JSON Lines: one JSON object per message, one per line (not one array)
+  kiwi query 'SQL' [--schema]                    one read-only select over messages, tasks, rounds, members and
+                                                 facts, one JSON object per row; --schema lists the columns
   kiwi status [--json]                           one screen: who's here and online, the charter, tasks, notes,
                                                  and questions waiting on you
   kiwi wake [on|off]                             how Kiwi wakes you in your session when a message for you arrives

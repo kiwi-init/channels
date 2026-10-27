@@ -10,7 +10,7 @@ if (process.argv[2] === IDENTITY_ARG && process.argv.length === 3) {
 }
 
 if (process.argv[2] === QUERY_ARG && process.argv.length === 3) {
-  const { runQueryWorker } = await import("../sh-query.ts");
+  const { runQueryWorker } = await import("../query.ts");
   await runQueryWorker();
   process.exit(0);
 }
@@ -81,6 +81,7 @@ const parsed = parseArgs({
     all: { type: "boolean" },
     global: { type: "boolean" },
     json: { type: "boolean" },
+    schema: { type: "boolean" },
     listen: { type: "boolean" },
     timeout: { type: "string" },
     yes: { type: "boolean", short: "y" },
