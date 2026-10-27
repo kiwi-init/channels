@@ -1,7 +1,8 @@
-import { Fragment, startTransition, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { Fragment, startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { Composer } from "~/chat/composer"
 import { MessageRow } from "~/chat/message"
+import { linked } from "~/chat/parsed"
 import { jumpTo, ReplyContext, type Replying } from "~/chat/reply"
 import { day, sameDay } from "~/kit/time"
 import type { Channel, Message, Where } from "~/model"
@@ -9,8 +10,23 @@ import { sameWhere, useApp } from "~/nav"
 
 const GROUP_MS = 5 * 60_000
 const NEAR_BOTTOM = 48
-const TAIL = 120
-const MORE = 60
+const TAIL = 100
+const MORE = 40
+const CAP = 160
+
+interface Span {
+  top: number | null
+  bottom: number | null
+}
+
+function spanOf(list: Message[], from: number, to: number): Span {
+  return { top: list[Math.max(0, from)]?.seq ?? null, bottom: to >= list.length ? null : (list[to - 1]?.seq ?? null) }
+}
+
+function around(list: Message[], at: number): Span {
+  const from = Math.max(0, Math.min(list.length - TAIL, at - 20))
+  return spanOf(list, from, Math.min(list.length, from + CAP))
+}
 
 export function useNames(channel: Channel): ReadonlySet<string> {
   const key = channel.people.map((p) => p.name.toLowerCase()).join("\n")
@@ -59,10 +75,14 @@ function anchorIn(box: HTMLElement, list: HTMLElement): Anchor | null {
   return el ? { el, top: el.getBoundingClientRect().top - top, at: box.scrollTop } : null
 }
 
-export function useStick() {
+export function useStick(following = true) {
   const scroller = useRef<HTMLDivElement>(null)
   const content = useRef<HTMLDivElement>(null)
   const stuck = useRef(true)
+  const live = useRef(following)
+  useLayoutEffect(() => {
+    live.current = following
+  }, [following])
   const anchor = useRef<Anchor | null>(null)
   const height = useRef(0)
 
@@ -88,7 +108,7 @@ export function useStick() {
     const list = content.current
     if (!box || !list) return
     if (height.current && list.offsetHeight !== height.current) settle()
-    stuck.current = box.scrollHeight - box.scrollTop - box.clientHeight < NEAR_BOTTOM
+    stuck.current = live.current && box.scrollHeight - box.scrollTop - box.clientHeight < NEAR_BOTTOM
     anchor.current = stuck.current ? null : anchorIn(box, list)
     height.current = list.offsetHeight
   }, [settle])
@@ -116,7 +136,7 @@ export function useStick() {
     if (box) box.scrollTop = top
   }, [])
 
-  return { scroller, content, stuck, remember, settle, toBottom, toOffset }
+  return { scroller, content, stuck, live, remember, settle, toBottom, toOffset }
 }
 
 export function Conversation({ channel, search }: { channel: Channel; search: string }) {
@@ -149,7 +169,6 @@ function Feed({ channel, where, search }: { channel: Channel; where: Where; sear
   const names = useNames(channel)
   const tasks = useTaskIds(channel)
   const typing = channel.people.filter((p) => p.typing && !p.you && where.kind === "room")
-  const { scroller, content, stuck, remember, settle, toBottom, toOffset } = useStick()
   const [fresh, setFresh] = useState(0)
   const [far, setFar] = useState(false)
 
@@ -162,12 +181,38 @@ function Feed({ channel, where, search }: { channel: Channel; where: Where; sear
   })
   const mark = unread?.seq ?? null
 
-  const [top, setTop] = useState<number | null>(() => {
-    const at = mark === null ? -1 : list.findIndex((m) => m.seq === mark)
-    return list[Math.max(0, Math.min(list.length - TAIL, at < 0 ? Infinity : at - 20))]?.seq ?? null
-  })
-  const pinned = top === null ? -1 : list.findIndex((m) => m.seq === top)
-  const start = pinned >= 0 ? pinned : Math.max(0, list.length - TAIL)
+  const [span, setSpan] = useState<Span>(() =>
+    mark === null
+      ? { top: null, bottom: null }
+      : around(
+          list,
+          list.findIndex((m) => m.seq === mark)
+        )
+  )
+  const lastAt = span.bottom === null ? -1 : list.findIndex((m) => m.seq === span.bottom)
+  const end = lastAt >= 0 ? lastAt + 1 : list.length
+  const firstAt = span.top === null ? -1 : list.findIndex((m) => m.seq === span.top)
+  const start = firstAt >= 0 && firstAt < end ? firstAt : Math.max(0, end - TAIL)
+  const following = end === list.length
+  const latest = useRef(false)
+  const { scroller, content, stuck, live, remember, settle, toBottom, toOffset } = useStick(following)
+
+  useEffect(() => {
+    const near = [...list.slice(Math.max(0, start - MORE), start), ...list.slice(end, end + MORE)]
+    const texts = near.flatMap((m) => (m.text && !m.system ? [linked(m.text, names, tasks)] : []))
+    let stop = () => {}
+    let live = true
+    const timer = window.setTimeout(() => {
+      void import("~/chat/markdown").then(({ warm }) => {
+        if (live) stop = warm(texts)
+      })
+    }, 150)
+    return () => {
+      live = false
+      window.clearTimeout(timer)
+      stop()
+    }
+  }, [list, start, end, names, tasks])
 
   const opened = useRef(false)
   useLayoutEffect(() => {
@@ -186,27 +231,50 @@ function Feed({ channel, where, search }: { channel: Channel; where: Where; sear
     const before = lastSeq.current
     lastSeq.current = last?.seq ?? 0
     if (!last || last.seq === before) return
+    if (last.from === channel.you && !live.current) {
+      latest.current = true
+      queueMicrotask(() => setSpan({ top: null, bottom: null }))
+      return
+    }
     if (last.from === channel.you) toBottom(false)
     else if (!stuck.current) setFresh((n) => n + list.filter((m) => m.seq > before && m.from !== channel.you && !m.system).length)
     settle()
-  }, [last, list, channel.you, toBottom, settle, stuck])
+  }, [last, list, channel.you, toBottom, settle, stuck, live])
 
   const onScroll = () => {
     remember()
     const box = scroller.current
     if (!box) return
     if (stuck.current) setFresh(0)
-    setFar(box.scrollHeight - box.scrollTop - box.clientHeight > box.clientHeight * 1.5)
+    const below = box.scrollHeight - box.scrollTop - box.clientHeight
+    setFar(!following || below > box.clientHeight * 1.5)
     if (start > 0 && box.scrollTop < box.clientHeight * 3) {
-      const next = list[Math.max(0, start - MORE)]?.seq ?? null
-      startTransition(() => setTop(next))
-    } else if (stuck.current && list.length - start > TAIL * 2) setTop(list[list.length - TAIL]?.seq ?? null)
+      const from = Math.max(0, start - MORE)
+      const next = spanOf(list, from, Math.min(end, from + CAP))
+      startTransition(() => setSpan(next))
+    } else if (!following && below < box.clientHeight * 3) {
+      const to = Math.min(list.length, end + MORE)
+      const next = spanOf(list, Math.max(start, to - CAP), to)
+      startTransition(() => setSpan(next))
+    } else if (stuck.current && end - start > TAIL * 2) setSpan({ top: list[end - TAIL]?.seq ?? null, bottom: null })
+  }
+
+  const toLatest = () => {
+    setFresh(0)
+    setFar(false)
+    if (following) return toBottom(true)
+    latest.current = true
+    setSpan({ top: null, bottom: null })
   }
 
   const known = useRef({ list, bySeq })
   const wanted = useRef<number | null>(null)
   useLayoutEffect(() => {
     known.current = { list, bySeq }
+    if (latest.current && live.current) {
+      latest.current = false
+      toBottom(false)
+    }
     if (wanted.current === null) return
     settle()
     if (jumpTo(content.current, wanted.current)) wanted.current = null
@@ -218,7 +286,7 @@ function Feed({ channel, where, search }: { channel: Channel; where: Where; sear
       const at = list.findIndex((m) => m.seq === seq)
       if (at >= 0) {
         wanted.current = seq
-        setTop(list[Math.max(0, at - 10)]?.seq ?? null)
+        setSpan(around(list, at))
         return
       }
       go({ to: "panel", panel: { kind: "thread", seq: bySeq.get(seq)?.inThread ?? seq } })
@@ -233,7 +301,7 @@ function Feed({ channel, where, search }: { channel: Channel; where: Where; sear
           {list.length === 0 ? (
             <Start channel={channel} where={where} searching={!!q} />
           ) : (
-            list.slice(start).map((m, k) => {
+            list.slice(start, end).map((m, k) => {
               const i = start + k
               return (
                 <Fragment key={m.seq}>
@@ -265,15 +333,7 @@ function Feed({ channel, where, search }: { channel: Channel; where: Where; sear
         </div>
       </div>
       {(fresh > 0 || far) && (
-        <button
-          type="button"
-          className="feed-jump"
-          onClick={() => {
-            setFresh(0)
-            setFar(false)
-            toBottom(true)
-          }}
-        >
+        <button type="button" className="feed-jump" onClick={toLatest}>
           {fresh > 0 ? `${fresh} new ${fresh === 1 ? "message" : "messages"}` : "Jump to latest"}
           <span aria-hidden="true"> ↓</span>
         </button>
