@@ -210,7 +210,7 @@ try {
       const got = await read();
       return { ok: String(got["text"] ?? "").startsWith("Message 1:"), detail: got };
     },
-    "WebKitGTK's navigator.clipboard writes don't reach the Wayland clipboard (T152)",
+    "KWin's fake input gives the page no user activation, so WebKit refuses navigator.clipboard writes; with a real gesture they reach the clipboard (Livewire Kitchen, T152)",
   );
 
   await step(
@@ -238,7 +238,7 @@ try {
       const got = await read();
       return { ok: Array.isArray(got["image"]), detail: got };
     },
-    "WebKitGTK's navigator.clipboard writes don't reach the Wayland clipboard (T152)",
+    "KWin's fake input gives the page no user activation, so WebKit refuses navigator.clipboard writes; with a real gesture they reach the clipboard (Livewire Kitchen, T152)",
   );
 
   await step("a PNG dragged from another app onto the composer is attached (T895)", async () => {
