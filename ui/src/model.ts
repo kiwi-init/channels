@@ -91,6 +91,12 @@ export interface Direct {
   seen?: number
 }
 
+export interface Upload {
+  name: string
+  mime: string
+  data: string
+}
+
 export interface Image {
   url: string
   width: number
@@ -278,7 +284,7 @@ export interface NewAgent {
 }
 
 export interface Actions {
-  send(code: string, where: Where, text: string, opts?: { replyTo?: number; inThread?: number }): void
+  send(code: string, where: Where, text: string, opts?: { replyTo?: number; inThread?: number; images?: Upload[] }): void
   retry(code: string, seq: number): void
   discard(code: string, seq: number): void
   react(code: string, seq: number, emoji: string): void
