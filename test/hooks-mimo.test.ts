@@ -92,19 +92,19 @@ test("install writes the plugin once, uninstall removes only a plugin of Kiwi's"
 });
 
 test("the plugin is strict TypeScript", async () => {
-  const dir = scratch("hk-mimo-tsc-");
+  const dir = scratch("hk-mimo-tsrs-");
   const file = join(dir, "kiwi.ts");
   writeFileSync(file, mimoPluginSource("'kiwi' hook listen # kiwi"));
-  const tsc = Bun.spawn(
-    [process.execPath, "x", "tsc", "--ignoreConfig", "--strict", "--noEmit", "--skipLibCheck", "--target", "es2022", "--module", "esnext", "--moduleResolution", "bundler", "--types", "bun", file],
+  const tsrs = Bun.spawn(
+    [process.execPath, "x", "tsrs", "--ignoreConfig", "--strict", "--noEmit", "--skipLibCheck", "--target", "es2022", "--module", "esnext", "--moduleResolution", "bundler", "--types", "bun", file],
     {
       cwd: join(import.meta.dir, ".."),
       stdout: "pipe",
       stderr: "pipe",
     },
   );
-  const out = await new Response(tsc.stdout).text();
-  expect(await tsc.exited, out).toBe(0);
+  const out = await new Response(tsrs.stdout).text();
+  expect(await tsrs.exited, out).toBe(0);
 });
 
 test("the plugin names a child session's root on the agent's shell, and a message for it starts a turn in that root session", async () => {

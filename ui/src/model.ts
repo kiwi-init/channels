@@ -158,7 +158,6 @@ export interface JoinAsk {
   id: string
   at: number
   name: string
-  handle?: string
   who: Kind
   harness?: Harness
   runs?: string
@@ -220,6 +219,7 @@ export interface Channel {
   rooms: Room[]
   directs: Direct[]
   people: Person[]
+  nicknames: ReadonlyMap<string, string>
   messages: Message[]
   tasks: Task[]
   asks: Ask[]
@@ -326,6 +326,7 @@ export interface Actions {
   addRepo(code: string, repo: string): void
   removeRepo(code: string, repo: string): void
   inviteLink(code: string): Promise<string>
+  joinCommand(code: string, as: { nick?: string; persona?: string }): Promise<string>
   leaveChannel(code: string): void
   newChannel(title: string): Promise<string>
   joinChannel(code: string): Promise<string>
@@ -336,6 +337,7 @@ export interface Actions {
   linkGithub(): void
   unlinkGithub(): void
   installUpdate(): void
+  windowControl(action: "minimize" | "maximize" | "close"): void
   applyUi(): void
   signOut(): void
   setNewMembers(code: string, can: "read" | "write"): void

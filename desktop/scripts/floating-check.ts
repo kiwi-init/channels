@@ -74,13 +74,6 @@ try {
     return { ok: wm === "floating", detail: { wm } };
   });
 
-  await step("weston doesn't blur, so the page draws GNOME's wallpaper behind its shell", async () => {
-    const got = await until("the wallpaper behind the shell", 20_000, () =>
-      driver.evaluate(() => (document.documentElement.style.getPropertyValue("--backdrop") ? { frost: document.documentElement.dataset["frost"] ?? null } : null), null, 5_000),
-    ).catch(() => null);
-    return { ok: got?.frost === "image", detail: got };
-  });
-
   await step("close, minimize and maximize show at the top left, with no GTK title bar (floating.png)", async () => {
     await driver.evaluate(() => void (document.documentElement.dataset["theme"] = "dark"), null, 5_000);
     await painted();

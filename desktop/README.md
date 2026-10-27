@@ -23,7 +23,7 @@ build (0.27.4), which no longer updates.
 ```sh
 bun run web:build && cd desktop && bun run start:eb   # dev build, opened
 bun run build:eb                                      # release-eb/: the stable build; scripts/eb-size.ts measures the plain .app we ship
-bun run typecheck:eb                                  # fetches the devkit into .hutch/, then tsc
+bun run typecheck:eb                                  # fetches the devkit into .hutch/, then tsrs
 ```
 
 - `scripts/eb.ts` — every Electrobun command goes through it (`start:eb`, `build:eb`,
@@ -109,7 +109,7 @@ else `location.origin` when served by a relay.
 ## Typecheck / build
 
 ```sh
-cd desktop && bunx tsc --noEmit   # shared modules and scripts
+cd desktop && bunx tsrs --noEmit   # shared modules and scripts
 bun run typecheck:eb              # the Electrobun shell (*-eb.ts)
 bun run build:eb                  # release-eb/: the stable build
 ```

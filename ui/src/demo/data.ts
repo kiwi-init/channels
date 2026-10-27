@@ -1,4 +1,5 @@
 import type { Account, Ask, Channel, ChannelTile, Message, Person, Prefs, Task } from "~/model"
+import { nicknamesOf } from "~/names"
 
 const now = Date.now()
 const m = (min: number): number => now - min * 60_000
@@ -341,7 +342,7 @@ const asks: Ask[] = [
     pin: { name: "Reviewer", persona: null },
     code: "482-193",
   },
-  { kind: "join", id: "join-2", at: m(1), name: "Sam Ortiz", handle: "sam", who: "human", key: "9f3a61c2", code: "", check: "unchecked" },
+  { kind: "join", id: "join-2", at: m(1), name: "Sam Ortiz", who: "human", key: "9f3a61c2", code: "", check: "unchecked" },
   {
     kind: "join",
     id: "join-3",
@@ -377,6 +378,7 @@ export const DEMO_CHANNEL: Channel = {
     { with: "maya", unread: 1, last: m(50) },
   ],
   people,
+  nicknames: nicknamesOf(people),
   messages: [...releases, ...messages, ...threadReplies, ...dm, ...taskThread].sort((a, b) => a.seq - b.seq),
   tasks,
   asks,
@@ -392,6 +394,7 @@ export const DEMO_EMPTY: Channel = {
   rooms: [{ id: "general", name: "general", unread: 0, mentions: 0 }],
   directs: [],
   people: [people[0] as Person],
+  nicknames: nicknamesOf([people[0] as Person]),
   messages: [],
   tasks: [],
   asks: [],

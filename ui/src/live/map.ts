@@ -143,7 +143,7 @@ function eventText(m: Wire, state: ChannelState): string {
     case "role.set":
       return ev.role ? `${nameIn(state, ev.member)} is ${ev.role} now` : `${nameIn(state, ev.member)} has no role now`
     default:
-      return `${who} ${describeEvent(m, state)}`
+      return `${who} ${describeEvent(m, state, (handle) => nameIn(state, handle))}`
   }
 }
 
@@ -397,7 +397,6 @@ export function asksOf(
         id: r.id,
         at: r.ts,
         name: r.display || r.name,
-        ...(r.display && r.display !== r.name ? { handle: r.name } : {}),
         who: r.kind === "human" ? "human" : "agent",
         ...(harness ? { harness } : {}),
         ...(r.kind === "human" ? (r.person ? { key: r.person.slice(0, 8) } : {}) : { said: saidOf(state, r.card) }),

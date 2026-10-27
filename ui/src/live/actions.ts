@@ -16,6 +16,7 @@ import { askToJoin, createChannel, forgetChannel, forgetPending, isJoinCode, loa
 import { linkOf, type ChannelLink } from "@/lib/channel-ops"
 import { removeComputer } from "@/lib/computers"
 import { joinCodeFromLink } from "@/lib/deep-link"
+import { kiwiJoin } from "@/lib/join-line"
 import { relayUrl } from "@/lib/relay"
 import { cleanRoomName, roomProblem, roomsAfter } from "@/lib/rooms"
 import { ALLOW_ONCE, DENY } from "@/lib/permission-settled"
@@ -110,7 +111,7 @@ async function letIn(run: Run, r: JoinRequest, choice: JoinChoice): Promise<stri
   } finally {
     await Promise.all([run.refreshRequests(), run.refreshRoster()])
   }
-  return persona ? `${name} joined as ${persona.name}` : `${name} joined`
+  return persona ? `${r.display || name} joined as ${persona.name}` : `${r.display || name} joined`
 }
 
 async function scopesFor(run: Run, name: string, scopes: Scope[]): Promise<void> {
@@ -227,14 +228,14 @@ export function makeActions(): Actions {
         if (!yes) {
           await run.ch.deny(r.id)
           await run.refreshRequests()
-          return announce(`Turned ${r.name} away`)
+          return announce(`Turned ${r.display || r.name} away`)
         }
         if (r.check === "unchecked") {
           await run.ch.checkRequest(r)
           await run.refreshRequests()
-          return announce(`Asked ${r.name} for its code: compare it, then let it in`)
+          return announce(`Asked ${r.display || r.name} for its code: compare it, then let it in`)
         }
-        if (r.check !== "ready" || !r.code) return announce(`Waiting for ${r.name}'s code`)
+        if (r.check !== "ready" || !r.code) return announce(`Waiting for ${r.display || r.name}'s code`)
         announce(await letIn(run, r, choice ?? {}))
       }),
     approveTask: (code, id, approve) =>
@@ -278,7 +279,7 @@ export function makeActions(): Actions {
         if (held.length) await run.send(handBackText(run.state, name, "removed", held), lead ? { to: lead } : {})
         await run.ch.remove(m.pk)
         await run.refreshRoster()
-        announce(`Removed ${name}`)
+        announce(`Removed ${m.display || name}`)
       }),
     setPersona: (code, name, id) =>
       attempt("Personality not changed", async () => {
@@ -359,6 +360,13 @@ export function makeActions(): Actions {
           owner(code).state.repos.filter((r) => r !== repo)
         )
       ),
+    joinCommand: async (code, as) => {
+      if (!loadMember(code)) throw new Error("you're not in that channel")
+      const picked = as.persona ? personalities().find((p) => p.id === as.persona) : undefined
+      if (as.persona && !picked) throw new Error("that personality isn't on this computer")
+      const pin = picked ? await owner(code).ch.pinPersona(picked) : null
+      return `kiwi ${kiwiJoin(relayUrl(), code, { ...(as.nick ? { nick: as.nick } : {}), persona: pin })}`
+    },
     inviteLink: async (code) => {
       if (!loadMember(code)) throw new Error("you're not in that channel")
       return `${relayUrl()}/#${code}`
@@ -397,6 +405,10 @@ export function makeActions(): Actions {
       }),
     linkGithub: () => attempt("GitHub not linked", linkGithub),
     unlinkGithub: () => attempt("GitHub not unlinked", unlinkGithub),
+    windowControl: (action) =>
+      void bridge()
+        ?.windowControl(action)
+        .catch(() => {}),
     installUpdate: () =>
       attempt("Couldn't update", async () => {
         const b = bridge()

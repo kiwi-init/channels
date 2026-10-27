@@ -8,6 +8,7 @@ import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import type { Ask, Channel, JoinAsk, Message, PermissionAsk, Person, Powers, QuestionAsk, ReviewAsk } from "~/model"
 import { useApp } from "~/nav"
+import { nickname } from "~/names"
 
 const isOpen = (a: Ask): boolean => a.kind === "review" || !a.answer
 
@@ -59,15 +60,15 @@ function answeredAt(a: Ask): number {
 }
 
 function byWhom(channel: Channel, by: string): string {
-  return by === channel.you ? "" : ` · by ${by}`
+  return by === channel.you ? "" : ` · by ${nickname(channel, by)}`
 }
 
 function doneLine(channel: Channel, a: Ask): string {
   switch (a.kind) {
     case "permission":
-      return a.answer ? `${a.answer.allow ? "Allowed" : "Denied"} · ${a.from} · ${a.code} · ${ago(a.answer.at)}${byWhom(channel, a.answer.by)}` : ""
+      return a.answer ? `${a.answer.allow ? "Allowed" : "Denied"} · ${nickname(channel, a.from)} · ${a.code} · ${ago(a.answer.at)}${byWhom(channel, a.answer.by)}` : ""
     case "question":
-      return a.answer ? `Chose “${a.answer.text}” · ${a.from} · ${ago(a.answer.at)}${byWhom(channel, a.answer.by)}` : ""
+      return a.answer ? `Chose “${a.answer.text}” · ${nickname(channel, a.from)} · ${ago(a.answer.at)}${byWhom(channel, a.answer.by)}` : ""
     case "join":
       return a.answer ? `${a.answer.letIn ? "Let in" : "Turned away"} · ${a.name}${a.sponsor ? ` · brought by ${a.sponsor}` : ""} · ${ago(a.answer.at)}${byWhom(channel, a.answer.by)}` : ""
     case "review":
@@ -166,7 +167,7 @@ function PermissionAskCard({ channel, ask, link }: { channel: Channel; ask: Perm
   return (
     <Shell
       face={who}
-      name={ask.from}
+      name={nickname(channel, ask.from)}
       member={!!who}
       verb={`asks to use ${ask.tool}`}
       at={ask.at}
@@ -193,7 +194,7 @@ function QuestionAskCard({ channel, ask, link }: { channel: Channel; ask: Questi
   const who = member(channel, ask.from)
   const holds = [...new Set([...(ask.task !== undefined ? [ask.task] : []), ...ask.holds])]
   return (
-    <Shell face={who} name={ask.from} member={!!who} verb="asks you" at={ask.at} link={link}>
+    <Shell face={who} name={nickname(channel, ask.from)} member={!!who} verb="asks you" at={ask.at} link={link}>
       <p className="needs-text">{ask.text}</p>
       <QuestionCard channel={channel} ask={ask} />
       {holds.length > 0 && (
@@ -257,30 +258,23 @@ function Said({ said }: { said: NonNullable<JoinAsk["said"]> }) {
 function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; link: ReactNode }) {
   const { app } = useApp()
   const agent = ask.who === "agent"
-  const it = agent ? "it" : "they"
   const [persona, setPersona] = useState<string | null | undefined>(undefined)
   const [readOnly, setReadOnly] = useState<boolean | undefined>(undefined)
   const [powers, setPowers] = useState<Powers | undefined>(undefined)
-  const [rename, setRename] = useState(ask.freeName ?? "")
   const face: Face = { name: ask.name, kind: ask.who, harness: ask.harness, presence: "online" }
   const ready = (ask.check ?? "ready") === "ready" && ask.code !== ""
   const unchecked = ask.check === "unchecked"
-  const line = [ask.handle && `@${ask.handle}`, agent ? "Agent" : "Person", ask.key && `key ${ask.key}`, ask.runs, ask.machine && `on ${ask.machine}`, ask.sponsor && `brought by ${ask.sponsor}`]
-    .filter(Boolean)
-    .join(" · ")
+  const line = [agent ? "Agent" : "Person", ask.key && `key ${ask.key}`, ask.runs, ask.machine && `on ${ask.machine}`, ask.sponsor && `brought by ${ask.sponsor}`].filter(Boolean).join(" · ")
   const chosen = agent ? (persona === undefined ? (ask.pin?.persona ?? null) : persona) : null
   const pinWaits = agent && persona === undefined && !!ask.pin && ask.pin.persona === undefined
   const pinGone = agent && persona === undefined && !!ask.pin && ask.pin.persona === null
   const label = app.personas.find((p) => p.id === chosen)?.label
   const only = readOnly ?? channel.newMembers === "read"
   const can = powers ?? channel.newPowers ?? { addsAgents: false, answersDecisions: false }
-  const name = rename.trim()
-  const nameTaken = !!ask.freeName && (!name || channel.people.some((p) => p.name.toLowerCase() === name.toLowerCase()))
-  const blocked = pinWaits || pinGone || nameTaken
-  const shownAs = ask.freeName ? name || ask.freeName : ask.name
+  const blocked = pinWaits || pinGone
   const letIn = () =>
     app.actions.answerJoin(channel.code, ask.id, true, {
-      ...(ask.freeName ? { as: name } : {}),
+      ...(ask.freeName ? { as: ask.freeName } : {}),
       ...(agent ? { persona: chosen } : { powers: can }),
       ...(chosen ? {} : { readOnly: only }),
     })
@@ -300,7 +294,7 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
             </button>
           ) : (
             <button type="button" className="btn is-primary" disabled={!ready || blocked} onClick={letIn}>
-              {!ready ? `Waiting for ${ask.name}'s code…` : pinGone ? "Pick a personality first" : label ? `It matches: let in as ${label}` : `It matches: let ${shownAs} in`}
+              {!ready ? `Waiting for ${ask.name}'s code…` : pinGone ? "Pick a personality first" : label ? `It matches: let in as ${label}` : `It matches: let ${ask.name} in`}
             </button>
           )}
           <button type="button" className="btn is-danger" onClick={() => app.actions.answerJoin(channel.code, ask.id, false)}>
@@ -347,11 +341,6 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
       </div>
       {ready && (
         <div className="needs-opts">
-          {ask.freeName && (
-            <Opt label="Name" hint={`${ask.handle ?? ask.name} is taken here. Let ${it} in under another.`}>
-              {(id) => <input id={id} className="input is-mono needs-name-input" value={rename} maxLength={32} spellCheck={false} onChange={(e) => setRename(e.target.value)} />}
-            </Opt>
-          )}
           {agent && (
             <Opt label="Personality" hint={app.personas.find((p) => p.id === chosen)?.about ?? "Works the way its harness does by default."}>
               {(id) => (
@@ -403,12 +392,12 @@ function ReviewAskCard({ channel, ask, link }: { channel: Channel; ask: ReviewAs
   const note = task?.notes.at(-1)
   const decide = (approve: boolean) => {
     app.actions.approveTask(channel.code, ask.task, approve)
-    toast(approve ? `Approved T${ask.task}` : `Sent T${ask.task} back to ${task?.owner ?? ask.from}`)
+    toast(approve ? `Approved T${ask.task}` : `Sent T${ask.task} back to ${nickname(channel, task?.owner ?? ask.from)}`)
   }
   return (
     <Shell
       face={who}
-      name={ask.from}
+      name={nickname(channel, ask.from)}
       member={!!who}
       verb={`asks you to review T${ask.task}`}
       at={ask.at}
@@ -436,7 +425,7 @@ function ReviewAskCard({ channel, ask, link }: { channel: Channel; ask: ReviewAs
             <blockquote className="needs-note">
               {note.text}{" "}
               <span className="needs-note-by">
-                {note.by === channel.you ? "you" : note.by} · {ago(note.at)}
+                {note.by === channel.you ? "you" : nickname(channel, note.by)} · {ago(note.at)}
               </span>
             </blockquote>
           )}
