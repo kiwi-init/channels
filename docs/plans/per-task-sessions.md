@@ -175,7 +175,7 @@ One issue and one PR each, with its CI gate:
    already running when the hold lands may finish, but cannot move the cursor forward after it: a
    delivery the hold refuses leaves the cursor where it was, and one that moved it before the hold
    is delivered, so a message is never both refused and counted read. A read that commits nothing
-   (`log`, `show`, `sh`) and was already running may still answer; its messages stay unread. Each
+   (`log`, `show`, `query`) and was already running may still answer; its messages stay unread. Each
    hold adds one to the seat's `holds`, which bind keeps: a connection to the seat opened before a
    hold reads nothing more for it afterwards, and moves neither its cursor nor its seen messages,
    even once the seat is bound again, so a listener, `ask` or webhook the old session left running

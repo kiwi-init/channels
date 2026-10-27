@@ -140,13 +140,13 @@ their windows. Local refusals are tagged (`refusals.ts`: `Rejected`, `OwnerOnly`
 `BadName`, `MissingKey`), in the agent and in `client.ts`, with the texts they always
 had; signs that the relay tampered with something (a join code's owner, a forged
 code half) are still thrown, as defects. The hooks' runner, `kiwi demo` and `kiwi
-sh`'s views are Effects; the computer link's relay calls are `machineFx`, refused
+query`'s tables are Effects; the computer link's relay calls are `machineFx`, refused
 with `MachineRefused`. The Stop hook's listener record stays for the life of the
 process, as before (an MCP server between two waits still counts as listening).
 
 **Step 5 (code):** every `kiwi` command is an Effect, run by one `ManagedRuntime`
 on `AgentLive`. A command stops with `Quit` (its line and exit code) where it used
-to call `die`, and its value, when it has one, is its exit code (`sh`, `wait`,
+to call `die`, and its value, when it has one, is its exit code (`query`, `wait`,
 `doctor`); `fail` at the bottom of `main.ts` is the one place a failure becomes
 its line and code (gone: forget, 4; the relay's refusals: `relay: …`; the rest:
 their text). `kiwi join` tells a key that's out for good by the relay's `Removed`

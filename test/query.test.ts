@@ -87,6 +87,31 @@ describe("kiwi query", () => {
     expect((await query(v, "select t.title from tasks t join messages m on m.task = t.id")).stdout).toBe(`{"title":"Ship it"}\n`);
   });
 
+  test("a forged message and the fact it sets never show", async () => {
+    const human = await generateIdentity("human");
+    const intern = await generateIdentity("intern");
+    const evil = await generateIdentity("evil");
+    const roster: Roster = [
+      { name: "human", pk: human.pk, owner: true, at: 0, active: true, kind: "human" },
+      { name: "intern", pk: intern.pk, owner: false, at: 0, active: true, role: "intern", kind: "agent" },
+    ];
+    const signed = async (id: Identity, from: string, seq: number, body: string, ev?: Event): Promise<Message> => {
+      const p = await sign(id, { v: 1 as const, id: crypto.randomUUID(), from, kind: ev ? ("event" as const) : ("msg" as const), body, ts: T0 + seq, ...(ev ? { ev } : {}) });
+      return { ...p, seq, rts: T0 + seq, sigOk: await verify(p) };
+    };
+    const messages = [
+      await signed(human, "human", 1, "", { op: "fact.set", key: "ip", value: "10.0.0.4" }),
+      await signed(intern, "intern", 2, "verified-hello"),
+      await signed(evil, "intern", 3, "forged-hello", { op: "fact.set", key: "ip", value: "6.6.6.6" }),
+    ];
+    const v: ChannelView = { me: "intern", messages, state: fold(messages, roster) };
+    const all = (await query(v, "select body from messages")).stdout + (await query(v, "select key, value from facts")).stdout;
+    expect(all).toContain("verified-hello");
+    expect(all).toContain("10.0.0.4");
+    expect(all).not.toContain("forged-hello");
+    expect(all).not.toContain("6.6.6.6");
+  });
+
   test("the schema lists the tables", () => {
     expect(schemaText()).toContain("messages(");
     expect(schemaText()).toContain("rounds(");

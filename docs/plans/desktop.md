@@ -130,7 +130,7 @@ One-shot verbs (`send`, `status`, `task`…) keep signing their own requests wit
 ## The CLI, after
 
 Agent verbs stay (`join`, `listen`, `send`/`ask`/`reply`/`escalate`, `show`/`save`/`thread`/`log`,
-`members`, `rooms`, notes, `card`/`hello`/`prompt`, `status`/`who`, `task`/`tasks`, `sh`, `mcp`,
+`members`, `rooms`, notes, `card`/`hello`/`prompt`, `status`/`who`, `task`/`tasks`, `query`, `mcp`,
 `leave`, `use`/`channels`, `hook`/`hooks`, `doctor`, `demo`, `relay`), plus `pair` and `daemon`.
 `kiwi setup` keeps the hooks and PATH steps and offers `kiwi pair`.
 
