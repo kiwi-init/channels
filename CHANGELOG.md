@@ -2,6 +2,39 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.10.8 — 2026-10-27
+
+- **UI: resizable panels, nothing hidden under the composer** ([#1049](https://github.com/kiwi-init/channels/pull/1049))
+- **UI: make channel settings findable** ([#1050](https://github.com/kiwi-init/channels/pull/1050))
+- **Desktop: build on Livewire 2026.10.0** ([#1051](https://github.com/kiwi-init/channels/pull/1051))
+- **Desktop: no dev-channel code in releases; name the first-run controls** ([#1054](https://github.com/kiwi-init/channels/pull/1054))
+- **UI: still dashed rings for doing tasks and waiting steps (T27)** ([#1058](https://github.com/kiwi-init/channels/pull/1058))
+- **UI: scroll the feed at 60fps (#1045)** ([#1055](https://github.com/kiwi-init/channels/pull/1055))
+- **Main CI: dialogs say they're dialogs; Homebrew CLI tests get a runner's budget (T54)** ([#1060](https://github.com/kiwi-init/channels/pull/1060))
+- **UI: let people in with the checks the web had (T18)** ([#1065](https://github.com/kiwi-init/channels/pull/1065))
+- **Composer: no suggested messages when the chat is empty (T17)** ([#1057](https://github.com/kiwi-init/channels/pull/1057))
+- **Composer: attach images by drag-drop, paste or + (T15)** ([#1059](https://github.com/kiwi-init/channels/pull/1059))
+- **Composer: # opens a task picker matched by title (T73)** ([#1068](https://github.com/kiwi-init/channels/pull/1068))
+- **Type-check with tsrs; drop typescript** ([#1066](https://github.com/kiwi-init/channels/pull/1066))
+- **A done task lists its own PRs (T101)** ([#1070](https://github.com/kiwi-init/channels/pull/1070))
+- **UI: the add-agent command can pin a personality (T20)** ([#1067](https://github.com/kiwi-init/channels/pull/1067))
+- **UI: people read nicknames, never handles** ([#1053](https://github.com/kiwi-init/channels/pull/1053))
+- **UI publish: on every merge that changes the UI, no request file (T124)** ([#1074](https://github.com/kiwi-init/channels/pull/1074))
+- **Linux: window controls on floating desktops (T54)** ([#1073](https://github.com/kiwi-init/channels/pull/1073))
+- **Desktop smoke: links through the bridge, a Dock badge check that doesn't race (T54)** ([#1069](https://github.com/kiwi-init/channels/pull/1069))
+- **Joining: invite step, waiting states, errors that say why (T41)** ([#1071](https://github.com/kiwi-init/channels/pull/1071))
+- **App: search lists results to jump to, ranked with BM25** ([#1064](https://github.com/kiwi-init/channels/pull/1064))
+- **Remove kiwi sh and just-bash; keep query as kiwi query (#1072)** ([#1075](https://github.com/kiwi-init/channels/pull/1075))
+- **Tray: the mark as three filled slabs, legible at 16 and 22 px (#1012)** ([#1076](https://github.com/kiwi-init/channels/pull/1076))
+- **UI: readable text selection (T163)** ([#1079](https://github.com/kiwi-init/channels/pull/1079))
+- **UI: mark up images in the viewer again (T169)** ([#1080](https://github.com/kiwi-init/channels/pull/1080))
+- **Tasks: the done line leaves out the assign note (T150)** ([#1081](https://github.com/kiwi-init/channels/pull/1081))
+- **UI: keep every feed frame inside the 120 fps budget (T38)** ([#1077](https://github.com/kiwi-init/channels/pull/1077))
+- **App smoke: read the join code from the relay's invite link** ([#1083](https://github.com/kiwi-init/channels/pull/1083))
+- **Desktop: build on Livewire 2026.10.1 (T88, T129)** ([#1082](https://github.com/kiwi-init/channels/pull/1082))
+- **Wayland check: say why the two copy checks are gaps (T152)** ([#1084](https://github.com/kiwi-init/channels/pull/1084))
+- **Desktop: an opaque window for the new UI (#1045)** ([#1056](https://github.com/kiwi-init/channels/pull/1056))
+
 ## 2026.10.7 — 2026-10-27
 
 - **Deps: refresh JavaScript, Android, and Electrobun** ([#1016](https://github.com/kiwi-init/channels/pull/1016))
