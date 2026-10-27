@@ -172,7 +172,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
           <div className="msg-images">
             {m.images.map((img) => (
               <button key={img.url} type="button" className="msg-image" aria-label={`Open ${img.alt || "image"}`} onClick={() => openImage(img.url, img.alt)}>
-                <img src={img.url} alt={img.alt} width={img.width} height={img.height} />
+                <img src={img.url} alt={img.alt} width={img.width || undefined} height={img.height || undefined} />
               </button>
             ))}
           </div>

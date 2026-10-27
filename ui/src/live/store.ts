@@ -5,7 +5,7 @@ import type { JoinRequest, Member as RosterMember } from "@kiwi/core/membership.
 import type { Message as Wire } from "@kiwi/core/protocol.ts"
 import type { ChannelState } from "@kiwi/core/state.ts"
 import type { ChannelLink } from "@/lib/channel-ops"
-import type { Channel, Where } from "~/model"
+import type { Channel, Upload, Where } from "~/model"
 
 export interface Run {
   code: string
@@ -18,7 +18,7 @@ export interface Run {
   roster: readonly RosterMember[]
   requests: readonly JoinRequest[]
   send: (body: string, opts: SendOptions) => Promise<number>
-  post: (where: Where, text: string, opts: { replyTo?: number; inThread?: number }) => Promise<number>
+  post: (where: Where, text: string, opts: { replyTo?: number; inThread?: number; images?: Upload[] }) => Promise<number>
   retry: (key: number) => Promise<number>
   discard: (key: number) => void
   refreshRequests: () => Promise<void>

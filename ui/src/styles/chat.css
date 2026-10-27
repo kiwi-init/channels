@@ -751,6 +751,7 @@
 }
 
 .composer {
+  position: relative;
   display: flex;
   flex-direction: column;
   padding: 8px;
@@ -961,4 +962,107 @@
   height: 96px;
   background: linear-gradient(to bottom, transparent, var(--bg) 70%);
   pointer-events: none;
+}
+
+.composer.is-dropping {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    var(--shadow-pop);
+}
+
+.compose-drop {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--bg-2) 92%, transparent);
+  color: var(--accent);
+  font: 500 var(--t-ui) var(--ui);
+  pointer-events: none;
+}
+
+.compose-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 4px 8px;
+}
+
+.compose-file {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--r-ctl);
+  overflow: hidden;
+  background: var(--bg-3);
+}
+
+.compose-file img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.compose-file-x {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  color: var(--ink);
+}
+
+.compose-file-x:hover {
+  background: var(--bg);
+}
+
+.compose-attach {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: none;
+  color: var(--ink-2);
+  transition:
+    background var(--fast),
+    color var(--fast);
+}
+
+.compose-attach:hover {
+  background: var(--wash-2);
+  color: var(--ink);
+}
+
+.mentions .task-row {
+  width: 100%;
+}
+
+.mentions:has(.task-row) {
+  width: min(460px, calc(100% - 56px));
+}
+
+.task-row-id {
+  flex: none;
+  color: var(--ink-3);
+  font: 11.5px var(--mono);
+}
+
+.task-row-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }

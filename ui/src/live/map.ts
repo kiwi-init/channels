@@ -29,7 +29,7 @@ import { reviewsFor } from "@/lib/task-actions"
 import { roomOfMessage, roomSeenKey } from "@/lib/rooms"
 import { canonicalHarness, harnessName } from "@/lib/harness"
 import type { Online } from "@/lib/channel/online"
-import type { Ask, Color, Direct, Harness, Image, JoinAsk, Message, Person, PullRequest, Reaction, Room, Task, TaskStatus, Where } from "~/model"
+import type { Ask, Color, Direct, Harness, Image, JoinAsk, Message, Person, PullRequest, Reaction, Room, Task, TaskStatus, Upload, Where } from "~/model"
 
 type Seen = Readonly<Record<string, number>>
 
@@ -180,6 +180,7 @@ export interface Pending {
   replyTo?: number
   seq?: number
   failed?: string
+  images?: Upload[]
 }
 
 export interface Pictures {
@@ -259,6 +260,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       ...(p.failed !== undefined ? { failed: p.failed } : { pending: true }),
       ...(p.inThread !== undefined ? { inThread: p.inThread } : {}),
       ...(p.replyTo !== undefined ? { replyTo: p.replyTo } : {}),
+      ...(p.images?.length ? { images: p.images.map((i) => ({ url: `data:${i.mime};base64,${i.data}`, width: 0, height: 0, alt: i.name })) } : {}),
     })
   }
   return out
