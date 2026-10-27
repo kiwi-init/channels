@@ -9,6 +9,7 @@ import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import type { Ask, Channel, PermissionAsk, PullRequest, QuestionAsk, ReviewRound, Task } from "~/model"
 import { useApp } from "~/nav"
+import { nickname } from "~/names"
 import { PanelHead } from "~/panels/frame"
 import { TONES } from "~/tasks/board"
 
@@ -57,7 +58,7 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
         <section className="panel-section">
           <Props channel={channel} task={task} />
         </section>
-        {waits.length > 0 && <Waits waits={waits} />}
+        {waits.length > 0 && <Waits channel={channel} waits={waits} />}
         {task.pr && <Pr pr={task.pr} />}
         <Review key={`review-${task.id}`} channel={channel} task={task} />
         {task.notes.length > 0 && (
@@ -67,7 +68,7 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
               {task.notes.map((n, i) => (
                 <li key={`${n.at}-${i}`}>
                   <p className="task-note-meta">
-                    {n.by} · {ago(n.at)}
+                    {nickname(channel, n.by)} · {ago(n.at)}
                   </p>
                   <p className="task-note-text">{n.text}</p>
                 </li>
@@ -96,7 +97,7 @@ function Who({ channel, name }: { channel: Channel; name: string }) {
   return (
     <button type="button" className="task-who" onClick={() => go({ to: "panel", panel: { kind: "person", name } })}>
       <Avatar person={person} size="sm" />
-      <span className="task-who-name">{name}</span>
+      <span className="task-who-name">{nickname(channel, name)}</span>
       {name === channel.you && <span className="dimmer">you</span>}
     </button>
   )
@@ -133,7 +134,7 @@ function Props({ channel, task }: { channel: Channel; task: Task }) {
   )
 }
 
-function Waits({ waits }: { waits: (PermissionAsk | QuestionAsk)[] }) {
+function Waits({ channel, waits }: { channel: Channel; waits: (PermissionAsk | QuestionAsk)[] }) {
   const { go } = useApp()
   return (
     <section className="panel-section">
@@ -144,7 +145,7 @@ function Waits({ waits }: { waits: (PermissionAsk | QuestionAsk)[] }) {
             <li key={a.id}>
               <p className="task-wait-text">{a.kind === "permission" ? a.summary : a.text}</p>
               <p className="task-wait-meta">
-                {a.from} · {ago(a.at)}
+                {nickname(channel, a.from)} · {ago(a.at)}
               </p>
             </li>
           ))}
@@ -204,14 +205,14 @@ function Review({ channel, task }: { channel: Channel; task: Task }) {
     app.actions.send(channel.code, { kind: "task", task: task.id }, text)
     app.actions.approveTask(channel.code, task.id, false)
     setReason(null)
-    toast(`Sent T${task.id} back${task.owner ? ` to ${task.owner}` : ""}`)
+    toast(`Sent T${task.id} back${task.owner ? ` to ${nickname(channel, task.owner)}` : ""}`)
   }
   return (
     <section className="panel-section">
       <Heading>Review</Heading>
       {yours && (
         <div className="task-box is-waiting task-review">
-          <p className="task-review-ask">{task.owner ? `${task.owner} asks for your review.` : "This waits for your review."}</p>
+          <p className="task-review-ask">{task.owner ? `${nickname(channel, task.owner)} asks for your review.` : "This waits for your review."}</p>
           {reason === null ? (
             <div className="actions">
               <button
@@ -262,7 +263,7 @@ function Review({ channel, task }: { channel: Channel; task: Task }) {
         <ol className="task-rounds">
           {past.map((r) => (
             <li key={r.n}>
-              Round {r.n} · {r.by === channel.you ? "you" : r.by} · <span className={ROUND_TONES[r.result]}>{ROUND_WORDS[r.result]}</span> · {ago(r.at)}
+              Round {r.n} · {r.by === channel.you ? "you" : nickname(channel, r.by)} · <span className={ROUND_TONES[r.result]}>{ROUND_WORDS[r.result]}</span> · {ago(r.at)}
             </li>
           ))}
         </ol>

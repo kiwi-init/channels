@@ -8,6 +8,7 @@ import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import type { Ask, Channel, JoinAsk, Message, PermissionAsk, Person, QuestionAsk, ReviewAsk } from "~/model"
 import { useApp } from "~/nav"
+import { nickname } from "~/names"
 
 const isOpen = (a: Ask): boolean => a.kind === "review" || !a.answer
 
@@ -59,15 +60,15 @@ function answeredAt(a: Ask): number {
 }
 
 function byWhom(channel: Channel, by: string): string {
-  return by === channel.you ? "" : ` · by ${by}`
+  return by === channel.you ? "" : ` · by ${nickname(channel, by)}`
 }
 
 function doneLine(channel: Channel, a: Ask): string {
   switch (a.kind) {
     case "permission":
-      return a.answer ? `${a.answer.allow ? "Allowed" : "Denied"} · ${a.from} · ${a.code} · ${ago(a.answer.at)}${byWhom(channel, a.answer.by)}` : ""
+      return a.answer ? `${a.answer.allow ? "Allowed" : "Denied"} · ${nickname(channel, a.from)} · ${a.code} · ${ago(a.answer.at)}${byWhom(channel, a.answer.by)}` : ""
     case "question":
-      return a.answer ? `Chose “${a.answer.text}” · ${a.from} · ${ago(a.answer.at)}${byWhom(channel, a.answer.by)}` : ""
+      return a.answer ? `Chose “${a.answer.text}” · ${nickname(channel, a.from)} · ${ago(a.answer.at)}${byWhom(channel, a.answer.by)}` : ""
     case "join":
       return a.answer ? `${a.answer.letIn ? "Let in" : "Turned away"} · ${a.name}${a.sponsor ? ` · brought by ${a.sponsor}` : ""} · ${ago(a.answer.at)}${byWhom(channel, a.answer.by)}` : ""
     case "review":
@@ -166,7 +167,7 @@ function PermissionAskCard({ channel, ask, link }: { channel: Channel; ask: Perm
   return (
     <Shell
       face={who}
-      name={ask.from}
+      name={nickname(channel, ask.from)}
       member={!!who}
       verb={`asks to use ${ask.tool}`}
       at={ask.at}
@@ -193,7 +194,7 @@ function QuestionAskCard({ channel, ask, link }: { channel: Channel; ask: Questi
   const who = member(channel, ask.from)
   const holds = [...new Set([...(ask.task !== undefined ? [ask.task] : []), ...ask.holds])]
   return (
-    <Shell face={who} name={ask.from} member={!!who} verb="asks you" at={ask.at} link={link}>
+    <Shell face={who} name={nickname(channel, ask.from)} member={!!who} verb="asks you" at={ask.at} link={link}>
       <p className="needs-text">{ask.text}</p>
       <QuestionCard channel={channel} ask={ask} />
       {holds.length > 0 && (
@@ -266,12 +267,12 @@ function ReviewAskCard({ channel, ask, link }: { channel: Channel; ask: ReviewAs
   const note = task?.notes.at(-1)
   const decide = (approve: boolean) => {
     app.actions.approveTask(channel.code, ask.task, approve)
-    toast(approve ? `Approved T${ask.task}` : `Sent T${ask.task} back to ${task?.owner ?? ask.from}`)
+    toast(approve ? `Approved T${ask.task}` : `Sent T${ask.task} back to ${nickname(channel, task?.owner ?? ask.from)}`)
   }
   return (
     <Shell
       face={who}
-      name={ask.from}
+      name={nickname(channel, ask.from)}
       member={!!who}
       verb={`asks you to review T${ask.task}`}
       at={ask.at}

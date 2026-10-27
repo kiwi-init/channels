@@ -20,6 +20,7 @@ import { ownPrefs } from "~/live/prefs"
 import { closeOpened, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
 import type { Channel, Where } from "~/model"
+import { nicknamesOf } from "~/names"
 
 export interface View {
   where: Where | null
@@ -94,6 +95,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const shown = useShown()
 
   const people = useMemo(() => peopleOf(state, roster, online, me, wakes), [state, roster, online, me, wakes])
+  const nicknames = useMemo(() => nicknamesOf(state.members.values()), [state.members])
   const asks = useMemo(() => asksOf(state, messages, me, isOwner, requests), [state, messages, me, isOwner, requests])
   const mapped = useMemo(() => messagesOf(state, messages, me, asks.askOf, pictures, pending), [state, messages, me, asks.askOf, pictures, pending])
   const tasks = useMemo(() => tasksOf(state, asks.held), [state, asks.held])
@@ -121,12 +123,13 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       rooms,
       directs,
       people,
+      nicknames,
       messages: mapped,
       tasks,
       asks: asks.asks,
       connection,
     }),
-    [code, title, icon, isOwner, me, state.lead, state.charter, state.hold, newMembers, state.repos, rooms, directs, people, mapped, tasks, asks.asks, connection]
+    [code, title, icon, isOwner, me, state.lead, state.charter, state.hold, newMembers, state.repos, rooms, directs, people, nicknames, mapped, tasks, asks.asks, connection]
   )
 
   const post = useCallback(
@@ -224,12 +227,12 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     })
   }, [messages, others, state, code, me, member.at])
 
-  useNotify(messages, me, title)
+  useNotify(messages, me, title, state.members)
 
   return null
 })
 
-function useNotify(messages: readonly Wire[], me: string, title: string) {
+function useNotify(messages: readonly Wire[], me: string, title: string, members: ChannelState["members"]) {
   const told = useRef(messages.at(-1)?.seq ?? 0)
   useEffect(() => {
     const fresh = messages.filter((m) => m.seq > told.current && m.kind !== "event" && m.from !== me)
@@ -241,7 +244,8 @@ function useNotify(messages: readonly Wire[], me: string, title: string) {
     if (!last) return
     const b = bridge()
     const body = last.body.slice(0, 200)
-    if (b) void b.notify(`${last.from} in ${title}`, body).catch(() => {})
-    else if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification(`${last.from} in ${title}`, { body })
-  }, [messages, me, title])
+    const who = members.get(last.from)?.display || last.from
+    if (b) void b.notify(`${who} in ${title}`, body).catch(() => {})
+    else if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification(`${who} in ${title}`, { body })
+  }, [messages, me, title, members])
 }

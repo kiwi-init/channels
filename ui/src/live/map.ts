@@ -13,6 +13,8 @@ import { roomOfMessage, roomSeenKey } from "@/lib/rooms"
 import { canonicalHarness, harnessName } from "@/lib/harness"
 import type { Online } from "@/lib/channel/online"
 import type { Ask, Color, Direct, Harness, Image, Message, Person, PullRequest, Reaction, Room, Task, TaskStatus, Where } from "~/model"
+import { named } from "~/chat/linked"
+import { nicknamesOf } from "~/names"
 
 type Seen = Readonly<Record<string, number>>
 
@@ -109,6 +111,16 @@ function mentionsYou(m: Wire, me: string): boolean {
 
 const SUMMARISED = (m: Wire): boolean => m.ev?.op === "task.add" || (m.ev?.op === "task.update" && !!m.ev.state)
 
+const nicknameMaps = new WeakMap<ChannelState["members"], ReadonlyMap<string, string>>()
+
+function nicknamesIn(state: ChannelState): ReadonlyMap<string, string> {
+  const known = nicknameMaps.get(state.members)
+  if (known) return known
+  const made = nicknamesOf(state.members.values())
+  nicknameMaps.set(state.members, made)
+  return made
+}
+
 function nameIn(state: ChannelState, name: string): string {
   const m = state.members.get(name)
   return m?.display || name
@@ -126,7 +138,7 @@ function eventText(m: Wire, state: ChannelState): string {
     case "role.set":
       return ev.role ? `${nameIn(state, ev.member)} is ${ev.role} now` : `${nameIn(state, ev.member)} has no role now`
     default:
-      return `${who} ${describeEvent(m, state)}`
+      return `${who} ${named(describeEvent(m, state), nicknamesIn(state))}`
   }
 }
 

@@ -196,6 +196,7 @@ export interface Channel {
   rooms: Room[]
   directs: Direct[]
   people: Person[]
+  nicknames: ReadonlyMap<string, string>
   messages: Message[]
   tasks: Task[]
   asks: Ask[]

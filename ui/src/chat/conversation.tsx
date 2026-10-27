@@ -6,11 +6,12 @@ import { jumpTo, ReplyContext, type Replying } from "~/chat/reply"
 import { day, sameDay } from "~/kit/time"
 import type { Channel, Message, Where } from "~/model"
 import { sameWhere, useApp } from "~/nav"
+import { nickname } from "~/names"
 
 const GROUP_MS = 5 * 60_000
 const NEAR_BOTTOM = 48
 
-export const namesOf = (channel: Channel): Set<string> => new Set(channel.people.map((p) => p.name.toLowerCase()))
+export const namesOf = (channel: Channel): ReadonlyMap<string, string> => channel.nicknames
 
 export function compactAt(list: Message[], i: number): boolean {
   const m = list[i]
@@ -102,7 +103,7 @@ export function Conversation({ channel, search }: { channel: Channel; search: st
   const key = `${channel.code}:${whereKey(where)}`
   const [reply, setReply] = useState<{ key: string; to: Message } | null>(null)
   const replying = useMemo((): Replying => ({ to: reply?.key === key ? reply.to : null, set: (to) => setReply(to ? { key, to } : null) }), [reply, key])
-  const placeName = where.kind === "room" ? `#${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}` : where.kind === "dm" ? where.with : `T${where.task}`
+  const placeName = where.kind === "room" ? `#${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}` : where.kind === "dm" ? nickname(channel, where.with) : `T${where.task}`
   const empty = !channel.messages.some((m) => sameWhere(m.where, where))
 
   return (
@@ -239,7 +240,7 @@ function Start({ channel, where, searching }: { channel: Channel; where: Where; 
         {where.kind === "room"
           ? `This is the start of #${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}.`
           : where.kind === "dm"
-            ? `Only you and ${where.with} read this.`
+            ? `Only you and ${nickname(channel, where.with)} read this.`
             : "Nothing here yet."}
       </p>
       <p className="dim">{agents === 0 ? "No agents here yet. Add one from the sidebar, then give it something to do." : "Say what you want done. The lead turns it into tasks."}</p>

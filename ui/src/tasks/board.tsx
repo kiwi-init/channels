@@ -7,6 +7,7 @@ import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import type { Channel, Task, TaskStatus } from "~/model"
 import { useApp } from "~/nav"
+import { nickname } from "~/names"
 
 export const openTasks = (channel: Channel): Task[] => channel.tasks.filter((t) => t.status !== "done" && !t.archived)
 
@@ -83,11 +84,11 @@ function Row({ channel, t, on }: { channel: Channel; t: Task; on: boolean }) {
       <span className="board-title">{t.title}</span>
       <span className="board-meta">
         T{t.id}
-        {t.owner && ` · ${t.owner}`} · {STATUS_WORDS[t.status]}
+        {t.owner && ` · ${nickname(channel, t.owner)}`} · {STATUS_WORDS[t.status]}
         {t.pr && ` · PR #${t.pr.number}`} · {ago(t.updatedAt)}
       </span>
       {t.owner && (
-        <span className="board-owner" title={t.owner}>
+        <span className="board-owner" title={nickname(channel, t.owner)}>
           <Avatar person={owner} size="sm" />
         </span>
       )}

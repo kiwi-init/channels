@@ -5,6 +5,7 @@ import { Avatar, cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { Channel, Where } from "~/model"
 import { useApp } from "~/nav"
+import { nickname, shown } from "~/names"
 
 const SUGGEST = ["hey team, what's everyone on?", "who's working on what?", "add a dark mode toggle"]
 
@@ -91,7 +92,7 @@ export function Composer({ channel, where, placeholder, inThread, suggest }: { c
             <li key={p.name} role="option" aria-selected={i === pick}>
               <button type="button" tabIndex={-1} className={cx("mention-row", i === pick && "is-on")} onMouseDown={(e) => e.preventDefault()} onClick={() => complete(p.name)}>
                 <Avatar person={p} size="sm" pip />
-                <span className="mention-name">{p.name}</span>
+                <span className="mention-name">{shown(p)}</span>
                 <span className="dim">{p.role ?? p.runs ?? (p.kind === "human" ? "person" : "agent")}</span>
               </button>
             </li>
@@ -109,7 +110,7 @@ export function Composer({ channel, where, placeholder, inThread, suggest }: { c
           <div className="compose-reply">
             <Icon name="reply" size={13} />
             <span className="compose-reply-text">
-              Replying to <b>{replyTo.from}</b> <span className="dim">{quoteLine.slice(0, 160)}</span>
+              Replying to <b>{nickname(channel, replyTo.from)}</b> <span className="dim">{quoteLine.slice(0, 160)}</span>
             </span>
             <button type="button" className="compose-reply-x" aria-label="Cancel reply" title="Cancel reply (Esc)" onClick={() => replying?.set(null)}>
               <Icon name="close" size={13} />
@@ -125,7 +126,7 @@ export function Composer({ channel, where, placeholder, inThread, suggest }: { c
             aria-autocomplete="list"
             aria-expanded={matches.length > 0}
             aria-controls={matches.length > 0 ? `${key}-people` : undefined}
-            placeholder={replyTo ? `Reply to ${replyTo.from}` : placeholder}
+            placeholder={replyTo ? `Reply to ${nickname(channel, replyTo.from)}` : placeholder}
             onChange={(e) => update(e.target.value, e.target.selectionStart)}
             onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
             onFocus={() => setFocused(true)}

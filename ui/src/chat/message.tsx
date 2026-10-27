@@ -7,13 +7,14 @@ import { Icon } from "~/kit/icons"
 import { ago, clock } from "~/kit/time"
 import type { Channel, Message } from "~/model"
 import { useApp } from "~/nav"
+import { nickname } from "~/names"
 
 const Markdown = lazy(() => import("~/chat/markdown"))
 
 const QUICK = ["👍", "🔥", "👀", "✅"]
 const CLAMP_PX = 12 * 22
 
-function Body({ channel, text, names, onImage }: { channel: Channel; text: string; names: ReadonlySet<string>; onImage: (url: string, alt: string) => void }) {
+function Body({ channel, text, names, onImage }: { channel: Channel; text: string; names: ReadonlyMap<string, string>; onImage: (url: string, alt: string) => void }) {
   const { go, toast } = useApp()
   const [shown, setShown] = useState(false)
   const tasks = useMemo(() => new Set(channel.tasks.map((t) => t.id)), [channel.tasks])
@@ -76,12 +77,12 @@ function Clamp({ on, children }: { on: boolean; children: ReactNode }) {
   )
 }
 
-function Quote({ quoted, onClick }: { quoted: Message; onClick?: () => void }) {
+function Quote({ quoted, who, onClick }: { quoted: Message; who: string; onClick?: () => void }) {
   const line = preview(quoted.text)
   return (
-    <button type="button" className="msg-quote" onClick={onClick} aria-label={`Replying to ${quoted.from}: ${line.slice(0, 80)}. Show it`}>
+    <button type="button" className="msg-quote" onClick={onClick} aria-label={`Replying to ${who}: ${line.slice(0, 80)}. Show it`}>
       <Icon name="reply" size={12} />
-      <span className="msg-quote-who">{quoted.from}</span>
+      <span className="msg-quote-who">{who}</span>
       <span className="msg-quote-text">{line || (quoted.images?.length ? "an image" : "…")}</span>
     </button>
   )
@@ -99,7 +100,7 @@ export const MessageRow = memo(function MessageRow({
   channel: Channel
   m: Message
   compact: boolean
-  names: Set<string>
+  names: ReadonlyMap<string, string>
   inThread?: boolean
   quote?: Message
   onQuote?: (seq: number) => void
@@ -124,7 +125,7 @@ export const MessageRow = memo(function MessageRow({
     <article
       className={cx("msg", compact && "is-compact", m.mentionsYou && "is-for-you", m.pending && "is-pending", m.failed !== undefined && "is-failed")}
       data-seq={m.seq}
-      aria-label={`${m.from}, ${clock(m.at)}`}
+      aria-label={`${nickname(channel, m.from)}, ${clock(m.at)}`}
     >
       <div className="msg-gutter">
         {compact ? (
@@ -139,7 +140,7 @@ export const MessageRow = memo(function MessageRow({
         {!compact && (
           <p className="msg-head">
             <button type="button" className="msg-name" onClick={() => go({ to: "panel", panel: { kind: "person", name: m.from } })}>
-              {m.from}
+              {nickname(channel, m.from)}
             </button>
             {who?.role && <span className="msg-role">{who.role}</span>}
             {who?.runs && <span className="msg-runs">· {who.runs}</span>}
@@ -148,7 +149,7 @@ export const MessageRow = memo(function MessageRow({
             </time>
           </p>
         )}
-        {quote && <Quote quoted={quote} onClick={onQuote ? () => onQuote(quote.seq) : undefined} />}
+        {quote && <Quote quoted={quote} who={nickname(channel, quote.from)} onClick={onQuote ? () => onQuote(quote.seq) : undefined} />}
         <Clamp on={who?.kind === "agent" && !inThread}>{m.text && <Body channel={channel} text={m.text} names={names} onImage={openImage} />}</Clamp>
         {m.images && (
           <div className="msg-images">
@@ -181,7 +182,7 @@ export const MessageRow = memo(function MessageRow({
                 key={r.emoji}
                 type="button"
                 className={cx("react", r.by.includes(channel.you) && "is-mine")}
-                title={r.by.join(", ")}
+                title={r.by.map((b) => nickname(channel, b)).join(", ")}
                 aria-pressed={r.by.includes(channel.you)}
                 onClick={() => app.actions.react(channel.code, m.seq, r.emoji)}
               >
@@ -196,7 +197,7 @@ export const MessageRow = memo(function MessageRow({
               {m.thread.replies} {m.thread.replies === 1 ? "reply" : "replies"}
             </span>
             <span className="dim">
-              {m.thread.people.join(", ")} · {ago(m.thread.last)}
+              {m.thread.people.map((p) => nickname(channel, p)).join(", ")} · {ago(m.thread.last)}
             </span>
           </button>
         )}

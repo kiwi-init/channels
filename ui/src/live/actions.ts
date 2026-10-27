@@ -206,16 +206,16 @@ export function makeActions(): Actions {
         if (!yes) {
           await run.ch.deny(r.id)
           await run.refreshRequests()
-          return announce(`Turned ${r.name} away`)
+          return announce(`Turned ${r.display || r.name} away`)
         }
         if (r.check === "unchecked") {
           await run.ch.checkRequest(r)
           await run.refreshRequests()
-          return announce(`Asked ${r.name} for its code: compare it, then let it in`)
+          return announce(`Asked ${r.display || r.name} for its code: compare it, then let it in`)
         }
-        if (r.check !== "ready" || !r.code) return announce(`Waiting for ${r.name}'s code`)
+        if (r.check !== "ready" || !r.code) return announce(`Waiting for ${r.display || r.name}'s code`)
         await letIn(run, r)
-        announce(`${r.name} joined`)
+        announce(`${r.display || r.name} joined`)
       }),
     approveTask: (code, id, approve) =>
       attempt(approve ? "Not approved" : "Not sent back", async () => {
@@ -258,7 +258,7 @@ export function makeActions(): Actions {
         if (held.length) await run.send(handBackText(run.state, name, "removed", held), lead ? { to: lead } : {})
         await run.ch.remove(m.pk)
         await run.refreshRoster()
-        announce(`Removed ${name}`)
+        announce(`Removed ${m.display || name}`)
       }),
     setPersona: (code, name, id) =>
       attempt("Personality not changed", async () => {

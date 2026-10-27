@@ -5,6 +5,7 @@ import { Icon } from "~/kit/icons"
 import { clock } from "~/kit/time"
 import type { Channel, PermissionAsk, PullRequest, QuestionAsk } from "~/model"
 import { useApp } from "~/nav"
+import { nickname } from "~/names"
 
 export function TaskChip({ channel, id }: { channel: Channel; id: number }) {
   const { go } = useApp()
@@ -16,7 +17,7 @@ export function TaskChip({ channel, id }: { channel: Channel; id: number }) {
       <span className="chip-id">T{t.id}</span>
       <span className="chip-title">{t.title}</span>
       <span className="chip-meta">
-        {t.owner ? ` · ${t.owner}` : ""} · {STATUS_WORDS[t.status]}
+        {t.owner ? ` · ${nickname(channel, t.owner)}` : ""} · {STATUS_WORDS[t.status]}
         {t.pr ? ` · PR #${t.pr.number}` : ""}
       </span>
     </button>
