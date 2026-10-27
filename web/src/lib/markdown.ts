@@ -1,3 +1,5 @@
+import { readsAsHandle } from "@kiwi/core/state.ts"
+
 // Message text is untrusted. Only these schemes may become a link; everything else stays text.
 const SAFE_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:"])
 
@@ -44,9 +46,9 @@ export function knownRefs(text: string, known: (seq: number) => boolean): string
   return seqs.join(",")
 }
 
-const MENTION = /(?<![\p{L}\p{N}\p{M}_/.@-])@([\p{L}\p{N}_.-]+)/gu
+const MENTION = /(?<![\p{L}\p{N}\p{M}_/.@-])(@?)([\p{L}\p{N}_.-]+)/gu
 
-export type MentionPart = { kind: "text"; text: string } | { kind: "mention"; text: string; name: string; label: string }
+export type MentionPart = { kind: "text"; text: string } | { kind: "mention"; text: string; name: string; label: string } | { kind: "handle"; text: string; name: string; label: string }
 
 function mentioned(raw: string, labelOf: (name: string) => string | undefined): { name: string; label: string } | null {
   for (let name = raw; name; name = name.slice(0, -1)) {
@@ -61,11 +63,14 @@ export function mentionParts(text: string, labelOf: (name: string) => string | u
   const parts: MentionPart[] = []
   let from = 0
   for (const match of text.matchAll(MENTION)) {
-    const who = mentioned(match[1]!, labelOf)
+    const at = match[1] === "@"
+    const who = mentioned(match[2]!, labelOf)
     if (!who) continue
+    const end = match.index + match[1]!.length + who.name.length
+    if (!at && (!readsAsHandle(who.name, who.label) || text[end] === "@")) continue
     if (match.index > from) parts.push({ kind: "text", text: text.slice(from, match.index) })
-    parts.push({ kind: "mention", text: `@${who.name}`, ...who })
-    from = match.index + 1 + who.name.length
+    parts.push(at ? { kind: "mention", text: `@${who.name}`, ...who } : { kind: "handle", text: who.name, ...who })
+    from = end
   }
   if (from < text.length || parts.length === 0) parts.push({ kind: "text", text: text.slice(from) })
   return parts
