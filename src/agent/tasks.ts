@@ -184,15 +184,21 @@ export class SessionTasks extends SessionMessaging {
       }
       if (change.state && change.state !== "cancelled" && !TASK_STATES.includes(change.state)) return yield* new Rejected(`state must be one of ${TASK_STATES.join(", ")}`);
       const owner = change.owner ? (yield* this.resolveTo([change.owner], state))?.[0] : change.owner;
-      const review = change.review ? yield* this.reviewer(state, change.review) : change.review;
+      const finishing = change.state === "done" || change.state === "cancelled";
+      const reviewerLeft = !!t.review && t.review !== "*" && state.members.get(t.review)?.active === false;
+      const opensReview = finishing && change.review === undefined && reviewerLeft && state.lead === this.me;
+      const review = change.review ? yield* this.reviewer(state, change.review) : opensReview ? "*" : change.review;
       const me = state.members.get(this.me);
       const gate = review === undefined ? t.review : review || undefined;
-      const finishing = change.state === "done" || change.state === "cancelled";
       const notReviewer = !!gate && !!me && !isPerson(me) && (gate === "*" ? (owner ?? t.owner) === this.me || t.workedBy.includes(this.me) : gate !== this.me);
       const open = openRound(t);
       const revised = change.state === "cancelled" ? revisedOut(t, this.me, open) : null;
       if (finishing && t.state !== "done" && notReviewer && revised === null) {
         const what = change.state === "cancelled" ? "cancelled" : "done";
+        if (gate === t.review && reviewerLeft)
+          return yield* new Rejected(
+            `${taskId(id)}'s reviewer ${gate} left the channel: the lead, the owner or a person opens its review (kiwi task review ${taskId(id)} --review any), then it can be ${what}`,
+          );
         return yield* new Rejected(
           `${taskId(id)} needs review by ${gate === "*" ? "someone who hasn't worked on it" : gate} before it's ${what}: ${change.state === "cancelled" ? "ask a person or its reviewer to cancel it, or cancel it yourself once a review round has rejected it" : `send it for review (kiwi task review ${taskId(id)})`}`,
         );
@@ -211,7 +217,7 @@ export class SessionTasks extends SessionMessaging {
       if (t.owner && t.owner !== this.me) notify.push(t.owner);
       const reviewerName = (review ?? t.review) !== "*" ? (review ?? t.review) : undefined;
       if ((change.state === "review" || review) && reviewerName) notify.push(reviewerName);
-      if (review !== undefined && t.review && t.review !== "*" && t.review !== reviewerName) notify.push(t.review);
+      if (review !== undefined && t.review && t.review !== "*" && t.review !== reviewerName && !reviewerLeft) notify.push(t.review);
       if (finishing) notify.push(t.createdBy);
       const seq = yield* this.event(
         { op: "task.update", task: id, ...rest, ...opening, ...areas, ...(owner !== undefined ? { owner } : {}), ...(review !== undefined ? { review } : {}), ...round, ...body },
@@ -238,6 +244,7 @@ export class SessionTasks extends SessionMessaging {
       const mine = heldBy(state, this.me);
       const reviewing = reviewedBy(state, this.me);
       if (!mine.length && !reviewing.length) return [];
+      for (const t of reviewing) yield* this.taskUpdate(t.id, { review: "*" });
       const lead = state.lead && state.lead !== this.me ? [state.lead] : undefined;
       yield* this.send(handBackText(state, this.me, "left", mine, reviewing), lead ? { to: lead } : {});
       return [...mine, ...reviewing].map((t) => t.id);

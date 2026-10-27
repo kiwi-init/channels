@@ -276,7 +276,7 @@ describe("review", () => {
     const drop = await ev("win", { op: "task.update", task: add.seq, review: null, state: "done" });
     const bypass = fold([add, drop], departed);
     expect(bypass.rejected.has(drop.seq)).toBe(true);
-    expect(bypass.tasks.get(add.seq)).toMatchObject({ review: "*", reviewLeftBy: "mac", state: "todo" });
+    expect(bypass.tasks.get(add.seq)).toMatchObject({ review: "mac", state: "todo" });
   });
 
   test("reopening clears the approval", async () => {
