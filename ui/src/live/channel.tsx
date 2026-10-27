@@ -97,7 +97,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const shown = useShown()
 
   const people = useMemo(() => peopleOf(state, roster, online, me, wakes), [state, roster, online, me, wakes])
-  const nicknames = useMemo(() => nicknamesOf(state.members.values()), [state.members])
+  const nicknameKey = [...state.members.values()].map((m) => `${m.name}\u0000${m.display ?? ""}`).join("\n")
+  const nicknames = useMemo(() => nicknamesOf(nicknameKey ? nicknameKey.split("\n").map((line) => ({ name: line.split("\u0000")[0] ?? "", display: line.split("\u0000")[1] })) : []), [nicknameKey])
   const asks = useMemo(() => asksOf(state, messages, me, isOwner, requests), [state, messages, me, isOwner, requests])
   const mapped = useMemo(() => kept(code, messagesOf(state, messages, me, asks.askOf, pictures, pending)), [code, state, messages, me, asks.askOf, pictures, pending])
   const tasks = useMemo(() => tasksOf(state, asks.held), [state, asks.held])
