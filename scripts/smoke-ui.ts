@@ -671,7 +671,7 @@ async function run(part: Part): Promise<string[]> {
       .getByRole("option", { name: new RegExp(smokeTask) })
       .first()
       .waitFor({ timeout: 15000 });
-    const resultScroll = await page.evaluate(() => document.querySelector<HTMLElement>("div.absolute.inset-0.overflow-y-auto")?.scrollTop ?? -1);
+    const resultScroll = await page.evaluate(() => document.getElementById("search-results")?.closest<HTMLElement>(".overflow-y-auto")?.scrollTop ?? -1);
     if (resultScroll !== 0) throw new Error(`search results opened below the top of the list: ${resultScroll}`);
     await search.press("Enter");
     await tasksPanel.getByRole("region", { name: new RegExp(`^Task ${smokeTask}`) }).waitFor({ timeout: 15000 });
@@ -701,9 +701,15 @@ async function run(part: Part): Promise<string[]> {
     await page.waitForFunction(() => (CSS.highlights.get("search-hit")?.size ?? 0) > 0, undefined, { timeout: 15000 });
     const searchShots = process.env.SMOKE_SHOTS;
     if (searchShots) await page.waitForTimeout(800).then(() => page.screenshot({ path: join(searchShots, "search-jump.png") }));
+    const timelineTop = () => page.evaluate(() => document.querySelector<HTMLElement>("div.absolute.inset-0.overflow-y-auto")?.scrollTop ?? -1);
+    const topBefore = await timelineTop();
     await openSearch();
     if (await page.evaluate(() => CSS.highlights.has("search-hit"))) throw new Error("a new search kept the old message's highlight");
+    await search.fill("rep rea");
+    await spoken.waitFor({ timeout: 15000 });
+    await page.getByRole("button", { name: "Clear search" }).click();
     await search.fill("no-such-task");
+    if (await results.count()) throw new Error("typing after Clear search showed the previous query's results");
     await page.getByText("No results", { exact: true }).waitFor();
     await page.getByRole("button", { name: "Clear search" }).click();
     if ((await search.inputValue()) !== "") throw new Error("Clear search left text in the field");
@@ -711,6 +717,8 @@ async function run(part: Part): Promise<string[]> {
     if (!(await search.evaluate((el) => el === document.activeElement))) throw new Error("Clear search took the focus out of the field");
     if (await page.getByRole("button", { name: "Clear search" }).count()) throw new Error("Clear search shows on an empty field");
     await search.press("Escape");
+    const topAfter = await timelineTop();
+    if (Math.abs(topAfter - topBefore) > 2) throw new Error(`closing search moved the timeline from ${topBefore} to ${topAfter}`);
     await toTab("Tasks");
     const filter = page.getByRole("textbox", { name: "Filter tasks" });
     await filter.fill(smokeTask);

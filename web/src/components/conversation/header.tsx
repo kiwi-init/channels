@@ -155,7 +155,15 @@ export function Header({ headRef, onBack, search, setSearch, tab, onTab, heading
       </div>
       {search !== null && (
         <div className="relative mx-auto w-full max-w-[792px] px-3 pb-2 md:px-4 md:pt-(--step)">
-          <label className="flex h-9 items-center gap-2 rounded-full px-3.5 text-ink-3 edge">
+          <div
+            role="search"
+            className="flex h-9 items-center gap-2 rounded-full px-3.5 text-ink-3 edge"
+            onPointerDown={(e) => {
+              if (e.target !== e.currentTarget) return
+              e.preventDefault()
+              input.current?.focus()
+            }}
+          >
             <Icon icon={Search01Icon} size={16} className="shrink-0" />
             <input
               ref={input}
@@ -193,7 +201,7 @@ export function Header({ headRef, onBack, search, setSearch, tab, onTab, heading
                 <Icon icon={Cancel01Icon} size={14} />
               </button>
             )}
-          </label>
+          </div>
         </div>
       )}
       <div className="relative">

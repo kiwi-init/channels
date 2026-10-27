@@ -81,3 +81,54 @@ describe("marks and snippets", () => {
     expect(snippet("short relay note", terms("relay"))).toBe("short relay note")
   })
 })
+
+describe("text beyond Latin words", () => {
+  const mixed = buildIndex(
+    [
+      { id: "cjk", text: "我们今天讨论部署方案" },
+      { id: "emoji", text: "deploy 🚀 now" },
+      { id: "decomposed", text: "migracáo concluída" },
+      { id: "mixed", text: "API部署 done" },
+    ].map((d) => ({ item: d.id, fields: [{ text: d.text, weight: 1 }] }))
+  )
+  const found = (query: string) => rank(mixed, query).map((r) => r.item)
+
+  test("a CJK word inside a sentence and an emoji are found", () => {
+    expect(found("部署").sort()).toEqual(["cjk", "mixed"])
+    expect(found("🚀")).toEqual(["emoji"])
+    expect(found("api")).toEqual(["mixed"])
+  })
+
+  test("a word written with combining accents is found and marked whole", () => {
+    expect(found("migracao")).toEqual(["decomposed"])
+    expect(marks("migracáo", terms("migracao"))).toEqual([{ text: "migracáo", hit: true }])
+    expect(marks("cáfe", terms("ca"))).toEqual([
+      { text: "cá", hit: true },
+      { text: "fe", hit: false },
+    ])
+  })
+
+  test("a CJK match is marked character by character", () => {
+    expect(marks("讨论部署方案", terms("部署"))).toEqual([
+      { text: "讨论", hit: false },
+      { text: "部", hit: true },
+      { text: "署", hit: true },
+      { text: "方案", hit: false },
+    ])
+  })
+
+  test("a query with hundreds of words still matches, using its first 32 terms", () => {
+    const text = Array.from({ length: 300 }, (_, i) => `term${i}`).join(" ")
+    const many = buildIndex([{ item: "exact", fields: [{ text, weight: 1 }] }])
+    expect(terms(text)).toHaveLength(32)
+    expect(rank(many, text).map((r) => r.item)).toEqual(["exact"])
+  })
+
+  test("a snippet cuts at a word boundary, never inside an emoji or after folded accents", () => {
+    const emoji = snippet(`${"😀".repeat(20)}${"!".repeat(29)}relay`, terms("relay"))
+    expect(emoji).toBe("…relay")
+    const accents = snippet(`${"é ".repeat(45)}relay`, terms("relay"))
+    expect(accents.endsWith("relay")).toBe(true)
+    expect(accents.slice(1).startsWith("é")).toBe(true)
+  })
+})

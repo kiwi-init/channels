@@ -1,5 +1,5 @@
 import { ArrowDown01Icon } from "@hugeicons/core-free-icons"
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react"
 
 import type { SendOptions } from "@kiwi/core/client.ts"
 import { permissionReply } from "@kiwi/core/permission.ts"
@@ -195,9 +195,10 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     setHitsWere(hits)
     setActiveHit(0)
   }
+  const resultsScroller = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    if (query) scroller.current?.scrollTo({ top: 0, behavior: "instant" })
-  }, [query, scroller])
+    if (query) resultsScroller.current?.scrollTo({ top: 0, behavior: "instant" })
+  }, [query])
   const [found, setFound] = useState<{ seq: number; terms: string[]; here: string } | null>(null)
   if (found && (searchOpen || found.here !== hereKey)) setFound(null)
   useEffect(() => {
@@ -215,19 +216,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       paintHits(null, [])
     }
   }, [found])
-  const spot = useRef<number | null>(null)
-  const searchedBefore = useRef(false)
-  useLayoutEffect(() => {
-    const was = searchedBefore.current
-    searchedBefore.current = searching
-    const el = scroller.current
-    if (!was || searching || !el || found) return
-    const fromBottom = spot.current
-    if (fromBottom === null || fromBottom <= el.clientHeight + 2) {
-      stick()
-      el.scrollTo({ top: el.scrollHeight, behavior: "instant" })
-    } else el.scrollTo({ top: el.scrollHeight - fromBottom, behavior: "instant" })
-  }, [searching, found, scroller, stick])
   const anyShown = visible.length > 0
   useEffect(() => {
     if (anyShown) requestAnimationFrame(() => markOnce("kiwi:first-message"))
@@ -358,7 +346,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     [hold, state.hold, state.lead, me, send, nameOf]
   )
 
-  const folded = hereKey === "main" && !search && state.compact ? state.compact : null
+  const folded = hereKey === "main" && state.compact ? state.compact : null
   const shown = folded && !earlier ? visible.filter((m) => m.seq > folded.through) : visible
   const { tail, hidden, more, onScrolled } = useWindow(shown, hereKey, scroller, highlight, tab === "conversation")
 
@@ -420,7 +408,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
         </button>
       </p>
     )
-  const proposal = hereKey === "main" && !search ? state.compactProposal : null
+  const proposal = hereKey === "main" ? state.compactProposal : null
   if (folded) rows.push(<CompactBlock key="compact" compact={folded} byName={nameOf(folded.by)} earlier={earlier} onToggle={() => setEarlier((v) => !v)} />)
   const at = proposal ? tail.findIndex((m) => m.seq === proposal.seq) : -1
   const approve =
@@ -709,16 +697,49 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                       <>
                         <div
                           ref={scroller}
-                          className="absolute inset-0 overflow-y-auto"
+                          inert={searching}
+                          className={cx("absolute inset-0 overflow-y-auto", searching && "invisible")}
                           onScroll={(e) => {
-                            if (!searching) spot.current = e.currentTarget.scrollHeight - e.currentTarget.scrollTop
                             onScroll(e)
                             onScrolled(e.currentTarget)
                           }}
                         >
                           <div className="relative mx-auto w-full max-w-[792px] aside-room px-4 pt-[calc(var(--head)+8px)] pb-[calc(var(--foot)+16px)] [--column:792px]">
-                            {searching ? (
-                              hits.length ? (
+                            {hereKey === "main" && ready && (
+                              <div className="sticky top-(--head) z-10 -mt-2 bg-canvas pt-2 pb-2">
+                                {nowNode("", true)}
+                                <div aria-hidden className="scrim-top absolute inset-x-0 top-full h-4" />
+                              </div>
+                            )}
+                            {hereKey === "main" && needsYou}
+                            {hereKey === "main" && state.rooms.size > 1 && <RoomChips rooms={[...state.rooms.values()]} value={cardRoom} onChange={switchRoom} />}
+                            {!ready && messages.length === 0 ? (
+                              slowToOpen && (
+                                <Centered>
+                                  <Spinner />
+                                </Centered>
+                              )
+                            ) : hereKey === "main" && noAgents ? (
+                              <>
+                                <AddAgent code={member.code} isOwner={isOwner} addsAgents={addsAgents} onNewAgent={onNewAgent} />
+                                {!quiet && rows}
+                              </>
+                            ) : visible.length === 0 ? (
+                              <Centered>
+                                <p className="text-body font-semibold">No messages yet</p>
+                                <p className="mt-1 max-w-xs text-ui leading-normal text-ink-2">
+                                  {place.kind === "dm" ? "What these two say to each other shows up here." : "What’s said here shows up the moment it’s sent."}
+                                </p>
+                              </Centered>
+                            ) : (
+                              rows
+                            )}
+                          </div>
+                        </div>
+                        {searching && (
+                          <div ref={resultsScroller} className="absolute inset-0 overflow-y-auto">
+                            <div className="relative mx-auto w-full max-w-[792px] aside-room px-4 pt-[calc(var(--head)+8px)] pb-[calc(var(--foot)+16px)] [--column:792px]">
+                              {hits.length ? (
                                 <SearchResults state={state} hits={hits} terms={terms(query ?? "")} active={activeHit} onActive={setActiveHit} onPick={pick} nameOf={nameOf} />
                               ) : (
                                 <Centered>
@@ -727,44 +748,12 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                                     {hereKey === "main" ? `No task or message here matches “${query}”.` : `No message here matches “${query}”.`}
                                   </p>
                                 </Centered>
-                              )
-                            ) : (
-                              <>
-                                {hereKey === "main" && !search && ready && (
-                                  <div className="sticky top-(--head) z-10 -mt-2 bg-canvas pt-2 pb-2">
-                                    {nowNode("", true)}
-                                    <div aria-hidden className="scrim-top absolute inset-x-0 top-full h-4" />
-                                  </div>
-                                )}
-                                {hereKey === "main" && needsYou}
-                                {hereKey === "main" && state.rooms.size > 1 && !search && <RoomChips rooms={[...state.rooms.values()]} value={cardRoom} onChange={switchRoom} />}
-                                {!ready && messages.length === 0 ? (
-                                  slowToOpen && (
-                                    <Centered>
-                                      <Spinner />
-                                    </Centered>
-                                  )
-                                ) : hereKey === "main" && noAgents && !search ? (
-                                  <>
-                                    <AddAgent code={member.code} isOwner={isOwner} addsAgents={addsAgents} onNewAgent={onNewAgent} />
-                                    {!quiet && rows}
-                                  </>
-                                ) : visible.length === 0 ? (
-                                  <Centered>
-                                    <p className="text-body font-semibold">No messages yet</p>
-                                    <p className="mt-1 max-w-xs text-ui leading-normal text-ink-2">
-                                      {place.kind === "dm" ? "What these two say to each other shows up here." : "What’s said here shows up the moment it’s sent."}
-                                    </p>
-                                  </Centered>
-                                ) : (
-                                  rows
-                                )}
-                              </>
-                            )}
+                              )}
+                            </div>
                           </div>
-                        </div>
+                        )}
 
-                        {behind > 0 && (
+                        {behind > 0 && !searching && (
                           <button
                             type="button"
                             onClick={toBottom}
