@@ -1044,3 +1044,25 @@
   background: var(--wash-2);
   color: var(--ink);
 }
+
+.mentions .task-row {
+  width: 100%;
+}
+
+.mentions:has(.task-row) {
+  width: min(460px, calc(100% - 56px));
+}
+
+.task-row-id {
+  flex: none;
+  color: var(--ink-3);
+  font: 11.5px var(--mono);
+}
+
+.task-row-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
