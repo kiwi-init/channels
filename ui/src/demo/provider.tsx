@@ -223,6 +223,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       linkGithub: () => setState((s) => (s.account ? { ...s, account: { ...s.account, github: { login: "ojowwalker77" } } } : s)),
       unlinkGithub: () => setState((s) => (s.account ? { ...s, account: { ...s.account, github: undefined } } : s)),
       applyUi: () => setState((s) => (s.account ? { ...s, account: { ...s.account, uiUpdate: undefined } } : s)),
+      windowControl: () => {},
       installUpdate: () => setState((s) => (s.account?.update ? { ...s, account: { ...s.account, version: s.account.update.version, update: undefined } } : s)),
       signOut: () => setState((s) => ({ ...s, account: null, tiles: [] })),
       setNewMembers: (code, can) => edit(code, (c) => ({ ...c, newMembers: can })),
