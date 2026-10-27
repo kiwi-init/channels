@@ -216,6 +216,10 @@ jobs:
           webkit_code=$?
           set -e
           [ "$chromium_code" -eq 0 ] && [ "$webkit_code" -eq 0 ]
+      # The new UI's long-feed demo in WebKit: it renders the latest rows, and nothing jumps while it scrolls. Timings are printed, never gated.
+      - name: ui scroll in WebKit
+        if: ${{ !cancelled() }}
+        run: PERF_RUNS=1 bun scripts/ui-scroll-fps.ts --check
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

@@ -44,7 +44,7 @@
       "project": ["src/**/*.ts", "scripts/**/*.ts"]
     },
     "ui": {
-      "entry": ["src/chat/react-native.ts", "stubs/react-native/index.js"]
+      "entry": ["src/chat/react-native.ts", "stubs/react-native/index.js", "src/**/*.test.{ts,tsx}"]
     }
   }
 }
