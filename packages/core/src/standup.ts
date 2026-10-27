@@ -1,5 +1,5 @@
 import { inlineText } from "./membership.ts";
-import { MAIN, placeFromKey, placeKey, threadMembers, type ChannelState, type Task } from "./state.ts";
+import { isPerson, MAIN, placeFromKey, placeKey, threadMembers, type ChannelState, type Task } from "./state.ts";
 import { GENERAL_ROOM, type Message } from "./protocol.ts";
 import { textOf, visible } from "./work.ts";
 
@@ -131,7 +131,7 @@ export function taskCards(state: ChannelState, messages: readonly Message[]): Ta
         people: [...new Set([task.owner, ...task.workedBy].filter((n): n is string => !!n))],
         said: said.get(id) ?? 0,
         ...(found ? { lastLine: line(found) } : {}),
-        waiting: task.state === "review" && (task.review === viewer || (task.review === "*" && !task.workedBy.includes(viewer))),
+        waiting: task.state === "review" && (task.review === viewer || (task.review === "*" && !isPerson(state.members.get(viewer) ?? {}) && !task.workedBy.includes(viewer))),
       };
     },
     shown: (id, room) => room === GENERAL_ROOM || roomOf(id) === room,
@@ -149,6 +149,6 @@ export function liveCard(state: ChannelState, messages: readonly Message[], id: 
     people: [...new Set([task.owner, ...task.workedBy].filter((n): n is string => !!n))],
     said,
     ...(last ? { lastLine: last } : {}),
-    waiting: task.state === "review" && (task.review === viewer || (task.review === "*" && !task.workedBy.includes(viewer))),
+    waiting: task.state === "review" && (task.review === viewer || (task.review === "*" && !isPerson(state.members.get(viewer) ?? {}) && !task.workedBy.includes(viewer))),
   };
 }

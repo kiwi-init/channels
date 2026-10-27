@@ -172,5 +172,8 @@ describe("every task's card in one pass", () => {
       }
     expect(cards.card(tasks[0]!, "ann")?.lastLine?.text.startsWith("status")).toBe(true);
     expect(cards.card(tasks[4]!, "ann")?.said).toBe(0);
+    expect(cards.card(tasks[3]!, "jonatas")?.waiting).toBe(false);
+    expect(cards.card(tasks[3]!, "ann")?.waiting).toBe(false);
+    expect(cards.card(tasks[3]!, "bob")?.waiting).toBe(false);
   });
 });

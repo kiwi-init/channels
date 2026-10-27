@@ -51,13 +51,14 @@ async function inReview(review: string): Promise<number> {
 }
 
 describe("which tasks need this person's review", () => {
-  test("only reviews named for them, or open to anyone who hasn't worked on it", async () => {
+  test("only reviews named for the person; one open to anyone stays optional", async () => {
     const byGrok = await inReview("grok-reviewer")
     const byJon = await inReview("jon")
     const byAnyone = await inReview("*")
     const ids = reviewsFor(state().tasks.values(), "jon", true).map((t) => t.id)
     expect(ids).toContain(byJon)
-    expect(ids).toContain(byAnyone)
+    expect(ids).not.toContain(byAnyone)
+    expect(taskActions(task(byAnyone), "jon", true)).toEqual({ kind: "open", review: "verdict" })
     expect(ids).not.toContain(byGrok)
     expect(reviewsFor(state().tasks.values(), "dev", false)).toEqual([])
   })
