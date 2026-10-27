@@ -314,7 +314,7 @@ describe("review rounds through the CLI", () => {
     expect(JSON.parse(await ok(dev, "task", "show", `T${unowned}`, "--json")).notes.at(-1)).toMatchObject({ by: "dev", text: "on it" });
   });
 
-  test("review --review NAME from the reviewer hands the open round on: same round, same commit, and the new reviewer is told", async () => {
+  test("review --review NAME hands the open round on with its commit, and tells both reviewers", async () => {
     const at = "3333333333333333333333333333333333333333";
     const t = taskNo(await ok(dev, "task", "add", "hand the review on", "--review", "rev", "--ask", want));
     await ok(dev, "task", "claim", `T${t}`);
@@ -323,6 +323,8 @@ describe("review rounds through the CLI", () => {
     const shown: unknown = JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"));
     expect(shown).toMatchObject({ review: "other", rounds: [{ n: 1, at, result: { kind: "open" } }] });
     expect(await ok(other, "listen", "--now")).toContain(`asked for T${t} “hand the review on” to be reviewed: review by other: round 1 stays open at ${at}`);
+    expect(await ok(owner, "--as", "human", "task", "review", `T${t}`, "--review", "rev")).toContain(`T${t}'s review moved to rev: round 1 stays open at ${at}`);
+    expect(await ok(other, "listen", "--now")).toContain(`asked for T${t} “hand the review on” to be reviewed: review by rev: round 1 stays open at ${at}`);
     await ok(dev, "task", "review", `T${t}`);
     const resent: unknown = JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"));
     expect(resent).toMatchObject({
@@ -331,6 +333,24 @@ describe("review rounds through the CLI", () => {
         { n: 2, result: { kind: "open" } },
       ],
     });
+  });
+
+  test("review takes the author's inline or file summary, keeps it out of notes, and caps its length", async () => {
+    const t = taskNo(await ok(dev, "task", "add", "summarize this round", "--review", "rev", "--ask", want));
+    await ok(dev, "task", "claim", `T${t}`);
+    await ok(dev, "task", "review", `T${t}`, "--at", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "Changed the card.");
+    const summaryFile = join(dev, "summary.md");
+    writeFileSync(summaryFile, "Changed the card again.\n\nProved it with the UI smoke run.\n");
+    await ok(dev, "task", "review", `T${t}`, "--file", summaryFile);
+    const shown = JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json")) as { rounds: { summary?: string }[]; notes: unknown[] };
+    expect(shown.rounds.map((r) => r.summary)).toEqual(["Changed the card.", "Changed the card again.\n\nProved it with the UI smoke run."]);
+    expect(shown.notes).toEqual([]);
+    expect(await ok(dev, "task", "show", `T${t}`)).toContain("round 2 summary:\nChanged the card again.");
+    const tooLong = await run(dev, "task", "review", `T${t}`, "x".repeat(4001));
+    expect(tooLong.code).toBe(1);
+    expect(tooLong.err).toContain("the most it takes is 4000");
+    expect(JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json")).rounds).toHaveLength(2);
+    expect(await ok(dev, "help")).toContain('task review T7 [--at SHA] ["summary"] [--file summary.md]');
   });
 
   test("review on a task with no reviewer is refused with how to name one, and opens no round", async () => {

@@ -1,12 +1,12 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { daemonHello, daemonStop } from "../src/daemon-client.ts";
 import { bridgeChecks } from "./eb-bridge-checks.ts";
 import { appExecutable, appRoot, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
-import { firstChannel } from "./eb-first-run.ts";
+import { firstChannel, sendMessage } from "./eb-first-run.ts";
 
 if (!process.argv[2]) {
   console.error("usage: bun desktop/scripts/smoke-eb.ts <Channels.app, or on Linux its app folder, built with CHANNELS_EB_TEST=1>");
@@ -49,7 +49,15 @@ async function check<T>(what: string, d: Driver, fn: () => T | Promise<T>, ok: (
 const { relay, port } = await startLocalRelay(join(root, "relay"), null, { rateLimits: false });
 const RELAY = `http://127.0.0.1:${port}`;
 const before = new Set(webContent());
-const app = launch(exe, testEnv(root, join(root, "driver.sock"), RELAY));
+const opened = join(root, "opened-links.txt");
+const openers = join(root, "openers");
+mkdirSync(openers, { recursive: true });
+for (const name of ["xdg-open", "gio"]) {
+  const opener = join(openers, name);
+  writeFileSync(opener, `#!/bin/sh\nprintf '%s\\n' "$@" >> '${opened}'\n`);
+  chmodSync(opener, 0o755);
+}
+const app = launch(exe, testEnv(root, join(root, "driver.sock"), RELAY, { PATH: `${openers}:${process.env.PATH}` }));
 try {
   const d = await attach(join(root, "driver.sock"));
   const page = await until("the dashboard's first screen", 60_000, () =>
@@ -61,6 +69,9 @@ try {
     (e: Error) => (problems.push(e.message), null),
   );
   if (paint !== null) console.log(`first paint: ${paint}`);
+  const spellCheck = await d.main("spellCheck");
+  if (spellCheck === true) console.log("spell checking: enabled on the window's native web view");
+  else problems.push(`spell checking on the window's native web view: ${JSON.stringify(spellCheck)}`);
   await check(
     "the relay it was given reaches the page through the store (window.kiwi.relayUrl) and answers through the CSP",
     d,
@@ -124,6 +135,31 @@ try {
   await firstChannel(d, 1).then(
     () => console.log("first run: a person, a channel and a message sent and in the conversation, on the local relay"),
     (e: Error) => problems.push(`first run: ${e.message}`),
+  );
+  if (linux) {
+    const messageLink = "https://example.com/kiwi-message-link";
+    const linkOpened = await until("a markdown link in a sent message", 30_000, () => d.evaluate(sendMessage, messageLink, 2_000).then((sent) => (sent ? true : null)))
+      .then(() =>
+        d.evaluate((url) => {
+          const a = [...document.querySelectorAll<HTMLAnchorElement>("a")].find((el) => el.href === url);
+          a?.click();
+          return !!a;
+        }, messageLink),
+      )
+      .then((clicked) =>
+        until("the system opener receiving the clicked message link", 10_000, async () => (clicked && existsSync(opened) && readFileSync(opened, "utf8").includes(messageLink) ? true : null)),
+      )
+      .catch((e: Error) => (problems.push(`message link opens the system browser: ${e.message}`), null));
+    if (linkOpened) console.log("a clicked markdown link reached the fake xdg-open with its exact URL");
+  }
+  await check(
+    "the composer checks spelling and fields that opt out stay unchecked",
+    d,
+    () => ({
+      composer: document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]')?.spellcheck ?? null,
+      optedOut: [...document.querySelectorAll<HTMLElement>('[spellcheck="false"]')].every((el) => !el.spellcheck),
+    }),
+    (v) => v.composer === true && v.optedOut,
   );
 
   const hello = await until("the kiwi daemon the app starts", 60_000, () => daemonHello(kiwiHome, 1_000)).catch((e: Error) => (problems.push(e.message), null));

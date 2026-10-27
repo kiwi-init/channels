@@ -36,6 +36,36 @@ describe("mentions", () => {
     expect(html).not.toContain(">@Jow<")
   })
 
+  test("a bare handle in prose reads as the nickname too, matched as a whole word", () => {
+    expect(mentionParts("jovial-gecko continues; jow and zesty-owl.", labelOf)).toEqual([
+      { kind: "handle", text: "jovial-gecko", name: "jovial-gecko", label: "claude" },
+      { kind: "text", text: " continues; jow and " },
+      { kind: "handle", text: "zesty-owl", name: "zesty-owl", label: "grokbot" },
+      { kind: "text", text: "." },
+    ])
+    for (const text of [
+      "jovial-geckos",
+      "jovial-gecko@example.com",
+      "x/jovial-gecko",
+      "a.jovial-gecko",
+      "jow said so",
+      "jovial-gecko/src/main.ts",
+      "on jovial-gecko/fix-cache",
+      "?q=jovial-gecko",
+      "jovial-gecko./file",
+    ]) {
+      expect(mentionParts(text, labelOf)).toEqual([{ kind: "text", text }])
+    }
+  })
+
+  test("a rendered bare handle shows the nickname with the handle on hover, while code keeps the handle", () => {
+    const html = render("jovial-gecko said `kiwi task review T2 --review zesty-owl`\n\n```\njovial-gecko\n```")
+    expect(html).toContain('<span title="jovial-gecko" class="font-medium text-link">claude</span> said')
+    expect(html).toContain("--review zesty-owl</code>")
+    expect(html).toContain("jovial-gecko\n</code>")
+    expect(html).not.toContain(">grokbot<")
+  })
+
   test("without names (outside a conversation) a mention stays the @handle as written", () => {
     expect(renderToStaticMarkup(createElement(Markdown, null, "@jovial-gecko look"))).toBe(
       '<div class="[overflow-wrap:anywhere] break-words"><p class="[&amp;:not(:first-child)]:mt-2">@jovial-gecko look</p></div>'

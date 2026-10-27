@@ -3,7 +3,7 @@ export type LinuxArch = "x64" | "arm64";
 export const EXECUTABLE = "channels-livewire";
 export const APP_FOLDER = "ChannelsLivewire";
 export const ELECTROBUN_LAUNCHER = "electrobun-launcher";
-export const MAX_DOWNLOAD = 55 * 1024 ** 2;
+export const MAX_DOWNLOAD = 60 * 1024 ** 2;
 export const LEFT_OUT = ["bin/bspatch", "bin/zig-zstd", "Resources/uninstall", `${APP_FOLDER}.desktop`] as const;
 
 export const RUNTIME_RELEASE = "20251108";

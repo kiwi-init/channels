@@ -2,6 +2,7 @@ import type { Serves } from "../calls.ts";
 import { takeDeepLink } from "../deep-links.ts";
 import { externalUrl } from "../guard.ts";
 import type { Host } from "../host.ts";
+import { logMainError } from "../main-log.ts";
 import { openInBrowser } from "../open.ts";
 import { keysAtRest } from "../store.ts";
 import { checkForUpdate, updateState } from "../updater.ts";
@@ -33,10 +34,18 @@ export function miscCalls(
     installUpdate: () => host.restartToUpdate(),
     checkUpdate: () => checkForUpdate(),
     notify: (title: string, body: string) => host.notify(title, body),
-    openExternal: (url: string) => {
+    openExternal: async (url: string) => {
       const ext = externalUrl(url);
-      if (!ext) throw new Error("only http(s) links open outside");
-      return openInBrowser(ext, (u) => host.openExternal(u));
+      if (!ext) {
+        logMainError(new Error(`refused to open a non-http(s) link: ${url}`));
+        throw new Error("only http(s) links open outside");
+      }
+      try {
+        await openInBrowser(ext, (u) => host.openExternal(u));
+      } catch (err) {
+        logMainError(new Error(`could not open ${ext} in the system browser`, { cause: err }));
+        throw err;
+      }
     },
     getDeepLink: () => takeDeepLink(),
     takeDroppedFiles: () => host.droppedFiles(),

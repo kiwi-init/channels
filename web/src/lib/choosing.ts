@@ -25,7 +25,7 @@ export function choiceGate(now: () => number = Date.now) {
   }
 }
 
-export function useChoosing(key: number, onChoose: (choice: string) => Promise<boolean>): { busy: boolean; pick: (choice: string) => void } {
+export function useChoosing<T>(key: number, onChoose: (choice: T) => Promise<boolean>): { busy: boolean; pick: (choice: T) => void } {
   const [gate] = useState(() => choiceGate())
   const [busyFor, setBusyFor] = useState<number | null>(null)
   const busy = busyFor === key
@@ -35,7 +35,7 @@ export function useChoosing(key: number, onChoose: (choice: string) => Promise<b
     const t = setTimeout(() => (gate.done(false), setBusyFor(null)), STUCK_MS)
     return () => clearTimeout(t)
   }, [busy, gate])
-  const pick = (choice: string) => {
+  const pick = (choice: T) => {
     if (!gate.take()) return
     setBusyFor(key)
     void onChoose(choice).then((sent) => {

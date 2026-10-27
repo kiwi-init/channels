@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { canonical, generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
-import type { Event, Kind, Message } from "@kiwi/core/protocol.ts";
+import { REVIEW_SUMMARY_MAX_LENGTH, wellFormedEvent, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
+import { formatTask } from "@kiwi/core/format.ts";
 import { fold as foldWith, parseTaskId, type Roster } from "@kiwi/core/state.ts";
 
 /** Everyone a test identity was generated for is a member, unless dropped. */
@@ -94,6 +95,27 @@ describe("fold", () => {
     expect(s.tasks.get(t1.seq)?.state).toBe("done");
     expect(s.tasks.get(t2.seq)).toMatchObject({ owner: undefined, state: "todo" });
     expect(s.tasks.get(t2.seq)?.notes[0]?.text).toBe("free for anyone");
+  });
+
+  test("a review round keeps its author's summary, including when the round has no summary", async () => {
+    const a = await member("author");
+    const add = await msg(a, "author", { ev: { op: "task.add", title: "review summaries" } });
+    const first = await msg(a, "author", { ev: { op: "task.update", task: add.seq, state: "review", at: "abc", summary: "Changed the card.\n\nProved it in the smoke run." } });
+    const second = await msg(a, "author", { ev: { op: "task.update", task: add.seq, state: "review", at: "def" } });
+    const s = fold([add, first, second]);
+    expect(s.rejected.size).toBe(0);
+    expect(s.tasks.get(add.seq)?.rounds).toMatchObject([
+      { n: 1, at: "abc", summary: "Changed the card.\n\nProved it in the smoke run.", result: { kind: "withdrawn" } },
+      { n: 2, at: "def", result: { kind: "open" } },
+    ]);
+    expect(s.tasks.get(add.seq)?.rounds[1]).not.toHaveProperty("summary");
+    const formatted = formatTask(s, s.tasks.get(add.seq)!);
+    expect(formatted).toContain("Changed the card.");
+    expect(formatted).toContain("Proved it in the smoke run.");
+    expect(wellFormedEvent({ op: "task.update", task: add.seq, state: "review", summary: "x".repeat(REVIEW_SUMMARY_MAX_LENGTH) })).toBe(true);
+    expect(wellFormedEvent({ op: "task.update", task: add.seq, state: "review", summary: "x".repeat(REVIEW_SUMMARY_MAX_LENGTH + 1) })).toBe(false);
+    expect(wellFormedEvent({ op: "task.update", task: add.seq, state: "doing", summary: "not a round" })).toBe(false);
+    expect(wellFormedEvent({ op: "task.update", task: add.seq, state: "review", summary: "  " })).toBe(false);
   });
 
   test("older clients' logs still fold: dependencies, needs, blocked, cancelled, handoffs and claims", async () => {

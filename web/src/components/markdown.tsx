@@ -5,6 +5,7 @@ import remarkBreaks from "remark-breaks"
 import remarkGfm from "remark-gfm"
 import { compareCells, knownRefs, mentionParts, messageRefs, nextSort, Recent, sanitizeMarkdownUrl, type SortDir } from "../lib/markdown"
 import { MentionNames } from "../lib/mentions"
+import { bridge } from "../lib/secrets"
 import { cx } from "../lib/utils"
 import { Icon } from "./icon"
 import { MermaidBlock } from "./mermaid"
@@ -17,8 +18,15 @@ const components: Components = {
     const safe = typeof href === "string" ? sanitizeMarkdownUrl(href) : undefined
     if (!safe) return <span className="underline decoration-dotted underline-offset-2">{children}</span>
     if (/^https?:\/\//i.test(safe)) {
+      const b = bridge()
       return (
-        <a href={safe} target="_blank" rel="noopener noreferrer nofollow" className="[overflow-wrap:anywhere] text-link underline decoration-link/30 underline-offset-2 hover:decoration-link">
+        <a
+          href={safe}
+          target={b ? "_self" : "_blank"}
+          onClick={b ? (e) => (e.preventDefault(), void b.openExternal(safe)) : undefined}
+          rel="noopener noreferrer nofollow"
+          className="[overflow-wrap:anywhere] text-link underline decoration-link/30 underline-offset-2 hover:decoration-link"
+        >
           {children}
         </a>
       )
@@ -278,7 +286,9 @@ const OPAQUE = new Set(["link", "linkReference", "definition", "code", "inlineCo
 
 function mentionNodes(text: string, labelOf: (name: string) => string | undefined): MdNode[] {
   return mentionParts(text, labelOf).map((part) =>
-    part.kind === "text" ? { type: "text", value: part.text } : { type: "mention", data: { hName: "mark", hProperties: { title: part.text } }, children: [{ type: "text", value: `@${part.label}` }] }
+    part.kind === "text"
+      ? { type: "text", value: part.text }
+      : { type: "mention", data: { hName: "mark", hProperties: { title: part.text } }, children: [{ type: "text", value: part.kind === "mention" ? `@${part.label}` : part.label }] }
   )
 }
 
@@ -308,7 +318,7 @@ const rendered = new Recent<ReactElement>(500)
 
 export function renderMarkdown(body: string, known?: (seq: number) => boolean, labelOf?: (name: string) => string | undefined): ReactElement {
   const linked = known ? knownRefs(body, known) : ""
-  const named = labelOf ? mentionParts(body, labelOf).flatMap((p) => (p.kind === "mention" ? [[p.name, p.label] as const] : [])) : []
+  const named = labelOf ? mentionParts(body, labelOf).flatMap((p) => (p.kind === "text" ? [] : [[p.name, p.label] as const])) : []
   const key = `${linked}\u0000${JSON.stringify(named)}\u0000${body}`
   const hit = rendered.get(key)
   if (hit) return hit
@@ -336,7 +346,18 @@ export const Markdown = memo(function Markdown({ children, refs }: { children: s
   const labelOf = useContext(MentionNames)
   const tree = useMemo(() => renderMarkdown(children, known, labelOf), [children, known, labelOf])
   return (
-    <div className="[overflow-wrap:anywhere] break-words">
+    <div
+      className="[overflow-wrap:anywhere] break-words"
+      onClick={(e) => {
+        const b = bridge()
+        if (e.defaultPrevented || !b || !(e.target instanceof Element)) return
+        const a = e.target.closest("a")
+        const safe = sanitizeMarkdownUrl(a?.getAttribute("href") ?? "")
+        if (!a || !e.currentTarget.contains(a) || !safe || !/^https?:\/\//i.test(safe)) return
+        e.preventDefault()
+        void b.openExternal(safe)
+      }}
+    >
       <OpenRef.Provider value={refs?.open}>{tree}</OpenRef.Provider>
     </div>
   )

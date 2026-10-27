@@ -64,8 +64,8 @@ bun run typecheck:eb                                  # fetches the devkit into 
 - Release, Mac (`.github/workflows/release-build.yml`, job `desktop-mac-eb`): the plain
   `Channels.app` from the build's payload, signed with the Developer ID (Bun alone gets the
   JIT entitlements), notarized and stapled, as `Channels-<version>-mac-arm64.zip` (ditto,
-  `Channels.app` at its root, the name the Electron app's updater asks for) and `.dmg`, each at
-  most 40 MB (`scripts/eb-release.ts`). `scripts/eb-update-rehearsal.ts` installs the last
+  `Channels.app` at its root, the name the Electron app's updater asks for) and `.dmg`, the app at
+  most 120 MB and each archive at most 60 MB (`scripts/eb-release.ts`). `scripts/eb-update-rehearsal.ts` installs the last
   Electron arm64 release and runs its updater's own steps on the new zip, then opens the
   swapped app. `scripts/eb-driver-check.ts --release` fails if the zip or the dmg carries
   test-only code, or if `CHANNELS_EB_TEST` is set. Every tag ships it; there is no Intel
@@ -92,10 +92,12 @@ bun run typecheck:eb                                  # fetches the devkit into 
 - `src/updater.ts` — checks GitHub releases for a newer app.
 - `src/move.ts` — moves a download over the file it replaces, across filesystems too (the
   AppImage update).
-- `build/icon.svg` — the app icon. `bun desktop/scripts/icons.ts` (on a Mac) makes every
-  size from it: `build/icon.icns`, `build/icons/NxN.png` for Linux, and `assets/icon.png`
-  for the window. On Linux, `native/linux/kiwi-shell.c` names the program `channels-desktop`,
-  so Wayland matches the window's app_id to `channels-desktop.desktop` and finds its icon.
+- `build/icon.svg` — the app icon, and `build/tray.svg` — its one-color tray mark.
+  `bun desktop/scripts/icons.ts` (on a Mac) makes every app size (`build/icon.icns`,
+  `build/icons/NxN.png` for Linux, and `assets/icon.png` for the window), the macOS tray
+  template PNGs, and Linux's `assets/channels-tray-symbolic.svg`. On Linux,
+  `native/linux/kiwi-shell.c` names the program `channels-desktop`, so Wayland matches the
+  window's app_id to `channels-desktop.desktop` and finds its icon.
 
 ## Renderer relay URL
 

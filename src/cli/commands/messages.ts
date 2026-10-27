@@ -21,8 +21,10 @@ import {
   type InlineImage,
   type Kind,
   type Message,
+  type Step,
 } from "@kiwi/core/protocol.ts";
 import { chooseThread, inGeneral, longForGeneral, parseTaskId, wentTo } from "@kiwi/core/state.ts";
+import { bareHandleNote } from "../handles.ts";
 import { args, opt, unexpectedOptions } from "../args.ts";
 import { parseWhere } from "../where.ts";
 import { type Command, die, noteRead, offlineOk, out, type Quit, session } from "../context.ts";
@@ -78,13 +80,13 @@ export const messageCommands: Record<string, Command> = {
         });
         const room = opt.room ?? where.room;
         const general = chosen.task === undefined && !chosen.dm && (!room || room.toLowerCase() === "general") && (re.length === 0 || inGeneral(state, re[0]!));
-        const long = general ? longForGeneral(state, s.me, body) : null;
+        const notes = [general ? longForGeneral(state, s.me, body) : null, bareHandleNote(state, body)].filter((n) => n !== null);
         if (!asking || !opt.wait) {
           out(`${asking ? "asked" : "sent"} #${seq}${wentTo(chosen)}`);
-          if (long) out(long);
+          for (const n of notes) out(n);
           return;
         }
-        if (long) out(long);
+        for (const n of notes) out(n);
         const replies = yield* s.awaitReplies(seq, head, parseDuration(opt.wait));
         if (!replies.length) return yield* die(`no answer to #${seq} within ${opt.wait}; replies will still arrive when you listen`, 2);
         for (const r of replies) out(render(r));
@@ -110,8 +112,8 @@ export const messageCommands: Record<string, Command> = {
         const imgs = yield* images;
         const { state } = yield* s.state();
         out(`sent #${yield* s.reply(seq, body, kind, imgs)}`);
-        const long = inGeneral(state, seq) ? longForGeneral(state, s.me, body) : null;
-        if (long) out(long);
+        const notes = [inGeneral(state, seq) ? longForGeneral(state, s.me, body) : null, bareHandleNote(state, body)].filter((n) => n !== null);
+        for (const n of notes) out(n);
       }),
     ),
 
@@ -234,7 +236,10 @@ export const messageCommands: Record<string, Command> = {
     Effect.gen(function* () {
       const s = yield* session();
       const body = yield* text(1);
-      if (!body.trim()) return yield* die('usage: kiwi ask-human [--holds T7,#18] [--kind taste] [--option "A: …" --option "B: …"] [--task T7] [--re N] "the decision you need"');
+      if (!body.trim())
+        return yield* die(
+          'usage: kiwi ask-human [--holds T7,#18] [--kind taste] [--option "A: …" --option "B: …"] [--task T7] [--re N] "the decision you need"; for a person to act: --step --holds T7 --why "…" --needs-person "…" (--do "…" | --run "…" | --link URL) "the step"',
+        );
       const re = opt.re === undefined ? undefined : Number(opt.re.replace(/^#/, "")) || (yield* die("--re takes a message number"));
       const task = opt.task === undefined ? undefined : (parseTaskId(opt.task) ?? (yield* die(`"${opt.task}" isn't a task id (like T12)`)));
       const held = list(opt.holds)?.map((h) => [h, parseTaskId(h)] as const);
@@ -248,6 +253,35 @@ export const messageCommands: Record<string, Command> = {
       const digestNote = () => {
         if (!named.length) process.stderr.write("kiwi: this holds nothing up, so it goes to the person's digest, not Needs you; name the task or message it holds with --holds T7,#18\n");
       };
+      const stepFlags = ["do", "run", "expect", "link", "why", "needs-person"] as const;
+      if (!opt.step && stepFlags.some((f) => opt[f] !== undefined)) return yield* die(`--${stepFlags.find((f) => opt[f] !== undefined)} goes with --step`);
+      if (opt.step) {
+        const incompatible = (["kind", "option", "handoff", "vendor", "expires", "wait"] as const).filter((f) => opt[f] !== undefined);
+        if (incompatible.length) return yield* die(`--step doesn't take ${incompatible.map((f) => `--${f}`).join(", ")}: a step has its own answers`);
+        if (!holds?.length) return yield* die("a step needs --holds T7,#18: a step that holds nothing belongs in the digest, not Needs you");
+        const why = opt.why?.trim();
+        if (!why) return yield* die("a step needs --why: one line on what it unblocks");
+        const needsPerson = opt["needs-person"]?.trim();
+        if (!needsPerson) return yield* die("a step needs --needs-person: why an agent can't do it");
+        const instructions = opt.do?.map((item) => item.trim());
+        const commands = opt.run?.map((item) => item.trim());
+        const links = opt.link?.map((item) => item.trim());
+        if ([...(instructions ?? []), ...(commands ?? [])].some((item) => !item)) return yield* die("--do and --run take non-empty instructions and commands");
+        if (!instructions?.length && !commands?.length && !links?.length) return yield* die("a step needs how: at least one --do, --run or --link");
+        if (links?.some((link) => !handoffUrl(link))) return yield* die("--link takes an https URL without a user name or password, up to 2048 characters");
+        const expect = opt.expect?.trim();
+        if (opt.expect !== undefined && !expect) return yield* die("--expect takes a non-empty result to check");
+        const step: Step = {
+          why,
+          needsPerson,
+          ...(instructions?.length ? { do: instructions } : {}),
+          ...(commands?.length ? { run: commands } : {}),
+          ...(expect ? { expect } : {}),
+          ...(links?.length ? { links } : {}),
+        };
+        const { seq, to, also } = yield* s.escalate(body, re, undefined, { ...(task !== undefined ? { task } : {}), ...hold, step });
+        return out(`escalated #${seq} to ${to.join(" and ")} with a step${heldText}${alsoAnswers(also)}; wait for their answer before acting on it`);
+      }
       if (opt.handoff === undefined) {
         for (const f of ["vendor", "expires", "wait"] as const) if (opt[f] !== undefined) return yield* die(`--${f} goes with --handoff URL`);
         const choices = opt.option?.map((o) => o.trim());

@@ -7,19 +7,20 @@
 // Needs Playwright's Chromium: bunx playwright-core install --only-shell chromium
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium } from "playwright-core";
 
 const DESKTOP = resolve(import.meta.dir, "..");
 const svg = readFileSync(join(DESKTOP, "build", "icon.svg"), "utf8");
+const traySvg = readFileSync(join(DESKTOP, "build", "tray.svg"), "utf8");
 
 const browser = await chromium.launch();
 const page = await browser.newPage();
-async function png(size: number): Promise<Buffer> {
+async function png(size: number, source = svg): Promise<Buffer> {
   await page.setViewportSize({ width: size, height: size });
-  await page.setContent(`<style>html,body{margin:0;background:transparent}svg{display:block;width:${size}px;height:${size}px}</style>${svg}`);
+  await page.setContent(`<style>html,body{margin:0;background:transparent}svg{display:block;width:${size}px;height:${size}px}</style>${source}`);
   return page.screenshot({ omitBackground: true, type: "png" });
 }
 
@@ -27,6 +28,9 @@ async function png(size: number): Promise<Buffer> {
 mkdirSync(join(DESKTOP, "build", "icons"), { recursive: true });
 for (const n of [16, 24, 32, 48, 64, 128, 256, 512, 1024]) writeFileSync(join(DESKTOP, "build", "icons", `${n}x${n}.png`), await png(n));
 writeFileSync(join(DESKTOP, "assets", "icon.png"), await png(512));
+copyFileSync(join(DESKTOP, "build", "tray.svg"), join(DESKTOP, "assets", "channels-tray-symbolic.svg"));
+writeFileSync(join(DESKTOP, "assets", "trayTemplate.png"), await png(16, traySvg));
+writeFileSync(join(DESKTOP, "assets", "trayTemplate@2x.png"), await png(32, traySvg));
 
 // The Mac: an iconset (each size and its @2x), packed by iconutil.
 if (process.platform === "darwin") {

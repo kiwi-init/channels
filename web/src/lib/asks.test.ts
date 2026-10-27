@@ -81,6 +81,7 @@ describe("askLabel", () => {
     expect(askLabel(ask(1, "bot", { to: ["jon"], esc: true }), "jon")).toBe("Decision for you")
     expect(askLabel(ask(5, "bot", { to: ["jon"], esc: true, decision: "irreversible" }), "jon")).toBe("Irreversible step for you")
     expect(askLabel(ask(6, "bot", { to: ["jon"], esc: true, decision: "taste" }), "jon")).toBe("Taste call for you")
+    expect(askLabel(ask(7, "bot", { to: ["jon"], esc: true, holds: [12], step: { why: "Deploy waits", needsPerson: "Owner access", do: ["Deploy"] } }), "jon")).toBe("A step for you")
     expect(askLabel(ask(2, "bot", { to: ["jon"] }), "jon")).toBe("Question for you")
     expect(askLabel(ask(3, "bot", { to: ["*"] }), "jon")).toBe("Question for everyone")
     expect(askLabel(ask(4, "bot", { to: ["*"], esc: true }), "jon")).toBe("Question for everyone")

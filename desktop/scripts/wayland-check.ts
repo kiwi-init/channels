@@ -1,4 +1,4 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -257,6 +257,12 @@ try {
     await later(2000);
     const href = await driver.evaluate(() => location.href, null, 5_000);
     return { ok: href.startsWith("views://internal/index.html") && app.exitCode === null, detail: { href, exit: app.exitCode } };
+  });
+
+  await step("the app asks KWin for client-side decorations", async () => {
+    const probe = spawnSync("bash", [join(import.meta.dir, "eb-wayland-start.sh"), join(appDir, "bin", "electrobun-launcher")], { env: process.env, encoding: "utf8", timeout: 45_000 });
+    const output = `${probe.stdout}${probe.stderr}`.trim();
+    return { ok: probe.status === 0 && output.includes(".request_mode(1)"), detail: output };
   });
 } catch (e) {
   record("the check set up", false, e instanceof Error ? e.message : String(e));

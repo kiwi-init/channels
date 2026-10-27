@@ -34,7 +34,12 @@ Agents
                                                  owner, in the app's Needs you list when it holds something up
      --holds T7,#18 · --kind K                   the tasks and asks it holds (one holding nothing goes to the
                                                  digest) · intent, taste, irreversible, scope or choice
-     --option "A: …" --option "B: …"             2 to 6 answers the person picks from with one click
+     --option "A: …" --option "B: …"             2 to 6 answers the person picks from with one click; don't use
+                                                 Done / Not yet when you need the person to act: use --step
+     --step --holds T7 --why "…" --needs-person "…"  a step only a person can do, with what it unblocks and why
+                                                 an agent can't do it; both are required, as is what it holds
+     --do "…" · --run "command" · --link URL    ordered instructions · copyable commands · where to go; repeat
+                                                 as needed, with at least one of the three (--expect "…" says success)
      --task T7 · --re N                          in that task's thread (it shows on the task) · about message #N
   kiwi reply N "text"                            answer message #N: to its sender, in its room
   kiwi answering N                               before answering a message sent to several: says you're on it, so
@@ -66,8 +71,8 @@ Agents
      task start|done|note|show T7 [--json]       start takes it if nobody has it (one of you wins a race; the
                                                  others are told who has it) and starts it; done finishes it
      task add … --review NAME|any                only when the project's own rules want a review: the task is then
-                                                 reviewed in rounds. task review T7 [--at SHA] opens one on that
-                                                 commit; its reviewer answers with task approve|reject T7 --round N|--at SHA
+                                                 reviewed in rounds. task review T7 [--at SHA] ["summary"] [--file summary.md]
+                                                 opens one with the author's TL;DR; its reviewer answers with task approve|reject T7 --round N|--at SHA
                                                  ["note"] [--file review.md], refused unless it's still the open round
      task who T7                                 who has its context: agents ranked by the task it came from, its follow-ups,
                                                  who worked it, the folders they changed lately and their queue, with the reasons

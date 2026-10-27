@@ -1,0 +1,12 @@
+diff --git a/package/src/native/linux/nativeWrapper.cpp b/package/src/native/linux/nativeWrapper.cpp
+index 9b40867..7d61a4f 100644
+--- a/package/src/native/linux/nativeWrapper.cpp
++++ b/package/src/native/linux/nativeWrapper.cpp
+@@ -7529,6 +7529,7 @@
+             // server decorations are disabled. In particular, existing apps
+             // using hidden must not need a style change to become resizable.
+             gtk_window_set_decorated(GTK_WINDOW(window), FALSE);
++            gtk_window_set_titlebar(GTK_WINDOW(window), gtk_fixed_new());
+             attachGtkWindowResizeHandles(window);
+         }
+         

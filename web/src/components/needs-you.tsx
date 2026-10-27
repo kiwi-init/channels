@@ -4,7 +4,7 @@ import { useState, type ReactNode } from "react"
 
 import { freeHandle, seededPick } from "@kiwi/core/handles.ts"
 import { nameKey, type JoinRequest, type PersonPowers } from "@kiwi/core/membership.ts"
-import { HANDOFF_DONE, HANDOFF_FAILED, type Message } from "@kiwi/core/protocol.ts"
+import { HANDOFF_DONE, HANDOFF_FAILED, type Message, type StepReply } from "@kiwi/core/protocol.ts"
 import { TOO_MANY_REQUESTS } from "@kiwi/core/sas.ts"
 import { taskId, type Task } from "@kiwi/core/state.ts"
 import { usePinned } from "@/lib/pinned"
@@ -18,6 +18,7 @@ import { useControls } from "./controls"
 import { Icon } from "./icon"
 import { Button, Checkbox, Monogram, TextField, errorText, toast } from "./kit"
 import { PermissionItem } from "./lazy"
+import { StepDetails, StepResponse, stepReplyText } from "./step-card"
 import { defaultPowers, defaultScopes, POWER_WORDS, POWERS } from "./scopes"
 import { AgentFacts } from "./agent-facts"
 
@@ -58,7 +59,7 @@ export function NeedsYou({
   nameOf: (name: string) => string
   agentOf: (name: string) => boolean
   heldOf: (m: Message) => string[]
-  onReply: (m: Message, text: string) => Promise<void>
+  onReply: (m: Message, text: string, stepReply?: StepReply) => Promise<void>
   permissionOf: (m: Message) => { human: string | null; owner: string | null }
   onPermission: (m: Message, allow: boolean) => Promise<void>
   onApproveTask: (t: Task) => Promise<void>
@@ -278,7 +279,7 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
   )
 }
 
-/** An agent handing a decision to its person: what it says, and an answer right here. */
+/** An agent handing a decision or step to its person: what it says, and an answer right here. */
 function AskItem({
   m,
   me,
@@ -296,7 +297,7 @@ function AskItem({
   nameOf: (n: string) => string
   agent: boolean
   held: string[]
-  onReply: (m: Message, text: string) => Promise<void>
+  onReply: (m: Message, text: string, stepReply?: StepReply) => Promise<void>
   onJump: (seq: number) => void
   seat?: PlacedSeat
 }) {
@@ -315,6 +316,11 @@ function AskItem({
       detail={
         <>
           <p className="text-ui leading-normal whitespace-pre-wrap text-ink-2">{excerpt(m.body, 2000)}</p>
+          {m.step && (
+            <div className="mt-2">
+              <StepDetails step={m.step} />
+            </div>
+          )}
           <p className="mt-1">
             {[
               held.length ? `holds ${held.join(", ")}` : null,
@@ -333,9 +339,16 @@ function AskItem({
           </span>
         </>
       }
-      below={draft !== null && <AnswerForm draft={draft} setDraft={setDraft} busy={busy} send={send} to={nameOf(m.from)} autoFocus onEscape={() => setDraft(null)} />}
+      below={
+        m.step || draft !== null ? (
+          <>
+            {m.step && draft === null && <StepResponse id={m.seq} disabled={busy} onAnswer={(reply) => send(stepReplyText(reply), reply)} onElse={() => setDraft("")} />}
+            {draft !== null && <AnswerForm draft={draft} setDraft={setDraft} busy={busy} send={send} to={nameOf(m.from)} autoFocus onEscape={() => setDraft(null)} />}
+          </>
+        ) : undefined
+      }
     >
-      {draft === null && (
+      {draft === null && !m.step && (
         <>
           {!handoff &&
             m.choices?.map((c) => (
@@ -365,14 +378,14 @@ function AskItem({
   )
 }
 
-function useAnswer(m: Message, nameOf: (n: string) => string, onReply: (m: Message, text: string) => Promise<void>, idle: string | null) {
+function useAnswer(m: Message, nameOf: (n: string) => string, onReply: (m: Message, text: string, stepReply?: StepReply) => Promise<void>, idle: string | null) {
   const [draft, setDraft] = useState<string | null>(idle)
   const [busy, setBusy] = useState(false)
-  const send = async (text = draft?.trim() ?? ""): Promise<boolean> => {
+  const send = async (text = draft?.trim() ?? "", stepReply?: StepReply): Promise<boolean> => {
     if (!text) return false
     setBusy(true)
     try {
-      await onReply(m, text)
+      await onReply(m, text, stepReply)
       setDraft(idle)
       toast(`Answered ${nameOf(m.from)}`)
       return true

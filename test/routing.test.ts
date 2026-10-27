@@ -233,20 +233,50 @@ describe("review", () => {
     expect(s.tasks.get(t)!.approvedBy).toBe("linux");
   });
 
-  test("only a person or the reviewer moves a review gate once it's set", async () => {
+  test("only a person, the lead, the reviewer, or an owner whose reviewer is gone moves a review gate", async () => {
     const add = await ev("win", { op: "task.add", title: "mine", owner: "win", review: "mac" });
     const t = add.seq;
     const dodge = await ev("win", { op: "task.update", task: t, review: null });
     const swap = await ev("win", { op: "task.update", task: t, review: "*" });
     const handBack = await ev("mac", { op: "task.update", task: t, review: "linux" });
     const s = fold([add, dodge, swap, handBack], roster);
-    expect(s.rejected.get(dodge.seq)).toBe(`only a person or mac changes who reviews T${t}`);
+    expect(s.rejected.get(dodge.seq)).toBe(`only a person, the lead, mac, or the task owner when the reviewer is gone changes who reviews T${t}`);
     expect(s.rejected.has(swap.seq)).toBe(true);
     expect(s.tasks.get(t)!.review).toBe("linux");
     // Setting one where there was none is anyone's (with the tasks scope).
     const open = await ev("jon", { op: "task.add", title: "open" });
     const set = await ev("win", { op: "task.update", task: open.seq, review: "mac" });
     expect(fold([open, set], roster).tasks.get(open.seq)!.review).toBe("mac");
+  });
+
+  test("a role or signed-persona lead reassigns an open round without changing its number or commit", async () => {
+    const add = await ev("jon", { op: "task.add", title: "stalled", owner: "win", review: "mac" });
+    const round = await ev("win", { op: "task.update", task: add.seq, state: "review", at: "abc123" });
+    const move = await ev("linux", { op: "task.update", task: add.seq, review: "linux" });
+    const messages = [add, round, move];
+    const roleLead: Roster = roster.map((r) => (r.name === "linux" ? { ...r, role: "lead" } : r));
+    const signedLead: Roster = roster.map((r) => (r.name === "linux" ? { ...r, persona: { name: "Lead", role: "lead", capabilities: [], areas: [], instructions: "" } } : r));
+    for (const lead of [roleLead, signedLead]) {
+      const s = fold(messages, lead);
+      expect(s.rejected.has(move.seq)).toBe(false);
+      expect(s.tasks.get(add.seq)).toMatchObject({ review: "linux", rounds: [{ n: 1, at: "abc123", result: { kind: "open" } }] });
+    }
+  });
+
+  test("the owner replaces a reviewer who left, but cannot choose another while the reviewer is active", async () => {
+    const add = await ev("jon", { op: "task.add", title: "stalled", owner: "win", review: "mac" });
+    const move = await ev("win", { op: "task.update", task: add.seq, review: "linux" });
+    const active = fold([add, move], roster);
+    expect(active.rejected.get(move.seq)).toBe(`only a person, the lead, mac, or the task owner when the reviewer is gone changes who reviews T${add.seq}`);
+    expect(active.tasks.get(add.seq)!.review).toBe("mac");
+    const departed: Roster = roster.map((r) => (r.name === "mac" ? { ...r, active: false } : r));
+    const gone = fold([add, move], departed);
+    expect(gone.rejected.has(move.seq)).toBe(false);
+    expect(gone.tasks.get(add.seq)!.review).toBe("linux");
+    const drop = await ev("win", { op: "task.update", task: add.seq, review: null, state: "done" });
+    const bypass = fold([add, drop], departed);
+    expect(bypass.rejected.has(drop.seq)).toBe(true);
+    expect(bypass.tasks.get(add.seq)).toMatchObject({ review: "mac", state: "todo" });
   });
 
   test("reopening clears the approval", async () => {

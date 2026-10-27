@@ -2,7 +2,7 @@ import { ArrowDown01Icon, GithubIcon, GitPullRequestIcon, Link01Icon, UserMultip
 import { useMemo, useState, type ReactNode } from "react"
 import { proofLabel } from "@kiwi/core/format.ts"
 import type { Message } from "@kiwi/core/protocol.ts"
-import { colorOf, issueOf, taskId, type ChannelState, type Task } from "@kiwi/core/state.ts"
+import { colorOf, issueOf, openRound, taskId, type ChannelState, type Task } from "@kiwi/core/state.ts"
 import type { GithubDiff } from "@kiwi/core/client.ts"
 import { pickFor, taskCandidates } from "@kiwi/core/routing.ts"
 import { taskFeed, taskPr, taskPrs, taskRepo } from "@kiwi/core/work.ts"
@@ -63,6 +63,7 @@ export function TaskDetails({
   const items = useMemo(() => taskFeed(state, messages, id), [state, messages, id])
   const pr = useMemo(() => taskPr(state, id)?.pr, [state, id])
   const [story, setStory] = useState(false)
+  const round = task ? openRound(task) : undefined
 
   if (!task)
     return (
@@ -84,6 +85,14 @@ export function TaskDetails({
         </span>
         <span className="min-w-0">{task.title}</span>
       </h2>
+      {round?.summary && (
+        <section aria-label={`Round ${round.n} summary`} className="mt-3 rounded-card px-3.5 py-3 edge">
+          <h3 className="mb-1.5 text-meta font-medium text-ink-3">Round {round.n} TL;DR</h3>
+          <div className="text-body text-ink">
+            <Markdown>{round.summary}</Markdown>
+          </div>
+        </section>
+      )}
       {task.detail && (
         <div className="mt-1.5 text-body text-ink-2">
           <Markdown>{task.detail}</Markdown>
@@ -188,6 +197,7 @@ function Properties({
         <Prop label="Review">
           <span className="text-ink-2">
             {task.review === "*" ? "Anyone who hasn’t worked on it" : memberName(state.members.get(task.review), task.review)}
+            {task.review !== "*" && state.members.get(task.review)?.active === false ? " (left the channel)" : ""}
             {task.approvedBy ? `, approved by ${memberName(state.members.get(task.approvedBy), task.approvedBy)}` : task.state === "review" ? ", waiting" : ""}
           </span>
           {round?.at && repo && onDiff && (

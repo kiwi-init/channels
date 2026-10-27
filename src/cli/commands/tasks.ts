@@ -101,7 +101,9 @@ export const taskCommands: Record<string, Command> = {
         const verdictOf = { approve: "approved", reject: "rejected" } as const;
         const verdict = sub === "approve" || sub === "reject" ? verdictOf[sub] : undefined;
         const review = verdict && opt.file !== undefined ? yield* readText(opt.file) : undefined;
-        if (review !== undefined && !review.trim()) return yield* die(`${opt.file} is empty`);
+        const summaryFile = sub === "review" && opt.file !== undefined ? yield* readText(opt.file) : undefined;
+        if ((review !== undefined || summaryFile !== undefined) && !(review ?? summaryFile)?.trim()) return yield* die(`${opt.file} is empty`);
+        const summary = sub === "review" ? (summaryFile ?? (args.slice(3).join(" ") || opt.note || undefined))?.trim() || undefined : undefined;
         const note = args.slice(3).join(" ") || opt.note || (review ? firstLine(review) : undefined) || undefined;
         const roundNo = opt.round === undefined ? undefined : /^[1-9]\d{0,8}$/.test(opt.round.trim()) ? Number(opt.round.trim()) : yield* die(`"${opt.round}" isn't a round number`);
         const judged = { ...(roundNo !== undefined ? { round: roundNo } : {}), ...(opt.at?.trim() ? { at: opt.at.trim() } : {}) };
@@ -110,7 +112,7 @@ export const taskCommands: Record<string, Command> = {
         const asker = before?.members.get(s.me);
         if (reviewed && !reviewed.review && opt.review === undefined && asker && !isPerson(asker))
           return yield* die(`${taskId(id)} has no reviewer: kiwi task review ${taskId(id)} --review NAME (or any)`);
-        const kept = reviewed && opt.review !== undefined && !opt.at?.trim() && reviewed.owner !== s.me ? openRound(reviewed) : undefined;
+        const kept = reviewed && opt.review !== undefined && !opt.at?.trim() ? openRound(reviewed) : undefined;
         const keptAt = kept ? `round ${kept.n} stays open ${kept.at ? `at ${kept.at}` : "at no commit"}` : "";
         let state: ChannelState;
         const takes = (sub === "start" || sub === "claim") && before?.tasks.get(id)?.owner !== s.me;
@@ -120,7 +122,12 @@ export const taskCommands: Record<string, Command> = {
         } else if (sub === "claim") state = yield* s.taskClaim(id);
         else if (kept) state = yield* s.taskUpdate(id, { note: note ? `${keptAt}; ${note}` : keptAt, ...(opt.review !== undefined ? { review: opt.review } : {}) });
         else if (sub === "review")
-          state = yield* s.taskUpdate(id, { state: "review", note, ...(opt.review !== undefined ? { review: opt.review } : {}), ...(opt.at?.trim() ? { at: opt.at.trim() } : {}) });
+          state = yield* s.taskUpdate(id, {
+            state: "review",
+            ...(summary ? { summary } : {}),
+            ...(opt.review !== undefined ? { review: opt.review } : {}),
+            ...(opt.at?.trim() ? { at: opt.at.trim() } : {}),
+          });
         else if (sub === "approve") state = yield* s.taskUpdate(id, { state: "done", verdict: "approved", note, ...judged }, review);
         else if (sub === "reject")
           state = yield* s.taskUpdate(

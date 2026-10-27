@@ -1,11 +1,14 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, mock, test } from "bun:test"
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 
 import { PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts"
 import { choiceGate } from "@/lib/choosing"
-import { ComposerQuestion } from "./composer-question"
 import { answered } from "@/lib/asks"
+
+mock.module("@/lib/avatars", () => ({ avatarUrl: () => "", robotUrl: () => "", robotFor: () => "blue", harnessUrl: () => "" }))
+const { ComposerQuestion } = await import("./composer-question")
+const { stepReplyText } = await import("./step-card")
 
 const decision: Message = {
   v: PROTOCOL_VERSION,
@@ -49,6 +52,50 @@ describe("a decision in the composer", () => {
     expect(out).toContain("Question for you")
     expect(out).toContain("Ship it now?")
     expect(out).not.toContain("Something else")
+  })
+})
+
+describe("a step in the composer", () => {
+  const step: Message = {
+    ...decision,
+    id: "step-1",
+    body: "Purge the catalog cache",
+    choices: undefined,
+    holds: [12],
+    step: {
+      why: "The catalog deploy is waiting",
+      needsPerson: "Only the owner has Cloudflare access",
+      do: ["Purge the /catalog/ prefix"],
+      run: ["curl -sI https://example.com/catalog"],
+      expect: "cf-cache-status: BYPASS",
+      links: ["https://dash.cloudflare.com/"],
+    },
+  }
+
+  test("shows the how above Done, the reason actions and free text, never Decision for you", () => {
+    const out = html(step)
+    expect(out).toContain("A step for you")
+    expect(out).not.toContain("Decision for you")
+    expect(out).toContain("The catalog deploy is waiting")
+    expect(out).toContain("Only the owner has Cloudflare access")
+    expect(out).toContain("Purge the /catalog/ prefix")
+    expect(out).toContain("curl -sI https://example.com/catalog")
+    expect(out).toContain("cf-cache-status: BYPASS")
+    expect(out).toContain('href="https://dash.cloudflare.com/"')
+    expect(out).toContain("Copy command 1")
+    expect(out.indexOf("Step instructions")).toBeLessThan(out.indexOf(">Done<"))
+    expect(out).toContain("Can’t do it")
+    expect(out).toContain("Not needed")
+    expect(out).toContain("Something else")
+    expect(out).toContain("max-h-[70dvh]")
+    expect(out).toContain("overflow-y-auto")
+  })
+
+  test("Done preserves pasted output and the other outcomes carry their reason", () => {
+    expect(stepReplyText({ outcome: "done", output: "first line\n  second line" })).toBe("Done\n\nfirst line\n  second line")
+    expect(stepReplyText({ outcome: "done" })).toBe("Done")
+    expect(stepReplyText({ outcome: "cant", reason: "No access on this device" })).toBe("Can't do it: No access on this device")
+    expect(stepReplyText({ outcome: "not-needed", reason: "Already purged" })).toBe("Not needed: Already purged")
   })
 })
 

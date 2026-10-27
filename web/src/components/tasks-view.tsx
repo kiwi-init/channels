@@ -7,6 +7,7 @@ import { versionName } from "@kiwi/core/status.ts"
 import { taskPr, type PrChecks } from "@kiwi/core/work.ts"
 import { formatAgoShort, memberName } from "@/lib/format"
 import { labelOf } from "@/lib/task-labels"
+import { taskMatches } from "@/lib/task-search"
 import { taskGroups, type GroupHead, type View } from "@/lib/views"
 import { cx } from "@/lib/utils"
 import { doingNow, type AgentNow } from "./agent-strip"
@@ -306,6 +307,8 @@ export function TasksView({
   me,
   onJump,
   onNameGoal,
+  query,
+  onQuery,
 }: {
   state: ChannelState
   now: number
@@ -318,8 +321,14 @@ export function TasksView({
   me: string
   onJump: (seq: number) => void
   onNameGoal: (ask: number, name: string | null) => Promise<void>
+  query: string | null
+  onQuery: (query: string) => void
 }) {
+  const [filter, setFilter] = useState("")
+  const filterQuery = query ?? filter
   const groups = taskGroups(state, view, now)
+    .map((g) => ({ ...g, tasks: g.tasks.filter((task) => taskMatches(task, filterQuery)) }))
+    .filter((g) => g.tasks.length)
   const prs = groups.some((g) => g.tasks.some((t) => taskPr(state, t.id)))
   const byName = new Map(agents.map((a) => [a.name, a]))
   const showNeeds = view === "everything" || view === "needs"
@@ -343,6 +352,18 @@ export function TasksView({
   const order = groups.map((g) => `${g.key}:${g.tasks.map((t) => t.id).join(",")}`).join(" ")
   return (
     <Reorder order={order} rows={groups.reduce((n, g) => n + g.tasks.length, 0)}>
+      {view !== "needs" && (
+        <input
+          aria-label="Filter tasks"
+          value={filterQuery}
+          placeholder="Find a task by number or title"
+          onChange={(e) => {
+            setFilter(e.target.value)
+            if (query !== null) onQuery(e.target.value)
+          }}
+          className={cx("mb-3 block h-9 w-full rounded-full px-3.5 text-body", FIELD)}
+        />
+      )}
       {showNeeds && needs}
       {view === "needs" && !needs && <p className="px-3.5 pt-6 text-ui text-ink-3">Nothing needs you right now.</p>}
       {groups.map((g) => {
@@ -363,7 +384,11 @@ export function TasksView({
           </DoneGroup>
         )
       })}
-      {!groups.length && view !== "everything" && view !== "needs" && <p className="px-3.5 pt-6 text-ui text-ink-3">Nothing here right now.</p>}
+      {view !== "needs" && !groups.length && filterQuery.trim() ? (
+        <p className="px-3.5 pt-6 text-ui text-ink-3">No tasks match “{filterQuery.trim()}”.</p>
+      ) : (
+        !groups.length && view !== "everything" && view !== "needs" && <p className="px-3.5 pt-6 text-ui text-ink-3">Nothing here right now.</p>
+      )}
     </Reorder>
   )
 }

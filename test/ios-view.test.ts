@@ -60,16 +60,18 @@ describe("the phone's room view", () => {
   beforeAll(async () => {
     log = await signedLog([
       say("lead", "On it: T12 is mine."),
-      ev("lead", { op: "task.add", title: "Gate the feel numbers in CI", owner: "dev", review: "*" }),
+      ev("lead", { op: "task.add", title: "Gate the feel numbers in CI", owner: "dev", review: "jow" }),
       ev("lead", { op: "task.add", title: "Panels slide over the page", owner: "dev", review: "lead" }),
       ev("dev", { op: "task.update", task: 2, state: "review", at: "abc123" }),
       ev("dev", { op: "task.update", task: 3, state: "review", at: "def456" }),
+      ev("lead", { op: "task.add", title: "Open to any reviewer", owner: "dev", review: "*" }),
+      ev("dev", { op: "task.update", task: 6, state: "review", at: "ghi789" }),
       say("dev", "T2 is green and waits for your OK.", { task: 2 }),
       say("lead", "Only for you.", { to: ["jow"], dm: true }),
     ]);
   });
 
-  test("a task waiting on the person's review is in reviews, done by its owner; one for an agent reviewer isn't", () => {
+  test("only a review naming the person is in reviews, done by its owner; agent and any-reviewer tasks aren't", () => {
     const reviews = view(log, "jow").reviews;
     expect(reviews.map((r) => [r.task, r.title, r.by])).toEqual([[2, "Gate the feel numbers in CI", "dev"]]);
     expect(reviews[0]!.at).toBe(T0 + 3 * 60_000);

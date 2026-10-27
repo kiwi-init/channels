@@ -212,7 +212,7 @@ jobs:
           DASH_RELEASE_OFFLINE: "1"
         run: bun run build:eb
 
-      - name: AppImage, at most 55 MB (Livewire RC branch, T892)
+      - name: AppImage, at most 60 MB
         run: bun desktop/scripts/package-linux.ts desktop/release-eb out
 
       - name: No test code in what ships

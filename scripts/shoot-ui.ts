@@ -285,9 +285,28 @@ try {
   await owner.getByPlaceholder(/^Reply/).fill("Ship it. The web follows tomorrow.");
   await owner.keyboard.press("Enter");
   await owner.waitForTimeout(400);
-  // Work waiting on a person's review, and a decision an agent hands to its person: both under Needs you.
+  // Work waiting on a person's review, a step and a decision: all under Needs you.
   const reviewed = /T\d+/.exec(await win("task", "add", "Cache sealed history in the browser", "--owner", "win", "--review", "any", "--ask", ask))?.[0] ?? "T0";
   await win("task", "review", reviewed, "reload fetches only what is new");
+  await win(
+    "ask-human",
+    "--step",
+    "--holds",
+    reviewed,
+    "--why",
+    "The catalog deploy is waiting",
+    "--needs-person",
+    "Only the owner has Cloudflare access",
+    "--do",
+    "Purge the /catalog/ prefix",
+    "--run",
+    "curl -sI https://example.com/catalog | grep -i cf-cache-status",
+    "--expect",
+    "cf-cache-status: BYPASS",
+    "--link",
+    "https://dash.cloudflare.com/",
+    "Purge the catalog cache",
+  );
   await win("escalate", "--holds", reviewed, "--kind", "irreversible", "Should I delete the 800 test rooms on the old relay? It frees space, and it can't be undone.");
   const askPermission = (tool: string, given: object) => kiwi(["-c", "kiwi-w", "--as", "win", tool, JSON.stringify(given), "/Users/jonatas/www/channels"], undefined, "scripts/seed-permission.ts");
   const needsView = () => owner.getByRole("navigation", { name: "Views" }).getByRole("button", { name: /^Needs you/ });
@@ -534,6 +553,8 @@ try {
         if (moreChannels > 0) await shoot(owner, tag, "01e-more-channels");
       }
       await owner.mouse.wheel(0, -4000);
+      const nowFade = owner.locator('section[aria-label="Now"] + .scrim-top');
+      if ((await nowFade.count()) && (await nowFade.evaluate((el) => el.getBoundingClientRect().height)) > 16) throw new Error(`${tag}: the Now card's scroll fade wastes more than 16px`);
       await shoot(owner, tag, "02-channel-top");
       await shoot(owner, tag, "03-reply", async () => {
         await owner.locator("button[aria-label='Reply']").last().dispatchEvent("click");

@@ -6,13 +6,14 @@ import { addRelease, applyGithub, repoKey, type GithubState } from "./github.ts"
 import { reposOf } from "./repos.ts";
 import { omit } from "../omit.ts";
 import { readScopes, SCOPES, type Scope } from "../scopes.ts";
-import { isPerson } from "./people.ts";
+import { isLeadRole, isPerson } from "./people.ts";
 import { roomName } from "./rooms.ts";
 import { currentState, openRound, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
 import type { Charter, Compact, Fact, FoldMember, Hold, Lease, Room, Task } from "./types.ts";
 
 export interface FoldCtx {
   members: Map<string, FoldMember>;
+  signed: ReadonlySet<string>;
   keysByName: Map<string, Set<string>>;
   scopesByKey: Map<string, Scope[]>;
   scopeSets: Map<string, { seq: number; scopes: Scope[] }>;
@@ -285,8 +286,11 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         reject(`no task ${taskId(ev.task)}`);
         break;
       }
-      if (ev.review !== undefined && task.review && !isPerson(member) && m.from !== task.review) {
-        reject(`only a person or ${task.review === "*" ? "a reviewer" : task.review} changes who reviews ${taskId(task.id)}`);
+      const reviewerGone = task.review !== "*" && !members.get(task.review ?? "")?.active;
+      const lead = member.owner || isLeadRole(member.role) || (c.signed.has(member.name) && member.persona?.role === "lead");
+      const mayMoveReview = isPerson(member) || lead || m.from === task.review || (m.from === task.owner && reviewerGone && !!ev.review?.trim());
+      if (ev.review !== undefined && task.review && !mayMoveReview) {
+        reject(`only a person, the lead, ${task.review === "*" ? "a reviewer" : task.review}, or the task owner when the reviewer is gone changes who reviews ${taskId(task.id)}`);
         break;
       }
       const review = ev.review === undefined ? task.review : ev.review?.trim() || undefined;
@@ -314,7 +318,15 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
               : { kind: "withdrawn", seq: m.seq };
       if (state === "review") {
         if (open) open.result = { kind: "withdrawn", seq: m.seq };
-        task.rounds.push({ n: (task.rounds.at(-1)?.n ?? 0) + 1, ...(ev.at ? { at: ev.at.trim() } : {}), by: m.from, seq: m.seq, ts: at, result: { kind: "open" } });
+        task.rounds.push({
+          n: (task.rounds.at(-1)?.n ?? 0) + 1,
+          ...(ev.at ? { at: ev.at.trim() } : {}),
+          ...(ev.summary ? { summary: ev.summary.trim() } : {}),
+          by: m.from,
+          seq: m.seq,
+          ts: at,
+          result: { kind: "open" },
+        });
       }
       const note = ev.note || (ev.state === "blocked" ? "blocked" : ev.state === "cancelled" ? "cancelled" : undefined);
       if (ev.review !== undefined) task.review = review;

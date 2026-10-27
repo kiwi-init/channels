@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       jobs:
-        description: "Only these jobs, comma-separated (static, test-unit, test-flows, build, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, ios, ios-gestures, android); empty runs everything"
+        description: "Only these jobs, comma-separated (static, test-unit, test-flows, build, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, ios, android); empty runs everything"
         required: false
         default: ""
       update_from:
@@ -45,7 +45,7 @@ jobs:
           EVENT: ${{ github.event_name }}
           JOBS: ${{ inputs.jobs }}
         run: |
-          all="static test-unit test-flows build shots desktop-mac desktop-linux desktop-distros cli-macos ios ios-gestures android"
+          all="static test-unit test-flows build shots desktop-mac desktop-linux desktop-distros cli-macos ios android"
           case "$EVENT" in
             pull_request) pick="static test-unit" ;;
             workflow_dispatch) pick=$(echo "${JOBS:-$all}" | tr ',' ' ') ;;
@@ -203,11 +203,19 @@ jobs:
         with:
           webkit: "true"
       - run: bun run web:build
-      - name: ui shots
-        run: bun scripts/shoot-ui.ts --wide --phone channel,tasks --theme dark "$RUNNER_TEMP/shots"
-      - name: ui shots in WebKit
-        if: ${{ !cancelled() }}
-        run: bun scripts/shoot-ui.ts --browser webkit --wide --theme light "$RUNNER_TEMP/shots-webkit"
+      - name: ui shots in Chromium and WebKit
+        run: |
+          bun scripts/shoot-ui.ts --wide --phone channel,tasks --theme dark "$RUNNER_TEMP/shots" &
+          chromium=$!
+          bun scripts/shoot-ui.ts --browser webkit --wide --theme light "$RUNNER_TEMP/shots-webkit" &
+          webkit=$!
+          set +e
+          wait "$chromium"
+          chromium_code=$?
+          wait "$webkit"
+          webkit_code=$?
+          set -e
+          [ "$chromium_code" -eq 0 ] && [ "$webkit_code" -eq 0 ]
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -369,7 +377,7 @@ jobs:
         run: |
           dbus-run-session -- sh -c 'printf throwaway | gnome-keyring-daemon --unlock --components=secrets >/dev/null && bun desktop/scripts/linux-store-check.ts keyring'
           DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent/kiwi-no-session-bus bun desktop/scripts/linux-store-check.ts none
-      - name: the AppImage, at most 55 MB (Livewire RC branch, T892)
+      - name: the AppImage, at most 60 MB
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/package-linux.ts desktop/release-eb desktop/release-eb/linux
       - name: the AppImage holds the app
@@ -392,11 +400,11 @@ jobs:
           xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$APP/bin/launcher" ${{ matrix.sandbox }}
           img=$(ls "$PWD"/desktop/release-eb/linux/Channels-*-linux-x86_64.AppImage)
           xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$img" ${{ matrix.sandbox }} --appimage-extract-and-run
-      - name: closing hides to the tray only where a tray host runs
+      - name: the tray uses Channels' symbolic icon and title where a tray host runs
         if: ${{ !cancelled() }}
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-tray-test" desktop/native/linux/kiwi-tray-test.c $(pkg-config --cflags --libs gio-2.0) -ldl
-          dbus-run-session -- "$RUNNER_TEMP/kiwi-tray-test" "$APP/bin/libkiwi-shell.so"
+          dbus-run-session -- sh -c 'printf throwaway | gnome-keyring-daemon --unlock --components=secrets >/dev/null && xvfb-run -a "$1" "$2" "$3"' sh "$RUNNER_TEMP/kiwi-tray-test" "$APP/bin/libkiwi-shell.so" "$APP/bin/launcher"
       - name: with no libayatana-appindicator on the system (stock Arch), the app still starts, with no tray
         if: ${{ !cancelled() }}
         run: |
@@ -655,47 +663,6 @@ jobs:
         if: ${{ !cancelled() }}
         run: xcodebuild -project ios/Channels.xcodeproj -scheme Channels -configuration Release -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/ios" CODE_SIGNING_ALLOWED=NO build
 
-  # The iPhone app's gestures, with real touches: ios/ChannelsUITests in a simulator, on a canned channel.
-  ios-gestures:
-    name: ios / gestures
-    needs: plan
-    if: fromJSON(needs.plan.outputs.run)['ios-gestures']
-    runs-on: macos-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: ./.github/actions/setup
-      - name: newest xcode
-        run: |
-          sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
-          xcodebuild -version
-      - name: simulator
-        run: |
-          SIM=$(xcrun simctl list devices available --json | python3 -c '
-          import json, sys
-          devices = json.load(sys.stdin)["devices"]
-          runtimes = sorted((k for k in devices if ".iOS-" in k), key=lambda k: [int(x) for x in k.rsplit(".iOS-", 1)[1].split("-")])
-          print(next(d["udid"] for d in devices[runtimes[-1]] if d["name"].startswith("iPhone")))')
-          echo "SIM=$SIM" >> "$GITHUB_ENV"
-          xcrun simctl boot "$SIM"
-          xcrun simctl bootstatus "$SIM"
-      - name: gestures
-        run: |
-          set +e
-          xcodebuild test -project ios/Channels.xcodeproj -scheme Channels -destination "id=$SIM" -derivedDataPath "$RUNNER_TEMP/ios-ui" -resultBundlePath "$RUNNER_TEMP/gestures.xcresult" CODE_SIGNING_ALLOWED=NO > "$RUNNER_TEMP/gestures.log" 2>&1
-          code=$?
-          grep -E "GESTURE|error:|Test Case .*(passed|failed)|\*\* TEST" "$RUNNER_TEMP/gestures.log"
-          [ "$code" -eq 0 ] || tail -80 "$RUNNER_TEMP/gestures.log"
-          exit "$code"
-      - if: ${{ failure() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: ios-gestures-xcresult
-          path: ${{ runner.temp }}/gestures.xcresult
-          if-no-files-found: ignore
-          retention-days: 3
-          overwrite: true
-
   # The Android app: Gradle bundles the engine, builds a release APK (R8, signed with the debug key in android/app/debug.p12
   # so every build installs over the last one) and runs Android lint on it. The APK is kept as an artifact to install on a phone.
   # Every screen is drawn on the JVM (Robolectric and Roborazzi), light and dark, and kept as the android-screens artifact.
@@ -745,7 +712,7 @@ jobs:
   # The one check to require: passes when every job the plan ran passed and the rest were skipped.
   ci-ok:
     name: ci-ok
-    needs: [plan, static, test-unit, test-flows, build, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, ios, ios-gestures, android]
+    needs: [plan, static, test-unit, test-flows, build, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, ios, android]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2

@@ -20,6 +20,7 @@ import { Icon } from "./icon"
 import { Monogram, toast } from "./kit"
 import { CopyGlyph, Markdown, PermissionInThread, ReplyGlyph } from "./lazy"
 import { AskOptions } from "./ask-options"
+import { StepDetails } from "./step-card"
 import { ChecksWord } from "./pr-checks"
 import { Quote } from "./quote"
 
@@ -162,8 +163,9 @@ function phrase(m: Message, me: string, nameOf: (n: string) => string, repliedTo
   // "*" is how a broadcast to all is addressed; say it in words.
   const to = targets.map((t) => (t === "*" ? "everyone" : t === me ? "you" : nameOf(t)))
   const list = to.length > 1 ? `${to.slice(0, -1).join(", ")} and ${to[to.length - 1]}` : to[0]
-  // An agent handing a decision to people: named for what it is, in amber, never shouted.
+  // An agent handing a decision or step to people: named for what it is, in amber, never shouted.
   if (m.esc && m.handoff) return { text: to.includes("you") ? "Browser for you" : list ? `Browser for ${list}` : "Browser for people", decide: true }
+  if (m.esc && m.step) return { text: to.includes("you") ? "A step for you" : list ? `A step for ${list}` : "A step for people", decide: true }
   if (m.esc) return { text: to.includes("you") ? "Decision for you" : list ? `Decision for ${list}` : "Decision for people", decide: true }
   switch (m.kind) {
     case "ask":
@@ -484,6 +486,12 @@ export const MessageRow = memo(function MessageRow({
               </Clamp>
             </div>
           )
+        )}
+
+        {m.step && !inBanner && (
+          <div className="mt-2 max-w-[560px]">
+            <StepDetails step={m.step} />
+          </div>
         )}
 
         {onChoose && !chosen && !inBanner && (
