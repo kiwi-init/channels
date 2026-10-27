@@ -136,12 +136,30 @@
 }
 
 .msg.is-for-you {
-  border-radius: 0;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 9%, transparent) 4%, color-mix(in srgb, var(--accent) 5%, transparent) 45%, transparent 85%);
+  padding-block: 8px;
+  border-radius: var(--r-card);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
 }
 
 .msg.is-for-you:hover {
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 12%, transparent) 4%, color-mix(in srgb, var(--accent) 7%, transparent) 45%, transparent 85%);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.msg.is-for-you + .msg.is-for-you {
+  margin-top: 0;
+  padding-top: 18px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.msg.is-for-you + .msg.is-for-you.is-compact {
+  padding-top: 4px;
+}
+
+.msg.is-for-you:has(+ .msg.is-for-you) {
+  padding-bottom: 4px;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .msg.is-for-you::before {
