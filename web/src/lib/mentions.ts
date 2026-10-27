@@ -1,6 +1,18 @@
 import { createContext } from "react"
 
+import { aliasesOf, type Member, type Roster } from "@kiwi/core/state.ts"
+import { memberName } from "./format"
+
 export const MentionNames = createContext<((name: string) => string | undefined) | undefined>(undefined)
+
+export function mentionLabels(members: ReadonlyMap<string, Member>, roster: readonly Pick<Roster[number], "name" | "pk" | "was">[]): [string, string][] {
+  const own = [...members].map(([name, m]): [string, string] => [name, memberName(m, name)])
+  const earlier = [...aliasesOf(roster)].flatMap(([old, now]): [string, string][] => {
+    const m = members.get(now)
+    return m && !members.has(old) ? [[old, memberName(m, now)]] : []
+  })
+  return [...own, ...earlier]
+}
 
 export interface Mentionable {
   name: string

@@ -16,6 +16,7 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
   const [dialog, setDialog] = useState<"rename" | "charter" | "branch" | null>(null)
   const [scopeDraft, setScopeDraft] = useState<Scope[]>([...SCOPES])
   const [nickDraft, setNickDraft] = useState("")
+  const [handleDraft, setHandleDraft] = useState("")
   const [personaDraft, setPersonaDraft] = useState<Persona | null>(null)
   const active = p.roster.filter((m) => m.active)
   if (confirm?.kind === "approve" && active.some((m) => m.pk === confirm.req.pk)) setConfirm(null)
@@ -65,6 +66,10 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
       setNickDraft(m.display ?? "")
       setConfirm({ kind: "nickname", member: m })
     },
+    editHandle: (m) => {
+      setHandleDraft(m.name)
+      setConfirm({ kind: "handle", member: m })
+    },
     editColor: (m) => setConfirm({ kind: "color", member: m }),
     lastSeenOf,
     onlineNow,
@@ -91,6 +96,8 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
           setScopeDraft={setScopeDraft}
           nickDraft={nickDraft}
           setNickDraft={setNickDraft}
+          handleDraft={handleDraft}
+          setHandleDraft={setHandleDraft}
           personaDraft={personaDraft}
           setPersonaDraft={setPersonaDraft}
         />

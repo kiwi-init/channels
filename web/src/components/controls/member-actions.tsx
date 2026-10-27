@@ -19,7 +19,7 @@ export function loadDetail(l: Load): string {
 }
 
 export function MemberActions({ m, trigger, onMessage }: { m: RosterMember; trigger: Parameters<typeof Menu>[0]["trigger"]; onMessage?: () => void }) {
-  const { p, run, ask, editScopes, editPersona, editNickname, editColor } = useControls()
+  const { p, run, ask, editScopes, editPersona, editNickname, editHandle, editColor } = useControls()
   const now = p.state.members.get(m.name)
   const seat = useWakeSeat(p.roomId, m.name)
   return (
@@ -31,6 +31,7 @@ export function MemberActions({ m, trigger, onMessage }: { m: RosterMember; trig
         </>
       )}
       {m.kind !== "human" && p.onNickname && <MenuItem onClick={() => editNickname(m)}>Change nickname…</MenuItem>}
+      {m.kind !== "human" && p.onHandle && <MenuItem onClick={() => editHandle(m)}>Change handle…</MenuItem>}
       {m.kind !== "human" && p.onPersona && <MenuItem onClick={() => editPersona(m)}>{now?.persona ? `Personality: ${now.persona.name}…` : "Give a personality…"}</MenuItem>}
       {m.kind !== "human" && seat && (
         <MenuItem

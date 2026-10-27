@@ -26,6 +26,8 @@ export function ConfirmDialogs({
   setScopeDraft,
   nickDraft,
   setNickDraft,
+  handleDraft,
+  setHandleDraft,
   personaDraft,
   setPersonaDraft,
 }: {
@@ -39,6 +41,8 @@ export function ConfirmDialogs({
   setScopeDraft: Dispatch<SetStateAction<Scope[]>>
   nickDraft: string
   setNickDraft: Dispatch<SetStateAction<string>>
+  handleDraft: string
+  setHandleDraft: Dispatch<SetStateAction<string>>
   personaDraft: Persona | null
   setPersonaDraft: Dispatch<SetStateAction<Persona | null>>
 }) {
@@ -129,7 +133,7 @@ export function ConfirmDialogs({
         message={
           <span className="mt-3 grid gap-2">
             <TextField value={nickDraft} onChange={(e) => setNickDraft(e.target.value)} placeholder="Nickname, e.g. claude" maxLength={40} aria-label="Nickname" autoFocus />
-            <span className="text-meta text-ink-3">What everyone sees. Others still reach it as @{confirm?.kind === "nickname" ? confirm.member.name : ""}, which never changes.</span>
+            <span className="text-meta text-ink-3">What everyone sees. Others still reach it as @{confirm?.kind === "nickname" ? confirm.member.name : ""}.</span>
           </span>
         }
       >
@@ -146,6 +150,35 @@ export function ConfirmDialogs({
           }}
         >
           Save
+        </Button>
+      </Alert>
+
+      <Alert
+        open={confirm?.kind === "handle"}
+        onClose={() => setConfirm(null)}
+        title={confirm?.kind === "handle" ? `Handle for @${confirm.member.name}` : ""}
+        message={
+          <span className="mt-3 grid gap-2">
+            <TextField value={handleDraft} onChange={(e) => setHandleDraft(e.target.value)} placeholder="Handle, e.g. opus-vm-coder" maxLength={32} aria-label="Handle" autoFocus />
+            <span className="text-meta text-ink-3">
+              What others write after @ and what commands take. It keeps its key, tasks and history; @{confirm?.kind === "handle" ? confirm.member.name : ""} in older messages reads as the new handle.
+            </span>
+          </span>
+        }
+      >
+        <Button variant="secondary" onClick={() => setConfirm(null)}>
+          Cancel
+        </Button>
+        <Button
+          disabled={busy || !p.onHandle || !handleDraft.trim() || (confirm?.kind === "handle" && handleDraft.trim() === confirm.member.name)}
+          onClick={() => {
+            if (confirm?.kind !== "handle" || !p.onHandle) return
+            const m = confirm.member
+            const handle = handleDraft.trim()
+            void run(() => p.onHandle!(m, handle), `@${m.name} is now @${handle}`)
+          }}
+        >
+          Rename
         </Button>
       </Alert>
 

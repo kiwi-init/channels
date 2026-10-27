@@ -5,7 +5,7 @@ import { ChannelGone } from "@kiwi/core/client/relay-errors.ts"
 import type { HumanSession, RoomsSetting, SendOptions } from "@kiwi/core/client.ts"
 import type { JoinRequest, Member } from "@kiwi/core/membership.ts"
 import { SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts"
-import { fold, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts"
+import { aliasesOf, fold, renamedLog, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts"
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "../channel-ops"
 import { openCached, planCached, readKept, rememberKept, rememberRow, rememberRows } from "../history"
 import { markOnce } from "../marks"
@@ -131,6 +131,7 @@ export class ChannelStore {
     const admitted = computed(() => this.roster.value.filter((m) => !m.unverified))
     this.keyOf = computed(() => new Map(admitted.value.filter((r) => r.active).map((r) => [r.name, r.pk])))
     this.rosterForFold = computed(() => foldRoster(admitted.value))
+    const shown = computed(() => renamedLog(aliasesOf(this.rosterForFold.value), this.messages.value))
     this.state = computed(() => fold(this.messages.value, this.rosterForFold.value, this.now.value, this.roomsFloor.value, this.guardFloor.value, this.base.value))
     this.caughtUp = computed(() => {
       const start = this.start.value
@@ -159,7 +160,7 @@ export class ChannelStore {
       ch: this.ch,
       connection: this.connection.value,
       gone: this.gone.value,
-      messages: this.messages.value,
+      messages: shown.value,
       roster: this.roster.value,
       state: this.state.value,
       online: live.value,

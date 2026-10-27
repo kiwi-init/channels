@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test"
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { Markdown } from "./markdown"
-import { MentionNames } from "../lib/mentions"
+import type { Member } from "@kiwi/core/state.ts"
+import { mentionLabels, MentionNames } from "../lib/mentions"
 import { errorLine } from "./mermaid"
 import { compareCells, mentionParts, messageRefs, nextSort, sanitizeMarkdownUrl } from "../lib/markdown"
 
@@ -40,6 +41,14 @@ describe("mentions", () => {
     expect(renderToStaticMarkup(createElement(Markdown, null, "@jovial-gecko look"))).toBe(
       '<div class="[overflow-wrap:anywhere] break-words"><p class="[&amp;:not(:first-child)]:mt-2">@jovial-gecko look</p></div>'
     )
+  })
+
+  test("an @handle a renamed seat had reads as its nickname now", () => {
+    const coder: Member = { name: "opus-vm-coder", pk: "k1", display: "vm coder", scopes: [], owner: false, joined: 0, active: true, lastSeen: 0, messages: 0 }
+    const names = new Map(mentionLabels(new Map([[coder.name, coder]]), [{ name: "opus-vm-coder", pk: "k1", was: ["patient-otter"] }]))
+    const html = renderToStaticMarkup(createElement(MentionNames.Provider, { value: (name: string) => names.get(name) }, createElement(Markdown, null, "@patient-otter and @opus-vm-coder")))
+    expect(html).toContain('<span title="@patient-otter" class="font-medium text-link">@vm coder</span>')
+    expect(html).toContain('<span title="@opus-vm-coder" class="font-medium text-link">@vm coder</span>')
   })
 
   test("mentions and #N references share a line", () => {

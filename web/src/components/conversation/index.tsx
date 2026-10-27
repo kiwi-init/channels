@@ -17,7 +17,7 @@ import type { Command } from "@/lib/commands"
 import { approveTask, closedDigest, reviewsFor, sendBackTask, type TaskSend } from "@/lib/task-actions"
 import { useIcons, useLiveIcon } from "@/lib/icons"
 import { memberName } from "@/lib/format"
-import { MentionNames } from "@/lib/mentions"
+import { mentionLabels, MentionNames } from "@/lib/mentions"
 import { dmPlace, MAIN, placeFromKey, placeKey, sendFrom, type Place } from "@/lib/threads"
 import { mergedSince, startOfDay, viewCounts, VIEWS, type Tab, type View } from "@/lib/views"
 import { cx } from "@/lib/utils"
@@ -104,7 +104,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const [headRef, headH] = useHeight()
   const [footRef, footH] = useHeight()
 
-  const names = useMemo(() => JSON.stringify([...state.members].map(([name, m]) => [name, memberName(m, name)])), [state.members])
+  const names = useMemo(() => JSON.stringify(mentionLabels(state.members, roster)), [state.members, roster])
   const nameOf = useMemo(() => {
     const byName = new Map(JSON.parse(names) as [string, string][])
     return (name: string) => byName.get(name) ?? name
