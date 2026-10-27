@@ -13,9 +13,8 @@ import { useIcons, useMemberIcons } from "@/lib/icons"
 import { lastChannel, rememberChannel, reopenable } from "@/lib/last-channel"
 import { newsTotal, rowNews, startMarks, useMarks, useOpenNews, useTabNews } from "@/lib/news"
 import { bridge, useSecrets } from "@/lib/secrets"
-import { announce } from "~/kit/toasts"
 import { useAccount } from "~/live/account"
-import { joinChannel, makeActions } from "~/live/actions"
+import { makeActions } from "~/live/actions"
 import { OpenMember, type View } from "~/live/channel"
 import { iconUrl } from "~/live/icon"
 import { harnessOf } from "~/live/map"
@@ -114,10 +113,7 @@ function useOpenLinks(go: (g: Go) => void, ready: boolean) {
   useEffect(() => {
     take.current = (code: string) => {
       if (loadMember(code) || loadPending(code)) return go({ to: "channel", code })
-      void joinChannel(code).then(
-        (c) => go({ to: "channel", code: c }),
-        (err: unknown) => announce(`Couldn't ask to join: ${err instanceof Error ? err.message : String(err)}`)
-      )
+      go({ to: "invite", code })
     }
   }, [go])
   useEffect(() => {

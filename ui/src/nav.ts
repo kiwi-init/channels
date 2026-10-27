@@ -18,6 +18,7 @@ export interface Nav {
   panel: Panel | null
   dialog: Dialog
   section: Section
+  invite?: string
 }
 
 export type Go =
@@ -29,6 +30,7 @@ export type Go =
   | { to: "settings"; section?: Section }
   | { to: "back" }
   | { to: "home" }
+  | { to: "invite"; code: string }
 
 const GENERAL: Where = { kind: "room", room: "general" }
 
@@ -49,7 +51,9 @@ export function navigate(nav: Nav, go: Go): Nav {
     case "panel":
       return { ...nav, panel: go.panel }
     case "dialog":
-      return { ...nav, dialog: go.dialog }
+      return { ...nav, dialog: go.dialog, ...(go.dialog === "join" ? {} : { invite: undefined }) }
+    case "invite":
+      return { ...nav, dialog: "join", invite: go.code }
     case "settings":
       return { ...nav, page: "settings", section: go.section ?? nav.section, dialog: null }
     case "back":

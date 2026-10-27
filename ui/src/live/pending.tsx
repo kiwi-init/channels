@@ -1,15 +1,18 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useState } from "react"
 
 import { decodeJoinCode } from "@kiwi/core/crypto.ts"
-import { checkJoin, forgetPending, type PendingJoin } from "@/lib/channel"
+import { checkJoin, type PendingJoin } from "@/lib/channel"
 import { isJoinBlip } from "@/lib/join-blip"
 import { announce } from "~/kit/toasts"
+import { inviteOwner } from "~/live/invites"
 import { closeOpened, publish } from "~/live/store"
 import type { Channel } from "~/model"
 
 const POLL_MS = 2000
 
 export function pendingTitle(code: string): string {
+  const owner = inviteOwner(code)
+  if (owner) return `${owner}'s channel`
   try {
     return `Channel ${decodeJoinCode(code).roomId.slice(0, 4).toUpperCase()}`
   } catch {
@@ -19,7 +22,9 @@ export function pendingTitle(code: string): string {
 
 export const OpenPending = memo(function OpenPending({ pending }: { pending: PendingJoin }) {
   const [verify, setVerify] = useState<string | null>(null)
+  const [state, setState] = useState<"waiting" | "unreachable" | "declined">("waiting")
   const [since] = useState(() => Date.now())
+  const [owner] = useState(() => inviteOwner(pending.code))
   const code = pending.code
 
   useEffect(() => {
@@ -30,16 +35,14 @@ export const OpenPending = memo(function OpenPending({ pending }: { pending: Pen
       try {
         const r = await checkJoin(pending)
         if (stop) return
-        if (r === "denied") {
-          announce("The owner didn't let you in")
-          await forgetPending(code)
-          return
-        }
+        if (r === "denied") return setState("declined")
         if ("access" in r) return
+        setState("waiting")
         setVerify(r.code)
       } catch (err) {
         if (stop) return
-        if (!isJoinBlip(err)) announce(`Couldn't check the request: ${err instanceof Error ? err.message : String(err)}`)
+        if (isJoinBlip(err)) setState("unreachable")
+        else announce(`Couldn't check the request: ${err instanceof Error ? err.message : String(err)}`)
       }
       timer = setTimeout(() => void tick(), POLL_MS)
     }
@@ -65,9 +68,9 @@ export const OpenPending = memo(function OpenPending({ pending }: { pending: Pen
       tasks: [],
       asks: [],
       connection: "live",
-      waiting: { code: verify ?? "", since },
+      waiting: { code: verify ?? "", since, state, ...(owner ? { owner } : {}) },
     }),
-    [code, pending.identity.name, verify, since]
+    [code, pending.identity.name, verify, since, state, owner]
   )
 
   useLayoutEffect(() => publish({ code, channel, run: null }), [code, channel])
