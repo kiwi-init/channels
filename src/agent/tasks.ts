@@ -211,6 +211,7 @@ export class SessionTasks extends SessionMessaging {
       if (t.owner && t.owner !== this.me) notify.push(t.owner);
       const reviewerName = (review ?? t.review) !== "*" ? (review ?? t.review) : undefined;
       if ((change.state === "review" || review) && reviewerName) notify.push(reviewerName);
+      if (review !== undefined && t.review && t.review !== "*" && t.review !== reviewerName) notify.push(t.review);
       if (finishing) notify.push(t.createdBy);
       const seq = yield* this.event(
         { op: "task.update", task: id, ...rest, ...opening, ...areas, ...(owner !== undefined ? { owner } : {}), ...(review !== undefined ? { review } : {}), ...round, ...body },

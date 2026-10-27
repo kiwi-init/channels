@@ -228,6 +228,7 @@ export function fold(
   const placeOf = new Map<number, Place>(from?.placeOf);
   const ctx: FoldCtx = {
     members,
+    signed,
     keysByName,
     scopesByKey,
     scopeSets,
