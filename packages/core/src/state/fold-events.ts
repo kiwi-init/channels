@@ -341,7 +341,15 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       if (state && state !== "done" && (m.from === task.owner || state === "review")) worked(task, m.from);
       if (state) task.state = state;
       if (ev.title) task.title = ev.title.slice(0, TASK_TITLE_MAX_LENGTH);
-      if (note) task.notes.push({ seq: m.seq, by: m.from, ts: at, text: note, ...(ev.checkpoint && ev.note ? { checkpoint: true as const } : {}) });
+      if (note)
+        task.notes.push({
+          seq: m.seq,
+          by: m.from,
+          ts: at,
+          text: note,
+          ...(ev.checkpoint && ev.note ? { checkpoint: true as const } : {}),
+          ...(ev.owner && ev.owner !== m.from && ev.note ? { assign: true as const } : {}),
+        });
       if (ev.proof && !task.proof?.some((p) => p.url === ev.proof!.url) && (task.proof?.length ?? 0) < PROOF_MAX)
         task.proof = [...(task.proof ?? []), { seq: m.seq, by: m.from, ts: at, url: ev.proof.url, ...(ev.proof.label ? { label: ev.proof.label } : {}) }];
       if (ev.areas?.length) task.areas = [...new Set(ev.areas)];
