@@ -41,6 +41,23 @@
     "linux-x64": "d689fd91c40017f80e144886716c8237d2167fc6e7703ed18958ad6e255354c1",
     "linux-arm64": "d689fd91c40017f80e144886716c8237d2167fc6e7703ed18958ad6e255354c1"
   },
+  "nativeWrapper": {
+    "source": {
+      "url": "https://codeload.github.com/kiwi-init/electrobun-livewire/tar.gz/2469dc94f10722c65530ac0c1f3248554b03ea49",
+      "keep": "electrobun-livewire-2469dc94f10722c65530ac0c1f3248554b03ea49/package/src/native",
+      "tree": "fd22861f7eb9252c159480d53c44b6e3ac817112d2d30a5e99ee36b5f1d8295d"
+    },
+    "cef": {
+      "url": "https://cef-builds.spotifycdn.com/cef_binary_156.0.7%2Bg47dbc1d%2Bchromium-156.0.8078.17_linux64_minimal.tar.bz2",
+      "keep": "cef_binary_156.0.7+g47dbc1d+chromium-156.0.8078.17_linux64_minimal/include",
+      "tree": "01056439b08c53fd2646452d4ea7413c73d089f7737e23966cc385fdf5f2113e"
+    },
+    "dawn": {
+      "url": "https://electrobun-artifacts.blackboard.sh/electrobun-dawn/releases/0.2.7/electrobun-dawn-linux-x64.tar.gz",
+      "keep": "linux-x64/include",
+      "tree": "61e7c61ed667e833011d5dd9744a83ad701e78bd0b587f7d3c2819499df63891"
+    }
+  },
   "app": {
     "macos-arm64": {
       "Contents/MacOS/launcher": "cb56c4ccfa6d2c1a3596e44d143af212b5af3e196199a83c19d511506f28ff4f",
