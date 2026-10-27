@@ -9,6 +9,7 @@ import { UI_MANIFEST_URL, UI_POLL_MS, UI_PREFIX, UI_READY_MS, UI_TRUSTED_KEYS } 
 import { UI_CONTRACT } from "./ui-contract.ts";
 import { hearUi } from "./ui-signals.ts";
 
+declare const KIWI_EB_DEV: boolean;
 declare const KIWI_EB_LIVEWIRE: boolean;
 declare const KIWI_EB_TEST: boolean;
 declare const KIWI_UI_SEQ: number;
@@ -23,7 +24,11 @@ const testChannel = (value: string | undefined): Channel | null => {
   return manifestUrl?.startsWith("http://127.0.0.1:") && keyId && publicKey && extra === undefined ? { manifestUrl, trustedKeys: { [keyId]: publicKey } } : null;
 };
 
-const channel: Channel | null = KIWI_EB_TEST ? testChannel(process.env.KIWI_EB_UI_CHANNEL) : KIWI_EB_LIVEWIRE ? { manifestUrl: UI_MANIFEST_URL, trustedKeys: { ...UI_TRUSTED_KEYS } } : null;
+const official = (): Channel => ({ manifestUrl: UI_MANIFEST_URL, trustedKeys: { ...UI_TRUSTED_KEYS } });
+
+const devChannel: Channel | null = KIWI_EB_DEV ? testChannel(process.env.KIWI_EB_UI_CHANNEL) : null;
+
+const channel: Channel | null = KIWI_EB_TEST ? testChannel(process.env.KIWI_EB_UI_CHANNEL) : devChannel ? devChannel : KIWI_EB_LIVEWIRE ? official() : null;
 
 export const uiFromChannel: boolean = channel !== null;
 
@@ -62,7 +67,7 @@ export function channelUi(w: UiWindow): ChannelUi {
   const engine = new AppEngine({
     contractVersion: UI_CONTRACT,
     readyTimeoutMs: UI_READY_MS,
-    channel: { ...channel, pollIntervalMs: UI_POLL_MS },
+    channel: { ...channel, pollIntervalMs: devChannel ? 3_000 : UI_POLL_MS },
     host: {
       viewsRoot: uiViewsRoot(),
       prefix: UI_PREFIX,

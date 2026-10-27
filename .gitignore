@@ -23,3 +23,6 @@ desktop/.hutch/
 
 # Electrobun dev runs leave this behind
 desktop/.cottontail-tmp/
+
+# scripts/ui-dev-channel.ts: the local signing key
+desktop/.ui-dev/
