@@ -9,7 +9,7 @@ import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identi
 import type { Event, Message } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 import { formatTask, formatTasks } from "@kiwi/core/format.ts";
-import { handBackText, heldBy } from "@kiwi/core/handback.ts";
+import { handBackText, heldBy, reviewedBy } from "@kiwi/core/handback.ts";
 import { joinAgent, pairComputer, setupChannel } from "./owner.ts";
 
 setDefaultTimeout(60_000);
@@ -84,6 +84,65 @@ describe("a task outlives the agent who leaves", () => {
         "- T2 Start without the tray library: no PR yet; its checkpoint (#4) says where it stands",
         "- T5 Name the right package: no PR yet; no checkpoint written",
       ].join("\n"),
+    );
+  });
+});
+
+describe("a review outlives the reviewer who leaves", () => {
+  let reviewed: Message[];
+  beforeAll(async () => {
+    reviewed = await signedLog([
+      { from: "jow", kind: "msg", body: "ship the tray fix" },
+      ev("lead", { op: "task.add", title: "Approve me", owner: "hedgehog", review: "wren" }, 1),
+      ev("lead", { op: "task.add", title: "Cancel me", owner: "hedgehog", review: "wren" }, 1),
+      ev("lead", { op: "task.add", title: "Jow reviews me", owner: "hedgehog", review: "jow" }, 1),
+      ev("hedgehog", { op: "task.update", task: 2, state: "review" }),
+      ev("hedgehog", { op: "task.update", task: 3, state: "review" }),
+      ev("hedgehog", { op: "task.update", task: 4, state: "review" }),
+      ev("lead", { op: "task.update", task: 2, state: "done" }),
+      ev("lead", { op: "task.update", task: 3, state: "cancelled" }),
+      ev("lead", { op: "task.update", task: 4, state: "done" }),
+    ]);
+  });
+
+  test("once the named reviewer is gone, a fresh reviewer finishes the task and the lead cancels it; an active reviewer still holds theirs", () => {
+    const s = fold(reviewed, roster(["wren"]), T0);
+    expect([2, 3, 4].map((id) => [id, s.tasks.get(id)?.state, s.tasks.get(id)?.cancelled ?? false, s.tasks.get(id)?.review, s.tasks.get(id)?.reviewLeftBy ?? null])).toEqual([
+      [2, "done", false, "wren", null],
+      [3, "done", true, "wren", null],
+      [4, "review", false, "jow", null],
+    ]);
+    expect(s.tasks.get(2)?.approvedBy).toBe("lead");
+  });
+
+  test("an open task whose reviewer left is open to anyone who hasn't worked on it, naming who left", async () => {
+    const open = await signedLog([
+      { from: "jow", kind: "msg", body: "ship the tray fix" },
+      ev("lead", { op: "task.add", title: "Waiting on wren", owner: "hedgehog", review: "wren" }, 1),
+      ev("lead", { op: "task.add", title: "Open review", owner: "hedgehog", review: "*" }, 1),
+      ev("hedgehog", { op: "task.update", task: 2, state: "review" }),
+    ]);
+    const s = fold(open, roster(["wren"]), T0);
+    expect([2, 3].map((id) => [s.tasks.get(id)?.review, s.tasks.get(id)?.reviewLeftBy ?? null])).toEqual([
+      ["*", "wren"],
+      ["*", null],
+    ]);
+    expect(formatTask(s, s.tasks.get(2)!)).toContain("review by anyone who hasn't worked on it (wren left)");
+  });
+
+  test("while the reviewer is still here, nobody else finishes or cancels the task", () => {
+    const s = fold(reviewed, roster(), T0);
+    expect([2, 3, 4].map((id) => [s.tasks.get(id)?.state, s.tasks.get(id)?.review])).toEqual([
+      ["review", "wren"],
+      ["review", "wren"],
+      ["review", "jow"],
+    ]);
+  });
+
+  test("the hand-back message also lists the tasks the leaving agent was reviewing", () => {
+    const s = fold(reviewed.slice(0, 7), roster(), T0);
+    expect(handBackText(s, "wren", "left", heldBy(s, "wren"), reviewedBy(s, "wren"))).toBe(
+      ["wren is leaving the channel.", "Open for review by anyone who hasn't worked on them:", "- T2 Approve me", "- T3 Cancel me"].join("\n"),
     );
   });
 });

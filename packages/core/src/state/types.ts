@@ -122,6 +122,7 @@ export interface Task {
   posters?: string[];
   archived?: boolean;
   leftBy?: string;
+  reviewLeftBy?: string;
 }
 
 export interface AskHead {

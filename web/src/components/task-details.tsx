@@ -197,6 +197,7 @@ function Properties({
         <Prop label="Review">
           <span className="text-ink-2">
             {task.review === "*" ? "Anyone who hasn’t worked on it" : memberName(state.members.get(task.review), task.review)}
+            {task.reviewLeftBy ? ` (${memberName(state.members.get(task.reviewLeftBy), task.reviewLeftBy)} left)` : ""}
             {task.approvedBy ? `, approved by ${memberName(state.members.get(task.approvedBy), task.approvedBy)}` : task.state === "review" ? ", waiting" : ""}
           </span>
           {round?.at && repo && onDiff && (

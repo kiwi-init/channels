@@ -531,6 +531,10 @@ export function fold(
     if (t.state === "done" || !t.owner || members.get(t.owner)?.active !== false) continue;
     tasks.set(t.id, { ...omit(t, "owner"), leftBy: t.owner, ...(t.state === "doing" ? { state: "todo" as const } : {}) });
   }
+  for (const t of [...tasks.values()]) {
+    if (t.state === "done" || !t.review || t.review === "*" || members.get(t.review)?.active !== false) continue;
+    tasks.set(t.id, { ...t, review: "*", reviewLeftBy: t.review });
+  }
 
   passGuard(Infinity);
 

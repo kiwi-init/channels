@@ -295,9 +295,10 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       }
       const review = ev.review === undefined ? task.review : ev.review?.trim() || undefined;
       const owner = ev.owner === undefined ? task.owner : ev.owner || undefined;
-      const mayFinish = !review || isPerson(member) || (review === "*" ? m.from !== owner && !task.workedBy.includes(m.from) : m.from === review);
+      const gate = review && review !== "*" && members.get(review)?.active === false ? "*" : review;
+      const mayFinish = !gate || isPerson(member) || (gate === "*" ? m.from !== owner && !task.workedBy.includes(m.from) : m.from === gate);
       if (ev.state === "done" && task.state !== "done" && !mayFinish) {
-        reject(`${taskId(task.id)} needs review by ${review === "*" ? "someone who hasn't worked on it" : review} before it's done (send it for review)`);
+        reject(`${taskId(task.id)} needs review by ${gate === "*" ? "someone who hasn't worked on it" : gate} before it's done (send it for review)`);
         break;
       }
       const open = openRound(task);

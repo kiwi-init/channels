@@ -11,7 +11,11 @@ function whereItStands(state: ChannelState, t: Task): string {
   return `${work}; ${checkpoint ? `its checkpoint (#${checkpoint.seq}) says where it stands` : "no checkpoint written"}`;
 }
 
-export function handBackText(state: ChannelState, who: string, how: "left" | "removed", tasks: readonly Task[]): string {
+export const reviewedBy = (state: Pick<ChannelState, "tasks">, name: string): Task[] => [...state.tasks.values()].filter((t) => t.review === name && t.state !== "done");
+
+export function handBackText(state: ChannelState, who: string, how: "left" | "removed", tasks: readonly Task[], reviewing: readonly Task[] = []): string {
   const head = how === "left" ? `${who} is leaving the channel.` : `${who} was removed from the channel.`;
-  return [`${head} Back on the board, open for someone to take:`, ...tasks.map((t) => `- ${taskId(t.id)} ${inlineText(t.title, 80)}: ${whereItStands(state, t)}`)].join("\n");
+  const held = tasks.length ? [`${head} Back on the board, open for someone to take:`, ...tasks.map((t) => `- ${taskId(t.id)} ${inlineText(t.title, 80)}: ${whereItStands(state, t)}`)] : [head];
+  const review = reviewing.length ? ["Open for review by anyone who hasn't worked on them:", ...reviewing.map((t) => `- ${taskId(t.id)} ${inlineText(t.title, 80)}`)] : [];
+  return [...held, ...review].join("\n");
 }

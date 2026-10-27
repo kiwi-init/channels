@@ -18,7 +18,7 @@ import { Rejected } from "@kiwi/core/refusals.ts";
 import { isPerson, openRound, revisedOut, taskId, type ChannelState, type ReviewRound, type Task } from "@kiwi/core/state.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { parseIssueRef, taskDigest, taskOfIssue } from "@kiwi/core/work.ts";
-import { handBackText, heldBy } from "@kiwi/core/handback.ts";
+import { handBackText, heldBy, reviewedBy } from "@kiwi/core/handback.ts";
 import { branchAreas } from "../areas.ts";
 import { SessionMessaging } from "./messaging.ts";
 import { oneLook } from "./shared.ts";
@@ -236,10 +236,11 @@ export class SessionTasks extends SessionMessaging {
     function* (this: SessionTasks) {
       const { state } = yield* this.state();
       const mine = heldBy(state, this.me);
-      if (!mine.length) return [];
+      const reviewing = reviewedBy(state, this.me);
+      if (!mine.length && !reviewing.length) return [];
       const lead = state.lead && state.lead !== this.me ? [state.lead] : undefined;
-      yield* this.send(handBackText(state, this.me, "left", mine), lead ? { to: lead } : {});
-      return mine.map((t) => t.id);
+      yield* this.send(handBackText(state, this.me, "left", mine, reviewing), lead ? { to: lead } : {});
+      return [...mine, ...reviewing].map((t) => t.id);
     },
     oneLook,
   );
