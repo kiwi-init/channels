@@ -68,16 +68,16 @@ jobs:
           fetch-depth: 2
       - uses: ./.github/actions/setup
       - name: core types
-        run: bunx tsc --noEmit && bunx tsc --noEmit -p tsconfig.worker.json
+        run: bunx tsrs --noEmit && bunx tsrs --noEmit -p tsconfig.worker.json
       - name: web types
         if: ${{ !cancelled() }}
-        run: cd web && bunx tsc -b
+        run: cd web && bunx tsrs -b
       - name: desktop types
         if: ${{ !cancelled() }}
-        run: cd desktop && bunx tsc --noEmit
+        run: cd desktop && bunx tsrs --noEmit
       - name: phone engine types
         if: ${{ !cancelled() }}
-        run: bunx tsc --noEmit -p ios/engine/tsconfig.json && bunx tsc --noEmit -p ios/scripts/tsconfig.json && bunx tsc --noEmit -p android/scripts/tsconfig.json
+        run: bunx tsrs --noEmit -p ios/engine/tsconfig.json && bunx tsrs --noEmit -p ios/scripts/tsconfig.json && bunx tsrs --noEmit -p android/scripts/tsconfig.json
       - name: ui tokens
         if: ${{ !cancelled() }}
         run: bun scripts/ui-tokens.ts
@@ -95,7 +95,7 @@ jobs:
         run: cd web && bun oxfmt --check src
       - name: ui types
         if: ${{ !cancelled() }}
-        run: cd ui && bunx tsc -b
+        run: cd ui && bunx tsrs -b
       - name: ui lint
         if: ${{ !cancelled() }}
         run: cd ui && bun oxlint src

@@ -1,1 +1,0 @@
-The conversation keeps every frame under 8.3 ms: at most 160 rows mounted, markdown parsed once and ahead of time

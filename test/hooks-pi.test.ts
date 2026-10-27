@@ -162,13 +162,13 @@ test("Pi: a hook with nothing to say adds nothing", async () => {
 });
 
 test("Pi: the extension Kiwi writes is strictly typed TypeScript", () => {
-  const dir = scratch("kiwi-pi-tsc-");
+  const dir = scratch("kiwi-pi-tsrs-");
   const file = join(dir, "kiwi.ts");
   writeFileSync(file, piExtensionSource({ "session-start": "a", prompt: "b", stop: "c", listen: "d" }));
   const root = join(import.meta.dir, "..");
-  const tsc = Bun.spawnSync(
+  const tsrs = Bun.spawnSync(
     [
-      join(root, "node_modules", ".bin", "tsc"),
+      join(root, "node_modules", ".bin", "tsrs"),
       "--ignoreConfig",
       "--noEmit",
       "--strict",
@@ -187,6 +187,6 @@ test("Pi: the extension Kiwi writes is strictly typed TypeScript", () => {
     ],
     { stdout: "pipe", stderr: "pipe" },
   );
-  expect(tsc.stdout.toString() + tsc.stderr.toString()).toBe("");
-  expect(tsc.exitCode).toBe(0);
+  expect(tsrs.stdout.toString() + tsrs.stderr.toString()).toBe("");
+  expect(tsrs.exitCode).toBe(0);
 }, 60_000);

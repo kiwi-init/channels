@@ -2,11 +2,12 @@ import { Fragment, startTransition, useCallback, useEffect, useLayoutEffect, use
 
 import { Composer } from "~/chat/composer"
 import { MessageRow } from "~/chat/message"
-import { linked } from "~/chat/parsed"
+import { linked } from "~/chat/linked"
 import { jumpTo, ReplyContext, type Replying } from "~/chat/reply"
 import { day, sameDay } from "~/kit/time"
 import type { Channel, Message, Where } from "~/model"
 import { sameWhere, useApp } from "~/nav"
+import { nickname, shown } from "~/names"
 
 const GROUP_MS = 5 * 60_000
 const NEAR_BOTTOM = 48
@@ -28,9 +29,8 @@ function around(list: Message[], at: number): Span {
   return spanOf(list, from, Math.min(list.length, from + CAP))
 }
 
-export function useNames(channel: Channel): ReadonlySet<string> {
-  const key = channel.people.map((p) => p.name.toLowerCase()).join("\n")
-  return useMemo(() => new Set(key ? key.split("\n") : []), [key])
+export function useNames(channel: Channel): ReadonlyMap<string, string> {
+  return channel.nicknames
 }
 
 export function useTaskIds(channel: Channel): ReadonlySet<number> {
@@ -145,8 +145,7 @@ export function Conversation({ channel, search }: { channel: Channel; search: st
   const key = `${channel.code}:${whereKey(where)}`
   const [reply, setReply] = useState<{ key: string; to: Message } | null>(null)
   const replying = useMemo((): Replying => ({ to: reply?.key === key ? reply.to : null, set: (to) => setReply(to ? { key, to } : null) }), [reply, key])
-  const placeName = where.kind === "room" ? `#${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}` : where.kind === "dm" ? where.with : `T${where.task}`
-  const empty = !channel.messages.some((m) => sameWhere(m.where, where))
+  const placeName = where.kind === "room" ? `#${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}` : where.kind === "dm" ? nickname(channel, where.with) : `T${where.task}`
 
   return (
     <ReplyContext.Provider value={replying}>
@@ -156,7 +155,7 @@ export function Conversation({ channel, search }: { channel: Channel; search: st
         </p>
       )}
       <Feed key={key} channel={channel} where={where} search={search} />
-      <Composer channel={channel} where={where} placeholder={where.kind === "dm" ? `Message ${placeName} privately` : `Message ${placeName}`} suggest={empty && !search.trim()} />
+      <Composer channel={channel} where={where} placeholder={where.kind === "dm" ? `Message ${placeName} privately` : `Message ${placeName}`} />
     </ReplyContext.Provider>
   )
 }
@@ -199,12 +198,12 @@ function Feed({ channel, where, search }: { channel: Channel; where: Where; sear
 
   useEffect(() => {
     const near = [...list.slice(Math.max(0, start - MORE), start), ...list.slice(end, end + MORE)]
-    const texts = near.flatMap((m) => (m.text && !m.system ? [linked(m.text, names, tasks)] : []))
+    const texts = near.flatMap((m) => (m.text && !m.system ? [m.text] : []))
     let stop = () => {}
     let live = true
     const timer = window.setTimeout(() => {
       void import("~/chat/markdown").then(({ warm }) => {
-        if (live) stop = warm(texts)
+        if (live) stop = warm(texts, (text) => linked(text, names, tasks))
       })
     }, 150)
     return () => {
@@ -327,7 +326,7 @@ function Feed({ channel, where, search }: { channel: Channel; where: Where; sear
                 <i />
                 <i />
               </span>
-              {typing.map((p) => p.name).join(", ")} {typing.length === 1 ? "is" : "are"} typing
+              {typing.map((p) => shown(p)).join(", ")} {typing.length === 1 ? "is" : "are"} typing
             </p>
           )}
         </div>
@@ -351,7 +350,7 @@ function Start({ channel, where, searching }: { channel: Channel; where: Where; 
         {where.kind === "room"
           ? `This is the start of #${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}.`
           : where.kind === "dm"
-            ? `Only you and ${where.with} read this.`
+            ? `Only you and ${nickname(channel, where.with)} read this.`
             : "Nothing here yet."}
       </p>
       <p className="dim">{agents === 0 ? "No agents here yet. Add one from the sidebar, then give it something to do." : "Say what you want done. The lead turns it into tasks."}</p>

@@ -12,15 +12,18 @@ import { bridge } from "@/lib/secrets"
 import { sendsInTurn } from "@/lib/send-order"
 import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@/lib/threads"
 import { announce } from "~/kit/toasts"
-import { useNewMembers } from "~/live/defaults"
+import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
 import { asksOf, directsOf, messagesOf, peopleOf, roomsOf, tasksOf, type Pending } from "~/live/map"
 import { iconUrl } from "~/live/icon"
+import { usePinsHere } from "~/live/pins"
 import { usePictures } from "~/live/pictures"
 import { ownPrefs } from "~/live/prefs"
 import { closeOpened, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
-import type { Channel, Where } from "~/model"
+import type { Channel, Upload, Where } from "~/model"
+import { nicknamesOf } from "~/names"
+import { named as withNicknames } from "~/chat/linked"
 
 export interface View {
   where: Where | null
@@ -85,6 +88,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const seen = useSeen(roomId)
   const wakes = useWakes(roomId)
   const newMembers = useNewMembers(roomId)
+  const newPowers = useNewPowers(roomId)
   const pictures = usePictures(ch, messages)
   const known = useKnownChannels()
   const icon = iconUrl(useIcons().get(roomId) ?? null)
@@ -95,7 +99,10 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const shown = useShown()
 
   const people = useMemo(() => peopleOf(state, roster, online, me, wakes), [state, roster, online, me, wakes])
-  const asks = useMemo(() => asksOf(state, messages, me, isOwner, requests), [state, messages, me, isOwner, requests])
+  const nicknameKey = [...state.members.values()].map((m) => `${m.name}\u0000${m.display ?? ""}`).join("\n")
+  const nicknames = useMemo(() => nicknamesOf(nicknameKey ? nicknameKey.split("\n").map((line) => ({ name: line.split("\u0000")[0] ?? "", display: line.split("\u0000")[1] })) : []), [nicknameKey])
+  const pins = usePinsHere(requests)
+  const asks = useMemo(() => asksOf(state, messages, me, isOwner, requests, roster, pins), [state, messages, me, isOwner, requests, roster, pins])
   const mapped = useMemo(() => kept(code, messagesOf(state, messages, me, asks.askOf, pictures, pending)), [code, state, messages, me, asks.askOf, pictures, pending])
   const tasks = useMemo(() => tasksOf(state, asks.held), [state, asks.held])
   const from = roomsFrom(roomId)
@@ -118,23 +125,25 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       ...(state.charter ? { goal: state.charter.text } : {}),
       ...(state.hold ? { hold: { ...(state.hold.note ? { note: state.hold.note } : {}), by: state.hold.by, at: state.hold.at } } : {}),
       newMembers,
+      newPowers,
       repos: state.repos,
       rooms,
       directs,
       people,
+      nicknames,
       messages: mapped,
       tasks,
       asks: asks.asks,
       connection,
     }),
-    [code, title, icon, isOwner, me, state.lead, state.charter, state.hold, newMembers, state.repos, rooms, directs, people, mapped, tasks, asks.asks, connection]
+    [code, title, icon, isOwner, me, state.lead, state.charter, state.hold, newMembers, newPowers, state.repos, rooms, directs, people, nicknames, mapped, tasks, asks.asks, connection]
   )
 
   const post = useCallback(
-    async (where: Where, text: string, opts: { replyTo?: number; inThread?: number }): Promise<number> => {
+    async (where: Where, text: string, opts: { replyTo?: number; inThread?: number; images?: Upload[] }): Promise<number> => {
       const key = ++counter.current
       const body = text.trim()
-      const sending = sendOptions(state, messages, me, where, body, opts)
+      const sending = { ...sendOptions(state, messages, me, where, body, opts), ...(opts.images?.length ? { imgs: opts.images } : {}) }
       const landed = new Set(messages.map((m) => m.seq))
       const next: Pending = {
         key,
@@ -143,6 +152,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
         at: Date.now(),
         ...(opts.inThread !== undefined ? { inThread: opts.inThread } : {}),
         ...(opts.replyTo !== undefined ? { replyTo: opts.replyTo } : {}),
+        ...(opts.images?.length ? { images: opts.images } : {}),
       }
       setPending((list) => [...list.filter((p) => p.seq === undefined || !landed.has(p.seq)), next].slice(-PENDING_MAX))
       try {
@@ -163,7 +173,11 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       const p = pending.find((x) => x.key === key)
       if (!p) throw new Error("that message is gone")
       discard(key)
-      return post(p.where, p.text, { ...(p.inThread !== undefined ? { inThread: p.inThread } : {}), ...(p.replyTo !== undefined ? { replyTo: p.replyTo } : {}) })
+      return post(p.where, p.text, {
+        ...(p.inThread !== undefined ? { inThread: p.inThread } : {}),
+        ...(p.replyTo !== undefined ? { replyTo: p.replyTo } : {}),
+        ...(p.images?.length ? { images: p.images } : {}),
+      })
     },
     [pending, discard, post]
   )
@@ -225,12 +239,12 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     })
   }, [messages, others, state, code, me, member.at])
 
-  useNotify(messages, me, title)
+  useNotify(messages, me, title, state.members)
 
   return null
 })
 
-function useNotify(messages: readonly Wire[], me: string, title: string) {
+function useNotify(messages: readonly Wire[], me: string, title: string, members: ChannelState["members"]) {
   const told = useRef(messages.at(-1)?.seq ?? 0)
   useEffect(() => {
     const fresh = messages.filter((m) => m.seq > told.current && m.kind !== "event" && m.from !== me)
@@ -241,8 +255,9 @@ function useNotify(messages: readonly Wire[], me: string, title: string) {
     const last = worth.at(-1)
     if (!last) return
     const b = bridge()
-    const body = last.body.slice(0, 200)
-    if (b) void b.notify(`${last.from} in ${title}`, body).catch(() => {})
-    else if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification(`${last.from} in ${title}`, { body })
-  }, [messages, me, title])
+    const body = withNicknames(last.body, nicknamesOf(members.values())).slice(0, 200)
+    const who = members.get(last.from)?.display || last.from
+    if (b) void b.notify(`${who} in ${title}`, body).catch(() => {})
+    else if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification(`${who} in ${title}`, { body })
+  }, [messages, me, title, members])
 }

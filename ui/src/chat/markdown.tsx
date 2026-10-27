@@ -7,6 +7,7 @@ import { RenderNode } from "react-native-enriched-markdown/lib/module/web/render
 import { buildStyles, zeroTrailingMargins } from "react-native-enriched-markdown/lib/module/web/styles.js"
 import { indexTaskItems, markInlineImages } from "react-native-enriched-markdown/lib/module/web/utils.js"
 import type { ASTNode } from "react-native-enriched-markdown/lib/typescript/src/web/types"
+import { bridge } from "@/lib/secrets"
 
 import { keepParsed, parsedFor } from "~/chat/parsed"
 import { Icon } from "~/kit/icons"
@@ -111,13 +112,13 @@ function parse(markdown: string): Promise<ASTNode> {
   return next
 }
 
-export function warm(markdowns: readonly string[]): () => void {
-  const queue = markdowns.filter((m) => !parsedFor(m))
+export function warm(texts: readonly string[], link: (text: string) => string): () => void {
+  const queue = [...texts]
   let timer = 0
   const step = () => {
-    const next = queue.shift()
-    if (next === undefined) return
-    void parse(next)
+    const text = queue.shift()
+    if (text === undefined) return
+    void parse(link(text))
       .catch(() => {
         // A message that doesn't parse shows its plain text when it's rendered; warming skips it.
       })
@@ -200,7 +201,10 @@ export default function Markdown({ markdown, onMention, onTask, onImage, onShown
     ({ url }: { url: string }) => {
       if (url.startsWith("kiwi-mention:")) return onMention(decodeURIComponent(url.slice("kiwi-mention:".length)))
       if (url.startsWith("kiwi-task:")) return onTask(Number(url.slice("kiwi-task:".length)))
-      if (/^https?:\/\//i.test(url) || url.startsWith("mailto:")) window.open(url, "_blank", "noopener,noreferrer")
+      if (!/^https?:\/\//i.test(url) && !url.startsWith("mailto:")) return
+      const b = bridge()
+      if (b) void b.openExternal(url).catch(() => {})
+      else window.open(url, "_blank", "noopener,noreferrer")
     },
     [onMention, onTask]
   )

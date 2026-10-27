@@ -1,4 +1,5 @@
 import type { Account, Ask, Channel, ChannelTile, Message, Person, Prefs, Task } from "~/model"
+import { nicknamesOf } from "~/names"
 
 const now = Date.now()
 const m = (min: number): number => now - min * 60_000
@@ -327,7 +328,35 @@ const asks: Ask[] = [
     options: ["Everyone at once", "Behind a setting", "Only on Livewire"],
     holds: [11],
   },
-  { kind: "join", id: "join-1", at: m(1), name: "nova", who: "agent", harness: "gemini", runs: "Gemini CLI", machine: "maya's ThinkPad", sponsor: "maya", code: "4821" },
+  {
+    kind: "join",
+    id: "join-1",
+    at: m(1),
+    name: "nova",
+    who: "agent",
+    harness: "gemini",
+    runs: "Gemini CLI · gemini-3-pro",
+    machine: "maya's ThinkPad",
+    sponsor: "maya",
+    said: { machine: "Linux x64 · 16 cores · 32 GB", tools: ["git", "docker", "node"], repo: "interlinked/site@main", outside: true },
+    pin: { name: "Reviewer", persona: null },
+    code: "482-193",
+  },
+  { kind: "join", id: "join-2", at: m(1), name: "Sam Ortiz", who: "human", key: "9f3a61c2", code: "", check: "unchecked" },
+  {
+    kind: "join",
+    id: "join-3",
+    at: m(1),
+    name: "claude-2",
+    who: "agent",
+    harness: "claude",
+    runs: "Claude Code · claude-opus-5-5",
+    machine: "theo's MacBook",
+    sponsor: "theo",
+    said: { machine: "macOS arm64 · 10 cores · 16 GB", repo: "interlinked/studio@main", outside: false },
+    freeName: "brisk-heron",
+    code: "731-845",
+  },
   { kind: "review", id: "rev-14", at: m(12), from: "pixel", task: 14 },
 ]
 
@@ -349,6 +378,7 @@ export const DEMO_CHANNEL: Channel = {
     { with: "maya", unread: 1, last: m(50) },
   ],
   people,
+  nicknames: nicknamesOf(people),
   messages: [...releases, ...messages, ...threadReplies, ...dm, ...taskThread].sort((a, b) => a.seq - b.seq),
   tasks,
   asks,
@@ -364,6 +394,7 @@ export const DEMO_EMPTY: Channel = {
   rooms: [{ id: "general", name: "general", unread: 0, mentions: 0 }],
   directs: [],
   people: [people[0] as Person],
+  nicknames: nicknamesOf([people[0] as Person]),
   messages: [],
   tasks: [],
   asks: [],

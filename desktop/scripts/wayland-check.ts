@@ -194,7 +194,7 @@ try {
 
   await step("a message's Copy text button copies for another app", async () => {
     const message = await driver.evaluate(() => {
-      const g = document.querySelector('button[aria-label="Copy text"]')?.closest('[class*="group/b"]')?.getBoundingClientRect();
+      const g = document.querySelector('button[aria-label="Copy text"]')?.closest('article, [class*="group/b"]')?.getBoundingClientRect();
       return g ? ([g.x, g.y, g.width, g.height] as [number, number, number, number]) : null;
     }, null);
     if (!message) return { ok: false, detail: "no message with a Copy text button" };

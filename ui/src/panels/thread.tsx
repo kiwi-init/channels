@@ -6,6 +6,7 @@ import { MessageRow } from "~/chat/message"
 import { jumpTo, ReplyContext, type Replying } from "~/chat/reply"
 import { Empty } from "~/kit/bits"
 import type { Channel, Message } from "~/model"
+import { nickname } from "~/names"
 import { PanelHead } from "~/panels/frame"
 
 export function ThreadPanel({ channel, seq }: { channel: Channel; seq: number }) {
@@ -33,7 +34,7 @@ export function ThreadPanel({ channel, seq }: { channel: Channel; seq: number })
     )
   return (
     <ReplyContext.Provider value={replying}>
-      <PanelHead title="Thread" sub={`· ${root.from}`} />
+      <PanelHead title="Thread" sub={`· ${nickname(channel, root.from)}`} />
       <div className="feed" ref={scroller} onScroll={remember}>
         <div className="feed-list" ref={content}>
           <div className="thread-root">

@@ -1,9 +1,9 @@
 import { handBackText, heldBy } from "@kiwi/core/handback.ts"
 import type { JoinRequest, Member as RosterMember } from "@kiwi/core/membership.ts"
-import { handleFor } from "@kiwi/core/membership.ts"
+import { handleFor, NAME_RE, nameKey } from "@kiwi/core/membership.ts"
 import { permissionReply } from "@kiwi/core/permission.ts"
 import { cleanPersonalities } from "@kiwi/core/personalities.ts"
-import { personaOf, personaScopes, type Personality } from "@kiwi/core/personality.ts"
+import { personaOf, personaScopes, type Persona, type Personality } from "@kiwi/core/personality.ts"
 import { pinned } from "@kiwi/core/pin.ts"
 import { PRESETS } from "@kiwi/core/presets.ts"
 import { ROBOT_FACES, ROOM_ID_RE, TASK_TITLE_MAX_LENGTH, type Event } from "@kiwi/core/protocol.ts"
@@ -12,10 +12,11 @@ import { newRoomId, taskId } from "@kiwi/core/state.ts"
 import type { KnownHarness } from "@kiwi/core/harnesses.ts"
 import type { Permission } from "@kiwi/core/launch-options.ts"
 import { tokenForCreate } from "@/lib/auth"
-import { askToJoin, createChannel, forgetChannel, forgetPending, isJoinCode, loadMember, loadPending, renameChannel } from "@/lib/channel"
+import { askToJoin, createChannel, forgetChannel, forgetPending, inviteInfo, isJoinCode, loadMember, loadPending, renameChannel } from "@/lib/channel"
 import { linkOf, type ChannelLink } from "@/lib/channel-ops"
 import { removeComputer } from "@/lib/computers"
 import { joinCodeFromLink } from "@/lib/deep-link"
+import { kiwiJoin } from "@/lib/join-line"
 import { relayUrl } from "@/lib/relay"
 import { cleanRoomName, roomProblem, roomsAfter } from "@/lib/rooms"
 import { ALLOW_ONCE, DENY } from "@/lib/permission-settled"
@@ -24,11 +25,12 @@ import { isSignInGone } from "@/lib/session"
 import { approveTask, closedDigest, sendBackTask, type TaskSend } from "@/lib/task-actions"
 import { announce } from "~/kit/toasts"
 import { answerPair, cancelPair, linkGithub, pairBegin, unlinkGithub } from "~/live/account"
-import { newMemberScopes, setNewMemberScopes } from "~/live/defaults"
+import { newMemberPowers, newMemberScopes, setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
 import { closeOpened, openedRun, type Run } from "~/live/store"
 import { setWake } from "~/live/wakes"
-import type { Actions, Harness, NewAgent, TaskStatus } from "~/model"
+import { rememberOwner } from "~/live/invites"
+import type { Actions, Harness, InviteInfo, JoinChoice, NewAgent, TaskStatus } from "~/model"
 
 const say = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
@@ -77,19 +79,40 @@ async function roomFolded(run: () => Run | null, room: { id: string; name: strin
   throw new Error(`#${room.name} was sent but hasn't come back from the relay yet: look again in a moment`)
 }
 
-async function letIn(run: Run, r: JoinRequest): Promise<void> {
-  const pin = r.pin ? await pinned(r.pin, personalities()) : null
-  if (r.pin && !pin) throw new Error(`${r.name} was invited as ${r.pin.name}, which isn't on this computer anymore`)
-  const scopes = newMemberScopes(run.roomId)
-  const as = pin ? { persona: pin } : wireScopes(scopes) ? { scopes } : {}
+async function personaFor(r: JoinRequest, choice: JoinChoice): Promise<Persona | null> {
+  if (r.kind === "human" || choice.persona === null) return null
+  const all = personalities()
+  if (choice.persona !== undefined) {
+    const p = all.find((x) => x.id === choice.persona)
+    if (!p) throw new Error("that personality isn't on this computer")
+    return personaOf(p)
+  }
+  if (!r.pin) return null
+  const pin = await pinned(r.pin, all)
+  if (!pin) throw new Error(`${r.name} was invited as ${r.pin.name}, which isn't on this computer anymore`)
+  return pin
+}
+
+async function letIn(run: Run, r: JoinRequest, choice: JoinChoice): Promise<string> {
+  const name = choice.as?.trim() || r.name
+  if (name !== r.name) {
+    if (!NAME_RE.test(name)) throw new Error(`${name} can't be a name: letters, digits, . _ - only`)
+    if (run.roster.some((m) => m.active && m.pk !== r.pk && nameKey(m.name) === nameKey(name))) throw new Error(`${name} is taken here too`)
+  }
+  const persona = await personaFor(r, choice)
+  const scopes = choice.readOnly === undefined ? newMemberScopes(run.roomId) : choice.readOnly ? [] : [...SCOPES]
+  const powers = r.kind === "human" ? (choice.powers ?? newMemberPowers(run.roomId)) : null
+  const granted = powers ? { ...(powers.addsAgents ? { addsAgents: true } : {}), ...(powers.answersDecisions ? { answersDecisions: true } : {}) } : {}
+  const as = persona ? { persona } : { ...(wireScopes(scopes) ? { scopes } : {}), ...granted }
   try {
-    await run.ch.approve(r, as, { person: secrets().person?.pk })
+    await run.ch.approve(name === r.name ? r : { ...r, name }, as, { person: secrets().person?.pk })
   } catch (err) {
     const joined = (await run.ch.members().catch(() => [])).find((m) => m.active && !m.unverified && m.pk === r.pk)
     if (!joined) throw err
   } finally {
     await Promise.all([run.refreshRequests(), run.refreshRoster()])
   }
+  return persona ? `${r.display || name} joined as ${persona.name}` : `${r.display || name} joined`
 }
 
 async function scopesFor(run: Run, name: string, scopes: Scope[]): Promise<void> {
@@ -145,13 +168,23 @@ async function newChannel(title: string): Promise<string> {
   return m.code
 }
 
-export async function joinChannel(typed: string): Promise<string> {
+async function lookUpInvite(typed: string): Promise<InviteInfo> {
   const code = joinCodeOf(typed)
-  if (!code) throw new Error("That isn't a join code. Codes start with mc2-")
+  if (!code) throw new Error("That isn't an invite. Codes start with mc2-")
+  if (loadMember(code) || loadPending(code)) return { code, owner: null, state: "member" }
+  const info = await inviteInfo(code)
+  if (!info) return { code, owner: null, state: "gone" }
+  if (info.ownerName) rememberOwner(code, info.ownerName)
+  return { code, owner: info.ownerName, state: "ok" }
+}
+
+async function joinChannel(typed: string, name?: string): Promise<string> {
+  const code = joinCodeOf(typed)
+  if (!code) throw new Error("That isn't an invite. Codes start with mc2-")
   if (loadMember(code) || loadPending(code)) return code
   const person = secrets().person
   if (!person) throw new Error("Say your name first")
-  await askToJoin(code, handleFor(person.name))
+  await askToJoin(code, name?.trim() || handleFor(person.name))
   return code
 }
 
@@ -198,7 +231,7 @@ export function makeActions(): Actions {
         if (!m) throw new Error("that question is gone")
         await run.send(text, { to: [m.from], re: [m.seq], kind: "msg" })
       }),
-    answerJoin: (code, id, yes) =>
+    answerJoin: (code, id, yes, choice) =>
       attempt(yes ? "Couldn't let them in" : "Couldn't turn them away", async () => {
         const run = owner(code)
         const r = run.requests.find((x) => x.id === id)
@@ -206,16 +239,15 @@ export function makeActions(): Actions {
         if (!yes) {
           await run.ch.deny(r.id)
           await run.refreshRequests()
-          return announce(`Turned ${r.name} away`)
+          return announce(`Turned ${r.display || r.name} away`)
         }
         if (r.check === "unchecked") {
           await run.ch.checkRequest(r)
           await run.refreshRequests()
-          return announce(`Asked ${r.name} for its code: compare it, then let it in`)
+          return announce(`Asked ${r.display || r.name} for its code: compare it, then let it in`)
         }
-        if (r.check !== "ready" || !r.code) return announce(`Waiting for ${r.name}'s code`)
-        await letIn(run, r)
-        announce(`${r.name} joined`)
+        if (r.check !== "ready" || !r.code) return announce(`Waiting for ${r.display || r.name}'s code`)
+        announce(await letIn(run, r, choice ?? {}))
       }),
     approveTask: (code, id, approve) =>
       attempt(approve ? "Not approved" : "Not sent back", async () => {
@@ -258,7 +290,7 @@ export function makeActions(): Actions {
         if (held.length) await run.send(handBackText(run.state, name, "removed", held), lead ? { to: lead } : {})
         await run.ch.remove(m.pk)
         await run.refreshRoster()
-        announce(`Removed ${name}`)
+        announce(`Removed ${m.display || name}`)
       }),
     setPersona: (code, name, id) =>
       attempt("Personality not changed", async () => {
@@ -339,9 +371,16 @@ export function makeActions(): Actions {
           owner(code).state.repos.filter((r) => r !== repo)
         )
       ),
+    joinCommand: async (code, as) => {
+      if (!loadMember(code)) throw new Error("you're not in that channel")
+      const picked = as.persona ? personalities().find((p) => p.id === as.persona) : undefined
+      if (as.persona && !picked) throw new Error("that personality isn't on this computer")
+      const pin = picked ? await owner(code).ch.pinPersona(picked) : null
+      return `kiwi ${kiwiJoin(relayUrl(), code, { ...(as.nick ? { nick: as.nick } : {}), persona: pin })}`
+    },
     inviteLink: async (code) => {
       if (!loadMember(code)) throw new Error("you're not in that channel")
-      return `kiwi://join/${code}`
+      return `${relayUrl()}/#${code}`
     },
     leaveChannel: (code) =>
       attempt("Couldn't leave", async () => {
@@ -361,6 +400,7 @@ export function makeActions(): Actions {
         await forgetChannel(code)
       }),
     newChannel,
+    inviteInfo: lookUpInvite,
     joinChannel,
     setName: (name) =>
       attempt("Name not saved", async () => {
@@ -377,6 +417,10 @@ export function makeActions(): Actions {
       }),
     linkGithub: () => attempt("GitHub not linked", linkGithub),
     unlinkGithub: () => attempt("GitHub not unlinked", unlinkGithub),
+    windowControl: (action) =>
+      void bridge()
+        ?.windowControl(action)
+        .catch(() => {}),
     installUpdate: () =>
       attempt("Couldn't update", async () => {
         const b = bridge()
@@ -405,6 +449,12 @@ export function makeActions(): Actions {
         const m = loadMember(code)
         if (!m) throw new Error("you're not in that channel")
         setNewMemberScopes(m.access.roomId, can)
+      }),
+    setNewPowers: (code, powers) =>
+      attempt("Not changed", async () => {
+        const m = loadMember(code)
+        if (!m) throw new Error("you're not in that channel")
+        setNewMemberPowers(m.access.roomId, powers)
       }),
     answerPair: (accept) => attempt("Pairing failed", () => answerPair(accept)),
     cancelPair: () => attempt("Couldn't cancel", cancelPair),

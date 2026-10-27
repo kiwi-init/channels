@@ -1,13 +1,14 @@
 import "~/styles/needs.css"
 
-import type { ReactNode } from "react"
+import { useId, useState, type ReactNode } from "react"
 
 import { PrChip, QuestionCard, TaskChip } from "~/chat/cards"
-import { Avatar, Empty } from "~/kit/bits"
+import { Avatar, Empty, Toggle } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
-import type { Ask, Channel, JoinAsk, Message, PermissionAsk, Person, QuestionAsk, ReviewAsk } from "~/model"
+import type { Ask, Channel, JoinAsk, Message, PermissionAsk, Person, Powers, QuestionAsk, ReviewAsk } from "~/model"
 import { useApp } from "~/nav"
+import { nickname } from "~/names"
 
 const isOpen = (a: Ask): boolean => a.kind === "review" || !a.answer
 
@@ -59,15 +60,15 @@ function answeredAt(a: Ask): number {
 }
 
 function byWhom(channel: Channel, by: string): string {
-  return by === channel.you ? "" : ` · by ${by}`
+  return by === channel.you ? "" : ` · by ${nickname(channel, by)}`
 }
 
 function doneLine(channel: Channel, a: Ask): string {
   switch (a.kind) {
     case "permission":
-      return a.answer ? `${a.answer.allow ? "Allowed" : "Denied"} · ${a.from} · ${a.code} · ${ago(a.answer.at)}${byWhom(channel, a.answer.by)}` : ""
+      return a.answer ? `${a.answer.allow ? "Allowed" : "Denied"} · ${nickname(channel, a.from)} · ${a.code} · ${ago(a.answer.at)}${byWhom(channel, a.answer.by)}` : ""
     case "question":
-      return a.answer ? `Chose “${a.answer.text}” · ${a.from} · ${ago(a.answer.at)}${byWhom(channel, a.answer.by)}` : ""
+      return a.answer ? `Chose “${a.answer.text}” · ${nickname(channel, a.from)} · ${ago(a.answer.at)}${byWhom(channel, a.answer.by)}` : ""
     case "join":
       return a.answer ? `${a.answer.letIn ? "Let in" : "Turned away"} · ${a.name}${a.sponsor ? ` · brought by ${a.sponsor}` : ""} · ${ago(a.answer.at)}${byWhom(channel, a.answer.by)}` : ""
     case "review":
@@ -166,7 +167,7 @@ function PermissionAskCard({ channel, ask, link }: { channel: Channel; ask: Perm
   return (
     <Shell
       face={who}
-      name={ask.from}
+      name={nickname(channel, ask.from)}
       member={!!who}
       verb={`asks to use ${ask.tool}`}
       at={ask.at}
@@ -193,7 +194,7 @@ function QuestionAskCard({ channel, ask, link }: { channel: Channel; ask: Questi
   const who = member(channel, ask.from)
   const holds = [...new Set([...(ask.task !== undefined ? [ask.task] : []), ...ask.holds])]
   return (
-    <Shell face={who} name={ask.from} member={!!who} verb="asks you" at={ask.at} link={link}>
+    <Shell face={who} name={nickname(channel, ask.from)} member={!!who} verb="asks you" at={ask.at} link={link}>
       <p className="needs-text">{ask.text}</p>
       <QuestionCard channel={channel} ask={ask} />
       {holds.length > 0 && (
@@ -206,11 +207,77 @@ function QuestionAskCard({ channel, ask, link }: { channel: Channel; ask: Questi
   )
 }
 
+const POWER_WORDS: Record<keyof Powers, { label: string; on: string; off: string }> = {
+  addsAgents: {
+    label: "Can add agents",
+    on: "Their agents join on their own from computers paired with their Kiwi app.",
+    off: "Their agents wait for you to let them in.",
+  },
+  answersDecisions: {
+    label: "Can answer decisions",
+    on: "They answer agents' decisions in Needs you, as you do.",
+    off: "Agents' decisions go to you and each agent's own person.",
+  },
+}
+
+function Opt({ label, hint, children }: { label: string; hint?: string; children: (id: string) => ReactNode }) {
+  const id = useId()
+  return (
+    <div className="needs-opt">
+      <div className="needs-opt-text">
+        <label className="needs-opt-label" htmlFor={id}>
+          {label}
+        </label>
+        {hint && <p className="needs-opt-hint">{hint}</p>}
+      </div>
+      {children(id)}
+    </div>
+  )
+}
+
+function Said({ said }: { said: NonNullable<JoinAsk["said"]> }) {
+  if (said === "nothing") return <p className="needs-said">Didn't say what it runs on (an older kiwi)</p>
+  const machine = [said.machine, said.tools?.join(", ")].filter(Boolean).join(" · ")
+  return (
+    <>
+      {said.repo && (
+        <p className="needs-said">
+          <span className="needs-repo">{said.repo}</span>
+          {said.outside && <span className="needs-warn"> · not one of this channel's repos</span>}
+        </p>
+      )}
+      {machine && (
+        <p className="needs-said">
+          {machine} <span className="dimmer">· its word</span>
+        </p>
+      )}
+    </>
+  )
+}
+
 function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; link: ReactNode }) {
   const { app } = useApp()
+  const agent = ask.who === "agent"
+  const [persona, setPersona] = useState<string | null | undefined>(undefined)
+  const [readOnly, setReadOnly] = useState<boolean | undefined>(undefined)
+  const [powers, setPowers] = useState<Powers | undefined>(undefined)
   const face: Face = { name: ask.name, kind: ask.who, harness: ask.harness, presence: "online" }
   const ready = (ask.check ?? "ready") === "ready" && ask.code !== ""
-  const line = [ask.who === "agent" ? "Agent" : "Person", ask.runs, ask.machine && `on ${ask.machine}`, ask.sponsor && `brought by ${ask.sponsor}`].filter(Boolean).join(" · ")
+  const unchecked = ask.check === "unchecked"
+  const line = [agent ? "Agent" : "Person", ask.key && `key ${ask.key}`, ask.runs, ask.machine && `on ${ask.machine}`, ask.sponsor && `brought by ${ask.sponsor}`].filter(Boolean).join(" · ")
+  const chosen = agent ? (persona === undefined ? (ask.pin?.persona ?? null) : persona) : null
+  const pinWaits = agent && persona === undefined && !!ask.pin && ask.pin.persona === undefined
+  const pinGone = agent && persona === undefined && !!ask.pin && ask.pin.persona === null
+  const label = app.personas.find((p) => p.id === chosen)?.label
+  const only = readOnly ?? channel.newMembers === "read"
+  const can = powers ?? channel.newPowers ?? { addsAgents: false, answersDecisions: false }
+  const blocked = pinWaits || pinGone
+  const letIn = () =>
+    app.actions.answerJoin(channel.code, ask.id, true, {
+      ...(ask.freeName ? { as: ask.freeName } : {}),
+      ...(agent ? { persona: chosen } : { powers: can }),
+      ...(chosen ? {} : { readOnly: only }),
+    })
   return (
     <Shell
       face={face}
@@ -221,9 +288,15 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
       link={link}
       actions={
         <>
-          <button type="button" className="btn is-primary" disabled={!ready} onClick={() => app.actions.answerJoin(channel.code, ask.id, true)}>
-            {ready ? `It matches: let ${ask.name} in` : `Waiting for ${ask.name}'s code…`}
-          </button>
+          {unchecked ? (
+            <button type="button" className="btn is-primary" onClick={() => app.actions.answerJoin(channel.code, ask.id, true)}>
+              Show {agent ? "its" : "their"} code
+            </button>
+          ) : (
+            <button type="button" className="btn is-primary" disabled={!ready || blocked} onClick={letIn}>
+              {!ready ? `Waiting for ${ask.name}'s code…` : pinGone ? "Pick a personality first" : label ? `It matches: let in as ${label}` : `It matches: let ${ask.name} in`}
+            </button>
+          )}
           <button type="button" className="btn is-danger" onClick={() => app.actions.answerJoin(channel.code, ask.id, false)}>
             Turn away
           </button>
@@ -231,10 +304,17 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
       }
     >
       <p className="needs-line">{line}</p>
+      {ask.said && <Said said={ask.said} />}
+      {ask.pin && (
+        <p className="needs-line">
+          Invited as <span className="needs-strong">{ask.pin.name}</span>
+          {ask.pin.persona === null && <span className="needs-warn">, which isn't on this computer anymore</span>}
+        </p>
+      )}
       <div className="needs-check">
         {ready ? (
           <>
-            <p className="needs-check-q">Does their screen show this code?</p>
+            <p className="needs-check-q">Does {agent ? "its terminal" : "their screen"} show this code?</p>
             <p className="needs-pin">
               <span className="sr">{ask.code}</span>
               {ask.code.split("").map((d, i) =>
@@ -251,10 +331,56 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
             </p>
             <p className="needs-check-hint">If it doesn't match, someone else has the link. Turn them away.</p>
           </>
+        ) : unchecked ? (
+          <p className="needs-check-q">
+            Show {agent ? "its" : "their"} code to start the check. It appears here and on {agent ? "its terminal" : "their screen"}, then you compare.
+          </p>
         ) : (
           <p className="needs-check-q">Their code shows up here as soon as {ask.name} has it on screen. Then you compare.</p>
         )}
       </div>
+      {ready && (
+        <div className="needs-opts">
+          {agent && (
+            <Opt label="Personality" hint={app.personas.find((p) => p.id === chosen)?.about ?? "Works the way its harness does by default."}>
+              {(id) => (
+                <span className="needs-select">
+                  <select id={id} className="input is-mono" value={pinGone ? "" : (chosen ?? "none")} onChange={(e) => setPersona(e.target.value === "none" ? null : e.target.value)}>
+                    {pinGone && (
+                      <option value="" disabled>
+                        Pick one
+                      </option>
+                    )}
+                    <option value="none">None</option>
+                    {app.personas.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                  <Icon name="down" size={14} />
+                </span>
+              )}
+            </Opt>
+          )}
+          {!chosen && (
+            <Opt
+              label="Can only read"
+              hint={
+                only ? `${agent ? "It reads" : "They read"} the channel and can't post.` : agent ? "It writes, asks, works on tasks and sets notes." : "They write, ask, work on tasks and set notes."
+              }
+            >
+              {(id) => <Toggle id={id} on={only} onChange={setReadOnly} />}
+            </Opt>
+          )}
+          {!agent &&
+            (["addsAgents", "answersDecisions"] as const).map((power) => (
+              <Opt key={power} label={POWER_WORDS[power].label} hint={can[power] ? POWER_WORDS[power].on : POWER_WORDS[power].off}>
+                {(id) => <Toggle id={id} on={can[power]} onChange={(on) => setPowers({ ...can, [power]: on })} />}
+              </Opt>
+            ))}
+        </div>
+      )}
     </Shell>
   )
 }
@@ -266,12 +392,12 @@ function ReviewAskCard({ channel, ask, link }: { channel: Channel; ask: ReviewAs
   const note = task?.notes.at(-1)
   const decide = (approve: boolean) => {
     app.actions.approveTask(channel.code, ask.task, approve)
-    toast(approve ? `Approved T${ask.task}` : `Sent T${ask.task} back to ${task?.owner ?? ask.from}`)
+    toast(approve ? `Approved T${ask.task}` : `Sent T${ask.task} back to ${nickname(channel, task?.owner ?? ask.from)}`)
   }
   return (
     <Shell
       face={who}
-      name={ask.from}
+      name={nickname(channel, ask.from)}
       member={!!who}
       verb={`asks you to review T${ask.task}`}
       at={ask.at}
@@ -299,7 +425,7 @@ function ReviewAskCard({ channel, ask, link }: { channel: Channel; ask: ReviewAs
             <blockquote className="needs-note">
               {note.text}{" "}
               <span className="needs-note-by">
-                {note.by === channel.you ? "you" : note.by} · {ago(note.at)}
+                {note.by === channel.you ? "you" : nickname(channel, note.by)} · {ago(note.at)}
               </span>
             </blockquote>
           )}

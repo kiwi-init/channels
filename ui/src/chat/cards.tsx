@@ -5,6 +5,7 @@ import { Icon } from "~/kit/icons"
 import { clock } from "~/kit/time"
 import type { Channel, PermissionAsk, PullRequest, QuestionAsk } from "~/model"
 import { useAct } from "~/nav"
+import { nickname } from "~/names"
 
 export function TaskChip({ channel, id }: { channel: Channel; id: number }) {
   const { go } = useAct()
@@ -16,7 +17,7 @@ export function TaskChip({ channel, id }: { channel: Channel; id: number }) {
       <span className="chip-id">T{t.id}</span>
       <span className="chip-title">{t.title}</span>
       <span className="chip-meta">
-        {t.owner ? ` · ${t.owner}` : ""} · {STATUS_WORDS[t.status]}
+        {t.owner ? ` · ${nickname(channel, t.owner)}` : ""} · {STATUS_WORDS[t.status]}
         {t.pr ? ` · PR #${t.pr.number}` : ""}
       </span>
     </button>
@@ -71,7 +72,7 @@ export function PermissionCard({ channel, ask }: { channel: Channel; ask: Permis
       <pre className="ask-code">{ask.code}</pre>
       {ask.answer ? (
         <p className="ask-state">
-          {ask.answer.allow ? "Allowed" : "Denied"} by {ask.answer.by === channel.you ? "you" : ask.answer.by} · {clock(ask.answer.at)}
+          {ask.answer.allow ? "Allowed" : "Denied"} by {ask.answer.by === channel.you ? "you" : nickname(channel, ask.answer.by)} · {clock(ask.answer.at)}
         </p>
       ) : (
         <>
@@ -97,7 +98,7 @@ export function QuestionCard({ channel, ask }: { channel: Channel; ask: Question
     return (
       <div className="ask">
         <p className="ask-state">
-          {ask.answer.by === channel.you ? "You" : ask.answer.by} chose “{ask.answer.text}” · {clock(ask.answer.at)}
+          {ask.answer.by === channel.you ? "You" : nickname(channel, ask.answer.by)} chose “{ask.answer.text}” · {clock(ask.answer.at)}
         </p>
       </div>
     )

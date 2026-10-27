@@ -5,6 +5,7 @@ import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import type { Channel, Person } from "~/model"
 import { sameWhere, useApp } from "~/nav"
+import { nickname, shown } from "~/names"
 
 export function Sidebar({ channel }: { channel: Channel }) {
   const { nav, go, app } = useApp()
@@ -72,7 +73,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
                 <li key={d.with}>
                   <button type="button" className={cx("side-row", on && "is-on", d.unread > 0 && "is-news")} aria-current={on ? "page" : undefined} onClick={() => go({ to: "where", where })}>
                     <Avatar person={who} size="sm" />
-                    <span className="side-label">{d.with}</span>
+                    <span className="side-label">{nickname(channel, d.with)}</span>
                     <Count n={d.unread} loud />
                   </button>
                 </li>
@@ -147,7 +148,7 @@ function Member({ person, channel }: { person: Person; channel: Channel }) {
       >
         <Avatar person={person} size="sm" pip />
         <span className="side-name">
-          {person.name}
+          {shown(person)}
           {person.you && <span className="side-role"> you</span>}
           {person.role && <span className="side-role"> {person.role}</span>}
         </span>

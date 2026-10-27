@@ -1,18 +1,35 @@
+import { freeHandle, seededPick } from "@kiwi/core/handles.ts"
 import type { JoinRequest, Member as RosterMember } from "@kiwi/core/membership.ts"
-import { runsLine } from "@kiwi/core/membership.ts"
+import { nameKey, runsLine } from "@kiwi/core/membership.ts"
+import type { Card } from "@kiwi/core/protocol.ts"
 import { permissionAnswer } from "@kiwi/core/permission.ts"
 import { describeEvent } from "@kiwi/core/format.ts"
 import { FAILED, prLinks, taskPr } from "@kiwi/core/prs.ts"
 import { GENERAL_ROOM, ignored, isQuiet, isReaction, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { canPost } from "@kiwi/core/scopes.ts"
-import { answersDecisions, colorOf, heldBy, holdsWork, humanOf, isPerson, MAIN, placeKey, prChecks, prKey, tasksAwaitingPeople, type ChannelState, type Task as CoreTask } from "@kiwi/core/state.ts"
+import {
+  answersDecisions,
+  colorOf,
+  heldBy,
+  holdsWork,
+  humanOf,
+  isPerson,
+  MAIN,
+  outsideRepos,
+  placeKey,
+  prChecks,
+  prKey,
+  tasksAwaitingPeople,
+  type ChannelState,
+  type Task as CoreTask,
+} from "@kiwi/core/state.ts"
 import type { GithubPr } from "@kiwi/core/state/github.ts"
 import { permissionCode, permissionTitle } from "@/lib/permission-view"
 import { reviewsFor } from "@/lib/task-actions"
 import { roomOfMessage, roomSeenKey } from "@/lib/rooms"
 import { canonicalHarness, harnessName } from "@/lib/harness"
 import type { Online } from "@/lib/channel/online"
-import type { Ask, Color, Direct, Harness, Image, Message, Person, PullRequest, Reaction, Room, Task, TaskStatus, Where } from "~/model"
+import type { Ask, Color, Direct, Harness, Image, JoinAsk, Message, Person, PullRequest, Reaction, Room, Task, TaskStatus, Upload, Where } from "~/model"
 
 type Seen = Readonly<Record<string, number>>
 
@@ -126,7 +143,7 @@ function eventText(m: Wire, state: ChannelState): string {
     case "role.set":
       return ev.role ? `${nameIn(state, ev.member)} is ${ev.role} now` : `${nameIn(state, ev.member)} has no role now`
     default:
-      return `${who} ${describeEvent(m, state)}`
+      return `${who} ${describeEvent(m, state, (handle) => nameIn(state, handle))}`
   }
 }
 
@@ -163,6 +180,7 @@ export interface Pending {
   replyTo?: number
   seq?: number
   failed?: string
+  images?: Upload[]
 }
 
 export interface Pictures {
@@ -242,6 +260,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       ...(p.failed !== undefined ? { failed: p.failed } : { pending: true }),
       ...(p.inThread !== undefined ? { inThread: p.inThread } : {}),
       ...(p.replyTo !== undefined ? { replyTo: p.replyTo } : {}),
+      ...(p.images?.length ? { images: p.images.map((i) => ({ url: `data:${i.mime};base64,${i.data}`, width: 0, height: 0, alt: i.name })) } : {}),
     })
   }
   return out
@@ -291,7 +310,28 @@ interface AsksMap {
 
 const isQuestion = (m: Wire): boolean => (m.kind === "ask" || m.kind === "blocking") && !m.permission && !m.handoff
 
-export function asksOf(state: ChannelState, messages: readonly Wire[], me: string, owner: boolean, requests: readonly JoinRequest[]): AsksMap {
+const OS: Record<string, string> = { macos: "macOS", linux: "Linux", windows: "Windows" }
+
+function saidOf(state: ChannelState, card: Card | undefined): JoinAsk["said"] {
+  if (!card) return "nothing"
+  const machine = [[card.os && (OS[card.os] ?? card.os), card.arch].filter(Boolean).join(" "), card.cpu, card.memory].filter(Boolean).join(" · ")
+  return {
+    ...(machine ? { machine } : {}),
+    ...(card.tools?.length ? { tools: card.tools } : {}),
+    ...(card.repo ? { repo: card.branch ? `${card.repo}@${card.branch}` : card.repo } : {}),
+    outside: outsideRepos(state, card),
+  }
+}
+
+export function asksOf(
+  state: ChannelState,
+  messages: readonly Wire[],
+  me: string,
+  owner: boolean,
+  requests: readonly JoinRequest[],
+  roster: readonly RosterMember[],
+  pins: ReadonlyMap<string, string | null>
+): AsksMap {
   const open = new Set(state.openAsks.filter((m) => holdsWork(state, m)).map((m) => m.seq))
   const decides = answersDecisions(state.members, me)
   const bySeq = new Map(messages.map((m) => [m.seq, m]))
@@ -351,6 +391,7 @@ export function asksOf(state: ChannelState, messages: readonly Wire[], me: strin
   if (owner)
     for (const r of requests) {
       const harness = harnessOf(r.runs?.harness ?? r.card?.harness)
+      const taken = r.kind !== "human" && roster.some((m) => m.active && m.pk !== r.pk && nameKey(m.name) === nameKey(r.name))
       asks.push({
         kind: "join",
         id: r.id,
@@ -358,7 +399,21 @@ export function asksOf(state: ChannelState, messages: readonly Wire[], me: strin
         name: r.display || r.name,
         who: r.kind === "human" ? "human" : "agent",
         ...(harness ? { harness } : {}),
-        ...(r.runs ? { runs: runsLine({ harness: harnessName(r.runs.harness), model: r.runs.model }) } : r.card?.harness ? { runs: harnessName(r.card.harness) } : {}),
+        ...(r.kind === "human" ? (r.person ? { key: r.person.slice(0, 8) } : {}) : { said: saidOf(state, r.card) }),
+        ...(r.pin ? { pin: { name: r.pin.name, persona: pins.get(r.id) } } : {}),
+        ...(taken
+          ? {
+              freeName: freeHandle(
+                roster.filter((m) => m.active),
+                seededPick(r.pk)
+              ),
+            }
+          : {}),
+        ...(r.runs
+          ? { runs: runsLine({ harness: harnessName(r.runs.harness), model: r.runs.model }) }
+          : r.card?.harness || r.card?.model
+            ? { runs: [r.card.harness && harnessName(r.card.harness), r.card.model].filter(Boolean).join(" · ") }
+            : {}),
         ...(r.computer ? { machine: r.computer.label, sponsor: r.computer.personName } : r.card?.os ? { machine: r.card.os } : {}),
         code: r.check === "ready" && r.code ? r.code : "",
         check: r.check,

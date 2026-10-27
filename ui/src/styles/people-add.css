@@ -13,6 +13,22 @@
   cursor: default;
 }
 
+.invite-box.is-wrap {
+  align-items: flex-start;
+}
+
+.invite-box.is-wrap code {
+  padding-top: 6px;
+  line-height: 1.55;
+  white-space: normal;
+}
+
+.invite-part {
+  display: inline-block;
+  max-width: 100%;
+  word-break: break-all;
+}
+
 .invite-box.is-off code {
   color: var(--ink-3);
 }
@@ -22,6 +38,26 @@
   margin-top: 10px;
   color: var(--ink-2);
   font: var(--t-meta) / 1.55 var(--ui);
+}
+
+.invite-power {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.invite-power-text {
+  min-width: 0;
+}
+
+.invite-power-text .invite-note {
+  margin-top: 2px;
+}
+
+.invite-power-label {
+  font: var(--t-ui) var(--ui);
 }
 
 .invite-failed {
