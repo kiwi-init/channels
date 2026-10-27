@@ -41,7 +41,6 @@
   flex: none;
   height: 54px;
   padding: 0 18px;
-  border-bottom: 1px solid var(--line);
   color: var(--ink-3);
 }
 
@@ -186,7 +185,6 @@
   gap: 18px;
   flex: none;
   padding: 9px 18px;
-  border-top: 1px solid var(--line);
   color: var(--ink-3);
   font: var(--t-stamp) var(--ui);
 }

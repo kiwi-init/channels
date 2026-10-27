@@ -67,8 +67,9 @@
   flex-direction: column;
   justify-content: flex-end;
   min-height: 100%;
-  max-width: 920px;
-  padding: 20px 28px 8px;
+  max-width: calc(var(--col) + 56px);
+  margin: 0 auto;
+  padding: 20px 28px var(--compose-space);
 }
 
 .feed-empty {
@@ -113,7 +114,7 @@
   content: "";
   flex: 1;
   height: 1px;
-  background: var(--line);
+  background: transparent;
 }
 
 .msg {
@@ -304,6 +305,14 @@
 .md table {
   width: auto !important;
   min-width: min(420px, 100%);
+  border: 0 !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+.md th,
+.md td {
+  border: 0 !important;
 }
 
 .md a {
@@ -702,9 +711,19 @@
 }
 
 .compose {
-  position: relative;
-  max-width: 920px;
-  padding: 8px 28px 8px;
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 4;
+  width: min(var(--col), calc(100% - 48px));
+  margin: 0 auto;
+  padding: 0 0 18px;
+  pointer-events: none;
+}
+
+.compose > * {
+  pointer-events: auto;
 }
 
 .suggests {
@@ -731,16 +750,18 @@
 .composer {
   display: flex;
   flex-direction: column;
-  padding: 7px;
+  padding: 8px;
   border: 0;
-  border-radius: var(--r-card);
+  border-radius: var(--r-win);
   background: var(--bg-2);
-  box-shadow: inset 0 0 0 1px var(--line-2);
+  box-shadow: var(--shadow-pop);
   transition: box-shadow var(--fast);
 }
 
 .composer:focus-within {
-  box-shadow: inset 0 0 0 1px var(--line-3);
+  box-shadow:
+    0 0 0 1px var(--line-3),
+    var(--shadow-pop);
 }
 
 .composer-row {
@@ -895,7 +916,8 @@
 
 .panel .feed-list {
   justify-content: flex-start;
-  padding: 8px 18px;
+  max-width: none;
+  padding: 8px 18px var(--compose-space);
 }
 
 .panel .msg {
@@ -909,12 +931,12 @@
 }
 
 .panel .compose {
-  padding: 8px 14px 6px;
+  width: calc(100% - 28px);
+  padding-bottom: 14px;
 }
 
 .thread-root {
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--line);
 }
 
 .thread-count {
@@ -923,4 +945,17 @@
   font: var(--t-stamp) var(--ui);
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+.main:has(> .compose)::after,
+.panel:has(> .compose)::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3;
+  height: 96px;
+  background: linear-gradient(to bottom, transparent, var(--bg) 70%);
+  pointer-events: none;
 }

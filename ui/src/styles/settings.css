@@ -22,7 +22,6 @@
 .set-nav {
   min-height: 0;
   padding: 16px 10px 24px;
-  border-right: 1px solid var(--line);
   overflow-y: auto;
 }
 
@@ -73,7 +72,6 @@
 }
 
 .set-rows {
-  border-top: 1px solid var(--line);
 }
 
 .set-row {
@@ -86,7 +84,6 @@
   min-height: 56px;
   padding: 12px 0;
   border: 0;
-  border-bottom: 1px solid var(--line);
   background: none;
   text-align: left;
 }
@@ -130,7 +127,6 @@
 
 .set-none {
   padding: 14px 0;
-  border-bottom: 1px solid var(--line);
   color: var(--ink-2);
   font: var(--t-ui) var(--ui);
 }
@@ -191,7 +187,6 @@
 }
 
 .set-devices {
-  border-top: 1px solid var(--line);
 }
 
 .set-device {
@@ -201,7 +196,6 @@
   gap: 14px;
   min-height: 64px;
   padding: 12px 0;
-  border-bottom: 1px solid var(--line);
 }
 
 .set-device-icon {
@@ -315,7 +309,6 @@
   justify-content: space-between;
   gap: 12px;
   padding-top: 14px;
-  border-top: 1px solid var(--line);
 }
 
 .set-pair-wait {
@@ -395,7 +388,6 @@
   .set-nav {
     padding: 8px 10px;
     border-right: 0;
-    border-bottom: 1px solid var(--line);
     overflow-x: auto;
     scrollbar-width: none;
   }

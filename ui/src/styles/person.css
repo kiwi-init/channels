@@ -103,7 +103,6 @@
 
 .person-facts {
   padding-top: 18px;
-  border-top: 1px solid var(--line);
 }
 
 .person-prop {
@@ -142,7 +141,6 @@
 
 .person-manage {
   padding-top: 18px;
-  border-top: 1px solid var(--line);
 }
 
 .person-manage > .heading {
@@ -159,7 +157,6 @@
 }
 
 .person-row + .person-row {
-  border-top: 1px solid var(--line);
 }
 
 .person-row.is-stacked {
@@ -189,7 +186,6 @@
 
 .person-remove {
   padding-top: 14px;
-  border-top: 1px solid var(--line);
 }
 
 .person-confirm {

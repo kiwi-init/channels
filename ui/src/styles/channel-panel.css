@@ -6,7 +6,6 @@
   display: grid;
   gap: 10px;
   padding: 18px 0;
-  border-bottom: 1px solid var(--line);
 }
 
 .cpanel-part:first-child {
@@ -54,7 +53,6 @@
 }
 
 .cpanel-list {
-  border-top: 1px solid var(--line);
 }
 
 .cpanel-item {
@@ -63,7 +61,6 @@
   justify-content: space-between;
   gap: 8px;
   min-height: 38px;
-  border-bottom: 1px solid var(--line);
 }
 
 .cpanel-repo {
