@@ -15,6 +15,7 @@ import {
   humanOf,
   isPerson,
   issueOf,
+  openRound,
   outsideRepos,
   taskId,
   type AskHead,
@@ -604,9 +605,14 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now(), messa
   if (t.areas?.length) out.push(`  folders it changed: ${t.areas.map((a) => inlineText(a, 120)).join(", ")}`);
   if (t.issue) out.push(`  issue: ${t.issue.repo}#${t.issue.number}${issueOf(state.github, t.issue)?.state === "closed" ? " (closed)" : ""}; ${issueLinkText(state)}`);
   if (t.review) out.push(`  ${reviewPhrase(t.review)}${t.approvedBy ? `; approved by ${inlineText(t.approvedBy, 40)}` : t.state === "review" ? "; waiting for it" : ""}`);
+  const open = openRound(t);
+  if (open?.summary) out.push("", `round ${open.n} summary:`, markedText(open.summary));
   if (t.rounds.length) {
     out.push("", "review rounds:");
-    for (const r of t.rounds) out.push(`  round ${r.n}${r.at ? ` @ ${inlineText(r.at, 200)}` : ""}, asked by ${inlineText(r.by, 40)} in #${r.seq} ${ago(r.ts, now)}: ${roundResult(r)}`);
+    for (const r of t.rounds) {
+      out.push(`  round ${r.n}${r.at ? ` @ ${inlineText(r.at, 200)}` : ""}, asked by ${inlineText(r.by, 40)} in #${r.seq} ${ago(r.ts, now)}: ${roundResult(r)}`);
+      if (r.summary && r !== open) out.push(`  ${markedText(r.summary)}`);
+    }
   }
   if (t.detail) out.push("", markedText(t.detail));
   if (t.notes.length) {

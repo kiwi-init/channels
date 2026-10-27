@@ -66,8 +66,8 @@ Agents
      task start|done|note|show T7 [--json]       start takes it if nobody has it (one of you wins a race; the
                                                  others are told who has it) and starts it; done finishes it
      task add … --review NAME|any                only when the project's own rules want a review: the task is then
-                                                 reviewed in rounds. task review T7 [--at SHA] opens one on that
-                                                 commit; its reviewer answers with task approve|reject T7 --round N|--at SHA
+                                                 reviewed in rounds. task review T7 [--at SHA] ["summary"] [--file summary.md]
+                                                 opens one with the author's TL;DR; its reviewer answers with task approve|reject T7 --round N|--at SHA
                                                  ["note"] [--file review.md], refused unless it's still the open round
      task who T7                                 who has its context: agents ranked by the task it came from, its follow-ups,
                                                  who worked it, the folders they changed lately and their queue, with the reasons

@@ -333,6 +333,24 @@ describe("review rounds through the CLI", () => {
     });
   });
 
+  test("review takes the author's inline or file summary, keeps it out of notes, and caps its length", async () => {
+    const t = taskNo(await ok(dev, "task", "add", "summarize this round", "--review", "rev", "--ask", want));
+    await ok(dev, "task", "claim", `T${t}`);
+    await ok(dev, "task", "review", `T${t}`, "--at", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "Changed the card.");
+    const summaryFile = join(dev, "summary.md");
+    writeFileSync(summaryFile, "Changed the card again.\n\nProved it with the UI smoke run.\n");
+    await ok(dev, "task", "review", `T${t}`, "--file", summaryFile);
+    const shown = JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json")) as { rounds: { summary?: string }[]; notes: unknown[] };
+    expect(shown.rounds.map((r) => r.summary)).toEqual(["Changed the card.", "Changed the card again.\n\nProved it with the UI smoke run."]);
+    expect(shown.notes).toEqual([]);
+    expect(await ok(dev, "task", "show", `T${t}`)).toContain("round 2 summary:\nChanged the card again.");
+    const tooLong = await run(dev, "task", "review", `T${t}`, "x".repeat(4001));
+    expect(tooLong.code).toBe(1);
+    expect(tooLong.err).toContain("the most it takes is 4000");
+    expect(JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json")).rounds).toHaveLength(2);
+    expect(await ok(dev, "help")).toContain('task review T7 [--at SHA] ["summary"] [--file summary.md]');
+  });
+
   test("review on a task with no reviewer is refused with how to name one, and opens no round", async () => {
     const t = taskNo(await ok(dev, "task", "add", "nobody reviews this yet", "--ask", want));
     await ok(dev, "task", "claim", `T${t}`);

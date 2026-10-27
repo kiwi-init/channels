@@ -746,9 +746,12 @@ async function run(part: Part): Promise<string[]> {
     at = "Take over, then cancel, a task waiting on an agent's review";
     const added = /added (T\d+)/.exec(await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke review", "--owner", "bot", "--review", "helper", "--from", smokeTask]))?.[1];
     if (!added) throw new Error("kiwi task add printed no task id");
-    await kiwi(["-c", "smoke", "--as", "bot", "task", "review", added]);
+    await kiwi(["-c", "smoke", "--as", "bot", "task", "review", added, "Changed the review card.\n\nProved it in the UI smoke run."]);
     await openFromBoard(/Smoke review/);
     const reviewed = tasksPanel.getByRole("region", { name: `Task ${added}` });
+    const summary = reviewed.getByRole("region", { name: "Round 1 summary" });
+    await summary.getByText("Changed the review card.").waitFor({ timeout: 15000 });
+    await summary.getByText("Proved it in the UI smoke run.").waitFor();
     await reviewed.getByRole("button", { name: "Send back" }).waitFor({ timeout: 15000 });
     if (await reviewed.getByRole("button", { name: "Approve" }).count()) throw new Error("Approve showed for a review waiting on an agent");
     await reviewed.getByRole("button", { name: "More", exact: true }).click();
@@ -767,6 +770,10 @@ async function run(part: Part): Promise<string[]> {
     await cancelling.getByRole("button", { name: "Cancel task" }).click();
     await cancelling.waitFor({ state: "detached" });
     await reviewed.getByRole("button", { name: "More", exact: true }).waitFor({ state: "detached", timeout: 15000 });
+    await reviewed.getByRole("region", { name: "Round 1 summary" }).waitFor({ state: "detached" });
+    await reviewed.getByRole("button", { name: /Activity/ }).click();
+    await reviewed.getByText("Changed the review card.").waitFor();
+    await reviewed.getByText("Proved it in the UI smoke run.").waitFor();
     await tasksPanel.getByRole("button", { name: "Close tasks" }).click();
     log(`ok  ${at}`);
 
