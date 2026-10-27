@@ -9,7 +9,7 @@ import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identi
 import type { Event, Message } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 import { formatTask, formatTasks } from "@kiwi/core/format.ts";
-import { handBackText, heldBy } from "@kiwi/core/handback.ts";
+import { handBackText, heldBy, reviewedBy } from "@kiwi/core/handback.ts";
 import { joinAgent, pairComputer, setupChannel } from "./owner.ts";
 
 setDefaultTimeout(60_000);
@@ -88,6 +88,48 @@ describe("a task outlives the agent who leaves", () => {
   });
 });
 
+describe("a review outlives the reviewer who leaves", () => {
+  let reviewed: Message[];
+  beforeAll(async () => {
+    reviewed = await signedLog([
+      { from: "jow", kind: "msg", body: "ship the tray fix" },
+      ev("lead", { op: "task.add", title: "Approve me", owner: "hedgehog", review: "wren" }, 1),
+      ev("lead", { op: "task.add", title: "Cancel me", owner: "hedgehog", review: "wren" }, 1),
+      ev("lead", { op: "task.add", title: "Jow reviews me", owner: "hedgehog", review: "jow" }, 1),
+      ev("hedgehog", { op: "task.update", task: 2, state: "review" }),
+      ev("hedgehog", { op: "task.update", task: 3, state: "review" }),
+      ev("hedgehog", { op: "task.update", task: 4, state: "review" }),
+      ev("lead", { op: "task.update", task: 2, state: "done" }),
+      ev("lead", { op: "task.update", task: 3, review: "*", state: "cancelled" }),
+      ev("lead", { op: "task.update", task: 4, state: "done" }),
+    ]);
+  });
+
+  test("whether the reviewer is here or gone, the lead finishes only a review it opened in the same event, so replay never depends on who is still in the channel", () => {
+    for (const gone of [["wren"], []]) {
+      const s = fold(reviewed, roster(gone), T0);
+      expect([2, 3, 4].map((id) => [id, s.tasks.get(id)?.state, s.tasks.get(id)?.cancelled ?? false, s.tasks.get(id)?.review])).toEqual([
+        [2, "review", false, "wren"],
+        [3, "done", true, "*"],
+        [4, "review", false, "jow"],
+      ]);
+    }
+  });
+
+  test("a task whose reviewer left says so", () => {
+    const s = fold(reviewed.slice(0, 7), roster(["wren"]), T0);
+    expect(formatTask(s, s.tasks.get(2)!)).toContain("review by wren (they left the channel); waiting for it");
+    expect(formatTask(fold(reviewed.slice(0, 7), roster(), T0), s.tasks.get(2)!)).not.toContain("left the channel");
+  });
+
+  test("the hand-back message also lists the tasks the leaving agent was reviewing", () => {
+    const s = fold(reviewed.slice(0, 7), roster(), T0);
+    expect(handBackText(s, "wren", "left", heldBy(s, "wren"), reviewedBy(s, "wren"))).toBe(
+      ["wren is leaving the channel.", "Open for review by anyone who hasn't worked on them:", "- T2 Approve me", "- T3 Cancel me"].join("\n"),
+    );
+  });
+});
+
 describe("leaving hands the tasks back", () => {
   const dataDir = mkdtempSync(join(tmpdir(), "kiwi-handback-relay-"));
   const home = mkdtempSync(join(tmpdir(), "kiwi-handback-home-"));
@@ -96,6 +138,9 @@ describe("leaving hands the tasks back", () => {
   const run = <A, E>(e: Effect.Effect<A, E, unknown>) => Effect.runPromise(e.pipe(Effect.provide(AgentLive)) as Effect.Effect<A, E, never>);
   let lead: AgentSession;
   let dev: AgentSession;
+  let qa: AgentSession;
+  let rev: AgentSession;
+  let gone: AgentSession;
   let ask: number;
 
   beforeAll(async () => {
@@ -109,6 +154,9 @@ describe("leaving hands the tasks back", () => {
     };
     lead = await seat("lead");
     dev = await seat("dev");
+    qa = await seat("qa");
+    rev = await seat("rev");
+    gone = await seat("gone");
     await owner.ownerCh.send("lead is the lead", { kind: "event", ev: { op: "role.set", member: "lead", role: "lead" } });
     ask = await owner.ownerCh.send("make it start on Fedora");
   });
@@ -138,5 +186,22 @@ describe("leaving hands the tasks back", () => {
       [null, "dev", "todo"],
       ["dev", null, "done"],
     ]);
+  });
+
+  test("a reviewer who leaves opens its reviews; the lead cancels a task whose reviewer left without a word, and the owner hears how", async () => {
+    const x = await run(qa.taskAdd("Reviewed by rev", { re: ask, owner: "qa", review: "rev" }));
+    const y = await run(qa.taskAdd("Reviewed by gone", { re: ask, owner: "qa", review: "gone" }));
+    for (const id of [x, y]) await run(qa.taskUpdate(id, { state: "review" }));
+    expect(await run(rev.handBack())).toEqual([x]);
+    const told = (await run(lead.state())).messages.at(-1)!;
+    expect([told.from, told.body]).toEqual(["rev", ["rev is leaving the channel.", "Open for review by anyone who hasn't worked on them:", `- T${x} Reviewed by rev`].join("\n")]);
+    await run(rev.ch.fx.leave());
+    await run(gone.ch.fx.leave());
+    await run(lead.members(true));
+    await run(qa.members(true));
+    expect((await run(lead.taskUpdate(x, { state: "done" }))).tasks.get(x)).toMatchObject({ state: "done", review: "*", approvedBy: "lead" });
+    const refused = await run(Effect.flip(qa.taskUpdate(y, { state: "cancelled" })));
+    expect(refused.message).toBe(`T${y}'s reviewer gone left the channel: the lead, the owner or a person opens its review (kiwi task review T${y} --review any), then it can be cancelled`);
+    expect((await run(lead.taskUpdate(y, { state: "cancelled" }))).tasks.get(y)).toMatchObject({ state: "done", cancelled: true, review: "*" });
   });
 });

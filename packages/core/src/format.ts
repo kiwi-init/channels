@@ -604,7 +604,10 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now(), messa
   if (followUps.length) out.push(`  follow-ups: ${followUps.join(", ")}`);
   if (t.areas?.length) out.push(`  folders it changed: ${t.areas.map((a) => inlineText(a, 120)).join(", ")}`);
   if (t.issue) out.push(`  issue: ${t.issue.repo}#${t.issue.number}${issueOf(state.github, t.issue)?.state === "closed" ? " (closed)" : ""}; ${issueLinkText(state)}`);
-  if (t.review) out.push(`  ${reviewPhrase(t.review)}${t.approvedBy ? `; approved by ${inlineText(t.approvedBy, 40)}` : t.state === "review" ? "; waiting for it" : ""}`);
+  if (t.review)
+    out.push(
+      `  ${reviewPhrase(t.review)}${t.review !== "*" && state.members.get(t.review)?.active === false ? " (they left the channel)" : ""}${t.approvedBy ? `; approved by ${inlineText(t.approvedBy, 40)}` : t.state === "review" ? "; waiting for it" : ""}`,
+    );
   const open = openRound(t);
   if (open?.summary) out.push("", `round ${open.n} summary:`, markedText(open.summary));
   if (t.rounds.length) {
