@@ -57,14 +57,19 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
         <button type="button" className="icon-btn top-drawer" aria-label="Rooms and people" aria-pressed={drawer} onClick={() => setDrawer(!drawer)}>
           <Icon name="sidebar" />
         </button>
-        <button
-          type="button"
-          className="top-title"
-          onClick={() => go({ to: "panel", panel: nav.panel?.kind === "channel" ? null : { kind: "channel" } })}
-          aria-label={`${channel.title}: channel settings`}
-        >
-          <span className="top-name">{channel.title}</span>
-        </button>
+        <div className="top-title">
+          <button
+            type="button"
+            className="top-chan"
+            aria-pressed={nav.panel?.kind === "channel"}
+            onClick={() => go({ to: "panel", panel: nav.panel?.kind === "channel" ? null : { kind: "channel" } })}
+            aria-label={`${channel.title}: channel settings`}
+            title="Channel settings"
+          >
+            <span className="top-name">{channel.title}</span>
+            <Icon name="down" size={14} />
+          </button>
+        </div>
         <nav className="tabs" aria-label="Views">
           <button type="button" aria-pressed={nav.tab === "chat"} onClick={() => go({ to: "tab", tab: "chat" })}>
             {here}
