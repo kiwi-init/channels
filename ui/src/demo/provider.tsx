@@ -184,6 +184,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       setHold: (code, on, note) => edit(code, (c) => ({ ...c, hold: on ? { note, by: c.you, at: Date.now() } : undefined })),
       addRepo: (code, repo) => edit(code, (c) => ({ ...c, repos: [...new Set([...c.repos, repo])] })),
       removeRepo: (code, repo) => edit(code, (c) => ({ ...c, repos: c.repos.filter((r) => r !== repo) })),
+      joinCommand: async (code, as) => [`kiwi join ${code}-x7Qp2LmR`, as.nick && `--nick ${as.nick}`, as.persona && "--persona eyJyb29tIjoia2l3aSJ9"].filter(Boolean).join(" "),
       inviteLink: async (code) => `kiwi://join/${code}-x7Qp2LmR`,
       leaveChannel: (code) => setState((s) => ({ ...s, tiles: s.tiles.filter((t) => t.code !== code) })),
       newChannel: async (title) => {

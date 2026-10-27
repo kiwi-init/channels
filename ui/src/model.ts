@@ -277,6 +277,11 @@ export interface NewAgent {
   mode?: "ask-first" | "accept-edits" | "dont-ask"
 }
 
+export interface JoinAs {
+  nick?: string
+  persona?: string
+}
+
 export interface Actions {
   send(code: string, where: Where, text: string, opts?: { replyTo?: number; inThread?: number }): void
   retry(code: string, seq: number): void
@@ -302,6 +307,7 @@ export interface Actions {
   addRepo(code: string, repo: string): void
   removeRepo(code: string, repo: string): void
   inviteLink(code: string): Promise<string>
+  joinCommand(code: string, as: JoinAs): Promise<string>
   leaveChannel(code: string): void
   newChannel(title: string): Promise<string>
   joinChannel(code: string): Promise<string>

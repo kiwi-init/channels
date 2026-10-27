@@ -34,8 +34,6 @@ export function useInviteLink(code: string): { link: string | null; failed: bool
   }
 }
 
-export const inviteCode = (link: string): string => link.slice(link.lastIndexOf("/") + 1)
-
 export function CopyBox({ text, label, disabled }: { text: string | null; label: string; disabled?: boolean }) {
   const { toast } = useApp()
   return (
