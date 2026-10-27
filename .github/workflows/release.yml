@@ -17,17 +17,17 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Check the tag is a Livewire RC on the Livewire branch
+      - name: Check the tag is a Livewire release on main
         run: |
           [[ "$GITHUB_REF_NAME" =~ ^v[0-9]{1,6}\.[0-9]{1,6}\.[0-9]{1,6}-livewire\.[0-9]{1,6}$ ]] || {
             echo "::error::$GITHUB_REF_NAME isn't vYYYY.M.PATCH-livewire.N: a Channels Livewire release is tagged like v2026.10.2-livewire.1, so nothing is built, signed or published"
             exit 1
           }
-          git merge-base --is-ancestor "$GITHUB_SHA" origin/T377-livewire-rc || {
-            echo "::error::$GITHUB_REF_NAME is on $GITHUB_SHA, which isn't on T377-livewire-rc: a Channels Livewire release is a tag on that branch, so nothing is built, signed or published"
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
+            echo "::error::$GITHUB_REF_NAME is on $GITHUB_SHA, which isn't on main: a Channels Livewire release is a tag on main, so nothing is built, signed or published"
             exit 1
           }
-          echo "$GITHUB_REF_NAME is on $GITHUB_SHA, on T377-livewire-rc"
+          echo "$GITHUB_REF_NAME is on $GITHUB_SHA, on main"
 
   build:
     needs: on-livewire

@@ -2,10 +2,9 @@ name: ui-publish
 
 on:
   workflow_dispatch:
-  # Dispatch needs this file on main, which stays stable's. On the Livewire branch,
-  # a commit that changes ui-publish-request publishes the UI at that commit.
+  # A commit on main that changes ui-publish-request publishes the UI at that commit.
   push:
-    branches: [T377-livewire-rc]
+    branches: [main]
     paths: [.github/ui-publish-request]
 
 permissions:
@@ -17,7 +16,7 @@ concurrency:
 
 jobs:
   publish:
-    if: github.ref == 'refs/heads/T377-livewire-rc'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: livewire-ui
@@ -81,7 +80,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release view livewire-ui --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 || gh release create livewire-ui \
-            --repo "$GITHUB_REPOSITORY" --target T377-livewire-rc --prerelease --latest=false \
+            --repo "$GITHUB_REPOSITORY" --target main --prerelease --latest=false \
             --title "Channels Livewire UI" \
             --notes "The UI channel Channels Livewire boots its UI from: manifest.json (signed, livewire-manifest/1) and the uipack bundles it points to. Published by ui-publish.yml; the app checks the signature against the key pinned in desktop/src/ui-channel.ts. Not an app release: nothing here updates the app."
           mapfile -t packs < <(find "$RUNNER_TEMP/site" -maxdepth 1 -name '*.uipack' | sort)

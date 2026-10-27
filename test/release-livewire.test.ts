@@ -53,25 +53,25 @@ function bash(script: string, cwd: string, env: Record<string, string>): { code:
   return { code: r.exitCode, out: r.stdout.toString() + r.stderr.toString() };
 }
 
-test("a tag releases only when it's vYYYY.M.PATCH-livewire.N on a commit of T377-livewire-rc (T839)", () => {
+test("a tag releases only when it's vYYYY.M.PATCH-livewire.N on a commit of main (T839)", () => {
   const git = repo("tags");
   git("commit", "-q", "--allow-empty", "-m", "a");
   const older = git("rev-parse", "HEAD");
   git("commit", "-q", "--allow-empty", "-m", "b");
   const tip = git("rev-parse", "HEAD");
-  git("update-ref", "refs/remotes/origin/T377-livewire-rc", tip);
+  git("update-ref", "refs/remotes/origin/main", tip);
   git("checkout", "-q", "-b", "side", older);
   git("commit", "-q", "--allow-empty", "-m", "c");
   const side = git("rev-parse", "HEAD");
-  git("update-ref", "refs/remotes/origin/main", side);
+  git("update-ref", "refs/remotes/origin/elsewhere", side);
 
-  const check = step("on-livewire", "Check the tag is a Livewire RC on the Livewire branch").run;
+  const check = step("on-livewire", "Check the tag is a Livewire release on main").run;
   const run = (sha: string, tag: string) => bash(check, join(root, "tags"), { GITHUB_SHA: sha, GITHUB_REF_NAME: tag });
 
   for (const sha of [tip, older]) expect({ sha, code: run(sha, "v2026.10.2-livewire.1").code }).toEqual({ sha, code: 0 });
   const offBranch = run(side, "v2026.10.2-livewire.1");
   expect(offBranch.code).toBe(1);
-  expect(offBranch.out).toContain("isn't on T377-livewire-rc");
+  expect(offBranch.out).toContain("isn't on main");
   for (const tag of ["v2026.10.2", "v2026.10.2-rc.1", "livewire-v2026.10.2-livewire.1", "v2026.10.2-livewire.1x", "v2026.10-livewire.1", "v2026.10.2-livewire.1;true"]) {
     const r = run(tip, tag);
     expect({ tag, code: r.code }).toEqual({ tag, code: 1 });
