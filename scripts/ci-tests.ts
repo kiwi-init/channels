@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { FLOWS } from "./ci-flows.ts";
 
 const [group = "", ...extra] = process.argv.slice(2);
-const all = [...new Glob("test/*.test.ts").scanSync(), ...new Glob("web/src/**/*.test.{ts,tsx}").scanSync()].sort();
+const all = [...new Glob("test/*.test.ts").scanSync(), ...new Glob("web/src/**/*.test.{ts,tsx}").scanSync(), ...new Glob("ui/src/**/*.test.{ts,tsx}").scanSync()].sort();
 const flows = FLOWS.map((name) => `test/${name}.test.ts`);
 const files = group === "all" ? all : group === "unit" ? all.filter((f) => !flows.includes(f)) : group === "flows" ? flows : undefined;
 if (!files || extra.length) {

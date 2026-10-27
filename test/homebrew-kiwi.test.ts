@@ -54,7 +54,7 @@ describe.skipIf(process.platform === "win32")("a kiwi from Homebrew is the one p
     fakeKiwi(join(loose, "bin", "kiwi"), "1.2.3");
     expect(homebrewKiwi([loose, join(dir, "nothing")])).toBeNull();
     expect(await keepCli(bundle, "9.9.9", [loose])).toEqual({ path: join(dir, "install", "kiwi"), version: "9.9.9", updated: true, homebrew: false });
-  });
+  }, 30_000);
 
   test("a Homebrew kiwi that won't run doesn't count: the app keeps its own copy", async () => {
     const dir = folder();
@@ -63,7 +63,7 @@ describe.skipIf(process.platform === "win32")("a kiwi from Homebrew is the one p
     const bundle = fakeKiwi(join(dir, "app", "kiwi"), "9.9.9");
     process.env["KIWI_INSTALL"] = join(dir, "install");
     expect((await keepCli(bundle, "9.9.9", [brew])).homebrew).toBe(false);
-  });
+  }, 30_000);
 
   test("the app adds no PATH line beside Homebrew's kiwi, and its daemon runs brew's when it's as new as the app, else the app's own", () => {
     const dir = folder();

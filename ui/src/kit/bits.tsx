@@ -71,6 +71,8 @@ export function Dialog({ open, onClose, label, children, wide }: { open: boolean
   return (
     <dialog
       ref={ref}
+      role="dialog"
+      aria-modal="true"
       className={cx("dialog", wide && "is-wide")}
       aria-label={label}
       onClose={() => {
