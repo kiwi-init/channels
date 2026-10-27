@@ -47,6 +47,21 @@ describe("a closed task's digest", () => {
     expect(taskDigest(s, log, s.tasks.get(t)!)).toBe(`T${t} done: Ship the digest · ready · PR ojow/channels#12, ojow/channels#13 · by mac · approved by jon · 1 message in its threads`);
   });
 
+  test("its PRs are the ones posted about it, not every PR in a thread that once named it (T101)", async () => {
+    const add = await ev("jon", { op: "task.add", title: "Drop images", owner: "mac" });
+    const t = add.seq;
+    const ask = await msg("jon", "msg", `Fixes: T${t} and the rest`);
+    const log = [
+      add,
+      ask,
+      await msg("mac", "msg", `T${t}: PR https://github.com/ojow/channels/pull/21`, { re: [ask.seq] }),
+      await msg("win", "msg", "mine is up: https://github.com/ojow/livewire/pull/255", { re: [ask.seq] }),
+      await ev("jon", { op: "task.update", task: t, state: "done" }),
+    ];
+    const s = fold(log, roster);
+    expect(taskDigest(s, log, s.tasks.get(t)!)).toBe(`T${t} done: Drop images · PR ojow/channels#21 · by mac · 3 messages in its threads`);
+  });
+
   test("a cancelled one says why, and no approval", async () => {
     const add = await ev("jon", { op: "task.add", title: "Old idea", owner: "mac" });
     const log = [add, await ev("jon", { op: "task.update", task: add.seq, state: "cancelled", note: "superseded by T9" })];
