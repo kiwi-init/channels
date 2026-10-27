@@ -103,7 +103,7 @@ export class ChannelStore {
   private readonly checksDue: ReadonlySignal<string>
   private readonly rulesDue: ReadonlySignal<string>
   private readonly namesDue: ReadonlySignal<string>
-  private rebasedFor = ""
+  private repair: string | null = null
   private rebasing: string | null = null
 
   private guardIn = false
@@ -207,7 +207,7 @@ export class ChannelStore {
       this.roster.value = await this.ch.members()
       this.rosterIn = true
       if (this.ch.isOwner && (await this.ch.rotateIfDue())) this.roster.value = await this.ch.members()
-      void this.rebase(this.namesDue.peek())
+      void this.rebase()
     } catch (err) {
       this.onGone(err)
     }
@@ -234,7 +234,11 @@ export class ChannelStore {
       on(this.checksDue, () => this.postReviewChecks()),
       this.every(60_000, () => this.drainGithub()),
       on(this.rulesDue, () => this.githubRules()),
-      on(this.namesDue, (key) => void this.rebase(key)),
+      on(this.namesDue, (key) => {
+        if (!key) return
+        this.repair = key
+        void this.rebase()
+      }),
       subscribeTick(CLOCK_MS, () => {
         this.now.value = tickOf(Date.now(), CLOCK_MS)
       }),
@@ -477,8 +481,9 @@ export class ChannelStore {
     }
   }
 
-  private async rebase(key: string): Promise<void> {
-    if (!key || key === this.rebasedFor || key === this.rebasing) return
+  private async rebase(): Promise<void> {
+    const key = this.repair
+    if (!key || key === this.rebasing) return
     this.rebasing = key
     try {
       const roster = this.rosterForFold.peek()
@@ -486,8 +491,7 @@ export class ChannelStore {
       const from = snap && !namesMoved(snap, roster) ? snap : null
       const since = from?.n ?? 0
       const page = await this.ch.history(since).catch(() => null)
-      if (!page || this.rebasing !== key || this.namesDue.peek() !== key) return
-      this.rebasedFor = key
+      if (!page || this.rebasing !== key || this.repair !== key) return
       if (page.head > since && page.first !== since + 1) return
       batch(() => {
         this.base.value = from
@@ -496,6 +500,7 @@ export class ChannelStore {
           this.messages.peek().filter((m) => m.seq > since)
         )
       })
+      this.repair = null
     } finally {
       if (this.rebasing === key) {
         this.rebasing = null
