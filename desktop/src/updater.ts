@@ -14,12 +14,11 @@ import { compareVersions } from "@kiwi/core/versions.ts";
 import { childEnv } from "./child-env.ts";
 import { host } from "./host.ts";
 import { moveOver } from "./move.ts";
-import { LIVEWIRE_APP } from "./livewire-id.ts";
 import { logMainError } from "./main-log.ts";
 import { minisignVerifies } from "./minisign.ts";
 import { RELEASE_KEY } from "./release-key.ts";
 import { signedLikeThisApp } from "./signer.ts";
-import { cantSwap, githubHop, livewireVersion, newestLivewireTag, ownAppImage, releaseDownload, swapAsset, swapScript } from "./update-asset.ts";
+import { cantSwap, githubHop, latestTag, ownAppImage, releaseDownload, swapAsset, swapScript } from "./update-asset.ts";
 
 const REPO = "kiwi-init/channels";
 const EVERY_MS = 6 * 3_600_000;
@@ -55,7 +54,7 @@ let current: UpdateState | null = null;
 let notify: (s: UpdateState) => void = () => {};
 let running: Promise<UpdateCheck> | null = null;
 
-/** The app bundle this runs from (…/Contents/MacOS/its executable). */
+/** The Channels.app this runs from (…/Channels.app/Contents/MacOS/Channels). */
 const macBundle = () => path.resolve(host().app.path("exe"), "..", "..", "..");
 
 const realOr = (p: string): string => {
@@ -106,19 +105,18 @@ const failedBefore = (version: string): boolean => {
 
 async function check(): Promise<UpdateCheck> {
   if (fetching && current) return current;
-  const res = await fetch(`https://github.com/${REPO}/releases.atom`, {
+  const res = await fetch(`https://github.com/${REPO}/releases/latest`, {
     headers: { "user-agent": "channels-desktop" },
-    redirect: "error",
+    redirect: "manual",
     signal: AbortSignal.timeout(ASK_WAIT_MS),
   });
-  const feed = res.ok ? await res.text() : "";
-  if (!/<feed\b/.test(feed)) {
-    retrySoon(`the update check got ${res.status} from GitHub, not its releases feed`);
+  if (res.status < 300 || res.status >= 400) {
+    retrySoon(`the update check got ${res.status} from GitHub, not the latest release's redirect`);
     return { state: "failed" };
   }
-  const tag = newestLivewireTag(REPO, feed);
-  if (!tag) return { state: "current", version: host().app.version() };
-  const version = livewireVersion(tag);
+  const tag = latestTag(REPO, res.headers.get("location"));
+  if (!tag) return { state: "failed" };
+  const version = tag.slice(1);
   if (compareVersions(version, host().app.version()) <= 0) return { state: "current", version: host().app.version() };
   const url = `https://github.com/${REPO}/releases/tag/${tag}`;
   if (staged && compareVersions(version, staged.version) <= 0) return current ?? set({ version: staged.version, state: "ready", url: staged.url });
@@ -205,8 +203,8 @@ async function download(assetUrl: string, sumsUrl: string, signatureUrl: string 
   if (process.platform === "darwin") {
     // ditto keeps the bundle's symlinks and modes (the frameworks need both).
     await run("/usr/bin/ditto", ["-x", "-k", file, dir]);
-    const next = path.join(dir, LIVEWIRE_APP);
-    if (!fs.existsSync(next)) throw new Error(`${name} has no ${LIVEWIRE_APP}`);
+    const next = path.join(dir, "Channels.app");
+    if (!fs.existsSync(next)) throw new Error(`${name} has no Channels.app`);
     if (!(await signedLikeThisApp(macBundle(), next))) throw new Error(`${name} isn't signed like this app`);
     return next;
   }

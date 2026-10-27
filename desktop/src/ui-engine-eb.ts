@@ -11,7 +11,7 @@ import { hearApply, hearUi, setUiWaiting } from "./ui-signals.ts";
 import { dataDir } from "./host-eb.ts";
 
 declare const KIWI_EB_DEV: boolean;
-declare const KIWI_EB_LIVEWIRE: boolean;
+declare const KIWI_EB_OFFICIAL_UI: boolean;
 declare const KIWI_EB_TEST: boolean;
 declare const KIWI_UI_SEQ: number;
 
@@ -38,7 +38,7 @@ function devChannelLine(): string | undefined {
 
 const devChannel: Channel | null = KIWI_EB_DEV ? testChannel(devChannelLine()) : null;
 
-const channel: Channel | null = KIWI_EB_TEST ? testChannel(process.env.KIWI_EB_UI_CHANNEL) : devChannel ? devChannel : KIWI_EB_LIVEWIRE ? official() : null;
+const channel: Channel | null = KIWI_EB_TEST ? testChannel(process.env.KIWI_EB_UI_CHANNEL) : devChannel ? devChannel : KIWI_EB_OFFICIAL_UI ? official() : null;
 
 export const uiFromChannel: boolean = channel !== null;
 

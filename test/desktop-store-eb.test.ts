@@ -91,16 +91,6 @@ test("a first start opens a sealed store, marks its key, ends the launcher's ses
   expect(s.done()).toBe(2);
 });
 
-test("Channels Livewire starts empty: with importLegacy off, Electron's store is never read and the launcher is never asked for its password (T839)", async () => {
-  const { dir, home } = place();
-  electronStore(home, { relayUrl: "https://old.example", channels: [] }, "electron-pw");
-  const s = sources("electron-pw");
-  const opened = await openEbStore({ dir, keys: s.keys, home, platform: "darwin", importLegacy: false });
-  expect(opened).toMatchObject({ kind: "open", imported: null });
-  expect(opened.kind === "open" ? opened.json?.["relayUrl"] : "not open").toBeUndefined();
-  expect(s.asked).toEqual([]);
-});
-
 test("Electron's store is imported once, through the launcher's password for kiwi-desktop, and the next start reads store v2 without asking again", async () => {
   const { dir, home } = place();
   const file = electronStore(home, { relayUrl: "https://old.example", channels: [] }, "electron-pw");

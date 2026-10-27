@@ -180,11 +180,11 @@ int main(int argc, char **argv) {
     fprintf(stderr, "kiwi-shell-test: one of libkiwi-shell's entry points isn't exported\n");
     return 1;
   }
-  if (g_strcmp0(g_get_prgname(), "channels-livewire") != 0 || g_strcmp0(gdk_get_program_class(), "channels-livewire") != 0) {
-    fprintf(stderr, "kiwi-shell-test: the program is named %s, class %s, not channels-livewire\n", g_get_prgname(), gdk_get_program_class());
+  if (g_strcmp0(g_get_prgname(), "channels-desktop") != 0 || g_strcmp0(gdk_get_program_class(), "channels-desktop") != 0) {
+    fprintf(stderr, "kiwi-shell-test: the program is named %s, class %s, not channels-desktop\n", g_get_prgname(), gdk_get_program_class());
     bad++;
   } else
-    printf("program name and class: channels-livewire (the Wayland app_id, matching channels-livewire.desktop)\n");
+    printf("program name and class: channels-desktop (the Wayland app_id, matching channels-desktop.desktop)\n");
   loop = g_main_loop_new(NULL, FALSE);
   Hooks hooks = {deny, watch, sandbox, commits, downloads, allow_only, false, false, ""};
   g_idle_add(install_from_worker, &hooks);

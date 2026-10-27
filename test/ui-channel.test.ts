@@ -9,7 +9,7 @@ import { stageUi, uiJson } from "../desktop/scripts/ui-stage.ts";
 import { PAGE_URL } from "../desktop/src/eb-page.ts";
 import { UI_MANIFEST_URL, UI_PREFIX, UI_RELEASE_TAG, UI_TRUSTED_KEYS } from "../desktop/src/ui-channel.ts";
 import { UI_CONTRACT, UI_DATA_SCHEMA } from "../desktop/src/ui-contract.ts";
-import { livewireVersion, newestLivewireTag } from "../desktop/src/update-asset.ts";
+import { latestTag } from "../desktop/src/update-asset.ts";
 
 describe("the UI channel", () => {
   test("each pinned key is named by its keyId: the first 16 hex of the raw key's sha256", () => {
@@ -25,9 +25,8 @@ describe("the UI channel", () => {
     expect(PAGE_URL.startsWith(`views://${UI_PREFIX}/`)).toBe(true);
     expect(UI_MANIFEST_URL).toBe(`https://github.com/kiwi-init/channels/releases/download/${UI_RELEASE_TAG}/manifest.json`);
     const repo = "kiwi-init/channels";
-    const atom = [UI_RELEASE_TAG, "v2026.10.2-livewire.3"].map((tag) => `<link rel="alternate" href="https://github.com/${repo}/releases/tag/${tag}"/>`).join("");
-    expect(livewireVersion(UI_RELEASE_TAG)).toBe("");
-    expect(newestLivewireTag(repo, atom)).toBe("v2026.10.2-livewire.3");
+    expect(latestTag(repo, `https://github.com/${repo}/releases/tag/${UI_RELEASE_TAG}`)).toBeNull();
+    expect(latestTag(repo, `https://github.com/${repo}/releases/tag/v2026.10.7`)).toBe("v2026.10.7");
   });
 
   test("a staged UI is web/dist without _headers, plus ui.json for this contract", () => {

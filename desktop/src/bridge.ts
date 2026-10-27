@@ -346,7 +346,7 @@ export interface KiwiBridge {
   takePastedImage(): Promise<PastedImage | null>;
   setBadge(count: number): Promise<void>;
   setAppearance(appearance: "system" | "light" | "dark"): Promise<void>;
-  /** The UI booted. Channels Livewire boots its UI from a signed UI channel and rolls back one that doesn't say so in time. */
+  /** The UI booted. Channels boots its UI from a signed UI channel and rolls back one that doesn't say so in time. */
   uiReady(): Promise<void>;
   /** An uncaught error while the UI boots, or one that brought the whole UI down. */
   uiError(message: string): Promise<void>;

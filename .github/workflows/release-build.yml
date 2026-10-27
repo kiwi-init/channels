@@ -21,6 +21,10 @@ on:
 permissions:
   contents: read
 
+env:
+  ELECTRON_LAST_MAC_ARM64: v0.26.0
+  UPSTREAM_ELECTROBUN_LAST_MAC_ARM64: v2026.10.6
+
 jobs:
   version:
     runs-on: ubuntu-latest
@@ -41,7 +45,7 @@ jobs:
           REHEARSAL: ${{ inputs.rehearsal }}
         run: |
           tag="$GITHUB_REF_NAME"
-          if [ "$REHEARSAL" = true ]; then tag="$(bun scripts/stamp.ts --next)-livewire.0"; git tag "$tag"; echo "rehearsal: stamping $tag, tagged here only"; fi
+          if [ "$REHEARSAL" = true ]; then tag=$(bun scripts/stamp.ts --next); echo "rehearsal: stamping $tag"; fi
           echo "TAG=$tag" >> "$GITHUB_ENV"
           bun scripts/stamp.ts "$tag"
           git diff > "$RUNNER_TEMP/stamp.patch"
@@ -56,9 +60,6 @@ jobs:
           test "$pkg" = "$v" || { echo "package.json says $pkg, src/version.ts says $v"; exit 1; }
           test "$app" = "$v" || { echo "desktop/package.json says $app, src/version.ts says $v"; exit 1; }
 
-      # Required: a release ships with its changelog, which the stamp writes (a section already in
-      # CHANGELOG.md is kept as it is); a pre-release gets notes made from its commits. Checked here
-      # so nothing builds for a tag that can't be published.
       - name: Check the changelog has this version
         run: bun scripts/changelog.ts --notes "$TAG" > /dev/null
 
@@ -66,6 +67,51 @@ jobs:
         with:
           name: stamp
           path: ${{ runner.temp }}/stamp.patch
+          overwrite: true
+
+  cli:
+    needs: version
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: ./.github/actions/stamp
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Test
+        run: bun test
+
+      - name: Build
+        run: |
+          mkdir -p dist
+          for t in darwin-arm64 darwin-x64 linux-x64 linux-arm64; do
+            bun scripts/build-cli.ts --target "bun-$t" --outfile "dist/kiwi-$t"
+          done
+          codesign --force --sign - dist/kiwi-darwin-arm64 dist/kiwi-darwin-x64
+          ./dist/kiwi-darwin-arm64 --version
+
+      - name: Pack
+        run: |
+          cd dist
+          for f in kiwi-*; do
+            gzip -9 -n -k "$f"
+            xz -9 -T0 -k "$f"
+          done
+          bun ../scripts/cli-downloads.ts .
+
+      - name: Upload
+        if: ${{ !inputs.rehearsal || github.event_name == 'workflow_dispatch' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ inputs.rehearsal && 'rehearsal' || 'release' }}-cli
+          retention-days: ${{ inputs.rehearsal && 3 || 0 }}
+          path: dist/kiwi-*
           overwrite: true
 
   desktop-mac-eb:
@@ -145,10 +191,21 @@ jobs:
       - name: No test code in what ships
         run: bun desktop/scripts/eb-driver-check.ts --release out/Channels-*-mac-arm64.zip out/Channels-*-mac-arm64.dmg
 
+      - name: Update from the Electron app and from the last release on upstream Electrobun
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for from in "$ELECTRON_LAST_MAC_ARM64" "$UPSTREAM_ELECTROBUN_LAST_MAC_ARM64"; do
+            old="Channels-${from#v}-mac-arm64.zip"
+            gh release download "$from" --repo "$GITHUB_REPOSITORY" --pattern "$old" --dir "$RUNNER_TEMP/update-from/$from"
+            bun desktop/scripts/eb-update-rehearsal.ts "$RUNNER_TEMP/update-from/$from/$old" out/Channels-*-mac-arm64.zip
+          done
+
       - name: The app makes a channel and sends
         run: |
           ditto -x -k "$(ls out/Channels-*-mac-arm64.zip)" "$RUNNER_TEMP/probe"
-          app="$RUNNER_TEMP/probe/Channels Livewire.app/Contents"
+          app="$RUNNER_TEMP/probe/Channels.app/Contents"
           bun desktop/scripts/package-probe.ts "$app/MacOS/bun" "$app/Resources/kiwi.js" "$app/Resources/app/bun/keys.js"
           rm -rf "$RUNNER_TEMP/probe"
 
@@ -225,7 +282,7 @@ jobs:
         run: |
           img="$PWD/$(ls out/Channels-*-linux-x86_64.AppImage)"
           (cd "$RUNNER_TEMP" && "$img" --appimage-extract > /dev/null)
-          root="$RUNNER_TEMP/squashfs-root/ChannelsLivewire"
+          root="$RUNNER_TEMP/squashfs-root/Channels"
           bun desktop/scripts/package-probe.ts "$root/bin/bun" "$root/Resources/kiwi.js" "$root/Resources/app/bun/keys.js"
           rm -rf "$RUNNER_TEMP/squashfs-root"
 

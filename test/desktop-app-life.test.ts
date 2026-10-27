@@ -212,13 +212,6 @@ describe("the tray and the app menu say what Electron's did (T438)", () => {
     expect(labels(sub(appMenu("darwin"), "Edit"))).toEqual(["undo", "redo", "-", "cut", "copy", "paste", "pasteAndMatchStyle", "delete", "selectAll"]);
   });
 
-  test("Channels Livewire names itself in the Mac app menu and the tray, so it can't be taken for stable Channels (T1192)", () => {
-    const name = "Channels Livewire";
-    expect(labels(appMenu("darwin", name))[0]).toBe(name);
-    expect(labels(sub(appMenu("darwin", name), name))).toEqual([`About ${name}`, "-", `Hide ${name}`, "hideOthers", "showAll", "-", `Quit ${name}`]);
-    expect(trayItems(null, name)[0]).toEqual({ type: "normal", label: `Open ${name}`, action: "open" });
-  });
-
   test("View keeps the text sizes on ⌘0, ⌘= and ⌘-, with reload and the developer tools", () => {
     const view = sub(appMenu("darwin"), "View");
     const keyed = view.flatMap((i) => ("action" in i ? [[i.action, i.accelerator ?? ""]] : []));

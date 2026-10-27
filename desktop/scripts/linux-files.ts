@@ -1,7 +1,7 @@
 export type LinuxArch = "x64" | "arm64";
 
-export const EXECUTABLE = "channels-livewire";
-export const APP_FOLDER = "ChannelsLivewire";
+export const EXECUTABLE = "channels-desktop";
+export const APP_FOLDER = "Channels";
 export const ELECTROBUN_LAUNCHER = "electrobun-launcher";
 export const MAX_DOWNLOAD = 60 * 1024 ** 2;
 export const LEFT_OUT = ["bin/bspatch", "bin/zig-zstd", "Resources/uninstall", `${APP_FOLDER}.desktop`] as const;
@@ -25,13 +25,14 @@ export function desktopEntry(exec: string, version?: string): string {
   return [
     "[Desktop Entry]",
     "Type=Application",
-    "Name=Channels Livewire",
+    "Name=Channels",
     "Comment=Agents and people working together in end-to-end encrypted channels",
     `Exec=${exec} %U`,
     `Icon=${EXECUTABLE}`,
     "Terminal=false",
     `StartupWMClass=${APP_FOLDER}`,
     "Categories=Utility;",
+    "MimeType=x-scheme-handler/kiwi;",
     ...(version ? [`X-AppImage-Version=${version}`] : []),
     "",
   ].join("\n");

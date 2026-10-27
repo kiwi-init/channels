@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import Electrobun, { BrowserWindow, PATHS, Utils, type BrowserView } from "electrobun/main";
 
-import { APP_NAME } from "./app-name-eb.ts";
 import { onOurPage, preloadSource, toPageScript } from "./eb-bridge.ts";
 import { frost, lookMarks } from "./frost-eb.ts";
 import { keys, keysToPage } from "./keys-start-eb.ts";
@@ -92,7 +91,7 @@ export async function createWindow(keyring: KeyringState | null = null): Promise
   const preload = preloadSource({ snapshot: snapshot(), session: bridge.nextSession() }, lookMarks() + bundled);
   Bun.gc(true);
   const win = new BrowserWindow({
-    title: APP_NAME,
+    title: "Channels",
     url: null,
     frame: { width: WINDOW_SIZE.width, height: WINDOW_SIZE.height },
     titleBarStyle: mac ? "hiddenInset" : "hidden",

@@ -69,12 +69,12 @@ int main(int argc, char **argv) {
     failed++;
   }
   spin(500);
-  if (updates != 1 || g_strcmp0(app_uri, "application://channels-livewire.desktop") != 0 || count != 3 || !visible) {
-    printf("FAIL a count of 3 should send one Update for application://channels-livewire.desktop with count 3, shown: got %d, %s, %" G_GINT64_FORMAT ", %s\n", updates, app_uri ? app_uri : "(none)",
+  if (updates != 1 || g_strcmp0(app_uri, "application://channels-desktop.desktop") != 0 || count != 3 || !visible) {
+    printf("FAIL a count of 3 should send one Update for application://channels-desktop.desktop with count 3, shown: got %d, %s, %" G_GINT64_FORMAT ", %s\n", updates, app_uri ? app_uri : "(none)",
            count, visible ? "shown" : "hidden");
     failed++;
   } else {
-    printf("ok   a count of 3 sends LauncherEntry Update for application://channels-livewire.desktop at %s, count 3, shown\n", path);
+    printf("ok   a count of 3 sends LauncherEntry Update for application://channels-desktop.desktop at %s, count 3, shown\n", path);
   }
 
   badge(0);

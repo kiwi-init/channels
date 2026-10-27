@@ -123,7 +123,7 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   sidebar and fades, never cut at the gutter.
 - Tint: Settings → Appearance offers the main colours of the desktop's
   wallpaper (read live on a Mac and on GNOME and KDE, never a fixed
-  palette; the row hides when none can be read). Channels Livewire also
+  palette; the row hides when none can be read). The desktop app also
   offers the system accent first, followed live as it changes. A tint washes
   the frost 10% and becomes `accent`, `accent-text` and `accent-wash`.
 - One shell: the sidebar, the page's toolbar and the gutters are one

@@ -11,7 +11,7 @@ const UI = join(ROOT, "ui");
 const DIST = join(UI, "dist");
 const HOME = join(ROOT, "desktop", ".ui-dev");
 const PORT = Number(process.env.KIWI_UI_DEV_PORT ?? 47175);
-const DEV_APP = join(ROOT, "desktop", "release-eb", "build", "dev-macos-arm64", "Channels Livewire-dev.app");
+const DEV_APP = join(ROOT, "desktop", "release-eb", "build", "dev-macos-arm64", "Channels-dev.app");
 const args = process.argv.slice(2);
 
 interface Key {
