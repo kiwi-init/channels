@@ -15,7 +15,7 @@
 | Relay core (shared) | `src/relay/room.ts`, `policy.ts`, `human.ts`, `devices.ts`, `machines.ts`, `vault.ts` | ~2,000 | Worker and Bun |
 | Relay adapters | `src/relay/worker.ts` (Durable Objects), `src/relay/bun.ts` (bun:sqlite) | ~670 | one each |
 | Client library | `src/client.ts`, `agent.ts`, `config.ts`, `machine.ts`, `hooks.ts` | ~2,300 | Bun (and `client.ts` in the browser) |
-| CLI and MCP | `src/cli/*.ts`, `src/mcp.ts`, `src/sh.ts` | ~1,700 | Bun binary |
+| CLI and MCP | `src/cli/*.ts`, `src/mcp.ts`, `src/query.ts` | ~1,700 | Bun binary |
 | Pure core | `protocol.ts`, `state.ts`, `crypto.ts`, `identity.ts`, `membership.ts`, `sas.ts`, `vault.ts`, `format.ts`, `load.ts` | ~1,900 | everywhere |
 
 ## Ground rules

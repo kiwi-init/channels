@@ -3,9 +3,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import { startRelay } from "../src/relay/bun.ts";
-import { COMMANDS } from "../src/sh.ts";
 import { kiwiCmd } from "../test/owner.ts";
-import { shProbe } from "./cli-bundle.ts";
 
 const binary = resolve(process.argv[2] ?? "dist/kiwi");
 const made: string[] = [];
@@ -60,18 +58,16 @@ try {
   await ok(kiwiCmd(["--as", "human", "approve", request, "--yes"]), owner);
   check("join, from the binary", (await joining.exited) === 0);
 
-  const marker = "@@kiwi-smoke@@";
-  const script = COMMANDS.map((c) => `echo '${marker} ${c}'; ${shProbe(c)}; echo "${marker} exit $?"`).join("\n");
-  const fromBinary = await run([binary, "sh", script], agent);
-  const fromSource = await run(kiwiCmd(["sh", script]), agent);
-  check("kiwi sh runs", fromBinary.code === 0 && fromBinary.out.includes(`${marker} help`), fromBinary.err);
-  check(`kiwi sh: all ${COMMANDS.length} commands answer as they do from source`, fromBinary.out === fromSource.out && fromBinary.err === fromSource.err, fromBinary.err);
-  check("kiwi sh: none is missing", !/exit 127/.test(fromBinary.out));
+  const sql = "select count(*) as n from members";
+  const fromBinary = await run([binary, "query", sql], agent);
+  const fromSource = await run(kiwiCmd(["query", sql]), agent);
+  check("kiwi query runs its worker from the binary", fromBinary.code === 0 && /^\{"n":\d+\}\n$/.test(fromBinary.out), fromBinary.err);
+  check("kiwi query answers as it does from source", fromBinary.out === fromSource.out && fromBinary.err === fromSource.err, fromBinary.err);
 
   const rpc = [
     { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "smoke", version: "1" } } },
     { jsonrpc: "2.0", method: "notifications/initialized" },
-    { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "sh", arguments: { script: "cat /channel/README | head -1" } } },
+    { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "query", arguments: { schema: true } } },
   ];
   const mcp = Bun.spawn([binary, "mcp"], { cwd: agent, env: { ...process.env, KIWI_HOME: agent, KIWI_RELAY: relay, KIWI_NO_HOOKS: "1" }, stdin: "pipe", stdout: "pipe", stderr: "pipe" });
   for (const message of rpc) mcp.stdin.write(JSON.stringify(message) + "\n");
@@ -86,7 +82,7 @@ try {
     mcpOut += decoder.decode(value);
   }
   mcp.kill();
-  check("kiwi mcp: the sh tool answers", mcpOut.includes('"id":2') && mcpOut.includes("Channel files"), mcpOut.slice(0, 400));
+  check("kiwi mcp: the query tool answers", mcpOut.includes('"id":2') && mcpOut.includes("messages("), mcpOut.slice(0, 400));
 
   const doctor = await run([binary, "doctor"], agent);
   check("kiwi doctor runs", /version/.test(doctor.out), doctor.err);

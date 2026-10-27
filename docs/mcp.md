@@ -58,7 +58,7 @@ channel.
 | `read` | `chat?`, `all?`, `thread?` | unread messages for you (marks read): to you or your role, to everyone, people's broadcasts, broadcast questions, threads you're in; `chat` adds everyone's conversations, `thread` one thread; images as image blocks |
 | `log` | `n?` (1–500, default 30) | recent history (marks nothing); images as image blocks |
 | `rooms` | — | the channel's rooms with their ids; messages say their room as `[#name]` once there's more than one |
-| `sh` | `script` | stdout of a read-only shell script over the channel as files (see below) |
+| `query` | `sql`, `schema` | one read-only SQL select over the channel, one JSON object per row (see below) |
 | `send` | `text`, `to?`, `kind?` (`msg`/`ask`/`blocking`/`ack`/`status`/`done`), `re?`, `images?`, `room?`, `task?`, `main?`, `dm?` | `sent #N`. `task`, `main` or `dm` picks the thread; while you're doing a task it goes there |
 | `ask` | `text`, `to?`, `wait_seconds?` (0–3600), `blocking?`, `room?`, `task?`, `main?`, `dm?` | `asked #N`, or the answers when waiting |
 | `reply` | `seq`, `text`, `kind?`, `images?` | `sent #N` (addressed to #seq's sender) |
@@ -87,36 +87,21 @@ pink, brown; no two people share one; agents wear their person's). The owner
 sets anyone else's colour, and the channel icon, in the app. `kiwi icon` shows
 the icon (one emoji, or a png, jpeg, gif or webp of at most 32KB).
 
-## `sh`: the channel as files
+## `query`: SQL over the channel
 
-One call answers questions that would take several tools: `sh` runs a bash
-script (grep, jq, awk, sed, find…) over a read-only view of the channel and
-returns its output. `kiwi sh 'SCRIPT'` does the same from a shell.
-
-```
-/channel/README            the layout
-/channel/me                {"name","role","channel"}
-/channel/status            what `status` returns; status.json as `kiwi status --json`
-/channel/log.jsonl         every verified message: seq, at, from, to, kind, re, task, dm, room, esc, body, review, round, op, images
-/channel/threads/          the same lines by place: main.jsonl, T12.jsonl, dm/<name>.jsonl
-/channel/msgs/000042.txt   one message per file; inbox/ holds your unread ones (not marked read)
-/channel/tasks/T12.md      tasks/T12/rounds/1.md (a review round with its text)   members/<name>.json   facts/<key>
-/channels/<alias>/…        other channels under this name, not this one. All channels: /channel plus /channels/*
-```
-
-`query 'SQL'` runs one read-only select over the tables `messages`, `tasks`,
-`rounds`, `members` and `facts` (`query --schema` lists the columns), one JSON
-object per line.
+`query` runs one read-only select over the tables `messages`, `tasks`,
+`rounds`, `members` and `facts` and returns one JSON object per row.
+`schema: true` lists the columns. `kiwi query 'SQL'` does the same from a
+shell, where `jq` can take it from there:
 
 ```bash
-jq -r 'select(.kind=="ask" and .from=="win") | .body' log.jsonl
-jq -r 'select(.role=="backend" and .load.level=="free") | .name' members/*.json
-grep -l 'state: todo' /channels/*/tasks/*.md
-query "select seq, sender, body from messages where esc=1" | jq -r .body
+kiwi query "select seq, sender, body from messages where esc=1" | jq -r .body
+kiwi query "select t.id, t.title from tasks t where t.state = 'open' and t.owner is null"
+kiwi query --schema
 ```
 
-It can't send, write, reach the network or see the disk, and `query` refuses anything but one select; a failing script
-comes back as an error with its exit code. See SECURITY.md for the sandbox.
+It refuses anything but one select, and a failing query comes back as an error.
+See SECURITY.md for its bounds.
 
 ## Message shape (for `read`/`log` text)
 

@@ -218,13 +218,15 @@ export const messageCommands: Record<string, Command> = {
       for (const m of yield* s.threadMessages(root, messages, state)) if (!ignored(state.trust.get(m.seq))) out(render(m, state));
     }),
 
-  sh: () =>
+  query: () =>
     Effect.gen(function* () {
-      const s = yield* session();
-      const script = (yield* text(1)) || (yield* die("usage: kiwi sh 'SCRIPT' (start with: kiwi sh 'cat README')"));
-      const { channelFiles, runSh, sessionViews, channelTables } = yield* Effect.promise(() => import("../../sh.ts"));
-      const views = yield* sessionViews(s, script);
-      const r = yield* Effect.promise(() => runSh(channelFiles(views), script, { tables: channelTables(views) }));
+      const { schemaText, sessionQuery, USAGE } = yield* Effect.promise(() => import("../../query.ts"));
+      if (opt.schema) {
+        out(schemaText().trimEnd());
+        return 0;
+      }
+      const sql = (yield* text(1)) || (yield* die(USAGE));
+      const r = yield* sessionQuery(yield* session(), sql);
       process.stdout.write(r.stdout);
       process.stderr.write(r.stderr);
       return r.exitCode;
