@@ -5,12 +5,33 @@ import { fileDrag, takeDropped } from "@/lib/dropped"
 import { needsCompressing } from "@/lib/needs-compressing"
 import { takePasted } from "@/lib/pasted"
 import { preview, useReplying } from "~/chat/reply"
-import { Avatar, cx } from "~/kit/bits"
+import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
-import type { Channel, Upload, Where } from "~/model"
+import type { Channel, Task, Upload, Where } from "~/model"
 import { useApp } from "~/nav"
 
 const MENTION = /(^|\s)@([\p{L}\p{N}_.-]*)$/u
+const TASK_REF = /(^|\s)#([^#\n]{0,40})$/u
+
+function taskMatches(tasks: readonly Task[], query: string): Task[] {
+  const q = query.trim().toLowerCase()
+  const id = q.replace(/^t/, "")
+  const score = (t: Task): number => {
+    if (!q) return 0
+    if (/^\d+$/.test(id) && String(t.id).startsWith(id)) return 0
+    const title = t.title.toLowerCase()
+    if (title.startsWith(q)) return 1
+    if (title.split(/[^\p{L}\p{N}]+/u).some((w) => w.startsWith(q))) return 2
+    return title.includes(q) ? 3 : -1
+  }
+  return tasks
+    .filter((t) => !t.archived)
+    .map((t) => ({ t, s: score(t) }))
+    .filter((x) => x.s >= 0)
+    .sort((a, b) => a.s - b.s || Number(a.t.status === "done") - Number(b.t.status === "done") || b.t.updatedAt - a.t.updatedAt)
+    .slice(0, 6)
+    .map((x) => x.t)
+}
 
 const drafts = new Map<string, string>()
 
@@ -101,7 +122,9 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
     if (replyTo) area.current?.focus()
   }, [replyTo])
 
-  const query = closed ? undefined : MENTION.exec(text.slice(0, caret))?.[2]
+  const typed = text.slice(0, caret)
+  const query = closed ? undefined : MENTION.exec(typed)?.[2]
+  const taskQuery = closed || query !== undefined ? undefined : TASK_REF.exec(typed)?.[2]
   const matches =
     query === undefined
       ? []
@@ -109,6 +132,8 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
           .filter((p) => !p.you && (p.name.toLowerCase().startsWith(query.toLowerCase()) || p.display?.toLowerCase().startsWith(query.toLowerCase())))
           .sort((a, b) => Number(b.presence === "online") - Number(a.presence === "online"))
           .slice(0, 6)
+  const taskOptions = taskQuery === undefined ? [] : taskMatches(channel.tasks, taskQuery)
+  const options = matches.length || taskOptions.length
 
   const update = (value: string, at = value.length) => {
     setText(value)
@@ -127,8 +152,9 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
     update("")
   }
   const ready = !!text.trim() || files.length > 0
-  const complete = (name: string) => {
-    const before = text.slice(0, caret).replace(MENTION, (_all, pre: string) => `${pre}@${name} `)
+  const complete = (name: string) => insert(text.slice(0, caret).replace(MENTION, (_all, pre: string) => `${pre}@${name} `))
+  const completeTask = (id: number) => insert(text.slice(0, caret).replace(TASK_REF, (_all, pre: string) => `${pre}T${id} `))
+  const insert = (before: string) => {
     const next = before + text.slice(caret)
     update(next, before.length)
     requestAnimationFrame(() => {
@@ -143,6 +169,20 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
 
   return (
     <div className="compose">
+      {taskOptions.length > 0 && (
+        <ul className="mentions" role="listbox" aria-label="Tasks" id={`${key}-tasks`}>
+          {taskOptions.map((t, i) => (
+            <li key={t.id} role="option" aria-selected={i === pick}>
+              <button type="button" tabIndex={-1} className={cx("mention-row task-row", i === pick && "is-on")} onMouseDown={(e) => e.preventDefault()} onClick={() => completeTask(t.id)}>
+                <Dot status={t.status} />
+                <span className="task-row-id">T{t.id}</span>
+                <span className="task-row-title">{t.title}</span>
+                <span className="dim">{t.owner ?? STATUS_WORDS[t.status]}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       {matches.length > 0 && (
         <ul className="mentions" role="listbox" aria-label="People" id={`${key}-people`}>
           {matches.map((p, i) => (
@@ -231,8 +271,8 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
             value={text}
             aria-label="Message"
             aria-autocomplete="list"
-            aria-expanded={matches.length > 0}
-            aria-controls={matches.length > 0 ? `${key}-people` : undefined}
+            aria-expanded={options > 0}
+            aria-controls={matches.length > 0 ? `${key}-people` : taskOptions.length > 0 ? `${key}-tasks` : undefined}
             placeholder={replyTo ? `Reply to ${replyTo.from}` : placeholder}
             onChange={(e) => update(e.target.value, e.target.selectionStart)}
             onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
@@ -250,16 +290,18 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
             onBlur={() => setFocused(false)}
             onKeyDown={(e) => {
               if (e.nativeEvent.isComposing || e.keyCode === 229) return
-              if (matches.length) {
+              if (options) {
                 if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                   e.preventDefault()
-                  setPick((pick + (e.key === "ArrowDown" ? 1 : matches.length - 1)) % matches.length)
+                  setPick((pick + (e.key === "ArrowDown" ? 1 : options - 1)) % options)
                   return
                 }
                 if (e.key === "Enter" || e.key === "Tab") {
                   e.preventDefault()
                   const p = matches[pick]
+                  const t = taskOptions[pick]
                   if (p) complete(p.name)
+                  else if (t) completeTask(t.id)
                   return
                 }
                 if (e.key === "Escape") {
