@@ -192,46 +192,54 @@ try {
     return { ok: got["text"] === "kiwi copied out", detail: got };
   });
 
-  await step("a message's Copy text button copies for another app", async () => {
-    const message = await driver.evaluate(() => {
-      const g = document.querySelector('button[aria-label="Copy text"]')?.closest('article, [class*="group/b"]')?.getBoundingClientRect();
-      return g ? ([g.x, g.y, g.width, g.height] as [number, number, number, number]) : null;
-    }, null);
-    if (!message) return { ok: false, detail: "no message with a Copy text button" };
-    const [x, y] = onPage(message);
-    await ask({ op: "hover", x, y });
-    await later(400);
-    const button = await rectOf('button[aria-label="Copy text"]');
-    if (!button) return { ok: false, detail: "no Copy text button under the pointer" };
-    await click(onPage(button));
-    await later(600);
-    const got = await read();
-    return { ok: String(got["text"] ?? "").startsWith("Message 1:"), detail: got };
-  });
+  await step(
+    "a message's Copy text button copies for another app",
+    async () => {
+      const message = await driver.evaluate(() => {
+        const g = document.querySelector('button[aria-label="Copy text"]')?.closest('article, [class*="group/b"]')?.getBoundingClientRect();
+        return g ? ([g.x, g.y, g.width, g.height] as [number, number, number, number]) : null;
+      }, null);
+      if (!message) return { ok: false, detail: "no message with a Copy text button" };
+      const [x, y] = onPage(message);
+      await ask({ op: "hover", x, y });
+      await later(400);
+      const button = await rectOf('button[aria-label="Copy text"]');
+      if (!button) return { ok: false, detail: "no Copy text button under the pointer" };
+      await click(onPage(button));
+      await later(600);
+      const got = await read();
+      return { ok: String(got["text"] ?? "").startsWith("Message 1:"), detail: got };
+    },
+    "WebKitGTK's navigator.clipboard writes don't reach the Wayland clipboard (T152)",
+  );
 
-  await step("an image the page copies (navigator.clipboard.write, image/png) pastes in another app", async () => {
-    await driver.evaluate(() => {
-      const b = document.createElement("button");
-      b.id = "kiwi-check-copy-image";
-      Object.assign(b.style, { position: "fixed", left: "8px", top: "8px", zIndex: "99999", width: "140px", height: "40px" });
-      b.addEventListener("click", () => {
-        const c = document.createElement("canvas");
-        c.width = 32;
-        c.height = 24;
-        const png = new Promise<Blob>((ok, no) => c.toBlob((blob) => (blob ? ok(blob) : no(new Error("no PNG"))), "image/png"));
-        void navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
-      });
-      document.body.append(b);
-      return true;
-    }, null);
-    const r = await rectOf("#kiwi-check-copy-image");
-    if (!r) return { ok: false, detail: "no copy button" };
-    await click(onPage(r));
-    await later(1200);
-    await driver.evaluate(() => void document.getElementById("kiwi-check-copy-image")?.remove(), null);
-    const got = await read();
-    return { ok: Array.isArray(got["image"]), detail: got };
-  }, "WebKitGTK leaves the clipboard unchanged for an image/png ClipboardItem (writeText works); the UI copies no images yet");
+  await step(
+    "an image the page copies (navigator.clipboard.write, image/png) pastes in another app",
+    async () => {
+      await driver.evaluate(() => {
+        const b = document.createElement("button");
+        b.id = "kiwi-check-copy-image";
+        Object.assign(b.style, { position: "fixed", left: "8px", top: "8px", zIndex: "99999", width: "140px", height: "40px" });
+        b.addEventListener("click", () => {
+          const c = document.createElement("canvas");
+          c.width = 32;
+          c.height = 24;
+          const png = new Promise<Blob>((ok, no) => c.toBlob((blob) => (blob ? ok(blob) : no(new Error("no PNG"))), "image/png"));
+          void navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+        });
+        document.body.append(b);
+        return true;
+      }, null);
+      const r = await rectOf("#kiwi-check-copy-image");
+      if (!r) return { ok: false, detail: "no copy button" };
+      await click(onPage(r));
+      await later(1200);
+      await driver.evaluate(() => void document.getElementById("kiwi-check-copy-image")?.remove(), null);
+      const got = await read();
+      return { ok: Array.isArray(got["image"]), detail: got };
+    },
+    "WebKitGTK's navigator.clipboard writes don't reach the Wayland clipboard (T152)",
+  );
 
   await step("a PNG dragged from another app onto the composer is attached (T895)", async () => {
     const before = (await state()).files.length;
