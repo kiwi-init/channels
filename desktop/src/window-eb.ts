@@ -13,6 +13,7 @@ import { externalUrl } from "./guard.ts";
 import { attachWindow, ebHost } from "./host-eb.ts";
 import { handlers } from "./ipc/handlers.ts";
 import { ASK_AGAIN_URL, keyringPage, type KeyringState } from "./keyring-wait.ts";
+import { logMainError } from "./main-log.ts";
 import { openInBrowser } from "./open.ts";
 import { bunBridge } from "./rpc-eb.ts";
 import { snapshot, store } from "./store.ts";
@@ -26,7 +27,11 @@ const detailOf = (e: unknown): unknown => (e as { data?: { detail?: unknown } })
 
 function openOutside(url: string): void {
   const ext = externalUrl(url);
-  if (ext) void openInBrowser(ext, (u) => ebHost.openExternal(u)).catch(() => {});
+  if (!ext) {
+    logMainError(new Error(`refused to open a non-http(s) message link: ${url}`));
+    return;
+  }
+  void openInBrowser(ext, (u) => ebHost.openExternal(u)).catch((err: unknown) => logMainError(new Error(`could not open ${ext} in the system browser`, { cause: err })));
 }
 
 let showNote: (state: KeyringState) => void = () => {};
@@ -140,6 +145,7 @@ export async function createWindow(keyring: KeyringState | null = null): Promise
   Electrobun.events.on(`new-window-open-${webview.id}`, (e: { data?: { detail?: unknown } }) => {
     const url = openedUrl(e.data?.detail);
     if (url) openOutside(url);
+    else logMainError(new Error("a new-window request had no readable URL"));
   });
   webview.on("dom-ready", () => {
     mark("domReady");

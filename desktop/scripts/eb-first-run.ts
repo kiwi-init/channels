@@ -17,7 +17,7 @@ const clickButton = ({ name, within }: { name: string; within: string }): boolea
   return !!button;
 };
 
-const sendMessage = (text: string): boolean => {
+export const sendMessage = (text: string): boolean => {
   if (document.body.innerText.includes(text)) return true;
   const el = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]');
   if (!el || el.disabled) return false;
