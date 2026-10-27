@@ -666,10 +666,11 @@ const routes: RoomRoute[] = [
     guard: "owner",
     run: (_, m) =>
       Effect.gen(function* () {
-        const b = yield* json<{ rec?: unknown; e?: unknown; post?: unknown }>();
+        const b = yield* json<{ rec?: unknown; e?: unknown; post?: unknown; names?: unknown }>();
         if (typeof b.rec !== "string" || typeof b.e !== "number" || typeof b.post !== "boolean")
           return yield* new BadRequest({ message: "send the sealed record, its epoch, and whether they may post" });
-        yield* setRecord(m[1]!, b.rec, b.e, b.post);
+        const names = typeof b.names === "object" && b.names !== null ? { renamed: "renamed" in b.names && b.names.renamed === true } : undefined;
+        yield* setRecord(m[1]!, b.rec, b.e, b.post, names);
         // Everyone re-reads the roster, so the new record (and what it lets them do) lands at once.
         return { data: { ok: true }, fx: { broadcast: [frame({ t: "roster" })] } };
       }),

@@ -10,7 +10,7 @@ import { daemonPresence, daemonSeat } from "../daemon/rpc.ts";
 import { isReach, PROTOCOL_VERSION, type Message, type Presence } from "@kiwi/core/protocol.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { TOO_MANY_REQUESTS } from "@kiwi/core/sas.ts";
-import { aliasesOf, renamedMessage, type ChannelState } from "@kiwi/core/state.ts";
+import type { ChannelState } from "@kiwi/core/state.ts";
 import { isWakeVia, viaOf } from "@kiwi/core/wake.ts";
 import { holding, isAnswer, MARK_EVERY_MS, type Agent, type Delivery, type Hearing } from "./shared.ts";
 import { SessionState } from "./state.ts";
@@ -51,7 +51,7 @@ export class SessionListen extends SessionState {
           const fresh = !seen.has(m.seq);
           const wanted = fresh && this.wants(m, state, opts);
           if (wanted && (yield* lost)) return;
-          const delivered = wanted && (yield* onMessage(renamedMessage(aliasesOf(yield* this.members()), m), state)) !== false;
+          const delivered = wanted && (yield* onMessage(m, state)) !== false;
           if (delivered) readTo = m.seq;
           if (fresh && !delivered && (wanted || (narrowed && this.wants(m, state)))) held = true;
           if (yield* lost) return;

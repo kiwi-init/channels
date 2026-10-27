@@ -3,6 +3,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
+import { callRelay } from "@kiwi/core/client/relay.ts";
+import { makeRecord, sealRecord } from "@kiwi/core/membership.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
 import { PERMISSION_CHOICES, permissionReply } from "@kiwi/core/permission.ts";
 import { aliasesOf, fold, namesMoved, renamedMessage, rosterOf, type FoldBase } from "@kiwi/core/state.ts";
@@ -143,6 +145,30 @@ describe("seat rename", () => {
         "Patient-Otter",
       ),
     ).rejects.toThrow(/only in case/);
+  });
+
+  test("an app too old to keep earlier handles can't rewrite a renamed seat's record", async () => {
+    const { ownerCh, otter, wren } = await team();
+    const owner = ownerCh.identity;
+    const access = ownerCh.access;
+    const oldWrite = async (pk: string, name: string) => {
+      const rec = await sealRecord(
+        access.keys[String(access.epoch)]!,
+        await makeRecord(owner, access.roomId, { name, pk, xpk: (await ownerCh.members()).find((m) => m.pk === pk)!.xpk, display: "old app" }),
+      );
+      return runAgent(callRelay(relay, access.roomId, `/members/${pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e: access.epoch, post: true }), identity: owner }));
+    };
+    await oldWrite(wren.pk, "honest-wren");
+    await ownerCh.updateHandle(
+      (await ownerCh.members()).find((m) => m.pk === otter.pk)!,
+      "opus-vm-coder",
+    );
+    await expect(oldWrite(otter.pk, "opus-vm-coder")).rejects.toThrow(/renamed/);
+    await ownerCh.updateNickname(
+      (await ownerCh.members()).find((m) => m.pk === otter.pk)!,
+      "vm coder",
+    );
+    expect((await ownerCh.members()).find((m) => m.pk === otter.pk)).toMatchObject({ name: "opus-vm-coder", display: "vm coder", was: ["patient-otter"] });
   });
 
   test("a renamed seat's handles stay taken after it leaves", async () => {

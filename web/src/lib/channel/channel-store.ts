@@ -5,7 +5,7 @@ import { ChannelGone } from "@kiwi/core/client/relay-errors.ts"
 import type { HumanSession, RoomsSetting, SendOptions } from "@kiwi/core/client.ts"
 import type { JoinRequest, Member } from "@kiwi/core/membership.ts"
 import { SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts"
-import { aliasesOf, fold, renamedLog, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts"
+import { aliasesOf, aliasPairs, fold, namesMoved, renamedLog, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts"
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "../channel-ops"
 import { openCached, planCached, readKept, rememberKept, rememberRow, rememberRows } from "../history"
 import { markOnce } from "../marks"
@@ -102,6 +102,8 @@ export class ChannelStore {
   private readonly reconcileDue: ReadonlySignal<string>
   private readonly checksDue: ReadonlySignal<string>
   private readonly rulesDue: ReadonlySignal<string>
+  private readonly namesDue: ReadonlySignal<string>
+  private rebasedFor = ""
 
   private guardIn = false
   private roomsIn = false
@@ -132,6 +134,11 @@ export class ChannelStore {
     this.keyOf = computed(() => new Map(admitted.value.filter((r) => r.active).map((r) => [r.name, r.pk])))
     this.rosterForFold = computed(() => foldRoster(admitted.value))
     const shown = computed(() => renamedLog(aliasesOf(this.rosterForFold.value), this.messages.value))
+    this.namesDue = computed(() => {
+      const base = this.base.value
+      const roster = this.rosterForFold.value
+      return base && namesMoved(base, roster) ? JSON.stringify(aliasPairs(aliasesOf(roster))) : ""
+    })
     this.state = computed(() => fold(this.messages.value, this.rosterForFold.value, this.now.value, this.roomsFloor.value, this.guardFloor.value, this.base.value))
     this.caughtUp = computed(() => {
       const start = this.start.value
@@ -225,6 +232,7 @@ export class ChannelStore {
       on(this.checksDue, () => this.postReviewChecks()),
       this.every(60_000, () => this.drainGithub()),
       on(this.rulesDue, () => this.githubRules()),
+      on(this.namesDue, (key) => void this.rebase(key)),
       subscribeTick(CLOCK_MS, () => {
         this.now.value = tickOf(Date.now(), CLOCK_MS)
       }),
@@ -465,6 +473,24 @@ export class ChannelStore {
       clearTimeout(flush)
       lent.release()
     }
+  }
+
+  private async rebase(key: string): Promise<void> {
+    if (!key || key === this.rebasedFor) return
+    this.rebasedFor = key
+    const roster = this.rosterForFold.peek()
+    const snap = await this.ch.snapshot().catch(() => null)
+    const from = snap && !namesMoved(snap, roster) ? snap : null
+    const since = from?.n ?? 0
+    const page = await this.ch.history(since).catch(() => null)
+    if (!page || (page.head > since && page.first !== since + 1)) return
+    batch(() => {
+      this.base.value = from
+      this.messages.value = merged(
+        page.messages,
+        this.messages.peek().filter((m) => m.seq > since)
+      )
+    })
   }
 
   private trimSoon(): () => void {

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 
 import type { Member } from "@kiwi/core/membership.ts"
+import { fold, rosterOf, type FoldBase } from "@kiwi/core/state.ts"
 import { PROTOCOL_VERSION, SNAPSHOT_EVERY, SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts"
 import type { ChannelOps, FollowEvent } from "../../../../desktop/src/bridge.ts"
 import { ChannelLink } from "../channel-ops"
@@ -310,6 +311,27 @@ describe("the GitHub chores", () => {
     expect(r.called("drainGithub")).toHaveLength(0)
     expect(r.called("syncGithubRules")).toHaveLength(0)
     expect(r.called("syncGithubReleases")).toHaveLength(0)
+    close()
+  })
+})
+
+describe("a renamed seat", () => {
+  test("a base folded before a seat's rename is dropped for the whole log, which folds under the new handle", async () => {
+    const log = [1, 2, 3].map((seq) => ({ ...msg(seq), pk: "pk-atlas" }))
+    const kept: { base?: FoldBase } = {}
+    fold(log.slice(0, 2), rosterOf([person("atlas", "pk-atlas")]), Date.now(), null, null, null, (b) => void (kept.base = b))
+    const history = (since: unknown) => ({ head: 3, messages: log.filter((m) => m.seq > Number(since)), first: Number(since) + 1 })
+    const r = relay(2_002, { answers: { snapshot: () => kept.base, history } })
+    const { store, close } = await opened(r)
+    r.say({ _tag: "Message", message: log[2]!, row: null })
+    await until(() => store.handle.value.state.head === 3)
+    expect(store.handle.value.state.members.get("atlas")?.messages).toBe(3)
+    r.setRoster([{ ...person("atlas-coder", "pk-atlas"), was: ["atlas"] }])
+    await store.refreshRoster()
+    await until(() => r.called("history").some((c) => c.args[0] === 0))
+    await until(() => store.handle.value.messages.length === 3)
+    expect(store.handle.value.messages.map((m) => m.from)).toEqual(["atlas-coder", "atlas-coder", "atlas-coder"])
+    expect(store.handle.value.state.members.get("atlas-coder")?.messages).toBe(3)
     close()
   })
 })

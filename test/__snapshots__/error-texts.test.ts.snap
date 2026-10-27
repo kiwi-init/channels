@@ -85,6 +85,7 @@ exports[`the relay's error texts are exactly these 1`] = `
   "409 next epoch is \${meta.epoch + 1}",
   "409 stale key epoch \${e}; current is \${epoch}",
   "409 this channel has a newer snapshot (#\${stored.n})",
+  "409 this member was renamed: change its record from an up-to-date Channels app, which keeps its earlier handles",
   "409 this request already has the owner's nonce",
   "409 this request hasn't finished its code check yet",
   "409 wait for the owner's half of the check",

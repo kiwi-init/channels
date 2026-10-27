@@ -11,11 +11,11 @@ import { GENERAL_ROOM, knownOp, outgrown, PAGE_LIMIT, type Message } from "@kiwi
 import { Rejected } from "@kiwi/core/refusals.ts";
 import {
   aliasesOf,
+  aliasPairs,
   currentName,
   findRoom,
   fold,
   namesMoved,
-  renamedLog,
   renamedMessage,
   rosterOf,
   type ChannelState,
@@ -34,7 +34,7 @@ const NOT_A_MEMBER = " isn't a member";
 
 function poisoned(base: FoldBase, roster: Roster): boolean {
   const names = new Set(roster.filter((r) => r.kind !== "computer").map((r) => r.name));
-  return namesMoved(base, roster) || base.rejected.some(([, why]) => why.endsWith(NOT_A_MEMBER) && names.has(why.slice(0, -NOT_A_MEMBER.length)));
+  return base.rejected.some(([, why]) => why.endsWith(NOT_A_MEMBER) && names.has(why.slice(0, -NOT_A_MEMBER.length)));
 }
 
 export const outgrownCache = (cached: readonly Message[], base: FoldBase | null): boolean => cached.some((m) => m.newer !== undefined && knownOp(m.newer.op)) || (!!base && outgrown(base));
@@ -53,6 +53,8 @@ export class SessionState {
   private roomsCheckedAt = 0;
   private rosterCheckedAt = 0;
   private healed = false;
+  private healedNames: string | null = null;
+  private wholeLog = false;
   private toldRenamed = false;
   private log: Message[] | null = null;
   private saved = 0;
@@ -127,8 +129,8 @@ export class SessionState {
     const first = this.log[0]?.seq;
     const holed = first !== undefined && first > (this.base?.n ?? 0) + 1;
     const current = !holed && seen !== null && seen.head <= lastSeq(this.log) && lastSeq(this.log) >= this.owed;
-    if (!current && (holed || !look?.fetched.has(this) || lastSeq(this.log) < this.owed)) {
-      const fetched = !this.base && (first === undefined || first > 1) ? yield* this.ch.fx.snapshot() : null;
+    if (!current && (this.wholeLog || holed || !look?.fetched.has(this) || lastSeq(this.log) < this.owed)) {
+      const fetched = !this.base && !this.wholeLog && (first === undefined || first > 1) ? yield* this.ch.fx.snapshot() : null;
       const floor = this.base?.n ?? fetched?.n ?? 0;
       const hole = first !== undefined && first > floor + 1;
       const from = hole ? floor : Math.max(lastSeq(this.log), floor);
@@ -177,7 +179,21 @@ export class SessionState {
     const seen = yield* this.peek();
     const [synced, roster] = yield* Effect.all([this.sync(seen), this.members(false, seen?.members ?? undefined)], { concurrency: "unbounded" });
     let messages = synced;
-    if (this.base && !this.healed && poisoned(this.base, roster)) {
+    const names = JSON.stringify(aliasPairs(aliasesOf(roster)));
+    if (this.base && namesMoved(this.base, roster) && this.healedNames !== names) {
+      this.healedNames = names;
+      const cache = yield* Cache;
+      this.wholeLog = (yield* orNone(this.ch.fx.page(0, 1)))?.[0]?.seq === 1;
+      if (this.wholeLog) {
+        this.log = [];
+        this.saved = 0;
+        yield* cache.replace(this.cfg.roomId, []);
+      }
+      yield* cache.dropBase(this.cfg.roomId);
+      this.base = null;
+      messages = yield* this.sync(seen);
+      this.wholeLog = false;
+    } else if (this.base && !this.healed && poisoned(this.base, roster)) {
       this.healed = true;
       yield* (yield* Cache).dropBase(this.cfg.roomId);
       this.base = null;
@@ -186,7 +202,7 @@ export class SessionState {
     const look = yield* Look;
     const prior = look?.seen.get(this);
     if (prior && prior.messages === messages && prior.roster === roster && prior.rooms === this.roomsFloor && prior.guard === this.guardFloor) return prior.view;
-    const view = { messages: renamedLog(aliasesOf(roster), messages), state: yield* this.foldState(messages, roster, seen?.info ?? undefined) };
+    const view = { messages, state: yield* this.foldState(messages, roster, seen?.info ?? undefined) };
     look?.seen.set(this, { messages, roster, rooms: this.roomsFloor, guard: this.guardFloor, view });
     return view;
   });
@@ -311,6 +327,11 @@ export class SessionState {
     yield* this.whileOurs(cursor.write(this.alias, this.me, head));
     return head;
   });
+
+  isMe(name: string): boolean {
+    const aliases = aliasesOf(this.roster ?? []);
+    return currentName(aliases, name) === currentName(aliases, this.me);
+  }
 
   wants(m: Message, state: ChannelState | null, d: Delivery = {}): boolean {
     const aliases = aliasesOf(this.roster ?? []);

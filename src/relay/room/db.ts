@@ -137,6 +137,7 @@ export class RoomDb {
     if (!memberCols.has("admits_until")) this.sql.run("ALTER TABLE members ADD COLUMN admits_until INTEGER");
     if (!memberCols.has("admitted_by")) this.sql.run("ALTER TABLE members ADD COLUMN admitted_by TEXT");
     if (!memberCols.has("gone")) this.sql.run("ALTER TABLE members ADD COLUMN gone TEXT");
+    if (!memberCols.has("renamed")) this.sql.run("ALTER TABLE members ADD COLUMN renamed INTEGER NOT NULL DEFAULT 0");
     const cols = new Set(this.sql.all<{ name: string }>("PRAGMA table_info(requests)").map((c) => c.name));
     for (const [col, def] of REQUEST_COLUMNS) {
       if (!cols.has(col)) this.sql.run(`ALTER TABLE requests ADD COLUMN ${col} ${def}`);
