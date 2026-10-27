@@ -1,6 +1,7 @@
-import { useSyncExternalStore } from "react"
+import { useMemo, useSyncExternalStore } from "react"
 
 import { SCOPES, type Scope } from "@kiwi/core/scopes.ts"
+import type { Powers } from "~/model"
 
 const KEY = (roomId: string) => `mc.scopes.${roomId}`
 const listeners = new Set<() => void>()
@@ -31,4 +32,41 @@ export function useNewMembers(roomId: string): "read" | "write" {
     },
     () => (newMemberScopes(roomId).length === 0 ? "read" : "write")
   )
+}
+
+const POWER_KEY = (roomId: string, power: keyof Powers) => `mc.${power}.${roomId}`
+
+function powerOn(roomId: string, power: keyof Powers): boolean {
+  try {
+    return localStorage.getItem(POWER_KEY(roomId, power)) === "1"
+  } catch {
+    // Without storage nobody gets a power by default: the owner turns it on at Let in.
+    return false
+  }
+}
+
+export function newMemberPowers(roomId: string): Powers {
+  return { addsAgents: powerOn(roomId, "addsAgents"), answersDecisions: powerOn(roomId, "answersDecisions") }
+}
+
+export function setNewMemberPowers(roomId: string, powers: Powers): void {
+  try {
+    for (const power of ["addsAgents", "answersDecisions"] as const) localStorage.setItem(POWER_KEY(roomId, power), powers[power] ? "1" : "0")
+  } catch {
+    // Without storage the choice lasts until the page reloads: nothing else to keep it in.
+  }
+  for (const l of listeners) l()
+}
+
+const powersKey = (p: Powers): string => `${p.addsAgents ? 1 : 0}${p.answersDecisions ? 1 : 0}`
+
+export function useNewPowers(roomId: string): Powers {
+  const key = useSyncExternalStore(
+    (l) => {
+      listeners.add(l)
+      return () => void listeners.delete(l)
+    },
+    () => powersKey(newMemberPowers(roomId))
+  )
+  return useMemo(() => ({ addsAgents: key[0] === "1", answersDecisions: key[1] === "1" }), [key])
 }

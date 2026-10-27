@@ -152,14 +152,31 @@ export interface JoinAsk {
   id: string
   at: number
   name: string
+  handle?: string
   who: Kind
   harness?: Harness
   runs?: string
   machine?: string
   sponsor?: string
+  key?: string
+  said?: { machine?: string; tools?: string[]; repo?: string; outside: boolean } | "nothing"
+  pin?: { name: string; persona: string | null | undefined }
+  freeName?: string
   code: string
   check?: "unchecked" | "waiting" | "ready"
   answer?: { letIn: boolean; by: string; at: number }
+}
+
+export interface Powers {
+  addsAgents: boolean
+  answersDecisions: boolean
+}
+
+export interface JoinChoice {
+  as?: string
+  persona?: string | null
+  readOnly?: boolean
+  powers?: Powers
 }
 
 export interface ReviewAsk {
@@ -192,6 +209,7 @@ export interface Channel {
   goal?: string
   hold?: { note?: string; by: string; at: number }
   newMembers?: "read" | "write"
+  newPowers?: Powers
   repos: string[]
   rooms: Room[]
   directs: Direct[]
@@ -284,7 +302,7 @@ export interface Actions {
   react(code: string, seq: number, emoji: string): void
   answerPermission(code: string, id: string, allow: boolean): void
   answerQuestion(code: string, id: string, text: string): void
-  answerJoin(code: string, id: string, letIn: boolean): void
+  answerJoin(code: string, id: string, letIn: boolean, choice?: JoinChoice): void
   approveTask(code: string, task: number, approve: boolean): void
   addTask(code: string, title: string, owner?: string): void
   setTaskStatus(code: string, task: number, status: TaskStatus): void
@@ -315,6 +333,7 @@ export interface Actions {
   applyUi(): void
   signOut(): void
   setNewMembers(code: string, can: "read" | "write"): void
+  setNewPowers(code: string, powers: Powers): void
   answerPair(accept: boolean): void
   cancelPair(): void
   closeChannel(code: string): void
