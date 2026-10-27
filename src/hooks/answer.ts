@@ -89,16 +89,17 @@ export function grokMonitorListens(tasks: readonly BackgroundTask[], commands: r
 
 const LOGGED_CHARS = 300;
 
-function noteUnheard(b: Binding, tasks: readonly BackgroundTask[], commands: readonly string[]): void {
-  const monitors = tasks.filter((t) => t.type === "monitor").map((t) => JSON.stringify(t.text.slice(0, LOGGED_CHARS)));
+function noteGrok(b: Binding, text: string): void {
   try {
-    appendRotated(
-      join(home(), "stop.log"),
-      `${new Date().toISOString()}\t${b.alias}\t${b.as}\tgrok: no listener among ${monitors.length} monitors\t${monitors.join(" ")}\twanted ${JSON.stringify(commands)}\n`,
-    );
+    appendRotated(join(home(), "stop.log"), `${new Date().toISOString()}\t${b.alias}\t${b.as}\tgrok: ${text}\n`);
   } catch {
     // A home Kiwi can't write to keeps no stop log; the reminder still goes to the agent.
   }
+}
+
+function noteUnheard(b: Binding, tasks: readonly BackgroundTask[], commands: readonly string[]): void {
+  const monitors = tasks.filter((t) => t.type === "monitor").map((t) => JSON.stringify(t.text.slice(0, LOGGED_CHARS)));
+  noteGrok(b, `no listener among ${monitors.length} monitors\t${monitors.join(" ")}\twanted ${JSON.stringify(commands)}`);
 }
 
 const LISTENER_SETTLE_MS = 1_500;
@@ -111,9 +112,20 @@ function listenCheck(input: HookInput, b: Binding, who: Here, mc: string): Liste
     const heard = () => liveListeners().some((l) => l.alias === b.alias && l.as === b.as && ((!!who.session && l.session === who.session) || (!!who.pid && l.pid === who.pid)));
     return { kind: "check", listens: heard, settles: true };
   }
-  if (who.harness !== "grok" || input.stop_hook_active) return { kind: "skip" };
+  if (who.harness !== "grok") return { kind: "skip" };
+  if (input.stop_hook_active) {
+    noteGrok(b, "listener check skipped: stop_hook_active");
+    return { kind: "skip" };
+  }
   const tasks = backgroundTasks(input.backgroundTasks);
-  if (!tasks) return { kind: "skip" };
+  if (!tasks) {
+    const listens = () => {
+      const heard = liveListeners().some((l) => l.alias === b.alias && l.as === b.as);
+      if (!heard) noteGrok(b, "no backgroundTasks; no live listener");
+      return heard;
+    };
+    return { kind: "check", listens, settles: false };
+  }
   const commands = [COMMANDS.listen(mc), COMMANDS.listen(`${mcBin()} ${channelOption(b.alias)} ${asOption(b.as)}`)];
   const listens = () => {
     const heard = grokMonitorListens(tasks, commands);

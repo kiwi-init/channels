@@ -303,7 +303,17 @@ describe("Grok keeps its own monitor running", () => {
     const listen = /start the monitor tool with command `([^`]+)`/.exec(deaf!.reason)![1]!;
     expect(listen).toEndWith(" listen");
     expect(await stop({ stop_hook_active: true, backgroundTasks: [] })).toBeNull();
-    expect(await stop({})).toBeNull();
+    const activeLogged = readFileSync(join(h, "stop.log"), "utf8").trim().split("\n").at(-1)!;
+    expect(activeLogged).toContain("grok-wake");
+    expect(activeLogged).toContain(me);
+    expect(activeLogged).toContain("grok: listener check skipped: stop_hook_active");
+    const missing = await stop({});
+    expect(missing?.decision).toBe("block");
+    expect(missing?.reason).toContain("no Kiwi listener of yours is running for grok-wake");
+    const missingLogged = readFileSync(join(h, "stop.log"), "utf8").trim().split("\n").at(-1)!;
+    expect(missingLogged).toContain("grok-wake");
+    expect(missingLogged).toContain(me);
+    expect(missingLogged).toContain("grok: no backgroundTasks; no live listener");
     expect(await stop({ backgroundTasks: [{ id: "m1", type: "monitor", status: "running", description: listen }] })).toBeNull();
     const elsewhere = `${listen} -c other --as other`;
     expect((await stop({ backgroundTasks: [{ id: "m3", type: "monitor", status: "running", description: elsewhere }] }))?.decision).toBe("block");
@@ -317,6 +327,7 @@ describe("Grok keeps its own monitor running", () => {
     const monitor = spawn(h, ["listen"], G);
     shells.push(monitor);
     await until(async () => (await listenersOf(h, me)).some((l) => l.session === "g1"), "the monitor's listener held for this Grok session");
+    expect(await stop({})).toBeNull();
     expect((await stop({ backgroundTasks: [{ id: "m2", type: "monitor", status: "running", description: "tail -f build.log" }] }))?.decision).toBe("block");
     expect(
       (
