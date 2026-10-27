@@ -21,10 +21,7 @@
     "grim",
     "plutil",
     "secret-tool",
-    "nm",
-    "readelf",
-    "patch",
-    "^g\\+\\+$"
+    "readelf"
   ],
   "workspaces": {
     ".": {

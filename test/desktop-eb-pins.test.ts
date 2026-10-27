@@ -30,21 +30,12 @@ describe("Electrobun's toolchain and what it ships are pinned in the repo (T804)
     for (const key of ["linux-x64", "linux-arm64"]) expect(pinFor(PINS.devkit, key, "devkit")).toBe(pinFor(PINS.devkit, "macos-arm64", "devkit"));
   });
 
-  test("Linux's native wrapper is built from pinned Livewire source with the client-decoration patch (T1011)", () => {
-    const { source, cef, dawn } = PINS.nativeWrapper;
-    const commit = /^https:\/\/codeload\.github\.com\/kiwi-init\/electrobun-livewire\/tar\.gz\/([0-9a-f]{40})$/.exec(source.url)?.[1];
-    expect(commit).toBeString();
-    expect(source.keep).toBe(`electrobun-livewire-${commit}/package/src/native`);
-    expect(cef.keep).toContain("_linux64_minimal/include");
-    expect(dawn.keep).toBe("linux-x64/include");
-    for (const pin of [source, cef, dawn]) expect(pin.tree).toMatch(/^[0-9a-f]{64}$/);
+  test("Livewire's own native wrapper ships, checked for an AppIndicator link (T377)", () => {
     expect(fs.existsSync(path.join(import.meta.dirname, "..", "desktop", "native", "linux", "electrobun-wayland.patch"))).toBe(false);
     expect(fs.existsSync(path.join(import.meta.dirname, "..", "desktop", "native", "linux", "electrobun-tray.patch"))).toBe(false);
-    const patch = fs.readFileSync(path.join(import.meta.dirname, "..", "desktop", "native", "linux", "electrobun-titlebar.patch"), "utf8");
-    expect(patch.match(/^\+\+\+ .*$/gm)).toEqual(["+++ b/package/src/native/linux/wrapper/window_exports.inc"]);
-    expect(patch).toContain("\n+            gtk_window_set_titlebar(GTK_WINDOW(window), gtk_fixed_new());\n");
     const postBuild = fs.readFileSync(path.join(import.meta.dirname, "..", "desktop", "scripts", "eb-post-build.ts"), "utf8");
-    expect(postBuild).toContain('buildNativeWrapper(wrapper, path.join(bin, "libasar.so"))');
+    expect(postBuild).toContain('execFileSync("readelf", ["-d", wrapper]');
+    expect(postBuild).toContain('line.includes("appindicator")');
     const shell = fs.readFileSync(path.join(import.meta.dirname, "..", "desktop", "native", "linux", "kiwi-shell.c"), "utf8");
     expect(shell).toContain('#define TRAY_LIBRARY "libayatana-appindicator3.so.1"');
     expect(shell).toContain("  if (!tray_library()) return false;\n");
