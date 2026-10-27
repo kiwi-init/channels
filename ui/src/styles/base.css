@@ -741,3 +741,47 @@ kbd,
   --raise: var(--bg-3);
   --raise-2: color-mix(in srgb, var(--bg-3) 86%, var(--ink));
 }
+
+.heading h3,
+.day,
+.num,
+.count,
+.tile-badge,
+.top-meta,
+.side-role,
+.side-status,
+.panel-sub,
+.msg-time,
+.msg-time-hover,
+.msg-role,
+.msg-runs,
+.msg-thread-n,
+.thread-count,
+.typing,
+.sys,
+.chip-id,
+.chip-meta,
+.compose-hint,
+.board-n,
+.board-meta,
+.task-note-meta,
+.task-pr-meta,
+.task-wait-meta,
+.needs-sum,
+.needs-meta,
+.needs-time,
+.needs-id,
+.person-id,
+.person-kind,
+.set-device-meta,
+.palette-meta,
+.add-who-meta,
+.theme-when {
+  font-family: var(--mono);
+  letter-spacing: -0.01em;
+}
+
+.heading h3,
+.msg-thread-n {
+  font-weight: 500;
+}
