@@ -81,7 +81,7 @@ function Lane({
             {a.label}
             {a.lead && <span className="ml-1.5 font-normal text-ink-3">lead</span>}
           </span>
-          <span className="block truncate text-meta text-ink-3">{[a.name !== a.label ? `@${a.name}` : null, sponsor ? `for ${nameOf(sponsor)}` : null, a.model].filter(Boolean).join(" · ")}</span>
+          <span className="block truncate text-meta text-ink-3">{[sponsor ? `for ${nameOf(sponsor)}` : null, a.model].filter(Boolean).join(" · ")}</span>
         </span>
       </header>
 

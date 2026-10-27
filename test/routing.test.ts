@@ -294,7 +294,7 @@ describe("handing over", () => {
     const hand = await ev("mac", old);
     const s = fold([add, hand], roster);
     expect(s.tasks.get(add.seq)!.owner).toBe("win");
-    expect(s.tasks.get(add.seq)!.notes[0]).toEqual({ seq: hand.seq, by: "mac", ts: expect.any(Number), text: "build on Windows next" });
+    expect(s.tasks.get(add.seq)!.notes[0]).toEqual({ seq: hand.seq, by: "mac", ts: expect.any(Number), text: "build on Windows next", assign: true });
     expect(describeEvent(hand, s)).toBe(`assigned T${add.seq} “port” to win: build on Windows next`);
     expect(formatTask(s, s.tasks.get(add.seq)!)).not.toContain("files");
   });

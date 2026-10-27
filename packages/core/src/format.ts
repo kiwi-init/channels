@@ -106,7 +106,7 @@ export function proofLabel(p: { url: string; label?: string }): string {
  */
 /** " via mac-mini": the computer that let an agent in, as its join reads. */
 
-export function describeEvent(m: Message, state?: ChannelState): string {
+export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle: string) => string = (handle) => handle): string {
   const ev = m.ev;
   if (!ev) return m.body;
   const task = (id: number) => {
@@ -123,15 +123,15 @@ export function describeEvent(m: Message, state?: ChannelState): string {
       return `joined${role ? ` as ${role}` : ""}${about ? ` (${about})` : ""}`;
     }
     case "role.set":
-      return ev.role ? `made ${ev.member} ${ev.role}${ev.about ? ` (${ev.about})` : ""}` : `cleared ${ev.member}'s role`;
+      return ev.role ? `made ${nameOf(ev.member)} ${ev.role}${ev.about ? ` (${ev.about})` : ""}` : `cleared ${nameOf(ev.member)}'s role`;
     case "role.refuse":
-      return `kept ${ev.member}'s role as it was`;
+      return `kept ${nameOf(ev.member)}'s role as it was`;
     case "picture.set":
       return ev.picture ? "set their picture" : "cleared their picture";
     case "color.set":
-      return ev.color ? `${ev.member === m.from ? "picked" : `gave ${ev.member}`} the colour ${ev.color}` : `cleared ${ev.member === m.from ? "their" : `${ev.member}'s`} colour`;
+      return ev.color ? `${ev.member === m.from ? "picked" : `gave ${nameOf(ev.member)}`} the colour ${ev.color}` : `cleared ${ev.member === m.from ? "their" : `${nameOf(ev.member)}'s`} colour`;
     case "scope.set":
-      return `set what ${ev.member} may do: ${ev.scopes === null ? "full" : describeScopes(readScopes(ev.scopes) ?? [])}`;
+      return `set what ${nameOf(ev.member)} may do: ${ev.scopes === null ? "full" : describeScopes(readScopes(ev.scopes) ?? [])}`;
     case "mode.set":
       return `${ev.coordinatorOnly ? "turned on" : "turned off"} coordinator-only (gone: it no longer gates anything)`;
     case "room.create":
@@ -143,9 +143,9 @@ export function describeEvent(m: Message, state?: ChannelState): string {
       return now && now !== name ? `renamed a room to #${name} (now #${now})` : `renamed a room to #${name}`;
     }
     case "seat.reclaim":
-      return `moved ${ev.member}'s seat to a new key (${ev.from} → ${ev.to}): the old key is out`;
+      return `moved ${nameOf(ev.member)}'s seat to a new key (${ev.from} → ${ev.to}): the old key is out`;
     case "task.add":
-      return `added task ${taskId(m.seq)} “${ev.title}”${ev.from !== undefined ? ` (from ${taskId(ev.from)})` : ""}${ev.issue ? ` from ${ev.issue.repo}#${ev.issue.number}` : ""}${ev.owner ? ` for ${ev.owner}` : ""}${ev.review ? `; ${reviewPhrase(ev.review)}` : ""}`;
+      return `added task ${taskId(m.seq)} “${ev.title}”${ev.from !== undefined ? ` (from ${taskId(ev.from)})` : ""}${ev.issue ? ` from ${ev.issue.repo}#${ev.issue.number}` : ""}${ev.owner ? ` for ${nameOf(ev.owner)}` : ""}${ev.review ? `; ${reviewPhrase(ev.review === "*" ? "*" : nameOf(ev.review))}` : ""}`;
     case "card":
       return `described itself: ${cardLine(ev) || "nothing"}`;
     case "task.claim":
@@ -155,12 +155,13 @@ export function describeEvent(m: Message, state?: ChannelState): string {
       if (ev.verdict === "rejected" && ev.state === "doing") return `rejected ${task(ev.task)}${round}${note(ev.note)}`;
       if (ev.state === "review") return `${STATE_VERB.review} ${task(ev.task)}${round}${note(ev.note)}`;
       if (ev.state === "done" && state?.tasks.get(ev.task)?.review && state.tasks.get(ev.task)?.approvedBy === m.from) return `approved ${task(ev.task)}${note(ev.note)}`;
-      if (ev.review !== undefined && !ev.state) return ev.review ? `asked for ${task(ev.task)} to be reviewed: ${reviewPhrase(ev.review)}${note(ev.note)}` : `dropped the review on ${task(ev.task)}`;
+      if (ev.review !== undefined && !ev.state)
+        return ev.review ? `asked for ${task(ev.task)} to be reviewed: ${reviewPhrase(ev.review === "*" ? "*" : nameOf(ev.review))}${note(ev.note)}` : `dropped the review on ${task(ev.task)}`;
       if (ev.state === "blocked") return `is blocked on ${task(ev.task)}${note(ev.note)}`;
       // Handed over: given to someone, back to open for them to start.
-      if (ev.owner && (!ev.state || ev.state === "todo")) return `assigned ${task(ev.task)} to ${ev.owner}${note(ev.note)}`;
+      if (ev.owner && (!ev.state || ev.state === "todo")) return `assigned ${task(ev.task)} to ${nameOf(ev.owner)}${note(ev.note)}`;
       if (ev.state) return `${STATE_VERB[ev.state]} ${task(ev.task)}${note(ev.note)}`;
-      if (ev.owner) return `assigned ${task(ev.task)} to ${ev.owner}${note(ev.note)}`;
+      if (ev.owner) return `assigned ${task(ev.task)} to ${nameOf(ev.owner)}${note(ev.note)}`;
       if (ev.owner === null) return `unassigned ${task(ev.task)}${note(ev.note)}`;
       if (ev.title) return `renamed ${taskId(ev.task)} to “${ev.title}”`;
       if (ev.proof) return `added proof to ${task(ev.task)}: ${proofLabel(ev.proof)} ${ev.proof.url}${note(ev.note)}`;

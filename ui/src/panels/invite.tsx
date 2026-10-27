@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react"
+import { Fragment, useEffect, useState } from "react"
 
 import "~/styles/people-add.css"
-import { cx, Heading } from "~/kit/bits"
+import { cx, Heading, Toggle } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { Channel } from "~/model"
 import { useApp } from "~/nav"
@@ -9,7 +9,7 @@ import { PanelHead } from "~/panels/frame"
 
 type Link = { code: string; link: string } | { code: string; failed: true }
 
-export function useInviteLink(code: string): { link: string | null; failed: boolean; retry: () => void } {
+function useInviteLink(code: string): { link: string | null; failed: boolean; retry: () => void } {
   const { app } = useApp()
   const [got, setGot] = useState<Link | null>(null)
   const [attempt, setAttempt] = useState(0)
@@ -34,13 +34,22 @@ export function useInviteLink(code: string): { link: string | null; failed: bool
   }
 }
 
-export const inviteCode = (link: string): string => link.slice(link.lastIndexOf("/") + 1)
-
-export function CopyBox({ text, label, disabled }: { text: string | null; label: string; disabled?: boolean }) {
+export function CopyBox({ text, label, disabled, wrap }: { text: string | null; label: string; disabled?: boolean; wrap?: boolean }) {
   const { toast } = useApp()
   return (
-    <div className={cx("codebox invite-box", disabled && "is-off")}>
-      <code>{text ?? "…"}</code>
+    <div className={cx("codebox invite-box", disabled && "is-off", wrap && "is-wrap")}>
+      <code>
+        {text === null
+          ? "…"
+          : wrap
+            ? text.split(/\s(?=--)/).map((part, i) => (
+                <Fragment key={i}>
+                  {i > 0 && " "}
+                  <span className="invite-part">{part}</span>
+                </Fragment>
+              ))
+            : text}
+      </code>
       <button
         type="button"
         className="icon-btn"
@@ -61,6 +70,11 @@ export function CopyBox({ text, label, disabled }: { text: string | null; label:
   )
 }
 
+const POWERS = [
+  { id: "addsAgents", label: "Can add agents", on: "Their agents join on their own from computers paired with their Kiwi app.", off: "Their agents wait for you to let them in." },
+  { id: "answersDecisions", label: "Can answer decisions", on: "They answer agents' decisions in Needs you, as you do.", off: "Agents' decisions go to you and each agent's own person." },
+] as const
+
 const CAN = [
   { id: "read", label: "Only read", says: "They see every room and task, and can't post." },
   { id: "write", label: "Write and work", says: "They post, take tasks and bring their own agents." },
@@ -70,6 +84,7 @@ export function InvitePanel({ channel }: { channel: Channel }) {
   const { app } = useApp()
   const { link, failed, retry } = useInviteLink(channel.code)
   const can = channel.newMembers ?? "write"
+  const powers = channel.newPowers ?? { addsAgents: false, answersDecisions: false }
   return (
     <>
       <PanelHead title="Invite people" />
@@ -99,6 +114,16 @@ export function InvitePanel({ channel }: { channel: Channel }) {
               ))}
             </div>
             <p className="invite-note">{CAN.find((c) => c.id === can)?.says}</p>
+            {POWERS.map((power) => (
+              <div key={power.id} className="invite-power">
+                <div className="invite-power-text">
+                  <span className="invite-power-label">{power.label}</span>
+                  <p className="invite-note">{powers[power.id] ? power.on : power.off}</p>
+                </div>
+                <Toggle label={power.label} on={powers[power.id]} onChange={(on) => app.actions.setNewPowers(channel.code, { ...powers, [power.id]: on })} />
+              </div>
+            ))}
+            <p className="invite-note">You can change it for each person when you let them in.</p>
           </section>
         )}
       </div>

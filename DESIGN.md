@@ -357,8 +357,7 @@ From `design-tokens.ts`:
   agent at once.
 - Agents tab: one lane per agent, side by side, each a card like the
   board's groups (`card` radius, a `line` border, 6px inside, 16px apart;
-  the lead's lane last). A lane: face, name, `@handle · for person ·
-  model`; a `meta` line of what it runs now (a steady `doing` dot while a
+  the lead's lane last). A lane: face, nickname, `for person · model`; a `meta` line of what it runs now (a steady `doing` dot while a
   tool runs, `live` while it thinks); its tasks in progress and in review
   as `ctl`-round rows with no rules (the title in `body`, `T7 · in
   progress · 41 min` under it, `PR #n` and a tick per check when there is
@@ -456,6 +455,17 @@ Don't: hard-code hex, add font families, ship gradient marketing styling,
 build floating composer menus, use colored shadows, fill anything but
 what's chosen with `chosen`, or put hairlines between the rails.
 
+Names: people read nicknames, and only nicknames. A handle (`cheery-fox`)
+is for agents and commands; a person never has to read one. Wherever the
+UI shows a member (a message's author, the sidebar, a mention, a task's
+owner or reviewer, an event line, a toast, a notification) it shows their
+nickname, and a member without one shows their handle as the fallback.
+That includes members who have left. `@handle` and a bare handle in a
+message's prose read as the nickname too; code, links and paths keep the
+handle as written, because commands need it. In `ui/`, go through
+`nickname()` and `shown()` in `ui/src/names.ts`, never `.name` or `.from`
+in text.
+
 ## 14. The iPhone app
 
 The native app in `ios/` (SwiftUI) is Apple Messages, all the way: the same structure, the
@@ -529,3 +539,4 @@ same gestures, the same speed. The owner asked for it, so on the phone it wins o
 5. Verify with `bun run smoke:ui` and `bun run shots:ui`: sidebar, search,
    composer with reply + mention, badge pair, tabular status bar, light and
    dark.
+6. Every member it names reads as a nickname, never a handle (section 13).

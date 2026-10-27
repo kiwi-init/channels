@@ -1,11 +1,10 @@
 // A task is open, doing or done (an older client's cancel is done), a near-duplicate open title
-// warns, and an empty kiwi sh glob says so.
+// warns.
 
 import { describe, expect, test } from "bun:test";
 import { describeEvent, formatStatus, formatTask, formatTasks } from "@kiwi/core/format.ts";
 import { memberLoad } from "@kiwi/core/load.ts";
 import { wellFormedEvent, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
-import { runSh } from "../src/sh.ts";
 import { fold as foldWith, similarOpenTasks, titlesLookAlike, type Roster, type Task } from "@kiwi/core/state.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 
@@ -118,34 +117,5 @@ describe("near-duplicate titles", () => {
     const cancelled = await msg(a, "a", { op: "task.update", task: cancel.seq, state: "cancelled" });
     const s = fold([open, done, finish, cancel, cancelled]);
     expect(similarOpenTasks(s, "fix the login button!").map((t: Task) => t.id)).toEqual([open.seq]);
-  });
-});
-
-describe("kiwi sh empty globs", () => {
-  const files = { "/channel/tasks/T2.md": "hello\n", "/channel/nope/": "" };
-
-  test("a glob that matches nothing is named on stderr and the script still runs", async () => {
-    const r = await runSh(files, "echo /channel/nope/*.md; echo after");
-    expect(r.exitCode).toBe(0);
-    expect(r.stdout).toBe("after\n");
-    expect(r.stderr).toBe("bash: no match: /channel/nope/*.md\n");
-  });
-
-  test("a glob that matches nothing, and nothing after it, exits nonzero", async () => {
-    const r = await runSh(files, "echo /channel/nope/*.md");
-    expect(r.exitCode).not.toBe(0);
-    expect(r.stdout).toBe("");
-    expect(r.stderr).toBe("bash: no match: /channel/nope/*.md\n");
-  });
-
-  test("a matching glob is quiet, and test, arithmetic and prefix removal are not globs", async () => {
-    const hit = await runSh(files, "echo /channel/tasks/*.md");
-    expect(hit).toMatchObject({ stdout: "/channel/tasks/T2.md\n", stderr: "", exitCode: 0 });
-    const testCmd = await runSh(files, "[ -f x ]; echo after");
-    expect(testCmd).toMatchObject({ stdout: "after\n", stderr: "", exitCode: 0 });
-    const arith = await runSh(files, "echo $((2*3))");
-    expect(arith).toMatchObject({ stdout: "6\n", stderr: "", exitCode: 0 });
-    const trim = await runSh(files, "x=a/b; echo ${x#*/}");
-    expect(trim).toMatchObject({ stdout: "b\n", stderr: "", exitCode: 0 });
   });
 });

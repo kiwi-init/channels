@@ -68,16 +68,16 @@ jobs:
           fetch-depth: 2
       - uses: ./.github/actions/setup
       - name: core types
-        run: bunx tsc --noEmit && bunx tsc --noEmit -p tsconfig.worker.json
+        run: bunx tsrs --noEmit && bunx tsrs --noEmit -p tsconfig.worker.json
       - name: web types
         if: ${{ !cancelled() }}
-        run: cd web && bunx tsc -b
+        run: cd web && bunx tsrs -b
       - name: desktop types
         if: ${{ !cancelled() }}
-        run: cd desktop && bunx tsc --noEmit
+        run: cd desktop && bunx tsrs --noEmit
       - name: phone engine types
         if: ${{ !cancelled() }}
-        run: bunx tsc --noEmit -p ios/engine/tsconfig.json && bunx tsc --noEmit -p ios/scripts/tsconfig.json && bunx tsc --noEmit -p android/scripts/tsconfig.json
+        run: bunx tsrs --noEmit -p ios/engine/tsconfig.json && bunx tsrs --noEmit -p ios/scripts/tsconfig.json && bunx tsrs --noEmit -p android/scripts/tsconfig.json
       - name: ui tokens
         if: ${{ !cancelled() }}
         run: bun scripts/ui-tokens.ts
@@ -95,7 +95,7 @@ jobs:
         run: cd web && bun oxfmt --check src
       - name: ui types
         if: ${{ !cancelled() }}
-        run: cd ui && bunx tsc -b
+        run: cd ui && bunx tsrs -b
       - name: ui lint
         if: ${{ !cancelled() }}
         run: cd ui && bun oxlint src
@@ -216,6 +216,10 @@ jobs:
           webkit_code=$?
           set -e
           [ "$chromium_code" -eq 0 ] && [ "$webkit_code" -eq 0 ]
+      # The new UI's long-feed demo in WebKit: it renders the latest rows, and nothing jumps while it scrolls. Timings are printed, never gated.
+      - name: ui scroll in WebKit
+        if: ${{ !cancelled() }}
+        run: PERF_RUNS=1 bun scripts/ui-scroll-fps.ts --check
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -400,10 +404,14 @@ jobs:
           xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$APP/bin/launcher" ${{ matrix.sandbox }}
           img=$(ls "$PWD"/desktop/release-eb/linux/Channels-*-linux-x86_64.AppImage)
           xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$img" ${{ matrix.sandbox }} --appimage-extract-and-run
-      - name: with no libayatana-appindicator on the system (stock Arch), the app still starts, with no tray
+      - name: the tray uses Channels' symbolic icon and title where a tray host runs
         if: ${{ !cancelled() }}
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-tray-test" desktop/native/linux/kiwi-tray-test.c $(pkg-config --cflags --libs gio-2.0) -ldl
+          dbus-run-session -- sh -c 'printf throwaway | gnome-keyring-daemon --unlock --components=secrets >/dev/null && xvfb-run -a "$1" "$2" "$3"' sh "$RUNNER_TEMP/kiwi-tray-test" "$APP/bin/libkiwi-shell.so" "$APP/bin/launcher"
+      - name: with no libayatana-appindicator on the system (stock Arch), the app still starts, with no tray
+        if: ${{ !cancelled() }}
+        run: |
           if readelf -d "$APP/bin/libNativeWrapper.so" | grep -i appindicator; then echo "libNativeWrapper.so still links AppIndicator"; exit 1; fi
           echo "libNativeWrapper.so doesn't link AppIndicator"
           hidden="$RUNNER_TEMP/hidden-appindicator"

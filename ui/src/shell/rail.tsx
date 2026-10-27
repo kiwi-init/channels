@@ -9,6 +9,19 @@ export function Rail() {
   const onChannel = nav.page === "channel"
   return (
     <nav className="rail" aria-label="Channels">
+      {document.documentElement.dataset["wm"] === "floating" && (
+        <div className="wm-controls">
+          <button type="button" className="wm-btn is-close" aria-label="Close window" title="Close" onClick={() => app.actions.windowControl("close")}>
+            <Icon name="close" size={10} />
+          </button>
+          <button type="button" className="wm-btn" aria-label="Minimize window" title="Minimize" onClick={() => app.actions.windowControl("minimize")}>
+            <Icon name="minus" size={10} />
+          </button>
+          <button type="button" className="wm-btn" aria-label="Maximize window" title="Maximize" onClick={() => app.actions.windowControl("maximize")}>
+            <Icon name="expand" size={10} />
+          </button>
+        </div>
+      )}
       <ul className="rail-list">
         {app.channels.map((c) => (
           <li key={c.code}>

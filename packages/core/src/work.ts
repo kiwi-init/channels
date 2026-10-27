@@ -361,11 +361,26 @@ export function prsByTask(state: ChannelState, messages: Message[], ids: Iterabl
   return out;
 }
 
+function ownPrs(state: ChannelState, messages: Message[], id: number): PrRef[] {
+  const own = (m: Message): boolean => {
+    if (m.kind === "event") return m.ev?.op === "task.update" && m.ev.task === id;
+    const place = state.placeOf.get(m.seq);
+    return mentions(m, id) || (place?.kind === "task" && place.task === id);
+  };
+  const prs = prsIn(state, messages, own);
+  const shown = new Set(prs.map((p) => prKey(p.repo, p.number)));
+  for (const [key, gh] of state.github.prs) {
+    if (shown.has(key) || taskOfBranch(gh.branch, state.branchPrefix) !== id || !messages.some((m) => m.seq === gh.seq)) continue;
+    prs.push(fromGithub(state, { url: gh.url ?? `https://github.com/${gh.repo}/pull/${gh.number}`, repo: gh.repo, number: gh.number, state: gh.state, seq: gh.seq }));
+  }
+  return prs;
+}
+
 export function taskDigest(state: ChannelState, messages: Message[], t: Task): string {
   const feed = taskFeed(state, messages, t.id);
-  const prs = [...new Map(taskPrs(feed).map((p) => [p.url, `${p.repo}#${p.number}`])).values()];
+  const prs = [...new Map(ownPrs(state, messages, t.id).map((p) => [p.url, `${p.repo}#${p.number}`])).values()];
   const said = feed.reduce((n, i) => n + (i.type === "thread" ? i.messages.length : 0), 0);
-  const note = [...t.notes].reverse().find((n) => !n.checkpoint && n.text.trim().toLowerCase() !== "approved")?.text;
+  const note = [...t.notes].reverse().find((n) => !n.checkpoint && !n.assign && n.text.trim().toLowerCase() !== "approved")?.text;
   const by = [...new Set([...t.workedBy, ...(t.owner ? [t.owner] : [])])];
   return [
     `${taskId(t.id)} ${t.cancelled ? "cancelled" : "done"}: ${inlineText(t.title, 120)}`,

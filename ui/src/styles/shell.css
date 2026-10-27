@@ -6,6 +6,7 @@
 }
 
 .rail {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -16,8 +17,46 @@
   -webkit-app-region: drag;
 }
 
-:root[data-shell="mac"] .rail {
+:root[data-shell="mac"] .rail,
+:root[data-wm="floating"] .rail {
   padding-top: 44px;
+}
+
+.wm-controls {
+  position: absolute;
+  top: 12px;
+  left: 10px;
+  display: flex;
+  gap: 6px;
+  -webkit-app-region: no-drag;
+}
+
+.wm-btn {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--bg-3);
+  color: transparent;
+  transition:
+    background var(--fast),
+    color var(--fast);
+}
+
+.wm-controls:hover .wm-btn {
+  color: var(--ink);
+}
+
+.wm-btn:hover {
+  background: var(--wash-2);
+}
+
+.wm-btn.is-close:hover {
+  background: var(--alert);
+  color: var(--white);
 }
 
 .rail button {

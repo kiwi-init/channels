@@ -5,11 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsrs -b && vite build",
     "lint": "oxlint src",
     "format": "oxfmt src",
     "format:check": "oxfmt --check src",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsrs --noEmit",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -37,7 +37,7 @@
     "@vitejs/plugin-react": "^6.1.2",
     "oxfmt": "0.74.0",
     "oxlint": "1.89.0",
-    "typescript": "^7.0.2",
+    "tsrs": "0.20.0-ts7.1.0-beta",
     "vite": "^8.3.5"
   }
 }

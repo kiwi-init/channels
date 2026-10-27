@@ -1,4 +1,5 @@
 import type { Account, Ask, Channel, ChannelTile, Message, Person, Prefs, Task } from "~/model"
+import { nicknamesOf } from "~/names"
 
 const now = Date.now()
 const m = (min: number): number => now - min * 60_000
@@ -202,6 +203,10 @@ const tasks: Task[] = [
 
 const general = { kind: "room", room: "general" } as const
 
+const ICONS_SHOT = `data:image/svg+xml,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270"><rect width="480" height="270" fill="#18181b"/>${["#5b9bff", "#f5b041", "#32d074", "#b48cff", "#ff6259"].map((c, i) => `<rect x="${36 + i * 86}" y="95" width="64" height="64" rx="16" fill="${c}"/>`).join("")}<rect x="36" y="190" width="200" height="10" rx="5" fill="#3f3f46"/></svg>`
+)}`
+
 const messages: Message[] = [
   { seq: 101, from: "maya", at: m(60 * 20), text: "morning! anything blocking the release?", where: general },
   { seq: 102, from: "atlas", at: m(60 * 20 - 1), text: "Nothing blocking. T9 is merged, the rest is polish.", where: general, task: 9 },
@@ -221,7 +226,17 @@ const messages: Message[] = [
   { seq: 121, from: "atlas", at: m(6), text: "T13 for win. It can't be undone, so it waits for you.", where: general, task: 13 },
   { seq: 122, from: "win", at: m(5), text: "This needs your OK first:", where: general, ask: "perm-1" },
   { seq: 123, from: "win", at: m(5), text: "Done with T12: PR #43 is up. @atlas can you review?", where: general, pr: pr43 },
-  { seq: 124, from: "pixel", at: m(3), text: "New channel icons for T14. @jow they need your eyes before I merge.", where: general, pr: pr44, mentionsYou: true, ask: "rev-14" },
+  {
+    seq: 124,
+    from: "pixel",
+    at: m(3),
+    text: "New channel icons for T14. @jow they need your eyes before I merge.",
+    where: general,
+    pr: pr44,
+    mentionsYou: true,
+    ask: "rev-14",
+    images: [{ url: ICONS_SHOT, width: 480, height: 270, alt: "channel-icons.png" }],
+  },
   { seq: 125, from: "atlas", at: m(2), text: "Should the redesign go to everyone at once, or behind a setting first?", where: general, ask: "q-1", mentionsYou: true },
   { seq: 126, from: "maya", at: m(1), text: "nice, thanks!", where: general },
   {
@@ -327,7 +342,35 @@ const asks: Ask[] = [
     options: ["Everyone at once", "Behind a setting", "Only on Livewire"],
     holds: [11],
   },
-  { kind: "join", id: "join-1", at: m(1), name: "nova", who: "agent", harness: "gemini", runs: "Gemini CLI", machine: "maya's ThinkPad", sponsor: "maya", code: "4821" },
+  {
+    kind: "join",
+    id: "join-1",
+    at: m(1),
+    name: "nova",
+    who: "agent",
+    harness: "gemini",
+    runs: "Gemini CLI · gemini-3-pro",
+    machine: "maya's ThinkPad",
+    sponsor: "maya",
+    said: { machine: "Linux x64 · 16 cores · 32 GB", tools: ["git", "docker", "node"], repo: "interlinked/site@main", outside: true },
+    pin: { name: "Reviewer", persona: null },
+    code: "482-193",
+  },
+  { kind: "join", id: "join-2", at: m(1), name: "Sam Ortiz", who: "human", key: "9f3a61c2", code: "", check: "unchecked" },
+  {
+    kind: "join",
+    id: "join-3",
+    at: m(1),
+    name: "claude-2",
+    who: "agent",
+    harness: "claude",
+    runs: "Claude Code · claude-opus-5-5",
+    machine: "theo's MacBook",
+    sponsor: "theo",
+    said: { machine: "macOS arm64 · 10 cores · 16 GB", repo: "interlinked/studio@main", outside: false },
+    freeName: "brisk-heron",
+    code: "731-845",
+  },
   { kind: "review", id: "rev-14", at: m(12), from: "pixel", task: 14 },
 ]
 
@@ -349,6 +392,7 @@ export const DEMO_CHANNEL: Channel = {
     { with: "maya", unread: 1, last: m(50) },
   ],
   people,
+  nicknames: nicknamesOf(people),
   messages: [...releases, ...messages, ...threadReplies, ...dm, ...taskThread].sort((a, b) => a.seq - b.seq),
   tasks,
   asks,
@@ -364,6 +408,7 @@ export const DEMO_EMPTY: Channel = {
   rooms: [{ id: "general", name: "general", unread: 0, mentions: 0 }],
   directs: [],
   people: [people[0] as Person],
+  nicknames: nicknamesOf([people[0] as Person]),
   messages: [],
   tasks: [],
   asks: [],

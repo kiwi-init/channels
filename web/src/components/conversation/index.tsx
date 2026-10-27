@@ -1,5 +1,5 @@
 import { ArrowDown01Icon } from "@hugeicons/core-free-icons"
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react"
 
 import type { SendOptions } from "@kiwi/core/client.ts"
 import { permissionReply } from "@kiwi/core/permission.ts"
@@ -33,10 +33,13 @@ import { canStartAgents } from "@/lib/launches"
 import { markOnce } from "@/lib/marks"
 import { roomOfMessage } from "@/lib/rooms"
 import { matchingTasks } from "@/lib/task-search"
+import { buildIndex, rank, terms } from "@/lib/search-rank"
+import { paintHits } from "@/lib/search-paint"
+import { useDebounced } from "@/hooks/use-debounced"
 import { ALLOW_ONCE, DENY, settledOf } from "@/lib/permission-settled"
 import { isAgent } from "../message"
 import { NeedsYou } from "../needs-you"
-import { TaskSearchResults } from "../task-search-results"
+import { hitId, SEARCH_LIST, SearchResults, type SearchHit } from "../search-results"
 import { ChannelSidebar, ConversationMenu, type Conversation as ConversationRow } from "./channel-sidebar"
 import { Header, type HeaderProps, Toolbar, ViewsNav } from "./header"
 import { InfoSide, PictureSide, TasksSide, ThreadSide } from "./side-panels"
@@ -91,7 +94,9 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const openTask = useCallback((task: number) => setSide({ kind: "tasks", task }), [])
   const [pausing, setPausing] = useState(false)
   const [search, setSearch] = useState<string | null>(null)
-  const query = useDeferredValue(search?.trim() ? search : null)
+  const settled = useDebounced(search, 150, (s) => !s?.trim())
+  const query = settled?.trim() ? settled : null
+  const searchOpen = search !== null
   const taskResults = useMemo(() => matchingTasks(state.tasks.values(), query), [state.tasks, query])
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [sending, setSending] = useState<{ key: number; place: string; m: Message; after: number; seq?: number }[]>([])
@@ -144,18 +149,13 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
 
   const { placeOf, places } = state
   const { place, hereKey, openRoom, unreadIn, unreadInRoom, taskKey } = usePlaces({ here, roomId, cardRoom, viewing: tab === "conversation", messages, me, state, shownTask })
-  const openFirstTask = useCallback(() => {
-    const first = hereKey === "main" ? taskResults[0] : undefined
-    if (first) openTask(first.id)
-  }, [hereKey, openTask, taskResults])
   const sendRoom = openRoom !== null && openRoom !== GENERAL_ROOM ? openRoom : undefined
-  const { bySeq, threadRoot, showDropped, setShowDropped, threads, visible, inTask, quoted, summaryOf } = useThreads({
+  const { bySeq, threadRoot, showDropped, setShowDropped, threads, visible, searchable, inTask, quoted, summaryOf } = useThreads({
     messages,
     state,
     me,
     sideRoot,
     isOwner,
-    search: query,
     hereKey,
     room: openRoom,
     cards,
@@ -164,9 +164,58 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     nameOf,
   })
   const { behind, setBehind, isFresh, scroller, stick, theirs, toBottom, onScroll } = useScroll({ messages, visible, hereKey })
+  const searching = tab === "conversation" && query !== null
+  const messageIndex = useMemo(
+    () =>
+      searchOpen
+        ? buildIndex(
+            searchable
+              .filter((m) => m.kind !== "event" && m.body.trim())
+              .map((m) => ({
+                item: m,
+                fields: [
+                  { text: m.body, weight: 1 },
+                  { text: nameOf(m.from), weight: 1 },
+                ],
+              }))
+          )
+        : null,
+    [searchOpen, searchable, nameOf]
+  )
+  const hits = useMemo<SearchHit[]>(() => {
+    if (tab !== "conversation" || !query || !messageIndex) return []
+    const found = rank(messageIndex, query)
+      .sort((a, b) => b.score - a.score || b.item.ts - a.item.ts)
+      .slice(0, 50)
+    return [...(hereKey === "main" ? taskResults : []).map((task): SearchHit => ({ kind: "task", task })), ...found.map((r): SearchHit => ({ kind: "message", m: r.item }))]
+  }, [tab, query, messageIndex, hereKey, taskResults])
+  const [activeHit, setActiveHit] = useState(0)
+  const [hitsWere, setHitsWere] = useState(hits)
+  if (hitsWere !== hits) {
+    setHitsWere(hits)
+    setActiveHit(0)
+  }
+  const resultsScroller = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    if (query && taskResults.length) scroller.current?.scrollTo({ top: 0, behavior: "instant" })
-  }, [query, scroller, taskResults])
+    if (query) resultsScroller.current?.scrollTo({ top: 0, behavior: "instant" })
+  }, [query])
+  const [found, setFound] = useState<{ seq: number; terms: string[]; here: string } | null>(null)
+  if (found && (searchOpen || found.here !== hereKey)) setFound(null)
+  useEffect(() => {
+    if (!found) return
+    let frame = 0
+    let left = 20
+    const paint = () => {
+      const el = document.getElementById(`m${found.seq}`) ?? document.getElementById(`k${found.seq}`)
+      if (el) return paintHits(el, found.terms)
+      if (left-- > 0) frame = requestAnimationFrame(paint)
+    }
+    frame = requestAnimationFrame(paint)
+    return () => {
+      cancelAnimationFrame(frame)
+      paintHits(null, [])
+    }
+  }, [found])
   const anyShown = visible.length > 0
   useEffect(() => {
     if (anyShown) requestAnimationFrame(() => markOnce("kiwi:first-message"))
@@ -232,6 +281,19 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     [placeOf, hereKey, openTask, state, theirs, bySeq, cardRoom, switchRoom]
   )
 
+  const pick = useCallback(
+    (hit: SearchHit) => {
+      if (hit.kind === "task") {
+        setSearch(null)
+        openTask(hit.task.id)
+        return
+      }
+      jump(hit.m.seq)
+      setFound({ seq: hit.m.seq, terms: terms(query ?? ""), here: hereKey })
+    },
+    [jump, openTask, query, hereKey]
+  )
+
   const onReply = useCallback((m: Message) => setReplyTo(m), [])
   const decided = useMemo(() => new Set(decisions.map((m) => m.seq)), [decisions])
   const repliesTo = useMemo(() => {
@@ -284,9 +346,9 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     [hold, state.hold, state.lead, me, send, nameOf]
   )
 
-  const folded = hereKey === "main" && !search && state.compact ? state.compact : null
+  const folded = hereKey === "main" && state.compact ? state.compact : null
   const shown = folded && !earlier ? visible.filter((m) => m.seq > folded.through) : visible
-  const { tail, hidden, more, onScrolled } = useWindow(shown, query ? `${hereKey}\u0000${query}` : hereKey, scroller, highlight, tab === "conversation")
+  const { tail, hidden, more, onScrolled } = useWindow(shown, hereKey, scroller, highlight, tab === "conversation")
 
   if (gone) {
     return (
@@ -317,7 +379,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     hereKey,
     cardRoom,
     cards,
-    search: query,
     highlight,
     bySeq,
     quoted: quotedHere,
@@ -347,7 +408,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
         </button>
       </p>
     )
-  const proposal = hereKey === "main" && !search ? state.compactProposal : null
+  const proposal = hereKey === "main" ? state.compactProposal : null
   if (folded) rows.push(<CompactBlock key="compact" compact={folded} byName={nameOf(folded.by)} earlier={earlier} onToggle={() => setEarlier((v) => !v)} />)
   const at = proposal ? tail.findIndex((m) => m.seq === proposal.seq) : -1
   const approve =
@@ -516,7 +577,16 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     status,
     onTitle: () => setSide((s) => (s?.kind === "info" ? null : { kind: "info" })),
     searchHint: place.kind === "main" ? "Search this channel" : `Search ${placeTitle}`,
-    onSearchEnter: openFirstTask,
+    onSearchKey:
+      tab === "conversation"
+        ? (key) => {
+            if (key === "enter") {
+              const hit = hits[activeHit]
+              if (hit) pick(hit)
+            } else if (hits.length) setActiveHit((i) => (i + (key === "down" ? 1 : -1) + hits.length) % hits.length)
+          }
+        : undefined,
+    searchList: tab === "conversation" ? { id: SEARCH_LIST, open: hits.length > 0, active: hits[activeHit] ? hitId(hits[activeHit]) : null } : undefined,
     places: <ConversationMenu conversations={conversations} current={currentConversation} onConversation={(key) => (leaveInfo(), openConversation(key))} />,
     needs: counts.needs,
     view,
@@ -627,42 +697,38 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                       <>
                         <div
                           ref={scroller}
-                          className="absolute inset-0 overflow-y-auto"
+                          inert={searching}
+                          className={cx("absolute inset-0 overflow-y-auto", searching && "invisible")}
                           onScroll={(e) => {
                             onScroll(e)
                             onScrolled(e.currentTarget)
                           }}
                         >
                           <div className="relative mx-auto w-full max-w-[792px] aside-room px-4 pt-[calc(var(--head)+8px)] pb-[calc(var(--foot)+16px)] [--column:792px]">
-                            {hereKey === "main" && !search && ready && (
+                            {hereKey === "main" && ready && (
                               <div className="sticky top-(--head) z-10 -mt-2 bg-canvas pt-2 pb-2">
                                 {nowNode("", true)}
                                 <div aria-hidden className="scrim-top absolute inset-x-0 top-full h-4" />
                               </div>
                             )}
                             {hereKey === "main" && needsYou}
-                            {hereKey === "main" && state.rooms.size > 1 && !search && <RoomChips rooms={[...state.rooms.values()]} value={cardRoom} onChange={switchRoom} />}
-                            {hereKey === "main" && taskResults.length > 0 && <TaskSearchResults state={state} tasks={taskResults} onOpen={openTask} />}
+                            {hereKey === "main" && state.rooms.size > 1 && <RoomChips rooms={[...state.rooms.values()]} value={cardRoom} onChange={switchRoom} />}
                             {!ready && messages.length === 0 ? (
                               slowToOpen && (
                                 <Centered>
                                   <Spinner />
                                 </Centered>
                               )
-                            ) : hereKey === "main" && noAgents && !search ? (
+                            ) : hereKey === "main" && noAgents ? (
                               <>
                                 <AddAgent code={member.code} isOwner={isOwner} addsAgents={addsAgents} onNewAgent={onNewAgent} />
                                 {!quiet && rows}
                               </>
-                            ) : visible.length === 0 && (hereKey !== "main" || taskResults.length === 0) ? (
+                            ) : visible.length === 0 ? (
                               <Centered>
-                                <p className="text-body font-semibold">{search ? "No results" : "No messages yet"}</p>
+                                <p className="text-body font-semibold">No messages yet</p>
                                 <p className="mt-1 max-w-xs text-ui leading-normal text-ink-2">
-                                  {search
-                                    ? `No message here mentions “${search}”.`
-                                    : place.kind === "dm"
-                                      ? "What these two say to each other shows up here."
-                                      : "What’s said here shows up the moment it’s sent."}
+                                  {place.kind === "dm" ? "What these two say to each other shows up here." : "What’s said here shows up the moment it’s sent."}
                                 </p>
                               </Centered>
                             ) : (
@@ -670,8 +736,24 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                             )}
                           </div>
                         </div>
+                        {searching && (
+                          <div ref={resultsScroller} className="absolute inset-0 overflow-y-auto">
+                            <div className="relative mx-auto w-full max-w-[792px] aside-room px-4 pt-[calc(var(--head)+8px)] pb-[calc(var(--foot)+16px)] [--column:792px]">
+                              {hits.length ? (
+                                <SearchResults state={state} hits={hits} terms={terms(query ?? "")} active={activeHit} onActive={setActiveHit} onPick={pick} nameOf={nameOf} />
+                              ) : (
+                                <Centered>
+                                  <p className="text-body font-semibold">No results</p>
+                                  <p className="mt-1 max-w-xs text-ui leading-normal text-ink-2">
+                                    {hereKey === "main" ? `No task or message here matches “${query}”.` : `No message here matches “${query}”.`}
+                                  </p>
+                                </Centered>
+                              )}
+                            </div>
+                          </div>
+                        )}
 
-                        {behind > 0 && (
+                        {behind > 0 && !searching && (
                           <button
                             type="button"
                             onClick={toBottom}

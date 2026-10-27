@@ -91,6 +91,12 @@ export interface Direct {
   seen?: number
 }
 
+export interface Upload {
+  name: string
+  mime: string
+  data: string
+}
+
 export interface Image {
   url: string
   width: number
@@ -157,9 +163,25 @@ export interface JoinAsk {
   runs?: string
   machine?: string
   sponsor?: string
+  key?: string
+  said?: { machine?: string; tools?: string[]; repo?: string; outside: boolean } | "nothing"
+  pin?: { name: string; persona: string | null | undefined }
+  freeName?: string
   code: string
   check?: "unchecked" | "waiting" | "ready"
   answer?: { letIn: boolean; by: string; at: number }
+}
+
+export interface Powers {
+  addsAgents: boolean
+  answersDecisions: boolean
+}
+
+export interface JoinChoice {
+  as?: string
+  persona?: string | null
+  readOnly?: boolean
+  powers?: Powers
 }
 
 export interface ReviewAsk {
@@ -182,6 +204,12 @@ export interface ChannelTile {
   last: number
 }
 
+export interface InviteInfo {
+  code: string
+  owner: string | null
+  state: "ok" | "gone" | "member"
+}
+
 export interface Channel {
   code: string
   title: string
@@ -192,15 +220,17 @@ export interface Channel {
   goal?: string
   hold?: { note?: string; by: string; at: number }
   newMembers?: "read" | "write"
+  newPowers?: Powers
   repos: string[]
   rooms: Room[]
   directs: Direct[]
   people: Person[]
+  nicknames: ReadonlyMap<string, string>
   messages: Message[]
   tasks: Task[]
   asks: Ask[]
   connection: "connecting" | "live" | "reconnecting"
-  waiting?: { code: string; since: number }
+  waiting?: { code: string; since: number; state?: "waiting" | "unreachable" | "declined"; owner?: string }
 }
 
 export interface Computer {
@@ -278,13 +308,13 @@ export interface NewAgent {
 }
 
 export interface Actions {
-  send(code: string, where: Where, text: string, opts?: { replyTo?: number; inThread?: number }): void
+  send(code: string, where: Where, text: string, opts?: { replyTo?: number; inThread?: number; images?: Upload[] }): void
   retry(code: string, seq: number): void
   discard(code: string, seq: number): void
   react(code: string, seq: number, emoji: string): void
   answerPermission(code: string, id: string, allow: boolean): void
   answerQuestion(code: string, id: string, text: string): void
-  answerJoin(code: string, id: string, letIn: boolean): void
+  answerJoin(code: string, id: string, letIn: boolean, choice?: JoinChoice): void
   approveTask(code: string, task: number, approve: boolean): void
   addTask(code: string, title: string, owner?: string): void
   setTaskStatus(code: string, task: number, status: TaskStatus): void
@@ -302,9 +332,11 @@ export interface Actions {
   addRepo(code: string, repo: string): void
   removeRepo(code: string, repo: string): void
   inviteLink(code: string): Promise<string>
+  joinCommand(code: string, as: { nick?: string; persona?: string }): Promise<string>
   leaveChannel(code: string): void
   newChannel(title: string): Promise<string>
-  joinChannel(code: string): Promise<string>
+  inviteInfo(typed: string): Promise<InviteInfo>
+  joinChannel(code: string, name?: string): Promise<string>
   setName(name: string): void
   setPrefs(prefs: Partial<Prefs>): void
   pairBegin(kind: "computer" | "phone"): Promise<string>
@@ -312,9 +344,11 @@ export interface Actions {
   linkGithub(): void
   unlinkGithub(): void
   installUpdate(): void
+  windowControl(action: "minimize" | "maximize" | "close"): void
   applyUi(): void
   signOut(): void
   setNewMembers(code: string, can: "read" | "write"): void
+  setNewPowers(code: string, powers: Powers): void
   answerPair(accept: boolean): void
   cancelPair(): void
   closeChannel(code: string): void

@@ -1,12 +1,12 @@
 import { Database } from "bun:sqlite";
 import { join } from "node:path";
 import { QUERY_ARG } from "./query-arg.ts";
-import { decodeBytesToUtf8, defineCommand, type Command } from "just-bash";
+import * as Effect from "effect/Effect";
+import type { AgentSession } from "./agent.ts";
 import { loadJson, memberLoad } from "@kiwi/core/load.ts";
 import { ignored, type Message } from "@kiwi/core/protocol.ts";
 import { reviewBody } from "@kiwi/core/format.ts";
-import { taskId } from "@kiwi/core/state.ts";
-import type { ChannelView } from "./sh.ts";
+import { taskId, type ChannelState } from "@kiwi/core/state.ts";
 
 type Cell = string | number | null;
 export type Tables = Record<string, { columns: string[]; rows: Cell[][] }>;
@@ -24,9 +24,15 @@ const READ_ONLY_SQL = /^\s*(select|with|values)\b/i;
 const FORBIDDEN_SQL = /\b(attach|detach|pragma|vacuum|recursive|randomblob|zeroblob)\b/i;
 const QUERY_MS = 10_000;
 
-type Ran = { stdout: string; stderr: string; exitCode: number };
+export type Ran = { stdout: string; stderr: string; exitCode: number };
 
-export function reviewTexts(messages: Message[]): Map<string, string> {
+export interface ChannelView {
+  me: string;
+  messages: Message[];
+  state: ChannelState;
+}
+
+function reviewTexts(messages: Message[]): Map<string, string> {
   const out = new Map<string, string>();
   for (const m of messages) {
     const body = reviewBody(m);
@@ -111,7 +117,7 @@ function database(tables: Tables): Database {
   return db;
 }
 
-const schemaText = () =>
+export const schemaText = () =>
   Object.entries(SCHEMA)
     .map(([name, cols]) => `${name}(${cols.join(", ")})`)
     .join("\n") + "\n";
@@ -216,17 +222,26 @@ export async function queryIsolated(sql: string, tables: Tables, ms = QUERY_MS, 
   }
 }
 
-export function queryCommand(load: () => Tables | undefined): Command {
-  return defineCommand("query", async (args, ctx) => {
-    if (args[0] === "--schema") return { stdout: schemaText(), stderr: "", exitCode: 0 };
-    const sql = (args.length ? args.join(" ") : decodeBytesToUtf8(ctx.stdin)).trim().replace(/;+$/, "");
-    if (!sql) return fail("usage: query 'SQL' (or SQL on stdin); query --schema lists the tables\n", 2);
-    const code = bare(sql);
-    if (code.includes("\u0000") || !READ_ONLY_SQL.test(code) || FORBIDDEN_SQL.test(code) || code.includes(";")) {
-      return fail("query: one select, with or values statement only (no attach, detach, pragma, vacuum, recursive, randomblob, zeroblob or ';' outside a string)\n");
-    }
-    const tables = load();
-    if (!tables) return fail("query: no channel data in this run\n");
-    return queryIsolated(sql, tables);
-  });
+export const USAGE = "usage: kiwi query 'SQL' (or SQL on stdin); kiwi query --schema lists the tables";
+
+export type Checked = { kind: "sql"; sql: string } | { kind: "refused"; ran: Ran };
+
+export function readOnlySql(input: string): Checked {
+  const sql = input.trim().replace(/;+$/, "");
+  if (!sql) return { kind: "refused", ran: fail(`${USAGE}\n`, 2) };
+  const code = bare(sql);
+  if (code.includes("\u0000") || !READ_ONLY_SQL.test(code) || FORBIDDEN_SQL.test(code) || code.includes(";")) {
+    return { kind: "refused", ran: fail("query: one select, with or values statement only (no attach, detach, pragma, vacuum, recursive, randomblob, zeroblob or ';' outside a string)\n") };
+  }
+  return { kind: "sql", sql };
 }
+
+export const sessionQuery = Effect.fn("query.sessionQuery")(function* (s: AgentSession, input: string) {
+  const checked = readOnlySql(input);
+  if (checked.kind === "refused") return checked.ran;
+  yield* s.unheld;
+  const { messages, state } = yield* s.state();
+  yield* s.unheld;
+  const tables = queryTables({ me: s.me, messages, state });
+  return yield* Effect.promise(() => queryIsolated(checked.sql, tables));
+});

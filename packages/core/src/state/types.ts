@@ -74,6 +74,7 @@ interface TaskNote {
   ts: number;
   text: string;
   checkpoint?: true;
+  assign?: true;
 }
 
 interface TaskProof {
