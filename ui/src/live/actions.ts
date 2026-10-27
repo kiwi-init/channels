@@ -167,7 +167,7 @@ async function newChannel(title: string): Promise<string> {
   return m.code
 }
 
-export async function lookUpInvite(typed: string): Promise<InviteInfo> {
+async function lookUpInvite(typed: string): Promise<InviteInfo> {
   const code = joinCodeOf(typed)
   if (!code) throw new Error("That isn't an invite. Codes start with mc2-")
   if (loadMember(code) || loadPending(code)) return { code, owner: null, state: "member" }
@@ -177,7 +177,7 @@ export async function lookUpInvite(typed: string): Promise<InviteInfo> {
   return { code, owner: info.ownerName, state: "ok" }
 }
 
-export async function joinChannel(typed: string, name?: string): Promise<string> {
+async function joinChannel(typed: string, name?: string): Promise<string> {
   const code = joinCodeOf(typed)
   if (!code) throw new Error("That isn't an invite. Codes start with mc2-")
   if (loadMember(code) || loadPending(code)) return code
