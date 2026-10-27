@@ -308,6 +308,28 @@
   overflow-wrap: anywhere;
 }
 
+.md ul {
+  list-style: disc;
+}
+
+.md ol {
+  list-style: decimal;
+}
+
+.md ul ul,
+.md ol ul {
+  list-style: circle;
+}
+
+.md ol ol {
+  list-style: lower-alpha;
+}
+
+.md li::marker {
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
 .md-plain {
   white-space: pre-wrap;
 }
