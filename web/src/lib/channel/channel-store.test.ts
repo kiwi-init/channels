@@ -27,7 +27,7 @@ function relay(head = 0, opts: { owner?: boolean; answers?: Record<string, Answe
   const follows: { since: number; on: (e: FollowEvent) => void; stopped: boolean }[] = []
   const lent = { emitted: [] as string[], released: 0 }
   const calls: { op: string; args: unknown[] }[] = []
-  const kept: object[] = []
+  const kept: { at: number; state: object }[] = []
   const answers: Record<string, Answer> = {
     head: () => head,
     members: () => roster,
@@ -54,7 +54,7 @@ function relay(head = 0, opts: { owner?: boolean; answers?: Record<string, Answe
     presence: () => Promise.resolve(),
     openRows: () => Promise.resolve([]),
     keep: (_code: string, state: object) => {
-      kept.push(state)
+      kept.push({ at: Date.now(), state })
       return Promise.resolve(null)
     },
     openKept: () => Promise.resolve(null),
@@ -207,16 +207,19 @@ describe("a channel store", () => {
 })
 
 describe("the sealed keep", () => {
-  test("a change inside the 3 s window restarts it: one seal, with the latest roster", async () => {
+  test("a change inside the 3 s window restarts it: one seal, 3 s after the change, with the latest roster", async () => {
     const r = relay(0)
     const { store, close } = await opened(r)
-    await sleep(100)
+    await sleep(1_000)
     r.setRoster([person("atlas", "pk-atlas"), person("nova", "pk-nova")])
     r.say({ _tag: "Roster" })
     await until(() => store.handle.value.roster.length === 2)
+    const changed = Date.now()
     await sleep(3_400)
-    expect(r.kept).toHaveLength(1)
-    expect(JSON.stringify(r.kept[0])).toContain("pk-nova")
+    const after = r.kept.filter((k) => k.at >= changed)
+    expect(after).toHaveLength(1)
+    expect(after[0]!.at - changed).toBeGreaterThanOrEqual(2_900)
+    expect(JSON.stringify(after[0]!.state)).toContain("pk-nova")
     close()
   }, 10_000)
 
