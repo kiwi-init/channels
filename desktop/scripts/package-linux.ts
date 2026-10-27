@@ -82,7 +82,7 @@ try {
   rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
   const { app, arch, version } = plainApp(tmp);
-  console.log(`package-linux: Channels Livewire ${version} for linux-${arch}, ${(sizeOf(app) / MB).toFixed(1)}MB unpacked`);
+  console.log(`package-linux: Channels ${version} for linux-${arch}, ${(sizeOf(app) / MB).toFixed(1)}MB unpacked`);
   const file = await appImage(app, arch, version, tmp);
   const size = statSync(file).size;
   const fits = size <= MAX_DOWNLOAD;

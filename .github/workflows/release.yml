@@ -2,13 +2,13 @@ name: release
 
 on:
   push:
-    tags: ["v*-livewire.*"]
+    tags: ["v*"]
 
 permissions:
   contents: read
 
 jobs:
-  on-livewire:
+  on-main:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -17,20 +17,20 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Check the tag is a Livewire release on main
+      - name: Check the tagged commit is on main
         run: |
-          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]{1,6}\.[0-9]{1,6}\.[0-9]{1,6}-livewire\.[0-9]{1,6}$ ]] || {
-            echo "::error::$GITHUB_REF_NAME isn't vYYYY.M.PATCH-livewire.N: a Channels Livewire release is tagged like v2026.10.2-livewire.1, so nothing is built, signed or published"
+          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]{1,6}\.[0-9]{1,6}\.[0-9]{1,6}$ ]] || {
+            echo "::error::$GITHUB_REF_NAME isn't vYYYY.M.PATCH: a release is tagged like v2026.10.7, so nothing is built, signed or published"
             exit 1
           }
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
-            echo "::error::$GITHUB_REF_NAME is on $GITHUB_SHA, which isn't on main: a Channels Livewire release is a tag on main, so nothing is built, signed or published"
+            echo "::error::$GITHUB_REF_NAME is on $GITHUB_SHA, which isn't on main: a release is a tag on a commit of main, so nothing is built, signed or published"
             exit 1
           }
           echo "$GITHUB_REF_NAME is on $GITHUB_SHA, on main"
 
   build:
-    needs: on-livewire
+    needs: on-main
     uses: ./.github/workflows/release-build.yml
     secrets: inherit
 
@@ -87,10 +87,174 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mapfile -t files < <(find artifacts -maxdepth 1 -type f | sort)
-          version="${GITHUB_REF_NAME#v}"
           bun repo/scripts/changelog.ts --notes "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
-          printf '\n---\n\n%s\n' "Channels Livewire $version: a release candidate of the Channels desktop app on Electrobun Livewire, installed beside Channels with its own data, keychain items and ~/.kiwi-livewire, and updated only to later Livewire releases. Every file is checksummed in SHA256SUMS, signed in SHA256SUMS.minisig (minisign -Vm SHA256SUMS -P <the key in desktop/src/release-key.ts>), and has a build-provenance attestation: gh attestation verify <file> --repo $GITHUB_REPOSITORY" >> "$RUNNER_TEMP/notes.md"
-          gh release create "$GITHUB_REF_NAME" "${files[@]}" --prerelease --latest=false \
+          printf '\n---\n\n%s\n' "Channels desktop app (macOS dmg/zip, Linux AppImage) and the kiwi CLI. Download the app at https://channels.kiwiinit.com/; install the CLI with: curl -fsSL https://channels.kiwiinit.com/install | sh (macOS, Linux). Every file is checksummed in SHA256SUMS, signed in SHA256SUMS.minisig (minisign -Vm SHA256SUMS -P <the key in desktop/src/release-key.ts>), and has a build-provenance attestation: gh attestation verify <file> --repo $GITHUB_REPOSITORY" >> "$RUNNER_TEMP/notes.md"
+          gh release create "$GITHUB_REF_NAME" "${files[@]}" --latest \
             --repo "$GITHUB_REPOSITORY" \
-            --title "Channels Livewire $version" \
+            --title "Channels ${GITHUB_REF_NAME#v}" \
             --notes-file "$RUNNER_TEMP/notes.md"
+
+  deploy-relay:
+    needs: publish
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    environment: release
+    concurrency:
+      group: deploy-relay
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: ./.github/actions/stamp
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Deploy the Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bun run relay:deploy
+
+  bump-main:
+    needs: publish
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: stamp
+          path: ${{ runner.temp }}/stamp
+
+      - id: stamp
+        name: Is there a stamp to commit
+        run: |
+          if [ -s "$RUNNER_TEMP/stamp/stamp.patch" ]; then
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "the tagged commit already says ${GITHUB_REF_NAME#v} (its stamp landed as a pull request): nothing to commit"
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - id: app
+        if: steps.stamp.outputs.needed == 'true'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.BUS_APP_CLIENT_ID }}
+          private-key: ${{ secrets.BUS_APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - if: steps.stamp.outputs.needed == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ steps.app.outputs.token }}
+
+      - if: steps.stamp.outputs.needed == 'true'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Check the stamp only edits the stamped files
+        if: steps.stamp.outputs.needed == 'true'
+        env:
+          STAMPED: |
+            src/version.ts
+            package.json
+            desktop/package.json
+            site/app.js
+            site/README.md
+            CHANGELOG.md
+        run: |
+          patch="$RUNNER_TEMP/stamp/stamp.patch"
+          [ -s "$patch" ] || exit 0
+          summary=$(git apply --summary "$patch")
+          [ -z "$summary" ] || { echo "::error::the stamp creates, deletes, renames or changes the mode of a file, so it isn't pushed to main: $summary"; exit 1; }
+          stat=$(git apply --numstat "$patch")
+          while IFS=$'\t' read -r _ _ file; do
+            grep -qxF -- "$file" <<<"$STAMPED" || { echo "::error::the stamp edits $file, which scripts/stamp.ts never writes, so it isn't pushed to main"; exit 1; }
+          done <<<"$stat"
+
+      - name: Commit the stamp to main
+        if: steps.stamp.outputs.needed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          APP: ${{ steps.app.outputs.app-slug }}
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          patch="$RUNNER_TEMP/stamp/stamp.patch"
+          [ -s "$patch" ] || { echo "the tagged commit already said $v: nothing to commit"; exit 0; }
+          id=$(gh api "users/$APP%5Bbot%5D" --jq .id)
+          who=$(gh api "users/$GITHUB_ACTOR" --jq '.name // .login')
+          git config user.name "$APP[bot]"
+          git config user.email "$id+$APP[bot]@users.noreply.github.com"
+          for attempt in 1 2 3; do
+            git fetch -q origin main && git reset -q --hard origin/main
+            cmp=$(V="$v" bun -e 'const { compareVersions } = await import("./packages/core/src/versions.ts"); const { VERSION } = await import("./src/version.ts"); console.log(compareVersions(VERSION, process.env.V ?? ""))')
+            [ "$cmp" -lt 0 ] || { echo "main already says $v or later: nothing to commit"; exit 0; }
+            git apply --3way "$patch"
+            git commit -q -a -m "kiwi $v" -m "The release's stamp from $GITHUB_REF_NAME: the version in src/version.ts, package.json, desktop/package.json and the site's download names, and CHANGELOG.md's section." -m "Agent: release.yml on behalf of $who"
+            git push origin HEAD:main && exit 0
+          done
+          exit 1
+
+  bump-tap:
+    needs: publish
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Download SHA256SUMS
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS --dir "$RUNNER_TEMP"
+
+      - id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.BUS_APP_CLIENT_ID }}
+          private-key: ${{ secrets.BUS_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: homebrew-tap
+          permission-contents: write
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: ${{ github.repository_owner }}/homebrew-tap
+          ref: main
+          path: tap
+          token: ${{ steps.app.outputs.token }}
+
+      - name: Bump the cask and the formula
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          APP: ${{ steps.app.outputs.app-slug }}
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          id=$(gh api "users/$APP%5Bbot%5D" --jq .id)
+          who=$(gh api "users/$GITHUB_ACTOR" --jq '.name // .login')
+          cd tap
+          git config user.name "$APP[bot]"
+          git config user.email "$id+$APP[bot]@users.noreply.github.com"
+          for attempt in 1 2 3; do
+            git fetch -q origin main && git reset -q --hard origin/main
+            bun ../scripts/brew-bump.ts "$GITHUB_REF_NAME" "$RUNNER_TEMP/SHA256SUMS" .
+            git diff --quiet && { echo "the tap already installs $v: nothing to commit"; exit 0; }
+            git commit -q -a -m "channels $v, kiwi $v" -m "From $GITHUB_REF_NAME's SHA256SUMS: the version and sha256 of Casks/channels.rb and Formula/kiwi.rb." -m "Agent: release.yml on behalf of $who"
+            git push origin HEAD:main && exit 0
+          done
+          exit 1

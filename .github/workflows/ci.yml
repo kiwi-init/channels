@@ -389,8 +389,8 @@ jobs:
           img=$(ls "$PWD"/desktop/release-eb/linux/Channels-*-linux-x86_64.AppImage)
           rm -rf "$RUNNER_TEMP/appimage" && mkdir -p "$RUNNER_TEMP/appimage"
           (cd "$RUNNER_TEMP/appimage" && "$img" --appimage-extract > /dev/null)
-          [ -x "$RUNNER_TEMP/appimage/squashfs-root/ChannelsLivewire/bin/launcher" ] || { echo "the AppImage has no ChannelsLivewire/bin/launcher"; exit 1; }
-          echo "APP=$RUNNER_TEMP/appimage/squashfs-root/ChannelsLivewire" >> "$GITHUB_ENV"
+          [ -x "$RUNNER_TEMP/appimage/squashfs-root/Channels/bin/launcher" ] || { echo "the AppImage has no Channels/bin/launcher"; exit 1; }
+          echo "APP=$RUNNER_TEMP/appimage/squashfs-root/Channels" >> "$GITHUB_ENV"
       - name: the app starts on WebKitGTK, with the .desktop entry's names, and its permission and page hooks work
         if: ${{ !cancelled() }}
         run: |

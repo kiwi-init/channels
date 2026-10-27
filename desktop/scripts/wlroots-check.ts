@@ -97,18 +97,18 @@ try {
   const page = () => driver.evaluate((): Page => ({ w: innerWidth, h: innerHeight, dpr: devicePixelRatio }), null, 5_000);
   const settled = async (what: string, fits: (n: Node, p: Page) => boolean): Promise<{ n: Node; p: Page }> => {
     const got = await until(what, 15_000, async () => {
-      const n = windowOf("channels-livewire");
+      const n = windowOf("channels-desktop");
       const p = await page();
       return n && fits(n, p) ? { n, p } : null;
-    }).catch(async () => ({ n: windowOf("channels-livewire"), p: await page() }));
-    if (!got.n) throw new Error(`${what}: no channels-livewire window in sway's tree`);
+    }).catch(async () => ({ n: windowOf("channels-desktop"), p: await page() }));
+    if (!got.n) throw new Error(`${what}: no channels-desktop window in sway's tree`);
     return { n: got.n, p: got.p };
   };
   const painted = () => driver.evaluate(() => new Promise<boolean>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true)))), null, 30_000);
   const follows = (n: Node, p: Page) => near(p.w, n.window_rect.width, 2) && p.h <= n.window_rect.height && p.h > n.window_rect.height - 80;
 
-  await step("the window is a native Wayland toplevel (xdg_shell) whose app_id is channels-livewire", async () => {
-    const n = await until("the window in sway's tree", 30_000, async () => windowOf("channels-livewire"));
+  await step("the window is a native Wayland toplevel (xdg_shell) whose app_id is channels-desktop", async () => {
+    const n = await until("the window in sway's tree", 30_000, async () => windowOf("channels-desktop"));
     return { ok: n.shell === "xdg_shell", detail: { app_id: n.app_id, shell: n.shell, title: n.name } };
   });
 
@@ -127,17 +127,17 @@ try {
   });
 
   await step("floating at 1000x700, the page follows the window and is drawn (floating.png)", async () => {
-    sway("[app_id=channels-livewire]", "floating", "enable");
+    sway("[app_id=channels-desktop]", "floating", "enable");
     await settled("the page at the floating window's own size", follows);
     await until("the floating window at 1000x700", 20_000, async () => {
-      sway("[app_id=channels-livewire]", "resize", "set", "width", "1000", "px", "height", "700", "px");
+      sway("[app_id=channels-desktop]", "resize", "set", "width", "1000", "px", "height", "700", "px");
       await later(1_500);
-      return near(windowOf("channels-livewire")?.rect.width ?? 0, 1000, 1) ? true : null;
+      return near(windowOf("channels-desktop")?.rect.width ?? 0, 1000, 1) ? true : null;
     });
-    sway("[app_id=channels-livewire]", "move", "position", "center");
+    sway("[app_id=channels-desktop]", "move", "position", "center");
     const { n, p } = await settled("the page at the floating size", (w, q) => near(w.window_rect.width, 1000, 4) && follows(w, q));
     const px = await shot("floating", n.rect, painted);
-    sway("[app_id=channels-livewire]", "floating", "disable");
+    sway("[app_id=channels-desktop]", "floating", "disable");
     return { ok: near(n.window_rect.width, 1000, 4) && follows(n, p) && drawn(px), detail: { window: n.window_rect, page: p, pixels: px } };
   });
 
@@ -167,15 +167,15 @@ try {
 
   await step("closed from the compositor (Super+W) with no tray host, the window leaves the screen", async () => {
     const before = await driver.main("window");
-    sway("[app_id=channels-livewire]", "kill");
-    const gone = await until("the window off the screen", 10_000, async () => (windowOf("channels-livewire") ? null : true)).catch(() => false);
+    sway("[app_id=channels-desktop]", "kill");
+    const gone = await until("the window off the screen", 10_000, async () => (windowOf("channels-desktop") ? null : true)).catch(() => false);
     const after = await driver.main("window").catch((e: unknown) => `threw: ${String(e)}`);
-    return { ok: gone === true, detail: { before, after, stillOnScreen: windowOf("channels-livewire") !== null, running: app.exitCode === null } };
+    return { ok: gone === true, detail: { before, after, stillOnScreen: windowOf("channels-desktop") !== null, running: app.exitCode === null } };
   });
 
   await step("launched again from the app launcher, the window is on the screen (reopened.png)", async () => {
     const again = launch(appExecutable(appDir), env);
-    const back = await until("the window on the screen", 30_000, async () => windowOf("channels-livewire")).catch(() => null);
+    const back = await until("the window on the screen", 30_000, async () => windowOf("channels-desktop")).catch(() => null);
     const second = await exitWithin(again, 15_000);
     const px = back ? await shot("reopened", back.rect, painted) : null;
     return { ok: back !== null && px !== null && drawn(px), detail: { window: back?.window_rect ?? null, secondLaunchExit: second, firstStillRunning: app.exitCode === null } };

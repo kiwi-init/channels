@@ -6,12 +6,11 @@ import { childEnv } from "./child-env.ts";
 const SECRETS = "org.freedesktop.secrets";
 const SEARCH_MS = 5_000;
 
-// Channels Livewire keeps its key under its own service name.
-const storeKeyAttributes = (service: string): string => `{'service': '${service}', 'account': 'store-key'}`;
+const STORE_KEY_ATTRIBUTES = "{'service': 'Channels', 'account': 'store-key'}";
 
 export const holdsItems = (reply: string | null): boolean => reply !== null && reply.includes("objectpath");
 
-export function storeKeyHeld(service = "Channels"): Promise<boolean> {
+export function storeKeyHeld(): Promise<boolean> {
   return new Promise((resolve) => {
     execFile(
       "gdbus",
@@ -26,7 +25,7 @@ export function storeKeyHeld(service = "Channels"): Promise<boolean> {
         "/org/freedesktop/secrets",
         "--method",
         "org.freedesktop.Secret.Service.SearchItems",
-        storeKeyAttributes(service),
+        STORE_KEY_ATTRIBUTES,
       ],
       { timeout: SEARCH_MS + 2_000, env: childEnv() },
       (err, stdout) => resolve(err ? false : holdsItems(stdout)),

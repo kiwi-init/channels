@@ -9,15 +9,14 @@ cd "$dir"
 bun "$here/appimage-squashfs.ts" .
 img=$(ls Channels-*-linux-x86_64.AppImage)
 "./$img" --appimage-extract > /dev/null
-for p in AppRun channels-livewire.desktop channels-livewire.png ChannelsLivewire/bin/launcher ChannelsLivewire/bin/electrobun-launcher ChannelsLivewire/bin/bun ChannelsLivewire/Resources/kiwi.js ChannelsLivewire/Resources/app/bun/index.js ChannelsLivewire/Resources/app/bun/keys.js ChannelsLivewire/Resources/app/bun/message-box.js ChannelsLivewire/Resources/app/page/index.html ChannelsLivewire/Resources/app/views/internal/assets; do
+for p in AppRun channels-desktop.desktop channels-desktop.png Channels/bin/launcher Channels/bin/electrobun-launcher Channels/bin/bun Channels/Resources/kiwi.js Channels/Resources/app/bun/index.js Channels/Resources/app/bun/keys.js Channels/Resources/app/bun/message-box.js Channels/Resources/app/page/index.html Channels/Resources/app/views/internal/assets; do
   [ -e "squashfs-root/$p" ] || { echo "$img lacks $p"; exit 1; }
 done
-for p in ChannelsLivewire/bin/bspatch ChannelsLivewire/bin/zig-zstd ChannelsLivewire/Resources/uninstall ChannelsLivewire/ChannelsLivewire.desktop ChannelsLivewire/Resources/app/views/internal/index.html; do
+for p in Channels/bin/bspatch Channels/bin/zig-zstd Channels/Resources/uninstall Channels/Channels.desktop Channels/Resources/app/views/internal/index.html; do
   [ ! -e "squashfs-root/$p" ] || { echo "$img carries $p, which it leaves out"; exit 1; }
 done
-! grep -q 'x-scheme-handler/kiwi' squashfs-root/channels-livewire.desktop || { echo "$img's entry opens kiwi:// links, which stay stable Channels'"; exit 1; }
 probe=$(mktemp -d)
-cp squashfs-root/ChannelsLivewire/bin/launcher "$probe/launcher"
+cp squashfs-root/Channels/bin/launcher "$probe/launcher"
 printf '#include <stdio.h>\nextern char **environ;\nint main(void) { for (char **e = environ; *e; e++) puts(*e); return 0; }\n' > "$probe/env.c"
 cc -O2 -o "$probe/electrobun-launcher" "$probe/env.c"
 seen=$(env -i HOME=/home/ana DISPLAY=:0 LD_PRELOAD=/tmp/evil.so LD_LIBRARY_PATH=. BUN_OPTIONS=--preload=/tmp/evil.ts NODE_OPTIONS=--require=/tmp/evil.js GTK_MODULES=evil XDG_RUNTIME_DIR=/run/user/1000 "$probe/launcher")

@@ -81,8 +81,8 @@ jobs:
         run: |
           gh release view livewire-ui --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 || gh release create livewire-ui \
             --repo "$GITHUB_REPOSITORY" --target main --prerelease --latest=false \
-            --title "Channels Livewire UI" \
-            --notes "The UI channel Channels Livewire boots its UI from: manifest.json (signed, livewire-manifest/1) and the uipack bundles it points to. Published by ui-publish.yml; the app checks the signature against the key pinned in desktop/src/ui-channel.ts. Not an app release: nothing here updates the app."
+            --title "Channels UI" \
+            --notes "The UI channel Channels boots its UI from: manifest.json (signed, livewire-manifest/1) and the uipack bundles it points to. Published by ui-publish.yml; the app checks the signature against the key pinned in desktop/src/ui-channel.ts. Not an app release: nothing here updates the app."
           mapfile -t packs < <(find "$RUNNER_TEMP/site" -maxdepth 1 -name '*.uipack' | sort)
           gh release upload livewire-ui "${packs[@]}" --repo "$GITHUB_REPOSITORY" --clobber
           gh release upload livewire-ui "$RUNNER_TEMP/site/manifest.json" --repo "$GITHUB_REPOSITORY" --clobber

@@ -5,10 +5,8 @@ TO=$2
 OUT=$3
 mkdir -p "$OUT/dl"
 problems=()
-app="/Applications/Channels Livewire.app"
-data="$HOME/Library/Application Support/com.kiwiinit.channels.livewire"
-version_of() { plutil -extract version raw -o - "$1/Contents/Resources/version.json" 2> /dev/null; }
-version() { version_of "$app"; }
+app=/Applications/Channels.app
+version() { /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$app/Contents/Info.plist" 2> /dev/null; }
 main_pid() { pgrep -f "$app/Contents/MacOS/bun" | head -n 1; }
 
 gh release download "v$FROM" -R "$GITHUB_REPOSITORY" -p "Channels-$FROM-mac-arm64.zip" -D "$OUT/dl" || exit 1
@@ -21,14 +19,14 @@ tmp=$(getconf DARWIN_USER_TEMP_DIR)
 open "$app"
 staged=""
 for _ in $(seq 1 90); do
-  staged=$(ls -d "$tmp"/kiwi-update-*/"Channels Livewire.app" 2> /dev/null | head -n 1)
+  staged=$(ls -d "$tmp"/kiwi-update-*/Channels.app 2> /dev/null | head -n 1)
   [ -n "$staged" ] && break
   sleep 5
 done
 if [ -z "$staged" ]; then
   problems+=("$FROM never staged an update in 7.5 min")
 else
-  echo "staged: $staged ($(version_of "$staged"))"
+  echo "staged: $staged ($(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$staged/Contents/Info.plist"))"
   sleep 3
 fi
 
@@ -42,8 +40,8 @@ done
 now=$(version)
 echo "after quitting: $now"
 [ "$now" = "$TO" ] || problems+=("the app is $now after quitting, not $TO")
-[ -e "$data/stable/update-failed" ] && problems+=("update-failed marker: $(cat "$data/stable/update-failed")")
-ls -d "$app"* "$tmp"/kiwi-update-* 2> /dev/null | sed 's/^/left: /'
+[ -e "$HOME/Library/Application Support/com.kiwiinit.channels/stable/update-failed" ] && problems+=("update-failed marker: $(cat "$HOME/Library/Application Support/com.kiwiinit.channels/stable/update-failed")")
+ls -d /Applications/Channels.app* "$tmp"/kiwi-update-* 2> /dev/null | sed 's/^/left: /'
 codesign --verify --deep --strict "$app" || problems+=("codesign --verify fails on the updated app")
 spctl --assess --type execute --verbose=2 "$app" || problems+=("Gatekeeper refuses the updated app")
 grep -q "\"$TO\"" "$app/Contents/Resources/version.json" || problems+=("version.json isn't $TO: $(cat "$app/Contents/Resources/version.json")")
@@ -54,7 +52,7 @@ pid=$(main_pid)
 if [ -n "$pid" ]; then echo "$TO runs (bun $pid)"; else problems+=("the updated app didn't stay up"); fi
 [ -n "$pid" ] && kill -TERM "$pid"
 sleep 5
-find "$HOME/Library/Logs/com.kiwiinit.channels.livewire" "$data" -name main.log 2> /dev/null | while read -r f; do
+find "$HOME/Library/Logs" "$HOME/Library/Application Support/com.kiwiinit.channels" -name main.log 2> /dev/null | while read -r f; do
   echo "::group::$f"
   tail -n 60 "$f"
   echo "::endgroup::"
@@ -63,4 +61,4 @@ if [ ${#problems[@]} -gt 0 ]; then
   printf 'FAIL %s\n' "${problems[@]}"
   exit 1
 fi
-echo "ok: an installed Channels Livewire $FROM updated itself to $TO on Apple silicon"
+echo "ok: an installed $FROM updated itself to $TO on Apple silicon"

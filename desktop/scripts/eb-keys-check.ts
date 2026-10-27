@@ -189,7 +189,7 @@ try {
     JSON.stringify([second.report?.["drop"], second.report?.["markedKept"], second.report?.["get"]]),
   );
 
-  const storeBundle = await Bun.build({ entrypoints: [path.join(import.meta.dirname, "eb-store-probe.ts")], target: "bun", define: { KIWI_EB_LIVEWIRE: "true" } });
+  const storeBundle = await Bun.build({ entrypoints: [path.join(import.meta.dirname, "eb-store-probe.ts")], target: "bun" });
   const storeOut = storeBundle.outputs[0];
   if (!storeBundle.success || !storeOut) throw new Error(`the store probe didn't bundle: ${storeBundle.logs.join("\n")}`);
   const storeApp = async (name: string, appId: string, legacyNames: string[]): Promise<string> => {

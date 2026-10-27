@@ -11,7 +11,7 @@ import { swapAsset, swapScript } from "../src/update-asset.ts";
 import { homeKeychain, stuck } from "./eb-home-keychain.ts";
 
 const [oldZip, newZip] = process.argv.slice(2);
-if (!oldZip || !newZip) throw new Error("usage: bun desktop/scripts/eb-update-rehearsal.ts <Electron Channels-…-mac-arm64.zip> <new Channels-…-mac-arm64.zip>");
+if (!oldZip || !newZip) throw new Error("usage: bun desktop/scripts/eb-update-rehearsal.ts <an older Channels-…-mac-arm64.zip> <new Channels-…-mac-arm64.zip>");
 const signed = process.env.EB_SIGNED === "1";
 const later = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -58,15 +58,15 @@ let dropKeychain: () => void = () => {};
 try {
   const apps = path.join(tmp, "Applications");
   fs.mkdirSync(apps);
-  must("ditto", ["-x", "-k", oldZip, apps], "installing the Electron app");
+  must("ditto", ["-x", "-k", oldZip, apps], "installing the older app");
   const target = path.join(apps, "Channels.app");
   const from = plist(target, "CFBundleShortVersionString");
   const to = desktopPackage.version;
-  console.log(`the installed Electron app: ${from}; the update: ${to}`);
-  if (compareVersions(to, from) <= 0) throw new Error(`update rehearsal: the Electron updater only takes a newer release, and ${to} isn't newer than ${from}`);
+  console.log(`the installed app: ${from}; the update: ${to}`);
+  if (compareVersions(to, from) <= 0) throw new Error(`update rehearsal: the updater only takes a newer release, and ${to} isn't newer than ${from}`);
 
   const name = swapAsset(to, "darwin", "arm64");
-  if (path.basename(newZip) !== name) throw new Error(`update rehearsal: the Electron updater asks for ${String(name)}, and the release has ${path.basename(newZip)}`);
+  if (path.basename(newZip) !== name) throw new Error(`update rehearsal: the updater asks for ${String(name)}, and the release has ${path.basename(newZip)}`);
   const sums = `${createHash("sha256").update(fs.readFileSync(newZip)).digest("hex")}  ${name}\n`;
   const stage = fs.mkdtempSync(path.join(tmp, "kiwi-update-"));
   const download = path.join(stage, name);
@@ -81,7 +81,7 @@ try {
   if (!fs.existsSync(next)) throw new Error(`update rehearsal: ${name} has no Channels.app at its root`);
   if (signed) {
     if (!(await signedLikeThisApp(target, next)))
-      throw new Error("update rehearsal: the Electron app's updater would refuse it: not signed like the installed app (codesign -R its designated requirement, then spctl)");
+      throw new Error("update rehearsal: the installed app's updater would refuse it: not signed like the installed app (codesign -R its designated requirement, then spctl)");
     console.log("signed like the installed app: its designated requirement and Gatekeeper accept the update");
   } else console.log("rehearsal without the Developer ID: the signature check is skipped");
 

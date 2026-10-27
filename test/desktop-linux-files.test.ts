@@ -13,31 +13,30 @@ describe("the Linux AppImage made from Electrobun's bundle (T444)", () => {
     expect(site).not.toContain(".deb");
   });
 
-  test("come from Electrobun's plain stable artifact, never its self-extracting setup", () => {
-    expect(archOfArtifact("stable-linux-x64-ChannelsLivewire.tar.zst")).toBe("x64");
-    expect(archOfArtifact("stable-linux-arm64-ChannelsLivewire.tar.zst")).toBe("arm64");
-    expect(archOfArtifact("stable-linux-x64-Channels.tar.zst")).toBeNull();
-    expect(archOfArtifact("linux-x64-ChannelsLivewire-Setup.tar.gz")).toBeNull();
-    expect(archOfArtifact("canary-linux-x64-ChannelsLivewire.tar.zst")).toBeNull();
+  test("comes from Electrobun's plain stable artifact, never its self-extracting setup", () => {
+    expect(archOfArtifact("stable-linux-x64-Channels.tar.zst")).toBe("x64");
+    expect(archOfArtifact("stable-linux-arm64-Channels.tar.zst")).toBe("arm64");
+    expect(archOfArtifact("linux-x64-Channels-Setup.tar.gz")).toBeNull();
+    expect(archOfArtifact("canary-linux-x64-Channels.tar.zst")).toBeNull();
   });
 
-  test("the .desktop entry is Channels Livewire's, leaves kiwi:// links to stable Channels and names the icon the packages install (T839)", () => {
-    const entry = desktopEntry("channels-livewire");
-    expect(entry).toContain("Name=Channels Livewire\n");
-    expect(entry).toContain("Exec=channels-livewire %U\n");
-    expect(entry).not.toContain("x-scheme-handler/kiwi");
-    expect(entry).toContain("Icon=channels-livewire\n");
-    expect(entry).toContain("StartupWMClass=ChannelsLivewire\n");
+  test("the .desktop entry opens kiwi:// links and names the icon the AppImage carries", () => {
+    const entry = desktopEntry("channels-desktop");
+    expect(entry).toContain("Name=Channels\n");
+    expect(entry).toContain("Exec=channels-desktop %U\n");
+    expect(entry).toContain("StartupWMClass=Channels\n");
+    expect(entry).toContain("MimeType=x-scheme-handler/kiwi;\n");
+    expect(entry).toContain("Icon=channels-desktop\n");
     expect(entry).not.toContain("X-AppImage-Version");
-    expect(desktopEntry("channels-livewire", "0.26.0")).toContain("X-AppImage-Version=0.26.0\n");
+    expect(desktopEntry("channels-desktop", "0.26.0")).toContain("X-AppImage-Version=0.26.0\n");
   });
 
   test("leaves out Electrobun's updater tools, its uninstall tool and its own .desktop entry: the AppImage updates and integrates as a whole", () => {
-    expect([...LEFT_OUT]).toEqual(["bin/bspatch", "bin/zig-zstd", "Resources/uninstall", "ChannelsLivewire.desktop"]);
+    expect([...LEFT_OUT]).toEqual(["bin/bspatch", "bin/zig-zstd", "Resources/uninstall", "Channels.desktop"]);
   });
 
   test("the AppImage starts Electrobun's launcher from wherever it's mounted, with a pinned runtime", () => {
-    expect(APP_RUN).toContain('exec "$HERE/ChannelsLivewire/bin/launcher" "$@"');
+    expect(APP_RUN).toContain('exec "$HERE/Channels/bin/launcher" "$@"');
     expect(runtimeUrl("x64")).toBe("https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64");
   });
 });

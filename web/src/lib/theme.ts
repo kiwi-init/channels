@@ -80,7 +80,7 @@ export function stepTextSize(step: TextStep) {
 const TINT_KEY = "mc.tint"
 // The tint "accent" is the system's accent colour (System Settings on a Mac, the
 // desktop's Settings portal on Linux), followed as it changes. Only an app whose
-// bridge reads it (Channels Livewire) offers it. The last one seen is kept, so the
+// bridge reads it (the desktop app) offers it. The last one seen is kept, so the
 // first paint has it before the bridge answers.
 export const ACCENT_TINT = "accent"
 const ACCENT_KEY = "mc.accent"

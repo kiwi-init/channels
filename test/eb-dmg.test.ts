@@ -24,7 +24,7 @@ test("a dmg that hdiutil makes on the first try is made once, with no pause", ()
   const d = dir();
   const f = fake([0]);
   makeDmg(join(d, "stage"), join(d, "Channels.dmg"), f.run, f.pause);
-  expect(f.calls).toEqual([["hdiutil", "create", "-volname", "Channels Livewire", "-srcfolder", join(d, "stage"), "-format", "ULMO", "-o", join(d, "Channels.dmg")]]);
+  expect(f.calls).toEqual([["hdiutil", "create", "-volname", "Channels", "-srcfolder", join(d, "stage"), "-format", "ULMO", "-o", join(d, "Channels.dmg")]]);
   expect(f.pauses).toEqual([]);
   rmSync(d, { recursive: true, force: true });
 });
