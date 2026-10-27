@@ -78,17 +78,19 @@ export function roomsOf(state: ChannelState, messages: readonly Wire[], me: stri
   }
   const rooms = [...state.rooms.values()]
   const list = rooms.some((r) => r.id === GENERAL_ROOM) ? rooms : [{ id: GENERAL_ROOM, name: GENERAL_ROOM }, ...rooms]
-  return list.map((r) => ({ id: r.id, name: r.name, unread: unread.get(r.id) ?? 0, mentions: mentions.get(r.id) ?? 0 }))
+  return list.map((r) => ({ id: r.id, name: r.name, unread: unread.get(r.id) ?? 0, mentions: mentions.get(r.id) ?? 0, seen: seen[roomSeenKey(r.id)] ?? (r.id === GENERAL_ROOM ? 0 : from) }))
 }
 
 export function directsOf(state: ChannelState, messages: readonly Wire[], me: string, seen: Seen): Direct[] {
   const at = new Map<string, number>()
   const unread = new Map<string, number>()
+  const marks = new Map<string, number>()
   for (const m of messages) {
     const place = state.placeOf.get(m.seq)
     if (place?.kind !== "dm" || !place.with.includes(me) || ignored(state.trust.get(m.seq))) continue
     const other = place.with[0] === me ? place.with[1] : place.with[0]
     at.set(other, m.ts)
+    marks.set(other, seen[placeKey(place)] ?? 0)
     if (m.from !== me && m.kind !== "event" && m.seq > (seen[placeKey(place)] ?? 0)) unread.set(other, (unread.get(other) ?? 0) + 1)
   }
   for (const s of state.places.values()) {
@@ -96,7 +98,7 @@ export function directsOf(state: ChannelState, messages: readonly Wire[], me: st
     const other = s.place.with[0] === me ? s.place.with[1] : s.place.with[0]
     if (!at.has(other)) at.set(other, 0)
   }
-  return [...at].map(([name, last]) => ({ with: name, unread: unread.get(name) ?? 0, last })).sort((a, b) => b.last - a.last)
+  return [...at].map(([name, last]) => ({ with: name, unread: unread.get(name) ?? 0, last, seen: marks.get(name) ?? 0 })).sort((a, b) => b.last - a.last)
 }
 
 const LEADING_MENTION = (me: string) => new RegExp(`(^|[^\\p{L}\\p{N}_.-])@${me.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}_-])`, "u")
@@ -160,6 +162,7 @@ export interface Pending {
   inThread?: number
   replyTo?: number
   seq?: number
+  failed?: string
 }
 
 export interface Pictures {
@@ -236,7 +239,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       at: p.at,
       text: p.text,
       where: p.where,
-      pending: true,
+      ...(p.failed !== undefined ? { failed: p.failed } : { pending: true }),
       ...(p.inThread !== undefined ? { inThread: p.inThread } : {}),
       ...(p.replyTo !== undefined ? { replyTo: p.replyTo } : {}),
     })

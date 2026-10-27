@@ -19,6 +19,8 @@ export interface Run {
   requests: readonly JoinRequest[]
   send: (body: string, opts: SendOptions) => Promise<number>
   post: (where: Where, text: string, opts: { replyTo?: number; inThread?: number }) => Promise<number>
+  retry: (key: number) => Promise<number>
+  discard: (key: number) => void
   refreshRequests: () => Promise<void>
   refreshRoster: () => Promise<void>
 }

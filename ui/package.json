@@ -14,7 +14,9 @@
   "dependencies": {
     "@kiwi/core": "workspace:*",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "react-native-enriched-markdown": "1.1.1",
+    "react-native": "file:./stubs/react-native"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

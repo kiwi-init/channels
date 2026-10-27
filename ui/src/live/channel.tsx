@@ -149,16 +149,27 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
         setPending((list) => list.map((p) => (p.key === key ? { ...p, seq } : p)))
         return seq
       } catch (err) {
-        setPending((list) => list.filter((p) => p.key !== key))
+        setPending((list) => list.map((p) => (p.key === key ? { ...p, failed: err instanceof Error ? err.message : String(err) } : p)))
         throw err
       }
     },
     [state, messages, me, send, inTurn]
   )
 
+  const discard = useCallback((key: number) => setPending((list) => list.filter((p) => p.key !== key)), [])
+  const retry = useCallback(
+    async (key: number): Promise<number> => {
+      const p = pending.find((x) => x.key === key)
+      if (!p) throw new Error("that message is gone")
+      discard(key)
+      return post(p.where, p.text, { ...(p.inThread !== undefined ? { inThread: p.inThread } : {}), ...(p.replyTo !== undefined ? { replyTo: p.replyTo } : {}) })
+    },
+    [pending, discard, post]
+  )
+
   const run = useMemo(
-    (): Run => ({ code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, refreshRequests, refreshRoster }),
-    [code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, refreshRequests, refreshRoster]
+    (): Run => ({ code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster }),
+    [code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster]
   )
 
   useLayoutEffect(() => publish({ code, channel, run }), [code, channel, run])

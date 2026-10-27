@@ -43,8 +43,9 @@ export function normalizeRelay(url: string): string | null {
 /**
  * The Content-Security-Policy for the app's page: the hosted web's (web/public/_headers),
  * with the relay this app talks to, over HTTP and its WebSocket, as the only place to connect. Not
- * WorkOS: in the app, sign-in runs in main (the device flow), never in the page. No eval, no inline
- * script, nothing framed, no form posts: script that got in some other way can't phone anywhere else.
+ * WorkOS: in the app, sign-in runs in main (the device flow), never in the page. No eval (only
+ * WebAssembly compiles: the message renderer's parser is wasm), no inline script, nothing framed, no
+ * form posts: script that got in some other way can't phone anywhere else.
  */
 export function csp(relay: string): string {
   const origin = normalizeRelay(relay);
@@ -52,7 +53,7 @@ export function csp(relay: string): string {
   const connect = ["'self'", ...(origin ? [origin, socket!] : [])].join(" ");
   return [
     "default-src 'self'",
-    "script-src 'self'",
+    "script-src 'self' 'wasm-unsafe-eval'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self'",

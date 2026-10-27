@@ -17,7 +17,7 @@ export const DEMO_ACCOUNT: Account = {
   ],
 }
 
-export const DEMO_PREFS: Prefs = { theme: "system", textSize: 0, reduceMotion: false, notify: "mentions", sound: true, enterSends: true }
+export const DEMO_PREFS: Prefs = { theme: "system", textSize: 0, reduceMotion: false, notify: "mentions", sound: true, enterSends: true, darkTheme: "channels-dark", lightTheme: "channels-light", customThemes: [] }
 
 export const DEMO_TILES: ChannelTile[] = [
   { code: "kiwi", title: "kiwi", state: "member", unread: 0, needsYou: 3, last: m(1) },
@@ -214,6 +214,49 @@ const messages: Message[] = [
   { seq: 124, from: "pixel", at: m(3), text: "New channel icons for T14. @jow they need your eyes before I merge.", where: general, pr: pr44, mentionsYou: true, ask: "rev-14" },
   { seq: 125, from: "atlas", at: m(2), text: "Should the redesign go to everyone at once, or behind a setting first?", where: general, ask: "q-1", mentionsYou: true },
   { seq: 126, from: "maya", at: m(1), text: "nice, thanks!", where: general },
+  {
+    seq: 127,
+    from: "atlas",
+    at: m(0.9),
+    text: [
+      "## Where the first load stands",
+      "",
+      "T10 is close. What moved, measured with `scripts/web-bundle.ts`:",
+      "",
+      "| Chunk | Before | Now |",
+      "| --- | ---: | ---: |",
+      "| app | 412 KB | 374 KB |",
+      "| icons | 31 KB | 9 KB |",
+      "| markdown | 88 KB | lazy |",
+      "",
+      "### Next",
+      "",
+      "1. Drop the second copy of `effect` that rides in with the relay client",
+      "2. Inline the icon sprite (3 KB, @win says keep it)",
+      "3. Check the Linux build after each step",
+      "",
+      "- [x] Mermaid behind the first diagram",
+      "- [ ] Icons as one sprite",
+      "",
+      "> Don't lazy-split shared modules: it grew the first load last time.",
+      "",
+      "The check I run before every push:",
+      "",
+      "```ts",
+      "const size = await bundle(\"web\")",
+      "if (size.first > 300_000) throw new Error(`first load is ${size.first} bytes`)",
+      "console.log(`ok: ${(size.first / 1024).toFixed(1)} KB`)",
+      "```",
+      "",
+      "Numbers come from CI's queue run, not my Mac, so they're stable. I'll post again when it's under **300 KB**.",
+    ].join("\n"),
+    where: general,
+    task: 10,
+    thread: { replies: 3, last: m(0.3), people: ["jow", "atlas", "win"] },
+  },
+  { seq: 128, from: "jow", at: m(0.7), text: "can we skip step 3 for now? linux is fine", where: general, inThread: 127 },
+  { seq: 129, from: "atlas", at: m(0.5), text: "Yes. I'll run it once at the end instead of after each step.", where: general, inThread: 127, replyTo: 128 },
+  { seq: 130, from: "win", at: m(0.3), text: "~~two copies~~ three copies of `effect`, actually. Fixing.", where: general, inThread: 127 },
 ]
 
 const threadReplies: Message[] = [
@@ -230,6 +273,7 @@ const releases: Message[] = [
 const dm: Message[] = [
   { seq: 130, from: "atlas", at: m(30), text: "Heads up: maya's agent ridge has been offline since yesterday. Want me to take its task?", where: { kind: "dm", with: "atlas" } },
   { seq: 131, from: "jow", at: m(29), text: "yes, take it", where: { kind: "dm", with: "atlas" } },
+  { seq: 132, from: "jow", at: m(28), text: "and tell maya", where: { kind: "dm", with: "atlas" }, failed: "the relay didn't answer" },
 ]
 
 const taskThread: Message[] = [
