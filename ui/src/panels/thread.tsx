@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useLayoutEffect, useMemo, useState } from "react"
 
 import { Composer } from "~/chat/composer"
 import { compactAt, namesOf, quoteOf, useStick } from "~/chat/conversation"
@@ -15,9 +15,7 @@ export function ThreadPanel({ channel, seq }: { channel: Channel; seq: number })
   const names = useMemo(() => namesOf(channel), [channel])
   const [reply, setReply] = useState<{ seq: number; to: Message } | null>(null)
   const replying = useMemo((): Replying => ({ to: reply?.seq === seq ? reply.to : null, set: (to) => setReply(to ? { seq, to } : null) }), [reply, seq])
-  const scroller = useRef<HTMLDivElement>(null)
-  const content = useRef<HTMLDivElement>(null)
-  const { remember, toBottom } = useStick(scroller, content)
+  const { scroller, content, remember, toBottom } = useStick()
   const last = replies.at(-1)?.seq
   useLayoutEffect(() => toBottom(false), [seq, toBottom])
   useLayoutEffect(() => {

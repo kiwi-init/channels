@@ -13,7 +13,7 @@ const Markdown = lazy(() => import("~/chat/markdown"))
 const QUICK = ["👍", "🔥", "👀", "✅"]
 const CLAMP_PX = 12 * 22
 
-export function Body({ channel, text, names, onImage }: { channel: Channel; text: string; names: ReadonlySet<string>; onImage: (url: string, alt: string) => void }) {
+function Body({ channel, text, names, onImage }: { channel: Channel; text: string; names: ReadonlySet<string>; onImage: (url: string, alt: string) => void }) {
   const { go, toast } = useApp()
   const [shown, setShown] = useState(false)
   const tasks = useMemo(() => new Set(channel.tasks.map((t) => t.id)), [channel.tasks])
@@ -76,7 +76,7 @@ function Clamp({ on, children }: { on: boolean; children: ReactNode }) {
   )
 }
 
-export function Quote({ quoted, onClick }: { quoted: Message; onClick?: () => void }) {
+function Quote({ quoted, onClick }: { quoted: Message; onClick?: () => void }) {
   const line = preview(quoted.text)
   return (
     <button type="button" className="msg-quote" onClick={onClick} aria-label={`Replying to ${quoted.from}: ${line.slice(0, 80)}. Show it`}>

@@ -15,7 +15,6 @@ import { externalUrl } from "./guard.ts";
 import { attachWindow, ebHost } from "./host-eb.ts";
 import { handlers } from "./ipc/handlers.ts";
 import { ASK_AGAIN_URL, keyringPage, type KeyringState } from "./keyring-wait.ts";
-import { logMainError } from "./main-log.ts";
 import { openInBrowser } from "./open.ts";
 import { bunBridge } from "./rpc-eb.ts";
 import { snapshot, store } from "./store.ts";

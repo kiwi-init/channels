@@ -62,14 +62,18 @@ export function Themes() {
   const { prefs, actions } = app
   const systemDark = useSystemDark()
   const [query, setQuery] = useState("")
-  const [draft, setDraft] = useState<Draft | null>(null)
   const themes = useMemo(() => allThemes(prefs.customThemes), [prefs.customThemes])
   const ref = useRef<HTMLElement>(null)
   const now = resolveMode(prefs.theme, systemDark)
 
-  const startNew = (appearance: Appearance) => {
+  const draftFor = (appearance: Appearance): Draft | null => {
     const from = themes.find((t) => t.id === (appearance === "dark" ? prefs.darkTheme : prefs.lightTheme)) ?? themes.find((t) => t.appearance === appearance)
-    if (from) setDraft({ id: null, name: "", appearance, base: baseOf(from.colors) })
+    return from ? { id: null, name: "", appearance, base: baseOf(from.colors) } : null
+  }
+  const [draft, setDraft] = useState<Draft | null>(() => (SHOT === "theme-editor" ? draftFor("dark") : null))
+  const startNew = (appearance: Appearance) => {
+    const next = draftFor(appearance)
+    if (next) setDraft(next)
   }
   const startEdit = (t: CustomTheme) => setDraft({ id: t.id, name: t.name, appearance: t.appearance, base: { ...baseOf(customColors(t)), ...t.base } })
 
@@ -77,7 +81,6 @@ export function Themes() {
   useEffect(() => {
     if (opened.current) return
     opened.current = true
-    if (SHOT === "theme-editor") startNew("dark")
     if (SHOT === "settings-themes" || SHOT === "theme-editor") ref.current?.scrollIntoView({ block: "start" })
   })
 

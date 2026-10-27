@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react"
+import { Fragment, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { Composer } from "~/chat/composer"
 import { MessageRow } from "~/chat/message"
@@ -29,7 +29,9 @@ export function quoteOf(list: Message[], i: number, bySeq: ReadonlyMap<number, M
 
 const whereKey = (w: Where): string => (w.kind === "room" ? `r:${w.room}` : w.kind === "dm" ? `d:${w.with}` : `t:${w.task}`)
 
-export function useStick(scroller: RefObject<HTMLDivElement | null>, content: RefObject<HTMLDivElement | null>) {
+export function useStick() {
+  const scroller = useRef<HTMLDivElement>(null)
+  const content = useRef<HTMLDivElement>(null)
   const stuck = useRef(true)
   const anchor = useRef<{ el: Element; top: number } | null>(null)
 
@@ -53,7 +55,7 @@ export function useStick(scroller: RefObject<HTMLDivElement | null>, content: Re
     }
     const el = rows[lo]
     anchor.current = el ? { el, top: el.getBoundingClientRect().top - top } : null
-  }, [scroller, content])
+  }, [])
 
   const settle = useCallback(() => {
     const box = scroller.current
@@ -66,7 +68,7 @@ export function useStick(scroller: RefObject<HTMLDivElement | null>, content: Re
     if (!a?.el.isConnected) return
     const now = a.el.getBoundingClientRect().top - box.getBoundingClientRect().top
     if (Math.abs(now - a.top) > 0.5) box.scrollTop += now - a.top
-  }, [scroller])
+  }, [])
 
   useLayoutEffect(() => {
     const box = scroller.current
@@ -76,20 +78,17 @@ export function useStick(scroller: RefObject<HTMLDivElement | null>, content: Re
     watch.observe(list)
     watch.observe(box)
     return () => watch.disconnect()
-  }, [scroller, content, settle])
+  }, [settle])
 
-  const toBottom = useCallback(
-    (smooth: boolean) => {
-      const box = scroller.current
-      if (!box) return
-      stuck.current = true
-      anchor.current = null
-      box.scrollTo({ top: box.scrollHeight, behavior: smooth && !matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "auto" })
-    },
-    [scroller]
-  )
+  const toBottom = useCallback((smooth: boolean) => {
+    const box = scroller.current
+    if (!box) return
+    stuck.current = true
+    anchor.current = null
+    box.scrollTo({ top: box.scrollHeight, behavior: smooth && !matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "auto" })
+  }, [])
 
-  return { stuck, remember, settle, toBottom }
+  return { scroller, content, stuck, remember, settle, toBottom }
 }
 
 export function Conversation({ channel, search }: { channel: Channel; search: string }) {
@@ -121,9 +120,7 @@ function Feed({ channel, where, search }: { channel: Channel; where: Where; sear
   const bySeq = useMemo(() => new Map(channel.messages.map((m) => [m.seq, m])), [channel.messages])
   const names = useMemo(() => namesOf(channel), [channel])
   const typing = channel.people.filter((p) => p.typing && !p.you && where.kind === "room")
-  const scroller = useRef<HTMLDivElement>(null)
-  const content = useRef<HTMLDivElement>(null)
-  const { stuck, remember, settle, toBottom } = useStick(scroller, content)
+  const { scroller, content, stuck, remember, settle, toBottom } = useStick()
   const [fresh, setFresh] = useState(0)
   const [far, setFar] = useState(false)
 
@@ -145,7 +142,7 @@ function Feed({ channel, where, search }: { channel: Channel; where: Where; sear
     if (!box || !line || !unread) return toBottom(false)
     box.scrollTop = line.offsetTop - 12
     remember()
-    if (!stuck.current) setFresh(unread.count)
+    if (!stuck.current) queueMicrotask(() => setFresh(unread.count))
   }, [unread, remember, toBottom, stuck])
 
   const last = list.at(-1)

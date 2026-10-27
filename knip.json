@@ -3,7 +3,6 @@
   "ignoreBinaries": [
     "oxfmt",
     "gsettings",
-    "hyprctl",
     "weston-screenshooter",
     "iconutil",
     "clang",
@@ -20,7 +19,6 @@
     "xdotool",
     "swaymsg",
     "grim",
-    "osascript",
     "plutil",
     "secret-tool",
     "readelf"
@@ -44,6 +42,9 @@
     "desktop": {
       "entry": ["src/main-eb.ts", "src/preload-eb.ts", "src/keys-worker.ts", "src/message-box-worker.ts", "scripts/*.ts", "electrobun.config.ts"],
       "project": ["src/**/*.ts", "scripts/**/*.ts"]
+    },
+    "ui": {
+      "entry": ["src/chat/react-native.ts", "stubs/react-native/index.js"]
     }
   }
 }

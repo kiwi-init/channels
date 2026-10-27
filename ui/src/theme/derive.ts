@@ -37,7 +37,7 @@ export const TOKENS = [
   "c-brown",
 ] as const
 
-export type TokenName = (typeof TOKENS)[number]
+type TokenName = (typeof TOKENS)[number]
 
 export type Colors = Record<TokenName, string>
 
@@ -72,7 +72,7 @@ export interface Parts {
 
 type Rgb = readonly [number, number, number]
 
-export const FLOORS = { ink: 7, ink2: 6, ink3: 4.5, accent: 4.5, tone: 3 } as const
+const FLOORS = { ink: 7, ink2: 6, ink3: 4.5, accent: 4.5, tone: 3 } as const
 
 const STEP = { bg2: 0.035, bg3: 0.04, ink2: 0.32, ink3: 0.46 } as const
 
@@ -100,7 +100,7 @@ const hexOf = (c: Rgb): string => `#${byte(c[0])}${byte(c[1])}${byte(c[2])}`
 
 export const hex = (c: string): string => hexOf(rgb(c))
 
-export function mix(a: string, b: string, t: number): string {
+function mix(a: string, b: string, t: number): string {
   const x = rgb(a)
   const y = rgb(b)
   return hexOf([x[0] + (y[0] - x[0]) * t, x[1] + (y[1] - x[1]) * t, x[2] + (y[2] - x[2]) * t])
@@ -133,7 +133,7 @@ const spread = (a: string, b: string): number => {
   return (Math.abs(x[0] - y[0]) + Math.abs(x[1] - y[1]) + Math.abs(x[2] - y[2])) / 3
 }
 
-export function reach(color: string, toward: string, on: readonly string[], min: number): string {
+function reach(color: string, toward: string, on: readonly string[], min: number): string {
   for (let i = 0; i <= 50; i++) {
     const next = mix(color, toward, i / 50)
     if (on.every((s) => contrast(next, s) >= min)) return next
