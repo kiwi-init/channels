@@ -33,6 +33,7 @@ export function driveForTests(win: BrowserWindow): void {
         closeWindow: () => (win.requestClose(), true),
         window: () => ({ visible: win.isVisible(), minimized: win.isMinimized() }),
         frame: () => win.getFrame(),
+        spellCheck: () => win.spellCheck,
         looks: () => windowLooks(),
         frostAllowed: () => frostAllowed(),
         solidForTest: () => (forceFrostForTest(false), true),
