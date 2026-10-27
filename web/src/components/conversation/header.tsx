@@ -1,5 +1,5 @@
-import { ArrowLeft01Icon, BotIcon, Search01Icon, Settings02Icon, TaskDone01Icon } from "@hugeicons/core-free-icons"
-import type { Dispatch, ReactNode, SetStateAction } from "react"
+import { ArrowLeft01Icon, BotIcon, Cancel01Icon, Search01Icon, Settings02Icon, TaskDone01Icon } from "@hugeicons/core-free-icons"
+import { useRef, type Dispatch, type ReactNode, type SetStateAction } from "react"
 
 import type { ChannelIcon } from "@kiwi/core/protocol.ts"
 
@@ -27,7 +27,8 @@ export type HeaderProps = {
   status: string[]
   onTitle: () => void
   searchHint: string
-  onSearchEnter?: () => void
+  onSearchKey?: (key: SearchKey) => void
+  searchList?: { id: string; open: boolean; active: string | null }
   places: ReactNode
   needs: number
   view: View
@@ -35,6 +36,9 @@ export type HeaderProps = {
   onView: (v: View) => void
   reviewing: boolean
 }
+
+export type SearchKey = "up" | "down" | "enter"
+const KEYS: Record<string, SearchKey> = { ArrowUp: "up", ArrowDown: "down", Enter: "enter" }
 
 const SEGMENT = "no-drag relative flex h-full shrink-0 items-center gap-1.5 rounded-full px-2.5 text-ui transition-colors"
 
@@ -112,8 +116,9 @@ export function ViewsNav({ view, counts, onView, reviewing }: Pick<HeaderProps, 
   )
 }
 
-export function Header({ headRef, onBack, search, setSearch, tab, onTab, heading, headingLabel, face, onTitle, searchHint, onSearchEnter, places }: HeaderProps) {
+export function Header({ headRef, onBack, search, setSearch, tab, onTab, heading, headingLabel, face, onTitle, searchHint, onSearchKey, searchList, places }: HeaderProps) {
   const wide = useSidebarHidden()
+  const input = useRef<HTMLInputElement>(null)
   return (
     <header ref={headRef} className="absolute inset-x-0 top-0 z-20 bg-canvas">
       <div className="drag relative flex h-(--chrome-h) items-center gap-1 px-2 sm:gap-3 sm:px-3 md:hidden">
@@ -153,20 +158,41 @@ export function Header({ headRef, onBack, search, setSearch, tab, onTab, heading
           <label className="flex h-9 items-center gap-2 rounded-full px-3.5 text-ink-3 edge">
             <Icon icon={Search01Icon} size={16} className="shrink-0" />
             <input
+              ref={input}
               autoFocus
               value={search}
+              role={searchList ? "combobox" : undefined}
+              aria-expanded={searchList ? searchList.open : undefined}
+              aria-controls={searchList?.open ? searchList.id : undefined}
+              aria-activedescendant={searchList?.open ? (searchList.active ?? undefined) : undefined}
+              aria-autocomplete={searchList ? "list" : undefined}
               aria-label="Search messages and tasks"
               placeholder={searchHint}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Escape") setSearch(null)
-                if (e.key === "Enter") {
+                const key = KEYS[e.key]
+                if (key && onSearchKey) {
                   e.preventDefault()
-                  onSearchEnter?.()
+                  onSearchKey(key)
                 }
               }}
               className="min-w-0 flex-1 bg-transparent text-body text-ink outline-none placeholder:text-ink-3 focus-visible:outline-none"
             />
+            {search !== "" && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setSearch("")
+                  input.current?.focus()
+                }}
+                className="-mr-1.5 flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full text-ink-3 transition-colors hover:bg-wash hover:text-ink"
+              >
+                <Icon icon={Cancel01Icon} size={14} />
+              </button>
+            )}
           </label>
         </div>
       )}
