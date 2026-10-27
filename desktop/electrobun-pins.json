@@ -1,5 +1,5 @@
 {
-  "electrobun": "2026.10.0",
+  "electrobun": "2026.10.1",
   "releasesBaseUrl": "https://github.com/kiwi-init/electrobun-livewire/releases/download",
   "hutch": {
     "version": "0.28.2-canary.8",
@@ -37,23 +37,23 @@
     }
   },
   "devkit": {
-    "macos-arm64": "d689fd91c40017f80e144886716c8237d2167fc6e7703ed18958ad6e255354c1",
-    "linux-x64": "d689fd91c40017f80e144886716c8237d2167fc6e7703ed18958ad6e255354c1",
-    "linux-arm64": "d689fd91c40017f80e144886716c8237d2167fc6e7703ed18958ad6e255354c1"
+    "macos-arm64": "2bad27a84cd58ae87137583c64a2e98a507b88caba3aeb5e9c67b19edf85e8a3",
+    "linux-x64": "2bad27a84cd58ae87137583c64a2e98a507b88caba3aeb5e9c67b19edf85e8a3",
+    "linux-arm64": "2bad27a84cd58ae87137583c64a2e98a507b88caba3aeb5e9c67b19edf85e8a3"
   },
   "app": {
     "macos-arm64": {
       "Contents/MacOS/launcher": "cb56c4ccfa6d2c1a3596e44d143af212b5af3e196199a83c19d511506f28ff4f",
       "Contents/MacOS/bun": "0a2237cdcfa0d16ef501d9acca9f0026309ef348bea7393a64e8d1e3609565cc",
       "Contents/MacOS/libElectrobunCore.dylib": "fabb7954d71f66f508422fc0c432ba9ccde36394b9ccab02a8ba4aeaaa597243",
-      "Contents/MacOS/libNativeWrapper.dylib": "81164dfdfb750a561e38e2dfd1396f007b8c1d819bed49147997ac7312a41b98",
+      "Contents/MacOS/libNativeWrapper.dylib": "7204f65d6743289904eab8a61a8ce0f7e01c9c7397df2d7783b99524482fa0f5",
       "Contents/MacOS/libasar.dylib": "775e92fed7238ea1da09ec5ae54a72a19baaccf602a4467f16bb2e36cff9cfbc",
       "Contents/MacOS/zig-zstd": "581944e9e8cac153581cf17109f1f58b5b87202524909d11803bfce2402c2548",
       "Contents/MacOS/bspatch": "a722fd1cf674012f25eb192c84b154bb753ec62422eb5d568907c44405cc81dd",
       "Contents/Resources/main.js": "8afb61682280f0f2bd82abaad23996d043781cf23cd132a2bbfa2a8b8cd001c7",
       "Contents/Resources/preload-full.js": "0c9f9ff20749edffc2768f4a89c08bd5af916d3471dda8af6e5d05510a9630ac",
       "Contents/Resources/preload-sandboxed.js": "d358fa4e85148ae6059eca9cfb398faf7a6c0710a03cdc972275f6a61670f3f9",
-      "Contents/Resources/uninstall": "476f3b6fa7f795b7d3b1476999b7c1201c2ffd0e945624d16b5e0ff5f21cac15"
+      "Contents/Resources/uninstall": "3a398ad837952d529e83b540d807d015593a74f61ac71265c5443042a515c383"
     }
   }
 }
