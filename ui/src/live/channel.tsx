@@ -12,9 +12,10 @@ import { bridge } from "@/lib/secrets"
 import { sendsInTurn } from "@/lib/send-order"
 import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@/lib/threads"
 import { announce } from "~/kit/toasts"
-import { useNewMembers } from "~/live/defaults"
+import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { asksOf, directsOf, messagesOf, peopleOf, roomsOf, tasksOf, type Pending } from "~/live/map"
 import { iconUrl } from "~/live/icon"
+import { usePinsHere } from "~/live/pins"
 import { usePictures } from "~/live/pictures"
 import { ownPrefs } from "~/live/prefs"
 import { closeOpened, publish, type Run } from "~/live/store"
@@ -84,6 +85,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const seen = useSeen(roomId)
   const wakes = useWakes(roomId)
   const newMembers = useNewMembers(roomId)
+  const newPowers = useNewPowers(roomId)
   const pictures = usePictures(ch, messages)
   const known = useKnownChannels()
   const icon = iconUrl(useIcons().get(roomId) ?? null)
@@ -94,7 +96,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const shown = useShown()
 
   const people = useMemo(() => peopleOf(state, roster, online, me, wakes), [state, roster, online, me, wakes])
-  const asks = useMemo(() => asksOf(state, messages, me, isOwner, requests), [state, messages, me, isOwner, requests])
+  const pins = usePinsHere(requests)
+  const asks = useMemo(() => asksOf(state, messages, me, isOwner, requests, roster, pins), [state, messages, me, isOwner, requests, roster, pins])
   const mapped = useMemo(() => messagesOf(state, messages, me, asks.askOf, pictures, pending), [state, messages, me, asks.askOf, pictures, pending])
   const tasks = useMemo(() => tasksOf(state, asks.held), [state, asks.held])
   const from = roomsFrom(roomId)
@@ -117,6 +120,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       ...(state.charter ? { goal: state.charter.text } : {}),
       ...(state.hold ? { hold: { ...(state.hold.note ? { note: state.hold.note } : {}), by: state.hold.by, at: state.hold.at } } : {}),
       newMembers,
+      newPowers,
       repos: state.repos,
       rooms,
       directs,
@@ -126,7 +130,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       asks: asks.asks,
       connection,
     }),
-    [code, title, icon, isOwner, me, state.lead, state.charter, state.hold, newMembers, state.repos, rooms, directs, people, mapped, tasks, asks.asks, connection]
+    [code, title, icon, isOwner, me, state.lead, state.charter, state.hold, newMembers, newPowers, state.repos, rooms, directs, people, mapped, tasks, asks.asks, connection]
   )
 
   const post = useCallback(
