@@ -88,7 +88,12 @@ export function useStick() {
     box.scrollTo({ top: box.scrollHeight, behavior: smooth && !matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "auto" })
   }, [])
 
-  return { scroller, content, stuck, remember, settle, toBottom }
+  const toOffset = useCallback((top: number) => {
+    const box = scroller.current
+    if (box) box.scrollTop = top
+  }, [])
+
+  return { scroller, content, stuck, remember, settle, toBottom, toOffset }
 }
 
 export function Conversation({ channel, search }: { channel: Channel; search: string }) {
@@ -120,7 +125,7 @@ function Feed({ channel, where, search }: { channel: Channel; where: Where; sear
   const bySeq = useMemo(() => new Map(channel.messages.map((m) => [m.seq, m])), [channel.messages])
   const names = useMemo(() => namesOf(channel), [channel])
   const typing = channel.people.filter((p) => p.typing && !p.you && where.kind === "room")
-  const { scroller, content, stuck, remember, settle, toBottom } = useStick()
+  const { scroller, content, stuck, remember, settle, toBottom, toOffset } = useStick()
   const [fresh, setFresh] = useState(0)
   const [far, setFar] = useState(false)
 
@@ -137,13 +142,12 @@ function Feed({ channel, where, search }: { channel: Channel; where: Where; sear
   useLayoutEffect(() => {
     if (opened.current) return
     opened.current = true
-    const box = scroller.current
     const line = content.current?.querySelector<HTMLElement>(".feed-new")
-    if (!box || !line || !unread) return toBottom(false)
-    box.scrollTop = line.offsetTop - 12
+    if (!line || !unread) return toBottom(false)
+    toOffset(line.offsetTop - 12)
     remember()
     if (!stuck.current) queueMicrotask(() => setFresh(unread.count))
-  }, [unread, remember, toBottom, stuck])
+  }, [unread, remember, toBottom, toOffset, stuck, content])
 
   const last = list.at(-1)
   const lastSeq = useRef(last?.seq ?? 0)
