@@ -93,6 +93,15 @@ jobs:
       - name: web format
         if: ${{ !cancelled() }}
         run: cd web && bun oxfmt --check src
+      - name: ui types
+        if: ${{ !cancelled() }}
+        run: cd ui && bunx tsc -b
+      - name: ui lint
+        if: ${{ !cancelled() }}
+        run: cd ui && bun oxlint src
+      - name: ui format
+        if: ${{ !cancelled() }}
+        run: cd ui && bun oxfmt --check src
       - name: knip
         if: ${{ !cancelled() }}
         run: bun run knip
@@ -149,6 +158,19 @@ jobs:
         with:
           name: ui-smoke-failure
           path: /tmp/kiwi-smoke-failure-*.png
+          if-no-files-found: ignore
+          overwrite: true
+      - name: new ui build
+        if: ${{ !cancelled() }}
+        run: bun run ui:build
+      - name: app smoke
+        if: ${{ !cancelled() }}
+        run: bun scripts/smoke-app.ts
+      - if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: app-smoke-failure
+          path: /tmp/kiwi-app-smoke-failure.png
           if-no-files-found: ignore
           overwrite: true
       - name: cli build

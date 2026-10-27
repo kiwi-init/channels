@@ -1,0 +1,394 @@
+import { handBackText, heldBy } from "@kiwi/core/handback.ts"
+import type { JoinRequest, Member as RosterMember } from "@kiwi/core/membership.ts"
+import { handleFor } from "@kiwi/core/membership.ts"
+import { permissionReply } from "@kiwi/core/permission.ts"
+import { cleanPersonalities } from "@kiwi/core/personalities.ts"
+import { personaOf, personaScopes, type Personality } from "@kiwi/core/personality.ts"
+import { pinned } from "@kiwi/core/pin.ts"
+import { PRESETS } from "@kiwi/core/presets.ts"
+import { ROBOT_FACES, ROOM_ID_RE, TASK_TITLE_MAX_LENGTH, type Event } from "@kiwi/core/protocol.ts"
+import { describeScopes, SCOPES, wireScopes, type Scope } from "@kiwi/core/scopes.ts"
+import { newRoomId, taskId } from "@kiwi/core/state.ts"
+import type { KnownHarness } from "@kiwi/core/harnesses.ts"
+import type { Permission } from "@kiwi/core/launch-options.ts"
+import { tokenForCreate } from "@/lib/auth"
+import { askToJoin, createChannel, forgetChannel, forgetPending, isJoinCode, loadMember, loadPending, renameChannel } from "@/lib/channel"
+import { linkOf, type ChannelLink } from "@/lib/channel-ops"
+import { removeComputer } from "@/lib/computers"
+import { joinCodeFromLink } from "@/lib/deep-link"
+import { relayUrl } from "@/lib/relay"
+import { cleanRoomName, roomProblem, roomsAfter } from "@/lib/rooms"
+import { ALLOW_ONCE, DENY } from "@/lib/permission-settled"
+import { createPerson, bridge, secrets } from "@/lib/secrets"
+import { isSignInGone } from "@/lib/session"
+import { approveTask, closedDigest, sendBackTask, type TaskSend } from "@/lib/task-actions"
+import { announce } from "~/kit/toasts"
+import { answerPair, cancelPair, linkGithub, pairBegin, unlinkGithub } from "~/live/account"
+import { newMemberScopes, setNewMemberScopes } from "~/live/defaults"
+import { setPrefs } from "~/live/prefs"
+import { closeOpened, openedRun, type Run } from "~/live/store"
+import { setWake } from "~/live/wakes"
+import type { Actions, Harness, NewAgent, TaskStatus } from "~/model"
+
+const say = (err: unknown): string => (err instanceof Error ? err.message : String(err))
+
+function attempt(what: string, run: () => Promise<unknown>): void {
+  void (async () => run())().catch((err: unknown) => announce(`${what}: ${say(err)}`))
+}
+
+function need(code: string): Run {
+  const run = openedRun(code)
+  if (!run) throw new Error("open the channel first")
+  return run
+}
+
+function owner(code: string): Run {
+  const run = need(code)
+  if (!run.isOwner) throw new Error("only the channel's owner can do that")
+  return run
+}
+
+function link(code: string): ChannelLink {
+  const run = openedRun(code)
+  if (run) return run.ch
+  const m = loadMember(code)
+  if (!m) throw new Error("you're not in that channel")
+  return linkOf(m)
+}
+
+function memberOf(run: Run, name: string): RosterMember {
+  const m = run.roster.find((r) => r.active && !r.unverified && r.name === name)
+  if (!m) throw new Error(`${name} isn't in this channel`)
+  return m
+}
+
+const event = (run: Run, body: string, ev: Event, to?: string[]) => run.send(body, { kind: "event", ev, ...(to?.length ? { to } : {}) })
+
+async function sends(run: Run, ...all: TaskSend[]): Promise<void> {
+  for (const { body, opts } of all) await run.send(body, opts)
+}
+
+function personalities(): Personality[] {
+  return [...PRESETS, ...cleanPersonalities(secrets().personalities)]
+}
+
+async function roomFolded(run: () => Run | null, room: { id: string; name: string }): Promise<void> {
+  for (const end = Date.now() + 10_000; Date.now() < end; await new Promise((r) => setTimeout(r, 50))) if (run()?.state.rooms.get(room.id)?.name === room.name) return
+  throw new Error(`#${room.name} was sent but hasn't come back from the relay yet: look again in a moment`)
+}
+
+async function letIn(run: Run, r: JoinRequest): Promise<void> {
+  const pin = r.pin ? await pinned(r.pin, personalities()) : null
+  if (r.pin && !pin) throw new Error(`${r.name} was invited as ${r.pin.name}, which isn't on this computer anymore`)
+  const scopes = newMemberScopes(run.roomId)
+  const as = pin ? { persona: pin } : wireScopes(scopes) ? { scopes } : {}
+  try {
+    await run.ch.approve(r, as, { person: secrets().person?.pk })
+  } catch (err) {
+    const joined = (await run.ch.members().catch(() => [])).find((m) => m.active && !m.unverified && m.pk === r.pk)
+    if (!joined) throw err
+  } finally {
+    await Promise.all([run.refreshRequests(), run.refreshRoster()])
+  }
+}
+
+async function scopesFor(run: Run, name: string, scopes: Scope[]): Promise<void> {
+  const m = memberOf(run, name)
+  const wire = wireScopes(scopes)
+  const seq = await event(run, `set what ${m.name} may do: ${wire ? describeScopes(wire) : "full"}`, { op: "scope.set", member: m.name, pk: m.pk, scopes: wire })
+  await run.ch.updateScopes(m, scopes, seq)
+  await run.refreshRoster()
+}
+
+const HARNESS: Partial<Record<Harness, KnownHarness>> = { claude: "claude", codex: "codex", opencode: "opencode", gemini: "gemini", cursor: "cursor", grok: "grok" }
+
+function launchId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "")
+}
+
+const PERMISSION: Record<NonNullable<NewAgent["mode"]>, Permission> = { "ask-first": "default", "accept-edits": "accept-edits", "dont-ask": "bypass" }
+
+const STATES: Partial<Record<TaskStatus, "todo" | "doing" | "review" | "done">> = { todo: "todo", doing: "doing", review: "review", done: "done" }
+
+function joinCodeOf(typed: string): string | null {
+  const raw = typed.trim()
+  if (isJoinCode(raw)) return raw
+  const linked = joinCodeFromLink(raw)
+  if (linked) return linked
+  try {
+    const hash = decodeURIComponent(new URL(raw).hash.slice(1)).trim()
+    if (isJoinCode(hash)) return hash
+    const path = /\/join\/([^/?#]+)/.exec(new URL(raw).pathname)?.[1]
+    const fromPath = path ? decodeURIComponent(path) : ""
+    return isJoinCode(fromPath) ? fromPath : null
+  } catch {
+    return null
+  }
+}
+
+async function newChannel(title: string): Promise<string> {
+  const person = secrets().person
+  const make = async (fresh: boolean) => createChannel(title.trim() || "Untitled channel", await tokenForCreate(fresh), person ? { name: person.name } : null)
+  const m = await make(false).catch((err: unknown) => {
+    if (isSignInGone(err) && bridge()) return make(true)
+    throw err
+  })
+  await linkOf(m)
+    .setIcon({ kind: "robot", robot: ROBOT_FACES[Math.floor(Math.random() * ROBOT_FACES.length)] ?? "blue" })
+    .catch(() => {
+      // The channel exists either way; its owner can pick an icon later.
+    })
+  return m.code
+}
+
+export async function joinChannel(typed: string): Promise<string> {
+  const code = joinCodeOf(typed)
+  if (!code) throw new Error("That isn't a join code. Codes start with mc2-")
+  if (loadMember(code) || loadPending(code)) return code
+  const person = secrets().person
+  if (!person) throw new Error("Say your name first")
+  await askToJoin(code, handleFor(person.name))
+  return code
+}
+
+export function makeActions(): Actions {
+  return {
+    send: (code, where, text, opts) => attempt("Not sent", () => need(code).post(where, text, opts ?? {})),
+    react: (code, seq, emoji) =>
+      attempt("Couldn't react", async () => {
+        const run = need(code)
+        const mine = run.state.reactions.get(seq)?.get(run.me)?.emoji === emoji
+        await event(run, "reaction", { op: "react", seq, emoji: mine ? null : emoji })
+      }),
+    answerPermission: (code, id, allow) =>
+      attempt("Not answered", async () => {
+        const run = need(code)
+        const m = run.messages.find((x) => x.seq === Number(id))
+        if (!m) throw new Error("that request is gone")
+        const perm = permissionReply(m, allow, run.state)
+        if (!perm) throw new Error("this one can only be answered in the terminal")
+        await run.send(allow ? ALLOW_ONCE : DENY, { to: [m.from], re: [m.seq], kind: "msg", perm })
+      }),
+    answerQuestion: (code, id, text) =>
+      attempt("Not answered", async () => {
+        const run = need(code)
+        const m = run.messages.find((x) => x.seq === Number(id))
+        if (!m) throw new Error("that question is gone")
+        await run.send(text, { to: [m.from], re: [m.seq], kind: "msg" })
+      }),
+    answerJoin: (code, id, yes) =>
+      attempt(yes ? "Couldn't let them in" : "Couldn't turn them away", async () => {
+        const run = owner(code)
+        const r = run.requests.find((x) => x.id === id)
+        if (!r) throw new Error("that request is gone")
+        if (!yes) {
+          await run.ch.deny(r.id)
+          await run.refreshRequests()
+          return announce(`Turned ${r.name} away`)
+        }
+        if (r.check === "unchecked") {
+          await run.ch.checkRequest(r)
+          await run.refreshRequests()
+          return announce(`Asked ${r.name} for its code: compare it, then let it in`)
+        }
+        if (r.check !== "ready" || !r.code) return announce(`Waiting for ${r.name}'s code`)
+        await letIn(run, r)
+        announce(`${r.name} joined`)
+      }),
+    approveTask: (code, id, approve) =>
+      attempt(approve ? "Not approved" : "Not sent back", async () => {
+        const run = need(code)
+        const t = run.state.tasks.get(id)
+        if (!t) throw new Error(`no task ${taskId(id)}`)
+        if (approve) await sends(run, approveTask(t), closedDigest(run.state, [...run.messages], t, { by: run.me }))
+        else await sends(run, sendBackTask(t, "sent back for another look"))
+      }),
+    addTask: (code, title, taskOwner) =>
+      attempt("Task not added", async () => {
+        const run = need(code)
+        const clean = title.trim().slice(0, TASK_TITLE_MAX_LENGTH)
+        if (!clean) throw new Error("a task needs a title")
+        await event(run, `task: ${clean}`, { op: "task.add", title: clean, ...(taskOwner ? { owner: taskOwner } : {}) }, taskOwner ? [taskOwner] : undefined)
+      }),
+    setTaskStatus: (code, id, status) =>
+      attempt("Status not changed", async () => {
+        const run = need(code)
+        const t = run.state.tasks.get(id)
+        if (!t) throw new Error(`no task ${taskId(id)}`)
+        const state = STATES[status]
+        if (!state) throw new Error("a task waits on its own, when something holds it")
+        const to = t.owner && t.owner !== run.me ? [t.owner] : undefined
+        await event(run, `${taskId(id)} ${state}`, { op: "task.update", task: id, state }, to)
+      }),
+    archiveTask: () => announce("Tasks archive on their own when the history is compacted"),
+    setRole: (code, name, role) =>
+      attempt("Role not changed", async () => {
+        const run = owner(code)
+        memberOf(run, name)
+        await event(run, role ? `made ${name} ${role}` : `cleared ${name}'s role`, { op: "role.set", member: name, role })
+      }),
+    removeMember: (code, name) =>
+      attempt(`Couldn't remove ${name}`, async () => {
+        const run = owner(code)
+        const m = memberOf(run, name)
+        const held = heldBy(run.state, name)
+        const lead = run.state.lead && run.state.lead !== name ? [run.state.lead] : undefined
+        if (held.length) await run.send(handBackText(run.state, name, "removed", held), lead ? { to: lead } : {})
+        await run.ch.remove(m.pk)
+        await run.refreshRoster()
+        announce(`Removed ${name}`)
+      }),
+    setPersona: (code, name, id) =>
+      attempt("Personality not changed", async () => {
+        const run = owner(code)
+        const m = memberOf(run, name)
+        const p = id === null ? null : personalities().find((x) => x.id === id)
+        if (p === undefined) throw new Error("that personality isn't on this computer")
+        const persona = p ? personaOf(p) : null
+        const wire = wireScopes(persona ? personaScopes(persona) : [...SCOPES])
+        const seq = await event(run, persona ? `made ${m.name} ${persona.name}` : `took ${m.name}'s personality away`, { op: "scope.set", member: m.name, pk: m.pk, scopes: wire })
+        await run.ch.updatePersona(m, persona, seq)
+        await run.refreshRoster()
+      }),
+    setReadOnly: (code, name, on) => attempt("Not changed", () => scopesFor(owner(code), name, on ? [] : [...SCOPES])),
+    setWake: (code, name, on) => attempt("Not changed", () => setWake(need(code).roomId, name, on)),
+    addAgent: (code, agent) =>
+      attempt("Agent not started", async () => {
+        const b = bridge()
+        if (!b) throw new Error("starting agents needs the Channels desktop app")
+        const run = need(code)
+        const harness = HARNESS[agent.harness]
+        if (!harness) throw new Error("pick a harness Channels knows how to start")
+        const p = agent.persona ? personalities().find((x) => x.id === agent.persona) : undefined
+        const pin = p && run.isOwner ? await run.ch.pinPersona(p) : undefined
+        const here = secrets().computers.find((c) => c.own)?.machinePk
+        const r = await b.launchAgent({
+          ...(agent.computer && agent.computer !== here && agent.computer !== "this" ? { machinePk: agent.computer } : {}),
+          launch: launchId(),
+          harness,
+          folder: agent.folder,
+          code,
+          relay: relayUrl(),
+          ...(agent.name ? { nick: agent.name } : {}),
+          ...(pin ? { persona: pin } : {}),
+          ...(agent.mode && agent.mode !== "ask-first" ? { permission: PERMISSION[agent.mode] } : {}),
+        })
+        if (!r.ok) throw new Error(r.detail || "Kiwi couldn't start it")
+        announce(`Starting ${agent.name || harness}`)
+      }),
+    addRoom: (code, typed) =>
+      attempt("Room not made", async () => {
+        const run = owner(code)
+        const problem = roomProblem(run.state.rooms.values(), typed)
+        if (problem) throw new Error(problem)
+        const name = cleanRoomName(typed)
+        const slug = name.toLowerCase()
+        const room = { id: ROOM_ID_RE.test(slug) && !run.state.rooms.has(slug) ? slug : newRoomId(), name }
+        const since = await event(run, `made the room #${room.name}`, { op: "room.create", ...room })
+        await roomFolded(() => openedRun(code), room)
+        await run.ch.setRooms({ list: roomsAfter(openedRun(code)?.state.rooms.values() ?? run.state.rooms.values(), room), since })
+      }),
+    renameChannel: (code, title) =>
+      attempt("Not renamed", async () => {
+        const name = title.trim().slice(0, 80)
+        if (!name) throw new Error("a channel needs a name")
+        await link(code).setTitle(name)
+        if (loadMember(code)) await renameChannel(code, name)
+      }),
+    setGoal: (code, goal) =>
+      attempt("Goal not set", async () => {
+        const run = owner(code)
+        const text = goal.trim() || null
+        const since = await event(run, text ? `charter: ${text}` : "cleared the charter", { op: "charter.set", text })
+        await run.ch.setCharter({ text, since })
+      }),
+    setHold: (code, on, note) =>
+      attempt(on ? "Agents not paused" : "Agents not resumed", async () => {
+        const run = owner(code)
+        const ev = { op: "hold.set" as const, on, ...(note ? { note } : {}) }
+        const since = await event(run, on ? `on hold${note ? `: ${note}` : ""}` : "hold lifted", ev)
+        await run.ch.setHold({ on, ...(note ? { note } : {}), since })
+      }),
+    addRepo: (code, repo) => attempt("Repo not added", () => setRepos(owner(code), [...new Set([...owner(code).state.repos, repo.trim()])])),
+    removeRepo: (code, repo) =>
+      attempt("Repo not removed", () =>
+        setRepos(
+          owner(code),
+          owner(code).state.repos.filter((r) => r !== repo)
+        )
+      ),
+    inviteLink: async (code) => {
+      if (!loadMember(code)) throw new Error("you're not in that channel")
+      return `kiwi://join/${code}`
+    },
+    leaveChannel: (code) =>
+      attempt("Couldn't leave", async () => {
+        if (loadPending(code) && !loadMember(code)) {
+          closeOpened(code)
+          return forgetPending(code)
+        }
+        await link(code).leave()
+        closeOpened(code)
+        await forgetChannel(code)
+      }),
+    closeChannel: (code) =>
+      attempt("Couldn't close it", async () => {
+        const run = owner(code)
+        await run.ch.close()
+        closeOpened(code)
+        await forgetChannel(code)
+      }),
+    newChannel,
+    joinChannel,
+    setName: (name) =>
+      attempt("Name not saved", async () => {
+        if (secrets().person) throw new Error("your name stays the one your key was made with")
+        await createPerson(name.trim())
+      }),
+    setPrefs,
+    pairBegin,
+    forgetComputer: (id) =>
+      attempt("Couldn't forget it", async () => {
+        if (id.startsWith("phone:")) throw new Error("phones are unlinked from the phone itself")
+        const removed = await removeComputer(id)
+        announce(removed.length ? `Forgot it and removed ${removed.join(", ")}` : "Forgot it")
+      }),
+    linkGithub: () => attempt("GitHub not linked", linkGithub),
+    unlinkGithub: () => attempt("GitHub not unlinked", unlinkGithub),
+    installUpdate: () =>
+      attempt("Couldn't update", async () => {
+        const b = bridge()
+        if (!b) throw new Error("updates come with the Channels desktop app")
+        const u = await b.getUpdate()
+        if (!u) return announce("Channels is up to date")
+        if (u.state === "ready") return b.installUpdate()
+        if (u.state === "downloading") return announce("The update is still downloading")
+        await b.openExternal(u.url)
+      }),
+    signOut: () =>
+      attempt("Couldn't sign out", async () => {
+        const b = bridge()
+        if (!b) throw new Error("only the desktop app keeps a sign-in")
+        await b.signOut()
+        announce("Signed out of the relay. Your key and channels stay on this computer")
+      }),
+    setNewMembers: (code, can) =>
+      attempt("Not changed", async () => {
+        const m = loadMember(code)
+        if (!m) throw new Error("you're not in that channel")
+        setNewMemberScopes(m.access.roomId, can)
+      }),
+    answerPair: (accept) => attempt("Pairing failed", () => answerPair(accept)),
+    cancelPair: () => attempt("Couldn't cancel", cancelPair),
+  }
+}
+
+async function setRepos(run: Run, repos: string[]): Promise<void> {
+  await run.ch.setGithubRepos(repos)
+  const since = await event(run, repos.length ? `repos: ${repos.join(", ")}` : "cleared the channel's repos", { op: "repos.set", repos })
+  await run.ch.setRepos({ list: repos, since })
+}

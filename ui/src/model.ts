@@ -1,10 +1,10 @@
 export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "grok" | "other"
 
-export type Presence = "online" | "away" | "offline"
+type Presence = "online" | "away" | "offline"
 
 export type TaskStatus = "todo" | "doing" | "review" | "done" | "waiting"
 
-export type Kind = "human" | "agent"
+type Kind = "human" | "agent"
 
 export type Color = "red" | "orange" | "yellow" | "green" | "teal" | "blue" | "indigo" | "violet" | "pink" | "brown"
 
@@ -45,7 +45,7 @@ export interface PullRequest {
   deletions?: number
 }
 
-export interface TaskNote {
+interface TaskNote {
   by: string
   at: number
   text: string

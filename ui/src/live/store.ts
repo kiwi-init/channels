@@ -1,0 +1,54 @@
+import { useSyncExternalStore } from "react"
+
+import type { SendOptions } from "@kiwi/core/client.ts"
+import type { JoinRequest, Member as RosterMember } from "@kiwi/core/membership.ts"
+import type { Message as Wire } from "@kiwi/core/protocol.ts"
+import type { ChannelState } from "@kiwi/core/state.ts"
+import type { ChannelLink } from "@/lib/channel-ops"
+import type { Channel, Where } from "~/model"
+
+export interface Run {
+  code: string
+  roomId: string
+  me: string
+  isOwner: boolean
+  ch: ChannelLink
+  state: ChannelState
+  messages: readonly Wire[]
+  roster: readonly RosterMember[]
+  requests: readonly JoinRequest[]
+  send: (body: string, opts: SendOptions) => Promise<number>
+  post: (where: Where, text: string, opts: { replyTo?: number; inThread?: number }) => Promise<number>
+  refreshRequests: () => Promise<void>
+  refreshRoster: () => Promise<void>
+}
+
+interface Opened {
+  code: string
+  channel: Channel
+  run: Run | null
+}
+
+let current: Opened | null = null
+const listeners = new Set<() => void>()
+
+const subscribe = (l: () => void) => {
+  listeners.add(l)
+  return () => void listeners.delete(l)
+}
+
+export function publish(next: Opened | null): void {
+  if (current === next) return
+  current = next
+  for (const l of listeners) l()
+}
+
+export function closeOpened(code: string): void {
+  if (current?.code === code) publish(null)
+}
+
+export const openedRun = (code: string): Run | null => (current?.code === code ? current.run : null)
+
+export function useOpened(): Opened | null {
+  return useSyncExternalStore(subscribe, () => current)
+}

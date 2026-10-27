@@ -25,7 +25,7 @@
     "lint": "oxlint src packages/core/src desktop/src desktop/scripts scripts test site/app.js site/world.js ios/engine ios/scripts android/scripts",
     "format": "oxfmt src packages/core/src desktop/src desktop/scripts scripts test site/app.js site/world.js ios/engine ios/scripts android/scripts",
     "format:check": "oxfmt --check src packages/core/src desktop/src desktop/scripts scripts test site/app.js site/world.js ios/engine ios/scripts android/scripts",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json && bun run lint && bun run format:check && bun scripts/ui-tokens.ts && cd web && tsc -b && bun oxlint src && bun oxfmt --check src && cd ../desktop && tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json && bun run lint && bun run format:check && bun scripts/ui-tokens.ts && cd web && tsc -b && bun oxlint src && bun oxfmt --check src && cd ../ui && tsc -b && bun oxlint src && bun oxfmt --check src && cd ../desktop && tsc --noEmit",
     "web:dev": "cd web && bun run dev",
     "web:build": "cd web && bun run build",
     "demo": "bun scripts/demo.ts",
