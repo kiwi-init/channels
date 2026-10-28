@@ -3,7 +3,7 @@ import { Fragment, startTransition, useCallback, useEffect, useLayoutEffect, use
 import { Composer } from "~/chat/composer"
 import { MessageRow } from "~/chat/message"
 import { linked } from "~/chat/linked"
-import { jumpTo, ReplyContext, type Replying } from "~/chat/reply"
+import { flash, jumpTo, ReplyContext, type Replying } from "~/chat/reply"
 import type { Jump } from "~/chat/search-box"
 import { paintHits } from "~/chat/search-paint"
 import { day, sameDay } from "~/kit/time"
@@ -138,7 +138,12 @@ export function useStick(following = true) {
     if (box) box.scrollTop = top
   }, [])
 
-  return { scroller, content, stuck, live, remember, settle, toBottom, toOffset }
+  const unstick = useCallback(() => {
+    stuck.current = false
+    anchor.current = null
+  }, [])
+
+  return { scroller, content, stuck, live, remember, settle, toBottom, toOffset, unstick }
 }
 
 export function Conversation({ channel, jump }: { channel: Channel; jump: Jump | null }) {
@@ -195,7 +200,7 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
   const start = firstAt >= 0 && firstAt < end ? firstAt : Math.max(0, end - TAIL)
   const following = end === list.length
   const latest = useRef(false)
-  const { scroller, content, stuck, live, remember, settle, toBottom, toOffset } = useStick(following)
+  const { scroller, content, stuck, live, remember, settle, toBottom, toOffset, unstick } = useStick(following)
 
   useEffect(() => {
     const near = [...list.slice(Math.max(0, start - MORE), start), ...list.slice(end, end + MORE)]
@@ -306,24 +311,34 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
 
   useEffect(() => {
     if (!jump) return
-    onQuote(jump.m.seq)
+    const seq = jump.m.seq
+    const at = known.current.list.findIndex((m) => m.seq === seq)
+    if (at < 0) {
+      onQuote(seq)
+      return
+    }
+    unstick()
+    if (!content.current?.querySelector(`[data-seq="${seq}"]`)) setSpan(around(known.current.list, at))
     let frame = 0
     let left = 30
-    const paint = () => {
-      const row = content.current?.querySelector<HTMLElement>(`[data-seq="${jump.m.seq}"]`)
-      if (row) {
-        const first = paintHits(row.querySelector<HTMLElement>(".msg-text") ?? row, jump.terms)
-        first?.startContainer.parentElement?.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })
+    const land = () => {
+      const row = content.current?.querySelector<HTMLElement>(`[data-seq="${seq}"]`)
+      if (!row) {
+        if (left-- > 0) frame = requestAnimationFrame(land)
         return
       }
-      if (left-- > 0) frame = requestAnimationFrame(paint)
+      const first = paintHits(row.querySelector<HTMLElement>(".msg-text") ?? row, jump.terms)
+      const target = first?.startContainer.parentElement ?? row
+      target.scrollIntoView({ block: "center", behavior: "auto" })
+      remember()
+      flash(row)
     }
-    frame = requestAnimationFrame(paint)
+    frame = requestAnimationFrame(land)
     return () => {
       cancelAnimationFrame(frame)
       paintHits(null, [])
     }
-  }, [jump, onQuote, content])
+  }, [jump, onQuote, content, unstick, remember])
 
   return (
     <div className="feed-wrap">

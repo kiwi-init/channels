@@ -142,6 +142,13 @@ try {
   await results.waitFor({ state: "detached" });
   await page.waitForFunction(() => [...(CSS.highlights.get("search-hit") ?? [])].some((r) => r.toString() === "hel"), undefined, { timeout: 15000 });
   await shot("search-jump");
+  await page.keyboard.press("ControlOrMeta+f");
+  if (!(await search.evaluate((el) => el === document.activeElement))) throw new Error("the search shortcut did not focus the open search field");
+  await views.getByRole("button", { name: /^Tasks/ }).click();
+  await views.getByRole("button", { name: /general/ }).click();
+  await page.locator("article").filter({ hasText: "hello from bot" }).first().waitFor({ timeout: 15000 });
+  await page.waitForTimeout(300);
+  if (await page.evaluate(() => CSS.highlights.has("search-hit"))) throw new Error("coming back to the room replayed the old search jump");
   await search.fill("hello");
   await results.getByRole("option").first().waitFor({ timeout: 15000 });
   if (await page.evaluate(() => CSS.highlights.has("search-hit"))) throw new Error("a new search kept the old message's highlight");

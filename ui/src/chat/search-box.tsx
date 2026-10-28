@@ -41,7 +41,7 @@ function Marked({ text, wanted }: { text: string; wanted: string[] }) {
   )
 }
 
-export function SearchBox({ channel, onJump, onClose }: { channel: Channel; onJump: (jump: Jump | null) => void; onClose: () => void }) {
+export function SearchBox({ channel, focusAsk, onJump, onClose }: { channel: Channel; focusAsk: number; onJump: (jump: Jump | null) => void; onClose: () => void }) {
   const { go } = useApp()
   const [query, setQuery] = useState("")
   const [focused, setFocused] = useState(true)
@@ -65,6 +65,10 @@ export function SearchBox({ channel, onJump, onClose }: { channel: Channel; onJu
   useEffect(() => {
     listRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" })
   }, [current, hits])
+
+  useEffect(() => {
+    if (focusAsk) input.current?.focus()
+  }, [focusAsk])
 
   const pick = (hit: Hit) => {
     setFocused(false)
@@ -110,7 +114,7 @@ export function SearchBox({ channel, onJump, onClose }: { channel: Channel; onJu
           onChange={(e) => {
             setQuery(e.target.value)
             setFocused(true)
-            if (e.target.value.trim()) onJump(null)
+            onJump(null)
           }}
           onFocus={() => setFocused(true)}
           onBlur={() => {
@@ -134,6 +138,7 @@ export function SearchBox({ channel, onJump, onClose }: { channel: Channel; onJu
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
               setQuery("")
+              onJump(null)
               input.current?.focus()
             }}
           >

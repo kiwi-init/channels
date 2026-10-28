@@ -6,7 +6,7 @@ import { cx, Count, IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { Channel } from "~/model"
 import { NeedsYou, openAsks } from "~/needs/needs"
-import { useApp } from "~/nav"
+import { sameWhere, useApp } from "~/nav"
 import { ChannelPanel } from "~/panels/channel-panel"
 import { InvitePanel } from "~/panels/invite"
 import { AddAgentPanel } from "~/panels/add-agent"
@@ -23,6 +23,8 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const { nav, go } = useApp()
   const panel = usePanelWidth()
   const [jump, setJump] = useState<Jump | null>(null)
+  const [focusAsk, setFocusAsk] = useState(0)
+  if (jump && (nav.tab !== "chat" || !sameWhere(jump.m.where, nav.where))) setJump(null)
   const [searching, setSearching] = useState(false)
   const [drawer, setDrawer] = useState(false)
   const [seen, setSeen] = useState(nav.where)
@@ -36,6 +38,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
         e.preventDefault()
         setSearching(true)
+        setFocusAsk((n) => n + 1)
       }
     }
     window.addEventListener("keydown", onKey)
@@ -92,7 +95,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
             </span>
           )}
           {searching ? (
-            <SearchBox channel={channel} onJump={setJump} onClose={() => setSearching(false)} />
+            <SearchBox channel={channel} focusAsk={focusAsk} onJump={setJump} onClose={() => setSearching(false)} />
           ) : (
             <IconButton icon="search" label="Search this channel (⌘F)" onClick={() => setSearching(true)} />
           )}
