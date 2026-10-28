@@ -1,6 +1,6 @@
 import "~/styles/channel-panel.css"
 
-import { useState, type ReactNode } from "react"
+import { useRef, useState, type ReactNode } from "react"
 
 import { Field, Heading, IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
@@ -38,6 +38,14 @@ export function ChannelPanel({ channel }: { channel: Channel }) {
             <p className="cpanel-value">{channel.title}</p>
           )}
           {!own && owner && <p className="cpanel-hint">{shown(owner)} owns this channel.</p>}
+        </Part>
+
+        <Part title="Icon">
+          <ChannelIcon channel={channel} own={own} />
+        </Part>
+
+        <Part title="Rooms">
+          <Rooms channel={channel} own={own} />
         </Part>
 
         <Part title="Goal">{own ? <GoalEditor channel={channel} /> : channel.goal ? <p className="cpanel-goal">{channel.goal}</p> : <p className="cpanel-none">No goal yet.</p>}</Part>
@@ -254,5 +262,58 @@ function End({ channel, open, onClose, onDone }: { channel: Channel; open: boole
         <input autoFocus className="input is-mono" value={typed} onChange={(e) => setTyped(e.target.value)} />
       </Field>
     </Confirm>
+  )
+}
+
+function ChannelIcon({ channel, own }: { channel: Channel; own: boolean }) {
+  const { app } = useApp()
+  const input = useRef<HTMLInputElement>(null)
+  return (
+    <div className="cpanel-icon">
+      <span className="cpanel-icon-tile" aria-hidden="true">
+        {channel.icon ? <img src={channel.icon} alt="" /> : <span>{channel.title.slice(0, 1).toUpperCase()}</span>}
+      </span>
+      {own && (
+        <>
+          <button type="button" className="btn is-small" onClick={() => input.current?.click()}>
+            {channel.icon ? "Change image…" : "Choose an image…"}
+          </button>
+          {channel.icon && (
+            <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.setIcon(channel.code, null)}>
+              Remove
+            </button>
+          )}
+          <input
+            ref={input}
+            type="file"
+            accept="image/png,image/jpeg,image/gif,image/webp"
+            hidden
+            onChange={(e) => {
+              const file = e.currentTarget.files?.[0]
+              e.currentTarget.value = ""
+              if (file) app.actions.setIcon(channel.code, file)
+            }}
+          />
+        </>
+      )}
+      {!own && !channel.icon && <p className="cpanel-none">No image: the channel shows its first letter.</p>}
+    </div>
+  )
+}
+
+function Rooms({ channel, own }: { channel: Channel; own: boolean }) {
+  const { app } = useApp()
+  return (
+    <ul className="cpanel-rooms">
+      {channel.rooms.map((r) => (
+        <li key={r.id}>
+          {own ? (
+            <InlineEdit value={r.name} label={`Name of #${r.name}`} verb="Rename" onSave={(name) => app.actions.renameRoom(channel.code, r.id, name)} />
+          ) : (
+            <span className="cpanel-value">#{r.name}</span>
+          )}
+        </li>
+      ))}
+    </ul>
   )
 }

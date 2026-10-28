@@ -336,6 +336,8 @@ export interface Actions {
   setPowers(code: string, name: string, powers: Partial<Powers>): void
   addAgent(code: string, agent: NewAgent): void
   addRoom(code: string, name: string): void
+  renameRoom(code: string, id: string, name: string): void
+  setIcon(code: string, file: File | null): void
   renameChannel(code: string, title: string): void
   exportHistory(code: string, kind: "transcript" | "log"): Promise<void>
   setGoal(code: string, goal: string): void

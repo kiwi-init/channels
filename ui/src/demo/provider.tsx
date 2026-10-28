@@ -191,6 +191,12 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         )
       },
       addRoom: (code, name) => edit(code, (c) => ({ ...c, rooms: [...c.rooms, { id: name, name, unread: 0, mentions: 0 }] })),
+      renameRoom: (code, id, name) => edit(code, (c) => ({ ...c, rooms: c.rooms.map((r) => (r.id === id ? { ...r, name: name.trim().replace(/^#/, "") } : r)) })),
+      setIcon: (code, file) => {
+        const icon = file ? URL.createObjectURL(file) : undefined
+        edit(code, (c) => ({ ...c, icon }))
+        setState((s) => ({ ...s, tiles: s.tiles.map((t) => (t.code === code ? { ...t, icon } : t)) }))
+      },
       exportHistory: async (code, kind) => announce(`Saved ${code} ${kind === "log" ? "log.jsonl" : "transcript.md"} to Downloads`),
       renameChannel: (code, title) => {
         edit(code, (c) => ({ ...c, title }))
