@@ -164,13 +164,17 @@ export class HostedTmux {
     const st = this.state();
     if (!st) return null;
     const inner = tmuxPane({ socket: st.socket, pane }, st.bin);
-    const free = (): boolean => Date.now() - (this.typed.get(pane) ?? 0) >= TYPED_HOLD_MS;
+    const free = (): boolean => !this.typing(pane);
     return {
       screen: inner.screen,
       type: (text) => free() && inner.type(text),
       enter: () => free() && inner.enter(),
       erase: (count) => free() && inner.erase(count),
     };
+  }
+
+  typing(pane: string): boolean {
+    return Date.now() - (this.typed.get(pane) ?? 0) < TYPED_HOLD_MS;
   }
 
   output(pane: string, fn: HostedOutput): () => void {

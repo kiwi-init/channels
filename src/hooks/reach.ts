@@ -1,6 +1,8 @@
 import { COMMANDS } from "../brief.ts";
 import { kimiServer } from "../kimi-server.ts";
 import { here, type Here } from "../seats.ts";
+import { onHostedSocket } from "../terminals/shared/tmux.ts";
+import { tmuxPlaceFrom } from "../terminals/tmux/locate.ts";
 import { wakePath, wakeWords } from "@kiwi/core/wake.ts";
 import { hooksListen } from "./install/claude.ts";
 import { extraInstalled } from "./install/extra.ts";
@@ -68,10 +70,18 @@ export function wakeYourself(mc: string, harness: Here["harness"]): string | nul
   return null;
 }
 
-export function howMessagesReachYou(mc: string, waking: boolean, who: Here = here(), webhook = false): string {
+export function hostedPaneHere(env: Record<string, string | undefined> = process.env): string | undefined {
+  const t = tmuxPlaceFrom(env).tmux;
+  return t && onHostedSocket(t.socket) ? t.pane : undefined;
+}
+
+export function howMessagesReachYou(mc: string, waking: boolean, who: Here = here(), webhook = false, hosted: string | undefined = hostedPaneHere()): string {
   if (!waking) return `Kiwi won't wake you: waking is off for you here (\`kiwi wake on\` turns it back on). ${checkEachTurn(mc)}`;
   if (who.harness === "kimi" && kimiServer(who.pid) && extraInstalled("kimi")) return `Kiwi wakes you in this session when a message for you arrives (${wakeWords("kimi-server")}). Don't run listen.`;
-  const path = wakePath(who.harness ? { harness: who.harness, ...(who.session ? { session: who.session } : {}) } : null, hooksListen(), webhook, { pi: piInstalled(), mimo: mimoInstalled() });
+  const path = wakePath(who.harness ? { harness: who.harness, ...(who.session ? { session: who.session } : {}), ...(hosted ? { hosted } : {}) } : null, hooksListen(), webhook, {
+    pi: piInstalled(),
+    mimo: mimoInstalled(),
+  });
   switch (path.kind) {
     case "hooks":
       return "Messages for you arrive on their own: Kiwi's hooks wake you when one comes. Don't run listen.";

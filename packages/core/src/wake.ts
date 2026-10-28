@@ -1,6 +1,6 @@
 export type WakeHarness = "claude" | "codex" | "gemini" | "cursor" | "grok" | "opencode" | "kimi" | "mimo" | "grok-bot" | "pi" | "zcode";
 
-export type WakeCommand = "codex-queue" | "opencode-api" | "webhook" | "kimi-server";
+export type WakeCommand = "codex-queue" | "opencode-api" | "webhook" | "kimi-server" | "hosted-typing";
 
 export type WakePath = { kind: "hooks" } | { kind: "extension"; via: WakeExtension } | { kind: "command"; via: WakeCommand; session: string } | { kind: "none"; why: string };
 
@@ -8,7 +8,7 @@ type WakeExtension = "pi-extension" | "mimo-plugin";
 
 export type WakeVia = "hooks" | WakeExtension | "listener" | WakeCommand;
 
-const WAKE_VIA: readonly WakeVia[] = ["hooks", "pi-extension", "mimo-plugin", "listener", "codex-queue", "opencode-api", "webhook", "kimi-server"];
+const WAKE_VIA: readonly WakeVia[] = ["hooks", "pi-extension", "mimo-plugin", "listener", "codex-queue", "opencode-api", "webhook", "kimi-server", "hosted-typing"];
 
 export function isWakeVia(v: unknown): v is WakeVia {
   return typeof v === "string" && (WAKE_VIA as readonly string[]).includes(v);
@@ -32,12 +32,16 @@ export function wakeWords(via: WakeVia): string {
       return "its routine's webhook";
     case "kimi-server":
       return "Kimi's server";
+    case "hosted-typing":
+      return "typing into its window in Channels";
   }
 }
 
 export function wakesInSession(via: string | undefined): boolean {
   return via === "hooks" || via === "pi-extension" || via === "mimo-plugin";
 }
+
+const TYPED = new Set<WakeHarness | undefined>(["gemini", "cursor", "grok", "kimi"]);
 
 export function pullsWake(harness: WakeHarness | undefined): boolean {
   return harness === "kimi" || harness === "cursor" || harness === "grok" || harness === "zcode";
@@ -64,13 +68,14 @@ export function viaOf(path: WakePath): WakeVia | null {
 }
 
 export function wakePath(
-  record: { harness?: WakeHarness; session?: string; harnessSession?: string; served?: boolean; held?: boolean } | null,
+  record: { harness?: WakeHarness; session?: string; harnessSession?: string; served?: boolean; held?: boolean; hosted?: string } | null,
   claudeHooks: boolean,
   webhook = false,
   extensions: { pi?: boolean; mimo?: boolean } = {},
 ): WakePath {
   if (!record) return { kind: "none", why: "no session of a harness Kiwi knows has used this seat yet" };
   if (record.held) return { kind: "none", why: "its loop holds it between sessions, and wakes nothing until it hands the seat to a new session" };
+  if (record.hosted && TYPED.has(record.harness) && !(record.harness === "kimi" && record.served)) return { kind: "command", via: "hosted-typing", session: record.hosted };
   switch (record.harness) {
     case "claude":
       return claudeHooks ? { kind: "hooks" } : { kind: "none", why: "Claude Code's listening hooks aren't installed, or this Claude Code is older than 2.1.296 (kiwi hooks install)" };
@@ -120,7 +125,7 @@ export function wakePrompt(alias: string, agent: string): string {
   return `New Kiwi messages for you in ${JSON.stringify(alias)}. If they aren't shown here, read them with: kiwi ${channelOption(alias)} ${asOption(agent)} listen --now, then act on them.`;
 }
 
-export function wakeArgv(via: Exclude<WakeCommand, "webhook" | "kimi-server">, session: string, prompt: string): string[] {
+export function wakeArgv(via: Exclude<WakeCommand, "webhook" | "kimi-server" | "hosted-typing">, session: string, prompt: string): string[] {
   switch (via) {
     case "codex-queue":
       return ["codex", "queue", "--thread", session, "--message", prompt];
