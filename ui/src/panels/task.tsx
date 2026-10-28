@@ -274,7 +274,7 @@ function Review({ channel, task }: { channel: Channel; task: Task }) {
 }
 
 function Footer({ channel, task }: { channel: Channel; task: Task }) {
-  const { app, go, toast } = useApp()
+  const { app } = useApp()
   return (
     <section className="panel-section task-foot actions">
       {task.status === "done" ? (
@@ -284,19 +284,6 @@ function Footer({ channel, task }: { channel: Channel; task: Task }) {
       ) : (
         <button type="button" className="btn is-small" onClick={() => app.actions.setTaskStatus(channel.code, task.id, "done")}>
           Mark done
-        </button>
-      )}
-      {!task.archived && (
-        <button
-          type="button"
-          className="btn is-quiet is-small"
-          onClick={() => {
-            app.actions.archiveTask(channel.code, task.id)
-            go({ to: "panel", panel: null })
-            toast(`Archived T${task.id}`)
-          }}
-        >
-          Archive
         </button>
       )}
     </section>

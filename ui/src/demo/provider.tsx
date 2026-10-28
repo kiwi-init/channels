@@ -166,7 +166,6 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           return { ...c, tasks: [...c.tasks, { id, title, owner, status: "todo", createdBy: c.you, createdAt: Date.now(), updatedAt: Date.now(), notes: [], rounds: [], archived: false }] }
         }),
       setTaskStatus: (code, id, status) => editTask(code, id, (t) => ({ ...t, status, updatedAt: Date.now() })),
-      archiveTask: (code, id) => editTask(code, id, (t) => ({ ...t, archived: true })),
       setRole: (code, name, role) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, role: role ?? undefined } : p)) })),
       removeMember: (code, name) => edit(code, (c) => ({ ...c, people: c.people.filter((p) => p.name !== name) })),
       setPersona: (code, name, persona) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, persona: persona ?? undefined } : p)) })),
