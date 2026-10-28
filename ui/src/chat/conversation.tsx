@@ -1,4 +1,4 @@
-import { Component, Fragment, startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { Fragment, startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { Composer } from "~/chat/composer"
 import { MessageRow } from "~/chat/message"
@@ -131,32 +131,12 @@ export function useStick(following = true) {
     box.scrollTo({ top: box.scrollHeight, behavior: smooth && !matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "auto" })
   }, [])
 
-  const pin = useCallback(() => {
-    const box = scroller.current
-    const list = content.current
-    if (!box || !list || stuck.current) return
-    anchor.current = anchorIn(box, list)
-  }, [])
-
   const toOffset = useCallback((top: number) => {
     const box = scroller.current
     if (box) box.scrollTop = top
   }, [])
 
-  return { scroller, content, stuck, live, remember, settle, pin, toBottom, toOffset }
-}
-
-class Anchored extends Component<{ before: () => void; after: () => void; children: ReactNode }> {
-  override getSnapshotBeforeUpdate(): null {
-    this.props.before()
-    return null
-  }
-  override componentDidUpdate(): void {
-    this.props.after()
-  }
-  override render(): ReactNode {
-    return this.props.children
-  }
+  return { scroller, content, stuck, live, remember, settle, toBottom, toOffset }
 }
 
 export function Conversation({ channel, search }: { channel: Channel; search: string }) {
@@ -214,7 +194,7 @@ function Feed({ channel, where, search }: { channel: Channel; where: Where; sear
   const start = firstAt >= 0 && firstAt < end ? firstAt : Math.max(0, end - TAIL)
   const following = end === list.length
   const latest = useRef(false)
-  const { scroller, content, stuck, live, remember, settle, pin, toBottom, toOffset } = useStick(following)
+  const { scroller, content, stuck, live, remember, settle, toBottom, toOffset } = useStick(following)
 
   useEffect(() => {
     const near = [...list.slice(Math.max(0, start - MORE), start), ...list.slice(end, end + MORE)]
@@ -267,15 +247,25 @@ function Feed({ channel, where, search }: { channel: Channel; where: Where; sear
     if (stuck.current) setFresh(0)
     const below = box.scrollHeight - box.scrollTop - box.clientHeight
     setFar(!following || below > box.clientHeight * 1.5)
+    const at = (i: number) => content.current?.querySelector(`[data-seq="${list[i]?.seq}"]`)?.getBoundingClientRect().top
+    const top = box.getBoundingClientRect().top
+    const cutBelow = (to: number) => to >= end || (at(to) ?? 0) - top > box.clientHeight * 2
+    const cutAbove = (from: number) => from <= start || (at(from) ?? Infinity) - (content.current?.getBoundingClientRect().top ?? top) < below - box.clientHeight
     if (start > 0 && box.scrollTop < box.clientHeight * 3) {
       const from = Math.max(0, start - MORE)
-      const next = spanOf(list, from, Math.min(end, from + CAP))
+      const to = Math.min(end, from + CAP)
+      const next = spanOf(list, from, cutBelow(to) ? to : end)
       startTransition(() => setSpan(next))
     } else if (!following && below < box.clientHeight * 3) {
       const to = Math.min(list.length, end + MORE)
-      const next = spanOf(list, Math.max(start, to - CAP), to)
+      const from = Math.max(start, to - CAP)
+      const next = spanOf(list, cutAbove(from) ? from : start, to)
       startTransition(() => setSpan(next))
     } else if (stuck.current && end - start > TAIL * 2) setSpan({ top: list[end - TAIL]?.seq ?? null, bottom: null })
+    else if (end - start > CAP) {
+      if (cutAbove(end - CAP)) startTransition(() => setSpan(spanOf(list, end - CAP, end)))
+      else if (cutBelow(start + CAP)) startTransition(() => setSpan(spanOf(list, start, start + CAP)))
+    }
   }
 
   const toLatest = () => {
@@ -320,26 +310,24 @@ function Feed({ channel, where, search }: { channel: Channel; where: Where; sear
           {list.length === 0 ? (
             <Start channel={channel} where={where} searching={!!q} />
           ) : (
-            <Anchored before={pin} after={settle}>
-              {list.slice(start, end).map((m, k) => {
-                const i = start + k
-                return (
-                  <Fragment key={m.seq}>
-                    {(i === 0 || !sameDay(list[i - 1]?.at ?? 0, m.at)) && (
-                      <p className="day">
-                        <span>{day(m.at)}</span>
-                      </p>
-                    )}
-                    {m.seq === mark && (
-                      <p className="feed-new" role="separator">
-                        <span>New</span>
-                      </p>
-                    )}
-                    <MessageRow channel={channel} m={m} compact={m.seq !== mark && compactAt(list, i)} names={names} tasks={tasks} quote={quoteOf(list, i, bySeq)} onQuote={onQuote} />
-                  </Fragment>
-                )
-              })}
-            </Anchored>
+            list.slice(start, end).map((m, k) => {
+              const i = start + k
+              return (
+                <Fragment key={m.seq}>
+                  {(i === 0 || !sameDay(list[i - 1]?.at ?? 0, m.at)) && (
+                    <p className="day">
+                      <span>{day(m.at)}</span>
+                    </p>
+                  )}
+                  {m.seq === mark && (
+                    <p className="feed-new" role="separator">
+                      <span>New</span>
+                    </p>
+                  )}
+                  <MessageRow channel={channel} m={m} compact={m.seq !== mark && compactAt(list, i)} names={names} tasks={tasks} quote={quoteOf(list, i, bySeq)} onQuote={onQuote} />
+                </Fragment>
+              )
+            })
           )}
           {typing.length > 0 && (
             <p className="typing">
