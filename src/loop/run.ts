@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import type { ChannelState } from "@kiwi/core/state.ts";
 import { openSession, type Agent } from "../agent.ts";
 import type { AgentSession } from "../agent.ts";
 import { randomBytes } from "node:crypto";
@@ -9,7 +10,7 @@ import { loginArgv } from "../terminals/shared/launch.ts";
 import type { Recipe, Started } from "./recipes.ts";
 import { clearPane, kimiScreen, listenersUnder, paneText, pasteBracketed, stopStrays, strayKey, typeInto } from "./kimi.ts";
 import { tmuxSocket } from "../terminals/shared/tmux.ts";
-import { firstPrompt, nextWork, step, workName, type Work } from "./work.ts";
+import { firstPrompt, nextWork, step, waitingBehind, waitingText, waitsDue, waitTellsTo, workName, type Wait, type Work } from "./work.ts";
 import { clearFresh, freshAsked, LOOP_TASK_ENV } from "./fresh.ts";
 import { LOOP_ENV } from "../hooks/loop-wait.ts";
 
@@ -23,6 +24,7 @@ const QUICK_END_MS = 30_000;
 const PAUSE_MS = 5_000;
 const STRAY_EVERY = 5;
 const STARTING_MS = 2 * 60_000;
+const WAIT_TELL_MS = 30 * 60_000;
 
 export interface LoopSeat {
   alias: string;
@@ -149,6 +151,7 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
       for (const stray of listenersUnder(child.pid)) strays.add(strayKey(stray));
     };
     let polls = 0;
+    const waits = new Map<string, Wait>();
     const end = (why: Ended) =>
       Effect.gen(function* () {
         if (!exited) noteStrays();
@@ -193,8 +196,32 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
         return yield* end(next);
       }
       if (next.kind === "over" || (first.kind === "answering" && answered(live, started, seen.forMe))) return yield* end({ kind: "done", work: first });
+      const now = Date.now();
+      const { fresh, due } = waitsDue(waits, waitingBehind(first, seen.state, seat.me), now, WAIT_TELL_MS);
+      for (const w of fresh) yield* say(`${workName(w)} is waiting; the ${workName(first)} session is still running`);
+      for (const w of due) yield* tellWait(s, seen.state, seat.me, w, first, waits, now);
       yield* Effect.sleep(POLL_MS);
     }
+  });
+}
+
+function tellWait(s: AgentSession, state: ChannelState, me: string, w: Work, session: Work, waits: Map<string, Wait>, now: number): Effect.Effect<void, never, Agent> {
+  return Effect.gen(function* () {
+    const wait = waits.get(workName(w));
+    if (!wait) return;
+    const minutes = Math.round((now - wait.since) / 60_000);
+    const to = waitTellsTo(state, me);
+    const head = `${workName(w)} has waited ${minutes} minutes behind the ${workName(session)} session`;
+    if (!to.length) {
+      wait.tellAt = null;
+      return yield* say(`${head}, and there's nobody to tell`);
+    }
+    const sent = yield* s.send(waitingText(w, session, minutes), { to }).pipe(
+      Effect.as(true),
+      Effect.catchCause(() => Effect.succeed(false)),
+    );
+    wait.tellAt = sent ? null : now + WAIT_TELL_MS;
+    yield* say(sent ? `${head}; told ${to.join(", ")}` : `${head}; couldn't tell ${to.join(", ")}, trying again in ${Math.round(WAIT_TELL_MS / 60_000)} minutes`);
   });
 }
 

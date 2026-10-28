@@ -65,6 +65,12 @@ async function until(pred: () => boolean | Promise<boolean>, label: string, ms =
   }
 }
 
+function added(out: string): string {
+  const id = /added (T\d+)/.exec(out)?.[1];
+  if (!id) throw new Error(`no task id in: ${out}`);
+  return id;
+}
+
 const S: Env = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "joiner", CLAUDE_PID: String(process.pid), AI_AGENT: "claude-code_2-1-296_agent" };
 
 type Seen =
@@ -96,7 +102,7 @@ reg("busy");
 say({ kind: "start", harness: "claude", pid: process.pid, argv, token: !!process.env.KIWI_SEAT_TOKEN, as: process.env.KIWI_AS, channel: process.env.KIWI_CHANNEL, loop: process.env.KIWI_LOOP, loopTask: process.env.KIWI_LOOP_TASK, marker: !!process.env.CLAUDE_CODE_SESSION_ID });
 await Bun.sleep(1_500);
 const task = /This session is for (T\\d+)/.exec(argv.at(-1) ?? "")?.[1];
-if (task) {
+if (task && !(argv.at(-1) ?? "").includes("“loop hold”")) {
   const p = Bun.spawn(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: { ...process.env, CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: sessionId, CLAUDE_PID: String(process.pid) }, stdout: "pipe", stderr: "pipe" });
   const out = (await new Response(p.stdout).text()) + (await new Response(p.stderr).text());
   await p.exited;
@@ -338,6 +344,45 @@ test("the loop holds the seat, starts a fresh Claude Code session for a task, bi
   await until(() => !seatOf(agent)?.hold, "the seat released");
   expect(log).toContain(`${id} is over; its session ended`);
   expect(log).toContain(`released ${me} in loop`);
+});
+
+test("a task assigned behind a session whose work never ends is named on stderr, and dropping the stuck task starts it (#1154)", async () => {
+  const before = seen().length;
+  const loopEnv: Env = { PATH: `${bin}:${process.env.PATH}`, SHELL: "/bin/sh", CLAUDECODE: "", CLAUDE_CODE_SESSION_ID: "outer", CLAUDE_PID: "" };
+  const loop = spawn(agent, ["loop", "--model", "test-model"], loopEnv);
+  let log = "";
+  const decoder = new TextDecoder();
+  const reading = (async () => {
+    for await (const chunk of loop.stderr) log += decoder.decode(chunk);
+  })();
+  const fail = async (e: unknown) => {
+    loop.kill();
+    await loop.exited;
+    await reading;
+    throw new Error(`${String(e)}\n${JSON.stringify(seen().slice(before))}\n${log}`);
+  };
+  const startOf = (id: string) =>
+    seen()
+      .slice(before)
+      .find((s) => s.kind === "start" && (s.argv.at(-1) ?? "").includes(`This session is for ${id} `));
+  await until(() => !!seatOf(agent)?.hold, "the loop's hold").catch(fail);
+  const held = added(await ok(owner, ["--as", "human", "task", "add", "loop hold", "--owner", me, "--ask", want], { CLAUDECODE: "" }));
+  await until(() => !!startOf(held), "the held task's session").catch(fail);
+  const next = added(await ok(owner, ["--as", "human", "task", "add", "loop next", "--owner", me, "--ask", want], { CLAUDECODE: "" }));
+  await until(() => log.includes(`${next} is waiting; the ${held} session is still running`), "the waiting notice").catch(fail);
+  expect(startOf(next)).toBeUndefined();
+
+  await ok(owner, ["--as", "human", "task", "drop", held], { CLAUDECODE: "" });
+  await until(() => !!startOf(next), "the waiting task's session").catch(fail);
+  const started = startOf(next);
+  await until(() => seen().some((s) => s.kind === "term" && started?.kind === "start" && s.pid === started.pid), "the waiting task's session end").catch(fail);
+  expect(await ok(owner, ["--as", "human", "task", "show", next], { CLAUDECODE: "" })).toContain("status: done");
+
+  loop.kill("SIGTERM");
+  await loop.exited;
+  await reading;
+  await until(() => !seatOf(agent)?.hold, "the seat released");
+  expect(log.split(`${next} is waiting`).length).toBe(2);
 });
 
 test("with --harness codex, the loop finds the new thread by the nonce in its first prompt, binds the seat to it, and ends it once the task is done", async () => {

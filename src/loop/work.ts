@@ -31,6 +31,51 @@ export function nextWork(state: ChannelState, me: string, unreadForMe: number): 
   return unreadForMe > 0 ? { kind: "answering" } : null;
 }
 
+export function waitingBehind(work: Work, state: ChannelState, me: string): Work[] {
+  const held = work.kind === "answering" ? null : work.task;
+  const open = openTasks(state).filter((t) => t.id !== held);
+  const reviews = open.flatMap((t): Work[] => {
+    const round = openRound(t);
+    return round && t.review === me && t.owner !== me ? [{ kind: "reviewing", task: t.id, round: round.n }] : [];
+  });
+  if (work.kind === "answering") return reviews;
+  const coding = open.filter((t) => t.owner === me && !awaitingVerdict(t)).map((t): Work => ({ kind: "coding", task: t.id }));
+  return [...coding, ...reviews];
+}
+
+export type Wait = { since: number; tellAt: number | null };
+
+export function waitsDue(waits: Map<string, Wait>, behind: readonly Work[], now: number, tellAfter: number): { fresh: Work[]; due: Work[] } {
+  const names = new Set(behind.map(workName));
+  for (const name of [...waits.keys()]) if (!names.has(name)) waits.delete(name);
+  const fresh: Work[] = [];
+  const due: Work[] = [];
+  for (const w of behind) {
+    const wait = waits.get(workName(w));
+    if (!wait) {
+      waits.set(workName(w), { since: now, tellAt: now + tellAfter });
+      fresh.push(w);
+    } else if (wait.tellAt !== null && now >= wait.tellAt) due.push(w);
+  }
+  return { fresh, due };
+}
+
+export function waitTellsTo(state: ChannelState, me: string): string[] {
+  if (state.lead && state.lead !== me && state.members.get(state.lead)?.active) return [state.lead];
+  return [...state.members.values()].filter((m) => m.owner && m.active && m.name !== me).map((m) => m.name);
+}
+
+export function waitingText(waiting: Work, session: Work, minutes: number, mc = "kiwi"): string {
+  const held = session.kind === "answering" ? "messages" : taskId(session.task);
+  const free =
+    session.kind === "coding"
+      ? `approve it, mark it done, or hand it on with \`${mc} task assign ${held} NAME\``
+      : session.kind === "reviewing"
+        ? `give round ${session.round}'s verdict or move its review to someone else`
+        : "answer what's waiting";
+  return `${workName(waiting)} has waited ${minutes} minutes behind my ${workName(session)} session, which is still running: my loop starts it only when that work is over. To start ${workName(waiting)} now, ${free}.`;
+}
+
 export function workOver(work: Work, state: ChannelState, me: string): boolean {
   switch (work.kind) {
     case "coding": {
