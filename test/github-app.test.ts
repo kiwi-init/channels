@@ -6,7 +6,7 @@ import { signRequest } from "@kiwi/core/auth.ts";
 import { Channel } from "@kiwi/core/client.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { appJwt, githubAppFrom, pkcs8Of, REVIEW_CHECK } from "../src/relay/github-app.ts";
+import { appJwt, githubAppFrom, githubPushFrom, pkcs8Of, REVIEW_CHECK } from "../src/relay/github-app.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
 import { checked } from "./check.ts";
 
@@ -61,9 +61,14 @@ beforeAll(async () => {
       calls.push({ method: req.method, path, auth: req.headers.get("authorization") ?? "", body: await req.text() });
       if (path === "/repos/ojow/channels/installation") return Response.json({ id: 42 });
       if (path === "/app/installations/42/access_tokens") return Response.json({ token: "ghs_test", expires_at: new Date(Date.now() + 3_600_000).toISOString() });
+      if (path === "/repos/ojow/old-name") return Response.redirect(`${github.url.origin}/repos/ojow/channels`, 301);
       if (path === "/repos/ojow/channels") {
         const user = req.headers.get("authorization");
-        return Response.json({ default_branch: "main", ...(user === "Bearer ghu_owner" ? { permissions: { push: true } } : user === "Bearer ghu_reader" ? { permissions: { push: false } } : {}) });
+        return Response.json({
+          full_name: "ojow/channels",
+          default_branch: "main",
+          ...(user === "Bearer ghu_owner" ? { permissions: { push: true } } : user === "Bearer ghu_reader" ? { permissions: { push: false } } : {}),
+        });
       }
       if (path === `/repos/ojow/channels/compare/main...${sha}`) return new Response("diff --git a/x b/x\n+hello\n");
       if (path === "/repos/ojow/channels/check-runs") return Response.json({ html_url: "https://github.com/ojow/channels/runs/1" }, { status: 201 });
@@ -114,6 +119,13 @@ describe("the App's key", () => {
     expect(JSON.parse(new TextDecoder().decode(dec(h)))).toEqual({ alg: "RS256", typ: "JWT" });
     expect(JSON.parse(new TextDecoder().decode(dec(p)))).toEqual({ iat: 1_699_999_940, exp: 1_700_000_540, iss: "1234" });
     expect(await crypto.subtle.verify("RSASSA-PKCS1-v1_5", keys.publicKey, dec(s), new TextEncoder().encode(`${h}.${p}`))).toBe(true);
+  });
+
+  test("push access names the repo as GitHub does now, after a rename or a transfer", async () => {
+    const canPush = githubPushFrom({ api: github.url.origin });
+    expect(await canPush("ojow/old-name", "ghu_owner")).toEqual({ ok: true, value: "ojow/channels" });
+    expect(await canPush("ojow/old-name", "ghu_reader")).toEqual({ ok: true, value: null });
+    expect(await canPush("ojow/gone", "ghu_owner")).toEqual({ ok: true, value: null });
   });
 
   test("without an id and a key, there's no App", () => {
@@ -194,12 +206,19 @@ describe("diffs and review checks through the relay", () => {
   test("the owner's token is used for that one check and nothing else", () => {
     const used = calls.filter((c) => c.auth.startsWith("Bearer ghu_"));
     expect(used.length).toBeGreaterThan(0);
-    expect(used.every((c) => c.method === "GET" && c.path === "/repos/ojow/channels")).toBe(true);
+    expect(used.every((c) => c.method === "GET" && ["/repos/ojow/channels", "/repos/ojow/old-name", "/repos/ojow/gone"].includes(c.path))).toBe(true);
   });
 
   test("a relay without the App answers 404", async () => {
     const dir = mkdtempSync(join(tmpdir(), "kiwi-github-app-off-"));
-    const off = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, human: devHumanAuth(), githubApp: null, githubPush: async (_, token) => ({ ok: true, value: token === "ghu_owner" }) });
+    const off = startRelay({
+      port: 0,
+      hostname: "127.0.0.1",
+      dataDir: dir,
+      human: devHumanAuth(),
+      githubApp: null,
+      githubPush: async (repo, token) => ({ ok: true, value: token === "ghu_owner" ? repo : null }),
+    });
     try {
       const o = await generateIdentity("bob");
       const made = await Channel.create(off.url.origin, o, { name: "bob", kind: "human" }, [], undefined, "dev:bob");
