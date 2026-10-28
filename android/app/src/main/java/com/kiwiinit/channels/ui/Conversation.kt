@@ -6,12 +6,10 @@ import android.content.Intent
 import android.graphics.Bitmap
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -92,6 +90,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -490,7 +489,6 @@ private const val REVEAL_MAX = 62f
 
 private val tapbacks = listOf("❤️", "👍", "👎", "😂", "‼️", "❓")
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun BubbleBody(model: AppModel, room: RoomView, message: MessageView, first: Boolean, last: Boolean, reply: () -> Unit) {
     val tone = Tone.current
@@ -498,6 +496,10 @@ private fun BubbleBody(model: AppModel, room: RoomView, message: MessageView, fi
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     var menu by remember { mutableStateOf(false) }
+    val onHold by rememberUpdatedState {
+        view.buzz(Buzz.Tap)
+        menu = true
+    }
     val fill = if (message.mine) tone.mine else tone.them
     val ink = if (message.mine) tone.onMine else tone.onThem
     val onlyPictures = message.images > 0 && message.body.isBlank()
@@ -512,20 +514,16 @@ private fun BubbleBody(model: AppModel, room: RoomView, message: MessageView, fi
                 Box(
                     Modifier.clip(bubbleShape(message.mine, first, last))
                         .background(fill)
-                        .combinedClickable(
-                            onClick = {},
-                            onLongClick = {
-                                view.buzz(Buzz.Tap)
-                                menu = true
-                            },
-                            onDoubleClick = {
-                                view.buzz(Buzz.Tap)
-                                menu = true
-                            },
-                        )
+                        .held { onHold() }
+                        .semantics {
+                            onLongClick {
+                                onHold()
+                                true
+                            }
+                        }
                         .padding(horizontal = 14.dp, vertical = 9.dp),
                 ) {
-                    Prose(message.body, Inks(ink, if (message.mine) ink else MaterialTheme.colorScheme.primary, ink.copy(alpha = 0.12f), message.mine))
+                    Markdown(message.body, Inks(ink, if (message.mine) ink else MaterialTheme.colorScheme.primary, ink.copy(alpha = 0.12f), message.mine), selectable = false)
                 }
             }
         }
@@ -640,7 +638,7 @@ fun PollCard(model: AppModel, room: RoomView, poll: Poll, other: () -> Unit) {
             color = if (open) tone.decide else tone.ink3,
             modifier = Modifier.padding(bottom = 4.dp),
         )
-        Prose(poll.body, Inks(tone.onThem, MaterialTheme.colorScheme.primary, tone.wash2, false), Modifier.padding(bottom = 10.dp))
+        Markdown(poll.body, Inks(tone.onThem, MaterialTheme.colorScheme.primary, tone.wash2, false), Modifier.padding(bottom = 10.dp))
         HorizontalDivider(color = tone.line)
         for (choice in poll.choices) {
             val chosen = picked == choice
@@ -864,7 +862,7 @@ private fun PendingBubble(model: AppModel, item: Pending, spot: Spot) {
                     .background(tone.mine)
                     .padding(horizontal = 14.dp, vertical = 9.dp),
             ) {
-                Prose(item.body, Inks(tone.onMine, tone.onMine, tone.onMine.copy(alpha = 0.12f), true))
+                Markdown(item.body, Inks(tone.onMine, tone.onMine, tone.onMine.copy(alpha = 0.12f), true))
             }
             if (item.failed) {
                 Text("Not delivered", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = tone.alert, modifier = Modifier.padding(top = 3.dp))
