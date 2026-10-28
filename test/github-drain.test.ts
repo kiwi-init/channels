@@ -23,7 +23,14 @@ let ownerCh: Channel;
 let memberCh: Channel;
 
 beforeAll(async () => {
-  server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir, human: devHumanAuth(), githubSecret: SECRET, githubPush: async (_, token) => ({ ok: true, value: token === "ghu_owner" }) });
+  server = startRelay({
+    port: 0,
+    hostname: "127.0.0.1",
+    dataDir,
+    human: devHumanAuth(),
+    githubSecret: SECRET,
+    githubPush: async (repo, token) => ({ ok: true, value: token === "ghu_owner" ? repo : null }),
+  });
   relay = server.url.origin;
   owner = await generateIdentity("alice");
   const member = await generateIdentity("win");
