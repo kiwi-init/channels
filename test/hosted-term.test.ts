@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readPlacedSeat } from "../packages/core/src/terminals.ts";
+import { readPlacedSeat } from "@kiwi/core/terminals.ts";
 import { clampSize, controlOutput, keyCommands, openTerm, readPaneInfo, seedOf, unescapeOutput, TERM_COLS } from "../src/daemon/hosted-term.ts";
 import { HOSTED_SESSION, HostedTmux, findTmux } from "../src/daemon/hosted-tmux.ts";
 import { onHostedSocket } from "../src/terminals/shared/tmux.ts";
