@@ -308,6 +308,10 @@
   overflow-wrap: anywhere;
 }
 
+.md {
+  --enrm-selection-bg: var(--selection);
+}
+
 .md ul {
   list-style: disc;
 }

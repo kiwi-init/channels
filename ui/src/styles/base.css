@@ -77,7 +77,7 @@ kbd {
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--ink) 28%, transparent);
+  background: var(--selection);
 }
 
 * {

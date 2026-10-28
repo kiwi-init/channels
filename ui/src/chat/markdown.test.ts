@@ -39,3 +39,15 @@ describe("message text follows Settings > Appearance > Text size", () => {
     expect(css).toContain(".md .enrm-admonition > div:first-child > span {\n  font-size: calc(15px * var(--text-scale, 1));\n}")
   })
 })
+
+describe("message text can be selected and seen", () => {
+  test("the renderer's selection colour is set wherever a message is drawn", () => {
+    const library = readFileSync(Bun.fileURLToPath(import.meta.resolve("react-native-enriched-markdown/lib/module/web/globalStyles.js")), "utf8")
+    const rule = /`\.\$\{ENRM_TEXT_CLASS\} ::selection \{ background-color: var\(\$\{ENRM_SELECTION_BG_VAR\}\); \}`/
+    expect(library).toMatch(rule)
+    const name = /ENRM_SELECTION_BG_VAR = '([^']+)'/.exec(library)?.[1]
+    expect(name).toBe("--enrm-selection-bg")
+    const css = readFileSync(join(import.meta.dir, "../styles/chat.css"), "utf8")
+    expect(css).toContain(`.md {\n  ${name}: var(--selection);\n}`)
+  })
+})
