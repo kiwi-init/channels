@@ -228,6 +228,8 @@ interface Fact {
   at: number
 }
 
+export type ComputerChoices = { harnesses?: App["harnesses"]; folders: string[] } | { error: string }
+
 export interface Channel {
   code: string
   title: string
@@ -350,6 +352,8 @@ export interface Actions {
   setColor(code: string, name: string, color: Color | null): void
   setPowers(code: string, name: string, powers: Partial<Powers>): void
   addAgent(code: string, agent: NewAgent): void
+  choicesOn(code: string, computer: string): Promise<ComputerChoices>
+  chooseFolder(): Promise<string | null>
   addRoom(code: string, name: string): void
   renameRoom(code: string, id: string, name: string): void
   setIcon(code: string, file: File | null): void
