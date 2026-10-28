@@ -4,6 +4,7 @@ import type { HookRow, KnownHarness } from "@kiwi/core/harnesses.ts"
 
 const calls: string[] = []
 let running = true
+let line: "on" | "off" = "off"
 let hooks: HookRow[] = [
   { harness: "claude", state: "installed", text: "" },
   { harness: "codex", state: "outdated", text: "" },
@@ -18,10 +19,12 @@ const fake = {
     hooks = hooks.map((h) => (h.harness === harness ? { ...h, state: to === "on" ? "installed" : "off" } : h))
     return hooks
   },
+  contextLine: async () => line,
+  setContextLine: async (to: "on" | "off") => (calls.push(`context line ${to}`), (line = to)),
   doctor: async () => [{ ok: false as const, what: "Codex's hooks are from an older kiwi", how: "Update them" }],
 }
 mock.module("@/lib/secrets", () => ({ bridge: () => fake }))
-const { checkComputer, computerNow, loadComputer, setHooks } = await import("~/live/computer")
+const { checkComputer, computerNow, loadComputer, setContextLine, setHooks } = await import("~/live/computer")
 
 describe("Settings > Agents shows this computer", () => {
   test("kiwi's version, and the hooks of every harness that takes them", async () => {
@@ -32,6 +35,7 @@ describe("Settings > Agents shows this computer", () => {
         { harness: "claude", label: "Claude Code", state: "installed" },
         { harness: "codex", label: "Codex", state: "outdated" },
       ],
+      contextLine: false,
     })
   })
 
@@ -40,6 +44,12 @@ describe("Settings > Agents shows this computer", () => {
     await setHooks("claude", false)
     expect(calls).toEqual(["codex on", "claude off"])
     expect(computerNow()?.hooks.map((h) => h.state)).toEqual(["off", "installed"])
+  })
+
+  test("the 250k checkpoint ask stays off until it's turned on", async () => {
+    await setContextLine(true)
+    expect(calls.at(-1)).toBe("context line on")
+    expect(computerNow()?.contextLine).toBe(true)
   })
 
   test("Check this computer hands back kiwi doctor's findings", async () => {

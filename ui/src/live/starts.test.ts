@@ -4,7 +4,11 @@ import type { TerminalsStatus } from "@kiwi/core/terminals.ts"
 
 const calls: string[] = []
 let folders = ["/Users/jow/www/channels"]
-let status: TerminalsStatus | null = { prefer: "app", launch: "on", bypass: "off", terminals: [] }
+const terminals: TerminalsStatus["terminals"] = [
+  { id: "app", name: "Terminal", found: true, running: true, helpers: null },
+  { id: "rex", name: "Rex", found: true, running: true, helpers: "off" },
+]
+let status: TerminalsStatus | null = { prefer: "app", launch: "on", bypass: "off", terminals }
 let chosen: string | null = "/Users/jow/www/landing"
 
 const fake = {
@@ -18,14 +22,19 @@ const fake = {
   },
   setLaunches: async (to: "on" | "off") => (calls.push(`launch ${to}`), status && (status = { ...status, launch: to })),
   setRemoteBypass: async (to: "on" | "off") => (calls.push(`bypass ${to}`), status && (status = { ...status, bypass: to })),
+  terminalHelpers: async (id: "rex" | "tmux", to: "on" | "off") => (
+    calls.push(`${id} helpers ${to}`),
+    status && (status = { ...status, terminals: status.terminals.map((t) => (t.id === id ? { ...t, helpers: to } : t)) })
+  ),
+  terminalPrefer: async (id: "app" | "rex" | "tmux") => (calls.push(`prefer ${id}`), status && (status = { ...status, prefer: id })),
 }
 mock.module("@/lib/secrets", () => ({ bridge: () => fake }))
-const { addStartFolder, allowNewAgents, allowRemoteBypass, loadStarts, removeStartFolder, startsNow } = await import("~/live/starts")
+const { addStartFolder, allowNewAgents, allowRemoteBypass, loadStarts, preferTerminal, removeStartFolder, setTerminalHelpers, startsNow } = await import("~/live/starts")
 
 describe("Settings > Agents saves where and how agents start", () => {
   test("it shows this computer's own folders and switches, not a made-up list", async () => {
     await loadStarts()
-    expect(startsNow()).toEqual({ folders: ["/Users/jow/www/channels"], launch: true, bypass: false })
+    expect(startsNow()).toEqual({ folders: ["/Users/jow/www/channels"], launch: true, bypass: false, prefer: "app", terminals })
   })
 
   test("Add a folder… asks for one and keeps it; Remove takes it out", async () => {
@@ -49,6 +58,14 @@ describe("Settings > Agents saves where and how agents start", () => {
     await allowNewAgents(false)
     expect(calls.splice(0)).toEqual(["bypass on", "launch off"])
     expect(startsNow()).toMatchObject({ launch: false, bypass: true })
+  })
+
+  test("downloading Rex's helpers lets new agents open in Rex", async () => {
+    await setTerminalHelpers("rex", true)
+    await preferTerminal("rex")
+    expect(calls.splice(0)).toEqual(["rex helpers on", "prefer rex"])
+    expect(startsNow()?.prefer).toBe("rex")
+    expect(startsNow()?.terminals.find((t) => t.id === "rex")?.helpers).toBe("on")
   })
 
   test("with kiwi not answering, the page has nothing to show", async () => {

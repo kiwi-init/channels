@@ -1,11 +1,11 @@
 import { useState } from "react"
 
-import { Avatar, IconButton } from "~/kit/bits"
+import type { TerminalId, TerminalRow } from "@kiwi/core/terminals.ts"
+import { Avatar, IconButton, Toggle } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
-import type { Finding, ThisComputer } from "~/model"
+import type { AgentStarts, Finding, ThisComputer } from "~/model"
 import { useApp } from "~/nav"
-import { Toggle } from "~/kit/bits"
-import { Group, Row } from "~/settings/controls"
+import { Group, Row, Seg } from "~/settings/controls"
 import { Personalities } from "~/settings/personalities"
 import { Page } from "~/settings/sections"
 
@@ -15,6 +15,58 @@ const HOOK_SAYS: Record<ThisComputer["hooks"][number]["state"], { desc: string; 
   outdated: { desc: "From an older kiwi: update them", action: "Update" },
   missing: { desc: "Not installed", action: "Install" },
   off: { desc: "Removed. Kiwi won't add them back until you install them", action: "Install" },
+}
+
+const HELPERS: Record<Exclude<TerminalId, "app">, { download: string; on: string; off: string }> = {
+  rex: {
+    download: "Download Rex Helpers",
+    on: "Downloaded. A seat that needs you marks its Rex tab, and Needs you opens it.",
+    off: "Marks a seat that needs you in its Rex tab, opens it from Needs you, and lets new agents open in Rex.",
+  },
+  tmux: {
+    download: "Download Tmux Helpers",
+    on: "Downloaded. A seat that needs you marks its window in tmux, and prefix K jumps to it.",
+    off: "Marks a seat that needs you in tmux's window list, jumps to it with prefix K, and lets new agents open in tmux.",
+  },
+}
+
+const PREFER_ORDER: TerminalId[] = ["app", "rex", "tmux"]
+
+function Opens({ starts }: { starts: AgentStarts }) {
+  const { app } = useApp()
+  const rows = PREFER_ORDER.flatMap((id) => starts.terminals.filter((t) => t.id === id))
+  const usable = rows.filter((t) => t.id === "app" || t.helpers === "on").map((t) => [t.id, t.name] as const)
+  const helpers = rows.filter((t): t is TerminalRow & { id: Exclude<TerminalId, "app">; helpers: "on" | "off" } => t.id !== "app" && t.helpers !== null && (t.found || t.helpers === "on"))
+  return (
+    <>
+      {usable.length > 1 && (
+        <Row label="Prefer" hint="Where a new agent opens. If it can't open there, it opens in Terminal.">
+          <Seg label="Prefer" value={starts.prefer} options={usable} onChange={app.actions.preferTerminal} />
+        </Row>
+      )}
+      {helpers.map((t) => {
+        const on = t.helpers === "on"
+        const note =
+          on && !t.found ? `${t.name} isn't on this computer anymore. Remove takes back what Kiwi wrote.` : on && !t.running ? `${t.name} isn't running. Kiwi picks it up once it starts.` : null
+        return (
+          <Row
+            key={t.id}
+            label={t.name}
+            hint={
+              <>
+                {on ? HELPERS[t.id].on : HELPERS[t.id].off}
+                {note && <span className="set-row-note">{note}</span>}
+              </>
+            }
+          >
+            <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.setTerminalHelpers(t.id, !on)}>
+              {on ? "Remove" : HELPERS[t.id].download}
+            </button>
+          </Row>
+        )
+      })}
+    </>
+  )
 }
 
 function CheckComputer() {
@@ -124,6 +176,16 @@ export function AgentsSection() {
               </Row>
             ))}
           </Group>
+          {computer.contextLine !== null && (
+            <Group>
+              <Row
+                label="Ask agents for a checkpoint past 250k context"
+                hint="Off by default. On, an agent on this computer past 250k tokens is asked to write where its work stands before it ends its turn."
+              >
+                <Toggle label="Ask agents for a checkpoint past 250k context" on={computer.contextLine} onChange={actions.setContextLine} />
+              </Row>
+            </Group>
+          )}
           <CheckComputer />
         </>
       )}
@@ -138,6 +200,7 @@ export function AgentsSection() {
                 <Toggle label="Allow bypass from your other devices" on={starts.bypass} onChange={actions.allowRemoteBypass} />
               </Row>
             )}
+            <Opens starts={starts} />
           </Group>
           <Group
             title="Folders agents can start in"

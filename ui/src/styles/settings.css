@@ -109,6 +109,12 @@
   font: var(--t-meta) / 1.45 var(--ui);
 }
 
+.set-row-note {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-2);
+}
+
 .set-group-hint {
   margin: -2px 0 6px;
   color: var(--ink-3);

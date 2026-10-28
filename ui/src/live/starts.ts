@@ -1,13 +1,13 @@
 import { useEffect, useSyncExternalStore } from "react"
 
-import type { TerminalsStatus } from "@kiwi/core/terminals.ts"
+import type { TerminalId, TerminalsStatus } from "@kiwi/core/terminals.ts"
 import { bridge } from "@/lib/secrets"
 import { store } from "~/live/value"
 import type { AgentStarts } from "~/model"
 
 const starts = store<AgentStarts | null>(null)
 
-const switches = (t: TerminalsStatus) => ({ launch: t.launch === "on", bypass: t.bypass === "on" })
+const switches = (t: TerminalsStatus) => ({ launch: t.launch === "on", bypass: t.bypass === "on", prefer: t.prefer, terminals: t.terminals })
 
 function patch(next: Partial<AgentStarts>): void {
   const now = starts.get()
@@ -56,5 +56,15 @@ export async function allowNewAgents(on: boolean): Promise<void> {
 
 export async function allowRemoteBypass(on: boolean): Promise<void> {
   const t = await need().setRemoteBypass(on ? "on" : "off")
+  if (t) patch(switches(t))
+}
+
+export async function preferTerminal(id: TerminalId): Promise<void> {
+  const t = await need().terminalPrefer(id)
+  if (t) patch(switches(t))
+}
+
+export async function setTerminalHelpers(id: Exclude<TerminalId, "app">, on: boolean): Promise<void> {
+  const t = await need().terminalHelpers(id, on ? "on" : "off")
   if (t) patch(switches(t))
 }
