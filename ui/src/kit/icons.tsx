@@ -133,6 +133,11 @@ export const LOGOS: Partial<Record<Harness, readonly LogoPath[]>> = {
       rule: "evenodd",
     },
   ],
+  zcode: [
+    { d: "M12.6 1.793L10.92 4.181C10.656 4.553 10.224 4.781 9.756 4.781H0.6V1.781C0.6 1.793 12.6 1.793 12.6 1.793Z", rule: "evenodd" },
+    { d: "M24 1.793L9.6 22.194H0L14.4 1.793H24Z", rule: "evenodd" },
+    { d: "M11.4 22.194L13.092 19.794C13.356 19.422 13.788 19.194 14.256 19.194H23.4V22.194H11.4V22.194Z", rule: "evenodd" },
+  ],
 }
 
 export function HarnessLogo({ harness }: { harness?: Harness }) {
