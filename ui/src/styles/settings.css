@@ -331,6 +331,17 @@
   letter-spacing: 0.08em;
 }
 
+.set-enroll-what {
+  color: var(--ink-2);
+  font: var(--t-ui) / 1.5 var(--ui);
+}
+
+.input.set-enroll-digits {
+  font: 600 var(--t-display) var(--ui);
+  letter-spacing: 0.3em;
+  text-align: center;
+}
+
 .set-pair-how {
   color: var(--ink-2);
   font: var(--t-ui) / 1.5 var(--ui);

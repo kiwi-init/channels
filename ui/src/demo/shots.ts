@@ -42,6 +42,8 @@ export const SHOTS: Record<string, Shot> = {
   palette: kiwi({ dialog: "palette" }),
   "new-channel": kiwi({ dialog: "new-channel" }),
   join: kiwi({ dialog: "join" }),
+  enroll: { scenario: "enroll", channel: "kiwi" },
+  "enroll-digits": { scenario: "enroll-digits", channel: "kiwi" },
   empty: { scenario: "full", channel: "landing" },
   waiting: { scenario: "full", channel: "ops" },
   settings: kiwi({ page: "settings", section: "account" }),

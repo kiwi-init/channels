@@ -92,7 +92,7 @@ function withStep(c: Channel): Channel {
   }
 }
 
-export type Scenario = "full" | "long" | "step" | "signed-out" | "no-channels" | "updates" | "update-ready" | "update-available"
+export type Scenario = "full" | "long" | "step" | "signed-out" | "no-channels" | "updates" | "update-ready" | "update-available" | "enroll" | "enroll-digits"
 
 function initial(scenario: Scenario, look: Partial<Prefs>): State {
   const prefs = { ...DEMO_PREFS, ...look }
@@ -109,6 +109,14 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
     return { account: { ...DEMO_ACCOUNT, uiUpdate: { version: "dev-1542" }, update: { version: "2026.10.7", ready: true, state: "ready" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "update-ready") return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.7", ready: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "update-available") return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.8", ready: false, state: "available" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
+  if (scenario === "enroll" || scenario === "enroll-digits")
+    return {
+      account: { ...DEMO_ACCOUNT, enrollAsk: { id: "demo-ask", label: "Jow's MacBook Air", os: "macOS", as: "desktop", stage: scenario === "enroll" ? "new" : "digits" } },
+      tiles: DEMO_TILES,
+      channels,
+      prefs,
+      seq: 1000,
+    }
   if (scenario === "signed-out") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000 }
   if (scenario === "no-channels") return { account: DEMO_ACCOUNT, tiles: [], channels: new Map(), prefs, seq: 1000 }
   return { account: DEMO_ACCOUNT, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
@@ -351,6 +359,13 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       closeChannel: (code) => setState((s) => ({ ...s, tiles: s.tiles.filter((t) => t.code !== code) })),
       answerPair: () => setState((s) => (s.account ? { ...s, account: { ...s.account, pairAsk: undefined } } : s)),
       cancelPair: () => setState((s) => (s.account ? { ...s, account: { ...s.account, pairAsk: undefined } } : s)),
+      enrollAnswer: () => setState((s) => (s.account?.enrollAsk ? { ...s, account: { ...s.account, enrollAsk: { ...s.account.enrollAsk, stage: "digits" } } } : s)),
+      enrollConfirm: async (_id, digits) => {
+        if (digits !== "482913") return { ok: false, left: 2 }
+        setState((s) => (s.account ? { ...s, account: { ...s.account, enrollAsk: undefined } } : s))
+        return { ok: true }
+      },
+      enrollDeny: () => setState((s) => (s.account ? { ...s, account: { ...s.account, enrollAsk: undefined } } : s)),
       saveTheme: (theme) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...savedTheme(s.prefs, theme) } })),
       deleteTheme: (id) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...deletedTheme(s.prefs, id) } })),
       addStartFolder: () => setStarts((s) => (s.folders.includes("~/code/kiwi") ? s : { ...s, folders: [...s.folders, "~/code/kiwi"] })),

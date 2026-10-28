@@ -289,7 +289,16 @@ export interface Account {
   keysUnsealed?: boolean
   desktop?: boolean
   pairAsk?: { kind: "computer" | "phone"; label: string; os?: string; digits?: string }
+  enrollAsk?: EnrollAsk
   githubCode?: { code: string; url: string }
+}
+
+export interface EnrollAsk {
+  id: string
+  label: string
+  os: string
+  as: "desktop" | "phone" | "computer"
+  stage: "new" | "waiting" | "digits" | "elsewhere"
 }
 
 export type Theme = "system" | "dark" | "light"
@@ -399,6 +408,9 @@ export interface Actions {
   setNewPowers(code: string, powers: Powers): void
   answerPair(accept: boolean): void
   cancelPair(): void
+  enrollAnswer(id: string): void
+  enrollConfirm(id: string, digits: string): Promise<{ ok: true } | { ok: false; left: number }>
+  enrollDeny(id: string): void
   closeChannel(code: string): void
   saveTheme(theme: CustomTheme): void
   deleteTheme(id: string): void

@@ -1,6 +1,7 @@
 import type { Handlers } from "../calls.ts";
 import type { Host } from "../host.ts";
 import { daemonCalls } from "./daemon.ts";
+import { devicesCalls } from "./devices.ts";
 import { githubCalls } from "./github.ts";
 import { launchCalls } from "./launch.ts";
 import { linkingCalls } from "./linking.ts";
@@ -19,6 +20,7 @@ export function handlers(host: Host): Handlers {
     ...githubCalls(host),
     ...pairingCalls(),
     ...linkingCalls(),
+    ...devicesCalls(),
     ...daemonCalls(),
     ...miscCalls(host),
     ...personalitiesCalls(),
