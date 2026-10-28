@@ -92,4 +92,16 @@ describe("a loop session waiting for its verdict (#1117)", () => {
     const sent = await ev("win", { op: "task.update", task: add.seq, state: "review", at: "abc1234" });
     expect(wants("win", note, fold([old, handed, theirs, add, sent, note], roster), loop)).toBe(false);
   });
+
+  test("once its open round is handed on, the seat hears the handoff and nothing after it", async () => {
+    const t14 = await ev("jon", { op: "task.add", title: "t14", owner: "win", review: "linux" });
+    const sent = await ev("win", { op: "task.update", task: t14.seq, state: "review", at: "abc1234" });
+    const moved = await ev("jon", { op: "task.update", task: t14.seq, owner: "mac" }, ["mac"]);
+    const note = await ev("jon", { op: "task.update", task: t14.seq, note: "mac: rebase first" }, ["mac"]);
+    expect(wants("win", moved, fold([t14, sent, moved], roster), loop)).toBe(true);
+    expect(wants("win", note, fold([t14, sent, moved, note], roster), loop)).toBe(false);
+    const add = await ev("jon", { op: "task.add", title: "ship it", owner: "win", review: "mac" });
+    const mine = await ev("win", { op: "task.update", task: add.seq, state: "review", at: "abc1234" });
+    expect(wants("win", note, fold([t14, sent, moved, add, mine, note], roster), loop)).toBe(false);
+  });
 });
