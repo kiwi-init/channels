@@ -271,7 +271,13 @@ const messages: Message[] = [
     images: [{ url: ICONS_SHOT, width: 480, height: 270, alt: "channel-icons.png" }],
   },
   { seq: 125, from: "atlas", at: m(2), text: "Should the redesign go to everyone at once, or behind a setting first?", where: general, ask: "q-1", mentionsYou: true },
-  { seq: 126, from: "maya", at: m(1), text: "nice, thanks!", where: general },
+  {
+    seq: 126,
+    from: "maya",
+    at: m(1),
+    text: "nice, thanks!\nSame crash as #112 on my phone though:\n![the crash](https://maya.example.com/crash.png)",
+    where: general,
+  },
   {
     seq: 127,
     from: "atlas",

@@ -53,13 +53,31 @@ describe("message text can be selected and seen", () => {
   })
 })
 
+describe("a message keeps the lines it was written in (T616)", () => {
+  test("one newline is a line break, not a space", async () => {
+    const source = readFileSync(join(import.meta.dir, "markdown.tsx"), "utf8")
+    expect(source).toContain("const FLAGS = { latexMath: false, underline: false, hardSoftBreaks: true }")
+    const ast = await parseMarkdown("Done:\n- tests\nNext: shots", { latexMath: false, underline: false, hardSoftBreaks: true })
+    const html = renderToStaticMarkup(
+      createElement(RenderNode, {
+        node: ast.children?.[1] ?? ast,
+        style: normalizeMarkdownStyle({}),
+        styles: buildStyles(normalizeMarkdownStyle({})),
+        callbacks: {},
+        capabilities: { katex: null, enableTaskListItemToggle: false },
+      })
+    )
+    expect(html).toMatch(/tests<br\/?>Next: shots/)
+  })
+})
+
 describe("a code block copies when it's pressed", () => {
   test("the block is the button, with its language in the label, and no copy buttons laid over it", async () => {
     const markdown = "Run it:\n\n```sh\nbun test\n```"
     const ast = await parseMarkdown(markdown, { latexMath: false, underline: false })
     keepParsed(markdown, ast)
     const quiet = () => {}
-    const html = renderToStaticMarkup(createElement(Markdown, { markdown, onMention: quiet, onTask: quiet, onImage: quiet, onShown: quiet, copied: quiet }))
+    const html = renderToStaticMarkup(createElement(Markdown, { markdown, onMention: quiet, onTask: quiet, onMessage: quiet, onImage: quiet, onShown: quiet, copied: quiet }))
     expect(html).toMatch(/<pre style="[^"]*cursor:pointer[^"]*" aria-label="Code block: sh" role="button" tabindex="0"><code[^>]*>bun test/)
     expect(html).not.toContain("md-copy")
   })

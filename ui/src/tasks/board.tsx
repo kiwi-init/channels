@@ -2,7 +2,7 @@ import "~/styles/tasks.css"
 
 import { useState } from "react"
 
-import { Avatar, cx, Dot, Empty, statusWord } from "~/kit/bits"
+import { Avatar, cx, Dot, Empty, Loading, statusWord } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import { memberOf, type Channel, type Task, type TaskStatus } from "~/model"
@@ -32,7 +32,9 @@ export function Board({ channel }: { channel: Channel }) {
     <div className="board">
       <div className="board-list">
         <NewTask channel={channel} />
-        {live.length === 0 ? (
+        {live.length === 0 && channel.loading ? (
+          <Loading />
+        ) : live.length === 0 ? (
           <Empty title="No tasks yet.">
             {channel.people.some((p) => p.kind === "agent")
               ? "Say what you want done in the conversation. The lead turns it into tasks."

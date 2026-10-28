@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties, type ReactNode } from "react"
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react"
 
 import { HarnessLogo, Icon } from "~/kit/icons"
 import type { Person, TaskStatus } from "~/model"
@@ -116,6 +116,19 @@ export function Empty({ title, children }: { title: string; children?: ReactNode
     <div className="empty">
       <p className="empty-title">{title}</p>
       {children && <div className="empty-text">{children}</div>}
+    </div>
+  )
+}
+
+export function Loading() {
+  const [late, setLate] = useState(false)
+  useEffect(() => {
+    const timer = window.setTimeout(() => setLate(true), 400)
+    return () => window.clearTimeout(timer)
+  }, [])
+  return (
+    <div className="empty" role="status">
+      {late && <p className="empty-text">Loading…</p>}
     </div>
   )
 }
