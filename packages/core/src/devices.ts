@@ -1,5 +1,5 @@
 import { b64url } from "./crypto.ts";
-import { canonical, sign, verify, type Identity } from "./identity.ts";
+import { canonical, sign, signText, verify, verifyText, type Identity } from "./identity.ts";
 
 const KEY_RE = /^[A-Za-z0-9_-]{43}$/;
 const LABEL_MAX = 64;
@@ -196,4 +196,35 @@ function apply(link: DeviceLink, devices: Map<string, Device>, revoked: Set<stri
 export function currentDevice(list: DeviceList, pk: string, now = Date.now()): Device | null {
   const d = list.devices.find((x) => x.device === pk);
   return d && d.until > now ? d : null;
+}
+
+export interface DeviceClaim {
+  links: DeviceLink[];
+  device: string;
+  vouch: string;
+}
+
+const deviceVouch = (roomId: string, memberPk: string) => `kiwi-device\n${roomId}\n${memberPk}`;
+
+export async function claimDevice(device: Identity, links: DeviceLink[], roomId: string, memberPk: string): Promise<DeviceClaim> {
+  return { links, device: device.pk, vouch: await signText(device, deviceVouch(roomId, memberPk)) };
+}
+
+interface CheckedDevice {
+  person: string;
+  version: number;
+  device: Device;
+}
+
+export async function checkDevice(c: unknown, roomId: string, memberPk: string, newer?: (person: string) => DeviceList | undefined, now = Date.now()): Promise<CheckedDevice | null> {
+  if (!c || typeof c !== "object") return null;
+  const claim = c as Partial<DeviceClaim>;
+  if (!Array.isArray(claim.links) || typeof claim.device !== "string" || typeof claim.vouch !== "string") return null;
+  const read = await readDeviceList(claim.links);
+  if (!read.ok) return null;
+  const known = newer?.(read.list.person);
+  const list = known && known.version > read.list.version ? known : read.list;
+  const d = currentDevice(list, claim.device, now);
+  if (!d) return null;
+  return (await verifyText(d.device, claim.vouch, deviceVouch(roomId, memberPk))) ? { person: list.person, version: list.version, device: d } : null;
 }
