@@ -8,10 +8,10 @@ import { useIcons, useLiveIcon } from "@/lib/icons"
 import { markSeen, setOpenNews } from "@/lib/news"
 import { lastPreview } from "@/lib/preview"
 import { roomLast, roomSeenKey } from "@/lib/rooms"
-import { bridge } from "@/lib/secrets"
 import { sendsInTurn } from "@/lib/send-order"
 import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@/lib/threads"
 import { announce } from "~/kit/toasts"
+import { show, useAskChime } from "~/live/alerts"
 import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
 import { asksOf, directsOf, messagesOf, formerOf, peopleOf, roomsOf, tasksOf, type Pending } from "~/live/map"
@@ -251,7 +251,9 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     if (task !== null && lastInTask && shown) markSeenIn(roomId, { [placeKey({ kind: "task", task })]: lastInTask })
   }, [task, lastInTask, roomId, shown])
 
-  const needs = useMemo(() => asks.asks.filter((a) => !("answer" in a && a.answer) && !(a.kind === "question" && a.idle)).length, [asks.asks])
+  const waiting = useMemo(() => asks.asks.filter((a) => !("answer" in a && a.answer) && !(a.kind === "question" && a.idle)), [asks.asks])
+  const needs = waiting.length
+  useAskChime(waiting)
   const top = Math.max(live.head, messages.at(-1)?.seq ?? 0)
   const unreadHere = rooms.reduce((n, r) => n + r.unread, 0) + directs.reduce((n, d) => n + d.unread, 0)
   useEffect(() => {
@@ -289,10 +291,8 @@ function useNotify(messages: readonly Wire[], me: string, title: string, members
     const worth = fresh.filter((m) => notify === "all" || (notify === "mentions" && (m.to?.includes(me) || m.body.includes(`@${me}`))))
     const last = worth.at(-1)
     if (!last) return
-    const b = bridge()
     const body = withNicknames(last.body, nicknamesOf(members.values())).slice(0, 200)
     const who = members.get(last.from)?.display || last.from
-    if (b) void b.notify(`${who} in ${title}`, body).catch(() => {})
-    else if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification(`${who} in ${title}`, { body })
+    show(`${who} in ${title}`, body)
   }, [messages, me, title, members])
 }

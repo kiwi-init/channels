@@ -739,6 +739,7 @@ static void note_capabilities(GObject *source, GAsyncResult *res, gpointer data)
   g_variant_builder_init(&hints, G_VARIANT_TYPE("a{sv}"));
   g_variant_builder_add(&hints, "{sv}", "desktop-entry", g_variant_new_string(KIWI_APP_ID));
   g_variant_builder_add(&hints, "{sv}", "urgency", g_variant_new_byte(1));
+  g_variant_builder_add(&hints, "{sv}", "suppress-sound", g_variant_new_boolean(TRUE));
   g_dbus_connection_call(notes_bus, NOTES, NOTES_PATH, NOTES, "Notify", g_variant_new("(susssasa{sv}i)", "Channels", 0, KIWI_APP_ID, note->title, body, &actions, &hints, -1), G_VARIANT_TYPE("(u)"),
                          G_DBUS_CALL_FLAGS_NONE, 10000, NULL, note_shown, NULL);
   g_free(body);
