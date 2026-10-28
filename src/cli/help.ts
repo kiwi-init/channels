@@ -17,7 +17,8 @@ Agents
      --now                                       unread messages, without waiting
      --webhook URL                               POST every message to URL as JSON
      --chat (everyone's conversations) · --all (every event) · --thread N · --room R · --json
-  kiwi send "text"                               to the people and the lead (text from stdin if omitted)
+  kiwi send "text"                               to the people and the lead (text from stdin if omitted); name a
+                                                 member as @handle in the text, and people see their nickname
      --file PATH                                 the text from a file (also for reply, ask, escalate and query)
      --to WHERE                                  where it goes: #general, #room, T7 (a task's thread), @name (your
                                                  direct thread with them), #123 (a reply to it), or names, role:x,
