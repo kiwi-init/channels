@@ -4,6 +4,7 @@ import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_EMPTY, DEMO_GUEST, DEMO_PREFS, DEMO_TI
 import { longFeed } from "~/demo/long"
 import type { Account, Actions, AgentStarts, App, Channel, ChannelTile, Message, Prefs, Task } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
+import { announce } from "~/kit/toasts"
 
 interface State {
   account: Account | null
@@ -187,6 +188,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         )
       },
       addRoom: (code, name) => edit(code, (c) => ({ ...c, rooms: [...c.rooms, { id: name, name, unread: 0, mentions: 0 }] })),
+      exportHistory: async (code, kind) => announce(`Saved ${code} ${kind === "log" ? "log.jsonl" : "transcript.md"} to Downloads`),
       renameChannel: (code, title) => {
         edit(code, (c) => ({ ...c, title }))
         setState((s) => ({ ...s, tiles: s.tiles.map((t) => (t.code === code ? { ...t, title } : t)) }))

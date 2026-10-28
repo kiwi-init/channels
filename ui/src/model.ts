@@ -335,6 +335,7 @@ export interface Actions {
   addAgent(code: string, agent: NewAgent): void
   addRoom(code: string, name: string): void
   renameChannel(code: string, title: string): void
+  exportHistory(code: string, kind: "transcript" | "log"): Promise<void>
   setGoal(code: string, goal: string): void
   setHold(code: string, on: boolean, note?: string): void
   addRepo(code: string, repo: string): void
