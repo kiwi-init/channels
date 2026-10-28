@@ -49,7 +49,7 @@ interface Account {
 }
 
 const account = (): Account => {
-  const name = `person${++users}`;
+  const name = `relay${++users}`;
   return { user: `dev_${name}`, token: `dev:${name}` };
 };
 

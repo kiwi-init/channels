@@ -254,6 +254,16 @@ export interface EnrollAskView {
   stage: "new" | "waiting" | "digits" | "elsewhere";
 }
 
+export interface DeviceView {
+  id: string;
+  label: string;
+  os: string;
+  as: "desktop" | "phone" | "computer";
+  approve: boolean;
+  until: number;
+  thisOne: boolean;
+}
+
 export type EnrollConfirmView = { ok: true; label: string } | { ok: false; left: number };
 
 /** "kiwi daemon" as the app sees it. */
@@ -341,6 +351,9 @@ export interface KiwiBridge {
   enrollAnswer(id: string): Promise<void>;
   enrollConfirm(id: string, digits: string): Promise<EnrollConfirmView>;
   enrollDeny(id: string): Promise<void>;
+  devices(): Promise<DeviceView[] | null>;
+  forgetDevice(id: string): Promise<void>;
+  renewDevice(id: string): Promise<void>;
   daemonStatus(): Promise<DaemonStatus>;
   doctor(): Promise<DoctorFinding[] | null>;
   /** Certify this machine's daemon key with the person key and hand the cert back. */

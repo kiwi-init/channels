@@ -6,7 +6,7 @@ import { mutate, store } from "../store.ts";
 
 const OS_NAMES: Partial<Record<NodeJS.Platform, string>> = { darwin: "macOS", linux: "Linux", win32: "Windows" };
 
-export function devicesCalls(): Serves<"enrollPoll" | "enrollAnswer" | "enrollConfirm" | "enrollDeny"> {
+export function devicesCalls(): Serves<"enrollPoll" | "enrollAnswer" | "enrollConfirm" | "enrollDeny" | "devices" | "forgetDevice" | "renewDevice"> {
   const host = createDeviceHost({
     relayUrl: () => store.relayUrl,
     token: () => freshToken(),
@@ -24,5 +24,8 @@ export function devicesCalls(): Serves<"enrollPoll" | "enrollAnswer" | "enrollCo
     enrollAnswer: (id: string) => host.answer(id),
     enrollConfirm: (id: string, digits: string) => host.confirm(id, digits),
     enrollDeny: (id: string) => host.deny(id),
+    devices: () => host.list(),
+    forgetDevice: (id: string) => host.forget(id),
+    renewDevice: (id: string) => host.renew(id),
   };
 }

@@ -290,6 +290,7 @@ export interface Account {
   desktop?: boolean
   pairAsk?: { kind: "computer" | "phone"; label: string; os?: string; digits?: string }
   enrollAsk?: EnrollAsk
+  devices?: Device[]
   githubCode?: { code: string; url: string }
 }
 
@@ -299,6 +300,15 @@ export interface EnrollAsk {
   os: string
   as: "desktop" | "phone" | "computer"
   stage: "new" | "waiting" | "digits" | "elsewhere"
+}
+
+export interface Device {
+  id: string
+  label: string
+  os: string
+  as: "desktop" | "phone" | "computer"
+  until: number
+  thisOne: boolean
 }
 
 export type Theme = "system" | "dark" | "light"
@@ -411,6 +421,8 @@ export interface Actions {
   enrollAnswer(id: string): void
   enrollConfirm(id: string, digits: string): Promise<{ ok: true } | { ok: false; left: number }>
   enrollDeny(id: string): void
+  forgetDevice(id: string): void
+  renewDevice(id: string): void
   closeChannel(code: string): void
   saveTheme(theme: CustomTheme): void
   deleteTheme(id: string): void
