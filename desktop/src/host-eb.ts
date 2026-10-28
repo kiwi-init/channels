@@ -97,7 +97,7 @@ export const ebHost: Host = {
   },
   notify: (title, body) => {
     if (process.platform === "linux") notifyLinux(title, body);
-    else Utils.showNotification({ title, body });
+    else Utils.showNotification({ title, body, silent: true });
   },
   showWindow: () => {
     if (!shown) return;

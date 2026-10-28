@@ -14,6 +14,7 @@ import { useOwnPersonalities } from "@/lib/personalities"
 import { bridge, useSecrets } from "@/lib/secrets"
 import { useAccount } from "~/live/account"
 import { makeActions } from "~/live/actions"
+import { tellAsk } from "~/live/alerts"
 import { OpenMember, type View } from "~/live/channel"
 import { iconUrl } from "~/live/icon"
 import { harnessChoices } from "~/live/harness-rows"
@@ -79,7 +80,7 @@ function usePersonas(own: Personality[]): App["personas"] {
 }
 
 function useDuties(rows: ChannelRow[], person: string | undefined) {
-  useAutoApproval(rows)
+  useAutoApproval(rows, tellAsk)
   useMemberIcons(rows.filter((r) => r.state === "member").map((r) => r.code))
   useEffect(() => {
     if (person) void adoptThisComputer().catch(() => {})
