@@ -96,12 +96,10 @@ if [ -z "$web" ]; then bad "no WebKitWebProcess of the app's"; elif [ -n "$boxed
 registered=$(grep -c 'RegisterStatusNotifierItem' "$logs/$tag-watcher.log")
 if [ "$keyring" = kwallet-unanswered ] || [ "${keyring#cancel}" != "$keyring" ]; then
   :
-elif [ "$tray" = tray ]; then
-  if [ "$registered" -gt 0 ]; then ok "its tray icon registered with the StatusNotifierWatcher"; else bad "no tray icon registered, though libayatana-appindicator is installed and a watcher runs"; fi
-elif [ "$registered" -eq 0 ]; then
-  ok "no tray icon, as expected without libayatana-appindicator, and the app runs on"
+elif [ "$registered" -gt 0 ]; then
+  ok "its tray icon registered with the StatusNotifierWatcher$([ "$tray" = tray ] || echo ", with no libayatana-appindicator (Electrobun's own StatusNotifierItem)")"
 else
-  bad "a tray icon registered without libayatana-appindicator"
+  bad "no tray icon registered, though a watcher runs$([ "$tray" = tray ] || echo " (the tray needs no libayatana-appindicator)")"
 fi
 
 main_log=$(find "$home" -name main.log 2> /dev/null | head -n 1)

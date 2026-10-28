@@ -37,8 +37,8 @@ describe("Electrobun's toolchain and what it ships are pinned in the repo (T804)
     expect(postBuild).toContain('execFileSync("readelf", ["-d", wrapper]');
     expect(postBuild).toContain('line.includes("appindicator")');
     const shell = fs.readFileSync(path.join(import.meta.dirname, "..", "desktop", "native", "linux", "kiwi-shell.c"), "utf8");
-    expect(shell).toContain('#define TRAY_LIBRARY "libayatana-appindicator3.so.1"');
-    expect(shell).toContain("  if (!tray_library()) return false;\n");
+    expect(shell).not.toContain("libayatana-appindicator");
+    expect(shell).toContain('"IsStatusNotifierHostRegistered"');
   });
 
   test("a host without pins is refused by name", () => {

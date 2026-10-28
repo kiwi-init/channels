@@ -307,7 +307,9 @@ export function messageHead(m: Message, trust?: Trust, state?: ChannelState, me?
 
 export function formatMessage(m: Message, trust?: Trust, state?: ChannelState, me?: string): string {
   const review = reviewBody(m);
-  const body = cleanBody(m.kind === "event" ? `${describeEvent(m, state)}${review ? `\n${review}` : ""}` : String(m.body ?? "")).replace(/\n/g, "\n  │ ");
+  const refused = m.kind === "event" ? state?.rejected.get(m.seq) : undefined;
+  const said = refused !== undefined ? `refused: ${refused}` : m.kind === "event" ? `${describeEvent(m, state)}${review ? `\n${review}` : ""}` : String(m.body ?? "");
+  const body = cleanBody(said).replace(/\n/g, "\n  │ ");
   const imgs = m.imgs?.length ? ` ${m.imgs.map((i) => imageMarker({ name: inlineText(i.name, 80), data: i.data, ref: i.ref })).join(" ")}` : "";
   const link = m.handoff ? " [browser link]" : "";
   const options = m.choices?.length ? ` [options: ${m.choices.map((c) => inlineText(c, 200)).join(" | ")}]` : "";
@@ -514,7 +516,7 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
   }
   if (left.length) out.push(`  left or removed: ${left.sort().join(", ")}`);
 
-  const toMe = state.openAsks.filter((a) => a.from !== me && (!a.to || a.to.includes(me)));
+  const toMe = state.openAsks.filter((a) => a.from !== me && (!a.to?.length || a.to.includes(me) || a.to.includes("*")));
   const self = state.members.get(me);
   const asks = self && isPerson(self) ? toMe.filter((a) => holdsWork(state, a)) : toMe;
   const digest = toMe.filter((a) => !asks.includes(a));

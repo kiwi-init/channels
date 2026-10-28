@@ -241,6 +241,9 @@ describe("review", () => {
     const handBack = await ev("mac", { op: "task.update", task: t, review: "linux" });
     const s = fold([add, dodge, swap, handBack], roster);
     expect(s.rejected.get(dodge.seq)).toBe(`only a person, the lead, mac, or the task owner when the reviewer is gone changes who reviews T${t}`);
+    const shown = formatMessage(dodge, "verified", s, "jon");
+    expect(shown).toContain(`refused: only a person, the lead, mac, or the task owner when the reviewer is gone changes who reviews T${t}`);
+    expect(shown).not.toContain(describeEvent(dodge, s));
     expect(s.rejected.has(swap.seq)).toBe(true);
     expect(s.tasks.get(t)!.review).toBe("linux");
     // Setting one where there was none is anyone's (with the tasks scope).

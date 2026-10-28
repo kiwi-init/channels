@@ -135,6 +135,8 @@ function eventText(m: Wire, state: ChannelState): string {
   const ev = m.ev
   const who = nameIn(state, m.from)
   if (!ev) return m.body
+  const refused = state.rejected.get(m.seq)
+  if (refused !== undefined) return `${who}: refused: ${refused}`
   switch (ev.op) {
     case "hold.set":
       return ev.on ? `${who} paused the agents${ev.note ? `: ${ev.note}` : ""}` : `${who} let the agents carry on`
@@ -333,6 +335,7 @@ export function asksOf(
   pins: ReadonlyMap<string, string | null>
 ): AsksMap {
   const open = new Set(state.openAsks.filter((m) => holdsWork(state, m)).map((m) => m.seq))
+  const pending = new Set(state.openAsks.map((m) => m.seq))
   const decides = answersDecisions(state.members, me)
   const bySeq = new Map(messages.map((m) => [m.seq, m]))
   const replies = new Map<number, Wire[]>()
@@ -372,7 +375,8 @@ export function asksOf(
     if (!toMe) continue
     const answer = (replies.get(m.seq) ?? []).find((r) => r.from !== m.from && r.kind !== "event")
     const isOpen = open.has(m.seq)
-    if (!isOpen && !answer) continue
+    const idle = !isOpen && !answer && pending.has(m.seq)
+    if (!isOpen && !answer && !idle) continue
     const holds = heldBy(state, m)
     if (isOpen) for (const t of holds) held.add(t)
     asks.push({
@@ -384,6 +388,7 @@ export function asksOf(
       options: m.choices ?? [],
       holds,
       ...(task !== undefined ? { task } : {}),
+      ...(idle ? { idle: true as const } : {}),
       ...(!isOpen && answer ? { answer: { text: answer.body, by: answer.from, at: answer.ts } } : {}),
     })
     askOf.set(m.seq, id)

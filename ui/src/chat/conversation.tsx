@@ -247,15 +247,25 @@ function Feed({ channel, where, search }: { channel: Channel; where: Where; sear
     if (stuck.current) setFresh(0)
     const below = box.scrollHeight - box.scrollTop - box.clientHeight
     setFar(!following || below > box.clientHeight * 1.5)
+    const at = (i: number) => content.current?.querySelector(`[data-seq="${list[i]?.seq}"]`)?.getBoundingClientRect().top
+    const top = box.getBoundingClientRect().top
+    const cutBelow = (to: number) => to >= end || (at(to) ?? 0) - top > box.clientHeight * 2
+    const cutAbove = (from: number) => from <= start || (at(from) ?? Infinity) - (content.current?.getBoundingClientRect().top ?? top) < below - box.clientHeight
     if (start > 0 && box.scrollTop < box.clientHeight * 3) {
       const from = Math.max(0, start - MORE)
-      const next = spanOf(list, from, Math.min(end, from + CAP))
+      const to = Math.min(end, from + CAP)
+      const next = spanOf(list, from, cutBelow(to) ? to : end)
       startTransition(() => setSpan(next))
     } else if (!following && below < box.clientHeight * 3) {
       const to = Math.min(list.length, end + MORE)
-      const next = spanOf(list, Math.max(start, to - CAP), to)
+      const from = Math.max(start, to - CAP)
+      const next = spanOf(list, cutAbove(from) ? from : start, to)
       startTransition(() => setSpan(next))
     } else if (stuck.current && end - start > TAIL * 2) setSpan({ top: list[end - TAIL]?.seq ?? null, bottom: null })
+    else if (end - start > CAP) {
+      if (cutAbove(end - CAP)) startTransition(() => setSpan(spanOf(list, end - CAP, end)))
+      else if (cutBelow(start + CAP)) startTransition(() => setSpan(spanOf(list, start, start + CAP)))
+    }
   }
 
   const toLatest = () => {

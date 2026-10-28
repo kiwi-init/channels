@@ -260,6 +260,10 @@ const messages: Message[] = [
       "2. Inline the icon sprite (3 KB, @win says keep it)",
       "3. Check the Linux build after each step",
       "",
+      "* Measured on main, six runs each",
+      "  * p50 and p95 per chunk",
+      "* Same Bun on every runner",
+      "",
       "- [x] Mermaid behind the first diagram",
       "- [ ] Icons as one sprite",
       "",
@@ -372,6 +376,7 @@ const asks: Ask[] = [
     code: "731-845",
   },
   { kind: "review", id: "rev-14", at: m(12), from: "pixel", task: 14 },
+  { kind: "question", id: "q-2", from: "win", at: m(4), text: "Can I clear the CI cache on the Linux runners? It's 9 GB.", options: ["Yes", "Not yet"], holds: [], idle: true },
 ]
 
 export const DEMO_CHANNEL: Channel = {

@@ -238,7 +238,7 @@ describe("handing unread messages to a hook", () => {
     const cut = handOver([big, plain(1001, "next")], 3_000, mc);
     expect(cut.count).toBe(1);
     expect(cut.text.length).toBeLessThanOrEqual(3_000);
-    expect(cut.text).toContain(`(#1000 is cut here: ${mc} show 1000 has all of it)`);
+    expect(cut.text).toContain(`(#1000 is cut here: ${mc} show 1000 --raw has all of it)`);
     expect(cut.text).toContain("b".repeat(CLIP_MIN));
     expect(cut.text).toContain("… 1 more unread");
     for (const max of [CLIP_MIN, 400, 120, 1]) {

@@ -219,6 +219,15 @@ describe("ten verbs", () => {
     expect(shown).toContain("looks good");
   });
 
+  test("show --raw: the body exactly as sent, every line and a trailing newline kept (#1033)", async () => {
+    const file = join(owner, "raw-body.md");
+    writeFileSync(file, "first line\n\n  indented second\nlast line\n\n");
+    const withNewline = seqOf(await ok(owner, "send", "--to", "dev", "--file", file));
+    expect(await ok(agent, "show", withNewline, "--raw")).toBe("first line\n\n  indented second\nlast line\n");
+    const twoLines = seqOf(await ok(owner, "send", "--to", "dev", "two\nlines"));
+    expect(await ok(agent, "show", twoLines, "--raw")).toBe("two\nlines");
+  });
+
   test("note: set, get, list, clear", async () => {
     expect(await ok(agent, "note", "build.cmd", "bun", "test")).toContain("build.cmd = bun test");
     expect((await ok(owner, "note", "build.cmd")).trim()).toBe("bun test");
@@ -312,6 +321,17 @@ describe("review rounds through the CLI", () => {
     const unowned = taskNo(await ok(dev, "task", "add", "start with a note", "--ask", want));
     expect(await ok(dev, "task", "start", `T${unowned}`, "on it")).toContain(`T${unowned} doing @dev`);
     expect(JSON.parse(await ok(dev, "task", "show", `T${unowned}`, "--json")).notes.at(-1)).toMatchObject({ by: "dev", text: "on it" });
+  });
+
+  test("a review change the channel would refuse sends nothing and says why (#1032)", async () => {
+    const t = taskNo(await ok(dev, "task", "add", "keep the gate", "--review", "rev", "--ask", want));
+    await ok(dev, "task", "claim", `T${t}`);
+    const before = await ok(dev, "log", "--all", "-n", "5");
+    const moved = await run(dev, "task", "review", `T${t}`, "--review", "other");
+    expect(moved.code).not.toBe(0);
+    expect(moved.err).toContain(`only a person, the lead, rev, or the task owner when the reviewer is gone changes who reviews T${t}`);
+    expect(await ok(dev, "log", "--all", "-n", "5")).toBe(before);
+    expect(JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"))).toMatchObject({ review: "rev" });
   });
 
   test("review --review NAME hands the open round on with its commit, and tells both reviewers", async () => {

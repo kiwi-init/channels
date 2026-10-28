@@ -197,6 +197,16 @@ export default function Markdown({ markdown, onMention, onTask, onImage, onShown
     [onShown]
   )
 
+  useLayoutEffect(() => {
+    for (const a of box.current?.querySelectorAll<HTMLAnchorElement>('a[href^="kiwi-mention:"]') ?? []) {
+      try {
+        a.title = `@${decodeURIComponent((a.getAttribute("href") ?? "").slice("kiwi-mention:".length))}`
+      } catch {
+        // A mention link someone wrote by hand with a stray %: it keeps no hover text.
+      }
+    }
+  }, [ast])
+
   const press = useCallback(
     ({ url }: { url: string }) => {
       if (url.startsWith("kiwi-mention:")) return onMention(decodeURIComponent(url.slice("kiwi-mention:".length)))

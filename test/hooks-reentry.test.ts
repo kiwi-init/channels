@@ -142,7 +142,7 @@ test("big checkpoints and a backlog of messages stay inside Claude Code's inline
   const first = sent.filter((b) => told.includes(b));
   const cut = sent.filter((b) => !told.includes(b) && told.includes(b.slice(0, CLIP_MIN)));
   expect(cut.length).toBeLessThanOrEqual(1);
-  if (cut.length) expect(told).toMatch(/\(#(\d+) is cut here: .* show \1 has all of it\)/);
+  if (cut.length) expect(told).toMatch(/\(#(\d+) is cut here: .* show \1 --raw has all of it\)/);
   expect(first.length + cut.length).toBeLessThan(sent.length);
   const shown = (b: string, later: string) => told.includes(b) || cut.includes(b) || later.includes(b);
   let later = "";
