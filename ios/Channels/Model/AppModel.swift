@@ -20,7 +20,17 @@ enum Linking: Equatable {
     case idle
     case asking
     case digits(String)
+    case opening
+    case signingIn(url: String?, code: String)
+    case approve(String)
     case failed(String)
+
+    var signingIn: Bool {
+        switch self {
+        case .opening, .signingIn, .approve: true
+        default: false
+        }
+    }
 }
 
 struct Draft {
@@ -33,12 +43,17 @@ struct Draft {
 @MainActor
 @Observable
 final class AppModel {
+    static let defaultRelay = "https://channels.kiwiinit.com"
+    static let signInRelay = UserDefaults.standard.string(forKey: "relay")
+
     var phase: Phase = .starting
     var person: String = ""
     var relay: String = ""
     var rooms: [String: RoomView] = [:]
     var linking: Linking = .idle
     var relinkAsked = false
+    var enrolled = false
+    var joining = 0
 
     var relinking: Bool {
         phase == .ready && (relinkAsked || linking != .idle)
@@ -108,8 +123,7 @@ final class AppModel {
             phase = .unlinked
             return
         }
-        person = (object["person"] as? [String: Any])?["name"] as? String ?? ""
-        relay = object["relay"] as? String ?? ""
+        held(object)
         do {
             try await engine.ask(["op": "start", "saved": object])
             phase = .ready
@@ -118,10 +132,20 @@ final class AppModel {
         }
     }
 
+    private func held(_ saved: [String: Any]) {
+        let device = saved["device"] as? [String: Any]
+        let owner = saved["person"] as? [String: Any] ?? device?["person"] as? [String: Any]
+        person = owner?["name"] as? String ?? ""
+        relay = saved["relay"] as? String ?? relay
+        enrolled = device != nil
+        joining = (saved["seats"] as? [[String: Any]] ?? []).count { $0["requestId"] != nil && ($0["access"] == nil || $0["access"] is NSNull) }
+    }
+
     private func take(_ push: Push) {
         switch push {
         case .saved(let data):
             Vault.save(data)
+            if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] { held(object) }
         case .room(let room):
             if let before = rooms[room.code], before.connection == .live {
                 let known = Set(before.asks.map(\.seq))
@@ -163,10 +187,34 @@ final class AppModel {
         }
     }
 
+    func signIn() async {
+        linking = .opening
+        do {
+            var ask: [String: Any] = [
+                "op": "enrollBegin", "relay": Self.signInRelay ?? (relay.isEmpty ? Self.defaultRelay : relay), "label": UIDevice.current.name,
+                "os": "iOS \(UIDevice.current.systemVersion)",
+            ]
+            if let user = UserDefaults.standard.string(forKey: "devUser") { ask["user"] = user }
+            let started = try await engine.ask(ask, as: EnrollStart.self)
+            linking = .signingIn(url: started.url, code: started.code)
+            if let url = started.url.flatMap(URL.init(string:)) { await UIApplication.shared.open(url) }
+            let shown = try await engine.ask(["op": "enrollWait"], as: EnrollDigits.self)
+            linking = .approve(shown.digits)
+            let data = try await engine.ask(["op": "enrollFinish"])
+            Vault.save(data)
+            linking = .idle
+            rooms = [:]
+            await start(data)
+        } catch {
+            if linking != .idle { linking = .failed(error.localizedDescription) }
+        }
+    }
+
     func cancelLink() async {
+        let enrolling = linking.signingIn
         linking = .idle
         relinkAsked = false
-        try? await engine.ask(["op": "linkCancel"])
+        try? await engine.ask(["op": enrolling ? "enrollCancel" : "linkCancel"])
     }
 
     @discardableResult
@@ -232,6 +280,8 @@ final class AppModel {
         Vault.wipe()
         rooms = [:]
         person = ""
+        enrolled = false
+        joining = 0
         phase = .unlinked
         Task { try? await engine.ask(["op": "start", "saved": ["relay": relay, "person": NSNull(), "seats": []]]) }
     }
