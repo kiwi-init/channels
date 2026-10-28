@@ -26,7 +26,7 @@ import {
 } from "@kiwi/core/state.ts"
 import type { GithubPr } from "@kiwi/core/state/github.ts"
 import { permissionCode, permissionTitle } from "@/lib/permission-view"
-import { reviewsFor } from "@/lib/task-actions"
+import { reviewsFor, taskActions } from "@/lib/task-actions"
 import { roomOfMessage, roomSeenKey } from "@/lib/rooms"
 import { canonicalHarness, harnessName } from "@/lib/harness"
 import type { Online } from "@/lib/channel/online"
@@ -292,24 +292,34 @@ function reactionsOf(state: ChannelState, seq: number): Reaction[] {
 
 const STATUS: Record<CoreTask["state"], TaskStatus> = { todo: "todo", doing: "doing", review: "review", done: "done" }
 
-export function tasksOf(state: ChannelState, held: ReadonlySet<number>): Task[] {
+export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: string): Task[] {
   const waiting = tasksAwaitingPeople(state)
+  const you = state.members.get(me)
+  const person = !!you && isPerson(you)
   return [...state.tasks.values()].map((t): Task => {
     const linked = taskPr(state, t.id)
+    const can = taskActions(t, me, person)
+    const review = can.kind === "open" && can.review !== "none" ? can.review : undefined
     return {
       id: t.id,
       title: t.title,
       ...(t.detail ? { detail: t.detail } : {}),
       status: t.state !== "done" && (waiting.has(t.id) || held.has(t.id)) ? "waiting" : STATUS[t.state],
       ...(t.owner ? { owner: t.owner } : {}),
-      ...(t.review ? { reviewer: t.review === "*" ? "anyone" : t.review } : {}),
+      ...(t.review ? { reviewer: t.review } : {}),
       createdBy: t.createdBy,
       createdAt: t.createdAt,
       updatedAt: t.updatedAt,
       ...(linked ? { pr: prOf(state, linked.pr) } : {}),
       notes: t.notes.map((n) => ({ by: n.by, at: n.ts, text: n.text })),
-      rounds: t.rounds.map((r) => ({ n: r.n, by: r.by, at: r.result.kind === "open" || r.result.kind === "withdrawn" ? r.ts : r.result.ts, result: r.result.kind })),
+      rounds: t.rounds.map((r) =>
+        r.result.kind === "open" || r.result.kind === "withdrawn"
+          ? { n: r.n, by: r.by, at: r.ts, result: r.result.kind }
+          : { n: r.n, by: r.by, judge: r.result.by, at: r.result.ts, result: r.result.kind }
+      ),
       archived: !!t.archived,
+      ...(t.cancelled ? { cancelled: true } : {}),
+      ...(review ? { youReview: review } : {}),
     }
   })
 }
