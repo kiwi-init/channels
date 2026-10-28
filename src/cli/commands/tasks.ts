@@ -11,6 +11,8 @@ import { bindingFor } from "../../hooks.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, keepDaemon, offlineOk, out, session } from "../context.ts";
 import { firstLine, readText, taskArg, text } from "../input.ts";
+import { LOOP_ENV } from "../../hooks/loop-wait.ts";
+import { askFresh } from "../../loop/fresh.ts";
 
 const CLAIMS_GONE = "claims are gone: say what you're working on in the task, or post it";
 const ANCHORS = "--ask N (the person's message #N it answers), --from T… (the task it comes from) or --issue N (a GitHub issue)";
@@ -143,7 +145,9 @@ export const taskCommands: Record<string, Command> = {
         else if (sub === "checkpoint") {
           const where = opt.file !== undefined ? yield* readText(opt.file) : args.slice(3).join(" ") || opt.note || "";
           if (!where.trim()) return yield* die("usage: kiwi task checkpoint T7 --file note.md (where the work stands: branch, last commit, done, next, traps)");
+          if (opt.fresh && process.env[LOOP_ENV] !== "1") return yield* die("--fresh starts a new kiwi loop session from the checkpoint, and this session isn't one kiwi loop started");
           state = yield* s.taskUpdate(id, { note: where.trim(), checkpoint: true });
+          if (opt.fresh) askFresh(s.alias, s.me, id);
         } else if (sub === "proof") {
           const url = args[3] ?? (yield* die('usage: kiwi task proof T7 https://… [--label "preview"] [--note "…"]'));
           state = yield* s.taskUpdate(id, { proof: { url, ...(opt.label ? { label: opt.label } : {}) }, ...(opt.note ? { note: opt.note } : {}) });
@@ -152,7 +156,8 @@ export const taskCommands: Record<string, Command> = {
         if (kept) return out(`${taskId(id)}'s review moved to ${t.review === "*" ? "anyone who hasn't worked on it" : t.review}: ${keptAt}`);
         out(`${taskId(id)} ${taskStateWord(t)}${t.owner ? ` @${t.owner}` : ""}: ${inlineText(t.title, 200)}`);
         if ((sub === "done" || sub === "review") && t.areas?.length) out(`folders it changed (for kiwi task who): ${t.areas.join(", ")}`);
-        if (sub === "checkpoint") out(loadConfig().contextLine === "on" ? `checkpoint saved: a new session of yours starts ${taskId(id)} from it` : `checkpoint saved on ${taskId(id)}`);
+        if (sub === "checkpoint" && opt.fresh) out(`checkpoint saved: end your turn, and the loop starts a fresh session on ${taskId(id)} from it`);
+        else if (sub === "checkpoint") out(loadConfig().contextLine === "on" ? `checkpoint saved: a new session of yours starts ${taskId(id)} from it` : `checkpoint saved on ${taskId(id)}`);
       }),
     ),
 

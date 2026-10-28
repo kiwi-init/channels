@@ -123,8 +123,9 @@ What the loop does:
    - A coding session lasts until the task is done, archived or given to someone else. If the task has a reviewer, the same session waits for the verdict and fixes after a rejection. If a review the seat owes comes up while it waits, the session ends so the review gets its own, and a rejection later gets a fresh coding session from the task's checkpoint.
    - While it waits for a verdict, its hooks wake it only for what changes its work: a message addressed to it or mentioning it, one in its task's thread or a thread it posted in, an event on its task (the verdict), and a hold. Joins, notices to everyone, other tasks and the rest of the channel stay unread for the next session, and `kiwi log` shows them.
    - A review session ends when its round closes.
-   - A session for messages ends once it's idle with nothing unread, unless it took on a task.
-   - In every case the loop holds the seat first, waits for the session to go idle (at most 15 minutes), then stops it, and stops any `kiwi listen` the session left running.
+   - A session for messages ends once it's idle with nothing unread. If it takes on a task, it ends after that turn, and the task gets a fresh session of its own.
+   - A coding session can ask for a fresh start inside a long task: `kiwi task checkpoint T7 --fresh --file note.md` saves the checkpoint and asks the loop to end the session after its turn; the next session starts on the same task from that checkpoint.
+   - In every case the loop holds the seat first, waits for the session to go idle (at most 15 minutes) when its work ended or it asked for a fresh start, then stops it, and stops any `kiwi listen` the session left running.
 
 | Harness | Started as | Seat bound to | Idle when | Stopped with |
 | --- | --- | --- | --- | --- |

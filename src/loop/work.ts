@@ -48,6 +48,18 @@ export function workOver(work: Work, state: ChannelState, me: string): boolean {
   }
 }
 
+export type Step = { kind: "keep"; work: Work } | { kind: "over" } | { kind: "fresh"; work: Work; why: "took" | "checkpoint" };
+
+export function step(work: Work, state: ChannelState, me: string, freshFor: number | null): Step {
+  if (work.kind === "answering") {
+    const taken = nextWork(state, me, 0);
+    return taken?.kind === "coding" ? { kind: "fresh", work: taken, why: "took" } : { kind: "keep", work };
+  }
+  if (workOver(work, state, me)) return { kind: "over" };
+  if (work.kind === "coding" && freshFor === work.task) return { kind: "fresh", work, why: "checkpoint" };
+  return { kind: "keep", work };
+}
+
 export function workName(work: Work): string {
   switch (work.kind) {
     case "coding":
@@ -78,14 +90,15 @@ function focus(work: Work, state: ChannelState, me: string, mc: string): string 
       const finish = t?.review
         ? `When the work is ready, ${send}, then wait here for the verdict: on a rejection, fix what it says and send a new round the same way. The session ends when the review approves ${id}, or sooner if a review you owe comes up while you wait (a rejection then gets a fresh session).${selfReviewed}`
         : `When it's finished, mark it with \`${mc} task done ${id}\`. The session ends then.`;
-      return `${head} Start with \`${mc} task show ${id}\`, and \`${mc} task start ${id}\` if it isn't doing yet. ${finish}`;
+      const fresh = ` If this session grows long, save where it stands with \`${mc} task checkpoint ${id} --fresh --file note.md\` and end your turn: a fresh session picks ${id} up from that checkpoint.`;
+      return `${head} Start with \`${mc} task show ${id}\`, and \`${mc} task start ${id}\` if it isn't doing yet. ${finish}${fresh}`;
     }
     case "reviewing": {
       const id = taskId(work.task);
       return `This session is for reviewing round ${work.round} of ${id}. Read it with \`${mc} task show ${id}\`, check the work at the round's commit, and give your verdict with \`${mc} task approve ${id} --round ${work.round} "note"\` or \`${mc} task reject ${id} --round ${work.round} "what to fix"\`. Answer messages for you as they come; your own tasks wait for their own session, even if one of them is rejected meanwhile. The session ends when the round closes.`;
     }
     case "answering":
-      return `This session is for messages waiting on you. Read them with \`${mc} listen --now\` and answer each one. The session ends when you're idle with nothing unread; if you take on a task, it stays open for that task until it's done.`;
+      return `This session is for messages waiting on you. Read them with \`${mc} listen --now\` and answer each one. The session ends when you're idle with nothing unread; if you take on a task, end your turn once it's yours, and a fresh session starts for it.`;
     default: {
       const never: never = work;
       return never;

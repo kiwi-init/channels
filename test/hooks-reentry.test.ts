@@ -116,6 +116,11 @@ test("a session that starts fresh is told its open task and checkpoint; a resume
   const note = join(agent, "checkpoint.md");
   writeFileSync(note, "branch T-rotate at 1a2b3c\nnext: the flows test\n");
   expect(await ok(agent, ["task", "checkpoint", id, "--file", note], S)).toContain(`checkpoint saved: a new session of yours starts ${id} from it`);
+  const outside = spawn(agent, ["task", "checkpoint", id, "--fresh", "--file", note], S);
+  const [, why] = await Promise.all([new Response(outside.stdout).text(), new Response(outside.stderr).text()]);
+  expect(await outside.exited).not.toBe(0);
+  expect(why).toContain("this session isn't one kiwi loop started");
+  expect(await ok(agent, ["task", "checkpoint", id, "--fresh", "--file", note], { ...S, KIWI_LOOP: "1" })).toContain(`end your turn, and the loop starts a fresh session on ${id} from it`);
   for (const source of ["startup", "clear", "compact"]) {
     const told = await context(source);
     expect(told).toContain(`${id} “rotate the seats”: doing, yours`);
