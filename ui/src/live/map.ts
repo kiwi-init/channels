@@ -8,6 +8,7 @@ import { FAILED, prLinks, taskPr } from "@kiwi/core/prs.ts"
 import { GENERAL_ROOM, ignored, isQuiet, isReaction, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { canPost } from "@kiwi/core/scopes.ts"
 import {
+  answersAsk,
   answersDecisions,
   colorOf,
   heldBy,
@@ -382,7 +383,7 @@ export function asksOf(
     if (!isQuestion(m)) continue
     const toMe = !m.to?.length || m.to.includes(me) || m.to.includes("*") || (decides && !!m.esc)
     if (!toMe) continue
-    const answer = (replies.get(m.seq) ?? []).find((r) => r.from !== m.from && r.kind !== "event")
+    const answer = (replies.get(m.seq) ?? []).find((r) => r.kind !== "event" && answersAsk(state.members, m, r.from))
     const isOpen = open.has(m.seq)
     const idle = !isOpen && !answer && pending.has(m.seq)
     if (!isOpen && !answer && !idle) continue

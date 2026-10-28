@@ -2,7 +2,7 @@ import { EVENT_OPS_VERSION, GENERAL_ROOM, ignored, isOldGifKey, isReaction, MAX_
 import { inlineText } from "../membership.ts";
 import { refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
-import { allowedOnHold, answersDecisions, isLeadRole, isPerson, LEAD, ON_HOLD } from "./people.ts";
+import { allowedOnHold, answersAsk, isLeadRole, isPerson, LEAD, ON_HOLD } from "./people.ts";
 import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
 import { askHeadOf, fileTask } from "./asks.ts";
@@ -453,8 +453,7 @@ export function fold(
     if (m.permission)
       return !(settledBy.get(m.seq)?.has(m.from) || now > m.permission.expiresAt || (permReplies.get(m.seq) ?? []).some((r) => permissionAnswer(m, r, { trust, members, bySeq: permBySeq }) !== null));
     const by = answered.get(m.seq);
-    const answers = (n: string) => (m.esc ? !!m.to?.includes(n) || (!m.handoff && answersDecisions(members, n)) : n !== m.from);
-    return !by || ![...by].some(answers);
+    return !by || ![...by].some((n) => answersAsk(members, m, n));
   });
 
   const cut = head - KEEP_SEQS;

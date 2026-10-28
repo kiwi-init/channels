@@ -61,10 +61,15 @@ const STARTS: AgentStarts = {
 function withStep(c: Channel): Channel {
   const at = Date.now() - 30_000
   const text = "Remove commit signing from ~/.gitconfig-personal"
+  const free = "Is the old relay at relay-eu still needed, or can I switch it off?"
   const seq = Math.max(...c.messages.map((m) => m.seq)) + 1
   return {
     ...c,
-    messages: [...c.messages, { seq, from: "win", at, text, where: { kind: "room", room: "general" }, ask: "step-1", mentionsYou: true }],
+    messages: [
+      ...c.messages,
+      { seq, from: "win", at, text, where: { kind: "room", room: "general" }, ask: "step-1", mentionsYou: true },
+      { seq: seq + 1, from: "atlas", at, text: free, where: { kind: "room", room: "general" }, ask: "q-free", mentionsYou: true },
+    ],
     asks: [
       ...c.asks,
       {
@@ -82,6 +87,7 @@ function withStep(c: Channel): Channel {
           expect: "git config --file ~/.gitconfig-personal commit.gpgsign prints nothing.",
         },
       },
+      { kind: "question", id: "q-free", from: "atlas", at, text: free, options: [], holds: [11] },
     ],
   }
 }

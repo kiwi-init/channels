@@ -94,15 +94,28 @@ export function PermissionCard({ channel, ask }: { channel: Channel; ask: Permis
 
 export function QuestionCard({ channel, ask }: { channel: Channel; ask: QuestionAsk }) {
   const { actions } = useAct()
-  const [other, setOther] = useState<string | null>(null)
-  if (ask.answer)
+  const free = !ask.step && ask.options.length === 0
+  const [other, setOther] = useState<string | null>(free ? "" : null)
+  const asker = nickname(channel, ask.from)
+  if (ask.answer) {
+    const who = ask.answer.by === channel.you ? "You" : nickname(channel, ask.answer.by)
+    if (ask.options.includes(ask.answer.text))
+      return (
+        <div className="ask">
+          <p className="ask-state">
+            {who} chose “{ask.answer.text}” · {clock(ask.answer.at)}
+          </p>
+        </div>
+      )
     return (
       <div className="ask">
         <p className="ask-state">
-          {ask.answer.by === channel.you ? "You" : nickname(channel, ask.answer.by)} {ask.step ? "answered" : "chose"} “{ask.answer.text}” · {clock(ask.answer.at)}
+          {who} {ask.step ? "answered" : "replied"} · {clock(ask.answer.at)}
         </p>
+        <p className="ask-reply">{ask.answer.text}</p>
       </div>
     )
+  }
   return (
     <div className="ask is-open">
       {ask.step && <StepHow step={ask.step} />}
@@ -125,16 +138,30 @@ export function QuestionCard({ channel, ask }: { channel: Channel; ask: Question
         </button>
       ) : (
         <form
-          className="ask-other"
+          className="ask-reply-form"
           onSubmit={(e) => {
             e.preventDefault()
             if (other.trim()) actions.answerQuestion(channel.code, ask.id, other.trim())
           }}
         >
-          <input autoFocus className="input" value={other} onChange={(e) => setOther(e.target.value)} placeholder="Your answer" onKeyDown={(e) => e.key === "Escape" && setOther(null)} />
-          <button type="submit" className="btn is-primary is-small" disabled={!other.trim()}>
-            Answer
-          </button>
+          <label className="ask-reply-label" htmlFor={`reply-${ask.id}`}>
+            Reply to {asker}
+            <span className="ask-reply-hint"> · answers this card, in its thread</span>
+          </label>
+          <div className="ask-other">
+            <input
+              id={`reply-${ask.id}`}
+              autoFocus={!free}
+              className="input"
+              value={other}
+              onChange={(e) => setOther(e.target.value)}
+              placeholder={`Your reply to ${asker}`}
+              onKeyDown={(e) => e.key === "Escape" && !free && setOther(null)}
+            />
+            <button type="submit" className="btn is-primary is-small" disabled={!other.trim()}>
+              Reply
+            </button>
+          </div>
         </form>
       )}
     </div>

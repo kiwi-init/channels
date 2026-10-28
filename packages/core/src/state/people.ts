@@ -14,6 +14,10 @@ export function answersDecisions(members: ReadonlyMap<string, Pick<Member, "acti
   return !!m?.active && !!m.answersDecisions;
 }
 
+export function answersAsk(members: ReadonlyMap<string, Pick<Member, "active" | "answersDecisions">>, m: Pick<Message, "from" | "esc" | "to" | "handoff">, name: string): boolean {
+  return m.esc ? !!m.to?.includes(name) || (!m.handoff && answersDecisions(members, name)) : name !== m.from;
+}
+
 export function decidersOf(state: Pick<ChannelState, "members">, m: Pick<Message, "esc" | "to" | "handoff" | "permission">): string[] {
   if (!m.esc || m.handoff || m.permission) return [];
   return [...state.members.values()].filter((x) => answersDecisions(state.members, x.name) && !m.to?.includes(x.name)).map((x) => x.name);
