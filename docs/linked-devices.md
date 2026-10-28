@@ -173,10 +173,11 @@ owner-signed **delegation** lets the `kiwi` daemon admit its own computer's agen
 - Forget adds a revoke link to your device list. It is kept on the relay's account record and posted
   into every channel you're in, as a new op that older clients fold to nothing (since 54313c33,
   2026-10-21).
-- **No window.** The relay already gates connections by key, so it refuses a revoked device's key as
-  soon as it sees a valid revoke link. It doesn't wait for every owner's app to come online and
-  rotate.
-- Owners then remove that device's member key and rotate.
+- **The relay stays blind** (Jow, #1011). As soon as it sees a valid revoke link, it refuses the
+  revoked key on every account route and closes that computer's inbox. It never learns which member
+  keys belong to which device, so it can't cut those keys from a channel.
+- **Owners cut the channel access.** Their apps remove that device's member keys and rotate. Until an
+  owner's app comes online, the revoked device can still read that channel.
 - **Revoking a computer also removes its agents:** the members whose `from.pk` is that machine.
 - **Revoking an older device** (enrolled before the signer) shows a notice on every one of your
   devices. A thief holding a newer device can't quietly revoke the rest.
