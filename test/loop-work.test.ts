@@ -139,6 +139,61 @@ describe("the work a loop starts a session for", () => {
     expect(waitingText({ kind: "reviewing", task: 7, round: 2 }, { kind: "reviewing", task: 3, round: 1 }, 45)).toContain("give round 1's verdict");
   });
 
+  test("a task marked first goes before the seat's older tasks, the one it's doing included, until it's handed on", async () => {
+    const older = await ev("jon", { op: "task.add", title: "Older", owner: "ana" });
+    const started = await ev("ana", { op: "task.update", task: older.seq, state: "doing" });
+    const urgent = await ev("jon", { op: "task.add", title: "Urgent" });
+    const assigned = await ev("jon", { op: "task.update", task: urgent.seq, owner: "ana", note: "this one first" });
+    const marked = await ev("jon", { op: "task.first", task: urgent.seq });
+    expect(nextWork(fold([older, started, urgent, assigned], roster), "ana", 0)).toEqual({ kind: "coding", task: older.seq });
+    expect(nextWork(fold([older, started, urgent, assigned, marked], roster), "ana", 0)).toEqual({ kind: "coding", task: urgent.seq });
+    const noted = await ev("jon", { op: "task.update", task: urgent.seq, owner: "ana", note: "still ana's" });
+    expect(nextWork(fold([older, started, urgent, assigned, marked, noted], roster), "ana", 0)).toEqual({ kind: "coding", task: urgent.seq });
+    const later = await ev("ana", { op: "task.first", task: older.seq });
+    expect(nextWork(fold([older, started, urgent, assigned, marked, later], roster), "ana", 0)).toEqual({ kind: "coding", task: older.seq });
+    const away = await ev("jon", { op: "task.update", task: urgent.seq, owner: "bo" });
+    const back = await ev("jon", { op: "task.update", task: urgent.seq, owner: "ana" });
+    const s = fold([older, started, urgent, assigned, marked, away, back], roster);
+    expect(s.tasks.get(urgent.seq)?.first).toBeUndefined();
+    expect(nextWork(s, "ana", 0)).toEqual({ kind: "coding", task: older.seq });
+  });
+
+  test("only an owned, open task is put first, by anyone who may hand it on", async () => {
+    const loose = await ev("jon", { op: "task.add", title: "Loose" });
+    const unowned = await ev("jon", { op: "task.first", task: loose.seq });
+    const anas = await ev("jon", { op: "task.add", title: "Ana's", owner: "ana" });
+    const byBo = await ev("bo", { op: "task.first", task: anas.seq });
+    const finished = await ev("jon", { op: "task.add", title: "Finished", owner: "ana" });
+    const closed = await ev("ana", { op: "task.update", task: finished.seq, state: "done" });
+    const late = await ev("jon", { op: "task.first", task: finished.seq });
+    const s = fold([loose, unowned, anas, byBo, finished, closed, late], roster);
+    expect(s.rejected.get(unowned.seq)).toContain("has no owner");
+    expect(s.rejected.has(byBo.seq)).toBe(false);
+    expect(s.rejected.get(late.seq)).toContain("already done");
+    expect(s.tasks.get(anas.seq)?.first).toBe(byBo.seq);
+    const reopened = await ev("ana", { op: "task.update", task: finished.seq, state: "doing" });
+    const own = await ev("ana", { op: "task.first", task: finished.seq });
+    expect(fold([loose, anas, finished, closed, reopened, own], roster).tasks.get(finished.seq)?.first).toBe(own.seq);
+    const marked = await ev("jon", { op: "task.first", task: anas.seq });
+    const done = await ev("ana", { op: "task.update", task: anas.seq, state: "done" });
+    const again = await ev("ana", { op: "task.update", task: anas.seq, state: "doing" });
+    expect(nextWork(fold([anas, marked, done], roster), "ana", 0)).toBeNull();
+    expect(nextWork(fold([finished, closed, anas, marked, done, again], roster), "ana", 0)).toEqual({ kind: "coding", task: anas.seq });
+  });
+
+  test("a task marked first waits while its own round is with the reviewer, and its session yields to a round the seat owes", async () => {
+    const older = await ev("jon", { op: "task.add", title: "Older", owner: "ana" });
+    const urgent = await ev("jon", { op: "task.add", title: "Urgent", owner: "ana", review: "bo" });
+    const marked = await ev("jon", { op: "task.first", task: urgent.seq });
+    const round = await ev("ana", { op: "task.update", task: urgent.seq, state: "review", at: "ddd4444" });
+    expect(nextWork(fold([older, urgent, marked, round], roster), "ana", 0)).toEqual({ kind: "coding", task: older.seq });
+    const theirs = await ev("jon", { op: "task.add", title: "Bo's", owner: "bo", review: "ana" });
+    const owed = await ev("bo", { op: "task.update", task: theirs.seq, state: "review", at: "fff6666" });
+    const s = fold([urgent, marked, round, theirs, owed], roster);
+    expect(workOver({ kind: "coding", task: urgent.seq }, s, "ana")).toBe(true);
+    expect(nextWork(s, "ana", 0)).toEqual({ kind: "reviewing", task: theirs.seq, round: 1 });
+  });
+
   test("with nothing else to do, the seat's task waiting on its verdict keeps a session", async () => {
     const t = await ev("jon", { op: "task.add", title: "Waiting", owner: "ana", review: "bo" });
     const round = await ev("ana", { op: "task.update", task: t.seq, state: "review", at: "ddd4444" });

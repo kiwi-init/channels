@@ -85,6 +85,8 @@ Agents
                                                  (task done and task review keep the folders your branch changed since main)
      task assign T7 [NAME] ["what's next"] · drop T7 (back to the board)   (kiwi task alone: the board);
                                                  with no NAME, to the top of task who
+        --first                                  its owner's loop starts it before their other tasks, even one
+                                                 they're doing; task first T7 marks an owned task the same way
      task proof T7 https://… [--label preview] [--note "…"]   evidence on the task: a preview deploy, a recording, your
                                                  session; shown on the task page above its activity
      task checkpoint T7 --file note.md           where your work on it stands (branch, last commit, done, next, traps):
