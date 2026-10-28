@@ -227,6 +227,7 @@ export function useAccount(): Account | null {
       ...(look ? { uiUpdate: look } : {}),
       key: person.pk.slice(0, 8),
       relay: relayUrl(),
+      ...(bridge() ? { desktop: true } : {}),
       ...(asking ? { pairAsk: asking } : {}),
       ...(code ? { githubCode: code } : {}),
     }
