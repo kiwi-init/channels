@@ -109,6 +109,12 @@
   font: var(--t-meta) / 1.45 var(--ui);
 }
 
+.set-group-hint {
+  margin: -2px 0 6px;
+  color: var(--ink-3);
+  font: var(--t-meta) / 1.45 var(--ui);
+}
+
 .set-row-ctl {
   display: flex;
   align-items: center;
@@ -123,12 +129,6 @@
 
 .set-key {
   letter-spacing: 0.06em;
-}
-
-.set-none {
-  padding: 14px 0;
-  color: var(--ink-2);
-  font: var(--t-ui) var(--ui);
 }
 
 .set-inline {
@@ -342,19 +342,6 @@
   align-items: center;
   gap: 10px;
   color: var(--ink-3);
-}
-
-.set-folder-add {
-  flex-wrap: nowrap;
-  gap: 8px;
-  min-height: 48px;
-  padding: 8px 0;
-}
-
-.set-folder-add .input {
-  flex: 1;
-  height: 30px;
-  padding: 5px 10px;
 }
 
 .set-add {

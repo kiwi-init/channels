@@ -1,11 +1,11 @@
 import { useEffect } from "react"
 
 import type { Message } from "@kiwi/core/protocol.ts"
+import { marks, snippet } from "@kiwi/core/search-rank.ts"
 import { taskId, type ChannelState, type Task } from "@kiwi/core/state.ts"
 
 import { formatShort } from "@/lib/format"
 import { roomOfMessage } from "@/lib/rooms"
-import { marks, snippet } from "@/lib/search-rank"
 import { labelOf } from "@/lib/task-labels"
 import { cx } from "@/lib/utils"
 
