@@ -63,8 +63,9 @@ export function navigate(nav: Nav, go: Go): Nav {
   }
 }
 
-export const sameWhere = (a: Where, b: Where): boolean =>
-  a.kind === b.kind && (a.kind === "room" ? a.room === (b as { room: string }).room : a.kind === "dm" ? a.with === (b as { with: string }).with : a.task === (b as { task: number }).task)
+export const whereKey = (w: Where): string => (w.kind === "room" ? `r:${w.room}` : w.kind === "dm" ? `d:${w.with}` : w.kind === "theirs" ? `p:${w.between.join("&")}` : `t:${w.task}`)
+
+export const sameWhere = (a: Where, b: Where): boolean => whereKey(a) === whereKey(b)
 
 export interface Ctx {
   app: App

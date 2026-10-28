@@ -9,8 +9,8 @@ import { paintHits } from "~/chat/search-paint"
 import { Loading } from "~/kit/bits"
 import { day, sameDay } from "~/kit/time"
 import type { Channel, Message, Where } from "~/model"
-import { sameWhere, useApp } from "~/nav"
-import { nickname, shown } from "~/names"
+import { sameWhere, useApp, whereKey } from "~/nav"
+import { between, nickname, shown } from "~/names"
 
 const GROUP_MS = 5 * 60_000
 const NEAR_BOTTOM = 48
@@ -55,8 +55,6 @@ export function quoteOf(list: Message[], i: number, bySeq: ReadonlyMap<number, M
   if (target === undefined || list[i - 1]?.seq === target) return undefined
   return bySeq.get(target)
 }
-
-const whereKey = (w: Where): string => (w.kind === "room" ? `r:${w.room}` : w.kind === "dm" ? `d:${w.with}` : `t:${w.task}`)
 
 interface Anchor {
   el: Element
@@ -153,7 +151,14 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
   const key = `${channel.code}:${whereKey(where)}`
   const [reply, setReply] = useState<{ key: string; to: Message } | null>(null)
   const replying = useMemo((): Replying => ({ to: reply?.key === key ? reply.to : null, set: (to) => setReply(to ? { key, to } : null) }), [reply, key])
-  const placeName = where.kind === "room" ? `#${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}` : where.kind === "dm" ? nickname(channel, where.with) : `T${where.task}`
+  const placeName =
+    where.kind === "room"
+      ? `#${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}`
+      : where.kind === "dm"
+        ? nickname(channel, where.with)
+        : where.kind === "theirs"
+          ? between(channel, where.between)
+          : `T${where.task}`
 
   return (
     <ReplyContext.Provider value={replying}>
@@ -163,7 +168,11 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
         </p>
       )}
       <Feed key={key} channel={channel} where={where} jump={jump && sameWhere(jump.m.where, where) ? jump : null} />
-      <Composer channel={channel} where={where} placeholder={where.kind === "dm" ? `Message ${placeName} privately` : `Message ${placeName}`} />
+      {where.kind === "theirs" ? (
+        <ReadOnly channel={channel} between={where.between} />
+      ) : (
+        <Composer channel={channel} where={where} placeholder={where.kind === "dm" ? `Message ${placeName} privately` : `Message ${placeName}`} />
+      )}
     </ReplyContext.Provider>
   )
 }
@@ -393,6 +402,14 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
   )
 }
 
+export function ReadOnly({ channel, between: names }: { channel: Channel; between: readonly [string, string] }) {
+  return (
+    <div className="compose">
+      <p className="compose-note">Only {between(channel, names)} write here. You read along.</p>
+    </div>
+  )
+}
+
 function Start({ channel, where }: { channel: Channel; where: Where }) {
   const agents = channel.people.filter((p) => p.kind === "agent").length
   return (
@@ -402,7 +419,9 @@ function Start({ channel, where }: { channel: Channel; where: Where }) {
           ? `This is the start of #${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}.`
           : where.kind === "dm"
             ? `Only you and ${nickname(channel, where.with)} read this.`
-            : "Nothing here yet."}
+            : where.kind === "theirs"
+              ? `This is the start of ${between(channel, where.between)}.`
+              : "Nothing here yet."}
       </p>
       <p className="dim">{agents === 0 ? "No agents here yet. Add one from the sidebar, then give it something to do." : "Say what you want done. The lead turns it into tasks."}</p>
     </div>

@@ -87,7 +87,7 @@ export interface Task {
   youReview?: "verdict" | "send-back"
 }
 
-export type Where = { kind: "room"; room: string } | { kind: "dm"; with: string } | { kind: "task"; task: number }
+export type Where = { kind: "room"; room: string } | { kind: "dm"; with: string } | { kind: "theirs"; between: readonly [string, string] } | { kind: "task"; task: number }
 
 export interface Room {
   id: string
@@ -102,6 +102,11 @@ export interface Direct {
   unread: number
   last: number
   seen?: number
+}
+
+export interface TheirDirect {
+  between: readonly [string, string]
+  last: number
 }
 
 export interface Upload {
@@ -258,6 +263,7 @@ export interface Channel {
   branchPrefix?: string
   rooms: Room[]
   directs: Direct[]
+  theirs: TheirDirect[]
   people: Person[]
   former?: Person[]
   nicknames: ReadonlyMap<string, string>

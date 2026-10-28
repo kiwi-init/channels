@@ -30,7 +30,7 @@ import { reviewsFor, taskActions } from "@/lib/task-actions"
 import { roomOfMessage, roomSeenKey } from "@/lib/rooms"
 import { canonicalHarness, harnessName } from "@/lib/harness"
 import type { Online } from "@/lib/channel/online"
-import type { Ask, Color, Direct, Harness, Image, JoinAsk, Message, Person, PullRequest, Reaction, Room, Task, TaskStatus, Upload, Where } from "~/model"
+import type { Ask, Color, Direct, Harness, Image, JoinAsk, Message, Person, PullRequest, Reaction, Room, Task, TaskStatus, TheirDirect, Upload, Where } from "~/model"
 
 type Seen = Readonly<Record<string, number>>
 
@@ -148,6 +148,16 @@ export function directsOf(state: ChannelState, messages: readonly Wire[], me: st
   return [...at].map(([name, last]) => ({ with: name, unread: unread.get(name) ?? 0, last, seen: marks.get(name) ?? 0 })).sort((a, b) => b.last - a.last)
 }
 
+export function theirsOf(state: ChannelState, messages: readonly Wire[], me: string): TheirDirect[] {
+  const at = new Map<string, { between: readonly [string, string]; last: number }>()
+  for (const m of messages) {
+    const place = state.placeOf.get(m.seq)
+    if (place?.kind !== "dm" || place.with.includes(me) || m.kind === "event" || ignored(state.trust.get(m.seq))) continue
+    at.set(placeKey(place), { between: place.with, last: m.ts })
+  }
+  return [...at.values()].sort((a, b) => b.last - a.last)
+}
+
 const LEADING_MENTION = (me: string) => new RegExp(`(^|[^\\p{L}\\p{N}_.-])@${me.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}_-])`, "u")
 
 function mentionsYou(m: Wire, me: string): boolean {
@@ -251,12 +261,13 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       continue
     }
     const place = state.placeOf.get(m.seq) ?? MAIN
-    if (place.kind === "dm" && !place.with.includes(me)) continue
     const where: Where =
       place.kind === "task"
         ? { kind: "task", task: place.task }
         : place.kind === "dm"
-          ? { kind: "dm", with: place.with[0] === me ? place.with[1] : place.with[0] }
+          ? place.with.includes(me)
+            ? { kind: "dm", with: place.with[0] === me ? place.with[1] : place.with[0] }
+            : { kind: "theirs", between: place.with }
           : { kind: "room", room: roomOfMessage(state, m) }
     const root = rootOf(m)
     const quoted = m.re?.[0]

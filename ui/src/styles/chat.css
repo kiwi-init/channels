@@ -1154,3 +1154,14 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+.compose-note {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--r-win);
+  background: var(--bg-2);
+  box-shadow: var(--shadow-pop);
+  color: var(--ink-2);
+  font: var(--t-ui) var(--ui);
+  text-align: center;
+}

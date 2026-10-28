@@ -446,6 +446,27 @@
   color: var(--ink-2);
 }
 
+.side-pair {
+  display: flex;
+  flex: none;
+  align-items: center;
+  width: 28px;
+  height: 24px;
+  margin-right: -4px;
+}
+
+.side-pair .av {
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  font-size: 8px;
+}
+
+.side-pair .av + .av {
+  margin-left: -4px;
+  box-shadow: -1.5px 0 0 var(--bg);
+}
+
 .side-label {
   flex: 1;
   min-width: 0;

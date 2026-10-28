@@ -342,6 +342,8 @@ const dm: Message[] = [
   { seq: 130, from: "atlas", at: m(30), text: "Heads up: maya's agent ridge has been offline since yesterday. Want me to take its task?", where: { kind: "dm", with: "atlas" } },
   { seq: 131, from: "jow", at: m(29), text: "yes, take it", where: { kind: "dm", with: "atlas" } },
   { seq: 132, from: "jow", at: m(28), text: "and tell maya", where: { kind: "dm", with: "atlas" }, failed: "the relay didn't answer" },
+  { seq: 133, from: "atlas", at: m(27), text: "Taking ridge's task. Can you review the installer changes after?", where: { kind: "theirs", between: ["atlas", "win"] } },
+  { seq: 134, from: "win", at: m(26), text: "Yes, send the PR when it's up.", where: { kind: "theirs", between: ["atlas", "win"] } },
 ]
 
 const taskThread: Message[] = [
@@ -462,6 +464,7 @@ export const DEMO_CHANNEL: Channel = {
     { with: "atlas", unread: 0, last: m(29) },
     { with: "maya", unread: 1, last: m(50) },
   ],
+  theirs: [{ between: ["atlas", "win"], last: m(26) }],
   people,
   facts: [
     { key: "release", value: "2026.10.8 is out; 2026.10.9 cuts Friday", by: "atlas", at: m(30) },
@@ -499,6 +502,7 @@ export const DEMO_EMPTY: Channel = {
   repos: [],
   rooms: [{ id: "general", name: "general", unread: 0, mentions: 0 }],
   directs: [],
+  theirs: [],
   people: [people[0] as Person],
   nicknames: nicknamesOf([people[0] as Person]),
   messages: [],

@@ -6,7 +6,7 @@ import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import { memberOf, type Channel, type Person } from "~/model"
 import { sameWhere, useApp } from "~/nav"
-import { nickname, shown } from "~/names"
+import { between, nickname, shown } from "~/names"
 
 export function Sidebar({ channel }: { channel: Channel }) {
   const { nav, go, app } = useApp()
@@ -15,6 +15,9 @@ export function Sidebar({ channel }: { channel: Channel }) {
   const humans = channel.people.filter((p) => p.kind === "human")
   const agents = channel.people.filter((p) => p.kind === "agent").sort((a, b) => rank(a) - rank(b))
   const onChat = nav.tab === "chat"
+  const [openTheirs, setOpenTheirs] = useState(false)
+  const onTheirs = onChat && nav.where.kind === "theirs"
+  const theirsShown = openTheirs || onTheirs
   return (
     <div className="side">
       <section aria-label="Rooms">
@@ -78,7 +81,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
         </ul>
       </section>
 
-      {channel.directs.length > 0 && (
+      {(channel.directs.length > 0 || channel.theirs.length > 0) && (
         <section aria-label="Direct messages">
           <Heading>Direct</Heading>
           <ul>
@@ -96,6 +99,30 @@ export function Sidebar({ channel }: { channel: Channel }) {
                 </li>
               )
             })}
+            {theirsShown &&
+              channel.theirs.map((t) => {
+                const where = { kind: "theirs", between: t.between } as const
+                const on = onChat && sameWhere(nav.where, where)
+                return (
+                  <li key={t.between.join("&")}>
+                    <button type="button" className={cx("side-row", on && "is-on")} aria-current={on ? "page" : undefined} onClick={() => go({ to: "where", where })}>
+                      <span className="side-pair">
+                        <Avatar person={memberOf(channel, t.between[0])} size="sm" />
+                        <Avatar person={memberOf(channel, t.between[1])} size="sm" />
+                      </span>
+                      <span className="side-label">{between(channel, t.between)}</span>
+                    </button>
+                  </li>
+                )
+              })}
+            {channel.theirs.length > 0 && !onTheirs && (
+              <li>
+                <button type="button" className="side-row is-add" aria-expanded={openTheirs} onClick={() => setOpenTheirs(!openTheirs)}>
+                  <Icon name={openTheirs ? "down" : "chevron"} size={14} />
+                  <span className="side-label">{openTheirs ? "Show less" : `${channel.theirs.length} more`}</span>
+                </button>
+              </li>
+            )}
           </ul>
         </section>
       )}
