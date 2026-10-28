@@ -3,6 +3,7 @@
   "ignoreBinaries": [
     "oxfmt",
     "gsettings",
+    "xdg-user-dir",
     "weston-screenshooter",
     "iconutil",
     "clang",

@@ -8,7 +8,7 @@ import pkg from "../desktop/package.json" with { type: "json" };
 import { stageUi, uiJson } from "../desktop/scripts/ui-stage.ts";
 import { PAGE_URL } from "../desktop/src/eb-page.ts";
 import { UI_MANIFEST_URL, UI_PREFIX, UI_RELEASE_TAG, UI_TRUSTED_KEYS } from "../desktop/src/ui-channel.ts";
-import { UI_CONTRACT, UI_DATA_SCHEMA } from "../desktop/src/ui-contract.ts";
+import { UI_DATA_SCHEMA, UI_REQUIRES } from "../desktop/src/ui-contract.ts";
 import { latestTag } from "../desktop/src/update-asset.ts";
 
 describe("the UI channel", () => {
@@ -39,7 +39,7 @@ describe("the UI channel", () => {
       fs.writeFileSync(path.join(dist, "_headers"), "/*\n  x: y");
       const out = path.join(tmp, "ui");
       const json = stageUi(dist, out, "0123456789abcdef0123456789abcdef01234567");
-      expect(json).toEqual({ uiVersion: `${pkg.version}-0123456789`, requiresContract: `^${UI_CONTRACT}`, dataSchema: UI_DATA_SCHEMA });
+      expect(json).toEqual({ uiVersion: `${pkg.version}-0123456789`, requiresContract: `^${UI_REQUIRES}`, dataSchema: UI_DATA_SCHEMA });
       expect(fs.readdirSync(out).sort()).toEqual(["assets", "index.html", "ui.json"]);
       expect(JSON.parse(fs.readFileSync(path.join(out, "ui.json"), "utf8"))).toEqual(json);
       expect(() => stageUi(dist, out, "0123456")).toThrow("already exists");

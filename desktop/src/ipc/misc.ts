@@ -4,6 +4,7 @@ import { externalUrl } from "../guard.ts";
 import type { Host } from "../host.ts";
 import { logMainError } from "../main-log.ts";
 import { openInBrowser } from "../open.ts";
+import { MAX_SAVE_BYTES, savedName } from "../save-file.ts";
 import { keysAtRest } from "../store.ts";
 import { checkForUpdate, updateState } from "../updater.ts";
 import { tintsOf } from "../wallpaper-tints.ts";
@@ -26,6 +27,7 @@ export function miscCalls(
   | "wallpaperTints"
   | "wallpaperBackdrop"
   | "windowControl"
+  | "saveFile"
   | "getAccentColor"
 > {
   return {
@@ -61,6 +63,10 @@ export function miscCalls(
     wallpaperTints: async (dark: boolean) => {
       const pixels = await host.wallpaper(dark === true);
       return pixels ? tintsOf(pixels) : [];
+    },
+    saveFile: (name: string, text: string) => {
+      if (typeof text !== "string" || Buffer.byteLength(text) > MAX_SAVE_BYTES) throw new Error("that file is too big to save");
+      return host.saveDownload(savedName(String(name)), text);
     },
     windowControl: (action: string) => {
       if (action !== "minimize" && action !== "maximize" && action !== "close") throw new Error("a window control is minimize, maximize or close");

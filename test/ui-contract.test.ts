@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { makeBridge } from "../desktop/src/calls.ts";
 import type { StoreSnapshot } from "../desktop/src/bridge.ts";
-import { UI_CONTRACT, UI_SURFACES } from "../desktop/src/ui-contract.ts";
+import { UI_CONTRACT, UI_REQUIRES, UI_SURFACES } from "../desktop/src/ui-contract.ts";
 
 const snapshot: StoreSnapshot = { relayUrl: "https://relay.example", person: null, channels: [], computers: [], phones: [], pending: [], personalities: [] };
 
@@ -35,6 +35,12 @@ describe("the UI contract", () => {
 
   test("UI_CONTRACT is the newest version listed", () => {
     expect(Object.keys(UI_SURFACES).sort(newer).at(-1)).toBe(UI_CONTRACT);
+  });
+
+  test("published UIs ask for a contract the app lists, no newer than its own and in the same major version", () => {
+    expect(UI_SURFACES[UI_REQUIRES]).toBeDefined();
+    expect(newer(UI_REQUIRES, UI_CONTRACT)).toBeLessThanOrEqual(0);
+    expect(semver(UI_REQUIRES)[0]).toBe(semver(UI_CONTRACT)[0]);
   });
 
   test("within a major version, every later surface keeps all the names of the earlier ones", () => {
