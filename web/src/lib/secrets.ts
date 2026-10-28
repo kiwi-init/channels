@@ -9,6 +9,7 @@ import type {
   ChannelIdentityView,
   ChannelView,
   ComputerView,
+  DeviceNewsView,
   GithubRepoView,
   KeysAtRest,
   KiwiBridge,
@@ -29,6 +30,7 @@ import { persistQueue } from "./persist-queue"
 export type {
   ChannelView,
   ComputerView,
+  DeviceNewsView,
   GithubRepoView,
   KeysAtRest,
   KiwiBridge,

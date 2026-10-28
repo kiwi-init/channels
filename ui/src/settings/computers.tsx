@@ -3,7 +3,7 @@ import { useEffect, useState } from "react"
 import { cx, IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
-import type { Computer, Device } from "~/model"
+import type { Account, Computer, Device } from "~/model"
 import { useApp } from "~/nav"
 import { Confirm } from "~/settings/controls"
 import { Page } from "~/settings/sections"
@@ -76,6 +76,25 @@ function expiry(until: number, now = Date.now()): string {
 
 const due = (until: number, now = Date.now()): boolean => until - now < RENEW_WITHIN
 
+const day = (at: number): string => new Date(at).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+
+function DeviceNotices({ account }: { account: Account }) {
+  return (
+    <>
+      {account.forgotHere && (
+        <p className="set-fine set-warning" role="note">
+          {account.forgotHere.by} forgot this app. It keeps your person key and its channels, but it can't approve or change your devices any more.
+        </p>
+      )}
+      {account.forgotten?.map((f) => (
+        <p key={`${f.label}:${f.at}`} className="set-fine set-warning" role="note">
+          {f.by} forgot {f.label} on {day(f.at)}, and you had {f.label} longer. If that wasn't you, forget {f.by}.
+        </p>
+      ))}
+    </>
+  )
+}
+
 function SignedDevices({ devices }: { devices: Device[] }) {
   const { app } = useApp()
   const [forget, setForget] = useState<Device | null>(null)
@@ -85,6 +104,7 @@ function SignedDevices({ devices }: { devices: Device[] }) {
         <h3>Signed in as you</h3>
       </div>
       <p className="set-group-hint">Each one has its own key. Forget one and it can't sign in as you again.</p>
+      {app.account && <DeviceNotices account={app.account} />}
       <ul className="set-devices">
         {devices.map((d) => (
           <li key={d.id} className="set-device">
@@ -119,7 +139,7 @@ function SignedDevices({ devices }: { devices: Device[] }) {
       <Confirm
         open={!!forget}
         title={`Forget ${forget?.label ?? ""}?`}
-        sub="It can't sign in as you again. Its channel memberships stay until the channels' owners remove them."
+        sub="It can't sign in as you again. Channels you own drop it now; other channels drop it when their owner's app is next open."
         action="Forget"
         onClose={() => setForget(null)}
         onConfirm={() => {
@@ -154,6 +174,7 @@ export function ComputersSection() {
 
   return (
     <Page title="Computers and phones" lede="Everywhere you are signed in. Agents run on computers; phones read and answer.">
+      {!account.devices?.length && account.forgotHere && <DeviceNotices account={account} />}
       {account.devices && account.devices.length > 0 && (
         <>
           <SignedDevices devices={account.devices} />

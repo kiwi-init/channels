@@ -3,9 +3,10 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react"
 import { handleFor } from "@kiwi/core/membership.ts"
 import { useUnsealedKeys } from "@/lib/keys-at-rest"
 import { relayUrl } from "@/lib/relay"
-import { bridge, useSecrets, type ComputerView, type PhoneView } from "@/lib/secrets"
+import { bridge, useSecrets, type ComputerView, type DeviceNewsView, type PhoneView } from "@/lib/secrets"
 import { useUpdate } from "@/lib/update"
 import { announce } from "~/kit/toasts"
+import { deviceNews, postDevicesNow } from "~/live/devices"
 import { store, type Listener } from "~/live/value"
 import type { Account, Computer, Device, EnrollAsk, Enrolling } from "~/model"
 import { version } from "../../../package.json"
@@ -147,11 +148,18 @@ const devices = (() => {
   }
 })()
 
+function deviceNotices(news: DeviceNewsView | null): Pick<Account, "forgotten" | "forgotHere"> {
+  if (!news) return {}
+  const older = news.revokes.filter((r) => r.older).map((r) => ({ label: r.label, by: r.by, at: r.at }))
+  return { ...(older.length ? { forgotten: older } : {}), ...(news.removed && !news.removed.wiped ? { forgotHere: { by: news.removed.by } } : {}) }
+}
+
 export async function forgetDevice(id: string): Promise<void> {
   const b = bridge()
   if (!b?.forgetDevice) throw new Error("forgetting a device needs the next Channels update")
   await b.forgetDevice(id)
   await devices.load()
+  postDevicesNow()
 }
 
 export async function renewDevice(id: string): Promise<void> {
@@ -159,6 +167,7 @@ export async function renewDevice(id: string): Promise<void> {
   if (!b?.renewDevice) throw new Error("renewing a device needs the next Channels update")
   await b.renewDevice(id)
   await devices.load()
+  postDevicesNow()
 }
 
 const enrolling = () => {
@@ -387,6 +396,7 @@ export function useAccount(): Account | null {
   const look = useSyncExternalStore(uiUpdate.subscribe, uiUpdate.get)
   const enroll = useSyncExternalStore(enrollAsk.subscribe, enrollAsk.get)
   const signed = useSyncExternalStore(devices.subscribe, devices.get)
+  const news = useSyncExternalStore(deviceNews.subscribe, deviceNews.get)
   const unsealed = useUnsealedKeys()
   useEffect(() => {
     if (person) void refreshGithub().catch(() => {})
@@ -408,7 +418,8 @@ export function useAccount(): Account | null {
       ...(asking ? { pairAsk: asking } : {}),
       ...(enroll ? { enrollAsk: enroll } : {}),
       ...(signed ? { devices: signed } : {}),
+      ...deviceNotices(news),
       ...(code ? { githubCode: code } : {}),
     }
-  }, [person, linked, computers, phones, online, agents, update, asking, code, look, unsealed, enroll, signed])
+  }, [person, linked, computers, phones, online, agents, update, asking, code, look, unsealed, enroll, signed, news])
 }

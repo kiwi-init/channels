@@ -311,6 +311,8 @@ export interface Account {
   pairAsk?: { kind: "computer" | "phone"; label: string; os?: string; digits?: string }
   enrollAsk?: EnrollAsk
   devices?: Device[]
+  forgotten?: { label: string; by: string; at: number }[]
+  forgotHere?: { by: string }
   githubCode?: { code: string; url: string }
 }
 

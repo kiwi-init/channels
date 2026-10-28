@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
-import { certUntil, claimDevice, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
+import { certUntil, claimDevice, newestLists, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { joinPerson, setupChannel, type OwnerSetup } from "./owner.ts";
@@ -179,6 +179,26 @@ describe("a revoked device is cut out, and the newest list decides (T641)", () =
     await s.ownerCh.autoApprove(s.person.pk, [], null, lists);
     await Channel.joinStatus(relay, s.code, lapsed.id, lapsed.requestId);
     expect((await s.ownerCh.autoApprove(s.person.pk, [], null, lists)).map((m) => m.name)).toEqual(["owner-2"]);
+    await s.ownerCh.close();
+  });
+});
+
+describe("a member's list posted into the channel cuts their forgotten phone (T1006)", () => {
+  test("bob's desktop posts the revoke, and the owner reads it from the log and cuts bob's phone", async () => {
+    const s = await setupChannel(relay);
+    const bobsPerson = await generateIdentity("bobs-person");
+    const bob = await joinPerson(s, "bob", bobsPerson, { scopes: ["post"] });
+    const { links, desk, phone } = await listWithPhone(bobsPerson);
+    const joiner = await ask(s, phone, links, "bob");
+    expect((await letThrough(s, joiner)).map((m) => m.name)).toEqual(["bob-2"]);
+
+    const revoked = await grow(links, desk, { op: "revoke", device: phone.pk });
+    await bob.ch.send("updated their list of devices", { kind: "event", ev: { op: "devices", links: revoked } });
+    const posted = (await s.ownerCh.history(0)).messages.flatMap((m) => (m.kind === "event" && m.ev?.op === "devices" ? [m.ev.links] : []));
+    const lists = await newestLists(posted);
+    expect(lists.get(bobsPerson.pk)?.revoked).toEqual([phone.pk]);
+    expect((await s.ownerCh.cutDevices(lists.get(bobsPerson.pk)!)).map((m) => m.name)).toEqual(["bob-2"]);
+    expect((await s.ownerCh.members()).find((m) => m.pk === joiner.id.pk)?.active).toBe(false);
     await s.ownerCh.close();
   });
 });
