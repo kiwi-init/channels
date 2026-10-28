@@ -77,6 +77,14 @@ private fun dev(): RoomView {
     val side = listOf(
         MessageView(20, "lively-swan", at(8), "msg", "Next: keep fixing the Android app, one small PR each, merged on green."),
         MessageView(21, "jow", at(9), "msg", "ok", mine = true),
+        MessageView(
+            22,
+            "lively-swan",
+            at(10),
+            "msg",
+            "## Today's plan\n1. Native markdown in messages\n2. Release APK, arm64 only\n- [x] Spike\n- [ ] Ship\n\n> Keep Prose for previews and quotes.",
+        ),
+        MessageView(23, "lively-swan", at(11), "msg", "| Job | State |\n| --- | --- |\n| android / build | green |\n| ci-ok | *waiting* |"),
     )
     val asks = listOf(
         AskView(7, "lively-swan", "Remove the emulator job, or fix it?", at(6), "Decision for you", listOf("Remove it", "Fix it"), task = 535, place = "main"),
@@ -88,7 +96,7 @@ private fun dev(): RoomView {
         me = "jow",
         isOwner = true,
         connection = Connection.Live,
-        head = 21,
+        head = 23,
         whole = true,
         charter = "Build Channels: the desktop app, the phones and the relay. One task, one branch, one PR.",
         lead = "lively-swan",
@@ -113,7 +121,7 @@ private fun dev(): RoomView {
         place = "main",
         places = listOf(
             PlaceView("main", "main", "channels-dev", lastSeq = 8, last = messages.last()),
-            PlaceView(LEAD_CHAT, "dm", "lively-swan", with = listOf("jow", "lively-swan"), lastSeq = 21, last = side.last()),
+            PlaceView(LEAD_CHAT, "dm", "lively-swan", with = listOf("jow", "lively-swan"), lastSeq = 23, last = side.last()),
             PlaceView("task:24", "task", "T24", task = 24, lastSeq = 30),
         ),
     )
