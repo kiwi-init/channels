@@ -4,7 +4,7 @@ import type { Personality } from "@kiwi/core/personality.ts"
 
 import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_EMPTY, DEMO_GUEST, DEMO_PREFS, DEMO_TILES, DEMO_WAITING } from "~/demo/data"
 import { longFeed } from "~/demo/long"
-import type { Account, Actions, AgentStarts, App, Channel, ChannelTile, Message, Prefs, Task } from "~/model"
+import type { Account, Actions, AgentStarts, App, Finding, ThisComputer, Channel, ChannelTile, Message, Prefs, Task } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
 
@@ -17,8 +17,8 @@ interface State {
 }
 
 const HARNESSES: App["harnesses"] = [
-  { id: "claude", label: "Claude Code", installed: true },
-  { id: "codex", label: "Codex", installed: true },
+  { id: "claude", label: "Claude Code", installed: true, version: "2.1.4", path: "~/.local/bin/claude" },
+  { id: "codex", label: "Codex", installed: true, version: "0.52.0", path: "/opt/homebrew/bin/codex" },
   { id: "opencode", label: "OpenCode", installed: false },
   { id: "gemini", label: "Gemini CLI", installed: false },
 ]
@@ -28,6 +28,20 @@ const PERSONAS: App["personas"] = [
   { id: "builder", label: "Builder", about: "Takes a task, ships a small PR, moves on." },
   { id: "reviewer", label: "Reviewer", about: "Reads every PR closely and says what would break." },
   { id: "designer", label: "Designer", about: "Owns how it looks: shots on every PR, no slop." },
+]
+
+const COMPUTER: ThisComputer = {
+  kiwi: { running: true, version: "2026.10.8" },
+  hooks: [
+    { harness: "claude", label: "Claude Code", state: "installed" },
+    { harness: "codex", label: "Codex", state: "outdated" },
+  ],
+}
+
+const FINDINGS: Finding[] = [
+  { ok: true, what: "kiwi     2026.10.8 at ~/.local/bin/kiwi" },
+  { ok: true, what: "relay    wss://relay.kiwi.sh answers" },
+  { ok: false, what: "Codex's hooks are from an older kiwi", how: "Update them in Settings > Agents > Hooks." },
 ]
 
 const STARTS: AgentStarts = { folders: ["~/www/channels", "~/www/landing"], launch: true, bypass: false }
@@ -52,6 +66,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
   const [state, setState] = useState(() => initial(scenario, look))
   const [starts, setStarts] = useState(STARTS)
   const [ownPersonalities, setOwnPersonalities] = useState<Personality[]>([])
+  const [computer, setComputer] = useState(COMPUTER)
 
   const actions = useMemo((): Actions => {
     const edit = (code: string, f: (c: Channel, seq: number) => Channel) =>
@@ -268,6 +283,8 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       allowNewAgents: (on) => setStarts((s) => ({ ...s, launch: on })),
       allowRemoteBypass: (on) => setStarts((s) => ({ ...s, bypass: on })),
       savePersonalities: setOwnPersonalities,
+      setHooks: (harness, on) => setComputer((c) => ({ ...c, hooks: c.hooks.map((h) => (h.harness === harness ? { ...h, state: on ? "installed" : "off" } : h)) })),
+      checkComputer: () => new Promise((done) => setTimeout(() => done(FINDINGS), 400)),
     }
   }, [])
 
@@ -280,6 +297,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
     personas: PERSONAS,
     starts,
     ownPersonalities,
+    computer,
     actions,
   }
 }
