@@ -1,8 +1,8 @@
 import { accountClient, type AccountClient } from "@kiwi/core/account.ts";
-import { certUntil, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
+import { certUntil, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceLinkBody, type DeviceList } from "@kiwi/core/devices.ts";
 import { enrollDigits, enrollMailbox, enrollNonce, revealMatches, type EnrollGrant, type Enrollment } from "@kiwi/core/enroll.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
-import type { EnrollAskView, EnrollConfirmView } from "./bridge.ts";
+import type { DeviceView, EnrollAskView, EnrollConfirmView } from "./bridge.ts";
 
 const TRIES = 3;
 
@@ -26,6 +26,9 @@ export interface DeviceHost {
   answer(id: string): Promise<void>;
   confirm(id: string, digits: string): Promise<EnrollConfirmView>;
   deny(id: string): Promise<void>;
+  list(): Promise<DeviceView[] | null>;
+  forget(device: string): Promise<void>;
+  renew(device: string): Promise<void>;
 }
 
 async function readList(links: unknown[]): Promise<DeviceList> {
@@ -80,6 +83,23 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
     return { ...s, e };
   };
 
+  const extend = async (client: AccountClient, device: Identity, body: DeviceLinkBody): Promise<{ links: DeviceLink[]; list: DeviceList }> => {
+    const kept = (await client.links()) as DeviceLink[];
+    const base = kept.length > deps.links().length ? kept : deps.links();
+    const list = await readList(base);
+    if (!list.devices.some((d) => d.device === device.pk && d.approve)) throw new Error("this app can't change your devices any more");
+    const links = [...base, await nextLink(list, device, body, now())];
+    await client.publish(links);
+    deps.saveLinks(links);
+    return { links, list };
+  };
+
+  const signedIn = async () => {
+    const s = await sync();
+    if (!s) throw new Error("sign in to change your devices");
+    return s;
+  };
+
   return {
     async poll() {
       let s: Awaited<ReturnType<typeof sync>>;
@@ -125,19 +145,16 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
         }
         return { ok: false, left: Math.max(0, left) };
       }
-      const kept = (await client.links()) as DeviceLink[];
-      const base = kept.length > deps.links().length ? kept : deps.links();
-      const list = await readList(base);
-      if (!list.devices.some((d) => d.device === device.pk && d.approve)) throw new Error("this app can't approve devices any more");
-      const link = await nextLink(
-        list,
-        device,
-        { op: "add", device: e.ask.device, dxpk: e.ask.dxpk, label: e.ask.label, os: e.ask.os, as: e.ask.as, approve: e.ask.as === "desktop", until: certUntil(now()) },
-        now(),
-      );
-      const links = [...base, link];
-      await client.publish(links);
-      deps.saveLinks(links);
+      const { links, list } = await extend(client, device, {
+        op: "add",
+        device: e.ask.device,
+        dxpk: e.ask.dxpk,
+        label: e.ask.label,
+        os: e.ask.os,
+        as: e.ask.as,
+        approve: e.ask.as === "desktop",
+        until: certUntil(now()),
+      });
       const person = deps.person();
       const grant: EnrollGrant = { kind: "kiwi-enroll-grant", v: 1, links, person: { pk: list.person, name: person?.name ?? "" }, relay: deps.relayUrl(), channels: deps.channels() };
       const mailbox = await enrollMailbox(deps.relayUrl(), device, { ...e, answer: { ...answer, at: e.answer.at } }, deps.fetchImpl);
@@ -152,6 +169,26 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
       if (!s) return;
       answered.delete(id);
       await s.client.drop(id);
+    },
+
+    async list() {
+      const s = await sync();
+      if (!s) return null;
+      const kept = (await s.client.links()) as DeviceLink[];
+      if (kept.length > deps.links().length) deps.saveLinks(kept);
+      const list = await readList(deps.links());
+      return list.devices.map((d) => ({ id: d.device, label: d.label, os: d.os, as: d.as, approve: d.approve, until: d.until, thisOne: d.device === s.device.pk }));
+    },
+
+    async forget(target) {
+      const { client, device } = await signedIn();
+      if (target === device.pk) throw new Error("forget this app from another of your devices");
+      await extend(client, device, { op: "revoke", device: target });
+    },
+
+    async renew(target) {
+      const { client, device } = await signedIn();
+      await extend(client, device, { op: "renew", device: target, until: certUntil(now()) });
     },
   };
 }

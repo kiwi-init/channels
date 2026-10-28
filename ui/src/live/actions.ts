@@ -25,7 +25,7 @@ import { createPerson, bridge, secrets } from "@/lib/secrets"
 import { isSignInGone } from "@/lib/session"
 import { approveTask, closedDigest, sendBackTask, type TaskSend } from "@/lib/task-actions"
 import { announce } from "~/kit/toasts"
-import { answerPair, cancelPair, enrollAnswer, enrollConfirm, enrollDeny, linkGithub, pairBegin, unlinkGithub } from "~/live/account"
+import { answerPair, cancelPair, enrollAnswer, enrollConfirm, enrollDeny, forgetDevice, linkGithub, pairBegin, renewDevice, unlinkGithub } from "~/live/account"
 import { newMemberPowers, newMemberScopes, setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
 import { harnessChoices, STARTS } from "~/live/harness-rows"
@@ -616,6 +616,8 @@ export function makeActions(): Actions {
     enrollAnswer: (id) => attempt("Couldn't answer the device", () => enrollAnswer(id)),
     enrollConfirm,
     enrollDeny: (id) => attempt("Couldn't turn the device away", () => enrollDeny(id)),
+    forgetDevice: (id) => attempt("Couldn't forget the device", () => forgetDevice(id)),
+    renewDevice: (id) => attempt("Couldn't renew the device", () => renewDevice(id)),
     saveTheme,
     deleteTheme,
     addStartFolder: () => attempt("Couldn't add the folder", addStartFolder),

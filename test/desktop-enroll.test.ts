@@ -36,8 +36,8 @@ interface App {
   held: { device: Identity | null; links: DeviceLink[] };
 }
 
-async function app(opts: { fetchImpl?: typeof fetch; person?: Identity; token?: string } = {}): Promise<App> {
-  const name = `person${++users}`;
+async function app(opts: { fetchImpl?: typeof fetch; person?: Identity; token?: string; now?: () => number } = {}): Promise<App> {
+  const name = `desk${++users}`;
   const token = opts.token ?? `dev:${name}`;
   const person = opts.person ?? (await device("Jow"));
   const held: App["held"] = { device: null, links: [] };
@@ -53,6 +53,7 @@ async function app(opts: { fetchImpl?: typeof fetch; person?: Identity; token?: 
     label: () => "desk",
     os: () => "macOS",
     ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}),
+    ...(opts.now ? { now: opts.now } : {}),
   });
   return { host, token, user: token.replace(/^dev:/, "dev_"), held };
 }
@@ -174,5 +175,74 @@ describe("the desktop approves a new device (T636)", () => {
     b.held.links = [await rootLink(person, { pk: desk.pk, xpk: desk.xpk!, label: "desk", os: "macOS", as: "desktop" })];
     expect(await b.host.poll()).toBeNull();
     expect(b.held.links).toEqual(a.held.links);
+  });
+});
+
+async function enrolled(a: App, as: "desktop" | "phone" = "desktop") {
+  await a.host.poll();
+  const d = await newDevice(a, as);
+  const { id } = (await a.host.poll())!;
+  await a.host.answer(id);
+  expect(await a.host.confirm(id, await d.reveal())).toMatchObject({ ok: true });
+  return d.laptop;
+}
+
+describe("Settings → Devices: the signed list, forget and renew (T836)", () => {
+  test("the list shows this app and the devices it approved", async () => {
+    const a = await app();
+    const laptop = await enrolled(a, "phone");
+    const list = await a.host.list();
+    expect(list?.map((d) => [d.label, d.as, d.approve, d.thisOne])).toEqual([
+      ["desk", "desktop", true, true],
+      ["laptop", "phone", false, false],
+    ]);
+    expect(list?.[1]?.id).toBe(laptop.pk);
+  });
+
+  test("forget adds a revoke link the relay keeps, and the device can't ask again", async () => {
+    const a = await app();
+    const laptop = await enrolled(a);
+    await a.host.forget(laptop.pk);
+    expect((await a.host.list())?.map((d) => d.label)).toEqual(["desk"]);
+    const kept = (await (await fetch(`${relay}/v1/account`, { headers: { "x-human-token": a.token } })).json()) as { links: DeviceLink[] };
+    const read = await readDeviceList(kept.links);
+    expect(read.ok && read.list.revoked).toEqual([laptop.pk]);
+    const { ask } = await askToEnroll(laptop, { label: "laptop", os: "Linux", as: "desktop" });
+    expect((await call(a, laptop, "POST", "/v1/account/ask", { ask })).status).toBe(403);
+  });
+
+  test("this app can't forget itself", async () => {
+    const a = await app();
+    await a.host.poll();
+    await expect(a.host.forget(a.held.device!.pk)).rejects.toThrow("another of your devices");
+  });
+
+  test("renew moves a device's expiry out to 90 days from now", async () => {
+    let t = Date.now();
+    const a = await app({ now: () => t });
+    const laptop = await enrolled(a);
+    const before = (await a.host.list())!.find((d) => d.id === laptop.pk)!.until;
+    t += 30 * 86_400_000;
+    await a.host.renew(laptop.pk);
+    const after = (await a.host.list())!.find((d) => d.id === laptop.pk)!.until;
+    expect(after - before).toBe(30 * 86_400_000);
+  });
+
+  test("an app that isn't signed in has no list", async () => {
+    const a = await app();
+    const out = createDeviceHost({
+      relayUrl: () => relay,
+      token: async () => null,
+      person: () => null,
+      device: () => null,
+      saveDevice: () => {},
+      links: () => [],
+      saveLinks: () => {},
+      channels: () => [],
+      label: () => "x",
+      os: () => "y",
+    });
+    expect(await out.list()).toBeNull();
+    expect(a.held.links).toEqual([]);
   });
 });
