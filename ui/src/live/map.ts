@@ -54,6 +54,7 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
     ...(m.display ? { display: m.display } : {}),
     ...(m.name === state.lead ? { role: "lead" } : m.owner ? { role: "owner" } : m.persona ? { role: m.persona.name } : {}),
     ...(color ? { color } : {}),
+    ...(human && m.picture ? { picture: `data:${m.picture.mime};base64,${m.picture.data}` } : {}),
     owner: m.owner,
     you: m.name === me,
     presence: m.name === me || here ? (here?.activity?.state === "idle" ? "away" : "online") : "offline",

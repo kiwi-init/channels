@@ -3,6 +3,7 @@ import { useState, type ReactNode } from "react"
 import { IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { Prefs, Theme } from "~/model"
+import { KEYS_UNSEALED } from "@/lib/keys-at-rest"
 import { useApp } from "~/nav"
 import { Toggle } from "~/kit/bits"
 import { Confirm, Group, InlineEdit, Row, Seg } from "~/settings/controls"
@@ -32,7 +33,14 @@ export function AccountSection() {
         <Row label="Name" hint="Shown next to everything you send.">
           <InlineEdit value={account.name} label="Your name" verb="Change" onSave={actions.setName} />
         </Row>
-        <Row label="GitHub" hint={account.github ? "Your pull requests and their checks show up in tasks." : "Link it to see pull requests and their checks in tasks."}>
+        <Row
+          label="GitHub"
+          hint={
+            account.github
+              ? "Your pull requests and their checks show up in tasks, and your GitHub picture is your face in channels."
+              : "Link it to see pull requests and their checks in tasks, and to wear your GitHub picture in channels."
+          }
+        >
           {account.github ? (
             <>
               <span className="set-value">@{account.github.login}</span>
@@ -80,6 +88,11 @@ export function AccountSection() {
           </Row>
         )}
       </Group>
+      {account.keysUnsealed && (
+        <p className="set-fine set-warning" role="note">
+          {KEYS_UNSEALED}
+        </p>
+      )}
       <Group>
         <Row label="Sign out" hint="Signs this computer out of the relay. Your keys and channels stay here.">
           <button type="button" className="btn is-danger is-small" onClick={() => setLeaving(true)}>

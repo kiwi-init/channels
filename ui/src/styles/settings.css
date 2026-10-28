@@ -391,3 +391,10 @@
     padding: 24px 16px 48px;
   }
 }
+
+.set-fine.set-warning {
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: var(--ink-2);
+  background: color-mix(in srgb, var(--alert) 12%, transparent);
+}
