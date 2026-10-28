@@ -27,6 +27,7 @@ import { announce } from "~/kit/toasts"
 import { answerPair, cancelPair, linkGithub, pairBegin, unlinkGithub } from "~/live/account"
 import { newMemberPowers, newMemberScopes, setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
+import { addStartFolder, allowNewAgents, allowRemoteBypass, removeStartFolder } from "~/live/starts"
 import { closeOpened, openedRun, type Run } from "~/live/store"
 import { downloadAndRestart } from "~/live/update"
 import { setWake } from "~/live/wakes"
@@ -476,6 +477,10 @@ export function makeActions(): Actions {
     cancelPair: () => attempt("Couldn't cancel", cancelPair),
     saveTheme,
     deleteTheme,
+    addStartFolder: () => attempt("Couldn't add the folder", addStartFolder),
+    removeStartFolder: (dir) => attempt("Couldn't remove the folder", () => removeStartFolder(dir)),
+    allowNewAgents: (on) => attempt("Couldn't change new agents", () => allowNewAgents(on)),
+    allowRemoteBypass: (on) => attempt("Couldn't change bypass", () => allowRemoteBypass(on)),
   }
 }
 

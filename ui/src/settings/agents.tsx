@@ -1,5 +1,3 @@
-import { useState } from "react"
-
 import { Avatar, IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { useApp } from "~/nav"
@@ -9,10 +7,7 @@ import { Page } from "~/settings/sections"
 
 export function AgentsSection() {
   const { app } = useApp()
-  const [folders, setFolders] = useState(["~/www/channels", "~/www/landing"])
-  const [adding, setAdding] = useState(false)
-  const [remote, setRemote] = useState(false)
-
+  const { starts, actions } = app
   return (
     <Page title="Agents" lede="What agents you start from this computer can use.">
       <Group title="Personalities">
@@ -33,59 +28,38 @@ export function AgentsSection() {
         ))}
       </Group>
 
-      <Group title="Folders agents can start in">
-        {folders.length === 0 && !adding && <p className="set-none">No folders yet. Agents need one to start in.</p>}
-        {folders.map((f) => (
-          <div key={f} className="set-row set-folder">
-            <span className="set-row-text set-folder-path">
-              <Icon name="folder" size={14} />
-              <span className="set-value">{f}</span>
-            </span>
-            <IconButton icon="close" label={`Remove ${f}`} onClick={() => setFolders((list) => list.filter((x) => x !== f))} />
-          </div>
-        ))}
-        {adding ? (
-          <form
-            className="set-row set-folder-add"
-            onSubmit={(e) => {
-              e.preventDefault()
-              const path = new FormData(e.currentTarget).get("folder")?.toString().trim()
-              if (path) setFolders((list) => (list.includes(path) ? list : [...list, path]))
-              setAdding(false)
-            }}
+      {starts && (
+        <>
+          <Group title="New agents">
+            <Row label="Allow creating new agents" hint="New agent starts an agent on this computer, from this app or from a computer paired with it.">
+              <Toggle label="Allow creating new agents" on={starts.launch} onChange={actions.allowNewAgents} />
+            </Row>
+            {starts.launch && (
+              <Row label="Allow bypass from your other devices" hint="An agent started from your phone or another computer may skip its harness's permission prompts here. Off keeps every prompt.">
+                <Toggle label="Allow bypass from your other devices" on={starts.bypass} onChange={actions.allowRemoteBypass} />
+              </Row>
+            )}
+          </Group>
+          <Group
+            title="Folders agents can start in"
+            hint="New agent, here or from your phone, can start one in these folders and the folders inside them, as well as where agents on this computer already work and your home folder's git repos."
           >
-            <input
-              name="folder"
-              autoFocus
-              className="input is-mono"
-              placeholder="~/code/project"
-              aria-label="Folder path"
-              onKeyDown={(e) => {
-                if (e.key !== "Escape") return
-                e.preventDefault()
-                setAdding(false)
-              }}
-            />
-            <button type="submit" className="btn is-small">
-              Add
+            {starts.folders.map((f) => (
+              <div key={f} className="set-row set-folder">
+                <span className="set-row-text set-folder-path">
+                  <Icon name="folder" size={14} />
+                  <span className="set-value">{f}</span>
+                </span>
+                <IconButton icon="close" label={`Remove ${f}`} onClick={() => actions.removeStartFolder(f)} />
+              </div>
+            ))}
+            <button type="button" className="set-row set-add" onClick={actions.addStartFolder}>
+              <Icon name="plus" size={14} />
+              Add a folder…
             </button>
-            <button type="button" className="btn is-quiet is-small" onClick={() => setAdding(false)}>
-              Cancel
-            </button>
-          </form>
-        ) : (
-          <button type="button" className="set-row set-add" onClick={() => setAdding(true)}>
-            <Icon name="plus" size={14} />
-            Add a folder…
-          </button>
-        )}
-      </Group>
-
-      <Group>
-        <Row label="Let agents start from my other devices" hint="Your other computers and phones can start an agent here, in one of the folders above.">
-          <Toggle label="Let agents start from my other devices" on={remote} onChange={setRemote} />
-        </Row>
-      </Group>
+          </Group>
+        </>
+      )}
     </Page>
   )
 }
