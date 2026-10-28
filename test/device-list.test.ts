@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { certUntil, currentDevice, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
+import { certUntil, currentDevice, dueForRenewal, newestLists, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
+import { isQuiet, wellFormedEvent } from "@kiwi/core/protocol.ts";
 
 const T0 = Date.UTC(2026, 9, 28);
 const ids: Record<string, Identity> = {};
@@ -92,5 +93,55 @@ describe("a person's device list (T634)", () => {
     expect(currentDevice(await list(links), ids.phone!.pk, later)?.label).toBe("phone");
     links = await grow(links, "person", { op: "revoke", device: ids.desk!.pk });
     expect((await list(links)).devices.map((d) => d.label)).toEqual(["phone"]);
+  });
+});
+
+describe("revocation and expiry (T641)", () => {
+  const DAY = 86_400_000;
+  const root = () => rootLink(ids.person!, { pk: ids.desk!.pk, xpk: ids.desk!.xpk!, label: "desk", os: "macOS", as: "desktop" }, T0);
+
+  test("a revoke says who did it, and whether it cut a device older than the one signing", async () => {
+    let links = [await root()];
+    links = await grow(links, "desk", add("phone", "phone"));
+    links = await grow(links, "desk", add("laptop", "desktop", true));
+    links = await grow(links, "laptop", { op: "revoke", device: ids.desk!.pk });
+    links = await grow(links, "laptop", { op: "revoke", device: ids.phone!.pk });
+    links = await grow(links, "person", { op: "revoke", device: ids.laptop!.pk });
+    const got = await list(links);
+    expect(got.revoked).toEqual([ids.desk!.pk, ids.phone!.pk, ids.laptop!.pk]);
+    expect(got.revokes.map((r) => [r.label, r.by === ids.laptop!.pk ? "laptop" : "person", r.older])).toEqual([
+      ["desk", "laptop", true],
+      ["phone", "laptop", true],
+      ["laptop", "person", false],
+    ]);
+  });
+
+  test("a device is due for renewal in its cert's last 14 days, and not once it has lapsed", async () => {
+    let links = [await root()];
+    links = await grow(links, "desk", add("phone", "phone"));
+    expect(dueForRenewal(await list(links), T0 + 60 * DAY)).toEqual([]);
+    expect(dueForRenewal(await list(links), T0 + 80 * DAY).map((d) => d.label)).toEqual(["desk", "phone"]);
+    expect(dueForRenewal(await list(links), T0 + 91 * DAY)).toEqual([]);
+    links = await grow(links, "desk", { op: "renew", device: ids.phone!.pk, until: certUntil(T0 + 80 * DAY) }, T0 + 80 * DAY);
+    expect(dueForRenewal(await list(links), T0 + 80 * DAY).map((d) => d.label)).toEqual(["desk"]);
+  });
+
+  test("the highest version seen anywhere wins, and a list that doesn't hold up is passed over", async () => {
+    const short = [await root()];
+    const long = await grow(short, "desk", { op: "revoke", device: ids.desk!.pk });
+    const forged = [...long, { ...long[1]!, seq: 3 } as DeviceLink];
+    const other = [await rootLink(ids.thief!, { pk: ids.box!.pk, xpk: ids.box!.xpk!, label: "box", os: "Linux", as: "desktop" }, T0)];
+    const seen = await newestLists([long, "junk", forged, short, other]);
+    expect(seen.get(ids.person!.pk)?.version).toBe(2);
+    expect(seen.get(ids.thief!.pk)?.version).toBe(1);
+    const kept = await newestLists([short], seen);
+    expect(kept.get(ids.person!.pk)?.revoked).toEqual([ids.desk!.pk]);
+  });
+
+  test("the list goes into a channel as a quiet devices event", async () => {
+    const links = [await root()];
+    expect(wellFormedEvent({ op: "devices", links })).toBe(true);
+    for (const bad of [[], ["link"], [[1]], undefined]) expect(wellFormedEvent({ op: "devices", links: bad })).toBe(false);
+    expect(isQuiet({ kind: "event", ev: { op: "devices", links } })).toBe(true);
   });
 });

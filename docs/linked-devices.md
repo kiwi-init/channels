@@ -185,6 +185,10 @@ owner-signed **delegation** lets the `kiwi` daemon admit its own computer's agen
   anywhere.
 - An honest lost device that sees itself revoked wipes its keys. A stolen one is cut off by the relay
   and by rotation, not by its own cooperation.
+- In the code (T641): the list travels in a `devices` event (`{links}`), and member records name the
+  device key (`device.pk`). `Channel.cutDevices(list)` removes a revoked device's members, and a
+  revoked computer's agents, in one rotation. `requests({lists})` checks claims against the newest
+  list seen. Device members admitted before T641 carry no device key, so they are removed by hand.
 
 **Expiry.**
 

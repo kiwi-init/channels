@@ -211,6 +211,8 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return ev.name ? `named the goal of #${ev.ask}: ${inlineText(ev.name, 80)}` : `took back the goal's name of #${ev.ask}`;
     case "ask.close":
       return ev.why ? `closed #${ev.ask}: ${inlineText(ev.why, 160)}` : `closed #${ev.ask}`;
+    case "devices":
+      return "updated their list of devices";
   }
 }
 
