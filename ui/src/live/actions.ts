@@ -6,7 +6,7 @@ import { cleanPersonalities } from "@kiwi/core/personalities.ts"
 import { personaOf, personaScopes, type Persona, type Personality } from "@kiwi/core/personality.ts"
 import { pinned } from "@kiwi/core/pin.ts"
 import { PRESETS } from "@kiwi/core/presets.ts"
-import { ROBOT_FACES, ROOM_ID_RE, TASK_TITLE_MAX_LENGTH, type Event } from "@kiwi/core/protocol.ts"
+import { BRANCH_PREFIX_RE, ROBOT_FACES, ROOM_ID_RE, TASK_TITLE_MAX_LENGTH, type Event } from "@kiwi/core/protocol.ts"
 import { describeScopes, SCOPES, wireScopes, type Scope } from "@kiwi/core/scopes.ts"
 import { newRoomId, taskId } from "@kiwi/core/state.ts"
 import type { KnownHarness } from "@kiwi/core/harnesses.ts"
@@ -342,6 +342,16 @@ export function makeActions(): Actions {
         const since = await event(run, `made the room #${room.name}`, { op: "room.create", ...room })
         await roomFolded(() => openedRun(code), room)
         await run.ch.setRooms({ list: roomsAfter(openedRun(code)?.state.rooms.values() ?? run.state.rooms.values(), room), since })
+      }),
+    setGithubWrite: (code, on) =>
+      attempt("Not changed", async () => {
+        await event(owner(code), on ? "turned on Write to GitHub" : "turned off Write to GitHub", { op: "github.write.set", on })
+      }),
+    setBranchPrefix: (code, typed) =>
+      attempt("Branch prefix not changed", async () => {
+        const prefix = typed?.trim() || null
+        if (prefix && !BRANCH_PREFIX_RE.test(prefix)) throw new Error("a branch prefix is up to 32 letters, digits, dots, dashes, underscores or slashes")
+        await event(owner(code), prefix ? `branch prefix: ${prefix}` : "cleared the branch prefix", { op: "branch.prefix.set", prefix })
       }),
     renameChannel: (code, title) =>
       attempt("Not renamed", async () => {

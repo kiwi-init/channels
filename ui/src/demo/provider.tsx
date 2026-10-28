@@ -181,6 +181,8 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         )
       },
       addRoom: (code, name) => edit(code, (c) => ({ ...c, rooms: [...c.rooms, { id: name, name, unread: 0, mentions: 0 }] })),
+      setGithubWrite: (code, on) => edit(code, (c) => ({ ...c, githubWrite: on || undefined })),
+      setBranchPrefix: (code, prefix) => edit(code, (c) => ({ ...c, branchPrefix: prefix?.trim() || undefined })),
       renameChannel: (code, title) => {
         edit(code, (c) => ({ ...c, title }))
         setState((s) => ({ ...s, tiles: s.tiles.map((t) => (t.code === code ? { ...t, title } : t)) }))

@@ -123,3 +123,18 @@
 .cpanel-end {
   padding: 22px 0 8px;
 }
+
+.cpanel-github {
+  display: grid;
+  gap: 6px;
+}
+
+.cpanel-github .cpanel-hint {
+  margin-bottom: 8px;
+}
+
+.cpanel-prefix {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
