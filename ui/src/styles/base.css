@@ -818,7 +818,7 @@ html .set-device-meta,
 html .palette-meta,
 html .add-who-meta,
 html .theme-when {
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--text-scale, 1));
   font-weight: 400;
 }
 

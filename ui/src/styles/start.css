@@ -165,7 +165,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font: 600 14px var(--ui);
+  font: 600 calc(14px * var(--text-scale, 1)) var(--ui);
 }
 
 .start-choice-title .icon {

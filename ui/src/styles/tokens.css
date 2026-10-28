@@ -52,12 +52,12 @@
   --ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, sans-serif;
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, sans-serif;
 
-  --t-stamp: 11px;
-  --t-meta: 12px;
-  --t-ui: 13px;
-  --t-body: 15px;
-  --t-title: 17px;
-  --t-display: 24px;
+  --t-stamp: calc(11px * var(--text-scale, 1));
+  --t-meta: calc(12px * var(--text-scale, 1));
+  --t-ui: calc(13px * var(--text-scale, 1));
+  --t-body: calc(15px * var(--text-scale, 1));
+  --t-title: calc(17px * var(--text-scale, 1));
+  --t-display: calc(24px * var(--text-scale, 1));
 
   --r-row: 8px;
   --r-ctl: 10px;
