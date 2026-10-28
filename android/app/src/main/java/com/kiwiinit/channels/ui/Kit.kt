@@ -90,6 +90,7 @@ val harnesses: Map<String, Int> = mapOf(
     "mimocode" to R.drawable.harness_mimocode,
     "opencode" to R.drawable.harness_opencode,
     "pi" to R.drawable.harness_pi,
+    "zcode" to R.drawable.harness_zcode,
 )
 
 fun View.buzz(kind: Buzz) {
