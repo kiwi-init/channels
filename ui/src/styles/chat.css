@@ -589,6 +589,30 @@
   gap: 8px;
 }
 
+.ask-reply-form {
+  display: grid;
+  gap: 6px;
+}
+
+.ask-reply-label {
+  color: var(--ink-2);
+  font: 600 var(--t-meta) var(--ui);
+}
+
+.ask-reply-hint {
+  color: var(--ink-3);
+  font-weight: 400;
+}
+
+.ask-reply {
+  margin-left: 6px;
+  padding: 2px 0 2px 12px;
+  border-left: 2px solid var(--line-3);
+  color: var(--ink);
+  font: var(--t-body) / 1.5 var(--sans);
+  white-space: pre-wrap;
+}
+
 .ask-step,
 .ask-step-answer {
   display: grid;
