@@ -32,6 +32,7 @@ export function wants(me: string, m: Message, state: ChannelState | null, d: Del
   if (d.room !== undefined && m.kind !== "event" && (state?.roomOf.get(m.seq) ?? m.room ?? GENERAL_ROOM) !== d.room) return false;
   if (d.all) return true;
   if (d.thread !== undefined) return m.kind !== "event" && (state?.threadOf.get(m.seq) ?? m.seq) === (state?.threadOf.get(d.thread) ?? d.thread);
+  if (d.loop && m.kind === "event" && m.ev?.op === "task.update" && state?.tasks.get(m.ev.task)?.workedBy.includes(me)) return true;
   const waiting = d.loop && state ? waitingTask(state, me) : undefined;
   if (waiting !== undefined) return wantsWhileWaiting(me, m, state, waiting);
   const persona = state?.members.get(me)?.persona;

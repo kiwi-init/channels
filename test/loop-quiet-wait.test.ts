@@ -72,4 +72,13 @@ describe("a loop session waiting for its verdict (#1117)", () => {
     expect(wants("win", chatter, fold([add, chatter, sent], roster), loop)).toBe(false);
     expect(wants("win", chatter, fold([add, chatter, sent, reject], roster), loop)).toBe(true);
   });
+
+  test("the event that ends the wait still reaches the seat, even when it isn't addressed to it", async () => {
+    const add = await ev("jon", { op: "task.add", title: "ship it", owner: "win", review: "mac" });
+    const sent = await ev("win", { op: "task.update", task: add.seq, state: "review", at: "abc1234" });
+    const moved = await ev("jon", { op: "task.update", task: add.seq, owner: "linux" }, ["linux"]);
+    const verdict = await ev("mac", { op: "task.update", task: add.seq, state: "doing", verdict: "rejected", round: 1 });
+    expect(wants("win", moved, fold([add, sent, moved], roster), loop)).toBe(true);
+    expect(wants("win", verdict, fold([add, sent, verdict], roster), loop)).toBe(true);
+  });
 });
