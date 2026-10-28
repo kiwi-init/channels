@@ -13,7 +13,8 @@ const { normalizeMarkdownStyle } = await import("react-native-enriched-markdown/
 const { buildStyles } = await import("react-native-enriched-markdown/lib/module/web/styles.js")
 const { parseMarkdown } = await import("react-native-enriched-markdown/lib/module/web/parseMarkdown.js")
 const { RenderNode } = await import("react-native-enriched-markdown/lib/module/web/renderers/index.js")
-const { withTextSize } = await import("~/chat/markdown")
+const { default: Markdown, withTextSize } = await import("~/chat/markdown")
+const { keepParsed } = await import("~/chat/parsed")
 
 const fixed = (name: string, s: CSSProperties): string[] => [
   ...(typeof s.fontSize === "number" ? [`${name} fontSize ${s.fontSize}`] : []),
@@ -49,5 +50,24 @@ describe("message text can be selected and seen", () => {
     expect(name).toBe("--enrm-selection-bg")
     const css = readFileSync(join(import.meta.dir, "../styles/chat.css"), "utf8")
     expect(css).toContain(`.md {\n  ${name}: var(--selection);\n}`)
+  })
+})
+
+describe("a code block copies when it's pressed", () => {
+  test("the block is the button, with its language in the label, and no copy buttons laid over it", async () => {
+    const markdown = "Run it:\n\n```sh\nbun test\n```"
+    const ast = await parseMarkdown(markdown, { latexMath: false, underline: false })
+    keepParsed(markdown, ast)
+    const quiet = () => {}
+    const html = renderToStaticMarkup(createElement(Markdown, { markdown, onMention: quiet, onTask: quiet, onImage: quiet, onShown: quiet, copied: quiet }))
+    expect(html).toMatch(/<pre style="[^"]*cursor:pointer[^"]*" aria-label="Code block: sh" role="button" tabindex="0"><code[^>]*>bun test/)
+    expect(html).not.toContain("md-copy")
+  })
+
+  test("a hint says Copy on hover and on keyboard focus, and doesn't take the click", () => {
+    const css = readFileSync(join(import.meta.dir, "../styles/chat.css"), "utf8")
+    expect(css).toContain('.md pre[role="button"]::after {\n  content: "Copy";')
+    expect(css).toContain('.msg:hover .md pre[role="button"]::after,\n.md pre[role="button"]:focus-visible::after {\n  opacity: 1;\n}')
+    expect(css).toMatch(/\.md pre\[role="button"\]::after \{[^}]*pointer-events: none;/)
   })
 })
