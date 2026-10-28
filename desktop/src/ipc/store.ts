@@ -23,7 +23,7 @@ export function storeCalls(host: Host): Serves<"setRelayUrl" | "createPerson" | 
       return norm;
     },
     createPerson: async (name: string) => {
-      if (store.person || makingPerson) throw new Error("this app already has your person key");
+      if (store.person || store.enrolled || makingPerson) throw new Error("this app already has your person key");
       makingPerson = true;
       try {
         const clean =
@@ -34,7 +34,7 @@ export function storeCalls(host: Host): Serves<"setRelayUrl" | "createPerson" | 
             .slice(0, 80) || "someone";
         const id = await generateIdentity(clean);
         const person: PersonView = { name: clean, pk: id.pk, sk: id.sk, xpk: id.xpk as string, xsk: id.xsk as string };
-        if (store.person) throw new Error("this app already has your person key");
+        if (store.person || store.enrolled) throw new Error("this app already has your person key");
         mutate((s) => (s.person = person));
         return publicPerson(person);
       } finally {

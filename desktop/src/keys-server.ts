@@ -1,6 +1,6 @@
 import type { PresenceFields } from "@kiwi/core/client.ts";
 import type { ChannelAccess } from "@kiwi/core/crypto.ts";
-import type { PersonClaim } from "@kiwi/core/person.ts";
+import type { JoinClaims } from "@kiwi/core/membership.ts";
 import type { ChannelIdentityView, KeysPush, KeysReply } from "./bridge.ts";
 import { isCall, wireError, type Keyring } from "./keyring.ts";
 import { fromWire, toWire } from "./wire.ts";
@@ -103,7 +103,7 @@ export type HostToKeys =
   | { type: "relay"; relay: string }
   | { type: "nudge" }
   | { type: "port" }
-  | { type: "done"; id: number; error?: string; claim?: PersonClaim | null; token?: string | null };
+  | { type: "done"; id: number; error?: string; claim?: JoinClaims | null; token?: string | null };
 
 export type KeysToHost =
   | { type: "save"; id: number; entry: ChannelIdentityView }

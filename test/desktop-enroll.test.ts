@@ -6,7 +6,8 @@ import { signRequest } from "@kiwi/core/auth.ts";
 import { readDeviceList, rootLink, type DeviceLink } from "@kiwi/core/devices.ts";
 import { accountScope, askToEnroll, enrollDigits, enrollMailbox, readEnrollGrant, type Enrollment } from "@kiwi/core/enroll.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
-import { createDeviceHost, type DeviceHost } from "../desktop/src/devices.ts";
+import type { PublicPerson } from "../desktop/src/bridge.ts";
+import { createDeviceHost, createEnrollee, type DeviceHost } from "../desktop/src/devices.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
 
@@ -36,15 +37,23 @@ interface App {
   held: { device: Identity | null; links: DeviceLink[] };
 }
 
-async function app(opts: { fetchImpl?: typeof fetch; person?: Identity; token?: string; now?: () => number } = {}): Promise<App> {
+interface Enrolled {
+  who: PublicPerson;
+  device: Identity;
+  links: DeviceLink[];
+}
+
+async function app(opts: { fetchImpl?: typeof fetch; person?: Identity; enrolled?: Enrolled; token?: string; now?: () => number } = {}): Promise<App> {
   const name = `desk${++users}`;
   const token = opts.token ?? `dev:${name}`;
-  const person = opts.person ?? (await device("Jow"));
-  const held: App["held"] = { device: null, links: [] };
+  const person = opts.enrolled ? null : (opts.person ?? (await device("Jow")));
+  const who = opts.enrolled?.who ?? { name: person!.name, pk: person!.pk, xpk: person!.xpk! };
+  const held: App["held"] = { device: opts.enrolled?.device ?? null, links: opts.enrolled?.links ?? [] };
   const host = createDeviceHost({
     relayUrl: () => relay,
     token: async () => token,
     person: () => person,
+    who: () => who,
     device: () => held.device,
     saveDevice: (d) => void (held.device = d),
     links: () => held.links,
@@ -234,6 +243,7 @@ describe("Settings → Devices: the signed list, forget and renew (T836)", () =>
       relayUrl: () => relay,
       token: async () => null,
       person: () => null,
+      who: () => null,
       device: () => null,
       saveDevice: () => {},
       links: () => [],
@@ -244,5 +254,93 @@ describe("Settings → Devices: the signed list, forget and renew (T836)", () =>
     });
     expect(await out.list()).toBeNull();
     expect(a.held.links).toEqual([]);
+  });
+});
+
+function newDesktop(a: App) {
+  const held: { device: Identity | null; enrolled: Enrolled | null } = { device: null, enrolled: null };
+  const enrollee = createEnrollee({
+    relayUrl: () => relay,
+    token: async () => a.token,
+    who: () => held.enrolled?.who ?? null,
+    device: () => held.device,
+    saveDevice: (d) => void (held.device = d),
+    enrolled: (grant) => void (held.enrolled = { who: grant.person, device: held.device!, links: grant.links }),
+    label: () => "studio",
+    os: () => "Linux",
+  });
+  return { enrollee, held };
+}
+
+describe("a new desktop enrolls with no person key (T837)", () => {
+  test("it asks, shows the digits the person types on the other app, and gets the person and channels", async () => {
+    const a = await app();
+    await a.host.poll();
+    const b = newDesktop(a);
+    await b.enrollee.begin();
+    expect(await b.enrollee.status()).toEqual({ stage: "asking" });
+    const asking = await a.host.poll();
+    expect(asking).toMatchObject({ label: "studio", os: "Linux", as: "desktop", stage: "new" });
+    await a.host.answer(asking!.id);
+    const shown = await b.enrollee.status();
+    expect(shown?.stage).toBe("digits");
+    expect(await b.enrollee.status()).toEqual(shown!);
+    expect((await a.host.poll())?.stage).toBe("digits");
+    expect(await a.host.confirm(asking!.id, shown!.stage === "digits" ? shown!.digits : "")).toEqual({ ok: true, label: "studio" });
+
+    const done = await b.enrollee.status();
+    const person = (await readDeviceList(a.held.links)).ok ? a.held.links[0]!.person : "";
+    expect(done).toEqual({ stage: "done", person: { name: "Jow", pk: person, xpk: expect.any(String) }, channels: [{ label: "general", code: "mc2-code" }] });
+    const read = await readDeviceList(b.held.enrolled!.links);
+    expect(read.ok && read.list.devices.find((d) => d.device === b.held.device!.pk)).toMatchObject({ label: "studio", as: "desktop", approve: true });
+    expect(await b.enrollee.status()).toBeNull();
+    await expect(b.enrollee.begin()).rejects.toThrow("already holds your person");
+  });
+
+  test("the enrolled desktop approves the next device, with no person key of its own", async () => {
+    const a = await app();
+    await a.host.poll();
+    const b = newDesktop(a);
+    await b.enrollee.begin();
+    await b.enrollee.status();
+    const { id } = (await a.host.poll())!;
+    await a.host.answer(id);
+    const shown = await b.enrollee.status();
+    await a.host.confirm(id, shown?.stage === "digits" ? shown.digits : "");
+    await b.enrollee.status();
+
+    const c = await app({ token: a.token, enrolled: b.held.enrolled! });
+    const laptop = await enrolled(c, "phone");
+    const read = await readDeviceList(c.held.links);
+    expect(read.ok && read.list.devices.map((d) => d.label)).toEqual(["desk", "studio", "laptop"]);
+    expect(read.ok && read.list.devices.find((d) => d.device === laptop.pk)?.approve).toBe(false);
+    expect((await a.host.list())?.map((d) => d.label)).toEqual(["desk", "studio", "laptop"]);
+  });
+
+  test("an ask turned away on the other app ends as gone", async () => {
+    const a = await app();
+    await a.host.poll();
+    const b = newDesktop(a);
+    await b.enrollee.begin();
+    const { id } = (await a.host.poll())!;
+    await a.host.deny(id);
+    expect(await b.enrollee.status()).toEqual({ stage: "gone" });
+    expect(b.held.enrolled).toBeNull();
+  });
+
+  test("cancel takes the ask back before anyone answers", async () => {
+    const a = await app();
+    await a.host.poll();
+    const b = newDesktop(a);
+    await b.enrollee.begin();
+    expect(await a.host.poll()).not.toBeNull();
+    await b.enrollee.cancel();
+    expect(await a.host.poll()).toBeNull();
+    expect(await b.enrollee.status()).toBeNull();
+  });
+
+  test("a new desktop that isn't signed in can't ask", async () => {
+    const e = createEnrollee({ relayUrl: () => relay, token: async () => null, who: () => null, device: () => null, saveDevice: () => {}, enrolled: () => {}, label: () => "x", os: () => "y" });
+    await expect(e.begin()).rejects.toThrow("sign in first");
   });
 });

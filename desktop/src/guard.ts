@@ -80,12 +80,13 @@ export interface StoredKeys {
   phones?: PhoneView[];
   pending: PendingItem[];
   personalities?: Personality[];
+  enrolled?: PublicPerson;
 }
 
 export function snapshotOf(s: StoredKeys): StoreSnapshot {
   return {
     relayUrl: s.relayUrl,
-    person: publicPerson(s.person),
+    person: publicPerson(s.person) ?? s.enrolled ?? null,
     channels: s.channels.map(publicChannel),
     computers: s.computers,
     phones: (s.phones ?? []).map((p) => ({ label: p.label, at: p.at, ...(p.channels ? { channels: p.channels } : {}) })),

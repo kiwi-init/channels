@@ -1,8 +1,8 @@
 import { accountClient, type AccountClient } from "@kiwi/core/account.ts";
 import { certUntil, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceLinkBody, type DeviceList } from "@kiwi/core/devices.ts";
-import { enrollDigits, enrollMailbox, enrollNonce, revealMatches, type EnrollGrant, type Enrollment } from "@kiwi/core/enroll.ts";
+import { askToEnroll, enrollDigits, enrollMailbox, enrollNonce, readEnrollGrant, revealMatches, type EnrollGrant, type Enrollment } from "@kiwi/core/enroll.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
-import type { DeviceView, EnrollAskView, EnrollConfirmView } from "./bridge.ts";
+import type { DeviceView, EnrollAskView, EnrollConfirmView, EnrollStatusView, PublicPerson } from "./bridge.ts";
 
 const TRIES = 3;
 
@@ -10,6 +10,7 @@ export interface DeviceHostDeps {
   relayUrl: () => string;
   token: () => Promise<string | null>;
   person: () => Identity | null;
+  who: () => PublicPerson | null;
   device: () => Identity | null;
   saveDevice: (d: Identity) => void;
   links: () => DeviceLink[];
@@ -37,35 +38,39 @@ async function readList(links: unknown[]): Promise<DeviceList> {
   return read.list;
 }
 
+async function myDevice(deps: Pick<DeviceHostDeps, "device" | "saveDevice">, name: string): Promise<Identity> {
+  const held = deps.device();
+  if (held?.xsk) return held;
+  const made = await withExchangeKey(await generateIdentity(name));
+  deps.saveDevice(made);
+  return made;
+}
+
 export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
   const now = deps.now ?? Date.now;
   const answered = new Map<string, { nonce: string; tries: number }>();
   let synced: { relay: string; client: AccountClient; device: Identity } | null = null;
 
-  const myDevice = async (person: Identity): Promise<Identity> => {
-    const held = deps.device();
-    if (held?.xsk) return held;
-    const made = await withExchangeKey(await generateIdentity(person.name));
-    deps.saveDevice(made);
-    return made;
-  };
-
   const sync = async (): Promise<{ client: AccountClient; device: Identity } | null> => {
     const relay = deps.relayUrl();
     if (synced?.relay === relay) return synced;
-    const person = deps.person();
+    const who = deps.who();
     const token = await deps.token();
-    if (!person || !token) return null;
-    const device = await myDevice(person);
+    if (!who || !token) return null;
+    const device = await myDevice(deps, who.name);
     const client = accountClient(relay, async () => (await deps.token()) ?? token, device, deps.fetchImpl);
     const kept = await client.links();
     let ours = deps.links();
-    if (!ours.length) ours = [await rootLink(person, { pk: device.pk, xpk: device.xpk!, label: deps.label(), os: deps.os(), as: "desktop" }, now())];
+    if (!ours.length) {
+      const person = deps.person();
+      if (!person) throw new Error("this app lost its device list: forget it from another of your devices and sign in again");
+      ours = [await rootLink(person, { pk: device.pk, xpk: device.xpk!, label: deps.label(), os: deps.os(), as: "desktop" }, now())];
+    }
     if (!kept.length) {
       await client.publish(ours);
     } else {
       const theirs = await readList(kept);
-      if (theirs.person !== person.pk) throw new Error("this sign-in already belongs to another Channels person key");
+      if (theirs.person !== who.pk) throw new Error("this sign-in already belongs to another Channels person key");
       if (kept.length >= ours.length) ours = kept as DeviceLink[];
       else await client.publish(ours);
     }
@@ -155,8 +160,9 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
         approve: e.ask.as === "desktop",
         until: certUntil(now()),
       });
-      const person = deps.person();
-      const grant: EnrollGrant = { kind: "kiwi-enroll-grant", v: 1, links, person: { pk: list.person, name: person?.name ?? "" }, relay: deps.relayUrl(), channels: deps.channels() };
+      const who = deps.who();
+      if (!who || who.pk !== list.person) throw new Error("this app's person doesn't match your device list");
+      const grant: EnrollGrant = { kind: "kiwi-enroll-grant", v: 1, links, person: { pk: who.pk, name: who.name, xpk: who.xpk }, relay: deps.relayUrl(), channels: deps.channels() };
       const mailbox = await enrollMailbox(deps.relayUrl(), device, { ...e, answer: { ...answer, at: e.answer.at } }, deps.fetchImpl);
       await mailbox.put("b", grant);
       answered.delete(id);
@@ -189,6 +195,95 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
     async renew(target) {
       const { client, device } = await signedIn();
       await extend(client, device, { op: "renew", device: target, until: certUntil(now()) });
+    },
+  };
+}
+
+export interface EnrolleeDeps {
+  relayUrl: () => string;
+  token: () => Promise<string | null>;
+  who: () => PublicPerson | null;
+  device: () => Identity | null;
+  saveDevice: (d: Identity) => void;
+  enrolled: (grant: EnrollGrant) => void;
+  label: () => string;
+  os: () => string;
+  fetchImpl?: typeof fetch;
+}
+
+export interface Enrollee {
+  begin(): Promise<void>;
+  status(): Promise<EnrollStatusView | null>;
+  cancel(): Promise<void>;
+}
+
+interface Asking {
+  id: string;
+  nonce: string;
+  relay: string;
+  client: AccountClient;
+  device: Identity;
+  seen: Enrollment | null;
+}
+
+export function createEnrollee(deps: EnrolleeDeps): Enrollee {
+  let asking: Asking | null = null;
+
+  return {
+    async begin() {
+      if (deps.who()) throw new Error("this app already holds your person");
+      const token = await deps.token();
+      if (!token) throw new Error("sign in first, with the account your other computer uses");
+      if (asking) await asking.client.drop(asking.id).catch(() => {});
+      asking = null;
+      const relay = deps.relayUrl();
+      const device = await myDevice(deps, deps.label());
+      const client = accountClient(relay, async () => (await deps.token()) ?? token, device, deps.fetchImpl);
+      const { ask, nonce } = await askToEnroll(device, { label: deps.label(), os: deps.os(), as: "desktop" });
+      const id = await client.ask(ask);
+      asking = { id, nonce, relay, client, device, seen: null };
+    },
+
+    async status() {
+      const a = asking;
+      if (!a) return null;
+      if (!a.seen) {
+        const e = await a.client.enrollment();
+        if (asking !== a) return null;
+        if (!e || e.id !== a.id) {
+          asking = null;
+          return { stage: "gone" };
+        }
+        if (!e.answer) return { stage: "asking" };
+        if (!e.reveal) await a.client.reveal(a.id, a.nonce);
+        a.seen = { ...e, reveal: { nonce: a.nonce, at: e.reveal?.at ?? Date.now() } };
+      }
+      const e = a.seen;
+      const mailbox = await enrollMailbox(a.relay, a.device, e, deps.fetchImpl);
+      let raw = await mailbox.get("b");
+      if (asking !== a) return null;
+      if (raw === null) {
+        const still = await a.client.enrollment();
+        if (still?.id === a.id) return { stage: "digits", digits: await enrollDigits(e.ask, e.answer!, a.nonce) };
+        raw = await mailbox.get("b");
+        if (asking !== a) return null;
+        if (raw === null) {
+          asking = null;
+          return { stage: "gone" };
+        }
+      }
+      const grant = await readEnrollGrant(raw, a.device.pk);
+      if (!grant) throw new Error("the grant your other computer sent doesn't hold up");
+      asking = null;
+      deps.enrolled(grant);
+      await mailbox.drop();
+      return { stage: "done", person: grant.person, channels: grant.channels };
+    },
+
+    async cancel() {
+      const a = asking;
+      asking = null;
+      if (a) await a.client.drop(a.id).catch(() => {});
     },
   };
 }
