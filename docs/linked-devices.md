@@ -62,34 +62,44 @@ Why not copy the person key (the `kl1` way):
 - **No new signature format.** Each device signs as its own member, as members do today. Older apps
   show a device as one more member (for example "jow · iPhone") and keep working.
 
-The person key stays on **keyholders**:
+**Who signs: a device list per person, not a single keyholder.**
 
-- the first desktop, plus any device you explicitly promote (promotion copies the person key, with a
-  warning);
-- the recovery vault (section 6).
-
-Keyholders approve new devices and sign certs. Channel owner keys stay on keyholders as well.
-Section 3 covers admitting agents without one open.
+- Each person has one append-only, signed **device list**: add and revoke links, each with a version
+  number and signed by a device that is current at that point.
+- The first link is signed by the person key and adds the first device. That makes it a small sigchain
+  rooted in the person key, as Keybase does.
+- So **any device you already have can approve a new one**. That's Jow's choice: approve from any
+  enrolled device.
+- The person key itself stays on the first desktop and in the recovery vault (section 6). It only signs
+  the root and a re-root.
+- Channel owner keys stay where they are today; see section 3.
+- History comes free: approving a device into a channel already wraps every past epoch for it
+  (`wrapAllFor`).
+- One open point: today a handle has one key. A member record therefore needs a "same person, another
+  device" shape, or older apps show the device as a separate member (for example `jow-2`).
 
 ## 2. Enrolling a new device
 
 1. **Sign in.** The new device runs the WorkOS device flow (the one `desktop/src/signin.ts` already
-   has; `kiwi login` for the CLI). The relay maps the WorkOS user to a person key. A keyholder
-   publishes that mapping, signed by the person key, the first time it signs in.
+   has; `kiwi login` for the CLI). The relay maps the WorkOS user to a person key. The first
+   device publishes that mapping, signed by the person key, the first time it signs in.
 2. **Ask.** The new device makes its key and posts an `EnrollAsk` `{device, dxpk, label, os, at}` to
    the account's enrollment inbox. It is WorkOS-authenticated, rate-limited, and gone after 10 minutes.
-3. **Compare.** Every keyholder of that person shows "iPhone wants to be you". Both screens show the
-   same 6 digits, derived from the person key, the device's two keys and a fresh nonce. You check the
-   digits match and tap Approve on the keyholder. The digits cover the device's keys, so a relay that
-   swaps in its own key shows different digits.
-4. **Hand over.** The keyholder signs the `DeviceCert` and seals an `EnrollAnswer` to the device's
+3. **Compare.** Every current device of that person shows "iPhone wants to be you".
+   - Both screens show the same 6 digits, reusing `linkDigits`, which binds both keys. A relay that
+     swaps in its own key shows different digits.
+   - The approve screen says plainly what the new device will get (your channels, as you), and its OS
+     and label. That is Signal's 2025 phishing lesson.
+   - You check the digits match and tap Approve on any device you have.
+4. **Hand over.** The approving device signs the add link and the `DeviceCert`, and seals an `EnrollAnswer` to the device's
    X25519 key through the mailbox (`packages/core/src/mailbox.ts`, 10-minute TTL, 64 KB). It holds
-   `{cert, relay, the channels it may join (codes, not keys)}`.
+   `{cert, relay, your person public key and name, the channels it may join (codes, not keys)}`.
+   It never contains a secret key.
 5. **Join.** The device asks to join each channel with its `DeviceClaim`. Owners' clients admit it on
    their own; channels you own admit it immediately.
 
 What the relay sees: public keys, the WorkOS user, and sealed blobs. A WorkOS takeover alone gets a
-pending request at most. Approving it needs a keyholder in your hand and matching digits.
+pending request at most. Approving it needs one of your devices in your hand and matching digits.
 
 ## 3. Admitting agents without an app open
 
@@ -115,17 +125,17 @@ acceptable, since it's only the owner's own agents.
 **Expiry**
 
 - `DeviceCert.until` is 90 days.
-- Keyholders renew every listed device's cert as it nears the end, sealed to the device's inbox.
+- A device that's online gets its cert renewed by any current device as it nears the end, sealed to
+  its inbox.
 - A cert past `until` is not admitted on its own; it waits for Let in.
-- Old `MachineCert`s (no `until`) count as expiring 90 days after the device-key release, so that
-  existing computers get renewed and nothing stops at once.
+- Old `MachineCert`s (no `until`) stay valid until they're removed. Daemons on kiwi 2026.10.4 can't
+  renew, so expiring them would stop every existing computer's agents. The device list is what cuts
+  them off.
 
 **Revocation**
 
-- Forget in Settings puts the device on a person-signed `RevokedDevices`
-  `{person, devices[], version, at}`.
-- It is kept on the relay's account record, with a monotonic `version`, so the relay can't roll it
-  back.
+- Forget adds a revoke link to the device list. The list is kept on the relay's account record, and its
+  monotonic version means the relay can't roll it back.
 - It is also posted as a `device.revoke` event in each channel you're in. Owners there stop admitting
   that device, remove its member key and rotate.
 - Older clients skip the new op. They have handled unknown ops since 54313c33 (2026-10-21).
@@ -136,13 +146,15 @@ acceptable, since it's only the owner's own agents.
 
 The order, each step one PR:
 
-1. **Core:** `DeviceCert`, `DeviceClaim`, verification, and auto-admit of a member's devices.
+1. **Core:** `DeviceCert` (a `MachineCert` v2 with `role` and `until`), the device list (add and revoke
+   links rooted in the person key), `DeviceClaim`, verification, and auto-admit of a member's devices.
 2. **Relay:** account record (WorkOS user → person key, devices, revoked list), enrollment inbox.
-3. **Desktop:** approve-a-device screen, Settings → Devices (rename, forget, renew), the keyholder role,
+3. **Desktop:** approve-a-device screen, Settings → Devices (rename, forget, renew),
    and enrolling as a new desktop.
 4. **CLI:** `kiwi login` enrolls a computer (replaces `kp1` on the CLI).
 5. **iOS**, then **Android**: sign in and enroll (replaces `kl1`).
-6. **Revocation and expiry:** `device.revoke` and cert renewal.
+6. **Revocation and expiry:** the device list posted into every channel (a new op; older clients fold it
+   to nothing), and cert renewal.
 7. **Delegation** for the daemon.
 8. **Recovery vault.**
 9. **Remove** `kl1` and `kp1`, one release after every app ships enrollment. Code that goes:
@@ -151,12 +163,20 @@ The order, each step one PR:
    - `src/daemon/pair.ts`, `desktop/src/pairing.ts`, `desktop/src/ipc/pairing.ts`, and `kp1` in
      `kiwi setup`, `doctor` and `help`.
 
-Phones linked by `kl1` today hold copies of your keys. After step 5 the app asks them to enroll,
-rotates the channels they were in, and drops the copies.
+**Migrating `kl1` phones, once.** They hold copies of the person key and every channel's member key,
+owner keys included. For each one:
+
+1. Enroll it as a real device.
+2. Re-key: a new person key (the old one signs the hand-over link) and a new member key in every channel
+   it joined. This is the one time "rejoin with a new member key" is needed (#524).
+
+A **lost** `kl1` phone can't be fixed by revocation. Channels you own also need the owner-key answer
+from section 3, or to be recreated.
 
 ## 6. Recovery vault
 
-Only for when every keyholder is gone.
+Only for when every device is gone, or for a race where a thief revokes your other devices first. The
+recovery key **re-roots** the device list, like Keybase's paper keys.
 
 - **What it holds:** your person key and the owner keys of channels you own.
 - **Recovery key:** a **generated** 24-word phrase (256 bits). The vault key is HKDF of the phrase. It is
@@ -169,9 +189,15 @@ Only for when every keyholder is gone.
 
 ## Open decision for Jow
 
-- **Phones and owner actions.** Under device keys, a phone isn't a keyholder, so it can't approve joins
-  in channels you own unless delegation (section 3) is extended to it.
-- **Option a:** a phone can be promoted to keyholder. It copies the keys, with the warning that losing
-  it means replacing your person key.
-- **Option b:** phones never hold the person key, and approve through delegation.
-- Recommendation: **b**, with **a** available for people who want it.
+- **The owner key.** Today it can't be per device: the join code pins it, records must be signed by it
+  (`openRecord`), and the relay authenticates owner routes with it.
+- **Proposal:** an owner delegation `{room, device member key, exp}` signed by the owner key, which the
+  relay and clients accept for owner routes and records (Matrix's master / self-signing split). The
+  owner key then stays on the creating device and in the vault.
+- That needs a relay change and new clients before it can be used. Until then the owner key stays on
+  the device that created the channel, and Settings lists plainly which devices hold it.
+- Section 3's daemon delegation is the narrow case of the same mechanism.
+
+Thanks to sunny-tortoise's comparison of Signal, Matrix, Keybase and Apple (T536, #559): they all give
+each device its own keys, keep a device list the server can't forge or roll back, and revoke by dropping
+a device and re-keying what it could read.
