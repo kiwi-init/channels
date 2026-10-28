@@ -171,7 +171,7 @@ async function bundledKeysAnswer(file: string): Promise<string> {
       });
       worker.addEventListener("error", (e) => resolve(`it threw: ${e.message}`));
       const send = (m: ToWorker) => worker.postMessage(m);
-      send({ to: "host", m: { type: "init", relay: "https://relay.invalid", dir, seats: [], person: null } });
+      send({ to: "host", m: { type: "init", relay: "https://relay.invalid", dir, seats: [], person: null, mine: [] } });
       send({ to: "host", m: { type: "port" }, port: 1 });
       send({ to: "port", port: 1, data: { id: 1, op: "nudge" } });
     });

@@ -28,7 +28,7 @@ async function drive(keysJs: string, relay: string): Promise<string> {
       }
       if (m.type === "forget") seats.splice(0, seats.length, ...seats.filter((s) => s.code !== m.code));
       say({ to: "host", m: { type: "done", id: m.id } });
-      if (m.type === "save" || m.type === "forget") say({ to: "host", m: { type: "seats", seats, person: null } });
+      if (m.type === "save" || m.type === "forget") say({ to: "host", m: { type: "seats", seats, person: null, mine: [] } });
       return;
     }
     if (d.from === "port" && d.data && "id" in d.data) waiting.get(d.data.id)?.answer(d.data);
@@ -54,7 +54,7 @@ async function drive(keysJs: string, relay: string): Promise<string> {
       });
       say({ to: "port", port: 1, data: { id, ...data } });
     });
-  say({ to: "host", m: { type: "init", relay, dir, seats: [], person: null } });
+  say({ to: "host", m: { type: "init", relay, dir, seats: [], person: null, mine: [] } });
   say({ to: "host", m: { type: "port" }, port: 1 });
   try {
     const made = await ask<{ code: string }>({ op: "create", name: "probe", token: null, me: { name: "Probe" } });
