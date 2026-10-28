@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react"
 
 import { handleFor } from "@kiwi/core/membership.ts"
+import { useUnsealedKeys } from "@/lib/keys-at-rest"
 import { relayUrl } from "@/lib/relay"
 import { bridge, useSecrets, type ComputerView, type PhoneView } from "@/lib/secrets"
 import { useUpdate } from "@/lib/update"
@@ -212,6 +213,7 @@ export function useAccount(): Account | null {
   const asking = useSyncExternalStore(pairAsk.subscribe, pairAsk.get)
   const code = useSyncExternalStore(githubCode.subscribe, githubCode.get)
   const look = useSyncExternalStore(uiUpdate.subscribe, uiUpdate.get)
+  const unsealed = useUnsealedKeys()
   useEffect(() => {
     if (person) void refreshGithub().catch(() => {})
   }, [person])
@@ -227,9 +229,10 @@ export function useAccount(): Account | null {
       ...(look ? { uiUpdate: look } : {}),
       key: person.pk.slice(0, 8),
       relay: relayUrl(),
+      ...(unsealed ? { keysUnsealed: true } : {}),
       ...(bridge() ? { desktop: true } : {}),
       ...(asking ? { pairAsk: asking } : {}),
       ...(code ? { githubCode: code } : {}),
     }
-  }, [person, linked, computers, phones, online, agents, update, asking, code, look])
+  }, [person, linked, computers, phones, online, agents, update, asking, code, look, unsealed])
 }

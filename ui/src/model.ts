@@ -16,6 +16,7 @@ export interface Person {
   display?: string
   role?: string
   color?: Color
+  picture?: string
   owner: boolean
   you: boolean
   presence: Presence
@@ -265,6 +266,7 @@ export interface Account {
   uiUpdate?: { version: string }
   key?: string
   relay?: string
+  keysUnsealed?: boolean
   desktop?: boolean
   pairAsk?: { kind: "computer" | "phone"; label: string; os?: string; digits?: string }
   githubCode?: { code: string; url: string }

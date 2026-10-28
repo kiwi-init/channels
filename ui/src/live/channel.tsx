@@ -17,6 +17,7 @@ import { kept } from "~/live/keep"
 import { asksOf, directsOf, messagesOf, formerOf, peopleOf, roomsOf, tasksOf, type Pending } from "~/live/map"
 import { iconUrl } from "~/live/icon"
 import { usePinsHere } from "~/live/pins"
+import { usePublishFace } from "~/live/face"
 import { usePictures } from "~/live/pictures"
 import { ownPrefs } from "~/live/prefs"
 import { closeOpened, publish, type Run } from "~/live/store"
@@ -98,6 +99,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const [inTurn] = useState(sendsInTurn)
   const shown = useShown()
 
+  usePublishFace(state, me, connection === "live", send)
   const people = useMemo(() => peopleOf(state, roster, online, me, wakes), [state, roster, online, me, wakes])
   const former = useMemo(() => formerOf(state, me), [state, me])
   const nicknameKey = [...state.members.values()].map((m) => `${m.name}\u0000${m.display ?? ""}`).join("\n")

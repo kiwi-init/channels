@@ -5,7 +5,7 @@ import type { Person, TaskStatus } from "~/model"
 
 export const cx = (...parts: (string | false | null | undefined)[]): string => parts.filter(Boolean).join(" ")
 
-export function Avatar({ person, size = "md", pip }: { person: Pick<Person, "name" | "kind" | "harness" | "presence" | "color"> | undefined; size?: "sm" | "md" | "lg"; pip?: boolean }) {
+export function Avatar({ person, size = "md", pip }: { person: Pick<Person, "name" | "kind" | "harness" | "presence" | "color" | "picture"> | undefined; size?: "sm" | "md" | "lg"; pip?: boolean }) {
   if (!person) return <span className={cx("av", `av-${size}`, "av-gone")} aria-hidden="true" />
   const face = (
     <span
@@ -15,7 +15,7 @@ export function Avatar({ person, size = "md", pip }: { person: Pick<Person, "nam
       style={person.kind === "human" && person.color ? ({ "--member": `var(--c-${person.color})` } as CSSProperties) : undefined}
       aria-hidden="true"
     >
-      {person.kind === "agent" ? <HarnessLogo harness={person.harness} /> : person.name.slice(0, 1).toUpperCase()}
+      {person.kind === "agent" ? <HarnessLogo harness={person.harness} /> : person.picture ? <img src={person.picture} alt="" /> : person.name.slice(0, 1).toUpperCase()}
     </span>
   )
   if (!pip) return face

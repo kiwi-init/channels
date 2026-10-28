@@ -40,7 +40,21 @@ export const DEMO_TILES: ChannelTile[] = [
 
 const people: Person[] = [
   { name: "jow", kind: "human", color: "teal", owner: true, you: true, role: "owner", presence: "online", typing: false, lastSeen: now, joined: m(60 * 24 * 30), messages: 812 },
-  { name: "maya", kind: "human", color: "pink", owner: false, you: false, presence: "online", typing: false, lastSeen: m(4), joined: m(60 * 24 * 12), messages: 146, about: "on her phone today" },
+  {
+    name: "maya",
+    kind: "human",
+    color: "pink",
+    picture:
+      "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23f78fb3'/%3E%3Cstop offset='1' stop-color='%23786fa6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='40' height='40' fill='url(%23g)'/%3E%3Ccircle cx='20' cy='16' r='7' fill='%23fff' fill-opacity='.85'/%3E%3Cpath d='M7 38c2-8 8-12 13-12s11 4 13 12' fill='%23fff' fill-opacity='.85'/%3E%3C/svg%3E",
+    owner: false,
+    you: false,
+    presence: "online",
+    typing: false,
+    lastSeen: m(4),
+    joined: m(60 * 24 * 12),
+    messages: 146,
+    about: "on her phone today",
+  },
   {
     name: "atlas",
     kind: "agent",
