@@ -1,6 +1,6 @@
 import "~/styles/channel-panel.css"
 
-import { useRef, useState, type ReactNode } from "react"
+import { useEffect, useId, useRef, useState, type ReactNode } from "react"
 
 import { Field, Heading, IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
@@ -9,6 +9,7 @@ import type { Channel } from "~/model"
 import { nickname, shown } from "~/names"
 import { useApp } from "~/nav"
 import { PanelHead } from "~/panels/frame"
+import { repoOffers } from "~/panels/repo-offers"
 import { Toggle } from "~/kit/bits"
 import { Confirm, InlineEdit } from "~/settings/controls"
 
@@ -155,7 +156,18 @@ function Repos({ channel }: { channel: Channel }) {
   const { app } = useApp()
   const own = channel.youOwn
   const [draft, setDraft] = useState("")
+  const [mine, setMine] = useState<string[]>([])
   const valid = REPO.test(draft.trim())
+  const listId = useId()
+  useEffect(() => {
+    if (!own) return
+    let live = true
+    void app.actions.myRepos().then((r) => live && setMine(r))
+    return () => {
+      live = false
+    }
+  }, [app.actions, own])
+  const offer = repoOffers(mine, channel.repos)
   return (
     <>
       {channel.repos.length > 0 ? (
@@ -182,7 +194,12 @@ function Repos({ channel }: { channel: Channel }) {
             setDraft("")
           }}
         >
-          <input className="input is-mono" placeholder="owner/repo" aria-label="Add a repo" value={draft} onChange={(e) => setDraft(e.target.value)} />
+          <input className="input is-mono" placeholder="owner/repo" aria-label="Add a repo" list={listId} value={draft} onChange={(e) => setDraft(e.target.value)} />
+          <datalist id={listId}>
+            {offer.map((r) => (
+              <option key={r} value={r} />
+            ))}
+          </datalist>
           <button type="submit" className="btn is-small" disabled={!valid}>
             Add
           </button>
