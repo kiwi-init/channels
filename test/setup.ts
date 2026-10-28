@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const root = mkdtempSync(join(tmpdir(), "kiwi-test-harness-"));
-for (const name of ["codex", "gemini", "cursor", "grok", "kimi", "pi", "mimo", "claude", "kiwi", "tmux"]) mkdirSync(join(root, name));
+for (const name of ["codex", "gemini", "cursor", "grok", "kimi", "pi", "mimo", "zcode", "claude", "kiwi", "tmux"]) mkdirSync(join(root, name));
 
 const DIRS: Record<string, string> = {
   KIWI_CODEX_DIR: join(root, "codex"),
@@ -20,6 +20,7 @@ const DIRS: Record<string, string> = {
   KIWI_KIMI_DIR: join(root, "kimi"),
   KIWI_PI_DIR: join(root, "pi"),
   KIWI_MIMO_DIR: join(root, "mimo"),
+  KIWI_ZCODE_DIR: join(root, "zcode"),
   CLAUDE_CONFIG_DIR: join(root, "claude"),
   KIWI_HOME: join(root, "kiwi"),
   KIWI_TMUX_CONF: join(root, "tmux", "tmux.conf"),
@@ -45,6 +46,7 @@ const SESSION = [
   "MIMOCODE",
   "MIMOCODE_PID",
   "MIMOCODE_SESSION_ID",
+  "ZCODE_RUNTIME_ENV",
   "TMUX",
   "TMUX_PANE",
 ];

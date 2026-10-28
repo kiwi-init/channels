@@ -17,6 +17,12 @@ export interface HarnessRow {
 
 export const isKnownHarness = (v: unknown): v is KnownHarness => typeof v === "string" && (KNOWN_HARNESSES as readonly string[]).includes(v);
 
+const HOOK_HARNESSES = [...KNOWN_HARNESSES, "zcode"] as const satisfies readonly WakeHarness[];
+
+export type HookHarness = (typeof HOOK_HARNESSES)[number];
+
+export const isHookHarness = (v: unknown): v is HookHarness => typeof v === "string" && (HOOK_HARNESSES as readonly string[]).includes(v);
+
 const text = (v: unknown): string | null => (typeof v === "string" && v ? v : null);
 
 const HOOK_STATES = ["installed", "partial", "outdated", "missing", "off", "absent"] as const;
@@ -24,7 +30,7 @@ const HOOK_STATES = ["installed", "partial", "outdated", "missing", "off", "abse
 export type HookState = (typeof HOOK_STATES)[number];
 
 export interface HookRow {
-  harness: KnownHarness;
+  harness: HookHarness;
   state: HookState;
   text: string;
 }
@@ -34,7 +40,7 @@ const isHookState = (v: unknown): v is HookState => typeof v === "string" && (HO
 export function readHookRow(x: unknown): HookRow | null {
   if (!x || typeof x !== "object") return null;
   const r = x as Record<string, unknown>;
-  if (!isKnownHarness(r.harness) || !isHookState(r.state)) return null;
+  if (!isHookHarness(r.harness) || !isHookState(r.state)) return null;
   return { harness: r.harness, state: r.state, text: text(r.text) ?? r.state };
 }
 
