@@ -1,11 +1,11 @@
 import "~/styles/needs.css"
 
-import { useId, useState, type ReactNode } from "react"
+import { useEffect, useId, useState, type ReactNode } from "react"
 
 import { PrChip, QuestionCard, TaskChip } from "~/chat/cards"
 import { Avatar, Empty, Toggle } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
-import { ago } from "~/kit/time"
+import { ago, clock } from "~/kit/time"
 import type { Ask, Channel, JoinAsk, Message, PermissionAsk, Person, Powers, QuestionAsk, ReviewAsk } from "~/model"
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
@@ -185,9 +185,21 @@ function Holds({ channel, ids }: { channel: Channel; ids: number[] }) {
 
 const member = (channel: Channel, name: string): Person | undefined => channel.people.find((p) => p.name === name)
 
+function usePast(at: number | undefined): boolean {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (at === undefined || now > at) return
+    const timer = window.setTimeout(() => setNow(Date.now()), Math.min(at - now + 50, 2 ** 31 - 1))
+    return () => window.clearTimeout(timer)
+  }, [at, now])
+  return at !== undefined && now > at
+}
+
 function PermissionAskCard({ channel, ask, link }: { channel: Channel; ask: PermissionAsk; link: ReactNode }) {
   const { app } = useApp()
   const who = member(channel, ask.from)
+  const expired = usePast(ask.expiresAt)
+  const open = !ask.answer && !expired
   return (
     <Shell
       face={who}
@@ -197,18 +209,30 @@ function PermissionAskCard({ channel, ask, link }: { channel: Channel; ask: Perm
       at={ask.at}
       link={link}
       actions={
-        <>
-          <button type="button" className="btn is-primary" onClick={() => app.actions.answerPermission(channel.code, ask.id, true)}>
-            Allow
-          </button>
-          <button type="button" className="btn" onClick={() => app.actions.answerPermission(channel.code, ask.id, false)}>
-            Deny
-          </button>
-        </>
+        open && (ask.canAllow || ask.canDeny || ask.allower) ? (
+          <>
+            {ask.canAllow && (
+              <button type="button" className="btn is-primary" onClick={() => app.actions.answerPermission(channel.code, ask.id, true)}>
+                Allow
+              </button>
+            )}
+            {ask.canDeny && (
+              <button type="button" className="btn" onClick={() => app.actions.answerPermission(channel.code, ask.id, false)}>
+                Deny
+              </button>
+            )}
+            {!ask.canAllow && ask.allower && <span className="dim">Only {nickname(channel, ask.allower)} can allow it: it runs on their computer.</span>}
+          </>
+        ) : undefined
       }
     >
       <p className="needs-title">{ask.summary}</p>
       <pre className="needs-code">{ask.code}</pre>
+      {ask.expiresAt !== undefined && !ask.answer && (
+        <p className="dim">
+          {expired ? `It stopped waiting at ${clock(ask.expiresAt)}. If it still needs this, it asks again in its terminal.` : `It waits until ${clock(ask.expiresAt)}, and asks in its terminal too.`}
+        </p>
+      )}
       {ask.task !== undefined && <Holds channel={channel} ids={[ask.task]} />}
     </Shell>
   )

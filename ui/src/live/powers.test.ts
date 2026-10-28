@@ -8,7 +8,7 @@ const roster: Roster = [
   { name: "lin", pk: "pk-lin", owner: false, at: 0, active: true, kind: "human" },
   { name: "patient-otter", pk: "pk-otter", owner: false, at: 0, active: true, kind: "agent", addsAgents: true },
 ]
-const people = peopleOf(fold([], roster, 0), roster, new Map(), "jow", new Set())
+const people = peopleOf(fold([], roster, 0), roster, new Map(), "jow", new Map())
 const by = (name: string) => people.find((p) => p.name === name)
 
 describe("a person's powers show on their profile (T380)", () => {

@@ -47,6 +47,16 @@ function attempt(what: string, run: () => Promise<unknown>): void {
   void (async () => run())().catch((err: unknown) => announce(`${what}: ${say(err)}`))
 }
 
+async function tried<T>(what: string, run: () => Promise<T>): Promise<T | null> {
+  try {
+    return await run()
+  } catch (err) {
+    // The person sees why in the announcement; the caller gets null and stays where it was.
+    announce(`${what}: ${say(err)}`)
+    return null
+  }
+}
+
 function need(code: string): Run {
   const run = openedRun(code)
   if (!run) throw new Error("open the channel first")
@@ -393,7 +403,7 @@ export function makeActions(): Actions {
         announce(`Starting ${agent.name || harness}`)
       }),
     addRoom: (code, typed) =>
-      attempt("Room not made", async () => {
+      tried("Room not made", async () => {
         const run = owner(code)
         const problem = roomProblem(run.state.rooms.values(), typed)
         if (problem) throw new Error(problem)
@@ -403,6 +413,7 @@ export function makeActions(): Actions {
         const since = await event(run, `made the room #${room.name}`, { op: "room.create", ...room })
         await roomFolded(() => openedRun(code), room)
         await run.ch.setRooms({ list: roomsAfter(openedRun(code)?.state.rooms.values() ?? run.state.rooms.values(), room), since })
+        return room.id
       }),
     setGithubWrite: (code, on) =>
       attempt("Not changed", async () => {

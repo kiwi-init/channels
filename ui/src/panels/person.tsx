@@ -241,9 +241,9 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
       <Row label="Can only read" hint={`${agent ? "It reads" : "They read"} messages but can't post or take tasks.`}>
         {(id) => <Toggle id={id} on={!!person.readOnly} onChange={(on) => app.actions.setReadOnly(channel.code, person.name, on)} />}
       </Row>
-      {agent && (
-        <Row label="Wake it on new messages" hint={person.wakes === false ? "Off: it reads them on its next run." : "It starts working when someone writes."}>
-          {(id) => <Toggle id={id} on={person.wakes !== false} onChange={(on) => app.actions.setWake(channel.code, person.name, on)} />}
+      {agent && person.wakes !== undefined && (
+        <Row label="Wake it on new messages" hint={person.wakes ? "It starts working when someone writes." : "Off: it reads them on its next run."}>
+          {(id) => <Toggle id={id} on={person.wakes === true} onChange={(on) => app.actions.setWake(channel.code, person.name, on)} />}
         </Row>
       )}
       {!agent && (

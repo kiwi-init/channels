@@ -147,6 +147,10 @@ export interface PermissionAsk {
   id: string
   from: string
   at: number
+  expiresAt?: number
+  canAllow: boolean
+  canDeny: boolean
+  allower?: string
   tool: string
   summary: string
   code: string
@@ -364,7 +368,7 @@ export interface Actions {
   showAgent(code: string, name: string): Promise<string | null>
   choicesOn(code: string, computer: string): Promise<ComputerChoices>
   chooseFolder(): Promise<string | null>
-  addRoom(code: string, name: string): void
+  addRoom(code: string, name: string): Promise<string | null>
   renameRoom(code: string, id: string, name: string): void
   setIcon(code: string, file: File | null): void
   renameChannel(code: string, title: string): void

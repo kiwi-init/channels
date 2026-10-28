@@ -407,6 +407,12 @@
   background: var(--wash);
 }
 
+.side-problem {
+  margin: 4px 8px 6px;
+  color: var(--alert);
+  font: var(--t-meta) var(--ui);
+}
+
 .side-row.is-on {
   background: var(--wash-2);
   color: var(--ink);
