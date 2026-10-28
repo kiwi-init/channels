@@ -29,6 +29,7 @@ import { answerPair, cancelPair, linkGithub, pairBegin, unlinkGithub } from "~/l
 import { newMemberPowers, newMemberScopes, setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
 import { memberName } from "@/lib/format"
+import { checkComputer, setHooks } from "~/live/computer"
 import { addStartFolder, allowNewAgents, allowRemoteBypass, removeStartFolder } from "~/live/starts"
 import { closeOpened, openedChannel, openedRun, type Run } from "~/live/store"
 import { downloadAndRestart } from "~/live/update"
@@ -513,6 +514,8 @@ export function makeActions(): Actions {
     allowNewAgents: (on) => attempt("Couldn't change new agents", () => allowNewAgents(on)),
     allowRemoteBypass: (on) => attempt("Couldn't change bypass", () => allowRemoteBypass(on)),
     savePersonalities: (list) => attempt("Not saved", () => savePersonalities(list)),
+    setHooks: (harness, on) => attempt("Couldn't change the hooks", () => setHooks(harness, on)),
+    checkComputer,
   }
 }
 

@@ -20,6 +20,7 @@ import { iconUrl } from "~/live/icon"
 import { harnessOf } from "~/live/map"
 import { OpenPending, pendingTitle } from "~/live/pending"
 import { usePrefs } from "~/live/prefs"
+import { useComputer } from "~/live/computer"
 import { useStarts } from "~/live/starts"
 import { useOpened } from "~/live/store"
 import type { App, ChannelTile } from "~/model"
@@ -76,7 +77,14 @@ function useHarnesses(): App["harnesses"] {
     for (const r of rows) {
       const id = harnessOf(r.harness)
       if (!id || id === "other" || out.has(id)) continue
-      out.set(id, { id, label: harnessName(r.harness), installed: !!r.path && r.start })
+      out.set(id, {
+        id,
+        label: harnessName(r.harness),
+        installed: !!r.path && r.start,
+        ...(r.version ? { version: r.version } : {}),
+        ...(r.path ? { path: r.path } : {}),
+        ...(!r.start && r.why ? { why: r.why } : {}),
+      })
     }
     return [...out.values()]
   }, [rows])
@@ -105,11 +113,12 @@ export function useLive(open: string | null): App {
   const ownPersonalities = useOwnPersonalities()
   const personas = usePersonas(ownPersonalities)
   const starts = useStarts()
+  const computer = useComputer()
   const actions = useMemo(() => makeActions(), [])
   const channel = opened && opened.code === open ? opened.channel : null
   return useMemo(
-    () => ({ account, channels, channel, prefs, harnesses, personas, starts, ownPersonalities, actions }),
-    [account, channels, channel, prefs, harnesses, personas, starts, ownPersonalities, actions]
+    () => ({ account, channels, channel, prefs, harnesses, personas, starts, ownPersonalities, computer, actions }),
+    [account, channels, channel, prefs, harnesses, personas, starts, ownPersonalities, computer, actions]
   )
 }
 

@@ -1,3 +1,4 @@
+import type { HookState, KnownHarness } from "@kiwi/core/harnesses.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
 
 export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "grok" | "other"
@@ -370,6 +371,15 @@ export interface Actions {
   allowNewAgents(on: boolean): void
   allowRemoteBypass(on: boolean): void
   savePersonalities(list: Personality[]): void
+  setHooks(harness: KnownHarness, on: boolean): void
+  checkComputer(): Promise<Finding[] | null>
+}
+
+export type Finding = { ok: true; what: string } | { ok: false; what: string; how: string }
+
+export interface ThisComputer {
+  kiwi: { running: boolean; version?: string }
+  hooks: { harness: KnownHarness; label: string; state: Exclude<HookState, "absent"> }[]
 }
 
 export interface AgentStarts {
@@ -383,10 +393,11 @@ export interface App {
   channels: ChannelTile[]
   channel: Channel | null
   prefs: Prefs
-  harnesses: { id: Harness; label: string; installed: boolean }[]
+  harnesses: { id: Harness; label: string; installed: boolean; version?: string; path?: string; why?: string }[]
   personas: { id: string; label: string; about: string }[]
   starts: AgentStarts | null
   ownPersonalities: Personality[]
+  computer: ThisComputer | null
   actions: Actions
 }
 
