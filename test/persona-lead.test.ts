@@ -114,6 +114,25 @@ describe("lead by persona follows the log (#1122)", () => {
     }
   });
 
+  test("an older client's reset before a logged change means the same whichever base a fold resumes from", async () => {
+    const legacy = await ev("jon", { op: "scope.set", member: "linux", pk: ids.linux!.pk, scopes: null });
+    const add = await ev("jon", { op: "task.add", title: "stalled", owner: "win", review: "mac" });
+    const move = await ev("linux", { op: "task.update", task: add.seq, review: "linux" });
+    const dropped = await ev("jon", promote(false, true));
+    const all = [legacy, add, move, dropped];
+    const full = fold(all, before);
+    expect(full.rejected.has(move.seq)).toBe(true);
+    expect(full.tasks.get(add.seq)!.review).toBe("mac");
+    for (let cut = 0; cut <= all.length; cut++) {
+      const kept: { base?: FoldBase } = {};
+      fold(all.slice(0, cut), before, Date.now(), null, null, null, (b) => void (kept.base = b));
+      for (const resumed of [fold(all.slice(cut), before, Date.now(), null, null, kept.base), fold(all, before, Date.now(), null, null, kept.base)]) {
+        expect([cut, resumed.rejected.has(move.seq)]).toEqual([cut, true]);
+        expect([cut, resumed.tasks.get(add.seq)!.review]).toEqual([cut, "mac"]);
+      }
+    }
+  });
+
   test("a persona change carries both values or neither; a permission change may say it keeps them", () => {
     const base = { op: "scope.set", member: "linux", pk: "k", scopes: null };
     const msg = (e: object) => ({ v: 1, id: "x", from: "jon", kind: "event", body: "", ts: 1, ev: e });

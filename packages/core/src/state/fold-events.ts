@@ -9,12 +9,12 @@ import { readScopes, SCOPES, type Scope } from "../scopes.ts";
 import { isPerson } from "./people.ts";
 import { roomName } from "./rooms.ts";
 import { currentState, openRound, reviewMoveRefusal, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
-import type { Charter, Compact, Fact, FoldMember, Hold, Lease, Room, Task } from "./types.ts";
+import type { Charter, Compact, Fact, FoldMember, Hold, Lease, PersonaLead, Room, Task } from "./types.ts";
 
 export interface FoldCtx {
   members: Map<string, FoldMember>;
   signed: ReadonlySet<string>;
-  personaLead: Map<string, boolean>;
+  personaLead: Map<string, PersonaLead>;
   leads: (member: FoldMember) => boolean;
   keysByName: Map<string, Set<string>>;
   scopesByKey: Map<string, Scope[]>;
@@ -213,7 +213,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       scopesByKey.set(ev.pk, scopes);
       scopeSets.set(ev.pk, { seq: m.seq, scopes });
       if (ev.lead !== undefined) c.personaLead.set(ev.member, ev.lead);
-      else if (!ev.keepLead) c.personaLead.delete(ev.member);
+      else if (!ev.keepLead) c.personaLead.set(ev.member, "roster");
       break;
     }
 

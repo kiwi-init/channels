@@ -232,6 +232,8 @@ export interface Room {
   posters?: string[];
 }
 
+export type PersonaLead = boolean | "roster";
+
 export interface FoldBase {
   n: number;
   members: { name: string; role?: string; about?: string; color?: Color; picture?: MemberPicture; card?: Card & { at: number }; lastSeen: number; messages: number }[];
@@ -261,7 +263,7 @@ export interface FoldBase {
   sentFloors?: [string, number][];
   hw?: number;
   placesBefore?: [Place, number, number][];
-  personaLeads?: [string, boolean][];
+  personaLeads?: [string, PersonaLead][];
   asks: Message[];
   askHeads?: AskHead[];
   answered: [number, string[]][];

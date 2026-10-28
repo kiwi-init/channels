@@ -12,7 +12,7 @@ import { roomName } from "./rooms.ts";
 import { settle } from "./leases.ts";
 import { carriedPersona } from "../personality.ts";
 import { permissionAnswer } from "../permission.ts";
-import type { AskHead, ChannelState, Fact, FoldBase, FoldMember, GuardFloor, Lease, Member, Place, Reaction, Room, RoomsFloor, Roster, Task } from "./types.ts";
+import type { AskHead, ChannelState, Fact, FoldBase, FoldMember, GuardFloor, Lease, Member, PersonaLead, Place, Reaction, Room, RoomsFloor, Roster, Task } from "./types.ts";
 
 const STALE_MS = 24 * 3_600_000;
 const SENT_WINDOW_MS = 2 * STALE_MS;
@@ -157,7 +157,7 @@ function folding(
     if (!set) keysByName.set(r.name, (set = new Set()));
     set.add(r.pk);
   }
-  const personaLead = new Map<string, boolean>(from?.personaLeads);
+  const personaLead = new Map<string, PersonaLead>(from?.personaLeads);
   const leadChanges = lookAhead
     ? messages.flatMap((m) =>
         m.seq > after && m.ev?.op === "scope.set" && m.ev.wasLead !== undefined && !personaLead.has(m.ev.member) ? [{ seq: m.seq, member: m.ev.member, was: m.ev.wasLead }] : [],
@@ -167,7 +167,11 @@ function folding(
     const accepted = folding(messages, roster, now, roomsFloor, guardFloor, given, undefined, false);
     for (const c of leadChanges) if (!personaLead.has(c.member) && accepted.trust.get(c.seq) === "verified" && !accepted.rejected.has(c.seq)) personaLead.set(c.member, c.was);
   }
-  const leads = (member: FoldMember): boolean => member.owner || isLeadRole(member.role) || (personaLead.get(member.name) ?? (signed.has(member.name) && member.persona?.role === "lead"));
+  const logged = (member: FoldMember): boolean | undefined => {
+    const lead = personaLead.get(member.name);
+    return lead === "roster" ? undefined : lead;
+  };
+  const leads = (member: FoldMember): boolean => member.owner || isLeadRole(member.role) || (logged(member) ?? (signed.has(member.name) && member.persona?.role === "lead"));
   const scopesByKey = new Map<string, Scope[]>();
   for (const r of roster) scopesByKey.set(r.pk, scopesOf(r));
   for (const [pk, scopes] of from?.scopesByKey ?? []) scopesByKey.set(pk, scopes);
