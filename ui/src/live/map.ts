@@ -69,6 +69,8 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
     ...(doing.has(m.name) ? { doing: doing.get(m.name) } : {}),
     ...(!m.owner && !canPost(m.scopes) ? { readOnly: true } : {}),
     ...(!human && wakes.has(m.name) ? { wakes: true } : {}),
+    ...(human && record?.addsAgents ? { addsAgents: true } : {}),
+    ...(human && record?.answersDecisions ? { answersDecisions: true } : {}),
     lastSeen: here?.at ?? m.lastSeen,
     joined: m.joined,
     messages: m.messages,

@@ -1,11 +1,12 @@
 import { useEffect, useState, type CSSProperties } from "react"
 
 import { Conversation } from "~/chat/conversation"
+import { SearchBox, type Jump } from "~/chat/search-box"
 import { cx, Count, IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { Channel } from "~/model"
 import { NeedsYou, openAsks } from "~/needs/needs"
-import { useApp } from "~/nav"
+import { sameWhere, useApp } from "~/nav"
 import { ChannelPanel } from "~/panels/channel-panel"
 import { InvitePanel } from "~/panels/invite"
 import { AddAgentPanel } from "~/panels/add-agent"
@@ -21,7 +22,9 @@ import { nickname } from "~/names"
 export function ChannelScreen({ channel }: { channel: Channel }) {
   const { nav, go } = useApp()
   const panel = usePanelWidth()
-  const [search, setSearch] = useState("")
+  const [jump, setJump] = useState<Jump | null>(null)
+  const [focusAsk, setFocusAsk] = useState(0)
+  if (jump && (nav.tab !== "chat" || !sameWhere(jump.m.where, nav.where))) setJump(null)
   const [searching, setSearching] = useState(false)
   const [drawer, setDrawer] = useState(false)
   const [seen, setSeen] = useState(nav.where)
@@ -35,6 +38,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
         e.preventDefault()
         setSearching(true)
+        setFocusAsk((n) => n + 1)
       }
     }
     window.addEventListener("keydown", onKey)
@@ -91,27 +95,14 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
             </span>
           )}
           {searching ? (
-            <input
-              autoFocus
-              className="input is-mono top-search"
-              placeholder="Search this channel"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onBlur={() => !search && setSearching(false)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  setSearch("")
-                  setSearching(false)
-                }
-              }}
-            />
+            <SearchBox channel={channel} focusAsk={focusAsk} onJump={setJump} onClose={() => setSearching(false)} />
           ) : (
             <IconButton icon="search" label="Search this channel (⌘F)" onClick={() => setSearching(true)} />
           )}
         </div>
       </header>
       <Sidebar channel={channel} />
-      <main className="main">{nav.tab === "tasks" ? <Board channel={channel} /> : nav.tab === "needs" ? <NeedsYou channel={channel} /> : <Conversation channel={channel} search={search} />}</main>
+      <main className="main">{nav.tab === "tasks" ? <Board channel={channel} /> : nav.tab === "needs" ? <NeedsYou channel={channel} /> : <Conversation channel={channel} jump={jump} />}</main>
       {channel.connection !== "live" && (
         <p className="conn" role="status">
           <span className="dot is-doing" aria-hidden="true" />

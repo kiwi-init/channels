@@ -1,6 +1,6 @@
 import type { Task } from "@kiwi/core/state.ts"
 
-import { buildIndex, rank } from "./search-rank"
+import { buildIndex, rank } from "@kiwi/core/search-rank.ts"
 
 const idOf = (query: string) => {
   const id = /^t?(\d+)$/i.exec(query.trim())

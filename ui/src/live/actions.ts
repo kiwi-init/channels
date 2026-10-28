@@ -28,6 +28,7 @@ import { answerPair, cancelPair, linkGithub, pairBegin, unlinkGithub } from "~/l
 import { newMemberPowers, newMemberScopes, setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
 import { memberName } from "@/lib/format"
+import { addStartFolder, allowNewAgents, allowRemoteBypass, removeStartFolder } from "~/live/starts"
 import { closeOpened, openedChannel, openedRun, type Run } from "~/live/store"
 import { downloadAndRestart } from "~/live/update"
 import { setWake } from "~/live/wakes"
@@ -308,6 +309,25 @@ export function makeActions(): Actions {
       }),
     setReadOnly: (code, name, on) => attempt("Not changed", () => scopesFor(owner(code), name, on ? [] : [...SCOPES])),
     setWake: (code, name, on) => attempt("Not changed", () => setWake(need(code).roomId, name, on)),
+    setNickname: (code, name, nickname) =>
+      attempt("Nickname not changed", async () => {
+        const run = owner(code)
+        await run.ch.updateNickname(memberOf(run, name), nickname?.trim() || null)
+        await run.refreshRoster()
+      }),
+    setColor: (code, name, color) =>
+      attempt("Colour not changed", async () => {
+        const run = need(code)
+        if (name !== run.me && !run.isOwner) throw new Error("only that person or the owner sets a colour")
+        await event(run, color ? `${name}'s colour is ${color}` : `cleared ${name}'s colour`, { op: "color.set", member: name, color })
+      }),
+    setPowers: (code, name, powers) =>
+      attempt("Not changed", async () => {
+        const run = owner(code)
+        const m = memberOf(run, name)
+        await run.ch.updatePowers(m, { addsAgents: powers.addsAgents ?? !!m.addsAgents, answersDecisions: powers.answersDecisions ?? !!m.answersDecisions })
+        await run.refreshRoster()
+      }),
     addAgent: (code, agent) =>
       attempt("Agent not started", async () => {
         const b = bridge()
@@ -487,6 +507,10 @@ export function makeActions(): Actions {
     cancelPair: () => attempt("Couldn't cancel", cancelPair),
     saveTheme,
     deleteTheme,
+    addStartFolder: () => attempt("Couldn't add the folder", addStartFolder),
+    removeStartFolder: (dir) => attempt("Couldn't remove the folder", () => removeStartFolder(dir)),
+    allowNewAgents: (on) => attempt("Couldn't change new agents", () => allowNewAgents(on)),
+    allowRemoteBypass: (on) => attempt("Couldn't change bypass", () => allowRemoteBypass(on)),
   }
 }
 

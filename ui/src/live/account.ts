@@ -5,26 +5,9 @@ import { relayUrl } from "@/lib/relay"
 import { bridge, useSecrets, type ComputerView, type PhoneView } from "@/lib/secrets"
 import { useUpdate } from "@/lib/update"
 import { announce } from "~/kit/toasts"
+import { store, type Listener } from "~/live/value"
 import type { Account, Computer } from "~/model"
 import { version } from "../../../package.json"
-
-type Listener = () => void
-
-function store<T>(initial: T) {
-  let value = initial
-  const listeners = new Set<Listener>()
-  return {
-    get: () => value,
-    set: (next: T) => {
-      value = next
-      for (const l of listeners) l()
-    },
-    subscribe: (l: Listener) => {
-      listeners.add(l)
-      return () => void listeners.delete(l)
-    },
-  }
-}
 
 type PairAsk = NonNullable<Account["pairAsk"]>
 
