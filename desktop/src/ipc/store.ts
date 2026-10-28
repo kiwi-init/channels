@@ -3,7 +3,8 @@ import type { ComputerView, PendingItem, PersonView } from "../bridge.ts";
 import type { Serves } from "../calls.ts";
 import { mergePublicChannels, migrateEntries, movedRelay, normalizeRelay, publicComputer, publicPerson } from "../guard.ts";
 import type { Host } from "../host.ts";
-import { mutate, store } from "../store.ts";
+import { unpairAt } from "../remote.ts";
+import { mutate, requirePerson, store } from "../store.ts";
 
 let makingPerson = false;
 
@@ -50,7 +51,14 @@ export function storeCalls(host: Host): Serves<"setRelayUrl" | "createPerson" | 
       });
       return added;
     },
-    saveComputers: (computers: ComputerView[]) => mutate((s) => (s.computers = computers.map(publicComputer))),
+    saveComputers: (computers: ComputerView[]) => {
+      const kept = new Set(computers.map((c) => c.machinePk));
+      const gone = store.computers.filter((c) => !c.own && !kept.has(c.machinePk));
+      mutate((s) => (s.computers = computers.map(publicComputer)));
+      if (!store.person || !gone.length) return;
+      const person = requirePerson();
+      for (const c of gone) void unpairAt({ person, relay: store.relayUrl }, c.machinePk);
+    },
     setPending: (pending: PendingItem[]) => mutate((s) => (s.pending = pending)),
   };
 }
