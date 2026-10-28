@@ -4,7 +4,7 @@ import { join, relative, resolve, sep } from "node:path";
 
 import { buildUipack, generateSigningKey, signManifest, uipackFileName, type UiManifest } from "../desktop/.hutch/devkit/api/sdks/main/appengine/format.ts";
 import { appExecutable } from "../desktop/scripts/eb-drive.ts";
-import { UI_CONTRACT, UI_DATA_SCHEMA } from "../desktop/src/ui-contract.ts";
+import { UI_DATA_SCHEMA, UI_REQUIRES } from "../desktop/src/ui-contract.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const UI = join(ROOT, "ui");
@@ -61,7 +61,7 @@ function publish(): boolean {
   bundles.clear();
   bundles.set(name, bytes);
   manifest = signManifest(
-    { format: "livewire-manifest/1", keyId: signing.keyId, seq: at, uiVersion, bundleUrl: name, sha256, requiresContract: `^${UI_CONTRACT}`, dataSchema: UI_DATA_SCHEMA, publishedAt: at },
+    { format: "livewire-manifest/1", keyId: signing.keyId, seq: at, uiVersion, bundleUrl: name, sha256, requiresContract: `^${UI_REQUIRES}`, dataSchema: UI_DATA_SCHEMA, publishedAt: at },
     signing.privateKeyPem,
   );
   console.log(`published ${uiVersion} (${bytes.length} bytes): close the app's window and open it again to see it`);

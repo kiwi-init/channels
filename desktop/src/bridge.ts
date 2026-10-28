@@ -342,6 +342,7 @@ export interface KiwiBridge {
   checkUpdate(): Promise<UpdateCheckView>;
   notify(title: string, body: string): Promise<void>;
   openExternal(url: string): Promise<void>;
+  saveFile(name: string, text: string): Promise<string>;
   takeDroppedFiles(): Promise<DroppedFile[]>;
   takePastedImage(): Promise<PastedImage | null>;
   setBadge(count: number): Promise<void>;

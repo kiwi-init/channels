@@ -3,6 +3,7 @@ import { Icon } from "~/kit/icons"
 import { useApp } from "~/nav"
 import { Toggle } from "~/kit/bits"
 import { Group, Row } from "~/settings/controls"
+import { Personalities } from "~/settings/personalities"
 import { Page } from "~/settings/sections"
 
 export function AgentsSection() {
@@ -10,11 +11,7 @@ export function AgentsSection() {
   const { starts, actions } = app
   return (
     <Page title="Agents" lede="What agents you start from this computer can use.">
-      <Group title="Personalities">
-        {app.personas.map((p) => (
-          <Row key={p.id} label={p.label} hint={p.about} />
-        ))}
-      </Group>
+      <Personalities />
 
       <Group title="Harnesses on this computer">
         {app.harnesses.map((h) => (

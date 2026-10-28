@@ -3,7 +3,7 @@ import { useSyncExternalStore } from "react"
 import type { SendOptions } from "@kiwi/core/client.ts"
 import type { JoinRequest, Member as RosterMember } from "@kiwi/core/membership.ts"
 import type { Message as Wire } from "@kiwi/core/protocol.ts"
-import type { ChannelState } from "@kiwi/core/state.ts"
+import type { ChannelState, FoldBase } from "@kiwi/core/state.ts"
 import type { ChannelLink } from "@/lib/channel-ops"
 import type { Channel, Upload, Where } from "~/model"
 
@@ -23,6 +23,7 @@ export interface Run {
   discard: (key: number) => void
   refreshRequests: () => Promise<void>
   refreshRoster: () => Promise<void>
+  foldFrom: (messages: Wire[], base: FoldBase | null) => ChannelState
 }
 
 interface Opened {
@@ -50,6 +51,8 @@ export function closeOpened(code: string): void {
 }
 
 export const openedRun = (code: string): Run | null => (current?.code === code ? current.run : null)
+
+export const openedChannel = (code: string): Channel | null => (current?.code === code ? current.channel : null)
 
 export function useOpened(): Opened | null {
   return useSyncExternalStore(subscribe, () => current)

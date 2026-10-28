@@ -81,7 +81,7 @@ function useShown(): boolean {
 
 export const OpenMember = memo(function OpenMember({ member, view }: { member: StoredMember; view: View }) {
   const live = useChannel(member)
-  const { ch, state, messages, roster, online, requests, isOwner, connection, gone, send, refreshRequests, refreshRoster } = live
+  const { ch, state, messages, roster, online, requests, isOwner, connection, gone, send, refreshRequests, refreshRoster, foldFrom } = live
   const me = member.identity.name
   const roomId = member.access.roomId
   const code = member.code
@@ -131,6 +131,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       newMembers,
       newPowers,
       repos: state.repos,
+      ...(state.githubWrite !== null ? { githubWrite: true } : {}),
+      ...(state.branchPrefix ? { branchPrefix: state.branchPrefix } : {}),
       rooms,
       directs,
       people,
@@ -141,7 +143,31 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       asks: asks.asks,
       connection,
     }),
-    [code, title, icon, isOwner, me, state.lead, state.charter, facts, state.hold, newMembers, newPowers, state.repos, rooms, directs, people, former, nicknames, mapped, tasks, asks.asks, connection]
+    [
+      code,
+      title,
+      icon,
+      isOwner,
+      me,
+      state.lead,
+      state.charter,
+      facts,
+      state.hold,
+      newMembers,
+      newPowers,
+      state.repos,
+      state.githubWrite,
+      state.branchPrefix,
+      rooms,
+      directs,
+      people,
+      former,
+      nicknames,
+      mapped,
+      tasks,
+      asks.asks,
+      connection,
+    ]
   )
 
   const post = useCallback(
@@ -188,8 +214,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   )
 
   const run = useMemo(
-    (): Run => ({ code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster }),
-    [code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster]
+    (): Run => ({ code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster, foldFrom }),
+    [code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster, foldFrom]
   )
 
   useLayoutEffect(() => publish({ code, channel, run }), [code, channel, run])
