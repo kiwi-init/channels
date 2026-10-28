@@ -61,6 +61,7 @@ export const SHOTS: Record<string, Shot> = {
   "settings-notifications": kiwi({ page: "settings", section: "notifications" }),
   "settings-updates": kiwi({ page: "settings", section: "updates" }),
   "settings-update-ready": { scenario: "update-ready", channel: "kiwi", nav: { page: "settings", section: "updates" } },
+  "settings-update-available": { scenario: "update-available", channel: "kiwi", nav: { page: "settings", section: "updates" } },
   "settings-about": kiwi({ page: "settings", section: "about" }),
   "channel-settings-guest": { scenario: "full", channel: "studio", nav: { panel: { kind: "channel" } } },
   updates: { scenario: "updates", channel: "kiwi" },

@@ -193,6 +193,20 @@ export function UpdatesSection() {
               Restart to update
             </button>
           </Row>
+        ) : update?.state === "available" ? (
+          <Row
+            label={
+              <span className="set-state">
+                <span className="set-state-dot is-new" aria-hidden="true" />
+                {update.version} is out
+              </span>
+            }
+            hint="Channels downloads it, then closes and opens again on the new version."
+          >
+            <button type="button" className="btn is-primary is-small" onClick={app.actions.installUpdate}>
+              Download and restart
+            </button>
+          </Row>
         ) : update ? (
           <Row
             label={

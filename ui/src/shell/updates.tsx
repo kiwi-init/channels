@@ -30,7 +30,16 @@ export function UpdateDock() {
 
   if (!look && !update) return null
   const ready = !!look || state === "ready"
-  const label = look && update ? "Updates ready" : look ? "UI changes are ready" : state === "ready" ? `Channels ${update?.version} is ready` : `Channels ${update?.version} is downloading`
+  const label =
+    look && update
+      ? "Updates ready"
+      : look
+        ? "UI changes are ready"
+        : state === "ready"
+          ? `Channels ${update?.version} is ready`
+          : state === "available"
+            ? `Channels ${update?.version} is out`
+            : `Channels ${update?.version} is downloading`
 
   return (
     <div className="dock" ref={box}>

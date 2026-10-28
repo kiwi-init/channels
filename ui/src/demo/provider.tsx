@@ -27,7 +27,7 @@ const PERSONAS: App["personas"] = [
   { id: "designer", label: "Designer", about: "Owns how it looks: shots on every PR, no slop." },
 ]
 
-export type Scenario = "full" | "long" | "signed-out" | "no-channels" | "updates" | "update-ready"
+export type Scenario = "full" | "long" | "signed-out" | "no-channels" | "updates" | "update-ready" | "update-available"
 
 function initial(scenario: Scenario, look: Partial<Prefs>): State {
   const prefs = { ...DEMO_PREFS, ...look }
@@ -37,6 +37,7 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
   if (scenario === "updates")
     return { account: { ...DEMO_ACCOUNT, uiUpdate: { version: "dev-1542" }, update: { version: "2026.10.7", ready: true, state: "ready" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "update-ready") return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.7", ready: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
+  if (scenario === "update-available") return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.8", ready: false, state: "available" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "signed-out") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000 }
   if (scenario === "no-channels") return { account: DEMO_ACCOUNT, tiles: [], channels: new Map(), prefs, seq: 1000 }
   return { account: DEMO_ACCOUNT, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
