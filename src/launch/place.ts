@@ -1,6 +1,6 @@
 import { statSync } from "node:fs";
 import { isAbsolute } from "node:path";
-import type { Opened, PlaceKind } from "@kiwi/core/terminals.ts";
+import { PLACE_NAMES, type Opened, type PlaceKind } from "@kiwi/core/terminals.ts";
 import { loadConfig, type Config } from "../config.ts";
 import type { Pane, PlaceRequest, Placed, PlaceTools, TerminalId, TerminalPlugin } from "../terminals/plugin.ts";
 import { placeTools, preferred, terminalPlugins } from "../terminals/registry.ts";
@@ -9,6 +9,12 @@ const KIND: Record<TerminalId, PlaceKind> = { rex: "rex", tmux: "tmux", app: "te
 
 const CONTROL = /[\x00-\x1f\x7f]/;
 const ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+export interface Hosted {
+  ready(): Promise<string | null>;
+  open(req: PlaceRequest): Promise<Placed>;
+  pane(pane: string): Pane | null;
+}
 
 function isDir(path: string): boolean {
   try {
@@ -29,12 +35,14 @@ function badRequest(req: PlaceRequest): string | null {
   return null;
 }
 
-export async function placeKind(tools?: PlaceTools, cfg: Pick<Config, "terminals"> = loadConfig()): Promise<PlaceKind | null> {
+export async function placeKind(tools?: PlaceTools, cfg: Pick<Config, "terminals"> = loadConfig(), hosted?: Hosted): Promise<PlaceKind | null> {
+  if (hosted && !(await hosted.ready())) return "hosted";
   const picked = await pick(await terminalPlugins(tools ?? (await placeTools())), cfg);
   return picked ? KIND[picked.plugin.manifest.id] : null;
 }
 
-export async function paneOf(placed: Opened, tools?: PlaceTools): Promise<Pane | null> {
+export async function paneOf(placed: Opened, tools?: PlaceTools, hosted?: Hosted): Promise<Pane | null> {
+  if (placed.place === "hosted") return hosted?.pane(placed.pane) ?? null;
   const plugins = await terminalPlugins(tools ?? (await placeTools()));
   const typer = (id: TerminalId) => plugins.find((p) => p.manifest.id === id)?.type;
   if (placed.place === "rex") return typer("rex")?.({ rex: placed.rex }) ?? null;
@@ -42,13 +50,21 @@ export async function paneOf(placed: Opened, tools?: PlaceTools): Promise<Pane |
   return null;
 }
 
-export async function openPlace(req: PlaceRequest, tools?: PlaceTools, cfg: Pick<Config, "terminals"> = loadConfig()): Promise<Placed> {
+export async function openHosted(req: PlaceRequest, hosted: Hosted): Promise<Placed> {
+  const bad = badRequest(req);
+  return bad ? { ok: false, why: "bad-request", detail: bad } : hosted.open(req);
+}
+
+export async function openPlace(req: PlaceRequest, tools?: PlaceTools, cfg: Pick<Config, "terminals"> = loadConfig(), hosted?: Hosted): Promise<Placed> {
   const bad = badRequest(req);
   if (bad) return { ok: false, why: "bad-request", detail: bad };
+  const unhosted = hosted ? await hosted.ready() : null;
+  if (hosted && !unhosted) return hosted.open(req);
   const picked = await pick(await terminalPlugins(tools ?? (await placeTools())), cfg);
-  if (!picked) return { ok: false, why: "no-place", detail: "No terminal to open: install tmux, or run kiwi join yourself" };
+  if (!picked) return { ok: false, why: "no-place", detail: unhosted ?? "No terminal to open: install tmux, or run kiwi join yourself" };
   const placed = await picked.plugin.open!(req);
-  return placed.ok && picked.instead ? { ...placed, instead: picked.instead } : placed;
+  const instead = unhosted ? `${unhosted}, so it opened in ${PLACE_NAMES[KIND[picked.plugin.manifest.id]]}` : picked.instead;
+  return placed.ok && instead ? { ...placed, instead } : placed;
 }
 
 async function pick(plugins: TerminalPlugin[], cfg: Pick<Config, "terminals">): Promise<{ plugin: TerminalPlugin; instead?: string } | null> {

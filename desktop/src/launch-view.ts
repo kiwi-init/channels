@@ -36,5 +36,6 @@ export function launchedView(v: unknown): LaunchedView {
   const p = r.placed;
   if (p.place === "rex") return { ok: true, launch: r.launch, place: "rex", rex: p.rex };
   if (p.place === "tmux") return { ok: true, launch: r.launch, place: "tmux", session: p.session, window: p.window };
+  if (p.place === "hosted") return { ok: true, launch: r.launch, place: "hosted", window: p.window };
   return { ok: true, launch: r.launch, place: "terminal" };
 }

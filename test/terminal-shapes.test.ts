@@ -25,6 +25,8 @@ const places: Opened[] = [
   { ok: true, place: "tmux", socket: "/private/tmp/tmux-501/default", session: "kiwi", window: "@7", pane: "%7" },
   { ok: true, place: "terminal", window: 12 },
   { ok: true, place: "terminal" },
+  { ok: true, place: "hosted", socket: "/tmp/kiwi-501/0123456789ab", window: "@3", pane: "%3", pid: 43 },
+  { ok: true, place: "hosted", socket: "/tmp/kiwi-501/0123456789ab", window: "@3", pane: "%3" },
 ];
 
 const opened = (placed: Record<string, unknown>): unknown => ({ ok: true, launch, placed: { ok: true, ...placed } });
@@ -35,15 +37,19 @@ describe("a launch's answer", () => {
       const sent: Launched = { ok: true, launch, placed };
       expect(readLaunched(JSON.parse(JSON.stringify(sent)))).toEqual(sent);
     }
-    expect(places.map((p) => p.place).filter((kind, i, all) => all.indexOf(kind) === i)).toEqual(["rex", "tmux", "terminal"]);
-    expect(Object.keys(PLACE_NAMES)).toEqual(["rex", "tmux", "terminal"]);
+    expect(launchedView({ ok: true, launch, placed: places[7] })).toEqual({ ok: true, launch, place: "hosted", window: "@3" });
+    expect(places.map((p) => p.place).filter((kind, i, all) => all.indexOf(kind) === i)).toEqual(["rex", "tmux", "terminal", "hosted"]);
+    expect(Object.keys(PLACE_NAMES)).toEqual(["rex", "tmux", "terminal", "hosted"]);
   });
 
   test("each place is named the same in the CLI and the app", () => {
-    expect(PLACE_NAMES).toEqual({ rex: "Rex", tmux: "tmux", terminal: "Terminal" });
+    expect(PLACE_NAMES).toEqual({ rex: "Rex", tmux: "tmux", terminal: "Terminal", hosted: "Channels" });
     expect(launchedText({ ok: true, launch, placed: places[0]! })).toBe(`started in a Rex window; it joins with launch ${launch}`);
     expect(launchedText({ ok: true, launch, placed: places[2]! })).toBe(`started in tmux window @7 of session kiwi (tmux attach -t kiwi); it joins with launch ${launch}`);
     expect(launchedText({ ok: true, launch, placed: places[5]! })).toBe(`started in a Terminal window; it joins with launch ${launch}`);
+    expect(launchedText({ ok: true, launch, placed: places[7]! })).toBe(
+      `started in Channels' own tmux, window @3 (to watch it: tmux -S /tmp/kiwi-501/0123456789ab attach -t _kiwi); it joins with launch ${launch}`,
+    );
   });
 
   test("a refusal keeps its reason and its words, an unknown reason is a failure", () => {
@@ -78,6 +84,8 @@ describe("a launch's answer", () => {
       opened({ place: "tmux", socket: "/tmp/s", session: "kiwi", window: "@".repeat(33), pane: "%4" }),
       opened({ place: "tmux", session: "kiwi", window: "@4", pane: "%4" }),
       opened({ place: "tmux", socket: "/tmp/s", session: "kiwi", window: "@4" }),
+      opened({ place: "hosted", window: "@4", pane: "%4" }),
+      opened({ place: "hosted", socket: "/tmp/s", window: "@4" }),
     ]) {
       expect(readLaunched(bad)).toBeNull();
       expect(launchedView(bad)).toEqual({ ok: false, why: "failed", detail: "the daemon answered a launch in a shape this app doesn't know" });
