@@ -105,7 +105,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
       <Sidebar channel={channel} />
       <main className="main">
         <Boundary resetKey={nav.tab}>
-          {nav.tab === "tasks" ? <Board channel={channel} /> : nav.tab === "needs" ? <NeedsYou channel={channel} /> : <Conversation channel={channel} jump={jump} />}
+          {nav.tab === "tasks" ? <Board channel={channel} /> : nav.tab === "needs" ? <NeedsYou channel={channel} onJump={setJump} /> : <Conversation channel={channel} jump={jump} />}
         </Boundary>
       </main>
       {channel.connection !== "live" && (

@@ -152,8 +152,13 @@ export interface PermissionAsk {
   canDeny: boolean
   allower?: string
   tool: string
-  summary: string
+  title: string
+  summary?: string
   code: string
+  cwd?: string
+  notes: string[]
+  replaced?: string
+  content?: string
   task?: number
   answer?: { allow: boolean; by: string; at: number }
 }
@@ -164,6 +169,8 @@ export interface QuestionAsk {
   from: string
   at: number
   text: string
+  label: string
+  irreversible?: true
   options: string[]
   holds: number[]
   task?: number

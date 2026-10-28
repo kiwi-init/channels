@@ -382,3 +382,45 @@ button.needs-name:hover {
   color: var(--ink-3);
   font: 600 var(--t-title) var(--mono);
 }
+
+.needs-tag {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font: 600 var(--t-meta) var(--ui);
+  white-space: nowrap;
+}
+
+.needs-tag.is-decide {
+  background: var(--decide-wash);
+  color: var(--decide);
+}
+
+.needs-tag.is-alert {
+  background: var(--alert-wash);
+  color: var(--alert);
+}
+
+.needs-tag.is-quiet {
+  background: var(--wash-2);
+  color: var(--ink-2);
+}
+
+.needs-alarm {
+  color: var(--alert);
+  font: 500 var(--t-ui) var(--ui);
+}
+
+.needs-written {
+  display: grid;
+  gap: 4px;
+}
+
+.needs-written .needs-code {
+  max-height: 192px;
+  overflow: auto;
+}
+
+.needs-code.is-gone {
+  color: var(--alert);
+}
