@@ -142,8 +142,8 @@ export const taskCommands: Record<string, Command> = {
         else if (sub === "cancel") state = yield* s.taskUpdate(id, { state: "cancelled", note });
         else if (sub === "drop") state = yield* s.taskUpdate(id, { owner: null, note });
         else if (sub === "first") {
-          if (!(yield* s.state()).state.tasks.get(id)?.owner) return yield* die(`${taskId(id)} has no owner to go first for: kiwi task assign ${taskId(id)} NAME --first`);
-          state = yield* s.taskUpdate(id, { first: true, note });
+          state = yield* s.taskFirst(id);
+          if (note) state = yield* s.taskUpdate(id, { note });
         } else if (sub === "note") state = yield* s.taskUpdate(id, { note: note ?? (yield* die('usage: kiwi task note T7 "…"')) });
         else if (sub === "checkpoint") {
           const where = opt.file !== undefined ? yield* readText(opt.file) : args.slice(3).join(" ") || opt.note || "";

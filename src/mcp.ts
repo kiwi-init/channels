@@ -734,6 +734,11 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
           const state = yield* s.taskHandoff(id, owner, note, first === true);
           return `${taskId(id)} is ${state.tasks.get(id)!.owner}'s now${first ? ", before their other tasks" : ""}`;
         }
+        if (action === "assign" && first) {
+          yield* s.taskUpdate(id, { owner: s.me, note });
+          yield* s.taskFirst(id);
+          return `${taskId(id)} is yours now, before your other tasks`;
+        }
         const verdictNote =
           note ||
           (review_text?.trim()

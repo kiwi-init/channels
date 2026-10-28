@@ -161,7 +161,6 @@ export class SessionTasks extends SessionMessaging {
         round?: number;
         proof?: { url: string; label?: string };
         checkpoint?: true;
-        first?: true;
       },
       reviewText?: string,
     ) {
@@ -263,12 +262,26 @@ export class SessionTasks extends SessionMessaging {
       const target = (yield* this.resolveTo([to], state))?.[0];
       if (!target || !state.members.get(target)?.active) return yield* new Rejected(`no member named ${to}`);
       if (target === this.me) return yield* new Rejected("hand it to someone else");
-      return yield* this.taskUpdate(id, {
+      const after = yield* this.taskUpdate(id, {
         owner: target,
         ...(next ? { note: next } : {}),
-        ...(first ? { first: true as const } : {}),
         ...(state.tasks.get(id)?.state === "doing" ? { state: "todo" as const } : {}),
       });
+      return first ? yield* this.taskFirst(id) : after;
+    },
+    oneLook,
+  );
+
+  readonly taskFirst = Effect.fn("AgentSession.taskFirst")(
+    { self: this },
+    function* (this: SessionTasks, id: number) {
+      const { state } = yield* this.state();
+      const t = state.tasks.get(id);
+      if (!t) return yield* new Rejected(`no task ${taskId(id)}`);
+      if (t.state === "done") return yield* new Rejected(`${taskId(id)} is already done`);
+      if (!t.owner) return yield* new Rejected(`${taskId(id)} has no owner to go first for: assign it first`);
+      const seq = yield* this.event({ op: "task.first", task: id }, `${taskId(id)} first`, t.owner !== this.me ? [t.owner] : undefined);
+      return yield* this.confirm(seq);
     },
     oneLook,
   );

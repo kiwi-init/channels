@@ -236,8 +236,9 @@ export type Event =
       proof?: { url: string; label?: string };
       areas?: string[];
       checkpoint?: true;
-      first?: true;
     }
+  /** A task its owner's loop starts before their other tasks, until it's handed to someone else. */
+  | { op: "task.first"; task: number }
   /** What a member is and has, said by itself: where it runs, what runs it, what it can use. Shown in People. */
   | ({ op: "card" } & Card)
   /** Claims are gone. Older clients still send these; they fold to nothing. */
@@ -732,7 +733,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 6;
+export const EVENT_OPS_VERSION = 7;
 const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 
 export const knownOp = (op: string): boolean => eventCheck({ op }) !== null;
@@ -867,6 +868,7 @@ function eventCheck(ev: unknown): boolean | null {
         opt(e.from, (x): x is number => Number.isSafeInteger(x) && (x as number) > 0)
       );
     case "task.claim":
+    case "task.first":
       return n(e.task);
     case "task.update":
       return (
@@ -882,7 +884,6 @@ function eventCheck(ev: unknown): boolean | null {
         (e.summary === undefined || (e.state === "review" && str(e.summary, REVIEW_SUMMARY_MAX_LENGTH) && e.summary.trim().length > 0)) &&
         (e.body === undefined || (e.body === "review" && e.verdict !== undefined)) &&
         opt(e.areas, isAreas) &&
-        (e.first === undefined || e.first === true) &&
         (e.checkpoint === undefined || (e.checkpoint === true && str(e.note, CHECKPOINT_MAX_LENGTH) && e.note.trim().length > 0)) &&
         opt(e.proof, (x): x is { url: string; label?: string } => {
           const p = x as { url?: unknown; label?: unknown } | null;
