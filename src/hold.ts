@@ -91,12 +91,12 @@ export function holdSeat(alias: string, as: string, token: string, now = Date.no
   return rewrite(alias, as, token, false, (b) => ({ ...omit(b, "session", "pid", "harnessSession"), hold: { key: keyOf(token), at: b.hold?.at ?? now }, holds: (b.holds ?? 0) + (b.hold ? 0 : 1) }));
 }
 
-export function bindHeldSeat(alias: string, as: string, token: string, to: HeldSession, now = Date.now()): HoldChange {
+export function bindHeldSeat(alias: string, as: string, token: string, to: HeldSession, by: "loop" | "person", now = Date.now()): HoldChange {
   const bound =
     to.harness === "kimi"
       ? { harness: to.harness, session: `kimi-pid-${to.pid}`, pid: to.pid, ...(to.served ? { harnessSession: to.served } : {}) }
       : { harness: to.harness, session: to.session, ...(to.pid ? { pid: to.pid } : {}) };
-  return rewrite(alias, as, token, true, (b) => ({ ...omit(b, "hold", "session", "pid", "harnessSession"), ...bound, loop: true, at: now, seen: now }));
+  return rewrite(alias, as, token, true, (b) => ({ ...omit(b, "hold", "session", "pid", "harnessSession", "loop"), ...bound, ...(by === "loop" ? { loop: true } : {}), at: now, seen: now }));
 }
 
 export function releaseSeat(alias: string, as: string, token: string): HoldChange {

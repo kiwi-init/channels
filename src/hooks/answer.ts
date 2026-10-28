@@ -435,7 +435,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
   if (event === "prompt") {
     const head = promptHead(b.alias);
     const persona = yield* personaNews(s, who, mc, Math.min(MAX_CONTEXT, budget));
-    const unread = yield* unreadText(s, mc, Math.max(0, Math.min(MAX_CONTEXT, budget - head.length - 1 - (persona ? persona.text.length + 2 : 0))), yield* loopDelivery(s));
+    const unread = yield* unreadText(s, mc, Math.max(0, Math.min(MAX_CONTEXT, budget - head.length - 1 - (persona ? persona.text.length + 2 : 0))), loopDelivery());
     if (!unread.text && !persona) return yield* Effect.as(unread.shown, null);
     const text = [persona?.text ?? null, unread.text ? [head, unread.text].join("\n") : null].filter((t) => t !== null).join("\n\n");
     const shown = persona ? Effect.andThen(persona.shown, unread.shown) : unread.shown;
@@ -448,7 +448,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
     if (style === "cursor") {
       if (input.status && input.status !== "completed") return null;
       const { messages, state } = yield* s.state();
-      const unread = (yield* s.unreadAt(state, messages, yield* loopDelivery(s))).unread > 0;
+      const unread = (yield* s.unreadAt(state, messages, loopDelivery())).unread > 0;
       const follow = cursorFollow(b.alias, mc, unread, yield* rearmText(input, b, who, mc), budget);
       return follow ? answered("followup", follow) : null;
     }
@@ -459,7 +459,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
     const rearm = fitReminder(yield* rearmText(input, b, who, mc), budget - (nudge ? nudge.text.length + 2 : 0) - (persona ? persona.text.length + 2 : 0));
     const reminder = [nudge?.text ?? null, rearm].filter((t) => t !== null).join("\n\n") || null;
     const unreadMax = stopUnreadMax(stopHead, [persona?.text ?? null, reminder].filter((t) => t !== null).join("\n\n") || null, budget);
-    const unread = unreadMax > 0 ? yield* unreadText(s, mc, unreadMax, yield* loopDelivery(s)) : { text: "", shown: Effect.void };
+    const unread = unreadMax > 0 ? yield* unreadText(s, mc, unreadMax, loopDelivery()) : { text: "", shown: Effect.void };
     const decision = style === "gemini" ? "deny" : "block";
     const reason = [persona?.text ?? null, stopReason(stopHead, unread.text, reminder) || null].filter((t) => t !== null).join("\n\n");
     const told = persona ? Effect.andThen(persona.shown, unread.shown) : unread.shown;

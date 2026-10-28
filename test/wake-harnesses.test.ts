@@ -60,7 +60,7 @@ describe("waking an agent in its own session, by harness, and when the daemon st
     await Bun.sleep(2_500);
     expect(calls().length).toBe(before);
     expect((await seat())?.wake.path).toEqual({ kind: "none", why: "its loop holds it between sessions, and wakes nothing until it hands the seat to a new session" });
-    expect(bindHeldSeat("test", "claude", "loop-token", { harness: "codex", session: "thread-new" })).toEqual({ kind: "changed", seats: 1 });
+    expect(bindHeldSeat("test", "claude", "loop-token", { harness: "codex", session: "thread-new" }, "loop")).toEqual({ kind: "changed", seats: 1 });
     await w.ownerCh.send("after the hand-over", { to: ["claude"] });
     await until("a wake of the new thread", () => calls().length === before + 1);
     expect(calls().at(-1)).toEqual(["codex", "queue", "--thread", "thread-new", "--message", wakePrompt("test", "claude")]);

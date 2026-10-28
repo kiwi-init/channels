@@ -2,7 +2,9 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import type { Event, Kind, Message } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
-import { waitingFor, wants } from "../src/agent/wants.ts";
+import { waitingTask, wants } from "../src/agent/wants.ts";
+
+const loop = { loop: true } as const;
 
 const ids: Record<string, Identity> = {};
 let seq = 0;
@@ -30,9 +32,7 @@ describe("a loop session waiting for its verdict (#1117)", () => {
     const add = await ev("jon", { op: "task.add", title: "ship it", owner: "win", review: "mac" });
     const t = add.seq;
     const sent = await ev("win", { op: "task.update", task: t, state: "review", at: "abc1234" });
-    const before = fold([add, sent], roster);
-    const waiting = waitingFor(before, "win");
-    expect(waiting).toEqual({ waiting: t });
+    expect(waitingTask(fold([add, sent], roster), "win")).toBe(t);
 
     const quiet = {
       join: await ev("linux", { op: "hello", about: "new here" }),
@@ -46,19 +46,30 @@ describe("a loop session waiting for its verdict (#1117)", () => {
       mention: await msg("jon", "msg", "@win can you check the logs?"),
       hold: await ev("jon", { op: "hold.set", on: true }),
     };
-    const state = fold([add, sent, ...Object.values(quiet), ...Object.values(loud)], roster);
-    for (const [name, m] of Object.entries(quiet)) expect([name, wants("win", m, state, waiting)]).toEqual([name, false]);
-    for (const [name, m] of Object.entries(loud)) expect([name, wants("win", m, state, waiting)]).toEqual([name, true]);
+    const state = fold([add, sent, ...Object.values(quiet), ...Object.values(loud).filter((m) => m !== loud.verdict)], roster);
+    expect(waitingTask(state, "win")).toBe(t);
+    for (const [name, m] of Object.entries(quiet)) expect([name, wants("win", m, state, loop)]).toEqual([name, false]);
+    for (const [name, m] of Object.entries(loud)) expect([name, wants("win", m, state, loop)]).toEqual([name, true]);
     expect(wants("win", quiet.chatter, state)).toBe(true);
   });
 
   test("only a task the seat owns, with a round open and someone else reviewing, makes it wait", async () => {
     const add = await ev("jon", { op: "task.add", title: "ship it", owner: "win", review: "mac" });
-    expect(waitingFor(fold([add], roster), "win")).toEqual({});
+    expect(waitingTask(fold([add], roster), "win")).toBeUndefined();
     const sent = await ev("win", { op: "task.update", task: add.seq, state: "review", at: "abc1234" });
-    expect(waitingFor(fold([add, sent], roster), "mac")).toEqual({});
+    expect(waitingTask(fold([add, sent], roster), "mac")).toBeUndefined();
     const own = await ev("jon", { op: "task.add", title: "self", owner: "linux", review: "linux" });
     const round = await ev("linux", { op: "task.update", task: own.seq, state: "review", at: "abc1234" });
-    expect(waitingFor(fold([own, round], roster), "linux")).toEqual({});
+    expect(waitingTask(fold([own, round], roster), "linux")).toBeUndefined();
+  });
+
+  test("the same loop delivery follows the task: open while coding, quiet while a round is open, open again after the verdict", async () => {
+    const add = await ev("jon", { op: "task.add", title: "ship it", owner: "win", review: "mac" });
+    const chatter = await msg("jon", "msg", "anyone seen the build?");
+    const sent = await ev("win", { op: "task.update", task: add.seq, state: "review", at: "abc1234" });
+    const reject = await ev("mac", { op: "task.update", task: add.seq, state: "doing", verdict: "rejected", round: 1 });
+    expect(wants("win", chatter, fold([add, chatter], roster), loop)).toBe(true);
+    expect(wants("win", chatter, fold([add, chatter, sent], roster), loop)).toBe(false);
+    expect(wants("win", chatter, fold([add, chatter, sent, reject], roster), loop)).toBe(true);
   });
 });

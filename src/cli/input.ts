@@ -7,6 +7,7 @@ import { parseTaskId, type ChannelState } from "@kiwi/core/state.ts";
 import { args, opt } from "./args.ts";
 import { here } from "../seats.ts";
 import { noteHeard } from "../hooks/delivered.ts";
+import { loopDelivery } from "../hooks/loop-wait.ts";
 import { acting, die, Quit } from "./context.ts";
 
 export function render(m: Message, state?: ChannelState | null): string {
@@ -20,7 +21,7 @@ export const delivery = Effect.fn("kiwi.delivery")(function* (s: AgentSession) {
   const thread = opt.thread === undefined ? undefined : Number(opt.thread.replace(/^#/, "")) || (yield* die("--thread takes a message number"));
   const room = opt.room === undefined ? undefined : yield* s.roomId(opt.room);
   const d: Delivery = { forMe: opt["for-me"], chat: opt.chat, all: opt.all, ...(thread !== undefined ? { thread } : {}), ...(room !== undefined ? { room } : {}) };
-  return d;
+  return d.forMe || d.chat || d.all || thread !== undefined || room !== undefined ? d : { ...d, ...loopDelivery() };
 });
 
 export function list(s: string | undefined): string[] | undefined {

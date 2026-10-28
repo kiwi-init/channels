@@ -102,13 +102,16 @@ test("only the token's holder moves a held seat's cursor forward; anyone may mov
 test("bind names the session each harness is known by: Kimi Code by its process, with the session kimi web serves", () => {
   bindDirectory(dir, { alias: "ch", as: "dev", harness: "kimi", session: "kimi-pid-1", pid: 1 });
   holdSeat("ch", "dev", "loop");
-  expect(bindHeldSeat("ch", "dev", "other", { harness: "kimi", pid: 4242 })).toEqual({ kind: "other-holder" });
-  expect(bindHeldSeat("ch", "dev", "loop", { harness: "kimi", pid: 4242, served: "ses-9" }, 5)).toEqual({ kind: "changed", seats: 1 });
+  expect(bindHeldSeat("ch", "dev", "other", { harness: "kimi", pid: 4242 }, "loop")).toEqual({ kind: "other-holder" });
+  expect(bindHeldSeat("ch", "dev", "loop", { harness: "kimi", pid: 4242, served: "ses-9" }, "loop", 5)).toEqual({ kind: "changed", seats: 1 });
   expect(all()).toEqual([{ alias: "ch", as: "dev", harness: "kimi", session: "kimi-pid-4242", pid: 4242, harnessSession: "ses-9", holds: 1, loop: true, at: 5, seen: 5 }]);
-  expect(bindHeldSeat("ch", "dev", "loop", { harness: "codex", session: "t" })).toEqual({ kind: "not-held" });
+  expect(bindHeldSeat("ch", "dev", "loop", { harness: "codex", session: "t" }, "loop")).toEqual({ kind: "not-held" });
   expect(holdSeat("ch", "nobody", "loop")).toEqual({ kind: "no-seat" });
   holdSeat("ch", "dev", "loop");
   releaseSeat("ch", "dev", "loop");
+  expect(all()[0]?.loop).toBeUndefined();
+  holdSeat("ch", "dev", "loop");
+  expect(bindHeldSeat("ch", "dev", "loop", { harness: "codex", session: "by-hand" }, "person")).toEqual({ kind: "changed", seats: 1 });
   expect(all()[0]?.loop).toBeUndefined();
 });
 
@@ -122,7 +125,7 @@ test("a session opened before a hold commits nothing once the seat is bound agai
   const commit = (s: AgentSession, who: string) => Effect.runPromise(s.whileOurs(Effect.sync(() => void commits.push(who))));
   await commit(old, "old before");
   holdSeat("ch", "late", "loop");
-  bindHeldSeat("ch", "late", "loop", { harness: "codex", session: "new" });
+  bindHeldSeat("ch", "late", "loop", { harness: "codex", session: "new" }, "loop");
   const fresh = new AgentSession("ch", cfg, identity, () => {});
   await commit(old, "old after");
   await commit(fresh, "fresh");
@@ -132,7 +135,7 @@ test("a session opened before a hold commits nothing once the seat is bound agai
 test("an old session's listener in another checkout doesn't take back a seat bound to a live session", () => {
   bindDirectory(dir, { alias: "ch", as: "moved", harness: "claude", session: "old", pid: process.pid });
   holdSeat("ch", "moved", "loop");
-  bindHeldSeat("ch", "moved", "loop", { harness: "claude", session: "new", pid: process.pid });
+  bindHeldSeat("ch", "moved", "loop", { harness: "claude", session: "new", pid: process.pid }, "loop");
   const listeners = () => [{ alias: "ch", as: "moved", harness: "claude" as const, session: "old", cwd: other }];
   expect(seatsFor(other, { who: { harness: "claude", session: "old" }, listeners })).toEqual([]);
   expect(
@@ -146,7 +149,7 @@ test("a join that opened the seat before a hold binds nothing once the seat went
   bindDirectory(dir, { alias: "ch", as: "joiner", harness: "codex", session: "old" });
   const opened = seatHolds(loadConfig(), "ch", "joiner");
   holdSeat("ch", "joiner", "loop");
-  bindHeldSeat("ch", "joiner", "loop", { harness: "codex", session: "new" });
+  bindHeldSeat("ch", "joiner", "loop", { harness: "codex", session: "new" }, "loop");
   expect(bindDirectory(dir, { alias: "ch", as: "joiner", harness: "codex", session: "old" }, () => false, opened)).toBe(false);
   expect(
     all()

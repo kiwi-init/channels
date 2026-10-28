@@ -11,12 +11,11 @@ function mentionsOf(body: string): Set<string> {
 }
 
 export function narrows(d: Delivery): boolean {
-  return d.thread !== undefined || d.room !== undefined || !!d.forMe || d.waiting !== undefined;
+  return d.thread !== undefined || d.room !== undefined || !!d.forMe || !!d.loop;
 }
 
-export function waitingFor(state: ChannelState, me: string): Delivery {
-  const task = [...state.tasks.values()].find((t) => t.owner === me && t.state !== "done" && t.review !== me && !!openRound(t));
-  return task ? { waiting: task.id } : {};
+export function waitingTask(state: ChannelState, me: string): number | undefined {
+  return [...state.tasks.values()].find((t) => t.owner === me && t.state !== "done" && t.review !== me && !!openRound(t))?.id;
 }
 
 function wantsWhileWaiting(me: string, m: Message, state: ChannelState | null, task: number): boolean {
@@ -33,7 +32,8 @@ export function wants(me: string, m: Message, state: ChannelState | null, d: Del
   if (d.room !== undefined && m.kind !== "event" && (state?.roomOf.get(m.seq) ?? m.room ?? GENERAL_ROOM) !== d.room) return false;
   if (d.all) return true;
   if (d.thread !== undefined) return m.kind !== "event" && (state?.threadOf.get(m.seq) ?? m.seq) === (state?.threadOf.get(d.thread) ?? d.thread);
-  if (d.waiting !== undefined) return wantsWhileWaiting(me, m, state, d.waiting);
+  const waiting = d.loop && state ? waitingTask(state, me) : undefined;
+  if (waiting !== undefined) return wantsWhileWaiting(me, m, state, waiting);
   const persona = state?.members.get(me)?.persona;
   const addressed = isDirectedAt(m, me) || !!m.to?.includes("*") || !!m.to?.some((t) => t.startsWith("role:") && personaAnswers(persona, t.slice(5)));
   if (m.kind === "event")

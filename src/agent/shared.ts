@@ -21,7 +21,7 @@ export interface Delivery {
   forMe?: boolean;
   thread?: number;
   room?: string;
-  waiting?: number;
+  loop?: true;
 }
 
 export interface Hearing<R = never> {

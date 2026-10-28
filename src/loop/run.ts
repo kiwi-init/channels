@@ -171,7 +171,7 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
     }
     if (!found) return yield* end(exited ? { kind: "own", lived: Date.now() - started } : stop.asked ? { kind: "stopped" } : { kind: "unbound" });
     const live = found;
-    yield* heldOrDie(bindHeldSeat(seat.alias, seat.me, seat.token, live.bound), seat);
+    yield* heldOrDie(bindHeldSeat(seat.alias, seat.me, seat.token, live.bound, "loop"), seat);
     yield* say(`${seat.me} is bound to ${recipe.label} session ${live.id}`);
 
     let work = first;

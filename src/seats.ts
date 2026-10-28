@@ -331,7 +331,7 @@ export function seatsFor(from: string, opts: SeatOptions = {}): Binding[] {
     if (!pick) return [];
     if (opts.claim !== false && who.session && (pick.session !== who.session || (who.pid && pick.pid !== who.pid))) {
       // The previous holder's process goes with it: this session's, or none.
-      const rest = omit(pick, "pid", "model", "harnessSession");
+      const rest = omit(pick, "pid", "model", "harnessSession", "loop");
       const taken: Binding = {
         ...rest,
         session: who.session,

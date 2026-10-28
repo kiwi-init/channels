@@ -65,7 +65,7 @@ export const seatCommands: Record<string, Command> = {
         const token = yield* tokenOrUsage;
         const { alias, name } = yield* seatNamed;
         return yield* settled(
-          bindHeldSeat(alias, name, token, to),
+          bindHeldSeat(alias, name, token, to, "person"),
           alias,
           name,
           `${name} in ${alias} is bound to ${to.harness} ${to.harness === "kimi" ? `process ${to.pid}` : `session ${to.session}`}`,
