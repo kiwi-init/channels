@@ -12,7 +12,7 @@ import { roomName } from "./rooms.ts";
 import { settle } from "./leases.ts";
 import { carriedPersona } from "../personality.ts";
 import { permissionAnswer } from "../permission.ts";
-import type { AskHead, ChannelState, Fact, FoldBase, FoldMember, GuardFloor, Lease, Member, Place, Reaction, Room, RoomsFloor, Roster, Task } from "./types.ts";
+import type { AskHead, ChannelState, Fact, FoldBase, FoldMember, GuardFloor, Lease, Member, PersonaLead, Place, Reaction, Room, RoomsFloor, Roster, Task } from "./types.ts";
 
 const STALE_MS = 24 * 3_600_000;
 const SENT_WINDOW_MS = 2 * STALE_MS;
@@ -54,6 +54,19 @@ export function fold(
   guardFloor?: GuardFloor | null,
   given?: FoldBase | null,
   keep?: (base: FoldBase) => void,
+): ChannelState {
+  return folding(messages, roster, now, roomsFloor, guardFloor, given, keep, true);
+}
+
+function folding(
+  messages: Message[],
+  roster: Roster,
+  now: number,
+  roomsFloor: RoomsFloor | null | undefined,
+  guardFloor: GuardFloor | null | undefined,
+  given: FoldBase | null | undefined,
+  keep: ((base: FoldBase) => void) | undefined,
+  lookAhead: boolean,
 ): ChannelState {
   const from = given ? structuredClone(given) : null;
   const after = from?.n ?? -1;
@@ -144,6 +157,21 @@ export function fold(
     if (!set) keysByName.set(r.name, (set = new Set()));
     set.add(r.pk);
   }
+  const personaLead = new Map<string, PersonaLead>(from?.personaLeads);
+  const leadChanges = lookAhead
+    ? messages.flatMap((m) =>
+        m.seq > after && m.ev?.op === "scope.set" && m.ev.wasLead !== undefined && !personaLead.has(m.ev.member) ? [{ seq: m.seq, member: m.ev.member, was: m.ev.wasLead }] : [],
+      )
+    : [];
+  if (leadChanges.length) {
+    const accepted = folding(messages, roster, now, roomsFloor, guardFloor, given, undefined, false);
+    for (const c of leadChanges) if (!personaLead.has(c.member) && accepted.trust.get(c.seq) === "verified" && !accepted.rejected.has(c.seq)) personaLead.set(c.member, c.was);
+  }
+  const logged = (member: FoldMember): boolean | undefined => {
+    const lead = personaLead.get(member.name);
+    return lead === "roster" ? undefined : lead;
+  };
+  const leads = (member: FoldMember): boolean => member.owner || isLeadRole(member.role) || (logged(member) ?? (signed.has(member.name) && member.persona?.role === "lead"));
   const scopesByKey = new Map<string, Scope[]>();
   for (const r of roster) scopesByKey.set(r.pk, scopesOf(r));
   for (const [pk, scopes] of from?.scopesByKey ?? []) scopesByKey.set(pk, scopes);
@@ -231,6 +259,8 @@ export function fold(
   const ctx: FoldCtx = {
     members,
     signed,
+    personaLead,
+    leads,
     keysByName,
     scopesByKey,
     scopeSets,
@@ -422,8 +452,7 @@ export function fold(
         const head = askHeads.get(ev.ask);
         const goal = ev.name === null ? null : inlineText(ev.name, MAX_GOAL_NAME);
         if (!head) reject(`#${ev.ask} isn't a person's message that tasks are filed under`);
-        else if (!member.owner && !isLeadRole(member.role) && !(signed.has(member.name) && member.persona?.role === "lead") && head.by !== m.from)
-          reject("only the lead, the owner or the person who asked names a goal");
+        else if (!leads(member) && head.by !== m.from) reject("only the lead, the owner or the person who asked names a goal");
         else if (goal === "") reject("a goal needs a name");
         else if (goal === null) askHeads.set(head.id, omit(head, "goal", "goalBy"));
         else askHeads.set(head.id, { ...head, goal, goalBy: m.from });
@@ -508,6 +537,7 @@ export function fold(
       rooms: [...rooms.values()],
       roomOf: recent(roomOf),
       placeOf: recent(placeOf),
+      personaLeads: [...personaLead],
       folded: EVENT_OPS_VERSION,
       ...(skipped ? { skipped: true as const } : {}),
     }),

@@ -128,7 +128,7 @@ async function letIn(run: Run, r: JoinRequest, choice: JoinChoice): Promise<stri
 async function scopesFor(run: Run, name: string, scopes: Scope[]): Promise<void> {
   const m = memberOf(run, name)
   const wire = wireScopes(scopes)
-  const seq = await event(run, `set what ${m.name} may do: ${wire ? describeScopes(wire) : "full"}`, { op: "scope.set", member: m.name, pk: m.pk, scopes: wire })
+  const seq = await event(run, `set what ${m.name} may do: ${wire ? describeScopes(wire) : "full"}`, { op: "scope.set", member: m.name, pk: m.pk, scopes: wire, keepLead: true })
   await run.ch.updateScopes(m, scopes, seq)
   await run.refreshRoster()
 }
@@ -316,7 +316,14 @@ export function makeActions(): Actions {
         if (p === undefined) throw new Error("that personality isn't on this computer")
         const persona = p ? personaOf(p) : null
         const wire = wireScopes(persona ? personaScopes(persona) : [...SCOPES])
-        const seq = await event(run, persona ? `made ${m.name} ${persona.name}` : `took ${m.name}'s personality away`, { op: "scope.set", member: m.name, pk: m.pk, scopes: wire })
+        const seq = await event(run, persona ? `made ${m.name} ${persona.name}` : `took ${m.name}'s personality away`, {
+          op: "scope.set",
+          member: m.name,
+          pk: m.pk,
+          scopes: wire,
+          lead: persona?.role === "lead",
+          wasLead: m.persona?.role === "lead",
+        })
         await run.ch.updatePersona(m, persona, seq)
         await run.refreshRoster()
       }),

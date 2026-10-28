@@ -112,7 +112,7 @@ class OwnerSession extends AgentSession {
     const rec = (yield* owner.fx.members()).find((x) => x.active && x.name === member && x.pk === m.pk);
     if (!rec || rec.owner || rec.kind === "human") return yield* new Rejected("only an agent carries a personality");
     const scopes = wireScopes(persona ? personaScopes(persona) : [...SCOPES]);
-    const ev: Event = { op: "scope.set", member, pk: m.pk, scopes };
+    const ev: Event = { op: "scope.set", member, pk: m.pk, scopes, lead: persona?.role === "lead", wasLead: rec.persona?.role === "lead" };
     const seq = yield* owner.fx.send(persona ? `made ${member} ${persona.name}` : `took ${member}'s personality away`, { kind: "event", ev, to: [member] });
     yield* owner.fx.updatePersona(rec, persona, seq);
     return yield* this.confirm(seq);
@@ -130,7 +130,7 @@ class OwnerSession extends AgentSession {
     if (!m?.active) return yield* new Rejected(`no member named ${member}`);
     if (m.owner) return yield* new Rejected("the owner may do everything");
     const wire = wireScopes(scopes);
-    const ev: Event = { op: "scope.set", member, pk: m.pk, scopes: wire };
+    const ev: Event = { op: "scope.set", member, pk: m.pk, scopes: wire, keepLead: true };
     const seq = yield* owner.fx.send(`set what ${member} may do: ${wire ? describeScopes(wire) : "full"}`, { kind: "event", ev });
     const after = yield* this.confirm(seq);
     // Then the member's record says it too (for clients holding only the log's tail), with the relay's
