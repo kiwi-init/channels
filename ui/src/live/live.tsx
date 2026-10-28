@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import type { HarnessRow } from "@kiwi/core/harnesses.ts"
-import { cleanPersonalities } from "@kiwi/core/personalities.ts"
-import { capabilityLine } from "@kiwi/core/personality.ts"
+import { capabilityLine, type Personality } from "@kiwi/core/personality.ts"
 import { PRESETS } from "@kiwi/core/presets.ts"
 import { useAutoApproval } from "@/lib/auto-approval"
 import { loadMember, loadPending, parseHash, useChannelList, type ChannelRow } from "@/lib/channel"
@@ -12,6 +11,7 @@ import { harnessName } from "@/lib/harness"
 import { useIcons, useMemberIcons } from "@/lib/icons"
 import { lastChannel, rememberChannel, reopenable } from "@/lib/last-channel"
 import { newsTotal, rowNews, startMarks, useMarks, useOpenNews, useTabNews } from "@/lib/news"
+import { useOwnPersonalities } from "@/lib/personalities"
 import { bridge, useSecrets } from "@/lib/secrets"
 import { useAccount } from "~/live/account"
 import { makeActions } from "~/live/actions"
@@ -82,9 +82,8 @@ function useHarnesses(): App["harnesses"] {
   }, [rows])
 }
 
-function usePersonas(): App["personas"] {
-  const kept = useSecrets().personalities
-  return useMemo(() => [...PRESETS, ...cleanPersonalities(kept)].map((p) => ({ id: p.id, label: p.name, about: p.instructions.split(/(?<=\.)\s/)[0] ?? capabilityLine(p) })), [kept])
+function usePersonas(own: Personality[]): App["personas"] {
+  return useMemo(() => [...PRESETS, ...own].map((p) => ({ id: p.id, label: p.name, about: p.instructions.split(/(?<=\.)\s/)[0] ?? capabilityLine(p) })), [own])
 }
 
 function useDuties(rows: ChannelRow[], person: string | undefined) {
@@ -103,11 +102,15 @@ export function useLive(open: string | null): App {
   const opened = useOpened()
   const prefs = usePrefs()
   const harnesses = useHarnesses()
-  const personas = usePersonas()
+  const ownPersonalities = useOwnPersonalities()
+  const personas = usePersonas(ownPersonalities)
   const starts = useStarts()
   const actions = useMemo(() => makeActions(), [])
   const channel = opened && opened.code === open ? opened.channel : null
-  return useMemo(() => ({ account, channels, channel, prefs, harnesses, personas, starts, actions }), [account, channels, channel, prefs, harnesses, personas, starts, actions])
+  return useMemo(
+    () => ({ account, channels, channel, prefs, harnesses, personas, starts, ownPersonalities, actions }),
+    [account, channels, channel, prefs, harnesses, personas, starts, ownPersonalities, actions]
+  )
 }
 
 function useOpenLinks(go: (g: Go) => void, ready: boolean) {

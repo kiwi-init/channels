@@ -1,3 +1,5 @@
+import type { Personality } from "@kiwi/core/personality.ts"
+
 export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "grok" | "other"
 
 type Presence = "online" | "away" | "offline"
@@ -215,6 +217,8 @@ export interface InviteInfo {
   state: "ok" | "gone" | "member"
 }
 
+export type UpdateCheck = { state: "current"; version: string } | { state: "failed" } | { state: "downloading" | "ready" | "available"; version: string; blocked?: boolean }
+
 export interface Channel {
   code: string
   title: string
@@ -261,6 +265,7 @@ export interface Account {
   key?: string
   relay?: string
   keysUnsealed?: boolean
+  desktop?: boolean
   pairAsk?: { kind: "computer" | "phone"; label: string; os?: string; digits?: string }
   githubCode?: { code: string; url: string }
 }
@@ -336,7 +341,10 @@ export interface Actions {
   setPowers(code: string, name: string, powers: Partial<Powers>): void
   addAgent(code: string, agent: NewAgent): void
   addRoom(code: string, name: string): void
+  renameRoom(code: string, id: string, name: string): void
+  setIcon(code: string, file: File | null): void
   renameChannel(code: string, title: string): void
+  exportHistory(code: string, kind: "transcript" | "log"): Promise<void>
   setGoal(code: string, goal: string): void
   setHold(code: string, on: boolean, note?: string): void
   addRepo(code: string, repo: string): void
@@ -354,6 +362,8 @@ export interface Actions {
   linkGithub(): void
   unlinkGithub(): void
   installUpdate(): void
+  checkUpdate(): Promise<UpdateCheck | null>
+  setRelay(url: string): Promise<string | null>
   windowControl(action: "minimize" | "maximize" | "close"): void
   applyUi(): void
   signOut(): void
@@ -368,6 +378,7 @@ export interface Actions {
   removeStartFolder(dir: string): void
   allowNewAgents(on: boolean): void
   allowRemoteBypass(on: boolean): void
+  savePersonalities(list: Personality[]): void
 }
 
 export interface AgentStarts {
@@ -384,6 +395,7 @@ export interface App {
   harnesses: { id: Harness; label: string; installed: boolean }[]
   personas: { id: string; label: string; about: string }[]
   starts: AgentStarts | null
+  ownPersonalities: Personality[]
   actions: Actions
 }
 

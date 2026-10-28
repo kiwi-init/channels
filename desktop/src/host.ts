@@ -31,6 +31,7 @@ export interface Host {
   showWindow(): void;
   reload(): void;
   restartToUpdate(): void;
+  saveDownload(name: string, text: string): Promise<string>;
   tellKeys(m: HostToKeys): void;
 }
 

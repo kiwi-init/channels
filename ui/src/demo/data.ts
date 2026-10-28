@@ -11,6 +11,7 @@ export const DEMO_ACCOUNT: Account = {
   version: "2026.10.6-livewire.5",
   key: "kM3x9Q2a",
   relay: "https://channels.kiwiinit.com",
+  desktop: true,
   computers: [
     { id: "mbp", label: "MacBook Pro", os: "mac", thisOne: true, online: true, agents: 3, lastSeen: now },
     { id: "arch", label: "arch-box", os: "linux", thisOne: false, online: true, agents: 1, lastSeen: m(2) },

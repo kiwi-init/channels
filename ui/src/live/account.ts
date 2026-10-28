@@ -230,6 +230,7 @@ export function useAccount(): Account | null {
       key: person.pk.slice(0, 8),
       relay: relayUrl(),
       ...(unsealed ? { keysUnsealed: true } : {}),
+      ...(bridge() ? { desktop: true } : {}),
       ...(asking ? { pairAsk: asking } : {}),
       ...(code ? { githubCode: code } : {}),
     }

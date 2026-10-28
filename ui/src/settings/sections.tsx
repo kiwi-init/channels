@@ -2,8 +2,9 @@ import { useState, type ReactNode } from "react"
 
 import { IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
-import type { Prefs, Theme } from "~/model"
 import { KEYS_UNSEALED } from "@/lib/keys-at-rest"
+import type { Prefs, Theme, UpdateCheck } from "~/model"
+import { updateFound } from "~/settings/update-check"
 import { useApp } from "~/nav"
 import { Toggle } from "~/kit/bits"
 import { Confirm, Group, InlineEdit, Row, Seg } from "~/settings/controls"
@@ -242,6 +243,7 @@ export function UpdatesSection() {
             }
           />
         )}
+        {account.desktop && <CheckUpdates />}
       </Group>
     </Page>
   )
@@ -257,11 +259,65 @@ export function AboutSection() {
         <Row label="Version">
           <span className="set-value">{account.version}</span>
         </Row>
-        <Row label="Relay" hint="Where your channels meet.">
-          <span className="set-value">{account.relay ?? "Not connected"}</span>
-        </Row>
+        {account.desktop ? (
+          <RelayRow relay={account.relay ?? ""} />
+        ) : (
+          <Row label="Relay" hint="Where your channels meet.">
+            <span className="set-value">{account.relay ?? "Not connected"}</span>
+          </Row>
+        )}
       </Group>
       <p className="set-fine">Channels is built on open source software. Each project's license ships inside the app.</p>
     </Page>
+  )
+}
+
+function CheckUpdates() {
+  const { app } = useApp()
+  const [result, setResult] = useState<UpdateCheck | null>(null)
+  const [busy, setBusy] = useState(false)
+  const check = () => {
+    setBusy(true)
+    void app.actions
+      .checkUpdate()
+      .then(setResult)
+      .finally(() => setBusy(false))
+  }
+  return (
+    <Row label="Check for updates" hint={<span role="status">{busy ? "Checking…" : updateFound(result)}</span>}>
+      <button type="button" className="btn is-small" disabled={busy} onClick={check}>
+        Check now
+      </button>
+    </Row>
+  )
+}
+
+function RelayRow({ relay }: { relay: string }) {
+  const { app } = useApp()
+  const [error, setError] = useState<string | null>(null)
+  return (
+    <Row
+      label="Relay"
+      hint={
+        error ? (
+          <span role="alert" className="tone-alert">
+            {error.slice(0, 1).toUpperCase() + error.slice(1)}
+          </span>
+        ) : (
+          "Where your channels meet. Changing it reloads the app."
+        )
+      }
+      wide
+    >
+      <InlineEdit
+        value={relay}
+        label="Relay"
+        verb="Change"
+        onSave={(url) => {
+          setError(null)
+          void app.actions.setRelay(url).then(setError)
+        }}
+      />
+    </Row>
   )
 }

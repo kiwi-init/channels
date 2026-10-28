@@ -1,9 +1,12 @@
 import { useMemo, useState } from "react"
 
+import type { Personality } from "@kiwi/core/personality.ts"
+
 import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_EMPTY, DEMO_GUEST, DEMO_PREFS, DEMO_TILES, DEMO_WAITING } from "~/demo/data"
 import { longFeed } from "~/demo/long"
 import type { Account, Actions, AgentStarts, App, Channel, ChannelTile, Message, Prefs, Task } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
+import { announce } from "~/kit/toasts"
 
 interface State {
   account: Account | null
@@ -48,6 +51,7 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
 export function useDemo(scenario: Scenario, open: string | null, look: Partial<Prefs> = {}): App {
   const [state, setState] = useState(() => initial(scenario, look))
   const [starts, setStarts] = useState(STARTS)
+  const [ownPersonalities, setOwnPersonalities] = useState<Personality[]>([])
 
   const actions = useMemo((): Actions => {
     const edit = (code: string, f: (c: Channel, seq: number) => Channel) =>
@@ -187,6 +191,13 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         )
       },
       addRoom: (code, name) => edit(code, (c) => ({ ...c, rooms: [...c.rooms, { id: name, name, unread: 0, mentions: 0 }] })),
+      renameRoom: (code, id, name) => edit(code, (c) => ({ ...c, rooms: c.rooms.map((r) => (r.id === id ? { ...r, name: name.trim().replace(/^#/, "") } : r)) })),
+      setIcon: (code, file) => {
+        const icon = file ? URL.createObjectURL(file) : undefined
+        edit(code, (c) => ({ ...c, icon }))
+        setState((s) => ({ ...s, tiles: s.tiles.map((t) => (t.code === code ? { ...t, icon } : t)) }))
+      },
+      exportHistory: async (code, kind) => announce(`Saved ${code} ${kind === "log" ? "log.jsonl" : "transcript.md"} to Downloads`),
       renameChannel: (code, title) => {
         edit(code, (c) => ({ ...c, title }))
         setState((s) => ({ ...s, tiles: s.tiles.map((t) => (t.code === code ? { ...t, title } : t)) }))
@@ -239,6 +250,8 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       unlinkGithub: () => setState((s) => (s.account ? { ...s, account: { ...s.account, github: undefined } } : s)),
       applyUi: () => setState((s) => (s.account ? { ...s, account: { ...s.account, uiUpdate: undefined } } : s)),
       windowControl: () => {},
+      checkUpdate: async () => ({ state: "current", version: "2026.10.8" }),
+      setRelay: async (url) => (/^https?:\/\//.test(url.trim()) ? null : "a relay is an http(s) address"),
       installUpdate: () => setState((s) => (s.account?.update ? { ...s, account: { ...s.account, version: s.account.update.version, update: undefined } } : s)),
       signOut: () => setState((s) => ({ ...s, account: null, tiles: [] })),
       setNewMembers: (code, can) => edit(code, (c) => ({ ...c, newMembers: can })),
@@ -252,6 +265,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       removeStartFolder: (dir) => setStarts((s) => ({ ...s, folders: s.folders.filter((f) => f !== dir) })),
       allowNewAgents: (on) => setStarts((s) => ({ ...s, launch: on })),
       allowRemoteBypass: (on) => setStarts((s) => ({ ...s, bypass: on })),
+      savePersonalities: setOwnPersonalities,
     }
   }, [])
 
@@ -263,6 +277,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
     harnesses: HARNESSES,
     personas: PERSONAS,
     starts,
+    ownPersonalities,
     actions,
   }
 }
