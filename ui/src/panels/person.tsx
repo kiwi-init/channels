@@ -1,15 +1,16 @@
 import "~/styles/person.css"
 
-import { useId, useState, type ReactNode } from "react"
+import { useId, useState, type CSSProperties, type ReactNode } from "react"
 
 import { TaskChip } from "~/chat/cards"
 import { Avatar, cx, Dialog, DialogHead, Empty, Heading, Toggle } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
-import { memberOf, type App, type Channel, type Person } from "~/model"
+import { memberOf, type App, type Channel, type Color, type Person } from "~/model"
 import { useApp } from "~/nav"
 import { nickname, shown } from "~/names"
 import { PanelHead } from "~/panels/frame"
+import { InlineEdit } from "~/settings/controls"
 
 const since = (at: number, on = "on "): string => {
   const a = ago(at)
@@ -34,7 +35,7 @@ export function PersonPanel({ channel, name }: { channel: Channel; name: string 
       <div className="panel-body person">
         <Hero person={person} />
         <Now channel={channel} person={person} />
-        {!person.left && <Doors person={person} />}
+        {!person.left && <Doors channel={channel} person={person} />}
         <Facts channel={channel} person={person} />
         {channel.youOwn && !person.you && !person.owner && !person.left && <Manage channel={channel} person={person} />}
       </div>
@@ -91,12 +92,17 @@ function Now({ channel, person }: { channel: Channel; person: Person }) {
   )
 }
 
-function Doors({ person }: { person: Person }) {
-  const { go } = useApp()
+function Doors({ channel, person }: { channel: Channel; person: Person }) {
+  const { app, go } = useApp()
   if (person.you)
     return (
       <section className="person-me">
         <p>This is you.</p>
+        {person.kind === "human" && (
+          <Row label="Your colour" hint="How people tell your messages and agents apart here.">
+            {(id) => <Colors id={id} channel={channel} person={person} onPick={(c) => app.actions.setColor(channel.code, person.name, c)} />}
+          </Row>
+        )}
         <button type="button" className="btn" onClick={() => go({ to: "settings", section: "account" })}>
           Your settings
         </button>
@@ -148,7 +154,7 @@ function Facts({ channel, person }: { channel: Channel; person: Person }) {
           ["Joined", since(person.joined, "")],
           ["Messages", person.messages.toLocaleString()],
           [
-            "Color",
+            "Colour",
             person.color ? (
               <span className="person-color">
                 <span className="person-swatch" style={{ background: `var(--c-${person.color})` }} aria-hidden="true" />
@@ -220,13 +226,33 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
           )}
         </Row>
       )}
-      <Row label="Can only read" hint={`${it} reads messages but can't post or take tasks.`}>
+      {agent && (
+        <Row label="Nickname" hint="The name people see. Its handle stays the same." stack>
+          {() => <InlineEdit value={person.display ?? ""} label="Nickname" verb="Change" onSave={(v) => app.actions.setNickname(channel.code, person.name, v || null)} />}
+        </Row>
+      )}
+      {!agent && (
+        <Row label="Colour" hint="Their messages and their agents wear it." stack>
+          {(id) => <Colors id={id} channel={channel} person={person} onPick={(c) => app.actions.setColor(channel.code, person.name, c)} />}
+        </Row>
+      )}
+      <Row label="Can only read" hint={`${agent ? "It reads" : "They read"} messages but can't post or take tasks.`}>
         {(id) => <Toggle id={id} on={!!person.readOnly} onChange={(on) => app.actions.setReadOnly(channel.code, person.name, on)} />}
       </Row>
       {agent && (
         <Row label="Wake it on new messages" hint={person.wakes === false ? "Off: it reads them on its next run." : "It starts working when someone writes."}>
           {(id) => <Toggle id={id} on={person.wakes !== false} onChange={(on) => app.actions.setWake(channel.code, person.name, on)} />}
         </Row>
+      )}
+      {!agent && (
+        <>
+          <Row label="Can add agents" hint={person.addsAgents ? "Their agents come in without waiting for you." : "Their agents wait for you to let them in."}>
+            {(id) => <Toggle id={id} on={!!person.addsAgents} onChange={(on) => app.actions.setPowers(channel.code, person.name, { addsAgents: on })} />}
+          </Row>
+          <Row label="Can answer decisions" hint="Agents' questions and approvals can go to them as well as you.">
+            {(id) => <Toggle id={id} on={!!person.answersDecisions} onChange={(on) => app.actions.setPowers(channel.code, person.name, { answersDecisions: on })} />}
+          </Row>
+        </>
       )}
       <div className="person-remove">
         <button type="button" className="btn is-danger" onClick={() => setConfirm(true)}>
@@ -261,6 +287,32 @@ function Row({ label, hint, stack, children }: { label: string; hint?: string; s
       </div>
       <div className="person-row-control">{children(id)}</div>
       {hint && stack && <p className="person-row-hint">{hint}</p>}
+    </div>
+  )
+}
+
+const COLORS: readonly Color[] = ["red", "orange", "yellow", "green", "teal", "blue", "indigo", "violet", "pink", "brown"]
+
+function Colors({ id, channel, person, onPick }: { id: string; channel: Channel; person: Person; onPick: (color: Color | null) => void }) {
+  const worn = new Map(channel.people.filter((p) => p.kind === "human" && p.name !== person.name && p.color).map((p) => [p.color, shown(p)]))
+  return (
+    <div id={id} className="swatches" role="group" aria-labelledby={`${id}-label`}>
+      {COLORS.map((c) => {
+        const by = worn.get(c)
+        return (
+          <button
+            key={c}
+            type="button"
+            className="swatch"
+            style={{ "--member": `var(--c-${c})` } as CSSProperties}
+            aria-pressed={person.color === c}
+            aria-label={by ? `${c}, ${by}'s colour` : c}
+            title={by ? `${by}'s colour` : c}
+            disabled={!!by}
+            onClick={() => onPick(person.color === c ? null : c)}
+          />
+        )
+      })}
     </div>
   )
 }
