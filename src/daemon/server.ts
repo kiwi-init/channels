@@ -20,6 +20,7 @@ import { launchFolders } from "../launch/folders.ts";
 import { hooksRows } from "../hooks/install/extra.ts";
 import { computerSettings } from "./settings.ts";
 import { harnessInventory } from "../launch/harnesses.ts";
+import { HostedTmux } from "./hosted-tmux.ts";
 import { forgetAtRelay, startMachineInbox } from "./inbox.ts";
 import { remoteRunner } from "./remote.ts";
 import { launchAgent } from "../launch/launch.ts";
@@ -49,6 +50,7 @@ export interface Daemon {
   readonly sock: string;
   stop(): Promise<void>;
   readonly stopped: Promise<void>;
+  readonly hosted: HostedTmux;
   beacons(): number;
 }
 
@@ -92,6 +94,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     }
   }
 
+  const hosted = new HostedTmux(dir);
+  void hosted.resume().catch(() => {});
   const seats = new Map<string, Seat>();
   const conns = new Set<ConnState>();
   let stopped = false;
@@ -872,6 +876,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     inbox.stop();
     rexWatch?.stop();
     rexWatch = null;
+    await hosted.detach();
     resolveStopped();
     for (const conn of [...conns]) {
       try {
@@ -903,7 +908,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
 
   await seatSync.now();
   await watchStatus();
-  return { sock, stop, stopped: stoppedP, beacons: () => beacons };
+  return { sock, stop, stopped: stoppedP, hosted, beacons: () => beacons };
 }
 
 function onLoopback(relay: string): boolean {
