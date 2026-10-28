@@ -227,7 +227,23 @@
 }
 
 .top-drawer {
+  position: relative;
   display: none;
+}
+
+.top-drawer-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ink-2);
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+.top-drawer-dot.is-loud {
+  background: var(--decide);
 }
 
 .top-title {

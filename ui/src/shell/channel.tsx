@@ -6,6 +6,7 @@ import { cx, Count, IconButton } from "~/kit/bits"
 import { Boundary } from "~/kit/boundary"
 import { Icon } from "~/kit/icons"
 import type { Channel } from "~/model"
+import { drawerNews } from "~/live/notify"
 import { NeedsYou, openAsks } from "~/needs/needs"
 import { sameWhere, useApp } from "~/nav"
 import { ChannelPanel } from "~/panels/channel-panel"
@@ -57,11 +58,14 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
         ? `@ ${nickname(channel, nav.where.with)}`
         : `T${nav.where.task}`
 
+  const news = drawerNews(channel)
+
   return (
     <div className={cx("chan", nav.panel && "has-panel", drawer && "is-drawer")} style={{ "--panel-w": `${panel.width}px` } as CSSProperties}>
       <header className="top">
-        <button type="button" className="icon-btn top-drawer" aria-label="Rooms and people" aria-pressed={drawer} onClick={() => setDrawer(!drawer)}>
+        <button type="button" className="icon-btn top-drawer" aria-label={news ? "Rooms and people, new messages" : "Rooms and people"} aria-pressed={drawer} onClick={() => setDrawer(!drawer)}>
           <Icon name="sidebar" />
+          {news && <span className={cx("top-drawer-dot", news === "loud" && "is-loud")} />}
         </button>
         <div className="top-title">
           <button
