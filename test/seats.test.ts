@@ -111,6 +111,19 @@ test("MiMoCode and Kimi Code: the harness's own process holds the seat, over the
   expect(baseName(here({ MIMOCODE: "1", MIMOCODE_PID: "99" }, chain("zsh", "mimo")))).toBe("mimo");
 });
 
+test("ZCode: its own process holds the seat, over the Claude markers it passes through, unless a harness runs nearer", () => {
+  const chain = (...names: string[]) => {
+    const procs = new Map(names.map((name, i) => [100 - i, { ppid: i === names.length - 1 ? 1 : 99 - i, name }]));
+    return { from: 100, lookup: (pid: number) => procs.get(pid) ?? null };
+  };
+  const zcode = { ZCODE_RUNTIME_ENV: "production" };
+  expect(here(zcode, chain("zsh", "zcode-cli", "fnm"))).toEqual({ harness: "zcode", session: "zcode-pid-99", pid: 99 });
+  expect(here({ ...zcode, CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "c1" }, chain("zsh", "zcode-cli", "claude"))).toEqual({ harness: "zcode", session: "zcode-pid-99", pid: 99 });
+  expect(here({ ...zcode, CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "c1" }, chain("zsh", "claude", "zcode-cli"))).toEqual({ harness: "claude", session: "c1" });
+  expect(here({}, chain("zsh", "zcode-cli"))).toEqual({});
+  expect(baseName(here(zcode, chain("zsh", "zcode-cli")))).toBe("zcode");
+});
+
 test("Pi: its marker names the harness; its extension's process and session hold the seat, unless a harness runs nearer", () => {
   const chain = (...names: string[]) => {
     const procs = new Map(names.map((name, i) => [100 - i, { ppid: i === names.length - 1 ? 1 : 99 - i, name }]));

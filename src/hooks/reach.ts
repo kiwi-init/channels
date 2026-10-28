@@ -17,6 +17,7 @@ export function startListener(mc: string, harness: Here["harness"]): string | nu
   if (harness === "kimi")
     return `Now, from your main session (not a subagent), and again every time it wakes you: call the Bash tool with command \`${COMMANDS.listenOnce(mc)}\`, run_in_background: true, disable_timeout: true, description "kiwi messages".`;
   if (harness === "grok") return `Now, once for this session: start the monitor tool with command \`${COMMANDS.listen(mc)}\`, description "${COMMANDS.listen(mc)}", persistent: true.`;
+  if (harness === "zcode") return `Now, and again every time it wakes you: call the Bash tool with command \`${COMMANDS.listenOnce(mc)}\`, run_in_background: true, and no timeout.`;
   if (harness === "cursor") return `Now, and again every time it wakes you: run \`${COMMANDS.listenOnce(mc)}\` with the Shell tool as a background command (is_background: true).`;
   return null;
 }
@@ -46,6 +47,14 @@ export function wakeYourself(mc: string, harness: Here["harness"]): string | nul
       start,
       "It ends when a message for you arrives, and Cursor starts your next turn with its output. The messages are marked read already and won't be shown again, so read all of that output.",
       "Don't wait on it with Await. Before you end any turn, check it is still running; if not, start it.",
+    ].join("\n");
+  }
+  if (harness === "zcode" && start) {
+    return [
+      KEEP_A_LISTENER,
+      start,
+      "It ends when a message for you arrives, and ZCode starts your next turn when it exits. The messages are marked read already and won't be shown again, so read all of its output: if the notice names an output file, read that whole file.",
+      "Before you end any turn, check it is still running; if not, start it.",
     ].join("\n");
   }
   if (harness === "grok" && start) {

@@ -4,7 +4,7 @@ import { updateConfig, type Config, type SeatRecord } from "./config/file.ts";
 
 export type SeatHarness = NonNullable<SeatRecord["harness"]>;
 
-const HARNESSES: readonly SeatHarness[] = ["claude", "codex", "gemini", "cursor", "grok", "opencode", "kimi", "mimo", "grok-bot", "pi"];
+const HARNESSES: readonly SeatHarness[] = ["claude", "codex", "gemini", "cursor", "grok", "opencode", "kimi", "mimo", "grok-bot", "pi", "zcode"];
 
 export const SEAT_TOKEN = "KIWI_SEAT_TOKEN";
 
