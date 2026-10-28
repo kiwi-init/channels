@@ -5,7 +5,7 @@ import type { JoinRequest, Member as RosterMember } from "@kiwi/core/membership.
 import type { Message as Wire } from "@kiwi/core/protocol.ts"
 import type { ChannelState, FoldBase } from "@kiwi/core/state.ts"
 import type { ChannelLink } from "@/lib/channel-ops"
-import type { Channel, Upload, Where } from "~/model"
+import type { Channel, GoneChannel, Upload, Where } from "~/model"
 
 export interface Run {
   code: string
@@ -56,4 +56,28 @@ export const openedChannel = (code: string): Channel | null => (current?.code ==
 
 export function useOpened(): Opened | null {
   return useSyncExternalStore(subscribe, () => current)
+}
+
+let gone: GoneChannel | null = null
+const leaving = new Set<string>()
+const goneListeners = new Set<() => void>()
+
+export function leavingOnPurpose(code: string): void {
+  leaving.add(code)
+}
+
+export function markGone(next: GoneChannel): void {
+  if (leaving.has(next.code) || gone?.code === next.code) return
+  gone = next
+  for (const l of goneListeners) l()
+}
+
+export function useGone(): GoneChannel | null {
+  return useSyncExternalStore(
+    (l) => {
+      goneListeners.add(l)
+      return () => void goneListeners.delete(l)
+    },
+    () => gone
+  )
 }
