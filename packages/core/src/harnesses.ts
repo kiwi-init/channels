@@ -17,7 +17,7 @@ export interface HarnessRow {
 
 export const isKnownHarness = (v: unknown): v is KnownHarness => typeof v === "string" && (KNOWN_HARNESSES as readonly string[]).includes(v);
 
-export const HOOK_HARNESSES = [...KNOWN_HARNESSES, "zcode"] as const satisfies readonly WakeHarness[];
+const HOOK_HARNESSES = [...KNOWN_HARNESSES, "zcode"] as const satisfies readonly WakeHarness[];
 
 export type HookHarness = (typeof HOOK_HARNESSES)[number];
 
