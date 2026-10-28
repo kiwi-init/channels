@@ -198,6 +198,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     wakeOutstandingMs: opts.wakeOutstandingMs ?? WAKE_OUTSTANDING_MS,
     stopped: () => stopped,
     current,
+    hosted,
   });
 
   const seatInfo = async (s: Seat): Promise<DaemonSeat> => {

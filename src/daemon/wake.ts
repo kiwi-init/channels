@@ -11,7 +11,10 @@ import { kimiServer, promptKimi } from "../kimi-server.ts";
 import { wakeArgv, wakeKey, wakePath, wakePrompt, type WakePath, type WakeVia } from "@kiwi/core/wake.ts";
 import { withDeadline, type DaemonWake } from "./protocol.ts";
 import { seatRecordFor, wakeOn } from "./reach.ts";
+import type { HostedTmux } from "./hosted-tmux.ts";
 import type { Seat } from "./seat.ts";
+import { typeWake } from "./wake-typing.ts";
+import { onHostedSocket } from "../terminals/shared/tmux.ts";
 
 const WAKE_LOG_KEEP_BYTES = 1_000_000;
 
@@ -71,10 +74,17 @@ function oneLine(text: string): string {
   return text.replace(/\s+/g, " ").trim().slice(0, 200);
 }
 const UNREAD_CHECK_MS = 30_000;
+const TYPE_RETRY_MS = 10_000;
 
 export const pathOf = async (cfg: Config, alias: string, agent: string): Promise<WakePath> => {
   const record = seatRecordFor(cfg, alias, agent);
-  const seen = record && { ...record, held: seatHeldAway(cfg, alias, agent, {}), ...(record.harness === "kimi" ? { served: !!kimiServer(record.pid) } : {}) };
+  const hosted = record?.tmux && onHostedSocket(record.tmux.socket) ? record.tmux.pane : undefined;
+  const seen = record && {
+    ...record,
+    held: seatHeldAway(cfg, alias, agent, {}),
+    ...(record.harness === "kimi" ? { served: !!kimiServer(record.pid) } : {}),
+    ...(hosted ? { hosted } : {}),
+  };
   return wakePath(seen, listenHooksInstalled(), !!cfg.wakeHooks?.[wakeKey(alias, agent)], {
     pi: piInstalled(),
     mimo: mimoInstalled(),
@@ -102,9 +112,10 @@ interface WakeContext {
   wakeOutstandingMs: number;
   stopped: () => boolean;
   current: (seat: Seat) => boolean;
+  hosted: HostedTmux;
 }
 
-export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stopped, current }: WakeContext): { scheduleWake: (seat: Seat, delay?: number) => void } {
+export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stopped, current, hosted }: WakeContext): { scheduleWake: (seat: Seat, delay?: number) => void } {
   const sessions = new Map<string, { fp: string; session: Session }>();
   const nothingAt = new Map<string, number>();
 
@@ -197,6 +208,7 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stop
       }
       seat.outstanding = null;
       const prompt = wakePrompt(seat.alias, seat.agent);
+      let retry = false;
       const why =
         path.via === "webhook"
           ? hook
@@ -204,8 +216,14 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stop
             : "no webhook set"
           : path.via === "kimi-server"
             ? await wakeKimi(seat, path.session, prompt)
-            : await runWake(seat, wakeArgv(path.via, path.session, prompt));
+            : path.via === "hosted-typing"
+              ? await typeWake(hosted, path.session, prompt).then((t) => (t.ok ? null : ((retry = t.retry), t.why)))
+              : await runWake(seat, wakeArgv(path.via, path.session, prompt));
       if (!current(seat)) return;
+      if (retry) {
+        seat.wakeAgain = false;
+        return scheduleWake(seat, Math.min(wakeGapMs, TYPE_RETRY_MS));
+      }
       seat.lastWake = { at: Date.now(), via: path.via, unread, ok: why === null };
       if (why === null) seat.outstanding = { seqs, to, at: seat.lastWake.at };
       logWake(seat, seat.lastWake, why, cursor);
