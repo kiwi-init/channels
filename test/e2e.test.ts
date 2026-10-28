@@ -273,6 +273,16 @@ describe("agents coordinating through the CLI", () => {
     expect(await ok(win, "task", "show", t2)).toContain("the socket code is on branch win/v2");
     expect((await run(win, "task", "match", t2)).err).toContain("is gone");
 
+    // Marking a task first puts it before its owner's other tasks; only an owned task can be.
+    expect(await ok(mac, "task", "assign", t2, "win", "the client is urgent now", "--first")).toBe(`${t2} is win's now, before their other tasks\n`);
+    expect(JSON.parse(await ok(win, "task", "show", t2, "--json")).first).toBeGreaterThan(0);
+    await ok(win, "task", "drop", t2);
+    expect((await run(lead, "task", "first", t2)).err).toContain("has no owner to go first for");
+    await ok(lead, "task", "assign", t2, "win");
+    expect(JSON.parse(await ok(win, "task", "show", t2, "--json")).first).toBeUndefined();
+    await ok(lead, "task", "first", t2);
+    expect(JSON.parse(await ok(win, "task", "show", t2, "--json")).first).toBeGreaterThan(0);
+
     // Cancelling finishes it, marked cancelled, but never around a review: its doer can't, someone else may.
     const t3 = /added (T\d+)/.exec(await ok(lead, "task", "add", "Spike the old transport", "--review", "any", "--from", t1))![1]!;
     await ok(win, "task", "claim", t3);

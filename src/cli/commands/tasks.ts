@@ -95,10 +95,10 @@ export const taskCommands: Record<string, Command> = {
           const top = args[3] ? null : pickFor(taskCandidates(now, id));
           const to = args[3] ?? top?.name ?? (yield* die(`nobody free has ${taskId(id)}'s context (kiwi task who ${taskId(id)}): name someone, kiwi task assign ${taskId(id)} NAME`));
           const next = args.slice(4).join(" ") || opt.note || undefined;
-          const state = yield* s.taskHandoff(id, to, next);
+          const state = yield* s.taskHandoff(id, to, next, opt.first === true);
           const t = state.tasks.get(id)!;
           const why = top ? `: ${top.reasons.join("; ")}` : "";
-          return out(`${taskId(id)} is ${t.owner}'s now${why}${next ? "" : ' (add where it stands next time: kiwi task assign T7 NAME "…")'}`);
+          return out(`${taskId(id)} is ${t.owner}'s now${opt.first ? ", before their other tasks" : ""}${why}${next ? "" : ' (add where it stands next time: kiwi task assign T7 NAME "…")'}`);
         }
         const verdictOf = { approve: "approved", reject: "rejected" } as const;
         const verdict = sub === "approve" || sub === "reject" ? verdictOf[sub] : undefined;
@@ -141,7 +141,10 @@ export const taskCommands: Record<string, Command> = {
         else if (sub === "block") state = yield* s.taskUpdate(id, { note: `blocked${note ? `: ${note}` : ""}` });
         else if (sub === "cancel") state = yield* s.taskUpdate(id, { state: "cancelled", note });
         else if (sub === "drop") state = yield* s.taskUpdate(id, { owner: null, note });
-        else if (sub === "note") state = yield* s.taskUpdate(id, { note: note ?? (yield* die('usage: kiwi task note T7 "…"')) });
+        else if (sub === "first") {
+          if (!(yield* s.state()).state.tasks.get(id)?.owner) return yield* die(`${taskId(id)} has no owner to go first for: kiwi task assign ${taskId(id)} NAME --first`);
+          state = yield* s.taskUpdate(id, { first: true, note });
+        } else if (sub === "note") state = yield* s.taskUpdate(id, { note: note ?? (yield* die('usage: kiwi task note T7 "…"')) });
         else if (sub === "checkpoint") {
           const where = opt.file !== undefined ? yield* readText(opt.file) : args.slice(3).join(" ") || opt.note || "";
           if (!where.trim()) return yield* die("usage: kiwi task checkpoint T7 --file note.md (where the work stands: branch, last commit, done, next, traps)");

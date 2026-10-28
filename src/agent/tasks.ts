@@ -161,6 +161,7 @@ export class SessionTasks extends SessionMessaging {
         round?: number;
         proof?: { url: string; label?: string };
         checkpoint?: true;
+        first?: true;
       },
       reviewText?: string,
     ) {
@@ -257,12 +258,17 @@ export class SessionTasks extends SessionMessaging {
 
   readonly taskHandoff = Effect.fn("AgentSession.taskHandoff")(
     { self: this },
-    function* (this: SessionTasks, id: number, to: string, next: string | undefined) {
+    function* (this: SessionTasks, id: number, to: string, next: string | undefined, first = false) {
       const { state } = yield* this.state();
       const target = (yield* this.resolveTo([to], state))?.[0];
       if (!target || !state.members.get(target)?.active) return yield* new Rejected(`no member named ${to}`);
       if (target === this.me) return yield* new Rejected("hand it to someone else");
-      return yield* this.taskUpdate(id, { owner: target, ...(next ? { note: next } : {}), ...(state.tasks.get(id)?.state === "doing" ? { state: "todo" as const } : {}) });
+      return yield* this.taskUpdate(id, {
+        owner: target,
+        ...(next ? { note: next } : {}),
+        ...(first ? { first: true as const } : {}),
+        ...(state.tasks.get(id)?.state === "doing" ? { state: "todo" as const } : {}),
+      });
     },
     oneLook,
   );

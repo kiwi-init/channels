@@ -713,6 +713,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         action: z.enum(["claim", "start", "review", "approve", "reject", "done", "drop", "assign", "note", "proof", "show"]),
         note: z.string().optional(),
         owner: z.string().optional().describe("for assign"),
+        first: z.boolean().optional().describe("for assign: its owner's loop starts it before their other tasks, even one they're doing"),
         at: z.string().optional().describe("for review: the commit or artifact under review; for approve or reject: the commit you reviewed"),
         round: z.number().int().positive().optional().describe("for approve or reject: the review round you judged"),
         review_text: z.string().optional().describe("for approve or reject: the whole review, sent with the verdict"),
@@ -720,7 +721,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         label: z.string().optional().describe("for proof: what the link is, in a few words (preview, session, recording)"),
       },
     },
-    tool(({ task: raw, action, note, owner, at, round, review_text, url, label }) =>
+    tool(({ task: raw, action, note, owner, first, at, round, review_text, url, label }) =>
       Effect.gen(function* () {
         const id = yield* task(raw);
         if (action === "show") {
@@ -730,8 +731,8 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
           return formatTask(state, t, Date.now(), messages);
         }
         if (action === "assign" && owner && owner !== s.me) {
-          const state = yield* s.taskHandoff(id, owner, note);
-          return `${taskId(id)} is ${state.tasks.get(id)!.owner}'s now`;
+          const state = yield* s.taskHandoff(id, owner, note, first === true);
+          return `${taskId(id)} is ${state.tasks.get(id)!.owner}'s now${first ? ", before their other tasks" : ""}`;
         }
         const verdictNote =
           note ||

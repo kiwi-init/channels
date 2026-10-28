@@ -77,6 +77,30 @@ describe("the work a loop starts a session for", () => {
     expect(nextWork(fold([backlog, theirs, round, started], roster), "ana", 0)).toEqual({ kind: "coding", task: backlog.seq });
   });
 
+  test("a task marked first goes before the seat's older tasks, the one it's doing included, until it's handed on", async () => {
+    const older = await ev("jon", { op: "task.add", title: "Older", owner: "ana" });
+    const started = await ev("ana", { op: "task.update", task: older.seq, state: "doing" });
+    const urgent = await ev("jon", { op: "task.add", title: "Urgent" });
+    const assigned = await ev("jon", { op: "task.update", task: urgent.seq, owner: "ana", note: "this one first", first: true });
+    expect(nextWork(fold([older, started, urgent], roster), "ana", 0)).toEqual({ kind: "coding", task: older.seq });
+    expect(nextWork(fold([older, started, urgent, assigned], roster), "ana", 0)).toEqual({ kind: "coding", task: urgent.seq });
+    const later = await ev("jon", { op: "task.update", task: older.seq, first: true });
+    expect(nextWork(fold([older, started, urgent, assigned, later], roster), "ana", 0)).toEqual({ kind: "coding", task: older.seq });
+    const away = await ev("jon", { op: "task.update", task: urgent.seq, owner: "bo" });
+    const back = await ev("jon", { op: "task.update", task: urgent.seq, owner: "ana" });
+    const s = fold([older, started, urgent, assigned, away, back], roster);
+    expect(s.tasks.get(urgent.seq)?.first).toBeUndefined();
+    expect(nextWork(s, "ana", 0)).toEqual({ kind: "coding", task: older.seq });
+  });
+
+  test("a task marked first still waits while its own round is with the reviewer", async () => {
+    const older = await ev("jon", { op: "task.add", title: "Older", owner: "ana" });
+    const urgent = await ev("jon", { op: "task.add", title: "Urgent", owner: "ana", review: "bo" });
+    const marked = await ev("jon", { op: "task.update", task: urgent.seq, first: true });
+    const round = await ev("ana", { op: "task.update", task: urgent.seq, state: "review", at: "ddd4444" });
+    expect(nextWork(fold([older, urgent, marked, round], roster), "ana", 0)).toEqual({ kind: "coding", task: older.seq });
+  });
+
   test("with nothing else to do, the seat's task waiting on its verdict keeps a session", async () => {
     const t = await ev("jon", { op: "task.add", title: "Waiting", owner: "ana", review: "bo" });
     const round = await ev("ana", { op: "task.update", task: t.seq, state: "review", at: "ddd4444" });

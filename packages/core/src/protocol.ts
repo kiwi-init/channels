@@ -236,6 +236,7 @@ export type Event =
       proof?: { url: string; label?: string };
       areas?: string[];
       checkpoint?: true;
+      first?: true;
     }
   /** What a member is and has, said by itself: where it runs, what runs it, what it can use. Shown in People. */
   | ({ op: "card" } & Card)
@@ -881,6 +882,7 @@ function eventCheck(ev: unknown): boolean | null {
         (e.summary === undefined || (e.state === "review" && str(e.summary, REVIEW_SUMMARY_MAX_LENGTH) && e.summary.trim().length > 0)) &&
         (e.body === undefined || (e.body === "review" && e.verdict !== undefined)) &&
         opt(e.areas, isAreas) &&
+        (e.first === undefined || e.first === true) &&
         (e.checkpoint === undefined || (e.checkpoint === true && str(e.note, CHECKPOINT_MAX_LENGTH) && e.note.trim().length > 0)) &&
         opt(e.proof, (x): x is { url: string; label?: string } => {
           const p = x as { url?: unknown; label?: unknown } | null;
