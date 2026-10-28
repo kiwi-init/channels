@@ -31,6 +31,7 @@ export {
   adoptDaemon,
   daemonHarnesses,
   daemonLaunch,
+  daemonLoop,
   daemonUnpair,
   daemonHello,
   daemonListeners,

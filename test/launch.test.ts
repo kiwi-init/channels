@@ -5,7 +5,9 @@ import { join } from "node:path";
 import { readLaunch } from "@kiwi/core/membership.ts";
 import { daemonSock, stopDaemon } from "../src/daemon.ts";
 import { launchAgent } from "../src/launch/launch.ts";
-import type { Pane, PlaceTools } from "../src/terminals/plugin.ts";
+import type { Hosted } from "../src/launch/place.ts";
+import type { Pane, PlaceRequest, PlaceTools } from "../src/terminals/plugin.ts";
+import { tmuxPane } from "../src/terminals/tmux/type.ts";
 import { typeWhenReady, type Typed } from "../src/launch/typed.ts";
 import { kimiScreen } from "../src/loop/kimi.ts";
 import { joinLineRefusal } from "@kiwi/core/join-line.ts";
@@ -449,6 +451,22 @@ esac`,
       detail: expect.stringContaining("only in Rex or tmux"),
     });
     expect(existsSync(calls)).toBe(false);
+
+    const opened: PlaceRequest[] = [];
+    const hostedTyped = Promise.withResolvers<Typed>();
+    const hosted: Hosted = {
+      ready: async () => null,
+      open: async (req) => {
+        opened.push(req);
+        return { ok: true, place: "hosted", socket: "/tmp/kiwi-1/abc", window: "@3", pane: "%3" };
+      },
+      pane: (pane) => tmuxPane({ socket: "/tmp/kiwi-1/abc", pane }, tmux),
+    };
+    const there = await launchAgent({ harness: "kimi", folder, code }, { PATH, tools: mac, config: {}, hosted, typing: { everyMs: 5 }, onTyped: (t) => hostedTyped.resolve(t) });
+    expect(there).toMatchObject({ ok: true, placed: { place: "hosted", pane: "%3" } });
+    expect(await hostedTyped.promise).toBe("typed");
+    expect(opened[0]?.argv).toEqual([join(bins, "kimi-code")]);
+    expect(readFileSync(calls, "utf8")).toContain("/tmp/kiwi-1/abc");
   });
 });
 

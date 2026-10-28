@@ -1,7 +1,8 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
+import { loopArgv, readLoopStart, startLoop } from "../src/loop/start.ts";
 import { HOSTED_CONF, HOSTED_SESSION, HostedTmux, findTmux, hostedSocket, privateDir, tmuxHosts, type HostedState } from "../src/daemon/hosted-tmux.ts";
 
 describe("the hosted tmux's settings", () => {
@@ -45,6 +46,35 @@ describe("the hosted tmux's settings", () => {
     expect(statSync(dir).mode & 0o777).toBe(0o700);
     expect(() => privateDir(dir, (process.getuid?.() ?? 0) + 1)).toThrow("isn't this user's own folder");
     rmSync(join(dir, ".."), { recursive: true, force: true });
+  });
+});
+
+describe("a loop start's request", () => {
+  test("names a channel, a seat and its folder, a loop harness and plain choices", () => {
+    const start = { channel: "work", as: "ada", folder: "/w" };
+    expect(readLoopStart(start)).toEqual({ ...start, harness: "claude" });
+    expect(readLoopStart({ ...start, harness: "codex", model: "gpt-5.5", effort: "high" })).toEqual({ ...start, harness: "codex", model: "gpt-5.5", effort: "high" });
+    for (const bad of [
+      { ...start, as: "a b" },
+      { ...start, as: "" },
+      { ...start, harness: "cursor" },
+      { ...start, model: "a b" },
+      { ...start, effort: "" },
+      { as: "ada", folder: "/w" },
+      { channel: "work", as: "ada" },
+    ])
+      expect(readLoopStart(bad)).toBeNull();
+  });
+
+  test("runs kiwi loop for that seat, each choice one word kiwi can't read as another flag", () => {
+    expect(loopArgv(["/bin/kiwi"], { channel: "work", as: "-x", folder: "/w", harness: "claude", model: "opus" })).toEqual([
+      "/bin/kiwi",
+      "loop",
+      "--channel=work",
+      "--as=-x",
+      "--harness=claude",
+      "--model=opus",
+    ]);
   });
 });
 
@@ -111,6 +141,43 @@ describe("a hosted tmux server", () => {
     for (let i = 0; i < 50 && !lines.includes("hosted-ping"); i++) await Bun.sleep(100);
     expect(lines).toContain("hosted-ping");
     await second.detach();
+  });
+
+  test.if(!!tmux)("opens an agent's window in its own session, in the folder, with the tmux it runs on", async () => {
+    const folder = mkdtempSync(join(tmpdir(), "kiwi-hosted-work-"));
+    const placed = await first.open({ argv: ["/bin/sh", "-c", 'printf "%s|%s|%s\\n" "$KIWI_TMUX" "$KIWI_LAUNCH" "$PWD"; exec sleep 60'], folder, name: "agent-one", env: { KIWI_LAUNCH: "l1" } });
+    const st = first.state()!;
+    if (!placed.ok || placed.place !== "hosted") throw new Error(JSON.stringify(placed));
+    expect(placed.socket).toBe(st.socket);
+    expect(placed.window).toMatch(/^@\d+$/);
+    expect(await read(st, ["display-message", "-p", "-t", placed.pane, "#{session_name} #{window_name} #{window-size}"])).toBe(`${HOSTED_SESSION} agent-one manual`);
+    const pane = first.pane(placed.pane)!;
+    let screen = "";
+    for (let i = 0; i < 100 && !screen.includes("|l1|"); i++) {
+      screen = pane.screen() ?? "";
+      await Bun.sleep(100);
+    }
+    expect(screen).toContain(`${st.bin}|l1|`);
+    expect(screen).toContain(basename(folder));
+    rmSync(folder, { recursive: true, force: true });
+  });
+
+  test.if(!!tmux)("kiwi loop start runs the seat's loop in a window of its own, only for a channel this computer is in", async () => {
+    const folder = mkdtempSync(join(tmpdir(), "kiwi-hosted-loop-"));
+    const start = { channel: "work", as: "ada", folder, harness: "claude", model: "opus" } as const;
+    const echo = ["/bin/sh", "-c", 'echo "$*"; exec sleep 60', "kiwi"];
+    expect(await startLoop({ ...start, channel: "elsewhere" }, first, ["work"], echo)).toMatchObject({ ok: false, why: "bad-request" });
+    const placed = await startLoop(start, first, ["work"], echo);
+    if (!placed.ok || placed.place !== "hosted") throw new Error(JSON.stringify(placed));
+    const st = first.state()!;
+    expect(await read(st, ["display-message", "-p", "-t", placed.pane, "#{window_name}"])).toBe("ada loop");
+    let screen = "";
+    for (let i = 0; i < 100 && !screen.includes("--model=opus"); i++) {
+      screen = first.pane(placed.pane)?.screen() ?? "";
+      await Bun.sleep(100);
+    }
+    expect(screen).toContain("loop --channel=work --as=ada --harness=claude --model=opus");
+    rmSync(folder, { recursive: true, force: true });
   });
 
   test.if(!!tmux)("killing it stops the server and leaves no socket or state behind", async () => {

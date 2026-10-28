@@ -4,8 +4,9 @@ import { join, resolve } from "node:path";
 import type { Socket } from "bun";
 import type { Info, MemberRow } from "@kiwi/core/client.ts";
 import { readHarnessRow, type HarnessRow } from "@kiwi/core/harnesses.ts";
-import { readLaunched, type Launched } from "@kiwi/core/terminals.ts";
+import { readLaunched, readOpened, type Launched, type Opened } from "@kiwi/core/terminals.ts";
 import type { LaunchRequest } from "../launch/wire.ts";
+import type { LoopStart } from "../loop/start.ts";
 import { home } from "../config.ts";
 import type { MachineCert } from "@kiwi/core/person.ts";
 import type { Message, Presence } from "@kiwi/core/protocol.ts";
@@ -277,6 +278,18 @@ export async function daemonLaunch(req: LaunchRequest, sock = daemonSock()): Pro
     const launched = readLaunched(r.launched);
     if (!launched) throw new Error("the daemon answered a launch in a shape this kiwi doesn't know");
     return launched;
+  } finally {
+    c.close();
+  }
+}
+
+export async function daemonLoop(start: LoopStart, sock = daemonSock()): Promise<Opened> {
+  const c = await openConn(sock, 30_000);
+  try {
+    const r = await c.call("loop", { ...start });
+    const opened = readOpened(r.opened);
+    if (!opened) throw new Error("the daemon answered a loop start in a shape this kiwi doesn't know");
+    return opened;
   } finally {
     c.close();
   }

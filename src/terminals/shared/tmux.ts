@@ -6,7 +6,7 @@ export function tmuxSocket(env: Env): string | undefined {
   return env.TMUX?.split(",")[0] || undefined;
 }
 
-export function tmuxNow(socket: string, args: readonly string[]): string | null {
-  const r = runNow(["tmux", "-S", socket, ...args], 5_000);
+export function tmuxNow(socket: string, args: readonly string[], env: Env = process.env): string | null {
+  const r = runNow([env.KIWI_TMUX || "tmux", "-S", socket, ...args], 5_000);
   return r.status === 0 ? r.stdout : null;
 }

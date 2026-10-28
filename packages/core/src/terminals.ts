@@ -1,6 +1,6 @@
 import { readLaunch } from "./membership.ts";
 
-export const PLACE_NAMES = { rex: "Rex", tmux: "tmux", terminal: "Terminal" } as const;
+export const PLACE_NAMES = { rex: "Rex", tmux: "tmux", terminal: "Terminal", hosted: "Channels" } as const;
 
 export type PlaceKind = keyof typeof PLACE_NAMES;
 
@@ -17,6 +17,7 @@ export interface RexPlace {
 export type Opened = (
   | { ok: true; place: "rex"; rex: RexPlace; window: string; pid?: number }
   | { ok: true; place: "tmux"; socket: string; session: string; window: string; pane: string; pid?: number }
+  | { ok: true; place: "hosted"; socket: string; window: string; pane: string; pid?: number }
   | { ok: true; place: "terminal"; window?: number }
 ) & { instead?: string };
 
@@ -25,6 +26,7 @@ export type Launched = { ok: true; launch: string; placed: Opened } | { ok: fals
 export type LaunchedView =
   | { ok: true; launch: string; place: "rex"; rex: RexPlace }
   | { ok: true; launch: string; place: "tmux"; session: string; window: string }
+  | { ok: true; launch: string; place: "hosted"; window: string }
   | { ok: true; launch: string; place: "terminal" }
   | Extract<Launched, { ok: false }>;
 
@@ -76,7 +78,7 @@ function readRexPlace(x: unknown): RexPlace | null {
   return server && session && block ? { server, session, block } : null;
 }
 
-function readOpened(x: unknown): Opened | null {
+export function readOpened(x: unknown): Opened | null {
   const opened = readPlace(x);
   const instead = text(record(x)?.instead, 200);
   return opened && instead ? { ...opened, instead } : opened;
@@ -96,6 +98,12 @@ function readPlace(x: unknown): Opened | null {
     const window = text(p.window, 32);
     const pane = text(p.pane, 32);
     return socket && session && window && pane ? { ok: true, place: "tmux", socket, session, window, pane, ...(pid ? { pid } : {}) } : null;
+  }
+  if (p.place === "hosted") {
+    const socket = text(p.socket, 4096);
+    const window = text(p.window, 32);
+    const pane = text(p.pane, 32);
+    return socket && window && pane ? { ok: true, place: "hosted", socket, window, pane, ...(pid ? { pid } : {}) } : null;
   }
   if (p.place === "rex") {
     const rex = readRexPlace(p.rex);
