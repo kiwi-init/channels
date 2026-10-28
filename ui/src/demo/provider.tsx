@@ -206,12 +206,20 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
             ],
           }
         }),
-      approveTask: (code, id, approve) =>
+      approveTask: (code, id, approve, why) =>
         edit(code, (c) => ({
           ...c,
           asks: c.asks.filter((a) => !(a.kind === "review" && a.task === id)),
           tasks: c.tasks.map((t) =>
-            t.id === id ? { ...t, status: approve ? "done" : "doing", rounds: t.rounds.map((r) => (r.result === "open" ? { ...r, result: approve ? "approved" : "rejected", at: Date.now() } : r)) } : t
+            t.id === id
+              ? {
+                  ...t,
+                  status: approve ? "done" : "doing",
+                  youReview: undefined,
+                  notes: why ? [...t.notes, { by: c.you, at: Date.now(), text: why }] : t.notes,
+                  rounds: t.rounds.map((r) => (r.result === "open" ? { ...r, judge: c.you, result: approve ? "approved" : "rejected", at: Date.now() } : r)),
+                }
+              : t
           ),
         })),
       addTask: (code, title, owner) =>

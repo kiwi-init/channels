@@ -266,13 +266,13 @@ export function makeActions(): Actions {
         if (r.check !== "ready" || !r.code) return announce(`Waiting for ${r.display || r.name}'s code`)
         announce(await letIn(run, r, choice ?? {}))
       }),
-    approveTask: (code, id, approve) =>
+    approveTask: (code, id, approve, why) =>
       attempt(approve ? "Not approved" : "Not sent back", async () => {
         const run = need(code)
         const t = run.state.tasks.get(id)
         if (!t) throw new Error(`no task ${taskId(id)}`)
         if (approve) await sends(run, approveTask(t), closedDigest(run.state, [...run.messages], t, { by: run.me }))
-        else await sends(run, sendBackTask(t, "sent back for another look"))
+        else await sends(run, sendBackTask(t, why?.trim() || "sent back for another look"))
       }),
     addTask: (code, title, taskOwner) =>
       attempt("Task not added", async () => {
