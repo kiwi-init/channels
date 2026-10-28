@@ -140,8 +140,8 @@ export function HarnessLogo({ harness }: { harness?: Harness }) {
   if (!logo) return <span className="logo-letter">{(harness ?? "a").slice(0, 1).toUpperCase()}</span>
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      {logo.map((p) => (
-        <path key={p.d} d={p.d} fillRule={p.rule} fill="currentColor" />
+      {logo.map((p, i) => (
+        <path key={i} d={p.d} fillRule={p.rule} fill="currentColor" />
       ))}
     </svg>
   )
