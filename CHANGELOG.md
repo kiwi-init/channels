@@ -34,6 +34,13 @@ Written by `bun scripts/changelog.ts` from each squash-merged pull request's tit
 - **Desktop: build on Livewire 2026.10.1 (T88, T129)** ([#1082](https://github.com/kiwi-init/channels/pull/1082))
 - **Wayland check: say why the two copy checks are gaps (T152)** ([#1084](https://github.com/kiwi-init/channels/pull/1084))
 - **Desktop: an opaque window for the new UI (#1045)** ([#1056](https://github.com/kiwi-init/channels/pull/1056))
+- **UI: lists in messages show their bullets and numbers again (T258)** ([#1087](https://github.com/kiwi-init/channels/pull/1087))
+- **Needs you: asks that hold nothing up get a quiet group instead of vanishing (T269)** ([#1088](https://github.com/kiwi-init/channels/pull/1088))
+- **Mentions: a mention shows its @handle on hover; kiwi help says to write @handle (T290)** ([#1091](https://github.com/kiwi-init/channels/pull/1091))
+- **Tasks: a refused review change sends nothing and says why (T270)** ([#1089](https://github.com/kiwi-init/channels/pull/1089))
+- **CLI: kiwi show N --raw prints the body exactly as sent (T289)** ([#1090](https://github.com/kiwi-init/channels/pull/1090))
+- **Feed: never drop rows where it would clamp the scroll (T222)** ([#1085](https://github.com/kiwi-init/channels/pull/1085))
+- **Main CI: shots find the search box again; Linux's tray needs no AppIndicator (T315)** ([#1092](https://github.com/kiwi-init/channels/pull/1092))
 
 ## 2026.10.7 — 2026-10-27
 
