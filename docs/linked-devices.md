@@ -131,6 +131,23 @@ reveal.
 What the relay sees: public keys, the WorkOS user, commitments and sealed blobs. A WorkOS takeover
 gets one pending ask at most. Approving it needs your app in your hand and the digits typed in.
 
+**At the relay** (step 2, `src/relay/account.ts`). Every route takes the WorkOS session
+(`x-human-token`); all but the first are also signed by a device key for `account:<user>`.
+
+| Route | Who | What |
+| --- | --- | --- |
+| `GET /v1/account` | the session | `{user, links}`: the account's device list, empty at first |
+| `PUT /v1/account` `{links}` | the person key or an app that approves | binds the account to the list's person, then only accepts lists that extend it |
+| `POST /v1/account/ask` `{ask}` | the new device | the `EnrollAsk`; one per account for 10 minutes, 5 a minute |
+| `GET /v1/account/ask` | the asking device, an app that approves | the ask with its answer and reveal |
+| `PUT /v1/account/ask/<id>/answer` `{device, dxpk, nonce}` | an app that approves | once, with the app's own listed keys |
+| `PUT /v1/account/ask/<id>/reveal` `{nonce}` | the asking device | once, after the answer; checked against the commitment |
+| `DELETE /v1/account/ask/<id>` | the asking device, an app that approves | turns the ask away |
+
+A key revoked in a published list is refused on every account route, can't ask again, and loses its
+computer inbox at once (`/v1/machine/<key>` answers 403 and its socket closes). The digits come from
+`enrollDigits` in `packages/core/src/enroll.ts`.
+
 ## 3. Admitting agents without an app open (delegation)
 
 Today auto-approval needs the owner key, so it only runs while an app with it is open. An
