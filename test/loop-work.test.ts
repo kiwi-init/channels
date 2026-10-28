@@ -11,7 +11,7 @@ import { grokArgv, grokIdle, grokSession } from "../src/loop/grok.ts";
 import { mimoArgv, mimoIdle, mimoSession } from "../src/loop/mimo.ts";
 import { isListener, kimiArgv, kimiIdle, kimiScreen, kimiSession, listenersUnder, stopStrays, strayKey, tmuxPastesFlag, type Proc } from "../src/loop/kimi.ts";
 import { Database } from "bun:sqlite";
-import { firstPrompt, nextWork, workOver } from "../src/loop/work.ts";
+import { firstPrompt, nextWork, waitingBehind, waitingText, waitTellsTo, workOver } from "../src/loop/work.ts";
 
 const ids: Record<string, Identity> = {};
 let seq = 0;
@@ -75,6 +75,32 @@ describe("the work a loop starts a session for", () => {
     expect(nextWork(fold([backlog, theirs, round], roster), "ana", 0)).toEqual({ kind: "reviewing", task: theirs.seq, round: 1 });
     const started = await ev("ana", { op: "task.update", task: backlog.seq, state: "doing" });
     expect(nextWork(fold([backlog, theirs, round, started], roster), "ana", 0)).toEqual({ kind: "coding", task: backlog.seq });
+  });
+
+  test("a task assigned behind a live session is named, and nothing is while the session holds only its own work", async () => {
+    const live = await ev("jon", { op: "task.add", title: "Live", owner: "ana" });
+    const started = await ev("ana", { op: "task.update", task: live.seq, state: "doing" });
+    const session = { kind: "coding" as const, task: live.seq };
+    expect(waitingBehind(session, fold([live, started], roster), "ana")).toBeNull();
+    const queued = await ev("jon", { op: "task.add", title: "Queued", owner: "ana" });
+    const s = fold([live, started, queued], roster);
+    expect(waitingBehind(session, s, "ana")).toEqual({ kind: "coding", task: queued.seq });
+    expect(waitingBehind({ kind: "answering" }, s, "ana")).toBeNull();
+    const theirs = await ev("jon", { op: "task.add", title: "Bo's", owner: "bo", review: "ana" });
+    const round = await ev("bo", { op: "task.update", task: theirs.seq, state: "review", at: "eee5555" });
+    expect(waitingBehind(session, fold([live, started, theirs, round], roster), "ana")).toEqual({ kind: "reviewing", task: theirs.seq, round: 1 });
+    expect(waitingBehind({ kind: "reviewing", task: theirs.seq, round: 1 }, fold([live, started, theirs, round], roster), "ana")).toEqual(session);
+  });
+
+  test("a long wait is told to the lead, or to the channel's owners when the seat is the lead or there is none", async () => {
+    const t = await ev("jon", { op: "task.add", title: "Any" });
+    const s = fold([t], roster);
+    expect(waitTellsTo({ ...s, lead: "bo" }, "ana")).toEqual(["bo"]);
+    expect(waitTellsTo({ ...s, lead: "ana" }, "ana")).toEqual(["jon"]);
+    expect(waitTellsTo({ ...s, lead: null }, "ana")).toEqual(["jon"]);
+    const text = waitingText({ kind: "coding", task: 7 }, { kind: "coding", task: 3 }, 30);
+    expect(text).toContain("T7 has waited 30 minutes behind my T3 session");
+    expect(text).toContain("kiwi task assign T3");
   });
 
   test("with nothing else to do, the seat's task waiting on its verdict keeps a session", async () => {

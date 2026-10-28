@@ -9,7 +9,7 @@ import { loginArgv } from "../terminals/shared/launch.ts";
 import type { Recipe, Started } from "./recipes.ts";
 import { clearPane, kimiScreen, listenersUnder, paneText, pasteBracketed, stopStrays, strayKey, typeInto } from "./kimi.ts";
 import { tmuxSocket } from "../terminals/shared/tmux.ts";
-import { firstPrompt, nextWork, step, workName, type Work } from "./work.ts";
+import { firstPrompt, nextWork, step, waitingBehind, waitingText, waitTellsTo, workName, type Work } from "./work.ts";
 import { clearFresh, freshAsked, LOOP_TASK_ENV } from "./fresh.ts";
 import { LOOP_ENV } from "../hooks/loop-wait.ts";
 
@@ -23,6 +23,7 @@ const QUICK_END_MS = 30_000;
 const PAUSE_MS = 5_000;
 const STRAY_EVERY = 5;
 const STARTING_MS = 2 * 60_000;
+const WAIT_TELL_MS = 30 * 60_000;
 
 export interface LoopSeat {
   alias: string;
@@ -149,6 +150,7 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
       for (const stray of listenersUnder(child.pid)) strays.add(strayKey(stray));
     };
     let polls = 0;
+    let waits: { name: string; since: number; told: boolean } | null = null;
     const end = (why: Ended) =>
       Effect.gen(function* () {
         if (!exited) noteStrays();
@@ -193,6 +195,19 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
         return yield* end(next);
       }
       if (next.kind === "over" || (first.kind === "answering" && answered(live, started, seen.forMe))) return yield* end({ kind: "done", work: first });
+      const behind = waitingBehind(first, seen.state, seat.me);
+      if (!behind) waits = null;
+      else if (waits?.name !== workName(behind)) {
+        waits = { name: workName(behind), since: Date.now(), told: false };
+        yield* say(`${waits.name} is waiting; the ${workName(first)} session is still running`);
+      } else if (!waits.told && Date.now() - waits.since >= WAIT_TELL_MS) {
+        waits.told = true;
+        const to = waitTellsTo(seen.state, seat.me);
+        if (to.length) yield* Effect.ignoreCause(s.send(waitingText(behind, first, Math.round(WAIT_TELL_MS / 60_000)), { to }));
+        yield* say(
+          `${waits.name} has waited ${Math.round(WAIT_TELL_MS / 60_000)} minutes behind the ${workName(first)} session${to.length ? `; told ${to.join(", ")}` : ", and there's nobody to tell"}`,
+        );
+      }
       yield* Effect.sleep(POLL_MS);
     }
   });

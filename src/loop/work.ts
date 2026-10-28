@@ -29,6 +29,29 @@ export function nextWork(state: ChannelState, me: string, unreadForMe: number): 
   return unreadForMe > 0 ? { kind: "answering" } : null;
 }
 
+export function waitingBehind(work: Work, state: ChannelState, me: string): Work | null {
+  if (work.kind === "answering") return null;
+  const tasks = new Map([...state.tasks].filter(([id]) => id !== work.task));
+  const next = nextWork({ ...state, tasks }, me, 0);
+  return next?.kind === "answering" ? null : next;
+}
+
+export function waitTellsTo(state: ChannelState, me: string): string[] {
+  if (state.lead && state.lead !== me && state.members.get(state.lead)?.active) return [state.lead];
+  return [...state.members.values()].filter((m) => m.owner && m.active && m.name !== me).map((m) => m.name);
+}
+
+export function waitingText(waiting: Work, session: Work, minutes: number, mc = "kiwi"): string {
+  const held = session.kind === "answering" ? "messages" : taskId(session.task);
+  const free =
+    session.kind === "coding"
+      ? `approve it, mark it done, or hand it on with \`${mc} task assign ${held} NAME\``
+      : session.kind === "reviewing"
+        ? `give round ${session.round}'s verdict or move its review to someone else`
+        : "answer what's waiting";
+  return `${workName(waiting)} has waited ${minutes} minutes behind my ${workName(session)} session, which is still running: my loop starts it only when that work is over. To start ${workName(waiting)} now, ${free}.`;
+}
+
 export function workOver(work: Work, state: ChannelState, me: string): boolean {
   switch (work.kind) {
     case "coding": {
