@@ -5,7 +5,7 @@ import { loginPath } from "../launch/shell.ts";
 import { run, type Ran } from "../terminals/shared/run.ts";
 
 export const HOSTED_SESSION = "_kiwi";
-export const PAUSE_AFTER_S = 5;
+const PAUSE_AFTER_S = 5;
 const MIN_TMUX: readonly [number, number] = [3, 2];
 const STATE_FILE = "hosted-tmux.json";
 const CONF_FILE = "hosted-tmux.conf";
@@ -17,7 +17,8 @@ export const HOSTED_CONF = [
   "set -s focus-events on",
   "set -g default-terminal screen-256color",
   "set -g remain-on-exit on",
-  "set -g window-size manual",
+  "set-hook -g after-new-session 'set -w window-size manual'",
+  "set-hook -g after-new-window 'set -w window-size manual'",
   "",
 ].join("\n");
 

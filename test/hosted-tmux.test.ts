@@ -6,7 +6,16 @@ import { HOSTED_CONF, HOSTED_SESSION, HostedTmux, findTmux, hostedSocket, privat
 
 describe("the hosted tmux's settings", () => {
   test("the config keeps the server up with no sessions, keeps dead panes, and never resizes on its own", () => {
-    for (const line of ["exit-empty off", "escape-time 0", "focus-events on", "default-terminal screen-256color", "remain-on-exit on", "window-size manual"]) expect(HOSTED_CONF).toContain(line);
+    for (const line of [
+      "exit-empty off",
+      "escape-time 0",
+      "focus-events on",
+      "default-terminal screen-256color",
+      "remain-on-exit on",
+      "after-new-session 'set -w window-size manual'",
+      "after-new-window 'set -w window-size manual'",
+    ])
+      expect(HOSTED_CONF).toContain(line);
   });
 
   test("each home gets its own short socket under /tmp/kiwi-UID", () => {
@@ -68,7 +77,9 @@ describe("a hosted tmux server", () => {
     expect(st.socket).toBe(hostedSocket(home));
     expect(statSync(join(st.socket, "..")).mode & 0o777).toBe(0o700);
     expect(await read(st, ["show-options", "-sv", "exit-empty"])).toBe("off");
-    expect(await read(st, ["show-options", "-gv", "window-size"])).toBe("manual");
+    expect(await read(st, ["show-options", "-wv", "-t", `=${HOSTED_SESSION}:hold`, "window-size"])).toBe("manual");
+    expect((await first.tmux(st, ["new-window", "-d", "-t", `=${HOSTED_SESSION}`, "-n", "agent", "cat"])).status).toBe(0);
+    expect(await read(st, ["show-options", "-wv", "-t", `=${HOSTED_SESSION}:agent`, "window-size"])).toBe("manual");
     expect(await read(st, ["show-options", "-gv", "remain-on-exit"])).toBe("on");
     expect(await read(st, ["list-sessions", "-F", "#{session_name}"])).toBe(HOSTED_SESSION);
     const flags = await clientFlags(st);
