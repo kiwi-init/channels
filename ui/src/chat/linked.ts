@@ -2,7 +2,7 @@ import { bareAt, memberNamed, readsAsHandle } from "@kiwi/core/state.ts"
 import { fromMarkdown } from "mdast-util-from-markdown"
 import { gfmFromMarkdown } from "mdast-util-gfm"
 import { gfm } from "micromark-extension-gfm"
-import { sanitizeMarkdownUrl } from "@/lib/markdown"
+import { sanitizeMarkdownUrl } from "../../../web/src/lib/markdown"
 
 type MdNode = { type: string; value?: string; url?: string; alt?: string | null; children?: MdNode[]; position?: { start: { offset?: number }; end: { offset?: number } } }
 
