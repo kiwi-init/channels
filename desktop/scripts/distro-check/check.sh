@@ -89,7 +89,6 @@ session none stock no-tray "$plain_home"
 for f in $activatable; do mv "$f.off" "$f"; done
 lib_test kiwi-tray-test "$tests/kiwi-tray-test" "$lib" no-indicator
 install "${ayatana[@]}" || exit 1
-lib_test kiwi-tray-test "$tests/kiwi-tray-test" "$lib"
 sealed_home=$(runuser -u tester -- mktemp -d)
 session gnome-keyring gnome-keyring tray "$sealed_home"
 session kwallet kwallet tray

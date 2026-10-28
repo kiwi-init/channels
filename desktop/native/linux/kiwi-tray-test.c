@@ -171,18 +171,12 @@ int main(int argc, char **argv) {
     printf("a StatusNotifierWatcher with no host registered: no tray host either\n");
 
   host_registered = TRUE;
-  if (no_indicator) {
-    if (ask(tray_host)) {
-      fprintf(stderr, "kiwi-tray-test: with no libayatana-appindicator3 to make a tray icon, a watcher with a host registered counted as a tray host\n");
-      bad++;
-    } else
-      printf("a StatusNotifierWatcher with a host registered, but no libayatana-appindicator3 (stock Fedora, Arch): no tray icon can show, so closing minimizes\n");
-  } else {
-    if (!ask(tray_host)) {
-      fprintf(stderr, "kiwi-tray-test: a watcher with a host registered didn't count as a tray host\n");
-      bad++;
-    } else
-      printf("a StatusNotifierWatcher with a host registered (Plasma, GNOME's AppIndicator extension): a tray host, so closing hides to it\n");
+  if (!ask(tray_host)) {
+    fprintf(stderr, "kiwi-tray-test: a watcher with a host registered didn't count as a tray host%s\n", no_indicator ? " (with no libayatana-appindicator3: the tray is Electrobun's own StatusNotifierItem, which needs none)" : "");
+    bad++;
+  } else
+    printf("a StatusNotifierWatcher with a host registered (Plasma, GNOME's AppIndicator extension)%s: a tray host, so closing hides to it\n", no_indicator ? ", with no libayatana-appindicator3 (stock Fedora, Arch)" : "");
+  if (!no_indicator) {
     gchar *command[] = {"setsid", argv[2], NULL};
     GPid app = 0;
     GError *error = NULL;
