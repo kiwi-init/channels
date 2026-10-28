@@ -2,6 +2,8 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { home } from "../config.ts";
 
+export const LOOP_TASK_ENV = "KIWI_LOOP_TASK";
+
 const fileOf = (alias: string, as: string): string => join(home(), "fresh", `${encodeURIComponent(alias)}~${encodeURIComponent(as)}.json`);
 
 export function askFresh(alias: string, as: string, task: number, at = Date.now()): void {

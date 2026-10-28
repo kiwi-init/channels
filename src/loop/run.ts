@@ -10,7 +10,7 @@ import type { Recipe, Started } from "./recipes.ts";
 import { clearPane, kimiScreen, listenersUnder, paneText, pasteBracketed, stopStrays, strayKey, typeInto } from "./kimi.ts";
 import { tmuxSocket } from "../terminals/shared/tmux.ts";
 import { firstPrompt, nextWork, step, workName, type Work } from "./work.ts";
-import { clearFresh, freshAsked } from "./fresh.ts";
+import { clearFresh, freshAsked, LOOP_TASK_ENV } from "./fresh.ts";
 import { LOOP_ENV } from "../hooks/loop-wait.ts";
 
 const POLL_MS = 2_000;
@@ -132,6 +132,7 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
       KIWI_CHANNEL: seat.alias,
       KIWI_AS: seat.me,
       [LOOP_ENV]: "1",
+      ...(first.kind === "coding" ? { [LOOP_TASK_ENV]: String(first.task) } : {}),
     });
     yield* hooksFirst(recipe);
     if (recipe.typed) clearTypedPane();

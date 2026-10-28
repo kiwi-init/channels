@@ -12,7 +12,7 @@ import { args, opt } from "../args.ts";
 import { type Command, die, keepDaemon, offlineOk, out, session } from "../context.ts";
 import { firstLine, readText, taskArg, text } from "../input.ts";
 import { LOOP_ENV } from "../../hooks/loop-wait.ts";
-import { askFresh } from "../../loop/fresh.ts";
+import { askFresh, LOOP_TASK_ENV } from "../../loop/fresh.ts";
 
 const CLAIMS_GONE = "claims are gone: say what you're working on in the task, or post it";
 const ANCHORS = "--ask N (the person's message #N it answers), --from T… (the task it comes from) or --issue N (a GitHub issue)";
@@ -146,6 +146,8 @@ export const taskCommands: Record<string, Command> = {
           const where = opt.file !== undefined ? yield* readText(opt.file) : args.slice(3).join(" ") || opt.note || "";
           if (!where.trim()) return yield* die("usage: kiwi task checkpoint T7 --file note.md (where the work stands: branch, last commit, done, next, traps)");
           if (opt.fresh && process.env[LOOP_ENV] !== "1") return yield* die("--fresh starts a new kiwi loop session from the checkpoint, and this session isn't one kiwi loop started");
+          if (opt.fresh && process.env[LOOP_TASK_ENV] !== String(id))
+            return yield* die(`--fresh restarts the loop session working on a task, and this session isn't working on ${taskId(id)}: save the checkpoint without --fresh`);
           state = yield* s.taskUpdate(id, { note: where.trim(), checkpoint: true });
           if (opt.fresh) askFresh(s.alias, s.me, id);
         } else if (sub === "proof") {

@@ -120,7 +120,13 @@ test("a session that starts fresh is told its open task and checkpoint; a resume
   const [, why] = await Promise.all([new Response(outside.stdout).text(), new Response(outside.stderr).text()]);
   expect(await outside.exited).not.toBe(0);
   expect(why).toContain("this session isn't one kiwi loop started");
-  expect(await ok(agent, ["task", "checkpoint", id, "--fresh", "--file", note], { ...S, KIWI_LOOP: "1" })).toContain(`end your turn, and the loop starts a fresh session on ${id} from it`);
+  const elsewhere = spawn(agent, ["task", "checkpoint", id, "--fresh", "--file", note], { ...S, KIWI_LOOP: "1", KIWI_LOOP_TASK: "999" });
+  const [, other] = await Promise.all([new Response(elsewhere.stdout).text(), new Response(elsewhere.stderr).text()]);
+  expect(await elsewhere.exited).not.toBe(0);
+  expect(other).toContain(`this session isn't working on ${id}`);
+  expect(await ok(agent, ["task", "checkpoint", id, "--fresh", "--file", note], { ...S, KIWI_LOOP: "1", KIWI_LOOP_TASK: id.slice(1) })).toContain(
+    `end your turn, and the loop starts a fresh session on ${id} from it`,
+  );
   for (const source of ["startup", "clear", "compact"]) {
     const told = await context(source);
     expect(told).toContain(`${id} “rotate the seats”: doing, yours`);
