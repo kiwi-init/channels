@@ -81,4 +81,15 @@ describe("a loop session waiting for its verdict (#1117)", () => {
     expect(wants("win", moved, fold([add, sent, moved], roster), loop)).toBe(true);
     expect(wants("win", verdict, fold([add, sent, verdict], roster), loop)).toBe(true);
   });
+
+  test("an update to a task the seat handed on doesn't reach it, waiting or not", async () => {
+    const old = await ev("jon", { op: "task.add", title: "old", owner: "win", review: "linux" });
+    const handed = await ev("win", { op: "task.update", task: old.seq, owner: "mac" }, ["mac"]);
+    const theirs = await ev("mac", { op: "task.update", task: old.seq, state: "review", at: "def5678" });
+    const note = await ev("jon", { op: "task.update", task: old.seq, note: "mac: rebase first" }, ["mac"]);
+    const add = await ev("jon", { op: "task.add", title: "ship it", owner: "win", review: "mac" });
+    expect(wants("win", note, fold([old, handed, theirs, add, note], roster), loop)).toBe(false);
+    const sent = await ev("win", { op: "task.update", task: add.seq, state: "review", at: "abc1234" });
+    expect(wants("win", note, fold([old, handed, theirs, add, sent, note], roster), loop)).toBe(false);
+  });
 });
