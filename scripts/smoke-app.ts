@@ -37,7 +37,8 @@ const { relay, port } = await startLocalRelay(join(data, "relay"), DIST);
 const BASE = `http://127.0.0.1:${port}/`;
 const errors: string[] = [];
 let at = "start";
-const ICON_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAbElEQVR4nA3JQQEAMAgDMaRUClIqpVKQwvNkIGXLN1WFii5cpJhiiyuqhEQLi4gRK04/GjXduEkzzTbXP4xMG5uYMWvOP4JCB4eECRsuPwYNPXjIMMMONz8WLb14yTLLLrc/Dh19+Mgxxx53PLzkagFHPAwGAAAAAElFTkSuQmCC";
+const ICON_PNG =
+  "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAbElEQVR4nA3JQQEAMAgDMaRUClIqpVKQwvNkIGXLN1WFii5cpJhiiyuqhEQLi4gRK04/GjXduEkzzTbXP4xMG5uYMWvOP4JCB4eECRsuPwYNPXjIMMMONz8WLb14yTLLLrc/Dh19+Mgxxx53PLzkagFHPAwGAAAAAElFTkSuQmCC";
 const step = (line: string) => console.log(`ok  ${line}`);
 const shot = async (name: string) => {
   if (process.env.SMOKE_SHOTS) await page.waitForTimeout(300).then(() => page.screenshot({ path: join(process.env.SMOKE_SHOTS ?? "", `${name}.png`) }));
