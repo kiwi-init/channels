@@ -117,10 +117,13 @@ try {
   await notes.getByRole("button", { name: "Clear", exact: true }).click();
   let cleared = false;
   for (let i = 0; i < 50 && !cleared; i++) {
-    cleared = (await said("bot")).some((m) => m.from === "smoke" && m.body === "cleared smoke-url");
+    cleared = await kiwi(["-c", "smoke", "--as", "bot", "get", "smoke-url"]).then(
+      () => false,
+      (e: unknown) => String(e).includes("no fact"),
+    );
     if (!cleared) await page.waitForTimeout(200);
   }
-  if (!cleared) throw new Error("the agent never saw the note cleared");
+  if (!cleared) throw new Error("the agent still has the note after the owner cleared it");
   await page.keyboard.press("Escape");
   step(at);
 

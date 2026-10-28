@@ -214,7 +214,7 @@ export interface InviteInfo {
   state: "ok" | "gone" | "member"
 }
 
-export interface Fact {
+interface Fact {
   key: string
   value: string
   by: string
