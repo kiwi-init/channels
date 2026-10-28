@@ -16,7 +16,7 @@ export { unnamedAsks, unnamedTasks } from "./state/compact.ts";
 export { leadCheckpointKey } from "./state/lead.ts";
 export { findRoom, newRoomId } from "./state/rooms.ts";
 export { bareAt, memberNamed, readsAsHandle } from "./state/mentions.ts";
-export { currentState, openRound, parseTaskId, revisedOut, similarOpenTasks, taskId, titlesLookAlike } from "./state/tasks.ts";
+export { currentState, openRound, parseTaskId, reviewMoveRefusal, revisedOut, similarOpenTasks, taskId, titlesLookAlike } from "./state/tasks.ts";
 export {
   rosterOf,
   toRoster,

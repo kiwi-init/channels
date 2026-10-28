@@ -135,6 +135,8 @@ function eventText(m: Wire, state: ChannelState): string {
   const ev = m.ev
   const who = nameIn(state, m.from)
   if (!ev) return m.body
+  const refused = state.rejected.get(m.seq)
+  if (refused !== undefined) return `${who}: refused: ${refused}`
   switch (ev.op) {
     case "hold.set":
       return ev.on ? `${who} paused the agents${ev.note ? `: ${ev.note}` : ""}` : `${who} let the agents carry on`

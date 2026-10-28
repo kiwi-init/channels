@@ -15,7 +15,7 @@ import {
 } from "@kiwi/core/protocol.ts";
 import { omit } from "@kiwi/core/omit.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
-import { isPerson, openRound, revisedOut, taskId, type ChannelState, type ReviewRound, type Task } from "@kiwi/core/state.ts";
+import { isPerson, openRound, reviewMoveRefusal, revisedOut, taskId, type ChannelState, type ReviewRound, type Task } from "@kiwi/core/state.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { parseIssueRef, taskDigest, taskOfIssue } from "@kiwi/core/work.ts";
 import { handBackText, heldBy, reviewedBy } from "@kiwi/core/handback.ts";
@@ -189,6 +189,12 @@ export class SessionTasks extends SessionMessaging {
       const opensReview = finishing && change.review === undefined && reviewerLeft && state.lead === this.me;
       const review = change.review ? yield* this.reviewer(state, change.review) : opensReview ? "*" : change.review;
       const me = state.members.get(this.me);
+      if (me) {
+        const lead = !!me.owner || me.persona?.role === "lead" || state.lead === this.me;
+        const reviewerGone = t.review !== "*" && !state.members.get(t.review ?? "")?.active;
+        const refused = reviewMoveRefusal(t, { name: this.me, person: isPerson(me), lead }, review, reviewerGone);
+        if (refused) return yield* new Rejected(refused);
+      }
       const gate = review === undefined ? t.review : review || undefined;
       const notReviewer = !!gate && !!me && !isPerson(me) && (gate === "*" ? (owner ?? t.owner) === this.me || t.workedBy.includes(this.me) : gate !== this.me);
       const open = openRound(t);
