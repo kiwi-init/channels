@@ -19,6 +19,7 @@ export interface Nav {
   dialog: Dialog
   section: Section
   invite?: string
+  term?: string
 }
 
 export type Go =
@@ -31,6 +32,7 @@ export type Go =
   | { to: "back" }
   | { to: "home" }
   | { to: "invite"; code: string }
+  | { to: "term"; name: string | null }
 
 const GENERAL: Where = { kind: "room", room: "general" }
 
@@ -42,7 +44,7 @@ export function navigate(nav: Nav, go: Go): Nav {
   switch (go.to) {
     case "channel": {
       if (nav.channel) lastWhere.set(nav.channel, nav.where)
-      return { ...nav, page: "channel", channel: go.code, where: lastWhere.get(go.code) ?? GENERAL, tab: "chat", panel: null, dialog: null }
+      return { ...nav, page: "channel", channel: go.code, where: lastWhere.get(go.code) ?? GENERAL, tab: "chat", panel: null, dialog: null, term: undefined }
     }
     case "where":
       return { ...nav, page: "channel", where: go.where, tab: "chat", panel: nav.panel?.kind === "thread" ? null : nav.panel }
@@ -54,12 +56,14 @@ export function navigate(nav: Nav, go: Go): Nav {
       return { ...nav, dialog: go.dialog, ...(go.dialog === "join" ? {} : { invite: undefined }) }
     case "invite":
       return { ...nav, dialog: "join", invite: go.code }
+    case "term":
+      return { ...nav, page: "channel", term: go.name ?? undefined }
     case "settings":
       return { ...nav, page: "settings", section: go.section ?? nav.section, dialog: null }
     case "back":
       return { ...nav, page: "channel" }
     case "home":
-      return { ...nav, page: "channel", channel: null, where: GENERAL, tab: "chat", panel: null, dialog: null }
+      return { ...nav, page: "channel", channel: null, where: GENERAL, tab: "chat", panel: null, dialog: null, term: undefined }
   }
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from "react"
+import { lazy, Suspense, useEffect, useState, type CSSProperties } from "react"
 
 import { Conversation } from "~/chat/conversation"
 import { SearchBox, type Jump } from "~/chat/search-box"
@@ -18,6 +18,8 @@ import { Sidebar } from "~/shell/sidebar"
 import { Waiting } from "~/start/waiting"
 import { Board, openTasks } from "~/tasks/board"
 import { nickname } from "~/names"
+
+const TermDrawer = lazy(() => import("~/term/drawer"))
 
 export function ChannelScreen({ channel }: { channel: Channel }) {
   const { nav, go } = useApp()
@@ -102,7 +104,14 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
         </div>
       </header>
       <Sidebar channel={channel} />
-      <main className="main">{nav.tab === "tasks" ? <Board channel={channel} /> : nav.tab === "needs" ? <NeedsYou channel={channel} /> : <Conversation channel={channel} jump={jump} />}</main>
+      <main className="main">
+        {nav.tab === "tasks" ? <Board channel={channel} /> : nav.tab === "needs" ? <NeedsYou channel={channel} /> : <Conversation channel={channel} jump={jump} />}
+        {nav.term && (
+          <Suspense fallback={null}>
+            <TermDrawer key={nav.term} channel={channel} name={nav.term} />
+          </Suspense>
+        )}
+      </main>
       {channel.connection !== "live" && (
         <p className="conn" role="status">
           <span className="dot is-doing" aria-hidden="true" />

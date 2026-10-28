@@ -5,9 +5,15 @@ import type { Channel, Person } from "~/model"
 import { useApp } from "~/nav"
 
 export function ShowAgent({ channel, person, className = "btn" }: { channel: Channel; person: Pick<Person, "name" | "seat"> | undefined; className?: string }) {
-  const { app, toast } = useApp()
+  const { app, nav, go, toast } = useApp()
   const [busy, setBusy] = useState(false)
   if (!person?.seat) return null
+  if (person.seat === "hosted")
+    return (
+      <button type="button" className={className} aria-pressed={nav.term === person.name} onClick={() => go({ to: "term", name: nav.term === person.name ? null : person.name })}>
+        Open terminal
+      </button>
+    )
   return (
     <button
       type="button"

@@ -21,7 +21,7 @@ import { noteFor, showSeat, type ShowResult } from "@/lib/show-seat"
 import { cleanRoomName, roomProblem, roomsAfter } from "@/lib/rooms"
 import { ALLOW_ONCE, DENY } from "@/lib/permission-settled"
 import { savePersonalities } from "@/lib/personalities"
-import { createPerson, bridge, secrets } from "@/lib/secrets"
+import { createPerson, bridge, secrets, type TermEvent, type TermOpenView } from "@/lib/secrets"
 import { isSignInGone } from "@/lib/session"
 import { approveTask, closedDigest, sendBackTask, type TaskSend } from "@/lib/task-actions"
 import { announce } from "~/kit/toasts"
@@ -375,6 +375,36 @@ export function makeActions(): Actions {
       if (!seat) return "It isn't running in a window on this computer."
       const r = await showSeat(seat).catch((): ShowResult => ({ ok: false, why: "failed" }))
       return noteFor(seat.place, r)
+    },
+    openTerm: async (code, name, cols, rows, watch) => {
+      const b = bridge()
+      const seat = seatOf(need(code).roomId, name)
+      if (!b) return { error: "Terminals open in the Channels desktop app." }
+      if (typeof b.termOpen !== "function") return { error: "Update Channels to open its terminals here." }
+      if (seat?.place !== "hosted") return { error: "It isn't running in Channels' own terminal on this computer." }
+      const early: TermEvent[] = []
+      let mine: string | null = null
+      const deliver = (e: TermEvent) => ("out" in e ? watch.out(e.out) : watch.ended())
+      const off = b.onTerm((e) => (mine === null ? early.push(e) : e.term === mine && deliver(e)))
+      const r = await b.termOpen(seat.pane, cols, rows).catch((err: unknown): TermOpenView => ({ ok: false, detail: err instanceof Error ? err.message : String(err) }))
+      if (!r.ok) {
+        off()
+        return { error: r.detail }
+      }
+      const term = r.term
+      mine = term
+      queueMicrotask(() => early.filter((e) => e.term === term).forEach(deliver))
+      return {
+        screen: { cols: r.cols, rows: r.rows, seed: r.seed, dead: r.dead },
+        link: {
+          keys: (text) => void b.termKeys(term, text).catch(() => {}),
+          size: (c, w) => void b.termSize(term, c, w).catch(() => {}),
+          close: () => {
+            off()
+            void b.termClose(term).catch(() => {})
+          },
+        },
+      }
     },
     choicesOn: async (code, computer) => {
       const b = bridge()
