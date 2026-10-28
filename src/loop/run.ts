@@ -10,6 +10,7 @@ import type { Recipe, Started } from "./recipes.ts";
 import { clearPane, kimiScreen, listenersUnder, paneText, pasteBracketed, stopStrays, strayKey, typeInto } from "./kimi.ts";
 import { tmuxSocket } from "../terminals/shared/tmux.ts";
 import { firstPrompt, nextWork, workName, workOver, type Work } from "./work.ts";
+import { LOOP_ENV } from "../hooks/loop-wait.ts";
 
 const POLL_MS = 2_000;
 const BIND_MS = 60_000;
@@ -123,6 +124,7 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
     const argv = loginArgv(loginShell(), recipe.argv({ bin: recipe.bin, prompt: launched, ...(seat.model ? { model: seat.model } : {}), ...(seat.effort ? { effort: seat.effort } : {}) }), {
       KIWI_CHANNEL: seat.alias,
       KIWI_AS: seat.me,
+      [LOOP_ENV]: "1",
     });
     yield* hooksFirst(recipe);
     if (recipe.typed) clearTypedPane();
@@ -169,7 +171,7 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
     }
     if (!found) return yield* end(exited ? { kind: "own", lived: Date.now() - started } : stop.asked ? { kind: "stopped" } : { kind: "unbound" });
     const live = found;
-    yield* heldOrDie(bindHeldSeat(seat.alias, seat.me, seat.token, live.bound), seat);
+    yield* heldOrDie(bindHeldSeat(seat.alias, seat.me, seat.token, live.bound, "loop"), seat);
     yield* say(`${seat.me} is bound to ${recipe.label} session ${live.id}`);
 
     let work = first;

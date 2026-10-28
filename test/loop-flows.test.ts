@@ -68,7 +68,7 @@ async function until(pred: () => boolean | Promise<boolean>, label: string, ms =
 const S: Env = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "joiner", CLAUDE_PID: String(process.pid), AI_AGENT: "claude-code_2-1-296_agent" };
 
 type Seen =
-  | { kind: "start"; harness: string; pid: number; argv: string[]; token: boolean; as?: string; channel?: string; marker: boolean; thread?: string }
+  | { kind: "start"; harness: string; pid: number; argv: string[]; token: boolean; as?: string; channel?: string; loop?: string; marker: boolean; thread?: string }
   | { kind: "done"; pid: number; out: string }
   | { kind: "term"; pid: number }
   | { kind: "ignored-term"; pid: number }
@@ -93,7 +93,7 @@ const say = (o) => appendFileSync(record, JSON.stringify(o) + "\\n");
 process.on("SIGTERM", () => { say({ kind: "term", pid: process.pid }); process.exit(143); });
 const argv = process.argv.slice(2);
 reg("busy");
-say({ kind: "start", harness: "claude", pid: process.pid, argv, token: !!process.env.KIWI_SEAT_TOKEN, as: process.env.KIWI_AS, channel: process.env.KIWI_CHANNEL, marker: !!process.env.CLAUDE_CODE_SESSION_ID });
+say({ kind: "start", harness: "claude", pid: process.pid, argv, token: !!process.env.KIWI_SEAT_TOKEN, as: process.env.KIWI_AS, channel: process.env.KIWI_CHANNEL, loop: process.env.KIWI_LOOP, marker: !!process.env.CLAUDE_CODE_SESSION_ID });
 await Bun.sleep(1_500);
 const task = /This session is for (T\\d+)/.exec(argv.at(-1) ?? "")?.[1];
 if (task) {
@@ -319,6 +319,7 @@ test("the loop holds the seat, starts a fresh Claude Code session for a task, bi
   expect(start.marker).toBe(false);
   expect(start.as).toBe(me);
   expect(start.channel).toBe("loop");
+  expect(start.loop).toBe("1");
   expect(start.argv.slice(0, 2)).toEqual(["--model", "test-model"]);
   expect(start.argv.at(-1)).toContain(`This session is for ${id} “loop work”`);
   expect(start.argv.at(-1)).toContain(`kiwi task done ${id}`);

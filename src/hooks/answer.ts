@@ -3,6 +3,7 @@ import { writeSync } from "node:fs";
 import { join } from "node:path";
 import type { Relay } from "@kiwi/core/client.ts";
 import { openSession, type AgentSession } from "../agent.ts";
+import type { Delivery } from "../agent/shared.ts";
 import { briefText, COMMANDS } from "../brief.ts";
 import { detectWhere } from "../card.ts";
 import { home, loadConfig, type ChannelConfig } from "../config.ts";
@@ -17,6 +18,7 @@ import { asOption, channelOption } from "@kiwi/core/wake.ts";
 import { crossing, noteOverLine, nudgeShort, nudgeText, openTasksOf, overLine } from "./context-line.ts";
 import { commitDelivered, noteHeard } from "./delivered.ts";
 import { isRecord } from "./files.ts";
+import { loopDelivery } from "./loop-wait.ts";
 import { liveListeners, refreshListeners } from "./listeners.ts";
 import { notePersonaTold, personaChange, personaMark, personaTold } from "./persona-line.ts";
 import { howMessagesReachYou, startListener, wakeYourself } from "./reach.ts";
@@ -272,8 +274,8 @@ export function handOver(unread: readonly Unread[], max: number, mc: string): { 
   return { count: 0, text: waiting.length <= max ? waiting : "" };
 }
 
-const unreadText = Effect.fn("Hooks.unreadText")(function* (s: AgentSession, mc: string, max = MAX_CONTEXT) {
-  const { messages, state, commit } = yield* s.unread();
+const unreadText = Effect.fn("Hooks.unreadText")(function* (s: AgentSession, mc: string, max = MAX_CONTEXT, d: Delivery = {}) {
+  const { messages, state, commit } = yield* s.unread(d);
   const hand = handOver(
     messages.map((m) => ({
       line: formatMessage(m, state.trust.get(m.seq), state, s.me),
@@ -433,7 +435,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
   if (event === "prompt") {
     const head = promptHead(b.alias);
     const persona = yield* personaNews(s, who, mc, Math.min(MAX_CONTEXT, budget));
-    const unread = yield* unreadText(s, mc, Math.max(0, Math.min(MAX_CONTEXT, budget - head.length - 1 - (persona ? persona.text.length + 2 : 0))));
+    const unread = yield* unreadText(s, mc, Math.max(0, Math.min(MAX_CONTEXT, budget - head.length - 1 - (persona ? persona.text.length + 2 : 0))), loopDelivery());
     if (!unread.text && !persona) return yield* Effect.as(unread.shown, null);
     const text = [persona?.text ?? null, unread.text ? [head, unread.text].join("\n") : null].filter((t) => t !== null).join("\n\n");
     const shown = persona ? Effect.andThen(persona.shown, unread.shown) : unread.shown;
@@ -446,7 +448,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
     if (style === "cursor") {
       if (input.status && input.status !== "completed") return null;
       const { messages, state } = yield* s.state();
-      const unread = (yield* s.unreadCount(state, messages)) > 0;
+      const unread = (yield* s.unreadAt(state, messages, loopDelivery())).unread > 0;
       const follow = cursorFollow(b.alias, mc, unread, yield* rearmText(input, b, who, mc), budget);
       return follow ? answered("followup", follow) : null;
     }
@@ -457,7 +459,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
     const rearm = fitReminder(yield* rearmText(input, b, who, mc), budget - (nudge ? nudge.text.length + 2 : 0) - (persona ? persona.text.length + 2 : 0));
     const reminder = [nudge?.text ?? null, rearm].filter((t) => t !== null).join("\n\n") || null;
     const unreadMax = stopUnreadMax(stopHead, [persona?.text ?? null, reminder].filter((t) => t !== null).join("\n\n") || null, budget);
-    const unread = unreadMax > 0 ? yield* unreadText(s, mc, unreadMax) : { text: "", shown: Effect.void };
+    const unread = unreadMax > 0 ? yield* unreadText(s, mc, unreadMax, loopDelivery()) : { text: "", shown: Effect.void };
     const decision = style === "gemini" ? "deny" : "block";
     const reason = [persona?.text ?? null, stopReason(stopHead, unread.text, reminder) || null].filter((t) => t !== null).join("\n\n");
     const told = persona ? Effect.andThen(persona.shown, unread.shown) : unread.shown;

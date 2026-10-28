@@ -14,6 +14,7 @@ import type { Binding, Here } from "../seats.ts";
 import { handOver, seatBudget } from "./answer.ts";
 import { answeringNow, deliveredInProcess, noteDelivered, noteHeard, notePending, settlePending } from "./delivered.ts";
 import { hooksListen, installedListenSeconds } from "./install/claude.ts";
+import { loopDelivery } from "./loop-wait.ts";
 import { mimoInstalled } from "./install/mimo.ts";
 import { piInstalled } from "./install/pi.ts";
 import { alive, isListening, takeListenSlot } from "./listeners.ts";
@@ -56,6 +57,7 @@ const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, w
           woke,
         ),
       {
+        ...loopDelivery(),
         onNotice: (text) =>
           Effect.andThen(
             Effect.sync(() => void got.push({ seq: null, text: `* ${text}`, head: text.length + 2 })),

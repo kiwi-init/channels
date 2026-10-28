@@ -119,7 +119,8 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stop
       sessions.set(seat.key, kept);
     }
     const { messages, state } = await runAgent(kept.session.state());
-    return runAgent(kept.session.unreadAt(state, messages));
+    const looped = !!seatRecordFor(loadConfig(), seat.alias, seat.agent)?.loop;
+    return runAgent(kept.session.unreadAt(state, messages, looped ? { loop: true } : {}));
   };
 
   const runWake = async (seat: Seat, [cmd, ...rest]: string[]): Promise<string | null> => {

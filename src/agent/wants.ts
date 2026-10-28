@@ -1,7 +1,7 @@
 import { personaAnswers } from "@kiwi/core/personality.ts";
 import { isDirectedAt, isForAgent } from "@kiwi/core/client.ts";
 import { GENERAL_ROOM, ignored, type Message } from "@kiwi/core/protocol.ts";
-import { threadMembers, type ChannelState } from "@kiwi/core/state.ts";
+import { openRound, threadMembers, type ChannelState, type Task } from "@kiwi/core/state.ts";
 import type { Delivery } from "./shared.ts";
 
 const MENTION_RE = /(?:^|[^\w@/.-])@([a-z0-9][a-z0-9._-]*[a-z0-9]|[a-z0-9])/gi;
@@ -11,7 +11,24 @@ function mentionsOf(body: string): Set<string> {
 }
 
 export function narrows(d: Delivery): boolean {
-  return d.thread !== undefined || d.room !== undefined || !!d.forMe;
+  return d.thread !== undefined || d.room !== undefined || !!d.forMe || !!d.loop;
+}
+
+export function waitingTask(state: ChannelState, me: string): number | undefined {
+  return [...state.tasks.values()].find((t) => t.owner === me && t.state !== "done" && t.review !== me && !!openRound(t))?.id;
+}
+
+function endsMyWait(me: string, seq: number, task: Task | undefined): boolean {
+  const round = task?.rounds.at(-1);
+  if (round && round.result.kind !== "open" && round.result.seq === seq && (round.by === me || task?.owner === me)) return true;
+  return task?.handedOff?.seq === seq && task.handedOff.from === me;
+}
+
+function wantsWhileWaiting(me: string, m: Message, state: ChannelState | null, task: number): boolean {
+  if (m.kind === "event") return (m.ev?.op === "task.update" && m.ev.task === task) || m.ev?.op === "hold.set";
+  const place = state?.placeOf.get(m.seq);
+  const inMyThread = !!state?.threadPeople.get(state.threadOf.get(m.seq) ?? m.seq)?.has(me);
+  return isDirectedAt(m, me) || mentionsOf(m.body).has(me.toLowerCase()) || inMyThread || (place?.kind === "task" && place.task === task);
 }
 
 export function wants(me: string, m: Message, state: ChannelState | null, d: Delivery = {}): boolean {
@@ -21,6 +38,9 @@ export function wants(me: string, m: Message, state: ChannelState | null, d: Del
   if (d.room !== undefined && m.kind !== "event" && (state?.roomOf.get(m.seq) ?? m.room ?? GENERAL_ROOM) !== d.room) return false;
   if (d.all) return true;
   if (d.thread !== undefined) return m.kind !== "event" && (state?.threadOf.get(m.seq) ?? m.seq) === (state?.threadOf.get(d.thread) ?? d.thread);
+  if (d.loop && m.kind === "event" && m.ev?.op === "task.update" && endsMyWait(me, m.seq, state?.tasks.get(m.ev.task))) return true;
+  const waiting = d.loop && state ? waitingTask(state, me) : undefined;
+  if (waiting !== undefined) return wantsWhileWaiting(me, m, state, waiting);
   const persona = state?.members.get(me)?.persona;
   const addressed = isDirectedAt(m, me) || !!m.to?.includes("*") || !!m.to?.some((t) => t.startsWith("role:") && personaAnswers(persona, t.slice(5)));
   if (m.kind === "event")

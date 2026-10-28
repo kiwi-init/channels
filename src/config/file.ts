@@ -36,6 +36,7 @@ export interface SeatRecord {
   tmux?: TmuxPlace;
   hold?: SeatHold;
   holds?: number;
+  loop?: true;
 }
 
 export function allSeats(cfg: Pick<Config, "bindings">): SeatRecord[] {
