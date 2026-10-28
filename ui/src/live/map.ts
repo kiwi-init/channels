@@ -40,46 +40,52 @@ export function harnessOf(raw: string | undefined): Harness | undefined {
   return h ? (HARNESS_OF[h] ?? "other") : undefined
 }
 
+type StateMember = ChannelState["members"] extends ReadonlyMap<string, infer M> ? M : never
+
+function personOf(state: ChannelState, m: StateMember, record: RosterMember | undefined, here: Online | undefined, me: string, wakes: ReadonlySet<string>, doing: ReadonlyMap<string, number>): Person {
+  const human = isPerson(m)
+  const raw = m.runs?.harness ?? m.card?.harness
+  const harness = human ? undefined : harnessOf(raw)
+  const sponsor = human ? undefined : (humanOf(state, m.name) ?? m.sponsor?.handle ?? m.sponsor?.name)
+  const color: Color | null = colorOf(state, m.name)
+  return {
+    name: m.name,
+    kind: human ? "human" : "agent",
+    ...(m.display ? { display: m.display } : {}),
+    ...(m.name === state.lead ? { role: "lead" } : m.owner ? { role: "owner" } : m.persona ? { role: m.persona.name } : {}),
+    ...(color ? { color } : {}),
+    owner: m.owner,
+    you: m.name === me,
+    presence: m.name === me || here ? (here?.activity?.state === "idle" ? "away" : "online") : "offline",
+    typing: false,
+    ...(harness ? { harness } : {}),
+    ...(!human && raw ? { runs: harnessName(canonicalHarness(raw) ?? raw) } : {}),
+    ...(!human && (m.runs?.model ?? here?.activity?.model ?? m.card?.model) ? { model: m.runs?.model ?? here?.activity?.model ?? m.card?.model } : {}),
+    ...(record?.from?.label ? { machine: record.from.label } : m.card?.os ? { machine: m.card.os } : {}),
+    ...(m.card?.repo ? { folder: m.card.repo } : {}),
+    ...(m.persona ? { persona: m.persona.name } : {}),
+    ...(sponsor ? { sponsor } : {}),
+    ...(m.card?.note ? { about: m.card.note } : {}),
+    ...(doing.has(m.name) ? { doing: doing.get(m.name) } : {}),
+    ...(!m.owner && !canPost(m.scopes) ? { readOnly: true } : {}),
+    ...(!human && wakes.has(m.name) ? { wakes: true } : {}),
+    lastSeen: here?.at ?? m.lastSeen,
+    joined: m.joined,
+    messages: m.messages,
+  }
+}
+
 export function peopleOf(state: ChannelState, roster: readonly RosterMember[], online: ReadonlyMap<string, Online>, me: string, wakes: ReadonlySet<string>): Person[] {
   const byName = new Map(roster.filter((r) => r.active).map((r) => [r.name, r]))
   const doing = new Map<string, number>()
   for (const t of state.tasks.values()) if (t.owner && t.state === "doing" && !doing.has(t.owner)) doing.set(t.owner, t.id)
+  return [...state.members.values()].filter((m) => m.active && m.kind !== "computer").map((m) => personOf(state, m, byName.get(m.name), online.get(m.name), me, wakes, doing))
+}
+
+export function formerOf(state: ChannelState, me: string): Person[] {
   return [...state.members.values()]
-    .filter((m) => m.active && m.kind !== "computer")
-    .map((m): Person => {
-      const human = isPerson(m)
-      const here = online.get(m.name)
-      const record = byName.get(m.name)
-      const raw = m.runs?.harness ?? m.card?.harness
-      const harness = human ? undefined : harnessOf(raw)
-      const sponsor = human ? undefined : (humanOf(state, m.name) ?? m.sponsor?.handle ?? m.sponsor?.name)
-      const color: Color | null = colorOf(state, m.name)
-      return {
-        name: m.name,
-        kind: human ? "human" : "agent",
-        ...(m.display ? { display: m.display } : {}),
-        ...(m.name === state.lead ? { role: "lead" } : m.owner ? { role: "owner" } : m.persona ? { role: m.persona.name } : {}),
-        ...(color ? { color } : {}),
-        owner: m.owner,
-        you: m.name === me,
-        presence: m.name === me || here ? (here?.activity?.state === "idle" ? "away" : "online") : "offline",
-        typing: false,
-        ...(harness ? { harness } : {}),
-        ...(!human && raw ? { runs: harnessName(canonicalHarness(raw) ?? raw) } : {}),
-        ...(!human && (m.runs?.model ?? here?.activity?.model ?? m.card?.model) ? { model: m.runs?.model ?? here?.activity?.model ?? m.card?.model } : {}),
-        ...(record?.from?.label ? { machine: record.from.label } : m.card?.os ? { machine: m.card.os } : {}),
-        ...(m.card?.repo ? { folder: m.card.repo } : {}),
-        ...(m.persona ? { persona: m.persona.name } : {}),
-        ...(sponsor ? { sponsor } : {}),
-        ...(m.card?.note ? { about: m.card.note } : {}),
-        ...(doing.has(m.name) ? { doing: doing.get(m.name) } : {}),
-        ...(!m.owner && !canPost(m.scopes) ? { readOnly: true } : {}),
-        ...(!human && wakes.has(m.name) ? { wakes: true } : {}),
-        lastSeen: here?.at ?? m.lastSeen,
-        joined: m.joined,
-        messages: m.messages,
-      }
-    })
+    .filter((m) => !m.active && m.kind !== "computer")
+    .map((m) => ({ ...personOf(state, m, undefined, undefined, me, new Set(), new Map()), presence: "offline" as const, left: true }))
 }
 
 export function roomsOf(state: ChannelState, messages: readonly Wire[], me: string, seen: Seen, from: number): Room[] {

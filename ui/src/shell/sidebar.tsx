@@ -3,7 +3,7 @@ import { useState } from "react"
 import { Avatar, Count, cx, Heading, IconButton, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
-import type { Channel, Person } from "~/model"
+import { memberOf, type Channel, type Person } from "~/model"
 import { sameWhere, useApp } from "~/nav"
 import { nickname, shown } from "~/names"
 
@@ -68,7 +68,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
             {channel.directs.map((d) => {
               const where = { kind: "dm", with: d.with } as const
               const on = onChat && sameWhere(nav.where, where)
-              const who = channel.people.find((p) => p.name === d.with)
+              const who = memberOf(channel, d.with)
               return (
                 <li key={d.with}>
                   <button type="button" className={cx("side-row", on && "is-on", d.unread > 0 && "is-news")} aria-current={on ? "page" : undefined} onClick={() => go({ to: "where", where })}>

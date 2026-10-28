@@ -5,7 +5,7 @@ import { useState } from "react"
 import { Avatar, cx, Dot, Empty, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
-import type { Channel, Task, TaskStatus } from "~/model"
+import { memberOf, type Channel, type Task, type TaskStatus } from "~/model"
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
 
@@ -72,7 +72,7 @@ export function Board({ channel }: { channel: Channel }) {
 
 function Row({ channel, t, on }: { channel: Channel; t: Task; on: boolean }) {
   const { go } = useApp()
-  const owner = t.owner ? channel.people.find((p) => p.name === t.owner) : undefined
+  const owner = t.owner ? memberOf(channel, t.owner) : undefined
   return (
     <button
       type="button"

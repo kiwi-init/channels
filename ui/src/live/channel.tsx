@@ -14,7 +14,7 @@ import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@/lib/threads"
 import { announce } from "~/kit/toasts"
 import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
-import { asksOf, directsOf, messagesOf, peopleOf, roomsOf, tasksOf, type Pending } from "~/live/map"
+import { asksOf, directsOf, messagesOf, formerOf, peopleOf, roomsOf, tasksOf, type Pending } from "~/live/map"
 import { iconUrl } from "~/live/icon"
 import { usePinsHere } from "~/live/pins"
 import { usePictures } from "~/live/pictures"
@@ -99,6 +99,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const shown = useShown()
 
   const people = useMemo(() => peopleOf(state, roster, online, me, wakes), [state, roster, online, me, wakes])
+  const former = useMemo(() => formerOf(state, me), [state, me])
   const nicknameKey = [...state.members.values()].map((m) => `${m.name}\u0000${m.display ?? ""}`).join("\n")
   const nicknames = useMemo(() => nicknamesOf(nicknameKey ? nicknameKey.split("\n").map((line) => ({ name: line.split("\u0000")[0] ?? "", display: line.split("\u0000")[1] })) : []), [nicknameKey])
   const pins = usePinsHere(requests)
@@ -130,13 +131,14 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       rooms,
       directs,
       people,
+      former,
       nicknames,
       messages: mapped,
       tasks,
       asks: asks.asks,
       connection,
     }),
-    [code, title, icon, isOwner, me, state.lead, state.charter, state.hold, newMembers, newPowers, state.repos, rooms, directs, people, nicknames, mapped, tasks, asks.asks, connection]
+    [code, title, icon, isOwner, me, state.lead, state.charter, state.hold, newMembers, newPowers, state.repos, rooms, directs, people, former, nicknames, mapped, tasks, asks.asks, connection]
   )
 
   const post = useCallback(

@@ -32,6 +32,7 @@ export interface Person {
   lastSeen: number
   joined: number
   messages: number
+  left?: boolean
 }
 
 export interface PullRequest {
@@ -226,6 +227,7 @@ export interface Channel {
   rooms: Room[]
   directs: Direct[]
   people: Person[]
+  former?: Person[]
   nicknames: ReadonlyMap<string, string>
   messages: Message[]
   tasks: Task[]
@@ -365,4 +367,8 @@ export interface App {
   harnesses: { id: Harness; label: string; installed: boolean }[]
   personas: { id: string; label: string; about: string }[]
   actions: Actions
+}
+
+export function memberOf(channel: Pick<Channel, "people" | "former">, name: string): Person | undefined {
+  return channel.people.find((p) => p.name === name) ?? channel.former?.find((p) => p.name === name)
 }

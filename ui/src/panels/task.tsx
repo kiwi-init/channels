@@ -7,7 +7,7 @@ import { MessageRow } from "~/chat/message"
 import { Avatar, Dot, Empty, Heading, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
-import type { Ask, Channel, PermissionAsk, PullRequest, QuestionAsk, ReviewRound, Task } from "~/model"
+import { memberOf, type Ask, type Channel, type PermissionAsk, type PullRequest, type QuestionAsk, type ReviewRound, type Task } from "~/model"
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
 import { PanelHead } from "~/panels/frame"
@@ -94,7 +94,7 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
 
 function Who({ channel, name }: { channel: Channel; name: string }) {
   const { go } = useApp()
-  const person = channel.people.find((p) => p.name === name)
+  const person = memberOf(channel, name)
   return (
     <button type="button" className="task-who" onClick={() => go({ to: "panel", panel: { kind: "person", name } })}>
       <Avatar person={person} size="sm" />
