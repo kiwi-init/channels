@@ -286,9 +286,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         reject(`no task ${taskId(ev.task)}`);
         break;
       }
-      const reviewerGone = task.review !== "*" && !members.get(task.review ?? "")?.active;
       const lead = member.owner || isLeadRole(member.role) || (c.signed.has(member.name) && member.persona?.role === "lead");
-      const reviewRefused = reviewMoveRefusal(task, { name: m.from, person: isPerson(member), lead }, ev.review, reviewerGone);
+      const reviewRefused = reviewMoveRefusal(task, { name: m.from, person: isPerson(member), lead }, ev.review);
       if (reviewRefused) {
         reject(reviewRefused);
         break;

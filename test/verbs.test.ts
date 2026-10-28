@@ -329,7 +329,7 @@ describe("review rounds through the CLI", () => {
     const before = await ok(dev, "log", "--all", "-n", "5");
     const moved = await run(dev, "task", "review", `T${t}`, "--review", "other");
     expect(moved.code).not.toBe(0);
-    expect(moved.err).toContain(`only a person, the lead, rev, or the task owner when the reviewer is gone changes who reviews T${t}`);
+    expect(moved.err).toContain(`only a person, the lead or rev changes who reviews T${t}`);
     expect(await ok(dev, "log", "--all", "-n", "5")).toBe(before);
     expect(JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"))).toMatchObject({ review: "rev" });
   });
