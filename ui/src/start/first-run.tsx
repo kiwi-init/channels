@@ -26,7 +26,7 @@ function Enroll({ enrolling }: { enrolling: Enrolling }) {
       {enrolling.stage === "asking" ? (
         <>
           <p className="start-ask">Open Channels on your other computer</p>
-          <p className="start-wait" aria-live="polite">
+          <p className="start-asking" aria-live="polite">
             <span className="start-pip" aria-hidden="true" />
             It shows this computer asking to join as you. Approve it there.
           </p>

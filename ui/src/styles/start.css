@@ -92,10 +92,10 @@
   margin-left: -10px;
 }
 
-.start-wait {
+.start-asking {
   display: flex;
   gap: 10px;
-  align-items: baseline;
+  align-items: center;
   color: var(--ink-2);
   font: var(--t-body) / 1.5 var(--sans);
 }
