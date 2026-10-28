@@ -270,7 +270,10 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           2400
         )
       },
-      addRoom: (code, name) => edit(code, (c) => ({ ...c, rooms: [...c.rooms, { id: name, name, unread: 0, mentions: 0 }] })),
+      addRoom: (code, name) => {
+        edit(code, (c) => ({ ...c, rooms: [...c.rooms, { id: name, name, unread: 0, mentions: 0 }] }))
+        return Promise.resolve(name)
+      },
       setGithubWrite: (code, on) => edit(code, (c) => ({ ...c, githubWrite: on || undefined })),
       setBranchPrefix: (code, prefix) => edit(code, (c) => ({ ...c, branchPrefix: prefix?.trim() || undefined })),
       renameRoom: (code, id, name) => edit(code, (c) => ({ ...c, rooms: c.rooms.map((r) => (r.id === id ? { ...r, name: name.trim().replace(/^#/, "") } : r)) })),

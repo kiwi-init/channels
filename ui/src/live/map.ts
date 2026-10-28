@@ -43,7 +43,15 @@ export function harnessOf(raw: string | undefined): Harness | undefined {
 
 type StateMember = ChannelState["members"] extends ReadonlyMap<string, infer M> ? M : never
 
-function personOf(state: ChannelState, m: StateMember, record: RosterMember | undefined, here: Online | undefined, me: string, wakes: ReadonlySet<string>, doing: ReadonlyMap<string, number>): Person {
+function personOf(
+  state: ChannelState,
+  m: StateMember,
+  record: RosterMember | undefined,
+  here: Online | undefined,
+  me: string,
+  wakes: ReadonlyMap<string, boolean>,
+  doing: ReadonlyMap<string, number>
+): Person {
   const human = isPerson(m)
   const raw = m.runs?.harness ?? m.card?.harness
   const harness = human ? undefined : harnessOf(raw)
@@ -58,7 +66,7 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
     ...(human && m.picture ? { picture: `data:${m.picture.mime};base64,${m.picture.data}` } : {}),
     owner: m.owner,
     you: m.name === me,
-    presence: m.name === me || here ? (here?.activity?.state === "idle" ? "away" : "online") : "offline",
+    presence: m.name === me || here ? (human && here?.activity?.state === "idle" ? "away" : "online") : "offline",
     typing: false,
     ...(harness ? { harness } : {}),
     ...(!human && raw ? { runs: harnessName(canonicalHarness(raw) ?? raw) } : {}),
@@ -70,7 +78,7 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
     ...(m.card?.note ? { about: m.card.note } : {}),
     ...(doing.has(m.name) ? { doing: doing.get(m.name) } : {}),
     ...(!m.owner && !canPost(m.scopes) ? { readOnly: true } : {}),
-    ...(!human && wakes.has(m.name) ? { wakes: true } : {}),
+    ...(!human && wakes.has(m.name) ? { wakes: wakes.get(m.name) === true } : {}),
     ...(human && record?.addsAgents ? { addsAgents: true } : {}),
     ...(human && record?.answersDecisions ? { answersDecisions: true } : {}),
     lastSeen: here?.at ?? m.lastSeen,
@@ -79,7 +87,7 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
   }
 }
 
-export function peopleOf(state: ChannelState, roster: readonly RosterMember[], online: ReadonlyMap<string, Online>, me: string, wakes: ReadonlySet<string>): Person[] {
+export function peopleOf(state: ChannelState, roster: readonly RosterMember[], online: ReadonlyMap<string, Online>, me: string, wakes: ReadonlyMap<string, boolean>): Person[] {
   const byName = new Map(roster.filter((r) => r.active).map((r) => [r.name, r]))
   const doing = new Map<string, number>()
   for (const t of state.tasks.values()) if (t.owner && t.state === "doing" && !doing.has(t.owner)) doing.set(t.owner, t.id)
@@ -89,7 +97,7 @@ export function peopleOf(state: ChannelState, roster: readonly RosterMember[], o
 export function formerOf(state: ChannelState, me: string): Person[] {
   return [...state.members.values()]
     .filter((m) => !m.active && m.kind !== "computer")
-    .map((m) => ({ ...personOf(state, m, undefined, undefined, me, new Set(), new Map()), presence: "offline" as const, left: true }))
+    .map((m) => ({ ...personOf(state, m, undefined, undefined, me, new Map(), new Map()), presence: "offline" as const, left: true }))
 }
 
 export function roomsOf(state: ChannelState, messages: readonly Wire[], me: string, seen: Seen, from: number): Room[] {
@@ -366,11 +374,16 @@ export function asksOf(
       if (!isOpen && !said) continue
       if (isOpen) for (const t of heldBy(state, m)) held.add(t)
       if (isOpen && task !== undefined) held.add(task)
+      const human = humanOf(state, m.from)
       asks.push({
         kind: "permission",
         id,
         from: m.from,
         at: m.ts,
+        expiresAt: m.permission.expiresAt,
+        canAllow: human === me && m.permission.canAllow,
+        canDeny: human === me || owner,
+        ...(m.permission.canAllow && human && human !== me ? { allower: human } : {}),
         tool: m.permission.tool,
         summary: m.permission.description ?? permissionTitle(m.permission),
         code: permissionCode(m.permission),

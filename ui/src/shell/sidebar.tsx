@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { roomProblem } from "@/lib/rooms"
 
 import { Avatar, Count, cx, Heading, IconButton, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
@@ -10,6 +11,7 @@ import { nickname, shown } from "~/names"
 export function Sidebar({ channel }: { channel: Channel }) {
   const { nav, go, app } = useApp()
   const [adding, setAdding] = useState(false)
+  const [problem, setProblem] = useState<string | null>(null)
   const humans = channel.people.filter((p) => p.kind === "human")
   const agents = channel.people.filter((p) => p.kind === "agent").sort((a, b) => rank(a) - rank(b))
   const onChat = nav.tab === "chat"
@@ -37,12 +39,11 @@ export function Sidebar({ channel }: { channel: Channel }) {
                 className="side-new"
                 onSubmit={(e) => {
                   e.preventDefault()
-                  const name = new FormData(e.currentTarget).get("room")?.toString().trim().toLowerCase().replace(/\s+/g, "-")
-                  if (name) {
-                    app.actions.addRoom(channel.code, name)
-                    go({ to: "where", where: { kind: "room", room: name } })
-                  }
+                  const name = roomName(new FormData(e.currentTarget).get("room")?.toString() ?? "")
+                  const wrong = roomProblem(channel.rooms, name)
+                  if (wrong) return setProblem(wrong)
                   setAdding(false)
+                  void app.actions.addRoom(channel.code, name).then((id) => id && go({ to: "where", where: { kind: "room", room: id } }))
                 }}
               >
                 <span className="side-hash">#</span>
@@ -52,10 +53,26 @@ export function Sidebar({ channel }: { channel: Channel }) {
                   className="side-input"
                   placeholder="room-name"
                   aria-label="New room name"
-                  onBlur={(e) => !e.target.value && setAdding(false)}
-                  onKeyDown={(e) => e.key === "Escape" && setAdding(false)}
+                  aria-invalid={problem ? true : undefined}
+                  aria-describedby={problem ? "side-new-problem" : undefined}
+                  onChange={(e) => setProblem(e.target.value.trim() ? roomProblem(channel.rooms, roomName(e.target.value)) : null)}
+                  onBlur={(e) => {
+                    if (e.target.value) return
+                    setAdding(false)
+                    setProblem(null)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Escape") return
+                    setAdding(false)
+                    setProblem(null)
+                  }}
                 />
               </form>
+              {problem && (
+                <p className="side-problem" id="side-new-problem" role="alert">
+                  {problem}
+                </p>
+              )}
             </li>
           )}
         </ul>
@@ -117,6 +134,8 @@ export function Sidebar({ channel }: { channel: Channel }) {
     </div>
   )
 }
+
+const roomName = (typed: string): string => typed.trim().toLowerCase().replace(/\s+/g, "-")
 
 const rank = (p: Person): number => (p.role === "lead" ? 0 : p.presence === "offline" ? 2 : 1)
 
