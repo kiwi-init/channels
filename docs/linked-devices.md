@@ -4,8 +4,8 @@ One login on every device, without copying your root keys to all of them. You si
 desktop, phone or computer, then approve it from an app you already have, the way Signal links
 devices. The encrypted vault is only for recovery.
 
-Status: proposal (T521), docs only until Jow settles the open decisions at the end. Jow chose this
-over the Spike 3 vault (#518; verdict in T494). Reviewed by sunny-tortoise (#559, #570).
+Status: decided (T521). Jow chose this over the Spike 3 vault (#518; verdict in T494) and took the
+decisions at the end (#602, #615). Reviewed by sunny-tortoise (#559, #570).
 
 ## Today
 
@@ -75,7 +75,12 @@ given a copy of the person key.
 
 **Who may sign list links.**
 
-- Only `role: "app"` devices, with a person present: the app is unlocked and a person taps.
+- Only `role: "app"` devices that hold the **approve permission**, with a person present: the app is
+  unlocked and a person taps.
+  - A desktop gets the permission when it enrolls.
+  - A phone gets it as a permission link that a desktop signs, so phones approve without holding your
+    keys (#615).
+  - Full keys on a phone only if you opt in.
 - Computers (`role: "computer"`, enrolled by `kiwi login`) sign nothing. A compromised agent host
   stays one revocable device and can't become the person.
 
@@ -83,7 +88,7 @@ given a copy of the person key.
 
 - Today a handle has one key. A member record needs a "same person, another device" shape, so that
   one human shows once.
-- That shape must carry your person authority. The open decision B covers this.
+- That shape carries your person authority (decision B).
 - Until then, older apps show a device as a separate member (for example `jow-2`).
 
 ## 2. Enrolling a new device
@@ -212,7 +217,7 @@ The re-key cascades:
   - A hand-over must also be signed by the **recovery key** (section 6), which a phone never holds.
   - Without a recovery key set up, migration waits until there is one.
 - A **lost** `kl1` phone can't be fixed by revocation. Channels you own also need the owner answer
-  (open decision C), or recreating.
+  (decision C), or recreating.
 
 ## 6. Recovery vault
 
@@ -228,33 +233,34 @@ For when every app is gone, or a thief revoked your other devices first. The rec
   AuthenticationServices; Android Credential Manager). Never in a page the relay serves, which would
   see the unlock key.
 
-## Open decisions for Jow
+## Decisions (Jow, #602 and #615)
 
-**A. Where the person key lives after setup.**
+**A. The person key lives offline after setup.**
 
-- Whoever holds the person key can re-root the list, so a stolen first desktop beats the vault.
-  Keybase and Matrix keep the root offline.
-- **Proposal:** after setup, keep the person key only in the vault (paper-key style), and make the
-  first desktop a device like the rest.
-- Cost: re-rooting (and the `kl1` migration) then needs the recovery key in hand.
+- Once the first app has signed the device list's root, the person key stays only in the recovery
+  vault (paper-key style), and the first desktop becomes a device like the rest.
+- Whoever holds the person key can re-root the list. Keeping it offline means a stolen desktop can't
+  beat the vault.
+- Re-rooting, and the `kl1` migration, then need the recovery key in hand.
 
 **B. Your other devices keep your authority.**
 
-- Today your phone signs with your member key, so it shows as "jow (owner)".
-- Agents are told to obey only "your own human and the channel owner". As a separate member, your
-  phone would lose the power to direct agents and answer decisions.
-- **Proposal:** the "same person, another device" record carries person authority (directing agents,
-  answering decisions, the owner's included) but **not owner-key powers** (admitting, removing,
-  rotating).
+- The "same person, another device" record carries person authority: directing agents and answering
+  decisions, the owner's included.
+- It does **not** carry owner-key powers (admitting, removing, rotating).
+- Your phone still counts as "your own human" and "the channel owner" to agents.
 
-**C. The owner key.**
+**C. Owner-key delegation.**
 
-- **Proposal:** an owner delegation `{room, device member key, until}`, signed by the owner key, which
-  the relay and clients accept for owner routes and records. That is Matrix's master / self-signing
-  split, and section 3 is its narrow case.
-- The owner key then stays on the creating device (or offline, with A) and in the vault.
-- It needs a relay change and new clients first. Until then the owner key stays on the device that
-  created the channel, and Settings lists plainly which devices hold it.
+- The owner key signs `{room, device member key, until}`, which the relay and clients accept for
+  owner routes and records. That is Matrix's master / self-signing split, and section 3 is its narrow
+  case.
+- The owner key stays offline with the person key (A) and in the vault.
+- Until the relay and clients ship it, the owner key stays on the device that created the channel,
+  and Settings lists plainly which devices hold it.
+
+**Phones approve through a permission (#615).** A phone approves new devices with a permission a
+desktop signs. Full keys on a phone only if you opt in.
 
 Thanks to sunny-tortoise's comparison of Signal, Matrix, Keybase and Apple (T536, #559) and review
 (#570): every one gives each device its own keys, keeps a device list the server can't forge or roll
