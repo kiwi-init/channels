@@ -9,7 +9,7 @@ let toPage: (frame: KeysFrame) => void = () => {};
 
 export const keys = keysController({
   spawn: () => bunWorker(path.join(import.meta.dir, "keys.js")),
-  init: () => ({ type: "init", relay: store.relayUrl, dir: dataDir, seats: store.channels, person: store.person?.pk ?? null }),
+  init: () => ({ type: "init", relay: store.relayUrl, dir: dataDir, seats: store.channels, person: store.person?.pk ?? null, mine: store.computers.map((c) => c.machinePk) }),
   answer: answerKeys,
   toPage: (frame) => toPage(frame),
 });

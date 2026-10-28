@@ -273,7 +273,7 @@ export class Channel {
    * it for one request at a person's click. With the owner's person key, own
    * computers' requests are marked as such (for autoApprove).
    */
-  requests(opts: { budget?: SigningBudget; person?: string } = {}): Promise<JoinRequest[]> {
+  requests(opts: { budget?: SigningBudget; person?: string; mine?: readonly string[] | null } = {}): Promise<JoinRequest[]> {
     return run(this.fx.requests(opts));
   }
 
@@ -296,8 +296,8 @@ export class Channel {
    * owner's own computers whose code is ready, as agents sponsored by the owner, without spending
    * the daily signing budget. Returns who was let in.
    */
-  autoApprove(person: string, personalities: readonly Personality[] = []): Promise<Member[]> {
-    return run(this.fx.autoApprove(person, personalities));
+  autoApprove(person: string, personalities: readonly Personality[] = [], mine: readonly string[] | null = null): Promise<Member[]> {
+    return run(this.fx.autoApprove(person, personalities, mine));
   }
 
   deny(requestId: string): Promise<void> {

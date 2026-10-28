@@ -73,7 +73,7 @@ function setup(answer: KeysDeps["answer"] = (_m, done) => done()) {
       workers.push(w);
       return w;
     },
-    init: () => ({ type: "init", relay: "https://r.example", dir: "/data", seats: [], person: null }),
+    init: () => ({ type: "init", relay: "https://r.example", dir: "/data", seats: [], person: null, mine: [] }),
     answer,
     toPage: (f) => void frames.push(f),
     clock,
@@ -92,7 +92,7 @@ describe("the keys Worker, from main", () => {
     const early = s.keys.request(SESSION, req(1));
     s.keys.start();
     expect(s.last().got).toEqual([
-      { to: "host", m: { type: "init", relay: "https://r.example", dir: "/data", seats: [], person: null } },
+      { to: "host", m: { type: "init", relay: "https://r.example", dir: "/data", seats: [], person: null, mine: [] } },
       { to: "host", m: { type: "port" }, port: 1 },
       { to: "port", port: 1, data: req(1) },
     ]);
@@ -142,7 +142,7 @@ describe("the keys Worker, from main", () => {
     s.clock.run();
     expect(await settled(queued)).toBe("unanswered");
     expect(s.frames).toEqual([]);
-    expect(s.last().got).toEqual([{ to: "host", m: { type: "init", relay: "https://r.example", dir: "/data", seats: [], person: null } }]);
+    expect(s.last().got).toEqual([{ to: "host", m: { type: "init", relay: "https://r.example", dir: "/data", seats: [], person: null, mine: [] } }]);
   });
   test("the Worker's asks are answered by the host, and an answer for a Worker that has gone is dropped", () => {
     const answers: ((extra?: KeysAnswer) => void)[] = [];
@@ -191,7 +191,7 @@ describe("the keys Worker, from main", () => {
     s.clock.run();
     expect(await meanwhile).toEqual({ id: 2, ok: false, error: { kind: "unreachable", message: RESTARTED } });
     expect(s.last().got).toEqual([
-      { to: "host", m: { type: "init", relay: "https://r.example", dir: "/data", seats: [], person: null } },
+      { to: "host", m: { type: "init", relay: "https://r.example", dir: "/data", seats: [], person: null, mine: [] } },
       { to: "host", m: { type: "port" }, port: 2 },
     ]);
     expect(s.frames).toEqual([{ session: SESSION, restart: true }]);

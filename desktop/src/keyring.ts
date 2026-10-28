@@ -39,6 +39,7 @@ export interface KeyHost {
   prove(code: string, memberPk: string): Promise<PersonClaim | null>;
   githubToken(): Promise<string | null>;
   person(): string | null;
+  mine(): readonly string[] | null;
   budget: SigningBudget;
 }
 
@@ -145,10 +146,10 @@ export class Keyring implements ChannelOps {
     const who = person ? { person } : {};
     switch (op) {
       case "requests":
-        return [{ budget: this.host.budget, ...(field(args[0], "person") !== undefined ? who : {}) }];
+        return [{ budget: this.host.budget, ...(field(args[0], "person") !== undefined ? { ...who, mine: this.host.mine() } : {}) }];
       case "autoApprove":
         if (!person) throw new Error("make your person key first");
-        return [person, [...PRESETS, ...cleanPersonalities(args[1])]];
+        return [person, [...PRESETS, ...cleanPersonalities(args[1])], this.host.mine()];
       case "approve":
       case "checkRequest": {
         const id = field(args[0], "id");

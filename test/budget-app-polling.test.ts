@@ -36,6 +36,7 @@ function keyring(person: Identity | null): Keyring {
     prove: async (code, memberPk) => (person ? provePerson(person, decodeJoinCode(code).roomId, memberPk) : null),
     githubToken: async () => null,
     person: () => person?.pk ?? null,
+    mine: () => null,
     budget: memoryBudget(),
   };
   return new Keyring(host);

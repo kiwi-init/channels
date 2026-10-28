@@ -25,7 +25,7 @@ function start() {
       workers.push(w);
       return w;
     },
-    init: () => ({ type: "init", relay: "https://relay.invalid", dir, seats: [], person: null }),
+    init: () => ({ type: "init", relay: "https://relay.invalid", dir, seats: [], person: null, mine: [] }),
     answer: (_m, done) => done(),
     toPage: (f) => void frames.push(f),
     clock: { now: () => Date.now(), later: (fn, ms) => setTimeout(fn, ms === FLUSH_MS ? ms : 10), clear: (t) => clearTimeout(t) },

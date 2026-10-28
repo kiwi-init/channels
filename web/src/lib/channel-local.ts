@@ -55,6 +55,7 @@ export function localOps(): ChannelOps {
     },
     githubToken: async () => null,
     person: () => readLocal().person?.pk ?? null,
+    mine: () => null,
     budget,
   })
   void keyring.finishCreating().catch(() => {})

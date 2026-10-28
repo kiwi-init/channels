@@ -39,6 +39,7 @@ function memHost(opts: { relay?: () => string; failSaveWithAccess?: boolean } = 
     prove: async () => null,
     githubToken: async () => null,
     person: () => null,
+    mine: () => null,
     budget: memoryBudget(),
   };
   return { host, store };
