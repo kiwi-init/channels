@@ -82,7 +82,7 @@ fun SettingsScreen(model: AppModel, back: () -> Unit) {
             Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Face(model.person.ifEmpty { "?" }, null, 80.dp)
                 Text(model.person, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 12.dp))
-                Text("Linked to your Mac", style = MaterialTheme.typography.bodyMedium, color = tone.ink3)
+                Text(if (model.enrolled) "Signed in as one of your devices" else "Linked to your Mac", style = MaterialTheme.typography.bodyMedium, color = tone.ink3)
             }
             Section("This phone")
             Group {
@@ -90,22 +90,30 @@ fun SettingsScreen(model: AppModel, back: () -> Unit) {
                 Setting(Icons.Filled.Router, tone.doing, "Relay", relayHost)
                 Setting(Icons.Filled.Lock, tone.ink3, "Lock", guarded)
             }
-            Spacer(Modifier.size(16.dp))
-            Group {
-                Setting(Icons.Filled.Link, MaterialTheme.colorScheme.primary, "Link again", null) { model.relinkAsked = true }
+            if (!model.enrolled) {
+                Spacer(Modifier.size(16.dp))
+                Group {
+                    Setting(Icons.Filled.Link, MaterialTheme.colorScheme.primary, "Link again", null) { model.relinkAsked = true }
+                }
+                Foot("Brings the channels you joined on your Mac since you linked.")
             }
-            Foot("Brings the channels you joined on your Mac since you linked.")
             Spacer(Modifier.size(16.dp))
             Group {
                 Text(
-                    "Unlink this phone",
+                    if (model.enrolled) "Sign out of this phone" else "Unlink this phone",
                     style = MaterialTheme.typography.bodyLarge,
                     color = tone.alert,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().clickable { confirm = true }.padding(16.dp),
                 )
             }
-            Foot("This phone holds your person key and your channels' keys, sealed by its keystore. Unlinking deletes them from this phone.")
+            Foot(
+                if (model.enrolled) {
+                    "This phone holds its own key and your channels' keys, sealed by its keystore. Signing out deletes them from this phone; forget it in Settings → Devices on your computer too."
+                } else {
+                    "This phone holds your person key and your channels' keys, sealed by its keystore. Unlinking deletes them from this phone."
+                },
+            )
             Text(
                 "Channels $version",
                 style = MaterialTheme.typography.labelMedium,
@@ -118,13 +126,13 @@ fun SettingsScreen(model: AppModel, back: () -> Unit) {
     if (confirm) {
         AlertDialog(
             onDismissRequest = { confirm = false },
-            title = { Text("Unlink this phone?") },
-            text = { Text("Its keys are deleted. Link again from your Mac to come back.") },
+            title = { Text(if (model.enrolled) "Sign out of this phone?" else "Unlink this phone?") },
+            text = { Text(if (model.enrolled) "Its keys are deleted. Sign in again to come back." else "Its keys are deleted. Link again from your Mac to come back.") },
             confirmButton = {
                 TextButton(onClick = {
                     confirm = false
                     model.unlink()
-                }) { Text("Unlink", color = tone.alert) }
+                }) { Text(if (model.enrolled) "Sign out" else "Unlink", color = tone.alert) }
             },
             dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } },
         )

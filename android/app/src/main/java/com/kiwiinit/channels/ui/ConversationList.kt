@@ -80,6 +80,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
@@ -294,20 +295,28 @@ private fun Account(model: AppModel, settings: () -> Unit) {
 
 @Composable
 private fun Empty(model: AppModel) {
+    val waiting = model.waiting
     Column(Modifier.fillMaxWidth().padding(40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("No conversations", style = MaterialTheme.typography.titleMedium)
+        Text(if (waiting > 0) "Waiting to be let in" else "No conversations", style = MaterialTheme.typography.titleMedium)
         Text(
-            "Link your Mac again to bring your channels.",
+            when {
+                waiting > 0 -> "Asked to join ${if (waiting == 1) "1 channel" else "$waiting channels"} as you. Channels you own let this phone in while Channels is open on your computer."
+                model.enrolled -> "This phone joins the channels your computer had when it approved it."
+                else -> "Link your Mac again to bring your channels."
+            },
             style = MaterialTheme.typography.bodyMedium,
             color = Tone.current.ink3,
+            textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 6.dp),
         )
-        Text(
-            "Link again",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = 12.dp).clip(RoundedCornerShape(8.dp)).clickable { model.relinkAsked = true }.padding(8.dp),
-        )
+        if (!model.enrolled) {
+            Text(
+                "Link again",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 12.dp).clip(RoundedCornerShape(8.dp)).clickable { model.relinkAsked = true }.padding(8.dp),
+            )
+        }
     }
 }
 

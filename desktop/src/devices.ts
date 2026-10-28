@@ -208,6 +208,7 @@ export interface EnrolleeDeps {
   enrolled: (grant: EnrollGrant) => void;
   label: () => string;
   os: () => string;
+  as?: "desktop" | "phone";
   fetchImpl?: typeof fetch;
 }
 
@@ -239,7 +240,7 @@ export function createEnrollee(deps: EnrolleeDeps): Enrollee {
       const relay = deps.relayUrl();
       const device = await myDevice(deps, deps.label());
       const client = accountClient(relay, async () => (await deps.token()) ?? token, device, deps.fetchImpl);
-      const { ask, nonce } = await askToEnroll(device, { label: deps.label(), os: deps.os(), as: "desktop" });
+      const { ask, nonce } = await askToEnroll(device, { label: deps.label(), os: deps.os(), as: deps.as ?? "desktop" });
       const id = await client.ask(ask);
       asking = { id, nonce, relay, client, device, seen: null };
     },
