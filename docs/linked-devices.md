@@ -1,203 +1,261 @@
 # Linked devices
 
 One login on every device, without copying your root keys to all of them. You sign in on a new
-desktop, phone or computer, then approve it from a device you already have, the way Signal links
-devices. The encrypted vault is only for recovery, when every device is lost.
+desktop, phone or computer, then approve it from an app you already have, the way Signal links
+devices. The encrypted vault is only for recovery.
 
-Status: proposal (T521). Jow chose this over the Spike 3 vault (#518, verdict in T494).
+Status: proposal (T521), docs only until Jow settles the open decisions at the end. Jow chose this
+over the Spike 3 vault (#518; verdict in T494). Reviewed by sunny-tortoise (#559, #570).
 
 ## Today
 
 - Your person key (Ed25519 + X25519, `packages/core/src/identity.ts`) is made by the first desktop
   app. A second desktop can't receive it: its first run makes a new person (`createPerson`,
   `desktop/src/ipc/store.ts`).
-- Phones link by `kl1` and get **copies** of the person key and every channel's member key
-  (`LinkPerson`, `LinkChannel`, `packages/core/src/link.ts:26-48`). A phone is you; it can only be
-  unlinked from itself, and no list can cut a stolen one off.
+- Phones link by `kl1` and get **copies** of the person key and every channel's member key, owner keys
+  included (`LinkPerson`, `LinkChannel`, `packages/core/src/link.ts:26-48`).
+  - A phone is you: it can only be unlinked from itself, and no list can cut a stolen one off.
+  - On iOS those keys are `WhenUnlockedThisDeviceOnly` (`ios/Channels/Model/Vault.swift:29`), so they
+    aren't in iCloud backups.
 - Computers pair by `kp1` and get a `MachineCert` (`packages/core/src/person.ts:22`): a person
-  signature over the computer's key, with no expiry. Since T503 a forgotten computer's agents no
-  longer join on their own in the desktop app, but the cert itself stays valid.
+  signature over the computer's key, with no expiry.
+  - Since T503 a forgotten computer's agents no longer join on their own in the desktop app.
+  - The cert itself stays valid.
 - Auto-approval runs wherever the channel owner key is: the desktop app, and the iOS app while open
   (`packages/core/src/client/requests.ts:181`). Never the `kiwi` daemon.
 - WorkOS sign-in (`desktop/src/signin.ts:22`) only gates creating channels (`creator` guard,
   `src/relay/route.ts:147`).
 - The relay keeps each computer's binding to its person (`src/relay/machine.ts`).
-- Removing a member and rotating the channel's content key exists (`packages/core/src/client.ts:342`).
+- Removing a member rotates the channel's content key: `rotation(without)` wraps the next epoch for
+  everyone but that key (`packages/core/src/client/members.ts`, `client.ts:342`).
+- The owner key is pinned in the join code, records must be signed by it (`openRecord`), and the relay
+  authenticates owner routes with it.
 
-## 1. What a new device gets: its own key
+## 1. Devices, their keys, and the device list
 
-**Decision: every device has its own device key. The person key is not copied to it.**
+**Every device has its own key.** A device makes its own Ed25519 + X25519 key pair. No device is
+given a copy of the person key.
 
-- A device makes its own Ed25519 + X25519 key pair.
-- Your person key signs a `DeviceCert`. It is the `MachineCert` generalised, with a role and an expiry:
+**Each device is its own member in each channel.**
+
+- Its join request carries a `DeviceClaim` (its cert plus a vouch over room and member key, like
+  today's `ComputerClaim`).
+- The owner's client admits it on its own when the cert chains to a person already in the record.
+  That extends `joinsOnItsOwn`.
+- History comes free: approving already wraps every past epoch for the new key (`wrapAllFor`).
+- **A stolen device is cut off by removal and rotation, which exist today.** Your other devices keep
+  working, and nobody rejoins. This answers #524: per-device keys make revocation enough. "Rejoin with a
+  new member key" is needed only once, for keys `kl1` already copied (section 5).
+- **No new signature format.** Each device signs as its own member, as members do today.
+
+**The device list.** Each person has one append-only device list:
+
+- It is made of *add* and *revoke* links, each with a version number.
+- The first link is signed by the person key: a small sigchain rooted in it (Keybase-style).
+- Every later link is signed by a device that is current at that point.
+- **The cert is the add link.** A `DeviceCert` is signed by the approving device, not by the person
+  key:
 
   ```ts
-  interface DeviceCert {
-    kind: "kiwi-device-cert"; v: 1
-    name: string          // the person's name
-    device: string        // the device's Ed25519 key
-    dxpk: string          // the device's X25519 key
-    label: string         // "Jonatas's iPhone", "mac-mini"
+  interface DeviceCert {          // one add link in the person's device list
+    kind: "kiwi-device-cert"; v: 2
+    person: string                // the person key the list is rooted in
+    device: string; dxpk: string  // the new device's keys
+    label: string; os: string
     role: "app" | "computer"
-    at: number
-    until: number         // at + 90 days, renewed while the device is listed
-    pk: string; sig: string  // the person key and its signature
+    at: number; until: number     // 90 days, renewed while the device is listed
+    seq: number                   // the list's version after this link
+    by: string; sig: string       // the approving device's key and its signature
   }
   ```
 
-- In each channel, a device joins **as its own member key**. Its join request carries a `DeviceClaim`
-  (cert + a vouch over room and member key, like today's `ComputerClaim`).
-- The owner's client admits it on its own when the cert's person is already a member. That is the
-  path own computers' agents already take.
-- Apps group member keys by person, so one human still shows once.
+- Clients verify a device by walking the list from the person key's root.
+- Older owner clients can't: `readMachineCert` rejects v2 fields. A new device's own-computer
+  auto-admit therefore falls back to Let in there until those owners update.
 
-Why not copy the person key (the `kl1` way):
+**Who may sign list links.**
 
-- **A stolen device is cut off by the paths that exist today.** The owner removes that device's member
-  key and rotates the content key (`client.ts:342`). Your other devices keep working, and nobody
-  rejoins. With copied keys, a stolen phone *is* your member key in every channel: cutting it off
-  means every device rejoins with a new member key, and the person key must be replaced.
-- This answers #524. Per-device keys make revocation enough; rejoining is only needed for keys that
-  were copied.
-- **No new signature format.** Each device signs as its own member, as members do today. Older apps
-  show a device as one more member (for example "jow · iPhone") and keep working.
+- Only `role: "app"` devices, with a person present: the app is unlocked and a person taps.
+- Computers (`role: "computer"`, enrolled by `kiwi login`) sign nothing. A compromised agent host
+  stays one revocable device and can't become the person.
 
-**Who signs: a device list per person, not a single keyholder.**
+**Records.**
 
-- Each person has one append-only, signed **device list**: add and revoke links, each with a version
-  number and signed by a device that is current at that point.
-- The first link is signed by the person key and adds the first device. That makes it a small sigchain
-  rooted in the person key, as Keybase does.
-- So **any device you already have can approve a new one**. That's Jow's choice: approve from any
-  enrolled device.
-- The person key itself stays on the first desktop and in the recovery vault (section 6). It only signs
-  the root and a re-root.
-- Channel owner keys stay where they are today; see section 3.
-- History comes free: approving a device into a channel already wraps every past epoch for it
-  (`wrapAllFor`).
-- One open point: today a handle has one key. A member record therefore needs a "same person, another
-  device" shape, or older apps show the device as a separate member (for example `jow-2`).
+- Today a handle has one key. A member record needs a "same person, another device" shape, so that
+  one human shows once.
+- That shape must carry your person authority. The open decision B covers this.
+- Until then, older apps show a device as a separate member (for example `jow-2`).
 
 ## 2. Enrolling a new device
 
-1. **Sign in.** The new device runs the WorkOS device flow (the one `desktop/src/signin.ts` already
-   has; `kiwi login` for the CLI). The relay maps the WorkOS user to a person key. The first
-   device publishes that mapping, signed by the person key, the first time it signs in.
-2. **Ask.** The new device makes its key and posts an `EnrollAsk` `{device, dxpk, label, os, at}` to
-   the account's enrollment inbox. It is WorkOS-authenticated, rate-limited, and gone after 10 minutes.
-3. **Compare.** Every current device of that person shows "iPhone wants to be you".
-   - Both screens show the same 6 digits, reusing `linkDigits`, which binds both keys. A relay that
-     swaps in its own key shows different digits.
-   - The approve screen says plainly what the new device will get (your channels, as you), and its OS
-     and label. That is Signal's 2025 phishing lesson.
-   - You check the digits match and tap Approve on any device you have.
-4. **Hand over.** The approving device signs the add link and the `DeviceCert`, and seals an `EnrollAnswer` to the device's
-   X25519 key through the mailbox (`packages/core/src/mailbox.ts`, 10-minute TTL, 64 KB). It holds
-   `{cert, relay, your person public key and name, the channels it may join (codes, not keys)}`.
-   It never contains a secret key.
-5. **Join.** The device asks to join each channel with its `DeviceClaim`. Owners' clients admit it on
-   their own; channels you own admit it immediately.
+The new device and the approving app never share a code out of band, so everything passes through the
+relay. The digits must therefore be committed before they can be ground: Matrix's SAS, commit then
+reveal.
 
-What the relay sees: public keys, the WorkOS user, and sealed blobs. A WorkOS takeover alone gets a
-pending request at most. Approving it needs one of your devices in your hand and matching digits.
+1. **Sign in.**
+   - The new device runs the WorkOS device flow (the one `desktop/src/signin.ts` already has;
+     `kiwi login` for the CLI).
+   - The relay maps the WorkOS user to the person. The first app publishes that mapping, signed by
+     its list.
+2. **Ask, with a commitment.**
+   - The new device makes its keys and a random `nonce_d`.
+   - It posts an `EnrollAsk` `{device, dxpk, label, os, at, commit: H(nonce_d ‖ device ‖ dxpk)}`.
+   - One pending ask per account, WorkOS-authenticated, rate-limited, gone after 10 minutes.
+3. **Answer.** An app of the person's answers with its own keys and a random `nonce_a`.
+4. **Reveal.**
+   - The new device reveals `nonce_d`, and the app checks it against the commitment.
+   - Both compute the digits: `H(nonce_a ‖ nonce_d ‖ both devices' keys)`, as 6 digits.
+   - A relay that swaps keys must commit before it sees `nonce_a`, so it can't search for a match.
+5. **Confirm, without fatigue.**
+   - The approving app asks you to **type the digits shown on the new device** (or pick them out of
+     three). A tap alone isn't enough, so a stream of asks from a WorkOS takeover can't be waved
+     through.
+   - The screen says plainly what the device will get (your channels, as you), and its label and OS.
+     That is Signal's 2025 phishing lesson.
+6. **Hand over.**
+   - The app signs the add link (the `DeviceCert`).
+   - It seals an `EnrollAnswer` through the mailbox (`packages/core/src/mailbox.ts`, 10-minute TTL,
+     64 KB). The mailbox secret is derived from the ECDH of the two devices' X25519 keys after the
+     reveal; there is no code to carry it.
+   - The answer holds `{cert, relay, the person's public key and name, the channels it may join
+     (codes, not keys)}`, never a secret key.
+7. **Join.**
+   - The device asks to join each channel with its `DeviceClaim`.
+   - Owners' clients admit it on their own; channels you own admit it immediately.
 
-## 3. Admitting agents without an app open
+What the relay sees: public keys, the WorkOS user, commitments and sealed blobs. A WorkOS takeover
+gets one pending ask at most. Approving it needs your app in your hand and the digits typed in.
 
-Today auto-approval needs the owner key, so it only runs while the desktop app (or the iOS app) is
-open.
+## 3. Admitting agents without an app open (delegation)
 
-**Owner-signed delegation:**
+Today auto-approval needs the owner key, so it only runs while an app with it is open. An
+owner-signed **delegation** lets the `kiwi` daemon admit its own computer's agents.
 
-- Per channel, the owner key signs an `AdmitDelegation` `{room, delegate: <computer's device key>,
-  scope: "own-agents", until}`.
-- The `kiwi` daemon on that computer then admits agents whose `ComputerClaim` is for that same
-  computer.
-- The relay accepts an admission signed by the delegate when it carries the delegation.
-- Clients check the chain owner → delegation → delegate when they read member records
-  (`packages/core/src/membership.ts`).
-
-This is a protocol change (relay and member records), so it ships after device keys. An older client
-sees a delegated admission as a record it can't verify and shows that member as unverified. That's
-acceptable, since it's only the owner's own agents.
+- **The delegation:** the owner key signs `{room, delegate: <the computer's device key>, scope:
+  "own-agents", until}`.
+- **What the delegate needs:**
+  - The channel's epoch keys, sealed to it inside the delegation, and re-wrapped to it on every
+    rotation. Admitting means sealing records and wrapping past epochs (`wrapAllFor`).
+  - The join requests: those are sealed to the owner's key (`packages/core/src/membership.ts:278`), so
+    joiners also seal a copy to each current delegate.
+- **What a delegate may sign:** only `kind: agent`, with `from.pk` equal to the delegate itself, no
+  owner flag, no `addsAgents` or `answersDecisions`, and scopes no wider than the channel's default.
+- **Checks:** the relay accepts a delegated admission that carries its delegation. Clients check the
+  chain owner → delegation → delegate when they read member records.
+- **Older clients** see a delegated record they can't verify, and show that agent as unverified.
 
 ## 4. Revocation and expiry
 
-**Expiry**
+**Revoking.**
+
+- Forget adds a revoke link to your device list. It is kept on the relay's account record and posted
+  into every channel you're in, as a new op that older clients fold to nothing (since 54313c33,
+  2026-10-21).
+- **No window.** The relay already gates connections by key, so it refuses a revoked device's key as
+  soon as it sees a valid revoke link. It doesn't wait for every owner's app to come online and
+  rotate.
+- Owners then remove that device's member key and rotate.
+- **Revoking a computer also removes its agents:** the members whose `from.pk` is that machine.
+- **Revoking an older device** (enrolled before the signer) shows a notice on every one of your
+  devices. A thief holding a newer device can't quietly revoke the rest.
+- **Versions.** Clients take the highest list version seen across the account record and every
+  channel log. "The relay can't roll it back" holds for any client that has seen a newer version
+  anywhere.
+- An honest lost device that sees itself revoked wipes its keys. A stolen one is cut off by the relay
+  and by rotation, not by its own cooperation.
+
+**Expiry.**
 
 - `DeviceCert.until` is 90 days.
-- A device that's online gets its cert renewed by any current device as it nears the end, sealed to
-  its inbox.
-- A cert past `until` is not admitted on its own; it waits for Let in.
-- Old `MachineCert`s (no `until`) stay valid until they're removed. Daemons on kiwi 2026.10.4 can't
-  renew, so expiring them would stop every existing computer's agents. The device list is what cuts
-  them off.
-
-**Revocation**
-
-- Forget adds a revoke link to the device list. The list is kept on the relay's account record, and its
-  monotonic version means the relay can't roll it back.
-- It is also posted as a `device.revoke` event in each channel you're in. Owners there stop admitting
-  that device, remove its member key and rotate.
-- Older clients skip the new op. They have handled unknown ops since 54313c33 (2026-10-21).
-- An honest lost device that sees itself revoked wipes its keys. A stolen one is cut off by the
-  removal and rotation, not by its own cooperation.
+- An app renews each listed device's cert as it nears the end, sealed to the device's inbox.
+- A cert past `until` isn't admitted on its own; it waits for Let in.
+- Old `MachineCert`s (v1, no `until`) stay valid until removed. Daemons on kiwi 2026.10.4 can't renew,
+  so expiring them would stop every existing computer's agents. Revocation is what cuts them off.
 
 ## 5. Retiring kl1 and kp1
 
-The order, each step one PR:
+**The order, each step one PR:**
 
-1. **Core:** `DeviceCert` (a `MachineCert` v2 with `role` and `until`), the device list (add and revoke
-   links rooted in the person key), `DeviceClaim`, verification, and auto-admit of a member's devices.
-2. **Relay:** account record (WorkOS user → person key, devices, revoked list), enrollment inbox.
-3. **Desktop:** approve-a-device screen, Settings → Devices (rename, forget, renew),
-   and enrolling as a new desktop.
+1. **Core:** the device list (links, verification from the root), `DeviceCert` v2, `DeviceClaim`, and
+   auto-admit of a person's devices.
+2. **Relay:** the account record (WorkOS user → person, device list), the enrollment inbox with
+   commit-reveal, and refusing revoked keys.
+3. **Desktop:** the approve screen (typing the digits), Settings → Devices (rename, forget, renew), and
+   enrolling as a new desktop.
 4. **CLI:** `kiwi login` enrolls a computer (replaces `kp1` on the CLI).
-5. **iOS**, then **Android**: sign in and enroll (replaces `kl1`).
-6. **Revocation and expiry:** the device list posted into every channel (a new op; older clients fold it
-   to nothing), and cert renewal.
+5. **iOS**, then **Android:** sign in, enroll, and approve (replaces `kl1`).
+6. **Revocation and expiry:** the list posted into channels, removing a computer's agents, renewal.
 7. **Delegation** for the daemon.
 8. **Recovery vault.**
-9. **Remove** `kl1` and `kp1`, one release after every app ships enrollment. Code that goes:
-   - `packages/core/src/link.ts`, `desktop/src/link-host.ts`, `desktop/src/ipc/linking.ts`, the iOS and
-     Android link screens;
+9. **Remove** `kl1` and `kp1`, one release after every app ships enrollment:
+   - `packages/core/src/link.ts`, `desktop/src/link-host.ts`, `desktop/src/ipc/linking.ts`, and the iOS
+     and Android link screens;
    - `src/daemon/pair.ts`, `desktop/src/pairing.ts`, `desktop/src/ipc/pairing.ts`, and `kp1` in
      `kiwi setup`, `doctor` and `help`.
 
-**Migrating `kl1` phones, once.** They hold copies of the person key and every channel's member key,
-owner keys included. For each one:
+**Migrating `kl1` phones, once.** They hold copies of the person key and every channel's member key.
+For each phone:
 
 1. Enroll it as a real device.
-2. Re-key: a new person key (the old one signs the hand-over link) and a new member key in every channel
-   it joined. This is the one time "rejoin with a new member key" is needed (#524).
+2. Re-key: a new person key and a new member key in every channel it joined. This is the one time
+   "rejoin with a new member key" is needed (#524).
 
-A **lost** `kl1` phone can't be fixed by revocation. Channels you own also need the owner-key answer
-from section 3, or to be recreated.
+The re-key cascades:
+
+- A new person key orphans every `kp1` `MachineCert` v1, and the `person` field in your member
+  records.
+  - Your computers are re-certified in the new list.
+  - Records are owner-signed, so in channels you don't own, the owner's app re-signs yours when it
+    sees the hand-over.
+- **Which hand-over wins.** The hand-over link is signed by the old person key, which the phone also
+  holds. A thief could therefore sign a competing one.
+  - A hand-over must also be signed by the **recovery key** (section 6), which a phone never holds.
+  - Without a recovery key set up, migration waits until there is one.
+- A **lost** `kl1` phone can't be fixed by revocation. Channels you own also need the owner answer
+  (open decision C), or recreating.
 
 ## 6. Recovery vault
 
-Only for when every device is gone, or for a race where a thief revokes your other devices first. The
-recovery key **re-roots** the device list, like Keybase's paper keys.
+For when every app is gone, or a thief revoked your other devices first. The recovery key
+**re-roots** the device list, as Keybase's paper keys do.
 
-- **What it holds:** your person key and the owner keys of channels you own.
-- **Recovery key:** a **generated** 24-word phrase (256 bits). The vault key is HKDF of the phrase. It is
-  never a password, which the relay could guess offline.
+- **What it holds:** your person key, and the owner keys of channels you own.
+- **Recovery key:** a **generated** 24-word phrase (256 bits), with the vault key derived by HKDF.
+  Never a password, which the relay could guess offline.
 - **Format:** `{version, at, nonce, ciphertext}`, signed by the person key and stored at
-  `/v1/account/vault`. Clients remember the highest version they've seen and refuse a lower one.
+  `/v1/account/vault`. Clients remember the highest version and refuse a lower one.
 - **Passkeys later:** per-passkey wrapping where native passkey PRF exists (macOS 15 and iOS 18 through
-  AuthenticationServices, Android Credential Manager). Never in a page the relay serves, which would
+  AuthenticationServices; Android Credential Manager). Never in a page the relay serves, which would
   see the unlock key.
 
-## Open decision for Jow
+## Open decisions for Jow
 
-- **The owner key.** Today it can't be per device: the join code pins it, records must be signed by it
-  (`openRecord`), and the relay authenticates owner routes with it.
-- **Proposal:** an owner delegation `{room, device member key, exp}` signed by the owner key, which the
-  relay and clients accept for owner routes and records (Matrix's master / self-signing split). The
-  owner key then stays on the creating device and in the vault.
-- That needs a relay change and new clients before it can be used. Until then the owner key stays on
-  the device that created the channel, and Settings lists plainly which devices hold it.
-- Section 3's daemon delegation is the narrow case of the same mechanism.
+**A. Where the person key lives after setup.**
 
-Thanks to sunny-tortoise's comparison of Signal, Matrix, Keybase and Apple (T536, #559): they all give
-each device its own keys, keep a device list the server can't forge or roll back, and revoke by dropping
-a device and re-keying what it could read.
+- Whoever holds the person key can re-root the list, so a stolen first desktop beats the vault.
+  Keybase and Matrix keep the root offline.
+- **Proposal:** after setup, keep the person key only in the vault (paper-key style), and make the
+  first desktop a device like the rest.
+- Cost: re-rooting (and the `kl1` migration) then needs the recovery key in hand.
+
+**B. Your other devices keep your authority.**
+
+- Today your phone signs with your member key, so it shows as "jow (owner)".
+- Agents are told to obey only "your own human and the channel owner". As a separate member, your
+  phone would lose the power to direct agents and answer decisions.
+- **Proposal:** the "same person, another device" record carries person authority (directing agents,
+  answering decisions, the owner's included) but **not owner-key powers** (admitting, removing,
+  rotating).
+
+**C. The owner key.**
+
+- **Proposal:** an owner delegation `{room, device member key, until}`, signed by the owner key, which
+  the relay and clients accept for owner routes and records. That is Matrix's master / self-signing
+  split, and section 3 is its narrow case.
+- The owner key then stays on the creating device (or offline, with A) and in the vault.
+- It needs a relay change and new clients first. Until then the owner key stays on the device that
+  created the channel, and Settings lists plainly which devices hold it.
+
+Thanks to sunny-tortoise's comparison of Signal, Matrix, Keybase and Apple (T536, #559) and review
+(#570): every one gives each device its own keys, keeps a device list the server can't forge or roll
+back, and revokes by dropping a device and re-keying what it could read.
