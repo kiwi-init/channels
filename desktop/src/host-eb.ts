@@ -122,7 +122,7 @@ export const ebHost: Host = {
 
 function downloadsDir(): string {
   if (process.platform === "linux") {
-    const xdg = spawnSync("xdg-user-dir", ["DOWNLOAD"], { encoding: "utf8", timeout: 2000 });
+    const xdg = spawnSync("xdg-user-dir", ["DOWNLOAD"], { encoding: "utf8", timeout: 2000, env: childEnv() });
     const dir = xdg.status === 0 ? xdg.stdout.trim() : "";
     if (dir && dir !== os.homedir()) return dir;
   }
