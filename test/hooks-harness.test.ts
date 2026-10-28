@@ -736,6 +736,31 @@ test("ZCode: hooks a person turned on stay on after uninstall, and uninstall wit
   expect(readZcode(path)).toEqual(withEvents);
 });
 
+test("ZCode: a config replaced after Kiwi's install starts its note again, and an uninstall that fails keeps the note for its retry", () => {
+  const dir = scratch("hk-zcode-life-");
+  setEnv({ KIWI_HOME: scratch("hk-zcode-life-home-"), KIWI_ZCODE_DIR: dir });
+  const path = join(dir, "config.json");
+  installExtra("zcode");
+  expect(loadConfig().zcodeHooksTurnedOn).toEqual([path]);
+  const replaced = { hooks: { enabled: true } };
+  writeFileSync(path, JSON.stringify(replaced));
+  installExtra("zcode");
+  expect(loadConfig().zcodeHooksTurnedOn).toBeUndefined();
+  uninstallExtra("zcode");
+  expect(readZcode(path)).toEqual(replaced);
+
+  rmSync(path);
+  installExtra("zcode");
+  const installed = readFileSync(path, "utf8");
+  writeFileSync(path, "{ not json");
+  expect(() => uninstallExtra("zcode")).toThrow();
+  expect(loadConfig().zcodeHooksTurnedOn).toEqual([path]);
+  writeFileSync(path, installed);
+  uninstallExtra("zcode");
+  expect(existsSync(path)).toBe(false);
+  expect(loadConfig().zcodeHooksTurnedOn).toBeUndefined();
+});
+
 test("ZCode: an absent config.json gets just the hook and is absent again after uninstall; hooks a person turned off stay off", () => {
   const dir = scratch("hk-zcode-none-");
   setEnv({ KIWI_HOME: scratch("hk-zcode-none-home-"), KIWI_ZCODE_DIR: dir });

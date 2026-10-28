@@ -35,6 +35,7 @@ function turnedOn(path: string): boolean {
 }
 
 function noteTurnedOn(path: string, on: boolean): void {
+  if (turnedOn(path) === on) return;
   updateConfig((c) => {
     const rest = (c.zcodeHooksTurnedOn ?? []).filter((p) => p !== path);
     if (on) c.zcodeHooksTurnedOn = [...rest, path];
@@ -53,27 +54,23 @@ export function installZcode(path: string): void {
   const hooks = isRecord(config.hooks) ? config.hooks : {};
   if (hooks.enabled === false) throw new Error(`ZCode's hooks are off in ${path} (hooks.enabled is false): turn them on, then run kiwi hooks install zcode`);
   const events = isRecord(hooks.events) ? hooks.events : {};
-  if (hooks.enabled === undefined) noteTurnedOn(path, true);
   writeJson(path, { ...config, hooks: { ...hooks, enabled: true, events: { ...events, Stop: [...withoutOurs(events.Stop), stopGroup()] } } });
+  if (!hasOurs(config)) noteTurnedOn(path, hooks.enabled === undefined);
 }
 
 export function uninstallZcode(path: string): void {
-  const kiwiOn = turnedOn(path);
-  if (kiwiOn) noteTurnedOn(path, false);
-  if (!existsSync(path)) return;
+  if (!existsSync(path)) return noteTurnedOn(path, false);
   const config = readJson(path);
-  if (!isRecord(config.hooks) || !hasOurs(config)) return;
+  if (!isRecord(config.hooks) || !hasOurs(config)) return noteTurnedOn(path, false);
   const events = isRecord(config.hooks.events) ? config.hooks.events : {};
   const stop = withoutOurs(events.Stop);
   const keptEvents = stop.length ? { ...events, Stop: stop } : omit(events, "Stop");
   const withEvents = Object.keys(keptEvents).length ? { ...config.hooks, events: keptEvents } : omit(config.hooks, "events");
-  const hooks = kiwiOn ? omit(withEvents, "enabled") : withEvents;
+  const hooks = turnedOn(path) ? omit(withEvents, "enabled") : withEvents;
   const rest = Object.keys(hooks).length ? { ...config, hooks } : omit(config, "hooks");
-  if (!Object.keys(rest).length) {
-    rmSync(path, { force: true });
-    return;
-  }
-  writeJson(path, rest);
+  if (Object.keys(rest).length) writeJson(path, rest);
+  else rmSync(path, { force: true });
+  noteTurnedOn(path, false);
 }
 
 export function zcodeInstalled(path: string): boolean {
