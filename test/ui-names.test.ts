@@ -127,4 +127,31 @@ describe("the composer writes nicknames and sends handles", () => {
   test("handles, longer words, code and escapes are sent as written", () => {
     for (const text of ["@cheery-fox hi", "@leader hi", "@lead-ish", "mail me@lead", "`@lead`", "```\n@lead\n```", "\\@lead", "@twin and @Twin", "@jow"]) expect(mentions.sent(text)).toBe(text);
   });
+
+  test("paths, escaped longer words, astral letters and combining marks are not mentions", () => {
+    for (const text of ["/@lead/file", "@lead/file", "@lead\\-ish", "𐐀@lead", "@leaď"]) expect(mentions.sent(text)).toBe(text);
+  });
+
+  test("a nickname that markdown would split is written as the handle, so it still reaches them", () => {
+    const odd = mentionNames([
+      { name: "cheery-fox", display: "**lead**" },
+      { name: "patient-otter", display: "dev`ops" },
+      { name: "honest-wren", display: "ops [east](https://example.com)" },
+    ]);
+    expect(odd.typed("cheery-fox")).toBe("cheery-fox");
+    expect(odd.typed("patient-otter")).toBe("patient-otter");
+    expect(odd.typed("honest-wren")).toBe("honest-wren");
+  });
+
+  test("a nickname whose lowercase is longer still matches as written", () => {
+    const ipek = mentionNames([{ name: "kind-ibis", display: "İpek" }]);
+    expect(ipek.typed("kind-ibis")).toBe("İpek");
+    expect(ipek.sent("@İpek hello")).toBe("@kind-ibis hello");
+  });
+
+  test("a former member's handle is never redirected to someone else", () => {
+    const now = mentionNames([{ name: "cheery-fox", display: "honest-wren" }], [{ name: "honest-wren", display: "docs" }]);
+    expect(now.sent("@honest-wren hi")).toBe("@honest-wren hi");
+    expect(now.typed("cheery-fox")).toBe("cheery-fox");
+  });
 });

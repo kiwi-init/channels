@@ -81,41 +81,45 @@ export function named(text: string, nicknames: ReadonlyMap<string, string>): str
   return swap(text, nicknames, (hit) => (hit.kind === "task" ? null : `${hit.kind === "mention" ? "@" : ""}${hit.label}`))
 }
 
-const NAME_GOES_ON = /[\p{L}\p{N}_-]|\.[\p{L}\p{N}]/uy
-const NAME_BEFORE = /[\p{L}\p{N}_.@\\-]/u
+const NAME_GOES_ON = /[\p{L}\p{N}\p{M}_\\-]|[./][\p{L}\p{N}]/uy
+const NAME_BEFORE = /[\p{L}\p{N}\p{M}_.@\\/-]$/u
+const MARKUP = /[\\`*[\]<>|~]|^_|_$/
 
-export function mentionNames(people: readonly { name: string; display?: string | undefined }[]): { typed: (handle: string) => string; sent: (text: string) => string } {
+type Named = { name: string; display?: string | undefined }
+
+export function mentionNames(people: readonly Named[], former: readonly Named[] = []): { typed: (handle: string) => string; sent: (text: string) => string } {
+  const fold = (s: string) => s.toLowerCase()
   const taken = new Map<string, number>()
   const count = (key: string) => taken.set(key, (taken.get(key) ?? 0) + 1)
-  for (const p of people) {
-    count(p.name.toLowerCase())
-    if (p.display && p.display.toLowerCase() !== p.name.toLowerCase()) count(p.display.toLowerCase())
+  for (const p of [...people, ...former]) {
+    count(fold(p.name))
+    if (p.display && fold(p.display) !== fold(p.name)) count(fold(p.display))
   }
-  const handleOf = new Map<string, string>()
-  for (const p of people) if (p.display && p.display.toLowerCase() !== p.name.toLowerCase() && taken.get(p.display.toLowerCase()) === 1) handleOf.set(p.display.toLowerCase(), p.name)
-  const longestFirst = [...handleOf.keys()].sort((a, b) => b.length - a.length)
-  const typed = (handle: string) => {
-    const display = people.find((p) => p.name === handle)?.display
-    return display && handleOf.get(display.toLowerCase()) === handle ? display : handle
-  }
+  const nicks = people
+    .flatMap((p) => (p.display && fold(p.display) !== fold(p.name) && taken.get(fold(p.display)) === 1 ? [{ display: p.display, handle: p.name }] : []))
+    .sort((a, b) => b.display.length - a.display.length)
   const sent = (text: string) => {
     let result = ""
     let from = 0
     for (const span of spansOf(text)) {
       for (let at = text.indexOf("@", span.start); at !== -1 && at < span.end; at = text.indexOf("@", at + 1)) {
-        if (at > 0 && NAME_BEFORE.test(text[at - 1] ?? "")) continue
-        const nick = longestFirst.find((n) => {
-          const end = at + 1 + n.length
+        if (NAME_BEFORE.test(text.slice(0, at))) continue
+        const hit = nicks.find(({ display }) => {
+          const end = at + 1 + display.length
           NAME_GOES_ON.lastIndex = end
-          return end <= span.end && text.slice(at + 1, end).toLowerCase() === n && !NAME_GOES_ON.test(text)
+          return end <= span.end && fold(text.slice(at + 1, end)) === fold(display) && !NAME_GOES_ON.test(text)
         })
-        if (nick === undefined) continue
-        result += `${text.slice(from, at)}@${handleOf.get(nick) ?? nick}`
-        from = at + 1 + nick.length
+        if (!hit) continue
+        result += `${text.slice(from, at)}@${hit.handle}`
+        from = at + 1 + hit.display.length
         at = from - 1
       }
     }
     return result + text.slice(from)
+  }
+  const typed = (handle: string) => {
+    const display = nicks.find((n) => n.handle === handle)?.display
+    return display && !MARKUP.test(display) && sent(`@${display} x`) === `@${handle} x` ? display : handle
   }
   return { typed, sent }
 }

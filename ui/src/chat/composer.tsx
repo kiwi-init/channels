@@ -136,7 +136,7 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
           .slice(0, 6)
   const taskOptions = taskQuery === undefined ? [] : taskMatches(channel.tasks, taskQuery)
   const options = matches.length || taskOptions.length
-  const mentions = useMemo(() => mentionNames(channel.people), [channel.people])
+  const mentions = useMemo(() => mentionNames(channel.people, channel.former), [channel.people, channel.former])
 
   const update = (value: string, at = value.length) => {
     setText(value)
