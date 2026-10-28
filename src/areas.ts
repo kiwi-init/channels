@@ -3,6 +3,7 @@ import { areasOf } from "@kiwi/core/routing.ts";
 import { taskOfBranch } from "@kiwi/core/work.ts";
 
 const DEFAULT_BRANCHES = new Set(["main", "master", "trunk", "HEAD"]);
+const REMOTE = "refs/remotes/origin/";
 
 function git(args: string[], cwd: string): string | null {
   try {
@@ -13,30 +14,31 @@ function git(args: string[], cwd: string): string | null {
   }
 }
 
-// A local or pushed branch named after the task, the most recently committed first.
+const lines = (out: string | null) => out?.split("\n").filter(Boolean) ?? [];
+
 function taskBranch(task: number, prefix: string | null, cwd: string): string | null {
   if (!prefix) return null;
-  const refs = git(["for-each-ref", "--sort=-committerdate", "--format=%(refname:short)", "refs/heads", "refs/remotes/origin"], cwd);
-  for (const ref of refs?.split("\n") ?? []) {
+  for (const ref of lines(git(["for-each-ref", "--sort=-committerdate", "--format=%(refname:short)", "refs/heads", "refs/remotes/origin"], cwd))) {
     const name = ref.replace(/^origin\//, "");
     if (!DEFAULT_BRANCHES.has(name) && taskOfBranch(name, prefix) === task) return ref;
   }
   return null;
 }
 
-// The folders the task's own branch changed since main. A checkout on any other branch says nothing
-// about the task: ~/www/channels sits on Jow's site-redo with his uncommitted work (T713).
+function bases(prefix: string | null, cwd: string): string[] {
+  return lines(git(["for-each-ref", "--format=%(refname)", REMOTE], cwd)).filter((ref) => taskOfBranch(ref.slice(REMOTE.length), prefix) === null);
+}
+
 export function branchAreas(task: number, prefix: string | null, cwd = process.cwd()): string[] | null {
   const head = git(["rev-parse", "--abbrev-ref", "HEAD"], cwd);
   const here = !!head && !DEFAULT_BRANCHES.has(head) && taskOfBranch(head, prefix) === task;
   const branch = here ? "HEAD" : taskBranch(task, prefix, cwd);
   if (!branch) return null;
-  const main = git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], cwd) || "origin/main";
-  const base = git(["merge-base", branch, main], cwd);
-  if (!base) return null;
-  // On the task's branch its uncommitted work counts too; from elsewhere, only what the branch committed.
-  const files = git(here ? ["diff", "--name-only", base] : ["diff", "--name-only", base, branch], cwd);
-  if (files === null) return null;
-  const areas = areasOf(files.split("\n").filter(Boolean));
+  const from = bases(prefix, cwd);
+  if (!from.length) return null;
+  const committed = git(["log", "--no-merges", "--name-only", "--format=", branch, "--not", ...from], cwd);
+  if (committed === null) return null;
+  const files = [...lines(committed), ...(here ? lines(git(["diff", "--name-only", "HEAD"], cwd)) : [])];
+  const areas = areasOf([...new Set(files)]);
   return areas.length ? areas : null;
 }

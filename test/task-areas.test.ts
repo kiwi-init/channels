@@ -114,6 +114,33 @@ describe("reading the folders from the agent's checkout", () => {
     expect(branchAreas(42, "T", dir)).toBeNull();
   });
 
+  test("a branch cut from a sink ahead of main counts only its own commits, with the sink merged in or not", () => {
+    g("clean", "-fdq");
+    g("checkout", "-qb", "sink-ui", "main");
+    put("android/a.kt");
+    g("add", ".");
+    g("commit", "-qm", "android");
+    g("update-ref", "refs/remotes/origin/sink/ui", g("rev-parse", "HEAD"));
+    g("checkout", "-qb", "T44-feed");
+    put("ui/src/feed.ts");
+    g("add", ".");
+    g("commit", "-qm", "feed");
+    put("ui/src/more.ts");
+    g("add", ".");
+    g("commit", "-qm", "more");
+    expect(branchAreas(44, "T", dir)).toEqual(["ui/src"]);
+    g("checkout", "-q", "sink-ui");
+    put("ios/b.swift");
+    g("add", ".");
+    g("commit", "-qm", "ios");
+    g("update-ref", "refs/remotes/origin/sink/ui", g("rev-parse", "HEAD"));
+    g("checkout", "-q", "T44-feed");
+    g("merge", "-q", "--no-edit", "sink-ui");
+    expect(branchAreas(44, "T", dir)).toEqual(["ui/src"]);
+    g("checkout", "-q", "main");
+    expect(branchAreas(44, "T", dir)).toEqual(["ui/src"]);
+  });
+
   test("no branch prefix, main, or a folder that isn't a checkout say nothing", () => {
     g("clean", "-fdq");
     g("checkout", "-qb", "T43-ui", "main");
