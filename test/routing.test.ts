@@ -280,14 +280,16 @@ describe("review", () => {
   test("a client that folded before the reviewer left and one that folds after agree on the review rounds", async () => {
     const add = await ev("jon", { op: "task.add", title: "stalled", owner: "win", review: "mac" });
     const send = await ev("win", { op: "task.update", task: add.seq, state: "review", at: "abc1234" });
-    const move = await ev("win", { op: "task.update", task: add.seq, review: "linux" });
+    const move = await ev("win", { op: "task.update", task: add.seq, state: "review", review: "linux" });
+    const verdict = await ev("linux", { op: "task.update", task: add.seq, state: "done", verdict: "approved", round: 2 });
     const departed: Roster = roster.map((r) => (r.name === "mac" ? { ...r, active: false } : r));
     const kept: { base?: FoldBase } = {};
     fold([add, send, move], roster, Date.now(), null, null, null, (b) => void (kept.base = b));
-    const early = fold([], departed, Date.now(), null, null, kept.base);
-    const late = fold([add, send, move], departed);
-    expect(early.tasks.get(add.seq)!.review).toBe(late.tasks.get(add.seq)!.review);
-    expect(early.rejected.has(move.seq)).toBe(late.rejected.has(move.seq));
+    const early = fold([verdict], departed, Date.now(), null, null, kept.base);
+    const late = fold([add, send, move, verdict], departed);
+    expect(early.tasks.get(add.seq)).toEqual(late.tasks.get(add.seq)!);
+    expect(early.rejected.get(move.seq)).toBe(late.rejected.get(move.seq));
+    expect(early.rejected.get(verdict.seq)).toBe(late.rejected.get(verdict.seq));
   });
 
   test("reopening clears the approval", async () => {
