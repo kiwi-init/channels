@@ -242,6 +242,16 @@ export const messageCommands: Record<string, Command> = {
   escalate: () =>
     Effect.gen(function* () {
       const s = yield* session();
+      if (opt.close !== undefined) {
+        const ask = Number(opt.close.replace(/^#/, "")) || (yield* die('usage: kiwi ask-human --close N "why": closes your ask #N once you have its answer some other way'));
+        const why = (yield* text(1)).trim();
+        const { state } = yield* s.state();
+        const open = state.openAsks.find((a) => a.seq === ask);
+        if (!open) return yield* die(`#${ask} isn't an open ask: it's answered, closed, or not a question`);
+        if (open.from !== s.me) return yield* die(`#${ask} is ${open.from}'s ask: only who asked closes it (answer it with kiwi reply ${ask} "…")`);
+        yield* s.closeAsk(ask, why || undefined);
+        return out(`closed #${ask}${why ? `: ${why}` : ""}; it leaves Needs you`);
+      }
       const body = yield* text(1);
       if (!body.trim())
         return yield* die(
@@ -287,7 +297,9 @@ export const messageCommands: Record<string, Command> = {
           ...(links?.length ? { links } : {}),
         };
         const { seq, to, also } = yield* s.escalate(body, re, undefined, { ...(task !== undefined ? { task } : {}), ...hold, step });
-        return out(`escalated #${seq} to ${to.join(" and ")} with a step${heldText}${alsoAnswers(also)}; wait for their answer before acting on it`);
+        return out(
+          `escalated #${seq} to ${to.join(" and ")} with a step${heldText}${alsoAnswers(also)}; wait for their answer before acting on it (if it comes some other way, close it: kiwi ask-human --close ${seq} "why")`,
+        );
       }
       if (opt.handoff === undefined) {
         for (const f of ["vendor", "expires", "wait"] as const) if (opt[f] !== undefined) return yield* die(`--${f} goes with --handoff URL`);
@@ -295,7 +307,9 @@ export const messageCommands: Record<string, Command> = {
         if (choices && !wellFormedChoices(choices)) return yield* die(`--option takes ${CHOICES_MIN} to ${CHOICES_MAX} different answers, one line of up to ${CHOICE_MAX_LENGTH} characters each`);
         const { seq, to, also } = yield* s.escalate(body, re, undefined, { ...(choices ? { choices } : {}), ...(task !== undefined ? { task } : {}), ...hold });
         digestNote();
-        return out(`escalated #${seq} to ${to.join(" and ")}${choices ? ` with ${choices.length} options` : ""}${heldText}${alsoAnswers(also)}; wait for their answer before acting on it`);
+        return out(
+          `escalated #${seq} to ${to.join(" and ")}${choices ? ` with ${choices.length} options` : ""}${heldText}${alsoAnswers(also)}; wait for their answer before acting on it (if it comes some other way, close it: kiwi ask-human --close ${seq} "why")`,
+        );
       }
       if (opt.option !== undefined) return yield* die("--handoff has its own Done and Couldn't answers; leave out --option");
       if (!handoffUrl(opt.handoff)) return yield* die("--handoff takes an https link without a user name or password, up to 2048 characters");
@@ -307,7 +321,9 @@ export const messageCommands: Record<string, Command> = {
       const expiresAt = Date.now() + seconds * 1000;
       const head = opt.wait === undefined ? 0 : yield* s.ch.fx.head();
       const { seq, to } = yield* s.escalate(body, re, { url: opt.handoff, vendor: vendor.slice(0, HANDOFF_MAX_VENDOR), expiresAt }, { ...(task !== undefined ? { task } : {}), ...hold });
-      out(`escalated #${seq} to ${to.join(" and ")} with a browser link that opens for ${opt.expires ?? "10m"}; wait for their answer before acting on it`);
+      out(
+        `escalated #${seq} to ${to.join(" and ")} with a browser link that opens for ${opt.expires ?? "10m"}; wait for their answer before acting on it (if it comes some other way, close it: kiwi ask-human --close ${seq} "why")`,
+      );
       if (opt.wait === undefined) return;
       const { outcome, replies } = yield* s.awaitHandoff(seq, head, expiresAt, parseDuration(opt.wait));
       for (const r of replies) out(render(r));

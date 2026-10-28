@@ -347,6 +347,10 @@ export class SessionMessaging extends SessionListen {
     oneLook,
   );
 
+  readonly closeAsk = Effect.fn("AgentSession.closeAsk")({ self: this }, function* (this: SessionMessaging, ask: number, why: string | undefined) {
+    return yield* this.event({ op: "ask.close", ask, ...(why ? { why } : {}) }, why ? `closed #${ask}: ${why}` : `closed #${ask}`, undefined, ask);
+  });
+
   readonly setFact = Effect.fn("AgentSession.setFact")({ self: this }, function* (this: SessionMessaging, key: string, value: string, ttlSec?: number) {
     return yield* this.event({ op: "fact.set", key, value, ...(ttlSec ? { ttl: ttlSec } : {}) }, `${key} = ${value}`);
   });

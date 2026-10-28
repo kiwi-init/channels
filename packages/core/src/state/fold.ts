@@ -206,6 +206,8 @@ export function fold(
   let hw = from?.hw ?? 0;
   const placesBefore = from?.placesBefore ?? [];
   const answered = new Map<number, Set<string>>(from?.answered.map(([seq, by]) => [seq, new Set(by)]));
+  const closedAsks = new Set<number>();
+  const askers = new Map([...(from?.asks ?? []), ...messages].flatMap((a): [number, string][] => ((a.kind === "ask" || a.kind === "blocking") && !a.permission ? [[a.seq, a.from]] : [])));
   const settledBy = new Map<number, Set<string>>();
   const permReplies = new Map<number, Message[]>();
   const permBySeq = new Map<number, Message>();
@@ -407,6 +409,14 @@ export function fold(
         if (on && !on.size) reactions.delete(ev.seq);
         continue;
       }
+      if (ev.op === "ask.close") {
+        placeOf.set(m.seq, placeOf.get(ev.ask) ?? MAIN);
+        const asker = askers.get(ev.ask);
+        if (asker === undefined || !(ev.ask < m.seq)) reject(`#${ev.ask} isn't a question or a step waiting on someone`);
+        else if (asker !== m.from && !isPerson(member)) reject("only who asked, or a person, closes an ask");
+        else closedAsks.add(ev.ask);
+        continue;
+      }
       if (ev.op === "ask.name") {
         placeOf.set(m.seq, MAIN);
         const head = askHeads.get(ev.ask);
@@ -439,7 +449,7 @@ export function fold(
 
   const openAsks = [...(from?.asks ?? []), ...messages.filter((m) => m.seq > after)].filter((m) => {
     if (m.kind !== "ask" && m.kind !== "blocking") return false;
-    if (ignored(trust.get(m.seq))) return false;
+    if (ignored(trust.get(m.seq)) || closedAsks.has(m.seq)) return false;
     if (m.permission)
       return !(settledBy.get(m.seq)?.has(m.from) || now > m.permission.expiresAt || (permReplies.get(m.seq) ?? []).some((r) => permissionAnswer(m, r, { trust, members, bySeq: permBySeq }) !== null));
     const by = answered.get(m.seq);
