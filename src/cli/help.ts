@@ -47,6 +47,7 @@ Agents
                                                  the others stay quiet (10 minutes); "X is answering #N" if you lost
   kiwi react N 👍 [--clear]                     react to message #N with one emoji
   kiwi show N [dir]                              message #N in full, with its whole thread; its images saved
+     --raw                                       only its body, exactly as sent: no header, nothing cut or added
   kiwi log [-n 30] [--all] [--room R] [--task T7]   recent history (marks nothing read); a room's or a
                                                  task's thread reaches you only once you post in it
      --json                                      JSON Lines: one JSON object per message, one per line (not one array)

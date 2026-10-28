@@ -264,7 +264,7 @@ export function handOver(unread: readonly Unread[], max: number, mc: string): { 
   if (whole(lines, max) === total) return { count: total, text: lines.join("\n") };
   const count = whole(lines, max - 1 - moreNote(total, mc).length);
   if (count > 0) return { count, text: [...lines.slice(0, count), moreNote(total - count, mc)].join("\n") };
-  const cut = `(#${first.seq} is cut here: ${mc} show ${first.seq} has all of it)`;
+  const cut = `(#${first.seq} is cut here: ${mc} show ${first.seq} --raw has all of it)`;
   const after = total > 1 ? [moreNote(total - 1, mc)] : [];
   const room = max - 2 - 1 - cut.length - after.reduce((n, a) => n + 1 + a.length, 0);
   if (room >= first.head + CLIP_MIN) return { count: 1, text: [`${first.line.slice(0, room)} …`, cut, ...after].join("\n") };
