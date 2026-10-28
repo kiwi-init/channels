@@ -12,6 +12,7 @@ import { wakeArgv, wakeKey, wakePath, wakePrompt, type WakePath, type WakeVia } 
 import { withDeadline, type DaemonWake } from "./protocol.ts";
 import { seatRecordFor, wakeOn } from "./reach.ts";
 import type { Seat } from "./seat.ts";
+import { waitingFor } from "../agent/wants.ts";
 
 const WAKE_LOG_KEEP_BYTES = 1_000_000;
 
@@ -119,7 +120,8 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stop
       sessions.set(seat.key, kept);
     }
     const { messages, state } = await runAgent(kept.session.state());
-    return runAgent(kept.session.unreadAt(state, messages));
+    const looped = !!seatRecordFor(loadConfig(), seat.alias, seat.agent)?.loop;
+    return runAgent(kept.session.unreadAt(state, messages, looped ? waitingFor(state, seat.agent) : {}));
   };
 
   const runWake = async (seat: Seat, [cmd, ...rest]: string[]): Promise<string | null> => {

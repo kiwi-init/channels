@@ -14,6 +14,7 @@ import type { Binding, Here } from "../seats.ts";
 import { handOver, seatBudget } from "./answer.ts";
 import { answeringNow, deliveredInProcess, noteDelivered, noteHeard, notePending, settlePending } from "./delivered.ts";
 import { hooksListen, installedListenSeconds } from "./install/claude.ts";
+import { loopDelivery } from "./loop-wait.ts";
 import { mimoInstalled } from "./install/mimo.ts";
 import { piInstalled } from "./install/pi.ts";
 import { alive, isListening, takeListenSlot } from "./listeners.ts";
@@ -43,6 +44,7 @@ const SLOT_RETRY_MAX_MS = 60_000;
 
 const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, woke: Effect.Effect<void, never, Scope.Scope>) {
   const s = yield* openSession(b.alias, cfg, b.as);
+  const quiet = yield* loopDelivery(s);
   const real = yield* Cursor;
   let at = Math.max(yield* s.cursor(), deliveredInProcess(b.alias, b.as, who.session ?? "", who.harness === "claude" ? who.pid : undefined));
   const from = at;
@@ -56,6 +58,7 @@ const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, w
           woke,
         ),
       {
+        ...quiet,
         onNotice: (text) =>
           Effect.andThen(
             Effect.sync(() => void got.push({ seq: null, text: `* ${text}`, head: text.length + 2 })),

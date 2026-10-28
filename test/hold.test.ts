@@ -104,9 +104,12 @@ test("bind names the session each harness is known by: Kimi Code by its process,
   holdSeat("ch", "dev", "loop");
   expect(bindHeldSeat("ch", "dev", "other", { harness: "kimi", pid: 4242 })).toEqual({ kind: "other-holder" });
   expect(bindHeldSeat("ch", "dev", "loop", { harness: "kimi", pid: 4242, served: "ses-9" }, 5)).toEqual({ kind: "changed", seats: 1 });
-  expect(all()).toEqual([{ alias: "ch", as: "dev", harness: "kimi", session: "kimi-pid-4242", pid: 4242, harnessSession: "ses-9", holds: 1, at: 5, seen: 5 }]);
+  expect(all()).toEqual([{ alias: "ch", as: "dev", harness: "kimi", session: "kimi-pid-4242", pid: 4242, harnessSession: "ses-9", holds: 1, loop: true, at: 5, seen: 5 }]);
   expect(bindHeldSeat("ch", "dev", "loop", { harness: "codex", session: "t" })).toEqual({ kind: "not-held" });
   expect(holdSeat("ch", "nobody", "loop")).toEqual({ kind: "no-seat" });
+  holdSeat("ch", "dev", "loop");
+  releaseSeat("ch", "dev", "loop");
+  expect(all()[0]?.loop).toBeUndefined();
 });
 
 test("a session opened before a hold commits nothing once the seat is bound again, even after another session opens it, and the fresh one commits", async () => {

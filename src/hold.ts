@@ -96,9 +96,9 @@ export function bindHeldSeat(alias: string, as: string, token: string, to: HeldS
     to.harness === "kimi"
       ? { harness: to.harness, session: `kimi-pid-${to.pid}`, pid: to.pid, ...(to.served ? { harnessSession: to.served } : {}) }
       : { harness: to.harness, session: to.session, ...(to.pid ? { pid: to.pid } : {}) };
-  return rewrite(alias, as, token, true, (b) => ({ ...omit(b, "hold", "session", "pid", "harnessSession"), ...bound, at: now, seen: now }));
+  return rewrite(alias, as, token, true, (b) => ({ ...omit(b, "hold", "session", "pid", "harnessSession"), ...bound, loop: true, at: now, seen: now }));
 }
 
 export function releaseSeat(alias: string, as: string, token: string): HoldChange {
-  return rewrite(alias, as, token, true, (b) => omit(b, "hold"));
+  return rewrite(alias, as, token, true, (b) => omit(b, "hold", "loop"));
 }
