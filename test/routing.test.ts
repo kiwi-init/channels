@@ -330,6 +330,8 @@ describe("reading the machine", () => {
     expect(detectHarness({ PI_CODING_AGENT: "true" })).toBe("pi");
     expect(detectHarness({ PI_CODING_AGENT: "true", KIWI_PI_PID: "9", CLAUDECODE: "1" }, { from: 9, lookup: () => null })).toBe("pi");
     expect(detectHarness({ TERM: "dumb", NO_COLOR: "1", CLAUDECODE: "1" }, { from: 9, lookup: () => ({ ppid: 1, name: "kimi-code" }) })).toBe("kimi-code");
+    expect(detectHarness({ ZCODE_RUNTIME_ENV: "production", CLAUDECODE: "1" }, { from: 9, lookup: () => ({ ppid: 1, name: "zcode-cli" }) })).toBe("zcode");
+    expect(detectHarness({ ZCODE_RUNTIME_ENV: "production", CLAUDECODE: "1" }, { from: 9, lookup: () => ({ ppid: 1, name: "claude" }) })).toBe("claude-code");
     expect(detectHarness({})).toBeUndefined();
   });
 

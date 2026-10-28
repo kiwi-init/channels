@@ -76,7 +76,10 @@ export function useControlsHandlers({
     },
     onScopes: async (m, scopes) => {
       const wire = wireScopes(scopes)
-      const seq = await send(`set what ${m.name} may do: ${wire ? describeScopes(wire) : "full"}`, { kind: "event", ev: { op: "scope.set", member: m.name, pk: m.pk, scopes: wire } })
+      const seq = await send(`set what ${m.name} may do: ${wire ? describeScopes(wire) : "full"}`, {
+        kind: "event",
+        ev: { op: "scope.set", member: m.name, pk: m.pk, scopes: wire, keepLead: true },
+      })
       await ch.updateScopes(m, scopes, seq)
       await refreshRoster()
     },
@@ -84,7 +87,10 @@ export function useControlsHandlers({
     onPersona: async (m, persona) => {
       const scopes = persona ? personaScopes(persona) : [...SCOPES]
       const wire = wireScopes(scopes)
-      const seq = await send(persona ? `made ${m.name} ${persona.name}` : `took ${m.name}'s personality away`, { kind: "event", ev: { op: "scope.set", member: m.name, pk: m.pk, scopes: wire } })
+      const seq = await send(persona ? `made ${m.name} ${persona.name}` : `took ${m.name}'s personality away`, {
+        kind: "event",
+        ev: { op: "scope.set", member: m.name, pk: m.pk, scopes: wire, lead: persona?.role === "lead", wasLead: m.persona?.role === "lead" },
+      })
       await ch.updatePersona(m, persona, seq)
       await refreshRoster()
     },

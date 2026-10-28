@@ -32,7 +32,7 @@ function procInfo(pid: number): ProcInfo | null {
   return process.platform === "linux" ? fromProc(pid) : fromPs(pid);
 }
 
-const HARNESS_PROCESSES: readonly string[] = ["claude", "codex", "opencode", "grok", "gemini", "cursor-agent", "mimo", "kimi-code", "kimi"];
+const HARNESS_PROCESSES: readonly string[] = ["claude", "codex", "opencode", "grok", "gemini", "cursor-agent", "mimo", "kimi-code", "kimi", "zcode-cli"];
 
 const KIMI_PROCESSES: readonly string[] = ["kimi-code", "kimi"];
 
@@ -64,6 +64,12 @@ export function kimiCodePid(env: Record<string, string | undefined>, tree: Proce
 export function kimiAncestor(tree: ProcessTree = {}): number | null {
   const near = nearestHarness(tree, null);
   return near.kind === "harness" && KIMI_PROCESSES.includes(near.name) ? near.pid : null;
+}
+
+export function zcodePid(env: Record<string, string | undefined>, tree: ProcessTree = {}): number | null {
+  if (!env.ZCODE_RUNTIME_ENV) return null;
+  const near = nearestHarness(tree, null);
+  return near.kind === "harness" && near.name === "zcode-cli" ? near.pid : null;
 }
 
 export function mimoHere(env: Record<string, string | undefined>, tree: ProcessTree = {}): { pid: number | null } | null {

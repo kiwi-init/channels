@@ -29,6 +29,8 @@ export function Avatar({ person, size = "md", pip }: { person: Pick<Person, "nam
 
 export const STATUS_WORDS: Record<TaskStatus, string> = { todo: "to do", doing: "working", review: "in review", done: "done", waiting: "needs you" }
 
+export const statusWord = (t: { status: TaskStatus; cancelled?: boolean }): string => (t.cancelled ? "cancelled" : STATUS_WORDS[t.status])
+
 export function Dot({ status }: { status: TaskStatus }) {
   return <span className={cx("dot", `is-${status}`)} aria-hidden="true" />
 }

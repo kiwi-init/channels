@@ -3,7 +3,7 @@ import type { Personality } from "@kiwi/core/personality.ts"
 import type { Step, StepReply } from "@kiwi/core/protocol.ts"
 import type { TerminalId, TerminalRow } from "@kiwi/core/terminals.ts"
 
-export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "grok" | "other"
+export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "grok" | "kimi" | "mimo" | "pi" | "grok-bot" | "zcode" | "other"
 
 type Presence = "online" | "away" | "offline"
 
@@ -64,6 +64,7 @@ interface TaskNote {
 export interface ReviewRound {
   n: number
   by: string
+  judge?: string
   at: number
   result: "open" | "approved" | "rejected" | "withdrawn"
 }
@@ -82,6 +83,8 @@ export interface Task {
   notes: TaskNote[]
   rounds: ReviewRound[]
   archived: boolean
+  cancelled?: boolean
+  youReview?: "verdict" | "send-back"
 }
 
 export type Where = { kind: "room"; room: string } | { kind: "dm"; with: string } | { kind: "task"; task: number }
@@ -144,6 +147,10 @@ export interface PermissionAsk {
   id: string
   from: string
   at: number
+  expiresAt?: number
+  canAllow: boolean
+  canDeny: boolean
+  allower?: string
   tool: string
   summary: string
   code: string
@@ -347,7 +354,7 @@ export interface Actions {
   answerQuestion(code: string, id: string, text: string): void
   answerStep(code: string, id: string, reply: StepReply): void
   answerJoin(code: string, id: string, letIn: boolean, choice?: JoinChoice): void
-  approveTask(code: string, task: number, approve: boolean): void
+  approveTask(code: string, task: number, approve: boolean, why?: string): void
   addTask(code: string, title: string, owner?: string): void
   setTaskStatus(code: string, task: number, status: TaskStatus): void
   setRole(code: string, name: string, role: string | null): void
@@ -362,7 +369,7 @@ export interface Actions {
   showAgent(code: string, name: string): Promise<string | null>
   choicesOn(code: string, computer: string): Promise<ComputerChoices>
   chooseFolder(): Promise<string | null>
-  addRoom(code: string, name: string): void
+  addRoom(code: string, name: string): Promise<string | null>
   renameRoom(code: string, id: string, name: string): void
   setIcon(code: string, file: File | null): void
   renameChannel(code: string, title: string): void

@@ -4,7 +4,8 @@ import { CHECKS } from "~/chat/cards"
 import { Composer } from "~/chat/composer"
 import { compactAt, useNames, useTaskIds } from "~/chat/conversation"
 import { MessageRow } from "~/chat/message"
-import { Avatar, Dot, Empty, Heading, STATUS_WORDS } from "~/kit/bits"
+import { ANYONE } from "@/lib/task-actions"
+import { Avatar, Dot, Empty, Heading, statusWord } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import { memberOf, type Ask, type Channel, type PermissionAsk, type PullRequest, type QuestionAsk, type ReviewRound, type Task } from "~/model"
@@ -12,6 +13,7 @@ import { useApp } from "~/nav"
 import { nickname } from "~/names"
 import { PanelHead } from "~/panels/frame"
 import { TONES } from "~/tasks/board"
+import { SendBack } from "~/tasks/send-back"
 
 const ROUND_WORDS: Record<ReviewRound["result"], string> = { open: "reviewing", approved: "approved", rejected: "sent back", withdrawn: "withdrawn" }
 const ROUND_TONES: Record<ReviewRound["result"], string> = { open: "tone-review", approved: "tone-live", rejected: "", withdrawn: "" }
@@ -50,7 +52,7 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
   const waits = channel.asks.filter((a) => holds(a, id))
   return (
     <>
-      <PanelHead title={`T${task.id}`} sub={`· ${task.archived ? "archived" : STATUS_WORDS[task.status]}`} />
+      <PanelHead title={`T${task.id}`} sub={`· ${task.archived ? "archived" : statusWord(task)}`} />
       <div key={task.id} ref={body} className="panel-body task-body">
         <section className="panel-section">
           <h3 className="task-title">{task.title}</h3>
@@ -110,7 +112,7 @@ function Props({ channel, task }: { channel: Channel; task: Task }) {
       <dt>Status</dt>
       <dd>
         <Dot status={task.status} />
-        <span className={TONES[task.status]}>{STATUS_WORDS[task.status]}</span>
+        <span className={task.cancelled ? "dim" : TONES[task.status]}>{statusWord(task)}</span>
         {task.archived && <span className="dimmer">· archived</span>}
       </dd>
       <dt>Owner</dt>
@@ -118,9 +120,7 @@ function Props({ channel, task }: { channel: Channel; task: Task }) {
       {task.reviewer && (
         <>
           <dt>Reviewer</dt>
-          <dd>
-            <Who channel={channel} name={task.reviewer} />
-          </dd>
+          <dd>{task.reviewer === ANYONE ? <span>anyone who hasn't worked on it</span> : <Who channel={channel} name={task.reviewer} />}</dd>
         </>
       )}
       <dt>Asked by</dt>
@@ -195,78 +195,66 @@ function Pr({ pr }: { pr: PullRequest }) {
 
 function Review({ channel, task }: { channel: Channel; task: Task }) {
   const { app, toast } = useApp()
-  const [reason, setReason] = useState<string | null>(null)
+  const [sending, setSending] = useState(false)
   const last = task.rounds.at(-1)
-  const yours = task.reviewer === channel.you && last?.result === "open"
-  const past = yours ? task.rounds.slice(0, -1) : task.rounds
+  const yours = task.youReview !== undefined
+  const past = yours && last?.result === "open" ? task.rounds.slice(0, -1) : task.rounds
   if (!yours && past.length === 0) return null
-  const sendBack = () => {
-    const text = reason?.trim()
-    if (!text) return
-    app.actions.send(channel.code, { kind: "task", task: task.id }, text)
-    app.actions.approveTask(channel.code, task.id, false)
-    setReason(null)
-    toast(`Sent T${task.id} back${task.owner ? ` to ${nickname(channel, task.owner)}` : ""}`)
+  const owner = task.owner ? nickname(channel, task.owner) : null
+  const ask =
+    task.youReview === "send-back"
+      ? `This waits for ${task.reviewer && task.reviewer !== ANYONE ? `${nickname(channel, task.reviewer)}'s` : "a"} review. You can still send it back.`
+      : task.reviewer === channel.you
+        ? owner
+          ? `${owner} asks for your review.`
+          : "This waits for your review."
+        : task.reviewer === ANYONE
+          ? "This waits for a review from someone who hasn't worked on it."
+          : "This waits for a review."
+  const sendBack = (why: string) => {
+    app.actions.approveTask(channel.code, task.id, false, why)
+    setSending(false)
+    toast(`Sent T${task.id} back${owner ? ` to ${owner}` : ""}`)
   }
   return (
     <section className="panel-section">
       <Heading>Review</Heading>
       {yours && (
         <div className="task-box is-waiting task-review">
-          <p className="task-review-ask">{task.owner ? `${nickname(channel, task.owner)} asks for your review.` : "This waits for your review."}</p>
-          {reason === null ? (
+          <p className="task-review-ask">{ask}</p>
+          {sending ? (
+            <SendBack onSend={sendBack} onCancel={() => setSending(false)} />
+          ) : (
             <div className="actions">
-              <button
-                type="button"
-                className="btn is-primary"
-                onClick={() => {
-                  app.actions.approveTask(channel.code, task.id, true)
-                  toast(`Approved T${task.id}`)
-                }}
-              >
-                Approve
-              </button>
-              <button type="button" className="btn" onClick={() => setReason("")}>
+              {task.youReview === "verdict" && (
+                <button
+                  type="button"
+                  className="btn is-primary"
+                  onClick={() => {
+                    app.actions.approveTask(channel.code, task.id, true)
+                    toast(`Approved T${task.id}`)
+                  }}
+                >
+                  Approve
+                </button>
+              )}
+              <button type="button" className="btn" onClick={() => setSending(true)}>
                 Send back
               </button>
             </div>
-          ) : (
-            <form
-              className="task-sendback"
-              onSubmit={(e) => {
-                e.preventDefault()
-                sendBack()
-              }}
-            >
-              <input
-                autoFocus
-                className="input"
-                value={reason}
-                aria-label="What needs to change"
-                placeholder="What needs to change?"
-                onChange={(e) => setReason(e.target.value)}
-                onBlur={() => !reason.trim() && setReason(null)}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") {
-                    e.stopPropagation()
-                    setReason(null)
-                  }
-                }}
-              />
-              <button type="submit" className="btn is-primary" disabled={!reason.trim()}>
-                Send
-              </button>
-            </form>
           )}
         </div>
       )}
       {past.length > 0 && (
         <ol className="task-rounds">
-          {past.map((r) => (
-            <li key={r.n}>
-              Round {r.n} · {r.by === channel.you ? "you" : nickname(channel, r.by)} · <span className={ROUND_TONES[r.result]}>{ROUND_WORDS[r.result]}</span> · {ago(r.at)}
-            </li>
-          ))}
+          {past.map((r) => {
+            const who = r.judge ?? r.by
+            return (
+              <li key={r.n}>
+                Round {r.n} · {who === channel.you ? "you" : nickname(channel, who)} · <span className={ROUND_TONES[r.result]}>{ROUND_WORDS[r.result]}</span> · {ago(r.at)}
+              </li>
+            )
+          })}
         </ol>
       )}
     </section>

@@ -10,7 +10,6 @@ import type { ASTNode } from "react-native-enriched-markdown/lib/typescript/src/
 import { bridge } from "@/lib/secrets"
 
 import { keepParsed, parsedFor } from "~/chat/parsed"
-import { Icon } from "~/kit/icons"
 
 const TEXT = { fontSize: 15, fontFamily: "var(--sans)", color: "var(--ink)", lineHeight: 22, marginTop: 0, marginBottom: 8 }
 const HEAD = { fontFamily: "var(--sans)", fontWeight: "600", color: "var(--ink)", marginTop: 6, marginBottom: 4 }
@@ -181,15 +180,8 @@ export interface MarkdownProps {
   copied: () => void
 }
 
-interface Block {
-  top: number
-  right: number
-  code: string
-}
-
 export default function Markdown({ markdown, onMention, onTask, onMessage, onImage, onShown, copied }: MarkdownProps) {
   const box = useRef<HTMLDivElement>(null)
-  const [blocks, setBlocks] = useState<Block[]>([])
   const [got, setGot] = useState<{ markdown: string; ast: ASTNode } | null>(() => {
     const cached = parsedFor(markdown)
     return cached ? { markdown, ast: cached } : null
@@ -209,25 +201,6 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
       live = false
     }
   }, [markdown])
-
-  const measure = useCallback(() => {
-    const el = box.current
-    if (!el) return
-    const at = el.getBoundingClientRect()
-    const next = [...el.querySelectorAll("pre")].map((pre) => {
-      const r = pre.getBoundingClientRect()
-      return { top: r.top - at.top, right: at.right - r.right, code: (pre.textContent ?? "").replace(/\n+$/, "") }
-    })
-    setBlocks((prev) => (prev.length === next.length && prev.every((b, i) => b.top === next[i]?.top && b.right === next[i]?.right && b.code === next[i]?.code) ? prev : next))
-  }, [])
-
-  useLayoutEffect(() => {
-    const el = box.current
-    if (!el) return
-    const watch = new ResizeObserver(measure)
-    watch.observe(el)
-    return () => watch.disconnect()
-  }, [measure])
 
   const shown = useCallback(
     (el: HTMLDivElement | null) => {
@@ -258,11 +231,20 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
     },
     [onMention, onTask, onMessage]
   )
-  const callbacks = useMemo(() => ({ onLinkPress: press, onImagePress: ({ url, altText }: { url: string; altText: string }) => onImage(url, altText) }), [press, onImage])
+  const callbacks = useMemo(
+    () => ({
+      onLinkPress: press,
+      onImagePress: ({ url, altText }: { url: string; altText: string }) => onImage(url, altText),
+      onCodeBlockPress: ({ code }: { code: string }) => {
+        void navigator.clipboard?.writeText(code).then(copied, () => {})
+      },
+    }),
+    [press, onImage, copied]
+  )
   const children = ast?.children ?? []
 
   return (
-    <div className={blocks.length ? "md has-code" : "md"} ref={box}>
+    <div className="md" ref={box}>
       {ast && (
         <div className={ENRM_TEXT_CLASS} style={WRAP} ref={shown}>
           {children.map((child, i) => (
@@ -277,21 +259,6 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
           ))}
         </div>
       )}
-      {blocks.map((b, i) => (
-        <button
-          key={i}
-          type="button"
-          className="md-copy"
-          style={{ top: b.top + 6, right: b.right + 6 }}
-          aria-label="Copy code"
-          title="Copy code"
-          onClick={() => {
-            void navigator.clipboard?.writeText(b.code).then(copied)
-          }}
-        >
-          <Icon name="copy" size={13} />
-        </button>
-      ))}
     </div>
   )
 }

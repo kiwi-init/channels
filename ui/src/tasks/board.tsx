@@ -2,7 +2,7 @@ import "~/styles/tasks.css"
 
 import { useState } from "react"
 
-import { Avatar, cx, Dot, Empty, Loading, STATUS_WORDS } from "~/kit/bits"
+import { Avatar, cx, Dot, Empty, Loading, statusWord } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import { memberOf, type Channel, type Task, type TaskStatus } from "~/model"
@@ -86,7 +86,7 @@ function Row({ channel, t, on }: { channel: Channel; t: Task; on: boolean }) {
       <span className="board-title">{t.title}</span>
       <span className="board-meta">
         T{t.id}
-        {t.owner && ` · ${nickname(channel, t.owner)}`} · {STATUS_WORDS[t.status]}
+        {t.owner && ` · ${nickname(channel, t.owner)}`} · {statusWord(t)}
         {t.pr && ` · PR #${t.pr.number}`} · {ago(t.updatedAt)}
       </span>
       {t.owner && (

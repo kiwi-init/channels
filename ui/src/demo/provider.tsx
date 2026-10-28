@@ -212,12 +212,20 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
             ],
           }
         }),
-      approveTask: (code, id, approve) =>
+      approveTask: (code, id, approve, why) =>
         edit(code, (c) => ({
           ...c,
           asks: c.asks.filter((a) => !(a.kind === "review" && a.task === id)),
           tasks: c.tasks.map((t) =>
-            t.id === id ? { ...t, status: approve ? "done" : "doing", rounds: t.rounds.map((r) => (r.result === "open" ? { ...r, result: approve ? "approved" : "rejected", at: Date.now() } : r)) } : t
+            t.id === id
+              ? {
+                  ...t,
+                  status: approve ? "done" : "doing",
+                  youReview: undefined,
+                  notes: why ? [...t.notes, { by: c.you, at: Date.now(), text: why }] : t.notes,
+                  rounds: t.rounds.map((r) => (r.result === "open" ? { ...r, judge: c.you, result: approve ? "approved" : "rejected", at: Date.now() } : r)),
+                }
+              : t
           ),
         })),
       addTask: (code, title, owner) =>
@@ -276,7 +284,10 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           2400
         )
       },
-      addRoom: (code, name) => edit(code, (c) => ({ ...c, rooms: [...c.rooms, { id: name, name, unread: 0, mentions: 0 }] })),
+      addRoom: (code, name) => {
+        edit(code, (c) => ({ ...c, rooms: [...c.rooms, { id: name, name, unread: 0, mentions: 0 }] }))
+        return Promise.resolve(name)
+      },
       setGithubWrite: (code, on) => edit(code, (c) => ({ ...c, githubWrite: on || undefined })),
       setBranchPrefix: (code, prefix) => edit(code, (c) => ({ ...c, branchPrefix: prefix?.trim() || undefined })),
       renameRoom: (code, id, name) => edit(code, (c) => ({ ...c, rooms: c.rooms.map((r) => (r.id === id ? { ...r, name: name.trim().replace(/^#/, "") } : r)) })),

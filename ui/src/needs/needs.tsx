@@ -1,15 +1,16 @@
 import "~/styles/needs.css"
 
-import { useId, useState, type ReactNode } from "react"
+import { useEffect, useId, useState, type ReactNode } from "react"
 
 import { PrChip, QuestionCard, TaskChip } from "~/chat/cards"
 import { Avatar, Empty, Loading, Toggle } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
-import { ago } from "~/kit/time"
+import { ago, clock } from "~/kit/time"
 import type { Ask, Channel, JoinAsk, Message, PermissionAsk, Person, Powers, QuestionAsk, ReviewAsk } from "~/model"
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
 import { ShowAgent } from "~/kit/show-agent"
+import { SendBack } from "~/tasks/send-back"
 
 const isOpen = (a: Ask): boolean => a.kind === "review" || !a.answer
 
@@ -186,9 +187,21 @@ function Holds({ channel, ids }: { channel: Channel; ids: number[] }) {
 
 const member = (channel: Channel, name: string): Person | undefined => channel.people.find((p) => p.name === name)
 
+function usePast(at: number | undefined): boolean {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (at === undefined || now > at) return
+    const timer = window.setTimeout(() => setNow(Date.now()), Math.min(at - now + 50, 2 ** 31 - 1))
+    return () => window.clearTimeout(timer)
+  }, [at, now])
+  return at !== undefined && now > at
+}
+
 function PermissionAskCard({ channel, ask, link }: { channel: Channel; ask: PermissionAsk; link: ReactNode }) {
   const { app } = useApp()
   const who = member(channel, ask.from)
+  const expired = usePast(ask.expiresAt)
+  const open = !ask.answer && !expired
   return (
     <Shell
       face={who}
@@ -198,18 +211,30 @@ function PermissionAskCard({ channel, ask, link }: { channel: Channel; ask: Perm
       at={ask.at}
       link={link}
       actions={
-        <>
-          <button type="button" className="btn is-primary" onClick={() => app.actions.answerPermission(channel.code, ask.id, true)}>
-            Allow
-          </button>
-          <button type="button" className="btn" onClick={() => app.actions.answerPermission(channel.code, ask.id, false)}>
-            Deny
-          </button>
-        </>
+        open && (ask.canAllow || ask.canDeny || ask.allower) ? (
+          <>
+            {ask.canAllow && (
+              <button type="button" className="btn is-primary" onClick={() => app.actions.answerPermission(channel.code, ask.id, true)}>
+                Allow
+              </button>
+            )}
+            {ask.canDeny && (
+              <button type="button" className="btn" onClick={() => app.actions.answerPermission(channel.code, ask.id, false)}>
+                Deny
+              </button>
+            )}
+            {!ask.canAllow && ask.allower && <span className="dim">Only {nickname(channel, ask.allower)} can allow it: it runs on their computer.</span>}
+          </>
+        ) : undefined
       }
     >
       <p className="needs-title">{ask.summary}</p>
       <pre className="needs-code">{ask.code}</pre>
+      {ask.expiresAt !== undefined && !ask.answer && (
+        <p className="dim">
+          {expired ? `It stopped waiting at ${clock(ask.expiresAt)}. If it still needs this, it asks again in its terminal.` : `It waits until ${clock(ask.expiresAt)}, and asks in its terminal too.`}
+        </p>
+      )}
       {ask.task !== undefined && <Holds channel={channel} ids={[ask.task]} />}
     </Shell>
   )
@@ -416,8 +441,10 @@ function ReviewAskCard({ channel, ask, link }: { channel: Channel; ask: ReviewAs
   const who = member(channel, ask.from)
   const task = channel.tasks.find((t) => t.id === ask.task)
   const note = task?.notes.at(-1)
-  const decide = (approve: boolean) => {
-    app.actions.approveTask(channel.code, ask.task, approve)
+  const [sending, setSending] = useState(false)
+  const decide = (approve: boolean, why?: string) => {
+    app.actions.approveTask(channel.code, ask.task, approve, why)
+    setSending(false)
     toast(approve ? `Approved T${ask.task}` : `Sent T${ask.task} back to ${nickname(channel, task?.owner ?? ask.from)}`)
   }
   return (
@@ -429,17 +456,21 @@ function ReviewAskCard({ channel, ask, link }: { channel: Channel; ask: ReviewAs
       at={ask.at}
       link={link}
       actions={
-        <>
-          <button type="button" className="btn is-primary" onClick={() => decide(true)}>
-            Approve
-          </button>
-          <button type="button" className="btn" onClick={() => decide(false)}>
-            Send back
-          </button>
-          <button type="button" className="btn is-quiet" onClick={() => go({ to: "panel", panel: { kind: "task", task: ask.task } })}>
-            Open the task
-          </button>
-        </>
+        sending ? (
+          <SendBack onSend={(why) => decide(false, why)} onCancel={() => setSending(false)} />
+        ) : (
+          <>
+            <button type="button" className="btn is-primary" onClick={() => decide(true)}>
+              Approve
+            </button>
+            <button type="button" className="btn" onClick={() => setSending(true)}>
+              Send back
+            </button>
+            <button type="button" className="btn is-quiet" onClick={() => go({ to: "panel", panel: { kind: "task", task: ask.task } })}>
+              Open the task
+            </button>
+          </>
+        )
       }
     >
       {task ? (
