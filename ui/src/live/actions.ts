@@ -28,6 +28,7 @@ import { announce } from "~/kit/toasts"
 import { answerPair, cancelPair, linkGithub, pairBegin, unlinkGithub } from "~/live/account"
 import { newMemberPowers, newMemberScopes, setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
+import { harnessChoices } from "~/live/harness-rows"
 import { iconFromFile } from "~/live/icon-file"
 import { memberName } from "@/lib/format"
 import { checkComputer, setHooks } from "~/live/computer"
@@ -331,6 +332,23 @@ export function makeActions(): Actions {
         await run.ch.updatePowers(m, { addsAgents: powers.addsAgents ?? !!m.addsAgents, answersDecisions: powers.answersDecisions ?? !!m.answersDecisions })
         await run.refreshRoster()
       }),
+    choicesOn: async (code, computer) => {
+      const b = bridge()
+      if (!b) return { error: "agents start from the Channels desktop app" }
+      const here = secrets().computers.find((c) => c.own)?.machinePk
+      try {
+        if (computer === "this" || computer === here) return { folders: await b.launchRoots() }
+        const [h, f] = await Promise.all([b.harnessesOn(computer), b.foldersOn(computer, need(code).roomId)])
+        if (!h.ok) return { error: h.detail }
+        return { harnesses: harnessChoices(h.value), folders: f.ok ? f.value : [] }
+      } catch (err) {
+        return { error: err instanceof Error ? err.message : String(err) }
+      }
+    },
+    chooseFolder: async () => {
+      const b = bridge()
+      return b ? b.chooseFolder() : null
+    },
     addAgent: (code, agent) =>
       attempt("Agent not started", async () => {
         const b = bridge()

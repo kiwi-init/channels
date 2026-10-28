@@ -3,7 +3,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react"
 import { Avatar, cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
-import type { App, Channel, Computer, Harness, NewAgent } from "~/model"
+import type { App, Channel, Computer, ComputerChoices, Harness, NewAgent } from "~/model"
 import { useApp } from "~/nav"
 import { shown } from "~/names"
 import { PanelHead } from "~/panels/frame"
@@ -67,17 +67,17 @@ function computersOf(app: App): Computer[] {
   return (app.account?.computers ?? []).filter((c) => !isPhone(c))
 }
 
-function firstChoices(app: App, channel: Channel) {
+function firstChoices(app: App) {
   const computer = computersOf(app).find((c) => c.thisOne && c.online) ?? computersOf(app).find((c) => c.online)
   const harness = app.harnesses.find((h) => h.installed)
-  return { computer, harness, folder: `~/www/${channel.title.trim().replace(/\s+/g, "-")}` }
+  return { computer, harness }
 }
 
-function presetRun(app: App, channel: Channel, name: string): Run | null {
+function presetRun(app: App, name: string): Run | null {
   if (PRESET !== "add-agent-starting") return null
-  const { computer, harness, folder } = firstChoices(app, channel)
+  const { computer, harness } = firstChoices(app)
   if (!computer || !harness) return null
-  return { agent: { harness: harness.id, computer: computer.id, folder, name, mode: "ask-first" }, on: computer.label, runs: harness.label, step: 2 }
+  return { agent: { harness: harness.id, computer: computer.id, folder: "~/www/channels", name, mode: "ask-first" }, on: computer.label, runs: harness.label, step: 2 }
 }
 
 export function AddAgentPanel({ channel }: { channel: Channel }) {
@@ -85,7 +85,7 @@ export function AddAgentPanel({ channel }: { channel: Channel }) {
   const taken = takenNames(channel)
   const [name, setName] = useState(() => freeName(taken))
   const [way, setWay] = useState<Way>(PRESET === "add-agent-command" ? "command" : "here")
-  const [run, setRun] = useState<Run | null>(() => presetRun(app, channel, name))
+  const [run, setRun] = useState<Run | null>(() => presetRun(app, name))
   const timers = useRef<number[]>([])
 
   useEffect(() => {
@@ -188,19 +188,39 @@ function Choice({ group, on, off, pick, children, side }: { group: string; on: b
 }
 
 function StartHere({ channel, name, setName, taken, onStart }: NameProps & { onStart: (agent: NewAgent, on: string, runs: string) => void }) {
-  const { app, toast } = useApp()
+  const { app } = useApp()
   const id = useId()
   const computers = computersOf(app)
-  const [first] = useState(() => firstChoices(app, channel))
+  const [first] = useState(() => firstChoices(app))
   const [computerId, setComputerId] = useState(first.computer?.id ?? "")
   const [harnessId, setHarnessId] = useState<Harness | "">(first.harness?.id ?? "")
-  const [folder, setFolder] = useState(first.folder)
+  const [folder, setFolder] = useState("")
+  const [typed, setTyped] = useState(false)
+  const [loaded, setLoaded] = useState<{ for: string; choices: ComputerChoices } | null>(null)
+  useEffect(() => {
+    if (!computerId) return
+    let live = true
+    void app.actions.choicesOn(channel.code, computerId).then((c) => {
+      if (!live) return
+      setLoaded({ for: computerId, choices: c })
+      if (!typed && "folders" in c) setFolder(c.folders[0] ?? "")
+      const there = "harnesses" in c ? c.harnesses : undefined
+      if (there) setHarnessId((now) => (there.some((h) => h.id === now && h.installed) ? now : (there.find((h) => h.installed)?.id ?? "")))
+    })
+    return () => {
+      live = false
+    }
+  }, [app.actions, channel.code, computerId, typed])
+  const choices = loaded?.for === computerId ? loaded.choices : null
+  const harnesses = choices && "harnesses" in choices && choices.harnesses ? choices.harnesses : app.harnesses
+  const folders = choices && "folders" in choices ? choices.folders : []
+  const unreachable = choices && "error" in choices ? choices.error : null
   const [persona, setPersona] = useState("")
   const [mode, setMode] = useState<Mode>("ask-first")
   const [understood, setUnderstood] = useState(false)
 
   const computer = computers.find((c) => c.id === computerId && c.online)
-  const harness = app.harnesses.find((h) => h.id === harnessId && h.installed)
+  const harness = harnesses.find((h) => h.id === harnessId && h.installed)
   const problem = nameProblem(name, taken)
   const who = problem ? "It" : name
   const ready = !!computer && !!harness && !!folder.trim() && !problem && (mode !== "dont-ask" || understood)
@@ -224,7 +244,11 @@ function StartHere({ channel, name, setName, taken, onStart }: NameProps & { onS
               group={`${id}-computer`}
               on={c.id === computerId}
               off={!c.online}
-              pick={() => setComputerId(c.id)}
+              pick={() => {
+                if (c.id === computerId) return
+                setComputerId(c.id)
+                setTyped(false)
+              }}
               side={
                 <>
                   <span className={cx("add-pip", c.online && "is-online")} />
@@ -242,7 +266,7 @@ function StartHere({ channel, name, setName, taken, onStart }: NameProps & { onS
         </Group>
 
         <Group label="Harness">
-          {app.harnesses.map((h) => (
+          {harnesses.map((h) => (
             <Choice key={h.id} group={`${id}-harness`} on={h.id === harnessId} off={!h.installed} pick={() => setHarnessId(h.id)}>
               <Avatar person={{ name: h.label, kind: "agent", harness: h.id, presence: h.installed ? "online" : "offline" }} size="sm" />
               {h.installed ? (
@@ -262,11 +286,45 @@ function StartHere({ channel, name, setName, taken, onStart }: NameProps & { onS
             Folder
           </label>
           <div className="add-folder">
-            <input id={`${id}-folder`} className="input is-mono" value={folder} spellCheck={false} autoComplete="off" onChange={(e) => setFolder(e.target.value)} />
-            <button type="button" className="btn is-quiet" onClick={() => toast("The folder picker opens in the desktop app")}>
-              Choose…
-            </button>
+            <input
+              id={`${id}-folder`}
+              className="input is-mono"
+              value={folder}
+              list={`${id}-folders`}
+              placeholder={computer?.thisOne ? "Choose a folder" : "A folder on that computer"}
+              spellCheck={false}
+              autoComplete="off"
+              onChange={(e) => {
+                setTyped(true)
+                setFolder(e.target.value)
+              }}
+            />
+            <datalist id={`${id}-folders`}>
+              {folders.map((f) => (
+                <option key={f} value={f} />
+              ))}
+            </datalist>
+            {computer?.thisOne && (
+              <button
+                type="button"
+                className="btn is-quiet"
+                onClick={() =>
+                  void app.actions.chooseFolder().then((f) => {
+                    if (!f) return
+                    setTyped(true)
+                    setFolder(f)
+                  })
+                }
+              >
+                Choose…
+              </button>
+            )}
           </div>
+          {unreachable && computer && (
+            <p className="add-none">
+              Couldn't ask {computer.label} for its harnesses and folders: {unreachable}
+            </p>
+          )}
         </div>
 
         <NameField name={name} setName={setName} problem={problem} />

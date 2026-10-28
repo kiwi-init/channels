@@ -7,7 +7,6 @@ import { useAutoApproval } from "@/lib/auto-approval"
 import { loadMember, loadPending, parseHash, useChannelList, type ChannelRow } from "@/lib/channel"
 import { joinCodeFromLink } from "@/lib/deep-link"
 import { adoptThisComputer } from "@/lib/computers"
-import { harnessName } from "@/lib/harness"
 import { useIcons, useMemberIcons } from "@/lib/icons"
 import { lastChannel, rememberChannel, reopenable } from "@/lib/last-channel"
 import { newsTotal, rowNews, startMarks, useMarks, useOpenNews, useTabNews } from "@/lib/news"
@@ -17,7 +16,7 @@ import { useAccount } from "~/live/account"
 import { makeActions } from "~/live/actions"
 import { OpenMember, type View } from "~/live/channel"
 import { iconUrl } from "~/live/icon"
-import { harnessOf } from "~/live/map"
+import { harnessChoices } from "~/live/harness-rows"
 import { OpenPending, pendingTitle } from "~/live/pending"
 import { usePrefs } from "~/live/prefs"
 import { useComputer } from "~/live/computer"
@@ -72,22 +71,7 @@ function useHarnesses(): App["harnesses"] {
       window.removeEventListener("focus", load)
     }
   }, [])
-  return useMemo(() => {
-    const out = new Map<string, App["harnesses"][number]>()
-    for (const r of rows) {
-      const id = harnessOf(r.harness)
-      if (!id || id === "other" || out.has(id)) continue
-      out.set(id, {
-        id,
-        label: harnessName(r.harness),
-        installed: !!r.path && r.start,
-        ...(r.version ? { version: r.version } : {}),
-        ...(r.path ? { path: r.path } : {}),
-        ...(!r.start && r.why ? { why: r.why } : {}),
-      })
-    }
-    return [...out.values()]
-  }, [rows])
+  return useMemo(() => harnessChoices(rows), [rows])
 }
 
 function usePersonas(own: Personality[]): App["personas"] {
