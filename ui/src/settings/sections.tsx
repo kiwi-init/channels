@@ -171,9 +171,6 @@ export function NotificationsSection() {
         <Row label="Notify me" hint="Asks are things that wait on you: a permission, a question, someone at the door." wide>
           <Seg label="Notify me" value={prefs.notify} options={NOTIFY} onChange={(notify) => actions.setPrefs({ notify })} />
         </Row>
-        <Row label="Sound" hint="A short tone when a notification arrives.">
-          <Toggle label="Sound" on={prefs.sound} onChange={(sound) => actions.setPrefs({ sound })} />
-        </Row>
         <Row label="Enter sends" hint={prefs.enterSends ? "Shift Enter starts a new line." : "Enter starts a new line. ⌘ Enter sends."}>
           <Toggle label="Enter sends" on={prefs.enterSends} onChange={(enterSends) => actions.setPrefs({ enterSends })} />
         </Row>

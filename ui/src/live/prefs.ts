@@ -5,10 +5,10 @@ import { setAppearance, setTextSize, useAppearance, useTextSize, type TextSize }
 import type { CustomTheme, Prefs } from "~/model"
 import { cleanThemes, deletedTheme, savedTheme, type ThemePrefs } from "~/theme/themes"
 
-type Own = Pick<Prefs, "notify" | "sound" | "enterSends" | "darkTheme" | "lightTheme" | "customThemes">
+type Own = Pick<Prefs, "notify" | "enterSends" | "darkTheme" | "lightTheme" | "customThemes">
 
 const KEY = "ui.prefs"
-const DEFAULTS: Own = { notify: "mentions", sound: false, enterSends: true, darkTheme: "channels-dark", lightTheme: "channels-light", customThemes: [] }
+const DEFAULTS: Own = { notify: "mentions", enterSends: true, darkTheme: "channels-dark", lightTheme: "channels-light", customThemes: [] }
 const SIZES: readonly TextSize[] = ["small", "default", "large", "larger"]
 const listeners = new Set<() => void>()
 let own: Own | null = null
@@ -19,7 +19,6 @@ function readOwn(): Own {
     const raw = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Partial<Own>
     own = {
       notify: raw.notify === "all" || raw.notify === "none" || raw.notify === "mentions" ? raw.notify : DEFAULTS.notify,
-      sound: typeof raw.sound === "boolean" ? raw.sound : DEFAULTS.sound,
       enterSends: typeof raw.enterSends === "boolean" ? raw.enterSends : DEFAULTS.enterSends,
       darkTheme: typeof raw.darkTheme === "string" ? raw.darkTheme : DEFAULTS.darkTheme,
       lightTheme: typeof raw.lightTheme === "string" ? raw.lightTheme : DEFAULTS.lightTheme,
@@ -64,11 +63,10 @@ export function setPrefs(p: Partial<Prefs>): void {
   if (p.theme) setAppearance(p.theme)
   if (p.textSize !== undefined) setTextSize(SIZES[Math.min(Math.max(Math.round(p.textSize) + 1, 0), SIZES.length - 1)] ?? "default")
   if (p.reduceMotion !== undefined) setAccessibilityOption("reduce-motion", p.reduceMotion)
-  if (p.notify !== undefined || p.sound !== undefined || p.enterSends !== undefined || p.darkTheme !== undefined || p.lightTheme !== undefined || p.customThemes !== undefined)
+  if (p.notify !== undefined || p.enterSends !== undefined || p.darkTheme !== undefined || p.lightTheme !== undefined || p.customThemes !== undefined)
     writeOwn({
       ...readOwn(),
       ...(p.notify !== undefined ? { notify: p.notify } : {}),
-      ...(p.sound !== undefined ? { sound: p.sound } : {}),
       ...(p.enterSends !== undefined ? { enterSends: p.enterSends } : {}),
       ...(p.darkTheme !== undefined ? { darkTheme: p.darkTheme } : {}),
       ...(p.lightTheme !== undefined ? { lightTheme: p.lightTheme } : {}),

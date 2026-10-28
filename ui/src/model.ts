@@ -313,7 +313,6 @@ export interface Prefs {
   textSize: number
   reduceMotion: boolean
   notify: "all" | "mentions" | "none"
-  sound: boolean
   enterSends: boolean
   darkTheme: string
   lightTheme: string
@@ -341,7 +340,6 @@ export interface Actions {
   approveTask(code: string, task: number, approve: boolean): void
   addTask(code: string, title: string, owner?: string): void
   setTaskStatus(code: string, task: number, status: TaskStatus): void
-  archiveTask(code: string, task: number): void
   setRole(code: string, name: string, role: string | null): void
   removeMember(code: string, name: string): void
   setPersona(code: string, name: string, persona: string | null): void

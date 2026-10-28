@@ -24,7 +24,6 @@ export const DEMO_PREFS: Prefs = {
   textSize: 0,
   reduceMotion: false,
   notify: "mentions",
-  sound: true,
   enterSends: true,
   darkTheme: "channels-dark",
   lightTheme: "channels-light",

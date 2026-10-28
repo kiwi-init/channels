@@ -280,7 +280,6 @@ export function makeActions(): Actions {
         const to = t.owner && t.owner !== run.me ? [t.owner] : undefined
         await event(run, `${taskId(id)} ${state}`, { op: "task.update", task: id, state }, to)
       }),
-    archiveTask: () => announce("Tasks archive on their own when the history is compacted"),
     setRole: (code, name, role) =>
       attempt("Role not changed", async () => {
         const run = owner(code)
