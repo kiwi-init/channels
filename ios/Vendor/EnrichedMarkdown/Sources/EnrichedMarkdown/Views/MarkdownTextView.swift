@@ -126,6 +126,7 @@ final class MarkdownTextView: UITextView, SelectionHandleTouchReporting, Markdow
     var isSelectionEnabled: Bool = true {
         didSet {
             guard isSelectionEnabled != oldValue else { return }
+            isSelectable = isSelectionEnabled
             if !isSelectionEnabled {
                 selectedTextRange = nil
                 if isFirstResponder {
@@ -217,6 +218,15 @@ final class MarkdownTextView: UITextView, SelectionHandleTouchReporting, Markdow
         return knobs.contains { hypot($0.x - point.x, $0.y - point.y) <= Self.selectionHandleGrabRadius }
     }
 
+    /// The link under `point` (view coordinates). Opens links when the text
+    /// isn't selectable, since UITextView only follows them while it is.
+    func link(at point: CGPoint) -> URL? {
+        guard let attributedText, let range = characterRange(at: point), firstRect(for: range).contains(point) else { return nil }
+        let offset = offset(from: beginningOfDocument, to: range.start)
+        guard offset >= 0, offset < attributedText.length else { return nil }
+        return MarkdownAttributeValue.linkString(from: attributedText.attribute(.link, at: offset, effectiveRange: nil)).flatMap(URL.init(string:))
+    }
+
     /// The task item whose checkbox margin contains `point` (view
     /// coordinates), or nil.
     func taskListHit(at point: CGPoint) -> TaskListInteraction.Hit? {
@@ -239,6 +249,11 @@ final class MarkdownTextView: UITextView, SelectionHandleTouchReporting, Markdow
         if let onSpoilerTap, let range = spoilerOverlays.concealedRange(at: point) {
             spoilerOverlays.reveal(range: range, at: point)
             onSpoilerTap(range)
+            return
+        }
+
+        if !isSelectable, let url = link(at: point) {
+            onLinkPress?(url)
             return
         }
 

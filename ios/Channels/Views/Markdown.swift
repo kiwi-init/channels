@@ -39,10 +39,11 @@ struct Markdown: View {
             EnrichedMarkdown.Link().foregroundStyle(link).underline(underline)
             Code().fontDesign(.monospaced).foregroundStyle(ink).background(code)
             CodeBlock().font(.system(.caption, design: .monospaced)).foregroundStyle(ink).background(code).cornerRadius(10).padding(8).marginBottom(6)
-            Blockquote().font(.body).foregroundStyle(ink).border(ink.opacity(0.35), width: 3).gapWidth(10).lineHeight(0).marginBottom(6)
+            Blockquote().font(.body).foregroundStyle(ink).background(.clear).border(ink.opacity(0.35), width: 3).gapWidth(10).lineHeight(0).marginBottom(6)
             EnrichedMarkdown.List().font(.body).foregroundStyle(ink).bulletColor(ink).markerColor(ink).gapWidth(8).marginLeading(18).lineHeight(0).marginBottom(6)
             TaskList().checkedColor(link).borderColor(ink).checkmarkColor(underline ? Tone.bubbleMine : .white)
-            EnrichedMarkdown.Table().foregroundStyle(ink).headerForegroundStyle(ink).headerBackground(code).rowOddBackground(.clear).border(ink.opacity(0.2), width: 0.5)
+            EnrichedMarkdown.Table().font(.callout).headerFont(.callout.weight(.semibold))
+                .foregroundStyle(ink).headerForegroundStyle(ink).headerBackground(code).rowOddBackground(.clear).border(ink.opacity(0.2), width: 0.5)
                 .cornerRadius(8).cellPadding(horizontal: 8, vertical: 5).lineHeight(0).marginBottom(6)
             ThematicBreak().foregroundStyle(ink.opacity(0.25)).height(0.5).marginTop(6).marginBottom(6)
         }

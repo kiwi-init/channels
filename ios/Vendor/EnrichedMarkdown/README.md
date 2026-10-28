@@ -23,8 +23,12 @@ used. Without those targets, nothing is fetched at build time.
   `sizeThatFits`). Upstream always takes the whole proposed width, which would stretch every
   bubble to the edge. Text with attachments (tables, code panels, rules, images) still takes the
   full width.
+- **Text that can't be selected isn't selectable** (`MarkdownTextView.isSelectionEnabled` turns
+  `isSelectable` off, and `link(at:)` opens links from the view's own tap). Upstream keeps the
+  text view selectable for link taps, and its double-tap recognizer then swallows the bubble's
+  double tap (tapback).
 
 ## Updating
 
-Copy the same three folders from the new tag, keep this `Package.swift`, and apply the two
+Copy the same three folders from the new tag, keep this `Package.swift`, and apply the three
 changes again: `git log -p -- ios/Vendor/EnrichedMarkdown` shows them.
