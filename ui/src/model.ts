@@ -367,6 +367,7 @@ export interface Actions {
   setGoal(code: string, goal: string): void
   setHold(code: string, on: boolean, note?: string): void
   addRepo(code: string, repo: string): void
+  myRepos(): Promise<string[]>
   removeRepo(code: string, repo: string): void
   inviteLink(code: string): Promise<string>
   joinCommand(code: string, as: { nick?: string; persona?: string }): Promise<string>

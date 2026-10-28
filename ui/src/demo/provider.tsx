@@ -244,6 +244,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       },
       setGoal: (code, goal) => edit(code, (c) => ({ ...c, goal: goal || undefined })),
       setHold: (code, on, note) => edit(code, (c) => ({ ...c, hold: on ? { note, by: c.you, at: Date.now() } : undefined })),
+      myRepos: async () => ["kiwi-init/channels", "kiwi-init/electrobun-livewire", "kiwi-init/landing", "ojowwalker77/dotfiles"],
       addRepo: (code, repo) => edit(code, (c) => ({ ...c, repos: [...new Set([...c.repos, repo])] })),
       removeRepo: (code, repo) => edit(code, (c) => ({ ...c, repos: c.repos.filter((r) => r !== repo) })),
       joinCommand: async (code, as) =>

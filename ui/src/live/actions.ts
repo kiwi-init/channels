@@ -473,6 +473,16 @@ export function makeActions(): Actions {
         const since = await event(run, on ? `on hold${note ? `: ${note}` : ""}` : "hold lifted", ev)
         await run.ch.setHold({ on, ...(note ? { note } : {}), since })
       }),
+    myRepos: async () => {
+      const b = bridge()
+      if (!b) return []
+      try {
+        return (await b.githubRepos()).map((r) => r.fullName)
+      } catch {
+        // Unlinked GitHub, or no reach to it: the field still takes owner/repo typed by hand.
+        return []
+      }
+    },
     addRepo: (code, repo) => attempt("Repo not added", () => setRepos(owner(code), [...new Set([...owner(code).state.repos, repo.trim()])])),
     removeRepo: (code, repo) =>
       attempt("Repo not removed", () =>
