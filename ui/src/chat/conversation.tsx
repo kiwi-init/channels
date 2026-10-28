@@ -4,6 +4,8 @@ import { Composer } from "~/chat/composer"
 import { MessageRow } from "~/chat/message"
 import { linked } from "~/chat/linked"
 import { jumpTo, ReplyContext, type Replying } from "~/chat/reply"
+import type { Jump } from "~/chat/search-box"
+import { paintHits } from "~/chat/search-paint"
 import { day, sameDay } from "~/kit/time"
 import type { Channel, Message, Where } from "~/model"
 import { sameWhere, useApp } from "~/nav"
@@ -139,7 +141,7 @@ export function useStick(following = true) {
   return { scroller, content, stuck, live, remember, settle, toBottom, toOffset }
 }
 
-export function Conversation({ channel, search }: { channel: Channel; search: string }) {
+export function Conversation({ channel, jump }: { channel: Channel; jump: Jump | null }) {
   const { nav } = useApp()
   const where: Where = nav.where
   const key = `${channel.code}:${whereKey(where)}`
@@ -154,16 +156,15 @@ export function Conversation({ channel, search }: { channel: Channel; search: st
           Agents are paused{channel.hold.note ? `: ${channel.hold.note.replace(/[.\s]+$/, "")}` : ""}. <span className="dim">They read but don't act until you resume.</span>
         </p>
       )}
-      <Feed key={key} channel={channel} where={where} search={search} />
+      <Feed key={key} channel={channel} where={where} jump={jump && sameWhere(jump.m.where, where) ? jump : null} />
       <Composer channel={channel} where={where} placeholder={where.kind === "dm" ? `Message ${placeName} privately` : `Message ${placeName}`} />
     </ReplyContext.Provider>
   )
 }
 
-function Feed({ channel, where, search }: { channel: Channel; where: Where; search: string }) {
+function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: Jump | null }) {
   const { go } = useApp()
-  const q = search.trim().toLowerCase()
-  const list = useMemo(() => channel.messages.filter((m) => sameWhere(m.where, where) && (!q || m.text.toLowerCase().includes(q) || m.from.includes(q))), [channel.messages, where, q])
+  const list = useMemo(() => channel.messages.filter((m) => sameWhere(m.where, where)), [channel.messages, where])
   const bySeq = useMemo(() => new Map(channel.messages.map((m) => [m.seq, m])), [channel.messages])
   const names = useNames(channel)
   const tasks = useTaskIds(channel)
@@ -173,7 +174,7 @@ function Feed({ channel, where, search }: { channel: Channel; where: Where; sear
 
   const [unread] = useState(() => {
     const seen = where.kind === "room" ? channel.rooms.find((r) => r.id === where.room)?.seen : where.kind === "dm" ? channel.directs.find((d) => d.with === where.with)?.seen : undefined
-    if (seen === undefined || q) return null
+    if (seen === undefined) return null
     const fresh = list.filter((m) => m.seq > seen && m.from !== channel.you && !m.system)
     const first = fresh[0]
     return first && first !== list[0] ? { seq: first.seq, count: fresh.length } : null
@@ -303,12 +304,33 @@ function Feed({ channel, where, search }: { channel: Channel; where: Where; sear
     [go, content]
   )
 
+  useEffect(() => {
+    if (!jump) return
+    onQuote(jump.m.seq)
+    let frame = 0
+    let left = 30
+    const paint = () => {
+      const row = content.current?.querySelector<HTMLElement>(`[data-seq="${jump.m.seq}"]`)
+      if (row) {
+        const first = paintHits(row.querySelector<HTMLElement>(".msg-text") ?? row, jump.terms)
+        first?.startContainer.parentElement?.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })
+        return
+      }
+      if (left-- > 0) frame = requestAnimationFrame(paint)
+    }
+    frame = requestAnimationFrame(paint)
+    return () => {
+      cancelAnimationFrame(frame)
+      paintHits(null, [])
+    }
+  }, [jump, onQuote, content])
+
   return (
     <div className="feed-wrap">
       <div className="feed" ref={scroller} onScroll={onScroll}>
         <div className="feed-list" ref={content}>
           {list.length === 0 ? (
-            <Start channel={channel} where={where} searching={!!q} />
+            <Start channel={channel} where={where} />
           ) : (
             list.slice(start, end).map((m, k) => {
               const i = start + k
@@ -351,8 +373,7 @@ function Feed({ channel, where, search }: { channel: Channel; where: Where; sear
   )
 }
 
-function Start({ channel, where, searching }: { channel: Channel; where: Where; searching: boolean }) {
-  if (searching) return <p className="feed-empty">Nothing matches.</p>
+function Start({ channel, where }: { channel: Channel; where: Where }) {
   const agents = channel.people.filter((p) => p.kind === "agent").length
   return (
     <div className="feed-start">

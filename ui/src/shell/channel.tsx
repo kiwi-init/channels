@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties } from "react"
 
 import { Conversation } from "~/chat/conversation"
+import { SearchBox, type Jump } from "~/chat/search-box"
 import { cx, Count, IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { Channel } from "~/model"
@@ -21,7 +22,7 @@ import { nickname } from "~/names"
 export function ChannelScreen({ channel }: { channel: Channel }) {
   const { nav, go } = useApp()
   const panel = usePanelWidth()
-  const [search, setSearch] = useState("")
+  const [jump, setJump] = useState<Jump | null>(null)
   const [searching, setSearching] = useState(false)
   const [drawer, setDrawer] = useState(false)
   const [seen, setSeen] = useState(nav.where)
@@ -91,27 +92,14 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
             </span>
           )}
           {searching ? (
-            <input
-              autoFocus
-              className="input is-mono top-search"
-              placeholder="Search this channel"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onBlur={() => !search && setSearching(false)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  setSearch("")
-                  setSearching(false)
-                }
-              }}
-            />
+            <SearchBox channel={channel} onJump={setJump} onClose={() => setSearching(false)} />
           ) : (
             <IconButton icon="search" label="Search this channel (⌘F)" onClick={() => setSearching(true)} />
           )}
         </div>
       </header>
       <Sidebar channel={channel} />
-      <main className="main">{nav.tab === "tasks" ? <Board channel={channel} /> : nav.tab === "needs" ? <NeedsYou channel={channel} /> : <Conversation channel={channel} search={search} />}</main>
+      <main className="main">{nav.tab === "tasks" ? <Board channel={channel} /> : nav.tab === "needs" ? <NeedsYou channel={channel} /> : <Conversation channel={channel} jump={jump} />}</main>
       {channel.connection !== "live" && (
         <p className="conn" role="status">
           <span className="dot is-doing" aria-hidden="true" />
