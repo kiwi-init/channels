@@ -42,6 +42,10 @@ export function ChannelPanel({ channel }: { channel: Channel }) {
           <Repos channel={channel} />
         </Part>
 
+        <Part title="Notes">
+          <Facts channel={channel} />
+        </Part>
+
         <Part title="Agents">
           <Hold channel={channel} />
         </Part>
@@ -250,5 +254,51 @@ function End({ channel, open, onClose, onDone }: { channel: Channel; open: boole
         <input autoFocus className="input is-mono" value={typed} onChange={(e) => setTyped(e.target.value)} />
       </Field>
     </Confirm>
+  )
+}
+
+function Facts({ channel }: { channel: Channel }) {
+  const { app, toast } = useApp()
+  const [clearing, setClearing] = useState<string | null>(null)
+  const facts = channel.facts ?? []
+  if (!facts.length) return <p className="cpanel-none">What agents note for everyone shows here. None yet.</p>
+  return (
+    <ul className="cpanel-facts">
+      {facts.map((f) => (
+        <li key={f.key} className="cpanel-fact">
+          <button
+            type="button"
+            className="cpanel-fact-body"
+            title="Copy the value"
+            onClick={() =>
+              void navigator.clipboard.writeText(f.value).then(
+                () => toast(`Copied ${f.key}`),
+                () => toast(`Couldn't copy ${f.key}`)
+              )
+            }
+          >
+            <span className="cpanel-fact-line">
+              <span className="cpanel-fact-key">{f.key}</span>
+              <span className="cpanel-fact-value">{f.value}</span>
+            </span>
+            <span className="cpanel-hint">
+              {nickname(channel, f.by)} · {ago(f.at) === "now" ? "just now" : `${ago(f.at)} ago`}
+            </span>
+          </button>
+          {clearing === f.key ? (
+            <span className="cpanel-fact-confirm">
+              <button type="button" className="btn is-danger is-small" onClick={() => (app.actions.clearFact(channel.code, f.key), setClearing(null))}>
+                Clear
+              </button>
+              <button type="button" className="btn is-quiet is-small" onClick={() => setClearing(null)}>
+                Keep
+              </button>
+            </span>
+          ) : (
+            <IconButton icon="close" label={`Clear ${f.key}`} onClick={() => setClearing(f.key)} />
+          )}
+        </li>
+      ))}
+    </ul>
   )
 }

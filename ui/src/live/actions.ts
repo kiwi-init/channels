@@ -362,6 +362,11 @@ export function makeActions(): Actions {
         await roomFolded(() => openedRun(code), room)
         await run.ch.setRooms({ list: roomsAfter(openedRun(code)?.state.rooms.values() ?? run.state.rooms.values(), room), since })
       }),
+    clearFact: (code, key) =>
+      attempt("Note not cleared", async () => {
+        await event(need(code), `cleared ${key}`, { op: "fact.del", key })
+        announce(`Cleared ${key}`)
+      }),
     renameChannel: (code, title) =>
       attempt("Not renamed", async () => {
         const name = title.trim().slice(0, 80)

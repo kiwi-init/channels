@@ -184,6 +184,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         )
       },
       addRoom: (code, name) => edit(code, (c) => ({ ...c, rooms: [...c.rooms, { id: name, name, unread: 0, mentions: 0 }] })),
+      clearFact: (code, key) => edit(code, (c) => ({ ...c, facts: c.facts?.filter((f) => f.key !== key) })),
       renameChannel: (code, title) => {
         edit(code, (c) => ({ ...c, title }))
         setState((s) => ({ ...s, tiles: s.tiles.map((t) => (t.code === code ? { ...t, title } : t)) }))

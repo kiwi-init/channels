@@ -115,6 +115,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     others.length ? { from: "", text: "", ts: 0, people: others.map((p) => p.display ?? p.name) } : loadRecent(code)
   )
 
+  const facts = useMemo(() => [...state.facts.values()].sort((a, b) => a.key.localeCompare(b.key)).map((f) => ({ key: f.key, value: f.value, by: f.by, at: f.ts })), [state.facts])
+
   const channel = useMemo(
     (): Channel => ({
       code,
@@ -124,6 +126,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       you: me,
       ...(state.lead ? { lead: state.lead } : {}),
       ...(state.charter ? { goal: state.charter.text } : {}),
+      ...(facts.length ? { facts } : {}),
       ...(state.hold ? { hold: { ...(state.hold.note ? { note: state.hold.note } : {}), by: state.hold.by, at: state.hold.at } } : {}),
       newMembers,
       newPowers,
@@ -138,7 +141,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       asks: asks.asks,
       connection,
     }),
-    [code, title, icon, isOwner, me, state.lead, state.charter, state.hold, newMembers, newPowers, state.repos, rooms, directs, people, former, nicknames, mapped, tasks, asks.asks, connection]
+    [code, title, icon, isOwner, me, state.lead, state.charter, facts, state.hold, newMembers, newPowers, state.repos, rooms, directs, people, former, nicknames, mapped, tasks, asks.asks, connection]
   )
 
   const post = useCallback(

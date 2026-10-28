@@ -123,3 +123,60 @@
 .cpanel-end {
   padding: 22px 0 8px;
 }
+
+.cpanel-facts {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cpanel-fact {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.cpanel-fact-body {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: inherit;
+  text-align: left;
+}
+
+.cpanel-fact-body:hover {
+  background: var(--wash);
+}
+
+.cpanel-fact-line {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.cpanel-fact-key {
+  flex: none;
+  font-weight: 600;
+}
+
+.cpanel-fact-value {
+  overflow: hidden;
+  font-family: var(--mono);
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cpanel-fact-confirm {
+  display: inline-flex;
+  gap: 4px;
+  padding-top: 4px;
+}

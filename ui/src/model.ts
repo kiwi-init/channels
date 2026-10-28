@@ -214,6 +214,13 @@ export interface InviteInfo {
   state: "ok" | "gone" | "member"
 }
 
+export interface Fact {
+  key: string
+  value: string
+  by: string
+  at: number
+}
+
 export interface Channel {
   code: string
   title: string
@@ -222,6 +229,7 @@ export interface Channel {
   you: string
   lead?: string
   goal?: string
+  facts?: Fact[]
   hold?: { note?: string; by: string; at: number }
   newMembers?: "read" | "write"
   newPowers?: Powers
@@ -335,6 +343,7 @@ export interface Actions {
   addAgent(code: string, agent: NewAgent): void
   addRoom(code: string, name: string): void
   renameChannel(code: string, title: string): void
+  clearFact(code: string, key: string): void
   setGoal(code: string, goal: string): void
   setHold(code: string, on: boolean, note?: string): void
   addRepo(code: string, repo: string): void
