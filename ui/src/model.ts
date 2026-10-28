@@ -329,6 +329,8 @@ export interface Actions {
   setWake(code: string, name: string, on: boolean): void
   addAgent(code: string, agent: NewAgent): void
   addRoom(code: string, name: string): void
+  renameRoom(code: string, id: string, name: string): void
+  setIcon(code: string, file: File | null): void
   renameChannel(code: string, title: string): void
   setGoal(code: string, goal: string): void
   setHold(code: string, on: boolean, note?: string): void

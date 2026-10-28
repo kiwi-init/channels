@@ -27,6 +27,7 @@ import { announce } from "~/kit/toasts"
 import { answerPair, cancelPair, linkGithub, pairBegin, unlinkGithub } from "~/live/account"
 import { newMemberPowers, newMemberScopes, setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
+import { iconFromFile } from "~/live/icon-file"
 import { closeOpened, openedRun, type Run } from "~/live/store"
 import { downloadAndRestart } from "~/live/update"
 import { setWake } from "~/live/wakes"
@@ -342,6 +343,22 @@ export function makeActions(): Actions {
         const since = await event(run, `made the room #${room.name}`, { op: "room.create", ...room })
         await roomFolded(() => openedRun(code), room)
         await run.ch.setRooms({ list: roomsAfter(openedRun(code)?.state.rooms.values() ?? run.state.rooms.values(), room), since })
+      }),
+    renameRoom: (code, id, typed) =>
+      attempt("Room not renamed", async () => {
+        const run = owner(code)
+        if (!run.state.rooms.has(id)) throw new Error("that room isn't in this channel")
+        const problem = roomProblem(run.state.rooms.values(), typed, id)
+        if (problem) throw new Error(problem)
+        const room = { id, name: cleanRoomName(typed) }
+        const since = await event(run, `renamed a room to #${room.name}`, { op: "room.rename", ...room })
+        await roomFolded(() => openedRun(code), room)
+        await run.ch.setRooms({ list: roomsAfter(openedRun(code)?.state.rooms.values() ?? run.state.rooms.values(), room), since })
+      }),
+    setIcon: (code, file) =>
+      attempt("Icon not changed", async () => {
+        const run = owner(code)
+        await run.ch.setIcon(file ? await iconFromFile(file) : null)
       }),
     renameChannel: (code, title) =>
       attempt("Not renamed", async () => {
