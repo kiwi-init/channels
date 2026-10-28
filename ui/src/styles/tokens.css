@@ -11,6 +11,7 @@
   --bg-2: #18181b;
   --bg-3: #212125;
   --ink: #ececef;
+  --selection: color-mix(in srgb, var(--ink) 28%, transparent);
   --ink-2: #a3a3ab;
   --ink-3: #808089;
   --line: rgb(255 255 255 / 0.06);
