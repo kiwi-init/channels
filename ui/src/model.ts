@@ -302,6 +302,8 @@ export interface EnrollAsk {
   stage: "new" | "waiting" | "digits" | "elsewhere"
 }
 
+export type Enrolling = { stage: "asking" } | { stage: "digits"; digits: string }
+
 export interface Device {
   id: string
   label: string
@@ -423,6 +425,8 @@ export interface Actions {
   enrollDeny(id: string): void
   forgetDevice(id: string): void
   renewDevice(id: string): void
+  enrollBegin(): void
+  enrollCancel(): void
   closeChannel(code: string): void
   saveTheme(theme: CustomTheme): void
   deleteTheme(id: string): void
@@ -465,6 +469,7 @@ export interface App {
   starts: AgentStarts | null
   ownPersonalities: Personality[]
   computer: ThisComputer | null
+  enrolling?: Enrolling | null
   actions: Actions
 }
 

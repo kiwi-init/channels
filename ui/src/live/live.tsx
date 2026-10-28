@@ -12,7 +12,7 @@ import { lastChannel, rememberChannel, reopenable } from "@/lib/last-channel"
 import { newsTotal, rowNews, startMarks, useMarks, useOpenNews, useTabNews } from "@/lib/news"
 import { useOwnPersonalities } from "@/lib/personalities"
 import { bridge, useSecrets } from "@/lib/secrets"
-import { useAccount } from "~/live/account"
+import { useAccount, useEnrolling } from "~/live/account"
 import { makeActions } from "~/live/actions"
 import { OpenMember, type View } from "~/live/channel"
 import { iconUrl } from "~/live/icon"
@@ -98,11 +98,12 @@ export function useLive(open: string | null): App {
   const personas = usePersonas(ownPersonalities)
   const starts = useStarts()
   const computer = useComputer()
+  const enrolling = useEnrolling()
   const actions = useMemo(() => makeActions(), [])
   const channel = opened && opened.code === open ? opened.channel : null
   return useMemo(
-    () => ({ account, channels, channel, prefs, harnesses, personas, starts, ownPersonalities, computer, actions }),
-    [account, channels, channel, prefs, harnesses, personas, starts, ownPersonalities, computer, actions]
+    () => ({ account, channels, channel, prefs, harnesses, personas, starts, ownPersonalities, computer, enrolling, actions }),
+    [account, channels, channel, prefs, harnesses, personas, starts, ownPersonalities, computer, enrolling, actions]
   )
 }
 

@@ -7,7 +7,7 @@ import { bridge, useSecrets, type ComputerView, type PhoneView } from "@/lib/sec
 import { useUpdate } from "@/lib/update"
 import { announce } from "~/kit/toasts"
 import { store, type Listener } from "~/live/value"
-import type { Account, Computer, Device, EnrollAsk } from "~/model"
+import type { Account, Computer, Device, EnrollAsk, Enrolling } from "~/model"
 import { version } from "../../../package.json"
 
 type PairAsk = NonNullable<Account["pairAsk"]>
@@ -25,6 +25,58 @@ let pairing: Pairing | null = null
 const PAIR_POLL_MS = 1500
 const ENROLL_POLL_MS = 20_000
 const ENROLL_WAIT_MS = 2_000
+const ENROLLING_MS = 2_000
+
+const selfEnroll = store<Enrolling | null>(null)
+let enrollTimer: ReturnType<typeof setTimeout> | null = null
+
+export type EnrollDone = { person: { name: string }; channels: { label: string; code: string }[] }
+
+const enrollBridge = () => {
+  const b = bridge()
+  if (!b?.enrollBegin) throw new Error("signing in as one of your devices works in the Channels desktop app")
+  return b
+}
+
+export async function enrollBegin(signIn: () => Promise<unknown>, done: (d: EnrollDone) => void): Promise<void> {
+  const b = enrollBridge()
+  await signIn()
+  await b.enrollBegin()
+  selfEnroll.set({ stage: "asking" })
+  const tick = async () => {
+    enrollTimer = null
+    let next: Awaited<ReturnType<typeof b.enrollStatus>>
+    try {
+      next = await b.enrollStatus()
+    } catch (err) {
+      selfEnroll.set(null)
+      announce(`Couldn't sign in as one of your devices: ${err instanceof Error ? err.message : String(err)}`)
+      return
+    }
+    if (!next) return selfEnroll.set(null)
+    if (next.stage === "gone") {
+      selfEnroll.set(null)
+      return announce("Your other computer turned this one away, or the ask ran out")
+    }
+    if (next.stage === "done") {
+      selfEnroll.set(null)
+      return done(next)
+    }
+    const shown = selfEnroll.get()
+    if (JSON.stringify(shown) !== JSON.stringify(next)) selfEnroll.set(next)
+    enrollTimer = setTimeout(() => void tick(), ENROLLING_MS)
+  }
+  enrollTimer = setTimeout(() => void tick(), ENROLLING_MS)
+}
+
+export async function enrollCancel(): Promise<void> {
+  if (enrollTimer) clearTimeout(enrollTimer)
+  enrollTimer = null
+  selfEnroll.set(null)
+  await enrollBridge().enrollCancel()
+}
+
+export const useEnrolling = (): Enrolling | null => useSyncExternalStore(selfEnroll.subscribe, selfEnroll.get)
 
 const enrollAsk = (() => {
   let value: EnrollAsk | null = null
