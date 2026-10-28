@@ -413,6 +413,10 @@ export const DEMO_CHANNEL: Channel = {
     { with: "maya", unread: 1, last: m(50) },
   ],
   people,
+  facts: [
+    { key: "release", value: "2026.10.8 is out; 2026.10.9 cuts Friday", by: "atlas", at: m(30) },
+    { key: "staging", value: "https://staging.kiwi.example", by: "win", at: m(60 * 3) },
+  ],
   former: [
     {
       name: "scout",

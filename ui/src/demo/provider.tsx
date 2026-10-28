@@ -215,6 +215,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         setState((s) => ({ ...s, tiles: s.tiles.map((t) => (t.code === code ? { ...t, icon } : t)) }))
       },
       exportHistory: async (code, kind) => announce(`Saved ${code} ${kind === "log" ? "log.jsonl" : "transcript.md"} to Downloads`),
+      clearFact: (code, key) => edit(code, (c) => ({ ...c, facts: c.facts?.filter((f) => f.key !== key) })),
       renameChannel: (code, title) => {
         edit(code, (c) => ({ ...c, title }))
         setState((s) => ({ ...s, tiles: s.tiles.map((t) => (t.code === code ? { ...t, title } : t)) }))

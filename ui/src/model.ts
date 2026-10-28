@@ -220,6 +220,13 @@ export interface InviteInfo {
 
 export type UpdateCheck = { state: "current"; version: string } | { state: "failed" } | { state: "downloading" | "ready" | "available"; version: string; blocked?: boolean }
 
+interface Fact {
+  key: string
+  value: string
+  by: string
+  at: number
+}
+
 export interface Channel {
   code: string
   title: string
@@ -228,6 +235,7 @@ export interface Channel {
   you: string
   lead?: string
   goal?: string
+  facts?: Fact[]
   hold?: { note?: string; by: string; at: number }
   newMembers?: "read" | "write"
   newPowers?: Powers
@@ -347,6 +355,7 @@ export interface Actions {
   renameRoom(code: string, id: string, name: string): void
   setIcon(code: string, file: File | null): void
   renameChannel(code: string, title: string): void
+  clearFact(code: string, key: string): void
   setGithubWrite(code: string, on: boolean): void
   setBranchPrefix(code: string, prefix: string | null): void
   exportHistory(code: string, kind: "transcript" | "log"): Promise<void>

@@ -422,6 +422,11 @@ export function makeActions(): Actions {
         announce(`Not saved: ${err instanceof Error ? err.message : String(err)}`)
       }
     },
+    clearFact: (code, key) =>
+      attempt("Note not cleared", async () => {
+        await event(need(code), `cleared ${key}`, { op: "fact.del", key })
+        announce(`Cleared ${key}`)
+      }),
     renameChannel: (code, title) =>
       attempt("Not renamed", async () => {
         const name = title.trim().slice(0, 80)

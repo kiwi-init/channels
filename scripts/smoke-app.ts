@@ -110,6 +110,25 @@ try {
   await joining;
   step(at);
 
+  at = "a note the agent sets shows in channel settings, and the owner clears it";
+  await kiwi(["-c", "smoke", "--as", "bot", "note", "smoke-url", "https://example.test"]);
+  await page.getByRole("button", { name: /: channel settings$/ }).click();
+  const notes = page.getByRole("complementary", { name: "Details" }).locator(".cpanel-facts");
+  await notes.getByText("smoke-url").waitFor({ timeout: 15000 });
+  await notes.getByRole("button", { name: "Clear smoke-url" }).click();
+  await notes.getByRole("button", { name: "Clear", exact: true }).click();
+  let cleared = false;
+  for (let i = 0; i < 50 && !cleared; i++) {
+    cleared = await kiwi(["-c", "smoke", "--as", "bot", "get", "smoke-url"]).then(
+      () => false,
+      (e: unknown) => String(e).includes("no fact"),
+    );
+    if (!cleared) await page.waitForTimeout(200);
+  }
+  if (!cleared) throw new Error("the agent still has the note after the owner cleared it");
+  await page.keyboard.press("Escape");
+  step(at);
+
   at = "the agent posts a message and a task";
   await views.getByRole("button", { name: /general/ }).click();
   await kiwi(["-c", "smoke", "--as", "bot", "send", "hello from bot"]);
