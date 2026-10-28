@@ -228,6 +228,42 @@
   font: var(--t-ui) var(--ui);
 }
 
+.set-device-actions-inline {
+  display: flex;
+  gap: 4px;
+}
+
+.set-device-settings {
+  display: grid;
+  grid-column: 2 / -1;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--r-ctl);
+  background: var(--bg-3);
+}
+
+.set-their {
+  display: grid;
+  gap: 4px;
+  font: var(--t-meta) / 1.45 var(--ui);
+}
+
+.set-their-row {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.set-their dt {
+  color: var(--ink-3);
+}
+
+.set-their dd {
+  min-width: 0;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
 .set-tag {
   padding: 1px 6px;
   border: 1px solid var(--line-3);

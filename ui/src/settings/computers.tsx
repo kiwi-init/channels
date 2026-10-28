@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 import { cx, IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
@@ -12,10 +12,62 @@ type Kind = "computer" | "phone"
 
 const isPhone = (c: Computer): boolean => c.os === "iphone" || c.os === "android"
 
+function TheirSettings({ computer }: { computer: Computer }) {
+  const { app } = useApp()
+  const [got, setGot] = useState<{ ok: true; lines: [string, string[]][] } | { ok: false; why: string } | null>(null)
+  const [round, setRound] = useState(0)
+  const { computerSettings } = app.actions
+  useEffect(() => {
+    let live = true
+    computerSettings(computer.id).then(
+      (lines) => live && setGot({ ok: true, lines }),
+      (err: unknown) => live && setGot({ ok: false, why: err instanceof Error ? err.message : String(err) })
+    )
+    return () => {
+      live = false
+    }
+  }, [computerSettings, computer.id, round])
+  const again = () => {
+    setGot(null)
+    setRound((r) => r + 1)
+  }
+  return (
+    <div className="set-device-settings">
+      {got === null ? (
+        <p className="set-device-meta">Asking {computer.label}…</p>
+      ) : !got.ok ? (
+        <p className="set-device-meta">
+          {got.why}
+          <button type="button" className="btn is-quiet is-small" onClick={again}>
+            Try again
+          </button>
+        </p>
+      ) : (
+        <>
+          <dl className="set-their">
+            {got.lines.map(([term, lines]) => (
+              <div key={term} className="set-their-row">
+                <dt>{term}</dt>
+                <dd>
+                  {lines.map((line) => (
+                    <p key={line}>{line}</p>
+                  ))}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <p className="set-device-meta">Read only. Change these on {computer.label}.</p>
+        </>
+      )}
+    </div>
+  )
+}
+
 export function ComputersSection() {
   const { app, toast } = useApp()
   const [pairing, setPairing] = useState<{ kind: Kind; code: string } | null>(null)
   const [forget, setForget] = useState<Computer | null>(null)
+  const [shown, setShown] = useState<string | null>(null)
   const account = app.account
   if (!account) return null
   const computers = [...account.computers].sort((a, b) => Number(b.thisOne) - Number(a.thisOne) || Number(b.online) - Number(a.online))
@@ -47,10 +99,18 @@ export function ComputersSection() {
               </span>
             </span>
             {!c.thisOne && (
-              <button type="button" className="btn is-quiet is-small set-forget" onClick={() => setForget(c)}>
-                Forget
-              </button>
+              <span className="set-device-actions-inline">
+                {!isPhone(c) && (
+                  <button type="button" className="btn is-quiet is-small" aria-expanded={shown === c.id} onClick={() => setShown(shown === c.id ? null : c.id)}>
+                    Its settings
+                  </button>
+                )}
+                <button type="button" className="btn is-quiet is-small set-forget" onClick={() => setForget(c)}>
+                  Forget
+                </button>
+              </span>
             )}
+            {shown === c.id && <TheirSettings computer={c} />}
           </li>
         ))}
       </ul>

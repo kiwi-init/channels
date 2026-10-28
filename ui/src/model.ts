@@ -401,6 +401,7 @@ export interface Actions {
   preferTerminal(id: TerminalId): void
   setTerminalHelpers(id: Exclude<TerminalId, "app">, on: boolean): void
   setContextLine(on: boolean): void
+  computerSettings(id: string): Promise<[string, string[]][]>
 }
 
 export type Finding = { ok: true; what: string } | { ok: false; what: string; how: string }

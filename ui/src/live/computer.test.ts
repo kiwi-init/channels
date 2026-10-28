@@ -21,10 +21,23 @@ const fake = {
   },
   contextLine: async () => line,
   setContextLine: async (to: "on" | "off") => (calls.push(`context line ${to}`), (line = to)),
+  settingsOn: async (machinePk: string) =>
+    machinePk === "studio"
+      ? {
+          ok: true as const,
+          value: {
+            launch: "on" as const,
+            bypass: "off" as const,
+            prefer: "tmux" as const,
+            hooks: [{ harness: "claude" as const, state: "outdated" as const, text: "" }],
+            seats: [{ channel: "kiwi", agent: "builder", wake: "on" as const }],
+          },
+        }
+      : { ok: false as const, detail: "laptop didn't answer: it's offline" },
   doctor: async () => [{ ok: false as const, what: "Codex's hooks are from an older kiwi", how: "Update them" }],
 }
 mock.module("@/lib/secrets", () => ({ bridge: () => fake }))
-const { checkComputer, computerNow, loadComputer, setContextLine, setHooks } = await import("~/live/computer")
+const { checkComputer, computerNow, computerSettings, loadComputer, setContextLine, setHooks } = await import("~/live/computer")
 
 describe("Settings > Agents shows this computer", () => {
   test("kiwi's version, and the hooks of every harness that takes them", async () => {
@@ -54,6 +67,17 @@ describe("Settings > Agents shows this computer", () => {
 
   test("Check this computer hands back kiwi doctor's findings", async () => {
     expect(await checkComputer()).toEqual([{ ok: false, what: "Codex's hooks are from an older kiwi", how: "Update them" }])
+  })
+
+  test("a paired computer's settings read as lines, or say why it didn't answer", async () => {
+    expect(await computerSettings("studio")).toEqual([
+      ["New agents", ["Allowed"]],
+      ["Bypass from your other devices", ["Off"]],
+      ["Opens them in", ["tmux"]],
+      ["Hooks", ["Claude Code out of date"]],
+      ["Agents", ["builder in kiwi, wakes on a message"]],
+    ])
+    await expect(computerSettings("laptop")).rejects.toThrow("laptop didn't answer: it's offline")
   })
 
   test("with kiwi stopped, it says so", async () => {

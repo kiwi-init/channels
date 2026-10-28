@@ -31,7 +31,7 @@ import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
 import { harnessChoices } from "~/live/harness-rows"
 import { iconFromFile } from "~/live/icon-file"
 import { memberName } from "@/lib/format"
-import { checkComputer, setContextLine, setHooks } from "~/live/computer"
+import { checkComputer, computerSettings, setContextLine, setHooks } from "~/live/computer"
 import { addStartFolder, allowNewAgents, allowRemoteBypass, preferTerminal, removeStartFolder, setTerminalHelpers } from "~/live/starts"
 import { closeOpened, openedChannel, openedRun, type Run } from "~/live/store"
 import { downloadAndRestart } from "~/live/update"
@@ -587,6 +587,7 @@ export function makeActions(): Actions {
     savePersonalities: (list) => attempt("Not saved", () => savePersonalities(list)),
     setHooks: (harness, on) => attempt("Couldn't change the hooks", () => setHooks(harness, on)),
     checkComputer,
+    computerSettings,
     preferTerminal: (id) => attempt("Couldn't change where agents open", () => preferTerminal(id)),
     setTerminalHelpers: (id, on) => attempt(on ? "Couldn't download the helpers" : "Couldn't remove the helpers", () => setTerminalHelpers(id, on)),
     setContextLine: (on) => attempt("Couldn't change it", () => setContextLine(on)),
