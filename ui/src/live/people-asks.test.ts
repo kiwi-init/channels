@@ -18,12 +18,10 @@ describe("who's here (T650)", () => {
   const people = peopleOf(
     fold([], roster, 0),
     roster,
-    new Map(
-      [
-        ["pk-win", idle("win")],
-        ["pk-maya", idle("maya")],
-      ].map(([k, v]) => [v.from, v] as const)
-    ),
+    new Map([
+      ["win", idle("win")],
+      ["maya", idle("maya")],
+    ]),
     "jow",
     new Map([["atlas", false]])
   )
