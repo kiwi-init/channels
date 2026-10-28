@@ -9,7 +9,8 @@ import { loginArgv } from "../terminals/shared/launch.ts";
 import type { Recipe, Started } from "./recipes.ts";
 import { clearPane, kimiScreen, listenersUnder, paneText, pasteBracketed, stopStrays, strayKey, typeInto } from "./kimi.ts";
 import { tmuxSocket } from "../terminals/shared/tmux.ts";
-import { firstPrompt, nextWork, workName, workOver, type Work } from "./work.ts";
+import { firstPrompt, nextWork, step, workName, type Work } from "./work.ts";
+import { clearFresh, freshAsked, LOOP_TASK_ENV } from "./fresh.ts";
 import { LOOP_ENV } from "../hooks/loop-wait.ts";
 
 const POLL_MS = 2_000;
@@ -33,7 +34,7 @@ export interface LoopSeat {
   effort?: string;
 }
 
-type Ended = { kind: "done"; work: Work } | { kind: "own"; lived: number } | { kind: "unbound" } | { kind: "stopped" };
+type Ended = { kind: "done"; work: Work } | { kind: "fresh"; work: Work; why: "took" | "checkpoint" } | { kind: "own"; lived: number } | { kind: "unbound" } | { kind: "stopped" };
 
 const say = (line: string) => Effect.sync(() => void process.stderr.write(`kiwi loop: ${line}\n`));
 
@@ -104,6 +105,12 @@ const cycles = (seat: LoopSeat, stop: { asked: boolean; busy: boolean }): Effect
       const ended = yield* runSession(seat, s, work, firstPrompt(work, seen.state, seat.me, seat.alias), stop);
       yield* hold(seat);
       if (ended.kind === "done") yield* say(`${workName(ended.work)} is over; its session ended`);
+      if (ended.kind === "fresh")
+        yield* say(
+          ended.why === "took"
+            ? `the session took on ${workName(ended.work)}; a fresh session starts for it`
+            : `${workName(ended.work)} asked for a fresh session; the next one starts from its checkpoint`,
+        );
       if (ended.kind === "unbound") {
         yield* say(`the session never reported its id; ended it, and the next one starts in ${Math.round(QUICK_END_MS / 1000)}s`);
         yield* pauseFor(QUICK_END_MS, stop);
@@ -125,6 +132,7 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
       KIWI_CHANNEL: seat.alias,
       KIWI_AS: seat.me,
       [LOOP_ENV]: "1",
+      ...(first.kind === "coding" ? { [LOOP_TASK_ENV]: String(first.task) } : {}),
     });
     yield* hooksFirst(recipe);
     if (recipe.typed) clearTypedPane();
@@ -146,7 +154,7 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
         if (!exited) noteStrays();
         if (!exited) {
           yield* hold(seat);
-          const until = why.kind === "done" ? Date.now() + IDLE_WAIT_MS : 0;
+          const until = why.kind === "done" || why.kind === "fresh" ? Date.now() + IDLE_WAIT_MS : 0;
           while (!exited && !stop.asked && Date.now() < until && !found?.idle().idle) yield* Effect.sleep(POLL_MS);
           child.kill(recipe.stopSignal);
           const late = Date.now() + TERM_GRACE_MS;
@@ -174,21 +182,17 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
     yield* heldOrDie(bindHeldSeat(seat.alias, seat.me, seat.token, live.bound, "loop"), seat);
     yield* say(`${seat.me} is bound to ${recipe.label} session ${live.id}`);
 
-    let work = first;
     while (true) {
       if (exited) return yield* end({ kind: "own", lived: Date.now() - started });
       if (stop.asked) return yield* end({ kind: "stopped" });
       if (polls++ % STRAY_EVERY === 0) noteStrays();
       const seen = yield* look(s);
-      if (work.kind === "answering") {
-        const taken = nextWork(seen.state, seat.me, 0);
-        if (taken?.kind === "coding") {
-          work = taken;
-          yield* say(`the session took on ${workName(work)}; it lasts until that's done`);
-        }
+      const next = step(first, seen.state, seat.me, freshAsked(seat.alias, seat.me, started));
+      if (next.kind === "fresh") {
+        clearFresh(seat.alias, seat.me);
+        return yield* end(next);
       }
-      const over = work.kind === "answering" ? answered(live, started, seen.forMe) : workOver(work, seen.state, seat.me);
-      if (over) return yield* end({ kind: "done", work });
+      if (next.kind === "over" || (first.kind === "answering" && answered(live, started, seen.forMe))) return yield* end({ kind: "done", work: first });
       yield* Effect.sleep(POLL_MS);
     }
   });

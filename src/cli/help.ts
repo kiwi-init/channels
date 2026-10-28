@@ -89,6 +89,8 @@ Agents
                                                  session; shown on the task page above its activity
      task checkpoint T7 --file note.md           where your work on it stands (branch, last commit, done, next, traps):
                                                  a new session of yours starts from it
+        --fresh                                  in a kiwi loop session: end your turn after, and the loop starts a
+                                                 fresh session on the task from this checkpoint
      task checkpoint lead --file note.md         the lead only: where the channel stands, naming every open task and
                                                  question by its id; a new session of the lead starts from it
      task cancel T7 "why"                        closes it, marked cancelled, if you may finish it (else it's only a note)
