@@ -237,6 +237,7 @@ export type Event =
       areas?: string[];
       checkpoint?: true;
     }
+  | { op: "task.first"; task: number }
   /** What a member is and has, said by itself: where it runs, what runs it, what it can use. Shown in People. */
   | ({ op: "card" } & Card)
   /** Claims are gone. Older clients still send these; they fold to nothing. */
@@ -731,7 +732,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 6;
+export const EVENT_OPS_VERSION = 7;
 const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 
 export const knownOp = (op: string): boolean => eventCheck({ op }) !== null;
@@ -866,6 +867,7 @@ function eventCheck(ev: unknown): boolean | null {
         opt(e.from, (x): x is number => Number.isSafeInteger(x) && (x as number) > 0)
       );
     case "task.claim":
+    case "task.first":
       return n(e.task);
     case "task.update":
       return (

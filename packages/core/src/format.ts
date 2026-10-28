@@ -150,6 +150,8 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return `described itself: ${cardLine(ev) || "nothing"}`;
     case "task.claim":
       return `claimed ${task(ev.task)}`;
+    case "task.first":
+      return `put ${task(ev.task)} before its owner's other tasks`;
     case "task.update": {
       if (ev.verdict === "approved" && ev.state === "done") return `approved ${task(ev.task)}${round}${note(ev.note)}`;
       if (ev.verdict === "rejected" && ev.state === "doing") return `rejected ${task(ev.task)}${round}${note(ev.note)}`;

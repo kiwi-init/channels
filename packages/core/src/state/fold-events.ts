@@ -284,6 +284,15 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       break;
     }
 
+    case "task.first": {
+      const task = tasks.get(ev.task);
+      if (!task) reject(`no task ${taskId(ev.task)}`);
+      else if (task.state === "done") reject(`${taskId(task.id)} is already done`);
+      else if (!task.owner) reject(`${taskId(task.id)} has no owner to go first for`);
+      else task.first = m.seq;
+      break;
+    }
+
     case "task.update": {
       const task = tasks.get(ev.task);
       if (!task) {
@@ -342,6 +351,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       if (ev.owner !== undefined) {
         const next = ev.owner || undefined;
         if (task.owner && next !== task.owner) task.handedOff = { seq: m.seq, from: task.owner };
+        if (next !== task.owner) task.first = undefined;
         task.owner = next;
       }
       if (ev.owner) worked(task, ev.owner);

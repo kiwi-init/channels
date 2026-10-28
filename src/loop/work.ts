@@ -20,6 +20,8 @@ function owedReview(state: ChannelState, me: string): Work | null {
 
 export function nextWork(state: ChannelState, me: string, unreadForMe: number): Work | null {
   const mine = openTasks(state).filter((t) => t.owner === me);
+  const first = mine.filter((t) => t.first !== undefined && !awaitingVerdict(t)).sort((a, b) => (b.first ?? 0) - (a.first ?? 0))[0];
+  if (first) return { kind: "coding", task: first.id };
   const doing = mine.find((t) => t.state === "doing" && !awaitingVerdict(t));
   if (doing) return { kind: "coding", task: doing.id };
   const review = owedReview(state, me);
