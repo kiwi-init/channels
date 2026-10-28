@@ -335,7 +335,11 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       if (state && state !== "done") task.cancelled = undefined;
       if (state === "done" && task.state !== "done") task.closedSeq = m.seq;
       if (state && state !== "done") task.closedSeq = undefined;
-      if (ev.owner !== undefined) task.owner = ev.owner || undefined;
+      if (ev.owner !== undefined) {
+        const next = ev.owner || undefined;
+        if (task.owner && next !== task.owner) task.handedOff = { seq: m.seq, from: task.owner };
+        task.owner = next;
+      }
       if (ev.owner) worked(task, ev.owner);
       if (state && state !== "done" && (m.from === task.owner || state === "review")) worked(task, m.from);
       if (state) task.state = state;

@@ -123,6 +123,7 @@ export interface Task {
   posters?: string[];
   archived?: boolean;
   leftBy?: string;
+  handedOff?: { seq: number; from: string };
 }
 
 export interface AskHead {

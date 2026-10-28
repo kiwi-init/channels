@@ -104,4 +104,25 @@ describe("a loop session waiting for its verdict (#1117)", () => {
     const mine = await ev("win", { op: "task.update", task: add.seq, state: "review", at: "abc1234" });
     expect(wants("win", note, fold([t14, sent, moved, add, mine, note], roster), loop)).toBe(false);
   });
+
+  test("only the update that takes the task from the seat reaches it: not a repeat, and whoever sent the round", async () => {
+    const add = await ev("jon", { op: "task.add", title: "ship it", owner: "win", review: "linux" });
+    const sent = await ev("win", { op: "task.update", task: add.seq, state: "review", at: "abc1234" });
+    const moved = await ev("jon", { op: "task.update", task: add.seq, owner: "mac" }, ["mac"]);
+    const again = await ev("jon", { op: "task.update", task: add.seq, owner: "mac", note: "mac: it's yours" }, ["mac"]);
+    expect(wants("win", again, fold([add, sent, moved, again], roster), loop)).toBe(false);
+
+    const back = await ev("jon", { op: "task.add", title: "back", owner: "mac", review: "linux" });
+    const toWin = await ev("jon", { op: "task.update", task: back.seq, owner: "win" }, ["win"]);
+    const winSent = await ev("win", { op: "task.update", task: back.seq, state: "review", at: "abc1234" });
+    const toMac = await ev("jon", { op: "task.update", task: back.seq, owner: "mac" }, ["mac"]);
+    expect(wants("win", toMac, fold([back, toWin, winSent, toMac], roster), loop)).toBe(true);
+
+    const cleared = await ev("jon", { op: "task.update", task: add.seq, owner: null });
+    expect(wants("win", cleared, fold([add, sent, cleared], roster), loop)).toBe(true);
+
+    const proxy = await ev("jon", { op: "task.update", task: add.seq, state: "review", at: "abc1234" });
+    const away = await ev("jon", { op: "task.update", task: add.seq, owner: "linux" }, ["linux"]);
+    expect(wants("win", away, fold([add, proxy, away], roster), loop)).toBe(true);
+  });
 });

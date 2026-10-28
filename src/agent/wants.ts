@@ -18,11 +18,10 @@ export function waitingTask(state: ChannelState, me: string): number | undefined
   return [...state.tasks.values()].find((t) => t.owner === me && t.state !== "done" && t.review !== me && !!openRound(t))?.id;
 }
 
-function endsMyWait(me: string, seq: number, movesOwner: boolean, task: Task | undefined): boolean {
+function endsMyWait(me: string, seq: number, task: Task | undefined): boolean {
   const round = task?.rounds.at(-1);
-  if (!task || !round) return false;
-  if (round.result.kind !== "open") return round.result.seq === seq && (round.by === me || task.owner === me);
-  return movesOwner && task.owner !== me && task.workedBy.at(-1) === task.owner && task.workedBy.at(-2) === me;
+  if (round && round.result.kind !== "open" && round.result.seq === seq && (round.by === me || task?.owner === me)) return true;
+  return task?.handedOff?.seq === seq && task.handedOff.from === me;
 }
 
 function wantsWhileWaiting(me: string, m: Message, state: ChannelState | null, task: number): boolean {
@@ -39,7 +38,7 @@ export function wants(me: string, m: Message, state: ChannelState | null, d: Del
   if (d.room !== undefined && m.kind !== "event" && (state?.roomOf.get(m.seq) ?? m.room ?? GENERAL_ROOM) !== d.room) return false;
   if (d.all) return true;
   if (d.thread !== undefined) return m.kind !== "event" && (state?.threadOf.get(m.seq) ?? m.seq) === (state?.threadOf.get(d.thread) ?? d.thread);
-  if (d.loop && m.kind === "event" && m.ev?.op === "task.update" && endsMyWait(me, m.seq, m.ev.owner !== undefined, state?.tasks.get(m.ev.task))) return true;
+  if (d.loop && m.kind === "event" && m.ev?.op === "task.update" && endsMyWait(me, m.seq, state?.tasks.get(m.ev.task))) return true;
   const waiting = d.loop && state ? waitingTask(state, me) : undefined;
   if (waiting !== undefined) return wantsWhileWaiting(me, m, state, waiting);
   const persona = state?.members.get(me)?.persona;
