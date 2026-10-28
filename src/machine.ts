@@ -1,17 +1,25 @@
-// This computer's key (machine.json). `kiwi pair` adds its person's cert (src/daemon/pair.ts), and
-// agents started here then carry a computer claim in their join requests (computerClaimFor).
+// This computer's key (machine.json). `kiwi pair` adds its person's cert (src/daemon/pair.ts) and
+// `kiwi login` its person's device list (src/login.ts); agents started here then carry a computer
+// or device claim in their join requests (computerClaimFor).
 
 import { existsSync, readFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { home, writePrivate } from "./config.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
+import { claimDevice, type DeviceClaim, type DeviceLink } from "@kiwi/core/devices.ts";
 import { claimComputer, type ComputerClaim, type MachineCert } from "@kiwi/core/person.ts";
+
+export interface EnrolledDevice {
+  person: { pk: string; name: string; xpk: string };
+  links: DeviceLink[];
+}
 
 export interface MachineFile {
   identity: Identity;
   label: string;
   relay: string;
+  device?: EnrolledDevice;
 }
 
 const path = () => join(home(), "machine.json");
@@ -52,11 +60,14 @@ export async function newMachine(relay: string): Promise<MachineFile> {
 }
 
 /**
- * The claim an agent's join request carries when this computer is paired with its person's app:
- * the cert, and this computer's signature over this agent key in this channel. Null when unpaired.
+ * The claims an agent's join request carries from this computer: the computer claim when it is
+ * paired with its person's app (kiwi pair), the device claim when it is one of their devices
+ * (kiwi login). Undefined when it is neither.
  */
-export async function computerClaimFor(roomId: string, agentPk: string): Promise<{ computer: ComputerClaim } | undefined> {
+export async function computerClaimFor(roomId: string, agentPk: string): Promise<{ computer?: ComputerClaim; device?: DeviceClaim } | undefined> {
   const m = loadMachine() as (MachineFile & { cert?: MachineCert }) | null;
-  if (!m?.cert || m.cert.machine !== m.identity.pk) return undefined;
-  return { computer: await claimComputer(m.identity, m.cert, roomId, agentPk) };
+  if (!m) return undefined;
+  const computer = m.cert && m.cert.machine === m.identity.pk ? await claimComputer(m.identity, m.cert, roomId, agentPk) : undefined;
+  const device = m.device?.links.length ? await claimDevice(m.identity, m.device.links, roomId, agentPk) : undefined;
+  return computer || device ? { ...(computer ? { computer } : {}), ...(device ? { device } : {}) } : undefined;
 }

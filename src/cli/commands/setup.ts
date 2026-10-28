@@ -43,6 +43,7 @@ export const setupCommands: Record<string, Command> = {
       }
       out("To let this computer's agents in on their own, pair it with your Channels app: Your computers → Add a computer,");
       out("then run the kiwi pair kp1-… command it shows, here.");
+      out("Or run kiwi login here and type the digits it shows in your app: this computer becomes one of your devices.");
     }),
 
   pair: () =>
@@ -60,6 +61,16 @@ export const setupCommands: Record<string, Command> = {
         ),
       );
       out(running ? "its kiwi daemon is running, so your app can start agents here now." : "its kiwi daemon didn't start: run kiwi daemon here, or your app can't reach this computer.");
+    }),
+
+  login: () =>
+    Effect.gen(function* () {
+      const { loginComputer } = yield* Effect.promise(() => import("../../login.ts"));
+      const { PairError } = yield* Effect.promise(() => import("../../daemon.ts"));
+      yield* Effect.tryPromise({
+        try: () => loginComputer({ relay: relayUrl(), ...(typeof opt.user === "string" ? { user: opt.user } : {}) }),
+        catch: (err) => (err instanceof PairError ? new Quit({ message: err.message, code: err.code }) : err),
+      });
     }),
 
   unpair: () =>
