@@ -219,6 +219,15 @@ describe("ten verbs", () => {
     expect(shown).toContain("looks good");
   });
 
+  test("show --raw: the body exactly as sent, every line and a trailing newline kept (#1033)", async () => {
+    const file = join(owner, "raw-body.md");
+    writeFileSync(file, "first line\n\n  indented second\nlast line\n\n");
+    const withNewline = seqOf(await ok(owner, "send", "--to", "dev", "--file", file));
+    expect(await ok(agent, "show", withNewline, "--raw")).toBe("first line\n\n  indented second\nlast line\n");
+    const twoLines = seqOf(await ok(owner, "send", "--to", "dev", "two\nlines"));
+    expect(await ok(agent, "show", twoLines, "--raw")).toBe("two\nlines");
+  });
+
   test("note: set, get, list, clear", async () => {
     expect(await ok(agent, "note", "build.cmd", "bun", "test")).toContain("build.cmd = bun test");
     expect((await ok(owner, "note", "build.cmd")).trim()).toBe("bun test");

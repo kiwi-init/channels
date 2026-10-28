@@ -60,6 +60,7 @@ const parsed = parseArgs({
     vendor: { type: "string" },
     expires: { type: "string" },
     reveal: { type: "boolean" },
+    raw: { type: "boolean" },
     list: { type: "boolean" },
     owner: { type: "string" },
     after: { type: "string" },

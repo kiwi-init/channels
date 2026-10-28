@@ -157,10 +157,15 @@ export const messageCommands: Record<string, Command> = {
   show: () =>
     Effect.gen(function* () {
       const s = yield* session();
-      const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi show N [dir]"));
+      const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi show N [dir] | kiwi show N --raw"));
       const { messages, state } = yield* s.state();
       const found = yield* s.message(seq, messages);
       const m = found && !ignored(state.trust.get(seq)) ? found : yield* die(`no message #${seq}`);
+      if (opt.raw) {
+        process.stdout.write(String(m.body ?? ""));
+        yield* noteRead(s);
+        return;
+      }
       const root = state.threadOf.get(seq) ?? seq;
       const thread = yield* s.threadMessages(root, messages, state);
       const known = [...messages, ...thread.filter((x) => !messages.some((y) => y.seq === x.seq))];
