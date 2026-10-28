@@ -55,8 +55,8 @@ import {
   type MachineStore,
   type PersonMachine,
 } from "./machine.ts";
-import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, type AccountStore, type Enrollment } from "./account.ts";
-import { ENROLL_TTL_MS } from "@kiwi/core/enroll.ts";
+import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, type AccountStore } from "./account.ts";
+import { ENROLL_TTL_MS, type Enrollment } from "@kiwi/core/enroll.ts";
 import { allow as allowPerMinute } from "./room/limits.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync, type Relay } from "./route.ts";
 import { GithubApp, githubAppFrom, GithubPush, githubPushFrom } from "./github-app.ts";

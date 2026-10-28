@@ -7,7 +7,7 @@ import { bridge, useSecrets, type ComputerView, type PhoneView } from "@/lib/sec
 import { useUpdate } from "@/lib/update"
 import { announce } from "~/kit/toasts"
 import { store, type Listener } from "~/live/value"
-import type { Account, Computer } from "~/model"
+import type { Account, Computer, EnrollAsk } from "~/model"
 import { version } from "../../../package.json"
 
 type PairAsk = NonNullable<Account["pairAsk"]>
@@ -23,6 +23,70 @@ const githubCode = store<{ code: string; url: string } | null>(null)
 let pairing: Pairing | null = null
 
 const PAIR_POLL_MS = 1500
+const ENROLL_POLL_MS = 20_000
+const ENROLL_WAIT_MS = 2_000
+
+const enrollAsk = (() => {
+  let value: EnrollAsk | null = null
+  const listeners = new Set<Listener>()
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let started = false
+  const set = (next: EnrollAsk | null) => {
+    if (JSON.stringify(next) === JSON.stringify(value)) return
+    value = next
+    for (const l of listeners) l()
+  }
+  const check = async () => {
+    if (timer) clearTimeout(timer)
+    timer = null
+    const b = bridge()
+    if (!b?.enrollPoll) return
+    try {
+      set(await b.enrollPoll())
+    } catch {
+      // Not signed in, or the relay is unreachable: the next poll tries again, and nothing is asking meanwhile.
+      set(null)
+    }
+    timer = setTimeout(() => void check(), value?.stage === "waiting" ? ENROLL_WAIT_MS : ENROLL_POLL_MS)
+  }
+  return {
+    get: () => value,
+    check,
+    subscribe: (l: Listener) => {
+      listeners.add(l)
+      if (!started) {
+        started = true
+        window.addEventListener("focus", () => void check())
+        void check()
+      }
+      return () => void listeners.delete(l)
+    },
+  }
+})()
+
+const enrolling = () => {
+  const b = bridge()
+  if (!b?.enrollPoll) throw new Error("approving a device needs the next Channels update")
+  return b
+}
+
+export async function enrollAnswer(id: string): Promise<void> {
+  await enrolling().enrollAnswer(id)
+  await enrollAsk.check()
+}
+
+export async function enrollConfirm(id: string, digits: string): Promise<{ ok: true } | { ok: false; left: number }> {
+  const r = await enrolling().enrollConfirm(id, digits)
+  if (r.ok) announce(`${r.label} is one of your devices now`)
+  else if (r.left === 0) announce("Turned it away: the digits didn't match")
+  await enrollAsk.check()
+  return r.ok ? { ok: true } : { ok: false, left: r.left }
+}
+
+export async function enrollDeny(id: string): Promise<void> {
+  await enrolling().enrollDeny(id)
+  await enrollAsk.check()
+}
 
 async function poll(p: Pairing): Promise<void> {
   const b = bridge()
@@ -222,6 +286,7 @@ export function useAccount(): Account | null {
   const asking = useSyncExternalStore(pairAsk.subscribe, pairAsk.get)
   const code = useSyncExternalStore(githubCode.subscribe, githubCode.get)
   const look = useSyncExternalStore(uiUpdate.subscribe, uiUpdate.get)
+  const enroll = useSyncExternalStore(enrollAsk.subscribe, enrollAsk.get)
   const unsealed = useUnsealedKeys()
   useEffect(() => {
     if (person) void refreshGithub().catch(() => {})
@@ -241,7 +306,8 @@ export function useAccount(): Account | null {
       ...(unsealed ? { keysUnsealed: true } : {}),
       ...(bridge() ? { desktop: true } : {}),
       ...(asking ? { pairAsk: asking } : {}),
+      ...(enroll ? { enrollAsk: enroll } : {}),
       ...(code ? { githubCode: code } : {}),
     }
-  }, [person, linked, computers, phones, online, agents, update, asking, code, look, unsealed])
+  }, [person, linked, computers, phones, online, agents, update, asking, code, look, unsealed, enroll])
 }

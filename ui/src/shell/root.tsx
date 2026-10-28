@@ -8,6 +8,7 @@ import { Settings } from "~/settings/settings"
 import { ChannelScreen } from "~/shell/channel"
 import { Rail } from "~/shell/rail"
 import { FirstRun } from "~/start/first-run"
+import { EnrollDialog } from "~/settings/enroll"
 import { JoinDialog } from "~/start/join"
 import { NewChannelDialog } from "~/start/new-channel"
 import { Welcome } from "~/start/welcome"
@@ -40,6 +41,7 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
         </div>
         <NewChannelDialog />
         <JoinDialog />
+        <EnrollDialog />
         <Palette />
         <Toasts toasts={toasts} />
       </ActContext>

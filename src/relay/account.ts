@@ -1,7 +1,7 @@
 import { verifyRequest } from "@kiwi/core/auth.ts";
 import { b64url } from "@kiwi/core/crypto.ts";
 import { currentDevice, readDeviceList, type Device, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
-import { accountScope, ENROLL_TTL_MS, readEnrollAnswer, readEnrollAsk, revealMatches, type EnrollAnswer, type EnrollAsk } from "@kiwi/core/enroll.ts";
+import { accountScope, ENROLL_TTL_MS, readEnrollAnswer, readEnrollAsk, revealMatches, type Enrollment } from "@kiwi/core/enroll.ts";
 import { canonical } from "@kiwi/core/identity.ts";
 import { BadRequest, Conflict, Forbidden, NotFound, SignInRequired, TooLarge, TooMany, Unauthorized } from "./failures.ts";
 import { readCapped } from "./http.ts";
@@ -13,14 +13,6 @@ import { requestToken } from "./room/auth.ts";
 export const ACCOUNT_ASKS_PER_MINUTE = 5;
 const LIST_MAX_BYTES = 768 * 1024;
 const ASK_MAX_BYTES = 4096;
-
-export interface Enrollment {
-  id: string;
-  at: number;
-  ask: EnrollAsk;
-  answer?: EnrollAnswer & { at: number };
-  reveal?: { nonce: string; at: number };
-}
 
 export interface AccountStore {
   links(user: string): Promise<unknown[]>;

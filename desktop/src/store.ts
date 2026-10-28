@@ -1,3 +1,4 @@
+import type { DeviceLink } from "@kiwi/core/devices.ts";
 import type { Identity } from "@kiwi/core/identity.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
 import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts";
@@ -17,6 +18,8 @@ export interface StoreFile {
   github?: { login: string; id: number; token: string; at: number; relay?: string; clientId?: string };
   migrated?: boolean;
   personalities?: Personality[];
+  device?: Identity;
+  deviceLinks?: DeviceLink[];
 }
 
 export type VaultRead = { ok: true; file: Partial<StoreFile> | null; resave: boolean } | { ok: false; why: string; advice?: string };

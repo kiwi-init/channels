@@ -15,8 +15,8 @@ import { clockLayer, MAX_REQUEST_BYTES } from "./http.ts";
 import { authkitDomains, devHostOk, devHumanAuth, devRequestOk, Human, HUMAN_HEADER, workosFromSettings, type HumanAuth } from "./human.ts";
 import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
-import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, type AccountStore, type Enrollment } from "./account.ts";
-import { ENROLL_TTL_MS } from "@kiwi/core/enroll.ts";
+import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, type AccountStore } from "./account.ts";
+import { ENROLL_TTL_MS, type Enrollment } from "@kiwi/core/enroll.ts";
 import {
   MACHINE_ASKS_PER_MINUTE,
   MACHINE_BOX_TTL_MS,
