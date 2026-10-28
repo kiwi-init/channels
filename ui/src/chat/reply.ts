@@ -15,11 +15,15 @@ export function jumpTo(root: HTMLElement | null, seq: number): boolean {
   const el = root?.querySelector<HTMLElement>(`[data-seq="${seq}"]`)
   if (!el) return false
   el.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })
+  flash(el)
+  return true
+}
+
+export function flash(el: HTMLElement): void {
   el.classList.remove("is-flash")
   void el.offsetWidth
   el.classList.add("is-flash")
   el.addEventListener("animationend", () => el.classList.remove("is-flash"), { once: true })
-  return true
 }
 
 export { preview } from "~/chat/preview"

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react"
 
 import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_EMPTY, DEMO_GUEST, DEMO_PREFS, DEMO_TILES, DEMO_WAITING } from "~/demo/data"
 import { longFeed } from "~/demo/long"
-import type { Account, Actions, App, Channel, ChannelTile, Message, Prefs, Task } from "~/model"
+import type { Account, Actions, AgentStarts, App, Channel, ChannelTile, Message, Prefs, Task } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 
 interface State {
@@ -27,6 +27,8 @@ const PERSONAS: App["personas"] = [
   { id: "designer", label: "Designer", about: "Owns how it looks: shots on every PR, no slop." },
 ]
 
+const STARTS: AgentStarts = { folders: ["~/www/channels", "~/www/landing"], launch: true, bypass: false }
+
 export type Scenario = "full" | "long" | "signed-out" | "no-channels" | "updates" | "update-ready" | "update-available"
 
 function initial(scenario: Scenario, look: Partial<Prefs>): State {
@@ -45,6 +47,7 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
 
 export function useDemo(scenario: Scenario, open: string | null, look: Partial<Prefs> = {}): App {
   const [state, setState] = useState(() => initial(scenario, look))
+  const [starts, setStarts] = useState(STARTS)
 
   const actions = useMemo((): Actions => {
     const edit = (code: string, f: (c: Channel, seq: number) => Channel) =>
@@ -150,6 +153,9 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       setPersona: (code, name, persona) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, persona: persona ?? undefined } : p)) })),
       setReadOnly: (code, name, on) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, readOnly: on } : p)) })),
       setWake: (code, name, on) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, wakes: on } : p)) })),
+      setNickname: (code, name, nickname) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, display: nickname?.trim() || undefined } : p)) })),
+      setColor: (code, name, color) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, color: color ?? undefined } : p)) })),
+      setPowers: (code, name, powers) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, ...powers } : p)) })),
       addAgent: (code, a) => {
         window.setTimeout(
           () =>
@@ -244,6 +250,10 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       cancelPair: () => setState((s) => (s.account ? { ...s, account: { ...s.account, pairAsk: undefined } } : s)),
       saveTheme: (theme) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...savedTheme(s.prefs, theme) } })),
       deleteTheme: (id) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...deletedTheme(s.prefs, id) } })),
+      addStartFolder: () => setStarts((s) => (s.folders.includes("~/code/kiwi") ? s : { ...s, folders: [...s.folders, "~/code/kiwi"] })),
+      removeStartFolder: (dir) => setStarts((s) => ({ ...s, folders: s.folders.filter((f) => f !== dir) })),
+      allowNewAgents: (on) => setStarts((s) => ({ ...s, launch: on })),
+      allowRemoteBypass: (on) => setStarts((s) => ({ ...s, bypass: on })),
     }
   }, [])
 
@@ -254,6 +264,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
     prefs: state.prefs,
     harnesses: HARNESSES,
     personas: PERSONAS,
+    starts,
     actions,
   }
 }
