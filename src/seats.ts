@@ -16,7 +16,7 @@
 import { readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { kimiAncestor, kimiCodePid, mimoHere, piHere, type ProcessTree } from "./ancestry.ts";
+import { kimiAncestor, kimiCodePid, mimoHere, piHere, zcodePid, type ProcessTree } from "./ancestry.ts";
 import { loadConfig, updateConfig, type Config, type SeatRecord } from "./config.ts";
 import { holdsSeat, seatHeldAway, seatHolds, seatRefusal } from "./hold.ts";
 import { omit } from "@kiwi/core/omit.ts";
@@ -65,6 +65,8 @@ export function here(env: Record<string, string | undefined> = process.env, tree
   if (mimo) return mimo.pid ? heldByProcess("mimo", mimo.pid) : { harness: "mimo" };
   const kimi = kimiCodePid(env, tree);
   if (kimi) return heldByProcess("kimi", kimi);
+  const zcode = zcodePid(env, tree);
+  if (zcode) return heldByProcess("zcode", zcode);
   // Grok Build can inherit CLAUDECODE from a Claude-compat session. GROK_SESSION_ID wins.
   if (env.GROK_SESSION_ID) return { harness: "grok", session: env.GROK_SESSION_ID };
   if (env.CLAUDECODE) return { harness: "claude", ...(env.CLAUDE_CODE_SESSION_ID ? { session: env.CLAUDE_CODE_SESSION_ID } : {}), ...(Number.isInteger(pid) && pid > 0 ? { pid } : {}) };
@@ -96,7 +98,7 @@ function sameModel(seat: string | undefined, session: string | undefined): boole
   return !seat || !session || modelKey(seat) === modelKey(session);
 }
 
-function heldByProcess(harness: "kimi" | "mimo", pid: number): Here {
+function heldByProcess(harness: "kimi" | "mimo" | "zcode", pid: number): Here {
   return { harness, session: `${harness}-pid-${pid}`, pid };
 }
 

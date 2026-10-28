@@ -188,6 +188,10 @@ describe("seats always on", () => {
     await wakesViaListenerWhileItRuns("/kimi", { alias: "test", as: "claude", harness: "kimi", session: "kimi-pid-1", pid: process.pid });
   });
 
+  test("a ZCode seat is announced as woken by its background listener only while one runs", async () => {
+    await wakesViaListenerWhileItRuns("/zcode", { alias: "test", as: "claude", harness: "zcode", session: "zcode-pid-1", pid: process.pid });
+  });
+
   test("a Grok seat is announced as woken by its kiwi listen only while one runs", async () => {
     await wakesViaListenerWhileItRuns("/grok", { alias: "test", as: "claude", harness: "grok", session: "grok-1" });
   });

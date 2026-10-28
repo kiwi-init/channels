@@ -28,3 +28,7 @@ describe("the harnesses a computer can start (T429)", () => {
     expect(harnessChoices([row("codex"), row("codex", { path: "/other/codex" })]).map((h) => h.path)).toEqual(["/bin/codex"])
   })
 })
+
+test("a harness the app can show but not start yet isn't offered", () => {
+  expect(harnessChoices([row("kimi"), row("mimo"), row("pi"), row("codex")]).map((h) => h.id)).toEqual(["codex"])
+})

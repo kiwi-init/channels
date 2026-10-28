@@ -109,7 +109,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const pins = usePinsHere(requests)
   const asks = useMemo(() => asksOf(state, messages, me, isOwner, requests, roster, pins), [state, messages, me, isOwner, requests, roster, pins])
   const mapped = useMemo(() => kept(code, messagesOf(state, messages, me, asks.askOf, pictures, pending)), [code, state, messages, me, asks.askOf, pictures, pending])
-  const tasks = useMemo(() => tasksOf(state, asks.held), [state, asks.held])
+  const tasks = useMemo(() => tasksOf(state, asks.held, me), [state, asks.held, me])
   const from = roomsFrom(roomId)
   const rooms = useMemo(() => roomsOf(state, messages, me, seen, from), [state, messages, me, seen, from])
   const directs = useMemo(() => directsOf(state, messages, me, seen), [state, messages, me, seen])
