@@ -312,6 +312,20 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       setTerminalHelpers: (id, on) =>
         setStarts((s) => ({ ...s, prefer: !on && s.prefer === id ? "app" : s.prefer, terminals: s.terminals.map((t) => (t.id === id ? { ...t, helpers: on ? "on" : "off" } : t)) })),
       setContextLine: (on) => setComputer((c) => ({ ...c, contextLine: on })),
+      computerSettings: () =>
+        new Promise((done) =>
+          setTimeout(
+            () =>
+              done([
+                ["New agents", ["Allowed"]],
+                ["Bypass from your other devices", ["Off"]],
+                ["Opens them in", ["tmux"]],
+                ["Hooks", ["Claude Code on", "Codex out of date"]],
+                ["Agents", ["builder in kiwi, wakes on a message"]],
+              ]),
+            400
+          )
+        ),
       checkComputer: () => new Promise((done) => setTimeout(() => done(FINDINGS), 400)),
     }
   }, [])
