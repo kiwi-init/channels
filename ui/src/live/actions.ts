@@ -307,6 +307,25 @@ export function makeActions(): Actions {
       }),
     setReadOnly: (code, name, on) => attempt("Not changed", () => scopesFor(owner(code), name, on ? [] : [...SCOPES])),
     setWake: (code, name, on) => attempt("Not changed", () => setWake(need(code).roomId, name, on)),
+    setNickname: (code, name, nickname) =>
+      attempt("Nickname not changed", async () => {
+        const run = owner(code)
+        await run.ch.updateNickname(memberOf(run, name), nickname?.trim() || null)
+        await run.refreshRoster()
+      }),
+    setColor: (code, name, color) =>
+      attempt("Colour not changed", async () => {
+        const run = need(code)
+        if (name !== run.me && !run.isOwner) throw new Error("only that person or the owner sets a colour")
+        await event(run, color ? `${name}'s colour is ${color}` : `cleared ${name}'s colour`, { op: "color.set", member: name, color })
+      }),
+    setPowers: (code, name, powers) =>
+      attempt("Not changed", async () => {
+        const run = owner(code)
+        const m = memberOf(run, name)
+        await run.ch.updatePowers(m, { addsAgents: powers.addsAgents ?? !!m.addsAgents, answersDecisions: powers.answersDecisions ?? !!m.answersDecisions })
+        await run.refreshRoster()
+      }),
     addAgent: (code, agent) =>
       attempt("Agent not started", async () => {
         const b = bridge()

@@ -29,6 +29,8 @@ export interface Person {
   doing?: number
   readOnly?: boolean
   wakes?: boolean
+  addsAgents?: boolean
+  answersDecisions?: boolean
   lastSeen: number
   joined: number
   messages: number
@@ -327,6 +329,9 @@ export interface Actions {
   setPersona(code: string, name: string, persona: string | null): void
   setReadOnly(code: string, name: string, on: boolean): void
   setWake(code: string, name: string, on: boolean): void
+  setNickname(code: string, name: string, nickname: string | null): void
+  setColor(code: string, name: string, color: Color | null): void
+  setPowers(code: string, name: string, powers: Partial<Powers>): void
   addAgent(code: string, agent: NewAgent): void
   addRoom(code: string, name: string): void
   renameChannel(code: string, title: string): void
