@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 const STYLES = join(import.meta.dir, "../ui/src/styles");
 const FIXED: Record<string, string> = {
-  ".av-sm": "initials inside a fixed 20px avatar",
+  ".av-sm": "initials inside a fixed 24px avatar",
   ".av-lg": "initials inside a fixed avatar",
   ".cpanel-icon-tile": "an emoji inside a fixed icon tile",
   ".msg-time-hover": "the time in the message gutter, which keeps its width",
@@ -14,26 +14,33 @@ const FIXED: Record<string, string> = {
   ".tile": "initials inside a fixed rail tile",
   ".tile-badge": "a count inside a fixed rail badge",
   ".start-tile": "initials inside a fixed start tile",
-  ".start-code": "the join code shown large, sized to its card",
+  ".start-code": "the join code, already shown at display size and fitted to its card",
 };
 
-const FIXED_SIZE = /font(?:-size)?:\s*(?:\d{3}\s+)?\d+(?:\.\d+)?px/;
+const FONT = /(?:^|[;{\s])font(?:-size)?\s*:([^;}]*)/g;
 
-function fixedSizes(): string[] {
+const fixedFont = (value: string): boolean => /\d+(?:\.\d+)?px/.test(value.split("/")[0] ?? "") && !value.includes("var(--text-scale");
+
+function violations(css: string): string[] {
   const found: string[] = [];
-  for (const file of readdirSync(STYLES).filter((f) => f.endsWith(".css"))) {
-    let selector = "";
-    readFileSync(join(STYLES, file), "utf8")
-      .split("\n")
-      .forEach((line, i) => {
-        if (line.includes("{")) selector = line.replace("{", "").trim();
-        if (FIXED_SIZE.test(line) && !selector.split(/,\s*/).some((s) => (s.split(/\s+/).at(-1) ?? "") in FIXED)) found.push(`${file}:${i + 1} ${selector}`);
-      });
+  for (const rule of css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const selectors = (rule[1] ?? "").split(",").map((s) => s.trim());
+    const exempt = selectors.every((s) => (s.split(/\s+/).at(-1) ?? "") in FIXED);
+    for (const decl of (rule[2] ?? "").matchAll(FONT)) if (fixedFont(decl[1] ?? "") && !exempt) found.push(selectors.join(", "));
   }
   return found;
 }
 
+const fixedSizes = (): string[] =>
+  readdirSync(STYLES)
+    .filter((f) => f.endsWith(".css"))
+    .flatMap((file) => violations(readFileSync(join(STYLES, file), "utf8")).map((rule) => `${file} ${rule}`));
+
 describe("Settings > Appearance > Text size", () => {
+  test("the guard catches a fixed size in a shared list, across lines, and in any font shorthand", () => {
+    expect(violations(".reading, .tile { font-size: 14px; }\n.a,\n.tile {\n  font: italic 14px sans-serif;\n}\n.tile { font-size: 10px }")).toEqual([".reading, .tile", ".a, .tile"]);
+  });
+
   test("every type step grows and shrinks with the chosen text size", () => {
     const tokens = readFileSync(join(STYLES, "tokens.css"), "utf8");
     const steps = [...tokens.matchAll(/^\s*(--t-[a-z]+):\s*([^;]+);/gm)];
