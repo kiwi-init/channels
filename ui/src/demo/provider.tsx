@@ -92,13 +92,19 @@ function withStep(c: Channel): Channel {
   }
 }
 
-export type Scenario = "full" | "long" | "step" | "signed-out" | "no-channels" | "updates" | "update-ready" | "update-available"
+export type Scenario = "full" | "long" | "step" | "opening" | "signed-out" | "no-channels" | "updates" | "update-ready" | "update-available"
 
 function initial(scenario: Scenario, look: Partial<Prefs>): State {
   const prefs = { ...DEMO_PREFS, ...look }
   const channels = new Map(
     [
-      scenario === "long" ? longFeed(DEMO_CHANNEL) : scenario === "step" ? withStep(DEMO_CHANNEL) : DEMO_CHANNEL,
+      scenario === "long"
+        ? longFeed(DEMO_CHANNEL)
+        : scenario === "step"
+          ? withStep(DEMO_CHANNEL)
+          : scenario === "opening"
+            ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
+            : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       { ...DEMO_EMPTY, code: "interlinked", title: "interlinked" },

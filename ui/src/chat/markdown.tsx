@@ -57,6 +57,7 @@ const STYLE: MarkdownStyle = {
   linkVariants: {
     "^kiwi-mention:": { color: "var(--accent)", underline: false },
     "^kiwi-task:": { color: "var(--ink)", underline: true },
+    "^kiwi-msg:": { color: "var(--ink)", underline: true },
   },
   strong: { color: "var(--ink)" },
   em: { color: "var(--ink)" },
@@ -84,7 +85,7 @@ const STYLE: MarkdownStyle = {
   taskList: { checkedColor: "var(--accent)", borderColor: "var(--line-3)", checkmarkColor: "var(--on-ink)", checkedTextColor: "var(--ink-2)" },
 }
 
-const FLAGS = { latexMath: false, underline: false }
+const FLAGS = { latexMath: false, underline: false, hardSoftBreaks: true }
 
 type Styles = ReturnType<typeof buildStyles>
 
@@ -149,7 +150,7 @@ function parse(markdown: string): Promise<ASTNode> {
   return next
 }
 
-export function warm(texts: readonly string[], link: (text: string) => string): () => void {
+export function warm<T>(texts: readonly T[], link: (text: T) => string): () => void {
   const queue = [...texts]
   let timer = 0
   const step = () => {
@@ -174,6 +175,7 @@ export interface MarkdownProps {
   markdown: string
   onMention: (name: string) => void
   onTask: (id: number) => void
+  onMessage: (seq: number) => void
   onImage: (url: string, alt: string) => void
   onShown: () => void
   copied: () => void
@@ -185,7 +187,7 @@ interface Block {
   code: string
 }
 
-export default function Markdown({ markdown, onMention, onTask, onImage, onShown, copied }: MarkdownProps) {
+export default function Markdown({ markdown, onMention, onTask, onMessage, onImage, onShown, copied }: MarkdownProps) {
   const box = useRef<HTMLDivElement>(null)
   const [blocks, setBlocks] = useState<Block[]>([])
   const [got, setGot] = useState<{ markdown: string; ast: ASTNode } | null>(() => {
@@ -248,12 +250,13 @@ export default function Markdown({ markdown, onMention, onTask, onImage, onShown
     ({ url }: { url: string }) => {
       if (url.startsWith("kiwi-mention:")) return onMention(decodeURIComponent(url.slice("kiwi-mention:".length)))
       if (url.startsWith("kiwi-task:")) return onTask(Number(url.slice("kiwi-task:".length)))
+      if (url.startsWith("kiwi-msg:")) return onMessage(Number(url.slice("kiwi-msg:".length)))
       if (!/^https?:\/\//i.test(url) && !url.startsWith("mailto:")) return
       const b = bridge()
       if (b) void b.openExternal(url).catch(() => {})
       else window.open(url, "_blank", "noopener,noreferrer")
     },
-    [onMention, onTask]
+    [onMention, onTask, onMessage]
   )
   const callbacks = useMemo(() => ({ onLinkPress: press, onImagePress: ({ url, altText }: { url: string; altText: string }) => onImage(url, altText) }), [press, onImage])
   const children = ast?.children ?? []

@@ -258,6 +258,7 @@ export interface Channel {
   tasks: Task[]
   asks: Ask[]
   connection: "connecting" | "live" | "reconnecting"
+  loading?: boolean
   waiting?: { code: string; since: number; state?: "waiting" | "unreachable" | "declined"; owner?: string }
 }
 

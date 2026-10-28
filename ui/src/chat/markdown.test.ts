@@ -51,3 +51,21 @@ describe("message text can be selected and seen", () => {
     expect(css).toContain(`.md {\n  ${name}: var(--selection);\n}`)
   })
 })
+
+describe("a message keeps the lines it was written in (T616)", () => {
+  test("one newline is a line break, not a space", async () => {
+    const source = readFileSync(join(import.meta.dir, "markdown.tsx"), "utf8")
+    expect(source).toContain("const FLAGS = { latexMath: false, underline: false, hardSoftBreaks: true }")
+    const ast = await parseMarkdown("Done:\n- tests\nNext: shots", { latexMath: false, underline: false, hardSoftBreaks: true })
+    const html = renderToStaticMarkup(
+      createElement(RenderNode, {
+        node: ast.children?.[1] ?? ast,
+        style: normalizeMarkdownStyle({}),
+        styles: buildStyles(normalizeMarkdownStyle({})),
+        callbacks: {},
+        capabilities: { katex: null, enableTaskListItemToggle: false },
+      })
+    )
+    expect(html).toMatch(/tests<br\/?>Next: shots/)
+  })
+})

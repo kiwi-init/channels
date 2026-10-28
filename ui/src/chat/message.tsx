@@ -17,9 +17,23 @@ const Annotator = lazy(() => import("~/chat/annotator"))
 const QUICK = ["👍", "🔥", "👀", "✅"]
 const CLAMP_PX = 12 * 22
 
-function Body({ text, names, tasks, onImage }: { text: string; names: ReadonlyMap<string, string>; tasks: ReadonlySet<number>; onImage: (url: string, alt: string) => void }) {
+function Body({
+  text,
+  seq,
+  names,
+  tasks,
+  onImage,
+  onMessage,
+}: {
+  text: string
+  seq: number
+  names: ReadonlyMap<string, string>
+  tasks: ReadonlySet<number>
+  onImage: (url: string, alt: string) => void
+  onMessage: (seq: number) => void
+}) {
   const { go, toast } = useAct()
-  const markdown = useMemo(() => linked(text, names, tasks), [text, names, tasks])
+  const markdown = useMemo(() => linked(text, names, tasks, seq), [text, names, tasks, seq])
   const [shown, setShown] = useState(false)
   const onShown = useCallback(() => setShown(true), [])
   const onMention = useCallback((name: string) => go({ to: "panel", panel: { kind: "person", name } }), [go])
@@ -29,7 +43,7 @@ function Body({ text, names, tasks, onImage }: { text: string; names: ReadonlyMa
     <div className="msg-text">
       {!shown && !parsedFor(markdown) && <p className="md-plain">{named(text, names)}</p>}
       <Suspense fallback={null}>
-        <Markdown markdown={markdown} onMention={onMention} onTask={onTask} onImage={onImage} onShown={onShown} copied={copied} />
+        <Markdown markdown={markdown} onMention={onMention} onTask={onTask} onMessage={onMessage} onImage={onImage} onShown={onShown} copied={copied} />
       </Suspense>
     </div>
   )
@@ -113,6 +127,13 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
   const replying = useReplying()
   const [image, setImage] = useState<{ url: string; alt: string } | null>(null)
   const openImage = useCallback((url: string, alt: string) => setImage({ url, alt }), [])
+  const openMessage = useCallback(
+    (seq: number) => {
+      if (onQuote) return onQuote(seq)
+      go({ to: "panel", panel: { kind: "thread", seq: channel.messages.find((x) => x.seq === seq)?.inThread ?? seq } })
+    },
+    [onQuote, go, channel.messages]
+  )
   const who = memberOf(channel, m.from)
   const ask = m.ask ? channel.asks.find((a) => a.id === m.ask) : undefined
 
@@ -154,7 +175,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
           </p>
         )}
         {quote && <Quote quoted={quote} who={nickname(channel, quote.from)} names={names} onClick={onQuote ? () => onQuote(quote.seq) : undefined} />}
-        <Clamp on={who?.kind === "agent" && !inThread}>{m.text && <Body text={m.text} names={names} tasks={tasks} onImage={openImage} />}</Clamp>
+        <Clamp on={who?.kind === "agent" && !inThread}>{m.text && <Body text={m.text} seq={m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={openMessage} />}</Clamp>
         {m.images && (
           <div className="msg-images">
             {m.images.map((img) => (

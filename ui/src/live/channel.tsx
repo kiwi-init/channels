@@ -83,7 +83,7 @@ function useShown(): boolean {
 
 export const OpenMember = memo(function OpenMember({ member, view }: { member: StoredMember; view: View }) {
   const live = useChannel(member)
-  const { ch, state, messages, roster, online, requests, isOwner, connection, gone, send, refreshRequests, refreshRoster, foldFrom } = live
+  const { ch, state, messages, roster, online, requests, isOwner, connection, gone, ready, send, refreshRequests, refreshRoster, foldFrom } = live
   const me = member.identity.name
   const roomId = member.access.roomId
   const code = member.code
@@ -146,6 +146,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       tasks,
       asks: asks.asks,
       connection,
+      ...(ready ? {} : { loading: true }),
     }),
     [
       code,
@@ -171,6 +172,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       tasks,
       asks.asks,
       connection,
+      ready,
     ]
   )
 
