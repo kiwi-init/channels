@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { describeEvent } from "@kiwi/core/format.ts";
 import type { Event } from "@kiwi/core/protocol.ts";
-import { linked, named, withNames } from "../ui/src/chat/linked.ts";
+import { linked, mentionNames, named, withNames } from "../ui/src/chat/linked.ts";
 import { preview } from "../ui/src/chat/preview.ts";
 
 const nicknames = new Map([
@@ -91,5 +91,40 @@ describe("people read nicknames, never handles", () => {
 
   test("an unknown @name and a plain-word handle stay as written", () => {
     expect(linked("@nobody and jow said so", nicknames, tasks)).toBe("@nobody and jow said so");
+  });
+});
+
+describe("the composer writes nicknames and sends handles", () => {
+  const people = [
+    { name: "cheery-fox", display: "lead" },
+    { name: "jonatas-walker", display: "Jonatas Walker" },
+    { name: "patient-otter", display: "opus-vm-coder" },
+    { name: "honest-wren", display: "cheery-fox" },
+    { name: "gentle-otter", display: "twin" },
+    { name: "brave-owl", display: "Twin" },
+    { name: "jow" },
+  ];
+  const mentions = mentionNames(people);
+
+  test("picking someone puts their nickname in the draft", () => {
+    expect(mentions.typed("cheery-fox")).toBe("lead");
+    expect(mentions.typed("jonatas-walker")).toBe("Jonatas Walker");
+    expect(mentions.typed("jow")).toBe("jow");
+  });
+
+  test("a nickname that could mean someone else is written as the handle", () => {
+    expect(mentions.typed("honest-wren")).toBe("honest-wren");
+    expect(mentions.typed("gentle-otter")).toBe("gentle-otter");
+    expect(mentions.typed("brave-owl")).toBe("brave-owl");
+  });
+
+  test("sending turns each @nickname back into the handle agents listen for", () => {
+    expect(mentions.sent("latest Kiwi installed, @lead")).toBe("latest Kiwi installed, @cheery-fox");
+    expect(mentions.sent("@Jonatas Walker, @opus-vm-coder: done.")).toBe("@jonatas-walker, @patient-otter: done.");
+    expect(mentions.sent("@LEAD ok")).toBe("@cheery-fox ok");
+  });
+
+  test("handles, longer words, code and escapes are sent as written", () => {
+    for (const text of ["@cheery-fox hi", "@leader hi", "@lead-ish", "mail me@lead", "`@lead`", "```\n@lead\n```", "\\@lead", "@twin and @Twin", "@jow"]) expect(mentions.sent(text)).toBe(text);
   });
 });

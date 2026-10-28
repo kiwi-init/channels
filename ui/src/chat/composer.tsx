@@ -10,7 +10,7 @@ import { Icon } from "~/kit/icons"
 import type { Channel, Task, Upload, Where } from "~/model"
 import { useApp } from "~/nav"
 import { nickname, shown } from "~/names"
-import { withNames } from "~/chat/linked"
+import { mentionNames, withNames } from "~/chat/linked"
 
 const MENTION = /(^|\s)@([\p{L}\p{N}_.-]*)$/u
 const TASK_REF = /(^|\s)#([^#\n]{0,40})$/u
@@ -136,6 +136,7 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
           .slice(0, 6)
   const taskOptions = taskQuery === undefined ? [] : taskMatches(channel.tasks, taskQuery)
   const options = matches.length || taskOptions.length
+  const mentions = useMemo(() => mentionNames(channel.people), [channel.people])
 
   const update = (value: string, at = value.length) => {
     setText(value)
@@ -148,13 +149,13 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
     const body = value.trim() || files.map((f) => f.name).join(", ")
     if (!body) return
     const opts = { ...(inThread !== undefined ? { inThread } : {}), ...(replyTo ? { replyTo: replyTo.seq } : {}), ...(files.length ? { images: files } : {}) }
-    app.actions.send(channel.code, where, body, Object.keys(opts).length ? opts : undefined)
+    app.actions.send(channel.code, where, mentions.sent(body), Object.keys(opts).length ? opts : undefined)
     replying?.set(null)
     setFiles([])
     update("")
   }
   const ready = !!text.trim() || files.length > 0
-  const complete = (name: string) => insert(text.slice(0, caret).replace(MENTION, (_all, pre: string) => `${pre}@${name} `))
+  const complete = (name: string) => insert(text.slice(0, caret).replace(MENTION, (_all, pre: string) => `${pre}@${mentions.typed(name)} `))
   const completeTask = (id: number) => insert(text.slice(0, caret).replace(TASK_REF, (_all, pre: string) => `${pre}T${id} `))
   const insert = (before: string) => {
     const next = before + text.slice(caret)
