@@ -28,6 +28,8 @@ export const SHOTS: Record<string, Shot> = {
   "step-card": { scenario: "step", channel: "kiwi" },
   "needs-step": { scenario: "step", channel: "kiwi", nav: { tab: "needs" } },
   agent: kiwi({ panel: { kind: "person", name: "atlas" } }),
+  terminal: kiwi({ term: "atlas" }),
+  "terminal-agent": kiwi({ panel: { kind: "person", name: "atlas" }, term: "atlas" }),
   person: kiwi({ panel: { kind: "person", name: "maya" } }),
   "agent-offline": kiwi({ panel: { kind: "person", name: "ridge" } }),
   "agent-working": kiwi({ panel: { kind: "person", name: "win" } }),

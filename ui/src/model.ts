@@ -35,7 +35,7 @@ export interface Person {
   doing?: number
   readOnly?: boolean
   wakes?: boolean
-  seat?: "rex" | "tmux"
+  seat?: "rex" | "tmux" | "hosted"
   addsAgents?: boolean
   answersDecisions?: boolean
   lastSeen: number
@@ -235,6 +235,26 @@ interface Fact {
   at: number
 }
 
+interface TermScreen {
+  cols: number
+  rows: number
+  seed: string
+  dead: boolean
+}
+
+export interface TermWatch {
+  out(text: string): void
+  ended(): void
+}
+
+export interface TermLink {
+  keys(text: string): void
+  size(cols: number, rows: number): void
+  close(): void
+}
+
+export type TermOpened = { screen: TermScreen; link: TermLink } | { error: string }
+
 export type ComputerChoices = { harnesses?: App["harnesses"]; folders: string[] } | { error: string }
 
 export interface Channel {
@@ -383,6 +403,7 @@ export interface Actions {
   setPowers(code: string, name: string, powers: Partial<Powers>): void
   addAgent(code: string, agent: NewAgent): void
   showAgent(code: string, name: string): Promise<string | null>
+  openTerm(code: string, name: string, cols: number, rows: number, watch: TermWatch): Promise<TermOpened>
   choicesOn(code: string, computer: string): Promise<ComputerChoices>
   chooseFolder(): Promise<string | null>
   addRoom(code: string, name: string): void

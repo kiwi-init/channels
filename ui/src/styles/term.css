@@ -1,0 +1,91 @@
+.term {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  height: min(46%, 440px);
+  min-height: 180px;
+  border-radius: var(--r-card) var(--r-card) 0 0;
+  background: var(--bg);
+  box-shadow: var(--shadow-pop);
+  animation: term-in var(--slow) var(--ease);
+}
+
+@keyframes term-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+.term-grip {
+  position: absolute;
+  top: -4px;
+  right: 0;
+  left: 0;
+  height: 9px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.term-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px 8px 6px 14px;
+  font: var(--t-ui) var(--ui);
+}
+
+.term-name {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.term-where {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-3);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.term-size {
+  font-variant-numeric: tabular-nums;
+}
+
+.term-ended {
+  color: var(--decide);
+}
+
+.term-screen {
+  flex: 1;
+  min-height: 0;
+  margin: 0 6px 6px 14px;
+  overflow: hidden;
+}
+
+.term-screen canvas {
+  display: block;
+}
+
+.term-note {
+  position: absolute;
+  inset: 40px 0 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  color: var(--ink-3);
+  font: var(--t-ui) var(--ui);
+  text-align: center;
+  pointer-events: none;
+}
+
+.term-note.is-error {
+  color: var(--alert);
+}
