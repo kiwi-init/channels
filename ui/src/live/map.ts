@@ -25,7 +25,8 @@ import {
   type Task as CoreTask,
 } from "@kiwi/core/state.ts"
 import type { GithubPr } from "@kiwi/core/state/github.ts"
-import { permissionCode, permissionTitle } from "@/lib/permission-view"
+import { decisionLabel } from "@/lib/asks"
+import { permissionCode, permissionNotes, permissionTitle, visibleText } from "@/lib/permission-view"
 import { reviewsFor, taskActions } from "@/lib/task-actions"
 import { roomOfMessage, roomSeenKey } from "@/lib/rooms"
 import { canonicalHarness, harnessName } from "@/lib/harness"
@@ -407,8 +408,13 @@ export function asksOf(
         canDeny: human === me || owner,
         ...(m.permission.canAllow && human && human !== me ? { allower: human } : {}),
         tool: m.permission.tool,
-        summary: m.permission.description ?? permissionTitle(m.permission),
+        title: permissionTitle(m.permission),
+        ...(m.permission.description ? { summary: m.permission.description } : {}),
         code: permissionCode(m.permission),
+        ...(m.permission.cwd ? { cwd: m.permission.cwd } : {}),
+        notes: permissionNotes(m.permission),
+        ...(m.permission.replaced !== undefined ? { replaced: visibleText(m.permission.replaced) } : {}),
+        ...(m.permission.content !== undefined ? { content: visibleText(m.permission.content) } : {}),
         ...(task !== undefined ? { task } : {}),
         ...(said ? { answer: { allow: said.a === "allow", by: said.r.from, at: said.r.ts } } : {}),
       })
@@ -430,6 +436,8 @@ export function asksOf(
       from: m.from,
       at: m.ts,
       text: m.body,
+      label: m.esc ? decisionLabel(m) : m.to?.includes(me) ? "Question for you" : "Question for everyone",
+      ...(m.decision === "irreversible" ? { irreversible: true as const } : {}),
       options: m.choices ?? [],
       holds,
       ...(m.step ? { step: m.step } : {}),

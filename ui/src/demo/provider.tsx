@@ -78,6 +78,7 @@ function withStep(c: Channel): Channel {
         from: "win",
         at,
         text,
+        label: "A step for you",
         options: [],
         holds: [13],
         step: {
@@ -87,7 +88,7 @@ function withStep(c: Channel): Channel {
           expect: "git config --file ~/.gitconfig-personal commit.gpgsign prints nothing.",
         },
       },
-      { kind: "question", id: "q-free", from: "atlas", at, text: free, options: [], holds: [11] },
+      { kind: "question", id: "q-free", from: "atlas", at, text: free, label: "Question for everyone", options: [], holds: [11] },
     ],
   }
 }

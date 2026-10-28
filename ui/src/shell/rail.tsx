@@ -1,3 +1,6 @@
+import { useEffect, useEffectEvent } from "react"
+
+import { nextWithNews } from "@/lib/news"
 import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { ChannelTile } from "~/model"
@@ -7,6 +10,22 @@ import { UpdateDock } from "~/shell/updates"
 export function Rail() {
   const { app, nav, go } = useApp()
   const onChannel = nav.page === "channel"
+  const step = useEffectEvent((dir: 1 | -1) => {
+    const from = onChannel ? app.channels.findIndex((c) => c.code === nav.channel) : -1
+    const news = app.channels.map((c, i) => ({ open: i === from, fresh: c.unread > 0, needs: c.needsYou, count: c.unread }))
+    const next = nextWithNews(app.channels, news, from, dir)
+    if (next) go({ to: "channel", code: next.code })
+  })
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey || (e.key !== "ArrowDown" && e.key !== "ArrowUp")) return
+      e.preventDefault()
+      e.stopPropagation()
+      step(e.key === "ArrowDown" ? 1 : -1)
+    }
+    window.addEventListener("keydown", onKey, true)
+    return () => window.removeEventListener("keydown", onKey, true)
+  }, [])
   return (
     <nav className="rail" aria-label="Channels">
       {document.documentElement.dataset["wm"] === "floating" && (

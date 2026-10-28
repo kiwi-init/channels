@@ -65,3 +65,49 @@ describe("a permission card offers only what the answer can do (T650)", () => {
     expect(c).toMatchObject({ kind: "permission", canAllow: false, canDeny: true, allower: "maya" })
   })
 })
+
+describe("Needs you shows what an ask is about (T653)", () => {
+  const base = { v: 1, sigOk: true, pk: "pk-win", from: "win", kind: "blocking", ts: 1, esc: true } as const
+  const edit = {
+    ...base,
+    id: "e",
+    seq: 7,
+    body: "Allow?",
+    to: ["maya"],
+    choices: [...PERMISSION_CHOICES],
+    permission: {
+      tool: "Edit",
+      paths: ["src/a.ts"],
+      replaced: "old​",
+      content: "new",
+      cwd: "/work",
+      sandbox: "off",
+      background: true,
+      nonce: "n".repeat(32),
+      expiresAt: 9_000_000_000_000,
+      canAllow: true,
+    },
+  } as Wire
+  const asksFor = (m: Wire, me = "maya") => asksOf(fold([m], roster, 0), [m], me, false, [], roster, new Map()).asks[0]
+
+  test("a permission says what it wants, where, the diff and its warnings", () => {
+    expect(asksFor(edit)).toMatchObject({
+      kind: "permission",
+      title: "wants to edit a file",
+      code: "src/a.ts",
+      cwd: "/work",
+      replaced: "old\\u{200b}",
+      content: "new",
+      notes: ["It asks to run outside the sandbox: allow that in the terminal.", "It runs in the background."],
+    })
+  })
+
+  test("a decision wears its kind, an irreversible one apart, and a plain question says who it's for", () => {
+    const ask = (over: Partial<Wire>) => ({ ...base, id: "q", seq: 9, body: "Go?", choices: ["A: yes", "B: no"], holds: [], ...over }) as Wire
+    expect(asksFor(ask({ to: ["maya"], decision: "irreversible" }))).toMatchObject({ label: "Irreversible step for you", irreversible: true })
+    expect(asksFor(ask({ to: ["maya"], decision: "taste" }))).toMatchObject({ label: "Taste call for you" })
+    expect(asksFor(ask({ to: ["maya"] }))).toMatchObject({ label: "Decision for you" })
+    const everyone = asksFor(ask({ esc: undefined, choices: undefined, kind: "ask", to: ["*"] }))
+    expect(everyone?.kind === "question" ? everyone.label : null).toBe("Question for everyone")
+  })
+})
