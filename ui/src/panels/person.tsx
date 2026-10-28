@@ -6,7 +6,7 @@ import { TaskChip } from "~/chat/cards"
 import { Avatar, cx, Dialog, DialogHead, Empty, Heading, Toggle } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
-import type { App, Channel, Person } from "~/model"
+import { memberOf, type App, type Channel, type Person } from "~/model"
 import { useApp } from "~/nav"
 import { nickname, shown } from "~/names"
 import { PanelHead } from "~/panels/frame"
@@ -20,7 +20,7 @@ const since = (at: number, on = "on "): string => {
 const personaOf = (personas: App["personas"], value: string | undefined) => (value ? personas.find((p) => p.id === value || p.label === value) : undefined)
 
 export function PersonPanel({ channel, name }: { channel: Channel; name: string }) {
-  const person = channel.people.find((p) => p.name === name)
+  const person = memberOf(channel, name)
   if (!person)
     return (
       <>
@@ -34,9 +34,9 @@ export function PersonPanel({ channel, name }: { channel: Channel; name: string 
       <div className="panel-body person">
         <Hero person={person} />
         <Now channel={channel} person={person} />
-        <Doors person={person} />
+        {!person.left && <Doors person={person} />}
         <Facts channel={channel} person={person} />
-        {channel.youOwn && !person.you && !person.owner && <Manage channel={channel} person={person} />}
+        {channel.youOwn && !person.you && !person.owner && !person.left && <Manage channel={channel} person={person} />}
       </div>
     </>
   )
@@ -65,7 +65,13 @@ function Hero({ person }: { person: Person }) {
 
 function Now({ channel, person }: { channel: Channel; person: Person }) {
   const doing = person.doing !== undefined ? channel.tasks.find((t) => t.id === person.doing) : undefined
-  const presence = person.presence === "online" ? "Online" : person.presence === "away" ? `Away · last seen ${since(person.lastSeen)}` : `Offline · last seen ${since(person.lastSeen)}`
+  const presence = person.left
+    ? `Left the channel · last seen ${since(person.lastSeen)}`
+    : person.presence === "online"
+      ? "Online"
+      : person.presence === "away"
+        ? `Away · last seen ${since(person.lastSeen)}`
+        : `Offline · last seen ${since(person.lastSeen)}`
   return (
     <section className="person-now" aria-label="Now">
       <p className="person-presence">
@@ -116,7 +122,7 @@ function Facts({ channel, person }: { channel: Channel; person: Person }) {
   const { app, go } = useApp()
   const persona = personaOf(app.personas, person.persona)
   const editable = channel.youOwn && !person.you && !person.owner
-  const sponsor = person.sponsor ? channel.people.find((p) => p.name === person.sponsor) : undefined
+  const sponsor = person.sponsor ? memberOf(channel, person.sponsor) : undefined
   const rows: [string, ReactNode][] =
     person.kind === "agent"
       ? [

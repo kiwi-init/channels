@@ -6,7 +6,7 @@ import { preview, useReplying } from "~/chat/reply"
 import { Avatar, cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago, clock } from "~/kit/time"
-import type { Channel, Message, Person } from "~/model"
+import { memberOf, type Channel, type Message, type Person } from "~/model"
 import { useAct } from "~/nav"
 import { nickname } from "~/names"
 import { linked, named, withNames } from "~/chat/linked"
@@ -102,7 +102,7 @@ function sameRow(a: RowProps, b: RowProps): boolean {
   return (
     x.code === y.code &&
     x.you === y.you &&
-    face(x.people.find((p) => p.name === from)) === face(y.people.find((p) => p.name === from)) &&
+    face(memberOf(x, from)) === face(memberOf(y, from)) &&
     (ask === undefined || x.asks.find((k) => k.id === ask) === y.asks.find((k) => k.id === ask)) &&
     chip(x, task) === chip(y, task)
   )
@@ -113,7 +113,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
   const replying = useReplying()
   const [image, setImage] = useState<{ url: string; alt: string } | null>(null)
   const openImage = useCallback((url: string, alt: string) => setImage({ url, alt }), [])
-  const who = channel.people.find((p) => p.name === m.from)
+  const who = memberOf(channel, m.from)
   const ask = m.ask ? channel.asks.find((a) => a.id === m.ask) : undefined
 
   if (m.system)

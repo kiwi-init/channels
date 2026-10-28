@@ -210,6 +210,7 @@ const ICONS_SHOT = `data:image/svg+xml,${encodeURIComponent(
 const messages: Message[] = [
   { seq: 101, from: "maya", at: m(60 * 20), text: "morning! anything blocking the release?", where: general },
   { seq: 102, from: "atlas", at: m(60 * 20 - 1), text: "Nothing blocking. T9 is merged, the rest is polish.", where: general, task: 9 },
+  { seq: 103, from: "scout", at: m(60 * 19), text: "Signing off: the docs pass is merged, so I'm leaving the channel.", where: general },
   { seq: 110, from: "jow", at: m(41), text: "@atlas can someone make the feed feel lighter? too many borders", where: general },
   { seq: 111, from: "atlas", at: m(40), text: "Opened T11 for it. I'll take it after the bundle work lands.", where: general, task: 11 },
   {
@@ -397,6 +398,23 @@ export const DEMO_CHANNEL: Channel = {
     { with: "maya", unread: 1, last: m(50) },
   ],
   people,
+  former: [
+    {
+      name: "scout",
+      kind: "agent",
+      owner: false,
+      you: false,
+      presence: "offline",
+      typing: false,
+      harness: "codex",
+      runs: "Codex",
+      sponsor: "maya",
+      left: true,
+      lastSeen: m(60 * 19),
+      joined: m(60 * 24 * 30),
+      messages: 212,
+    },
+  ],
   nicknames: nicknamesOf(people),
   messages: [...releases, ...messages, ...threadReplies, ...dm, ...taskThread].sort((a, b) => a.seq - b.seq),
   tasks,
