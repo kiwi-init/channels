@@ -1,4 +1,4 @@
-import { marks } from "./search-rank"
+import { marks } from "@kiwi/core/search-rank.ts"
 
 const NAME = "search-hit"
 
