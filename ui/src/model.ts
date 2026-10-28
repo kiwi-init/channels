@@ -3,7 +3,7 @@ import type { Personality } from "@kiwi/core/personality.ts"
 import type { Step, StepReply } from "@kiwi/core/protocol.ts"
 import type { TerminalId, TerminalRow } from "@kiwi/core/terminals.ts"
 
-export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "grok" | "other"
+export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "grok" | "kimi" | "mimo" | "pi" | "grok-bot" | "zcode" | "other"
 
 type Presence = "online" | "away" | "offline"
 
