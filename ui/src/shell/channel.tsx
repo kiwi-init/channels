@@ -14,7 +14,9 @@ import { AddAgentPanel } from "~/panels/add-agent"
 import { PersonPanel } from "~/panels/person"
 import { TaskPanel } from "~/panels/task"
 import { ThreadPanel } from "~/panels/thread"
+import { SIDEBAR_KEYS, useSidebarHidden } from "@/lib/sidebar-hidden"
 import { usePanelWidth } from "~/shell/panel-width"
+import { isSideKey, setDrawer, toggleSide, useDrawer } from "~/shell/side"
 import { Sidebar } from "~/shell/sidebar"
 import { Waiting } from "~/start/waiting"
 import { Board, openTasks } from "~/tasks/board"
@@ -22,20 +24,27 @@ import { nickname } from "~/names"
 
 export function ChannelScreen({ channel }: { channel: Channel }) {
   const { nav, go } = useApp()
-  const panel = usePanelWidth()
+  const hidden = useSidebarHidden()
+  const panel = usePanelWidth(hidden)
   const [jump, setJump] = useState<Jump | null>(null)
   const [focusAsk, setFocusAsk] = useState(0)
   if (jump && (nav.tab !== "chat" || !sameWhere(jump.m.where, nav.where))) setJump(null)
   const [searching, setSearching] = useState(false)
-  const [drawer, setDrawer] = useState(false)
-  const [seen, setSeen] = useState(nav.where)
-  if (seen !== nav.where) {
-    setSeen(nav.where)
+  const drawer = useDrawer()
+  useEffect(() => {
     setDrawer(false)
-  }
+    return () => setDrawer(false)
+  }, [nav.where])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && nav.panel && !document.querySelector("dialog[open]")) go({ to: "panel", panel: null })
+      if (isSideKey(e)) {
+        e.preventDefault()
+        toggleSide()
+      }
+      if (e.key === "Escape" && !document.querySelector("dialog[open]")) {
+        if (drawer) setDrawer(false)
+        else if (nav.panel) go({ to: "panel", panel: null })
+      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
         e.preventDefault()
         setSearching(true)
@@ -44,7 +53,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [nav.panel, go])
+  }, [nav.panel, go, drawer])
 
   if (channel.waiting) return <Waiting channel={channel} />
 
@@ -58,9 +67,16 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
         : `T${nav.where.task}`
 
   return (
-    <div className={cx("chan", nav.panel && "has-panel", drawer && "is-drawer")} style={{ "--panel-w": `${panel.width}px` } as CSSProperties}>
+    <div className={cx("chan", nav.panel && "has-panel", drawer && "is-drawer", hidden && "is-bare")} style={{ "--panel-w": `${panel.width}px` } as CSSProperties}>
       <header className="top">
-        <button type="button" className="icon-btn top-drawer" aria-label="Rooms and people" aria-pressed={drawer} onClick={() => setDrawer(!drawer)}>
+        <button
+          type="button"
+          className="icon-btn top-drawer"
+          aria-label={`Rooms and people (${SIDEBAR_KEYS})`}
+          title={`Show or hide rooms and people (${SIDEBAR_KEYS})`}
+          aria-pressed={drawer}
+          onClick={toggleSide}
+        >
           <Icon name="sidebar" />
         </button>
         <div className="top-title">
