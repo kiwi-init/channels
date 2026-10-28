@@ -52,7 +52,7 @@ export interface TmuxSeat {
   pane: string;
 }
 
-export type PlacedSeat = ({ place: "rex" } & RexSeat) | ({ place: "tmux" } & TmuxSeat);
+export type PlacedSeat = ({ place: "rex" } & RexSeat) | ({ place: "tmux" | "hosted" } & TmuxSeat);
 
 const SHOW_REFUSALS = ["no-rex", "no-server", "no-app", "remote-control", "failed"] as const;
 
@@ -168,7 +168,7 @@ export function readPlacedSeat(x: unknown): PlacedSeat | null {
     const seat = readRexSeat(x);
     return seat ? { place, ...seat } : null;
   }
-  if (place === "tmux") {
+  if (place === "tmux" || place === "hosted") {
     const seat = readTmuxSeat(x);
     return seat ? { place, ...seat } : null;
   }
