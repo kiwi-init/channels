@@ -58,6 +58,7 @@ function desktop(person: Identity, user: string): { host: DeviceHost; held: { de
     channels: () => [],
     label: () => "studio",
     os: () => "macOS",
+    wipe: () => {},
   });
   return { host, held };
 }

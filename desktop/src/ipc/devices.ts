@@ -1,13 +1,16 @@
 import os from "node:os";
 import type { Serves } from "../calls.ts";
 import { publicPerson } from "../guard.ts";
+import { publicAccess } from "../public-channel.ts";
 import { createDeviceHost, createEnrollee } from "../devices.ts";
 import { freshToken } from "../signin.ts";
 import { mutate, store } from "../store.ts";
 
 const OS_NAMES: Partial<Record<NodeJS.Platform, string>> = { darwin: "macOS", linux: "Linux", win32: "Windows" };
 
-export function devicesCalls(): Serves<"enrollPoll" | "enrollAnswer" | "enrollConfirm" | "enrollDeny" | "enrollBegin" | "enrollStatus" | "enrollCancel" | "devices" | "forgetDevice" | "renewDevice"> {
+export function devicesCalls(): Serves<
+  "enrollPoll" | "enrollAnswer" | "enrollConfirm" | "enrollDeny" | "enrollBegin" | "enrollStatus" | "enrollCancel" | "devices" | "forgetDevice" | "renewDevice" | "deviceNews"
+> {
   const label = () => os.hostname().split(".")[0] || "this computer";
   const osName = () => OS_NAMES[process.platform] ?? process.platform;
   const who = () => publicPerson(store.person) ?? store.enrolled ?? null;
@@ -23,6 +26,14 @@ export function devicesCalls(): Serves<"enrollPoll" | "enrollAnswer" | "enrollCo
     channels: () => store.channels.flatMap((c) => (c.code ? [{ label: c.label, code: c.code }] : [])),
     label,
     os: osName,
+    wipe: () =>
+      mutate((s) => {
+        s.device = undefined;
+        s.deviceLinks = undefined;
+        s.enrolled = undefined;
+        s.channels = s.channels.filter((c) => publicAccess(c.access)?.ownerPk === c.pk);
+        s.pending = [];
+      }),
   });
   const enrollee = createEnrollee({
     relayUrl: () => store.relayUrl,
@@ -49,5 +60,6 @@ export function devicesCalls(): Serves<"enrollPoll" | "enrollAnswer" | "enrollCo
     devices: () => host.list(),
     forgetDevice: (id: string) => host.forget(id),
     renewDevice: (id: string) => host.renew(id),
+    deviceNews: () => host.news(),
   };
 }

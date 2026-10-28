@@ -34,7 +34,7 @@ interface App {
   host: DeviceHost;
   token: string;
   user: string;
-  held: { device: Identity | null; links: DeviceLink[] };
+  held: { device: Identity | null; links: DeviceLink[]; wiped: boolean };
 }
 
 interface Enrolled {
@@ -48,7 +48,7 @@ async function app(opts: { fetchImpl?: typeof fetch; person?: Identity; enrolled
   const token = opts.token ?? `dev:${name}`;
   const person = opts.enrolled ? null : (opts.person ?? (await device("Jow")));
   const who = opts.enrolled?.who ?? { name: person!.name, pk: person!.pk, xpk: person!.xpk! };
-  const held: App["held"] = { device: opts.enrolled?.device ?? null, links: opts.enrolled?.links ?? [] };
+  const held: App["held"] = { device: opts.enrolled?.device ?? null, links: opts.enrolled?.links ?? [], wiped: false };
   const host = createDeviceHost({
     relayUrl: () => relay,
     token: async () => token,
@@ -61,6 +61,11 @@ async function app(opts: { fetchImpl?: typeof fetch; person?: Identity; enrolled
     channels: () => [{ label: "general", code: "mc2-code" }],
     label: () => "desk",
     os: () => "macOS",
+    wipe: () => {
+      held.device = null;
+      held.links = [];
+      held.wiped = true;
+    },
     ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}),
     ...(opts.now ? { now: opts.now } : {}),
   });
@@ -251,6 +256,7 @@ describe("Settings → Devices: the signed list, forget and renew (T836)", () =>
       channels: () => [],
       label: () => "x",
       os: () => "y",
+      wipe: () => {},
     });
     expect(await out.list()).toBeNull();
     expect(a.held.links).toEqual([]);
@@ -342,5 +348,77 @@ describe("a new desktop enrolls with no person key (T837)", () => {
   test("a new desktop that isn't signed in can't ask", async () => {
     const e = createEnrollee({ relayUrl: () => relay, token: async () => null, who: () => null, device: () => null, saveDevice: () => {}, enrolled: () => {}, label: () => "x", os: () => "y" });
     await expect(e.begin()).rejects.toThrow("sign in first");
+  });
+});
+
+async function secondDesktop(a: App): Promise<App> {
+  await a.host.poll();
+  const b = newDesktop(a);
+  await b.enrollee.begin();
+  await b.enrollee.status();
+  const { id } = (await a.host.poll())!;
+  await a.host.answer(id);
+  const shown = await b.enrollee.status();
+  await a.host.confirm(id, shown?.stage === "digits" ? shown.digits : "");
+  await b.enrollee.status();
+  return app({ token: a.token, enrolled: b.held.enrolled! });
+}
+
+describe("revoke, renew and wipe on the desktop (T1006)", () => {
+  const own = mkdtempSync(join(tmpdir(), "kiwi-desktop-revoke-"));
+  let mine: ReturnType<typeof startRelay>;
+  let shared = "";
+  beforeAll(() => {
+    mine = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: own, human: devHumanAuth() });
+    shared = relay;
+    relay = mine.url.origin;
+  });
+  afterAll(() => {
+    relay = shared;
+    mine.stop(true);
+    rmSync(own, { recursive: true, force: true });
+  });
+
+  test("an approving app renews every device near its expiry, once a round", async () => {
+    let t = Date.now();
+    const a = await app({ now: () => t });
+    const laptop = await enrolled(a, "phone");
+    t += 80 * 86_400_000;
+    await a.host.poll();
+    const list = (await a.host.list())!;
+    expect(list.map((d) => d.until - t)).toEqual([90 * 86_400_000, 90 * 86_400_000]);
+    expect(list.find((d) => d.id === laptop.pk)).toBeDefined();
+    const links = a.held.links.length;
+    await a.host.poll();
+    expect(a.held.links.length).toBe(links);
+  });
+
+  test("a desktop with no person key that sees itself forgotten wipes its keys, and says who did it", async () => {
+    const a = await app();
+    const c = await secondDesktop(a);
+    expect(await c.host.poll()).toBeNull();
+    const studio = c.held.device!.pk;
+    await a.host.forget(studio);
+    expect(await c.host.poll()).toBeNull();
+    expect(c.held.wiped).toBe(true);
+    expect(await c.host.news()).toEqual({ links: [], revokes: [], removed: { wiped: true, by: "desk" } });
+    expect(await c.host.list()).toBeNull();
+    const told = (await a.host.news())!;
+    expect(told.revokes).toEqual([{ device: studio, label: "studio", as: "desktop", by: "desk", at: expect.any(Number), older: false }]);
+  });
+
+  test("the desktop holding the person key is told, never wiped, and every device hears an older one was forgotten", async () => {
+    const a = await app();
+    const c = await secondDesktop(a);
+    await c.host.poll();
+    await c.host.forget(a.held.device!.pk);
+    expect(await a.host.poll()).toBeNull();
+    expect(a.held.wiped).toBe(false);
+    expect(a.held.device).not.toBeNull();
+    expect((await a.host.news())?.removed).toEqual({ wiped: false, by: "studio" });
+    await expect(a.host.renew(c.held.device!.pk)).rejects.toThrow("sign in");
+    const news = (await c.host.news())!;
+    expect(news.revokes.map((r) => [r.label, r.by, r.older])).toEqual([["desk", "studio", true]]);
+    expect(news.links).toEqual(c.held.links);
   });
 });

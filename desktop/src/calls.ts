@@ -72,6 +72,7 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     devices: () => t.call("devices"),
     forgetDevice: (id) => t.call("forgetDevice", id),
     renewDevice: (id) => t.call("renewDevice", id),
+    deviceNews: () => t.call("deviceNews"),
     daemonStatus: () => t.call("daemonStatus"),
     doctor: () => t.call("doctor"),
     daemonAdopt: () => t.call("daemonAdopt"),
