@@ -88,12 +88,41 @@ describe("lead by persona follows the log (#1122)", () => {
     expect(s.tasks.get(add.seq)!.review).toBe("mac");
   });
 
-  test("a persona change carries both values or neither", () => {
+  test("a permission change keeps the logged lead value, whatever roster its sender had", async () => {
+    const dropped = await ev("jon", promote(false, true));
+    const perm = await ev("jon", { op: "scope.set", member: "linux", pk: ids.linux!.pk, scopes: null, keepLead: true });
+    const add = await ev("jon", { op: "task.add", title: "stalled", owner: "win", review: "mac" });
+    const move = await ev("linux", { op: "task.update", task: add.seq, review: "linux" });
+    const s = fold([dropped, perm, add, move], after);
+    expect(s.rejected.has(move.seq)).toBe(true);
+    expect(s.tasks.get(add.seq)!.review).toBe("mac");
+  });
+
+  test("messages the base already holds don't seed lead status again", async () => {
+    const made = await ev("jon", promote(true, false));
+    const legacy = await ev("jon", { op: "scope.set", member: "linux", pk: ids.linux!.pk, scopes: null });
+    const add = await ev("jon", { op: "task.add", title: "stalled", owner: "win", review: "mac" });
+    const move = await ev("linux", { op: "task.update", task: add.seq, review: "linux" });
+    const kept: { base?: FoldBase } = {};
+    fold([made, legacy], after, Date.now(), null, null, null, (b) => void (kept.base = b));
+    const tail = fold([add, move], after, Date.now(), null, null, kept.base);
+    const overlapping = fold([made, legacy, add, move], after, Date.now(), null, null, kept.base);
+    const full = fold([made, legacy, add, move], after);
+    for (const s of [tail, overlapping, full]) {
+      expect(s.rejected.has(move.seq)).toBe(false);
+      expect(s.tasks.get(add.seq)!.review).toBe("linux");
+    }
+  });
+
+  test("a persona change carries both values or neither; a permission change may say it keeps them", () => {
     const base = { op: "scope.set", member: "linux", pk: "k", scopes: null };
     const msg = (e: object) => ({ v: 1, id: "x", from: "jon", kind: "event", body: "", ts: 1, ev: e });
     expect(wellFormed(msg(base))).toBe(true);
     expect(wellFormed(msg({ ...base, lead: true, wasLead: false }))).toBe(true);
     expect(wellFormed(msg({ ...base, lead: true }))).toBe(false);
     expect(wellFormed(msg({ ...base, lead: "yes", wasLead: false }))).toBe(false);
+    expect(wellFormed(msg({ ...base, keepLead: true }))).toBe(true);
+    expect(wellFormed(msg({ ...base, keepLead: true, lead: true, wasLead: true }))).toBe(false);
+    expect(wellFormed(msg({ ...base, keepLead: false }))).toBe(false);
   });
 });

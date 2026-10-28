@@ -130,8 +130,7 @@ class OwnerSession extends AgentSession {
     if (!m?.active) return yield* new Rejected(`no member named ${member}`);
     if (m.owner) return yield* new Rejected("the owner may do everything");
     const wire = wireScopes(scopes);
-    const lead = m.persona?.role === "lead";
-    const ev: Event = { op: "scope.set", member, pk: m.pk, scopes: wire, lead, wasLead: lead };
+    const ev: Event = { op: "scope.set", member, pk: m.pk, scopes: wire, keepLead: true };
     const seq = yield* owner.fx.send(`set what ${member} may do: ${wire ? describeScopes(wire) : "full"}`, { kind: "event", ev });
     const after = yield* this.confirm(seq);
     // Then the member's record says it too (for clients holding only the log's tail), with the relay's

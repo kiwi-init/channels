@@ -159,7 +159,9 @@ function folding(
   }
   const personaLead = new Map<string, boolean>(from?.personaLeads);
   const leadChanges = lookAhead
-    ? messages.flatMap((m) => (m.ev?.op === "scope.set" && m.ev.wasLead !== undefined && !personaLead.has(m.ev.member) ? [{ seq: m.seq, member: m.ev.member, was: m.ev.wasLead }] : []))
+    ? messages.flatMap((m) =>
+        m.seq > after && m.ev?.op === "scope.set" && m.ev.wasLead !== undefined && !personaLead.has(m.ev.member) ? [{ seq: m.seq, member: m.ev.member, was: m.ev.wasLead }] : [],
+      )
     : [];
   if (leadChanges.length) {
     const accepted = folding(messages, roster, now, roomsFloor, guardFloor, given, undefined, false);

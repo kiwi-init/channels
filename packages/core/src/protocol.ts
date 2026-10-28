@@ -260,7 +260,7 @@ export type Event =
    * Owner only: what a member may do besides read (null: everything). Names the member's key
    * too, so it never carries over to someone admitted under the same name later.
    */
-  | { op: "scope.set"; member: string; pk: string; scopes: string[] | null; lead?: boolean; wasLead?: boolean }
+  | { op: "scope.set"; member: string; pk: string; scopes: string[] | null; lead?: boolean; wasLead?: boolean; keepLead?: true }
   /** Coordinator-only mode is gone. Older logs still carry these; they fold to nothing. */
   | { op: "mode.set"; coordinatorOnly: boolean; strict: boolean }
   /** Owner only: a room in this channel. Its id never changes; the name is a label (room.rename). */
@@ -935,6 +935,7 @@ function eventCheck(ev: unknown): boolean | null {
         str(e.member, 64) &&
         str(e.pk, 64) &&
         (e.scopes === null || strs(e.scopes, 32)) &&
+        (e.keepLead === undefined || (e.keepLead === true && e.lead === undefined)) &&
         (e.lead === undefined ? e.wasLead === undefined : typeof e.lead === "boolean" && typeof e.wasLead === "boolean")
       );
     case "mode.set":
