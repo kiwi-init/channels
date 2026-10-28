@@ -459,7 +459,7 @@
   width: 16px;
   height: 16px;
   border-radius: 5px;
-  font-size: 8px;
+  font-size: 0.6em;
 }
 
 .side-pair .av + .av {
