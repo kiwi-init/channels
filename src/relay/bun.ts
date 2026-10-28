@@ -15,6 +15,8 @@ import { clockLayer, MAX_REQUEST_BYTES } from "./http.ts";
 import { authkitDomains, devHostOk, devHumanAuth, devRequestOk, Human, HUMAN_HEADER, workosFromSettings, type HumanAuth } from "./human.ts";
 import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
+import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, type AccountStore, type Enrollment } from "./account.ts";
+import { ENROLL_TTL_MS } from "@kiwi/core/enroll.ts";
 import {
   MACHINE_ASKS_PER_MINUTE,
   MACHINE_BOX_TTL_MS,
@@ -134,6 +136,9 @@ export function startRelay(
   people.run("CREATE INDEX IF NOT EXISTS machines_person ON machines (person)");
   people.run("CREATE TABLE IF NOT EXISTS machine_floors (mpk TEXT PRIMARY KEY, cert_at INTEGER NOT NULL)");
   people.run("CREATE TABLE IF NOT EXISTS machine_boxes (mpk TEXT NOT NULL, id TEXT NOT NULL, box TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (mpk, id))");
+  people.run("CREATE TABLE IF NOT EXISTS revoked_keys (pk TEXT PRIMARY KEY)");
+  people.run("CREATE TABLE IF NOT EXISTS account_links (user TEXT NOT NULL, seq INTEGER NOT NULL, link TEXT NOT NULL, PRIMARY KEY (user, seq))");
+  people.run("CREATE TABLE IF NOT EXISTS account_asks (user TEXT PRIMARY KEY, rec TEXT NOT NULL, at INTEGER NOT NULL)");
   const machineSockets = new Map<string, { ws: ServerWebSocket<SocketData>; since: number }>();
   const instance = crypto.randomUUID();
   const machines: MachineStore = {
@@ -141,6 +146,7 @@ export function startRelay(
       const row = people.query("SELECT person, mxpk, label, cert_at, seen_at FROM machines WHERE mpk = ?").get(mpk) as MachineRow | null;
       return row ? bindingOf(row) : null;
     },
+    revoked: async (mpk) => people.query("SELECT 1 FROM revoked_keys WHERE pk = ?").get(mpk) !== null,
     floor: async (mpk) => (people.query("SELECT cert_at FROM machine_floors WHERE mpk = ?").get(mpk) as { cert_at: number } | null)?.cert_at ?? 0,
     bind: async (mpk, b) => {
       people.query("INSERT OR REPLACE INTO machines (mpk, person, mxpk, label, cert_at, seen_at) VALUES (?, ?, ?, ?, ?, ?)").run(mpk, b.person, b.mxpk, b.label, b.certAt, b.seenAt);
@@ -168,6 +174,33 @@ export function startRelay(
         personMachine(r.mpk, bindingOf(r), machineSockets.get(r.mpk)?.since ?? null),
       ),
   };
+  const enrollmentOf = (user: string): Enrollment | null => {
+    const row = people.query("SELECT rec FROM account_asks WHERE user = ?").get(user) as { rec: string } | null;
+    return row ? (JSON.parse(row.rec) as Enrollment) : null;
+  };
+  const accounts: AccountStore = {
+    links: async (user) => (people.query("SELECT link FROM account_links WHERE user = ? ORDER BY seq").all(user) as { link: string }[]).map((r) => JSON.parse(r.link) as unknown),
+    extend: async (user, from, links) =>
+      people.transaction(() => {
+        if ((people.query("SELECT COUNT(*) AS n FROM account_links WHERE user = ?").get(user) as { n: number }).n !== from) return false;
+        links.forEach((l, i) => people.query("INSERT INTO account_links (user, seq, link) VALUES (?, ?, ?)").run(user, from + i + 1, JSON.stringify(l)));
+        return true;
+      })(),
+    enrollment: async (user) => enrollmentOf(user),
+    setEnrollment: async (user, next, prev) => {
+      if (!sameEnrollment(enrollmentOf(user), prev)) return false;
+      if (next) people.query("INSERT OR REPLACE INTO account_asks (user, rec, at) VALUES (?, ?, ?)").run(user, JSON.stringify(next), next.at);
+      else people.query("DELETE FROM account_asks WHERE user = ?").run(user);
+      return true;
+    },
+    revoke: async (keys) => {
+      for (const pk of keys) {
+        people.query("INSERT OR IGNORE INTO revoked_keys (pk) VALUES (?)").run(pk);
+        await machines.unbind(pk);
+        machines.close(pk);
+      }
+    },
+  };
   const githubSecret = opts.githubSecret === undefined ? (process.env.GITHUB_WEBHOOK_SECRET ?? null) : opts.githubSecret;
   const mailboxes: MailboxStore = {
     load: async (id) => {
@@ -181,6 +214,7 @@ export function startRelay(
   const sweepMailboxes = () => {
     const now = Date.now();
     people.query("DELETE FROM machine_boxes WHERE at < ?").run(now - MACHINE_BOX_TTL_MS);
+    people.query("DELETE FROM account_asks WHERE at < ?").run(now - ENROLL_TTL_MS);
     for (const r of people.query("SELECT mpk FROM machines WHERE seen_at < ?").all(now - MACHINE_UNSEEN_MS) as { mpk: string }[]) {
       if (machineSockets.has(r.mpk)) continue;
       people.query("DELETE FROM machines WHERE mpk = ?").run(r.mpk);
@@ -378,6 +412,17 @@ export function startRelay(
         if (machine instanceof Response) return machine;
         const person = await onPersonHttp(req, personMachines, { now: clock });
         if (person) return person;
+        if (isAccountPath(url.pathname)) {
+          if (req.method === "OPTIONS") return corsPreflight();
+          const user = await accountUser(req, human);
+          if (user instanceof Response) return user;
+          const account = await onAccountHttp(req, accounts, user, {
+            now: clock,
+            perAccount: (key) => allowPerMinute(key, ACCOUNT_ASKS_PER_MINUTE, clock()),
+            ...(ip ? { perAddress: () => allowPerMinute(`account-ip:${instance}:${ip}`, MACHINE_WRITES_PER_ADDRESS, clock()) } : {}),
+          });
+          if (account) return account;
+        }
         if (machine) {
           const data: SocketData = { machine: machine.upgrade, roomId: "", pk: machine.upgrade, since: 0, presence: false, reads: false, echo: false, watch: false };
           if (server.upgrade(req, { data, headers: wsHeaders(req) })) return undefined;

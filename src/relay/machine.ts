@@ -32,6 +32,7 @@ export interface MachineBox {
 
 export interface MachineStore {
   binding(mpk: string): Promise<MachineBinding | null>;
+  revoked(mpk: string): Promise<boolean>;
   floor(mpk: string): Promise<number>;
   bind(mpk: string, b: MachineBinding): Promise<void>;
   seen(mpk: string, at: number): Promise<void>;
@@ -126,6 +127,7 @@ export async function onMachineHttp(
   const signed = await signedMachineRequest(req, now);
   if (!signed || signed instanceof Response) return signed;
   const { mpk, sub, boxId, signer, body } = signed;
+  if (await store.revoked(mpk)) return refuse(new Forbidden({ message: "this computer was removed from its person's devices" }));
   const bound = await store.binding(mpk);
   const isMachine = signer === mpk;
   const isPerson = !!bound && signer === bound.person;
