@@ -125,7 +125,11 @@ try {
 
   at = "the owner turns on Write to GitHub and sets a branch prefix";
   await page.getByRole("button", { name: /: channel settings$/ }).click();
-  const github = page.getByRole("complementary", { name: "Details" }).locator(".cpanel-github");
+  const settings = page.getByRole("complementary", { name: "Details" });
+  await settings.getByRole("textbox", { name: "Add a repo" }).fill("kiwi-init/smoke");
+  await settings.getByRole("textbox", { name: "Add a repo" }).press("Enter");
+  const github = settings.locator(".cpanel-github");
+  await github.waitFor({ timeout: 15000 });
   await github.getByLabel("Write to GitHub").click();
   await github.getByRole("button", { name: "Set" }).click();
   await github.getByRole("textbox", { name: "Branch prefix" }).fill("T");
