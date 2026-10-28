@@ -3,6 +3,7 @@ import { useEffect, useState, type CSSProperties } from "react"
 import { Conversation } from "~/chat/conversation"
 import { SearchBox, type Jump } from "~/chat/search-box"
 import { cx, Count, IconButton } from "~/kit/bits"
+import { Boundary } from "~/kit/boundary"
 import { Icon } from "~/kit/icons"
 import type { Channel } from "~/model"
 import { NeedsYou, openAsks } from "~/needs/needs"
@@ -102,7 +103,11 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
         </div>
       </header>
       <Sidebar channel={channel} />
-      <main className="main">{nav.tab === "tasks" ? <Board channel={channel} /> : nav.tab === "needs" ? <NeedsYou channel={channel} /> : <Conversation channel={channel} jump={jump} />}</main>
+      <main className="main">
+        <Boundary resetKey={nav.tab}>
+          {nav.tab === "tasks" ? <Board channel={channel} /> : nav.tab === "needs" ? <NeedsYou channel={channel} /> : <Conversation channel={channel} jump={jump} />}
+        </Boundary>
+      </main>
       {channel.connection !== "live" && (
         <p className="conn" role="status">
           <span className="dot is-doing" aria-hidden="true" />
@@ -123,19 +128,21 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
             title="Drag to resize · double-click to reset"
             {...panel.grip}
           />
-          {nav.panel.kind === "thread" ? (
-            <ThreadPanel channel={channel} seq={nav.panel.seq} />
-          ) : nav.panel.kind === "task" ? (
-            <TaskPanel channel={channel} id={nav.panel.task} />
-          ) : nav.panel.kind === "person" ? (
-            <PersonPanel channel={channel} name={nav.panel.name} />
-          ) : nav.panel.kind === "channel" ? (
-            <ChannelPanel channel={channel} />
-          ) : nav.panel.kind === "invite" ? (
-            <InvitePanel channel={channel} />
-          ) : (
-            <AddAgentPanel channel={channel} />
-          )}
+          <Boundary panel resetKey={JSON.stringify(nav.panel)}>
+            {nav.panel.kind === "thread" ? (
+              <ThreadPanel channel={channel} seq={nav.panel.seq} />
+            ) : nav.panel.kind === "task" ? (
+              <TaskPanel channel={channel} id={nav.panel.task} />
+            ) : nav.panel.kind === "person" ? (
+              <PersonPanel channel={channel} name={nav.panel.name} />
+            ) : nav.panel.kind === "channel" ? (
+              <ChannelPanel channel={channel} />
+            ) : nav.panel.kind === "invite" ? (
+              <InvitePanel channel={channel} />
+            ) : (
+              <AddAgentPanel channel={channel} />
+            )}
+          </Boundary>
         </aside>
       )}
     </div>

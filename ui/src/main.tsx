@@ -8,6 +8,7 @@ import "~/styles/chat.css"
 import { DEMO_PREFS } from "~/demo/data"
 import { useDemo } from "~/demo/provider"
 import { SHOTS } from "~/demo/shots"
+import { Boundary } from "~/kit/boundary"
 import { LiveDuties, useLive } from "~/live/live"
 import type { Prefs } from "~/model"
 import { storedThemePrefs } from "~/live/prefs"
@@ -71,4 +72,9 @@ if (!demo) {
 bootTheme(demo ? { ...DEMO_PREFS, ...look } : storedThemePrefs())
 
 const root = document.getElementById("root")
-if (root) createRoot(root).render(<StrictMode>{demo ? <DemoApp /> : <LiveApp />}</StrictMode>)
+if (root)
+  createRoot(root).render(
+    <StrictMode>
+      <Boundary whole>{demo ? <DemoApp /> : <LiveApp />}</Boundary>
+    </StrictMode>
+  )
