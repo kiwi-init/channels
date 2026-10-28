@@ -314,6 +314,17 @@ describe("review rounds through the CLI", () => {
     expect(JSON.parse(await ok(dev, "task", "show", `T${unowned}`, "--json")).notes.at(-1)).toMatchObject({ by: "dev", text: "on it" });
   });
 
+  test("a review change the channel would refuse sends nothing and says why (#1032)", async () => {
+    const t = taskNo(await ok(dev, "task", "add", "keep the gate", "--review", "rev", "--ask", want));
+    await ok(dev, "task", "claim", `T${t}`);
+    const before = await ok(dev, "log", "--all", "-n", "5");
+    const moved = await run(dev, "task", "review", `T${t}`, "--review", "other");
+    expect(moved.code).not.toBe(0);
+    expect(moved.err).toContain(`only a person, the lead, rev, or the task owner when the reviewer is gone changes who reviews T${t}`);
+    expect(await ok(dev, "log", "--all", "-n", "5")).toBe(before);
+    expect(JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"))).toMatchObject({ review: "rev" });
+  });
+
   test("review --review NAME hands the open round on with its commit, and tells both reviewers", async () => {
     const at = "3333333333333333333333333333333333333333";
     const t = taskNo(await ok(dev, "task", "add", "hand the review on", "--review", "rev", "--ask", want));
