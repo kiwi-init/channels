@@ -29,6 +29,7 @@ import { canPost, scopesOf, wireScopes } from "../scopes.ts";
 import type { ChannelCore } from "./core.ts";
 import type { MemberRefusal, Refused } from "./errors.ts";
 import { requestInfo, wrapAllFor } from "./keys.ts";
+import type { DeviceList } from "../devices.ts";
 import type { Relay } from "./relay.ts";
 
 const deviceName = (members: readonly Pick<Member, "name">[], base: string): string => {
@@ -47,6 +48,13 @@ const personNameOf = (members: readonly Member[], person: string): string => {
 
 const addsAgents = (m: Member) => m.kind === "human" && !m.owner && !!m.addsAgents && !!m.person && canPost(m.later?.scopes ?? scopesOf(m));
 
+export interface RequestsOptions {
+  budget?: SigningBudget;
+  person?: string;
+  mine?: readonly string[] | null;
+  lists?: ReadonlyMap<string, DeviceList>;
+}
+
 type RequestRow = {
   id: string;
   pk: string;
@@ -61,11 +69,11 @@ type RequestRow = {
 };
 
 export interface RequestsFx {
-  requests(opts?: { budget?: SigningBudget; person?: string; mine?: readonly string[] | null }): Effect.Effect<JoinRequest[], Refused, Relay>;
+  requests(opts?: RequestsOptions): Effect.Effect<JoinRequest[], Refused, Relay>;
   checkRequest(req: Pick<JoinRequest, "id" | "pk" | "commit">): Effect.Effect<void, Refused, Relay>;
   approve(req: JoinRequest, as?: Partial<MemberInfo>, opts?: { person?: string }): Effect.Effect<Member, Refused, Relay>;
   pinPersona(p: Personality): Effect.Effect<string, Refused, Relay>;
-  autoApprove(person: string, personalities?: readonly Personality[], mine?: readonly string[] | null): Effect.Effect<Member[], Refused, Relay>;
+  autoApprove(person: string, personalities?: readonly Personality[], mine?: readonly string[] | null, lists?: ReadonlyMap<string, DeviceList>): Effect.Effect<Member[], Refused, Relay>;
   deny(requestId: string): Effect.Effect<void, Refused, Relay>;
 }
 
@@ -73,7 +81,7 @@ export class ChannelRequests {
   constructor(private readonly ch: ChannelCore) {}
 
   readonly fx: RequestsFx = {
-    requests: Effect.fn("Channel.requests")({ self: this }, function* (this: ChannelRequests, opts: { budget?: SigningBudget; person?: string; mine?: readonly string[] | null } = {}) {
+    requests: Effect.fn("Channel.requests")({ self: this }, function* (this: ChannelRequests, opts: RequestsOptions = {}) {
       yield* this.ch.ownerOnly();
       const { requests } = yield* this.ch.request<{ requests: RequestRow[] }>("/requests", {}, { v: 2 });
       const out: JoinRequest[] = [];
@@ -92,9 +100,9 @@ export class ChannelRequests {
         }
         const paired = yield* Effect.promise(() => verifiedComputer(this.ch.roomId, r.pk, info.computer));
         const person = yield* Effect.promise(() => verifiedPerson(this.ch.roomId, r.pk, info.person));
-        const device = person ? null : yield* Effect.promise(() => verifiedDevice(this.ch.roomId, r.pk, info.device));
+        const device = person ? null : yield* Effect.promise(() => verifiedDevice(this.ch.roomId, r.pk, info.device, (p) => opts.lists?.get(p)));
         const app = device && device.as !== "computer" ? device : null;
-        const enrolled = device?.as === "computer" ? { pk: device.device, label: device.label, person: device.person, personName: personNameOf(seats, device.person) } : null;
+        const enrolled = device?.as === "computer" ? { pk: device.pk, label: device.label, person: device.person, personName: personNameOf(seats, device.person) } : null;
         const computer = enrolled ?? paired;
         const pin = person || app ? null : yield* Effect.promise(() => readPin(info.pin, this.ch.roomId, this.ch.identity.pk));
         const kind = person || app ? "human" : "agent";
@@ -198,7 +206,7 @@ export class ChannelRequests {
         ...(kind === "human" ? (as?.display ? { display: as.display } : same?.display ? { display: same.display } : {}) : nick ? { display: nick } : {}),
         ...(sponsor ? { sponsor } : {}),
         ...(kind === "human" && req.person ? { person: req.person } : {}),
-        ...(device ? { person: device.person, device: { label: device.label, as: device.as } } : {}),
+        ...(device ? { person: device.person, device: { pk: device.pk, label: device.label, as: device.as } } : {}),
         ...(kind === "human" && (as?.addsAgents ?? authority) ? { addsAgents: true } : {}),
         ...(kind === "human" && (as?.answersDecisions ?? decides) ? { answersDecisions: true } : {}),
         ...(kind === "agent" && req.computer ? { from: { pk: req.computer.pk, label: req.computer.label } } : {}),
@@ -215,38 +223,41 @@ export class ChannelRequests {
       return { pk: req.pk, xpk: req.xpk, ...info, owner: false, at: rec.at, active: true } satisfies Member;
     }),
 
-    autoApprove: Effect.fn("Channel.autoApprove")({ self: this }, function* (this: ChannelRequests, person: string, personalities: readonly Personality[] = [], mine: readonly string[] | null = null) {
-      yield* this.ch.ownerOnly();
-      for (const req of yield* this.ch.fx.requests({ person, mine })) {
-        if ((req.computer?.joinsOnItsOwn || req.device?.joinsOnItsOwn) && req.check === "unchecked") yield* Effect.ignoreCause(this.ch.fx.checkRequest(req));
-      }
-      const approved: Member[] = [];
-      const people = yield* this.ch.fx.members();
-      for (const req of yield* this.ch.fx.requests({ person, mine })) {
-        if (req.device?.joinsOnItsOwn && req.check === "ready" && req.code) {
-          const one = yield* Effect.exit(this.ch.fx.approve(req, undefined, { person }));
+    autoApprove: Effect.fn("Channel.autoApprove")(
+      { self: this },
+      function* (this: ChannelRequests, person: string, personalities: readonly Personality[] = [], mine: readonly string[] | null = null, lists?: ReadonlyMap<string, DeviceList>) {
+        yield* this.ch.ownerOnly();
+        for (const req of yield* this.ch.fx.requests({ person, mine, lists })) {
+          if ((req.computer?.joinsOnItsOwn || req.device?.joinsOnItsOwn) && req.check === "unchecked") yield* Effect.ignoreCause(this.ch.fx.checkRequest(req));
+        }
+        const approved: Member[] = [];
+        const people = yield* this.ch.fx.members();
+        for (const req of yield* this.ch.fx.requests({ person, mine, lists })) {
+          if (req.device?.joinsOnItsOwn && req.check === "ready" && req.code) {
+            const one = yield* Effect.exit(this.ch.fx.approve(req, undefined, { person }));
+            if (Exit.isSuccess(one)) approved.push(one.value);
+            continue;
+          }
+          if (!(req.computer?.joinsOnItsOwn && req.check === "ready" && req.code)) continue;
+          const pin = req.pin;
+          let as: Partial<MemberInfo> | undefined;
+          if (req.computer.own) {
+            const persona = pin ? yield* Effect.promise(() => pinned(pin, personalities)) : undefined;
+            if (persona === null) continue;
+            as = persona ? { persona } : undefined;
+          } else {
+            const sponsor = req.computer.person;
+            const human = people.find((m) => m.active && !m.unverified && addsAgents(m) && m.person === sponsor);
+            if (!human || pin) continue;
+            const scopes = human.later?.scopes ?? scopesOf(human);
+            as = wireScopes(scopes) ? { scopes } : undefined;
+          }
+          const one = yield* Effect.exit(this.ch.fx.approve(req, as, { person }));
           if (Exit.isSuccess(one)) approved.push(one.value);
-          continue;
         }
-        if (!(req.computer?.joinsOnItsOwn && req.check === "ready" && req.code)) continue;
-        const pin = req.pin;
-        let as: Partial<MemberInfo> | undefined;
-        if (req.computer.own) {
-          const persona = pin ? yield* Effect.promise(() => pinned(pin, personalities)) : undefined;
-          if (persona === null) continue;
-          as = persona ? { persona } : undefined;
-        } else {
-          const sponsor = req.computer.person;
-          const human = people.find((m) => m.active && !m.unverified && addsAgents(m) && m.person === sponsor);
-          if (!human || pin) continue;
-          const scopes = human.later?.scopes ?? scopesOf(human);
-          as = wireScopes(scopes) ? { scopes } : undefined;
-        }
-        const one = yield* Effect.exit(this.ch.fx.approve(req, as, { person }));
-        if (Exit.isSuccess(one)) approved.push(one.value);
-      }
-      return approved;
-    }),
+        return approved;
+      },
+    ),
 
     deny: Effect.fn("Channel.deny")({ self: this }, function* (this: ChannelRequests, requestId: string) {
       yield* this.ch.ownerOnly();

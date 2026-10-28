@@ -4,6 +4,7 @@
 // and AES-GCM ciphertext. Everything meaningful (sender, recipients, body,
 // coordination events, signatures) lives inside the encrypted payload.
 
+import { DEVICE_LIST_MAX, type DeviceLink } from "./devices.ts";
 import { permissionChoices, wellFormedPermission, wellFormedPermReply, wellFormedSettled, type PermissionReply, type PermissionSettled, type PermissionShown } from "./permission.ts";
 
 export const PROTOCOL_VERSION = 1;
@@ -291,6 +292,7 @@ export type Event =
   /** The goal a person's message #ask stands for, in plain words, as its tasks' header (null: their own words again). The lead, the owner or who asked names it. */
   | { op: "ask.name"; ask: number; name: string | null }
   | { op: "ask.close"; ask: number; why?: string }
+  | { op: "devices"; links: DeviceLink[] }
   /**
    * A member's reaction to message #seq: one short emoji per member per message, the latest wins, null
    * takes it back. Not news: it's no unread, no notification, no line in a feed. Its body is throwaway
@@ -332,6 +334,7 @@ const QUIET_OPS: ReadonlySet<string> = new Set([
   "release",
   "github.rules",
   "github.release",
+  "devices",
 ]);
 
 export const isRunning = (i: GithubNote): boolean => (i.event === "check_run" || i.event === "workflow_run") && i.conclusion === undefined;
@@ -731,7 +734,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 6;
+export const EVENT_OPS_VERSION = 7;
 const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 
 export const knownOp = (op: string): boolean => eventCheck({ op }) !== null;
@@ -993,6 +996,8 @@ function eventCheck(ev: unknown): boolean | null {
       return n(e.ask) && (e.ask as number) > 0 && (e.name === null || str(e.name, MAX_GOAL_NAME * 4));
     case "ask.close":
       return n(e.ask) && (e.ask as number) > 0 && (e.why === undefined || str(e.why, 500));
+    case "devices":
+      return Array.isArray(e.links) && e.links.length > 0 && e.links.length <= DEVICE_LIST_MAX && e.links.every((l) => !!l && typeof l === "object" && !Array.isArray(l));
     default:
       return null;
   }
