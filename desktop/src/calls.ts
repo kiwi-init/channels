@@ -60,6 +60,7 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     linkPoll: () => t.call("linkPoll"),
     linkAnswer: (accept) => t.call("linkAnswer", accept),
     linkCancel: () => t.call("linkCancel"),
+    forgetPhone: (at) => t.call("forgetPhone", at),
     daemonStatus: () => t.call("daemonStatus"),
     doctor: () => t.call("doctor"),
     daemonAdopt: () => t.call("daemonAdopt"),

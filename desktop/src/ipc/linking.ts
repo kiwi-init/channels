@@ -3,7 +3,7 @@ import type { Serves } from "../calls.ts";
 import { createLinkHost } from "../link-host.ts";
 import { mutate, store } from "../store.ts";
 
-export function linkingCalls(): Serves<"linkBegin" | "linkPoll" | "linkAnswer" | "linkCancel"> {
+export function linkingCalls(): Serves<"linkBegin" | "linkPoll" | "linkAnswer" | "linkCancel" | "forgetPhone"> {
   const host = createLinkHost({
     relayUrl: () => store.relayUrl,
     person: () => {
@@ -22,5 +22,9 @@ export function linkingCalls(): Serves<"linkBegin" | "linkPoll" | "linkAnswer" |
     linkPoll: (): Promise<LinkAskView | null> => host.poll(),
     linkAnswer: (accept: boolean): Promise<PhoneView | null> => host.answer(accept === true),
     linkCancel: () => host.cancel(),
+    forgetPhone: (at: number) =>
+      mutate((s) => {
+        s.phones = (s.phones ?? []).filter((p) => p.at !== at);
+      }),
   };
 }

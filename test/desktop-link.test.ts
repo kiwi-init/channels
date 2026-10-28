@@ -51,6 +51,7 @@ describe("the desktop's side of linking a phone", () => {
     const done = await a.host.answer(true);
     expect(done?.label).toBe("Ada's iPhone");
     expect(a.linked).toHaveLength(1);
+    expect(a.linked[0]?.channels).toEqual(["channel 0", "channel 1", "channel 2"]);
 
     const chunks = await waitForLinkChunks(relay, code.secret, { timeoutMs: 5_000 });
     const payload = await openLink(code, phone.xsk, phone.xpk, chunks!);

@@ -55,9 +55,11 @@ describe("the person key stays in main (T203)", () => {
     expect(snapshotOf({ relayUrl: "https://r.example", person: null, channels: [], computers: [], pending: [] }).person).toBeNull();
   });
 
-  test("linked phones show only a label and a time", () => {
+  test("linked phones show a label, a time and the channels they were sent, never keys", () => {
     const snap = snapshotOf({ relayUrl: "https://r.example", person, channels: [], computers: [], phones: [{ label: "Ada's iPhone", at: 5 }], pending: [] });
     expect(snap.phones).toEqual([{ label: "Ada's iPhone", at: 5 }]);
+    const held = snapshotOf({ relayUrl: "https://r.example", person, channels: [], computers: [], phones: [{ label: "Ada's iPhone", at: 5, channels: ["kiwi", "landing"] }], pending: [] });
+    expect(held.phones).toEqual([{ label: "Ada's iPhone", at: 5, channels: ["kiwi", "landing"] }]);
     expect(snapshotOf({ relayUrl: "https://r.example", person, channels: [], computers: [], pending: [] }).phones).toEqual([]);
   });
 

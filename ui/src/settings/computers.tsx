@@ -63,6 +63,11 @@ function TheirSettings({ computer }: { computer: Computer }) {
   )
 }
 
+function phoneWarning(phone: Computer): string {
+  const held = phone.holds?.length ? `your person key and the keys of ${phone.holds.join(", ")}` : "your person key and the keys of the channels you had when you linked it"
+  return `It holds ${held}, so it can act as you there. Forgetting it removes it from this list; to sign it out, unlink it on the phone. If it's lost or stolen, there's no way yet to cut it off from here.`
+}
+
 export function ComputersSection() {
   const { app, toast } = useApp()
   const [pairing, setPairing] = useState<{ kind: Kind; code: string } | null>(null)
@@ -210,7 +215,7 @@ export function ComputersSection() {
       <Confirm
         open={!!forget}
         title={`Forget ${forget?.label ?? ""}?`}
-        sub="It is signed out and its agents stop. Pair it again to bring it back."
+        sub={forget && isPhone(forget) ? phoneWarning(forget) : "It is signed out and its agents stop. Pair it again to bring it back."}
         action="Forget"
         onClose={() => setForget(null)}
         onConfirm={() => {
