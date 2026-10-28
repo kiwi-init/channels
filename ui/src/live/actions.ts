@@ -128,7 +128,8 @@ async function letIn(run: Run, r: JoinRequest, choice: JoinChoice): Promise<stri
 async function scopesFor(run: Run, name: string, scopes: Scope[]): Promise<void> {
   const m = memberOf(run, name)
   const wire = wireScopes(scopes)
-  const seq = await event(run, `set what ${m.name} may do: ${wire ? describeScopes(wire) : "full"}`, { op: "scope.set", member: m.name, pk: m.pk, scopes: wire })
+  const lead = m.persona?.role === "lead"
+  const seq = await event(run, `set what ${m.name} may do: ${wire ? describeScopes(wire) : "full"}`, { op: "scope.set", member: m.name, pk: m.pk, scopes: wire, lead, wasLead: lead })
   await run.ch.updateScopes(m, scopes, seq)
   await run.refreshRoster()
 }

@@ -6,10 +6,10 @@ import { fold, type FoldBase, type Roster } from "@kiwi/core/state.ts";
 
 const ids: Record<string, Identity> = {};
 let seq = 0;
-async function ev(from: string, e: Event): Promise<Message> {
+async function ev(from: string, e: Event, late = 0): Promise<Message> {
   seq++;
   const p = await sign(ids[from]!, { v: 1 as const, id: crypto.randomUUID(), from, kind: "event" as const, body: "", ts: seq, ev: e });
-  return { ...p, seq, rts: seq, sigOk: await verify(p) };
+  return { ...p, seq, rts: seq + late, sigOk: await verify(p) };
 }
 
 const LEAD: Persona = { name: "Lead", role: "lead", capabilities: [], areas: [], instructions: "" };
@@ -61,6 +61,31 @@ describe("lead by persona follows the log (#1122)", () => {
       expect(s.tasks.get(add.seq)!.review).toBe("linux");
       expect(s.tasks.get(other.seq)!.review).toBe("mac");
     }
+  });
+
+  test("a change the fold refuses never seeds lead status, for a kept base and a full fold alike", async () => {
+    const add = await ev("jon", { op: "task.add", title: "stalled", owner: "win", review: "mac" });
+    const move = await ev("linux", { op: "task.update", task: add.seq, review: "linux" });
+    const stale = await ev("jon", promote(false, true), 2 * 86_400_000);
+    const kept: { base?: FoldBase } = {};
+    fold([add, move], before, Date.now(), null, null, null, (b) => void (kept.base = b));
+    const resumed = fold([stale], before, Date.now(), null, null, kept.base);
+    const full = fold([add, move, stale], before);
+    for (const s of [resumed, full]) {
+      expect(s.rejected.has(stale.seq)).toBe(true);
+      expect(s.rejected.has(move.seq)).toBe(true);
+      expect(s.tasks.get(add.seq)!.review).toBe("mac");
+    }
+  });
+
+  test("a persona change from an older client, without the fields, hands the member back to the roster", async () => {
+    const made = await ev("jon", promote(true, false));
+    const legacy = await ev("jon", { op: "scope.set", member: "linux", pk: ids.linux!.pk, scopes: null });
+    const add = await ev("jon", { op: "task.add", title: "stalled", owner: "win", review: "mac" });
+    const move = await ev("linux", { op: "task.update", task: add.seq, review: "linux" });
+    const s = fold([made, legacy, add, move], before);
+    expect(s.rejected.has(move.seq)).toBe(true);
+    expect(s.tasks.get(add.seq)!.review).toBe("mac");
   });
 
   test("a persona change carries both values or neither", () => {

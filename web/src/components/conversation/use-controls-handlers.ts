@@ -76,7 +76,11 @@ export function useControlsHandlers({
     },
     onScopes: async (m, scopes) => {
       const wire = wireScopes(scopes)
-      const seq = await send(`set what ${m.name} may do: ${wire ? describeScopes(wire) : "full"}`, { kind: "event", ev: { op: "scope.set", member: m.name, pk: m.pk, scopes: wire } })
+      const lead = m.persona?.role === "lead"
+      const seq = await send(`set what ${m.name} may do: ${wire ? describeScopes(wire) : "full"}`, {
+        kind: "event",
+        ev: { op: "scope.set", member: m.name, pk: m.pk, scopes: wire, lead, wasLead: lead },
+      })
       await ch.updateScopes(m, scopes, seq)
       await refreshRoster()
     },

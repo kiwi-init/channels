@@ -213,6 +213,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       scopesByKey.set(ev.pk, scopes);
       scopeSets.set(ev.pk, { seq: m.seq, scopes });
       if (ev.lead !== undefined) c.personaLead.set(ev.member, ev.lead);
+      else c.personaLead.delete(ev.member);
       break;
     }
 

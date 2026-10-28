@@ -55,6 +55,19 @@ export function fold(
   given?: FoldBase | null,
   keep?: (base: FoldBase) => void,
 ): ChannelState {
+  return folding(messages, roster, now, roomsFloor, guardFloor, given, keep, true);
+}
+
+function folding(
+  messages: Message[],
+  roster: Roster,
+  now: number,
+  roomsFloor: RoomsFloor | null | undefined,
+  guardFloor: GuardFloor | null | undefined,
+  given: FoldBase | null | undefined,
+  keep: ((base: FoldBase) => void) | undefined,
+  lookAhead: boolean,
+): ChannelState {
   const from = given ? structuredClone(given) : null;
   const after = from?.n ?? -1;
   const ahead = <F extends { since: number }>(f: F | null | undefined): F | null => (f && f.since >= after ? f : null);
@@ -145,10 +158,12 @@ export function fold(
     set.add(r.pk);
   }
   const personaLead = new Map<string, boolean>(from?.personaLeads);
-  for (const m of messages) {
-    const ev = m.ev;
-    if (ev?.op !== "scope.set" || ev.wasLead === undefined || personaLead.has(ev.member)) continue;
-    if (m.sigOk && !!m.pk && !!keysByName.get(m.from)?.has(m.pk) && !!members.get(m.from)?.owner && !!keysByName.get(ev.member)?.has(ev.pk)) personaLead.set(ev.member, ev.wasLead);
+  const leadChanges = lookAhead
+    ? messages.flatMap((m) => (m.ev?.op === "scope.set" && m.ev.wasLead !== undefined && !personaLead.has(m.ev.member) ? [{ seq: m.seq, member: m.ev.member, was: m.ev.wasLead }] : []))
+    : [];
+  if (leadChanges.length) {
+    const accepted = folding(messages, roster, now, roomsFloor, guardFloor, given, undefined, false);
+    for (const c of leadChanges) if (!personaLead.has(c.member) && accepted.trust.get(c.seq) === "verified" && !accepted.rejected.has(c.seq)) personaLead.set(c.member, c.was);
   }
   const leads = (member: FoldMember): boolean => member.owner || isLeadRole(member.role) || (personaLead.get(member.name) ?? (signed.has(member.name) && member.persona?.role === "lead"));
   const scopesByKey = new Map<string, Scope[]>();
