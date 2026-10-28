@@ -297,6 +297,10 @@ export interface MachineView {
   online: boolean | null;
 }
 
+export type TermOpenView = { ok: true; term: string; window: string; cols: number; rows: number; seed: string; dead: boolean } | { ok: false; detail: string };
+
+export type TermEvent = { term: string; out: string } | { term: string; ended: true };
+
 export type FromMachine<T> = { ok: true; value: T } | { ok: false; detail: string };
 
 export interface LaunchAgentRequest extends LaunchChoices {
@@ -402,6 +406,12 @@ export interface KiwiBridge {
   setPersonalities(list: Personality[]): Promise<void>;
   seatPlaces(): Promise<PlacedSeat[]>;
   showSeat(seat: PlacedSeat): Promise<ShowResult>;
+  /** Watch and type in a hosted agent's tmux pane: the daemon sizes it, then sends the screen and what follows as onTerm events. */
+  termOpen(pane: string, cols: number, rows: number): Promise<TermOpenView>;
+  termKeys(term: string, keys: string): Promise<void>;
+  termSize(term: string, cols: number, rows: number): Promise<void>;
+  termClose(term: string): Promise<void>;
+  onTerm(cb: (e: TermEvent) => void): () => void;
   terminals(): Promise<TerminalsStatus | null>;
   terminalHelpers(id: "rex" | "tmux", to: "on" | "off"): Promise<TerminalsStatus | null>;
   terminalPrefer(id: TerminalId): Promise<TerminalsStatus | null>;

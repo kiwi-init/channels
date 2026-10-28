@@ -17,6 +17,8 @@ import type {
   PhoneView,
   PublicPerson,
   StoreSnapshot,
+  TermEvent,
+  TermOpenView,
   UpdateCheckView,
   UpdateView,
 } from "../../../desktop/src/bridge.ts"
@@ -24,7 +26,22 @@ import { publicChannel } from "../../../desktop/src/public-channel.ts"
 import { onLocalChange, readLocal, writeLocal, type Local } from "./local-store"
 import { persistQueue } from "./persist-queue"
 
-export type { ChannelView, ComputerView, GithubRepoView, KeysAtRest, KiwiBridge, LinkAskView, PairAskView, PhoneView, PublicPerson, StoreSnapshot, UpdateCheckView, UpdateView }
+export type {
+  ChannelView,
+  ComputerView,
+  GithubRepoView,
+  KeysAtRest,
+  KiwiBridge,
+  LinkAskView,
+  PairAskView,
+  PhoneView,
+  PublicPerson,
+  StoreSnapshot,
+  TermEvent,
+  TermOpenView,
+  UpdateCheckView,
+  UpdateView,
+}
 
 /** The desktop bridge, or null in a plain browser. */
 export function bridge(): KiwiBridge | null {
