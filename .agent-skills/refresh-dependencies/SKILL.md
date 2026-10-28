@@ -86,8 +86,8 @@ Look at each one and say in the PR whether it moved.
 - **Electrobun/Livewire and Hutch:** only when kiwi-init/electrobun-livewire
   has a new release. Update `desktop/electrobun-pins.json` and run
   `bun desktop/scripts/eb-pins-check.ts macos-arm64 linux-x64 linux-arm64`.
-  Record which pinned files changed and why, as #1051 does. New pins are
-  reviewed like code.
+  Record which pinned files changed and why, as #1051 does, and read each
+  new pin before you take it.
 - **GitHub Actions:** every `uses:` is a full 40-character SHA, enforced by
   `bun scripts/action-pins.ts`. To bump one, resolve the new tag with
   `gh api repos/<owner>/<repo>/commits/<tag> -q .sha` and keep the tag in the
@@ -150,4 +150,6 @@ then `Closes #N.`, then:
 - **Verification:** the commands from step 6 with their pass counts from your
   own run, plus the dispatched CI run's URL.
 
-An independent reviewer's PASS and a green `ci-ok` come before merge.
+A dependency refresh needs no independent review. It merges on a green
+`ci-ok` and a green run of the dispatched jobs from step 6. A job that never
+got a runner is no verdict; dispatch it again.

@@ -86,10 +86,47 @@ const STYLE: MarkdownStyle = {
 
 const FLAGS = { latexMath: false, underline: false }
 
+type Styles = ReturnType<typeof buildStyles>
+
+const scaled = (px: number) => `calc(${px}px * var(--text-scale, 1))`
+
+function sized(s: CSSProperties): CSSProperties {
+  const line = typeof s.lineHeight === "string" ? /^(\d+(?:\.\d+)?)px$/.exec(s.lineHeight)?.[1] : undefined
+  return { ...s, ...(typeof s.fontSize === "number" ? { fontSize: scaled(s.fontSize) } : {}), ...(line ? { lineHeight: scaled(Number(line)) } : {}) }
+}
+
+const sizedCells = (cells: Styles["tableCell"]): Styles["tableCell"] => ({ left: sized(cells.left), center: sized(cells.center), right: sized(cells.right), default: sized(cells.default) })
+
+export function withTextSize(s: Styles): Styles {
+  return {
+    ...s,
+    paragraph: sized(s.paragraph),
+    paragraphInBlockquote: sized(s.paragraphInBlockquote),
+    h1: sized(s.h1),
+    h2: sized(s.h2),
+    h3: sized(s.h3),
+    h4: sized(s.h4),
+    h5: sized(s.h5),
+    h6: sized(s.h6),
+    blockquote: sized(s.blockquote),
+    list: sized(s.list),
+    listNested: sized(s.listNested),
+    listTask: sized(s.listTask),
+    codeBlock: sized(s.codeBlock),
+    codeBlockFont: sized(s.codeBlockFont),
+    code: sized(s.code),
+    mathInline: sized(s.mathInline),
+    mathDisplay: sized(s.mathDisplay),
+    table: sized(s.table),
+    tableHeaderCell: sizedCells(s.tableHeaderCell),
+    tableCell: sizedCells(s.tableCell),
+  }
+}
+
 const NORMAL = normalizeMarkdownStyle(STYLE)
 const LAST = zeroTrailingMargins(NORMAL)
-const STYLES = buildStyles(NORMAL)
-const LAST_STYLES = buildStyles(LAST)
+const STYLES = withTextSize(buildStyles(NORMAL))
+const LAST_STYLES = withTextSize(buildStyles(LAST))
 const CAPABILITIES = { katex: null, enableTaskListItemToggle: false }
 const WRAP: CSSProperties = { display: "flex", flexDirection: "column" }
 

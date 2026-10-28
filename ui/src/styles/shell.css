@@ -246,7 +246,7 @@
 .top-name {
   overflow: hidden;
   text-overflow: ellipsis;
-  font: 600 15px var(--ui);
+  font: 600 calc(15px * var(--text-scale, 1)) var(--ui);
 }
 
 .top-meta {
@@ -564,7 +564,7 @@
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  font: 600 14px var(--ui);
+  font: 600 calc(14px * var(--text-scale, 1)) var(--ui);
   white-space: nowrap;
   text-overflow: ellipsis;
 }

@@ -1,5 +1,6 @@
 import type { HookState, KnownHarness } from "@kiwi/core/harnesses.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
+import type { TerminalId, TerminalRow } from "@kiwi/core/terminals.ts"
 
 export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "grok" | "other"
 
@@ -228,6 +229,8 @@ interface Fact {
   at: number
 }
 
+export type ComputerChoices = { harnesses?: App["harnesses"]; folders: string[] } | { error: string }
+
 export interface Channel {
   code: string
   title: string
@@ -351,6 +354,8 @@ export interface Actions {
   setPowers(code: string, name: string, powers: Partial<Powers>): void
   addAgent(code: string, agent: NewAgent): void
   showAgent(code: string, name: string): Promise<string | null>
+  choicesOn(code: string, computer: string): Promise<ComputerChoices>
+  chooseFolder(): Promise<string | null>
   addRoom(code: string, name: string): void
   renameRoom(code: string, id: string, name: string): void
   setIcon(code: string, file: File | null): void
@@ -395,6 +400,9 @@ export interface Actions {
   savePersonalities(list: Personality[]): void
   setHooks(harness: KnownHarness, on: boolean): void
   checkComputer(): Promise<Finding[] | null>
+  preferTerminal(id: TerminalId): void
+  setTerminalHelpers(id: Exclude<TerminalId, "app">, on: boolean): void
+  setContextLine(on: boolean): void
 }
 
 export type Finding = { ok: true; what: string } | { ok: false; what: string; how: string }
@@ -402,12 +410,15 @@ export type Finding = { ok: true; what: string } | { ok: false; what: string; ho
 export interface ThisComputer {
   kiwi: { running: boolean; version?: string }
   hooks: { harness: KnownHarness; label: string; state: Exclude<HookState, "absent"> }[]
+  contextLine: boolean | null
 }
 
 export interface AgentStarts {
   folders: string[]
   launch: boolean
   bypass: boolean
+  prefer: TerminalId
+  terminals: TerminalRow[]
 }
 
 export interface App {

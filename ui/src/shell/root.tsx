@@ -61,7 +61,7 @@ function usePaletteKey(toggle: () => void) {
 }
 
 function useTheme(app: App) {
-  const { theme, reduceMotion, textSize, darkTheme, lightTheme, customThemes } = app.prefs
+  const { theme, reduceMotion, darkTheme, lightTheme, customThemes } = app.prefs
   const systemDark = useSystemDark()
   const preview = usePreview()
   const active = useMemo(() => activeTheme({ theme, darkTheme, lightTheme, customThemes }, systemDark), [theme, darkTheme, lightTheme, customThemes, systemDark])
@@ -73,6 +73,5 @@ function useTheme(app: App) {
     applyTheme(colorsOf(preview ?? active))
     if (reduceMotion) root.dataset.motion = "reduced"
     else delete root.dataset.motion
-    root.style.setProperty("--zoom", String(1 + textSize * 0.08))
-  }, [theme, reduceMotion, textSize, active, preview])
+  }, [theme, reduceMotion, active, preview])
 }

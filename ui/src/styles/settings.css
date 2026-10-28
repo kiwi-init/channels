@@ -12,7 +12,7 @@
 
 .set-top-title {
   padding: 0 18px;
-  font: 600 14px var(--ui);
+  font: 600 calc(14px * var(--text-scale, 1)) var(--ui);
 }
 
 .set-back {
@@ -107,6 +107,12 @@
 .set-row-hint {
   color: var(--ink-3);
   font: var(--t-meta) / 1.45 var(--ui);
+}
+
+.set-row-note {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-2);
 }
 
 .set-group-hint {
