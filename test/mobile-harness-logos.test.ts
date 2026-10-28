@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { monoHarness } from "../web/src/lib/harness.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const ASSETS = join(ROOT, "assets/harness");
@@ -19,14 +20,16 @@ describe("the phone apps carry every harness logo the desktop app draws", () => 
     expect(harnesses.length).toBeGreaterThan(10);
   });
 
-  test("iOS has each one as a template image set with the same shapes", () => {
+  test("iOS has each one as an image set with the same shapes, a template exactly when the mark is drawn in one color", () => {
     for (const h of harnesses) {
       const set = join(IOS, `harness-${h}.imageset`);
       const svg = join(set, `${h}.svg`);
       expect([h, existsSync(svg)]).toEqual([h, true]);
       if (!existsSync(svg)) continue;
       expect([h, shapes(readFileSync(svg, "utf8"))]).toEqual([h, shapes(readFileSync(join(ASSETS, `${h}.svg`), "utf8"))]);
-      expect([h, JSON.parse(readFileSync(join(set, "Contents.json"), "utf8")).images]).toEqual([h, [{ filename: `${h}.svg`, idiom: "universal" }]]);
+      const contents = JSON.parse(readFileSync(join(set, "Contents.json"), "utf8"));
+      expect([h, contents.images]).toEqual([h, [{ filename: `${h}.svg`, idiom: "universal" }]]);
+      expect([h, contents.properties?.["template-rendering-intent"] === "template"]).toEqual([h, monoHarness(h)]);
     }
   });
 
