@@ -1,5 +1,6 @@
 import type { HookState, KnownHarness } from "@kiwi/core/harnesses.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
+import type { Step, StepReply } from "@kiwi/core/protocol.ts"
 import type { TerminalId, TerminalRow } from "@kiwi/core/terminals.ts"
 
 export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "grok" | "other"
@@ -160,6 +161,7 @@ export interface QuestionAsk {
   holds: number[]
   task?: number
   idle?: true
+  step?: Step
   answer?: { text: string; by: string; at: number }
 }
 
@@ -340,6 +342,7 @@ export interface Actions {
   react(code: string, seq: number, emoji: string): void
   answerPermission(code: string, id: string, allow: boolean): void
   answerQuestion(code: string, id: string, text: string): void
+  answerStep(code: string, id: string, reply: StepReply): void
   answerJoin(code: string, id: string, letIn: boolean, choice?: JoinChoice): void
   approveTask(code: string, task: number, approve: boolean): void
   addTask(code: string, title: string, owner?: string): void

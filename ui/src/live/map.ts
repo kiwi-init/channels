@@ -396,6 +396,7 @@ export function asksOf(
       text: m.body,
       options: m.choices ?? [],
       holds,
+      ...(m.step ? { step: m.step } : {}),
       ...(task !== undefined ? { task } : {}),
       ...(idle ? { idle: true as const } : {}),
       ...(!isOpen && answer ? { answer: { text: answer.body, by: answer.from, at: answer.ts } } : {}),

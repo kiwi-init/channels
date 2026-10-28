@@ -2,6 +2,7 @@ import { useMemo, useState } from "react"
 
 import type { Personality } from "@kiwi/core/personality.ts"
 
+import { stepReplyText } from "~/chat/step"
 import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_EMPTY, DEMO_GUEST, DEMO_PREFS, DEMO_TILES, DEMO_WAITING } from "~/demo/data"
 import { longFeed } from "~/demo/long"
 import type { Account, Actions, AgentStarts, App, Finding, ThisComputer, Channel, ChannelTile, Message, Prefs, Task } from "~/model"
@@ -57,12 +58,46 @@ const STARTS: AgentStarts = {
   ],
 }
 
-export type Scenario = "full" | "long" | "signed-out" | "no-channels" | "updates" | "update-ready" | "update-available"
+function withStep(c: Channel): Channel {
+  const at = Date.now() - 30_000
+  const text = "Remove commit signing from ~/.gitconfig-personal"
+  const seq = Math.max(...c.messages.map((m) => m.seq)) + 1
+  return {
+    ...c,
+    messages: [...c.messages, { seq, from: "win", at, text, where: { kind: "room", room: "general" }, ask: "step-1", mentionsYou: true }],
+    asks: [
+      ...c.asks,
+      {
+        kind: "question",
+        id: "step-1",
+        from: "win",
+        at,
+        text,
+        options: [],
+        holds: [13],
+        step: {
+          why: "The release tag has to be signed with the release key, and commit.gpgsign in your personal config signs it with yours. Editing your git config is yours to do.",
+          needsPerson: "jow",
+          run: ["git config --file ~/.gitconfig-personal --unset commit.gpgsign"],
+          expect: "git config --file ~/.gitconfig-personal commit.gpgsign prints nothing.",
+        },
+      },
+    ],
+  }
+}
+
+export type Scenario = "full" | "long" | "step" | "signed-out" | "no-channels" | "updates" | "update-ready" | "update-available"
 
 function initial(scenario: Scenario, look: Partial<Prefs>): State {
   const prefs = { ...DEMO_PREFS, ...look }
   const channels = new Map(
-    [scenario === "long" ? longFeed(DEMO_CHANNEL) : DEMO_CHANNEL, DEMO_EMPTY, DEMO_WAITING, { ...DEMO_EMPTY, code: "interlinked", title: "interlinked" }, DEMO_GUEST].map((c) => [c.code, c])
+    [
+      scenario === "long" ? longFeed(DEMO_CHANNEL) : scenario === "step" ? withStep(DEMO_CHANNEL) : DEMO_CHANNEL,
+      DEMO_EMPTY,
+      DEMO_WAITING,
+      { ...DEMO_EMPTY, code: "interlinked", title: "interlinked" },
+      DEMO_GUEST,
+    ].map((c) => [c.code, c])
   )
   if (scenario === "updates")
     return { account: { ...DEMO_ACCOUNT, uiUpdate: { version: "dev-1542" }, update: { version: "2026.10.7", ready: true, state: "ready" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
@@ -131,6 +166,8 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           asks: c.asks.map((a) => (a.kind === "permission" && a.id === id ? { ...a, answer: { allow, by: c.you, at: Date.now() } } : a)),
           tasks: c.tasks.map((t) => (c.asks.some((a) => a.kind === "permission" && a.id === id && a.task === t.id) ? { ...t, status: allow ? "doing" : "todo" } : t)),
         })),
+      answerStep: (code, id, reply) =>
+        edit(code, (c) => ({ ...c, asks: c.asks.map((a) => (a.kind === "question" && a.id === id ? { ...a, answer: { text: stepReplyText(reply), by: c.you, at: Date.now() } } : a)) })),
       answerQuestion: (code, id, text) => edit(code, (c) => ({ ...c, asks: c.asks.map((a) => (a.kind === "question" && a.id === id ? { ...a, answer: { text, by: c.you, at: Date.now() } } : a)) })),
       answerJoin: (code, id, letIn, choice) =>
         edit(code, (c) => {

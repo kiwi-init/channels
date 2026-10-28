@@ -36,6 +36,7 @@ import { memberName } from "@/lib/format"
 import { checkComputer, computerSettings, setContextLine, setHooks } from "~/live/computer"
 import { addStartFolder, allowNewAgents, allowRemoteBypass, preferTerminal, removeStartFolder, setTerminalHelpers } from "~/live/starts"
 import { closeOpened, openedChannel, openedRun, type Run } from "~/live/store"
+import { stepReplyText } from "~/chat/step"
 import { downloadAndRestart } from "~/live/update"
 import { setWake } from "~/live/wakes"
 import { rememberOwner } from "~/live/invites"
@@ -239,6 +240,13 @@ export function makeActions(): Actions {
         const m = run.messages.find((x) => x.seq === Number(id))
         if (!m) throw new Error("that question is gone")
         await run.send(text, { to: [m.from], re: [m.seq], kind: "msg" })
+      }),
+    answerStep: (code, id, reply) =>
+      attempt("Not answered", async () => {
+        const run = need(code)
+        const m = run.messages.find((x) => x.seq === Number(id))
+        if (!m) throw new Error("that step is gone")
+        await run.send(stepReplyText(reply), { to: [m.from], re: [m.seq], kind: "msg", stepReply: reply })
       }),
     answerJoin: (code, id, yes, choice) =>
       attempt(yes ? "Couldn't let them in" : "Couldn't turn them away", async () => {

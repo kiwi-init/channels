@@ -25,6 +25,8 @@ export const SHOTS: Record<string, Shot> = {
   "task-done": kiwi({ tab: "tasks", panel: { kind: "task", task: 9 } }),
   "tasks-empty": { scenario: "full", channel: "landing", nav: { tab: "tasks" } },
   needs: kiwi({ tab: "needs" }),
+  "step-card": { scenario: "step", channel: "kiwi" },
+  "needs-step": { scenario: "step", channel: "kiwi", nav: { tab: "needs" } },
   agent: kiwi({ panel: { kind: "person", name: "atlas" } }),
   person: kiwi({ panel: { kind: "person", name: "maya" } }),
   "agent-offline": kiwi({ panel: { kind: "person", name: "ridge" } }),

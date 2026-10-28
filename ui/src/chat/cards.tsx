@@ -1,5 +1,6 @@
 import { useState } from "react"
 
+import { StepAnswer, StepHow } from "~/chat/step"
 import { cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { clock } from "~/kit/time"
@@ -98,23 +99,27 @@ export function QuestionCard({ channel, ask }: { channel: Channel; ask: Question
     return (
       <div className="ask">
         <p className="ask-state">
-          {ask.answer.by === channel.you ? "You" : nickname(channel, ask.answer.by)} chose “{ask.answer.text}” · {clock(ask.answer.at)}
+          {ask.answer.by === channel.you ? "You" : nickname(channel, ask.answer.by)} {ask.step ? "answered" : "chose"} “{ask.answer.text}” · {clock(ask.answer.at)}
         </p>
       </div>
     )
   return (
     <div className="ask is-open">
-      <ol className="ask-options">
-        {ask.options.map((o, i) => (
-          <li key={o}>
-            <button type="button" className="ask-option" onClick={() => actions.answerQuestion(channel.code, ask.id, o)}>
-              <span className="ask-letter">{String.fromCharCode(65 + i)}</span>
-              {o}
-            </button>
-          </li>
-        ))}
-      </ol>
-      {other === null ? (
+      {ask.step && <StepHow step={ask.step} />}
+      {ask.step && other === null && <StepAnswer onAnswer={(reply) => actions.answerStep(channel.code, ask.id, reply)} onElse={() => setOther("")} />}
+      {ask.options.length > 0 && (
+        <ol className="ask-options">
+          {ask.options.map((o, i) => (
+            <li key={o}>
+              <button type="button" className="ask-option" onClick={() => actions.answerQuestion(channel.code, ask.id, o)}>
+                <span className="ask-letter">{String.fromCharCode(65 + i)}</span>
+                {o}
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
+      {ask.step && other === null ? null : other === null ? (
         <button type="button" className="btn is-quiet is-small" onClick={() => setOther("")}>
           Something else…
         </button>
