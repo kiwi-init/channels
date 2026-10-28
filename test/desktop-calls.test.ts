@@ -150,7 +150,7 @@ describe("main's handlers reach the shell only through the host", () => {
     expect({ did, told, relay: store.relayUrl }).toEqual({
       did: ["push store", "reload"],
       told: [
-        { type: "seats", seats: [], person: null },
+        { type: "seats", seats: [], person: null, mine: [] },
         { type: "relay", relay: "https://relay.example" },
       ],
       relay: "https://relay.example",

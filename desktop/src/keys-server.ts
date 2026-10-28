@@ -97,8 +97,8 @@ export function serveKeys(k: Keyring, push: (p: KeysPush) => void): KeysSession 
 }
 
 export type HostToKeys =
-  | { type: "init"; relay: string; dir: string; seats: ChannelIdentityView[]; person: string | null }
-  | { type: "seats"; seats: ChannelIdentityView[]; person: string | null }
+  | { type: "init"; relay: string; dir: string; seats: ChannelIdentityView[]; person: string | null; mine: string[] }
+  | { type: "seats"; seats: ChannelIdentityView[]; person: string | null; mine: string[] }
   | { type: "flush" }
   | { type: "relay"; relay: string }
   | { type: "nudge" }

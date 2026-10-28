@@ -213,6 +213,7 @@ function app(relay: string): Keyring {
     prove: async () => null,
     githubToken: async () => null,
     person: () => null,
+    mine: () => null,
     budget: memoryBudget(),
   };
   return new Keyring(host);

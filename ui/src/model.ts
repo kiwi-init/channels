@@ -174,6 +174,7 @@ export interface JoinAsk {
   harness?: Harness
   runs?: string
   machine?: string
+  forgotten?: true
   sponsor?: string
   key?: string
   said?: { machine?: string; tools?: string[]; repo?: string; outside: boolean } | "nothing"

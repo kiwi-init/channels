@@ -49,6 +49,7 @@ function memHost(person: Identity | null): { host: KeyHost; store: Store } {
     prove: async (code, memberPk) => (person ? provePerson(person, decodeJoinCode(code).roomId, memberPk) : null),
     githubToken: async () => null,
     person: () => person?.pk ?? null,
+    mine: () => null,
     budget: memoryBudget(),
   };
   return { host, store };

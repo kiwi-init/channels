@@ -431,6 +431,7 @@ export function asksOf(
             ? { runs: [r.card.harness && harnessName(r.card.harness), r.card.model].filter(Boolean).join(" · ") }
             : {}),
         ...(r.computer ? { machine: r.computer.label, sponsor: r.computer.personName } : r.card?.os ? { machine: r.card.os } : {}),
+        ...(r.computer?.forgotten ? { forgotten: true as const } : {}),
         code: r.check === "ready" && r.code ? r.code : "",
         check: r.check,
       })

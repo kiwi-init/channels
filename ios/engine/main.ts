@@ -79,6 +79,7 @@ function start(next: Saved): number {
     prove: async () => null,
     githubToken: async () => null,
     person: () => saved?.person?.pk ?? null,
+    mine: () => null,
     budget,
   });
   keyring = ring;

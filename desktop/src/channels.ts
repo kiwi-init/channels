@@ -24,6 +24,7 @@ let relay = "";
 let dir = "";
 let seats: ChannelIdentityView[] = [];
 let person: string | null = null;
+let mine: string[] = [];
 let memory: Memory = { records: {}, checks: {} };
 let writing: ReturnType<typeof setTimeout> | null = null;
 let nextId = 1;
@@ -97,6 +98,7 @@ const keyring = new Keyring({
   prove: async (code, memberPk): Promise<PersonClaim | null> => (await asked({ type: "prove", code, memberPk })).claim ?? null,
   githubToken: async () => (await asked({ type: "githubToken" })).token ?? null,
   person: () => person,
+  mine: () => mine,
   budget,
 });
 
@@ -119,12 +121,14 @@ parent.on("message", (e) => {
       dir = m.dir;
       seats = m.seats;
       person = m.person;
+      mine = m.mine;
       loadMemory();
       void keyring.finishCreating().catch(() => {});
       return;
     case "seats":
       seats = m.seats;
       person = m.person;
+      mine = m.mine;
       return;
     case "flush":
       writeMemory();

@@ -46,11 +46,11 @@ type RequestRow = {
 };
 
 export interface RequestsFx {
-  requests(opts?: { budget?: SigningBudget; person?: string }): Effect.Effect<JoinRequest[], Refused, Relay>;
+  requests(opts?: { budget?: SigningBudget; person?: string; mine?: readonly string[] | null }): Effect.Effect<JoinRequest[], Refused, Relay>;
   checkRequest(req: Pick<JoinRequest, "id" | "pk" | "commit">): Effect.Effect<void, Refused, Relay>;
   approve(req: JoinRequest, as?: Partial<MemberInfo>, opts?: { person?: string }): Effect.Effect<Member, Refused, Relay>;
   pinPersona(p: Personality): Effect.Effect<string, Refused, Relay>;
-  autoApprove(person: string, personalities?: readonly Personality[]): Effect.Effect<Member[], Refused, Relay>;
+  autoApprove(person: string, personalities?: readonly Personality[], mine?: readonly string[] | null): Effect.Effect<Member[], Refused, Relay>;
   deny(requestId: string): Effect.Effect<void, Refused, Relay>;
 }
 
@@ -58,7 +58,7 @@ export class ChannelRequests {
   constructor(private readonly ch: ChannelCore) {}
 
   readonly fx: RequestsFx = {
-    requests: Effect.fn("Channel.requests")({ self: this }, function* (this: ChannelRequests, opts: { budget?: SigningBudget; person?: string } = {}) {
+    requests: Effect.fn("Channel.requests")({ self: this }, function* (this: ChannelRequests, opts: { budget?: SigningBudget; person?: string; mine?: readonly string[] | null } = {}) {
       yield* this.ch.ownerOnly();
       const { requests } = yield* this.ch.request<{ requests: RequestRow[] }>("/requests", {}, { v: 2 });
       const out: JoinRequest[] = [];
@@ -88,7 +88,8 @@ export class ChannelRequests {
         const free = !!auto && allowed && !offered.some((m) => nameKey(m.name) === nameKey(asked));
         const nick = kind === "human" ? "" : inlineText(info.display, 40) || (auto && !free && allowed && !personName ? asked.replace(/-\d+$/, "") || asked : "");
         if (auto) offered.push({ name: (info.name = free ? asked : freeHandle(offered, seededPick(r.pk))) });
-        const own = !!computer && !!opts.person && computer.person === opts.person;
+        const forgotten = !!computer && !!opts.person && computer.person === opts.person && !!opts.mine && !opts.mine.includes(computer.pk);
+        const own = !!computer && !!opts.person && computer.person === opts.person && !forgotten;
         const joinsOnItsOwn = own || (kind === "agent" && !!computer && !!opts.person && agentsOf.has(computer.person));
         const spend = joinsOnItsOwn ? undefined : opts.person && !r.reveal ? undefined : opts.budget;
         const check = yield* this.codeCheck(r, spend, joinsOnItsOwn).pipe(Effect.catchCause(() => Effect.succeed(null)));
@@ -105,7 +106,7 @@ export class ChannelRequests {
           ...check,
           sponsoredBy: null,
           ...(auto ? { askedAs: auto } : {}),
-          ...(computer ? { computer: { ...computer, own: opts.person === computer.person, joinsOnItsOwn } } : {}),
+          ...(computer ? { computer: { ...computer, own, joinsOnItsOwn, ...(forgotten ? { forgotten: true } : {}) } } : {}),
           ...(person ? { person } : {}),
           ...(cleanCard(info.card) ? { card: cleanCard(info.card)! } : {}),
           ...(kind !== "human" && readRuns(info.runs) ? { runs: readRuns(info.runs)! } : {}),
@@ -178,14 +179,14 @@ export class ChannelRequests {
       return { pk: req.pk, xpk: req.xpk, ...info, owner: false, at: rec.at, active: true } satisfies Member;
     }),
 
-    autoApprove: Effect.fn("Channel.autoApprove")({ self: this }, function* (this: ChannelRequests, person: string, personalities: readonly Personality[] = []) {
+    autoApprove: Effect.fn("Channel.autoApprove")({ self: this }, function* (this: ChannelRequests, person: string, personalities: readonly Personality[] = [], mine: readonly string[] | null = null) {
       yield* this.ch.ownerOnly();
-      for (const req of yield* this.ch.fx.requests({ person })) {
+      for (const req of yield* this.ch.fx.requests({ person, mine })) {
         if (req.computer?.joinsOnItsOwn && req.check === "unchecked") yield* Effect.ignoreCause(this.ch.fx.checkRequest(req));
       }
       const approved: Member[] = [];
       const people = yield* this.ch.fx.members();
-      for (const req of yield* this.ch.fx.requests({ person })) {
+      for (const req of yield* this.ch.fx.requests({ person, mine })) {
         if (!(req.computer?.joinsOnItsOwn && req.check === "ready" && req.code)) continue;
         const pin = req.pin;
         let as: Partial<MemberInfo> | undefined;

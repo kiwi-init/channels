@@ -327,6 +327,7 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
       }
     >
       <p className="needs-line">{line}</p>
+      {ask.forgotten && <p className="needs-warn">It runs on {ask.machine}, a computer you forgot, so it didn't join on its own. Let it in only if you meant to bring that computer back.</p>}
       {ask.said && <Said said={ask.said} />}
       {ask.pin && (
         <p className="needs-line">

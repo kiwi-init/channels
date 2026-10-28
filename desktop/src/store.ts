@@ -83,7 +83,7 @@ export const mutate = (fn: (s: StoreFile) => void) => {
   saveStore();
   const shell = host();
   shell.push("store", snapshot());
-  shell.tellKeys({ type: "seats", seats: store.channels, person: store.person?.pk ?? null });
+  shell.tellKeys({ type: "seats", seats: store.channels, person: store.person?.pk ?? null, mine: store.computers.map((c) => c.machinePk) });
 };
 
 export function requirePerson(): Identity {
