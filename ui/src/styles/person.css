@@ -77,7 +77,7 @@
   padding-left: 12px;
   border-left: 2px solid var(--line-3);
   color: var(--ink-2);
-  font: 14px / 1.5 var(--sans);
+  font: calc(14px * var(--text-scale, 1)) / 1.5 var(--sans);
 }
 
 .person-doing {
@@ -110,7 +110,7 @@
 }
 
 .person-prop code {
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--text-scale, 1));
 }
 
 .person-ref {

@@ -164,7 +164,7 @@ button.needs-name:hover {
   padding: 9px 12px;
   border: 1px solid var(--line-2);
   border-radius: var(--r-row);
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--text-scale, 1));
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-all;
@@ -195,7 +195,7 @@ button.needs-name:hover {
   padding-left: 12px;
   border-left: 2px solid var(--line-3);
   color: var(--ink-2);
-  font: 14px / 1.5 var(--sans);
+  font: calc(14px * var(--text-scale, 1)) / 1.5 var(--sans);
 }
 
 .needs-note-by {

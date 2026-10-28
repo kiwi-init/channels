@@ -12,7 +12,7 @@
 
 .set-top-title {
   padding: 0 18px;
-  font: 600 14px var(--ui);
+  font: 600 calc(14px * var(--text-scale, 1)) var(--ui);
 }
 
 .set-back {
