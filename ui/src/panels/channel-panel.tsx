@@ -21,7 +21,11 @@ export function ChannelPanel({ channel }: { channel: Channel }) {
   const owner = channel.people.find((p) => p.owner && !p.you)
   const [ending, setEnding] = useState(false)
 
-  const save = (ext: "md" | "jsonl") => toast(`Saving ${channel.code}.${ext} to Downloads`)
+  const [saving, setSaving] = useState<"transcript" | "log" | null>(null)
+  const save = (kind: "transcript" | "log") => {
+    setSaving(kind)
+    void actions.exportHistory(channel.code, kind).finally(() => setSaving(null))
+  }
 
   return (
     <>
@@ -48,13 +52,13 @@ export function ChannelPanel({ channel }: { channel: Channel }) {
 
         <Part title="History">
           <div className="cpanel-downloads">
-            <button type="button" className="btn is-quiet cpanel-download" onClick={() => save("md")}>
+            <button type="button" className="btn is-quiet cpanel-download" disabled={saving !== null} onClick={() => save("transcript")}>
               <Icon name="download" size={14} />
-              Download the transcript (.md)
+              {saving === "transcript" ? "Saving the transcript…" : "Download the transcript (.md)"}
             </button>
-            <button type="button" className="btn is-quiet cpanel-download" onClick={() => save("jsonl")}>
+            <button type="button" className="btn is-quiet cpanel-download" disabled={saving !== null} onClick={() => save("log")}>
               <Icon name="download" size={14} />
-              Download the signed log (.jsonl)
+              {saving === "log" ? "Saving the signed log…" : "Download the signed log (.jsonl)"}
             </button>
           </div>
         </Part>

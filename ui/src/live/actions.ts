@@ -27,7 +27,8 @@ import { announce } from "~/kit/toasts"
 import { answerPair, cancelPair, linkGithub, pairBegin, unlinkGithub } from "~/live/account"
 import { newMemberPowers, newMemberScopes, setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
-import { closeOpened, openedRun, type Run } from "~/live/store"
+import { memberName } from "@/lib/format"
+import { closeOpened, openedChannel, openedRun, type Run } from "~/live/store"
 import { downloadAndRestart } from "~/live/update"
 import { setWake } from "~/live/wakes"
 import { rememberOwner } from "~/live/invites"
@@ -343,6 +344,35 @@ export function makeActions(): Actions {
         await roomFolded(() => openedRun(code), room)
         await run.ch.setRooms({ list: roomsAfter(openedRun(code)?.state.rooms.values() ?? run.state.rooms.values(), room), since })
       }),
+    exportHistory: async (code, kind) => {
+      try {
+        const run = need(code)
+        const b = bridge()
+        if (b && !("saveFile" in b)) return announce("Saving the history needs the next Channels update")
+        const [{ checkedState, exportNote, logExport, logFileName, transcript }, history] = await Promise.all([import("@/lib/log-export"), run.ch.history(0)])
+        const log = logExport(history)
+        const state = await checkedState(history, run.foldFrom, () => run.ch.snapshot().catch(() => null), run.state)
+        const at = new Date()
+        const title = openedChannel(code)?.title
+        const text = kind === "log" ? log.text : transcript({ title, log, state, nameOf: (from) => memberName(state.members.get(from), from), at })
+        const name = logFileName(title, at, kind)
+        if (b) {
+          const saved = await b.saveFile(name, text)
+          announce(`Saved ${saved} to Downloads`)
+        } else {
+          const url = URL.createObjectURL(new Blob([text], { type: kind === "log" ? "application/jsonl" : "text/markdown" }))
+          const a = document.createElement("a")
+          a.href = url
+          a.download = name
+          a.click()
+          window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+        }
+        const note = exportNote(log)
+        if (!note.complete) announce(note.text)
+      } catch (err) {
+        announce(`Not saved: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    },
     renameChannel: (code, title) =>
       attempt("Not renamed", async () => {
         const name = title.trim().slice(0, 80)
