@@ -3,7 +3,7 @@ import "~/styles/needs.css"
 import { useEffect, useId, useState, type ReactNode } from "react"
 
 import { PrChip, QuestionCard, TaskChip } from "~/chat/cards"
-import { Avatar, Empty, Toggle } from "~/kit/bits"
+import { Avatar, Empty, Loading, Toggle } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago, clock } from "~/kit/time"
 import type { Ask, Channel, JoinAsk, Message, PermissionAsk, Person, Powers, QuestionAsk, ReviewAsk } from "~/model"
@@ -38,6 +38,8 @@ export function NeedsYou({ channel }: { channel: Channel }) {
               ))}
             </ol>
           </>
+        ) : channel.loading ? (
+          <Loading />
         ) : (
           <Empty title="Nothing needs you.">Asks from agents and people who want in show up here.</Empty>
         )}

@@ -2,17 +2,36 @@ import { bareAt, memberNamed, readsAsHandle } from "@kiwi/core/state.ts"
 import { fromMarkdown } from "mdast-util-from-markdown"
 import { gfmFromMarkdown } from "mdast-util-gfm"
 import { gfm } from "micromark-extension-gfm"
+import { sanitizeMarkdownUrl } from "../../../web/src/lib/markdown"
 
-type MdNode = { type: string; value?: string; children?: MdNode[]; position?: { start: { offset?: number }; end: { offset?: number } } }
+type MdNode = { type: string; value?: string; url?: string; alt?: string | null; children?: MdNode[]; position?: { start: { offset?: number }; end: { offset?: number } } }
 
-type Found = { start: number; end: number } & ({ kind: "mention" | "bare"; name: string; label: string } | { kind: "task"; id: number })
+type Found = { start: number; end: number } & (
+  | { kind: "mention" | "bare"; name: string; label: string }
+  | { kind: "task"; id: number }
+  | { kind: "ref"; seq: number }
+  | { kind: "image"; url: string; alt: string }
+)
 
 const NOT_PROSE = new Set(["link", "linkReference", "definition", "image", "imageReference", "code", "inlineCode", "html"])
 const MENTION = /(?<![\p{L}\p{N}_.@-])@([\p{L}\p{N}_.-]+)/gu
 const TASK = /\bT(\d+)\b/g
+const REF = /(?<![\p{L}\p{N}\p{M}_/#&.-])#([1-9]\d{0,8})(?![\p{L}\p{N}\p{M}_])/gu
+const NOT_A_MESSAGE = /\b(?:PR|pr|pull|issue|Issue|issues|Issues)\s*$/
 const WORD = /(?<![\p{L}\p{N}\p{M}_/.@-])[\p{L}\p{N}_.-]+/gu
 
 type Span = { start: number; end: number }
+
+type Image = Span & { url: string; alt: string }
+
+function images(node: MdNode): Image[] {
+  if (node.type === "image") {
+    const start = node.position?.start.offset
+    const end = node.position?.end.offset
+    return start !== undefined && end !== undefined && node.url !== undefined ? [{ start, end, url: node.url, alt: node.alt ?? "" }] : []
+  }
+  return (node.children ?? []).flatMap(images)
+}
 
 function prose(node: MdNode): Span[] {
   if (NOT_PROSE.has(node.type)) return []
@@ -24,27 +43,36 @@ function prose(node: MdNode): Span[] {
   return (node.children ?? []).flatMap(prose)
 }
 
-const parsed = new Map<string, Span[]>()
+const parsed = new Map<string, { spans: Span[]; images: Image[] }>()
 
-function spansOf(text: string): Span[] {
+function treeOf(text: string): { spans: Span[]; images: Image[] } {
   const known = parsed.get(text)
   if (known) return known
-  const spans = prose(fromMarkdown(text, { extensions: [gfm()], mdastExtensions: [gfmFromMarkdown()] }))
+  const tree = fromMarkdown(text, { extensions: [gfm()], mdastExtensions: [gfmFromMarkdown()] })
+  const next = { spans: prose(tree), images: images(tree) }
   if (parsed.size >= 500) parsed.delete(parsed.keys().next().value ?? "")
-  parsed.set(text, spans)
-  return spans
+  parsed.set(text, next)
+  return next
 }
 
-function found(text: string, nicknames: ReadonlyMap<string, string>): Found[] {
+const spansOf = (text: string): Span[] => treeOf(text).spans
+
+function found(text: string, nicknames: ReadonlyMap<string, string>, before?: number): Found[] {
   const labelOf = (name: string) => nicknames.get(name) ?? nicknames.get(name.toLowerCase())
-  const hits: Found[] = []
-  for (const span of spansOf(text)) {
+  const { spans, images: pictures } = treeOf(text)
+  const hits: Found[] = pictures.map((p) => ({ kind: "image", ...p }))
+  for (const span of spans) {
     const part = text.slice(span.start, span.end)
     for (const m of part.matchAll(MENTION)) {
       const who = memberNamed(m[1] ?? "", labelOf)
       if (who) hits.push({ kind: "mention", ...who, start: span.start + m.index, end: span.start + m.index + 1 + who.name.length })
     }
     for (const m of part.matchAll(TASK)) hits.push({ kind: "task", id: Number(m[1]), start: span.start + m.index, end: span.start + m.index + m[0].length })
+    if (before !== undefined)
+      for (const m of part.matchAll(REF)) {
+        const seq = Number(m[1])
+        if (seq < before && !NOT_A_MESSAGE.test(part.slice(0, m.index))) hits.push({ kind: "ref", seq, start: span.start + m.index, end: span.start + m.index + m[0].length })
+      }
     for (const m of part.matchAll(WORD)) {
       const who = memberNamed(m[0], labelOf)
       const start = span.start + m.index
@@ -57,10 +85,10 @@ function found(text: string, nicknames: ReadonlyMap<string, string>): Found[] {
   return kept.filter((hit) => !escaped(hit))
 }
 
-function swap(text: string, nicknames: ReadonlyMap<string, string>, out: (hit: Found) => string | null): string {
+function swap(text: string, nicknames: ReadonlyMap<string, string>, out: (hit: Found) => string | null, before?: number): string {
   let result = ""
   let from = 0
-  for (const hit of found(text, nicknames)) {
+  for (const hit of found(text, nicknames, before)) {
     const said = out(hit)
     if (said === null) continue
     result += text.slice(from, hit.start) + said
@@ -71,14 +99,34 @@ function swap(text: string, nicknames: ReadonlyMap<string, string>, out: (hit: F
 
 const literal = (text: string): string => text.replace(/[\\`*_[\]()<>&!|~]/g, "\\$&")
 
-export function linked(text: string, nicknames: ReadonlyMap<string, string>, tasks: ReadonlySet<number>): string {
-  return swap(text, nicknames, (hit) =>
-    hit.kind === "task" ? (tasks.has(hit.id) ? `[T${hit.id}](kiwi-task:${hit.id})` : null) : `[${hit.kind === "mention" ? "@" : ""}${literal(hit.label)}](kiwi-mention:${hit.name})`
+function remote(url: string, alt: string): string | null {
+  if (/^(?:data|blob):/i.test(url.trim())) return null
+  const safe = sanitizeMarkdownUrl(url)
+  if (!safe || !/^https?:\/\//i.test(safe)) return literal(alt)
+  const at = new URL(safe)
+  return `[${literal(alt || "image")} (opens ${at.hostname})](<${at.href}>)`
+}
+
+export function linked(text: string, nicknames: ReadonlyMap<string, string>, tasks: ReadonlySet<number>, before?: number): string {
+  return swap(
+    text,
+    nicknames,
+    (hit) =>
+      hit.kind === "task"
+        ? tasks.has(hit.id)
+          ? `[T${hit.id}](kiwi-task:${hit.id})`
+          : null
+        : hit.kind === "ref"
+          ? `[#${hit.seq}](kiwi-msg:${hit.seq})`
+          : hit.kind === "image"
+            ? remote(hit.url, hit.alt)
+            : `[${hit.kind === "mention" ? "@" : ""}${literal(hit.label)}](kiwi-mention:${hit.name})`,
+    before
   )
 }
 
 export function named(text: string, nicknames: ReadonlyMap<string, string>): string {
-  return swap(text, nicknames, (hit) => (hit.kind === "task" ? null : `${hit.kind === "mention" ? "@" : ""}${hit.label}`))
+  return swap(text, nicknames, (hit) => (hit.kind === "mention" || hit.kind === "bare" ? `${hit.kind === "mention" ? "@" : ""}${hit.label}` : null))
 }
 
 const NAME_GOES_ON = /[\p{L}\p{N}\p{M}_\\-]|[./][\p{L}\p{N}]/uy
@@ -134,7 +182,7 @@ export function withNames(text: string, nicknames: ReadonlyMap<string, string>, 
   const [open, close] = unused(text)
   const labels: string[] = []
   const marked = swap(text, nicknames, (hit) => {
-    if (hit.kind === "task") return null
+    if (hit.kind !== "mention" && hit.kind !== "bare") return null
     labels.push(`${hit.kind === "mention" ? "@" : ""}${hit.label}`)
     return `${open}${labels.length - 1}${close}`
   })

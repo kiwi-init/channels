@@ -6,6 +6,7 @@ import { linked } from "~/chat/linked"
 import { flash, jumpTo, ReplyContext, type Replying } from "~/chat/reply"
 import type { Jump } from "~/chat/search-box"
 import { paintHits } from "~/chat/search-paint"
+import { Loading } from "~/kit/bits"
 import { day, sameDay } from "~/kit/time"
 import type { Channel, Message, Where } from "~/model"
 import { sameWhere, useApp } from "~/nav"
@@ -204,12 +205,12 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
 
   useEffect(() => {
     const near = [...list.slice(Math.max(0, start - MORE), start), ...list.slice(end, end + MORE)]
-    const texts = near.flatMap((m) => (m.text && !m.system ? [m.text] : []))
+    const texts = near.flatMap((m) => (m.text && !m.system ? [{ text: m.text, seq: m.seq }] : []))
     let stop = () => {}
     let live = true
     const timer = window.setTimeout(() => {
       void import("~/chat/markdown").then(({ warm }) => {
-        if (live) stop = warm(texts, (text) => linked(text, names, tasks))
+        if (live) stop = warm(texts, ({ text, seq }) => linked(text, names, tasks, seq))
       })
     }, 150)
     return () => {
@@ -345,7 +346,11 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
       <div className="feed" ref={scroller} onScroll={onScroll}>
         <div className="feed-list" ref={content}>
           {list.length === 0 ? (
-            <Start channel={channel} where={where} />
+            channel.loading ? (
+              <Loading />
+            ) : (
+              <Start channel={channel} where={where} />
+            )
           ) : (
             list.slice(start, end).map((m, k) => {
               const i = start + k
