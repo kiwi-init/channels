@@ -92,8 +92,8 @@ async function listenersOf(home: string, agent: string) {
 
 const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
-function fakeKimi(home: string, cwd: string, env: Env) {
-  const bin = join(scratch("kimi-bin"), "kimi");
+function fakeKimi(home: string, cwd: string, env: Env, name = "kimi") {
+  const bin = join(scratch(`${name}-bin`), name);
   copyFileSync(Bun.which("bash") ?? "/bin/sh", bin);
   chmodSync(bin, 0o755);
   const io = scratch("kimi-io");
@@ -194,6 +194,58 @@ describe("Kimi Code keeps its own listener running", () => {
 
     expect((await kimi.tool(["hooks", "uninstall", "kimi"])).code).toBe(0);
     expect(readFileSync(join(kimiDir, "config.toml"), "utf8")).toBe(KIMI_USER);
+  });
+});
+
+describe("ZCode keeps its own listener running", () => {
+  test("join installs its Stop hook in config.json; Stop blocks, Claude-shaped, until `listen --once` runs, and again once it has woken the agent", async () => {
+    const owner = scratch("zcode-own");
+    const code = created(await ok(owner, ["create", "zcode-wake", "--as", "boss"]));
+    const h = scratch("zcode");
+    const zcodeDir = scratch("zcode-home");
+    writeFileSync(join(zcodeDir, "config.json"), JSON.stringify({ model: "glm-5" }));
+    const zcode = fakeKimi(h, h, { KIWI_ZCODE_DIR: zcodeDir, ZCODE_RUNTIME_ENV: "1" }, "zcode-cli");
+
+    const joining = zcode.tool(["join", code, "--timeout", "40s"]);
+    await approve(owner);
+    const joined = await joining;
+    expect(joined.code).toBe(0);
+    const me = youAre(joined.out);
+    expect(joined.out).toContain("listen --once`, run_in_background: true, and no timeout");
+    expect(joined.err).toContain(`installed ZCode hooks (${join(zcodeDir, "config.json")})`);
+    const config = JSON.parse(readFileSync(join(zcodeDir, "config.json"), "utf8")) as { model: string; hooks: { enabled: boolean; events: { Stop: { hooks: { command: string }[] }[] } } };
+    expect(config.model).toBe("glm-5");
+    expect(config.hooks.enabled).toBe(true);
+    const command = config.hooks.events.Stop.flatMap((g) => g.hooks.map((x) => x.command));
+    expect(command).toHaveLength(1);
+    expect(command[0]).toEndWith(" hook stop # kiwi");
+
+    const stopInput = JSON.stringify({ hookEventName: "Stop", sessionId: "sess_zcode", cwd: h, stopHookActive: false, responsePreview: "done", toolCallCount: 0 });
+    const decision = (r: Ran) => JSON.parse(r.out) as { decision: string; reason: string };
+    const deaf = await zcode.hook(["hook", "stop"], stopInput);
+    expect(deaf.code).toBe(0);
+    expect(decision(deaf).decision).toBe("block");
+    expect(decision(deaf).reason).toContain("no Kiwi listener of yours is running for zcode-wake");
+    expect(decision(deaf).reason).toContain("listen --once`, run_in_background: true, and no timeout");
+
+    const listener = zcode.background(["listen", "--once"]);
+    await until(async () => (await listenersOf(h, me)).some((l) => l.pid === zcode.pid && l.harness === "zcode"), "the listener held for this ZCode session");
+    expect(await zcode.hook(["hook", "stop"], stopInput)).toEqual({ code: 0, out: "", err: "" });
+
+    await ok(owner, ["send", "--to", me, "wakes the zcode listener"]);
+    await until(() => listener.out().includes("wakes the zcode listener"), "listen --once handing over the message");
+    await until(async () => (await listenersOf(h, me)).length === 0, "the listener gone");
+    const rearm = await zcode.hook(["hook", "stop"], stopInput);
+    expect(decision(rearm).decision).toBe("block");
+    expect(decision(rearm).reason).toContain("no Kiwi listener of yours is running");
+
+    await ok(owner, ["send", "--to", me, "unread at stop"]);
+    const unread = await zcode.hook(["hook", "stop"], stopInput);
+    expect(decision(unread).reason).toContain("unread Kiwi Channels messages for you");
+    expect(decision(unread).reason).toContain("unread at stop");
+
+    expect((await zcode.tool(["hooks", "uninstall", "zcode"])).code).toBe(0);
+    expect(JSON.parse(readFileSync(join(zcodeDir, "config.json"), "utf8"))).toEqual({ model: "glm-5" });
   });
 });
 

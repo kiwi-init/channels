@@ -1,4 +1,4 @@
-import { isKnownHarness, readHookRow, type HookRow, type KnownHarness } from "@kiwi/core/harnesses.ts";
+import { isHookHarness, readHookRow, type HookHarness, type HookRow } from "@kiwi/core/harnesses.ts";
 import { readWakeSeat, type WakeSeat } from "@kiwi/core/wake.ts";
 import { readPlacedSeat, readShowResult, type PlacedSeat, type ShowResult, type TerminalId, type TerminalsStatus } from "@kiwi/core/terminals.ts";
 import type { Serves } from "../calls.ts";
@@ -35,7 +35,7 @@ async function change(args: string[]): Promise<TerminalsStatus | null> {
   return terminals();
 }
 
-const isHooked = (v: unknown): v is KnownHarness => isKnownHarness(v) && v !== "opencode";
+const isHooked = (v: unknown): v is HookHarness => isHookHarness(v) && v !== "opencode";
 
 export type ClaudeHere = "wakes" | "old" | "none" | null;
 

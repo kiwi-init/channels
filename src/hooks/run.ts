@@ -43,7 +43,7 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string, harness?
       ? { harness: "cursor", session: cursor, ...(model ? { model } : {}) }
       : { ...hereAs(harness), ...(input.session_id ? { session: input.session_id } : {}), ...(model ? { model } : {}) };
   const release = event === LISTEN ? () => {} : holdAnswering(who.session);
-  const deadline = event === "session-start" || kimi || cursor !== null ? START_MS : HOOK_MS;
+  const deadline = event === "session-start" || kimi || cursor !== null || who.harness === "zcode" ? START_MS : HOOK_MS;
   const keys = yield* Keystore;
   const seatsServed = Effect.gen(function* () {
     yield* Effect.promise(() => refreshListeners());
