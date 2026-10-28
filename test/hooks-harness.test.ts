@@ -711,8 +711,29 @@ test("ZCode: one Stop entry in config.json beside the user's hooks, hooks turned
   expect(extraInstalled("zcode")).toBe(true);
   expect(hooksStatus()).toContain("zcode: installed");
   uninstallExtra("zcode");
-  expect(readZcode(path)).toEqual({ ...ZCODE_USER, hooks: { ...ZCODE_USER.hooks, enabled: true } });
+  expect(readZcode(path)).toEqual(ZCODE_USER);
   expect(extraInstalled("zcode")).toBe(false);
+  expect(loadConfig().zcodeHooksTurnedOn).toBeUndefined();
+});
+
+test("ZCode: hooks a person turned on stay on after uninstall, and uninstall without Kiwi's entry changes nothing", () => {
+  const dir = scratch("hk-zcode-on-");
+  setEnv({ KIWI_HOME: scratch("hk-zcode-on-home-"), KIWI_ZCODE_DIR: dir });
+  const path = join(dir, "config.json");
+  const theirs = { hooks: { enabled: true } };
+  writeFileSync(path, JSON.stringify(theirs));
+  uninstallExtra("zcode");
+  expect(readZcode(path)).toEqual(theirs);
+  installExtra("zcode");
+  installExtra("zcode");
+  expect(loadConfig().zcodeHooksTurnedOn).toBeUndefined();
+  uninstallExtra("zcode");
+  expect(readZcode(path)).toEqual(theirs);
+  const withEvents = { hooks: { enabled: true, events: { Stop: [{ hooks: [{ type: "command", command: "notify-send done" }] }] } } };
+  writeFileSync(path, JSON.stringify(withEvents));
+  installExtra("zcode");
+  uninstallExtra("zcode");
+  expect(readZcode(path)).toEqual(withEvents);
 });
 
 test("ZCode: an absent config.json gets just the hook and is absent again after uninstall; hooks a person turned off stay off", () => {

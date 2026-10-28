@@ -20,6 +20,11 @@ const START_MS = 5_000;
 
 const say = (text: string) => Effect.sync(() => void writeSync(1, text));
 
+function heldOrNamed(who: Here, session: string | undefined, model: string | undefined): Here {
+  const named = session && who.harness !== "zcode" ? { session } : {};
+  return { ...who, ...named, ...(model ? { model } : {}) };
+}
+
 export const runHook = Effect.fn("Hooks.run")(function* (event: string, harness?: string) {
   const raw = yield* Effect.promise(() => new Response(Bun.stdin.stream()).text().catch(() => ""));
   let input: HookInput = {};
@@ -37,11 +42,7 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string, harness?
   const kimi = event === KIMI_STOP;
   const model = typeof input.model === "string" && input.model.trim() ? input.model.trim() : undefined;
   const cursor = typeof input.cursor_version === "string" && typeof input.conversation_id === "string" && input.conversation_id && !onGrokBot() ? input.conversation_id : null;
-  const who: Here = kimi
-    ? kimiHookHere()
-    : cursor
-      ? { harness: "cursor", session: cursor, ...(model ? { model } : {}) }
-      : { ...hereAs(harness), ...(input.session_id ? { session: input.session_id } : {}), ...(model ? { model } : {}) };
+  const who: Here = kimi ? kimiHookHere() : cursor ? { harness: "cursor", session: cursor, ...(model ? { model } : {}) } : heldOrNamed(hereAs(harness), input.session_id, model);
   const release = event === LISTEN ? () => {} : holdAnswering(who.session);
   const deadline = event === "session-start" || kimi || cursor !== null || who.harness === "zcode" ? START_MS : HOOK_MS;
   const keys = yield* Keystore;

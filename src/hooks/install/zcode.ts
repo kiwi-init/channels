@@ -2,6 +2,7 @@ import { existsSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { omit } from "@kiwi/core/omit.ts";
+import { loadConfig, updateConfig } from "../../config.ts";
 import { isRecord, readJson, writeJson } from "../files.ts";
 import { hookCommand, isOurHook, isOurHookCommand } from "../self.ts";
 
@@ -29,24 +30,45 @@ function stopGroup(): Record<string, unknown> {
   return { hooks: [{ type: "command", command: hookCommand("stop"), timeoutMs: ZCODE_STOP_MS }] };
 }
 
+function turnedOn(path: string): boolean {
+  return (loadConfig().zcodeHooksTurnedOn ?? []).includes(path);
+}
+
+function noteTurnedOn(path: string, on: boolean): void {
+  updateConfig((c) => {
+    const rest = (c.zcodeHooksTurnedOn ?? []).filter((p) => p !== path);
+    if (on) c.zcodeHooksTurnedOn = [...rest, path];
+    else if (rest.length) c.zcodeHooksTurnedOn = rest;
+    else delete c.zcodeHooksTurnedOn;
+  });
+}
+
+function hasOurs(config: Record<string, unknown>): boolean {
+  const hooks = config.hooks;
+  return isRecord(hooks) && isRecord(hooks.events) && list(hooks.events.Stop).some((group) => isRecord(group) && list(group.hooks).some(ours));
+}
+
 export function installZcode(path: string): void {
   const config = readJson(path);
   const hooks = isRecord(config.hooks) ? config.hooks : {};
   if (hooks.enabled === false) throw new Error(`ZCode's hooks are off in ${path} (hooks.enabled is false): turn them on, then run kiwi hooks install zcode`);
   const events = isRecord(hooks.events) ? hooks.events : {};
+  if (hooks.enabled === undefined) noteTurnedOn(path, true);
   writeJson(path, { ...config, hooks: { ...hooks, enabled: true, events: { ...events, Stop: [...withoutOurs(events.Stop), stopGroup()] } } });
 }
 
 export function uninstallZcode(path: string): void {
+  const kiwiOn = turnedOn(path);
+  if (kiwiOn) noteTurnedOn(path, false);
   if (!existsSync(path)) return;
   const config = readJson(path);
-  if (!isRecord(config.hooks)) return;
+  if (!isRecord(config.hooks) || !hasOurs(config)) return;
   const events = isRecord(config.hooks.events) ? config.hooks.events : {};
   const stop = withoutOurs(events.Stop);
   const keptEvents = stop.length ? { ...events, Stop: stop } : omit(events, "Stop");
-  const hooks = Object.keys(keptEvents).length ? { ...config.hooks, events: keptEvents } : omit(config.hooks, "events");
-  const onlyOn = Object.keys(hooks).every((k) => k === "enabled") && hooks.enabled === true;
-  const rest = onlyOn ? omit(config, "hooks") : { ...config, hooks };
+  const withEvents = Object.keys(keptEvents).length ? { ...config.hooks, events: keptEvents } : omit(config.hooks, "events");
+  const hooks = kiwiOn ? omit(withEvents, "enabled") : withEvents;
+  const rest = Object.keys(hooks).length ? { ...config, hooks } : omit(config, "hooks");
   if (!Object.keys(rest).length) {
     rmSync(path, { force: true });
     return;

@@ -69,13 +69,13 @@ async function until(pred: () => boolean | Promise<boolean>, label: string, ms =
   }
 }
 
-async function approve(owner: string): Promise<void> {
+async function approve(owner: string, channel: string[] = []): Promise<void> {
   let listed = "";
   await until(async () => {
-    listed = await ok(owner, ["--as", "human", "requests"]);
+    listed = await ok(owner, [...channel, "--as", "human", "requests"]);
     return /\d{3}-\d{3}/.test(listed);
   }, "request listed with a code");
-  await ok(owner, ["--as", "human", "approve", /(\d{3}-\d{3})/.exec(listed)![1]!, "--yes"]);
+  await ok(owner, [...channel, "--as", "human", "approve", /(\d{3}-\d{3})/.exec(listed)![1]!, "--yes"]);
 }
 
 function created(out: string): string {
@@ -220,26 +220,46 @@ describe("ZCode keeps its own listener running", () => {
     expect(command).toHaveLength(1);
     expect(command[0]).toEndWith(" hook stop # kiwi");
 
-    const stopInput = JSON.stringify({ hookEventName: "Stop", sessionId: "sess_zcode", cwd: h, stopHookActive: false, responsePreview: "done", toolCallCount: 0 });
+    const otherCode = created(await ok(owner, ["create", "zcode-other", "--as", "boss"]));
+    const second = zcode.tool(["join", otherCode, "--timeout", "40s"]);
+    await approve(owner, ["-c", "zcode-other"]);
+    const joinedOther = await second;
+    expect(joinedOther.code).toBe(0);
+    const other = youAre(joinedOther.out);
+
+    const stopInput = JSON.stringify({
+      hookEventName: "Stop",
+      sessionId: "sess_zcode",
+      session_id: "sess_zcode",
+      cwd: h,
+      stopHookActive: false,
+      stop_hook_active: false,
+      responsePreview: "done",
+      toolCallCount: 0,
+    });
     const decision = (r: Ran) => JSON.parse(r.out) as { decision: string; reason: string };
     const deaf = await zcode.hook(["hook", "stop"], stopInput);
     expect(deaf.code).toBe(0);
     expect(decision(deaf).decision).toBe("block");
     expect(decision(deaf).reason).toContain("no Kiwi listener of yours is running for zcode-wake");
+    expect(decision(deaf).reason).toContain("no Kiwi listener of yours is running for zcode-other");
     expect(decision(deaf).reason).toContain("listen --once`, run_in_background: true, and no timeout");
 
-    const listener = zcode.background(["listen", "--once"]);
-    await until(async () => (await listenersOf(h, me)).some((l) => l.pid === zcode.pid && l.harness === "zcode"), "the listener held for this ZCode session");
+    const listener = zcode.background(["-c", "zcode-wake", "listen", "--once"]);
+    zcode.background(["-c", "zcode-other", "listen", "--once"]);
+    const held = async (agent: string) => (await listenersOf(h, agent)).some((l) => l.pid === zcode.pid && l.harness === "zcode");
+    await until(async () => (await held(me)) && (await held(other)), "a listener held for each seat of this ZCode process");
     expect(await zcode.hook(["hook", "stop"], stopInput)).toEqual({ code: 0, out: "", err: "" });
 
-    await ok(owner, ["send", "--to", me, "wakes the zcode listener"]);
+    await ok(owner, ["-c", "zcode-wake", "send", "--to", me, "wakes the zcode listener"]);
     await until(() => listener.out().includes("wakes the zcode listener"), "listen --once handing over the message");
     await until(async () => (await listenersOf(h, me)).length === 0, "the listener gone");
     const rearm = await zcode.hook(["hook", "stop"], stopInput);
     expect(decision(rearm).decision).toBe("block");
-    expect(decision(rearm).reason).toContain("no Kiwi listener of yours is running");
+    expect(decision(rearm).reason).toContain("no Kiwi listener of yours is running for zcode-wake");
+    expect(decision(rearm).reason).not.toContain("running for zcode-other");
 
-    await ok(owner, ["send", "--to", me, "unread at stop"]);
+    await ok(owner, ["-c", "zcode-wake", "send", "--to", me, "unread at stop"]);
     const unread = await zcode.hook(["hook", "stop"], stopInput);
     expect(decision(unread).reason).toContain("unread Kiwi Channels messages for you");
     expect(decision(unread).reason).toContain("unread at stop");
