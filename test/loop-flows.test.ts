@@ -65,6 +65,12 @@ async function until(pred: () => boolean | Promise<boolean>, label: string, ms =
   }
 }
 
+function added(out: string): string {
+  const id = /added (T\d+)/.exec(out)?.[1];
+  if (!id) throw new Error(`no task id in: ${out}`);
+  return id;
+}
+
 const S: Env = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "joiner", CLAUDE_PID: String(process.pid), AI_AGENT: "claude-code_2-1-296_agent" };
 
 type Seen =
@@ -360,9 +366,9 @@ test("a task assigned behind a session whose work never ends is named on stderr,
       .slice(before)
       .find((s) => s.kind === "start" && (s.argv.at(-1) ?? "").includes(`This session is for ${id} `));
   await until(() => !!seatOf(agent)?.hold, "the loop's hold").catch(fail);
-  const held = /added (T\d+)/.exec(await ok(owner, ["--as", "human", "task", "add", "loop hold", "--owner", me, "--ask", want], { CLAUDECODE: "" }))![1]!;
+  const held = added(await ok(owner, ["--as", "human", "task", "add", "loop hold", "--owner", me, "--ask", want], { CLAUDECODE: "" }));
   await until(() => !!startOf(held), "the held task's session").catch(fail);
-  const next = /added (T\d+)/.exec(await ok(owner, ["--as", "human", "task", "add", "loop next", "--owner", me, "--ask", want], { CLAUDECODE: "" }))![1]!;
+  const next = added(await ok(owner, ["--as", "human", "task", "add", "loop next", "--owner", me, "--ask", want], { CLAUDECODE: "" }));
   await until(() => log.includes(`${next} is waiting; the ${held} session is still running`), "the waiting notice").catch(fail);
   expect(startOf(next)).toBeUndefined();
 

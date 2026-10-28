@@ -29,11 +29,33 @@ export function nextWork(state: ChannelState, me: string, unreadForMe: number): 
   return unreadForMe > 0 ? { kind: "answering" } : null;
 }
 
-export function waitingBehind(work: Work, state: ChannelState, me: string): Work | null {
-  if (work.kind === "answering") return null;
-  const tasks = new Map([...state.tasks].filter(([id]) => id !== work.task));
-  const next = nextWork({ ...state, tasks }, me, 0);
-  return next?.kind === "answering" ? null : next;
+export function waitingBehind(work: Work, state: ChannelState, me: string): Work[] {
+  const held = work.kind === "answering" ? null : work.task;
+  const open = openTasks(state).filter((t) => t.id !== held);
+  const reviews = open.flatMap((t): Work[] => {
+    const round = openRound(t);
+    return round && t.review === me && t.owner !== me ? [{ kind: "reviewing", task: t.id, round: round.n }] : [];
+  });
+  if (work.kind === "answering") return reviews;
+  const coding = open.filter((t) => t.owner === me && !awaitingVerdict(t)).map((t): Work => ({ kind: "coding", task: t.id }));
+  return [...coding, ...reviews];
+}
+
+export type Wait = { since: number; tellAt: number | null };
+
+export function waitsDue(waits: Map<string, Wait>, behind: readonly Work[], now: number, tellAfter: number): { fresh: Work[]; due: Work[] } {
+  const names = new Set(behind.map(workName));
+  for (const name of [...waits.keys()]) if (!names.has(name)) waits.delete(name);
+  const fresh: Work[] = [];
+  const due: Work[] = [];
+  for (const w of behind) {
+    const wait = waits.get(workName(w));
+    if (!wait) {
+      waits.set(workName(w), { since: now, tellAt: now + tellAfter });
+      fresh.push(w);
+    } else if (wait.tellAt !== null && now >= wait.tellAt) due.push(w);
+  }
+  return { fresh, due };
 }
 
 export function waitTellsTo(state: ChannelState, me: string): string[] {
