@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import pkg from "../package.json" with { type: "json" };
-import { UI_CONTRACT, UI_DATA_SCHEMA } from "../src/ui-contract.ts";
+import { UI_DATA_SCHEMA, UI_REQUIRES } from "../src/ui-contract.ts";
 
 export interface UiJson {
   uiVersion: string;
@@ -14,7 +14,7 @@ export const SKIPPED = new Set(["_headers"]);
 
 export function uiJson(sha: string): UiJson {
   if (!/^[0-9a-f]{7,40}$/.test(sha)) throw new Error(`${sha} isn't a commit sha`);
-  return { uiVersion: `${pkg.version}-${sha.slice(0, 10)}`, requiresContract: `^${UI_CONTRACT}`, dataSchema: UI_DATA_SCHEMA };
+  return { uiVersion: `${pkg.version}-${sha.slice(0, 10)}`, requiresContract: `^${UI_REQUIRES}`, dataSchema: UI_DATA_SCHEMA };
 }
 
 export function stageUi(dist: string, out: string, sha: string): UiJson {
