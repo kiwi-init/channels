@@ -1,6 +1,6 @@
 import { signRequest } from "./auth.ts";
 import type { DeviceLink } from "./devices.ts";
-import { accountScope, type EnrollAnswer, type Enrollment } from "./enroll.ts";
+import { accountScope, type EnrollAnswer, type EnrollAsk, type Enrollment } from "./enroll.ts";
 import type { Identity } from "./identity.ts";
 
 class AccountError extends Error {
@@ -19,6 +19,8 @@ export interface AccountClient {
   enrollment(): Promise<Enrollment | null>;
   answer(id: string, answer: EnrollAnswer): Promise<void>;
   drop(id: string): Promise<void>;
+  ask(ask: EnrollAsk): Promise<string>;
+  reveal(id: string, nonce: string): Promise<void>;
 }
 
 export function accountClient(relay: string, token: () => Promise<string>, device: Identity, fetchImpl: typeof fetch = fetch): AccountClient {
@@ -54,5 +56,7 @@ export function accountClient(relay: string, token: () => Promise<string>, devic
     },
     answer: async (id, answer) => void (await call("PUT", `/v1/account/ask/${id}/answer`, answer)),
     drop: async (id) => void (await call("DELETE", `/v1/account/ask/${id}`)),
+    ask: async (ask) => ((await (await call("POST", "/v1/account/ask", { ask })).json()) as { id: string }).id,
+    reveal: async (id, nonce) => void (await call("PUT", `/v1/account/ask/${id}/reveal`, { nonce })),
   };
 }

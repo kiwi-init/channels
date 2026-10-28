@@ -46,7 +46,7 @@ function memHost(person: Identity | null): { host: KeyHost; store: Store } {
     save: async (entry) => void (store.seats = acceptSeat(store.seats, entry)),
     access: async (code, pk, access) => void (store.seats = withAccess(store.seats, code, pk, access)),
     forget: async (code) => void (store.seats = store.seats.filter((c) => c.code !== code)),
-    prove: async (code, memberPk) => (person ? provePerson(person, decodeJoinCode(code).roomId, memberPk) : null),
+    prove: async (code, memberPk) => (person ? { person: await provePerson(person, decodeJoinCode(code).roomId, memberPk) } : null),
     githubToken: async () => null,
     person: () => person?.pk ?? null,
     mine: () => null,

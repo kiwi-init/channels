@@ -266,6 +266,8 @@ export interface DeviceView {
 
 export type EnrollConfirmView = { ok: true; label: string } | { ok: false; left: number };
 
+export type EnrollStatusView = { stage: "asking" } | { stage: "digits"; digits: string } | { stage: "done"; person: PublicPerson; channels: { label: string; code: string }[] } | { stage: "gone" };
+
 /** "kiwi daemon" as the app sees it. */
 export interface DaemonStatus {
   running: boolean;
@@ -351,6 +353,9 @@ export interface KiwiBridge {
   enrollAnswer(id: string): Promise<void>;
   enrollConfirm(id: string, digits: string): Promise<EnrollConfirmView>;
   enrollDeny(id: string): Promise<void>;
+  enrollBegin(): Promise<void>;
+  enrollStatus(): Promise<EnrollStatusView | null>;
+  enrollCancel(): Promise<void>;
   devices(): Promise<DeviceView[] | null>;
   forgetDevice(id: string): Promise<void>;
   renewDevice(id: string): Promise<void>;

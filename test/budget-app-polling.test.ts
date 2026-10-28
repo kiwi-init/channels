@@ -33,7 +33,7 @@ function keyring(person: Identity | null): Keyring {
     save: async (entry) => void (seats = acceptSeat(seats, entry)),
     access: async (code, pk, access) => void (seats = withAccess(seats, code, pk, access)),
     forget: async (code) => void (seats = seats.filter((c) => c.code !== code)),
-    prove: async (code, memberPk) => (person ? provePerson(person, decodeJoinCode(code).roomId, memberPk) : null),
+    prove: async (code, memberPk) => (person ? { person: await provePerson(person, decodeJoinCode(code).roomId, memberPk) } : null),
     githubToken: async () => null,
     person: () => person?.pk ?? null,
     mine: () => null,

@@ -87,6 +87,33 @@
   color: var(--alert);
 }
 
+.start-other {
+  margin-top: 28px;
+  margin-left: -10px;
+}
+
+.start-asking {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: var(--ink-2);
+  font: var(--t-body) / 1.5 var(--sans);
+}
+
+.start-pip {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border: 1.5px dashed var(--doing);
+  border-radius: 50%;
+}
+
+.start-digits {
+  font: 500 calc(var(--t-display) * 1.6) / 1.1 var(--mono);
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+}
+
 .start-area {
   position: relative;
   display: grid;

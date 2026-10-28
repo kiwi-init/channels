@@ -5,7 +5,7 @@ import type { Personality } from "@kiwi/core/personality.ts"
 import { stepReplyText } from "~/chat/step"
 import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_PREFS, DEMO_TILES, DEMO_WAITING } from "~/demo/data"
 import { longFeed } from "~/demo/long"
-import type { Account, Actions, AgentStarts, App, Finding, ThisComputer, Channel, ChannelTile, Message, Prefs, Task } from "~/model"
+import type { Account, Actions, AgentStarts, App, Enrolling, Finding, ThisComputer, Channel, ChannelTile, Message, Prefs, Task } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
 
@@ -15,6 +15,7 @@ interface State {
   channels: Map<string, Channel>
   prefs: Prefs
   seq: number
+  enrolling?: Enrolling | null
 }
 
 const HARNESSES: App["harnesses"] = [
@@ -92,7 +93,20 @@ function withStep(c: Channel): Channel {
   }
 }
 
-export type Scenario = "full" | "long" | "step" | "signed-out" | "no-channels" | "updates" | "update-ready" | "update-available" | "enroll" | "enroll-digits" | "devices"
+export type Scenario =
+  | "full"
+  | "long"
+  | "step"
+  | "signed-out"
+  | "no-channels"
+  | "updates"
+  | "update-ready"
+  | "update-available"
+  | "enroll"
+  | "enroll-digits"
+  | "devices"
+  | "enroll-desktop"
+  | "enroll-desktop-digits"
 
 function initial(scenario: Scenario, look: Partial<Prefs>): State {
   const prefs = { ...DEMO_PREFS, ...look }
@@ -118,6 +132,8 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
       seq: 1000,
     }
   if (scenario === "devices") return { account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
+  if (scenario === "enroll-desktop") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, enrolling: { stage: "asking" } }
+  if (scenario === "enroll-desktop-digits") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, enrolling: { stage: "digits", digits: "482915" } }
   if (scenario === "signed-out") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000 }
   if (scenario === "no-channels") return { account: DEMO_ACCOUNT, tiles: [], channels: new Map(), prefs, seq: 1000 }
   return { account: DEMO_ACCOUNT, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
@@ -369,6 +385,11 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       forgetDevice: (id) => setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.filter((d) => d.id !== id) } } : s)),
       renewDevice: (id) =>
         setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.map((d) => (d.id === id ? { ...d, until: Date.now() + 90 * 86_400_000 } : d)) } } : s)),
+      enrollBegin: () => {
+        setState((s) => ({ ...s, enrolling: { stage: "asking" } }))
+        setTimeout(() => setState((s) => (s.enrolling ? { ...s, enrolling: { stage: "digits", digits: "482915" } } : s)), 1500)
+      },
+      enrollCancel: () => setState((s) => ({ ...s, enrolling: null })),
       enrollDeny: () => setState((s) => (s.account ? { ...s, account: { ...s.account, enrollAsk: undefined } } : s)),
       saveTheme: (theme) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...savedTheme(s.prefs, theme) } })),
       deleteTheme: (id) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...deletedTheme(s.prefs, id) } })),
@@ -410,6 +431,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
     starts,
     ownPersonalities,
     computer,
+    enrolling: state.enrolling ?? null,
     actions,
   }
 }

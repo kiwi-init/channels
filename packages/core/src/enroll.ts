@@ -39,7 +39,7 @@ export interface EnrollGrant {
   kind: "kiwi-enroll-grant";
   v: 1;
   links: DeviceLink[];
-  person: { pk: string; name: string };
+  person: { pk: string; name: string; xpk: string };
   relay: string;
   channels: { label: string; code: string }[];
 }
@@ -118,9 +118,16 @@ export async function readEnrollGrant(x: unknown, device: string): Promise<Enrol
   if (!x || typeof x !== "object" || Array.isArray(x)) return null;
   const g = x as Partial<EnrollGrant>;
   if (g.kind !== "kiwi-enroll-grant" || g.v !== 1 || !Array.isArray(g.links) || typeof g.relay !== "string" || !Array.isArray(g.channels)) return null;
-  if (!g.person || typeof g.person.pk !== "string" || typeof g.person.name !== "string") return null;
+  if (!g.person || typeof g.person.pk !== "string" || typeof g.person.name !== "string" || typeof g.person.xpk !== "string" || !KEY_RE.test(g.person.xpk)) return null;
   if (!g.channels.every((c) => !!c && typeof c.label === "string" && typeof c.code === "string")) return null;
   const read = await readDeviceList(g.links);
   if (!read.ok || read.list.person !== g.person.pk || !read.list.devices.some((d) => d.device === device)) return null;
-  return { kind: g.kind, v: 1, links: g.links, person: { pk: g.person.pk, name: g.person.name }, relay: g.relay, channels: g.channels.map((c) => ({ label: c.label, code: c.code })) };
+  return {
+    kind: g.kind,
+    v: 1,
+    links: g.links,
+    person: { pk: g.person.pk, name: g.person.name, xpk: g.person.xpk },
+    relay: g.relay,
+    channels: g.channels.map((c) => ({ label: c.label, code: c.code })),
+  };
 }

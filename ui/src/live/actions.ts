@@ -25,7 +25,21 @@ import { createPerson, bridge, secrets } from "@/lib/secrets"
 import { isSignInGone } from "@/lib/session"
 import { approveTask, closedDigest, sendBackTask, type TaskSend } from "@/lib/task-actions"
 import { announce } from "~/kit/toasts"
-import { answerPair, cancelPair, enrollAnswer, enrollConfirm, enrollDeny, forgetDevice, linkGithub, pairBegin, renewDevice, unlinkGithub } from "~/live/account"
+import {
+  answerPair,
+  cancelPair,
+  enrollAnswer,
+  enrollBegin,
+  enrollCancel,
+  enrollConfirm,
+  enrollDeny,
+  forgetDevice,
+  linkGithub,
+  pairBegin,
+  renewDevice,
+  unlinkGithub,
+  type EnrollDone,
+} from "~/live/account"
 import { newMemberPowers, newMemberScopes, setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
 import { harnessChoices, STARTS } from "~/live/harness-rows"
@@ -193,6 +207,17 @@ async function joinChannel(typed: string, name?: string): Promise<string> {
   if (!person) throw new Error("Say your name first")
   await askToJoin(code, name?.trim() || handleFor(person.name))
   return code
+}
+
+async function joinGranted(d: EnrollDone): Promise<void> {
+  const name = handleFor(d.person.name)
+  let asked = 0
+  for (const c of d.channels) {
+    if (loadMember(c.code) || loadPending(c.code)) continue
+    await askToJoin(c.code, name)
+    asked++
+  }
+  announce(asked ? `Signed in as ${d.person.name}. Asked to join ${asked === 1 ? "1 channel" : `${asked} channels`}` : `Signed in as ${d.person.name}`)
 }
 
 export function makeActions(): Actions {
@@ -618,6 +643,14 @@ export function makeActions(): Actions {
     enrollDeny: (id) => attempt("Couldn't turn the device away", () => enrollDeny(id)),
     forgetDevice: (id) => attempt("Couldn't forget the device", () => forgetDevice(id)),
     renewDevice: (id) => attempt("Couldn't renew the device", () => renewDevice(id)),
+    enrollBegin: () =>
+      attempt("Couldn't sign in as one of your devices", () =>
+        enrollBegin(
+          () => tokenForCreate(),
+          (d) => attempt("Couldn't join your channels", () => joinGranted(d))
+        )
+      ),
+    enrollCancel: () => attempt("Couldn't take the ask back", enrollCancel),
     saveTheme,
     deleteTheme,
     addStartFolder: () => attempt("Couldn't add the folder", addStartFolder),
