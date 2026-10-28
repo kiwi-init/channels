@@ -29,6 +29,8 @@ export interface Person {
   doing?: number
   readOnly?: boolean
   wakes?: boolean
+  addsAgents?: boolean
+  answersDecisions?: boolean
   lastSeen: number
   joined: number
   messages: number
@@ -327,6 +329,9 @@ export interface Actions {
   setPersona(code: string, name: string, persona: string | null): void
   setReadOnly(code: string, name: string, on: boolean): void
   setWake(code: string, name: string, on: boolean): void
+  setNickname(code: string, name: string, nickname: string | null): void
+  setColor(code: string, name: string, color: Color | null): void
+  setPowers(code: string, name: string, powers: Partial<Powers>): void
   addAgent(code: string, agent: NewAgent): void
   addRoom(code: string, name: string): void
   renameRoom(code: string, id: string, name: string): void
@@ -359,6 +364,16 @@ export interface Actions {
   closeChannel(code: string): void
   saveTheme(theme: CustomTheme): void
   deleteTheme(id: string): void
+  addStartFolder(): void
+  removeStartFolder(dir: string): void
+  allowNewAgents(on: boolean): void
+  allowRemoteBypass(on: boolean): void
+}
+
+export interface AgentStarts {
+  folders: string[]
+  launch: boolean
+  bypass: boolean
 }
 
 export interface App {
@@ -368,6 +383,7 @@ export interface App {
   prefs: Prefs
   harnesses: { id: Harness; label: string; installed: boolean }[]
   personas: { id: string; label: string; about: string }[]
+  starts: AgentStarts | null
   actions: Actions
 }
 

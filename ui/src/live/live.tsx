@@ -20,6 +20,7 @@ import { iconUrl } from "~/live/icon"
 import { harnessOf } from "~/live/map"
 import { OpenPending, pendingTitle } from "~/live/pending"
 import { usePrefs } from "~/live/prefs"
+import { useStarts } from "~/live/starts"
 import { useOpened } from "~/live/store"
 import type { App, ChannelTile } from "~/model"
 import type { Go } from "~/nav"
@@ -103,9 +104,10 @@ export function useLive(open: string | null): App {
   const prefs = usePrefs()
   const harnesses = useHarnesses()
   const personas = usePersonas()
+  const starts = useStarts()
   const actions = useMemo(() => makeActions(), [])
   const channel = opened && opened.code === open ? opened.channel : null
-  return useMemo(() => ({ account, channels, channel, prefs, harnesses, personas, actions }), [account, channels, channel, prefs, harnesses, personas, actions])
+  return useMemo(() => ({ account, channels, channel, prefs, harnesses, personas, starts, actions }), [account, channels, channel, prefs, harnesses, personas, starts, actions])
 }
 
 function useOpenLinks(go: (g: Go) => void, ready: boolean) {
