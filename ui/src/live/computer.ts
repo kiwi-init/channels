@@ -22,8 +22,8 @@ export const computerNow = computer.get
 export async function loadComputer(): Promise<void> {
   const b = bridge()
   if (!b) return
-  const [daemon, hooks] = await Promise.all([b.daemonStatus(), b.hooks().catch((): HookRow[] => [])])
-  computer.set({ kiwi: { running: daemon.running, ...(daemon.version ? { version: daemon.version } : {}) }, hooks: shown(hooks) })
+  const [daemon, hooks, line] = await Promise.all([b.daemonStatus(), b.hooks().catch((): HookRow[] => []), b.contextLine().catch(() => null)])
+  computer.set({ kiwi: { running: daemon.running, ...(daemon.version ? { version: daemon.version } : {}) }, hooks: shown(hooks), contextLine: line === null ? null : line === "on" })
 }
 
 export function useComputer(): ThisComputer | null {
@@ -43,3 +43,10 @@ export async function setHooks(harness: KnownHarness, on: boolean): Promise<void
 }
 
 export const checkComputer = (): Promise<Finding[] | null> => need().doctor()
+
+export async function setContextLine(on: boolean): Promise<void> {
+  const got = await need().setContextLine(on ? "on" : "off")
+  if (!got) throw new Error("kiwi didn't change it")
+  const now = computer.get()
+  if (now) computer.set({ ...now, contextLine: got === "on" })
+}

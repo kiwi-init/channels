@@ -36,6 +36,7 @@ const COMPUTER: ThisComputer = {
     { harness: "claude", label: "Claude Code", state: "installed" },
     { harness: "codex", label: "Codex", state: "outdated" },
   ],
+  contextLine: false,
 }
 
 const FINDINGS: Finding[] = [
@@ -44,7 +45,17 @@ const FINDINGS: Finding[] = [
   { ok: false, what: "Codex's hooks are from an older kiwi", how: "Update them in Settings > Agents > Hooks." },
 ]
 
-const STARTS: AgentStarts = { folders: ["~/www/channels", "~/www/landing"], launch: true, bypass: false }
+const STARTS: AgentStarts = {
+  folders: ["~/www/channels", "~/www/landing"],
+  launch: true,
+  bypass: false,
+  prefer: "app",
+  terminals: [
+    { id: "app", name: "Terminal", found: true, running: true, helpers: null },
+    { id: "rex", name: "Rex", found: true, running: true, helpers: "on" },
+    { id: "tmux", name: "tmux", found: true, running: false, helpers: "off" },
+  ],
+}
 
 export type Scenario = "full" | "long" | "signed-out" | "no-channels" | "updates" | "update-ready" | "update-available"
 
@@ -284,6 +295,10 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       allowRemoteBypass: (on) => setStarts((s) => ({ ...s, bypass: on })),
       savePersonalities: setOwnPersonalities,
       setHooks: (harness, on) => setComputer((c) => ({ ...c, hooks: c.hooks.map((h) => (h.harness === harness ? { ...h, state: on ? "installed" : "off" } : h)) })),
+      preferTerminal: (id) => setStarts((s) => ({ ...s, prefer: id })),
+      setTerminalHelpers: (id, on) =>
+        setStarts((s) => ({ ...s, prefer: !on && s.prefer === id ? "app" : s.prefer, terminals: s.terminals.map((t) => (t.id === id ? { ...t, helpers: on ? "on" : "off" } : t)) })),
+      setContextLine: (on) => setComputer((c) => ({ ...c, contextLine: on })),
       checkComputer: () => new Promise((done) => setTimeout(() => done(FINDINGS), 400)),
     }
   }, [])
