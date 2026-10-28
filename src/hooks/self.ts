@@ -27,10 +27,13 @@ export function stableBin(exe: string): string {
   return exe;
 }
 
-export function selfCommand(): string {
+export function selfArgv(): string[] {
   const compiled = !/\.(ts|js)$/.test(Bun.main);
-  const bun = Bun.which("bun") ?? process.execPath;
-  return compiled ? shellQuote(stableBin(process.execPath)) : `${shellQuote(bun)} ${shellQuote(Bun.main)}`;
+  return compiled ? [stableBin(process.execPath)] : [Bun.which("bun") ?? process.execPath, Bun.main];
+}
+
+export function selfCommand(): string {
+  return selfArgv().map(shellQuote).join(" ");
 }
 
 function shellQuote(s: string): string {

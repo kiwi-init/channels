@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
-import { openPlace, placeKind } from "../src/launch/place.ts";
+import { openHosted, openPlace, placeKind, type Hosted } from "../src/launch/place.ts";
 import { terminalLine } from "../src/terminals/app/index.ts";
 import type { Config } from "../src/config.ts";
 import type { PlaceRequest, PlaceTools, TerminalId } from "../src/terminals/plugin.ts";
@@ -227,6 +227,52 @@ describe("which place", () => {
     });
     expect(await openPlace(request(), tools({ rex: down.bin }), REX)).toEqual({ ok: false, why: "no-place", detail: "No terminal to open: install tmux, or run kiwi join yourself" });
     expect(down.calls().every((c) => c.includes("--autostart=false"))).toBe(true);
+  });
+});
+
+describe("the daemon's own tmux", () => {
+  const hosted = (why: string | null): Hosted & { opened: PlaceRequest[] } => {
+    const opened: PlaceRequest[] = [];
+    return {
+      opened,
+      ready: async () => why,
+      open: async (req) => {
+        opened.push(req);
+        return { ok: true, place: "hosted", socket: "/tmp/kiwi-1/abc", window: "@5", pane: "%5", pid: 55 };
+      },
+      pane: () => null,
+    };
+  };
+
+  test("comes before every terminal while it runs, whatever terminal is preferred", async () => {
+    const up = fakeRex();
+    const tmux = fake("tmux", `printf '/tmp/tmux-1/default\tkiwi\t@3\t%%3\t777\n'`);
+    const ours = hosted(null);
+    expect(await placeKind(tools({ rex: up.bin, tmux: tmux.bin }), REX, ours)).toBe("hosted");
+    expect(await openPlace(request(), tools({ rex: up.bin, tmux: tmux.bin }), REX, ours)).toEqual({ ok: true, place: "hosted", socket: "/tmp/kiwi-1/abc", window: "@5", pane: "%5", pid: 55 });
+    expect(ours.opened).toEqual([request()]);
+    expect(up.calls().map(method)).not.toContain("session.new_window");
+    expect(tmux.calls()).toEqual([]);
+  });
+
+  test("without a tmux that can host, the agent opens where it did before, saying why", async () => {
+    const tmux = fake("tmux", `printf '/tmp/tmux-1/default\tkiwi\t@3\t%%3\t777\n'`);
+    const none = hosted("hosted agents need tmux 3.2 or newer: install it, or point KIWI_TMUX at one");
+    expect(await placeKind(tools({ tmux: tmux.bin }), {}, none)).toBe("tmux");
+    expect(await openPlace(request(), tools({ tmux: tmux.bin }), {}, none)).toMatchObject({
+      ok: true,
+      place: "tmux",
+      instead: "hosted agents need tmux 3.2 or newer: install it, or point KIWI_TMUX at one, so it opened in tmux",
+    });
+    expect(await openPlace(request(), tools(), {}, none)).toEqual({ ok: false, why: "no-place", detail: "hosted agents need tmux 3.2 or newer: install it, or point KIWI_TMUX at one" });
+    expect(none.opened).toEqual([]);
+  });
+
+  test("a request it can't run is refused before anything opens", async () => {
+    const ours = hosted(null);
+    expect(await openHosted(request({ folder: "relative" }), ours)).toMatchObject({ ok: false, why: "bad-request" });
+    expect(await openPlace(request({ argv: ["claude", "a\nb"] }), tools(), {}, ours)).toMatchObject({ ok: false, why: "bad-request" });
+    expect(ours.opened).toEqual([]);
   });
 });
 

@@ -1,8 +1,11 @@
 import { createHash } from "node:crypto";
 import { chmodSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { loginPath } from "../launch/shell.ts";
-import { run, type Ran } from "../terminals/shared/run.ts";
+import { loginPath, loginShell } from "../launch/shell.ts";
+import type { Pane, PlaceRequest, Placed } from "../terminals/plugin.ts";
+import { loginArgv } from "../terminals/shared/launch.ts";
+import { run, said, type Ran } from "../terminals/shared/run.ts";
+import { tmuxPane } from "../terminals/tmux/type.ts";
 
 export const HOSTED_SESSION = "_kiwi";
 const PAUSE_AFTER_S = 5;
@@ -10,6 +13,7 @@ const MIN_TMUX: readonly [number, number] = [3, 2];
 const STATE_FILE = "hosted-tmux.json";
 const CONF_FILE = "hosted-tmux.conf";
 const REATTACH_MS = 1_000;
+const WINDOW_FORMAT = "#{window_id}\t#{pane_id}\t#{pane_pid}";
 
 export const HOSTED_CONF = [
   "set -s exit-empty off",
@@ -123,6 +127,32 @@ export class HostedTmux {
     this.save(st);
     await this.attach(st);
     return st;
+  }
+
+  async ready(): Promise<string | null> {
+    try {
+      await this.ensure();
+      return null;
+    } catch (err) {
+      return err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  async open(req: PlaceRequest): Promise<Placed> {
+    const why = await this.ready();
+    const st = this.state();
+    if (why || !st) return { ok: false, why: "no-place", detail: why ?? "the hosted tmux server didn't start" };
+    const argv = loginArgv(loginShell(), req.argv, { ...req.env, KIWI_TMUX: st.bin });
+    const r = await this.tmux(st, ["new-window", "-d", "-t", `=${HOSTED_SESSION}:`, "-c", req.folder, "-n", req.name, "-P", "-F", WINDOW_FORMAT, "--", ...argv]);
+    if (r.status !== 0) return { ok: false, why: "failed", detail: `tmux: ${said(r)}` };
+    const [window, pane, pid] = r.stdout.trim().split("\t");
+    if (!window || !pane) return { ok: false, why: "failed", detail: "tmux opened a window but didn't say which" };
+    return { ok: true, place: "hosted", socket: st.socket, window, pane, ...(Number(pid) > 0 ? { pid: Number(pid) } : {}) };
+  }
+
+  pane(pane: string): Pane | null {
+    const st = this.state();
+    return st ? tmuxPane({ socket: st.socket, pane }, st.bin) : null;
   }
 
   on(line: HostedLine): () => void {

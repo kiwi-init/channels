@@ -24,6 +24,7 @@ import { HostedTmux } from "./hosted-tmux.ts";
 import { forgetAtRelay, startMachineInbox } from "./inbox.ts";
 import { remoteRunner } from "./remote.ts";
 import { launchAgent } from "../launch/launch.ts";
+import { readLoopStart, startLoop } from "../loop/start.ts";
 import { readLaunchRequest } from "../launch/wire.ts";
 import { beatLock, dropLock, lockPath, ownsLock, takeLock } from "./lock.ts";
 import { stopDaemon, tryHello } from "./rpc.ts";
@@ -709,7 +710,15 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         case "launch": {
           const launch = readLaunchRequest(params);
           if (!launch) throw new Error('launch needs {"harness", "folder", "code", "relay"?, "nick"?, "persona"?, "launch"?: an id of 8 to 64 of A-Z a-z 0-9 _ -}');
-          sendLine(conn, JSON.stringify({ id, ok: true, launched: await launchAgent(launch) }));
+          sendLine(conn, JSON.stringify({ id, ok: true, launched: await launchAgent(launch, { hosted }) }));
+          break;
+        }
+        case "loop": {
+          const start = readLoopStart(params);
+          if (!start) throw new Error('loop needs {"channel", "as", "folder", "harness"?, "model"?, "effort"?}');
+          const opened = await startLoop(start, hosted);
+          if (!opened.ok) throw new Error(opened.detail);
+          sendLine(conn, JSON.stringify({ id, ok: true, opened }));
           break;
         }
         case "stop":
@@ -717,7 +726,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           setTimeout(() => void stop(), 50);
           break;
         default:
-          throw new Error(`unknown verb "${verb}" (hello, adopt, listen, listening, hold, listeners, read, mark, peek, presence, harnesses, folders, launch, unpair, stop)`);
+          throw new Error(`unknown verb "${verb}" (hello, adopt, listen, listening, hold, listeners, read, mark, peek, presence, harnesses, folders, launch, loop, unpair, stop)`);
       }
     } catch (err) {
       sendLine(conn, JSON.stringify({ id, ok: false, error: err instanceof Error ? err.message : String(err) }));
@@ -788,7 +797,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     run: remoteRunner({
       inventory: () => harnessInventory(),
       folders: (room) => launchFolders(loadConfig(), room),
-      launch: (req) => launchAgent(req),
+      launch: (req) => launchAgent(req, { hosted }),
       bypass: () => remoteBypassOn(loadConfig()),
       settings: async () => computerSettings(loadConfig(), hooksRows()),
       starts: join(dir, "remote-launches.json"),
