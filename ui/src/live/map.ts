@@ -34,7 +34,19 @@ import type { Ask, Color, Direct, Harness, Image, JoinAsk, Message, Person, Pull
 
 type Seen = Readonly<Record<string, number>>
 
-const HARNESS_OF: Record<string, Harness> = { "claude-code": "claude", codex: "codex", opencode: "opencode", gemini: "gemini", cursor: "cursor", grok: "grok" }
+const HARNESS_OF: Record<string, Harness> = {
+  "claude-code": "claude",
+  codex: "codex",
+  opencode: "opencode",
+  gemini: "gemini",
+  cursor: "cursor",
+  grok: "grok",
+  "kimi-code": "kimi",
+  mimocode: "mimo",
+  pi: "pi",
+  "grok-bot": "grok-bot",
+  zcode: "zcode",
+}
 
 export function harnessOf(raw: string | undefined): Harness | undefined {
   const h = canonicalHarness(raw)

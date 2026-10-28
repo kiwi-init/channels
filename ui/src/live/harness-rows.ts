@@ -1,13 +1,15 @@
-import type { HarnessRow } from "@kiwi/core/harnesses.ts"
+import type { HarnessRow, KnownHarness } from "@kiwi/core/harnesses.ts"
 import { harnessName } from "@/lib/harness"
 import { harnessOf } from "~/live/map"
-import type { App } from "~/model"
+import type { App, Harness } from "~/model"
+
+export const STARTS: Partial<Record<Harness, KnownHarness>> = { claude: "claude", codex: "codex", opencode: "opencode", gemini: "gemini", cursor: "cursor", grok: "grok" }
 
 export function harnessChoices(rows: readonly HarnessRow[]): App["harnesses"] {
   const out = new Map<string, App["harnesses"][number]>()
   for (const r of rows) {
     const id = harnessOf(r.harness)
-    if (!id || id === "other" || out.has(id)) continue
+    if (!id || !STARTS[id] || out.has(id)) continue
     out.set(id, {
       id,
       label: harnessName(r.harness),
