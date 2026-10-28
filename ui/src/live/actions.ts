@@ -28,6 +28,7 @@ import { answerPair, cancelPair, linkGithub, pairBegin, unlinkGithub } from "~/l
 import { newMemberPowers, newMemberScopes, setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
 import { closeOpened, openedRun, type Run } from "~/live/store"
+import { downloadAndRestart } from "~/live/update"
 import { setWake } from "~/live/wakes"
 import { rememberOwner } from "~/live/invites"
 import type { Actions, Harness, InviteInfo, JoinChoice, NewAgent, TaskStatus } from "~/model"
@@ -425,11 +426,7 @@ export function makeActions(): Actions {
       attempt("Couldn't update", async () => {
         const b = bridge()
         if (!b) throw new Error("updates come with the Channels desktop app")
-        const u = await b.getUpdate()
-        if (!u) return announce("Channels is up to date")
-        if (u.state === "ready") return b.installUpdate()
-        if (u.state === "downloading") return announce("The update is still downloading")
-        await b.openExternal(u.url)
+        await downloadAndRestart(b, announce)
       }),
     applyUi: () =>
       attempt("Couldn't switch to the new look", async () => {
