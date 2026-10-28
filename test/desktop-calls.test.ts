@@ -114,6 +114,14 @@ describe("main's handlers reach the shell only through the host", () => {
     expect(did).toEqual(["notify T484: done", "restart"]);
   });
 
+  test("a notification carries the channel link a click opens, and nothing else", async () => {
+    did.length = 0;
+    await bridge.notify("maya in kiwi-dev", "@you look", "kiwi://join/mc2-abc");
+    await bridge.notify("maya in kiwi-dev", "@you look", "https://evil.example");
+    await bridge.notify("maya in kiwi-dev", "@you look", `kiwi://join/${"a".repeat(3000)}`);
+    expect(did).toEqual(["notify maya in kiwi-dev: @you look → kiwi://join/mc2-abc", "notify maya in kiwi-dev: @you look", "notify maya in kiwi-dev: @you look"]);
+  });
+
   test("the page's news count goes to the app icon's badge; anything but a whole count of zero or more is refused", async () => {
     did.length = 0;
     await bridge.setBadge(3);

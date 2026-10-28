@@ -8,7 +8,6 @@ import { useIcons, useLiveIcon } from "@/lib/icons"
 import { markSeen, setOpenNews } from "@/lib/news"
 import { lastPreview } from "@/lib/preview"
 import { roomLast, roomSeenKey } from "@/lib/rooms"
-import { bridge } from "@/lib/secrets"
 import { sendsInTurn } from "@/lib/send-order"
 import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@/lib/threads"
 import { announce } from "~/kit/toasts"
@@ -20,13 +19,13 @@ import { usePinsHere } from "~/live/pins"
 import { usePublishFace } from "~/live/face"
 import { usePictures } from "~/live/pictures"
 import { seated, useSeats } from "~/live/seats"
-import { elsewhere, worthTelling } from "~/live/notify"
+import { elsewhere, lastWorth } from "~/live/notify"
+import { tellMessage } from "~/live/notes"
 import { ownPrefs } from "~/live/prefs"
 import { closeOpened, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
 import type { Channel, Upload, Where } from "~/model"
 import { nicknamesOf } from "~/names"
-import { named as withNicknames } from "~/chat/linked"
 
 export interface View {
   where: Where | null
@@ -277,26 +276,18 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     })
   }, [messages, others, state, code, me, member.at])
 
-  useNotify(messages, me, title, state.members)
+  useNotify(messages, me, title, code, state.members)
 
   return null
 })
 
-function useNotify(messages: readonly Wire[], me: string, title: string, members: ChannelState["members"]) {
+function useNotify(messages: readonly Wire[], me: string, title: string, code: string, members: ChannelState["members"]) {
   const told = useRef(messages.at(-1)?.seq ?? 0)
   useEffect(() => {
     const fresh = messages.filter((m) => m.seq > told.current)
     told.current = Math.max(told.current, messages.at(-1)?.seq ?? 0)
     if (!fresh.length || !elsewhere()) return
-    const { notify } = ownPrefs()
-    const decides = answersDecisions(members, me)
-    const worth = fresh.filter((m) => worthTelling(m, me, notify, decides))
-    const last = worth.at(-1)
-    if (!last) return
-    const b = bridge()
-    const body = withNicknames(last.body, nicknamesOf(members.values())).slice(0, 200)
-    const who = members.get(last.from)?.display || last.from
-    if (b) void b.notify(`${who} in ${title}`, body).catch(() => {})
-    else if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification(`${who} in ${title}`, { body })
-  }, [messages, me, title, members])
+    const last = lastWorth(fresh, me, ownPrefs().notify, answersDecisions(members, me))
+    if (last) tellMessage(last, title, code, members.values(), members.get(last.from)?.display)
+  }, [messages, me, title, code, members])
 }
