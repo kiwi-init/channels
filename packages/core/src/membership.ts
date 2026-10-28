@@ -313,9 +313,9 @@ export async function verifiedDevice(
   memberPk: string,
   c: unknown,
   newer?: (person: string) => DeviceList | undefined,
-): Promise<{ person: string; label: string; as: "desktop" | "phone" | "computer" } | null> {
+): Promise<{ person: string; device: string; label: string; as: "desktop" | "phone" | "computer" } | null> {
   const got = await checkDevice(c, roomId, memberPk, newer);
-  return got ? { person: got.person, label: got.device.label, as: got.device.as } : null;
+  return got ? { person: got.person, device: got.device.device, label: got.device.label, as: got.device.as } : null;
 }
 
 function readDeviceMark(x: unknown): { label: string; as: "desktop" | "phone" | "computer" } | undefined {

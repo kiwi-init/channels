@@ -40,6 +40,11 @@ const deviceName = (members: readonly Pick<Member, "name">[], base: string): str
 
 const sameHuman = (members: readonly Member[], person: string) => members.find((m) => (m.kind === "human" || m.owner) && m.person === person && !m.device);
 
+const personNameOf = (members: readonly Member[], person: string): string => {
+  const m = sameHuman(members, person);
+  return m?.display ?? m?.name ?? "someone";
+};
+
 const addsAgents = (m: Member) => m.kind === "human" && !m.owner && !!m.addsAgents && !!m.person && canPost(m.later?.scopes ?? scopesOf(m));
 
 type RequestRow = {
@@ -85,10 +90,12 @@ export class ChannelRequests {
         } catch {
           // Info that isn't JSON: the request still shows, named "?".
         }
-        const computer = yield* Effect.promise(() => verifiedComputer(this.ch.roomId, r.pk, info.computer));
+        const paired = yield* Effect.promise(() => verifiedComputer(this.ch.roomId, r.pk, info.computer));
         const person = yield* Effect.promise(() => verifiedPerson(this.ch.roomId, r.pk, info.person));
         const device = person ? null : yield* Effect.promise(() => verifiedDevice(this.ch.roomId, r.pk, info.device));
         const app = device && device.as !== "computer" ? device : null;
+        const enrolled = device?.as === "computer" ? { pk: device.device, label: device.label, person: device.person, personName: personNameOf(seats, device.person) } : null;
+        const computer = enrolled ?? paired;
         const pin = person || app ? null : yield* Effect.promise(() => readPin(info.pin, this.ch.roomId, this.ch.identity.pk));
         const kind = person || app ? "human" : "agent";
         const launch = kind === "agent" ? readLaunch(info.launch) : undefined;
@@ -100,7 +107,7 @@ export class ChannelRequests {
         const free = !!auto && allowed && !offered.some((m) => nameKey(m.name) === nameKey(asked));
         const nick = kind === "human" ? "" : inlineText(info.display, 40) || (auto && !free && allowed && !personName ? asked.replace(/-\d+$/, "") || asked : "");
         if (auto) offered.push({ name: (info.name = free ? asked : freeHandle(offered, seededPick(r.pk))) });
-        const forgotten = !!computer && !!opts.person && computer.person === opts.person && !!opts.mine && !opts.mine.includes(computer.pk);
+        const forgotten = !enrolled && !!computer && !!opts.person && computer.person === opts.person && !!opts.mine && !opts.mine.includes(computer.pk);
         const own = !!computer && !!opts.person && computer.person === opts.person && !forgotten;
         const same = app ? sameHuman(seats, app.person) : undefined;
         const joinsOnItsOwn = own || (kind === "agent" && !!computer && !!opts.person && agentsOf.has(computer.person)) || !!same;
