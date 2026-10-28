@@ -30,7 +30,7 @@ beforeAll(async () => {
     dataDir,
     human: devHumanAuth(),
     githubSecret: SECRET,
-    githubPush: async (repo, token) => ({ ok: true, value: token === "ghu_owner" && repo.startsWith("ojow/") }),
+    githubPush: async (repo, token) => ({ ok: true, value: token !== "ghu_owner" || !repo.startsWith("ojow/") ? null : repo === "ojow/old-name" ? "Kiwi-Init/Channels" : repo }),
   });
   relay = server.url.origin;
   owner = await generateIdentity("alice");
@@ -119,6 +119,15 @@ describe("GitHub webhooks into a channel's queue", () => {
     expect((await room("GET", "/github/queue", member)).status).toBe(403);
     expect((await room("POST", "/github/ack", owner, { upTo: id })).status).toBe(200);
     expect(((await (await room("GET", "/github/queue", owner)).json()) as Queue).items).toEqual([]);
+  });
+
+  test("a repo connected under its old name is linked under GitHub's current one, so its events still land", async () => {
+    const set = await room("PUT", "/github/repos", owner, { repos: ["ojow/old-name"], token: "ghu_owner" });
+    expect(await set.json()).toEqual({ repos: ["kiwi-init/channels"] });
+    expect(await (await hook("pull_request", pr("kiwi-init/channels"))).json()).toEqual({ queued: 1 });
+    const q = (await (await room("GET", "/github/queue", owner)).json()) as Queue;
+    expect(q.items.map((i) => i["repo"])).toEqual(["kiwi-init/channels"]);
+    expect((await room("POST", "/github/ack", owner, { upTo: q.items[0]!.id })).status).toBe(200);
   });
 
   test("refused: a bad signature, a repo nobody connected, an event it doesn't take; a ping is fine", async () => {

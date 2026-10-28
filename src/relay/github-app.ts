@@ -1,5 +1,5 @@
 import * as Context from "effect/Context";
-import { MAX_RELEASE_COMMITS, MAX_REQUIRED_CHECKS, MERGE_METHODS, type MergeMethod } from "@kiwi/core/protocol.ts";
+import { MAX_RELEASE_COMMITS, MAX_REQUIRED_CHECKS, MERGE_METHODS, REPO_RE, type MergeMethod } from "@kiwi/core/protocol.ts";
 
 export const REVIEW_CHECK = "kiwi/review";
 const MAX_DIFF = 2 << 20;
@@ -115,12 +115,12 @@ export interface GithubAppApi {
   closeIssue(repo: string, number: number, reason: "completed" | "not_planned", body: string): Promise<GithubReply<{ url: string | null }>>;
   rules(repo: string): Promise<GithubReply<GithubRulesInfo>>;
   releases(repo: string, known: readonly string[]): Promise<GithubReply<GithubReleaseInfo[]>>;
-  canPush(repo: string, userToken: string): Promise<GithubReply<boolean>>;
+  canPush: PushCheck;
 }
 
 export class GithubApp extends Context.Service<GithubApp, GithubAppApi | null>()("kiwi/relay/GithubApp") {}
 
-export type PushCheck = (repo: string, userToken: string) => Promise<GithubReply<boolean>>;
+export type PushCheck = (repo: string, userToken: string) => Promise<GithubReply<string | null>>;
 
 export class GithubPush extends Context.Service<GithubPush, PushCheck | null>()("kiwi/relay/GithubPush") {}
 
@@ -131,10 +131,11 @@ export function githubPushFrom(opts: { api?: string; fetch?: typeof fetch } = {}
   const get = opts.fetch ?? fetch;
   return async (repo, userToken) => {
     const res = await get(`${api}/repos/${repo}`, { headers: githubHeaders(userToken) });
-    if (res.status === 404 || res.status === 403) return { ok: true, value: false };
+    if (res.status === 404 || res.status === 403) return { ok: true, value: null };
     if (!res.ok) return { ok: false, status: 502, error: `GitHub refused this repo (${res.status})` };
-    const r = (await res.json()) as { permissions?: { push?: boolean; admin?: boolean } };
-    return { ok: true, value: !!(r.permissions?.push || r.permissions?.admin) };
+    const r = (await res.json()) as { full_name?: string; permissions?: { push?: boolean; admin?: boolean } };
+    if (!(r.permissions?.push || r.permissions?.admin)) return { ok: true, value: null };
+    return { ok: true, value: typeof r.full_name === "string" && REPO_RE.test(r.full_name) ? r.full_name : repo };
   };
 }
 

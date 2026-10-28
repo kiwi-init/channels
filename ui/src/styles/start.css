@@ -109,7 +109,7 @@
 }
 
 .start-digits {
-  font: 500 40px / 1.1 var(--mono);
+  font: 500 calc(var(--t-display) * 1.6) / 1.1 var(--mono);
   letter-spacing: 0.08em;
   font-variant-numeric: tabular-nums;
 }
