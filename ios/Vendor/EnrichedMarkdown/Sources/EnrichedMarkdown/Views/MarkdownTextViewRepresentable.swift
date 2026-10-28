@@ -58,7 +58,7 @@ struct MarkdownTextViewRepresentable: UIViewRepresentable {
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: MarkdownTextView, context: Context) -> CGSize? {
-        let width = proposal.width ?? UIScreen.main.bounds.width
+        let width = uiView.usedWidth(within: proposal.width ?? UIScreen.main.bounds.width)
         let size = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
         return CGSize(width: width, height: size.height)
     }

@@ -54,6 +54,34 @@ final class MarkdownRenderStore: ObservableObject {
 
     private let coordinator = AsyncRenderCoordinator()
 
+    private var first: (inputs: MarkdownRenderInputs, text: NSAttributedString, source: RenderedSource)?
+
+    func shown(_ inputs: MarkdownRenderInputs) -> (text: NSAttributedString, source: RenderedSource?) {
+        if source != nil || isBlank(inputs.markdown) {
+            return (attributedText, source)
+        }
+        if let first, first.inputs == inputs {
+            return (first.text, first.source)
+        }
+        let options = MarkdownRenderer.effectiveParsingOptions(inputs.options, plugins: inputs.plugins.values)
+        let made = (inputs: inputs, text: Self.render(inputs.markdown, inputs), source: RenderedSource(markdown: inputs.markdown, options: options))
+        first = made
+        return (made.text, made.source)
+    }
+
+    private nonisolated static func render(_ markdown: String, _ inputs: MarkdownRenderInputs) -> NSAttributedString {
+        MarkdownRenderer.render(
+            markdown,
+            config: inputs.config,
+            options: inputs.options,
+            imageRequestHeaders: inputs.imageRequestHeaders,
+            plugins: inputs.plugins.values,
+            writingDirection: inputs.writingDirection,
+            layoutDirection: UIUserInterfaceLayoutDirection(inputs.layoutDirection),
+            codeBlockLayout: inputs.codeBlockLayout
+        )
+    }
+
     func schedule(_ inputs: MarkdownRenderInputs) {
         let markdown = inputs.markdown
         if isBlank(markdown) {
@@ -74,17 +102,16 @@ final class MarkdownRenderStore: ObservableObject {
         // render adjusts the options itself; the source keeps the adjusted ones for copying.
         let effectiveOptions = MarkdownRenderer.effectiveParsingOptions(inputs.options, plugins: plugins)
 
+        if let first, first.inputs == inputs, resolved == markdown {
+            self.first = nil
+            coordinator.invalidate()
+            attributedText = first.text
+            source = first.source
+            return
+        }
+
         coordinator.scheduleRender {
-            MarkdownRenderer.render(
-                resolved,
-                config: inputs.config,
-                options: inputs.options,
-                imageRequestHeaders: inputs.imageRequestHeaders,
-                plugins: plugins,
-                writingDirection: inputs.writingDirection,
-                layoutDirection: UIUserInterfaceLayoutDirection(inputs.layoutDirection),
-                codeBlockLayout: inputs.codeBlockLayout
-            )
+            Self.render(resolved, inputs)
         } apply: { [weak self] result in
             guard let self else { return }
             attributedText = SpoilerInteraction.revealing(in: result, ordinals: revealedSpoilers) ?? result

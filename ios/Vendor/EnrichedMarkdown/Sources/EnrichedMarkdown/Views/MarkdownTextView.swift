@@ -360,6 +360,25 @@ final class MarkdownTextView: UITextView, SelectionHandleTouchReporting, Markdow
         setNeedsLayout()
     }
 
+    func usedWidth(within width: CGFloat) -> CGFloat {
+        guard let text = attributedText, text.length > 0 else { return width }
+        let whole = NSRange(location: 0, length: text.length)
+        var attached = false
+        text.enumerateAttribute(.attachment, in: whole) { value, _, stop in
+            if value != nil {
+                attached = true
+                stop.pointee = true
+            }
+        }
+        if attached { return width }
+        let used = text.boundingRect(
+            with: CGSize(width: width, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            context: nil
+        )
+        return min(width, ceil(used.width) + 1)
+    }
+
     override func sizeThatFits(_ size: CGSize) -> CGSize {
         let trailingInset = trailingSpacing.inset(marginEnabled: isBottomMarginEnabled)
         if let cachedFit, cachedFit.width == size.width, cachedFit.text === renderedText {

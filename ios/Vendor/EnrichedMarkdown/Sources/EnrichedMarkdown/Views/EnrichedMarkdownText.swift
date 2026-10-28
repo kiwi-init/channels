@@ -58,9 +58,10 @@ public struct EnrichedMarkdownText: View {
             layoutDirection: layoutDirection,
             codeBlockLayout: codeBlockLayout
         )
+        let shown = renderStore.shown(inputs)
         return MarkdownTextViewRepresentable(
-            attributedText: renderStore.attributedText,
-            source: renderStore.source,
+            attributedText: shown.text,
+            source: shown.source,
             isBottomMarginEnabled: bottomMarginVisibility == .visible,
             styleConfig: config,
             openURL: { openURL($0) },
