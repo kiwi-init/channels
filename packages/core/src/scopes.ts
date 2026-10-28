@@ -71,6 +71,8 @@ function scopeFor(m: Pick<Message, "kind" | "ev">): Scope | "any" | null {
   if (m.kind === "ask" || m.kind === "blocking") return "ask";
   if (m.kind !== "event") return "post";
   switch (m.ev?.op) {
+    case "ask.close":
+      return "ask";
     case "task.add":
     case "task.claim":
     case "task.update":

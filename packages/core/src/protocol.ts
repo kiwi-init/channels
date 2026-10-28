@@ -290,6 +290,7 @@ export type Event =
   | { op: "branch.prefix.set"; prefix: string | null }
   /** The goal a person's message #ask stands for, in plain words, as its tasks' header (null: their own words again). The lead, the owner or who asked names it. */
   | { op: "ask.name"; ask: number; name: string | null }
+  | { op: "ask.close"; ask: number; why?: string }
   /**
    * A member's reaction to message #seq: one short emoji per member per message, the latest wins, null
    * takes it back. Not news: it's no unread, no notification, no line in a feed. Its body is throwaway
@@ -730,7 +731,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 5;
+export const EVENT_OPS_VERSION = 6;
 const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 
 export const knownOp = (op: string): boolean => eventCheck({ op }) !== null;
@@ -984,6 +985,8 @@ function eventCheck(ev: unknown): boolean | null {
       return n(e.seq) && (e.seq as number) > 0 && (e.emoji === null || wellFormedReaction(e.emoji));
     case "ask.name":
       return n(e.ask) && (e.ask as number) > 0 && (e.name === null || str(e.name, MAX_GOAL_NAME * 4));
+    case "ask.close":
+      return n(e.ask) && (e.ask as number) > 0 && (e.why === undefined || str(e.why, 500));
     default:
       return null;
   }

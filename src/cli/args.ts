@@ -48,6 +48,7 @@ const parsed = parseArgs({
     image: { type: "string", multiple: true },
     option: { type: "string", multiple: true },
     holds: { type: "string" },
+    close: { type: "string" },
     step: { type: "boolean" },
     do: { type: "string", multiple: true },
     run: { type: "string", multiple: true },
