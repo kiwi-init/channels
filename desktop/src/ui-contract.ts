@@ -195,6 +195,7 @@ export const UI_SURFACES: Readonly<Record<string, readonly string[]>> = {
     "kiwi.devSignIn",
     "kiwi.doctor",
     "kiwi.foldersOn",
+    "kiwi.forgetPhone",
     "kiwi.getAccentColor",
     "kiwi.getDeepLink",
     "kiwi.getSnapshot",

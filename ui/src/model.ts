@@ -269,6 +269,7 @@ export interface Computer {
   online: boolean
   agents: number
   lastSeen: number
+  holds?: string[]
 }
 
 export interface Account {

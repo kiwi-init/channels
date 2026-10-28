@@ -94,7 +94,7 @@ export function createLinkHost(deps: LinkHostDeps): LinkHost {
       };
       const chunks = await sealLink(l.secret, l.keys.xsk, l.keys.xpk, l.ask.pxpk, payload);
       await writeLinkChunks(l.relay, l.secret, chunks, fetchImpl);
-      const phone: PhoneView = { label: l.ask.label, at: now() };
+      const phone: PhoneView = { label: l.ask.label, at: now(), channels: payload.channels.map((c) => c.label) };
       deps.linked(phone);
       return phone;
     },

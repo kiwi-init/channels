@@ -15,7 +15,7 @@ export const DEMO_ACCOUNT: Account = {
   computers: [
     { id: "mbp", label: "MacBook Pro", os: "mac", thisOne: true, online: true, agents: 3, lastSeen: now },
     { id: "arch", label: "arch-box", os: "linux", thisOne: false, online: true, agents: 1, lastSeen: m(2) },
-    { id: "iphone", label: "iPhone 14 Pro", os: "iphone", thisOne: false, online: false, agents: 0, lastSeen: m(180) },
+    { id: "iphone", label: "iPhone 14 Pro", os: "iphone", thisOne: false, online: false, agents: 0, lastSeen: m(180), holds: ["kiwi", "interlinked", "landing"] },
   ],
 }
 

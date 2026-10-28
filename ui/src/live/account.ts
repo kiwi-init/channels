@@ -131,7 +131,16 @@ function computerOf(c: ComputerView, online: ReadonlyMap<string, boolean | null>
   }
 }
 
-const phoneOf = (p: PhoneView): Computer => ({ id: `phone:${p.at}`, label: p.label, os: /android/i.test(p.label) ? "android" : "iphone", thisOne: false, online: false, agents: 0, lastSeen: p.at })
+const phoneOf = (p: PhoneView): Computer => ({
+  id: `phone:${p.at}`,
+  label: p.label,
+  os: /android/i.test(p.label) ? "android" : "iphone",
+  thisOne: false,
+  online: false,
+  agents: 0,
+  lastSeen: p.at,
+  ...(p.channels ? { holds: p.channels } : {}),
+})
 
 function useMachines(): ReadonlyMap<string, boolean | null> {
   const [online, setOnline] = useState<ReadonlyMap<string, boolean | null>>(new Map())

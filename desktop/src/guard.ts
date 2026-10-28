@@ -88,7 +88,7 @@ export function snapshotOf(s: StoredKeys): StoreSnapshot {
     person: publicPerson(s.person),
     channels: s.channels.map(publicChannel),
     computers: s.computers,
-    phones: (s.phones ?? []).map((p) => ({ label: p.label, at: p.at })),
+    phones: (s.phones ?? []).map((p) => ({ label: p.label, at: p.at, ...(p.channels ? { channels: p.channels } : {}) })),
     pending: s.pending,
     personalities: cleanPersonalities(s.personalities),
   };

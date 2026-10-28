@@ -539,7 +539,12 @@ export function makeActions(): Actions {
     pairBegin,
     forgetComputer: (id) =>
       attempt("Couldn't forget it", async () => {
-        if (id.startsWith("phone:")) throw new Error("phones are unlinked from the phone itself")
+        if (id.startsWith("phone:")) {
+          const b = bridge()
+          if (!b?.forgetPhone) throw new Error("forgetting a phone here needs the next Channels update; until then, unlink it on the phone")
+          await b.forgetPhone(Number(id.slice("phone:".length)))
+          return announce("Forgot it. Unlink it on the phone too")
+        }
         const removed = await removeComputer(id)
         announce(removed.length ? `Forgot it and removed ${removed.join(", ")}` : "Forgot it")
       }),

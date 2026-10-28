@@ -228,6 +228,7 @@ export interface StoreSnapshot {
 export interface PhoneView {
   label: string;
   at: number;
+  channels?: string[];
 }
 
 export interface LinkAskView {
@@ -324,6 +325,7 @@ export interface KiwiBridge {
   linkPoll(): Promise<LinkAskView | null>;
   linkAnswer(accept: boolean): Promise<PhoneView | null>;
   linkCancel(): Promise<void>;
+  forgetPhone(at: number): Promise<void>;
   daemonStatus(): Promise<DaemonStatus>;
   doctor(): Promise<DoctorFinding[] | null>;
   /** Certify this machine's daemon key with the person key and hand the cert back. */
