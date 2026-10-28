@@ -63,15 +63,26 @@ export function zcodeSession(nonce: string, since: number, cwd: string = process
   );
 }
 
-export function zcodeIdle(session: string, file: string = zcodeDb()): { idle: boolean; since: number | null } {
+export function zcodeIdle(since: number, cwd: string = process.cwd(), file: string = zcodeDb()): { idle: boolean; since: number | null } {
+  const from = since - CLOCK_MS;
   return withDb(
     file,
     (db) => {
-      const ended = db.query<{ at: number | null }, [string]>("select max(completed_at) as at from turn_usage where session_id = ?").get(session)?.at ?? null;
-      const asked =
-        db.query<{ n: number }, [string, number]>("select count(*) as n from message where session_id = ? and json_extract(data, '$.role') = 'user' and time_created > ?").get(session, ended ?? 0)
-          ?.n ?? 0;
-      return { idle: asked === 0, since: ended };
+      const row = db
+        .query<{ busy: number; ended: number | null }, [string, number, number]>(
+          `with here as (
+             select s.id, (select max(t.completed_at) from turn_usage t where t.session_id = s.id) as ended
+             from session s
+             where s.directory = ? and s.parent_id is null and (s.time_created >= ? or s.time_updated >= ?)
+           )
+           select
+             (select count(*) from here h
+              where exists (select 1 from message m
+                            where m.session_id = h.id and json_extract(m.data, '$.role') = 'user' and m.time_created > coalesce(h.ended, 0))) as busy,
+             (select max(ended) from here) as ended`,
+        )
+        .get(realDir(cwd), from, from);
+      return row ? { idle: row.busy === 0, since: row.ended } : { idle: false, since: null };
     },
     { idle: false, since: null },
   );

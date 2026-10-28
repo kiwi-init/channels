@@ -150,7 +150,7 @@ export function recipeFor(harness: LoopHarness): Omit<Recipe, "bin"> {
         started: (pid, since, nonce) => {
           const session = zcodeSession(nonce, since);
           const zpid = session ? zcodeProcess(pid) : null;
-          return session && zpid ? { id: session, bound: { harness, session: `zcode-pid-${zpid}`, pid: zpid }, idle: () => zcodeIdle(session) } : null;
+          return session && zpid ? { id: session, bound: { harness, session: `zcode-pid-${zpid}`, pid: zpid }, idle: () => zcodeIdle(since) } : null;
         },
       };
     default: {

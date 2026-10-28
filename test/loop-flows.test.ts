@@ -231,13 +231,13 @@ const prompt = await new Promise((resolve) => {
 const dir = join(process.env.KIWI_ZCODE_DIR, "db");
 mkdirSync(dir, { recursive: true });
 const db = new Database(join(dir, "db.sqlite"));
-db.run("create table if not exists session (id text primary key, directory text not null, parent_id text, time_created integer not null)");
+db.run("create table if not exists session (id text primary key, directory text not null, parent_id text, time_created integer not null, time_updated integer not null)");
 db.run("create table if not exists message (id text primary key, session_id text not null, time_created integer not null, data text not null)");
 db.run("create table if not exists part (id text primary key, message_id text not null, session_id text not null, data text not null)");
 db.run("create table if not exists turn_usage (session_id text not null, turn_id text not null, user_message_id text, status text not null, started_at integer not null, completed_at integer)");
 const session = "sess_" + crypto.randomUUID();
 const asked = Date.now();
-db.run("insert into session values (?, ?, ?, ?)", [session, realpathSync(process.cwd()), null, asked]);
+db.run("insert into session values (?, ?, ?, ?, ?)", [session, realpathSync(process.cwd()), null, asked, asked]);
 db.run("insert into message values (?, ?, ?, ?)", ["msg_p_" + session, session, asked, JSON.stringify({ role: "user" })]);
 db.run("insert into part values (?, ?, ?, ?)", ["prt_p_" + session, "msg_p_" + session, session, JSON.stringify({ type: "text", text: prompt })]);
 db.run("insert into message values (?, ?, ?, ?)", ["msg_s_" + session, session, asked + 5, JSON.stringify({ role: "user" })]);
