@@ -38,6 +38,9 @@ let keyring: Keyring | null = null;
 const rooms = new Map<string, Room>();
 let linking: { code: LinkCode; keys: LinkKeys; stop: AbortController } | null = null;
 let computers = new Map<string, PairedComputer>();
+let computersKnown = false;
+let computersTimer: ReturnType<typeof setInterval> | null = null;
+const COMPUTERS_EVERY_MS = 5 * 60_000;
 
 const checks = new Map<string, Signed[]>();
 const budget: SigningBudget = {
@@ -55,6 +58,8 @@ function seats(): ChannelIdentityView[] {
 }
 
 function stopAll(): void {
+  if (computersTimer) clearInterval(computersTimer);
+  computersTimer = null;
   for (const room of rooms.values()) room.stop();
   rooms.clear();
   keyring?.stopAll();
@@ -79,7 +84,7 @@ function start(next: Saved): number {
     prove: async () => null,
     githubToken: async () => null,
     person: () => saved?.person?.pk ?? null,
-    mine: () => null,
+    mine: () => (computersKnown ? [...computers.keys()] : null),
     budget,
   });
   keyring = ring;
@@ -95,6 +100,11 @@ function start(next: Saved): number {
     });
     rooms.set(seat.code, room);
     void room.start();
+  }
+  if (next.person) {
+    const load = () => void listComputers().catch(() => {});
+    load();
+    computersTimer = setInterval(load, COMPUTERS_EVERY_MS);
   }
   return rooms.size;
 }
@@ -125,6 +135,7 @@ function valueOf<T>(got: FromMachine<T>): T {
 async function listComputers(): Promise<PairedComputer[]> {
   const listed = valueOf(await personMachines(asker()));
   computers = new Map(listed.map((c) => [c.key, c]));
+  computersKnown = true;
   return listed;
 }
 

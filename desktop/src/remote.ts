@@ -139,6 +139,18 @@ function readComputer(x: unknown): PairedComputer | null {
   return { key, xpk, label, online, ...(online && typeof since === "number" ? { since } : {}), seenAt };
 }
 
+export async function unpairAt(asker: Asker, machinePk: string): Promise<boolean> {
+  const path = `/v1/machine/${machinePk}`;
+  const auth = await signRequest(asker.person, `machine:${machinePk}`, "DELETE", path);
+  try {
+    const res = await (asker.fetch ?? fetch)(new URL(path, asker.relay), { method: "DELETE", headers: { authorization: `Bearer ${auth}` } });
+    return res.ok || res.status === 404;
+  } catch {
+    // An unreachable relay keeps the binding for now; the computer is already gone from this app's list.
+    return false;
+  }
+}
+
 export async function personMachines(asker: Asker): Promise<FromMachine<PairedComputer[]>> {
   const path = `/v1/person/${asker.person.pk}/machines`;
   const auth = await signRequest(asker.person, `person:${asker.person.pk}`, "GET", path);
