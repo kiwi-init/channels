@@ -9,7 +9,6 @@ import { PRESETS } from "@kiwi/core/presets.ts"
 import { BRANCH_PREFIX_RE, ROBOT_FACES, ROOM_ID_RE, TASK_TITLE_MAX_LENGTH, type Event } from "@kiwi/core/protocol.ts"
 import { describeScopes, SCOPES, wireScopes, type Scope } from "@kiwi/core/scopes.ts"
 import { newRoomId, taskId } from "@kiwi/core/state.ts"
-import type { KnownHarness } from "@kiwi/core/harnesses.ts"
 import type { Permission } from "@kiwi/core/launch-options.ts"
 import { tokenForCreate } from "@/lib/auth"
 import { askToJoin, createChannel, forgetChannel, forgetPending, inviteInfo, isJoinCode, loadMember, loadPending, renameChannel } from "@/lib/channel"
@@ -29,7 +28,7 @@ import { announce } from "~/kit/toasts"
 import { answerPair, cancelPair, linkGithub, pairBegin, unlinkGithub } from "~/live/account"
 import { newMemberPowers, newMemberScopes, setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
-import { harnessChoices } from "~/live/harness-rows"
+import { harnessChoices, STARTS } from "~/live/harness-rows"
 import { iconFromFile } from "~/live/icon-file"
 import { seatOf } from "~/live/seats"
 import { memberName } from "@/lib/format"
@@ -40,7 +39,7 @@ import { stepReplyText } from "~/chat/step"
 import { downloadAndRestart } from "~/live/update"
 import { setWake } from "~/live/wakes"
 import { rememberOwner } from "~/live/invites"
-import type { Actions, Harness, InviteInfo, JoinChoice, NewAgent, TaskStatus } from "~/model"
+import type { Actions, InviteInfo, JoinChoice, NewAgent, TaskStatus } from "~/model"
 
 const say = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
@@ -138,12 +137,10 @@ async function letIn(run: Run, r: JoinRequest, choice: JoinChoice): Promise<stri
 async function scopesFor(run: Run, name: string, scopes: Scope[]): Promise<void> {
   const m = memberOf(run, name)
   const wire = wireScopes(scopes)
-  const seq = await event(run, `set what ${m.name} may do: ${wire ? describeScopes(wire) : "full"}`, { op: "scope.set", member: m.name, pk: m.pk, scopes: wire })
+  const seq = await event(run, `set what ${m.name} may do: ${wire ? describeScopes(wire) : "full"}`, { op: "scope.set", member: m.name, pk: m.pk, scopes: wire, keepLead: true })
   await run.ch.updateScopes(m, scopes, seq)
   await run.refreshRoster()
 }
-
-const HARNESS: Partial<Record<Harness, KnownHarness>> = { claude: "claude", codex: "codex", opencode: "opencode", gemini: "gemini", cursor: "cursor", grok: "grok" }
 
 function launchId(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16))
@@ -276,13 +273,13 @@ export function makeActions(): Actions {
         if (r.check !== "ready" || !r.code) return announce(`Waiting for ${r.display || r.name}'s code`)
         announce(await letIn(run, r, choice ?? {}))
       }),
-    approveTask: (code, id, approve) =>
+    approveTask: (code, id, approve, why) =>
       attempt(approve ? "Not approved" : "Not sent back", async () => {
         const run = need(code)
         const t = run.state.tasks.get(id)
         if (!t) throw new Error(`no task ${taskId(id)}`)
         if (approve) await sends(run, approveTask(t), closedDigest(run.state, [...run.messages], t, { by: run.me }))
-        else await sends(run, sendBackTask(t, "sent back for another look"))
+        else await sends(run, sendBackTask(t, why?.trim() || "sent back for another look"))
       }),
     addTask: (code, title, taskOwner) =>
       attempt("Task not added", async () => {
@@ -326,7 +323,14 @@ export function makeActions(): Actions {
         if (p === undefined) throw new Error("that personality isn't on this computer")
         const persona = p ? personaOf(p) : null
         const wire = wireScopes(persona ? personaScopes(persona) : [...SCOPES])
-        const seq = await event(run, persona ? `made ${m.name} ${persona.name}` : `took ${m.name}'s personality away`, { op: "scope.set", member: m.name, pk: m.pk, scopes: wire })
+        const seq = await event(run, persona ? `made ${m.name} ${persona.name}` : `took ${m.name}'s personality away`, {
+          op: "scope.set",
+          member: m.name,
+          pk: m.pk,
+          scopes: wire,
+          lead: persona?.role === "lead",
+          wasLead: m.persona?.role === "lead",
+        })
         await run.ch.updatePersona(m, persona, seq)
         await run.refreshRoster()
       }),
@@ -379,7 +383,7 @@ export function makeActions(): Actions {
         const b = bridge()
         if (!b) throw new Error("starting agents needs the Channels desktop app")
         const run = need(code)
-        const harness = HARNESS[agent.harness]
+        const harness = STARTS[agent.harness]
         if (!harness) throw new Error("pick a harness Channels knows how to start")
         const p = agent.persona ? personalities().find((x) => x.id === agent.persona) : undefined
         const pin = p && run.isOwner ? await run.ch.pinPersona(p) : undefined

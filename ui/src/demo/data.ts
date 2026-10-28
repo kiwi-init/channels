@@ -155,6 +155,19 @@ const pr44 = {
 
 const tasks: Task[] = [
   {
+    id: 8,
+    title: "Animated channel icons",
+    status: "done",
+    cancelled: true,
+    owner: "pixel",
+    createdBy: "jow",
+    createdAt: m(60 * 40),
+    updatedAt: m(60 * 26),
+    notes: [{ by: "jow", at: m(60 * 26), text: "cancelled: motion in the rail is too busy" }],
+    rounds: [],
+    archived: false,
+  },
+  {
     id: 9,
     title: "Fold duplicate event rows",
     status: "done",
@@ -163,7 +176,7 @@ const tasks: Task[] = [
     createdAt: m(60 * 30),
     updatedAt: m(60 * 20),
     notes: [],
-    rounds: [],
+    rounds: [{ n: 1, by: "atlas", judge: "win", at: m(60 * 20), result: "approved" }],
     archived: false,
     pr: { repo: "kiwi-init/channels", number: 41, title: "Fold duplicate event rows", url: "https://github.com/kiwi-init/channels/pull/41", state: "merged", checks: "pass" },
   },
@@ -196,8 +209,9 @@ const tasks: Task[] = [
     updatedAt: m(3),
     pr: pr43,
     notes: [{ by: "win", at: m(5), text: "PR #43 is up. Theme applies before first paint, no flash." }],
-    rounds: [{ n: 1, by: "atlas", at: m(3), result: "open" }],
+    rounds: [{ n: 1, by: "win", at: m(3), result: "open" }],
     archived: false,
+    youReview: "send-back",
   },
   { id: 13, title: "Tag and push v1.0.0", status: "waiting", owner: "win", createdBy: "jow", createdAt: m(6), updatedAt: m(2), notes: [], rounds: [], archived: false },
   {
@@ -212,8 +226,9 @@ const tasks: Task[] = [
     updatedAt: m(12),
     pr: pr44,
     notes: [{ by: "pixel", at: m(12), text: "Shots are on the PR. Waiting for your OK before merging." }],
-    rounds: [{ n: 1, by: "jow", at: m(12), result: "open" }],
+    rounds: [{ n: 1, by: "pixel", at: m(12), result: "open" }],
     archived: false,
+    youReview: "verdict",
   },
   { id: 15, title: "Rotate the relay's signing key", status: "todo", createdBy: "maya", createdAt: m(200), updatedAt: m(200), notes: [], rounds: [], archived: false },
 ]

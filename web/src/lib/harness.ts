@@ -11,9 +11,10 @@ const NAMES: Record<string, string> = {
   mimocode: "MiMo Code",
   "grok-bot": "Grok Bot",
   pi: "Pi",
+  zcode: "ZCode",
 }
 
-const MONO = new Set(["opencode", "grok", "cursor", "mimocode", "grok-bot", "pi"])
+const MONO = new Set(["opencode", "grok", "cursor", "mimocode", "grok-bot", "pi", "zcode"])
 
 export function canonicalHarness(harness: string | undefined): string | undefined {
   const h = harness?.trim().toLowerCase()
