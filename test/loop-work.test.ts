@@ -112,6 +112,11 @@ describe("the work a loop starts a session for", () => {
     const reopened = await ev("ana", { op: "task.update", task: finished.seq, state: "doing" });
     const own = await ev("ana", { op: "task.first", task: finished.seq });
     expect(fold([loose, anas, finished, closed, reopened, own], roster).tasks.get(finished.seq)?.first).toBe(own.seq);
+    const marked = await ev("jon", { op: "task.first", task: anas.seq });
+    const done = await ev("ana", { op: "task.update", task: anas.seq, state: "done" });
+    const again = await ev("ana", { op: "task.update", task: anas.seq, state: "doing" });
+    expect(nextWork(fold([anas, marked, done], roster), "ana", 0)).toBeNull();
+    expect(nextWork(fold([finished, closed, anas, marked, done, again], roster), "ana", 0)).toEqual({ kind: "coding", task: anas.seq });
   });
 
   test("a task marked first waits while its own round is with the reviewer, and its session yields to a round the seat owes", async () => {

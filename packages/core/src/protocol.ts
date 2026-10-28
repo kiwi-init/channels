@@ -237,7 +237,6 @@ export type Event =
       areas?: string[];
       checkpoint?: true;
     }
-  /** A task its owner's loop starts before their other tasks, until it's handed to someone else. */
   | { op: "task.first"; task: number }
   /** What a member is and has, said by itself: where it runs, what runs it, what it can use. Shown in People. */
   | ({ op: "card" } & Card)
