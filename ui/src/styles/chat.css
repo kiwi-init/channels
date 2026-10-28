@@ -330,6 +330,10 @@
   font-variant-numeric: tabular-nums;
 }
 
+.md .enrm-admonition > div:first-child > span {
+  font-size: calc(15px * var(--text-scale, 1));
+}
+
 .md-plain {
   white-space: pre-wrap;
 }
