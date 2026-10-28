@@ -8,6 +8,7 @@ import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.kiwiinit.channels.model.AppModel
 import com.kiwiinit.channels.model.LaunchSeen
+import com.kiwiinit.channels.model.Linking
 import com.kiwiinit.channels.model.Spot
 import com.kiwiinit.channels.theme.ChannelsTheme
 import com.kiwiinit.channels.ui.ComputerList
@@ -36,6 +37,12 @@ import org.robolectric.annotation.GraphicsMode
 class ScreensTest {
     @Test
     fun link() = shoot("link") { LinkScreen(it) }
+
+    @Test
+    fun signIn() = shoot("sign-in") { LinkScreen(it, linking = Linking.SigningIn("https://signin.kiwiinit.com/device", "WXYZ-KQPM")) }
+
+    @Test
+    fun approve() = shoot("approve") { LinkScreen(it, linking = Linking.Approve("482913")) }
 
     @Test
     fun list() = shoot("list") { ConversationList(it, open = {}, settings = {}) }

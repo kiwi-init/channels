@@ -65,7 +65,7 @@ private fun scan(context: Context, found: (String) -> Unit, failed: (String) -> 
 }
 
 @Composable
-fun LinkScreen(model: AppModel, modifier: Modifier = Modifier) {
+fun LinkScreen(model: AppModel, modifier: Modifier = Modifier, linking: Linking = model.linking) {
     val tone = Tone.current
     val context = LocalContext.current
     val clipboard = LocalClipboard.current
@@ -89,21 +89,38 @@ fun LinkScreen(model: AppModel, modifier: Modifier = Modifier) {
         Text("Channels", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 28.dp))
         Text("Your agents, on your phone.", style = MaterialTheme.typography.bodyLarge, color = tone.ink2, modifier = Modifier.padding(top = 4.dp))
         Spacer(Modifier.size(40.dp))
-        when (val linking = model.linking) {
+        when (linking) {
             Linking.Idle, is Linking.Failed -> {
-                Text("Link this phone", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                val why = (linking as? Linking.Failed)?.why ?: problem
+                val signs = !model.relinking
+                if (signs) {
+                    Text("Sign in", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "With the account Channels on your computer uses, then approve this phone there.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = tone.ink2,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                    if (why != null) Text(why, style = MaterialTheme.typography.bodyMedium, color = tone.alert, modifier = Modifier.padding(top = 16.dp))
+                    PrimaryButton("Sign in", modifier = Modifier.padding(top = 24.dp)) {
+                        problem = null
+                        model.signIn()
+                    }
+                    Spacer(Modifier.size(40.dp))
+                }
+                Text(if (signs) "Or link with your Mac" else "Link this phone", style = if (signs) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                 Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Step(1, "Open Channels on your Mac.")
                     Step(2, "Settings → Phone → Link a phone.")
                     Step(3, "Scan the code it shows.")
                 }
-                val why = (linking as? Linking.Failed)?.why ?: problem
-                if (why != null) Text(why, style = MaterialTheme.typography.bodyMedium, color = tone.alert, modifier = Modifier.padding(top = 16.dp))
+                if (why != null && !signs) Text(why, style = MaterialTheme.typography.bodyMedium, color = tone.alert, modifier = Modifier.padding(top = 16.dp))
                 Column(Modifier.padding(top = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PrimaryButton("Scan the code") {
+                    val scanCode = {
                         problem = null
                         scan(context, found = { model.link(it) }, failed = { problem = it })
                     }
+                    if (signs) QuietButton("Scan the code", action = scanCode) else PrimaryButton("Scan the code", action = scanCode)
                     QuietButton("Paste the code") {
                         scope.launch {
                             val clip = clipboard.getClipEntry()?.clipData
@@ -139,15 +156,61 @@ fun LinkScreen(model: AppModel, modifier: Modifier = Modifier) {
                     letterSpacing = 2.sp,
                     modifier = Modifier.padding(vertical = 24.dp),
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Waiting for your Mac", style = MaterialTheme.typography.bodyMedium, color = tone.ink3)
+                Waiting("Waiting for your Mac")
+                QuietButton("Cancel", Modifier.padding(top = 24.dp)) { model.cancelLink() }
+            }
+            is Linking.SigningIn -> {
+                val url = linking.url
+                if (url == null) {
+                    Waiting("Opening the sign-in…")
+                } else {
+                    Text("Sign in in your browser", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Use the account Channels on your computer uses.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = tone.ink2,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                    if (linking.code.isNotEmpty()) {
+                        Text("Check the page shows", style = MaterialTheme.typography.bodyMedium, color = tone.ink3, modifier = Modifier.padding(top = 24.dp))
+                        Text(linking.code, fontSize = 32.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 2.sp, modifier = Modifier.padding(top = 4.dp, bottom = 24.dp))
+                    } else {
+                        Spacer(Modifier.size(24.dp))
+                    }
+                    Waiting("Waiting for the sign-in")
+                    QuietButton("Open the sign-in page", Modifier.padding(top = 24.dp)) { model.browse(url) }
                 }
+                QuietButton("Cancel", Modifier.padding(top = 10.dp)) { model.cancelLink() }
+            }
+            is Linking.Approve -> {
+                Text("Approve this phone", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Open Channels on your computer. When it asks about this phone, type these digits there.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = tone.ink2,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+                Text(
+                    spaced(linking.digits),
+                    fontSize = 44.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 2.sp,
+                    modifier = Modifier.padding(vertical = 24.dp),
+                )
+                Waiting("Waiting for your computer")
                 QuietButton("Cancel", Modifier.padding(top = 24.dp)) { model.cancelLink() }
             }
         }
         Spacer(Modifier.size(24.dp))
+    }
+}
+
+@Composable
+private fun Waiting(text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+        Spacer(Modifier.width(8.dp))
+        Text(text, style = MaterialTheme.typography.bodyMedium, color = Tone.current.ink3)
     }
 }
 

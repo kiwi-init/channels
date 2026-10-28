@@ -1,7 +1,9 @@
 package com.kiwiinit.channels.model
 
 import android.app.Application
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
 import android.graphics.BitmapFactory
 import android.os.Build
 import android.provider.Settings
@@ -15,10 +17,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.edit
+import androidx.core.net.toUri
 import com.kiwiinit.channels.engine.ComputerView
 import com.kiwiinit.channels.engine.Connection
 import com.kiwiinit.channels.engine.Engine
 import com.kiwiinit.channels.engine.EngineException
+import com.kiwiinit.channels.engine.EnrollDigits
+import com.kiwiinit.channels.engine.EnrollStart
 import com.kiwiinit.channels.engine.HarnessesOn
 import com.kiwiinit.channels.engine.Launched
 import com.kiwiinit.channels.engine.LinkStart
@@ -36,6 +41,7 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -66,8 +72,14 @@ sealed interface Linking {
 
     data class Digits(val digits: String) : Linking
 
+    data class SigningIn(val url: String?, val code: String) : Linking
+
+    data class Approve(val digits: String) : Linking
+
     data class Failed(val why: String) : Linking
 }
+
+const val DEFAULT_RELAY = "https://channels.kiwiinit.com"
 
 enum class Buzz { Tap, Warn, Fail, Done }
 
@@ -105,6 +117,10 @@ class AppModel(private val app: Application) {
     var person by mutableStateOf("")
         private set
     var relay by mutableStateOf("")
+        private set
+    var enrolled by mutableStateOf(false)
+        private set
+    var waiting by mutableStateOf(0)
         private set
     var linking by mutableStateOf<Linking>(Linking.Idle)
         private set
@@ -172,8 +188,8 @@ class AppModel(private val app: Application) {
             phase = Phase.Unlinked
             return
         }
-        person = ((obj["person"] as? JsonObject)?.get("name") as? JsonPrimitive)?.contentOrNull ?: ""
         relay = (obj["relay"] as? JsonPrimitive)?.contentOrNull ?: ""
+        held(obj)
         try {
             ask(
                 buildJsonObject {
@@ -187,11 +203,25 @@ class AppModel(private val app: Application) {
         }
     }
 
+    private fun held(saved: JsonObject) {
+        val device = saved["device"] as? JsonObject
+        val owner = (saved["person"] as? JsonObject) ?: (device?.get("person") as? JsonObject)
+        person = (owner?.get("name") as? JsonPrimitive)?.contentOrNull ?: ""
+        enrolled = device != null
+        waiting = (saved["seats"] as? JsonArray).orEmpty().count { seat ->
+            val o = seat as? JsonObject
+            o != null && o["requestId"] != null && (o["access"] == null || o["access"] is JsonNull)
+        }
+    }
+
     private suspend fun ask(request: JsonObject) = (engine ?: throw EngineException("Channels is still starting.")).ask(request)
 
     private fun take(push: Push) {
         when (push) {
-            is Push.Saved -> vault.save(push.saved.toString().toByteArray())
+            is Push.Saved -> {
+                vault.save(push.saved.toString().toByteArray())
+                (push.saved as? JsonObject)?.let(::held)
+            }
             is Push.Room -> {
                 val room = push.room
                 val before = rooms[room.code]
@@ -273,12 +303,51 @@ class AppModel(private val app: Application) {
         }
     }
 
+    fun signIn() {
+        scope.launch {
+            linking = Linking.SigningIn(null, "")
+            try {
+                val started = read(
+                    EnrollStart.serializer(),
+                    ask(
+                        buildJsonObject {
+                            put("op", "enrollBegin")
+                            put("relay", relay.ifEmpty { DEFAULT_RELAY })
+                            put("label", deviceName())
+                            put("os", "Android ${Build.VERSION.RELEASE}")
+                        },
+                    ),
+                )
+                linking = Linking.SigningIn(started.url, started.code)
+                started.url?.let(::browse)
+                val shown = read(EnrollDigits.serializer(), ask(buildJsonObject { put("op", "enrollWait") }))
+                linking = Linking.Approve(shown.digits)
+                val data = ask(buildJsonObject { put("op", "enrollFinish") }).toString().toByteArray()
+                vault.save(data)
+                linking = Linking.Idle
+                rooms.clear()
+                begin(data)
+            } catch (e: EngineException) {
+                if (linking != Linking.Idle) linking = Linking.Failed(e.message ?: "Signing in didn't work. Try again.")
+            }
+        }
+    }
+
+    fun browse(url: String) {
+        try {
+            app.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (e: ActivityNotFoundException) {
+            // No browser on this phone: the screen still shows the address and its code to type elsewhere.
+        }
+    }
+
     fun cancelLink() {
+        val signingIn = linking is Linking.SigningIn || linking is Linking.Approve
         linking = Linking.Idle
         relinkAsked = false
         scope.launch {
             try {
-                ask(buildJsonObject { put("op", "linkCancel") })
+                ask(buildJsonObject { put("op", if (signingIn) "enrollCancel" else "linkCancel") })
             } catch (e: EngineException) {
                 // Nothing was waiting: there's nothing to cancel.
             }
@@ -450,6 +519,8 @@ class AppModel(private val app: Application) {
         vault.wipe()
         rooms.clear()
         person = ""
+        enrolled = false
+        waiting = 0
         phase = Phase.Unlinked
         val keep = relay
         scope.launch {
