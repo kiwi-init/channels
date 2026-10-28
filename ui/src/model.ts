@@ -230,6 +230,8 @@ export interface Channel {
   newMembers?: "read" | "write"
   newPowers?: Powers
   repos: string[]
+  githubWrite?: boolean
+  branchPrefix?: string
   rooms: Room[]
   directs: Direct[]
   people: Person[]
@@ -342,6 +344,8 @@ export interface Actions {
   renameRoom(code: string, id: string, name: string): void
   setIcon(code: string, file: File | null): void
   renameChannel(code: string, title: string): void
+  setGithubWrite(code: string, on: boolean): void
+  setBranchPrefix(code: string, prefix: string | null): void
   exportHistory(code: string, kind: "transcript" | "log"): Promise<void>
   setGoal(code: string, goal: string): void
   setHold(code: string, on: boolean, note?: string): void

@@ -54,6 +54,12 @@ export function ChannelPanel({ channel }: { channel: Channel }) {
           <Repos channel={channel} />
         </Part>
 
+        {(own ? channel.repos.length > 0 : channel.githubWrite || channel.branchPrefix) && (
+          <Part title="GitHub">
+            <GitHub channel={channel} own={own} />
+          </Part>
+        )}
+
         <Part title="Agents">
           <Hold channel={channel} />
         </Part>
@@ -262,6 +268,41 @@ function End({ channel, open, onClose, onDone }: { channel: Channel; open: boole
         <input autoFocus className="input is-mono" value={typed} onChange={(e) => setTyped(e.target.value)} />
       </Field>
     </Confirm>
+  )
+}
+
+function GitHub({ channel, own }: { channel: Channel; own: boolean }) {
+  const { app } = useApp()
+  const write = !!channel.githubWrite
+  const prefix = channel.branchPrefix
+  return (
+    <div className="cpanel-github">
+      <div className="cpanel-row">
+        <span className="cpanel-value">Write to GitHub</span>
+        {own ? <Toggle on={write} label="Write to GitHub" onChange={(on) => app.actions.setGithubWrite(channel.code, on)} /> : <span className="cpanel-value">{write ? "On" : "Off"}</span>}
+      </div>
+      <p className="cpanel-hint">{write ? "Kiwi links new PRs and issues to their tasks, and a task closing closes its issue." : "Kiwi doesn't comment on or close anything in your repos."}</p>
+      <div className="cpanel-row">
+        <span className="cpanel-value">Branch prefix</span>
+        {own ? (
+          <span className="cpanel-prefix">
+            <InlineEdit value={prefix ?? ""} label="Branch prefix" verb={prefix ? "Change" : "Set"} onSave={(v) => app.actions.setBranchPrefix(channel.code, v)} />
+            {prefix && (
+              <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.setBranchPrefix(channel.code, null)}>
+                Clear
+              </button>
+            )}
+          </span>
+        ) : (
+          <span className="cpanel-value is-mono">{prefix ?? "None"}</span>
+        )}
+      </div>
+      <p className="cpanel-hint">
+        {prefix
+          ? `A pull request from a branch named ${prefix}7-… shows on T7.`
+          : "With a prefix, a pull request from a branch named with it and a task's number shows on that task. Without one, a pull request shows on a task only when someone posts its link."}
+      </p>
+    </div>
   )
 }
 

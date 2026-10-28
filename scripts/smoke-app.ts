@@ -125,6 +125,28 @@ try {
   await views.getByRole("button", { name: /general/ }).click();
   step(at);
 
+  at = "the owner turns on Write to GitHub and sets a branch prefix";
+  await page.getByRole("button", { name: /: channel settings$/ }).click();
+  const settings = page.getByRole("complementary", { name: "Details" });
+  await settings.getByRole("textbox", { name: "Add a repo" }).fill("kiwi-init/smoke");
+  await settings.getByRole("textbox", { name: "Add a repo" }).press("Enter");
+  const github = settings.locator(".cpanel-github");
+  await github.waitFor({ timeout: 15000 });
+  await github.getByLabel("Write to GitHub").click();
+  await github.getByRole("button", { name: "Set" }).click();
+  await github.getByRole("textbox", { name: "Branch prefix" }).fill("T");
+  await github.getByRole("textbox", { name: "Branch prefix" }).press("Enter");
+  const wanted = ["turned on Write to GitHub", "branch prefix: T"];
+  let got: string[] = [];
+  for (let i = 0; i < 50 && wanted.some((w) => !got.includes(w)); i++) {
+    got = (await said("bot")).flatMap((m) => (m.from === "smoke" && m.body ? [m.body] : []));
+    if (wanted.some((w) => !got.includes(w))) await page.waitForTimeout(200);
+  }
+  for (const w of wanted) if (!got.includes(w)) throw new Error(`the agent never saw "${w}"`);
+  await page.keyboard.press("Escape");
+  await views.getByRole("button", { name: /general/ }).click();
+  step(at);
+
   at = "search lists tasks and messages, jumps to a message, and clears";
   const openSearch = () => page.getByRole("button", { name: /^Search this channel/ }).click();
   const search = page.getByRole("combobox", { name: "Search this channel" });

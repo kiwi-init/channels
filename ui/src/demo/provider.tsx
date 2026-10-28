@@ -191,6 +191,8 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         )
       },
       addRoom: (code, name) => edit(code, (c) => ({ ...c, rooms: [...c.rooms, { id: name, name, unread: 0, mentions: 0 }] })),
+      setGithubWrite: (code, on) => edit(code, (c) => ({ ...c, githubWrite: on || undefined })),
+      setBranchPrefix: (code, prefix) => edit(code, (c) => ({ ...c, branchPrefix: prefix?.trim() || undefined })),
       renameRoom: (code, id, name) => edit(code, (c) => ({ ...c, rooms: c.rooms.map((r) => (r.id === id ? { ...r, name: name.trim().replace(/^#/, "") } : r)) })),
       setIcon: (code, file) => {
         const icon = file ? URL.createObjectURL(file) : undefined

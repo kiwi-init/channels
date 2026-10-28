@@ -128,6 +128,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       newMembers,
       newPowers,
       repos: state.repos,
+      ...(state.githubWrite !== null ? { githubWrite: true } : {}),
+      ...(state.branchPrefix ? { branchPrefix: state.branchPrefix } : {}),
       rooms,
       directs,
       people,
@@ -138,7 +140,30 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       asks: asks.asks,
       connection,
     }),
-    [code, title, icon, isOwner, me, state.lead, state.charter, state.hold, newMembers, newPowers, state.repos, rooms, directs, people, former, nicknames, mapped, tasks, asks.asks, connection]
+    [
+      code,
+      title,
+      icon,
+      isOwner,
+      me,
+      state.lead,
+      state.charter,
+      state.hold,
+      newMembers,
+      newPowers,
+      state.repos,
+      state.githubWrite,
+      state.branchPrefix,
+      rooms,
+      directs,
+      people,
+      former,
+      nicknames,
+      mapped,
+      tasks,
+      asks.asks,
+      connection,
+    ]
   )
 
   const post = useCallback(
