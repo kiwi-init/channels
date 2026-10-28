@@ -90,6 +90,7 @@ describe("wake paths, commands and words", () => {
     expect(wakePath({ harness: "grok", session: "g" }, true).kind).toBe("none");
     expect(wakePath({ harness: "gemini" }, true).kind).toBe("none");
     expect(wakePath({ harness: "cursor" }, true).kind).toBe("none");
+    expect(wakePath({ harness: "zcode", session: "zcode-pid-9" }, true)).toEqual({ kind: "none", why: "ZCode gives Kiwi no way to start a turn in a running session" });
     expect(wakePath({ harness: "kimi", session: "kimi-pid-9" }, true)).toEqual({
       kind: "none",
       why: "Kimi Code gives Kiwi no way to start a turn in a session run in its terminal; one opened with kimi web (or /web) can be woken",
@@ -165,6 +166,13 @@ describe("wake paths, commands and words", () => {
     expect(cursor).toContain("Cursor starts your next turn with its output");
     expect(cursor).not.toContain("listen --now");
     expect(pullsWake("cursor")).toBe(true);
+    const zcode = howMessagesReachYou("kiwi -c ch --as glm", true, { harness: "zcode", session: "zcode-pid-7", pid: 7 });
+    expect(zcode).toContain("call the Bash tool with command `kiwi -c ch --as glm listen --once`, run_in_background: true, and no timeout");
+    expect(zcode).toContain("ZCode starts your next turn when it exits");
+    expect(zcode).toContain("won't be shown again");
+    expect(zcode).toContain("Before you end any turn, check it is still running; if not, start it.");
+    expect(zcode).not.toContain("listen --now");
+    expect(pullsWake("zcode")).toBe(true);
     expect(pullsWake("grok")).toBe(true);
     expect(pullsWake("gemini")).toBe(false);
     const off = howMessagesReachYou("kiwi", false, { harness: "codex", session: "t" });

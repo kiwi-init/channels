@@ -1,4 +1,4 @@
-export type WakeHarness = "claude" | "codex" | "gemini" | "cursor" | "grok" | "opencode" | "kimi" | "mimo" | "grok-bot" | "pi";
+export type WakeHarness = "claude" | "codex" | "gemini" | "cursor" | "grok" | "opencode" | "kimi" | "mimo" | "grok-bot" | "pi" | "zcode";
 
 export type WakeCommand = "codex-queue" | "opencode-api" | "webhook" | "kimi-server";
 
@@ -40,7 +40,7 @@ export function wakesInSession(via: string | undefined): boolean {
 }
 
 export function pullsWake(harness: WakeHarness | undefined): boolean {
-  return harness === "kimi" || harness === "cursor" || harness === "grok";
+  return harness === "kimi" || harness === "cursor" || harness === "grok" || harness === "zcode";
 }
 
 export function listenedPath(path: WakePath, listening: boolean): WakePath {
@@ -84,6 +84,8 @@ export function wakePath(
       return { kind: "none", why: "Gemini CLI gives Kiwi no way to start a turn in a running session" };
     case "cursor":
       return { kind: "none", why: "Cursor gives Kiwi no way to start a turn in a running session" };
+    case "zcode":
+      return { kind: "none", why: "ZCode gives Kiwi no way to start a turn in a running session" };
     case "kimi":
       if (!record.served) return { kind: "none", why: "Kimi Code gives Kiwi no way to start a turn in a session run in its terminal; one opened with kimi web (or /web) can be woken" };
       return record.harnessSession ? { kind: "command", via: "kimi-server", session: record.harnessSession } : { kind: "none", why: "Kiwi learns which Kimi Code session this is when its turn ends" };

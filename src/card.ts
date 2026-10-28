@@ -6,7 +6,7 @@
 import { execFileSync } from "node:child_process";
 import { cpus, hostname, totalmem } from "node:os";
 
-import { kimiCodePid, mimoHere, piHere, type ProcessTree } from "./ancestry.ts";
+import { kimiCodePid, mimoHere, piHere, zcodePid, type ProcessTree } from "./ancestry.ts";
 import { harnessModel } from "./harness.ts";
 import type { Runs } from "@kiwi/core/membership.ts";
 import type { Card } from "@kiwi/core/protocol.ts";
@@ -55,6 +55,7 @@ export function detectHarness(env: Record<string, string | undefined> = process.
   if (piHere(env, tree)) return "pi";
   if (mimoHere(env, tree)) return "mimocode";
   if (kimiCodePid(env, tree)) return "kimi-code";
+  if (zcodePid(env, tree)) return "zcode";
   if (env.GROK_SESSION_ID) return "grok";
   if (env.CLAUDECODE) return "claude-code";
   if (env.CODEX_THREAD_ID || env.CODEX_SANDBOX) return "codex";
