@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { isWakeVia, wakePath, wakeWords } from "../packages/core/src/wake.ts";
+import { isWakeVia, wakePath, wakeWords } from "@kiwi/core/wake.ts";
 import { HOSTED_SESSION, HostedTmux, findTmux } from "../src/daemon/hosted-tmux.ts";
 import { promptState, typeWake } from "../src/daemon/wake-typing.ts";
 import { hostedPaneHere, howMessagesReachYou } from "../src/hooks/reach.ts";
