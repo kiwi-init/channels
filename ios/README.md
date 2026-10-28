@@ -56,3 +56,7 @@ new code is printed after each link, so you can link again. Debug builds take `-
 conversation`, `-shot tasks`, `-shot list` or `-shot settings` after `--` to open the first
 channel there (or stay on the list, or open Settings), plus `-place KEY`, `-fan YES` and
 `-draft TEXT`, for screenshots with `xcrun devicectl device capture screenshot`.
+
+To try Sign In against a dev relay (one started with dev sign-in, like `test/engine-enroll.test.ts` does), launch with
+`-relay http://IP:PORT -devUser NAME`, where NAME is the dev sign-in your computer's app used; the computer approves it
+with the digits the phone shows.
