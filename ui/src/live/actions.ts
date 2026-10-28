@@ -490,6 +490,28 @@ export function makeActions(): Actions {
       void bridge()
         ?.windowControl(action)
         .catch(() => {}),
+    checkUpdate: async () => {
+      const b = bridge()
+      if (!b) return null
+      try {
+        const u = await b.checkUpdate()
+        if (u.state === "current" || u.state === "failed") return u
+        return { state: u.state, version: u.version, ...(u.blocked ? { blocked: true } : {}) }
+      } catch {
+        // A check that throws is shown the same as one that couldn't reach GitHub.
+        return { state: "failed" }
+      }
+    },
+    setRelay: async (url) => {
+      const b = bridge()
+      if (!b) return "only the desktop app can change its relay"
+      try {
+        await b.setRelayUrl(url.trim())
+        return null
+      } catch (err) {
+        return err instanceof Error ? err.message.replace(/^.*?Error: /, "") : String(err)
+      }
+    },
     installUpdate: () =>
       attempt("Couldn't update", async () => {
         const b = bridge()

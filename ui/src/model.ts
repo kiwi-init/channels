@@ -216,6 +216,8 @@ export interface InviteInfo {
   state: "ok" | "gone" | "member"
 }
 
+export type UpdateCheck = { state: "current"; version: string } | { state: "failed" } | { state: "downloading" | "ready" | "available"; version: string; blocked?: boolean }
+
 export interface Channel {
   code: string
   title: string
@@ -261,6 +263,7 @@ export interface Account {
   uiUpdate?: { version: string }
   key?: string
   relay?: string
+  desktop?: boolean
   pairAsk?: { kind: "computer" | "phone"; label: string; os?: string; digits?: string }
   githubCode?: { code: string; url: string }
 }
@@ -357,6 +360,8 @@ export interface Actions {
   linkGithub(): void
   unlinkGithub(): void
   installUpdate(): void
+  checkUpdate(): Promise<UpdateCheck | null>
+  setRelay(url: string): Promise<string | null>
   windowControl(action: "minimize" | "maximize" | "close"): void
   applyUi(): void
   signOut(): void
