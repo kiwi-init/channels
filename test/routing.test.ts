@@ -10,7 +10,7 @@ import { detectHarness, detectWhere, mergeCard, movedCard, repoName, sameCard } 
 import { cardLine, describeEvent, formatMessage, formatStatus, formatTask, formatTasks } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { wellFormed, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
-import { fold, type Roster } from "@kiwi/core/state.ts";
+import { fold, type FoldBase, type Roster } from "@kiwi/core/state.ts";
 import { taskFeed } from "@kiwi/core/work.ts";
 
 const ids: Record<string, Identity> = {};
@@ -233,16 +233,16 @@ describe("review", () => {
     expect(s.tasks.get(t)!.approvedBy).toBe("linux");
   });
 
-  test("only a person, the lead, the reviewer, or an owner whose reviewer is gone moves a review gate", async () => {
+  test("only a person, the lead or the reviewer moves a review gate", async () => {
     const add = await ev("win", { op: "task.add", title: "mine", owner: "win", review: "mac" });
     const t = add.seq;
     const dodge = await ev("win", { op: "task.update", task: t, review: null });
     const swap = await ev("win", { op: "task.update", task: t, review: "*" });
     const handBack = await ev("mac", { op: "task.update", task: t, review: "linux" });
     const s = fold([add, dodge, swap, handBack], roster);
-    expect(s.rejected.get(dodge.seq)).toBe(`only a person, the lead, mac, or the task owner when the reviewer is gone changes who reviews T${t}`);
+    expect(s.rejected.get(dodge.seq)).toBe(`only a person, the lead or mac changes who reviews T${t}`);
     const shown = formatMessage(dodge, "verified", s, "jon");
-    expect(shown).toContain(`refused: only a person, the lead, mac, or the task owner when the reviewer is gone changes who reviews T${t}`);
+    expect(shown).toContain(`refused: only a person, the lead or mac changes who reviews T${t}`);
     expect(shown).not.toContain(describeEvent(dodge, s));
     expect(s.rejected.has(swap.seq)).toBe(true);
     expect(s.tasks.get(t)!.review).toBe("linux");
@@ -266,20 +266,28 @@ describe("review", () => {
     }
   });
 
-  test("the owner replaces a reviewer who left, but cannot choose another while the reviewer is active", async () => {
+  test("the owner never moves the review gate, whether the reviewer is here or has left", async () => {
     const add = await ev("jon", { op: "task.add", title: "stalled", owner: "win", review: "mac" });
     const move = await ev("win", { op: "task.update", task: add.seq, review: "linux" });
-    const active = fold([add, move], roster);
-    expect(active.rejected.get(move.seq)).toBe(`only a person, the lead, mac, or the task owner when the reviewer is gone changes who reviews T${add.seq}`);
-    expect(active.tasks.get(add.seq)!.review).toBe("mac");
     const departed: Roster = roster.map((r) => (r.name === "mac" ? { ...r, active: false } : r));
-    const gone = fold([add, move], departed);
-    expect(gone.rejected.has(move.seq)).toBe(false);
-    expect(gone.tasks.get(add.seq)!.review).toBe("linux");
-    const drop = await ev("win", { op: "task.update", task: add.seq, review: null, state: "done" });
-    const bypass = fold([add, drop], departed);
-    expect(bypass.rejected.has(drop.seq)).toBe(true);
-    expect(bypass.tasks.get(add.seq)).toMatchObject({ review: "mac", state: "todo" });
+    for (const now of [roster, departed]) {
+      const s = fold([add, move], now);
+      expect(s.rejected.get(move.seq)).toBe(`only a person, the lead or mac changes who reviews T${add.seq}`);
+      expect(s.tasks.get(add.seq)!.review).toBe("mac");
+    }
+  });
+
+  test("a client that folded before the reviewer left and one that folds after agree on the review rounds", async () => {
+    const add = await ev("jon", { op: "task.add", title: "stalled", owner: "win", review: "mac" });
+    const send = await ev("win", { op: "task.update", task: add.seq, state: "review", at: "abc1234" });
+    const move = await ev("win", { op: "task.update", task: add.seq, review: "linux" });
+    const departed: Roster = roster.map((r) => (r.name === "mac" ? { ...r, active: false } : r));
+    const kept: { base?: FoldBase } = {};
+    fold([add, send, move], roster, Date.now(), null, null, null, (b) => void (kept.base = b));
+    const early = fold([], departed, Date.now(), null, null, kept.base);
+    const late = fold([add, send, move], departed);
+    expect(early.tasks.get(add.seq)!.review).toBe(late.tasks.get(add.seq)!.review);
+    expect(early.rejected.has(move.seq)).toBe(late.rejected.has(move.seq));
   });
 
   test("reopening clears the approval", async () => {

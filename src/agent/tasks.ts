@@ -191,8 +191,7 @@ export class SessionTasks extends SessionMessaging {
       const me = state.members.get(this.me);
       if (me) {
         const lead = !!me.owner || me.persona?.role === "lead" || state.lead === this.me;
-        const reviewerGone = t.review !== "*" && !state.members.get(t.review ?? "")?.active;
-        const refused = reviewMoveRefusal(t, { name: this.me, person: isPerson(me), lead }, review, reviewerGone);
+        const refused = reviewMoveRefusal(t, { name: this.me, person: isPerson(me), lead }, review);
         if (refused) return yield* new Rejected(refused);
       }
       const gate = review === undefined ? t.review : review || undefined;
