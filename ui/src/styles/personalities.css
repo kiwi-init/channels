@@ -1,0 +1,108 @@
+.persona-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.persona-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-ctl);
+  background: var(--bg-3);
+  font: var(--t-meta) var(--ui);
+}
+
+.persona-editor {
+  display: grid;
+  gap: 18px;
+  scroll-margin-top: 20px;
+}
+
+.persona-head {
+  display: grid;
+  gap: 4px;
+}
+
+.persona-title {
+  font: 600 var(--t-ui) var(--ui);
+}
+
+.persona-hint {
+  color: var(--ink-3);
+  font: var(--t-meta) / 1.45 var(--ui);
+}
+
+.persona-form {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 14px;
+}
+
+.persona-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.persona-label {
+  color: var(--ink-2);
+  font: var(--t-meta) var(--ui);
+}
+
+.persona-field .input {
+  height: 34px;
+  padding: 6px 10px;
+  font-size: var(--t-ui);
+}
+
+.persona-field.is-glyph .input {
+  text-align: center;
+}
+
+.persona-areas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.persona-area {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--r-ctl);
+  background: var(--bg-3);
+  color: var(--ink);
+  font: var(--t-meta) var(--mono);
+}
+
+.persona-area.is-any {
+  color: var(--ink-3);
+  font-family: var(--ui);
+}
+
+.persona-field .persona-area-add {
+  width: 200px;
+  height: 28px;
+  font: var(--t-meta) var(--mono);
+}
+
+.persona-instructions {
+  min-height: 160px;
+}
+
+.persona-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 6px;
+}
+
+.persona-foot-gap {
+  flex: 1;
+}

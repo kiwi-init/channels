@@ -37,6 +37,8 @@ const { relay, port } = await startLocalRelay(join(data, "relay"), DIST);
 const BASE = `http://127.0.0.1:${port}/`;
 const errors: string[] = [];
 let at = "start";
+const ICON_PNG =
+  "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAbElEQVR4nA3JQQEAMAgDMaRUClIqpVKQwvNkIGXLN1WFii5cpJhiiyuqhEQLi4gRK04/GjXduEkzzTbXP4xMG5uYMWvOP4JCB4eECRsuPwYNPXjIMMMONz8WLb14yTLLLrc/Dh19+Mgxxx53PLzkagFHPAwGAAAAAElFTkSuQmCC";
 const step = (line: string) => console.log(`ok  ${line}`);
 const shot = async (name: string) => {
   if (process.env.SMOKE_SHOTS) await page.waitForTimeout(300).then(() => page.screenshot({ path: join(process.env.SMOKE_SHOTS ?? "", `${name}.png`) }));
@@ -195,6 +197,21 @@ try {
   }
   if (!heard) throw new Error("the agent never got the answer");
   await shot("answered");
+  step(at);
+
+  at = "the owner renames a room and gives the channel an image";
+  await page.getByRole("button", { name: /: channel settings$/ }).click();
+  const details = page.getByRole("complementary", { name: "Details" });
+  await details.getByRole("button", { name: "Rename" }).nth(1).click();
+  const roomName = details.getByRole("textbox", { name: /^Name of #/ });
+  await roomName.fill("lobby");
+  await roomName.press("Enter");
+  await page.getByText("lobby", { exact: true }).first().waitFor({ timeout: 15000 });
+  const png = join(data, "icon.png");
+  writeFileSync(png, Buffer.from(ICON_PNG, "base64"));
+  await details.locator('input[type="file"]').setInputFiles(png);
+  await page.locator(".rail img").first().waitFor({ timeout: 15000 });
+  await shot("channel-settings");
   step(at);
 } catch (e) {
   errors.push(`${at}: ${e instanceof Error ? e.message.split("\n").slice(0, 6).join(" | ") : String(e)}`);

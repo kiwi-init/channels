@@ -42,6 +42,7 @@ export function fakeHost(app: FakeApp = {}): FakeHost {
     showWindow: () => void did.push("show"),
     reload: () => void did.push("reload"),
     restartToUpdate: () => void did.push("restart"),
+    saveDownload: async (name) => (did.push(`save ${name}`), name),
     tellKeys: (m) => void told.push(m),
   };
   return { host, did, told, quits };

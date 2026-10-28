@@ -1,5 +1,6 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import Electrobun, { BuildConfig, PATHS, Utils, type BrowserView, type BrowserWindow } from "electrobun/main";
 
@@ -10,6 +11,7 @@ import type { HostToKeys } from "./keys-server.ts";
 import { readDropped } from "./dropped.ts";
 import { followTheme } from "./frost-eb.ts";
 import { droppedPaths, notifyLinux, onNoteClick, pastedPng, showBadge, wallpaperImage, wallpaperPixels } from "./native-eb.ts";
+import { freePath } from "./save-file.ts";
 import { relaunchAfter } from "./update-asset.ts";
 import { applyUpdate } from "./updater.ts";
 import { ebDataDir } from "./store-eb.ts";
@@ -104,8 +106,25 @@ export const ebHost: Host = {
     shown.win.activate();
   },
   reload: () => shown?.reload(),
+  saveDownload: async (name, text) => {
+    const dir = downloadsDir();
+    fs.mkdirSync(dir, { recursive: true });
+    const file = freePath(dir, name, (f) => fs.existsSync(f));
+    fs.writeFileSync(file, text, { flag: "wx" });
+    Utils.showItemInFolder(file);
+    return path.basename(file);
+  },
   restartToUpdate: () => {
     if (applyUpdate(true)) Utils.quit();
   },
   tellKeys: (m) => keysTell(m),
 };
+
+function downloadsDir(): string {
+  if (process.platform === "linux") {
+    const xdg = spawnSync("xdg-user-dir", ["DOWNLOAD"], { encoding: "utf8", timeout: 2000, env: childEnv() });
+    const dir = xdg.status === 0 ? xdg.stdout.trim() : "";
+    if (dir && dir !== os.homedir()) return dir;
+  }
+  return path.join(os.homedir(), "Downloads");
+}

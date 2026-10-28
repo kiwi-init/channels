@@ -1,6 +1,6 @@
 import "~/styles/channel-panel.css"
 
-import { useState, type ReactNode } from "react"
+import { useRef, useState, type ReactNode } from "react"
 
 import { Field, Heading, IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
@@ -21,7 +21,11 @@ export function ChannelPanel({ channel }: { channel: Channel }) {
   const owner = channel.people.find((p) => p.owner && !p.you)
   const [ending, setEnding] = useState(false)
 
-  const save = (ext: "md" | "jsonl") => toast(`Saving ${channel.code}.${ext} to Downloads`)
+  const [saving, setSaving] = useState<"transcript" | "log" | null>(null)
+  const save = (kind: "transcript" | "log") => {
+    setSaving(kind)
+    void actions.exportHistory(channel.code, kind).finally(() => setSaving(null))
+  }
 
   return (
     <>
@@ -34,6 +38,14 @@ export function ChannelPanel({ channel }: { channel: Channel }) {
             <p className="cpanel-value">{channel.title}</p>
           )}
           {!own && owner && <p className="cpanel-hint">{shown(owner)} owns this channel.</p>}
+        </Part>
+
+        <Part title="Icon">
+          <ChannelIcon channel={channel} own={own} />
+        </Part>
+
+        <Part title="Rooms">
+          <Rooms channel={channel} own={own} />
         </Part>
 
         <Part title="Goal">{own ? <GoalEditor channel={channel} /> : channel.goal ? <p className="cpanel-goal">{channel.goal}</p> : <p className="cpanel-none">No goal yet.</p>}</Part>
@@ -54,13 +66,13 @@ export function ChannelPanel({ channel }: { channel: Channel }) {
 
         <Part title="History">
           <div className="cpanel-downloads">
-            <button type="button" className="btn is-quiet cpanel-download" onClick={() => save("md")}>
+            <button type="button" className="btn is-quiet cpanel-download" disabled={saving !== null} onClick={() => save("transcript")}>
               <Icon name="download" size={14} />
-              Download the transcript (.md)
+              {saving === "transcript" ? "Saving the transcript…" : "Download the transcript (.md)"}
             </button>
-            <button type="button" className="btn is-quiet cpanel-download" onClick={() => save("jsonl")}>
+            <button type="button" className="btn is-quiet cpanel-download" disabled={saving !== null} onClick={() => save("log")}>
               <Icon name="download" size={14} />
-              Download the signed log (.jsonl)
+              {saving === "log" ? "Saving the signed log…" : "Download the signed log (.jsonl)"}
             </button>
           </div>
         </Part>
@@ -291,5 +303,58 @@ function GitHub({ channel, own }: { channel: Channel; own: boolean }) {
           : "With a prefix, a pull request from a branch named with it and a task's number shows on that task. Without one, a pull request shows on a task only when someone posts its link."}
       </p>
     </div>
+  )
+}
+
+function ChannelIcon({ channel, own }: { channel: Channel; own: boolean }) {
+  const { app } = useApp()
+  const input = useRef<HTMLInputElement>(null)
+  return (
+    <div className="cpanel-icon">
+      <span className="cpanel-icon-tile" aria-hidden="true">
+        {channel.icon ? <img src={channel.icon} alt="" /> : <span>{channel.title.slice(0, 1).toUpperCase()}</span>}
+      </span>
+      {own && (
+        <>
+          <button type="button" className="btn is-small" onClick={() => input.current?.click()}>
+            {channel.icon ? "Change image…" : "Choose an image…"}
+          </button>
+          {channel.icon && (
+            <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.setIcon(channel.code, null)}>
+              Remove
+            </button>
+          )}
+          <input
+            ref={input}
+            type="file"
+            accept="image/png,image/jpeg,image/gif,image/webp"
+            hidden
+            onChange={(e) => {
+              const file = e.currentTarget.files?.[0]
+              e.currentTarget.value = ""
+              if (file) app.actions.setIcon(channel.code, file)
+            }}
+          />
+        </>
+      )}
+      {!own && !channel.icon && <p className="cpanel-none">No image: the channel shows its first letter.</p>}
+    </div>
+  )
+}
+
+function Rooms({ channel, own }: { channel: Channel; own: boolean }) {
+  const { app } = useApp()
+  return (
+    <ul className="cpanel-rooms">
+      {channel.rooms.map((r) => (
+        <li key={r.id}>
+          {own ? (
+            <InlineEdit value={r.name} label={`Name of #${r.name}`} verb="Rename" onSave={(name) => app.actions.renameRoom(channel.code, r.id, name)} />
+          ) : (
+            <span className="cpanel-value">#{r.name}</span>
+          )}
+        </li>
+      ))}
+    </ul>
   )
 }
