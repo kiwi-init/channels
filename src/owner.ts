@@ -112,7 +112,7 @@ class OwnerSession extends AgentSession {
     const rec = (yield* owner.fx.members()).find((x) => x.active && x.name === member && x.pk === m.pk);
     if (!rec || rec.owner || rec.kind === "human") return yield* new Rejected("only an agent carries a personality");
     const scopes = wireScopes(persona ? personaScopes(persona) : [...SCOPES]);
-    const ev: Event = { op: "scope.set", member, pk: m.pk, scopes };
+    const ev: Event = { op: "scope.set", member, pk: m.pk, scopes, lead: persona?.role === "lead", wasLead: rec.persona?.role === "lead" };
     const seq = yield* owner.fx.send(persona ? `made ${member} ${persona.name}` : `took ${member}'s personality away`, { kind: "event", ev, to: [member] });
     yield* owner.fx.updatePersona(rec, persona, seq);
     return yield* this.confirm(seq);

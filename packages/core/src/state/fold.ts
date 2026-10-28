@@ -144,6 +144,13 @@ export function fold(
     if (!set) keysByName.set(r.name, (set = new Set()));
     set.add(r.pk);
   }
+  const personaLead = new Map<string, boolean>(from?.personaLeads);
+  for (const m of messages) {
+    const ev = m.ev;
+    if (ev?.op !== "scope.set" || ev.wasLead === undefined || personaLead.has(ev.member)) continue;
+    if (m.sigOk && !!m.pk && !!keysByName.get(m.from)?.has(m.pk) && !!members.get(m.from)?.owner && !!keysByName.get(ev.member)?.has(ev.pk)) personaLead.set(ev.member, ev.wasLead);
+  }
+  const leads = (member: FoldMember): boolean => member.owner || isLeadRole(member.role) || (personaLead.get(member.name) ?? (signed.has(member.name) && member.persona?.role === "lead"));
   const scopesByKey = new Map<string, Scope[]>();
   for (const r of roster) scopesByKey.set(r.pk, scopesOf(r));
   for (const [pk, scopes] of from?.scopesByKey ?? []) scopesByKey.set(pk, scopes);
@@ -231,6 +238,8 @@ export function fold(
   const ctx: FoldCtx = {
     members,
     signed,
+    personaLead,
+    leads,
     keysByName,
     scopesByKey,
     scopeSets,
@@ -422,8 +431,7 @@ export function fold(
         const head = askHeads.get(ev.ask);
         const goal = ev.name === null ? null : inlineText(ev.name, MAX_GOAL_NAME);
         if (!head) reject(`#${ev.ask} isn't a person's message that tasks are filed under`);
-        else if (!member.owner && !isLeadRole(member.role) && !(signed.has(member.name) && member.persona?.role === "lead") && head.by !== m.from)
-          reject("only the lead, the owner or the person who asked names a goal");
+        else if (!leads(member) && head.by !== m.from) reject("only the lead, the owner or the person who asked names a goal");
         else if (goal === "") reject("a goal needs a name");
         else if (goal === null) askHeads.set(head.id, omit(head, "goal", "goalBy"));
         else askHeads.set(head.id, { ...head, goal, goalBy: m.from });
@@ -508,6 +516,7 @@ export function fold(
       rooms: [...rooms.values()],
       roomOf: recent(roomOf),
       placeOf: recent(placeOf),
+      personaLeads: [...personaLead],
       folded: EVENT_OPS_VERSION,
       ...(skipped ? { skipped: true as const } : {}),
     }),

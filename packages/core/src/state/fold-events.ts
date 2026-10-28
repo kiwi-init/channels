@@ -6,7 +6,7 @@ import { addRelease, applyGithub, repoKey, type GithubState } from "./github.ts"
 import { reposOf } from "./repos.ts";
 import { omit } from "../omit.ts";
 import { readScopes, SCOPES, type Scope } from "../scopes.ts";
-import { isLeadRole, isPerson } from "./people.ts";
+import { isPerson } from "./people.ts";
 import { roomName } from "./rooms.ts";
 import { currentState, openRound, reviewMoveRefusal, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
 import type { Charter, Compact, Fact, FoldMember, Hold, Lease, Room, Task } from "./types.ts";
@@ -14,6 +14,8 @@ import type { Charter, Compact, Fact, FoldMember, Hold, Lease, Room, Task } from
 export interface FoldCtx {
   members: Map<string, FoldMember>;
   signed: ReadonlySet<string>;
+  personaLead: Map<string, boolean>;
+  leads: (member: FoldMember) => boolean;
   keysByName: Map<string, Set<string>>;
   scopesByKey: Map<string, Scope[]>;
   scopeSets: Map<string, { seq: number; scopes: Scope[] }>;
@@ -210,6 +212,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       const scopes = ev.scopes === null ? [...SCOPES] : (readScopes(ev.scopes) ?? []);
       scopesByKey.set(ev.pk, scopes);
       scopeSets.set(ev.pk, { seq: m.seq, scopes });
+      if (ev.lead !== undefined) c.personaLead.set(ev.member, ev.lead);
       break;
     }
 
@@ -286,7 +289,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         reject(`no task ${taskId(ev.task)}`);
         break;
       }
-      const lead = member.owner || isLeadRole(member.role) || (c.signed.has(member.name) && member.persona?.role === "lead");
+      const lead = c.leads(member);
       const reviewRefused = reviewMoveRefusal(task, { name: m.from, person: isPerson(member), lead }, ev.review);
       if (reviewRefused) {
         reject(reviewRefused);

@@ -261,6 +261,7 @@ export interface FoldBase {
   sentFloors?: [string, number][];
   hw?: number;
   placesBefore?: [Place, number, number][];
+  personaLeads?: [string, boolean][];
   asks: Message[];
   askHeads?: AskHead[];
   answered: [number, string[]][];
