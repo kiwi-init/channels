@@ -357,6 +357,16 @@ export interface Actions {
   closeChannel(code: string): void
   saveTheme(theme: CustomTheme): void
   deleteTheme(id: string): void
+  addStartFolder(): void
+  removeStartFolder(dir: string): void
+  allowNewAgents(on: boolean): void
+  allowRemoteBypass(on: boolean): void
+}
+
+export interface AgentStarts {
+  folders: string[]
+  launch: boolean
+  bypass: boolean
 }
 
 export interface App {
@@ -366,6 +376,7 @@ export interface App {
   prefs: Prefs
   harnesses: { id: Harness; label: string; installed: boolean }[]
   personas: { id: string; label: string; about: string }[]
+  starts: AgentStarts | null
   actions: Actions
 }
 
