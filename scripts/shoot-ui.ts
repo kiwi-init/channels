@@ -517,7 +517,7 @@ try {
         "01b-search",
         async () => {
           await owner.getByRole("button", { name: "Search", exact: true }).first().click();
-          await owner.getByRole("textbox", { name: "Search messages" }).first().fill("rows");
+          await owner.getByLabel("Search messages and tasks", { exact: true }).first().fill("rows");
         },
         async () => void (await owner.keyboard.press("Escape")),
       );

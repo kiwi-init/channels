@@ -409,7 +409,7 @@ jobs:
         run: |
           cc -O2 -Wall -Wextra -Werror -o "$RUNNER_TEMP/kiwi-tray-test" desktop/native/linux/kiwi-tray-test.c $(pkg-config --cflags --libs gio-2.0) -ldl
           dbus-run-session -- sh -c 'printf throwaway | gnome-keyring-daemon --unlock --components=secrets >/dev/null && xvfb-run -a "$1" "$2" "$3"' sh "$RUNNER_TEMP/kiwi-tray-test" "$APP/bin/libkiwi-shell.so" "$APP/bin/launcher"
-      - name: with no libayatana-appindicator on the system (stock Arch), the app still starts, with no tray
+      - name: with no libayatana-appindicator on the system (stock Arch), the app still starts, and closing still hides to the tray
         if: ${{ !cancelled() }}
         run: |
           if readelf -d "$APP/bin/libNativeWrapper.so" | grep -i appindicator; then echo "libNativeWrapper.so still links AppIndicator"; exit 1; fi
