@@ -1,0 +1,39 @@
+import { useEffect, useSyncExternalStore } from "react"
+
+import type { PlacedSeat } from "@kiwi/core/terminals.ts"
+import { bridge } from "@/lib/secrets"
+import { store } from "~/live/value"
+import type { Person } from "~/model"
+
+const seats = store<readonly PlacedSeat[]>([])
+
+export function seated(people: Person[], placed: readonly PlacedSeat[], room: string): Person[] {
+  return people.map((p) => {
+    const seat = p.kind === "agent" ? placed.find((s) => s.room === room && s.agent === p.name) : undefined
+    return seat ? { ...p, seat: seat.place } : p
+  })
+}
+
+export const seatOf = (room: string, agent: string): PlacedSeat | undefined => seats.get().find((s) => s.room === room && s.agent === agent)
+
+export function useSeats(): readonly PlacedSeat[] {
+  useEffect(() => {
+    const b = bridge()
+    if (!b) return
+    let live = true
+    const load = () =>
+      void b.seatPlaces().then(
+        (list) => live && seats.set(list),
+        () => {}
+      )
+    load()
+    const every = window.setInterval(load, 15_000)
+    window.addEventListener("focus", load)
+    return () => {
+      live = false
+      window.clearInterval(every)
+      window.removeEventListener("focus", load)
+    }
+  }, [])
+  return useSyncExternalStore(seats.subscribe, seats.get)
+}

@@ -19,6 +19,7 @@ import { iconUrl } from "~/live/icon"
 import { usePinsHere } from "~/live/pins"
 import { usePublishFace } from "~/live/face"
 import { usePictures } from "~/live/pictures"
+import { seated, useSeats } from "~/live/seats"
 import { ownPrefs } from "~/live/prefs"
 import { closeOpened, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
@@ -100,7 +101,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const shown = useShown()
 
   usePublishFace(state, me, connection === "live", send)
-  const people = useMemo(() => peopleOf(state, roster, online, me, wakes), [state, roster, online, me, wakes])
+  const seats = useSeats()
+  const people = useMemo(() => seated(peopleOf(state, roster, online, me, wakes), seats, roomId), [state, roster, online, me, wakes, seats, roomId])
   const former = useMemo(() => formerOf(state, me), [state, me])
   const nicknameKey = [...state.members.values()].map((m) => `${m.name}\u0000${m.display ?? ""}`).join("\n")
   const nicknames = useMemo(() => nicknamesOf(nicknameKey ? nicknameKey.split("\n").map((line) => ({ name: line.split("\u0000")[0] ?? "", display: line.split("\u0000")[1] })) : []), [nicknameKey])

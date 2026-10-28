@@ -185,6 +185,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       setNickname: (code, name, nickname) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, display: nickname?.trim() || undefined } : p)) })),
       setColor: (code, name, color) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, color: color ?? undefined } : p)) })),
       setPowers: (code, name, powers) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, ...powers } : p)) })),
+      showAgent: async () => null,
       choicesOn: async (_code, computer) =>
         computer === "mbp"
           ? { folders: ["~/www/channels", "~/www/landing"] }

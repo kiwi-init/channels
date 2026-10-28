@@ -9,6 +9,7 @@ import { ago } from "~/kit/time"
 import type { Ask, Channel, JoinAsk, Message, PermissionAsk, Person, Powers, QuestionAsk, ReviewAsk } from "~/model"
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
+import { ShowAgent } from "~/kit/show-agent"
 
 const isOpen = (a: Ask): boolean => a.kind === "review" || !a.answer
 
@@ -102,10 +103,15 @@ function Card({ channel, ask }: { channel: Channel; ask: Ask }) {
     go({ to: "where", where: m.where })
     if (m.inThread !== undefined) go({ to: "panel", panel: { kind: "thread", seq: m.inThread } })
   }
-  const link = source && (
-    <button type="button" className="needs-link" onClick={() => show(source)}>
-      Show in the conversation
-    </button>
+  const link = (
+    <>
+      {source && (
+        <button type="button" className="needs-link" onClick={() => show(source)}>
+          Show in the conversation
+        </button>
+      )}
+      <ShowAgent channel={channel} person={"from" in ask ? member(channel, ask.from) : undefined} className="needs-link" />
+    </>
   )
   switch (ask.kind) {
     case "permission":

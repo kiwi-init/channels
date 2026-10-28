@@ -18,6 +18,7 @@ import { removeComputer } from "@/lib/computers"
 import { joinCodeFromLink } from "@/lib/deep-link"
 import { kiwiJoin } from "@/lib/join-line"
 import { relayUrl } from "@/lib/relay"
+import { noteFor, showSeat, type ShowResult } from "@/lib/show-seat"
 import { cleanRoomName, roomProblem, roomsAfter } from "@/lib/rooms"
 import { ALLOW_ONCE, DENY } from "@/lib/permission-settled"
 import { savePersonalities } from "@/lib/personalities"
@@ -30,6 +31,7 @@ import { newMemberPowers, newMemberScopes, setNewMemberPowers, setNewMemberScope
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
 import { harnessChoices } from "~/live/harness-rows"
 import { iconFromFile } from "~/live/icon-file"
+import { seatOf } from "~/live/seats"
 import { memberName } from "@/lib/format"
 import { checkComputer, setContextLine, setHooks } from "~/live/computer"
 import { addStartFolder, allowNewAgents, allowRemoteBypass, preferTerminal, removeStartFolder, setTerminalHelpers } from "~/live/starts"
@@ -331,6 +333,12 @@ export function makeActions(): Actions {
         await run.ch.updatePowers(m, { addsAgents: powers.addsAgents ?? !!m.addsAgents, answersDecisions: powers.answersDecisions ?? !!m.answersDecisions })
         await run.refreshRoster()
       }),
+    showAgent: async (code, name) => {
+      const seat = seatOf(need(code).roomId, name)
+      if (!seat) return "It isn't running in a window on this computer."
+      const r = await showSeat(seat).catch((): ShowResult => ({ ok: false, why: "failed" }))
+      return noteFor(seat.place, r)
+    },
     choicesOn: async (code, computer) => {
       const b = bridge()
       if (!b) return { error: "agents start from the Channels desktop app" }
