@@ -589,6 +589,62 @@
   gap: 8px;
 }
 
+.ask-step,
+.ask-step-answer {
+  display: grid;
+  gap: 8px;
+}
+
+.ask-why {
+  color: var(--ink-2);
+  font: var(--t-body) / 1.5 var(--sans);
+  white-space: pre-wrap;
+}
+
+.ask-who {
+  color: var(--ink-3);
+  font: var(--t-meta) var(--ui);
+}
+
+.ask-label {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.ask-do {
+  display: grid;
+  gap: 4px;
+  padding-left: 20px;
+  font: var(--t-body) / 1.5 var(--sans);
+  list-style: decimal;
+  white-space: pre-wrap;
+}
+
+.ask-run {
+  position: relative;
+  min-width: 0;
+}
+
+.ask-run .ask-code {
+  padding-right: 40px;
+}
+
+.ask-run .icon-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+
+.ask-links {
+  display: grid;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+
+.ask-links a {
+  color: var(--accent);
+}
+
 .reacts {
   display: flex;
   flex-wrap: wrap;

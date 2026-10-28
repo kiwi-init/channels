@@ -217,7 +217,7 @@ function QuestionAskCard({ channel, ask, link }: { channel: Channel; ask: Questi
   const who = member(channel, ask.from)
   const holds = [...new Set([...(ask.task !== undefined ? [ask.task] : []), ...ask.holds])]
   return (
-    <Shell face={who} name={nickname(channel, ask.from)} member={!!who} verb="asks you" at={ask.at} link={link}>
+    <Shell face={who} name={nickname(channel, ask.from)} member={!!who} verb={ask.step ? "has a step for you" : "asks you"} at={ask.at} link={link}>
       <p className="needs-text">{ask.text}</p>
       <QuestionCard channel={channel} ask={ask} />
       {holds.length > 0 && (
