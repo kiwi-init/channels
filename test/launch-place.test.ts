@@ -107,7 +107,7 @@ describe("the login shell runs the program", () => {
   test('env drops the session markers a harness leaves behind and sets the variables, then POSIX shells get exec "$@", fish exec $argv, anything else /bin/sh', () => {
     const zsh = loginArgv("/bin/zsh", ["claude", "hi"], { KIWI_LAUNCH: "l1" });
     expect(zsh[0]).toBe("/usr/bin/env");
-    for (const marker of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID", "KIWI_HARNESS", "KIWI_MODEL"]) expect(zsh[zsh.indexOf(marker) - 1]).toBe("-u");
+    for (const marker of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID", "KIWI_HARNESS", "KIWI_MODEL", "KIWI_LOOP", "KIWI_LOOP_TASK"]) expect(zsh[zsh.indexOf(marker) - 1]).toBe("-u");
     expect(shellPart(zsh)).toEqual(["KIWI_LAUNCH=l1", "/bin/zsh", "-ilc", 'exec "$@"', "kiwi-launch", "claude", "hi"]);
     expect(shellPart(loginArgv("/opt/homebrew/bin/fish", ["claude"], {}))).toEqual(["/opt/homebrew/bin/fish", "-ilc", "exec $argv", "claude"]);
     expect(shellPart(loginArgv("/usr/bin/nu", ["claude"]))).toEqual(["/bin/sh", "-ilc", 'exec "$@"', "kiwi-launch", "claude"]);
