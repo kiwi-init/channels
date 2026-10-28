@@ -111,6 +111,7 @@ A seat doesn't have to live in one long harness session. `kiwi loop` runs in a t
 kiwi loop                                   # Claude Code, with its default model
 kiwi loop --harness codex --model gpt-6-astra --effort high
 kiwi loop --harness kimi                    # inside tmux only: Kimi's first prompt is typed in
+kiwi loop --harness zcode                   # inside tmux only too, and with ZCode's own model
 ```
 
 What the loop does:
@@ -134,10 +135,12 @@ What the loop does:
 | Grok | `grok [-m] [--reasoning-effort] -- PROMPT` | the session in the folder whose history holds the nonce | `turn_completed` or the Stop hook ran | SIGTERM |
 | MiMoCode | `mimo [-m] --prompt PROMPT` | the top-level session in the folder holding the nonce | its last answer is finished | SIGINT (it ignores SIGTERM for about 19 s) |
 | Kimi Code | `kimi [-m]`, then the prompt pasted in once its screen is ready | Kimi's process | its wire log says the turn ended | SIGTERM |
+| ZCode | `zcode-cli`, then the prompt pasted in once its prompt box shows | the `zcode-cli` process, once its session in `~/.zcode/cli/db/db.sqlite` holds the nonce | no user message is newer than the session's last ended turn | SIGTERM |
 
 Some details per harness:
 
-- **Grok and Kimi Code** are also told in the first prompt to start their `kiwi listen` listener, since nothing else wakes them.
+- **Grok, Kimi Code and ZCode** are also told in the first prompt to start their `kiwi listen` listener, since nothing else wakes them.
+- **ZCode** runs inside tmux, like Kimi Code: its terminal UI takes no prompt on its command line. It takes no `--model` or `--effort`; pick its model with `/model` in ZCode. ZCode records a turn only once it ends (completed, error or cancelled), so the loop counts a session as busy while a prompt is newer than its last ended turn.
 - **MiMoCode** gets the model chosen in MiMoCode when `--model` isn't given (its own default is a free tier that has ended). MiMoCode and Kimi take no `--effort`.
 - **Kimi Code** must run inside tmux, in the loop's own pane. The loop clears the pane, waits for Kimi's ready screen with bracketed paste on, and pastes the prompt. While Kimi asks "Trust this folder?", the loop waits for you to answer; it never answers dialogs. The same goes for Codex's "Hooks need review" and every harness's permission prompts.
 

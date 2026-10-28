@@ -8,7 +8,7 @@ import { bindHeldSeat, holdSeat, releaseSeat, SEAT_TOKEN, type HoldChange } from
 import { loginShell } from "../launch/shell.ts";
 import { loginArgv } from "../terminals/shared/launch.ts";
 import type { Recipe, Started } from "./recipes.ts";
-import { clearPane, kimiScreen, listenersUnder, paneText, pasteBracketed, stopStrays, strayKey, typeInto } from "./kimi.ts";
+import { clearPane, listenersUnder, paneText, pasteBracketed, stopStrays, strayKey, typeInto, type KimiScreen } from "./kimi.ts";
 import { tmuxSocket } from "../terminals/shared/tmux.ts";
 import { firstPrompt, nextWork, step, waitingBehind, waitingText, waitsDue, waitTellsTo, workName, type Wait, type Work } from "./work.ts";
 import { clearFresh, freshAsked, LOOP_TASK_ENV } from "./fresh.ts";
@@ -137,7 +137,7 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
       ...(first.kind === "coding" ? { [LOOP_TASK_ENV]: String(first.task) } : {}),
     });
     yield* hooksFirst(recipe);
-    if (recipe.typed) clearTypedPane();
+    if (recipe.screen) clearTypedPane();
     const started = Date.now();
     const child = Bun.spawn(argv, { cwd: process.cwd(), env: childEnv(), stdin: "inherit", stdout: "inherit", stderr: "inherit" });
     stop.busy = true;
@@ -171,8 +171,8 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
         return why;
       });
 
-    if (recipe.typed) {
-      const typed = yield* typeFirst(child.pid, launched, () => exited, stop);
+    if (recipe.screen) {
+      const typed = yield* typeFirst(recipe.screen, child.pid, launched, () => exited, stop);
       if (!typed) return yield* end(exited ? { kind: "own", lived: Date.now() - started } : stop.asked ? { kind: "stopped" } : { kind: "unbound" });
     }
     const binding = Date.now();
@@ -231,7 +231,7 @@ function clearTypedPane(): void {
   if (socket && pane) clearPane(socket, pane);
 }
 
-function typeFirst(pid: number, text: string, exited: () => boolean, stop: { asked: boolean }): Effect.Effect<boolean> {
+function typeFirst(readScreen: (text: string) => KimiScreen, pid: number, text: string, exited: () => boolean, stop: { asked: boolean }): Effect.Effect<boolean> {
   return Effect.gen(function* () {
     const socket = tmuxSocket(process.env);
     const pane = process.env.TMUX_PANE;
@@ -240,7 +240,7 @@ function typeFirst(pid: number, text: string, exited: () => boolean, stop: { ask
     let sawReady = false;
     let deadline = Date.now() + STARTING_MS;
     while (!exited() && !stop.asked) {
-      const screen = kimiScreen(paneText(socket, pane));
+      const screen = readScreen(paneText(socket, pane));
       if (screen === "ready") {
         if (pasteBracketed(socket, pane)) return typeInto(socket, pane, text);
         sawReady = true;
