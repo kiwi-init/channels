@@ -18,6 +18,7 @@ import { removeComputer } from "@/lib/computers"
 import { joinCodeFromLink } from "@/lib/deep-link"
 import { kiwiJoin } from "@/lib/join-line"
 import { relayUrl } from "@/lib/relay"
+import { noteFor, showSeat, type ShowResult } from "@/lib/show-seat"
 import { cleanRoomName, roomProblem, roomsAfter } from "@/lib/rooms"
 import { ALLOW_ONCE, DENY } from "@/lib/permission-settled"
 import { savePersonalities } from "@/lib/personalities"
@@ -29,6 +30,7 @@ import { answerPair, cancelPair, linkGithub, pairBegin, unlinkGithub } from "~/l
 import { newMemberPowers, newMemberScopes, setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
 import { iconFromFile } from "~/live/icon-file"
+import { seatOf } from "~/live/seats"
 import { memberName } from "@/lib/format"
 import { checkComputer, setHooks } from "~/live/computer"
 import { addStartFolder, allowNewAgents, allowRemoteBypass, removeStartFolder } from "~/live/starts"
@@ -330,6 +332,12 @@ export function makeActions(): Actions {
         await run.ch.updatePowers(m, { addsAgents: powers.addsAgents ?? !!m.addsAgents, answersDecisions: powers.answersDecisions ?? !!m.answersDecisions })
         await run.refreshRoster()
       }),
+    showAgent: async (code, name) => {
+      const seat = seatOf(need(code).roomId, name)
+      if (!seat) return "It isn't running in a window on this computer."
+      const r = await showSeat(seat).catch((): ShowResult => ({ ok: false, why: "failed" }))
+      return noteFor(seat.place, r)
+    },
     addAgent: (code, agent) =>
       attempt("Agent not started", async () => {
         const b = bridge()

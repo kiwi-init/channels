@@ -9,6 +9,7 @@ import { ago } from "~/kit/time"
 import { memberOf, type App, type Channel, type Color, type Person } from "~/model"
 import { useApp } from "~/nav"
 import { nickname, shown } from "~/names"
+import { ShowAgent } from "~/kit/show-agent"
 import { PanelHead } from "~/panels/frame"
 import { InlineEdit } from "~/settings/controls"
 
@@ -120,6 +121,7 @@ function Doors({ channel, person }: { channel: Channel; person: Person }) {
       >
         Message privately
       </button>
+      <ShowAgent channel={channel} person={person} />
     </div>
   )
 }

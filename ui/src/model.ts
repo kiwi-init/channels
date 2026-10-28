@@ -33,6 +33,7 @@ export interface Person {
   doing?: number
   readOnly?: boolean
   wakes?: boolean
+  seat?: "rex" | "tmux"
   addsAgents?: boolean
   answersDecisions?: boolean
   lastSeen: number
@@ -349,6 +350,7 @@ export interface Actions {
   setColor(code: string, name: string, color: Color | null): void
   setPowers(code: string, name: string, powers: Partial<Powers>): void
   addAgent(code: string, agent: NewAgent): void
+  showAgent(code: string, name: string): Promise<string | null>
   addRoom(code: string, name: string): void
   renameRoom(code: string, id: string, name: string): void
   setIcon(code: string, file: File | null): void

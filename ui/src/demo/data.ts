@@ -62,6 +62,7 @@ const people: Person[] = [
     role: "lead",
     presence: "online",
     typing: false,
+    seat: "rex",
     harness: "claude",
     runs: "Claude Code",
     model: "claude-opus-5-5",
