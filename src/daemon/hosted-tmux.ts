@@ -5,7 +5,9 @@ import { loginPath, loginShell } from "../launch/shell.ts";
 import type { Pane, PlaceRequest, Placed } from "../terminals/plugin.ts";
 import { loginArgv } from "../terminals/shared/launch.ts";
 import { run, said, type Ran } from "../terminals/shared/run.ts";
+import { hostedDir } from "../terminals/shared/tmux.ts";
 import { tmuxPane } from "../terminals/tmux/type.ts";
+import { controlOutput, keyCommands } from "./hosted-term.ts";
 
 export const HOSTED_SESSION = "_kiwi";
 const PAUSE_AFTER_S = 5;
@@ -14,6 +16,10 @@ const STATE_FILE = "hosted-tmux.json";
 const CONF_FILE = "hosted-tmux.conf";
 const REATTACH_MS = 1_000;
 const WINDOW_FORMAT = "#{window_id}\t#{pane_id}\t#{pane_pid}";
+const TYPED_HOLD_MS = 3_000;
+const NEWLINE = 0x0a;
+const PAUSED = /^%pause (%\d+)$/;
+const GONE = /^%(?:window-close|unlinked-window-close) (@\d+)$/;
 
 export const HOSTED_CONF = [
   "set -s exit-empty off",
@@ -37,12 +43,14 @@ export interface HostedState extends HostedTmuxBin {
 
 export type HostedLine = (line: string) => void;
 
+export type HostedOutput = (data: Uint8Array) => void;
+
 type Client = Bun.Subprocess<"pipe", "pipe", "ignore">;
 
 const uid = (): number => process.getuid?.() ?? 0;
 
 export function hostedSocket(home: string, user = uid()): string {
-  return join(`/tmp/kiwi-${user}`, createHash("sha256").update(home).digest("hex").slice(0, 12));
+  return join(hostedDir(user), createHash("sha256").update(home).digest("hex").slice(0, 12));
 }
 
 export function tmuxHosts(version: string): boolean {
@@ -71,6 +79,8 @@ export async function findTmux(env: Record<string, string | undefined> = process
 export class HostedTmux {
   private client: Client | null = null;
   private readonly lines = new Set<HostedLine>();
+  private readonly outputs = new Map<string, Set<HostedOutput>>();
+  private readonly typed = new Map<string, number>();
   private closing = false;
 
   constructor(
@@ -152,7 +162,44 @@ export class HostedTmux {
 
   pane(pane: string): Pane | null {
     const st = this.state();
-    return st ? tmuxPane({ socket: st.socket, pane }, st.bin) : null;
+    if (!st) return null;
+    const inner = tmuxPane({ socket: st.socket, pane }, st.bin);
+    const free = (): boolean => Date.now() - (this.typed.get(pane) ?? 0) >= TYPED_HOLD_MS;
+    return {
+      screen: inner.screen,
+      type: (text) => free() && inner.type(text),
+      enter: () => free() && inner.enter(),
+      erase: (count) => free() && inner.erase(count),
+    };
+  }
+
+  output(pane: string, fn: HostedOutput): () => void {
+    const set = this.outputs.get(pane) ?? new Set<HostedOutput>();
+    set.add(fn);
+    this.outputs.set(pane, set);
+    return () => {
+      set.delete(fn);
+      if (!set.size) this.outputs.delete(pane);
+    };
+  }
+
+  gone(pane: string, fn: () => void): () => void {
+    let window: string | null = null;
+    const st = this.state();
+    if (st) void this.tmux(st, ["display-message", "-p", "-t", pane, "#{window_id}"]).then((r) => (window = r.status === 0 ? r.stdout.trim() : null));
+    return this.on((line) => {
+      const m = GONE.exec(line);
+      if (m && m[1] === window) fn();
+    });
+  }
+
+  keys(pane: string, text: string): boolean {
+    this.typed.set(pane, Date.now());
+    return keyCommands(pane, text).every((cmd) => this.send(cmd));
+  }
+
+  resize(pane: string, cols: number, rows: number): boolean {
+    return this.send(`resize-window -t ${pane} -x ${cols} -y ${rows}`);
   }
 
   on(line: HostedLine): () => void {
@@ -219,14 +266,29 @@ export class HostedTmux {
 
   private async read(client: Client): Promise<void> {
     const decoder = new TextDecoder();
-    let buf = "";
+    let buf = new Uint8Array(0);
     for await (const chunk of client.stdout) {
-      buf += decoder.decode(chunk, { stream: true });
-      for (let nl = buf.indexOf("\n"); nl >= 0; nl = buf.indexOf("\n")) {
-        const line = buf.slice(0, nl);
-        buf = buf.slice(nl + 1);
-        for (const fn of this.lines) fn(line);
+      const next = new Uint8Array(buf.length + chunk.length);
+      next.set(buf);
+      next.set(chunk, buf.length);
+      let from = 0;
+      for (let nl = next.indexOf(NEWLINE); nl >= 0; nl = next.indexOf(NEWLINE, from)) {
+        this.line(next.subarray(from, nl), decoder);
+        from = nl + 1;
       }
+      buf = next.slice(from);
     }
+  }
+
+  private line(bytes: Uint8Array, decoder: TextDecoder): void {
+    const out = controlOutput(bytes);
+    if (out) {
+      for (const fn of this.outputs.get(out.pane) ?? []) fn(out.data);
+      return;
+    }
+    const line = decoder.decode(bytes);
+    const paused = PAUSED.exec(line);
+    if (paused) this.send(`refresh-client -A '${paused[1]}:continue'`);
+    for (const fn of this.lines) fn(line);
   }
 }

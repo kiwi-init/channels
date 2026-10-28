@@ -21,6 +21,7 @@ import { hooksRows } from "../hooks/install/extra.ts";
 import { computerSettings } from "./settings.ts";
 import { harnessInventory } from "../launch/harnesses.ts";
 import { HostedTmux } from "./hosted-tmux.ts";
+import { clampSize, isPane, openTerm, TERM_COLS, TERM_ROWS } from "./hosted-term.ts";
 import { forgetAtRelay, startMachineInbox } from "./inbox.ts";
 import { remoteRunner } from "./remote.ts";
 import { launchAgent } from "../launch/launch.ts";
@@ -99,6 +100,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   void hosted.resume().catch(() => {});
   const seats = new Map<string, Seat>();
   const conns = new Set<ConnState>();
+  const terms = new Map<ConnState, Set<() => void>>();
   let stopped = false;
   let resolveStopped: () => void = () => {};
   const stoppedP = new Promise<void>((resolve) => (resolveStopped = resolve));
@@ -309,6 +311,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     if (conn.dead) return;
     conn.dead = true;
     conns.delete(conn);
+    for (const close of terms.get(conn) ?? []) close();
+    terms.delete(conn);
     for (const sub of [...conn.subs]) dropSub(sub);
     for (const l of conn.held) reachMoved(l.channel, l.agent);
   };
@@ -721,12 +725,43 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           sendLine(conn, JSON.stringify({ id, ok: true, opened }));
           break;
         }
+        case "term": {
+          const { pane } = params;
+          const cols = clampSize(params.cols, TERM_COLS);
+          const rows = clampSize(params.rows, TERM_ROWS);
+          if (!isPane(pane) || !cols || !rows) throw new Error('term needs {"pane", "cols", "rows"}');
+          const term = await openTerm(hosted, pane, cols, rows, (msg) => sendLine(conn, JSON.stringify({ id, ...msg })));
+          if (conn.dead) {
+            term.close();
+            break;
+          }
+          terms.set(conn, new Set([...(terms.get(conn) ?? []), term.close]));
+          sendLine(conn, JSON.stringify({ id, ok: true, stream: true, ...term.opened }));
+          term.start();
+          break;
+        }
+        case "term-keys": {
+          const { pane, keys } = params;
+          if (!isPane(pane) || typeof keys !== "string" || keys.length > 65_536) throw new Error('term-keys needs {"pane", "keys"}');
+          sendLine(conn, JSON.stringify({ id, ok: hosted.keys(pane, keys) }));
+          break;
+        }
+        case "term-size": {
+          const { pane } = params;
+          const cols = clampSize(params.cols, TERM_COLS);
+          const rows = clampSize(params.rows, TERM_ROWS);
+          if (!isPane(pane) || !cols || !rows) throw new Error('term-size needs {"pane", "cols", "rows"}');
+          sendLine(conn, JSON.stringify({ id, ok: hosted.resize(pane, cols, rows), cols, rows }));
+          break;
+        }
         case "stop":
           sendLine(conn, JSON.stringify({ id, ok: true }));
           setTimeout(() => void stop(), 50);
           break;
         default:
-          throw new Error(`unknown verb "${verb}" (hello, adopt, listen, listening, hold, listeners, read, mark, peek, presence, harnesses, folders, launch, loop, unpair, stop)`);
+          throw new Error(
+            `unknown verb "${verb}" (hello, adopt, listen, listening, hold, listeners, read, mark, peek, presence, harnesses, folders, launch, loop, term, term-keys, term-size, unpair, stop)`,
+          );
       }
     } catch (err) {
       sendLine(conn, JSON.stringify({ id, ok: false, error: err instanceof Error ? err.message : String(err) }));
