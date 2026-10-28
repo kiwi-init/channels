@@ -202,7 +202,7 @@ export class SessionTasks extends SessionMessaging {
         const what = change.state === "cancelled" ? "cancelled" : "done";
         if (gate === t.review && reviewerLeft)
           return yield* new Rejected(
-            `${taskId(id)}'s reviewer ${gate} left the channel: the lead, the owner or a person opens its review (kiwi task review ${taskId(id)} --review any), then it can be ${what}`,
+            `${taskId(id)}'s reviewer ${gate} left the channel: the lead or a person opens its review (kiwi task review ${taskId(id)} --review any), then it can be ${what}`,
           );
         return yield* new Rejected(
           `${taskId(id)} needs review by ${gate === "*" ? "someone who hasn't worked on it" : gate} before it's ${what}: ${change.state === "cancelled" ? "ask a person or its reviewer to cancel it, or cancel it yourself once a review round has rejected it" : `send it for review (kiwi task review ${taskId(id)})`}`,

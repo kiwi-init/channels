@@ -201,7 +201,7 @@ describe("leaving hands the tasks back", () => {
     await run(qa.members(true));
     expect((await run(lead.taskUpdate(x, { state: "done" }))).tasks.get(x)).toMatchObject({ state: "done", review: "*", approvedBy: "lead" });
     const refused = await run(Effect.flip(qa.taskUpdate(y, { state: "cancelled" })));
-    expect(refused.message).toBe(`T${y}'s reviewer gone left the channel: the lead, the owner or a person opens its review (kiwi task review T${y} --review any), then it can be cancelled`);
+    expect(refused.message).toBe(`T${y}'s reviewer gone left the channel: the lead or a person opens its review (kiwi task review T${y} --review any), then it can be cancelled`);
     expect((await run(lead.taskUpdate(y, { state: "cancelled" }))).tasks.get(y)).toMatchObject({ state: "done", cancelled: true, review: "*" });
   });
 });
