@@ -20,6 +20,7 @@ import { kiwiJoin } from "@/lib/join-line"
 import { relayUrl } from "@/lib/relay"
 import { cleanRoomName, roomProblem, roomsAfter } from "@/lib/rooms"
 import { ALLOW_ONCE, DENY } from "@/lib/permission-settled"
+import { savePersonalities } from "@/lib/personalities"
 import { createPerson, bridge, secrets } from "@/lib/secrets"
 import { isSignInGone } from "@/lib/session"
 import { approveTask, closedDigest, sendBackTask, type TaskSend } from "@/lib/task-actions"
@@ -481,6 +482,7 @@ export function makeActions(): Actions {
     removeStartFolder: (dir) => attempt("Couldn't remove the folder", () => removeStartFolder(dir)),
     allowNewAgents: (on) => attempt("Couldn't change new agents", () => allowNewAgents(on)),
     allowRemoteBypass: (on) => attempt("Couldn't change bypass", () => allowRemoteBypass(on)),
+    savePersonalities: (list) => attempt("Not saved", () => savePersonalities(list)),
   }
 }
 
