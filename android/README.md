@@ -24,7 +24,12 @@ with `kiwi.ask(json)` (`ios/engine/wire.ts` lists them) and the answers come bac
 `kiwiAndroid` bridge, as do the pushes: a `RoomView` per channel, ready to draw, and the saved keys
 whenever they change, which `Vault.kt` seals with a Keystore AES-GCM key in no-backup storage.
 
-A phone gets its keys by linking with the Mac app (Settings → Phone → Link a phone): scan its code
+A phone signs in as one of your devices (`docs/linked-devices.md` §2): Sign in opens the relay's
+sign-in in the browser, the phone shows six digits, and you type them where Channels on your computer
+asks to approve it. The phone keeps its own key, never your person key, and asks to join the channels
+your computer holds; the ones you own let it in while the app is open there.
+
+It can also link with the Mac app the old way (Settings → Phone → Link a phone): scan its code
 (Google's code scanner, no camera permission), paste it, or open a `kiwi://link/…` link.
 
 ## Install it on a phone
