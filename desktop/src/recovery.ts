@@ -19,6 +19,7 @@ import {
 import type { RecoverySaveView, RecoveryView } from "./bridge.ts";
 
 const CHECKS = 3;
+const LOOK_MS = 10 * 60_000;
 
 export interface RecoveryKept {
   at: number;
@@ -48,6 +49,7 @@ export interface RecoveryHost {
 }
 
 const NOT_HERE = "set up the recovery key on the computer you first signed in on: it holds your person key";
+const NO_BOX = "no app has sealed your person key to this recovery key yet, so this app can't add its channels to the vault";
 
 const matches = (word: string, typed: string): boolean => {
   const t = typed.trim().toLowerCase();
@@ -64,10 +66,23 @@ const setUpAt = (chain: readonly unknown[]): number | null => lastSetUp(chain)?.
 
 const typedHere = (chain: readonly unknown[], recovery: Recovery): boolean => lastSetUp(chain)?.rpk === recovery.rpk;
 
+const sealedFor = (box: SealedPerson | undefined, recovery: Recovery): box is SealedPerson => !!box && box.rxpk === recovery.rxpk && box.pk === recovery.root;
+
+const holdsMine = (vault: Vault | null, device: string, recovery: Recovery): boolean =>
+  !!vault && sealedFor(vault.held, recovery) && vault.boxes.some((b) => b.device === device && b.rxpk === recovery.rxpk);
+
+interface Kept {
+  chain: unknown[];
+  recovery: Recovery | null;
+  version: number;
+  vault: Vault | null;
+  at: number | null;
+}
+
 export function createRecoveryHost(deps: RecoveryHostDeps): RecoveryHost {
   const now = deps.now ?? Date.now;
   let held: string[] | null = null;
-  let looked = false;
+  let looked: { at: number; owners: string[] } | null = null;
 
   const list = async (): Promise<DeviceList> => {
     const read = await readDeviceList(deps.links());
@@ -75,7 +90,7 @@ export function createRecoveryHost(deps: RecoveryHostDeps): RecoveryHost {
     return read.list;
   };
 
-  const kept = async (client: AccountClient, devices: DeviceList): Promise<{ chain: unknown[]; recovery: Recovery | null; version: number; at: number | null }> => {
+  const kept = async (client: AccountClient, devices: DeviceList): Promise<Kept> => {
     const got = await client.vault();
     const known = deps.kept()?.version ?? 0;
     let recovery: Recovery | null = null;
@@ -86,31 +101,34 @@ export function createRecoveryHost(deps: RecoveryHostDeps): RecoveryHost {
     }
     if (got.vault === null) {
       if (known) throw new Error(`the relay lost your recovery vault, which was at version ${known}`);
-      return { chain: got.recovery, recovery, version: 0, at: setUpAt(got.recovery) };
+      return { chain: got.recovery, recovery, version: 0, vault: null, at: setUpAt(got.recovery) };
     }
     const bad = await checkVault(got.vault, devices, known);
     if (bad) throw new Error(`the relay's recovery vault doesn't hold up: ${bad}`);
-    return { chain: got.recovery, recovery, version: (got.vault as Vault).version, at: setUpAt(got.recovery) };
+    const vault = got.vault as Vault;
+    return { chain: got.recovery, recovery, version: vault.version, vault, at: setUpAt(got.recovery) };
   };
 
-  const boxed = async (chain: readonly unknown[], recovery: Recovery): Promise<SealedPerson> => {
+  const boxed = async (chain: readonly unknown[], recovery: Recovery, vault: Vault | null): Promise<SealedPerson> => {
     const person = deps.person();
     if (person) {
       if (!typedHere(chain, recovery)) throw new Error("your recovery key was replaced by a device's proposal, so this app won't seal your person key to it");
       return sealPerson(recovery, person);
     }
     const kept = deps.kept()?.person;
-    if (!kept) throw new Error(NOT_HERE);
-    if (kept.rxpk !== recovery.rxpk) throw new Error("your recovery key changed after this app let go of your person key: type the old words to carry it over");
-    return kept;
+    const box = [kept, vault?.held].find((b) => sealedFor(b, recovery));
+    if (box) return box;
+    if (kept && kept.rxpk !== recovery.rxpk) throw new Error("your recovery key changed after this app let go of your person key: type the old words to carry it over");
+    throw new Error(NO_BOX);
   };
 
-  const seal = async (s: { client: AccountClient; device: Identity }, recovery: Recovery, chain: readonly unknown[], version: number, at: number, extend?: RecoveryLink[]): Promise<RecoveryKept> => {
+  const seal = async (s: { client: AccountClient; device: Identity }, recovery: Recovery, chain: readonly unknown[], before: Kept, at: number, extend?: RecoveryLink[]): Promise<RecoveryKept> => {
     const channels = deps.owned();
-    const person = await boxed(chain, recovery);
-    const vault = await sealVault(deps.person() ?? s.device, recovery, version + 1, { person, channels }, now());
+    const person = await boxed(chain, recovery, before.vault);
+    const others = before.vault?.boxes ?? [];
+    const vault = await sealVault(deps.person() ?? s.device, recovery, before.version + 1, { person, channels, device: s.device.pk, others }, now());
     await s.client.keepVault({ ...(extend ? { recovery: extend } : {}), vault });
-    const next = { at, version: version + 1, owners: ownersOf(channels), person };
+    const next = { at, version: before.version + 1, owners: ownersOf(channels), person };
     deps.keep(next);
     return next;
   };
@@ -158,7 +176,7 @@ export function createRecoveryHost(deps: RecoveryHostDeps): RecoveryHost {
       const chain = [...(before.chain as RecoveryLink[]), link];
       const read = await readRecovery(chain, devices, now());
       if (!read.ok) throw new Error(`the new recovery key doesn't hold up: ${read.why}`);
-      const done = await seal(session, read.recovery, chain, before.version, link.at, chain);
+      const done = await seal(session, read.recovery, chain, before, link.at, chain);
       held = null;
       await letGo(chain, read.recovery).catch(() => {
         // The words are saved either way; the next enrollPoll lists the computers and lets the person key go.
@@ -175,15 +193,17 @@ export function createRecoveryHost(deps: RecoveryHostDeps): RecoveryHost {
       if (held && deps.links().length && (await list()).root !== held.pk) deps.forget();
       const person = deps.person();
       const was = deps.kept();
-      if (!person && !was?.person) return;
-      const current = !!was && sameOwners(was.owners, ownersOf(deps.owned()));
-      if (person ? !was && looked : current) return;
+      const owners = ownersOf(deps.owned());
+      const current = !!was?.person && sameOwners(was.owners, owners);
+      const fresh = !!looked && sameOwners(looked.owners, owners) && now() - looked.at < LOOK_MS;
+      if (fresh && !(person && current)) return;
       const s = await deps.session();
       if (!s) return;
       const before = await kept(s.client, await list());
-      looked = true;
+      looked = { at: now(), owners };
       if (!before.recovery) return;
-      if (!current || !was?.person || was.version !== before.version) await seal(s, before.recovery, before.chain, before.version, before.at ?? now());
+      if (!current || !holdsMine(before.vault, s.device.pk, before.recovery)) await seal(s, before.recovery, before.chain, before, before.at ?? now());
+      else if (was && was.version !== before.version) deps.keep({ ...was, version: before.version });
       await letGo(before.chain, before.recovery);
     },
   };

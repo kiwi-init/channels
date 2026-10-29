@@ -304,19 +304,25 @@ For when every app is gone, or a thief revoked your other devices first. The rec
   clients still read the list. The person key signs the first link. The recovery key replaces itself at
   once; an approving device may propose a new one, which takes over only after 7 days. Your devices show
   the proposal meanwhile, and the old words, or revoking the device that proposed it, cancel it.
-- **Format:** `{person, version, at, box}`. The box is sealed to the recovery X25519 key, with person,
-  version and time bound into the key derivation. Inside, the person key is a box of its own, sealed to
-  the same recovery key with person and recovery key bound in (`sealPerson`, T899), so a device that
-  no longer holds the person key carries it into each new version unread, and the vault is signed by the person key or any of
-  its current approving devices (decision A keeps the person key offline, so a device must be able to
-  add a new channel's owner key). Stored at `/v1/account/vault`. Clients remember the highest version
-  and refuse a lower one.
+- **Format:** `{person, version, at, held, boxes}`, signed by the person key or any of its current
+  approving devices (decision A keeps the person key offline, so a device must be able to add a new
+  channel's owner key). Stored at `/v1/account/vault`. Clients remember the highest version and refuse
+  a lower one.
+  - `held` is the person key, sealed to the recovery X25519 key with person, person key and recovery
+    key bound in (`sealPerson`, T899). It sits in the signed record, so every approving desktop reads
+    it and carries it into each new version unread (T969).
+  - `boxes` holds one box per desktop: the owner keys of the channels that desktop owns, sealed to the
+    recovery key with person, desktop and recovery key bound in. A desktop reseals only its own box and
+    carries the others unread, so two desktops never drop each other's channels. Boxes sealed to
+    earlier words are dropped; their desktops seal them again on their next look, within 10 minutes.
+  - The words open `held` and every box that opens; a box that doesn't is skipped.
+  - At most 64 boxes and 512 KB in all.
 - **The relay** keeps the chain and the newest vault at `/v1/account/vault`. `GET` needs only the sign-in,
   so a new desktop with nothing but the 24 words can read them. `PUT` takes `{recovery, vault}`, signed by
   the person key, the recovery key or a current approving device. The chain must extend the one kept,
   and each new link must carry the relay's time, so a proposal can't be backdated past its 7 days. A
-  vault must be version kept + 1, signed by the person key or a current approving device, and at most
-  512 KB. Links and vaults from revoked devices are refused.
+  vault must be version kept + 1, signed by the person key or a current approving device, with `held`
+  sealed for the current person key and recovery key. Links and vaults from revoked devices are refused.
 - In the code (T693, T823): `packages/core/src/recovery.ts`, `src/relay/account.ts`.
 - **Re-root** (T827), when the person key itself may be stolen: a `reroot {root, keep[]}` link in the
   device list, signed by the new person key, with the recovery key's signature over it (`rsig`) and
@@ -344,7 +350,8 @@ For when every app is gone, or a thief revoked your other devices first. The rec
   vault (paper-key style), and the first desktop becomes a device like the rest.
 - In the code (T899, `desktop/src/recovery.ts`): once the 24 words are checked and the vault is kept,
   the first desktop lists its computers and drops the person secret from its store. It keeps only the
-  sealed person box, to reseal the vault when a channel it owns appears. It doesn't let go while a
+  sealed person box, to reseal the vault when a channel it owns appears. Other approving desktops take
+  that box from the vault (T969), and after a re-root they take the new person key's box from it. It doesn't let go while a
   device's proposed recovery key is waiting, and never seals the person key to a key a device proposed.
   An app that set up its words before T899 does the same on its next poll. Joins are proven with the
   device claim alone.

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { signRequest } from "@kiwi/core/auth.ts";
 import { certUntil, nextLink, readDeviceList, rerootLink, rootLink, type DeviceLink, type DeviceLinkBody } from "@kiwi/core/devices.ts";
 import { accountScope, askToEnroll, ENROLL_TTL_MS, enrollDigits, enrollNonce, type EnrollAnswer, type EnrollAsk, type Enrollment } from "@kiwi/core/enroll.ts";
-import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
+import { generateIdentity, sign, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { openVault, readRecovery, recoveryAfter, recoveryKey, recoveryLink, sealVault, type Recovery, type RecoveryLink, type Vault } from "@kiwi/core/recovery.ts";
 import { certifyMachine } from "@kiwi/core/person.ts";
 import { WS_PROTOCOL } from "@kiwi/core/protocol.ts";
@@ -470,7 +470,7 @@ describe("the vault: the recovery chain and signed versions (T823)", () => {
     const v1 = await seal(desk, 1);
     const huge = await call(a, desk, "PUT", "/v1/account/vault", { vault: { ...v1, box: "x".repeat(1024 * 1024) } });
     expect(huge.status).toBe(413);
-    const big = await call(a, desk, "PUT", "/v1/account/vault", { vault: { ...v1, box: "x".repeat(600 * 1024) } });
+    const big = await call(a, desk, "PUT", "/v1/account/vault", { vault: { ...v1, boxes: [{ ...v1.boxes[0]!, box: "x".repeat(600 * 1024) }] } });
     expect(big.status).toBe(400);
     expect(await errorOf(big)).toContain("too large");
   });
@@ -512,6 +512,11 @@ describe("re-rooting to a new person key (T827)", () => {
     expect((await call(a, person, "PUT", "/v1/account/vault", { vault: v1 })).status).toBe(403);
     const oldSigned = await sealVault(person, { ...recovery.recovery, root: person.pk }, 1, { person, channels: [] }, t);
     expect((await call(a, desk, "PUT", "/v1/account/vault", { vault: oldSigned })).status).toBe(400);
+    for (const held of [oldSigned.held, { ...v1.held, rxpk: (await recoveryKey(new Uint8Array(32).fill(13))).xpk! }]) {
+      const carried = await call(a, desk, "PUT", "/v1/account/vault", { vault: await sign(desk, { ...v1, held, pk: undefined, sig: undefined }) });
+      expect(carried.status).toBe(400);
+      expect(await errorOf(carried)).toContain("isn't sealed for the current person key and recovery key");
+    }
     expect((await call(a, next, "PUT", "/v1/account/vault", { vault: v1 })).status).toBe(204);
     expect((await openVault(v1, key, next.pk))?.person.pk).toBe(next.pk);
     const swap = await recoveryKey(new Uint8Array(32).fill(12));

@@ -111,7 +111,7 @@ export function devicesCalls(
     enrollPoll: async () => {
       const ask = await host.poll();
       await recovery.keepCurrent().catch(() => {
-        // The relay is away or another app sealed first: the owners stay unsealed here, so the next poll seals again.
+        // The relay is away, another app sealed first, or no person box is sealed yet: this app looks again within 10 minutes, or once its owned channels change.
       });
       return ask;
     },

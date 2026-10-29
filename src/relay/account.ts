@@ -103,6 +103,7 @@ async function keepVault(store: AccountStore, user: string, list: DeviceList | n
   if (bad) return refuse(new BadRequest({ message: `that vault doesn't hold up: ${bad}` }));
   const next = vault as Vault;
   if (!speaksForPerson(list, next.pk, now)) return refuse(new Forbidden({ message: "the vault is signed by a key that isn't one of this person's current approving devices" }));
+  if (next.held.pk !== list.root || next.held.rxpk !== recovery.rxpk) return refuse(new BadRequest({ message: "that vault's person key isn't sealed for the current person key and recovery key" }));
   const prev = await store.vault(user);
   const known = prev?.version ?? 0;
   if (prev && canonical(prev) === canonical(next)) return done();

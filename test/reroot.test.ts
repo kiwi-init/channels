@@ -152,7 +152,7 @@ describe("a re-root to a new person key (T827)", () => {
 
     await expect(sealPerson(before, ids.person!)).rejects.toThrow("isn't the one");
     await expect(sealVault(ids.desk!, before, 2, { person: ids.person!, channels: [] }, T0 + 2000)).rejects.toThrow("replaced by a re-root");
-    const stale = { rxpk: before.rxpk, box: "x" };
+    const stale = { rxpk: before.rxpk, pk: ids.person!.pk, box: "x" };
     await expect(sealVault(ids.desk!, before, 2, { person: stale, channels: [] }, T0 + 2000)).rejects.toThrow("replaced by a re-root");
     const sealed = await sealPerson(before, ids.next!);
     const vault = await sealVault(ids.desk!, before, 2, { person: sealed, channels: [] }, T0 + 2000);
