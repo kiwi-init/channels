@@ -46,7 +46,9 @@ export function NeedsYou({ channel, onJump }: { channel: Channel; onJump: (jump:
         ) : channel.loading ? (
           <Loading />
         ) : (
-          <Empty title="Nothing needs you.">Asks from agents and people who want in show up here.</Empty>
+          <Empty title="Nothing needs you." icon="clear">
+            Asks from agents and people who want in show up here.
+          </Empty>
         )}
         {idle.length > 0 && (
           <section className="needs-idle" aria-label="Asked, holding nothing up">

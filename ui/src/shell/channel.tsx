@@ -110,15 +110,18 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
             {here}
           </button>
           <button type="button" aria-pressed={nav.tab === "tasks"} onClick={() => go({ to: "tab", tab: "tasks" })}>
+            <Icon name="tasks" size={14} />
             Tasks <Count n={tasks} />
           </button>
           {(agents || nav.tab === "agents") && (
             <button type="button" className="is-agents" aria-pressed={nav.tab === "agents"} onClick={() => go({ to: "tab", tab: "agents" })}>
+              <Icon name="agent" size={14} />
               Agents
             </button>
           )}
           {(needs > 0 || nav.tab === "needs") && (
             <button type="button" className="is-needs" aria-pressed={nav.tab === "needs"} onClick={() => go({ to: "tab", tab: "needs" })}>
+              <Icon name="needs" size={14} />
               Needs you <Count n={needs} loud />
             </button>
           )}

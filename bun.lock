@@ -70,6 +70,7 @@
       "name": "ui",
       "version": "0.0.1",
       "dependencies": {
+        "@hugeicons/core-free-icons": "^4.3.5",
         "@kiwi/channel": "workspace:*",
         "@kiwi/core": "workspace:*",
         "@kiwi/secrets": "workspace:*",

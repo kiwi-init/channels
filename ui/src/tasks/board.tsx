@@ -52,7 +52,7 @@ export function Board({ channel, needs }: { channel: Channel; needs: number }) {
         {live.length === 0 && channel.loading ? (
           <Loading />
         ) : live.length === 0 ? (
-          <Empty title="No tasks yet.">
+          <Empty title="No tasks yet." icon="tasks">
             {channel.people.some((p) => p.kind === "agent")
               ? "Say what you want done in the conversation. The lead turns it into tasks."
               : "Add one above, or add an agent from the sidebar and say what you want done."}

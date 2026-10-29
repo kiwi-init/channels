@@ -12,6 +12,7 @@
     "typecheck": "tsrs -b"
   },
   "dependencies": {
+    "@hugeicons/core-free-icons": "^4.3.5",
     "@kiwi/channel": "workspace:*",
     "@kiwi/core": "workspace:*",
     "@kiwi/secrets": "workspace:*",
