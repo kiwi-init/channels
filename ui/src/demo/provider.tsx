@@ -54,12 +54,7 @@ const STARTS: AgentStarts = {
   folders: ["~/www/channels", "~/www/landing"],
   launch: true,
   bypass: false,
-  prefer: "app",
-  terminals: [
-    { id: "app", name: "Terminal", found: true, running: true, helpers: null },
-    { id: "rex", name: "Rex", found: true, running: true, helpers: "on" },
-    { id: "tmux", name: "tmux", found: true, running: false, helpers: "off" },
-  ],
+  terminals: [{ id: "rex", name: "Rex", found: true, running: true, helpers: "on" }],
 }
 
 function withLeftOut(c: Channel): Channel {
@@ -546,9 +541,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       allowRemoteBypass: (on) => setStarts((s) => ({ ...s, bypass: on })),
       savePersonalities: setOwnPersonalities,
       setHooks: (harness, on) => setComputer((c) => ({ ...c, hooks: c.hooks.map((h) => (h.harness === harness ? { ...h, state: on ? "installed" : "off" } : h)) })),
-      preferTerminal: (id) => setStarts((s) => ({ ...s, prefer: id })),
-      setTerminalHelpers: (id, on) =>
-        setStarts((s) => ({ ...s, prefer: !on && s.prefer === id ? "app" : s.prefer, terminals: s.terminals.map((t) => (t.id === id ? { ...t, helpers: on ? "on" : "off" } : t)) })),
+      setTerminalHelpers: (id, on) => setStarts((s) => ({ ...s, terminals: s.terminals.map((t) => (t.id === id ? { ...t, helpers: on ? "on" : "off" } : t)) })),
       setContextLine: (on) => setComputer((c) => ({ ...c, contextLine: on })),
       computerSettings: () =>
         new Promise((done) =>
@@ -557,7 +550,6 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
               done([
                 ["New agents", ["Allowed"]],
                 ["Bypass from your other devices", ["Off"]],
-                ["Opens them in", ["tmux"]],
                 ["Hooks", ["Claude Code on", "Codex out of date"]],
                 ["Agents", ["builder in kiwi, wakes on a message"]],
               ]),

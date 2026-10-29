@@ -53,17 +53,18 @@ describe("the launch the renderer asks for", () => {
 });
 
 describe("the daemon's answer", () => {
-  test("each place keeps only what the app shows", () => {
-    const rex = { server: "unix:///s.sock", session: "session:1", block: "block:2" };
-    expect(launchedView({ ok: true, launch: good.launch, placed: { ok: true, place: "rex", rex, window: "window:3", pid: 9 } })).toEqual({ ok: true, launch: good.launch, place: "rex", rex });
-    expect(launchedView({ ok: true, launch: good.launch, placed: { ok: true, place: "tmux", socket: "/tmp/s", session: "kiwi", window: "@4", pane: "%4" } })).toEqual({
+  test("it keeps only the window the app shows, and a place other than Channels' own tmux is no answer", () => {
+    expect(launchedView({ ok: true, launch: good.launch, placed: { ok: true, place: "hosted", socket: "/tmp/kiwi-1/abc", window: "@4", pane: "%4", pid: 9 } })).toEqual({
       ok: true,
       launch: good.launch,
-      place: "tmux",
-      session: "kiwi",
+      place: "hosted",
       window: "@4",
     });
-    expect(launchedView({ ok: true, launch: good.launch, placed: { ok: true, place: "terminal", window: 12 } })).toEqual({ ok: true, launch: good.launch, place: "terminal" });
+    for (const placed of [
+      { ok: true, place: "terminal", window: 12 },
+      { ok: true, place: "tmux", socket: "/tmp/s", session: "kiwi", window: "@4", pane: "%4" },
+    ])
+      expect(launchedView({ ok: true, launch: good.launch, placed }).ok).toBe(false);
   });
 
   test("a refusal keeps its reason, and anything unknown is a failure", () => {

@@ -2,7 +2,6 @@ import { useEffect, useSyncExternalStore } from "react"
 
 import type { ComputerSettings, SeatWake } from "@kiwi/core/computer-settings.ts"
 import type { HookHarness, HookRow, HookState } from "@kiwi/core/harnesses.ts"
-import type { TerminalId } from "@kiwi/core/terminals.ts"
 import { harnessName } from "@/lib/harness"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import { store } from "~/live/value"
@@ -53,7 +52,6 @@ export async function setContextLine(on: boolean): Promise<void> {
   if (now) computer.set({ ...now, contextLine: got === "on" })
 }
 
-const TERMINAL: Record<TerminalId, string> = { app: "Terminal", rex: "Rex", tmux: "tmux" }
 const HOOK: Record<Exclude<HookState, "absent">, string> = { installed: "on", partial: "partly on", outdated: "out of date", missing: "not installed", off: "off" }
 const WAKE: Record<SeatWake, string> = { on: "wakes on a message", off: "doesn't wake", webhook: "wakes by webhook" }
 
@@ -62,7 +60,6 @@ function settingsLines(s: ComputerSettings): [string, string[]][] {
   return [
     ["New agents", [s.launch === "on" ? "Allowed" : "Off"]],
     ["Bypass from your other devices", [s.bypass === "on" ? "Allowed" : "Off"]],
-    ["Opens them in", [TERMINAL[s.prefer]]],
     ["Hooks", hooks.length ? hooks : ["None"]],
     ["Agents", s.seats.length ? s.seats.map((seat) => `${seat.agent} in ${seat.channel}, ${WAKE[seat.wake]}`) : ["None yet"]],
   ]

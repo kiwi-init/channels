@@ -21,8 +21,7 @@ const seat: PlacedSeat = {
 describe("Show on a Needs you row", () => {
   test("the button names the terminal the seat runs in", () => {
     expect(showLabel("rex")).toBe("Show in Rex")
-    expect(showLabel("tmux")).toBe("Show in tmux")
-    expect(showLabel("terminal")).toBe("Show in Terminal")
+    expect(showLabel("hosted")).toBe("Show in Channels")
     expect(renderToStaticMarkup(createElement(ShowSeat, { seat }))).toContain(">Show in Rex</button>")
     expect(renderToStaticMarkup(createElement(ShowSeat, {}))).toBe("")
   })
@@ -34,10 +33,7 @@ describe("Show on a Needs you row", () => {
     expect(showNote("rex", { ok: false, why: "no-app" })).toBe("Open the Rex app to show it there.")
     expect(showNote("rex", { ok: false, why: "no-rex" })).toBe("Rex isn't installed on this computer.")
     expect(showNote("rex", { ok: false, why: "failed" })).toBe("Rex didn't open that seat.")
-    expect(showNote("tmux", { ok: true })).toBeNull()
-    expect(showNote("tmux", { ok: false, why: "no-app" })).toBe("No tmux client is attached: the pane is selected for when you attach.")
-    expect(showNote("tmux", { ok: false, why: "no-server" })).toBe("That seat's tmux server isn't running anymore.")
-    expect(showNote("tmux", { ok: false, why: "failed" })).toBe("tmux didn't show that seat.")
+    expect(showNote("hosted", { ok: false, why: "failed" })).toBe("Its terminal didn't open.")
   })
 
   test("outside the desktop app there's nothing to show it with", async () => {
@@ -46,7 +42,7 @@ describe("Show on a Needs you row", () => {
 })
 
 test("a Show that worked has no note, and one that didn't loads its terminal's note only then", async () => {
-  expect(await noteFor("tmux", { ok: true })).toBeNull()
-  expect(await noteFor("tmux", { ok: false, why: "no-app" })).toBe("No tmux client is attached: the pane is selected for when you attach.")
+  expect(await noteFor("hosted", { ok: true })).toBeNull()
+  expect(await noteFor("hosted", { ok: false, why: "no-app" })).toBe("Its terminal didn't open.")
   expect(await noteFor("rex", { ok: false, why: "no-server" })).toBe("Rex isn't running on this computer.")
 })

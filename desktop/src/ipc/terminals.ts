@@ -1,15 +1,11 @@
 import { isHookHarness, readHookRow, type HookHarness, type HookRow } from "@kiwi/core/harnesses.ts";
 import { readWakeSeat, type WakeSeat } from "@kiwi/core/wake.ts";
-import { readPlacedSeat, readShowResult, type PlacedSeat, type ShowResult, type TerminalId, type TerminalsStatus } from "@kiwi/core/terminals.ts";
+import { isTerminalId, readPlacedSeat, readShowResult, type PlacedSeat, type ShowResult, type TerminalsStatus } from "@kiwi/core/terminals.ts";
 import type { Serves } from "../calls.ts";
 import { daemonHarnesses } from "../daemon-client.ts";
 import { terminalsOf } from "../terminals-status.ts";
 import { runKiwi } from "./kiwi.ts";
 
-type HelperId = Exclude<TerminalId, "app">;
-
-const isHelperId = (v: unknown): v is HelperId => v === "rex" || v === "tmux";
-const isTerminalId = (v: unknown): v is TerminalId => v === "app" || isHelperId(v);
 const isSwitch = (v: unknown): v is "on" | "off" => v === "on" || v === "off";
 
 async function terminals(): Promise<TerminalsStatus | null> {
@@ -97,12 +93,11 @@ export function terminalsCalls(): Serves<
   return {
     terminals: () => terminals(),
     terminalHelpers: (id: unknown, to: unknown) => {
-      if (!isHelperId(id) || !isSwitch(to)) throw new Error("terminalHelpers takes rex or tmux, and on or off");
+      if (!isTerminalId(id) || !isSwitch(to)) throw new Error("terminalHelpers takes rex, and on or off");
       return change(["terminal", to === "on" ? "download" : "remove", id]);
     },
-    terminalPrefer: (id: unknown) => {
-      if (!isTerminalId(id)) throw new Error("terminalPrefer takes app, rex or tmux");
-      return change(["terminal", "prefer", id]);
+    terminalPrefer: async () => {
+      throw new Error("new agents always open in Channels' own tmux");
     },
     setLaunches: (to: unknown) => {
       if (!isSwitch(to)) throw new Error("setLaunches takes on or off");

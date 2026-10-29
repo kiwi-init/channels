@@ -34,7 +34,6 @@ const startHosted = (harness: LoopHarness) =>
     yield* Effect.promise(() => ensureDaemon());
     const start = { channel: alias, as: name, folder: process.cwd(), harness, ...(opt.model ? { model: opt.model } : {}), ...(opt.effort ? { effort: opt.effort } : {}) };
     const opened = yield* Effect.tryPromise(() => daemonLoop(start)).pipe(Effect.catch((e) => die(`kiwi loop start: ${e.cause instanceof Error ? e.cause.message : String(e.cause)}`)));
-    if (opened.place !== "hosted") return yield* die("kiwi loop start: the daemon opened it somewhere other than its own tmux");
     out(`kiwi loop for ${name} in ${alias} runs in ${hostedWhere(opened)}`);
   });
 

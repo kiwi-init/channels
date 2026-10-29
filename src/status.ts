@@ -3,7 +3,7 @@ import { openRound, type ChannelState, type Task } from "@kiwi/core/state.ts";
 import { allSeats, loadConfig, type Config, type SeatRecord } from "./config.ts";
 import { seatRecordFor } from "./daemon/reach.ts";
 import type { ShowResult, StatusRecord, TerminalId, TerminalPlugin } from "./terminals/plugin.ts";
-import { markerOf, marking, placeTools, showsIn, terminalPlugin } from "./terminals/registry.ts";
+import { markerOf, marking, showsIn, terminalPlugin } from "./terminals/registry.ts";
 import { askId, reviewId, statusFrame } from "./terminals/shared/osc7501.ts";
 
 const STATUS_EVERY_MS = 3_000;
@@ -100,7 +100,7 @@ export type ShowWhy = Extract<ShowResult, { ok: false }>["why"];
 export type NeedsYou = { shown: Waiting } | { shown: null; seats: number; failed: { waiting: Waiting; why: ShowWhy } | null };
 
 async function showWith(by: TerminalId, record: SeatRecord): Promise<ShowResult> {
-  return (await (await terminalPlugin(by, await placeTools())).show?.(record)) ?? { ok: false, why: "failed" };
+  return (await (await terminalPlugin(by)).show?.(record)) ?? { ok: false, why: "failed" };
 }
 
 export async function showNeedsYou(
@@ -139,7 +139,7 @@ export function startStatusWatch(opts: StatusWatchOptions): { stop(): void } {
   let stopped = false;
   const plugins = new Map<TerminalId, Promise<TerminalPlugin>>();
   const plugin = (id: TerminalId): Promise<TerminalPlugin> => {
-    const loaded = plugins.get(id) ?? placeTools().then((tools) => terminalPlugin(id, tools));
+    const loaded = plugins.get(id) ?? terminalPlugin(id);
     plugins.set(id, loaded);
     return loaded;
   };

@@ -1,5 +1,4 @@
 import { readHookRow, type HookRow } from "./harnesses.ts";
-import { isTerminalId, type TerminalId } from "./terminals.ts";
 
 export type SeatWake = "on" | "off" | "webhook";
 
@@ -12,7 +11,6 @@ export interface SeatSettings {
 export interface ComputerSettings {
   launch: "on" | "off";
   bypass: "on" | "off";
-  prefer: TerminalId;
   hooks: HookRow[];
   seats: SeatSettings[];
 }
@@ -34,11 +32,10 @@ function readSeat(x: unknown): SeatSettings | null {
 export function readComputerSettings(x: unknown): ComputerSettings | null {
   if (!x || typeof x !== "object") return null;
   const s = x as Record<string, unknown>;
-  if ((s.launch !== "on" && s.launch !== "off") || !isTerminalId(s.prefer) || !Array.isArray(s.hooks) || !Array.isArray(s.seats)) return null;
+  if ((s.launch !== "on" && s.launch !== "off") || !Array.isArray(s.hooks) || !Array.isArray(s.seats)) return null;
   return {
     launch: s.launch,
     bypass: s.bypass === "on" ? "on" : "off",
-    prefer: s.prefer,
     hooks: s.hooks.map(readHookRow).filter((h): h is HookRow => h !== null),
     seats: s.seats
       .slice(0, SEATS_MAX)

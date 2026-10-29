@@ -6,7 +6,7 @@ import { readLaunch } from "@kiwi/core/membership.ts";
 import { daemonSock, stopDaemon } from "../src/daemon.ts";
 import { launchAgent } from "../src/launch/launch.ts";
 import type { Hosted } from "../src/launch/place.ts";
-import type { Pane, PlaceRequest, PlaceTools } from "../src/terminals/plugin.ts";
+import type { Pane, PlaceRequest } from "../src/terminals/plugin.ts";
 import { tmuxPane } from "../src/terminals/tmux/type.ts";
 import { typeWhenReady, type Typed } from "../src/launch/typed.ts";
 import { kimiScreen } from "../src/loop/kimi.ts";
@@ -248,41 +248,43 @@ describe("the line an agent is started with", () => {
 describe("launching an agent", () => {
   const bins = join(root, "bins");
   const folder = join(root, "project");
-  const calls = join(root, "tmux-calls");
-  let tools: PlaceTools;
+  const opened: PlaceRequest[] = [];
+  const hosted: Hosted = {
+    ready: async () => null,
+    open: async (req) => {
+      opened.push(req);
+      return { ok: true, place: "hosted", socket: "/tmp/kiwi-1/abc", window: "@7", pane: "%9", pid: 4242 };
+    },
+    pane: () => null,
+  };
 
   beforeAll(() => {
     mkdirSync(folder, { recursive: true });
     script(bins, "claude", "echo '2.1.304 (Claude Code)'");
     script(bins, "codex", "echo 'codex-cli 0.163.0'");
-    const tmux = script(
-      join(root, "tools"),
-      "tmux",
-      `for a in "$@"; do printf '%s\\n' "$a" >> '${calls}'; done
-printf '%s\\n' --- >> '${calls}'
-printf '/tmp/sock\\tkiwi\\t@7\\t%%9\\t4242\\n'`,
-    );
-    tools = { platform: "linux", shell: "/bin/sh", rex: null, tmux, osascript: null };
   });
 
-  const launched = () => readFileSync(calls, "utf8").split("---\n").at(-2)?.split("\n") ?? [];
+  const launched = (): string[] => {
+    const req = opened.at(-1);
+    return req ? ["-c", req.folder, "-n", req.name, ...Object.entries(req.env ?? {}).map(([k, v]) => `${k}=${v}`), ...req.argv] : [];
+  };
 
   test("refuses what isn't a project folder, a harness without a recipe, and one that isn't installed", async () => {
     const PATH = `${bins}:/usr/bin:/bin`;
-    expect(await launchAgent({ harness: "claude", folder: "relative", code }, { PATH, tools })).toMatchObject({ ok: false, why: "bad-request" });
-    expect(await launchAgent({ harness: "claude", folder: join(root, "missing"), code }, { PATH, tools })).toMatchObject({ ok: false, why: "bad-request" });
-    expect(await launchAgent({ harness: "claude", folder: homedir(), code }, { PATH, tools })).toMatchObject({ ok: false, why: "bad-request", detail: expect.stringContaining("home folder") });
-    expect(await launchAgent({ harness: "claude", folder: "/", code }, { PATH, tools })).toMatchObject({ ok: false, why: "bad-request" });
-    expect(await launchAgent({ harness: "claude", folder, code: "nope" }, { PATH, tools })).toMatchObject({ ok: false, why: "bad-request" });
-    expect(await launchAgent({ harness: "cursor", folder, code }, { PATH, tools })).toMatchObject({ ok: false, why: "no-recipe" });
-    expect(await launchAgent({ harness: "claude", folder, code }, { PATH: "/usr/bin:/bin", tools })).toMatchObject({ ok: false, why: "not-installed" });
-    expect(existsSync(calls)).toBe(false);
+    expect(await launchAgent({ harness: "claude", folder: "relative", code }, { PATH, hosted })).toMatchObject({ ok: false, why: "bad-request" });
+    expect(await launchAgent({ harness: "claude", folder: join(root, "missing"), code }, { PATH, hosted })).toMatchObject({ ok: false, why: "bad-request" });
+    expect(await launchAgent({ harness: "claude", folder: homedir(), code }, { PATH, hosted })).toMatchObject({ ok: false, why: "bad-request", detail: expect.stringContaining("home folder") });
+    expect(await launchAgent({ harness: "claude", folder: "/", code }, { PATH, hosted })).toMatchObject({ ok: false, why: "bad-request" });
+    expect(await launchAgent({ harness: "claude", folder, code: "nope" }, { PATH, hosted })).toMatchObject({ ok: false, why: "bad-request" });
+    expect(await launchAgent({ harness: "cursor", folder, code }, { PATH, hosted })).toMatchObject({ ok: false, why: "no-recipe" });
+    expect(await launchAgent({ harness: "claude", folder, code }, { PATH: "/usr/bin:/bin", hosted })).toMatchObject({ ok: false, why: "not-installed" });
+    expect(opened).toEqual([]);
   });
 
   test("starts the harness the inventory found, in the folder, with its join line and a launch id the owner can read", async () => {
     process.env.KIWI_NO_HOOKS = "1";
-    const r = await launchAgent({ harness: "claude", folder, code, nick: "Ada Bot", persona: "eyJhIjoxfQ" }, { PATH: `${bins}:/usr/bin:/bin`, tools });
-    expect(r).toMatchObject({ ok: true, placed: { ok: true, place: "tmux", session: "kiwi", window: "@7", pane: "%9", pid: 4242 } });
+    const r = await launchAgent({ harness: "claude", folder, code, nick: "Ada Bot", persona: "eyJhIjoxfQ" }, { PATH: `${bins}:/usr/bin:/bin`, hosted });
+    expect(r).toMatchObject({ ok: true, placed: { ok: true, place: "hosted", window: "@7", pane: "%9", pid: 4242 } });
     if (!r.ok) throw new Error(r.detail);
     expect(readLaunch(r.launch)).toBe(r.launch);
     const argv = launched();
@@ -290,10 +292,10 @@ printf '/tmp/sock\\tkiwi\\t@7\\t%%9\\t4242\\n'`,
     expect(argv).toContain(`KIWI_LAUNCH=${r.launch}`);
     expect(argv).toContain(`KIWI_HOME=${join(root, "home")}`);
     expect(argv).toContain(join(bins, "claude"));
-    expect(argv.slice(-5, -1)).toEqual(["--allowedTools", "Bash(kiwi join:*)", "--", expect.stringContaining(`kiwi join ${code} --nick 'Ada Bot' --persona eyJhIjoxfQ`)]);
-    const again = await launchAgent({ harness: "codex", folder, code }, { PATH: `${bins}:/usr/bin:/bin`, tools });
+    expect(argv.slice(-4)).toEqual(["--allowedTools", "Bash(kiwi join:*)", "--", expect.stringContaining(`kiwi join ${code} --nick 'Ada Bot' --persona eyJhIjoxfQ`)]);
+    const again = await launchAgent({ harness: "codex", folder, code }, { PATH: `${bins}:/usr/bin:/bin`, hosted });
     expect(again.ok && again.launch !== r.launch).toBe(true);
-    expect(await launchAgent({ harness: "codex", folder, code, launch: "fromTheApp_0123456789" }, { PATH: `${bins}:/usr/bin:/bin`, tools })).toMatchObject({
+    expect(await launchAgent({ harness: "codex", folder, code, launch: "fromTheApp_0123456789" }, { PATH: `${bins}:/usr/bin:/bin`, hosted })).toMatchObject({
       ok: true,
       launch: "fromTheApp_0123456789",
     });
@@ -305,8 +307,8 @@ printf '/tmp/sock\\tkiwi\\t@7\\t%%9\\t4242\\n'`,
   test("starts it with the choices it was asked for, and refuses one its harness doesn't take before anything opens", async () => {
     process.env.KIWI_NO_HOOKS = "1";
     const PATH = `${bins}:/usr/bin:/bin`;
-    expect(await launchAgent({ harness: "claude", folder, code, model: "sonnet", effort: "xhigh", permission: "plan", context: 1_000_000 }, { PATH, tools })).toMatchObject({ ok: true });
-    expect(launched().slice(-11, -1)).toEqual([
+    expect(await launchAgent({ harness: "claude", folder, code, model: "sonnet", effort: "xhigh", permission: "plan", context: 1_000_000 }, { PATH, hosted })).toMatchObject({ ok: true });
+    expect(launched().slice(-10)).toEqual([
       "--model",
       "sonnet[1m]",
       "--effort",
@@ -318,16 +320,16 @@ printf '/tmp/sock\\tkiwi\\t@7\\t%%9\\t4242\\n'`,
       "--",
       expect.stringContaining(`kiwi join ${code}`),
     ]);
-    expect(await launchAgent({ harness: "codex", folder, code, permission: "bypass", context: 128_000 }, { PATH, tools })).toMatchObject({ ok: true });
-    expect(launched().slice(-6, -1)).toEqual(["-c", "model_context_window=128000", "--dangerously-bypass-approvals-and-sandbox", "--", expect.stringContaining(`kiwi join ${code}`)]);
-    const before = readFileSync(calls, "utf8");
-    expect(await launchAgent({ harness: "codex", folder, code, effort: "max" }, { PATH, tools })).toEqual({
+    expect(await launchAgent({ harness: "codex", folder, code, permission: "bypass", context: 128_000 }, { PATH, hosted })).toMatchObject({ ok: true });
+    expect(launched().slice(-5)).toEqual(["-c", "model_context_window=128000", "--dangerously-bypass-approvals-and-sandbox", "--", expect.stringContaining(`kiwi join ${code}`)]);
+    const before = opened.length;
+    expect(await launchAgent({ harness: "codex", folder, code, effort: "max" }, { PATH, hosted })).toEqual({
       ok: false,
       why: "bad-request",
       detail: "Codex takes effort minimal, low, medium, high, xhigh, not max",
     });
-    expect(await launchAgent({ harness: "claude", folder, code, context: 1_000_000 }, { PATH, tools })).toMatchObject({ ok: false, why: "bad-request" });
-    expect(readFileSync(calls, "utf8")).toBe(before);
+    expect(await launchAgent({ harness: "claude", folder, code, context: 1_000_000 }, { PATH, hosted })).toMatchObject({ ok: false, why: "bad-request" });
+    expect(opened.length).toBe(before);
   });
 
   test("puts the harness's hooks in before it starts, unless they're off", async () => {
@@ -336,22 +338,22 @@ printf '/tmp/sock\\tkiwi\\t@7\\t%%9\\t4242\\n'`,
     const codexHooks = join(process.env.KIWI_CODEX_DIR!, "hooks.json");
     rmSync(claudeSettings, { force: true });
     rmSync(codexHooks, { force: true });
-    await launchAgent({ harness: "claude", folder, code }, { PATH: `${bins}:/usr/bin:/bin`, tools });
+    await launchAgent({ harness: "claude", folder, code }, { PATH: `${bins}:/usr/bin:/bin`, hosted });
     expect(readFileSync(claudeSettings, "utf8")).toContain("kiwi");
     expect(readFileSync(claudeSettings, "utf8")).toContain("listen");
-    await launchAgent({ harness: "codex", folder, code }, { PATH: `${bins}:/usr/bin:/bin`, tools });
+    await launchAgent({ harness: "codex", folder, code }, { PATH: `${bins}:/usr/bin:/bin`, hosted });
     expect(readFileSync(codexHooks, "utf8")).toContain("kiwi");
     rmSync(codexHooks, { force: true });
     mkdirSync(process.env.KIWI_HOME!, { recursive: true });
     writeFileSync(join(process.env.KIWI_HOME!, "config.json"), JSON.stringify({ channels: {}, harnessHooks: { codex: "off" } }));
-    expect(await launchAgent({ harness: "codex", folder, code }, { PATH: `${bins}:/usr/bin:/bin`, tools })).toMatchObject({ ok: true });
+    expect(await launchAgent({ harness: "codex", folder, code }, { PATH: `${bins}:/usr/bin:/bin`, hosted })).toMatchObject({ ok: true });
     expect(existsSync(codexHooks)).toBe(false);
   });
 
   test("the daemon's answer reads back as it was sent, and says where the agent is", async () => {
-    const r = await launchAgent({ harness: "claude", folder, code }, { PATH: `${bins}:/usr/bin:/bin`, tools });
+    const r = await launchAgent({ harness: "claude", folder, code }, { PATH: `${bins}:/usr/bin:/bin`, hosted });
     expect(readLaunched(JSON.parse(JSON.stringify(r)))).toEqual(r);
-    expect(launchedText(r)).toMatch(/^started in tmux window @7 of session kiwi \(tmux attach -t kiwi\); it joins with launch [A-Za-z0-9_-]{22}$/);
+    expect(launchedText(r)).toMatch(/^started in Channels' own tmux, window @7 \(to watch it: \S+ -S \/tmp\/kiwi-1\/abc attach -t _kiwi\); it joins with launch [A-Za-z0-9_-]{22}$/);
     expect(readLaunched({ ok: false, why: "no-place", detail: "install tmux" })).toEqual({ ok: false, why: "no-place", detail: "install tmux" });
     expect(readLaunched({ ok: false, why: "exploded" })).toEqual({ ok: false, why: "failed", detail: "" });
     expect(readLaunched({ ok: true, launch: "x", placed: { ok: true, place: "moon" } })).toBeNull();
@@ -404,7 +406,7 @@ describe("starting Kimi Code, whose first prompt is typed into its window", () =
     expect(asking.did).toEqual([]);
   });
 
-  test("opens in tmux and types the join line in, and is refused before anything runs where only Terminal can open", async () => {
+  test("opens in Channels' own tmux and types the join line in once it's ready", async () => {
     const dir = join(root, "kimi");
     const calls = join(dir, "calls");
     const bins = join(dir, "bins");
@@ -416,44 +418,13 @@ describe("starting Kimi Code, whose first prompt is typed into its window", () =
 printf '%s\\n' --- >> '${calls}'
 case " $* " in
   *" capture-pane "*) printf '%s\\n' '${READY}' ;;
-  *" new-window "*) printf '/tmp/sock\\tkiwi\\t@7\\t%%9\\t4242\\n' ;;
 esac`,
     );
     const folder = join(dir, "project");
     mkdirSync(folder, { recursive: true });
     process.env.KIWI_NO_HOOKS = "1";
-    const PATH = `${bins}:/usr/bin:/bin`;
-    const typed = Promise.withResolvers<Typed>();
-    const r = await launchAgent(
-      { harness: "kimi", folder, code, nick: "Kim", permission: "plan" },
-      { PATH, tools: { platform: "linux", shell: "/bin/sh", rex: null, tmux, osascript: null }, typing: { everyMs: 5 }, onTyped: (t) => typed.resolve(t) },
-    );
-    expect(r).toMatchObject({ ok: true, placed: { place: "tmux", socket: "/tmp/sock", pane: "%9" } });
-    expect(await typed.promise).toBe("typed");
-    const runs = readFileSync(calls, "utf8")
-      .split("---\n")
-      .map((c) => c.split("\n").filter(Boolean));
-    expect(runs[0]).toContain(join(bins, "kimi-code"));
-    expect(runs[0]).toContain("--plan");
-    expect(runs[0]!.some((a) => a.includes("kiwi join"))).toBe(false);
-    const set = runs.find((c) => c.includes("set-buffer"))!;
-    expect(set.slice(0, 2)).toEqual(["-S", "/tmp/sock"]);
-    expect(set.at(-1)).toContain(`kiwi join ${code} --nick 'Kim'`);
-    expect(runs.find((c) => c.includes("paste-buffer"))).toEqual(expect.arrayContaining(["-p", "-t", "%9"]));
-    expect(runs.find((c) => c.includes("send-keys"))).toEqual(["-S", "/tmp/sock", "send-keys", "-t", "%9", "Enter"]);
-
-    rmSync(calls, { force: true });
-    const osascript = script(join(dir, "tools"), "osascript", "exit 0");
-    const mac = { platform: "darwin" as const, shell: "/bin/sh", rex: null, tmux, osascript };
-    expect(await launchAgent({ harness: "kimi", folder, code }, { PATH, tools: mac, config: {} })).toMatchObject({
-      ok: false,
-      why: "no-place",
-      detail: expect.stringContaining("only in Rex or tmux"),
-    });
-    expect(existsSync(calls)).toBe(false);
-
     const opened: PlaceRequest[] = [];
-    const hostedTyped = Promise.withResolvers<Typed>();
+    const typed = Promise.withResolvers<Typed>();
     const hosted: Hosted = {
       ready: async () => null,
       open: async (req) => {
@@ -462,11 +433,21 @@ esac`,
       },
       pane: (pane) => tmuxPane({ socket: "/tmp/kiwi-1/abc", pane }, tmux),
     };
-    const there = await launchAgent({ harness: "kimi", folder, code }, { PATH, tools: mac, config: {}, hosted, typing: { everyMs: 5 }, onTyped: (t) => hostedTyped.resolve(t) });
-    expect(there).toMatchObject({ ok: true, placed: { place: "hosted", pane: "%3" } });
-    expect(await hostedTyped.promise).toBe("typed");
-    expect(opened[0]?.argv).toEqual([join(bins, "kimi-code")]);
-    expect(readFileSync(calls, "utf8")).toContain("/tmp/kiwi-1/abc");
+    const r = await launchAgent(
+      { harness: "kimi", folder, code, nick: "Kim", permission: "plan" },
+      { PATH: `${bins}:/usr/bin:/bin`, config: {}, hosted, typing: { everyMs: 5 }, onTyped: (t) => typed.resolve(t) },
+    );
+    expect(r).toMatchObject({ ok: true, placed: { place: "hosted", pane: "%3" } });
+    expect(await typed.promise).toBe("typed");
+    expect(opened[0]?.argv).toEqual([join(bins, "kimi-code"), "--plan"]);
+    const runs = readFileSync(calls, "utf8")
+      .split("---\n")
+      .map((c) => c.split("\n").filter(Boolean));
+    const set = runs.find((c) => c.includes("set-buffer"))!;
+    expect(set.slice(0, 2)).toEqual(["-S", "/tmp/kiwi-1/abc"]);
+    expect(set.at(-1)).toContain(`kiwi join ${code} --nick 'Kim'`);
+    expect(runs.find((c) => c.includes("paste-buffer"))).toEqual(expect.arrayContaining(["-p", "-t", "%3"]));
+    expect(runs.find((c) => c.includes("send-keys"))).toEqual(["-S", "/tmp/kiwi-1/abc", "send-keys", "-t", "%3", "Enter"]);
   });
 });
 

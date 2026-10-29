@@ -425,7 +425,7 @@ export interface KiwiBridge {
   termClose(term: string): Promise<void>;
   onTerm(cb: (e: TermEvent) => void): () => void;
   terminals(): Promise<TerminalsStatus | null>;
-  terminalHelpers(id: "rex" | "tmux", to: "on" | "off"): Promise<TerminalsStatus | null>;
+  terminalHelpers(id: TerminalId, to: "on" | "off"): Promise<TerminalsStatus | null>;
   terminalPrefer(id: TerminalId): Promise<TerminalsStatus | null>;
   setLaunches(to: "on" | "off"): Promise<TerminalsStatus | null>;
   setRemoteBypass(to: "on" | "off"): Promise<TerminalsStatus | null>;

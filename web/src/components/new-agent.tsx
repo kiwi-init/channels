@@ -13,7 +13,6 @@ import { followLaunch, sawMembers, type LaunchSeen } from "@/lib/launch-follow"
 import { launcher } from "@/lib/launches"
 import { usePersonalities } from "@/lib/personalities"
 import { relayUrl } from "@kiwi/secrets/relay.ts"
-import { showLabel, showSeat } from "@/lib/show-seat"
 import { useLaunchesHere } from "@/lib/terminals"
 import { cx } from "@/lib/utils"
 import { HarnessFace } from "./harness-face"
@@ -737,7 +736,7 @@ function Progress({
   const late = lateAt === stage
   const who = harness ? harnessName(harness) : "the agent"
   const computer = on ?? "this computer"
-  const place = started ? (started.place === "tmux" ? `${PLACE_NAMES.tmux}, window ${started.window} of session ${started.session}` : PLACE_NAMES[started.place]) : null
+  const place = started ? PLACE_NAMES[started.place] : null
   const steps: { state: "done" | "now" | "failed" | "todo"; text: string; detail?: ReactNode }[] = [
     launch.phase === "failed"
       ? { state: "failed", text: `Didn’t start on ${computer}`, detail: <span className="text-ink-2">{launch.detail}</span> }
@@ -745,7 +744,6 @@ function Progress({
         ? {
             state: "done",
             text: `Started in ${on ? `${place} on ${on}` : place}`,
-            ...(started.place === "tmux" ? { detail: <code className="font-mono text-ink-2">tmux attach -t {started.session}</code> } : {}),
           }
         : { state: "now", text: `Starting it on ${computer}` },
     seen
@@ -772,7 +770,6 @@ function Progress({
           ...(stage === "join" && late ? { detail: <span className="text-decide">It asked but isn’t in yet. If it’s waiting in Needs you, let it in there.</span> } : {}),
         },
   ]
-  const rex = started?.place === "rex" && !on ? started : null
   return (
     <Frame
       fit
@@ -790,11 +787,6 @@ function Progress({
             <p className="min-w-0 flex-1 text-meta leading-normal text-ink-3">
               {!joined && (started ? "Closing this won’t stop it: it joins by itself." : `Sent to ${computer}: closing this won’t stop it.`)}
             </p>
-            {rex && (
-              <Button variant="secondary" onClick={() => void showSeat({ place: "rex", alias: "kiwi", agent: joined ?? "agent", ...rex.rex })}>
-                {showLabel(rex.place)}
-              </Button>
-            )}
             <Button onClick={onClose}>{joined ? "Done" : "Close"}</Button>
           </>
         )

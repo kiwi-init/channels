@@ -1,6 +1,6 @@
 import { readLaunch } from "./membership.ts";
 
-export const PLACE_NAMES = { rex: "Rex", tmux: "tmux", terminal: "Terminal", hosted: "Channels" } as const;
+export const PLACE_NAMES = { rex: "Rex", hosted: "Channels" } as const;
 
 export type PlaceKind = keyof typeof PLACE_NAMES;
 
@@ -16,21 +16,11 @@ export interface RexPlace {
   block: string;
 }
 
-export type Opened = (
-  | { ok: true; place: "rex"; rex: RexPlace; window: string; pid?: number }
-  | { ok: true; place: "tmux"; socket: string; session: string; window: string; pane: string; pid?: number }
-  | { ok: true; place: "hosted"; socket: string; window: string; pane: string; pid?: number }
-  | { ok: true; place: "terminal"; window?: number }
-) & { instead?: string };
+export type Opened = { ok: true; place: "hosted"; socket: string; window: string; pane: string; pid?: number };
 
 export type Launched = { ok: true; launch: string; placed: Opened } | { ok: false; why: LaunchRefusal; detail: string };
 
-export type LaunchedView =
-  | { ok: true; launch: string; place: "rex"; rex: RexPlace }
-  | { ok: true; launch: string; place: "tmux"; session: string; window: string }
-  | { ok: true; launch: string; place: "hosted"; window: string }
-  | { ok: true; launch: string; place: "terminal" }
-  | Extract<Launched, { ok: false }>;
+export type LaunchedView = { ok: true; launch: string; place: "hosted"; window: string } | Extract<Launched, { ok: false }>;
 
 export interface RexStatus {
   found: boolean;
@@ -54,7 +44,7 @@ export interface TmuxSeat {
   pane: string;
 }
 
-export type PlacedSeat = ({ place: "rex" } & RexSeat) | ({ place: "tmux" | "hosted" } & TmuxSeat);
+export type PlacedSeat = ({ place: "rex" } & RexSeat) | ({ place: "hosted" } & TmuxSeat);
 
 const SHOW_REFUSALS = ["no-rex", "no-server", "no-app", "remote-control", "failed"] as const;
 
@@ -81,38 +71,13 @@ function readRexPlace(x: unknown): RexPlace | null {
 }
 
 export function readOpened(x: unknown): Opened | null {
-  const opened = readPlace(x);
-  const instead = text(record(x)?.instead, 200);
-  return opened && instead ? { ...opened, instead } : opened;
-}
-
-function readPlace(x: unknown): Opened | null {
   const p = record(x);
-  if (p?.ok !== true) return null;
+  if (p?.ok !== true || p.place !== "hosted") return null;
+  const socket = text(p.socket, 4096);
+  const window = text(p.window, 32);
+  const pane = text(p.pane, 32);
   const pid = positive(p.pid);
-  if (p.place === "terminal") {
-    const window = positive(p.window);
-    return { ok: true, place: "terminal", ...(window ? { window } : {}) };
-  }
-  if (p.place === "tmux") {
-    const socket = text(p.socket, 4096);
-    const session = text(p.session, 128);
-    const window = text(p.window, 32);
-    const pane = text(p.pane, 32);
-    return socket && session && window && pane ? { ok: true, place: "tmux", socket, session, window, pane, ...(pid ? { pid } : {}) } : null;
-  }
-  if (p.place === "hosted") {
-    const socket = text(p.socket, 4096);
-    const window = text(p.window, 32);
-    const pane = text(p.pane, 32);
-    return socket && window && pane ? { ok: true, place: "hosted", socket, window, pane, ...(pid ? { pid } : {}) } : null;
-  }
-  if (p.place === "rex") {
-    const rex = readRexPlace(p.rex);
-    const window = text(p.window, 128);
-    return rex && window ? { ok: true, place: "rex", rex, window, ...(pid ? { pid } : {}) } : null;
-  }
-  return null;
+  return socket && window && pane ? { ok: true, place: "hosted", socket, window, pane, ...(pid ? { pid } : {}) } : null;
 }
 
 export function readLaunched(x: unknown): Launched | null {
@@ -170,7 +135,7 @@ export function readPlacedSeat(x: unknown): PlacedSeat | null {
     const seat = readRexSeat(x);
     return seat ? { place, ...seat } : null;
   }
-  if (place === "tmux" || place === "hosted") {
+  if (place === "hosted") {
     const seat = readTmuxSeat(x);
     return seat ? { place, ...seat } : null;
   }
@@ -183,7 +148,7 @@ export function readShowResult(x: unknown): ShowResult {
   return { ok: false, why: isShowRefusal(r?.why) ? r.why : "failed" };
 }
 
-const TERMINAL_IDS = ["app", "tmux", "rex"] as const;
+const TERMINAL_IDS = ["rex"] as const;
 
 export type TerminalId = (typeof TERMINAL_IDS)[number];
 
@@ -198,7 +163,6 @@ export interface TerminalRow {
 }
 
 export interface TerminalsStatus {
-  prefer: TerminalId;
   launch: "on" | "off";
   bypass: "on" | "off";
   terminals: TerminalRow[];
@@ -213,7 +177,7 @@ function readTerminalRow(x: unknown): TerminalRow | null {
 
 export function readTerminalsStatus(x: unknown): TerminalsStatus | null {
   const s = record(x);
-  if (!s || !isTerminalId(s.prefer) || (s.launch !== "on" && s.launch !== "off") || !Array.isArray(s.terminals)) return null;
+  if (!s || (s.launch !== "on" && s.launch !== "off") || !Array.isArray(s.terminals)) return null;
   const terminals = s.terminals.map(readTerminalRow).filter((t): t is TerminalRow => t !== null);
-  return { prefer: s.prefer, launch: s.launch, bypass: s.bypass === "on" ? "on" : "off", terminals };
+  return { launch: s.launch, bypass: s.bypass === "on" ? "on" : "off", terminals };
 }

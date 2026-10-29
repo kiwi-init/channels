@@ -3,7 +3,6 @@ import {
   ArrowRight01Icon,
   CheckmarkCircle02Icon,
   ColorsIcon,
-  CommandLineIcon,
   ComputerIcon,
   ComputerRemoveIcon,
   Folder01Icon,
@@ -312,20 +311,15 @@ function GithubFields() {
   )
 }
 
-const HELPERS: Record<"rex" | "tmux", { download: string; on: string; off: string }> = {
+const HELPERS: Record<TerminalId, { download: string; on: string; off: string }> = {
   rex: {
     download: "Download Rex Helpers",
     on: "Downloaded. A seat that needs you marks its Rex tab, and Needs you opens it.",
-    off: "Marks a seat that needs you in its Rex tab, opens it from Needs you, and lets new agents open in Rex.",
-  },
-  tmux: {
-    download: "Download Tmux Helpers",
-    on: "Downloaded. A seat that needs you marks its window in tmux, and prefix K jumps to it.",
-    off: "Marks a seat that needs you in tmux's window list, jumps to it with prefix K, and lets new agents open in tmux.",
+    off: "Marks a seat that needs you in its Rex tab, and opens it from Needs you.",
   },
 }
 
-const PREFER_ORDER: TerminalId[] = ["app", "rex", "tmux"]
+const ORDER: TerminalId[] = ["rex"]
 
 function NewAgentsFields() {
   const b = terminalsBridge()
@@ -349,8 +343,8 @@ function NewAgentsFields() {
       .finally(() => setBusy(null))
   }
   const setBypass = b.setRemoteBypass
-  const rows = PREFER_ORDER.flatMap((id) => status.terminals.filter((t) => t.id === id))
-  const helpers = rows.filter((t): t is TerminalRow & { id: "rex" | "tmux"; helpers: "on" | "off" } => t.id !== "app" && t.helpers !== null && (t.found || t.helpers === "on"))
+  const rows = ORDER.flatMap((id) => status.terminals.filter((t) => t.id === id))
+  const helpers = rows.filter((t): t is TerminalRow & { helpers: "on" | "off" } => t.helpers !== null && (t.found || t.helpers === "on"))
   return (
     <>
       <Choice
@@ -377,14 +371,6 @@ function NewAgentsFields() {
           onChange={(to) => run("bypass", () => setBypass(to))}
         />
       )}
-      <Choice
-        tile={glyph(CommandLineIcon)}
-        label="Prefer"
-        desc="Where a new agent opens. If it can't open there, it opens in Terminal."
-        value={status.prefer}
-        options={rows.map((t) => ({ value: t.id, label: t.name, disabled: t.id !== "app" && t.helpers !== "on" }))}
-        onChange={(id) => run("prefer", () => b.terminalPrefer(id))}
-      />
       {helpers.map((t) => {
         const on = t.helpers === "on"
         const note =

@@ -15,20 +15,7 @@ function rexNote(why: ShowRefusal): string {
   }
 }
 
-function tmuxNote(why: ShowRefusal): string {
-  switch (why) {
-    case "no-server":
-      return "That seat's tmux server isn't running anymore."
-    case "no-app":
-      return "No tmux client is attached: the pane is selected for when you attach."
-    case "no-rex":
-    case "remote-control":
-    case "failed":
-      return "tmux didn't show that seat."
-  }
-}
-
-const NOTES: Record<PlacedSeat["place"], (why: ShowRefusal) => string> = { rex: rexNote, tmux: tmuxNote, hosted: () => "Its terminal didn't open." }
+const NOTES: Record<PlacedSeat["place"], (why: ShowRefusal) => string> = { rex: rexNote, hosted: () => "Its terminal didn't open." }
 
 export function showNote(place: PlacedSeat["place"], result: ShowResult): string | null {
   return result.ok ? null : NOTES[place](result.why)

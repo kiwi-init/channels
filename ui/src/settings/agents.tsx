@@ -5,7 +5,7 @@ import { Avatar, IconButton, Toggle } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { AgentStarts, Finding, ThisComputer } from "~/model"
 import { useApp } from "~/nav"
-import { Group, Row, Seg } from "~/settings/controls"
+import { Group, Row } from "~/settings/controls"
 import { Personalities } from "~/settings/personalities"
 import { Page } from "~/settings/sections"
 
@@ -17,33 +17,22 @@ const HOOK_SAYS: Record<ThisComputer["hooks"][number]["state"], { desc: string; 
   off: { desc: "Removed. Kiwi won't add them back until you install them", action: "Install" },
 }
 
-const HELPERS: Record<Exclude<TerminalId, "app">, { download: string; on: string; off: string }> = {
+const HELPERS: Record<TerminalId, { download: string; on: string; off: string }> = {
   rex: {
     download: "Download Rex Helpers",
     on: "Downloaded. A seat that needs you marks its Rex tab, and Needs you opens it.",
-    off: "Marks a seat that needs you in its Rex tab, opens it from Needs you, and lets new agents open in Rex.",
-  },
-  tmux: {
-    download: "Download Tmux Helpers",
-    on: "Downloaded. A seat that needs you marks its window in tmux, and prefix K jumps to it.",
-    off: "Marks a seat that needs you in tmux's window list, jumps to it with prefix K, and lets new agents open in tmux.",
+    off: "Marks a seat that needs you in its Rex tab, and opens it from Needs you.",
   },
 }
 
-const PREFER_ORDER: TerminalId[] = ["app", "rex", "tmux"]
+const ORDER: TerminalId[] = ["rex"]
 
-function Opens({ starts }: { starts: AgentStarts }) {
+function Helpers({ starts }: { starts: AgentStarts }) {
   const { app } = useApp()
-  const rows = PREFER_ORDER.flatMap((id) => starts.terminals.filter((t) => t.id === id))
-  const usable = rows.filter((t) => t.id === "app" || t.helpers === "on").map((t) => [t.id, t.name] as const)
-  const helpers = rows.filter((t): t is TerminalRow & { id: Exclude<TerminalId, "app">; helpers: "on" | "off" } => t.id !== "app" && t.helpers !== null && (t.found || t.helpers === "on"))
+  const rows = ORDER.flatMap((id) => starts.terminals.filter((t) => t.id === id))
+  const helpers = rows.filter((t): t is TerminalRow & { helpers: "on" | "off" } => t.helpers !== null && (t.found || t.helpers === "on"))
   return (
     <>
-      {usable.length > 1 && (
-        <Row label="Prefer" hint="Where a new agent opens. If it can't open there, it opens in Terminal.">
-          <Seg label="Prefer" value={starts.prefer} options={usable} onChange={app.actions.preferTerminal} />
-        </Row>
-      )}
       {helpers.map((t) => {
         const on = t.helpers === "on"
         const note =
@@ -200,7 +189,7 @@ export function AgentsSection() {
                 <Toggle label="Allow bypass from your other devices" on={starts.bypass} onChange={actions.allowRemoteBypass} />
               </Row>
             )}
-            <Opens starts={starts} />
+            <Helpers starts={starts} />
           </Group>
           <Group
             title="Folders agents can start in"
