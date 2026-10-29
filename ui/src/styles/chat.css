@@ -1099,6 +1099,120 @@ button.msg-image-spot:hover {
   font: var(--t-stamp) var(--mono);
 }
 
+.compose-hint.is-cue {
+  color: var(--ink-2);
+}
+
+.compose-hint b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.compose-hint kbd,
+.stash kbd {
+  color: var(--ink-3);
+  font: var(--t-stamp) var(--mono);
+}
+
+.stash {
+  position: absolute;
+  right: 10px;
+  bottom: calc(100% + 6px);
+  left: 10px;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.stash > * {
+  pointer-events: auto;
+}
+
+.stash-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 9px 0 7px;
+  border: 0;
+  border-radius: var(--r-row);
+  background: var(--bg-2);
+  box-shadow: var(--shadow-pop);
+  color: var(--ink-2);
+  font: var(--t-meta) var(--ui);
+}
+
+.stash-chip b {
+  color: var(--ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.stash-chip:hover,
+.stash-chip.is-open {
+  background: var(--bg-3);
+  color: var(--ink);
+}
+
+.stash-list {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  display: grid;
+  width: min(420px, 100%);
+  padding: 4px;
+  border-radius: var(--r-ctl);
+  background: var(--bg-2);
+  box-shadow: var(--shadow-pop);
+}
+
+.stash-head {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 6px 4px;
+  color: var(--ink-3);
+  font: var(--t-meta) var(--ui);
+}
+
+.stash-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px;
+  border: 0;
+  border-radius: var(--r-row);
+  background: none;
+  color: var(--ink);
+  font: var(--t-ui) var(--ui);
+  text-align: left;
+}
+
+.stash-row:hover,
+.stash-row:focus-visible {
+  background: var(--wash-2);
+  outline: none;
+}
+
+.stash-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.stash-age {
+  color: var(--ink-3);
+  font: var(--t-stamp) var(--ui);
+}
+
+.stash-foot {
+  margin: 4px 0 0;
+  padding: 6px 6px 4px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-3);
+  font: var(--t-stamp) var(--ui);
+}
+
 .composer textarea {
   flex: 1;
   min-width: 0;
