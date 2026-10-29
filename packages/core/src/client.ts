@@ -17,7 +17,7 @@ import type { ChannelIcon, Envelope, ImageAttachment, Message } from "./protocol
 import type { Scope } from "./scopes.ts";
 import type { ChannelState, FoldBase, GithubRelease, GithubRules, GuardFloor } from "./state.ts";
 import { ChannelCore, type ChannelFx } from "./client/core.ts";
-import { ChannelDelegations } from "./client/delegations.ts";
+import { ChannelDelegations, type Computer, type Tended } from "./client/delegations.ts";
 import { ChannelGithub, type GithubDiff, type GithubIssueInfo, type ReviewCheck } from "./client/github.ts";
 import { ChannelHistory } from "./client/history.ts";
 import { ChannelImages } from "./client/images.ts";
@@ -317,6 +317,14 @@ export class Channel {
 
   delegations(): Promise<Delegation[]> {
     return run(this.fx.delegations());
+  }
+
+  tendDelegations(computers: readonly Computer[], person: string): Promise<Tended> {
+    return run(this.fx.tendDelegations(computers, person));
+  }
+
+  dropDelegates(pks: readonly string[]): Promise<string[]> {
+    return run(this.fx.dropDelegates(pks));
   }
 
   /** Whether a member may post: the one bit of their scopes the relay enforces (the scope.set event is the record). */

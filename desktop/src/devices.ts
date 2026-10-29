@@ -1,5 +1,5 @@
 import { accountClient, type AccountClient } from "@kiwi/core/account.ts";
-import { certUntil, dueForRenewal, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceLinkBody, type DeviceList } from "@kiwi/core/devices.ts";
+import { approvingDevice, certUntil, dueForRenewal, listedComputer, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceLinkBody, type DeviceList } from "@kiwi/core/devices.ts";
 import { askToEnroll, enrollDigits, enrollMailbox, enrollNonce, readEnrollGrant, revealMatches, type EnrollGrant, type Enrollment } from "@kiwi/core/enroll.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { certifyMachine } from "@kiwi/core/person.ts";
@@ -36,6 +36,7 @@ export interface DeviceHost {
   renew(device: string): Promise<void>;
   news(): Promise<DeviceNewsView | null>;
   session(): Promise<{ client: AccountClient; device: Identity } | null>;
+  addComputer(m: { pk: string; xpk: string; label: string; os: string }): Promise<DeviceLink[] | null>;
 }
 
 async function readList(links: unknown[]): Promise<DeviceList> {
@@ -223,7 +224,7 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
       };
       const mailbox = await enrollMailbox(deps.relayUrl(), device, { ...e, answer: { ...answer, at: e.answer.at } }, deps.fetchImpl);
       await mailbox.put("b", grant);
-      if (cert) deps.computer?.({ label: e.ask.label, os: e.ask.os, machinePk: e.ask.device, machineXpk: e.ask.dxpk, personPk: cert.pk, at: now() });
+      if (e.ask.as === "computer") deps.computer?.({ label: e.ask.label, os: e.ask.os, machinePk: e.ask.device, machineXpk: e.ask.dxpk, personPk: who.pk, at: now() });
       answered.delete(id);
       await client.drop(id).catch(() => {});
       return { ok: true, label: e.ask.label };
@@ -252,6 +253,23 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
     async renew(target) {
       const { client, device } = await signedIn();
       await extend(client, device, { op: "renew", device: target, until: certUntil(now()) });
+    },
+
+    async addComputer(m) {
+      const s = await sync();
+      if (!s || !(await refresh(s))) return null;
+      const list = await readList(deps.links());
+      if (!approvingDevice(list, s.device.pk, now())) return null;
+      if (list.revoked.includes(m.pk)) throw new Error("this computer was removed from your devices: it needs a new kiwi key before it can be added again");
+      if (listedComputer(list, m.pk, now())) return deps.links();
+      const listed = list.devices.find((d) => d.device === m.pk);
+      if (listed && listed.as !== "computer") throw new Error("this computer's key is listed as another kind of device");
+      if (listed) {
+        const { links } = await extend(s.client, s.device, { op: "renew", device: m.pk, until: certUntil(now()) });
+        return links;
+      }
+      const { links } = await extend(s.client, s.device, { op: "add", device: m.pk, dxpk: m.xpk, label: m.label, os: m.os, as: "computer", approve: false, until: certUntil(now()) });
+      return links;
     },
 
     async news() {

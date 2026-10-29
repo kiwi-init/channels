@@ -2,35 +2,20 @@ import os from "node:os";
 import type { Serves } from "../calls.ts";
 import { publicPerson } from "../guard.ts";
 import { publicAccess } from "../public-channel.ts";
-import { createDeviceHost, createEnrollee } from "../devices.ts";
+import { createDeviceHost, createEnrollee, type DeviceHost } from "../devices.ts";
 import { createRecoveryHost } from "../recovery.ts";
 import { freshToken } from "../signin.ts";
 import { mutate, store, upsertComputer } from "../store.ts";
 
 const OS_NAMES: Partial<Record<NodeJS.Platform, string>> = { darwin: "macOS", linux: "Linux", win32: "Windows" };
 
-export function devicesCalls(): Serves<
-  | "enrollPoll"
-  | "enrollAnswer"
-  | "enrollConfirm"
-  | "enrollDeny"
-  | "enrollBegin"
-  | "enrollStatus"
-  | "enrollCancel"
-  | "devices"
-  | "forgetDevice"
-  | "renewDevice"
-  | "deviceNews"
-  | "recovery"
-  | "recoveryWords"
-  | "recoverySave"
-  | "recoveryDrop"
-> {
-  const label = () => os.hostname().split(".")[0] || "this computer";
-  const osName = () => OS_NAMES[process.platform] ?? process.platform;
-  const who = () => publicPerson(store.person) ?? store.enrolled ?? null;
-  const person = () => (store.person ? { name: store.person.name, pk: store.person.pk, sk: store.person.sk, xpk: store.person.xpk, xsk: store.person.xsk } : null);
-  const host = createDeviceHost({
+const label = () => os.hostname().split(".")[0] || "this computer";
+export const osName = (): string => OS_NAMES[process.platform] ?? process.platform;
+const who = () => publicPerson(store.person) ?? store.enrolled ?? null;
+const person = () => (store.person ? { name: store.person.name, pk: store.person.pk, sk: store.person.sk, xpk: store.person.xpk, xsk: store.person.xsk } : null);
+
+export function storeDeviceHost(): DeviceHost {
+  return createDeviceHost({
     relayUrl: () => store.relayUrl,
     token: () => freshToken(),
     person,
@@ -52,6 +37,27 @@ export function devicesCalls(): Serves<
         s.pending = [];
       }),
   });
+}
+
+export function devicesCalls(
+  host: DeviceHost,
+): Serves<
+  | "enrollPoll"
+  | "enrollAnswer"
+  | "enrollConfirm"
+  | "enrollDeny"
+  | "enrollBegin"
+  | "enrollStatus"
+  | "enrollCancel"
+  | "devices"
+  | "forgetDevice"
+  | "renewDevice"
+  | "deviceNews"
+  | "recovery"
+  | "recoveryWords"
+  | "recoverySave"
+  | "recoveryDrop"
+> {
   const recovery = createRecoveryHost({
     session: () => host.session(),
     person,

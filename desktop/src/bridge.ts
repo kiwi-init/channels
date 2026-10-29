@@ -88,6 +88,8 @@ export const CHANNEL_CALLS = [
   "deny",
   "remove",
   "cutDevices",
+  "tendDelegations",
+  "dropDelegates",
   "updateScopes",
   "updatePersona",
   "updateNickname",

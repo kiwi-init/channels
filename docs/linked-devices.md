@@ -147,7 +147,15 @@ gets one pending ask at most. Approving it needs your app in your hand and the d
 | `DELETE /v1/account/ask/<id>` | the asking device, an app that approves | turns the ask away |
 
 A key revoked in a published list is refused on every account route, can't ask again, and loses its
-computer inbox at once (`/v1/machine/<key>` answers 403 and its socket closes). The digits come from
+computer inbox at once (`/v1/machine/<key>` answers 403 and its socket closes).
+
+A computer can also register its inbox with the device list instead of a `MachineCert`
+(`PUT /v1/machine/<key>` `{links}`), when that list has it as a current computer. The person key, or
+any current approving device in that list, then counts as its person: asks, unpairing, the online
+check and `/v1/person/<pk>/machines`. The relay never rolls the kept list back. Each list the account
+accepts reaches its computers, so a revoked or expired desktop stops counting at once. The daemon
+checks asks the same way (`readAsk` with the list). Under decision A, this is what lets a desktop
+without the person key start agents. The digits come from
 `enrollDigits` in `packages/core/src/enroll.ts`.
 
 ## 3. Admitting agents without an app open (delegation)
@@ -176,6 +184,13 @@ owner-signed **delegation** lets the `kiwi` daemon admit its own computer's agen
   this computer pokes it (`admit` verb, while the request waits), when one of its seats gets a
   `request` frame, and once per known channel at start. It keeps looking while a request of its
   own waits on the joiner's reveal, for up to 30 minutes.
+- In the owner's app (T684): `packages/app/src/delegations.ts` runs `tendDelegations`
+  (`packages/core/src/client/delegations.ts`) in the approval loop for each owned channel, at most
+  hourly unless the computers change. The computers are the app's own and approved ones, plus the
+  device list's current `computer` entries. It delegates to each one without a delegation, or
+  with fewer than 7 days left; drops the rest and rotates; and re-signs the records a delegate
+  signed with the owner key. Forget computer calls `dropDelegates` before removing its agents, so
+  their removal rotates past it.
 
 ## 4. Revocation and expiry
 

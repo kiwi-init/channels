@@ -106,7 +106,7 @@ beforeAll(async () => {
   if (!held.machine) throw new Error("the app didn't certify the computer");
   machine = held.machine;
   const until = Date.now() + 20_000;
-  while ((await machineOnline({ person, relay }, machine.pk)) !== true && Date.now() < until) await Bun.sleep(200);
+  while ((await machineOnline({ signer: person, person: person.pk, relay }, machine.pk)) !== true && Date.now() < until) await Bun.sleep(200);
 });
 
 afterAll(async () => {
@@ -118,23 +118,23 @@ afterAll(async () => {
 
 describe.skipIf(!TMUX)("starting an agent on one of your computers from another device (T394)", () => {
   test("the computer comes online for its person once kiwi login starts its daemon", async () => {
-    expect(await machineOnline({ person, relay }, machine.pk)).toBe(true);
+    expect(await machineOnline({ signer: person, person: person.pk, relay }, machine.pk)).toBe(true);
   });
 
   test("it lists the harnesses it can start, without bypass while its switch is off, and offers its home folder's git repos", async () => {
-    const harnesses = await harnessesOn({ person, relay }, machine);
+    const harnesses = await harnessesOn({ signer: person, person: person.pk, relay }, machine);
     if (!harnesses.ok) throw new Error(harnesses.detail);
     const claude = harnesses.value.find((r) => r.harness === "claude");
     expect(claude).toMatchObject({ path: join(bins, "claude"), version: "2.1.304", start: true });
     expect(claude?.options?.permission).toContain("plan");
     expect(claude?.options?.permission).not.toContain("bypass");
-    const folders = await foldersOn({ person, relay }, machine, "a".repeat(32));
+    const folders = await foldersOn({ signer: person, person: person.pk, relay }, machine, "a".repeat(32));
     if (!folders.ok) throw new Error(folders.detail);
     expect(folders.value).toContain(repo);
   });
 
   test("it starts Claude Code in that repo with the model, effort and permission mode asked for, in Channels' own tmux", async () => {
-    const launched = await launchOn({ person, relay }, machine, {
+    const launched = await launchOn({ signer: person, person: person.pk, relay }, machine, {
       launch: "fromThePhone_0123456789",
       harness: "claude",
       folder: repo,
@@ -153,14 +153,14 @@ describe.skipIf(!TMUX)("starting an agent on one of your computers from another 
 
   test("bypass is refused before anything opens until that computer allows it, then reaches Claude Code", async () => {
     const before = opened().length;
-    const refused = await launchOn({ person, relay }, machine, { launch: "bypassFromPhone_000001", harness: "claude", folder: repo, code, relay, permission: "bypass" });
+    const refused = await launchOn({ signer: person, person: person.pk, relay }, machine, { launch: "bypassFromPhone_000001", harness: "claude", folder: repo, code, relay, permission: "bypass" });
     expect(refused).toEqual({ ok: false, why: "not-allowed", detail: NO_REMOTE_BYPASS });
     expect(opened().length).toBe(before);
 
     expect(kiwi(["launches", "bypass", "on"]).exitCode).toBe(0);
-    const harnesses = await harnessesOn({ person, relay }, machine);
+    const harnesses = await harnessesOn({ signer: person, person: person.pk, relay }, machine);
     expect(harnesses.ok && harnesses.value.find((r) => r.harness === "claude")?.options?.permission).toContain("bypass");
-    const allowed = await launchOn({ person, relay }, machine, { launch: "bypassFromPhone_000002", harness: "claude", folder: repo, code, relay, permission: "bypass" });
+    const allowed = await launchOn({ signer: person, person: person.pk, relay }, machine, { launch: "bypassFromPhone_000002", harness: "claude", folder: repo, code, relay, permission: "bypass" });
     expect(allowed).toMatchObject({ ok: true, place: "hosted" });
     expect(opened().at(-1)).toContain("bypassPermissions");
   });
@@ -169,15 +169,15 @@ describe.skipIf(!TMUX)("starting an agent on one of your computers from another 
     const outside = join(root, "elsewhere");
     mkdirSync(outside, { recursive: true });
     for (const [n, folder] of [outside, join(repo, "..", "..", "..", "elsewhere")].entries()) {
-      const r = await launchOn({ person, relay }, machine, { launch: `outsideFromPhone_000${n}`, harness: "claude", folder, code, relay });
+      const r = await launchOn({ signer: person, person: person.pk, relay }, machine, { launch: `outsideFromPhone_000${n}`, harness: "claude", folder, code, relay });
       expect(r).toEqual({ ok: false, why: "bad-request", detail: "that folder isn't one this computer starts agents in" });
     }
   });
 
   test("a third start in ten minutes goes through, and a fourth is refused before anything opens", async () => {
-    expect(await launchOn({ person, relay }, machine, { launch: "thirdFromPhone_0000001", harness: "claude", folder: repo, code, relay })).toMatchObject({ ok: true });
+    expect(await launchOn({ signer: person, person: person.pk, relay }, machine, { launch: "thirdFromPhone_0000001", harness: "claude", folder: repo, code, relay })).toMatchObject({ ok: true });
     const before = opened().length;
-    const fourth = await launchOn({ person, relay }, machine, { launch: "fourthFromPhone_000001", harness: "claude", folder: repo, code, relay });
+    const fourth = await launchOn({ signer: person, person: person.pk, relay }, machine, { launch: "fourthFromPhone_000001", harness: "claude", folder: repo, code, relay });
     expect(fourth).toMatchObject({ ok: false, detail: "at most 3 agents are started from another computer every 10 minutes" });
     expect(opened().length).toBe(before);
   });

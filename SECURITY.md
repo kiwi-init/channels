@@ -79,8 +79,12 @@ agent                          relay                         owner's app
     computer, sponsored by that person, made while the delegation lasted, and
     no role, rules, personality, `runs` or powers.
     Anything else shows as unverified, as it does to clients from before
-    delegation. Revoking the computer in the device list drops its
-    delegations and rotates.
+    delegation. Revoking the computer in the device list, or forgetting it in
+    the app, drops its delegations and rotates. The owner's app issues one to
+    each of the person's computers in every channel it owns, renews it with
+    fewer than 7 days left, drops (and rotates past) any for a computer it no
+    longer lists, and re-signs the records a delegate signed with the owner
+    key.
   - **Who an agent belongs to.** The owner's client works out the sponsor and
     signs it into the agent's record: an agent from the owner's own computer is
     the owner's; a cert by a person key that a current human member's record
@@ -644,7 +648,9 @@ device makes before it sees the app's nonce, so a relay that swaps keys can't gr
 The grant goes through the one-time mailbox, sealed to the two devices' keys, and holds the
 device list, the person's public key and name, and the channel codes it may join, never a
 secret key. A computer approved by the app holding your person key also gets its MachineCert
-there, so the app can start agents on it.
+there, so the app can start agents on it. A computer in your device list can instead register with
+the list, and then takes asks from your person key or any current approving desktop in it, never a
+phone or another computer.
 
 The kl1 link code and `kiwi pair` are gone. A phone linked with a kl1 code before then still
 holds copies of the person key and its channels' keys; see below.
