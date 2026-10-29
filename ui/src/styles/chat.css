@@ -277,6 +277,21 @@
   font-variant-numeric: tabular-nums;
 }
 
+.msg-said {
+  min-width: 0;
+  color: var(--ink-3);
+}
+
+.msg-said.is-decide {
+  color: var(--decide);
+  font-weight: 500;
+}
+
+.msg-said.is-alert {
+  color: var(--alert);
+  font-weight: 600;
+}
+
 .msg-quote {
   display: flex;
   align-items: center;
@@ -313,6 +328,19 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.msg-quote.is-earlier,
+.msg-quote.is-earlier:hover {
+  background: none;
+  color: var(--ink-3);
+}
+
+.msg-receipt {
+  margin-top: 2px;
+  color: var(--ink-3);
+  font: var(--t-stamp) var(--ui);
+  font-variant-numeric: tabular-nums;
 }
 
 .msg-text {

@@ -225,7 +225,7 @@ export function longFeed(base: Channel): Channel {
     else if (roll < 0.39) out.push({ ...msg, text: pick(["New feed, dark theme:", "Here's the Linux shot:", "Before and after:"]), images: [shot(i, int(180, 260))] })
     else if (agent) {
       const text = fill(pick(STATUS))
-      out.push({ ...msg, text, task: r() < 0.35 ? pick(TASKS) : undefined, pr: text.includes("PR #") || r() < 0.1 ? pr() : undefined, reactions: reactions() })
+      out.push({ ...msg, text, task: r() < 0.35 ? pick(TASKS) : undefined, prs: text.includes("PR #") || r() < 0.1 ? [pr()] : undefined, reactions: reactions() })
     } else out.push({ ...msg, text: fill(pick(CHAT)), reactions: reactions() })
   }
 

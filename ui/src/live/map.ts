@@ -64,6 +64,7 @@ import type {
   Upload,
   Where,
 } from "~/model"
+import { phraseOf } from "~/live/said"
 
 type Seen = Readonly<Record<string, number>>
 
@@ -330,8 +331,10 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
     const where = whereOf(state, m, me)
     const root = rootOf(m)
     const quoted = m.re?.[0]
+    const target = quoted === undefined ? undefined : bySeq.get(quoted)
     const reactions = reactionsOf(state, m.seq)
-    const link = prLinks(m.body)[0]
+    const prs = prLinks(m.body).map((link) => prOf(state, link))
+    const said = phraseOf(m, me, (name) => (name === me ? "you" : nameIn(state, name)), new Set((m.re ?? []).flatMap((seq) => bySeq.get(seq)?.from ?? [])))
     const images = (m.imgs ?? []).flatMap((img, i) => (isRasterMime(img.mime) ? [pictures.get(m.seq, i, img.name)] : []))
     const ask = askOf.get(m.seq)
     out.push({
@@ -340,11 +343,12 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       at: m.ts,
       text: m.body,
       where,
+      ...(said ? { said } : {}),
       ...(root !== undefined ? { inThread: root } : {}),
-      ...(quoted !== undefined && quoted !== root && bySeq.has(quoted) ? { replyTo: quoted } : {}),
+      ...(quoted !== undefined && quoted !== root && target?.kind !== "event" ? { replyTo: quoted } : {}),
       ...(threads.has(m.seq) ? { thread: threads.get(m.seq) } : {}),
       ...(m.kind === "done" && m.task !== undefined && !state.rejected.has(m.seq) ? { task: m.task, done: true } : {}),
-      ...(link ? { pr: prOf(state, link) } : {}),
+      ...(prs.length ? { prs } : {}),
       ...(images.length ? { images } : {}),
       ...(reactions.length ? { reactions } : {}),
       ...(ask ? { ask } : {}),

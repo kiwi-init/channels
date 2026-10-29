@@ -22,8 +22,10 @@ import { seated, useSeats } from "~/live/seats"
 import { elsewhere, lastWorth } from "~/live/notify"
 import { tellMessage } from "~/live/notes"
 import { ownPrefs } from "~/live/prefs"
+import { receiptsOf, withReceipts } from "~/live/receipts"
 import { closeOpened, markGone, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
+import { clock } from "~/kit/time"
 import type { Channel, Upload, Where } from "~/model"
 import { nicknamesOf } from "~/names"
 
@@ -84,7 +86,7 @@ function useShown(): boolean {
 
 export const OpenMember = memo(function OpenMember({ member, view }: { member: StoredMember; view: View }) {
   const live = useChannel(member)
-  const { ch, state, messages, roster, online, requests, isOwner, connection, gone, ready, send, refreshRequests, refreshRoster, foldFrom } = live
+  const { ch, state, messages, roster, online, requests, isOwner, connection, gone, ready, send, refreshRequests, refreshRoster, foldFrom, marks, pkOf } = live
   const me = member.identity.name
   const roomId = member.access.roomId
   const code = member.code
@@ -109,7 +111,9 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const nicknames = useMemo(() => nicknamesOf(nicknameKey ? nicknameKey.split("\n").map((line) => ({ name: line.split("\u0000")[0] ?? "", display: line.split("\u0000")[1] })) : []), [nicknameKey])
   const pins = usePinsHere(requests)
   const asks = useMemo(() => asksOf(state, messages, me, isOwner, requests, roster, pins), [state, messages, me, isOwner, requests, roster, pins])
-  const mapped = useMemo(() => kept(code, messagesOf(state, messages, me, asks.askOf, pictures, pending)), [code, state, messages, me, asks.askOf, pictures, pending])
+  const rows = useMemo(() => messagesOf(state, messages, me, asks.askOf, pictures, pending), [state, messages, me, asks.askOf, pictures, pending])
+  const receipts = useMemo(() => receiptsOf(state, messages, me, marks, pkOf, clock), [state, messages, me, marks, pkOf])
+  const mapped = useMemo(() => kept(code, withReceipts(rows, receipts)), [code, rows, receipts])
   const leftOut = useMemo(() => (isOwner ? leftOutOf(state, messages, me) : []), [isOwner, state, messages, me])
   const tasks = useMemo(() => tasksOf(state, asks.held, me, messages), [state, asks.held, me, messages])
   const taskGroups = useMemo(() => groupsOf(state, me), [state, me])
