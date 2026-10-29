@@ -1,48 +1,28 @@
 import type { PlacedSeat, ShowResult } from "@kiwi/core/terminals.ts";
-import { loadConfig, type Config, type HelperId, type SeatRecord } from "../config.ts";
-import { loginPath, loginShell } from "../launch/shell.ts";
-import { appManifest } from "./app/manifest.ts";
+import { loadConfig, type Config, type SeatRecord } from "../config.ts";
+import { loginShell } from "../launch/shell.ts";
 import type { PlaceTools, SeatPlace, TerminalId, TerminalManifest, TerminalPlugin } from "./plugin.ts";
 import { placeFrom, rexBinary } from "./rex/locate.ts";
 import { rexManifest } from "./rex/manifest.ts";
 import { takesStatus } from "./shared/osc7501.ts";
 import { tmuxPlaceFrom } from "./tmux/locate.ts";
-import { tmuxManifest } from "./tmux/manifest.ts";
-import { localTmuxSeats } from "./tmux/show.ts";
+import { hostedSeats } from "./tmux/seats.ts";
 
-export const MANIFESTS: readonly TerminalManifest[] = [rexManifest, tmuxManifest, appManifest];
+export const MANIFESTS: readonly TerminalManifest[] = [rexManifest];
 
 const LOAD: Record<TerminalId, () => Promise<(t: PlaceTools) => TerminalPlugin>> = {
   rex: async () => (await import("./rex/index.ts")).rexTerminal,
-  tmux: async () => (await import("./tmux/index.ts")).tmuxTerminal,
-  app: async () => (await import("./app/index.ts")).appTerminal,
 };
-
-export async function placeTools(): Promise<PlaceTools> {
-  return {
-    platform: process.platform,
-    shell: loginShell(),
-    rex: rexBinary(),
-    tmux: Bun.which("tmux", { PATH: await loginPath() }),
-    osascript: process.platform === "darwin" ? (Bun.which("osascript") ?? "/usr/bin/osascript") : null,
-  };
-}
 
 export async function terminalPlugins(tools: PlaceTools): Promise<TerminalPlugin[]> {
   return Promise.all(MANIFESTS.filter((m) => m.platforms.includes(tools.platform)).map(async (m) => (await LOAD[m.id]())(tools)));
 }
 
-function hereTools(): PlaceTools {
-  return {
-    platform: process.platform,
-    shell: loginShell(),
-    rex: rexBinary(),
-    tmux: Bun.which("tmux"),
-    osascript: process.platform === "darwin" ? (Bun.which("osascript") ?? "/usr/bin/osascript") : null,
-  };
+export function placeTools(): PlaceTools {
+  return { platform: process.platform, shell: loginShell(), rex: rexBinary() };
 }
 
-export async function terminalPlugin(id: TerminalId, tools: PlaceTools = hereTools()): Promise<TerminalPlugin> {
+export async function terminalPlugin(id: TerminalId, tools: PlaceTools = placeTools()): Promise<TerminalPlugin> {
   return (await LOAD[id]())(tools);
 }
 
@@ -51,17 +31,11 @@ export function locate(env: Record<string, string | undefined>): SeatPlace {
 }
 
 export function helpersOn(id: TerminalId, cfg: Pick<Config, "terminals">): boolean {
-  return id !== "app" && cfg.terminals?.helpers?.[id] === "on";
+  return cfg.terminals?.helpers?.[id] === "on";
 }
 
-export function preferred(cfg: Pick<Config, "terminals">): TerminalId {
-  const prefer = cfg.terminals?.prefer;
-  return prefer && helpersOn(prefer, cfg) ? prefer : "app";
-}
-
-export function switchHelpers(terminals: NonNullable<Config["terminals"]>, id: HelperId, on: boolean): NonNullable<Config["terminals"]> {
-  const { prefer, ...rest } = terminals;
-  return { ...rest, ...(prefer && (on || prefer !== id) ? { prefer } : {}), helpers: { ...terminals.helpers, [id]: on ? "on" : "off" } };
+export function switchHelpers(terminals: NonNullable<Config["terminals"]>, id: TerminalId, on: boolean): NonNullable<Config["terminals"]> {
+  return { ...terminals, helpers: { ...terminals.helpers, [id]: on ? "on" : "off" } };
 }
 
 export function launchesOn(cfg: Pick<Config, "launch">): boolean {
@@ -91,7 +65,7 @@ function showing(from: Plugins, on: (id: TerminalId) => boolean): Promise<Termin
 }
 
 export async function seatPlaces(cfg: Config = loadConfig(), from: Plugins = BUILT_IN): Promise<PlacedSeat[]> {
-  const hosted = localTmuxSeats(cfg, true).map((seat): PlacedSeat => ({ place: "hosted", ...seat }));
+  const hosted = hostedSeats(cfg).map((seat): PlacedSeat => ({ place: "hosted", ...seat }));
   return [...hosted, ...(await showing(from, (id) => helpersOn(id, cfg))).flatMap((plugin) => plugin.seats?.(cfg) ?? [])];
 }
 
@@ -108,11 +82,11 @@ export function marking(cfg: Pick<Config, "terminals">): TerminalId[] {
 }
 
 export function markerOf(record: SeatRecord, on: readonly TerminalId[]): TerminalId | null {
-  if (record.tmux) return on.includes("tmux") ? "tmux" : null;
+  if (record.tmux) return null;
   return takesStatus(record.term) && on.includes("rex") ? "rex" : null;
 }
 
 export function showsIn(record: SeatPlace, cfg: Pick<Config, "terminals">): TerminalId | null {
-  if (record.tmux) return helpersOn("tmux", cfg) ? "tmux" : null;
+  if (record.tmux) return null;
   return record.rex && helpersOn("rex", cfg) ? "rex" : null;
 }

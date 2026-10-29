@@ -8,8 +8,8 @@ type Env = Record<string, string | undefined>;
 const PROGRAM = /^[A-Za-z][A-Za-z0-9+._-]{0,31}$/;
 const VERSION = /^[\x21-\x7e]{1,64}$/;
 const SERVER = /^[\x21-\x7e]{1,512}$/;
-export const REX_SESSION = /^session:[0-9a-f-]{36}$/;
-export const REX_BLOCK = /^block:[0-9a-f-]{36}$/;
+const REX_SESSION = /^session:[0-9a-f-]{36}$/;
+const REX_BLOCK = /^block:[0-9a-f-]{36}$/;
 
 export function placeFrom(env: Env): SeatPlace {
   if (env.TMUX) return {};

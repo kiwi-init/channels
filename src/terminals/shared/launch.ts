@@ -40,7 +40,7 @@ export const SESSION_MARKERS = [
   "KIWI_PI_SESSION",
 ];
 
-export const pairs = (env: Record<string, string>): string[] => Object.entries(env).map(([key, value]) => `${key}=${value}`);
+const pairs = (env: Record<string, string>): string[] => Object.entries(env).map(([key, value]) => `${key}=${value}`);
 
 export function loginArgv(shell: string, argv: readonly string[], env: Record<string, string> = {}): string[] {
   const name = basename(shell);
@@ -48,6 +48,6 @@ export function loginArgv(shell: string, argv: readonly string[], env: Record<st
   return ["/usr/bin/env", ...SESSION_MARKERS.flatMap((key) => ["-u", key]), ...pairs(env), ...login, ...argv];
 }
 
-export function quote(word: string, fish: boolean): string {
-  return fish ? `'${word.replace(/[\\']/g, "\\$&")}'` : `'${word.replace(/'/g, "'\\''")}'`;
+export function quote(word: string): string {
+  return `'${word.replace(/'/g, "'\\''")}'`;
 }

@@ -66,12 +66,12 @@ On **Start**, that computer's daemon does what `kiwi launch` does:
 
 1. It refuses the whole launch when that computer doesn't allow creating new agents (`kiwi launches off`), and the home folder and `/`.
 2. It installs the harness's hooks.
-3. It opens a terminal you can see, where Settings → New agents → **Prefer** says (`kiwi terminal prefer`): Terminal by default, or Rex or tmux once their helpers are downloaded. If that terminal can't open now, it opens in Terminal and says why; on a computer with no terminal app, like a Linux server, it opens a window in tmux's detached `kiwi` session.
+3. It opens a window in Channels' own tmux, the copy the app ships, so there is nothing to install or download. The app shows the agent there. If that tmux can't start, the launch is refused and says why.
 4. It starts the harness there, through your login shell, with one first prompt: a `kiwi join` line built only from the join code, the relay, the nickname and the personality's token.
 
 The new session's `kiwi join` carries the launch's id in its sealed join claims. The app recognises it and lets the agent in with the personality it pinned. Claude Code, Codex, Gemini CLI, Grok, MiMoCode, Kimi Code, Pi and OpenCode can be started so far.
 
-Kimi Code takes no prompt on its command line, so it starts only where Kiwi can type into its window: Rex or tmux (a launch where only Terminal would open is refused, and says to pick Rex or tmux in Settings → New agents). The daemon waits for Kimi's ready screen, types the `kiwi join` line and presses Enter. While Kimi asks "Trust this folder?", it waits for you to answer, for up to 30 minutes; it never answers dialogs. Each outcome is a line in `~/.kiwi/launch.log`.
+Kimi Code takes no prompt on its command line, so Kiwi types it into its window. The daemon waits for Kimi's ready screen, types the `kiwi join` line and presses Enter. While Kimi asks "Trust this folder?", it waits for you to answer, for up to 30 minutes; it never answers dialogs. Each outcome is a line in `~/.kiwi/launch.log`.
 
 A launch can also pick the model, effort, permissions and context, where that harness takes them (`kiwi harnesses --json` lists them per harness):
 
@@ -101,7 +101,7 @@ OpenCode's full interface takes only `--prompt` and `--auto`; its model and agen
   - Every ask is logged in `~/.kiwi/remote.log`, and one that's refused gets no answer.
 - **Unpairing:** removing the computer in the app, or running `kiwi unpair` on it, makes the relay forget it and closes its inbox. After that it takes no more asks.
 
-**Terminals.** Terminal, Rex and tmux are terminal plugins (`src/terminals/`, [plans/terminal-plugins.md](plans/terminal-plugins.md)). Settings → New agents downloads or removes a terminal's helpers on this computer (`kiwi terminal download|remove rex|tmux`): they mark a seat that needs you in that terminal (in tmux, its window in the window list, and `prefix K` jumps to it), let Needs you open it (Show in Rex or Show in tmux), and let new agents open there. `kiwi terminal status` says what's found, what's on and what's preferred; `kiwi rex on|off|status` still works this release.
+**Terminals.** New agents always open in Channels' own tmux. Rex is the one terminal plugin left (`src/terminals/`, [plans/terminal-plugins.md](plans/terminal-plugins.md)), for agents you run in Rex yourself. Settings → New agents downloads or removes its helpers on this computer (`kiwi terminal download|remove rex`): they mark a seat that needs you in its Rex tab and let Needs you open it (Show in Rex). `kiwi terminal status` says what's found and what's on; `kiwi rex on|off|status` still works this release. Terminal.app and the tmux helpers are gone: the daemon takes back the tmux helpers an older Kiwi downloaded (its line in your tmux.conf, `kiwi.tmux.conf`, the window marks and `prefix K`) the first time it starts.
 
 ## One session per task: `kiwi loop`
 

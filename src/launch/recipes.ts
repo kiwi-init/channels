@@ -89,10 +89,6 @@ export function canStart(harness: KnownHarness): boolean {
   return harness in RECIPES;
 }
 
-export function harnessLabel(harness: KnownHarness): string {
-  return RECIPES[harness]?.label ?? harness;
-}
-
 export function typedPrompt(harness: KnownHarness): ((screen: string) => Screen) | null {
   return RECIPES[harness]?.typed ?? null;
 }

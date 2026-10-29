@@ -1,7 +1,7 @@
 import type { HookHarness, HookState } from "@kiwi/core/harnesses.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
 import type { GithubNote, Step, StepReply } from "@kiwi/core/protocol.ts"
-import type { TerminalId, TerminalRow } from "@kiwi/core/terminals.ts"
+import type { PlacedSeat, TerminalId, TerminalRow } from "@kiwi/core/terminals.ts"
 
 export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "grok" | "kimi" | "mimo" | "pi" | "grok-bot" | "zcode" | "other"
 
@@ -56,7 +56,7 @@ export interface Person {
   load?: Load
   readOnly?: boolean
   wakes?: boolean
-  seat?: "rex" | "tmux" | "hosted"
+  seat?: PlacedSeat["place"]
   addsAgents?: boolean
   answersDecisions?: boolean
   lastSeen: number
@@ -594,8 +594,7 @@ export interface Actions {
   savePersonalities(list: Personality[]): void
   setHooks(harness: HookHarness, on: boolean): void
   checkComputer(): Promise<Finding[] | null>
-  preferTerminal(id: TerminalId): void
-  setTerminalHelpers(id: Exclude<TerminalId, "app">, on: boolean): void
+  setTerminalHelpers(id: TerminalId, on: boolean): void
   setContextLine(on: boolean): void
   computerSettings(id: string): Promise<[string, string[]][]>
 }
@@ -612,7 +611,6 @@ export interface AgentStarts {
   folders: string[]
   launch: boolean
   bypass: boolean
-  prefer: TerminalId
   terminals: TerminalRow[]
 }
 

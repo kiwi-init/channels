@@ -17,6 +17,7 @@ import { activityEnv, reachOf, readsRex, seatRecordFor, wakeOn, type Attached } 
 import { readRexInto } from "./rex-reads.ts";
 import type { RexActivity, RexPlace, SeatPlace, TerminalPlugin } from "../terminals/plugin.ts";
 import { helpersOn, marking, remoteBypassOn, terminalPlugin } from "../terminals/registry.ts";
+import { dropTmuxHelpers } from "../terminals/tmux/leftovers.ts";
 import { pruneHookFiles } from "../hooks/delivered.ts";
 import { launchFolders, seatFolders } from "../launch/folders.ts";
 import { hooksRows } from "../hooks/install/extra.ts";
@@ -102,6 +103,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
 
   const hosted = new HostedTmux(dir);
   void hosted.resume().catch(() => {});
+  void dropTmuxHelpers().catch(() => {});
   const seats = new Map<string, Seat>();
   const admitter = startAdmitter(() => {
     const m = loadPairedMachine();

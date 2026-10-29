@@ -30,7 +30,7 @@ export function rexApi(place: RexPlace, method: string, args: Record<string, unk
   return r.status === 0 ? parseJson(r.stdout) : null;
 }
 
-export const REX_TERMINAL = "com.superlogical.terminal";
+const REX_TERMINAL = "com.superlogical.terminal";
 
 function blockCall(place: RexPlace, method: string, args: Record<string, unknown>, bin: string | null = rexBinary(), timeout = 5_000): unknown {
   return rexApi(place, `${REX_TERMINAL}.${method}`, { block_id: place.block, args }, bin, true, timeout);
