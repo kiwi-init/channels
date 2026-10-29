@@ -138,6 +138,7 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
     });
     yield* hooksFirst(recipe);
     if (recipe.screen) clearTypedPane();
+    const mode = terminalMode();
     const started = Date.now();
     const child = Bun.spawn(argv, { cwd: process.cwd(), env: childEnv(), stdin: "inherit", stdout: "inherit", stderr: "inherit" });
     stop.busy = true;
@@ -165,6 +166,7 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
           if (!exited) child.kill("SIGKILL");
           yield* Effect.promise(() => child.exited);
         }
+        restoreTerminal(mode);
         const stopped = strays.size ? stopStrays(strays) : 0;
         if (stopped) yield* say(`stopped ${stopped} kiwi listener${stopped > 1 ? "s" : ""} the session left running`);
         stop.busy = false;
@@ -223,6 +225,17 @@ function tellWait(s: AgentSession, state: ChannelState, me: string, w: Work, ses
     wait.tellAt = sent ? null : now + WAIT_TELL_MS;
     yield* say(sent ? `${head}; told ${to.join(", ")}` : `${head}; couldn't tell ${to.join(", ")}, trying again in ${Math.round(WAIT_TELL_MS / 60_000)} minutes`);
   });
+}
+
+function terminalMode(): string | null {
+  if (!process.stdin.isTTY) return null;
+  const saved = Bun.spawnSync(["stty", "-g"], { stdin: "inherit", stdout: "pipe", stderr: "ignore" });
+  const mode = saved.stdout.toString().trim();
+  return saved.exitCode === 0 && mode ? mode : null;
+}
+
+function restoreTerminal(mode: string | null): void {
+  if (mode) Bun.spawnSync(["stty", mode], { stdin: "inherit", stdout: "ignore", stderr: "ignore" });
 }
 
 function clearTypedPane(): void {
