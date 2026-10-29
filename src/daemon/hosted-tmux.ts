@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import { chmodSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { loginPath, loginShell } from "../launch/shell.ts";
+import { OWN_TMUX_DIR } from "@kiwi/core/terminals.ts";
 import type { Pane, PlaceRequest, Placed } from "../terminals/plugin.ts";
 import { loginArgv, SESSION_MARKERS } from "../terminals/shared/launch.ts";
 import { run, said, type Ran } from "../terminals/shared/run.ts";
@@ -13,6 +14,7 @@ export const HOSTED_SESSION = "_kiwi";
 const PAUSE_AFTER_S = 5;
 const MIN_TMUX: readonly [number, number] = [3, 2];
 const STATE_FILE = "hosted-tmux.json";
+const OWN_TMUX = /^tmux-(\d+)\.(\d+)([a-z]?)$/;
 const CONF_FILE = "hosted-tmux.conf";
 const REATTACH_MS = 1_000;
 const WINDOW_FORMAT = "#{window_id}\t#{pane_id}\t#{pane_pid}";
@@ -74,8 +76,29 @@ export function privateDir(path: string, user = uid()): void {
   if ((st.mode & 0o077) !== 0) chmodSync(path, 0o700);
 }
 
-export async function findTmux(env: Record<string, string | undefined> = process.env): Promise<HostedTmuxBin | null> {
-  const bins = [env.KIWI_TMUX, Bun.which("tmux", { PATH: await loginPath() })].filter((b): b is string => !!b);
+export function ownTmux(home: string): string[] {
+  let names: string[];
+  try {
+    names = readdirSync(join(home, OWN_TMUX_DIR));
+  } catch {
+    // No app has put its tmux in this home.
+    return [];
+  }
+  const rank = (name: string): [number, number, string] => {
+    const m = OWN_TMUX.exec(name);
+    return m ? [Number(m[1]), Number(m[2]), m[3] ?? ""] : [-1, -1, ""];
+  };
+  return names
+    .filter((name) => OWN_TMUX.test(name))
+    .sort((a, b) => {
+      const [x, y] = [rank(a), rank(b)];
+      return y[0] - x[0] || y[1] - x[1] || y[2].localeCompare(x[2]);
+    })
+    .map((name) => join(home, OWN_TMUX_DIR, name));
+}
+
+export async function findTmux(home: string, env: Record<string, string | undefined> = process.env): Promise<HostedTmuxBin | null> {
+  const bins = [env.KIWI_TMUX, ...ownTmux(home), Bun.which("tmux", { PATH: await loginPath() })].filter((b): b is string => !!b);
   for (const bin of bins) {
     const version = (await run([bin, "-V"])).stdout.trim();
     if (tmuxHosts(version)) return { bin, version };
@@ -92,7 +115,7 @@ export class HostedTmux {
 
   constructor(
     readonly home: string,
-    private readonly find: () => Promise<HostedTmuxBin | null> = findTmux,
+    private readonly find: (home: string) => Promise<HostedTmuxBin | null> = findTmux,
   ) {}
 
   state(): HostedState | null {
@@ -133,7 +156,7 @@ export class HostedTmux {
       await this.attach(known);
       return known;
     }
-    const found = await this.find();
+    const found = await this.find(this.home);
     if (!found) throw new Error(`hosted agents need tmux ${MIN_TMUX.join(".")} or newer: install it, or point KIWI_TMUX at one`);
     const st: HostedState = { ...found, socket: hostedSocket(this.home) };
     privateDir(dirname(st.socket));

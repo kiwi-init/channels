@@ -35,12 +35,20 @@ chmod +x "$extract/Channels.AppImage"
 (cd "$extract" && ./Channels.AppImage --appimage-extract > /dev/null 2>&1)
 [ -x "$extract/squashfs-root/Channels/bin/launcher" ] || { bad "the AppImage didn't extract: no Channels/bin/launcher in it"; exit 1; }
 missing=""
-for f in "$extract"/squashfs-root/Channels/bin/*.so "$extract"/squashfs-root/Channels/bin/bun "$extract"/squashfs-root/Channels/bin/electrobun-launcher "$extract"/squashfs-root/Channels/bin/launcher; do
+for f in "$extract"/squashfs-root/Channels/bin/*.so "$extract"/squashfs-root/Channels/bin/bun "$extract"/squashfs-root/Channels/bin/electrobun-launcher "$extract"/squashfs-root/Channels/bin/launcher "$extract"/squashfs-root/Channels/Resources/tmux; do
   m=$(ldd "$f" 2> /dev/null | awk '/not found/ { print $1 }' | while read -r l; do [ -e "$extract/squashfs-root/Channels/bin/$l" ] || echo "$l"; done | tr '\n' ' ')
   [ -n "$m" ] && missing+="$(basename "$f"): $m; "
 done
 if [ -n "$missing" ]; then bad "libraries the app can't find on a stock install: $missing"; else ok "every library the app's binaries link is there on a stock install"; fi
 lib="$extract/squashfs-root/Channels/bin/libkiwi-shell.so"
+tmux="$extract/squashfs-root/Channels/Resources/tmux"
+sock=$(mktemp -d /tmp/kiwi-tmux.XXXXXX)/s
+if "$tmux" -S "$sock" new-session -d -s check -x 80 -y 24 'printf "kiwi-%s\n" ok; exec sleep 30' 2> "$out/logs/tmux.log" && sleep 1 && "$tmux" -S "$sock" capture-pane -p -t check 2>> "$out/logs/tmux.log" | grep -q kiwi-ok; then
+  ok "the app's own tmux ($("$tmux" -V)) runs an agent's window on a stock install"
+else
+  bad "the app's own tmux didn't run a window on a stock install: $(tail -n 3 "$out/logs/tmux.log" | tr '\n' ' ')"
+fi
+"$tmux" -S "$sock" kill-server 2> /dev/null
 chmod -R a+rX "$extract"
 
 install "${tools[@]}" || exit 1

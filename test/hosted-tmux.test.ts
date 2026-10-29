@@ -1,9 +1,10 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { OWN_TMUX_DIR } from "@kiwi/core/terminals.ts";
 import { loopArgv, readLoopStart, startLoop } from "../src/loop/start.ts";
-import { HOSTED_CONF, HOSTED_SESSION, HostedTmux, findTmux, hostedSocket, privateDir, tmuxHosts, type HostedState } from "../src/daemon/hosted-tmux.ts";
+import { HOSTED_CONF, HOSTED_SESSION, HostedTmux, findTmux, hostedSocket, ownTmux, privateDir, tmuxHosts, type HostedState } from "../src/daemon/hosted-tmux.ts";
 
 describe("the hosted tmux's settings", () => {
   test("the config keeps the server up with no sessions, keeps dead panes, and never resizes on its own", () => {
@@ -49,6 +50,39 @@ describe("the hosted tmux's settings", () => {
   });
 });
 
+describe("the tmux the app ships", () => {
+  const home = mkdtempSync(join(tmpdir(), "kiwi-own-tmux-"));
+  const own = join(home, OWN_TMUX_DIR);
+  const fake = (name: string, says: string): string => {
+    mkdirSync(own, { recursive: true });
+    const bin = join(own, name);
+    writeFileSync(bin, `#!/bin/sh\necho "${says}"\n`, { mode: 0o755 });
+    return bin;
+  };
+  afterAll(() => rmSync(home, { recursive: true, force: true }));
+
+  test.if(process.platform !== "win32")("a home with no copy has none, and copies are tried newest first, other files never", () => {
+    expect(ownTmux(home)).toEqual([]);
+    fake("tmux-3.7c", "tmux 3.7c");
+    fake("tmux-3.10", "tmux 3.10");
+    fake("tmux-3.8", "tmux 3.8");
+    fake("tmux-3.7", "tmux 3.7");
+    fake("tmux-3.8.new-1-x", "tmux 3.8");
+    fake("tmux", "tmux 3.8");
+    expect(ownTmux(home).map((bin) => basename(bin))).toEqual(["tmux-3.10", "tmux-3.8", "tmux-3.7c", "tmux-3.7"]);
+  });
+
+  test.if(process.platform !== "win32")("the daemon takes the app's copy before the person's, KIWI_TMUX before both, and skips one too old to host", async () => {
+    const newest = join(own, "tmux-3.10");
+    expect(await findTmux(home, { PATH: "/usr/bin:/bin" })).toEqual({ bin: newest, version: "tmux 3.10" });
+    const mine = fake("custom-tmux", "tmux 3.6");
+    expect(await findTmux(home, { KIWI_TMUX: mine })).toEqual({ bin: mine, version: "tmux 3.6" });
+    rmSync(own, { recursive: true, force: true });
+    fake("tmux-3.1", "tmux 3.1");
+    expect((await findTmux(home, {}))?.bin).not.toBe(join(own, "tmux-3.1"));
+  });
+});
+
 describe("a loop start's request", () => {
   test("names a channel, a seat and its folder, a loop harness and plain choices", () => {
     const start = { channel: "work", as: "ada", folder: "/w" };
@@ -78,7 +112,7 @@ describe("a loop start's request", () => {
   });
 });
 
-const tmux = process.platform === "win32" ? null : await findTmux({});
+const tmux = process.platform === "win32" ? null : await findTmux(join(tmpdir(), "kiwi-no-own-tmux"), {});
 
 describe("a hosted tmux server", () => {
   if (!tmux && process.env.GITHUB_ACTIONS) test("CI has tmux 3.2 or newer for these tests", () => expect(tmux).not.toBeNull());

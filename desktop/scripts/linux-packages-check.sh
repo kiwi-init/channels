@@ -9,7 +9,7 @@ cd "$dir"
 bun "$here/appimage-squashfs.ts" .
 img=$(ls Channels-*-linux-x86_64.AppImage)
 "./$img" --appimage-extract > /dev/null
-for p in AppRun channels-desktop.desktop channels-desktop.png Channels/bin/launcher Channels/bin/electrobun-launcher Channels/bin/bun Channels/Resources/kiwi.js Channels/Resources/app/bun/index.js Channels/Resources/app/bun/keys.js Channels/Resources/app/bun/message-box.js Channels/Resources/app/page/index.html Channels/Resources/app/views/internal/assets; do
+for p in AppRun channels-desktop.desktop channels-desktop.png Channels/bin/launcher Channels/bin/electrobun-launcher Channels/bin/bun Channels/Resources/kiwi.js Channels/Resources/tmux Channels/Resources/app/bun/index.js Channels/Resources/app/bun/keys.js Channels/Resources/app/bun/message-box.js Channels/Resources/app/page/index.html Channels/Resources/app/views/internal/assets; do
   [ -e "squashfs-root/$p" ] || { echo "$img lacks $p"; exit 1; }
 done
 for p in Channels/bin/bspatch Channels/bin/zig-zstd Channels/Resources/uninstall Channels/Channels.desktop Channels/Resources/app/views/internal/index.html; do
