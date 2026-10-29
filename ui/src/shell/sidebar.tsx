@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { roomProblem } from "@/lib/rooms"
+import { liveOf, restOf } from "~/doing"
 
 import { Avatar, Count, cx, Heading, IconButton, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
@@ -167,19 +168,22 @@ const roomName = (typed: string): string => typed.trim().toLowerCase().replace(/
 const rank = (p: Person): number => (p.role === "lead" ? 0 : p.presence === "offline" ? 2 : 1)
 
 export function statusOf(p: Person, channel: Channel): string {
-  if (p.typing) return "typing…"
-  if (p.doing) {
-    const t = channel.tasks.find((t) => t.id === p.doing)
-    if (t) return `T${t.id} ${STATUS_WORDS[t.status]}`
-  }
+  const live = liveOf(p)
+  if (live) return live.text
+  const t = taskOf(p, channel)
+  if (t) return `T${t.id} ${STATUS_WORDS[t.status]}`
   if (p.presence === "offline") return `offline · ${ago(p.lastSeen)}`
   if (p.kind === "human") return p.presence === "away" ? "away" : "online"
-  return "idle"
+  return restOf(p)
 }
 
+const taskOf = (p: Person, channel: Channel) => (p.load?.doing[0] !== undefined ? channel.tasks.find((t) => t.id === p.load?.doing[0]) : undefined)
+
 function toneOf(p: Person, channel: Channel): string | false {
-  const t = p.doing ? channel.tasks.find((t) => t.id === p.doing) : undefined
-  return !p.typing && !!t && `is-${t.status}`
+  const live = liveOf(p)
+  if (live) return live.busy ? "is-doing" : "is-waiting"
+  const t = taskOf(p, channel)
+  return !!t && `is-${t.status}`
 }
 
 function Member({ person, channel }: { person: Person; channel: Channel }) {
@@ -198,7 +202,7 @@ function Member({ person, channel }: { person: Person; channel: Channel }) {
           {person.you && <span className="side-role"> you</span>}
           {person.role && <span className="side-role"> {person.role}</span>}
         </span>
-        <span className={cx("side-status", person.typing && "is-typing", toneOf(person, channel))}>{statusOf(person, channel)}</span>
+        <span className={cx("side-status", toneOf(person, channel))}>{statusOf(person, channel)}</span>
       </button>
     </li>
   )

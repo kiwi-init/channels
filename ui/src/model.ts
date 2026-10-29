@@ -13,6 +13,20 @@ type Kind = "human" | "agent"
 
 export type Color = "red" | "orange" | "yellow" | "green" | "teal" | "blue" | "indigo" | "violet" | "pink" | "brown"
 
+export interface Activity {
+  state: "working" | "waiting" | "idle"
+  tool?: string
+  since?: number
+  context?: { used: number; window?: number }
+}
+
+export interface Load {
+  level: "free" | "busy" | "overloaded"
+  doing: number[]
+  queued: number[]
+  waiting: number[]
+}
+
 export interface Person {
   name: string
   kind: Kind
@@ -23,16 +37,21 @@ export interface Person {
   owner: boolean
   you: boolean
   presence: Presence
-  typing: boolean
+  activity?: Activity
+  reach?: "listening" | "running" | "wakes"
   harness?: Harness
   runs?: string
   model?: string
   machine?: string
-  folder?: string
+  specs?: string
+  tools?: string[]
+  repo?: string
+  branch?: string
+  outside?: boolean
   persona?: string
   sponsor?: string
   about?: string
-  doing?: number
+  load?: Load
   readOnly?: boolean
   wakes?: boolean
   seat?: "rex" | "tmux"
