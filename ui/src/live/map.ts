@@ -367,6 +367,28 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
   return out
 }
 
+export function leftOutOf(state: ChannelState, messages: readonly Wire[], me: string): Message[] {
+  const out: Message[] = []
+  for (const m of messages) {
+    const trust = state.trust.get(m.seq)
+    if (!ignored(trust) || isReaction(m)) continue
+    const why = state.rejected.get(m.seq) ?? (trust === "forged" ? `not signed by ${m.from}'s key` : "not allowed here")
+    const leftOut = `${trust === "forged" ? "Forged" : "Refused"}: ${why}`
+    if (m.kind === "event")
+      out.push({
+        seq: m.seq,
+        from: m.from,
+        at: m.ts,
+        text: `${nameIn(state, m.from)} ${describeEvent(m, state, (handle) => nameIn(state, handle))}`,
+        where: { kind: "room", room: GENERAL_ROOM },
+        system: true,
+        leftOut,
+      })
+    else out.push({ seq: m.seq, from: m.from, at: m.ts, text: m.body, where: whereOf(state, m, me), leftOut })
+  }
+  return out
+}
+
 function reactionsOf(state: ChannelState, seq: number): Reaction[] {
   const on = state.reactions.get(seq)
   if (!on?.size) return []

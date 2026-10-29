@@ -13,7 +13,7 @@ import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@/lib/threads"
 import { useAskChime } from "~/live/alerts"
 import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
-import { asksOf, directsOf, groupsOf, messagesOf, formerOf, nextOf, peopleOf, roomsOf, tasksOf, theirsOf, type Pending } from "~/live/map"
+import { asksOf, directsOf, groupsOf, leftOutOf, messagesOf, formerOf, nextOf, peopleOf, roomsOf, tasksOf, theirsOf, type Pending } from "~/live/map"
 import { iconUrl } from "~/live/icon"
 import { usePinsHere } from "~/live/pins"
 import { usePublishFace } from "~/live/face"
@@ -110,6 +110,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const pins = usePinsHere(requests)
   const asks = useMemo(() => asksOf(state, messages, me, isOwner, requests, roster, pins), [state, messages, me, isOwner, requests, roster, pins])
   const mapped = useMemo(() => kept(code, messagesOf(state, messages, me, asks.askOf, pictures, pending)), [code, state, messages, me, asks.askOf, pictures, pending])
+  const leftOut = useMemo(() => (isOwner ? leftOutOf(state, messages, me) : []), [isOwner, state, messages, me])
   const tasks = useMemo(() => tasksOf(state, asks.held, me, messages), [state, asks.held, me, messages])
   const taskGroups = useMemo(() => groupsOf(state, me), [state, me])
   const from = roomsFrom(roomId)
@@ -151,6 +152,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       former,
       nicknames,
       messages: mapped,
+      ...(leftOut.length ? { leftOut } : {}),
       tasks,
       taskGroups,
       asks: asks.asks,
@@ -181,6 +183,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       former,
       nicknames,
       mapped,
+      leftOut,
       tasks,
       taskGroups,
       asks.asks,
