@@ -224,6 +224,11 @@ fun ConversationList(model: AppModel, open: (Spot) -> Unit, settings: () -> Unit
         PullToRefreshBox(isRefreshing = refreshing, onRefresh = { refreshing = true }, modifier = Modifier.weight(1f).fillMaxWidth()) {
             val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             LazyColumn(Modifier.fillMaxSize().imePadding(), contentPadding = PaddingValues(top = 6.dp, bottom = 24.dp + bottom)) {
+                model.unsaved?.let { why ->
+                    item(key = "unsaved") {
+                        Text(why, style = MaterialTheme.typography.bodyMedium, color = tone.alert, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
+                    }
+                }
                 if (model.channels.isEmpty()) {
                     item(key = "empty") { Empty(model) }
                 } else if (rows.isEmpty() && hits.isEmpty()) {

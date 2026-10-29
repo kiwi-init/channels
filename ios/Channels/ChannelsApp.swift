@@ -19,7 +19,7 @@ struct ChannelsApp: App {
                 .onChange(of: scene) { _, now in
                     switch now {
                     case .active:
-                        model.nudge()
+                        Task { await model.awake() }
                         Task { await lock.back() }
                     case .background:
                         lock.left()

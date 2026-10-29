@@ -13,6 +13,8 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
+class VaultException(why: String, cause: Throwable) : Exception(why, cause)
+
 class Vault(context: Context) {
     private val file = AtomicFile(File(context.noBackupFilesDir, "linked.bin"))
 
@@ -35,28 +37,27 @@ class Vault(context: Context) {
         }
     }
 
-    fun save(data: ByteArray): Boolean {
+    fun save(data: ByteArray) {
         val out = try {
             file.startWrite()
         } catch (e: IOException) {
-            // Nothing was written; the keys stay as they were and the next save tries again.
-            return false
+            // Nothing was written; the keys stay as they were and the caller says so.
+            throw VaultException("the disk refused it (${e.message ?: "no reason given"})", e)
         }
-        return try {
+        try {
             val cipher = Cipher.getInstance(MODE)
             cipher.init(Cipher.ENCRYPT_MODE, key())
             out.write(cipher.iv)
             out.write(cipher.doFinal(data))
             file.finishWrite(out)
-            true
         } catch (e: GeneralSecurityException) {
-            // The keystore refused: the old file stays whole and the next save tries again.
+            // The keystore refused: the old file stays whole and the caller says so.
             file.failWrite(out)
-            false
+            throw VaultException("the keystore refused it (${e.message ?: "no reason given"})", e)
         } catch (e: IOException) {
-            // The disk refused: the old file stays whole and the next save tries again.
+            // The disk refused: the old file stays whole and the caller says so.
             file.failWrite(out)
-            false
+            throw VaultException("the disk refused it (${e.message ?: "no reason given"})", e)
         }
     }
 
