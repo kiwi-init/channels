@@ -501,6 +501,7 @@
 }
 
 .md-mermaid-tools.is-code {
+  top: 8px;
   right: 58px;
 }
 
