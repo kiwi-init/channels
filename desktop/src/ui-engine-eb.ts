@@ -85,7 +85,7 @@ export function channelUi(w: UiWindow): ChannelUi {
       prefix: UI_PREFIX,
       builtIn: { uiVersion: `built-in-${pkg.version}`, seq: KIWI_UI_SEQ, files: builtInFiles },
       show: (ui) => w.show(new TextDecoder().decode(ui.index)),
-      canSwap: () => devChannel !== null || accepted,
+      canSwap: () => devChannel !== null || accepted || !w.win.isVisible(),
     },
   });
   let accepted = false;

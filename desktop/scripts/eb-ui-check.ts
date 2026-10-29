@@ -38,14 +38,20 @@ const marked = (index: string, mark: string): string => index.replace(/<head([^>
 
 let manifest: UiManifest | null = null;
 const bundles = new Map<string, Uint8Array>();
+let held: Promise<void> = Promise.resolve();
+let release = (): void => {};
+const holdBundles = (): void => {
+  held = new Promise((resolve) => (release = resolve));
+};
 const channel = Bun.serve({
   hostname: "127.0.0.1",
   port: 0,
+  idleTimeout: 0,
   fetch(request) {
     const name = new URL(request.url).pathname.slice(1);
     if (name === "manifest.json") return manifest ? Response.json(manifest) : new Response("none yet", { status: 404 });
     const bundle = bundles.get(name);
-    return bundle ? new Response(new Blob([bundle as Uint8Array<ArrayBuffer>])) : new Response("not found", { status: 404 });
+    return bundle ? held.then(() => new Response(new Blob([bundle as Uint8Array<ArrayBuffer>]))) : new Response("not found", { status: 404 });
   },
 });
 
@@ -109,11 +115,13 @@ try {
   });
 
   const a = publish("a");
+  holdBundles();
   await run(async (d) => {
     await d.main("closeWindow");
+    release();
     await shows(d, "a");
     if (await visible(d)) problems.push("swapping to a new UI while the window was closed showed the window");
-    console.log("published a, closed the window: a, the window still closed");
+    console.log("published a, closed the window, then a arrived: a, the window still closed");
   });
 
   await run(async (d) => {
@@ -128,9 +136,11 @@ try {
     files.set("index.html", encode(index.replace(/<script type="module"[^>]*><\/script>/, '<script type="module" src="/assets/check-boom.js"></script>')));
     files.set("assets/check-boom.js", encode('window.kiwi.uiError("Error: check-boom");'));
   });
+  holdBundles();
   await run(async (d) => {
     await shows(d, "a");
     await d.main("closeWindow");
+    release();
     await until("b banned", 60_000, async () => (engineState()?.bad[b.sha256] ? true : null));
     await shows(d, "a");
     console.log(`published b, which fails at boot: banned (${engineState()?.bad[b.sha256]}), back on a`);
