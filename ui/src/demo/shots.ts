@@ -22,6 +22,7 @@ export const SHOTS: Record<string, Shot> = {
   theirs: kiwi({ where: { kind: "theirs", between: ["atlas", "win"] } }),
   room: kiwi({ where: { kind: "room", room: "releases" } }),
   tasks: kiwi({ tab: "tasks" }),
+  agents: kiwi({ tab: "agents" }),
   task: kiwi({ tab: "tasks", panel: { kind: "task", task: 12 } }),
   "task-working": kiwi({ panel: { kind: "task", task: 10 } }),
   "task-review": kiwi({ tab: "tasks", panel: { kind: "task", task: 14 } }),

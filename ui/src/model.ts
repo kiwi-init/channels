@@ -9,6 +9,8 @@ type Presence = "online" | "away" | "offline"
 
 export type TaskStatus = "todo" | "doing" | "review" | "done" | "waiting"
 
+type Stage = "open" | "building" | "proving" | "red" | "yours" | "done" | "dropped"
+
 type Kind = "human" | "agent"
 
 export type Color = "red" | "orange" | "yellow" | "green" | "teal" | "blue" | "indigo" | "violet" | "pink" | "brown"
@@ -70,9 +72,10 @@ export interface PullRequest {
   url: string
   state: "open" | "draft" | "merged" | "closed"
   checks: "pass" | "fail" | "running" | "none"
+  ticks?: { passed: number; running: number; failed: readonly string[] }
+  mergedAt?: number
   additions?: number
   deletions?: number
-  tally?: { passed: number; failed: readonly string[]; running: number }
 }
 
 interface TaskNote {
@@ -133,6 +136,8 @@ export interface Task {
   createdAt: number
   updatedAt: number
   pr?: PullRequest
+  stage?: Stage
+  release?: string
   notes: TaskNote[]
   rounds: ReviewRound[]
   history: TaskEvent[]
@@ -212,6 +217,7 @@ export interface Message {
   reactions?: Reaction[]
   ask?: string
   system?: boolean
+  done?: true
   pending?: boolean
   failed?: string
   mentionsYou?: boolean
@@ -332,6 +338,8 @@ export interface Channel {
   lead?: string
   goal?: string
   facts?: Fact[]
+  next?: string
+  mergedAt?: number[]
   hold?: { note?: string; by: string; at: number }
   newMembers?: "read" | "write"
   newPowers?: Powers
