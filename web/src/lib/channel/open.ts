@@ -1,8 +1,8 @@
-import type { Message } from "@kiwi/core/protocol.ts"
+import { olderRules, type Message } from "@kiwi/core/protocol.ts"
 import type { FoldBase } from "@kiwi/core/state.ts"
 import type { OpenedCache } from "../history"
 import { planReload } from "../history-plan"
-import { baseFrom, startsWhole, usableBase } from "./base-plan"
+import { baseFrom, newestRules, startsWhole, usableBase } from "./base-plan"
 import { keptBaseUpTo, type Kept } from "./kept"
 import { heldWindow, type Warm } from "./warm"
 
@@ -73,8 +73,8 @@ export async function openChannel(steps: OpenSteps, was: Warm | undefined, limit
   const kept = was?.base ? null : await steps.kept()
   const keptBase = usableBase(keptBaseUpTo(kept, head), from)
   const warm = usableBase(was?.base ?? null, from) ?? keptBase
-  const snap = from > 0 && !warm ? await steps.snapshot() : null
-  const base = usableBase(snap, from) ?? keptBase
+  const snap = (from > 0 && !warm) || (warm !== null && olderRules(warm)) ? await steps.snapshot() : null
+  const base = newestRules([usableBase(snap, from), keptBase, warm])
   steps.paint(cached, base, head)
   if (await rotated) await steps.roster()
   return { head, since, whole: startsWhole(head, limit, since, firstSeq, base ?? warm) }

@@ -377,6 +377,30 @@
   border: 0 !important;
 }
 
+.md-sort {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.md-sort > span:last-child {
+  color: var(--ink-3);
+  font-size: var(--t-stamp);
+}
+
+.md-sort:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
 .md a {
   cursor: pointer;
 }
@@ -400,6 +424,35 @@
 
 .md pre code {
   font-size: inherit;
+}
+
+.md code[data-copy] {
+  cursor: copy;
+}
+
+.md code[data-copy]:hover {
+  background-color: var(--raise-2) !important;
+}
+
+.md code[data-copy]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.md pre.code-more {
+  mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+}
+
+.msg:hover .md pre.code-more[role="button"],
+.md pre.code-more[role="button"]:focus-visible {
+  mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent), linear-gradient(#000, #000);
+  mask-size:
+    auto,
+    64px 32px;
+  mask-position:
+    0 0,
+    top right;
+  mask-repeat: no-repeat;
 }
 
 .md img[role="button"] {

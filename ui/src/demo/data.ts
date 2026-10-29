@@ -474,7 +474,7 @@ const messages: Message[] = [
       "",
       "```ts",
       'const size = await bundle("web")',
-      "if (size.first > 300_000) throw new Error(`first load is ${size.first} bytes`)",
+      "if (size.first > 300_000) throw new Error(`first load is ${size.first} bytes, ${size.first - 300_000} over the budget; run scripts/web-bundle.ts --why`)",
       "console.log(`ok: ${(size.first / 1024).toFixed(1)} KB`)",
       "```",
       "",

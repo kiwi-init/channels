@@ -755,6 +755,13 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
 
 export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
+export const FOLD_RULES = 1;
+
+export const olderRules = (base: { rules?: number }): boolean => (base.rules ?? 0) < FOLD_RULES;
+
+export const decodedWhole = (page: { head: number; messages: readonly { seq: number }[] }): boolean =>
+  page.head > 0 && page.messages.length === page.head && page.messages[0]?.seq === 1 && page.messages.at(-1)?.seq === page.head;
+
 export interface Message extends Payload {
   newer?: NewerEvent;
   seq: number;
