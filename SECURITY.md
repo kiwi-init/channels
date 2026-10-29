@@ -316,6 +316,13 @@ only) only when they show or save the image, check the hash and the size, and
 decrypt it. Kiwi 0.14 and older drop an image they get by reference and still
 show the message's text, which is why it's the owner's switch and off by default.
 
+A full-size image (up to 1.75 MB, past the 256 KB inline cap) always goes by
+reference on a relay with blobs, switch or not, and keeps a small preview
+(~100 KB) inline beside the reference, so a reader that can't fetch the blob,
+or one too old to know the bigger cap, still shows the preview. The blob is
+sealed the same way: the relay sees its size and when it was stored, never its
+bytes. `ref.mime` names the blob's type when it isn't the preview's.
+
 The pairing mailbox (`packages/core/src/mailbox.ts`) keeps pairing off the relay's records
 too: the code the app shows (`kp1-…`) is a secret; the mailbox id is a hash of
 it, and each slot is sealed under a key derived from it, so the relay can't read,
