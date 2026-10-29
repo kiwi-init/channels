@@ -283,9 +283,11 @@ jobs:
       - name: the app carries its own tmux, and it runs
         if: ${{ !cancelled() }}
         run: |
-          set -- desktop/release-eb/build/*-macos-*/*.app/Contents/Resources/tmux
-          [ -x "$1" ] || { echo "the app has no Contents/Resources/tmux"; exit 1; }
-          for t in "$@"; do "$t" -V; done
+          into=$(mktemp -d)
+          app=$(INTO="$into" bun -e 'import { payloadOf, shippedApp } from "./desktop/scripts/eb-app.ts"; console.log(shippedApp(payloadOf("desktop/release-eb/artifacts"), process.env.INTO ?? ""))')
+          [ -x "$app/Contents/Resources/tmux" ] || { echo "the shipped app has no Contents/Resources/tmux"; exit 1; }
+          "$app/Contents/Resources/tmux" -V
+          rm -rf "$into"
       - if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-seal-check.ts
       - name: the launcher keeps BUN_*, NODE_*, DYLD_* and JSC_* out of the app
