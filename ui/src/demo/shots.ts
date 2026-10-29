@@ -87,6 +87,7 @@ export const SHOTS: Record<string, Shot> = {
   "settings-computers": kiwi({ page: "settings", section: "computers" }),
   "settings-link-phone": kiwi({ page: "settings", section: "computers" }),
   "settings-add-computer": kiwi({ page: "settings", section: "computers" }),
+  "settings-link-phone-stuck": { scenario: "link-stuck", channel: "kiwi", nav: { page: "settings", section: "computers" } },
   "settings-notifications": kiwi({ page: "settings", section: "notifications" }),
   "settings-updates": kiwi({ page: "settings", section: "updates" }),
   "settings-update-ready": { scenario: "update-ready", channel: "kiwi", nav: { page: "settings", section: "updates" } },

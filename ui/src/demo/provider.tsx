@@ -185,6 +185,7 @@ export type Scenario =
   | "enroll-desktop-digits"
   | "devices-forgotten"
   | "forgot-here"
+  | "link-stuck"
 
 function initial(scenario: Scenario, look: Partial<Prefs>): State {
   const prefs = { ...DEMO_PREFS, ...look }
@@ -212,6 +213,7 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
   if (scenario === "updates")
     return { account: { ...DEMO_ACCOUNT, uiUpdate: { version: "dev-1542" }, update: { version: "2026.10.7", ready: true, state: "ready" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "update-ready") return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.7", ready: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
+  if (scenario === "link-stuck") return { account: { ...DEMO_ACCOUNT, enrollError: "this app isn't in your device list any more" }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "update-available") return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.8", ready: false, state: "available" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "enroll" || scenario === "enroll-digits")
     return {

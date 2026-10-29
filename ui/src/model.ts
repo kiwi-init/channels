@@ -420,6 +420,7 @@ export interface Account {
   keysUnsealed?: boolean
   desktop?: boolean
   enrollAsk?: EnrollAsk
+  enrollError?: string
   devices?: Device[]
   forgotten?: { label: string; by: string; at: number }[]
   forgotHere?: { by: string }

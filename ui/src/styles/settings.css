@@ -378,6 +378,10 @@
   font: var(--t-meta) var(--ui);
 }
 
+.set-pair-wait.is-stuck {
+  color: var(--alert);
+}
+
 .set-harness {
   display: flex;
   align-items: center;
