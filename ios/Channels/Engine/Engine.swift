@@ -22,6 +22,7 @@ enum Push {
     case gone(String)
     case log(String)
     case launch(String, LaunchSeen)
+    case removed(String)
 }
 
 @MainActor
@@ -99,6 +100,8 @@ final class Engine: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
             if let code = object["code"] as? String { onPush(.gone(code)) }
         case "log":
             if let line = object["line"] as? String { onPush(.log(line)) }
+        case "removed":
+            onPush(.removed(object["by"] as? String ?? "another device"))
         case "launch":
             if let launch = object["launch"] as? String, let stage = object["stage"] as? String, let name = object["name"] as? String {
                 onPush(.launch(launch, LaunchSeen(stage: stage, name: name)))

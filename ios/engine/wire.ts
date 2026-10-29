@@ -60,6 +60,7 @@ export type Push =
   | { type: "room"; room: RoomView }
   | { type: "gone"; code: string }
   | { type: "log"; line: string }
+  | { type: "removed"; by: string }
   | { type: "launch"; code: string; launch: string; stage: "asked" | "joined"; name: string };
 
 export type Connection = "connecting" | "live" | "reconnecting";

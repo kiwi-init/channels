@@ -1,5 +1,5 @@
 import { b64url, decodeJoinCode } from "@kiwi/core/crypto.ts";
-import { claimDevice } from "@kiwi/core/devices.ts";
+import { claimDevice, readDeviceList, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import type { EnrollGrant } from "@kiwi/core/enroll.ts";
 import type { HarnessRow } from "@kiwi/core/harnesses.ts";
 import { askToLink, dropLink, linkDigits, newLinkKeys, openLink, readLinkCode, waitForLinkChunks, type LinkCode, type LinkKeys } from "@kiwi/core/link.ts";
@@ -136,9 +136,37 @@ function openRoom(ring: Keyring, seat: ChannelIdentityView): void {
     launch: (launch, seen) => post({ type: "launch", code, launch, stage: seen.stage, name: seen.name }),
     person: personPk,
     log: (line) => post({ type: "log", line }),
+    devices: heardList,
   });
   rooms.set(code, room);
   void room.start();
+}
+
+let taking: Promise<unknown> = Promise.resolve();
+
+function heardList(links: unknown): void {
+  taking = taking.then(() => takeList(links)).catch(() => null);
+}
+
+const signerLabel = (list: DeviceList, pk: string): string =>
+  pk === list.person ? "your person key" : (list.devices.find((d) => d.device === pk)?.label ?? list.revokes.find((r) => r.device === pk)?.label ?? "another device");
+
+async function takeList(links: unknown): Promise<void> {
+  const device = saved?.device;
+  if (!device || !Array.isArray(links)) return;
+  const read = await readDeviceList(links);
+  if (!read.ok || read.list.person !== device.person.pk) return;
+  const kept = await readDeviceList(device.links);
+  if ((kept.ok && read.list.version <= kept.list.version) || saved?.device !== device) return;
+  if (read.list.revoked.includes(device.key.pk)) {
+    const by = read.list.revokes.find((r) => r.device === device.key.pk)?.by ?? "";
+    const relay = saved.relay;
+    stopAll();
+    saved = { relay, person: null, seats: [], device: null };
+    post({ type: "removed", by: signerLabel(read.list, by) });
+    return;
+  }
+  keep({ ...saved, device: { ...device, links: links as DeviceLink[] } });
 }
 
 const asking = (s: ChannelIdentityView): boolean => !!s.code && !!s.requestId && !s.access;

@@ -237,6 +237,10 @@ class AppModel(private val app: Application) {
             is Push.Gone -> rooms.remove(push.code)
             is Push.Log -> Unit
             is Push.Launch -> launches[push.launch] = LaunchSeen(push.stage, push.name)
+            is Push.Removed -> {
+                unlink()
+                linking = Linking.Failed("This phone was removed from your devices by ${push.by}, so it deleted its keys and channels. Sign in to add it again.")
+            }
         }
     }
 

@@ -202,6 +202,10 @@ owner-signed **delegation** lets the `kiwi` daemon admit its own computer's agen
   longer list replaces the one in `machine.json`. If the list revokes this computer, it drops
   `machine.device`, so its agents stop carrying a device claim. It keeps its seat keys: owners cut
   those. The daemon keeps no WorkOS session after `kiwi login`, so channel logs are its only source.
+- On phones (T1007, `ios/engine`, shared by iOS and Android): the same, from the channels the phone
+  reads. A list that revokes the phone stops the engine, and the app wipes its vault (the device key,
+  the links, the person and the channels it joined) and says on the sign-in screen which device
+  removed it.
 
 **Expiry.**
 
