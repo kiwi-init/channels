@@ -51,17 +51,56 @@ export function withKiwiDefault(text: string | null): string | null {
   return `${body}${body ? "\n" : ""}${DEFAULTS}\n${KIWI_HANDLER}=${ENTRY_FILE}\n`;
 }
 
-const readOr = (file: string): Buffer | null => {
+const STRING_ESCAPES: Record<string, string> = { s: " ", n: "\n", t: "\t", r: "\r", "\\": "\\" };
+
+export function execArgs(value: string): string[] | null {
+  const line = value.replace(/\\(.)/g, (whole, c: string) => STRING_ESCAPES[c] ?? whole);
+  const args: string[] = [];
+  let arg = "";
+  let inArg = false;
+  let quoted = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line.charAt(i);
+    if (quoted) {
+      if (c === "\\" && i + 1 < line.length && '"`$\\'.includes(line.charAt(i + 1))) arg += line.charAt(++i);
+      else if (c === '"') quoted = false;
+      else arg += c;
+    } else if (c === '"') {
+      quoted = true;
+      inArg = true;
+    } else if (c === " ") {
+      if (inArg) args.push(arg);
+      arg = "";
+      inArg = false;
+    } else {
+      arg += c;
+      inArg = true;
+    }
+  }
+  if (quoted) return null;
+  if (inArg) args.push(arg);
+  return args.map((a) => a.replace(/%%/g, "%"));
+}
+
+export function launchedFile(args: string[]): string | null {
+  const rest = args[0] === "env" ? args.slice(1) : args;
+  return rest.find((a) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(a)) ?? null;
+}
+
+const isMissing = (e: unknown): boolean => e instanceof Error && "code" in e && e.code === "ENOENT";
+
+const readIfThere = (file: string): Buffer | null => {
   try {
     return fs.readFileSync(file);
-  } catch {
-    // A missing or unreadable file is written afresh.
-    return null;
+  } catch (e) {
+    // Only a file that isn't there is written afresh; one that can't be read is never replaced.
+    if (isMissing(e)) return null;
+    throw e;
   }
 };
 
 function writeIfChanged(file: string, bytes: Buffer, wrote: string[]): void {
-  const now = readOr(file);
+  const now = readIfThere(file);
   if (now && now.equals(bytes)) return;
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.tmp`;
@@ -80,8 +119,18 @@ function otherEntryFor(applications: string, appImage: string): string | null {
   }
   for (const name of names) {
     if (name === ENTRY_FILE || !name.endsWith(".desktop")) continue;
-    const text = readOr(path.join(applications, name))?.toString("utf8") ?? "";
-    if (text.split("\n").some((line) => line.startsWith("Exec=") && line.includes(appImage))) return name;
+    let text: string;
+    try {
+      text = fs.readFileSync(path.join(applications, name), "utf8");
+    } catch {
+      // An entry nobody can read starts nothing for us to defer to.
+      continue;
+    }
+    const starts = (line: string): boolean => {
+      const args = line.startsWith("Exec=") ? execArgs(line.slice("Exec=".length).trimEnd()) : null;
+      return !!args && launchedFile(args) === appImage;
+    };
+    if (text.split("\n").some(starts)) return name;
   }
   return null;
 }
@@ -101,12 +150,12 @@ export function keepEntry(place: EntryPlace): EntryOutcome {
     // An AppImage without hicolor icons still gets its entry.
   }
   for (const size of sizes) {
-    const icon = readOr(path.join(icons, size, "apps", `${EXECUTABLE}.png`));
+    const icon = readIfThere(path.join(icons, size, "apps", `${EXECUTABLE}.png`));
     if (icon) writeIfChanged(path.join(place.dataHome, "icons", "hicolor", size, "apps", `${EXECUTABLE}.png`), icon, wrote);
   }
   writeIfChanged(path.join(applications, ENTRY_FILE), Buffer.from(text), wrote);
   const mimeapps = path.join(place.configHome, "mimeapps.list");
-  const added = withKiwiDefault(readOr(mimeapps)?.toString("utf8") ?? null);
+  const added = withKiwiDefault(readIfThere(mimeapps)?.toString("utf8") ?? null);
   if (added !== null) writeIfChanged(mimeapps, Buffer.from(added), wrote);
   return { kind: "kept", wrote };
 }

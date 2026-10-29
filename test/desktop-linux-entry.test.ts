@@ -1,9 +1,9 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { ENTRY_FILE, entryText, hasFusermount, keepEntry, keepLinuxEntry, quotedExec, withKiwiDefault } from "../desktop/src/linux-entry.ts";
+import { ENTRY_FILE, entryText, execArgs, hasFusermount, keepEntry, keepLinuxEntry, launchedFile, quotedExec, withKiwiDefault } from "../desktop/src/linux-entry.ts";
 
 const root = mkdtempSync(join(tmpdir(), "kiwi-linux-entry-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -88,6 +88,42 @@ describe("the AppImage keeps its own desktop entry (#1284)", () => {
     expect(keepEntry(p)).toEqual({ kind: "skipped", why: `appimagekit_0123-Channels.desktop already starts this AppImage` });
     expect(existsSync(join(p.dataHome, "applications", ENTRY_FILE))).toBe(false);
     expect(existsSync(join(p.configHome, "mimeapps.list"))).toBe(false);
+  });
+
+  test("Exec reads back to the AppImage it starts, through env, quotes and every escape", () => {
+    for (const appImage of ["/home/a/Channels.AppImage", "/home/a b/50%/Channels.AppImage", '/home/a/"$x`\\.AppImage']) {
+      for (const fuse of [true, false]) {
+        const exec = /^Exec=(.*)$/m.exec(entryText(appImage, fuse) ?? "")?.[1] ?? "";
+        expect(launchedFile(execArgs(exec) ?? [])).toBe(appImage);
+      }
+    }
+    expect(execArgs("/opt/Channels.AppImage %U")).toEqual(["/opt/Channels.AppImage", "%U"]);
+    expect(execArgs('"/opt/unclosed %U')).toBeNull();
+    expect(launchedFile(["env", "A=1", "B=2", "/opt/x.AppImage", "%U"])).toBe("/opt/x.AppImage");
+    expect(launchedFile(["env"])).toBeNull();
+  });
+
+  test("an entry for another AppImage whose path starts the same, or that only passes ours as an argument, doesn't count", () => {
+    const p = place();
+    mkdirSync(join(p.dataHome, "applications"), { recursive: true });
+    writeFileSync(join(p.dataHome, "applications", "old.desktop"), `[Desktop Entry]\nExec="${p.appImage}.old" %U\n`);
+    writeFileSync(join(p.dataHome, "applications", "opener.desktop"), `[Desktop Entry]\nExec=/usr/bin/xdg-open "${p.appImage}"\n`);
+    expect(keepEntry(p).kind).toBe("kept");
+    expect(existsSync(join(p.dataHome, "applications", ENTRY_FILE))).toBe(true);
+  });
+
+  test("a mimeapps.list that can't be read is never replaced", () => {
+    const p = place();
+    mkdirSync(p.configHome, { recursive: true });
+    const mimeapps = join(p.configHome, "mimeapps.list");
+    writeFileSync(mimeapps, "[Default Applications]\ntext/html=firefox.desktop\n");
+    chmodSync(mimeapps, 0o000);
+    try {
+      expect(() => keepEntry(p)).toThrow();
+    } finally {
+      chmodSync(mimeapps, 0o644);
+    }
+    expect(readFileSync(mimeapps, "utf8")).toBe("[Default Applications]\ntext/html=firefox.desktop\n");
   });
 
   test("a path no desktop entry can hold is skipped, not half-written", () => {
