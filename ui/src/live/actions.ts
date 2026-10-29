@@ -23,7 +23,7 @@ import { ALLOW_ONCE, DENY } from "@/lib/permission-settled"
 import { savePersonalities } from "@/lib/personalities"
 import { createPerson, bridge, secrets } from "@/lib/secrets"
 import { isSignInGone } from "@/lib/session"
-import { approveTask, closedDigest, sendBackTask, type TaskSend } from "@/lib/task-actions"
+import { ANYONE, approveTask, assignTask, cancelTask, changeReviewer, closedDigest, sendBackTask, type TaskSend } from "@/lib/task-actions"
 import { announce } from "~/kit/toasts"
 import { answerPair, cancelPair, linkGithub, pairBegin, unlinkGithub } from "~/live/account"
 import { newMemberPowers, newMemberScopes, setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
@@ -297,6 +297,31 @@ export function makeActions(): Actions {
         if (!state) throw new Error("a task waits on its own, when something holds it")
         const to = t.owner && t.owner !== run.me ? [t.owner] : undefined
         await event(run, `${taskId(id)} ${state}`, { op: "task.update", task: id, state }, to)
+      }),
+    cancelTask: (code, id, why) =>
+      attempt("Not cancelled", async () => {
+        const run = need(code)
+        const t = run.state.tasks.get(id)
+        if (!t) throw new Error(`no task ${taskId(id)}`)
+        const note = why.trim()
+        if (!note) throw new Error("say why it's cancelled")
+        await sends(run, cancelTask(t, note, run.me), closedDigest(run.state, [...run.messages], t, { by: run.me, cancelled: note }))
+      }),
+    assignTask: (code, id, to, why) =>
+      attempt("Not assigned", async () => {
+        const run = need(code)
+        const t = run.state.tasks.get(id)
+        if (!t) throw new Error(`no task ${taskId(id)}`)
+        memberOf(run, to)
+        await sends(run, assignTask(t, to, why.trim() || (t.owner ? `was ${t.owner}'s` : "nobody had it")))
+      }),
+    setReviewer: (code, id, reviewer) =>
+      attempt("Reviewer not changed", async () => {
+        const run = need(code)
+        const t = run.state.tasks.get(id)
+        if (!t) throw new Error(`no task ${taskId(id)}`)
+        if (reviewer !== ANYONE) memberOf(run, reviewer)
+        await sends(run, changeReviewer(t, reviewer, run.me))
       }),
     setRole: (code, name, role) =>
       attempt("Role not changed", async () => {
