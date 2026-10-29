@@ -1,4 +1,4 @@
-import { olderRules, type Message } from "@kiwi/core/protocol.ts"
+import { decodedWhole, olderRules, type Message } from "@kiwi/core/protocol.ts"
 import type { FoldBase } from "@kiwi/core/state.ts"
 import type { OpenedCache } from "../history"
 import { planReload } from "../history-plan"
@@ -75,8 +75,9 @@ export async function openChannel(steps: OpenSteps, was: Warm | undefined, limit
   const warm = usableBase(was?.base ?? null, from) ?? keptBase
   const snap = from > 0 && (!warm || olderRules(warm)) ? await steps.snapshot() : null
   const offered = [usableBase(snap, from), keptBase]
-  const base = from === 0 ? (offered.find((b) => b !== null && !olderRules(b)) ?? null) : newestRules(offered)
-  steps.paint(cached, base, head, from === 0 && !!warm && olderRules(warm))
+  const replayable = from === 0 && cached !== null && decodedWhole({ head: Math.max(cached.messages.at(-1)?.seq ?? 0, ...cached.unread), messages: cached.messages })
+  const base = replayable ? (offered.find((b) => b !== null && !olderRules(b)) ?? null) : newestRules(offered)
+  steps.paint(cached, base, head, replayable && !!warm && olderRules(warm))
   if (await rotated) await steps.roster()
   return { head, since, whole: startsWhole(head, limit, since, firstSeq, base ?? warm) }
 }

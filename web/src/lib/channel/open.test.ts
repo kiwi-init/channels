@@ -159,6 +159,16 @@ describe("opening a channel", () => {
     expect(r.painted.at(-1)?.base).toBeNull()
   })
 
+  test("a cache from seq 1 with a message it couldn't read keeps the older-rules base, which still holds what that message said", async () => {
+    const r = relay()
+    const steps = r.make(3, [1, 3], null, { ...kept(2), base: { ...base(2), rules: 0 } })
+    const opened = openChannel(steps, undefined, 2000)
+    await r.roundTrip()
+    await r.roundTrip()
+    await opened
+    expect(r.painted.at(-1)?.base).toBe(2)
+  })
+
   test("a kept base that doesn't reach the cache's first message still asks for the snapshot", async () => {
     const r = relay()
     const steps = r.make(5000, range(3001, 5000), 3000, kept(1000))

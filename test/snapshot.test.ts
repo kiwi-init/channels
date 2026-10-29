@@ -799,15 +799,17 @@ describe("a base folded under older fold rules is set aside wherever the log can
   });
 
   test("an agent keeps its older-rules base when a message in the log can't be opened", async () => {
-    const { s, done, olderBase, cold } = await scene();
+    const { s, done, olderBase, cold, relay } = await scene();
     try {
       const task = await s.ownerCh.send("", { ev: { op: "task.add", title: "as the log says" } });
       const garbage = await seal(newChannelKey(), s.roomId, { v: 1, id: "x", from: "nobody", kind: "msg", body: "sealed with a key nobody here has", ts: Date.now() });
-      const post = (s.ownerCh as unknown as { core: { request: (path: string, init: RequestInit) => Effect.Effect<unknown, unknown, Relay> } }).core.request("/messages", {
+      const body = JSON.stringify({ ...garbage, e: 0 });
+      const posted = await fetch(`${relay}/v1/rooms/${s.roomId}/messages`, {
         method: "POST",
-        body: JSON.stringify({ ...garbage, e: 0 }),
+        headers: { "content-type": "application/json", authorization: `Bearer ${await signRequest(s.owner, s.roomId, "POST", "/messages", body)}` },
+        body,
       });
-      await Effect.runPromise(Effect.provideService(post, Relay, fetchRelay));
+      expect(posted.ok).toBe(true);
       await s.ownerCh.send("after");
       keepBase(s.roomId, await olderBase());
       const { state } = await runAgent(cold("unreadable").state());
