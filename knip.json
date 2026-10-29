@@ -53,7 +53,7 @@
       "project": ["src/**/*.ts", "scripts/**/*.ts"]
     },
     "ui": {
-      "entry": ["src/chat/react-native.ts", "stubs/react-native/index.js", "src/**/*.test.{ts,tsx}"]
+      "entry": ["src/chat/react-native.ts", "src/chat/no-elk.ts", "stubs/react-native/index.js", "src/**/*.test.{ts,tsx}"]
     }
   }
 }

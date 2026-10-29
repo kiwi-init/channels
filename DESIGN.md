@@ -101,11 +101,13 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 - Metrics and counts always use tabular numerals (`time, .tabular-nums`).
 - Chat prose wraps pretty (`bubble-text`), code blocks fade at the right
   edge (`code-more`) so cut-off lines read as "scroll for more".
-- A `mermaid` code block draws as a diagram on a `raised` card in the
-  bubble, in the tokens of the current theme (`field` nodes, `ink-3`
-  lines, `accent-wash` notes, Inter 13px, `row`-round nodes, no shadows).
-  It fits the bubble down to 70%, then scrolls with the same `code-more`
-  fade. Mermaid that doesn't parse stays a code block with its error.
+- A `mermaid` code block draws as a diagram on a `raise` card in the
+  message, in the tokens of the current theme (`bg` nodes, `ink-3`
+  lines, `accent-wash` notes, the system face at 13px, `row`-round nodes,
+  no shadows). It fits the message down to 70%, then scrolls with the
+  same `code-more` fade. Code and Copy show on hover, like a code
+  block's Copy. Mermaid that doesn't parse stays a code block with its
+  error.
 - No additional font families in the app: the system face and the code
   face. Hierarchy comes from weight, size and spacing, not font swaps.
 
