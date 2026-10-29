@@ -12,7 +12,9 @@ export function usableBase(snap: FoldBase | null, from: number): FoldBase | null
 }
 
 export function newestRules(bases: readonly (FoldBase | null)[]): FoldBase | null {
-  return bases.find((b) => b !== null && !olderRules(b)) ?? bases.find((b) => b !== null) ?? null
+  const present = bases.filter((b): b is FoldBase => b !== null)
+  const reach = Math.max(-1, ...present.filter(olderRules).map((b) => b.n))
+  return present.find((b) => !olderRules(b) && b.n >= reach) ?? present.find((b) => olderRules(b) && b.n === reach) ?? present[0] ?? null
 }
 
 export function startsWhole(head: number, limit: number, since: number, firstSeq: number | undefined, base: FoldBase | null): boolean {

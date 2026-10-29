@@ -46,12 +46,15 @@ describe("folding the app's window on top of the channel's snapshot", () => {
     expect(startsWhole(1500, 2000, 1500, 5, at(4))).toBe(true)
   })
 
-  test("a base folded under the current fold rules wins over an older-rules one, which is used only when there's nothing else (#1116)", () => {
-    const current: FoldBase = { ...at(10), rules: FOLD_RULES }
+  test("a current-rules base wins over an older-rules one when it reaches at least as far; otherwise the furthest older one is kept (#1116)", () => {
+    const current: FoldBase = { ...at(30), rules: FOLD_RULES }
     const older: FoldBase = { ...at(20), rules: 0 }
     expect(newestRules([older, current])).toBe(current)
     expect(newestRules([current, older])).toBe(current)
     expect(newestRules([null, older])).toBe(older)
     expect(newestRules([null, null])).toBeNull()
+    const further: FoldBase = { ...at(25), rules: FOLD_RULES }
+    expect(newestRules([further, older])).toBe(further)
+    expect(newestRules([{ ...at(10), rules: FOLD_RULES }, older])).toBe(older)
   })
 })

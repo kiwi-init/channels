@@ -139,14 +139,14 @@ describe("opening a channel", () => {
 
   test("a kept base folded under older rules asks for the snapshot, and the snapshot is folded on (#1116)", async () => {
     const r = relay()
-    const steps = r.make(5000, range(3001, 5000), 3000, { ...kept(3500), base: { ...base(3500), rules: 0 } })
+    const steps = r.make(5000, range(3001, 5000), 3400, { ...kept(3200), base: { ...base(3200), rules: 0 } })
     const opened = openChannel(steps, undefined, 2000)
     await r.roundTrip()
     await r.roundTrip()
     await r.roundTrip()
     await opened
     expect(r.log.some((l) => l.startsWith("snapshot"))).toBe(true)
-    expect(r.painted.at(-1)?.base).toBe(3000)
+    expect(r.painted.at(-1)?.base).toBe(3400)
   })
 
   test("a cache from seq 1 next to a kept base from older rules still asks for the snapshot, and folds on it (#1116)", async () => {
@@ -167,6 +167,17 @@ describe("opening a channel", () => {
     await r.roundTrip()
     await r.roundTrip()
     await opened
+    expect(r.painted.at(-1)?.base).toBe(2)
+  })
+
+  test("a current-rules snapshot that ends before an older kept base doesn't replace it, so nothing between them is lost", async () => {
+    const r = relay()
+    const steps = r.make(3, [1, 3], 1, { ...kept(2), base: { ...base(2), rules: 0 } })
+    const opened = openChannel(steps, undefined, 2000)
+    await r.roundTrip()
+    await r.roundTrip()
+    await opened
+    expect(r.log.some((l) => l.startsWith("snapshot"))).toBe(true)
     expect(r.painted.at(-1)?.base).toBe(2)
   })
 

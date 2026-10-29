@@ -74,7 +74,7 @@ export async function openChannel(steps: OpenSteps, was: Warm | undefined, limit
   const keptBase = usableBase(keptBaseUpTo(kept, head), from)
   const warm = usableBase(was?.base ?? null, from) ?? keptBase
   const snap = (from > 0 && !warm) || (warm !== null && olderRules(warm)) ? await steps.snapshot() : null
-  const base = newestRules([usableBase(snap, from), keptBase])
+  const base = newestRules([usableBase(snap, from), keptBase, warm])
   steps.paint(cached, base, head)
   if (await rotated) await steps.roster()
   return { head, since, whole: startsWhole(head, limit, since, firstSeq, base ?? warm) }
