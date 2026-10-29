@@ -117,15 +117,18 @@ async function speaksForMachine(store: MachineStore, mpk: string, signer: string
 
 export async function takeNewerList(store: MachineStore, mpk: string, links: unknown[], now: number): Promise<void> {
   const bound = await store.binding(mpk);
-  const kept = bound ? await keptList(store, mpk, bound.person) : null;
   const next = await listOf(links);
-  if (!bound || !kept || !next || next.person !== kept.person || next.version <= kept.version) return;
+  if (!bound || !next || next.person !== bound.person) return;
+  const kept = await keptList(store, mpk, bound.person);
+  if (kept && next.version <= kept.version) return;
   if (!listedComputer(next, mpk, now)) {
+    if (!kept) return;
     await store.unbind(mpk);
     store.close(mpk);
     return;
   }
   await store.keepLinks(mpk, links);
+  if (!kept) store.close(mpk);
 }
 
 async function register(store: MachineStore, mpk: string, body: Record<string, unknown> | null, now: number): Promise<Response> {
@@ -147,9 +150,11 @@ async function register(store: MachineStore, mpk: string, body: Record<string, u
   const cert = await readMachineCert(body?.["cert"]);
   if (!cert || cert.machine !== mpk) return refuse(new BadRequest({ message: "a machine registers with its own cert" }));
   if (bound ? cert.at < bound.certAt : floor > 0 && cert.at <= floor) return refuse(new Conflict({ message: "a newer cert was registered for this machine" }));
+  const kept = bound?.person === cert.pk ? await keptList(store, mpk, cert.pk) : null;
+  const listed = kept && listedComputer(kept, mpk, now) ? await store.links(mpk) : null;
   await store.bind(mpk, { person: cert.pk, mxpk: cert.mxpk, label: cert.label, certAt: cert.at, seenAt: now });
-  await store.keepLinks(mpk, null);
-  return done();
+  await store.keepLinks(mpk, listed);
+  return listed ? answer({ links: listed }) : done();
 }
 
 export interface MachineRequest {
