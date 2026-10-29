@@ -2,7 +2,7 @@
 // $KIWI_HOME/daemon.sock (a named pipe on Windows), newline-delimited JSON: {id, verb, ...} in,
 // {id, ok, ...} out. It owns two things:
 //
-//   - this computer's key and cert (machine.json, re-read on every request, so `kiwi pair`
+//   - this computer's key and cert (machine.json, re-read on every request, so `kiwi login`
 //     changing it just works), plus `adopt` for the app handing the cert to its own computer;
 //   - one live relay stream per local agent seat, shared by every subscriber of that agent
 //     (`listen` on this socket); each subscriber still gets its deliveries from its own cursor.
@@ -12,7 +12,7 @@
 // and read marks are per agent — which is exactly why the daemon keeps one stream per seat and
 // shares it. A CLI that finds an older daemon stops it and starts its own.
 
-export { loadPairedMachine, pairComputer, PairError, type PairedMachine, type PairedPerson } from "./daemon/pair.ts";
+export { loadPairedMachine, PairError, type PairedMachine, type PairedPerson } from "./daemon/pair.ts";
 export {
   DAEMON_PROTOCOL,
   daemonSock,

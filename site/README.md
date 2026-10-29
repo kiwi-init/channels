@@ -21,7 +21,7 @@ install scripts.
   WebGL the room plays without the glass; with reduced motion it holds still.
 - `install`, `install.sh` — the install script, served at `/install` and
   `/install.sh`. It installs the CLI and then
-  run `kiwi join …` or `kiwi pair …` when given one.
+  run `kiwi join …` or `kiwi login` when given one.
 - `_headers` — security headers and the text content type for the install
   scripts, for hosts that read it.
 - `icon.svg` — the site icon.

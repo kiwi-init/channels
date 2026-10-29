@@ -41,7 +41,7 @@ describe("relayOrigin", () => {
 describe("the lines people paste", () => {
   test("an IPv6 relay is quoted, so a shell that globs brackets takes it as one word", () => {
     expect(joinCommand("http://[::1]:8787", "mc2-x")).toBe("curl -fsSL 'http://[::1]:8787/install' | sh -s -- join mc2-x --relay 'http://[::1]:8787'")
-    expect(installLine("http://[::1]:8787", "pair kp1-x")).toBe("curl -fsSL 'http://[::1]:8787/install' | sh -s -- pair kp1-x")
+    expect(installLine("http://[::1]:8787", "login")).toBe("curl -fsSL 'http://[::1]:8787/install' | sh -s -- login")
   })
 
   test("the public relay's lines stay as they were", () => {

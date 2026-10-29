@@ -82,24 +82,24 @@ export function launchCalls(
       const req = launchRequestOf(value);
       if (!req) return { ok: false, why: "bad-request", detail: "the app sent a launch it can't check" };
       const there = req.machinePk ? paired(req.machinePk) : null;
-      if (req.machinePk && !there) return { ok: false, why: "bad-request", detail: "that isn't one of your paired computers" };
+      if (req.machinePk && !there) return { ok: false, why: "bad-request", detail: "that isn't one of your computers" };
       const launched = there ? launchOn(asker(), machine(there), req) : daemonLaunch(req);
       return launched.catch((err: unknown) => ({ ok: false, why: "failed", detail: err instanceof Error ? err.message : String(err) }));
     },
     machines: (): Promise<MachineView[]> => machines().catch(() => []),
     harnessesOn: async (machinePk: unknown): Promise<FromMachine<HarnessRow[]>> => {
       const c = paired(machinePk);
-      if (!c) return { ok: false, detail: "that isn't one of your paired computers" };
+      if (!c) return { ok: false, detail: "that isn't one of your computers" };
       return harnessesOn(asker(), machine(c));
     },
     settingsOn: async (machinePk: unknown): Promise<FromMachine<ComputerSettings>> => {
       const c = paired(machinePk);
-      if (!c) return { ok: false, detail: "that isn't one of your paired computers" };
+      if (!c) return { ok: false, detail: "that isn't one of your computers" };
       return settingsOn(asker(), machine(c));
     },
     foldersOn: async (machinePk: unknown, roomId: unknown): Promise<FromMachine<string[]>> => {
       const c = paired(machinePk);
-      if (!c || typeof roomId !== "string" || !ROOM_ID.test(roomId)) return { ok: false, detail: "that isn't one of your paired computers" };
+      if (!c || typeof roomId !== "string" || !ROOM_ID.test(roomId)) return { ok: false, detail: "that isn't one of your computers" };
       return foldersOn(asker(), machine(c), roomId);
     },
     launchRoots: () => launchRoots(["folders", "added", "--json"]),

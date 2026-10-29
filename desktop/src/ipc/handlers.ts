@@ -6,7 +6,6 @@ import { githubCalls } from "./github.ts";
 import { launchCalls } from "./launch.ts";
 import { linkingCalls } from "./linking.ts";
 import { miscCalls } from "./misc.ts";
-import { pairingCalls } from "./pairing.ts";
 import { personalitiesCalls } from "./personalities.ts";
 import { signInCalls } from "./signin.ts";
 import { storeCalls } from "./store.ts";
@@ -19,7 +18,6 @@ export function handlers(host: Host): Handlers {
     ...storeCalls(host),
     ...signInCalls(host),
     ...githubCalls(host),
-    ...pairingCalls(),
     ...linkingCalls(),
     ...devicesCalls(),
     ...daemonCalls(),
