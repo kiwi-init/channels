@@ -289,7 +289,13 @@ For when every app is gone, or a thief revoked your other devices first. The rec
   its current approving devices (decision A keeps the person key offline, so a device must be able to
   add a new channel's owner key). Stored at `/v1/account/vault`. Clients remember the highest version
   and refuse a lower one.
-- In the code (T693): `packages/core/src/recovery.ts`.
+- **The relay** keeps the chain and the newest vault at `/v1/account/vault`. `GET` needs only the sign-in,
+  so a new desktop with nothing but the 24 words can read them. `PUT` takes `{recovery, vault}`, signed by
+  the person key, the recovery key or a current approving device. The chain must extend the one kept,
+  and each new link must carry the relay's time, so a proposal can't be backdated past its 7 days. A
+  vault must be version kept + 1, signed by the person key or a current approving device, and at most
+  512 KB. Links and vaults from revoked devices are refused.
+- In the code (T693, T823): `packages/core/src/recovery.ts`, `src/relay/account.ts`.
 - **Passkeys later:** per-passkey wrapping where native passkey PRF exists (macOS 15 and iOS 18 through
   AuthenticationServices; Android Credential Manager). Never in a page the relay serves, which would
   see the unlock key.

@@ -17,6 +17,7 @@ import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
 import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, type AccountStore } from "./account.ts";
 import { ENROLL_TTL_MS, type Enrollment } from "@kiwi/core/enroll.ts";
+import type { Vault } from "@kiwi/core/recovery.ts";
 import {
   MACHINE_ASKS_PER_MINUTE,
   MACHINE_BOX_TTL_MS,
@@ -138,6 +139,8 @@ export function startRelay(
   people.run("CREATE TABLE IF NOT EXISTS machine_boxes (mpk TEXT NOT NULL, id TEXT NOT NULL, box TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (mpk, id))");
   people.run("CREATE TABLE IF NOT EXISTS revoked_keys (pk TEXT PRIMARY KEY)");
   people.run("CREATE TABLE IF NOT EXISTS account_links (user TEXT NOT NULL, seq INTEGER NOT NULL, link TEXT NOT NULL, PRIMARY KEY (user, seq))");
+  people.run("CREATE TABLE IF NOT EXISTS account_recovery (user TEXT NOT NULL, n INTEGER NOT NULL, link TEXT NOT NULL, PRIMARY KEY (user, n))");
+  people.run("CREATE TABLE IF NOT EXISTS account_vaults (user TEXT PRIMARY KEY, version INTEGER NOT NULL, rec TEXT NOT NULL)");
   people.run("CREATE TABLE IF NOT EXISTS account_asks (user TEXT PRIMARY KEY, rec TEXT NOT NULL, at INTEGER NOT NULL)");
   const machineSockets = new Map<string, { ws: ServerWebSocket<SocketData>; since: number }>();
   const instance = crypto.randomUUID();
@@ -200,6 +203,24 @@ export function startRelay(
         machines.close(pk);
       }
     },
+    recovery: async (user) => (people.query("SELECT link FROM account_recovery WHERE user = ? ORDER BY n").all(user) as { link: string }[]).map((r) => JSON.parse(r.link) as unknown),
+    extendRecovery: async (user, from, links) =>
+      people.transaction(() => {
+        if ((people.query("SELECT COUNT(*) AS n FROM account_recovery WHERE user = ?").get(user) as { n: number }).n !== from) return false;
+        links.forEach((l, i) => people.query("INSERT INTO account_recovery (user, n, link) VALUES (?, ?, ?)").run(user, from + i + 1, JSON.stringify(l)));
+        return true;
+      })(),
+    vault: async (user) => {
+      const row = people.query("SELECT rec FROM account_vaults WHERE user = ?").get(user) as { rec: string } | null;
+      return row ? (JSON.parse(row.rec) as Vault) : null;
+    },
+    setVault: async (user, next, prev) =>
+      people.transaction(() => {
+        const row = people.query("SELECT version FROM account_vaults WHERE user = ?").get(user) as { version: number } | null;
+        if ((row?.version ?? 0) !== prev) return false;
+        people.query("INSERT OR REPLACE INTO account_vaults (user, version, rec) VALUES (?, ?, ?)").run(user, next.version, JSON.stringify(next));
+        return true;
+      })(),
   };
   const githubSecret = opts.githubSecret === undefined ? (process.env.GITHUB_WEBHOOK_SECRET ?? null) : opts.githubSecret;
   const mailboxes: MailboxStore = {
