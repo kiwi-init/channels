@@ -1,7 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreBinaries": [
-    "oxfmt",
     "gsettings",
     "xdg-user-dir",
     "weston-screenshooter",

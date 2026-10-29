@@ -29,7 +29,7 @@ describe("the UI channel", () => {
     expect(latestTag(repo, `https://github.com/${repo}/releases/tag/v2026.10.7`)).toBe("v2026.10.7");
   });
 
-  test("a staged UI is web/dist without _headers, plus ui.json for this contract", () => {
+  test("a staged UI is ui/dist without _headers, plus ui.json for this contract", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ui-stage-"));
     try {
       const dist = path.join(tmp, "dist");

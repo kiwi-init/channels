@@ -9,9 +9,9 @@ const valuesFromBarrel = (text: string): string[] =>
       .filter((n) => n && !n.startsWith("type ")),
   );
 
-test("the dashboard takes values from @kiwi/core's client submodules, never the client.ts barrel, which pulls the whole Channel into the first load", async () => {
+test("the app takes values from @kiwi/core's client submodules, never the client.ts barrel, which pulls the whole Channel into the first load", async () => {
   const offenders: string[] = [];
-  for (const file of new Glob("web/src/**/*.{ts,tsx}").scanSync()) {
+  for (const file of new Glob("ui/src/**/*.{ts,tsx}").scanSync()) {
     if (/\.test\.tsx?$/.test(file)) continue;
     for (const name of valuesFromBarrel(await Bun.file(file).text())) offenders.push(`${file}: ${name}`);
   }

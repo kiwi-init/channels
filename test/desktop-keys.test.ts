@@ -371,7 +371,7 @@ describe("the window's code holds no channel keys", () => {
   test("only channel-local.ts (the plain-browser dev mode) touches them", () => {
     const root = join(import.meta.dir, "..");
     const bad: string[] = [];
-    for (const f of [...files(join(root, "web/src")), ...files(join(root, "packages/app/src")), ...files(join(root, "packages/secrets/src"))]) {
+    for (const f of [...files(join(root, "ui/src")), ...files(join(root, "packages/app/src")), ...files(join(root, "packages/secrets/src"))]) {
       const rel = f.slice(root.length + 1);
       if (allowed.has(rel)) continue;
       const text = readFileSync(f, "utf8");
