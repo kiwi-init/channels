@@ -30,7 +30,7 @@ import { parseWhere } from "../where.ts";
 import { type Command, die, noteRead, offlineOk, out, type Quit, session } from "../context.ts";
 import { images, list, render, text } from "../input.ts";
 
-const PUBLISHING = ["channel", "as", "quiet", "json", "file", "image"] as const;
+const PUBLISHING = ["channel", "as", "quiet", "json", "file", "image", "small"] as const;
 const SEND_OPTIONS = [...PUBLISHING, "to", "kind", "re", "room", "ask", "wait", "escalate", "handoff", "vendor", "expires", "option", "dm", "task", "main"];
 
 function refuseUnused(command: string, allowed: readonly string[]): Effect.Effect<void, Quit> {
@@ -44,7 +44,7 @@ export const messageCommands: Record<string, Command> = {
       Effect.gen(function* () {
         yield* refuseUnused(args[0] === "ask" ? "ask" : "send", SEND_OPTIONS);
         if (opt.escalate) {
-          const extra = (["to", "image", "kind", "room", "ask", ...(opt.handoff === undefined ? (["wait"] as const) : [])] as const).filter((f) => opt[f] !== undefined);
+          const extra = (["to", "image", "small", "kind", "room", "ask", ...(opt.handoff === undefined ? (["wait"] as const) : [])] as const).filter((f) => opt[f] !== undefined);
           if (extra.length) return yield* die(`--escalate goes to your human and the owner as it is; leave out ${extra.map((f) => `--${f}`).join(", ")}`);
           return yield* messageCommands.escalate!();
         }

@@ -1,6 +1,7 @@
 import * as Effect from "effect/Effect";
 import { fromBase64, openBlob, sealBlob, toBase64 } from "../crypto.ts";
 import { blobRef, type ImageAttachment, type InlineImage, type RasterMime } from "../protocol.ts";
+import { Rejected } from "../refusals.ts";
 import type { ChannelCore } from "./core.ts";
 import { gone, RelayError, type MemberRefusal } from "./errors.ts";
 import { Relay } from "./relay.ts";
@@ -11,7 +12,7 @@ export interface ImagesFx {
   images(imgs: readonly ImageAttachment[]): Effect.Effect<InlineImage[], MemberRefusal, Relay>;
 }
 
-/** An image to send: inline as it is, or, with `full`, the full-size bytes go as a blob and `data` rides along as the preview. */
+/** An image to send: inline as it is, or, with `full`, the full-size bytes go as a blob and `data`, if any, rides along as the preview. */
 export type OutgoingImage = ImageAttachment & { full?: { mime: RasterMime; data: string } };
 
 const inline = ({ name, mime, data, ref }: OutgoingImage): ImageAttachment => ({ name, mime, ...(data !== undefined ? { data } : {}), ...(ref ? { ref } : {}) });
@@ -76,11 +77,14 @@ export class ChannelImages {
     });
   }
 
-  stored(imgs: OutgoingImage[]): Effect.Effect<ImageAttachment[], never, Relay> {
+  stored(imgs: OutgoingImage[]): Effect.Effect<ImageAttachment[], Rejected, Relay> {
     return Effect.gen({ self: this }, function* () {
-      if (!imgs.some((i) => i.data !== undefined)) return imgs.map(inline);
+      if (!imgs.some((i) => i.data !== undefined || i.full)) return imgs.map(inline);
       const info = yield* Effect.option(this.ch.fx.info());
-      if (info._tag === "None" || info.value.blobs !== true) return imgs.map(inline);
+      const blobs = info._tag === "Some" && info.value.blobs === true;
+      const bare = imgs.find((i) => i.full && i.data === undefined);
+      if (!blobs && bare) return yield* new Rejected(`${bare.name}: this relay can't take full-size images; send it small instead`);
+      if (!blobs) return imgs.map(inline);
       const settings = imgs.every((i) => i.full) ? null : yield* Effect.option(this.settings.settings(info.value));
       const byRef = settings?._tag === "Some" && settings.value?.imageRefs === true;
       const relay = yield* Relay;
@@ -93,12 +97,12 @@ export class ChannelImages {
         });
       return yield* Effect.forEach(
         imgs,
-        (img): Effect.Effect<ImageAttachment, never, Relay> => {
+        (img): Effect.Effect<ImageAttachment, Rejected, Relay> => {
           const full = img.full;
           if (full)
             return upload(fromBase64(full.data)).pipe(
               Effect.map((ref): ImageAttachment => ({ ...inline(img), ref: { ...ref, ...(full.mime !== img.mime ? { mime: full.mime } : {}) } })),
-              Effect.orElseSucceed(() => inline(img)),
+              Effect.catch(() => (img.data !== undefined ? Effect.succeed(inline(img)) : Effect.fail(new Rejected(`${img.name}: the relay didn't take the full-size image; send it small instead`)))),
             );
           if (!byRef || img.data === undefined) return Effect.succeed(inline(img));
           return upload(fromBase64(img.data)).pipe(

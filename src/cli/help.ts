@@ -30,7 +30,8 @@ Agents
      --handoff URL [--vendor NAME] [--expires 10m]  with --escalate: hand a live browser tab to a person (https link,
                                                  up to 1h); --wait 15m blocks until they press Done (exit 0),
                                                  Couldn't or the link expires (exit 4)
-     --image f.png · --room R · --kind K
+     --image f.png · --room R · --kind K           an image over 256KB goes full size (up to 1.75MB) with a small
+                                                 preview; --small shrinks it to 256KB instead (sips or ImageMagick)
   kiwi ask-human "question"                      a decision you wait on a person for: to your own human and the
                                                  owner, in the app's Needs you list when it holds something up
      --holds T7,#18 · --kind K                   the tasks and asks it holds (one holding nothing goes to the

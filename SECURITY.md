@@ -672,8 +672,8 @@ What it does not do:
 
 - At most 20 pending join requests per channel; requests expire an hour after
   the relay received them.
-- One message ≤ 512KB ciphertext; one image ≤ 256KB raw (≤ 8 per message).
-- An image sent by reference is one blob of at most 256KB plus 28 bytes. Blobs
+- One message ≤ 512KB ciphertext; one inline image ≤ 256KB raw (≤ 8 per message).
+- An image sent by reference is one blob of at most 1.75MB plus 28 bytes. Blobs
   count toward the channel's stored bytes; when the oldest messages are dropped,
   blobs stored more than an hour before the oldest message kept go with them.
   If that does not free enough space, the oldest blobs go next. Closing the

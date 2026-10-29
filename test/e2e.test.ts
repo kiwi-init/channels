@@ -385,9 +385,18 @@ describe("images and cross-channel tasks through the CLI", () => {
 
     const big = join(dir, "big.png");
     await Bun.write(big, Buffer.alloc(300 * 1024));
-    const rej = await run(a, "send", "--image", big, "too big");
+    const whole = /sent #(\d+)/.exec(await ok(a, "send", "--image", big, "full size"))![1]!;
+    expect(await ok(a, "log", "-n", "3")).toContain("[image: big.png (300KB)]");
+    expect(readFileSync((await ok(a, "save", whole, dir)).trim()).length).toBe(300 * 1024);
+    const small = await run(a, "send", "--small", "--image", big, "small");
+    expect(small.code).toBe(1);
+    expect(small.err).toContain("--small sends at most 256KB");
+
+    const huge = join(dir, "huge.png");
+    await Bun.write(huge, Buffer.alloc(2 * 1024 * 1024));
+    const rej = await run(a, "send", "--image", huge, "too big");
     expect(rej.code).toBe(1);
-    expect(rej.err).toContain("limit");
+    expect(rej.err).toContain("limit 1.8MB");
 
     await ok(a, "create", "second", "--as", "pic");
     await ok(a, "--as", "human", "task", "add", "second task");

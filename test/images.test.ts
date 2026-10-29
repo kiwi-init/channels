@@ -228,12 +228,18 @@ test("a full-size image goes as a blob with its preview inline: new readers get 
   expect(await run(ownerCh.fx.images([lost]))).toEqual([{ name: "shot.png", mime: "image/webp", data: preview }]);
 });
 
-test("send refuses a full-size image over the cap, or one with no preview beside it", async () => {
+test("send refuses a full-size image over the cap", async () => {
   const over = Buffer.alloc(MAX_FULL_IMAGE_BYTES + 1024).toString("base64");
   const preview = Buffer.from("p").toString("base64");
   await expect(memberCh.send("too big", { imgs: [{ name: "big.png", mime: "image/webp", data: preview, full: { mime: "image/png", data: over } }] })).rejects.toThrow(/full-size image/);
-  const ok = Buffer.from("ok").toString("base64");
-  await expect(
-    memberCh.send("no preview", { imgs: [{ name: "np.png", mime: "image/png", ref: { id: "0".repeat(64), key: "A".repeat(43), size: 2 }, full: { mime: "image/png", data: ok } }] }),
-  ).rejects.toThrow(/full-size image/);
+});
+
+test("a full-size image with no preview goes as the blob alone and reads back", async () => {
+  keepBlobsIn({ get: () => null, set: () => {}, drop: () => {} });
+  const full = Buffer.from(crypto.getRandomValues(new Uint8Array(300 * 1024))).toString("base64");
+  const seq = await memberCh.send("no preview", { imgs: [{ name: "np.png", mime: "image/png", full: { mime: "image/png", data: full } }] });
+  const got = (await ownerCh.history(seq - 1)).messages.find((m) => m.seq === seq)!.imgs![0]!;
+  expect(got.data).toBeUndefined();
+  expect(got.ref?.size).toBe(300 * 1024);
+  expect(await ownerCh.image(got)).toBe(full);
 });

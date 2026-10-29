@@ -111,9 +111,9 @@ export class ChannelSending {
       if (body.length > MAX_BODY_LENGTH) return yield* new Rejected(`a message is at most ${MAX_BODY_LENGTH.toLocaleString("en")} characters; this one is ${body.length.toLocaleString("en")}`);
       const imgs = opts.imgs?.slice(0, MAX_IMAGES);
       if (imgs?.some((i) => !isRasterMime(i.mime))) return yield* new Rejected("an image must be png, jpg, gif or webp");
-      if (imgs?.some((i) => !rasterAttachment(i))) return yield* new Rejected("an image needs its bytes or a stored reference");
-      if (imgs?.some((i) => i.full && (i.data === undefined || !isRasterMime(i.full.mime) || Math.ceil((i.full.data.length * 3) / 4) > MAX_FULL_IMAGE_BYTES + 2)))
-        return yield* new Rejected(`a full-size image is png, jpg, gif or webp, at most ${MAX_FULL_IMAGE_BYTES / 1024} KB, with a preview beside it`);
+      if (imgs?.some((i) => !i.full && !rasterAttachment(i))) return yield* new Rejected("an image needs its bytes or a stored reference");
+      if (imgs?.some((i) => i.full && (!isRasterMime(i.full.mime) || Math.ceil((i.full.data.length * 3) / 4) > MAX_FULL_IMAGE_BYTES + 2 || (i.data !== undefined && !rasterAttachment(i)))))
+        return yield* new Rejected(`a full-size image is png, jpg, gif or webp, at most ${MAX_FULL_IMAGE_BYTES / 1024} KB`);
       if (opts.handoff && (!opts.esc || !wellFormedHandoff(opts.handoff))) return yield* new Rejected("a browser handoff goes only on an escalation, with an https link, a vendor and an expiry");
       if (opts.choices && (!opts.esc || opts.handoff || !wellFormedChoices(opts.choices)))
         return yield* new Rejected(`options go only on an escalation without a browser link: ${CHOICES_MIN} to ${CHOICES_MAX} different ones, one line of up to ${CHOICE_MAX_LENGTH} characters each`);
