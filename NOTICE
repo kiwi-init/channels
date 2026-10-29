@@ -5,21 +5,11 @@ This product includes design and code adapted from Rakazo
 Version 2.0. A copy of that license is in licenses/rakazo-LICENSE.
 
 Adapted from Rakazo:
-- The colour palette in web/src/index.css (from packages/ui-tokens), since
-  reworked toward Apple Messages' greys and system blue.
-- The menu, tooltip, popover and dialog primitives in web/src/components/ui/
-  and web/src/components/kit.tsx, following packages/ui-web/components/ui.
-- Message markdown in web/src/components/markdown.tsx (from packages/chat-ui):
-  a copy button on code blocks, sortable tables, and links limited to
-  http, https, mailto and tel.
+- Message markdown in ui/src/chat/markdown.tsx and packages/app/src/markdown.ts
+  (from packages/chat-ui): copy on long code, sortable tables, and links
+  limited to http, https, mailto and tel.
 
-Changes: rewritten for this app's tokens, Hugeicons and the system font, and
-trimmed to what Channels uses.
-
-This product includes robot-heads 0.3.0 (https://github.com/fayazara/robot-heads,
-npm robot-heads), Copyright (c) 2026 Fayaz Ahmed, licensed under the MIT License.
-A copy of that license is in licenses/robot-heads-LICENSE. It draws the
-coordinator's animated head in the desktop app (web/src/components/coordinator-head.tsx).
+Changes: rewritten for this app's tokens and trimmed to what Channels uses.
 
 This product includes enriched-markdown-ios 0.4.0
 (https://github.com/software-mansion-labs/enriched-markdown-ios), Copyright (c) 2025

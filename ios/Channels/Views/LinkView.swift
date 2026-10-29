@@ -59,12 +59,21 @@ struct LinkView: View {
                         if let page = URL(string: url) { UIApplication.shared.open(page) }
                     }
                     .padding(.top, 20)
+                    waiting("Finish signing in in Safari").padding(.top, 24)
+                } else {
+                    waiting("Signing in…")
                 }
-                Text("Then approve this iPhone in Channels on your computer.")
-                    .type(url == nil ? .body : .ui)
-                    .foregroundStyle(url == nil ? Tone.ink : Tone.ink2)
-                    .padding(.top, url == nil ? 0 : 24)
-                waiting("Waiting for your computer").padding(.top, 16)
+                QuietButton(title: "Cancel") { Task { await model.cancelLink() } }
+                    .padding(.top, 24)
+            }
+        case .asking:
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Approve this iPhone").type(.title, .semibold).foregroundStyle(Tone.ink)
+                Text("Open Channels on your computer and let this iPhone in. It then shows digits to type there.")
+                    .type(.ui)
+                    .foregroundStyle(Tone.ink2)
+                    .padding(.top, 6)
+                waiting("Waiting for your computer").padding(.top, 24)
                 QuietButton(title: "Cancel") { Task { await model.cancelLink() } }
                     .padding(.top, 24)
             }

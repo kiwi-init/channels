@@ -10,20 +10,21 @@ import { BRANCH_PREFIX_RE, MAX_GOAL_NAME, ROBOT_FACES, ROOM_ID_RE, TASK_TITLE_MA
 import { describeScopes, SCOPES, wireScopes, type Scope } from "@kiwi/core/scopes.ts"
 import { newRoomId, taskId } from "@kiwi/core/state.ts"
 import type { Permission } from "@kiwi/core/launch-options.ts"
-import { tokenForCreate } from "@/lib/auth"
-import { askToJoin, createChannel, forgetChannel, forgetPending, inviteInfo, isJoinCode, loadMember, loadPending, renameChannel } from "@/lib/channel"
-import { linkOf, type ChannelLink } from "@/lib/channel-ops"
-import { removeComputer } from "@/lib/computers"
-import { joinCodeFromLink } from "@/lib/deep-link"
-import { kiwiJoin } from "@/lib/join-line"
+import { tokenForCreate } from "@kiwi/app/auth.ts"
+import { askToJoin, createChannel, inviteInfo } from "@kiwi/channel/join.ts"
+import { forgetChannel, forgetPending, isJoinCode, loadMember, loadPending, renameChannel } from "@kiwi/channel/store.ts"
+import { linkOf, type ChannelLink } from "@kiwi/channel/channel-ops.ts"
+import { removeComputer } from "@kiwi/app/computers.ts"
+import { joinCodeFromLink } from "@kiwi/app/deep-link.ts"
+import { kiwiJoin } from "@kiwi/app/join-line.ts"
 import { relayUrl } from "@kiwi/secrets/relay.ts"
-import { noteFor, showSeat, type ShowResult } from "@/lib/show-seat"
-import { cleanRoomName, roomProblem, roomsAfter } from "@/lib/rooms"
-import { ALLOW_ONCE, DENY } from "@/lib/permission-settled"
-import { savePersonalities } from "@/lib/personalities"
+import { noteFor, showSeat, type ShowResult } from "@kiwi/app/show-seat.ts"
+import { cleanRoomName, roomProblem, roomsAfter } from "@kiwi/app/rooms.ts"
+import { ALLOW_ONCE, DENY } from "@kiwi/app/permission-settled.ts"
+import { savePersonalities } from "@kiwi/app/personalities.ts"
 import { createPerson, bridge, secrets, type KiwiBridge, type TermEvent, type TermOpenView } from "@kiwi/secrets/secrets.ts"
-import { isSignInGone } from "@/lib/session"
-import { ANYONE, approveTask, assignTask, cancelTask, changeReviewer, closedDigest, sendBackTask, type TaskSend } from "@/lib/task-actions"
+import { isSignInGone } from "@kiwi/channel/session.ts"
+import { ANYONE, approveTask, assignTask, cancelTask, changeReviewer, closedDigest, sendBackTask, type TaskSend } from "@kiwi/channel/task-actions.ts"
 import { announce } from "~/kit/toasts"
 import { enrollAnswer, enrollBegin, enrollCancel, enrollConfirm, enrollDeny, forgetDevice, linkGithub, renewDevice, unlinkGithub, type EnrollDone } from "~/live/account"
 import { loadPicture } from "~/live/pictures"
@@ -32,7 +33,7 @@ import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
 import { harnessChoices, STARTS } from "~/live/harness-rows"
 import { iconFromFile } from "~/live/icon-file"
 import { seatOf } from "~/live/seats"
-import { memberName } from "@/lib/format"
+import { memberName } from "@kiwi/app/format.ts"
 import { checkComputer, computerSettings, setContextLine, setHooks } from "~/live/computer"
 import { addStartFolder, allowNewAgents, allowRemoteBypass, removeStartFolder, setTerminalHelpers } from "~/live/starts"
 import { closeOpened, leavingOnPurpose, openedChannel, openedRun, type Run } from "~/live/store"
@@ -533,7 +534,7 @@ export function makeActions(): Actions {
         const run = need(code)
         const b = bridge()
         if (b && !("saveFile" in b)) return announce("Saving the history needs the next Channels update")
-        const [{ checkedState, exportNote, logExport, logFileName, transcript }, history] = await Promise.all([import("@/lib/log-export"), run.ch.history(0)])
+        const [{ checkedState, exportNote, logExport, logFileName, transcript }, history] = await Promise.all([import("@kiwi/app/log-export.ts"), run.ch.history(0)])
         const log = logExport(history)
         const state = await checkedState(history, run.foldFrom, () => run.ch.snapshot().catch(() => null), run.state)
         const at = new Date()
@@ -582,6 +583,14 @@ export function makeActions(): Actions {
         const ev = { op: "hold.set" as const, on, ...(note ? { note } : {}) }
         const since = await event(run, on ? `on hold${note ? `: ${note}` : ""}` : "hold lifted", ev)
         await run.ch.setHold({ on, ...(note ? { note } : {}), since })
+      }),
+    approveCompact: (code, proposal) =>
+      attempt("Not compacted", async () => {
+        const run = owner(code)
+        const p = run.state.compactProposal
+        if (p?.seq !== proposal) throw new Error("that proposal was replaced or already approved")
+        await event(run, `compacted the history through #${p.through}`, { op: "compact", summary: p.summary, through: p.through, proposal: p.seq })
+        announce(`History through #${p.through} compacted`)
       }),
     myRepos: async () => {
       const b = bridge()

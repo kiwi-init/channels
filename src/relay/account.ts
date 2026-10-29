@@ -1,8 +1,9 @@
-import { verifyRequest } from "@kiwi/core/auth.ts";
+import { AUTH_SKEW_MS, verifyRequest } from "@kiwi/core/auth.ts";
 import { b64url } from "@kiwi/core/crypto.ts";
 import { currentDevice, readDeviceList, type Device, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import { accountScope, ENROLL_TTL_MS, readEnrollAnswer, readEnrollAsk, revealMatches, type Enrollment } from "@kiwi/core/enroll.ts";
 import { canonical } from "@kiwi/core/identity.ts";
+import { checkVault, readRecovery, type Recovery, type RecoveryLink, type Vault } from "@kiwi/core/recovery.ts";
 import { BadRequest, Conflict, Forbidden, NotFound, SignInRequired, TooLarge, TooMany, Unauthorized } from "./failures.ts";
 import { readCapped } from "./http.ts";
 import { HUMAN_HEADER, type HumanAuth } from "./human.ts";
@@ -13,6 +14,7 @@ import { requestToken } from "./room/auth.ts";
 export const ACCOUNT_ASKS_PER_MINUTE = 5;
 const LIST_MAX_BYTES = 768 * 1024;
 const ASK_MAX_BYTES = 4096;
+const VAULT_MAX_BYTES = 1024 * 1024;
 
 export interface AccountStore {
   links(user: string): Promise<unknown[]>;
@@ -20,9 +22,14 @@ export interface AccountStore {
   enrollment(user: string): Promise<Enrollment | null>;
   setEnrollment(user: string, next: Enrollment | null, prev: Enrollment | null): Promise<boolean>;
   revoke(keys: string[]): Promise<void>;
+  recovery(user: string): Promise<unknown[]>;
+  extendRecovery(user: string, from: number, links: RecoveryLink[]): Promise<boolean>;
+  vault(user: string): Promise<Vault | null>;
+  setVault(user: string, next: Vault, prev: number): Promise<boolean>;
 }
 
-const PATH = /^\/v1\/account(?:\/ask(?:\/([A-Za-z0-9_-]{22})(?:\/(answer|reveal))?)?)?$/;
+const PATH = /^\/v1\/account(?:\/vault|\/ask(?:\/([A-Za-z0-9_-]{22})(?:\/(answer|reveal))?)?)?$/;
+const VAULT_PATH = "/v1/account/vault";
 
 export const isAccountPath = (pathname: string): boolean => PATH.test(pathname);
 
@@ -63,6 +70,50 @@ async function kept(store: AccountStore, user: string): Promise<{ links: unknown
   return { links, list: read.list };
 }
 
+async function keptRecovery(store: AccountStore, user: string, list: DeviceList | null, now: number): Promise<{ chain: unknown[]; recovery: Recovery | null }> {
+  const chain = await store.recovery(user);
+  if (!chain.length || !list) return { chain, recovery: null };
+  const read = await readRecovery(chain, list, now);
+  if (!read.ok) throw new Error(`a kept recovery chain doesn't hold up: ${read.why}`);
+  return { chain, recovery: read.recovery };
+}
+
+async function keepVault(store: AccountStore, user: string, list: DeviceList | null, signer: string, body: Record<string, unknown> | null, now: number): Promise<Response> {
+  const raw = body?.["recovery"];
+  const vault = body?.["vault"];
+  if (!body || (raw !== undefined && !Array.isArray(raw)) || (raw === undefined && vault === undefined))
+    return refuse(new BadRequest({ message: "a vault update takes {recovery, vault}: the recovery chain, the sealed vault, or both" }));
+  if (!list) return refuse(new NotFound({ message: "publish the device list before a recovery key" }));
+  const { chain, recovery: kept } = await keptRecovery(store, user, list, now);
+  let recovery = kept;
+  if (signer !== list.person && !approver(list, signer, now) && signer !== recovery?.rpk)
+    return refuse(new Forbidden({ message: "only the person key, the recovery key or an app that approves devices keeps the vault" }));
+  if (Array.isArray(raw)) {
+    if (raw.length < chain.length) return refuse(new Conflict({ message: "a newer recovery chain is already kept" }));
+    if (chain.some((l, i) => canonical(l) !== canonical(raw[i]))) return refuse(new Conflict({ message: "that recovery chain doesn't extend the one kept" }));
+    const read = await readRecovery(raw, list, now);
+    if (!read.ok) return refuse(new BadRequest({ message: `that recovery chain doesn't hold up: ${read.why}` }));
+    const fresh = raw.slice(chain.length) as RecoveryLink[];
+    if (fresh.some((l) => list.revoked.includes(l.pk))) return refuse(new Forbidden({ message: "a removed device can't change the recovery key" }));
+    if (fresh.some((l) => Math.abs(l.at - now) > AUTH_SKEW_MS)) return refuse(new BadRequest({ message: "a new recovery link carries the time it's sent, and this one doesn't" }));
+    if (fresh.length && !(await store.extendRecovery(user, chain.length, fresh))) return refuse(new Conflict({ message: "the recovery chain changed meanwhile; read it and try again" }));
+    recovery = read.recovery;
+  }
+  if (vault === undefined) return done();
+  if (!recovery) return refuse(new Conflict({ message: "set up a recovery key before its vault" }));
+  const bad = await checkVault(vault, list);
+  if (bad) return refuse(new BadRequest({ message: `that vault doesn't hold up: ${bad}` }));
+  const next = vault as Vault;
+  if (next.pk !== list.person && !approver(list, next.pk, now)) return refuse(new Forbidden({ message: "the vault is signed by a key that isn't one of this person's current approving devices" }));
+  const prev = await store.vault(user);
+  const known = prev?.version ?? 0;
+  if (prev && canonical(prev) === canonical(next)) return done();
+  if (next.version <= known) return refuse(new Conflict({ message: `vault version ${known} is already kept, so version ${next.version} is too old` }));
+  if (next.version !== known + 1) return refuse(new BadRequest({ message: `vault version ${next.version} doesn't follow version ${known}` }));
+  if (!(await store.setVault(user, next, known))) return refuse(new Conflict({ message: "the vault changed meanwhile; read it and try again" }));
+  return done();
+}
+
 export async function onAccountHttp(
   req: Request,
   store: AccountStore,
@@ -74,22 +125,26 @@ export async function onAccountHttp(
   if (!m) return null;
   if (req.method === "OPTIONS") return corsPreflight();
   const now = (opts.now ?? Date.now)();
-  const onAsk = url.pathname !== "/v1/account";
+  const onVault = url.pathname === VAULT_PATH;
+  const onAsk = url.pathname !== "/v1/account" && !onVault;
   const id = m[1];
   const step = m[2];
   const writes = req.method === "PUT" || req.method === "POST";
-  const bytes = writes ? await readCapped(req, onAsk ? ASK_MAX_BYTES : LIST_MAX_BYTES) : new Uint8Array(0);
+  const bytes = writes ? await readCapped(req, onAsk ? ASK_MAX_BYTES : onVault ? VAULT_MAX_BYTES : LIST_MAX_BYTES) : new Uint8Array(0);
   if (bytes === null) return refuse(new TooLarge({ message: "that request is too large for an account route" }));
   if (writes && opts.perAddress && !(await opts.perAddress())) return refuse(new TooMany({ message: "too many account requests from this address; try again in a few minutes" }));
   const body = new TextDecoder().decode(bytes);
   const { links, list } = await kept(store, user);
 
+  if (onVault && req.method === "GET") return answer({ recovery: await store.recovery(user), vault: await store.vault(user) });
   if (!onAsk && req.method === "GET") return answer({ user, links });
 
   const token = requestToken(req);
   const signer = token ? await verifyRequest(token, accountScope(user), req.method, url.pathname, body, now) : null;
   if (!signer) return refuse(new Unauthorized({ message: "sign this request for this account and path" }));
   if (list?.revoked.includes(signer)) return refuse(new Forbidden({ message: "this device was removed from this person's devices" }));
+
+  if (onVault) return req.method === "PUT" ? keepVault(store, user, list, signer, parse(body), now) : refuse(new NotFound({ message: "not found" }));
 
   if (!onAsk && req.method === "PUT") {
     const raw = parse(body)?.links;
@@ -118,8 +173,6 @@ export async function onAccountHttp(
     if (!list) return refuse(new NotFound({ message: "no app of this account can approve a device yet: sign in on your first app" }));
     if (list.revoked.includes(ask.device)) return refuse(new Forbidden({ message: "this device was removed from this person's devices" }));
     if (list.devices.some((d) => d.device === ask.device)) return refuse(new Conflict({ message: "this device is already one of this person's" }));
-    if (live && live.ask.device !== ask.device)
-      return refuse(new Conflict({ message: "another device is already asking to join this account: it's gone in 10 minutes, or an app of yours can turn it away" }));
     if (opts.perAccount && !(await opts.perAccount(`account:${user}`))) return refuse(new TooMany({ message: "too many asks for this account; try again in a minute" }));
     const fresh: Enrollment = { id: b64url(crypto.getRandomValues(new Uint8Array(16))), at: now, ask };
     if (!(await store.setEnrollment(user, fresh, stored))) return refuse(new Conflict({ message: "another ask arrived meanwhile; try again" }));

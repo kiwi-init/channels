@@ -4,7 +4,8 @@ import { join } from "node:path"
 
 import { CHANNELS_DARK, CHANNELS_OLED } from "~/theme/channels"
 import { TOKENS } from "~/theme/derive"
-import { activeTheme, allThemes, deletedTheme, isBuiltin, movedDark } from "~/theme/themes"
+import { loadRex } from "~/theme/rex"
+import { activeTheme, allThemes, deletedTheme, isBuiltin, movedDark, wantsRex } from "~/theme/themes"
 
 const css = readFileSync(join(import.meta.dir, "../styles/tokens.css"), "utf8")
 const firstPaint = css.slice(css.indexOf(":root {"), css.indexOf(":root[data-theme"))
@@ -35,5 +36,17 @@ describe("OLED Black", () => {
     expect(movedDark(CHANNELS_DARK.id, true)).toBe(CHANNELS_DARK.id)
     expect(movedDark("abyssal-trench", false)).toBe("abyssal-trench")
     expect(movedDark("mine-dusk", false)).toBe("mine-dusk")
+  })
+})
+
+describe("Rex themes", () => {
+  test("load only for a saved Rex theme, and resolve once loaded", async () => {
+    const prefs = { theme: "dark" as const, darkTheme: "abyssal-trench", lightTheme: "channels-light", customThemes: [] }
+    expect(wantsRex({ ...prefs, darkTheme: CHANNELS_OLED.id })).toBe(false)
+    expect(wantsRex({ ...prefs, darkTheme: "mine", customThemes: [{ id: "mine", name: "Mine", appearance: "dark", base: { background: "#000000", text: "#ffffff", accent: "#ff0000" } }] })).toBe(false)
+    expect(wantsRex(prefs)).toBe(true)
+    await loadRex()
+    expect(activeTheme(prefs, true).id).toBe("abyssal-trench")
+    expect(allThemes([]).map((t) => t.id)).toContain("abyssal-trench")
   })
 })

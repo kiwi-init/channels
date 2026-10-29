@@ -444,10 +444,10 @@ esac`,
       .split("---\n")
       .map((c) => c.split("\n").filter(Boolean));
     const set = runs.find((c) => c.includes("set-buffer"))!;
-    expect(set.slice(0, 2)).toEqual(["-S", "/tmp/kiwi-1/abc"]);
+    expect(set.slice(0, 3)).toEqual(["-u", "-S", "/tmp/kiwi-1/abc"]);
     expect(set.at(-1)).toContain(`kiwi join ${code} --nick 'Kim'`);
     expect(runs.find((c) => c.includes("paste-buffer"))).toEqual(expect.arrayContaining(["-p", "-t", "%3"]));
-    expect(runs.find((c) => c.includes("send-keys"))).toEqual(["-S", "/tmp/kiwi-1/abc", "send-keys", "-t", "%3", "Enter"]);
+    expect(runs.find((c) => c.includes("send-keys"))).toEqual(["-u", "-S", "/tmp/kiwi-1/abc", "send-keys", "-t", "%3", "Enter"]);
   });
 });
 

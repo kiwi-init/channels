@@ -69,6 +69,8 @@ sealed interface Linking {
 
     data class SigningIn(val url: String?, val code: String) : Linking
 
+    data object Asking : Linking
+
     data class Approve(val digits: String) : Linking
 
     data class Failed(val why: String) : Linking
@@ -119,6 +121,9 @@ class AppModel(private val app: Application) {
     var linking by mutableStateOf<Linking>(Linking.Idle)
         private set
     var relinkAsked by mutableStateOf(false)
+    var unsaved by mutableStateOf<String?>(null)
+        private set
+    private var keeping: ByteArray? = null
 
     val rooms = mutableStateMapOf<String, RoomView>()
     val seen = mutableStateMapOf<String, Int>().apply { putAll(counts("seen")) }
@@ -209,7 +214,7 @@ class AppModel(private val app: Application) {
     private fun take(push: Push) {
         when (push) {
             is Push.Saved -> {
-                vault.save(push.saved.toString().toByteArray())
+                store(push.saved.toString().toByteArray())
                 (push.saved as? JsonObject)?.let(::held)
             }
             is Push.Room -> {
@@ -281,10 +286,12 @@ class AppModel(private val app: Application) {
                 )
                 linking = Linking.SigningIn(started.url, started.code)
                 started.url?.let(::browse)
+                ask(buildJsonObject { put("op", "enrollAsk") })
+                linking = Linking.Asking
                 val shown = read(EnrollDigits.serializer(), ask(buildJsonObject { put("op", "enrollWait") }))
                 linking = Linking.Approve(shown.digits)
                 val data = ask(buildJsonObject { put("op", "enrollFinish") }).toString().toByteArray()
-                vault.save(data)
+                store(data)
                 linking = Linking.Idle
                 rooms.clear()
                 begin(data)
@@ -464,7 +471,20 @@ class AppModel(private val app: Application) {
         }
     }
 
+    private fun store(data: ByteArray) {
+        try {
+            vault.save(data)
+            keeping = null
+            unsaved = null
+        } catch (e: VaultException) {
+            // The session runs from memory: the notice says so, and the next start or push saves again.
+            keeping = data
+            unsaved = "This phone couldn't save your sign-in: ${e.message}. You stay signed in until Channels closes, and it tries again each time you open it."
+        }
+    }
+
     fun nudge() {
+        keeping?.let(::store)
         if (phase != Phase.Ready) return
         scope.launch {
             try {
@@ -477,6 +497,8 @@ class AppModel(private val app: Application) {
 
     fun unlink() {
         vault.wipe()
+        keeping = null
+        unsaved = null
         rooms.clear()
         person = ""
         enrolled = false

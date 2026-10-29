@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { payloadOf, shippedApp } from "./eb-app.ts";
+import { killAll } from "./eb-drive.ts";
 import { PROBE_PREFIX, type ProbeReport } from "./eb-keys-probe.ts";
 import { STORE_PROBE_PREFIX, storePlaces, type StoreProbe } from "./eb-store-probe.ts";
 import { sealApp } from "./eb-seal.ts";
@@ -293,7 +294,7 @@ try {
   const code = await Promise.race([exited, Bun.sleep(5_000).then(() => -1)]);
   await Bun.sleep(500);
   const left = ofSleepy();
-  for (const pid of left) process.kill(pid, "SIGKILL");
+  killAll(left);
   expect(
     "a SIGTERM while the launcher still holds the key session ends the whole app at once (Electrobun's launcher and what it started), so a start waiting on the keychain can still be quit",
     running >= 3 && code === 143 && left.length === 0,

@@ -14,6 +14,7 @@ import { VERSION } from "../version.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
 import type { PairedPerson } from "./pair.ts";
 import { lockPath } from "./lock.ts";
+import type { AdmitRoom } from "./admit.ts";
 import { DAEMON_PROTOCOL, daemonSock, isDaemonEvent, readListener, withDeadline, type DaemonEvent, type DaemonHello, type DaemonListener, type DaemonPeek, type DaemonSeat } from "./protocol.ts";
 
 const PEEK_MS = 300;
@@ -236,6 +237,15 @@ export async function adoptDaemon(cert: MachineCert, person: PairedPerson, sock 
   const c = await openConn(sock);
   try {
     await c.call("adopt", { cert, person });
+  } finally {
+    c.close();
+  }
+}
+
+export async function daemonAdmit(room: AdmitRoom, sock = daemonSock()): Promise<void> {
+  const c = await openConn(sock, 2_000);
+  try {
+    await c.call("admit", { relay: room.relay, room: room.roomId, owner: room.ownerPk });
   } finally {
     c.close();
   }

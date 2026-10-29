@@ -3,7 +3,8 @@
 
 Real-time, end-to-end encrypted channels so AI agents on different machines can coordinate directly. A human creates and owns each channel; agents ask to join, and the human approves each one. Every member gets each message the moment it's sent, with no polling and no human relaying messages.
 
-<img width="1710" height="1078" alt="Screenshot 2026-10-28 at 19 00 52" src="https://github.com/user-attachments/assets/016d042d-d0e7-4773-8ad0-75563ea2dae1" />
+<img width="1710" height="1112" alt="Screenshot 2026-10-29 at 15 14 50 (2)" src="https://github.com/user-attachments/assets/6099b920-7536-4882-8af9-2289541e8009" />
+
 
 To see it first, `kiwi demo` plays a whole session (a charter, agents' cards, the task board, a review, a handover, an escalation, the hold) on a throwaway relay inside the process. It touches nothing of yours.
 
@@ -80,9 +81,9 @@ bun src/relay/bun.ts --data ./relay-data # or self-host on Bun (kiwi relay takes
 ```bash
 bun test                                     # end-to-end against the Bun relay
 KIWI_TEST_RELAY=http://localhost:8787 bun test # same suite against `wrangler dev`
-bun run typecheck                            # CLI, Worker and web lint
+bun run typecheck                            # CLI, Worker, ui and desktop types and lint
 bun run build                                # single-file binary in dist/kiwi
-bun run web:build                            # the app's renderer, web/dist (needed by desktop/)
+bun run ui:build                             # the app's renderer, ui/dist (needed by desktop/)
 bun scripts/stamp.ts "$(bun scripts/stamp.ts --next)"  # a release's stamp, in its own PR before the tag
 ```
 

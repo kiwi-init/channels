@@ -39,7 +39,8 @@ const deviceName = (members: readonly Pick<Member, "name">[], base: string): str
   }
 };
 
-const sameHuman = (members: readonly Member[], person: string) => members.find((m) => (m.kind === "human" || m.owner) && m.person === person && !m.device);
+const sameHuman = (members: readonly Member[], person: string, ownerPerson?: string) =>
+  members.find((m) => (m.kind === "human" || m.owner) && m.person === person && !m.device) ?? (person === ownerPerson ? members.find((m) => m.owner) : undefined);
 
 const personNameOf = (members: readonly Member[], person: string): string => {
   const m = sameHuman(members, person);
@@ -117,7 +118,7 @@ export class ChannelRequests {
         if (auto) offered.push({ name: (info.name = free ? asked : freeHandle(offered, seededPick(r.pk))) });
         const forgotten = !enrolled && !!computer && !!opts.person && computer.person === opts.person && !!opts.mine && !opts.mine.includes(computer.pk);
         const own = !!computer && !!opts.person && computer.person === opts.person && !forgotten;
-        const same = app ? sameHuman(seats, app.person) : undefined;
+        const same = app ? sameHuman(seats, app.person, opts.person) : undefined;
         const joinsOnItsOwn = own || (kind === "agent" && !!computer && !!opts.person && agentsOf.has(computer.person)) || !!same;
         const spend = joinsOnItsOwn ? undefined : opts.person && !r.reveal ? undefined : opts.budget;
         const check = yield* this.codeCheck(r, spend, joinsOnItsOwn).pipe(Effect.catchCause(() => Effect.succeed(null)));
@@ -169,6 +170,7 @@ export class ChannelRequests {
         ? sameHuman(
             members.filter((m) => m.active && !m.unverified),
             device.person,
+            ownerPerson,
           )
         : undefined;
       let sponsor: MemberInfo["sponsor"];

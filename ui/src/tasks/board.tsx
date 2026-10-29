@@ -12,8 +12,6 @@ import { useApp } from "~/nav"
 import { nickname } from "~/names"
 import { NowCard } from "~/tasks/now"
 
-export const openTasks = (channel: Channel): Task[] => channel.tasks.filter((t) => t.status !== "done" && !t.archived)
-
 export const TONES: Record<TaskStatus, string> = { todo: "", doing: "tone-doing", review: "tone-review", done: "tone-live", waiting: "tone-decide" }
 
 const ROWS_SHOWN = 5
@@ -52,7 +50,7 @@ export function Board({ channel, needs }: { channel: Channel; needs: number }) {
         {live.length === 0 && channel.loading ? (
           <Loading />
         ) : live.length === 0 ? (
-          <Empty title="No tasks yet.">
+          <Empty title="No tasks yet." icon="tasks">
             {channel.people.some((p) => p.kind === "agent")
               ? "Say what you want done in the conversation. The lead turns it into tasks."
               : "Add one above, or add an agent from the sidebar and say what you want done."}

@@ -14,12 +14,7 @@ import { useApp } from "~/nav"
 import { nickname } from "~/names"
 import { ShowAgent } from "~/kit/show-agent"
 import { SendBack } from "~/tasks/send-back"
-
-const isOpen = (a: Ask): boolean => a.kind === "review" || !a.answer
-
-const isIdle = (a: Ask): boolean => a.kind === "question" && !!a.idle && !a.answer
-
-export const openAsks = (channel: Channel): Ask[] => channel.asks.filter((a) => isOpen(a) && !isIdle(a))
+import { isIdle, isOpen, openAsks } from "~/needs/open"
 
 export function NeedsYou({ channel, onJump }: { channel: Channel; onJump: (jump: Jump) => void }) {
   const open = openAsks(channel).sort((a, b) => a.at - b.at)
@@ -46,7 +41,9 @@ export function NeedsYou({ channel, onJump }: { channel: Channel; onJump: (jump:
         ) : channel.loading ? (
           <Loading />
         ) : (
-          <Empty title="Nothing needs you.">Asks from agents and people who want in show up here.</Empty>
+          <Empty title="Nothing needs you." icon="clear">
+            Asks from agents and people who want in show up here.
+          </Empty>
         )}
         {idle.length > 0 && (
           <section className="needs-idle" aria-label="Asked, holding nothing up">

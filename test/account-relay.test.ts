@@ -6,6 +6,7 @@ import { signRequest } from "@kiwi/core/auth.ts";
 import { certUntil, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceLinkBody } from "@kiwi/core/devices.ts";
 import { accountScope, askToEnroll, ENROLL_TTL_MS, enrollDigits, enrollNonce, type EnrollAnswer, type EnrollAsk, type Enrollment } from "@kiwi/core/enroll.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
+import { openVault, readRecovery, recoveryAfter, recoveryKey, recoveryLink, sealVault, type Recovery, type RecoveryLink, type Vault } from "@kiwi/core/recovery.ts";
 import { certifyMachine } from "@kiwi/core/person.ts";
 import { WS_PROTOCOL } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
@@ -210,21 +211,32 @@ describe("enrolling a new device: commit, answer, reveal", () => {
     expect(await errorOf(again.res)).toContain("already one of");
   });
 
-  test("an account takes one pending ask, gone after ten minutes", async () => {
+  test("an account keeps one pending ask: a new one replaces it, even answered, and it's gone after ten minutes", async () => {
     const a = account();
     const { desk } = await firstApp(a);
     const first = await device("first");
-    expect((await asks(a, first)).res.status).toBe(202);
+    const asked = await asks(a, first, "phone");
+    expect(asked.res.status).toBe(202);
+    const { id } = (await asked.res.json()) as { id: string };
+    const answer: EnrollAnswer = { device: desk.pk, dxpk: desk.xpk!, nonce: enrollNonce() };
+    expect((await call(a, desk, "PUT", `/v1/account/ask/${id}/answer`, answer)).status).toBe(204);
+
     const second = await device("second");
-    const blocked = await asks(a, second);
-    expect(blocked.res.status).toBe(409);
-    expect(await errorOf(blocked.res)).toContain("already asking");
-    expect((await asks(a, first)).res.status).toBe(202);
+    const again = await asks(a, second, "phone");
+    expect(again.res.status).toBe(202);
+    const { id: next } = (await again.res.json()) as { id: string };
+    const kept = (await (await call(a, desk, "GET", "/v1/account/ask")).json()) as Enrollment;
+    expect(kept).toMatchObject({ id: next, ask: again.ask });
+    expect(kept.answer).toBeUndefined();
+    expect((await call(a, first, "GET", "/v1/account/ask")).status).toBe(403);
+    const stale = await call(a, first, "PUT", `/v1/account/ask/${id}/reveal`, { nonce: asked.nonce });
+    expect(stale.status).toBe(404);
+    expect(await errorOf(stale)).toContain("gone");
 
     t += ENROLL_TTL_MS + 1;
     setSystemTime(t);
     expect((await call(a, desk, "GET", "/v1/account/ask")).status).toBe(404);
-    expect((await asks(a, second)).res.status).toBe(202);
+    expect((await asks(a, first)).res.status).toBe(202);
   });
 
   test("an app turns an ask away; a device that can't approve neither reads nor answers it", async () => {
@@ -305,5 +317,161 @@ describe("a revoked device is refused", () => {
     expect(asked.res.status).toBe(403);
     expect(await errorOf(asked.res)).toContain("removed");
     expect((await call(a, box, "GET", "/v1/account/ask")).status).toBe(403);
+  });
+});
+
+describe("the vault: the recovery chain and signed versions (T823)", () => {
+  const paper = () => recoveryKey(new Uint8Array(32).fill(7));
+
+  async function readOf(links: DeviceLink[], chain: RecoveryLink[]): Promise<Recovery> {
+    const list = await readDeviceList(links);
+    if (!list.ok) throw new Error(list.why);
+    const read = await readRecovery(chain, list.list, t);
+    if (!read.ok) throw new Error(read.why);
+    return read.recovery;
+  }
+
+  async function setUp(a: Account) {
+    const first = await firstApp(a);
+    const key = await paper();
+    const chain = [await recoveryLink(first.person, first.person.pk, null, { pk: key.pk, xpk: key.xpk! }, t)];
+    expect((await call(a, first.desk, "PUT", "/v1/account/vault", { recovery: chain })).status).toBe(204);
+    const seal = async (signer: Identity, version: number, label = "home"): Promise<Vault> =>
+      sealVault(signer, await readOf(first.links, chain), version, { person: first.person, channels: [{ label, code: "c", owner: first.desk }] }, t);
+    return { ...first, key, chain, seal };
+  }
+
+  const kept = async (a: Account) => (await (await call(a, null, "GET", "/v1/account/vault")).json()) as { recovery: unknown[]; vault: Vault | null };
+
+  test("a new account keeps no vault, and a vault waits for the device list and a recovery key", async () => {
+    const a = account();
+    expect(await kept(a)).toEqual({ recovery: [], vault: null });
+    const person = await device("person");
+    const key = await paper();
+    const early = await call(a, person, "PUT", "/v1/account/vault", { recovery: [await recoveryLink(person, person.pk, null, { pk: key.pk, xpk: key.xpk! }, t)] });
+    expect(early.status).toBe(404);
+    const { desk } = await firstApp(a);
+    const vault = await call(a, desk, "PUT", "/v1/account/vault", { vault: { kind: "kiwi-vault" } });
+    expect(vault.status).toBe(409);
+    expect(await errorOf(vault)).toContain("recovery key before");
+    expect((await call(a, desk, "PUT", "/v1/account/vault", {})).status).toBe(400);
+  });
+
+  test("versions only go up, one at a time, and the recovery key opens what's kept", async () => {
+    const a = account();
+    const { desk, person, key, chain, seal } = await setUp(a);
+    const v1 = await seal(desk, 1);
+    expect((await call(a, desk, "PUT", "/v1/account/vault", { vault: v1 })).status).toBe(204);
+    expect((await call(a, desk, "PUT", "/v1/account/vault", { vault: v1 })).status).toBe(204);
+    const skipped = await call(a, desk, "PUT", "/v1/account/vault", { vault: await seal(desk, 3) });
+    expect(skipped.status).toBe(400);
+    expect(await errorOf(skipped)).toContain("doesn't follow version 1");
+    const v2 = await seal(person, 2, "work");
+    expect((await call(a, desk, "PUT", "/v1/account/vault", { vault: v2 })).status).toBe(204);
+
+    for (const old of [v1, await seal(desk, 2, "rolled back"), await seal(desk, 1, "rolled back")]) {
+      const back = await call(a, desk, "PUT", "/v1/account/vault", { vault: old });
+      expect(back.status).toBe(409);
+      expect(await errorOf(back)).toContain("version 2 is already kept");
+    }
+    const got = await kept(a);
+    expect(got).toEqual({ recovery: chain, vault: v2 });
+    expect((await openVault(got.vault!, key))?.channels.map((c) => c.label)).toEqual(["work"]);
+  });
+
+  test("a forged vault is refused: a changed version, a stranger's or a phone's signature, another person's", async () => {
+    const a = account();
+    const { desk, links, chain, seal } = await setUp(a);
+    const phone = await device("phone");
+    const withPhone = await grow(links, desk, adds(phone, "phone"));
+    expect((await call(a, desk, "PUT", "/v1/account", { links: withPhone })).status).toBe(204);
+    const v1 = await seal(desk, 1);
+    const bumped = await call(a, desk, "PUT", "/v1/account/vault", { vault: { ...v1, version: 2 } });
+    expect(bumped.status).toBe(400);
+    expect(await errorOf(bumped)).toContain("isn't signed");
+    for (const signer of [await device("stranger"), phone]) {
+      const res = await call(a, desk, "PUT", "/v1/account/vault", { vault: await seal(signer, 1) });
+      expect(res.status).toBe(400);
+      expect(await errorOf(res)).toContain("approving devices");
+    }
+    const elsewhere = await device("elsewhere");
+    const theirs = await sealVault(elsewhere, { ...(await readOf(links, chain)), person: elsewhere.pk }, 1, { person: elsewhere, channels: [] }, t);
+    expect(await errorOf(await call(a, desk, "PUT", "/v1/account/vault", { vault: theirs }))).toContain("another person");
+    expect((await call(a, phone, "PUT", "/v1/account/vault", { vault: v1 })).status).toBe(403);
+    expect((await kept(a)).vault).toBeNull();
+  });
+
+  test("a vault from an app whose certificate ran out is refused", async () => {
+    const a = account();
+    const { desk, person, links, seal } = await setUp(a);
+    const laptop = await device("laptop");
+    const short = await grow(links, person, { op: "add", device: laptop.pk, dxpk: laptop.xpk!, label: "laptop", os: "macOS", as: "desktop", approve: true, until: t + 60_000 });
+    expect((await call(a, desk, "PUT", "/v1/account", { links: short })).status).toBe(204);
+    const v1 = await seal(laptop, 1);
+    t += 120_000;
+    const res = await call(a, desk, "PUT", "/v1/account/vault", { vault: v1 });
+    expect(res.status).toBe(403);
+    expect(await errorOf(res)).toContain("current approving");
+  });
+
+  test("a revoked app is refused: its requests, its vaults and its recovery proposals", async () => {
+    const a = account();
+    const { desk, person, links, chain, seal, key } = await setUp(a);
+    const thief = await device("thief");
+    const withThief = await grow(links, desk, adds(thief, "desktop", true));
+    expect((await call(a, desk, "PUT", "/v1/account", { links: withThief })).status).toBe(204);
+    const stolen = await seal(thief, 1, "stolen");
+    const other = await recoveryKey(new Uint8Array(32).fill(8));
+    const proposal = await recoveryLink(thief, person.pk, await readOf(withThief, chain), { pk: other.pk, xpk: other.xpk! }, t);
+    expect((await call(a, desk, "PUT", "/v1/account", { links: await grow(withThief, desk, { op: "revoke", device: thief.pk }) })).status).toBe(204);
+
+    const own = await call(a, thief, "PUT", "/v1/account/vault", { vault: stolen });
+    expect(own.status).toBe(403);
+    expect(await errorOf(own)).toContain("removed");
+    expect(await errorOf(await call(a, desk, "PUT", "/v1/account/vault", { vault: stolen }))).toContain("approving devices");
+    const proposed = await call(a, desk, "PUT", "/v1/account/vault", { recovery: [...chain, proposal] });
+    expect(proposed.status).toBe(403);
+    expect(await errorOf(proposed)).toContain("removed device");
+    expect(await kept(a)).toEqual({ recovery: chain, vault: null });
+    expect(key.pk).not.toBe(other.pk);
+  });
+
+  test("the recovery chain only grows, a proposal carries the relay's time, and the recovery key replaces itself", async () => {
+    const a = account();
+    const { desk, person, links, chain, key } = await setUp(a);
+    t += 10 * 86_400_000;
+    setSystemTime(new Date(t));
+    const other = await recoveryKey(new Uint8Array(32).fill(9));
+    const r1 = await readOf(links, chain);
+    const backdated = await recoveryLink(desk, person.pk, r1, { pk: other.pk, xpk: other.xpk! }, t - 8 * 86_400_000);
+    const back = await call(a, desk, "PUT", "/v1/account/vault", { recovery: [...chain, backdated] });
+    expect(back.status).toBe(400);
+    expect(await errorOf(back)).toContain("time it's sent");
+
+    const proposal = await recoveryLink(desk, person.pk, r1, { pk: other.pk, xpk: other.xpk! }, t);
+    expect(proposal.after).toBe(recoveryAfter(t));
+    const longer = [...chain, proposal];
+    expect((await call(a, desk, "PUT", "/v1/account/vault", { recovery: longer })).status).toBe(204);
+    expect((await call(a, desk, "PUT", "/v1/account/vault", { recovery: chain })).status).toBe(409);
+    const fork = [...chain, await recoveryLink(key, person.pk, r1, { pk: other.pk, xpk: other.xpk! }, t)];
+    expect(await errorOf(await call(a, desk, "PUT", "/v1/account/vault", { recovery: fork }))).toContain("doesn't extend");
+
+    const r2 = await readOf(links, longer);
+    expect(r2.pending?.rpk).toBe(other.pk);
+    const cancel = await recoveryLink(key, person.pk, r2, { pk: key.pk, xpk: key.xpk! }, t);
+    expect((await call(a, key, "PUT", "/v1/account/vault", { recovery: [...longer, cancel] })).status).toBe(204);
+    expect((await kept(a)).recovery).toHaveLength(3);
+    expect((await call(a, await device("stranger"), "PUT", "/v1/account/vault", { recovery: [...longer, cancel] })).status).toBe(403);
+  });
+
+  test("a vault too large is refused", async () => {
+    const a = account();
+    const { desk, seal } = await setUp(a);
+    const v1 = await seal(desk, 1);
+    const huge = await call(a, desk, "PUT", "/v1/account/vault", { vault: { ...v1, box: "x".repeat(1024 * 1024) } });
+    expect(huge.status).toBe(413);
+    const big = await call(a, desk, "PUT", "/v1/account/vault", { vault: { ...v1, box: "x".repeat(600 * 1024) } });
+    expect(big.status).toBe(400);
+    expect(await errorOf(big)).toContain("too large");
   });
 });

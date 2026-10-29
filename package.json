@@ -6,7 +6,6 @@
   "private": true,
   "workspaces": [
     "packages/*",
-    "web",
     "ui",
     "desktop"
   ],
@@ -20,14 +19,12 @@
     "relay:local": "bun src/relay/bun.ts",
     "build": "bun scripts/build-cli.ts",
     "test": "bun test",
-    "smoke:ui": "bun scripts/smoke-ui.ts",
-    "shots:ui": "bun scripts/shoot-ui.ts",
-    "lint": "oxlint src packages/core/src packages/secrets/src packages/channel/src desktop/src desktop/scripts scripts test site/app.js site/world.js ios/engine ios/scripts android/scripts",
-    "format": "oxfmt src packages/core/src packages/secrets/src packages/channel/src desktop/src desktop/scripts scripts test site/app.js site/world.js ios/engine ios/scripts android/scripts",
-    "format:check": "oxfmt --check src packages/core/src packages/secrets/src packages/channel/src desktop/src desktop/scripts scripts test site/app.js site/world.js ios/engine ios/scripts android/scripts",
-    "typecheck": "tsrs --noEmit && tsrs --noEmit -p tsconfig.worker.json && tsrs --noEmit -p packages/secrets/tsconfig.json && tsrs --noEmit -p packages/channel/tsconfig.json && bun run lint && bun run format:check && bun scripts/ui-tokens.ts && cd web && tsrs -b && bun oxlint src && bun oxfmt --check src && cd ../ui && tsrs -b && bun oxlint src && bun oxfmt --check src && cd ../desktop && tsrs --noEmit",
-    "web:dev": "cd web && bun run dev",
-    "web:build": "cd web && bun run build",
+    "smoke:ui": "bun scripts/smoke-app.ts",
+    "shots:ui": "bun scripts/shoot-app.ts --dist ui/dist",
+    "lint": "oxlint src packages/core/src packages/secrets/src packages/channel/src packages/app/src desktop/src desktop/scripts scripts test site/app.js site/world.js ios/engine ios/scripts android/scripts",
+    "format": "oxfmt src packages/core/src packages/secrets/src packages/channel/src packages/app/src desktop/src desktop/scripts scripts test site/app.js site/world.js ios/engine ios/scripts android/scripts",
+    "format:check": "oxfmt --check src packages/core/src packages/secrets/src packages/channel/src packages/app/src desktop/src desktop/scripts scripts test site/app.js site/world.js ios/engine ios/scripts android/scripts",
+    "typecheck": "tsrs --noEmit && tsrs --noEmit -p tsconfig.worker.json && tsrs --noEmit -p packages/secrets/tsconfig.json && tsrs --noEmit -p packages/channel/tsconfig.json && tsrs --noEmit -p packages/app/tsconfig.json && bun run lint && bun run format:check && cd ui && tsrs -b && bun oxlint src && bun oxfmt --check src && cd ../desktop && tsrs --noEmit",
     "demo": "bun scripts/demo.ts",
     "changelog": "bun scripts/changelog.ts",
     "knip": "knip",
@@ -47,6 +44,7 @@
     "wrangler": "^4.154.0"
   },
   "dependencies": {
+    "@kiwi/app": "workspace:*",
     "@kiwi/channel": "workspace:*",
     "@kiwi/core": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.32.2",

@@ -1,7 +1,7 @@
 import type { Appearance, CustomTheme, Prefs, ThemeBase } from "../model"
 import { CHANNELS_DARK, CHANNELS_LIGHT, CHANNELS_OLED } from "./channels"
 import { compose, hex, isHex, type ColorTheme, type Colors } from "./derive"
-import { REX_THEMES } from "./rex-themes"
+import { rexThemes } from "./rex"
 
 export type ThemePrefs = Pick<Prefs, "theme" | "darkTheme" | "lightTheme" | "customThemes">
 
@@ -10,6 +10,10 @@ type Owned = Pick<Prefs, "darkTheme" | "lightTheme" | "customThemes">
 const fallback = (a: Appearance): ColorTheme => (a === "dark" ? CHANNELS_OLED : CHANNELS_LIGHT)
 
 export const isBuiltin = (t: ColorTheme): boolean => t.id === CHANNELS_OLED.id || t.id === CHANNELS_LIGHT.id
+
+const OURS = [CHANNELS_OLED.id, CHANNELS_DARK.id, CHANNELS_LIGHT.id]
+
+export const wantsRex = (p: Owned): boolean => [p.darkTheme, p.lightTheme].some((id) => !OURS.includes(id) && !p.customThemes.some((c) => c.id === id))
 
 export function customColors(t: Pick<CustomTheme, "appearance" | "base">): Colors {
   const b = t.base
@@ -34,17 +38,17 @@ export function customColors(t: Pick<CustomTheme, "appearance" | "base">): Color
 
 const toTheme = (t: CustomTheme): ColorTheme => ({ id: t.id, name: t.name, appearance: t.appearance, colors: customColors(t) })
 
-export const allThemes = (custom: readonly CustomTheme[]): ColorTheme[] => [CHANNELS_OLED, CHANNELS_DARK, CHANNELS_LIGHT, ...REX_THEMES, ...custom.map(toTheme)]
+export const allThemes = (custom: readonly CustomTheme[], rex: readonly ColorTheme[] = rexThemes()): ColorTheme[] => [CHANNELS_OLED, CHANNELS_DARK, CHANNELS_LIGHT, ...rex, ...custom.map(toTheme)]
 
 export function resolveMode(mode: Prefs["theme"], systemDark: boolean): Appearance {
   return mode === "system" ? (systemDark ? "dark" : "light") : mode
 }
 
-export function activeTheme(p: ThemePrefs, systemDark: boolean): ColorTheme {
+export function activeTheme(p: ThemePrefs, systemDark: boolean, rex: readonly ColorTheme[] = rexThemes()): ColorTheme {
   const appearance = resolveMode(p.theme, systemDark)
   const id = appearance === "dark" ? p.darkTheme : p.lightTheme
   const own = p.customThemes.find((c) => c.id === id)
-  const found = own ? toTheme(own) : [CHANNELS_OLED, CHANNELS_DARK, CHANNELS_LIGHT, ...REX_THEMES].find((t) => t.id === id)
+  const found = own ? toTheme(own) : [CHANNELS_OLED, CHANNELS_DARK, CHANNELS_LIGHT, ...rex].find((t) => t.id === id)
   return found && found.appearance === appearance ? found : fallback(appearance)
 }
 

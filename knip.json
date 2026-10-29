@@ -1,7 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreBinaries": [
-    "oxfmt",
     "gsettings",
     "xdg-user-dir",
     "weston-screenshooter",
@@ -35,6 +34,10 @@
       "includeEntryExports": true,
       "project": ["src/**/*.ts"]
     },
+    "packages/app": {
+      "entry": ["src/**/*.test.ts"],
+      "project": ["src/**/*.ts"]
+    },
     "packages/channel": {
       "entry": ["src/**/*.test.ts"],
       "project": ["src/**/*.ts"]
@@ -43,17 +46,12 @@
       "entry": ["src/**/*.test.ts"],
       "project": ["src/**/*.ts"]
     },
-    "web": {
-      "entry": ["src/**/*.test.{ts,tsx}", "src/lib/no-elk.ts"],
-      "project": ["src/**/*.{ts,tsx,css}"],
-      "ignore": ["src/lib/design-tokens.ts", "src/lib/fonts.ts"]
-    },
     "desktop": {
       "entry": ["src/main-eb.ts", "src/preload-eb.ts", "src/keys-worker.ts", "src/message-box-worker.ts", "scripts/*.ts", "electrobun.config.ts"],
       "project": ["src/**/*.ts", "scripts/**/*.ts"]
     },
     "ui": {
-      "entry": ["src/chat/react-native.ts", "stubs/react-native/index.js", "src/**/*.test.{ts,tsx}"]
+      "entry": ["src/chat/react-native.ts", "src/chat/no-elk.ts", "stubs/react-native/index.js", "src/**/*.test.{ts,tsx}"]
     }
   }
 }

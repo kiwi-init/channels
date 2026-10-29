@@ -17,7 +17,7 @@ const Annotator = lazy(() => import("~/chat/annotator"))
 const QUICK = ["👍", "🔥", "👀", "✅"]
 const CLAMP_PX = 12 * 22
 
-function Body({
+export function Body({
   text,
   seq,
   names,
@@ -109,6 +109,16 @@ function Spot({ code, img }: { code: string; img: ImageSpot }) {
   )
 }
 
+function Earlier() {
+  return (
+    <p className="msg-quote is-earlier">
+      <Icon name="reply" size={12} />
+      <span className="msg-quote-who">Earlier message</span>
+      <span className="msg-quote-text">no longer kept here</span>
+    </p>
+  )
+}
+
 function Quote({ quoted, who, names, onClick }: { quoted: Message; who: string; names: ReadonlyMap<string, string>; onClick?: () => void }) {
   const line = useMemo(() => withNames(quoted.text, names, preview), [quoted.text, names])
   return (
@@ -127,7 +137,7 @@ interface RowProps {
   names: ReadonlyMap<string, string>
   tasks: ReadonlySet<number>
   inThread?: boolean
-  quote?: Message
+  quote?: Message | number
   onQuote?: (seq: number) => void
 }
 
@@ -201,12 +211,13 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             </button>
             {who?.role && <span className="msg-role">{who.role}</span>}
             {who?.runs && <span className="msg-runs">· {who.runs}</span>}
+            {m.said && <span className={cx("msg-said", `is-${m.said.tone}`)}>{m.said.text}</span>}
             <time className="msg-time" dateTime={new Date(m.at).toISOString()}>
               {clock(m.at)}
             </time>
           </p>
         )}
-        {quote && <Quote quoted={quote} who={nickname(channel, quote.from)} names={names} onClick={onQuote ? () => onQuote(quote.seq) : undefined} />}
+        {typeof quote === "number" ? <Earlier /> : quote && <Quote quoted={quote} who={nickname(channel, quote.from)} names={names} onClick={onQuote ? () => onQuote(quote.seq) : undefined} />}
         <Clamp on={who?.kind === "agent" && !inThread}>{m.text && <Body text={m.text} seq={m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={openMessage} />}</Clamp>
         {m.images && (
           <div className="msg-images">
@@ -234,7 +245,9 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
           </p>
         )}
         {m.task !== undefined && <TaskChip channel={channel} id={m.task} />}
-        {m.pr && <PrChip pr={m.pr} />}
+        {m.prs?.map((pr) => (
+          <PrChip key={pr.url} pr={pr} />
+        ))}
         {ask?.kind === "permission" && <PermissionCard channel={channel} ask={ask} />}
         {ask?.kind === "question" && <QuestionCard channel={channel} ask={ask} />}
         {(m.reactions?.length ?? 0) > 0 && (
@@ -253,6 +266,11 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
               </button>
             ))}
           </div>
+        )}
+        {m.receipt && (
+          <p className="msg-receipt" aria-live="polite">
+            {m.receipt}
+          </p>
         )}
         {m.thread && !inThread && (
           <button type="button" className="msg-thread" onClick={() => go({ to: "panel", panel: { kind: "thread", seq: m.seq } })}>

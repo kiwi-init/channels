@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { MAX_IMAGE_BYTES, RASTER_MIMES } from "@kiwi/core/protocol.ts"
-import { fileDrag, takeDropped } from "@/lib/dropped"
-import { takePasted } from "@/lib/pasted"
+import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
+import { takePasted } from "@kiwi/app/pasted.ts"
 import { preview, useReplying } from "~/chat/reply"
 import { STASH_SHOT, useStash, type Stashed } from "~/chat/stash"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
@@ -80,7 +80,7 @@ function StashList({ list, place, onTake, onDrop, onClose }: { list: readonly St
       <ul ref={rows} aria-label="Stashed drafts">
         {list.map((s, i) => (
           <li key={`${s.at}-${i}`}>
-            <button type="button" className="stash-row" onFocus={() => setOn(i)} onMouseEnter={() => setOn(i)} onClick={() => onTake(i)}>
+            <button type="button" className="stash-row" onFocus={() => setOn(i)} onMouseEnter={() => setOn(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => onTake(i)}>
               <span className="stash-text">{s.text}</span>
               {i === 0 ? <kbd>⇧⌘S</kbd> : <span className="stash-age">{ago(s.at)}</span>}
             </button>
@@ -123,8 +123,8 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
   const [caret, setCaret] = useState(text.length)
   const [pick, setPick] = useState(0)
   const [closed, setClosed] = useState(false)
-  const [focused, setFocused] = useState(false)
   const area = useRef<HTMLTextAreaElement>(null)
+  const box = useRef<HTMLDivElement>(null)
   const picker = useRef<HTMLInputElement>(null)
   const [files, setFiles] = useState<Upload[]>([])
   const [dropping, setDropping] = useState(false)
@@ -158,7 +158,7 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
         continue
       }
       if (f.size > MAX_IMAGE_BYTES) {
-        void import("@/lib/compress-image").then(({ compressImage, renamed }) =>
+        void import("@kiwi/app/compress-image.ts").then(({ compressImage, renamed }) =>
           compressImage(f, MAX_IMAGE_BYTES).then((done) => (done ? add({ ...done, name: renamed(name, done.mime) }) : toast(`${name} couldn't be read`)))
         )
         continue
@@ -180,6 +180,20 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
   useEffect(() => {
     if (replyTo) area.current?.focus()
   }, [replyTo])
+
+  useLayoutEffect(() => {
+    const el = box.current
+    const host = el?.parentElement
+    if (!el || !host) return
+    const measure = () => host.style.setProperty("--compose-h", `${el.offsetHeight}px`)
+    measure()
+    const watch = new ResizeObserver(measure)
+    watch.observe(el)
+    return () => {
+      watch.disconnect()
+      host.style.removeProperty("--compose-h")
+    }
+  }, [])
 
   const typed = text.slice(0, caret)
   const query = closed ? undefined : MENTION.exec(typed)?.[2]
@@ -249,7 +263,7 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
   const quoteLine = useMemo(() => (replyTo ? withNames(replyTo.text, channel.nicknames, preview) : ""), [replyTo, channel.nicknames])
 
   return (
-    <div className="compose">
+    <div className="compose" ref={box}>
       {taskOptions.length > 0 && (
         <ul className="mentions" role="listbox" aria-label="Tasks" id={`${key}-tasks`}>
           {taskOptions.map((t, i) => (
@@ -328,6 +342,7 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
               className={cx("stash-chip", listOpen && "is-open")}
               aria-expanded={listOpen}
               title="Stashed drafts (⇧⌘S brings back the newest)"
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => setListOf(listOpen ? null : key)}
             >
               <Icon name="tray" size={14} />
@@ -404,8 +419,6 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
               if (!e.clipboardData.getData("text/plain")) e.preventDefault()
               attach(images)
             }}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
             onKeyDown={(e) => {
               if (e.nativeEvent.isComposing || e.keyCode === 229) return
               if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "s") {
@@ -452,8 +465,8 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
           </button>
         </div>
       </form>
-      {cue ? (
-        <p className="compose-hint is-on is-cue" role="status">
+      {cue && (
+        <p className="compose-hint" role="status">
           <b>{cue.back ? "Back from the stash" : "Stashed"}</b> <span>·</span>{" "}
           {cue.back ? (
             `${cue.left} left`
@@ -462,10 +475,6 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
               <kbd>⇧⌘S</kbd> brings it back
             </>
           )}
-        </p>
-      ) : (
-        <p className={cx("compose-hint", (focused || text) && "is-on")} aria-hidden="true">
-          <code>**bold**</code> <code>`code`</code> <code>- list</code> <span>·</span> {enterSends ? "Shift+Enter for a new line" : "⌘ Enter to send"}
         </p>
       )}
     </div>

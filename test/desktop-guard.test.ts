@@ -37,8 +37,8 @@ describe("the page gets a CSP (T184)", () => {
     expect(csp("https://r.example")).not.toContain("blob:'");
     expect(directives(csp("https://r.example")).get("worker-src")).toEqual(["'self'"]);
   });
-  test("it allows what the hosted web's CSP does (web/public/_headers), except WorkOS: in the app, main signs in", () => {
-    const hosted = /Content-Security-Policy: (.*)/.exec(readFileSync(new URL("../web/public/_headers", import.meta.url), "utf8"))![1]!;
+  test("it allows what the hosted app's CSP does (ui/public/_headers), except WorkOS: in the app, main signs in", () => {
+    const hosted = /Content-Security-Policy: (.*)/.exec(readFileSync(new URL("../ui/public/_headers", import.meta.url), "utf8"))![1]!;
     const app = directives(csp("https://r.example"));
     for (const [name, values] of directives(hosted)) for (const v of values) if (!/workos|authkit/.test(v)) expect(app.get(name) ?? []).toContain(v);
     expect(csp("https://r.example")).not.toMatch(/workos|authkit/);

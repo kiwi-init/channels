@@ -9,7 +9,7 @@ import { editable, Keyring, type KeyHost } from "../desktop/src/keyring.ts";
 import { serveKeys } from "../desktop/src/keys-server.ts";
 import { acceptSeat, mergePublicChannels, migrateEntries, movedRelay, publicChannel, withAccess } from "../desktop/src/seats.ts";
 import { fromWire, toWire } from "../desktop/src/wire.ts";
-import { remoteOps } from "../web/src/lib/channel-remote.ts";
+import { remoteOps } from "@kiwi/channel/channel-remote.ts";
 import { ChannelGone } from "@kiwi/core/client.ts";
 import { decodeJoinCode, encodeJoinCode, newRoomId } from "@kiwi/core/crypto.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
@@ -371,7 +371,7 @@ describe("the window's code holds no channel keys", () => {
   test("only channel-local.ts (the plain-browser dev mode) touches them", () => {
     const root = join(import.meta.dir, "..");
     const bad: string[] = [];
-    for (const f of [...files(join(root, "web/src")), ...files(join(root, "packages/secrets/src"))]) {
+    for (const f of [...files(join(root, "ui/src")), ...files(join(root, "packages/app/src")), ...files(join(root, "packages/secrets/src"))]) {
       const rel = f.slice(root.length + 1);
       if (allowed.has(rel)) continue;
       const text = readFileSync(f, "utf8");

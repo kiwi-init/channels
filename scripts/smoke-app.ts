@@ -134,7 +134,9 @@ try {
   await kiwi(["-c", "smoke", "--as", "bot", "send", "hello from bot"]);
   const ask = (await said("bot")).find((m) => m.body === "smoke test")?.seq;
   if (ask === undefined) throw new Error("the person's message isn't in the agent's log");
-  await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke task", "--owner", "bot", "--ask", String(ask)]);
+  const added = await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke task", "--owner", "bot", "--ask", String(ask)]);
+  const task = /\bT(\d+)\b/.exec(added)?.[1];
+  if (task === undefined) throw new Error(`kiwi task add printed no task id: ${added.trim()}`);
   await page.locator("article").filter({ hasText: "hello from bot" }).first().waitFor({ timeout: 30000 });
   await page.getByText("Smoke task").first().waitFor({ timeout: 30000 });
   await shot("general");
@@ -216,6 +218,29 @@ try {
   }
   if (!heard) throw new Error("the agent never got the answer");
   await shot("answered");
+  step(at);
+
+  at = "an agent proposes a compact, the owner approves it, and the history folds";
+  const proposed = await kiwi(["-c", "smoke", "--as", "bot", "compact", `Smoke summary: T${task} is open, asked in #${ask}.`]);
+  if (!proposed.includes("proposed #")) throw new Error(`kiwi compact did not propose: ${proposed.trim()}`);
+  const card = page.getByRole("region", { name: "Proposed compact" });
+  await card.waitFor({ timeout: 30000 });
+  await shot("compact-proposed");
+  await card.getByRole("button", { name: "Approve and compact" }).click();
+  const fold = page.getByRole("region", { name: "Compacted history" });
+  await fold.waitFor({ timeout: 30000 });
+  await card.waitFor({ state: "detached", timeout: 15000 });
+  await page.locator("article").filter({ hasText: "hello from bot" }).waitFor({ state: "detached", timeout: 15000 });
+  await shot("compacted");
+  await fold.getByRole("button", { name: "Show earlier messages" }).click();
+  await page.locator("article").filter({ hasText: "hello from bot" }).first().waitFor({ timeout: 15000 });
+  await fold.getByRole("button", { name: "Hide earlier messages" }).click();
+  let compacted = false;
+  for (let i = 0; i < 50 && !compacted; i++) {
+    compacted = (await said("bot")).some((m) => m.from === "smoke" && m.body?.startsWith("compacted the history through #") === true);
+    if (!compacted) await page.waitForTimeout(200);
+  }
+  if (!compacted) throw new Error("the agent never saw the compact");
   step(at);
 
   at = "the owner renames a room and gives the channel an image";

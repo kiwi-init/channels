@@ -1,4 +1,4 @@
-import { WORKOS_TOKEN_URL, workosDeviceSignIn } from "@kiwi/core/workos.ts";
+import { sessionExpiry, tokenExpiry, WORKOS_TOKEN_URL, workosDeviceSignIn } from "@kiwi/core/workos.ts";
 import type { SignInResult } from "./bridge.ts";
 import { externalUrl, type ExternalUrl } from "./guard.ts";
 import { held } from "./held.ts";
@@ -35,7 +35,7 @@ let refreshing: Promise<string | null> | null = null;
 export async function freshToken(): Promise<string | null> {
   const s = store.signin;
   if (!s) return null;
-  if (Date.now() < s.exp - 60_000) return s.access;
+  if (Date.now() < Math.min(s.exp, tokenExpiry(s.access) ?? s.exp) - 60_000) return s.access;
   refreshing ??= refreshToken(s).finally(() => (refreshing = null));
   return refreshing;
 }
@@ -51,9 +51,10 @@ async function refreshToken(s: NonNullable<StoreFile["signin"]>): Promise<string
     });
     if (!res.ok) throw new Error("refresh refused");
     const tok = (await res.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
-    if (!tok.access_token) throw new Error("no token");
+    const access = tok.access_token;
+    if (!access) throw new Error("no token");
     if (store.signin !== s) return store.signin?.access ?? null;
-    mutate((st) => (st.signin = { access: tok.access_token as string, refresh: tok.refresh_token ?? s.refresh, exp: Date.now() + (tok.expires_in ?? 3600) * 1000 }));
+    mutate((st) => (st.signin = { access, refresh: tok.refresh_token ?? s.refresh, exp: sessionExpiry(access, tok.expires_in) }));
     return store.signin?.access ?? null;
   } catch {
     return null;

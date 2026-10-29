@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { isRasterMime, type ImageAttachment, type Message as Wire } from "@kiwi/core/protocol.ts"
-import type { ChannelLink } from "@/lib/channel-ops"
+import type { ChannelLink } from "@kiwi/channel/channel-ops.ts"
 import type { Image as Picture, ImageSpot } from "~/model"
 import type { Pictures } from "~/live/map"
 

@@ -1,67 +1,96 @@
+import {
+  Add01Icon,
+  ArrowDown01Icon,
+  ArrowLeft01Icon,
+  ArrowRight01Icon,
+  ArrowTurnBackwardIcon,
+  ArrowUp02Icon,
+  AtIcon,
+  BotIcon,
+  BubbleChatIcon,
+  Cancel01Icon,
+  CommandLineIcon,
+  ComputerIcon,
+  ComputerPhoneSyncIcon,
+  Copy01Icon,
+  Download01Icon,
+  Folder01Icon,
+  GitPullRequestIcon,
+  HashtagIcon,
+  InboxCheckIcon,
+  InboxIcon,
+  InformationCircleIcon,
+  Link01Icon,
+  LinkSquare02Icon,
+  MinusSignIcon,
+  Moon02Icon,
+  Notification01Icon,
+  PaintBoardIcon,
+  Search01Icon,
+  Settings02Icon,
+  SidebarLeftIcon,
+  SmartPhone01Icon,
+  SquareIcon,
+  Sun03Icon,
+  TaskDone01Icon,
+  Tick02Icon,
+  UserCircleIcon,
+  UserQuestion01Icon,
+} from "@hugeicons/core-free-icons"
+import { createElement } from "react"
 import type { Harness } from "~/model"
 
-const PATHS = {
-  send: "M8 13V3M3.5 7.5 8 3l4.5 4.5",
-  sparkle: "M8 2.5c.4 2.6 1.4 3.6 4 4-2.6.4-3.6 1.4-4 4-.4-2.6-1.4-3.6-4-4 2.6-.4 3.6-1.4 4-4zM12.5 10.5c.2 1 .5 1.3 1.5 1.5-1 .2-1.3.5-1.5 1.5-.2-1-.5-1.3-1.5-1.5 1-.2 1.3-.5 1.5-1.5z",
-  plus: "M8 3v10M3 8h10",
-  minus: "M3 8h10",
-  expand: "M3.5 3.5h9v9h-9z",
-  close: "M4 4l8 8M12 4l-8 8",
-  search: "M7 12A5 5 0 1 0 7 2a5 5 0 0 0 0 10zM10.6 10.6 14 14",
-  gear: "M8 10.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4zM8 1.8v1.6M8 12.6v1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M1.8 8h1.6M12.6 8h1.6M3.6 12.4l1.1-1.1M11.3 4.7l1.1-1.1",
-  more: "M3.5 8h.01M8 8h.01M12.5 8h.01",
-  reply: "M6.5 4 3 7.5 6.5 11M3 7.5h6.5a3.5 3.5 0 0 1 3.5 3.5v1",
-  thread: "M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2zM5 6.2h6M5 8.2h4",
-  smile: "M8 14A6 6 0 1 0 8 2a6 6 0 0 0 0 12zM5.8 9.6c.5.7 1.3 1.1 2.2 1.1s1.7-.4 2.2-1.1M6 6.5h.01M10 6.5h.01",
-  attach: "M13 7.5 8 12.5a3.2 3.2 0 0 1-4.5-4.5l5-5a2.1 2.1 0 0 1 3 3l-5 5a1.05 1.05 0 0 1-1.5-1.5L9.5 5",
-  check: "M3 8.5 6.5 12 13 4.5",
-  chevron: "M6 3.5 10.5 8 6 12.5",
-  down: "M3.5 6 8 10.5 12.5 6",
-  back: "M10 3.5 5.5 8l4.5 4.5",
-  external: "M9 3h4v4M13 3 7.5 8.5M11 9.5V13H3V5h3.5",
-  computer: "M2.5 3.5h11v7.5h-11zM6 13.5h4M8 11v2.5",
-  phone: "M5 1.8h6v12.4H5zM7.4 12.2h1.2",
-  lock: "M4.5 7V5.2a3.5 3.5 0 0 1 7 0V7M3.5 7h9v7h-9z",
-  pause: "M5.5 3.5v9M10.5 3.5v9",
-  play: "M5 3.2v9.6L12.5 8z",
-  link: "M6.5 9.5l3-3M7 4.6l1-1a2.8 2.8 0 0 1 4 4l-1 1M9 11.4l-1 1a2.8 2.8 0 0 1-4-4l1-1",
-  copy: "M5.5 5.5h7v7h-7zM10.5 5.5v-2h-7v7h2",
-  folder: "M2 4h4.2l1.3 1.5H14v7H2z",
-  door: "M9.5 2.5h-6v11h6M12.5 8H6.5M10.5 6l2 2-2 2",
-  pr: "M4.5 5.5v5M4.5 5.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM4.5 13.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM11.5 10.5V6a1.5 1.5 0 0 0-1.5-1.5H7.5M11.5 13.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z",
-  hash: "M6 2.5 4.8 13.5M11.2 2.5 10 13.5M2.8 6h11M2.2 10h11",
-  at: "M10.5 8A2.5 2.5 0 1 1 8 5.5 2.5 2.5 0 0 1 10.5 8zm0 0v1a1.8 1.8 0 0 0 3.5.5V8A6 6 0 1 0 11 13.2",
-  bell: "M4 11V7a4 4 0 0 1 8 0v4l1.2 1.5H2.8zM6.5 14h3",
-  key: "M10 9.5a3.5 3.5 0 1 0-3.3-2.4L2.5 11.3V13.5h2.2v-1.4h1.4v-1.4h1.4l.8-.8A3.5 3.5 0 0 0 10 9.5zM11 5.5h.01",
-  sidebar: "M2.5 3h11v10h-11zM6 3v10",
-  refresh: "M13 3v3.5H9.5M3 13V9.5h3.5M12.4 6.5A5 5 0 0 0 3.6 6M3.6 9.5a5 5 0 0 0 8.8.5",
-  trash: "M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 9h5.8l.6-9",
-  sun: "M8 10.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM8 1.5V3M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1.06 1.06M11.54 11.54l1.06 1.06M3.4 12.6l1.06-1.06M11.54 4.46l1.06-1.06",
-  moon: "M13.5 9.6A5.6 5.6 0 0 1 6.4 2.5a5.6 5.6 0 1 0 7.1 7.1z",
-  download: "M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10",
-  terminal: "M2.5 3h11v10h-11zM5 6.5 7 8l-2 1.5M8.5 10H11",
-  tray: "M2.5 9.5h3l1 1.5h3l1-1.5h3M2.5 9.5 4 4h8l1.5 5.5V13h-11z",
-} as const
+type Glyph = readonly (readonly [string, { readonly [key: string]: string | number }])[]
 
-export type IconName = keyof typeof PATHS
+const GLYPHS = {
+  send: ArrowUp02Icon,
+  plus: Add01Icon,
+  minus: MinusSignIcon,
+  expand: SquareIcon,
+  close: Cancel01Icon,
+  search: Search01Icon,
+  reply: ArrowTurnBackwardIcon,
+  thread: BubbleChatIcon,
+  check: Tick02Icon,
+  chevron: ArrowRight01Icon,
+  down: ArrowDown01Icon,
+  back: ArrowLeft01Icon,
+  external: LinkSquare02Icon,
+  computer: ComputerIcon,
+  phone: SmartPhone01Icon,
+  link: Link01Icon,
+  copy: Copy01Icon,
+  folder: Folder01Icon,
+  pr: GitPullRequestIcon,
+  hash: HashtagIcon,
+  at: AtIcon,
+  sidebar: SidebarLeftIcon,
+  sun: Sun03Icon,
+  moon: Moon02Icon,
+  download: Download01Icon,
+  terminal: CommandLineIcon,
+  tray: InboxIcon,
+  gear: Settings02Icon,
+  tasks: TaskDone01Icon,
+  agent: BotIcon,
+  needs: UserQuestion01Icon,
+  clear: InboxCheckIcon,
+  account: UserCircleIcon,
+  paint: PaintBoardIcon,
+  bell: Notification01Icon,
+  devices: ComputerPhoneSyncIcon,
+  info: InformationCircleIcon,
+} satisfies Record<string, Glyph>
+
+export type IconName = keyof typeof GLYPHS
+
+const STROKE = 1.8
 
 export function Icon({ name, size = 16, label }: { name: IconName; size?: number; label?: string }) {
+  const glyph: Glyph = GLYPHS[name]
   return (
-    <svg
-      className="icon"
-      width={size}
-      height={size}
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={name === "more" ? 2.4 : 1.4}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      role={label ? "img" : undefined}
-      aria-label={label}
-      aria-hidden={label ? undefined : true}
-    >
-      <path d={PATHS[name]} />
+    <svg className="icon" width={size} height={size} viewBox="0 0 24 24" fill="none" role={label ? "img" : undefined} aria-label={label} aria-hidden={label ? undefined : true}>
+      {glyph.map(([tag, attrs], i) => createElement(tag, { ...attrs, ...("strokeWidth" in attrs ? { strokeWidth: STROKE } : {}), key: i }))}
     </svg>
   )
 }

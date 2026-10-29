@@ -1,11 +1,10 @@
 import { useEffect, useEffectEvent } from "react"
 
-import { nextWithNews } from "@/lib/news"
+import { nextWithNews } from "@kiwi/channel/news.ts"
 import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { ChannelTile } from "~/model"
 import { useApp } from "~/nav"
-import { UpdateDock } from "~/shell/updates"
 
 export function Rail() {
   const { app, nav, go } = useApp()
@@ -53,18 +52,19 @@ export function Rail() {
           </button>
         </li>
       </ul>
-      <div className="rail-foot">
-        <UpdateDock />
-        <button
-          type="button"
-          className={cx("rail-me", nav.page === "settings" && "is-on")}
-          aria-label="Settings"
-          title="Settings"
-          onClick={() => (nav.page === "settings" ? go({ to: "back" }) : go({ to: "settings" }))}
-        >
-          {app.account?.name.slice(0, 1).toUpperCase()}
-        </button>
-      </div>
+      {!(onChannel && app.channel) && (
+        <div className="rail-foot">
+          <button
+            type="button"
+            className={cx("rail-gear", nav.page === "settings" && "is-on")}
+            aria-label="Settings"
+            title="Settings"
+            onClick={() => (nav.page === "settings" ? go({ to: "back" }) : go({ to: "settings" }))}
+          >
+            <Icon name="gear" size={18} />
+          </button>
+        </div>
+      )}
     </nav>
   )
 }

@@ -47,6 +47,9 @@ class ScreensTest {
     fun signIn() = shoot("sign-in") { LinkScreen(it, linking = Linking.SigningIn("https://signin.kiwiinit.com/device", "WXYZ-KQPM")) }
 
     @Test
+    fun asking() = shoot("asking") { LinkScreen(it, linking = Linking.Asking) }
+
+    @Test
     fun approve() = shoot("approve") { LinkScreen(it, linking = Linking.Approve("482913")) }
 
     @Test

@@ -23,7 +23,8 @@ decisions at the end (#602, #615). Reviewed by sunny-tortoise (#559, #570).
   - Since T503 a forgotten computer's agents no longer join on their own in the desktop app.
   - The cert itself stays valid.
 - Auto-approval runs wherever the channel owner key is: the desktop app, and the iOS app while open
-  (`packages/core/src/client/requests.ts:181`). Never the `kiwi` daemon.
+  (`packages/core/src/client/requests.ts:181`). The `kiwi` daemon admits only its own computer's
+  agents, and only with a delegation (section 3).
 - WorkOS sign-in (`desktop/src/signin.ts:22`) only gates creating channels (`creator` guard,
   `src/relay/route.ts:147`).
 - The relay keeps each computer's binding to its person (`src/relay/machine.ts`).
@@ -166,6 +167,15 @@ owner-signed **delegation** lets the `kiwi` daemon admit its own computer's agen
 - **Checks:** the relay accepts a delegated admission that carries its delegation. Clients check the
   chain owner → delegation → delegate when they read member records.
 - **Older clients** see a delegated record they can't verify, and show that agent as unverified.
+- In the code (T677): `packages/core/src/delegation.ts` (the format, 14 days), the relay's
+  `/delegations` (owner), `/delegation` (the delegate's own) and the `admitter` guard, joiners'
+  `dpk`/`dbox` copy, and `admitOwn` (`packages/core/src/client/delegate.ts`) for the daemon.
+  A rotation re-wraps to every live delegate; one without a wrap is dropped. `cutDevices` drops a
+  revoked computer's delegations.
+- In the daemon (T683): `src/daemon/admit.ts` runs `admitOwn` for a channel when `kiwi join` on
+  this computer pokes it (`admit` verb, while the request waits), when one of its seats gets a
+  `request` frame, and once per known channel at start. It keeps looking while a request of its
+  own waits on the joiner's reveal, for up to 30 minutes.
 
 ## 4. Revocation and expiry
 
@@ -267,10 +277,25 @@ For when every app is gone, or a thief revoked your other devices first. The rec
 **re-roots** the device list, as Keybase's paper keys do.
 
 - **What it holds:** your person key, and the owner keys of channels you own.
-- **Recovery key:** a **generated** 24-word phrase (256 bits), with the vault key derived by HKDF.
-  Never a password, which the relay could guess offline.
-- **Format:** `{version, at, nonce, ciphertext}`, signed by the person key and stored at
-  `/v1/account/vault`. Clients remember the highest version and refuse a lower one.
+- **Recovery key:** a **generated** 24-word BIP39 phrase (256 bits). HKDF over it derives two keys: an
+  Ed25519 recovery key, which signs re-roots and its own replacement, and an X25519 key that opens the
+  vault. Never a password, which the relay could guess offline.
+- **The recovery chain** holds the public halves, kept beside the device list rather than in it, so older
+  clients still read the list. The person key signs the first link. The recovery key replaces itself at
+  once; an approving device may propose a new one, which takes over only after 7 days. Your devices show
+  the proposal meanwhile, and the old words, or revoking the device that proposed it, cancel it.
+- **Format:** `{person, version, at, box}`. The box is sealed to the recovery X25519 key, with person,
+  version and time bound into the key derivation, and the vault is signed by the person key or any of
+  its current approving devices (decision A keeps the person key offline, so a device must be able to
+  add a new channel's owner key). Stored at `/v1/account/vault`. Clients remember the highest version
+  and refuse a lower one.
+- **The relay** keeps the chain and the newest vault at `/v1/account/vault`. `GET` needs only the sign-in,
+  so a new desktop with nothing but the 24 words can read them. `PUT` takes `{recovery, vault}`, signed by
+  the person key, the recovery key or a current approving device. The chain must extend the one kept,
+  and each new link must carry the relay's time, so a proposal can't be backdated past its 7 days. A
+  vault must be version kept + 1, signed by the person key or a current approving device, and at most
+  512 KB. Links and vaults from revoked devices are refused.
+- In the code (T693, T823): `packages/core/src/recovery.ts`, `src/relay/account.ts`.
 - **Passkeys later:** per-passkey wrapping where native passkey PRF exists (macOS 15 and iOS 18 through
   AuthenticationServices; Android Credential Manager). Never in a page the relay serves, which would
   see the unlock key.

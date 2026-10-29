@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo } from "react"
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo } from "react"
 
 import { Boundary } from "~/kit/boundary"
+import { later } from "~/kit/later"
 import { Toasts, useToasts } from "~/kit/toasts"
 import type { App } from "~/model"
 import { ActContext, AppContext, type Go, type Nav } from "~/nav"
 import { Palette } from "~/palette/palette"
-import { Settings } from "~/settings/settings"
 import { ChannelScreen } from "~/shell/channel"
 import { Rail } from "~/shell/rail"
 import { FirstRun } from "~/start/first-run"
@@ -15,7 +15,10 @@ import { JoinDialog } from "~/start/join"
 import { NewChannelDialog } from "~/start/new-channel"
 import { Welcome } from "~/start/welcome"
 import { applyTheme, colorsOf, usePreview, useSystemDark } from "~/theme/apply"
-import { activeTheme } from "~/theme/themes"
+import { loadRex, useRex } from "~/theme/rex"
+import { activeTheme, wantsRex } from "~/theme/themes"
+
+const Settings = later(() => import("~/settings/settings").then((m) => m.Settings))
 
 export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => void }) {
   const [toasts, toast] = useToasts()
@@ -42,7 +45,17 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
         <div className="app">
           <Rail />
           <Boundary resetKey={nav.page === "settings" ? "settings" : app.channel?.code}>
-            {nav.page === "settings" ? <Settings /> : app.channel ? <ChannelScreen key={app.channel.code} channel={app.channel} /> : app.gone ? <Gone gone={app.gone} /> : <Welcome />}
+            {nav.page === "settings" ? (
+              <Suspense fallback={null}>
+                <Settings />
+              </Suspense>
+            ) : app.channel ? (
+              <ChannelScreen key={app.channel.code} channel={app.channel} />
+            ) : app.gone ? (
+              <Gone gone={app.gone} />
+            ) : (
+              <Welcome />
+            )}
           </Boundary>
         </div>
         <NewChannelDialog />
@@ -72,7 +85,12 @@ function useTheme(app: App) {
   const { theme, reduceMotion, darkTheme, lightTheme, customThemes } = app.prefs
   const systemDark = useSystemDark()
   const preview = usePreview()
-  const active = useMemo(() => activeTheme({ theme, darkTheme, lightTheme, customThemes }, systemDark), [theme, darkTheme, lightTheme, customThemes, systemDark])
+  const rex = useRex()
+  const wants = wantsRex({ darkTheme, lightTheme, customThemes })
+  useEffect(() => {
+    if (wants) void loadRex()
+  }, [wants])
+  const active = useMemo(() => activeTheme({ theme, darkTheme, lightTheme, customThemes }, systemDark, rex), [theme, darkTheme, lightTheme, customThemes, systemDark, rex])
   useLayoutEffect(() => {
     const root = document.documentElement
     const mode = preview?.appearance ?? theme

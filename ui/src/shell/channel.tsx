@@ -5,27 +5,30 @@ import { SearchBox, type Jump } from "~/chat/search-box"
 import { cx, Count, IconButton, useLate } from "~/kit/bits"
 import { Boundary } from "~/kit/boundary"
 import { Icon } from "~/kit/icons"
+import { later } from "~/kit/later"
 import type { Channel } from "~/model"
 import { drawerNews } from "~/live/notify"
-import { NeedsYou, openAsks } from "~/needs/needs"
+import { openAsks } from "~/needs/open"
 import { sameWhere, useApp } from "~/nav"
-import { ChannelPanel } from "~/panels/channel-panel"
-import { InvitePanel } from "~/panels/invite"
-import { AddAgentPanel } from "~/panels/add-agent"
-import { PersonPanel } from "~/panels/person"
-import { TaskPanel } from "~/panels/task"
 import { ThreadPanel } from "~/panels/thread"
-import { SIDEBAR_KEYS, useSidebarHidden } from "@/lib/sidebar-hidden"
+import { SIDEBAR_KEYS, useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 import { usePanelWidth } from "~/shell/panel-width"
 import { isSideKey, setDrawer, toggleSide, useDrawer } from "~/shell/side"
 import { Sidebar } from "~/shell/sidebar"
 import { Waiting } from "~/start/waiting"
-import { Board, openTasks } from "~/tasks/board"
-import { Lanes } from "~/tasks/lanes"
+import { openTasks } from "~/tasks/open"
 import { headerLine } from "~/now"
 import { between, nickname } from "~/names"
 
 const TermDrawer = lazy(() => import("~/term/drawer"))
+const Board = later(() => import("~/tasks/board").then((m) => m.Board))
+const Lanes = later(() => import("~/tasks/lanes").then((m) => m.Lanes))
+const NeedsYou = later(() => import("~/needs/needs").then((m) => m.NeedsYou))
+const TaskPanel = later(() => import("~/panels/task").then((m) => m.TaskPanel))
+const PersonPanel = later(() => import("~/panels/person").then((m) => m.PersonPanel))
+const ChannelPanel = later(() => import("~/panels/channel-panel").then((m) => m.ChannelPanel))
+const InvitePanel = later(() => import("~/panels/invite").then((m) => m.InvitePanel))
+const AddAgentPanel = later(() => import("~/panels/add-agent").then((m) => m.AddAgentPanel))
 
 export function ChannelScreen({ channel }: { channel: Channel }) {
   const { nav, go } = useApp()
@@ -110,15 +113,18 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
             {here}
           </button>
           <button type="button" aria-pressed={nav.tab === "tasks"} onClick={() => go({ to: "tab", tab: "tasks" })}>
+            <Icon name="tasks" size={14} />
             Tasks <Count n={tasks} />
           </button>
           {(agents || nav.tab === "agents") && (
             <button type="button" className="is-agents" aria-pressed={nav.tab === "agents"} onClick={() => go({ to: "tab", tab: "agents" })}>
+              <Icon name="agent" size={14} />
               Agents
             </button>
           )}
           {(needs > 0 || nav.tab === "needs") && (
             <button type="button" className="is-needs" aria-pressed={nav.tab === "needs"} onClick={() => go({ to: "tab", tab: "needs" })}>
+              <Icon name="needs" size={14} />
               Needs you <Count n={needs} loud />
             </button>
           )}
@@ -141,15 +147,17 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
       <Sidebar channel={channel} />
       <main className="main">
         <Boundary resetKey={nav.tab}>
-          {nav.tab === "tasks" ? (
-            <Board channel={channel} needs={needs} />
-          ) : nav.tab === "agents" ? (
-            <Lanes channel={channel} />
-          ) : nav.tab === "needs" ? (
-            <NeedsYou channel={channel} onJump={setJump} />
-          ) : (
-            <Conversation channel={channel} jump={jump} />
-          )}
+          <Suspense fallback={null}>
+            {nav.tab === "tasks" ? (
+              <Board channel={channel} needs={needs} />
+            ) : nav.tab === "agents" ? (
+              <Lanes channel={channel} />
+            ) : nav.tab === "needs" ? (
+              <NeedsYou channel={channel} onJump={setJump} />
+            ) : (
+              <Conversation channel={channel} jump={jump} />
+            )}
+          </Suspense>
         </Boundary>
         {nav.term && (
           <Suspense fallback={null}>
@@ -178,19 +186,21 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
             {...panel.grip}
           />
           <Boundary panel resetKey={JSON.stringify(nav.panel)}>
-            {nav.panel.kind === "thread" ? (
-              <ThreadPanel channel={channel} seq={nav.panel.seq} />
-            ) : nav.panel.kind === "task" ? (
-              <TaskPanel channel={channel} id={nav.panel.task} />
-            ) : nav.panel.kind === "person" ? (
-              <PersonPanel channel={channel} name={nav.panel.name} />
-            ) : nav.panel.kind === "channel" ? (
-              <ChannelPanel channel={channel} />
-            ) : nav.panel.kind === "invite" ? (
-              <InvitePanel channel={channel} />
-            ) : (
-              <AddAgentPanel channel={channel} />
-            )}
+            <Suspense fallback={null}>
+              {nav.panel.kind === "thread" ? (
+                <ThreadPanel channel={channel} seq={nav.panel.seq} />
+              ) : nav.panel.kind === "task" ? (
+                <TaskPanel channel={channel} id={nav.panel.task} />
+              ) : nav.panel.kind === "person" ? (
+                <PersonPanel channel={channel} name={nav.panel.name} />
+              ) : nav.panel.kind === "channel" ? (
+                <ChannelPanel channel={channel} />
+              ) : nav.panel.kind === "invite" ? (
+                <InvitePanel channel={channel} />
+              ) : (
+                <AddAgentPanel channel={channel} />
+              )}
+            </Suspense>
           </Boundary>
         </aside>
       )}

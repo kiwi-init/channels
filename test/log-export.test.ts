@@ -3,7 +3,7 @@ import { Channel } from "@kiwi/core/client.ts";
 import { seal } from "@kiwi/core/crypto.ts";
 import { generateIdentity, sign } from "@kiwi/core/identity.ts";
 import { PROTOCOL_VERSION } from "@kiwi/core/protocol.ts";
-import { exportNote, logExport } from "../web/src/lib/log-export.ts";
+import { exportNote, logExport } from "@kiwi/app/log-export.ts";
 
 test("a stored message this build can't read is named as missing from the export, not passed off as a complete log", async () => {
   const key = "A".repeat(43);

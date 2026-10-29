@@ -1,13 +1,14 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { CHECKS } from "~/chat/cards"
 import { Composer } from "~/chat/composer"
-import { compactAt, useNames, useTaskIds } from "~/chat/conversation"
+import { compactAt, quoteOf, useNames, useTaskIds } from "~/chat/conversation"
 import { named } from "~/chat/linked"
 import { MessageRow } from "~/chat/message"
 import { preview } from "~/chat/preview"
+import { jumpTo } from "~/chat/reply"
 import { whereLabel } from "~/chat/search-hits"
-import { ANYONE } from "@/lib/task-actions"
+import { ANYONE } from "@kiwi/channel/task-actions.ts"
 import { Avatar, cx, Dialog, DialogHead, Dot, Empty, Heading, statusWord } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
@@ -37,7 +38,15 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
   const talk = useMemo(() => channel.messages.filter((m) => m.where.kind === "task" && m.where.task === id && m.inThread === undefined), [channel.messages, id])
   const names = useNames(channel)
   const tasks = useTaskIds(channel)
+  const bySeq = useMemo(() => new Map(channel.messages.map((m) => [m.seq, m])), [channel.messages])
   const body = useRef<HTMLDivElement>(null)
+  const { go } = useApp()
+  const onQuote = useCallback(
+    (seq: number) => {
+      if (!jumpTo(body.current, seq)) go({ to: "panel", panel: { kind: "thread", seq: bySeq.get(seq)?.inThread ?? seq } })
+    },
+    [go, bySeq]
+  )
   const last = talk.at(-1)?.seq
   const seen = useRef({ id, last })
   useLayoutEffect(() => {
@@ -76,7 +85,7 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
           {talk.length === 0 ? (
             <p className="task-quiet">No messages about this task yet.</p>
           ) : (
-            talk.map((m, i) => <MessageRow key={m.seq} channel={channel} m={m} compact={compactAt(talk, i)} names={names} tasks={tasks} inThread />)
+            talk.map((m, i) => <MessageRow key={m.seq} channel={channel} m={m} compact={compactAt(talk, i)} names={names} tasks={tasks} inThread quote={quoteOf(talk, i, bySeq)} onQuote={onQuote} />)
           )}
         </section>
       </div>

@@ -20,18 +20,16 @@
 }
 
 .set-nav {
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   padding: 16px 10px 24px;
   overflow-y: auto;
 }
 
-.set-nav-pip {
-  flex: none;
-  width: 7px;
-  height: 7px;
-  margin-right: 4px;
-  border-radius: 50%;
-  background: var(--ink);
+.set-nav .side-cards {
+  margin-top: auto;
+  padding-top: 16px;
 }
 
 .set-main {

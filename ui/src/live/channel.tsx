@@ -3,13 +3,16 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import type { SendOptions } from "@kiwi/core/client.ts"
 import { GENERAL_ROOM, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { answersDecisions, dmPlace, placeKey, type ChannelState } from "@kiwi/core/state.ts"
-import { channelTitle, loadRecent, saveRecent, useChannel, useKnownChannels, type StoredMember } from "@/lib/channel"
-import { useIcons, useLiveIcon } from "@/lib/icons"
-import { markSeen, setOpenNews } from "@/lib/news"
-import { lastPreview } from "@/lib/preview"
-import { roomLast, roomSeenKey } from "@/lib/rooms"
-import { sendsInTurn } from "@/lib/send-order"
-import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@/lib/threads"
+import { channelTitle, loadRecent, saveRecent } from "@kiwi/channel/recent.ts"
+import { useChannel } from "@kiwi/channel/use-channel.ts"
+import { useKnownChannels } from "@kiwi/channel/list.ts"
+import { type StoredMember } from "@kiwi/channel/store.ts"
+import { useIcons, useLiveIcon } from "@kiwi/app/icons.ts"
+import { markSeen, setOpenNews } from "@kiwi/channel/news.ts"
+import { lastPreview } from "@kiwi/app/preview.ts"
+import { roomLast, roomSeenKey } from "@kiwi/app/rooms.ts"
+import { sendsInTurn } from "@kiwi/app/send-order.ts"
+import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@kiwi/app/threads.ts"
 import { useAskChime } from "~/live/alerts"
 import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
@@ -22,8 +25,10 @@ import { seated, useSeats } from "~/live/seats"
 import { elsewhere, lastWorth } from "~/live/notify"
 import { tellMessage } from "~/live/notes"
 import { ownPrefs } from "~/live/prefs"
+import { receiptsOf, withReceipts } from "~/live/receipts"
 import { closeOpened, markGone, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
+import { clock } from "~/kit/time"
 import type { Channel, Upload, Where } from "~/model"
 import { nicknamesOf } from "~/names"
 
@@ -84,7 +89,7 @@ function useShown(): boolean {
 
 export const OpenMember = memo(function OpenMember({ member, view }: { member: StoredMember; view: View }) {
   const live = useChannel(member)
-  const { ch, state, messages, roster, online, requests, isOwner, connection, gone, ready, send, refreshRequests, refreshRoster, foldFrom } = live
+  const { ch, state, messages, roster, online, requests, isOwner, connection, gone, ready, send, refreshRequests, refreshRoster, foldFrom, marks, pkOf } = live
   const me = member.identity.name
   const roomId = member.access.roomId
   const code = member.code
@@ -109,7 +114,9 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const nicknames = useMemo(() => nicknamesOf(nicknameKey ? nicknameKey.split("\n").map((line) => ({ name: line.split("\u0000")[0] ?? "", display: line.split("\u0000")[1] })) : []), [nicknameKey])
   const pins = usePinsHere(requests)
   const asks = useMemo(() => asksOf(state, messages, me, isOwner, requests, roster, pins), [state, messages, me, isOwner, requests, roster, pins])
-  const mapped = useMemo(() => kept(code, messagesOf(state, messages, me, asks.askOf, pictures, pending)), [code, state, messages, me, asks.askOf, pictures, pending])
+  const rows = useMemo(() => messagesOf(state, messages, me, asks.askOf, pictures, pending), [state, messages, me, asks.askOf, pictures, pending])
+  const receipts = useMemo(() => receiptsOf(state, messages, me, marks, pkOf, clock), [state, messages, me, marks, pkOf])
+  const mapped = useMemo(() => kept(code, withReceipts(rows, receipts)), [code, rows, receipts])
   const leftOut = useMemo(() => (isOwner ? leftOutOf(state, messages, me) : []), [isOwner, state, messages, me])
   const tasks = useMemo(() => tasksOf(state, asks.held, me, messages), [state, asks.held, me, messages])
   const taskGroups = useMemo(() => groupsOf(state, me), [state, me])
@@ -140,6 +147,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       ...(next ? { next } : {}),
       mergedAt,
       ...(state.hold ? { hold: { ...(state.hold.note ? { note: state.hold.note } : {}), by: state.hold.by, at: state.hold.at } } : {}),
+      ...(state.compact ? { compact: state.compact } : {}),
+      ...(state.compactProposal ? { proposal: state.compactProposal } : {}),
       newMembers,
       newPowers,
       repos: state.repos,
@@ -171,6 +180,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       next,
       mergedAt,
       state.hold,
+      state.compact,
+      state.compactProposal,
       newMembers,
       newPowers,
       state.repos,

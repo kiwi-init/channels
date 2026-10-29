@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts"
 import type { Event, Message } from "@kiwi/core/protocol.ts"
 import { fold, type Roster } from "@kiwi/core/state.ts"
-import { sendBackTask } from "@/lib/task-actions"
+import { sendBackTask } from "@kiwi/channel/task-actions.ts"
 import { tasksOf } from "~/live/map"
 
 const roster: Roster = []

@@ -5,12 +5,12 @@
 FROM oven/bun:1.4.2
 WORKDIR /app
 # The relay needs only the root workspace's dependencies, @kiwi/core (packages/core)
-# among them; the web and desktop manifests are copied so the lockfile matches, and
-# --filter skips their installs.
+# among them; the desktop manifest is copied so the lockfile matches, and --filter
+# skips its install.
 COPY package.json bun.lock ./
 COPY packages/core/package.json ./packages/core/
+COPY packages/app/package.json ./packages/app/
 COPY packages/channel/package.json ./packages/channel/
-COPY web/package.json ./web/
 COPY desktop/package.json ./desktop/
 RUN bun install --frozen-lockfile --production --filter './'
 COPY packages/core/src ./packages/core/src

@@ -117,6 +117,9 @@ describe("owner routes need the owner key's signature, and nothing else", () => 
     ["POST", `/requests/${"0".repeat(8)}-0000-0000-0000-${"0".repeat(12)}/deny`],
     ["POST", "/members"],
     ["DELETE", `/members/${pk}`],
+    ["PUT", "/delegations"],
+    ["GET", "/delegations"],
+    ["DELETE", `/delegations/${pk}`],
     ["POST", "/epochs"],
     ["DELETE", "/"],
   ];
@@ -177,6 +180,12 @@ describe("routes with their own checks", () => {
     expect(await room("GET", `/requests/${requestId}`, { as: stranger })).toBe(404);
     expect(refused(await room("POST", `/requests/${requestId}/reveal`))).toBe(true);
     expect(await room("POST", `/requests/${requestId}/reveal`, { as: stranger, body: { nonce: "x" } })).not.toBe(200);
+  });
+
+  test("a delegate's own delegation needs its signature, and only a delegate has one", async () => {
+    expect(refused(await room("GET", "/delegation"))).toBe(true);
+    expect(await room("GET", "/delegation", { as: stranger })).toBe(404);
+    expect(await room("GET", "/delegation", { as: member })).toBe(404);
   });
 
   test("GET /info needs the code's fingerprint", async () => {
