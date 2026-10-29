@@ -270,7 +270,7 @@ void kiwi_window_appearance(void *ptr, int32_t appearance) {
   });
 }
 
-static void (*noteClicked)(void) = NULL;
+static void (*noteClicked)(uint32_t) = NULL;
 
 @interface KiwiNotes : NSObject <UNUserNotificationCenterDelegate>
 @end
@@ -285,14 +285,34 @@ static void (*noteClicked)(void) = NULL;
 - (void)userNotificationCenter:(UNUserNotificationCenter *)center
     didReceiveNotificationResponse:(UNNotificationResponse *)response
              withCompletionHandler:(void (^)(void))completionHandler {
-  if (noteClicked && ![response.actionIdentifier isEqualToString:UNNotificationDismissActionIdentifier]) noteClicked();
+  if (noteClicked && ![response.actionIdentifier isEqualToString:UNNotificationDismissActionIdentifier]) {
+    id tag = response.notification.request.content.userInfo[@"tag"];
+    noteClicked([tag isKindOfClass:NSNumber.class] ? [tag unsignedIntValue] : 0);
+  }
   completionHandler();
 }
 @end
 
 static KiwiNotes *notes = nil;
 
-bool kiwi_notify_clicks(void *window, void (*clicked)(void)) {
+bool kiwi_notify(const char *title, const char *body, uint32_t tag) {
+  NSString *heading = title ? [NSString stringWithUTF8String:title] : nil;
+  if (!heading) return false;
+  UNMutableNotificationContent *content = [UNMutableNotificationContent new];
+  content.title = heading;
+  content.body = (body ? [NSString stringWithUTF8String:body] : nil) ?: @"";
+  content.userInfo = @{@"tag" : @(tag)};
+  UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:NSUUID.UUID.UUIDString content:content trigger:nil];
+  UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+  [center requestAuthorizationWithOptions:UNAuthorizationOptionAlert | UNAuthorizationOptionSound
+                        completionHandler:^(BOOL granted, NSError *error) {
+                          (void)error;
+                          if (granted) [center addNotificationRequest:request withCompletionHandler:nil];
+                        }];
+  return true;
+}
+
+bool kiwi_notify_clicks(void *window, void (*clicked)(uint32_t)) {
   if (!clicked) return false;
   noteClicked = clicked;
   dispatch_async(dispatch_get_main_queue(), ^{

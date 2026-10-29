@@ -1,11 +1,14 @@
 import "~/styles/needs.css"
 
-import { useId, useState, type ReactNode } from "react"
+import { useEffect, useId, useState, type ReactNode } from "react"
+
+import { TOO_MANY_REQUESTS } from "@kiwi/core/sas.ts"
 
 import { PrChip, QuestionCard, TaskChip } from "~/chat/cards"
-import { Avatar, Empty, Toggle } from "~/kit/bits"
+import type { Jump } from "~/chat/search-box"
+import { Avatar, Empty, Loading, Toggle } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
-import { ago } from "~/kit/time"
+import { ago, clock } from "~/kit/time"
 import type { Ask, Channel, JoinAsk, Message, PermissionAsk, Person, Powers, QuestionAsk, ReviewAsk } from "~/model"
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
@@ -18,8 +21,9 @@ const isIdle = (a: Ask): boolean => a.kind === "question" && !!a.idle && !a.answ
 
 export const openAsks = (channel: Channel): Ask[] => channel.asks.filter((a) => isOpen(a) && !isIdle(a))
 
-export function NeedsYou({ channel }: { channel: Channel }) {
+export function NeedsYou({ channel, onJump }: { channel: Channel; onJump: (jump: Jump) => void }) {
   const open = openAsks(channel).sort((a, b) => a.at - b.at)
+  const unchecked = open.some((a) => a.kind === "join" && a.check === "unchecked")
   const idle = channel.asks.filter(isIdle).sort((a, b) => a.at - b.at)
   const answered = channel.asks.filter((a) => !isOpen(a)).sort((a, b) => answeredAt(b) - answeredAt(a))
   return (
@@ -30,14 +34,17 @@ export function NeedsYou({ channel }: { channel: Channel }) {
             <p className="needs-sum">
               {open.length} {open.length === 1 ? "thing waits" : "things wait"} on you <span className="dimmer">· oldest first</span>
             </p>
+            {unchecked && <p className="needs-warn">{TOO_MANY_REQUESTS}</p>}
             <ol className="needs-cards">
               {open.map((a) => (
                 <li key={a.id}>
-                  <Card channel={channel} ask={a} />
+                  <Card channel={channel} ask={a} onJump={onJump} />
                 </li>
               ))}
             </ol>
           </>
+        ) : channel.loading ? (
+          <Loading />
         ) : (
           <Empty title="Nothing needs you.">Asks from agents and people who want in show up here.</Empty>
         )}
@@ -49,7 +56,7 @@ export function NeedsYou({ channel }: { channel: Channel }) {
             <ol className="needs-cards">
               {idle.map((a) => (
                 <li key={a.id}>
-                  <Card channel={channel} ask={a} />
+                  <Card channel={channel} ask={a} onJump={onJump} />
                 </li>
               ))}
             </ol>
@@ -97,12 +104,13 @@ function doneLine(channel: Channel, a: Ask): string {
 
 type Face = Pick<Person, "name" | "kind" | "harness" | "presence" | "color">
 
-function Card({ channel, ask }: { channel: Channel; ask: Ask }) {
+function Card({ channel, ask, onJump }: { channel: Channel; ask: Ask; onJump: (jump: Jump) => void }) {
   const { go } = useApp()
   const source = channel.messages.find((m) => m.ask === ask.id)
   const show = (m: Message) => {
     go({ to: "where", where: m.where })
     if (m.inThread !== undefined) go({ to: "panel", panel: { kind: "thread", seq: m.inThread } })
+    else onJump({ m, terms: [] })
   }
   const link = (
     <>
@@ -130,6 +138,7 @@ function Shell({
   face,
   name,
   member,
+  tag,
   verb,
   at,
   children,
@@ -139,6 +148,7 @@ function Shell({
   face: Face | undefined
   name: string
   member: boolean
+  tag?: { text: string; tone: "decide" | "alert" | "quiet" }
   verb: string
   at: number
   children: ReactNode
@@ -157,6 +167,7 @@ function Shell({
         ) : (
           <span className="needs-name">{name}</span>
         )}
+        {tag && <span className={`needs-tag is-${tag.tone}`}>{tag.text}</span>}
         <span className="needs-verb">{verb}</span>
         <span className="needs-meta">
           {link}
@@ -185,32 +196,74 @@ function Holds({ channel, ids }: { channel: Channel; ids: number[] }) {
 
 const member = (channel: Channel, name: string): Person | undefined => channel.people.find((p) => p.name === name)
 
+function usePast(at: number | undefined): boolean {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (at === undefined || now > at) return
+    const timer = window.setTimeout(() => setNow(Date.now()), Math.min(at - now + 50, 2 ** 31 - 1))
+    return () => window.clearTimeout(timer)
+  }, [at, now])
+  return at !== undefined && now > at
+}
+
 function PermissionAskCard({ channel, ask, link }: { channel: Channel; ask: PermissionAsk; link: ReactNode }) {
   const { app } = useApp()
   const who = member(channel, ask.from)
+  const expired = usePast(ask.expiresAt)
+  const open = !ask.answer && !expired
   return (
     <Shell
       face={who}
       name={nickname(channel, ask.from)}
       member={!!who}
-      verb={`asks to use ${ask.tool}`}
+      tag={{ text: "Permission", tone: "decide" }}
+      verb={ask.title}
       at={ask.at}
       link={link}
       actions={
-        <>
-          <button type="button" className="btn is-primary" onClick={() => app.actions.answerPermission(channel.code, ask.id, true)}>
-            Allow
-          </button>
-          <button type="button" className="btn" onClick={() => app.actions.answerPermission(channel.code, ask.id, false)}>
-            Deny
-          </button>
-        </>
+        open && (ask.canAllow || ask.canDeny || ask.allower) ? (
+          <>
+            {ask.canAllow && (
+              <button type="button" className="btn is-primary" onClick={() => app.actions.answerPermission(channel.code, ask.id, true)}>
+                Allow
+              </button>
+            )}
+            {ask.canDeny && (
+              <button type="button" className="btn" onClick={() => app.actions.answerPermission(channel.code, ask.id, false)}>
+                Deny
+              </button>
+            )}
+            {!ask.canAllow && ask.allower && <span className="dim">Only {nickname(channel, ask.allower)} can allow it: it runs on their computer.</span>}
+          </>
+        ) : undefined
       }
     >
-      <p className="needs-title">{ask.summary}</p>
+      {ask.summary && <p className="needs-title">“{ask.summary}”</p>}
       <pre className="needs-code">{ask.code}</pre>
+      {ask.replaced !== undefined && <Written label="Replaces" text={ask.replaced} gone />}
+      {ask.content !== undefined && <Written label={ask.replaced !== undefined ? "With" : "Writes"} text={ask.content} />}
+      {ask.notes.map((note) => (
+        <p key={note} className="needs-alarm">
+          {note}
+        </p>
+      ))}
+      <p className="needs-line">{[ask.tool, ask.cwd && `in ${ask.cwd}`].filter(Boolean).join(" · ")}</p>
+      {ask.expiresAt !== undefined && !ask.answer && (
+        <p className="dim">
+          {expired ? `It stopped waiting at ${clock(ask.expiresAt)}. If it still needs this, it asks again in its terminal.` : `It waits until ${clock(ask.expiresAt)}, and asks in its terminal too.`}
+        </p>
+      )}
       {ask.task !== undefined && <Holds channel={channel} ids={[ask.task]} />}
     </Shell>
+  )
+}
+
+function Written({ label, text, gone }: { label: string; text: string; gone?: boolean }) {
+  return (
+    <div className="needs-written">
+      <p className="needs-label">{label}</p>
+      <pre className={gone ? "needs-code is-gone" : "needs-code"}>{text}</pre>
+    </div>
   )
 }
 
@@ -218,7 +271,15 @@ function QuestionAskCard({ channel, ask, link }: { channel: Channel; ask: Questi
   const who = member(channel, ask.from)
   const holds = [...new Set([...(ask.task !== undefined ? [ask.task] : []), ...ask.holds])]
   return (
-    <Shell face={who} name={nickname(channel, ask.from)} member={!!who} verb={ask.step ? "has a step for you" : "asks you"} at={ask.at} link={link}>
+    <Shell
+      face={who}
+      name={nickname(channel, ask.from)}
+      member={!!who}
+      tag={{ text: ask.label, tone: ask.irreversible ? "alert" : ask.label.startsWith("Question") ? "quiet" : "decide" }}
+      verb={ask.step ? "has a step for you" : "asks you"}
+      at={ask.at}
+      link={link}
+    >
       <p className="needs-text">{ask.text}</p>
       <QuestionCard channel={channel} ask={ask} />
       {holds.length > 0 && (
@@ -318,7 +379,7 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
             </button>
           ) : (
             <button type="button" className="btn is-primary" disabled={!ready || blocked} onClick={letIn}>
-              {!ready ? `Waiting for ${ask.name}'s code…` : pinGone ? "Pick a personality first" : label ? `It matches: let in as ${label}` : `It matches: let ${ask.name} in`}
+              {!ready ? `Waiting for ${ask.name}'s code…` : pinGone ? "Pick a personality first" : label ? `It matches: let in as ${label}` : `It matches: let ${ask.freeName ?? ask.name} in`}
             </button>
           )}
           <button type="button" className="btn is-danger" onClick={() => app.actions.answerJoin(channel.code, ask.id, false)}>
@@ -328,6 +389,11 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
       }
     >
       <p className="needs-line">{line}</p>
+      {ask.freeName && (
+        <p className="needs-line">
+          Someone here is already called {ask.name}, so {agent ? "it" : "they"} join{agent ? "s" : ""} as <span className="needs-strong">{ask.freeName}</span>.
+        </p>
+      )}
       {ask.forgotten && <p className="needs-warn">It runs on {ask.machine}, a computer you forgot, so it didn't join on its own. Let it in only if you meant to bring that computer back.</p>}
       {ask.said && <Said said={ask.said} />}
       {ask.pin && (

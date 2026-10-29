@@ -77,6 +77,9 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            ndk {
+                abiFilters += "arm64-v8a"
+            }
             signingConfig = signingConfigs.getByName("debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
@@ -142,6 +145,7 @@ dependencies {
     implementation(libs.serialization.json)
     implementation(libs.coroutines.android)
     implementation(libs.code.scanner)
+    implementation(libs.enriched.markdown)
     debugImplementation(libs.compose.tooling)
     testImplementation(platform(libs.compose.bom))
     testImplementation(libs.compose.ui.test)

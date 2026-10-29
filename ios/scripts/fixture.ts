@@ -25,6 +25,7 @@ const long = (n: number) =>
 
 const said: [string, string][] = [];
 for (let n = 1; n <= 6; n++) said.push(["jow", `progress update ${n}?`], [n % 2 ? "lead" : "dev", long(n)]);
+said.push(["lead", "Notes in https://example.com/release"]);
 
 const start = Date.now() - said.length * 60_000;
 const log: Message[] = [];

@@ -26,7 +26,8 @@ function typedTmuxOld(): string | null {
 
 const startHosted = (harness: LoopHarness) =>
   Effect.gen(function* () {
-    if (!Bun.which(harness, { PATH: yield* Effect.promise(() => loginPath()) })) return yield* die(`${harness} isn't on your login shell's PATH`);
+    const { program } = recipeFor(harness);
+    if (!Bun.which(program, { PATH: yield* Effect.promise(() => loginPath()) })) return yield* die(`${program} isn't on your login shell's PATH`);
     const { alias, name } = yield* seatNamed;
     const { daemonLoop, ensureDaemon } = yield* Effect.promise(() => import("../../daemon.ts"));
     const { hostedWhere } = yield* Effect.promise(() => import("../../launch/wire.ts"));
@@ -45,14 +46,15 @@ export const loopCommands: Record<string, Command> = {
       for (const key of SESSION_MARKERS) if (!key.startsWith("KIWI_")) delete process.env[key];
       const recipe = recipeFor(harness);
       if (opt.effort && !recipe.takesEffort) return yield* die(`${recipe.label} keeps its effort per model in its own settings: drop --effort`);
+      if (opt.model && !recipe.takesModel) return yield* die(`${recipe.label} takes its model from its own settings (/model in a session): drop --model`);
       if (args[1] === "start") return yield* startHosted(harness);
       if (args[1] !== undefined) return yield* die(USAGE);
-      if (recipe.typed && !typedPaneOk())
+      if (recipe.screen && !typedPaneOk())
         return yield* die(`${recipe.label} takes its first prompt typed into its window, so kiwi loop --harness ${harness} runs only inside tmux, in the pane it was started from`);
-      const oldTmux = recipe.typed ? typedTmuxOld() : null;
+      const oldTmux = recipe.screen ? typedTmuxOld() : null;
       if (oldTmux) return yield* die(`${recipe.label}'s first prompt needs tmux 3.7 or newer, to know when it can paste; this tmux is ${oldTmux}`);
-      const bin = Bun.which(harness, { PATH: process.env.PATH ?? "" }) ?? Bun.which(harness, { PATH: yield* Effect.promise(() => loginPath()) });
-      if (!bin) return yield* die(`${harness} isn't on your login shell's PATH`);
+      const bin = Bun.which(recipe.program, { PATH: process.env.PATH ?? "" }) ?? Bun.which(recipe.program, { PATH: yield* Effect.promise(() => loginPath()) });
+      if (!bin) return yield* die(`${recipe.program} isn't on your login shell's PATH`);
       const { alias, name } = yield* seatNamed;
       const cfg = (yield* config).channels[alias];
       if (!cfg) return yield* die(`unknown channel "${alias}" (see: kiwi channels)`);

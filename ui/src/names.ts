@@ -4,4 +4,6 @@ export const nicknamesOf = (members: Iterable<{ name: string; display?: string |
 
 export const nickname = (channel: Pick<Channel, "nicknames">, handle: string): string => channel.nicknames.get(handle) ?? handle
 
+export const between = (channel: Pick<Channel, "nicknames">, names: readonly [string, string]): string => `${nickname(channel, names[0])} & ${nickname(channel, names[1])}`
+
 export const shown = (person: { name: string; display?: string | undefined }): string => person.display || person.name

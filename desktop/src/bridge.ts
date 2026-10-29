@@ -4,7 +4,7 @@
 
 import type { ComputerSettings } from "@kiwi/core/computer-settings.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
-import type { HarnessRow, HookRow, KnownHarness } from "@kiwi/core/harnesses.ts";
+import type { HarnessRow, HookHarness, HookRow, KnownHarness } from "@kiwi/core/harnesses.ts";
 import type { LaunchChoices } from "@kiwi/core/launch-options.ts";
 import type { WakeSeat } from "@kiwi/core/wake.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
@@ -397,7 +397,7 @@ export interface KiwiBridge {
   /** Restart into the downloaded update. */
   installUpdate(): Promise<void>;
   checkUpdate(): Promise<UpdateCheckView>;
-  notify(title: string, body: string): Promise<void>;
+  notify(title: string, body: string, link?: string): Promise<void>;
   openExternal(url: string): Promise<void>;
   saveFile(name: string, text: string): Promise<string>;
   takeDroppedFiles(): Promise<DroppedFile[]>;
@@ -438,7 +438,7 @@ export interface KiwiBridge {
   contextLine(): Promise<"on" | "off" | null>;
   setContextLine(to: "on" | "off"): Promise<"on" | "off" | null>;
   hooks(): Promise<HookRow[]>;
-  setHooks(harness: KnownHarness, to: "on" | "off"): Promise<HookRow[]>;
+  setHooks(harness: HookHarness, to: "on" | "off"): Promise<HookRow[]>;
   wakeSeats(): Promise<WakeSeat[]>;
   setWake(room: string, agent: string, to: "on" | "off"): Promise<WakeSeat[]>;
   harnesses(): Promise<HarnessRow[]>;

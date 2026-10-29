@@ -2,6 +2,8 @@ import { host } from "./host.ts";
 
 export const JOIN_SCHEME = "kiwi";
 
+const MAX_LINK = 2048;
+
 let deepLink: string | null = null;
 
 export function takeDeepLink(): string | null {
@@ -10,8 +12,10 @@ export function takeDeepLink(): string | null {
   return link;
 }
 
+export const opensChannel = (link: unknown): string | null => (typeof link === "string" && link.length <= MAX_LINK && link.startsWith(`${JOIN_SCHEME}://join/`) ? link : null);
+
 export function handleDeepLink(url: string): void {
-  if (!url.startsWith(`${JOIN_SCHEME}://join/`)) return;
+  if (!opensChannel(url)) return;
   deepLink = url;
   const shell = host();
   shell.push("deepLink", url);

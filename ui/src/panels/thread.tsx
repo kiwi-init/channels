@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useState } from "react"
 
 import { Composer } from "~/chat/composer"
-import { compactAt, quoteOf, useNames, useStick, useTaskIds } from "~/chat/conversation"
+import { compactAt, quoteOf, ReadOnly, useNames, useStick, useTaskIds } from "~/chat/conversation"
 import { MessageRow } from "~/chat/message"
 import { jumpTo, ReplyContext, type Replying } from "~/chat/reply"
 import { Empty } from "~/kit/bits"
@@ -48,7 +48,7 @@ export function ThreadPanel({ channel, seq }: { channel: Channel; seq: number })
           ))}
         </div>
       </div>
-      <Composer channel={channel} where={root.where} inThread={seq} placeholder="Reply in thread" />
+      {root.where.kind === "theirs" ? <ReadOnly channel={channel} between={root.where.between} /> : <Composer channel={channel} where={root.where} inThread={seq} placeholder="Reply in thread" />}
     </ReplyContext.Provider>
   )
 }

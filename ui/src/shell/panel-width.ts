@@ -1,16 +1,27 @@
-import { useCallback, useState, type KeyboardEvent, type PointerEvent } from "react"
+import { useCallback, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent } from "react"
 
 const KEY = "channels.panel.width"
+const OLD_KEY = "mc.panel.width"
 const START = 400
 const MIN = 320
 const MAX = 760
+const MIN_CHAT = 420
+const RAIL = 64
+const SIDE = 248
 
-const clamp = (w: number): number => Math.round(Math.min(Math.max(w, MIN), Math.min(MAX, window.innerWidth * 0.6)))
+export function panelRoom(w: number, windowWidth: number, sideHidden: boolean): number {
+  const chat = windowWidth - RAIL - (sideHidden ? 0 : SIDE) - MIN_CHAT
+  return Math.round(Math.max(MIN, Math.min(w, MAX, windowWidth * 0.6, chat)))
+}
+
+const onResize = (l: () => void) => (window.addEventListener("resize", l), () => window.removeEventListener("resize", l))
+
+const useWindowWidth = (): number => useSyncExternalStore(onResize, () => window.innerWidth)
 
 function stored(): number {
   try {
-    const n = Number(localStorage.getItem(KEY))
-    return n ? clamp(n) : START
+    const n = Number(localStorage.getItem(KEY) ?? localStorage.getItem(OLD_KEY))
+    return n || START
   } catch {
     // Storage can be off (private windows, blocked site data): start at the default width.
     return START
@@ -25,14 +36,19 @@ function keep(w: number): void {
   }
 }
 
-export function usePanelWidth() {
-  const [width, setWidth] = useState(stored)
+export function usePanelWidth(sideHidden: boolean) {
+  const [wanted, setWanted] = useState(stored)
+  const windowWidth = useWindowWidth()
+  const width = panelRoom(wanted, windowWidth, sideHidden)
 
-  const set = useCallback((w: number) => {
-    const next = clamp(w)
-    setWidth(next)
-    keep(next)
-  }, [])
+  const set = useCallback(
+    (w: number) => {
+      const next = panelRoom(w, window.innerWidth, sideHidden)
+      setWanted(next)
+      keep(next)
+    },
+    [sideHidden]
+  )
 
   const onPointerDown = useCallback(
     (e: PointerEvent<HTMLDivElement>) => {

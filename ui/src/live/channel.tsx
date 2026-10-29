@@ -2,30 +2,30 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 
 import type { SendOptions } from "@kiwi/core/client.ts"
 import { GENERAL_ROOM, type Message as Wire } from "@kiwi/core/protocol.ts"
-import { dmPlace, placeKey, type ChannelState } from "@kiwi/core/state.ts"
+import { answersDecisions, dmPlace, placeKey, type ChannelState } from "@kiwi/core/state.ts"
 import { channelTitle, loadRecent, saveRecent, useChannel, useKnownChannels, type StoredMember } from "@/lib/channel"
 import { useIcons, useLiveIcon } from "@/lib/icons"
 import { markSeen, setOpenNews } from "@/lib/news"
 import { lastPreview } from "@/lib/preview"
 import { roomLast, roomSeenKey } from "@/lib/rooms"
-import { bridge } from "@/lib/secrets"
 import { sendsInTurn } from "@/lib/send-order"
 import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@/lib/threads"
-import { announce } from "~/kit/toasts"
+import { useAskChime } from "~/live/alerts"
 import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
-import { asksOf, directsOf, messagesOf, formerOf, peopleOf, roomsOf, tasksOf, type Pending } from "~/live/map"
+import { asksOf, directsOf, groupsOf, messagesOf, formerOf, nextOf, peopleOf, roomsOf, tasksOf, theirsOf, type Pending } from "~/live/map"
 import { iconUrl } from "~/live/icon"
 import { usePinsHere } from "~/live/pins"
 import { usePublishFace } from "~/live/face"
 import { usePictures } from "~/live/pictures"
 import { seated, useSeats } from "~/live/seats"
+import { elsewhere, lastWorth } from "~/live/notify"
+import { tellMessage } from "~/live/notes"
 import { ownPrefs } from "~/live/prefs"
-import { closeOpened, publish, type Run } from "~/live/store"
+import { closeOpened, markGone, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
 import type { Channel, Upload, Where } from "~/model"
 import { nicknamesOf } from "~/names"
-import { named as withNicknames } from "~/chat/linked"
 
 export interface View {
   where: Where | null
@@ -41,7 +41,7 @@ function named(body: string, names: ReadonlySet<string>): string[] {
   return [...lead.matchAll(/@([\p{L}\p{N}_.-]+)/gu)].flatMap((m) => (m[1] && names.has(m[1]) ? [m[1]] : []))
 }
 
-function sendOptions(state: ChannelState, messages: readonly Wire[], me: string, where: Where, body: string, opts: { replyTo?: number; inThread?: number }): SendOptions {
+function sendOptions(state: ChannelState, messages: readonly Wire[], me: string, where: Exclude<Where, { kind: "theirs" }>, body: string, opts: { replyTo?: number; inThread?: number }): SendOptions {
   const names = new Set([...state.members.values()].filter((m) => m.active && m.name !== me).map((m) => m.name))
   const re = opts.replyTo ?? opts.inThread
   const target = opts.replyTo !== undefined ? messages.find((m) => m.seq === opts.replyTo) : undefined
@@ -56,6 +56,7 @@ function sendOptions(state: ChannelState, messages: readonly Wire[], me: string,
 function seenKeyOf(where: Where, me: string): string {
   if (where.kind === "room") return roomSeenKey(where.room)
   if (where.kind === "dm") return placeKey(dmPlace(me, where.with))
+  if (where.kind === "theirs") return placeKey(dmPlace(...where.between))
   return placeKey({ kind: "task", task: where.task })
 }
 
@@ -83,7 +84,7 @@ function useShown(): boolean {
 
 export const OpenMember = memo(function OpenMember({ member, view }: { member: StoredMember; view: View }) {
   const live = useChannel(member)
-  const { ch, state, messages, roster, online, requests, isOwner, connection, gone, send, refreshRequests, refreshRoster, foldFrom } = live
+  const { ch, state, messages, roster, online, requests, isOwner, connection, gone, ready, send, refreshRequests, refreshRoster, foldFrom } = live
   const me = member.identity.name
   const roomId = member.access.roomId
   const code = member.code
@@ -91,7 +92,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const wakes = useWakes(roomId)
   const newMembers = useNewMembers(roomId)
   const newPowers = useNewPowers(roomId)
-  const pictures = usePictures(ch, messages)
+  const pictures = usePictures(code, ch, messages)
   const known = useKnownChannels()
   const icon = iconUrl(useIcons().get(roomId) ?? null)
   useLiveIcon(member)
@@ -109,10 +110,12 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const pins = usePinsHere(requests)
   const asks = useMemo(() => asksOf(state, messages, me, isOwner, requests, roster, pins), [state, messages, me, isOwner, requests, roster, pins])
   const mapped = useMemo(() => kept(code, messagesOf(state, messages, me, asks.askOf, pictures, pending)), [code, state, messages, me, asks.askOf, pictures, pending])
-  const tasks = useMemo(() => tasksOf(state, asks.held, me), [state, asks.held, me])
+  const tasks = useMemo(() => tasksOf(state, asks.held, me, messages), [state, asks.held, me, messages])
+  const taskGroups = useMemo(() => groupsOf(state, me), [state, me])
   const from = roomsFrom(roomId)
   const rooms = useMemo(() => roomsOf(state, messages, me, seen, from), [state, messages, me, seen, from])
   const directs = useMemo(() => directsOf(state, messages, me, seen), [state, messages, me, seen])
+  const theirs = useMemo(() => theirsOf(state, messages, me), [state, messages, me])
   const others = useMemo(() => people.filter((p) => !p.you), [people])
   const title = channelTitle(
     { name: known.find((c) => c.code === code)?.name ?? member.name },
@@ -120,6 +123,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   )
 
   const facts = useMemo(() => [...state.facts.values()].sort((a, b) => a.key.localeCompare(b.key)).map((f) => ({ key: f.key, value: f.value, by: f.by, at: f.ts })), [state.facts])
+  const next = nextOf(state)
+  const mergedAt = useMemo(() => [...state.github.prs.values()].flatMap((p) => (p.state === "merged" ? [p.at] : [])), [state.github.prs])
 
   const channel = useMemo(
     (): Channel => ({
@@ -131,6 +136,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       ...(state.lead ? { lead: state.lead } : {}),
       ...(state.charter ? { goal: state.charter.text } : {}),
       ...(facts.length ? { facts } : {}),
+      ...(next ? { next } : {}),
+      mergedAt,
       ...(state.hold ? { hold: { ...(state.hold.note ? { note: state.hold.note } : {}), by: state.hold.by, at: state.hold.at } } : {}),
       newMembers,
       newPowers,
@@ -139,13 +146,16 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       ...(state.branchPrefix ? { branchPrefix: state.branchPrefix } : {}),
       rooms,
       directs,
+      theirs,
       people,
       former,
       nicknames,
       messages: mapped,
       tasks,
+      taskGroups,
       asks: asks.asks,
       connection,
+      ...(ready ? {} : { loading: true }),
     }),
     [
       code,
@@ -156,6 +166,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       state.lead,
       state.charter,
       facts,
+      next,
+      mergedAt,
       state.hold,
       newMembers,
       newPowers,
@@ -164,18 +176,22 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       state.branchPrefix,
       rooms,
       directs,
+      theirs,
       people,
       former,
       nicknames,
       mapped,
       tasks,
+      taskGroups,
       asks.asks,
       connection,
+      ready,
     ]
   )
 
   const post = useCallback(
     async (where: Where, text: string, opts: { replyTo?: number; inThread?: number; images?: Upload[] }): Promise<number> => {
+      if (where.kind === "theirs") throw new Error("Only the two of them write in their direct messages")
       const key = ++counter.current
       const body = text.trim()
       const sending = { ...sendOptions(state, messages, me, where, body, opts), ...(opts.images?.length ? { imgs: opts.images } : {}) }
@@ -222,12 +238,12 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     [code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster, foldFrom]
   )
 
-  useLayoutEffect(() => publish({ code, channel, run }), [code, channel, run])
+  useLayoutEffect(() => {
+    if (!gone) return publish({ code, channel, run })
+    markGone({ code, title, why: gone })
+    closeOpened(code)
+  }, [code, channel, run, gone, title])
   useLayoutEffect(() => () => closeOpened(code), [code])
-
-  useEffect(() => {
-    if (gone) announce(gone === "closed" ? `${title} was closed by its owner` : `You're no longer in ${title}`)
-  }, [gone, title])
 
   const firstVisit = useRef(Object.keys(seenIn(roomId)).length === 0)
   useEffect(() => {
@@ -251,7 +267,9 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     if (task !== null && lastInTask && shown) markSeenIn(roomId, { [placeKey({ kind: "task", task })]: lastInTask })
   }, [task, lastInTask, roomId, shown])
 
-  const needs = useMemo(() => asks.asks.filter((a) => !("answer" in a && a.answer) && !(a.kind === "question" && a.idle)).length, [asks.asks])
+  const waiting = useMemo(() => asks.asks.filter((a) => !("answer" in a && a.answer) && !(a.kind === "question" && a.idle)), [asks.asks])
+  const needs = waiting.length
+  useAskChime(waiting)
   const top = Math.max(live.head, messages.at(-1)?.seq ?? 0)
   const unreadHere = rooms.reduce((n, r) => n + r.unread, 0) + directs.reduce((n, d) => n + d.unread, 0)
   useEffect(() => {
@@ -274,25 +292,18 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     })
   }, [messages, others, state, code, me, member.at])
 
-  useNotify(messages, me, title, state.members)
+  useNotify(messages, me, title, code, state.members)
 
   return null
 })
 
-function useNotify(messages: readonly Wire[], me: string, title: string, members: ChannelState["members"]) {
+function useNotify(messages: readonly Wire[], me: string, title: string, code: string, members: ChannelState["members"]) {
   const told = useRef(messages.at(-1)?.seq ?? 0)
   useEffect(() => {
-    const fresh = messages.filter((m) => m.seq > told.current && m.kind !== "event" && m.from !== me)
+    const fresh = messages.filter((m) => m.seq > told.current)
     told.current = Math.max(told.current, messages.at(-1)?.seq ?? 0)
-    if (!fresh.length || !document.hidden) return
-    const { notify } = ownPrefs()
-    const worth = fresh.filter((m) => notify === "all" || (notify === "mentions" && (m.to?.includes(me) || m.body.includes(`@${me}`))))
-    const last = worth.at(-1)
-    if (!last) return
-    const b = bridge()
-    const body = withNicknames(last.body, nicknamesOf(members.values())).slice(0, 200)
-    const who = members.get(last.from)?.display || last.from
-    if (b) void b.notify(`${who} in ${title}`, body).catch(() => {})
-    else if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification(`${who} in ${title}`, { body })
-  }, [messages, me, title, members])
+    if (!fresh.length || !elsewhere()) return
+    const last = lastWorth(fresh, me, ownPrefs().notify, answersDecisions(members, me))
+    if (last) tellMessage(last, title, code, members.values(), members.get(last.from)?.display)
+  }, [messages, me, title, code, members])
 }

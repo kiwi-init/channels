@@ -13,10 +13,16 @@ import { bridge, secrets } from "./secrets"
 /** Requests already announced, so each is notified once per run of the app. */
 const told = new Set<string>()
 
-function notify(title: string, body: string) {
+function notify(title: string, body: string, code: string) {
   const b = bridge()
-  if (b) return void b.notify(title, body).catch(() => {})
-  if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification(title, { body })
+  if (b) return void b.notify(title, body, `kiwi://join/${encodeURIComponent(code)}`).catch(() => {})
+  if (typeof Notification === "undefined" || Notification.permission !== "granted") return
+  const note = new Notification(title, { body, silent: true })
+  note.onclick = () => {
+    window.focus()
+    location.hash = encodeURIComponent(code)
+    note.close()
+  }
 }
 
 async function ownLinks() {
@@ -26,14 +32,14 @@ async function ownLinks() {
 }
 
 /** One pass over one owned channel: cut forgotten devices, approve own computers' agents, announce the rest. */
-async function tend(code: string, person: string | undefined): Promise<void> {
+async function tend(code: string, person: string | undefined, muted: () => boolean, ring: () => void): Promise<void> {
   const m = loadMember(code)
   if (!m || m.identity.pk !== m.access.ownerPk) return
   const ch = linkOf(m)
   const title = m.name ?? "your channel"
   const { lists, cut } = await tendLists(code, await ownLinks(), ch).catch(() => ({ lists: undefined, cut: [] }))
   const one = cut[0]
-  if (one) notify(title, cut.length === 1 ? `${one.name} is out: the device was forgotten` : `${cut.length} members are out: their devices were forgotten`)
+  if (one && !muted()) notify(title, cut.length === 1 ? `${one.name} is out: the device was forgotten` : `${cut.length} members are out: their devices were forgotten`, code)
   if (!person) return
   const [{ PRESETS }, { cleanPersonalities }] = await Promise.all([import("@kiwi/core/presets.ts"), import("@kiwi/core/personalities.ts")])
   const personalities = [...PRESETS, ...cleanPersonalities(secrets().personalities)]
@@ -46,12 +52,22 @@ async function tend(code: string, person: string | undefined): Promise<void> {
     },
     requests: (o: { person: string }) => ch.requests({ ...o, ...(lists ? { lists } : {}) }),
   }
-  await tendOwned(person, title, api, notify, told)
+  await tendOwned(
+    person,
+    title,
+    api,
+    (title, body) => {
+      if (muted()) return
+      ring()
+      notify(title, body, code)
+    },
+    told
+  )
 }
 
 /** Watch every owned channel in `rows` while the app runs (the tray keeps it running when closed). */
-export function startAutoApproval(codes: string[]): () => void {
-  const tending = tendOnPush(codes, watches().watch, (code) => tend(code, secrets().person?.pk))
+export function startAutoApproval(codes: string[], muted: () => boolean = () => false, ring: () => void = () => {}): () => void {
+  const tending = tendOnPush(codes, watches().watch, (code) => tend(code, secrets().person?.pk, muted, ring))
   const timer = window.setInterval(() => {
     for (const code of codes) tending.kick(code)
   }, TEND_SAFETY_MS)

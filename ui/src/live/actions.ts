@@ -6,7 +6,7 @@ import { cleanPersonalities } from "@kiwi/core/personalities.ts"
 import { personaOf, personaScopes, type Persona, type Personality } from "@kiwi/core/personality.ts"
 import { pinned } from "@kiwi/core/pin.ts"
 import { PRESETS } from "@kiwi/core/presets.ts"
-import { BRANCH_PREFIX_RE, ROBOT_FACES, ROOM_ID_RE, TASK_TITLE_MAX_LENGTH, type Event } from "@kiwi/core/protocol.ts"
+import { BRANCH_PREFIX_RE, MAX_GOAL_NAME, ROBOT_FACES, ROOM_ID_RE, TASK_TITLE_MAX_LENGTH, type Event } from "@kiwi/core/protocol.ts"
 import { describeScopes, SCOPES, wireScopes, type Scope } from "@kiwi/core/scopes.ts"
 import { newRoomId, taskId } from "@kiwi/core/state.ts"
 import type { Permission } from "@kiwi/core/launch-options.ts"
@@ -23,7 +23,7 @@ import { ALLOW_ONCE, DENY } from "@/lib/permission-settled"
 import { savePersonalities } from "@/lib/personalities"
 import { createPerson, bridge, secrets, type TermEvent, type TermOpenView } from "@/lib/secrets"
 import { isSignInGone } from "@/lib/session"
-import { approveTask, closedDigest, sendBackTask, type TaskSend } from "@/lib/task-actions"
+import { ANYONE, approveTask, assignTask, cancelTask, changeReviewer, closedDigest, sendBackTask, type TaskSend } from "@/lib/task-actions"
 import { announce } from "~/kit/toasts"
 import {
   answerPair,
@@ -40,6 +40,7 @@ import {
   unlinkGithub,
   type EnrollDone,
 } from "~/live/account"
+import { loadPicture } from "~/live/pictures"
 import { newMemberPowers, newMemberScopes, setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
 import { harnessChoices, STARTS } from "~/live/harness-rows"
@@ -48,7 +49,7 @@ import { seatOf } from "~/live/seats"
 import { memberName } from "@/lib/format"
 import { checkComputer, computerSettings, setContextLine, setHooks } from "~/live/computer"
 import { addStartFolder, allowNewAgents, allowRemoteBypass, preferTerminal, removeStartFolder, setTerminalHelpers } from "~/live/starts"
-import { closeOpened, openedChannel, openedRun, type Run } from "~/live/store"
+import { closeOpened, leavingOnPurpose, openedChannel, openedRun, type Run } from "~/live/store"
 import { stepReplyText } from "~/chat/step"
 import { downloadAndRestart } from "~/live/update"
 import { setWake } from "~/live/wakes"
@@ -59,6 +60,16 @@ const say = (err: unknown): string => (err instanceof Error ? err.message : Stri
 
 function attempt(what: string, run: () => Promise<unknown>): void {
   void (async () => run())().catch((err: unknown) => announce(`${what}: ${say(err)}`))
+}
+
+async function tried<T>(what: string, run: () => Promise<T>): Promise<T | null> {
+  try {
+    return await run()
+  } catch (err) {
+    // The person sees why in the announcement; the caller gets null and stays where it was.
+    announce(`${what}: ${say(err)}`)
+    return null
+  }
 }
 
 function need(code: string): Run {
@@ -240,6 +251,7 @@ export function makeActions(): Actions {
           // A retry that fails again is marked "Couldn't send" once more.
         }
       }),
+    loadImage: (code, spot) => loadPicture(code, spot),
     discard: (code, seq) => attempt("Couldn't remove it", async () => need(code).discard(-seq)),
     react: (code, seq, emoji) =>
       attempt("Couldn't react", async () => {
@@ -312,6 +324,37 @@ export function makeActions(): Actions {
         if (!state) throw new Error("a task waits on its own, when something holds it")
         const to = t.owner && t.owner !== run.me ? [t.owner] : undefined
         await event(run, `${taskId(id)} ${state}`, { op: "task.update", task: id, state }, to)
+      }),
+    cancelTask: (code, id, why) =>
+      attempt("Not cancelled", async () => {
+        const run = need(code)
+        const t = run.state.tasks.get(id)
+        if (!t) throw new Error(`no task ${taskId(id)}`)
+        const note = why.trim()
+        if (!note) throw new Error("say why it's cancelled")
+        await sends(run, cancelTask(t, note, run.me), closedDigest(run.state, [...run.messages], t, { by: run.me, cancelled: note }))
+      }),
+    assignTask: (code, id, to, why) =>
+      attempt("Not assigned", async () => {
+        const run = need(code)
+        const t = run.state.tasks.get(id)
+        if (!t) throw new Error(`no task ${taskId(id)}`)
+        memberOf(run, to)
+        await sends(run, assignTask(t, to, why.trim() || (t.owner ? `was ${t.owner}'s` : "nobody had it")))
+      }),
+    setReviewer: (code, id, reviewer) =>
+      attempt("Reviewer not changed", async () => {
+        const run = need(code)
+        const t = run.state.tasks.get(id)
+        if (!t) throw new Error(`no task ${taskId(id)}`)
+        if (reviewer !== ANYONE) memberOf(run, reviewer)
+        await sends(run, changeReviewer(t, reviewer, run.me))
+      }),
+    nameGoal: (code, ask, name) =>
+      attempt("Goal not named", async () => {
+        const run = need(code)
+        const clean = name?.trim().slice(0, MAX_GOAL_NAME) || null
+        await event(run, clean ? `named the goal of #${ask}: ${clean}` : `#${ask}'s goal unnamed`, { op: "ask.name", ask, name: clean })
       }),
     setRole: (code, name, role) =>
       attempt("Role not changed", async () => {
@@ -448,7 +491,7 @@ export function makeActions(): Actions {
         announce(`Starting ${agent.name || harness}`)
       }),
     addRoom: (code, typed) =>
-      attempt("Room not made", async () => {
+      tried("Room not made", async () => {
         const run = owner(code)
         const problem = roomProblem(run.state.rooms.values(), typed)
         if (problem) throw new Error(problem)
@@ -458,6 +501,7 @@ export function makeActions(): Actions {
         const since = await event(run, `made the room #${room.name}`, { op: "room.create", ...room })
         await roomFolded(() => openedRun(code), room)
         await run.ch.setRooms({ list: roomsAfter(openedRun(code)?.state.rooms.values() ?? run.state.rooms.values(), room), since })
+        return room.id
       }),
     setGithubWrite: (code, on) =>
       attempt("Not changed", async () => {
@@ -571,6 +615,7 @@ export function makeActions(): Actions {
     },
     leaveChannel: (code) =>
       attempt("Couldn't leave", async () => {
+        leavingOnPurpose(code)
         if (loadPending(code) && !loadMember(code)) {
           closeOpened(code)
           return forgetPending(code)
@@ -582,6 +627,7 @@ export function makeActions(): Actions {
     closeChannel: (code) =>
       attempt("Couldn't close it", async () => {
         const run = owner(code)
+        leavingOnPurpose(code)
         await run.ch.close()
         closeOpened(code)
         await forgetChannel(code)

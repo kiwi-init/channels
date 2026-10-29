@@ -6,6 +6,8 @@ import { Icon } from "~/kit/icons"
 import type { App, Task, TaskStatus, Theme } from "~/model"
 import { useApp, type Go, type Nav, type Panel } from "~/nav"
 import { nickname, shown } from "~/names"
+import { SIDEBAR_KEYS } from "@/lib/sidebar-hidden"
+import { toggleSide } from "~/shell/side"
 import { statusOf } from "~/shell/sidebar"
 
 type Group = "Channels" | "Rooms" | "People" | "Tasks" | "Actions"
@@ -46,11 +48,20 @@ export function Palette() {
   const { nav, go } = useApp()
   const open = nav.dialog === "palette"
   const ref = useRef<HTMLDialogElement>(null)
+  const back = useRef<HTMLElement | null>(null)
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    if (open && !el.open) el.showModal()
-    if (!open && el.open) el.close()
+    if (open && !el.open) {
+      back.current = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null
+      el.showModal()
+    }
+    if (!open && el.open) {
+      el.close()
+      const to = back.current
+      back.current = null
+      if (to?.isConnected && !document.querySelector("dialog[open]")) to.focus()
+    }
   }, [open])
   const close = () => go({ to: "dialog", dialog: null })
   return (
@@ -97,6 +108,9 @@ function Finder() {
     } else if (e.key === "ArrowUp" || (ctrl && e.key === "p")) {
       e.preventDefault()
       move(-1)
+    } else if ((e.key === "Home" || e.key === "End") && flat.length) {
+      e.preventDefault()
+      setActive(e.key === "Home" ? 0 : flat.length - 1)
     } else if (e.key === "Enter") {
       e.preventDefault()
       flat[current]?.run()
@@ -327,6 +341,14 @@ function collect(app: App, nav: Nav, go: (go: Go) => void): Item[] {
       run: () => go({ to: "dialog", dialog: "join" }),
     },
     {
+      id: "action:computers",
+      group: "Actions",
+      label: "Your computers",
+      keys: ["phones", "devices", "machines"],
+      lead: <Icon name="computer" size={14} />,
+      run: () => go({ to: "settings", section: "computers" }),
+    },
+    {
       id: "action:settings",
       group: "Actions",
       label: "Settings",
@@ -335,6 +357,20 @@ function collect(app: App, nav: Nav, go: (go: Go) => void): Item[] {
       run: () => go({ to: "settings" }),
     }
   )
+
+  if (channel && nav.page === "channel")
+    items.push({
+      id: "action:sidebar",
+      group: "Actions",
+      label: "Toggle sidebar",
+      keys: ["hide", "show", "rooms", "people"],
+      lead: <Icon name="sidebar" size={14} />,
+      meta: <kbd className="palette-kbd">{SIDEBAR_KEYS}</kbd>,
+      run: () => {
+        close()
+        toggleSide()
+      },
+    })
 
   for (const t of THEMES) {
     const on = app.prefs.theme === t.theme

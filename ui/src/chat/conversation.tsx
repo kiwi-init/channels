@@ -6,10 +6,13 @@ import { linked } from "~/chat/linked"
 import { flash, jumpTo, ReplyContext, type Replying } from "~/chat/reply"
 import type { Jump } from "~/chat/search-box"
 import { paintHits } from "~/chat/search-paint"
+import { Loading } from "~/kit/bits"
 import { day, sameDay } from "~/kit/time"
-import type { Channel, Message, Where } from "~/model"
-import { sameWhere, useApp } from "~/nav"
-import { nickname, shown } from "~/names"
+import type { Channel, Message, Person, Where } from "~/model"
+import { liveOf, workingIn } from "~/doing"
+import { sameWhere, useApp, whereKey } from "~/nav"
+import { between, nickname, shown } from "~/names"
+import { AddAgentCard } from "~/panels/add-agent"
 
 const GROUP_MS = 5 * 60_000
 const NEAR_BOTTOM = 48
@@ -54,8 +57,6 @@ export function quoteOf(list: Message[], i: number, bySeq: ReadonlyMap<number, M
   if (target === undefined || list[i - 1]?.seq === target) return undefined
   return bySeq.get(target)
 }
-
-const whereKey = (w: Where): string => (w.kind === "room" ? `r:${w.room}` : w.kind === "dm" ? `d:${w.with}` : `t:${w.task}`)
 
 interface Anchor {
   el: Element
@@ -152,17 +153,24 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
   const key = `${channel.code}:${whereKey(where)}`
   const [reply, setReply] = useState<{ key: string; to: Message } | null>(null)
   const replying = useMemo((): Replying => ({ to: reply?.key === key ? reply.to : null, set: (to) => setReply(to ? { key, to } : null) }), [reply, key])
-  const placeName = where.kind === "room" ? `#${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}` : where.kind === "dm" ? nickname(channel, where.with) : `T${where.task}`
+  const placeName =
+    where.kind === "room"
+      ? `#${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}`
+      : where.kind === "dm"
+        ? nickname(channel, where.with)
+        : where.kind === "theirs"
+          ? between(channel, where.between)
+          : `T${where.task}`
 
   return (
     <ReplyContext.Provider value={replying}>
-      {channel.hold && (
-        <p className="banner">
-          Agents are paused{channel.hold.note ? `: ${channel.hold.note.replace(/[.\s]+$/, "")}` : ""}. <span className="dim">They read but don't act until you resume.</span>
-        </p>
-      )}
+      {channel.hold && <HoldBanner channel={channel} hold={channel.hold} />}
       <Feed key={key} channel={channel} where={where} jump={jump && sameWhere(jump.m.where, where) ? jump : null} />
-      <Composer channel={channel} where={where} placeholder={where.kind === "dm" ? `Message ${placeName} privately` : `Message ${placeName}`} />
+      {where.kind === "theirs" ? (
+        <ReadOnly channel={channel} between={where.between} />
+      ) : (
+        <Composer channel={channel} where={where} placeholder={where.kind === "dm" ? `Message ${placeName} privately` : `Message ${placeName}`} />
+      )}
     </ReplyContext.Provider>
   )
 }
@@ -173,7 +181,7 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
   const bySeq = useMemo(() => new Map(channel.messages.map((m) => [m.seq, m])), [channel.messages])
   const names = useNames(channel)
   const tasks = useTaskIds(channel)
-  const typing = channel.people.filter((p) => p.typing && !p.you && where.kind === "room")
+  const working = workingIn(channel.people, where)
   const [fresh, setFresh] = useState(0)
   const [far, setFar] = useState(false)
 
@@ -204,12 +212,12 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
 
   useEffect(() => {
     const near = [...list.slice(Math.max(0, start - MORE), start), ...list.slice(end, end + MORE)]
-    const texts = near.flatMap((m) => (m.text && !m.system ? [m.text] : []))
+    const texts = near.flatMap((m) => (m.text && !m.system ? [{ text: m.text, seq: m.seq }] : []))
     let stop = () => {}
     let live = true
     const timer = window.setTimeout(() => {
       void import("~/chat/markdown").then(({ warm }) => {
-        if (live) stop = warm(texts, (text) => linked(text, names, tasks))
+        if (live) stop = warm(texts, ({ text, seq }) => linked(text, names, tasks, seq))
       })
     }, 150)
     return () => {
@@ -345,7 +353,11 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
       <div className="feed" ref={scroller} onScroll={onScroll}>
         <div className="feed-list" ref={content}>
           {list.length === 0 ? (
-            <Start channel={channel} where={where} />
+            channel.loading ? (
+              <Loading />
+            ) : (
+              <Start channel={channel} where={where} />
+            )
           ) : (
             list.slice(start, end).map((m, k) => {
               const i = start + k
@@ -366,22 +378,39 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
               )
             })
           )}
-          {typing.length > 0 && (
-            <p className="typing">
-              <span className="typing-dots" aria-hidden="true">
-                <i />
-                <i />
-                <i />
-              </span>
-              {typing.map((p) => shown(p)).join(", ")} {typing.length === 1 ? "is" : "are"} typing
-            </p>
-          )}
+          {working.length > 0 && <Working people={working} />}
         </div>
       </div>
       {(fresh > 0 || far) && (
         <button type="button" className="feed-jump" onClick={toLatest}>
           {fresh > 0 ? `${fresh} new ${fresh === 1 ? "message" : "messages"}` : "Jump to latest"}
           <span aria-hidden="true"> ↓</span>
+        </button>
+      )}
+    </div>
+  )
+}
+
+export function ReadOnly({ channel, between: names }: { channel: Channel; between: readonly [string, string] }) {
+  return (
+    <div className="compose">
+      <p className="compose-note">Only {between(channel, names)} write here. You read along.</p>
+    </div>
+  )
+}
+
+function HoldBanner({ channel, hold }: { channel: Channel; hold: NonNullable<Channel["hold"]> }) {
+  const { app } = useApp()
+  const owner = channel.people.find((p) => p.owner && !p.you)
+  const until = channel.youOwn ? "until you resume them" : `until ${owner ? shown(owner) : "the owner"} resumes them`
+  return (
+    <div className="banner" role="status">
+      <p className="banner-text">
+        Agents are paused{hold.note ? `: ${hold.note.replace(/[.\s]+$/, "")}` : ""}. <span className="dim">They read but don't act {until}.</span>
+      </p>
+      {channel.youOwn && (
+        <button type="button" className="btn is-small" onClick={() => app.actions.setHold(channel.code, false)}>
+          Resume agents
         </button>
       )}
     </div>
@@ -397,9 +426,38 @@ function Start({ channel, where }: { channel: Channel; where: Where }) {
           ? `This is the start of #${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}.`
           : where.kind === "dm"
             ? `Only you and ${nickname(channel, where.with)} read this.`
-            : "Nothing here yet."}
+            : where.kind === "theirs"
+              ? `This is the start of ${between(channel, where.between)}.`
+              : "Nothing here yet."}
       </p>
-      <p className="dim">{agents === 0 ? "No agents here yet. Add one from the sidebar, then give it something to do." : "Say what you want done. The lead turns it into tasks."}</p>
+      {agents === 0 ? <AddAgentCard channel={channel} /> : <p className="dim">Say what you want done. The lead turns it into tasks.</p>}
     </div>
+  )
+}
+
+function Working({ people }: { people: Person[] }) {
+  const { go } = useApp()
+  const named = people.slice(0, 3)
+  const more = people.length - named.length
+  return (
+    <p className="working" aria-live="polite">
+      <span className="working-dots" aria-hidden="true">
+        <i />
+        <i />
+        <i />
+      </span>
+      <span className="working-text">
+        {named.map((p, i) => (
+          <Fragment key={p.name}>
+            {i > 0 && ", "}
+            <button type="button" className="working-name" onClick={() => go({ to: "panel", panel: { kind: "person", name: p.name } })}>
+              {shown(p)}
+            </button>{" "}
+            {liveOf(p)?.text}
+          </Fragment>
+        ))}
+        {more > 0 && `, ${more} more working`}
+      </span>
+    </p>
   )
 }

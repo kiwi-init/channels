@@ -21,7 +21,7 @@ export interface Host {
   pickFolder(): Promise<string | null>;
   droppedFiles(): Promise<DroppedFile[]>;
   pastedImage(): Promise<PastedImage | null>;
-  notify(title: string, body: string): void;
+  notify(title: string, body: string, link: string | null): void;
   badge(count: number): void;
   appearance(appearance: "system" | "light" | "dark"): void;
   wallpaper(dark: boolean): Promise<Uint8Array | null>;

@@ -227,7 +227,23 @@
 }
 
 .top-drawer {
+  position: relative;
   display: none;
+}
+
+.top-drawer-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ink-2);
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+.top-drawer-dot.is-loud {
+  background: var(--decide);
 }
 
 .top-title {
@@ -259,7 +275,7 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
-  max-width: 100%;
+  max-width: calc(100% + 4px);
   height: 32px;
   margin-left: -4px;
   padding: 0 10px 0 12px;
@@ -407,6 +423,12 @@
   background: var(--wash);
 }
 
+.side-problem {
+  margin: 4px 8px 6px;
+  color: var(--alert);
+  font: var(--t-meta) var(--ui);
+}
+
 .side-row.is-on {
   background: var(--wash-2);
   color: var(--ink);
@@ -438,6 +460,27 @@
 
 .side-row.is-on .side-hash {
   color: var(--ink-2);
+}
+
+.side-pair {
+  display: flex;
+  flex: none;
+  align-items: center;
+  width: 28px;
+  height: 24px;
+  margin-right: -4px;
+}
+
+.side-pair .av {
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  font-size: 0.6em;
+}
+
+.side-pair .av + .av {
+  margin-left: -4px;
+  box-shadow: -1.5px 0 0 var(--bg);
 }
 
 .side-label {
@@ -514,7 +557,6 @@
   text-overflow: ellipsis;
 }
 
-.side-status.is-typing,
 .side-status.is-doing {
   color: var(--doing);
 }
@@ -672,8 +714,67 @@
     scrollbar-width: none;
   }
 
+  .tabs {
+    gap: 2px;
+  }
+
+  .tabs button {
+    padding: 0 8px;
+  }
+
+  .tabs .is-agents {
+    display: none;
+  }
+
   .top-meta {
     display: none;
+  }
+}
+
+@media (min-width: 761px) {
+  .chan:not(.is-bare) .top-drawer {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-area: 1 / 1;
+    justify-self: end;
+    margin-right: 12px;
+  }
+
+  .chan:not(.is-bare) .top-title {
+    grid-area: 1 / 1;
+    padding-right: 48px;
+  }
+
+  .chan:not(.is-bare) .top-drawer-dot {
+    display: none;
+  }
+
+  .chan.is-bare {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .chan.is-bare .side {
+    display: none;
+  }
+
+  .chan.is-bare .top {
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    padding-left: 8px;
+  }
+
+  .chan.is-bare .top-drawer {
+    display: grid;
+  }
+
+  .chan.is-bare .top-title {
+    padding: 0 10px;
+  }
+}
+
+@media (min-width: 1181px) {
+  .chan.is-bare.has-panel {
+    grid-template-columns: minmax(0, 1fr) var(--panel-w);
   }
 }
 

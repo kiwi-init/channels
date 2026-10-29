@@ -2,7 +2,7 @@ import { createContext, useContext } from "react"
 
 import type { Actions, App, Where } from "~/model"
 
-type Tab = "chat" | "tasks" | "needs"
+type Tab = "chat" | "tasks" | "agents" | "needs"
 
 export type Panel = { kind: "person"; name: string } | { kind: "task"; task: number } | { kind: "thread"; seq: number } | { kind: "channel" } | { kind: "invite" } | { kind: "add-agent" }
 
@@ -67,8 +67,9 @@ export function navigate(nav: Nav, go: Go): Nav {
   }
 }
 
-export const sameWhere = (a: Where, b: Where): boolean =>
-  a.kind === b.kind && (a.kind === "room" ? a.room === (b as { room: string }).room : a.kind === "dm" ? a.with === (b as { with: string }).with : a.task === (b as { task: number }).task)
+export const whereKey = (w: Where): string => (w.kind === "room" ? `r:${w.room}` : w.kind === "dm" ? `d:${w.with}` : w.kind === "theirs" ? `p:${w.between.join("&")}` : `t:${w.task}`)
+
+export const sameWhere = (a: Where, b: Where): boolean => whereKey(a) === whereKey(b)
 
 export interface Ctx {
   app: App

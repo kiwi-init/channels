@@ -1,4 +1,4 @@
-import type { HookState, KnownHarness } from "@kiwi/core/harnesses.ts"
+import type { HookHarness, HookState } from "@kiwi/core/harnesses.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
 import type { Step, StepReply } from "@kiwi/core/protocol.ts"
 import type { TerminalId, TerminalRow } from "@kiwi/core/terminals.ts"
@@ -9,9 +9,25 @@ type Presence = "online" | "away" | "offline"
 
 export type TaskStatus = "todo" | "doing" | "review" | "done" | "waiting"
 
+type Stage = "open" | "building" | "proving" | "red" | "yours" | "done" | "dropped"
+
 type Kind = "human" | "agent"
 
 export type Color = "red" | "orange" | "yellow" | "green" | "teal" | "blue" | "indigo" | "violet" | "pink" | "brown"
+
+export interface Activity {
+  state: "working" | "waiting" | "idle"
+  tool?: string
+  since?: number
+  context?: { used: number; window?: number }
+}
+
+export interface Load {
+  level: "free" | "busy" | "overloaded"
+  doing: number[]
+  queued: number[]
+  waiting: number[]
+}
 
 export interface Person {
   name: string
@@ -23,16 +39,21 @@ export interface Person {
   owner: boolean
   you: boolean
   presence: Presence
-  typing: boolean
+  activity?: Activity
+  reach?: "listening" | "running" | "wakes"
   harness?: Harness
   runs?: string
   model?: string
   machine?: string
-  folder?: string
+  specs?: string
+  tools?: string[]
+  repo?: string
+  branch?: string
+  outside?: boolean
   persona?: string
   sponsor?: string
   about?: string
-  doing?: number
+  load?: Load
   readOnly?: boolean
   wakes?: boolean
   seat?: "rex" | "tmux" | "hosted"
@@ -51,6 +72,8 @@ export interface PullRequest {
   url: string
   state: "open" | "draft" | "merged" | "closed"
   checks: "pass" | "fail" | "running" | "none"
+  ticks?: { passed: number; running: number; failed: readonly string[] }
+  mergedAt?: number
   additions?: number
   deletions?: number
 }
@@ -67,6 +90,39 @@ export interface ReviewRound {
   judge?: string
   at: number
   result: "open" | "approved" | "rejected" | "withdrawn"
+  summary?: string
+}
+
+export type TaskMove =
+  | "created"
+  | "took"
+  | "assigned"
+  | "unassigned"
+  | "started"
+  | "blocked"
+  | "reopened"
+  | "review"
+  | "approved"
+  | "rejected"
+  | "done"
+  | "cancelled"
+  | "reviewer"
+  | "renamed"
+  | "proof"
+  | "checkpoint"
+  | "note"
+  | "mention"
+
+export interface TaskEvent {
+  seq: number
+  by: string
+  at: number
+  what: TaskMove
+  to?: string
+  round?: number
+  note?: string
+  where?: Where
+  root?: number
 }
 
 export interface Task {
@@ -80,14 +136,32 @@ export interface Task {
   createdAt: number
   updatedAt: number
   pr?: PullRequest
+  stage?: Stage
+  release?: string
   notes: TaskNote[]
   rounds: ReviewRound[]
+  history: TaskEvent[]
   archived: boolean
   cancelled?: boolean
   youReview?: "verdict" | "send-back"
+  suggested?: { name: string; why: string }
+  leftBy?: string
 }
 
-export type Where = { kind: "room"; room: string } | { kind: "dm"; with: string } | { kind: "task"; task: number }
+export type TaskGroupHead =
+  | { kind: "ask"; id: number; by: string; words: string; goal?: string; mayName: boolean }
+  | { kind: "unfiled" }
+  | { kind: "next"; name?: string }
+  | { kind: "release"; tag: string; at: number }
+  | { kind: "cancelled" }
+
+export interface TaskGroup {
+  key: string
+  head: TaskGroupHead
+  tasks: number[]
+}
+
+export type Where = { kind: "room"; room: string } | { kind: "dm"; with: string } | { kind: "theirs"; between: readonly [string, string] } | { kind: "task"; task: number }
 
 export interface Room {
   id: string
@@ -104,6 +178,11 @@ export interface Direct {
   seen?: number
 }
 
+export interface TheirDirect {
+  between: readonly [string, string]
+  last: number
+}
+
 export interface Upload {
   name: string
   mime: string
@@ -115,6 +194,12 @@ export interface Image {
   width: number
   height: number
   alt: string
+}
+
+export interface ImageSpot {
+  spot: string
+  alt: string
+  state: "waiting" | "failed" | "gone"
 }
 
 export interface Reaction {
@@ -133,10 +218,11 @@ export interface Message {
   thread?: { replies: number; last: number; people: string[] }
   task?: number
   pr?: PullRequest
-  images?: Image[]
+  images?: (Image | ImageSpot)[]
   reactions?: Reaction[]
   ask?: string
   system?: boolean
+  done?: true
   pending?: boolean
   failed?: string
   mentionsYou?: boolean
@@ -147,9 +233,18 @@ export interface PermissionAsk {
   id: string
   from: string
   at: number
+  expiresAt?: number
+  canAllow: boolean
+  canDeny: boolean
+  allower?: string
   tool: string
-  summary: string
+  title: string
+  summary?: string
   code: string
+  cwd?: string
+  notes: string[]
+  replaced?: string
+  content?: string
   task?: number
   answer?: { allow: boolean; by: string; at: number }
 }
@@ -160,6 +255,8 @@ export interface QuestionAsk {
   from: string
   at: number
   text: string
+  label: string
+  irreversible?: true
   options: string[]
   holds: number[]
   task?: number
@@ -266,6 +363,8 @@ export interface Channel {
   lead?: string
   goal?: string
   facts?: Fact[]
+  next?: string
+  mergedAt?: number[]
   hold?: { note?: string; by: string; at: number }
   newMembers?: "read" | "write"
   newPowers?: Powers
@@ -274,13 +373,16 @@ export interface Channel {
   branchPrefix?: string
   rooms: Room[]
   directs: Direct[]
+  theirs: TheirDirect[]
   people: Person[]
   former?: Person[]
   nicknames: ReadonlyMap<string, string>
   messages: Message[]
   tasks: Task[]
+  taskGroups: TaskGroup[]
   asks: Ask[]
   connection: "connecting" | "live" | "reconnecting"
+  loading?: boolean
   waiting?: { code: string; since: number; state?: "waiting" | "unreachable" | "declined"; owner?: string }
 }
 
@@ -386,6 +488,7 @@ export interface NewAgent {
 export interface Actions {
   send(code: string, where: Where, text: string, opts?: { replyTo?: number; inThread?: number; images?: Upload[] }): void
   retry(code: string, seq: number): void
+  loadImage(code: string, spot: string): void
   discard(code: string, seq: number): void
   react(code: string, seq: number, emoji: string): void
   answerPermission(code: string, id: string, allow: boolean): void
@@ -395,6 +498,10 @@ export interface Actions {
   approveTask(code: string, task: number, approve: boolean, why?: string): void
   addTask(code: string, title: string, owner?: string): void
   setTaskStatus(code: string, task: number, status: TaskStatus): void
+  cancelTask(code: string, task: number, why: string): void
+  assignTask(code: string, task: number, to: string, why: string): void
+  setReviewer(code: string, task: number, reviewer: string): void
+  nameGoal(code: string, ask: number, name: string | null): void
   setRole(code: string, name: string, role: string | null): void
   removeMember(code: string, name: string): void
   setPersona(code: string, name: string, persona: string | null): void
@@ -408,7 +515,7 @@ export interface Actions {
   openTerm(code: string, name: string, cols: number, rows: number, watch: TermWatch): Promise<TermOpened>
   choicesOn(code: string, computer: string): Promise<ComputerChoices>
   chooseFolder(): Promise<string | null>
-  addRoom(code: string, name: string): void
+  addRoom(code: string, name: string): Promise<string | null>
   renameRoom(code: string, id: string, name: string): void
   setIcon(code: string, file: File | null): void
   renameChannel(code: string, title: string): void
@@ -458,7 +565,7 @@ export interface Actions {
   allowNewAgents(on: boolean): void
   allowRemoteBypass(on: boolean): void
   savePersonalities(list: Personality[]): void
-  setHooks(harness: KnownHarness, on: boolean): void
+  setHooks(harness: HookHarness, on: boolean): void
   checkComputer(): Promise<Finding[] | null>
   preferTerminal(id: TerminalId): void
   setTerminalHelpers(id: Exclude<TerminalId, "app">, on: boolean): void
@@ -470,7 +577,7 @@ export type Finding = { ok: true; what: string } | { ok: false; what: string; ho
 
 export interface ThisComputer {
   kiwi: { running: boolean; version?: string }
-  hooks: { harness: KnownHarness; label: string; state: Exclude<HookState, "absent"> }[]
+  hooks: { harness: HookHarness; label: string; state: Exclude<HookState, "absent"> }[]
   contextLine: boolean | null
 }
 
@@ -482,10 +589,17 @@ export interface AgentStarts {
   terminals: TerminalRow[]
 }
 
+export interface GoneChannel {
+  code: string
+  title: string
+  why: "closed" | "removed"
+}
+
 export interface App {
   account: Account | null
   channels: ChannelTile[]
   channel: Channel | null
+  gone?: GoneChannel
   prefs: Prefs
   harnesses: { id: Harness; label: string; installed: boolean; version?: string; path?: string; why?: string }[]
   personas: { id: string; label: string; about: string }[]
