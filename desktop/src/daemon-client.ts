@@ -18,6 +18,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { readHarnessRow, type HarnessRow } from "@kiwi/core/harnesses.ts";
+import type { DeviceLink } from "@kiwi/core/devices.ts";
 import type { MachineCert } from "@kiwi/core/person.ts";
 import type { LaunchedView } from "@kiwi/core/terminals.ts";
 
@@ -31,10 +32,7 @@ export interface HelloResult {
   paired: { person: string; name: string; label: string } | null;
 }
 
-export interface AdoptParams {
-  cert: MachineCert;
-  person: { pk: string; xpk: string; name: string };
-}
+export type AdoptParams = ({ cert: MachineCert } | { links: DeviceLink[] }) & { person: { pk: string; xpk: string; name: string } };
 
 export function kiwiHome(): string {
   return process.env["KIWI_HOME"] ?? path.join(os.homedir(), ".kiwi");
