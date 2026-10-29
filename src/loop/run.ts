@@ -126,6 +126,26 @@ const cycles = (seat: LoopSeat, stop: { asked: boolean; busy: boolean }): Effect
   });
 
 function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string, stop: { asked: boolean; busy: boolean }): Effect.Effect<Ended, unknown, Agent> {
+  return Effect.suspend(() => {
+    let spawned: { left: Effect.Effect<void>; mode: string | null } | null = null;
+    const leave = Effect.gen(function* () {
+      if (!spawned) return;
+      yield* spawned.left;
+      restoreTerminal(spawned.mode);
+      stop.busy = false;
+    });
+    return session(seat, s, first, prompt, stop, (left, mode) => void (spawned = { left, mode })).pipe(Effect.ensuring(leave));
+  });
+}
+
+function session(
+  seat: LoopSeat,
+  s: AgentSession,
+  first: Work,
+  prompt: string,
+  stop: { asked: boolean; busy: boolean },
+  spawned: (left: Effect.Effect<void>, mode: string | null) => void,
+): Effect.Effect<Ended, unknown, Agent> {
   return Effect.gen(function* () {
     const { recipe } = seat;
     const nonce = randomBytes(9).toString("hex");
@@ -138,11 +158,21 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
     });
     yield* hooksFirst(recipe);
     if (recipe.screen) clearTypedPane();
+    const mode = terminalMode();
     const started = Date.now();
     const child = Bun.spawn(argv, { cwd: process.cwd(), env: childEnv(), stdin: "inherit", stdout: "inherit", stderr: "inherit" });
     stop.busy = true;
     let exited = false;
     void child.exited.then(() => void (exited = true));
+    const finish = Effect.gen(function* () {
+      if (exited) return;
+      child.kill(recipe.stopSignal);
+      const late = Date.now() + TERM_GRACE_MS;
+      while (!exited && Date.now() < late) yield* Effect.sleep(250);
+      if (!exited) child.kill("SIGKILL");
+      yield* Effect.promise(() => child.exited);
+    });
+    spawned(finish, mode);
     yield* say(`${workName(first)}: started ${recipe.label} (pid ${child.pid})`);
 
     let found: Started | null = null;
@@ -159,11 +189,7 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
           yield* hold(seat);
           const until = why.kind === "done" || why.kind === "fresh" ? Date.now() + IDLE_WAIT_MS : 0;
           while (!exited && !stop.asked && Date.now() < until && !found?.idle().idle) yield* Effect.sleep(POLL_MS);
-          child.kill(recipe.stopSignal);
-          const late = Date.now() + TERM_GRACE_MS;
-          while (!exited && Date.now() < late) yield* Effect.sleep(250);
-          if (!exited) child.kill("SIGKILL");
-          yield* Effect.promise(() => child.exited);
+          yield* finish;
         }
         const stopped = strays.size ? stopStrays(strays) : 0;
         if (stopped) yield* say(`stopped ${stopped} kiwi listener${stopped > 1 ? "s" : ""} the session left running`);
@@ -223,6 +249,24 @@ function tellWait(s: AgentSession, state: ChannelState, me: string, w: Work, ses
     wait.tellAt = sent ? null : now + WAIT_TELL_MS;
     yield* say(sent ? `${head}; told ${to.join(", ")}` : `${head}; couldn't tell ${to.join(", ")}, trying again in ${Math.round(WAIT_TELL_MS / 60_000)} minutes`);
   });
+}
+
+function ownsTerminal(): boolean {
+  if (!process.stdin.isTTY) return false;
+  const ps = Bun.spawnSync(["ps", "-o", "pgid=,tpgid=", "-p", String(process.pid)], { stdout: "pipe", stderr: "ignore" });
+  const [group, foreground] = ps.stdout.toString().trim().split(/\s+/).map(Number);
+  return ps.exitCode === 0 && group !== undefined && group > 0 && group === foreground;
+}
+
+function terminalMode(): string | null {
+  if (!ownsTerminal()) return null;
+  const saved = Bun.spawnSync(["stty", "-g"], { stdin: "inherit", stdout: "pipe", stderr: "ignore" });
+  const mode = saved.stdout.toString().trim();
+  return saved.exitCode === 0 && mode ? mode : null;
+}
+
+function restoreTerminal(mode: string | null): void {
+  if (mode && ownsTerminal()) Bun.spawnSync(["stty", mode], { stdin: "inherit", stdout: "ignore", stderr: "ignore" });
 }
 
 function clearTypedPane(): void {

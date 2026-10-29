@@ -260,14 +260,15 @@ import { appendFileSync, mkdirSync, realpathSync, writeFileSync } from "node:fs"
 import { join } from "node:path";
 const record = ${JSON.stringify(record)};
 const say = (o) => appendFileSync(record, JSON.stringify(o) + "\\n");
-process.on("SIGTERM", () => { say({ kind: "term", pid: process.pid }); process.exit(143); });
+process.on("SIGTERM", () => { say({ kind: "term", pid: process.pid }); process.kill(process.pid, "SIGKILL"); });
 const argv = process.argv.slice(2);
 say({ kind: "start", harness: "kimi", pid: process.pid, argv, token: !!process.env.KIWI_SEAT_TOKEN, as: process.env.KIWI_AS, channel: process.env.KIWI_CHANNEL, marker: !!process.env.CLAUDE_CODE_SESSION_ID });
 process.stdout.write("Model: fake\\r\\nNo session yet — one will be created on your first message.\\r\\n> ");
 await Bun.sleep(1_000);
 process.stdout.write("\\x1b[?2004h");
-process.stdin.setRawMode(true);
+Bun.spawnSync(["stty", "raw", "-echo"], { stdin: "inherit" });
 process.stdin.resume();
+process.stdin.on("data", (d) => { if (d.includes(3)) process.kill(process.pid, "SIGKILL"); });
 let got = "";
 const prompt = await new Promise((resolve) => {
   process.stdin.on("data", (d) => {
@@ -654,9 +655,20 @@ test.skipIf(!tmuxPastes)("with --harness kimi in tmux 3.7 or newer, the loop typ
     expect(await ok(owner, ["--as", "human", "task", "show", id], { CLAUDECODE: "" })).toContain("status: done");
     await until(() => !pidAlive(typed.stray), "the stray listener stopped").catch(fail);
 
-    const loopPid = Number(new TextDecoder().decode(tmux("display-message", "-p", "-t", "loop", "#{pane_pid}").stdout).trim());
-    process.kill(loopPid, "SIGTERM");
-    await until(() => !seatOf(agent)?.hold, "the seat released").catch(fail);
+    await until(() => log().includes(`${id} is over; its session ended`), "the loop back to waiting").catch(fail);
+    let pressed = 0;
+    await until(
+      () => {
+        if (log().includes(`released ${me} in`)) return true;
+        if (Date.now() - pressed > 1_000) {
+          tmux("send-keys", "-t", "loop", "C-c");
+          pressed = Date.now();
+        }
+        return false;
+      },
+      "the seat released by Ctrl-C",
+      60_000,
+    ).catch(fail);
     expect(log()).toContain("stopped 1 kiwi listener the session left running");
     expect(log()).toContain(`${id} is over; its session ended`);
   } finally {
