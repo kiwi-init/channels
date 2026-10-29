@@ -4,7 +4,7 @@ import type { JoinRequest } from "@kiwi/core/membership.ts"
 import { pinned, type Pin } from "@kiwi/core/pin.ts"
 import { cleanPersonalities } from "@kiwi/core/personalities.ts"
 import { PRESETS } from "@kiwi/core/presets.ts"
-import { useSecrets } from "@/lib/secrets"
+import { useSecrets } from "@kiwi/secrets/secrets.ts"
 
 export function usePinsHere(requests: readonly JoinRequest[]): ReadonlyMap<string, string | null> {
   const kept = useSecrets().personalities

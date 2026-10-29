@@ -4,7 +4,7 @@ import type { ComputerSettings, SeatWake } from "@kiwi/core/computer-settings.ts
 import type { HookHarness, HookRow, HookState } from "@kiwi/core/harnesses.ts"
 import type { TerminalId } from "@kiwi/core/terminals.ts"
 import { harnessName } from "@/lib/harness"
-import { bridge } from "@/lib/secrets"
+import { bridge } from "@kiwi/secrets/secrets.ts"
 import { store } from "~/live/value"
 import type { Finding, ThisComputer } from "~/model"
 

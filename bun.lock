@@ -44,11 +44,22 @@
         "effect": "4.0.7",
       },
     },
+    "packages/secrets": {
+      "name": "@kiwi/secrets",
+      "dependencies": {
+        "@kiwi/core": "workspace:*",
+        "react": "^19.3.1",
+      },
+      "devDependencies": {
+        "@types/react": "^19.3.0",
+      },
+    },
     "ui": {
       "name": "ui",
       "version": "0.0.1",
       "dependencies": {
         "@kiwi/core": "workspace:*",
+        "@kiwi/secrets": "workspace:*",
         "ghostty-web": "0.4.0",
         "mdast-util-from-markdown": "2.1.0",
         "mdast-util-gfm": "3.1.0",
@@ -77,6 +88,7 @@
         "@hugeicons/core-free-icons": "^4.3.5",
         "@hugeicons/react": "^1.1.10",
         "@kiwi/core": "workspace:*",
+        "@kiwi/secrets": "workspace:*",
         "@preact/signals-core": "1.14.5",
         "@tailwindcss/vite": "^4.3.3",
         "effect": "4.0.7",
@@ -284,6 +296,8 @@
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.9", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.0.3", "@jridgewell/sourcemap-codec": "^1.4.10" } }, "sha512-3Belt6tdc8bPgAtbcmdtNJlirVoTmEb5e2gC94PnkwEW9jI6CAHUeoG85tjWP5WquqfavoMtMwiG4P926ZKKuQ=="],
 
     "@kiwi/core": ["@kiwi/core@workspace:packages/core"],
+
+    "@kiwi/secrets": ["@kiwi/secrets@workspace:packages/secrets"],
 
     "@mermaid-js/parser": ["@mermaid-js/parser@2.0.1", "", { "dependencies": { "@chevrotain/types": "~13.2.0" } }, "sha512-j37dj/h6p6pots1L7pLPPNuABEEu9WP4OYg9pW1g+nYG331j0+3canE9OagtYdytYvdSAMG+2fKU5cxep6LgjA=="],
 

@@ -3,7 +3,7 @@ import { useEffect } from "react"
 import { loadMember } from "@/lib/channel"
 import { linkOf } from "@/lib/channel-ops"
 import { postList } from "@/lib/device-lists"
-import { bridge, type DeviceNewsView } from "@/lib/secrets"
+import { bridge, type DeviceNewsView } from "@kiwi/secrets/secrets.ts"
 import { announce } from "~/kit/toasts"
 import { store } from "~/live/value"
 

@@ -8,7 +8,7 @@ import { buildStyles, tableBodyRowStyle, zeroTrailingMargins } from "react-nativ
 import { indexTaskItems, markInlineImages } from "react-native-enriched-markdown/lib/module/web/utils.js"
 import type { ASTNode, RendererCallbacks } from "react-native-enriched-markdown/lib/typescript/src/web/types"
 import { compareCells, nextSort, sanitizeMarkdownUrl, type SortDir } from "@/lib/markdown"
-import { bridge } from "@/lib/secrets"
+import { bridge } from "@kiwi/secrets/secrets.ts"
 
 import { keepParsed, parsedFor } from "~/chat/parsed"
 

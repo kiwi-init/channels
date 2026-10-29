@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react"
-import { bridge } from "@/lib/secrets"
+import { bridge } from "@kiwi/secrets/secrets.ts"
 import type { TextStep } from "../../../desktop/src/text-size.ts"
 
 // Light, dark, or whatever the system says, and how large the text reads.

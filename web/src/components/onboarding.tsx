@@ -1,6 +1,6 @@
 import { memo, useCallback, useState } from "react"
 
-import { relayUrl } from "@/lib/relay"
+import { relayUrl } from "@kiwi/secrets/relay.ts"
 import { isJoinCode, loadMember, loadPending, type ChannelRow, type PendingJoin, type StoredMember } from "@/lib/channel"
 import { Conversation } from "./conversation"
 import { errorText } from "./kit"

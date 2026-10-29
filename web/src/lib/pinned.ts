@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 
 import type { Persona } from "@kiwi/core/personality.ts"
 import { pinned, type Pin } from "@kiwi/core/pin.ts"
-import { useSecrets } from "./secrets"
+import { useSecrets } from "@kiwi/secrets/secrets.ts"
 
 export function usePinned(pin: Pin | undefined): Persona | null | undefined {
   const [got, setGot] = useState<{ key: string; persona: Persona | null } | null>(null)

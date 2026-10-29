@@ -19,7 +19,7 @@ import { joinCodeFromLink } from "@/lib/deep-link"
 import { newsTotal, rowNews, startMarks, useMarks, useNewsKeys, useOpenNews, useTabNews } from "@/lib/news"
 import { formatShort } from "@/lib/format"
 import { useSidebarShortcut } from "@/lib/sidebar-hidden"
-import { bridge, useSecrets } from "@/lib/secrets"
+import { bridge, useSecrets } from "@kiwi/secrets/secrets.ts"
 import { cx } from "@/lib/utils"
 import { lastChannel, rememberChannel, reopenable } from "@/lib/last-channel"
 

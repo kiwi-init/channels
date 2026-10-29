@@ -28,7 +28,7 @@ const fake = {
   ),
   terminalPrefer: async (id: "app" | "rex" | "tmux") => (calls.push(`prefer ${id}`), status && (status = { ...status, prefer: id })),
 }
-mock.module("@/lib/secrets", () => ({ bridge: () => fake }))
+mock.module("@kiwi/secrets/secrets.ts", () => ({ bridge: () => fake }))
 const { addStartFolder, allowNewAgents, allowRemoteBypass, loadStarts, preferTerminal, removeStartFolder, setTerminalHelpers, startsNow } = await import("~/live/starts")
 
 describe("Settings > Agents saves where and how agents start", () => {

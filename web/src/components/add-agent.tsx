@@ -1,4 +1,4 @@
-import { relayUrl } from "../lib/relay"
+import { relayUrl } from "@kiwi/secrets/relay.ts"
 import { Copy01Icon, Tick02Icon } from "@hugeicons/core-free-icons"
 import { useState } from "react"
 
