@@ -6,7 +6,7 @@ import { cleanPersonalities } from "@kiwi/core/personalities.ts"
 import { personaOf, personaScopes, type Persona, type Personality } from "@kiwi/core/personality.ts"
 import { pinned } from "@kiwi/core/pin.ts"
 import { PRESETS } from "@kiwi/core/presets.ts"
-import { BRANCH_PREFIX_RE, ROBOT_FACES, ROOM_ID_RE, TASK_TITLE_MAX_LENGTH, type Event } from "@kiwi/core/protocol.ts"
+import { BRANCH_PREFIX_RE, MAX_GOAL_NAME, ROBOT_FACES, ROOM_ID_RE, TASK_TITLE_MAX_LENGTH, type Event } from "@kiwi/core/protocol.ts"
 import { describeScopes, SCOPES, wireScopes, type Scope } from "@kiwi/core/scopes.ts"
 import { newRoomId, taskId } from "@kiwi/core/state.ts"
 import type { Permission } from "@kiwi/core/launch-options.ts"
@@ -324,6 +324,12 @@ export function makeActions(): Actions {
         if (!t) throw new Error(`no task ${taskId(id)}`)
         if (reviewer !== ANYONE) memberOf(run, reviewer)
         await sends(run, changeReviewer(t, reviewer, run.me))
+      }),
+    nameGoal: (code, ask, name) =>
+      attempt("Goal not named", async () => {
+        const run = need(code)
+        const clean = name?.trim().slice(0, MAX_GOAL_NAME) || null
+        await event(run, clean ? `named the goal of #${ask}: ${clean}` : `#${ask}'s goal unnamed`, { op: "ask.name", ask, name: clean })
       }),
     setRole: (code, name, role) =>
       attempt("Role not changed", async () => {

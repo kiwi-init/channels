@@ -5,10 +5,12 @@ import type { Card, Event } from "@kiwi/core/protocol.ts"
 import { permissionAnswer } from "@kiwi/core/permission.ts"
 import { describeEvent, proofLabel } from "@kiwi/core/format.ts"
 import { memberLoad, showsLoad } from "@kiwi/core/load.ts"
-import { FAILED, prLinks, taskPr } from "@kiwi/core/prs.ts"
+import { checksOf, FAILED, prLinks, taskPr } from "@kiwi/core/prs.ts"
+import { stageOf } from "@kiwi/core/stage.ts"
 import { GENERAL_ROOM, ignored, isQuiet, isRasterMime, isReaction, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { pickFor, taskCandidates } from "@kiwi/core/routing.ts"
 import { canPost } from "@kiwi/core/scopes.ts"
+import { versionName } from "@kiwi/core/status.ts"
 import {
   answersAsk,
   answersDecisions,
@@ -18,10 +20,12 @@ import {
   humanOf,
   isPerson,
   MAIN,
+  mayNameGoal,
   outsideRepos,
   placeKey,
   prChecks,
   prKey,
+  releaseOf,
   tasksAwaitingPeople,
   type ChannelState,
   type Task as CoreTask,
@@ -30,6 +34,7 @@ import type { GithubPr } from "@kiwi/core/state/github.ts"
 import { decisionLabel } from "@/lib/asks"
 import { permissionCode, permissionNotes, permissionTitle, visibleText } from "@/lib/permission-view"
 import { reviewsFor, taskActions } from "@/lib/task-actions"
+import { taskGroups } from "@/lib/views"
 import { roomOfMessage, roomSeenKey } from "@/lib/rooms"
 import { canonicalHarness, harnessName } from "@/lib/harness"
 import type { Online } from "@/lib/channel/online"
@@ -51,6 +56,7 @@ import type {
   Room,
   Task,
   TaskEvent,
+  TaskGroup,
   TaskMove,
   TaskStatus,
   TheirDirect,
@@ -144,6 +150,11 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
     joined: m.joined,
     messages: m.messages,
   }
+}
+
+export function nextOf(state: ChannelState, now = Date.now()): string {
+  const note = state.facts.get("next")
+  return note && (!note.expires || note.expires > now) ? note.value.trim() : ""
 }
 
 export function peopleOf(state: ChannelState, roster: readonly RosterMember[], online: ReadonlyMap<string, Online>, me: string, wakes: ReadonlyMap<string, boolean>): Person[] {
@@ -246,6 +257,7 @@ function prOf(state: ChannelState, pr: GithubPr | { repo: string; number: number
   const checks = real ? prChecks(state.github, real) : []
   const failed = checks.some((c) => !!c.conclusion && FAILED.has(c.conclusion))
   const running = checks.some((c) => c.conclusion === undefined)
+  const ticks = real ? checksOf(state, real) : undefined
   return {
     repo: pr.repo,
     number: pr.number,
@@ -253,6 +265,8 @@ function prOf(state: ChannelState, pr: GithubPr | { repo: string; number: number
     url: real?.url ?? ("url" in pr && pr.url ? pr.url : `https://github.com/${pr.repo}/pull/${pr.number}`),
     state: real?.state ?? "open",
     checks: !checks.length ? "none" : failed ? "fail" : running ? "running" : "pass",
+    ...(ticks ? { ticks: { passed: ticks.passed, running: ticks.running, failed: ticks.failed } } : {}),
+    ...(real?.state === "merged" ? { mergedAt: real.at } : {}),
     ...(real?.additions !== undefined ? { additions: real.additions } : {}),
     ...(real?.deletions !== undefined ? { deletions: real.deletions } : {}),
   }
@@ -328,7 +342,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       ...(root !== undefined ? { inThread: root } : {}),
       ...(quoted !== undefined && quoted !== root && bySeq.has(quoted) ? { replyTo: quoted } : {}),
       ...(threads.has(m.seq) ? { thread: threads.get(m.seq) } : {}),
-      ...(m.kind === "done" && m.task !== undefined ? { task: m.task } : {}),
+      ...(m.kind === "done" && m.task !== undefined ? { task: m.task, done: true } : {}),
       ...(link ? { pr: prOf(state, link) } : {}),
       ...(images.length ? { images } : {}),
       ...(reactions.length ? { reactions } : {}),
@@ -446,7 +460,9 @@ export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: stri
   const person = !!you && isPerson(you)
   const history = historyOf(state, messages, me)
   return [...state.tasks.values()].map((t): Task => {
-    const linked = taskPr(state, t.id)
+    const stage = stageOf(state, t)
+    const linked = taskPr(state, t.id)?.pr ?? stage.pr
+    const release = stage.stage === "done" && stage.pr ? releaseOf(state.github, stage.pr) : undefined
     const can = taskActions(t, me, person)
     const review = can.kind === "open" && can.review !== "none" ? can.review : undefined
     const suggested = person ? suggestionFor(state, t) : undefined
@@ -460,7 +476,9 @@ export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: stri
       createdBy: t.createdBy,
       createdAt: t.createdAt,
       updatedAt: t.updatedAt,
-      ...(linked ? { pr: prOf(state, linked.pr) } : {}),
+      ...(linked ? { pr: prOf(state, linked) } : {}),
+      stage: stage.stage,
+      ...(release ? { release: versionName(release.tag) } : {}),
       notes: t.notes.map((n) => ({ by: n.by, at: n.ts, text: n.text })),
       rounds: t.rounds.map((r) => ({
         n: r.n,
@@ -474,6 +492,30 @@ export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: stri
       ...(t.cancelled ? { cancelled: true } : {}),
       ...(review ? { youReview: review } : {}),
       ...(suggested ? { suggested } : {}),
+      ...(t.leftBy && !t.owner ? { leftBy: t.leftBy } : {}),
+    }
+  })
+}
+
+export function groupsOf(state: ChannelState, me: string, now = Date.now()): TaskGroup[] {
+  return taskGroups(state, "everything", now).map((g): TaskGroup => {
+    const tasks = g.tasks.map((t) => t.id)
+    const h = g.head
+    switch (h.kind) {
+      case "ask":
+        return {
+          key: g.key,
+          tasks,
+          head: h.ask
+            ? { kind: "ask", id: h.ask.id, by: h.ask.by, words: h.ask.words.trim(), ...(h.ask.goal ? { goal: h.ask.goal } : {}), mayName: mayNameGoal(state, me, h.ask) }
+            : { kind: "unfiled" },
+        }
+      case "next":
+        return { key: g.key, tasks, head: { kind: "next", ...(h.name ? { name: versionName(h.name) } : {}) } }
+      case "release":
+        return { key: g.key, tasks, head: { kind: "release", tag: versionName(h.tag), at: h.at } }
+      case "cancelled":
+        return { key: g.key, tasks, head: { kind: "cancelled" } }
     }
   })
 }

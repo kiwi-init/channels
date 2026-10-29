@@ -10,9 +10,10 @@ import { lastPreview } from "@/lib/preview"
 import { roomLast, roomSeenKey } from "@/lib/rooms"
 import { sendsInTurn } from "@/lib/send-order"
 import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@/lib/threads"
+import { useAskChime } from "~/live/alerts"
 import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
-import { asksOf, directsOf, messagesOf, formerOf, peopleOf, roomsOf, tasksOf, theirsOf, type Pending } from "~/live/map"
+import { asksOf, directsOf, groupsOf, messagesOf, formerOf, nextOf, peopleOf, roomsOf, tasksOf, theirsOf, type Pending } from "~/live/map"
 import { iconUrl } from "~/live/icon"
 import { usePinsHere } from "~/live/pins"
 import { usePublishFace } from "~/live/face"
@@ -110,6 +111,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const asks = useMemo(() => asksOf(state, messages, me, isOwner, requests, roster, pins), [state, messages, me, isOwner, requests, roster, pins])
   const mapped = useMemo(() => kept(code, messagesOf(state, messages, me, asks.askOf, pictures, pending)), [code, state, messages, me, asks.askOf, pictures, pending])
   const tasks = useMemo(() => tasksOf(state, asks.held, me, messages), [state, asks.held, me, messages])
+  const taskGroups = useMemo(() => groupsOf(state, me), [state, me])
   const from = roomsFrom(roomId)
   const rooms = useMemo(() => roomsOf(state, messages, me, seen, from), [state, messages, me, seen, from])
   const directs = useMemo(() => directsOf(state, messages, me, seen), [state, messages, me, seen])
@@ -121,6 +123,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   )
 
   const facts = useMemo(() => [...state.facts.values()].sort((a, b) => a.key.localeCompare(b.key)).map((f) => ({ key: f.key, value: f.value, by: f.by, at: f.ts })), [state.facts])
+  const next = nextOf(state)
+  const mergedAt = useMemo(() => [...state.github.prs.values()].flatMap((p) => (p.state === "merged" ? [p.at] : [])), [state.github.prs])
 
   const channel = useMemo(
     (): Channel => ({
@@ -132,6 +136,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       ...(state.lead ? { lead: state.lead } : {}),
       ...(state.charter ? { goal: state.charter.text } : {}),
       ...(facts.length ? { facts } : {}),
+      ...(next ? { next } : {}),
+      mergedAt,
       ...(state.hold ? { hold: { ...(state.hold.note ? { note: state.hold.note } : {}), by: state.hold.by, at: state.hold.at } } : {}),
       newMembers,
       newPowers,
@@ -146,6 +152,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       nicknames,
       messages: mapped,
       tasks,
+      taskGroups,
       asks: asks.asks,
       connection,
       ...(ready ? {} : { loading: true }),
@@ -159,6 +166,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       state.lead,
       state.charter,
       facts,
+      next,
+      mergedAt,
       state.hold,
       newMembers,
       newPowers,
@@ -173,6 +182,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       nicknames,
       mapped,
       tasks,
+      taskGroups,
       asks.asks,
       connection,
       ready,
@@ -257,7 +267,9 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     if (task !== null && lastInTask && shown) markSeenIn(roomId, { [placeKey({ kind: "task", task })]: lastInTask })
   }, [task, lastInTask, roomId, shown])
 
-  const needs = useMemo(() => asks.asks.filter((a) => !("answer" in a && a.answer) && !(a.kind === "question" && a.idle)).length, [asks.asks])
+  const waiting = useMemo(() => asks.asks.filter((a) => !("answer" in a && a.answer) && !(a.kind === "question" && a.idle)), [asks.asks])
+  const needs = waiting.length
+  useAskChime(waiting)
   const top = Math.max(live.head, messages.at(-1)?.seq ?? 0)
   const unreadHere = rooms.reduce((n, r) => n + r.unread, 0) + directs.reduce((n, d) => n + d.unread, 0)
   useEffect(() => {

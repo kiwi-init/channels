@@ -237,8 +237,12 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       addTask: (code, title, owner) =>
         edit(code, (c) => {
           const id = Math.max(0, ...c.tasks.map((t) => t.id)) + 1
+          const unfiled = c.taskGroups.some((g) => g.head.kind === "unfiled")
           return {
             ...c,
+            taskGroups: unfiled
+              ? c.taskGroups.map((g) => (g.head.kind === "unfiled" ? { ...g, tasks: [id, ...g.tasks] } : g))
+              : [...c.taskGroups, { key: "unfiled", head: { kind: "unfiled" }, tasks: [id] }],
             tasks: [...c.tasks, { id, title, owner, status: "todo", createdBy: c.you, createdAt: Date.now(), updatedAt: Date.now(), notes: [], rounds: [], history: [], archived: false }],
           }
         }),
@@ -268,6 +272,11 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
               ? { ...t, owner: to, suggested: undefined, updatedAt: Date.now(), history: [...t.history, { seq, by: c.you, at: Date.now(), what: "assigned", to, ...(why ? { note: why } : {}) }] }
               : t
           ),
+        })),
+      nameGoal: (code, ask, name) =>
+        edit(code, (c) => ({
+          ...c,
+          taskGroups: c.taskGroups.map((g) => (g.head.kind === "ask" && g.head.id === ask ? { ...g, head: { ...g.head, goal: name?.trim() || undefined } } : g)),
         })),
       setReviewer: (code, id, reviewer) =>
         edit(code, (c, seq) => ({

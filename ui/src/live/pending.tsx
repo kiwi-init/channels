@@ -67,6 +67,7 @@ export const OpenPending = memo(function OpenPending({ pending }: { pending: Pen
       nicknames: new Map(),
       messages: [],
       tasks: [],
+      taskGroups: [],
       asks: [],
       connection: "live",
       waiting: { code: verify ?? "", since, state, ...(owner ? { owner } : {}) },

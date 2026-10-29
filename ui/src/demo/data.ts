@@ -1,4 +1,4 @@
-import type { Account, Ask, Channel, ChannelTile, Message, Person, Prefs, Task } from "~/model"
+import type { Account, Ask, Channel, ChannelTile, Message, Person, Prefs, Task, TaskGroup } from "~/model"
 import { nicknamesOf } from "~/names"
 
 const now = Date.now()
@@ -148,6 +148,7 @@ const pr43 = {
   url: "https://github.com/kiwi-init/channels/pull/43",
   state: "open",
   checks: "pass",
+  ticks: { passed: 6, running: 0, failed: [] },
   additions: 182,
   deletions: 40,
 } as const
@@ -158,8 +159,20 @@ const pr44 = {
   url: "https://github.com/kiwi-init/channels/pull/44",
   state: "open",
   checks: "running",
+  ticks: { passed: 3, running: 2, failed: [] },
   additions: 96,
   deletions: 71,
+} as const
+const pr45 = {
+  repo: "kiwi-init/channels",
+  number: 45,
+  title: "Shrink the first-load bundle",
+  url: "https://github.com/kiwi-init/channels/pull/45",
+  state: "open",
+  checks: "fail",
+  ticks: { passed: 5, running: 0, failed: ["desktop / linux"] },
+  additions: 64,
+  deletions: 210,
 } as const
 
 const general = { kind: "room", room: "general" } as const
@@ -187,6 +200,7 @@ const tasks: Task[] = [
     id: 9,
     title: "Fold duplicate event rows",
     status: "done",
+    release: "0.9.4",
     owner: "atlas",
     createdBy: "jow",
     createdAt: m(60 * 30),
@@ -201,7 +215,8 @@ const tasks: Task[] = [
       { seq: 102, by: "atlas", at: m(60 * 20 - 1), what: "mention", where: general, root: 102, note: "Nothing blocking. T9 is merged, the rest is polish." },
     ],
     archived: false,
-    pr: { repo: "kiwi-init/channels", number: 41, title: "Fold duplicate event rows", url: "https://github.com/kiwi-init/channels/pull/41", state: "merged", checks: "pass" },
+    pr: { repo: "kiwi-init/channels", number: 41, title: "Fold duplicate event rows", url: "https://github.com/kiwi-init/channels/pull/41", state: "merged", checks: "pass", mergedAt: m(60 * 20) },
+    stage: "done",
   },
   {
     id: 10,
@@ -249,6 +264,8 @@ const tasks: Task[] = [
       { seq: 111, by: "atlas", at: m(40), what: "mention", where: general, root: 111, note: "Opened T11 for it. I'll take it after the bundle work lands." },
     ],
     archived: false,
+    pr: pr45,
+    stage: "red",
   },
   {
     id: 12,
@@ -280,6 +297,7 @@ const tasks: Task[] = [
       { seq: 1205, by: "win", at: m(3), what: "review", round: 1 },
     ],
     archived: false,
+    stage: "yours",
     youReview: "send-back",
   },
   {
@@ -319,13 +337,34 @@ const tasks: Task[] = [
       { seq: 124, by: "pixel", at: m(3), what: "mention", where: general, root: 124, note: "New channel icons for T14. @jow they need your eyes before I merge." },
     ],
     archived: false,
+    stage: "proving",
     youReview: "verdict",
+  },
+  {
+    id: 16,
+    title: "Restore composer spell checking",
+    status: "done",
+    owner: "pixel",
+    createdBy: "maya",
+    createdAt: m(90),
+    updatedAt: m(50),
+    notes: [],
+    rounds: [{ n: 1, by: "pixel", judge: "atlas", at: m(52), result: "approved" }],
+    archived: false,
+    pr: { repo: "kiwi-init/channels", number: 42, title: "Restore composer spell checking", url: "https://github.com/kiwi-init/channels/pull/42", state: "merged", checks: "pass", mergedAt: m(50) },
+    stage: "done",
+    history: [
+      { seq: 1601, by: "maya", at: m(90), what: "created", to: "pixel" },
+      { seq: 1602, by: "pixel", at: m(52), what: "review", round: 1 },
+      { seq: 1603, by: "atlas", at: m(50), what: "approved", round: 1 },
+    ],
   },
   {
     id: 15,
     title: "Rotate the relay's signing key",
     status: "todo",
     suggested: { name: "atlas", why: "worked T9 before" },
+    leftBy: "scout",
     createdBy: "maya",
     createdAt: m(200),
     updatedAt: m(200),
@@ -334,6 +373,15 @@ const tasks: Task[] = [
     history: [{ seq: 1501, by: "maya", at: m(200), what: "created" }],
     archived: false,
   },
+]
+
+const taskGroups: TaskGroup[] = [
+  { key: "ask:120", head: { kind: "ask", id: 120, by: "jow", words: "@win ship it: tag v1.0.0", goal: "Ship 1.0", mayName: true }, tasks: [13, 10, 12] },
+  { key: "ask:110", head: { kind: "ask", id: 110, by: "jow", words: "@atlas can someone make the feed feel lighter? too many borders", mayName: true }, tasks: [14, 11] },
+  { key: "unfiled", head: { kind: "unfiled" }, tasks: [15] },
+  { key: "next", head: { kind: "next", name: "1.0.0" }, tasks: [16] },
+  { key: "release:0.9.4", head: { kind: "release", tag: "0.9.4", at: m(60 * 18) }, tasks: [9] },
+  { key: "cancelled", head: { kind: "cancelled" }, tasks: [8] },
 ]
 
 const ICONS_SHOT = `data:image/svg+xml,${encodeURIComponent(
@@ -455,6 +503,9 @@ const taskThread: Message[] = [
   { seq: 140, from: "win", at: m(60), text: "Starting T10. Measuring with scripts/web-bundle.ts first.", where: { kind: "task", task: 10 } },
   { seq: 141, from: "atlas", at: m(58), text: "Don't lazy-split shared modules, it grew the first load last time.", where: { kind: "task", task: 10 } },
   { seq: 142, from: "win", at: m(9), text: "Down 38 KB. Icons next.", where: { kind: "task", task: 10 } },
+  { seq: 143, from: "win", at: m(4), text: "win linked PR #45 to T10", where: { kind: "task", task: 10 }, task: 10, system: true },
+  { seq: 144, from: "pixel", at: m(50), text: "pixel finished T16 “Restore composer spell checking”", where: { kind: "task", task: 16 }, task: 16, system: true },
+  { seq: 145, from: "pixel", at: m(12), text: "pixel asked for a review of T14", where: { kind: "task", task: 14 }, task: 14, system: true },
 ]
 
 const asks: Ask[] = [
@@ -593,6 +644,8 @@ export const DEMO_CHANNEL: Channel = {
   ],
   theirs: [{ between: ["atlas", "win"], last: m(26) }],
   people,
+  next: "Tag v1.0.0 once T12 and T14 land",
+  mergedAt: [m(60 * 20), m(50)],
   facts: [
     { key: "release", value: "2026.10.8 is out; 2026.10.9 cuts Friday", by: "atlas", at: m(30) },
     { key: "staging", value: "https://staging.kiwi.example", by: "win", at: m(60 * 3) },
@@ -616,6 +669,7 @@ export const DEMO_CHANNEL: Channel = {
   nicknames: nicknamesOf(people),
   messages: [...releases, ...messages, ...threadReplies, ...dm, ...taskThread].sort((a, b) => a.seq - b.seq),
   tasks,
+  taskGroups,
   asks,
   connection: "live",
 }
@@ -633,6 +687,7 @@ export const DEMO_EMPTY: Channel = {
   nicknames: nicknamesOf([people[0] as Person]),
   messages: [],
   tasks: [],
+  taskGroups: [],
   asks: [],
   connection: "live",
 }

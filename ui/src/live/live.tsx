@@ -14,6 +14,7 @@ import { useOwnPersonalities } from "@/lib/personalities"
 import { bridge, useSecrets } from "@/lib/secrets"
 import { useAccount } from "~/live/account"
 import { makeActions } from "~/live/actions"
+import { chime } from "~/live/alerts"
 import { OpenMember, type View } from "~/live/channel"
 import { iconUrl } from "~/live/icon"
 import { useNotesElsewhere } from "~/live/notes"
@@ -82,7 +83,7 @@ function usePersonas(own: Personality[]): App["personas"] {
 const joinsMuted = (): boolean => ownPrefs().notify === "none"
 
 function useDuties(rows: ChannelRow[], person: string | undefined, open: string | null) {
-  useAutoApproval(rows, joinsMuted)
+  useAutoApproval(rows, joinsMuted, chime)
   useNotesElsewhere(rows, open)
   useMemberIcons(rows.filter((r) => r.state === "member").map((r) => r.code))
   useEffect(() => {

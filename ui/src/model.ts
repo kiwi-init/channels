@@ -1,4 +1,4 @@
-import type { HookState, KnownHarness } from "@kiwi/core/harnesses.ts"
+import type { HookHarness, HookState } from "@kiwi/core/harnesses.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
 import type { Step, StepReply } from "@kiwi/core/protocol.ts"
 import type { TerminalId, TerminalRow } from "@kiwi/core/terminals.ts"
@@ -8,6 +8,8 @@ export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "g
 type Presence = "online" | "away" | "offline"
 
 export type TaskStatus = "todo" | "doing" | "review" | "done" | "waiting"
+
+type Stage = "open" | "building" | "proving" | "red" | "yours" | "done" | "dropped"
 
 type Kind = "human" | "agent"
 
@@ -70,6 +72,8 @@ export interface PullRequest {
   url: string
   state: "open" | "draft" | "merged" | "closed"
   checks: "pass" | "fail" | "running" | "none"
+  ticks?: { passed: number; running: number; failed: readonly string[] }
+  mergedAt?: number
   additions?: number
   deletions?: number
 }
@@ -132,6 +136,8 @@ export interface Task {
   createdAt: number
   updatedAt: number
   pr?: PullRequest
+  stage?: Stage
+  release?: string
   notes: TaskNote[]
   rounds: ReviewRound[]
   history: TaskEvent[]
@@ -139,6 +145,20 @@ export interface Task {
   cancelled?: boolean
   youReview?: "verdict" | "send-back"
   suggested?: { name: string; why: string }
+  leftBy?: string
+}
+
+export type TaskGroupHead =
+  | { kind: "ask"; id: number; by: string; words: string; goal?: string; mayName: boolean }
+  | { kind: "unfiled" }
+  | { kind: "next"; name?: string }
+  | { kind: "release"; tag: string; at: number }
+  | { kind: "cancelled" }
+
+export interface TaskGroup {
+  key: string
+  head: TaskGroupHead
+  tasks: number[]
 }
 
 export type Where = { kind: "room"; room: string } | { kind: "dm"; with: string } | { kind: "theirs"; between: readonly [string, string] } | { kind: "task"; task: number }
@@ -202,6 +222,7 @@ export interface Message {
   reactions?: Reaction[]
   ask?: string
   system?: boolean
+  done?: true
   pending?: boolean
   failed?: string
   mentionsYou?: boolean
@@ -322,6 +343,8 @@ export interface Channel {
   lead?: string
   goal?: string
   facts?: Fact[]
+  next?: string
+  mergedAt?: number[]
   hold?: { note?: string; by: string; at: number }
   newMembers?: "read" | "write"
   newPowers?: Powers
@@ -336,6 +359,7 @@ export interface Channel {
   nicknames: ReadonlyMap<string, string>
   messages: Message[]
   tasks: Task[]
+  taskGroups: TaskGroup[]
   asks: Ask[]
   connection: "connecting" | "live" | "reconnecting"
   loading?: boolean
@@ -434,6 +458,7 @@ export interface Actions {
   cancelTask(code: string, task: number, why: string): void
   assignTask(code: string, task: number, to: string, why: string): void
   setReviewer(code: string, task: number, reviewer: string): void
+  nameGoal(code: string, ask: number, name: string | null): void
   setRole(code: string, name: string, role: string | null): void
   removeMember(code: string, name: string): void
   setPersona(code: string, name: string, persona: string | null): void
@@ -489,7 +514,7 @@ export interface Actions {
   allowNewAgents(on: boolean): void
   allowRemoteBypass(on: boolean): void
   savePersonalities(list: Personality[]): void
-  setHooks(harness: KnownHarness, on: boolean): void
+  setHooks(harness: HookHarness, on: boolean): void
   checkComputer(): Promise<Finding[] | null>
   preferTerminal(id: TerminalId): void
   setTerminalHelpers(id: Exclude<TerminalId, "app">, on: boolean): void
@@ -501,7 +526,7 @@ export type Finding = { ok: true; what: string } | { ok: false; what: string; ho
 
 export interface ThisComputer {
   kiwi: { running: boolean; version?: string }
-  hooks: { harness: KnownHarness; label: string; state: Exclude<HookState, "absent"> }[]
+  hooks: { harness: HookHarness; label: string; state: Exclude<HookState, "absent"> }[]
   contextLine: boolean | null
 }
 
