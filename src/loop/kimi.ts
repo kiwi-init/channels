@@ -191,7 +191,7 @@ export type Stray = { pid: number; start: string };
 const VALUE_FLAGS = new Set(["-c", "--channel", "--as", "--relay", "--timeout", "--thread", "--room", "-n"]);
 const TMUX_PASTE_FLAG = [3, 7] as const;
 
-function processes(): Proc[] {
+export function processes(): Proc[] {
   const r = runNow(["env", "LC_ALL=C", "TZ=UTC0", "ps", "-eo", "pid=,ppid=,lstart=,args="], 5_000);
   if (r.status !== 0) return [];
   return r.stdout.split("\n").flatMap((line) => {
@@ -225,7 +225,7 @@ export function tmuxVersion(socket: string): string {
   return tmuxNow(socket, ["display-message", "-p", "#{version}"])?.trim() ?? "";
 }
 
-export function listenersUnder(pid: number, procs: readonly Proc[] = processes()): Stray[] {
+export function descendantsOf(pid: number, procs: readonly Proc[] = processes()): Proc[] {
   const under = new Set([pid]);
   for (let grew = true; grew;) {
     grew = false;
@@ -236,7 +236,13 @@ export function listenersUnder(pid: number, procs: readonly Proc[] = processes()
       }
     }
   }
-  return procs.filter((p) => p.pid !== pid && under.has(p.pid) && isListener(p.args)).map((p) => ({ pid: p.pid, start: p.start }));
+  return procs.filter((p) => p.pid !== pid && under.has(p.pid));
+}
+
+export function listenersUnder(pid: number, procs: readonly Proc[] = processes()): Stray[] {
+  return descendantsOf(pid, procs)
+    .filter((p) => isListener(p.args))
+    .map((p) => ({ pid: p.pid, start: p.start }));
 }
 
 export const strayKey = (s: Stray) => `${s.pid}@${s.start}`;

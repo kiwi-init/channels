@@ -1,7 +1,7 @@
 import { useEffect, useSyncExternalStore } from "react"
 
 import type { ComputerSettings, SeatWake } from "@kiwi/core/computer-settings.ts"
-import type { HookRow, HookState, KnownHarness } from "@kiwi/core/harnesses.ts"
+import type { HookHarness, HookRow, HookState } from "@kiwi/core/harnesses.ts"
 import type { TerminalId } from "@kiwi/core/terminals.ts"
 import { harnessName } from "@/lib/harness"
 import { bridge } from "@/lib/secrets"
@@ -38,7 +38,7 @@ export function useComputer(): ThisComputer | null {
   return useSyncExternalStore(computer.subscribe, computer.get)
 }
 
-export async function setHooks(harness: KnownHarness, on: boolean): Promise<void> {
+export async function setHooks(harness: HookHarness, on: boolean): Promise<void> {
   const hooks = shown(await need().setHooks(harness, on ? "on" : "off"))
   const now = computer.get()
   if (now) computer.set({ ...now, hooks })

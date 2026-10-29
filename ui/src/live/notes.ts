@@ -15,7 +15,7 @@ function tell(title: string, body: string, code: string): void {
   const b = bridge()
   if (b) return void b.notify(title, body, channelLink(code)).catch(() => {})
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return
-  const note = new Notification(title, { body })
+  const note = new Notification(title, { body, silent: true })
   note.onclick = () => {
     window.focus()
     location.hash = encodeURIComponent(code)

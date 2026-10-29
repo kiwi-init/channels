@@ -2,7 +2,7 @@ import { useEffect } from "react"
 
 import type { ChannelRow } from "./channel"
 
-export function useAutoApproval(rows: ChannelRow[], muted: () => boolean = () => false): void {
+export function useAutoApproval(rows: ChannelRow[], muted: () => boolean = () => false, ring: () => void = () => {}): void {
   const key = rows
     .filter((r) => r.owner && r.state === "member")
     .map((r) => r.code)
@@ -13,7 +13,7 @@ export function useAutoApproval(rows: ChannelRow[], muted: () => boolean = () =>
     let gone = false
     void import("./approval")
       .then((m) => {
-        if (!gone) stop = m.startAutoApproval(key.split(" "), muted)
+        if (!gone) stop = m.startAutoApproval(key.split(" "), muted, ring)
       })
       .catch(() => {
         // The chunk didn't load (offline, an update mid-session): the next launch watches again.
@@ -22,5 +22,5 @@ export function useAutoApproval(rows: ChannelRow[], muted: () => boolean = () =>
       gone = true
       stop?.()
     }
-  }, [key, muted])
+  }, [key, muted, ring])
 }
