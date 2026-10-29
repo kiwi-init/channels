@@ -126,6 +126,26 @@ const cycles = (seat: LoopSeat, stop: { asked: boolean; busy: boolean }): Effect
   });
 
 function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string, stop: { asked: boolean; busy: boolean }): Effect.Effect<Ended, unknown, Agent> {
+  return Effect.suspend(() => {
+    let spawned: { left: () => void; mode: string | null } | null = null;
+    const leave = Effect.sync(() => {
+      if (!spawned) return;
+      spawned.left();
+      restoreTerminal(spawned.mode);
+      stop.busy = false;
+    });
+    return session(seat, s, first, prompt, stop, (left, mode) => void (spawned = { left, mode })).pipe(Effect.ensuring(leave));
+  });
+}
+
+function session(
+  seat: LoopSeat,
+  s: AgentSession,
+  first: Work,
+  prompt: string,
+  stop: { asked: boolean; busy: boolean },
+  spawned: (left: () => void, mode: string | null) => void,
+): Effect.Effect<Ended, unknown, Agent> {
   return Effect.gen(function* () {
     const { recipe } = seat;
     const nonce = randomBytes(9).toString("hex");
@@ -144,6 +164,9 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
     stop.busy = true;
     let exited = false;
     void child.exited.then(() => void (exited = true));
+    spawned(() => {
+      if (!exited) child.kill(recipe.stopSignal);
+    }, mode);
     yield* say(`${workName(first)}: started ${recipe.label} (pid ${child.pid})`);
 
     let found: Started | null = null;
@@ -166,7 +189,6 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
           if (!exited) child.kill("SIGKILL");
           yield* Effect.promise(() => child.exited);
         }
-        restoreTerminal(mode);
         const stopped = strays.size ? stopStrays(strays) : 0;
         if (stopped) yield* say(`stopped ${stopped} kiwi listener${stopped > 1 ? "s" : ""} the session left running`);
         stop.busy = false;
@@ -227,15 +249,22 @@ function tellWait(s: AgentSession, state: ChannelState, me: string, w: Work, ses
   });
 }
 
+function ownsTerminal(): boolean {
+  if (!process.stdin.isTTY) return false;
+  const ps = Bun.spawnSync(["ps", "-o", "pgid=,tpgid=", "-p", String(process.pid)], { stdout: "pipe", stderr: "ignore" });
+  const [group, foreground] = ps.stdout.toString().trim().split(/\s+/).map(Number);
+  return ps.exitCode === 0 && group !== undefined && group > 0 && group === foreground;
+}
+
 function terminalMode(): string | null {
-  if (!process.stdin.isTTY) return null;
+  if (!ownsTerminal()) return null;
   const saved = Bun.spawnSync(["stty", "-g"], { stdin: "inherit", stdout: "pipe", stderr: "ignore" });
   const mode = saved.stdout.toString().trim();
   return saved.exitCode === 0 && mode ? mode : null;
 }
 
 function restoreTerminal(mode: string | null): void {
-  if (mode) Bun.spawnSync(["stty", mode], { stdin: "inherit", stdout: "ignore", stderr: "ignore" });
+  if (mode && ownsTerminal()) Bun.spawnSync(["stty", mode], { stdin: "inherit", stdout: "ignore", stderr: "ignore" });
 }
 
 function clearTypedPane(): void {
