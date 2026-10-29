@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { FOLD_RULES, PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts"
 import { fold, type FoldBase } from "@kiwi/core/state.ts"
-import type { OpenedCache } from "../history"
+import type { OpenedCache } from "@kiwi/channel/history.ts"
 import type { Kept } from "@kiwi/channel/kept.ts"
 import { planReload } from "@kiwi/channel/history-plan.ts"
 import { handOver, onceEach, openChannel, warmUp, type OpenSteps, type Planned } from "./open"

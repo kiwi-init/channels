@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
 import { tendOnPush, tendOwned, type TendApi } from "./approval-tend"
-import type { Watches } from "./watch"
+import type { Watches } from "@kiwi/channel/watch.ts"
 
 const pinged: string[] = []
 const ping = (_title: string, body: string) => pinged.push(body)

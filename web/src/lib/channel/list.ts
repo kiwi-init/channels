@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react"
 
 import { decodeJoinCode } from "@kiwi/core/crypto.ts"
-import { ops, watches } from "../channel-ops"
-import { withHeads } from "../news"
+import { ops, watches } from "@kiwi/channel/channel-ops.ts"
+import { withHeads } from "@kiwi/channel/news.ts"
 import { useSecrets } from "@kiwi/secrets/secrets.ts"
-import { HEADS_SAFETY_MS } from "../watch"
+import { HEADS_SAFETY_MS } from "@kiwi/channel/watch.ts"
 import { clockNow } from "@kiwi/channel/clock.ts"
 import { channelTitle, loadRecent, type Recent } from "./recent"
 import { allMembers, CHANGED, loadMember, pendingChannels } from "./store"

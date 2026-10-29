@@ -3,7 +3,7 @@ import { Component, createContext, useContext, useEffect, useSyncExternalStore, 
 import type { Color, MemberPicture } from "@kiwi/core/protocol.ts"
 import { PALETTE } from "@/lib/characters"
 import { initials } from "@/lib/format"
-import { noteSignInGone } from "@/lib/session"
+import { noteSignInGone } from "@kiwi/channel/session.ts"
 import { later, onLoadFailed } from "@/lib/later"
 import { uiFailed } from "@/lib/ui-boot"
 import { cx } from "@/lib/utils"

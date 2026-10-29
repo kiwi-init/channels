@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { fileStats } from "./diff"
+import { diffLineClass, fileStats } from "./diff"
 
 describe("a PR card's files", () => {
   test("each file's additions and deletions, from a unified diff, headers not counted", () => {
@@ -28,4 +28,11 @@ describe("a PR card's files", () => {
     ])
     expect(fileStats("")).toEqual([])
   })
+})
+
+test("diff lines: additions and removals marked at the edge, headers bold, hunks quiet", () => {
+  expect(diffLineClass("+added")).toContain("border-live")
+  expect(diffLineClass("-removed")).toContain("border-alert")
+  expect(diffLineClass("+++ b/file")).toContain("font-semibold")
+  expect(diffLineClass("@@ -1 +1 @@")).toBe("text-ink-3")
 })

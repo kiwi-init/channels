@@ -1,6 +1,6 @@
 import { changed, read, RECENT_KEY } from "./store"
 import { showable } from "@/lib/format"
-import { pendingWrite, writeLater } from "@/lib/write-behind"
+import { pendingWrite, writeLater } from "@kiwi/channel/write-behind.ts"
 
 const AGENT_WORKED = "mc.agent-worked"
 const AGENT_WORKED_EVENT = "mc:agent-worked"

@@ -5,8 +5,8 @@ import { useEffect, useState } from "react"
 import type { ChannelIcon } from "@kiwi/core/protocol.ts"
 
 import { loadMember, type StoredMember } from "./channel"
-import { linkOf } from "./channel-ops"
-import { ICON_LIVE } from "./icon-event"
+import { linkOf } from "@kiwi/channel/channel-ops.ts"
+import { ICON_LIVE } from "@kiwi/channel/icon-event.ts"
 
 const CHANGED = "mc-icons"
 const keyOf = (room: string) => `mc.icon.${room}`

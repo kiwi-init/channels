@@ -1,6 +1,6 @@
 import { RelayError } from "@kiwi/core/client/relay-errors.ts"
 import { decodeJoinCode, ownerFingerprint } from "@kiwi/core/crypto.ts"
-import { ops } from "../channel-ops"
+import { ops } from "@kiwi/channel/channel-ops.ts"
 import { relayUrl } from "@kiwi/secrets/relay.ts"
 import type { ChannelView } from "@kiwi/secrets/secrets.ts"
 import { asMember, asPending, changed, type PendingJoin, type StoredMember } from "./store"

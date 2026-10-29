@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@kiwi/core": "workspace:*",
+    "@kiwi/secrets": "workspace:*",
     "react": "^19.3.1"
   },
   "devDependencies": {

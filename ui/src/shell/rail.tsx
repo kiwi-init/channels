@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent } from "react"
 
-import { nextWithNews } from "@/lib/news"
+import { nextWithNews } from "@kiwi/channel/news.ts"
 import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { ChannelTile } from "~/model"

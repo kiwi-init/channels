@@ -5,7 +5,7 @@ import type { ChannelIcon, ImageAttachment, Message } from "@kiwi/core/protocol.
 import { taskId, type ChannelState, type Task } from "@kiwi/core/state.ts"
 import type { ChannelHandle } from "@/lib/channel"
 import { formatShort } from "@/lib/format"
-import { approveTask, assignTask, cancelTask, changeReviewer, closedDigest, sendBackTask, type TaskSend } from "@/lib/task-actions"
+import { approveTask, assignTask, cancelTask, changeReviewer, closedDigest, sendBackTask, type TaskSend } from "@kiwi/channel/task-actions.ts"
 import { sendFrom } from "@/lib/threads"
 import { Composer, type Person } from "../composer"
 import { Annotator, InfoPanel, TaskDetails, TasksPanel, ThreadPanel } from "../lazy"

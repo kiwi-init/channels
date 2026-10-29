@@ -1,6 +1,6 @@
 /** One pass over an owned channel's join requests. */
 
-import type { Watches } from "./watch"
+import type { Watches } from "@kiwi/channel/watch.ts"
 
 export const TEND_SAFETY_MS = 300_000
 

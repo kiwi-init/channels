@@ -1,7 +1,7 @@
 import { Add01Icon, LockIcon } from "@hugeicons/core-free-icons"
 
 import type { ChannelRow } from "@/lib/channel"
-import type { RowNews } from "@/lib/news"
+import type { RowNews } from "@kiwi/channel/news.ts"
 import { useIcons } from "@/lib/icons"
 import { useOwnPicture } from "@/lib/own-picture"
 import { formatShort } from "@/lib/format"

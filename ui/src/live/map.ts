@@ -34,12 +34,12 @@ import type { GithubPr } from "@kiwi/core/state/github.ts"
 import { decisionLabel } from "@/lib/asks"
 import { handoffLabel } from "@/lib/handoff"
 import { permissionCode, permissionNotes, permissionTitle, visibleText } from "@/lib/permission-view"
-import { reviewsFor, taskActions } from "@/lib/task-actions"
+import { reviewsFor, taskActions } from "@kiwi/channel/task-actions.ts"
 import { taskGroups } from "@/lib/views"
 import { roomOfMessage, roomSeenKey } from "@/lib/rooms"
 import { canonicalHarness, harnessName } from "@/lib/harness"
 import type { Online } from "@/lib/channel/online"
-import { howHere } from "@/lib/presence"
+import { howHere } from "@kiwi/channel/presence.ts"
 import type {
   Activity,
   Ask,
