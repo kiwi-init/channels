@@ -1,0 +1,107 @@
+import UIKit
+
+/// Abstraction over image fetching so consumers of attachments can inject
+/// a stub in tests and previews instead of hitting the network.
+///
+/// The completion runs on the main queue, except a cache hit, which completes
+/// synchronously on the calling queue.
+protocol ImageDownloading: AnyObject {
+    func download(url: String, headers: [String: String], completion: @escaping (UIImage?) -> Void)
+}
+
+final class ImageDownloader: ImageDownloading {
+    static let shared = ImageDownloader()
+
+    private let session: URLSession
+    /// No URL cache: it keys by URL alone and would mix header sets.
+    private let headerSession: URLSession
+    private var inFlightRequests: [String: [(UIImage?) -> Void]] = [:]
+    private let lock = NSLock()
+
+    private init() {
+        let cache = URLCache(
+            memoryCapacity: 10 * 1024 * 1024,
+            diskCapacity: 100 * 1024 * 1024
+        )
+        session = URLSession(configuration: Self.makeConfiguration(cache: cache))
+        headerSession = URLSession(configuration: Self.makeConfiguration(cache: nil))
+    }
+
+    private static func makeConfiguration(cache: URLCache?) -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.default
+        configuration.urlCache = cache
+        configuration.requestCachePolicy = .returnCacheDataElseLoad
+        configuration.timeoutIntervalForRequest = 15
+        configuration.timeoutIntervalForResource = 30
+        return configuration
+    }
+
+    func download(url: String, headers: [String: String], completion: @escaping (UIImage?) -> Void) {
+        guard !url.isEmpty else {
+            completion(nil)
+            return
+        }
+
+        let headers = ImageCacheKey.normalizedHeaders(headers)
+        let requestKey = ImageCacheKey.requestKey(url: url, headers: headers)
+        if let cached = MarkdownImageAttachment.originalImageCache.object(forKey: requestKey as NSString) {
+            completion(cached)
+            return
+        }
+
+        lock.lock()
+        if var existing = inFlightRequests[requestKey] {
+            existing.append(completion)
+            inFlightRequests[requestKey] = existing
+            lock.unlock()
+            return
+        }
+        inFlightRequests[requestKey] = [completion]
+        lock.unlock()
+
+        let scheme = URLComponents(string: url)?.scheme?.lowercased()
+        guard scheme == "http" || scheme == "https" else {
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                let image = LocalImageLoader.load(url)
+                self?.cacheAndDispatch(image, for: requestKey)
+            }
+            return
+        }
+
+        guard let requestURL = URL(string: url) else {
+            dispatchCallbacks(for: requestKey, image: nil)
+            return
+        }
+
+        var request = URLRequest(url: requestURL)
+        for (field, value) in headers {
+            request.setValue(value, forHTTPHeaderField: field)
+        }
+
+        let taskSession = headers.isEmpty ? session : headerSession
+        taskSession.dataTask(with: request) { [weak self] data, _, error in
+            let image = (data != nil && error == nil) ? data.flatMap { ImageDecoder.decodeDownsampled($0) } : nil
+            self?.cacheAndDispatch(image, for: requestKey)
+        }.resume()
+    }
+
+    private func cacheAndDispatch(_ image: UIImage?, for requestKey: String) {
+        if let image {
+            MarkdownImageAttachment.originalImageCache.setObject(
+                image,
+                forKey: requestKey as NSString,
+                cost: image.byteCost
+            )
+        }
+        dispatchCallbacks(for: requestKey, image: image)
+    }
+
+    private func dispatchCallbacks(for requestKey: String, image: UIImage?) {
+        lock.lock()
+        let callbacks = inFlightRequests.removeValue(forKey: requestKey) ?? []
+        lock.unlock()
+        DispatchQueue.main.async {
+            callbacks.forEach { $0(image) }
+        }
+    }
+}

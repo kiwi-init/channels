@@ -34,7 +34,7 @@ import { seatOf } from "~/live/seats"
 import { memberName } from "@/lib/format"
 import { checkComputer, computerSettings, setContextLine, setHooks } from "~/live/computer"
 import { addStartFolder, allowNewAgents, allowRemoteBypass, preferTerminal, removeStartFolder, setTerminalHelpers } from "~/live/starts"
-import { closeOpened, openedChannel, openedRun, type Run } from "~/live/store"
+import { closeOpened, leavingOnPurpose, openedChannel, openedRun, type Run } from "~/live/store"
 import { stepReplyText } from "~/chat/step"
 import { downloadAndRestart } from "~/live/update"
 import { setWake } from "~/live/wakes"
@@ -527,6 +527,7 @@ export function makeActions(): Actions {
     },
     leaveChannel: (code) =>
       attempt("Couldn't leave", async () => {
+        leavingOnPurpose(code)
         if (loadPending(code) && !loadMember(code)) {
           closeOpened(code)
           return forgetPending(code)
@@ -538,6 +539,7 @@ export function makeActions(): Actions {
     closeChannel: (code) =>
       attempt("Couldn't close it", async () => {
         const run = owner(code)
+        leavingOnPurpose(code)
         await run.ch.close()
         closeOpened(code)
         await forgetChannel(code)

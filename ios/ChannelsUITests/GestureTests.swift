@@ -27,6 +27,7 @@ struct Screen {
         var out: [(label: String, frame: CGRect)] = []
         func walk(_ s: XCUIElementSnapshot) {
             if s.elementType == .staticText { out.append((s.label, s.frame)) }
+            if s.elementType == .textView { out.append(((s.value as? String) ?? s.label, s.frame)) }
             s.children.forEach(walk)
         }
         walk(try app.snapshot())
@@ -124,5 +125,39 @@ final class GestureTests: XCTestCase {
         let reply = any.matching(NSPredicate(format: "placeholderValue BEGINSWITH 'Reply to'")).firstMatch
         XCTAssertTrue(reply.waitForExistence(timeout: 3), "swiping a bubble right didn't start a reply")
         XCTAssertTrue(any.matching(NSPredicate(format: "label == 'Back'")).firstMatch.exists, "swiping a bubble right left the conversation")
+    }
+
+    @MainActor
+    private func bubble(_ screen: Screen) async throws -> XCUICoordinate {
+        let shown = try await screen.shownOnceABubbleIs()
+        let probe = try XCTUnwrap(screen.measurable(screen.bubbles(in: shown)).first, "no bubble on the screen")
+        return screen.app.windows.firstMatch.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: probe.frame.midX, dy: probe.frame.midY))
+    }
+
+    @MainActor
+    func testHoldingABubbleOpensItsMenu() async throws {
+        let screen = try Screen.list()
+        try await screen.enter(after: .milliseconds(800))
+        try await bubble(screen).press(forDuration: 1)
+        XCTAssertTrue(screen.app.buttons["Copy"].waitForExistence(timeout: 3), "holding a bubble didn't open Reply, Tapback and Copy")
+        XCTAssertTrue(screen.app.buttons["Reply"].exists, "the bubble's menu has no Reply")
+    }
+
+    @MainActor
+    func testDoubleTappingABubbleOpensTapbacks() async throws {
+        let screen = try Screen.list()
+        try await screen.enter(after: .milliseconds(800))
+        try await bubble(screen).doubleTap()
+        XCTAssertTrue(screen.app.buttons["👍"].waitForExistence(timeout: 3), "double tapping a bubble didn't open the tapbacks")
+    }
+
+    @MainActor
+    func testTappingALinkOpensIt() async throws {
+        let screen = try Screen.list()
+        try await screen.enter(after: .milliseconds(800))
+        let link = screen.app.links.firstMatch
+        XCTAssertTrue(link.waitForExistence(timeout: 5), "no link in the conversation")
+        link.tap()
+        XCTAssertTrue(screen.app.wait(for: .runningBackground, timeout: 5), "tapping a link in a bubble didn't open it")
     }
 }

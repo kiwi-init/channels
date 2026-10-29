@@ -266,7 +266,7 @@ struct PendingBubble: View {
                 .accessibilityLabel("Not delivered")
             }
             VStack(alignment: .trailing, spacing: 3) {
-                Prose(text: item.body, ink: .white, link: .white, code: .white.opacity(0.18), underline: true)
+                Markdown(text: item.body, ink: .white, link: .white, code: .white.opacity(0.18), underline: true)
                     .padding(.horizontal, 13)
                     .padding(.vertical, 8)
                     .background {
@@ -413,6 +413,8 @@ struct Bubble: View {
 
     private var fill: Color { message.mine ? Tone.bubbleMine : Tone.bubbleThem }
     private var ink: Color { message.mine ? .white : Tone.ink }
+    private var link: Color { message.mine ? .white : Tone.accent }
+    private var wash: Color { message.mine ? .white.opacity(0.18) : Tone.wash2 }
     private var onlyPictures: Bool { message.images > 0 && message.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     var body: some View {
@@ -421,7 +423,7 @@ struct Bubble: View {
                 Picture(code: room.code, seq: message.seq, index: i)
             }
             if !onlyPictures {
-                Prose(text: message.body, ink: ink, link: message.mine ? .white : Tone.accent, code: message.mine ? .white.opacity(0.18) : Tone.wash2, underline: message.mine)
+                Markdown(text: message.body, ink: ink, link: link, code: wash, underline: message.mine, selectable: false)
                     .padding(.horizontal, 13)
                     .padding(.vertical, 8)
                     .background {
@@ -719,7 +721,7 @@ struct PollCard: View {
                 .type(.meta, .semibold)
                 .foregroundStyle(open ? Tone.decide : Tone.ink3)
                 .padding(.bottom, 4)
-            Prose(text: poll.body)
+            Markdown(text: poll.body)
                 .padding(.bottom, 10)
             Rectangle().fill(Tone.line).frame(height: 0.5)
             ForEach(poll.choices, id: \.self) { choice in

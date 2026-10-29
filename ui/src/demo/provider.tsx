@@ -5,7 +5,7 @@ import type { Personality } from "@kiwi/core/personality.ts"
 import { stepReplyText } from "~/chat/step"
 import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_EMPTY, DEMO_GUEST, DEMO_PREFS, DEMO_TILES, DEMO_WAITING } from "~/demo/data"
 import { longFeed } from "~/demo/long"
-import type { Account, Actions, AgentStarts, App, Finding, ThisComputer, Channel, ChannelTile, Message, Prefs, Task } from "~/model"
+import type { Account, Actions, AgentStarts, App, Finding, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Task } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
 
@@ -15,6 +15,7 @@ interface State {
   channels: Map<string, Channel>
   prefs: Prefs
   seq: number
+  gone?: GoneChannel
 }
 
 const HARNESSES: App["harnesses"] = [
@@ -78,6 +79,7 @@ function withStep(c: Channel): Channel {
         from: "win",
         at,
         text,
+        label: "A step for you",
         options: [],
         holds: [13],
         step: {
@@ -87,12 +89,12 @@ function withStep(c: Channel): Channel {
           expect: "git config --file ~/.gitconfig-personal commit.gpgsign prints nothing.",
         },
       },
-      { kind: "question", id: "q-free", from: "atlas", at, text: free, options: [], holds: [11] },
+      { kind: "question", id: "q-free", from: "atlas", at, text: free, label: "Question for everyone", options: [], holds: [11] },
     ],
   }
 }
 
-export type Scenario = "full" | "long" | "step" | "opening" | "signed-out" | "no-channels" | "updates" | "update-ready" | "update-available"
+export type Scenario = "full" | "long" | "step" | "opening" | "held" | "closed" | "removed" | "signed-out" | "no-channels" | "updates" | "update-ready" | "update-available"
 
 function initial(scenario: Scenario, look: Partial<Prefs>): State {
   const prefs = { ...DEMO_PREFS, ...look }
@@ -104,7 +106,9 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
           ? withStep(DEMO_CHANNEL)
           : scenario === "opening"
             ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
-            : DEMO_CHANNEL,
+            : scenario === "held"
+              ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
+              : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       { ...DEMO_EMPTY, code: "interlinked", title: "interlinked" },
@@ -117,6 +121,8 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
   if (scenario === "update-available") return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.8", ready: false, state: "available" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "signed-out") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000 }
   if (scenario === "no-channels") return { account: DEMO_ACCOUNT, tiles: [], channels: new Map(), prefs, seq: 1000 }
+  if (scenario === "closed" || scenario === "removed")
+    return { account: DEMO_ACCOUNT, tiles: DEMO_TILES.filter((t) => t.code !== "studio"), channels, prefs, seq: 1000, gone: { code: "studio", title: "studio", why: scenario } }
   return { account: DEMO_ACCOUNT, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
 }
 
@@ -393,7 +399,8 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
   return {
     account: state.account,
     channels: state.tiles,
-    channel: open ? (state.channels.get(open) ?? null) : null,
+    channel: open && state.gone?.code !== open ? (state.channels.get(open) ?? null) : null,
+    ...(state.gone && state.gone.code === open ? { gone: state.gone } : {}),
     prefs: state.prefs,
     harnesses: HARNESSES,
     personas: PERSONAS,

@@ -9,6 +9,7 @@ import { Settings } from "~/settings/settings"
 import { ChannelScreen } from "~/shell/channel"
 import { Rail } from "~/shell/rail"
 import { FirstRun } from "~/start/first-run"
+import { Gone } from "~/start/gone"
 import { JoinDialog } from "~/start/join"
 import { NewChannelDialog } from "~/start/new-channel"
 import { Welcome } from "~/start/welcome"
@@ -40,7 +41,7 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
         <div className="app">
           <Rail />
           <Boundary resetKey={nav.page === "settings" ? "settings" : app.channel?.code}>
-            {nav.page === "settings" ? <Settings /> : app.channel ? <ChannelScreen key={app.channel.code} channel={app.channel} /> : <Welcome />}
+            {nav.page === "settings" ? <Settings /> : app.channel ? <ChannelScreen key={app.channel.code} channel={app.channel} /> : app.gone ? <Gone gone={app.gone} /> : <Welcome />}
           </Boundary>
         </div>
         <NewChannelDialog />
