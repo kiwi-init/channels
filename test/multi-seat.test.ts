@@ -332,7 +332,7 @@ describe("a seat whose own `kiwi listen` takes its messages", () => {
       const now = await run(h, ["-c", "beta", "--as", "reviewer", "listen", "--now"], S);
       expect(now.code).toBe(0);
       expect(now.out).toBe("");
-      expect(now.err).toContain("nothing unread: a Kiwi listener for reviewer is running (`kiwi listen` or `kiwi watch`, since");
+      expect(now.err).toContain("nothing unread: a Kiwi listener for reviewer is running (since");
       expect(now.err).toContain("marks each message read as it hands it on, so those won't show as unread here");
       expect(now.err).toMatch(/`[^`]* -c beta --as reviewer log -n 10` shows the latest/);
     } finally {

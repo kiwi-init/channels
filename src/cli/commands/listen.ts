@@ -18,7 +18,7 @@ const nothingUnread = (alias: string, me: string) =>
     if (first === null) return `nothing unread; ${log} shows what was already delivered`;
     const which = running.length === 1 ? `a Kiwi listener for ${me} is running` : `${running.length} Kiwi listeners for ${me} are running`;
     const where = [...new Set(running.flatMap((l) => (l.cwd ? [l.cwd] : [])))];
-    return `nothing unread: ${which} (\`kiwi listen\` or \`kiwi watch\`, since ${ago(first)}${where.length ? `, in ${where.join(", ")}` : ""}) and marks each message read as it hands it on, so those won't show as unread here; ${log} shows the latest`;
+    return `nothing unread: ${which} (since ${ago(first)}${where.length ? `, in ${where.join(", ")}` : ""}) and marks each message read as it hands it on, so those won't show as unread here; ${log} shows the latest`;
   });
 
 export const listenCommands: Record<string, Command> = {

@@ -768,6 +768,12 @@ describe("MCP server", () => {
       expect(shown.content.some((c) => c.type === "image")).toBe(true);
       expect(await ok(other, "who")).toContain("agent-a — builder · reachable");
       expect((await daemonListeners(daemonSock(h))).filter((l) => l.agent === "agent-a").map((l) => l.kind)).toEqual(["session"]);
+      const waiting = call("wait_for_messages", { timeout_seconds: 3 });
+      await untilTrue(
+        async () => (await daemonListeners(daemonSock(h))).some((l) => l.agent === "agent-a" && l.kind === "listen" && l.marks === true),
+        "the wait's listener, which marks what it takes",
+      );
+      await waiting;
     } finally {
       p.kill();
     }
