@@ -1,13 +1,17 @@
 # Channels DESIGN.md
 
-Source of truth for Channels visual identity (web renderer, later the
-desktop app's renderer). Implementations derive from tokens here. Never
+Source of truth for Channels visual identity (the `ui/` renderer, in the
+desktop app and in a browser). Implementations derive from tokens here. Never
 hard-code hex in components.
 
-Canonical sources: `web/src/index.css` (`:root`, `:root[data-theme]`,
-`@theme inline`), `web/src/lib/design-tokens.ts`, `web/src/lib/fonts.ts`,
-`packages/app/src/accessibility.ts`, `web/src/components/kit.tsx`,
-`web/src/components/ui/*`, `web/src/components/composer.tsx`.
+Canonical sources: `ui/src/styles/tokens.css` (`:root`), `ui/src/theme/`
+(`channels.ts`, `derive.ts`, `themes.ts`, `apply.ts`),
+`packages/app/src/accessibility.ts`, `ui/src/kit/bits.tsx`,
+`ui/src/kit/icons.tsx`, `ui/src/chat/composer.tsx`.
+
+Sections 1 to 13 and 15 still describe the retired `web/` renderer (Tailwind,
+Base UI, `kit.tsx`, `lib/`, `components/`). Where they and `ui/` differ,
+`ui/` is the current look until they are rewritten for it.
 
 ## 1. Identity in one line
 

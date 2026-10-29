@@ -1,6 +1,6 @@
-// window.kiwi: the main-process bridge the renderer (web/dist) talks to. Shared by
+// window.kiwi: the main-process bridge the renderer (ui/dist) talks to. Shared by
 // main-eb.ts and preload-eb.ts; renderer-neutral on purpose (no node imports),
-// so web/ can type against it without touching this process.
+// so ui/ can type against it without touching this process.
 
 import type { ComputerSettings } from "@kiwi/core/computer-settings.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
