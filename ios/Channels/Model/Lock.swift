@@ -15,7 +15,8 @@ final class Lock {
         #if DEBUG
             if UserDefaults.standard.string(forKey: "shot") != nil { return false }
         #endif
-        return Vault.load() != nil
+        if case .empty = Vault.load() { return false }
+        return true
     }
 
     var available: Bool {
