@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test"
 import { FOLD_RULES, PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts"
 import { fold, type FoldBase } from "@kiwi/core/state.ts"
 import type { OpenedCache } from "../history"
-import type { Kept } from "./kept"
-import { planReload } from "../history-plan"
+import type { Kept } from "@kiwi/channel/kept.ts"
+import { planReload } from "@kiwi/channel/history-plan.ts"
 import { handOver, onceEach, openChannel, warmUp, type OpenSteps, type Planned } from "./open"
 
 const msg = (seq: number): Message => ({ v: PROTOCOL_VERSION, id: `id-${seq}`, from: "atlas", kind: "msg", body: `m${seq}`, ts: 1_700_000_000_000 + seq, seq, sigOk: true })

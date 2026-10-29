@@ -5,7 +5,7 @@ import { ops, watches } from "../channel-ops"
 import { withHeads } from "../news"
 import { useSecrets } from "@kiwi/secrets/secrets.ts"
 import { HEADS_SAFETY_MS } from "../watch"
-import { clockNow } from "./clock"
+import { clockNow } from "@kiwi/channel/clock.ts"
 import { channelTitle, loadRecent, type Recent } from "./recent"
 import { allMembers, CHANGED, loadMember, pendingChannels } from "./store"
 

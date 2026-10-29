@@ -120,6 +120,7 @@ androidComponents {
             sources.from(
                 fileTree(File(repoDir, "ios/engine")),
                 fileTree(File(repoDir, "packages/core/src")),
+                fileTree(File(repoDir, "packages/channel/src")),
                 fileTree(File(repoDir, "desktop/src")),
                 fileTree(File(repoDir, "web/src/lib")),
             )

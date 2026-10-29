@@ -6,7 +6,7 @@ import { ignored, type Color, type Handoff, type ImageAttachment, type Message, 
 import { isLeadRole, type ChannelState, type Member } from "@kiwi/core/state.ts"
 import type { PrRef } from "@kiwi/core/work.ts"
 import type { Chosen } from "@/lib/asks"
-import { useClock } from "@/lib/channel"
+import { useClock } from "@kiwi/channel/clock.ts"
 import { formatAgo, formatFull, formatStamp, formatTime, isoTime, memberName } from "@/lib/format"
 import type { Settled } from "@/lib/permission-settled"
 import { AskedBelow } from "./asked-below"
