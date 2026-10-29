@@ -3,6 +3,7 @@ import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import { open, ownerFingerprint } from "../crypto.ts";
 import { sign, verify } from "../identity.ts";
+import { delegatedMember, readDelegation } from "../delegation.ts";
 import { readRecord, type Member } from "../membership.ts";
 import { MAX_ICON_BYTES, wellFormedIcon, type ChannelIcon } from "../protocol.ts";
 import { MissingKey, Rejected } from "../refusals.ts";
@@ -28,7 +29,7 @@ export interface Info {
   sealedEpoch?: boolean;
 }
 
-export type MemberRow = { pk: string; xpk: string; rec: string; e: number; active: number; read_only?: number };
+export type MemberRow = { pk: string; xpk: string; rec: string; e: number; active: number; read_only?: number; d?: string };
 
 export interface InfoFx {
   info(fp?: string): Effect.Effect<Info, Refusal, Relay>;
@@ -179,7 +180,7 @@ export class ChannelInfo {
         if (!this.ch.access.keys[String(m.e)]) yield* this.ch.fx.refreshKeys();
         const key = this.ch.access.keys[String(m.e)];
         const read = key ? yield* Effect.promise(() => readRecord(key, m.rec, this.ch.roomId, m.pk, this.ch.access.ownerPk)) : null;
-        const opened = read && read.signer === this.ch.access.ownerPk ? read.member : undefined;
+        const opened = !read ? undefined : read.signer === this.ch.access.ownerPk ? read.member : yield* Effect.promise(() => delegatedRecord(read, m.d, this.ch.roomId, this.ch.access.ownerPk));
         const member = opened && newestRecord(this.ch.roomId, opened, !m.active && this.keepsGone(m.pk));
         if (member) out.push({ ...member, active: !!m.active && member.active, ...(m.read_only ? { readOnly: true } : {}) });
         else if (m.active && !isGone(this.ch.roomId, m.pk)) out.push({ name: `unverified-${m.pk.slice(0, 6)}`, pk: m.pk, xpk: m.xpk, owner: false, at: 0, active: true, unverified: true });
@@ -205,6 +206,11 @@ export class ChannelInfo {
     this.ch.access = { ...this.ch.access, signedTitle: true };
     this.ch.onAccess?.(this.ch.access);
   }
+}
+
+export async function delegatedRecord(read: NonNullable<Awaited<ReturnType<typeof readRecord>>>, d: string | undefined, room: string, ownerPk: string): Promise<Member | undefined> {
+  const delegation = d ? await readDelegation(d, room, ownerPk) : null;
+  return delegation && delegatedMember(read, delegation) ? { ...read.member, signedBy: delegation.delegate } : undefined;
 }
 
 export interface RecordMemory {

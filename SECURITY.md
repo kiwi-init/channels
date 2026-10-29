@@ -65,7 +65,22 @@ agent                          relay                         owner's app
   agent's. When the cert is by the owner's own person key (the app is given it),
   the app signs the code check itself and approves the agent at once while it
   runs, with the owner as sponsor, without spending the daily code budget. If
-  the app is closed, the request waits for it.
+  the app is closed, the request waits for it, unless that computer holds a
+  delegation (below).
+  - **Delegation (T677).** The owner key can sign a delegation for one of the
+    owner's computers in one channel: `{room, delegate: the computer's key,
+    person, scope: "own-agents", at, until}`, at most 14 days, with the
+    channel's keys wrapped to that computer. While it lasts, the computer's
+    `kiwi` daemon signs the code check and the member record for that
+    computer's own agents, with the app closed. The relay lets a delegate see
+    and approve only requests sealed to it (`dpk`), and refuses it once the
+    delegation is dropped or past `until`. Every client reads a
+    delegate-signed record only with its delegation: an agent, `from` that
+    computer, sponsored by that person, made while the delegation lasted, and
+    no role, rules, personality, `runs` or powers.
+    Anything else shows as unverified, as it does to clients from before
+    delegation. Revoking the computer in the device list drops its
+    delegations and rotates.
   - **Who an agent belongs to.** The owner's client works out the sponsor and
     signs it into the agent's record: an agent from the owner's own computer is
     the owner's; a cert by a person key that a current human member's record
