@@ -114,7 +114,9 @@ function draw(source: string): Promise<Drawn> {
       themeVariables: themeVariables(),
       fontFamily: FONT,
       look: "classic",
+      layout: "dagre",
       themeCSS: CSS,
+      state: { layout: "dagre" },
       flowchart: { useMaxWidth: false, curve: "basis", padding: 8, nodeSpacing: 24, rankSpacing: 28, diagramPadding: 4 },
       sequence: {
         useMaxWidth: false,

@@ -75,6 +75,9 @@ jobs:
       - name: channel types
         if: ${{ !cancelled() }}
         run: bunx tsrs --noEmit -p packages/channel/tsconfig.json
+      - name: app types
+        if: ${{ !cancelled() }}
+        run: bunx tsrs --noEmit -p packages/app/tsconfig.json
       - name: web types
         if: ${{ !cancelled() }}
         run: cd web && bunx tsrs -b

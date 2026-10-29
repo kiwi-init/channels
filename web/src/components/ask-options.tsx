@@ -1,6 +1,6 @@
-import type { Chosen } from "@/lib/asks"
+import type { Chosen } from "@kiwi/app/asks.ts"
 import { useChoosing } from "@/lib/choosing"
-import { formatTime } from "@/lib/format"
+import { formatTime } from "@kiwi/app/format.ts"
 import { cx } from "@/lib/utils"
 
 const split = (c: string): [string | null, string] => {

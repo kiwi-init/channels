@@ -20,9 +20,9 @@ import { ops } from "@kiwi/channel/channel-ops.ts"
 import { hasBridge } from "@kiwi/secrets/relay.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import { noteSignInGone } from "@kiwi/channel/session.ts"
-import { applyStoredAppearance, stepTextSize } from "@/lib/theme"
-import { uiBooted, watchUiBoot } from "@/lib/ui-boot"
-import { nudgeOnWake } from "@/lib/wake"
+import { applyStoredAppearance, stepTextSize } from "@kiwi/app/theme.ts"
+import { uiBooted, watchUiBoot } from "@kiwi/app/ui-boot.ts"
+import { nudgeOnWake } from "@kiwi/app/wake.ts"
 
 watchUiBoot()
 

@@ -5,7 +5,7 @@ import type { Room } from "@kiwi/core/state/types.ts"
 import { describeScopes, SCOPES, wireScopes } from "@kiwi/core/scopes.ts"
 import { forgetChannel, loadMember, renameChannel, type StoredMember } from "@kiwi/channel/store.ts"
 import { type ChannelHandle } from "@kiwi/channel/use-channel.ts"
-import { cleanRoomName, roomProblem, roomsAfter } from "@/lib/rooms"
+import { cleanRoomName, roomProblem, roomsAfter } from "@kiwi/app/rooms.ts"
 import { secrets } from "@kiwi/secrets/secrets.ts"
 import type { ControlsProps } from "../controls"
 
@@ -189,7 +189,7 @@ export function useControlsHandlers({
       onGone()
     },
     exportLog: async () => {
-      const [{ checkedState, logExport }, history] = await Promise.all([import("@/lib/log-export"), ch.history(0)])
+      const [{ checkedState, logExport }, history] = await Promise.all([import("@kiwi/app/log-export.ts"), ch.history(0)])
       return { log: logExport(history), state: await checkedState(history, foldFrom, () => ch.snapshot().catch(() => null), state) }
     },
   }

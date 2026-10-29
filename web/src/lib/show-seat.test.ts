@@ -2,8 +2,8 @@ import { describe, expect, mock, test } from "bun:test"
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 
-import { showNote } from "./show-notes"
-import { noteFor, showLabel, showSeat, type PlacedSeat } from "./show-seat"
+import { showNote } from "@kiwi/app/show-notes.ts"
+import { noteFor, showLabel, showSeat, type PlacedSeat } from "@kiwi/app/show-seat.ts"
 
 mock.module("@/lib/avatars", () => ({ avatarUrl: () => "robot.svg", robotUrl: () => "robot.svg", robotFor: () => "blue", harnessUrl: (h: string) => `/harness/${h}.svg` }))
 const { ShowSeat } = await import("@/components/needs-you")

@@ -2,12 +2,12 @@ import { ignored, isQuiet, ROBOT_FACES, type ChannelIcon, type Message } from "@
 import { answersDecisions, decidersOf, MAIN, openRound, placeFromKey, placeKey, taskId, type ChannelState } from "@kiwi/core/state.ts";
 import type { FoldMember } from "@kiwi/core/state/types.ts";
 
-import { askLabel, asksFor, chosenOf, heldAsks } from "../../web/src/lib/asks.ts";
-import { avatarIndex } from "../../web/src/lib/avatar-pick.ts";
-import { chipsFor } from "../../web/src/lib/reactions.ts";
+import { askLabel, asksFor, chosenOf, heldAsks } from "@kiwi/app/asks.ts";
+import { avatarIndex } from "@kiwi/app/avatar-pick.ts";
+import { chipsFor } from "@kiwi/app/reactions.ts";
 import type { Online } from "@kiwi/channel/online.ts";
-import { knownHarness, monoHarness } from "../../web/src/lib/harness.ts";
-import { lastPreview } from "../../web/src/lib/preview.ts";
+import { knownHarness, monoHarness } from "@kiwi/app/harness.ts";
+import { lastPreview } from "@kiwi/app/preview.ts";
 import { reviewsFor } from "@kiwi/channel/task-actions.ts";
 import type { AskView, Connection, IconView, MemberView, MessageView, PlaceView, ReviewView, RoomView, TaskView } from "./wire.ts";
 

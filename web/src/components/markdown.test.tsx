@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { Markdown } from "./markdown"
 import { MentionNames } from "../lib/mentions"
 import { errorLine } from "./mermaid"
-import { compareCells, mentionParts, messageRefs, nextSort, sanitizeMarkdownUrl } from "../lib/markdown"
+import { compareCells, mentionParts, messageRefs, nextSort, sanitizeMarkdownUrl } from "@kiwi/app/markdown.ts"
 
 describe("mentions", () => {
   const nicks: Record<string, string> = { "jovial-gecko": "claude", "zesty-owl": "grokbot", jow: "Jow" }

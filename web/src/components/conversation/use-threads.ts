@@ -4,8 +4,8 @@ import { ignored, isQuiet, type Color, type Message } from "@kiwi/core/protocol.
 import type { TaskCards } from "@kiwi/core/standup.ts"
 import { colorOf, type ChannelState } from "@kiwi/core/state.ts"
 import { digestTask } from "@/lib/activity"
-import { roomOfMessage } from "@/lib/rooms"
-import { MAIN, placeKey } from "@/lib/threads"
+import { roomOfMessage } from "@kiwi/app/rooms.ts"
+import { MAIN, placeKey } from "@kiwi/app/threads.ts"
 import { isAgent, type ThreadSummary } from "../message"
 
 const summarised = (m: Message) => digestTask(m) !== null || m.ev?.op === "task.add" || (m.ev?.op === "task.update" && !!m.ev.state)

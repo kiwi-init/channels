@@ -1,4 +1,4 @@
-import { excerpt } from "@/lib/format"
+import { excerpt } from "@kiwi/app/format.ts"
 import { cx } from "@/lib/utils"
 
 export function AskedBelow({ body, first }: { body: string; first: boolean }) {

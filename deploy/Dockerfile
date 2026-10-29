@@ -9,6 +9,7 @@ WORKDIR /app
 # --filter skips their installs.
 COPY package.json bun.lock ./
 COPY packages/core/package.json ./packages/core/
+COPY packages/app/package.json ./packages/app/
 COPY packages/channel/package.json ./packages/channel/
 COPY web/package.json ./web/
 COPY desktop/package.json ./desktop/

@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react"
 
-import { toggleSidebar } from "@/lib/sidebar-hidden"
+import { toggleSidebar } from "@kiwi/app/sidebar-hidden.ts"
 
 const listeners = new Set<() => void>()
 let drawer = false

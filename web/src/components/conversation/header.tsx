@@ -3,8 +3,8 @@ import { useRef, type Dispatch, type ReactNode, type SetStateAction } from "reac
 
 import type { ChannelIcon } from "@kiwi/core/protocol.ts"
 
-import { TABS, type Tab, type View } from "@/lib/views"
-import { useSidebarHidden } from "@/lib/sidebar-hidden"
+import { TABS, type Tab, type View } from "@kiwi/app/views.ts"
+import { useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 import { cx } from "@/lib/utils"
 import { ChannelIconTile } from "../channel-icon"
 import { HoldBanner } from "../controls"

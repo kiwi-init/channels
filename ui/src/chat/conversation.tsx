@@ -50,15 +50,15 @@ export function compactAt(list: Message[], i: number): boolean {
   const m = list[i]
   const prev = list[i - 1]
   if (!m || !prev) return false
-  return prev.from === m.from && !prev.system && !m.system && !prev.ask && !prev.leftOut && !m.leftOut && m.at - prev.at < GROUP_MS && sameDay(prev.at, m.at)
+  return prev.from === m.from && !prev.system && !m.system && !prev.ask && !prev.leftOut && !m.leftOut && (!m.said || m.said.tone === "quiet") && m.at - prev.at < GROUP_MS && sameDay(prev.at, m.at)
 }
 
-export function quoteOf(list: Message[], i: number, bySeq: ReadonlyMap<number, Message>, root?: number): Message | undefined {
+export function quoteOf(list: Message[], i: number, bySeq: ReadonlyMap<number, Message>, root?: number): Message | number | undefined {
   const m = list[i]
   if (!m || m.system) return undefined
   const target = m.replyTo ?? (m.inThread !== root ? m.inThread : undefined)
   if (target === undefined || list[i - 1]?.seq === target) return undefined
-  return bySeq.get(target)
+  return bySeq.get(target) ?? target
 }
 
 interface Anchor {

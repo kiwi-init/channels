@@ -1,6 +1,6 @@
 import { ROBOT_FACES, type RobotFace } from "@kiwi/core/protocol.ts"
 
-import { avatarIndex } from "./avatar-pick"
+import { avatarIndex } from "@kiwi/app/avatar-pick.ts"
 
 const urls = import.meta.glob<string>("../../../assets/avatars/*.svg", { eager: true, query: "?url", import: "default" })
 

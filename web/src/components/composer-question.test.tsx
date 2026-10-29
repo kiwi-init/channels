@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 
 import { PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts"
 import { choiceGate } from "@/lib/choosing"
-import { answered } from "@/lib/asks"
+import { answered } from "@kiwi/app/asks.ts"
 
 mock.module("@/lib/avatars", () => ({ avatarUrl: () => "", robotUrl: () => "", robotFor: () => "blue", harnessUrl: () => "" }))
 const { ComposerQuestion } = await import("./composer-question")

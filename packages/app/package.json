@@ -1,0 +1,19 @@
+{
+  "name": "@kiwi/app",
+  "private": true,
+  "description": "The app's helpers in the renderer: theme, sign-in, deep links, rooms, harnesses, markdown links, image compression and the rest the ui, the web dashboard and the phone engine share.",
+  "type": "module",
+  "exports": {
+    "./*": "./src/*"
+  },
+  "dependencies": {
+    "@kiwi/channel": "workspace:*",
+    "@kiwi/core": "workspace:*",
+    "@kiwi/secrets": "workspace:*",
+    "effect": "4.0.7",
+    "react": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0"
+  }
+}

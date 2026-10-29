@@ -3,7 +3,7 @@ import { useEffect, useState } from "react"
 
 import { MAX_REPOS, REPO_RE } from "@kiwi/core/protocol.ts"
 import { reposOf } from "@kiwi/core/state.ts"
-import { formatShort } from "@/lib/format"
+import { formatShort } from "@kiwi/app/format.ts"
 import { bridge, type GithubRepoView } from "@kiwi/secrets/secrets.ts"
 import { cx } from "@/lib/utils"
 import { Icon } from "../icon"

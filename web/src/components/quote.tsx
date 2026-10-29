@@ -1,5 +1,5 @@
 import type { Message } from "@kiwi/core/protocol.ts"
-import { excerpt } from "@/lib/format"
+import { excerpt } from "@kiwi/app/format.ts"
 
 function quoteText(q: Message): string {
   const imgs = q.imgs ?? []

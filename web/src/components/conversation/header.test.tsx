@@ -2,7 +2,7 @@ import { describe, expect, mock, test } from "bun:test"
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 
-import type { Tab } from "@/lib/views"
+import type { Tab } from "@kiwi/app/views.ts"
 
 mock.module("@/lib/avatars", () => ({ avatarUrl: () => "", robotUrl: () => "", robotFor: () => "blue", harnessUrl: () => "" }))
 const { Header, Toolbar, ViewsNav } = await import("./header")
