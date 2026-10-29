@@ -1,5 +1,5 @@
 name: setup
-description: Bun, its download cache, and the dependencies of every workspace (root, web and desktop).
+description: Bun, its download cache, and the dependencies of every workspace (root, ui and desktop).
 runs:
   using: composite
   steps:
