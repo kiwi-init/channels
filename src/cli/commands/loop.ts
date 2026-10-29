@@ -45,14 +45,24 @@ export const loopCommands: Record<string, Command> = {
       if (!isLoopHarness(harness)) return yield* die(`${USAGE}: the loop doesn't start ${harness} yet`);
       for (const key of SESSION_MARKERS) if (!key.startsWith("KIWI_")) delete process.env[key];
       const recipe = recipeFor(harness);
-      if (opt.effort && !recipe.takesEffort) return yield* die(`${recipe.label} keeps its effort per model in its own settings: drop --effort`);
-      if (opt.model && !recipe.takesModel) return yield* die(`${recipe.label} takes its model from its own settings (/model in a session): drop --model`);
-      if (args[1] === "start") return yield* startHosted(harness);
+      const unsupported = (): string | null =>
+        opt.effort && !recipe.takesEffort
+          ? `${recipe.label} keeps its effort per model in its own settings: drop --effort`
+          : opt.model && !recipe.takesModel
+            ? `${recipe.label} takes its model from its own settings (/model in a session): drop --model`
+            : null;
+      if (args[1] === "start") {
+        const refused = unsupported();
+        if (refused) return yield* die(refused);
+        return yield* startHosted(harness);
+      }
       if (args[1] !== undefined) return yield* die(USAGE);
       if (recipe.screen && !typedPaneOk())
         return yield* die(`${recipe.label} takes its first prompt typed into its window, so kiwi loop --harness ${harness} runs only inside tmux, in the pane it was started from`);
       const oldTmux = recipe.screen ? typedTmuxOld() : null;
       if (oldTmux) return yield* die(`${recipe.label}'s first prompt needs tmux 3.7 or newer, to know when it can paste; this tmux is ${oldTmux}`);
+      const why = unsupported();
+      if (why) return yield* die(why);
       const bin = Bun.which(recipe.program, { PATH: process.env.PATH ?? "" }) ?? Bun.which(recipe.program, { PATH: yield* Effect.promise(() => loginPath()) });
       if (!bin) return yield* die(`${recipe.program} isn't on your login shell's PATH`);
       const { alias, name } = yield* seatNamed;
