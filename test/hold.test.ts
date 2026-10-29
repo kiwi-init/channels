@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Cursor, LocalFiles, loadConfig, updateConfig, type SeatRecord } from "../src/config.ts";
 import { pathOf } from "../src/daemon/wake.ts";
-import { bindHeldSeat, holdSeat, releaseSeat, SEAT_TOKEN, seatHolds } from "../src/hold.ts";
+import { bindHeldSeat, holdSeat, loopFor, releaseSeat, releaseStale, SEAT_TOKEN, seatHeldAway, seatHolds } from "../src/hold.ts";
 import { AgentSession } from "../src/agent.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 import { bindDirectory, seatsAt, seatsFor, seatsHeldAnywhere } from "../src/seats.ts";
@@ -157,4 +157,64 @@ test("a join that opened the seat before a hold binds nothing once the seat went
       .map((b) => b.session),
   ).toEqual(["new"]);
   expect(bindDirectory(dir, { alias: "ch", as: "joiner", harness: "codex", session: "later" }, () => false, seatHolds(loadConfig(), "ch", "joiner"))).toBe(true);
+});
+
+const deadPid = async (): Promise<number> => {
+  const p = Bun.spawn(["true"]);
+  await p.exited;
+  return p.pid;
+};
+
+test("a hold records its loop's pid, and once that process is gone the seat is free to a new loop and to sessions (#1272)", async () => {
+  bindDirectory(dir, { alias: "ch", as: "dev", harness: "codex", session: "old" });
+  const gone = await deadPid();
+  expect(holdSeat("ch", "dev", "killed-loop", Date.now(), gone)).toEqual({ kind: "changed", seats: 1 });
+  expect(all()[0]?.hold?.pid).toBe(gone);
+  expect(seatHeldAway(loadConfig(), "ch", "dev")).toBe(false);
+  const before = seatHolds(loadConfig(), "ch", "dev");
+  expect(holdSeat("ch", "dev", "new-loop", Date.now(), process.pid)).toEqual({ kind: "changed", seats: 1 });
+  expect(all()[0]?.hold?.pid).toBe(process.pid);
+  expect(seatHolds(loadConfig(), "ch", "dev")).toBe(before + 1);
+});
+
+test("a live holder keeps its seat: another loop is refused, and a stale release names the holder (#1272)", () => {
+  bindDirectory(dir, { alias: "ch", as: "dev", harness: "codex", session: "old" });
+  holdSeat("ch", "dev", "loop", Date.now(), process.pid);
+  expect(seatHeldAway(loadConfig(), "ch", "dev")).toBe(true);
+  expect(holdSeat("ch", "dev", "other")).toEqual({ kind: "other-holder" });
+  expect(releaseStale("ch", "dev")).toEqual({ kind: "alive", pid: process.pid });
+  expect(all()[0]?.hold).toBeDefined();
+});
+
+test("a stale release frees a dead holder's seat, and one held from before pids were recorded only when no loop for it runs (#1272)", async () => {
+  bindDirectory(dir, { alias: "ch", as: "dev", harness: "codex", session: "old" });
+  holdSeat("ch", "dev", "killed-loop", Date.now(), await deadPid());
+  expect(releaseStale("ch", "dev")).toEqual({ kind: "changed", seats: 1 });
+  expect(all()[0]?.hold).toBeUndefined();
+  expect(releaseStale("ch", "dev")).toEqual({ kind: "not-held" });
+  const seat = all()[0];
+  if (!seat) throw new Error("no seat");
+  updateConfig((c) => {
+    c.bindings = { [dir]: { ...seat, hold: { key: "from-an-older-kiwi", at: 1 } } };
+  });
+  expect(seatHeldAway(loadConfig(), "ch", "dev")).toBe(true);
+  expect(releaseStale("ch", "dev", () => 4242)).toEqual({ kind: "alive", pid: 4242 });
+  expect(releaseStale("ch", "dev", () => null)).toEqual({ kind: "changed", seats: 1 });
+  expect(all()[0]?.hold).toBeUndefined();
+  expect(releaseStale("ch", "nobody")).toEqual({ kind: "no-seat" });
+});
+
+test("the loop holding a seat from before pids were recorded is found by its command line (#1272)", () => {
+  const procs = [
+    { pid: 10, args: "/home/me/.kiwi/bin/kiwi -c ch --as dev loop --harness codex" },
+    { pid: 11, args: "/home/me/.kiwi/bin/kiwi -c ch --as other loop --harness kimi" },
+    { pid: 12, args: "kiwi -c ch listen --as dev" },
+    { pid: 13, args: "bun /src/cli.ts loop --harness claude" },
+  ];
+  expect(loopFor("dev", procs)).toBe(10);
+  expect(loopFor("other", procs)).toBe(11);
+  expect(loopFor("nobody", procs.slice(0, 3))).toBeNull();
+  expect(loopFor("nobody", procs)).toBe(13);
+  expect(loopFor("dev", procs, 10)).toBe(13);
+  expect(loopFor("dev", procs.slice(0, 3), 10)).toBeNull();
 });

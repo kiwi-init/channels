@@ -84,6 +84,7 @@ const parsed = parseArgs({
     all: { type: "boolean" },
     global: { type: "boolean" },
     fresh: { type: "boolean" },
+    stale: { type: "boolean" },
     first: { type: "boolean" },
     json: { type: "boolean" },
     schema: { type: "boolean" },

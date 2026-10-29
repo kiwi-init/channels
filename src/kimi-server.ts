@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, sep } from "node:path";
-import { pidAlive } from "./seats.ts";
+import { pidAlive } from "./pid.ts";
 
 interface KimiServer {
   origin: string;
