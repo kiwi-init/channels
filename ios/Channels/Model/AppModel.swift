@@ -20,6 +20,7 @@ enum Linking: Equatable {
     case idle
     case opening
     case signingIn(url: String?, code: String)
+    case asking
     case approve(String)
     case failed(String)
 }
@@ -176,6 +177,8 @@ final class AppModel {
             let started = try await engine.ask(ask, as: EnrollStart.self)
             linking = .signingIn(url: started.url, code: started.code)
             if let url = started.url.flatMap(URL.init(string:)) { await UIApplication.shared.open(url) }
+            _ = try await engine.ask(["op": "enrollAsk"])
+            linking = .asking
             let shown = try await engine.ask(["op": "enrollWait"], as: EnrollDigits.self)
             linking = .approve(shown.digits)
             let data = try await engine.ask(["op": "enrollFinish"])

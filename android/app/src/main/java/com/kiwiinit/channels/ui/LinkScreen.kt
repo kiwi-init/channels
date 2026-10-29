@@ -82,10 +82,22 @@ fun LinkScreen(model: AppModel, modifier: Modifier = Modifier, linking: Linking 
                     } else {
                         Spacer(Modifier.size(24.dp))
                     }
-                    Waiting("Waiting for the sign-in")
+                    Waiting("Finish signing in in your browser")
                     QuietButton("Open the sign-in page", Modifier.padding(top = 24.dp)) { model.browse(url) }
                 }
                 QuietButton("Cancel", Modifier.padding(top = 10.dp)) { model.cancelLink() }
+            }
+            Linking.Asking -> {
+                Text("Approve this phone", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Open Channels on your computer and let this phone in. It then shows digits to type there.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = tone.ink2,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+                Spacer(Modifier.size(24.dp))
+                Waiting("Waiting for your computer")
+                QuietButton("Cancel", Modifier.padding(top = 24.dp)) { model.cancelLink() }
             }
             is Linking.Approve -> {
                 Text("Approve this phone", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)

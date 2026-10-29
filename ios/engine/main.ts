@@ -61,6 +61,7 @@ interface Enrolling {
   grant: EnrollGrant | null;
   done: boolean;
   stop: AbortController;
+  asked: Promise<void> | null;
 }
 const COMPUTERS_EVERY_MS = 5 * 60_000;
 
@@ -363,6 +364,7 @@ async function enrollBegin(relay: string, label: string, os: string, user?: stri
     grant: null,
     done: false,
     stop,
+    asked: null,
     enrollee: createEnrollee({
       relayUrl: () => relay,
       token: () => e.token,
@@ -393,13 +395,25 @@ async function enrollStage(e: Enrolling, until: (st: EnrollStatusView) => boolea
   }
 }
 
-async function enrollWait(): Promise<{ digits: string }> {
-  const e = enrolling;
-  if (!e) throw new Error("signing in hasn't started");
+async function askComputer(e: Enrolling): Promise<void> {
   await e.token;
   if (enrolling !== e) throw new Error("signing in was cancelled");
   post({ type: "log", line: "sign-in: signed in, asking your computer" });
   await e.enrollee.begin();
+}
+
+async function enrollAsk(): Promise<null> {
+  const e = enrolling;
+  if (!e) throw new Error("signing in hasn't started");
+  e.asked ??= askComputer(e);
+  await e.asked;
+  return null;
+}
+
+async function enrollWait(): Promise<{ digits: string }> {
+  const e = enrolling;
+  if (!e) throw new Error("signing in hasn't started");
+  await enrollAsk();
   const st = await enrollStage(e, (s) => s.stage === "digits");
   return { digits: st.stage === "digits" ? st.digits : "" };
 }
@@ -429,6 +443,8 @@ async function handle(ask: Ask): Promise<unknown> {
       return start(ask.saved);
     case "enrollBegin":
       return enrollBegin(ask.relay, ask.label, ask.os, ask.user, ask.waitMs);
+    case "enrollAsk":
+      return enrollAsk();
     case "enrollWait":
       return enrollWait();
     case "enrollFinish":

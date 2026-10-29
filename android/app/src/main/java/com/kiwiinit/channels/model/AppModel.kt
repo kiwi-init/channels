@@ -69,6 +69,8 @@ sealed interface Linking {
 
     data class SigningIn(val url: String?, val code: String) : Linking
 
+    data object Asking : Linking
+
     data class Approve(val digits: String) : Linking
 
     data class Failed(val why: String) : Linking
@@ -281,6 +283,8 @@ class AppModel(private val app: Application) {
                 )
                 linking = Linking.SigningIn(started.url, started.code)
                 started.url?.let(::browse)
+                ask(buildJsonObject { put("op", "enrollAsk") })
+                linking = Linking.Asking
                 val shown = read(EnrollDigits.serializer(), ask(buildJsonObject { put("op", "enrollWait") }))
                 linking = Linking.Approve(shown.digits)
                 val data = ask(buildJsonObject { put("op", "enrollFinish") }).toString().toByteArray()
