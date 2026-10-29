@@ -27,10 +27,11 @@ export interface OwnerSetup {
 }
 
 /** A channel owned by `ownerName`'s person key, with that person admitted as the owner. */
-export async function setupChannel(relay: string, opts: { ownerName?: string; personName?: string; human?: string | null } = {}): Promise<OwnerSetup> {
+export async function setupChannel(relay: string, opts: { ownerName?: string; personName?: string; human?: string | null; personInRecord?: boolean } = {}): Promise<OwnerSetup> {
   const owner = await generateIdentity(opts.ownerName ?? "owner");
   const person = await generateIdentity(opts.personName ?? "person");
-  const { code, access } = await Channel.create(relay, owner, { name: owner.name, kind: "human", person: person.pk }, [], undefined, opts.human ?? null);
+  const info = { name: owner.name, kind: "human" as const, ...(opts.personInRecord === false ? {} : { person: person.pk }) };
+  const { code, access } = await Channel.create(relay, owner, info, [], undefined, opts.human ?? null);
   return { relay, code, roomId: access.roomId, access, owner, person, ownerCh: new Channel(access, relay, owner) };
 }
 
