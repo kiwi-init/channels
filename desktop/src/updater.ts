@@ -66,7 +66,7 @@ const realOr = (p: string): string => {
   }
 };
 
-const runningAppImage = (): string | undefined => {
+export const runningAppImage = (): string | undefined => {
   const dir = process.env["APPDIR"];
   return ownAppImage(process.env["APPIMAGE"], dir ? realOr(dir) : undefined, realOr(host().app.path("exe")));
 };
