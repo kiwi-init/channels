@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo } from "react"
 
 import { Toasts, useToasts } from "~/kit/toasts"
 import type { App } from "~/model"
-import { AppContext, type Go, type Nav } from "~/nav"
+import { ActContext, AppContext, type Go, type Nav } from "~/nav"
 import { Palette } from "~/palette/palette"
 import { Settings } from "~/settings/settings"
 import { ChannelScreen } from "~/shell/channel"
@@ -16,28 +16,33 @@ import { activeTheme } from "~/theme/themes"
 
 export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => void }) {
   const [toasts, toast] = useToasts()
-  const ctx = { app, nav, go, toast }
+  const ctx = useMemo(() => ({ app, nav, go, toast }), [app, nav, go, toast])
+  const act = useMemo(() => ({ actions: app.actions, go, toast }), [app.actions, go, toast])
   usePaletteKey(useCallback(() => go({ to: "dialog", dialog: nav.dialog === "palette" ? null : "palette" }), [go, nav.dialog]))
   useTheme(app)
 
   if (!app.account)
     return (
       <AppContext value={ctx}>
-        <FirstRun />
-        <Toasts toasts={toasts} />
+        <ActContext value={act}>
+          <FirstRun />
+          <Toasts toasts={toasts} />
+        </ActContext>
       </AppContext>
     )
 
   return (
     <AppContext value={ctx}>
-      <div className="app">
-        <Rail />
-        {nav.page === "settings" ? <Settings /> : app.channel ? <ChannelScreen key={app.channel.code} channel={app.channel} /> : <Welcome />}
-      </div>
-      <NewChannelDialog />
-      <JoinDialog />
-      <Palette />
-      <Toasts toasts={toasts} />
+      <ActContext value={act}>
+        <div className="app">
+          <Rail />
+          {nav.page === "settings" ? <Settings /> : app.channel ? <ChannelScreen key={app.channel.code} channel={app.channel} /> : <Welcome />}
+        </div>
+        <NewChannelDialog />
+        <JoinDialog />
+        <Palette />
+        <Toasts toasts={toasts} />
+      </ActContext>
     </AppContext>
   )
 }

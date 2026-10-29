@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useState } from "react"
 
 import { Composer } from "~/chat/composer"
-import { compactAt, namesOf, quoteOf, useStick } from "~/chat/conversation"
+import { compactAt, quoteOf, useNames, useStick, useTaskIds } from "~/chat/conversation"
 import { MessageRow } from "~/chat/message"
 import { jumpTo, ReplyContext, type Replying } from "~/chat/reply"
 import { Empty } from "~/kit/bits"
@@ -12,7 +12,8 @@ export function ThreadPanel({ channel, seq }: { channel: Channel; seq: number })
   const root = channel.messages.find((m) => m.seq === seq)
   const replies = useMemo(() => channel.messages.filter((m) => m.inThread === seq), [channel.messages, seq])
   const bySeq = useMemo(() => new Map(channel.messages.map((m) => [m.seq, m])), [channel.messages])
-  const names = useMemo(() => namesOf(channel), [channel])
+  const names = useNames(channel)
+  const tasks = useTaskIds(channel)
   const [reply, setReply] = useState<{ seq: number; to: Message } | null>(null)
   const replying = useMemo((): Replying => ({ to: reply?.seq === seq ? reply.to : null, set: (to) => setReply(to ? { seq, to } : null) }), [reply, seq])
   const { scroller, content, remember, toBottom } = useStick()
