@@ -147,7 +147,15 @@ gets one pending ask at most. Approving it needs your app in your hand and the d
 | `DELETE /v1/account/ask/<id>` | the asking device, an app that approves | turns the ask away |
 
 A key revoked in a published list is refused on every account route, can't ask again, and loses its
-computer inbox at once (`/v1/machine/<key>` answers 403 and its socket closes). The digits come from
+computer inbox at once (`/v1/machine/<key>` answers 403 and its socket closes).
+
+A computer can also register its inbox with the device list instead of a `MachineCert`
+(`PUT /v1/machine/<key>` `{links}`), when that list has it as a current computer. The person key, or
+any current approving device in that list, then counts as its person: asks, unpairing, the online
+check and `/v1/person/<pk>/machines`. The relay never rolls the kept list back. Each list the account
+accepts reaches its computers, so a revoked or expired desktop stops counting at once. The daemon
+checks asks the same way (`readAsk` with the list). Under decision A, this is what lets a desktop
+without the person key start agents. The digits come from
 `enrollDigits` in `packages/core/src/enroll.ts`.
 
 ## 3. Admitting agents without an app open (delegation)

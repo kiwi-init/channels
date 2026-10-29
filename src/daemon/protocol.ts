@@ -42,7 +42,7 @@ export type DaemonVerb =
   | "unpair"
   | "stop";
 
-export const DAEMON_PROTOCOL = 7;
+export const DAEMON_PROTOCOL = 8;
 
 export type DaemonEvent = "open" | "roster" | "info" | "request";
 
