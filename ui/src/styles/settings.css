@@ -350,21 +350,6 @@
   user-select: all;
 }
 
-.set-pair .qr {
-  display: block;
-  width: 176px;
-  height: 176px;
-  border-radius: var(--r-row);
-}
-
-.qr-paper {
-  fill: var(--white);
-}
-
-.qr-ink {
-  fill: var(--black);
-}
-
 .set-enroll-what {
   color: var(--ink-2);
   font: var(--t-ui) / 1.5 var(--ui);
