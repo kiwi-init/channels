@@ -226,6 +226,7 @@ export interface Message {
   pending?: boolean
   failed?: string
   mentionsYou?: boolean
+  leftOut?: string
 }
 
 export interface PermissionAsk {
@@ -379,6 +380,7 @@ export interface Channel {
   former?: Person[]
   nicknames: ReadonlyMap<string, string>
   messages: Message[]
+  leftOut?: Message[]
   tasks: Task[]
   taskGroups: TaskGroup[]
   asks: Ask[]

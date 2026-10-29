@@ -869,6 +869,53 @@ button.msg-image-spot:hover {
   font: var(--t-meta) var(--ui);
 }
 
+.sys.is-left-out {
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+
+.sys.is-left-out .sys-text,
+.msg.is-left-out .msg-text {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+.left-out-why {
+  color: var(--alert);
+  font: var(--t-meta) var(--ui);
+}
+
+.msg-left-out {
+  margin-top: 2px;
+}
+
+.sys.is-left-out .left-out-why {
+  flex-basis: 100%;
+  padding-left: 16px;
+}
+
+.fold {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 0 48px;
+  color: var(--ink-3);
+  font: var(--t-meta) var(--ui);
+}
+
+.fold-act {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: 600 var(--t-meta) var(--ui);
+}
+
+.fold-act:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .sys-line {
   width: 6px;
   height: 6px;

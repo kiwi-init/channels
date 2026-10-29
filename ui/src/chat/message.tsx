@@ -170,16 +170,17 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
 
   if (m.system)
     return (
-      <p className="sys" data-seq={m.seq}>
+      <p className={cx("sys", m.leftOut && "is-left-out")} data-seq={m.seq}>
         <span className="sys-line" />
-        <span>{m.text}</span>
+        <span className="sys-text">{m.text}</span>
         <time>{clock(m.at)}</time>
+        {m.leftOut && <span className="left-out-why">{m.leftOut}</span>}
       </p>
     )
 
   return (
     <article
-      className={cx("msg", compact && "is-compact", m.mentionsYou && "is-for-you", m.pending && "is-pending", m.failed !== undefined && "is-failed")}
+      className={cx("msg", compact && "is-compact", m.mentionsYou && "is-for-you", m.pending && "is-pending", m.failed !== undefined && "is-failed", m.leftOut && "is-left-out")}
       data-seq={m.seq}
       aria-label={`${nickname(channel, m.from)}, ${clock(m.at)}`}
     >
@@ -220,6 +221,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             )}
           </div>
         )}
+        {m.leftOut && <p className="msg-left-out left-out-why">{m.leftOut}</p>}
         {m.failed !== undefined && (
           <p className="msg-failed" role="status" title={m.failed}>
             Couldn't send
@@ -263,7 +265,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
           </button>
         )}
       </div>
-      {!m.pending && m.failed === undefined && (
+      {!m.pending && m.failed === undefined && !m.leftOut && (
         <div className="msg-tools" role="toolbar" aria-label="Message actions">
           {m.where.kind !== "theirs" &&
             QUICK.map((e) => (

@@ -1,6 +1,7 @@
 import { Fragment, startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { Composer } from "~/chat/composer"
+import { foldText, leftOutRun, runFirst, withLeftOut } from "~/chat/left-out"
 import { MessageRow } from "~/chat/message"
 import { linked } from "~/chat/linked"
 import { flash, jumpTo, ReplyContext, type Replying } from "~/chat/reply"
@@ -47,7 +48,7 @@ export function compactAt(list: Message[], i: number): boolean {
   const m = list[i]
   const prev = list[i - 1]
   if (!m || !prev) return false
-  return prev.from === m.from && !prev.system && !m.system && !prev.ask && m.at - prev.at < GROUP_MS && sameDay(prev.at, m.at)
+  return prev.from === m.from && !prev.system && !m.system && !prev.ask && !prev.leftOut && !m.leftOut && m.at - prev.at < GROUP_MS && sameDay(prev.at, m.at)
 }
 
 export function quoteOf(list: Message[], i: number, bySeq: ReadonlyMap<number, Message>, root?: number): Message | undefined {
@@ -177,7 +178,16 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
 
 function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: Jump | null }) {
   const { go } = useApp()
-  const list = useMemo(() => channel.messages.filter((m) => sameWhere(m.where, where)), [channel.messages, where])
+  const list = useMemo(
+    () =>
+      withLeftOut(
+        channel.messages.filter((m) => sameWhere(m.where, where)),
+        (channel.leftOut ?? []).filter((m) => sameWhere(m.where, where))
+      ),
+    [channel.messages, channel.leftOut, where]
+  )
+  const [shownRuns, setShownRuns] = useState<ReadonlySet<number>>(() => new Set())
+  const toggleRun = useCallback((first: number) => setShownRuns((was) => (was.has(first) ? new Set([...was].filter((s) => s !== first)) : new Set([...was, first]))), [])
   const bySeq = useMemo(() => new Map(channel.messages.map((m) => [m.seq, m])), [channel.messages])
   const names = useNames(channel)
   const tasks = useTaskIds(channel)
@@ -188,7 +198,7 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
   const [unread] = useState(() => {
     const seen = where.kind === "room" ? channel.rooms.find((r) => r.id === where.room)?.seen : where.kind === "dm" ? channel.directs.find((d) => d.with === where.with)?.seen : undefined
     if (seen === undefined) return null
-    const fresh = list.filter((m) => m.seq > seen && m.from !== channel.you && !m.system)
+    const fresh = list.filter((m) => m.seq > seen && m.from !== channel.you && !m.system && !m.leftOut)
     const first = fresh[0]
     return first && first !== list[0] ? { seq: first.seq, count: fresh.length } : null
   })
@@ -250,7 +260,7 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
       return
     }
     if (last.from === channel.you) toBottom(false)
-    else if (!stuck.current) setFresh((n) => n + list.filter((m) => m.seq > before && m.from !== channel.you && !m.system).length)
+    else if (!stuck.current) setFresh((n) => n + list.filter((m) => m.seq > before && m.from !== channel.you && !m.system && !m.leftOut).length)
     settle()
   }, [last, list, channel.you, toBottom, settle, stuck, live])
 
@@ -361,6 +371,8 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
           ) : (
             list.slice(start, end).map((m, k) => {
               const i = start + k
+              const run = leftOutRun(list, i)
+              const open = !m.leftOut || shownRuns.has(runFirst(list, i))
               return (
                 <Fragment key={m.seq}>
                   {(i === 0 || !sameDay(list[i - 1]?.at ?? 0, m.at)) && (
@@ -373,7 +385,8 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
                       <span>New</span>
                     </p>
                   )}
-                  <MessageRow channel={channel} m={m} compact={m.seq !== mark && compactAt(list, i)} names={names} tasks={tasks} quote={quoteOf(list, i, bySeq)} onQuote={onQuote} />
+                  {run && <Fold run={run} open={open} onToggle={() => toggleRun(m.seq)} />}
+                  {open && <MessageRow channel={channel} m={m} compact={m.seq !== mark && compactAt(list, i)} names={names} tasks={tasks} quote={quoteOf(list, i, bySeq)} onQuote={onQuote} />}
                 </Fragment>
               )
             })
@@ -388,6 +401,18 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
         </button>
       )}
     </div>
+  )
+}
+
+function Fold({ run, open, onToggle }: { run: readonly Message[]; open: boolean; onToggle: () => void }) {
+  return (
+    <p className="fold" data-seq={run[0]?.seq}>
+      <span className="sys-line" />
+      <span>{foldText(run)}</span>
+      <button type="button" className="fold-act" aria-expanded={open} onClick={onToggle}>
+        {open ? "Hide" : run.length === 1 ? "Show it" : "Show them"}
+      </button>
+    </p>
   )
 }
 
