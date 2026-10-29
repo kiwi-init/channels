@@ -44,6 +44,7 @@ interface Revoke {
   device: string;
   label: string;
   as: DeviceKind;
+  approve: boolean;
   by: string;
   seq: number;
   at: number;
@@ -152,7 +153,7 @@ export async function readDeviceList(links: readonly unknown[]): Promise<ReadLis
       if (link.op === "revoke") {
         const target = devices.get(link.device)!;
         const signer = devices.get(link.pk);
-        revokes.push({ device: target.device, label: target.label, as: target.as, by: link.pk, seq: link.seq, at: link.at, older: !!signer && target.seq < signer.seq });
+        revokes.push({ device: target.device, label: target.label, as: target.as, approve: target.approve, by: link.pk, seq: link.seq, at: link.at, older: !!signer && target.seq < signer.seq });
       }
     }
     apply(link, devices, revoked);

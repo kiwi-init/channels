@@ -272,10 +272,19 @@ For when every app is gone, or a thief revoked your other devices first. The rec
 **re-roots** the device list, as Keybase's paper keys do.
 
 - **What it holds:** your person key, and the owner keys of channels you own.
-- **Recovery key:** a **generated** 24-word phrase (256 bits), with the vault key derived by HKDF.
-  Never a password, which the relay could guess offline.
-- **Format:** `{version, at, nonce, ciphertext}`, signed by the person key and stored at
-  `/v1/account/vault`. Clients remember the highest version and refuse a lower one.
+- **Recovery key:** a **generated** 24-word BIP39 phrase (256 bits). HKDF over it derives two keys: an
+  Ed25519 recovery key, which signs re-roots and its own replacement, and an X25519 key that opens the
+  vault. Never a password, which the relay could guess offline.
+- **The recovery chain** holds the public halves, kept beside the device list rather than in it, so older
+  clients still read the list. The person key signs the first link. The recovery key replaces itself at
+  once; an approving device may propose a new one, which takes over only after 7 days. Your devices show
+  the proposal meanwhile, and the old words, or revoking the device that proposed it, cancel it.
+- **Format:** `{person, version, at, box}`. The box is sealed to the recovery X25519 key, with person,
+  version and time bound into the key derivation, and the vault is signed by the person key or any of
+  its current approving devices (decision A keeps the person key offline, so a device must be able to
+  add a new channel's owner key). Stored at `/v1/account/vault`. Clients remember the highest version
+  and refuse a lower one.
+- In the code (T693): `packages/core/src/recovery.ts`.
 - **Passkeys later:** per-passkey wrapping where native passkey PRF exists (macOS 15 and iOS 18 through
   AuthenticationServices; Android Credential Manager). Never in a page the relay serves, which would
   see the unlock key.
