@@ -18,6 +18,7 @@ export interface ChannelConfig extends ChannelAccess {
 interface SeatHold {
   key: string;
   at: number;
+  holder?: { pid: number; started: string };
 }
 
 export interface SeatRecord {

@@ -53,7 +53,7 @@ function heldOrDie(change: HoldChange, seat: LoopSeat): Effect.Effect<void, Erro
   }
 }
 
-const hold = (seat: LoopSeat) => Effect.suspend(() => heldOrDie(holdSeat(seat.alias, seat.me, seat.token), seat));
+const hold = (seat: LoopSeat) => Effect.suspend(() => heldOrDie(holdSeat(seat.alias, seat.me, seat.token, Date.now(), process.pid), seat));
 
 const hooksFirst = (recipe: Recipe) =>
   Effect.suspend(() => {

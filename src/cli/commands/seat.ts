@@ -1,10 +1,10 @@
 import * as Effect from "effect/Effect";
 import { Keystore } from "../../config.ts";
-import { bindHeldSeat, holdSeat, isSeatHarness, newSeatToken, releaseSeat, SEAT_TOKEN, type HeldSession, type HoldChange } from "../../hold.ts";
+import { bindHeldSeat, holdSeat, isSeatHarness, newSeatToken, releaseSeat, releaseStale, SEAT_TOKEN, type HeldSession, type HoldChange } from "../../hold.ts";
 import { args, opt } from "../args.ts";
 import { agentName, channelAlias, type Command, config, die, out, type Quit } from "../context.ts";
 
-const USAGE = `usage: kiwi seat hold | bind --harness HARNESS (--session ID [--pid PID] | --pid PID for kimi) | release (bind and release read ${SEAT_TOKEN})`;
+const USAGE = `usage: kiwi seat hold | bind --harness HARNESS (--session ID [--pid PID] | --pid PID for kimi) | release [--stale [--force]] (bind and release read ${SEAT_TOKEN}; release --stale needs none)`;
 
 export const seatNamed = Effect.gen(function* () {
   const alias = yield* channelAlias();
@@ -70,6 +70,24 @@ export const seatCommands: Record<string, Command> = {
           name,
           `${name} in ${alias} is bound to ${to.harness} ${to.harness === "kimi" ? `process ${to.pid}` : `session ${to.session}`}`,
         );
+      }
+      if (sub === "release" && opt.stale) {
+        const { alias, name } = yield* seatNamed;
+        const freed = releaseStale(alias, name, !!opt.force);
+        switch (freed.kind) {
+          case "changed":
+            return out(`${name} in ${alias} is released: its loop is gone`);
+          case "no-seat":
+            return yield* die(`${name} has no seat in ${alias} on this computer`);
+          case "not-held":
+            return yield* die(`${name} in ${alias} isn't held`);
+          case "alive":
+            return yield* die(`${name} in ${alias} is held by its loop, still running as pid ${freed.pid}: stop it with a plain kill ${freed.pid} (not -9), and it releases the seat itself`);
+          case "unknown":
+            return yield* die(
+              `${name} in ${alias} is held by a loop from an older Kiwi, which records no process. Check that no kiwi loop for ${name} runs on this computer, then run kiwi seat release --stale --force`,
+            );
+        }
       }
       if (sub === "release") {
         const token = yield* tokenOrUsage;

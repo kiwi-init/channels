@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, sy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig } from "../src/config.ts";
-import { pidAlive } from "../src/seats.ts";
+import { pidAlive } from "../src/pid.ts";
 import { tmuxPastesFlag } from "../src/loop/kimi.ts";
 import { daemonSock, stopDaemon } from "../src/daemon.ts";
 import { startRelay } from "../src/relay/bun.ts";

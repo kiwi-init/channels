@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Cursor, LocalFiles, loadConfig, updateConfig, type SeatRecord } from "../src/config.ts";
 import { pathOf } from "../src/daemon/wake.ts";
-import { bindHeldSeat, holdSeat, releaseSeat, SEAT_TOKEN, seatHolds } from "../src/hold.ts";
+import { bindHeldSeat, holdSeat, releaseSeat, releaseStale, SEAT_TOKEN, seatHeldAway, seatHolds } from "../src/hold.ts";
+import { processStart } from "../src/pid.ts";
 import { AgentSession } from "../src/agent.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 import { bindDirectory, seatsAt, seatsFor, seatsHeldAnywhere } from "../src/seats.ts";
@@ -157,4 +158,90 @@ test("a join that opened the seat before a hold binds nothing once the seat went
       .map((b) => b.session),
   ).toEqual(["new"]);
   expect(bindDirectory(dir, { alias: "ch", as: "joiner", harness: "codex", session: "later" }, () => false, seatHolds(loadConfig(), "ch", "joiner"))).toBe(true);
+});
+
+const killed = async (): Promise<number> => {
+  const child = Bun.spawn(["sleep", "30"]);
+  holdSeat("ch", "dev", "killed-loop", Date.now(), child.pid);
+  expect(all()[0]?.hold?.holder?.pid).toBe(child.pid);
+  expect(seatHeldAway(loadConfig(), "ch", "dev")).toBe(true);
+  child.kill(9);
+  await child.exited;
+  return child.pid;
+};
+
+const withHold = (hold: NonNullable<SeatRecord["hold"]>) => {
+  const seat = all()[0];
+  if (!seat) throw new Error("no seat");
+  updateConfig((c) => {
+    c.bindings = { [dir]: { ...seat, hold } };
+  });
+};
+
+test("a loop's hold records its process; once that process is killed, sessions may use the seat and a new loop takes it over (#1272)", async () => {
+  bindDirectory(dir, { alias: "ch", as: "dev", harness: "codex", session: "old" });
+  await killed();
+  expect(seatHeldAway(loadConfig(), "ch", "dev")).toBe(false);
+  const before = seatHolds(loadConfig(), "ch", "dev");
+  expect(holdSeat("ch", "dev", "new-loop", Date.now(), process.pid)).toEqual({ kind: "changed", seats: 1 });
+  expect(all()[0]?.hold?.holder?.pid).toBe(process.pid);
+  expect(seatHolds(loadConfig(), "ch", "dev")).toBe(before + 1);
+});
+
+test("a live holder keeps its seat: another loop is refused, and a stale release names its pid (#1272)", () => {
+  bindDirectory(dir, { alias: "ch", as: "dev", harness: "codex", session: "old" });
+  holdSeat("ch", "dev", "loop", Date.now(), process.pid);
+  expect(holdSeat("ch", "dev", "other", Date.now(), process.pid)).toEqual({ kind: "other-holder" });
+  expect(releaseStale("ch", "dev")).toEqual({ kind: "alive", pid: process.pid });
+  expect(releaseStale("ch", "dev", true)).toEqual({ kind: "alive", pid: process.pid });
+  expect(all()[0]?.hold).toBeDefined();
+});
+
+test("a pid that now belongs to another process isn't the loop: a new loop and a stale release both see the hold is gone (#1272)", () => {
+  bindDirectory(dir, { alias: "ch", as: "dev", harness: "codex", session: "old" });
+  withHold({ key: "an-old-loop", at: 1, holder: { pid: process.pid, started: "Mon Jan  1 00:00:00 2001" } });
+  expect(releaseStale("ch", "dev")).toEqual({ kind: "changed", seats: 1 });
+  withHold({ key: "an-old-loop", at: 1, holder: { pid: process.pid, started: "Mon Jan  1 00:00:00 2001" } });
+  expect(holdSeat("ch", "dev", "new-loop", Date.now(), process.pid)).toEqual({ kind: "changed", seats: 1 });
+});
+
+test("a stale release frees a killed loop's seat, and one held by an older Kiwi only with --force (#1272)", async () => {
+  bindDirectory(dir, { alias: "ch", as: "dev", harness: "codex", session: "old" });
+  await killed();
+  expect(releaseStale("ch", "dev")).toEqual({ kind: "changed", seats: 1 });
+  expect(all()[0]?.hold).toBeUndefined();
+  expect(releaseStale("ch", "dev")).toEqual({ kind: "not-held" });
+  withHold({ key: "from-an-older-kiwi", at: 1 });
+  expect(seatHeldAway(loadConfig(), "ch", "dev")).toBe(true);
+  expect(releaseStale("ch", "dev")).toEqual({ kind: "unknown" });
+  expect(releaseStale("ch", "dev", true)).toEqual({ kind: "changed", seats: 1 });
+  expect(all()[0]?.hold).toBeUndefined();
+  expect(releaseStale("ch", "nobody")).toEqual({ kind: "no-seat" });
+});
+
+test("a hold taken from a shell records no process, so it never lapses on its own (#1272)", () => {
+  bindDirectory(dir, { alias: "ch", as: "dev", harness: "codex", session: "old" });
+  holdSeat("ch", "dev", "by-hand");
+  expect(all()[0]?.hold?.holder).toBeUndefined();
+  expect(seatHeldAway(loadConfig(), "ch", "dev")).toBe(true);
+});
+
+test("a process's start is the same each time it's read, and unknown once the process is gone (#1272)", async () => {
+  const child = Bun.spawn(["sleep", "30"]);
+  try {
+    const started = processStart(child.pid);
+    expect(started).not.toBeNull();
+    expect(processStart(child.pid)).toBe(started);
+  } finally {
+    child.kill(9);
+    await child.exited;
+  }
+  expect(processStart(child.pid)).toBeNull();
+});
+
+test("a session that took a dead loop's seat keeps it when the loop's pid comes back as another process (#1272)", () => {
+  bindDirectory(dir, { alias: "ch", as: "dev", harness: "codex", session: "old" });
+  withHold({ key: "a-dead-loop", at: 1, holder: { pid: process.pid, started: "another start" } });
+  expect(seatHeldAway(loadConfig(), "ch", "dev")).toBe(false);
+  expect(seatsFor(dir, { who: { harness: "codex", session: "old" } }).map((b) => b.as)).toEqual(["dev"]);
 });

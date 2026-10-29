@@ -19,6 +19,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { kimiAncestor, kimiCodePid, mimoHere, piHere, zcodePid, type ProcessTree } from "./ancestry.ts";
 import { loadConfig, updateConfig, type Config, type SeatRecord } from "./config.ts";
 import { holdsSeat, seatHeldAway, seatHolds, seatRefusal } from "./hold.ts";
+import { pidAlive } from "./pid.ts";
 import { omit } from "@kiwi/core/omit.ts";
 import type { SeatPlace } from "./terminals/plugin.ts";
 import { locate } from "./terminals/registry.ts";
@@ -196,16 +197,6 @@ function store(cfg: Config, dir: string, seats: Binding[]): void {
   if (!seats.length) delete bindings[dir];
   else bindings[dir] = seats.length === 1 ? seats[0]! : seats;
   cfg.bindings = bindings;
-}
-
-export function pidAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err) {
-    // EPERM: it exists, it's just not ours to signal.
-    return (err as NodeJS.ErrnoException).code === "EPERM";
-  }
 }
 
 /** How long a seat with no process to check stays its session's after that session last used it. */
