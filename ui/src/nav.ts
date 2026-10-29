@@ -2,7 +2,7 @@ import { createContext, useContext } from "react"
 
 import type { Actions, App, Where } from "~/model"
 
-type Tab = "chat" | "tasks" | "needs"
+type Tab = "chat" | "tasks" | "agents" | "needs"
 
 export type Panel = { kind: "person"; name: string } | { kind: "task"; task: number } | { kind: "thread"; seq: number } | { kind: "channel" } | { kind: "invite" } | { kind: "add-agent" }
 

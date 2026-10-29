@@ -714,6 +714,18 @@
     scrollbar-width: none;
   }
 
+  .tabs {
+    gap: 2px;
+  }
+
+  .tabs button {
+    padding: 0 8px;
+  }
+
+  .tabs .is-agents {
+    display: none;
+  }
+
   .top-meta {
     display: none;
   }

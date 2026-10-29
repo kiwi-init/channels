@@ -21,6 +21,8 @@ import { isSideKey, setDrawer, toggleSide, useDrawer } from "~/shell/side"
 import { Sidebar } from "~/shell/sidebar"
 import { Waiting } from "~/start/waiting"
 import { Board, openTasks } from "~/tasks/board"
+import { Lanes } from "~/tasks/lanes"
+import { headerLine } from "~/now"
 import { between, nickname } from "~/names"
 
 export function ChannelScreen({ channel }: { channel: Channel }) {
@@ -61,6 +63,8 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
 
   const needs = openAsks(channel).length
   const tasks = openTasks(channel).length
+  const agents = channel.people.some((p) => p.kind === "agent" && !p.left)
+  const line = channel.loading ? [] : headerLine(channel, needs)
   const here =
     nav.where.kind === "room"
       ? `# ${channel.rooms.find((r) => r.id === (nav.where as { room: string }).room)?.name ?? "general"}`
@@ -106,6 +110,11 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           <button type="button" aria-pressed={nav.tab === "tasks"} onClick={() => go({ to: "tab", tab: "tasks" })}>
             Tasks <Count n={tasks} />
           </button>
+          {(agents || nav.tab === "agents") && (
+            <button type="button" className="is-agents" aria-pressed={nav.tab === "agents"} onClick={() => go({ to: "tab", tab: "agents" })}>
+              Agents
+            </button>
+          )}
           {(needs > 0 || nav.tab === "needs") && (
             <button type="button" className="is-needs" aria-pressed={nav.tab === "needs"} onClick={() => go({ to: "tab", tab: "needs" })}>
               Needs you <Count n={needs} loud />
@@ -113,6 +122,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           )}
         </nav>
         <div className="top-tools">
+          {line.length > 0 && !searching && <span className="top-meta num">{line.join(" · ")}</span>}
           {channel.hold && (
             <span className="top-hold" title={channel.hold.note}>
               paused
@@ -128,7 +138,15 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
       <Sidebar channel={channel} />
       <main className="main">
         <Boundary resetKey={nav.tab}>
-          {nav.tab === "tasks" ? <Board channel={channel} /> : nav.tab === "needs" ? <NeedsYou channel={channel} onJump={setJump} /> : <Conversation channel={channel} jump={jump} />}
+          {nav.tab === "tasks" ? (
+            <Board channel={channel} needs={needs} />
+          ) : nav.tab === "agents" ? (
+            <Lanes channel={channel} />
+          ) : nav.tab === "needs" ? (
+            <NeedsYou channel={channel} onJump={setJump} />
+          ) : (
+            <Conversation channel={channel} jump={jump} />
+          )}
         </Boundary>
       </main>
       {offline && (

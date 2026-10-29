@@ -8,6 +8,7 @@ import { ago } from "~/kit/time"
 import { memberOf, type Channel, type Task, type TaskStatus } from "~/model"
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
+import { NowCard } from "~/tasks/now"
 
 export const openTasks = (channel: Channel): Task[] => channel.tasks.filter((t) => t.status !== "done" && !t.archived)
 
@@ -23,7 +24,7 @@ const GROUPS: { status: TaskStatus; title: string }[] = [
 
 const DONE_SHOWN = 5
 
-export function Board({ channel }: { channel: Channel }) {
+export function Board({ channel, needs }: { channel: Channel; needs: number }) {
   const { nav } = useApp()
   const [allDone, setAllDone] = useState(false)
   const live = channel.tasks.filter((t) => !t.archived)
@@ -31,6 +32,7 @@ export function Board({ channel }: { channel: Channel }) {
   return (
     <div className="board">
       <div className="board-list">
+        {live.length > 0 && <NowCard channel={channel} needs={needs} />}
         <NewTask channel={channel} />
         {live.length === 0 && channel.loading ? (
           <Loading />
