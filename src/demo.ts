@@ -21,7 +21,7 @@ export interface DemoOptions {
   pace?: number;
   /** Keep the relay (and the dashboard, when there's one) up after the session. */
   stay?: boolean;
-  /** Where to serve the dashboard from, when it's built (web/dist in a checkout). */
+  /** Where to serve the dashboard from, when it's built (ui/dist in a checkout). */
   web?: string;
   print?: (line: string) => void;
   stop?: AbortSignal;

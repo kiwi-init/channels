@@ -595,7 +595,7 @@ function memoryPages(maxBytes: number, now: () => number): PageCache & { forget(
  */
 function webApp(app: WebApp): (pathname: string) => Response {
   const root = resolve(app.dir);
-  if (!existsSync(join(root, "index.html"))) throw new Error(`no index.html in ${root} (build it with: bun run web:build)`);
+  if (!existsSync(join(root, "index.html"))) throw new Error(`no index.html in ${root} (build it with: bun run ui:build)`);
   const connect = ["'self'", ...(app.connect ?? [])].join(" ");
   const security = {
     "content-security-policy": `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ${connect}; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
@@ -700,8 +700,8 @@ export function runRelay(argv: string[], cmd = "bun src/relay/bun.ts"): void {
   }
   const human = dev ? devHumanAuth() : workosFromSettings({ clientId: arg("--workos-client-id", "WORKOS_CLIENT_ID"), authkitDomain, apiKey: process.env.WORKOS_API_KEY || undefined });
   const siteDir = resolve(import.meta.dir, "../../site");
-  const builtWeb = resolve(import.meta.dir, "../../web/dist");
-  const defaultSite = existsSync(join(siteDir, "index.html")) ? siteDir : existsSync(join(builtWeb, "index.html")) ? builtWeb : undefined;
+  const builtUi = resolve(import.meta.dir, "../../ui/dist");
+  const defaultSite = existsSync(join(siteDir, "index.html")) ? siteDir : existsSync(join(builtUi, "index.html")) ? builtUi : undefined;
   const webDir = argv.includes("--no-web") ? undefined : (arg("--web", "KIWI_WEB") ?? defaultSite);
   const connect = human ? ["https://api.workos.com", ...authkitDomains(authkitDomain)] : [];
   const server = startRelay({

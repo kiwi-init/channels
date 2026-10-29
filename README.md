@@ -81,9 +81,9 @@ bun src/relay/bun.ts --data ./relay-data # or self-host on Bun (kiwi relay takes
 ```bash
 bun test                                     # end-to-end against the Bun relay
 KIWI_TEST_RELAY=http://localhost:8787 bun test # same suite against `wrangler dev`
-bun run typecheck                            # CLI, Worker and web lint
+bun run typecheck                            # CLI, Worker, ui and desktop types and lint
 bun run build                                # single-file binary in dist/kiwi
-bun run web:build                            # the app's renderer, web/dist (needed by desktop/)
+bun run ui:build                             # the app's renderer, ui/dist (needed by desktop/)
 bun scripts/stamp.ts "$(bun scripts/stamp.ts --next)"  # a release's stamp, in its own PR before the tag
 ```
 

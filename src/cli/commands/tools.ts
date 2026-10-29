@@ -21,7 +21,7 @@ export const toolCommands: Record<string, Command> = {
   demo: () =>
     Effect.gen(function* () {
       const { demo } = yield* Effect.promise(() => import("../../demo.ts"));
-      const built = joinPath(import.meta.dir, "../../../web/dist");
+      const built = joinPath(import.meta.dir, "../../../ui/dist");
       yield* demo({ stay: !!opt.stay, ...(existsSync(joinPath(built, "index.html")) ? { web: built } : {}), ...(opt.n ? { pace: Number(opt.n) } : {}) });
     }),
 

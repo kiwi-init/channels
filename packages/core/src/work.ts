@@ -11,7 +11,7 @@ import type { OldTaskState, TaskState } from "./protocol.ts";
 import { currentState, holdsWork, isPerson, issueOf, prKey, taskId, type ChannelState, type GithubPr, type Task } from "./state.ts";
 import { checksOf, prLinks, taskOfBranch, type PrChecks } from "./prs.ts";
 
-export { FAILED, prLinks, taskOfBranch, taskPr, type PrChecks } from "./prs.ts";
+export { prLinks, taskOfBranch, taskPr } from "./prs.ts";
 
 /** Quiet this long, with nothing in progress, and an agent reads as idle. */
 const IDLE_AFTER_MS = 15 * 60_000;
@@ -179,7 +179,7 @@ export function needsPerson(state: ChannelState): Need[] {
 // ---------- a task's feed ----------
 
 /** What a feed row's mark shows: a task state, or what kind of change it was. */
-export type EventMark = TaskState | "add" | "assign" | "note" | "other";
+type EventMark = TaskState | "add" | "assign" | "note" | "other";
 
 /** One item of an activity feed: an event as a single row, or a thread as one card. */
 export type FeedItem =
