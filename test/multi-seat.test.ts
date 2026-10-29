@@ -317,6 +317,31 @@ describe("one Claude Code session that holds two seats", () => {
   });
 });
 
+describe("a seat whose own `kiwi listen` takes its messages", () => {
+  test("listen --now, finding nothing unread, says that listener runs and already took them (#1170)", async () => {
+    const { ownerB, h } = await twoSeats();
+    const tail = spawn(h, ["-c", "beta", "--as", "reviewer", "listen"], S);
+    let printed = "";
+    void (async () => {
+      for await (const chunk of tail.stdout) printed += new TextDecoder().decode(chunk);
+    })();
+    try {
+      await until(async () => (await slots(h)).includes("listen:reviewer"), "the listener's slot");
+      await ok(ownerB, ["send", "--to", "reviewer", "taken by the listener"], PERSON);
+      await until(() => printed.includes("taken by the listener"), "the listener printing the message");
+      const now = await run(h, ["-c", "beta", "--as", "reviewer", "listen", "--now"], S);
+      expect(now.code).toBe(0);
+      expect(now.out).toBe("");
+      expect(now.err).toContain("nothing unread: a `kiwi listen` for reviewer is running");
+      expect(now.err).toContain("marks each message read as it prints it");
+      expect(now.err).toMatch(/`[^`]* -c beta --as reviewer log -n 10` shows them/);
+    } finally {
+      tail.kill();
+      await tail.exited;
+    }
+  });
+});
+
 describe("one Claude Code session that joined its second seat from another folder", () => {
   test("its hooks, run from the folder the session started in, serve both seats", async () => {
     const ownerA = scratch("own-a");

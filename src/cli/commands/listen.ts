@@ -1,13 +1,25 @@
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
-import { describeEvent, parseDuration } from "@kiwi/core/format.ts";
+import { ago, describeEvent, parseDuration } from "@kiwi/core/format.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import type { ChannelState } from "@kiwi/core/state.ts";
 import { mcFor } from "../../hooks.ts";
 import { detectCard } from "../../card.ts";
+import { daemonListeners } from "../../daemon.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, noteRead, out, session } from "../context.ts";
 import { delivery, render } from "../input.ts";
+
+const nothingUnread = (alias: string, me: string) =>
+  Effect.gen(function* () {
+    const log = `\`${mcFor(alias, me)} log -n 10\``;
+    const running = (yield* Effect.promise(() => daemonListeners().catch(() => []))).filter((l) => l.kind === "listen" && l.channel === alias && l.agent === me);
+    const first = running.reduce<number | null>((at, l) => (at === null || l.at < at ? l.at : at), null);
+    if (first === null) return `nothing unread; ${log} shows what was already delivered`;
+    const which = running.length === 1 ? `a \`kiwi listen\` for ${me} is running` : `${running.length} \`kiwi listen\`s for ${me} are running`;
+    const where = [...new Set(running.flatMap((l) => (l.cwd ? [l.cwd] : [])))];
+    return `nothing unread: ${which} (since ${ago(first)}${where.length ? `, in ${where.join(", ")}` : ""}) and marks each message read as it prints it, so whatever it took is only in its output; ${log} shows them`;
+  });
 
 export const listenCommands: Record<string, Command> = {
   listen: () => {
@@ -20,7 +32,7 @@ export const listenCommands: Record<string, Command> = {
       const s = yield* session();
       const { messages, state } = yield* s.read(yield* delivery(s));
       for (const m of messages) out(render(m, state));
-      if (!messages.length) process.stderr.write(`nothing unread; \`${mcFor(s.alias, s.me)} log -n 10\` shows what was already delivered\n`);
+      if (!messages.length) process.stderr.write(`${yield* nothingUnread(s.alias, s.me)}\n`);
       yield* noteRead(s);
     }),
 
