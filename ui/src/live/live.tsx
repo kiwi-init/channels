@@ -22,7 +22,7 @@ import { OpenPending, pendingTitle } from "~/live/pending"
 import { ownPrefs, usePrefs } from "~/live/prefs"
 import { useComputer } from "~/live/computer"
 import { useStarts } from "~/live/starts"
-import { useOpened } from "~/live/store"
+import { useGone, useOpened } from "~/live/store"
 import type { App, ChannelTile } from "~/model"
 import type { Go } from "~/nav"
 
@@ -104,9 +104,11 @@ export function useLive(open: string | null): App {
   const computer = useComputer()
   const actions = useMemo(() => makeActions(), [])
   const channel = opened && opened.code === open ? opened.channel : null
+  const lost = useGone()
+  const gone = !channel && lost && lost.code === open ? lost : null
   return useMemo(
-    () => ({ account, channels, channel, prefs, harnesses, personas, starts, ownPersonalities, computer, actions }),
-    [account, channels, channel, prefs, harnesses, personas, starts, ownPersonalities, computer, actions]
+    () => ({ account, channels, channel, ...(gone ? { gone } : {}), prefs, harnesses, personas, starts, ownPersonalities, computer, actions }),
+    [account, channels, channel, gone, prefs, harnesses, personas, starts, ownPersonalities, computer, actions]
   )
 }
 

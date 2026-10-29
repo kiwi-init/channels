@@ -152,8 +152,13 @@ export interface PermissionAsk {
   canDeny: boolean
   allower?: string
   tool: string
-  summary: string
+  title: string
+  summary?: string
   code: string
+  cwd?: string
+  notes: string[]
+  replaced?: string
+  content?: string
   task?: number
   answer?: { allow: boolean; by: string; at: number }
 }
@@ -164,6 +169,8 @@ export interface QuestionAsk {
   from: string
   at: number
   text: string
+  label: string
+  irreversible?: true
   options: string[]
   holds: number[]
   task?: number
@@ -436,10 +443,17 @@ export interface AgentStarts {
   terminals: TerminalRow[]
 }
 
+export interface GoneChannel {
+  code: string
+  title: string
+  why: "closed" | "removed"
+}
+
 export interface App {
   account: Account | null
   channels: ChannelTile[]
   channel: Channel | null
+  gone?: GoneChannel
   prefs: Prefs
   harnesses: { id: Harness; label: string; installed: boolean; version?: string; path?: string; why?: string }[]
   personas: { id: string; label: string; about: string }[]
