@@ -2,7 +2,7 @@
 // the person's identity across channels, the way a channel member key is their identity in one.
 // It signs two things:
 //
-//   MachineCert   "this computer is mine": issued when a computer pairs with the app (kiwi pair).
+//   MachineCert   "this computer is mine": issued when the app approves a computer (kiwi login).
 //                 The computer shows it in its agents' join requests (a ComputerClaim), so an owner
 //                 knows whose agent is asking without any account at the relay.
 //   PersonClaim   "this member key is mine": sent when the person asks to join a channel themselves,

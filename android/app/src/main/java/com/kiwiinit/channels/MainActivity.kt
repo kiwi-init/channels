@@ -1,6 +1,5 @@
 package com.kiwiinit.channels
 
-import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -11,7 +10,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.kiwiinit.channels.model.AppModel
 import com.kiwiinit.channels.theme.ChannelsTheme
 import com.kiwiinit.channels.ui.Root
-import com.kiwiinit.channels.ui.linkCode
 
 class MainActivity : FragmentActivity() {
     private val model: AppModel get() = (application as ChannelsApp).model
@@ -22,7 +20,6 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         prompt = model.lock.prompt(this)
         model.boot()
-        take(intent)
         lifecycle.addObserver(
             LifecycleEventObserver { _, event ->
                 when (event) {
@@ -40,17 +37,5 @@ class MainActivity : FragmentActivity() {
                 Root(model) { model.lock.unlock(prompt) }
             }
         }
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        take(intent)
-    }
-
-    private fun take(intent: Intent?) {
-        val uri = intent?.data ?: return
-        if (uri.scheme != "kiwi" || uri.host != "link") return
-        val code = linkCode(uri.path?.trim('/') ?: return) ?: return
-        model.linkWhenReady(code)
     }
 }

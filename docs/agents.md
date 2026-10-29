@@ -27,13 +27,13 @@ kiwi task add "freeze protocol v1" && kiwi task start T3   # takes it if nobody 
 kiwi task assign T3 win "edge detection works; multi-monitor next"   # hand it over with where it stands
 kiwi task show T3 --json            # the task in full
 kiwi note branch grok/docs --ttl 7d          # a shared note that expires on its own
-kiwi pair kp1-…                     # pair this computer with your app (approve it there; the cert stays here)
-kiwi unpair                         # stop being paired: the relay forgets this computer, and it takes no more asks
+kiwi login                          # add this computer to your devices: sign in, type its 6 digits in your app
+kiwi unpair                         # stop taking asks from your app: the relay forgets this computer
 kiwi harnesses                      # the harnesses here (from your login shell's PATH), their versions, which kiwi launch starts
 kiwi launch claude --code mc2-… --folder ~/src/app --nick Ada   # start an agent in a terminal you can open; it joins by itself
 kiwi loop --harness codex           # in a tmux window in the seat's folder: a fresh session per task (see below)
 kiwi daemon                         # one long-running process per computer, for every local agent
-kiwi setup                          # this computer once: hooks, PATH, and how to pair it
+kiwi setup                          # this computer once: hooks, PATH, and how to add it to your devices
 kiwi card --model …                 # add to the card (does not change the owner-signed seat)
 ```
 
@@ -57,7 +57,7 @@ Each agent carries a **card**, what it runs on and has: OS and CPU, the harness 
 
 **New agent**, next to Agents in a channel's sidebar of the desktop app, starts an agent on one of your computers. It joins by itself. The modal offers:
 
-- the computer: this one, unless Settings → New agents → **Allow creating new agents** is off here, or a paired one that's online;
+- the computer: this one, unless Settings → New agents → **Allow creating new agents** is off here, or another of your computers that's online;
 - a harness that computer has. `kiwi harnesses` lists the same ones: what's on your login shell's PATH (`$SHELL -ilc`, so `.zshrc` counts), each one's version, and whether Kiwi can start and wake it;
 - a folder that computer's agents already work in;
 - a nickname and a personality.
@@ -90,16 +90,16 @@ Default permissions send no flag, so the harness's own settings apply. Bypass as
 
 OpenCode's full interface takes only `--prompt` and `--auto`; its model and agent flags are on `opencode mini`. So a launch that picks a model or Plan opens OpenCode's mini interface, one with neither opens the full one, and a model with Bypass is refused with that reason. Checked against OpenCode 2.1.2.
 
-**On a paired computer**, the app reaches that computer's daemon through the relay, and the relay can't read, forge or replay what it carries:
+**On one of your computers**, the app reaches that computer's daemon through the relay, and the relay can't read, forge or replay what it carries:
 
-- **Registration:** while it's paired, the daemon registers with its cert and holds an inbox socket at the relay. A computer counts as online while that socket is open.
+- **Registration:** while it holds its cert (from `kiwi login`), the daemon registers with it and holds an inbox socket at the relay. A computer counts as online while that socket is open.
 - **Each ask:**
   - The app signs it with your person key and seals it to that computer's key. It's one of `harnesses`, `folders`, `launch` or `unpair`.
-  - The daemon runs it only if all of these hold: it's from the person the computer is paired with, aimed at this computer, less than two minutes old, and never seen before. Its arguments must also check out.
+  - The daemon runs it only if all of these hold: it's from the person who certified the computer, aimed at this computer, less than two minutes old, and never seen before. Its arguments must also check out.
   - A launch must be in a folder this computer's agents already work in, and at most three are started this way every ten minutes.
   - The answer goes back signed by the computer, in a one-time mailbox only the app can read.
   - Every ask is logged in `~/.kiwi/remote.log`, and one that's refused gets no answer.
-- **Unpairing:** unpairing the computer in the app, or running `kiwi unpair` on it, makes the relay forget it and closes its inbox. After that it takes no more asks.
+- **Unpairing:** removing the computer in the app, or running `kiwi unpair` on it, makes the relay forget it and closes its inbox. After that it takes no more asks.
 
 **Terminals.** Terminal, Rex and tmux are terminal plugins (`src/terminals/`, [plans/terminal-plugins.md](plans/terminal-plugins.md)). Settings → New agents downloads or removes a terminal's helpers on this computer (`kiwi terminal download|remove rex|tmux`): they mark a seat that needs you in that terminal (in tmux, its window in the window list, and `prefix K` jumps to it), let Needs you open it (Show in Rex or Show in tmux), and let new agents open there. `kiwi terminal status` says what's found, what's on and what's preferred; `kiwi rex on|off|status` still works this release.
 

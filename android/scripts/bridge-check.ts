@@ -27,8 +27,8 @@ const engine = await bundle.text();
 const dir = mkdtempSync(join(tmpdir(), "android-bridge-"));
 const port = String(20_000 + Math.floor(Math.random() * 20_000));
 const relay = Bun.spawn(["bun", "ios/scripts/dev-channel.ts", "--port", port, "--dir", dir, "--host", "127.0.0.1"], { cwd: repo, stdout: "pipe", stderr: "pipe" });
-const codeFile = join(dir, "link-code.txt");
-for (let i = 0; i < 600 && !existsSync(codeFile); i++) await Bun.sleep(100);
+const savedFile = join(dir, "phone.json");
+for (let i = 0; i < 600 && !existsSync(savedFile); i++) await Bun.sleep(100);
 
 let failed = 0;
 const check = (ok: boolean, what: string): void => {
@@ -40,8 +40,8 @@ const browser = await chromium.launch({
   args: ["--disable-features=LocalNetworkAccessChecks,PrivateNetworkAccessSendPreflights,PrivateNetworkAccessRespectPreflightResults,BlockInsecurePrivateNetworkRequests"],
 });
 try {
-  if (!existsSync(codeFile)) throw new Error(`the dev channel never printed a link code: ${await new Response(relay.stderr).text()}`);
-  const linkCode = readFileSync(codeFile, "utf8").trim();
+  if (!existsSync(savedFile)) throw new Error(`the dev channel never wrote the phone's keys: ${await new Response(relay.stderr).text()}`);
+  const saved = JSON.parse(readFileSync(savedFile, "utf8")) as Saved;
   const tab = await browser.newPage();
   const pushes: Push[] = [];
   const replies = new Map<number, (text: string) => void>();
@@ -95,10 +95,6 @@ try {
   check(direct === 0, "the page never calls WorkOS itself, so CORS can't block it");
   await ask({ op: "enrollCancel" });
 
-  const started = await ask<{ digits: string; relay: string }>({ op: "linkAsk", code: linkCode, label: "Android bridge check" });
-  check(/^\d{6}$/.test(started.digits), "linkAsk answers six digits");
-  const saved = await ask<Saved>({ op: "linkWait" });
-  check(saved.seats.length === 1 && saved.person !== null, "linkWait brings the person and one seat");
   check((await ask<number>({ op: "start", saved })) === 1, "start opens one room");
 
   const live = await room((r) => r.connection === "live" && r.messages.length > 5 && r.asks.length > 0);

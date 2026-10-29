@@ -1,27 +1,18 @@
-import type { LinkAskView, PhoneView } from "../bridge.ts";
 import type { Serves } from "../calls.ts";
-import { createLinkHost } from "../link-host.ts";
-import { mutate, store } from "../store.ts";
+import { mutate } from "../store.ts";
 
-export function linkingCalls(): Serves<"linkBegin" | "linkPoll" | "linkAnswer" | "linkCancel" | "forgetPhone"> {
-  const host = createLinkHost({
-    relayUrl: () => store.relayUrl,
-    person: () => {
-      const p = store.person;
-      if (!p?.xsk) throw new Error("make your person key first");
-      return p;
-    },
-    channels: () => store.channels,
-    linked: (phone) =>
-      mutate((s) => {
-        s.phones = [...(s.phones ?? []), phone];
-      }),
-  });
+const retired = (): Promise<never> => Promise.reject(new Error("Codes are gone: sign in on the other device (kiwi login on a computer), then type the 6 digits it shows here."));
+
+export function linkingCalls(): Serves<"pairBegin" | "pairPoll" | "pairAnswer" | "pairCancel" | "linkBegin" | "linkPoll" | "linkAnswer" | "linkCancel" | "forgetPhone"> {
   return {
-    linkBegin: () => host.begin(),
-    linkPoll: (): Promise<LinkAskView | null> => host.poll(),
-    linkAnswer: (accept: boolean): Promise<PhoneView | null> => host.answer(accept === true),
-    linkCancel: () => host.cancel(),
+    pairBegin: retired,
+    pairPoll: retired,
+    pairAnswer: retired,
+    pairCancel: retired,
+    linkBegin: retired,
+    linkPoll: retired,
+    linkAnswer: retired,
+    linkCancel: retired,
     forgetPhone: (at: number) =>
       mutate((s) => {
         s.phones = (s.phones ?? []).filter((p) => p.at !== at);

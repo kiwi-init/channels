@@ -67,7 +67,7 @@
     // exactly like a close. Launch: 90.
     "KIWI_EXPIRE_AFTER_DAYS": ""
   },
-  // 20 mailbox writes per minute per client address (pairing codes are pasted by hand).
+  // 20 mailbox writes per minute per client address (launch asks and enrolments).
   // namespace_id must be unique in the Cloudflare account.
   "ratelimits": [
     { "name": "MAILBOX_WRITES", "namespace_id": "870202", "simple": { "limit": 20, "period": 60 } },

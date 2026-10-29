@@ -67,23 +67,23 @@ describe("the installer", () => {
     }
   });
 
-  test("with `pair CODE`, installs and then runs exactly that pair", () => {
+  test("with `login`, installs and then runs kiwi login", () => {
     const dir = sandbox();
     try {
-      const r = install(dir, ["pair", "kp1-abc"]);
+      const r = install(dir, ["login"]);
       expect(r.exitCode).toBe(0);
-      expect(readFileSync(join(dir, "ran"), "utf8").trim()).toBe("ran: cleanup --quiet\nran: pair kp1-abc");
+      expect(readFileSync(join(dir, "ran"), "utf8").trim()).toBe("ran: cleanup --quiet\nran: login");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  test("anything but join or pair is refused before downloading", () => {
+  test("anything but join or login is refused before downloading", () => {
     const dir = sandbox();
     try {
       const r = install(dir, ["close", "--yes"]);
       expect(r.exitCode).toBe(1);
-      expect(r.stderr.toString()).toContain("only runs `kiwi join` or `kiwi pair`");
+      expect(r.stderr.toString()).toContain("only runs `kiwi join` or `kiwi login`");
       expect(() => readFileSync(join(dir, "bin", "kiwi"))).toThrow();
     } finally {
       rmSync(dir, { recursive: true, force: true });

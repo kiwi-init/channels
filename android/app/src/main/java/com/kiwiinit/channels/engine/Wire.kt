@@ -208,9 +208,6 @@ data class HarnessesOn(val harnesses: List<HarnessChoice>, val bypass: Boolean =
 data class Launched(val ok: Boolean, val launch: String? = null, val detail: String? = null)
 
 @Serializable
-data class LinkStart(val digits: String, val relay: String)
-
-@Serializable
 data class EnrollStart(val url: String? = null, val code: String = "")
 
 @Serializable

@@ -1,10 +1,18 @@
 import { describe, expect, test } from "bun:test"
 
-import type { FoldBase } from "@kiwi/core/state.ts"
+import { fold, type FoldBase } from "@kiwi/core/state.ts"
 
-import { baseFrom, startsWhole, usableBase } from "./base-plan"
+import { FOLD_RULES } from "@kiwi/core/protocol.ts"
 
-const at = (n: number) => ({ n }) as FoldBase
+import { baseFrom, newestRules, startsWhole, usableBase } from "./base-plan"
+
+const empty = (): FoldBase => {
+  const kept: { base?: FoldBase } = {}
+  fold([], [], 0, null, null, null, (b) => void (kept.base = b))
+  if (!kept.base) throw new Error("the fold kept no base")
+  return kept.base
+}
+const at = (n: number): FoldBase => ({ ...empty(), n })
 
 describe("folding the app's window on top of the channel's snapshot", () => {
   test("the window must follow straight on from the snapshot", () => {
@@ -36,5 +44,17 @@ describe("folding the app's window on top of the channel's snapshot", () => {
     expect(startsWhole(1500, 2000, 0, undefined, null)).toBe(true)
     expect(startsWhole(1500, 2000, 1500, 5, null)).toBe(false)
     expect(startsWhole(1500, 2000, 1500, 5, at(4))).toBe(true)
+  })
+
+  test("a current-rules base wins over an older-rules one when it reaches at least as far; otherwise the furthest older one is kept (#1116)", () => {
+    const current: FoldBase = { ...at(30), rules: FOLD_RULES }
+    const older: FoldBase = { ...at(20), rules: 0 }
+    expect(newestRules([older, current])).toBe(current)
+    expect(newestRules([current, older])).toBe(current)
+    expect(newestRules([null, older])).toBe(older)
+    expect(newestRules([null, null])).toBeNull()
+    const further: FoldBase = { ...at(25), rules: FOLD_RULES }
+    expect(newestRules([further, older])).toBe(further)
+    expect(newestRules([{ ...at(10), rules: FOLD_RULES }, older])).toBe(older)
   })
 })

@@ -9,8 +9,8 @@ import { VERSION } from "../../version.ts";
 import { hooksInstalled, installHooks } from "../../hooks.ts";
 import { binDir, ensureOnPath, profileFor } from "@kiwi/core/node/shell-path.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
-import { args, opt } from "../args.ts";
-import { type Command, die, out, Quit, relayUrl } from "../context.ts";
+import { opt } from "../args.ts";
+import { type Command, out, Quit, relayUrl } from "../context.ts";
 import { confirm } from "../input.ts";
 
 export const setupCommands: Record<string, Command> = {
@@ -41,19 +41,19 @@ export const setupCommands: Record<string, Command> = {
         else if (process.platform === "win32") out(`PATH: to type plain kiwi, add ${binDir()} to your user Path.\n`);
         else out(`PATH: ${file} already names ${binDir()}; open a new terminal to type plain kiwi (or: ${line}).\n`);
       }
-      out("To let this computer's agents in on their own, pair it with your Channels app: Your computers → Add a computer,");
-      out("then run the kiwi pair kp1-… command it shows, here.");
-      out("Or run kiwi login here and type the digits it shows in your app: this computer becomes one of your devices.");
+      out("To let this computer's agents in on their own, run kiwi login here and type the digits it shows in your");
+      out("Channels app: this computer becomes one of your devices, and your app can start agents on it.");
     }),
 
-  pair: () =>
+  login: () =>
     Effect.gen(function* () {
-      const code = (args[1] ?? (yield* die("usage: kiwi pair kp1-… (the code your app shows)"))).trim();
-      const { ensureDaemon, pairComputer, PairError } = yield* Effect.promise(() => import("../../daemon.ts"));
+      const { loginComputer } = yield* Effect.promise(() => import("../../login.ts"));
+      const { ensureDaemon, loadPairedMachine, PairError } = yield* Effect.promise(() => import("../../daemon.ts"));
       yield* Effect.tryPromise({
-        try: () => pairComputer(code, { relay: relayUrl() }),
+        try: () => loginComputer({ relay: relayUrl(), ...(typeof opt.user === "string" ? { user: opt.user } : {}) }),
         catch: (err) => (err instanceof PairError ? new Quit({ message: err.message, code: err.code }) : err),
       });
+      if (!loadPairedMachine()?.cert) return;
       const running = yield* Effect.promise(() =>
         ensureDaemon().then(
           () => true,
@@ -63,22 +63,12 @@ export const setupCommands: Record<string, Command> = {
       out(running ? "its kiwi daemon is running, so your app can start agents here now." : "its kiwi daemon didn't start: run kiwi daemon here, or your app can't reach this computer.");
     }),
 
-  login: () =>
-    Effect.gen(function* () {
-      const { loginComputer } = yield* Effect.promise(() => import("../../login.ts"));
-      const { PairError } = yield* Effect.promise(() => import("../../daemon.ts"));
-      yield* Effect.tryPromise({
-        try: () => loginComputer({ relay: relayUrl(), ...(typeof opt.user === "string" ? { user: opt.user } : {}) }),
-        catch: (err) => (err instanceof PairError ? new Quit({ message: err.message, code: err.code }) : err),
-      });
-    }),
-
   unpair: () =>
     Effect.gen(function* () {
       const { daemonUnpair, ensureDaemon } = yield* Effect.promise(() => import("../../daemon.ts"));
       yield* Effect.promise(() => ensureDaemon());
       yield* Effect.promise(() => daemonUnpair());
-      out("this computer is no longer paired: it takes no more asks from your app (pair it again with kiwi pair)");
+      out("your app can't start agents here any more: it takes no more asks from your app (kiwi login lets it again)");
     }),
 
   cleanup: () =>

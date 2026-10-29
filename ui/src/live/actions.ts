@@ -25,21 +25,7 @@ import { createPerson, bridge, secrets, type TermEvent, type TermOpenView } from
 import { isSignInGone } from "@/lib/session"
 import { ANYONE, approveTask, assignTask, cancelTask, changeReviewer, closedDigest, sendBackTask, type TaskSend } from "@/lib/task-actions"
 import { announce } from "~/kit/toasts"
-import {
-  answerPair,
-  cancelPair,
-  enrollAnswer,
-  enrollBegin,
-  enrollCancel,
-  enrollConfirm,
-  enrollDeny,
-  forgetDevice,
-  linkGithub,
-  pairBegin,
-  renewDevice,
-  unlinkGithub,
-  type EnrollDone,
-} from "~/live/account"
+import { enrollAnswer, enrollBegin, enrollCancel, enrollConfirm, enrollDeny, forgetDevice, linkGithub, renewDevice, unlinkGithub, type EnrollDone } from "~/live/account"
 import { loadPicture } from "~/live/pictures"
 import { newMemberPowers, newMemberScopes, setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
@@ -400,12 +386,6 @@ export function makeActions(): Actions {
         await run.ch.updateNickname(memberOf(run, name), nickname?.trim() || null)
         await run.refreshRoster()
       }),
-    setColor: (code, name, color) =>
-      attempt("Colour not changed", async () => {
-        const run = need(code)
-        if (name !== run.me && !run.isOwner) throw new Error("only that person or the owner sets a colour")
-        await event(run, color ? `${name}'s colour is ${color}` : `cleared ${name}'s colour`, { op: "color.set", member: name, color })
-      }),
     setPowers: (code, name, powers) =>
       attempt("Not changed", async () => {
         const run = owner(code)
@@ -641,7 +621,6 @@ export function makeActions(): Actions {
         await createPerson(name.trim())
       }),
     setPrefs,
-    pairBegin,
     forgetComputer: (id) =>
       attempt("Couldn't forget it", async () => {
         if (id.startsWith("phone:")) {
@@ -712,8 +691,6 @@ export function makeActions(): Actions {
         if (!m) throw new Error("you're not in that channel")
         setNewMemberPowers(m.access.roomId, powers)
       }),
-    answerPair: (accept) => attempt("Pairing failed", () => answerPair(accept)),
-    cancelPair: () => attempt("Couldn't cancel", cancelPair),
     enrollAnswer: (id) => attempt("Couldn't answer the device", () => enrollAnswer(id)),
     enrollConfirm,
     enrollDeny: (id) => attempt("Couldn't turn the device away", () => enrollDeny(id)),

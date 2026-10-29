@@ -1,9 +1,9 @@
-// A person's key and what it signs (src/person.ts), and pairing through a mailbox (src/mailbox.ts),
+// A person's key and what it signs (src/person.ts), and the one-time mailbox (src/mailbox.ts),
 // against an in-memory mailbox that behaves like the relay's: write-once slots, 404 when empty.
 
 import { describe, expect, test } from "bun:test";
 import { generateIdentity } from "@kiwi/core/identity.ts";
-import { answerPair, askToPair, mailboxId, newSecret, openMailbox, pairCode, readPairAnswer, readPairAsk, readPairCode, type PairAsk } from "@kiwi/core/mailbox.ts";
+import { mailboxId, newSecret, openMailbox } from "@kiwi/core/mailbox.ts";
 import { certifyMachine, checkComputer, checkPerson, claimComputer, provePerson, readMachineCert } from "@kiwi/core/person.ts";
 
 const ROOM = "0123456789abcdef0123456789abcdef";
@@ -77,58 +77,34 @@ describe("machine certs and claims", () => {
   });
 });
 
-describe("pairing through a mailbox", () => {
-  test("the app's code pairs the computer, and each side checks the other", async () => {
+describe("a one-time mailbox", () => {
+  test("what one side writes, the other side reads with the same secret", async () => {
     const { fetchImpl, relay } = fakeRelay();
-    const person = await generateIdentity("Ada Lovelace");
-    const machine = await generateIdentity("vps-1");
     const secret = newSecret();
-    const code = pairCode(secret);
-    expect(readPairCode(code)).toBe(secret);
-    expect(readPairCode("kp1-short")).toBeNull();
-
-    // The computer, from `kiwi pair <code>`.
-    const there = await openMailbox(relay, readPairCode(code)!, fetchImpl);
-    await askToPair(machine, there, "vps-1", "linux");
-    // The app.
+    const there = await openMailbox(relay, secret, fetchImpl);
+    await there.put("a", { label: "vps-1" });
     const here = await openMailbox(relay, secret, fetchImpl);
     expect(here.id).toBe(await mailboxId(secret));
-    const ask = await readPairAsk(await here.get("a"), here);
-    expect(ask?.pk).toBe(machine.pk);
-    expect(ask?.label).toBe("vps-1");
-    const cert = await answerPair(person, here, ask!);
-    // Back on the computer.
-    const answer = await readPairAnswer(await there.wait("b", { timeoutMs: 1_000 }), machine.pk);
-    expect(answer?.cert).toEqual(cert);
-    expect(answer?.person).toEqual({ pk: person.pk, xpk: person.xpk!, name: "Ada Lovelace" });
+    expect(await here.get<{ label: string }>("a")).toEqual({ label: "vps-1" });
+    await here.put("b", { ok: true });
+    expect(await there.wait<{ ok: boolean }>("b", { timeoutMs: 1_000 })).toEqual({ ok: true });
     await there.drop();
     expect(await here.get("a")).toBeNull();
   });
 
-  test("a relay can't read, swap or replay what's in a mailbox", async () => {
+  test("a relay can't read or swap what's in a mailbox", async () => {
     const { boxes, fetchImpl, relay } = fakeRelay();
     const machine = await generateIdentity("vps-1");
-    const secret = newSecret();
-    const mb = await openMailbox(relay, secret, fetchImpl);
-    await askToPair(machine, mb, "vps-1", "linux");
+    const mb = await openMailbox(relay, newSecret(), fetchImpl);
+    await mb.put("a", { pk: machine.pk });
     const sealed = boxes.get(`${mb.id}/a`)!;
     expect(sealed).not.toContain(machine.pk);
-    // Slot a's box moved into slot b doesn't open there.
     boxes.set(`${mb.id}/b`, sealed);
     await expect(mb.get("b")).rejects.toThrow(/didn't seal/);
-    // Another mailbox's box doesn't open here either, and an ask signed for another mailbox is refused.
     const other = await openMailbox(relay, newSecret(), fetchImpl);
-    await askToPair(machine, other, "vps-1", "linux");
+    await other.put("a", { pk: machine.pk });
     boxes.set(`${mb.id}/a`, boxes.get(`${other.id}/a`)!);
     await expect(mb.get("a")).rejects.toThrow(/didn't seal/);
-    const ask = (await other.get<PairAsk>("a"))!;
-    expect(await readPairAsk(ask, mb)).toBeNull();
-    // An answer whose cert is for another computer is refused by the computer.
-    const person = await generateIdentity("Ada");
-    const fresh = await openMailbox(relay, newSecret(), fetchImpl);
-    await askToPair(machine, fresh, "vps-1", "linux");
-    await answerPair(person, fresh, (await readPairAsk(await fresh.get("a"), fresh))!);
-    expect(await readPairAnswer(await fresh.get("b"), (await generateIdentity("y")).pk)).toBeNull();
   });
 
   test("a slot is written once", async () => {

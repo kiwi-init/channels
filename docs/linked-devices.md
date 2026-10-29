@@ -12,13 +12,14 @@ decisions at the end (#602, #615). Reviewed by sunny-tortoise (#559, #570).
 - Your person key (Ed25519 + X25519, `packages/core/src/identity.ts`) is made by the first desktop
   app. A second desktop can't receive it: its first run makes a new person (`createPerson`,
   `desktop/src/ipc/store.ts`).
-- Phones link by `kl1` and get **copies** of the person key and every channel's member key, owner keys
-  included (`LinkPerson`, `LinkChannel`, `packages/core/src/link.ts:26-48`).
-  - A phone is you: it can only be unlinked from itself, and no list can cut a stolen one off.
+- Phones linked by `kl1` before T112 hold **copies** of the person key and every channel's member key,
+  owner keys included. The `kl1` link itself is gone (T112).
+  - Such a phone is you: it can only be unlinked from itself, and no list can cut a stolen one off.
   - On iOS those keys are `WhenUnlockedThisDeviceOnly` (`ios/Channels/Model/Vault.swift:29`), so they
     aren't in iCloud backups.
-- Computers pair by `kp1` and get a `MachineCert` (`packages/core/src/person.ts:22`): a person
-  signature over the computer's key, with no expiry.
+- Computers enroll with `kiwi login`. When the app holding the person key approves one, the grant
+  also carries a `MachineCert` (`packages/core/src/person.ts:22`): a person signature over the
+  computer's key, with no expiry, which the app's launches need. `kp1` and `kiwi pair` are gone (T112).
   - Since T503 a forgotten computer's agents no longer join on their own in the desktop app.
   - The cert itself stays valid.
 - Auto-approval runs wherever the channel owner key is: the desktop app, and the iOS app while open
@@ -233,7 +234,7 @@ owner-signed **delegation** lets the `kiwi` daemon admit its own computer's agen
 6. **Revocation and expiry:** the list posted into channels, removing a computer's agents, renewal.
 7. **Delegation** for the daemon.
 8. **Recovery vault.**
-9. **Remove** `kl1` and `kp1`, one release after every app ships enrollment:
+9. **Remove** `kl1` and `kp1` (done in T112):
    - `packages/core/src/link.ts`, `desktop/src/link-host.ts`, `desktop/src/ipc/linking.ts`, and the iOS
      and Android link screens;
    - `src/daemon/pair.ts`, `desktop/src/pairing.ts`, `desktop/src/ipc/pairing.ts`, and `kp1` in

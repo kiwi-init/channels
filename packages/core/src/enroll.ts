@@ -2,6 +2,7 @@ import { b64url, fromB64url } from "./crypto.ts";
 import { readDeviceList, type DeviceLink } from "./devices.ts";
 import type { Identity } from "./identity.ts";
 import { openMailbox, type Mailbox } from "./mailbox.ts";
+import { readMachineCert, type MachineCert } from "./person.ts";
 
 export const ENROLL_TTL_MS = 10 * 60_000;
 
@@ -42,6 +43,7 @@ export interface EnrollGrant {
   person: { pk: string; name: string; xpk: string };
   relay: string;
   channels: { label: string; code: string }[];
+  cert?: MachineCert;
 }
 
 export const accountScope = (user: string): string => `account:${user}`;
@@ -122,6 +124,8 @@ export async function readEnrollGrant(x: unknown, device: string): Promise<Enrol
   if (!g.channels.every((c) => !!c && typeof c.label === "string" && typeof c.code === "string")) return null;
   const read = await readDeviceList(g.links);
   if (!read.ok || read.list.person !== g.person.pk || !read.list.devices.some((d) => d.device === device)) return null;
+  const cert = g.cert === undefined ? null : await readMachineCert(g.cert);
+  if (g.cert !== undefined && (!cert || cert.machine !== device || cert.pk !== g.person.pk)) return null;
   return {
     kind: g.kind,
     v: 1,
@@ -129,5 +133,6 @@ export async function readEnrollGrant(x: unknown, device: string): Promise<Enrol
     person: { pk: g.person.pk, name: g.person.name, xpk: g.person.xpk },
     relay: g.relay,
     channels: g.channels.map((c) => ({ label: c.label, code: c.code })),
+    ...(cert ? { cert } : {}),
   };
 }

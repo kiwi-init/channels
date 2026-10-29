@@ -204,7 +204,7 @@ export interface ComputerView {
   /** The person key that certified it. */
   personPk: string;
   at: number;
-  /** This machine (adopted daemon), rather than a remotely paired one. */
+  /** This machine (adopted daemon), rather than another of the person's computers. */
   own?: boolean;
 }
 
@@ -231,20 +231,6 @@ export interface PhoneView {
   label: string;
   at: number;
   channels?: string[];
-}
-
-export interface LinkAskView {
-  label: string;
-  digits: string;
-  at: number;
-}
-
-/** A computer asking to pair, for the person to confirm. */
-export interface PairAskView {
-  label: string;
-  os: string;
-  machinePk: string;
-  at: number;
 }
 
 export interface EnrollAskView {
@@ -360,15 +346,14 @@ export interface KiwiBridge {
   /** The linked account's GitHub avatar, fetched by main (no page loads from GitHub), or null when nothing is linked. */
   githubPicture(): Promise<MemberPicture | null>;
   onGithubCode(cb: (c: { code: string; url: string }) => void): () => void;
-  /** Pairing: show the code, poll slot a, answer into slot b. */
-  pairBegin(): Promise<{ code: string }>;
-  pairPoll(): Promise<PairAskView | null>;
-  pairAnswer(accept: boolean): Promise<{ machinePk: string } | null>;
-  pairCancel(): Promise<void>;
-  linkBegin(): Promise<{ code: string }>;
-  linkPoll(): Promise<LinkAskView | null>;
-  linkAnswer(accept: boolean): Promise<PhoneView | null>;
-  linkCancel(): Promise<void>;
+  pairBegin(): Promise<never>;
+  pairPoll(): Promise<never>;
+  pairAnswer(accept: boolean): Promise<never>;
+  pairCancel(): Promise<never>;
+  linkBegin(): Promise<never>;
+  linkPoll(): Promise<never>;
+  linkAnswer(accept: boolean): Promise<never>;
+  linkCancel(): Promise<never>;
   forgetPhone(at: number): Promise<void>;
   enrollPoll(): Promise<EnrollAskView | null>;
   enrollAnswer(id: string): Promise<void>;

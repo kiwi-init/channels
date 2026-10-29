@@ -34,7 +34,7 @@ export async function setupChannel(relay: string, opts: { ownerName?: string; pe
   return { relay, code, roomId: access.roomId, access, owner, person, ownerCh: new Channel(access, relay, owner) };
 }
 
-/** A computer the person's app certified (what `kiwi pair` stores as machine.json's cert). */
+/** A computer the person's app certified (what `kiwi login` stores as machine.json's cert). */
 export interface PairedComputer {
   machine: Identity;
   cert: MachineCert;

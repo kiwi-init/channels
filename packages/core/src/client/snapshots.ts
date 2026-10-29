@@ -1,6 +1,6 @@
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
-import { SNAPSHOT_EVERY, SNAPSHOT_TOO_LARGE } from "../protocol.ts";
+import { decodedWhole, olderRules, SNAPSHOT_EVERY, SNAPSHOT_TOO_LARGE } from "../protocol.ts";
 import { MissingKey } from "../refusals.ts";
 import { openSnapshot, sealSnapshot, wellFormedSnapshot } from "../snapshot.ts";
 import { fold, rosterOf, type FoldBase } from "../state.ts";
@@ -48,10 +48,17 @@ export class ChannelSnapshots {
       yield* this.ch.ownerOnly();
       const at = (yield* this.ch.fx.snapshotAt()) ?? 0;
       if ((yield* this.ch.fx.head()) - at < Math.max(every, 1)) return null;
-      const from = at ? yield* this.ch.fx.snapshot() : null;
+      const prior = at ? yield* this.ch.fx.snapshot() : null;
+      const whole = prior && olderRules(prior) ? yield* this.ch.fx.history(0) : null;
+      const from = whole && decodedWhole(whole) ? null : prior;
       const since = from?.n ?? 0;
       const [{ messages, head: top, through }, members, rooms, guard] = yield* Effect.all(
-        [this.ch.fx.history(since), this.ch.fx.members(), Effect.orElseSucceed(this.ch.fx.rooms(), () => null), Effect.orElseSucceed(this.ch.fx.guard(), () => null)],
+        [
+          whole && !from ? Effect.succeed(whole) : this.ch.fx.history(since),
+          this.ch.fx.members(),
+          Effect.orElseSucceed(this.ch.fx.rooms(), () => null),
+          Effect.orElseSucceed(this.ch.fx.guard(), () => null),
+        ],
         { concurrency: "unbounded" },
       );
       if (through !== top || messages.some((m) => m.seq <= since || m.seq > top)) return null;

@@ -320,15 +320,23 @@
   letter-spacing: 0.08em;
 }
 
-.set-pair-code {
+.set-pair-line {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  min-width: 0;
 }
 
-.set-pair-code code {
-  font: 600 var(--t-display) var(--ui);
-  letter-spacing: 0.08em;
+.set-pair-line code {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-row);
+  color: var(--ink-2);
+  font: var(--t-meta) / 1.5 var(--mono);
+  overflow-wrap: anywhere;
+  user-select: all;
 }
 
 .set-enroll-what {

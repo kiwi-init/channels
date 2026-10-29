@@ -3,27 +3,44 @@ import { useMemo, useSyncExternalStore } from "react"
 import { setAccessibilityOption, useAccessibilityOption } from "@/lib/accessibility"
 import { setAppearance, setTextSize, useAppearance, useTextSize, type TextSize } from "@/lib/theme"
 import type { CustomTheme, Prefs } from "~/model"
-import { cleanThemes, deletedTheme, savedTheme, type ThemePrefs } from "~/theme/themes"
+import { cleanThemes, deletedTheme, movedDark, savedTheme, type ThemePrefs } from "~/theme/themes"
 
 type Own = Pick<Prefs, "notify" | "enterSends" | "darkTheme" | "lightTheme" | "customThemes">
 
 const KEY = "ui.prefs"
-const DEFAULTS: Own = { notify: "mentions", enterSends: true, darkTheme: "channels-dark", lightTheme: "channels-light", customThemes: [] }
+const MOVED = "ui.prefs.oled"
+const DEFAULTS: Own = { notify: "mentions", enterSends: true, darkTheme: "channels-oled", lightTheme: "channels-light", customThemes: [] }
 const SIZES: readonly TextSize[] = ["small", "default", "large", "larger"]
 const listeners = new Set<() => void>()
 let own: Own | null = null
 
+type Store = Pick<Storage, "getItem" | "setItem">
+
+export function readPrefs(store: Store): Own {
+  const raw = JSON.parse(store.getItem(KEY) ?? "{}") as Partial<Own>
+  const moved = store.getItem(MOVED) === "1"
+  const read: Own = {
+    notify: raw.notify === "all" || raw.notify === "none" || raw.notify === "mentions" ? raw.notify : DEFAULTS.notify,
+    enterSends: typeof raw.enterSends === "boolean" ? raw.enterSends : DEFAULTS.enterSends,
+    darkTheme: typeof raw.darkTheme === "string" ? movedDark(raw.darkTheme, moved) : DEFAULTS.darkTheme,
+    lightTheme: typeof raw.lightTheme === "string" ? raw.lightTheme : DEFAULTS.lightTheme,
+    customThemes: cleanThemes(raw.customThemes),
+  }
+  if (!moved) {
+    try {
+      if (typeof raw.darkTheme === "string" && raw.darkTheme !== read.darkTheme) store.setItem(KEY, JSON.stringify(read))
+      store.setItem(MOVED, "1")
+    } catch {
+      // Without storage the move runs again on the next load and lands the same way.
+    }
+  }
+  return read
+}
+
 function readOwn(): Own {
   if (own) return own
   try {
-    const raw = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Partial<Own>
-    own = {
-      notify: raw.notify === "all" || raw.notify === "none" || raw.notify === "mentions" ? raw.notify : DEFAULTS.notify,
-      enterSends: typeof raw.enterSends === "boolean" ? raw.enterSends : DEFAULTS.enterSends,
-      darkTheme: typeof raw.darkTheme === "string" ? raw.darkTheme : DEFAULTS.darkTheme,
-      lightTheme: typeof raw.lightTheme === "string" ? raw.lightTheme : DEFAULTS.lightTheme,
-      customThemes: cleanThemes(raw.customThemes),
-    }
+    own = readPrefs(localStorage)
   } catch {
     own = DEFAULTS
   }

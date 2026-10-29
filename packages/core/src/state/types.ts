@@ -274,6 +274,7 @@ export interface FoldBase {
   roomOf: [number, string][];
   placeOf: [number, Place][];
   folded?: number;
+  rules?: number;
   skipped?: true;
 }
 

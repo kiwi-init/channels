@@ -10,6 +10,9 @@ import { Page } from "~/settings/sections"
 
 type Kind = "computer" | "phone"
 
+const SHOT = new URLSearchParams(location.search).get("shot")
+const PRESET: Kind | null = SHOT === "settings-link-phone" ? "phone" : SHOT === "settings-add-computer" ? "computer" : null
+
 const isPhone = (c: Computer): boolean => c.os === "iphone" || c.os === "android"
 
 function TheirSettings({ computer }: { computer: Computer }) {
@@ -156,21 +159,39 @@ function phoneWarning(phone: Computer): string {
   return `It holds ${held}, so it can act as you there. Forgetting it removes it from this list; to sign it out, unlink it on the phone. If it's lost or stolen, there's no way yet to cut it off from here.`
 }
 
+function PairLine({ text, label }: { text: string; label: string }) {
+  const { toast } = useApp()
+  return (
+    <div className="set-pair-line">
+      <code>{text}</code>
+      <IconButton
+        icon="copy"
+        label={label}
+        onClick={() => {
+          void navigator.clipboard.writeText(text).then(
+            () => toast("Copied"),
+            () => toast("Could not copy")
+          )
+        }}
+      />
+    </div>
+  )
+}
+
 export function ComputersSection() {
-  const { app, toast } = useApp()
-  const [pairing, setPairing] = useState<{ kind: Kind; code: string } | null>(null)
+  const { app } = useApp()
+  const [linking, setLinking] = useState<Kind | null>(PRESET)
   const [forget, setForget] = useState<Computer | null>(null)
   const [shown, setShown] = useState<string | null>(null)
+  const asked = app.account?.enrollAsk?.id
+  const [seen, setSeen] = useState(asked)
+  if (asked !== seen) {
+    setSeen(asked)
+    if (asked) setLinking(null)
+  }
   const account = app.account
   if (!account) return null
   const computers = [...account.computers].sort((a, b) => Number(b.thisOne) - Number(a.thisOne) || Number(b.online) - Number(a.online))
-
-  const begin = (kind: Kind) => {
-    void app.actions.pairBegin(kind).then(
-      (code) => setPairing({ kind, code }),
-      () => toast("Could not start pairing. Try again.")
-    )
-  }
 
   return (
     <Page title="Computers and phones" lede="Everywhere you are signed in. Agents run on computers; phones read and answer.">
@@ -219,92 +240,34 @@ export function ComputersSection() {
         ))}
       </ul>
 
-      {account.pairAsk ? (
-        <div className="set-pair" role="region" aria-label="Confirm pairing">
-          <p className="set-pair-what">
-            {account.pairAsk.label}
-            {account.pairAsk.os ? ` (${account.pairAsk.os})` : ""} asks to pair
-          </p>
-          {account.pairAsk.digits && (
+      {linking ? (
+        <div className="set-pair" role="region" aria-label={linking === "phone" ? "Link a phone" : "Add a computer"}>
+          <p className="set-pair-what">{linking === "phone" ? "Link a phone" : "Add a computer"}</p>
+          {linking === "phone" ? (
+            <p className="set-pair-how">On your phone, open Channels and tap Sign In. It shows 6 digits: type them here when this app asks.</p>
+          ) : (
             <>
-              <p className="set-pair-how">Check that it shows the same code:</p>
-              <div className="set-pair-code">
-                <code>{account.pairAsk.digits}</code>
-              </div>
+              <p className="set-pair-how">On the other computer, run this in a terminal and sign in. It shows 6 digits: type them here when this app asks.</p>
+              <PairLine text="kiwi login" label="Copy the command" />
             </>
           )}
-          <div className="actions">
-            <button
-              type="button"
-              className="btn is-primary is-small"
-              onClick={() => {
-                app.actions.answerPair(true)
-                setPairing(null)
-              }}
-            >
-              {account.pairAsk.digits ? "It matches: pair" : "Pair"}
-            </button>
-            <button
-              type="button"
-              className="btn is-small"
-              onClick={() => {
-                app.actions.answerPair(false)
-                setPairing(null)
-              }}
-            >
-              Not this one
-            </button>
-          </div>
-        </div>
-      ) : pairing ? (
-        <div className="set-pair" role="region" aria-label={pairing.kind === "phone" ? "Link a phone" : "Add a computer"}>
-          <p className="set-pair-what">{pairing.kind === "phone" ? "Link a phone" : "Add a computer"}</p>
-          <div className="set-pair-code">
-            <code>{pairing.code}</code>
-            <IconButton
-              icon="copy"
-              label="Copy the code"
-              onClick={() => {
-                void navigator.clipboard.writeText(pairing.code).then(
-                  () => toast("Code copied"),
-                  () => toast("Could not copy")
-                )
-              }}
-            />
-          </div>
-          <p className="set-pair-how">
-            {pairing.kind === "phone" ? (
-              "Open Channels on your phone and type this code."
-            ) : (
-              <>
-                On the other computer run <code>kiwi pair</code> and type this code.
-              </>
-            )}
-          </p>
           <div className="set-pair-foot">
             <span className="set-pair-wait">
               <span className="set-pip is-waiting" aria-hidden="true" />
-              Waiting for the {pairing.kind}…
+              Waiting for the {linking}…
             </span>
-            <button
-              type="button"
-              className="btn is-quiet is-small"
-              onClick={() => {
-                app.actions.cancelPair()
-                setPairing(null)
-              }}
-            >
+            <button type="button" className="btn is-quiet is-small" onClick={() => setLinking(null)}>
               Cancel
             </button>
           </div>
         </div>
       ) : (
         <div className="actions set-device-actions">
-          <button type="button" className="btn" onClick={() => begin("computer")}>
+          <button type="button" className="btn" onClick={() => setLinking("computer")}>
             <Icon name="computer" size={14} />
             Add a computer
           </button>
-          <button type="button" className="btn" onClick={() => begin("phone")}>
+          <button type="button" className="btn" onClick={() => setLinking("phone")}>
             <Icon name="phone" size={14} />
             Link a phone
           </button>

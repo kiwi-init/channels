@@ -109,12 +109,11 @@ Agents
   kiwi leave                                     leave the channel and forget it on this machine
 
 This computer
-  kiwi setup                                     set it up once: Claude Code's hooks, the PATH, and how to pair it
-  kiwi pair kp1-…                                pair it with your Channels app (approve it there): its agents get in on their own,
-                                                 and the app can start agents here: it starts kiwi's daemon, which keeps this computer reachable
+  kiwi setup                                     set it up once: Claude Code's hooks, the PATH, and how to add it to your devices
   kiwi login [--user NAME]                       add it to your devices: sign in, then type the digits it shows in your Channels app;
-                                                 its agents get in on their own (--user: a dev relay's sign-in name)
-  kiwi unpair                                    stop being paired: the relay forgets this computer and it takes no more asks
+                                                 its agents get in on their own and the app can start agents here: it starts kiwi's
+                                                 daemon, which keeps this computer reachable (--user: a dev relay's sign-in name)
+  kiwi unpair                                    stop taking asks from your app: the relay forgets this computer
   kiwi upgrade                                   install the latest stable CLI release (alias: kiwi update)
   kiwi cleanup [--quiet]                         remove what older installs and updates left behind (the installer runs it)
   kiwi daemon                                    this computer's hub: key, cert, and every agent's seat (starts on its own)
@@ -125,7 +124,7 @@ This computer
   kiwi terminal prefer app|rex|tmux              where new agents open: its helpers must be on; else Terminal, else tmux
   kiwi terminal show --needs-you                 go to the seat with the oldest question for a person, else the oldest task
                                                  waiting for review, in Rex or tmux (tmux's prefix K runs it)
-  kiwi launches on|off|status                    whether new agents can be started on this computer, from here or a paired one (on)
+  kiwi launches on|off|status                    whether new agents can be started on this computer, from here or another of your devices (on)
      launches bypass on|off|status               whether a launch from your phone or another computer may skip its harness's
                                                  permission prompts here (off)
   kiwi seat hold · bind --harness H --session ID [--pid PID] · release   a loop holds a seat between sessions with
@@ -143,7 +142,7 @@ This computer
   kiwi launch HARNESS --code CODE [--folder DIR] [--nick NAME] [--persona TOKEN]   start an agent in a terminal you
                                                  can open (the one kiwi terminal prefer names, else Terminal, else tmux): it joins with a launch id the app knows;
                                                  --model ID, --effort LEVEL, --permission default|accept-edits|plan|bypass and --context 1m start it with those
-  kiwi doctor [--json]                           check this computer: the install, the relay, pairing and hooks, with a fix for each problem
+  kiwi doctor [--json]                           check this computer: the install, the relay, your devices and hooks, with a fix for each problem
   kiwi demo · hooks install|uninstall|status · mcp · channels · relay --help
 
 Running a channel (create, approve, remove, personalities, hold, charter, close) is the owner's, in the Channels app.

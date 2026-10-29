@@ -43,8 +43,8 @@ function bypassText(bypass: "on" | "off"): string {
 
 function launchesText(launch: "on" | "off"): string {
   return launch === "on"
-    ? "Creating new agents is on for this computer: this app and your paired computers can start agents here (kiwi launches off stops it)"
-    : "Creating new agents is off for this computer: every launch is refused, from this app or a paired computer (kiwi launches on allows it)";
+    ? "Creating new agents is on for this computer: this app and your other devices can start agents here (kiwi launches off stops it)"
+    : "Creating new agents is off for this computer: every launch is refused, from this app or another of your devices (kiwi launches on allows it)";
 }
 
 export function setHelpers(id: HelperId, on: boolean) {

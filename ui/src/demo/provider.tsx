@@ -330,7 +330,6 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       setReadOnly: (code, name, on) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, readOnly: on } : p)) })),
       setWake: (code, name, on) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, wakes: on } : p)) })),
       setNickname: (code, name, nickname) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, display: nickname?.trim() || undefined } : p)) })),
-      setColor: (code, name, color) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, color: color ?? undefined } : p)) })),
       setPowers: (code, name, powers) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, ...powers } : p)) })),
       showAgent: async () => null,
       openTerm: (_code, _name, cols, rows, watch) => demoTerm(cols, rows, watch),
@@ -434,7 +433,6 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       },
       setName: (name) => setState((s) => (s.account ? { ...s, account: { ...s.account, name } } : { ...s, account: { ...DEMO_ACCOUNT, name } })),
       setPrefs: (p) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...p } })),
-      pairBegin: async () => "KIWI-7305-PAIR",
       forgetComputer: (id) => setState((s) => (s.account ? { ...s, account: { ...s.account, computers: s.account.computers.filter((c) => c.id !== id) } } : s)),
       linkGithub: () => setState((s) => (s.account ? { ...s, account: { ...s.account, github: { login: "ojowwalker77" } } } : s)),
       unlinkGithub: () => setState((s) => (s.account ? { ...s, account: { ...s.account, github: undefined } } : s)),
@@ -447,8 +445,6 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       setNewMembers: (code, can) => edit(code, (c) => ({ ...c, newMembers: can })),
       setNewPowers: (code, powers) => edit(code, (c) => ({ ...c, newPowers: powers })),
       closeChannel: (code) => setState((s) => ({ ...s, tiles: s.tiles.filter((t) => t.code !== code) })),
-      answerPair: () => setState((s) => (s.account ? { ...s, account: { ...s.account, pairAsk: undefined } } : s)),
-      cancelPair: () => setState((s) => (s.account ? { ...s, account: { ...s.account, pairAsk: undefined } } : s)),
       enrollAnswer: () => setState((s) => (s.account?.enrollAsk ? { ...s, account: { ...s.account, enrollAsk: { ...s.account.enrollAsk, stage: "digits" } } } : s)),
       enrollConfirm: async (_id, digits) => {
         if (digits !== "482913") return { ok: false, left: 2 }
