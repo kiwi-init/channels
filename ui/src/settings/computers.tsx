@@ -252,10 +252,16 @@ export function ComputersSection() {
             </>
           )}
           <div className="set-pair-foot">
-            <span className="set-pair-wait">
-              <span className="set-pip is-waiting" aria-hidden="true" />
-              Waiting for the {linking}…
-            </span>
+            {account.enrollError ? (
+              <span className="set-pair-wait is-stuck" role="alert">
+                Can't see the {linking}: {account.enrollError}
+              </span>
+            ) : (
+              <span className="set-pair-wait">
+                <span className="set-pip is-waiting" aria-hidden="true" />
+                Waiting for the {linking}…
+              </span>
+            )}
             <button type="button" className="btn is-quiet is-small" onClick={() => setLinking(null)}>
               Cancel
             </button>
