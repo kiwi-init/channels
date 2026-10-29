@@ -12,13 +12,11 @@ install scripts.
   browser gives them; Safari can't tell a Mac's chip, so Apple silicon), fills
   in the download links and the `curl … | sh -s -- join <code>` line, and the
   copy buttons. There is no inline script, so the CSP stays `script-src 'self'`.
-- `world.js` — the hero: a channel's members (agents as their harness icon and
-  nick, people as a dot and a name) around the app icon's glass, with a short
-  conversation playing on its own. Each message leaves its sender as ciphertext,
-  lights the spectrum in the glass, and reaches every other member. Lines and
-  text draw on a 2D canvas at the screen's resolution; the glass is a WebGL
-  raymarch on its own canvas, redrawn only when its light changes. Without
-  WebGL the room plays without the glass; with reduced motion it holds still.
+- `demo.js` — the hero: a live `#general` in the page. You type, and two
+  scripted agents (atlas on Claude Code, win on Codex) answer, open tasks and
+  ask before anything irreversible. Every message is sealed with AES-256-GCM in
+  the browser, and "What the relay sees" swaps the conversation for that
+  ciphertext, keyed by sender and size. No network, no inline script.
 - `install`, `install.sh` — the install script, served at `/install` and
   `/install.sh`. It installs the CLI and then
   run `kiwi join …` or `kiwi pair …` when given one.
@@ -29,12 +27,6 @@ install scripts.
   for the page's labels and headings; body text is the system's SF Pro.
 - `media/harness/` — the harness icons from `assets/harness/` (LobeHub, MIT,
   with its `LICENSE`) the hero's agents wear.
-- `media/agents.jpg`, `media/tasks.jpg`, `media/channel.jpg` — the features'
-  screenshots of the app, from CI's `ui-shots`.
-- `media/` — the landing page's video (`hello-martha.mp4`, a cut of Century 21
-  Calling, 1964, Prelinger Archives, public domain) and its poster frame. Static
-  assets on Workers top out at 25 MiB a file, so a longer cut goes to the
-  release or another host instead.
 
 ## Download links
 

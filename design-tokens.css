@@ -1,0 +1,388 @@
+/*
+ * Design tokens, ready to drop into another app.
+ *
+ * Values are taken from the Channels web renderer (web/src/index.css), which is the
+ * source of truth. Nothing here is app-specific except the OPTIONAL BRAND section at
+ * the end, which you can delete.
+ *
+ * Two rules that make this work:
+ *   1. Components never hard-code a colour, radius or font size. They use these vars.
+ *   2. Light and dark are written once, together, as light-dark(day, night). The
+ *      color-scheme decides which side applies. Requires a modern browser
+ *      (light-dark() is supported everywhere since 2024). See the fallback note at
+ *      the bottom if you must support older ones.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* Text size scaler. The app's text-size setting writes this; 1 is the default. */
+  --text-scale: 1;
+
+  /* ---- Surfaces ---------------------------------------------------------- */
+  /* One neutral ramp. Areas are separated by a step in tone, not by borders. */
+  --canvas: light-dark(#ffffff, #0d0d0e); /* the main working surface */
+  --rail: var(--canvas); /* chrome beside the canvas: flat, same tone */
+  --raised: light-dark(#ffffff, #1c1c1e); /* cards, popovers, grouped lists */
+  --field: light-dark(#f0f0f3, #1a1a1c); /* inputs, search, pickers */
+  --frame: var(--rail);
+  --panel: var(--canvas);
+
+  /* ---- Ink --------------------------------------------------------------- */
+  --ink: light-dark(#0f0f11, #f3f3f5); /* primary text */
+  --ink-2: light-dark(#4a4a52, #bcbcc3); /* secondary text */
+  --ink-3: light-dark(#6b6b73, #8f8f97); /* quiet text: still clears 4.5:1 */
+
+  /* ---- Chrome ------------------------------------------------------------ */
+  --line: light-dark(rgba(15, 15, 17, 0.08), rgba(255, 255, 255, 0.08));
+  --edge: var(--line);
+  --edge-strong: light-dark(rgba(15, 15, 17, 0.14), rgba(255, 255, 255, 0.14));
+  --wash: light-dark(rgba(15, 15, 17, 0.045), rgba(255, 255, 255, 0.055)); /* hover */
+  --wash-2: light-dark(rgba(15, 15, 17, 0.075), rgba(255, 255, 255, 0.09)); /* pressed, scrollbar */
+  --pick: light-dark(rgba(15, 15, 17, 0.07), rgba(255, 255, 255, 0.08)); /* selected row */
+  --overlay: light-dark(rgba(20, 20, 22, 0.32), rgba(0, 0, 0, 0.62)); /* dimmed backdrop */
+
+  /* ---- The one accent ---------------------------------------------------- */
+  /* Apple system blue. It means: this is yours, this is new, or this is the one
+     primary action. Nothing else. Never more than three accent moments a screen. */
+  --accent: light-dark(#007aff, #0a84ff);
+  --accent-ink: #ffffff; /* text/icons on the accent */
+  --accent-text: light-dark(#007aff, #0a84ff); /* accent used as text */
+  --accent-wash: light-dark(rgba(0, 122, 255, 0.1), rgba(10, 132, 255, 0.18));
+  --link: light-dark(#007aff, #0a84ff);
+  --ring: light-dark(rgba(0, 122, 255, 0.55), rgba(10, 132, 255, 0.6)); /* focus */
+
+  /* ---- Semantic status --------------------------------------------------- */
+  /* These never decorate. Each one carries a meaning. */
+  --alert: light-dark(#d1342a, #ff6259); /* error, destructive */
+  --decide: light-dark(#a35a00, #f5b041); /* amber: something waits on someone */
+  --decide-wash: light-dark(rgba(214, 125, 0, 0.12), rgba(245, 176, 65, 0.14));
+  --live: light-dark(#1f9a55, #32d074); /* success, done, online */
+  --doing: light-dark(#2f6fe4, #5b9bff); /* in progress */
+  --warn: light-dark(#a35a00, #f5b041);
+
+  /* ---- Bubbles (chat; drop if the app has no conversation) --------------- */
+  --bubble-me: var(--accent);
+  --bubble-me-ink: #ffffff;
+  --bubble-them: light-dark(#e9e9eb, #1f1f21);
+  --bubble-them-ink: var(--ink);
+
+  /* ---- Type -------------------------------------------------------------- */
+  --font-sans: "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Six steps, nothing between them. Hierarchy comes from weight and spacing. */
+  --text-stamp: calc(11px * var(--text-scale, 1));
+  --text-stamp--line-height: calc(14px * var(--text-scale, 1));
+  --text-meta: calc(12px * var(--text-scale, 1));
+  --text-meta--line-height: calc(16px * var(--text-scale, 1));
+  --text-ui: calc(13px * var(--text-scale, 1));
+  --text-ui--line-height: calc(18px * var(--text-scale, 1));
+  --text-body: calc(15px * var(--text-scale, 1));
+  --text-body--line-height: calc(21px * var(--text-scale, 1));
+  --text-title: calc(16px * var(--text-scale, 1));
+  --text-title--line-height: calc(21px * var(--text-scale, 1));
+  --text-display: calc(26px * var(--text-scale, 1));
+  --text-display--line-height: calc(32px * var(--text-scale, 1));
+
+  /* ---- Radius ------------------------------------------------------------ */
+  --radius-row: 8px; /* rows, list items, buttons */
+  --radius-ctl: 10px; /* inputs and controls */
+  --radius-card: 16px; /* cards, popovers, grouped sections */
+  --radius-bubble: 20px; /* the one thing that is rounder than everything else */
+  --radius-dock: 26px; /* the composer / a large soft container */
+
+  /* ---- Elevation --------------------------------------------------------- */
+  /* Exactly one shadow for floating things plus one for the docked composer.
+     No coloured shadows, no other shadows. */
+  --pop-edge: light-dark(rgba(15, 15, 17, 0.08), rgba(255, 255, 255, 0.09));
+  --pop-shade: light-dark(rgba(15, 15, 17, 0.16), rgba(0, 0, 0, 0.65));
+  --shadow-pop: 0 0 0 1px var(--pop-edge), 0 16px 40px -12px var(--pop-shade);
+  --shadow-dock: 0 0 0 1px var(--line), 0 6px 20px -12px var(--pop-shade);
+
+  /* ---- Glass (only for what floats over scrolling content) --------------- */
+  --glass-fill: light-dark(rgba(255, 255, 255, 0.64), rgba(40, 40, 44, 0.52));
+  --glass-fill-hover: light-dark(rgba(255, 255, 255, 0.8), rgba(52, 52, 57, 0.62));
+  --glass-rim: light-dark(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.11));
+  --glass-edge: light-dark(rgba(15, 15, 17, 0.07), rgba(255, 255, 255, 0.07));
+  --glass-shade: light-dark(rgba(15, 15, 17, 0.14), rgba(0, 0, 0, 0.55));
+
+  /* ---- Chrome metrics ---------------------------------------------------- */
+  --chrome-h: 52px; /* header row height */
+}
+
+/* An explicit choice sets data-theme; "system" leaves it unset so the media query wins. */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+/* ---- Base ---------------------------------------------------------------- */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+html,
+button,
+input,
+textarea,
+select {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-feature-settings: inherit;
+}
+
+body {
+  margin: 0;
+  background: var(--rail);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  font-feature-settings: "calt", "kern", "cv05", "cv08";
+  font-optical-sizing: auto;
+  letter-spacing: -0.006em;
+}
+
+/* Times, counts and metrics never jiggle as they change. */
+time,
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Big text gets set a little tighter, as display sizes should be. */
+.text-display,
+.text-title {
+  letter-spacing: -0.014em;
+}
+
+::selection {
+  background: var(--accent-wash);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--wash-2) transparent;
+}
+
+/* Focus ring in the base layer, so a component can still opt out of it. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 1px;
+    border-radius: 6px;
+  }
+}
+
+/* ---- Motion -------------------------------------------------------------- */
+/* Keyframes only, no library. Motion only ever answers an action. One family of
+   eases: (0.2, 0.8, 0.2, 1) generally, a small overshoot for something arriving. */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(3px) scale(0.99);
+  }
+}
+.animate-rise {
+  animation: rise 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+}
+.animate-slide-in {
+  animation: slide-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes flash {
+  from {
+    background: var(--accent-wash);
+  }
+}
+.animate-flash {
+  animation: flash 1.6s ease-out;
+}
+
+@keyframes sent {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.94);
+  }
+}
+.animate-sent {
+  animation: sent 0.24s cubic-bezier(0.3, 1.35, 0.5, 1);
+  transform-origin: bottom right;
+}
+
+@keyframes arrived {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.animate-arrived {
+  animation: arrived 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* The OS setting, and a persisted in-app toggle (html.reduce-motion). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+html.reduce-motion *,
+html.reduce-motion ::before,
+html.reduce-motion ::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+/* ---- Glass --------------------------------------------------------------- */
+/* A translucent fill over a blur, a bright rim on the top edge, a hairline round it.
+   Only for surfaces that float over scrolling content (header, composer, popovers). */
+
+@layer components {
+  .glass {
+    background: var(--glass-fill);
+    -webkit-backdrop-filter: blur(20px) saturate(1.8);
+    backdrop-filter: blur(20px) saturate(1.8);
+    box-shadow:
+      inset 0 1px 0 var(--glass-rim),
+      inset 0 0 0 1px var(--glass-edge),
+      0 8px 24px -12px var(--glass-shade);
+  }
+
+  button.glass:hover,
+  .glass-hover:hover {
+    background: var(--glass-fill-hover);
+  }
+}
+
+/* A soft fade so text scrolling under the header or composer never fights with it. */
+.scrim-top,
+.scrim-bottom {
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.scrim-top {
+  background: linear-gradient(to bottom, var(--canvas) 30%, transparent);
+  mask-image: linear-gradient(to bottom, #000 55%, transparent);
+}
+.scrim-bottom {
+  background: linear-gradient(to top, var(--canvas) 35%, transparent);
+  mask-image: linear-gradient(to top, #000 55%, transparent);
+}
+
+/* ---- Tailwind v4 (optional) --------------------------------------------- */
+/* If the app uses Tailwind v4, put this block in the same file as the import so the
+   vars become utilities (bg-canvas, text-ink-2, rounded-card, shadow-pop, ...).
+   Delete it entirely if the app does not use Tailwind. */
+
+@theme inline {
+  --font-sans: "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  --text-stamp: calc(11px * var(--text-scale, 1));
+  --text-stamp--line-height: calc(14px * var(--text-scale, 1));
+  --text-meta: calc(12px * var(--text-scale, 1));
+  --text-meta--line-height: calc(16px * var(--text-scale, 1));
+  --text-ui: calc(13px * var(--text-scale, 1));
+  --text-ui--line-height: calc(18px * var(--text-scale, 1));
+  --text-body: calc(15px * var(--text-scale, 1));
+  --text-body--line-height: calc(21px * var(--text-scale, 1));
+  --text-title: calc(16px * var(--text-scale, 1));
+  --text-title--line-height: calc(21px * var(--text-scale, 1));
+  --text-display: calc(26px * var(--text-scale, 1));
+  --text-display--line-height: calc(32px * var(--text-scale, 1));
+
+  --radius-row: 8px;
+  --radius-ctl: 10px;
+  --radius-card: 16px;
+  --radius-bubble: 20px;
+  --radius-dock: 26px;
+
+  --color-frame: var(--frame);
+  --color-panel: var(--panel);
+  --color-edge: var(--edge);
+  --color-edge-strong: var(--edge-strong);
+  --color-canvas: var(--canvas);
+  --color-rail: var(--rail);
+  --color-raised: var(--raised);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line: var(--line);
+  --color-wash: var(--wash);
+  --color-wash-2: var(--wash-2);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-text: var(--accent-text);
+  --color-accent-wash: var(--accent-wash);
+  --color-link: var(--link);
+  --color-ring: var(--ring);
+  --color-alert: var(--alert);
+  --color-live: var(--live);
+  --color-doing: var(--doing);
+  --color-warn: var(--warn);
+  --color-decide: var(--decide);
+  --color-decide-wash: var(--decide-wash);
+  --color-overlay: var(--overlay);
+  --color-pick: var(--pick);
+  --color-field: var(--field);
+  --color-bubble-me: var(--bubble-me);
+  --color-bubble-me-ink: var(--bubble-me-ink);
+  --color-bubble-them: var(--bubble-them);
+  --color-bubble-them-ink: var(--bubble-them-ink);
+
+  --shadow-pop: var(--shadow-pop);
+  --shadow-dock: var(--shadow-dock);
+}
+
+/* ---- Optional brand ------------------------------------------------------ */
+/* Channels' own mascot and fallback-avatar colours. Delete unless wanted. */
+
+:root {
+  --head-shell: light-dark(#007aff, #0a84ff);
+  --head-screen: light-dark(#e9f0fc, #d9e7fa);
+  --head-trim: light-dark(#cfd4d6, #9aa0a3);
+  --head-bg-top: light-dark(#e1ebf8, #22324a);
+  --head-bg-bottom: light-dark(#c6daf2, #141e2c);
+  --avatar-top: light-dark(#a8a8b0, #78787f);
+  --avatar-bottom: light-dark(#8a8a92, #55555c);
+}
+
+/* ---- Fallback for light-dark() ------------------------------------------ */
+/* If the target must support browsers older than 2024, replace each
+   light-dark(a, b) with a(light) and add an override block:
+
+     :root { --canvas: #ffffff; --ink: #0f0f11; ... }
+     @media (prefers-color-scheme: dark) {
+       :root:not([data-theme="light"]) { --canvas: #0d0d0e; --ink: #f3f3f5; ... }
+     }
+     :root[data-theme="dark"] { --canvas: #0d0d0e; --ink: #f3f3f5; ... }
+
+   Keep light-dark() if you can: one line per token instead of three. */
