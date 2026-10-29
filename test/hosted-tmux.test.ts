@@ -260,3 +260,38 @@ describe("a hosted tmux server", () => {
     expect(first.state()).toBeNull();
   });
 });
+
+describe("a hosted tmux server under a daemon with no UTF-8 locale", () => {
+  const home = mkdtempSync(join(tmpdir(), "kiwi-hosted-nolang-"));
+  afterAll(() => rmSync(home, { recursive: true, force: true }));
+
+  test.if(!!tmux)("still opens your terminal and agent windows, and reads their panes", async () => {
+    const script = `
+      const { HostedTmux } = await import(${JSON.stringify(join(import.meta.dir, "../src/daemon/hosted-tmux.ts"))});
+      const { readPaneInfo } = await import(${JSON.stringify(join(import.meta.dir, "../src/daemon/hosted-term.ts"))});
+      const hosted = new HostedTmux(process.argv[1]);
+      const mine = await hosted.mine(process.argv[1], null, "/bin/sh");
+      const agent = await hosted.open({ argv: ["/bin/sh", "-c", "printf 'café ✓\\n'; exec sleep 60"], folder: process.argv[1], name: "agent", env: {} });
+      const tabs = await hosted.mineTabs();
+      const st = hosted.state();
+      const info = mine.ok ? readPaneInfo((await hosted.tmux(st, ["display-message", "-p", "-t", mine.pane, "#{session_name}\t#{window_id}\t#{pane_width}\t#{pane_height}\t0\t0\t1\t0\t0"])).stdout) : null;
+      let screen = "";
+      for (let i = 0; i < 50 && agent.ok && !screen.includes("caf"); i++) {
+        screen = hosted.pane(agent.pane)?.screen() ?? "";
+        await Bun.sleep(100);
+      }
+      await hosted.kill();
+      console.log(JSON.stringify({ mine, agent, tabs, info, screen }));
+    `;
+    const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== "LANG" && key !== "TMUX" && !key.startsWith("LC_")));
+    const child = Bun.spawn([process.execPath, "-e", script, home], { env, stdout: "pipe", stderr: "pipe" });
+    const [out, err] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
+    if (!out.trim()) throw new Error(err);
+    const r = JSON.parse(out);
+    expect(r.mine).toMatchObject({ ok: true, pane: expect.stringMatching(/^%\d+$/) });
+    expect(r.agent).toMatchObject({ ok: true, window: expect.stringMatching(/^@\d+$/), pane: expect.stringMatching(/^%\d+$/) });
+    expect(r.tabs).toEqual([{ pane: r.mine.pane, label: expect.any(String) }]);
+    expect(r.info).toMatchObject({ session: "_kiwi", cols: expect.any(Number), rows: expect.any(Number) });
+    expect(r.screen).toContain("café ✓");
+  });
+});

@@ -437,10 +437,10 @@ esac`,
     expect(runs[0]).toContain("--plan");
     expect(runs[0]!.some((a) => a.includes("kiwi join"))).toBe(false);
     const set = runs.find((c) => c.includes("set-buffer"))!;
-    expect(set.slice(0, 2)).toEqual(["-S", "/tmp/sock"]);
+    expect(set.slice(0, 3)).toEqual(["-u", "-S", "/tmp/sock"]);
     expect(set.at(-1)).toContain(`kiwi join ${code} --nick 'Kim'`);
     expect(runs.find((c) => c.includes("paste-buffer"))).toEqual(expect.arrayContaining(["-p", "-t", "%9"]));
-    expect(runs.find((c) => c.includes("send-keys"))).toEqual(["-S", "/tmp/sock", "send-keys", "-t", "%9", "Enter"]);
+    expect(runs.find((c) => c.includes("send-keys"))).toEqual(["-u", "-S", "/tmp/sock", "send-keys", "-t", "%9", "Enter"]);
 
     rmSync(calls, { force: true });
     const osascript = script(join(dir, "tools"), "osascript", "exit 0");

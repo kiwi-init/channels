@@ -21,7 +21,7 @@ export function localTmuxSeats(cfg: Config = loadConfig(), hosted = false): Tmux
 }
 
 export async function showPane(place: TmuxPlace, tmux: string): Promise<ShowResult> {
-  const cmd = (...args: string[]) => run([tmux, "-S", place.socket, ...args], 5_000);
+  const cmd = (...args: string[]) => run([tmux, "-u", "-S", place.socket, ...args], 5_000);
   const found = await cmd("display-message", "-p", "-t", place.pane, "#{window_id}");
   if (found.status !== 0 && NO_SERVER.test(found.stderr)) return { ok: false, why: "no-server" };
   const window = found.stdout.trim();
