@@ -15,7 +15,7 @@ import { ComputersModal, Palette, preloadAccountItems, SettingsPage } from "@/co
 import { whenIdle } from "@/lib/later"
 import { useAutoApproval } from "@/lib/auto-approval"
 import { parseHash } from "@kiwi/channel/hash.ts"
-import { useChannelList } from "@/lib/channel"
+import { useChannelList } from "@kiwi/channel/list.ts"
 import { joinCodeFromLink } from "@/lib/deep-link"
 import { newsTotal, rowNews, startMarks, useMarks, useNewsKeys, useOpenNews, useTabNews } from "@kiwi/channel/news.ts"
 import { formatShort } from "@/lib/format"

@@ -5,7 +5,7 @@ import type { FoldMember } from "@kiwi/core/state/types.ts";
 import { askLabel, asksFor, chosenOf, heldAsks } from "../../web/src/lib/asks.ts";
 import { avatarIndex } from "../../web/src/lib/avatar-pick.ts";
 import { chipsFor } from "../../web/src/lib/reactions.ts";
-import type { Online } from "../../web/src/lib/channel/online.ts";
+import type { Online } from "@kiwi/channel/online.ts";
 import { knownHarness, monoHarness } from "../../web/src/lib/harness.ts";
 import { lastPreview } from "../../web/src/lib/preview.ts";
 import { reviewsFor } from "@kiwi/channel/task-actions.ts";

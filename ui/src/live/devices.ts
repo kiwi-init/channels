@@ -1,6 +1,6 @@
 import { useEffect } from "react"
 
-import { loadMember } from "@/lib/channel"
+import { loadMember } from "@kiwi/channel/store.ts"
 import { linkOf } from "@kiwi/channel/channel-ops.ts"
 import { postList } from "@/lib/device-lists"
 import { bridge, type DeviceNewsView } from "@kiwi/secrets/secrets.ts"

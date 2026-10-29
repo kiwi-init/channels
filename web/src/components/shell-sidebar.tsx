@@ -1,7 +1,7 @@
 import { Add01Icon, ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon, LockIcon, MinusSignIcon, Settings02Icon, SidebarLeftIcon, SquareIcon } from "@hugeicons/core-free-icons"
 import { createContext, useContext, useState, type ReactNode } from "react"
 
-import type { ChannelRow } from "@/lib/channel"
+import type { ChannelRow } from "@kiwi/channel/list.ts"
 import type { RowNews } from "@kiwi/channel/news.ts"
 import { useIcons } from "@/lib/icons"
 import { useOwnPicture } from "@/lib/own-picture"

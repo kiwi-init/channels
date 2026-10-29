@@ -29,7 +29,7 @@ const fullFmt = new Intl.DateTimeFormat(undefined, { dateStyle: "full", timeStyl
 const weekdayFmt = new Intl.DateTimeFormat(undefined, { weekday: "long" })
 const dateFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "numeric", year: "2-digit" })
 
-export const showable = (ts: number) => Number.isFinite(new Date(ts).getTime())
+const showable = (ts: number) => Number.isFinite(new Date(ts).getTime())
 
 export const formatTime = (ts: number) => (showable(ts) ? timeFmt.format(ts) : "")
 export const formatFull = (ts: number) => (showable(ts) ? fullFmt.format(ts) : "")

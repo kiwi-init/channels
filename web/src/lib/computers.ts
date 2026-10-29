@@ -2,7 +2,7 @@
 // kept in the bridge's secrets store. Removing one takes its agents out of every channel this app
 // owns, then forgets it.
 
-import { allMembers } from "./channel"
+import { allMembers } from "@kiwi/channel/store.ts"
 import { linkOf, type ChannelLink } from "@kiwi/channel/channel-ops.ts"
 import { takeAgents } from "./remove-agents"
 import { bridge, saveComputers, secrets, type ComputerView } from "@kiwi/secrets/secrets.ts"

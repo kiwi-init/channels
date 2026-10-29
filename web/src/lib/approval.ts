@@ -4,7 +4,7 @@
 // once, so the person can open the channel and decide.
 
 import { TEND_SAFETY_MS, tendOnPush, tendOwned } from "./approval-tend"
-import { loadMember } from "./channel"
+import { loadMember } from "@kiwi/channel/store.ts"
 import { linkOf, watches } from "@kiwi/channel/channel-ops.ts"
 import { tendLists } from "./device-lists"
 import { followedLaunches, sawMembers, sawRequests } from "./launch-follow"

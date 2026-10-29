@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react"
 
 import type { MemberPicture } from "@kiwi/core/protocol.ts"
 import { isPerson, type ChannelState } from "@kiwi/core/state.ts"
-import type { ChannelHandle } from "@/lib/channel"
+import type { ChannelHandle } from "@kiwi/channel/use-channel.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 
 /** People's pictures in this channel, by member name, for the faces drawn in it. */

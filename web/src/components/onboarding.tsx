@@ -1,7 +1,8 @@
 import { memo, useCallback, useState } from "react"
 
 import { relayUrl } from "@kiwi/secrets/relay.ts"
-import { isJoinCode, loadMember, loadPending, type ChannelRow, type PendingJoin, type StoredMember } from "@/lib/channel"
+import { isJoinCode, loadMember, loadPending, type PendingJoin, type StoredMember } from "@kiwi/channel/store.ts"
+import { type ChannelRow } from "@kiwi/channel/list.ts"
 import { Conversation } from "./conversation"
 import { errorText } from "./kit"
 import { JoinScreens } from "./lazy"
