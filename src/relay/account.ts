@@ -1,6 +1,6 @@
 import { AUTH_SKEW_MS, verifyRequest } from "@kiwi/core/auth.ts";
 import { b64url } from "@kiwi/core/crypto.ts";
-import { currentDevice, readDeviceList, type Device, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
+import { approvingDevice, readDeviceList, type Device, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import { accountScope, ENROLL_TTL_MS, readEnrollAnswer, readEnrollAsk, revealMatches, type Enrollment } from "@kiwi/core/enroll.ts";
 import { canonical } from "@kiwi/core/identity.ts";
 import { checkVault, readRecovery, type Recovery, type RecoveryLink, type Vault } from "@kiwi/core/recovery.ts";
@@ -22,6 +22,7 @@ export interface AccountStore {
   enrollment(user: string): Promise<Enrollment | null>;
   setEnrollment(user: string, next: Enrollment | null, prev: Enrollment | null): Promise<boolean>;
   revoke(keys: string[]): Promise<void>;
+  tellComputers(keys: string[], links: unknown[]): Promise<void>;
   recovery(user: string): Promise<unknown[]>;
   extendRecovery(user: string, from: number, links: RecoveryLink[]): Promise<boolean>;
   vault(user: string): Promise<Vault | null>;
@@ -57,10 +58,7 @@ export async function accountUser(req: Request, human: HumanAuth | null): Promis
   return user ?? refuse(new SignInRequired({ message: "sign in to reach your account" }));
 }
 
-function approver(list: DeviceList | null, pk: string, now: number): Device | null {
-  const d = list ? currentDevice(list, pk, now) : null;
-  return d && d.approve && d.as !== "computer" ? d : null;
-}
+const approver = (list: DeviceList | null, pk: string, now: number): Device | null => (list ? approvingDevice(list, pk, now) : null);
 
 async function kept(store: AccountStore, user: string): Promise<{ links: unknown[]; list: DeviceList | null }> {
   const links = await store.links(user);
@@ -160,6 +158,8 @@ export async function onAccountHttp(
     if (!(await store.extend(user, links.length, raw.slice(links.length) as DeviceLink[]))) return refuse(new Conflict({ message: "the device list changed meanwhile; read it and try again" }));
     const cut = next.revoked.filter((k) => !list?.revoked.includes(k));
     if (cut.length) await store.revoke(cut);
+    const computers = next.devices.filter((d) => d.as === "computer").map((d) => d.device);
+    if (computers.length) await store.tellComputers(computers, raw);
     return done();
   }
 

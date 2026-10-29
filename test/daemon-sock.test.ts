@@ -6,7 +6,8 @@ import { chmodSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { adoptDaemon, daemonHello, daemonListening, daemonSock, ensureDaemon, loadPairedMachine, startDaemon, stopDaemon, type Daemon } from "../src/daemon.ts";
-import { generateIdentity } from "@kiwi/core/identity.ts";
+import { certUntil, nextLink, readDeviceList, rootLink } from "@kiwi/core/devices.ts";
+import { generateIdentity, withExchangeKey } from "@kiwi/core/identity.ts";
 import { saveMachine } from "../src/machine.ts";
 import { certifyMachine } from "@kiwi/core/person.ts";
 import { VERSION } from "../src/version.ts";
@@ -50,7 +51,7 @@ describe("the daemon socket", () => {
     const h0 = await daemonHello();
     const person = await generateIdentity("Ada Lovelace");
     const cert = await certifyMachine(person, { pk: h0.machine!, xpk: h0.mxpk!, label: "sock-test" });
-    await adoptDaemon(cert, { pk: person.pk, xpk: person.xpk!, name: "Ada Lovelace" });
+    await adoptDaemon({ cert }, { pk: person.pk, xpk: person.xpk!, name: "Ada Lovelace" });
     const h1 = await daemonHello();
     expect(h1.certified).toBe(true);
     expect(h1.person).toEqual({ pk: person.pk, xpk: person.xpk!, name: "Ada Lovelace" });
@@ -59,7 +60,37 @@ describe("the daemon socket", () => {
     const mallory = await generateIdentity("Mallory");
     const other = await generateIdentity("someone-else");
     const foreign = await certifyMachine(mallory, { pk: other.pk, xpk: other.xpk!, label: "x" });
-    await expect(adoptDaemon(foreign, { pk: mallory.pk, xpk: mallory.xpk!, name: "M" })).rejects.toThrow(/another computer/);
+    await expect(adoptDaemon({ cert: foreign }, { pk: mallory.pk, xpk: mallory.xpk!, name: "M" })).rejects.toThrow(/another computer/);
+  });
+
+  test("adopt takes a device list that lists this computer, and refuses one that doesn't", async () => {
+    const h0 = await daemonHello();
+    const person = await withExchangeKey(await generateIdentity("Grace Hopper"));
+    const desk = await withExchangeKey(await generateIdentity("desk"));
+    const root = [await rootLink(person, { pk: desk.pk, xpk: desk.xpk!, label: "desk", os: "macOS", as: "desktop" })];
+    const read = await readDeviceList(root);
+    if (!read.ok) throw new Error(read.why);
+    const named = { pk: person.pk, xpk: person.xpk!, name: "Grace Hopper" };
+    await expect(adoptDaemon({ links: root }, named)).rejects.toThrow(/doesn't list this computer/);
+    const links = [
+      ...root,
+      await nextLink(read.list, desk, { op: "add", device: h0.machine!, dxpk: h0.mxpk!, label: "sock-test", os: "macOS", as: "computer", approve: false, until: certUntil(Date.now()) }),
+    ];
+    const stranger = await generateIdentity("Mallory");
+    await expect(adoptDaemon({ links }, { pk: stranger.pk, xpk: stranger.xpk!, name: "M" })).rejects.toThrow(/another person's/);
+    await expect(adoptDaemon({ links: links.map((l, i) => (i === 1 ? { ...l, label: "renamed" } : l)) }, named)).rejects.toThrow(/doesn't check out/);
+    await adoptDaemon({ links }, named);
+    const h1 = await daemonHello();
+    expect(h1.certified).toBe(true);
+    expect(h1.person).toEqual(named);
+    expect(loadPairedMachine()?.device?.links).toEqual(links);
+    const after = await readDeviceList(links);
+    if (!after.ok) throw new Error(after.why);
+    const renewed = [...links, await nextLink(after.list, desk, { op: "renew", device: h0.machine!, until: certUntil(Date.now()) + 1 })];
+    await adoptDaemon({ links: renewed }, named);
+    await expect(adoptDaemon({ links }, named)).rejects.toThrow(/newer device list/);
+    expect(loadPairedMachine()?.device?.links).toEqual(renewed);
+    expect(loadPairedMachine()?.cert).toBeUndefined();
   });
 
   test("hello re-reads machine.json: no cached pairing", async () => {

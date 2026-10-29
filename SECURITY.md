@@ -644,7 +644,9 @@ device makes before it sees the app's nonce, so a relay that swaps keys can't gr
 The grant goes through the one-time mailbox, sealed to the two devices' keys, and holds the
 device list, the person's public key and name, and the channel codes it may join, never a
 secret key. A computer approved by the app holding your person key also gets its MachineCert
-there, so the app can start agents on it.
+there, so the app can start agents on it. A computer in your device list can instead register with
+the list, and then takes asks from your person key or any current approving desktop in it, never a
+phone or another computer.
 
 The kl1 link code and `kiwi pair` are gone. A phone linked with a kl1 code before then still
 holds copies of the person key and its channels' keys; see below.

@@ -51,12 +51,14 @@ import {
   personMachine,
   signedMachineRequest,
   signedPersonRequest,
+  takeNewerList,
   type MachineBox,
   type MachineStore,
   type PersonMachine,
 } from "./machine.ts";
 import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, type AccountStore } from "./account.ts";
 import { ENROLL_TTL_MS, type Enrollment } from "@kiwi/core/enroll.ts";
+import type { DeviceLink } from "@kiwi/core/devices.ts";
 import type { Vault } from "@kiwi/core/recovery.ts";
 import { allow as allowPerMinute } from "./room/limits.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync, type Relay } from "./route.ts";
@@ -343,6 +345,7 @@ export class MachineInbox extends DurableObject<Env> {
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS floor (k INTEGER PRIMARY KEY CHECK (k = 1), cert_at INTEGER NOT NULL)");
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS boxes (id TEXT PRIMARY KEY, box TEXT NOT NULL, at INTEGER NOT NULL)");
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS revoked (k INTEGER PRIMARY KEY CHECK (k = 1))");
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS links (k INTEGER PRIMARY KEY CHECK (k = 1), links TEXT NOT NULL)");
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING, PONG));
   }
 
@@ -382,7 +385,16 @@ export class MachineInbox extends DurableObject<Env> {
       unbind: async () => {
         sql.exec("DELETE FROM binding");
         sql.exec("DELETE FROM boxes");
+        sql.exec("DELETE FROM links");
         await this.schedule();
+      },
+      links: async () => {
+        const row = sql.exec("SELECT links FROM links").toArray()[0] as { links: string } | undefined;
+        return row ? (JSON.parse(row.links) as unknown[]) : null;
+      },
+      keepLinks: async (_mpk, links) => {
+        if (links) sql.exec("INSERT OR REPLACE INTO links (k, links) VALUES (1, ?)", JSON.stringify(links));
+        else sql.exec("DELETE FROM links");
       },
       pending: async (_mpk, since) => (sql.exec("SELECT COUNT(*) AS n FROM boxes WHERE at >= ?", since).toArray()[0] as { n: number }).n,
       boxes: async (_mpk, since) => sql.exec("SELECT id, box, at FROM boxes WHERE at >= ? ORDER BY at", since).toArray() as unknown as MachineBox[],
@@ -409,14 +421,19 @@ export class MachineInbox extends DurableObject<Env> {
     sql.exec("INSERT OR IGNORE INTO revoked (k) VALUES (1)");
     sql.exec("DELETE FROM binding");
     sql.exec("DELETE FROM boxes");
+    sql.exec("DELETE FROM links");
     for (const ws of this.live()) close(ws, 4000, "unpaired");
     await this.schedule();
   }
 
-  async listed(mpk: string): Promise<{ person: string; machine: PersonMachine } | null> {
+  async listed(mpk: string): Promise<{ person: string; machine: PersonMachine; links: DeviceLink[] | null } | null> {
     const store = this.store();
     const b = await store.binding(mpk);
-    return b ? { person: b.person, machine: personMachine(mpk, b, store.online(mpk)) } : null;
+    return b ? { person: b.person, machine: personMachine(mpk, b, store.online(mpk)), links: (await store.links(mpk)) as DeviceLink[] | null } : null;
+  }
+
+  async takeList(mpk: string, links: DeviceLink[]): Promise<void> {
+    await takeNewerList(this.store(), mpk, links, Date.now());
   }
 
   override async fetch(req: Request): Promise<Response> {
@@ -447,7 +464,7 @@ export class MachineInbox extends DurableObject<Env> {
     const sql = this.ctx.storage.sql;
     const now = Date.now();
     sql.exec("DELETE FROM boxes WHERE at < ?", now - MACHINE_BOX_TTL_MS);
-    if (!this.live().length) sql.exec("DELETE FROM binding WHERE seen_at < ?", now - MACHINE_UNSEEN_MS);
+    if (!this.live().length && sql.exec("DELETE FROM binding WHERE seen_at < ?", now - MACHINE_UNSEEN_MS).rowsWritten) sql.exec("DELETE FROM links");
     await this.schedule();
   }
 }
@@ -462,7 +479,7 @@ export class PersonMachines extends DurableObject<Env> {
     this.ctx.storage.sql.exec("INSERT OR IGNORE INTO machines (mpk) VALUES (?)", mpk);
   }
 
-  private async machines(person: string): Promise<PersonMachine[]> {
+  private async listed(person: string): Promise<{ machine: PersonMachine; links: DeviceLink[] | null }[]> {
     const sql = this.ctx.storage.sql;
     const keys = sql
       .exec("SELECT mpk FROM machines")
@@ -470,12 +487,16 @@ export class PersonMachines extends DurableObject<Env> {
       .map((r) => String(r.mpk));
     const listed = await Promise.all(keys.map(async (mpk) => ({ mpk, got: await this.env.MACHINES.get(this.env.MACHINES.idFromName(mpk)).listed(mpk) })));
     for (const { mpk, got } of listed) if (got?.person !== person) sql.exec("DELETE FROM machines WHERE mpk = ?", mpk);
-    return listed.flatMap(({ got }) => (got?.person === person ? [got.machine] : []));
+    return listed.flatMap(({ got }) => (got?.person === person ? [{ machine: got.machine, links: got.links }] : []));
   }
 
   override async fetch(req: Request): Promise<Response> {
     try {
-      return (await onPersonHttp(req, { machines: (person) => this.machines(person) })) ?? withCors(errorResponse(new NotFound({ message: "not found" })));
+      const store = {
+        machines: async (person: string) => (await this.listed(person)).map((l) => l.machine),
+        lists: async (person: string) => (await this.listed(person)).flatMap((l) => (l.links ? [l.links] : [])),
+      };
+      return (await onPersonHttp(req, store)) ?? withCors(errorResponse(new NotFound({ message: "not found" })));
     } catch (err) {
       return withCors(errorResponse(err));
     }
@@ -519,6 +540,9 @@ export class Account extends DurableObject<Env> {
       },
       revoke: async (keys) => {
         await Promise.all(keys.map((pk) => this.env.MACHINES.get(this.env.MACHINES.idFromName(pk)).revoke()));
+      },
+      tellComputers: async (keys, links) => {
+        await Promise.all(keys.map((pk) => this.env.MACHINES.get(this.env.MACHINES.idFromName(pk)).takeList(pk, links as DeviceLink[])));
       },
       recovery: async () => (sql.exec("SELECT link FROM recovery ORDER BY n").toArray() as { link: string }[]).map((r) => JSON.parse(r.link) as unknown),
       extendRecovery: async (_user, from, links) => {
@@ -639,10 +663,10 @@ export default {
       return env.ACCOUNTS.get(env.ACCOUNTS.idFromName(user)).serve(user, req);
     }
     if (url.pathname.startsWith("/v1/person/")) {
-      const pk = await signedPersonRequest(req, Date.now());
-      if (pk === null) return withCors(errorResponse(new NotFound({ message: "not found" })));
-      if (pk instanceof Response) return pk;
-      return env.PERSON_MACHINES.get(env.PERSON_MACHINES.idFromName(pk)).fetch(req);
+      const signed = await signedPersonRequest(req, Date.now());
+      if (signed === null) return withCors(errorResponse(new NotFound({ message: "not found" })));
+      if (signed instanceof Response) return signed;
+      return env.PERSON_MACHINES.get(env.PERSON_MACHINES.idFromName(signed.pk)).fetch(req);
     }
     const github = await onGithubHttp(req, env.GITHUB_WEBHOOK_SECRET, githubRoutes(env));
     if (github) return github;

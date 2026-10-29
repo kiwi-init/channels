@@ -217,6 +217,18 @@ export function currentDevice(list: DeviceList, pk: string, now = Date.now()): D
   return d && d.until > now ? d : null;
 }
 
+export function approvingDevice(list: DeviceList, pk: string, now = Date.now()): Device | null {
+  const d = currentDevice(list, pk, now);
+  return d && d.approve && d.as !== "computer" ? d : null;
+}
+
+export const speaksForPerson = (list: DeviceList, pk: string, now = Date.now()): boolean => pk === list.person || !!approvingDevice(list, pk, now);
+
+export function listedComputer(list: DeviceList, pk: string, now = Date.now()): Device | null {
+  const d = currentDevice(list, pk, now);
+  return d && d.as === "computer" ? d : null;
+}
+
 export const dueForRenewal = (list: DeviceList, now = Date.now()): Device[] => list.devices.filter((d) => d.until > now && d.until - now <= RENEW_WITHIN_DAYS * DAY_MS);
 
 function newestList(a: DeviceList | undefined, b: DeviceList | undefined): DeviceList | undefined {
