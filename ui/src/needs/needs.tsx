@@ -14,12 +14,7 @@ import { useApp } from "~/nav"
 import { nickname } from "~/names"
 import { ShowAgent } from "~/kit/show-agent"
 import { SendBack } from "~/tasks/send-back"
-
-const isOpen = (a: Ask): boolean => a.kind === "review" || !a.answer
-
-const isIdle = (a: Ask): boolean => a.kind === "question" && !!a.idle && !a.answer
-
-export const openAsks = (channel: Channel): Ask[] => channel.asks.filter((a) => isOpen(a) && !isIdle(a))
+import { isIdle, isOpen, openAsks } from "~/needs/open"
 
 export function NeedsYou({ channel, onJump }: { channel: Channel; onJump: (jump: Jump) => void }) {
   const open = openAsks(channel).sort((a, b) => a.at - b.at)
