@@ -4,6 +4,7 @@ import { nameKey, runsLine } from "@kiwi/core/membership.ts"
 import type { Card, Event } from "@kiwi/core/protocol.ts"
 import { permissionAnswer } from "@kiwi/core/permission.ts"
 import { describeEvent, proofLabel } from "@kiwi/core/format.ts"
+import { memberLoad, showsLoad } from "@kiwi/core/load.ts"
 import { FAILED, prLinks, taskPr } from "@kiwi/core/prs.ts"
 import { GENERAL_ROOM, ignored, isQuiet, isReaction, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { pickFor, taskCandidates } from "@kiwi/core/routing.ts"
@@ -32,7 +33,29 @@ import { reviewsFor, taskActions } from "@/lib/task-actions"
 import { roomOfMessage, roomSeenKey } from "@/lib/rooms"
 import { canonicalHarness, harnessName } from "@/lib/harness"
 import type { Online } from "@/lib/channel/online"
-import type { Ask, Color, Direct, Harness, Image, JoinAsk, Message, Person, PullRequest, Reaction, Room, Task, TaskEvent, TaskMove, TaskStatus, TheirDirect, Upload, Where } from "~/model"
+import { howHere } from "@/lib/presence"
+import type {
+  Activity,
+  Ask,
+  Color,
+  Direct,
+  Harness,
+  Image,
+  JoinAsk,
+  Load,
+  Message,
+  Person,
+  PullRequest,
+  Reaction,
+  Room,
+  Task,
+  TaskEvent,
+  TaskMove,
+  TaskStatus,
+  TheirDirect,
+  Upload,
+  Where,
+} from "~/model"
 
 type Seen = Readonly<Record<string, number>>
 
@@ -57,20 +80,37 @@ export function harnessOf(raw: string | undefined): Harness | undefined {
 
 type StateMember = ChannelState["members"] extends ReadonlyMap<string, infer M> ? M : never
 
-function personOf(
-  state: ChannelState,
-  m: StateMember,
-  record: RosterMember | undefined,
-  here: Online | undefined,
-  me: string,
-  wakes: ReadonlyMap<string, boolean>,
-  doing: ReadonlyMap<string, number>
-): Person {
+const OS: Record<string, string> = { macos: "macOS", linux: "Linux", windows: "Windows" }
+
+const specsOf = (card: Card): string => [[card.os && (OS[card.os] ?? card.os), card.arch].filter(Boolean).join(" "), card.cpu, card.memory].filter(Boolean).join(" · ")
+
+function activityOf(here: Online | undefined): Activity | undefined {
+  const a = here?.activity
+  if (!a) return undefined
+  return {
+    state: a.state,
+    ...(a.tool ? { tool: a.tool } : {}),
+    ...(a.since ? { since: a.since } : {}),
+    ...(a.context ? { context: a.context.window ? { used: a.context.used, window: a.context.window } : { used: a.context.used } } : {}),
+  }
+}
+
+function loadOf(state: ChannelState, m: StateMember): Load | undefined {
+  const l = memberLoad(state, m.name)
+  if (!showsLoad(m, l)) return undefined
+  return { level: l.level, doing: l.current.map((t) => t.id), queued: l.queued.map((t) => t.id), waiting: l.waiting.map((t) => t.id) }
+}
+
+function personOf(state: ChannelState, m: StateMember, record: RosterMember | undefined, here: Online | undefined, me: string, wakes: ReadonlyMap<string, boolean>): Person {
   const human = isPerson(m)
   const raw = m.runs?.harness ?? m.card?.harness
   const harness = human ? undefined : harnessOf(raw)
   const sponsor = human ? undefined : (humanOf(state, m.name) ?? m.sponsor?.handle ?? m.sponsor?.name)
   const color: Color | null = colorOf(state, m.name)
+  const activity = human ? undefined : activityOf(here)
+  const reach = human ? null : howHere(here)
+  const specs = m.card ? specsOf(m.card) : ""
+  const load = loadOf(state, m)
   return {
     name: m.name,
     kind: human ? "human" : "agent",
@@ -81,16 +121,20 @@ function personOf(
     owner: m.owner,
     you: m.name === me,
     presence: m.name === me || here ? (human && here?.activity?.state === "idle" ? "away" : "online") : "offline",
-    typing: false,
+    ...(activity ? { activity } : {}),
+    ...(reach && reach !== "unknown" ? { reach } : {}),
     ...(harness ? { harness } : {}),
     ...(!human && raw ? { runs: harnessName(canonicalHarness(raw) ?? raw) } : {}),
     ...(!human && (m.runs?.model ?? here?.activity?.model ?? m.card?.model) ? { model: m.runs?.model ?? here?.activity?.model ?? m.card?.model } : {}),
-    ...(record?.from?.label ? { machine: record.from.label } : m.card?.os ? { machine: m.card.os } : {}),
-    ...(m.card?.repo ? { folder: m.card.repo } : {}),
+    ...(record?.from?.label ? { machine: record.from.label } : {}),
+    ...(!human && specs ? { specs } : {}),
+    ...(!human && m.card?.tools?.length ? { tools: m.card.tools } : {}),
+    ...(m.card?.repo ? { repo: m.card.repo, outside: outsideRepos(state, m.card) } : {}),
+    ...(m.card?.repo && m.card.branch ? { branch: m.card.branch } : {}),
     ...(m.persona ? { persona: m.persona.name } : {}),
     ...(sponsor ? { sponsor } : {}),
     ...(m.card?.note ? { about: m.card.note } : {}),
-    ...(doing.has(m.name) ? { doing: doing.get(m.name) } : {}),
+    ...(load ? { load } : {}),
     ...(!m.owner && !canPost(m.scopes) ? { readOnly: true } : {}),
     ...(!human && wakes.has(m.name) ? { wakes: wakes.get(m.name) === true } : {}),
     ...(human && record?.addsAgents ? { addsAgents: true } : {}),
@@ -103,15 +147,13 @@ function personOf(
 
 export function peopleOf(state: ChannelState, roster: readonly RosterMember[], online: ReadonlyMap<string, Online>, me: string, wakes: ReadonlyMap<string, boolean>): Person[] {
   const byName = new Map(roster.filter((r) => r.active).map((r) => [r.name, r]))
-  const doing = new Map<string, number>()
-  for (const t of state.tasks.values()) if (t.owner && t.state === "doing" && !doing.has(t.owner)) doing.set(t.owner, t.id)
-  return [...state.members.values()].filter((m) => m.active && m.kind !== "computer").map((m) => personOf(state, m, byName.get(m.name), online.get(m.name), me, wakes, doing))
+  return [...state.members.values()].filter((m) => m.active && m.kind !== "computer").map((m) => personOf(state, m, byName.get(m.name), online.get(m.name), me, wakes))
 }
 
 export function formerOf(state: ChannelState, me: string): Person[] {
   return [...state.members.values()]
     .filter((m) => !m.active && m.kind !== "computer")
-    .map((m) => ({ ...personOf(state, m, undefined, undefined, me, new Map(), new Map()), presence: "offline" as const, left: true }))
+    .map((m) => ({ ...personOf(state, m, undefined, undefined, me, new Map()), presence: "offline" as const, left: true }))
 }
 
 export function roomsOf(state: ChannelState, messages: readonly Wire[], me: string, seen: Seen, from: number): Room[] {
@@ -443,11 +485,9 @@ interface AsksMap {
 
 const isQuestion = (m: Wire): boolean => (m.kind === "ask" || m.kind === "blocking") && !m.permission && !m.handoff
 
-const OS: Record<string, string> = { macos: "macOS", linux: "Linux", windows: "Windows" }
-
 function saidOf(state: ChannelState, card: Card | undefined): JoinAsk["said"] {
   if (!card) return "nothing"
-  const machine = [[card.os && (OS[card.os] ?? card.os), card.arch].filter(Boolean).join(" "), card.cpu, card.memory].filter(Boolean).join(" · ")
+  const machine = specsOf(card)
   return {
     ...(machine ? { machine } : {}),
     ...(card.tools?.length ? { tools: card.tools } : {}),

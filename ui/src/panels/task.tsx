@@ -189,7 +189,7 @@ function Choice({ channel, person, on, about, onPick }: { channel: Channel; pers
 const agentsFirst = (a: Person, b: Person): number => (a.kind === b.kind ? 0 : a.kind === "agent" ? -1 : 1)
 
 const aboutOf = (p: Person): string =>
-  [p.kind === "agent" ? "Agent" : "Person", p.role === "lead" ? "lead" : undefined, p.doing !== undefined ? `on T${p.doing}` : undefined].filter(Boolean).join(" · ")
+  [p.kind === "agent" ? "Agent" : "Person", p.role === "lead" ? "lead" : undefined, p.load?.doing.length ? `on ${p.load.doing.map((t) => `T${t}`).join(", ")}` : undefined].filter(Boolean).join(" · ")
 
 function Assign({ channel, task, open, onClose }: { channel: Channel; task: Task; open: boolean; onClose: () => void }) {
   const { app, toast } = useApp()
