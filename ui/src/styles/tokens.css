@@ -7,21 +7,21 @@
 
 :root {
   color-scheme: dark;
-  --bg: #111113;
-  --bg-2: #18181b;
-  --bg-3: #212125;
+  --bg: #000000;
+  --bg-2: #0c0c0d;
+  --bg-3: #18181a;
   --ink: #ececef;
   --selection: color-mix(in srgb, var(--ink) 28%, transparent);
   --ink-2: #a3a3ab;
   --ink-3: #808089;
-  --line: rgb(255 255 255 / 0.06);
-  --line-2: rgb(255 255 255 / 0.09);
-  --line-3: rgb(255 255 255 / 0.13);
+  --line: rgb(255 255 255 / 0.08);
+  --line-2: rgb(255 255 255 / 0.11);
+  --line-3: rgb(255 255 255 / 0.15);
   --wash: rgb(255 255 255 / 0.045);
   --wash-2: rgb(255 255 255 / 0.08);
-  --scrim: rgb(0 0 0 / 0.55);
+  --scrim: rgb(0 0 0 / 0.7);
   --link: #8ab4ff;
-  --on-ink: #111113;
+  --on-ink: #000000;
   --accent: #8ab4ff;
   --accent-wash: rgb(138 180 255 / 0.14);
   --live: #32d074;

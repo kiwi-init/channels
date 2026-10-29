@@ -37,7 +37,7 @@ export const DEMO_PREFS: Prefs = {
   reduceMotion: false,
   notify: "mentions",
   enterSends: true,
-  darkTheme: "channels-dark",
+  darkTheme: "channels-oled",
   lightTheme: "channels-light",
   customThemes: [],
 }

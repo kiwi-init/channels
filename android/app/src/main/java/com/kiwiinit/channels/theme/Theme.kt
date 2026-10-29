@@ -91,8 +91,9 @@ private val darkScheme = darkColorScheme(
     onPrimaryContainer = Color(0xFFD3E3FD),
     secondaryContainer = Color(0xFF004A77),
     onSecondaryContainer = Color(0xFFC2E7FF),
-    surface = Color(0xFF131314),
-    surfaceContainerLowest = Color(0xFF0E0E0E),
+    background = Color.Black,
+    surface = Color.Black,
+    surfaceContainerLowest = Color.Black,
     surfaceContainerLow = Color(0xFF1B1B1B),
     surfaceContainer = Color(0xFF1E1F20),
     surfaceContainerHigh = Color(0xFF282A2C),
@@ -146,12 +147,14 @@ private fun tones(scheme: ColorScheme, dark: Boolean): Tones =
         )
     }
 
+private fun ColorScheme.oled(): ColorScheme = copy(background = Color.Black, surface = Color.Black, surfaceContainerLowest = Color.Black)
+
 @Composable
 fun ChannelsTheme(content: @Composable () -> Unit) {
     val dark = isSystemInDarkTheme()
     val context = LocalContext.current
     val scheme = when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> if (dark) dynamicDarkColorScheme(context).oled() else dynamicLightColorScheme(context)
         dark -> darkScheme
         else -> lightScheme
     }
