@@ -228,11 +228,20 @@ test("a hold taken from a shell records no process, so it never lapses on its ow
 
 test("a process's start is the same each time it's read, and unknown once the process is gone (#1272)", async () => {
   const child = Bun.spawn(["sleep", "30"]);
-  const started = processStart(child.pid);
-  expect(started).not.toBeNull();
-  expect(processStart(child.pid)).toBe(started);
-  expect(processStart(process.pid)).not.toBe(started);
-  child.kill(9);
-  await child.exited;
+  try {
+    const started = processStart(child.pid);
+    expect(started).not.toBeNull();
+    expect(processStart(child.pid)).toBe(started);
+  } finally {
+    child.kill(9);
+    await child.exited;
+  }
   expect(processStart(child.pid)).toBeNull();
+});
+
+test("a session that took a dead loop's seat keeps it when the loop's pid comes back as another process (#1272)", () => {
+  bindDirectory(dir, { alias: "ch", as: "dev", harness: "codex", session: "old" });
+  withHold({ key: "a-dead-loop", at: 1, holder: { pid: process.pid, started: "another start" } });
+  expect(seatHeldAway(loadConfig(), "ch", "dev")).toBe(false);
+  expect(seatsFor(dir, { who: { harness: "codex", session: "old" } }).map((b) => b.as)).toEqual(["dev"]);
 });

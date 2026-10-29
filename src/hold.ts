@@ -36,10 +36,6 @@ export function holdsSeat(b: SeatRecord, env: Env = process.env): boolean {
 
 type Hold = NonNullable<SeatRecord["hold"]>;
 
-function holderDead(hold: Hold): boolean {
-  return !!hold.holder && !pidAlive(hold.holder.pid);
-}
-
 function holderGone(hold: Hold): boolean {
   if (!hold.holder) return false;
   if (!pidAlive(hold.holder.pid)) return true;
@@ -48,7 +44,7 @@ function holderGone(hold: Hold): boolean {
 }
 
 export function heldAway(b: SeatRecord, env: Env = process.env): boolean {
-  return !!b.hold && !holdsSeat(b, env) && !holderDead(b.hold);
+  return !!b.hold && !holdsSeat(b, env) && !holderGone(b.hold);
 }
 
 function recordsOf(cfg: Config, alias: string, as: string): SeatRecord[] {
