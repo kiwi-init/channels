@@ -5,7 +5,7 @@ import type { Personality } from "@kiwi/core/personality.ts"
 import { stepReplyText } from "~/chat/step"
 import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_EMPTY, DEMO_GUEST, DEMO_PREFS, DEMO_TILES, DEMO_WAITING } from "~/demo/data"
 import { longFeed } from "~/demo/long"
-import type { Account, Actions, AgentStarts, App, Finding, ThisComputer, Channel, ChannelTile, Message, Prefs, Task } from "~/model"
+import type { Account, Actions, AgentStarts, App, Finding, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Task } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
 
@@ -15,6 +15,7 @@ interface State {
   channels: Map<string, Channel>
   prefs: Prefs
   seq: number
+  gone?: GoneChannel
 }
 
 const HARNESSES: App["harnesses"] = [
@@ -78,6 +79,7 @@ function withStep(c: Channel): Channel {
         from: "win",
         at,
         text,
+        label: "A step for you",
         options: [],
         holds: [13],
         step: {
@@ -87,18 +89,26 @@ function withStep(c: Channel): Channel {
           expect: "git config --file ~/.gitconfig-personal commit.gpgsign prints nothing.",
         },
       },
-      { kind: "question", id: "q-free", from: "atlas", at, text: free, options: [], holds: [11] },
+      { kind: "question", id: "q-free", from: "atlas", at, text: free, label: "Question for everyone", options: [], holds: [11] },
     ],
   }
 }
 
-export type Scenario = "full" | "long" | "step" | "signed-out" | "no-channels" | "updates" | "update-ready" | "update-available"
+export type Scenario = "full" | "long" | "step" | "opening" | "held" | "closed" | "removed" | "signed-out" | "no-channels" | "updates" | "update-ready" | "update-available"
 
 function initial(scenario: Scenario, look: Partial<Prefs>): State {
   const prefs = { ...DEMO_PREFS, ...look }
   const channels = new Map(
     [
-      scenario === "long" ? longFeed(DEMO_CHANNEL) : scenario === "step" ? withStep(DEMO_CHANNEL) : DEMO_CHANNEL,
+      scenario === "long"
+        ? longFeed(DEMO_CHANNEL)
+        : scenario === "step"
+          ? withStep(DEMO_CHANNEL)
+          : scenario === "opening"
+            ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
+            : scenario === "held"
+              ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
+              : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       { ...DEMO_EMPTY, code: "interlinked", title: "interlinked" },
@@ -111,6 +121,8 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
   if (scenario === "update-available") return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.8", ready: false, state: "available" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "signed-out") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000 }
   if (scenario === "no-channels") return { account: DEMO_ACCOUNT, tiles: [], channels: new Map(), prefs, seq: 1000 }
+  if (scenario === "closed" || scenario === "removed")
+    return { account: DEMO_ACCOUNT, tiles: DEMO_TILES.filter((t) => t.code !== "studio"), channels, prefs, seq: 1000, gone: { code: "studio", title: "studio", why: scenario } }
   return { account: DEMO_ACCOUNT, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
 }
 
@@ -152,6 +164,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         window.setTimeout(() => edit(code, (c) => ({ ...c, messages: c.messages.map((m) => (m.seq === sent ? { ...m, pending: undefined } : m)) })), 700)
       },
       retry: (code, seq) => edit(code, (c) => ({ ...c, messages: c.messages.map((m) => (m.seq === seq ? { ...m, failed: undefined } : m)) })),
+      loadImage: () => {},
       discard: (code, seq) => edit(code, (c) => ({ ...c, messages: c.messages.filter((m) => m.seq !== seq) })),
       react: (code, seq, emoji) =>
         edit(code, (c) => ({
@@ -194,7 +207,6 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
                 owner: false,
                 you: false,
                 presence: "online",
-                typing: false,
                 harness: ask.harness,
                 runs: ask.runs,
                 machine: ask.machine,
@@ -225,9 +237,52 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       addTask: (code, title, owner) =>
         edit(code, (c) => {
           const id = Math.max(0, ...c.tasks.map((t) => t.id)) + 1
-          return { ...c, tasks: [...c.tasks, { id, title, owner, status: "todo", createdBy: c.you, createdAt: Date.now(), updatedAt: Date.now(), notes: [], rounds: [], archived: false }] }
+          const unfiled = c.taskGroups.some((g) => g.head.kind === "unfiled")
+          return {
+            ...c,
+            taskGroups: unfiled
+              ? c.taskGroups.map((g) => (g.head.kind === "unfiled" ? { ...g, tasks: [id, ...g.tasks] } : g))
+              : [...c.taskGroups, { key: "unfiled", head: { kind: "unfiled" }, tasks: [id] }],
+            tasks: [...c.tasks, { id, title, owner, status: "todo", createdBy: c.you, createdAt: Date.now(), updatedAt: Date.now(), notes: [], rounds: [], history: [], archived: false }],
+          }
         }),
       setTaskStatus: (code, id, status) => editTask(code, id, (t) => ({ ...t, status, updatedAt: Date.now() })),
+      cancelTask: (code, id, why) =>
+        edit(code, (c, seq) => ({
+          ...c,
+          tasks: c.tasks.map((t) =>
+            t.id === id
+              ? {
+                  ...t,
+                  status: "done",
+                  cancelled: true,
+                  youReview: undefined,
+                  rounds: t.rounds.map((r) => (r.result === "open" ? { ...r, result: "withdrawn" } : r)),
+                  updatedAt: Date.now(),
+                  history: [...t.history, { seq, by: c.you, at: Date.now(), what: "cancelled", note: why }],
+                }
+              : t
+          ),
+        })),
+      assignTask: (code, id, to, why) =>
+        edit(code, (c, seq) => ({
+          ...c,
+          tasks: c.tasks.map((t) =>
+            t.id === id
+              ? { ...t, owner: to, suggested: undefined, updatedAt: Date.now(), history: [...t.history, { seq, by: c.you, at: Date.now(), what: "assigned", to, ...(why ? { note: why } : {}) }] }
+              : t
+          ),
+        })),
+      nameGoal: (code, ask, name) =>
+        edit(code, (c) => ({
+          ...c,
+          taskGroups: c.taskGroups.map((g) => (g.head.kind === "ask" && g.head.id === ask ? { ...g, head: { ...g.head, goal: name?.trim() || undefined } } : g)),
+        })),
+      setReviewer: (code, id, reviewer) =>
+        edit(code, (c, seq) => ({
+          ...c,
+          tasks: c.tasks.map((t) => (t.id === id ? { ...t, reviewer, updatedAt: Date.now(), history: [...t.history, { seq, by: c.you, at: Date.now(), what: "reviewer", to: reviewer }] } : t)),
+        })),
       setRole: (code, name, role) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, role: role ?? undefined } : p)) })),
       removeMember: (code, name) => edit(code, (c) => ({ ...c, people: c.people.filter((p) => p.name !== name) })),
       setPersona: (code, name, persona) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, persona: persona ?? undefined } : p)) })),
@@ -261,11 +316,9 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
                   owner: false,
                   you: false,
                   presence: "online",
-                  typing: false,
                   harness: a.harness,
                   runs: HARNESSES.find((h) => h.id === a.harness)?.label,
                   machine: DEMO_ACCOUNT.computers.find((m) => m.id === a.computer)?.label ?? a.computer,
-                  folder: a.folder,
                   persona: PERSONAS.find((p) => p.id === a.persona)?.label ?? a.persona,
                   role: a.role,
                   sponsor: c.you,
@@ -278,7 +331,10 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           2400
         )
       },
-      addRoom: (code, name) => edit(code, (c) => ({ ...c, rooms: [...c.rooms, { id: name, name, unread: 0, mentions: 0 }] })),
+      addRoom: (code, name) => {
+        edit(code, (c) => ({ ...c, rooms: [...c.rooms, { id: name, name, unread: 0, mentions: 0 }] }))
+        return Promise.resolve(name)
+      },
       setGithubWrite: (code, on) => edit(code, (c) => ({ ...c, githubWrite: on || undefined })),
       setBranchPrefix: (code, prefix) => edit(code, (c) => ({ ...c, branchPrefix: prefix?.trim() || undefined })),
       renameRoom: (code, id, name) => edit(code, (c) => ({ ...c, rooms: c.rooms.map((r) => (r.id === id ? { ...r, name: name.trim().replace(/^#/, "") } : r)) })),
@@ -384,7 +440,8 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
   return {
     account: state.account,
     channels: state.tiles,
-    channel: open ? (state.channels.get(open) ?? null) : null,
+    channel: open && state.gone?.code !== open ? (state.channels.get(open) ?? null) : null,
+    ...(state.gone && state.gone.code === open ? { gone: state.gone } : {}),
     prefs: state.prefs,
     harnesses: HARNESSES,
     personas: PERSONAS,

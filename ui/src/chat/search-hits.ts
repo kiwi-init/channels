@@ -2,7 +2,7 @@ import { buildIndex, marks, rank, snippet, terms, type Index } from "@kiwi/core/
 
 import { preview } from "~/chat/preview"
 import type { Channel, Message, Task, Where } from "~/model"
-import { nickname } from "~/names"
+import { between, nickname } from "~/names"
 
 export type Hit = { kind: "task"; task: Task } | { kind: "message"; m: Message }
 
@@ -54,6 +54,7 @@ export const hitKey = (hit: Hit): string => (hit.kind === "task" ? `task-${hit.t
 export function whereLabel(channel: Pick<Channel, "rooms" | "nicknames">, where: Where): string {
   if (where.kind === "room") return `# ${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}`
   if (where.kind === "dm") return `@ ${nickname(channel, where.with)}`
+  if (where.kind === "theirs") return between(channel, where.between)
   return `T${where.task}`
 }
 

@@ -36,9 +36,9 @@ function subscribe(l: () => void): () => void {
 
 const read = (): readonly WakeSeat[] => seats
 
-export function useWakes(room: string): ReadonlySet<string> {
+export function useWakes(room: string): ReadonlyMap<string, boolean> {
   const all = useSyncExternalStore(subscribe, read, read)
-  return useMemo(() => new Set(all.filter((s) => s.room === room && s.wake === "on").map((s) => s.agent)), [all, room])
+  return useMemo(() => new Map(all.filter((s) => s.room === room).map((s) => [s.agent, s.wake === "on"])), [all, room])
 }
 
 export async function setWake(room: string, agent: string, on: boolean): Promise<void> {

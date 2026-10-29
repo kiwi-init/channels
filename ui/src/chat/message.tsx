@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
 import { PermissionCard, PrChip, QuestionCard, TaskChip } from "~/chat/cards"
 import { parsedFor } from "~/chat/parsed"
@@ -6,7 +6,7 @@ import { preview, useReplying } from "~/chat/reply"
 import { Avatar, cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago, clock } from "~/kit/time"
-import { memberOf, type Channel, type Message, type Person } from "~/model"
+import { memberOf, type Channel, type ImageSpot, type Message, type Person } from "~/model"
 import { useAct } from "~/nav"
 import { nickname } from "~/names"
 import { linked, named, withNames } from "~/chat/linked"
@@ -17,9 +17,23 @@ const Annotator = lazy(() => import("~/chat/annotator"))
 const QUICK = ["👍", "🔥", "👀", "✅"]
 const CLAMP_PX = 12 * 22
 
-function Body({ text, names, tasks, onImage }: { text: string; names: ReadonlyMap<string, string>; tasks: ReadonlySet<number>; onImage: (url: string, alt: string) => void }) {
+function Body({
+  text,
+  seq,
+  names,
+  tasks,
+  onImage,
+  onMessage,
+}: {
+  text: string
+  seq: number
+  names: ReadonlyMap<string, string>
+  tasks: ReadonlySet<number>
+  onImage: (url: string, alt: string) => void
+  onMessage: (seq: number) => void
+}) {
   const { go, toast } = useAct()
-  const markdown = useMemo(() => linked(text, names, tasks), [text, names, tasks])
+  const markdown = useMemo(() => linked(text, names, tasks, seq), [text, names, tasks, seq])
   const [shown, setShown] = useState(false)
   const onShown = useCallback(() => setShown(true), [])
   const onMention = useCallback((name: string) => go({ to: "panel", panel: { kind: "person", name } }), [go])
@@ -29,7 +43,7 @@ function Body({ text, names, tasks, onImage }: { text: string; names: ReadonlyMa
     <div className="msg-text">
       {!shown && !parsedFor(markdown) && <p className="md-plain">{named(text, names)}</p>}
       <Suspense fallback={null}>
-        <Markdown markdown={markdown} onMention={onMention} onTask={onTask} onImage={onImage} onShown={onShown} copied={copied} />
+        <Markdown markdown={markdown} onMention={onMention} onTask={onTask} onMessage={onMessage} onImage={onImage} onShown={onShown} copied={copied} />
       </Suspense>
     </div>
   )
@@ -61,6 +75,37 @@ function Clamp({ on, children }: { on: boolean; children: ReactNode }) {
         </button>
       )}
     </>
+  )
+}
+
+function Spot({ code, img }: { code: string; img: ImageSpot }) {
+  const { actions } = useAct()
+  const at = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    const el = at.current
+    if (img.state !== "waiting" || !el) return
+    if (typeof IntersectionObserver === "undefined") return void actions.loadImage(code, img.spot)
+    const watch = new IntersectionObserver(
+      (seen) => {
+        if (!seen.some((e) => e.isIntersecting)) return
+        watch.disconnect()
+        actions.loadImage(code, img.spot)
+      },
+      { rootMargin: "400px 0px" }
+    )
+    watch.observe(el)
+    return () => watch.disconnect()
+  }, [actions, code, img.spot, img.state])
+  if (img.state === "failed")
+    return (
+      <button type="button" className="msg-image-spot is-failed" title={img.alt} onClick={() => actions.loadImage(code, img.spot)}>
+        Couldn't load image. Retry
+      </button>
+    )
+  return (
+    <span ref={at} className="msg-image-spot" title={img.alt} role="status">
+      {img.state === "gone" ? "Image no longer available" : "Loading image…"}
+    </span>
   )
 }
 
@@ -113,6 +158,13 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
   const replying = useReplying()
   const [image, setImage] = useState<{ url: string; alt: string } | null>(null)
   const openImage = useCallback((url: string, alt: string) => setImage({ url, alt }), [])
+  const openMessage = useCallback(
+    (seq: number) => {
+      if (onQuote) return onQuote(seq)
+      go({ to: "panel", panel: { kind: "thread", seq: channel.messages.find((x) => x.seq === seq)?.inThread ?? seq } })
+    },
+    [onQuote, go, channel.messages]
+  )
   const who = memberOf(channel, m.from)
   const ask = m.ask ? channel.asks.find((a) => a.id === m.ask) : undefined
 
@@ -154,14 +206,18 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
           </p>
         )}
         {quote && <Quote quoted={quote} who={nickname(channel, quote.from)} names={names} onClick={onQuote ? () => onQuote(quote.seq) : undefined} />}
-        <Clamp on={who?.kind === "agent" && !inThread}>{m.text && <Body text={m.text} names={names} tasks={tasks} onImage={openImage} />}</Clamp>
+        <Clamp on={who?.kind === "agent" && !inThread}>{m.text && <Body text={m.text} seq={m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={openMessage} />}</Clamp>
         {m.images && (
           <div className="msg-images">
-            {m.images.map((img) => (
-              <button key={img.url} type="button" className="msg-image" aria-label={`Open ${img.alt || "image"}`} onClick={() => openImage(img.url, img.alt)}>
-                <img src={img.url} alt={img.alt} width={img.width || undefined} height={img.height || undefined} />
-              </button>
-            ))}
+            {m.images.map((img) =>
+              "spot" in img ? (
+                <Spot key={img.spot} code={channel.code} img={img} />
+              ) : (
+                <button key={img.url} type="button" className="msg-image" aria-label={`Open ${img.alt || "image"}`} onClick={() => openImage(img.url, img.alt)}>
+                  <img src={img.url} alt={img.alt} width={img.width || undefined} height={img.height || undefined} />
+                </button>
+              )
+            )}
           </div>
         )}
         {m.failed !== undefined && (
@@ -188,6 +244,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
                 className={cx("react", r.by.includes(channel.you) && "is-mine")}
                 title={r.by.map((b) => nickname(channel, b)).join(", ")}
                 aria-pressed={r.by.includes(channel.you)}
+                disabled={m.where.kind === "theirs"}
                 onClick={() => actions.react(channel.code, m.seq, r.emoji)}
               >
                 {r.emoji} <span className="num">{r.by.length}</span>
@@ -208,12 +265,13 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
       </div>
       {!m.pending && m.failed === undefined && (
         <div className="msg-tools" role="toolbar" aria-label="Message actions">
-          {QUICK.map((e) => (
-            <button key={e} type="button" className="msg-tool" aria-label={`React ${e}`} onClick={() => actions.react(channel.code, m.seq, e)}>
-              {e}
-            </button>
-          ))}
-          {replying && (
+          {m.where.kind !== "theirs" &&
+            QUICK.map((e) => (
+              <button key={e} type="button" className="msg-tool" aria-label={`React ${e}`} onClick={() => actions.react(channel.code, m.seq, e)}>
+                {e}
+              </button>
+            ))}
+          {replying && m.where.kind !== "theirs" && (
             <button type="button" className="msg-tool" aria-label="Reply" title="Reply" onClick={() => replying.set(m)}>
               <Icon name="reply" size={14} />
             </button>
@@ -236,7 +294,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             face={who}
             at={m.at}
             onSend={
-              channel.people.find((p) => p.you)?.readOnly
+              channel.people.find((p) => p.you)?.readOnly || m.where.kind === "theirs"
                 ? undefined
                 : (note, upload) => actions.send(channel.code, m.where, note || upload.name, { replyTo: m.seq, ...(m.inThread !== undefined ? { inThread: m.inThread } : {}), images: [upload] })
             }

@@ -762,14 +762,13 @@ html .msg-role,
 html .msg-runs,
 html .msg-thread-n,
 html .thread-count,
-html .typing,
+html .working,
 html .sys time,
 html .chip-id,
 html .chip-meta,
 html .compose-hint,
 html .board-n,
 html .board-meta,
-html .task-note-meta,
 html .task-pr-meta,
 html .task-wait-meta,
 html .needs-sum,
@@ -801,13 +800,12 @@ html .msg-time-hover,
 html .msg-role,
 html .msg-runs,
 html .thread-count,
-html .typing,
+html .working,
 html .sys time,
 html .chip-id,
 html .chip-meta,
 html .compose-hint,
 html .board-meta,
-html .task-note-meta,
 html .task-pr-meta,
 html .task-wait-meta,
 html .needs-meta,
@@ -835,7 +833,6 @@ html .chip-id,
 html .chip-meta,
 html .compose-hint,
 html .board-meta,
-html .task-note-meta,
 html .needs-meta,
 html .needs-time,
 html .palette-meta,
@@ -867,4 +864,44 @@ html .tabs .is-needs {
 html .text,
 html .md {
   font-weight: 400;
+}
+
+.crash {
+  position: relative;
+  display: grid;
+  flex: 1;
+  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  padding: 32px;
+}
+
+.crash.is-whole {
+  height: 100vh;
+  background: var(--bg);
+}
+
+.crash-drag {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 40px;
+  -webkit-app-region: drag;
+}
+
+.crash-body {
+  max-width: 320px;
+  animation: rise var(--slow) var(--ease);
+}
+
+.crash-title {
+  font: 600 var(--t-body) / 1.4 var(--ui);
+}
+
+.crash-sub {
+  margin: 4px 0 16px;
+  color: var(--ink-2);
+  font: var(--t-ui) / 1.6 var(--ui);
 }

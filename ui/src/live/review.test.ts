@@ -27,7 +27,7 @@ async function post(from: string, ev: Event): Promise<Message> {
 }
 
 const task = (id: number, me: string) => {
-  const t = tasksOf(fold(log, roster), new Set(), me).find((x) => x.id === id)
+  const t = tasksOf(fold(log, roster), new Set(), me, log).find((x) => x.id === id)
   if (!t) throw new Error(`no task ${id}`)
   return t
 }

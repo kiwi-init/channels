@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo } from "react"
 
+import { Boundary } from "~/kit/boundary"
 import { Toasts, useToasts } from "~/kit/toasts"
 import type { App } from "~/model"
 import { ActContext, AppContext, type Go, type Nav } from "~/nav"
@@ -8,6 +9,7 @@ import { Settings } from "~/settings/settings"
 import { ChannelScreen } from "~/shell/channel"
 import { Rail } from "~/shell/rail"
 import { FirstRun } from "~/start/first-run"
+import { Gone } from "~/start/gone"
 import { JoinDialog } from "~/start/join"
 import { NewChannelDialog } from "~/start/new-channel"
 import { Welcome } from "~/start/welcome"
@@ -25,7 +27,9 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
     return (
       <AppContext value={ctx}>
         <ActContext value={act}>
-          <FirstRun />
+          <Boundary>
+            <FirstRun />
+          </Boundary>
           <Toasts toasts={toasts} />
         </ActContext>
       </AppContext>
@@ -36,7 +40,9 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
       <ActContext value={act}>
         <div className="app">
           <Rail />
-          {nav.page === "settings" ? <Settings /> : app.channel ? <ChannelScreen key={app.channel.code} channel={app.channel} /> : <Welcome />}
+          <Boundary resetKey={nav.page === "settings" ? "settings" : app.channel?.code}>
+            {nav.page === "settings" ? <Settings /> : app.channel ? <ChannelScreen key={app.channel.code} channel={app.channel} /> : app.gone ? <Gone gone={app.gone} /> : <Welcome />}
+          </Boundary>
         </div>
         <NewChannelDialog />
         <JoinDialog />

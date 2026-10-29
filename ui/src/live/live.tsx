@@ -14,15 +14,16 @@ import { useOwnPersonalities } from "@/lib/personalities"
 import { bridge, useSecrets } from "@/lib/secrets"
 import { useAccount } from "~/live/account"
 import { makeActions } from "~/live/actions"
-import { tellAsk } from "~/live/alerts"
+import { chime } from "~/live/alerts"
 import { OpenMember, type View } from "~/live/channel"
 import { iconUrl } from "~/live/icon"
+import { useNotesElsewhere } from "~/live/notes"
 import { harnessChoices } from "~/live/harness-rows"
 import { OpenPending, pendingTitle } from "~/live/pending"
-import { usePrefs } from "~/live/prefs"
+import { ownPrefs, usePrefs } from "~/live/prefs"
 import { useComputer } from "~/live/computer"
 import { useStarts } from "~/live/starts"
-import { useOpened } from "~/live/store"
+import { useGone, useOpened } from "~/live/store"
 import type { App, ChannelTile } from "~/model"
 import type { Go } from "~/nav"
 
@@ -79,8 +80,11 @@ function usePersonas(own: Personality[]): App["personas"] {
   return useMemo(() => [...PRESETS, ...own].map((p) => ({ id: p.id, label: p.name, about: p.instructions.split(/(?<=\.)\s/)[0] ?? capabilityLine(p) })), [own])
 }
 
-function useDuties(rows: ChannelRow[], person: string | undefined) {
-  useAutoApproval(rows, tellAsk)
+const joinsMuted = (): boolean => ownPrefs().notify === "none"
+
+function useDuties(rows: ChannelRow[], person: string | undefined, open: string | null) {
+  useAutoApproval(rows, joinsMuted, chime)
+  useNotesElsewhere(rows, open)
   useMemberIcons(rows.filter((r) => r.state === "member").map((r) => r.code))
   useEffect(() => {
     if (person) void adoptThisComputer().catch(() => {})
@@ -91,7 +95,7 @@ export function useLive(open: string | null): App {
   const account = useAccount()
   const rows = useChannelList()
   const channels = useTiles(rows)
-  useDuties(rows, useSecrets().person?.pk)
+  useDuties(rows, useSecrets().person?.pk, open)
   const opened = useOpened()
   const prefs = usePrefs()
   const harnesses = useHarnesses()
@@ -101,9 +105,11 @@ export function useLive(open: string | null): App {
   const computer = useComputer()
   const actions = useMemo(() => makeActions(), [])
   const channel = opened && opened.code === open ? opened.channel : null
+  const lost = useGone()
+  const gone = !channel && lost && lost.code === open ? lost : null
   return useMemo(
-    () => ({ account, channels, channel, prefs, harnesses, personas, starts, ownPersonalities, computer, actions }),
-    [account, channels, channel, prefs, harnesses, personas, starts, ownPersonalities, computer, actions]
+    () => ({ account, channels, channel, ...(gone ? { gone } : {}), prefs, harnesses, personas, starts, ownPersonalities, computer, actions }),
+    [account, channels, channel, gone, prefs, harnesses, personas, starts, ownPersonalities, computer, actions]
   )
 }
 

@@ -12,14 +12,20 @@ import { bridge, secrets } from "./secrets"
 /** Requests already announced, so each is notified once per run of the app. */
 const told = new Set<string>()
 
-export function notify(title: string, body: string) {
+function notify(title: string, body: string, code: string) {
   const b = bridge()
-  if (b) return void b.notify(title, body).catch(() => {})
-  if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification(title, { body })
+  if (b) return void b.notify(title, body, `kiwi://join/${encodeURIComponent(code)}`).catch(() => {})
+  if (typeof Notification === "undefined" || Notification.permission !== "granted") return
+  const note = new Notification(title, { body, silent: true })
+  note.onclick = () => {
+    window.focus()
+    location.hash = encodeURIComponent(code)
+    note.close()
+  }
 }
 
 /** One pass over one owned channel: approve own computers' agents, announce the rest. */
-async function tend(code: string, person: string, tell: (title: string, body: string) => void): Promise<void> {
+async function tend(code: string, person: string, muted: () => boolean, ring: () => void): Promise<void> {
   const m = loadMember(code)
   if (!m || m.identity.pk !== m.access.ownerPk) return
   const ch = linkOf(m)
@@ -34,14 +40,24 @@ async function tend(code: string, person: string, tell: (title: string, body: st
     },
     requests: (o: { person: string }) => ch.requests(o),
   }
-  await tendOwned(person, m.name ?? "your channel", api, tell, told)
+  await tendOwned(
+    person,
+    m.name ?? "your channel",
+    api,
+    (title, body) => {
+      if (muted()) return
+      ring()
+      notify(title, body, code)
+    },
+    told
+  )
 }
 
 /** Watch every owned channel in `rows` while the app runs (the tray keeps it running when closed). */
-export function startAutoApproval(codes: string[], tell: (title: string, body: string) => void = notify): () => void {
+export function startAutoApproval(codes: string[], muted: () => boolean = () => false, ring: () => void = () => {}): () => void {
   const tending = tendOnPush(codes, watches().watch, async (code) => {
     const person = secrets().person?.pk
-    if (person) await tend(code, person, tell)
+    if (person) await tend(code, person, muted, ring)
   })
   const timer = window.setInterval(() => {
     for (const code of codes) tending.kick(code)

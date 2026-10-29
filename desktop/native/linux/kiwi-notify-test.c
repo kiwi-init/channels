@@ -1,6 +1,7 @@
 #include <dlfcn.h>
 #include <gtk/gtk.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -88,18 +89,23 @@ static void emit(const char *signal, GVariant *params) {
   spin(300);
 }
 
-static void on_click(void) { clicked++; }
+static uint32_t clicked_tag = 0;
+
+static void on_click(uint32_t tag) {
+  clicked++;
+  clicked_tag = tag;
+}
 
 typedef struct {
-  bool (*clicks)(void *, void (*)(void));
-  bool (*notify)(const char *, const char *);
+  bool (*clicks)(void *, void (*)(uint32_t));
+  bool (*notify)(const char *, const char *, uint32_t);
   void *window;
   bool ok;
 } Calls;
 
 static gpointer calls_off_main(gpointer data) {
   Calls *calls = data;
-  calls->ok = calls->clicks(calls->window, on_click) && calls->notify("Ana asks to join kiwi-dev", "Ana & Bo <want in>");
+  calls->ok = calls->clicks(calls->window, on_click) && calls->notify("Ana asks to join kiwi-dev", "Ana & Bo <want in>", 42);
   g_idle_add(stop, NULL);
   return NULL;
 }
@@ -133,8 +139,8 @@ int main(int argc, char **argv) {
     fprintf(stderr, "kiwi-notify-test: %s\n", dlerror());
     return 1;
   }
-  bool (*clicks)(void *, void (*)(void)) = (bool (*)(void *, void (*)(void)))dlsym(lib, "kiwi_notify_clicks");
-  bool (*notify)(const char *, const char *) = (bool (*)(const char *, const char *))dlsym(lib, "kiwi_notify");
+  bool (*clicks)(void *, void (*)(uint32_t)) = (bool (*)(void *, void (*)(uint32_t)))dlsym(lib, "kiwi_notify_clicks");
+  bool (*notify)(const char *, const char *, uint32_t) = (bool (*)(const char *, const char *, uint32_t))dlsym(lib, "kiwi_notify");
   if (!clicks || !notify) {
     fprintf(stderr, "kiwi-notify-test: kiwi_notify or kiwi_notify_clicks isn't exported\n");
     return 1;
@@ -182,11 +188,12 @@ int main(int argc, char **argv) {
   gtk_widget_show_all(window);
   spin(500);
   gchar *got = startup_property(window);
-  if (clicked != 1 || g_strcmp0(got, "kiwi-note-token_TIME7") != 0) {
-    fprintf(stderr, "kiwi-notify-test: clicking ours reached the callback %d times and the window shown again carries _NET_STARTUP_ID '%s', not the notification's token\n", clicked, got ? got : "unset");
+  if (clicked != 1 || clicked_tag != 42 || g_strcmp0(got, "kiwi-note-token_TIME7") != 0) {
+    fprintf(stderr, "kiwi-notify-test: clicking ours reached the callback %d times with tag %u (want 42) and the window shown again carries _NET_STARTUP_ID '%s', not the notification's token\n", clicked,
+            clicked_tag, got ? got : "unset");
     bad++;
   } else
-    printf("ours clicked: the callback ran once and the window, shown again, carries the notification's activation token (%s)\n", got);
+    printf("ours clicked: the callback ran once with the notification's tag (42) and the window, shown again, carries its activation token (%s)\n", got);
   g_free(got);
 
   emit("NotificationClosed", g_variant_new("(uu)", 7, 2));

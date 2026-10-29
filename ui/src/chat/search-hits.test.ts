@@ -13,6 +13,7 @@ const task = (id: number, title: string, extra: Partial<Task> = {}): Task => ({
   createdAt: 0,
   updatedAt: id,
   notes: [],
+  history: [],
   rounds: [],
   archived: false,
   ...extra,

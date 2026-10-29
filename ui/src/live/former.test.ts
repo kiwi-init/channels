@@ -12,7 +12,7 @@ const state = fold([], roster, 0)
 
 describe("members who left keep their face in the feed (T369)", () => {
   test("the member list holds only who's here", () => {
-    expect(peopleOf(state, roster, new Map(), "jow", new Set()).map((p) => p.name)).toEqual(["jow", "patient-otter"])
+    expect(peopleOf(state, roster, new Map(), "jow", new Map()).map((p) => p.name)).toEqual(["jow", "patient-otter"])
   })
 
   test("a member who left is kept apart, offline, with their harness and nickname", () => {
@@ -22,7 +22,7 @@ describe("members who left keep their face in the feed (T369)", () => {
   })
 
   test("a message's sender resolves to who's here first, then to who left", () => {
-    const channel = { people: peopleOf(state, roster, new Map(), "jow", new Set()), former: formerOf(state, "jow") }
+    const channel = { people: peopleOf(state, roster, new Map(), "jow", new Map()), former: formerOf(state, "jow") }
     expect(memberOf(channel, "patient-otter")?.left).toBeUndefined()
     expect(memberOf(channel, "honest-wren")?.left).toBe(true)
     expect(memberOf(channel, "nobody")).toBeUndefined()

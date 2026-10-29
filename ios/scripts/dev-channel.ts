@@ -93,6 +93,30 @@ const program = Effect.gen(function* () {
   yield* mac.taskClaim(capture);
   yield* mac.send("Edge capture works on one monitor. Multi-monitor next: macOS reports the second screen's origin negative, so the mapping flips.", {});
   yield* win.send("Injection is in: SendInput with MOUSEEVENTF_ABSOLUTE, scaled to 0..65535. Testing on a 4K screen now.", {});
+  yield* lead.send(
+    [
+      "## Where the release stands",
+      "1. Protocol v1: **done**",
+      "2. Injection: in review",
+      "3. Edge capture: _multi-monitor next_",
+      "",
+      "- [x] Signed with the team certificate",
+      "- [ ] Notarized",
+      "",
+      "> macOS reports the second screen's origin negative.",
+      "",
+      "| Job | State |",
+      "| --- | --- |",
+      "| mac | green |",
+      "| win | `running` |",
+      "",
+      "```",
+      "kiwi task done T3",
+      "```",
+      "Notes in https://example.com/release",
+    ].join("\n"),
+    {},
+  );
   yield* lead.escalate("win is about to ship the installer: sign it with the team certificate now, or ship the beta unsigned?", undefined, undefined, {
     choices: ["A: Sign it now with the team certificate", "B: Ship unsigned for the beta, sign at 1.0"],
     decision: "choice",

@@ -1,12 +1,16 @@
 import { freeHandle, seededPick } from "@kiwi/core/handles.ts"
 import type { JoinRequest, Member as RosterMember } from "@kiwi/core/membership.ts"
 import { nameKey, runsLine } from "@kiwi/core/membership.ts"
-import type { Card } from "@kiwi/core/protocol.ts"
+import type { Card, Event } from "@kiwi/core/protocol.ts"
 import { permissionAnswer } from "@kiwi/core/permission.ts"
-import { describeEvent } from "@kiwi/core/format.ts"
-import { FAILED, prLinks, taskPr } from "@kiwi/core/prs.ts"
-import { GENERAL_ROOM, ignored, isQuiet, isReaction, type Message as Wire } from "@kiwi/core/protocol.ts"
+import { describeEvent, proofLabel } from "@kiwi/core/format.ts"
+import { memberLoad, showsLoad } from "@kiwi/core/load.ts"
+import { checksOf, FAILED, prLinks, taskPr } from "@kiwi/core/prs.ts"
+import { stageOf } from "@kiwi/core/stage.ts"
+import { GENERAL_ROOM, ignored, isQuiet, isRasterMime, isReaction, type Message as Wire } from "@kiwi/core/protocol.ts"
+import { pickFor, taskCandidates } from "@kiwi/core/routing.ts"
 import { canPost } from "@kiwi/core/scopes.ts"
+import { versionName } from "@kiwi/core/status.ts"
 import {
   answersAsk,
   answersDecisions,
@@ -16,21 +20,49 @@ import {
   humanOf,
   isPerson,
   MAIN,
+  mayNameGoal,
   outsideRepos,
   placeKey,
   prChecks,
   prKey,
+  releaseOf,
   tasksAwaitingPeople,
   type ChannelState,
   type Task as CoreTask,
 } from "@kiwi/core/state.ts"
 import type { GithubPr } from "@kiwi/core/state/github.ts"
-import { permissionCode, permissionTitle } from "@/lib/permission-view"
+import { decisionLabel } from "@/lib/asks"
+import { permissionCode, permissionNotes, permissionTitle, visibleText } from "@/lib/permission-view"
 import { reviewsFor, taskActions } from "@/lib/task-actions"
+import { taskGroups } from "@/lib/views"
 import { roomOfMessage, roomSeenKey } from "@/lib/rooms"
 import { canonicalHarness, harnessName } from "@/lib/harness"
 import type { Online } from "@/lib/channel/online"
-import type { Ask, Color, Direct, Harness, Image, JoinAsk, Message, Person, PullRequest, Reaction, Room, Task, TaskStatus, Upload, Where } from "~/model"
+import { howHere } from "@/lib/presence"
+import type {
+  Activity,
+  Ask,
+  Color,
+  Direct,
+  Harness,
+  Image,
+  ImageSpot,
+  JoinAsk,
+  Load,
+  Message,
+  Person,
+  PullRequest,
+  Reaction,
+  Room,
+  Task,
+  TaskEvent,
+  TaskGroup,
+  TaskMove,
+  TaskStatus,
+  TheirDirect,
+  Upload,
+  Where,
+} from "~/model"
 
 type Seen = Readonly<Record<string, number>>
 
@@ -55,12 +87,37 @@ export function harnessOf(raw: string | undefined): Harness | undefined {
 
 type StateMember = ChannelState["members"] extends ReadonlyMap<string, infer M> ? M : never
 
-function personOf(state: ChannelState, m: StateMember, record: RosterMember | undefined, here: Online | undefined, me: string, wakes: ReadonlySet<string>, doing: ReadonlyMap<string, number>): Person {
+const OS: Record<string, string> = { macos: "macOS", linux: "Linux", windows: "Windows" }
+
+const specsOf = (card: Card): string => [[card.os && (OS[card.os] ?? card.os), card.arch].filter(Boolean).join(" "), card.cpu, card.memory].filter(Boolean).join(" · ")
+
+function activityOf(here: Online | undefined): Activity | undefined {
+  const a = here?.activity
+  if (!a) return undefined
+  return {
+    state: a.state,
+    ...(a.tool ? { tool: a.tool } : {}),
+    ...(a.since ? { since: a.since } : {}),
+    ...(a.context ? { context: a.context.window ? { used: a.context.used, window: a.context.window } : { used: a.context.used } } : {}),
+  }
+}
+
+function loadOf(state: ChannelState, m: StateMember): Load | undefined {
+  const l = memberLoad(state, m.name)
+  if (!showsLoad(m, l)) return undefined
+  return { level: l.level, doing: l.current.map((t) => t.id), queued: l.queued.map((t) => t.id), waiting: l.waiting.map((t) => t.id) }
+}
+
+function personOf(state: ChannelState, m: StateMember, record: RosterMember | undefined, here: Online | undefined, me: string, wakes: ReadonlyMap<string, boolean>): Person {
   const human = isPerson(m)
   const raw = m.runs?.harness ?? m.card?.harness
   const harness = human ? undefined : harnessOf(raw)
   const sponsor = human ? undefined : (humanOf(state, m.name) ?? m.sponsor?.handle ?? m.sponsor?.name)
   const color: Color | null = colorOf(state, m.name)
+  const activity = human ? undefined : activityOf(here)
+  const reach = human ? null : howHere(here)
+  const specs = m.card ? specsOf(m.card) : ""
+  const load = loadOf(state, m)
   return {
     name: m.name,
     kind: human ? "human" : "agent",
@@ -70,19 +127,23 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
     ...(human && m.picture ? { picture: `data:${m.picture.mime};base64,${m.picture.data}` } : {}),
     owner: m.owner,
     you: m.name === me,
-    presence: m.name === me || here ? (here?.activity?.state === "idle" ? "away" : "online") : "offline",
-    typing: false,
+    presence: m.name === me || here ? (human && here?.activity?.state === "idle" ? "away" : "online") : "offline",
+    ...(activity ? { activity } : {}),
+    ...(reach && reach !== "unknown" ? { reach } : {}),
     ...(harness ? { harness } : {}),
     ...(!human && raw ? { runs: harnessName(canonicalHarness(raw) ?? raw) } : {}),
     ...(!human && (m.runs?.model ?? here?.activity?.model ?? m.card?.model) ? { model: m.runs?.model ?? here?.activity?.model ?? m.card?.model } : {}),
-    ...(record?.from?.label ? { machine: record.from.label } : m.card?.os ? { machine: m.card.os } : {}),
-    ...(m.card?.repo ? { folder: m.card.repo } : {}),
+    ...(record?.from?.label ? { machine: record.from.label } : {}),
+    ...(!human && specs ? { specs } : {}),
+    ...(!human && m.card?.tools?.length ? { tools: m.card.tools } : {}),
+    ...(m.card?.repo ? { repo: m.card.repo, outside: outsideRepos(state, m.card) } : {}),
+    ...(m.card?.repo && m.card.branch ? { branch: m.card.branch } : {}),
     ...(m.persona ? { persona: m.persona.name } : {}),
     ...(sponsor ? { sponsor } : {}),
     ...(m.card?.note ? { about: m.card.note } : {}),
-    ...(doing.has(m.name) ? { doing: doing.get(m.name) } : {}),
+    ...(load ? { load } : {}),
     ...(!m.owner && !canPost(m.scopes) ? { readOnly: true } : {}),
-    ...(!human && wakes.has(m.name) ? { wakes: true } : {}),
+    ...(!human && wakes.has(m.name) ? { wakes: wakes.get(m.name) === true } : {}),
     ...(human && record?.addsAgents ? { addsAgents: true } : {}),
     ...(human && record?.answersDecisions ? { answersDecisions: true } : {}),
     lastSeen: here?.at ?? m.lastSeen,
@@ -91,17 +152,20 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
   }
 }
 
-export function peopleOf(state: ChannelState, roster: readonly RosterMember[], online: ReadonlyMap<string, Online>, me: string, wakes: ReadonlySet<string>): Person[] {
+export function nextOf(state: ChannelState, now = Date.now()): string {
+  const note = state.facts.get("next")
+  return note && (!note.expires || note.expires > now) ? note.value.trim() : ""
+}
+
+export function peopleOf(state: ChannelState, roster: readonly RosterMember[], online: ReadonlyMap<string, Online>, me: string, wakes: ReadonlyMap<string, boolean>): Person[] {
   const byName = new Map(roster.filter((r) => r.active).map((r) => [r.name, r]))
-  const doing = new Map<string, number>()
-  for (const t of state.tasks.values()) if (t.owner && t.state === "doing" && !doing.has(t.owner)) doing.set(t.owner, t.id)
-  return [...state.members.values()].filter((m) => m.active && m.kind !== "computer").map((m) => personOf(state, m, byName.get(m.name), online.get(m.name), me, wakes, doing))
+  return [...state.members.values()].filter((m) => m.active && m.kind !== "computer").map((m) => personOf(state, m, byName.get(m.name), online.get(m.name), me, wakes))
 }
 
 export function formerOf(state: ChannelState, me: string): Person[] {
   return [...state.members.values()]
     .filter((m) => !m.active && m.kind !== "computer")
-    .map((m) => ({ ...personOf(state, m, undefined, undefined, me, new Set(), new Map()), presence: "offline" as const, left: true }))
+    .map((m) => ({ ...personOf(state, m, undefined, undefined, me, new Map()), presence: "offline" as const, left: true }))
 }
 
 export function roomsOf(state: ChannelState, messages: readonly Wire[], me: string, seen: Seen, from: number): Room[] {
@@ -138,6 +202,16 @@ export function directsOf(state: ChannelState, messages: readonly Wire[], me: st
     if (!at.has(other)) at.set(other, 0)
   }
   return [...at].map(([name, last]) => ({ with: name, unread: unread.get(name) ?? 0, last, seen: marks.get(name) ?? 0 })).sort((a, b) => b.last - a.last)
+}
+
+export function theirsOf(state: ChannelState, messages: readonly Wire[], me: string): TheirDirect[] {
+  const at = new Map<string, { between: readonly [string, string]; last: number }>()
+  for (const m of messages) {
+    const place = state.placeOf.get(m.seq)
+    if (place?.kind !== "dm" || place.with.includes(me) || m.kind === "event" || ignored(state.trust.get(m.seq))) continue
+    at.set(placeKey(place), { between: place.with, last: m.ts })
+  }
+  return [...at.values()].sort((a, b) => b.last - a.last)
 }
 
 const LEADING_MENTION = (me: string) => new RegExp(`(^|[^\\p{L}\\p{N}_.-])@${me.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}_-])`, "u")
@@ -183,6 +257,7 @@ function prOf(state: ChannelState, pr: GithubPr | { repo: string; number: number
   const checks = real ? prChecks(state.github, real) : []
   const failed = checks.some((c) => !!c.conclusion && FAILED.has(c.conclusion))
   const running = checks.some((c) => c.conclusion === undefined)
+  const ticks = real ? checksOf(state, real) : undefined
   return {
     repo: pr.repo,
     number: pr.number,
@@ -190,6 +265,8 @@ function prOf(state: ChannelState, pr: GithubPr | { repo: string; number: number
     url: real?.url ?? ("url" in pr && pr.url ? pr.url : `https://github.com/${pr.repo}/pull/${pr.number}`),
     state: real?.state ?? "open",
     checks: !checks.length ? "none" : failed ? "fail" : running ? "running" : "pass",
+    ...(ticks ? { ticks: { passed: ticks.passed, running: ticks.running, failed: ticks.failed } } : {}),
+    ...(real?.state === "merged" ? { mergedAt: real.at } : {}),
     ...(real?.additions !== undefined ? { additions: real.additions } : {}),
     ...(real?.deletions !== undefined ? { deletions: real.deletions } : {}),
   }
@@ -208,7 +285,14 @@ export interface Pending {
 }
 
 export interface Pictures {
-  get(seq: number, i: number): Image | undefined
+  get(seq: number, i: number, alt: string): Image | ImageSpot
+}
+
+function whereOf(state: ChannelState, m: Wire, me: string): Where {
+  const place = state.placeOf.get(m.seq) ?? MAIN
+  if (place.kind === "task") return { kind: "task", task: place.task }
+  if (place.kind === "dm") return place.with.includes(me) ? { kind: "dm", with: place.with[0] === me ? place.with[1] : place.with[0] } : { kind: "theirs", between: place.with }
+  return { kind: "room", room: roomOfMessage(state, m) }
 }
 
 export function messagesOf(state: ChannelState, messages: readonly Wire[], me: string, askOf: ReadonlyMap<number, string>, pictures: Pictures, pending: readonly Pending[]): Message[] {
@@ -242,19 +326,12 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       out.push({ seq: m.seq, from: m.from, at: m.ts, text: eventText(m, state), where, system: true, ...(task !== undefined ? { task } : {}) })
       continue
     }
-    const place = state.placeOf.get(m.seq) ?? MAIN
-    if (place.kind === "dm" && !place.with.includes(me)) continue
-    const where: Where =
-      place.kind === "task"
-        ? { kind: "task", task: place.task }
-        : place.kind === "dm"
-          ? { kind: "dm", with: place.with[0] === me ? place.with[1] : place.with[0] }
-          : { kind: "room", room: roomOfMessage(state, m) }
+    const where = whereOf(state, m, me)
     const root = rootOf(m)
     const quoted = m.re?.[0]
     const reactions = reactionsOf(state, m.seq)
     const link = prLinks(m.body)[0]
-    const images = (m.imgs ?? []).flatMap((_, i) => pictures.get(m.seq, i) ?? [])
+    const images = (m.imgs ?? []).flatMap((img, i) => (isRasterMime(img.mime) ? [pictures.get(m.seq, i, img.name)] : []))
     const ask = askOf.get(m.seq)
     out.push({
       seq: m.seq,
@@ -265,7 +342,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       ...(root !== undefined ? { inThread: root } : {}),
       ...(quoted !== undefined && quoted !== root && bySeq.has(quoted) ? { replyTo: quoted } : {}),
       ...(threads.has(m.seq) ? { thread: threads.get(m.seq) } : {}),
-      ...(m.kind === "done" && m.task !== undefined ? { task: m.task } : {}),
+      ...(m.kind === "done" && m.task !== undefined ? { task: m.task, done: true } : {}),
       ...(link ? { pr: prOf(state, link) } : {}),
       ...(images.length ? { images } : {}),
       ...(reactions.length ? { reactions } : {}),
@@ -304,14 +381,91 @@ function reactionsOf(state: ChannelState, seq: number): Reaction[] {
 
 const STATUS: Record<CoreTask["state"], TaskStatus> = { todo: "todo", doing: "doing", review: "review", done: "done" }
 
-export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: string): Task[] {
+const STATE_MOVES: Record<NonNullable<TaskUpdate["state"]>, TaskMove> = { todo: "reopened", doing: "started", review: "review", done: "done", blocked: "blocked", cancelled: "cancelled" }
+
+const TASK_REF = /\bT(\d+)\b/g
+
+type TaskUpdate = Extract<Event, { op: "task.update" }>
+
+type Move = Pick<TaskEvent, "what" | "to" | "round" | "note">
+
+const said = (note: string | undefined, quiet?: string): { note?: string } => {
+  const clean = note?.trim()
+  return clean && clean !== quiet ? { note: clean } : {}
+}
+
+function moveOf(state: ChannelState, m: Wire, ev: TaskUpdate): Move | null {
+  if (ev.verdict) return { what: ev.verdict, ...(ev.round !== undefined ? { round: ev.round } : {}), ...said(ev.note, ev.verdict) }
+  if (ev.state === "review") {
+    const round = state.tasks.get(ev.task)?.rounds.find((r) => r.seq === m.seq)
+    return { what: "review", ...(round ? { round: round.n } : {}), ...said(ev.note) }
+  }
+  if (ev.state === "cancelled") return { what: "cancelled", ...said(ev.note, "cancelled") }
+  if (ev.owner && (!ev.state || ev.state === "todo")) return { what: "assigned", to: ev.owner, ...said(ev.note?.replace(/^assigned to \S+: /, "")) }
+  if (ev.state) return { what: STATE_MOVES[ev.state], ...said(ev.note, ev.state) }
+  if (ev.owner === null) return { what: "unassigned", ...said(ev.note) }
+  if (ev.review !== undefined) return { what: "reviewer", ...(ev.review ? { to: ev.review } : {}), ...said(ev.note) }
+  if (ev.title) return { what: "renamed", note: ev.title.trim() }
+  if (ev.proof) return { what: "proof", note: proofLabel(ev.proof) }
+  if (ev.note?.trim()) return { what: ev.checkpoint ? "checkpoint" : "note", note: ev.note.trim() }
+  return null
+}
+
+function historyOf(state: ChannelState, messages: readonly Wire[], me: string): Map<number, TaskEvent[]> {
+  const out = new Map<number, TaskEvent[]>()
+  const named = new Set<string>()
+  const add = (id: number, e: TaskEvent) => {
+    if (!state.tasks.has(id)) return
+    const list = out.get(id)
+    if (list) list.push(e)
+    else out.set(id, [e])
+  }
+  for (const m of messages) {
+    if (ignored(state.trust.get(m.seq)) || isReaction(m) || state.rejected.has(m.seq)) continue
+    const base = { seq: m.seq, by: m.from, at: m.ts }
+    const ev = m.ev
+    if (m.kind === "event") {
+      if (ev?.op === "task.add") add(m.seq, { ...base, what: "created", ...(ev.owner ? { to: ev.owner } : {}) })
+      else if (ev?.op === "task.claim") add(ev.task, { ...base, what: "took" })
+      else if (ev?.op === "task.update") {
+        const move = moveOf(state, m, ev)
+        if (move) add(ev.task, { ...base, ...move })
+      }
+      continue
+    }
+    if (!m.body) continue
+    const where = whereOf(state, m, me)
+    if (where.kind === "theirs") continue
+    const root = state.threadOf.get(m.seq) ?? m.seq
+    for (const hit of m.body.matchAll(TASK_REF)) {
+      const id = Number(hit[1])
+      const key = `${id}:${root}`
+      if ((where.kind === "task" && where.task === id) || named.has(key)) continue
+      named.add(key)
+      add(id, { ...base, what: "mention", where, root, note: m.body.slice(0, 600) })
+    }
+  }
+  return out
+}
+
+function suggestionFor(state: ChannelState, t: CoreTask): { name: string; why: string } | undefined {
+  if (t.owner || t.state === "done") return undefined
+  const top = pickFor(taskCandidates(state, t.id))
+  return top ? { name: top.name, why: top.reasons[0] ?? "has its context" } : undefined
+}
+
+export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: string, messages: readonly Wire[]): Task[] {
   const waiting = tasksAwaitingPeople(state)
   const you = state.members.get(me)
   const person = !!you && isPerson(you)
+  const history = historyOf(state, messages, me)
   return [...state.tasks.values()].map((t): Task => {
-    const linked = taskPr(state, t.id)
+    const stage = stageOf(state, t)
+    const linked = taskPr(state, t.id)?.pr ?? stage.pr
+    const release = stage.stage === "done" && stage.pr ? releaseOf(state.github, stage.pr) : undefined
     const can = taskActions(t, me, person)
     const review = can.kind === "open" && can.review !== "none" ? can.review : undefined
+    const suggested = person ? suggestionFor(state, t) : undefined
     return {
       id: t.id,
       title: t.title,
@@ -322,16 +476,46 @@ export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: stri
       createdBy: t.createdBy,
       createdAt: t.createdAt,
       updatedAt: t.updatedAt,
-      ...(linked ? { pr: prOf(state, linked.pr) } : {}),
+      ...(linked ? { pr: prOf(state, linked) } : {}),
+      stage: stage.stage,
+      ...(release ? { release: versionName(release.tag) } : {}),
       notes: t.notes.map((n) => ({ by: n.by, at: n.ts, text: n.text })),
-      rounds: t.rounds.map((r) =>
-        r.result.kind === "open" || r.result.kind === "withdrawn"
-          ? { n: r.n, by: r.by, at: r.ts, result: r.result.kind }
-          : { n: r.n, by: r.by, judge: r.result.by, at: r.result.ts, result: r.result.kind }
-      ),
+      rounds: t.rounds.map((r) => ({
+        n: r.n,
+        by: r.by,
+        ...(r.result.kind === "open" || r.result.kind === "withdrawn" ? { at: r.ts } : { judge: r.result.by, at: r.result.ts }),
+        result: r.result.kind,
+        ...(r.summary ? { summary: r.summary } : {}),
+      })),
+      history: history.get(t.id) ?? [],
       archived: !!t.archived,
       ...(t.cancelled ? { cancelled: true } : {}),
       ...(review ? { youReview: review } : {}),
+      ...(suggested ? { suggested } : {}),
+      ...(t.leftBy && !t.owner ? { leftBy: t.leftBy } : {}),
+    }
+  })
+}
+
+export function groupsOf(state: ChannelState, me: string, now = Date.now()): TaskGroup[] {
+  return taskGroups(state, "everything", now).map((g): TaskGroup => {
+    const tasks = g.tasks.map((t) => t.id)
+    const h = g.head
+    switch (h.kind) {
+      case "ask":
+        return {
+          key: g.key,
+          tasks,
+          head: h.ask
+            ? { kind: "ask", id: h.ask.id, by: h.ask.by, words: h.ask.words.trim(), ...(h.ask.goal ? { goal: h.ask.goal } : {}), mayName: mayNameGoal(state, me, h.ask) }
+            : { kind: "unfiled" },
+        }
+      case "next":
+        return { key: g.key, tasks, head: { kind: "next", ...(h.name ? { name: versionName(h.name) } : {}) } }
+      case "release":
+        return { key: g.key, tasks, head: { kind: "release", tag: versionName(h.tag), at: h.at } }
+      case "cancelled":
+        return { key: g.key, tasks, head: { kind: "cancelled" } }
     }
   })
 }
@@ -344,11 +528,9 @@ interface AsksMap {
 
 const isQuestion = (m: Wire): boolean => (m.kind === "ask" || m.kind === "blocking") && !m.permission && !m.handoff
 
-const OS: Record<string, string> = { macos: "macOS", linux: "Linux", windows: "Windows" }
-
 function saidOf(state: ChannelState, card: Card | undefined): JoinAsk["said"] {
   if (!card) return "nothing"
-  const machine = [[card.os && (OS[card.os] ?? card.os), card.arch].filter(Boolean).join(" "), card.cpu, card.memory].filter(Boolean).join(" · ")
+  const machine = specsOf(card)
   return {
     ...(machine ? { machine } : {}),
     ...(card.tools?.length ? { tools: card.tools } : {}),
@@ -388,14 +570,24 @@ export function asksOf(
       if (!isOpen && !said) continue
       if (isOpen) for (const t of heldBy(state, m)) held.add(t)
       if (isOpen && task !== undefined) held.add(task)
+      const human = humanOf(state, m.from)
       asks.push({
         kind: "permission",
         id,
         from: m.from,
         at: m.ts,
+        expiresAt: m.permission.expiresAt,
+        canAllow: human === me && m.permission.canAllow,
+        canDeny: human === me || owner,
+        ...(m.permission.canAllow && human && human !== me ? { allower: human } : {}),
         tool: m.permission.tool,
-        summary: m.permission.description ?? permissionTitle(m.permission),
+        title: permissionTitle(m.permission),
+        ...(m.permission.description ? { summary: m.permission.description } : {}),
         code: permissionCode(m.permission),
+        ...(m.permission.cwd ? { cwd: m.permission.cwd } : {}),
+        notes: permissionNotes(m.permission),
+        ...(m.permission.replaced !== undefined ? { replaced: visibleText(m.permission.replaced) } : {}),
+        ...(m.permission.content !== undefined ? { content: visibleText(m.permission.content) } : {}),
         ...(task !== undefined ? { task } : {}),
         ...(said ? { answer: { allow: said.a === "allow", by: said.r.from, at: said.r.ts } } : {}),
       })
@@ -417,6 +609,8 @@ export function asksOf(
       from: m.from,
       at: m.ts,
       text: m.body,
+      label: m.esc ? decisionLabel(m) : m.to?.includes(me) ? "Question for you" : "Question for everyone",
+      ...(m.decision === "irreversible" ? { irreversible: true as const } : {}),
       options: m.choices ?? [],
       holds,
       ...(m.step ? { step: m.step } : {}),

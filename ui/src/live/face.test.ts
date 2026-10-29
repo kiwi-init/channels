@@ -29,12 +29,12 @@ beforeAll(async () => {
 describe("a person's published picture is their face in the app (T380)", () => {
   test("it comes through as an image the avatar can draw", async () => {
     const state = fold([await ev("ana", { op: "picture.set", member: "ana", picture: face })], roster)
-    const ana = peopleOf(state, roster, new Map(), "jow", new Set()).find((p) => p.name === "ana")
+    const ana = peopleOf(state, roster, new Map(), "jow", new Map()).find((p) => p.name === "ana")
     expect(ana?.picture).toBe(`data:image/png;base64,${face.data}`)
   })
 
   test("people without one, and agents, keep their initial or harness", () => {
-    const people = peopleOf(fold([], roster), roster, new Map(), "jow", new Set())
+    const people = peopleOf(fold([], roster), roster, new Map(), "jow", new Map())
     expect(people.map((p) => p.picture)).toEqual([undefined, undefined, undefined])
   })
 })
