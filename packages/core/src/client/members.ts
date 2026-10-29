@@ -1,5 +1,5 @@
 import { delegationLive } from "../delegation.ts";
-import type { DeviceList } from "../devices.ts";
+import { checkDevice, listedComputer, type DeviceClaim, type DeviceList } from "../devices.ts";
 import { cleanPersona, personaScopes, type Persona } from "../personality.ts";
 import * as Effect from "effect/Effect";
 import { newChannelKey } from "../crypto.ts";
@@ -17,6 +17,14 @@ import { newestEpoch, stale } from "./sealed.ts";
 
 const NO_RECORD = "that key has no record the owner signed: remove it instead";
 
+export const REPROVE_MS = 7 * 24 * 60 * 60 * 1000;
+
+export interface Reproved {
+  proved: Member[];
+  cut: Member[];
+  waiting: Member[];
+}
+
 export interface MembersFx {
   leave(): Effect.Effect<void, MemberRefusal, Relay>;
   setCanPost(pk: string, post: boolean): Effect.Effect<void, Refused, Relay>;
@@ -28,6 +36,7 @@ export interface MembersFx {
   reconcilePosting(state: Pick<ChannelState, "members" | "scopeSets" | "roleSets">, members?: Member[]): Effect.Effect<string[], Refused, Relay>;
   remove(pk: string): Effect.Effect<void, Refused, Relay>;
   cutDevices(list: DeviceList): Effect.Effect<Member[], Refused, Relay>;
+  reprove(list: DeviceList, proofs: Readonly<Record<string, DeviceClaim>>, now?: number): Effect.Effect<Reproved, Refused, Relay>;
   dropDelegates(pks: readonly string[]): Effect.Effect<string[], Refused, Relay>;
   rotate(): Effect.Effect<number, Refused, Relay>;
   rotateIfDue(): Effect.Effect<boolean, Refused, Relay>;
@@ -154,12 +163,13 @@ export class ChannelMembers {
     cutDevices: Effect.fn("Channel.cutDevices")({ self: this }, function* (this: ChannelMembers, list: DeviceList) {
       yield* this.ch.ownerOnly();
       const revoked = new Set(list.revoked);
+      const certOnly = (pk: string): boolean => !!list.reroots.length && !listedComputer(list, pk);
       const cut = (yield* this.ch.fx.members()).filter(
         (m) =>
           m.active &&
           !m.owner &&
           !m.unverified &&
-          ((!!m.device?.pk && revoked.has(m.device.pk) && m.person === list.person) || (!!m.from && revoked.has(m.from.pk) && m.sponsor?.user === list.person)),
+          ((!!m.device?.pk && revoked.has(m.device.pk) && m.person === list.person) || (!!m.from && (revoked.has(m.from.pk) || certOnly(m.from.pk)) && m.sponsor?.user === list.person)),
       );
       const dropped = (yield* this.ch.fx.delegations().pipe(Effect.catchCause(() => Effect.succeed([])))).filter((d) => d.person === list.person && revoked.has(d.delegate));
       if (!cut.length && !dropped.length) return cut;
@@ -170,6 +180,33 @@ export class ChannelMembers {
       }
       yield* this.rotation();
       return cut;
+    }),
+
+    reprove: Effect.fn("Channel.reprove")({ self: this }, function* (this: ChannelMembers, list: DeviceList, proofs: Readonly<Record<string, DeviceClaim>>, now: number = Date.now()) {
+      yield* this.ch.ownerOnly();
+      const since = list.reroots.at(-1)?.at;
+      const out: Reproved = { proved: [], cut: [], waiting: [] };
+      if (since === undefined) return out;
+      const seats = (yield* this.ch.fx.members()).filter((m) => m.active && !m.owner && !m.unverified && m.kind === "human" && m.person === list.person && !m.device);
+      const e = this.ch.access.epoch;
+      const key = this.ch.access.keys[String(e)]!;
+      for (const m of seats) {
+        const got = yield* Effect.promise(() => checkDevice(proofs[m.pk], this.ch.roomId, m.pk, (p) => (p === list.person ? list : undefined), now));
+        if (got && got.person === list.person && got.device.as !== "computer") {
+          const device = { pk: got.device.device, label: got.device.label, as: got.device.as };
+          const info = omit(m, "active", "readOnly", "unverified", "at");
+          const rec = yield* Effect.promise(async () => sealRecord(key, await makeRecord(this.ch.identity, this.ch.roomId, { ...info, device })));
+          yield* this.ch.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: canPost(m.later?.scopes ?? scopesOf(m)) }) });
+          out.proved.push({ ...m, device });
+        } else (now - since >= REPROVE_MS ? out.cut : out.waiting).push(m);
+      }
+      if (!out.cut.length) return out;
+      for (const m of out.cut) {
+        yield* this.ch.request(`/members/${m.pk}`, { method: "DELETE" });
+        yield* Effect.ignore(Effect.try({ try: () => this.info.markGone(m.pk), catch: (err) => err }));
+      }
+      yield* this.rotation();
+      return out;
     }),
 
     dropDelegates: Effect.fn("Channel.dropDelegates")({ self: this }, function* (this: ChannelMembers, pks: readonly string[]) {

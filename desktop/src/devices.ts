@@ -35,6 +35,7 @@ export interface DeviceHost {
   forget(device: string): Promise<void>;
   renew(device: string): Promise<void>;
   news(): Promise<DeviceNewsView | null>;
+  session(): Promise<{ client: AccountClient; device: Identity } | null>;
   addComputer(m: { pk: string; xpk: string; label: string; os: string }): Promise<DeviceLink[] | null>;
 }
 
@@ -279,6 +280,8 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
       const revokes = list.revokes.map((r) => ({ device: r.device, label: r.label, as: r.as, by: signerLabel(list, r.by), at: r.at, older: r.older }));
       return { links, revokes, removed: null };
     },
+
+    session: sync,
   };
 }
 

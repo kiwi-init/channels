@@ -40,7 +40,7 @@ const deviceName = (members: readonly Pick<Member, "name">[], base: string): str
 };
 
 const sameHuman = (members: readonly Member[], person: string, ownerPerson?: string) =>
-  members.find((m) => (m.kind === "human" || m.owner) && m.person === person && !m.device) ?? (person === ownerPerson ? members.find((m) => m.owner) : undefined);
+  members.find((m) => (m.kind === "human" || m.owner) && m.person === person && (!m.device || m.sponsor?.handle === m.name)) ?? (person === ownerPerson ? members.find((m) => m.owner) : undefined);
 
 const personNameOf = (members: readonly Member[], person: string): string => {
   const m = sameHuman(members, person);
@@ -99,8 +99,11 @@ export class ChannelRequests {
         } catch {
           // Info that isn't JSON: the request still shows, named "?".
         }
-        const paired = yield* Effect.promise(() => verifiedComputer(this.ch.roomId, r.pk, info.computer));
-        const person = yield* Effect.promise(() => verifiedPerson(this.ch.roomId, r.pk, info.person));
+        const rerooted = (p: string | null | undefined): boolean => !!p && !!opts.lists?.get(p)?.reroots.length;
+        const certified = yield* Effect.promise(() => verifiedComputer(this.ch.roomId, r.pk, info.computer));
+        const paired = rerooted(certified?.person) ? null : certified;
+        const claimed = yield* Effect.promise(() => verifiedPerson(this.ch.roomId, r.pk, info.person));
+        const person = rerooted(claimed) ? null : claimed;
         const device = person ? null : yield* Effect.promise(() => verifiedDevice(this.ch.roomId, r.pk, info.device, (p) => opts.lists?.get(p)));
         const app = device && device.as !== "computer" ? device : null;
         const enrolled = device?.as === "computer" ? { pk: device.pk, label: device.label, person: device.person, personName: personNameOf(seats, device.person) } : null;
