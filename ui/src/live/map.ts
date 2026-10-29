@@ -10,7 +10,7 @@ import { stageOf } from "@kiwi/core/stage.ts"
 import { GENERAL_ROOM, ignored, isQuiet, isReaction, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { pickFor, taskCandidates } from "@kiwi/core/routing.ts"
 import { canPost } from "@kiwi/core/scopes.ts"
-import { statusOf, versionName } from "@kiwi/core/status.ts"
+import { versionName } from "@kiwi/core/status.ts"
 import {
   answersAsk,
   answersDecisions,
@@ -465,7 +465,6 @@ export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: stri
     const can = taskActions(t, me, person)
     const review = can.kind === "open" && can.review !== "none" ? can.review : undefined
     const suggested = person ? suggestionFor(state, t) : undefined
-    const fate = statusOf(state, t)
     return {
       id: t.id,
       title: t.title,
@@ -478,7 +477,7 @@ export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: stri
       updatedAt: t.updatedAt,
       ...(linked ? { pr: prOf(state, linked) } : {}),
       stage: stage.stage,
-      ...(release ? { release: release.tag } : {}),
+      ...(release ? { release: versionName(release.tag) } : {}),
       notes: t.notes.map((n) => ({ by: n.by, at: n.ts, text: n.text })),
       rounds: t.rounds.map((r) => ({
         n: r.n,
@@ -492,7 +491,6 @@ export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: stri
       ...(t.cancelled ? { cancelled: true } : {}),
       ...(review ? { youReview: review } : {}),
       ...(suggested ? { suggested } : {}),
-      ...(fate.status === "shipped" && fate.release ? { shipped: versionName(fate.release) } : {}),
       ...(t.leftBy && !t.owner ? { leftBy: t.leftBy } : {}),
     }
   })

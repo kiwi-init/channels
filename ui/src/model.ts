@@ -145,7 +145,6 @@ export interface Task {
   cancelled?: boolean
   youReview?: "verdict" | "send-back"
   suggested?: { name: string; why: string }
-  shipped?: string
   leftBy?: string
 }
 
