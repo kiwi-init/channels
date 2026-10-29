@@ -66,6 +66,8 @@ export function baseOf(c: Colors): Required<ThemeBase> {
   }
 }
 
+export const movedDark = (saved: string, moved: boolean): string => (!moved && saved === CHANNELS_DARK.id ? CHANNELS_OLED.id : saved)
+
 export function savedTheme(p: Owned, t: CustomTheme): Owned {
   const customThemes = p.customThemes.some((c) => c.id === t.id) ? p.customThemes.map((c) => (c.id === t.id ? t : c)) : [...p.customThemes, t]
   return {

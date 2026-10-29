@@ -4,7 +4,7 @@ import { join } from "node:path"
 
 import { CHANNELS_DARK, CHANNELS_OLED } from "~/theme/channels"
 import { TOKENS } from "~/theme/derive"
-import { activeTheme, allThemes, deletedTheme, isBuiltin } from "~/theme/themes"
+import { activeTheme, allThemes, deletedTheme, isBuiltin, movedDark } from "~/theme/themes"
 
 const css = readFileSync(join(import.meta.dir, "../styles/tokens.css"), "utf8")
 const firstPaint = css.slice(css.indexOf(":root {"), css.indexOf(":root[data-theme"))
@@ -28,5 +28,12 @@ describe("OLED Black", () => {
     expect(isBuiltin(CHANNELS_DARK)).toBe(false)
     expect(allThemes([]).map((t) => t.id)).toContain(CHANNELS_DARK.id)
     expect(deletedTheme({ darkTheme: "mine", lightTheme: "channels-light", customThemes: [] }, "mine").darkTheme).toBe(CHANNELS_OLED.id)
+  })
+
+  test("moves a saved Channels Dark to OLED Black once, and leaves every other theme alone", () => {
+    expect(movedDark(CHANNELS_DARK.id, false)).toBe(CHANNELS_OLED.id)
+    expect(movedDark(CHANNELS_DARK.id, true)).toBe(CHANNELS_DARK.id)
+    expect(movedDark("abyssal-trench", false)).toBe("abyssal-trench")
+    expect(movedDark("mine-dusk", false)).toBe("mine-dusk")
   })
 })

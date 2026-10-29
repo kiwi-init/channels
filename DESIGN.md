@@ -66,8 +66,9 @@ Light / dark are the two sides of each `light-dark()` in `index.css`:
 Dark is true OLED black (OLED Black, `channels-oled`, the default dark in
 the desktop UI since T43): canvas, rail and panels are `#000000`; cards, the
 composer and popovers lift only to `#0c0c0d` and are told apart by `line`
-borders, not grey fills. Channels Dark (`#111113`) stays in the theme picker,
-and a theme someone already picked is kept. iOS and Android follow the same
+borders, not grey fills. Channels Dark (`#111113`) stays in the theme picker.
+A saved Channels Dark moves to OLED Black once (it was only ever the
+default); every other saved theme is kept. iOS and Android follow the same
 black.
 
 Supporting chrome: `line` (7% ink/white), `wash` (4/5%), `wash-2` (7/8%),
