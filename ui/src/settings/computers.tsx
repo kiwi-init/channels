@@ -11,7 +11,7 @@ import { Page } from "~/settings/sections"
 type Kind = "computer" | "phone"
 
 const SHOT = new URLSearchParams(location.search).get("shot")
-const PRESET: Kind | null = SHOT === "settings-link-phone" ? "phone" : SHOT === "settings-add-computer" ? "computer" : null
+const PRESET: Kind | null = SHOT === "settings-link-phone" || SHOT === "settings-link-phone-stuck" ? "phone" : SHOT === "settings-add-computer" ? "computer" : null
 
 const isPhone = (c: Computer): boolean => c.os === "iphone" || c.os === "android"
 
