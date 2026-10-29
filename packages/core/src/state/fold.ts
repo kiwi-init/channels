@@ -6,6 +6,7 @@ import { allowedOnHold, answersAsk, isLeadRole, isPerson, LEAD, ON_HOLD } from "
 import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
 import { askHeadOf, fileTask } from "./asks.ts";
+import { taskId } from "./tasks.ts";
 import { prKey, releasesFrom, repoKey } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { roomName } from "./rooms.ts";
@@ -380,6 +381,7 @@ function folding(
         const place =
           parentPlace ?? (m.task !== undefined && tasks.has(m.task) ? { kind: "task" as const, task: m.task } : m.dm && to && to !== m.from && members.has(to) ? dmPlace(m.from, to) : MAIN);
         placeOf.set(m.seq, place);
+        if (m.kind === "done" && m.task !== undefined && tasks.get(m.task)?.state !== "done") rejected.set(m.seq, `${taskId(m.task)} isn't done here`);
         const posted = place.kind === "task" ? tasks.get(place.task) : place.kind === "main" && room !== GENERAL_ROOM ? rooms.get(room) : undefined;
         if (posted && !posted.posters?.includes(m.from)) posted.posters = [...(posted.posters ?? []), m.from];
         if (place.kind === "task") touch(tasks.get(place.task), m.from, at);

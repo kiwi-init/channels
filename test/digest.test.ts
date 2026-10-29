@@ -6,14 +6,15 @@ import * as Effect from "effect/Effect";
 import { AgentLive, AgentSession } from "../src/agent.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import type { Event, Kind, Message } from "@kiwi/core/protocol.ts";
-import { fold, placeKey, type Roster } from "@kiwi/core/state.ts";
+import { fold, placeKey, type FoldBase, type Roster } from "@kiwi/core/state.ts";
 import { taskDigest } from "@kiwi/core/work.ts";
+import { messageHead } from "@kiwi/core/format.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { joinAgent, pairComputer, setupChannel } from "./owner.ts";
 
 const ids: Record<string, Identity> = {};
 let seq = 0;
-async function msg(from: string, kind: Kind, body: string, extra: { ev?: Event; re?: number[] } = {}): Promise<Message> {
+async function msg(from: string, kind: Kind, body: string, extra: { ev?: Event; re?: number[]; task?: number } = {}): Promise<Message> {
   seq++;
   const base = { v: 1 as const, id: crypto.randomUUID(), from, kind, body, ...extra, ts: seq };
   const p = await sign(ids[from]!, base);
@@ -96,6 +97,41 @@ describe("a closed task's digest", () => {
   });
 });
 
+describe("a digest whose closing event the channel refused", () => {
+  test("is refused too and marked, and one after an accepted close is not, from a full fold or a kept base alike", async () => {
+    const add = await ev("jon", { op: "task.add", title: "Ship the digest", owner: "mac", review: "jon" });
+    const refusedClose = await ev("win", { op: "task.update", task: add.seq, state: "done" });
+    const refusedDigest = await msg("win", "done", "Ship the digest done", { task: add.seq });
+    const acceptedClose = await ev("jon", { op: "task.update", task: add.seq, state: "done" });
+    const acceptedDigest = await msg("jon", "done", "Ship the digest done", { task: add.seq });
+    const log = [add, refusedClose, refusedDigest, acceptedClose, acceptedDigest];
+    const state = fold(log, roster);
+    expect(state.rejected.has(refusedClose.seq)).toBe(true);
+    expect(state.rejected.get(refusedDigest.seq)).toBe(`T${add.seq} isn't done here`);
+    expect(state.rejected.has(acceptedDigest.seq)).toBe(false);
+    expect(messageHead(refusedDigest, undefined, state)).toContain("[done] [the task isn't done here — ignore]");
+    expect(messageHead(acceptedDigest, undefined, state)).not.toContain("refused");
+    const kept: { base?: FoldBase } = {};
+    fold(log.slice(0, 2), roster, Date.now(), null, null, null, (b) => void (kept.base = b));
+    const resumed = fold(log.slice(2), roster, Date.now(), null, null, kept.base ?? null);
+    expect(kept.base?.n).toBe(refusedClose.seq);
+    expect(resumed.rejected.has(refusedDigest.seq)).toBe(true);
+    expect(resumed.rejected.has(acceptedDigest.seq)).toBe(false);
+  });
+});
+
+describe("a digest for a task this fold doesn't have done", () => {
+  test("is refused however the close went wrong: a refused close, then a cancel the review doesn't allow", async () => {
+    const add = await ev("jon", { op: "task.add", title: "Ship the digest", owner: "mac", review: "jon" });
+    const close = await ev("mac", { op: "task.update", task: add.seq, state: "done" });
+    const cancel = await ev("mac", { op: "task.update", task: add.seq, state: "cancelled" });
+    const digest = await msg("mac", "done", "Ship the digest done", { task: add.seq });
+    const state = fold([add, close, cancel, digest], roster);
+    expect(state.tasks.get(add.seq)?.state).not.toBe("done");
+    expect(state.rejected.has(digest.seq)).toBe(true);
+  });
+});
+
 describe("where a closed task's digest is posted", () => {
   const dataDir = mkdtempSync(join(tmpdir(), "kiwi-digest-relay-"));
   const home = mkdtempSync(join(tmpdir(), "kiwi-digest-home-"));
@@ -125,6 +161,7 @@ describe("where a closed task's digest is posted", () => {
     const { state, messages } = await run(dev.state());
     const digest = messages.find((m) => m.kind === "done");
     expect(digest?.body).toStartWith(`T${id} done: ship the login page`);
+    expect(state.rejected.has(digest?.seq ?? -1)).toBe(false);
     expect(placeKey(state.placeOf.get(digest!.seq)!)).toBe(`task:${id}`);
   }, 60_000);
 });
