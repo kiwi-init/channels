@@ -1,7 +1,7 @@
 import { FLOORS, fitImage, type LossyMime } from "@kiwi/core/fit-image.ts"
 
 import type { KiwiBridge } from "../../../desktop/src/bridge.ts"
-import { bridge } from "./secrets"
+import { bridge } from "@kiwi/secrets/secrets.ts"
 
 interface Compressed {
   mime: string

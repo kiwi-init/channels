@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 
 import { HANDOFF_DONE, HANDOFF_FAILED } from "@kiwi/core/protocol.ts"
-import { bridge } from "@/lib/secrets"
+import { bridge } from "@kiwi/secrets/secrets.ts"
 import { StepAnswer, StepHow } from "~/chat/step"
 import { cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
