@@ -514,6 +514,7 @@ export interface Actions {
   addAgent(code: string, agent: NewAgent): void
   showAgent(code: string, name: string): Promise<string | null>
   openTerm(code: string, name: string, cols: number, rows: number, watch: TermWatch): Promise<TermOpened>
+  openMyTerm(code: string, cols: number, rows: number, watch: TermWatch): Promise<TermOpened>
   choicesOn(code: string, computer: string): Promise<ComputerChoices>
   chooseFolder(): Promise<string | null>
   addRoom(code: string, name: string): Promise<string | null>

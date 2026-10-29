@@ -130,6 +130,12 @@ export async function daemonLaunch(req: LaunchAgentRequest, home: string = kiwiH
   return launchedView(r["launched"]);
 }
 
+export async function daemonMine(room: string, home: string = kiwiHome()): Promise<string> {
+  const r = await call(daemonSocketPath(home), "mine", { room }, 15_000);
+  if (typeof r["pane"] !== "string") throw new Error("the daemon didn't say which terminal is yours");
+  return r["pane"];
+}
+
 /**
  * Start `kiwi daemon` for `home`, apart from the app (it outlives a quit). It gets the app's relay:
  * a daemon not yet adopted follows the relay it starts on (src/daemon/pair.ts ensureMachine), and the

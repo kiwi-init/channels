@@ -5,9 +5,10 @@ import wasmUrl from "ghostty-web/ghostty-vt.wasm?url"
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react"
 
 import { Avatar, IconButton } from "~/kit/bits"
-import { memberOf, type Channel, type TermLink } from "~/model"
+import { Icon } from "~/kit/icons"
+import { memberOf, type Channel, type TermLink, type TermWatch } from "~/model"
 import { shown } from "~/names"
-import { useApp } from "~/nav"
+import { useApp, type TermOf } from "~/nav"
 
 const SCROLLBACK = 3_000
 const RESIZE_MS = 120
@@ -79,9 +80,11 @@ function keepHeight(h: number): void {
   }
 }
 
-export default function TermDrawer({ channel, name }: { channel: Channel; name: string }) {
+export default function TermDrawer({ channel, of }: { channel: Channel; of: TermOf }) {
   const { app, go } = useApp()
-  const person = memberOf(channel, name)
+  const name = of.kind === "agent" ? of.name : null
+  const person = name ? memberOf(channel, name) : undefined
+  const title = name === null ? "Your terminal" : person ? shown(person) : name
   const host = useRef<HTMLDivElement>(null)
   const [phase, setPhase] = useState<Phase>({ kind: "opening" })
   const [height, setHeight] = useState<number | null>(storedHeight)
@@ -106,10 +109,11 @@ export default function TermDrawer({ channel, name }: { channel: Channel; name: 
         t.loadAddon(fit)
         t.open(el)
         const want = fit.proposeDimensions() ?? { cols: 100, rows: 30 }
-        const opened = await app.actions.openTerm(channel.code, name, want.cols, want.rows, {
+        const watch: TermWatch = {
           out: (text) => t.write(text),
           ended: () => setPhase((p) => (p.kind === "live" ? { ...p, kind: "ended" } : p)),
-        })
+        }
+        const opened = name === null ? await app.actions.openMyTerm(channel.code, want.cols, want.rows, watch) : await app.actions.openTerm(channel.code, name, want.cols, want.rows, watch)
         if (gone) {
           if ("link" in opened) opened.link.close()
           return
@@ -173,16 +177,27 @@ export default function TermDrawer({ channel, name }: { channel: Channel; name: 
 
   const size = phase.kind === "live" || phase.kind === "ended" ? `${phase.cols}×${phase.rows}` : null
   return (
-    <section className="term" aria-label={`${person ? shown(person) : name}'s terminal`} style={height ? { height } : undefined} onKeyDown={(e) => e.stopPropagation()}>
+    <section className="term" aria-label={name === null ? title : `${title}'s terminal`} style={height ? { height } : undefined} onKeyDown={(e) => e.stopPropagation()}>
       <div className="term-grip" role="separator" aria-orientation="horizontal" aria-label="Resize the terminal" onPointerDown={grip} onDoubleClick={() => setHeight(null)} />
       <header className="term-head">
-        <Avatar person={person} size="sm" />
-        <span className="term-name">{person ? shown(person) : name}</span>
+        {name === null ? (
+          <span className="term-mine" aria-hidden="true">
+            <Icon name="terminal" size={14} />
+          </span>
+        ) : (
+          <Avatar person={person} size="sm" />
+        )}
+        <span className="term-name">{title}</span>
         <span className="term-where">
-          Channels' tmux{size && <span className="term-size"> · {size}</span>}
+          {name === null ? "this computer" : "Channels' tmux"}
+          {size && <span className="term-size"> · {size}</span>}
           {phase.kind === "ended" && <span className="term-ended"> · exited</span>}
         </span>
-        <IconButton icon="close" label="Close the terminal (the agent keeps running)" onClick={() => go({ to: "term", name: null })} />
+        <IconButton
+          icon="close"
+          label={name === null ? "Close the terminal (your shell keeps running)" : "Close the terminal (the agent keeps running)"}
+          onClick={() => go({ to: "term", term: null })}
+        />
       </header>
       <div className="term-screen" ref={host} />
       {phase.kind === "opening" && <p className="term-note">Opening…</p>}

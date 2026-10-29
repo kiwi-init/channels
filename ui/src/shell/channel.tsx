@@ -135,6 +135,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           ) : (
             <IconButton icon="search" label="Search this channel (⌘F)" onClick={() => setSearching(true)} />
           )}
+          <IconButton icon="terminal" label="Your terminal" pressed={nav.term?.kind === "you"} onClick={() => go({ to: "term", term: nav.term?.kind === "you" ? null : { kind: "you" } })} />
         </div>
       </header>
       <Sidebar channel={channel} />
@@ -152,7 +153,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
         </Boundary>
         {nav.term && (
           <Suspense fallback={null}>
-            <TermDrawer key={nav.term} channel={channel} name={nav.term} />
+            <TermDrawer key={nav.term.kind === "agent" ? `agent:${nav.term.name}` : "you"} channel={channel} of={nav.term} />
           </Suspense>
         )}
       </main>

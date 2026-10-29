@@ -2,11 +2,12 @@ import { randomUUID } from "node:crypto";
 import net from "node:net";
 
 import type { TermEvent, TermOpenView } from "./bridge.ts";
-import { daemonSocketPath, kiwiHome } from "./daemon-client.ts";
+import { daemonMine, daemonSocketPath, kiwiHome } from "./daemon-client.ts";
 
 const FLUSH_MS = 8;
 const OPEN_MS = 10_000;
 const PANE = /^%\d{1,10}$/;
+const ROOM_ID = /^[0-9a-f]{32}$/;
 
 interface Open {
   conn: net.Socket;
@@ -84,6 +85,12 @@ export function termOpen(pane: unknown, cols: unknown, rows: unknown, emit: (e: 
       emit({ term, ended: true });
     });
   });
+}
+
+export async function termMine(roomId: unknown, cols: unknown, rows: unknown, emit: (e: TermEvent) => void, home: string = kiwiHome()): Promise<TermOpenView> {
+  if (typeof roomId !== "string" || !ROOM_ID.test(roomId)) return { ok: false, detail: "termMine takes a room id, and a size" };
+  const pane = await daemonMine(roomId, home).catch((err: unknown) => (err instanceof Error ? err : new Error(String(err))));
+  return pane instanceof Error ? { ok: false, detail: pane.message } : termOpen(pane, cols, rows, emit, home);
 }
 
 function send(term: unknown, verb: string, params: object): void {

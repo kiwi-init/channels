@@ -6,7 +6,7 @@ import { HANDOFF_DONE } from "@kiwi/core/protocol.ts"
 import { stepReplyText } from "~/chat/step"
 import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_PREFS, DEMO_TILES, DEMO_WAITING } from "~/demo/data"
 import { longFeed } from "~/demo/long"
-import { demoTerm } from "~/demo/term"
+import { demoShell, demoTerm } from "~/demo/term"
 import type { Account, Actions, AgentStarts, App, Enrolling, Finding, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Task } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
@@ -406,6 +406,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       setPowers: (code, name, powers) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, ...powers } : p)) })),
       showAgent: async () => null,
       openTerm: (_code, _name, cols, rows, watch) => demoTerm(cols, rows, watch),
+      openMyTerm: (_code, cols, rows, watch) => demoShell(cols, rows, watch),
       choicesOn: async (_code, computer) =>
         computer === "mbp"
           ? { folders: ["~/www/channels", "~/www/landing"] }

@@ -43,6 +43,35 @@ function screen(cols: number, rows: number): string {
   return [...lines, ...Array.from({ length: fill }, () => ""), ...prompt].slice(-rows).join("\r\n")
 }
 
+function shell(rows: number): string {
+  const prompt = `${GREEN}jow@MacBook-Air${OFF} ${BOLD}channels${OFF} %`
+  const lines = [
+    `${prompt} git status --short`,
+    ` ${RED}M${OFF} ui/src/shell/channel.tsx`,
+    ` ${RED}M${OFF} ui/src/term/drawer.tsx`,
+    `${GREY}??${OFF} notes.md`,
+    `${prompt} bun run dev`,
+    `${DIM}$ vite${OFF}`,
+    `  ${GREEN}➜${OFF}  Local:   http://localhost:5173/`,
+    `${GREY}^C${OFF}`,
+    `${prompt} `,
+  ]
+  return lines.slice(-rows).join("\r\n")
+}
+
+export async function demoShell(cols: number, rows: number, watch: TermWatch): Promise<TermOpened> {
+  const c = Math.max(40, cols)
+  const r = Math.max(12, rows)
+  return {
+    screen: { cols: c, rows: r, seed: shell(r), dead: false },
+    link: {
+      keys: (text) => watch.out(text.replace(/\r/g, "\r\n")),
+      size: () => {},
+      close: () => {},
+    },
+  }
+}
+
 export async function demoTerm(cols: number, rows: number, watch: TermWatch): Promise<TermOpened> {
   const c = Math.max(40, cols)
   const r = Math.max(12, rows)

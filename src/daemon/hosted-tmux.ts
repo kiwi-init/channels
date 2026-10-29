@@ -3,7 +3,7 @@ import { chmodSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writ
 import { dirname, join } from "node:path";
 import { loginPath, loginShell } from "../launch/shell.ts";
 import type { Pane, PlaceRequest, Placed } from "../terminals/plugin.ts";
-import { loginArgv } from "../terminals/shared/launch.ts";
+import { loginArgv, SESSION_MARKERS } from "../terminals/shared/launch.ts";
 import { run, said, type Ran } from "../terminals/shared/run.ts";
 import { hostedDir } from "../terminals/shared/tmux.ts";
 import { tmuxPane } from "../terminals/tmux/type.ts";
@@ -20,6 +20,8 @@ const TYPED_HOLD_MS = 3_000;
 const NEWLINE = 0x0a;
 const PAUSED = /^%pause (%\d+)$/;
 const GONE = /^%(?:window-close|unlinked-window-close) (@\d+)$/;
+const MINE = "@kiwi-mine";
+const MINE_FORMAT = `#{${MINE}}\t#{window_id}\t#{pane_id}\t#{pane_dead}`;
 
 export const HOSTED_CONF = [
   "set -s exit-empty off",
@@ -158,6 +160,25 @@ export class HostedTmux {
     const [window, pane, pid] = r.stdout.trim().split("\t");
     if (!window || !pane) return { ok: false, why: "failed", detail: "tmux opened a window but didn't say which" };
     return { ok: true, place: "hosted", socket: st.socket, window, pane, ...(Number(pid) > 0 ? { pid: Number(pid) } : {}) };
+  }
+
+  async mine(folder: string, shell = loginShell()): Promise<{ ok: true; pane: string } | { ok: false; detail: string }> {
+    const why = await this.ready();
+    const st = this.state();
+    if (why || !st) return { ok: false, detail: why ?? "the hosted tmux server didn't start" };
+    const listed = await this.tmux(st, ["list-windows", "-t", `=${HOSTED_SESSION}`, "-F", MINE_FORMAT]);
+    for (const line of listed.status === 0 ? listed.stdout.split("\n") : []) {
+      const [mark, window, pane, dead] = line.split("\t");
+      if (mark !== "1" || !window || !pane) continue;
+      if (dead !== "1") return { ok: true, pane };
+      await this.tmux(st, ["kill-window", "-t", window]);
+    }
+    const argv = ["/usr/bin/env", ...SESSION_MARKERS.flatMap((key) => ["-u", key]), shell, "-l"];
+    const r = await this.tmux(st, ["new-window", "-d", "-t", `=${HOSTED_SESSION}:`, "-c", folder, "-n", "you", "-P", "-F", WINDOW_FORMAT, "--", ...argv]);
+    const [window, pane] = r.stdout.trim().split("\t");
+    if (r.status !== 0 || !window || !pane) return { ok: false, detail: `tmux: ${said(r)}` };
+    await this.tmux(st, ["set-option", "-w", "-t", window, MINE, "1"]);
+    return { ok: true, pane };
   }
 
   pane(pane: string): Pane | null {

@@ -412,6 +412,7 @@ export interface KiwiBridge {
   showSeat(seat: PlacedSeat): Promise<ShowResult>;
   /** Watch and type in a hosted agent's tmux pane: the daemon sizes it, then sends the screen and what follows as onTerm events. */
   termOpen(pane: string, cols: number, rows: number): Promise<TermOpenView>;
+  termMine(roomId: string, cols: number, rows: number): Promise<TermOpenView>;
   termKeys(term: string, keys: string): Promise<void>;
   termSize(term: string, cols: number, rows: number): Promise<void>;
   termClose(term: string): Promise<void>;

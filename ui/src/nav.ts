@@ -8,6 +8,8 @@ export type Panel = { kind: "person"; name: string } | { kind: "task"; task: num
 
 export type Dialog = "new-channel" | "join" | "palette" | null
 
+export type TermOf = { kind: "agent"; name: string } | { kind: "you" }
+
 export type Section = "account" | "appearance" | "notifications" | "computers" | "agents" | "updates" | "about"
 
 export interface Nav {
@@ -19,7 +21,7 @@ export interface Nav {
   dialog: Dialog
   section: Section
   invite?: string
-  term?: string
+  term?: TermOf
 }
 
 export type Go =
@@ -32,7 +34,7 @@ export type Go =
   | { to: "back" }
   | { to: "home" }
   | { to: "invite"; code: string }
-  | { to: "term"; name: string | null }
+  | { to: "term"; term: TermOf | null }
 
 const GENERAL: Where = { kind: "room", room: "general" }
 
@@ -57,7 +59,7 @@ export function navigate(nav: Nav, go: Go): Nav {
     case "invite":
       return { ...nav, dialog: "join", invite: go.code }
     case "term":
-      return { ...nav, page: "channel", term: go.name ?? undefined }
+      return { ...nav, page: "channel", term: go.term ?? undefined }
     case "settings":
       return { ...nav, page: "settings", section: go.section ?? nav.section, dialog: null }
     case "back":

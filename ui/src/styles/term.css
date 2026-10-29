@@ -41,6 +41,11 @@
   font: var(--t-ui) var(--ui);
 }
 
+.term-mine {
+  display: inline-flex;
+  color: var(--ink-2);
+}
+
 .term-name {
   font-weight: 600;
   white-space: nowrap;

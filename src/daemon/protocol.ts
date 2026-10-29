@@ -33,6 +33,7 @@ export type DaemonVerb =
   | "launch"
   | "loop"
   | "term"
+  | "mine"
   | "term-keys"
   | "term-size"
   | "unpair"

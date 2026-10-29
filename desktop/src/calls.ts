@@ -108,6 +108,7 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     seatPlaces: () => t.call("seatPlaces"),
     showSeat: (seat) => t.call("showSeat", seat),
     termOpen: (pane, cols, rows) => t.call("termOpen", pane, cols, rows),
+    termMine: (roomId, cols, rows) => t.call("termMine", roomId, cols, rows),
     termKeys: (term, keys) => t.call("termKeys", term, keys),
     termSize: (term, cols, rows) => t.call("termSize", term, cols, rows),
     termClose: (term) => t.call("termClose", term),
