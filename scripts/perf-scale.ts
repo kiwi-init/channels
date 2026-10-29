@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import * as Effect from "effect/Effect";
-import { chromium, type CDPSession, type Locator, type Page } from "playwright-core";
+import { chromium, type CDPSession, type Page } from "playwright-core";
 import { RelayError } from "@kiwi/core/client.ts";
 import { chooseThread } from "@kiwi/core/state.ts";
 import { AgentSession, oneLook, runAgent } from "../src/agent.ts";
@@ -12,6 +12,7 @@ import { daemonSock } from "../src/daemon/protocol.ts";
 import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
 import { calibrate } from "./perf-calibrate.ts";
+import { firstRun, letIn, newChannel, panel, ROWS, view } from "./perf-ui.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`A busy channel, measured: PERF_AGENTS agents (10), PERF_TASKS tasks (100), PERF_MESSAGES messages (2000), then PERF_SOAK_MIN minutes (20) of agents posting.
@@ -20,7 +21,7 @@ PERF_TASKS_FIRST=1 makes the tasks before the messages, so a reload has to keep 
 PERF_GL=swiftshader draws with the CPU, as CI's runners do: on a Mac that's how to see what CI sees.
 --gated measures only what scripts/perf-check.ts gates: the reload at 1x, the views at 4x and typing, without the 1x views, details toggles, profiles or second reload.
 
-  bun run web:build && bun scripts/perf-scale.ts [--gated] [--json out.json]
+  bun run ui:build && bun scripts/perf-scale.ts [--gated] [--json out.json]
 
 Needs Playwright's Chromium: bunx playwright-core install --only-shell chromium (or SMOKE_CHROMIUM=<Chrome binary>).`);
   process.exit(0);
@@ -100,7 +101,7 @@ const median = (xs: number[]) => {
 const mb = (b: number) => Math.round((b / 1048576) * 10) / 10;
 const log = (...xs: unknown[]) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...xs);
 
-const { relay, port } = await startLocalRelay(join(data, "relay"), "web/dist", { rateLimits: false });
+const { relay, port } = await startLocalRelay(join(data, "relay"), join(ROOT, "ui/dist"), { rateLimits: false });
 const BASE = `http://localhost:${port}/`;
 
 const browser = await chromium.launch({
@@ -127,7 +128,10 @@ async function sample(cdp: CDPSession): Promise<{ heapMB: number; nodes: number;
   await cdp.send("HeapProfiler.collectGarbage");
   const { metrics } = (await cdp.send("Performance.getMetrics")) as { metrics: { name: string; value: number }[] };
   const m = Object.fromEntries(metrics.map((x) => [x.name, x.value]));
-  const { result } = (await cdp.send("Runtime.evaluate", { expression: `[document.querySelectorAll("*").length, document.querySelectorAll("[id^='m']").length]`, returnByValue: true })) as {
+  const { result } = (await cdp.send("Runtime.evaluate", {
+    expression: `[document.querySelectorAll("*").length, document.querySelectorAll(${JSON.stringify(ROWS)}).length]`,
+    returnByValue: true,
+  })) as {
     result: { value: [number, number] };
   };
   return { heapMB: mb(m.JSHeapUsedSize ?? 0), nodes: m.Nodes ?? 0, listeners: m.JSEventListeners ?? 0, documents: m.Documents ?? 0, attached: result.value[0], rows: result.value[1] };
@@ -144,24 +148,8 @@ async function drain(page: Page): Promise<{ longTasks: number; longMs: number; w
   });
 }
 
-async function tab(page: Page, label: string, marker: string): Promise<number> {
-  return page.evaluate(
-    async ([name, text]) => {
-      const b = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Views of the channel"] button')].find((x) => x.textContent?.trim() === name);
-      if (!b) return -1;
-      const t0 = performance.now();
-      b.click();
-      const deadline = t0 + 15000;
-      while (performance.now() < deadline) {
-        await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
-        if (b.getAttribute("aria-current") === "page" && new RegExp(text).test(document.body.innerText)) break;
-      }
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      return Math.round(performance.now() - t0);
-    },
-    [label, marker] as const,
-  );
-}
+const VIEWS: Record<string, string> = { Agents: "Agents", Conversation: "# general", Tasks: "Tasks" };
+const tab = (page: Page, label: string, marker: string): Promise<number> => view(page, VIEWS[label] ?? label, marker);
 
 async function work(cdp: CDPSession): Promise<Record<string, number>> {
   const { metrics } = (await cdp.send("Performance.getMetrics")) as { metrics: { name: string; value: number }[] };
@@ -171,21 +159,7 @@ async function work(cdp: CDPSession): Promise<Record<string, number>> {
 
 async function detailsToggle(page: Page, cdp: CDPSession, open: boolean): Promise<{ ms: number; taskMs: number; scriptMs: number; styleMs: number; layoutMs: number }> {
   const before = await work(cdp);
-  const ms = await page.evaluate(async (opening) => {
-    const button = opening
-      ? [...document.querySelectorAll<HTMLElement>("button")].find((b) => (b.getAttribute("aria-label") ?? "").startsWith("Details:") && b.offsetParent !== null)
-      : document.querySelector<HTMLElement>('button[aria-label="Close details"]');
-    if (!button) return -1;
-    const t0 = performance.now();
-    button.click();
-    const deadline = t0 + 15000;
-    while (performance.now() < deadline) {
-      await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
-      if (!!document.querySelector('aside[aria-label="Details"]') === opening) break;
-    }
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    return Math.round(performance.now() - t0);
-  }, open);
+  const ms = await panel(page, open);
   await page.waitForTimeout(400);
   const after = await work(cdp);
   const d = (k: string) => Math.round(((after[k] ?? 0) - (before[k] ?? 0)) * 1000);
@@ -246,61 +220,20 @@ try {
   const t0 = performance.now();
   await page.goto(BASE);
   await page.getByRole("textbox", { name: "Your name" }).waitFor();
-  const firstRun = await page.evaluate(() => {
+  const cold = await page.evaluate(() => {
     const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming;
     const fcp = performance.getEntriesByName("first-contentful-paint")[0];
     return { domContentLoadedMs: Math.round(nav.domContentLoadedEventEnd), loadMs: Math.round(nav.loadEventEnd), fcpMs: Math.round(fcp?.startTime ?? -1) };
   });
-  report["cold: first run, empty cache"] = { ...firstRun, readyMs: Math.round(performance.now() - t0), transferredKB: Math.round(bytes / 1024), ...(await drain(page)), events: undefined };
+  report["cold: first run, empty cache"] = { ...cold, readyMs: Math.round(performance.now() - t0), transferredKB: Math.round(bytes / 1024), ...(await drain(page)), events: undefined };
   log("cold first run", JSON.stringify(report["cold: first run, empty cache"]));
 
-  await page.getByRole("textbox", { name: "Your name" }).fill("Jonatas");
-  await page.getByRole("button", { name: "Continue" }).click();
-  await page
-    .getByRole("complementary", { name: "Channels" })
-    .getByRole("button", { name: /Jonatas/i })
-    .first()
-    .waitFor();
-  const wa = await context.newCDPSession(page);
-  await wa.send("WebAuthn.enable");
-  await wa.send("WebAuthn.addVirtualAuthenticator", {
-    options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true, hasPrf: true },
-  } as never);
-
-  await page.getByRole("complementary", { name: "Channels" }).getByRole("button", { name: "New channel", exact: true }).click();
-  await page.getByRole("dialog").getByRole("textbox").fill("scale");
-  const before = page.url();
-  await page.getByRole("button", { name: "Create channel" }).click();
-  await page.waitForURL((u) => /#mc2-/.test(u.href) && u.href !== before);
-  const code = decodeURIComponent(new URL(page.url()).hash.slice(1));
-  const needs = page.getByRole("region", { name: "Needs you" });
-  const letIn = needs.getByRole("button", { name: "It matches: let in" });
-  const showCode = needs.getByRole("button", { name: "Show code" });
-  const tap = async (button: Locator) => {
-    const first = button.first();
-    if (await first.isVisible().catch(() => false)) await first.click().catch(() => undefined);
-  };
-  const offer = page.getByRole("button", { name: "Save channels to a passkey" });
-  const saveOffer = async () => {
-    if (!(await offer.isVisible().catch(() => false))) return;
-    await offer.click();
-    const saving = page.getByRole("dialog").filter({ hasText: "Save your recovery code" });
-    await saving.waitFor();
-    await saving.getByRole("checkbox").check();
-    await saving.getByRole("button", { name: "Done" }).click();
-    await saving.waitFor({ state: "hidden" });
-  };
+  await firstRun(page, "Jonatas");
+  const code = await newChannel(page, "scale");
   let joined = 0;
   const joining = Promise.all(agents.map((agent) => kiwi(["join", code, "scale", "--as", agent, "--model", "claude-opus-5-5", "--relay", BASE]).then(() => void joined++)));
-  const deadline = Date.now() + 120000;
-  while (joined < AGENTS && Date.now() < deadline) {
-    await tap(showCode);
-    await tap(letIn);
-    await saveOffer();
-    await page.waitForTimeout(100);
-  }
+  await letIn(page, () => joined < AGENTS);
   await joining;
-  await saveOffer();
   log(`${AGENTS} agents in`);
   const seats = await Promise.all(agents.map((agent) => AgentSession.open("scale", loadConfig().channels["scale"]!, agent)));
   await drain(page);
@@ -359,7 +292,7 @@ try {
   await mark("tasks added");
 
   await post(early, perSender);
-  await say(seats[0]!, SEEDED);
+  await patiently(() => runAgent(oneLook(seats[0]!.send(SEEDED, { kind: "msg" }))));
   report.seedSeconds = Math.round((Date.now() - seedStart) / 1000);
   const live = await drain(page);
   report["while seeding (page open on the channel)"] = { longTasks: live.longTasks, longMs: live.longMs, worstMs: live.worstMs, perMessageMs: Math.round((live.longMs / MESSAGES) * 10) / 10 };
@@ -457,7 +390,7 @@ try {
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
 
   await tab(page, "Conversation", "M\\d+: ");
-  const composer = page.getByRole("textbox").last();
+  const composer = page.getByRole("textbox", { name: "Message" });
   await composer.click();
   await drain(page);
   const typing = (async () => {

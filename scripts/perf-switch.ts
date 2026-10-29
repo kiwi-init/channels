@@ -1,9 +1,9 @@
 // How long switching channels takes: two channels with PERF_MESSAGES messages each (400 by default),
-// a click on the other channel's tab, timed until its first screen, the task board, is painted.
+// a click on the other channel's tile in the rail, timed until its first screen, #general with its last message, is painted.
 // At 1x and with the CPU throttled 4x, a channel's first visit and its later ones, plus a profile of
 // the slowest. With PERF_BUDGET_MS set it fails when the median revisit at 4x is over it.
 //
-//   bun run web:build && bun scripts/perf-switch.ts [--json out.json]
+//   bun run ui:build && bun scripts/perf-switch.ts [--json out.json]
 //
 // Needs Playwright's Chromium: bunx playwright-core install --only-shell chromium
 // (or set SMOKE_CHROMIUM to a Chrome binary).
@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type CDPSession, type Page } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
+import { firstRun, letIn, newChannel } from "./perf-ui.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const MESSAGES = Number(process.env.PERF_MESSAGES ?? 400);
@@ -44,46 +45,20 @@ const median = (xs: number[]) => {
   return s.length ? s[Math.floor(s.length / 2)]! : 0;
 };
 
-const { relay, port } = await startLocalRelay(join(data, "relay"), "web/dist");
+const { relay, port } = await startLocalRelay(join(data, "relay"), join(ROOT, "ui/dist"));
 const BASE = `http://localhost:${port}/`;
 
 const browser = await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
 
 async function channel(page: Page, title: string): Promise<string> {
-  await page.getByRole("complementary", { name: "Channels" }).getByRole("button", { name: "New channel", exact: true }).click();
-  await page.getByRole("dialog").getByRole("textbox").fill(title);
-  const before = page.url();
-  await page.getByRole("button", { name: "Create channel" }).click();
-  await page.waitForURL((u) => /#mc2-/.test(u.href) && u.href !== before);
-  const code = decodeURIComponent(new URL(page.url()).hash.slice(1));
-  const needs = page.getByRole("region", { name: "Needs you" });
-  const joining = kiwi(title, ["join", code, title, "--as", "atlas", "--model", "claude-opus-5-5", "--relay", BASE]);
-  const letIn = needs.getByRole("button", { name: "It matches: let in" });
-  const showCode = needs.getByRole("button", { name: "Show code" });
-  await letIn
-    .or(showCode)
-    .first()
-    .waitFor({ timeout: 30000 })
-    .catch(async (e: unknown) => {
-      await page.screenshot({ path: join(tmpdir(), `kiwi-perf-switch-${title}.png`) });
-      throw e;
-    });
-  if (await showCode.count()) await showCode.click();
-  await letIn.waitFor({ timeout: 30000 });
-  const seat = needs.getByRole("checkbox", { name: /Let agents from .* in from now on/ });
-  if (await seat.count()) await seat.uncheck();
-  await letIn.click();
+  const code = await newChannel(page, title);
+  let joined = false;
+  const joining = kiwi(title, ["join", code, title, "--as", "atlas", "--model", "claude-opus-5-5", "--relay", BASE]).then(() => void (joined = true));
+  await letIn(page, () => !joined).catch(async (e: unknown) => {
+    await page.screenshot({ path: join(tmpdir(), `kiwi-perf-switch-${title}.png`) });
+    throw e;
+  });
   await joining;
-  const offer = page.getByRole("button", { name: "Save channels to a passkey" });
-  if (await offer.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await offer.click();
-    const saving = page.getByRole("dialog").filter({ hasText: "Save your recovery code" });
-    await saving.waitFor();
-    await saving.getByRole("checkbox").check();
-    await saving.getByRole("button", { name: "Done" }).click();
-    await saving.waitFor({ state: "hidden" });
-  }
-  await page.getByRole("complementary", { name: "Channels" }).getByRole("region", { name: "Conversations" }).getByRole("button").first().click();
   await page.getByRole("textbox", { name: "Message" }).fill(`Plan the ${title} board`);
   await page.keyboard.press("Enter");
   return code;
@@ -118,12 +93,12 @@ async function seed(alias: string, prefix: string): Promise<void> {
   for (let i = 0; i < MESSAGES; i += 10) await Promise.all(Array.from({ length: Math.min(10, MESSAGES - i) }, (_, j) => send(`${prefix}${i + j}: ${texts[(i + j) % texts.length]}`)));
 }
 
-// A click on the channel's row in the sidebar, timed in the page until the target's first screen (its task board) is painted.
+// A click on the channel's tile in the rail, timed in the page until the target's first screen (its last message) is painted.
 async function switchTo(page: Page, title: string, last: string): Promise<number> {
   return page.evaluate(
     async ([name, text]) => {
-      const tile = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Your channels"] button')].find((b) => b.textContent?.trim().startsWith(name));
-      if (!tile) return -1;
+      const tile = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Channels"] button.tile')].find((b) => (b.getAttribute("aria-label") ?? "").split(",")[0] === name);
+      if (!tile) throw new Error(`no ${name} tile in the rail`);
       const t0 = performance.now();
       tile.click();
       const deadline = t0 + 15000;
@@ -131,6 +106,7 @@ async function switchTo(page: Page, title: string, last: string): Promise<number
         await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
         if (document.body.innerText.includes(text)) break;
       }
+      if (performance.now() >= deadline) throw new Error(`${name} opened without “${text}”`);
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       return Math.round(performance.now() - t0);
     },
@@ -165,18 +141,7 @@ try {
   const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
   page.on("pageerror", (e) => console.log(`page error: ${e.message}`));
   await page.goto(BASE);
-  await page.getByRole("textbox", { name: "Your name" }).fill("Jonatas");
-  await page.getByRole("button", { name: "Continue" }).click();
-  await page
-    .getByRole("complementary", { name: "Channels" })
-    .getByRole("button", { name: /Jonatas/i })
-    .first()
-    .waitFor();
-  const wa = await page.context().newCDPSession(page);
-  await wa.send("WebAuthn.enable");
-  await wa.send("WebAuthn.addVirtualAuthenticator", {
-    options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true, hasPrf: true },
-  } as never);
+  await firstRun(page, "Jonatas");
 
   const t0 = Date.now();
   await channel(page, "alpha");
@@ -184,7 +149,7 @@ try {
   await Promise.all([seed("alpha", "A"), seed("beta", "B")]);
   console.log(`seeded ${MESSAGES} messages in each of two channels in ${Math.round((Date.now() - t0) / 1000)}s`);
 
-  const lastOf = { alpha: "A board: the first screen", beta: "B board: the first screen" };
+  const lastOf = { alpha: `A${MESSAGES - 1}: `, beta: `B${MESSAGES - 1}: ` };
   await page
     .getByText(`B${MESSAGES - 1}: `)
     .filter({ visible: true })

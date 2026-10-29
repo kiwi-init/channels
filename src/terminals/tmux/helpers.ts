@@ -57,12 +57,12 @@ export async function downloadTmuxHelpers(kiwi: string, live: Live, conf = tmuxC
   const before = existsSync(conf) ? readFileSync(conf, "utf8") : "";
   const linked = hasLine(before, sourceLine(conf));
   if (!linked) replaceFile(conf, withLine(before, sourceLine(conf)));
-  for (const socket of live.sockets) await run([live.tmux, "-S", socket, "source-file", "-q", file], 5_000);
+  for (const socket of live.sockets) await run([live.tmux, "-u", "-S", socket, "source-file", "-q", file], 5_000);
   return { conf, file, changed: wrote || !linked };
 }
 
 async function takeBack(tmux: string, socket: string): Promise<void> {
-  const cmd = (...args: string[]) => run([tmux, "-S", socket, ...args], 5_000);
+  const cmd = (...args: string[]) => run([tmux, "-u", "-S", socket, ...args], 5_000);
   const windows = await cmd("list-windows", "-a", "-F", "#{window_id}");
   if (windows.status !== 0) return;
   for (const id of windows.stdout.split("\n").filter((w) => /^@\d+$/.test(w))) await cmd("set-option", "-wu", "-t", id, "@kiwi");

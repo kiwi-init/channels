@@ -117,9 +117,9 @@ describe("kiwi terminal and kiwi launches", () => {
     writeFileSync(join(dir, "kiwi", "config.json"), JSON.stringify({ channels: {}, bindings: { [join(dir, "work")]: { alias: "ch", as: "ana", tmux: { socket, pane: "%1" } } } }));
     const app = { SHELL: shell, PATH: "/usr/bin:/bin" };
     expect(kiwiWith(dir, app, "terminal", "download", "tmux").code).toBe(0);
-    expect(readFileSync(calls, "utf8").split("\n")).toContain(`-S ${realpathSync(socket)} source-file -q ${join(dir, "tmux", "kiwi.tmux.conf")}`);
+    expect(readFileSync(calls, "utf8").split("\n")).toContain(`-u -S ${realpathSync(socket)} source-file -q ${join(dir, "tmux", "kiwi.tmux.conf")}`);
     expect(kiwiWith(dir, app, "terminal", "remove", "tmux").code).toBe(0);
-    expect(readFileSync(calls, "utf8").split("\n")).toContain(`-S ${realpathSync(socket)} list-windows -a -F #{window_id}`);
+    expect(readFileSync(calls, "utf8").split("\n")).toContain(`-u -S ${realpathSync(socket)} list-windows -a -F #{window_id}`);
   });
 
   test("kiwi terminal show --needs-you says in one line, and succeeds, when there's no seat to show", () => {

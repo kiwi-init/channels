@@ -2,7 +2,7 @@ import type { Pane, TmuxPlace } from "../plugin.ts";
 import { runNow } from "../shared/run.ts";
 
 export function tmuxPane(place: TmuxPlace, bin: string): Pane {
-  const tmux = (...args: string[]) => runNow([bin, "-S", place.socket, ...args]);
+  const tmux = (...args: string[]) => runNow([bin, "-u", "-S", place.socket, ...args]);
   const ok = (...args: string[]) => tmux(...args).status === 0;
   const buffer = `kiwi-type-${process.pid}`;
   return {
