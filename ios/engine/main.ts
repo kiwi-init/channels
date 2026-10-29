@@ -14,7 +14,7 @@ import { Keyring } from "../../desktop/src/keyring.ts";
 import { launchRequestOf } from "../../desktop/src/launch-view.ts";
 import { foldersOn, launchOn, personMachines, remoteHarnesses, type Asker, type PairedComputer } from "../../desktop/src/remote.ts";
 import { acceptSeat, withAccess } from "../../desktop/src/seats.ts";
-import { canonicalHarness, harnessName, monoHarness } from "../../web/src/lib/harness.ts";
+import { canonicalHarness, harnessName, monoHarness } from "@kiwi/app/harness.ts";
 import { Room } from "./room.ts";
 import type { Ask, EnrollStart, Fetched, HarnessChoice, LaunchAsk, Push, Reply, Saved } from "./wire.ts";
 

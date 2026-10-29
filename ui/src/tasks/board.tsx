@@ -12,8 +12,6 @@ import { useApp } from "~/nav"
 import { nickname } from "~/names"
 import { NowCard } from "~/tasks/now"
 
-export const openTasks = (channel: Channel): Task[] => channel.tasks.filter((t) => t.status !== "done" && !t.archived)
-
 export const TONES: Record<TaskStatus, string> = { todo: "", doing: "tone-doing", review: "tone-review", done: "tone-live", waiting: "tone-decide" }
 
 const ROWS_SHOWN = 5

@@ -20,7 +20,7 @@ const escapeAttr = (s: string): string => s.replaceAll("&", "&amp;").replaceAll(
 
 export function pageWithCsp(index: string, relay: string): string {
   const head = PROLOGUE.exec(index);
-  if (!head) throw new Error("web/dist/index.html must open with only a doctype, <html> and <head>, so the CSP can go first in <head>");
+  if (!head) throw new Error("ui/dist/index.html must open with only a doctype, <html> and <head>, so the CSP can go first in <head>");
   const at = head[0].length;
   const meta = `<meta http-equiv="Content-Security-Policy" content="${escapeAttr(csp(relay))}">`;
   return `${index.slice(0, at)}${meta}${index.slice(at)}`;

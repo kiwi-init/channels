@@ -31,6 +31,7 @@ export { authenticate, authenticateSocket, missingFingerprint, readMeta, request
 export { append, expire, idleExpired, markRead, storeBlob, touch } from "./room/messages.ts";
 export { create, directory, setIcon, setSettings, setSnapshot, setTitle, type CreateBody } from "./room/lifecycle.ts";
 export { approve, keysFor, remove, rotate, setCanPost, setRecord, type MemberBody } from "./room/members.ts";
+export { dropDelegation, listDelegations, liveDelegation, putDelegation } from "./room/delegations.ts";
 export { request, requestStatus, requireChecked, reveal, setOwnerNonce, type RequestBody } from "./room/requests.ts";
 export { frame, msgFrame, onClientFrame, socketError, takesPresence, wantsEcho, wantsReads, wantsWatch, watchFrame, welcomeFrames } from "./room/sockets.ts";
 export { errorResponse, parseRoomPath, relayConfig } from "./room/http.ts";

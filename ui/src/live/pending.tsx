@@ -1,8 +1,9 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useState } from "react"
 
 import { decodeJoinCode } from "@kiwi/core/crypto.ts"
-import { checkJoin, type PendingJoin } from "@/lib/channel"
-import { isJoinBlip } from "@/lib/join-blip"
+import { checkJoin } from "@kiwi/channel/join.ts"
+import { type PendingJoin } from "@kiwi/channel/store.ts"
+import { isJoinBlip } from "@kiwi/app/join-blip.ts"
 import { announce } from "~/kit/toasts"
 import { inviteOwner } from "~/live/invites"
 import { closeOpened, publish } from "~/live/store"

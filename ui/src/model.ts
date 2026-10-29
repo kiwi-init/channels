@@ -1,6 +1,6 @@
 import type { HookHarness, HookState } from "@kiwi/core/harnesses.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
-import type { Step, StepReply } from "@kiwi/core/protocol.ts"
+import type { GithubNote, Step, StepReply } from "@kiwi/core/protocol.ts"
 import type { TerminalId, TerminalRow } from "@kiwi/core/terminals.ts"
 
 export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "grok" | "kimi" | "mimo" | "pi" | "grok-bot" | "zcode" | "other"
@@ -207,26 +207,34 @@ export interface Reaction {
   by: string[]
 }
 
+export interface Said {
+  text: string
+  tone: "quiet" | "ask" | "alert" | "decide"
+}
+
 export interface Message {
   seq: number
   from: string
   at: number
   text: string
   where: Where
+  said?: Said
   replyTo?: number
   inThread?: number
   thread?: { replies: number; last: number; people: string[] }
   task?: number
-  pr?: PullRequest
+  prs?: PullRequest[]
   images?: (Image | ImageSpot)[]
   reactions?: Reaction[]
   ask?: string
   system?: boolean
+  github?: readonly GithubNote[]
   done?: true
   pending?: boolean
   failed?: string
   mentionsYou?: boolean
   leftOut?: string
+  receipt?: string
 }
 
 export interface PermissionAsk {
@@ -362,6 +370,14 @@ export type TermOpened = { screen: TermScreen; link: TermLink } | { error: strin
 
 export type ComputerChoices = { harnesses?: App["harnesses"]; folders: string[] } | { error: string }
 
+export interface Compacted {
+  summary: string
+  through: number
+  by: string
+  at: number
+  seq: number
+}
+
 export interface Channel {
   code: string
   title: string
@@ -374,6 +390,8 @@ export interface Channel {
   next?: string
   mergedAt?: number[]
   hold?: { note?: string; by: string; at: number }
+  compact?: Compacted
+  proposal?: Compacted
   newMembers?: "read" | "write"
   newPowers?: Powers
   repos: string[]
@@ -536,6 +554,7 @@ export interface Actions {
   exportHistory(code: string, kind: "transcript" | "log"): Promise<void>
   setGoal(code: string, goal: string): void
   setHold(code: string, on: boolean, note?: string): void
+  approveCompact(code: string, proposal: number): void
   addRepo(code: string, repo: string): void
   myRepos(): Promise<string[]>
   removeRepo(code: string, repo: string): void

@@ -22,7 +22,6 @@ export {
   toRoster,
   type AskHead,
   type ChannelState,
-  type Compact,
   type Fact,
   type Lease,
   type FoldBase,

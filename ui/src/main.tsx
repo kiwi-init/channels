@@ -1,47 +1,35 @@
-import { StrictMode, useCallback, useEffect, useMemo, useState } from "react"
+import { StrictMode, useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 import { createRoot } from "react-dom/client"
 
 import "~/styles/tokens.css"
 import "~/styles/base.css"
 import "~/styles/shell.css"
 import "~/styles/chat.css"
-import { DEMO_PREFS } from "~/demo/data"
-import { useDemo } from "~/demo/provider"
-import { SHOTS } from "~/demo/shots"
 import { Boundary } from "~/kit/boundary"
+import { warmLater } from "~/kit/later"
 import { LiveDuties, useLive } from "~/live/live"
-import type { Prefs } from "~/model"
 import { storedThemePrefs } from "~/live/prefs"
 import { navigate, startNav, type Go, type Nav } from "~/nav"
 import { Root } from "~/shell/root"
 import { bootTheme } from "~/theme/apply"
-import { migrateChannelsToStore } from "@/lib/channel"
+import { loadRex } from "~/theme/rex"
+import { wantsRex, type ThemePrefs } from "~/theme/themes"
+import { migrateChannelsToStore } from "@kiwi/channel/store.ts"
 import { ops } from "@kiwi/channel/channel-ops.ts"
 import { hasBridge } from "@kiwi/secrets/relay.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import { noteSignInGone } from "@kiwi/channel/session.ts"
-import { applyStoredAppearance, stepTextSize } from "@/lib/theme"
-import { uiBooted, watchUiBoot } from "@/lib/ui-boot"
-import { nudgeOnWake } from "@/lib/wake"
+import { applyStoredAppearance, stepTextSize } from "@kiwi/app/theme.ts"
+import { uiBooted, watchUiBoot } from "@kiwi/app/ui-boot.ts"
+import { nudgeOnWake } from "@kiwi/app/wake.ts"
 
 watchUiBoot()
 
 const params = new URLSearchParams(location.search)
 const demo = params.has("demo") || params.has("shot") || import.meta.env.VITE_KIWI_DEMO === "1"
-const shot = SHOTS[params.get("shot") ?? ""] ?? SHOTS.channel
-const theme = params.get("theme")
-const look: Partial<Prefs> = { ...shot?.prefs, ...(theme === "light" || theme === "dark" ? { theme } : {}) }
 
 if (hasBridge() && /Mac/.test(navigator.platform)) document.documentElement.dataset.shell = "mac"
 else if (hasBridge() && /Linux/.test(navigator.platform)) document.documentElement.dataset.shell = "linux"
-
-function DemoApp() {
-  const [nav, setNav] = useState<Nav>(() => ({ ...startNav(shot?.channel ?? null), ...shot?.nav }))
-  const app = useDemo(shot?.scenario ?? "full", nav.channel, look)
-  const go = useCallback((g: Go) => setNav((n) => navigate(n, g)), [])
-  useEffect(uiBooted, [])
-  return <Root app={app} nav={nav} go={go} />
-}
 
 function LiveApp() {
   const [nav, setNav] = useState<Nav>(() => startNav(null))
@@ -69,12 +57,25 @@ if (!demo) {
   })
 }
 
-bootTheme(demo ? { ...DEMO_PREFS, ...look } : storedThemePrefs())
+const render = (app: ReactNode) => {
+  const root = document.getElementById("root")
+  if (root)
+    createRoot(root).render(
+      <StrictMode>
+        <Boundary whole>{app}</Boundary>
+      </StrictMode>
+    )
+}
 
-const root = document.getElementById("root")
-if (root)
-  createRoot(root).render(
-    <StrictMode>
-      <Boundary whole>{demo ? <DemoApp /> : <LiveApp />}</Boundary>
-    </StrictMode>
-  )
+const start = (prefs: ThemePrefs, app: ReactNode) => {
+  const go = () => {
+    bootTheme(prefs)
+    render(app)
+    warmLater()
+  }
+  if (wantsRex(prefs)) void loadRex().then(go, go)
+  else go()
+}
+
+if (demo) void import("~/demo/app").then(({ DemoApp, demoPrefs }) => start(demoPrefs, <DemoApp />))
+else start(storedThemePrefs(), <LiveApp />)

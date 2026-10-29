@@ -57,6 +57,7 @@ import {
 } from "./machine.ts";
 import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, type AccountStore } from "./account.ts";
 import { ENROLL_TTL_MS, type Enrollment } from "@kiwi/core/enroll.ts";
+import type { Vault } from "@kiwi/core/recovery.ts";
 import { allow as allowPerMinute } from "./room/limits.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync, type Relay } from "./route.ts";
 import { GithubApp, githubAppFrom, GithubPush, githubPushFrom } from "./github-app.ts";
@@ -486,6 +487,8 @@ export class Account extends DurableObject<Env> {
     super(ctx, env);
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS links (seq INTEGER PRIMARY KEY, link TEXT NOT NULL)");
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS ask (k INTEGER PRIMARY KEY CHECK (k = 1), rec TEXT NOT NULL)");
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS recovery (n INTEGER PRIMARY KEY, link TEXT NOT NULL)");
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS vault (k INTEGER PRIMARY KEY CHECK (k = 1), version INTEGER NOT NULL, rec TEXT NOT NULL)");
   }
 
   private enrollment(): Enrollment | null {
@@ -516,6 +519,22 @@ export class Account extends DurableObject<Env> {
       },
       revoke: async (keys) => {
         await Promise.all(keys.map((pk) => this.env.MACHINES.get(this.env.MACHINES.idFromName(pk)).revoke()));
+      },
+      recovery: async () => (sql.exec("SELECT link FROM recovery ORDER BY n").toArray() as { link: string }[]).map((r) => JSON.parse(r.link) as unknown),
+      extendRecovery: async (_user, from, links) => {
+        if ((sql.exec("SELECT COUNT(*) AS n FROM recovery").toArray()[0] as { n: number }).n !== from) return false;
+        links.forEach((l, i) => sql.exec("INSERT INTO recovery (n, link) VALUES (?, ?)", from + i + 1, JSON.stringify(l)));
+        return true;
+      },
+      vault: async () => {
+        const row = sql.exec("SELECT rec FROM vault").toArray()[0] as { rec: string } | undefined;
+        return row ? (JSON.parse(row.rec) as Vault) : null;
+      },
+      setVault: async (_user, next, prev) => {
+        const row = sql.exec("SELECT version FROM vault").toArray()[0] as { version: number } | undefined;
+        if ((row?.version ?? 0) !== prev) return false;
+        sql.exec("INSERT OR REPLACE INTO vault (k, version, rec) VALUES (1, ?, ?)", next.version, JSON.stringify(next));
+        return true;
       },
     };
   }

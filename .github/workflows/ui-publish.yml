@@ -6,7 +6,7 @@ on:
     branches: [main]
     paths:
       - ui/**
-      - web/src/lib/**
+      - packages/app/**
       - packages/core/**
       - packages/secrets/**
       - packages/channel/**

@@ -14,7 +14,7 @@ export function markText(records: readonly StatusRecord[]): string {
 }
 
 async function tmuxWindow(tmux: string, place: TmuxPlace): Promise<string | null> {
-  const r = await run([tmux, "-S", place.socket, "display-message", "-p", "-t", place.pane, "#{window_id}"], 5_000);
+  const r = await run([tmux, "-u", "-S", place.socket, "display-message", "-p", "-t", place.pane, "#{window_id}"], 5_000);
   const id = r.stdout.trim();
   return r.status === 0 && /^@\d+$/.test(id) ? id : null;
 }
@@ -32,7 +32,7 @@ export function tmuxMarker(tmux: string): (seat: SeatRecord, changed: readonly S
   const paint = async (held: Held): Promise<boolean> => {
     const text = markText([...held.seats.values()].flat());
     const option = text ? ["-w", "-t", held.window, "@kiwi", text] : ["-wu", "-t", held.window, "@kiwi"];
-    return (await run([tmux, "-S", held.socket, "set-option", ...option], 5_000)).status === 0;
+    return (await run([tmux, "-u", "-S", held.socket, "set-option", ...option], 5_000)).status === 0;
   };
 
   const hold = (at: string, held: Held, seat: string, records: readonly StatusRecord[]): void => {

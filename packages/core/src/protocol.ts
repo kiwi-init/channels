@@ -34,7 +34,7 @@ export function isRasterMime(mime: string): mime is RasterMime {
 
 /** The robot heads a channel can wear, by colour, in the order the app shows them. */
 export const ROBOT_FACES = ["blue", "purple", "red", "lime", "orange", "sky", "mint", "pink", "lilac", "teal", "gold", "coral"] as const;
-export type RobotFace = (typeof ROBOT_FACES)[number];
+type RobotFace = (typeof ROBOT_FACES)[number];
 
 /** A channel's icon: one of the robot heads, an emoji, or a small image (never SVG, which can carry script). Sealed like the title. */
 export type ChannelIcon = { kind: "robot"; robot: RobotFace } | { kind: "emoji"; emoji: string } | { kind: "image"; mime: RasterMime; data: string };
@@ -340,7 +340,7 @@ const QUIET_OPS: ReadonlySet<string> = new Set([
 
 export const isRunning = (i: GithubNote): boolean => (i.event === "check_run" || i.event === "workflow_run") && i.conclusion === undefined;
 
-export const onlyRunning = (items: readonly GithubNote[]): boolean => items.length > 0 && items.every(isRunning);
+const onlyRunning = (items: readonly GithubNote[]): boolean => items.length > 0 && items.every(isRunning);
 
 export function isQuiet(m: Pick<Message, "kind" | "ev" | "newer">): boolean {
   return m.kind === "event" && (m.newer !== undefined || (!!m.ev && (QUIET_OPS.has(m.ev.op) || (m.ev.op === "github" && onlyRunning(m.ev.items)))));

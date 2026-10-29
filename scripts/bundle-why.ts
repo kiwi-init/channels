@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 if (process.argv.includes("--help")) {
-  console.log(`Where the dashboard's first-load JS comes from: builds web/ with source maps into a temp dir and splits the entry script and every chunk it modulepreloads by package and by module.
+  console.log(`Where the app's first-load JS comes from: builds ui/ with source maps into a temp dir and splits the entry script and every chunk it modulepreloads by package and by module.
 
   bun scripts/bundle-why.ts [--top 40]`);
   process.exit(0);
@@ -58,10 +58,10 @@ function bytesBySource(code: string, map: SourceMap): Map<string, number> {
 const group = (source: string): { pkg: string; module: string } => {
   const pkg = /.*node_modules\/((?:@[^/]+\/)?[^/]+)\/(.*)/.exec(source);
   if (pkg) return { pkg: pkg[1]!, module: `${pkg[1]}/${pkg[2]}` };
-  const core = /packages\/core\/src\/(.*)/.exec(source);
-  if (core) return { pkg: "@kiwi/core", module: `core/${core[1]}` };
-  const web = /web\/src\/(.*)/.exec(source);
-  if (web) return { pkg: "web", module: `web/${web[1]}` };
+  const kiwi = /packages\/([^/]+)\/src\/(.*)/.exec(source);
+  if (kiwi) return { pkg: `@kiwi/${kiwi[1]}`, module: `${kiwi[1]}/${kiwi[2]}` };
+  const ui = /ui\/src\/(.*)/.exec(source);
+  if (ui) return { pkg: "ui", module: `ui/${ui[1]}` };
   return { pkg: "other", module: source.replace(/^(\.\.\/)+/, "") };
 };
 
@@ -70,7 +70,7 @@ const top = at > 0 ? Number(process.argv[at + 1]) : 40;
 const root = resolve(import.meta.dir, "..");
 const out = mkdtempSync(join(tmpdir(), "kiwi-bundle-why-"));
 try {
-  const built = spawnSync("bunx", ["vite", "build", "--sourcemap", "--outDir", out, "--emptyOutDir"], { cwd: join(root, "web"), encoding: "utf8" });
+  const built = spawnSync("bunx", ["vite", "build", "--sourcemap", "--outDir", out, "--emptyOutDir"], { cwd: join(root, "ui"), encoding: "utf8" });
   if (built.status !== 0) {
     console.error(built.stderr || built.stdout);
     process.exit(1);

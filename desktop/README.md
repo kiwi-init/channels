@@ -1,7 +1,7 @@
 # Channels desktop app (Electrobun shell)
 
 The app half of 0.11: it holds the person key, every channel identity, and
-paired computers, and hosts `web/`'s build. Admin lives here; the CLI is for
+paired computers, and hosts `ui/`'s build. Admin lives here; the CLI is for
 agents.
 
 ## Run
@@ -10,7 +10,7 @@ agents.
 bun install && cd desktop && bun run start:eb
 ```
 
-This expects `../web/dist` built (`bun run web:build` in the repo root); without it the
+This expects `../ui/dist` built (`bun run ui:build` in the repo root); without it the
 window says so. Closing the window keeps the app in the tray (background auto-approval
 + notifications); Quit lives in the tray menu.
 
@@ -21,7 +21,7 @@ Macs, WebKitGTK on Linux. Electron left the repo in T580; Intel Macs keep Electr
 build (0.27.4), which no longer updates.
 
 ```sh
-bun run web:build && cd desktop && bun run start:eb   # dev build, opened
+bun run ui:build && cd desktop && bun run start:eb   # dev build, opened
 bun run build:eb                                      # release-eb/: the stable build; scripts/eb-size.ts measures the plain .app we ship
 bun run typecheck:eb                                  # fetches the devkit into .hutch/, then tsrs
 ```
@@ -43,11 +43,11 @@ bun run typecheck:eb                                  # fetches the devkit into 
   window (`window-eb.ts`), the test build's driver (`test-build-eb.ts`), then app life and
   updates (`life-updates-eb.ts`). Each feature's wiring lives in its own module, so pull requests that
   add features don't all edit one file.
-- `src/window-eb.ts` — the window. The page is `web/dist/index.html` with `csp(relay)` from
+- `src/window-eb.ts` — the window. The page is `ui/dist/index.html` with `csp(relay)` from
   `guard.ts` as a `<meta>` first in `<head>` (found by the page's structure, and checked at
   build time), kept in memory and served at `views://internal/index.html` (Electrobun's
   scheme sends fixed headers, so no CSP header). The template sits outside `views/`, so no
-  copy of the page is served without its CSP; the rest of `web/dist` is under
+  copy of the page is served without its CSP; the rest of `ui/dist` is under
   `views/internal/`. Navigation stays on that one page (its hash and query); before the
   page loads, a canary navigation proves the rules took effect, and any navigation they
   should have refused closes the app. Links and `window.open` go to the browser through
@@ -101,9 +101,9 @@ bun run typecheck:eb                                  # fetches the devkit into 
 
 ## Renderer relay URL
 
-In the app, `web/` takes the relay from `window.kiwi.relayUrl` (main's store, through
+In the app, `ui/` takes the relay from `window.kiwi.relayUrl` (main's store, through
 the preload) and never from the page's URL: the sign-in token goes wherever the relay
-is. The app loads `views://internal/index.html`. In a browser, `web/` takes `?relay=`,
+is. The app loads `views://internal/index.html`. In a browser, `ui/` takes `?relay=`,
 else `location.origin` when served by a relay.
 
 ## Typecheck / build
@@ -131,7 +131,7 @@ first to try it.
 ```sh
 sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev \
   bubblewrap xdg-dbus-proxy dbus sway grim python3-gi gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0
-bun install && bun run web:build && bun scripts/build-cli.ts --js dist/kiwi.js
+bun install && bun run ui:build && bun scripts/build-cli.ts --js dist/kiwi.js
 cd desktop && bun run prepare:eb && CHANNELS_EB_TEST=1 bun scripts/eb.ts build --env=dev && cd ..
 bash desktop/scripts/wlroots-check/sway.sh desktop/release-eb/build/dev-linux-*/*/ /tmp/wlroots
 ```

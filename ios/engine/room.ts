@@ -7,11 +7,11 @@ import type { ChannelIdentityView, FollowEvent, WireError } from "../../desktop/
 import type { Keyring } from "../../desktop/src/keyring.ts";
 import { usableBase } from "@kiwi/channel/base-plan.ts";
 import { foldRoster } from "@kiwi/channel/fold-roster.ts";
-import { hear, onlineByName, type Online } from "../../web/src/lib/channel/online.ts";
+import { hear, onlineByName, type Online } from "@kiwi/channel/online.ts";
 import { trimmed } from "@kiwi/channel/trim.ts";
 import { approveTask, closedDigest, sendBackTask, type TaskSend } from "@kiwi/channel/task-actions.ts";
-import { TEND_SAFETY_MS, tendOwned } from "../../web/src/lib/approval-tend.ts";
-import { followedLaunches, followLaunch, sawMembers, sawRequests, type LaunchSeen } from "../../web/src/lib/launch-follow.ts";
+import { TEND_SAFETY_MS, tendOwned } from "@kiwi/app/approval-tend.ts";
+import { followedLaunches, followLaunch, sawMembers, sawRequests, type LaunchSeen } from "@kiwi/app/launch-follow.ts";
 import { roomView } from "./view.ts";
 import type { Connection, Picture, RoomView } from "./wire.ts";
 

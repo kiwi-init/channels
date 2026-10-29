@@ -1,467 +1,288 @@
 # Channels DESIGN.md
 
-Source of truth for Channels visual identity (web renderer, later the
-desktop app's renderer). Implementations derive from tokens here. Never
-hard-code hex in components.
+Source of truth for how Channels looks: the `ui/` renderer, in the desktop
+app (WebKit on Mac and Linux) and in a browser. Components take colours,
+sizes and type from the tokens here. Never hard-code hex in a component.
 
-Canonical sources: `web/src/index.css` (`:root`, `:root[data-theme]`,
-`@theme inline`), `web/src/lib/design-tokens.ts`, `web/src/lib/fonts.ts`,
-`web/src/lib/accessibility.ts`, `web/src/components/kit.tsx`,
-`web/src/components/ui/*`, `web/src/components/composer.tsx`.
-`scripts/ui-tokens.ts` enforces the type steps and radii below.
+Canonical sources: `ui/src/styles/tokens.css` (`:root`), `ui/src/theme/`
+(`channels.ts`, `derive.ts`, `themes.ts`, `apply.ts`, `rex-themes.ts`),
+`ui/src/styles/base.css` (the shared classes), `ui/src/kit/` (`bits.tsx`,
+`icons.tsx`, `toasts.tsx`, `boundary.tsx`), `ui/src/chat/composer.tsx`,
+`packages/app/src/accessibility.ts`.
 
 ## 1. Identity in one line
 
-A quiet Messages-like conversation. White `#ffffff` / true OLED black `#000000`
-canvas, Apple system blue `#007aff` (light) / `#0a84ff` (dark), the system font,
-small purposeful motion, one shell with the page floating on it. What's
-chosen wears one quiet solid fill; everything around it is plain, so it
-reads as meant.
+Black and white, quiet, fast. A true black canvas (white in light), ink for
+what matters and greys for the rest, the system font for what people read and
+Paper Mono for the machine's words (times, ids, counts, code). No glass, no
+blur, no gradients for show. Colour means a state, never decoration.
 
 ## 2. Theme architecture
 
-- CSS vars are the contract. Tailwind v4 maps them via `@theme inline`:
-  `canvas, rail, raised, field, ink, ink-2, ink-3, line, wash, wash-2,
-  accent, accent-ink, accent-text, accent-wash, link, ring, alert,
-  alert-fill, live,
-  doing, warn, overlay, bubble-me, bubble-them, pick, head-*, avatar-*,
-  pop-edge, pop-shade, shadow-pop, shadow-sheet, shell, well, chosen`, plus
-  `frame, panel, edge, edge-strong` aliases, and the sizes `step, card-head, control`
-  (section 5).
-- Each token is written once as `light-dark(day, night)`. The system picks
-  the side, unless `lib/theme.ts` set `data-theme` because the person chose
-  light or dark. `system` leaves `data-theme` unset so the media query
-  decides.
-- There is one accent, not a pack: Apple blue. A theme switcher (system /
-  light / dark) and a text-size switcher live in Settings. No accent
-  switcher.
-- New surface bootstrap: copy the `index.css` `:root` + `[data-theme]` +
-  `@theme inline` blocks, plus `design-tokens.ts`, `fonts.ts`,
-  `accessibility.ts`, `kit.tsx`.
+- CSS custom properties are the contract. `tokens.css` writes them on `:root`
+  in dark, and again for light under `:root[data-theme="light"]` and
+  `prefers-color-scheme: light` (unless `data-theme="dark"`).
+- The colour tokens are the list in `TOKENS` (`ui/src/theme/derive.ts`):
+  `bg, bg-2, bg-3, ink, ink-2, ink-3, line, line-2, line-3, wash, wash-2,
+  scrim, link, on-ink, accent, accent-wash, live, doing, review, decide,
+  decide-wash, alert, alert-wash` and the ten `c-*` colours. The rest of
+  `:root` (fonts, type steps, radii, sizes, motion, `shadow-pop`, `h-*`) is
+  the same in every theme.
+- Settings → Appearance picks system / light / dark, and a theme for each
+  side. Built in: OLED Black (`channels-oled`, the default dark), Channels
+  Dark (`#111113`) and Channels Light (the default light), then the Rex
+  themes (`rex-themes.ts`) and the person's own. `system` leaves
+  `data-theme` unset so the media query decides.
+- A theme that isn't built in is applied by `applyTheme()`: every token set
+  inline on `<html>`. A custom theme is 13 base colours (background, text,
+  accent, success, warning, danger, info and six ANSI-style hues);
+  `compose()` in `derive.ts` derives the whole token set from them.
+- A saved Channels Dark moves to OLED Black once (`movedDark`); every other
+  saved theme is kept.
 
 ## 3. Color tokens
 
-Light / dark are the two sides of each `light-dark()` in `index.css`:
+The two built-in sides, from `tokens.css` and `channels.ts`:
 
-| Token | Light | Dark |
+| Token | Dark (OLED Black) | Light |
 |---|---|---|
-| `canvas` (conversation) | `#ffffff` | `#000000` |
-| `rail` (the window's sidebar and the phone's channel list, a step darker) | `#f2f2f5` | `#000000` |
-| `shell` (the window surface: the rail, or the Mac's vibrancy under `html[data-frost]`, clear, washed 10% with the tint when one is picked) | the rail / `transparent` | the rail / `transparent` |
-| `well` (a field's quiet solid fill) | `#f2f2f5` | `#232327` |
-| `chosen` (a selected row's quiet fill) | ink at 12% | white at 12% |
-| `raised` (cards, popovers) | the canvas | the canvas |
-| `field` (inputs) | the canvas | the canvas |
-| `ink` | `#0f0f11` | `#f3f3f5` |
-| `ink-2` | `#4a4a52` | `#bcbcc3` |
-| `ink-3` (quiet floor, still 4.5:1) | `#6b6b73` | `#8f8f97` |
-| `accent` (Apple system blue) | `#007aff` | `#0a84ff` |
-| `accent-ink` (on the accent) | `#ffffff` | `#ffffff` |
-| `alert` | `#d1342a` | `#ff6259` |
-| `alert-fill` (under white text) | `#d1342a` | `#d1342a` |
-| `decide` (amber, someone waits) | `#a35a00` | `#f5b041` |
-| `live` (3:1 on the surfaces, a dot or a word beside one, not body text) | `#1f9a55` | `#32d074` |
-| `doing` (in-progress blue) | `#2f6fe4` | `#5b9bff` |
+| `bg` (canvas, rail, sidebar, panels) | `#000000` | `#ffffff` |
+| `bg-2` (raised: composer, dialogs, cards) | `#0c0c0d` | `#f7f7f8` |
+| `bg-3` (fills: buttons, fields, tiles, tracks) | `#18181a` | `#efeff1` |
+| `ink` | `#ececef` | `#18181b` |
+| `ink-2` (secondary text, idle controls) | `#a3a3ab` | `#56565e` |
+| `ink-3` (quiet floor: hints, placeholders, meta) | `#808089` | `#6c6c74` |
+| `line` / `line-2` / `line-3` (hairlines, light to strong) | white 8 / 11 / 15% | black 6 / 9 / 13% |
+| `wash` / `wash-2` (hover, pressed, chosen) | white 4.5 / 8% | black 3.5 / 6% |
+| `scrim` (under a dialog) | black 70% | black 22% |
+| `on-ink` (text on an `ink` fill) | `#000000` | `#ffffff` |
+| `accent`, `link` | `#8ab4ff` | `#1a56db` |
+| `accent-wash` | accent 14% | accent 8% |
+| `live` (online, done, passed) | `#32d074` | `#1f9a55` |
+| `doing` (working, running) | `#5b9bff` | `#2f6fe4` |
+| `review` (in review) | `#b48cff` | `#7a4fd6` |
+| `decide` (needs you) and `decide-wash` | `#f5b041`, 12% | `#a35a00`, 10% |
+| `alert` (failed, error, danger) and `alert-wash` | `#ff6259`, 12% | `#d1342a`, 8% |
 
-Dark is true OLED black (OLED Black, `channels-oled`, the default dark in
-the desktop UI since T43): canvas, rail and panels are `#000000`; cards, the
-composer and popovers lift only to `#0c0c0d` and are told apart by `line`
-borders, not grey fills. Channels Dark (`#111113`) stays in the theme picker.
-A saved Channels Dark moves to OLED Black once (it was only ever the
-default); every other saved theme is kept. iOS and Android follow the same
-black.
-
-Supporting chrome: `line` (7% ink/white), `wash` (4/5%), `wash-2` (7/8%),
-`accent-wash` (10/16%), `pick` (the open channel: a neutral step, never a
-block of colour), `bubble-them` (Messages grey `#e9e9eb` / `#1f1f21`).
-
-White on the light accent is ~4:1, Apple's own choice and just under AA 4.5
-for small text; the owner asked to mirror Apple, so it stays. As text on the
-dark canvas the dark side clears 4.5:1.
-
-White on the dark `alert` is ~2.9:1, so a red surface under white text (the
-error toast) uses `alert-fill`, the light red in both themes (~5:1).
+- `selection` is ink at 28%. `white` is for a knob or a glyph on a coloured
+  fill.
+- `c-red … c-brown` are the member colours: a person's initials and the
+  tint behind them (`.av[data-color]`, 18%). They never colour chrome.
+- `h-claude, h-codex, h-gemini, h-opencode` colour an agent's harness logo.
+- Channels Dark is the same set on `#111113` / `#18181b` / `#212125`.
 
 ## 4. Typography
 
-- Apps use the system font, websites use Paper Mono (the owner, T75).
-  The app's text is `-apple-system, BlinkMacSystemFont, "Segoe UI",
-  system-ui, sans-serif` (SF Pro on a Mac, the desktop's own sans on
-  Linux); code is `ui-monospace, "SF Mono", Menlo, monospace`. The sites
-  (kiwiinit.com and the landing pages) set their headings in Paper Mono.
-- Body: `-0.006em` letter-spacing, `calt/kern`, antialiased,
-  `optimizeLegibility`. Display/title set tighter at `-0.014em`.
-- Six type steps and nothing between them (`scripts/ui-tokens.ts` keeps it
-  that way; 4 documented exceptions for the pairing code, wordmark and
-  swatch initials): `stamp 11px` (times between messages), `meta 12px`
-  (counts, dates, section heads), `ui 13px` (names, rows, menus, buttons),
-  `body 15px/21px` (what people read, in bubbles too), `title 16px/21px`
-  (headers, dialogs), `display 26px/32px` (panel names, empty states,
-  welcomes). All six scale with the text-size setting (`--text-scale`).
-- Metrics and counts always use tabular numerals (`time, .tabular-nums`).
-- Chat prose wraps pretty (`bubble-text`), code blocks fade at the right
-  edge (`code-more`) so cut-off lines read as "scroll for more".
-- A `mermaid` code block draws as a diagram on a `raised` card in the
-  bubble, in the tokens of the current theme (`field` nodes, `ink-3`
-  lines, `accent-wash` notes, Inter 13px, `row`-round nodes, no shadows).
-  It fits the bubble down to 70%, then scrolls with the same `code-more`
-  fade. Mermaid that doesn't parse stays a code block with its error.
-- No additional font families in the app: the system face and the code
-  face. Hierarchy comes from weight, size and spacing, not font swaps.
+- Two faces and no others. `--sans` / `--ui`: the system font
+  (`-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI",
+  Roboto, Ubuntu, Cantarell, sans-serif`) for everything people read and
+  press. `--mono`: Paper Mono (`/fonts/PaperMono.woff2`, weights 100-900),
+  then `ui-monospace, "SF Mono", Menlo`.
+- Paper Mono carries the machine's words: times, days, counts, task and PR
+  ids, roles (`lead`, `owner`), statuses (`running Bash`, `offline · 1d`),
+  the header's summary line, the composer's hint, keys (`kbd`), code and
+  paths. The list is the `html .msg-time, html .count, …` rule and the
+  `code, pre, kbd, .mono, .codebox, …` rule in `base.css`; a new
+  machine-word class joins it there, with `letter-spacing: -0.01em`.
+- Six steps, all scaled by `--text-scale`: `--t-stamp 11px` (times, counts),
+  `--t-meta 12px` (meta lines, section heads), `--t-ui 13px` (rows, names,
+  buttons, menus), `--t-body 15px` (messages, task titles; message text at
+  22px line height), `--t-title 17px` (panel and dialog titles),
+  `--t-display 24px` (empty states, page headings).
+- Weights: 400 for text, 500 for buttons and tabs, 600 for names, titles and
+  what's chosen. Hierarchy comes from weight, ink level and size, not from
+  new faces.
+- Numbers that line up (counts, times, sizes, diff stats) use
+  `font-variant-numeric: tabular-nums` (`.num`).
+- Body text is antialiased with `optimizeLegibility`.
 
-## 5. Radius, shadow, blur
+## 5. Radius, shadow, layout
 
-- Spacing: one step, `step 8px`, between groups and from the window's and
-  a card's edges. A card's header is `card-head 30px`, its controls
-  `control 26px`, all on the header's one centre line. The kit's small
-  button is `control` tall too, so a row's actions match the header's.
-
-- Steps: `row 8px`, `ctl 10px`, `card 16px`, `bubble 20px` (pictures in
-  a message and the annotator) and `dock 26px` (the composer, soft without a pill's half-moon
-  ends once it grows to several lines).
-- Buttons and rows use `row`; controls and inputs `ctl`; cards `card`;
-  pictures `bubble`; the composer `dock`. Arbitrary `rounded-[Npx]` fails
-  `ui-tokens.ts`.
-- Two shadows, no coloured ones: `pop` (`0 0 0 1px pop-edge, 0 16px 40px
-  -12px pop-shade`) for what lifts over the canvas (popovers, dialogs, a
-  sheet sliding over the page), and `sheet` for the page itself, as in
-  Interlinked: `0 1px 4px` at 30% and `0 6px 36px` at 50% black (dark), with
-  the `sheet-edge` hairline drawn inside the page over its content. The
-  page's ancestors don't clip on a wide window, so the shadow falls over the
-  sidebar and fades, never cut at the gutter.
-- Tint: Settings → Appearance offers the main colours of the desktop's
-  wallpaper (read live on a Mac and on GNOME and KDE, never a fixed
-  palette; the row hides when none can be read). The desktop app also
-  offers the system accent first, followed live as it changes. A tint washes
-  the frost 10% and becomes `accent`, `accent-text` and `accent-wash`.
-- One shell: the sidebar, the page's toolbar and the gutters are one
-  surface, `shell` (the `rail`, or the Mac's vibrancy under `data-frost`),
-  with no fill, edge or shade of their own. Only the page floats: a sheet
-  of `canvas` (the `sheet` utility: `step` in from the window's edges and
-  from the sidebar, half a step under the toolbar, `card` radius, the
-  `sheet` shadow), holding the conversation and the tasks. Details is a
-  sheet of its own in the page's place, headed "Details": one centered
-  column like Settings, the channel's face and its actions on top, then
-  Members, Channel, Notes, Download and Close, each a box of rows whose
-  header is a 16px icon, the name and one quiet line. A choice sits at the
-  right of its row, `control` tall. A thread and the tasks panel
-  slide over the page's right side as a sheet lifted with the `pop` shadow
-  (`sheet-over`), under the toolbar: the page keeps its width and scroll, and its centered column (`aside-room`) slides left only as far as
-  its margin allows, so nothing reflows. `raised` and `field` are the
-  canvas. Inside a sheet, rows, cards and search have no grey fill and no
-  background of their own; they are separated by spacing and a thin 1px
-  `line` (the `edge` utility). Fields, the composer first, are `well`, a
-  quiet solid fill; focus adds a hairline (`edge-strong`), never the accent
-  ring (`FIELD` in `kit.tsx`, which `TextField` uses). Popovers and dialogs lift off the canvas with the `pop` shadow only.
-  A phone has no sheet: one screen at a time, on the canvas.
-- Liquid glass (`glass`), for what floats over the conversation (the
-  header's round controls, the place pills, the composer): a translucent
-  `glass-fill` over a blur, a bright `glass-rim` on top, a hairline round it.
-- Chosen (`chosen`, ink at 12%): what's chosen in a list wears one quiet
-  solid fill and nothing else does: the open conversation under its
-  channel, the open channel's row while none of its conversations is open,
-  the phone list's open channel and the open task on the board. Idle rows,
-  Search and counts are plain. `test/chosen.test.ts` keeps it that way.
-- Fall back to solid fills under `prefers-contrast: more`.
-- On a machine that draws without a GPU (WebGL's renderer is SwiftShader,
-  llvmpipe or a basic render driver, or there's no WebGL: `lib/drawing.ts`
-  marks `html[data-drawing=software]` once the app is idle), the scrims under
-  the header and over the composer drop their mask and keep only their fade.
-- The scrims never blur: text scrolling under the header or above the
-  composer fades but stays sharp, on every platform.
+- Radii: `--r-row 8px` (rows, small buttons, icon buttons, segments),
+  `--r-ctl 10px` (buttons, fields, segmented tracks, toasts, messages on
+  hover), `--r-card 14px` (cards: the Now card, task groups, agent lanes,
+  Needs you cards), `--r-win 18px` (the composer, dialogs). Avatars of people
+  are round; agents and channel tiles are rounded squares.
+- One shadow: `--shadow-pop` (`0 0 0 1px line-2`, then a soft black drop) for
+  what floats over the page: the composer, dialogs, menus, the palette, the
+  stash list, Jump to latest. No coloured shadows.
+- Surfaces are told apart by a step of fill (`bg` → `bg-2` → `bg-3`) and by
+  hairlines (`line`), not by shadows. Cards on the page are `bg` with a
+  `line` border.
+- No glass, no `backdrop-filter`, no blur anywhere. The fade over the bottom
+  of the conversation (`.main::after`, 96px, transparent to `bg`) is a plain
+  gradient: text under it fades but stays sharp.
+- Fixed sizes on `:root`: `--rail-w 64px` (channel tiles), `--side-w 248px`
+  (the sidebar), `--panel-w 400px` (the right panel), `--top-h 52px` (the
+  top bar, which drags the window), `--col 760px` (the reading column),
+  `--compose-space 128px` (room under the last message for the composer).
 
 ## 6. Motion
 
-- Motion only answers an action: something opens, closes, arrives or moves
-  because someone did something. Nothing animates forever: a busy agent's dot
-  is steady (a running animation keeps the GPU drawing every frame).
-- CSS first. Keyframes for what appears: `rise` (settings, composer lists,
-  the lightbox, toasts: 0.18s), `flash` (jump landing: 1.6s), `sent` (your
-  message lands: 0.24s spring), `arrived` (theirs rises: 0.22s), `leave` (a
-  toast goes: 0.16s).
-  Base UI popups (menus, dialogs, the palette, tooltips) enter and leave with
-  `data-starting-style` / `data-ending-style` transitions, 0.1-0.12s.
-- [Motion](https://motion.dev) (`motion/react`, through
-  `components/motion.tsx`) only for what CSS can't do: a side panel leaving
-  (`Presence`, `popLayout`, so the conversation takes the space at once). No
-  hover, press or decorative motion through it, and none on rows of a long
-  list: a Motion component re-renders with every relay event, and 60 of them
-  on the task board cost a frame per event at 4x CPU slowdown.
-- Rows moving to a new place (the task board's `Reorder`) slide with the Web
-  Animations API: measured just before React commits a new order, animated
-  from there with `el.animate`, only for rows near the screen, and only on a
-  board of up to 24 rows: starting a slide on 60 cost one frame at 4x CPU
-  slowdown however few rows moved, so bigger boards jump as before. Nothing
-  runs between reorders. `bun scripts/perf-motion.ts` times the frames of
-  each animation.
-- Motion stays off the first load: import it only from lazy surfaces
-  (`components/lazy.tsx`); the conversation reaches it through the lazy
-  `Presence` (`side-presence.tsx`). A lazy import goes to a module of its own
-  like that one, never to `motion.tsx` itself: importing it lazily from the
-  first load split React and some 35 modules out of the entry chunk (+9 KB,
-  37 more files). Wrap a surface that animates in `<Motion>` so it follows
-  the reduce-motion settings.
-- Eases: `cubic-bezier(0.2, 0.8, 0.2, 1)` generally, `(0.3, 1.35, 0.5, 1)`
-  for sent. Moves take 0.28s. Leaving is quicker than arriving.
-- Reduced motion: `html.reduce-motion` (the persisted toggle) and OS
-  reduced-motion turn CSS animation off; `<Motion>` turns Motion's movement
-  off for both and keeps only its fades; `Reorder` doesn't slide.
+- Motion answers an action: something opens, arrives or moves because
+  someone did something. Two things loop: the working dots under the
+  conversation (`blink`) and the current step's mark while adding an agent
+  (`spin`).
+- CSS only. Two speeds and one ease: `--fast 0.16s`, `--slow 0.28s`,
+  `--ease cubic-bezier(0.32, 0.72, 0, 1)`.
+- Keyframes: `rise` (6px up and in: dialogs, toasts, menus and most things
+  that appear), `fade`, `panel-in` (the right panel, 12px from the right),
+  `palette-in` (6px down), `term-in` (the terminal drawer, 16px up),
+  `jump-in` (Jump to latest), `msg-flash` (a message you jumped to, 1.6s).
+- Hover and pressed states change `background` and `color` over `--fast`;
+  nothing scales or bounces.
+- Reduced motion: the OS setting or Settings' own (`data-motion="reduced"`
+  on `<html>`) cuts every animation and transition to 0.01ms.
 
 ## 7. Core components
 
-- `kit.tsx`: `Button` (primary blue, quiet variants), `IconButton`,
-  `TextField`, `Monogram` (a person's picture when they published one: the
-  GitHub avatar their desktop fetched when they linked GitHub, carried in the
-  channel by `picture.set`, so no page loads from GitHub; else a neutral
-  gradient + initials; an agent always its character), `Spinner`, `SEGMENTED` tabs, `Modal`, `Alert`, `toast` /
-  `Toaster`, `Wordmark`, `Boundary` (every channel view renders inside one,
-  keyed by code).
-- `ui/`: `menu`, `palette` (command palette: channels, actions,
-  appearance), `panel`, `popover`, `tooltip` (500ms delay).
-- Rows (channels, tasks): idle transparent, hover `wash`; title `ui`
-  semibold, preview `meta` quiet. In the sidebar what's open is bold and
-  wears `chosen`. On a phone the header's tabs are text, the current one in
-  ink with a 2px `accent` mark under it; on a wide window the board's task
-  views are a segmented control.
-- A chosen option you pick from a set (role chips, personality rows, Joins
-  as, an ask's options, room chips) wears `accent-wash` with an `accent`
-  edge, and its label in `accent-text` or a check: it reads as chosen at a
-  glance, not just as having a thin ring. Segmented controls are a `wash`
-  track with the chosen segment on `segment` (white / `#3a3a3c`), so it
-  rises off the track in both themes.
-- Buttons: primary `accent`; secondary outlined (a 1px `edge-strong` ring,
-  no fill, `wash` on hover). The kit's `Checkbox` is the one checkbox, in
-  `accent`.
-- Inputs are `FIELD`: the `well` fill, no edge at rest, and an `edge-strong`
-  hairline on focus, never an accent ring.
-- Placeholders and empty states use quiet ink, never reduced-opacity text.
-- A dialog is for one decision (an `Alert`, a confirm, a short form). What you
-  work in opens in place: Settings and Personalities as a page in the main
-  area beside the sidebar (Escape or the back button returns), Invite and join
-  requests as a view of the details panel, with a back arrow to the details.
+The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 
-## 8. Semantic and chart colors
+- Buttons (`.btn`, 32px, `r-ctl`, 500 `t-ui`): default on `bg-3`;
+  `is-primary` is an `ink` fill with `on-ink` text (white on black, black on
+  white), the one loud button in a view; `is-danger` is `alert` on
+  `alert-wash`; `is-quiet` has no fill until hover (`wash`); `is-small` is
+  26px. There is no blue button.
+- `IconButton` (`.icon-btn`, 28px, `r-row`): `ink-2`, `wash-2` on hover and
+  while pressed.
+- Fields (`.input`, `.textarea`, `Field` with label and hint): `bg-3` fill;
+  `.input.is-mono` for codes and paths.
+- `Seg` (`.seg`): a `bg-3` track, the chosen segment on `wash-2` in `ink`
+  and 600.
+- `Toggle`: a 36×22 track, `live` when on with a white knob.
+- `Dialog` / `DialogHead`: `bg-2`, `r-win`, `shadow-pop`, 480px (720px
+  wide), rises in. A dialog is for one decision or a short form; Settings
+  and the panels open in place.
+- `Avatar` (`.av` 34px, `av-sm` 24px, `av-lg` 56px) with a presence `pip`
+  (`live` online, `decide` away, `ink-3` off). A person shows their picture
+  or initials in their member colour; an agent shows its harness logo
+  (`HarnessLogo`) in its `h-*` colour.
+- `Dot`: a task's state as one 8px mark: to do (`ink-2` ring), working
+  (`doing` dashed ring), in review (`review`, half filled), done (`live`,
+  filled), needs you (`decide`, filled with a halo).
+- `Count`: plain `ink-2` numerals; `is-loud` (`decide` fill) for what waits
+  on you, `is-mention` (`accent` fill) for a mention.
+- `Heading`: a section head in 600 `t-meta` `ink-3`, its action shown on
+  hover.
+- `Empty`, `Loading`, `Toasts` (`ink` pill with `on-ink` text, bottom
+  centre), `.codebox` (a `bg-3` box of mono text with Copy), `Boundary`
+  (every channel view renders inside one).
+- Icons: `Icon` in `ui/src/kit/icons.tsx`, 16px line icons drawn in
+  `currentColor` at a 1.4 stroke on a 16 grid, plus Hugeicons (24 grid, 1.5
+  stroke) where one is used (the gear). A new icon is a path added there;
+  no icon font and no icon package.
 
-From `design-tokens.ts`:
+## 8. Semantic colors
 
-- Task/member states: `open` quiet, `doing` doing-blue, `done` live-green,
-  `alert` red, `decide` amber.
-- Badges follow `bg-{color} wash + matching text`: one accent at a time on
-  a screen; red is for alerts, amber for a decision someone waits on;
-  neither decorates.
-- No charts yet. If charts come, they use one blue ramp only, tabular
-  numerals for every KPI.
+- Five state colours and nothing else carries meaning: `live` (online, done,
+  passed, additions), `doing` (working, running), `review` (in review),
+  `decide` (waiting on a person: needs you, a permission, an ask), `alert`
+  (failed, deletions, errors, danger).
+- Text in a state colour uses the `.tone-*` classes; a chip behind it uses
+  the matching `-wash`.
+- `accent` is for links, a mention and the rare chosen-from-a-set mark. It
+  never fills a button.
+- A diff bar is `live` and `alert`; checks read `checks passed` in `ink-2`,
+  running in `decide` or `doing`, failed in `alert`.
+- No charts yet. If they come: one hue per series from the state colours or
+  `c-*`, tabular numerals for every number.
 
 ## 9. App patterns
 
-- Shell: from 768px wide, one sidebar (280px) on `shell` beside the page's
-  round `sheet`. Its top row is `card-head` tall: the sidebar toggle in a
-  channel (the Mac's traffic lights before it) and New channel at its end.
-  Under it a "Channels" label and the channels as tab groups, 32px rows: a
-  chevron that folds the group, its 20px face and name (which open it), a
-  blue dot or a count for news and questions, a lock on one you can't open
-  yet, and a gear at the row's end that opens Details (always on the open
-  channel, on hover on the others). Under the open channel its
-  conversations are its tabs, a 20px icon column (`#` for a room, a person
-  for a direct one) and the name, the open one on `chosen`:
-  the rooms, your own direct ones, one that asks for you and the open one
-  stay; threads between agents fold behind an "N more" row carrying their
-  unread total, which opens to "Show less"; the owner's New room at the
-  foot. Your account, the app update and Settings sit at the bottom. ⌘\ or
-  the toggle hides the sidebar in a channel, and the toolbar then starts
-  with the toggle and a conversation menu; hidden stays hidden across
-  reloads.
-- The page's toolbar sits on the shell above the page, on the sidebar's
-  top line: `step` from the window's top, `card-head` tall, `step` in from
-  the page's edges, its controls `control` round on its centre line. A
-  sheet's own header (Details, a thread, the tasks panel) has the same
-  metrics: `step` from the sheet's top, `card-head` tall, `control`
-  buttons. In the toolbar's centre Search, Tasks (an `alert` dot while
-  something needs you) and Agents, each an icon and its label, on the frost
-  with no pill round them; the open one on `wash-2`. With the sidebar
-  hidden, a gear after the conversation menu opens Details. With Tasks
-  open, the task views sit at the top of the board as a segmented control:
-  Everything, Needs you, Working, In review (only while a task has a
-  reviewer) and Done, each with its count. A channel opens on its conversation (Needs
-  you's rows at its top while something waits). The approved mockups are
-  in `docs/ui/`.
-- Needs you says one line per thing: a face or icon, what it is in one
-  truncated line (a permission's command in mono, a join request's code
-  beside it), and its answer buttons on the right (Allow once / Deny, let in /
-  Decline, an ask's options or Answer, Approve / Send back). Everything else
-  (the whole command and what it replaces, the machine and tools, who asked
-  when, Show in the conversation, Show in Rex) opens under it on a click of
-  the line.
-- Tasks: Needs you's rows first, then the
-  board grouped by the person's message each task serves. Needs you and
-  each group are a card like the Now card (`card` radius, a `line` border,
-  6px inside, 16px apart) with its heading inside it: the group's
-  heading is their own words in quotes, under it who said it and #N, the
-  ask that moved last first and Unfiled (no person's message holds these)
-  at the foot; inside a group, in progress, in review, up next, then done
-  this week. A view (In progress, In review, Done) keeps the same groups
-  with only its own tasks. A row is two lines in its card, `ctl` round,
-  filling `wash` on hover and `chosen` while its task is open: the owner's
-  face, the title in `body`, and
-  under it the task id, the owner and what the agent is doing now (in
-  `doing` with a steady dot while it works) or the task's state; then its PR
-  (number, a 48px diff bar in `live` and `alert`, the additions), its
-  checks in a word and the time, short. The PR and checks columns drop on
-  narrow windows, and when no task on the board has a PR; a row without one
-  leaves them blank, never "no PR yet".
-- A task opens in place, under its row (a click again folds it): its
-  conversation as the conversation draws it, a reply box that talks in the
-  task, and Details for the Tasks panel (review, reviewer, cancel). Beside
-  it from 1024px, the PR card: outlined, no fill; its branch in mono, the
-  files with their additions and deletions (four, then "+n more"), each
-  check by name with how it went, and See the diff and GitHub as outlined
-  buttons.
-- A channel with a lead wears the lead's head in the sidebar, in its
-  details and in its row's tab group, the same face everywhere. A hover on a
-  channel's row says its last line, or why it can't open yet. A
-  phone always shows the full list. The Mac app's window is never narrower
-  than 768px, so it always has the sidebar: the phone layout's headers
-  would sit under the traffic lights. On Linux the window buttons stay in
-  the desktop's own title bar, so the top row starts at the sidebar's edge.
-- Conversation: no bubbles, everyone on the left, on the shell's one
-  background. A message is a row: a 32px face, then the name in `ui`
-  semibold, a quiet `owner` or `lead` tag and the time in `stamp`, the
-  text in `body` below (at most 760px wide). A run from one sender within
-  five minutes keeps one header. The day sits between days as a `meta`
-  word between two `line` rules; there are no other time marks.
-- Replies: a reply sits where it was sent, never folded away. Above its
-  text, one `meta` line with a 2px `edge-strong` rule on the left: the
-  name in `ink-2`, the words cut short in `ink-3`; pressing it jumps to
-  the message and flashes it. No quote when the answered message is the
-  one right above. Under a message, "N replies" in `accent-text` opens
-  them in the thread panel, except one reply that already follows it.
-- Things in a message are lines, outlined with a 1px `line` ring at `row`
-  radius, never filled: an ask's options (the shared AskOptions), a PR it
-  links (number, title, GitHub's state and checks), a task's card (its
-  owner, id, title and live state, its last line under it). Reactions are
-  outlined chips. Hover actions float at the row's top right on the
-  canvas, outlined.
-- Events are quiet `meta` lines under the text column. A run of GitHub's
-  news folds into one: "GitHub · #371 opened, 3 pushes, ci-ok passed ·
-  4 updates", each PR or issue a link.
-- #general reads like a group chat: people's messages and short ones at
-  full size, the bookkeeping out of the way. Between two messages, every
-  task event, done digest and task card folds into one `meta` line:
-  "T12 done, T18 in progress, T20 cancelled and 1 more · 6 updates", each
-  id opening its task and its state word in the state's colour. A click
-  opens the run, one line per task (its state mark, id, title, owner,
-  state and PRs). One update is just its line. A task waiting on the
-  reader stays its own line, in `decide`. A done digest lives in its
-  task's thread; #general only shows it in the fold. An agent's message
-  past six lines is cut with a fade and Show more; a person's never is,
-  nor a question.
-- Needs-you: approvals, escalations and review-waiting work in one place at
-  the top, as rows on the canvas, never folded behind a button: a 36px
-  `row`-round outlined square with the kind's glyph in `decide` (a question,
-  a decision, a review, a face for someone asking in), the question in
-  `body`, a `meta` line in `ink-3` (task, who asked, when), and the answers
-  on the row's right as outlined buttons (below it on a phone). Rows are
-  split by `line`, not by fills. `Pause agents` in the header stops every
-  agent at once.
-- Agents tab: one lane per agent, side by side, each a card like the
-  board's groups (`card` radius, a `line` border, 6px inside, 16px apart;
-  the lead's lane last). A lane: face, nickname, `for person · model`; a `meta` line of what it runs now (a steady `doing` dot while a
-  tool runs, `live` while it thinks); its tasks in progress and in review
-  as `ctl`-round rows with no rules (the title in `body`, `T7 · in
-  progress · 41 min` under it, `PR #n` and a tick per check when there is
-  one: `alert` failed, `doing` running, `live` passed); Up next; Watching
-  (the lead's other open PRs); and its last three moves at the foot,
-  times in tabular `meta`.
-- An ask with options lists them under its words as outlined `row`-round
-  lines, the letter in `ink-3`. While it waits on you it says so in
-  `decide` under the bubble and its options answer it; once answered, the
-  chosen line wears an `accent` border and "name chose this · time".
-- Lead: `coordinator-head` (system-blue shell, pale screen, quiet
-  steel trim; `robot-heads`); behind it in a round avatar a soft blue field.
-- Command palette wears the same icons as the menus. Dark/light/system and
-  text size live in Settings and apply at once.
-- A picture in the chat opens in the annotator: a full-window dark stage
-  (`.dark-stage` puts every token on its dark side, whatever the theme),
-  sender and time on its top row, which in the desktop app is the window's
-  own 52px `drag` row (the Mac traffic lights before the sender, its
-  buttons still click), one floating tool pill (Move, Pen, Arrow, Box,
-  Text, Hide; the alert, decide, accent and ink colours; undo, redo), and
-  a reply bar that sends the marked-up picture back in its thread. Hide
-  is an opaque block, burned into the pixels that are sent.
-- In the desktop app the top 52px of every page moves the window. What
-  floats over it takes it back: a dialog, its backdrop and a menu are
-  `no-drag`, and a full-window stage brings its own `drag` row.
-
-- One sidebar, aware of where you are. In Settings the app's sidebar
-  trades the channels for a back button, the title and Settings'
-  sections (the open one on `chosen`); in Personalities, for the presets
-  and Yours with New. The card holds only the page, never a second list. Each
-  group is a rounded box of rows with one 20px icon column, so the labels
-  line up down the group; Add a computer and Link a phone are action rows
-  in that column. Segmented choices and row buttons are `control` tall.
-- Settings → Personalities: the list in the sidebar (presets for code work,
-  then Yours, each a 36px outlined glyph tile, the name in `ui` semibold
-  and one quiet line; the one being edited on `chosen`) and the editor on
-  the right: role as outlined chips (the picked one `accent`-bordered),
-  capabilities as checkboxes with a quiet line each, areas as mono chips
-  with "+ add a path", and the glyph, area and instructions fields in
-  `FIELD`. A preset reads "edit it to make your own copy": changing it
-  makes one.
-- Onboarding dialogs (New channel, Join with a code, Your computers) have a
-  close button; Add an agent's command sits in a `well` box with a
-  `control` tall Copy.
-- Picking a personality (Let in, an agent's menu, Invite → Joins as): one
-  outlined row each, a 28px glyph tile, the name in `ui` semibold and its
-  role and capabilities in one quiet line; the picked row `accent`-bordered,
-  None last. A request whose invite pinned one says "pinned as <name>" and
-  its one click lets the agent in as that.
+- **Shell.** Three columns on `bg`: the rail (`--rail-w`: one 38px tile per
+  channel, a `decide` badge for what waits, + at the foot; on a Mac the
+  traffic lights sit above it), the sidebar (`--side-w`) and the main area.
+  The top bar spans the sidebar and the main area (`--top-h`): the channel
+  switcher and the sidebar toggle over the sidebar; the views in the middle
+  (`# room`, Tasks with its count, Agents, Needs you in `decide` with its
+  count), the open one on `wash-2`; on the right a mono summary
+  (`2 working · 1 merged today · 7 need you`), Search and the terminal.
+  No borders between the columns.
+- **Sidebar.** Sections with a mono head: Rooms (`#` rows), Direct, People
+  (face, name, a mono role and status line), Agents (face with presence,
+  name, what it runs now in `doing`), each with its + row (invite, add
+  agent). The open row is on `wash-2`; a row with news is 600 with a count.
+  Settings at the foot.
+- **Right panel** (`--panel-w` to start, resizable by its grip): a thread,
+  a task, a person or the channel slides in from the right (`panel-in`)
+  beside the conversation, with a title, a mono sub line and a close button.
+  A thread keeps its own composer.
+- **Conversation.** No bubbles, everyone on the left, in the `--col` column.
+  A message is a 34px face, then the name (600), a mono role, harness and
+  time, and the text in `t-body` under it. A run from one sender keeps one
+  header (`is-compact`). A reply carries one quoted line with a return arrow.
+  Task cards, PR lines and reactions sit under the text on `bg-2`. Under a
+  message, "N replies" with who and when opens the thread. A pending message
+  is at 55%; a failed one gets an `alert-wash` band. Working agents show as
+  a mono line of dots under the last message.
+- **Tasks.** The Now card on top (what's working, what needs you, done
+  today), the add field, then a card per person's ask: their words in quotes
+  as the heading, who and `from #N` under it, then a two-line row per task
+  (its `Dot`, the title in `t-body`, a mono line of id, owner, state and
+  age), with its PR number, diff bar, additions and checks on the right.
+- **Needs you.** A mono count line, then one card per thing waiting, oldest
+  first: who and what (a `decide` chip for a permission), the detail (a
+  command or a diff in mono boxes), and the answers as buttons, the main one
+  `is-primary`.
+- **Agents.** One card per agent, side by side: face, name, `for person ·
+  model`, a status line with a coloured dot, its tasks with PR and check
+  ticks, Up next, Watching, and its last moves with mono times.
+- **Settings.** The sidebar trades the channels for Settings' sections (the
+  open one on `wash-2`), the page is one column of rows: a title, a quiet
+  line and the control on the right.
+- **Palette** (⌘K), **Search**, the **terminal drawer** and the **annotator**
+  (a picture opened full window, marked up and sent back) float with
+  `shadow-pop` and their own enter animation.
 
 ## 10. Composer
 
-The composer never opens a floating menu. Panels expand inline above the
-textarea.
-
-Anatomy top to bottom: reply bar, textarea row, mention notes,
-actions row with send.
-
-- Mentions are inline pills.
-- Reply on a message opens the reply bar; Escape cancels it. In a thread every
-  message answers the root and there is no reply bar.
-- Drag-and-drop and pasted images render inside the composer; sending shows
-  in place, never an external spinner.
-- Disabled send and placeholders stay quiet; the send button is the one
-  primary accent in the composer.
+- A floating `bg-2` card at `r-win` with `shadow-pop`, centred in the
+  column at the bottom of the conversation (and of a panel), over the fade.
+  Top to bottom: the reply bar, attached images, the row with + (attach),
+  the textarea and send.
+- Send is a 34px `r-ctl` square: `ink` with `on-ink` when there is something
+  to send, `line-2` when not. Enter sends (or ⌘Enter, per Settings).
+- Typing `@name` or a task id (`T12`) opens a list of people or tasks just
+  above the composer; arrows move, Enter or Tab picks.
+- Drag-and-drop and pasted images attach in the composer; a drop shows
+  "Drop images to attach" over it.
+- ⌘S stashes the draft and ⇧⌘S brings back the newest: the "N stashed" chip
+  above the composer opens the stash list (click a row to bring it back, ⌫
+  drops one). The line under the composer says what just happened in mono.
+- A row in a list over the composer keeps focus where it is on mousedown
+  (`onMouseDown` → `preventDefault`): WebKit doesn't focus a clicked button,
+  and a blur would close the list before the click lands.
 
 ## 11. Accessibility (mandatory)
 
-- `focus-visible`: `2px ring` with `1px` offset and `6px` radius.
-- Selection: `accent-wash`. Scrollbar: thin, thumb `wash-2` on transparent.
-- Text size (`small/default/large/larger`, `mc.text-size`) scales the type
-  steps (`--text-scale`), never the layout. In the desktop app ⌘+, ⌘− and
-  ⌘0 (Ctrl elsewhere) and the View menu step through those sizes; the page
-  itself never zooms. Appearance persists per browser (`mc.appearance`).
-- Persisted toggles (`kiwi:a11y:*`): `reduce-motion` (CSS durations to near
-  zero, including sent/arrived; Motion keeps only fades). OS reduced-motion is
-  respected too.
-- `prefers-contrast: more` forces solid backgrounds with no transparency
-  tricks.
-- New entry points call `applyStoredAppearance()` plus
-  `initAccessibility()` / `syncAccessibilityClasses()` before first render.
+- Focus: `:focus-visible` draws a 2px `ink` outline, 2px out.
+- Selection: `--selection` (ink at 28%). Scrollbars: thin, `line-3` thumb on
+  transparent.
+- Text size (Settings: Small, Default, Large, Larger) sets `--text-scale`,
+  which every type step multiplies; layout sizes don't scale.
+- Reduced motion: the OS setting and Settings' own toggle both cut motion
+  (section 6).
+- `ink-3` is the lowest ink for text. Placeholders and empty states use it,
+  never opacity.
+- Icon-only buttons carry an `aria-label`; an `Icon` with a `label` is an
+  image, without one it is hidden from screen readers.
 
-## 12. Brand illustration (optional)
+## 12. Faces and marks
 
-The lead's head (`robot-heads`, blue shell) in `muted` contexts is the
-only mascot. The wordmark is set in Inter, never an image. New surfaces may
-omit the head; never replace it with stock art.
+- Agents wear their harness's logo (Claude, Codex, Gemini, OpenCode) in its
+  `h-*` colour. People wear their picture, or their initials in their member
+  colour. There is no mascot.
+- A channel's tile on the rail is its icon, or its first letter.
 
 ## 13. Do and don't
 
-Do: use vars, tabular numerals for times and counts, one accent at a time,
-a flat sidebar on `rail` beside the page's round sheet, inline composer panels, quiet placeholders, `Boundary` around
-channel views.
-Don't: hard-code hex, add font families, ship gradient marketing styling,
-build floating composer menus, use colored shadows, fill anything but
-what's chosen with `chosen`, or put hairlines between the rails.
+Do: use the tokens, Paper Mono for the machine's words and the system font
+for people's, tabular numerals for counts and times, one `is-primary` button
+per view, state colours only for states, hairlines and fill steps to separate
+surfaces.
+Don't: hard-code hex, add a font, add glass, blur or decorative gradients,
+fill a button with the accent, add coloured shadows, or animate anything
+that isn't answering an action.
 
 Names: people read nicknames, and only nicknames. A handle (`cheery-fox`)
 is for agents and commands; a person never has to read one. Wherever the
@@ -540,11 +361,15 @@ same gestures, the same speed. The owner asked for it, so on the phone it wins o
 
 ## 15. New-surface checklist
 
-1. Copy theme vars, `design-tokens.ts`, `fonts.ts`, `accessibility.ts`.
-2. Copy `kit.tsx` plus one `ui/` primitive at a time (not a whole library).
-3. Copy the composer patterns (inline panels, in-place sending states).
-4. Wire theme toggle, text size, and `reduce-motion`.
-5. Verify with `bun run smoke:ui` and `bun run shots:ui`: sidebar, search,
-   composer with reply + mention, badge pair, tabular status bar, light and
-   dark.
+1. Use the tokens from `tokens.css` and the shared classes from `base.css`;
+   add a class to the mono rule if it shows the machine's words.
+2. Build from `ui/src/kit/` (`Dialog`, `Field`, `Seg`, `Toggle`, `Avatar`,
+   `Dot`, `Count`, `Icon`) before writing a new control.
+3. Check it in dark and light, in OLED Black and one Rex theme, at Large
+   text and with reduced motion.
+4. Add it to `ui/src/demo/shots.ts` and look at it:
+   `bun scripts/shoot-app.ts --dist ui/dist --only <name> --theme dark,light`,
+   and with `--browser webkit` (the engine of the desktop app).
+5. Click through it in WebKit too: a click that works in Chromium can do
+   nothing in WebKit (section 10).
 6. Every member it names reads as a nickname, never a handle (section 13).

@@ -31,10 +31,10 @@ ignored here.
 ncu --workspaces --root > <scratch>/ncu-before.txt
 ```
 
-Read every section: the root, `packages/core`, `web`, `ui` and `desktop`.
+Read every section: the root, every `packages/*`, `ui` and `desktop`.
 One package often appears in several of them, and the sections drift apart:
 on 2026-10-28 `ui` declared `oxlint` 1.86.0 and `oxfmt` 0.71.0 while the root
-and `web` were on 1.89.0 and 0.74.0. After the refresh, every manifest that
+was on 1.89.0 and 0.74.0. After the refresh, every manifest that
 declares a package must declare the same version. Grep the manifests for each
 old version and confirm that none is left.
 
@@ -100,7 +100,7 @@ A refresh can push a bundle over its gate:
 
 - The CLI bundle: `BUDGET_BYTES` in `scripts/build-cli.ts`, checked by
   `bun run build`.
-- The web bundle: `bun scripts/web-bundle.ts`.
+- The ui bundle: `bun scripts/ui-bundle.ts`.
 - The desktop images: `desktop/scripts/eb-size.ts`.
 
 Raising a budget needs the owner's approval in words. Quote the measured size
@@ -116,8 +116,7 @@ bun run typecheck
 bun run knip
 bun scripts/action-pins.ts
 bun run build
-bun run web:build && bun scripts/web-bundle.ts
-bun run ui:build
+bun run ui:build && bun scripts/ui-bundle.ts
 bun run smoke:ui
 bun scripts/ci-tests.ts unit
 bun scripts/ci-tests.ts flows

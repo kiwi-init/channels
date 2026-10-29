@@ -46,6 +46,7 @@ final class AppModel {
     var relinkAsked = false
     var enrolled = false
     var joining = 0
+    var unsaved: String?
 
     var relinking: Bool {
         phase == .ready && (relinkAsked || linking != .idle)
@@ -62,6 +63,8 @@ final class AppModel {
 
     @ObservationIgnored let engine = Engine()
     @ObservationIgnored private var booted = false
+    @ObservationIgnored private var shut = false
+    @ObservationIgnored private var keeping: Data?
     @ObservationIgnored private let pictures = NSCache<NSString, UIImage>()
 
     var channels: [RoomView] {
@@ -103,11 +106,42 @@ final class AppModel {
                 return
             }
         #endif
-        guard let saved = Vault.load() else {
+        await resume()
+    }
+
+    private func resume() async {
+        switch Vault.load() {
+        case .empty:
+            shut = false
             phase = .unlinked
-            return
+        case .shut(let why):
+            shut = true
+            phase = .broken("Channels can't read its sign-in: \(why.localizedDescription). Unlock this iPhone and it carries on.")
+        case .found(let saved):
+            shut = false
+            store(saved)
+            await start(saved)
         }
-        await start(saved)
+    }
+
+    func awake() async {
+        if shut {
+            await resume()
+        } else if let keeping {
+            store(keeping)
+        }
+        nudge()
+    }
+
+    private func store(_ data: Data) {
+        do {
+            try Vault.save(data)
+            keeping = nil
+            unsaved = nil
+        } catch {
+            keeping = data
+            unsaved = "This iPhone couldn't save your sign-in: \(error.localizedDescription). You stay signed in until Channels closes, and it tries again each time you open it."
+        }
     }
 
     private func start(_ saved: Data) async {
@@ -136,7 +170,7 @@ final class AppModel {
     private func take(_ push: Push) {
         switch push {
         case .saved(let data):
-            Vault.save(data)
+            store(data)
             if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] { held(object) }
         case .room(let room):
             if let before = rooms[room.code], before.connection == .live {
@@ -182,7 +216,7 @@ final class AppModel {
             let shown = try await engine.ask(["op": "enrollWait"], as: EnrollDigits.self)
             linking = .approve(shown.digits)
             let data = try await engine.ask(["op": "enrollFinish"])
-            Vault.save(data)
+            store(data)
             linking = .idle
             rooms = [:]
             await start(data)
@@ -258,6 +292,8 @@ final class AppModel {
 
     func unlink() {
         Vault.wipe()
+        keeping = nil
+        unsaved = nil
         rooms = [:]
         person = ""
         enrolled = false

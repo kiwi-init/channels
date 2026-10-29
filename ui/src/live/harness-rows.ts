@@ -1,5 +1,5 @@
 import type { HarnessRow, KnownHarness } from "@kiwi/core/harnesses.ts"
-import { harnessName } from "@/lib/harness"
+import { harnessName } from "@kiwi/app/harness.ts"
 import { harnessOf } from "~/live/map"
 import type { App, Harness } from "~/model"
 

@@ -32,6 +32,16 @@ struct ConversationList: View {
     var body: some View {
         NavigationStack(path: $path) {
             List {
+                if let unsaved = model.unsaved {
+                    Text(unsaved)
+                        .type(.ui)
+                        .foregroundStyle(Tone.alert)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .listRowInsets(EdgeInsets())
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Tone.canvas)
+                }
                 if filter == .all && !finding && !model.pinned.isEmpty {
                     pins
                         .listRowInsets(EdgeInsets())

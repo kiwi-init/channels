@@ -4,6 +4,8 @@
 //
 //   - this computer's key and cert (machine.json, re-read on every request, so `kiwi login`
 //     changing it just works), plus `adopt` for the app handing the cert to its own computer;
+//   - letting this computer's own agents in where the owner delegated it (`admit`, a seat's
+//     request frames, and once at start);
 //   - one live relay stream per local agent seat, shared by every subscriber of that agent
 //     (`listen` on this socket); each subscriber still gets its deliveries from its own cursor.
 //
@@ -29,6 +31,7 @@ export {
 export { activityEnv, reachOf, seatRecordFor, wakeHooked, wakeOn, type Attached } from "./daemon/reach.ts";
 export {
   adoptDaemon,
+  daemonAdmit,
   daemonHarnesses,
   daemonLaunch,
   daemonLoop,
