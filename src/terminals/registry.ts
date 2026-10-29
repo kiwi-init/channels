@@ -8,6 +8,7 @@ import { rexManifest } from "./rex/manifest.ts";
 import { takesStatus } from "./shared/osc7501.ts";
 import { tmuxPlaceFrom } from "./tmux/locate.ts";
 import { tmuxManifest } from "./tmux/manifest.ts";
+import { localTmuxSeats } from "./tmux/show.ts";
 
 export const MANIFESTS: readonly TerminalManifest[] = [rexManifest, tmuxManifest, appManifest];
 
@@ -79,7 +80,7 @@ interface Plugins {
 const BUILT_IN: Plugins = { manifests: MANIFESTS, load: (id) => terminalPlugin(id) };
 
 function placeOf(seat: PlacedSeat): SeatPlace {
-  return seat.place === "tmux" ? { tmux: { socket: seat.socket, pane: seat.pane } } : { rex: { server: seat.server, session: seat.session, block: seat.block } };
+  return seat.place !== "rex" ? { tmux: { socket: seat.socket, pane: seat.pane } } : { rex: { server: seat.server, session: seat.session, block: seat.block } };
 }
 
 const samePlace = (a: PlacedSeat, b: PlacedSeat): boolean => JSON.stringify(placeOf(a)) === JSON.stringify(placeOf(b));
@@ -90,7 +91,8 @@ function showing(from: Plugins, on: (id: TerminalId) => boolean): Promise<Termin
 }
 
 export async function seatPlaces(cfg: Config = loadConfig(), from: Plugins = BUILT_IN): Promise<PlacedSeat[]> {
-  return (await showing(from, (id) => helpersOn(id, cfg))).flatMap((plugin) => plugin.seats?.(cfg) ?? []);
+  const hosted = localTmuxSeats(cfg, true).map((seat): PlacedSeat => ({ place: "hosted", ...seat }));
+  return [...hosted, ...(await showing(from, (id) => helpersOn(id, cfg))).flatMap((plugin) => plugin.seats?.(cfg) ?? [])];
 }
 
 export async function showSeat(seat: PlacedSeat, cfg: Config = loadConfig(), from: Plugins = BUILT_IN): Promise<ShowResult> {

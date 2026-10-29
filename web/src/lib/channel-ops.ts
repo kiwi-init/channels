@@ -82,6 +82,7 @@ export class ChannelLink {
   autoApprove = (...a: Args<"autoApprove">) => this.c("autoApprove", ...a)
   deny = (...a: Args<"deny">) => this.c("deny", ...a)
   remove = (...a: Args<"remove">) => this.c("remove", ...a)
+  cutDevices = (...a: Args<"cutDevices">) => this.c("cutDevices", ...a)
   updateScopes = (...a: Args<"updateScopes">) => this.c("updateScopes", ...a)
   updatePersona = (...a: Args<"updatePersona">) => this.c("updatePersona", ...a)
   pinPersona = (...a: Args<"pinPersona">) => this.c("pinPersona", ...a)

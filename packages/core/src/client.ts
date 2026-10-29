@@ -14,7 +14,6 @@ import { newRoomId, type ChannelAccess } from "./crypto.ts";
 import type { Identity } from "./identity.ts";
 import type { JoinClaims, JoinRequest, Member, MemberInfo, PersonPowers } from "./membership.ts";
 import type { ChannelIcon, Envelope, ImageAttachment, Message } from "./protocol.ts";
-import type { SigningBudget } from "./sas.ts";
 import type { Scope } from "./scopes.ts";
 import type { ChannelState, FoldBase, GithubRelease, GithubRules, GuardFloor } from "./state.ts";
 import { ChannelCore, type ChannelFx } from "./client/core.ts";
@@ -27,7 +26,8 @@ import { ChannelKeys } from "./client/keys.ts";
 import { ChannelLive, type StreamOptions } from "./client/live.ts";
 import { ChannelMembers } from "./client/members.ts";
 import { run, runUntil } from "./client/relay.ts";
-import { ChannelRequests } from "./client/requests.ts";
+import { ChannelRequests, type RequestsOptions } from "./client/requests.ts";
+import type { DeviceList } from "./devices.ts";
 import { ChannelSending, type SendOptions } from "./client/send.ts";
 import { ChannelSettings, type RoomsSetting } from "./client/settings.ts";
 import { ChannelSnapshots } from "./client/snapshots.ts";
@@ -273,7 +273,7 @@ export class Channel {
    * it for one request at a person's click. With the owner's person key, own
    * computers' requests are marked as such (for autoApprove).
    */
-  requests(opts: { budget?: SigningBudget; person?: string; mine?: readonly string[] | null } = {}): Promise<JoinRequest[]> {
+  requests(opts: RequestsOptions = {}): Promise<JoinRequest[]> {
     return run(this.fx.requests(opts));
   }
 
@@ -296,8 +296,8 @@ export class Channel {
    * owner's own computers whose code is ready, as agents sponsored by the owner, without spending
    * the daily signing budget. Returns who was let in.
    */
-  autoApprove(person: string, personalities: readonly Personality[] = [], mine: readonly string[] | null = null): Promise<Member[]> {
-    return run(this.fx.autoApprove(person, personalities, mine));
+  autoApprove(person: string, personalities: readonly Personality[] = [], mine: readonly string[] | null = null, lists?: ReadonlyMap<string, DeviceList>): Promise<Member[]> {
+    return run(this.fx.autoApprove(person, personalities, mine, lists));
   }
 
   deny(requestId: string): Promise<void> {
@@ -342,6 +342,10 @@ export class Channel {
   /** Remove a member and rotate the key so they can't read anything newer. */
   remove(pk: string): Promise<void> {
     return run(this.fx.remove(pk));
+  }
+
+  cutDevices(list: DeviceList): Promise<Member[]> {
+    return run(this.fx.cutDevices(list));
   }
 
   /** New channel key, wrapped to every remaining member. */

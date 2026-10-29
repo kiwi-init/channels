@@ -94,17 +94,64 @@ describe("reading the folders from the agent's checkout", () => {
     g("commit", "-qm", "relay");
     put("web/src/lib/x.ts");
     g("add", ".");
-    expect(branchAreas(42, false, "T", dir)).toEqual(["src/relay", "web/src/lib"]);
+    expect(branchAreas(42, "T", dir)).toEqual(["src/relay", "web/src/lib"]);
   });
 
-  test("another task's branch only counts for the task's owner; main and a folder that isn't a checkout say nothing", () => {
-    expect(branchAreas(7, false, "T", dir)).toBeNull();
-    expect(branchAreas(42, false, null, dir)).toBeNull();
-    expect(branchAreas(42, true, null, dir)).toEqual(["src/relay", "web/src/lib"]);
-    expect(branchAreas(7, true, "T", dir)).toEqual(["src/relay", "web/src/lib"]);
-    g("stash", "-q");
+  test("a checkout on another branch reads the task's branch, committed only, and never its own work", () => {
+    g("commit", "-qm", "web");
     g("checkout", "-q", "main");
-    expect(branchAreas(42, true, "T", dir)).toBeNull();
-    expect(branchAreas(42, true, "T", tmpdir())).toBeNull();
+    g("checkout", "-qb", "site-redo");
+    put("site/media/x.png");
+    g("add", ".");
+    g("commit", "-qm", "site");
+    put("site/index.html");
+    expect(branchAreas(42, "T", dir)).toEqual(["src/relay", "web/src/lib"]);
+    expect(branchAreas(7, "T", dir)).toBeNull();
+    g("update-ref", "refs/remotes/origin/T42-relay", g("rev-parse", "T42-relay"));
+    g("branch", "-qD", "T42-relay");
+    expect(branchAreas(42, "T", dir)).toEqual(["src/relay", "web/src/lib"]);
+    g("update-ref", "-d", "refs/remotes/origin/T42-relay");
+    expect(branchAreas(42, "T", dir)).toBeNull();
+  });
+
+  test("a branch cut from a sink ahead of main counts only its own commits, with the sink merged in or not", () => {
+    g("clean", "-fdq");
+    g("checkout", "-qb", "sink-ui", "main");
+    put("android/a.kt");
+    g("add", ".");
+    g("commit", "-qm", "android");
+    g("update-ref", "refs/remotes/origin/sink/ui", g("rev-parse", "HEAD"));
+    g("checkout", "-qb", "T44-feed");
+    put("ui/src/feed.ts");
+    g("add", ".");
+    g("commit", "-qm", "feed");
+    put("ui/src/more.ts");
+    g("add", ".");
+    g("commit", "-qm", "more");
+    expect(branchAreas(44, "T", dir)).toEqual(["ui/src"]);
+    g("checkout", "-q", "sink-ui");
+    put("ios/b.swift");
+    g("add", ".");
+    g("commit", "-qm", "ios");
+    g("update-ref", "refs/remotes/origin/sink/ui", g("rev-parse", "HEAD"));
+    g("checkout", "-q", "T44-feed");
+    g("merge", "-q", "--no-edit", "sink-ui");
+    expect(branchAreas(44, "T", dir)).toEqual(["ui/src"]);
+    g("checkout", "-q", "main");
+    expect(branchAreas(44, "T", dir)).toEqual(["ui/src"]);
+  });
+
+  test("no branch prefix, main, or a folder that isn't a checkout say nothing", () => {
+    g("clean", "-fdq");
+    g("checkout", "-qb", "T43-ui", "main");
+    put("ui/src/a.ts");
+    g("add", ".");
+    g("commit", "-qm", "ui");
+    expect(branchAreas(43, "T", dir)).toEqual(["ui/src"]);
+    expect(branchAreas(43, null, dir)).toBeNull();
+    g("checkout", "-q", "main");
+    expect(branchAreas(43, "T", dir)).toEqual(["ui/src"]);
+    expect(branchAreas(42, "T", dir)).toBeNull();
+    expect(branchAreas(42, "T", tmpdir())).toBeNull();
   });
 });

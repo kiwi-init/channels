@@ -1,8 +1,17 @@
-import type { Account, Ask, Channel, ChannelTile, Message, Person, Prefs, Task, TaskGroup } from "~/model"
+import type { Account, Ask, Channel, ChannelTile, Device, Message, Person, Prefs, Task, TaskGroup } from "~/model"
 import { nicknamesOf } from "~/names"
 
 const now = Date.now()
 const m = (min: number): number => now - min * 60_000
+
+const DEMO_DAY = 86_400_000
+
+export const DEMO_DEVICES: Device[] = [
+  { id: "dev-desk", label: "studio", os: "macOS", as: "desktop", until: Date.now() + 81 * DEMO_DAY, thisOne: true },
+  { id: "dev-air", label: "Jow's MacBook Air", os: "macOS", as: "desktop", until: Date.now() + 63 * DEMO_DAY, thisOne: false },
+  { id: "dev-phone", label: "iPhone", os: "iOS", as: "phone", until: Date.now() + 9 * DEMO_DAY, thisOne: false },
+  { id: "dev-box", label: "build-box", os: "Linux", as: "computer", until: Date.now() - 2 * DEMO_DAY, thisOne: false },
+]
 
 export const DEMO_ACCOUNT: Account = {
   name: "jow",
@@ -62,7 +71,7 @@ const people: Person[] = [
     presence: "online",
     activity: { state: "idle" },
     reach: "listening",
-    seat: "rex",
+    seat: "hosted",
     harness: "claude",
     runs: "Claude Code",
     model: "claude-opus-5-5",

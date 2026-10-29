@@ -131,6 +131,23 @@ reveal.
 What the relay sees: public keys, the WorkOS user, commitments and sealed blobs. A WorkOS takeover
 gets one pending ask at most. Approving it needs your app in your hand and the digits typed in.
 
+**At the relay** (step 2, `src/relay/account.ts`). Every route takes the WorkOS session
+(`x-human-token`); all but the first are also signed by a device key for `account:<user>`.
+
+| Route | Who | What |
+| --- | --- | --- |
+| `GET /v1/account` | the session | `{user, links}`: the account's device list, empty at first |
+| `PUT /v1/account` `{links}` | the person key or an app that approves | binds the account to the list's person, then only accepts lists that extend it |
+| `POST /v1/account/ask` `{ask}` | the new device | the `EnrollAsk`; one per account for 10 minutes, 5 a minute |
+| `GET /v1/account/ask` | the asking device, an app that approves | the ask with its answer and reveal |
+| `PUT /v1/account/ask/<id>/answer` `{device, dxpk, nonce}` | an app that approves | once, with the app's own listed keys |
+| `PUT /v1/account/ask/<id>/reveal` `{nonce}` | the asking device | once, after the answer; checked against the commitment |
+| `DELETE /v1/account/ask/<id>` | the asking device, an app that approves | turns the ask away |
+
+A key revoked in a published list is refused on every account route, can't ask again, and loses its
+computer inbox at once (`/v1/machine/<key>` answers 403 and its socket closes). The digits come from
+`enrollDigits` in `packages/core/src/enroll.ts`.
+
 ## 3. Admitting agents without an app open (delegation)
 
 Today auto-approval needs the owner key, so it only runs while an app with it is open. An
@@ -156,10 +173,11 @@ owner-signed **delegation** lets the `kiwi` daemon admit its own computer's agen
 - Forget adds a revoke link to your device list. It is kept on the relay's account record and posted
   into every channel you're in, as a new op that older clients fold to nothing (since 54313c33,
   2026-10-21).
-- **No window.** The relay already gates connections by key, so it refuses a revoked device's key as
-  soon as it sees a valid revoke link. It doesn't wait for every owner's app to come online and
-  rotate.
-- Owners then remove that device's member key and rotate.
+- **The relay stays blind** (Jow, #1011). As soon as it sees a valid revoke link, it refuses the
+  revoked key on every account route and closes that computer's inbox. It never learns which member
+  keys belong to which device, so it can't cut those keys from a channel.
+- **Owners cut the channel access.** Their apps remove that device's member keys and rotate. Until an
+  owner's app comes online, the revoked device can still read that channel.
 - **Revoking a computer also removes its agents:** the members whose `from.pk` is that machine.
 - **Revoking an older device** (enrolled before the signer) shows a notice on every one of your
   devices. A thief holding a newer device can't quietly revoke the rest.
@@ -168,11 +186,34 @@ owner-signed **delegation** lets the `kiwi` daemon admit its own computer's agen
   anywhere.
 - An honest lost device that sees itself revoked wipes its keys. A stolen one is cut off by the relay
   and by rotation, not by its own cooperation.
+- In the code (T641): the list travels in a `devices` event (`{links}`), and member records name the
+  device key (`device.pk`). `Channel.cutDevices(list)` removes a revoked device's members, and a
+  revoked computer's agents, in one rotation. `requests({lists})` checks claims against the newest
+  list seen. Device members admitted before T641 carry no device key, so they are removed by hand.
+- On the desktop (T1006):
+  - The app posts its list into every channel it's in whenever the list grows.
+  - An owner's app reads the lists posted in its channels, cuts what they revoke, and checks joins
+    against the newest one.
+  - A desktop with no person key that sees itself revoked deletes its device key, its list, and the
+    channels it joined. Channels it created stay, because their owner key exists nowhere else.
+  - A desktop holding the person key is told and stops signing links, but keeps its keys: the person
+    key is what re-roots the list.
+- In the `kiwi` daemon (T1007): when its seats read a `devices` event of this computer's person, a
+  longer list replaces the one in `machine.json`. If the list revokes this computer, it drops
+  `machine.device`, so its agents stop carrying a device claim. It keeps its seat keys: owners cut
+  those. The daemon keeps no WorkOS session after `kiwi login`, so channel logs are its only source.
+- On phones (T1007, `ios/engine`, shared by iOS and Android): the same, from the channels the phone
+  reads. A list that revokes the phone stops the engine, and the app wipes its vault (the device key,
+  the links, the person and the channels it joined) and says on the sign-in screen which device
+  removed it.
 
 **Expiry.**
 
 - `DeviceCert.until` is 90 days.
 - An app renews each listed device's cert as it nears the end, sealed to the device's inbox.
+  - The desktop renews every device within 14 days of its end, at most once every 6 hours, into the
+    list on the account record; the device reads it there (T1006). Computers read it from the
+    channel logs (T1007).
 - A cert past `until` isn't admitted on its own; it waits for Let in.
 - Old `MachineCert`s (v1, no `until`) stay valid until removed. Daemons on kiwi 2026.10.4 can't renew,
   so expiring them would stop every existing computer's agents. Revocation is what cuts them off.

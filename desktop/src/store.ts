@@ -1,7 +1,8 @@
+import type { DeviceLink } from "@kiwi/core/devices.ts";
 import type { Identity } from "@kiwi/core/identity.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
 import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts";
-import type { ChannelIdentityView, ComputerView, KeysAtRest, PendingItem, PersonView, PhoneView, StoreSnapshot } from "./bridge.ts";
+import type { ChannelIdentityView, ComputerView, KeysAtRest, PendingItem, PersonView, PhoneView, PublicPerson, StoreSnapshot } from "./bridge.ts";
 import { errorText, normalizeRelay, snapshotOf } from "./guard.ts";
 import { host } from "./host.ts";
 import { logMainError } from "./main-log.ts";
@@ -17,6 +18,9 @@ export interface StoreFile {
   github?: { login: string; id: number; token: string; at: number; relay?: string; clientId?: string };
   migrated?: boolean;
   personalities?: Personality[];
+  device?: Identity;
+  deviceLinks?: DeviceLink[];
+  enrolled?: PublicPerson;
 }
 
 export type VaultRead = { ok: true; file: Partial<StoreFile> | null; resave: boolean } | { ok: false; why: string; advice?: string };
@@ -83,11 +87,14 @@ export const mutate = (fn: (s: StoreFile) => void) => {
   saveStore();
   const shell = host();
   shell.push("store", snapshot());
-  shell.tellKeys({ type: "seats", seats: store.channels, person: store.person?.pk ?? null, mine: store.computers.map((c) => c.machinePk) });
+  shell.tellKeys({ type: "seats", seats: store.channels, person: personPk(), mine: store.computers.map((c) => c.machinePk) });
 };
+
+export const personPk = (): string | null => store.person?.pk ?? store.enrolled?.pk ?? null;
 
 export function requirePerson(): Identity {
   const p = store.person;
+  if (!p && store.enrolled) throw new Error("this app signed in as one of your devices: do this from the app that made your person key");
   if (!p || !p.xsk) throw new Error("make your person key first");
   return { name: p.name, pk: p.pk, sk: p.sk, xpk: p.xpk, xsk: p.xsk };
 }

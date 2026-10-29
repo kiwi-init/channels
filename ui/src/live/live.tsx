@@ -12,7 +12,7 @@ import { lastChannel, rememberChannel, reopenable } from "@/lib/last-channel"
 import { newsTotal, rowNews, startMarks, useMarks, useOpenNews, useTabNews } from "@/lib/news"
 import { useOwnPersonalities } from "@/lib/personalities"
 import { bridge, useSecrets } from "@/lib/secrets"
-import { useAccount } from "~/live/account"
+import { useAccount, useEnrolling } from "~/live/account"
 import { makeActions } from "~/live/actions"
 import { chime } from "~/live/alerts"
 import { OpenMember, type View } from "~/live/channel"
@@ -22,6 +22,7 @@ import { harnessChoices } from "~/live/harness-rows"
 import { OpenPending, pendingTitle } from "~/live/pending"
 import { ownPrefs, usePrefs } from "~/live/prefs"
 import { useComputer } from "~/live/computer"
+import { useDeviceLists } from "~/live/devices"
 import { useStarts } from "~/live/starts"
 import { useGone, useOpened } from "~/live/store"
 import type { App, ChannelTile } from "~/model"
@@ -85,7 +86,9 @@ const joinsMuted = (): boolean => ownPrefs().notify === "none"
 function useDuties(rows: ChannelRow[], person: string | undefined, open: string | null) {
   useAutoApproval(rows, joinsMuted, chime)
   useNotesElsewhere(rows, open)
-  useMemberIcons(rows.filter((r) => r.state === "member").map((r) => r.code))
+  const members = useMemo(() => rows.filter((r) => r.state === "member").map((r) => r.code), [rows])
+  useMemberIcons(members)
+  useDeviceLists(members)
   useEffect(() => {
     if (person) void adoptThisComputer().catch(() => {})
   }, [person])
@@ -103,13 +106,14 @@ export function useLive(open: string | null): App {
   const personas = usePersonas(ownPersonalities)
   const starts = useStarts()
   const computer = useComputer()
+  const enrolling = useEnrolling()
   const actions = useMemo(() => makeActions(), [])
   const channel = opened && opened.code === open ? opened.channel : null
   const lost = useGone()
   const gone = !channel && lost && lost.code === open ? lost : null
   return useMemo(
-    () => ({ account, channels, channel, ...(gone ? { gone } : {}), prefs, harnesses, personas, starts, ownPersonalities, computer, actions }),
-    [account, channels, channel, gone, prefs, harnesses, personas, starts, ownPersonalities, computer, actions]
+    () => ({ account, channels, channel, ...(gone ? { gone } : {}), prefs, harnesses, personas, starts, ownPersonalities, computer, enrolling, actions }),
+    [account, channels, channel, gone, prefs, harnesses, personas, starts, ownPersonalities, computer, enrolling, actions]
   )
 }
 

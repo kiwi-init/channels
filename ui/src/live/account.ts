@@ -3,11 +3,12 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react"
 import { handleFor } from "@kiwi/core/membership.ts"
 import { useUnsealedKeys } from "@/lib/keys-at-rest"
 import { relayUrl } from "@/lib/relay"
-import { bridge, useSecrets, type ComputerView, type PhoneView } from "@/lib/secrets"
+import { bridge, useSecrets, type ComputerView, type DeviceNewsView, type PhoneView } from "@/lib/secrets"
 import { useUpdate } from "@/lib/update"
 import { announce } from "~/kit/toasts"
+import { deviceNews, postDevicesNow } from "~/live/devices"
 import { store, type Listener } from "~/live/value"
-import type { Account, Computer } from "~/model"
+import type { Account, Computer, Device, EnrollAsk, Enrolling } from "~/model"
 import { version } from "../../../package.json"
 
 type PairAsk = NonNullable<Account["pairAsk"]>
@@ -23,6 +24,177 @@ const githubCode = store<{ code: string; url: string } | null>(null)
 let pairing: Pairing | null = null
 
 const PAIR_POLL_MS = 1500
+const ENROLL_POLL_MS = 20_000
+const ENROLL_WAIT_MS = 2_000
+const ENROLLING_MS = 2_000
+
+const selfEnroll = store<Enrolling | null>(null)
+let enrollTimer: ReturnType<typeof setTimeout> | null = null
+
+export type EnrollDone = { person: { name: string }; channels: { label: string; code: string }[] }
+
+const enrollBridge = () => {
+  const b = bridge()
+  if (!b?.enrollBegin) throw new Error("signing in as one of your devices works in the Channels desktop app")
+  return b
+}
+
+export async function enrollBegin(signIn: () => Promise<unknown>, done: (d: EnrollDone) => void): Promise<void> {
+  const b = enrollBridge()
+  await signIn()
+  await b.enrollBegin()
+  selfEnroll.set({ stage: "asking" })
+  const tick = async () => {
+    enrollTimer = null
+    let next: Awaited<ReturnType<typeof b.enrollStatus>>
+    try {
+      next = await b.enrollStatus()
+    } catch (err) {
+      selfEnroll.set(null)
+      announce(`Couldn't sign in as one of your devices: ${err instanceof Error ? err.message : String(err)}`)
+      return
+    }
+    if (!next) return selfEnroll.set(null)
+    if (next.stage === "gone") {
+      selfEnroll.set(null)
+      return announce("Your other computer turned this one away, or the ask ran out")
+    }
+    if (next.stage === "done") {
+      selfEnroll.set(null)
+      return done(next)
+    }
+    const shown = selfEnroll.get()
+    if (JSON.stringify(shown) !== JSON.stringify(next)) selfEnroll.set(next)
+    enrollTimer = setTimeout(() => void tick(), ENROLLING_MS)
+  }
+  enrollTimer = setTimeout(() => void tick(), ENROLLING_MS)
+}
+
+export async function enrollCancel(): Promise<void> {
+  if (enrollTimer) clearTimeout(enrollTimer)
+  enrollTimer = null
+  selfEnroll.set(null)
+  await enrollBridge().enrollCancel()
+}
+
+export const useEnrolling = (): Enrolling | null => useSyncExternalStore(selfEnroll.subscribe, selfEnroll.get)
+
+const enrollAsk = (() => {
+  let value: EnrollAsk | null = null
+  const listeners = new Set<Listener>()
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let started = false
+  const set = (next: EnrollAsk | null) => {
+    if (JSON.stringify(next) === JSON.stringify(value)) return
+    value = next
+    for (const l of listeners) l()
+  }
+  const check = async () => {
+    if (timer) clearTimeout(timer)
+    timer = null
+    const b = bridge()
+    if (!b?.enrollPoll) return
+    try {
+      set(await b.enrollPoll())
+    } catch {
+      // Not signed in, or the relay is unreachable: the next poll tries again, and nothing is asking meanwhile.
+      set(null)
+    }
+    timer = setTimeout(() => void check(), value?.stage === "waiting" ? ENROLL_WAIT_MS : ENROLL_POLL_MS)
+  }
+  return {
+    get: () => value,
+    check,
+    subscribe: (l: Listener) => {
+      listeners.add(l)
+      if (!started) {
+        started = true
+        window.addEventListener("focus", () => void check())
+        void check()
+      }
+      return () => void listeners.delete(l)
+    },
+  }
+})()
+
+const devices = (() => {
+  let value: Device[] | null = null
+  const listeners = new Set<Listener>()
+  let started = false
+  const load = async () => {
+    const b = bridge()
+    if (!b?.devices) return
+    try {
+      const got = await b.devices()
+      value = got ? got.map((d) => ({ id: d.id, label: d.label, os: d.os, as: d.as, until: d.until, thisOne: d.thisOne })) : null
+    } catch {
+      // Not signed in, or the relay is unreachable: the list shows what it last showed, and focus loads it again.
+      return
+    }
+    for (const l of listeners) l()
+  }
+  return {
+    get: () => value,
+    load,
+    subscribe: (l: Listener) => {
+      listeners.add(l)
+      if (!started) {
+        started = true
+        window.addEventListener("focus", () => void load())
+        void load()
+      }
+      return () => void listeners.delete(l)
+    },
+  }
+})()
+
+function deviceNotices(news: DeviceNewsView | null): Pick<Account, "forgotten" | "forgotHere"> {
+  if (!news) return {}
+  const older = news.revokes.filter((r) => r.older).map((r) => ({ label: r.label, by: r.by, at: r.at }))
+  return { ...(older.length ? { forgotten: older } : {}), ...(news.removed && !news.removed.wiped ? { forgotHere: { by: news.removed.by } } : {}) }
+}
+
+export async function forgetDevice(id: string): Promise<void> {
+  const b = bridge()
+  if (!b?.forgetDevice) throw new Error("forgetting a device needs the next Channels update")
+  await b.forgetDevice(id)
+  await devices.load()
+  postDevicesNow()
+}
+
+export async function renewDevice(id: string): Promise<void> {
+  const b = bridge()
+  if (!b?.renewDevice) throw new Error("renewing a device needs the next Channels update")
+  await b.renewDevice(id)
+  await devices.load()
+  postDevicesNow()
+}
+
+const enrolling = () => {
+  const b = bridge()
+  if (!b?.enrollPoll) throw new Error("approving a device needs the next Channels update")
+  return b
+}
+
+export async function enrollAnswer(id: string): Promise<void> {
+  await enrolling().enrollAnswer(id)
+  await enrollAsk.check()
+}
+
+export async function enrollConfirm(id: string, digits: string): Promise<{ ok: true } | { ok: false; left: number }> {
+  const r = await enrolling().enrollConfirm(id, digits)
+  if (r.ok) {
+    announce(`${r.label} is one of your devices now`)
+    await devices.load()
+  } else if (r.left === 0) announce("Turned it away: the digits didn't match")
+  await enrollAsk.check()
+  return r.ok ? { ok: true } : { ok: false, left: r.left }
+}
+
+export async function enrollDeny(id: string): Promise<void> {
+  await enrolling().enrollDeny(id)
+  await enrollAsk.check()
+}
 
 async function poll(p: Pairing): Promise<void> {
   const b = bridge()
@@ -222,6 +394,9 @@ export function useAccount(): Account | null {
   const asking = useSyncExternalStore(pairAsk.subscribe, pairAsk.get)
   const code = useSyncExternalStore(githubCode.subscribe, githubCode.get)
   const look = useSyncExternalStore(uiUpdate.subscribe, uiUpdate.get)
+  const enroll = useSyncExternalStore(enrollAsk.subscribe, enrollAsk.get)
+  const signed = useSyncExternalStore(devices.subscribe, devices.get)
+  const news = useSyncExternalStore(deviceNews.subscribe, deviceNews.get)
   const unsealed = useUnsealedKeys()
   useEffect(() => {
     if (person) void refreshGithub().catch(() => {})
@@ -241,7 +416,10 @@ export function useAccount(): Account | null {
       ...(unsealed ? { keysUnsealed: true } : {}),
       ...(bridge() ? { desktop: true } : {}),
       ...(asking ? { pairAsk: asking } : {}),
+      ...(enroll ? { enrollAsk: enroll } : {}),
+      ...(signed ? { devices: signed } : {}),
+      ...deviceNotices(news),
       ...(code ? { githubCode: code } : {}),
     }
-  }, [person, linked, computers, phones, online, agents, update, asking, code, look, unsealed])
+  }, [person, linked, computers, phones, online, agents, update, asking, code, look, unsealed, enroll, signed, news])
 }

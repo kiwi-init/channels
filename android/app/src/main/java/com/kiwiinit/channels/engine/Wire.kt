@@ -211,6 +211,12 @@ data class Launched(val ok: Boolean, val launch: String? = null, val detail: Str
 data class LinkStart(val digits: String, val relay: String)
 
 @Serializable
+data class EnrollStart(val url: String? = null, val code: String = "")
+
+@Serializable
+data class EnrollDigits(val digits: String)
+
+@Serializable
 sealed interface Push {
     @Serializable
     @SerialName("saved")
@@ -227,6 +233,10 @@ sealed interface Push {
     @Serializable
     @SerialName("log")
     data class Log(val line: String) : Push
+
+    @Serializable
+    @SerialName("removed")
+    data class Removed(val by: String) : Push
 
     @Serializable
     @SerialName("launch")

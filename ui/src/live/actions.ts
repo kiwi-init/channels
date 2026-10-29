@@ -21,11 +21,25 @@ import { noteFor, showSeat, type ShowResult } from "@/lib/show-seat"
 import { cleanRoomName, roomProblem, roomsAfter } from "@/lib/rooms"
 import { ALLOW_ONCE, DENY } from "@/lib/permission-settled"
 import { savePersonalities } from "@/lib/personalities"
-import { createPerson, bridge, secrets } from "@/lib/secrets"
+import { createPerson, bridge, secrets, type TermEvent, type TermOpenView } from "@/lib/secrets"
 import { isSignInGone } from "@/lib/session"
 import { ANYONE, approveTask, assignTask, cancelTask, changeReviewer, closedDigest, sendBackTask, type TaskSend } from "@/lib/task-actions"
 import { announce } from "~/kit/toasts"
-import { answerPair, cancelPair, linkGithub, pairBegin, unlinkGithub } from "~/live/account"
+import {
+  answerPair,
+  cancelPair,
+  enrollAnswer,
+  enrollBegin,
+  enrollCancel,
+  enrollConfirm,
+  enrollDeny,
+  forgetDevice,
+  linkGithub,
+  pairBegin,
+  renewDevice,
+  unlinkGithub,
+  type EnrollDone,
+} from "~/live/account"
 import { loadPicture } from "~/live/pictures"
 import { newMemberPowers, newMemberScopes, setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
@@ -204,6 +218,17 @@ async function joinChannel(typed: string, name?: string): Promise<string> {
   if (!person) throw new Error("Say your name first")
   await askToJoin(code, name?.trim() || handleFor(person.name))
   return code
+}
+
+async function joinGranted(d: EnrollDone): Promise<void> {
+  const name = handleFor(d.person.name)
+  let asked = 0
+  for (const c of d.channels) {
+    if (loadMember(c.code) || loadPending(c.code)) continue
+    await askToJoin(c.code, name)
+    asked++
+  }
+  announce(asked ? `Signed in as ${d.person.name}. Asked to join ${asked === 1 ? "1 channel" : `${asked} channels`}` : `Signed in as ${d.person.name}`)
 }
 
 export function makeActions(): Actions {
@@ -393,6 +418,36 @@ export function makeActions(): Actions {
       if (!seat) return "It isn't running in a window on this computer."
       const r = await showSeat(seat).catch((): ShowResult => ({ ok: false, why: "failed" }))
       return noteFor(seat.place, r)
+    },
+    openTerm: async (code, name, cols, rows, watch) => {
+      const b = bridge()
+      const seat = seatOf(need(code).roomId, name)
+      if (!b) return { error: "Terminals open in the Channels desktop app." }
+      if (typeof b.termOpen !== "function") return { error: "Update Channels to open its terminals here." }
+      if (seat?.place !== "hosted") return { error: "It isn't running in Channels' own terminal on this computer." }
+      const early: TermEvent[] = []
+      let mine: string | null = null
+      const deliver = (e: TermEvent) => ("out" in e ? watch.out(e.out) : watch.ended())
+      const off = b.onTerm((e) => (mine === null ? early.push(e) : e.term === mine && deliver(e)))
+      const r = await b.termOpen(seat.pane, cols, rows).catch((err: unknown): TermOpenView => ({ ok: false, detail: err instanceof Error ? err.message : String(err) }))
+      if (!r.ok) {
+        off()
+        return { error: r.detail }
+      }
+      const term = r.term
+      mine = term
+      queueMicrotask(() => early.filter((e) => e.term === term).forEach(deliver))
+      return {
+        screen: { cols: r.cols, rows: r.rows, seed: r.seed, dead: r.dead },
+        link: {
+          keys: (text) => void b.termKeys(term, text).catch(() => {}),
+          size: (c, w) => void b.termSize(term, c, w).catch(() => {}),
+          close: () => {
+            off()
+            void b.termClose(term).catch(() => {})
+          },
+        },
+      }
     },
     choicesOn: async (code, computer) => {
       const b = bridge()
@@ -659,6 +714,19 @@ export function makeActions(): Actions {
       }),
     answerPair: (accept) => attempt("Pairing failed", () => answerPair(accept)),
     cancelPair: () => attempt("Couldn't cancel", cancelPair),
+    enrollAnswer: (id) => attempt("Couldn't answer the device", () => enrollAnswer(id)),
+    enrollConfirm,
+    enrollDeny: (id) => attempt("Couldn't turn the device away", () => enrollDeny(id)),
+    forgetDevice: (id) => attempt("Couldn't forget the device", () => forgetDevice(id)),
+    renewDevice: (id) => attempt("Couldn't renew the device", () => renewDevice(id)),
+    enrollBegin: () =>
+      attempt("Couldn't sign in as one of your devices", () =>
+        enrollBegin(
+          () => tokenForCreate(),
+          (d) => attempt("Couldn't join your channels", () => joinGranted(d))
+        )
+      ),
+    enrollCancel: () => attempt("Couldn't take the ask back", enrollCancel),
     saveTheme,
     deleteTheme,
     addStartFolder: () => attempt("Couldn't add the folder", addStartFolder),

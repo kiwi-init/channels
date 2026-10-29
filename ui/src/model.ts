@@ -56,7 +56,7 @@ export interface Person {
   load?: Load
   readOnly?: boolean
   wakes?: boolean
-  seat?: "rex" | "tmux"
+  seat?: "rex" | "tmux" | "hosted"
   addsAgents?: boolean
   answersDecisions?: boolean
   lastSeen: number
@@ -332,6 +332,26 @@ interface Fact {
   at: number
 }
 
+interface TermScreen {
+  cols: number
+  rows: number
+  seed: string
+  dead: boolean
+}
+
+export interface TermWatch {
+  out(text: string): void
+  ended(): void
+}
+
+export interface TermLink {
+  keys(text: string): void
+  size(cols: number, rows: number): void
+  close(): void
+}
+
+export type TermOpened = { screen: TermScreen; link: TermLink } | { error: string }
+
 export type ComputerChoices = { harnesses?: App["harnesses"]; folders: string[] } | { error: string }
 
 export interface Channel {
@@ -391,7 +411,30 @@ export interface Account {
   keysUnsealed?: boolean
   desktop?: boolean
   pairAsk?: { kind: "computer" | "phone"; label: string; os?: string; digits?: string }
+  enrollAsk?: EnrollAsk
+  devices?: Device[]
+  forgotten?: { label: string; by: string; at: number }[]
+  forgotHere?: { by: string }
   githubCode?: { code: string; url: string }
+}
+
+export interface EnrollAsk {
+  id: string
+  label: string
+  os: string
+  as: "desktop" | "phone" | "computer"
+  stage: "new" | "waiting" | "digits" | "elsewhere"
+}
+
+export type Enrolling = { stage: "asking" } | { stage: "digits"; digits: string }
+
+export interface Device {
+  id: string
+  label: string
+  os: string
+  as: "desktop" | "phone" | "computer"
+  until: number
+  thisOne: boolean
 }
 
 export type Theme = "system" | "dark" | "light"
@@ -469,6 +512,7 @@ export interface Actions {
   setPowers(code: string, name: string, powers: Partial<Powers>): void
   addAgent(code: string, agent: NewAgent): void
   showAgent(code: string, name: string): Promise<string | null>
+  openTerm(code: string, name: string, cols: number, rows: number, watch: TermWatch): Promise<TermOpened>
   choicesOn(code: string, computer: string): Promise<ComputerChoices>
   chooseFolder(): Promise<string | null>
   addRoom(code: string, name: string): Promise<string | null>
@@ -506,6 +550,13 @@ export interface Actions {
   setNewPowers(code: string, powers: Powers): void
   answerPair(accept: boolean): void
   cancelPair(): void
+  enrollAnswer(id: string): void
+  enrollConfirm(id: string, digits: string): Promise<{ ok: true } | { ok: false; left: number }>
+  enrollDeny(id: string): void
+  forgetDevice(id: string): void
+  renewDevice(id: string): void
+  enrollBegin(): void
+  enrollCancel(): void
   closeChannel(code: string): void
   saveTheme(theme: CustomTheme): void
   deleteTheme(id: string): void
@@ -555,6 +606,7 @@ export interface App {
   starts: AgentStarts | null
   ownPersonalities: Personality[]
   computer: ThisComputer | null
+  enrolling?: Enrolling | null
   actions: Actions
 }
 

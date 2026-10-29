@@ -16,7 +16,7 @@ let server: ReturnType<typeof startRelay>;
 let relay: string;
 
 beforeAll(() => {
-  server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir, githubPush: async (_, token) => ({ ok: true, value: token === "ghu_plans" }) });
+  server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir, githubPush: async (repo, token) => ({ ok: true, value: token === "ghu_plans" ? repo : null }) });
   relay = server.url.origin;
 });
 afterAll(() => {

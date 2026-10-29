@@ -2,9 +2,10 @@ import { chmodSync, existsSync, mkdirSync, renameSync, rmSync, statSync } from "
 import { join } from "node:path";
 import type { Socket } from "bun";
 import type { Channel, PresenceFields, Probe } from "@kiwi/core/client.ts";
+import type { Message } from "@kiwi/core/protocol.ts";
 import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity, saveAccess, type Config } from "../config.ts";
 import { readCursor } from "../config/cursors.ts";
-import { saveMachine } from "../machine.ts";
+import { saveMachine, takeDeviceList } from "../machine.ts";
 import { readMachineCert } from "@kiwi/core/person.ts";
 import { VERSION } from "../version.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
@@ -20,9 +21,12 @@ import { launchFolders } from "../launch/folders.ts";
 import { hooksRows } from "../hooks/install/extra.ts";
 import { computerSettings } from "./settings.ts";
 import { harnessInventory } from "../launch/harnesses.ts";
+import { HostedTmux } from "./hosted-tmux.ts";
+import { clampSize, isPane, openTerm, TERM_COLS, TERM_ROWS } from "./hosted-term.ts";
 import { forgetAtRelay, startMachineInbox } from "./inbox.ts";
 import { remoteRunner } from "./remote.ts";
 import { launchAgent } from "../launch/launch.ts";
+import { readLoopStart, startLoop } from "../loop/start.ts";
 import { readLaunchRequest } from "../launch/wire.ts";
 import { beatLock, dropLock, lockPath, ownsLock, takeLock } from "./lock.ts";
 import { stopDaemon, tryHello } from "./rpc.ts";
@@ -49,6 +53,7 @@ export interface Daemon {
   readonly sock: string;
   stop(): Promise<void>;
   readonly stopped: Promise<void>;
+  readonly hosted: HostedTmux;
   beacons(): number;
 }
 
@@ -92,8 +97,11 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     }
   }
 
+  const hosted = new HostedTmux(dir);
+  void hosted.resume().catch(() => {});
   const seats = new Map<string, Seat>();
   const conns = new Set<ConnState>();
+  const terms = new Map<ConnState, Set<() => void>>();
   let stopped = false;
   let resolveStopped: () => void = () => {};
   const stoppedP = new Promise<void>((resolve) => (resolveStopped = resolve));
@@ -191,6 +199,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     wakeOutstandingMs: opts.wakeOutstandingMs ?? WAKE_OUTSTANDING_MS,
     stopped: () => stopped,
     current,
+    hosted,
   });
 
   const seatInfo = async (s: Seat): Promise<DaemonSeat> => {
@@ -304,6 +313,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     if (conn.dead) return;
     conn.dead = true;
     conns.delete(conn);
+    for (const close of terms.get(conn) ?? []) close();
+    terms.delete(conn);
     for (const sub of [...conn.subs]) dropSub(sub);
     for (const l of conn.held) reachMoved(l.channel, l.agent);
   };
@@ -457,6 +468,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         seat.head,
         (m) => {
           if (m.seq > seat.head) seat.head = m.seq;
+          heardList(m);
           if (m.from !== seat.agent) scheduleWake(seat);
           for (const sub of [...seat.subs]) {
             if (sub.held) sub.held.push(m);
@@ -492,6 +504,10 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     }
   };
 
+  const heardList = (m: Message): void => {
+    if (m.sigOk && m.kind === "event" && m.ev?.op === "devices") void takeDeviceList(m.ev.links).catch(() => null);
+  };
+
   const onListen = async (conn: ConnState, id: number, params: Record<string, unknown>): Promise<void> => {
     const { channel, as, cursor } = params as { channel?: unknown; as?: unknown; cursor?: unknown };
     if (typeof channel !== "string" || !channel || typeof as !== "string" || !as) throw new Error('listen needs {"channel", "as", cursor}');
@@ -507,6 +523,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       const { messages } = await seat.ch.history(cursor);
       const caught = [...messages, ...(sub.held ?? [])];
       sub.held = null;
+      for (const m of caught) heardList(m);
       for (const m of caught) {
         if (m.seq <= sub.cursor) continue;
         if (sendLine(conn, JSON.stringify({ id, message: m }))) sub.cursor = m.seq;
@@ -705,7 +722,44 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         case "launch": {
           const launch = readLaunchRequest(params);
           if (!launch) throw new Error('launch needs {"harness", "folder", "code", "relay"?, "nick"?, "persona"?, "launch"?: an id of 8 to 64 of A-Z a-z 0-9 _ -}');
-          sendLine(conn, JSON.stringify({ id, ok: true, launched: await launchAgent(launch) }));
+          sendLine(conn, JSON.stringify({ id, ok: true, launched: await launchAgent(launch, { hosted }) }));
+          break;
+        }
+        case "loop": {
+          const start = readLoopStart(params);
+          if (!start) throw new Error('loop needs {"channel", "as", "folder", "harness"?, "model"?, "effort"?}');
+          const opened = await startLoop(start, hosted);
+          if (!opened.ok) throw new Error(opened.detail);
+          sendLine(conn, JSON.stringify({ id, ok: true, opened }));
+          break;
+        }
+        case "term": {
+          const { pane } = params;
+          const cols = clampSize(params.cols, TERM_COLS);
+          const rows = clampSize(params.rows, TERM_ROWS);
+          if (!isPane(pane) || !cols || !rows) throw new Error('term needs {"pane", "cols", "rows"}');
+          const term = await openTerm(hosted, pane, cols, rows, (msg) => sendLine(conn, JSON.stringify({ id, ...msg })));
+          if (conn.dead) {
+            term.close();
+            break;
+          }
+          terms.set(conn, new Set([...(terms.get(conn) ?? []), term.close]));
+          sendLine(conn, JSON.stringify({ id, ok: true, stream: true, ...term.opened }));
+          term.start();
+          break;
+        }
+        case "term-keys": {
+          const { pane, keys } = params;
+          if (!isPane(pane) || typeof keys !== "string" || keys.length > 65_536) throw new Error('term-keys needs {"pane", "keys"}');
+          sendLine(conn, JSON.stringify({ id, ok: hosted.keys(pane, keys) }));
+          break;
+        }
+        case "term-size": {
+          const { pane } = params;
+          const cols = clampSize(params.cols, TERM_COLS);
+          const rows = clampSize(params.rows, TERM_ROWS);
+          if (!isPane(pane) || !cols || !rows) throw new Error('term-size needs {"pane", "cols", "rows"}');
+          sendLine(conn, JSON.stringify({ id, ok: hosted.resize(pane, cols, rows), cols, rows }));
           break;
         }
         case "stop":
@@ -713,7 +767,9 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           setTimeout(() => void stop(), 50);
           break;
         default:
-          throw new Error(`unknown verb "${verb}" (hello, adopt, listen, listening, hold, listeners, read, mark, peek, presence, harnesses, folders, launch, unpair, stop)`);
+          throw new Error(
+            `unknown verb "${verb}" (hello, adopt, listen, listening, hold, listeners, read, mark, peek, presence, harnesses, folders, launch, loop, term, term-keys, term-size, unpair, stop)`,
+          );
       }
     } catch (err) {
       sendLine(conn, JSON.stringify({ id, ok: false, error: err instanceof Error ? err.message : String(err) }));
@@ -784,7 +840,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     run: remoteRunner({
       inventory: () => harnessInventory(),
       folders: (room) => launchFolders(loadConfig(), room),
-      launch: (req) => launchAgent(req),
+      launch: (req) => launchAgent(req, { hosted }),
       bypass: () => remoteBypassOn(loadConfig()),
       settings: async () => computerSettings(loadConfig(), hooksRows()),
       starts: join(dir, "remote-launches.json"),
@@ -872,6 +928,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     inbox.stop();
     rexWatch?.stop();
     rexWatch = null;
+    await hosted.detach();
     resolveStopped();
     for (const conn of [...conns]) {
       try {
@@ -903,7 +960,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
 
   await seatSync.now();
   await watchStatus();
-  return { sock, stop, stopped: stoppedP, beacons: () => beacons };
+  return { sock, stop, stopped: stoppedP, hosted, beacons: () => beacons };
 }
 
 function onLoopback(relay: string): boolean {

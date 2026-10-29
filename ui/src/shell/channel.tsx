@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from "react"
+import { lazy, Suspense, useEffect, useState, type CSSProperties } from "react"
 
 import { Conversation } from "~/chat/conversation"
 import { SearchBox, type Jump } from "~/chat/search-box"
@@ -24,6 +24,8 @@ import { Board, openTasks } from "~/tasks/board"
 import { Lanes } from "~/tasks/lanes"
 import { headerLine } from "~/now"
 import { between, nickname } from "~/names"
+
+const TermDrawer = lazy(() => import("~/term/drawer"))
 
 export function ChannelScreen({ channel }: { channel: Channel }) {
   const { nav, go } = useApp()
@@ -148,6 +150,11 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
             <Conversation channel={channel} jump={jump} />
           )}
         </Boundary>
+        {nav.term && (
+          <Suspense fallback={null}>
+            <TermDrawer key={nav.term} channel={channel} name={nav.term} />
+          </Suspense>
+        )}
       </main>
       {offline && (
         <p className="conn" role="status">

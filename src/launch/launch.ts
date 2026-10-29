@@ -11,7 +11,7 @@ import { tooBroad } from "../seats.ts";
 import { harnessInventory } from "./harnesses.ts";
 import type { PlaceTools } from "../terminals/plugin.ts";
 import { launchesOn } from "../terminals/registry.ts";
-import { openPlace, paneOf, placeKind } from "./place.ts";
+import { openPlace, paneOf, placeKind, type Hosted } from "./place.ts";
 import { joinLineRefusal } from "@kiwi/core/join-line.ts";
 import { choicesOf } from "@kiwi/core/launch-options.ts";
 import { canStart, harnessLabel, joinPrompt, launchChoicesRefusal, recipeArgv, typedPrompt } from "./recipes.ts";
@@ -23,6 +23,7 @@ export interface LaunchOptions {
   PATH?: string;
   tools?: PlaceTools;
   config?: Pick<Config, "launch" | "terminals">;
+  hosted?: Hosted;
   typing?: TypeOptions;
   onTyped?: (typed: Typed, launch: string) => void;
 }
@@ -70,8 +71,8 @@ export async function launchAgent(req: LaunchRequest, opts: LaunchOptions = {}):
   const argv = row?.path ? recipeArgv(req.harness, row.path, joinPrompt(req), choices) : null;
   if (!row?.path || !argv) return { ok: false, why: "not-installed", detail: `${req.harness} isn't installed on this computer` };
   const typed = typedPrompt(req.harness);
-  const kind = typed ? await placeKind(opts.tools, cfg) : null;
-  if (typed && kind !== "rex" && kind !== "tmux")
+  const kind = typed ? await placeKind(opts.tools, cfg, opts.hosted) : null;
+  if (typed && kind !== "rex" && kind !== "tmux" && kind !== "hosted")
     return {
       ok: false,
       why: "no-place",
@@ -80,10 +81,10 @@ export async function launchAgent(req: LaunchRequest, opts: LaunchOptions = {}):
   hookUp(req.harness, row.version);
   const launch = req.launch ?? randomBytes(16).toString("base64url");
   const env = { KIWI_LAUNCH: launch, ...(process.env.KIWI_HOME ? { KIWI_HOME: process.env.KIWI_HOME } : {}) };
-  const placed = await openPlace({ argv, folder: req.folder, name: req.nick ?? req.harness, env }, opts.tools, cfg);
+  const placed = await openPlace({ argv, folder: req.folder, name: req.nick ?? req.harness, env }, opts.tools, cfg, opts.hosted);
   if (!placed.ok) return placed;
   if (typed) {
-    const pane = await paneOf(placed, opts.tools);
+    const pane = await paneOf(placed, opts.tools, opts.hosted);
     if (!pane) return { ok: false, why: "failed", detail: `it opened in ${placed.place}, but Kiwi can't type into that window: type the kiwi join line from the app into it` };
     const done = opts.onTyped ?? ((t: Typed, id: string) => noteTyped(req.harness, t, id));
     void typeWhenReady(pane, joinPrompt(req), typed, opts.typing).then((t) => done(t, launch));

@@ -1,3 +1,4 @@
+import type { DeviceList } from "../devices.ts";
 import { cleanPersona, personaScopes, type Persona } from "../personality.ts";
 import * as Effect from "effect/Effect";
 import { newChannelKey } from "../crypto.ts";
@@ -25,6 +26,7 @@ export interface MembersFx {
   updatePowers(m: Member, powers: PersonPowers): Effect.Effect<void, Refused, Relay>;
   reconcilePosting(state: Pick<ChannelState, "members" | "scopeSets" | "roleSets">, members?: Member[]): Effect.Effect<string[], Refused, Relay>;
   remove(pk: string): Effect.Effect<void, Refused, Relay>;
+  cutDevices(list: DeviceList): Effect.Effect<Member[], Refused, Relay>;
   rotate(): Effect.Effect<number, Refused, Relay>;
   rotateIfDue(): Effect.Effect<boolean, Refused, Relay>;
   close(): Effect.Effect<void, Refused, Relay>;
@@ -145,6 +147,25 @@ export class ChannelMembers {
       yield* this.ch.request(`/members/${pk}`, { method: "DELETE" });
       yield* Effect.ignore(Effect.try({ try: () => this.info.markGone(pk), catch: (err) => err }));
       yield* this.rotation(pk);
+    }),
+
+    cutDevices: Effect.fn("Channel.cutDevices")({ self: this }, function* (this: ChannelMembers, list: DeviceList) {
+      yield* this.ch.ownerOnly();
+      const revoked = new Set(list.revoked);
+      const cut = (yield* this.ch.fx.members()).filter(
+        (m) =>
+          m.active &&
+          !m.owner &&
+          !m.unverified &&
+          ((!!m.device?.pk && revoked.has(m.device.pk) && m.person === list.person) || (!!m.from && revoked.has(m.from.pk) && m.sponsor?.user === list.person)),
+      );
+      if (!cut.length) return cut;
+      for (const m of cut) {
+        yield* this.ch.request(`/members/${m.pk}`, { method: "DELETE" });
+        yield* Effect.ignore(Effect.try({ try: () => this.info.markGone(m.pk), catch: (err) => err }));
+      }
+      yield* this.rotation();
+      return cut;
     }),
 
     rotate: Effect.fn("Channel.rotate")({ self: this }, function* (this: ChannelMembers) {

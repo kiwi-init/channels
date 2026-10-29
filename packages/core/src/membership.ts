@@ -10,6 +10,7 @@ import type { Pin } from "./pin.ts";
 import { cleanPersona, type Persona } from "./personality.ts";
 import { openWith, sealWith } from "./crypto.ts";
 import { sign, verify, type Identity } from "./identity.ts";
+import { checkDevice, type DeviceClaim, type DeviceList } from "./devices.ts";
 import { checkComputer, checkPerson, type ComputerClaim, type PersonClaim } from "./person.ts";
 import { isColor, type Card, type Color } from "./protocol.ts";
 import { readScopes, SCOPES, wireScopes, type Scope } from "./scopes.ts";
@@ -49,6 +50,7 @@ export interface MemberInfo {
    * remove a computer's agents.
    */
   from?: { pk: string; label: string };
+  device?: { pk?: string; label: string; as: "desktop" | "phone" | "computer" };
   /** A person's colour, if the owner set one when admitting them (later changes are color.set events). */
   color?: Color;
   /** What they may do besides read, as the owner signed it at approval. Absent: everything (see scopes.ts). */
@@ -190,6 +192,7 @@ export async function makeRecord(owner: Identity, room: string, m: MemberInfo & 
     ...(m.display ? { display: m.display } : {}),
     ...(m.sponsor ? { sponsor: m.sponsor } : {}),
     ...(m.person ? { person: m.person } : {}),
+    ...(!m.owner && m.kind === "human" && m.device ? { device: { ...(m.device.pk ? { pk: m.device.pk } : {}), label: m.device.label, as: m.device.as } } : {}),
     ...(!m.owner && m.kind === "human" && m.addsAgents ? { addsAgents: true } : {}),
     ...(!m.owner && m.kind === "human" && m.answersDecisions ? { answersDecisions: true } : {}),
     ...(m.from ? { from: { pk: m.from.pk, label: m.from.label } } : {}),
@@ -235,6 +238,7 @@ export async function readRecord(key: string, sealed: string, room: string, pk: 
     const addsAgents = !owner && kind === "human" && rec.pk === ownerPk && (rec as { addsAgents?: unknown }).addsAgents === true;
     const answersDecisions = !owner && kind === "human" && rec.pk === ownerPk && (rec as { answersDecisions?: unknown }).answersDecisions === true;
     const from = readFrom((rec as { from?: unknown }).from);
+    const device = !owner && kind === "human" && rec.pk === ownerPk ? readDeviceMark((rec as { device?: unknown }).device) : undefined;
     return {
       signer: rec.pk,
       fields: Object.keys(rec),
@@ -251,6 +255,7 @@ export async function readRecord(key: string, sealed: string, room: string, pk: 
         ...(addsAgents ? { addsAgents } : {}),
         ...(answersDecisions ? { answersDecisions } : {}),
         ...(from ? { from } : {}),
+        ...(device ? { device } : {}),
         ...(isColor(rec.color) ? { color: rec.color } : {}),
         ...(scopes ? { scopes } : {}),
         ...(later ? { later } : {}),
@@ -281,6 +286,7 @@ export async function openRecord(key: string, sealed: string, room: string, owne
 export interface JoinClaims {
   computer?: ComputerClaim;
   person?: PersonClaim;
+  device?: DeviceClaim;
   /**
    * What the asker says it runs on (its model, harness, machine), shown to the owner as its word:
    * unlike the two claims above, nothing here is checked. Read through cleanCard.
@@ -300,6 +306,24 @@ export function readLaunch(x: unknown): string | undefined {
 export async function verifiedComputer(roomId: string, agentPk: string, c: unknown): Promise<{ pk: string; label: string; person: string; personName: string } | null> {
   const cert = await checkComputer(c, roomId, agentPk);
   return cert ? { pk: cert.machine, label: cert.label, person: cert.pk, personName: cert.name } : null;
+}
+
+export async function verifiedDevice(
+  roomId: string,
+  memberPk: string,
+  c: unknown,
+  newer?: (person: string) => DeviceList | undefined,
+): Promise<{ person: string; pk: string; label: string; as: "desktop" | "phone" | "computer" } | null> {
+  const got = await checkDevice(c, roomId, memberPk, newer);
+  return got ? { person: got.person, pk: got.device.device, label: got.device.label, as: got.device.as } : null;
+}
+
+function readDeviceMark(x: unknown): Member["device"] {
+  if (!x || typeof x !== "object") return undefined;
+  const d = x as { pk?: unknown; label?: unknown; as?: unknown };
+  if (typeof d.label !== "string" || d.label.length > 64) return undefined;
+  const pk = typeof d.pk === "string" && d.pk.length <= 64 ? { pk: d.pk } : {};
+  return d.as === "desktop" || d.as === "phone" || d.as === "computer" ? { ...pk, label: d.label, as: d.as } : undefined;
 }
 
 /** The person key in a verified person claim, or null. */
@@ -371,6 +395,7 @@ export interface JoinRequest extends MemberInfo {
    * it's let in without a tap: the owner's own, or a person's whose record says they add agents.
    */
   computer?: { pk: string; label: string; person: string; personName: string; own: boolean; joinsOnItsOwn: boolean; forgotten?: true };
+  device?: { pk: string; person: string; label: string; as: "desktop" | "phone" | "computer"; own: boolean; joinsOnItsOwn: boolean; handle?: string };
   /**
    * A person asking to join themself: their verified person key (from a valid PersonClaim over this
    * channel and this member key). Approving signs it into their member record.

@@ -51,7 +51,7 @@ export function localOps(): ChannelOps {
     forget: async (code) => void writeLocal({ channels: seats().filter((c) => c.code !== code) }),
     prove: async (code, memberPk) => {
       const p = readLocal().person
-      return p ? personClaimFor(p, code, memberPk) : null
+      return p ? { person: await personClaimFor(p, code, memberPk) } : null
     },
     githubToken: async () => null,
     person: () => readLocal().person?.pk ?? null,

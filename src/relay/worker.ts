@@ -55,6 +55,8 @@ import {
   type MachineStore,
   type PersonMachine,
 } from "./machine.ts";
+import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, type AccountStore } from "./account.ts";
+import { ENROLL_TTL_MS, type Enrollment } from "@kiwi/core/enroll.ts";
 import { allow as allowPerMinute } from "./room/limits.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync, type Relay } from "./route.ts";
 import { GithubApp, githubAppFrom, GithubPush, githubPushFrom } from "./github-app.ts";
@@ -69,6 +71,7 @@ interface Env {
   /** One per paired computer: who may ask it to act, its sealed asks, and its live socket. */
   MACHINES: DurableObjectNamespace<MachineInbox>;
   PERSON_MACHINES: DurableObjectNamespace<PersonMachines>;
+  ACCOUNTS: DurableObjectNamespace<Account>;
   /** When set, channels belong to humans signed in with this WorkOS AuthKit client. */
   WORKOS_CLIENT_ID?: string;
   /** The AuthKit domain (https://….authkit.app or a custom one), whose keys may also sign tokens. Comma-separated while moving domains. */
@@ -338,6 +341,7 @@ export class MachineInbox extends DurableObject<Env> {
     if (!columns.some((c) => c.name === "label")) ctx.storage.sql.exec("ALTER TABLE binding ADD COLUMN label TEXT NOT NULL DEFAULT ''");
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS floor (k INTEGER PRIMARY KEY CHECK (k = 1), cert_at INTEGER NOT NULL)");
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS boxes (id TEXT PRIMARY KEY, box TEXT NOT NULL, at INTEGER NOT NULL)");
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS revoked (k INTEGER PRIMARY KEY CHECK (k = 1))");
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING, PONG));
   }
 
@@ -362,6 +366,7 @@ export class MachineInbox extends DurableObject<Env> {
         const row = sql.exec("SELECT person, mxpk, label, cert_at, seen_at FROM binding").toArray()[0] as { person: string; mxpk: string; label: string; cert_at: number; seen_at: number } | undefined;
         return row ? { person: row.person, mxpk: row.mxpk, label: row.label, certAt: row.cert_at, seenAt: row.seen_at } : null;
       },
+      revoked: async () => sql.exec("SELECT k FROM revoked").toArray().length > 0,
       floor: async () => (sql.exec("SELECT cert_at FROM floor").toArray()[0] as { cert_at: number } | undefined)?.cert_at ?? 0,
       bind: async (mpk, b) => {
         sql.exec("INSERT OR REPLACE INTO binding (k, person, mxpk, label, cert_at, seen_at) VALUES (1, ?, ?, ?, ?, ?)", b.person, b.mxpk, b.label, b.certAt, b.seenAt);
@@ -396,6 +401,15 @@ export class MachineInbox extends DurableObject<Env> {
         for (const ws of this.live()) close(ws, 4000, "unpaired");
       },
     };
+  }
+
+  async revoke(): Promise<void> {
+    const sql = this.ctx.storage.sql;
+    sql.exec("INSERT OR IGNORE INTO revoked (k) VALUES (1)");
+    sql.exec("DELETE FROM binding");
+    sql.exec("DELETE FROM boxes");
+    for (const ws of this.live()) close(ws, 4000, "unpaired");
+    await this.schedule();
   }
 
   async listed(mpk: string): Promise<{ person: string; machine: PersonMachine } | null> {
@@ -464,6 +478,60 @@ export class PersonMachines extends DurableObject<Env> {
     } catch (err) {
       return withCors(errorResponse(err));
     }
+  }
+}
+
+export class Account extends DurableObject<Env> {
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS links (seq INTEGER PRIMARY KEY, link TEXT NOT NULL)");
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS ask (k INTEGER PRIMARY KEY CHECK (k = 1), rec TEXT NOT NULL)");
+  }
+
+  private enrollment(): Enrollment | null {
+    const row = this.ctx.storage.sql.exec("SELECT rec FROM ask").toArray()[0] as { rec: string } | undefined;
+    return row ? (JSON.parse(row.rec) as Enrollment) : null;
+  }
+
+  private store(): AccountStore {
+    const sql = this.ctx.storage.sql;
+    return {
+      links: async () => (sql.exec("SELECT link FROM links ORDER BY seq").toArray() as { link: string }[]).map((r) => JSON.parse(r.link) as unknown),
+      extend: async (_user, from, links) => {
+        if ((sql.exec("SELECT COUNT(*) AS n FROM links").toArray()[0] as { n: number }).n !== from) return false;
+        links.forEach((l, i) => sql.exec("INSERT INTO links (seq, link) VALUES (?, ?)", from + i + 1, JSON.stringify(l)));
+        return true;
+      },
+      enrollment: async () => this.enrollment(),
+      setEnrollment: async (_user, next, prev) => {
+        if (!sameEnrollment(this.enrollment(), prev)) return false;
+        if (next) {
+          sql.exec("INSERT OR REPLACE INTO ask (k, rec) VALUES (1, ?)", JSON.stringify(next));
+          await this.ctx.storage.setAlarm(next.at + ENROLL_TTL_MS);
+        } else {
+          sql.exec("DELETE FROM ask");
+          await this.ctx.storage.deleteAlarm();
+        }
+        return true;
+      },
+      revoke: async (keys) => {
+        await Promise.all(keys.map((pk) => this.env.MACHINES.get(this.env.MACHINES.idFromName(pk)).revoke()));
+      },
+    };
+  }
+
+  async serve(user: string, req: Request): Promise<Response> {
+    try {
+      const out = await onAccountHttp(req, this.store(), user, { perAccount: (key) => allowPerMinute(key, ACCOUNT_ASKS_PER_MINUTE) });
+      return out ?? withCors(errorResponse(new NotFound({ message: "not found" })));
+    } catch (err) {
+      return withCors(errorResponse(err));
+    }
+  }
+
+  override async alarm(): Promise<void> {
+    const rec = this.enrollment();
+    if (rec && rec.at + ENROLL_TTL_MS <= Date.now()) this.ctx.storage.sql.exec("DELETE FROM ask");
   }
 }
 
@@ -541,6 +609,15 @@ export default {
       if (!signed) return withCors(errorResponse(new NotFound({ message: "not found" })));
       if (signed instanceof Response) return signed;
       return env.MACHINES.get(env.MACHINES.idFromName(signed.mpk)).fetch(req);
+    }
+    if (isAccountPath(url.pathname)) {
+      const ip = req.headers.get("cf-connecting-ip");
+      if ((req.method === "PUT" || req.method === "POST") && ip && !(await env.MACHINE_WRITES.limit({ key: `account:${ip}` })).success) {
+        return withCors(errorResponse(new TooMany({ message: "too many account requests from this address; try again in a few minutes" })));
+      }
+      const user = await accountUser(req, human(env));
+      if (user instanceof Response) return user;
+      return env.ACCOUNTS.get(env.ACCOUNTS.idFromName(user)).serve(user, req);
     }
     if (url.pathname.startsWith("/v1/person/")) {
       const pk = await signedPersonRequest(req, Date.now());

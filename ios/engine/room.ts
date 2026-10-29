@@ -32,6 +32,7 @@ interface RoomHooks {
   launch: (launch: string, seen: LaunchSeen) => void;
   person: () => string | null;
   log: (line: string) => void;
+  devices: (links: unknown) => void;
 }
 
 export class Room {
@@ -272,6 +273,7 @@ export class Room {
         this.kick();
         return;
       case "Message":
+        if (ev.message.sigOk && ev.message.kind === "event" && ev.message.ev?.op === "devices") this.hooks.devices(ev.message.ev.links);
         this.messages = merged(this.messages, [ev.message]);
         this.head = Math.max(this.head, ev.message.seq);
         break;

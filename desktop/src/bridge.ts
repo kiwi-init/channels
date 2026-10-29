@@ -3,6 +3,7 @@
 // so web/ can type against it without touching this process.
 
 import type { ComputerSettings } from "@kiwi/core/computer-settings.ts";
+import type { DeviceLink } from "@kiwi/core/devices.ts";
 import type { HarnessRow, HookHarness, HookRow, KnownHarness } from "@kiwi/core/harnesses.ts";
 import type { LaunchChoices } from "@kiwi/core/launch-options.ts";
 import type { WakeSeat } from "@kiwi/core/wake.ts";
@@ -86,6 +87,7 @@ export const CHANNEL_CALLS = [
   "autoApprove",
   "deny",
   "remove",
+  "cutDevices",
   "updateScopes",
   "updatePersona",
   "updateNickname",
@@ -245,6 +247,44 @@ export interface PairAskView {
   at: number;
 }
 
+export interface EnrollAskView {
+  id: string;
+  label: string;
+  os: string;
+  as: "desktop" | "phone" | "computer";
+  at: number;
+  stage: "new" | "waiting" | "digits" | "elsewhere";
+}
+
+export interface DeviceView {
+  id: string;
+  label: string;
+  os: string;
+  as: "desktop" | "phone" | "computer";
+  approve: boolean;
+  until: number;
+  thisOne: boolean;
+}
+
+interface DeviceRevokeView {
+  device: string;
+  label: string;
+  as: "desktop" | "phone" | "computer";
+  by: string;
+  at: number;
+  older: boolean;
+}
+
+export interface DeviceNewsView {
+  links: DeviceLink[];
+  revokes: DeviceRevokeView[];
+  removed: { wiped: boolean; by: string } | null;
+}
+
+export type EnrollConfirmView = { ok: true; label: string } | { ok: false; left: number };
+
+export type EnrollStatusView = { stage: "asking" } | { stage: "digits"; digits: string } | { stage: "done"; person: PublicPerson; channels: { label: string; code: string }[] } | { stage: "gone" };
+
 /** "kiwi daemon" as the app sees it. */
 export interface DaemonStatus {
   running: boolean;
@@ -273,6 +313,10 @@ export interface MachineView {
   own: boolean;
   online: boolean | null;
 }
+
+export type TermOpenView = { ok: true; term: string; window: string; cols: number; rows: number; seed: string; dead: boolean } | { ok: false; detail: string };
+
+export type TermEvent = { term: string; out: string } | { term: string; ended: true };
 
 export type FromMachine<T> = { ok: true; value: T } | { ok: false; detail: string };
 
@@ -326,6 +370,17 @@ export interface KiwiBridge {
   linkAnswer(accept: boolean): Promise<PhoneView | null>;
   linkCancel(): Promise<void>;
   forgetPhone(at: number): Promise<void>;
+  enrollPoll(): Promise<EnrollAskView | null>;
+  enrollAnswer(id: string): Promise<void>;
+  enrollConfirm(id: string, digits: string): Promise<EnrollConfirmView>;
+  enrollDeny(id: string): Promise<void>;
+  enrollBegin(): Promise<void>;
+  enrollStatus(): Promise<EnrollStatusView | null>;
+  enrollCancel(): Promise<void>;
+  devices(): Promise<DeviceView[] | null>;
+  forgetDevice(id: string): Promise<void>;
+  renewDevice(id: string): Promise<void>;
+  deviceNews(): Promise<DeviceNewsView | null>;
   daemonStatus(): Promise<DaemonStatus>;
   doctor(): Promise<DoctorFinding[] | null>;
   /** Certify this machine's daemon key with the person key and hand the cert back. */
@@ -369,6 +424,12 @@ export interface KiwiBridge {
   setPersonalities(list: Personality[]): Promise<void>;
   seatPlaces(): Promise<PlacedSeat[]>;
   showSeat(seat: PlacedSeat): Promise<ShowResult>;
+  /** Watch and type in a hosted agent's tmux pane: the daemon sizes it, then sends the screen and what follows as onTerm events. */
+  termOpen(pane: string, cols: number, rows: number): Promise<TermOpenView>;
+  termKeys(term: string, keys: string): Promise<void>;
+  termSize(term: string, cols: number, rows: number): Promise<void>;
+  termClose(term: string): Promise<void>;
+  onTerm(cb: (e: TermEvent) => void): () => void;
   terminals(): Promise<TerminalsStatus | null>;
   terminalHelpers(id: "rex" | "tmux", to: "on" | "off"): Promise<TerminalsStatus | null>;
   terminalPrefer(id: TerminalId): Promise<TerminalsStatus | null>;

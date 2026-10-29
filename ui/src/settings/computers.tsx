@@ -3,7 +3,7 @@ import { useEffect, useState } from "react"
 import { cx, IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
-import type { Computer } from "~/model"
+import type { Account, Computer, Device } from "~/model"
 import { useApp } from "~/nav"
 import { Confirm } from "~/settings/controls"
 import { Page } from "~/settings/sections"
@@ -63,6 +63,94 @@ function TheirSettings({ computer }: { computer: Computer }) {
   )
 }
 
+const DAY = 86_400_000
+const RENEW_WITHIN = 14 * DAY
+
+const KIND: Record<Device["as"], string> = { desktop: "computer", phone: "phone", computer: "computer for agents" }
+
+function expiry(until: number, now = Date.now()): string {
+  if (until <= now) return "expired"
+  const days = Math.ceil((until - now) / DAY)
+  return days === 1 ? "expires tomorrow" : `expires in ${days} days`
+}
+
+const due = (until: number, now = Date.now()): boolean => until - now < RENEW_WITHIN
+
+const day = (at: number): string => new Date(at).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+
+function DeviceNotices({ account }: { account: Account }) {
+  return (
+    <>
+      {account.forgotHere && (
+        <p className="set-fine set-warning" role="note">
+          {account.forgotHere.by} forgot this app. It keeps your person key and its channels, but it can't approve or change your devices any more.
+        </p>
+      )}
+      {account.forgotten?.map((f) => (
+        <p key={`${f.label}:${f.at}`} className="set-fine set-warning" role="note">
+          {f.by} forgot {f.label} on {day(f.at)}, and you had {f.label} longer. If that wasn't you, forget {f.by}.
+        </p>
+      ))}
+    </>
+  )
+}
+
+function SignedDevices({ devices }: { devices: Device[] }) {
+  const { app } = useApp()
+  const [forget, setForget] = useState<Device | null>(null)
+  return (
+    <section className="set-group" aria-label="Signed in as you">
+      <div className="heading">
+        <h3>Signed in as you</h3>
+      </div>
+      <p className="set-group-hint">Each one has its own key. Forget one and it can't sign in as you again.</p>
+      {app.account && <DeviceNotices account={app.account} />}
+      <ul className="set-devices">
+        {devices.map((d) => (
+          <li key={d.id} className="set-device">
+            <span className="set-device-icon" aria-hidden="true">
+              <Icon name={d.as === "phone" ? "phone" : "computer"} />
+            </span>
+            <span className="set-device-text">
+              <span className="set-device-name">
+                {d.label}
+                {d.thisOne && <span className="set-tag">this app</span>}
+              </span>
+              <span className="set-device-meta">
+                {KIND[d.as]}
+                {d.os ? ` · ${d.os}` : ""} · {expiry(d.until)}
+              </span>
+            </span>
+            <span className="set-device-actions-inline">
+              {due(d.until) && (
+                <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.renewDevice(d.id)}>
+                  Renew
+                </button>
+              )}
+              {!d.thisOne && (
+                <button type="button" className="btn is-quiet is-small set-forget" onClick={() => setForget(d)}>
+                  Forget
+                </button>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <Confirm
+        open={!!forget}
+        title={`Forget ${forget?.label ?? ""}?`}
+        sub="It can't sign in as you again. Channels you own drop it now; other channels drop it when their owner's app is next open."
+        action="Forget"
+        onClose={() => setForget(null)}
+        onConfirm={() => {
+          if (forget) app.actions.forgetDevice(forget.id)
+          setForget(null)
+        }}
+      />
+    </section>
+  )
+}
+
 function phoneWarning(phone: Computer): string {
   const held = phone.holds?.length ? `your person key and the keys of ${phone.holds.join(", ")}` : "your person key and the keys of the channels you had when you linked it"
   return `It holds ${held}, so it can act as you there. Forgetting it removes it from this list; to sign it out, unlink it on the phone. If it's lost or stolen, there's no way yet to cut it off from here.`
@@ -86,6 +174,17 @@ export function ComputersSection() {
 
   return (
     <Page title="Computers and phones" lede="Everywhere you are signed in. Agents run on computers; phones read and answer.">
+      {!account.devices?.length && account.forgotHere && <DeviceNotices account={account} />}
+      {account.devices && account.devices.length > 0 && (
+        <>
+          <SignedDevices devices={account.devices} />
+          <section className="set-group" aria-label="Paired with a code">
+            <div className="heading">
+              <h3>Paired with a code</h3>
+            </div>
+          </section>
+        </>
+      )}
       <ul className="set-devices">
         {computers.map((c) => (
           <li key={c.id} className="set-device">

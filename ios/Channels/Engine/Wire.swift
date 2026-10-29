@@ -237,6 +237,15 @@ struct LinkStart: Codable, Sendable {
     let relay: String
 }
 
+struct EnrollStart: Codable, Sendable {
+    let url: String?
+    let code: String
+}
+
+struct EnrollDigits: Codable, Sendable {
+    let digits: String
+}
+
 struct Reply: Decodable {
     let ok: Bool
     let error: String?

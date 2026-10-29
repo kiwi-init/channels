@@ -8,8 +8,7 @@ import { openKept as openSealedKept, openRows as openSealedRows, packKept, packR
 import { Channel, ChannelGone, RelayError, Relay, Unreachable, eachLive, fetchRelay, type Live, type PresenceFields } from "@kiwi/core/client.ts";
 import { encodeJoinCode, keepSeen, newRoomId, ownerFingerprint, type ChannelAccess } from "@kiwi/core/crypto.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
-import { handleFor, type Member, type MemberInfo } from "@kiwi/core/membership.ts";
-import type { PersonClaim } from "@kiwi/core/person.ts";
+import { handleFor, type JoinClaims, type Member, type MemberInfo } from "@kiwi/core/membership.ts";
 import { omit } from "@kiwi/core/omit.ts";
 import { cleanPersonalities } from "@kiwi/core/personalities.ts";
 import { PRESETS } from "@kiwi/core/presets.ts";
@@ -36,7 +35,7 @@ export interface KeyHost {
   save(entry: ChannelIdentityView): Promise<void>;
   access(code: string, pk: string, access: ChannelAccess): Promise<void>;
   forget(code: string): Promise<void>;
-  prove(code: string, memberPk: string): Promise<PersonClaim | null>;
+  prove(code: string, memberPk: string): Promise<JoinClaims | null>;
   githubToken(): Promise<string | null>;
   person(): string | null;
   mine(): readonly string[] | null;
@@ -215,7 +214,7 @@ export class Keyring implements ChannelOps {
     const prior = this.host.seats().find((c) => c.code === code && !c.access && !c.imported);
     const identity = prior && (prior.idName ?? prior.label) === name ? identityOf(prior) : await generateIdentity(name);
     const claim = await this.host.prove(code, identity.pk);
-    const r = await Channel.requestJoin(this.host.relay(), code, identity, { name }, claim ? { person: claim } : undefined);
+    const r = await Channel.requestJoin(this.host.relay(), code, identity, { name }, claim ?? undefined);
     const entry: ChannelIdentityView = { label: identity.name, idName: identity.name, ...keysOf(identity), code, requestId: r.requestId };
     await this.host.save(entry);
     return publicChannel(entry);

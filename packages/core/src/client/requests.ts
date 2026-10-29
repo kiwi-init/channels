@@ -15,6 +15,7 @@ import {
   RESERVED_NAMES,
   sealRecord,
   verifiedComputer,
+  verifiedDevice,
   verifiedPerson,
   type JoinClaims,
   type JoinRequest,
@@ -28,9 +29,31 @@ import { canPost, scopesOf, wireScopes } from "../scopes.ts";
 import type { ChannelCore } from "./core.ts";
 import type { MemberRefusal, Refused } from "./errors.ts";
 import { requestInfo, wrapAllFor } from "./keys.ts";
+import type { DeviceList } from "../devices.ts";
 import type { Relay } from "./relay.ts";
 
+const deviceName = (members: readonly Pick<Member, "name">[], base: string): string => {
+  for (let n = 2; ; n++) {
+    const name = `${base.slice(0, 28)}-${n}`;
+    if (!members.some((m) => nameKey(m.name) === nameKey(name))) return name;
+  }
+};
+
+const sameHuman = (members: readonly Member[], person: string) => members.find((m) => (m.kind === "human" || m.owner) && m.person === person && !m.device);
+
+const personNameOf = (members: readonly Member[], person: string): string => {
+  const m = sameHuman(members, person);
+  return m?.display ?? m?.name ?? "someone";
+};
+
 const addsAgents = (m: Member) => m.kind === "human" && !m.owner && !!m.addsAgents && !!m.person && canPost(m.later?.scopes ?? scopesOf(m));
+
+export interface RequestsOptions {
+  budget?: SigningBudget;
+  person?: string;
+  mine?: readonly string[] | null;
+  lists?: ReadonlyMap<string, DeviceList>;
+}
 
 type RequestRow = {
   id: string;
@@ -46,11 +69,11 @@ type RequestRow = {
 };
 
 export interface RequestsFx {
-  requests(opts?: { budget?: SigningBudget; person?: string; mine?: readonly string[] | null }): Effect.Effect<JoinRequest[], Refused, Relay>;
+  requests(opts?: RequestsOptions): Effect.Effect<JoinRequest[], Refused, Relay>;
   checkRequest(req: Pick<JoinRequest, "id" | "pk" | "commit">): Effect.Effect<void, Refused, Relay>;
   approve(req: JoinRequest, as?: Partial<MemberInfo>, opts?: { person?: string }): Effect.Effect<Member, Refused, Relay>;
   pinPersona(p: Personality): Effect.Effect<string, Refused, Relay>;
-  autoApprove(person: string, personalities?: readonly Personality[], mine?: readonly string[] | null): Effect.Effect<Member[], Refused, Relay>;
+  autoApprove(person: string, personalities?: readonly Personality[], mine?: readonly string[] | null, lists?: ReadonlyMap<string, DeviceList>): Effect.Effect<Member[], Refused, Relay>;
   deny(requestId: string): Effect.Effect<void, Refused, Relay>;
 }
 
@@ -58,7 +81,7 @@ export class ChannelRequests {
   constructor(private readonly ch: ChannelCore) {}
 
   readonly fx: RequestsFx = {
-    requests: Effect.fn("Channel.requests")({ self: this }, function* (this: ChannelRequests, opts: { budget?: SigningBudget; person?: string; mine?: readonly string[] | null } = {}) {
+    requests: Effect.fn("Channel.requests")({ self: this }, function* (this: ChannelRequests, opts: RequestsOptions = {}) {
       yield* this.ch.ownerOnly();
       const { requests } = yield* this.ch.request<{ requests: RequestRow[] }>("/requests", {}, { v: 2 });
       const out: JoinRequest[] = [];
@@ -75,10 +98,14 @@ export class ChannelRequests {
         } catch {
           // Info that isn't JSON: the request still shows, named "?".
         }
-        const computer = yield* Effect.promise(() => verifiedComputer(this.ch.roomId, r.pk, info.computer));
+        const paired = yield* Effect.promise(() => verifiedComputer(this.ch.roomId, r.pk, info.computer));
         const person = yield* Effect.promise(() => verifiedPerson(this.ch.roomId, r.pk, info.person));
-        const pin = person ? null : yield* Effect.promise(() => readPin(info.pin, this.ch.roomId, this.ch.identity.pk));
-        const kind = person ? "human" : "agent";
+        const device = person ? null : yield* Effect.promise(() => verifiedDevice(this.ch.roomId, r.pk, info.device, (p) => opts.lists?.get(p)));
+        const app = device && device.as !== "computer" ? device : null;
+        const enrolled = device?.as === "computer" ? { pk: device.pk, label: device.label, person: device.person, personName: personNameOf(seats, device.person) } : null;
+        const computer = enrolled ?? paired;
+        const pin = person || app ? null : yield* Effect.promise(() => readPin(info.pin, this.ch.roomId, this.ch.identity.pk));
+        const kind = person || app ? "human" : "agent";
         const launch = kind === "agent" ? readLaunch(info.launch) : undefined;
         const asked = inlineText(info.name, 40);
         const allowed = NAME_RE.test(asked) && !RESERVED_NAMES.has(nameKey(asked));
@@ -88,9 +115,10 @@ export class ChannelRequests {
         const free = !!auto && allowed && !offered.some((m) => nameKey(m.name) === nameKey(asked));
         const nick = kind === "human" ? "" : inlineText(info.display, 40) || (auto && !free && allowed && !personName ? asked.replace(/-\d+$/, "") || asked : "");
         if (auto) offered.push({ name: (info.name = free ? asked : freeHandle(offered, seededPick(r.pk))) });
-        const forgotten = !!computer && !!opts.person && computer.person === opts.person && !!opts.mine && !opts.mine.includes(computer.pk);
+        const forgotten = !enrolled && !!computer && !!opts.person && computer.person === opts.person && !!opts.mine && !opts.mine.includes(computer.pk);
         const own = !!computer && !!opts.person && computer.person === opts.person && !forgotten;
-        const joinsOnItsOwn = own || (kind === "agent" && !!computer && !!opts.person && agentsOf.has(computer.person));
+        const same = app ? sameHuman(seats, app.person) : undefined;
+        const joinsOnItsOwn = own || (kind === "agent" && !!computer && !!opts.person && agentsOf.has(computer.person)) || !!same;
         const spend = joinsOnItsOwn ? undefined : opts.person && !r.reveal ? undefined : opts.budget;
         const check = yield* this.codeCheck(r, spend, joinsOnItsOwn).pipe(Effect.catchCause(() => Effect.succeed(null)));
         if (!check) continue;
@@ -108,6 +136,7 @@ export class ChannelRequests {
           ...(auto ? { askedAs: auto } : {}),
           ...(computer ? { computer: { ...computer, own, joinsOnItsOwn, ...(forgotten ? { forgotten: true } : {}) } } : {}),
           ...(person ? { person } : {}),
+          ...(app ? { device: { ...app, own: !!opts.person && app.person === opts.person, joinsOnItsOwn: !!same, ...(same ? { handle: same.name } : {}) } } : {}),
           ...(cleanCard(info.card) ? { card: cleanCard(info.card)! } : {}),
           ...(kind !== "human" && readRuns(info.runs) ? { runs: readRuns(info.runs)! } : {}),
           ...(pin ? { pin } : {}),
@@ -135,8 +164,19 @@ export class ChannelRequests {
       const ownerName = members.find((m) => m.owner && m.active)?.name;
       const ownerPerson = opts.person ?? members.find((m) => m.owner)?.person;
       const own = !!req.computer && !!ownerPerson && req.computer.person === ownerPerson;
+      const device = kind === "human" && !req.person ? req.device : undefined;
+      const same = device
+        ? sameHuman(
+            members.filter((m) => m.active && !m.unverified),
+            device.person,
+          )
+        : undefined;
       let sponsor: MemberInfo["sponsor"];
-      if (kind === "human" && req.person) {
+      if (device) {
+        if (same && !as?.name) as = { ...as, name: deviceName(members, same.name) };
+        const name = as?.name ?? req.name;
+        sponsor = { user: device.person, name: same?.display ?? same?.name ?? name, handle: same?.name ?? name };
+      } else if (kind === "human" && req.person) {
         const name = as?.name ?? req.name;
         sponsor = { user: req.person, name, handle: name };
       } else if (req.computer) {
@@ -156,15 +196,19 @@ export class ChannelRequests {
       yield* this.assertNamesFree([as?.name ?? req.name]);
       const persona = kind === "agent" && as?.persona !== undefined ? cleanPersona(as.persona) : undefined;
       if (persona === null) return yield* new Rejected("that personality isn't one a record can carry: check its name, role, capabilities, areas and instructions");
-      const scopes = persona ? personaScopes(persona) : as?.scopes;
+      const inherited = same && !same.owner ? (same.later?.scopes ?? scopesOf(same)) : undefined;
+      const scopes = persona ? personaScopes(persona) : (as?.scopes ?? inherited);
+      const authority = !!same && (same.owner || !!same.addsAgents);
+      const decides = !!same && (same.owner || !!same.answersDecisions);
       const info: MemberInfo = {
         name: as?.name ?? req.name,
         kind,
-        ...(kind === "human" ? (as?.display ? { display: as.display } : {}) : nick ? { display: nick } : {}),
+        ...(kind === "human" ? (as?.display ? { display: as.display } : same?.display ? { display: same.display } : {}) : nick ? { display: nick } : {}),
         ...(sponsor ? { sponsor } : {}),
         ...(kind === "human" && req.person ? { person: req.person } : {}),
-        ...(kind === "human" && as?.addsAgents ? { addsAgents: true } : {}),
-        ...(kind === "human" && as?.answersDecisions ? { answersDecisions: true } : {}),
+        ...(device ? { person: device.person, device: { pk: device.pk, label: device.label, as: device.as } } : {}),
+        ...(kind === "human" && (as?.addsAgents ?? authority) ? { addsAgents: true } : {}),
+        ...(kind === "human" && (as?.answersDecisions ?? decides) ? { answersDecisions: true } : {}),
         ...(kind === "agent" && req.computer ? { from: { pk: req.computer.pk, label: req.computer.label } } : {}),
         ...(kind === "agent" && req.runs ? { runs: req.runs } : {}),
         ...(persona ? { persona } : {}),
@@ -179,33 +223,41 @@ export class ChannelRequests {
       return { pk: req.pk, xpk: req.xpk, ...info, owner: false, at: rec.at, active: true } satisfies Member;
     }),
 
-    autoApprove: Effect.fn("Channel.autoApprove")({ self: this }, function* (this: ChannelRequests, person: string, personalities: readonly Personality[] = [], mine: readonly string[] | null = null) {
-      yield* this.ch.ownerOnly();
-      for (const req of yield* this.ch.fx.requests({ person, mine })) {
-        if (req.computer?.joinsOnItsOwn && req.check === "unchecked") yield* Effect.ignoreCause(this.ch.fx.checkRequest(req));
-      }
-      const approved: Member[] = [];
-      const people = yield* this.ch.fx.members();
-      for (const req of yield* this.ch.fx.requests({ person, mine })) {
-        if (!(req.computer?.joinsOnItsOwn && req.check === "ready" && req.code)) continue;
-        const pin = req.pin;
-        let as: Partial<MemberInfo> | undefined;
-        if (req.computer.own) {
-          const persona = pin ? yield* Effect.promise(() => pinned(pin, personalities)) : undefined;
-          if (persona === null) continue;
-          as = persona ? { persona } : undefined;
-        } else {
-          const sponsor = req.computer.person;
-          const human = people.find((m) => m.active && !m.unverified && addsAgents(m) && m.person === sponsor);
-          if (!human || pin) continue;
-          const scopes = human.later?.scopes ?? scopesOf(human);
-          as = wireScopes(scopes) ? { scopes } : undefined;
+    autoApprove: Effect.fn("Channel.autoApprove")(
+      { self: this },
+      function* (this: ChannelRequests, person: string, personalities: readonly Personality[] = [], mine: readonly string[] | null = null, lists?: ReadonlyMap<string, DeviceList>) {
+        yield* this.ch.ownerOnly();
+        for (const req of yield* this.ch.fx.requests({ person, mine, lists })) {
+          if ((req.computer?.joinsOnItsOwn || req.device?.joinsOnItsOwn) && req.check === "unchecked") yield* Effect.ignoreCause(this.ch.fx.checkRequest(req));
         }
-        const one = yield* Effect.exit(this.ch.fx.approve(req, as, { person }));
-        if (Exit.isSuccess(one)) approved.push(one.value);
-      }
-      return approved;
-    }),
+        const approved: Member[] = [];
+        const people = yield* this.ch.fx.members();
+        for (const req of yield* this.ch.fx.requests({ person, mine, lists })) {
+          if (req.device?.joinsOnItsOwn && req.check === "ready" && req.code) {
+            const one = yield* Effect.exit(this.ch.fx.approve(req, undefined, { person }));
+            if (Exit.isSuccess(one)) approved.push(one.value);
+            continue;
+          }
+          if (!(req.computer?.joinsOnItsOwn && req.check === "ready" && req.code)) continue;
+          const pin = req.pin;
+          let as: Partial<MemberInfo> | undefined;
+          if (req.computer.own) {
+            const persona = pin ? yield* Effect.promise(() => pinned(pin, personalities)) : undefined;
+            if (persona === null) continue;
+            as = persona ? { persona } : undefined;
+          } else {
+            const sponsor = req.computer.person;
+            const human = people.find((m) => m.active && !m.unverified && addsAgents(m) && m.person === sponsor);
+            if (!human || pin) continue;
+            const scopes = human.later?.scopes ?? scopesOf(human);
+            as = wireScopes(scopes) ? { scopes } : undefined;
+          }
+          const one = yield* Effect.exit(this.ch.fx.approve(req, as, { person }));
+          if (Exit.isSuccess(one)) approved.push(one.value);
+        }
+        return approved;
+      },
+    ),
 
     deny: Effect.fn("Channel.deny")({ self: this }, function* (this: ChannelRequests, requestId: string) {
       yield* this.ch.ownerOnly();

@@ -1,11 +1,24 @@
 import type { HarnessRow } from "@kiwi/core/harnesses.ts";
 import type { LaunchChoices } from "@kiwi/core/launch-options.ts";
-import type { ChannelIdentityView, PersonView } from "../../desktop/src/bridge.ts";
+import type { DeviceLink } from "@kiwi/core/devices.ts";
+import type { ChannelIdentityView, PersonView, PublicPerson } from "../../desktop/src/bridge.ts";
 
 export interface Saved {
   relay: string;
   person: PersonView | null;
   seats: ChannelIdentityView[];
+  device?: EnrolledPhone | null;
+}
+
+interface EnrolledPhone {
+  key: PersonView;
+  links: DeviceLink[];
+  person: PublicPerson;
+}
+
+export interface EnrollStart {
+  url: string | null;
+  code: string;
 }
 
 export type Ask =
@@ -13,6 +26,10 @@ export type Ask =
   | { op: "linkAsk"; code: string; label: string }
   | { op: "linkWait" }
   | { op: "linkCancel" }
+  | { op: "enrollBegin"; relay: string; label: string; os: string; user?: string }
+  | { op: "enrollWait" }
+  | { op: "enrollFinish" }
+  | { op: "enrollCancel" }
   | { op: "send"; code: string; body: string; re: number | null; imgs: Picture[]; place?: string }
   | { op: "image"; code: string; seq: number; index: number }
   | { op: "answer"; code: string; seq: number; text: string }
@@ -43,6 +60,7 @@ export type Push =
   | { type: "room"; room: RoomView }
   | { type: "gone"; code: string }
   | { type: "log"; line: string }
+  | { type: "removed"; by: string }
   | { type: "launch"; code: string; launch: string; stage: "asked" | "joined"; name: string };
 
 export type Connection = "connecting" | "live" | "reconnecting";

@@ -1,12 +1,13 @@
 import { b64url } from "./crypto.ts";
-import { canonical, sign, verify, type Identity } from "./identity.ts";
+import { canonical, sign, signText, verify, verifyText, type Identity } from "./identity.ts";
 
 const KEY_RE = /^[A-Za-z0-9_-]{43}$/;
 const LABEL_MAX = 64;
 const OS_MAX = 32;
 const DAY_MS = 86_400_000;
 const DEVICE_CERT_DAYS = 90;
-const DEVICE_LIST_MAX = 1024;
+export const DEVICE_LIST_MAX = 1024;
+const RENEW_WITHIN_DAYS = 14;
 
 type DeviceKind = "desktop" | "phone" | "computer";
 const KINDS: readonly DeviceKind[] = ["desktop", "phone", "computer"];
@@ -39,12 +40,23 @@ export interface Device {
   seq: number;
 }
 
+interface Revoke {
+  device: string;
+  label: string;
+  as: DeviceKind;
+  by: string;
+  seq: number;
+  at: number;
+  older: boolean;
+}
+
 export interface DeviceList {
   person: string;
   version: number;
   head: string;
   devices: Device[];
   revoked: string[];
+  revokes: Revoke[];
 }
 
 export type ReadList = { ok: true; list: DeviceList } | { ok: false; why: string };
@@ -117,6 +129,7 @@ export async function readDeviceList(links: readonly unknown[]): Promise<ReadLis
   if (links.length > DEVICE_LIST_MAX) return { ok: false, why: "a device list longer than any person needs" };
   const devices = new Map<string, Device>();
   const revoked = new Set<string>();
+  const revokes: Revoke[] = [];
   let person = "";
   let head = "";
   let version = 0;
@@ -136,12 +149,17 @@ export async function readDeviceList(links: readonly unknown[]): Promise<ReadLis
       if (link.seq !== version + 1 || link.prev !== head) return { ok: false, why: `link ${link.seq} doesn't follow link ${version}` };
       const why = refusal(link, devices, revoked, person);
       if (why) return { ok: false, why: `link ${link.seq}: ${why}` };
+      if (link.op === "revoke") {
+        const target = devices.get(link.device)!;
+        const signer = devices.get(link.pk);
+        revokes.push({ device: target.device, label: target.label, as: target.as, by: link.pk, seq: link.seq, at: link.at, older: !!signer && target.seq < signer.seq });
+      }
     }
     apply(link, devices, revoked);
     version = link.seq;
     head = await digest(link);
   }
-  return { ok: true, list: { person, version, head, devices: [...devices.values()], revoked: [...revoked] } };
+  return { ok: true, list: { person, version, head, devices: [...devices.values()], revoked: [...revoked], revokes } };
 }
 
 function refusal(link: DeviceLink, devices: ReadonlyMap<string, Device>, revoked: ReadonlySet<string>, person: string): string | null {
@@ -196,4 +214,53 @@ function apply(link: DeviceLink, devices: Map<string, Device>, revoked: Set<stri
 export function currentDevice(list: DeviceList, pk: string, now = Date.now()): Device | null {
   const d = list.devices.find((x) => x.device === pk);
   return d && d.until > now ? d : null;
+}
+
+export const dueForRenewal = (list: DeviceList, now = Date.now()): Device[] => list.devices.filter((d) => d.until > now && d.until - now <= RENEW_WITHIN_DAYS * DAY_MS);
+
+function newestList(a: DeviceList | undefined, b: DeviceList | undefined): DeviceList | undefined {
+  if (!a || !b) return a ?? b;
+  if (a.person !== b.person) throw new Error("two device lists of different people");
+  return b.version > a.version ? b : a;
+}
+
+export async function newestLists(candidates: readonly unknown[], known: ReadonlyMap<string, DeviceList> = new Map()): Promise<Map<string, DeviceList>> {
+  const out = new Map(known);
+  for (const links of candidates) {
+    if (!Array.isArray(links)) continue;
+    const read = await readDeviceList(links);
+    if (read.ok) out.set(read.list.person, newestList(out.get(read.list.person), read.list)!);
+  }
+  return out;
+}
+
+export interface DeviceClaim {
+  links: DeviceLink[];
+  device: string;
+  vouch: string;
+}
+
+const deviceVouch = (roomId: string, memberPk: string) => `kiwi-device\n${roomId}\n${memberPk}`;
+
+export async function claimDevice(device: Identity, links: DeviceLink[], roomId: string, memberPk: string): Promise<DeviceClaim> {
+  return { links, device: device.pk, vouch: await signText(device, deviceVouch(roomId, memberPk)) };
+}
+
+interface CheckedDevice {
+  person: string;
+  version: number;
+  device: Device;
+}
+
+export async function checkDevice(c: unknown, roomId: string, memberPk: string, newer?: (person: string) => DeviceList | undefined, now = Date.now()): Promise<CheckedDevice | null> {
+  if (!c || typeof c !== "object") return null;
+  const claim = c as Partial<DeviceClaim>;
+  if (!Array.isArray(claim.links) || typeof claim.device !== "string" || typeof claim.vouch !== "string") return null;
+  const read = await readDeviceList(claim.links);
+  if (!read.ok) return null;
+  const known = newer?.(read.list.person);
+  const list = known && known.version > read.list.version ? known : read.list;
+  const d = currentDevice(list, claim.device, now);
+  if (!d) return null;
+  return (await verifyText(d.device, claim.vouch, deviceVouch(roomId, memberPk))) ? { person: list.person, version: list.version, device: d } : null;
 }

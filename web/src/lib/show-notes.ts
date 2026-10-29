@@ -28,7 +28,7 @@ function tmuxNote(why: ShowRefusal): string {
   }
 }
 
-const NOTES: Record<PlacedSeat["place"], (why: ShowRefusal) => string> = { rex: rexNote, tmux: tmuxNote }
+const NOTES: Record<PlacedSeat["place"], (why: ShowRefusal) => string> = { rex: rexNote, tmux: tmuxNote, hosted: () => "Its terminal didn't open." }
 
 export function showNote(place: PlacedSeat["place"], result: ShowResult): string | null {
   return result.ok ? null : NOTES[place](result.why)
