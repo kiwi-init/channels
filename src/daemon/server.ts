@@ -103,7 +103,10 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   const hosted = new HostedTmux(dir);
   void hosted.resume().catch(() => {});
   const seats = new Map<string, Seat>();
-  const admitter = startAdmitter(() => loadPairedMachine()?.identity ?? null);
+  const admitter = startAdmitter(() => {
+    const m = loadPairedMachine();
+    return m && (m.cert || m.device?.links.length) ? m.identity : null;
+  });
   const conns = new Set<ConnState>();
   const terms = new Map<ConnState, Set<() => void>>();
   let stopped = false;
@@ -492,7 +495,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           onInfo: () => tell(seat, { event: "info" }),
           onRequest: () => {
             tell(seat, { event: "request" });
-            admitter.watch({ relay: c.relay, roomId: c.roomId, ownerPk: c.ownerPk });
+            admitter.watch({ relay: c.relay, roomId: c.roomId, ownerPk: c.ownerPk }, 0);
           },
           onStatus: (s) => tell(seat, { status: s }),
         },
