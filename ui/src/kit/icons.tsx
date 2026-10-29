@@ -40,6 +40,7 @@ const PATHS = {
   moon: "M13.5 9.6A5.6 5.6 0 0 1 6.4 2.5a5.6 5.6 0 1 0 7.1 7.1z",
   download: "M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10",
   terminal: "M2.5 3h11v10h-11zM5 6.5 7 8l-2 1.5M8.5 10H11",
+  tray: "M2.5 9.5h3l1 1.5h3l1-1.5h3M2.5 9.5 4 4h8l1.5 5.5V13h-11z",
 } as const
 
 export type IconName = keyof typeof PATHS

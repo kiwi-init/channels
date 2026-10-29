@@ -4,8 +4,10 @@ import { MAX_IMAGE_BYTES, RASTER_MIMES } from "@kiwi/core/protocol.ts"
 import { fileDrag, takeDropped } from "@/lib/dropped"
 import { takePasted } from "@/lib/pasted"
 import { preview, useReplying } from "~/chat/reply"
+import { STASH_SHOT, useStash, type Stashed } from "~/chat/stash"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
+import { ago } from "~/kit/time"
 import type { Channel, Task, Upload, Where } from "~/model"
 import { useApp } from "~/nav"
 import { nickname, shown } from "~/names"
@@ -35,6 +37,62 @@ function taskMatches(tasks: readonly Task[], query: string): Task[] {
 }
 
 const drafts = new Map<string, string>()
+
+type Cue = { key: string; back: boolean; left: number }
+
+function placeOf(channel: Channel, where: Where, inThread?: number): string {
+  if (inThread !== undefined) return "this thread"
+  if (where.kind === "room") return `#${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}`
+  if (where.kind === "task") return `T${where.task}`
+  if (where.kind === "dm") return `your chat with ${nickname(channel, where.with)}`
+  return "here"
+}
+
+function StashList({ list, place, onTake, onDrop, onClose }: { list: readonly Stashed[]; place: string; onTake: (i: number) => void; onDrop: (i: number) => void; onClose: () => void }) {
+  const [on, setOn] = useState(0)
+  const rows = useRef<HTMLUListElement>(null)
+  useEffect(() => {
+    rows.current?.querySelectorAll<HTMLButtonElement>(".stash-row")[Math.min(on, list.length - 1)]?.focus()
+  }, [on, list.length])
+  return (
+    <div
+      className="stash-list"
+      onKeyDown={(e) => {
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault()
+          setOn((on + (e.key === "ArrowDown" ? 1 : list.length - 1)) % list.length)
+        } else if (e.key === "Backspace" || e.key === "Delete") {
+          e.preventDefault()
+          onDrop(Math.min(on, list.length - 1))
+          setOn(Math.max(0, Math.min(on, list.length - 2)))
+          if (list.length === 1) onClose()
+        } else if (e.key === "Escape") {
+          e.preventDefault()
+          e.stopPropagation()
+          onClose()
+        }
+      }}
+    >
+      <div className="stash-head">
+        <span>Stashed in {place}</span>
+        <span>{list.length}</span>
+      </div>
+      <ul ref={rows} aria-label="Stashed drafts">
+        {list.map((s, i) => (
+          <li key={`${s.at}-${i}`}>
+            <button type="button" className="stash-row" onFocus={() => setOn(i)} onMouseEnter={() => setOn(i)} onClick={() => onTake(i)}>
+              <span className="stash-text">{s.text}</span>
+              {i === 0 ? <kbd>⇧⌘S</kbd> : <span className="stash-age">{ago(s.at)}</span>}
+            </button>
+          </li>
+        ))}
+      </ul>
+      <p className="stash-foot">
+        Click to bring back · <kbd>⌫</kbd> drops one · <kbd>⇧⌘S</kbd> brings back the newest
+      </p>
+    </div>
+  )
+}
 
 const MAX_FILES = 8
 const IMAGE_TYPES = new Set<string>(RASTER_MIMES)
@@ -71,6 +129,11 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
   const [files, setFiles] = useState<Upload[]>([])
   const [dropping, setDropping] = useState(false)
   const enterSends = app.prefs.enterSends
+  const stash = useStash(key)
+  const [cueOf, setCue] = useState<Cue | null>(() => (STASH_SHOT === "stash" ? { key, back: false, left: stash.list.length } : null))
+  const cue = cueOf?.key === key ? cueOf : null
+  const [listOf, setListOf] = useState<string | null>(() => (STASH_SHOT === "stash-open" ? key : null))
+  const listOpen = listOf === key && stash.list.length > 0
 
   useEffect(() => {
     const block = (e: DragEvent) => {
@@ -146,6 +209,7 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
     app.actions.send(channel.code, where, mentions.sent(body), Object.keys(opts).length ? opts : undefined)
     replying?.set(null)
     setFiles([])
+    setCue(null)
     update("")
   }
   const ready = !!text.trim() || files.length > 0
@@ -159,6 +223,26 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
       if (!el) return
       el.focus()
       el.setSelectionRange(before.length, before.length)
+    })
+  }
+
+  const putAway = () => {
+    if (!text.trim()) return
+    stash.add(text)
+    update("")
+    setCue({ key, back: false, left: stash.list.length + 1 })
+  }
+  const bringBack = (i: number) => {
+    const got = stash.take(i, text.trim() ? text : undefined)
+    if (!got) return
+    setListOf(null)
+    setCue({ key, back: true, left: stash.list.length - (text.trim() ? 0 : 1) })
+    update(got.text)
+    requestAnimationFrame(() => {
+      const el = area.current
+      if (!el) return
+      el.focus()
+      el.setSelectionRange(got.text.length, got.text.length)
     })
   }
 
@@ -219,6 +303,40 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
           })
         }}
       >
+        {stash.list.length > 0 && (
+          <div
+            className="stash"
+            onBlur={(e) => {
+              if (e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget)) return
+              setListOf(null)
+            }}
+          >
+            {listOpen && (
+              <StashList
+                list={stash.list}
+                place={placeOf(channel, where, inThread)}
+                onTake={bringBack}
+                onDrop={stash.drop}
+                onClose={() => {
+                  setListOf(null)
+                  area.current?.focus()
+                }}
+              />
+            )}
+            <button
+              type="button"
+              className={cx("stash-chip", listOpen && "is-open")}
+              aria-expanded={listOpen}
+              title="Stashed drafts (⇧⌘S brings back the newest)"
+              onClick={() => setListOf(listOpen ? null : key)}
+            >
+              <Icon name="tray" size={14} />
+              <span>
+                <b>{stash.list.length}</b> stashed
+              </span>
+            </button>
+          </div>
+        )}
         {dropping && (
           <div className="compose-drop" aria-hidden="true">
             Drop images to attach
@@ -271,7 +389,10 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
             aria-expanded={options > 0}
             aria-controls={matches.length > 0 ? `${key}-people` : taskOptions.length > 0 ? `${key}-tasks` : undefined}
             placeholder={replyTo ? `Reply to ${nickname(channel, replyTo.from)}` : placeholder}
-            onChange={(e) => update(e.target.value, e.target.selectionStart)}
+            onChange={(e) => {
+              setCue(null)
+              update(e.target.value, e.target.selectionStart)
+            }}
             onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
             onPaste={(e) => {
               const fromItems = [...e.clipboardData.items]
@@ -287,6 +408,12 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
             onBlur={() => setFocused(false)}
             onKeyDown={(e) => {
               if (e.nativeEvent.isComposing || e.keyCode === 229) return
+              if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "s") {
+                e.preventDefault()
+                if (e.shiftKey) bringBack(0)
+                else putAway()
+                return
+              }
               if (options) {
                 if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                   e.preventDefault()
@@ -325,9 +452,22 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
           </button>
         </div>
       </form>
-      <p className={cx("compose-hint", (focused || text) && "is-on")} aria-hidden="true">
-        <code>**bold**</code> <code>`code`</code> <code>- list</code> <span>·</span> {enterSends ? "Shift+Enter for a new line" : "⌘ Enter to send"}
-      </p>
+      {cue ? (
+        <p className="compose-hint is-on is-cue" role="status">
+          <b>{cue.back ? "Back from the stash" : "Stashed"}</b> <span>·</span>{" "}
+          {cue.back ? (
+            `${cue.left} left`
+          ) : (
+            <>
+              <kbd>⇧⌘S</kbd> brings it back
+            </>
+          )}
+        </p>
+      ) : (
+        <p className={cx("compose-hint", (focused || text) && "is-on")} aria-hidden="true">
+          <code>**bold**</code> <code>`code`</code> <code>- list</code> <span>·</span> {enterSends ? "Shift+Enter for a new line" : "⌘ Enter to send"}
+        </p>
+      )}
     </div>
   )
 }

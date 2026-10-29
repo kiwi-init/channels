@@ -2,6 +2,29 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.10.11 — 2026-10-29
+
+- **Loop: the terminal's mode comes back after each session, so Ctrl-C stops the loop again (#1174)** ([#1207](https://github.com/kiwi-init/channels/pull/1207))
+- **Listen: --now says when the seat's own `kiwi listen` already took its messages (#1170)** ([#1208](https://github.com/kiwi-init/channels/pull/1208))
+- **Settings: Link a phone shows the QR again, with the code wrapped under it (T11)** ([#1209](https://github.com/kiwi-init/channels/pull/1209))
+- **Themes: OLED Black, a true black, is the default dark (T43)** ([#1211](https://github.com/kiwi-init/channels/pull/1211))
+- **Profile: the colour picker goes (T64)** ([#1212](https://github.com/kiwi-init/channels/pull/1212))
+- **Settings: Link a phone and Add a computer are sign-in plus 6 digits, no QR** ([#1217](https://github.com/kiwi-init/channels/pull/1217))
+- **Linking: kiwi login replaces kiwi pair, and the kl1 link code is gone (T112)** ([#1219](https://github.com/kiwi-init/channels/pull/1219))
+- **CI: android / build gets 45 minutes, its screen tests alone take 18-27** ([#1220](https://github.com/kiwi-init/channels/pull/1220))
+- **Test: the hook listener is armed before the `kiwi listen` beside it starts** ([#1222](https://github.com/kiwi-init/channels/pull/1222))
+- **Android: screen shots run under a Compose test rule, so the sign-in spinners don't stall them** ([#1224](https://github.com/kiwi-init/channels/pull/1224))
+- **Fold: a base records the fold rules it was folded under, and one from older rules is folded again (#1116)** ([#1213](https://github.com/kiwi-init/channels/pull/1213))
+- **Phones: sign-in only; Scan the code, Paste the code and kiwi://link are gone (T111)** ([#1218](https://github.com/kiwi-init/channels/pull/1218))
+- **Markdown: tables sort, long inline code copies, wide code fades (T216)** ([#1229](https://github.com/kiwi-init/channels/pull/1229))
+- **Secrets: the person's keys at rest move out of web/ into packages/secrets (T212)** ([#1226](https://github.com/kiwi-init/channels/pull/1226))
+- **Images: every image fits the relay at full resolution, never refused (T162)** ([#1221](https://github.com/kiwi-init/channels/pull/1221))
+- **Feed: browser handoffs show again, with Open browser, Done and Couldn't (T197)** ([#1223](https://github.com/kiwi-init/channels/pull/1223))
+- **Phones: the sign-in mark and Android's icon are the app's mark, not the old starburst (T12)** ([#1214](https://github.com/kiwi-init/channels/pull/1214))
+- **Phones: Sign In opens or says why, and WorkOS goes through the app (T13)** ([#1210](https://github.com/kiwi-init/channels/pull/1210))
+- **Tasks: a done digest for a task the fold doesn't have done is refused and marked (#1227)** ([#1228](https://github.com/kiwi-init/channels/pull/1228))
+- **Feed: forged and refused messages are shown, not dropped (T204)** ([#1225](https://github.com/kiwi-init/channels/pull/1225))
+
 ## 2026.10.10 — 2026-10-29
 
 - **Loop: a task marked first goes before its owner's other tasks (#1158)** ([#1163](https://github.com/kiwi-init/channels/pull/1163))
