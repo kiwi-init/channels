@@ -190,8 +190,34 @@ function withHandoff(c: Channel): Channel {
   }
 }
 
+const COMPACT_SUMMARY = [
+  "Release week. **T9** is merged; the rest is polish.",
+  "",
+  "- **T11** (atlas): a lighter feed, after the bundle work.",
+  "- **T12** (win): PR #43 is up for review.",
+  "- **T13** (win): tag v1.0.0, waiting on your OK.",
+  "- **T14** (pixel): new channel icons, need your eyes before merge.",
+  "- Open: should the redesign ship to everyone or behind a setting (#125)?",
+].join("\n")
+
+function withCompact(c: Channel, approved: boolean): Channel {
+  const seq = Math.max(...c.messages.map((m) => m.seq)) + 1
+  const at = Date.now() - 60_000
+  const through = approved ? 127 : 125
+  const said = { seq, from: "atlas", at, where: { kind: "room" as const, room: "general" }, system: true }
+  if (!approved)
+    return { ...c, proposal: { summary: COMPACT_SUMMARY, through, by: "atlas", at, seq }, messages: [...c.messages, { ...said, text: `atlas proposed compacting the history through #${through}` }] }
+  return {
+    ...c,
+    compact: { summary: COMPACT_SUMMARY, through, by: c.you, at, seq },
+    messages: [...c.messages, { ...said, from: c.you, text: `jow compacted the history through #${through}` }],
+  }
+}
+
 export type Scenario =
   | "full"
+  | "compact"
+  | "compacted"
   | "long"
   | "step"
   | "left-out"
@@ -233,7 +259,9 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
                   ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
                   : scenario === "held"
                     ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
-                    : DEMO_CHANNEL,
+                    : scenario === "compact" || scenario === "compacted"
+                      ? withCompact(DEMO_CHANNEL, scenario === "compacted")
+                      : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       { ...DEMO_EMPTY, code: "interlinked", title: "interlinked" },
@@ -500,6 +528,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       },
       setGoal: (code, goal) => edit(code, (c) => ({ ...c, goal: goal || undefined })),
       setHold: (code, on, note) => edit(code, (c) => ({ ...c, hold: on ? { note, by: c.you, at: Date.now() } : undefined })),
+      approveCompact: (code, proposal) => edit(code, (c) => (c.proposal?.seq === proposal ? { ...c, compact: { ...c.proposal, by: c.you, at: Date.now() }, proposal: undefined } : c)),
       myRepos: async () => ["kiwi-init/channels", "kiwi-init/electrobun-livewire", "kiwi-init/landing", "ojowwalker77/dotfiles"],
       addRepo: (code, repo) => edit(code, (c) => ({ ...c, repos: [...new Set([...c.repos, repo])] })),
       removeRepo: (code, repo) => edit(code, (c) => ({ ...c, repos: c.repos.filter((r) => r !== repo) })),

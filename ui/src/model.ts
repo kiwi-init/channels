@@ -370,6 +370,14 @@ export type TermOpened = { screen: TermScreen; link: TermLink } | { error: strin
 
 export type ComputerChoices = { harnesses?: App["harnesses"]; folders: string[] } | { error: string }
 
+export interface Compacted {
+  summary: string
+  through: number
+  by: string
+  at: number
+  seq: number
+}
+
 export interface Channel {
   code: string
   title: string
@@ -382,6 +390,8 @@ export interface Channel {
   next?: string
   mergedAt?: number[]
   hold?: { note?: string; by: string; at: number }
+  compact?: Compacted
+  proposal?: Compacted
   newMembers?: "read" | "write"
   newPowers?: Powers
   repos: string[]
@@ -544,6 +554,7 @@ export interface Actions {
   exportHistory(code: string, kind: "transcript" | "log"): Promise<void>
   setGoal(code: string, goal: string): void
   setHold(code: string, on: boolean, note?: string): void
+  approveCompact(code: string, proposal: number): void
   addRepo(code: string, repo: string): void
   myRepos(): Promise<string[]>
   removeRepo(code: string, repo: string): void

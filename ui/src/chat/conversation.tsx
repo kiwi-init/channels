@@ -1,5 +1,6 @@
 import { Fragment, startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
+import { HistoryFold, ProposalCard } from "~/chat/compact"
 import { Composer } from "~/chat/composer"
 import { EventRun } from "~/chat/events"
 import { continuesRun, eventRun } from "~/chat/fold-events"
@@ -180,7 +181,7 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
 
 function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: Jump | null }) {
   const { go } = useApp()
-  const list = useMemo(
+  const all = useMemo(
     () =>
       withLeftOut(
         channel.messages.filter((m) => sameWhere(m.where, where)),
@@ -188,6 +189,14 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
       ),
     [channel.messages, channel.leftOut, where]
   )
+  const general = where.kind === "room" && where.room === "general"
+  const compact = general ? channel.compact : undefined
+  const proposal = general ? channel.proposal : undefined
+  const through = compact?.through
+  const [earlier, setEarlier] = useState(false)
+  const list = useMemo(() => (through === undefined || earlier ? all : all.filter((m) => m.seq > through)), [all, through, earlier])
+  const foldAt = through === undefined ? undefined : list.find((m) => m.seq > through)?.seq
+  const proposalAt = proposal && list.some((m) => m.seq === proposal.seq) ? proposal.seq : undefined
   const [shownRuns, setShownRuns] = useState<ReadonlySet<number>>(() => new Set())
   const toggleRun = useCallback((first: number) => setShownRuns((was) => (was.has(first) ? new Set([...was].filter((s) => s !== first)) : new Set([...was, first]))), [])
   const bySeq = useMemo(() => new Map(channel.messages.map((m) => [m.seq, m])), [channel.messages])
@@ -205,6 +214,8 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
     return first && first !== list[0] ? { seq: first.seq, count: fresh.length } : null
   })
   const mark = unread?.seq ?? null
+  const afterProposal = proposalAt === undefined ? undefined : list[list.findIndex((m) => m.seq === proposalAt) + 1]?.seq
+  const breaks = new Set([mark, foldAt, proposalAt, afterProposal].filter((seq): seq is number => seq !== null && seq !== undefined))
 
   const [span, setSpan] = useState<Span>(() =>
     mark === null
@@ -294,6 +305,15 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
     }
   }
 
+  const toggleEarlier = () => {
+    if (earlier) return setEarlier(false)
+    setEarlier(true)
+    const at = through === undefined ? -1 : all.findIndex((m) => m.seq > through)
+    if (at < 0) return
+    unstick()
+    setSpan(around(all, at))
+  }
+
   const toLatest = () => {
     setFresh(0)
     setFar(false)
@@ -302,10 +322,10 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
     setSpan({ top: null, bottom: null })
   }
 
-  const known = useRef({ list, bySeq })
+  const known = useRef({ list, all, bySeq })
   const wanted = useRef<number | null>(null)
   useLayoutEffect(() => {
-    known.current = { list, bySeq }
+    known.current = { list, all, bySeq }
     if (latest.current && live.current) {
       latest.current = false
       toBottom(false)
@@ -317,11 +337,18 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
   const onQuote = useCallback(
     (seq: number) => {
       if (jumpTo(content.current, seq)) return
-      const { list, bySeq } = known.current
+      const { list, all, bySeq } = known.current
       const at = list.findIndex((m) => m.seq === seq)
       if (at >= 0) {
         wanted.current = seq
         setSpan(around(list, at))
+        return
+      }
+      const folded = all.findIndex((m) => m.seq === seq)
+      if (folded >= 0) {
+        wanted.current = seq
+        setEarlier(true)
+        setSpan(around(all, folded))
         return
       }
       go({ to: "panel", panel: { kind: "thread", seq: bySeq.get(seq)?.inThread ?? seq } })
@@ -332,13 +359,17 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
   useEffect(() => {
     if (!jump) return
     const seq = jump.m.seq
-    const at = known.current.list.findIndex((m) => m.seq === seq)
+    const { list, all } = known.current
+    const folded = !list.some((m) => m.seq === seq)
+    const pool = folded ? all : list
+    const at = pool.findIndex((m) => m.seq === seq)
     if (at < 0) {
       onQuote(seq)
       return
     }
     unstick()
-    if (!content.current?.querySelector(`[data-seq="${seq}"]`)) setSpan(around(known.current.list, at))
+    if (folded) setEarlier(true)
+    if (!content.current?.querySelector(`[data-seq="${seq}"]`)) setSpan(around(pool, at))
     let frame = 0
     let left = 30
     const land = () => {
@@ -364,7 +395,7 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
     <div className="feed-wrap">
       <div className="feed" ref={scroller} onScroll={onScroll}>
         <div className="feed-list" ref={content}>
-          {list.length === 0 ? (
+          {list.length === 0 && !compact ? (
             channel.loading ? (
               <Loading />
             ) : (
@@ -373,8 +404,8 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
           ) : (
             list.slice(start, end).map((m, k) => {
               const i = start + k
-              if (continuesRun(list, i, start, mark)) return null
-              const events = eventRun(list, i, end, mark)
+              if (continuesRun(list, i, start, breaks)) return null
+              const events = eventRun(list, i, end, breaks)
               const run = leftOutRun(list, i)
               const open = !m.leftOut || shownRuns.has(runFirst(list, i))
               return (
@@ -389,16 +420,31 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
                       <span>New</span>
                     </p>
                   )}
+                  {compact && m.seq === foldAt && <HistoryFold channel={channel} compact={compact} earlier={earlier} onToggle={toggleEarlier} names={names} tasks={tasks} onQuote={onQuote} />}
                   {run && <Fold run={run} open={open} onToggle={() => toggleRun(m.seq)} />}
-                  {events ? (
+                  {m.seq === proposalAt && proposal ? (
+                    <ProposalCard channel={channel} proposal={proposal} names={names} tasks={tasks} onQuote={onQuote} />
+                  ) : events ? (
                     <EventRun channel={channel} run={events} here={where.kind === "task" ? where.task : null} jump={jump?.m.seq ?? null} />
                   ) : (
-                    open && <MessageRow channel={channel} m={m} compact={m.seq !== mark && compactAt(list, i)} names={names} tasks={tasks} quote={quoteOf(list, i, bySeq)} onQuote={onQuote} />
+                    open && (
+                      <MessageRow
+                        channel={channel}
+                        m={m}
+                        compact={m.seq !== mark && m.seq !== foldAt && compactAt(list, i)}
+                        names={names}
+                        tasks={tasks}
+                        quote={quoteOf(list, i, bySeq)}
+                        onQuote={onQuote}
+                      />
+                    )
                   )}
                 </Fragment>
               )
             })
           )}
+          {compact && foldAt === undefined && <HistoryFold channel={channel} compact={compact} earlier={earlier} onToggle={toggleEarlier} names={names} tasks={tasks} onQuote={onQuote} />}
+          {proposal && proposalAt === undefined && end === list.length && <ProposalCard channel={channel} proposal={proposal} names={names} tasks={tasks} onQuote={onQuote} />}
           {working.length > 0 && <Working people={working} />}
         </div>
       </div>

@@ -584,6 +584,14 @@ export function makeActions(): Actions {
         const since = await event(run, on ? `on hold${note ? `: ${note}` : ""}` : "hold lifted", ev)
         await run.ch.setHold({ on, ...(note ? { note } : {}), since })
       }),
+    approveCompact: (code, proposal) =>
+      attempt("Not compacted", async () => {
+        const run = owner(code)
+        const p = run.state.compactProposal
+        if (p?.seq !== proposal) throw new Error("that proposal was replaced or already approved")
+        await event(run, `compacted the history through #${p.through}`, { op: "compact", summary: p.summary, through: p.through, proposal: p.seq })
+        announce(`History through #${p.through} compacted`)
+      }),
     myRepos: async () => {
       const b = bridge()
       if (!b) return []
