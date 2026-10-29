@@ -127,7 +127,7 @@ This computer
                                                  permission prompts here (off)
   kiwi seat hold · bind --harness H --session ID [--pid PID] · release   a loop holds a seat between sessions with
                                                  KIWI_SEAT_TOKEN (hold prints a new one): nothing else reads for it until bind
-     seat release --stale                        frees a seat whose loop was killed, once no process holds it
+     seat release --stale [--force]              frees a seat whose loop was killed (--force for a hold from an older Kiwi)
   kiwi loop [--harness claude|codex|grok|mimo|kimi|zcode] [--model ID] [--effort LEVEL]   run in a tmux window from a seat's folder: a
                                                  fresh session for each task, review round or message, ended when that work is done
   kiwi rex on|off|status                         the old name of kiwi terminal download|remove rex and status, for this release

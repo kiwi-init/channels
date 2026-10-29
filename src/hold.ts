@@ -1,8 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
-import { basename } from "node:path";
 import { omit } from "@kiwi/core/omit.ts";
 import { updateConfig, type Config, type SeatRecord } from "./config/file.ts";
-import { pidAlive } from "./pid.ts";
+import { pidAlive, processStart } from "./pid.ts";
 
 export type SeatHarness = NonNullable<SeatRecord["harness"]>;
 
@@ -16,7 +15,7 @@ export type HeldSession = { harness: Exclude<SeatHarness, "kimi" | "grok-bot">; 
 
 export type HoldChange = { kind: "changed"; seats: number } | { kind: "no-seat" } | { kind: "not-held" } | { kind: "other-holder" };
 
-export type StaleRelease = { kind: "changed"; seats: number } | { kind: "no-seat" } | { kind: "not-held" } | { kind: "alive"; pid: number };
+export type StaleRelease = { kind: "changed"; seats: number } | { kind: "no-seat" } | { kind: "not-held" } | { kind: "alive"; pid: number } | { kind: "unknown" };
 
 export function isSeatHarness(v: string | undefined): v is SeatHarness {
   return HARNESSES.some((h) => h === v);
@@ -35,12 +34,21 @@ export function holdsSeat(b: SeatRecord, env: Env = process.env): boolean {
   return !!b.hold && !!token && keyOf(token) === b.hold.key;
 }
 
-function holderGone(hold: NonNullable<SeatRecord["hold"]>): boolean {
-  return hold.pid !== undefined && !pidAlive(hold.pid);
+type Hold = NonNullable<SeatRecord["hold"]>;
+
+function holderDead(hold: Hold): boolean {
+  return !!hold.holder && !pidAlive(hold.holder.pid);
+}
+
+function holderGone(hold: Hold): boolean {
+  if (!hold.holder) return false;
+  if (!pidAlive(hold.holder.pid)) return true;
+  const started = processStart(hold.holder.pid);
+  return started !== null && started !== hold.holder.started;
 }
 
 export function heldAway(b: SeatRecord, env: Env = process.env): boolean {
-  return !!b.hold && !holdsSeat(b, env) && !holderGone(b.hold);
+  return !!b.hold && !holdsSeat(b, env) && !holderDead(b.hold);
 }
 
 function recordsOf(cfg: Config, alias: string, as: string): SeatRecord[] {
@@ -97,9 +105,11 @@ function rewrite(alias: string, as: string, token: string, held: boolean, next: 
 
 export function holdSeat(alias: string, as: string, token: string, now = Date.now(), pid?: number): HoldChange {
   const key = keyOf(token);
+  const started = pid === undefined ? null : processStart(pid);
+  const holder = pid !== undefined && started !== null ? { holder: { pid, started } } : {};
   return rewrite(alias, as, token, false, (b) => {
     const kept = b.hold?.key === key ? b.hold : undefined;
-    return { ...omit(b, "session", "pid", "harnessSession"), hold: { key, at: kept?.at ?? now, ...(pid !== undefined ? { pid } : {}) }, holds: (b.holds ?? 0) + (kept ? 0 : 1) };
+    return { ...omit(b, "session", "pid", "harnessSession"), hold: { key, at: kept?.at ?? now, ...holder }, holds: (b.holds ?? 0) + (kept ? 0 : 1) };
   });
 }
 
@@ -115,38 +125,30 @@ export function releaseSeat(alias: string, as: string, token: string): HoldChang
   return rewrite(alias, as, token, true, (b) => omit(b, "hold", "loop"));
 }
 
-export function releaseStale(alias: string, as: string, loopRunning: () => number | null = () => null): StaleRelease {
+export function releaseStale(alias: string, as: string, force = false): StaleRelease {
   let outcome: StaleRelease = { kind: "no-seat" };
   updateConfig((cfg) => {
-    const held = recordsOf(cfg, alias, as).flatMap((b) => (b.hold ? [b.hold] : []));
-    if (!recordsOf(cfg, alias, as).length) return;
+    const records = recordsOf(cfg, alias, as);
+    if (!records.length) return;
+    const held = records.flatMap((b) => (b.hold ? [b.hold] : []));
     if (!held.length) {
       outcome = { kind: "not-held" };
       return;
     }
-    const live = held.find((h) => h.pid !== undefined && pidAlive(h.pid))?.pid ?? (held.some((h) => h.pid === undefined) ? loopRunning() : null);
-    if (live !== null) {
-      outcome = { kind: "alive", pid: live };
+    const live = held.find((h) => h.holder && !holderGone(h));
+    if (live?.holder) {
+      outcome = { kind: "alive", pid: live.holder.pid };
+      return;
+    }
+    if (!force && held.some((h) => !h.holder)) {
+      outcome = { kind: "unknown" };
       return;
     }
     const mine = (b: SeatRecord) => b.alias === alias && b.as === as && !!b.hold;
-    const count = recordsOf(cfg, alias, as).filter(mine).length;
     cfg.bindings = Object.fromEntries(
       Object.entries(cfg.bindings ?? {}).map(([dir, v]) => [dir, Array.isArray(v) ? v.map((b) => (mine(b) ? omit(b, "hold", "loop") : b)) : mine(v) ? omit(v, "hold", "loop") : v]),
     );
-    outcome = { kind: "changed", seats: count };
+    outcome = { kind: "changed", seats: held.length };
   });
   return outcome;
-}
-
-export function loopFor(name: string, procs: readonly { pid: number; args: string }[], me = process.pid): number | null {
-  for (const p of procs) {
-    if (p.pid === me) continue;
-    const words = p.args.trim().split(/\s+/);
-    const kiwi = words.some((w) => basename(w) === "kiwi" || basename(w) === "cli.ts");
-    if (!kiwi || !words.includes("loop")) continue;
-    const as = words.indexOf("--as");
-    if (as < 0 || words[as + 1] === name) return p.pid;
-  }
-  return null;
 }
