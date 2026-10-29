@@ -7,6 +7,7 @@ import { AgentSession, runAgent } from "../src/agent.ts";
 import { outgrownCache } from "../src/agent/state.ts";
 import { signRequest } from "@kiwi/core/auth.ts";
 import { saveIdentity } from "../src/config.ts";
+import { keepBase, readBase } from "../src/config/cache.ts";
 import * as Effect from "effect/Effect";
 import { fetchRelay, Relay } from "@kiwi/core/client.ts";
 import { newChannelKey, seal, type ChannelAccess } from "@kiwi/core/crypto.ts";
@@ -665,8 +666,7 @@ describe("a base folded under older fold rules is set aside wherever the log can
     const resumed: { base?: FoldBase } = {};
     fold([], [], NOW, null, null, older, (b) => void (resumed.base = b));
     expect(resumed.base?.rules ?? 0).toBe(0);
-    expect(outgrownCache([], older)).toBe(true);
-    expect(outgrownCache([], kept.base!)).toBe(false);
+    expect(outgrownCache([], older)).toBe(false);
   });
 
   test("a cold agent offered an older-rules snapshot folds the relay's whole log instead", async () => {
@@ -710,6 +710,38 @@ describe("a base folded under older fold rules is set aside wherever the log can
       expect(await runAgent(s.ownerCh.fx.snapshotAt())).not.toBeNull();
       const { state } = await runAgent(cold("pruned").state());
       expect(state.tasks.get(task)?.title).toBe("as older rules folded it");
+    } finally {
+      done();
+    }
+  });
+
+  test("an agent's own cached base from older rules is folded again when the relay still has the whole log", async () => {
+    const { s, done, olderBase, cold } = await scene();
+    try {
+      const task = await s.ownerCh.send("", { ev: { op: "task.add", title: "as the log says" } });
+      await s.ownerCh.send("after");
+      keepBase(s.roomId, await olderBase());
+      const { state } = await runAgent(cold("cached").state());
+      expect(state.tasks.get(task)?.title).toBe("as the log says");
+      expect(readBase(s.roomId)).toBeNull();
+    } finally {
+      done();
+    }
+  });
+
+  test("an agent's own cached base from older rules stays when the relay has dropped the log's start", async () => {
+    const { s, done, olderBase, cold } = await scene({ bytesPerChannel: 8000 });
+    try {
+      const task = await s.ownerCh.send("", { ev: { op: "task.add", title: "as the log says" } });
+      const older = await olderBase();
+      let sent = 0;
+      while (sent < 40 && (await s.ownerCh.history(0)).first === 1) await s.ownerCh.send(`m${sent++} ${"x".repeat(300)}`);
+      expect((await s.ownerCh.history(0)).first).toBeGreaterThan(1);
+      expect(await runAgent(s.ownerCh.fx.snapshotAt())).toBeNull();
+      keepBase(s.roomId, older);
+      const { state } = await runAgent(cold("cached-pruned").state());
+      expect(state.tasks.get(task)?.title).toBe("as older rules folded it");
+      expect(readBase(s.roomId)?.rules ?? 0).toBe(0);
     } finally {
       done();
     }

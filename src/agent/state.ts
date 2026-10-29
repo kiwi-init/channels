@@ -23,8 +23,7 @@ function poisoned(base: FoldBase, roster: Roster): boolean {
   return base.rejected.some(([, why]) => why.endsWith(NOT_A_MEMBER) && names.has(why.slice(0, -NOT_A_MEMBER.length)));
 }
 
-export const outgrownCache = (cached: readonly Message[], base: FoldBase | null): boolean =>
-  cached.some((m) => m.newer !== undefined && knownOp(m.newer.op)) || (!!base && (outgrown(base) || olderRules(base)));
+export const outgrownCache = (cached: readonly Message[], base: FoldBase | null): boolean => cached.some((m) => m.newer !== undefined && knownOp(m.newer.op)) || (!!base && outgrown(base));
 
 function strangers(rejected: Iterable<readonly [number, string]>, after: number): boolean {
   for (const [seq, why] of rejected) if (seq > after && (why.endsWith(NOT_A_MEMBER) || why.startsWith("not signed by "))) return true;
@@ -46,6 +45,7 @@ export class SessionState {
   private daemonLive = false;
   protected base: FoldBase | null = null;
   protected partial = false;
+  private probedWhole = false;
   readonly opened: number;
 
   constructor(
@@ -88,6 +88,17 @@ export class SessionState {
     return Effect.void;
   }
 
+  private replaysWhole(): Effect.Effect<boolean, never, Agent> {
+    return Effect.suspend(() => {
+      if (this.probedWhole) return Effect.succeed(false);
+      this.probedWhole = true;
+      return this.ch.fx.page(0, 1).pipe(
+        Effect.map((one) => one[0]?.seq === 1),
+        Effect.orElseSucceed(() => false),
+      );
+    });
+  }
+
   readonly sync = Effect.fn("AgentSession.sync")({ self: this }, function* (this: SessionState, peeked?: DaemonPeek | null) {
     const cache = yield* Cache;
     if (!this.log) {
@@ -103,6 +114,13 @@ export class SessionState {
         this.base ??= base;
       }
     }
+    if (this.base && olderRules(this.base) && (yield* this.replaysWhole())) {
+      this.base = null;
+      this.log = [];
+      this.saved = 0;
+      yield* cache.replace(this.cfg.roomId, []);
+      yield* cache.dropBase(this.cfg.roomId);
+    }
     const look = yield* Look;
     const seen = peeked === undefined ? yield* this.peek() : peeked;
     const first = this.log[0]?.seq;
@@ -110,14 +128,13 @@ export class SessionState {
     const current = !holed && seen !== null && seen.head <= lastSeq(this.log) && lastSeq(this.log) >= this.owed;
     if (!current && (holed || !look?.fetched.has(this) || lastSeq(this.log) < this.owed)) {
       const offered = !this.base && (first === undefined || first > 1) ? yield* this.ch.fx.snapshot() : null;
-      const whole = offered && olderRules(offered) ? yield* Effect.orElseSucceed(this.ch.fx.history(0), () => null) : null;
-      const fetched = whole?.first === 1 ? null : offered;
+      const fetched = offered && olderRules(offered) && (yield* this.replaysWhole()) ? null : offered;
       const floor = this.base?.n ?? fetched?.n ?? 0;
       const hole = first !== undefined && first > floor + 1;
       const from = hole ? floor : Math.max(lastSeq(this.log), floor);
       const offline = yield* OfflineReads;
       const cachedOnly = !!offline && !fetched && this.log.length > 0;
-      const page = yield* (whole?.first === 1 && from === 0 ? Effect.succeed(whole) : this.ch.fx.history(from)).pipe(
+      const page = yield* this.ch.fx.history(from).pipe(
         Effect.catchIf(
           (err) => cachedOnly && relayDown(err),
           (err) => Effect.sync(() => (offline?.note(downWhy(err)), null)),

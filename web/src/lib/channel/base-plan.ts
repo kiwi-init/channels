@@ -1,3 +1,4 @@
+import { olderRules } from "@kiwi/core/protocol.ts"
 import type { FoldBase } from "@kiwi/core/state.ts"
 
 import { wholeLog } from "../history-plan"
@@ -8,6 +9,10 @@ export function baseFrom(since: number, firstSeq: number | undefined): number {
 
 export function usableBase(snap: FoldBase | null, from: number): FoldBase | null {
   return snap && snap.n >= from ? snap : null
+}
+
+export function newestRules(bases: readonly (FoldBase | null)[]): FoldBase | null {
+  return bases.find((b) => b !== null && !olderRules(b)) ?? bases.find((b) => b !== null) ?? null
 }
 
 export function startsWhole(head: number, limit: number, since: number, firstSeq: number | undefined, base: FoldBase | null): boolean {

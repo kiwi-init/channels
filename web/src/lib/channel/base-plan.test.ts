@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test"
 
 import type { FoldBase } from "@kiwi/core/state.ts"
 
-import { baseFrom, startsWhole, usableBase } from "./base-plan"
+import { FOLD_RULES } from "@kiwi/core/protocol.ts"
+
+import { baseFrom, newestRules, startsWhole, usableBase } from "./base-plan"
 
 const at = (n: number) => ({ n }) as FoldBase
 
@@ -36,5 +38,14 @@ describe("folding the app's window on top of the channel's snapshot", () => {
     expect(startsWhole(1500, 2000, 0, undefined, null)).toBe(true)
     expect(startsWhole(1500, 2000, 1500, 5, null)).toBe(false)
     expect(startsWhole(1500, 2000, 1500, 5, at(4))).toBe(true)
+  })
+
+  test("a base folded under the current fold rules wins over an older-rules one, which is used only when there's nothing else (#1116)", () => {
+    const current = { n: 10, rules: FOLD_RULES } as FoldBase
+    const older = { n: 20, rules: 0 } as FoldBase
+    expect(newestRules([older, current])).toBe(current)
+    expect(newestRules([current, older])).toBe(current)
+    expect(newestRules([null, older])).toBe(older)
+    expect(newestRules([null, null])).toBeNull()
   })
 })

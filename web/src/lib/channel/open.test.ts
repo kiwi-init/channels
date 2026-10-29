@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts"
+import { FOLD_RULES, PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts"
 import type { FoldBase } from "@kiwi/core/state.ts"
 import type { OpenedCache } from "../history"
 import type { Kept } from "./kept"
@@ -8,7 +8,7 @@ import { handOver, onceEach, openChannel, warmUp, type OpenSteps, type Planned }
 
 const msg = (seq: number): Message => ({ v: PROTOCOL_VERSION, id: `id-${seq}`, from: "atlas", kind: "msg", body: `m${seq}`, ts: 1_700_000_000_000 + seq, seq, sigOk: true })
 const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i)
-const base = (n: number): FoldBase => ({ n }) as FoldBase
+const base = (n: number): FoldBase => ({ n, rules: FOLD_RULES }) as FoldBase
 const kept = (n: number | null): Kept => ({ roster: [], base: n === null ? null : base(n), guardFloor: null, roomsFloor: null })
 
 function relay(rotateTrips = 1, rotated = false) {
@@ -129,6 +129,18 @@ describe("opening a channel", () => {
     expect(r.log.filter((l) => l.startsWith("snapshot"))).toEqual([])
     await r.roundTrip()
     expect(r.painted).toEqual([{ at: 1, seqs: range(3001, 5000), base: 3000 }])
+  })
+
+  test("a kept base folded under older rules asks for the snapshot, and the snapshot is folded on (#1116)", async () => {
+    const r = relay()
+    const steps = r.make(5000, range(3001, 5000), 3000, { ...kept(3500), base: { ...base(3500), rules: 0 } })
+    const opened = openChannel(steps, undefined, 2000)
+    await r.roundTrip()
+    await r.roundTrip()
+    await r.roundTrip()
+    await opened
+    expect(r.log.some((l) => l.startsWith("snapshot"))).toBe(true)
+    expect(r.painted.at(-1)?.base).toBe(3000)
   })
 
   test("a kept base that doesn't reach the cache's first message still asks for the snapshot", async () => {
