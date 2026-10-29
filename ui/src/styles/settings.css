@@ -331,6 +331,39 @@
   letter-spacing: 0.08em;
 }
 
+.set-pair-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.set-pair-line code {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-row);
+  color: var(--ink-2);
+  font: var(--t-meta) / 1.5 var(--mono);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.set-pair .qr {
+  width: 176px;
+  height: 176px;
+  border-radius: var(--r-row);
+}
+
+.qr-paper {
+  fill: var(--white);
+}
+
+.qr-ink {
+  fill: var(--black);
+}
+
 .set-enroll-what {
   color: var(--ink-2);
   font: var(--t-ui) / 1.5 var(--ui);

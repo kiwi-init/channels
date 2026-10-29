@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 
 import { cx, IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
+import { QrCode } from "~/kit/qr"
 import { ago } from "~/kit/time"
 import type { Account, Computer, Device } from "~/model"
 import { useApp } from "~/nav"
@@ -9,6 +10,9 @@ import { Confirm } from "~/settings/controls"
 import { Page } from "~/settings/sections"
 
 type Kind = "computer" | "phone"
+
+const SHOT = new URLSearchParams(location.search).get("shot")
+const PRESET: Kind | null = SHOT === "settings-link-phone" ? "phone" : SHOT === "settings-add-computer" ? "computer" : null
 
 const isPhone = (c: Computer): boolean => c.os === "iphone" || c.os === "android"
 
@@ -156,11 +160,34 @@ function phoneWarning(phone: Computer): string {
   return `It holds ${held}, so it can act as you there. Forgetting it removes it from this list; to sign it out, unlink it on the phone. If it's lost or stolen, there's no way yet to cut it off from here.`
 }
 
+function PairLine({ text, label }: { text: string; label: string }) {
+  const { toast } = useApp()
+  return (
+    <div className="set-pair-line">
+      <code>{text}</code>
+      <IconButton
+        icon="copy"
+        label={label}
+        onClick={() => {
+          void navigator.clipboard.writeText(text).then(
+            () => toast("Copied"),
+            () => toast("Could not copy")
+          )
+        }}
+      />
+    </div>
+  )
+}
+
 export function ComputersSection() {
   const { app, toast } = useApp()
   const [pairing, setPairing] = useState<{ kind: Kind; code: string } | null>(null)
   const [forget, setForget] = useState<Computer | null>(null)
   const [shown, setShown] = useState<string | null>(null)
+  const { pairBegin } = app.actions
+  useEffect(() => {
+    if (PRESET) void pairBegin(PRESET).then((code) => setPairing({ kind: PRESET, code }))
+  }, [pairBegin])
   const account = app.account
   if (!account) return null
   const computers = [...account.computers].sort((a, b) => Number(b.thisOne) - Number(a.thisOne) || Number(b.online) - Number(a.online))
@@ -259,28 +286,19 @@ export function ComputersSection() {
       ) : pairing ? (
         <div className="set-pair" role="region" aria-label={pairing.kind === "phone" ? "Link a phone" : "Add a computer"}>
           <p className="set-pair-what">{pairing.kind === "phone" ? "Link a phone" : "Add a computer"}</p>
-          <div className="set-pair-code">
-            <code>{pairing.code}</code>
-            <IconButton
-              icon="copy"
-              label="Copy the code"
-              onClick={() => {
-                void navigator.clipboard.writeText(pairing.code).then(
-                  () => toast("Code copied"),
-                  () => toast("Could not copy")
-                )
-              }}
-            />
-          </div>
-          <p className="set-pair-how">
-            {pairing.kind === "phone" ? (
-              "Open Channels on your phone and type this code."
-            ) : (
-              <>
-                On the other computer run <code>kiwi pair</code> and type this code.
-              </>
-            )}
-          </p>
+          {pairing.kind === "phone" ? (
+            <>
+              <p className="set-pair-how">On your phone, open Channels and tap Sign In, or tap Scan the code and scan this one.</p>
+              <QrCode text={pairing.code} label="Code to link a phone" />
+              <p className="set-pair-how">No camera? Copy the code, then tap Paste the code.</p>
+              <PairLine text={pairing.code} label="Copy the code" />
+            </>
+          ) : (
+            <>
+              <p className="set-pair-how">On the other computer, run this in a terminal:</p>
+              <PairLine text={`kiwi pair ${pairing.code}`} label="Copy the command" />
+            </>
+          )}
           <div className="set-pair-foot">
             <span className="set-pair-wait">
               <span className="set-pip is-waiting" aria-hidden="true" />
