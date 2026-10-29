@@ -210,21 +210,32 @@ describe("enrolling a new device: commit, answer, reveal", () => {
     expect(await errorOf(again.res)).toContain("already one of");
   });
 
-  test("an account takes one pending ask, gone after ten minutes", async () => {
+  test("an account keeps one pending ask: a new one replaces it, even answered, and it's gone after ten minutes", async () => {
     const a = account();
     const { desk } = await firstApp(a);
     const first = await device("first");
-    expect((await asks(a, first)).res.status).toBe(202);
+    const asked = await asks(a, first, "phone");
+    expect(asked.res.status).toBe(202);
+    const { id } = (await asked.res.json()) as { id: string };
+    const answer: EnrollAnswer = { device: desk.pk, dxpk: desk.xpk!, nonce: enrollNonce() };
+    expect((await call(a, desk, "PUT", `/v1/account/ask/${id}/answer`, answer)).status).toBe(204);
+
     const second = await device("second");
-    const blocked = await asks(a, second);
-    expect(blocked.res.status).toBe(409);
-    expect(await errorOf(blocked.res)).toContain("already asking");
-    expect((await asks(a, first)).res.status).toBe(202);
+    const again = await asks(a, second, "phone");
+    expect(again.res.status).toBe(202);
+    const { id: next } = (await again.res.json()) as { id: string };
+    const kept = (await (await call(a, desk, "GET", "/v1/account/ask")).json()) as Enrollment;
+    expect(kept).toMatchObject({ id: next, ask: again.ask });
+    expect(kept.answer).toBeUndefined();
+    expect((await call(a, first, "GET", "/v1/account/ask")).status).toBe(403);
+    const stale = await call(a, first, "PUT", `/v1/account/ask/${id}/reveal`, { nonce: asked.nonce });
+    expect(stale.status).toBe(404);
+    expect(await errorOf(stale)).toContain("gone");
 
     t += ENROLL_TTL_MS + 1;
     setSystemTime(t);
     expect((await call(a, desk, "GET", "/v1/account/ask")).status).toBe(404);
-    expect((await asks(a, second)).res.status).toBe(202);
+    expect((await asks(a, first)).res.status).toBe(202);
   });
 
   test("an app turns an ask away; a device that can't approve neither reads nor answers it", async () => {

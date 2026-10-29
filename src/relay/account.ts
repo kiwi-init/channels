@@ -118,8 +118,6 @@ export async function onAccountHttp(
     if (!list) return refuse(new NotFound({ message: "no app of this account can approve a device yet: sign in on your first app" }));
     if (list.revoked.includes(ask.device)) return refuse(new Forbidden({ message: "this device was removed from this person's devices" }));
     if (list.devices.some((d) => d.device === ask.device)) return refuse(new Conflict({ message: "this device is already one of this person's" }));
-    if (live && live.ask.device !== ask.device)
-      return refuse(new Conflict({ message: "another device is already asking to join this account: it's gone in 10 minutes, or an app of yours can turn it away" }));
     if (opts.perAccount && !(await opts.perAccount(`account:${user}`))) return refuse(new TooMany({ message: "too many asks for this account; try again in a minute" }));
     const fresh: Enrollment = { id: b64url(crypto.getRandomValues(new Uint8Array(16))), at: now, ask };
     if (!(await store.setEnrollment(user, fresh, stored))) return refuse(new Conflict({ message: "another ask arrived meanwhile; try again" }));

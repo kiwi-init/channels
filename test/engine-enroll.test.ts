@@ -87,6 +87,8 @@ describe("the phone engine signs in and enrolls (T640)", () => {
     await host.poll();
 
     expect(await ask<EnrollStart>({ op: "enrollBegin", relay, label: "Pixel 9", os: "Android 16", user: "phone1" })).toEqual({ url: null, code: "" });
+    expect(await ask({ op: "enrollAsk" })).toBeNull();
+    expect(await host.poll()).toMatchObject({ label: "Pixel 9", stage: "new" });
     const waiting = ask<{ digits: string }>({ op: "enrollWait" });
     const id = await answered(host);
     const { digits } = await waiting;
@@ -232,6 +234,11 @@ describe("the phone engine's sign-in opens or says why (T13)", () => {
       const answer = { device_code: "dc", user_code: "ABCD-EFGH", verification_uri_complete: "https://auth.example/device?user_code=ABCD-EFGH", interval: 0.05 };
       engine.fetched(JSON.stringify({ id: (await asked(before)).id, status: 200, body: JSON.stringify(answer) }));
       await started;
+      let signedIn = false;
+      ask({ op: "enrollAsk" }).then(
+        () => (signedIn = true),
+        () => (signedIn = true),
+      );
       const waiting = ask({ op: "enrollWait" });
       waiting.catch(() => {});
 
@@ -239,6 +246,7 @@ describe("the phone engine's sign-in opens or says why (T13)", () => {
       const first = await asked(cut);
       expect(first.url).toBe("https://api.workos.com/user_management/authenticate");
       engine.fetched(JSON.stringify({ id: first.id, error: "The network connection was lost." }));
+      expect(signedIn).toBe(false);
 
       const next = pushes.length;
       const second = await asked(next);
@@ -246,6 +254,7 @@ describe("the phone engine's sign-in opens or says why (T13)", () => {
       engine.fetched(JSON.stringify({ id: second.id, status: 200, body: JSON.stringify({ access_token: "at", refresh_token: "rt" }) }));
       for (let i = 0; i < 200 && !pushes.slice(next).some((p) => p.type === "log" && p.line === "sign-in: signed in, asking your computer"); i++) await Bun.sleep(10);
       expect(pushes.slice(next).some((p) => p.type === "log" && p.line === "sign-in: signed in, asking your computer")).toBe(true);
+      expect(pushes.slice(next).filter((p) => p.type === "log" && p.line === "sign-in: signed in, asking your computer")).toHaveLength(1);
       await ask({ op: "enrollCancel" });
     } finally {
       noHost();

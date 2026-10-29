@@ -103,7 +103,6 @@ exports[`the relay's error texts are exactly these 1`] = `
   "409 already a member",
   "409 an app answers before the device reveals",
   "409 another ask arrived meanwhile; try again",
-  "409 another device is already asking to join this account: it's gone in 10 minutes, or an app of yours can turn it away",
   "409 channel already exists",
   "409 next epoch is \${meta.epoch + 1}",
   "409 stale key epoch \${e}; current is \${epoch}",

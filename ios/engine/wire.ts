@@ -24,6 +24,7 @@ export interface EnrollStart {
 export type Ask =
   | { op: "start"; saved: Saved }
   | { op: "enrollBegin"; relay: string; label: string; os: string; user?: string; waitMs?: number }
+  | { op: "enrollAsk" }
   | { op: "enrollWait" }
   | { op: "enrollFinish" }
   | { op: "enrollCancel" }
