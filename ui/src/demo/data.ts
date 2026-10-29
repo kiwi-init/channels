@@ -175,6 +175,8 @@ const pr45 = {
   deletions: 210,
 } as const
 
+const general = { kind: "room", room: "general" } as const
+
 const tasks: Task[] = [
   {
     id: 8,
@@ -187,6 +189,11 @@ const tasks: Task[] = [
     updatedAt: m(60 * 26),
     notes: [{ by: "jow", at: m(60 * 26), text: "cancelled: motion in the rail is too busy" }],
     rounds: [],
+    history: [
+      { seq: 801, by: "jow", at: m(60 * 40), what: "created", to: "pixel" },
+      { seq: 802, by: "pixel", at: m(60 * 39), what: "took" },
+      { seq: 803, by: "jow", at: m(60 * 26), what: "cancelled", note: "motion in the rail is too busy" },
+    ],
     archived: false,
   },
   {
@@ -199,6 +206,13 @@ const tasks: Task[] = [
     updatedAt: m(60 * 20),
     notes: [],
     rounds: [{ n: 1, by: "atlas", judge: "win", at: m(60 * 20), result: "approved" }],
+    history: [
+      { seq: 901, by: "jow", at: m(60 * 30), what: "created", to: "atlas" },
+      { seq: 902, by: "atlas", at: m(60 * 29), what: "started" },
+      { seq: 903, by: "atlas", at: m(60 * 22), what: "review", round: 1 },
+      { seq: 904, by: "win", at: m(60 * 20), what: "approved", round: 1 },
+      { seq: 102, by: "atlas", at: m(60 * 20 - 1), what: "mention", where: general, root: 102, note: "Nothing blocking. T9 is merged, the rest is polish." },
+    ],
     archived: false,
     pr: { repo: "kiwi-init/channels", number: 41, title: "Fold duplicate event rows", url: "https://github.com/kiwi-init/channels/pull/41", state: "merged", checks: "pass", mergedAt: m(60 * 20) },
     stage: "done",
@@ -217,11 +231,41 @@ const tasks: Task[] = [
       { by: "win", at: m(9), text: "Down 38 KB so far. Icons next." },
     ],
     rounds: [],
+    history: [
+      { seq: 1001, by: "atlas", at: m(95), what: "created", to: "win" },
+      { seq: 1002, by: "win", at: m(90), what: "started" },
+      { seq: 1003, by: "win", at: m(60), what: "note", note: "Mermaid was in the first load through markdown.ts. Moved behind the first diagram." },
+      {
+        seq: 112,
+        by: "win",
+        at: m(9),
+        what: "mention",
+        where: general,
+        root: 112,
+        note: "Bundle is down **38 KB** so far. `mermaid` was riding in on `markdown.ts`; it now loads with the first diagram.",
+      },
+      { seq: 1004, by: "win", at: m(9), what: "note", note: "Down 38 KB so far. Icons next." },
+    ],
+    archived: false,
+  },
+  {
+    id: 11,
+    title: "Polish the conversation feed",
+    status: "todo",
+    owner: "atlas",
+    createdBy: "maya",
+    createdAt: m(40),
+    updatedAt: m(40),
+    notes: [],
+    rounds: [],
+    history: [
+      { seq: 1101, by: "maya", at: m(40), what: "created", to: "atlas" },
+      { seq: 111, by: "atlas", at: m(40), what: "mention", where: general, root: 111, note: "Opened T11 for it. I'll take it after the bundle work lands." },
+    ],
     archived: false,
     pr: pr45,
     stage: "red",
   },
-  { id: 11, title: "Polish the conversation feed", status: "todo", owner: "atlas", createdBy: "maya", createdAt: m(40), updatedAt: m(40), notes: [], rounds: [], archived: false },
   {
     id: 12,
     title: "Add a dark mode toggle",
@@ -234,12 +278,43 @@ const tasks: Task[] = [
     updatedAt: m(3),
     pr: pr43,
     notes: [{ by: "win", at: m(5), text: "PR #43 is up. Theme applies before first paint, no flash." }],
-    rounds: [{ n: 1, by: "win", at: m(3), result: "open" }],
+    rounds: [
+      {
+        n: 1,
+        by: "win",
+        at: m(3),
+        result: "open",
+        summary: "A three-way switch in Settings: System, Dark, Light. The theme applies before first paint, so a reload never flashes. Checked on Mac and on Linux under GNOME and KDE.",
+      },
+    ],
+    history: [
+      { seq: 1201, by: "jow", at: m(30), what: "created", to: "win" },
+      { seq: 1202, by: "win", at: m(28), what: "started" },
+      { seq: 1203, by: "jow", at: m(8), what: "reviewer", to: "atlas" },
+      { seq: 1204, by: "win", at: m(5), what: "note", note: "PR #43 is up. Theme applies before first paint, no flash." },
+      { seq: 123, by: "win", at: m(5), what: "mention", where: general, root: 123, note: "Done with T12: PR #43 is up. @atlas can you review?" },
+      { seq: 1205, by: "win", at: m(3), what: "review", round: 1 },
+    ],
     archived: false,
     stage: "yours",
     youReview: "send-back",
   },
-  { id: 13, title: "Tag and push v1.0.0", status: "waiting", owner: "win", createdBy: "jow", createdAt: m(6), updatedAt: m(2), notes: [], rounds: [], archived: false },
+  {
+    id: 13,
+    title: "Tag and push v1.0.0",
+    status: "waiting",
+    owner: "win",
+    createdBy: "jow",
+    createdAt: m(6),
+    updatedAt: m(2),
+    notes: [],
+    rounds: [],
+    history: [
+      { seq: 1301, by: "atlas", at: m(6), what: "created", to: "win" },
+      { seq: 121, by: "atlas", at: m(6), what: "mention", where: general, root: 121, note: "T13 for win. It can't be undone, so it waits for you." },
+    ],
+    archived: false,
+  },
   {
     id: 14,
     title: "Redraw the channel icons",
@@ -253,6 +328,13 @@ const tasks: Task[] = [
     pr: pr44,
     notes: [{ by: "pixel", at: m(12), text: "Shots are on the PR. Waiting for your OK before merging." }],
     rounds: [{ n: 1, by: "pixel", at: m(12), result: "open" }],
+    history: [
+      { seq: 1401, by: "jow", at: m(120), what: "created", to: "pixel" },
+      { seq: 1402, by: "jow", at: m(120), what: "reviewer", to: "jow" },
+      { seq: 1403, by: "pixel", at: m(110), what: "started" },
+      { seq: 1404, by: "pixel", at: m(12), what: "review", round: 1, note: "Shots are on the PR. Waiting for your OK before merging." },
+      { seq: 124, by: "pixel", at: m(3), what: "mention", where: general, root: 124, note: "New channel icons for T14. @jow they need your eyes before I merge." },
+    ],
     archived: false,
     stage: "proving",
     youReview: "verdict",
@@ -270,11 +352,26 @@ const tasks: Task[] = [
     archived: false,
     pr: { repo: "kiwi-init/channels", number: 42, title: "Restore composer spell checking", url: "https://github.com/kiwi-init/channels/pull/42", state: "merged", checks: "pass", mergedAt: m(50) },
     stage: "done",
+    history: [
+      { seq: 1601, by: "maya", at: m(90), what: "created", to: "pixel" },
+      { seq: 1602, by: "pixel", at: m(52), what: "review", round: 1 },
+      { seq: 1603, by: "atlas", at: m(50), what: "approved", round: 1 },
+    ],
   },
-  { id: 15, title: "Rotate the relay's signing key", status: "todo", createdBy: "maya", createdAt: m(200), updatedAt: m(200), notes: [], rounds: [], archived: false },
+  {
+    id: 15,
+    title: "Rotate the relay's signing key",
+    status: "todo",
+    suggested: { name: "atlas", why: "worked T9 before" },
+    createdBy: "maya",
+    createdAt: m(200),
+    updatedAt: m(200),
+    notes: [],
+    rounds: [],
+    history: [{ seq: 1501, by: "maya", at: m(200), what: "created" }],
+    archived: false,
+  },
 ]
-
-const general = { kind: "room", room: "general" } as const
 
 const ICONS_SHOT = `data:image/svg+xml,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270"><rect width="480" height="270" fill="#18181b"/>${["#5b9bff", "#f5b041", "#32d074", "#b48cff", "#ff6259"].map((c, i) => `<rect x="${36 + i * 86}" y="95" width="64" height="64" rx="16" fill="${c}"/>`).join("")}<rect x="36" y="190" width="200" height="10" rx="5" fill="#3f3f46"/></svg>`
