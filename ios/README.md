@@ -21,8 +21,9 @@ the phone verifies and decrypts exactly as the Mac does. Swift asks it things wi
 handler: a `RoomView` per channel, ready to draw, and the saved keys whenever they change,
 which `Vault.swift` keeps in the keychain.
 
-A phone gets its keys by linking with the Mac app (Settings → Phone → Link a phone, then Scan
-the code on the phone). SECURITY.md has what that moves and why the relay can't read it.
+A phone signs in as one of your devices (`docs/linked-devices.md` §2): Sign In opens the relay's
+sign-in in Safari, the phone shows six digits, and you type them where Channels on your computer
+asks to approve it. SECURITY.md has what that moves and why the relay can't read it.
 
 ## Run it on your iPhone
 
@@ -43,20 +44,21 @@ xcrun devicectl device install app --device <UDID> <DerivedData>/Build/Products/
 bun ios/scripts/dev-channel.ts [--port 8790] [--dir .ios-dev] [--name "Your Name"] [--host IP]
 ```
 
-starts a relay on your network, makes a channel with four agents, a board and a question for
-you, and prints a link code (also in `.ios-dev/link-code.txt`). Paste it in the app, or open
-it on the phone as a link:
+starts a relay with dev sign-in on your network and makes a channel with four agents, a board
+and a question for you. Launch the app against it and tap Sign In:
 
 ```bash
-xcrun devicectl device process launch --device <UDID> --terminate-existing --payload-url "kiwi://link/$(cat .ios-dev/link-code.txt)" com.kiwiinit.channels
+xcrun devicectl device process launch --device <UDID> --terminate-existing com.kiwiinit.channels -- -relay http://IP:8790 -devUser phone
 ```
 
-The phone and the Mac must be on the same network; with the phone off Wi-Fi but on the cable, pass the Mac's USB link address (`ipconfig getifaddr en6`) as `--host`. The lead answers whatever you send, and a
-new code is printed after each link, so you can link again. Debug builds take `-shot
+The script asks for the six digits the phone shows and lets the phone into the channel; `--user`
+changes the dev sign-in name from `phone`. The phone and the Mac must be on the same network; with
+the phone off Wi-Fi but on the cable, pass the Mac's USB link address (`ipconfig getifaddr en6`) as
+`--host`. The lead answers whatever you send. Debug builds take `-shot
 conversation`, `-shot tasks`, `-shot list` or `-shot settings` after `--` to open the first
 channel there (or stay on the list, or open Settings), plus `-place KEY`, `-fan YES` and
 `-draft TEXT`, for screenshots with `xcrun devicectl device capture screenshot`.
 
-To try Sign In against a dev relay (one started with dev sign-in, like `test/engine-enroll.test.ts` does), launch with
+Any dev relay works the same way (one started with dev sign-in, like `test/engine-enroll.test.ts` does): launch with
 `-relay http://IP:PORT -devUser NAME`, where NAME is the dev sign-in your computer's app used; the computer approves it
 with the digits the phone shows.
