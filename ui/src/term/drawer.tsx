@@ -4,18 +4,21 @@ import { FitAddon, Ghostty, Terminal, type ITheme } from "ghostty-web"
 import wasmUrl from "ghostty-web/ghostty-vt.wasm?url"
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react"
 
-import { Avatar, IconButton } from "~/kit/bits"
-import { memberOf, type Channel, type TermLink } from "~/model"
+import { Avatar, cx, IconButton } from "~/kit/bits"
+import { Icon } from "~/kit/icons"
+import { memberOf, type Channel, type TermLink, type TermTab, type TermWatch } from "~/model"
 import { shown } from "~/names"
-import { useApp } from "~/nav"
+import { useApp, type TermOf } from "~/nav"
+import { colorsOf, useSystemDark } from "~/theme/apply"
+import { activeTheme } from "~/theme/themes"
 
 const SCROLLBACK = 3_000
 const RESIZE_MS = 120
 const HEIGHT_KEY = "kiwi.term.height"
 const MIN_HEIGHT = 180
-const ADVANCE = 0.6025
 const CELL = 8
 const FONT = '"SF Mono", SFMono-Regular, Menlo, "DejaVu Sans Mono", ui-monospace, monospace'
+const TABS_MS = 2_000
 
 type Phase = { kind: "opening" } | { kind: "live"; cols: number; rows: number } | { kind: "ended"; cols: number; rows: number } | { kind: "error"; why: string }
 
@@ -61,6 +64,15 @@ function themeOf(css: CSSStyleDeclaration): ITheme {
   }
 }
 
+async function fontOf(css: CSSStyleDeclaration): Promise<{ family: string; advance: number }> {
+  const family = css.getPropertyValue("--mono").trim() || FONT
+  await document.fonts.load(`16px ${family}`).catch(() => [])
+  const ctx = document.createElement("canvas").getContext("2d")
+  if (!ctx) return { family, advance: 0.6 }
+  ctx.font = `100px ${family}`
+  return { family, advance: ctx.measureText("0").width / 100 || 0.6 }
+}
+
 function storedHeight(): number | null {
   try {
     const n = Number(localStorage.getItem(HEIGHT_KEY))
@@ -79,12 +91,48 @@ function keepHeight(h: number): void {
   }
 }
 
-export default function TermDrawer({ channel, name }: { channel: Channel; name: string }) {
+export default function TermDrawer({ channel, of }: { channel: Channel; of: TermOf }) {
   const { app, go } = useApp()
-  const person = memberOf(channel, name)
+  const name = of.kind === "agent" ? of.name : null
+  const person = name ? memberOf(channel, name) : undefined
+  const title = name === null ? "Your terminal" : person ? shown(person) : name
   const host = useRef<HTMLDivElement>(null)
   const [phase, setPhase] = useState<Phase>({ kind: "opening" })
   const [height, setHeight] = useState<number | null>(storedHeight)
+  const [want, setWant] = useState<{ pane: string | null; n: number }>({ pane: null, n: 0 })
+  const [current, setCurrent] = useState<string | null>(null)
+  const [tabs, setTabs] = useState<TermTab[]>([])
+  const systemDark = useSystemDark()
+  const theme = activeTheme(app.prefs, systemDark)
+  const looks = `${theme.id}:${JSON.stringify(colorsOf(theme))}`
+  const ended = useRef<() => void>(() => {})
+  const last = useRef<{ n: number; pane: string | null }>({ n: 0, pane: null })
+
+  const pick = (pane: string | null) => setWant((w) => ({ pane, n: w.n + 1 }))
+  const settle = (left: TermTab[], gone: string | null) => {
+    setTabs(left)
+    if (gone !== current) return
+    const next = left[0]
+    if (next) pick(next.pane)
+    else go({ to: "term", term: null })
+  }
+  useEffect(() => {
+    ended.current = () => {
+      if (name === null) void app.actions.myTerms().then((left) => settle(left, current))
+    }
+  })
+
+  useEffect(() => {
+    if (name !== null) return
+    let live = true
+    const look = () => void app.actions.myTerms().then((t) => live && setTabs(t))
+    look()
+    const every = window.setInterval(look, TABS_MS)
+    return () => {
+      live = false
+      window.clearInterval(every)
+    }
+  }, [app.actions, name])
 
   useEffect(() => {
     const el = host.current
@@ -99,17 +147,23 @@ export default function TermDrawer({ channel, name }: { channel: Channel; name: 
         const g = await loadGhostty()
         const css = getComputedStyle(document.documentElement)
         const scale = Number(css.getPropertyValue("--text-scale")) || 1
+        const font = await fontOf(css)
         if (gone) return
-        const t = new Terminal({ ghostty: g, fontSize: (Math.round(CELL * scale) - 0.02) / ADVANCE, fontFamily: FONT, theme: themeOf(css), scrollback: SCROLLBACK, cursorBlink: false })
+        const t = new Terminal({ ghostty: g, fontSize: (Math.round(CELL * scale) - 0.02) / font.advance, fontFamily: font.family, theme: themeOf(css), scrollback: SCROLLBACK, cursorBlink: false })
         term = t
         const fit = new FitAddon()
         t.loadAddon(fit)
         t.open(el)
-        const want = fit.proposeDimensions() ?? { cols: 100, rows: 30 }
-        const opened = await app.actions.openTerm(channel.code, name, want.cols, want.rows, {
+        const watch: TermWatch = {
           out: (text) => t.write(text),
-          ended: () => setPhase((p) => (p.kind === "live" ? { ...p, kind: "ended" } : p)),
-        })
+          ended: () => {
+            setPhase((p) => (p.kind === "live" ? { ...p, kind: "ended" } : p))
+            ended.current()
+          },
+        }
+        const size = fit.proposeDimensions() ?? { cols: 100, rows: 30 }
+        const target = last.current.n === want.n ? last.current.pane : want.pane
+        const opened = name === null ? await app.actions.openMyTerm(channel.code, target, size.cols, size.rows, watch) : await app.actions.openTerm(channel.code, name, size.cols, size.rows, watch)
         if (gone) {
           if ("link" in opened) opened.link.close()
           return
@@ -120,6 +174,9 @@ export default function TermDrawer({ channel, name }: { channel: Channel; name: 
         }
         const l = opened.link
         link = l
+        last.current = { n: want.n, pane: opened.screen.pane ?? null }
+        setCurrent(opened.screen.pane ?? null)
+        if (name === null) void app.actions.myTerms().then((t) => !gone && setTabs(t))
         t.resize(opened.screen.cols, opened.screen.rows)
         t.write(opened.screen.seed)
         setPhase({ kind: opened.screen.dead ? "ended" : "live", cols: opened.screen.cols, rows: opened.screen.rows })
@@ -146,8 +203,9 @@ export default function TermDrawer({ channel, name }: { channel: Channel; name: 
       observer?.disconnect()
       link?.close()
       term?.dispose()
+      el.replaceChildren()
     }
-  }, [app.actions, channel.code, name])
+  }, [app.actions, channel.code, name, want, looks])
 
   const grip = (e: ReactPointerEvent<HTMLDivElement>) => {
     const sheet = e.currentTarget.parentElement
@@ -173,16 +231,48 @@ export default function TermDrawer({ channel, name }: { channel: Channel; name: 
 
   const size = phase.kind === "live" || phase.kind === "ended" ? `${phase.cols}×${phase.rows}` : null
   return (
-    <section className="term" aria-label={`${person ? shown(person) : name}'s terminal`} style={height ? { height } : undefined} onKeyDown={(e) => e.stopPropagation()}>
+    <section className="term" aria-label={name === null ? title : `${title}'s terminal`} style={height ? { height } : undefined} onKeyDown={(e) => e.stopPropagation()}>
       <div className="term-grip" role="separator" aria-orientation="horizontal" aria-label="Resize the terminal" onPointerDown={grip} onDoubleClick={() => setHeight(null)} />
       <header className="term-head">
-        <Avatar person={person} size="sm" />
-        <span className="term-name">{person ? shown(person) : name}</span>
+        {name === null ? (
+          <span className="term-mine" aria-hidden="true">
+            <Icon name="terminal" size={14} />
+          </span>
+        ) : (
+          <Avatar person={person} size="sm" />
+        )}
+        {name === null && tabs.length > 0 ? (
+          <div className="term-tabs" role="tablist" aria-label="Your terminals">
+            {tabs.map((t) => (
+              <span key={t.pane} className={cx("term-tab", t.pane === current && "is-on")}>
+                <button type="button" role="tab" aria-selected={t.pane === current} onClick={() => pick(t.pane)}>
+                  {t.label}
+                </button>
+                <button
+                  type="button"
+                  className="term-tab-x"
+                  aria-label={`Close ${t.label} (ends that shell)`}
+                  onClick={() => void app.actions.closeMyTerm(t.pane).then((left) => settle(left, t.pane))}
+                >
+                  <Icon name="close" size={10} />
+                </button>
+              </span>
+            ))}
+            <IconButton icon="plus" label="New terminal" onClick={() => pick("new")} />
+          </div>
+        ) : (
+          <span className="term-name">{title}</span>
+        )}
         <span className="term-where">
-          Channels' tmux{size && <span className="term-size"> · {size}</span>}
+          {name === null ? "this computer" : "Channels' tmux"}
+          {size && <span className="term-size"> · {size}</span>}
           {phase.kind === "ended" && <span className="term-ended"> · exited</span>}
         </span>
-        <IconButton icon="close" label="Close the terminal (the agent keeps running)" onClick={() => go({ to: "term", name: null })} />
+        <IconButton
+          icon="close"
+          label={name === null ? "Close the terminal (your shell keeps running)" : "Close the terminal (the agent keeps running)"}
+          onClick={() => go({ to: "term", term: null })}
+        />
       </header>
       <div className="term-screen" ref={host} />
       {phase.kind === "opening" && <p className="term-note">Opening…</p>}

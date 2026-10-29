@@ -339,6 +339,12 @@ interface TermScreen {
   rows: number
   seed: string
   dead: boolean
+  pane?: string
+}
+
+export interface TermTab {
+  pane: string
+  label: string
 }
 
 export interface TermWatch {
@@ -514,6 +520,9 @@ export interface Actions {
   addAgent(code: string, agent: NewAgent): void
   showAgent(code: string, name: string): Promise<string | null>
   openTerm(code: string, name: string, cols: number, rows: number, watch: TermWatch): Promise<TermOpened>
+  openMyTerm(code: string, want: string | null, cols: number, rows: number, watch: TermWatch): Promise<TermOpened>
+  myTerms(): Promise<TermTab[]>
+  closeMyTerm(pane: string): Promise<TermTab[]>
   choicesOn(code: string, computer: string): Promise<ComputerChoices>
   chooseFolder(): Promise<string | null>
   addRoom(code: string, name: string): Promise<string | null>

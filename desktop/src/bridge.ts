@@ -300,7 +300,12 @@ export interface MachineView {
   online: boolean | null;
 }
 
-export type TermOpenView = { ok: true; term: string; window: string; cols: number; rows: number; seed: string; dead: boolean } | { ok: false; detail: string };
+export type TermOpenView = { ok: true; term: string; pane: string; window: string; cols: number; rows: number; seed: string; dead: boolean } | { ok: false; detail: string };
+
+export interface TermTabView {
+  pane: string;
+  label: string;
+}
 
 export type TermEvent = { term: string; out: string } | { term: string; ended: true };
 
@@ -412,6 +417,9 @@ export interface KiwiBridge {
   showSeat(seat: PlacedSeat): Promise<ShowResult>;
   /** Watch and type in a hosted agent's tmux pane: the daemon sizes it, then sends the screen and what follows as onTerm events. */
   termOpen(pane: string, cols: number, rows: number): Promise<TermOpenView>;
+  termMine(roomId: string, want: string | null, cols: number, rows: number): Promise<TermOpenView>;
+  termTabs(): Promise<TermTabView[]>;
+  termTabClose(pane: string): Promise<TermTabView[]>;
   termKeys(term: string, keys: string): Promise<void>;
   termSize(term: string, cols: number, rows: number): Promise<void>;
   termClose(term: string): Promise<void>;

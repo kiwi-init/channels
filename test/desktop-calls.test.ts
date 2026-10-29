@@ -59,7 +59,7 @@ describe("window.kiwi on any transport", () => {
     const isCall = (key: keyof KiwiBridge): key is Call => typeof bridge[key] === "function" && key !== "getSnapshot" && !/^on[A-Z]/.test(key);
     const called: Call[] = [];
     for (const name of (Object.keys(bridge) as (keyof KiwiBridge)[]).filter(isCall)) {
-      const out: unknown = Reflect.apply(bridge[name], bridge, [`${name} 1`, `${name} 2`, `${name} 3`]);
+      const out: unknown = Reflect.apply(bridge[name], bridge, [`${name} 1`, `${name} 2`, `${name} 3`, `${name} 4`]);
       await expect(out).rejects.toThrow(name);
       called.push(name);
     }

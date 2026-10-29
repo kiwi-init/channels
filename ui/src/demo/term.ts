@@ -1,4 +1,4 @@
-import type { TermOpened, TermWatch } from "~/model"
+import type { TermOpened, TermTab, TermWatch } from "~/model"
 
 const DIM = "\x1b[2m"
 const BOLD = "\x1b[1m"
@@ -41,6 +41,50 @@ function screen(cols: number, rows: number): string {
   const prompt = [...box(cols, [`${GREY}>${OFF} `]), `  ${DIM}? for shortcuts${OFF}`]
   const fill = Math.max(0, rows - lines.length - prompt.length)
   return [...lines, ...Array.from({ length: fill }, () => ""), ...prompt].slice(-rows).join("\r\n")
+}
+
+const PROMPT = `${GREEN}jow@MacBook-Air${OFF} ${BOLD}channels${OFF} %`
+
+function shell(rows: number): string {
+  const prompt = PROMPT
+  const lines = [
+    `${prompt} git status --short`,
+    ` ${RED}M${OFF} ui/src/shell/channel.tsx`,
+    ` ${RED}M${OFF} ui/src/term/drawer.tsx`,
+    `${GREY}??${OFF} notes.md`,
+    `${prompt} bun run dev`,
+    `${DIM}$ vite${OFF}`,
+    `  ${GREEN}➜${OFF}  Local:   http://localhost:5173/`,
+    `${GREY}^C${OFF}`,
+    `${prompt} `,
+  ]
+  return lines.slice(-rows).join("\r\n")
+}
+
+let shells: TermTab[] = [
+  { pane: "%1", label: "zsh" },
+  { pane: "%2", label: "node" },
+]
+
+export function demoShells(close?: string): TermTab[] {
+  if (close) shells = shells.filter((t) => t.pane !== close)
+  return shells
+}
+
+export async function demoShell(want: string | null, cols: number, rows: number, watch: TermWatch): Promise<TermOpened> {
+  const c = Math.max(40, cols)
+  const r = Math.max(12, rows)
+  const fresh = want === "new" ? { pane: `%${shells.length + 10}`, label: "zsh" } : null
+  if (fresh) shells = [...shells, fresh]
+  const tab = fresh ?? shells.find((t) => t.pane === want) ?? shells[0]
+  return {
+    screen: { cols: c, rows: r, seed: fresh ? `${PROMPT} ` : shell(r), dead: false, ...(tab ? { pane: tab.pane } : {}) },
+    link: {
+      keys: (text) => watch.out(text.replace(/\r/g, "\r\n")),
+      size: () => {},
+      close: () => {},
+    },
+  }
 }
 
 export async function demoTerm(cols: number, rows: number, watch: TermWatch): Promise<TermOpened> {

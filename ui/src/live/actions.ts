@@ -21,7 +21,7 @@ import { noteFor, showSeat, type ShowResult } from "@/lib/show-seat"
 import { cleanRoomName, roomProblem, roomsAfter } from "@/lib/rooms"
 import { ALLOW_ONCE, DENY } from "@/lib/permission-settled"
 import { savePersonalities } from "@/lib/personalities"
-import { createPerson, bridge, secrets, type TermEvent, type TermOpenView } from "@kiwi/secrets/secrets.ts"
+import { createPerson, bridge, secrets, type KiwiBridge, type TermEvent, type TermOpenView } from "@kiwi/secrets/secrets.ts"
 import { isSignInGone } from "@/lib/session"
 import { ANYONE, approveTask, assignTask, cancelTask, changeReviewer, closedDigest, sendBackTask, type TaskSend } from "@/lib/task-actions"
 import { announce } from "~/kit/toasts"
@@ -40,7 +40,7 @@ import { stepReplyText } from "~/chat/step"
 import { downloadAndRestart } from "~/live/update"
 import { setWake } from "~/live/wakes"
 import { rememberOwner } from "~/live/invites"
-import type { Actions, InviteInfo, JoinChoice, NewAgent, TaskStatus } from "~/model"
+import type { Actions, InviteInfo, JoinChoice, NewAgent, TaskStatus, TermOpened, TermWatch } from "~/model"
 
 const say = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
@@ -215,6 +215,32 @@ async function joinGranted(d: EnrollDone): Promise<void> {
     asked++
   }
   announce(asked ? `Signed in as ${d.person.name}. Asked to join ${asked === 1 ? "1 channel" : `${asked} channels`}` : `Signed in as ${d.person.name}`)
+}
+
+async function streamTerm(b: KiwiBridge, open: () => Promise<TermOpenView>, watch: TermWatch): Promise<TermOpened> {
+  const early: TermEvent[] = []
+  let mine: string | null = null
+  const deliver = (e: TermEvent) => ("out" in e ? watch.out(e.out) : watch.ended())
+  const off = b.onTerm((e) => (mine === null ? early.push(e) : e.term === mine && deliver(e)))
+  const r = await open().catch((err: unknown): TermOpenView => ({ ok: false, detail: err instanceof Error ? err.message : String(err) }))
+  if (!r.ok) {
+    off()
+    return { error: r.detail }
+  }
+  const term = r.term
+  mine = term
+  queueMicrotask(() => early.filter((e) => e.term === term).forEach(deliver))
+  return {
+    screen: { cols: r.cols, rows: r.rows, seed: r.seed, dead: r.dead, pane: r.pane },
+    link: {
+      keys: (text) => void b.termKeys(term, text).catch(() => {}),
+      size: (c, w) => void b.termSize(term, c, w).catch(() => {}),
+      close: () => {
+        off()
+        void b.termClose(term).catch(() => {})
+      },
+    },
+  }
 }
 
 export function makeActions(): Actions {
@@ -405,29 +431,22 @@ export function makeActions(): Actions {
       if (!b) return { error: "Terminals open in the Channels desktop app." }
       if (typeof b.termOpen !== "function") return { error: "Update Channels to open its terminals here." }
       if (seat?.place !== "hosted") return { error: "It isn't running in Channels' own terminal on this computer." }
-      const early: TermEvent[] = []
-      let mine: string | null = null
-      const deliver = (e: TermEvent) => ("out" in e ? watch.out(e.out) : watch.ended())
-      const off = b.onTerm((e) => (mine === null ? early.push(e) : e.term === mine && deliver(e)))
-      const r = await b.termOpen(seat.pane, cols, rows).catch((err: unknown): TermOpenView => ({ ok: false, detail: err instanceof Error ? err.message : String(err) }))
-      if (!r.ok) {
-        off()
-        return { error: r.detail }
-      }
-      const term = r.term
-      mine = term
-      queueMicrotask(() => early.filter((e) => e.term === term).forEach(deliver))
-      return {
-        screen: { cols: r.cols, rows: r.rows, seed: r.seed, dead: r.dead },
-        link: {
-          keys: (text) => void b.termKeys(term, text).catch(() => {}),
-          size: (c, w) => void b.termSize(term, c, w).catch(() => {}),
-          close: () => {
-            off()
-            void b.termClose(term).catch(() => {})
-          },
-        },
-      }
+      return streamTerm(b, () => b.termOpen(seat.pane, cols, rows), watch)
+    },
+    openMyTerm: async (code, want, cols, rows, watch) => {
+      const b = bridge()
+      if (!b) return { error: "Your terminal opens in the Channels desktop app." }
+      if (typeof b.termMine !== "function") return { error: "Update Channels to open your own terminal here." }
+      const room = need(code).roomId
+      return streamTerm(b, () => b.termMine(room, want, cols, rows), watch)
+    },
+    myTerms: async () => {
+      const b = bridge()
+      return b && typeof b.termTabs === "function" ? b.termTabs().catch(() => []) : []
+    },
+    closeMyTerm: async (pane) => {
+      const b = bridge()
+      return b && typeof b.termTabClose === "function" ? b.termTabClose(pane).catch(() => []) : []
     },
     choicesOn: async (code, computer) => {
       const b = bridge()

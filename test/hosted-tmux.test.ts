@@ -180,6 +180,44 @@ describe("a hosted tmux server", () => {
     rmSync(folder, { recursive: true, force: true });
   });
 
+  test.if(!!tmux)("your own terminal is one shell window in the folder, kept while it runs, started afresh once it exits", async () => {
+    const folder = mkdtempSync(join(tmpdir(), "kiwi-hosted-mine-"));
+    const st = first.state()!;
+    const mine = await first.mine(folder, null, "/bin/sh");
+    if (!mine.ok) throw new Error(mine.detail);
+    expect(await read(st, ["display-message", "-p", "-t", mine.pane, "#{session_name} #{@kiwi-mine}"])).toBe(`${HOSTED_SESSION} 1`);
+    expect(await first.mine(tmpdir(), null, "/bin/sh")).toEqual(mine);
+    await first.tmux(st, ["send-keys", "-t", mine.pane, 'echo "[$CLAUDECODE]" "$PWD"', "Enter"]);
+    let screen = "";
+    for (let i = 0; i < 100 && !screen.includes(`] /`); i++) {
+      screen = first.pane(mine.pane)?.screen() ?? "";
+      await Bun.sleep(100);
+    }
+    expect(screen).toContain("[] ");
+    expect(screen).toContain(basename(folder));
+    await first.tmux(st, ["send-keys", "-t", mine.pane, "exit", "Enter"]);
+    for (let i = 0; i < 100 && (await read(st, ["display-message", "-p", "-t", mine.pane, "#{pane_dead}"])) !== "1"; i++) await Bun.sleep(100);
+    const again = await first.mine(folder, null, "/bin/sh");
+    if (!again.ok) throw new Error(again.detail);
+    expect(again.pane).not.toBe(mine.pane);
+    expect((await read(st, ["list-windows", "-t", `=${HOSTED_SESSION}`, "-F", "#{@kiwi-mine}"])).split("\n").filter((m) => m === "1")).toHaveLength(1);
+    rmSync(folder, { recursive: true, force: true });
+  });
+
+  test.if(!!tmux)("your terminals open as tabs: a new one, picked by pane, listed by what runs in them, closed one by one", async () => {
+    const one = await first.mine(tmpdir(), null, "/bin/sh");
+    const two = await first.mine(tmpdir(), "new", "/bin/sh");
+    if (!one.ok || !two.ok) throw new Error("no terminal");
+    expect(two.pane).not.toBe(one.pane);
+    expect(await first.mine(tmpdir(), two.pane, "/bin/sh")).toEqual(two);
+    expect(await first.mine(tmpdir(), "%99999", "/bin/sh")).toEqual(one);
+    const tabs = await first.mineTabs();
+    expect(tabs.map((t) => t.pane)).toEqual([one.pane, two.pane]);
+    expect(tabs.every((t) => t.label.length > 0)).toBe(true);
+    expect((await first.closeMine(two.pane)).map((t) => t.pane)).toEqual([one.pane]);
+    expect((await first.closeMine("%99999")).map((t) => t.pane)).toEqual([one.pane]);
+  });
+
   test.if(!!tmux)("killing it stops the server and leaves no socket or state behind", async () => {
     const st = first.state()!;
     await first.kill();
