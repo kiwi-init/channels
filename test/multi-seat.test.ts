@@ -359,6 +359,7 @@ describe("a seat whose own `kiwi listen` takes its messages", () => {
   test("a `kiwi listen` beside the session's hook listener is still named", async () => {
     const { h, input } = await twoSeats();
     const hook = spawn(h, ["hook", "listen"], S, h, input);
+    await until(async () => (await slots(h)).includes("hook:reviewer") && (await slots(h)).includes("listen:reviewer"), "the hook's listener");
     const tail = spawn(h, ["-c", "beta", "--as", "reviewer", "listen"], S);
     try {
       await until(async () => (await slots(h)).filter((s) => s === "listen:reviewer").length === 2, "the hook's and the tail's listeners");
