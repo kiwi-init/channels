@@ -29,7 +29,12 @@ function owned(): ChannelLink[] {
 
 /** Take every agent that computer let in out of the channels this app owns; returns their names. */
 async function removeAgentsOf(machinePk: string): Promise<string[]> {
-  const { removed, leftover } = await takeAgents(machinePk, owned());
+  const channels = owned();
+  const kept = (await Promise.allSettled(channels.map((ch) => ch.dropDelegates([machinePk])))).filter((r) => r.status === "rejected");
+  if (kept.length) {
+    throw new Error(`Couldn’t take that computer’s access back in ${kept.length === 1 ? "one of your channels" : `${kept.length} of your channels`}. The computer is still one of yours.`);
+  }
+  const { removed, leftover } = await takeAgents(machinePk, channels);
   if (leftover.length) {
     throw new Error(`Couldn’t remove ${leftover.join(", ")} from your channels. The computer is still one of yours.`);
   }

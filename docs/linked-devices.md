@@ -176,6 +176,13 @@ owner-signed **delegation** lets the `kiwi` daemon admit its own computer's agen
   this computer pokes it (`admit` verb, while the request waits), when one of its seats gets a
   `request` frame, and once per known channel at start. It keeps looking while a request of its
   own waits on the joiner's reveal, for up to 30 minutes.
+- In the owner's app (T684): `packages/app/src/delegations.ts` runs `tendDelegations`
+  (`packages/core/src/client/delegations.ts`) in the approval loop for each owned channel, at most
+  hourly unless the computers change. The computers are the app's own and approved ones, plus the
+  device list's current `computer` entries. It delegates to each one without a delegation, or
+  with fewer than 7 days left; drops the rest and rotates; and re-signs the records a delegate
+  signed with the owner key. Forget computer calls `dropDelegates` before removing its agents, so
+  their removal rotates past it.
 
 ## 4. Revocation and expiry
 

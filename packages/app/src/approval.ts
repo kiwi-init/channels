@@ -6,6 +6,7 @@
 import { TEND_SAFETY_MS, tendOnPush, tendOwned } from "./approval-tend";
 import { loadMember } from "@kiwi/channel/store.ts";
 import { linkOf, watches } from "@kiwi/channel/channel-ops.ts";
+import { ownComputers, tendDelegates } from "./delegations";
 import { tendLists } from "./device-lists";
 import { followedLaunches, sawMembers, sawRequests } from "./launch-follow";
 import { bridge, secrets } from "@kiwi/secrets/secrets.ts";
@@ -41,6 +42,7 @@ async function tend(code: string, person: string | undefined, muted: () => boole
   const one = cut[0];
   if (one && !muted()) notify(title, cut.length === 1 ? `${one.name} is out: the device was forgotten` : `${cut.length} members are out: their devices were forgotten`, code);
   if (!person) return;
+  if (lists) await tendDelegates(code, person, ownComputers(person, secrets().computers, lists.get(person)), ch).catch(() => null);
   const [{ PRESETS }, { cleanPersonalities }] = await Promise.all([import("@kiwi/core/presets.ts"), import("@kiwi/core/personalities.ts")]);
   const personalities = [...PRESETS, ...cleanPersonalities(secrets().personalities)];
   if (followedLaunches(code).length) sawRequests(code, await ch.requests({ person, ...(lists ? { lists } : {}) }).catch(() => []));
