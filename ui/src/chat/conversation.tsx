@@ -11,6 +11,7 @@ import { day, sameDay } from "~/kit/time"
 import type { Channel, Message, Where } from "~/model"
 import { sameWhere, useApp } from "~/nav"
 import { nickname, shown } from "~/names"
+import { AddAgentCard } from "~/panels/add-agent"
 
 const GROUP_MS = 5 * 60_000
 const NEAR_BOTTOM = 48
@@ -157,11 +158,7 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
 
   return (
     <ReplyContext.Provider value={replying}>
-      {channel.hold && (
-        <p className="banner">
-          Agents are paused{channel.hold.note ? `: ${channel.hold.note.replace(/[.\s]+$/, "")}` : ""}. <span className="dim">They read but don't act until you resume.</span>
-        </p>
-      )}
+      {channel.hold && <HoldBanner channel={channel} hold={channel.hold} />}
       <Feed key={key} channel={channel} where={where} jump={jump && sameWhere(jump.m.where, where) ? jump : null} />
       <Composer channel={channel} where={where} placeholder={where.kind === "dm" ? `Message ${placeName} privately` : `Message ${placeName}`} />
     </ReplyContext.Provider>
@@ -393,6 +390,24 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
   )
 }
 
+function HoldBanner({ channel, hold }: { channel: Channel; hold: NonNullable<Channel["hold"]> }) {
+  const { app } = useApp()
+  const owner = channel.people.find((p) => p.owner && !p.you)
+  const until = channel.youOwn ? "until you resume them" : `until ${owner ? shown(owner) : "the owner"} resumes them`
+  return (
+    <div className="banner" role="status">
+      <p className="banner-text">
+        Agents are paused{hold.note ? `: ${hold.note.replace(/[.\s]+$/, "")}` : ""}. <span className="dim">They read but don't act {until}.</span>
+      </p>
+      {channel.youOwn && (
+        <button type="button" className="btn is-small" onClick={() => app.actions.setHold(channel.code, false)}>
+          Resume agents
+        </button>
+      )}
+    </div>
+  )
+}
+
 function Start({ channel, where }: { channel: Channel; where: Where }) {
   const agents = channel.people.filter((p) => p.kind === "agent").length
   return (
@@ -404,7 +419,7 @@ function Start({ channel, where }: { channel: Channel; where: Where }) {
             ? `Only you and ${nickname(channel, where.with)} read this.`
             : "Nothing here yet."}
       </p>
-      <p className="dim">{agents === 0 ? "No agents here yet. Add one from the sidebar, then give it something to do." : "Say what you want done. The lead turns it into tasks."}</p>
+      {agents === 0 ? <AddAgentCard channel={channel} /> : <p className="dim">Say what you want done. The lead turns it into tasks.</p>}
     </div>
   )
 }

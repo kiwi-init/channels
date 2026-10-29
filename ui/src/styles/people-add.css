@@ -372,3 +372,24 @@
 .add-body .input[aria-invalid="true"] {
   border-color: color-mix(in srgb, var(--alert) 60%, transparent);
 }
+
+.add-card {
+  display: grid;
+  gap: 10px;
+  max-width: 560px;
+  margin-top: 10px;
+  padding: 16px 18px;
+  border-radius: var(--r-card);
+  background: var(--bg-2);
+  font: var(--t-ui) / 1.55 var(--ui);
+  animation: rise var(--slow) var(--ease);
+}
+
+.add-card-title {
+  font: 600 var(--t-ui) var(--ui);
+}
+
+.add-card-foot {
+  display: flex;
+  justify-content: flex-end;
+}

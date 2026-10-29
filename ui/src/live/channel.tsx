@@ -11,7 +11,6 @@ import { roomLast, roomSeenKey } from "@/lib/rooms"
 import { bridge } from "@/lib/secrets"
 import { sendsInTurn } from "@/lib/send-order"
 import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@/lib/threads"
-import { announce } from "~/kit/toasts"
 import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
 import { asksOf, directsOf, messagesOf, formerOf, peopleOf, roomsOf, tasksOf, type Pending } from "~/live/map"
@@ -21,7 +20,7 @@ import { usePublishFace } from "~/live/face"
 import { usePictures } from "~/live/pictures"
 import { seated, useSeats } from "~/live/seats"
 import { ownPrefs } from "~/live/prefs"
-import { closeOpened, publish, type Run } from "~/live/store"
+import { closeOpened, markGone, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
 import type { Channel, Upload, Where } from "~/model"
 import { nicknamesOf } from "~/names"
@@ -224,12 +223,12 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     [code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster, foldFrom]
   )
 
-  useLayoutEffect(() => publish({ code, channel, run }), [code, channel, run])
+  useLayoutEffect(() => {
+    if (!gone) return publish({ code, channel, run })
+    markGone({ code, title, why: gone })
+    closeOpened(code)
+  }, [code, channel, run, gone, title])
   useLayoutEffect(() => () => closeOpened(code), [code])
-
-  useEffect(() => {
-    if (gone) announce(gone === "closed" ? `${title} was closed by its owner` : `You're no longer in ${title}`)
-  }, [gone, title])
 
   const firstVisit = useRef(Object.keys(seenIn(roomId)).length === 0)
   useEffect(() => {

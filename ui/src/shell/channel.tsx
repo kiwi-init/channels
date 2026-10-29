@@ -2,7 +2,7 @@ import { useEffect, useState, type CSSProperties } from "react"
 
 import { Conversation } from "~/chat/conversation"
 import { SearchBox, type Jump } from "~/chat/search-box"
-import { cx, Count, IconButton } from "~/kit/bits"
+import { cx, Count, IconButton, useLate } from "~/kit/bits"
 import { Boundary } from "~/kit/boundary"
 import { Icon } from "~/kit/icons"
 import type { Channel } from "~/model"
@@ -28,6 +28,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   if (jump && (nav.tab !== "chat" || !sameWhere(jump.m.where, nav.where))) setJump(null)
   const [searching, setSearching] = useState(false)
   const [drawer, setDrawer] = useState(false)
+  const offline = useLate(channel.connection !== "live", 1000)
   const [seen, setSeen] = useState(nav.where)
   if (seen !== nav.where) {
     setSeen(nav.where)
@@ -108,7 +109,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           {nav.tab === "tasks" ? <Board channel={channel} /> : nav.tab === "needs" ? <NeedsYou channel={channel} onJump={setJump} /> : <Conversation channel={channel} jump={jump} />}
         </Boundary>
       </main>
-      {channel.connection !== "live" && (
+      {offline && (
         <p className="conn" role="status">
           <span className="dot is-doing" aria-hidden="true" />
           {channel.connection === "connecting" ? "Connecting…" : "Reconnecting…"}
