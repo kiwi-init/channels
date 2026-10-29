@@ -21,7 +21,7 @@ import { readHarnessRow, type HarnessRow } from "@kiwi/core/harnesses.ts";
 import type { MachineCert } from "@kiwi/core/person.ts";
 import type { LaunchedView } from "@kiwi/core/terminals.ts";
 
-import type { LaunchAgentRequest } from "./bridge.ts";
+import type { LaunchAgentRequest, TermTabView } from "./bridge.ts";
 import { childEnv } from "./child-env.ts";
 import { launchedView } from "./launch-view.ts";
 
@@ -130,10 +130,24 @@ export async function daemonLaunch(req: LaunchAgentRequest, home: string = kiwiH
   return launchedView(r["launched"]);
 }
 
-export async function daemonMine(room: string, home: string = kiwiHome()): Promise<string> {
-  const r = await call(daemonSocketPath(home), "mine", { room }, 15_000);
+export async function daemonMine(room: string, want: string | null, home: string = kiwiHome()): Promise<string> {
+  const r = await call(daemonSocketPath(home), "mine", { room, want }, 15_000);
   if (typeof r["pane"] !== "string") throw new Error("the daemon didn't say which terminal is yours");
   return r["pane"];
+}
+
+const tabsOf = (r: Reply): TermTabView[] =>
+  (Array.isArray(r["tabs"]) ? (r["tabs"] as unknown[]) : []).flatMap((t) => {
+    const { pane, label } = (t ?? {}) as { pane?: unknown; label?: unknown };
+    return typeof pane === "string" && typeof label === "string" ? [{ pane, label }] : [];
+  });
+
+export async function daemonMineTabs(home: string = kiwiHome()): Promise<TermTabView[]> {
+  return tabsOf(await call(daemonSocketPath(home), "mine-tabs", {}, 5_000));
+}
+
+export async function daemonMineClose(pane: string, home: string = kiwiHome()): Promise<TermTabView[]> {
+  return tabsOf(await call(daemonSocketPath(home), "mine-close", { pane }, 5_000));
 }
 
 /**

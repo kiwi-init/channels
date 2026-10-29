@@ -4,19 +4,21 @@ import { FitAddon, Ghostty, Terminal, type ITheme } from "ghostty-web"
 import wasmUrl from "ghostty-web/ghostty-vt.wasm?url"
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react"
 
-import { Avatar, IconButton } from "~/kit/bits"
+import { Avatar, cx, IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
-import { memberOf, type Channel, type TermLink, type TermWatch } from "~/model"
+import { memberOf, type Channel, type TermLink, type TermTab, type TermWatch } from "~/model"
 import { shown } from "~/names"
 import { useApp, type TermOf } from "~/nav"
+import { colorsOf, useSystemDark } from "~/theme/apply"
+import { activeTheme } from "~/theme/themes"
 
 const SCROLLBACK = 3_000
 const RESIZE_MS = 120
 const HEIGHT_KEY = "kiwi.term.height"
 const MIN_HEIGHT = 180
-const ADVANCE = 0.6025
 const CELL = 8
 const FONT = '"SF Mono", SFMono-Regular, Menlo, "DejaVu Sans Mono", ui-monospace, monospace'
+const TABS_MS = 2_000
 
 type Phase = { kind: "opening" } | { kind: "live"; cols: number; rows: number } | { kind: "ended"; cols: number; rows: number } | { kind: "error"; why: string }
 
@@ -62,6 +64,15 @@ function themeOf(css: CSSStyleDeclaration): ITheme {
   }
 }
 
+async function fontOf(css: CSSStyleDeclaration): Promise<{ family: string; advance: number }> {
+  const family = css.getPropertyValue("--mono").trim() || FONT
+  await document.fonts.load(`16px ${family}`).catch(() => [])
+  const ctx = document.createElement("canvas").getContext("2d")
+  if (!ctx) return { family, advance: 0.6 }
+  ctx.font = `100px ${family}`
+  return { family, advance: ctx.measureText("0").width / 100 || 0.6 }
+}
+
 function storedHeight(): number | null {
   try {
     const n = Number(localStorage.getItem(HEIGHT_KEY))
@@ -88,6 +99,40 @@ export default function TermDrawer({ channel, of }: { channel: Channel; of: Term
   const host = useRef<HTMLDivElement>(null)
   const [phase, setPhase] = useState<Phase>({ kind: "opening" })
   const [height, setHeight] = useState<number | null>(storedHeight)
+  const [want, setWant] = useState<{ pane: string | null; n: number }>({ pane: null, n: 0 })
+  const [current, setCurrent] = useState<string | null>(null)
+  const [tabs, setTabs] = useState<TermTab[]>([])
+  const systemDark = useSystemDark()
+  const theme = activeTheme(app.prefs, systemDark)
+  const looks = `${theme.id}:${JSON.stringify(colorsOf(theme))}`
+  const ended = useRef<() => void>(() => {})
+  const last = useRef<{ n: number; pane: string | null }>({ n: 0, pane: null })
+
+  const pick = (pane: string | null) => setWant((w) => ({ pane, n: w.n + 1 }))
+  const settle = (left: TermTab[], gone: string | null) => {
+    setTabs(left)
+    if (gone !== current) return
+    const next = left[0]
+    if (next) pick(next.pane)
+    else go({ to: "term", term: null })
+  }
+  useEffect(() => {
+    ended.current = () => {
+      if (name === null) void app.actions.myTerms().then((left) => settle(left, current))
+    }
+  })
+
+  useEffect(() => {
+    if (name !== null) return
+    let live = true
+    const look = () => void app.actions.myTerms().then((t) => live && setTabs(t))
+    look()
+    const every = window.setInterval(look, TABS_MS)
+    return () => {
+      live = false
+      window.clearInterval(every)
+    }
+  }, [app.actions, name])
 
   useEffect(() => {
     const el = host.current
@@ -102,18 +147,23 @@ export default function TermDrawer({ channel, of }: { channel: Channel; of: Term
         const g = await loadGhostty()
         const css = getComputedStyle(document.documentElement)
         const scale = Number(css.getPropertyValue("--text-scale")) || 1
+        const font = await fontOf(css)
         if (gone) return
-        const t = new Terminal({ ghostty: g, fontSize: (Math.round(CELL * scale) - 0.02) / ADVANCE, fontFamily: FONT, theme: themeOf(css), scrollback: SCROLLBACK, cursorBlink: false })
+        const t = new Terminal({ ghostty: g, fontSize: (Math.round(CELL * scale) - 0.02) / font.advance, fontFamily: font.family, theme: themeOf(css), scrollback: SCROLLBACK, cursorBlink: false })
         term = t
         const fit = new FitAddon()
         t.loadAddon(fit)
         t.open(el)
-        const want = fit.proposeDimensions() ?? { cols: 100, rows: 30 }
         const watch: TermWatch = {
           out: (text) => t.write(text),
-          ended: () => setPhase((p) => (p.kind === "live" ? { ...p, kind: "ended" } : p)),
+          ended: () => {
+            setPhase((p) => (p.kind === "live" ? { ...p, kind: "ended" } : p))
+            ended.current()
+          },
         }
-        const opened = name === null ? await app.actions.openMyTerm(channel.code, want.cols, want.rows, watch) : await app.actions.openTerm(channel.code, name, want.cols, want.rows, watch)
+        const size = fit.proposeDimensions() ?? { cols: 100, rows: 30 }
+        const target = last.current.n === want.n ? last.current.pane : want.pane
+        const opened = name === null ? await app.actions.openMyTerm(channel.code, target, size.cols, size.rows, watch) : await app.actions.openTerm(channel.code, name, size.cols, size.rows, watch)
         if (gone) {
           if ("link" in opened) opened.link.close()
           return
@@ -124,6 +174,9 @@ export default function TermDrawer({ channel, of }: { channel: Channel; of: Term
         }
         const l = opened.link
         link = l
+        last.current = { n: want.n, pane: opened.screen.pane ?? null }
+        setCurrent(opened.screen.pane ?? null)
+        if (name === null) void app.actions.myTerms().then((t) => !gone && setTabs(t))
         t.resize(opened.screen.cols, opened.screen.rows)
         t.write(opened.screen.seed)
         setPhase({ kind: opened.screen.dead ? "ended" : "live", cols: opened.screen.cols, rows: opened.screen.rows })
@@ -150,8 +203,9 @@ export default function TermDrawer({ channel, of }: { channel: Channel; of: Term
       observer?.disconnect()
       link?.close()
       term?.dispose()
+      el.replaceChildren()
     }
-  }, [app.actions, channel.code, name])
+  }, [app.actions, channel.code, name, want, looks])
 
   const grip = (e: ReactPointerEvent<HTMLDivElement>) => {
     const sheet = e.currentTarget.parentElement
@@ -187,7 +241,28 @@ export default function TermDrawer({ channel, of }: { channel: Channel; of: Term
         ) : (
           <Avatar person={person} size="sm" />
         )}
-        <span className="term-name">{title}</span>
+        {name === null && tabs.length > 0 ? (
+          <div className="term-tabs" role="tablist" aria-label="Your terminals">
+            {tabs.map((t) => (
+              <span key={t.pane} className={cx("term-tab", t.pane === current && "is-on")}>
+                <button type="button" role="tab" aria-selected={t.pane === current} onClick={() => pick(t.pane)}>
+                  {t.label}
+                </button>
+                <button
+                  type="button"
+                  className="term-tab-x"
+                  aria-label={`Close ${t.label} (ends that shell)`}
+                  onClick={() => void app.actions.closeMyTerm(t.pane).then((left) => settle(left, t.pane))}
+                >
+                  <Icon name="close" size={10} />
+                </button>
+              </span>
+            ))}
+            <IconButton icon="plus" label="New terminal" onClick={() => pick("new")} />
+          </div>
+        ) : (
+          <span className="term-name">{title}</span>
+        )}
         <span className="term-where">
           {name === null ? "this computer" : "Channels' tmux"}
           {size && <span className="term-size"> · {size}</span>}

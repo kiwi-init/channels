@@ -999,6 +999,8 @@ export const UI_SURFACES: Readonly<Record<string, readonly string[]>> = {
     "kiwi.termMine",
     "kiwi.termOpen",
     "kiwi.termSize",
+    "kiwi.termTabClose",
+    "kiwi.termTabs",
     "kiwi.terminalHelpers",
     "kiwi.terminalPrefer",
     "kiwi.terminals",

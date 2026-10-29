@@ -751,9 +751,18 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         }
         case "mine": {
           const room = typeof params.room === "string" && /^[0-9a-f]{32}$/.test(params.room) ? params.room : undefined;
-          const mine = await hosted.mine(seatFolders(loadConfig(), room)[0] ?? homedir());
+          const want = params.want === "new" || isPane(params.want) ? params.want : null;
+          const mine = await hosted.mine(seatFolders(loadConfig(), room)[0] ?? homedir(), want);
           if (!mine.ok) throw new Error(mine.detail);
           sendLine(conn, JSON.stringify({ id, ok: true, pane: mine.pane }));
+          break;
+        }
+        case "mine-tabs":
+          sendLine(conn, JSON.stringify({ id, ok: true, tabs: await hosted.mineTabs() }));
+          break;
+        case "mine-close": {
+          if (!isPane(params.pane)) throw new Error('mine-close needs {"pane"}');
+          sendLine(conn, JSON.stringify({ id, ok: true, tabs: await hosted.closeMine(params.pane) }));
           break;
         }
         case "term-keys": {
@@ -776,7 +785,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           break;
         default:
           throw new Error(
-            `unknown verb "${verb}" (hello, adopt, listen, listening, hold, listeners, read, mark, peek, presence, harnesses, folders, launch, loop, term, mine, term-keys, term-size, unpair, stop)`,
+            `unknown verb "${verb}" (hello, adopt, listen, listening, hold, listeners, read, mark, peek, presence, harnesses, folders, launch, loop, term, mine, mine-tabs, mine-close, term-keys, term-size, unpair, stop)`,
           );
       }
     } catch (err) {

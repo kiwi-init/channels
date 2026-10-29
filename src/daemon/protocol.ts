@@ -34,6 +34,8 @@ export type DaemonVerb =
   | "loop"
   | "term"
   | "mine"
+  | "mine-tabs"
+  | "mine-close"
   | "term-keys"
   | "term-size"
   | "unpair"

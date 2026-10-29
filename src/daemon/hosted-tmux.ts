@@ -21,7 +21,7 @@ const NEWLINE = 0x0a;
 const PAUSED = /^%pause (%\d+)$/;
 const GONE = /^%(?:window-close|unlinked-window-close) (@\d+)$/;
 const MINE = "@kiwi-mine";
-const MINE_FORMAT = `#{${MINE}}\t#{window_id}\t#{pane_id}\t#{pane_dead}`;
+const MINE_FORMAT = `#{${MINE}}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_current_command}`;
 
 export const HOSTED_CONF = [
   "set -s exit-empty off",
@@ -41,6 +41,11 @@ export interface HostedTmuxBin {
 
 export interface HostedState extends HostedTmuxBin {
   socket: string;
+}
+
+export interface MineTab {
+  pane: string;
+  label: string;
 }
 
 export type HostedLine = (line: string) => void;
@@ -162,23 +167,39 @@ export class HostedTmux {
     return { ok: true, place: "hosted", socket: st.socket, window, pane, ...(Number(pid) > 0 ? { pid: Number(pid) } : {}) };
   }
 
-  async mine(folder: string, shell = loginShell()): Promise<{ ok: true; pane: string } | { ok: false; detail: string }> {
+  async mineTabs(): Promise<MineTab[]> {
+    const st = this.state();
+    if (!st) return [];
+    const listed = await this.tmux(st, ["list-windows", "-t", `=${HOSTED_SESSION}`, "-F", MINE_FORMAT]);
+    const tabs: MineTab[] = [];
+    for (const line of listed.status === 0 ? listed.stdout.split("\n") : []) {
+      const [mark, window, pane, dead, command] = line.split("\t");
+      if (mark !== "1" || !window || !pane) continue;
+      if (dead === "1") await this.tmux(st, ["kill-window", "-t", window]);
+      else tabs.push({ pane, label: command || "shell" });
+    }
+    return tabs;
+  }
+
+  async mine(folder: string, want: string | null = null, shell = loginShell()): Promise<{ ok: true; pane: string } | { ok: false; detail: string }> {
     const why = await this.ready();
     const st = this.state();
     if (why || !st) return { ok: false, detail: why ?? "the hosted tmux server didn't start" };
-    const listed = await this.tmux(st, ["list-windows", "-t", `=${HOSTED_SESSION}`, "-F", MINE_FORMAT]);
-    for (const line of listed.status === 0 ? listed.stdout.split("\n") : []) {
-      const [mark, window, pane, dead] = line.split("\t");
-      if (mark !== "1" || !window || !pane) continue;
-      if (dead !== "1") return { ok: true, pane };
-      await this.tmux(st, ["kill-window", "-t", window]);
-    }
+    const tabs = await this.mineTabs();
+    const found = want === "new" ? undefined : (tabs.find((t) => t.pane === want) ?? tabs[0]);
+    if (found) return { ok: true, pane: found.pane };
     const argv = ["/usr/bin/env", ...SESSION_MARKERS.flatMap((key) => ["-u", key]), shell, "-l"];
     const r = await this.tmux(st, ["new-window", "-d", "-t", `=${HOSTED_SESSION}:`, "-c", folder, "-n", "you", "-P", "-F", WINDOW_FORMAT, "--", ...argv]);
     const [window, pane] = r.stdout.trim().split("\t");
     if (r.status !== 0 || !window || !pane) return { ok: false, detail: `tmux: ${said(r)}` };
     await this.tmux(st, ["set-option", "-w", "-t", window, MINE, "1"]);
     return { ok: true, pane };
+  }
+
+  async closeMine(pane: string): Promise<MineTab[]> {
+    const st = this.state();
+    if (st && (await this.mineTabs()).some((t) => t.pane === pane)) await this.tmux(st, ["kill-window", "-t", pane]);
+    return this.mineTabs();
   }
 
   pane(pane: string): Pane | null {

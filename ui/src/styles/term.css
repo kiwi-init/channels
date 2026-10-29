@@ -46,6 +46,60 @@
   color: var(--ink-2);
 }
 
+.term-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.term-tab {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 26px;
+  border-radius: var(--r-ctl);
+  color: var(--ink-3);
+}
+
+.term-tab button {
+  height: 100%;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.term-tab > button:first-child {
+  padding: 0 4px 0 10px;
+  font-family: var(--mono);
+}
+
+.term-tab-x {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px 0 4px;
+  opacity: 0;
+}
+
+.term-tab:hover,
+.term-tab.is-on {
+  color: var(--ink);
+}
+
+.term-tab.is-on {
+  background: var(--wash-2);
+}
+
+.term-tab:hover .term-tab-x,
+.term-tab.is-on .term-tab-x,
+.term-tab-x:focus-visible {
+  opacity: 1;
+}
+
 .term-name {
   font-weight: 600;
   white-space: nowrap;

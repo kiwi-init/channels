@@ -231,7 +231,7 @@ async function streamTerm(b: KiwiBridge, open: () => Promise<TermOpenView>, watc
   mine = term
   queueMicrotask(() => early.filter((e) => e.term === term).forEach(deliver))
   return {
-    screen: { cols: r.cols, rows: r.rows, seed: r.seed, dead: r.dead },
+    screen: { cols: r.cols, rows: r.rows, seed: r.seed, dead: r.dead, pane: r.pane },
     link: {
       keys: (text) => void b.termKeys(term, text).catch(() => {}),
       size: (c, w) => void b.termSize(term, c, w).catch(() => {}),
@@ -433,12 +433,20 @@ export function makeActions(): Actions {
       if (seat?.place !== "hosted") return { error: "It isn't running in Channels' own terminal on this computer." }
       return streamTerm(b, () => b.termOpen(seat.pane, cols, rows), watch)
     },
-    openMyTerm: async (code, cols, rows, watch) => {
+    openMyTerm: async (code, want, cols, rows, watch) => {
       const b = bridge()
       if (!b) return { error: "Your terminal opens in the Channels desktop app." }
       if (typeof b.termMine !== "function") return { error: "Update Channels to open your own terminal here." }
       const room = need(code).roomId
-      return streamTerm(b, () => b.termMine(room, cols, rows), watch)
+      return streamTerm(b, () => b.termMine(room, want, cols, rows), watch)
+    },
+    myTerms: async () => {
+      const b = bridge()
+      return b && typeof b.termTabs === "function" ? b.termTabs().catch(() => []) : []
+    },
+    closeMyTerm: async (pane) => {
+      const b = bridge()
+      return b && typeof b.termTabClose === "function" ? b.termTabClose(pane).catch(() => []) : []
     },
     choicesOn: async (code, computer) => {
       const b = bridge()

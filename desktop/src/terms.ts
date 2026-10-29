@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import net from "node:net";
 
-import type { TermEvent, TermOpenView } from "./bridge.ts";
-import { daemonMine, daemonSocketPath, kiwiHome } from "./daemon-client.ts";
+import type { TermEvent, TermOpenView, TermTabView } from "./bridge.ts";
+import { daemonMine, daemonMineClose, daemonMineTabs, daemonSocketPath, kiwiHome } from "./daemon-client.ts";
 
 const FLUSH_MS = 8;
 const OPEN_MS = 10_000;
@@ -54,7 +54,7 @@ export function termOpen(pane: unknown, cols: unknown, rows: unknown, emit: (e: 
       if (!answered) {
         const [c, r] = [size(msg.cols), size(msg.rows)];
         if (msg.ok === true && typeof msg.seed === "string" && typeof msg.window === "string" && c && r)
-          answer({ ok: true, term, window: msg.window, cols: c, rows: r, seed: msg.seed, dead: msg.dead === true });
+          answer({ ok: true, term, pane, window: msg.window, cols: c, rows: r, seed: msg.seed, dead: msg.dead === true });
         else answer({ ok: false, detail: typeof msg.error === "string" ? msg.error : "the daemon refused the terminal" });
         return;
       }
@@ -87,10 +87,17 @@ export function termOpen(pane: unknown, cols: unknown, rows: unknown, emit: (e: 
   });
 }
 
-export async function termMine(roomId: unknown, cols: unknown, rows: unknown, emit: (e: TermEvent) => void, home: string = kiwiHome()): Promise<TermOpenView> {
-  if (typeof roomId !== "string" || !ROOM_ID.test(roomId)) return { ok: false, detail: "termMine takes a room id, and a size" };
-  const pane = await daemonMine(roomId, home).catch((err: unknown) => (err instanceof Error ? err : new Error(String(err))));
+export async function termMine(roomId: unknown, want: unknown, cols: unknown, rows: unknown, emit: (e: TermEvent) => void, home: string = kiwiHome()): Promise<TermOpenView> {
+  if (typeof roomId !== "string" || !ROOM_ID.test(roomId)) return { ok: false, detail: "termMine takes a room id, a tab, and a size" };
+  const tab = want === "new" || (typeof want === "string" && PANE.test(want)) ? want : null;
+  const pane = await daemonMine(roomId, tab, home).catch((err: unknown) => (err instanceof Error ? err : new Error(String(err))));
   return pane instanceof Error ? { ok: false, detail: pane.message } : termOpen(pane, cols, rows, emit, home);
+}
+
+export const termTabs = (home: string = kiwiHome()): Promise<TermTabView[]> => daemonMineTabs(home).catch(() => []);
+
+export function termTabClose(pane: unknown, home: string = kiwiHome()): Promise<TermTabView[]> {
+  return typeof pane === "string" && PANE.test(pane) ? daemonMineClose(pane, home).catch(() => []) : termTabs(home);
 }
 
 function send(term: unknown, verb: string, params: object): void {
