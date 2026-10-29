@@ -11,6 +11,7 @@ import {
   isDecisionKind,
   isRasterMime,
   MAX_BODY_LENGTH,
+  MAX_FULL_IMAGE_BYTES,
   MAX_HOLDS,
   MAX_IMAGES,
   PROTOCOL_VERSION,
@@ -22,7 +23,6 @@ import {
   type DecisionKind,
   type Event,
   type Handoff,
-  type ImageAttachment,
   type Kind,
   type Message,
   type Payload,
@@ -34,7 +34,7 @@ import { MissingKey, Rejected } from "../refusals.ts";
 import type { ChannelCore } from "./core.ts";
 import { RelayError, Unreachable, type Refused } from "./errors.ts";
 import { received } from "./history.ts";
-import type { ChannelImages } from "./images.ts";
+import type { ChannelImages, OutgoingImage } from "./images.ts";
 import type { ChannelLive } from "./live.ts";
 import type { Relay } from "./relay.ts";
 import type { ChannelSettings } from "./settings.ts";
@@ -44,7 +44,7 @@ export interface SendOptions {
   kind?: Kind;
   re?: number[];
   ev?: Event;
-  imgs?: ImageAttachment[];
+  imgs?: OutgoingImage[];
   room?: string;
   esc?: boolean;
   handoff?: Handoff;
@@ -112,6 +112,8 @@ export class ChannelSending {
       const imgs = opts.imgs?.slice(0, MAX_IMAGES);
       if (imgs?.some((i) => !isRasterMime(i.mime))) return yield* new Rejected("an image must be png, jpg, gif or webp");
       if (imgs?.some((i) => !rasterAttachment(i))) return yield* new Rejected("an image needs its bytes or a stored reference");
+      if (imgs?.some((i) => i.full && (i.data === undefined || !isRasterMime(i.full.mime) || Math.ceil((i.full.data.length * 3) / 4) > MAX_FULL_IMAGE_BYTES + 2)))
+        return yield* new Rejected(`a full-size image is png, jpg, gif or webp, at most ${MAX_FULL_IMAGE_BYTES / 1024} KB, with a preview beside it`);
       if (opts.handoff && (!opts.esc || !wellFormedHandoff(opts.handoff))) return yield* new Rejected("a browser handoff goes only on an escalation, with an https link, a vendor and an expiry");
       if (opts.choices && (!opts.esc || opts.handoff || !wellFormedChoices(opts.choices)))
         return yield* new Rejected(`options go only on an escalation without a browser link: ${CHOICES_MIN} to ${CHOICES_MAX} different ones, one line of up to ${CHOICE_MAX_LENGTH} characters each`);

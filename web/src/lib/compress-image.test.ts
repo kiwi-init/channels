@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { MAX_SIDE, attempts, renamed } from "./compress-image"
+import { FULL_SIZE, MAX_SIDE, attempts, renamed } from "./compress-image"
 import { needsCompressing } from "./needs-compressing"
 
 describe("compress-image", () => {
@@ -28,4 +28,11 @@ describe("compress-image", () => {
     expect(renamed("pasted.png", "image/jpeg")).toBe("pasted.jpg")
     expect(renamed("noext", "image/webp")).toBe("noext.webp")
   })
+})
+
+test("full size keeps every pixel first, and only then trades a little size", () => {
+  const tries = attempts(2880, 1800, FULL_SIZE)
+  expect(tries[0]).toEqual({ width: 2880, height: 1800, quality: 0.95 })
+  expect(tries.slice(0, 4).every((a) => a.width === 2880 && a.height === 1800)).toBe(true)
+  expect(Math.min(...tries.map((a) => a.width))).toBeGreaterThan(2880 / 2)
 })

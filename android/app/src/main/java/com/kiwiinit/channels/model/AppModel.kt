@@ -54,6 +54,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 
 sealed interface Phase {
     data object Starting : Phase
@@ -83,13 +84,13 @@ const val DEFAULT_RELAY = "https://channels.kiwiinit.com"
 
 enum class Buzz { Tap, Warn, Fail, Done }
 
-class Attached(val id: String, val image: ImageBitmap, val data: ByteArray)
+class Attached(val id: String, val image: ImageBitmap, val data: ByteArray, val full: ByteArray? = null)
 
 data class Draft(val text: String = "", val attached: List<Attached> = emptyList()) {
     val isEmpty: Boolean get() = text.isBlank() && attached.isEmpty()
 }
 
-class Outgoing(val name: String, val mime: String, val data: String)
+class Outgoing(val name: String, val mime: String, val data: String, val full: String? = null)
 
 data class Pending(val id: String, val body: String, val re: Int?, val at: Long, val seq: Int? = null, val failed: Boolean = false)
 
@@ -372,6 +373,12 @@ class AppModel(private val app: Application) {
                             put("name", p.name)
                             put("mime", p.mime)
                             put("data", p.data)
+                            p.full?.let { full ->
+                                putJsonObject("full") {
+                                    put("mime", "image/jpeg")
+                                    put("data", full)
+                                }
+                            }
                         }
                     }
                 }

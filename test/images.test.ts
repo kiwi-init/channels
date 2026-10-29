@@ -7,10 +7,11 @@ import { join } from "node:path";
 import { loadImages } from "../src/attach.ts";
 import { signRequest } from "@kiwi/core/auth.ts";
 import { Channel, keepBlobsIn } from "@kiwi/core/client.ts";
+import { run } from "@kiwi/core/client/relay.ts";
 import { fileBlobs } from "../src/config.ts";
 import { seal } from "@kiwi/core/crypto.ts";
 import { generateIdentity, sign, type Identity } from "@kiwi/core/identity.ts";
-import { MAX_BLOB_BYTES, PROTOCOL_VERSION, type ImageAttachment } from "@kiwi/core/protocol.ts";
+import { imageMarker, MAX_BLOB_BYTES, MAX_FULL_IMAGE_BYTES, PROTOCOL_VERSION, type ImageAttachment } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { incoming, readCapped } from "../src/relay/http.ts";
 import { checked } from "./check.ts";
@@ -211,4 +212,28 @@ test("the local image cache keeps a channel under its cap and removes the least 
     else process.env.KIWI_HOME = was;
     rmSync(home, { recursive: true, force: true });
   }
+});
+
+test("a full-size image goes as a blob with its preview inline: new readers get the full image, a lost blob falls back to the preview", async () => {
+  keepBlobsIn({ get: () => null, set: () => {}, drop: () => {} });
+  const full = Buffer.from(crypto.getRandomValues(new Uint8Array(600 * 1024))).toString("base64");
+  const preview = Buffer.from("small webp").toString("base64");
+  const seq = await memberCh.send("full size", { imgs: [{ name: "shot.png", mime: "image/webp", data: preview, full: { mime: "image/png", data: full } }] });
+  const got = (await ownerCh.history(seq - 1)).messages.find((m) => m.seq === seq)!.imgs![0]!;
+  expect(got).toEqual({ name: "shot.png", mime: "image/webp", data: preview, ref: { id: expect.any(String), key: expect.any(String), size: 600 * 1024, mime: "image/png" } });
+  expect(imageMarker(got)).toBe("[image: shot.png (600KB)]");
+  expect(await ownerCh.image(got)).toBe(full);
+  expect(await run(ownerCh.fx.images([got]))).toEqual([{ name: "shot.png", mime: "image/png", data: full }]);
+  const lost = { ...got, ref: { ...got.ref!, id: "0".repeat(64) } };
+  expect(await run(ownerCh.fx.images([lost]))).toEqual([{ name: "shot.png", mime: "image/webp", data: preview }]);
+});
+
+test("send refuses a full-size image over the cap, or one with no preview beside it", async () => {
+  const over = Buffer.alloc(MAX_FULL_IMAGE_BYTES + 1024).toString("base64");
+  const preview = Buffer.from("p").toString("base64");
+  await expect(memberCh.send("too big", { imgs: [{ name: "big.png", mime: "image/webp", data: preview, full: { mime: "image/png", data: over } }] })).rejects.toThrow(/full-size image/);
+  const ok = Buffer.from("ok").toString("base64");
+  await expect(
+    memberCh.send("no preview", { imgs: [{ name: "np.png", mime: "image/png", ref: { id: "0".repeat(64), key: "A".repeat(43), size: 2 }, full: { mime: "image/png", data: ok } }] }),
+  ).rejects.toThrow(/full-size image/);
 });

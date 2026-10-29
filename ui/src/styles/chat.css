@@ -1174,6 +1174,31 @@ button.msg-image-spot:hover {
   background: var(--bg);
 }
 
+.compose-file-size {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  padding: 1px 6px;
+  border: 0;
+  border-radius: var(--r-row);
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  color: var(--ink-2);
+  font: 600 var(--t-stamp) var(--ui);
+}
+
+.compose-file-size.is-full {
+  background: var(--accent);
+  color: var(--on-ink);
+}
+
+.compose-file-size:hover {
+  color: var(--ink);
+}
+
+.compose-file-size.is-full:hover {
+  color: var(--on-ink);
+}
+
 .compose-attach {
   display: grid;
   place-items: center;

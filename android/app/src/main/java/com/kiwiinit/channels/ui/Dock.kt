@@ -98,20 +98,32 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private const val MAX_FULL_BYTES = 1792 * 1024
+
+private fun scaled(bitmap: Bitmap, longest: Int): Bitmap {
+    val scale = min(1f, longest / max(bitmap.width, bitmap.height).toFloat())
+    return if (scale < 1f) Bitmap.createScaledBitmap(bitmap, max(1, (bitmap.width * scale).roundToInt()), max(1, (bitmap.height * scale).roundToInt()), true) else bitmap
+}
+
+private fun jpeg(bitmap: Bitmap, longest: Int, quality: Int): ByteArray {
+    val out = ByteArrayOutputStream()
+    scaled(bitmap, longest).compress(Bitmap.CompressFormat.JPEG, quality, out)
+    return out.toByteArray()
+}
+
+private fun full(bitmap: Bitmap): ByteArray? {
+    val longest = max(bitmap.width, bitmap.height)
+    return listOf(1f, 0.8f, 0.64f, 0.5f).firstNotNullOfOrNull { factor -> jpeg(bitmap, (longest * factor).roundToInt(), 85).takeIf { it.size <= MAX_FULL_BYTES } }
+}
+
 private suspend fun shrink(context: Context, uri: Uri): Attached? =
     withContext(Dispatchers.IO) {
         try {
             val source = ImageDecoder.createSource(context.contentResolver, uri)
-            val bitmap = ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
-                val w = info.size.width
-                val h = info.size.height
-                val scale = min(1f, 1600f / max(w, h).toFloat())
-                decoder.setTargetSize(max(1, (w * scale).roundToInt()), max(1, (h * scale).roundToInt()))
-                decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-            }
-            val out = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 70, out)
-            Attached(UUID.randomUUID().toString(), bitmap.asImageBitmap(), out.toByteArray())
+            val bitmap = ImageDecoder.decodeBitmap(source) { decoder, _, _ -> decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE }
+            val whole = full(bitmap)
+            val small = if (whole == null) jpeg(bitmap, 1600, 70) else jpeg(bitmap, 1024, 60)
+            Attached(UUID.randomUUID().toString(), scaled(bitmap, 512).asImageBitmap(), small, whole)
         } catch (e: IOException) {
             // A file the decoder can't read isn't attached; the others still are.
             null
@@ -201,7 +213,7 @@ fun Dock(
         val ask = answering
         val review = sendingBack
         val re = replyTo?.seq
-        val pictures = attached.mapIndexed { i, a -> Outgoing("photo-${i + 1}.jpg", "image/jpeg", Base64.encodeToString(a.data, Base64.NO_WRAP)) }
+        val pictures = attached.mapIndexed { i, a -> Outgoing("photo-${i + 1}.jpg", "image/jpeg", Base64.encodeToString(a.data, Base64.NO_WRAP), a.full?.let { Base64.encodeToString(it, Base64.NO_WRAP) }) }
         scope.launch {
             try {
                 if (pictures.isEmpty() && review != null) {

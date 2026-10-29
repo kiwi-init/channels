@@ -23,6 +23,12 @@ export const SNAPSHOT_EVERY = 500;
 /** Largest raw image (per file) a client will attach: must survive two base64 trips inside this budget. */
 export const MAX_IMAGE_BYTES = 256 * 1024;
 
+/** Largest raw image sent full size, as a blob: its sealed bytes stay under a Durable Object row (2 MB). */
+export const MAX_FULL_IMAGE_BYTES = 1792 * 1024;
+
+/** The inline preview a full-size image carries, for readers that can't fetch the blob. */
+export const PREVIEW_IMAGE_BYTES = 100 * 1024;
+
 /** Raster images a message or an icon may carry. SVG is never one: it can carry script. */
 export const RASTER_MIMES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
 export type RasterMime = (typeof RASTER_MIMES)[number];
@@ -520,11 +526,13 @@ interface ImageRef {
   id: string;
   key: string;
   size: number;
+  /** The blob's type, when it isn't the inline preview's. */
+  mime?: RasterMime;
 }
 
 export type InlineImage = ImageAttachment & { data: string };
 
-export const MAX_BLOB_BYTES = MAX_IMAGE_BYTES + 28;
+export const MAX_BLOB_BYTES = MAX_FULL_IMAGE_BYTES + 28;
 
 export const BLOB_ID_RE = /^[0-9a-f]{64}$/;
 
@@ -538,9 +546,13 @@ function wellFormedRef(x: unknown): x is ImageRef {
     /^[A-Za-z0-9_-]{43}$/.test(r.key) &&
     Number.isSafeInteger(r.size) &&
     (r.size as number) >= 0 &&
-    (r.size as number) <= MAX_IMAGE_BYTES
+    (r.size as number) <= MAX_FULL_IMAGE_BYTES &&
+    (r.mime === undefined || (typeof r.mime === "string" && isRasterMime(r.mime)))
   );
 }
+
+/** The well-formed blob reference an image carries, if any. */
+export const blobRef = (img: Pick<ImageAttachment, "ref">): ImageRef | null => (wellFormedRef(img.ref) ? img.ref : null);
 
 /** An attachment worth keeping: a named raster image. Anything else (including SVG) is dropped. */
 export function rasterAttachment(x: unknown): x is ImageAttachment {
@@ -555,7 +567,7 @@ function kb(n: number): string {
 
 /** One-line marker for an image, e.g. `[image: shot.png (84KB)]`. */
 export function imageMarker(img: Pick<ImageAttachment, "name" | "data" | "ref">): string {
-  return `[image: ${img.name} (${kb(img.data !== undefined ? Math.ceil((img.data.length * 3) / 4) : (img.ref?.size ?? 0))})]`;
+  return `[image: ${img.name} (${kb(img.ref ? img.ref.size : img.data !== undefined ? Math.ceil((img.data.length * 3) / 4) : 0)})]`;
 }
 
 const HANDOFF_MAX_URL = 2048;

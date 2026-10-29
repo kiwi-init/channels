@@ -8,10 +8,20 @@ export interface Attempt {
   quality: number
 }
 
-export function attempts(width: number, height: number): Attempt[] {
-  const fit = Math.min(1, MAX_SIDE / Math.max(width, height))
-  return SCALES.flatMap((scale) =>
-    QUALITIES.map((quality) => ({
+export interface Shrink {
+  maxSide: number
+  scales: readonly number[]
+  qualities: readonly number[]
+}
+
+const SHRINK: Shrink = { maxSide: MAX_SIDE, scales: SCALES, qualities: QUALITIES }
+
+export const FULL_SIZE: Shrink = { maxSide: Infinity, scales: [1, 0.85, 0.7], qualities: [0.95, 0.9, 0.85, 0.8] }
+
+export function attempts(width: number, height: number, shrink: Shrink = SHRINK): Attempt[] {
+  const fit = Math.min(1, shrink.maxSide / Math.max(width, height))
+  return shrink.scales.flatMap((scale) =>
+    shrink.qualities.map((quality) => ({
       width: Math.max(1, Math.round(width * fit * scale)),
       height: Math.max(1, Math.round(height * fit * scale)),
       quality,
@@ -29,14 +39,14 @@ function encode(canvas: HTMLCanvasElement, mime: string, quality: number): Promi
   return new Promise((resolve) => canvas.toBlob(resolve, mime, quality))
 }
 
-export async function compressImage(file: File, limit: number): Promise<{ name: string; mime: string; data: string } | null> {
+export async function compressImage(file: File, limit: number, shrink: Shrink = SHRINK): Promise<{ name: string; mime: "image/webp"; data: string } | null> {
   const bitmap = await createImageBitmap(file).catch(() => null)
   if (!bitmap) return null
   try {
     const canvas = document.createElement("canvas")
     const ctx = canvas.getContext("2d")
     if (!ctx) return null
-    for (const a of attempts(bitmap.width, bitmap.height)) {
+    for (const a of attempts(bitmap.width, bitmap.height, shrink)) {
       canvas.width = a.width
       canvas.height = a.height
       ctx.clearRect(0, 0, a.width, a.height)

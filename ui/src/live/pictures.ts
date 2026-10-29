@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
-import { isRasterMime, type ImageAttachment, type Message as Wire } from "@kiwi/core/protocol.ts"
+import { blobRef, isRasterMime, type ImageAttachment, type Message as Wire } from "@kiwi/core/protocol.ts"
 import type { ChannelLink } from "@/lib/channel-ops"
 import type { Image as Picture, ImageSpot } from "~/model"
 import type { Pictures } from "~/live/map"
@@ -16,11 +16,13 @@ const loaders = new Map<string, (spot: string) => void>()
 
 export const loadPicture = (code: string, spot: string): void => loaders.get(code)?.(spot)
 
-async function picture(ch: ChannelLink, img: ImageAttachment): Promise<Picture | null> {
-  if (!isRasterMime(img.mime)) return null
-  const data = img.data ?? (await ch.image(img))
+async function picture(ch: ChannelLink, img: ImageAttachment, full: boolean): Promise<Picture | null> {
+  const ref = full ? blobRef(img) : null
+  const mime = ref?.mime ?? img.mime
+  if (!isRasterMime(mime)) return null
+  const data = ref ? await ch.image({ name: img.name, mime: img.mime, ref }) : (img.data ?? (await ch.image(img)))
   if (!data) return null
-  const url = `data:${img.mime};base64,${data}`
+  const url = `data:${mime};base64,${data}`
   const el = new window.Image()
   el.src = url
   await el.decode()
@@ -55,13 +57,15 @@ export function usePictures(code: string, ch: ChannelLink, messages: readonly Wi
       }
       settle({ state: "loading" })
       void (async () => {
+        const preview = blobRef(img) && img.data !== undefined ? await picture(ch, img, false).catch(() => null) : null
+        if (preview) settle({ state: "ready", picture: preview })
         for (let tries = 0; ; tries++) {
           try {
-            const p = await picture(ch, img)
+            const p = (await picture(ch, img, true)) ?? preview
             return settle(p ? { state: "ready", picture: p } : { state: "gone" })
           } catch {
-            // The relay or the decoder failed this time: try again a few times, then offer Retry.
-            if (tries >= RETRIES) return settle({ state: "failed" })
+            // The relay or the decoder failed this time: try again a few times, then keep the preview or offer Retry.
+            if (tries >= RETRIES) return settle(preview ? { state: "ready", picture: preview } : { state: "failed" })
             await pause(RETRY_MS)
             if (!live.current) return
           }

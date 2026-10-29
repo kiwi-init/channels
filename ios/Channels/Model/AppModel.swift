@@ -7,6 +7,13 @@ struct Outgoing: Sendable {
     let name: String
     let mime: String
     let data: String
+    var full: String? = nil
+
+    var ask: [String: Any] {
+        var picture: [String: Any] = ["name": name, "mime": mime, "data": data]
+        if let full { picture["full"] = ["mime": "image/jpeg", "data": full] }
+        return picture
+    }
 }
 
 enum Phase: Equatable {
@@ -223,7 +230,7 @@ final class AppModel {
     @discardableResult
     func send(_ spot: Spot, _ body: String, re: Int?, pictures: [Outgoing] = []) async throws -> Int {
         var ask: [String: Any] = [
-            "op": "send", "code": spot.code, "place": spot.place, "body": body, "imgs": pictures.map { ["name": $0.name, "mime": $0.mime, "data": $0.data] },
+            "op": "send", "code": spot.code, "place": spot.place, "body": body, "imgs": pictures.map(\.ask),
         ]
         ask["re"] = re ?? NSNull()
         let data = try await engine.ask(ask)

@@ -51,6 +51,7 @@ export interface Picture {
   name: string;
   mime: string;
   data: string;
+  full?: { mime: "image/jpeg"; data: string };
 }
 
 export type Reply = { ok: true; value: unknown } | { ok: false; error: string };

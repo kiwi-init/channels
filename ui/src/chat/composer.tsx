@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
-import { MAX_IMAGE_BYTES, RASTER_MIMES } from "@kiwi/core/protocol.ts"
+import { isRasterMime, MAX_FULL_IMAGE_BYTES, MAX_IMAGE_BYTES, PREVIEW_IMAGE_BYTES, RASTER_MIMES } from "@kiwi/core/protocol.ts"
 import { fileDrag, takeDropped } from "@/lib/dropped"
 import { needsCompressing } from "@/lib/needs-compressing"
 import { takePasted } from "@/lib/pasted"
@@ -41,6 +41,20 @@ const MAX_FILES = 8
 const IMAGE_TYPES = new Set<string>(RASTER_MIMES)
 const KB = Math.round(MAX_IMAGE_BYTES / 1024)
 
+interface Attached {
+  name: string
+  small: Upload
+  big: { upload: Upload; bytes: number } | null
+  whole: boolean
+  choice: boolean
+}
+
+const sizeOf = (data: string): number => Math.ceil((data.length * 3) / 4)
+
+const size = (bytes: number): string => (bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`)
+
+const outgoing = (a: Attached): Upload => (a.whole && a.big ? a.big.upload : a.small)
+
 function imageName(file: File): string {
   if (file.name) return file.name
   const ext = file.type === "image/jpeg" ? "jpg" : (file.type.split("/")[1] ?? "png")
@@ -70,7 +84,7 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
   const [focused, setFocused] = useState(false)
   const area = useRef<HTMLTextAreaElement>(null)
   const picker = useRef<HTMLInputElement>(null)
-  const [files, setFiles] = useState<Upload[]>([])
+  const [files, setFiles] = useState<Attached[]>([])
   const [dropping, setDropping] = useState(false)
   const enterSends = app.prefs.enterSends
 
@@ -86,7 +100,27 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
     }
   }, [])
 
-  const add = (upload: Upload) => setFiles((now) => (now.length < MAX_FILES ? [...now, upload] : now))
+  const add = (attached: Attached) => setFiles((now) => (now.length < MAX_FILES ? [...now, attached] : now))
+  const big = (f: File, name: string) =>
+    void import("@/lib/compress-image").then(async ({ compressImage, FULL_SIZE, renamed }) => {
+      const gif = f.type === "image/gif"
+      const [small, preview, full] = await Promise.all([
+        gif ? null : compressImage(f, MAX_IMAGE_BYTES),
+        compressImage(f, PREVIEW_IMAGE_BYTES),
+        f.size <= MAX_FULL_IMAGE_BYTES && isRasterMime(f.type)
+          ? readBase64(f).then((data) => ({ name, mime: f.type, data }))
+          : gif
+            ? null
+            : compressImage(f, MAX_FULL_IMAGE_BYTES, FULL_SIZE).then((done) => done && { ...done, name: renamed(name, done.mime) }),
+      ])
+      const whole =
+        full && preview && isRasterMime(full.mime)
+          ? { upload: { name: full.name, mime: preview.mime, data: preview.data, full: { mime: full.mime, data: full.data } }, bytes: sizeOf(full.data) }
+          : null
+      const smaller = small ?? (whole ? preview : null)
+      if (!smaller) return toast(`${name} couldn't be shrunk under ${KB} KB`)
+      add({ name, small: { ...smaller, name: renamed(name, smaller.mime) }, big: whole, whole: !!whole, choice: !!whole && !!small })
+    })
   const attach = (list: readonly File[]) => {
     const room = MAX_FILES - files.length
     if (list.length > room) toast(`Up to ${MAX_FILES} images in one message`)
@@ -96,18 +130,13 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
         toast(`${name} isn't a PNG, JPEG, GIF or WebP`)
         continue
       }
-      if (needsCompressing(f, MAX_IMAGE_BYTES)) {
-        void import("@/lib/compress-image").then(({ compressImage, renamed }) =>
-          compressImage(f, MAX_IMAGE_BYTES).then((done) => (done ? add({ ...done, name: renamed(name, done.mime) }) : toast(`${name} couldn't be shrunk under ${KB} KB`)))
-        )
-        continue
-      }
       if (f.size > MAX_IMAGE_BYTES) {
-        toast(`${name} is over ${KB} KB. Attach a smaller image`)
+        if (needsCompressing(f, MAX_IMAGE_BYTES) || f.size <= MAX_FULL_IMAGE_BYTES) big(f, name)
+        else toast(`${name} is over ${size(MAX_FULL_IMAGE_BYTES)}. Attach a smaller image`)
         continue
       }
       void readBase64(f).then(
-        (data) => add({ name, mime: f.type, data }),
+        (data) => add({ name, small: { name, mime: f.type, data }, big: null, whole: false, choice: false }),
         () => toast(`${name} couldn't be read`)
       )
     }
@@ -148,7 +177,7 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
   const send = (value = text) => {
     const body = value.trim() || files.map((f) => f.name).join(", ")
     if (!body) return
-    const opts = { ...(inThread !== undefined ? { inThread } : {}), ...(replyTo ? { replyTo: replyTo.seq } : {}), ...(files.length ? { images: files } : {}) }
+    const opts = { ...(inThread !== undefined ? { inThread } : {}), ...(replyTo ? { replyTo: replyTo.seq } : {}), ...(files.length ? { images: files.map(outgoing) } : {}) }
     app.actions.send(channel.code, where, mentions.sent(body), Object.keys(opts).length ? opts : undefined)
     replying?.set(null)
     setFiles([])
@@ -234,10 +263,26 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
           <ul className="compose-files" aria-label="Attached images">
             {files.map((f, i) => (
               <li key={`${f.name}-${i}`} className="compose-file">
-                <img src={`data:${f.mime};base64,${f.data}`} alt={f.name} />
+                <img src={`data:${f.small.mime};base64,${f.small.data}`} alt={f.name} />
                 <button type="button" className="compose-file-x" aria-label={`Remove ${f.name}`} title="Remove" onClick={() => setFiles((now) => now.filter((_, j) => j !== i))}>
                   <Icon name="close" size={12} />
                 </button>
+                {f.big && f.choice && (
+                  <button
+                    type="button"
+                    className={cx("compose-file-size", f.whole && "is-full")}
+                    aria-pressed={f.whole}
+                    aria-label={`Send ${f.name} full size, ${size(f.big.bytes)}`}
+                    title={
+                      f.whole
+                        ? `Full size, ${size(f.big.bytes)}. Click to send it smaller (${size(sizeOf(f.small.data))})`
+                        : `Smaller, ${size(sizeOf(f.small.data))}. Click to send it full size (${size(f.big.bytes)})`
+                    }
+                    onClick={() => setFiles((now) => now.map((g, j) => (j === i ? { ...g, whole: !g.whole } : g)))}
+                  >
+                    {f.whole ? "Full" : "Small"}
+                  </button>
+                )}
               </li>
             ))}
           </ul>

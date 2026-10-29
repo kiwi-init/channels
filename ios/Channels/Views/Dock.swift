@@ -30,17 +30,28 @@ struct Attached: Identifiable {
     let id = UUID()
     let image: UIImage
     let data: Data
+    let full: Data?
 }
 
 enum Shrink {
-    static func jpeg(_ image: UIImage, longest: CGFloat = 1600) -> Data? {
+    static let maxFull = 1792 * 1024
+
+    static func full(_ image: UIImage) -> Data? {
+        let longest = max(image.size.width, image.size.height)
+        for factor: CGFloat in [1, 0.8, 0.64, 0.5] {
+            if let data = jpeg(image, longest: longest * factor, quality: 0.85), data.count <= maxFull { return data }
+        }
+        return nil
+    }
+
+    static func jpeg(_ image: UIImage, longest: CGFloat = 1600, quality: CGFloat = 0.7) -> Data? {
         let size = image.size
         let scale = min(1, longest / max(size.width, size.height))
         let target = CGSize(width: (size.width * scale).rounded(), height: (size.height * scale).rounded())
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         let resized = UIGraphicsImageRenderer(size: target, format: format).image { _ in image.draw(in: CGRect(origin: .zero, size: target)) }
-        return resized.jpegData(compressionQuality: 0.7)
+        return resized.jpegData(compressionQuality: quality)
     }
 }
 
@@ -295,8 +306,10 @@ struct Dock: View {
 
     private func load(_ items: [PhotosPickerItem]) async {
         for item in items {
-            guard let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data), let jpeg = Shrink.jpeg(image) else { continue }
-            attached.append(Attached(image: image, data: jpeg))
+            guard let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) else { continue }
+            let full = Shrink.full(image)
+            guard let jpeg = full == nil ? Shrink.jpeg(image) : Shrink.jpeg(image, longest: 1024, quality: 0.6) else { continue }
+            attached.append(Attached(image: image, data: jpeg, full: full))
         }
     }
 
@@ -316,7 +329,7 @@ struct Dock: View {
         error = nil
         Haptic.tap()
         let from = spot
-        let pictures = attached.enumerated().map { i, a in Outgoing(name: "photo-\(i + 1).jpg", mime: "image/jpeg", data: a.data.base64EncodedString()) }
+        let pictures = attached.enumerated().map { i, a in Outgoing(name: "photo-\(i + 1).jpg", mime: "image/jpeg", data: a.data.base64EncodedString(), full: a.full?.base64EncodedString()) }
         Task {
             do {
                 if pictures.isEmpty, let review = sendingBack {
