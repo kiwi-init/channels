@@ -35,8 +35,8 @@ export interface DeviceHost {
   forget(device: string): Promise<void>;
   renew(device: string): Promise<void>;
   news(): Promise<DeviceNewsView | null>;
-  session(): Promise<{ client: AccountClient; device: Identity } | null>;
   addComputer(m: { pk: string; xpk: string; label: string; os: string }): Promise<DeviceLink[] | null>;
+  session(): Promise<{ client: AccountClient; device: Identity } | null>;
 }
 
 async function readList(links: unknown[]): Promise<DeviceList> {

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
@@ -39,13 +39,14 @@ const env = (): Record<string, string> => ({
 });
 const kiwi = (args: string[]) => Bun.spawnSync([process.execPath, MAIN_TS, ...args], { cwd: root, env: { ...env(), KIWI_RELAY: relay }, stdout: "pipe", stderr: "pipe" });
 const opened = (): string[][] =>
-  existsSync(calls)
-    ? readFileSync(calls, "utf8")
-        .split("---\n")
-        .filter(Boolean)
-        .map((c) => c.split("\n").filter(Boolean))
-        .filter((argv) => argv.includes("new-window"))
-    : [];
+  readdirSync(calls)
+    .map((f) => readFileSync(join(calls, f), "utf8").split("\n").filter(Boolean))
+    .filter((argv) => argv.includes("new-window"));
+const openedFor = (launch: string): string[] => {
+  const found = opened().filter((argv) => argv.includes(`KIWI_LAUNCH=${launch}`));
+  expect(found).toHaveLength(1);
+  return found[0]!;
+};
 
 let server: ReturnType<typeof startRelay> | undefined;
 let relay = "";
@@ -69,9 +70,9 @@ async function digitsFrom(out: ReadableStream<Uint8Array>): Promise<string> {
 }
 
 beforeAll(async () => {
-  for (const d of [home, kiwiHome, bins, join(repo, ".git")]) mkdirSync(d, { recursive: true });
+  for (const d of [home, kiwiHome, bins, calls, join(repo, ".git")]) mkdirSync(d, { recursive: true });
   script(join(bins, "claude"), "echo '2.1.304 (Claude Code)'");
-  script(join(bins, "tmux"), `for a in "$@"; do printf '%s\\n' "$a" >> '${calls}'; done\nprintf '%s\\n' --- >> '${calls}'\nexec '${TMUX ?? "false"}' "$@"`);
+  script(join(bins, "tmux"), `t=$(mktemp '${root}/call.XXXXXX')\nprintf '%s\\n' "$@" > "$t"\nmv "$t" '${calls}/'\nexec '${TMUX ?? "false"}' "$@"`);
   script(join(root, "login-shell"), `echo __kiwi_login_path__\necho '${bins}:/usr/bin:/bin'`);
   writeFileSync(join(kiwiHome, "config.json"), JSON.stringify({ channels: {} }));
   server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: join(root, "relay"), human: devHumanAuth() });
@@ -145,9 +146,8 @@ describe.skipIf(!TMUX)("starting an agent on one of your computers from another 
       permission: "plan",
     });
     expect(launched).toMatchObject({ ok: true, launch: "fromThePhone_0123456789", place: "hosted" });
-    const argv = opened().at(-1) ?? [];
+    const argv = openedFor("fromThePhone_0123456789");
     expect(argv.slice(argv.indexOf("-c"), argv.indexOf("-c") + 2)).toEqual(["-c", repo]);
-    expect(argv).toContain("KIWI_LAUNCH=fromThePhone_0123456789");
     expect(argv.slice(-10)).toEqual(["--model", "sonnet", "--effort", "high", "--permission-mode", "plan", "--allowedTools", "Bash(kiwi join:*)", "--", expect.stringContaining(`kiwi join ${code}`)]);
   });
 
@@ -162,7 +162,7 @@ describe.skipIf(!TMUX)("starting an agent on one of your computers from another 
     expect(harnesses.ok && harnesses.value.find((r) => r.harness === "claude")?.options?.permission).toContain("bypass");
     const allowed = await launchOn({ signer: person, person: person.pk, relay }, machine, { launch: "bypassFromPhone_000002", harness: "claude", folder: repo, code, relay, permission: "bypass" });
     expect(allowed).toMatchObject({ ok: true, place: "hosted" });
-    expect(opened().at(-1)).toContain("bypassPermissions");
+    expect(openedFor("bypassFromPhone_000002")).toContain("bypassPermissions");
   });
 
   test("a folder it doesn't start agents in is refused, however it's spelled", async () => {
