@@ -144,7 +144,6 @@ dependencies {
     implementation(libs.biometric)
     implementation(libs.serialization.json)
     implementation(libs.coroutines.android)
-    implementation(libs.code.scanner)
     implementation(libs.enriched.markdown)
     debugImplementation(libs.compose.tooling)
     testImplementation(platform(libs.compose.bom))

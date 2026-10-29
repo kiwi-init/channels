@@ -29,9 +29,6 @@ sign-in in the browser, the phone shows six digits, and you type them where Chan
 asks to approve it. The phone keeps its own key, never your person key, and asks to join the channels
 your computer holds; the ones you own let it in while the app is open there.
 
-It can also link with the Mac app the old way (Settings → Phone → Link a phone): scan its code
-(Google's code scanner, no camera permission), paste it, or open a `kiwi://link/…` link.
-
 ## Install it on a phone
 
 No emulator needed. Every push to main builds a release APK in CI (`android / build`), and so does
@@ -62,6 +59,7 @@ so a change to a screen can be looked at without a phone.
 
 ## A channel to try it on
 
-`bun ios/scripts/dev-channel.ts --host <your Mac's LAN IP>` starts a relay and a channel with a few
-agents and prints a link code. The app allows plain `http://` relays for this, as the iPhone app
-allows local networking.
+`bun ios/scripts/dev-channel.ts --host <your Mac's LAN IP>` starts a relay with dev sign-in and a
+channel with a few agents. The Android app has no dev sign-in name yet, so it signs in only against
+a real relay; the iPhone app takes `-devUser` (ios/README.md). The app allows plain `http://` relays,
+as the iPhone app allows local networking.

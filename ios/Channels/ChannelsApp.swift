@@ -16,7 +16,6 @@ struct ChannelsApp: App {
                     }
                 }
                 .task { await model.boot() }
-                .onOpenURL { url in open(url) }
                 .onChange(of: scene) { _, now in
                     switch now {
                     case .active:
@@ -28,16 +27,6 @@ struct ChannelsApp: App {
                         break
                     }
                 }
-        }
-    }
-
-    private func open(_ url: URL) {
-        guard url.scheme == "kiwi", url.host() == "link" else { return }
-        let code = url.path().trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard code.hasPrefix("kl1-") else { return }
-        Task {
-            while model.phase == .starting { try? await Task.sleep(for: .milliseconds(100)) }
-            await model.link(code)
         }
     }
 }

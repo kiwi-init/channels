@@ -232,11 +232,6 @@ struct LaunchSeen: Equatable, Sendable {
     let name: String
 }
 
-struct LinkStart: Codable, Sendable {
-    let digits: String
-    let relay: String
-}
-
 struct EnrollStart: Codable, Sendable {
     let url: String?
     let code: String
