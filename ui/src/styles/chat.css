@@ -455,6 +455,88 @@
   mask-repeat: no-repeat;
 }
 
+.md-mermaid {
+  position: relative;
+  margin: 2px 0 8px;
+}
+
+.md-mermaid:last-child {
+  margin-bottom: 0;
+}
+
+.md-mermaid > pre {
+  margin-bottom: 0 !important;
+}
+
+.md-mermaid-drawn {
+  margin: 0;
+  padding: 12px;
+  overflow-x: auto;
+  border-radius: var(--r-ctl);
+  background: var(--raise);
+  color: var(--ink);
+}
+
+.md-mermaid-drawn.code-more {
+  mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+}
+
+.md-mermaid-drawn > [role="img"] {
+  width: max-content;
+  margin: 0 auto;
+}
+
+.md-mermaid-drawn svg {
+  max-width: none;
+}
+
+.md-mermaid-tools {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity var(--fast);
+}
+
+.md-mermaid-tools.is-code {
+  top: 8px;
+  right: 58px;
+}
+
+.msg:hover .md-mermaid-tools,
+.md-mermaid-tools:focus-within {
+  opacity: 1;
+}
+
+.md-mermaid-tools button {
+  padding: 3px 7px;
+  border: 0;
+  border-radius: var(--r-row);
+  background: var(--raise-2);
+  color: var(--ink-2);
+  font-family: var(--mono);
+  font-size: var(--t-stamp);
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.md-mermaid-tools button:hover {
+  color: var(--ink);
+}
+
+.md-mermaid-tools button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.md-mermaid-error {
+  margin: 4px 0 0;
+  color: var(--ink-3);
+  font: var(--t-meta) var(--ui);
+}
+
 .md img[role="button"] {
   cursor: zoom-in;
 }

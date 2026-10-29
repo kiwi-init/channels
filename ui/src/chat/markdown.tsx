@@ -10,6 +10,7 @@ import type { ASTNode, RendererCallbacks } from "react-native-enriched-markdown/
 import { compareCells, nextSort, sanitizeMarkdownUrl, type SortDir } from "@/lib/markdown"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 
+import { MermaidBlock } from "~/chat/mermaid"
 import { keepParsed, parsedFor } from "~/chat/parsed"
 
 const TEXT = { fontSize: 15, fontFamily: "var(--sans)", color: "var(--ink)", lineHeight: 22, marginTop: 0, marginBottom: 8 }
@@ -195,6 +196,12 @@ export function sortedRows(rows: readonly ASTNode[], sort: Sort): number[] {
   })
 }
 
+export function mermaidSource(node: ASTNode): string | undefined {
+  if (node.type !== "CodeBlock" || node.attributes?.language?.trim().toLowerCase() !== "mermaid") return undefined
+  const text = textOf(node)
+  return text.trim() ? text : undefined
+}
+
 type Style = typeof NORMAL
 
 function Table({ node, style, styles, callbacks }: { node: ASTNode; style: Style; styles: Styles; callbacks: RendererCallbacks }) {
@@ -374,6 +381,17 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
         <div className={ENRM_TEXT_CLASS} style={WRAP} ref={shown}>
           {children.map((child, i) => {
             const last = i === children.length - 1
+            const source = mermaidSource(child)
+            if (source !== undefined)
+              return (
+                <MermaidBlock
+                  key={`${child.type}-${i}`}
+                  source={source}
+                  onLink={(url) => press({ url })}
+                  copied={copied}
+                  code={<RenderNode node={child} style={last ? LAST : NORMAL} styles={last ? LAST_STYLES : STYLES} callbacks={callbacks} capabilities={CAPABILITIES} />}
+                />
+              )
             return child.type === "Table" ? (
               <Table key={`${child.type}-${i}`} node={child} style={last ? LAST : NORMAL} styles={last ? LAST_STYLES : STYLES} callbacks={callbacks} />
             ) : (
