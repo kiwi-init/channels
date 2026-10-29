@@ -107,9 +107,9 @@ describe("a digest whose closing event the channel refused", () => {
     const log = [add, refusedClose, refusedDigest, acceptedClose, acceptedDigest];
     const state = fold(log, roster);
     expect(state.rejected.has(refusedClose.seq)).toBe(true);
-    expect(state.rejected.get(refusedDigest.seq)).toBe(`win's close of T${add.seq} was refused`);
+    expect(state.rejected.get(refusedDigest.seq)).toBe(`T${add.seq} isn't done here`);
     expect(state.rejected.has(acceptedDigest.seq)).toBe(false);
-    expect(messageHead(refusedDigest, undefined, state)).toContain("[done] [its close was refused by the channel — ignore]");
+    expect(messageHead(refusedDigest, undefined, state)).toContain("[done] [the task isn't done here — ignore]");
     expect(messageHead(acceptedDigest, undefined, state)).not.toContain("refused");
     const kept: { base?: FoldBase } = {};
     fold(log.slice(0, 2), roster, Date.now(), null, null, null, (b) => void (kept.base = b));
@@ -117,6 +117,18 @@ describe("a digest whose closing event the channel refused", () => {
     expect(kept.base?.n).toBe(refusedClose.seq);
     expect(resumed.rejected.has(refusedDigest.seq)).toBe(true);
     expect(resumed.rejected.has(acceptedDigest.seq)).toBe(false);
+  });
+});
+
+describe("a digest for a task this fold doesn't have done", () => {
+  test("is refused however the close went wrong: a refused close, then a cancel the review doesn't allow", async () => {
+    const add = await ev("jon", { op: "task.add", title: "Ship the digest", owner: "mac", review: "jon" });
+    const close = await ev("mac", { op: "task.update", task: add.seq, state: "done" });
+    const cancel = await ev("mac", { op: "task.update", task: add.seq, state: "cancelled" });
+    const digest = await msg("mac", "done", "Ship the digest done", { task: add.seq });
+    const state = fold([add, close, cancel, digest], roster);
+    expect(state.tasks.get(add.seq)?.state).not.toBe("done");
+    expect(state.rejected.has(digest.seq)).toBe(true);
   });
 });
 

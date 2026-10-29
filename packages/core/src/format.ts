@@ -308,7 +308,7 @@ export function messageHead(m: Message, trust?: Trust, state?: ChannelState, me?
         : m.kind === "event" && state?.rejected.has(m.seq)
           ? " [refused by the channel — ignore]"
           : m.kind === "done" && state?.rejected.has(m.seq)
-            ? " [its close was refused by the channel — ignore]"
+            ? " [the task isn't done here — ignore]"
             : "";
   return `#${m.seq} ${who(inlineText(m.from, 40), state, me)} → ${to}${room}${at}${kind}${re}${flag}`;
 }
