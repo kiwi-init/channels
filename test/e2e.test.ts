@@ -362,7 +362,7 @@ describe("leaving, removal and closing through the CLI", () => {
 });
 
 describe("images and cross-channel tasks through the CLI", () => {
-  test("quick, send --image, log markers, save, oversize rejected, tasks --global", async () => {
+  test("quick, send --image, log markers, save, an oversize non-image refused, tasks --global", async () => {
     const a = home("imgcli");
     const created = await ok(a, "quick", "pics", "--as", "pic");
     const code = /join code: (\S+)/.exec(created)![1]!;
@@ -387,7 +387,7 @@ describe("images and cross-channel tasks through the CLI", () => {
     await Bun.write(big, Buffer.alloc(300 * 1024));
     const rej = await run(a, "send", "--image", big, "too big");
     expect(rej.code).toBe(1);
-    expect(rej.err).toContain("limit");
+    expect(rej.err).toContain("couldn't be read as an image");
 
     await ok(a, "create", "second", "--as", "pic");
     await ok(a, "--as", "human", "task", "add", "second task");
