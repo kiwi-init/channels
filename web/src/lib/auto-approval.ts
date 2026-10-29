@@ -1,6 +1,6 @@
 import { useEffect } from "react"
 
-import type { ChannelRow } from "./channel"
+import type { ChannelRow } from "@kiwi/channel/list.ts"
 
 export function useAutoApproval(rows: ChannelRow[], muted: () => boolean = () => false, ring: () => void = () => {}): void {
   const key = rows

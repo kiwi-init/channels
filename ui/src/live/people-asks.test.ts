@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { PERMISSION_CHOICES } from "@kiwi/core/permission.ts"
 import type { Message as Wire } from "@kiwi/core/protocol.ts"
 import { fold, type Roster } from "@kiwi/core/state.ts"
-import type { Online } from "@/lib/channel/online"
+import type { Online } from "@kiwi/channel/online.ts"
 import { asksOf, peopleOf } from "~/live/map"
 
 const roster: Roster = [

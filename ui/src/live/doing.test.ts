@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from "bun:test"
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts"
 import type { Event, Message } from "@kiwi/core/protocol.ts"
 import { fold, type Roster } from "@kiwi/core/state.ts"
-import type { Online } from "@/lib/channel/online"
+import type { Online } from "@kiwi/channel/online.ts"
 import { liveOf, restOf, workingIn } from "~/doing"
 import { peopleOf } from "~/live/map"
 
