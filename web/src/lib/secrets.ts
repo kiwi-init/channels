@@ -1,4 +1,4 @@
-// The person's secrets: their person key, their paired computers and the join requests waiting
+// The person's secrets: their person key, their computers and the join requests waiting
 // on them. In the desktop app they live behind the bridge (window.kiwi), which keeps them with the
 // OS keychain (safeStorage) and hands the renderer one synchronous snapshot at load. In a plain
 // browser (development) they fall back to localStorage, so the renderer runs the same either way.
@@ -13,8 +13,6 @@ import type {
   GithubRepoView,
   KeysAtRest,
   KiwiBridge,
-  LinkAskView,
-  PairAskView,
   PhoneView,
   PublicPerson,
   StoreSnapshot,
@@ -27,23 +25,7 @@ import { publicChannel } from "../../../desktop/src/public-channel.ts"
 import { onLocalChange, readLocal, writeLocal, type Local } from "./local-store"
 import { persistQueue } from "./persist-queue"
 
-export type {
-  ChannelView,
-  ComputerView,
-  DeviceNewsView,
-  GithubRepoView,
-  KeysAtRest,
-  KiwiBridge,
-  LinkAskView,
-  PairAskView,
-  PhoneView,
-  PublicPerson,
-  StoreSnapshot,
-  TermEvent,
-  TermOpenView,
-  UpdateCheckView,
-  UpdateView,
-}
+export type { ChannelView, ComputerView, DeviceNewsView, GithubRepoView, KeysAtRest, KiwiBridge, PhoneView, PublicPerson, StoreSnapshot, TermEvent, TermOpenView, UpdateCheckView, UpdateView }
 
 /** The desktop bridge, or null in a plain browser. */
 export function bridge(): KiwiBridge | null {

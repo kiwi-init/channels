@@ -1,12 +1,12 @@
 import "~/styles/person.css"
 
-import { useId, useState, type CSSProperties, type ReactNode } from "react"
+import { useId, useState, type ReactNode } from "react"
 
 import { TaskChip } from "~/chat/cards"
 import { Avatar, cx, Dialog, DialogHead, Empty, Heading, Toggle } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
-import { memberOf, type App, type Channel, type Color, type Person } from "~/model"
+import { memberOf, type App, type Channel, type Person } from "~/model"
 import { useApp } from "~/nav"
 import { nickname, shown } from "~/names"
 import { ShowAgent } from "~/kit/show-agent"
@@ -118,16 +118,11 @@ function Now({ channel, person }: { channel: Channel; person: Person }) {
 }
 
 function Doors({ channel, person }: { channel: Channel; person: Person }) {
-  const { app, go } = useApp()
+  const { go } = useApp()
   if (person.you)
     return (
       <section className="person-me">
         <p>This is you.</p>
-        {person.kind === "human" && (
-          <Row label="Your colour" hint="How people tell your messages and agents apart here.">
-            {(id) => <Colors id={id} channel={channel} person={person} onPick={(c) => app.actions.setColor(channel.code, person.name, c)} />}
-          </Row>
-        )}
         <button type="button" className="btn" onClick={() => go({ to: "settings", section: "account" })}>
           Your settings
         </button>
@@ -194,17 +189,6 @@ function Facts({ channel, person }: { channel: Channel; person: Person }) {
       : [
           ["Joined", since(person.joined, "")],
           ["Messages", person.messages.toLocaleString()],
-          [
-            "Colour",
-            person.color ? (
-              <span className="person-color">
-                <span className="person-swatch" style={{ background: `var(--c-${person.color})` }} aria-hidden="true" />
-                {person.color}
-              </span>
-            ) : (
-              "none"
-            ),
-          ],
         ]
   return (
     <section className="person-facts" aria-label="Details">
@@ -272,11 +256,6 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
           {() => <InlineEdit value={person.display ?? ""} label="Nickname" verb="Change" onSave={(v) => app.actions.setNickname(channel.code, person.name, v || null)} />}
         </Row>
       )}
-      {!agent && (
-        <Row label="Colour" hint="Their messages and their agents wear it." stack>
-          {(id) => <Colors id={id} channel={channel} person={person} onPick={(c) => app.actions.setColor(channel.code, person.name, c)} />}
-        </Row>
-      )}
       <Row label="Can only read" hint={`${agent ? "It reads" : "They read"} messages but can't post or take tasks.`}>
         {(id) => <Toggle id={id} on={!!person.readOnly} onChange={(on) => app.actions.setReadOnly(channel.code, person.name, on)} />}
       </Row>
@@ -328,32 +307,6 @@ function Row({ label, hint, stack, children }: { label: string; hint?: string; s
       </div>
       <div className="person-row-control">{children(id)}</div>
       {hint && stack && <p className="person-row-hint">{hint}</p>}
-    </div>
-  )
-}
-
-const COLORS: readonly Color[] = ["red", "orange", "yellow", "green", "teal", "blue", "indigo", "violet", "pink", "brown"]
-
-function Colors({ id, channel, person, onPick }: { id: string; channel: Channel; person: Person; onPick: (color: Color | null) => void }) {
-  const worn = new Map(channel.people.filter((p) => p.kind === "human" && p.name !== person.name && p.color).map((p) => [p.color, shown(p)]))
-  return (
-    <div id={id} className="swatches" role="group" aria-labelledby={`${id}-label`}>
-      {COLORS.map((c) => {
-        const by = worn.get(c)
-        return (
-          <button
-            key={c}
-            type="button"
-            className="swatch"
-            style={{ "--member": `var(--c-${c})` } as CSSProperties}
-            aria-pressed={person.color === c}
-            aria-label={by ? `${c}, ${by}'s colour` : c}
-            title={by ? `${by}'s colour` : c}
-            disabled={!!by}
-            onClick={() => onPick(person.color === c ? null : c)}
-          />
-        )
-      })}
     </div>
   )
 }

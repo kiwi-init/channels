@@ -2,7 +2,6 @@ import { b64url, decodeJoinCode } from "@kiwi/core/crypto.ts";
 import { claimDevice, readDeviceList, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import type { EnrollGrant } from "@kiwi/core/enroll.ts";
 import type { HarnessRow } from "@kiwi/core/harnesses.ts";
-import { askToLink, dropLink, linkDigits, newLinkKeys, openLink, readLinkCode, waitForLinkChunks, type LinkCode, type LinkKeys } from "@kiwi/core/link.ts";
 import type { Signed, SigningBudget } from "@kiwi/core/sas.ts";
 import { handleFor } from "@kiwi/core/membership.ts";
 import type { LaunchedView } from "@kiwi/core/terminals.ts";
@@ -14,7 +13,7 @@ import { createEnrollee, type Enrollee } from "../../desktop/src/devices.ts";
 import { Keyring } from "../../desktop/src/keyring.ts";
 import { launchRequestOf } from "../../desktop/src/launch-view.ts";
 import { foldersOn, launchOn, personMachines, remoteHarnesses, type Asker, type PairedComputer } from "../../desktop/src/remote.ts";
-import { acceptSeat, migrateEntries, withAccess } from "../../desktop/src/seats.ts";
+import { acceptSeat, withAccess } from "../../desktop/src/seats.ts";
 import { canonicalHarness, harnessName, monoHarness } from "../../web/src/lib/harness.ts";
 import { Room } from "./room.ts";
 import type { Ask, EnrollStart, HarnessChoice, LaunchAsk, Push, Reply, Saved } from "./wire.ts";
@@ -23,7 +22,6 @@ interface Handler {
   postMessage(json: string): void;
 }
 
-const LINK_WAIT_MS = 10 * 60_000;
 const ENROLL_EVERY_MS = 1_500;
 const JOINS_EVERY_MS = 5_000;
 
@@ -44,7 +42,6 @@ const post = (p: Push): void => sink(p);
 let saved: Saved | null = null;
 let keyring: Keyring | null = null;
 const rooms = new Map<string, Room>();
-let linking: { code: LinkCode; keys: LinkKeys; stop: AbortController } | null = null;
 let computers = new Map<string, PairedComputer>();
 let computersKnown = false;
 let computersTimer: ReturnType<typeof setInterval> | null = null;
@@ -206,13 +203,13 @@ function room(code: string): Room {
 function asker(): Asker {
   const person = saved?.person;
   if (saved?.device && !person) throw new Error("this phone signed in without your person key: start agents from Channels on your computer");
-  if (!saved || !person) throw new Error("link this phone with the Mac app first");
+  if (!saved || !person) throw new Error("sign in on this phone first");
   return { person, relay: saved.relay };
 }
 
 function computer(key: string): PairedComputer {
   const c = computers.get(key);
-  if (!c) throw new Error("that isn't one of your paired computers");
+  if (!c) throw new Error("that isn't one of your computers");
   return c;
 }
 
@@ -251,31 +248,6 @@ async function launch(ask: LaunchAsk): Promise<LaunchedView> {
   return launched;
 }
 
-async function linkAsk(text: string, label: string): Promise<{ digits: string; relay: string }> {
-  const code = readLinkCode(text);
-  if (!code) throw new Error("that isn't a link code from the Channels app");
-  linking?.stop.abort();
-  const keys = await newLinkKeys();
-  await askToLink(code.relay, code, keys.xpk, label);
-  linking = { code, keys, stop: new AbortController() };
-  return { digits: await linkDigits(code.secret, code.dxpk, keys.xpk), relay: code.relay };
-}
-
-async function linkWait(): Promise<Saved> {
-  const l = linking;
-  if (!l) throw new Error("linking hasn't started");
-  const chunks = await waitForLinkChunks(l.code.relay, l.code.secret, { timeoutMs: LINK_WAIT_MS, everyMs: 1_500, signal: l.stop.signal });
-  if (linking !== l) throw new Error("linking was cancelled");
-  linking = null;
-  if (!chunks) throw new Error("the Mac didn't send anything: start again from Link a phone");
-  const payload = await openLink(l.code, l.keys.xsk, l.keys.xpk, chunks);
-  await dropLink(l.code.relay, l.code.secret, chunks.length).catch(() => {});
-  if (!payload) throw new Error("what came back wasn't sealed for this phone: start again");
-  const here = payload.channels.filter((c) => c.relay === undefined || c.relay === payload.relayUrl);
-  const { channels } = migrateEntries([], here);
-  return { relay: payload.relayUrl, person: payload.person, seats: channels.filter((c) => !!c.access) };
-}
-
 const pause = (ms: number, signal: AbortSignal): Promise<void> =>
   new Promise((resolve) => {
     const t = setTimeout(resolve, ms);
@@ -293,7 +265,7 @@ async function relaySignIn(relay: string, user: string | undefined, signal: Abor
     if (!name) throw new Error("this relay takes dev sign-in: give the name your computer's app signed in with");
     return { start: null, token: Promise.resolve(`dev:${name}`) };
   }
-  if (!config.workosClientId) throw new Error(`${relay} has no sign-in: link this phone with a code from your Mac instead`);
+  if (!config.workosClientId) throw new Error(`${relay} has no sign-in, so this phone can't join your devices there`);
   let shown: (s: DeviceSignIn) => void = () => {};
   const start = new Promise<DeviceSignIn>((resolve) => (shown = resolve));
   const token = workosDeviceSignIn(config.workosClientId, async (s) => shown(s), { signal }).then((s) => s.access);
@@ -384,14 +356,6 @@ async function handle(ask: Ask): Promise<unknown> {
   switch (ask.op) {
     case "start":
       return start(ask.saved);
-    case "linkAsk":
-      return linkAsk(ask.code, ask.label);
-    case "linkWait":
-      return linkWait();
-    case "linkCancel":
-      linking?.stop.abort();
-      linking = null;
-      return null;
     case "enrollBegin":
       return enrollBegin(ask.relay, ask.label, ask.os, ask.user);
     case "enrollWait":

@@ -1,5 +1,4 @@
 import {
-  Add01Icon,
   ArrowLeft01Icon,
   ArrowRight01Icon,
   CheckmarkCircle02Icon,
@@ -730,8 +729,6 @@ function General({ onPersonalities, onClose }: { onPersonalities: () => void; on
   const { person } = useSecrets()
   const b = bridge()
   const [on, setOn] = useState("appearance")
-  const [adding, setAdding] = useState(false)
-  const [linking, setLinking] = useState(false)
   const place = usePlaceSlot()
   const shown = SECTIONS.filter((s) =>
     s.id === "services" ? !!b?.githubStatus : s.id === "new-agents" ? !!terminalsBridge() : s.id === "computers" ? !!person : s.id === "phone" ? !!person && !!b : true
@@ -835,26 +832,24 @@ function General({ onPersonalities, onClose }: { onPersonalities: () => void; on
             </Group>
             {person && (
               <Group id="computers" title="Computers">
-                <Item tile={glyph(ComputerIcon)} title="Paired computers" desc="Agents on a paired computer join your channels as yours. Removing one takes its agents out of the channels you own.">
+                <Item
+                  tile={glyph(ComputerIcon)}
+                  title="Your computers"
+                  desc="Agents on one of your computers join your channels as yours. To add one, run kiwi login on it. Removing one takes its agents out of the channels you own."
+                >
                   <div className="grid gap-1">
-                    <ComputerRows adding={adding} onAdded={() => setAdding(false)} />
+                    <ComputerRows />
                   </div>
                 </Item>
-                {!adding && b && <Action icon={Add01Icon} label="Add a computer" onClick={() => setAdding(true)} />}
               </Group>
             )}
             {person && b && (
               <Group id="phone" title="Phone">
-                <Item
-                  tile={glyph(SmartPhone01Icon)}
-                  title="Linked phones"
-                  desc="Your phone reads and answers your channels as you. Linking hands it your person and channel keys, end to end through the relay."
-                >
+                <Item tile={glyph(SmartPhone01Icon)} title="Linked phones" desc="Your phone reads and answers your channels as you. Sign in on it, then type the digits it shows here.">
                   <div className="grid gap-1">
-                    <PhoneRows linking={linking} onLinked={() => setLinking(false)} />
+                    <PhoneRows />
                   </div>
                 </Item>
-                {!linking && <Action icon={Add01Icon} label="Link a phone" onClick={() => setLinking(true)} />}
               </Group>
             )}
             <Group id="app" title="This app">

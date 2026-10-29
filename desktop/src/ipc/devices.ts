@@ -4,7 +4,7 @@ import { publicPerson } from "../guard.ts";
 import { publicAccess } from "../public-channel.ts";
 import { createDeviceHost, createEnrollee } from "../devices.ts";
 import { freshToken } from "../signin.ts";
-import { mutate, store } from "../store.ts";
+import { mutate, store, upsertComputer } from "../store.ts";
 
 const OS_NAMES: Partial<Record<NodeJS.Platform, string>> = { darwin: "macOS", linux: "Linux", win32: "Windows" };
 
@@ -24,6 +24,7 @@ export function devicesCalls(): Serves<
     links: () => store.deviceLinks ?? [],
     saveLinks: (links) => mutate((s) => (s.deviceLinks = links)),
     channels: () => store.channels.flatMap((c) => (c.code ? [{ label: c.label, code: c.code }] : [])),
+    computer: upsertComputer,
     label,
     os: osName,
     wipe: () =>

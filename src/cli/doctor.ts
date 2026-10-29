@@ -167,7 +167,7 @@ const checkRelay = Effect.fn("Doctor.relay")(function* (relay: string) {
   );
 });
 
-/** Whether this computer is paired with its person's app (machine.json carries their cert). Never a failure: agents still join by approval. */
+/** Whether this computer is one of its person's devices (kiwi login), and whether their app certified it. Never a failure: agents still join by approval. */
 function checkPaired(): Finding {
   let m: (MachineFile & { cert?: { name?: string } }) | null;
   try {
@@ -175,8 +175,10 @@ function checkPaired(): Finding {
   } catch (err) {
     return { ok: false, what: "This computer's key file can't be read.", how: err instanceof Error ? err.message : String(err) };
   }
-  if (m?.cert) return { ok: true, what: `paired   with ${m.cert.name ?? "your app"} (${m.label})` };
-  return { ok: true, what: "paired   no: agents here ask to join and wait for the owner (kiwi pair kp1-… pairs this computer with your app)" };
+  const name = m?.cert?.name ?? m?.device?.person.name;
+  if (m?.cert) return { ok: true, what: `login    one of ${name ?? "your"}'s devices (${m.label}): your app can start agents here` };
+  if (m?.device) return { ok: true, what: `login    one of ${name ?? "your"}'s devices (${m.label})` };
+  return { ok: true, what: "login    no: agents here ask to join and wait for the owner (kiwi login adds this computer to your devices)" };
 }
 
 function checkHooks(): Finding {

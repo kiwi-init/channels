@@ -79,9 +79,10 @@ export async function loginComputer(o: LoginOpts): Promise<EnrolledDevice> {
       const grant = await readEnrollGrant(raw, m.identity.pk);
       if (!grant) throw new PairError("the app's grant didn't check out (another person's list, or a forged one); run kiwi login again");
       const device: EnrolledDevice = { person: grant.person, links: grant.links };
-      saveMachine({ ...m, device });
+      saveMachine({ ...m, device, ...(grant.cert ? { cert: grant.cert, person: grant.person } : {}) });
       await mailbox.drop().catch(() => {});
-      say(`"${m.label}" is one of ${grant.person.name}'s devices now: its agents join your channels on their own. Kept in ${join(home(), "machine.json")}.`);
+      const can = grant.cert ? " and your app can start agents here" : "";
+      say(`"${m.label}" is one of ${grant.person.name}'s devices now: its agents join your channels on their own${can}. Kept in ${join(home(), "machine.json")}.`);
       return device;
     }
     if (Date.now() > until) throw new PairError(`nothing approved "${m.label}" in time; run kiwi login again to ask again`, 3);
