@@ -876,9 +876,9 @@ try {
           await owner.addInitScript(() => {
             if (sessionStorage.getItem("shots.terminals") !== "1") return;
             type Row = { id: string; name: string; found: boolean; running: boolean; helpers: "on" | "off" | null };
-            type Status = { prefer: string; launch: "on" | "off"; terminals: Row[] };
+            type Status = { launch: "on" | "off"; bypass: "on" | "off"; terminals: Row[] };
             const row = (id: string, name: string, helpers: Row["helpers"]): Row => ({ id, name, found: true, running: true, helpers });
-            let status: Status = { prefer: "app", launch: "on", terminals: [row("rex", "Rex", "off"), row("tmux", "tmux", "off"), row("app", "Terminal", null)] };
+            let status: Status = { launch: "on", bypass: "off", terminals: [row("rex", "Rex", "off")] };
             let contextLine: "on" | "off" = "off";
             let roots: string[] = ["/Users/you/code"];
             type Hook = { harness: string; state: string; text: string };
@@ -893,9 +893,7 @@ try {
             const w = window as unknown as { kiwi?: object };
             w.kiwi = Object.assign(w.kiwi ?? {}, {
               terminals: async () => status,
-              terminalHelpers: (id: string, to: "on" | "off") =>
-                set((s) => ({ ...s, prefer: to === "off" && s.prefer === id ? "app" : s.prefer, terminals: s.terminals.map((t) => (t.id === id ? { ...t, helpers: to } : t)) })),
-              terminalPrefer: (id: string) => set((s) => ({ ...s, prefer: id })),
+              terminalHelpers: (id: string, to: "on" | "off") => set((s) => ({ ...s, terminals: s.terminals.map((t) => (t.id === id ? { ...t, helpers: to } : t)) })),
               setLaunches: (to: "on" | "off") => set((s) => ({ ...s, launch: to })),
               contextLine: async () => contextLine,
               setContextLine: async (to: "on" | "off") => (contextLine = to),
@@ -928,9 +926,7 @@ try {
           async () => {
             await openSettings();
             await newAgents().getByRole("button", { name: "Download Rex Helpers" }).click();
-            await newAgents().getByRole("button", { name: "Download Tmux Helpers" }).click();
-            await newAgents().getByRole("radio", { name: "Rex" }).click();
-            await newAgents().getByRole("radio", { name: "Rex", checked: true }).waitFor();
+            await newAgents().getByRole("button", { name: "Remove" }).waitFor();
             await newAgents().scrollIntoViewIfNeeded();
           },
           closeSettings,
