@@ -1,4 +1,8 @@
+import { MAX_IMAGE_BYTES } from "@kiwi/core/protocol.ts";
+import { shrinkImage } from "@kiwi/core/node/shrink-image.ts";
+
 import type { Serves } from "../calls.ts";
+import { MAX_DROPPED_BYTES } from "../dropped.ts";
 import { opensChannel, takeDeepLink } from "../deep-links.ts";
 import { externalUrl } from "../guard.ts";
 import type { Host } from "../host.ts";
@@ -22,6 +26,7 @@ export function miscCalls(
   | "getDeepLink"
   | "takeDroppedFiles"
   | "takePastedImage"
+  | "compressImage"
   | "setBadge"
   | "setAppearance"
   | "wallpaperTints"
@@ -52,6 +57,12 @@ export function miscCalls(
     getDeepLink: () => takeDeepLink(),
     takeDroppedFiles: () => host.droppedFiles(),
     takePastedImage: () => host.pastedImage(),
+    compressImage: async (data: string, limit: number) => {
+      if (typeof data !== "string" || data.length > Math.ceil(MAX_DROPPED_BYTES / 3) * 4) throw new Error("that image is too big to open");
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_IMAGE_BYTES) throw new Error(`a limit is 1 to ${MAX_IMAGE_BYTES} bytes`);
+      const out = await shrinkImage(Buffer.from(data, "base64"), limit);
+      return { type: out.mime, data: Buffer.from(out.bytes).toString("base64") };
+    },
     setBadge: (count: number) => {
       if (!Number.isSafeInteger(count) || count < 0) throw new Error("a badge is a count of zero or more");
       host.badge(count);

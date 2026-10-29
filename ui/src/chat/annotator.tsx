@@ -2,26 +2,10 @@ import "~/styles/annotator.css"
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react"
 
+import { MAX_IMAGE_SIDE } from "@kiwi/core/fit-image.ts"
 import { MAX_IMAGE_BYTES } from "@kiwi/core/protocol.ts"
-import {
-  arrowHead,
-  base64Blob,
-  base64Bytes,
-  fitSide,
-  INKS,
-  markedName,
-  meaningful,
-  penPath,
-  rect,
-  strokeWidth,
-  textSize,
-  toImage,
-  TOOL_KEYS,
-  type Ink,
-  type Mark,
-  type Point,
-  type Tool,
-} from "@/lib/annotate"
+import { arrowHead, base64Blob, fitSide, INKS, markedName, meaningful, penPath, rect, strokeWidth, textSize, toImage, TOOL_KEYS, type Ink, type Mark, type Point, type Tool } from "@/lib/annotate"
+import { compressImage, readBase64 } from "@/lib/compress-image"
 import { Avatar, cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { clock } from "~/kit/time"
@@ -52,7 +36,6 @@ const TOOLS: { tool: Tool; label: string; key: string }[] = [
 
 const INK_NAMES: Record<Ink, string> = { alert: "Red", decide: "Amber", accent: "Blue", ink: "Ink" }
 const HIDE = "#000"
-const MAX_SIDE = 2400
 const PAD = 24
 
 type Draft = { kind: "pen"; points: Point[] } | { kind: "arrow" | "box" | "hide"; from: Point; to: Point }
@@ -176,30 +159,21 @@ async function burn(img: HTMLImageElement, marks: Mark[], name: string, mime: st
   const font = getComputedStyle(root).fontFamily
   const nw = img.naturalWidth
   const nh = img.naturalHeight
-  const sw = strokeWidth(nw, nh)
-  const fs = textSize(nw, nh)
-  const base = fitSide(nw, nh, MAX_SIDE)
-  const png = mime === "image/png" || mime === "image/gif"
-  for (const shrink of [1, 0.8, 0.64, 0.5, 0.4, 0.3]) {
-    const width = Math.max(1, Math.round(base.width * shrink))
-    const height = Math.max(1, Math.round(base.height * shrink))
-    const canvas = document.createElement("canvas")
-    canvas.width = width
-    canvas.height = height
-    const ctx = canvas.getContext("2d")
-    if (!ctx) throw new Error("this window can't draw the image")
-    ctx.drawImage(img, 0, 0, width, height)
-    ctx.scale(width / nw, height / nh)
-    paint(ctx, marks, sw, fs, color, font)
-    const tries = png && shrink === 1 ? (["image/png", 0.9, 0.8] as const) : ([0.9, 0.8, 0.7] as const)
-    for (const t of tries) {
-      const out = typeof t === "string" ? t : "image/jpeg"
-      const url = typeof t === "string" ? canvas.toDataURL(t) : canvas.toDataURL("image/jpeg", t)
-      const data = dataOf(url)
-      if (base64Bytes(data) <= MAX_IMAGE_BYTES) return { name: markedName(name, out), mime: out, data }
-    }
-  }
-  throw new Error("the marked image is too big to send")
+  const base = fitSide(nw, nh, MAX_IMAGE_SIDE)
+  const canvas = document.createElement("canvas")
+  canvas.width = base.width
+  canvas.height = base.height
+  const ctx = canvas.getContext("2d")
+  if (!ctx) throw new Error("this window can't draw the image")
+  ctx.drawImage(img, 0, 0, base.width, base.height)
+  ctx.scale(base.width / nw, base.height / nh)
+  paint(ctx, marks, strokeWidth(nw, nh), textSize(nw, nh), color, font)
+  const png = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"))
+  if (!png) throw new Error("this window can't draw the image")
+  if ((mime === "image/png" || mime === "image/gif") && png.size <= MAX_IMAGE_BYTES) return { name: markedName(name, "image/png"), mime: "image/png", data: await readBase64(png) }
+  const out = await compressImage(png, MAX_IMAGE_BYTES)
+  if (!out) throw new Error("the marked image couldn't be read")
+  return { name: markedName(name, out.mime), mime: out.mime, data: out.data }
 }
 
 async function toPng(blob: Blob): Promise<Blob> {

@@ -36,7 +36,7 @@ export const images = Effect.suspend(() => {
   const v = opt.image as string | string[] | undefined;
   const paths = Array.isArray(v) ? v : v ? [v] : [];
   if (!paths.length) return Effect.succeed(undefined);
-  return Effect.try({ try: () => loadImages(paths), catch: (err) => new Quit({ message: err instanceof Error ? err.message : String(err), code: 1 }) });
+  return Effect.tryPromise({ try: () => loadImages(paths), catch: (err) => new Quit({ message: err instanceof Error ? err.message : String(err), code: 1 }) });
 });
 
 export const taskArg = Effect.fn("kiwi.taskArg")(function* (i = 2) {
