@@ -4,13 +4,15 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AgentSession, runAgent } from "../src/agent.ts";
+import { outgrownCache } from "../src/agent/state.ts";
 import { signRequest } from "@kiwi/core/auth.ts";
 import { saveIdentity } from "../src/config.ts";
+import { keepBase, readBase } from "../src/config/cache.ts";
 import * as Effect from "effect/Effect";
 import { fetchRelay, Relay } from "@kiwi/core/client.ts";
 import { newChannelKey, seal, type ChannelAccess } from "@kiwi/core/crypto.ts";
 import { canonical, generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
-import { MAX_SNAPSHOT_LENGTH, SNAPSHOT_EVERY, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
+import { decodedWhole, FOLD_RULES, MAX_SNAPSHOT_LENGTH, olderRules, SNAPSHOT_EVERY, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
 import { openOwnerSession } from "../src/owner.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { OPEN_POLICY } from "../src/relay/policy.ts";
@@ -622,6 +624,198 @@ describe("sessions fold from a snapshot only when the log after it is whole", ()
     } finally {
       setSystemTime();
       proxy.stop(true);
+      done();
+    }
+  });
+});
+
+describe("a base folded under older fold rules is set aside wherever the log can be folded again (#1116)", () => {
+  async function scene(policy: Partial<typeof OPEN_POLICY> = {}) {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-rules-relay-"));
+    const home = mkdtempSync(join(tmpdir(), "kiwi-rules-home-"));
+    const was = process.env.KIWI_HOME;
+    process.env.KIWI_HOME = home;
+    const server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, policy: { ...OPEN_POLICY, ...policy } });
+    const s = await setupChannel(server.url.origin);
+    const done = () => {
+      server.stop(true);
+      if (was === undefined) delete process.env.KIWI_HOME;
+      else process.env.KIWI_HOME = was;
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(home, { recursive: true, force: true });
+    };
+    const olderBase = async (): Promise<FoldBase> => {
+      const { messages } = await s.ownerCh.history(0);
+      const kept: { base?: FoldBase } = {};
+      fold(messages, (await s.ownerCh.members()).map(toRoster), NOW, await s.ownerCh.rooms(), await s.ownerCh.guard(), null, (b) => void (kept.base = b));
+      if (!kept.base) throw new Error("no base");
+      return { ...kept.base, rules: 0, tasks: kept.base.tasks.map((t) => ({ ...t, title: "as older rules folded it" })) };
+    };
+    const cold = (name: string, relay = server.url.origin) => new AgentSession(name, { ...s.access, relay, code: s.code }, s.owner, () => {});
+    return { s, done, olderBase, cold, relay: server.url.origin };
+  }
+
+  const keptFrom = (given: FoldBase | null): FoldBase => {
+    const kept: { base?: FoldBase } = {};
+    fold([], [], NOW, null, null, given, (b) => void (kept.base = b));
+    if (!kept.base) throw new Error("the fold kept no base");
+    return kept.base;
+  };
+
+  test("a fold stamps the rules it ran under, and a fold resumed from an older base keeps the older number", () => {
+    const fresh = keptFrom(null);
+    expect(fresh.rules).toBe(FOLD_RULES);
+    expect(olderRules(fresh)).toBe(false);
+    const older = { ...fresh, rules: 0 };
+    expect(olderRules(older)).toBe(true);
+    expect(olderRules({ ...older, rules: undefined })).toBe(true);
+    expect(keptFrom(older).rules ?? 0).toBe(0);
+    expect(outgrownCache([], older)).toBe(false);
+  });
+
+  test("a log counts as whole only when every message from seq 1 to the head decoded", () => {
+    expect(decodedWhole({ head: 3, messages: [{ seq: 1 }, { seq: 2 }, { seq: 3 }] })).toBe(true);
+    expect(decodedWhole({ head: 3, messages: [{ seq: 1 }, { seq: 3 }] })).toBe(false);
+    expect(decodedWhole({ head: 3, messages: [{ seq: 2 }, { seq: 3 }] })).toBe(false);
+    expect(decodedWhole({ head: 0, messages: [] })).toBe(false);
+  });
+
+  test("a cold agent offered an older-rules snapshot folds the relay's whole log instead", async () => {
+    const { s, done, olderBase, cold } = await scene();
+    try {
+      const task = await s.ownerCh.send("", { ev: { op: "task.add", title: "as the log says" } });
+      await s.ownerCh.send("after");
+      await runAgent(s.ownerCh.fx.putSnapshot(await olderBase()));
+      expect((await runAgent(s.ownerCh.fx.snapshot()))?.tasks[0]?.title).toBe("as older rules folded it");
+      const { state } = await runAgent(cold("fresh").state());
+      expect(state.tasks.get(task)?.title).toBe("as the log says");
+    } finally {
+      done();
+    }
+  });
+
+  test("the owner's next snapshot isn't built on an older-rules one", async () => {
+    const { s, done, olderBase } = await scene();
+    try {
+      const task = await s.ownerCh.send("", { ev: { op: "task.add", title: "as the log says" } });
+      await runAgent(s.ownerCh.fx.putSnapshot(await olderBase()));
+      await s.ownerCh.send("one");
+      await s.ownerCh.send("two");
+      expect(await runAgent(s.ownerCh.fx.snapshotIfDue(1))).not.toBeNull();
+      const next = await runAgent(s.ownerCh.fx.snapshot());
+      expect(next?.rules).toBe(FOLD_RULES);
+      expect(next?.tasks.find((t) => t.id === task)?.title).toBe("as the log says");
+    } finally {
+      done();
+    }
+  });
+
+  test("when the relay has dropped the log's start, the older-rules snapshot is still used rather than nothing", async () => {
+    const { s, done, olderBase, cold } = await scene({ bytesPerChannel: 8000 });
+    try {
+      const task = await s.ownerCh.send("", { ev: { op: "task.add", title: "as the log says" } });
+      await runAgent(s.ownerCh.fx.putSnapshot(await olderBase()));
+      let sent = 0;
+      while (sent < 40 && (await s.ownerCh.history(0)).first === 1) await s.ownerCh.send(`m${sent++} ${"x".repeat(300)}`);
+      expect((await s.ownerCh.history(0)).first).toBeGreaterThan(1);
+      expect(await runAgent(s.ownerCh.fx.snapshotAt())).not.toBeNull();
+      const { state } = await runAgent(cold("pruned").state());
+      expect(state.tasks.get(task)?.title).toBe("as older rules folded it");
+    } finally {
+      done();
+    }
+  });
+
+  test("an agent's own cached base from older rules is folded again when the relay still has the whole log", async () => {
+    const { s, done, olderBase, cold } = await scene();
+    try {
+      const task = await s.ownerCh.send("", { ev: { op: "task.add", title: "as the log says" } });
+      await s.ownerCh.send("after");
+      keepBase(s.roomId, await olderBase());
+      const { state } = await runAgent(cold("cached").state());
+      expect(state.tasks.get(task)?.title).toBe("as the log says");
+      expect(readBase(s.roomId)).toBeNull();
+    } finally {
+      done();
+    }
+  });
+
+  test("an agent's own cached base from older rules stays when the relay has dropped the log's start", async () => {
+    const { s, done, olderBase, cold } = await scene({ bytesPerChannel: 8000 });
+    try {
+      const task = await s.ownerCh.send("", { ev: { op: "task.add", title: "as the log says" } });
+      const older = await olderBase();
+      let sent = 0;
+      while (sent < 40 && (await s.ownerCh.history(0)).first === 1) await s.ownerCh.send(`m${sent++} ${"x".repeat(300)}`);
+      expect((await s.ownerCh.history(0)).first).toBeGreaterThan(1);
+      expect(await runAgent(s.ownerCh.fx.snapshotAt())).toBeNull();
+      keepBase(s.roomId, older);
+      const { state } = await runAgent(cold("cached-pruned").state());
+      expect(state.tasks.get(task)?.title).toBe("as older rules folded it");
+      expect(readBase(s.roomId)?.rules ?? 0).toBe(0);
+    } finally {
+      done();
+    }
+  });
+
+  test("with both its own base and the relay's snapshot from older rules, an agent folds the whole log, and the next session does too", async () => {
+    const { s, done, olderBase, cold } = await scene();
+    try {
+      const task = await s.ownerCh.send("", { ev: { op: "task.add", title: "as the log says" } });
+      await s.ownerCh.send("after");
+      const older = await olderBase();
+      await runAgent(s.ownerCh.fx.putSnapshot(older));
+      keepBase(s.roomId, older);
+      expect((await runAgent(cold("both").state())).state.tasks.get(task)?.title).toBe("as the log says");
+      expect(readBase(s.roomId)).toBeNull();
+      expect((await runAgent(cold("both again").state())).state.tasks.get(task)?.title).toBe("as the log says");
+    } finally {
+      done();
+    }
+  });
+
+  test("an agent keeps its older-rules base and cache when the whole log can't be fetched after the first message", async () => {
+    const { s, done, olderBase, cold, relay } = await scene();
+    const proxy = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch: async (req) => {
+        const url = new URL(req.url);
+        if (url.pathname.endsWith("/messages") && url.searchParams.has("pages")) return Response.json({ error: "down" }, { status: 503 });
+        const body = req.method === "GET" || req.method === "HEAD" ? undefined : await req.arrayBuffer();
+        return fetch(`${relay}${url.pathname}${url.search}`, { method: req.method, headers: req.headers, body });
+      },
+    });
+    try {
+      const task = await s.ownerCh.send("", { ev: { op: "task.add", title: "as the log says" } });
+      const older = await olderBase();
+      keepBase(s.roomId, older);
+      await runAgent(cold("flaky", proxy.url.origin).state()).catch(() => null);
+      expect(readBase(s.roomId)?.tasks.find((t) => t.id === task)?.title).toBe("as older rules folded it");
+    } finally {
+      proxy.stop(true);
+      done();
+    }
+  });
+
+  test("an agent keeps its older-rules base when a message in the log can't be opened", async () => {
+    const { s, done, olderBase, cold, relay } = await scene();
+    try {
+      const task = await s.ownerCh.send("", { ev: { op: "task.add", title: "as the log says" } });
+      const garbage = await seal(newChannelKey(), s.roomId, { v: 1, id: "x", from: "nobody", kind: "msg", body: "sealed with a key nobody here has", ts: Date.now() });
+      const body = JSON.stringify({ ...garbage, e: 0 });
+      const posted = await fetch(`${relay}/v1/rooms/${s.roomId}/messages`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${await signRequest(s.owner, s.roomId, "POST", "/messages", body)}` },
+        body,
+      });
+      expect(posted.ok).toBe(true);
+      await s.ownerCh.send("after");
+      keepBase(s.roomId, await olderBase());
+      const { state } = await runAgent(cold("unreadable").state());
+      expect(state.tasks.get(task)?.title).toBe("as older rules folded it");
+      expect(readBase(s.roomId)?.rules ?? 0).toBe(0);
+    } finally {
       done();
     }
   });
