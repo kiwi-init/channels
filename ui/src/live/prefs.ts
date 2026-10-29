@@ -8,7 +8,7 @@ import { cleanThemes, deletedTheme, savedTheme, type ThemePrefs } from "~/theme/
 type Own = Pick<Prefs, "notify" | "enterSends" | "darkTheme" | "lightTheme" | "customThemes">
 
 const KEY = "ui.prefs"
-const DEFAULTS: Own = { notify: "mentions", enterSends: true, darkTheme: "channels-dark", lightTheme: "channels-light", customThemes: [] }
+const DEFAULTS: Own = { notify: "mentions", enterSends: true, darkTheme: "channels-oled", lightTheme: "channels-light", customThemes: [] }
 const SIZES: readonly TextSize[] = ["small", "default", "large", "larger"]
 const listeners = new Set<() => void>()
 let own: Own | null = null

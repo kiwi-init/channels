@@ -12,7 +12,7 @@ Canonical sources: `web/src/index.css` (`:root`, `:root[data-theme]`,
 
 ## 1. Identity in one line
 
-A quiet Messages-like conversation. White `#ffffff` / near-black `#0f0f0f`
+A quiet Messages-like conversation. White `#ffffff` / true OLED black `#000000`
 canvas, Apple system blue `#007aff` (light) / `#0a84ff` (dark), the system font,
 small purposeful motion, one shell with the page floating on it. What's
 chosen wears one quiet solid fill; everything around it is plain, so it
@@ -45,7 +45,7 @@ Light / dark are the two sides of each `light-dark()` in `index.css`:
 
 | Token | Light | Dark |
 |---|---|---|
-| `canvas` (conversation) | `#ffffff` | `#0f0f0f` |
+| `canvas` (conversation) | `#ffffff` | `#000000` |
 | `rail` (the window's sidebar and the phone's channel list, a step darker) | `#f2f2f5` | `#000000` |
 | `shell` (the window surface: the rail, or the Mac's vibrancy under `html[data-frost]`, clear, washed 10% with the tint when one is picked) | the rail / `transparent` | the rail / `transparent` |
 | `well` (a field's quiet solid fill) | `#f2f2f5` | `#232327` |
@@ -62,6 +62,13 @@ Light / dark are the two sides of each `light-dark()` in `index.css`:
 | `decide` (amber, someone waits) | `#a35a00` | `#f5b041` |
 | `live` (3:1 on the surfaces, a dot or a word beside one, not body text) | `#1f9a55` | `#32d074` |
 | `doing` (in-progress blue) | `#2f6fe4` | `#5b9bff` |
+
+Dark is true OLED black (OLED Black, `channels-oled`, the default dark in
+the desktop UI since T43): canvas, rail and panels are `#000000`; cards, the
+composer and popovers lift only to `#0c0c0d` and are told apart by `line`
+borders, not grey fills. Channels Dark (`#111113`) stays in the theme picker,
+and a theme someone already picked is kept. iOS and Android follow the same
+black.
 
 Supporting chrome: `line` (7% ink/white), `wash` (4/5%), `wash-2` (7/8%),
 `accent-wash` (10/16%), `pick` (the open channel: a neutral step, never a
