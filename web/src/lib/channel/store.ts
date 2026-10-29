@@ -3,7 +3,7 @@ import type { PublicAccess } from "../../../../desktop/src/bridge.ts"
 import { ops } from "../channel-ops"
 import { forgetHistory } from "../history"
 import { migrateLegacy } from "../legacy-seats"
-import { migrateChannels, saveChannels, secrets, type ChannelView } from "../secrets"
+import { migrateChannels, saveChannels, secrets, type ChannelView } from "@kiwi/secrets/secrets.ts"
 import { dropWrite } from "../write-behind"
 
 export const CHANGED = "mc:channels"

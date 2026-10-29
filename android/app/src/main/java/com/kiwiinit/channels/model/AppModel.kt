@@ -26,7 +26,6 @@ import com.kiwiinit.channels.engine.EnrollDigits
 import com.kiwiinit.channels.engine.EnrollStart
 import com.kiwiinit.channels.engine.HarnessesOn
 import com.kiwiinit.channels.engine.Launched
-import com.kiwiinit.channels.engine.LinkStart
 import com.kiwiinit.channels.engine.MessageView
 import com.kiwiinit.channels.engine.Push
 import com.kiwiinit.channels.engine.RoomView
@@ -68,10 +67,6 @@ sealed interface Phase {
 sealed interface Linking {
     data object Idle : Linking
 
-    data object Asking : Linking
-
-    data class Digits(val digits: String) : Linking
-
     data class SigningIn(val url: String?, val code: String) : Linking
 
     data class Approve(val digits: String) : Linking
@@ -83,7 +78,7 @@ const val DEFAULT_RELAY = "https://channels.kiwiinit.com"
 
 enum class Buzz { Tap, Warn, Fail, Done }
 
-class Attached(val id: String, val image: ImageBitmap, val data: ByteArray)
+class Attached(val id: String, val image: ImageBitmap, val data: ByteArray, val mime: String)
 
 data class Draft(val text: String = "", val attached: List<Attached> = emptyList()) {
     val isEmpty: Boolean get() = text.isBlank() && attached.isEmpty()
@@ -104,7 +99,6 @@ class AppModel(private val app: Application) {
     private val prefs = app.getSharedPreferences("channels", Context.MODE_PRIVATE)
     private val pictures = LruCache<String, ImageBitmap>(48)
     private var booted = false
-    private var waitingLink: String? = null
 
     val vault = Vault(app)
     val lock = Lock(app, vault.exists())
@@ -150,10 +144,6 @@ class AppModel(private val app: Application) {
             if (!startEngine()) return@launch
             val saved = vault.load()
             if (saved == null) phase = Phase.Unlinked else begin(saved)
-            waitingLink?.let {
-                waitingLink = null
-                link(it)
-            }
         }
     }
 
@@ -274,39 +264,6 @@ class AppModel(private val app: Application) {
         }
     }
 
-    fun linkWhenReady(code: String) {
-        if (phase == Phase.Starting) waitingLink = code else link(code)
-    }
-
-    fun link(code: String) {
-        scope.launch {
-            linking = Linking.Asking
-            try {
-                val started = wire.decodeFromJsonElement(
-                    LinkStart.serializer(),
-                    ask(
-                        buildJsonObject {
-                            put("op", "linkAsk")
-                            put("code", code.trim())
-                            put("label", deviceName())
-                        },
-                    ),
-                )
-                linking = Linking.Digits(started.digits)
-                val data = ask(buildJsonObject { put("op", "linkWait") }).toString().toByteArray()
-                vault.save(data)
-                linking = Linking.Idle
-                relinkAsked = false
-                rooms.clear()
-                begin(data)
-            } catch (e: EngineException) {
-                linking = Linking.Failed(e.message ?: "Linking didn't work. Start again from Link a phone.")
-            } catch (e: IllegalArgumentException) {
-                linking = Linking.Failed("The engine answered something this app can't read. Start again from Link a phone.")
-            }
-        }
-    }
-
     fun signIn() {
         scope.launch {
             linking = Linking.SigningIn(null, "")
@@ -346,12 +303,11 @@ class AppModel(private val app: Application) {
     }
 
     fun cancelLink() {
-        val signingIn = linking is Linking.SigningIn || linking is Linking.Approve
         linking = Linking.Idle
         relinkAsked = false
         scope.launch {
             try {
-                ask(buildJsonObject { put("op", if (signingIn) "enrollCancel" else "linkCancel") })
+                ask(buildJsonObject { put("op", "enrollCancel") })
             } catch (e: EngineException) {
                 // Nothing was waiting: there's nothing to cancel.
             }

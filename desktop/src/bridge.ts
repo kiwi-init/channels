@@ -387,6 +387,7 @@ export interface KiwiBridge {
   saveFile(name: string, text: string): Promise<string>;
   takeDroppedFiles(): Promise<DroppedFile[]>;
   takePastedImage(): Promise<PastedImage | null>;
+  compressImage(data: string, limit: number): Promise<PastedImage>;
   setBadge(count: number): Promise<void>;
   setAppearance(appearance: "system" | "light" | "dark"): Promise<void>;
   /** The UI booted. Channels boots its UI from a signed UI channel and rolls back one that doesn't say so in time. */

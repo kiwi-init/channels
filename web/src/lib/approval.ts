@@ -8,7 +8,7 @@ import { loadMember } from "./channel"
 import { linkOf, watches } from "./channel-ops"
 import { tendLists } from "./device-lists"
 import { followedLaunches, sawMembers, sawRequests } from "./launch-follow"
-import { bridge, secrets } from "./secrets"
+import { bridge, secrets } from "@kiwi/secrets/secrets.ts"
 
 /** Requests already announced, so each is notified once per run of the app. */
 const told = new Set<string>()

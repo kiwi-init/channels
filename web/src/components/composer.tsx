@@ -8,7 +8,6 @@ import { answered } from "@/lib/asks"
 import { draftOf, keepDraft, type DraftFile } from "@/lib/drafts"
 import { fileDrag, takeDropped } from "@/lib/dropped"
 import { takePasted } from "@/lib/pasted"
-import { needsCompressing } from "@/lib/needs-compressing"
 import { excerpt } from "@/lib/format"
 import { composerMentions, mentionText, withHandles } from "@/lib/mentions"
 import { cx } from "@/lib/utils"
@@ -156,17 +155,13 @@ export function Composer({
         toast(`${name} isn’t a PNG, JPEG, GIF, or WebP.`, "error")
         continue
       }
-      if (needsCompressing(f, MAX_IMAGE_BYTES)) {
+      if (f.size > MAX_IMAGE_BYTES) {
         void import("@/lib/compress-image").then(({ compressImage, renamed }) =>
           compressImage(f, MAX_IMAGE_BYTES).then((done) => {
-            if (!done) return toast(`${name} couldn’t be shrunk under ${Math.round(MAX_IMAGE_BYTES / 1024)} KB.`, "error")
+            if (!done) return toast(`${name} couldn’t be read.`, "error")
             setFiles((prev) => (prev.length < 8 ? [...prev, { ...done, name: renamed(name, done.mime) }] : prev))
           })
         )
-        continue
-      }
-      if (f.size > MAX_IMAGE_BYTES) {
-        toast(`${name} is over ${Math.round(MAX_IMAGE_BYTES / 1024)} KB. Attach a smaller image.`, "error")
         continue
       }
       const reader = new FileReader()

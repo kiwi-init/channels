@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
 import { installLine, joinCommand } from "./join-line"
-import { relayOrigin } from "./relay"
+import { relayOrigin } from "@kiwi/secrets/relay.ts"
 
 describe("relayOrigin", () => {
   test("keeps an http or https relay as its origin", () => {

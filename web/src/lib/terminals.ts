@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 
-import type { KiwiBridge } from "./secrets"
+import type { KiwiBridge } from "@kiwi/secrets/secrets.ts"
 
 type Terminals = Pick<KiwiBridge, "terminals" | "terminalHelpers" | "terminalPrefer" | "setLaunches"> & Partial<Pick<KiwiBridge, "setRemoteBypass">>
 

@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react"
 
 import { handleFor, NAME_RE } from "@kiwi/core/membership.ts"
 import { isJoinBlip } from "@/lib/join-blip"
-import { useSecrets } from "@/lib/secrets"
+import { useSecrets } from "@kiwi/secrets/secrets.ts"
 import { askToJoin, checkJoin, forgetPending, inviteInfo, type ChannelRow, type PendingJoin } from "@/lib/channel"
 import { Button, Spinner, TextField, errorText } from "./kit"
 import type { Phase } from "./onboarding"

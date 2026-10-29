@@ -4,6 +4,7 @@
 import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { home } from "./config.ts";
+import { shrinkImage } from "@kiwi/core/node/shrink-image.ts";
 import { MAX_IMAGE_BYTES, MAX_IMAGES, type InlineImage, type RasterMime } from "@kiwi/core/protocol.ts";
 
 const MIME: Record<string, RasterMime> = {
@@ -14,24 +15,23 @@ const MIME: Record<string, RasterMime> = {
   ".webp": "image/webp",
 };
 
-function kb(n: number): string {
-  return n >= 1024 * 1024 ? `${(n / (1024 * 1024)).toFixed(1)}MB` : `${Math.round(n / 1024)}KB`;
-}
-
-/** Read image files into attachments. Throws a plain Error naming the problem. */
-export function loadImages(paths: string[]): InlineImage[] {
+/** Read image files into attachments, compressing any over the size limit to fit it. Rejects with a plain Error naming the problem. */
+export async function loadImages(paths: string[]): Promise<InlineImage[]> {
   if (paths.length > MAX_IMAGES) throw new Error(`at most ${MAX_IMAGES} images per message`);
-  return paths.map((p) => {
-    if (!existsSync(p)) throw new Error(`no such image: ${p}`);
-    if (!statSync(p).isFile()) throw new Error(`not a file: ${p}`);
-    const mime = MIME[extname(p).toLowerCase()];
-    if (!mime) throw new Error(`${p}: image must be png, jpg, gif or webp`);
-    const raw = readFileSync(p);
-    if (raw.length > MAX_IMAGE_BYTES) {
-      throw new Error(`${p} is ${kb(raw.length)} (limit ${kb(MAX_IMAGE_BYTES)}); shrink or convert it to jpeg first`);
-    }
-    return { name: basename(p), mime, data: raw.toString("base64") };
-  });
+  return Promise.all(
+    paths.map(async (p) => {
+      if (!existsSync(p)) throw new Error(`no such image: ${p}`);
+      if (!statSync(p).isFile()) throw new Error(`not a file: ${p}`);
+      const mime = MIME[extname(p).toLowerCase()];
+      if (!mime) throw new Error(`${p}: image must be png, jpg, gif or webp`);
+      const raw = readFileSync(p);
+      if (raw.length <= MAX_IMAGE_BYTES) return { name: basename(p), mime, data: raw.toString("base64") };
+      const out = await shrinkImage(raw, MAX_IMAGE_BYTES).catch((err: unknown) => {
+        throw new Error(`${p} couldn't be read as an image`, { cause: err });
+      });
+      return { name: `${basename(p, extname(p))}.webp`, mime: out.mime, data: Buffer.from(out.bytes).toString("base64") };
+    }),
+  );
 }
 
 /** True when `child` is `parent` or a directory inside it, by path spelling (the directory may not exist yet). */

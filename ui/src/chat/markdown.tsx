@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react"
 import type { MarkdownStyle } from "react-native-enriched-markdown/lib/module/index.web.js"
 import { normalizeMarkdownStyle } from "react-native-enriched-markdown/lib/module/normalizeMarkdownStyle.web.js"
 import { ENRM_TEXT_CLASS } from "react-native-enriched-markdown/lib/module/web/globalStyles.js"
 import { parseMarkdown } from "react-native-enriched-markdown/lib/module/web/parseMarkdown.js"
 import { RenderNode } from "react-native-enriched-markdown/lib/module/web/renderers/index.js"
-import { buildStyles, zeroTrailingMargins } from "react-native-enriched-markdown/lib/module/web/styles.js"
+import { buildStyles, tableBodyRowStyle, zeroTrailingMargins } from "react-native-enriched-markdown/lib/module/web/styles.js"
 import { indexTaskItems, markInlineImages } from "react-native-enriched-markdown/lib/module/web/utils.js"
-import type { ASTNode } from "react-native-enriched-markdown/lib/typescript/src/web/types"
-import { bridge } from "@/lib/secrets"
+import type { ASTNode, RendererCallbacks } from "react-native-enriched-markdown/lib/typescript/src/web/types"
+import { compareCells, nextSort, sanitizeMarkdownUrl, type SortDir } from "@/lib/markdown"
+import { bridge } from "@kiwi/secrets/secrets.ts"
 
 import { keepParsed, parsedFor } from "~/chat/parsed"
 
@@ -132,6 +133,14 @@ const WRAP: CSSProperties = { display: "flex", flexDirection: "column" }
 
 const parsing = new Map<string, Promise<ASTNode>>()
 
+const OWN_LINK = /^kiwi-(?:mention|task|msg):/
+
+export function safeLinks(node: ASTNode): void {
+  const url = node.attributes?.url
+  if (node.type === "Link" && url !== undefined && !OWN_LINK.test(url) && !sanitizeMarkdownUrl(url)) delete node.attributes?.url
+  for (const child of node.children ?? []) safeLinks(child)
+}
+
 function parse(markdown: string): Promise<ASTNode> {
   const done = parsedFor(markdown)
   if (done) return Promise.resolve(done)
@@ -141,6 +150,7 @@ function parse(markdown: string): Promise<ASTNode> {
     .then((ast) => {
       indexTaskItems(ast)
       markInlineImages(ast)
+      safeLinks(ast)
       keepParsed(markdown, ast)
       return ast
     })
@@ -169,6 +179,73 @@ export function warm<T>(texts: readonly T[], link: (text: T) => string): () => v
     window.clearTimeout(timer)
   }
 }
+
+type Sort = { column: number; direction: SortDir } | null
+
+const textOf = (node: ASTNode): string => node.content ?? (node.children ?? []).map(textOf).join("")
+
+export function sortedRows(rows: readonly ASTNode[], sort: Sort): number[] {
+  const order = rows.map((_, i) => i)
+  if (!sort) return order
+  const texts = rows.map((row) => textOf(row.children?.[sort.column] ?? { type: "Text" }))
+  return order.sort((a, b) => {
+    const compared = compareCells(texts[a] ?? "", texts[b] ?? "")
+    if (compared === 0) return a - b
+    return sort.direction === "asc" ? compared : -compared
+  })
+}
+
+type Style = typeof NORMAL
+
+function Table({ node, style, styles, callbacks }: { node: ASTNode; style: Style; styles: Styles; callbacks: RendererCallbacks }) {
+  const [sort, setSort] = useState<Sort>(null)
+  const head = node.children?.find((c) => c.type === "TableHead")?.children?.[0]?.children ?? []
+  const body = useMemo(() => node.children?.find((c) => c.type === "TableBody")?.children ?? [], [node])
+  const order = useMemo(() => sortedRows(body, sort), [body, sort])
+  const inside = (cell: ASTNode) =>
+    cell.children?.map((child, i) => <RenderNode key={i} node={child} style={style} styles={styles} callbacks={callbacks} capabilities={CAPABILITIES} parentType={cell.type} index={i} />)
+  return (
+    <div style={styles.tableWrapper}>
+      <table style={styles.table}>
+        <thead>
+          <tr>
+            {head.map((cell, i) => {
+              const direction = sort?.column === i ? sort.direction : null
+              return (
+                <th
+                  key={i}
+                  scope="col"
+                  style={styles.tableHeaderCell[cell.attributes?.align ?? "default"]}
+                  aria-sort={direction === "asc" ? "ascending" : direction === "desc" ? "descending" : "none"}
+                >
+                  <button type="button" className="md-sort" aria-label={`Sort by ${textOf(cell) || `column ${i + 1}`}`} onClick={() => setSort((was) => nextSort(was, i))}>
+                    {inside(cell)}
+                    <span aria-hidden="true">{direction === "asc" ? "↑" : direction === "desc" ? "↓" : ""}</span>
+                  </button>
+                </th>
+              )
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {order.map((at, r) => (
+            <tr key={at} style={tableBodyRowStyle(style, r)}>
+              {body[at]?.children?.map((cell, c) => (
+                <td key={c} style={styles.tableCell[cell.attributes?.align ?? "default"]}>
+                  {inside(cell)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+const COPYABLE = 16
+
+const scrollsOn = (pre: HTMLElement) => pre.classList.toggle("code-more", pre.scrollWidth - pre.clientWidth - pre.scrollLeft > 2)
 
 export interface MarkdownProps {
   markdown: string
@@ -217,14 +294,62 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
         // A mention link someone wrote by hand with a stray %: it keeps no hover text.
       }
     }
+    for (const code of box.current?.querySelectorAll<HTMLElement>("code") ?? []) {
+      const text = code.textContent ?? ""
+      if (code.closest("pre, a") || text.length < COPYABLE || text.includes("\n")) continue
+      code.dataset.copy = ""
+      code.setAttribute("role", "button")
+      code.tabIndex = 0
+      code.title = "Copy"
+      code.setAttribute("aria-label", `Copy ${text}`)
+    }
   }, [ast])
+
+  useLayoutEffect(() => {
+    const pres = box.current?.querySelectorAll<HTMLElement>("pre") ?? []
+    if (pres.length === 0) return
+    const watch = new ResizeObserver((seen) => {
+      for (const { target } of seen) if (target instanceof HTMLElement) scrollsOn(target)
+    })
+    for (const pre of pres) watch.observe(pre)
+    return () => watch.disconnect()
+  }, [ast])
+
+  const scrolled = useCallback((e: { target: EventTarget }) => {
+    if (e.target instanceof HTMLPreElement) scrollsOn(e.target)
+  }, [])
+
+  const copyCode = useCallback(
+    (target: EventTarget) => {
+      const code = target instanceof Element ? target.closest<HTMLElement>("code[data-copy]") : null
+      if (!code || !box.current?.contains(code)) return false
+      void navigator.clipboard?.writeText(code.textContent ?? "").then(copied, () => {})
+      return true
+    },
+    [copied]
+  )
+  const clicked = useCallback(
+    (e: MouseEvent<HTMLDivElement>) => {
+      const selection = window.getSelection()
+      if (selection && !selection.isCollapsed) return
+      copyCode(e.target)
+    },
+    [copyCode]
+  )
+  const keyed = useCallback(
+    (e: KeyboardEvent<HTMLDivElement>) => {
+      if (e.repeat || (e.key !== "Enter" && e.key !== " ")) return
+      if (copyCode(e.target)) e.preventDefault()
+    },
+    [copyCode]
+  )
 
   const press = useCallback(
     ({ url }: { url: string }) => {
       if (url.startsWith("kiwi-mention:")) return onMention(decodeURIComponent(url.slice("kiwi-mention:".length)))
       if (url.startsWith("kiwi-task:")) return onTask(Number(url.slice("kiwi-task:".length)))
       if (url.startsWith("kiwi-msg:")) return onMessage(Number(url.slice("kiwi-msg:".length)))
-      if (!/^https?:\/\//i.test(url) && !url.startsWith("mailto:")) return
+      if (!sanitizeMarkdownUrl(url) || (!/^https?:\/\//i.test(url) && !url.startsWith("mailto:"))) return
       const b = bridge()
       if (b) void b.openExternal(url).catch(() => {})
       else window.open(url, "_blank", "noopener,noreferrer")
@@ -244,19 +369,17 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
   const children = ast?.children ?? []
 
   return (
-    <div className="md" ref={box}>
+    <div className="md" ref={box} onClick={clicked} onKeyDown={keyed} onScrollCapture={scrolled}>
       {ast && (
         <div className={ENRM_TEXT_CLASS} style={WRAP} ref={shown}>
-          {children.map((child, i) => (
-            <RenderNode
-              key={`${child.type}-${i}`}
-              node={child}
-              style={i === children.length - 1 ? LAST : NORMAL}
-              styles={i === children.length - 1 ? LAST_STYLES : STYLES}
-              callbacks={callbacks}
-              capabilities={CAPABILITIES}
-            />
-          ))}
+          {children.map((child, i) => {
+            const last = i === children.length - 1
+            return child.type === "Table" ? (
+              <Table key={`${child.type}-${i}`} node={child} style={last ? LAST : NORMAL} styles={last ? LAST_STYLES : STYLES} callbacks={callbacks} />
+            ) : (
+              <RenderNode key={`${child.type}-${i}`} node={child} style={last ? LAST : NORMAL} styles={last ? LAST_STYLES : STYLES} callbacks={callbacks} capabilities={CAPABILITIES} />
+            )
+          })}
         </div>
       )}
     </div>

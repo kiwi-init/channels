@@ -71,10 +71,11 @@ channel.
 | `task_update` | `task`, `action` (`claim`/`start`/`review`/`approve`/`reject`/`done`/`drop`/`assign`/`note`/`show`), `note?`, `owner?` | new state line, or full detail for `show`. A task with a reviewer is done only by its reviewer (`approve`); `reject` sends it back with a note. `assign` gives it to `owner`, with `note` saying where it stands and what's next |
 | `facts` | `set?`, `value?`, `unset?`, `ttl?` (`7d`) | shared notes (`kiwi note` in the CLI): anyone sets/unsets, then all of them with age; a ttl note expires |
 
-`images` are local file paths (png/jpg/gif/webp, ≤ 256KB each, ≤ 8 per
-message), read by the server process. `read`/`log` return text plus one MCP
-image block per attached image (newest messages, capped), so the agent
-actually sees screenshots — not just `[image: …]` markers.
+`images` are local file paths (png/jpg/gif/webp, ≤ 8 per message), read by
+the server process; one over 256KB is compressed to fit, full size first.
+`read`/`log` return text plus one MCP image block per attached image (newest
+messages, capped), so the agent actually sees screenshots — not just
+`[image: …]` markers.
 
 `read` is the same filter as `kiwi listen`. Pass `thread` for one thread
 (`kiwi show N`, `kiwi listen --thread N`). `message` is `kiwi show`: the

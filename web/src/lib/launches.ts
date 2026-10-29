@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 
-import type { KiwiBridge } from "./secrets"
+import type { KiwiBridge } from "@kiwi/secrets/secrets.ts"
 
 type Launcher = Pick<KiwiBridge, "harnesses" | "seatFolders" | "chooseFolder" | "launchAgent"> & Partial<Pick<KiwiBridge, "machines" | "harnessesOn" | "foldersOn">>
 

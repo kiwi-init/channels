@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react"
 
 import { IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
-import { KEYS_UNSEALED } from "@/lib/keys-at-rest"
+import { KEYS_UNSEALED } from "@kiwi/secrets/keys-at-rest.ts"
 import type { Prefs, Theme, UpdateCheck } from "~/model"
 import { updateFound } from "~/settings/update-check"
 import { useApp } from "~/nav"

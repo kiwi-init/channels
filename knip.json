@@ -35,6 +35,10 @@
       "includeEntryExports": true,
       "project": ["src/**/*.ts"]
     },
+    "packages/secrets": {
+      "entry": ["src/**/*.test.ts"],
+      "project": ["src/**/*.ts"]
+    },
     "web": {
       "entry": ["src/**/*.test.{ts,tsx}", "src/lib/no-elk.ts"],
       "project": ["src/**/*.{ts,tsx,css}"],

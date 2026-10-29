@@ -1,6 +1,6 @@
 import { clockNow } from "@/lib/channel"
 import { formatAgo } from "@/lib/format"
-import { useSecrets } from "@/lib/secrets"
+import { useSecrets } from "@kiwi/secrets/secrets.ts"
 
 export function PhoneRows() {
   const { phones } = useSecrets()

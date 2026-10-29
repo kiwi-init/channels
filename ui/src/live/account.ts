@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react"
 
 import { handleFor } from "@kiwi/core/membership.ts"
-import { useUnsealedKeys } from "@/lib/keys-at-rest"
-import { relayUrl } from "@/lib/relay"
-import { bridge, useSecrets, type ComputerView, type DeviceNewsView, type PhoneView } from "@/lib/secrets"
+import { useUnsealedKeys } from "@kiwi/secrets/keys-at-rest.ts"
+import { relayUrl } from "@kiwi/secrets/relay.ts"
+import { bridge, useSecrets, type ComputerView, type DeviceNewsView, type PhoneView } from "@kiwi/secrets/secrets.ts"
 import { useUpdate } from "@/lib/update"
 import { announce } from "~/kit/toasts"
 import { deviceNews, postDevicesNow } from "~/live/devices"

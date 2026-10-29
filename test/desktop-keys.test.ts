@@ -359,7 +359,7 @@ describe("the wire", () => {
 describe("the window's code holds no channel keys", () => {
   const files = (dir: string): string[] =>
     readdirSync(dir, { withFileTypes: true }).flatMap((d) => (d.isDirectory() ? files(join(dir, d.name)) : /\.tsx?$/.test(d.name) && !/\.test\.tsx?$/.test(d.name) ? [join(dir, d.name)] : []));
-  const allowed = new Set(["web/src/lib/channel-local.ts"]);
+  const allowed = new Set(["packages/secrets/src/channel-local.ts"]);
   const forbidden: [RegExp, string][] = [
     [/import\s*\{[^}]*\bChannel\b[^}]*\}\s*from\s*"[^"]*\/client(\.ts)?"/, "Channel from client.ts"],
     [/\bgenerateIdentity\b/, "generateIdentity"],
@@ -371,7 +371,7 @@ describe("the window's code holds no channel keys", () => {
   test("only channel-local.ts (the plain-browser dev mode) touches them", () => {
     const root = join(import.meta.dir, "..");
     const bad: string[] = [];
-    for (const f of files(join(root, "web/src"))) {
+    for (const f of [...files(join(root, "web/src")), ...files(join(root, "packages/secrets/src"))]) {
       const rel = f.slice(root.length + 1);
       if (allowed.has(rel)) continue;
       const text = readFileSync(f, "utf8");

@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react"
 
 import type { WakeSeat } from "@kiwi/core/wake.ts"
-import type { KiwiBridge } from "./secrets"
+import type { KiwiBridge } from "@kiwi/secrets/secrets.ts"
 
 type Wake = Pick<KiwiBridge, "wakeSeats" | "setWake">
 

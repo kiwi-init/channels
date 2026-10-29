@@ -1,17 +1,20 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { join } from "node:path";
+import { createInterface } from "node:readline/promises";
 
 import * as Effect from "effect/Effect";
 
 import { Channel, eachLive } from "@kiwi/core/client.ts";
 import { newRoomId } from "@kiwi/core/crypto.ts";
-import { generateIdentity } from "@kiwi/core/identity.ts";
+import type { DeviceLink } from "@kiwi/core/devices.ts";
+import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
 import { handleFor } from "@kiwi/core/membership.ts";
 import { personaOf } from "@kiwi/core/personality.ts";
 import { PRESETS } from "@kiwi/core/presets.ts";
 import type { Activity } from "@kiwi/core/protocol.ts";
 
+import { createDeviceHost } from "../../desktop/src/devices.ts";
 import type { ChannelIdentityView } from "../../desktop/src/bridge.ts";
 import type { AgentSession } from "../../src/agent.ts";
 import type { Saved } from "../engine/wire.ts";
@@ -29,6 +32,7 @@ const lanAddress = (): string => {
 const root = arg("dir", join(process.cwd(), ".ios-dev"));
 const port = Number(arg("port", "8790"));
 const personName = arg("name", "Jonatas Walker");
+const user = arg("user", "phone");
 const out = arg("saved-file", join(root, "phone.json"));
 
 rmSync(root, { recursive: true, force: true });
@@ -37,11 +41,12 @@ process.env.KIWI_HOME = join(root, "home");
 process.env.KIWI_NO_HOOKS = "1";
 
 const { startRelay } = await import("../../src/relay/bun.ts");
+const { devHumanAuth } = await import("../../src/relay/human.ts");
 const { openSession, runAgent } = await import("../../src/agent.ts");
 const { openOwnerSession } = await import("../../src/owner.ts");
 const { loadIdentity, saveConfig } = await import("../../src/config.ts");
 
-const server = startRelay({ port, hostname: "0.0.0.0", dataDir: join(root, "relay") });
+const server = startRelay({ port, hostname: "0.0.0.0", dataDir: join(root, "relay"), human: devHumanAuth() });
 const local = `http://127.0.0.1:${port}`;
 const relay = `http://${arg("host", lanAddress())}:${port}`;
 const say = (line: string) => process.stdout.write(`${line}\n`);
@@ -60,10 +65,10 @@ const program = Effect.gen(function* () {
   const { code, access } = yield* Channel.fx.create(
     local,
     owner,
-    { name: handle, role: "owner", kind: "human", display: personName },
+    { name: handle, role: "owner", kind: "human", display: personName, person: person.pk },
     ids.map((id) => ({ ...id, info: { name: id.name } })),
     roomId,
-    null,
+    `dev:${user}`,
     title,
   );
   const cfg = { ...access, relay: local, code, owner: handle };
@@ -135,10 +140,53 @@ const program = Effect.gen(function* () {
   yield* Effect.forkChild(beacon(win, () => ({ state: "working", tool: "Edit", since })));
   yield* Effect.forkChild(beacon(lead, () => ({ state: "idle" })));
 
+  const held: { device: Identity | null; links: DeviceLink[] } = { device: null, links: [] };
+  const host = createDeviceHost({
+    relayUrl: () => relay,
+    token: async () => `dev:${user}`,
+    person: () => person,
+    who: () => ({ name: person.name, pk: person.pk, xpk: personXpk }),
+    device: () => held.device,
+    saveDevice: (d) => void (held.device = d),
+    links: () => held.links,
+    saveLinks: (l) => void (held.links = l),
+    channels: () => [{ label: title, code }],
+    label: () => "dev-channel",
+    os: () => "macOS",
+    wipe: () => {},
+  });
+  const prompt = createInterface({ input: process.stdin, output: process.stdout });
+  const signingIn = Effect.gen(function* () {
+    const answered = new Set<string>();
+    for (;;) {
+      const ask = yield* Effect.promise(() => host.poll());
+      if (!ask || answered.has(ask.id)) {
+        yield* Effect.sleep(500);
+        continue;
+      }
+      answered.add(ask.id);
+      yield* Effect.promise(() => host.answer(ask.id));
+      for (;;) {
+        const digits = yield* Effect.promise(() => prompt.question(`${ask.label} asks to sign in; type the six digits it shows: `));
+        const result = yield* Effect.promise(() => host.confirm(ask.id, digits.trim()));
+        if (result.ok) say(`${result.label} is in: the channel is on the phone`);
+        else say(result.left > 0 ? `those aren't the digits, ${result.left} tries left` : "out of tries: sign in again on the phone");
+        if (result.ok || result.left <= 0) break;
+      }
+    }
+  });
+  const lettingIn = Effect.forever(
+    Effect.andThen(
+      Effect.promise(() => human.ch.autoApprove(person.pk, [], []).catch(() => [])),
+      Effect.sleep(1_000),
+    ),
+  );
+  yield* Effect.forkChild(signingIn);
+  yield* Effect.forkChild(lettingIn);
   const seat: ChannelIdentityView = { label: title, idName: handle, pk: owner.pk, sk: owner.sk, xpk: owner.xpk, xsk: owner.xsk, roomId, code, access, at: Date.now(), name: title };
   const saved: Saved = { relay, person: { name: person.name, pk: person.pk, sk: person.sk, xpk: personXpk, xsk: personXsk }, seats: [seat] };
   writeFileSync(out, JSON.stringify(saved));
-  say(`relay ${relay}`);
+  say(`relay ${relay}, dev sign-in ${user}`);
   say(`a phone's saved keys for this channel are in ${out}`);
 
   const answers = ["On it.", "Good call, doing that now.", "Noted. I'll post when it's in review.", "Makes sense: I'll tell win."];

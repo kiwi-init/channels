@@ -1,11 +1,11 @@
-import { hasBridge, relayUrl } from "../lib/relay"
+import { hasBridge, relayUrl } from "@kiwi/secrets/relay.ts"
 import { CheckListIcon, LockIcon } from "@hugeicons/core-free-icons"
 import { useState } from "react"
 
 import { ROBOT_FACES, type RobotFace } from "@kiwi/core/protocol.ts"
 
 import { tokenForCreate, useSignInMode } from "@/lib/auth"
-import { bridge, useSecrets } from "@/lib/secrets"
+import { bridge, useSecrets } from "@kiwi/secrets/secrets.ts"
 import { isSignInGone } from "@/lib/session"
 import { createChannel, isJoinCode } from "@/lib/channel"
 import { linkOf } from "@/lib/channel-ops"

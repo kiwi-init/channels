@@ -263,6 +263,7 @@ export interface QuestionAsk {
   task?: number
   idle?: true
   step?: Step
+  handoff?: { url: string; label: string; expiresAt: number }
   answer?: { text: string; by: string; at: number }
 }
 

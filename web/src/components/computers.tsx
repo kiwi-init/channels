@@ -5,7 +5,7 @@ import { cx } from "@/lib/utils"
 import { useMachinesOnline } from "@/lib/launches"
 import { adoptThisComputer, removeComputer, type ComputerView } from "@/lib/computers"
 import { formatAgo } from "@/lib/format"
-import { bridge, useSecrets } from "@/lib/secrets"
+import { bridge, useSecrets } from "@kiwi/secrets/secrets.ts"
 import { RemoteSettings } from "./computer-settings"
 import { Button, Modal, errorText, toast } from "./kit"
 

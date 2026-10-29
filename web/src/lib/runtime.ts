@@ -8,7 +8,7 @@ import { Storage, localStore } from "./storage"
 // The dashboard on Effect (docs/plans/effect.md, "The web"): React stays at the
 // edge. What a component starts runs here, on one runtime with this browser's
 // services: its storage and the relay over HTTP. (The person's secrets live behind the
-// desktop bridge: lib/secrets.ts.)
+// desktop bridge: packages/secrets/src/secrets.ts.)
 // A step that fails rejects with its typed error (an Error, with the text the
 // page has always shown), so a component branches on the tag, never the text.
 

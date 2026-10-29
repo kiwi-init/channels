@@ -96,12 +96,12 @@ test("a message that is only an svg keeps its text and loses the image", async (
   expect(got?.imgs).toBeUndefined();
 });
 
-test("the cli refuses an svg file", () => {
+test("the cli refuses an svg file", async () => {
   const dir = mkdtempSync(join(tmpdir(), "kiwi-images-cli-"));
   try {
     const path = join(dir, "pic.svg");
     writeFileSync(path, "<svg/>");
-    expect(() => loadImages([path])).toThrow(/png, jpg, gif or webp/);
+    await expect(loadImages([path])).rejects.toThrow(/png, jpg, gif or webp/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

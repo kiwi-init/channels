@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from "bun:test"
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
-import type { GithubRepoView } from "@/lib/secrets"
+import type { GithubRepoView } from "@kiwi/secrets/secrets.ts"
 import type { Reach } from "./repos"
 
 mock.module("@/lib/avatars", () => ({ avatarUrl: () => "", robotUrl: () => "", robotFor: () => "blue", harnessUrl: () => "" }))

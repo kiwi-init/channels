@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 
 import { PLACE_NAMES, type PlaceKind, type PlacedSeat, type ShowResult } from "@kiwi/core/terminals.ts"
-import { bridge } from "./secrets"
+import { bridge } from "@kiwi/secrets/secrets.ts"
 
 export type { PlacedSeat, ShowResult }
 

@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
 import android.net.Uri
+import android.os.Build
 import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -82,6 +83,11 @@ import com.kiwiinit.channels.engine.RoomView
 import com.kiwiinit.channels.model.AppModel
 import com.kiwiinit.channels.model.Attached
 import com.kiwiinit.channels.model.Buzz
+import com.kiwiinit.channels.model.JPEG_FLOOR
+import com.kiwiinit.channels.model.MAX_IMAGE_BYTES
+import com.kiwiinit.channels.model.WEBP_FLOOR
+import com.kiwiinit.channels.model.capped
+import com.kiwiinit.channels.model.fitImage
 import com.kiwiinit.channels.model.Draft
 import com.kiwiinit.channels.model.Outgoing
 import com.kiwiinit.channels.model.Spot
@@ -91,27 +97,32 @@ import com.kiwiinit.channels.theme.Tone
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.util.UUID
-import kotlin.math.max
-import kotlin.math.min
-import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+private const val PREVIEW_SIDE = 512
 
 private suspend fun shrink(context: Context, uri: Uri): Attached? =
     withContext(Dispatchers.IO) {
         try {
             val source = ImageDecoder.createSource(context.contentResolver, uri)
-            val bitmap = ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
-                val w = info.size.width
-                val h = info.size.height
-                val scale = min(1f, 1600f / max(w, h).toFloat())
-                decoder.setTargetSize(max(1, (w * scale).roundToInt()), max(1, (h * scale).roundToInt()))
+            val full = ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                val (w, h) = capped(info.size.width, info.size.height)
+                decoder.setTargetSize(w, h)
                 decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
             }
-            val out = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 70, out)
-            Attached(UUID.randomUUID().toString(), bitmap.asImageBitmap(), out.toByteArray())
+            val webp = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+            val format = if (webp) Bitmap.CompressFormat.WEBP_LOSSY else Bitmap.CompressFormat.JPEG
+            var drawn = full
+            val fit = fitImage(full.width, full.height, MAX_IMAGE_BYTES, if (webp) WEBP_FLOOR else JPEG_FLOOR) { w, h, quality ->
+                if (drawn.width != w || drawn.height != h) drawn = Bitmap.createScaledBitmap(full, w, h, true)
+                val out = ByteArrayOutputStream()
+                if (drawn.compress(format, quality, out)) out.toByteArray() else null
+            } ?: return@withContext null
+            val thumb = PREVIEW_SIDE.toFloat() / maxOf(drawn.width, drawn.height)
+            val preview = if (thumb < 1f) Bitmap.createScaledBitmap(drawn, maxOf(1, (drawn.width * thumb).toInt()), maxOf(1, (drawn.height * thumb).toInt()), true) else drawn
+            Attached(UUID.randomUUID().toString(), preview.asImageBitmap(), fit.bytes, if (webp) "image/webp" else "image/jpeg")
         } catch (e: IOException) {
             // A file the decoder can't read isn't attached; the others still are.
             null
@@ -201,7 +212,7 @@ fun Dock(
         val ask = answering
         val review = sendingBack
         val re = replyTo?.seq
-        val pictures = attached.mapIndexed { i, a -> Outgoing("photo-${i + 1}.jpg", "image/jpeg", Base64.encodeToString(a.data, Base64.NO_WRAP)) }
+        val pictures = attached.mapIndexed { i, a -> Outgoing("photo-${i + 1}.${if (a.mime == "image/webp") "webp" else "jpg"}", a.mime, Base64.encodeToString(a.data, Base64.NO_WRAP)) }
         scope.launch {
             try {
                 if (pictures.isEmpty() && review != null) {

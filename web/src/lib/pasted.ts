@@ -1,5 +1,5 @@
 import type { KiwiBridge } from "../../../desktop/src/bridge.ts"
-import { bridge } from "./secrets"
+import { bridge } from "@kiwi/secrets/secrets.ts"
 
 type Paste = Pick<DataTransfer, "types" | "files" | "getData">
 

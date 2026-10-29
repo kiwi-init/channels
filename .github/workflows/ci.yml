@@ -69,6 +69,9 @@ jobs:
       - uses: ./.github/actions/setup
       - name: core types
         run: bunx tsrs --noEmit && bunx tsrs --noEmit -p tsconfig.worker.json
+      - name: secrets types
+        if: ${{ !cancelled() }}
+        run: bunx tsrs --noEmit -p packages/secrets/tsconfig.json
       - name: web types
         if: ${{ !cancelled() }}
         run: cd web && bunx tsrs -b
@@ -676,7 +679,7 @@ jobs:
     needs: plan
     if: fromJSON(needs.plan.outputs.run)['android']
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup

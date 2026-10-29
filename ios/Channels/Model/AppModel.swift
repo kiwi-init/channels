@@ -18,19 +18,10 @@ enum Phase: Equatable {
 
 enum Linking: Equatable {
     case idle
-    case asking
-    case digits(String)
     case opening
     case signingIn(url: String?, code: String)
     case approve(String)
     case failed(String)
-
-    var signingIn: Bool {
-        switch self {
-        case .opening, .signingIn, .approve: true
-        default: false
-        }
-    }
 }
 
 struct Draft {
@@ -174,22 +165,6 @@ final class AppModel {
         }
     }
 
-    func link(_ code: String) async {
-        linking = .asking
-        do {
-            let started = try await engine.ask(["op": "linkAsk", "code": code.trimmingCharacters(in: .whitespacesAndNewlines), "label": UIDevice.current.name], as: LinkStart.self)
-            linking = .digits(started.digits)
-            let data = try await engine.ask(["op": "linkWait"])
-            Vault.save(data)
-            linking = .idle
-            relinkAsked = false
-            rooms = [:]
-            await start(data)
-        } catch {
-            linking = .failed(error.localizedDescription)
-        }
-    }
-
     func signIn() async {
         linking = .opening
         do {
@@ -214,10 +189,9 @@ final class AppModel {
     }
 
     func cancelLink() async {
-        let enrolling = linking.signingIn
         linking = .idle
         relinkAsked = false
-        try? await engine.ask(["op": enrolling ? "enrollCancel" : "linkCancel"])
+        try? await engine.ask(["op": "enrollCancel"])
     }
 
     @discardableResult

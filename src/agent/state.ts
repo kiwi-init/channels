@@ -7,11 +7,13 @@ import type { Identity } from "@kiwi/core/identity.ts";
 import type { DaemonPeek } from "../daemon/protocol.ts";
 import { seatHolds, seatRefusal } from "../hold.ts";
 import { daemonMark, daemonPeek } from "../daemon/rpc.ts";
-import { GENERAL_ROOM, knownOp, outgrown, PAGE_LIMIT, type Message } from "@kiwi/core/protocol.ts";
+import { decodedWhole, GENERAL_ROOM, knownOp, olderRules, outgrown, PAGE_LIMIT, type Message } from "@kiwi/core/protocol.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { findRoom, fold, rosterOf, type ChannelState, type FoldBase, type GuardFloor, type Roster, type RoomsFloor } from "@kiwi/core/state.ts";
 import { LAST_MARK_MS, lastSeq, Look, orNone, type Agent, type Delivery } from "./shared.ts";
 import { narrows, wants } from "./wants.ts";
+
+type WholeLog = Effect.Success<ReturnType<Channel["fx"]["history"]>>;
 
 const CACHE_TRIM_AT = 800;
 const CACHE_KEEP = 300;
@@ -45,6 +47,7 @@ export class SessionState {
   private daemonLive = false;
   protected base: FoldBase | null = null;
   protected partial = false;
+  private replayed: { page: WholeLog | null } | null = null;
   readonly opened: number;
 
   constructor(
@@ -87,6 +90,18 @@ export class SessionState {
     return Effect.void;
   }
 
+  private wholeLog(): Effect.Effect<WholeLog | null, never, Agent> {
+    const tried = this.replayed;
+    if (tried) return Effect.succeed(tried.page);
+    return Effect.gen({ self: this }, function* () {
+      const one = yield* Effect.orElseSucceed(this.ch.fx.page(0, 1), () => []);
+      const all = one[0]?.seq === 1 ? yield* Effect.orElseSucceed(this.ch.fx.history(0), () => null) : null;
+      const page = all && decodedWhole(all) ? all : null;
+      this.replayed = { page };
+      return page;
+    });
+  }
+
   readonly sync = Effect.fn("AgentSession.sync")({ self: this }, function* (this: SessionState, peeked?: DaemonPeek | null) {
     const cache = yield* Cache;
     if (!this.log) {
@@ -102,19 +117,29 @@ export class SessionState {
         this.base ??= base;
       }
     }
+    const replaced = this.base && olderRules(this.base) ? yield* this.wholeLog() : null;
+    if (replaced) {
+      this.base = null;
+      this.log = replaced.messages;
+      this.saved = lastSeq(replaced.messages);
+      yield* cache.replace(this.cfg.roomId, replaced.messages);
+      yield* cache.dropBase(this.cfg.roomId);
+    }
     const look = yield* Look;
     const seen = peeked === undefined ? yield* this.peek() : peeked;
     const first = this.log[0]?.seq;
     const holed = first !== undefined && first > (this.base?.n ?? 0) + 1;
     const current = !holed && seen !== null && seen.head <= lastSeq(this.log) && lastSeq(this.log) >= this.owed;
     if (!current && (holed || !look?.fetched.has(this) || lastSeq(this.log) < this.owed)) {
-      const fetched = !this.base && (first === undefined || first > 1) ? yield* this.ch.fx.snapshot() : null;
+      const offered = !this.base && (first === undefined || first > 1) ? yield* this.ch.fx.snapshot() : null;
+      const whole = offered && olderRules(offered) ? yield* this.wholeLog() : null;
+      const fetched = whole ? null : offered;
       const floor = this.base?.n ?? fetched?.n ?? 0;
       const hole = first !== undefined && first > floor + 1;
       const from = hole ? floor : Math.max(lastSeq(this.log), floor);
       const offline = yield* OfflineReads;
       const cachedOnly = !!offline && !fetched && this.log.length > 0;
-      const page = yield* this.ch.fx.history(from).pipe(
+      const page = yield* (whole && from === 0 ? Effect.succeed(whole) : this.ch.fx.history(from)).pipe(
         Effect.catchIf(
           (err) => cachedOnly && relayDown(err),
           (err) => Effect.sync(() => (offline?.note(downWhy(err)), null)),

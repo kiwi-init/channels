@@ -3,7 +3,7 @@ import type { PresenceFields } from "@kiwi/core/client.ts"
 
 import type { CallResult, ChannelCallName, ChannelCalls, ChannelOps, FollowEvent } from "../../../desktop/src/bridge.ts"
 import { errorOf, remoteOps } from "./channel-remote"
-import { bridge } from "./secrets"
+import { bridge } from "@kiwi/secrets/secrets.ts"
 import { makeWatches, type Watches } from "./watch"
 
 export { errorOf }
@@ -19,7 +19,7 @@ export function watches(): Watches {
 
 function lazyLocalOps(): ChannelOps {
   let real: Promise<ChannelOps> | null = null
-  const local = () => (real ??= import("./channel-local").then((m) => m.localOps()))
+  const local = () => (real ??= import("@kiwi/secrets/channel-local.ts").then((m) => m.localOps()))
   return {
     call: (code, op, ...args) => local().then((o) => o.call(code, op, ...args)),
     create: (name, token, me) => local().then((o) => o.create(name, token, me)),

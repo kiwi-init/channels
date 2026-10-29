@@ -12,7 +12,7 @@ import { choicesProblem, choicesWords, contextLabel, EFFORT_LABEL, fitChoices, M
 import { followLaunch, sawMembers, type LaunchSeen } from "@/lib/launch-follow"
 import { launcher } from "@/lib/launches"
 import { usePersonalities } from "@/lib/personalities"
-import { relayUrl } from "@/lib/relay"
+import { relayUrl } from "@kiwi/secrets/relay.ts"
 import { showLabel, showSeat } from "@/lib/show-seat"
 import { useLaunchesHere } from "@/lib/terminals"
 import { cx } from "@/lib/utils"

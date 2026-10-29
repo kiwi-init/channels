@@ -4,13 +4,13 @@
  * A failed job does not block the next.
  */
 export function persistQueue(): (job: () => Promise<void>) => Promise<void> {
-  let tail: Promise<void> = Promise.resolve()
+  let tail: Promise<void> = Promise.resolve();
   return (job) => {
-    const run = tail.then(job, job)
+    const run = tail.then(job, job);
     tail = run.then(
       () => undefined,
-      () => undefined
-    )
-    return run
-  }
+      () => undefined,
+    );
+    return run;
+  };
 }

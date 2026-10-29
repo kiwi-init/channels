@@ -1,7 +1,7 @@
 import { useState } from "react"
 
-import { KEYS_UNSEALED, useUnsealedKeys } from "@/lib/keys-at-rest"
-import { createPerson } from "@/lib/secrets"
+import { KEYS_UNSEALED, useUnsealedKeys } from "@kiwi/secrets/keys-at-rest.ts"
+import { createPerson } from "@kiwi/secrets/secrets.ts"
 import { RobotAvatar } from "./robot"
 import { Button, Spinner, TextField, errorText } from "./kit"
 
