@@ -1,5 +1,5 @@
 import { clockNow } from "@kiwi/channel/clock.ts"
-import { formatAgo } from "@/lib/format"
+import { formatAgo } from "@kiwi/app/format.ts"
 import { useSecrets } from "@kiwi/secrets/secrets.ts"
 
 export function PhoneRows() {

@@ -2,9 +2,9 @@ import type { PermissionSettled, PermissionShown } from "@kiwi/core/permission.t
 import { Cancel01Icon, CheckmarkCircle02Icon, CommandLineIcon } from "@hugeicons/core-free-icons"
 import { useEffect, useState } from "react"
 
-import { formatTime } from "@/lib/format"
-import type { Settled } from "@/lib/permission-settled"
-import { permissionCode } from "@/lib/permission-view"
+import { formatTime } from "@kiwi/app/format.ts"
+import type { Settled } from "@kiwi/app/permission-settled.ts"
+import { permissionCode } from "@kiwi/app/permission-view.ts"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
 

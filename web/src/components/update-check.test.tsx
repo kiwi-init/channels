@@ -6,7 +6,7 @@ import type { UpdateView } from "../../../desktop/src/bridge.ts"
 let current: UpdateView | null = null
 mock.module("@/lib/avatars", () => ({ avatarUrl: () => "", robotUrl: () => "", robotFor: () => "blue", harnessUrl: () => "" }))
 mock.module("@kiwi/secrets/secrets.ts", () => ({ bridge: () => ({ checkUpdate: async () => ({ state: "failed" }) }) }))
-mock.module("@/lib/update", () => ({ useUpdate: () => current, openRelease: () => {}, restartToUpdate: () => {} }))
+mock.module("@kiwi/app/update.ts", () => ({ useUpdate: () => current, openRelease: () => {}, restartToUpdate: () => {} }))
 const { UpdateCheck } = await import("./update-check.tsx")
 
 test("a failed automatic update keeps a manual retry beside the release download", () => {

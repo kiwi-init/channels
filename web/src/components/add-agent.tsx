@@ -2,7 +2,7 @@ import { relayUrl } from "@kiwi/secrets/relay.ts"
 import { Copy01Icon, Tick02Icon } from "@hugeicons/core-free-icons"
 import { useState } from "react"
 
-import { joinCommand, kiwiJoin } from "@/lib/join-line"
+import { joinCommand, kiwiJoin } from "@kiwi/app/join-line.ts"
 import { cx } from "@/lib/utils"
 import { RobotAvatar } from "./robot"
 import { Icon } from "./icon"

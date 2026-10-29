@@ -9,7 +9,7 @@ import { EVENT_OPS_VERSION, isQuiet, knownOp, outgrown, PROTOCOL_VERSION, wellFo
 import { openSnapshot, sealSnapshot } from "@kiwi/core/snapshot.ts";
 import { fold, type FoldBase, type Roster } from "@kiwi/core/state.ts";
 import { outgrownCache } from "../src/agent/state.ts";
-import { logLines } from "../web/src/lib/log-export.ts";
+import { logLines } from "@kiwi/app/log-export.ts";
 
 const T0 = 1_760_000_000_000;
 const fixture = JSON.parse(readFileSync(join(import.meta.dir, "fixtures", "newer-ops-log.json"), "utf8")) as {

@@ -3,7 +3,7 @@ import { useState } from "react"
 import { createPortal } from "react-dom"
 
 import type { Room } from "@kiwi/core/state/types.ts"
-import { roomProblem } from "@/lib/rooms"
+import { roomProblem } from "@kiwi/app/rooms.ts"
 import { cx } from "@/lib/utils"
 import { useChannelSlot } from "../shell-sidebar"
 import { Icon } from "../icon"

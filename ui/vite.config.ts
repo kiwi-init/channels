@@ -10,7 +10,6 @@ export default defineConfig({
       "react-native": resolve(import.meta.dirname, "./src/chat/react-native.ts"),
       katex: resolve(import.meta.dirname, "./src/chat/react-native.ts"),
       "~": resolve(import.meta.dirname, "./src"),
-      "@": resolve(import.meta.dirname, "../web/src"),
     },
     dedupe: ["react", "react-dom"],
   },

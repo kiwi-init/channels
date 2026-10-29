@@ -12,6 +12,7 @@
     "typecheck": "tsrs -b"
   },
   "dependencies": {
+    "@kiwi/app": "workspace:*",
     "@kiwi/channel": "workspace:*",
     "@kiwi/core": "workspace:*",
     "@kiwi/secrets": "workspace:*",

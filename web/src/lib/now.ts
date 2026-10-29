@@ -1,7 +1,7 @@
 import { prChecks, type ChannelState, type Task } from "@kiwi/core/state.ts"
 import { statusOf, type TaskStatus } from "@kiwi/core/status.ts"
 import { FAILED } from "@kiwi/core/prs.ts"
-import { startOfDay } from "./views"
+import { startOfDay } from "@kiwi/app/views.ts"
 
 const NEXT_NOTE = "next"
 export const WORKING_SHOWN = 5

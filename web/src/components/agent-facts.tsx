@@ -5,7 +5,7 @@
 import type { Runs } from "@kiwi/core/membership.ts"
 import type { Card } from "@kiwi/core/protocol.ts"
 import { outsideRepos } from "@kiwi/core/state.ts"
-import { harnessName } from "@/lib/harness"
+import { harnessName } from "@kiwi/app/harness.ts"
 import { cx } from "@/lib/utils"
 
 const OS: Record<string, string> = { macos: "macOS", linux: "Linux", windows: "Windows" }

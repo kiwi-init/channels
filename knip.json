@@ -35,6 +35,10 @@
       "includeEntryExports": true,
       "project": ["src/**/*.ts"]
     },
+    "packages/app": {
+      "entry": ["src/**/*.test.ts"],
+      "project": ["src/**/*.ts"]
+    },
     "packages/channel": {
       "entry": ["src/**/*.test.ts"],
       "project": ["src/**/*.ts"]

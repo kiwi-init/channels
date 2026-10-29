@@ -1,7 +1,7 @@
 import { memberLoad, showsLoad, type Load } from "@kiwi/core/load.ts"
 import type { Member as RosterMember } from "@kiwi/core/membership.ts"
 import { taskId } from "@kiwi/core/state.ts"
-import { memberLine, memberName } from "@/lib/format"
+import { memberLine, memberName } from "@kiwi/app/format.ts"
 import { setWake, useWakeSeat } from "@/lib/wake-seats"
 import { scopesLine } from "../scopes"
 import { Menu, MenuItem, MenuSeparator } from "../ui/menu"

@@ -28,11 +28,11 @@ import {
   UserAdd01Icon,
   WebhookIcon,
 } from "@hugeicons/core-free-icons"
-import { useOwnPersonalities } from "@/lib/personalities"
+import { useOwnPersonalities } from "@kiwi/app/personalities.ts"
 import { Personalities } from "./personalities"
 
-import { ACCENT_TINT, setAppearance, setTextSize, setTint, useAccent, useAppearance, useTextSize, useTint, type Appearance, type TextSize } from "@/lib/theme"
-import { setAccessibilityOption, useAccessibilityOption } from "@/lib/accessibility"
+import { ACCENT_TINT, setAppearance, setTextSize, setTint, useAccent, useAppearance, useTextSize, useTint, type Appearance, type TextSize } from "@kiwi/app/theme.ts"
+import { setAccessibilityOption, useAccessibilityOption } from "@kiwi/app/accessibility.ts"
 import { cx } from "@/lib/utils"
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom"
@@ -40,7 +40,7 @@ import { relayUrl } from "@kiwi/secrets/relay.ts"
 import { bridge, useSecrets, type KiwiBridge } from "@kiwi/secrets/secrets.ts"
 import { contextLineBridge, hooksBridge, terminalsBridge } from "@/lib/terminals"
 import { rootsBridge } from "@/lib/launches"
-import { harnessName } from "@/lib/harness"
+import { harnessName } from "@kiwi/app/harness.ts"
 import type { HarnessRow, HookRow, HookState } from "@kiwi/core/harnesses.ts"
 import type { TerminalId, TerminalRow, TerminalsStatus } from "@kiwi/core/terminals.ts"
 import { version } from "../../../package.json"

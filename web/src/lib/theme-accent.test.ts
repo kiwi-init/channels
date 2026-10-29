@@ -22,7 +22,7 @@ let onAccent: ((color: string | null) => void) | null = null
   kiwi: { getSnapshot: () => null, onStore: () => () => {}, getAccentColor: async () => accent, onAccent: (cb: (color: string | null) => void) => ((onAccent = cb), () => {}) },
 }
 
-const { ACCENT_TINT, followAccent, setTint } = await import("./theme")
+const { ACCENT_TINT, followAccent, setTint } = await import("@kiwi/app/theme.ts")
 
 afterEach(() => {
   store.clear()
