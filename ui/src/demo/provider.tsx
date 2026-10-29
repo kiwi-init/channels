@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
 
 import type { Personality } from "@kiwi/core/personality.ts"
+import { HANDOFF_DONE } from "@kiwi/core/protocol.ts"
 
 import { stepReplyText } from "~/chat/step"
 import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_PREFS, DEMO_TILES, DEMO_WAITING } from "~/demo/data"
@@ -96,10 +97,62 @@ function withStep(c: Channel): Channel {
   }
 }
 
+function withHandoff(c: Channel): Channel {
+  const at = Date.now() - 3 * 60_000
+  const seq = Math.max(...c.messages.map((m) => m.seq)) + 1
+  const room = { kind: "room" as const, room: "general" }
+  const said = [
+    {
+      id: "handoff-open",
+      from: "win",
+      text: "Sign in to Vercel so I can link the preview deploys. I'm waiting on it.",
+      url: "https://vercel.com/login",
+      label: "vercel (vercel.com)",
+      expires: 12 * 60_000,
+    },
+    {
+      id: "handoff-done",
+      from: "atlas",
+      text: "Approve the Stripe test-mode key so the checkout tests can run.",
+      url: "https://dashboard.stripe.com/test/apikeys",
+      label: "stripe (dashboard.stripe.com)",
+      expires: 9 * 60_000,
+    },
+    {
+      id: "handoff-old",
+      from: "pixel",
+      text: "Log in to App Store Connect so I can read the review notes.",
+      url: "https://appstoreconnect.apple.com",
+      label: "apple (appstoreconnect.apple.com)",
+      expires: -5 * 60_000,
+    },
+  ]
+  return {
+    ...c,
+    messages: [...c.messages, ...said.map((h, i) => ({ seq: seq + i, from: h.from, at: at + i * 1_000, text: h.text, where: room, ask: h.id, mentionsYou: true }))],
+    asks: [
+      ...c.asks,
+      ...said.map((h, i) => ({
+        kind: "question" as const,
+        id: h.id,
+        from: h.from,
+        at: at + i * 1_000,
+        text: h.text,
+        label: "Browser for you",
+        options: [],
+        holds: [13],
+        handoff: { url: h.url, label: h.label, expiresAt: Date.now() + h.expires },
+        ...(h.id === "handoff-done" ? { answer: { text: HANDOFF_DONE, by: c.you, at: Date.now() - 60_000 } } : {}),
+      })),
+    ],
+  }
+}
+
 export type Scenario =
   | "full"
   | "long"
   | "step"
+  | "handoff"
   | "opening"
   | "held"
   | "closed"
@@ -125,11 +178,13 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
         ? longFeed(DEMO_CHANNEL)
         : scenario === "step"
           ? withStep(DEMO_CHANNEL)
-          : scenario === "opening"
-            ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
-            : scenario === "held"
-              ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
-              : DEMO_CHANNEL,
+          : scenario === "handoff"
+            ? withHandoff(DEMO_CHANNEL)
+            : scenario === "opening"
+              ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
+              : scenario === "held"
+                ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
+                : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       { ...DEMO_EMPTY, code: "interlinked", title: "interlinked" },

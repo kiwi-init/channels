@@ -592,6 +592,13 @@ button.msg-image-spot:hover {
   content: "● ";
 }
 
+.ask-handoff {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
 .ask-options {
   display: grid;
   gap: 6px;

@@ -276,7 +276,7 @@ function QuestionAskCard({ channel, ask, link }: { channel: Channel; ask: Questi
       name={nickname(channel, ask.from)}
       member={!!who}
       tag={{ text: ask.label, tone: ask.irreversible ? "alert" : ask.label.startsWith("Question") ? "quiet" : "decide" }}
-      verb={ask.step ? "has a step for you" : "asks you"}
+      verb={ask.step ? "has a step for you" : ask.handoff ? "needs you in a browser" : "asks you"}
       at={ask.at}
       link={link}
     >

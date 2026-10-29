@@ -32,6 +32,7 @@ import {
 } from "@kiwi/core/state.ts"
 import type { GithubPr } from "@kiwi/core/state/github.ts"
 import { decisionLabel } from "@/lib/asks"
+import { handoffLabel } from "@/lib/handoff"
 import { permissionCode, permissionNotes, permissionTitle, visibleText } from "@/lib/permission-view"
 import { reviewsFor, taskActions } from "@/lib/task-actions"
 import { taskGroups } from "@/lib/views"
@@ -526,7 +527,7 @@ interface AsksMap {
   held: Set<number>
 }
 
-const isQuestion = (m: Wire): boolean => (m.kind === "ask" || m.kind === "blocking") && !m.permission && !m.handoff
+const isQuestion = (m: Wire): boolean => (m.kind === "ask" || m.kind === "blocking") && !m.permission
 
 function saidOf(state: ChannelState, card: Card | undefined): JoinAsk["said"] {
   if (!card) return "nothing"
@@ -595,7 +596,7 @@ export function asksOf(
       continue
     }
     if (!isQuestion(m)) continue
-    const toMe = !m.to?.length || m.to.includes(me) || m.to.includes("*") || (decides && !!m.esc)
+    const toMe = !m.to?.length || m.to.includes(me) || m.to.includes("*") || (decides && !!m.esc && !m.handoff)
     if (!toMe) continue
     const answer = (replies.get(m.seq) ?? []).find((r) => r.kind !== "event" && answersAsk(state.members, m, r.from))
     const isOpen = open.has(m.seq)
@@ -609,11 +610,12 @@ export function asksOf(
       from: m.from,
       at: m.ts,
       text: m.body,
-      label: m.esc ? decisionLabel(m) : m.to?.includes(me) ? "Question for you" : "Question for everyone",
+      label: m.handoff ? "Browser for you" : m.esc ? decisionLabel(m) : m.to?.includes(me) ? "Question for you" : "Question for everyone",
       ...(m.decision === "irreversible" ? { irreversible: true as const } : {}),
       options: m.choices ?? [],
       holds,
       ...(m.step ? { step: m.step } : {}),
+      ...(m.handoff ? { handoff: { url: m.handoff.url, label: handoffLabel(m.handoff), expiresAt: m.handoff.expiresAt } } : {}),
       ...(task !== undefined ? { task } : {}),
       ...(idle ? { idle: true as const } : {}),
       ...(!isOpen && answer ? { answer: { text: answer.body, by: answer.from, at: answer.ts } } : {}),
