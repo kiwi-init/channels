@@ -293,7 +293,7 @@ export type Event =
   /** The goal a person's message #ask stands for, in plain words, as its tasks' header (null: their own words again). The lead, the owner or who asked names it. */
   | { op: "ask.name"; ask: number; name: string | null }
   | { op: "ask.close"; ask: number; why?: string }
-  | { op: "devices"; links: DeviceLink[] }
+  | { op: "devices"; links: DeviceLink[]; device?: string; vouch?: string }
   /**
    * A member's reaction to message #seq: one short emoji per member per message, the latest wins, null
    * takes it back. Not news: it's no unread, no notification, no line in a feed. Its body is throwaway
@@ -1006,7 +1006,15 @@ function eventCheck(ev: unknown): boolean | null {
     case "ask.close":
       return n(e.ask) && (e.ask as number) > 0 && (e.why === undefined || str(e.why, 500));
     case "devices":
-      return Array.isArray(e.links) && e.links.length > 0 && e.links.length <= DEVICE_LIST_MAX && e.links.every((l) => !!l && typeof l === "object" && !Array.isArray(l));
+      return (
+        Array.isArray(e.links) &&
+        e.links.length > 0 &&
+        e.links.length <= DEVICE_LIST_MAX &&
+        e.links.every((l) => !!l && typeof l === "object" && !Array.isArray(l)) &&
+        (e.device === undefined) === (e.vouch === undefined) &&
+        opt(e.device, (x): x is string => str(x, 64)) &&
+        opt(e.vouch, (x): x is string => str(x, 128))
+      );
     default:
       return null;
   }

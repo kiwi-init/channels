@@ -142,6 +142,9 @@ describe("revocation and expiry (T641)", () => {
     const links = [await root()];
     expect(wellFormedEvent({ op: "devices", links })).toBe(true);
     for (const bad of [[], ["link"], [[1]], undefined]) expect(wellFormedEvent({ op: "devices", links: bad })).toBe(false);
+    expect(wellFormedEvent({ op: "devices", links, device: "d".repeat(43), vouch: "v".repeat(86) })).toBe(true);
+    for (const bad of [{ device: "d".repeat(43) }, { vouch: "v" }, { device: 1, vouch: "v" }, { device: "d", vouch: "v".repeat(200) }])
+      expect(wellFormedEvent({ op: "devices", links, ...bad })).toBe(false);
     expect(isQuiet({ kind: "event", ev: { op: "devices", links } })).toBe(true);
   });
 });

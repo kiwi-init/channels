@@ -83,6 +83,7 @@ export class ChannelLink {
   deny = (...a: Args<"deny">) => this.c("deny", ...a);
   remove = (...a: Args<"remove">) => this.c("remove", ...a);
   cutDevices = (...a: Args<"cutDevices">) => this.c("cutDevices", ...a);
+  reprove = (...a: Args<"reprove">) => this.c("reprove", ...a);
   tendDelegations = (...a: Args<"tendDelegations">) => this.c("tendDelegations", ...a);
   dropDelegates = (...a: Args<"dropDelegates">) => this.c("dropDelegates", ...a);
   updateScopes = (...a: Args<"updateScopes">) => this.c("updateScopes", ...a);

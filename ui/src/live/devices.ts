@@ -68,7 +68,8 @@ export function useDeviceLists(codes: readonly string[]): void {
       tell(news)
       for (const code of key ? key.split(" ") : []) {
         const m = loadMember(code)
-        if (m && live) await postList(code, news.links, linkOf(m)).catch(() => false)
+        const prove = b.proveSeat ? () => b.proveSeat(code) : undefined
+        if (m && live) await postList(code, news.links, linkOf(m), prove).catch(() => false)
       }
     }
     kick = () => void pass()

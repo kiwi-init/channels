@@ -327,6 +327,10 @@ For when every app is gone, or a thief revoked your other devices first. The rec
   - Every device not in `keep` is revoked. The owner's app cuts those devices, and the agents of
     computers only an old `kp1` cert vouched for; join claims by the old key or its certs stop
     counting.
+  - Seats the person joined with only a person claim from the old key re-prove (T967). Each app
+    posts its list with its device's vouch for its own seat (the same statement as a device claim);
+    the owner's app re-signs the seat with that device when it is still listed. Seats with no such
+    proof are cut once the re-root is 7 days old.
   - A list with more re-roots beats a longer one with fewer, so a fork the old key grows can't win.
   - The relay takes a re-root only with its own time and the exact recovery chain it keeps, so words
     replaced since can't re-root. A later re-root must carry a chain that extends the one before.

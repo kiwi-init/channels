@@ -1,4 +1,6 @@
 import os from "node:os";
+import { decodeJoinCode } from "@kiwi/core/crypto.ts";
+import { claimDevice } from "@kiwi/core/devices.ts";
 import type { Serves } from "../calls.ts";
 import { publicPerson } from "../guard.ts";
 import { publicAccess } from "../public-channel.ts";
@@ -53,6 +55,7 @@ export function devicesCalls(
   | "forgetDevice"
   | "renewDevice"
   | "deviceNews"
+  | "proveSeat"
   | "recovery"
   | "recoveryWords"
   | "recoverySave"
@@ -125,6 +128,12 @@ export function devicesCalls(
     forgetDevice: (id: string) => host.forget(id),
     renewDevice: (id: string) => host.renew(id),
     deviceNews: () => host.news(),
+    proveSeat: async (code: string) => {
+      const seat = store.channels.find((c) => c.code === code && c.access);
+      if (!store.device || !seat) return null;
+      const { device, vouch } = await claimDevice(store.device, [], decodeJoinCode(code).roomId, seat.pk);
+      return { device, vouch };
+    },
     recovery: () => recovery.status(),
     recoveryWords: () => recovery.words(),
     recoverySave: (typed: { at: number; word: string }[]) => recovery.save(typed),

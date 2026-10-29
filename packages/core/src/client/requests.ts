@@ -40,7 +40,7 @@ const deviceName = (members: readonly Pick<Member, "name">[], base: string): str
 };
 
 const sameHuman = (members: readonly Member[], person: string, ownerPerson?: string) =>
-  members.find((m) => (m.kind === "human" || m.owner) && m.person === person && !m.device) ?? (person === ownerPerson ? members.find((m) => m.owner) : undefined);
+  members.find((m) => (m.kind === "human" || m.owner) && m.person === person && (!m.device || m.sponsor?.handle === m.name)) ?? (person === ownerPerson ? members.find((m) => m.owner) : undefined);
 
 const personNameOf = (members: readonly Member[], person: string): string => {
   const m = sameHuman(members, person);

@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
+import { REPROVE_MS } from "@kiwi/core/client/members.ts";
 import { certUntil, claimDevice, newestLists, nextLink, readDeviceList, rerootLink, rootLink, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { claimComputer, provePerson } from "@kiwi/core/person.ts";
@@ -253,6 +254,62 @@ describe("a re-root cuts what the old person key vouched for (T827)", () => {
     expect(reqs.find((r) => r.id === byCert.requestId)?.computer).toBeUndefined();
     const before = await s.ownerCh.requests({ person: s.person.pk });
     expect(before.find((r) => r.id === byPerson.requestId)?.person).toBe(s.person.pk);
+    await s.ownerCh.close();
+  });
+});
+
+describe("after a re-root, seats joined with an old person claim re-prove (T967)", () => {
+  test("a kept device's proof re-signs its seat, a forged or forgotten one's proof doesn't, and seats left unproven are cut after the window", async () => {
+    const s = await setupChannel(relay);
+    const alice = await generateIdentity("alice");
+    const { links, desk, phone: laptop } = await listWithPhone(alice);
+    const onDesk = await joinPerson(s, "alice", alice);
+    const onLaptop = await joinPerson(s, "alice-laptop", alice);
+    const thief = await joinPerson(s, "thief", alice);
+    expect(onDesk.member).toMatchObject({ kind: "human", person: alice.pk });
+    expect(onDesk.member.device).toBeUndefined();
+
+    const paper = await recoveryKey(new Uint8Array(32).fill(23));
+    const chain = [await recoveryLink(alice, alice.pk, null, { pk: paper.pk, xpk: paper.xpk! })];
+    const next = await device("next");
+    const all = [...links, await rerootLink(await listOf(links), paper, chain, next, [desk.pk])];
+    const rerooted = await listOf(all);
+    const proofs = {
+      [onDesk.id.pk]: await claimDevice(desk, all, s.roomId, onDesk.id.pk),
+      [onLaptop.id.pk]: await claimDevice(laptop, links, s.roomId, onLaptop.id.pk),
+      [thief.id.pk]: await claimDevice(desk, all, s.roomId, onDesk.id.pk),
+    };
+    const at = rerooted.reroots[0]!.at;
+
+    const first = await s.ownerCh.reprove(rerooted, proofs, at + 1000);
+    expect(first.proved.map((m) => m.name)).toEqual(["alice"]);
+    expect(first.waiting.map((m) => m.name).sort()).toEqual(["alice-laptop", "thief"]);
+    expect(first.cut).toEqual([]);
+    const proved = (await s.ownerCh.members()).find((m) => m.pk === onDesk.id.pk);
+    expect(proved).toMatchObject({ active: true, person: alice.pk, device: { pk: desk.pk, label: "desk", as: "desktop" } });
+
+    const later = await s.ownerCh.reprove(rerooted, proofs, at + REPROVE_MS);
+    expect(later.proved).toEqual([]);
+    expect(later.cut.map((m) => m.name).sort()).toEqual(["alice-laptop", "thief"]);
+    const active = (await s.ownerCh.members()).filter((m) => m.active).map((m) => m.name);
+    expect(active).toContain("alice");
+    expect(active).not.toContain("alice-laptop");
+    expect(active).not.toContain("thief");
+
+    const tab = await device("tab");
+    const grown = await grow(all, next, { op: "add", device: tab.pk, dxpk: tab.xpk!, label: "tab", os: "iPadOS", as: "phone", approve: false, until: certUntil(Date.now()) });
+    const joiner = await ask(s, tab, grown, "alice");
+    const req = (await s.ownerCh.requests({ person: s.person.pk, lists: new Map([[alice.pk, await listOf(grown)]]) })).find((r) => r.id === joiner.requestId);
+    expect(req?.device).toMatchObject({ person: alice.pk, joinsOnItsOwn: true, handle: "alice" });
+    await s.ownerCh.close();
+  });
+
+  test("a list without a re-root proves nothing and cuts nothing", async () => {
+    const s = await setupChannel(relay);
+    const alice = await generateIdentity("alice");
+    const { links } = await listWithPhone(alice);
+    await joinPerson(s, "alice", alice);
+    expect(await s.ownerCh.reprove(await listOf(links), {}, Date.now() + REPROVE_MS)).toEqual({ proved: [], cut: [], waiting: [] });
     await s.ownerCh.close();
   });
 });

@@ -88,6 +88,7 @@ export const CHANNEL_CALLS = [
   "deny",
   "remove",
   "cutDevices",
+  "reprove",
   "tendDelegations",
   "dropDelegates",
   "updateScopes",
@@ -269,6 +270,11 @@ export interface DeviceNewsView {
   removed: { wiped: boolean; by: string } | null;
 }
 
+interface SeatProofView {
+  device: string;
+  vouch: string;
+}
+
 export interface RecoveryView {
   at: number | null;
   here: boolean;
@@ -380,6 +386,7 @@ export interface KiwiBridge {
   forgetDevice(id: string): Promise<void>;
   renewDevice(id: string): Promise<void>;
   deviceNews(): Promise<DeviceNewsView | null>;
+  proveSeat(code: string): Promise<SeatProofView | null>;
   recovery(): Promise<RecoveryView | null>;
   recoveryWords(): Promise<string[]>;
   recoverySave(typed: { at: number; word: string }[]): Promise<RecoverySaveView>;

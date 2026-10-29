@@ -25,11 +25,11 @@ import { ChannelInfo, type Info, type MemberRow } from "./client/info.ts";
 import { joinFx, type JoinStatus } from "./client/join.ts";
 import { ChannelKeys } from "./client/keys.ts";
 import { ChannelLive, type StreamOptions } from "./client/live.ts";
-import { ChannelMembers } from "./client/members.ts";
+import { ChannelMembers, type Reproved } from "./client/members.ts";
 import { run, runUntil } from "./client/relay.ts";
 import { ChannelRequests, type RequestsOptions } from "./client/requests.ts";
 import type { Delegation } from "./delegation.ts";
-import type { DeviceList } from "./devices.ts";
+import type { DeviceClaim, DeviceList } from "./devices.ts";
 import { ChannelSending, type SendOptions } from "./client/send.ts";
 import { ChannelSettings, type RoomsSetting } from "./client/settings.ts";
 import { ChannelSnapshots } from "./client/snapshots.ts";
@@ -369,6 +369,10 @@ export class Channel {
 
   cutDevices(list: DeviceList): Promise<Member[]> {
     return run(this.fx.cutDevices(list));
+  }
+
+  reprove(list: DeviceList, proofs: Readonly<Record<string, DeviceClaim>>, now?: number): Promise<Reproved> {
+    return run(this.fx.reprove(list, proofs, now));
   }
 
   /** New channel key, wrapped to every remaining member. */
