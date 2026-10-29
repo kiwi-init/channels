@@ -341,9 +341,9 @@ describe("a seat whose own `kiwi listen` takes its messages", () => {
     }
   });
 
-  test("a hook listener, which marks nothing read, isn't taken for one", async () => {
+  test("a hook listener, which marks nothing read, isn't taken for one, even when its session comes only from the hook's input", async () => {
     const { h, input } = await twoSeats();
-    const hook = spawn(h, ["hook", "listen"], S, h, input);
+    const hook = spawn(h, ["hook", "listen"], { ...S, CLAUDE_CODE_SESSION_ID: "" }, h, input);
     try {
       await until(async () => (await slots(h)).includes("hook:reviewer"), "the hook's slot");
       await until(async () => (await slots(h)).includes("listen:reviewer"), "the hook's listener");
@@ -353,6 +353,22 @@ describe("a seat whose own `kiwi listen` takes its messages", () => {
     } finally {
       hook.kill();
       await hook.exited;
+    }
+  });
+
+  test("a `kiwi listen` beside the session's hook listener is still named", async () => {
+    const { h, input } = await twoSeats();
+    const hook = spawn(h, ["hook", "listen"], S, h, input);
+    const tail = spawn(h, ["-c", "beta", "--as", "reviewer", "listen"], S);
+    try {
+      await until(async () => (await slots(h)).filter((s) => s === "listen:reviewer").length === 2, "the hook's and the tail's listeners");
+      const now = await run(h, ["-c", "beta", "--as", "reviewer", "listen", "--now"], S);
+      expect(now.code).toBe(0);
+      expect(now.err).toContain("nothing unread: a Kiwi listener for reviewer is running");
+    } finally {
+      hook.kill();
+      tail.kill();
+      await Promise.all([hook.exited, tail.exited]);
     }
   });
 });

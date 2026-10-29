@@ -282,7 +282,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
           return Effect.flatMap(cursor.read(s.alias, s.me), (now) => (now !== null && since < now ? cursor.write(s.alias, s.me, since) : Effect.void));
         };
         yield* Effect.gen(function* () {
-          yield* holding(s.alias, s.me);
+          yield* holding(s.alias, s.me, false);
           const arrived = yield* Deferred.make<void>();
           waiting = arrived;
           floor = since;

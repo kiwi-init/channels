@@ -29,7 +29,7 @@ async function until(pred: () => Promise<boolean>, label: string): Promise<void>
   }
 }
 
-const listen = { channel: "ch", agent: "otter-gentle", kind: "listen" as const, cwd: "/work", harness: "claude", session: "s1", pid: 4242 };
+const listen = { channel: "ch", agent: "otter-gentle", kind: "listen" as const, cwd: "/work", harness: "claude", session: "s1", pid: 4242, marks: true };
 
 describe("the daemon knows who is listening", () => {
   test("a listener is listed with where it runs while its connection is open, and gone once it closes", async () => {

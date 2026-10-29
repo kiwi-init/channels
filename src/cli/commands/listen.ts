@@ -6,19 +6,14 @@ import type { ChannelState } from "@kiwi/core/state.ts";
 import { mcFor } from "../../hooks.ts";
 import { detectCard } from "../../card.ts";
 import { daemonListeners } from "../../daemon.ts";
-import type { DaemonListener } from "../../daemon/protocol.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, noteRead, out, session } from "../context.ts";
 import { delivery, render } from "../input.ts";
 
-const sameSession = (a: DaemonListener, b: DaemonListener) => a.harness === b.harness && a.session === b.session && a.pid === b.pid;
-
 const nothingUnread = (alias: string, me: string) =>
   Effect.gen(function* () {
     const log = `\`${mcFor(alias, me)} log -n 10\``;
-    const mine = (yield* Effect.promise(() => daemonListeners().catch(() => []))).filter((l) => l.channel === alias && l.agent === me);
-    const hooks = mine.filter((l) => l.kind === "hook");
-    const running = mine.filter((l) => l.kind === "listen" && !hooks.some((h) => sameSession(h, l)));
+    const running = (yield* Effect.promise(() => daemonListeners().catch(() => []))).filter((l) => l.kind === "listen" && l.marks === true && l.channel === alias && l.agent === me);
     const first = running.reduce<number | null>((at, l) => (at === null || l.at < at ? l.at : at), null);
     if (first === null) return `nothing unread; ${log} shows what was already delivered`;
     const which = running.length === 1 ? `a Kiwi listener for ${me} is running` : `${running.length} Kiwi listeners for ${me} are running`;

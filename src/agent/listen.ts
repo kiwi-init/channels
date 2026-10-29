@@ -22,7 +22,7 @@ export class SessionListen extends SessionState {
   listen<R = never>(onMessage: (m: Message, state: ChannelState) => Effect.Effect<void | boolean, unknown, R>, opts: Delivery & Hearing<R>): Effect.Effect<void, Refused | ChannelGone, Agent | R> {
     return Effect.gen({ self: this }, function* () {
       yield* this.unheld;
-      if (opts.hold !== false) yield* holding(this.alias, this.me);
+      if (opts.hold !== false) yield* holding(this.alias, this.me, opts.marks !== false);
       const status = (line: string) => opts.onStatus?.(line) ?? Effect.void;
       const reached = yield* this.reach(status);
       const since = reached.since;
