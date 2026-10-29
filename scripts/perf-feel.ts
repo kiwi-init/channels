@@ -7,13 +7,14 @@ import { chromium, type CDPSession, type Page, type Request, type WebSocket as P
 import { daemonSock } from "../src/daemon/protocol.ts";
 import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
+import { firstRun, letIn, newChannel, panel, ROWS, view } from "./perf-ui.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`What a person feels, measured: one channel with PERF_MESSAGES messages (400) and PERF_TASKS tasks (12), behind a relay PERF_RTT_MS away (0).
 Times sending (Enter to the composer emptied, and to the bubble on screen), opening a task, switching views, scrolling the whole channel (frames over 33 ms, blank frames),
 typing, and a reload to the first screen and to a live composer, each PERF_REPS times (5), plus every layout shift. --shots DIR saves a filmstrip of the reload and the send.
 
-  bun run web:build && bun scripts/perf-feel.ts [--json out.json] [--shots DIR]
+  bun run ui:build && bun scripts/perf-feel.ts [--json out.json] [--shots DIR]
 
 Needs Playwright's Chromium: bunx playwright-core install --only-shell chromium (or SMOKE_CHROMIUM=<Chrome binary>).`);
   process.exit(0);
@@ -73,7 +74,7 @@ const median = (xs: number[]) => {
 const later = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const log = (...xs: unknown[]) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...xs);
 
-const { relay, port: relayPort } = await startLocalRelay(join(data, "relay"), "web/dist", { rateLimits: false });
+const { relay, port: relayPort } = await startLocalRelay(join(data, "relay"), join(ROOT, "ui/dist"), { rateLimits: false });
 const UPSTREAM = `http://127.0.0.1:${relayPort}`;
 const half = RTT / 2;
 interface Pipe {
@@ -239,52 +240,35 @@ function trace(page: Page, t0: number): () => string[] {
   };
 }
 
-async function view(page: Page, label: string, marker: string): Promise<number> {
-  return page.evaluate(
-    async ([name, text]) => {
-      const b = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Views"] button, aside[aria-label="Channel"] section button')].find((x) =>
-        (x.getAttribute("aria-label") ?? x.textContent ?? "").trim().startsWith(name),
-      );
-      if (!b) return -1;
-      const t0 = performance.now();
-      b.click();
-      const deadline = t0 + 15000;
-      while (performance.now() < deadline) {
-        await new Promise((r) => requestAnimationFrame(r));
-        if (document.querySelector("main")?.textContent?.includes(text)) break;
-      }
-      return Math.round(performance.now() - t0);
-    },
-    [label, marker] as const,
-  );
-}
-
 async function send(page: Page, text: string): Promise<{ clearedMs: number; bubbleMs: number }> {
   const box = page.getByRole("textbox", { name: "Message" }).last();
   await box.fill(text);
-  await page.evaluate((body) => {
-    const w = window as unknown as { __sent?: Promise<{ clearedMs: number; bubbleMs: number }> };
-    const area = document.querySelectorAll<HTMLTextAreaElement>('textarea[aria-label="Message"]');
-    const el = area[area.length - 1]!;
-    w.__sent = new Promise((done) => {
-      const down = (e: KeyboardEvent) => {
-        if (e.key !== "Enter") return;
-        el.removeEventListener("keydown", down, true);
-        const t0 = performance.now();
-        let cleared = -1;
-        let bubble = -1;
-        const tick = () => {
-          const now = performance.now();
-          if (cleared < 0 && el.value === "") cleared = Math.round(now - t0);
-          if (bubble < 0 && [...document.querySelectorAll("[id^='m']")].some((r) => r.textContent?.includes(body))) bubble = Math.round(now - t0);
-          if ((cleared >= 0 && bubble >= 0) || now - t0 > 15000) return done({ clearedMs: cleared, bubbleMs: bubble });
+  await page.evaluate(
+    ([body, rows]) => {
+      const w = window as unknown as { __sent?: Promise<{ clearedMs: number; bubbleMs: number }> };
+      const area = document.querySelectorAll<HTMLTextAreaElement>('textarea[aria-label="Message"]');
+      const el = area[area.length - 1]!;
+      w.__sent = new Promise((done) => {
+        const down = (e: KeyboardEvent) => {
+          if (e.key !== "Enter") return;
+          el.removeEventListener("keydown", down, true);
+          const t0 = performance.now();
+          let cleared = -1;
+          let bubble = -1;
+          const tick = () => {
+            const now = performance.now();
+            if (cleared < 0 && el.value === "") cleared = Math.round(now - t0);
+            if (bubble < 0 && [...document.querySelectorAll(rows)].some((r) => r.textContent?.includes(body))) bubble = Math.round(now - t0);
+            if ((cleared >= 0 && bubble >= 0) || now - t0 > 15000) return done({ clearedMs: cleared, bubbleMs: bubble });
+            requestAnimationFrame(tick);
+          };
           requestAnimationFrame(tick);
         };
-        requestAnimationFrame(tick);
-      };
-      el.addEventListener("keydown", down, true);
-    });
-  }, text);
+        el.addEventListener("keydown", down, true);
+      });
+    },
+    [text, ROWS] as const,
+  );
   await box.press("Enter");
   return page.evaluate(() => (window as unknown as { __sent: Promise<{ clearedMs: number; bubbleMs: number }> }).__sent);
 }
@@ -297,21 +281,7 @@ async function work(cdp: CDPSession): Promise<{ layout: number; style: number }>
 
 async function details(page: Page, cdp: CDPSession, opening: boolean): Promise<{ ms: number; layoutMs: number; styleMs: number }> {
   const before = await work(cdp);
-  const ms = await page.evaluate(async (open) => {
-    const button = open
-      ? [...document.querySelectorAll<HTMLElement>("button")].find((b) => (b.getAttribute("aria-label") ?? "").startsWith("Details:") && b.offsetParent !== null)
-      : document.querySelector<HTMLElement>('button[aria-label="Close details"]');
-    if (!button) return -1;
-    const t0 = performance.now();
-    button.click();
-    const deadline = t0 + 15000;
-    while (performance.now() < deadline) {
-      await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
-      if (!!document.querySelector('aside[aria-label="Details"]') === open) break;
-    }
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    return Math.round(performance.now() - t0);
-  }, opening);
+  const ms = await panel(page, opening);
   await later(400);
   const after = await work(cdp);
   return { ms, layoutMs: Math.round((after.layout - before.layout) * 1000), styleMs: Math.round((after.style - before.style) * 1000) };
@@ -320,15 +290,16 @@ async function details(page: Page, cdp: CDPSession, opening: boolean): Promise<{
 async function openTask(page: Page, id: number, marker: string): Promise<number> {
   return page.evaluate(
     async ([task, text]) => {
-      const row = document.querySelector<HTMLElement>(`[role="button"][aria-label^="T${task}, "]`);
-      if (!row) return -1;
+      const row = [...document.querySelectorAll<HTMLElement>("main .board-row")].find((r) => r.querySelector(".board-meta")?.textContent?.startsWith(`T${task} `));
+      if (!row) throw new Error(`no row for T${task} on the board`);
       const t0 = performance.now();
       row.click();
       const deadline = t0 + 15000;
       while (performance.now() < deadline) {
         await new Promise((r) => requestAnimationFrame(r));
-        if (document.querySelector('aside[aria-label="Tasks"]')?.textContent?.includes(text)) break;
+        if (document.querySelector('aside[aria-label="Details"]')?.textContent?.includes(text)) break;
       }
+      if (performance.now() >= deadline) throw new Error(`T${task} opened without “${text}”`);
       return Math.round(performance.now() - t0);
     },
     [id, marker] as const,
@@ -336,11 +307,11 @@ async function openTask(page: Page, id: number, marker: string): Promise<number>
 }
 
 async function scrollAll(page: Page): Promise<{ ms: number; frames: number; over33: number; over50: number; worstFrameMs: number; blankFrames: number; reachedTop: boolean }> {
-  return page.evaluate(async () => {
-    const rows = document.querySelectorAll("[id^='m']");
+  return page.evaluate(async (selector) => {
+    const rows = document.querySelectorAll(selector);
     let el: HTMLElement | null = rows[rows.length - 1] as HTMLElement | null;
     while (el && !(el.scrollHeight > el.clientHeight && getComputedStyle(el).overflowY !== "visible")) el = el.parentElement;
-    if (!el) return { ms: -1, frames: 0, over33: 0, over50: 0, worstFrameMs: 0, blankFrames: 0, reachedTop: false };
+    if (!el) throw new Error("no scrolling feed");
     const scroller = el;
     const box = scroller.getBoundingClientRect();
     const deltas: number[] = [];
@@ -356,7 +327,7 @@ async function scrollAll(page: Page): Promise<{ ms: number; frames: number; over
       const now = performance.now();
       deltas.push(now - last);
       last = now;
-      const visible = [...scroller.querySelectorAll("[id^='m']")].some((r) => {
+      const visible = [...scroller.querySelectorAll(selector)].some((r) => {
         const b = r.getBoundingClientRect();
         return b.bottom > box.top && b.top < box.bottom;
       });
@@ -376,7 +347,7 @@ async function scrollAll(page: Page): Promise<{ ms: number; frames: number; over
       blankFrames: blank,
       reachedTop: scroller.scrollTop === 0,
     };
-  });
+  }, ROWS);
 }
 
 const report: Record<string, unknown> = { messages: MESSAGES, tasks: TASKS, rttMs: RTT, reps: REPS };
@@ -389,7 +360,8 @@ try {
     w.__falseScreens = [];
     const look = () => {
       if (document.querySelector('section[aria-label="Add an agent"]')) seen.add("Add an agent");
-      for (const p of document.querySelectorAll("p")) if (p.textContent === "No tasks yet" || p.textContent === "No messages yet") seen.add(p.textContent);
+      if (document.querySelector(".empty-title")?.textContent === "No tasks yet.") seen.add("No tasks yet");
+      if (document.querySelector(".feed-start")) seen.add("the start of the room");
       w.__falseScreens = [...seen];
     };
     const watch = new MutationObserver(look);
@@ -419,46 +391,12 @@ try {
     ...(await page.evaluate(() => ({ fcpMs: Math.round(performance.getEntriesByName("first-contentful-paint")[0]?.startTime ?? -1) }))),
   };
   log("cold", JSON.stringify(report["cold: first run, empty cache"]));
-  await page.getByRole("textbox", { name: "Your name" }).fill("Jonatas");
-  await page.getByRole("button", { name: "Continue" }).click();
-  await page
-    .getByRole("complementary", { name: "Channels" })
-    .getByRole("button", { name: /Jonatas/i })
-    .first()
-    .waitFor();
-  const wa = await context.newCDPSession(page);
-  await wa.send("WebAuthn.enable");
-  await wa.send("WebAuthn.addVirtualAuthenticator", {
-    options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true, hasPrf: true },
-  } as never);
-
-  await page.getByRole("complementary", { name: "Channels" }).getByRole("button", { name: "New channel", exact: true }).click();
-  await page.getByRole("dialog").getByRole("textbox").fill("feel");
-  const before = page.url();
-  await page.getByRole("button", { name: "Create channel" }).click();
-  await page.waitForURL((u) => /#mc2-/.test(u.href) && u.href !== before);
-  const code = decodeURIComponent(new URL(page.url()).hash.slice(1));
-  const needs = page.getByRole("region", { name: "Needs you" });
-  const joining = kiwi(["join", code, "feel", "--as", "atlas", "--model", "claude-opus-5-5", "--relay", `${UPSTREAM}/`]);
-  const letIn = needs.getByRole("button", { name: "It matches: let in" });
-  const showCode = needs.getByRole("button", { name: "Show code" });
-  await letIn.or(showCode).first().waitFor({ timeout: 30000 });
-  if (await showCode.count()) await showCode.click();
-  await letIn.waitFor({ timeout: 30000 });
-  const seat = needs.getByRole("checkbox", { name: /Let agents from .* in from now on/ });
-  if (await seat.count()) await seat.uncheck();
-  await letIn.click();
+  await firstRun(page, "Jonatas");
+  const code = await newChannel(page, "feel");
+  let joined = false;
+  const joining = kiwi(["join", code, "feel", "--as", "atlas", "--model", "claude-opus-5-5", "--relay", `${UPSTREAM}/`]).then(() => void (joined = true));
+  await letIn(page, () => !joined);
   await joining;
-  const offer = page.getByRole("button", { name: "Save channels to a passkey" });
-  if (await offer.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await offer.click();
-    const saving = page.getByRole("dialog").filter({ hasText: "Save your recovery code" });
-    await saving.waitFor();
-    await saving.getByRole("checkbox").check();
-    await saving.getByRole("button", { name: "Done" }).click();
-    await saving.waitFor({ state: "hidden" });
-  }
-  await page.getByRole("complementary", { name: "Channels" }).getByRole("region", { name: "Conversations" }).getByRole("button").first().click();
   await page.getByRole("textbox", { name: "Message" }).fill("Make it feel fast");
   await page.keyboard.press("Enter");
 
