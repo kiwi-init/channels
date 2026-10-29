@@ -457,6 +457,7 @@
 }
 
 .msg-image {
+  max-width: min(360px, 100%);
   padding: 0;
   border: 0;
   background: none;
@@ -466,14 +467,40 @@
 .msg-images {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;
   gap: 8px;
   margin-top: 8px;
 }
 
 .msg-images img {
-  max-width: min(360px, 100%);
+  display: block;
+  max-width: 100%;
   height: auto;
   border-radius: var(--r-ctl);
+}
+
+.msg-image-spot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 128px;
+  height: 96px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--wash);
+  color: var(--ink-3);
+  font: var(--t-meta) var(--ui);
+  text-align: center;
+}
+
+button.msg-image-spot {
+  color: var(--ink-2);
+  transition: background var(--fast);
+}
+
+button.msg-image-spot:hover {
+  background: var(--wash-2);
 }
 
 .chip {

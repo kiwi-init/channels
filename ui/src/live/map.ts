@@ -7,7 +7,7 @@ import { describeEvent, proofLabel } from "@kiwi/core/format.ts"
 import { memberLoad, showsLoad } from "@kiwi/core/load.ts"
 import { checksOf, FAILED, prLinks, taskPr } from "@kiwi/core/prs.ts"
 import { stageOf } from "@kiwi/core/stage.ts"
-import { GENERAL_ROOM, ignored, isQuiet, isReaction, type Message as Wire } from "@kiwi/core/protocol.ts"
+import { GENERAL_ROOM, ignored, isQuiet, isRasterMime, isReaction, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { pickFor, taskCandidates } from "@kiwi/core/routing.ts"
 import { canPost } from "@kiwi/core/scopes.ts"
 import { versionName } from "@kiwi/core/status.ts"
@@ -46,6 +46,7 @@ import type {
   Direct,
   Harness,
   Image,
+  ImageSpot,
   JoinAsk,
   Load,
   Message,
@@ -284,7 +285,7 @@ export interface Pending {
 }
 
 export interface Pictures {
-  get(seq: number, i: number): Image | undefined
+  get(seq: number, i: number, alt: string): Image | ImageSpot
 }
 
 function whereOf(state: ChannelState, m: Wire, me: string): Where {
@@ -330,7 +331,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
     const quoted = m.re?.[0]
     const reactions = reactionsOf(state, m.seq)
     const link = prLinks(m.body)[0]
-    const images = (m.imgs ?? []).flatMap((_, i) => pictures.get(m.seq, i) ?? [])
+    const images = (m.imgs ?? []).flatMap((img, i) => (isRasterMime(img.mime) ? [pictures.get(m.seq, i, img.name)] : []))
     const ask = askOf.get(m.seq)
     out.push({
       seq: m.seq,
