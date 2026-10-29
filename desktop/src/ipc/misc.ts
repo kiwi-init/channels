@@ -1,5 +1,5 @@
 import type { Serves } from "../calls.ts";
-import { takeDeepLink } from "../deep-links.ts";
+import { opensChannel, takeDeepLink } from "../deep-links.ts";
 import { externalUrl } from "../guard.ts";
 import type { Host } from "../host.ts";
 import { logMainError } from "../main-log.ts";
@@ -35,7 +35,7 @@ export function miscCalls(
     getUpdate: () => updateState(),
     installUpdate: () => host.restartToUpdate(),
     checkUpdate: () => checkForUpdate(),
-    notify: (title: string, body: string) => host.notify(title, body),
+    notify: (title: string, body: string, link?: string) => host.notify(title, body, opensChannel(link)),
     openExternal: async (url: string) => {
       const ext = externalUrl(url);
       if (!ext) {

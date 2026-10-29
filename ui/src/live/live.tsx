@@ -16,6 +16,7 @@ import { useAccount } from "~/live/account"
 import { makeActions } from "~/live/actions"
 import { OpenMember, type View } from "~/live/channel"
 import { iconUrl } from "~/live/icon"
+import { useNotesElsewhere } from "~/live/notes"
 import { harnessChoices } from "~/live/harness-rows"
 import { OpenPending, pendingTitle } from "~/live/pending"
 import { ownPrefs, usePrefs } from "~/live/prefs"
@@ -80,8 +81,9 @@ function usePersonas(own: Personality[]): App["personas"] {
 
 const joinsMuted = (): boolean => ownPrefs().notify === "none"
 
-function useDuties(rows: ChannelRow[], person: string | undefined) {
+function useDuties(rows: ChannelRow[], person: string | undefined, open: string | null) {
   useAutoApproval(rows, joinsMuted)
+  useNotesElsewhere(rows, open)
   useMemberIcons(rows.filter((r) => r.state === "member").map((r) => r.code))
   useEffect(() => {
     if (person) void adoptThisComputer().catch(() => {})
@@ -92,7 +94,7 @@ export function useLive(open: string | null): App {
   const account = useAccount()
   const rows = useChannelList()
   const channels = useTiles(rows)
-  useDuties(rows, useSecrets().person?.pk)
+  useDuties(rows, useSecrets().person?.pk, open)
   const opened = useOpened()
   const prefs = usePrefs()
   const harnesses = useHarnesses()

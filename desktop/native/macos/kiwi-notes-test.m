@@ -5,8 +5,38 @@
 #import <stdio.h>
 
 static int clicks = 0;
+static uint32_t lastTag = UINT32_MAX;
 
-static void clicked(void) { clicks++; }
+static void clicked(uint32_t tag) {
+  clicks++;
+  lastTag = tag;
+}
+
+@interface FakeNote : NSObject
+@property(nonatomic, strong) UNNotificationRequest *request;
+@end
+
+@implementation FakeNote
+@end
+
+@interface FakeResponse : NSObject
+@property(nonatomic, strong) FakeNote *notification;
+@property(nonatomic, copy) NSString *actionIdentifier;
+@end
+
+@implementation FakeResponse
+@end
+
+static UNNotificationResponse *responseTo(NSDictionary *userInfo, NSString *action) {
+  UNMutableNotificationContent *content = [UNMutableNotificationContent new];
+  content.title = @"maya in kiwi-dev";
+  content.userInfo = userInfo;
+  FakeResponse *response = [FakeResponse new];
+  response.notification = [FakeNote new];
+  response.notification.request = [UNNotificationRequest requestWithIdentifier:@"note" content:content trigger:nil];
+  response.actionIdentifier = action;
+  return (UNNotificationResponse *)response;
+}
 
 int main(int argc, char **argv) {
   @autoreleasepool {
@@ -20,9 +50,9 @@ int main(int argc, char **argv) {
       fprintf(stderr, "kiwi-notes-test: %s\n", dlerror());
       return 1;
     }
-    bool (*notifyClicks)(void *, void (*)(void)) = (bool (*)(void *, void (*)(void)))dlsym(lib, "kiwi_notify_clicks");
-    if (!notifyClicks) {
-      fprintf(stderr, "kiwi-notes-test: kiwi_notify_clicks isn't exported\n");
+    bool (*notifyClicks)(void *, void (*)(uint32_t)) = (bool (*)(void *, void (*)(uint32_t)))dlsym(lib, "kiwi_notify_clicks");
+    if (!notifyClicks || !dlsym(lib, "kiwi_notify")) {
+      fprintf(stderr, "kiwi-notes-test: kiwi_notify or kiwi_notify_clicks isn't exported\n");
       return 1;
     }
     UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
@@ -62,11 +92,32 @@ int main(int argc, char **argv) {
     [delegate userNotificationCenter:center didReceiveNotificationResponse:click withCompletionHandler:^{
       completed = true;
     }];
-    if (clicks != 1 || !completed) {
-      fprintf(stderr, "kiwi-notes-test: a click reached the app's callback %d times and %s the completion handler\n", clicks, completed ? "called" : "never called");
+    if (clicks != 1 || lastTag != 0 || !completed) {
+      fprintf(stderr, "kiwi-notes-test: a click reached the app's callback %d times with tag %u and %s the completion handler\n", clicks, lastTag, completed ? "called" : "never called");
       bad++;
     } else
       printf("clicked: the app's callback runs once (it shows the window) and the system is told it's handled\n");
+
+    [delegate userNotificationCenter:center didReceiveNotificationResponse:responseTo(@{@"tag" : @42}, UNNotificationDefaultActionIdentifier) withCompletionHandler:^{
+    }];
+    [delegate userNotificationCenter:center didReceiveNotificationResponse:responseTo(@{@"tag" : @"7"}, UNNotificationDefaultActionIdentifier) withCompletionHandler:^{
+    }];
+    uint32_t odd = lastTag;
+    [delegate userNotificationCenter:center didReceiveNotificationResponse:responseTo(@{@"tag" : @9}, UNNotificationDismissActionIdentifier) withCompletionHandler:^{
+    }];
+    if (clicks != 3 || odd != 0 || lastTag != 0) {
+      fprintf(stderr, "kiwi-notes-test: tagged clicks reached the callback %d times (want 3), a string tag came through as %u and the last tag is %u (want 0, 0)\n", clicks, odd, lastTag);
+      bad++;
+    } else {
+      clicks = 0;
+      [delegate userNotificationCenter:center didReceiveNotificationResponse:responseTo(@{@"tag" : @42}, UNNotificationDefaultActionIdentifier) withCompletionHandler:^{
+      }];
+      if (clicks != 1 || lastTag != 42) {
+        fprintf(stderr, "kiwi-notes-test: a click on the notification tagged 42 reached the callback with %u\n", lastTag);
+        bad++;
+      } else
+        printf("tagged: a click hands the app the notification's tag (42), a bad tag reads as 0, a dismissal isn't a click\n");
+    }
     return bad ? 1 : 0;
   }
 }

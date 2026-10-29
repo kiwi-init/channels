@@ -15,3 +15,39 @@ export function drawerNews(channel: Pick<Channel, "rooms" | "directs">): "loud" 
   if (channel.rooms.some((r) => r.mentions > 0) || channel.directs.some((d) => d.unread > 0)) return "loud"
   return channel.rooms.some((r) => r.unread > 0) ? "quiet" : null
 }
+
+export const channelLink = (code: string): string => `kiwi://join/${encodeURIComponent(code)}`
+
+export function lastWorth(messages: readonly Wire[], me: string, notify: Prefs["notify"], decides: boolean): Wire | null {
+  return messages.findLast((m) => m.sigOk && worthTelling(m, me, notify, decides)) ?? null
+}
+
+export interface Heads {
+  start(code: string, seq: number): void
+  head(code: string, seq: number): void
+}
+
+export function heardHeads(skip: (code: string) => boolean, read: (code: string, after: number, upTo: number) => Promise<void>): Heads {
+  const told = new Map<string, number>()
+  const reading = new Map<string, number>()
+  const head = (code: string, seq: number): void => {
+    const prev = told.get(code)
+    if (prev !== undefined && seq <= prev) return
+    const wanted = reading.get(code)
+    if (wanted !== undefined) return void reading.set(code, Math.max(wanted, seq))
+    told.set(code, seq)
+    if (prev === undefined || skip(code)) return
+    reading.set(code, seq)
+    void read(code, prev, seq)
+      .catch(() => {})
+      .finally(() => {
+        const next = reading.get(code) ?? seq
+        reading.delete(code)
+        if (next > seq) head(code, next)
+      })
+  }
+  const start = (code: string, seq: number): void => {
+    if (!told.has(code)) told.set(code, seq)
+  }
+  return { start, head }
+}

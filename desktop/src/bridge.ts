@@ -342,7 +342,7 @@ export interface KiwiBridge {
   /** Restart into the downloaded update. */
   installUpdate(): Promise<void>;
   checkUpdate(): Promise<UpdateCheckView>;
-  notify(title: string, body: string): Promise<void>;
+  notify(title: string, body: string, link?: string): Promise<void>;
   openExternal(url: string): Promise<void>;
   saveFile(name: string, text: string): Promise<string>;
   takeDroppedFiles(): Promise<DroppedFile[]>;
