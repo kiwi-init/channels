@@ -1,6 +1,8 @@
 import { Fragment, startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { Composer } from "~/chat/composer"
+import { EventRun } from "~/chat/events"
+import { continuesRun, eventRun } from "~/chat/fold-events"
 import { foldText, leftOutRun, runFirst, withLeftOut } from "~/chat/left-out"
 import { MessageRow } from "~/chat/message"
 import { linked } from "~/chat/linked"
@@ -371,6 +373,8 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
           ) : (
             list.slice(start, end).map((m, k) => {
               const i = start + k
+              if (continuesRun(list, i, start, mark)) return null
+              const events = eventRun(list, i, end, mark)
               const run = leftOutRun(list, i)
               const open = !m.leftOut || shownRuns.has(runFirst(list, i))
               return (
@@ -386,7 +390,11 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
                     </p>
                   )}
                   {run && <Fold run={run} open={open} onToggle={() => toggleRun(m.seq)} />}
-                  {open && <MessageRow channel={channel} m={m} compact={m.seq !== mark && compactAt(list, i)} names={names} tasks={tasks} quote={quoteOf(list, i, bySeq)} onQuote={onQuote} />}
+                  {events ? (
+                    <EventRun channel={channel} run={events} here={where.kind === "task" ? where.task : null} jump={jump?.m.seq ?? null} />
+                  ) : (
+                    open && <MessageRow channel={channel} m={m} compact={m.seq !== mark && compactAt(list, i)} names={names} tasks={tasks} quote={quoteOf(list, i, bySeq)} onQuote={onQuote} />
+                  )}
                 </Fragment>
               )
             })

@@ -246,6 +246,14 @@ function eventText(m: Wire, state: ChannelState): string {
   }
 }
 
+function eventForYou(m: Wire, me: string): boolean {
+  const ev = m.ev
+  if (!ev || m.from === me) return false
+  if (ev.op === "role.set" || ev.op === "role.refuse") return ev.member === me
+  if (ev.op === "task.add" || ev.op === "task.update") return ev.owner === me
+  return false
+}
+
 function eventTask(m: Wire): number | undefined {
   const ev = m.ev
   if (!ev) return undefined
@@ -324,7 +332,17 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       if (place.kind === "dm") continue
       const where: Where = place.kind === "task" && !SUMMARISED(m) ? { kind: "task", task: place.task } : { kind: "room", room: GENERAL_ROOM }
       const task = eventTask(m)
-      out.push({ seq: m.seq, from: m.from, at: m.ts, text: eventText(m, state), where, system: true, ...(task !== undefined ? { task } : {}) })
+      out.push({
+        seq: m.seq,
+        from: m.from,
+        at: m.ts,
+        text: eventText(m, state),
+        where,
+        system: true,
+        ...(task !== undefined ? { task } : {}),
+        ...(m.ev?.op === "github" ? { github: m.ev.items } : {}),
+        ...(eventForYou(m, me) ? { mentionsYou: true } : {}),
+      })
       continue
     }
     const where = whereOf(state, m, me)
