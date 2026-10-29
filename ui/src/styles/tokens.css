@@ -47,7 +47,6 @@
   --h-opencode: #c9c9c9;
 
   --white: #fff;
-  --black: #000;
   --shadow-pop: 0 0 0 1px var(--line-2), 0 16px 48px rgb(0 0 0 / 0.32);
 
   --mono: "Paper Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;

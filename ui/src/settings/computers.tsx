@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 
 import { cx, IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
@@ -9,8 +9,6 @@ import { Confirm } from "~/settings/controls"
 import { Page } from "~/settings/sections"
 
 type Kind = "computer" | "phone"
-
-const QrCode = lazy(() => import("~/kit/qr"))
 
 const SHOT = new URLSearchParams(location.search).get("shot")
 const PRESET: Kind | null = SHOT === "settings-link-phone" ? "phone" : SHOT === "settings-add-computer" ? "computer" : null
@@ -181,24 +179,19 @@ function PairLine({ text, label }: { text: string; label: string }) {
 }
 
 export function ComputersSection() {
-  const { app, toast } = useApp()
-  const [pairing, setPairing] = useState<{ kind: Kind; code: string } | null>(null)
+  const { app } = useApp()
+  const [linking, setLinking] = useState<Kind | null>(PRESET)
   const [forget, setForget] = useState<Computer | null>(null)
   const [shown, setShown] = useState<string | null>(null)
-  const { pairBegin } = app.actions
-  useEffect(() => {
-    if (PRESET) void pairBegin(PRESET).then((code) => setPairing({ kind: PRESET, code }))
-  }, [pairBegin])
+  const asked = app.account?.enrollAsk?.id
+  const [seen, setSeen] = useState(asked)
+  if (asked !== seen) {
+    setSeen(asked)
+    if (asked) setLinking(null)
+  }
   const account = app.account
   if (!account) return null
   const computers = [...account.computers].sort((a, b) => Number(b.thisOne) - Number(a.thisOne) || Number(b.online) - Number(a.online))
-
-  const begin = (kind: Kind) => {
-    void app.actions.pairBegin(kind).then(
-      (code) => setPairing({ kind, code }),
-      () => toast("Could not start pairing. Try again.")
-    )
-  }
 
   return (
     <Page title="Computers and phones" lede="Everywhere you are signed in. Agents run on computers; phones read and answer.">
@@ -267,7 +260,7 @@ export function ComputersSection() {
               className="btn is-primary is-small"
               onClick={() => {
                 app.actions.answerPair(true)
-                setPairing(null)
+                setLinking(null)
               }}
             >
               {account.pairAsk.digits ? "It matches: pair" : "Pair"}
@@ -277,55 +270,41 @@ export function ComputersSection() {
               className="btn is-small"
               onClick={() => {
                 app.actions.answerPair(false)
-                setPairing(null)
+                setLinking(null)
               }}
             >
               Not this one
             </button>
           </div>
         </div>
-      ) : pairing ? (
-        <div className="set-pair" role="region" aria-label={pairing.kind === "phone" ? "Link a phone" : "Add a computer"}>
-          <p className="set-pair-what">{pairing.kind === "phone" ? "Link a phone" : "Add a computer"}</p>
-          {pairing.kind === "phone" ? (
-            <>
-              <p className="set-pair-how">On your phone, open Channels and tap Sign In, or tap Scan the code and scan this one.</p>
-              <Suspense fallback={<span className="qr" aria-hidden="true" />}>
-                <QrCode text={pairing.code} label="Code to link a phone" />
-              </Suspense>
-              <p className="set-pair-how">No camera? Copy the code, then tap Paste the code.</p>
-              <PairLine text={pairing.code} label="Copy the code" />
-            </>
+      ) : linking ? (
+        <div className="set-pair" role="region" aria-label={linking === "phone" ? "Link a phone" : "Add a computer"}>
+          <p className="set-pair-what">{linking === "phone" ? "Link a phone" : "Add a computer"}</p>
+          {linking === "phone" ? (
+            <p className="set-pair-how">On your phone, open Channels and tap Sign In. It shows 6 digits: type them here when this app asks.</p>
           ) : (
             <>
-              <p className="set-pair-how">On the other computer, run this in a terminal:</p>
-              <PairLine text={`kiwi pair ${pairing.code}`} label="Copy the command" />
+              <p className="set-pair-how">On the other computer, run this in a terminal and sign in. It shows 6 digits: type them here when this app asks.</p>
+              <PairLine text="kiwi login" label="Copy the command" />
             </>
           )}
           <div className="set-pair-foot">
             <span className="set-pair-wait">
               <span className="set-pip is-waiting" aria-hidden="true" />
-              Waiting for the {pairing.kind}…
+              Waiting for the {linking}…
             </span>
-            <button
-              type="button"
-              className="btn is-quiet is-small"
-              onClick={() => {
-                app.actions.cancelPair()
-                setPairing(null)
-              }}
-            >
+            <button type="button" className="btn is-quiet is-small" onClick={() => setLinking(null)}>
               Cancel
             </button>
           </div>
         </div>
       ) : (
         <div className="actions set-device-actions">
-          <button type="button" className="btn" onClick={() => begin("computer")}>
+          <button type="button" className="btn" onClick={() => setLinking("computer")}>
             <Icon name="computer" size={14} />
             Add a computer
           </button>
-          <button type="button" className="btn" onClick={() => begin("phone")}>
+          <button type="button" className="btn" onClick={() => setLinking("phone")}>
             <Icon name="phone" size={14} />
             Link a phone
           </button>
