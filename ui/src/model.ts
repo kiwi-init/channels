@@ -454,7 +454,20 @@ export interface EnrollAsk {
   stage: "new" | "waiting" | "digits" | "elsewhere"
 }
 
-export type Enrolling = { stage: "asking" } | { stage: "digits"; digits: string }
+export type Enrolling = { stage: "asking" } | { stage: "digits"; digits: string } | { stage: "recover" } | { stage: "welcome"; name: string; devices: RecoverDevice[]; channels: string[] }
+
+export interface RecoverDevice {
+  id: string
+  label: string
+  os: string
+  as: "desktop" | "phone" | "computer"
+  lost: boolean
+}
+
+export interface RecoverTrouble {
+  why: string
+  word?: number
+}
 
 export interface Device {
   id: string
@@ -595,6 +608,9 @@ export interface Actions {
   recoveryDrop(): void
   enrollBegin(): void
   enrollCancel(): void
+  recoverBegin(): void
+  recoverOpen(words: string): Promise<RecoverTrouble | null>
+  recoverFinish(lost: string[]): Promise<void>
   closeChannel(code: string): void
   saveTheme(theme: CustomTheme): void
   deleteTheme(id: string): void

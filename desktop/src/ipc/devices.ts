@@ -3,6 +3,7 @@ import type { Serves } from "../calls.ts";
 import { publicPerson } from "../guard.ts";
 import { publicAccess } from "../public-channel.ts";
 import { createDeviceHost, createEnrollee } from "../devices.ts";
+import { createRecoverer } from "../recover.ts";
 import { createRecoveryHost } from "../recovery.ts";
 import { freshToken } from "../signin.ts";
 import { mutate, store, upsertComputer } from "../store.ts";
@@ -10,7 +11,24 @@ import { mutate, store, upsertComputer } from "../store.ts";
 const OS_NAMES: Partial<Record<NodeJS.Platform, string>> = { darwin: "macOS", linux: "Linux", win32: "Windows" };
 
 export function devicesCalls(): Serves<
-  "enrollPoll" | "enrollAnswer" | "enrollConfirm" | "enrollDeny" | "enrollBegin" | "enrollStatus" | "enrollCancel" | "devices" | "forgetDevice" | "renewDevice" | "deviceNews" | "recovery" | "recoveryWords" | "recoverySave" | "recoveryDrop"
+  | "enrollPoll"
+  | "enrollAnswer"
+  | "enrollConfirm"
+  | "enrollDeny"
+  | "enrollBegin"
+  | "enrollStatus"
+  | "enrollCancel"
+  | "devices"
+  | "forgetDevice"
+  | "renewDevice"
+  | "deviceNews"
+  | "recovery"
+  | "recoveryWords"
+  | "recoverySave"
+  | "recoveryDrop"
+  | "recover"
+  | "recoverFinish"
+  | "recoverCancel"
 > {
   const label = () => os.hostname().split(".")[0] || "this computer";
   const osName = () => OS_NAMES[process.platform] ?? process.platform;
@@ -46,7 +64,7 @@ export function devicesCalls(): Serves<
       store.channels.flatMap((c) =>
         c.code && publicAccess(c.access)?.ownerPk === c.pk
           ? [{ label: c.label, code: c.code, owner: { name: c.idName ?? c.label, pk: c.pk, sk: c.sk, ...(c.xpk && c.xsk ? { xpk: c.xpk, xsk: c.xsk } : {}) } }]
-          : []
+          : [],
       ),
     kept: () => store.recovery ?? null,
     keep: (k) => mutate((s) => (s.recovery = k)),
@@ -61,6 +79,27 @@ export function devicesCalls(): Serves<
       mutate((s) => {
         s.enrolled = grant.person;
         s.deviceLinks = grant.links;
+      }),
+    label,
+    os: osName,
+  });
+  const recoverer = createRecoverer({
+    relayUrl: () => store.relayUrl,
+    token: () => freshToken(),
+    who,
+    device: () => store.device ?? null,
+    saveDevice: (d) => mutate((s) => (s.device = d)),
+    restored: (r) =>
+      mutate((s) => {
+        s.person = { name: r.person.name, pk: r.person.pk, sk: r.person.sk, xpk: r.person.xpk, xsk: r.person.xsk };
+        s.enrolled = undefined;
+        s.deviceLinks = r.links;
+        s.recovery = r.kept;
+        for (const c of r.channels) {
+          if (s.channels.some((h) => h.code === c.code || h.pk === c.owner.pk)) continue;
+          const keys = c.owner.xpk && c.owner.xsk ? { xpk: c.owner.xpk, xsk: c.owner.xsk } : {};
+          s.channels.push({ label: c.label, idName: c.owner.name, pk: c.owner.pk, sk: c.owner.sk, ...keys, code: c.code, creating: true });
+        }
       }),
     label,
     os: osName,
@@ -87,5 +126,8 @@ export function devicesCalls(): Serves<
     recoveryWords: () => recovery.words(),
     recoverySave: (typed: { at: number; word: string }[]) => recovery.save(typed),
     recoveryDrop: () => recovery.drop(),
+    recover: (words: string) => recoverer.open(words),
+    recoverFinish: (lost: string[]) => recoverer.finish(lost),
+    recoverCancel: async () => recoverer.cancel(),
   };
 }

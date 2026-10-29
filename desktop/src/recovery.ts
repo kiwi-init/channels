@@ -1,7 +1,19 @@
 import type { AccountClient } from "@kiwi/core/account.ts";
 import { readDeviceList, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import type { Identity } from "@kiwi/core/identity.ts";
-import { checkVault, newRecoveryPhrase, readRecovery, readRecoveryPhrase, recoveryKey, recoveryLink, sealVault, type Recovery, type RecoveryLink, type Vault, type VaultContents } from "@kiwi/core/recovery.ts";
+import {
+  checkVault,
+  newRecoveryPhrase,
+  readRecovery,
+  readRecoveryPhrase,
+  recoveryKey,
+  recoveryLink,
+  sealVault,
+  type Recovery,
+  type RecoveryLink,
+  type Vault,
+  type VaultContents,
+} from "@kiwi/core/recovery.ts";
 import type { RecoverySaveView, RecoveryView } from "./bridge.ts";
 
 const CHECKS = 3;
@@ -37,11 +49,11 @@ const matches = (word: string, typed: string): boolean => {
   return t === word || (t.length >= 4 && word.startsWith(t));
 };
 
-const ownersOf = (channels: VaultContents["channels"]): string[] => channels.map((c) => c.owner.pk).sort();
+export const ownersOf = (channels: VaultContents["channels"]): string[] => channels.map((c) => c.owner.pk).sort();
 
 const sameOwners = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((pk, i) => pk === b[i]);
 
-const setUpAt = (chain: readonly unknown[]): number | null => {
+export const setUpAt = (chain: readonly unknown[]): number | null => {
   const now = [...(chain as RecoveryLink[])].reverse().find((l) => l.after === null);
   return now?.at ?? null;
 };

@@ -1,9 +1,12 @@
-import { useId, useState } from "react"
+import { Suspense, useId, useState } from "react"
 
 import "~/styles/start.css"
 import { cx } from "~/kit/bits"
+import { later } from "~/kit/later"
 import type { Enrolling } from "~/model"
 import { useApp } from "~/nav"
+
+const Recover = later(() => import("~/start/recover").then((m) => m.Recover))
 
 const ALLOWED = /^[A-Za-z0-9._-]+$/
 
@@ -15,7 +18,7 @@ function problemWith(name: string): string | null {
   return null
 }
 
-function Enroll({ enrolling }: { enrolling: Enrolling }) {
+function Enroll({ enrolling }: { enrolling: Extract<Enrolling, { stage: "asking" | "digits" }> }) {
   const { app } = useApp()
   return (
     <div className="start-first-box">
@@ -42,20 +45,32 @@ function Enroll({ enrolling }: { enrolling: Enrolling }) {
           <p className="start-hint">Then this computer joins your channels as you.</p>
         </>
       )}
-      <button type="button" className="btn is-quiet start-other" onClick={() => app.actions.enrollCancel()}>
-        Cancel
-      </button>
+      <div className="start-others">
+        <button type="button" className="btn is-quiet" onClick={() => app.actions.recoverBegin()}>
+          Lost your other devices? Use your recovery key
+        </button>
+        <button type="button" className="btn is-quiet" onClick={() => app.actions.enrollCancel()}>
+          Cancel
+        </button>
+      </div>
     </div>
   )
 }
 
 export function FirstRun() {
   const { app } = useApp()
-  if (app.enrolling)
+  const e = app.enrolling
+  if (e)
     return (
       <main className="start-first">
         <div className="start-drag" />
-        <Enroll enrolling={app.enrolling} />
+        {e.stage === "recover" || e.stage === "welcome" ? (
+          <Suspense fallback={null}>
+            <Recover enrolling={e} />
+          </Suspense>
+        ) : (
+          <Enroll enrolling={e} />
+        )}
       </main>
     )
   return <NameForm />

@@ -4,7 +4,7 @@ import type { Personality } from "@kiwi/core/personality.ts"
 import { HANDOFF_DONE } from "@kiwi/core/protocol.ts"
 
 import { stepReplyText } from "~/chat/step"
-import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_PREFS, DEMO_TILES, DEMO_WAITING } from "~/demo/data"
+import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_PREFS, DEMO_TILES, DEMO_WAITING, DEMO_WELCOME } from "~/demo/data"
 import { longFeed } from "~/demo/long"
 import { demoShell, demoShells, demoTerm } from "~/demo/term"
 import type { Account, Actions, AgentStarts, App, Enrolling, Finding, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Task } from "~/model"
@@ -232,6 +232,8 @@ export type Scenario =
   | "devices"
   | "enroll-desktop"
   | "enroll-desktop-digits"
+  | "recover-desktop"
+  | "recover-desktop-welcome"
   | "devices-forgotten"
   | "forgot-here"
   | "link-stuck"
@@ -288,6 +290,8 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
   if (scenario === "forgot-here") return { account: { ...DEMO_ACCOUNT, forgotHere: { by: "Jow's MacBook Air" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "enroll-desktop") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, enrolling: { stage: "asking" } }
   if (scenario === "enroll-desktop-digits") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, enrolling: { stage: "digits", digits: "482915" } }
+  if (scenario === "recover-desktop") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, enrolling: { stage: "recover" } }
+  if (scenario === "recover-desktop-welcome") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, enrolling: DEMO_WELCOME }
   if (scenario === "signed-out") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000 }
   if (scenario === "no-channels") return { account: DEMO_ACCOUNT, tiles: [], channels: new Map(), prefs, seq: 1000 }
   if (scenario === "closed" || scenario === "removed")
@@ -591,6 +595,14 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         setTimeout(() => setState((s) => (s.enrolling ? { ...s, enrolling: { stage: "digits", digits: "482915" } } : s)), 1500)
       },
       enrollCancel: () => setState((s) => ({ ...s, enrolling: null })),
+      recoverBegin: () => setState((s) => ({ ...s, enrolling: { stage: "recover" } })),
+      recoverOpen: async (words) => {
+        const n = words.split(/[^a-z]+/i).filter(Boolean).length
+        if (n !== 24) return { why: `a recovery key is 24 words, and that's ${n}` }
+        setState((s) => ({ ...s, enrolling: DEMO_WELCOME }))
+        return null
+      },
+      recoverFinish: async () => setState((s) => ({ ...s, enrolling: null })),
       enrollDeny: () => setState((s) => (s.account ? { ...s, account: { ...s.account, enrollAsk: undefined } } : s)),
       saveTheme: (theme) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...savedTheme(s.prefs, theme) } })),
       deleteTheme: (id) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...deletedTheme(s.prefs, id) } })),
