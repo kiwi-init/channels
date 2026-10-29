@@ -10,6 +10,7 @@ import { stageOf } from "@kiwi/core/stage.ts"
 import { GENERAL_ROOM, ignored, isQuiet, isReaction, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { pickFor, taskCandidates } from "@kiwi/core/routing.ts"
 import { canPost } from "@kiwi/core/scopes.ts"
+import { versionName } from "@kiwi/core/status.ts"
 import {
   answersAsk,
   answersDecisions,
@@ -19,6 +20,7 @@ import {
   humanOf,
   isPerson,
   MAIN,
+  mayNameGoal,
   outsideRepos,
   placeKey,
   prChecks,
@@ -32,6 +34,7 @@ import type { GithubPr } from "@kiwi/core/state/github.ts"
 import { decisionLabel } from "@/lib/asks"
 import { permissionCode, permissionNotes, permissionTitle, visibleText } from "@/lib/permission-view"
 import { reviewsFor, taskActions } from "@/lib/task-actions"
+import { taskGroups } from "@/lib/views"
 import { roomOfMessage, roomSeenKey } from "@/lib/rooms"
 import { canonicalHarness, harnessName } from "@/lib/harness"
 import type { Online } from "@/lib/channel/online"
@@ -52,6 +55,7 @@ import type {
   Room,
   Task,
   TaskEvent,
+  TaskGroup,
   TaskMove,
   TaskStatus,
   TheirDirect,
@@ -473,7 +477,7 @@ export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: stri
       updatedAt: t.updatedAt,
       ...(linked ? { pr: prOf(state, linked) } : {}),
       stage: stage.stage,
-      ...(release ? { release: release.tag } : {}),
+      ...(release ? { release: versionName(release.tag) } : {}),
       notes: t.notes.map((n) => ({ by: n.by, at: n.ts, text: n.text })),
       rounds: t.rounds.map((r) => ({
         n: r.n,
@@ -487,6 +491,30 @@ export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: stri
       ...(t.cancelled ? { cancelled: true } : {}),
       ...(review ? { youReview: review } : {}),
       ...(suggested ? { suggested } : {}),
+      ...(t.leftBy && !t.owner ? { leftBy: t.leftBy } : {}),
+    }
+  })
+}
+
+export function groupsOf(state: ChannelState, me: string, now = Date.now()): TaskGroup[] {
+  return taskGroups(state, "everything", now).map((g): TaskGroup => {
+    const tasks = g.tasks.map((t) => t.id)
+    const h = g.head
+    switch (h.kind) {
+      case "ask":
+        return {
+          key: g.key,
+          tasks,
+          head: h.ask
+            ? { kind: "ask", id: h.ask.id, by: h.ask.by, words: h.ask.words.trim(), ...(h.ask.goal ? { goal: h.ask.goal } : {}), mayName: mayNameGoal(state, me, h.ask) }
+            : { kind: "unfiled" },
+        }
+      case "next":
+        return { key: g.key, tasks, head: { kind: "next", ...(h.name ? { name: versionName(h.name) } : {}) } }
+      case "release":
+        return { key: g.key, tasks, head: { kind: "release", tag: versionName(h.tag), at: h.at } }
+      case "cancelled":
+        return { key: g.key, tasks, head: { kind: "cancelled" } }
     }
   })
 }

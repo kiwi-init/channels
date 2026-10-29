@@ -1,4 +1,4 @@
-import type { Account, Ask, Channel, ChannelTile, Message, Person, Prefs, Task } from "~/model"
+import type { Account, Ask, Channel, ChannelTile, Message, Person, Prefs, Task, TaskGroup } from "~/model"
 import { nicknamesOf } from "~/names"
 
 const now = Date.now()
@@ -200,6 +200,7 @@ const tasks: Task[] = [
     id: 9,
     title: "Fold duplicate event rows",
     status: "done",
+    release: "0.9.4",
     owner: "atlas",
     createdBy: "jow",
     createdAt: m(60 * 30),
@@ -363,6 +364,7 @@ const tasks: Task[] = [
     title: "Rotate the relay's signing key",
     status: "todo",
     suggested: { name: "atlas", why: "worked T9 before" },
+    leftBy: "scout",
     createdBy: "maya",
     createdAt: m(200),
     updatedAt: m(200),
@@ -371,6 +373,15 @@ const tasks: Task[] = [
     history: [{ seq: 1501, by: "maya", at: m(200), what: "created" }],
     archived: false,
   },
+]
+
+const taskGroups: TaskGroup[] = [
+  { key: "ask:120", head: { kind: "ask", id: 120, by: "jow", words: "@win ship it: tag v1.0.0", goal: "Ship 1.0", mayName: true }, tasks: [13, 10, 12] },
+  { key: "ask:110", head: { kind: "ask", id: 110, by: "jow", words: "@atlas can someone make the feed feel lighter? too many borders", mayName: true }, tasks: [14, 11] },
+  { key: "unfiled", head: { kind: "unfiled" }, tasks: [15] },
+  { key: "next", head: { kind: "next", name: "1.0.0" }, tasks: [16] },
+  { key: "release:0.9.4", head: { kind: "release", tag: "0.9.4", at: m(60 * 18) }, tasks: [9] },
+  { key: "cancelled", head: { kind: "cancelled" }, tasks: [8] },
 ]
 
 const ICONS_SHOT = `data:image/svg+xml,${encodeURIComponent(
@@ -654,6 +665,7 @@ export const DEMO_CHANNEL: Channel = {
   nicknames: nicknamesOf(people),
   messages: [...releases, ...messages, ...threadReplies, ...dm, ...taskThread].sort((a, b) => a.seq - b.seq),
   tasks,
+  taskGroups,
   asks,
   connection: "live",
 }
@@ -671,6 +683,7 @@ export const DEMO_EMPTY: Channel = {
   nicknames: nicknamesOf([people[0] as Person]),
   messages: [],
   tasks: [],
+  taskGroups: [],
   asks: [],
   connection: "live",
 }

@@ -145,6 +145,20 @@ export interface Task {
   cancelled?: boolean
   youReview?: "verdict" | "send-back"
   suggested?: { name: string; why: string }
+  leftBy?: string
+}
+
+export type TaskGroupHead =
+  | { kind: "ask"; id: number; by: string; words: string; goal?: string; mayName: boolean }
+  | { kind: "unfiled" }
+  | { kind: "next"; name?: string }
+  | { kind: "release"; tag: string; at: number }
+  | { kind: "cancelled" }
+
+export interface TaskGroup {
+  key: string
+  head: TaskGroupHead
+  tasks: number[]
 }
 
 export type Where = { kind: "room"; room: string } | { kind: "dm"; with: string } | { kind: "theirs"; between: readonly [string, string] } | { kind: "task"; task: number }
@@ -339,6 +353,7 @@ export interface Channel {
   nicknames: ReadonlyMap<string, string>
   messages: Message[]
   tasks: Task[]
+  taskGroups: TaskGroup[]
   asks: Ask[]
   connection: "connecting" | "live" | "reconnecting"
   loading?: boolean
@@ -436,6 +451,7 @@ export interface Actions {
   cancelTask(code: string, task: number, why: string): void
   assignTask(code: string, task: number, to: string, why: string): void
   setReviewer(code: string, task: number, reviewer: string): void
+  nameGoal(code: string, ask: number, name: string | null): void
   setRole(code: string, name: string, role: string | null): void
   removeMember(code: string, name: string): void
   setPersona(code: string, name: string, persona: string | null): void
