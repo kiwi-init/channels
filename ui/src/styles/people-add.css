@@ -393,3 +393,39 @@
   display: flex;
   justify-content: flex-end;
 }
+
+.add-gets {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.add-get {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+
+.add-get-who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  color: var(--ink-3);
+  font: var(--t-ui) var(--ui);
+}
+
+.add-get .codebox {
+  min-height: 34px;
+  padding: 2px 2px 2px 10px;
+  color: var(--ink-2);
+}
+
+.add-get .codebox code {
+  font-size: var(--t-meta);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
