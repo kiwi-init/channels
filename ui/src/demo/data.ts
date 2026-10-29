@@ -28,6 +28,9 @@ export const DEMO_ACCOUNT: Account = {
   ],
 }
 
+export const DEMO_LINK_CODE = "kl1-575YX8XM5mSLFy5UBIHEYeD7p4Zdl-AK6j0KgodkDIN.zNlxICAbaG8wy1JZirLnqB0PRfMBH7_WY5YQ1xOy1bA.imCaXyMFSb4hBqlx.aHR0cHM6Ly9yZWxheS5jaGFubmVscy5kZXY"
+export const DEMO_PAIR_CODE = "kp1-JJLafBvv6Q9RxXTndfYUZx9K1GNNEgeyg1_lWIQd9Jj"
+
 export const DEMO_PREFS: Prefs = {
   theme: "system",
   textSize: 0,
