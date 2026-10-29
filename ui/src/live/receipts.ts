@@ -1,7 +1,7 @@
 import { ignored, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { MAIN, placeKey, type ChannelState } from "@kiwi/core/state.ts"
 import { receipt, type Marks } from "@kiwi/channel/receipts.ts"
-import { roomOfMessage } from "@/lib/rooms"
+import { roomOfMessage } from "@kiwi/app/rooms.ts"
 import type { Message } from "~/model"
 
 export function receiptsOf(

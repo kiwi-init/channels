@@ -44,8 +44,8 @@ describe("packages/core (@kiwi/core)", () => {
     expect(bad).toEqual([]);
   });
 
-  test("web/src and packages/app never import its Node-only modules", () => {
-    const bad = [...sources(join(root, "web/src")), ...sources(join(root, "packages/app/src"))]
+  test("ui/src and packages/app never import its Node-only modules", () => {
+    const bad = [...sources(join(root, "ui/src")), ...sources(join(root, "packages/app/src"))]
       .filter((f) => imports(f).some((spec) => spec.startsWith("@kiwi/core/node/")))
       .map((f) => relative(root, f));
     expect(bad).toEqual([]);
@@ -53,7 +53,7 @@ describe("packages/core (@kiwi/core)", () => {
 
   test("everything else reaches it by package name, never by a relative path", () => {
     const bad: string[] = [];
-    for (const dir of ["src", "test", "scripts", "web/src", "packages/app/src", "desktop/src", "desktop/scripts"])
+    for (const dir of ["src", "test", "scripts", "ui/src", "packages/app/src", "desktop/src", "desktop/scripts"])
       for (const f of sources(join(root, dir))) for (const spec of imports(f)) if (spec.startsWith(".") && resolve(dirname(f), spec).startsWith(core + "/")) bad.push(`${relative(root, f)}: ${spec}`);
     expect(bad).toEqual([]);
   });

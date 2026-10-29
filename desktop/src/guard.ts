@@ -41,7 +41,7 @@ export function normalizeRelay(url: string): string | null {
 }
 
 /**
- * The Content-Security-Policy for the app's page: the hosted web's (web/public/_headers),
+ * The Content-Security-Policy for the app's page: the hosted app's (ui/public/_headers),
  * with the relay this app talks to, over HTTP and its WebSocket, as the only place to connect. Not
  * WorkOS: in the app, sign-in runs in main (the device flow), never in the page. No eval (only
  * WebAssembly compiles: the message renderer's parser is wasm), no inline script, nothing framed, no

@@ -74,8 +74,8 @@ describe("annotate export", () => {
     expect([...new Uint8Array(await blob.arrayBuffer())]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]);
     const connect = (headers: string) => /connect-src ([^;]*)/.exec(headers)?.[1] ?? "";
     const root = fileURLToPath(new URL("../../../", import.meta.url));
-    for (const app of ["ui", "web"]) expect(connect(readFileSync(join(root, app, "public/_headers"), "utf8"))).not.toContain("data:");
-    const fetchesData = ["packages/app/src", "ui/src", "web/src"].flatMap((dir) =>
+    expect(connect(readFileSync(join(root, "ui/public/_headers"), "utf8"))).not.toContain("data:");
+    const fetchesData = ["packages/app/src", "ui/src"].flatMap((dir) =>
       [...new Glob("**/*.{ts,tsx}").scanSync(join(root, dir))].map((f) => join(dir, f)).filter((f) => /fetch\(\s*[`"']data:/.test(readFileSync(join(root, f), "utf8"))),
     );
     expect(fetchesData).toEqual([]);
