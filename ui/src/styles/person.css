@@ -89,6 +89,11 @@
   margin-top: 0;
 }
 
+.person-repo {
+  display: grid;
+  gap: 2px;
+}
+
 .person-label {
   color: var(--ink-3);
   font: var(--t-meta) var(--ui);

@@ -8,7 +8,8 @@ import type { Jump } from "~/chat/search-box"
 import { paintHits } from "~/chat/search-paint"
 import { Loading } from "~/kit/bits"
 import { day, sameDay } from "~/kit/time"
-import type { Channel, Message, Where } from "~/model"
+import type { Channel, Message, Person, Where } from "~/model"
+import { liveOf, workingIn } from "~/doing"
 import { sameWhere, useApp, whereKey } from "~/nav"
 import { between, nickname, shown } from "~/names"
 import { AddAgentCard } from "~/panels/add-agent"
@@ -180,7 +181,7 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
   const bySeq = useMemo(() => new Map(channel.messages.map((m) => [m.seq, m])), [channel.messages])
   const names = useNames(channel)
   const tasks = useTaskIds(channel)
-  const typing = channel.people.filter((p) => p.typing && !p.you && where.kind === "room")
+  const working = workingIn(channel.people, where)
   const [fresh, setFresh] = useState(0)
   const [far, setFar] = useState(false)
 
@@ -377,16 +378,7 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
               )
             })
           )}
-          {typing.length > 0 && (
-            <p className="typing">
-              <span className="typing-dots" aria-hidden="true">
-                <i />
-                <i />
-                <i />
-              </span>
-              {typing.map((p) => shown(p)).join(", ")} {typing.length === 1 ? "is" : "are"} typing
-            </p>
-          )}
+          {working.length > 0 && <Working people={working} />}
         </div>
       </div>
       {(fresh > 0 || far) && (
@@ -440,5 +432,32 @@ function Start({ channel, where }: { channel: Channel; where: Where }) {
       </p>
       {agents === 0 ? <AddAgentCard channel={channel} /> : <p className="dim">Say what you want done. The lead turns it into tasks.</p>}
     </div>
+  )
+}
+
+function Working({ people }: { people: Person[] }) {
+  const { go } = useApp()
+  const named = people.slice(0, 3)
+  const more = people.length - named.length
+  return (
+    <p className="working" aria-live="polite">
+      <span className="working-dots" aria-hidden="true">
+        <i />
+        <i />
+        <i />
+      </span>
+      <span className="working-text">
+        {named.map((p, i) => (
+          <Fragment key={p.name}>
+            {i > 0 && ", "}
+            <button type="button" className="working-name" onClick={() => go({ to: "panel", panel: { kind: "person", name: p.name } })}>
+              {shown(p)}
+            </button>{" "}
+            {liveOf(p)?.text}
+          </Fragment>
+        ))}
+        {more > 0 && `, ${more} more working`}
+      </span>
+    </p>
   )
 }

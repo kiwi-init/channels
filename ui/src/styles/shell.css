@@ -557,7 +557,6 @@
   text-overflow: ellipsis;
 }
 
-.side-status.is-typing,
 .side-status.is-doing {
   color: var(--doing);
 }

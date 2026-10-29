@@ -10,6 +10,7 @@ import { memberOf, type App, type Channel, type Color, type Person } from "~/mod
 import { useApp } from "~/nav"
 import { nickname, shown } from "~/names"
 import { ShowAgent } from "~/kit/show-agent"
+import { contextOf, liveOf, restOf } from "~/doing"
 import { PanelHead } from "~/panels/frame"
 import { InlineEdit } from "~/settings/controls"
 
@@ -65,8 +66,19 @@ function Hero({ person }: { person: Person }) {
   )
 }
 
+const LOAD_ROWS = [
+  ["doing", "Working on"],
+  ["queued", "Up next"],
+  ["waiting", "Waiting for review"],
+] as const
+
+const capital = (text: string): string => text.slice(0, 1).toUpperCase() + text.slice(1)
+
 function Now({ channel, person }: { channel: Channel; person: Person }) {
-  const doing = person.doing !== undefined ? channel.tasks.find((t) => t.id === person.doing) : undefined
+  const { app } = useApp()
+  const live = person.left ? null : liveOf(person)
+  const context = app.computer?.contextLine && !person.left ? contextOf(person) : null
+  const rest = !live && person.kind === "agent" && person.presence === "online" ? restOf(person) : null
   const presence = person.left
     ? `Left the channel · last seen ${since(person.lastSeen)}`
     : person.presence === "online"
@@ -79,16 +91,28 @@ function Now({ channel, person }: { channel: Channel; person: Person }) {
       <p className="person-presence">
         <span className={cx("person-dot", `is-${person.presence}`)} aria-hidden="true" />
         <span>{presence}</span>
-        {person.typing && <span className="tone-doing">· typing…</span>}
-        {!person.typing && !doing && person.kind === "agent" && person.presence === "online" && <span className="dim">· idle</span>}
+        {live && (
+          <span className={live.busy ? "tone-doing" : "tone-decide"}>
+            · {capital(live.text)}
+            {live.since && ago(live.since) !== "now" && <span className="dim"> for {ago(live.since)}</span>}
+          </span>
+        )}
+        {rest && <span className="dim">· {capital(rest)}</span>}
+        {person.load?.level === "overloaded" && <span className="tone-alert">· Overloaded</span>}
+        {context && <span className={context.over ? "tone-alert" : "dim"}>· {context.text}</span>}
       </p>
       {person.about && <p className="person-about">{person.about}</p>}
-      {doing && (
-        <div className="person-doing">
-          <span className="person-label">Working on</span>
-          <TaskChip channel={channel} id={doing.id} />
-        </div>
-      )}
+      {LOAD_ROWS.map(([key, label]) => {
+        const ids = (person.load?.[key] ?? []).filter((id) => channel.tasks.some((t) => t.id === id))
+        return ids.length > 0 ? (
+          <div key={key} className="person-doing">
+            <span className="person-label">{label}</span>
+            {ids.map((id) => (
+              <TaskChip key={id} channel={channel} id={id} />
+            ))}
+          </div>
+        ) : null
+      })}
     </section>
   )
 }
@@ -134,8 +158,23 @@ function Facts({ channel, person }: { channel: Channel; person: Person }) {
   const rows: [string, ReactNode][] =
     person.kind === "agent"
       ? [
-          ["Computer", person.machine ?? "unknown"],
-          ["Folder", person.folder ? <code>{person.folder}</code> : "unknown"],
+          ["Computer", person.machine ?? person.specs ?? "unknown"],
+          ...(person.machine && person.specs ? [["System", person.specs] satisfies [string, ReactNode]] : []),
+          [
+            "Repo",
+            person.repo ? (
+              <span className="person-repo">
+                <code>
+                  {person.repo}
+                  {person.branch && <span className="dim">@{person.branch}</span>}
+                </code>
+                {person.outside && <span className="tone-decide">Not one of this channel's repos</span>}
+              </span>
+            ) : (
+              "unknown"
+            ),
+          ],
+          ...(person.tools?.length ? [["Tools", person.tools.join(", ")] satisfies [string, ReactNode]] : []),
           [
             "Brought by",
             sponsor ? (
