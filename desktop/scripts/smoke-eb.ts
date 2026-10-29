@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { daemonHello, daemonStop } from "../src/daemon-client.ts";
 import { bridgeChecks } from "./eb-bridge-checks.ts";
-import { appExecutable, appRoot, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
+import { appExecutable, appRoot, attach, killAll, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
 import { firstChannel, sendMessage } from "./eb-first-run.ts";
 
 if (!process.argv[2]) {
@@ -173,7 +173,7 @@ try {
   if (!ours.length) problems.push("found no web content process of the app's own to stop");
   else {
     const origin = await d.evaluate(() => performance.timeOrigin, null);
-    for (const pid of ours) process.kill(pid, "SIGKILL");
+    killAll(ours);
     const back = await until("the page, back after its web content process was killed", 30_000, () =>
       d.evaluate(() => (document.querySelector("#root")?.childElementCount ? performance.timeOrigin : null), null, 2_000).then((o) => (o !== null && o !== origin ? o : null)),
     ).catch((e: Error) => (problems.push(e.message), null));
@@ -250,7 +250,7 @@ try {
   await later(1_000);
   const left = alive();
   if (left.length) problems.push(`still running after the smoke test: ${left.join(", ")}`);
-  for (const pid of left) process.kill(pid, "SIGKILL");
+  killAll(left);
   rmSync(root, { recursive: true, force: true });
 }
 

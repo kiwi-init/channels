@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import { payloadOf, shippedApp } from "./eb-app.ts";
+import { killAll } from "./eb-drive.ts";
 import { homeKeychain, stuck } from "./eb-home-keychain.ts";
 import { sealApp } from "./eb-seal.ts";
 
@@ -171,10 +172,11 @@ if (id === "com.kiwiinit.channels" && !process.env.CI) {
   } catch {
     // The group is gone already: the app exited on its own, which the checks above report.
   }
-  await later(2_000);
-  const left = spawnSync("pgrep", ["-f", app], { encoding: "utf8" }).stdout.split("\n").filter(Boolean).map(Number);
-  for (const pid of left) console.error(`eb-env-check: still running after SIGTERM, where it waits:\n${stuck(pid)}`);
-  for (const pid of left) process.kill(pid, "SIGKILL");
+  const running = () => spawnSync("pgrep", ["-f", app], { encoding: "utf8" }).stdout.split("\n").filter(Boolean).map(Number);
+  for (const end = Date.now() + 10_000; running().length && Date.now() < end; await later(250));
+  const left = running();
+  for (const pid of left) console.error(`eb-env-check: still running 10s after SIGTERM, where it waits:\n${stuck(pid)}`);
+  killAll(left);
   if (left.length) problems.push(`still running after the check: ${left.join(", ")}`);
   dropKeychain();
 }

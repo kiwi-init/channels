@@ -33,6 +33,17 @@ export function processesOf(app: string): string[] {
     .filter((l) => l.includes(contents));
 }
 
+export function killAll(pids: readonly number[]): void {
+  for (const pid of pids) {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch (e) {
+      // ESRCH: it exited between the look and the kill, which is what the kill was for.
+      if ((e as NodeJS.ErrnoException).code !== "ESRCH") throw e;
+    }
+  }
+}
+
 export function webkitHelpers(): number {
   return execFileSync("ps", ["-Ao", "comm="], { encoding: "utf8" })
     .split("\n")
