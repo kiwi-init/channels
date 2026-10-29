@@ -1,11 +1,12 @@
 import { freeHandle, seededPick } from "@kiwi/core/handles.ts"
 import type { JoinRequest, Member as RosterMember } from "@kiwi/core/membership.ts"
 import { nameKey, runsLine } from "@kiwi/core/membership.ts"
-import type { Card } from "@kiwi/core/protocol.ts"
+import type { Card, Event } from "@kiwi/core/protocol.ts"
 import { permissionAnswer } from "@kiwi/core/permission.ts"
-import { describeEvent } from "@kiwi/core/format.ts"
+import { describeEvent, proofLabel } from "@kiwi/core/format.ts"
 import { FAILED, prLinks, taskPr } from "@kiwi/core/prs.ts"
 import { GENERAL_ROOM, ignored, isQuiet, isReaction, type Message as Wire } from "@kiwi/core/protocol.ts"
+import { pickFor, taskCandidates } from "@kiwi/core/routing.ts"
 import { canPost } from "@kiwi/core/scopes.ts"
 import {
   answersAsk,
@@ -31,7 +32,7 @@ import { reviewsFor, taskActions } from "@/lib/task-actions"
 import { roomOfMessage, roomSeenKey } from "@/lib/rooms"
 import { canonicalHarness, harnessName } from "@/lib/harness"
 import type { Online } from "@/lib/channel/online"
-import type { Ask, Color, Direct, Harness, Image, JoinAsk, Message, Person, PullRequest, Reaction, Room, Task, TaskStatus, TheirDirect, Upload, Where } from "~/model"
+import type { Ask, Color, Direct, Harness, Image, JoinAsk, Message, Person, PullRequest, Reaction, Room, Task, TaskEvent, TaskMove, TaskStatus, TheirDirect, Upload, Where } from "~/model"
 
 type Seen = Readonly<Record<string, number>>
 
@@ -230,6 +231,13 @@ export interface Pictures {
   get(seq: number, i: number): Image | undefined
 }
 
+function whereOf(state: ChannelState, m: Wire, me: string): Where {
+  const place = state.placeOf.get(m.seq) ?? MAIN
+  if (place.kind === "task") return { kind: "task", task: place.task }
+  if (place.kind === "dm") return place.with.includes(me) ? { kind: "dm", with: place.with[0] === me ? place.with[1] : place.with[0] } : { kind: "theirs", between: place.with }
+  return { kind: "room", room: roomOfMessage(state, m) }
+}
+
 export function messagesOf(state: ChannelState, messages: readonly Wire[], me: string, askOf: ReadonlyMap<number, string>, pictures: Pictures, pending: readonly Pending[]): Message[] {
   const bySeq = new Map(messages.map((m) => [m.seq, m]))
   const threads = new Map<number, { replies: number; last: number; people: string[] }>()
@@ -261,15 +269,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       out.push({ seq: m.seq, from: m.from, at: m.ts, text: eventText(m, state), where, system: true, ...(task !== undefined ? { task } : {}) })
       continue
     }
-    const place = state.placeOf.get(m.seq) ?? MAIN
-    const where: Where =
-      place.kind === "task"
-        ? { kind: "task", task: place.task }
-        : place.kind === "dm"
-          ? place.with.includes(me)
-            ? { kind: "dm", with: place.with[0] === me ? place.with[1] : place.with[0] }
-            : { kind: "theirs", between: place.with }
-          : { kind: "room", room: roomOfMessage(state, m) }
+    const where = whereOf(state, m, me)
     const root = rootOf(m)
     const quoted = m.re?.[0]
     const reactions = reactionsOf(state, m.seq)
@@ -324,14 +324,89 @@ function reactionsOf(state: ChannelState, seq: number): Reaction[] {
 
 const STATUS: Record<CoreTask["state"], TaskStatus> = { todo: "todo", doing: "doing", review: "review", done: "done" }
 
-export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: string): Task[] {
+const STATE_MOVES: Record<NonNullable<TaskUpdate["state"]>, TaskMove> = { todo: "reopened", doing: "started", review: "review", done: "done", blocked: "blocked", cancelled: "cancelled" }
+
+const TASK_REF = /\bT(\d+)\b/g
+
+type TaskUpdate = Extract<Event, { op: "task.update" }>
+
+type Move = Pick<TaskEvent, "what" | "to" | "round" | "note">
+
+const said = (note: string | undefined, quiet?: string): { note?: string } => {
+  const clean = note?.trim()
+  return clean && clean !== quiet ? { note: clean } : {}
+}
+
+function moveOf(state: ChannelState, m: Wire, ev: TaskUpdate): Move | null {
+  if (ev.verdict) return { what: ev.verdict, ...(ev.round !== undefined ? { round: ev.round } : {}), ...said(ev.note, ev.verdict) }
+  if (ev.state === "review") {
+    const round = state.tasks.get(ev.task)?.rounds.find((r) => r.seq === m.seq)
+    return { what: "review", ...(round ? { round: round.n } : {}), ...said(ev.note) }
+  }
+  if (ev.state === "cancelled") return { what: "cancelled", ...said(ev.note, "cancelled") }
+  if (ev.owner && (!ev.state || ev.state === "todo")) return { what: "assigned", to: ev.owner, ...said(ev.note?.replace(/^assigned to \S+: /, "")) }
+  if (ev.state) return { what: STATE_MOVES[ev.state], ...said(ev.note, ev.state) }
+  if (ev.owner === null) return { what: "unassigned", ...said(ev.note) }
+  if (ev.review !== undefined) return { what: "reviewer", ...(ev.review ? { to: ev.review } : {}), ...said(ev.note) }
+  if (ev.title) return { what: "renamed", note: ev.title.trim() }
+  if (ev.proof) return { what: "proof", note: proofLabel(ev.proof) }
+  if (ev.note?.trim()) return { what: ev.checkpoint ? "checkpoint" : "note", note: ev.note.trim() }
+  return null
+}
+
+function historyOf(state: ChannelState, messages: readonly Wire[], me: string): Map<number, TaskEvent[]> {
+  const out = new Map<number, TaskEvent[]>()
+  const named = new Set<string>()
+  const add = (id: number, e: TaskEvent) => {
+    if (!state.tasks.has(id)) return
+    const list = out.get(id)
+    if (list) list.push(e)
+    else out.set(id, [e])
+  }
+  for (const m of messages) {
+    if (ignored(state.trust.get(m.seq)) || isReaction(m) || state.rejected.has(m.seq)) continue
+    const base = { seq: m.seq, by: m.from, at: m.ts }
+    const ev = m.ev
+    if (m.kind === "event") {
+      if (ev?.op === "task.add") add(m.seq, { ...base, what: "created", ...(ev.owner ? { to: ev.owner } : {}) })
+      else if (ev?.op === "task.claim") add(ev.task, { ...base, what: "took" })
+      else if (ev?.op === "task.update") {
+        const move = moveOf(state, m, ev)
+        if (move) add(ev.task, { ...base, ...move })
+      }
+      continue
+    }
+    if (!m.body) continue
+    const where = whereOf(state, m, me)
+    if (where.kind === "theirs") continue
+    const root = state.threadOf.get(m.seq) ?? m.seq
+    for (const hit of m.body.matchAll(TASK_REF)) {
+      const id = Number(hit[1])
+      const key = `${id}:${root}`
+      if ((where.kind === "task" && where.task === id) || named.has(key)) continue
+      named.add(key)
+      add(id, { ...base, what: "mention", where, root, note: m.body.slice(0, 600) })
+    }
+  }
+  return out
+}
+
+function suggestionFor(state: ChannelState, t: CoreTask): { name: string; why: string } | undefined {
+  if (t.owner || t.state === "done") return undefined
+  const top = pickFor(taskCandidates(state, t.id))
+  return top ? { name: top.name, why: top.reasons[0] ?? "has its context" } : undefined
+}
+
+export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: string, messages: readonly Wire[]): Task[] {
   const waiting = tasksAwaitingPeople(state)
   const you = state.members.get(me)
   const person = !!you && isPerson(you)
+  const history = historyOf(state, messages, me)
   return [...state.tasks.values()].map((t): Task => {
     const linked = taskPr(state, t.id)
     const can = taskActions(t, me, person)
     const review = can.kind === "open" && can.review !== "none" ? can.review : undefined
+    const suggested = person ? suggestionFor(state, t) : undefined
     return {
       id: t.id,
       title: t.title,
@@ -344,14 +419,18 @@ export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: stri
       updatedAt: t.updatedAt,
       ...(linked ? { pr: prOf(state, linked.pr) } : {}),
       notes: t.notes.map((n) => ({ by: n.by, at: n.ts, text: n.text })),
-      rounds: t.rounds.map((r) =>
-        r.result.kind === "open" || r.result.kind === "withdrawn"
-          ? { n: r.n, by: r.by, at: r.ts, result: r.result.kind }
-          : { n: r.n, by: r.by, judge: r.result.by, at: r.result.ts, result: r.result.kind }
-      ),
+      rounds: t.rounds.map((r) => ({
+        n: r.n,
+        by: r.by,
+        ...(r.result.kind === "open" || r.result.kind === "withdrawn" ? { at: r.ts } : { judge: r.result.by, at: r.result.ts }),
+        result: r.result.kind,
+        ...(r.summary ? { summary: r.summary } : {}),
+      })),
+      history: history.get(t.id) ?? [],
       archived: !!t.archived,
       ...(t.cancelled ? { cancelled: true } : {}),
       ...(review ? { youReview: review } : {}),
+      ...(suggested ? { suggested } : {}),
     }
   })
 }

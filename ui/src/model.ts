@@ -67,6 +67,39 @@ export interface ReviewRound {
   judge?: string
   at: number
   result: "open" | "approved" | "rejected" | "withdrawn"
+  summary?: string
+}
+
+export type TaskMove =
+  | "created"
+  | "took"
+  | "assigned"
+  | "unassigned"
+  | "started"
+  | "blocked"
+  | "reopened"
+  | "review"
+  | "approved"
+  | "rejected"
+  | "done"
+  | "cancelled"
+  | "reviewer"
+  | "renamed"
+  | "proof"
+  | "checkpoint"
+  | "note"
+  | "mention"
+
+export interface TaskEvent {
+  seq: number
+  by: string
+  at: number
+  what: TaskMove
+  to?: string
+  round?: number
+  note?: string
+  where?: Where
+  root?: number
 }
 
 export interface Task {
@@ -82,9 +115,11 @@ export interface Task {
   pr?: PullRequest
   notes: TaskNote[]
   rounds: ReviewRound[]
+  history: TaskEvent[]
   archived: boolean
   cancelled?: boolean
   youReview?: "verdict" | "send-back"
+  suggested?: { name: string; why: string }
 }
 
 export type Where = { kind: "room"; room: string } | { kind: "dm"; with: string } | { kind: "theirs"; between: readonly [string, string] } | { kind: "task"; task: number }
@@ -370,6 +405,9 @@ export interface Actions {
   approveTask(code: string, task: number, approve: boolean, why?: string): void
   addTask(code: string, title: string, owner?: string): void
   setTaskStatus(code: string, task: number, status: TaskStatus): void
+  cancelTask(code: string, task: number, why: string): void
+  assignTask(code: string, task: number, to: string, why: string): void
+  setReviewer(code: string, task: number, reviewer: string): void
   setRole(code: string, name: string, role: string | null): void
   removeMember(code: string, name: string): void
   setPersona(code: string, name: string, persona: string | null): void
