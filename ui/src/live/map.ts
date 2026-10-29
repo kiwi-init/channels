@@ -5,7 +5,8 @@ import type { Card } from "@kiwi/core/protocol.ts"
 import { permissionAnswer } from "@kiwi/core/permission.ts"
 import { describeEvent } from "@kiwi/core/format.ts"
 import { memberLoad, showsLoad } from "@kiwi/core/load.ts"
-import { FAILED, prLinks, taskPr } from "@kiwi/core/prs.ts"
+import { checksOf, FAILED, prLinks, taskPr } from "@kiwi/core/prs.ts"
+import { stageOf } from "@kiwi/core/stage.ts"
 import { GENERAL_ROOM, ignored, isQuiet, isReaction, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { canPost } from "@kiwi/core/scopes.ts"
 import {
@@ -21,6 +22,7 @@ import {
   placeKey,
   prChecks,
   prKey,
+  releaseOf,
   tasksAwaitingPeople,
   type ChannelState,
   type Task as CoreTask,
@@ -123,6 +125,11 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
   }
 }
 
+export function nextOf(state: ChannelState, now = Date.now()): string {
+  const note = state.facts.get("next")
+  return note && (!note.expires || note.expires > now) ? note.value.trim() : ""
+}
+
 export function peopleOf(state: ChannelState, roster: readonly RosterMember[], online: ReadonlyMap<string, Online>, me: string, wakes: ReadonlyMap<string, boolean>): Person[] {
   const byName = new Map(roster.filter((r) => r.active).map((r) => [r.name, r]))
   return [...state.members.values()].filter((m) => m.active && m.kind !== "computer").map((m) => personOf(state, m, byName.get(m.name), online.get(m.name), me, wakes))
@@ -223,6 +230,7 @@ function prOf(state: ChannelState, pr: GithubPr | { repo: string; number: number
   const checks = real ? prChecks(state.github, real) : []
   const failed = checks.some((c) => !!c.conclusion && FAILED.has(c.conclusion))
   const running = checks.some((c) => c.conclusion === undefined)
+  const ticks = real ? checksOf(state, real) : undefined
   return {
     repo: pr.repo,
     number: pr.number,
@@ -230,6 +238,8 @@ function prOf(state: ChannelState, pr: GithubPr | { repo: string; number: number
     url: real?.url ?? ("url" in pr && pr.url ? pr.url : `https://github.com/${pr.repo}/pull/${pr.number}`),
     state: real?.state ?? "open",
     checks: !checks.length ? "none" : failed ? "fail" : running ? "running" : "pass",
+    ...(ticks ? { ticks: { passed: ticks.passed, running: ticks.running, failed: ticks.failed } } : {}),
+    ...(real?.state === "merged" ? { mergedAt: real.at } : {}),
     ...(real?.additions !== undefined ? { additions: real.additions } : {}),
     ...(real?.deletions !== undefined ? { deletions: real.deletions } : {}),
   }
@@ -350,7 +360,9 @@ export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: stri
   const you = state.members.get(me)
   const person = !!you && isPerson(you)
   return [...state.tasks.values()].map((t): Task => {
-    const linked = taskPr(state, t.id)
+    const stage = stageOf(state, t)
+    const linked = taskPr(state, t.id)?.pr ?? stage.pr
+    const release = stage.stage === "done" && stage.pr ? releaseOf(state.github, stage.pr) : undefined
     const can = taskActions(t, me, person)
     const review = can.kind === "open" && can.review !== "none" ? can.review : undefined
     return {
@@ -363,7 +375,9 @@ export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: stri
       createdBy: t.createdBy,
       createdAt: t.createdAt,
       updatedAt: t.updatedAt,
-      ...(linked ? { pr: prOf(state, linked.pr) } : {}),
+      ...(linked ? { pr: prOf(state, linked) } : {}),
+      stage: stage.stage,
+      ...(release ? { release: release.tag } : {}),
       notes: t.notes.map((n) => ({ by: n.by, at: n.ts, text: n.text })),
       rounds: t.rounds.map((r) =>
         r.result.kind === "open" || r.result.kind === "withdrawn"
