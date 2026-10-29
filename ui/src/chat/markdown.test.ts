@@ -13,7 +13,7 @@ const { normalizeMarkdownStyle } = await import("react-native-enriched-markdown/
 const { buildStyles } = await import("react-native-enriched-markdown/lib/module/web/styles.js")
 const { parseMarkdown } = await import("react-native-enriched-markdown/lib/module/web/parseMarkdown.js")
 const { RenderNode } = await import("react-native-enriched-markdown/lib/module/web/renderers/index.js")
-const { default: Markdown, withTextSize } = await import("~/chat/markdown")
+const { default: Markdown, withTextSize, safeLinks, sortedRows } = await import("~/chat/markdown")
 const { keepParsed } = await import("~/chat/parsed")
 
 const fixed = (name: string, s: CSSProperties): string[] => [
@@ -87,5 +87,63 @@ describe("a code block copies when it's pressed", () => {
     expect(css).toContain('.md pre[role="button"]::after {\n  content: "Copy";')
     expect(css).toContain('.msg:hover .md pre[role="button"]::after,\n.md pre[role="button"]:focus-visible::after {\n  opacity: 1;\n}')
     expect(css).toMatch(/\.md pre\[role="button"\]::after \{[^}]*pointer-events: none;/)
+  })
+})
+
+const quiet = () => {}
+const FLAGS = { latexMath: false, underline: false, hardSoftBreaks: true }
+
+async function rendered(markdown: string): Promise<string> {
+  const ast = await parseMarkdown(markdown, FLAGS)
+  safeLinks(ast)
+  keepParsed(markdown, ast)
+  return renderToStaticMarkup(createElement(Markdown, { markdown, onMention: quiet, onTask: quiet, onMessage: quiet, onImage: quiet, onShown: quiet, copied: quiet }))
+}
+
+describe("a link that hides a user name or password stays text (T216)", () => {
+  test("user:pass@ links lose their href, plain and mention links keep theirs", async () => {
+    const html = await rendered("[docs](https://user:pass@evil.example/x) and https://me:secret@evil.example and [ok](https://example.com) and [@ana](kiwi-mention:ana)")
+    expect(html).not.toContain('evil.example/x"')
+    expect(html).not.toMatch(/href="[^"]*secret@/)
+    expect(html).toContain('href="https://example.com"')
+    expect(html).toContain('href="kiwi-mention:ana"')
+    expect(html).toContain("docs")
+  })
+
+  test("javascript: links stay text", async () => {
+    expect(await rendered("[x](javascript:alert(1))")).not.toContain("href=")
+  })
+})
+
+describe("a table sorts on a header click (T216)", () => {
+  test("every header is a button that says what it sorts by", async () => {
+    const html = await rendered("| Name | Runs |\n| --- | ---: |\n| b | 10 |\n| a | 2 |")
+    expect(html).toMatch(/<th scope="col" style="[^"]*" aria-sort="none"><button type="button" class="md-sort" aria-label="Sort by Name">Name<span aria-hidden="true"><\/span><\/button><\/th>/)
+    expect(html).toContain('aria-label="Sort by Runs"')
+    expect(html).toMatch(/<td[^>]*>b<\/td><td[^>]*>10<\/td><\/tr><tr[^>]*><td[^>]*>a<\/td>/)
+  })
+
+  test("numbers sort as numbers, text as text, ties keep the author's order, and no sort is the author's order", async () => {
+    const ast = await parseMarkdown("| n | w |\n| - | - |\n| 10 | b |\n| 2 | a |\n| 9 | b |\n| 1,000 | a |", FLAGS)
+    const body = ast.children?.[0]?.children?.find((c) => c.type === "TableBody")?.children ?? []
+    expect(sortedRows(body, null)).toEqual([0, 1, 2, 3])
+    expect(sortedRows(body, { column: 0, direction: "asc" })).toEqual([1, 2, 0, 3])
+    expect(sortedRows(body, { column: 0, direction: "desc" })).toEqual([3, 0, 2, 1])
+    expect(sortedRows(body, { column: 1, direction: "asc" })).toEqual([1, 3, 0, 2])
+  })
+})
+
+describe("long inline code copies and wide code fades (T216)", () => {
+  test("inline code from 16 characters becomes a Copy button; the block's own copy stays", () => {
+    const source = readFileSync(join(import.meta.dir, "markdown.tsx"), "utf8")
+    expect(source).toContain("const COPYABLE = 16")
+    expect(source).toContain('if (code.closest("pre, a") || text.length < COPYABLE || text.includes("\\n")) continue')
+  })
+
+  test("a code block wider than the message fades at the right edge, and the Copy hint stays sharp over it", () => {
+    const css = readFileSync(join(import.meta.dir, "../styles/chat.css"), "utf8")
+    expect(css).toContain(".md pre.code-more {\n  mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);\n}")
+    expect(css).toContain('.msg:hover .md pre.code-more[role="button"],\n.md pre.code-more[role="button"]:focus-visible {')
+    expect(css).toContain(".md code[data-copy] {\n  cursor: copy;\n}")
   })
 })
