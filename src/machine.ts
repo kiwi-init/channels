@@ -7,7 +7,7 @@ import { hostname } from "node:os";
 import { join } from "node:path";
 import { home, writePrivate } from "./config.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
-import { claimDevice, type DeviceClaim, type DeviceLink } from "@kiwi/core/devices.ts";
+import { claimDevice, readDeviceList, type DeviceClaim, type DeviceLink } from "@kiwi/core/devices.ts";
 import { claimComputer, type ComputerClaim, type MachineCert } from "@kiwi/core/person.ts";
 
 export interface EnrolledDevice {
@@ -70,4 +70,30 @@ export async function computerClaimFor(roomId: string, agentPk: string): Promise
   const computer = m.cert && m.cert.machine === m.identity.pk ? await claimComputer(m.identity, m.cert, roomId, agentPk) : undefined;
   const device = m.device?.links.length ? await claimDevice(m.identity, m.device.links, roomId, agentPk) : undefined;
   return computer || device ? { ...(computer ? { computer } : {}), ...(device ? { device } : {}) } : undefined;
+}
+
+let taking: Promise<unknown> = Promise.resolve();
+
+export function takeDeviceList(links: unknown): Promise<"longer" | "revoked" | null> {
+  const run = taking.then(() => takeNow(links));
+  taking = run.catch(() => null);
+  return run;
+}
+
+async function takeNow(links: unknown): Promise<"longer" | "revoked" | null> {
+  if (!Array.isArray(links)) return null;
+  const m = loadMachine();
+  if (!m?.device) return null;
+  const read = await readDeviceList(links);
+  if (!read.ok || read.list.person !== m.device.person.pk) return null;
+  const kept = await readDeviceList(m.device.links);
+  if (kept.ok && read.list.version <= kept.list.version) return null;
+  if (read.list.revoked.includes(m.identity.pk)) {
+    const next: MachineFile = { ...m };
+    delete next.device;
+    saveMachine(next);
+    return "revoked";
+  }
+  saveMachine({ ...m, device: { ...m.device, links: links as DeviceLink[] } });
+  return "longer";
 }

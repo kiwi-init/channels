@@ -2,9 +2,10 @@ import { chmodSync, existsSync, mkdirSync, renameSync, rmSync, statSync } from "
 import { join } from "node:path";
 import type { Socket } from "bun";
 import type { Channel, PresenceFields, Probe } from "@kiwi/core/client.ts";
+import type { Message } from "@kiwi/core/protocol.ts";
 import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity, saveAccess, type Config } from "../config.ts";
 import { readCursor } from "../config/cursors.ts";
-import { saveMachine } from "../machine.ts";
+import { saveMachine, takeDeviceList } from "../machine.ts";
 import { readMachineCert } from "@kiwi/core/person.ts";
 import { VERSION } from "../version.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
@@ -467,6 +468,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         seat.head,
         (m) => {
           if (m.seq > seat.head) seat.head = m.seq;
+          heardList(m);
           if (m.from !== seat.agent) scheduleWake(seat);
           for (const sub of [...seat.subs]) {
             if (sub.held) sub.held.push(m);
@@ -502,6 +504,10 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     }
   };
 
+  const heardList = (m: Message): void => {
+    if (m.sigOk && m.kind === "event" && m.ev?.op === "devices") void takeDeviceList(m.ev.links).catch(() => null);
+  };
+
   const onListen = async (conn: ConnState, id: number, params: Record<string, unknown>): Promise<void> => {
     const { channel, as, cursor } = params as { channel?: unknown; as?: unknown; cursor?: unknown };
     if (typeof channel !== "string" || !channel || typeof as !== "string" || !as) throw new Error('listen needs {"channel", "as", cursor}');
@@ -517,6 +523,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       const { messages } = await seat.ch.history(cursor);
       const caught = [...messages, ...(sub.held ?? [])];
       sub.held = null;
+      for (const m of caught) heardList(m);
       for (const m of caught) {
         if (m.seq <= sub.cursor) continue;
         if (sendLine(conn, JSON.stringify({ id, message: m }))) sub.cursor = m.seq;
