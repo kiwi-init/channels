@@ -87,13 +87,18 @@ final class Engine: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
                 answer["status"] = (response as? HTTPURLResponse)?.statusCode ?? 500
                 answer["body"] = String(decoding: data, as: UTF8.self)
             } catch {
+                logger.info("sign-in: \(target.lastPathComponent, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
                 answer["error"] = error.localizedDescription
             }
         } else {
             answer["error"] = "this app only makes WorkOS's sign-in calls"
         }
         guard let blob = try? JSONSerialization.data(withJSONObject: answer), let json = String(data: blob, encoding: .utf8) else { return }
-        _ = try? await web.callAsyncJavaScript("kiwi.fetched(json)", arguments: ["json": json], in: nil, contentWorld: .page)
+        do {
+            _ = try await web.callAsyncJavaScript("kiwi.fetched(json)", arguments: ["json": json], in: nil, contentWorld: .page)
+        } catch {
+            logger.info("sign-in: couldn't hand the engine its answer: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

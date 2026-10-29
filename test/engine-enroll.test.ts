@@ -222,4 +222,34 @@ describe("the phone engine's sign-in opens or says why (T13)", () => {
       workos.stop(true);
     }
   });
+
+  test("a token check cut off while the phone is in Safari is asked again", async () => {
+    const workos = configOnly(async () => Response.json({ workosClientId: "client_test" }));
+    asHost();
+    try {
+      const before = pushes.length;
+      const started = ask<EnrollStart>({ op: "enrollBegin", relay: workos.url.origin, label: "iPhone", os: "iOS 27", waitMs: 5_000 });
+      const answer = { device_code: "dc", user_code: "ABCD-EFGH", verification_uri_complete: "https://auth.example/device?user_code=ABCD-EFGH", interval: 0.05 };
+      engine.fetched(JSON.stringify({ id: (await asked(before)).id, status: 200, body: JSON.stringify(answer) }));
+      await started;
+      const waiting = ask({ op: "enrollWait" });
+      waiting.catch(() => {});
+
+      const cut = pushes.length;
+      const first = await asked(cut);
+      expect(first.url).toBe("https://api.workos.com/user_management/authenticate");
+      engine.fetched(JSON.stringify({ id: first.id, error: "The network connection was lost." }));
+
+      const next = pushes.length;
+      const second = await asked(next);
+      expect(second.id).not.toBe(first.id);
+      engine.fetched(JSON.stringify({ id: second.id, status: 200, body: JSON.stringify({ access_token: "at", refresh_token: "rt" }) }));
+      for (let i = 0; i < 200 && !pushes.slice(next).some((p) => p.type === "log" && p.line === "sign-in: signed in, asking your computer"); i++) await Bun.sleep(10);
+      expect(pushes.slice(next).some((p) => p.type === "log" && p.line === "sign-in: signed in, asking your computer")).toBe(true);
+      await ask({ op: "enrollCancel" });
+    } finally {
+      noHost();
+      workos.stop(true);
+    }
+  });
 });

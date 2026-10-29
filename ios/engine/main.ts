@@ -25,6 +25,7 @@ interface Handler {
 const ENROLL_EVERY_MS = 1_500;
 const JOINS_EVERY_MS = 5_000;
 const OPEN_WAIT_MS = 20_000;
+const HOST_FETCH_MS = 25_000;
 
 interface Hosts {
   webkit?: { messageHandlers?: { kiwi?: Handler } };
@@ -283,9 +284,16 @@ const viaHost: WorkosFetch = (url, init) =>
     const signal = init.signal;
     if (signal?.aborted) return reject(new Error("sign-in was stopped"));
     const id = ++fetchSeq;
-    const stopped = () => (fetches.delete(id), reject(new Error("sign-in was stopped")));
+    const stopped = () => (clearTimeout(timer), fetches.delete(id), reject(new Error("sign-in was stopped")));
+    const timer = setTimeout(() => {
+      fetches.delete(id);
+      signal?.removeEventListener("abort", stopped);
+      post({ type: "log", line: "sign-in: no answer from the sign-in service, asking again" });
+      reject(new Error("the sign-in service didn't answer"));
+    }, HOST_FETCH_MS);
     signal?.addEventListener("abort", stopped, { once: true });
     fetches.set(id, (got) => {
+      clearTimeout(timer);
       fetches.delete(id);
       signal?.removeEventListener("abort", stopped);
       if ("error" in got) reject(new Error(got.error));
@@ -390,6 +398,7 @@ async function enrollWait(): Promise<{ digits: string }> {
   if (!e) throw new Error("signing in hasn't started");
   await e.token;
   if (enrolling !== e) throw new Error("signing in was cancelled");
+  post({ type: "log", line: "sign-in: signed in, asking your computer" });
   await e.enrollee.begin();
   const st = await enrollStage(e, (s) => s.stage === "digits");
   return { digits: st.stage === "digits" ? st.digits : "" };

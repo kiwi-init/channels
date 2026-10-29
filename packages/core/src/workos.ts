@@ -37,7 +37,11 @@ export async function workosDeviceSignIn(clientId: string, show: (start: DeviceS
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ grant_type: "urn:ietf:params:oauth:grant-type:device_code", device_code: start.device_code, client_id: clientId }),
       signal: opts.signal,
+    }).catch((err: unknown) => {
+      if (opts.signal?.aborted || Date.now() > until) throw err;
+      return null;
     });
+    if (!res) continue;
     if (res.status === 400) {
       const err = ((await res.json().catch(() => ({}))) as { error?: string }).error;
       if (err === "authorization_pending" || err === "slow_down") {
