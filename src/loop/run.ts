@@ -127,10 +127,10 @@ const cycles = (seat: LoopSeat, stop: { asked: boolean; busy: boolean }): Effect
 
 function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string, stop: { asked: boolean; busy: boolean }): Effect.Effect<Ended, unknown, Agent> {
   return Effect.suspend(() => {
-    let spawned: { left: () => void; mode: string | null } | null = null;
-    const leave = Effect.sync(() => {
+    let spawned: { left: Effect.Effect<void>; mode: string | null } | null = null;
+    const leave = Effect.gen(function* () {
       if (!spawned) return;
-      spawned.left();
+      yield* spawned.left;
       restoreTerminal(spawned.mode);
       stop.busy = false;
     });
@@ -144,7 +144,7 @@ function session(
   first: Work,
   prompt: string,
   stop: { asked: boolean; busy: boolean },
-  spawned: (left: () => void, mode: string | null) => void,
+  spawned: (left: Effect.Effect<void>, mode: string | null) => void,
 ): Effect.Effect<Ended, unknown, Agent> {
   return Effect.gen(function* () {
     const { recipe } = seat;
@@ -164,9 +164,15 @@ function session(
     stop.busy = true;
     let exited = false;
     void child.exited.then(() => void (exited = true));
-    spawned(() => {
-      if (!exited) child.kill(recipe.stopSignal);
-    }, mode);
+    const finish = Effect.gen(function* () {
+      if (exited) return;
+      child.kill(recipe.stopSignal);
+      const late = Date.now() + TERM_GRACE_MS;
+      while (!exited && Date.now() < late) yield* Effect.sleep(250);
+      if (!exited) child.kill("SIGKILL");
+      yield* Effect.promise(() => child.exited);
+    });
+    spawned(finish, mode);
     yield* say(`${workName(first)}: started ${recipe.label} (pid ${child.pid})`);
 
     let found: Started | null = null;
@@ -183,11 +189,7 @@ function session(
           yield* hold(seat);
           const until = why.kind === "done" || why.kind === "fresh" ? Date.now() + IDLE_WAIT_MS : 0;
           while (!exited && !stop.asked && Date.now() < until && !found?.idle().idle) yield* Effect.sleep(POLL_MS);
-          child.kill(recipe.stopSignal);
-          const late = Date.now() + TERM_GRACE_MS;
-          while (!exited && Date.now() < late) yield* Effect.sleep(250);
-          if (!exited) child.kill("SIGKILL");
-          yield* Effect.promise(() => child.exited);
+          yield* finish;
         }
         const stopped = strays.size ? stopStrays(strays) : 0;
         if (stopped) yield* say(`stopped ${stopped} kiwi listener${stopped > 1 ? "s" : ""} the session left running`);
