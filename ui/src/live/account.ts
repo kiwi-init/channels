@@ -69,6 +69,8 @@ export async function enrollCancel(): Promise<void> {
 
 export const useEnrolling = (): Enrolling | null => useSyncExternalStore(selfEnroll.subscribe, selfEnroll.get)
 
+const enrollTrouble = store<string | null>(null)
+
 const enrollAsk = (() => {
   let value: EnrollAsk | null = null
   const listeners = new Set<Listener>()
@@ -83,12 +85,17 @@ const enrollAsk = (() => {
     if (timer) clearTimeout(timer)
     timer = null
     const b = bridge()
-    if (!b?.enrollPoll) return
+    if (!b?.enrollPoll) {
+      if (b) enrollTrouble.set("this Channels app can't approve devices: update it")
+      return
+    }
     try {
       set(await b.enrollPoll())
-    } catch {
-      // Not signed in, or the relay is unreachable: the next poll tries again, and nothing is asking meanwhile.
+      enrollTrouble.set(null)
+    } catch (err) {
+      // Not signed in, or the relay is unreachable: the next poll tries again, and the reason shows meanwhile.
       set(null)
+      enrollTrouble.set(err instanceof Error ? err.message : String(err))
     }
     timer = setTimeout(() => void check(), value?.stage === "waiting" ? ENROLL_WAIT_MS : ENROLL_POLL_MS)
   }
@@ -324,6 +331,7 @@ export function useAccount(): Account | null {
   const code = useSyncExternalStore(githubCode.subscribe, githubCode.get)
   const look = useSyncExternalStore(uiUpdate.subscribe, uiUpdate.get)
   const enroll = useSyncExternalStore(enrollAsk.subscribe, enrollAsk.get)
+  const trouble = useSyncExternalStore(enrollTrouble.subscribe, enrollTrouble.get)
   const signed = useSyncExternalStore(devices.subscribe, devices.get)
   const news = useSyncExternalStore(deviceNews.subscribe, deviceNews.get)
   const unsealed = useUnsealedKeys()
@@ -345,9 +353,10 @@ export function useAccount(): Account | null {
       ...(unsealed ? { keysUnsealed: true } : {}),
       ...(bridge() ? { desktop: true } : {}),
       ...(enroll ? { enrollAsk: enroll } : {}),
+      ...(trouble ? { enrollError: trouble } : {}),
       ...(signed ? { devices: signed } : {}),
       ...deviceNotices(news),
       ...(code ? { githubCode: code } : {}),
     }
-  }, [person, linked, computers, phones, online, agents, update, code, look, unsealed, enroll, signed, news])
+  }, [person, linked, computers, phones, online, agents, update, code, look, unsealed, enroll, trouble, signed, news])
 }

@@ -9,7 +9,7 @@ import { onHostedSocket } from "../src/terminals/shared/tmux.ts";
 
 const bytes = (s: string): Uint8Array => new TextEncoder().encode(s);
 const text = (b: Uint8Array): string => new TextDecoder().decode(b);
-const tmux = await findTmux();
+const tmux = await findTmux(join(tmpdir(), "kiwi-no-own-tmux"));
 
 describe("control mode's pane output", () => {
   test("octal escapes come back as the bytes they stand for, the rest as it was", () => {

@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react"
 
+import { HARNESS_INSTALL, isKnownHarness } from "@kiwi/core/harnesses.ts"
+
 import { Avatar, cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
@@ -200,19 +202,25 @@ function StartHere({ channel, name, setName, taken, onStart }: NameProps & { onS
   useEffect(() => {
     if (!computerId) return
     let live = true
-    void app.actions.choicesOn(channel.code, computerId).then((c) => {
-      if (!live) return
-      setLoaded({ for: computerId, choices: c })
-      if (!typed && "folders" in c) setFolder(c.folders[0] ?? "")
-      const there = "harnesses" in c ? c.harnesses : undefined
-      if (there) setHarnessId((now) => (there.some((h) => h.id === now && h.installed) ? now : (there.find((h) => h.installed)?.id ?? "")))
-    })
+    const load = () =>
+      void app.actions.choicesOn(channel.code, computerId).then((c) => {
+        if (!live) return
+        setLoaded({ for: computerId, choices: c })
+        if (!typed && "folders" in c) setFolder(c.folders[0] ?? "")
+        const there = "harnesses" in c ? c.harnesses : undefined
+        if (there) setHarnessId((now) => (there.some((h) => h.id === now && h.installed) ? now : (there.find((h) => h.installed)?.id ?? "")))
+      })
+    load()
+    window.addEventListener("focus", load)
     return () => {
       live = false
+      window.removeEventListener("focus", load)
     }
   }, [app.actions, channel.code, computerId, typed])
   const choices = loaded?.for === computerId ? loaded.choices : null
   const harnesses = choices && "harnesses" in choices && choices.harnesses ? choices.harnesses : app.harnesses
+  const found = harnesses.filter((h) => h.installed)
+  const missing = harnesses.filter((h) => !h.installed)
   const folders = choices && "folders" in choices ? choices.folders : []
   const unreachable = choices && "error" in choices ? choices.error : null
   const [persona, setPersona] = useState("")
@@ -265,21 +273,26 @@ function StartHere({ channel, name, setName, taken, onStart }: NameProps & { onS
           ))}
         </Group>
 
-        <Group label="Harness">
-          {harnesses.map((h) => (
-            <Choice key={h.id} group={`${id}-harness`} on={h.id === harnessId} off={!h.installed} pick={() => setHarnessId(h.id)}>
-              <Avatar person={{ name: h.label, kind: "agent", harness: h.id, presence: h.installed ? "online" : "offline" }} size="sm" />
-              {h.installed ? (
-                <span className="add-choice-label">{h.label}</span>
-              ) : (
-                <span className="add-choice-text">
-                  <span className="add-choice-label">{h.label}</span>
-                  <span className="add-choice-about">Not installed on {where}</span>
-                </span>
-              )}
+        <Group label={`Agents found on ${where}`}>
+          {found.length === 0 && <p className="add-none">No agent found on {where} yet. Install one below, then come back here.</p>}
+          {found.map((h) => (
+            <Choice key={h.id} group={`${id}-harness`} on={h.id === harnessId} pick={() => setHarnessId(h.id)} side={h.version}>
+              <Avatar person={{ name: h.label, kind: "agent", harness: h.id, presence: "online" }} size="sm" />
+              <span className="add-choice-label">{h.label}</span>
             </Choice>
           ))}
         </Group>
+
+        {missing.length > 0 && (
+          <div className="add-group">
+            <span className="field-label">To get the others, run on {where}</span>
+            <ul className="add-gets">
+              {missing.map((h) => (
+                <Missing key={h.id} harness={h} />
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div className="field">
           <label className="field-label" htmlFor={`${id}-folder`}>
@@ -385,6 +398,20 @@ function StartHere({ channel, name, setName, taken, onStart }: NameProps & { onS
         </button>
       </footer>
     </form>
+  )
+}
+
+function Missing({ harness: h }: { harness: App["harnesses"][number] }) {
+  const line = isKnownHarness(h.id) ? HARNESS_INSTALL[h.id] : undefined
+  return (
+    <li className="add-get">
+      <span className="add-get-who">
+        <Avatar person={{ name: h.label, kind: "agent", harness: h.id, presence: "offline" }} size="sm" />
+        <span className="add-choice-label">{h.label}</span>
+        {h.path && <span className="add-choice-side">{h.why ?? "can't start yet"}</span>}
+      </span>
+      {!h.path && line && <CopyBox text={line} label={`Copy the ${h.label} install command`} />}
+    </li>
   )
 }
 

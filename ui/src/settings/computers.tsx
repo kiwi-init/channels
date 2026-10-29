@@ -11,7 +11,7 @@ import { Page } from "~/settings/sections"
 type Kind = "computer" | "phone"
 
 const SHOT = new URLSearchParams(location.search).get("shot")
-const PRESET: Kind | null = SHOT === "settings-link-phone" ? "phone" : SHOT === "settings-add-computer" ? "computer" : null
+const PRESET: Kind | null = SHOT === "settings-link-phone" || SHOT === "settings-link-phone-stuck" ? "phone" : SHOT === "settings-add-computer" ? "computer" : null
 
 const isPhone = (c: Computer): boolean => c.os === "iphone" || c.os === "android"
 
@@ -252,10 +252,16 @@ export function ComputersSection() {
             </>
           )}
           <div className="set-pair-foot">
-            <span className="set-pair-wait">
-              <span className="set-pip is-waiting" aria-hidden="true" />
-              Waiting for the {linking}…
-            </span>
+            {account.enrollError ? (
+              <span className="set-pair-wait is-stuck" role="alert">
+                Can't see the {linking}: {account.enrollError}
+              </span>
+            ) : (
+              <span className="set-pair-wait">
+                <span className="set-pip is-waiting" aria-hidden="true" />
+                Waiting for the {linking}…
+              </span>
+            )}
             <button type="button" className="btn is-quiet is-small" onClick={() => setLinking(null)}>
               Cancel
             </button>

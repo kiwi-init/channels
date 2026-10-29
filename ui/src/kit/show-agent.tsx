@@ -8,12 +8,14 @@ export function ShowAgent({ channel, person, className = "btn" }: { channel: Cha
   const { app, nav, go, toast } = useApp()
   const [busy, setBusy] = useState(false)
   if (!person?.seat) return null
-  if (person.seat === "hosted")
+  if (person.seat === "hosted") {
+    const open = nav.term?.kind === "agent" && nav.term.name === person.name
     return (
-      <button type="button" className={className} aria-pressed={nav.term === person.name} onClick={() => go({ to: "term", name: nav.term === person.name ? null : person.name })}>
+      <button type="button" className={className} aria-pressed={open} onClick={() => go({ to: "term", term: open ? null : { kind: "agent", name: person.name } })}>
         Open terminal
       </button>
     )
+  }
   return (
     <button
       type="button"

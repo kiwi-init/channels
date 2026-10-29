@@ -9,6 +9,7 @@ import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, noteD
 import { keepAlive } from "./daemon-keeper.ts";
 import { host } from "./host.ts";
 import { requirePerson, store, upsertComputer } from "./store.ts";
+import { keepTmux } from "./tmux.ts";
 
 function bundledKiwi(): string {
   const exe = process.platform === "win32" ? "kiwi.exe" : "kiwi";
@@ -19,6 +20,12 @@ function bundledKiwi(): string {
   const fromRepo = path.join(__dirname, "..", "..", "dist", exe);
   if (fs.existsSync(fromRepo)) return fromRepo;
   throw new Error("the bundled kiwi binary is missing (repo root `bun run build` makes dist/kiwi)");
+}
+
+function bundledTmux(): string | null {
+  if (process.platform === "win32") return null;
+  const bundled = host().app.packaged() ? path.join(host().app.path("resources"), "tmux") : path.join(__dirname, "..", "..", "dist", "tmux");
+  return fs.existsSync(bundled) ? bundled : null;
 }
 
 async function runnableKiwi(): Promise<string> {
@@ -89,6 +96,8 @@ export async function keepDaemon(stopped: () => boolean): Promise<void> {
       // The daemon still runs from the app's own copy below.
     }
   }
+  const tmux = bundledTmux();
+  if (tmux) await keepTmux(tmux, kiwiHome()).catch(() => null);
   await ensureDaemon().catch(() => null);
   await keepAlive({
     hello: async () => (await daemonHello(kiwiHome(), 2_000)) !== null,
