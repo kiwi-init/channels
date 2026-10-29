@@ -80,7 +80,7 @@ function StashList({ list, place, onTake, onDrop, onClose }: { list: readonly St
       <ul ref={rows} aria-label="Stashed drafts">
         {list.map((s, i) => (
           <li key={`${s.at}-${i}`}>
-            <button type="button" className="stash-row" onFocus={() => setOn(i)} onMouseEnter={() => setOn(i)} onClick={() => onTake(i)}>
+            <button type="button" className="stash-row" onFocus={() => setOn(i)} onMouseEnter={() => setOn(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => onTake(i)}>
               <span className="stash-text">{s.text}</span>
               {i === 0 ? <kbd>⇧⌘S</kbd> : <span className="stash-age">{ago(s.at)}</span>}
             </button>
@@ -342,6 +342,7 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
               className={cx("stash-chip", listOpen && "is-open")}
               aria-expanded={listOpen}
               title="Stashed drafts (⇧⌘S brings back the newest)"
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => setListOf(listOpen ? null : key)}
             >
               <Icon name="tray" size={14} />
