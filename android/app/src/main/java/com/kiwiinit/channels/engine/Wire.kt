@@ -241,4 +241,8 @@ sealed interface Push {
     @Serializable
     @SerialName("launch")
     data class Launch(val code: String, val launch: String, val stage: String, val name: String) : Push
+
+    @Serializable
+    @SerialName("fetch")
+    data class Fetch(val id: Int, val url: String, val body: String) : Push
 }

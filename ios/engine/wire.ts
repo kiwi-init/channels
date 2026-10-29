@@ -26,7 +26,7 @@ export type Ask =
   | { op: "linkAsk"; code: string; label: string }
   | { op: "linkWait" }
   | { op: "linkCancel" }
-  | { op: "enrollBegin"; relay: string; label: string; os: string; user?: string }
+  | { op: "enrollBegin"; relay: string; label: string; os: string; user?: string; waitMs?: number }
   | { op: "enrollWait" }
   | { op: "enrollFinish" }
   | { op: "enrollCancel" }
@@ -55,12 +55,15 @@ export interface Picture {
 
 export type Reply = { ok: true; value: unknown } | { ok: false; error: string };
 
+export type Fetched = { id: number; status: number; body: string } | { id: number; error: string };
+
 export type Push =
   | { type: "saved"; saved: Saved }
   | { type: "room"; room: RoomView }
   | { type: "gone"; code: string }
   | { type: "log"; line: string }
   | { type: "removed"; by: string }
+  | { type: "fetch"; id: number; url: string; body: string }
   | { type: "launch"; code: string; launch: string; stage: "asked" | "joined"; name: string };
 
 export type Connection = "connecting" | "live" | "reconnecting";

@@ -15,6 +15,7 @@ setDefaultTimeout(60_000);
 interface Engine {
   ask(json: string): Promise<string>;
   listen(next: (p: Push) => void): void;
+  fetched(json: string): void;
 }
 
 const dataDir = mkdtempSync(join(tmpdir(), "kiwi-engine-enroll-"));
@@ -156,5 +157,69 @@ describe("the phone engine signs in and enrolls (T640)", () => {
 
   test("a dev relay needs the sign-in name", async () => {
     await expect(ask({ op: "enrollBegin", relay, label: "Pixel 9", os: "Android 16" })).rejects.toThrow("dev sign-in");
+  });
+});
+
+describe("the phone engine's sign-in opens or says why (T13)", () => {
+  const configOnly = (answer: () => Promise<Response>) => Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: answer });
+  const asHost = () => Object.assign(globalThis, { kiwiAndroid: { postMessage: () => {} } });
+  const noHost = () => Reflect.deleteProperty(globalThis, "kiwiAndroid");
+
+  async function asked(after: number): Promise<Extract<Push, { type: "fetch" }>> {
+    for (;;) {
+      const got = pushes.slice(after).find((p) => p.type === "fetch");
+      if (got?.type === "fetch") return got;
+      await Bun.sleep(10);
+    }
+  }
+
+  test("a relay that never answers its config fails within the wait, with the reason", async () => {
+    const stuck = configOnly(() => new Promise<Response>(() => {}));
+    try {
+      const at = Date.now();
+      await expect(ask({ op: "enrollBegin", relay: stuck.url.origin, label: "iPhone", os: "iOS 27", waitMs: 300 })).rejects.toThrow(
+        `${stuck.url.origin} didn't answer in 1 second: check the connection`,
+      );
+      expect(Date.now() - at).toBeLessThan(5_000);
+    } finally {
+      stuck.stop(true);
+    }
+  });
+
+  test("Cancel stops a sign-in that is still opening", async () => {
+    const stuck = configOnly(() => new Promise<Response>(() => {}));
+    try {
+      const opening = ask({ op: "enrollBegin", relay: stuck.url.origin, label: "iPhone", os: "iOS 27", waitMs: 30_000 });
+      await Bun.sleep(100);
+      await ask({ op: "enrollCancel" });
+      await expect(opening).rejects.toThrow("signing in was cancelled");
+    } finally {
+      stuck.stop(true);
+    }
+  });
+
+  test("the app makes the WorkOS calls, and a blocked one says what failed", async () => {
+    const workos = configOnly(async () => Response.json({ workosClientId: "client_test" }));
+    asHost();
+    try {
+      const before = pushes.length;
+      const opening = ask({ op: "enrollBegin", relay: workos.url.origin, label: "iPhone", os: "iOS 27", waitMs: 5_000 });
+      const call = await asked(before);
+      expect(call.url).toBe("https://api.workos.com/user_management/authorize/device");
+      expect(JSON.parse(call.body)).toMatchObject({ client_id: "client_test" });
+      engine.fetched(JSON.stringify({ id: call.id, error: "Load failed" }));
+      await expect(opening).rejects.toThrow("couldn't reach the sign-in service: Load failed");
+
+      const again = pushes.length;
+      const started = ask<EnrollStart>({ op: "enrollBegin", relay: workos.url.origin, label: "iPhone", os: "iOS 27", waitMs: 5_000 });
+      const answer = { device_code: "dc", user_code: "ABCD-EFGH", verification_uri_complete: "https://auth.example/device?user_code=ABCD-EFGH", interval: 60 };
+      engine.fetched(JSON.stringify({ id: (await asked(again)).id, status: 200, body: JSON.stringify(answer) }));
+      expect(await started).toEqual({ url: "https://auth.example/device?user_code=ABCD-EFGH", code: "ABCD-EFGH" });
+      expect(pushes.slice(again).some((p) => p.type === "log" && p.line === "sign-in: page ready")).toBe(true);
+      await ask({ op: "enrollCancel" });
+    } finally {
+      noHost();
+      workos.stop(true);
+    }
   });
 });

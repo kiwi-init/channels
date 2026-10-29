@@ -12,13 +12,16 @@ export interface DeviceSignIn {
   code: string;
 }
 
-export async function workosDeviceSignIn(clientId: string, show: (start: DeviceSignIn) => Promise<void>, opts: { fetchImpl?: typeof fetch; signal?: AbortSignal } = {}): Promise<WorkosSession> {
+export type WorkosFetch = (url: string, init: RequestInit) => Promise<Response>;
+
+export async function workosDeviceSignIn(clientId: string, show: (start: DeviceSignIn) => Promise<void>, opts: { fetchImpl?: WorkosFetch; signal?: AbortSignal } = {}): Promise<WorkosSession> {
   const fetchImpl = opts.fetchImpl ?? fetch;
   const start = (await (
     await fetchImpl(WORKOS_DEVICE_URL, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ client_id: clientId, scope: "openid profile email offline_access" }),
+      signal: opts.signal,
     })
   ).json()) as { device_code?: string; user_code?: string; verification_uri?: string; verification_uri_complete?: string; expires_in?: number; interval?: number };
   if (!start.device_code) throw new Error("the relay's sign-in didn't start");
@@ -33,6 +36,7 @@ export async function workosDeviceSignIn(clientId: string, show: (start: DeviceS
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ grant_type: "urn:ietf:params:oauth:grant-type:device_code", device_code: start.device_code, client_id: clientId }),
+      signal: opts.signal,
     });
     if (res.status === 400) {
       const err = ((await res.json().catch(() => ({}))) as { error?: string }).error;

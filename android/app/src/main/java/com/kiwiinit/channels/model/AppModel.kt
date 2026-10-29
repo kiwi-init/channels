@@ -235,7 +235,7 @@ class AppModel(private val app: Application) {
                 settle(room.code)
             }
             is Push.Gone -> rooms.remove(push.code)
-            is Push.Log -> Unit
+            is Push.Log, is Push.Fetch -> Unit
             is Push.Launch -> launches[push.launch] = LaunchSeen(push.stage, push.name)
             is Push.Removed -> {
                 unlink()

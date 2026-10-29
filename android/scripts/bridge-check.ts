@@ -77,6 +77,24 @@ try {
 
   check((await tab.evaluate("isSecureContext")) === true, "http://localhost/ is a secure context");
   check((await call(probe)) === "ok", "Engine.kt's probe passes: the engine loaded, Ed25519 and X25519 are there");
+
+  await tab.route("http://localhost/v1/config", (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify({ workosClientId: "client_bridge" }) }));
+  let direct = 0;
+  await tab.route("https://api.workos.com/**", (r) => (direct++, r.abort()));
+  const opening = ask<{ url: string | null; code: string }>({ op: "enrollBegin", relay: "http://localhost/", label: "Android bridge check", os: "Android", waitMs: 10_000 });
+  let asked: Extract<Push, { type: "fetch" }> | undefined;
+  for (let i = 0; i < 200 && !asked; i++) {
+    asked = pushes.find((p): p is Extract<Push, { type: "fetch" }> => p.type === "fetch");
+    if (!asked) await Bun.sleep(50);
+  }
+  check(asked?.url === "https://api.workos.com/user_management/authorize/device", "sign-in asks the app to make WorkOS's device call");
+  const device = { device_code: "dc", user_code: "ABCD-EFGH", verification_uri_complete: "https://auth.example/device?user_code=ABCD-EFGH", interval: 60 };
+  if (asked) await tab.evaluate(`kiwi.fetched(${JSON.stringify(JSON.stringify({ id: asked.id, status: 200, body: JSON.stringify(device) }))})`);
+  const signIn = await opening.catch(() => null);
+  check(signIn?.code === "ABCD-EFGH" && signIn.url === device.verification_uri_complete, "the app's answer opens the sign-in page");
+  check(direct === 0, "the page never calls WorkOS itself, so CORS can't block it");
+  await ask({ op: "enrollCancel" });
+
   const started = await ask<{ digits: string; relay: string }>({ op: "linkAsk", code: linkCode, label: "Android bridge check" });
   check(/^\d{6}$/.test(started.digits), "linkAsk answers six digits");
   const saved = await ask<Saved>({ op: "linkWait" });

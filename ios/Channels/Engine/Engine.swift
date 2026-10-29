@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import SwiftUI
 import WebKit
 
@@ -30,6 +31,10 @@ final class Engine: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     let web: WKWebView
     private var loaded: CheckedContinuation<Void, Error>?
     private let decoder = JSONDecoder()
+    private let logger = Logger(subsystem: "com.kiwiinit.channels", category: "engine")
+    private static let workos: Set<String> = [
+        "https://api.workos.com/user_management/authorize/device", "https://api.workos.com/user_management/authenticate",
+    ]
     var onPush: (Push) -> Void = { _ in }
 
     override init() {
@@ -70,6 +75,27 @@ final class Engine: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         try decoder.decode(T.self, from: try await ask(request))
     }
 
+    private func fetchForEngine(_ id: Int, _ url: String, _ body: String) async {
+        var answer: [String: Any] = ["id": id]
+        if Self.workos.contains(url), let target = URL(string: url) {
+            var request = URLRequest(url: target, timeoutInterval: 20)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "content-type")
+            request.httpBody = Data(body.utf8)
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                answer["status"] = (response as? HTTPURLResponse)?.statusCode ?? 500
+                answer["body"] = String(decoding: data, as: UTF8.self)
+            } catch {
+                answer["error"] = error.localizedDescription
+            }
+        } else {
+            answer["error"] = "this app only makes WorkOS's sign-in calls"
+        }
+        guard let blob = try? JSONSerialization.data(withJSONObject: answer), let json = String(data: blob, encoding: .utf8) else { return }
+        _ = try? await web.callAsyncJavaScript("kiwi.fetched(json)", arguments: ["json": json], in: nil, contentWorld: .page)
+    }
+
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         loaded?.resume()
         loaded = nil
@@ -99,7 +125,14 @@ final class Engine: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         case "gone":
             if let code = object["code"] as? String { onPush(.gone(code)) }
         case "log":
-            if let line = object["line"] as? String { onPush(.log(line)) }
+            if let line = object["line"] as? String {
+                logger.info("\(line, privacy: .public)")
+                onPush(.log(line))
+            }
+        case "fetch":
+            if let id = object["id"] as? Int, let url = object["url"] as? String, let body = object["body"] as? String {
+                Task { await fetchForEngine(id, url, body) }
+            }
         case "removed":
             onPush(.removed(object["by"] as? String ?? "another device"))
         case "launch":

@@ -7,7 +7,7 @@ import type { Signed, SigningBudget } from "@kiwi/core/sas.ts";
 import { handleFor } from "@kiwi/core/membership.ts";
 import type { LaunchedView } from "@kiwi/core/terminals.ts";
 import type { Identity } from "@kiwi/core/identity.ts";
-import { workosDeviceSignIn, type DeviceSignIn } from "@kiwi/core/workos.ts";
+import { workosDeviceSignIn, type DeviceSignIn, type WorkosFetch } from "@kiwi/core/workos.ts";
 
 import type { ChannelIdentityView, EnrollStatusView, FromMachine } from "../../desktop/src/bridge.ts";
 import { createEnrollee, type Enrollee } from "../../desktop/src/devices.ts";
@@ -17,7 +17,7 @@ import { foldersOn, launchOn, personMachines, remoteHarnesses, type Asker, type 
 import { acceptSeat, migrateEntries, withAccess } from "../../desktop/src/seats.ts";
 import { canonicalHarness, harnessName, monoHarness } from "../../web/src/lib/harness.ts";
 import { Room } from "./room.ts";
-import type { Ask, EnrollStart, HarnessChoice, LaunchAsk, Push, Reply, Saved } from "./wire.ts";
+import type { Ask, EnrollStart, Fetched, HarnessChoice, LaunchAsk, Push, Reply, Saved } from "./wire.ts";
 
 interface Handler {
   postMessage(json: string): void;
@@ -26,6 +26,7 @@ interface Handler {
 const LINK_WAIT_MS = 10 * 60_000;
 const ENROLL_EVERY_MS = 1_500;
 const JOINS_EVERY_MS = 5_000;
+const OPEN_WAIT_MS = 20_000;
 
 interface Hosts {
   webkit?: { messageHandlers?: { kiwi?: Handler } };
@@ -50,6 +51,9 @@ let computersKnown = false;
 let computersTimer: ReturnType<typeof setInterval> | null = null;
 let joinsTimer: ReturnType<typeof setInterval> | null = null;
 let enrolling: Enrolling | null = null;
+let opening: AbortController | null = null;
+const fetches = new Map<number, (got: Fetched) => void>();
+let fetchSeq = 0;
 
 interface Enrolling {
   relay: string;
@@ -282,26 +286,81 @@ const pause = (ms: number, signal: AbortSignal): Promise<void> =>
     signal.addEventListener("abort", () => (clearTimeout(t), resolve()), { once: true });
   });
 
-async function relaySignIn(relay: string, user: string | undefined, signal: AbortSignal): Promise<{ start: DeviceSignIn | null; token: Promise<string> }> {
-  const res = await fetch(new URL("/v1/config", relay)).catch((err: unknown) => {
-    throw new Error(`couldn't reach ${relay}: ${err instanceof Error ? err.message : String(err)}`);
+const said = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+
+function within<T>(work: Promise<T>, ms: number, who: string, stop: AbortController): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const cancelled = () => (clearTimeout(timer), reject(new Error("signing in was cancelled")));
+    const timer = setTimeout(() => {
+      stop.signal.removeEventListener("abort", cancelled);
+      const s = Math.ceil(ms / 1000);
+      reject(new Error(`${who} didn't answer in ${s} second${s === 1 ? "" : "s"}: check the connection, then sign in again`));
+      stop.abort();
+    }, ms);
+    if (stop.signal.aborted) return cancelled();
+    stop.signal.addEventListener("abort", cancelled, { once: true });
+    work.then(
+      (value) => (clearTimeout(timer), stop.signal.removeEventListener("abort", cancelled), resolve(value)),
+      (err: unknown) => (clearTimeout(timer), stop.signal.removeEventListener("abort", cancelled), reject(err)),
+    );
+  });
+}
+
+const viaHost: WorkosFetch = (url, init) =>
+  new Promise<Response>((resolve, reject) => {
+    const signal = init.signal;
+    if (signal?.aborted) return reject(new Error("sign-in was stopped"));
+    const id = ++fetchSeq;
+    const stopped = () => (fetches.delete(id), reject(new Error("sign-in was stopped")));
+    signal?.addEventListener("abort", stopped, { once: true });
+    fetches.set(id, (got) => {
+      fetches.delete(id);
+      signal?.removeEventListener("abort", stopped);
+      if ("error" in got) reject(new Error(got.error));
+      else resolve(new Response(got.body, { status: got.status }));
+    });
+    post({ type: "fetch", id, url, body: typeof init.body === "string" ? init.body : "" });
+  });
+
+function fetched(json: string): void {
+  const got = JSON.parse(json) as Fetched;
+  fetches.get(got.id)?.(got);
+}
+
+async function readConfig(relay: string, signal: AbortSignal): Promise<{ workosClientId?: string | null; dev?: boolean }> {
+  const res = await fetch(new URL("/v1/config", relay), { signal }).catch((err: unknown) => {
+    throw new Error(`couldn't reach ${relay}: ${said(err)}`);
   });
   if (!res.ok) throw new Error(`${relay} returned ${res.status}`);
-  const config = (await res.json()) as { workosClientId?: string | null; dev?: boolean };
+  return (await res.json()) as { workosClientId?: string | null; dev?: boolean };
+}
+
+async function relaySignIn(relay: string, user: string | undefined, stop: AbortController, waitMs: number): Promise<{ start: DeviceSignIn | null; token: Promise<string> }> {
+  const signal = stop.signal;
+  post({ type: "log", line: `sign-in: asking ${relay} how to sign in` });
+  const config = await within(readConfig(relay, signal), waitMs, relay, stop);
   if (config.dev) {
     const name = (user ?? "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
     if (!name) throw new Error("this relay takes dev sign-in: give the name your computer's app signed in with");
     return { start: null, token: Promise.resolve(`dev:${name}`) };
   }
   if (!config.workosClientId) throw new Error(`${relay} has no sign-in: link this phone with a code from your Mac instead`);
+  post({ type: "log", line: `sign-in: starting WorkOS${handler() ? " through the app" : ""}` });
   let shown: (s: DeviceSignIn) => void = () => {};
   const start = new Promise<DeviceSignIn>((resolve) => (shown = resolve));
-  const token = workosDeviceSignIn(config.workosClientId, async (s) => shown(s), { signal }).then((s) => s.access);
+  const token = workosDeviceSignIn(config.workosClientId, async (s) => shown(s), { signal, fetchImpl: handler() ? viaHost : fetch }).then((s) => s.access);
   token.catch(() => {});
-  return { start: await Promise.race([start, token.then(() => start)]), token };
+  const ready = Promise.race([start, token.then(() => start)]).catch((err: unknown) => {
+    throw new Error(signal.aborted ? said(err) : `couldn't reach the sign-in service: ${said(err)}`);
+  });
+  const page = await within(ready, waitMs, "the sign-in service", stop);
+  post({ type: "log", line: "sign-in: page ready" });
+  return { start: page, token };
 }
 
 async function enrollCancel(): Promise<void> {
+  opening?.abort();
+  opening = null;
   const e = enrolling;
   enrolling = null;
   if (!e) return;
@@ -309,11 +368,14 @@ async function enrollCancel(): Promise<void> {
   await e.enrollee.cancel();
 }
 
-async function enrollBegin(relay: string, label: string, os: string, user?: string): Promise<EnrollStart> {
+async function enrollBegin(relay: string, label: string, os: string, user?: string, waitMs = OPEN_WAIT_MS): Promise<EnrollStart> {
   await enrollCancel();
   if (saved?.person || saved?.device) throw new Error("this phone is already one of your devices");
   const stop = new AbortController();
-  const signIn = await relaySignIn(relay, user, stop.signal);
+  opening = stop;
+  const signIn = await relaySignIn(relay, user, stop, waitMs).finally(() => {
+    if (opening === stop) opening = null;
+  });
   const e: Enrolling = {
     relay,
     token: signIn.token,
@@ -393,7 +455,7 @@ async function handle(ask: Ask): Promise<unknown> {
       linking = null;
       return null;
     case "enrollBegin":
-      return enrollBegin(ask.relay, ask.label, ask.os, ask.user);
+      return enrollBegin(ask.relay, ask.label, ask.os, ask.user, ask.waitMs);
     case "enrollWait":
       return enrollWait();
     case "enrollFinish":
@@ -449,4 +511,4 @@ function listen(next: (p: Push) => void): void {
   sink = next;
 }
 
-Object.assign(globalThis, { kiwi: { ask, listen } });
+Object.assign(globalThis, { kiwi: { ask, listen, fetched } });
