@@ -233,7 +233,7 @@ export class SessionTasks extends SessionMessaging {
       const closed = after.tasks.get(id);
       if (finishing && t.state !== "done" && closed?.state === "done") {
         const { messages } = yield* this.state();
-        yield* Effect.ignoreCause(this.send(taskDigest(after, messages, closed), { kind: "done", task: id, re: [seq] }));
+        yield* Effect.ignoreCause(this.send(taskDigest(after, messages, closed), { kind: "done", task: id }));
       }
       return after;
     },

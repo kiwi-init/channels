@@ -6,6 +6,7 @@ import { allowedOnHold, answersAsk, isLeadRole, isPerson, LEAD, ON_HOLD } from "
 import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
 import { askHeadOf, fileTask } from "./asks.ts";
+import { taskId } from "./tasks.ts";
 import { prKey, releasesFrom, repoKey } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { roomName } from "./rooms.ts";
@@ -216,6 +217,8 @@ function folding(
   let skipped = from?.skipped === true;
   const trust = new Map<number, Trust>(from?.trust);
   const rejected = new Map<number, string>(from?.rejected);
+  const closesRefused = new Set<string>(from?.closesRefused);
+  const closeKey = (by: string, task: number) => `${by}\u0000${task}`;
   const sent = new Map<string, number>();
   const sentAt = new Map<string, number>();
   const queue = new Map<string, string>();
@@ -380,6 +383,7 @@ function folding(
         const place =
           parentPlace ?? (m.task !== undefined && tasks.has(m.task) ? { kind: "task" as const, task: m.task } : m.dm && to && to !== m.from && members.has(to) ? dmPlace(m.from, to) : MAIN);
         placeOf.set(m.seq, place);
+        if (m.kind === "done" && m.task !== undefined && closesRefused.has(closeKey(m.from, m.task))) rejected.set(m.seq, `${m.from}'s close of ${taskId(m.task)} was refused`);
         const posted = place.kind === "task" ? tasks.get(place.task) : place.kind === "main" && room !== GENERAL_ROOM ? rooms.get(room) : undefined;
         if (posted && !posted.posters?.includes(m.from)) posted.posters = [...(posted.posters ?? []), m.from];
         if (place.kind === "task") touch(tasks.get(place.task), m.from, at);
@@ -468,6 +472,10 @@ function folding(
       );
 
       applyEvent(ctx, m, ev, member, at, reject);
+      if (ev.op === "task.update" && (ev.state === "done" || ev.state === "cancelled")) {
+        if (rejected.has(m.seq)) closesRefused.add(closeKey(m.from, ev.task));
+        else closesRefused.delete(closeKey(m.from, ev.task));
+      }
       const added = ev.op === "task.add" && !rejected.has(m.seq) ? tasks.get(m.seq) : undefined;
       if (added) {
         const re = earlierParent(m);
@@ -545,6 +553,7 @@ function folding(
       roomOf: recent(roomOf),
       placeOf: recent(placeOf),
       personaLeads: [...personaLead],
+      closesRefused: [...closesRefused],
       folded: EVENT_OPS_VERSION,
       rules: from ? Math.min(from.rules ?? 0, FOLD_RULES) : FOLD_RULES,
       ...(skipped ? { skipped: true as const } : {}),

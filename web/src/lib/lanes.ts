@@ -62,7 +62,7 @@ export function laneWork(state: ChannelState, messages: Message[], name: string,
   const events: LaneEvent[] = []
   for (let i = messages.length - 1; i >= 0 && events.length < EVENTS; i--) {
     const m = messages[i]!
-    if (m.from !== name || ignored(state.trust.get(m.seq))) continue
+    if (m.from !== name || ignored(state.trust.get(m.seq)) || state.rejected.has(m.seq)) continue
     const op = m.ev?.op
     if (op === "task.add" || op === "task.update" || op === "task.claim") events.push({ seq: m.seq, at: m.rts ?? m.ts, text: clip(describeEvent(m, state), 90) })
     else if (m.kind === "done") events.push({ seq: m.seq, at: m.rts ?? m.ts, text: clip(m.body, 90) })

@@ -71,6 +71,7 @@ export function wellFormedWire(x: unknown, n: number): x is Wire {
     (b.hold === null || typeof b.hold === "object") &&
     (b.voice === undefined || typeof b.voice === "boolean") &&
     (b.rules === undefined || typeof b.rules === "number") &&
+    (b.closesRefused === undefined || (Array.isArray(b.closesRefused) && b.closesRefused.every((k) => typeof k === "string"))) &&
     (b.githubWrite === undefined || b.githubWrite === null || typeof b.githubWrite === "number") &&
     (b.branchPrefix === undefined || b.branchPrefix === null || typeof b.branchPrefix === "string")
   );
