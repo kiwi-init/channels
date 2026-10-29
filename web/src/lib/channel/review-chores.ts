@@ -1,9 +1,9 @@
 import type { Message } from "@kiwi/core/protocol.ts"
 import type { ChannelState } from "@kiwi/core/state.ts"
-import type { ChannelLink } from "../channel-ops"
-import { drain } from "../github-queue"
-import { checksToPost, issuesToPost, linksToPost, setCheckedUpTo, tasksToClose } from "../review-checks"
-import { closeFromGithub } from "../task-actions"
+import type { ChannelLink } from "@kiwi/channel/channel-ops.ts"
+import { drain } from "@kiwi/channel/github-queue.ts"
+import { checksToPost, issuesToPost, linksToPost, setCheckedUpTo, tasksToClose } from "@kiwi/channel/review-checks.ts"
+import { closeFromGithub } from "@kiwi/channel/task-actions.ts"
 
 export async function postReviewChores(ch: ChannelLink, state: ChannelState, messages: Message[]): Promise<void> {
   const due = checksToPost(ch.roomId, state, messages)

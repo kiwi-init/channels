@@ -3,7 +3,7 @@ import type { JoinRequest, Member } from "@kiwi/core/membership.ts"
 import type { Message } from "@kiwi/core/protocol.ts"
 import type { FoldBase, GuardFloor } from "@kiwi/core/state.ts"
 import { planReload } from "@kiwi/channel/history-plan.ts"
-import type { Marks } from "../receipts"
+import type { Marks } from "@kiwi/channel/receipts.ts"
 
 export interface Warm {
   messages: Message[]

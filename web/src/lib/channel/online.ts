@@ -1,6 +1,6 @@
 import type { Activity, Presence, Reach } from "@kiwi/core/protocol.ts"
 import { isWakeVia, wakesInSession } from "@kiwi/core/wake.ts"
-import { howHere } from "../presence"
+import { howHere } from "@kiwi/channel/presence.ts"
 
 export const PRESENCE_TTL = 150_000
 

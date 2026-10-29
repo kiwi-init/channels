@@ -4,7 +4,7 @@ import type { Message } from "@kiwi/core/protocol.ts"
 import type { ChannelState, Member } from "@kiwi/core/state.ts"
 import { loadRecent, saveRecent, type StoredMember } from "@/lib/channel"
 import { excerpt, memberName } from "@/lib/format"
-import { markSeen, setOpenNews } from "@/lib/news"
+import { markSeen, setOpenNews } from "@kiwi/channel/news.ts"
 import { lastPreview } from "@/lib/preview"
 
 export function unreadOf(hidden: boolean, arrivals: number, mark: number, inOtherRooms: number): number {

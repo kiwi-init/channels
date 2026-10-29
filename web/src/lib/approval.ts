@@ -5,7 +5,7 @@
 
 import { TEND_SAFETY_MS, tendOnPush, tendOwned } from "./approval-tend"
 import { loadMember } from "./channel"
-import { linkOf, watches } from "./channel-ops"
+import { linkOf, watches } from "@kiwi/channel/channel-ops.ts"
 import { tendLists } from "./device-lists"
 import { followedLaunches, sawMembers, sawRequests } from "./launch-follow"
 import { bridge, secrets } from "@kiwi/secrets/secrets.ts"

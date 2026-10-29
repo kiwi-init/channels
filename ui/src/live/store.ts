@@ -4,7 +4,7 @@ import type { SendOptions } from "@kiwi/core/client.ts"
 import type { JoinRequest, Member as RosterMember } from "@kiwi/core/membership.ts"
 import type { Message as Wire } from "@kiwi/core/protocol.ts"
 import type { ChannelState, FoldBase } from "@kiwi/core/state.ts"
-import type { ChannelLink } from "@/lib/channel-ops"
+import type { ChannelLink } from "@kiwi/channel/channel-ops.ts"
 import type { Channel, GoneChannel, Upload, Where } from "~/model"
 
 export interface Run {

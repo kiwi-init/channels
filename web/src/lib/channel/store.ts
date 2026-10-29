@@ -1,10 +1,10 @@
 import { decodeJoinCode } from "@kiwi/core/crypto.ts"
 import type { PublicAccess } from "../../../../desktop/src/bridge.ts"
-import { ops } from "../channel-ops"
-import { forgetHistory } from "../history"
-import { migrateLegacy } from "../legacy-seats"
+import { ops } from "@kiwi/channel/channel-ops.ts"
+import { forgetHistory } from "@kiwi/channel/history.ts"
+import { migrateLegacy } from "@kiwi/channel/legacy-seats.ts"
 import { migrateChannels, saveChannels, secrets, type ChannelView } from "@kiwi/secrets/secrets.ts"
-import { dropWrite } from "../write-behind"
+import { dropWrite } from "@kiwi/channel/write-behind.ts"
 
 export const CHANGED = "mc:channels"
 export function changed(): void {

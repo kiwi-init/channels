@@ -7,7 +7,7 @@ import type { ChannelIdentityView, ChannelOps } from "../desktop/src/bridge.ts";
 import { Keyring, type KeyHost } from "../desktop/src/keyring.ts";
 import { acceptSeat, withAccess } from "../desktop/src/seats.ts";
 import { TEND_SAFETY_MS, tendOnPush, tendOwned } from "../web/src/lib/approval-tend.ts";
-import { HEADS_SAFETY_MS, makeWatches } from "../web/src/lib/watch.ts";
+import { HEADS_SAFETY_MS, makeWatches } from "@kiwi/channel/watch.ts";
 import { decodeJoinCode } from "@kiwi/core/crypto.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
 import { provePerson } from "@kiwi/core/person.ts";

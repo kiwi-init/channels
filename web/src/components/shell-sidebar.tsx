@@ -2,7 +2,7 @@ import { Add01Icon, ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon, LockIcon, M
 import { createContext, useContext, useState, type ReactNode } from "react"
 
 import type { ChannelRow } from "@/lib/channel"
-import type { RowNews } from "@/lib/news"
+import type { RowNews } from "@kiwi/channel/news.ts"
 import { useIcons } from "@/lib/icons"
 import { useOwnPicture } from "@/lib/own-picture"
 import { bridge, useSecrets } from "@kiwi/secrets/secrets.ts"

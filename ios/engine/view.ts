@@ -8,7 +8,7 @@ import { chipsFor } from "../../web/src/lib/reactions.ts";
 import type { Online } from "../../web/src/lib/channel/online.ts";
 import { knownHarness, monoHarness } from "../../web/src/lib/harness.ts";
 import { lastPreview } from "../../web/src/lib/preview.ts";
-import { reviewsFor } from "../../web/src/lib/task-actions.ts";
+import { reviewsFor } from "@kiwi/channel/task-actions.ts";
 import type { AskView, Connection, IconView, MemberView, MessageView, PlaceView, ReviewView, RoomView, TaskView } from "./wire.ts";
 
 const SHOWN = 300;

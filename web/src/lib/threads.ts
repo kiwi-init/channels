@@ -6,7 +6,7 @@ import { useSyncExternalStore } from "react"
 
 import type { SendOptions } from "@kiwi/core/client.ts"
 import { chooseThread, type ChannelState, type Place } from "@kiwi/core/state.ts"
-import { writeLater } from "@/lib/write-behind"
+import { writeLater } from "@kiwi/channel/write-behind.ts"
 
 export { MAIN, dmPlace, placeFromKey, placeKey, type Place } from "@kiwi/core/state.ts"
 

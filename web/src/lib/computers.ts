@@ -3,7 +3,7 @@
 // owns, then forgets it.
 
 import { allMembers } from "./channel"
-import { linkOf, type ChannelLink } from "./channel-ops"
+import { linkOf, type ChannelLink } from "@kiwi/channel/channel-ops.ts"
 import { takeAgents } from "./remove-agents"
 import { bridge, saveComputers, secrets, type ComputerView } from "@kiwi/secrets/secrets.ts"
 
