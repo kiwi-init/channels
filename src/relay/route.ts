@@ -36,6 +36,10 @@ import {
   create,
   directory,
   Directory,
+  dropDelegation,
+  listDelegations,
+  liveDelegation,
+  putDelegation,
   errorResponse,
   frame,
   keysFor,
@@ -96,7 +100,7 @@ export const runRoom = <A, E>(relay: Relay, db: RoomDb, effect: Effect.Effect<A,
  * The checks. Only GET /info is public; every other row names one of these, so
  * test/route-table.test.ts and the auth table can see what each route needs.
  */
-type Guard = "public" | "creator" | "joiner" | "requester" | "member" | "owner";
+type Guard = "public" | "creator" | "joiner" | "requester" | "member" | "owner" | "admitter" | "reader";
 
 /** Who a check found: the key that signed, and the signed-in person creating a channel. */
 interface Who {
@@ -143,6 +147,23 @@ const owner = Effect.gen(function* () {
   return me;
 });
 
+/** The owner, or a key the owner delegated admitting its own agents to. */
+const admitter = Effect.gen(function* () {
+  const pk = yield* requester;
+  if (pk === (yield* readMeta).ownerPk) return yield* owner;
+  if (!(yield* liveDelegation(pk))) return yield* new NotOwner({ message: "only the channel owner can do that" });
+  return pk;
+});
+
+/** A member, or a delegate, which holds the channel's keys too. */
+const reader = Effect.gen(function* () {
+  const db = yield* RoomStore;
+  const { req, method, path, url, body } = yield* Request_;
+  const pk = yield* Effect.promise(() => verifyRequest(requestToken(req), db.roomId, method, path + url.search, body));
+  if (pk && !db.isMember(pk) && (yield* liveDelegation(pk))) return pk;
+  return yield* member;
+});
+
 /** Creating a channel: the creator's signature (the room checks it is the owner key's) and, on sign-in relays, a session. */
 const creator = Effect.gen(function* () {
   const db = yield* RoomStore;
@@ -166,6 +187,8 @@ const guards: Record<Guard, Effect.Effect<Who, Refusal, Services>> = {
   requester: asKey(requester),
   member: asKey(member),
   owner: asKey(owner),
+  admitter: asKey(admitter),
+  reader: asKey(reader),
 };
 
 // ---------- the routes ----------
@@ -598,7 +621,7 @@ const routes: RoomRoute[] = [
         return { data: { n: yield* setSnapshot(snapshot) } };
       }),
   },
-  { method: "GET", path: "/members", guard: "member", run: () => Effect.flatMap(RoomStore, (db) => tagged(db.etag("roster"), () => ({ members: db.members() }))) },
+  { method: "GET", path: "/members", guard: "reader", run: () => Effect.flatMap(RoomStore, (db) => tagged(db.etag("roster"), () => ({ members: db.members() }))) },
   {
     method: "DELETE",
     path: "/members/me",
@@ -612,24 +635,24 @@ const routes: RoomRoute[] = [
   {
     method: "GET",
     path: "/requests",
-    guard: "member", // owner, after the version check: clients from before the join check get told to update
+    guard: "requester", // the owner or a delegate, after the version check: clients from before the join check get told to update
     run: () =>
       Effect.gen(function* () {
         const db = yield* RoomStore;
         const { url } = yield* Request_;
         if (url.searchParams.get("v") !== "2") return yield* new UpdateRequired({ message: UPDATE_KIWI });
-        yield* owner;
-        return { data: { requests: db.pendingRequests() } };
+        const me = yield* admitter;
+        return { data: { requests: db.pendingRequests(me === (yield* readMeta).ownerPk ? undefined : me) } };
       }),
   },
   {
     method: "POST",
     path: new RegExp(`^/requests/${ID}/nonce$`),
-    guard: "owner",
-    run: (_, m) =>
+    guard: "admitter",
+    run: ({ me }, m) =>
       Effect.gen(function* () {
         const { nonce } = yield* json<{ nonce?: unknown }>();
-        yield* setOwnerNonce(m[1]!, nonce);
+        yield* setOwnerNonce(m[1]!, nonce, me === (yield* readMeta).ownerPk ? undefined : me);
         return { data: { set: true } };
       }),
   },
@@ -642,13 +665,14 @@ const routes: RoomRoute[] = [
   {
     method: "POST",
     path: "/members",
-    guard: "owner",
-    run: () =>
+    guard: "admitter",
+    run: ({ me }) =>
       Effect.gen(function* () {
         const b = yield* json<MemberBody & { request?: string }>();
+        const by = me === (yield* readMeta).ownerPk ? null : yield* liveDelegation(me);
         // The checks and the admission run as one step, with no await in between.
-        yield* requireChecked(b.request, b.pk);
-        yield* approve(b);
+        yield* requireChecked(b.request, b.pk, by ? me : undefined);
+        yield* approve(b, by?.d ?? null);
         return { data: { approved: true }, fx: { broadcast: [frame({ t: "roster" })] } };
       }),
   },
@@ -686,6 +710,34 @@ const routes: RoomRoute[] = [
         if (typeof b.post !== "boolean") return yield* new BadRequest({ message: "say whether they may post" });
         yield* setCanPost(m[1]!, b.post);
         return { data: { post: b.post } };
+      }),
+  },
+  {
+    method: "PUT",
+    path: "/delegations",
+    guard: "owner",
+    run: () =>
+      Effect.gen(function* () {
+        const d = yield* putDelegation(yield* json<{ d?: unknown; keys?: unknown }>());
+        return { data: { delegate: d.delegate, until: d.until } };
+      }),
+  },
+  { method: "GET", path: "/delegations", guard: "owner", run: () => Effect.map(listDelegations(), (delegations) => ({ data: { delegations } })) },
+  {
+    method: "DELETE",
+    path: /^\/delegations\/([A-Za-z0-9_-]{43})$/,
+    guard: "owner",
+    run: (_, m) => Effect.map(dropDelegation(m[1]!), () => ({ data: { dropped: true } })),
+  },
+  {
+    method: "GET",
+    path: "/delegation",
+    guard: "requester",
+    run: ({ me }) =>
+      Effect.gen(function* () {
+        const live = yield* liveDelegation(me);
+        if (!live) return yield* new NotFound({ message: "no delegation for this key" });
+        return { data: { d: live.d, keys: live.keys, epoch: (yield* readMeta).epoch } };
       }),
   },
   {

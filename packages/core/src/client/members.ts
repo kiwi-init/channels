@@ -1,3 +1,4 @@
+import { delegationLive } from "../delegation.ts";
 import type { DeviceList } from "../devices.ts";
 import { cleanPersona, personaScopes, type Persona } from "../personality.ts";
 import * as Effect from "effect/Effect";
@@ -159,7 +160,9 @@ export class ChannelMembers {
           !m.unverified &&
           ((!!m.device?.pk && revoked.has(m.device.pk) && m.person === list.person) || (!!m.from && revoked.has(m.from.pk) && m.sponsor?.user === list.person)),
       );
-      if (!cut.length) return cut;
+      const dropped = (yield* this.ch.fx.delegations().pipe(Effect.catchCause(() => Effect.succeed([])))).filter((d) => d.person === list.person && revoked.has(d.delegate));
+      if (!cut.length && !dropped.length) return cut;
+      for (const d of dropped) yield* this.ch.fx.undelegate(d.delegate);
       for (const m of cut) {
         yield* this.ch.request(`/members/${m.pk}`, { method: "DELETE" });
         yield* Effect.ignore(Effect.try({ try: () => this.info.markGone(m.pk), catch: (err) => err }));
@@ -203,9 +206,11 @@ export class ChannelMembers {
       const next = Math.max(epoch, newestEpoch(this.ch.access.keys)) + 1;
       if (!Number.isSafeInteger(next) || this.ch.access.keys[String(next)]) return yield* new Rejected(`the relay named epoch ${epoch}, which can't be the channel's next key: not rotating`);
       const key = newChannelKey();
+      const delegates = (yield* this.ch.fx.delegations().pipe(Effect.catchCause(() => Effect.succeed([])))).filter((d) => delegationLive(d));
       const keys = yield* Effect.promise(async () => {
         const out: Record<string, string> = {};
         for (const m of members) out[m.pk] = await wrapFor(this.ch.identity, this.ch.roomId, next, m.pk, m.xpk, key);
+        for (const d of delegates) out[d.delegate] ??= await wrapFor(this.ch.identity, this.ch.roomId, next, d.delegate, d.dxpk, key);
         return out;
       });
       yield* this.ch.request("/epochs", { method: "POST", body: JSON.stringify({ epoch: next, keys }) }).pipe(

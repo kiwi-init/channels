@@ -37,6 +37,8 @@ const SLOTS_TABLE = "CREATE TABLE slots (id TEXT PRIMARY KEY, holder TEXT NOT NU
 
 const SENDS_TABLE = "CREATE TABLE sends (sender TEXT NOT NULL, cid TEXT NOT NULL, seq INTEGER NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (sender, cid))";
 
+const DELEGATIONS_TABLE = "CREATE TABLE delegations (pk TEXT PRIMARY KEY, d TEXT NOT NULL, until INTEGER NOT NULL, keys TEXT NOT NULL)";
+
 const REQUEST_COLUMNS = [
   ["kind", "TEXT NOT NULL DEFAULT 'agent'"],
   ["sponsor_user", "TEXT"],
@@ -46,7 +48,12 @@ const REQUEST_COLUMNS = [
   ["commit_to", "TEXT"],
   ["owner_nonce", "TEXT"],
   ["reveal", "TEXT"],
+  ["dpk", "TEXT"],
+  ["dbox", "TEXT"],
+  ["dsig", "TEXT"],
 ] as const;
+
+type PendingRow = RequestBody & { kind: string; ownerNonce: string | null; reveal: string | null; dbox?: string; dsig?: string };
 
 export interface StoredSnapshot {
   n: number;
@@ -119,7 +126,7 @@ export class RoomDb {
     this.sql.run("CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)");
     this.sql.run("CREATE TABLE msgs (seq INTEGER PRIMARY KEY, ts INTEGER NOT NULL, iv TEXT NOT NULL, ct TEXT NOT NULL, e INTEGER NOT NULL)");
     this.sql.run(
-      "CREATE TABLE members (pk TEXT PRIMARY KEY, xpk TEXT NOT NULL, rec TEXT NOT NULL, rec_e INTEGER NOT NULL, since INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1, read_only INTEGER NOT NULL DEFAULT 0, admits_until INTEGER, admitted_by TEXT)",
+      "CREATE TABLE members (pk TEXT PRIMARY KEY, xpk TEXT NOT NULL, rec TEXT NOT NULL, rec_e INTEGER NOT NULL, since INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1, read_only INTEGER NOT NULL DEFAULT 0, admits_until INTEGER, admitted_by TEXT, delegation TEXT)",
     );
     this.sql.run("CREATE TABLE keys (pk TEXT NOT NULL, e INTEGER NOT NULL, wrapped TEXT NOT NULL, PRIMARY KEY (pk, e))");
     this.sql.run(
@@ -128,6 +135,7 @@ export class RoomDb {
     this.sql.run(READS_TABLE);
     this.sql.run(SLOTS_TABLE);
     this.sql.run(SENDS_TABLE);
+    this.sql.run(DELEGATIONS_TABLE);
   }
 
   migrate(): void {
@@ -137,6 +145,7 @@ export class RoomDb {
     if (!memberCols.has("admits_until")) this.sql.run("ALTER TABLE members ADD COLUMN admits_until INTEGER");
     if (!memberCols.has("admitted_by")) this.sql.run("ALTER TABLE members ADD COLUMN admitted_by TEXT");
     if (!memberCols.has("gone")) this.sql.run("ALTER TABLE members ADD COLUMN gone TEXT");
+    if (!memberCols.has("delegation")) this.sql.run("ALTER TABLE members ADD COLUMN delegation TEXT");
     const cols = new Set(this.sql.all<{ name: string }>("PRAGMA table_info(requests)").map((c) => c.name));
     for (const [col, def] of REQUEST_COLUMNS) {
       if (!cols.has(col)) this.sql.run(`ALTER TABLE requests ADD COLUMN ${col} ${def}`);
@@ -144,6 +153,7 @@ export class RoomDb {
     this.sql.run(READS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
     this.sql.run(SLOTS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
     this.sql.run(SENDS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
+    this.sql.run(DELEGATIONS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
     this.sql.run("DROP TABLE IF EXISTS secrets");
     migrated.add(this.sql);
   }
@@ -459,15 +469,21 @@ export class RoomDb {
     return owner ? [{ user: owner, room: this.roomId, entry: null }] : [];
   }
 
-  members(): { pk: string; xpk: string; rec: string; e: number; active: number; read_only: number }[] {
-    return this.sql.all("SELECT pk, xpk, rec, rec_e AS e, active, read_only FROM members ORDER BY since");
+  members(): { pk: string; xpk: string; rec: string; e: number; active: number; read_only: number; d?: string }[] {
+    this.migrate();
+    return this.sql
+      .all<{ pk: string; xpk: string; rec: string; e: number; active: number; read_only: number; d: string | null }>(
+        "SELECT pk, xpk, rec, rec_e AS e, active, read_only, delegation AS d FROM members ORDER BY since",
+      )
+      .map(({ d, ...m }) => (d ? { ...m, d } : m));
   }
 
-  pendingRequests(): (RequestBody & { kind: string; ownerNonce: string | null; reveal: string | null })[] {
+  pendingRequests(delegate?: string): PendingRow[] {
     this.migrate();
-    return this.sql.all(
-      "SELECT id, pk, xpk, box, sig, ts, commit_to AS \"commit\", owner_nonce AS ownerNonce, reveal, kind FROM requests WHERE status = 'pending' AND commit_to IS NOT NULL ORDER BY COALESCE(received, ts)",
-    );
+    const cols = 'id, pk, xpk, box, sig, ts, commit_to AS "commit", owner_nonce AS ownerNonce, reveal, kind';
+    const pending = "status = 'pending' AND commit_to IS NOT NULL";
+    if (!delegate) return this.sql.all<PendingRow>(`SELECT ${cols} FROM requests WHERE ${pending} ORDER BY COALESCE(received, ts)`);
+    return this.sql.all<PendingRow>(`SELECT ${cols}, dbox, dsig FROM requests WHERE ${pending} AND dpk = ? AND dbox IS NOT NULL AND dsig IS NOT NULL ORDER BY COALESCE(received, ts)`, delegate);
   }
 
   deny(id: string): void {

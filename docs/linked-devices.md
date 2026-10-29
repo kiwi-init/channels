@@ -166,6 +166,11 @@ owner-signed **delegation** lets the `kiwi` daemon admit its own computer's agen
 - **Checks:** the relay accepts a delegated admission that carries its delegation. Clients check the
   chain owner → delegation → delegate when they read member records.
 - **Older clients** see a delegated record they can't verify, and show that agent as unverified.
+- In the code (T677): `packages/core/src/delegation.ts` (the format, 14 days), the relay's
+  `/delegations` (owner), `/delegation` (the delegate's own) and the `admitter` guard, joiners'
+  `dpk`/`dbox` copy, and `admitOwn` (`packages/core/src/client/delegate.ts`) for the daemon.
+  A rotation re-wraps to every live delegate; one without a wrap is dropped. `cutDevices` drops a
+  revoked computer's delegations.
 
 ## 4. Revocation and expiry
 

@@ -1,6 +1,7 @@
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import { openFrom, sealTo } from "../crypto.ts";
+import { readDelegation } from "../delegation.ts";
 import { signText, verify, verifyText, type Identity } from "../identity.ts";
 import type { ChannelCore } from "./core.ts";
 import type { MemberRefusal } from "./errors.ts";
@@ -34,7 +35,8 @@ export async function wrapAllFor(owner: Identity, roomId: string, keys: Record<s
   return out;
 }
 
-export async function unwrapKeys(id: Identity, roomId: string, wrapped: Record<string, string>, ownerPk: string, signedOnly: boolean): Promise<Record<string, string>> {
+export async function unwrapKeys(id: Identity, roomId: string, wrapped: Record<string, string>, ownerPk: string, signedOnly: boolean, delegation?: unknown): Promise<Record<string, string>> {
+  const delegate = delegation ? (await readDelegation(delegation, roomId, ownerPk))?.delegate : undefined;
   if (!id.xsk) throw new Error("identity has no exchange key");
   const out: Record<string, string> = {};
   for (const [e, w] of Object.entries(wrapped)) {
@@ -44,7 +46,7 @@ export async function unwrapKeys(id: Identity, roomId: string, wrapped: Record<s
         const parsed = JSON.parse(w) as { box?: unknown; sig?: unknown };
         if (typeof parsed.box !== "string" || typeof parsed.sig !== "string") continue;
         const statement = keyStatement(roomId, e, id.pk, parsed.box);
-        if (!(await verifyText(ownerPk, parsed.sig, statement))) continue;
+        if (!(await verifyText(ownerPk, parsed.sig, statement)) && !(delegate && (await verifyText(delegate, parsed.sig, statement)))) continue;
         box = parsed.box;
       } catch {
         continue;
@@ -81,8 +83,8 @@ export class ChannelKeys {
 
   private fetchKeys(): Effect.Effect<void, MemberRefusal, Relay> {
     return Effect.gen({ self: this }, function* () {
-      const r = yield* this.ch.request<{ epoch: number; keys: Record<string, string> }>("/keys");
-      const keys = yield* Effect.promise(() => unwrapKeys(this.ch.identity, this.ch.roomId, r.keys, this.ch.access.ownerPk, !!this.ch.access.signedKeys));
+      const r = yield* this.ch.request<{ epoch: number; keys: Record<string, string>; delegation?: string }>("/keys");
+      const keys = yield* Effect.promise(() => unwrapKeys(this.ch.identity, this.ch.roomId, r.keys, this.ch.access.ownerPk, !!this.ch.access.signedKeys, r.delegation));
       this.ch.access = { ...this.ch.access, ...keepHeld(this.ch.access, { epoch: r.epoch, keys }) };
       this.ch.onAccess?.(this.ch.access);
     });

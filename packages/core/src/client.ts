@@ -17,6 +17,7 @@ import type { ChannelIcon, Envelope, ImageAttachment, Message } from "./protocol
 import type { Scope } from "./scopes.ts";
 import type { ChannelState, FoldBase, GithubRelease, GithubRules, GuardFloor } from "./state.ts";
 import { ChannelCore, type ChannelFx } from "./client/core.ts";
+import { ChannelDelegations } from "./client/delegations.ts";
 import { ChannelGithub, type GithubDiff, type GithubIssueInfo, type ReviewCheck } from "./client/github.ts";
 import { ChannelHistory } from "./client/history.ts";
 import { ChannelImages } from "./client/images.ts";
@@ -27,6 +28,7 @@ import { ChannelLive, type StreamOptions } from "./client/live.ts";
 import { ChannelMembers } from "./client/members.ts";
 import { run, runUntil } from "./client/relay.ts";
 import { ChannelRequests, type RequestsOptions } from "./client/requests.ts";
+import type { Delegation } from "./delegation.ts";
 import type { DeviceList } from "./devices.ts";
 import { ChannelSending, type SendOptions } from "./client/send.ts";
 import { ChannelSettings, type RoomsSetting } from "./client/settings.ts";
@@ -68,6 +70,7 @@ export class Channel {
       ...settings.fx,
       ...new ChannelRequests(this.core).fx,
       ...new ChannelMembers(this.core, this.cache).fx,
+      ...new ChannelDelegations(this.core).fx,
       ...history.fx,
       ...new ChannelSnapshots(this.core, history).fx,
       ...this.sending.fx,
@@ -302,6 +305,18 @@ export class Channel {
 
   deny(requestId: string): Promise<void> {
     return run(this.fx.deny(requestId));
+  }
+
+  delegate(device: { pk: string; xpk: string }, person: string): Promise<Delegation> {
+    return run(this.fx.delegate(device, person));
+  }
+
+  undelegate(pk: string): Promise<void> {
+    return run(this.fx.undelegate(pk));
+  }
+
+  delegations(): Promise<Delegation[]> {
+    return run(this.fx.delegations());
   }
 
   /** Whether a member may post: the one bit of their scopes the relay enforces (the scope.set event is the record). */

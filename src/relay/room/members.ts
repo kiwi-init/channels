@@ -5,22 +5,25 @@ import { Policy } from "../policy.ts";
 import { fits, MAX_RECORD, MAX_WRAPPED, MemberRecord } from "../schema.ts";
 import { readMeta } from "./auth.ts";
 import { RoomStore } from "./db.ts";
+import { rotateDelegations } from "./delegations.ts";
 
 export function memberFits(m: MemberBody, epoch: number): boolean {
   return fits(MemberRecord, m) && !Object.keys(m.keys ?? {}).some((e) => !/^\d{1,9}$/.test(e) || Number(e) > epoch);
 }
 
-export const putMember = Effect.fn("Room.putMember")(function* (m: MemberBody, epoch: number) {
+export const putMember = Effect.fn("Room.putMember")(function* (m: MemberBody, epoch: number, delegation: string | null = null) {
   const db = yield* RoomStore;
   if (!memberFits(m, epoch)) return yield* new BadRequest({ message: "bad member" });
+  db.migrate();
   db.sql.run(
-    "INSERT INTO members (pk, xpk, rec, rec_e, since, active, read_only) VALUES (?, ?, ?, ?, ?, 1, ?) ON CONFLICT (pk) DO UPDATE SET xpk = excluded.xpk, rec = excluded.rec, rec_e = excluded.rec_e, active = 1, read_only = excluded.read_only",
+    "INSERT INTO members (pk, xpk, rec, rec_e, since, active, read_only, delegation) VALUES (?, ?, ?, ?, ?, 1, ?, ?) ON CONFLICT (pk) DO UPDATE SET xpk = excluded.xpk, rec = excluded.rec, rec_e = excluded.rec_e, active = 1, read_only = excluded.read_only, delegation = excluded.delegation",
     m.pk,
     m.xpk,
     m.rec,
     epoch,
     Date.now(),
     m.post === false ? 1 : 0,
+    delegation,
   );
   db.membersChanged(m.pk);
   for (const [e, wrapped] of Object.entries(m.keys ?? {})) {
@@ -28,7 +31,7 @@ export const putMember = Effect.fn("Room.putMember")(function* (m: MemberBody, e
   }
 });
 
-export const approve = Effect.fn("Room.approve")(function* (body: MemberBody & { request?: string }) {
+export const approve = Effect.fn("Room.approve")(function* (body: MemberBody & { request?: string }, delegation: string | null = null) {
   const db = yield* RoomStore;
   const policy = yield* Policy;
   const { epoch } = yield* readMeta;
@@ -40,15 +43,21 @@ export const approve = Effect.fn("Room.approve")(function* (body: MemberBody & {
   for (let e = 0; e <= epoch; e++) {
     if (!body.keys?.[String(e)]) return yield* new BadRequest({ message: `missing wrapped key for epoch ${e}` });
   }
-  yield* putMember(body, epoch);
+  yield* putMember(body, epoch, delegation);
   db.changed("roster");
   if (body.request) db.sql.run("UPDATE requests SET status = 'approved' WHERE id = ? AND pk = ?", body.request, body.pk);
 });
 
 export const keysFor = Effect.fn("Room.keysFor")(function* (pk: string) {
   const db = yield* RoomStore;
+  db.migrate();
   const rows = db.sql.all<{ e: number; wrapped: string }>("SELECT e, wrapped FROM keys WHERE pk = ?", pk);
-  return { epoch: (yield* readMeta).epoch, keys: Object.fromEntries(rows.map((r) => [String(r.e), r.wrapped])) as Record<string, string> };
+  const delegation = db.sql.all<{ d: string | null }>("SELECT delegation AS d FROM members WHERE pk = ?", pk)[0]?.d;
+  return {
+    epoch: (yield* readMeta).epoch,
+    keys: Object.fromEntries(rows.map((r) => [String(r.e), r.wrapped])) as Record<string, string>,
+    ...(delegation ? { delegation } : {}),
+  };
 });
 
 export const setRecord = Effect.fn("Room.setRecord")(function* (pk: string, rec: string, e: number, post: boolean) {
@@ -97,6 +106,7 @@ export const rotate = Effect.fn("Room.rotate")(function* (epoch: number, keys: R
   for (const m of members) if (!keys[m.pk]) return yield* new BadRequest({ message: `missing wrapped key for ${m.pk.slice(0, 8)}` });
   for (const m of members) if (typeof keys[m.pk] !== "string" || keys[m.pk]!.length > MAX_WRAPPED) return yield* new BadRequest({ message: "bad wrapped key" });
   for (const m of members) db.sql.run("INSERT OR REPLACE INTO keys (pk, e, wrapped) VALUES (?, ?, ?)", m.pk, epoch, keys[m.pk]!);
+  yield* rotateDelegations(epoch, keys);
   db.set("epoch", epoch);
   db.set("rotate", 0);
   db.changed("info");
