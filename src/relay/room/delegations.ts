@@ -31,6 +31,7 @@ export const putDelegation = Effect.fn("Room.putDelegation")(function* (body: { 
 
 export const dropDelegation = Effect.fn("Room.dropDelegation")(function* (pk: string) {
   const db = yield* RoomStore;
+  yield* readMeta;
   db.migrate();
   if (!db.sql.all("SELECT 1 FROM delegations WHERE pk = ?", pk).length) return yield* new NotFound({ message: "no such delegation" });
   db.sql.run("DELETE FROM delegations WHERE pk = ?", pk);
@@ -38,6 +39,7 @@ export const dropDelegation = Effect.fn("Room.dropDelegation")(function* (pk: st
 
 export const liveDelegation = Effect.fn("Room.liveDelegation")(function* (pk: string) {
   const db = yield* RoomStore;
+  yield* readMeta;
   db.migrate();
   const now = yield* Clock.currentTimeMillis;
   const r = db.sql.all<Row>("SELECT pk, d, until, keys FROM delegations WHERE pk = ? AND until > ?", pk, now)[0];
@@ -48,6 +50,7 @@ export const liveDelegation = Effect.fn("Room.liveDelegation")(function* (pk: st
 
 export const listDelegations = Effect.fn("Room.listDelegations")(function* () {
   const db = yield* RoomStore;
+  yield* readMeta;
   db.migrate();
   return db.sql.all<Row>("SELECT pk, d, until, keys FROM delegations ORDER BY pk").map((r) => ({ d: r.d, epochs: Object.keys(wrappedKeys(r.keys)).map(Number) }));
 });

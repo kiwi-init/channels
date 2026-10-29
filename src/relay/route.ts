@@ -158,6 +158,7 @@ const admitter = Effect.gen(function* () {
 /** A member, or a delegate, which holds the channel's keys too. */
 const reader = Effect.gen(function* () {
   const db = yield* RoomStore;
+  yield* readMeta;
   const { req, method, path, url, body } = yield* Request_;
   const pk = yield* Effect.promise(() => verifyRequest(requestToken(req), db.roomId, method, path + url.search, body));
   if (pk && !db.isMember(pk) && (yield* liveDelegation(pk))) return pk;

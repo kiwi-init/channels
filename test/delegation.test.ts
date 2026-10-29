@@ -249,4 +249,16 @@ describe("revoking and expiry stop a delegate at once", () => {
     expect((await call(s, stranger, "DELETE", `/delegations/${pc.machine.pk}`)).status).toBe(403);
     await s.ownerCh.close();
   });
+
+  test("a closed channel answers its delegate as gone, like its members", async () => {
+    const { s, pc } = await delegated();
+    await s.ownerCh.close();
+    for (const [method, path] of [
+      ["GET", "/delegation"],
+      ["GET", "/members"],
+      ["GET", "/requests"],
+    ] as const) {
+      expect([path, (await call(s, pc.machine, method, path)).json]).toEqual([path, expect.objectContaining({ tag: "ChannelGone" })]);
+    }
+  });
 });
