@@ -458,7 +458,14 @@ function folding(
         else askHeads.set(head.id, { ...head, goal, goalBy: m.from });
         continue;
       }
-      placeOf.set(m.seq, ev.op === "task.add" ? { kind: "task", task: m.seq } : (ev.op === "task.update" || ev.op === "task.claim") && tasks.has(ev.task) ? { kind: "task", task: ev.task } : MAIN);
+      placeOf.set(
+        m.seq,
+        ev.op === "task.add"
+          ? { kind: "task", task: m.seq }
+          : (ev.op === "task.update" || ev.op === "task.claim" || ev.op === "task.first") && tasks.has(ev.task)
+            ? { kind: "task", task: ev.task }
+            : MAIN,
+      );
 
       applyEvent(ctx, m, ev, member, at, reject);
       const added = ev.op === "task.add" && !rejected.has(m.seq) ? tasks.get(m.seq) : undefined;

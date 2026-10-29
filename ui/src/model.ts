@@ -1,4 +1,4 @@
-import type { HookState, KnownHarness } from "@kiwi/core/harnesses.ts"
+import type { HookHarness, HookState } from "@kiwi/core/harnesses.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
 import type { Step, StepReply } from "@kiwi/core/protocol.ts"
 import type { TerminalId, TerminalRow } from "@kiwi/core/terminals.ts"
@@ -482,7 +482,7 @@ export interface Actions {
   allowNewAgents(on: boolean): void
   allowRemoteBypass(on: boolean): void
   savePersonalities(list: Personality[]): void
-  setHooks(harness: KnownHarness, on: boolean): void
+  setHooks(harness: HookHarness, on: boolean): void
   checkComputer(): Promise<Finding[] | null>
   preferTerminal(id: TerminalId): void
   setTerminalHelpers(id: Exclude<TerminalId, "app">, on: boolean): void
@@ -494,7 +494,7 @@ export type Finding = { ok: true; what: string } | { ok: false; what: string; ho
 
 export interface ThisComputer {
   kiwi: { running: boolean; version?: string }
-  hooks: { harness: KnownHarness; label: string; state: Exclude<HookState, "absent"> }[]
+  hooks: { harness: HookHarness; label: string; state: Exclude<HookState, "absent"> }[]
   contextLine: boolean | null
 }
 

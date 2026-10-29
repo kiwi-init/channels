@@ -301,7 +301,6 @@ bool kiwi_notify(const char *title, const char *body, uint32_t tag) {
   UNMutableNotificationContent *content = [UNMutableNotificationContent new];
   content.title = heading;
   content.body = (body ? [NSString stringWithUTF8String:body] : nil) ?: @"";
-  content.sound = UNNotificationSound.defaultSound;
   content.userInfo = @{@"tag" : @(tag)};
   UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:NSUUID.UUID.UUIDString content:content trigger:nil];
   UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];

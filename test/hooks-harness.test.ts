@@ -133,6 +133,8 @@ function realHomeStamp(): string {
     join(root, ".config", "mimocode"),
     join(root, ".config", "mimocode", "plugin"),
     join(root, ".config", "mimocode", "plugin", "kiwi.ts"),
+    join(root, ".zcode", "cli"),
+    join(root, ".zcode", "cli", "config.json"),
     join(root, ".claude"),
     join(root, ".claude", "settings.json"),
   ];
@@ -151,7 +153,7 @@ function realHomeStamp(): string {
 
 test("a harness session during tests does not touch the real home", () => {
   const root = homedir();
-  for (const key of ["KIWI_CODEX_DIR", "KIWI_GEMINI_DIR", "KIWI_CURSOR_DIR", "KIWI_GROK_DIR", "KIWI_KIMI_DIR", "KIWI_PI_DIR", "KIWI_MIMO_DIR", "CLAUDE_CONFIG_DIR"]) {
+  for (const key of ["KIWI_CODEX_DIR", "KIWI_GEMINI_DIR", "KIWI_CURSOR_DIR", "KIWI_GROK_DIR", "KIWI_KIMI_DIR", "KIWI_PI_DIR", "KIWI_MIMO_DIR", "KIWI_ZCODE_DIR", "CLAUDE_CONFIG_DIR"]) {
     const dir = process.env[key];
     expect(dir, key).toBeTruthy();
     expect(dir!.startsWith(`${root}/`), key).toBe(false);
@@ -180,6 +182,7 @@ test("a harness session during tests does not touch the real home", () => {
   expect(existsSync(join(process.env.KIWI_KIMI_DIR!, "config.toml"))).toBe(true);
   expect(existsSync(join(process.env.KIWI_PI_DIR!, "extensions", "kiwi.ts"))).toBe(true);
   expect(existsSync(join(process.env.KIWI_MIMO_DIR!, "plugin", "kiwi.ts"))).toBe(true);
+  expect(existsSync(join(process.env.KIWI_ZCODE_DIR!, "config.json"))).toBe(true);
   uninstallDetected();
   expect(realHomeStamp()).toBe(before);
 });
@@ -330,6 +333,7 @@ test("a harness opted out stays out of install, and a named install turns it bac
     KIWI_KIMI_DIR: absent,
     KIWI_PI_DIR: absent,
     KIWI_MIMO_DIR: absent,
+    KIWI_ZCODE_DIR: absent,
   });
   updateConfig((c) => {
     c.harnessHooks = { codex: "off" };
@@ -628,13 +632,14 @@ test("kiwi hooks status --json gives the app each harness's state, and install c
     KIWI_KIMI_DIR: none,
     KIWI_PI_DIR: none,
     KIWI_MIMO_DIR: none,
+    KIWI_ZCODE_DIR: none,
     KIWI_NO_HOOKS: "",
     CLAUDECODE: "",
     AI_AGENT: "",
     CLAUDE_CODE_EXECPATH: "",
   };
   const states = () => Object.fromEntries((JSON.parse(kiwiCli(["hooks", "status", "--json"], env).out) as { hooks: { harness: string; state: string }[] }).hooks.map((r) => [r.harness, r.state]));
-  expect(states()).toEqual({ claude: "missing", codex: "missing", gemini: "absent", cursor: "absent", grok: "absent", kimi: "absent", pi: "absent", mimo: "absent" });
+  expect(states()).toEqual({ claude: "missing", codex: "missing", gemini: "absent", cursor: "absent", grok: "absent", kimi: "absent", pi: "absent", mimo: "absent", zcode: "absent" });
 
   expect(kiwiCli(["hooks", "install", "claude"], env).code).toBe(0);
   expect(states().claude).toBe("partial");
@@ -674,6 +679,102 @@ function kimiStops(path: string): string[] {
   const parsed = Bun.TOML.parse(readFileSync(path, "utf8")) as { hooks?: { event: string; command: string }[] };
   return (parsed.hooks ?? []).filter((h) => h.command.endsWith(" hook kimi-stop # kiwi")).map((h) => h.event);
 }
+
+const ZCODE_USER = {
+  model: "glm-5",
+  hooks: { timeoutMs: 20_000, events: { Stop: [{ hooks: [{ type: "command", command: "notify-send done" }] }], PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "audit" }] }] } },
+};
+
+type ZcodeHook = { type: string; command: string; timeoutMs?: number };
+type ZcodeConfig = { model?: string; hooks?: { enabled?: boolean; timeoutMs?: number; events?: Record<string, { matcher?: string; hooks: ZcodeHook[] }[]> } };
+
+function readZcode(path: string): ZcodeConfig {
+  return JSON.parse(readFileSync(path, "utf8")) as ZcodeConfig;
+}
+
+test("ZCode: one Stop entry in config.json beside the user's hooks, hooks turned on, re-installed once, and uninstall gives the user's file back", () => {
+  const dir = scratch("hk-zcode-");
+  setEnv({ KIWI_HOME: scratch("hk-zcode-home-"), KIWI_ZCODE_DIR: dir });
+  const path = join(dir, "config.json");
+  writeFileSync(path, JSON.stringify(ZCODE_USER, null, 2) + "\n");
+  expect(extraInstalled("zcode")).toBe(false);
+  expect(installExtra("zcode")).toBe(path);
+  installExtra("zcode");
+  const config = readZcode(path);
+  expect(config.model).toBe("glm-5");
+  expect(config.hooks?.enabled).toBe(true);
+  expect(config.hooks?.timeoutMs).toBe(20_000);
+  expect(config.hooks?.events?.PreToolUse).toEqual(ZCODE_USER.hooks.events.PreToolUse);
+  const stop = config.hooks?.events?.Stop ?? [];
+  expect(stop[0]).toEqual(ZCODE_USER.hooks.events.Stop[0]);
+  expect(stop.slice(1).flatMap((g) => g.hooks)).toEqual([{ type: "command", command: expect.stringMatching(/ hook stop # kiwi$/), timeoutMs: 30_000 }]);
+  expect(extraInstalled("zcode")).toBe(true);
+  expect(hooksStatus()).toContain("zcode: installed");
+  uninstallExtra("zcode");
+  expect(readZcode(path)).toEqual(ZCODE_USER);
+  expect(extraInstalled("zcode")).toBe(false);
+  expect(loadConfig().zcodeHooksTurnedOn).toBeUndefined();
+});
+
+test("ZCode: hooks a person turned on stay on after uninstall, and uninstall without Kiwi's entry changes nothing", () => {
+  const dir = scratch("hk-zcode-on-");
+  setEnv({ KIWI_HOME: scratch("hk-zcode-on-home-"), KIWI_ZCODE_DIR: dir });
+  const path = join(dir, "config.json");
+  const theirs = { hooks: { enabled: true } };
+  writeFileSync(path, JSON.stringify(theirs));
+  uninstallExtra("zcode");
+  expect(readZcode(path)).toEqual(theirs);
+  installExtra("zcode");
+  installExtra("zcode");
+  expect(loadConfig().zcodeHooksTurnedOn).toBeUndefined();
+  uninstallExtra("zcode");
+  expect(readZcode(path)).toEqual(theirs);
+  const withEvents = { hooks: { enabled: true, events: { Stop: [{ hooks: [{ type: "command", command: "notify-send done" }] }] } } };
+  writeFileSync(path, JSON.stringify(withEvents));
+  installExtra("zcode");
+  uninstallExtra("zcode");
+  expect(readZcode(path)).toEqual(withEvents);
+});
+
+test("ZCode: a config replaced after Kiwi's install starts its note again, and an uninstall that fails keeps the note for its retry", () => {
+  const dir = scratch("hk-zcode-life-");
+  setEnv({ KIWI_HOME: scratch("hk-zcode-life-home-"), KIWI_ZCODE_DIR: dir });
+  const path = join(dir, "config.json");
+  installExtra("zcode");
+  expect(loadConfig().zcodeHooksTurnedOn).toEqual([path]);
+  const replaced = { hooks: { enabled: true } };
+  writeFileSync(path, JSON.stringify(replaced));
+  installExtra("zcode");
+  expect(loadConfig().zcodeHooksTurnedOn).toBeUndefined();
+  uninstallExtra("zcode");
+  expect(readZcode(path)).toEqual(replaced);
+
+  rmSync(path);
+  installExtra("zcode");
+  const installed = readFileSync(path, "utf8");
+  writeFileSync(path, "{ not json");
+  expect(() => uninstallExtra("zcode")).toThrow();
+  expect(loadConfig().zcodeHooksTurnedOn).toEqual([path]);
+  writeFileSync(path, installed);
+  uninstallExtra("zcode");
+  expect(existsSync(path)).toBe(false);
+  expect(loadConfig().zcodeHooksTurnedOn).toBeUndefined();
+});
+
+test("ZCode: an absent config.json gets just the hook and is absent again after uninstall; hooks a person turned off stay off", () => {
+  const dir = scratch("hk-zcode-none-");
+  setEnv({ KIWI_HOME: scratch("hk-zcode-none-home-"), KIWI_ZCODE_DIR: dir });
+  const path = join(dir, "config.json");
+  installExtra("zcode");
+  expect(Object.keys(readZcode(path))).toEqual(["hooks"]);
+  expect(Object.keys(readZcode(path).hooks?.events ?? {})).toEqual(["Stop"]);
+  uninstallExtra("zcode");
+  expect(existsSync(path)).toBe(false);
+  writeFileSync(path, JSON.stringify({ hooks: { enabled: false } }));
+  expect(() => installExtra("zcode")).toThrow("hooks.enabled is false");
+  expect(readZcode(path)).toEqual({ hooks: { enabled: false } });
+  expect(extraInstalled("zcode")).toBe(false);
+});
 
 test("Kimi Code: one Stop entry in config.toml, re-installed once, and uninstall gives the user's file back as it was", () => {
   const kimi = scratch("hk-kimi-");

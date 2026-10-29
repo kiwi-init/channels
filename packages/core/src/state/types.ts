@@ -124,6 +124,7 @@ export interface Task {
   archived?: boolean;
   leftBy?: string;
   handedOff?: { seq: number; from: string };
+  first?: number;
 }
 
 export interface AskHead {

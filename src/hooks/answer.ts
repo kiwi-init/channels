@@ -109,7 +109,7 @@ const LISTENER_SETTLE_MS = 1_500;
 type ListenCheck = { kind: "skip" } | { kind: "check"; listens: () => boolean; settles: boolean };
 
 function listenCheck(input: HookInput, b: Binding, who: Here, mc: string): ListenCheck {
-  if (who.harness === "kimi" || who.harness === "cursor") {
+  if (who.harness === "kimi" || who.harness === "cursor" || who.harness === "zcode") {
     if (who.harness === "kimi" && kimiServer(who.pid)) return { kind: "skip" };
     const heard = () => liveListeners().some((l) => l.alias === b.alias && l.as === b.as && ((!!who.session && l.session === who.session) || (!!who.pid && l.pid === who.pid)));
     return { kind: "check", listens: heard, settles: true };

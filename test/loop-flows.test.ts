@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig } from "../src/config.ts";
@@ -65,6 +65,12 @@ async function until(pred: () => boolean | Promise<boolean>, label: string, ms =
   }
 }
 
+function added(out: string): string {
+  const id = /added (T\d+)/.exec(out)?.[1];
+  if (!id) throw new Error(`no task id in: ${out}`);
+  return id;
+}
+
 const S: Env = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "joiner", CLAUDE_PID: String(process.pid), AI_AGENT: "claude-code_2-1-296_agent" };
 
 type Seen =
@@ -96,7 +102,7 @@ reg("busy");
 say({ kind: "start", harness: "claude", pid: process.pid, argv, token: !!process.env.KIWI_SEAT_TOKEN, as: process.env.KIWI_AS, channel: process.env.KIWI_CHANNEL, loop: process.env.KIWI_LOOP, loopTask: process.env.KIWI_LOOP_TASK, marker: !!process.env.CLAUDE_CODE_SESSION_ID });
 await Bun.sleep(1_500);
 const task = /This session is for (T\\d+)/.exec(argv.at(-1) ?? "")?.[1];
-if (task) {
+if (task && !(argv.at(-1) ?? "").includes("“loop hold”")) {
   const p = Bun.spawn(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: { ...process.env, CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: sessionId, CLAUDE_PID: String(process.pid) }, stdout: "pipe", stderr: "pipe" });
   const out = (await new Response(p.stdout).text()) + (await new Response(p.stderr).text());
   await p.exited;
@@ -196,6 +202,59 @@ db.prepare("INSERT INTO message (id, session_id, time_created, data) VALUES ('m1
 setInterval(() => {}, 1_000);
 `;
 
+const zcodeDir = scratch("zcode");
+const zcodeBin = scratch("zcode-bin");
+
+const FAKE_ZCODE = `import { Database } from "bun:sqlite";
+import { appendFileSync, mkdirSync, realpathSync } from "node:fs";
+import { join } from "node:path";
+const record = ${JSON.stringify(record)};
+const say = (o) => appendFileSync(record, JSON.stringify(o) + "\\n");
+process.on("SIGTERM", () => { say({ kind: "term", pid: process.pid }); process.exit(143); });
+say({ kind: "start", harness: "zcode", pid: process.pid, argv: process.argv.slice(2), token: !!process.env.KIWI_SEAT_TOKEN, as: process.env.KIWI_AS, channel: process.env.KIWI_CHANNEL, marker: !!process.env.ZCODE_RUNTIME_ENV });
+process.stdout.write("ZCode 0.17.0\\r\\nStatus\\r\\nStarting\\r\\n");
+await Bun.sleep(800);
+process.stdout.write(" \\u256d\\u2500 Build \\u2500\\u256e\\r\\n \\u2502 Type a prompt \\u2502\\r\\n");
+await Bun.sleep(400);
+process.stdout.write("\\x1b[?2004h");
+process.stdin.setRawMode(true);
+process.stdin.resume();
+let got = "";
+const prompt = await new Promise((resolve) => {
+  process.stdin.on("data", (d) => {
+    got += d.toString();
+    const open = got.indexOf("\\x1b[200~");
+    const close = got.indexOf("\\x1b[201~");
+    if (open >= 0 && close > open && /[\\r\\n]/.test(got.slice(close + 6))) resolve(got.slice(open + 6, close));
+  });
+});
+const dir = join(process.env.KIWI_ZCODE_DIR, "db");
+mkdirSync(dir, { recursive: true });
+const db = new Database(join(dir, "db.sqlite"));
+db.run("create table if not exists session (id text primary key, directory text not null, parent_id text, time_created integer not null, time_updated integer not null)");
+db.run("create table if not exists message (id text primary key, session_id text not null, time_created integer not null, data text not null)");
+db.run("create table if not exists part (id text primary key, message_id text not null, session_id text not null, data text not null)");
+db.run("create table if not exists turn_usage (session_id text not null, turn_id text not null, user_message_id text, status text not null, started_at integer not null, completed_at integer)");
+const session = "sess_" + crypto.randomUUID();
+const asked = Date.now();
+db.run("insert into session values (?, ?, ?, ?, ?)", [session, realpathSync(process.cwd()), null, asked, asked]);
+db.run("insert into message values (?, ?, ?, ?)", ["msg_p_" + session, session, asked, JSON.stringify({ role: "user" })]);
+db.run("insert into part values (?, ?, ?, ?)", ["prt_p_" + session, "msg_p_" + session, session, JSON.stringify({ type: "text", text: prompt })]);
+db.run("insert into message values (?, ?, ?, ?)", ["msg_s_" + session, session, asked + 5, JSON.stringify({ role: "user" })]);
+const stray = Bun.spawn(["bash", "-c", "exec -a 'kiwi listen --once' sleep 120"], { stdout: "ignore", stderr: "ignore" });
+say({ kind: "typed", pid: process.pid, prompt, stray: stray.pid });
+await Bun.sleep(1_500);
+const task = /This session is for (T\\d+)/.exec(prompt)?.[1];
+if (task) {
+  const p = Bun.spawn(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: { ...process.env, ZCODE_RUNTIME_ENV: "1" }, stdout: "pipe", stderr: "pipe" });
+  const out = (await new Response(p.stdout).text()) + (await new Response(p.stderr).text());
+  await p.exited;
+  say({ kind: "done", pid: process.pid, out });
+}
+db.run("insert into turn_usage values (?, ?, ?, ?, ?, ?)", [session, "turn_1", "msg_p_" + session, "completed", asked, Date.now()]);
+setInterval(() => {}, 1_000);
+`;
+
 const FAKE_KIMI = `#!${process.execPath}
 import { appendFileSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -251,6 +310,10 @@ beforeAll(async () => {
   chmodSync(join(bin, "mimo"), 0o755);
   writeFileSync(join(bin, "kimi"), FAKE_KIMI);
   chmodSync(join(bin, "kimi"), 0o755);
+  writeFileSync(join(zcodeBin, "fake.js"), FAKE_ZCODE);
+  symlinkSync(process.execPath, join(zcodeBin, "zcode-cli"));
+  writeFileSync(join(bin, "zcode-cli"), `#!/bin/sh\nexec ${JSON.stringify(join(zcodeBin, "zcode-cli"))} ${JSON.stringify(join(zcodeBin, "fake.js"))}\n`);
+  chmodSync(join(bin, "zcode-cli"), 0o755);
   mkdirSync(join(mimoDir, "state"), { recursive: true });
   writeFileSync(join(mimoDir, "state", "model.json"), JSON.stringify({ recent: [{ providerID: "xiaomi", modelID: "mimo-test" }] }));
   const code = /join code: (\S+)/.exec(await ok(owner, ["create", "loop", "--as", "boss"]))![1]!;
@@ -338,6 +401,45 @@ test("the loop holds the seat, starts a fresh Claude Code session for a task, bi
   await until(() => !seatOf(agent)?.hold, "the seat released");
   expect(log).toContain(`${id} is over; its session ended`);
   expect(log).toContain(`released ${me} in loop`);
+});
+
+test("a task assigned behind a session whose work never ends is named on stderr, and dropping the stuck task starts it (#1154)", async () => {
+  const before = seen().length;
+  const loopEnv: Env = { PATH: `${bin}:${process.env.PATH}`, SHELL: "/bin/sh", CLAUDECODE: "", CLAUDE_CODE_SESSION_ID: "outer", CLAUDE_PID: "" };
+  const loop = spawn(agent, ["loop", "--model", "test-model"], loopEnv);
+  let log = "";
+  const decoder = new TextDecoder();
+  const reading = (async () => {
+    for await (const chunk of loop.stderr) log += decoder.decode(chunk);
+  })();
+  const fail = async (e: unknown) => {
+    loop.kill();
+    await loop.exited;
+    await reading;
+    throw new Error(`${String(e)}\n${JSON.stringify(seen().slice(before))}\n${log}`);
+  };
+  const startOf = (id: string) =>
+    seen()
+      .slice(before)
+      .find((s) => s.kind === "start" && (s.argv.at(-1) ?? "").includes(`This session is for ${id} `));
+  await until(() => !!seatOf(agent)?.hold, "the loop's hold").catch(fail);
+  const held = added(await ok(owner, ["--as", "human", "task", "add", "loop hold", "--owner", me, "--ask", want], { CLAUDECODE: "" }));
+  await until(() => !!startOf(held), "the held task's session").catch(fail);
+  const next = added(await ok(owner, ["--as", "human", "task", "add", "loop next", "--owner", me, "--ask", want], { CLAUDECODE: "" }));
+  await until(() => log.includes(`${next} is waiting; the ${held} session is still running`), "the waiting notice").catch(fail);
+  expect(startOf(next)).toBeUndefined();
+
+  await ok(owner, ["--as", "human", "task", "drop", held], { CLAUDECODE: "" });
+  await until(() => !!startOf(next), "the waiting task's session").catch(fail);
+  const started = startOf(next);
+  await until(() => seen().some((s) => s.kind === "term" && started?.kind === "start" && s.pid === started.pid), "the waiting task's session end").catch(fail);
+  expect(await ok(owner, ["--as", "human", "task", "show", next], { CLAUDECODE: "" })).toContain("status: done");
+
+  loop.kill("SIGTERM");
+  await loop.exited;
+  await reading;
+  await until(() => !seatOf(agent)?.hold, "the seat released");
+  expect(log.split(`${next} is waiting`).length).toBe(2);
 });
 
 test("with --harness codex, the loop finds the new thread by the nonce in its first prompt, binds the seat to it, and ends it once the task is done", async () => {
@@ -561,6 +663,73 @@ test.skipIf(!tmuxPastes)("with --harness kimi in tmux 3.7 or newer, the loop typ
     tmux("kill-server");
   }
 });
+
+test.skipIf(!tmuxPastes)(
+  "with --harness zcode in tmux, the loop types the first prompt once ZCode's prompt box shows, finds the session in ZCode's database, binds the seat to its zcode-cli process, and ends it once the task is done (#1157)",
+  async () => {
+    const before = seen().length;
+    const id = added(await ok(owner, ["--as", "human", "task", "add", "zcode work", "--owner", me, "--ask", want], { CLAUDECODE: "" }));
+    const refused = spawn(agent, ["loop", "--harness", "zcode", "--model", "glm-5"], { PATH: `${bin}:${process.env.PATH}`, SHELL: "/bin/sh", TMUX: "", TMUX_PANE: "" });
+    const [refusal, refusedCode] = await Promise.all([new Response(refused.stderr).text(), refused.exited]);
+    expect(refusedCode).not.toBe(0);
+    expect(refusal).toContain("runs only inside tmux");
+
+    const where = scratch("tmux-zcode");
+    const sock = join(where, "s");
+    const logFile = join(where, "loop.log");
+    const env: Env = { ...base(agent), KIWI_ZCODE_DIR: zcodeDir, PATH: `${bin}:${process.env.PATH}`, SHELL: "/bin/sh", CLAUDECODE: "", CLAUDE_PID: "", CLAUDE_CODE_SESSION_ID: "" };
+    const command = (args: string[]) => ["exec", "env", ...Object.entries(env).map(([k, v]) => shWord(`${k}=${v}`)), ...kiwiCmd(args).map(shWord), `2>>${shWord(logFile)}`].join(" ");
+    const tmux = (...args: string[]) => Bun.spawnSync(["tmux", "-S", sock, ...args], { stdout: "pipe", stderr: "pipe" });
+    const log = () => (existsSync(logFile) ? readFileSync(logFile, "utf8") : "");
+    const fail = (e: unknown) => {
+      tmux("kill-server");
+      throw new Error(`${String(e)}\n${JSON.stringify(seen().slice(before))}\n${log()}`);
+    };
+    try {
+      expect(tmux("new-session", "-d", "-s", "model", "-x", "200", "-y", "50", "-c", agent, command(["loop", "--harness", "zcode", "--model", "glm-5"])).exitCode).toBe(0);
+      await until(() => log().includes("drop --model"), "the --model refusal").catch(fail);
+      expect(tmux("new-session", "-d", "-s", "loop", "-x", "200", "-y", "50", "-c", agent, command(["loop", "--harness", "zcode"])).exitCode).toBe(0);
+      await until(
+        () =>
+          seen()
+            .slice(before)
+            .some((s) => s.kind === "typed"),
+        "the typed first prompt",
+      ).catch(fail);
+      const start = seen()
+        .slice(before)
+        .find((s) => s.kind === "start");
+      const typed = seen()
+        .slice(before)
+        .find((s) => s.kind === "typed");
+      if (start?.kind !== "start" || typed?.kind !== "typed") throw new Error("no start");
+      expect(start.harness).toBe("zcode");
+      expect(start.token).toBe(false);
+      expect(start.marker).toBe(false);
+      expect(start.argv).toEqual([]);
+      expect(typed.prompt).toContain(`This session is for ${id} “zcode work”`);
+      expect(typed.prompt).toContain("listen --once`, run_in_background: true, and no timeout");
+      expect(typed.prompt).toMatch(/\(Kiwi loop launch [0-9a-f]{18}\)$/);
+      await until(() => seatOf(agent)?.pid === start.pid, "the seat bound to ZCode's process").catch(fail);
+      expect(seatOf(agent)?.harness).toBe("zcode");
+      expect(seatOf(agent)?.session).toBe(`zcode-pid-${start.pid}`);
+
+      await until(() => seen().some((s) => s.kind === "term" && s.pid === start.pid), "the ZCode session's end").catch(fail);
+      const done = seen().find((s) => s.kind === "done" && s.pid === start.pid);
+      expect(done?.kind === "done" && done.out).toContain(id);
+      expect(await ok(owner, ["--as", "human", "task", "show", id], { CLAUDECODE: "" })).toContain("status: done");
+      await until(() => !pidAlive(typed.stray), "the stray listener stopped").catch(fail);
+
+      const loopPid = Number(new TextDecoder().decode(tmux("display-message", "-p", "-t", "loop", "#{pane_pid}").stdout).trim());
+      process.kill(loopPid, "SIGTERM");
+      await until(() => !seatOf(agent)?.hold, "the seat released").catch(fail);
+      expect(log()).toContain(`${id} is over; its session ended`);
+      expect(existsSync(join(zcodeDir, "config.json"))).toBe(true);
+    } finally {
+      tmux("kill-server");
+    }
+  },
+);
 
 test("on tmux older than 3.7, kiwi loop --harness kimi refuses up front instead of waiting for a paste flag tmux can't report", async () => {
   const shim = scratch("oldtmux");
