@@ -20,6 +20,7 @@ import { harnessChoices } from "~/live/harness-rows"
 import { OpenPending, pendingTitle } from "~/live/pending"
 import { usePrefs } from "~/live/prefs"
 import { useComputer } from "~/live/computer"
+import { useDeviceLists } from "~/live/devices"
 import { useStarts } from "~/live/starts"
 import { useOpened } from "~/live/store"
 import type { App, ChannelTile } from "~/model"
@@ -80,7 +81,9 @@ function usePersonas(own: Personality[]): App["personas"] {
 
 function useDuties(rows: ChannelRow[], person: string | undefined) {
   useAutoApproval(rows)
-  useMemberIcons(rows.filter((r) => r.state === "member").map((r) => r.code))
+  const members = useMemo(() => rows.filter((r) => r.state === "member").map((r) => r.code), [rows])
+  useMemberIcons(members)
+  useDeviceLists(members)
   useEffect(() => {
     if (person) void adoptThisComputer().catch(() => {})
   }, [person])

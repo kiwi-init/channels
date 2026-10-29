@@ -57,6 +57,7 @@ function desktop(person: Identity, user: string, channels: { label: string; code
     channels: () => channels,
     label: () => "studio",
     os: () => "macOS",
+    wipe: () => {},
   });
 }
 

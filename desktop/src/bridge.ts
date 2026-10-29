@@ -3,6 +3,7 @@
 // so web/ can type against it without touching this process.
 
 import type { ComputerSettings } from "@kiwi/core/computer-settings.ts";
+import type { DeviceLink } from "@kiwi/core/devices.ts";
 import type { HarnessRow, HookRow, KnownHarness } from "@kiwi/core/harnesses.ts";
 import type { LaunchChoices } from "@kiwi/core/launch-options.ts";
 import type { WakeSeat } from "@kiwi/core/wake.ts";
@@ -86,6 +87,7 @@ export const CHANNEL_CALLS = [
   "autoApprove",
   "deny",
   "remove",
+  "cutDevices",
   "updateScopes",
   "updatePersona",
   "updateNickname",
@@ -264,6 +266,21 @@ export interface DeviceView {
   thisOne: boolean;
 }
 
+interface DeviceRevokeView {
+  device: string;
+  label: string;
+  as: "desktop" | "phone" | "computer";
+  by: string;
+  at: number;
+  older: boolean;
+}
+
+export interface DeviceNewsView {
+  links: DeviceLink[];
+  revokes: DeviceRevokeView[];
+  removed: { wiped: boolean; by: string } | null;
+}
+
 export type EnrollConfirmView = { ok: true; label: string } | { ok: false; left: number };
 
 export type EnrollStatusView = { stage: "asking" } | { stage: "digits"; digits: string } | { stage: "done"; person: PublicPerson; channels: { label: string; code: string }[] } | { stage: "gone" };
@@ -363,6 +380,7 @@ export interface KiwiBridge {
   devices(): Promise<DeviceView[] | null>;
   forgetDevice(id: string): Promise<void>;
   renewDevice(id: string): Promise<void>;
+  deviceNews(): Promise<DeviceNewsView | null>;
   daemonStatus(): Promise<DaemonStatus>;
   doctor(): Promise<DoctorFinding[] | null>;
   /** Certify this machine's daemon key with the person key and hand the cert back. */

@@ -108,6 +108,8 @@ export type Scenario =
   | "devices"
   | "enroll-desktop"
   | "enroll-desktop-digits"
+  | "devices-forgotten"
+  | "forgot-here"
 
 function initial(scenario: Scenario, look: Partial<Prefs>): State {
   const prefs = { ...DEMO_PREFS, ...look }
@@ -133,6 +135,15 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
       seq: 1000,
     }
   if (scenario === "devices") return { account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
+  if (scenario === "devices-forgotten")
+    return {
+      account: { ...DEMO_ACCOUNT, devices: DEMO_DEVICES.filter((d) => d.id !== "dev-air"), forgotten: [{ label: "Jow's MacBook Air", by: "iPhone", at: Date.now() - 2 * 3_600_000 }] },
+      tiles: DEMO_TILES,
+      channels,
+      prefs,
+      seq: 1000,
+    }
+  if (scenario === "forgot-here") return { account: { ...DEMO_ACCOUNT, forgotHere: { by: "Jow's MacBook Air" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "enroll-desktop") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, enrolling: { stage: "asking" } }
   if (scenario === "enroll-desktop-digits") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, enrolling: { stage: "digits", digits: "482915" } }
   if (scenario === "signed-out") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000 }

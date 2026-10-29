@@ -190,11 +190,21 @@ owner-signed **delegation** lets the `kiwi` daemon admit its own computer's agen
   device key (`device.pk`). `Channel.cutDevices(list)` removes a revoked device's members, and a
   revoked computer's agents, in one rotation. `requests({lists})` checks claims against the newest
   list seen. Device members admitted before T641 carry no device key, so they are removed by hand.
+- On the desktop (T1006):
+  - The app posts its list into every channel it's in whenever the list grows.
+  - An owner's app reads the lists posted in its channels, cuts what they revoke, and checks joins
+    against the newest one.
+  - A desktop with no person key that sees itself revoked deletes its device key, its list, and the
+    channels it joined. Channels it created stay, because their owner key exists nowhere else.
+  - A desktop holding the person key is told and stops signing links, but keeps its keys: the person
+    key is what re-roots the list.
 
 **Expiry.**
 
 - `DeviceCert.until` is 90 days.
 - An app renews each listed device's cert as it nears the end, sealed to the device's inbox.
+  - The desktop renews every device within 14 days of its end, at most once every 6 hours, into the
+    list on the account record; the device reads it there (T1006). The inbox copy is T1007's.
 - A cert past `until` isn't admitted on its own; it waits for Let in.
 - Old `MachineCert`s (v1, no `until`) stay valid until removed. Daemons on kiwi 2026.10.4 can't renew,
   so expiring them would stop every existing computer's agents. Revocation is what cuts them off.

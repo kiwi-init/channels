@@ -6,6 +6,7 @@
 import { TEND_SAFETY_MS, tendOnPush, tendOwned } from "./approval-tend"
 import { loadMember } from "./channel"
 import { linkOf, watches } from "./channel-ops"
+import { tendLists } from "./device-lists"
 import { followedLaunches, sawMembers, sawRequests } from "./launch-follow"
 import { bridge, secrets } from "./secrets"
 
@@ -18,31 +19,39 @@ function notify(title: string, body: string) {
   if (typeof Notification !== "undefined" && Notification.permission === "granted") new Notification(title, { body })
 }
 
-/** One pass over one owned channel: approve own computers' agents, announce the rest. */
-async function tend(code: string, person: string): Promise<void> {
+async function ownLinks() {
+  const b = bridge()
+  if (!b?.deviceNews) return []
+  return (await b.deviceNews().catch(() => null))?.links ?? []
+}
+
+/** One pass over one owned channel: cut forgotten devices, approve own computers' agents, announce the rest. */
+async function tend(code: string, person: string | undefined): Promise<void> {
   const m = loadMember(code)
   if (!m || m.identity.pk !== m.access.ownerPk) return
   const ch = linkOf(m)
+  const title = m.name ?? "your channel"
+  const { lists, cut } = await tendLists(code, await ownLinks(), ch).catch(() => ({ lists: undefined, cut: [] }))
+  const one = cut[0]
+  if (one) notify(title, cut.length === 1 ? `${one.name} is out: the device was forgotten` : `${cut.length} members are out: their devices were forgotten`)
+  if (!person) return
   const [{ PRESETS }, { cleanPersonalities }] = await Promise.all([import("@kiwi/core/presets.ts"), import("@kiwi/core/personalities.ts")])
   const personalities = [...PRESETS, ...cleanPersonalities(secrets().personalities)]
-  if (followedLaunches(code).length) sawRequests(code, await ch.requests({ person }).catch(() => []))
+  if (followedLaunches(code).length) sawRequests(code, await ch.requests({ person, ...(lists ? { lists } : {}) }).catch(() => []))
   const api = {
     autoApprove: async (p: string) => {
-      const members = await ch.autoApprove(p, personalities)
+      const members = await ch.autoApprove(p, personalities, null, lists)
       sawMembers(code, members)
       return members
     },
-    requests: (o: { person: string }) => ch.requests(o),
+    requests: (o: { person: string }) => ch.requests({ ...o, ...(lists ? { lists } : {}) }),
   }
-  await tendOwned(person, m.name ?? "your channel", api, notify, told)
+  await tendOwned(person, title, api, notify, told)
 }
 
 /** Watch every owned channel in `rows` while the app runs (the tray keeps it running when closed). */
 export function startAutoApproval(codes: string[]): () => void {
-  const tending = tendOnPush(codes, watches().watch, async (code) => {
-    const person = secrets().person?.pk
-    if (person) await tend(code, person)
-  })
+  const tending = tendOnPush(codes, watches().watch, (code) => tend(code, secrets().person?.pk))
   const timer = window.setInterval(() => {
     for (const code of codes) tending.kick(code)
   }, TEND_SAFETY_MS)

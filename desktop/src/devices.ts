@@ -1,10 +1,11 @@
 import { accountClient, type AccountClient } from "@kiwi/core/account.ts";
-import { certUntil, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceLinkBody, type DeviceList } from "@kiwi/core/devices.ts";
+import { certUntil, dueForRenewal, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceLinkBody, type DeviceList } from "@kiwi/core/devices.ts";
 import { askToEnroll, enrollDigits, enrollMailbox, enrollNonce, readEnrollGrant, revealMatches, type EnrollGrant, type Enrollment } from "@kiwi/core/enroll.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
-import type { DeviceView, EnrollAskView, EnrollConfirmView, EnrollStatusView, PublicPerson } from "./bridge.ts";
+import type { DeviceNewsView, DeviceView, EnrollAskView, EnrollConfirmView, EnrollStatusView, PublicPerson } from "./bridge.ts";
 
 const TRIES = 3;
+const RENEW_EVERY_MS = 6 * 3_600_000;
 
 export interface DeviceHostDeps {
   relayUrl: () => string;
@@ -18,6 +19,7 @@ export interface DeviceHostDeps {
   channels: () => { label: string; code: string }[];
   label: () => string;
   os: () => string;
+  wipe: () => void;
   fetchImpl?: typeof fetch;
   now?: () => number;
 }
@@ -30,6 +32,7 @@ export interface DeviceHost {
   list(): Promise<DeviceView[] | null>;
   forget(device: string): Promise<void>;
   renew(device: string): Promise<void>;
+  news(): Promise<DeviceNewsView | null>;
 }
 
 async function readList(links: unknown[]): Promise<DeviceList> {
@@ -50,8 +53,29 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
   const now = deps.now ?? Date.now;
   const answered = new Map<string, { nonce: string; tries: number }>();
   let synced: { relay: string; client: AccountClient; device: Identity } | null = null;
+  let removed: DeviceNewsView["removed"] = null;
+  let renewedAt = -Infinity;
+
+  const cutOff = (by: string) => {
+    synced = null;
+    removed = deps.person() ? { wiped: false, by } : { wiped: true, by };
+    if (removed.wiped) deps.wipe();
+  };
+
+  const signerLabel = (list: DeviceList, pk: string): string =>
+    pk === list.person ? "your person key" : (list.devices.find((d) => d.device === pk)?.label ?? list.revokes.find((r) => r.device === pk)?.label ?? "a device");
+
+  const revokedHere = async (links: unknown[], device: Identity): Promise<boolean> => {
+    const read = await readDeviceList(links);
+    const who = deps.who();
+    if (!read.ok || !who || read.list.person !== who.pk || !read.list.revoked.includes(device.pk)) return false;
+    const by = read.list.revokes.find((r) => r.device === device.pk)?.by ?? "";
+    cutOff(signerLabel(read.list, by));
+    return true;
+  };
 
   const sync = async (): Promise<{ client: AccountClient; device: Identity } | null> => {
+    if (removed) return null;
     const relay = deps.relayUrl();
     if (synced?.relay === relay) return synced;
     const who = deps.who();
@@ -60,6 +84,7 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
     const device = await myDevice(deps, who.name);
     const client = accountClient(relay, async () => (await deps.token()) ?? token, device, deps.fetchImpl);
     const kept = await client.links();
+    if (await revokedHere(kept, device)) return null;
     let ours = deps.links();
     if (!ours.length) {
       const person = deps.person();
@@ -78,6 +103,21 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
     deps.saveLinks(ours);
     synced = { relay, client, device };
     return synced;
+  };
+
+  const refresh = async (s: { client: AccountClient; device: Identity }): Promise<boolean> => {
+    const kept = (await s.client.links()) as DeviceLink[];
+    if (await revokedHere(kept, s.device)) return false;
+    if (kept.length > deps.links().length) deps.saveLinks(kept);
+    return true;
+  };
+
+  const renewDue = async (s: { client: AccountClient; device: Identity }) => {
+    if (now() - renewedAt < RENEW_EVERY_MS) return;
+    renewedAt = now();
+    const list = await readList(deps.links());
+    if (!list.devices.some((d) => d.device === s.device.pk && d.approve)) return;
+    for (const d of dueForRenewal(list, now())) await extend(s.client, s.device, { op: "renew", device: d.device, until: certUntil(now()) });
   };
 
   const live = async (id: string): Promise<{ client: AccountClient; device: Identity; e: Enrollment }> => {
@@ -114,7 +154,12 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
         synced = null;
         throw err;
       }
-      if (!s) return null;
+      if (!s || !(await refresh(s))) return null;
+      try {
+        await renewDue(s);
+      } catch {
+        // Another app renewed first, or the relay is away: the list stays as it was, and the next round tries again.
+      }
       const e = await s.client.enrollment();
       if (!e) {
         answered.clear();
@@ -179,9 +224,7 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
 
     async list() {
       const s = await sync();
-      if (!s) return null;
-      const kept = (await s.client.links()) as DeviceLink[];
-      if (kept.length > deps.links().length) deps.saveLinks(kept);
+      if (!s || !(await refresh(s))) return null;
       const list = await readList(deps.links());
       return list.devices.map((d) => ({ id: d.device, label: d.label, os: d.os, as: d.as, approve: d.approve, until: d.until, thisOne: d.device === s.device.pk }));
     },
@@ -195,6 +238,15 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
     async renew(target) {
       const { client, device } = await signedIn();
       await extend(client, device, { op: "renew", device: target, until: certUntil(now()) });
+    },
+
+    async news() {
+      if (removed) return { links: [], revokes: [], removed };
+      const links = deps.links();
+      if (!links.length) return null;
+      const list = await readList(links);
+      const revokes = list.revokes.map((r) => ({ device: r.device, label: r.label, as: r.as, by: signerLabel(list, r.by), at: r.at, older: r.older }));
+      return { links, revokes, removed: null };
     },
   };
 }
