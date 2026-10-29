@@ -1,6 +1,6 @@
 import { b64url } from "./crypto.ts";
 import { canonical, sign, signText, verify, verifyText, type Identity } from "./identity.ts";
-import type { RecoveryLink } from "./recovery.ts";
+import { readRecovery, type RecoveryLink } from "./recovery.ts";
 
 const KEY_RE = /^[A-Za-z0-9_-]{43}$/;
 const LABEL_MAX = 64;
@@ -19,7 +19,7 @@ export type DeviceLinkBody =
   | { op: "renew"; device: string; until: number }
   | { op: "revoke"; device: string };
 
-export interface RerootFields {
+interface RerootFields {
   op: "reroot";
   root: string;
   keep: string[];
@@ -27,7 +27,7 @@ export interface RerootFields {
   rsig: string;
 }
 
-export interface LinkHead {
+interface LinkHead {
   kind: "kiwi-device-link";
   v: 1;
   person: string;
@@ -123,6 +123,26 @@ export function rootLink(person: Identity, first: { pk: string; xpk: string; lab
   });
 }
 
+type RerootBody = LinkHead & Omit<RerootFields, "rsig">;
+
+const rerootStatement = (body: RerootBody): string => `kiwi-reroot\n${canonical(body)}`;
+
+export async function rerootLink(list: DeviceList, recovery: Identity, chain: RecoveryLink[], root: Identity, keep: readonly string[], at = Date.now()): Promise<DeviceLink> {
+  const body: RerootBody = {
+    kind: "kiwi-device-link",
+    v: 1,
+    person: list.person,
+    seq: list.version + 1,
+    prev: list.head,
+    at,
+    op: "reroot",
+    root: root.pk,
+    keep: [...new Set(keep)].sort(),
+    recovery: chain,
+  };
+  return sign(root, { ...body, rsig: await signText(recovery, rerootStatement(body)) });
+}
+
 export function nextLink(list: DeviceList, signer: Identity, body: DeviceLinkBody, at = Date.now()): Promise<DeviceLink> {
   const head: LinkHead = { kind: "kiwi-device-link", v: 1, person: list.person, seq: list.version + 1, prev: list.head, at };
   const tidy: DeviceLinkBody = body.op === "add" ? { ...body, label: clean(body.label, LABEL_MAX) || "a device", os: clean(body.os, OS_MAX) } : body;
@@ -182,7 +202,7 @@ export async function readDeviceList(links: readonly unknown[]): Promise<ReadLis
       if (link.seq !== version + 1 || link.prev !== head) return { ok: false, why: `link ${link.seq} doesn't follow link ${version}` };
       if (link.op === "reroot") {
         const so: DeviceList = { person, root, reroots: [...reroots], version, head, devices: [...devices.values()], revoked: [...revoked], revokes: [...revokes] };
-        const got = await (await import("./reroot.ts")).rerooted(link, so);
+        const got = await rerooted(link, so);
         if (typeof got === "string") return { ok: false, why: `link ${link.seq}: ${got}` };
         for (const d of devices.values())
           if (!link.keep.includes(d.device)) revokes.push({ device: d.device, label: d.label, as: d.as, approve: d.approve, by: link.pk, seq: link.seq, at: link.at, older: false });
@@ -204,7 +224,18 @@ export async function readDeviceList(links: readonly unknown[]): Promise<ReadLis
   return { ok: true, list: { person, root, reroots, version, head, devices: [...devices.values()], revoked: [...revoked], revokes } };
 }
 
-export const wasRoot = (person: string, reroots: readonly Reroot[], pk: string): boolean => pk === person || reroots.some((r) => r.root === pk);
+const wasRoot = (person: string, reroots: readonly Reroot[], pk: string): boolean => pk === person || reroots.some((r) => r.root === pk);
+
+async function rerooted(link: LinkHead & RerootFields & { pk: string; sig: string }, so: DeviceList): Promise<{ n: number; head: string } | string> {
+  if (wasRoot(so.person, so.reroots, link.root) || so.devices.some((d) => d.device === link.root) || so.revoked.includes(link.root)) return "a re-root to a key this person already used";
+  if (link.keep.some((k) => !so.devices.some((d) => d.device === k))) return "a re-root keeping a device that isn't listed";
+  const read = await readRecovery(link.recovery, so, link.at);
+  if (!read.ok) return `a re-root whose recovery chain doesn't hold up: ${read.why}`;
+  if (read.recovery.n < (so.reroots.at(-1)?.n ?? 0)) return "a re-root signed against an older recovery chain than the last one";
+  const body: RerootBody = { kind: link.kind, v: link.v, person: link.person, seq: link.seq, prev: link.prev, at: link.at, op: link.op, root: link.root, keep: link.keep, recovery: link.recovery };
+  if (!(await verifyText(read.recovery.rpk, link.rsig, rerootStatement(body)))) return "a re-root not signed by the recovery key";
+  return { n: read.recovery.n, head: read.recovery.head };
+}
 
 function refusal(
   link: LinkHead & DeviceLinkBody & { pk: string; sig: string },

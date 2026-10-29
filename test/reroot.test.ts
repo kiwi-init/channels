@@ -1,6 +1,5 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { certUntil, checkDevice, claimDevice, newestLists, nextLink, readDeviceList, rootLink, speaksForPerson, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
-import { rerootLink } from "@kiwi/core/reroot.ts";
+import { certUntil, checkDevice, claimDevice, newestLists, nextLink, readDeviceList, rerootLink, rootLink, speaksForPerson, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import { generateIdentity, sign, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { makeAsk, readAsk } from "@kiwi/core/machine-ask.ts";
 import { checkVault, openVault, readRecovery, recoveryKey, recoveryLink, sealPerson, sealVault, type Recovery, type RecoveryLink } from "@kiwi/core/recovery.ts";
