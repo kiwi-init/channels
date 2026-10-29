@@ -199,6 +199,62 @@ describe("the daemon admits its own computer's agents with the app closed (T677)
   });
 });
 
+describe("the owner's app keeps its computers' delegations (T684)", () => {
+  test("it delegates to each computer, renews one under 7 days left, and leaves a fresh one alone", async () => {
+    const s = await setupChannel(relay);
+    const pc = await pairComputer(s.person, "mac-mini");
+    const mine = [{ pk: pc.machine.pk, xpk: pc.machine.xpk! }];
+    expect(await s.ownerCh.tendDelegations(mine, s.person.pk)).toEqual({ issued: [pc.machine.pk], dropped: [], adopted: [] });
+    expect(await s.ownerCh.tendDelegations(mine, s.person.pk)).toEqual({ issued: [], dropped: [], adopted: [] });
+    const old = await makeDelegation(s.owner, s.roomId, mine[0]!, s.person.pk, Date.now() - 8 * DAY_MS);
+    const keys = await wrapAllFor(s.owner, s.roomId, s.ownerCh.access.keys, pc.machine.pk, pc.machine.xpk!);
+    expect((await call(s, s.owner, "PUT", "/delegations", { d: old, keys })).status).toBe(200);
+    expect((await s.ownerCh.delegations())[0]?.until).toBe(old.until);
+    expect((await s.ownerCh.tendDelegations(mine, s.person.pk)).issued).toEqual([pc.machine.pk]);
+    expect((await s.ownerCh.delegations())[0]!.until).toBeGreaterThan(Date.now() + 13 * DAY_MS);
+    await s.ownerCh.close();
+  });
+
+  test("a computer no longer listed loses its delegation and every later key", async () => {
+    const { s, pc } = await delegated();
+    expect(await s.ownerCh.tendDelegations([], s.person.pk)).toEqual({ issued: [], dropped: [pc.machine.pk], adopted: [] });
+    expect(await s.ownerCh.delegations()).toEqual([]);
+    expect(s.ownerCh.access.epoch).toBe(1);
+    expect((await call(s, pc.machine, "GET", "/delegation")).status).toBe(404);
+    expect(await s.ownerCh.dropDelegates([pc.machine.pk])).toEqual([]);
+    expect(s.ownerCh.access.epoch).toBe(1);
+    await s.ownerCh.close();
+  });
+
+  test("forgetting a computer drops its delegation and rotates, and only that one", async () => {
+    const { s, pc } = await delegated();
+    const other = await pairComputer(s.person, "laptop");
+    await s.ownerCh.delegate({ pk: other.machine.pk, xpk: other.machine.xpk! }, s.person.pk);
+    expect(await s.ownerCh.dropDelegates([pc.machine.pk])).toEqual([pc.machine.pk]);
+    expect((await s.ownerCh.delegations()).map((d) => d.delegate)).toEqual([other.machine.pk]);
+    expect(s.ownerCh.access.epoch).toBe(1);
+    const { admitted } = await letIn(s, other, "still-works");
+    expect(admitted.map((m) => m.name)).toEqual(["still-works"]);
+    await s.ownerCh.close();
+  });
+
+  test("an agent its delegate let in is re-signed by the owner, and keeps working", async () => {
+    const { s, pc } = await delegated();
+    const { id, ch } = await letIn(s, pc, "helper");
+    const mine = [{ pk: pc.machine.pk, xpk: pc.machine.xpk! }];
+    expect(await s.ownerCh.tendDelegations(mine, s.person.pk)).toEqual({ issued: [], dropped: [], adopted: [id.pk] });
+    const seen = (await ch.members()).find((m) => m.pk === id.pk);
+    expect(seen).toMatchObject({ name: "helper", kind: "agent", from: { pk: pc.machine.pk }, sponsor: { user: s.person.pk } });
+    expect(seen?.signedBy).toBeUndefined();
+    expect(seen?.unverified).toBeUndefined();
+    expect((await s.ownerCh.tendDelegations(mine, s.person.pk)).adopted).toEqual([]);
+    await ch.send("still here");
+    const { messages } = await s.ownerCh.history(0);
+    expect(messages.some((m) => m.from === "helper" && m.body === "still here")).toBe(true);
+    await s.ownerCh.close();
+  });
+});
+
 describe("revoking and expiry stop a delegate at once", () => {
   test("after the owner drops it, the relay refuses the delegate and nobody else is admitted", async () => {
     const { s, pc } = await delegated();

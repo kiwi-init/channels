@@ -53,7 +53,8 @@ export const setupCommands: Record<string, Command> = {
         try: () => loginComputer({ relay: relayUrl(), ...(typeof opt.user === "string" ? { user: opt.user } : {}) }),
         catch: (err) => (err instanceof PairError ? new Quit({ message: err.message, code: err.code }) : err),
       });
-      if (!loadPairedMachine()?.cert) return;
+      const paired = loadPairedMachine();
+      if (!paired?.cert && !paired?.device?.links.length) return;
       const running = yield* Effect.promise(() =>
         ensureDaemon().then(
           () => true,

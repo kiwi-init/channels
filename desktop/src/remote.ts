@@ -10,7 +10,8 @@ import type { FromMachine, LaunchAgentRequest } from "./bridge.ts";
 import { launchedView, MACHINE_PK } from "./launch-view.ts";
 
 export interface Asker {
-  person: Identity;
+  signer: Identity;
+  person: string;
   relay: string;
   fetch?: typeof fetch;
 }
@@ -41,10 +42,10 @@ export interface PairedComputer {
 export async function askMachine(asker: Asker, machine: { pk: string; xpk: string }, verb: MachineVerb, args: Record<string, unknown>, opts: { timeoutMs: number; id?: string }): Promise<Asked> {
   const fetchImpl = asker.fetch ?? fetch;
   const reply = newSecret();
-  const { box, id } = await makeAsk(asker.person, machine, { verb, args, reply, ...(opts.id ? { id: opts.id } : {}) });
+  const { box, id } = await makeAsk(asker.signer, machine, { verb, args, reply, ...(opts.id ? { id: opts.id } : {}) });
   const path = `/v1/machine/${machine.pk}/inbox`;
   const body = JSON.stringify({ box });
-  const auth = await signRequest(asker.person, `machine:${machine.pk}`, "POST", path, body);
+  const auth = await signRequest(asker.signer, `machine:${machine.pk}`, "POST", path, body);
   let sent: Response;
   try {
     sent = await fetchImpl(new URL(path, asker.relay), { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${auth}` }, body });
@@ -74,7 +75,7 @@ export async function askMachine(asker: Asker, machine: { pk: string; xpk: strin
 
 export async function machineOnline(asker: Asker, machinePk: string): Promise<boolean | null> {
   const path = `/v1/machine/${machinePk}`;
-  const auth = await signRequest(asker.person, `machine:${machinePk}`, "GET", path);
+  const auth = await signRequest(asker.signer, `machine:${machinePk}`, "GET", path);
   try {
     const res = await (asker.fetch ?? fetch)(new URL(path, asker.relay), { headers: { authorization: `Bearer ${auth}` } });
     if (!res.ok) return null;
@@ -141,7 +142,7 @@ function readComputer(x: unknown): PairedComputer | null {
 
 export async function unpairAt(asker: Asker, machinePk: string): Promise<boolean> {
   const path = `/v1/machine/${machinePk}`;
-  const auth = await signRequest(asker.person, `machine:${machinePk}`, "DELETE", path);
+  const auth = await signRequest(asker.signer, `machine:${machinePk}`, "DELETE", path);
   try {
     const res = await (asker.fetch ?? fetch)(new URL(path, asker.relay), { method: "DELETE", headers: { authorization: `Bearer ${auth}` } });
     return res.ok || res.status === 404;
@@ -152,8 +153,8 @@ export async function unpairAt(asker: Asker, machinePk: string): Promise<boolean
 }
 
 export async function personMachines(asker: Asker): Promise<FromMachine<PairedComputer[]>> {
-  const path = `/v1/person/${asker.person.pk}/machines`;
-  const auth = await signRequest(asker.person, `person:${asker.person.pk}`, "GET", path);
+  const path = `/v1/person/${asker.person}/machines`;
+  const auth = await signRequest(asker.signer, `person:${asker.person}`, "GET", path);
   let res: Response;
   try {
     res = await (asker.fetch ?? fetch)(new URL(path, asker.relay), { headers: { authorization: `Bearer ${auth}` } });

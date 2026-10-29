@@ -8,6 +8,7 @@ import { readLaunched, readOpened, type Launched, type Opened } from "@kiwi/core
 import type { LaunchRequest } from "../launch/wire.ts";
 import type { LoopStart } from "../loop/start.ts";
 import { home } from "../config.ts";
+import type { DeviceLink } from "@kiwi/core/devices.ts";
 import type { MachineCert } from "@kiwi/core/person.ts";
 import type { Message, Presence } from "@kiwi/core/protocol.ts";
 import { VERSION } from "../version.ts";
@@ -233,10 +234,10 @@ export async function daemonHello(sock = daemonSock()): Promise<DaemonHello> {
   return hello;
 }
 
-export async function adoptDaemon(cert: MachineCert, person: PairedPerson, sock = daemonSock()): Promise<void> {
+export async function adoptDaemon(proof: { cert: MachineCert } | { links: DeviceLink[] }, person: PairedPerson, sock = daemonSock()): Promise<void> {
   const c = await openConn(sock);
   try {
-    await c.call("adopt", { cert, person });
+    await c.call("adopt", { ...proof, person });
   } finally {
     c.close();
   }

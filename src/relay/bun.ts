@@ -26,6 +26,7 @@ import {
   onMachineHttp,
   onPersonHttp,
   personMachine,
+  takeNewerList,
   type MachineBinding,
   type MachineBox,
   type MachineStore,
@@ -138,6 +139,7 @@ export function startRelay(
   people.run("CREATE TABLE IF NOT EXISTS machine_floors (mpk TEXT PRIMARY KEY, cert_at INTEGER NOT NULL)");
   people.run("CREATE TABLE IF NOT EXISTS machine_boxes (mpk TEXT NOT NULL, id TEXT NOT NULL, box TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (mpk, id))");
   people.run("CREATE TABLE IF NOT EXISTS revoked_keys (pk TEXT PRIMARY KEY)");
+  people.run("CREATE TABLE IF NOT EXISTS machine_links (mpk TEXT PRIMARY KEY, links TEXT NOT NULL)");
   people.run("CREATE TABLE IF NOT EXISTS account_links (user TEXT NOT NULL, seq INTEGER NOT NULL, link TEXT NOT NULL, PRIMARY KEY (user, seq))");
   people.run("CREATE TABLE IF NOT EXISTS account_recovery (user TEXT NOT NULL, n INTEGER NOT NULL, link TEXT NOT NULL, PRIMARY KEY (user, n))");
   people.run("CREATE TABLE IF NOT EXISTS account_vaults (user TEXT PRIMARY KEY, version INTEGER NOT NULL, rec TEXT NOT NULL)");
@@ -159,6 +161,15 @@ export function startRelay(
     unbind: async (mpk) => {
       people.query("DELETE FROM machines WHERE mpk = ?").run(mpk);
       people.query("DELETE FROM machine_boxes WHERE mpk = ?").run(mpk);
+      people.query("DELETE FROM machine_links WHERE mpk = ?").run(mpk);
+    },
+    links: async (mpk) => {
+      const row = people.query("SELECT links FROM machine_links WHERE mpk = ?").get(mpk) as { links: string } | null;
+      return row ? (JSON.parse(row.links) as unknown[]) : null;
+    },
+    keepLinks: async (mpk, links) => {
+      if (links) people.query("INSERT OR REPLACE INTO machine_links (mpk, links) VALUES (?, ?)").run(mpk, JSON.stringify(links));
+      else people.query("DELETE FROM machine_links WHERE mpk = ?").run(mpk);
     },
     pending: async (mpk, since) => (people.query("SELECT COUNT(*) AS n FROM machine_boxes WHERE mpk = ? AND at >= ?").get(mpk, since) as { n: number }).n,
     boxes: async (mpk, since) => people.query("SELECT id, box, at FROM machine_boxes WHERE mpk = ? AND at >= ? ORDER BY at").all(mpk, since) as MachineBox[],
@@ -176,6 +187,8 @@ export function startRelay(
       (people.query("SELECT mpk, person, mxpk, label, cert_at, seen_at FROM machines WHERE person = ?").all(person) as (MachineRow & { mpk: string })[]).map((r) =>
         personMachine(r.mpk, bindingOf(r), machineSockets.get(r.mpk)?.since ?? null),
       ),
+    lists: async (person) =>
+      (people.query("SELECT l.links FROM machine_links l JOIN machines m ON m.mpk = l.mpk WHERE m.person = ?").all(person) as { links: string }[]).map((r) => JSON.parse(r.links) as unknown[]),
   };
   const enrollmentOf = (user: string): Enrollment | null => {
     const row = people.query("SELECT rec FROM account_asks WHERE user = ?").get(user) as { rec: string } | null;
@@ -202,6 +215,9 @@ export function startRelay(
         await machines.unbind(pk);
         machines.close(pk);
       }
+    },
+    tellComputers: async (keys, links) => {
+      for (const pk of keys) await takeNewerList(machines, pk, links, Date.now());
     },
     recovery: async (user) => (people.query("SELECT link FROM account_recovery WHERE user = ? ORDER BY n").all(user) as { link: string }[]).map((r) => JSON.parse(r.link) as unknown),
     extendRecovery: async (user, from, links) =>
@@ -240,6 +256,7 @@ export function startRelay(
       if (machineSockets.has(r.mpk)) continue;
       people.query("DELETE FROM machines WHERE mpk = ?").run(r.mpk);
       people.query("DELETE FROM machine_boxes WHERE mpk = ?").run(r.mpk);
+      people.query("DELETE FROM machine_links WHERE mpk = ?").run(r.mpk);
     }
     for (const r of people.query("SELECT id, rec FROM mailboxes").all() as { id: string; rec: string }[]) {
       try {

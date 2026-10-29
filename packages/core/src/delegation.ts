@@ -4,6 +4,7 @@ import type { Member } from "./membership.ts";
 const KEY_RE = /^[A-Za-z0-9_-]{43}$/;
 const DAY_MS = 86_400_000;
 export const DELEGATION_DAYS = 14;
+const RENEW_DAYS = 7;
 const SKEW_MS = 600_000;
 const FIELDS = "at,delegate,dxpk,kind,person,pk,room,scope,sig,until,v";
 const RECORD_FIELDS = new Set(["room", "member", "mxpk", "name", "kind", "display", "sponsor", "from", "scopes", "at", "pk", "sig"]);
@@ -59,6 +60,8 @@ export async function readDelegation(x: unknown, room: string, ownerPk: string):
 export function delegationLive(d: Delegation, now = Date.now()): boolean {
   return d.at - SKEW_MS <= now && now < d.until;
 }
+
+export const delegationDue = (d: Delegation, now = Date.now()): boolean => d.until - now < RENEW_DAYS * DAY_MS;
 
 export function delegatedMember(read: { member: Member; signer: string; fields: readonly string[] }, d: Delegation): boolean {
   const m = read.member;

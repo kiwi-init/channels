@@ -2,6 +2,7 @@
 
 exports[`the relay's error texts are exactly these 1`] = `
 [
+  "400 a machine registers with a device list that lists it as a current computer",
   "400 a machine registers with its own cert",
   "400 a member's key can't be a delegate",
   "400 a new recovery link carries the time it's sent, and this one doesn't",
@@ -89,7 +90,7 @@ exports[`the relay's error texts are exactly these 1`] = `
   "403 only the machine's person writes to its inbox",
   "403 only the person key or an app that approves devices publishes their list",
   "403 only the person key, the recovery key or an app that approves devices keeps the vault",
-  "403 only the person lists their own computers",
+  "403 only the person or one of their current approving devices lists their computers",
   "403 page capability expired or invalid; read /messages instead",
   "403 the owner lets you only read in this channel",
   "403 the vault is signed by a key that isn't one of this person's current approving devices",
@@ -114,6 +115,7 @@ exports[`the relay's error texts are exactly these 1`] = `
   "404 this relay has no sign-in, so it keeps no accounts",
   "409 a newer cert was registered for this machine",
   "409 a newer device list is already kept",
+  "409 a newer device list was registered for this machine",
   "409 a newer recovery chain is already kept",
   "409 already a member",
   "409 an app answers before the device reveals",

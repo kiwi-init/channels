@@ -7,6 +7,7 @@ import type { Message } from "@kiwi/core/protocol.ts";
 import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity, saveAccess, type Config } from "../config.ts";
 import { readCursor } from "../config/cursors.ts";
 import { saveMachine, takeDeviceList } from "../machine.ts";
+import { listedComputer, readDeviceList, type DeviceLink } from "@kiwi/core/devices.ts";
 import { readMachineCert } from "@kiwi/core/person.ts";
 import { VERSION } from "../version.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
@@ -644,23 +645,36 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
               mxpk: m?.identity.xpk ?? null,
               label: m?.label ?? null,
               relay: m?.relay ?? null,
-              person: m?.person ?? null,
-              certified: !!m?.cert,
+              person: m?.person ?? m?.device?.person ?? null,
+              certified: !!m?.cert || !!m?.device?.links.length,
             }),
           );
           break;
         }
         case "adopt": {
-          const cert = await readMachineCert(params.cert);
-          if (!cert) throw new Error("that cert doesn't check out (wrong signature or shape)");
           const person = params.person as Partial<PairedPerson> | null;
           if (!person || typeof person.pk !== "string" || typeof person.xpk !== "string" || typeof person.name !== "string") {
-            throw new Error("adopt needs {cert, person: {pk, xpk, name}}");
+            throw new Error("adopt needs {cert or links, person: {pk, xpk, name}}");
           }
-          if (person.pk !== cert.pk) throw new Error("that cert is by another person than the one named");
+          const named = { pk: person.pk, xpk: person.xpk, name: person.name };
           const m = await ensureMachine(process.env.KIWI_RELAY ?? DEFAULT_RELAY);
-          if (cert.machine !== m.identity.pk) throw new Error("that cert is for another computer");
-          const paired: PairedMachine = { ...m, cert, person: { pk: person.pk, xpk: person.xpk, name: person.name } };
+          let paired: PairedMachine;
+          if (Array.isArray(params.links)) {
+            const read = await readDeviceList(params.links);
+            if (!read.ok) throw new Error(`that device list doesn't check out: ${read.why}`);
+            if (read.list.person !== named.pk) throw new Error("that device list is another person's than the one named");
+            if (!listedComputer(read.list, m.identity.pk)) throw new Error("that device list doesn't list this computer");
+            const kept = m.device?.person.pk === named.pk ? await readDeviceList(m.device.links) : null;
+            if (kept?.ok && kept.list.version > read.list.version) throw new Error("this computer already holds a newer device list");
+            const device = { person: named, links: params.links as DeviceLink[] };
+            paired = m.cert?.pk === named.pk ? { ...m, device } : { identity: m.identity, label: m.label, relay: m.relay, device };
+          } else {
+            const cert = await readMachineCert(params.cert);
+            if (!cert) throw new Error("that cert doesn't check out (wrong signature or shape)");
+            if (named.pk !== cert.pk) throw new Error("that cert is by another person than the one named");
+            if (cert.machine !== m.identity.pk) throw new Error("that cert is for another computer");
+            paired = { ...m, cert, person: named };
+          }
           saveMachine(paired);
           sendLine(conn, JSON.stringify({ id, ok: true }));
           break;
@@ -862,7 +876,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   let statusWatch: { stop(): void } | null = null;
   const unpairHere = async (): Promise<void> => {
     const m = loadPairedMachine();
-    if (m?.cert) {
+    if (m?.cert || m?.device) {
       await forgetAtRelay(m);
       saveMachine({ identity: m.identity, label: m.label, relay: m.relay });
     }
