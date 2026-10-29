@@ -73,7 +73,7 @@ async function seeded(entropy: Uint8Array<ArrayBuffer>, info: string, alg: keyof
   const prefix = Uint8Array.from(PKCS8_PREFIX[alg].match(/../g)!.map((h) => parseInt(h, 16)));
   const der = new Uint8Array([...prefix, ...seed]);
   const key = await crypto.subtle.importKey("pkcs8", der, { name: alg }, true, alg === "Ed25519" ? ["sign"] : ["deriveBits"]);
-  const { x } = await crypto.subtle.exportKey("jwk", key);
+  const { x } = (await crypto.subtle.exportKey("jwk", key)) as { x?: string };
   if (!x) throw new Error("a recovery key without a public half");
   return { pk: x, sk: b64url(der) };
 }

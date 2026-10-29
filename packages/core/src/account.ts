@@ -2,6 +2,7 @@ import { signRequest } from "./auth.ts";
 import type { DeviceLink } from "./devices.ts";
 import { accountScope, type EnrollAnswer, type EnrollAsk, type Enrollment } from "./enroll.ts";
 import type { Identity } from "./identity.ts";
+import type { RecoveryLink, Vault } from "./recovery.ts";
 
 class AccountError extends Error {
   constructor(
@@ -21,6 +22,8 @@ export interface AccountClient {
   drop(id: string): Promise<void>;
   ask(ask: EnrollAsk): Promise<string>;
   reveal(id: string, nonce: string): Promise<void>;
+  vault(): Promise<{ recovery: unknown[]; vault: unknown }>;
+  keepVault(update: { recovery?: RecoveryLink[]; vault?: Vault }): Promise<void>;
 }
 
 export function accountClient(relay: string, token: () => Promise<string>, device: Identity, fetchImpl: typeof fetch = fetch): AccountClient {
@@ -58,5 +61,7 @@ export function accountClient(relay: string, token: () => Promise<string>, devic
     drop: async (id) => void (await call("DELETE", `/v1/account/ask/${id}`)),
     ask: async (ask) => ((await (await call("POST", "/v1/account/ask", { ask })).json()) as { id: string }).id,
     reveal: async (id, nonce) => void (await call("PUT", `/v1/account/ask/${id}/reveal`, { nonce })),
+    vault: async () => (await (await call("GET", "/v1/account/vault", undefined, { signed: false })).json()) as { recovery: unknown[]; vault: unknown },
+    keepVault: async (update) => void (await call("PUT", "/v1/account/vault", update)),
   };
 }
