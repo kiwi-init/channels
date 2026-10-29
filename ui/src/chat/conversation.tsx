@@ -2,6 +2,8 @@ import { Fragment, startTransition, useCallback, useEffect, useLayoutEffect, use
 
 import { HistoryFold, ProposalCard } from "~/chat/compact"
 import { Composer } from "~/chat/composer"
+import { EventRun } from "~/chat/events"
+import { continuesRun, eventRun } from "~/chat/fold-events"
 import { foldText, leftOutRun, runFirst, withLeftOut } from "~/chat/left-out"
 import { MessageRow } from "~/chat/message"
 import { linked } from "~/chat/linked"
@@ -212,6 +214,8 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
     return first && first !== list[0] ? { seq: first.seq, count: fresh.length } : null
   })
   const mark = unread?.seq ?? null
+  const afterProposal = proposalAt === undefined ? undefined : list[list.findIndex((m) => m.seq === proposalAt) + 1]?.seq
+  const breaks = new Set([mark, foldAt, proposalAt, afterProposal].filter((seq): seq is number => seq !== null && seq !== undefined))
 
   const [span, setSpan] = useState<Span>(() =>
     mark === null
@@ -400,6 +404,8 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
           ) : (
             list.slice(start, end).map((m, k) => {
               const i = start + k
+              if (continuesRun(list, i, start, breaks)) return null
+              const events = eventRun(list, i, end, breaks)
               const run = leftOutRun(list, i)
               const open = !m.leftOut || shownRuns.has(runFirst(list, i))
               return (
@@ -418,6 +424,8 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
                   {run && <Fold run={run} open={open} onToggle={() => toggleRun(m.seq)} />}
                   {m.seq === proposalAt && proposal ? (
                     <ProposalCard channel={channel} proposal={proposal} names={names} tasks={tasks} onQuote={onQuote} />
+                  ) : events ? (
+                    <EventRun channel={channel} run={events} here={where.kind === "task" ? where.task : null} jump={jump?.m.seq ?? null} />
                   ) : (
                     open && (
                       <MessageRow

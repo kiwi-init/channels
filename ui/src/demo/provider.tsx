@@ -77,6 +77,33 @@ function withLeftOut(c: Channel): Channel {
   }
 }
 
+function withEvents(c: Channel): Channel {
+  const at = Date.now() - 6 * 60_000
+  const seq = Math.max(...c.messages.map((m) => m.seq)) + 1
+  const general = { kind: "room", room: "general" } as const
+  const repo = "kiwi-init/channels"
+  const events: Omit<Message, "seq" | "at" | "where" | "system">[] = [
+    { from: "pixel", text: "pixel asked for a review of T14", task: 14 },
+    { from: "github", text: "GitHub: PR kiwi-init/channels#45 opened", github: [{ event: "pull_request", at, repo, number: 45, action: "opened", url: `https://github.com/${repo}/pull/45` }] },
+    { from: "win", text: "win started T10", task: 10 },
+    { from: "github", text: "GitHub: push to T10-icons", github: [{ event: "push", at, repo, branch: "T10-icons" }] },
+    { from: "github", text: "GitHub: ci-ok success", github: [{ event: "check_run", at, repo, name: "ci-ok", conclusion: "success" }] },
+    { from: "pixel", text: "pixel finished T16 “Restore composer spell checking”", task: 16 },
+    { from: "atlas", text: "atlas moved T9 to done", task: 9 },
+    { from: "jow", text: "jow set the goal" },
+    { from: "maya", text: "maya joined the channel" },
+    { from: "jow", text: "scout is Builder now" },
+  ]
+  return {
+    ...c,
+    messages: [
+      ...c.messages,
+      ...events.map((e, i) => ({ ...e, seq: seq + i, at: at + i * 20_000, where: general, system: true })),
+      { seq: seq + events.length, from: "atlas", at: at + events.length * 20_000, text: "T9 and T16 are in. T10 is next.", where: general },
+    ],
+  }
+}
+
 function withStep(c: Channel): Channel {
   const at = Date.now() - 30_000
   const text = "Remove commit signing from ~/.gitconfig-personal"
@@ -189,6 +216,7 @@ export type Scenario =
   | "long"
   | "step"
   | "left-out"
+  | "events"
   | "handoff"
   | "opening"
   | "held"
@@ -218,15 +246,17 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
           ? withStep(DEMO_CHANNEL)
           : scenario === "left-out"
             ? withLeftOut(DEMO_CHANNEL)
-            : scenario === "handoff"
-              ? withHandoff(DEMO_CHANNEL)
-              : scenario === "opening"
-                ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
-                : scenario === "held"
-                  ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
-                  : scenario === "compact"
-                    ? withCompact(DEMO_CHANNEL)
-                    : DEMO_CHANNEL,
+            : scenario === "events"
+              ? withEvents(DEMO_CHANNEL)
+              : scenario === "handoff"
+                ? withHandoff(DEMO_CHANNEL)
+                : scenario === "opening"
+                  ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
+                  : scenario === "held"
+                    ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
+                    : scenario === "compact"
+                      ? withCompact(DEMO_CHANNEL)
+                      : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       { ...DEMO_EMPTY, code: "interlinked", title: "interlinked" },

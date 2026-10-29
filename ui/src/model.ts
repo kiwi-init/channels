@@ -1,6 +1,6 @@
 import type { HookHarness, HookState } from "@kiwi/core/harnesses.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
-import type { Step, StepReply } from "@kiwi/core/protocol.ts"
+import type { GithubNote, Step, StepReply } from "@kiwi/core/protocol.ts"
 import type { TerminalId, TerminalRow } from "@kiwi/core/terminals.ts"
 
 export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "grok" | "kimi" | "mimo" | "pi" | "grok-bot" | "zcode" | "other"
@@ -222,6 +222,7 @@ export interface Message {
   reactions?: Reaction[]
   ask?: string
   system?: boolean
+  github?: readonly GithubNote[]
   done?: true
   pending?: boolean
   failed?: string

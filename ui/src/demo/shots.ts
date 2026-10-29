@@ -33,6 +33,7 @@ export const SHOTS: Record<string, Shot> = {
   "step-card": { scenario: "step", channel: "kiwi" },
   "left-out": { scenario: "left-out", channel: "kiwi" },
   compact: { scenario: "compact", channel: "kiwi" },
+  events: { scenario: "events", channel: "kiwi" },
   stash: kiwi(),
   "stash-open": kiwi(),
   "needs-step": { scenario: "step", channel: "kiwi", nav: { tab: "needs" } },
