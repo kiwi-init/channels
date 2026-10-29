@@ -1,8 +1,8 @@
 import type { Message, StepReply } from "@kiwi/core/protocol.ts"
 import { taskId } from "@kiwi/core/state.ts"
-import { decisionLabel } from "@/lib/asks"
+import { decisionLabel } from "@kiwi/app/asks.ts"
 import { useChoosing } from "@/lib/choosing"
-import { excerpt } from "@/lib/format"
+import { excerpt } from "@kiwi/app/format.ts"
 import { StepDetails, StepResponse } from "./step-card"
 
 export function ComposerQuestion({

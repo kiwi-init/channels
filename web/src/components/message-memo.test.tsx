@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 
 import { PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts"
 
-import { knownRefs, Recent } from "../lib/markdown"
+import { knownRefs, Recent } from "@kiwi/app/markdown.ts"
 import { Markdown, renderMarkdown } from "./markdown"
 import type { MessageProps } from "./message"
 import { sameRow, sameValue } from "./message-memo"

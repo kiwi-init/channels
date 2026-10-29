@@ -1,7 +1,7 @@
 import { useMemo, useSyncExternalStore } from "react"
 
-import { setAccessibilityOption, useAccessibilityOption } from "@/lib/accessibility"
-import { setAppearance, setTextSize, useAppearance, useTextSize, type TextSize } from "@/lib/theme"
+import { setAccessibilityOption, useAccessibilityOption } from "@kiwi/app/accessibility.ts"
+import { setAppearance, setTextSize, useAppearance, useTextSize, type TextSize } from "@kiwi/app/theme.ts"
 import type { CustomTheme, Prefs } from "~/model"
 import { cleanThemes, deletedTheme, movedDark, savedTheme, type ThemePrefs } from "~/theme/themes"
 

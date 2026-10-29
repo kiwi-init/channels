@@ -2,7 +2,7 @@ import { Tick02Icon } from "@hugeicons/core-free-icons"
 import { useLayoutEffect, useRef } from "react"
 
 import { capabilityLine, personaOf, ROLE_LABEL, type Persona } from "@kiwi/core/personality.ts"
-import { usePersonalities } from "@/lib/personalities"
+import { usePersonalities } from "@kiwi/app/personalities.ts"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
 

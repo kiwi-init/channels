@@ -2,7 +2,7 @@ import { Download04Icon } from "@hugeicons/core-free-icons"
 import { useState } from "react"
 
 import { bridge } from "@kiwi/secrets/secrets.ts"
-import { openRelease, restartToUpdate, useUpdate, type UpdateCheckView } from "@/lib/update"
+import { openRelease, restartToUpdate, useUpdate, type UpdateCheckView } from "@kiwi/app/update.ts"
 import { Icon } from "./icon"
 import { Button } from "./kit"
 

@@ -122,7 +122,7 @@ androidComponents {
                 fileTree(File(repoDir, "packages/core/src")),
                 fileTree(File(repoDir, "packages/channel/src")),
                 fileTree(File(repoDir, "desktop/src")),
-                fileTree(File(repoDir, "web/src/lib")),
+                fileTree(File(repoDir, "packages/app/src")),
             )
             bun.set(bunPath)
             repo.set(repoDir)

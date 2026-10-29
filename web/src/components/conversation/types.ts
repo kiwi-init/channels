@@ -1,4 +1,4 @@
-import type { Place } from "@/lib/threads"
+import type { Place } from "@kiwi/app/threads.ts"
 
 export type Here = Exclude<Place, { kind: "task" }>
 

@@ -2,7 +2,7 @@ import { useState } from "react"
 
 import { GENERAL_ROOM } from "@kiwi/core/protocol.ts"
 import type { Room } from "@kiwi/core/state/types.ts"
-import { cleanRoomName, roomProblem } from "@/lib/rooms"
+import { cleanRoomName, roomProblem } from "@kiwi/app/rooms.ts"
 import { Button, errorText, toast } from "../kit"
 
 const field = "min-w-0 flex-1 bg-transparent text-ui text-ink outline-none placeholder:text-ink-3 focus-visible:outline-none"

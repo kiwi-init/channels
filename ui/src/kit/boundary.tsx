@@ -1,6 +1,6 @@
 import { Component, type ReactNode } from "react"
 
-import { uiFailed } from "@/lib/ui-boot"
+import { uiFailed } from "@kiwi/app/ui-boot.ts"
 
 type Props = { children: ReactNode; resetKey?: string; whole?: boolean; panel?: boolean }
 

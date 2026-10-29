@@ -6,7 +6,7 @@ hard-code hex in components.
 
 Canonical sources: `web/src/index.css` (`:root`, `:root[data-theme]`,
 `@theme inline`), `web/src/lib/design-tokens.ts`, `web/src/lib/fonts.ts`,
-`web/src/lib/accessibility.ts`, `web/src/components/kit.tsx`,
+`packages/app/src/accessibility.ts`, `web/src/components/kit.tsx`,
 `web/src/components/ui/*`, `web/src/components/composer.tsx`.
 `scripts/ui-tokens.ts` enforces the type steps and radii below.
 

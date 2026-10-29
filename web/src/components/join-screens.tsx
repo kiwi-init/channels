@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react"
 
 import { handleFor, NAME_RE } from "@kiwi/core/membership.ts"
-import { isJoinBlip } from "@/lib/join-blip"
+import { isJoinBlip } from "@kiwi/app/join-blip.ts"
 import { useSecrets } from "@kiwi/secrets/secrets.ts"
 import { askToJoin, checkJoin, inviteInfo } from "@kiwi/channel/join.ts"
 import { forgetPending, type PendingJoin } from "@kiwi/channel/store.ts"

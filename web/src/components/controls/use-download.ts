@@ -1,7 +1,7 @@
 import { useState } from "react"
 
-import { memberName } from "@/lib/format"
-import { exportNote, logFileName, transcript, type ExportKind } from "@/lib/log-export"
+import { memberName } from "@kiwi/app/format.ts"
+import { exportNote, logFileName, transcript, type ExportKind } from "@kiwi/app/log-export.ts"
 import { errorText, toast } from "../kit"
 import type { ControlsProps } from "./context"
 

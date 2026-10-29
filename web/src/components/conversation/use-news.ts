@@ -4,9 +4,9 @@ import type { Message } from "@kiwi/core/protocol.ts"
 import type { ChannelState, Member } from "@kiwi/core/state.ts"
 import { loadRecent, saveRecent } from "@kiwi/channel/recent.ts"
 import { type StoredMember } from "@kiwi/channel/store.ts"
-import { excerpt, memberName } from "@/lib/format"
+import { excerpt, memberName } from "@kiwi/app/format.ts"
 import { markSeen, setOpenNews } from "@kiwi/channel/news.ts"
-import { lastPreview } from "@/lib/preview"
+import { lastPreview } from "@kiwi/app/preview.ts"
 
 export function unreadOf(hidden: boolean, arrivals: number, mark: number, inOtherRooms: number): number {
   return hidden ? Math.max(0, arrivals - mark) : inOtherRooms

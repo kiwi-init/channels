@@ -3,8 +3,8 @@ import { useEffect, useMemo, useRef } from "react"
 import type { Message } from "@kiwi/core/protocol.ts"
 import { unreadAll } from "@kiwi/core/standup.ts"
 import type { ChannelState } from "@kiwi/core/state.ts"
-import { roomLast, roomSeenKey, roomUnread } from "@/lib/rooms"
-import { markSeenIn, placeFromKey, placeKey, roomsFrom, seenIn, useSeen } from "@/lib/threads"
+import { roomLast, roomSeenKey, roomUnread } from "@kiwi/app/rooms.ts"
+import { markSeenIn, placeFromKey, placeKey, roomsFrom, seenIn, useSeen } from "@kiwi/app/threads.ts"
 import type { Here, Unread } from "./types"
 
 export function usePlaces({

@@ -1,5 +1,5 @@
 import { harnessUrl } from "@/lib/avatars"
-import { harnessName, knownHarness, monoHarness } from "@/lib/harness"
+import { harnessName, knownHarness, monoHarness } from "@kiwi/app/harness.ts"
 import { cx } from "@/lib/utils"
 
 export function HarnessFace({ harness, size, working }: { harness: string | undefined; size: number; working?: boolean }) {

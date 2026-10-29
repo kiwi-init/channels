@@ -3,9 +3,9 @@ import type { Message } from "@kiwi/core/protocol.ts"
 import { taskId } from "@kiwi/core/state.ts"
 import { useState } from "react"
 
-import { formatAgo, formatTime } from "@/lib/format"
-import { permissionCode, permissionNotes, permissionTitle, visibleText } from "@/lib/permission-view"
-import type { PlacedSeat } from "@/lib/show-seat"
+import { formatAgo, formatTime } from "@kiwi/app/format.ts"
+import { permissionCode, permissionNotes, permissionTitle, visibleText } from "@kiwi/app/permission-view.ts"
+import type { PlacedSeat } from "@kiwi/app/show-seat.ts"
 import { Button, Monogram, errorText, toast } from "./kit"
 import { Row, ShowSeat } from "./needs-you"
 
