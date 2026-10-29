@@ -111,10 +111,11 @@ describe("lanes", () => {
   const messages = [
     msg(1, { system: true, task: 1, text: "Win took T1 “Task 1”" }),
     msg(2, { text: "just chatting" }),
-    msg(3, { task: 1, text: "Finished T1:\n  PR is up" }),
+    msg(3, { task: 1, done: true, text: "Finished T1:\n  PR is up" }),
     msg(4, { system: true, task: 2, text: "Win moved T2 to review" }),
-    msg(5, { system: true, task: 2, text: "Win asked for review" }),
-    msg(6, { from: "atlas", system: true, task: 3, text: "atlas added T3" }),
+    msg(5, { task: 2, text: "Talking about T2 in #general" }),
+    msg(6, { system: true, task: 2, text: "Win asked for review" }),
+    msg(7, { from: "atlas", system: true, task: 3, text: "atlas added T3" }),
   ]
   const ch = channel({ lead: "atlas", people: [agent("ridge", { presence: "offline" }), win, lead, agent("gone", { left: true })], tasks, messages })
 

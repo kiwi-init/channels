@@ -75,7 +75,7 @@ export function headerLine(channel: Channel, needs: number, now = Date.now()): s
   return [working ? `${working} working` : null, merged ? `${merged} merged today` : null, needs ? `${needs} ${needs === 1 ? "needs" : "need"} you` : null].filter((x): x is string => !!x)
 }
 
-export interface Recent {
+interface Recent {
   seq: number
   at: number
   text: string
@@ -94,7 +94,7 @@ function recentOf(messages: readonly Message[], p: Person): Recent[] {
   const out: Recent[] = []
   for (let i = messages.length - 1; i >= 0 && out.length < RECENT; i--) {
     const m = messages[i]!
-    if (m.from !== p.name || m.task === undefined || m.pending || m.failed) continue
+    if (m.from !== p.name || m.task === undefined || !(m.system || m.done) || m.pending || m.failed) continue
     const text = m.system && m.text.startsWith(who) ? m.text.slice(who.length) : m.text
     out.push({ seq: m.seq, at: m.at, text: clip(text) })
   }

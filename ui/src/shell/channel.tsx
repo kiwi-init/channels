@@ -111,7 +111,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
             Tasks <Count n={tasks} />
           </button>
           {(agents || nav.tab === "agents") && (
-            <button type="button" aria-pressed={nav.tab === "agents"} onClick={() => go({ to: "tab", tab: "agents" })}>
+            <button type="button" className="is-agents" aria-pressed={nav.tab === "agents"} onClick={() => go({ to: "tab", tab: "agents" })}>
               Agents
             </button>
           )}

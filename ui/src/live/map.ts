@@ -337,7 +337,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       ...(root !== undefined ? { inThread: root } : {}),
       ...(quoted !== undefined && quoted !== root && bySeq.has(quoted) ? { replyTo: quoted } : {}),
       ...(threads.has(m.seq) ? { thread: threads.get(m.seq) } : {}),
-      ...(m.kind === "done" && m.task !== undefined ? { task: m.task } : {}),
+      ...(m.kind === "done" && m.task !== undefined ? { task: m.task, done: true } : {}),
       ...(link ? { pr: prOf(state, link) } : {}),
       ...(images.length ? { images } : {}),
       ...(reactions.length ? { reactions } : {}),

@@ -9,7 +9,7 @@ type Presence = "online" | "away" | "offline"
 
 export type TaskStatus = "todo" | "doing" | "review" | "done" | "waiting"
 
-export type Stage = "open" | "building" | "proving" | "red" | "yours" | "done" | "dropped"
+type Stage = "open" | "building" | "proving" | "red" | "yours" | "done" | "dropped"
 
 type Kind = "human" | "agent"
 
@@ -202,6 +202,7 @@ export interface Message {
   reactions?: Reaction[]
   ask?: string
   system?: boolean
+  done?: true
   pending?: boolean
   failed?: string
   mentionsYou?: boolean
