@@ -12,7 +12,7 @@ import { sendsInTurn } from "@/lib/send-order"
 import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@/lib/threads"
 import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
-import { asksOf, directsOf, messagesOf, formerOf, peopleOf, roomsOf, tasksOf, theirsOf, type Pending } from "~/live/map"
+import { asksOf, directsOf, groupsOf, messagesOf, formerOf, peopleOf, roomsOf, tasksOf, theirsOf, type Pending } from "~/live/map"
 import { iconUrl } from "~/live/icon"
 import { usePinsHere } from "~/live/pins"
 import { usePublishFace } from "~/live/face"
@@ -110,6 +110,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const asks = useMemo(() => asksOf(state, messages, me, isOwner, requests, roster, pins), [state, messages, me, isOwner, requests, roster, pins])
   const mapped = useMemo(() => kept(code, messagesOf(state, messages, me, asks.askOf, pictures, pending)), [code, state, messages, me, asks.askOf, pictures, pending])
   const tasks = useMemo(() => tasksOf(state, asks.held, me, messages), [state, asks.held, me, messages])
+  const taskGroups = useMemo(() => groupsOf(state, me), [state, me])
   const from = roomsFrom(roomId)
   const rooms = useMemo(() => roomsOf(state, messages, me, seen, from), [state, messages, me, seen, from])
   const directs = useMemo(() => directsOf(state, messages, me, seen), [state, messages, me, seen])
@@ -146,6 +147,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       nicknames,
       messages: mapped,
       tasks,
+      taskGroups,
       asks: asks.asks,
       connection,
       ...(ready ? {} : { loading: true }),
@@ -173,6 +175,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       nicknames,
       mapped,
       tasks,
+      taskGroups,
       asks.asks,
       connection,
       ready,

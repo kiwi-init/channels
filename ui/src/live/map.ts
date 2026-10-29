@@ -5,10 +5,11 @@ import type { Card, Event } from "@kiwi/core/protocol.ts"
 import { permissionAnswer } from "@kiwi/core/permission.ts"
 import { describeEvent, proofLabel } from "@kiwi/core/format.ts"
 import { memberLoad, showsLoad } from "@kiwi/core/load.ts"
-import { FAILED, prLinks, taskPr } from "@kiwi/core/prs.ts"
+import { checksOf, FAILED, prLinks, taskPr } from "@kiwi/core/prs.ts"
 import { GENERAL_ROOM, ignored, isQuiet, isReaction, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { pickFor, taskCandidates } from "@kiwi/core/routing.ts"
 import { canPost } from "@kiwi/core/scopes.ts"
+import { statusOf, versionName } from "@kiwi/core/status.ts"
 import {
   answersAsk,
   answersDecisions,
@@ -18,6 +19,7 @@ import {
   humanOf,
   isPerson,
   MAIN,
+  mayNameGoal,
   outsideRepos,
   placeKey,
   prChecks,
@@ -30,6 +32,7 @@ import type { GithubPr } from "@kiwi/core/state/github.ts"
 import { decisionLabel } from "@/lib/asks"
 import { permissionCode, permissionNotes, permissionTitle, visibleText } from "@/lib/permission-view"
 import { reviewsFor, taskActions } from "@/lib/task-actions"
+import { taskGroups } from "@/lib/views"
 import { roomOfMessage, roomSeenKey } from "@/lib/rooms"
 import { canonicalHarness, harnessName } from "@/lib/harness"
 import type { Online } from "@/lib/channel/online"
@@ -50,6 +53,7 @@ import type {
   Room,
   Task,
   TaskEvent,
+  TaskGroup,
   TaskMove,
   TaskStatus,
   TheirDirect,
@@ -245,6 +249,7 @@ function prOf(state: ChannelState, pr: GithubPr | { repo: string; number: number
   const checks = real ? prChecks(state.github, real) : []
   const failed = checks.some((c) => !!c.conclusion && FAILED.has(c.conclusion))
   const running = checks.some((c) => c.conclusion === undefined)
+  const tally = real ? checksOf(state, real) : undefined
   return {
     repo: pr.repo,
     number: pr.number,
@@ -254,6 +259,7 @@ function prOf(state: ChannelState, pr: GithubPr | { repo: string; number: number
     checks: !checks.length ? "none" : failed ? "fail" : running ? "running" : "pass",
     ...(real?.additions !== undefined ? { additions: real.additions } : {}),
     ...(real?.deletions !== undefined ? { deletions: real.deletions } : {}),
+    ...(tally ? { tally: { passed: tally.passed, failed: tally.failed, running: tally.running } } : {}),
   }
 }
 
@@ -449,6 +455,7 @@ export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: stri
     const can = taskActions(t, me, person)
     const review = can.kind === "open" && can.review !== "none" ? can.review : undefined
     const suggested = person ? suggestionFor(state, t) : undefined
+    const fate = statusOf(state, t)
     return {
       id: t.id,
       title: t.title,
@@ -473,6 +480,31 @@ export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: stri
       ...(t.cancelled ? { cancelled: true } : {}),
       ...(review ? { youReview: review } : {}),
       ...(suggested ? { suggested } : {}),
+      ...(fate.status === "shipped" && fate.release ? { shipped: versionName(fate.release) } : {}),
+      ...(t.leftBy && !t.owner ? { leftBy: t.leftBy } : {}),
+    }
+  })
+}
+
+export function groupsOf(state: ChannelState, me: string, now = Date.now()): TaskGroup[] {
+  return taskGroups(state, "everything", now).map((g): TaskGroup => {
+    const tasks = g.tasks.map((t) => t.id)
+    const h = g.head
+    switch (h.kind) {
+      case "ask":
+        return {
+          key: g.key,
+          tasks,
+          head: h.ask
+            ? { kind: "ask", id: h.ask.id, by: h.ask.by, words: h.ask.words.trim(), ...(h.ask.goal ? { goal: h.ask.goal } : {}), mayName: mayNameGoal(state, me, h.ask) }
+            : { kind: "unfiled" },
+        }
+      case "next":
+        return { key: g.key, tasks, head: { kind: "next", ...(h.name ? { name: versionName(h.name) } : {}) } }
+      case "release":
+        return { key: g.key, tasks, head: { kind: "release", tag: versionName(h.tag), at: h.at } }
+      case "cancelled":
+        return { key: g.key, tasks, head: { kind: "cancelled" } }
     }
   })
 }
