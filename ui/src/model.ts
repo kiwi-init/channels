@@ -508,7 +508,6 @@ export interface Actions {
   setReadOnly(code: string, name: string, on: boolean): void
   setWake(code: string, name: string, on: boolean): void
   setNickname(code: string, name: string, nickname: string | null): void
-  setColor(code: string, name: string, color: Color | null): void
   setPowers(code: string, name: string, powers: Partial<Powers>): void
   addAgent(code: string, agent: NewAgent): void
   showAgent(code: string, name: string): Promise<string | null>

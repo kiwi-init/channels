@@ -132,18 +132,6 @@
   text-decoration-style: solid;
 }
 
-.person-color {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.person-swatch {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-
 .person-manage {
   padding-top: 18px;
 }
@@ -216,35 +204,4 @@
   color: var(--ink-2);
   transform: translateY(-50%);
   pointer-events: none;
-}
-
-.swatches {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.swatch {
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: var(--member);
-  transition:
-    transform var(--fast),
-    opacity var(--fast);
-}
-
-.swatch:hover:not(:disabled) {
-  transform: scale(1.12);
-}
-
-.swatch[aria-pressed="true"] {
-  outline: 2px solid var(--ink);
-  outline-offset: 2px;
-}
-
-.swatch:disabled {
-  opacity: 0.2;
 }
