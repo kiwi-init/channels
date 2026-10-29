@@ -13,6 +13,8 @@ import { findRoom, fold, rosterOf, type ChannelState, type FoldBase, type GuardF
 import { LAST_MARK_MS, lastSeq, Look, orNone, type Agent, type Delivery } from "./shared.ts";
 import { narrows, wants } from "./wants.ts";
 
+type WholeLog = Effect.Success<ReturnType<Channel["fx"]["history"]>>;
+
 const CACHE_TRIM_AT = 800;
 const CACHE_KEEP = 300;
 
@@ -45,7 +47,7 @@ export class SessionState {
   private daemonLive = false;
   protected base: FoldBase | null = null;
   protected partial = false;
-  private probedWhole = false;
+  private replayed: { page: WholeLog | null } | null = null;
   readonly opened: number;
 
   constructor(
@@ -88,14 +90,15 @@ export class SessionState {
     return Effect.void;
   }
 
-  private replaysWhole(): Effect.Effect<boolean, never, Agent> {
-    return Effect.suspend(() => {
-      if (this.probedWhole) return Effect.succeed(false);
-      this.probedWhole = true;
-      return this.ch.fx.page(0, 1).pipe(
-        Effect.map((one) => one[0]?.seq === 1),
-        Effect.orElseSucceed(() => false),
-      );
+  private wholeLog(): Effect.Effect<WholeLog | null, never, Agent> {
+    const tried = this.replayed;
+    if (tried) return Effect.succeed(tried.page);
+    return Effect.gen({ self: this }, function* () {
+      const one = yield* Effect.orElseSucceed(this.ch.fx.page(0, 1), () => []);
+      const all = one[0]?.seq === 1 ? yield* Effect.orElseSucceed(this.ch.fx.history(0), () => null) : null;
+      const page = all && all.messages[0]?.seq === 1 && all.through === all.head ? all : null;
+      this.replayed = { page };
+      return page;
     });
   }
 
@@ -114,11 +117,12 @@ export class SessionState {
         this.base ??= base;
       }
     }
-    if (this.base && olderRules(this.base) && (yield* this.replaysWhole())) {
+    const replaced = this.base && olderRules(this.base) ? yield* this.wholeLog() : null;
+    if (replaced) {
       this.base = null;
-      this.log = [];
-      this.saved = 0;
-      yield* cache.replace(this.cfg.roomId, []);
+      this.log = replaced.messages;
+      this.saved = lastSeq(replaced.messages);
+      yield* cache.replace(this.cfg.roomId, replaced.messages);
       yield* cache.dropBase(this.cfg.roomId);
     }
     const look = yield* Look;
@@ -128,13 +132,14 @@ export class SessionState {
     const current = !holed && seen !== null && seen.head <= lastSeq(this.log) && lastSeq(this.log) >= this.owed;
     if (!current && (holed || !look?.fetched.has(this) || lastSeq(this.log) < this.owed)) {
       const offered = !this.base && (first === undefined || first > 1) ? yield* this.ch.fx.snapshot() : null;
-      const fetched = offered && olderRules(offered) && (yield* this.replaysWhole()) ? null : offered;
+      const whole = offered && olderRules(offered) ? yield* this.wholeLog() : null;
+      const fetched = whole ? null : offered;
       const floor = this.base?.n ?? fetched?.n ?? 0;
       const hole = first !== undefined && first > floor + 1;
       const from = hole ? floor : Math.max(lastSeq(this.log), floor);
       const offline = yield* OfflineReads;
       const cachedOnly = !!offline && !fetched && this.log.length > 0;
-      const page = yield* this.ch.fx.history(from).pipe(
+      const page = yield* (whole && from === 0 ? Effect.succeed(whole) : this.ch.fx.history(from)).pipe(
         Effect.catchIf(
           (err) => cachedOnly && relayDown(err),
           (err) => Effect.sync(() => (offline?.note(downWhy(err)), null)),

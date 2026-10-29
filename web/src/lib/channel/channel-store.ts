@@ -418,7 +418,7 @@ export class ChannelStore {
           this.ready.value = true
         })
       },
-      paint: (cached, base) => {
+      paint: (cached, base, _head, replace) => {
         if (closed) return
         painted = true
         batch(() => {
@@ -437,7 +437,7 @@ export class ChannelStore {
             this.messages.value = handOver(this.messages.peek(), early, kept)
             if (kept.some((m) => m.kind === "event" && m.ev?.op === "card")) noteAgentWorked()
           }
-          if (base || earlyBase) this.base.value = base
+          if (base || earlyBase || replace) this.base.value = base
           this.ready.value = true
         })
       },

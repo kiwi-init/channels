@@ -651,21 +651,25 @@ describe("a base folded under older fold rules is set aside wherever the log can
       if (!kept.base) throw new Error("no base");
       return { ...kept.base, rules: 0, tasks: kept.base.tasks.map((t) => ({ ...t, title: "as older rules folded it" })) };
     };
-    const cold = (name: string) => new AgentSession(name, { ...s.access, relay: server.url.origin, code: s.code }, s.owner, () => {});
-    return { s, done, olderBase, cold };
+    const cold = (name: string, relay = server.url.origin) => new AgentSession(name, { ...s.access, relay, code: s.code }, s.owner, () => {});
+    return { s, done, olderBase, cold, relay: server.url.origin };
   }
 
-  test("a fold stamps the rules it ran under, and a fold resumed from an older base keeps the older number", () => {
+  const keptFrom = (given: FoldBase | null): FoldBase => {
     const kept: { base?: FoldBase } = {};
-    fold([], [], NOW, null, null, null, (b) => void (kept.base = b));
-    expect(kept.base?.rules).toBe(FOLD_RULES);
-    expect(olderRules(kept.base!)).toBe(false);
-    const older = { ...kept.base!, rules: 0 };
+    fold([], [], NOW, null, null, given, (b) => void (kept.base = b));
+    if (!kept.base) throw new Error("the fold kept no base");
+    return kept.base;
+  };
+
+  test("a fold stamps the rules it ran under, and a fold resumed from an older base keeps the older number", () => {
+    const fresh = keptFrom(null);
+    expect(fresh.rules).toBe(FOLD_RULES);
+    expect(olderRules(fresh)).toBe(false);
+    const older = { ...fresh, rules: 0 };
     expect(olderRules(older)).toBe(true);
     expect(olderRules({ ...older, rules: undefined })).toBe(true);
-    const resumed: { base?: FoldBase } = {};
-    fold([], [], NOW, null, null, older, (b) => void (resumed.base = b));
-    expect(resumed.base?.rules ?? 0).toBe(0);
+    expect(keptFrom(older).rules ?? 0).toBe(0);
     expect(outgrownCache([], older)).toBe(false);
   });
 
@@ -743,6 +747,46 @@ describe("a base folded under older fold rules is set aside wherever the log can
       expect(state.tasks.get(task)?.title).toBe("as older rules folded it");
       expect(readBase(s.roomId)?.rules ?? 0).toBe(0);
     } finally {
+      done();
+    }
+  });
+
+  test("with both its own base and the relay's snapshot from older rules, an agent folds the whole log, and the next session does too", async () => {
+    const { s, done, olderBase, cold } = await scene();
+    try {
+      const task = await s.ownerCh.send("", { ev: { op: "task.add", title: "as the log says" } });
+      await s.ownerCh.send("after");
+      const older = await olderBase();
+      await runAgent(s.ownerCh.fx.putSnapshot(older));
+      keepBase(s.roomId, older);
+      expect((await runAgent(cold("both").state())).state.tasks.get(task)?.title).toBe("as the log says");
+      expect(readBase(s.roomId)).toBeNull();
+      expect((await runAgent(cold("both again").state())).state.tasks.get(task)?.title).toBe("as the log says");
+    } finally {
+      done();
+    }
+  });
+
+  test("an agent keeps its older-rules base and cache when the whole log can't be fetched after the first message", async () => {
+    const { s, done, olderBase, cold, relay } = await scene();
+    const proxy = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch: async (req) => {
+        const url = new URL(req.url);
+        if (url.pathname.endsWith("/messages") && url.searchParams.has("pages")) return Response.json({ error: "down" }, { status: 503 });
+        const body = req.method === "GET" || req.method === "HEAD" ? undefined : await req.arrayBuffer();
+        return fetch(`${relay}${url.pathname}${url.search}`, { method: req.method, headers: req.headers, body });
+      },
+    });
+    try {
+      const task = await s.ownerCh.send("", { ev: { op: "task.add", title: "as the log says" } });
+      const older = await olderBase();
+      keepBase(s.roomId, older);
+      await runAgent(cold("flaky", proxy.url.origin).state()).catch(() => null);
+      expect(readBase(s.roomId)?.tasks.find((t) => t.id === task)?.title).toBe("as older rules folded it");
+    } finally {
+      proxy.stop(true);
       done();
     }
   });

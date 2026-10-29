@@ -23,7 +23,7 @@ export interface OpenSteps {
   plan: (cache: OpenedCache, head: number) => Promise<Planned | null>
   snapshot: () => Promise<FoldBase | null>
   early: (cached: Planned | null, kept: Kept) => void
-  paint: (cached: Planned | null, base: FoldBase | null, head: number) => void
+  paint: (cached: Planned | null, base: FoldBase | null, head: number, replace: boolean) => void
 }
 
 export interface Opened {
@@ -74,8 +74,9 @@ export async function openChannel(steps: OpenSteps, was: Warm | undefined, limit
   const keptBase = usableBase(keptBaseUpTo(kept, head), from)
   const warm = usableBase(was?.base ?? null, from) ?? keptBase
   const snap = from > 0 && (!warm || olderRules(warm)) ? await steps.snapshot() : null
-  const base = newestRules([usableBase(snap, from), keptBase])
-  steps.paint(cached, base, head)
+  const offered = [usableBase(snap, from), keptBase]
+  const base = from === 0 ? (offered.find((b) => b !== null && !olderRules(b)) ?? null) : newestRules(offered)
+  steps.paint(cached, base, head, from === 0 && !!warm && olderRules(warm))
   if (await rotated) await steps.roster()
   return { head, since, whole: startsWhole(head, limit, since, firstSeq, base ?? warm) }
 }
