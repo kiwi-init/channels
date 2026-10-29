@@ -20,3 +20,11 @@ This product includes robot-heads 0.3.0 (https://github.com/fayazara/robot-heads
 npm robot-heads), Copyright (c) 2026 Fayaz Ahmed, licensed under the MIT License.
 A copy of that license is in licenses/robot-heads-LICENSE. It draws the
 coordinator's animated head in the desktop app (web/src/components/coordinator-head.tsx).
+
+This product includes enriched-markdown-ios 0.4.0
+(https://github.com/software-mansion-labs/enriched-markdown-ios), Copyright (c) 2025
+Software Mansion, licensed under the MIT License, and md4c
+(https://github.com/mity/md4c), Copyright (c) 2016-2026 Martin Mitáš, licensed under the
+MIT License. They are vendored in ios/Vendor/EnrichedMarkdown, with their licenses in
+ios/Vendor/EnrichedMarkdown/LICENSE and at the top of core/md4c/md4c.c. They draw message
+markdown in the iPhone app (ios/Channels/Views/Markdown.swift).
