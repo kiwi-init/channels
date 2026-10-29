@@ -155,6 +155,13 @@ jobs:
           path: /tmp/kiwi-app-smoke-failure.png
           if-no-files-found: ignore
           overwrite: true
+      - name: perf harnesses run end to end, small and ungated
+        if: ${{ !cancelled() }}
+        run: |
+          PERF_MESSAGES=10 bun scripts/perf-switch.ts --json "$RUNNER_TEMP/perf-switch.json"
+          PERF_REPS=1 PERF_CPU=1 bun scripts/perf-motion.ts --json "$RUNNER_TEMP/perf-motion.json"
+          PERF_MESSAGES=20 PERF_TASKS=3 PERF_REPS=1 bun scripts/perf-feel.ts --json "$RUNNER_TEMP/perf-feel.json"
+          PERF_AGENTS=2 PERF_TASKS=4 PERF_MESSAGES=20 PERF_SOAK_MIN=0 bun scripts/perf-scale.ts --json "$RUNNER_TEMP/perf-scale.json"
       - name: cli build
         if: ${{ !cancelled() }}
         run: |

@@ -43,7 +43,7 @@ export async function view(page: Page, label: string, marker: string): Promise<n
     async ([name, text]) => {
       const flat = (s: string) => s.replace(/\s+/g, "");
       const b = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Views"] button')].find((x) => flat(x.textContent ?? "").startsWith(flat(name)));
-      if (!b) return -1;
+      if (!b) throw new Error(`no ${name} view`);
       const t0 = performance.now();
       b.click();
       const deadline = t0 + 15000;
@@ -51,6 +51,7 @@ export async function view(page: Page, label: string, marker: string): Promise<n
         await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
         if (b.getAttribute("aria-pressed") === "true" && new RegExp(text).test(document.querySelector("main")?.textContent ?? "")) break;
       }
+      if (performance.now() >= deadline) throw new Error(`the ${name} view opened without ${text}`);
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       return Math.round(performance.now() - t0);
     },
@@ -62,7 +63,7 @@ export async function panel(page: Page, opening: boolean): Promise<number> {
   return page.evaluate(async (open) => {
     const close = () => [...document.querySelectorAll<HTMLElement>('aside[aria-label="Details"] button')].find((b) => (b.getAttribute("aria-label") ?? b.textContent?.trim()) === "Close");
     const button = open ? [...document.querySelectorAll<HTMLElement>("button")].find((b) => (b.getAttribute("aria-label") ?? "").endsWith(": channel settings")) : close();
-    if (!button) return -1;
+    if (!button) throw new Error(open ? "no channel settings button" : "no Close in the panel");
     const t0 = performance.now();
     button.click();
     const deadline = t0 + 15000;
@@ -70,6 +71,7 @@ export async function panel(page: Page, opening: boolean): Promise<number> {
       await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
       if (!!document.querySelector('aside[aria-label="Details"]') === open) break;
     }
+    if (performance.now() >= deadline) throw new Error(open ? "the panel never opened" : "the panel never closed");
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     return Math.round(performance.now() - t0);
   }, opening);

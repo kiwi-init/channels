@@ -291,7 +291,7 @@ async function openTask(page: Page, id: number, marker: string): Promise<number>
   return page.evaluate(
     async ([task, text]) => {
       const row = [...document.querySelectorAll<HTMLElement>("main .board-row")].find((r) => r.querySelector(".board-meta")?.textContent?.startsWith(`T${task} `));
-      if (!row) return -1;
+      if (!row) throw new Error(`no row for T${task} on the board`);
       const t0 = performance.now();
       row.click();
       const deadline = t0 + 15000;
@@ -299,6 +299,7 @@ async function openTask(page: Page, id: number, marker: string): Promise<number>
         await new Promise((r) => requestAnimationFrame(r));
         if (document.querySelector('aside[aria-label="Details"]')?.textContent?.includes(text)) break;
       }
+      if (performance.now() >= deadline) throw new Error(`T${task} opened without “${text}”`);
       return Math.round(performance.now() - t0);
     },
     [id, marker] as const,
@@ -310,7 +311,7 @@ async function scrollAll(page: Page): Promise<{ ms: number; frames: number; over
     const rows = document.querySelectorAll(selector);
     let el: HTMLElement | null = rows[rows.length - 1] as HTMLElement | null;
     while (el && !(el.scrollHeight > el.clientHeight && getComputedStyle(el).overflowY !== "visible")) el = el.parentElement;
-    if (!el) return { ms: -1, frames: 0, over33: 0, over50: 0, worstFrameMs: 0, blankFrames: 0, reachedTop: false };
+    if (!el) throw new Error("no scrolling feed");
     const scroller = el;
     const box = scroller.getBoundingClientRect();
     const deltas: number[] = [];

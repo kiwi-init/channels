@@ -98,7 +98,7 @@ async function switchTo(page: Page, title: string, last: string): Promise<number
   return page.evaluate(
     async ([name, text]) => {
       const tile = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Channels"] button.tile')].find((b) => (b.getAttribute("aria-label") ?? "").split(",")[0] === name);
-      if (!tile) return -1;
+      if (!tile) throw new Error(`no ${name} tile in the rail`);
       const t0 = performance.now();
       tile.click();
       const deadline = t0 + 15000;
@@ -106,6 +106,7 @@ async function switchTo(page: Page, title: string, last: string): Promise<number
         await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
         if (document.body.innerText.includes(text)) break;
       }
+      if (performance.now() >= deadline) throw new Error(`${name} opened without “${text}”`);
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       return Math.round(performance.now() - t0);
     },
