@@ -99,6 +99,12 @@ export function requirePerson(): Identity {
   return { name: p.name, pk: p.pk, sk: p.sk, xpk: p.xpk, xsk: p.xsk };
 }
 
+export function personSigner(): { signer: Identity; person: string } {
+  if (store.person?.xsk) return { signer: requirePerson(), person: store.person.pk };
+  if (store.enrolled && store.device && store.deviceLinks?.length) return { signer: store.device, person: store.enrolled.pk };
+  throw new Error("make your person key first");
+}
+
 export function upsertComputer(c: ComputerView): void {
   mutate((s) => {
     s.computers = [...s.computers.filter((x) => x.machinePk !== c.machinePk), c];
