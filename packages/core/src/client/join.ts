@@ -87,7 +87,7 @@ export const joinFx = {
         })
       : {};
     const { id: requestId } = yield* callRelay<{ id: string }>(relay, roomId, "/requests", { method: "POST", body: JSON.stringify({ ...body, ...toComputer }) }, { fp: ownerFp });
-    return { roomId, requestId };
+    return { roomId, requestId, ownerPk: room.ownerPk, computer: computer?.pk ?? null };
   }),
 
   joinStatus: Effect.fn("Channel.joinStatus")(function* (relay: string, code: string, id: Identity, requestId: string): Effect.fn.Return<JoinStatus, Refusal, Relay> {

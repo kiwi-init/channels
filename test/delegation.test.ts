@@ -59,10 +59,11 @@ async function delegated(name = "mac-mini"): Promise<{ s: OwnerSetup; pc: Paired
 
 async function letIn(s: OwnerSetup, pc: PairedComputer, name: string): Promise<{ id: Identity; ch: Channel; admitted: Member[] }> {
   const { id, requestId } = await ask(s, name, pc);
-  expect(await admitOwn(relay, s.roomId, s.owner.pk, pc.machine)).toEqual([]);
+  expect(await admitOwn(relay, s.roomId, s.owner.pk, pc.machine)).toEqual({ admitted: [], waiting: 1 });
   const pending = await Channel.joinStatus(relay, s.code, id, requestId);
   expect(pending).toMatchObject({ status: "pending" });
-  const admitted = await admitOwn(relay, s.roomId, s.owner.pk, pc.machine);
+  const { admitted, waiting } = await admitOwn(relay, s.roomId, s.owner.pk, pc.machine);
+  expect(waiting).toBe(0);
   const st = await Channel.joinStatus(relay, s.code, id, requestId);
   if (st.status !== "approved") throw new Error(`not let in: ${st.status}`);
   return { id, ch: new Channel(st.access, relay, id), admitted };
@@ -155,7 +156,7 @@ describe("the daemon admits its own computer's agents with the app closed (T677)
     const other = await pairComputer(s.person, "vps-1");
     const { id, requestId } = await ask(s, "stray", other);
     await s.ownerCh.requests({ person: s.person.pk });
-    expect(await admitOwn(relay, s.roomId, s.owner.pk, pc.machine)).toEqual([]);
+    expect(await admitOwn(relay, s.roomId, s.owner.pk, pc.machine)).toEqual({ admitted: [], waiting: 0 });
     expect(((await call(s, pc.machine, "GET", "/requests")).json as { requests: unknown[] }).requests).toEqual([]);
     expect((await call(s, pc.machine, "POST", `/requests/${requestId}/nonce`, { nonce: "x" })).status).toBe(404);
     await Channel.joinStatus(relay, s.code, id, requestId);
@@ -204,7 +205,7 @@ describe("revoking and expiry stop a delegate at once", () => {
     const { id, requestId } = await ask(s, "late", pc);
     await s.ownerCh.undelegate(pc.machine.pk);
     expect(await s.ownerCh.delegations()).toEqual([]);
-    expect(await admitOwn(relay, s.roomId, s.owner.pk, pc.machine)).toEqual([]);
+    expect(await admitOwn(relay, s.roomId, s.owner.pk, pc.machine)).toEqual({ admitted: [], waiting: 0 });
     expect((await call(s, pc.machine, "GET", "/delegation")).status).toBe(404);
     expect((await call(s, pc.machine, "GET", "/requests")).status).toBe(403);
     expect((await call(s, pc.machine, "POST", `/requests/${requestId}/nonce`, { nonce: "x" })).status).toBe(403);
@@ -219,7 +220,7 @@ describe("revoking and expiry stop a delegate at once", () => {
     const { id, requestId } = await ask(s, "late", pc);
     skew = (DELEGATION_DAYS + 1) * DAY_MS;
     try {
-      expect(await admitOwn(relay, s.roomId, s.owner.pk, pc.machine)).toEqual([]);
+      expect(await admitOwn(relay, s.roomId, s.owner.pk, pc.machine)).toEqual({ admitted: [], waiting: 0 });
       expect((await call(s, pc.machine, "POST", `/requests/${requestId}/nonce`, { nonce: "x" })).status).toBe(403);
       expect((await call(s, pc.machine, "GET", "/delegation")).status).toBe(404);
     } finally {
