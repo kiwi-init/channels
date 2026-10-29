@@ -232,6 +232,15 @@ describe("the work a loop starts a session for", () => {
     expect(workOver(work, fold([t, round, approved], roster), "ana")).toBe(true);
   });
 
+  test("a messages session reads only what is for it, replies only where it's asked, and never acknowledges", () => {
+    const text = firstPrompt({ kind: "answering" }, fold([], roster), "ana", "dev");
+    expect(text).toContain("Read them with `kiwi listen --now --for-me`.");
+    expect(text).toContain("Reply only to a message that asks you something or needs something from you");
+    expect(text).toContain("react with 👍 (`kiwi react N 👍`)");
+    expect(text).toContain("never post an acknowledgement or thanks");
+    expect(text).not.toContain("answer each one");
+  });
+
   test("a task whose round is open isn't told to start it, which would withdraw the round", async () => {
     const t = await ev("jon", { op: "task.add", title: "Sent", owner: "ana", review: "bo" });
     const round = await ev("ana", { op: "task.update", task: t.seq, state: "review", at: "eee5555" });

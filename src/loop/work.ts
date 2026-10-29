@@ -145,7 +145,7 @@ function focus(work: Work, state: ChannelState, me: string, mc: string): string 
       return `This session is for reviewing round ${work.round} of ${id}. Read it with \`${mc} task show ${id}\`, check the work at the round's commit, and give your verdict with \`${mc} task approve ${id} --round ${work.round} "note"\` or \`${mc} task reject ${id} --round ${work.round} "what to fix"\`. Answer messages for you as they come; your own tasks wait for their own session, even if one of them is rejected meanwhile. The session ends when the round closes.`;
     }
     case "answering":
-      return `This session is for messages waiting on you. Read them with \`${mc} listen --now\` and answer each one. The session ends when you're idle with nothing unread; if you take on a task, end your turn once it's yours, and a fresh session starts for it.`;
+      return `This session is for messages waiting on you. Read them with \`${mc} listen --now --for-me\`. Reply only to a message that asks you something or needs something from you; react with 👍 (\`${mc} react N 👍\`) to one you've only noted, and never post an acknowledgement or thanks. The session ends when you're idle with nothing unread; if you take on a task, end your turn once it's yours, and a fresh session starts for it.`;
     default: {
       const never: never = work;
       return never;
