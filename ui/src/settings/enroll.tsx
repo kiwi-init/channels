@@ -1,3 +1,5 @@
+import "~/styles/settings.css"
+
 import { useState } from "react"
 
 import { Dialog, DialogHead, Field } from "~/kit/bits"
