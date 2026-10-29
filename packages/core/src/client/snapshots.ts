@@ -1,6 +1,6 @@
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
-import { olderRules, SNAPSHOT_EVERY, SNAPSHOT_TOO_LARGE } from "../protocol.ts";
+import { decodedWhole, olderRules, SNAPSHOT_EVERY, SNAPSHOT_TOO_LARGE } from "../protocol.ts";
 import { MissingKey } from "../refusals.ts";
 import { openSnapshot, sealSnapshot, wellFormedSnapshot } from "../snapshot.ts";
 import { fold, rosterOf, type FoldBase } from "../state.ts";
@@ -50,7 +50,7 @@ export class ChannelSnapshots {
       if ((yield* this.ch.fx.head()) - at < Math.max(every, 1)) return null;
       const prior = at ? yield* this.ch.fx.snapshot() : null;
       const whole = prior && olderRules(prior) ? yield* this.ch.fx.history(0) : null;
-      const from = whole?.messages[0]?.seq === 1 ? null : prior;
+      const from = whole && decodedWhole(whole) ? null : prior;
       const since = from?.n ?? 0;
       const [{ messages, head: top, through }, members, rooms, guard] = yield* Effect.all(
         [

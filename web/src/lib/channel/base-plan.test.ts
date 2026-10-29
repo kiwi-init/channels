@@ -1,12 +1,18 @@
 import { describe, expect, test } from "bun:test"
 
-import type { FoldBase } from "@kiwi/core/state.ts"
+import { fold, type FoldBase } from "@kiwi/core/state.ts"
 
 import { FOLD_RULES } from "@kiwi/core/protocol.ts"
 
 import { baseFrom, newestRules, startsWhole, usableBase } from "./base-plan"
 
-const at = (n: number) => ({ n }) as FoldBase
+const empty = (): FoldBase => {
+  const kept: { base?: FoldBase } = {}
+  fold([], [], 0, null, null, null, (b) => void (kept.base = b))
+  if (!kept.base) throw new Error("the fold kept no base")
+  return kept.base
+}
+const at = (n: number): FoldBase => ({ ...empty(), n })
 
 describe("folding the app's window on top of the channel's snapshot", () => {
   test("the window must follow straight on from the snapshot", () => {

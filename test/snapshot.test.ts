@@ -12,7 +12,7 @@ import * as Effect from "effect/Effect";
 import { fetchRelay, Relay } from "@kiwi/core/client.ts";
 import { newChannelKey, seal, type ChannelAccess } from "@kiwi/core/crypto.ts";
 import { canonical, generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
-import { FOLD_RULES, MAX_SNAPSHOT_LENGTH, olderRules, SNAPSHOT_EVERY, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
+import { decodedWhole, FOLD_RULES, MAX_SNAPSHOT_LENGTH, olderRules, SNAPSHOT_EVERY, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
 import { openOwnerSession } from "../src/owner.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { OPEN_POLICY } from "../src/relay/policy.ts";
@@ -673,6 +673,13 @@ describe("a base folded under older fold rules is set aside wherever the log can
     expect(outgrownCache([], older)).toBe(false);
   });
 
+  test("a log counts as whole only when every message from seq 1 to the head decoded", () => {
+    expect(decodedWhole({ head: 3, messages: [{ seq: 1 }, { seq: 2 }, { seq: 3 }] })).toBe(true);
+    expect(decodedWhole({ head: 3, messages: [{ seq: 1 }, { seq: 3 }] })).toBe(false);
+    expect(decodedWhole({ head: 3, messages: [{ seq: 2 }, { seq: 3 }] })).toBe(false);
+    expect(decodedWhole({ head: 0, messages: [] })).toBe(false);
+  });
+
   test("a cold agent offered an older-rules snapshot folds the relay's whole log instead", async () => {
     const { s, done, olderBase, cold } = await scene();
     try {
@@ -787,6 +794,26 @@ describe("a base folded under older fold rules is set aside wherever the log can
       expect(readBase(s.roomId)?.tasks.find((t) => t.id === task)?.title).toBe("as older rules folded it");
     } finally {
       proxy.stop(true);
+      done();
+    }
+  });
+
+  test("an agent keeps its older-rules base when a message in the log can't be opened", async () => {
+    const { s, done, olderBase, cold } = await scene();
+    try {
+      const task = await s.ownerCh.send("", { ev: { op: "task.add", title: "as the log says" } });
+      const garbage = await seal(newChannelKey(), s.roomId, { v: 1, id: "x", from: "nobody", kind: "msg", body: "sealed with a key nobody here has", ts: Date.now() });
+      const post = (s.ownerCh as unknown as { core: { request: (path: string, init: RequestInit) => Effect.Effect<unknown, unknown, Relay> } }).core.request("/messages", {
+        method: "POST",
+        body: JSON.stringify({ ...garbage, e: 0 }),
+      });
+      await Effect.runPromise(Effect.provideService(post, Relay, fetchRelay));
+      await s.ownerCh.send("after");
+      keepBase(s.roomId, await olderBase());
+      const { state } = await runAgent(cold("unreadable").state());
+      expect(state.tasks.get(task)?.title).toBe("as older rules folded it");
+      expect(readBase(s.roomId)?.rules ?? 0).toBe(0);
+    } finally {
       done();
     }
   });

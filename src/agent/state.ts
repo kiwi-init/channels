@@ -7,7 +7,7 @@ import type { Identity } from "@kiwi/core/identity.ts";
 import type { DaemonPeek } from "../daemon/protocol.ts";
 import { seatHolds, seatRefusal } from "../hold.ts";
 import { daemonMark, daemonPeek } from "../daemon/rpc.ts";
-import { GENERAL_ROOM, knownOp, olderRules, outgrown, PAGE_LIMIT, type Message } from "@kiwi/core/protocol.ts";
+import { decodedWhole, GENERAL_ROOM, knownOp, olderRules, outgrown, PAGE_LIMIT, type Message } from "@kiwi/core/protocol.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { findRoom, fold, rosterOf, type ChannelState, type FoldBase, type GuardFloor, type Roster, type RoomsFloor } from "@kiwi/core/state.ts";
 import { LAST_MARK_MS, lastSeq, Look, orNone, type Agent, type Delivery } from "./shared.ts";
@@ -96,7 +96,7 @@ export class SessionState {
     return Effect.gen({ self: this }, function* () {
       const one = yield* Effect.orElseSucceed(this.ch.fx.page(0, 1), () => []);
       const all = one[0]?.seq === 1 ? yield* Effect.orElseSucceed(this.ch.fx.history(0), () => null) : null;
-      const page = all && all.messages[0]?.seq === 1 && all.through === all.head ? all : null;
+      const page = all && decodedWhole(all) ? all : null;
       this.replayed = { page };
       return page;
     });

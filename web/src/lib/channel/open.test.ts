@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { FOLD_RULES, PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts"
-import type { FoldBase } from "@kiwi/core/state.ts"
+import { fold, type FoldBase } from "@kiwi/core/state.ts"
 import type { OpenedCache } from "../history"
 import type { Kept } from "./kept"
 import { planReload } from "../history-plan"
@@ -8,7 +8,13 @@ import { handOver, onceEach, openChannel, warmUp, type OpenSteps, type Planned }
 
 const msg = (seq: number): Message => ({ v: PROTOCOL_VERSION, id: `id-${seq}`, from: "atlas", kind: "msg", body: `m${seq}`, ts: 1_700_000_000_000 + seq, seq, sigOk: true })
 const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i)
-const base = (n: number): FoldBase => ({ n, rules: FOLD_RULES }) as FoldBase
+const empty = (): FoldBase => {
+  const kept: { base?: FoldBase } = {}
+  fold([], [], 0, null, null, null, (b) => void (kept.base = b))
+  if (!kept.base) throw new Error("the fold kept no base")
+  return kept.base
+}
+const base = (n: number): FoldBase => ({ ...empty(), n, rules: FOLD_RULES })
 const kept = (n: number | null): Kept => ({ roster: [], base: n === null ? null : base(n), guardFloor: null, roomsFloor: null })
 
 function relay(rotateTrips = 1, rotated = false) {
