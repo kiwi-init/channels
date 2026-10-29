@@ -927,6 +927,70 @@ button.msg-image-spot:hover {
   color: var(--ink-3);
 }
 
+.sys-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sys.is-yours .sys-text {
+  color: var(--decide);
+}
+
+.sys.is-task-row {
+  margin-left: 68px;
+}
+
+.sys-task {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: 500 var(--t-meta) var(--ui);
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.sys-task:hover,
+.sys-more:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.sys-more {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font: var(--t-meta) var(--ui);
+  cursor: pointer;
+}
+
+.sys-state.is-todo,
+.sys-state.is-cancelled {
+  color: var(--ink-3);
+}
+
+.sys-state.is-doing {
+  color: var(--doing);
+}
+
+.sys-state.is-review {
+  color: var(--review);
+}
+
+.sys-state.is-done {
+  color: var(--live);
+}
+
+.sys-state.is-waiting {
+  color: var(--decide);
+}
+
 .working {
   display: flex;
   align-items: center;
