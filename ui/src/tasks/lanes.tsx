@@ -131,7 +131,12 @@ function LaneCard({ channel, lane }: { channel: Channel; lane: Lane }) {
 
 export function Lanes({ channel }: { channel: Channel }) {
   const lanes = lanesOf(channel)
-  if (!lanes.length) return <Empty title="No agents yet.">Add one from the sidebar to see what it works on here.</Empty>
+  if (!lanes.length)
+    return (
+      <Empty title="No agents yet." icon="agent">
+        Add one from the sidebar to see what it works on here.
+      </Empty>
+    )
   return (
     <div className="lanes" role="region" aria-label="Agent lanes">
       {lanes.map((lane) => (

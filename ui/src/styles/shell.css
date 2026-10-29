@@ -457,6 +457,18 @@
   color: var(--ink-3);
 }
 
+.side-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  color: var(--ink-3);
+}
+
+.side-row.is-on .side-icon {
+  color: var(--ink-2);
+}
+
 .side-row.is-on .side-hash {
   color: var(--ink-2);
 }

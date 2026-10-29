@@ -562,6 +562,16 @@ kbd {
   text-align: center;
 }
 
+.empty-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-row);
+  background: var(--wash);
+  color: var(--ink-3);
+}
+
 .empty-title {
   font: 600 var(--t-ui) var(--ui);
 }
