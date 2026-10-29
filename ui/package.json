@@ -12,6 +12,7 @@
     "typecheck": "tsrs -b"
   },
   "dependencies": {
+    "@kiwi/channel": "workspace:*",
     "@kiwi/core": "workspace:*",
     "@kiwi/secrets": "workspace:*",
     "ghostty-web": "0.4.0",

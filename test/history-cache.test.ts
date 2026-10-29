@@ -1,9 +1,9 @@
-// Reload rules for the web history cache (web/src/lib/history-plan.ts).
+// Reload rules for the web history cache (packages/channel/src/history-plan.ts).
 // A hole or a seq past the relay's head loads the usual window. A contiguous
 // run fetches only what is newer than its last seq.
 
 import { expect, test } from "bun:test";
-import { planReload, wholeLog } from "../web/src/lib/history-plan.ts";
+import { planReload, wholeLog } from "@kiwi/channel/history-plan.ts";
 
 const LIMIT = 2_000;
 

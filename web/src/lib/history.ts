@@ -14,7 +14,7 @@
 
 import type { CachedKept, CachedRow, Unread } from "@kiwi/core/cache-row.ts"
 import type { Message } from "@kiwi/core/protocol.ts"
-import { planReload } from "./history-plan"
+import { planReload } from "@kiwi/channel/history-plan.ts"
 import { markOnce } from "./marks"
 
 export type { CachedKept, CachedRow }

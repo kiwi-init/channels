@@ -1,9 +1,9 @@
 import { olderRules, type Message } from "@kiwi/core/protocol.ts"
 import type { FoldBase } from "@kiwi/core/state.ts"
 import type { OpenedCache } from "../history"
-import { planReload } from "../history-plan"
-import { baseFrom, newestRules, startsWhole, usableBase } from "./base-plan"
-import { keptBaseUpTo, type Kept } from "./kept"
+import { planReload } from "@kiwi/channel/history-plan.ts"
+import { baseFrom, newestRules, startsWhole, usableBase } from "@kiwi/channel/base-plan.ts"
+import { keptBaseUpTo, type Kept } from "@kiwi/channel/kept.ts"
 import { heldWindow, type Warm } from "./warm"
 
 export interface Planned {

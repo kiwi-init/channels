@@ -1,0 +1,16 @@
+{
+  "name": "@kiwi/channel",
+  "private": true,
+  "description": "A channel's pure helpers in the renderer: its clock, its URL hash, the window it keeps and folds, and the bases a reload starts from. Shared by the ui, the web dashboard and the phone engine.",
+  "type": "module",
+  "exports": {
+    "./*": "./src/*"
+  },
+  "dependencies": {
+    "@kiwi/core": "workspace:*",
+    "react": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0"
+  }
+}

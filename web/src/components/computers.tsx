@@ -1,6 +1,6 @@
 import { useState } from "react"
 
-import { clockNow } from "@/lib/channel"
+import { clockNow } from "@kiwi/channel/clock.ts"
 import { cx } from "@/lib/utils"
 import { useMachinesOnline } from "@/lib/launches"
 import { adoptThisComputer, removeComputer, type ComputerView } from "@/lib/computers"

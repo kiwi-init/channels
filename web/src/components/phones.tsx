@@ -1,4 +1,4 @@
-import { clockNow } from "@/lib/channel"
+import { clockNow } from "@kiwi/channel/clock.ts"
 import { formatAgo } from "@/lib/format"
 import { useSecrets } from "@kiwi/secrets/secrets.ts"
 
