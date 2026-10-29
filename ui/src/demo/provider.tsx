@@ -433,7 +433,6 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       },
       setName: (name) => setState((s) => (s.account ? { ...s, account: { ...s.account, name } } : { ...s, account: { ...DEMO_ACCOUNT, name } })),
       setPrefs: (p) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...p } })),
-      pairBegin: async () => "KIWI-7305-PAIR",
       forgetComputer: (id) => setState((s) => (s.account ? { ...s, account: { ...s.account, computers: s.account.computers.filter((c) => c.id !== id) } } : s)),
       linkGithub: () => setState((s) => (s.account ? { ...s, account: { ...s.account, github: { login: "ojowwalker77" } } } : s)),
       unlinkGithub: () => setState((s) => (s.account ? { ...s, account: { ...s.account, github: undefined } } : s)),
@@ -446,8 +445,6 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       setNewMembers: (code, can) => edit(code, (c) => ({ ...c, newMembers: can })),
       setNewPowers: (code, powers) => edit(code, (c) => ({ ...c, newPowers: powers })),
       closeChannel: (code) => setState((s) => ({ ...s, tiles: s.tiles.filter((t) => t.code !== code) })),
-      answerPair: () => setState((s) => (s.account ? { ...s, account: { ...s.account, pairAsk: undefined } } : s)),
-      cancelPair: () => setState((s) => (s.account ? { ...s, account: { ...s.account, pairAsk: undefined } } : s)),
       enrollAnswer: () => setState((s) => (s.account?.enrollAsk ? { ...s, account: { ...s.account, enrollAsk: { ...s.account.enrollAsk, stage: "digits" } } } : s)),
       enrollConfirm: async (_id, digits) => {
         if (digits !== "482913") return { ok: false, left: 2 }

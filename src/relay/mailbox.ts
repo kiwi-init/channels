@@ -1,7 +1,7 @@
-// A one-time pairing mailbox at the relay, where two of one person's
-// programs meet: the desktop app and a computer pairing with it (`kiwi pair`).
-// Whoever starts makes a random secret; the person pastes its code on the
-// other side. The relay only ever sees a mailbox id hashed from the secret,
+// A one-time mailbox at the relay, where two of one person's programs meet:
+// the desktop app and a computer it asks to launch an agent, or a device
+// enrolling with the app. Whoever starts makes a random secret; the relay
+// only ever sees a mailbox id hashed from the secret,
 // and boxes sealed under keys derived from it, so it can't read, forge or
 // swap either side's message. See src/mailbox.ts for the client side.
 //

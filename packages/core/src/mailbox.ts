@@ -1,21 +1,13 @@
 // A one-time mailbox at the relay, where two of one person's programs meet: the desktop app and a
-// computer pairing with it (`kiwi pair`), or later two of their apps. Whoever starts makes a random
-// secret and shows it as a code; the person pastes it on the other side. The relay only ever sees
-// a mailbox id hashed from the secret, and boxes sealed under keys derived from it, so it can't read,
-// forge or swap either side's message. Each slot is written once; the mailbox lives ten minutes.
-//
-//   desktop app                       relay                           computer (kiwi pair kp1-…)
-//   shows kp1-<secret>
-//                                     mailbox <id> slot a  ◄────────  PairAsk: its keys and name, signed
-//   reads a, the person says yes
-//   PairAnswer: the cert  ─────────►  mailbox <id> slot b  ────────►  stores the cert, deletes the box
+// computer it asks to launch an agent, or a device enrolling with the app. Whoever starts makes a
+// random secret; the relay only ever sees a mailbox id hashed from it, and boxes sealed under keys
+// derived from it, so it can't read, forge or swap either side's message. Each slot is written once;
+// the mailbox lives ten minutes.
 //
 // Shared by the CLI, the daemon, the desktop app and the relay (the routes check MAILBOX_ID_RE and
 // the limits below), so nothing here touches the file system.
 
 import { b64url, fromB64url, openWith, sealWith } from "./crypto.ts";
-import { sign, verify, type Identity } from "./identity.ts";
-import { readMachineCert, certifyMachine, type MachineCert } from "./person.ts";
 
 /** How long a mailbox lives after its first write. */
 export const MAILBOX_TTL_MS = 10 * 60_000;
@@ -29,7 +21,7 @@ const enc = new TextEncoder();
 const SECRET_RE = /^[A-Za-z0-9_-]{43}$/;
 
 /** The relay refused or lost a mailbox call (status 0: it couldn't be reached). */
-export class MailboxError extends Error {
+class MailboxError extends Error {
   constructor(
     readonly status: number,
     message: string,
@@ -78,7 +70,7 @@ export interface Mailbox {
 
 /** The mailbox a secret names, on `relay`. `fetchImpl` lets a caller with its own fetch (a test, a sandbox) use it. */
 export async function openMailbox(relay: string, secret: string, fetchImpl: typeof fetch = fetch): Promise<Mailbox> {
-  if (!SECRET_RE.test(secret)) throw new MailboxError(400, "that isn't a pairing code");
+  if (!SECRET_RE.test(secret)) throw new MailboxError(400, "that isn't a mailbox secret");
   const id = await mailboxId(secret);
   const url = (path = "") => new URL(`/v1/mailbox/${id}${path}`, relay);
   const call = async (path: string, init?: RequestInit): Promise<Response> => {
@@ -137,76 +129,4 @@ export async function openMailbox(relay: string, secret: string, fetchImpl: type
       await call("", { method: "DELETE" }).catch(() => {});
     },
   };
-}
-
-// ---------- pairing a computer with a person's app ----------
-
-/** A pairing code: what the app shows and `kiwi pair` takes. */
-const PAIR_PREFIX = "kp1-";
-
-export const pairCode = (secret: string) => `${PAIR_PREFIX}${secret}`;
-
-/** The secret in a pairing code, or null if it isn't one. */
-export function readPairCode(code: string): string | null {
-  const s = code.trim();
-  if (!s.startsWith(PAIR_PREFIX)) return null;
-  const secret = s.slice(PAIR_PREFIX.length);
-  return SECRET_RE.test(secret) ? secret : null;
-}
-
-/** A computer asking to pair: its keys and name, signed by its key (`pk`), for this mailbox only. */
-export interface PairAsk {
-  kind: "kiwi-pair-ask";
-  v: 1;
-  mailbox: string;
-  mxpk: string;
-  label: string;
-  /** "linux", "darwin", "win32"…: shown beside the label. */
-  os: string;
-  at: number;
-  pk: string;
-  sig: string;
-}
-
-/** The app's answer: the person's cert for that computer, and who they are. */
-export interface PairAnswer {
-  kind: "kiwi-pair-answer";
-  v: 1;
-  cert: MachineCert;
-  person: { pk: string; xpk: string; name: string };
-}
-
-/** The computer's side, first half: ask to pair through `mailbox`. */
-export async function askToPair(machine: Identity, mailbox: Mailbox, label: string, os: string): Promise<void> {
-  if (!machine.xpk) throw new Error("this computer's key has no exchange key");
-  const ask = await sign(machine, { kind: "kiwi-pair-ask" as const, v: 1 as const, mailbox: mailbox.id, mxpk: machine.xpk, label, os, at: Date.now() });
-  await mailbox.put("a", ask);
-}
-
-/** The app's side: the ask in slot a, when it's a computer's own signature for this mailbox; else null. */
-export async function readPairAsk(x: unknown, mailbox: Mailbox): Promise<PairAsk | null> {
-  if (!x || typeof x !== "object") return null;
-  const a = x as Partial<PairAsk>;
-  if (a.kind !== "kiwi-pair-ask" || a.v !== 1 || a.mailbox !== mailbox.id) return null;
-  if (typeof a.mxpk !== "string" || typeof a.label !== "string" || typeof a.os !== "string" || a.label.length > 64 || a.os.length > 32) return null;
-  return (await verify(a)) ? (a as PairAsk) : null;
-}
-
-/** The app's side, once the person said yes: certify the computer and answer in slot b. */
-export async function answerPair(person: Identity, mailbox: Mailbox, ask: PairAsk, label = ask.label): Promise<MachineCert> {
-  if (!person.xpk) throw new Error("this person's key has no exchange key");
-  const cert = await certifyMachine(person, { pk: ask.pk, xpk: ask.mxpk, label });
-  const answer: PairAnswer = { kind: "kiwi-pair-answer", v: 1, cert, person: { pk: person.pk, xpk: person.xpk, name: person.name } };
-  await mailbox.put("b", answer);
-  return cert;
-}
-
-/** The computer's side, second half: the answer in slot b, when its cert is for this computer and signed by the person it names. */
-export async function readPairAnswer(x: unknown, machinePk: string): Promise<PairAnswer | null> {
-  if (!x || typeof x !== "object") return null;
-  const a = x as Partial<PairAnswer>;
-  if (a.kind !== "kiwi-pair-answer" || a.v !== 1 || !a.person || typeof a.person.pk !== "string" || typeof a.person.xpk !== "string" || typeof a.person.name !== "string") return null;
-  const cert = await readMachineCert(a.cert);
-  if (!cert || cert.machine !== machinePk || cert.pk !== a.person.pk) return null;
-  return { kind: "kiwi-pair-answer", v: 1, cert, person: { pk: a.person.pk, xpk: a.person.xpk, name: a.person.name } };
 }

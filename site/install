@@ -15,14 +15,14 @@
 #
 # With `sh -s -- join CODE [...]` it then runs `kiwi join CODE [...]`, so one
 # pasted line installs kiwi and asks to join a channel. With
-# `sh -s -- pair CODE` it runs `kiwi pair CODE`, which pairs this computer with
-# the Kiwi desktop app that showed the code. Nothing else is run.
+# `sh -s -- login` it runs `kiwi login`, which adds this computer to the
+# devices of the person who signs in. Nothing else is run.
 set -eu
 
 case "${1:-}" in
-  ""|join|pair) ;;
+  ""|join|login) ;;
   *)
-    echo "kiwi: the installer only runs \`kiwi join\` or \`kiwi pair\` after installing (got: $1)" >&2
+    echo "kiwi: the installer only runs \`kiwi join\` or \`kiwi login\` after installing (got: $1)" >&2
     exit 1
     ;;
 esac

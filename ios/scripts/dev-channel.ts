@@ -13,8 +13,8 @@ import { PRESETS } from "@kiwi/core/presets.ts";
 import type { Activity } from "@kiwi/core/protocol.ts";
 
 import type { ChannelIdentityView } from "../../desktop/src/bridge.ts";
-import { createLinkHost } from "../../desktop/src/link-host.ts";
 import type { AgentSession } from "../../src/agent.ts";
+import type { Saved } from "../engine/wire.ts";
 
 const arg = (name: string, fallback: string): string => {
   const at = process.argv.indexOf(`--${name}`);
@@ -29,7 +29,7 @@ const lanAddress = (): string => {
 const root = arg("dir", join(process.cwd(), ".ios-dev"));
 const port = Number(arg("port", "8790"));
 const personName = arg("name", "Jonatas Walker");
-const out = arg("code-file", join(root, "link-code.txt"));
+const out = arg("saved-file", join(root, "phone.json"));
 
 rmSync(root, { recursive: true, force: true });
 mkdirSync(root, { recursive: true });
@@ -136,25 +136,10 @@ const program = Effect.gen(function* () {
   yield* Effect.forkChild(beacon(lead, () => ({ state: "idle" })));
 
   const seat: ChannelIdentityView = { label: title, idName: handle, pk: owner.pk, sk: owner.sk, xpk: owner.xpk, xsk: owner.xsk, roomId, code, access, at: Date.now(), name: title };
-  const host = createLinkHost({
-    relayUrl: () => relay,
-    person: () => ({ name: person.name, pk: person.pk, sk: person.sk, xpk: personXpk, xsk: personXsk }),
-    channels: () => [seat],
-    linked: (phone) => say(`linked ${phone.label}: the channel is on the phone`),
-  });
+  const saved: Saved = { relay, person: { name: person.name, pk: person.pk, sk: person.sk, xpk: personXpk, xsk: personXsk }, seats: [seat] };
+  writeFileSync(out, JSON.stringify(saved));
   say(`relay ${relay}`);
-  const linking = Effect.gen(function* () {
-    for (;;) {
-      const { code: text } = yield* Effect.promise(() => host.begin());
-      writeFileSync(out, text);
-      say(`link code (also in ${out}):\n${text}`);
-      let ask = null;
-      while (!ask) ask = yield* Effect.promise(() => host.poll());
-      say(`${ask.label} asks to link, digits ${ask.digits}`);
-      yield* Effect.promise(() => host.answer(true));
-    }
-  });
-  yield* Effect.forkChild(linking);
+  say(`a phone's saved keys for this channel are in ${out}`);
 
   const answers = ["On it.", "Good call, doing that now.", "Noted. I'll post when it's in review.", "Makes sense: I'll tell win."];
   let turn = 0;

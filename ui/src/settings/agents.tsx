@@ -84,7 +84,7 @@ function CheckComputer() {
     <Group>
       <Row
         label="Check this computer"
-        hint={Array.isArray(state) ? (problems ? `${problems} to fix` : "Nothing to fix") : "Looks at kiwi's install, the relay, pairing and hooks, and says how to fix what isn't right."}
+        hint={Array.isArray(state) ? (problems ? `${problems} to fix` : "Nothing to fix") : "Looks at kiwi's install, the relay, your devices and hooks, and says how to fix what isn't right."}
       >
         <button type="button" className="btn is-small" disabled={state === "running"} onClick={run}>
           {state === "running" ? "Checking…" : Array.isArray(state) ? "Check again" : "Check"}

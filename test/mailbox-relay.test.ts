@@ -1,4 +1,4 @@
-// The pairing mailbox at the relay (src/relay/mailbox.ts, wired in
+// The one-time mailbox at the relay (src/relay/mailbox.ts, wired in
 // src/relay/bun.ts and worker.ts): write-once sealed slots the relay can't
 // read, gone ten minutes after the first write, open to any origin.
 
@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { answerPair, askToPair, mailboxId, newSecret, openMailbox, readPairAnswer, readPairAsk } from "@kiwi/core/mailbox.ts";
+import { mailboxId, newSecret, openMailbox } from "@kiwi/core/mailbox.ts";
 import { MAILBOX_MAX_BYTES } from "@kiwi/core/mailbox.ts";
 import { onMailboxHttp, sqlMailboxStore, type MailboxStore } from "../src/relay/mailbox.ts";
 import type { Sql, SqlParam } from "../src/relay/room/db.ts";
@@ -27,25 +27,21 @@ afterAll(() => {
   rmSync(dataDir, { recursive: true, force: true });
 });
 
-describe("the relay's pairing mailbox", () => {
-  test("a computer pairs through the real relay, and the relay learns nothing", async () => {
-    const person = await generateIdentity("Ada Lovelace");
+describe("the relay's one-time mailbox", () => {
+  test("two sides meet through the real relay, and the relay learns nothing", async () => {
     const machine = await generateIdentity("vps-1");
     const secret = newSecret();
     const there = await openMailbox(relay, secret);
-    await askToPair(machine, there, "vps-1", "linux");
+    await there.put("a", { pk: machine.pk });
     const here = await openMailbox(relay, secret);
-    const ask = await readPairAsk(await here.get("a"), here);
-    expect(ask?.pk).toBe(machine.pk);
-    const cert = await answerPair(person, here, ask!);
-    expect((await readPairAnswer(await there.wait("b", { timeoutMs: 5_000 }), machine.pk))?.cert).toEqual(cert);
+    expect(await here.get<{ pk: string }>("a")).toEqual({ pk: machine.pk });
+    await here.put("b", { ok: true });
+    expect(await there.wait<{ ok: boolean }>("b", { timeoutMs: 5_000 })).toEqual({ ok: true });
     await there.drop();
     expect(await here.get("a")).toBeNull();
   });
 
-  test("waiting for the answer rides out the relay's 5xx and dropped connections, as kiwi pair's wait must (issue #714)", async () => {
-    const person = await generateIdentity("Ada Lovelace");
-    const machine = await generateIdentity("devbox");
+  test("waiting for the answer rides out the relay's 5xx and dropped connections (issue #714)", async () => {
     const secret = newSecret();
     let reads = 0;
     const flaky: typeof fetch = Object.assign(
@@ -60,11 +56,9 @@ describe("the relay's pairing mailbox", () => {
       { preconnect: fetch.preconnect },
     );
     const there = await openMailbox(relay, secret, flaky);
-    await askToPair(machine, there, "devbox", "linux");
     const here = await openMailbox(relay, secret);
-    setTimeout(() => void (async () => answerPair(person, here, (await readPairAsk(await here.get("a"), here))!))(), 300);
-    const answer = await readPairAnswer(await there.wait("b", { timeoutMs: 10_000, everyMs: 50 }), machine.pk);
-    expect(answer?.person.pk).toBe(person.pk);
+    setTimeout(() => void here.put("b", { ok: true }), 300);
+    expect(await there.wait<{ ok: boolean }>("b", { timeoutMs: 10_000, everyMs: 50 })).toEqual({ ok: true });
     expect(reads).toBeGreaterThan(4);
   });
 

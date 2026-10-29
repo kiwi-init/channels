@@ -3,11 +3,13 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
-import { answerPair, newSecret, openMailbox, pairCode, readPairAsk } from "@kiwi/core/mailbox.ts";
+import type { DeviceLink } from "@kiwi/core/devices.ts";
+import { createDeviceHost } from "../desktop/src/devices.ts";
 import { foldersOn, harnessesOn, launchOn, machineOnline } from "../desktop/src/remote.ts";
 import { daemonSock, stopDaemon } from "../src/daemon.ts";
 import { NO_REMOTE_BYPASS } from "../src/daemon/remote.ts";
 import { startRelay } from "../src/relay/bun.ts";
+import { devHumanAuth } from "../src/relay/human.ts";
 
 setDefaultTimeout(60_000);
 
@@ -48,24 +50,59 @@ let relay = "";
 let person: Identity;
 let machine: { pk: string; xpk: string; label: string };
 
+async function digitsFrom(out: ReadableStream<Uint8Array>): Promise<string> {
+  const reader = out.getReader();
+  const text = new TextDecoder();
+  let said = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) throw new Error(`kiwi login ended before it showed its digits: ${said}`);
+    said += text.decode(value);
+    const m = /digits in your app: (\d{3}) (\d{3})/.exec(said);
+    if (m) {
+      reader.releaseLock();
+      return m[1]! + m[2]!;
+    }
+  }
+}
+
 beforeAll(async () => {
   for (const d of [home, kiwiHome, bins, join(repo, ".git")]) mkdirSync(d, { recursive: true });
   script(join(bins, "claude"), "echo '2.1.304 (Claude Code)'");
   script(join(bins, "tmux"), `for a in "$@"; do printf '%s\\n' "$a" >> '${calls}'; done\nprintf '%s\\n' --- >> '${calls}'\nprintf '/tmp/sock\\tkiwi\\t@7\\t%%9\\t4242\\n'`);
   script(join(root, "login-shell"), `echo __kiwi_login_path__\necho '${bins}:/usr/bin:/bin'`);
   writeFileSync(join(kiwiHome, "config.json"), JSON.stringify({ channels: {}, terminals: { prefer: "tmux", helpers: { tmux: "on" } } }));
-  server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: join(root, "relay") });
+  server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: join(root, "relay"), human: devHumanAuth() });
   relay = server.url.origin;
   person = await withExchangeKey(await generateIdentity("Ada Lovelace"));
 
-  const secret = newSecret();
-  const pairing = Bun.spawn([process.execPath, MAIN_TS, "pair", pairCode(secret)], { cwd: root, env: { ...env(), KIWI_RELAY: relay }, stdout: "pipe", stderr: "pipe" });
-  const app = await openMailbox(relay, secret);
-  const ask = await readPairAsk(await app.wait("a", { timeoutMs: 20_000 }), app);
-  if (!ask) throw new Error("the computer never asked to pair");
-  await answerPair(person, app, ask);
-  if ((await pairing.exited) !== 0) throw new Error(`kiwi pair failed: ${await new Response(pairing.stderr).text()}`);
-  machine = { pk: ask.pk, xpk: ask.mxpk, label: ask.label };
+  const held: { device: Identity | null; links: DeviceLink[]; machine?: typeof machine } = { device: null, links: [] };
+  const app = createDeviceHost({
+    relayUrl: () => relay,
+    token: async () => "dev:ada",
+    person: () => person,
+    who: () => ({ name: person.name, pk: person.pk, xpk: person.xpk! }),
+    device: () => held.device,
+    saveDevice: (d) => void (held.device = d),
+    links: () => held.links,
+    saveLinks: (l) => void (held.links = l),
+    channels: () => [],
+    computer: (c) => void (held.machine = { pk: c.machinePk, xpk: c.machineXpk, label: c.label }),
+    label: () => "studio",
+    os: () => "macOS",
+    wipe: () => {},
+  });
+  await app.poll();
+  const login = Bun.spawn([process.execPath, MAIN_TS, "login", "--user", "ada"], { cwd: root, env: { ...env(), KIWI_RELAY: relay }, stdout: "pipe", stderr: "pipe" });
+  let ask = await app.poll();
+  for (const until = Date.now() + 20_000; !ask && Date.now() < until; ask = await app.poll()) await Bun.sleep(100);
+  if (!ask) throw new Error("the computer never asked to be added");
+  await app.answer(ask.id);
+  const confirmed = await app.confirm(ask.id, await digitsFrom(login.stdout));
+  if (!confirmed.ok) throw new Error("the app refused the computer's digits");
+  if ((await login.exited) !== 0) throw new Error(`kiwi login failed: ${await new Response(login.stderr).text()}`);
+  if (!held.machine) throw new Error("the app didn't certify the computer");
+  machine = held.machine;
   const until = Date.now() + 20_000;
   while ((await machineOnline({ person, relay }, machine.pk)) !== true && Date.now() < until) await Bun.sleep(200);
 });
@@ -76,8 +113,8 @@ afterAll(async () => {
   rmSync(root, { recursive: true, force: true });
 });
 
-describe("starting an agent on a paired computer from another device (T394)", () => {
-  test("the paired computer comes online for its person once kiwi pair starts its daemon", async () => {
+describe("starting an agent on one of your computers from another device (T394)", () => {
+  test("the computer comes online for its person once kiwi login starts its daemon", async () => {
     expect(await machineOnline({ person, relay }, machine.pk)).toBe(true);
   });
 

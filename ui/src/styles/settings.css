@@ -320,17 +320,6 @@
   letter-spacing: 0.08em;
 }
 
-.set-pair-code {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.set-pair-code code {
-  font: 600 var(--t-display) var(--ui);
-  letter-spacing: 0.08em;
-}
-
 .set-pair-line {
   display: flex;
   align-items: center;

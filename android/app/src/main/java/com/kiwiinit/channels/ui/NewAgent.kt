@@ -259,7 +259,7 @@ internal fun NewAgentFrame(title: String, root: Boolean, back: (() -> Unit)?, co
 internal fun ComputerList(room: RoomView, computers: Loaded<List<ComputerView>>, retry: () -> Unit, pick: (ComputerView) -> Unit) {
     Steps(computers, "Looking for your computers…", retry) { list ->
         if (list.isEmpty()) {
-            item { Note("No paired computers yet. Pair one from the Mac app: Settings → Computers.") }
+            item { Note("No computers yet. Run kiwi login on a computer, then type the digits it shows in Channels on your Mac.") }
         } else {
             items(list, key = { it.key }) { c ->
                 Choice(
