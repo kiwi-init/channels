@@ -7,7 +7,7 @@ import type { Identity } from "@kiwi/core/identity.ts";
 import type { DaemonPeek } from "../daemon/protocol.ts";
 import { seatHolds, seatRefusal } from "../hold.ts";
 import { daemonMark, daemonPeek } from "../daemon/rpc.ts";
-import { GENERAL_ROOM, knownOp, outgrown, PAGE_LIMIT, type Message } from "@kiwi/core/protocol.ts";
+import { GENERAL_ROOM, knownOp, olderRules, outgrown, PAGE_LIMIT, type Message } from "@kiwi/core/protocol.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { findRoom, fold, rosterOf, type ChannelState, type FoldBase, type GuardFloor, type Roster, type RoomsFloor } from "@kiwi/core/state.ts";
 import { LAST_MARK_MS, lastSeq, Look, orNone, type Agent, type Delivery } from "./shared.ts";
@@ -23,7 +23,8 @@ function poisoned(base: FoldBase, roster: Roster): boolean {
   return base.rejected.some(([, why]) => why.endsWith(NOT_A_MEMBER) && names.has(why.slice(0, -NOT_A_MEMBER.length)));
 }
 
-export const outgrownCache = (cached: readonly Message[], base: FoldBase | null): boolean => cached.some((m) => m.newer !== undefined && knownOp(m.newer.op)) || (!!base && outgrown(base));
+export const outgrownCache = (cached: readonly Message[], base: FoldBase | null): boolean =>
+  cached.some((m) => m.newer !== undefined && knownOp(m.newer.op)) || (!!base && (outgrown(base) || olderRules(base)));
 
 function strangers(rejected: Iterable<readonly [number, string]>, after: number): boolean {
   for (const [seq, why] of rejected) if (seq > after && (why.endsWith(NOT_A_MEMBER) || why.startsWith("not signed by "))) return true;
@@ -108,13 +109,15 @@ export class SessionState {
     const holed = first !== undefined && first > (this.base?.n ?? 0) + 1;
     const current = !holed && seen !== null && seen.head <= lastSeq(this.log) && lastSeq(this.log) >= this.owed;
     if (!current && (holed || !look?.fetched.has(this) || lastSeq(this.log) < this.owed)) {
-      const fetched = !this.base && (first === undefined || first > 1) ? yield* this.ch.fx.snapshot() : null;
+      const offered = !this.base && (first === undefined || first > 1) ? yield* this.ch.fx.snapshot() : null;
+      const whole = offered && olderRules(offered) ? yield* Effect.orElseSucceed(this.ch.fx.history(0), () => null) : null;
+      const fetched = whole?.first === 1 ? null : offered;
       const floor = this.base?.n ?? fetched?.n ?? 0;
       const hole = first !== undefined && first > floor + 1;
       const from = hole ? floor : Math.max(lastSeq(this.log), floor);
       const offline = yield* OfflineReads;
       const cachedOnly = !!offline && !fetched && this.log.length > 0;
-      const page = yield* this.ch.fx.history(from).pipe(
+      const page = yield* (whole?.first === 1 && from === 0 ? Effect.succeed(whole) : this.ch.fx.history(from)).pipe(
         Effect.catchIf(
           (err) => cachedOnly && relayDown(err),
           (err) => Effect.sync(() => (offline?.note(downWhy(err)), null)),

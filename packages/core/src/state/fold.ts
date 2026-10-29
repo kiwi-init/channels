@@ -1,4 +1,4 @@
-import { EVENT_OPS_VERSION, GENERAL_ROOM, ignored, isOldGifKey, isReaction, MAX_GOAL_NAME, MAX_ROOMS, ROOM_ID_RE, type Message, type Trust } from "../protocol.ts";
+import { EVENT_OPS_VERSION, FOLD_RULES, GENERAL_ROOM, ignored, isOldGifKey, isReaction, MAX_GOAL_NAME, MAX_ROOMS, ROOM_ID_RE, type Message, type Trust } from "../protocol.ts";
 import { inlineText } from "../membership.ts";
 import { refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
@@ -546,6 +546,7 @@ function folding(
       placeOf: recent(placeOf),
       personaLeads: [...personaLead],
       folded: EVENT_OPS_VERSION,
+      rules: from ? Math.min(from.rules ?? 0, FOLD_RULES) : FOLD_RULES,
       ...(skipped ? { skipped: true as const } : {}),
     }),
   );
