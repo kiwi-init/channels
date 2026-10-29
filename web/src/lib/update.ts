@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react"
 
-import { bridge, type UpdateCheckView, type UpdateView } from "./secrets"
+import { bridge, type UpdateCheckView, type UpdateView } from "@kiwi/secrets/secrets.ts"
 
 export type { UpdateCheckView, UpdateView }
 

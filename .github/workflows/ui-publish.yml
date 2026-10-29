@@ -8,6 +8,7 @@ on:
       - ui/**
       - web/src/lib/**
       - packages/core/**
+      - packages/secrets/**
       - desktop/src/ui-channel.ts
       - desktop/scripts/ui-stage.ts
       - .github/workflows/ui-publish.yml

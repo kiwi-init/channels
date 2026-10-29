@@ -5,7 +5,7 @@ import type { Room } from "@kiwi/core/state/types.ts"
 import { describeScopes, SCOPES, wireScopes } from "@kiwi/core/scopes.ts"
 import { forgetChannel, loadMember, renameChannel, type ChannelHandle, type StoredMember } from "@/lib/channel"
 import { cleanRoomName, roomProblem, roomsAfter } from "@/lib/rooms"
-import { secrets } from "@/lib/secrets"
+import { secrets } from "@kiwi/secrets/secrets.ts"
 import type { ControlsProps } from "../controls"
 
 type Handlers = Pick<

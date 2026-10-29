@@ -1,5 +1,5 @@
 import type { DroppedFile, KiwiBridge } from "../../../desktop/src/bridge.ts"
-import { bridge } from "./secrets"
+import { bridge } from "@kiwi/secrets/secrets.ts"
 
 const here = (): string => `${navigator.platform} ${navigator.userAgent}`
 

@@ -9,9 +9,9 @@ import { useEffect, useState } from "react"
 
 import { fx as relayFx } from "@kiwi/core/client/relay.ts"
 
-import { relayUrl } from "./relay"
+import { relayUrl } from "@kiwi/secrets/relay.ts"
 import { run } from "./runtime"
-import { bridge, secrets } from "./secrets"
+import { bridge, secrets } from "@kiwi/secrets/secrets.ts"
 
 export type SignInMode = "loading" | "off" | "workos" | "dev"
 

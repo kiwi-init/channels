@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import type { UpdateCheckView, UpdateView } from "@/lib/secrets"
+import type { UpdateCheckView, UpdateView } from "@kiwi/secrets/secrets.ts"
 import { downloadAndRestart, type Updater } from "~/live/update"
 
 const URL = "https://github.com/kiwi-init/channels/releases/tag/v2026.10.8"

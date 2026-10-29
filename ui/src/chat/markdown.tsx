@@ -7,7 +7,7 @@ import { RenderNode } from "react-native-enriched-markdown/lib/module/web/render
 import { buildStyles, zeroTrailingMargins } from "react-native-enriched-markdown/lib/module/web/styles.js"
 import { indexTaskItems, markInlineImages } from "react-native-enriched-markdown/lib/module/web/utils.js"
 import type { ASTNode } from "react-native-enriched-markdown/lib/typescript/src/web/types"
-import { bridge } from "@/lib/secrets"
+import { bridge } from "@kiwi/secrets/secrets.ts"
 
 import { keepParsed, parsedFor } from "~/chat/parsed"
 

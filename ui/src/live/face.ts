@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react"
 
 import type { SendOptions } from "@kiwi/core/client.ts"
 import { isPerson, type ChannelState } from "@kiwi/core/state.ts"
-import { bridge } from "@/lib/secrets"
+import { bridge } from "@kiwi/secrets/secrets.ts"
 
 export function usePublishFace(state: ChannelState, me: string, ready: boolean, send: (body: string, opts: SendOptions) => Promise<number>): void {
   const done = useRef(false)

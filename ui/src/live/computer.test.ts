@@ -36,7 +36,7 @@ const fake = {
       : { ok: false as const, detail: "laptop didn't answer: it's offline" },
   doctor: async () => [{ ok: false as const, what: "Codex's hooks are from an older kiwi", how: "Update them" }],
 }
-mock.module("@/lib/secrets", () => ({ bridge: () => fake }))
+mock.module("@kiwi/secrets/secrets.ts", () => ({ bridge: () => fake }))
 const { checkComputer, computerNow, computerSettings, loadComputer, setContextLine, setHooks } = await import("~/live/computer")
 
 describe("Settings > Agents shows this computer", () => {

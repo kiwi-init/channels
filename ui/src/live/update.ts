@@ -1,4 +1,4 @@
-import type { KiwiBridge, UpdateView } from "@/lib/secrets"
+import type { KiwiBridge, UpdateView } from "@kiwi/secrets/secrets.ts"
 
 export type Updater = Pick<KiwiBridge, "getUpdate" | "checkUpdate" | "installUpdate" | "onUpdate" | "openExternal">
 

@@ -1,7 +1,7 @@
 import { useEffect, useSyncExternalStore } from "react"
 
 import type { PlacedSeat } from "@kiwi/core/terminals.ts"
-import { bridge } from "@/lib/secrets"
+import { bridge } from "@kiwi/secrets/secrets.ts"
 import { store } from "~/live/value"
 import type { Person } from "~/model"
 

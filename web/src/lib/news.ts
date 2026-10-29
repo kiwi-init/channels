@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useSyncExternalStore } from "react"
-import { bridge } from "@/lib/secrets"
+import { bridge } from "@kiwi/secrets/secrets.ts"
 import { pendingWrite, writeLater } from "@/lib/write-behind"
 
 // What's new where. For each channel this browser keeps the last seq it saw there, and how many

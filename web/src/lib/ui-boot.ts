@@ -1,4 +1,4 @@
-import { bridge } from "@/lib/secrets"
+import { bridge } from "@kiwi/secrets/secrets.ts"
 
 let booted = false
 

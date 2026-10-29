@@ -5,7 +5,7 @@ import type { UpdateView } from "../../../desktop/src/bridge.ts"
 
 let current: UpdateView | null = null
 mock.module("@/lib/avatars", () => ({ avatarUrl: () => "", robotUrl: () => "", robotFor: () => "blue", harnessUrl: () => "" }))
-mock.module("@/lib/secrets", () => ({ bridge: () => ({ checkUpdate: async () => ({ state: "failed" }) }) }))
+mock.module("@kiwi/secrets/secrets.ts", () => ({ bridge: () => ({ checkUpdate: async () => ({ state: "failed" }) }) }))
 mock.module("@/lib/update", () => ({ useUpdate: () => current, openRelease: () => {}, restartToUpdate: () => {} }))
 const { UpdateCheck } = await import("./update-check.tsx")
 

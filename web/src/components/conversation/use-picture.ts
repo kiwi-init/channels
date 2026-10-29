@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef } from "react"
 import type { MemberPicture } from "@kiwi/core/protocol.ts"
 import { isPerson, type ChannelState } from "@kiwi/core/state.ts"
 import type { ChannelHandle } from "@/lib/channel"
-import { bridge } from "@/lib/secrets"
+import { bridge } from "@kiwi/secrets/secrets.ts"
 
 /** People's pictures in this channel, by member name, for the faces drawn in it. */
 export function usePictures(state: ChannelState): ReadonlyMap<string, MemberPicture> {

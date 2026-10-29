@@ -5,7 +5,7 @@
 import { allMembers } from "./channel"
 import { linkOf, type ChannelLink } from "./channel-ops"
 import { takeAgents } from "./remove-agents"
-import { bridge, saveComputers, secrets, type ComputerView } from "./secrets"
+import { bridge, saveComputers, secrets, type ComputerView } from "@kiwi/secrets/secrets.ts"
 
 export type { ComputerView }
 

@@ -1,7 +1,7 @@
 import { useMemo, useSyncExternalStore } from "react"
 
 import type { WakeSeat } from "@kiwi/core/wake.ts"
-import { bridge } from "@/lib/secrets"
+import { bridge } from "@kiwi/secrets/secrets.ts"
 
 let seats: readonly WakeSeat[] = []
 let asking = false
