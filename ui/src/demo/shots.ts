@@ -19,6 +19,7 @@ export const SHOTS: Record<string, Shot> = {
   "opening-needs": { scenario: "opening", channel: "kiwi", nav: { tab: "needs" } },
   thread: kiwi({ panel: { kind: "thread", seq: 112 } }),
   dm: kiwi({ where: { kind: "dm", with: "atlas" } }),
+  theirs: kiwi({ where: { kind: "theirs", between: ["atlas", "win"] } }),
   room: kiwi({ where: { kind: "room", room: "releases" } }),
   tasks: kiwi({ tab: "tasks" }),
   task: kiwi({ tab: "tasks", panel: { kind: "task", task: 12 } }),

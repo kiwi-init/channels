@@ -209,6 +209,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
                 className={cx("react", r.by.includes(channel.you) && "is-mine")}
                 title={r.by.map((b) => nickname(channel, b)).join(", ")}
                 aria-pressed={r.by.includes(channel.you)}
+                disabled={m.where.kind === "theirs"}
                 onClick={() => actions.react(channel.code, m.seq, r.emoji)}
               >
                 {r.emoji} <span className="num">{r.by.length}</span>
@@ -229,12 +230,13 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
       </div>
       {!m.pending && m.failed === undefined && (
         <div className="msg-tools" role="toolbar" aria-label="Message actions">
-          {QUICK.map((e) => (
-            <button key={e} type="button" className="msg-tool" aria-label={`React ${e}`} onClick={() => actions.react(channel.code, m.seq, e)}>
-              {e}
-            </button>
-          ))}
-          {replying && (
+          {m.where.kind !== "theirs" &&
+            QUICK.map((e) => (
+              <button key={e} type="button" className="msg-tool" aria-label={`React ${e}`} onClick={() => actions.react(channel.code, m.seq, e)}>
+                {e}
+              </button>
+            ))}
+          {replying && m.where.kind !== "theirs" && (
             <button type="button" className="msg-tool" aria-label="Reply" title="Reply" onClick={() => replying.set(m)}>
               <Icon name="reply" size={14} />
             </button>
@@ -257,7 +259,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             face={who}
             at={m.at}
             onSend={
-              channel.people.find((p) => p.you)?.readOnly
+              channel.people.find((p) => p.you)?.readOnly || m.where.kind === "theirs"
                 ? undefined
                 : (note, upload) => actions.send(channel.code, m.where, note || upload.name, { replyTo: m.seq, ...(m.inThread !== undefined ? { inThread: m.inThread } : {}), images: [upload] })
             }

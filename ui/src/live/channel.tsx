@@ -13,7 +13,7 @@ import { sendsInTurn } from "@/lib/send-order"
 import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@/lib/threads"
 import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
-import { asksOf, directsOf, messagesOf, formerOf, peopleOf, roomsOf, tasksOf, type Pending } from "~/live/map"
+import { asksOf, directsOf, messagesOf, formerOf, peopleOf, roomsOf, tasksOf, theirsOf, type Pending } from "~/live/map"
 import { iconUrl } from "~/live/icon"
 import { usePinsHere } from "~/live/pins"
 import { usePublishFace } from "~/live/face"
@@ -41,7 +41,7 @@ function named(body: string, names: ReadonlySet<string>): string[] {
   return [...lead.matchAll(/@([\p{L}\p{N}_.-]+)/gu)].flatMap((m) => (m[1] && names.has(m[1]) ? [m[1]] : []))
 }
 
-function sendOptions(state: ChannelState, messages: readonly Wire[], me: string, where: Where, body: string, opts: { replyTo?: number; inThread?: number }): SendOptions {
+function sendOptions(state: ChannelState, messages: readonly Wire[], me: string, where: Exclude<Where, { kind: "theirs" }>, body: string, opts: { replyTo?: number; inThread?: number }): SendOptions {
   const names = new Set([...state.members.values()].filter((m) => m.active && m.name !== me).map((m) => m.name))
   const re = opts.replyTo ?? opts.inThread
   const target = opts.replyTo !== undefined ? messages.find((m) => m.seq === opts.replyTo) : undefined
@@ -56,6 +56,7 @@ function sendOptions(state: ChannelState, messages: readonly Wire[], me: string,
 function seenKeyOf(where: Where, me: string): string {
   if (where.kind === "room") return roomSeenKey(where.room)
   if (where.kind === "dm") return placeKey(dmPlace(me, where.with))
+  if (where.kind === "theirs") return placeKey(dmPlace(...where.between))
   return placeKey({ kind: "task", task: where.task })
 }
 
@@ -113,6 +114,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const from = roomsFrom(roomId)
   const rooms = useMemo(() => roomsOf(state, messages, me, seen, from), [state, messages, me, seen, from])
   const directs = useMemo(() => directsOf(state, messages, me, seen), [state, messages, me, seen])
+  const theirs = useMemo(() => theirsOf(state, messages, me), [state, messages, me])
   const others = useMemo(() => people.filter((p) => !p.you), [people])
   const title = channelTitle(
     { name: known.find((c) => c.code === code)?.name ?? member.name },
@@ -139,6 +141,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       ...(state.branchPrefix ? { branchPrefix: state.branchPrefix } : {}),
       rooms,
       directs,
+      theirs,
       people,
       former,
       nicknames,
@@ -165,6 +168,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       state.branchPrefix,
       rooms,
       directs,
+      theirs,
       people,
       former,
       nicknames,
@@ -178,6 +182,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
 
   const post = useCallback(
     async (where: Where, text: string, opts: { replyTo?: number; inThread?: number; images?: Upload[] }): Promise<number> => {
+      if (where.kind === "theirs") throw new Error("Only the two of them write in their direct messages")
       const key = ++counter.current
       const body = text.trim()
       const sending = { ...sendOptions(state, messages, me, where, body, opts), ...(opts.images?.length ? { imgs: opts.images } : {}) }

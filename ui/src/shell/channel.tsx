@@ -19,7 +19,7 @@ import { usePanelWidth } from "~/shell/panel-width"
 import { Sidebar } from "~/shell/sidebar"
 import { Waiting } from "~/start/waiting"
 import { Board, openTasks } from "~/tasks/board"
-import { nickname } from "~/names"
+import { between, nickname } from "~/names"
 
 export function ChannelScreen({ channel }: { channel: Channel }) {
   const { nav, go } = useApp()
@@ -57,7 +57,9 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
       ? `# ${channel.rooms.find((r) => r.id === (nav.where as { room: string }).room)?.name ?? "general"}`
       : nav.where.kind === "dm"
         ? `@ ${nickname(channel, nav.where.with)}`
-        : `T${nav.where.task}`
+        : nav.where.kind === "theirs"
+          ? between(channel, nav.where.between)
+          : `T${nav.where.task}`
 
   const news = drawerNews(channel)
 
