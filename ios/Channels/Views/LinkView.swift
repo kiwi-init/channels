@@ -42,28 +42,80 @@ struct LinkView: View {
     @ViewBuilder private var content: some View {
         switch model.linking {
         case .idle, .failed:
+            let signs = !model.relinking
             VStack(alignment: .leading, spacing: 0) {
-                Text("Link this iPhone").type(.title, .semibold).foregroundStyle(Tone.ink)
+                if signs {
+                    Text("Sign in").type(.title, .semibold).foregroundStyle(Tone.ink)
+                    Text("With the account Channels on your computer uses, then approve this iPhone there.")
+                        .type(.ui)
+                        .foregroundStyle(Tone.ink2)
+                        .padding(.top, 6)
+                    problems
+                    PrimaryButton(title: "Sign In") {
+                        pasteError = nil
+                        Task { await model.signIn() }
+                    }
+                    .padding(.top, 20)
+                    Text("Or link with your Mac").type(.body, .semibold).foregroundStyle(Tone.ink).padding(.top, 36)
+                } else {
+                    Text("Link this iPhone").type(.title, .semibold).foregroundStyle(Tone.ink)
+                }
                 VStack(alignment: .leading, spacing: 10) {
                     step(1, "Open Channels on your Mac.")
                     step(2, "Settings → Phone → Link a phone.")
                     step(3, "Scan the code it shows.")
                 }
                 .padding(.top, 12)
-                if case .failed(let why) = model.linking {
-                    Text(why).type(.ui).foregroundStyle(Tone.alert).padding(.top, 16)
-                }
-                if let pasteError {
-                    Text(pasteError).type(.ui).foregroundStyle(Tone.alert).padding(.top, 16)
-                }
+                if !signs { problems }
                 VStack(spacing: 10) {
-                    PrimaryButton(title: "Scan the code") {
-                        pasteError = nil
-                        scanning = true
+                    if signs {
+                        QuietButton(title: "Scan the code") { scan() }
+                    } else {
+                        PrimaryButton(title: "Scan the code") { scan() }
                     }
                     QuietButton(title: "Paste the code") { paste() }
                 }
                 .padding(.top, 24)
+            }
+        case .opening:
+            waiting("Opening the sign-in…")
+        case .signingIn(let url, let code):
+            VStack(alignment: .leading, spacing: 0) {
+                if let url {
+                    Text("Sign in in Safari").type(.title, .semibold).foregroundStyle(Tone.ink)
+                    Text(code.isEmpty ? "Use the account Channels on your computer uses." : "Use the account Channels on your computer uses, and check Safari shows \(code).")
+                        .type(.ui)
+                        .foregroundStyle(Tone.ink2)
+                        .padding(.top, 6)
+                    QuietButton(title: "Open the sign-in") {
+                        if let page = URL(string: url) { UIApplication.shared.open(page) }
+                    }
+                    .padding(.top, 20)
+                }
+                Text("Then approve this iPhone in Channels on your computer.")
+                    .type(url == nil ? .body : .ui)
+                    .foregroundStyle(url == nil ? Tone.ink : Tone.ink2)
+                    .padding(.top, url == nil ? 0 : 24)
+                waiting("Waiting for your computer").padding(.top, 16)
+                QuietButton(title: "Cancel") { Task { await model.cancelLink() } }
+                    .padding(.top, 24)
+            }
+        case .approve(let digits):
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Approve this iPhone").type(.title, .semibold).foregroundStyle(Tone.ink)
+                Text("Channels on your computer asks for these digits. Type them there.")
+                    .type(.ui)
+                    .foregroundStyle(Tone.ink2)
+                    .padding(.top, 6)
+                Text(spaced(digits))
+                    .font(.custom("Inter", size: 44).weight(.semibold))
+                    .monospacedDigit()
+                    .tracking(2)
+                    .foregroundStyle(Tone.ink)
+                    .padding(.vertical, 24)
+                waiting("Waiting for your computer")
+                QuietButton(title: "Cancel") { Task { await model.cancelLink() } }
+                    .padding(.top, 24)
             }
         case .asking:
             HStack(spacing: 10) {
@@ -91,6 +143,27 @@ struct LinkView: View {
                     .padding(.top, 24)
             }
         }
+    }
+
+    @ViewBuilder private var problems: some View {
+        if case .failed(let why) = model.linking {
+            Text(why).type(.ui).foregroundStyle(Tone.alert).padding(.top, 16)
+        }
+        if let pasteError {
+            Text(pasteError).type(.ui).foregroundStyle(Tone.alert).padding(.top, 16)
+        }
+    }
+
+    private func waiting(_ text: String) -> some View {
+        HStack(spacing: 8) {
+            ProgressView().controlSize(.small)
+            Text(text).type(.ui).foregroundStyle(Tone.ink3)
+        }
+    }
+
+    private func scan() {
+        pasteError = nil
+        scanning = true
     }
 
     private func step(_ n: Int, _ text: String) -> some View {

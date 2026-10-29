@@ -259,16 +259,26 @@ struct ConversationList: View {
         }
     }
 
+    private var emptyDetail: String {
+        if model.joining > 0 {
+            let channels = model.joining == 1 ? "1 channel" : "\(model.joining) channels"
+            return "Asked to join \(channels) as you. Channels you own let this iPhone in while Channels is open on your computer."
+        }
+        return model.enrolled ? "This iPhone joins the channels your computer had when it approved it." : "Link your Mac again to bring your channels."
+    }
+
     private var empty: some View {
         VStack(spacing: 6) {
-            Text("No Conversations").type(.title, .semibold).foregroundStyle(Tone.ink)
-            Text("Link your Mac again to bring your channels.")
+            Text(model.joining > 0 ? "Waiting to Be Let In" : "No Conversations").type(.title, .semibold).foregroundStyle(Tone.ink)
+            Text(emptyDetail)
                 .type(.ui)
                 .foregroundStyle(Tone.ink3)
                 .multilineTextAlignment(.center)
-            Button("Link Again") { model.relinkAsked = true }
-                .type(.ui, .semibold)
-                .padding(.top, 6)
+            if !model.enrolled {
+                Button("Link Again") { model.relinkAsked = true }
+                    .type(.ui, .semibold)
+                    .padding(.top, 6)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(40)
@@ -592,7 +602,7 @@ struct SettingsScreen: View {
                 VStack(spacing: 4) {
                     Face(name: model.person, member: nil, size: 80).padding(.bottom, 8)
                     Text(model.person).font(.title2.weight(.bold)).foregroundStyle(Tone.ink)
-                    Text("Linked to your Mac").type(.ui).foregroundStyle(Tone.ink3)
+                    Text(model.enrolled ? "One of your devices" : "Linked to your Mac").type(.ui).foregroundStyle(Tone.ink3)
                 }
                 .frame(maxWidth: .infinity)
                 .accessibilityElement(children: .combine)
@@ -616,24 +626,29 @@ struct SettingsScreen: View {
                     Setting(symbol: "lock.fill", tint: Tone.ink3, title: "Lock")
                 }
             }
-            Section {
-                Button {
-                    model.relinkAsked = true
-                } label: {
-                    Setting(symbol: "link", tint: Tone.accent, title: "Link Again")
+            if !model.enrolled {
+                Section {
+                    Button {
+                        model.relinkAsked = true
+                    } label: {
+                        Setting(symbol: "link", tint: Tone.accent, title: "Link Again")
+                    }
+                    .tint(Tone.ink)
+                } footer: {
+                    Text("Brings the channels you joined on your Mac since you linked.")
                 }
-                .tint(Tone.ink)
-            } footer: {
-                Text("Brings the channels you joined on your Mac since you linked.")
             }
             Section {
                 Button(role: .destructive) {
                     confirm = true
                 } label: {
-                    Text("Unlink This iPhone").frame(maxWidth: .infinity)
+                    Text(model.enrolled ? "Sign Out of This iPhone" : "Unlink This iPhone").frame(maxWidth: .infinity)
                 }
             } footer: {
-                Text("This iPhone holds your person key and your channels' keys in its keychain. Unlinking deletes them from this phone.")
+                Text(
+                    model.enrolled
+                        ? "This iPhone holds its own device key and its channels' keys in its keychain. Signing out deletes them from this phone; forget it in Settings → Devices on your computer too."
+                        : "This iPhone holds your person key and your channels' keys in its keychain. Unlinking deletes them from this phone.")
             }
             Section {
             } footer: {
@@ -643,12 +658,12 @@ struct SettingsScreen: View {
         .listStyle(.insetGrouped)
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog("Unlink this iPhone?", isPresented: $confirm, titleVisibility: .visible) {
-            Button("Unlink", role: .destructive) {
+        .confirmationDialog(model.enrolled ? "Sign out of this iPhone?" : "Unlink this iPhone?", isPresented: $confirm, titleVisibility: .visible) {
+            Button(model.enrolled ? "Sign Out" : "Unlink", role: .destructive) {
                 model.unlink()
             }
         } message: {
-            Text("Its keys are deleted. Link again from your Mac to come back.")
+            Text(model.enrolled ? "Its keys are deleted. Sign in again to come back." : "Its keys are deleted. Link again from your Mac to come back.")
         }
     }
 }
