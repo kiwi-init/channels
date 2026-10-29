@@ -7,7 +7,7 @@ import { HOSTED_SESSION, HostedTmux, findTmux } from "../src/daemon/hosted-tmux.
 import { promptState, typeWake } from "../src/daemon/wake-typing.ts";
 import { hostedPaneHere, howMessagesReachYou } from "../src/hooks/reach.ts";
 
-const tmux = await findTmux();
+const tmux = await findTmux(join(tmpdir(), "kiwi-no-own-tmux"));
 
 describe("whether a hosted agent is at its input prompt", () => {
   test("a still screen with no turn running and no question is ready", () => {

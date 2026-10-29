@@ -147,6 +147,9 @@ jobs:
       - name: The kiwi CLI the app bundles
         run: mkdir -p dist && bun scripts/build-cli.ts --js dist/kiwi.js
 
+      - name: The tmux the app bundles, built from its pinned sources
+        run: bash scripts/build-tmux.sh dist/tmux
+
       - name: Build
         working-directory: desktop
         env:
@@ -207,6 +210,7 @@ jobs:
           ditto -x -k "$(ls out/Channels-*-mac-arm64.zip)" "$RUNNER_TEMP/probe"
           app="$RUNNER_TEMP/probe/Channels.app/Contents"
           bun desktop/scripts/package-probe.ts "$app/MacOS/bun" "$app/Resources/kiwi.js" "$app/Resources/app/bun/keys.js"
+          "$app/Resources/tmux" -V
           rm -rf "$RUNNER_TEMP/probe"
 
       - name: Upload
@@ -239,7 +243,7 @@ jobs:
         timeout-minutes: 15
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bison bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools
 
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -261,6 +265,9 @@ jobs:
 
       - name: The kiwi CLI the app bundles
         run: mkdir -p dist && bun scripts/build-cli.ts --js dist/kiwi.js
+
+      - name: The tmux the app bundles, built from its pinned sources
+        run: bash scripts/build-tmux.sh dist/tmux
 
       - name: Build
         working-directory: desktop
@@ -284,6 +291,7 @@ jobs:
           (cd "$RUNNER_TEMP" && "$img" --appimage-extract > /dev/null)
           root="$RUNNER_TEMP/squashfs-root/Channels"
           bun desktop/scripts/package-probe.ts "$root/bin/bun" "$root/Resources/kiwi.js" "$root/Resources/app/bun/keys.js"
+          "$root/Resources/tmux" -V
           rm -rf "$RUNNER_TEMP/squashfs-root"
 
       - name: The AppImage starts

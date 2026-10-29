@@ -258,6 +258,14 @@ jobs:
         run: for i in 1 2 3; do bun run prepare:eb && exit 0; echo "electrobun prepare failed ($i of 3)"; [ "$i" -lt 3 ] && sleep 20; done; exit 1
       - name: the kiwi CLI the app bundles
         run: mkdir -p dist && bun scripts/build-cli.ts --js dist/kiwi.js
+      - id: tmux
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: dist/tmux
+          key: tmux-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build-tmux.sh') }}
+      - name: the tmux the app bundles, linked only to the system's own libraries
+        if: steps.tmux.outputs.cache-hit != 'true'
+        run: bash scripts/build-tmux.sh dist/tmux
       - working-directory: desktop
         env:
           DASH_RELEASE_OFFLINE: "1"
@@ -272,6 +280,12 @@ jobs:
         run: bun run build:eb
       - if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-size.ts desktop/release-eb
+      - name: the app carries its own tmux, and it runs
+        if: ${{ !cancelled() }}
+        run: |
+          set -- desktop/release-eb/build/*-macos-*/*.app/Contents/Resources/tmux
+          [ -x "$1" ] || { echo "the app has no Contents/Resources/tmux"; exit 1; }
+          for t in "$@"; do "$t" -V; done
       - if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-seal-check.ts
       - name: the launcher keeps BUN_*, NODE_*, DYLD_* and JSC_* out of the app
@@ -345,7 +359,7 @@ jobs:
           find "$debs" -maxdepth 1 -name '*.deb' | wc -l > "$RUNNER_TEMP/debs-before"
           echo "Dir::Cache::Archives \"$debs/\";" | sudo tee /etc/apt/apt.conf.d/90linux-debs > /dev/null
           sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus ${{ matrix.drive && 'weston xwayland kwin-wayland plasma-wayland-protocols sway swaybg grim gsettings-desktop-schemas libglib2.0-bin libwayland-dev python3-gi gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0' || '' }}
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bison bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus ${{ matrix.drive && 'weston xwayland kwin-wayland plasma-wayland-protocols sway swaybg grim gsettings-desktop-schemas libglib2.0-bin libwayland-dev python3-gi gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0' || '' }}
       - id: debs
         name: keep what apt downloaded, even when it ran out of time
         if: always()
@@ -371,6 +385,14 @@ jobs:
         run: for i in 1 2 3; do bun run prepare:eb && exit 0; echo "electrobun prepare failed ($i of 3)"; sleep 20; done; exit 1
       - name: the kiwi CLI the app bundles
         run: mkdir -p dist && bun scripts/build-cli.ts --js dist/kiwi.js
+      - id: tmux
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: dist/tmux
+          key: tmux-${{ runner.arch }}-${{ steps.image.outputs.key }}-${{ hashFiles('scripts/build-tmux.sh') }}
+      - name: the tmux the app bundles, linked only to glibc
+        if: steps.tmux.outputs.cache-hit != 'true'
+        run: bash scripts/build-tmux.sh dist/tmux
       - working-directory: desktop
         env:
           DASH_RELEASE_OFFLINE: "1"

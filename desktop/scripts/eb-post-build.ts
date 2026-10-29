@@ -47,6 +47,12 @@ if (fs.readdirSync(views).some((n) => n.toLowerCase() === "index.html")) throw n
 const cli = path.resolve(desktop, "../dist/kiwi.js");
 if (!fs.existsSync(cli)) throw new Error("dist/kiwi.js is missing: run `bun scripts/build-cli.ts --js dist/kiwi.js` in the repo root first");
 fs.copyFileSync(cli, path.join(resources[0] as string, "kiwi.js"));
+const tmux = path.resolve(desktop, "../dist/tmux");
+if (fs.existsSync(tmux)) {
+  fs.copyFileSync(tmux, path.join(resources[0] as string, "tmux"));
+  fs.chmodSync(path.join(resources[0] as string, "tmux"), 0o755);
+} else if (process.env.CHANNELS_EB_RELEASE === "1") throw new Error("dist/tmux is missing: run `bash scripts/build-tmux.sh dist/tmux` in the repo root first");
+else console.log("eb-post-build: no dist/tmux, so this build's agents use the computer's own tmux (bash scripts/build-tmux.sh dist/tmux makes one)");
 const keysWorker = await Bun.build({ entrypoints: [path.join(desktop, "src", "keys-worker.ts")], target: "bun" });
 const keysOut = keysWorker.outputs[0];
 if (!keysWorker.success || !keysOut) throw new Error(`the keys worker didn't bundle: ${keysWorker.logs.join("\n")}`);

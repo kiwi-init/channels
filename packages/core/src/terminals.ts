@@ -4,6 +4,8 @@ export const PLACE_NAMES = { rex: "Rex", tmux: "tmux", terminal: "Terminal", hos
 
 export type PlaceKind = keyof typeof PLACE_NAMES;
 
+export const OWN_TMUX_DIR = "tmux";
+
 const LAUNCH_REFUSALS = ["bad-request", "not-installed", "no-recipe", "no-place", "not-allowed", "failed"] as const;
 
 export type LaunchRefusal = (typeof LAUNCH_REFUSALS)[number];
