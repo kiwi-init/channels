@@ -2,26 +2,57 @@ import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { useApp } from "~/nav"
 
-export function UpdateDock() {
-  const { app } = useApp()
-  const look = app.account?.uiUpdate
-  const update = app.account?.update
-  const state = update?.state ?? (update?.ready ? "ready" : "downloading")
+type Card = { key: string; text: string; act?: string; onAct?: () => void }
 
-  if (!look && !update) return null
-  const ready = !!look || state === "ready"
-  const label = look
-    ? "Switch to the new look"
-    : state === "ready"
-      ? `Restart into Channels ${update?.version}`
-      : state === "available"
-        ? `Download Channels ${update?.version} and restart`
-        : `Channels ${update?.version} is downloading. Click to restart when it's in`
+function useCards(): Card[] {
+  const { app, go } = useApp()
+  const account = app.account
+  const cards: Card[] = []
+  const ask = account?.enrollAsk
+  if (ask && ask.stage !== "elsewhere") cards.push({ key: "ask", text: `${ask.label} wants to sign in as you`, act: "Review", onAct: () => go({ to: "settings", section: "computers" }) })
+  if (account?.uiUpdate) cards.push({ key: "look", text: "A new look is ready", act: "Switch", onAct: () => app.actions.applyUi() })
+  const update = account?.update
+  if (update) {
+    const state = update.state ?? (update.ready ? "ready" : "downloading")
+    const install = () => app.actions.installUpdate()
+    cards.push(
+      state === "ready"
+        ? { key: "update", text: `Channels ${update.version} is ready`, act: "Restart", onAct: install }
+        : state === "available"
+          ? { key: "update", text: `Channels ${update.version} is out`, act: "Update", onAct: install }
+          : { key: "update", text: `Downloading Channels ${update.version}…` }
+    )
+  }
+  return cards
+}
 
+export function SideCards() {
+  const cards = useCards()
+  if (!cards.length) return null
   return (
-    <div className="dock">
-      <button type="button" className={cx("dock-btn", ready && "is-ready")} aria-label={label} title={label} onClick={() => (look ? app.actions.applyUi() : app.actions.installUpdate())}>
-        <Icon name={look ? "sparkle" : "download"} />
+    <ul className="side-cards" aria-label="Waiting on you">
+      {cards.map((c) => (
+        <li key={c.key} className="side-card">
+          <span className="side-card-text">{c.text}</span>
+          {c.act && (
+            <button type="button" className="btn is-small" onClick={c.onAct}>
+              {c.act}
+            </button>
+          )}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+export function SideFoot() {
+  const { nav, go } = useApp()
+  return (
+    <div className="side-foot">
+      <SideCards />
+      <button type="button" className={cx("side-row", nav.page === "settings" && "is-on")} onClick={() => go({ to: "settings" })}>
+        <Icon name="gear" />
+        <span className="side-label">Settings</span>
       </button>
     </div>
   )

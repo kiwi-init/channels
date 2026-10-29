@@ -6,6 +6,7 @@ import { useApp, type Section } from "~/nav"
 import { AgentsSection } from "~/settings/agents"
 import { ComputersSection } from "~/settings/computers"
 import { AboutSection, AccountSection, AppearanceSection, NotificationsSection, UpdatesSection } from "~/settings/sections"
+import { SideCards } from "~/shell/updates"
 
 const SECTIONS: readonly (readonly [Section, string])[] = [
   ["account", "Account"],
@@ -18,7 +19,7 @@ const SECTIONS: readonly (readonly [Section, string])[] = [
 ]
 
 export function Settings() {
-  const { app, nav, go } = useApp()
+  const { nav, go } = useApp()
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented || document.querySelector("dialog[open]")) return
@@ -27,7 +28,6 @@ export function Settings() {
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [go])
-  const updateReady = !!app.account?.update?.ready
 
   return (
     <div className="set">
@@ -49,17 +49,12 @@ export function Settings() {
               <li key={id}>
                 <button type="button" className={cx("side-row", on && "is-on")} aria-current={on ? "page" : undefined} onClick={() => go({ to: "settings", section: id })}>
                   <span className="side-label">{label}</span>
-                  {id === "updates" && updateReady && (
-                    <>
-                      <span className="set-nav-pip" aria-hidden="true" />
-                      <span className="sr">, an update is ready</span>
-                    </>
-                  )}
                 </button>
               </li>
             )
           })}
         </ul>
+        <SideCards />
       </nav>
       <main className="set-main">
         <div className="set-body" key={nav.section}>

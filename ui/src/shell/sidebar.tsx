@@ -8,6 +8,7 @@ import { ago } from "~/kit/time"
 import { memberOf, type Channel, type Person } from "~/model"
 import { sameWhere, useApp } from "~/nav"
 import { between, nickname, shown } from "~/names"
+import { SideFoot } from "~/shell/updates"
 
 export function Sidebar({ channel }: { channel: Channel }) {
   const { nav, go, app } = useApp()
@@ -159,6 +160,8 @@ export function Sidebar({ channel }: { channel: Channel }) {
           </li>
         </ul>
       </section>
+
+      <SideFoot />
     </div>
   )
 }
