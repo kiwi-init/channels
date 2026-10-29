@@ -16,7 +16,7 @@
 
 .feed-jump {
   position: absolute;
-  bottom: 12px;
+  bottom: calc(var(--compose-h, 0px) + 12px);
   left: 50%;
   z-index: 4;
   display: flex;
@@ -1079,28 +1079,17 @@ button.msg-image-spot:hover {
 }
 
 .compose-hint {
+  position: absolute;
+  bottom: 0;
+  left: 0;
   display: flex;
   align-items: center;
   gap: 6px;
   height: 18px;
-  margin-top: 6px;
   padding-left: 12px;
-  color: var(--ink-3);
-  font: var(--t-stamp) var(--ui);
-  opacity: 0;
-  transition: opacity var(--fast);
-}
-
-.compose-hint.is-on {
-  opacity: 1;
-}
-
-.compose-hint code {
-  font: var(--t-stamp) var(--mono);
-}
-
-.compose-hint.is-cue {
   color: var(--ink-2);
+  font: var(--t-stamp) var(--ui);
+  pointer-events: none;
 }
 
 .compose-hint b {

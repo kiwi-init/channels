@@ -123,8 +123,8 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
   const [caret, setCaret] = useState(text.length)
   const [pick, setPick] = useState(0)
   const [closed, setClosed] = useState(false)
-  const [focused, setFocused] = useState(false)
   const area = useRef<HTMLTextAreaElement>(null)
+  const box = useRef<HTMLDivElement>(null)
   const picker = useRef<HTMLInputElement>(null)
   const [files, setFiles] = useState<Upload[]>([])
   const [dropping, setDropping] = useState(false)
@@ -180,6 +180,20 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
   useEffect(() => {
     if (replyTo) area.current?.focus()
   }, [replyTo])
+
+  useLayoutEffect(() => {
+    const el = box.current
+    const host = el?.parentElement
+    if (!el || !host) return
+    const measure = () => host.style.setProperty("--compose-h", `${el.offsetHeight}px`)
+    measure()
+    const watch = new ResizeObserver(measure)
+    watch.observe(el)
+    return () => {
+      watch.disconnect()
+      host.style.removeProperty("--compose-h")
+    }
+  }, [])
 
   const typed = text.slice(0, caret)
   const query = closed ? undefined : MENTION.exec(typed)?.[2]
@@ -249,7 +263,7 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
   const quoteLine = useMemo(() => (replyTo ? withNames(replyTo.text, channel.nicknames, preview) : ""), [replyTo, channel.nicknames])
 
   return (
-    <div className="compose">
+    <div className="compose" ref={box}>
       {taskOptions.length > 0 && (
         <ul className="mentions" role="listbox" aria-label="Tasks" id={`${key}-tasks`}>
           {taskOptions.map((t, i) => (
@@ -404,8 +418,6 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
               if (!e.clipboardData.getData("text/plain")) e.preventDefault()
               attach(images)
             }}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
             onKeyDown={(e) => {
               if (e.nativeEvent.isComposing || e.keyCode === 229) return
               if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "s") {
@@ -452,8 +464,8 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
           </button>
         </div>
       </form>
-      {cue ? (
-        <p className="compose-hint is-on is-cue" role="status">
+      {cue && (
+        <p className="compose-hint" role="status">
           <b>{cue.back ? "Back from the stash" : "Stashed"}</b> <span>·</span>{" "}
           {cue.back ? (
             `${cue.left} left`
@@ -462,10 +474,6 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
               <kbd>⇧⌘S</kbd> brings it back
             </>
           )}
-        </p>
-      ) : (
-        <p className={cx("compose-hint", (focused || text) && "is-on")} aria-hidden="true">
-          <code>**bold**</code> <code>`code`</code> <code>- list</code> <span>·</span> {enterSends ? "Shift+Enter for a new line" : "⌘ Enter to send"}
         </p>
       )}
     </div>
