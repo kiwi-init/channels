@@ -149,14 +149,15 @@ describe("opening a channel", () => {
     expect(r.painted.at(-1)?.base).toBe(3000)
   })
 
-  test("a cache that holds the whole log folds on no base rather than a kept one from older rules (#1116)", async () => {
+  test("a cache from seq 1 next to a kept base from older rules still asks for the snapshot, and folds on it (#1116)", async () => {
     const r = relay()
-    const steps = r.make(20, range(1, 20), null, { ...kept(10), base: { ...base(10), rules: 0 } })
+    const steps = r.make(20, range(1, 20), 15, { ...kept(10), base: { ...base(10), rules: 0 } })
     const opened = openChannel(steps, undefined, 2000)
     await r.roundTrip()
     await r.roundTrip()
     await opened
-    expect(r.painted.at(-1)?.base).toBeNull()
+    expect(r.log.some((l) => l.startsWith("snapshot"))).toBe(true)
+    expect(r.painted.at(-1)?.base).toBe(15)
   })
 
   test("a cache from seq 1 with a message it couldn't read keeps the older-rules base, which still holds what that message said", async () => {

@@ -1,4 +1,4 @@
-import { decodedWhole, olderRules, type Message } from "@kiwi/core/protocol.ts"
+import { olderRules, type Message } from "@kiwi/core/protocol.ts"
 import type { FoldBase } from "@kiwi/core/state.ts"
 import type { OpenedCache } from "../history"
 import { planReload } from "../history-plan"
@@ -23,7 +23,7 @@ export interface OpenSteps {
   plan: (cache: OpenedCache, head: number) => Promise<Planned | null>
   snapshot: () => Promise<FoldBase | null>
   early: (cached: Planned | null, kept: Kept) => void
-  paint: (cached: Planned | null, base: FoldBase | null, head: number, replace: boolean) => void
+  paint: (cached: Planned | null, base: FoldBase | null, head: number) => void
 }
 
 export interface Opened {
@@ -73,11 +73,9 @@ export async function openChannel(steps: OpenSteps, was: Warm | undefined, limit
   const kept = was?.base ? null : await steps.kept()
   const keptBase = usableBase(keptBaseUpTo(kept, head), from)
   const warm = usableBase(was?.base ?? null, from) ?? keptBase
-  const snap = from > 0 && (!warm || olderRules(warm)) ? await steps.snapshot() : null
-  const offered = [usableBase(snap, from), keptBase]
-  const replayable = from === 0 && cached !== null && decodedWhole({ head: Math.max(cached.messages.at(-1)?.seq ?? 0, ...cached.unread), messages: cached.messages })
-  const base = replayable ? (offered.find((b) => b !== null && !olderRules(b)) ?? null) : newestRules(offered)
-  steps.paint(cached, base, head, replayable && !!warm && olderRules(warm))
+  const snap = (from > 0 && !warm) || (warm !== null && olderRules(warm)) ? await steps.snapshot() : null
+  const base = newestRules([usableBase(snap, from), keptBase])
+  steps.paint(cached, base, head)
   if (await rotated) await steps.roster()
   return { head, since, whole: startsWhole(head, limit, since, firstSeq, base ?? warm) }
 }
