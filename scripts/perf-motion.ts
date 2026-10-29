@@ -6,14 +6,15 @@ import { chromium, type Page } from "playwright-core";
 import { daemonSock } from "../src/daemon/protocol.ts";
 import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
+import { firstRun, letIn, newChannel } from "./perf-ui.ts";
 
 if (process.argv.includes("--help")) {
-  console.log(`Frames while each of the dashboard's animations runs: a thread and the Tasks panel opening and closing, a task moving on the board,
-the board switching views, a dialog and a menu closing, on a board of PERF_TASKS tasks (6). Each runs PERF_REPS times (5) with the CPU slowed
+  console.log(`Frames while each of the app's animations runs: a thread and a task opening and closing in the panel, a task moving on the board,
+the Now card folding, and a dialog closing, on a board of PERF_TASKS tasks (6). Each runs PERF_REPS times (5) with the CPU slowed
 PERF_CPU times (4), and reports the frames over 33 ms and 50 ms, the worst frame, and the long animation frames' blocking time: the median, and
-the most of any run. --web DIR measures another build (web/dist).
+the most of any run. --dist DIR measures another build (ui/dist).
 
-  bun run web:build && bun scripts/perf-motion.ts [--web DIR] [--only "board move,menu close"] [--json out.json]
+  bun run ui:build && bun scripts/perf-motion.ts [--dist DIR] [--only "board move,dialog close"] [--json out.json]
 
 Needs Playwright's Chromium: bunx playwright-core install --only-shell chromium (or SMOKE_CHROMIUM=<Chrome binary>).`);
   process.exit(0);
@@ -27,7 +28,7 @@ const flag = (name: string) => {
   const at = process.argv.indexOf(name);
   return at > 0 ? process.argv[at + 1] : undefined;
 };
-const WEB = resolve(ROOT, flag("--web") ?? "web/dist");
+const DIST = resolve(ROOT, flag("--dist") ?? "ui/dist");
 const OUT = flag("--json");
 const ONLY = flag("--only")?.split(",");
 const data = mkdtempSync(join(tmpdir(), "kiwi-perf-motion-"));
@@ -109,7 +110,7 @@ async function frames(page: Page, act: () => Promise<unknown>, settleMs = 700): 
   });
 }
 
-const { relay, port } = await startLocalRelay(join(data, "relay"), WEB, { rateLimits: false });
+const { relay, port } = await startLocalRelay(join(data, "relay"), DIST, { rateLimits: false });
 const BASE = `http://localhost:${port}/`;
 const browser = await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
 const report: Record<string, Run & { runs: Run[] }> = {};
@@ -119,30 +120,16 @@ try {
   const page = await context.newPage();
   page.on("pageerror", (e) => console.log(`page error: ${e.message}`));
   await page.goto(BASE);
-  await page.getByRole("textbox", { name: "Your name" }).fill("Jonatas");
-  await page.getByRole("button", { name: "Continue" }).click();
-  const side = page.getByRole("complementary", { name: "Channels" });
-  await side.getByRole("button", { name: "New channel", exact: true }).click();
-  await page.getByRole("dialog").getByRole("textbox").fill("motion");
-  await page.getByRole("button", { name: "Create channel" }).click();
-  await page.waitForURL(/#mc2-/);
-  const channel = page.url();
-  const code = decodeURIComponent(new URL(channel).hash.slice(1));
-  const toConversation = () => side.getByRole("region", { name: "Conversations" }).getByRole("button", { name: /^# / }).first().click();
-  const toTasks = () => page.getByRole("button", { name: /^Tasks(,|$)/ }).click();
-  const needs = page.getByRole("region", { name: "Needs you" });
-  const joining = kiwi(["join", code, "motion", "--as", "atlas", "--model", "claude-opus-5-5", "--relay", BASE]);
-  const letIn = needs.getByRole("button", { name: "It matches: let in" });
-  const showCode = needs.getByRole("button", { name: "Show code" });
-  await letIn.or(showCode).first().waitFor({ timeout: 30000 });
-  if (await showCode.count()) await showCode.click();
-  const seat = needs.getByRole("checkbox", { name: /Let agents from .* in from now on/ });
-  if (await seat.count()) await seat.uncheck();
-  await letIn.click();
+  await firstRun(page, "Jonatas");
+  const code = await newChannel(page, "motion");
+  const views = page.getByRole("navigation", { name: "Views" });
+  const toConversation = () => views.getByRole("button", { name: /general/ }).click();
+  const toTasks = () => views.getByRole("button", { name: /^Tasks/ }).click();
+  let joined = false;
+  const joining = kiwi(["join", code, "motion", "--as", "atlas", "--model", "claude-opus-5-5", "--relay", BASE]).then(() => void (joined = true));
+  await letIn(page, () => !joined);
   await joining;
 
-  await page.goto(channel);
-  await toConversation();
   const say = async (body: string): Promise<string> => {
     await page.getByRole("textbox", { name: "Message" }).fill(body);
     await page.keyboard.press("Enter");
@@ -158,7 +145,7 @@ try {
   const question = await say("Ship it tonight, or wait for the web?");
   await atlas("send", "On it. I'll check the numbers first.");
   await atlas("send", "--re", question, "p50 0.3ms, p95 1ms, no refusals in 800 rooms. Ship it.");
-  await page.goto(channel);
+  await page.reload();
   await toConversation();
   await page.getByText("p50 0.3ms").first().waitFor({ state: "attached", timeout: 15000 });
   const cdp = await context.newCDPSession(page);
@@ -182,7 +169,7 @@ try {
   };
 
   const reply = page.getByRole("button", { name: /^1 reply/ }).first();
-  const closeThread = page.getByRole("button", { name: "Close thread" });
+  const closeThread = page.getByRole("complementary", { name: "Details" }).getByRole("button", { name: "Close", exact: true });
   await measure(
     "thread open",
     async () => undefined,
@@ -196,8 +183,8 @@ try {
   );
 
   await toTasks();
-  const row = page.getByRole("button", { name: new RegExp(`^T${ids[1]}, `) });
-  const closeTasks = page.getByRole("button", { name: "Close tasks" });
+  const row = page.getByRole("main").getByRole("button", { name: new RegExp(`^.+ T${ids[1]} · `) });
+  const closeTasks = closeThread;
   await row.waitFor();
   await measure(
     "tasks open",
@@ -218,35 +205,30 @@ try {
     async () => {
       const id = ids[next++ % ids.length]!;
       await atlas("task", "start", `T${id}`);
-      await page.waitForFunction((first) => document.querySelector("main ul [role='button']")?.getAttribute("aria-label")?.startsWith(first), `T${id}, `, { polling: 50, timeout: 15000 });
+      await page.waitForFunction(
+        (task) => [...document.querySelectorAll("main .board-row")].find((r) => r.querySelector(".board-meta")?.textContent?.startsWith(`T${task} `))?.classList.contains("is-doing"),
+        id,
+        { polling: 50, timeout: 15000 },
+      );
     },
   );
-  const views = page.getByRole("navigation", { name: "Views" });
+  const now = page.getByRole("region", { name: "Now" }).getByRole("button", { name: /^Now/ });
   await measure(
-    "board views",
+    "now fold",
     async () => undefined,
-    () => views.getByRole("button", { name: /^Working/ }).click(),
-    () => views.getByRole("button", { name: "Everything", exact: true }).click(),
+    () => now.click(),
+    () => now.click(),
   );
 
   await toConversation();
-  const newChannel = side.getByRole("button", { name: "New channel", exact: true });
+  const add = page.getByRole("button", { name: "New channel or join one" });
   await measure(
     "dialog close",
-    () => newChannel.click().then(() => page.getByRole("dialog").waitFor()),
+    () => add.click().then(() => page.getByRole("dialog").waitFor()),
     () => page.keyboard.press("Escape"),
     () => page.getByRole("dialog").waitFor({ state: "detached" }),
   );
-  const details = page.getByRole("button", { name: /^Details:/ }).first();
-  await details.click();
-  const more = page.getByRole("button", { name: "More for atlas" });
-  await measure(
-    "menu close",
-    () => more.click().then(() => page.getByRole("menu").waitFor()),
-    () => page.keyboard.press("Escape"),
-    () => page.getByRole("menu").waitFor({ state: "detached" }),
-  );
-  if (OUT) writeFileSync(OUT, JSON.stringify({ web: WEB, cpu: CPU, reps: REPS, report }, null, 2));
+  if (OUT) writeFileSync(OUT, JSON.stringify({ dist: DIST, cpu: CPU, reps: REPS, report }, null, 2));
 } catch (e) {
   const shot = join(tmpdir(), "perf-motion-failed.png");
   for (const ctx of browser.contexts()) for (const pg of ctx.pages()) await pg.screenshot({ path: shot }).catch(() => undefined);
