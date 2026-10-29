@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { Cursor, LocalFiles, loadConfig, updateConfig, type SeatRecord } from "../src/config.ts";
 import { pathOf } from "../src/daemon/wake.ts";
 import { bindHeldSeat, holdSeat, releaseSeat, releaseStale, SEAT_TOKEN, seatHeldAway, seatHolds } from "../src/hold.ts";
+import { processStart } from "../src/pid.ts";
 import { AgentSession } from "../src/agent.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 import { bindDirectory, seatsAt, seatsFor, seatsHeldAnywhere } from "../src/seats.ts";
@@ -223,4 +224,15 @@ test("a hold taken from a shell records no process, so it never lapses on its ow
   holdSeat("ch", "dev", "by-hand");
   expect(all()[0]?.hold?.holder).toBeUndefined();
   expect(seatHeldAway(loadConfig(), "ch", "dev")).toBe(true);
+});
+
+test("a process's start is the same each time it's read, and unknown once the process is gone (#1272)", async () => {
+  const child = Bun.spawn(["sleep", "30"]);
+  const started = processStart(child.pid);
+  expect(started).not.toBeNull();
+  expect(processStart(child.pid)).toBe(started);
+  expect(processStart(process.pid)).not.toBe(started);
+  child.kill(9);
+  await child.exited;
+  expect(processStart(child.pid)).toBeNull();
 });
