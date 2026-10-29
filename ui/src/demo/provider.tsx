@@ -164,6 +164,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         window.setTimeout(() => edit(code, (c) => ({ ...c, messages: c.messages.map((m) => (m.seq === sent ? { ...m, pending: undefined } : m)) })), 700)
       },
       retry: (code, seq) => edit(code, (c) => ({ ...c, messages: c.messages.map((m) => (m.seq === seq ? { ...m, failed: undefined } : m)) })),
+      loadImage: () => {},
       discard: (code, seq) => edit(code, (c) => ({ ...c, messages: c.messages.filter((m) => m.seq !== seq) })),
       react: (code, seq, emoji) =>
         edit(code, (c) => ({

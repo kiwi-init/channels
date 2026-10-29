@@ -176,6 +176,12 @@ export interface Image {
   alt: string
 }
 
+export interface ImageSpot {
+  spot: string
+  alt: string
+  state: "waiting" | "failed" | "gone"
+}
+
 export interface Reaction {
   emoji: string
   by: string[]
@@ -192,7 +198,7 @@ export interface Message {
   thread?: { replies: number; last: number; people: string[] }
   task?: number
   pr?: PullRequest
-  images?: Image[]
+  images?: (Image | ImageSpot)[]
   reactions?: Reaction[]
   ask?: string
   system?: boolean
@@ -415,6 +421,7 @@ export interface NewAgent {
 export interface Actions {
   send(code: string, where: Where, text: string, opts?: { replyTo?: number; inThread?: number; images?: Upload[] }): void
   retry(code: string, seq: number): void
+  loadImage(code: string, spot: string): void
   discard(code: string, seq: number): void
   react(code: string, seq: number, emoji: string): void
   answerPermission(code: string, id: string, allow: boolean): void

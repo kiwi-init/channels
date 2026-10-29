@@ -369,7 +369,11 @@ const messages: Message[] = [
     pr: pr44,
     mentionsYou: true,
     ask: "rev-14",
-    images: [{ url: ICONS_SHOT, width: 480, height: 270, alt: "channel-icons.png" }],
+    images: [
+      { url: ICONS_SHOT, width: 480, height: 270, alt: "channel-icons.png" },
+      { spot: "124:1", alt: "channel-icons-linux.png", state: "waiting" },
+      { spot: "124:2", alt: "channel-icons-light.png", state: "failed" },
+    ],
   },
   { seq: 125, from: "atlas", at: m(2), text: "Should the redesign go to everyone at once, or behind a setting first?", where: general, ask: "q-1", mentionsYou: true },
   {

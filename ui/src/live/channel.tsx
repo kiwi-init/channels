@@ -91,7 +91,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const wakes = useWakes(roomId)
   const newMembers = useNewMembers(roomId)
   const newPowers = useNewPowers(roomId)
-  const pictures = usePictures(ch, messages)
+  const pictures = usePictures(code, ch, messages)
   const known = useKnownChannels()
   const icon = iconUrl(useIcons().get(roomId) ?? null)
   useLiveIcon(member)

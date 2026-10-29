@@ -26,6 +26,7 @@ import { isSignInGone } from "@/lib/session"
 import { ANYONE, approveTask, assignTask, cancelTask, changeReviewer, closedDigest, sendBackTask, type TaskSend } from "@/lib/task-actions"
 import { announce } from "~/kit/toasts"
 import { answerPair, cancelPair, linkGithub, pairBegin, unlinkGithub } from "~/live/account"
+import { loadPicture } from "~/live/pictures"
 import { newMemberPowers, newMemberScopes, setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
 import { harnessChoices, STARTS } from "~/live/harness-rows"
@@ -225,6 +226,7 @@ export function makeActions(): Actions {
           // A retry that fails again is marked "Couldn't send" once more.
         }
       }),
+    loadImage: (code, spot) => loadPicture(code, spot),
     discard: (code, seq) => attempt("Couldn't remove it", async () => need(code).discard(-seq)),
     react: (code, seq, emoji) =>
       attempt("Couldn't react", async () => {

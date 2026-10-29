@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
 import { PermissionCard, PrChip, QuestionCard, TaskChip } from "~/chat/cards"
 import { parsedFor } from "~/chat/parsed"
@@ -6,7 +6,7 @@ import { preview, useReplying } from "~/chat/reply"
 import { Avatar, cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago, clock } from "~/kit/time"
-import { memberOf, type Channel, type Message, type Person } from "~/model"
+import { memberOf, type Channel, type ImageSpot, type Message, type Person } from "~/model"
 import { useAct } from "~/nav"
 import { nickname } from "~/names"
 import { linked, named, withNames } from "~/chat/linked"
@@ -75,6 +75,37 @@ function Clamp({ on, children }: { on: boolean; children: ReactNode }) {
         </button>
       )}
     </>
+  )
+}
+
+function Spot({ code, img }: { code: string; img: ImageSpot }) {
+  const { actions } = useAct()
+  const at = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    const el = at.current
+    if (img.state !== "waiting" || !el) return
+    if (typeof IntersectionObserver === "undefined") return void actions.loadImage(code, img.spot)
+    const watch = new IntersectionObserver(
+      (seen) => {
+        if (!seen.some((e) => e.isIntersecting)) return
+        watch.disconnect()
+        actions.loadImage(code, img.spot)
+      },
+      { rootMargin: "400px 0px" }
+    )
+    watch.observe(el)
+    return () => watch.disconnect()
+  }, [actions, code, img.spot, img.state])
+  if (img.state === "failed")
+    return (
+      <button type="button" className="msg-image-spot is-failed" title={img.alt} onClick={() => actions.loadImage(code, img.spot)}>
+        Couldn't load image. Retry
+      </button>
+    )
+  return (
+    <span ref={at} className="msg-image-spot" title={img.alt} role="status">
+      {img.state === "gone" ? "Image no longer available" : "Loading image…"}
+    </span>
   )
 }
 
@@ -178,11 +209,15 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
         <Clamp on={who?.kind === "agent" && !inThread}>{m.text && <Body text={m.text} seq={m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={openMessage} />}</Clamp>
         {m.images && (
           <div className="msg-images">
-            {m.images.map((img) => (
-              <button key={img.url} type="button" className="msg-image" aria-label={`Open ${img.alt || "image"}`} onClick={() => openImage(img.url, img.alt)}>
-                <img src={img.url} alt={img.alt} width={img.width || undefined} height={img.height || undefined} />
-              </button>
-            ))}
+            {m.images.map((img) =>
+              "spot" in img ? (
+                <Spot key={img.spot} code={channel.code} img={img} />
+              ) : (
+                <button key={img.url} type="button" className="msg-image" aria-label={`Open ${img.alt || "image"}`} onClick={() => openImage(img.url, img.alt)}>
+                  <img src={img.url} alt={img.alt} width={img.width || undefined} height={img.height || undefined} />
+                </button>
+              )
+            )}
           </div>
         )}
         {m.failed !== undefined && (

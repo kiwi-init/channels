@@ -3,6 +3,7 @@ import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identi
 import type { Message } from "@kiwi/core/protocol.ts"
 import { fold, type Roster } from "@kiwi/core/state.ts"
 import { directsOf, messagesOf, theirsOf } from "~/live/map"
+import { spotOf } from "~/live/pictures"
 
 const roster: Roster = []
 const ids = new Map<string, Identity>()
@@ -29,7 +30,7 @@ await dm("jow", "atlas", "take ridge's task")
 await dm("atlas", "win", "can you review the installer after?")
 await dm("win", "atlas", "yes, send the PR")
 const state = fold(log, roster)
-const none = { get: () => undefined }
+const none = { get: (seq: number, i: number, alt: string) => spotOf(undefined, `${seq}:${i}`, alt) }
 
 describe("other members' direct messages, read-only (T652)", () => {
   test("their DMs are listed once per pair, apart from yours", () => {
