@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.kiwiinit.channels.model.AppModel
@@ -24,6 +25,7 @@ import com.kiwiinit.channels.ui.OptionsForm
 import com.kiwiinit.channels.ui.SettingsScreen
 import com.kiwiinit.channels.ui.StartedList
 import com.kiwiinit.channels.ui.Starting
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -35,6 +37,9 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = RobolectricDeviceQualifiers.Pixel7)
 class ScreensTest {
+    @get:Rule
+    val compose = createEmptyComposeRule()
+
     @Test
     fun link() = shoot("link") { LinkScreen(it) }
 
