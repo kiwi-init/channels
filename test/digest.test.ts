@@ -8,6 +8,7 @@ import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identi
 import type { Event, Kind, Message } from "@kiwi/core/protocol.ts";
 import { fold, placeKey, type Roster } from "@kiwi/core/state.ts";
 import { taskDigest } from "@kiwi/core/work.ts";
+import { messageHead } from "@kiwi/core/format.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { joinAgent, pairComputer, setupChannel } from "./owner.ts";
 
@@ -96,6 +97,21 @@ describe("a closed task's digest", () => {
   });
 });
 
+describe("a digest whose closing event the channel refused", () => {
+  test("is marked like the refused event it follows, and one after an accepted close is not", async () => {
+    const add = await ev("jon", { op: "task.add", title: "Ship the digest", owner: "mac", review: "jon" });
+    const refusedClose = await ev("win", { op: "task.update", task: add.seq, state: "done" });
+    const refusedDigest = await msg("win", "done", "Ship the digest done", { re: [refusedClose.seq] });
+    const acceptedClose = await ev("jon", { op: "task.update", task: add.seq, state: "done" });
+    const acceptedDigest = await msg("jon", "done", "Ship the digest done", { re: [acceptedClose.seq] });
+    const state = fold([add, refusedClose, refusedDigest, acceptedClose, acceptedDigest], roster);
+    expect(state.rejected.has(refusedClose.seq)).toBe(true);
+    expect(state.rejected.has(acceptedClose.seq)).toBe(false);
+    expect(messageHead(refusedDigest, undefined, state)).toContain("[done] re #" + refusedClose.seq + " [its close was refused by the channel — ignore]");
+    expect(messageHead(acceptedDigest, undefined, state)).not.toContain("refused");
+  });
+});
+
 describe("where a closed task's digest is posted", () => {
   const dataDir = mkdtempSync(join(tmpdir(), "kiwi-digest-relay-"));
   const home = mkdtempSync(join(tmpdir(), "kiwi-digest-home-"));
@@ -125,6 +141,8 @@ describe("where a closed task's digest is posted", () => {
     const { state, messages } = await run(dev.state());
     const digest = messages.find((m) => m.kind === "done");
     expect(digest?.body).toStartWith(`T${id} done: ship the login page`);
+    const closing = messages.find((m) => m.kind === "event" && m.ev?.op === "task.update" && m.ev.task === id && m.ev.state === "done");
+    expect(digest?.re).toEqual([closing?.seq ?? -1]);
     expect(placeKey(state.placeOf.get(digest!.seq)!)).toBe(`task:${id}`);
   }, 60_000);
 });
