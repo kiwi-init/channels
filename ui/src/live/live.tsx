@@ -18,7 +18,7 @@ import { OpenMember, type View } from "~/live/channel"
 import { iconUrl } from "~/live/icon"
 import { harnessChoices } from "~/live/harness-rows"
 import { OpenPending, pendingTitle } from "~/live/pending"
-import { usePrefs } from "~/live/prefs"
+import { ownPrefs, usePrefs } from "~/live/prefs"
 import { useComputer } from "~/live/computer"
 import { useStarts } from "~/live/starts"
 import { useGone, useOpened } from "~/live/store"
@@ -78,8 +78,10 @@ function usePersonas(own: Personality[]): App["personas"] {
   return useMemo(() => [...PRESETS, ...own].map((p) => ({ id: p.id, label: p.name, about: p.instructions.split(/(?<=\.)\s/)[0] ?? capabilityLine(p) })), [own])
 }
 
+const joinsMuted = (): boolean => ownPrefs().notify === "none"
+
 function useDuties(rows: ChannelRow[], person: string | undefined) {
-  useAutoApproval(rows)
+  useAutoApproval(rows, joinsMuted)
   useMemberIcons(rows.filter((r) => r.state === "member").map((r) => r.code))
   useEffect(() => {
     if (person) void adoptThisComputer().catch(() => {})
