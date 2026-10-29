@@ -2,10 +2,11 @@ import { useEffect, useState, type CSSProperties } from "react"
 
 import { Conversation } from "~/chat/conversation"
 import { SearchBox, type Jump } from "~/chat/search-box"
-import { cx, Count, IconButton } from "~/kit/bits"
+import { cx, Count, IconButton, useLate } from "~/kit/bits"
 import { Boundary } from "~/kit/boundary"
 import { Icon } from "~/kit/icons"
 import type { Channel } from "~/model"
+import { drawerNews } from "~/live/notify"
 import { NeedsYou, openAsks } from "~/needs/needs"
 import { sameWhere, useApp } from "~/nav"
 import { ChannelPanel } from "~/panels/channel-panel"
@@ -31,6 +32,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   if (jump && (nav.tab !== "chat" || !sameWhere(jump.m.where, nav.where))) setJump(null)
   const [searching, setSearching] = useState(false)
   const drawer = useDrawer()
+  const offline = useLate(channel.connection !== "live", 1000)
   useEffect(() => {
     setDrawer(false)
     return () => setDrawer(false)
@@ -66,18 +68,21 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
         ? `@ ${nickname(channel, nav.where.with)}`
         : `T${nav.where.task}`
 
+  const news = drawerNews(channel)
+
   return (
     <div className={cx("chan", nav.panel && "has-panel", drawer && "is-drawer", hidden && "is-bare")} style={{ "--panel-w": `${panel.width}px` } as CSSProperties}>
       <header className="top">
         <button
           type="button"
           className="icon-btn top-drawer"
-          aria-label={`Rooms and people (${SIDEBAR_KEYS})`}
+          aria-label={`Rooms and people${news ? ", new messages" : ""} (${SIDEBAR_KEYS})`}
           title={`Show or hide rooms and people (${SIDEBAR_KEYS})`}
           aria-pressed={drawer}
           onClick={toggleSide}
         >
           <Icon name="sidebar" />
+          {news && <span className={cx("top-drawer-dot", news === "loud" && "is-loud")} />}
         </button>
         <div className="top-title">
           <button
@@ -124,7 +129,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           {nav.tab === "tasks" ? <Board channel={channel} /> : nav.tab === "needs" ? <NeedsYou channel={channel} onJump={setJump} /> : <Conversation channel={channel} jump={jump} />}
         </Boundary>
       </main>
-      {channel.connection !== "live" && (
+      {offline && (
         <p className="conn" role="status">
           <span className="dot is-doing" aria-hidden="true" />
           {channel.connection === "connecting" ? "Connecting…" : "Reconnecting…"}

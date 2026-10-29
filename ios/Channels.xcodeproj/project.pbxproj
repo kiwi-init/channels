@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		60FE7087DF68C9EA4EA8B8B8 /* EnrichedMarkdown in Frameworks */ = {isa = PBXBuildFile; productRef = A302B3E3B4850F5B01587A23 /* EnrichedMarkdown */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		C789B0CCB117C299E6EEDFD2 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +56,14 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		B03942542BE701D9B2F9D666 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				60FE7087DF68C9EA4EA8B8B8 /* EnrichedMarkdown in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		3D4FA58CA9E6C343627063B2 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -89,6 +101,7 @@
 			buildPhases = (
 				2E0A4F63BE961BEE50C93B2E /* Bundle the engine */,
 				69399972B880673AEB8744DF /* Sources */,
+				B03942542BE701D9B2F9D666 /* Frameworks */,
 				53EADC0890FAFAB4871F75CD /* Resources */,
 			);
 			buildRules = (
@@ -100,6 +113,7 @@
 			);
 			name = Channels;
 			packageProductDependencies = (
+				A302B3E3B4850F5B01587A23 /* EnrichedMarkdown */,
 			);
 			productName = Channels;
 			productReference = D2CDBC171B1223B0D7669F52 /* Channels.app */;
@@ -158,6 +172,9 @@
 			);
 			mainGroup = BD8E6D869CBA4878585357DE;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				09B9B9991238FEDB0A27A18E /* XCLocalSwiftPackageReference "Vendor/EnrichedMarkdown" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 599ACD9DAB642695245319D9 /* Products */;
 			projectDirPath = "";
@@ -503,6 +520,20 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		09B9B9991238FEDB0A27A18E /* XCLocalSwiftPackageReference "Vendor/EnrichedMarkdown" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Vendor/EnrichedMarkdown;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A302B3E3B4850F5B01587A23 /* EnrichedMarkdown */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = EnrichedMarkdown;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 0288C98C5AF1DD952A3C3FCD /* Project object */;
 }

@@ -19,7 +19,7 @@ function notify(title: string, body: string) {
 }
 
 /** One pass over one owned channel: approve own computers' agents, announce the rest. */
-async function tend(code: string, person: string): Promise<void> {
+async function tend(code: string, person: string, muted: () => boolean): Promise<void> {
   const m = loadMember(code)
   if (!m || m.identity.pk !== m.access.ownerPk) return
   const ch = linkOf(m)
@@ -34,14 +34,14 @@ async function tend(code: string, person: string): Promise<void> {
     },
     requests: (o: { person: string }) => ch.requests(o),
   }
-  await tendOwned(person, m.name ?? "your channel", api, notify, told)
+  await tendOwned(person, m.name ?? "your channel", api, (title, body) => (muted() ? undefined : notify(title, body)), told)
 }
 
 /** Watch every owned channel in `rows` while the app runs (the tray keeps it running when closed). */
-export function startAutoApproval(codes: string[]): () => void {
+export function startAutoApproval(codes: string[], muted: () => boolean = () => false): () => void {
   const tending = tendOnPush(codes, watches().watch, async (code) => {
     const person = secrets().person?.pk
-    if (person) await tend(code, person)
+    if (person) await tend(code, person, muted)
   })
   const timer = window.setInterval(() => {
     for (const code of codes) tending.kick(code)

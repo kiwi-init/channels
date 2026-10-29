@@ -18,10 +18,10 @@ import { OpenMember, type View } from "~/live/channel"
 import { iconUrl } from "~/live/icon"
 import { harnessChoices } from "~/live/harness-rows"
 import { OpenPending, pendingTitle } from "~/live/pending"
-import { usePrefs } from "~/live/prefs"
+import { ownPrefs, usePrefs } from "~/live/prefs"
 import { useComputer } from "~/live/computer"
 import { useStarts } from "~/live/starts"
-import { useOpened } from "~/live/store"
+import { useGone, useOpened } from "~/live/store"
 import type { App, ChannelTile } from "~/model"
 import type { Go } from "~/nav"
 
@@ -78,8 +78,10 @@ function usePersonas(own: Personality[]): App["personas"] {
   return useMemo(() => [...PRESETS, ...own].map((p) => ({ id: p.id, label: p.name, about: p.instructions.split(/(?<=\.)\s/)[0] ?? capabilityLine(p) })), [own])
 }
 
+const joinsMuted = (): boolean => ownPrefs().notify === "none"
+
 function useDuties(rows: ChannelRow[], person: string | undefined) {
-  useAutoApproval(rows)
+  useAutoApproval(rows, joinsMuted)
   useMemberIcons(rows.filter((r) => r.state === "member").map((r) => r.code))
   useEffect(() => {
     if (person) void adoptThisComputer().catch(() => {})
@@ -100,9 +102,11 @@ export function useLive(open: string | null): App {
   const computer = useComputer()
   const actions = useMemo(() => makeActions(), [])
   const channel = opened && opened.code === open ? opened.channel : null
+  const lost = useGone()
+  const gone = !channel && lost && lost.code === open ? lost : null
   return useMemo(
-    () => ({ account, channels, channel, prefs, harnesses, personas, starts, ownPersonalities, computer, actions }),
-    [account, channels, channel, prefs, harnesses, personas, starts, ownPersonalities, computer, actions]
+    () => ({ account, channels, channel, ...(gone ? { gone } : {}), prefs, harnesses, personas, starts, ownPersonalities, computer, actions }),
+    [account, channels, channel, gone, prefs, harnesses, personas, starts, ownPersonalities, computer, actions]
   )
 }
 

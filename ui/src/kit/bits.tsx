@@ -120,12 +120,21 @@ export function Empty({ title, children }: { title: string; children?: ReactNode
   )
 }
 
-export function Loading() {
+export function useLate(on: boolean, ms: number): boolean {
   const [late, setLate] = useState(false)
   useEffect(() => {
-    const timer = window.setTimeout(() => setLate(true), 400)
-    return () => window.clearTimeout(timer)
-  }, [])
+    if (!on) return
+    const timer = window.setTimeout(() => setLate(true), ms)
+    return () => {
+      window.clearTimeout(timer)
+      setLate(false)
+    }
+  }, [on, ms])
+  return on && late
+}
+
+export function Loading() {
+  const late = useLate(true, 400)
   return (
     <div className="empty" role="status">
       {late && <p className="empty-text">Loading…</p>}

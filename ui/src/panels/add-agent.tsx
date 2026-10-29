@@ -465,6 +465,33 @@ function RunCommand({ channel, name, setName, taken }: NameProps) {
   )
 }
 
+export function AddAgentCard({ channel }: { channel: Channel }) {
+  const { go } = useApp()
+  const [name] = useState(() => freeName(takenNames(channel)))
+  const { line, failed, retry } = useJoinCommand(channel.code, name, "")
+  return (
+    <section className="add-card" aria-label="Add an agent">
+      <p className="add-card-title">Add an agent</p>
+      <p className="dim">Start one on a computer of yours, or paste this into the terminal your agent works in. It asks to join, and you check its code in Needs you.</p>
+      {failed ? (
+        <div className="invite-failed">
+          <span>Couldn't make the command.</span>
+          <button type="button" className="btn is-small" onClick={retry}>
+            Try again
+          </button>
+        </div>
+      ) : (
+        <CopyBox text={line} label="Copy command" wrap />
+      )}
+      <div className="add-card-foot">
+        <button type="button" className="btn is-primary" onClick={() => go({ to: "panel", panel: { kind: "add-agent" } })}>
+          Start one here
+        </button>
+      </div>
+    </section>
+  )
+}
+
 function Progress({ channel, run, onDone, onMessage }: { channel: Channel; run: Run; onDone: () => void; onMessage: () => void }) {
   const { app } = useApp()
   const { agent, on, runs } = run

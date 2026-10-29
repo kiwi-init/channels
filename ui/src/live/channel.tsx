@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 
 import type { SendOptions } from "@kiwi/core/client.ts"
 import { GENERAL_ROOM, type Message as Wire } from "@kiwi/core/protocol.ts"
-import { dmPlace, placeKey, type ChannelState } from "@kiwi/core/state.ts"
+import { answersDecisions, dmPlace, placeKey, type ChannelState } from "@kiwi/core/state.ts"
 import { channelTitle, loadRecent, saveRecent, useChannel, useKnownChannels, type StoredMember } from "@/lib/channel"
 import { useIcons, useLiveIcon } from "@/lib/icons"
 import { markSeen, setOpenNews } from "@/lib/news"
@@ -11,7 +11,6 @@ import { roomLast, roomSeenKey } from "@/lib/rooms"
 import { bridge } from "@/lib/secrets"
 import { sendsInTurn } from "@/lib/send-order"
 import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@/lib/threads"
-import { announce } from "~/kit/toasts"
 import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
 import { asksOf, directsOf, messagesOf, formerOf, peopleOf, roomsOf, tasksOf, type Pending } from "~/live/map"
@@ -20,8 +19,9 @@ import { usePinsHere } from "~/live/pins"
 import { usePublishFace } from "~/live/face"
 import { usePictures } from "~/live/pictures"
 import { seated, useSeats } from "~/live/seats"
+import { elsewhere, worthTelling } from "~/live/notify"
 import { ownPrefs } from "~/live/prefs"
-import { closeOpened, publish, type Run } from "~/live/store"
+import { closeOpened, markGone, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
 import type { Channel, Upload, Where } from "~/model"
 import { nicknamesOf } from "~/names"
@@ -224,12 +224,12 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     [code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster, foldFrom]
   )
 
-  useLayoutEffect(() => publish({ code, channel, run }), [code, channel, run])
+  useLayoutEffect(() => {
+    if (!gone) return publish({ code, channel, run })
+    markGone({ code, title, why: gone })
+    closeOpened(code)
+  }, [code, channel, run, gone, title])
   useLayoutEffect(() => () => closeOpened(code), [code])
-
-  useEffect(() => {
-    if (gone) announce(gone === "closed" ? `${title} was closed by its owner` : `You're no longer in ${title}`)
-  }, [gone, title])
 
   const firstVisit = useRef(Object.keys(seenIn(roomId)).length === 0)
   useEffect(() => {
@@ -284,11 +284,12 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
 function useNotify(messages: readonly Wire[], me: string, title: string, members: ChannelState["members"]) {
   const told = useRef(messages.at(-1)?.seq ?? 0)
   useEffect(() => {
-    const fresh = messages.filter((m) => m.seq > told.current && m.kind !== "event" && m.from !== me)
+    const fresh = messages.filter((m) => m.seq > told.current)
     told.current = Math.max(told.current, messages.at(-1)?.seq ?? 0)
-    if (!fresh.length || !document.hidden) return
+    if (!fresh.length || !elsewhere()) return
     const { notify } = ownPrefs()
-    const worth = fresh.filter((m) => notify === "all" || (notify === "mentions" && (m.to?.includes(me) || m.body.includes(`@${me}`))))
+    const decides = answersDecisions(members, me)
+    const worth = fresh.filter((m) => worthTelling(m, me, notify, decides))
     const last = worth.at(-1)
     if (!last) return
     const b = bridge()
