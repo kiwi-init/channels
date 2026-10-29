@@ -21,7 +21,7 @@ export type EventLine =
 
 const FOLD_AT = 3
 
-export const isEvent = (m: Message | undefined): m is Message => !!m?.system && !m.leftOut
+const isEvent = (m: Message | undefined): m is Message => !!m?.system && !m.leftOut
 
 const joins = (a: Message | undefined, b: Message | undefined, mark: number | null): boolean => isEvent(a) && isEvent(b) && sameDay(a.at, b.at) && b.seq !== mark
 
