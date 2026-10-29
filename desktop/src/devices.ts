@@ -35,6 +35,7 @@ export interface DeviceHost {
   forget(device: string): Promise<void>;
   renew(device: string): Promise<void>;
   news(): Promise<DeviceNewsView | null>;
+  session(): Promise<{ client: AccountClient; device: Identity } | null>;
 }
 
 async function readList(links: unknown[]): Promise<DeviceList> {
@@ -43,7 +44,7 @@ async function readList(links: unknown[]): Promise<DeviceList> {
   return read.list;
 }
 
-async function myDevice(deps: Pick<DeviceHostDeps, "device" | "saveDevice">, name: string): Promise<Identity> {
+export async function myDevice(deps: Pick<DeviceHostDeps, "device" | "saveDevice">, name: string): Promise<Identity> {
   const held = deps.device();
   if (held?.xsk) return held;
   const made = await withExchangeKey(await generateIdentity(name));
@@ -261,6 +262,8 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
       const revokes = list.revokes.map((r) => ({ device: r.device, label: r.label, as: r.as, by: signerLabel(list, r.by), at: r.at, older: r.older }));
       return { links, revokes, removed: null };
     },
+
+    session: sync,
   };
 }
 

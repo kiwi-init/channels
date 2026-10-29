@@ -62,6 +62,8 @@ export const SHOTS: Record<string, Shot> = {
   "enroll-digits": { scenario: "enroll-digits", channel: "kiwi" },
   "enroll-desktop": { scenario: "enroll-desktop", channel: null },
   "enroll-desktop-digits": { scenario: "enroll-desktop-digits", channel: null },
+  "recover-desktop": { scenario: "recover-desktop", channel: null },
+  "recover-desktop-welcome": { scenario: "recover-desktop-welcome", channel: null },
   "settings-devices": { scenario: "devices", channel: "kiwi", nav: { page: "settings", section: "computers" } },
   "settings-devices-forgotten": { scenario: "devices-forgotten", channel: "kiwi", nav: { page: "settings", section: "computers" } },
   "settings-forgot-here": { scenario: "forgot-here", channel: "kiwi", nav: { page: "settings", section: "computers" } },

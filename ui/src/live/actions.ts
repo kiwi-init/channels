@@ -26,7 +26,24 @@ import { createPerson, bridge, secrets, type KiwiBridge, type TermEvent, type Te
 import { isSignInGone } from "@kiwi/channel/session.ts"
 import { ANYONE, approveTask, assignTask, cancelTask, changeReviewer, closedDigest, sendBackTask, type TaskSend } from "@kiwi/channel/task-actions.ts"
 import { announce } from "~/kit/toasts"
-import { enrollAnswer, enrollBegin, enrollCancel, enrollConfirm, enrollDeny, forgetDevice, linkGithub, renewDevice, unlinkGithub, type EnrollDone } from "~/live/account"
+import {
+  enrollAnswer,
+  enrollBegin,
+  enrollCancel,
+  enrollConfirm,
+  enrollDeny,
+  forgetDevice,
+  linkGithub,
+  recoverBegin,
+  recoverFinish,
+  recoverOpen,
+  recoveryDrop,
+  recoverySave,
+  recoveryWords,
+  renewDevice,
+  unlinkGithub,
+  type EnrollDone,
+} from "~/live/account"
 import { loadPicture } from "~/live/pictures"
 import { newMemberPowers, newMemberScopes, setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
@@ -724,6 +741,9 @@ export function makeActions(): Actions {
     enrollDeny: (id) => attempt("Couldn't turn the device away", () => enrollDeny(id)),
     forgetDevice: (id) => attempt("Couldn't forget the device", () => forgetDevice(id)),
     renewDevice: (id) => attempt("Couldn't renew the device", () => renewDevice(id)),
+    recoveryWords: () => tried("Couldn't make the recovery words", recoveryWords),
+    recoverySave: (typed) => tried("Couldn't set up the recovery key", () => recoverySave(typed)),
+    recoveryDrop: () => attempt("Couldn't put the words away", recoveryDrop),
     enrollBegin: () =>
       attempt("Couldn't sign in as one of your devices", () =>
         enrollBegin(
@@ -732,6 +752,9 @@ export function makeActions(): Actions {
         )
       ),
     enrollCancel: () => attempt("Couldn't take the ask back", enrollCancel),
+    recoverBegin: () => attempt("Couldn't start the recovery", recoverBegin),
+    recoverOpen: (words) => tried("Couldn't open your recovery vault", () => recoverOpen(words)),
+    recoverFinish: async (lost) => void (await tried("Couldn't finish the recovery", () => recoverFinish(lost))),
     saveTheme,
     deleteTheme,
     addStartFolder: () => attempt("Couldn't add the folder", addStartFolder),
