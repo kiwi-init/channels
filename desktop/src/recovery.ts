@@ -35,6 +35,7 @@ export interface RecoveryHostDeps {
   kept: () => RecoveryKept | null;
   keep: (k: RecoveryKept) => void;
   letGo: () => Promise<void>;
+  forget: () => void;
   now?: () => number;
 }
 
@@ -170,6 +171,8 @@ export function createRecoveryHost(deps: RecoveryHostDeps): RecoveryHost {
     },
 
     async keepCurrent() {
+      const held = deps.person();
+      if (held && deps.links().length && (await list()).root !== held.pk) deps.forget();
       const person = deps.person();
       const was = deps.kept();
       if (!person && !was?.person) return;
