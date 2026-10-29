@@ -24,17 +24,17 @@ function listenerDir(): string {
 let fromDaemon: DaemonListener[] = [];
 let signalsSet = false;
 
-function heldFor(alias: string, as: string, kind: DaemonListener["kind"], session: string | null): Omit<DaemonListener, "at"> {
+function heldFor(alias: string, as: string, kind: DaemonListener["kind"], session: string | null, marks: boolean | null = null): Omit<DaemonListener, "at"> {
   const who = here();
-  return { channel: alias, agent: as, kind, cwd: process.cwd(), harness: who.harness ?? null, session, pid: who.pid ?? null };
+  return { channel: alias, agent: as, kind, cwd: process.cwd(), harness: who.harness ?? null, session, pid: who.pid ?? null, marks };
 }
 
 export async function refreshListeners(): Promise<void> {
   fromDaemon = await daemonListeners().catch(() => []);
 }
 
-export async function holdListening(alias: string, as: string): Promise<HeldListener> {
-  const held = await holdListener(heldFor(alias, as, "listen", here().session ?? null));
+export async function holdListening(alias: string, as: string, marks: boolean): Promise<HeldListener> {
+  const held = await holdListener(heldFor(alias, as, "listen", here().session ?? null, marks));
   if (!signalsSet) {
     signalsSet = true;
     for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"] as const) process.on(sig, () => process.exit(0));

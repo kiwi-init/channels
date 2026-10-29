@@ -76,6 +76,7 @@ export interface DaemonListener {
   harness: string | null;
   session: string | null;
   pid: number | null;
+  marks: boolean | null;
   at: number;
 }
 
@@ -95,6 +96,7 @@ export function readListener(x: unknown): DaemonListener | null {
     harness: optionalText(r.harness),
     session: optionalText(r.session),
     pid: typeof r.pid === "number" && Number.isInteger(r.pid) && r.pid > 0 ? r.pid : null,
+    marks: typeof r.marks === "boolean" ? r.marks : null,
     at: typeof r.at === "number" ? r.at : Date.now(),
   };
 }

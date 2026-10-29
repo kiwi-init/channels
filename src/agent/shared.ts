@@ -39,10 +39,10 @@ export const runAgent = <A, E>(effect: Effect.Effect<A, E, Agent>): Promise<A> =
 
 export const isAnswer = (err: unknown) => err instanceof ChannelGone || isLocalRefusal(err) || (err instanceof RelayError && err.status < 500 && err.status !== 429);
 
-export const holding = (alias: string, as: string): Effect.Effect<void, never, Scoped.Scope> =>
+export const holding = (alias: string, as: string, marks: boolean): Effect.Effect<void, never, Scoped.Scope> =>
   Effect.gen(function* () {
     yield* Effect.acquireRelease(
-      Effect.promise(() => holdListening(alias, as)),
+      Effect.promise(() => holdListening(alias, as, marks)),
       (held) => Effect.sync(() => held.close()),
     );
   });
