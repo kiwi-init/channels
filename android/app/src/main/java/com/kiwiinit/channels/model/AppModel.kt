@@ -78,7 +78,7 @@ const val DEFAULT_RELAY = "https://channels.kiwiinit.com"
 
 enum class Buzz { Tap, Warn, Fail, Done }
 
-class Attached(val id: String, val image: ImageBitmap, val data: ByteArray)
+class Attached(val id: String, val image: ImageBitmap, val data: ByteArray, val mime: String)
 
 data class Draft(val text: String = "", val attached: List<Attached> = emptyList()) {
     val isEmpty: Boolean get() = text.isBlank() && attached.isEmpty()

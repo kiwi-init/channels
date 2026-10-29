@@ -412,7 +412,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         to: z.array(z.string()).optional(),
         kind: kind.optional(),
         re: z.array(z.number().int()).optional(),
-        images: z.array(z.string()).optional().describe("local image files to attach (png, jpg, gif, webp, ≤256KB each)"),
+        images: z.array(z.string()).optional().describe("local image files to attach (png, jpg, gif, webp; one over 256KB is compressed to fit)"),
         room: z.string().optional().describe("the room's name or id; general if omitted (a reply defaults to its parent's room)"),
         task: z.string().optional().describe("a task id (T7): post in that task's thread"),
         main: z.boolean().optional().describe("post in the main conversation, even while doing a task"),
@@ -422,12 +422,13 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     tool(({ text, to, kind, re, images, room, task, main, dm }) =>
       Effect.gen(function* () {
         const chosen = yield* where(task, main, dm, to, !!re?.length);
+        const imgs = images?.length ? yield* Effect.promise(() => loadImages(images)) : undefined;
         const seq = yield* s.send(text, {
           to: chosen.to ?? to,
           kind,
           re,
           room,
-          imgs: images?.length ? loadImages(images) : undefined,
+          imgs,
           ...(chosen.task !== undefined ? { task: chosen.task } : {}),
           ...(chosen.dm ? { dm: true } : {}),
         });
@@ -477,10 +478,15 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         seq: z.number().int(),
         text: z.string(),
         kind: kind.optional(),
-        images: z.array(z.string()).optional().describe("local image files to attach (png, jpg, gif, webp, ≤256KB each)"),
+        images: z.array(z.string()).optional().describe("local image files to attach (png, jpg, gif, webp; one over 256KB is compressed to fit)"),
       },
     },
-    tool(({ seq, text, kind, images }) => Effect.suspend(() => Effect.map(s.reply(seq, text, kind, images?.length ? loadImages(images) : undefined), (n) => `sent #${n}`))),
+    tool(({ seq, text, kind, images }) =>
+      Effect.gen(function* () {
+        const imgs = images?.length ? yield* Effect.promise(() => loadImages(images)) : undefined;
+        return `sent #${yield* s.reply(seq, text, kind, imgs)}`;
+      }),
+    ),
   );
 
   server.registerTool(

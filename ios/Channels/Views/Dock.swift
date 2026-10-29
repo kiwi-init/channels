@@ -33,14 +33,45 @@ struct Attached: Identifiable {
 }
 
 enum Shrink {
-    static func jpeg(_ image: UIImage, longest: CGFloat = 1600) -> Data? {
+    static let limit = 256 * 1024
+    static let maxSide: CGFloat = 4096
+    static let floor: CGFloat = 0.25
+    static let top: CGFloat = 0.92
+    static let steps = 5
+
+    static func jpeg(_ image: UIImage) -> Data? {
         let size = image.size
-        let scale = min(1, longest / max(size.width, size.height))
-        let target = CGSize(width: (size.width * scale).rounded(), height: (size.height * scale).rounded())
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        let resized = UIGraphicsImageRenderer(size: target, format: format).image { _ in image.draw(in: CGRect(origin: .zero, size: target)) }
-        return resized.jpegData(compressionQuality: 0.7)
+        var scale = min(1, maxSide / max(size.width, size.height))
+        while true {
+            let target = CGSize(width: max(1, (size.width * scale).rounded()), height: max(1, (size.height * scale).rounded()))
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            format.opaque = true
+            let resized = UIGraphicsImageRenderer(size: target, format: format).image { _ in image.draw(in: CGRect(origin: .zero, size: target)) }
+            if let fit = best(resized) { return fit }
+            guard let low = resized.jpegData(compressionQuality: floor) else { return nil }
+            if target.width <= 1 && target.height <= 1 { return nil }
+            scale *= min(0.9, max(0.5, (CGFloat(limit) / CGFloat(low.count)).squareRoot() * 0.95))
+        }
+    }
+
+    private static func best(_ image: UIImage) -> Data? {
+        if let full = image.jpegData(compressionQuality: top), full.count <= limit { return full }
+        var lo = floor
+        var hi = top
+        var found: Data?
+        for _ in 0..<steps {
+            let mid = (lo + hi) / 2
+            if let got = image.jpegData(compressionQuality: mid), got.count <= limit {
+                found = got
+                lo = mid
+            } else {
+                hi = mid
+            }
+        }
+        if let found { return found }
+        if let low = image.jpegData(compressionQuality: floor), low.count <= limit { return low }
+        return nil
     }
 }
 

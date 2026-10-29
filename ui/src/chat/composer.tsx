@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { MAX_IMAGE_BYTES, RASTER_MIMES } from "@kiwi/core/protocol.ts"
 import { fileDrag, takeDropped } from "@/lib/dropped"
-import { needsCompressing } from "@/lib/needs-compressing"
 import { takePasted } from "@/lib/pasted"
 import { preview, useReplying } from "~/chat/reply"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
@@ -39,7 +38,6 @@ const drafts = new Map<string, string>()
 
 const MAX_FILES = 8
 const IMAGE_TYPES = new Set<string>(RASTER_MIMES)
-const KB = Math.round(MAX_IMAGE_BYTES / 1024)
 
 function imageName(file: File): string {
   if (file.name) return file.name
@@ -96,14 +94,10 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
         toast(`${name} isn't a PNG, JPEG, GIF or WebP`)
         continue
       }
-      if (needsCompressing(f, MAX_IMAGE_BYTES)) {
-        void import("@/lib/compress-image").then(({ compressImage, renamed }) =>
-          compressImage(f, MAX_IMAGE_BYTES).then((done) => (done ? add({ ...done, name: renamed(name, done.mime) }) : toast(`${name} couldn't be shrunk under ${KB} KB`)))
-        )
-        continue
-      }
       if (f.size > MAX_IMAGE_BYTES) {
-        toast(`${name} is over ${KB} KB. Attach a smaller image`)
+        void import("@/lib/compress-image").then(({ compressImage, renamed }) =>
+          compressImage(f, MAX_IMAGE_BYTES).then((done) => (done ? add({ ...done, name: renamed(name, done.mime) }) : toast(`${name} couldn't be read`)))
+        )
         continue
       }
       void readBase64(f).then(
