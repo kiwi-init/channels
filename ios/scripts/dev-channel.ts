@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
@@ -15,7 +15,9 @@ import { PRESETS } from "@kiwi/core/presets.ts";
 import type { Activity } from "@kiwi/core/protocol.ts";
 
 import { createDeviceHost } from "../../desktop/src/devices.ts";
+import type { ChannelIdentityView } from "../../desktop/src/bridge.ts";
 import type { AgentSession } from "../../src/agent.ts";
+import type { Saved } from "../engine/wire.ts";
 
 const arg = (name: string, fallback: string): string => {
   const at = process.argv.indexOf(`--${name}`);
@@ -31,6 +33,7 @@ const root = arg("dir", join(process.cwd(), ".ios-dev"));
 const port = Number(arg("port", "8790"));
 const personName = arg("name", "Jonatas Walker");
 const user = arg("user", "phone");
+const out = arg("saved-file", join(root, "phone.json"));
 
 rmSync(root, { recursive: true, force: true });
 mkdirSync(root, { recursive: true });
@@ -152,7 +155,6 @@ const program = Effect.gen(function* () {
     os: () => "macOS",
     wipe: () => {},
   });
-  say(`relay ${relay}, dev sign-in ${user}`);
   const prompt = createInterface({ input: process.stdin, output: process.stdout });
   const signingIn = Effect.gen(function* () {
     const answered = new Set<string>();
@@ -181,6 +183,11 @@ const program = Effect.gen(function* () {
   );
   yield* Effect.forkChild(signingIn);
   yield* Effect.forkChild(lettingIn);
+  const seat: ChannelIdentityView = { label: title, idName: handle, pk: owner.pk, sk: owner.sk, xpk: owner.xpk, xsk: owner.xsk, roomId, code, access, at: Date.now(), name: title };
+  const saved: Saved = { relay, person: { name: person.name, pk: person.pk, sk: person.sk, xpk: personXpk, xsk: personXsk }, seats: [seat] };
+  writeFileSync(out, JSON.stringify(saved));
+  say(`relay ${relay}, dev sign-in ${user}`);
+  say(`a phone's saved keys for this channel are in ${out}`);
 
   const answers = ["On it.", "Good call, doing that now.", "Noted. I'll post when it's in review.", "Makes sense: I'll tell win."];
   let turn = 0;

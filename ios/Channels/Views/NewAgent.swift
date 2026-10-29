@@ -30,9 +30,9 @@ struct NewAgentSheet: View {
                     Failed(why: why) { Task { await load() } }
                 case .ready(let list) where list.isEmpty:
                     Section {
-                        Text("No paired computers yet").type(.body).foregroundStyle(Tone.ink2)
+                        Text("No computers yet").type(.body).foregroundStyle(Tone.ink2)
                     } footer: {
-                        Text("Pair one from the Mac app: Settings → Computers.")
+                        Text("Run kiwi login on a computer, then type the digits it shows in Channels on your Mac.")
                     }
                 case .ready(let list):
                     Section {

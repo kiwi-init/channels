@@ -78,7 +78,7 @@ interface Env {
   WORKOS_AUTHKIT_DOMAIN?: string;
   /** Secret, optional: lets the beta list match people by email (the relay never names owners from it). */
   WORKOS_API_KEY?: string;
-  /** 20 mailbox writes per minute per client address (pairing codes are pasted by hand). */
+  /** 20 mailbox writes per minute per client address (launch asks and enrolments). */
   MAILBOX_WRITES: RateLimit;
   /** 60 machine registrations and inbox writes per minute per client address. */
   MACHINE_WRITES: RateLimit;

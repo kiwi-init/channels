@@ -64,7 +64,7 @@ describe("the daemon socket", () => {
 
   test("hello re-reads machine.json: no cached pairing", async () => {
     const paired = loadPairedMachine()!;
-    // `kiwi pair` (or a forget) changed the file out from under the daemon: unlink it.
+    // `kiwi login` (or a forget) changed the file out from under the daemon: unlink it.
     saveMachine({ identity: paired.identity, label: paired.label, relay: paired.relay });
     const h = await daemonHello();
     expect(h.machine).toBe(paired.identity.pk);

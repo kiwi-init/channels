@@ -5,9 +5,11 @@ import { join } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
 import { readDeviceList, type DeviceLink } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
+import type { MachineCert } from "@kiwi/core/person.ts";
+import type { ComputerView } from "../desktop/src/bridge.ts";
 import { createDeviceHost, type DeviceHost } from "../desktop/src/devices.ts";
 import { loginComputer } from "../src/login.ts";
-import { computerClaimFor, loadMachine } from "../src/machine.ts";
+import { computerClaimFor, loadMachine, type MachineFile } from "../src/machine.ts";
 import { PairError } from "../src/daemon/pair.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
@@ -44,8 +46,9 @@ function freshMachine(): void {
   for (const f of ["machine.json", "machine.json.bak"]) rmSync(join(home, f), { force: true });
 }
 
-function desktop(person: Identity, user: string): { host: DeviceHost; held: { device: Identity | null; links: DeviceLink[] } } {
+function desktop(person: Identity, user: string): { host: DeviceHost; held: { device: Identity | null; links: DeviceLink[] }; computers: ComputerView[] } {
   const held: { device: Identity | null; links: DeviceLink[] } = { device: null, links: [] };
+  const computers: ComputerView[] = [];
   const host = createDeviceHost({
     relayUrl: () => relay,
     token: async () => `dev:${user}`,
@@ -56,11 +59,12 @@ function desktop(person: Identity, user: string): { host: DeviceHost; held: { de
     links: () => held.links,
     saveLinks: (l) => void (held.links = l),
     channels: () => [],
+    computer: (c) => void computers.push(c),
     label: () => "studio",
     os: () => "macOS",
     wipe: () => {},
   });
-  return { host, held };
+  return { host, held, computers };
 }
 
 async function approveFrom(host: DeviceHost, digits: Promise<string>): Promise<void> {
@@ -109,6 +113,23 @@ describe("kiwi login enrolls a computer (T637)", () => {
     expect(run.lines.at(-1)).toContain("is one of Jow's devices now");
   });
 
+  test("the app holding the person key certifies it too, so the app can start agents there", async () => {
+    freshMachine();
+    const user = `cli${++users}`;
+    const person = await withExchangeKey(await generateIdentity("Jow"));
+    const app = desktop(person, user);
+    await app.host.poll();
+    const run = login(user);
+    await approveFrom(app.host, run.digits);
+    await run.done;
+
+    const m = loadMachine() as MachineFile & { cert?: MachineCert; person?: { pk: string } };
+    expect(m.cert).toMatchObject({ machine: m.identity.pk, pk: person.pk, label: m.label });
+    expect(m.person?.pk).toBe(person.pk);
+    expect(app.computers).toEqual([expect.objectContaining({ machinePk: m.identity.pk, personPk: person.pk, label: m.label })]);
+    expect(run.lines.at(-1)).toContain("your app can start agents here");
+  });
+
   test("its agents join the person's channels on their own, from this computer", async () => {
     freshMachine();
     const user = `cli${++users}`;
@@ -122,7 +143,7 @@ describe("kiwi login enrolls a computer (T637)", () => {
 
     const agent = await generateIdentity("atlas");
     const claims = await computerClaimFor(s.roomId, agent.pk);
-    expect(claims?.computer).toBeUndefined();
+    expect(claims?.computer?.cert).toMatchObject({ machine: loadMachine()!.identity.pk, pk: s.person.pk });
     const { requestId } = await Channel.requestJoin(rooms.url.origin, s.code, agent, { name: "atlas" }, claims);
     const req = (await s.ownerCh.requests({ person: s.person.pk })).find((r) => r.id === requestId);
     expect(req).toMatchObject({ kind: "agent", computer: { pk: loadMachine()!.identity.pk, person: s.person.pk, own: true, joinsOnItsOwn: true } });

@@ -128,7 +128,7 @@ describe("the phone's engine starts agents on the person's own computers", () =>
       bypass: false,
     });
     expect(await ask<string[]>({ op: "foldersOn", computer: machine.pk, code })).toEqual([project]);
-    await expect(ask({ op: "harnessesOn", computer: owner.pk })).rejects.toThrow("that isn't one of your paired computers");
+    await expect(ask({ op: "harnessesOn", computer: owner.pk })).rejects.toThrow("that isn't one of your computers");
     await expect(ask({ op: "foldersOn", computer: machine.pk, code: "not-a-channel" })).rejects.toThrow("this phone isn't in that channel");
   });
 

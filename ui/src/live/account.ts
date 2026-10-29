@@ -11,19 +11,9 @@ import { store, type Listener } from "~/live/value"
 import type { Account, Computer, Device, EnrollAsk, Enrolling } from "~/model"
 import { version } from "../../../package.json"
 
-type PairAsk = NonNullable<Account["pairAsk"]>
-
-interface Pairing {
-  kind: PairAsk["kind"]
-  stop: AbortController
-}
-
-const pairAsk = store<PairAsk | null>(null)
 const github = store<{ login: string } | null>(null)
 const githubCode = store<{ code: string; url: string } | null>(null)
-let pairing: Pairing | null = null
 
-const PAIR_POLL_MS = 1500
 const ENROLL_POLL_MS = 20_000
 const ENROLL_WAIT_MS = 2_000
 const ENROLLING_MS = 2_000
@@ -196,66 +186,6 @@ export async function enrollDeny(id: string): Promise<void> {
   await enrollAsk.check()
 }
 
-async function poll(p: Pairing): Promise<void> {
-  const b = bridge()
-  if (!b) return
-  while (!p.stop.signal.aborted) {
-    try {
-      if (p.kind === "computer") {
-        const ask = await b.pairPoll()
-        if (ask && !p.stop.signal.aborted) return pairAsk.set({ kind: "computer", label: ask.label, os: ask.os })
-      } else {
-        const ask = await b.linkPoll()
-        if (ask && !p.stop.signal.aborted) return pairAsk.set({ kind: "phone", label: ask.label, digits: ask.digits })
-      }
-    } catch (err) {
-      if (p.stop.signal.aborted) return
-      announce(`Pairing stopped: ${err instanceof Error ? err.message : String(err)}`)
-      pairing = null
-      return
-    }
-    await new Promise((r) => setTimeout(r, PAIR_POLL_MS))
-  }
-}
-
-export async function pairBegin(kind: PairAsk["kind"]): Promise<string> {
-  const b = bridge()
-  if (!b) throw new Error("Pairing needs the Channels desktop app")
-  await cancelPair()
-  const { code } = kind === "computer" ? await b.pairBegin() : await b.linkBegin()
-  const p: Pairing = { kind, stop: new AbortController() }
-  pairing = p
-  void poll(p)
-  return code
-}
-
-export async function answerPair(accept: boolean): Promise<void> {
-  const b = bridge()
-  const p = pairing
-  const ask = pairAsk.get()
-  if (!b || !p || !ask) throw new Error("Nothing is asking to pair")
-  pairing = null
-  pairAsk.set(null)
-  p.stop.abort()
-  if (p.kind === "computer") {
-    const r = await b.pairAnswer(accept)
-    if (accept && r) announce(`Paired ${ask.label}`)
-  } else {
-    const r = await b.linkAnswer(accept)
-    if (accept && r) announce(`Linked ${r.label}`)
-  }
-}
-
-export async function cancelPair(): Promise<void> {
-  const p = pairing
-  pairing = null
-  pairAsk.set(null)
-  if (!p) return
-  p.stop.abort()
-  const b = bridge()
-  if (b) await (p.kind === "computer" ? b.pairCancel() : b.linkCancel())
-}
-
 async function refreshGithub(): Promise<void> {
   const b = bridge()
   if (!b) return github.set(null)
@@ -391,7 +321,6 @@ export function useAccount(): Account | null {
   const online = useMachines()
   const agents = useOwnAgents()
   const linked = useSyncExternalStore(github.subscribe, github.get)
-  const asking = useSyncExternalStore(pairAsk.subscribe, pairAsk.get)
   const code = useSyncExternalStore(githubCode.subscribe, githubCode.get)
   const look = useSyncExternalStore(uiUpdate.subscribe, uiUpdate.get)
   const enroll = useSyncExternalStore(enrollAsk.subscribe, enrollAsk.get)
@@ -415,11 +344,10 @@ export function useAccount(): Account | null {
       relay: relayUrl(),
       ...(unsealed ? { keysUnsealed: true } : {}),
       ...(bridge() ? { desktop: true } : {}),
-      ...(asking ? { pairAsk: asking } : {}),
       ...(enroll ? { enrollAsk: enroll } : {}),
       ...(signed ? { devices: signed } : {}),
       ...deviceNotices(news),
       ...(code ? { githubCode: code } : {}),
     }
-  }, [person, linked, computers, phones, online, agents, update, asking, code, look, unsealed, enroll, signed, news])
+  }, [person, linked, computers, phones, online, agents, update, code, look, unsealed, enroll, signed, news])
 }

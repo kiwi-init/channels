@@ -2,7 +2,8 @@ import { accountClient, type AccountClient } from "@kiwi/core/account.ts";
 import { certUntil, dueForRenewal, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceLinkBody, type DeviceList } from "@kiwi/core/devices.ts";
 import { askToEnroll, enrollDigits, enrollMailbox, enrollNonce, readEnrollGrant, revealMatches, type EnrollGrant, type Enrollment } from "@kiwi/core/enroll.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
-import type { DeviceNewsView, DeviceView, EnrollAskView, EnrollConfirmView, EnrollStatusView, PublicPerson } from "./bridge.ts";
+import { certifyMachine } from "@kiwi/core/person.ts";
+import type { ComputerView, DeviceNewsView, DeviceView, EnrollAskView, EnrollConfirmView, EnrollStatusView, PublicPerson } from "./bridge.ts";
 
 const TRIES = 3;
 const RENEW_EVERY_MS = 6 * 3_600_000;
@@ -17,6 +18,7 @@ export interface DeviceHostDeps {
   links: () => DeviceLink[];
   saveLinks: (links: DeviceLink[]) => void;
   channels: () => { label: string; code: string }[];
+  computer?: (c: ComputerView) => void;
   label: () => string;
   os: () => string;
   wipe: () => void;
@@ -207,9 +209,20 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
       });
       const who = deps.who();
       if (!who || who.pk !== list.person) throw new Error("this app's person doesn't match your device list");
-      const grant: EnrollGrant = { kind: "kiwi-enroll-grant", v: 1, links, person: { pk: who.pk, name: who.name, xpk: who.xpk }, relay: deps.relayUrl(), channels: deps.channels() };
+      const person = e.ask.as === "computer" ? deps.person() : null;
+      const cert = person ? await certifyMachine(person, { pk: e.ask.device, xpk: e.ask.dxpk, label: e.ask.label }, now()) : null;
+      const grant: EnrollGrant = {
+        kind: "kiwi-enroll-grant",
+        v: 1,
+        links,
+        person: { pk: who.pk, name: who.name, xpk: who.xpk },
+        relay: deps.relayUrl(),
+        channels: deps.channels(),
+        ...(cert ? { cert } : {}),
+      };
       const mailbox = await enrollMailbox(deps.relayUrl(), device, { ...e, answer: { ...answer, at: e.answer.at } }, deps.fetchImpl);
       await mailbox.put("b", grant);
+      if (cert) deps.computer?.({ label: e.ask.label, os: e.ask.os, machinePk: e.ask.device, machineXpk: e.ask.dxpk, personPk: cert.pk, at: now() });
       answered.delete(id);
       await client.drop(id).catch(() => {});
       return { ok: true, label: e.ask.label };

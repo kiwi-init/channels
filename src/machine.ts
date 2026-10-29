@@ -1,6 +1,6 @@
-// This computer's key (machine.json). `kiwi pair` adds its person's cert (src/daemon/pair.ts) and
-// `kiwi login` its person's device list (src/login.ts); agents started here then carry a computer
-// or device claim in their join requests (computerClaimFor).
+// This computer's key (machine.json). `kiwi login` adds its person's device list and, when the app
+// holding their person key approved it, their cert (src/login.ts); agents started here then carry a
+// computer or device claim in their join requests (computerClaimFor).
 
 import { existsSync, readFileSync } from "node:fs";
 import { hostname } from "node:os";
@@ -60,9 +60,9 @@ export async function newMachine(relay: string): Promise<MachineFile> {
 }
 
 /**
- * The claims an agent's join request carries from this computer: the computer claim when it is
- * paired with its person's app (kiwi pair), the device claim when it is one of their devices
- * (kiwi login). Undefined when it is neither.
+ * The claims an agent's join request carries from this computer: the computer claim when its
+ * person's app certified it, the device claim when it is one of their devices (both from kiwi
+ * login). Undefined when it is neither.
  */
 export async function computerClaimFor(roomId: string, agentPk: string): Promise<{ computer?: ComputerClaim; device?: DeviceClaim } | undefined> {
   const m = loadMachine() as (MachineFile & { cert?: MachineCert }) | null;

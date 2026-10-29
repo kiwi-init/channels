@@ -410,7 +410,6 @@ export interface Account {
   relay?: string
   keysUnsealed?: boolean
   desktop?: boolean
-  pairAsk?: { kind: "computer" | "phone"; label: string; os?: string; digits?: string }
   enrollAsk?: EnrollAsk
   devices?: Device[]
   forgotten?: { label: string; by: string; at: number }[]
@@ -535,7 +534,6 @@ export interface Actions {
   joinChannel(code: string, name?: string): Promise<string>
   setName(name: string): void
   setPrefs(prefs: Partial<Prefs>): void
-  pairBegin(kind: "computer" | "phone"): Promise<string>
   forgetComputer(id: string): void
   linkGithub(): void
   unlinkGithub(): void
@@ -547,8 +545,6 @@ export interface Actions {
   signOut(): void
   setNewMembers(code: string, can: "read" | "write"): void
   setNewPowers(code: string, powers: Powers): void
-  answerPair(accept: boolean): void
-  cancelPair(): void
   enrollAnswer(id: string): void
   enrollConfirm(id: string, digits: string): Promise<{ ok: true } | { ok: false; left: number }>
   enrollDeny(id: string): void

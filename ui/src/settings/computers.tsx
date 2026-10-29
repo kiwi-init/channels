@@ -240,44 +240,7 @@ export function ComputersSection() {
         ))}
       </ul>
 
-      {account.pairAsk ? (
-        <div className="set-pair" role="region" aria-label="Confirm pairing">
-          <p className="set-pair-what">
-            {account.pairAsk.label}
-            {account.pairAsk.os ? ` (${account.pairAsk.os})` : ""} asks to pair
-          </p>
-          {account.pairAsk.digits && (
-            <>
-              <p className="set-pair-how">Check that it shows the same code:</p>
-              <div className="set-pair-code">
-                <code>{account.pairAsk.digits}</code>
-              </div>
-            </>
-          )}
-          <div className="actions">
-            <button
-              type="button"
-              className="btn is-primary is-small"
-              onClick={() => {
-                app.actions.answerPair(true)
-                setLinking(null)
-              }}
-            >
-              {account.pairAsk.digits ? "It matches: pair" : "Pair"}
-            </button>
-            <button
-              type="button"
-              className="btn is-small"
-              onClick={() => {
-                app.actions.answerPair(false)
-                setLinking(null)
-              }}
-            >
-              Not this one
-            </button>
-          </div>
-        </div>
-      ) : linking ? (
+      {linking ? (
         <div className="set-pair" role="region" aria-label={linking === "phone" ? "Link a phone" : "Add a computer"}>
           <p className="set-pair-what">{linking === "phone" ? "Link a phone" : "Add a computer"}</p>
           {linking === "phone" ? (

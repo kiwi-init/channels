@@ -54,8 +54,9 @@ agent                          relay                         owner's app
   own making, or strip the promise. A member never replaces a key it already
   holds for an epoch. The relay stores the wrapped keys; only that member can
   open them.
-- **Your own computers' agents skip the code.** A computer pairs with your app
-  (`kiwi pair kp1-…`), and the app writes it a **MachineCert** — "computer key M
+- **Your own computers' agents skip the code.** A computer joins your devices
+  (`kiwi login`, then the 6 digits typed into your app), and the app holding your
+  person key writes it a **MachineCert** — "computer key M
   (exchange key, label) is mine", signed by your person key. The cert stays on
   that computer in `~/.kiwi/machine.json`. When an agent joins from it, its
   request carries the cert and the computer's signature over this channel and
@@ -73,7 +74,7 @@ agent                          relay                         owner's app
     Authority (who directs an agent) reads the sponsor.
   - **Removing a computer.** *Your computers* → Remove forgets the computer and
     removes the agents it let in from every channel you own, rotating the keys.
-  - **The risk, stated.** Anything that can read a paired computer's machine
+  - **The risk, stated.** Anything that can read one of your computers' machine
     key (`~/.kiwi/machine.json`) can have agents admitted from it while your
     app runs, into the channels you own. Each admission is announced, and
     removing the computer in the app undoes them all. That process can already
@@ -316,10 +317,11 @@ only) only when they show or save the image, check the hash and the size, and
 decrypt it. Kiwi 0.14 and older drop an image they get by reference and still
 show the message's text, which is why it's the owner's switch and off by default.
 
-The pairing mailbox (`packages/core/src/mailbox.ts`) keeps pairing off the relay's records
-too: the code the app shows (`kp1-…`) is a secret; the mailbox id is a hash of
-it, and each slot is sealed under a key derived from it, so the relay can't read,
-forge or swap anything. Writes are rate-limited per client address.
+The one-time mailbox (`packages/core/src/mailbox.ts`) keeps launch answers and
+device grants off the relay's records too: its secret never reaches the relay;
+the mailbox id is a hash of it, and each slot is sealed under a key derived from
+it, so the relay can't read, forge or swap anything. Writes are rate-limited per
+client address.
 
 ## Leaving, removal, closing
 
@@ -616,33 +618,21 @@ What this doesn't change: a person who allows a harmful command has allowed
 it, exactly as in the terminal. Read the command, not the description, which
 the agent wrote.
 
-## Linking a phone: the keys move, and the relay cannot read them
+## Adding a device: sign in, then 6 digits
 
-Linking gives an iPhone the same person as the Mac app: the person key and the key of every
-channel the app holds (Settings → Phone → Link a phone). It uses the one-time mailbox that
-pairing a computer uses, with a code starting `kl1-` (`packages/core/src/link.ts`).
+A new phone, desktop or computer (`kiwi login`) signs in with the account your app uses, then
+asks to join your devices; an app that already holds them answers, and you type the 6 digits
+the new device shows. There is no code to carry, no QR and no key copied: each device has its
+own key, and the app signs it into your device list. The digits come from a commitment the new
+device makes before it sees the app's nonce, so a relay that swaps keys can't grind a match
+(`packages/core/src/enroll.ts`; the design is [docs/linked-devices.md](docs/linked-devices.md)).
+The grant goes through the one-time mailbox, sealed to the two devices' keys, and holds the
+device list, the person's public key and name, and the channel codes it may join, never a
+secret key. A computer approved by the app holding your person key also gets its MachineCert
+there, so the app can start agents on it.
 
-1. The Mac app makes a 256-bit secret and an ephemeral X25519 key, and shows the secret, that
-   public key, a short fingerprint of the person key and the relay's origin as a QR and as
-   text. Nothing about the person key itself is in it.
-2. The phone makes its own ephemeral key and writes its public key into a mailbox slot, sealed
-   under a key derived from the secret. Each slot is written once.
-3. Both screens show six digits derived from the secret and both public keys. The Mac sends
-   nothing until the person has compared them and pressed "It matches: link".
-4. The Mac seals the person and every channel identity to the phone's public key: X25519
-   between the two ephemeral keys, mixed with the secret by HKDF, AES-GCM, with both keys and
-   each chunk's place bound in. It goes in 24 KB chunks across mailboxes derived from the
-   secret. The phone opens it only with its private key, the secret and every chunk, and only
-   if the person inside is the one the code named.
-
-What the relay sees is mailbox ids (hashes), sizes and timing. It never gets the secret (it
-goes from screen to camera, or by hand), nor either private key, and the ephemeral keys are
-dropped afterwards, so a later break-in on the Mac cannot open a recorded link. A mailbox is
-gone ten minutes after its first write.
-
-If the code leaks (a photo of the screen), someone who answers first gets different digits
-from the real phone's, so the person says no; the real phone then finds the slot taken and
-says the code was used. Nobody can read the answer without the phone's private key.
+The kl1 link code and `kiwi pair` are gone. A phone linked with a kl1 code before then still
+holds copies of the person key and its channels' keys; see below.
 
 On the phone the keys live in the iOS keychain, readable only while the phone is unlocked and
 never moved to another device or a backup (`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`).
@@ -654,12 +644,10 @@ The phone does none of the owner's chores (snapshots, posting rules, GitHub chec
 with the Mac app.
 
 What it does not do:
-- **A phone that holds these keys is as powerful as the Mac app**, and it cannot be revoked:
-  keys cannot be rotated for it yet. Link only a phone you hold. The Mac app lists linked
-  phones and says so. A per-device key certified by the person key, as computers have, is the
-  safer design and is not built.
-- **Channels joined later stay on the Mac** until you link again (Settings → Link again on the
-  phone): the link is a copy at that moment, not a sync.
+- **A phone linked with a kl1 code holds these keys and is as powerful as the Mac app**, and
+  it cannot be revoked: keys cannot be rotated for it yet. The Mac app lists those phones and
+  says so. A phone that signs in instead is one of your devices, with its own key, and Forget
+  cuts it off.
 
 ## Limits that double as abuse brakes
 
