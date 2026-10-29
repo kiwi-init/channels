@@ -8,7 +8,6 @@ Canonical sources: `web/src/index.css` (`:root`, `:root[data-theme]`,
 `@theme inline`), `web/src/lib/design-tokens.ts`, `web/src/lib/fonts.ts`,
 `packages/app/src/accessibility.ts`, `web/src/components/kit.tsx`,
 `web/src/components/ui/*`, `web/src/components/composer.tsx`.
-`scripts/ui-tokens.ts` enforces the type steps and radii below.
 
 ## 1. Identity in one line
 
@@ -91,9 +90,9 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   (kiwiinit.com and the landing pages) set their headings in Paper Mono.
 - Body: `-0.006em` letter-spacing, `calt/kern`, antialiased,
   `optimizeLegibility`. Display/title set tighter at `-0.014em`.
-- Six type steps and nothing between them (`scripts/ui-tokens.ts` keeps it
-  that way; 4 documented exceptions for the pairing code, wordmark and
-  swatch initials): `stamp 11px` (times between messages), `meta 12px`
+- Six type steps and nothing between them (4 documented exceptions for
+  the pairing code, wordmark and swatch initials): `stamp 11px` (times
+  between messages), `meta 12px`
   (counts, dates, section heads), `ui 13px` (names, rows, menus, buttons),
   `body 15px/21px` (what people read, in bubbles too), `title 16px/21px`
   (headers, dialogs), `display 26px/32px` (panel names, empty states,
@@ -122,8 +121,7 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   a message and the annotator) and `dock 26px` (the composer, soft without a pill's half-moon
   ends once it grows to several lines).
 - Buttons and rows use `row`; controls and inputs `ctl`; cards `card`;
-  pictures `bubble`; the composer `dock`. Arbitrary `rounded-[Npx]` fails
-  `ui-tokens.ts`.
+  pictures `bubble`; the composer `dock`. No arbitrary `rounded-[Npx]`.
 - Two shadows, no coloured ones: `pop` (`0 0 0 1px pop-edge, 0 16px 40px
   -12px pop-shade`) for what lifts over the canvas (popovers, dialogs, a
   sheet sliding over the page), and `sheet` for the page itself, as in

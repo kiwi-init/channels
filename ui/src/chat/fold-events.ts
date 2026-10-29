@@ -23,16 +23,16 @@ const FOLD_AT = 3
 
 const isEvent = (m: Message | undefined): m is Message => !!m?.system && !m.leftOut
 
-const joins = (a: Message | undefined, b: Message | undefined, mark: number | null): boolean => isEvent(a) && isEvent(b) && sameDay(a.at, b.at) && b.seq !== mark
+const joins = (a: Message | undefined, b: Message | undefined, breaks: ReadonlySet<number>): boolean => isEvent(a) && isEvent(b) && sameDay(a.at, b.at) && !breaks.has(b.seq)
 
-export function continuesRun(list: readonly Message[], i: number, from: number, mark: number | null): boolean {
-  return i > from && joins(list[i - 1], list[i], mark)
+export function continuesRun(list: readonly Message[], i: number, from: number, breaks: ReadonlySet<number>): boolean {
+  return i > from && joins(list[i - 1], list[i], breaks)
 }
 
-export function eventRun(list: readonly Message[], i: number, to: number, mark: number | null): Message[] | null {
+export function eventRun(list: readonly Message[], i: number, to: number, breaks: ReadonlySet<number>): Message[] | null {
   if (!isEvent(list[i])) return null
   let end = i + 1
-  while (end < to && joins(list[end - 1], list[end], mark)) end++
+  while (end < to && joins(list[end - 1], list[end], breaks)) end++
   return list.slice(i, end)
 }
 

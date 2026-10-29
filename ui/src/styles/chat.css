@@ -1026,6 +1026,35 @@ button.msg-image-spot:hover {
   text-underline-offset: 3px;
 }
 
+.compacted {
+  display: grid;
+  gap: 6px;
+  margin: 14px 0 6px;
+}
+
+.compacted > .fold {
+  margin-top: 0;
+}
+
+.compacted-summary {
+  max-width: 560px;
+  margin-left: 48px;
+  padding-left: 12px;
+  border-left: 2px solid var(--line);
+}
+
+.compacted-summary .msg-text {
+  color: var(--ink-2);
+}
+
+.compact-card {
+  margin: 10px 0 0 48px;
+}
+
+.compact-card > .ask {
+  margin-top: 0;
+}
+
 .sys-line {
   width: 6px;
   height: 6px;

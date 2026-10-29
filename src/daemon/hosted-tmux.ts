@@ -129,7 +129,7 @@ export class HostedTmux {
   }
 
   tmux(st: HostedState, args: readonly string[]): Promise<Ran> {
-    return run([st.bin, "-S", st.socket, ...args], 5_000);
+    return run([st.bin, "-u", "-S", st.socket, ...args], 5_000);
   }
 
   async alive(st: HostedState): Promise<boolean> {
@@ -162,7 +162,7 @@ export class HostedTmux {
     privateDir(dirname(st.socket));
     const conf = join(this.home, CONF_FILE);
     writeFileSync(conf, HOSTED_CONF, { mode: 0o600 });
-    const started = await run([st.bin, "-S", st.socket, "-f", conf, "start-server"], 5_000);
+    const started = await run([st.bin, "-u", "-S", st.socket, "-f", conf, "start-server"], 5_000);
     if (started.status !== 0 || !(await this.alive(st))) throw new Error(`tmux didn't start on ${st.socket}: ${started.stderr.trim() || `exit ${started.status}`}`);
     this.save(st);
     await this.attach(st);
@@ -320,7 +320,7 @@ export class HostedTmux {
       const made = await this.tmux(st, ["new-session", "-d", "-s", HOSTED_SESSION, "-n", "hold", "true"]);
       if (made.status !== 0) throw new Error(`tmux on ${st.socket} wouldn't make its ${HOSTED_SESSION} session: ${made.stderr.trim()}`);
     }
-    const client: Client = Bun.spawn([st.bin, "-S", st.socket, "-C", "attach-session", "-t", `=${HOSTED_SESSION}`], { stdin: "pipe", stdout: "pipe", stderr: "ignore" });
+    const client: Client = Bun.spawn([st.bin, "-u", "-S", st.socket, "-C", "attach-session", "-t", `=${HOSTED_SESSION}`], { stdin: "pipe", stdout: "pipe", stderr: "ignore" });
     this.client = client;
     this.closing = false;
     client.stdin.write(`refresh-client -f pause-after=${PAUSE_AFTER_S}\n`);

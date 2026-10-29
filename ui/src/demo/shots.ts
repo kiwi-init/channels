@@ -32,6 +32,8 @@ export const SHOTS: Record<string, Shot> = {
   needs: kiwi({ tab: "needs" }),
   "step-card": { scenario: "step", channel: "kiwi" },
   "left-out": { scenario: "left-out", channel: "kiwi" },
+  compact: { scenario: "compact", channel: "kiwi" },
+  compacted: { scenario: "compacted", channel: "kiwi" },
   events: { scenario: "events", channel: "kiwi" },
   stash: kiwi(),
   "stash-open": kiwi(),

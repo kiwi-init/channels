@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { startRelay } from "../src/relay/bun.ts";
 import { workosFromSettings } from "../src/relay/human.ts";
 
-// A stand-in for web/dist: the app, a fingerprinted asset, an installer, and Cloudflare's config file.
+// A stand-in for a built app: the app, a fingerprinted asset, an installer, and Cloudflare's config file.
 const tmp = mkdtempSync(join(tmpdir(), "kiwi-web-"));
 const dist = join(tmp, "dist");
 mkdirSync(join(dist, "assets"), { recursive: true });

@@ -78,30 +78,18 @@ jobs:
       - name: app types
         if: ${{ !cancelled() }}
         run: bunx tsrs --noEmit -p packages/app/tsconfig.json
-      - name: web types
-        if: ${{ !cancelled() }}
-        run: cd web && bunx tsrs -b
       - name: desktop types
         if: ${{ !cancelled() }}
         run: cd desktop && bunx tsrs --noEmit
       - name: phone engine types
         if: ${{ !cancelled() }}
         run: bunx tsrs --noEmit -p ios/engine/tsconfig.json && bunx tsrs --noEmit -p ios/scripts/tsconfig.json && bunx tsrs --noEmit -p android/scripts/tsconfig.json
-      - name: ui tokens
-        if: ${{ !cancelled() }}
-        run: bun scripts/ui-tokens.ts
       - name: lint
         if: ${{ !cancelled() }}
         run: bun run lint
       - name: format
         if: ${{ !cancelled() }}
         run: bun run format:check
-      - name: web lint
-        if: ${{ !cancelled() }}
-        run: cd web && bun oxlint src
-      - name: web format
-        if: ${{ !cancelled() }}
-        run: cd web && bun oxfmt --check src
       - name: ui types
         if: ${{ !cancelled() }}
         run: cd ui && bunx tsrs -b
@@ -142,7 +130,7 @@ jobs:
       - uses: ./.github/actions/setup
       - run: bun scripts/ci-tests.ts flows
 
-  # The web dashboard, the CLI binary and the worker, each built and smoke-tested.
+  # The app, the CLI binary and the worker, each built and smoke-tested.
   build:
     name: build / bundles
     needs: plan
@@ -153,25 +141,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/browser
-      - name: web build
-        run: cd web && bun run build
-      - name: web bundle budget
-        run: bun scripts/web-bundle.ts
-      # Opens every menu, popover and dialog on the production build: Base UI throws on a
-      # misplaced part only at render, which typecheck can't see (the b085ae8 crash).
-      - name: ui smoke
-        if: ${{ !cancelled() }}
-        run: bun run smoke:ui
-      - if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: ui-smoke-failure
-          path: /tmp/kiwi-smoke-failure-*.png
-          if-no-files-found: ignore
-          overwrite: true
-      - name: new ui build
-        if: ${{ !cancelled() }}
+      - name: ui build
         run: bun run ui:build
+      - name: ui bundle budget
+        run: bun scripts/ui-bundle.ts
       - name: app smoke
         if: ${{ !cancelled() }}
         run: bun scripts/smoke-app.ts
@@ -211,20 +184,22 @@ jobs:
       - uses: ./.github/actions/browser
         with:
           webkit: "true"
-      - run: bun run web:build
+      - run: bun run ui:build
       - name: ui shots in Chromium and WebKit
         run: |
-          bun scripts/shoot-ui.ts --wide --phone channel,tasks --theme dark "$RUNNER_TEMP/shots" &
+          bun scripts/shoot-app.ts --dist ui/dist --theme dark "$RUNNER_TEMP/shots" &
           chromium=$!
-          bun scripts/shoot-ui.ts --browser webkit --wide --theme light "$RUNNER_TEMP/shots-webkit" &
+          bun scripts/shoot-app.ts --dist ui/dist --browser webkit --theme light "$RUNNER_TEMP/shots-webkit" &
           webkit=$!
           set +e
+          bun scripts/shoot-app.ts --dist ui/dist --size 390x844 --only channel,tasks --theme dark "$RUNNER_TEMP/shots/phone"
+          phone_code=$?
           wait "$chromium"
           chromium_code=$?
           wait "$webkit"
           webkit_code=$?
           set -e
-          [ "$chromium_code" -eq 0 ] && [ "$webkit_code" -eq 0 ]
+          [ "$chromium_code" -eq 0 ] && [ "$webkit_code" -eq 0 ] && [ "$phone_code" -eq 0 ]
       # The new UI's long-feed demo in WebKit: it renders the latest rows, and nothing jumps while it scrolls. Timings are printed, never gated.
       - name: ui scroll in WebKit
         if: ${{ !cancelled() }}
