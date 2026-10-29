@@ -12,6 +12,11 @@ import { callRelay, run } from "./relay.ts";
 
 type Row = { id: string; pk: string; xpk: string; box: string; ts: number; commit: string; ownerNonce: string | null; reveal: string | null; sig: string; dbox: string; dsig: string };
 
+export interface Admitted {
+  admitted: Member[];
+  waiting: number;
+}
+
 interface Held {
   d: Delegation;
   keys: Record<string, string>;
@@ -58,11 +63,12 @@ async function ownAgent(roomId: string, r: Row, machine: Identity, d: Delegation
 
 const delegateFx = {
   admitOwn: Effect.fn("Delegate.admitOwn")(function* (relay: string, roomId: string, ownerPk: string, machine: Identity) {
-    if (!machine.xsk) return [];
+    if (!machine.xsk) return { admitted: [], waiting: 0 } satisfies Admitted;
     const h = yield* held(relay, roomId, ownerPk, machine).pipe(Effect.catchTag("RelayError", () => Effect.succeed(null)));
-    if (!h) return [];
+    if (!h) return { admitted: [], waiting: 0 } satisfies Admitted;
     const { requests } = yield* callRelay<{ requests: Row[] }>(relay, roomId, "/requests", { identity: machine }, { v: 2 });
     const admitted: Member[] = [];
+    let waiting = 0;
     let members: Member[] | null = null;
     for (const r of requests) {
       const own = yield* Effect.promise(() => ownAgent(roomId, r, machine, h.d));
@@ -71,10 +77,15 @@ const delegateFx = {
       if (!r.ownerNonce) {
         const nonce = yield* Effect.promise(() => signText(machine, statement));
         yield* Effect.ignore(callRelay(relay, roomId, `/requests/${r.id}/nonce`, { method: "POST", identity: machine, body: JSON.stringify({ nonce }) }));
+        waiting++;
         continue;
       }
       const reveal = r.reveal;
-      if (!reveal || (yield* Effect.promise(() => commitTo(roomId, r.pk, reveal))) !== r.commit) continue;
+      if (!reveal) {
+        waiting++;
+        continue;
+      }
+      if ((yield* Effect.promise(() => commitTo(roomId, r.pk, reveal))) !== r.commit) continue;
       members ??= yield* roster(relay, roomId, ownerPk, machine, h);
       const owner = members.find((m) => m.owner);
       const asked = inlineText(own.info.name, 40);
@@ -97,10 +108,10 @@ const delegateFx = {
       members.push(member);
       admitted.push(member);
     }
-    return admitted;
+    return { admitted, waiting } satisfies Admitted;
   }),
 };
 
-export function admitOwn(relay: string, roomId: string, ownerPk: string, machine: Identity): Promise<Member[]> {
+export function admitOwn(relay: string, roomId: string, ownerPk: string, machine: Identity): Promise<Admitted> {
   return run(delegateFx.admitOwn(relay, roomId, ownerPk, machine));
 }

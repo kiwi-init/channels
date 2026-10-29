@@ -23,7 +23,8 @@ decisions at the end (#602, #615). Reviewed by sunny-tortoise (#559, #570).
   - Since T503 a forgotten computer's agents no longer join on their own in the desktop app.
   - The cert itself stays valid.
 - Auto-approval runs wherever the channel owner key is: the desktop app, and the iOS app while open
-  (`packages/core/src/client/requests.ts:181`). Never the `kiwi` daemon.
+  (`packages/core/src/client/requests.ts:181`). The `kiwi` daemon admits only its own computer's
+  agents, and only with a delegation (section 3).
 - WorkOS sign-in (`desktop/src/signin.ts:22`) only gates creating channels (`creator` guard,
   `src/relay/route.ts:147`).
 - The relay keeps each computer's binding to its person (`src/relay/machine.ts`).
@@ -171,6 +172,10 @@ owner-signed **delegation** lets the `kiwi` daemon admit its own computer's agen
   `dpk`/`dbox` copy, and `admitOwn` (`packages/core/src/client/delegate.ts`) for the daemon.
   A rotation re-wraps to every live delegate; one without a wrap is dropped. `cutDevices` drops a
   revoked computer's delegations.
+- In the daemon (T683): `src/daemon/admit.ts` runs `admitOwn` for a channel when `kiwi join` on
+  this computer pokes it (`admit` verb, while the request waits), when one of its seats gets a
+  `request` frame, and once per known channel at start. It keeps looking while a request of its
+  own waits on the joiner's reveal, for up to 30 minutes.
 
 ## 4. Revocation and expiry
 

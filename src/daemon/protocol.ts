@@ -20,6 +20,7 @@ export function daemonSock(dir = home()): string {
 export type DaemonVerb =
   | "hello"
   | "adopt"
+  | "admit"
   | "listen"
   | "listening"
   | "hold"
@@ -41,7 +42,7 @@ export type DaemonVerb =
   | "unpair"
   | "stop";
 
-export const DAEMON_PROTOCOL = 6;
+export const DAEMON_PROTOCOL = 7;
 
 export type DaemonEvent = "open" | "roster" | "info" | "request";
 

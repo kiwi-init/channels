@@ -33,6 +33,7 @@ import { beatLock, dropLock, lockPath, ownsLock, takeLock } from "./lock.ts";
 import { stopDaemon, tryHello } from "./rpc.ts";
 import { readKey, type ConnState, type Seat, type Sub, type Waiting } from "./seat.ts";
 import { throttled } from "./throttle.ts";
+import { readAdmitRoom, startAdmitter } from "./admit.ts";
 import { pathOf, seatWakes } from "./wake.ts";
 
 export const ACTIVITY_EVERY_MS = 3_000;
@@ -56,6 +57,7 @@ export interface Daemon {
   readonly stopped: Promise<void>;
   readonly hosted: HostedTmux;
   beacons(): number;
+  admitting(): number;
 }
 
 export interface DaemonOptions {
@@ -101,6 +103,10 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   const hosted = new HostedTmux(dir);
   void hosted.resume().catch(() => {});
   const seats = new Map<string, Seat>();
+  const admitter = startAdmitter(() => {
+    const m = loadPairedMachine();
+    return m && (m.cert || m.device?.links.length) ? m.identity : null;
+  });
   const conns = new Set<ConnState>();
   const terms = new Map<ConnState, Set<() => void>>();
   let stopped = false;
@@ -487,7 +493,10 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           },
           onRoster: () => tell(seat, { event: "roster" }),
           onInfo: () => tell(seat, { event: "info" }),
-          onRequest: () => tell(seat, { event: "request" }),
+          onRequest: () => {
+            tell(seat, { event: "request" });
+            admitter.watch({ relay: c.relay, roomId: c.roomId, ownerPk: c.ownerPk }, 0);
+          },
           onStatus: (s) => tell(seat, { status: s }),
         },
       ).then(
@@ -716,6 +725,13 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           sendLine(conn, JSON.stringify({ id, ok: true, folders: launchFolders(loadConfig(), room) }));
           break;
         }
+        case "admit": {
+          const room = readAdmitRoom(params);
+          if (!room) throw new Error('admit needs {"relay", "room", "owner"}');
+          admitter.watch(room);
+          sendLine(conn, JSON.stringify({ id, ok: true }));
+          break;
+        }
         case "unpair":
           await unpairHere();
           sendLine(conn, JSON.stringify({ id, ok: true }));
@@ -785,7 +801,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           break;
         default:
           throw new Error(
-            `unknown verb "${verb}" (hello, adopt, listen, listening, hold, listeners, read, mark, peek, presence, harnesses, folders, launch, loop, term, mine, mine-tabs, mine-close, term-keys, term-size, unpair, stop)`,
+            `unknown verb "${verb}" (hello, adopt, admit, listen, listening, hold, listeners, read, mark, peek, presence, harnesses, folders, launch, loop, term, mine, mine-tabs, mine-close, term-keys, term-size, unpair, stop)`,
           );
       }
     } catch (err) {
@@ -940,6 +956,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     if (stopped) return;
     stopped = true;
     clearInterval(tick);
+    admitter.stop();
     statusWatch?.stop();
     statusWatch = null;
     inbox.stop();
@@ -977,7 +994,12 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
 
   await seatSync.now();
   await watchStatus();
-  return { sock, stop, stopped: stoppedP, hosted, beacons: () => beacons };
+  try {
+    for (const c of Object.values(loadConfig().channels)) admitter.watch({ relay: c.relay ?? DEFAULT_RELAY, roomId: c.roomId, ownerPk: c.ownerPk }, 0);
+  } catch {
+    // An unreadable config names no channels to look at: pokes and request frames still admit.
+  }
+  return { sock, stop, stopped: stoppedP, hosted, beacons: () => beacons, admitting: () => admitter.watching() };
 }
 
 function onLoopback(relay: string): boolean {
