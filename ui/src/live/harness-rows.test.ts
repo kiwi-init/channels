@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import type { HarnessRow } from "@kiwi/core/harnesses.ts"
-import { harnessChoices } from "~/live/harness-rows"
+import { HARNESS_INSTALL, type HarnessRow } from "@kiwi/core/harnesses.ts"
+import { harnessChoices, STARTS } from "~/live/harness-rows"
 
 const row = (harness: HarnessRow["harness"], over: Partial<HarnessRow> = {}): HarnessRow => ({
   harness,
@@ -31,4 +31,8 @@ describe("the harnesses a computer can start (T429)", () => {
 
 test("a harness the app can show but not start yet isn't offered", () => {
   expect(harnessChoices([row("kimi"), row("mimo"), row("pi"), row("codex")]).map((h) => h.id)).toEqual(["codex"])
+})
+
+test("every harness the app can start has a line that installs it (T375)", () => {
+  expect(Object.values(STARTS).filter((h) => !HARNESS_INSTALL[h])).toEqual([])
 })

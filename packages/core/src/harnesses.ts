@@ -5,6 +5,15 @@ export const KNOWN_HARNESSES = ["claude", "codex", "gemini", "cursor", "grok", "
 
 export type KnownHarness = (typeof KNOWN_HARNESSES)[number];
 
+export const HARNESS_INSTALL: Partial<Record<KnownHarness, string>> = {
+  claude: "curl -fsSL https://claude.ai/install.sh | bash",
+  codex: "npm install -g @openai/codex",
+  opencode: "curl -fsSL https://opencode.ai/install | bash",
+  gemini: "npm install -g @google/gemini-cli",
+  cursor: "curl https://cursor.com/install -fsS | bash",
+  grok: "curl -fsSL https://x.ai/cli/install.sh | bash",
+};
+
 export interface HarnessRow {
   harness: KnownHarness;
   path: string | null;
