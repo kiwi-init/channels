@@ -1,7 +1,19 @@
 import type { AccountClient } from "@kiwi/core/account.ts";
 import { readDeviceList, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import type { Identity } from "@kiwi/core/identity.ts";
-import { checkVault, newRecoveryPhrase, readRecovery, readRecoveryPhrase, recoveryKey, recoveryLink, sealVault, type Recovery, type RecoveryLink, type Vault, type VaultContents } from "@kiwi/core/recovery.ts";
+import {
+  checkVault,
+  newRecoveryPhrase,
+  readRecovery,
+  readRecoveryPhrase,
+  recoveryKey,
+  recoveryLink,
+  sealVault,
+  type Recovery,
+  type RecoveryLink,
+  type Vault,
+  type VaultContents,
+} from "@kiwi/core/recovery.ts";
 import type { RecoverySaveView, RecoveryView } from "./bridge.ts";
 
 const CHECKS = 3;

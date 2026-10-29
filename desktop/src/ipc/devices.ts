@@ -10,7 +10,21 @@ import { mutate, store, upsertComputer } from "../store.ts";
 const OS_NAMES: Partial<Record<NodeJS.Platform, string>> = { darwin: "macOS", linux: "Linux", win32: "Windows" };
 
 export function devicesCalls(): Serves<
-  "enrollPoll" | "enrollAnswer" | "enrollConfirm" | "enrollDeny" | "enrollBegin" | "enrollStatus" | "enrollCancel" | "devices" | "forgetDevice" | "renewDevice" | "deviceNews" | "recovery" | "recoveryWords" | "recoverySave" | "recoveryDrop"
+  | "enrollPoll"
+  | "enrollAnswer"
+  | "enrollConfirm"
+  | "enrollDeny"
+  | "enrollBegin"
+  | "enrollStatus"
+  | "enrollCancel"
+  | "devices"
+  | "forgetDevice"
+  | "renewDevice"
+  | "deviceNews"
+  | "recovery"
+  | "recoveryWords"
+  | "recoverySave"
+  | "recoveryDrop"
 > {
   const label = () => os.hostname().split(".")[0] || "this computer";
   const osName = () => OS_NAMES[process.platform] ?? process.platform;
@@ -46,7 +60,7 @@ export function devicesCalls(): Serves<
       store.channels.flatMap((c) =>
         c.code && publicAccess(c.access)?.ownerPk === c.pk
           ? [{ label: c.label, code: c.code, owner: { name: c.idName ?? c.label, pk: c.pk, sk: c.sk, ...(c.xpk && c.xsk ? { xpk: c.xpk, xsk: c.xsk } : {}) } }]
-          : []
+          : [],
       ),
     kept: () => store.recovery ?? null,
     keep: (k) => mutate((s) => (s.recovery = k)),
