@@ -1,4 +1,4 @@
-import { Fragment, startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { Fragment, startTransition, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { HistoryFold, ProposalCard } from "~/chat/compact"
 import { Composer } from "~/chat/composer"
@@ -11,12 +11,14 @@ import { flash, jumpTo, ReplyContext, type Replying } from "~/chat/reply"
 import type { Jump } from "~/chat/search-box"
 import { paintHits } from "~/chat/search-paint"
 import { Loading } from "~/kit/bits"
+import { later } from "~/kit/later"
 import { day, sameDay } from "~/kit/time"
 import type { Channel, Message, Person, Where } from "~/model"
 import { liveOf, workingIn } from "~/doing"
 import { sameWhere, useApp, whereKey } from "~/nav"
 import { between, nickname, shown } from "~/names"
-import { AddAgentCard } from "~/panels/add-agent"
+
+const AddAgentCard = later(() => import("~/panels/add-agent").then((m) => m.AddAgentCard))
 
 const GROUP_MS = 5 * 60_000
 const NEAR_BOTTOM = 48
@@ -509,7 +511,13 @@ function Start({ channel, where }: { channel: Channel; where: Where }) {
               ? `This is the start of ${between(channel, where.between)}.`
               : "Nothing here yet."}
       </p>
-      {agents === 0 ? <AddAgentCard channel={channel} /> : <p className="dim">Say what you want done. The lead turns it into tasks.</p>}
+      {agents === 0 ? (
+        <Suspense fallback={null}>
+          <AddAgentCard channel={channel} />
+        </Suspense>
+      ) : (
+        <p className="dim">Say what you want done. The lead turns it into tasks.</p>
+      )}
     </div>
   )
 }

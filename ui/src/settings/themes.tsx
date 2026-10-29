@@ -1,6 +1,6 @@
 import "~/styles/themes.css"
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
+import { use, useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 
 import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
@@ -9,6 +9,7 @@ import { useApp } from "~/nav"
 import { Confirm, Seg } from "~/settings/controls"
 import { setPreview, useSystemDark } from "~/theme/apply"
 import { hex, isHex, TOKENS, type ColorTheme, type Colors } from "~/theme/derive"
+import { loadRex } from "~/theme/rex"
 import { allThemes, baseOf, customColors, resolveMode } from "~/theme/themes"
 
 const SHOT = new URLSearchParams(location.search).get("shot")
@@ -62,7 +63,8 @@ export function Themes() {
   const { prefs, actions } = app
   const systemDark = useSystemDark()
   const [query, setQuery] = useState("")
-  const themes = useMemo(() => allThemes(prefs.customThemes), [prefs.customThemes])
+  const rex = use(loadRex())
+  const themes = useMemo(() => allThemes(prefs.customThemes, rex), [prefs.customThemes, rex])
   const ref = useRef<HTMLElement>(null)
   const now = resolveMode(prefs.theme, systemDark)
 

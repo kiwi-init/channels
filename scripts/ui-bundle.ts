@@ -1,7 +1,7 @@
 import { readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
-const BUDGET_BYTES = 960_000;
+const BUDGET_BYTES = 760_000;
 const FILE_LIMIT_BYTES = 20 * 1024 * 1024;
 
 const dist = resolve(import.meta.dir, "../ui/dist");
