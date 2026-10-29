@@ -43,8 +43,7 @@ async function ask<T>(request: object): Promise<T> {
   return reply.value as T;
 }
 
-function desktop(person: Identity, user: string, channels: { label: string; code: string }[]): DeviceHost {
-  const held: { device: Identity | null; links: DeviceLink[] } = { device: null, links: [] };
+function desktop(person: Identity, user: string, channels: { label: string; code: string }[], held: { device: Identity | null; links: DeviceLink[] } = { device: null, links: [] }): DeviceHost {
   return createDeviceHost({
     relayUrl: () => relay,
     token: async () => `dev:${user}`,
@@ -109,6 +108,37 @@ describe("the phone engine signs in and enrolls (T640)", () => {
     expect(member).toMatchObject({ kind: "human" });
     const kept = pushes.findLast((p) => p.type === "saved");
     expect(kept?.type === "saved" && kept.saved.seats.find((c) => c.code === s.code)?.access).toBeTruthy();
+    await s.ownerCh.close();
+  });
+
+  test("a renewal posted into a channel reaches the phone, and a revoke wipes it (T1007)", async () => {
+    await ask({ op: "start", saved: { relay, person: null, seats: [] } });
+    const s = await setupChannel(relay, { ownerName: "jow", personName: "Jow", human: "dev:phone3" });
+    const person = await withExchangeKey(s.person);
+    const held: { device: Identity | null; links: DeviceLink[] } = { device: null, links: [] };
+    const host = desktop(person, "phone3", [{ label: "onemouse", code: s.code }], held);
+    await host.poll();
+    await ask({ op: "enrollBegin", relay, label: "Pixel 9", os: "Android 16", user: "phone3" });
+    const waiting = ask<{ digits: string }>({ op: "enrollWait" });
+    const id = await answered(host);
+    await host.confirm(id, (await waiting).digits);
+    const saved = await ask<Saved>({ op: "enrollFinish" });
+    const phone = saved.device!.key.pk;
+    await letIn(s, () => pushes.some((p) => p.type === "room" && p.room.code === s.code && p.room.connection === "live"));
+
+    await host.renew(phone);
+    await host.list();
+    const post = () => s.ownerCh.send("updated their list of devices", { kind: "event", ev: { op: "devices", links: held.links } });
+    await post();
+    const longer = held.links.length;
+    for (let i = 0; i < 200 && !pushes.some((p) => p.type === "saved" && p.saved.device?.links.length === longer); i++) await Bun.sleep(50);
+    expect(pushes.some((p) => p.type === "saved" && p.saved.device?.links.length === longer)).toBe(true);
+
+    await host.forget(phone);
+    await host.list();
+    await post();
+    for (let i = 0; i < 200 && !pushes.some((p) => p.type === "removed"); i++) await Bun.sleep(50);
+    expect(pushes.find((p) => p.type === "removed")).toEqual({ type: "removed", by: "studio" });
     await s.ownerCh.close();
   });
 

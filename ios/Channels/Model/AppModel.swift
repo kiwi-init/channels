@@ -168,6 +168,9 @@ final class AppModel {
             return
         case .launch(let launch, let seen):
             launches[launch] = seen
+        case .removed(let by):
+            unlink()
+            linking = .failed("This iPhone was removed from your devices by \(by), so it deleted its keys and channels. Sign in to add it again.")
         }
     }
 

@@ -235,6 +235,10 @@ sealed interface Push {
     data class Log(val line: String) : Push
 
     @Serializable
+    @SerialName("removed")
+    data class Removed(val by: String) : Push
+
+    @Serializable
     @SerialName("launch")
     data class Launch(val code: String, val launch: String, val stage: String, val name: String) : Push
 }
