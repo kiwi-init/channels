@@ -163,8 +163,29 @@ function withHandoff(c: Channel): Channel {
   }
 }
 
+function withCompact(c: Channel): Channel {
+  const seq = Math.max(...c.messages.map((m) => m.seq)) + 1
+  const at = Date.now() - 60_000
+  const summary = [
+    "Release week. **T9** is merged; the rest is polish.",
+    "",
+    "- **T11** (atlas): a lighter feed, after the bundle work.",
+    "- **T12** (win): PR #43 is up for review.",
+    "- **T13** (win): tag v1.0.0, waiting on your OK.",
+    "- **T14** (pixel): new channel icons, need your eyes before merge.",
+    "- Open: should the redesign ship to everyone or behind a setting (#125)?",
+  ].join("\n")
+  return {
+    ...c,
+    compact: { summary: "Morning check-in: nothing blocks the release. scout signed off after the docs pass.", through: 103, by: "atlas", at: Date.now() - 50 * 60_000, seq: 104 },
+    proposal: { summary, through: 125, by: "atlas", at, seq },
+    messages: [...c.messages, { seq, from: "atlas", at, text: "atlas proposed compacting the history through #125", where: { kind: "room", room: "general" }, system: true }],
+  }
+}
+
 export type Scenario =
   | "full"
+  | "compact"
   | "long"
   | "step"
   | "left-out"
@@ -203,7 +224,9 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
                 ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
                 : scenario === "held"
                   ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
-                  : DEMO_CHANNEL,
+                  : scenario === "compact"
+                    ? withCompact(DEMO_CHANNEL)
+                    : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       { ...DEMO_EMPTY, code: "interlinked", title: "interlinked" },
@@ -470,6 +493,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       },
       setGoal: (code, goal) => edit(code, (c) => ({ ...c, goal: goal || undefined })),
       setHold: (code, on, note) => edit(code, (c) => ({ ...c, hold: on ? { note, by: c.you, at: Date.now() } : undefined })),
+      approveCompact: (code, proposal) => edit(code, (c) => (c.proposal?.seq === proposal ? { ...c, compact: { ...c.proposal, by: c.you, at: Date.now() }, proposal: undefined } : c)),
       myRepos: async () => ["kiwi-init/channels", "kiwi-init/electrobun-livewire", "kiwi-init/landing", "ojowwalker77/dotfiles"],
       addRepo: (code, repo) => edit(code, (c) => ({ ...c, repos: [...new Set([...c.repos, repo])] })),
       removeRepo: (code, repo) => edit(code, (c) => ({ ...c, repos: c.repos.filter((r) => r !== repo) })),

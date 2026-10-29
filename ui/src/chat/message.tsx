@@ -17,7 +17,7 @@ const Annotator = lazy(() => import("~/chat/annotator"))
 const QUICK = ["👍", "🔥", "👀", "✅"]
 const CLAMP_PX = 12 * 22
 
-function Body({
+export function Body({
   text,
   seq,
   names,
