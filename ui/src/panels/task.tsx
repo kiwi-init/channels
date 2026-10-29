@@ -3,12 +3,15 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react"
 import { CHECKS } from "~/chat/cards"
 import { Composer } from "~/chat/composer"
 import { compactAt, useNames, useTaskIds } from "~/chat/conversation"
+import { named } from "~/chat/linked"
 import { MessageRow } from "~/chat/message"
+import { preview } from "~/chat/preview"
+import { whereLabel } from "~/chat/search-hits"
 import { ANYONE } from "@/lib/task-actions"
-import { Avatar, Dot, Empty, Heading, statusWord } from "~/kit/bits"
+import { Avatar, cx, Dialog, DialogHead, Dot, Empty, Heading, statusWord } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
-import { memberOf, type Ask, type Channel, type PermissionAsk, type PullRequest, type QuestionAsk, type ReviewRound, type Task } from "~/model"
+import { memberOf, type Ask, type Channel, type PermissionAsk, type Person, type PullRequest, type QuestionAsk, type ReviewRound, type Task, type TaskEvent } from "~/model"
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
 import { PanelHead } from "~/panels/frame"
@@ -50,6 +53,7 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
       </>
     )
   const waits = channel.asks.filter((a) => holds(a, id))
+  const may = !memberOf(channel, channel.you)?.readOnly
   return (
     <>
       <PanelHead title={`T${task.id}`} sub={`· ${task.archived ? "archived" : statusWord(task)}`} />
@@ -59,27 +63,14 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
           {task.detail && <p className="task-detail">{task.detail}</p>}
         </section>
         <section className="panel-section">
-          <Props channel={channel} task={task} />
+          <Props key={`props-${task.id}`} channel={channel} task={task} may={may} />
+          {may && task.suggested && !task.owner && <Suggested channel={channel} task={task} suggested={task.suggested} />}
         </section>
         {waits.length > 0 && <Waits channel={channel} waits={waits} />}
         {task.pr && <Pr pr={task.pr} />}
         <Review key={`review-${task.id}`} channel={channel} task={task} />
-        {task.notes.length > 0 && (
-          <section className="panel-section">
-            <Heading>Notes</Heading>
-            <ol className="task-notes">
-              {task.notes.map((n, i) => (
-                <li key={`${n.at}-${i}`}>
-                  <p className="task-note-meta">
-                    {nickname(channel, n.by)} · {ago(n.at)}
-                  </p>
-                  <p className="task-note-text">{n.text}</p>
-                </li>
-              ))}
-            </ol>
-          </section>
-        )}
-        <Footer channel={channel} task={task} />
+        {task.history.length > 0 && <Activity key={`activity-${task.id}`} channel={channel} history={task.history} />}
+        {may && <Footer key={`foot-${task.id}`} channel={channel} task={task} />}
         <section className="panel-section task-talk">
           <Heading>Conversation</Heading>
           {talk.length === 0 ? (
@@ -106,32 +97,173 @@ function Who({ channel, name }: { channel: Channel; name: string }) {
   )
 }
 
-function Props({ channel, task }: { channel: Channel; task: Task }) {
+const someone = (channel: Channel, name: string): string => (name === channel.you ? "you" : nickname(channel, name))
+
+function Props({ channel, task, may }: { channel: Channel; task: Task; may: boolean }) {
+  const [picking, setPicking] = useState<"owner" | "reviewer" | null>(null)
+  const open = may && task.status !== "done"
   return (
-    <dl className="props task-props">
-      <dt>Status</dt>
-      <dd>
-        <Dot status={task.status} />
-        <span className={task.cancelled ? "dim" : TONES[task.status]}>{statusWord(task)}</span>
-        {task.archived && <span className="dimmer">· archived</span>}
-      </dd>
-      <dt>Owner</dt>
-      <dd>{task.owner ? <Who channel={channel} name={task.owner} /> : <span className="dimmer">nobody yet</span>}</dd>
-      {task.reviewer && (
-        <>
-          <dt>Reviewer</dt>
-          <dd>{task.reviewer === ANYONE ? <span>anyone who hasn't worked on it</span> : <Who channel={channel} name={task.reviewer} />}</dd>
-        </>
-      )}
-      <dt>Asked by</dt>
-      <dd>
-        <Who channel={channel} name={task.createdBy} />
-      </dd>
-      <dt>Created</dt>
-      <dd>{since(task.createdAt)}</dd>
-      <dt>Updated</dt>
-      <dd>{since(task.updatedAt)}</dd>
-    </dl>
+    <>
+      <dl className="props task-props">
+        <dt>Status</dt>
+        <dd>
+          <Dot status={task.status} />
+          <span className={task.cancelled ? "dim" : TONES[task.status]}>{statusWord(task)}</span>
+          {task.archived && <span className="dimmer">· archived</span>}
+        </dd>
+        <dt>Owner</dt>
+        <dd>
+          {task.owner ? <Who channel={channel} name={task.owner} /> : <span className="dimmer">nobody yet</span>}
+          {open && (
+            <button type="button" className="task-change" onClick={() => setPicking("owner")}>
+              {task.owner ? "Reassign" : "Assign"}
+            </button>
+          )}
+        </dd>
+        {(task.reviewer || open) && (
+          <>
+            <dt>Reviewer</dt>
+            <dd>
+              {!task.reviewer ? <span className="dimmer">none</span> : task.reviewer === ANYONE ? <span>anyone who hasn't worked on it</span> : <Who channel={channel} name={task.reviewer} />}
+              {open && (
+                <button type="button" className="task-change" onClick={() => setPicking("reviewer")}>
+                  {task.reviewer ? "Change" : "Ask for a review"}
+                </button>
+              )}
+            </dd>
+          </>
+        )}
+        <dt>Asked by</dt>
+        <dd>
+          <Who channel={channel} name={task.createdBy} />
+        </dd>
+        <dt>Created</dt>
+        <dd>{since(task.createdAt)}</dd>
+        <dt>Updated</dt>
+        <dd>{since(task.updatedAt)}</dd>
+      </dl>
+      <Assign channel={channel} task={task} open={picking === "owner"} onClose={() => setPicking(null)} />
+      <PickReviewer channel={channel} task={task} open={picking === "reviewer"} onClose={() => setPicking(null)} />
+    </>
+  )
+}
+
+function Suggested({ channel, task, suggested }: { channel: Channel; task: Task; suggested: NonNullable<Task["suggested"]> }) {
+  const { app, toast } = useApp()
+  return (
+    <div className="task-suggest">
+      <Avatar person={memberOf(channel, suggested.name)} size="sm" />
+      <p className="task-suggest-text">
+        <span className="dimmer">Suggested</span> {nickname(channel, suggested.name)} <span className="dim">· {named(suggested.why, channel.nicknames)}</span>
+      </p>
+      <button
+        type="button"
+        className="btn is-small"
+        onClick={() => {
+          app.actions.assignTask(channel.code, task.id, suggested.name, suggested.why)
+          toast(`T${task.id} is ${nickname(channel, suggested.name)}'s now`)
+        }}
+      >
+        Assign
+      </button>
+    </div>
+  )
+}
+
+function Choice({ channel, person, on, about, onPick }: { channel: Channel; person: Person; on: boolean; about: string; onPick: () => void }) {
+  return (
+    <button type="button" className="task-pick-row" aria-pressed={on} disabled={on} onClick={onPick}>
+      <Avatar person={person} size="sm" />
+      <span className="task-pick-text">
+        <span className="task-pick-name">
+          {nickname(channel, person.name)}
+          {person.you && <span className="dimmer"> · you</span>}
+        </span>
+        <span className="task-pick-about">{about}</span>
+      </span>
+      {on && <Icon name="check" size={14} />}
+    </button>
+  )
+}
+
+const agentsFirst = (a: Person, b: Person): number => (a.kind === b.kind ? 0 : a.kind === "agent" ? -1 : 1)
+
+const aboutOf = (p: Person): string =>
+  [p.kind === "agent" ? "Agent" : "Person", p.role === "lead" ? "lead" : undefined, p.doing !== undefined ? `on T${p.doing}` : undefined].filter(Boolean).join(" · ")
+
+function Assign({ channel, task, open, onClose }: { channel: Channel; task: Task; open: boolean; onClose: () => void }) {
+  const { app, toast } = useApp()
+  const [why, setWhy] = useState("")
+  const close = () => {
+    setWhy("")
+    onClose()
+  }
+  const people = channel.people.filter((p) => !p.left && !p.readOnly)
+  const first = task.suggested ? people.filter((p) => p.name === task.suggested?.name) : []
+  const rest = people.filter((p) => p.name !== task.suggested?.name).sort(agentsFirst)
+  const pick = (name: string) => {
+    app.actions.assignTask(channel.code, task.id, name, why.trim() || (name === task.suggested?.name ? task.suggested.why : ""))
+    toast(`T${task.id} is ${nickname(channel, name)}'s now`)
+    close()
+  }
+  return (
+    <Dialog open={open} onClose={close} label={`Who works on T${task.id}?`}>
+      <DialogHead
+        title={`Who works on T${task.id}?`}
+        sub={task.owner ? `Now ${someone(channel, task.owner)}. The new owner gets a message with your note.` : "The new owner gets a message with your note."}
+        onClose={close}
+      />
+      <div className="task-pick">
+        <input className="input" value={why} aria-label="A note for them" placeholder="A note for them (optional)" maxLength={300} onChange={(e) => setWhy(e.target.value)} />
+        <div className="task-pick-list">
+          {[...first, ...rest].map((p) => (
+            <Choice
+              key={p.name}
+              channel={channel}
+              person={p}
+              on={p.name === task.owner}
+              about={p.name === task.suggested?.name ? `Suggested · ${named(task.suggested.why, channel.nicknames)}` : aboutOf(p)}
+              onPick={() => pick(p.name)}
+            />
+          ))}
+        </div>
+      </div>
+    </Dialog>
+  )
+}
+
+function PickReviewer({ channel, task, open, onClose }: { channel: Channel; task: Task; open: boolean; onClose: () => void }) {
+  const { app, toast } = useApp()
+  const people = channel.people.filter((p) => !p.left && !p.readOnly && p.name !== task.owner).sort(agentsFirst)
+  const pick = (name: string) => {
+    app.actions.setReviewer(channel.code, task.id, name)
+    toast(name === ANYONE ? `Anyone who hasn't worked on T${task.id} can review it` : `${nickname(channel, name)} reviews T${task.id}`)
+    onClose()
+  }
+  const now = task.reviewer ? (task.reviewer === ANYONE ? "Now anyone who hasn't worked on it. " : `Now ${someone(channel, task.reviewer)}. `) : ""
+  return (
+    <Dialog open={open} onClose={onClose} label={`Who reviews T${task.id}?`}>
+      <DialogHead
+        title={`Who reviews T${task.id}?`}
+        sub={`${now}${task.status === "review" ? "They give the verdict on the open round." : "They give the verdict when it's sent for review."}`}
+        onClose={onClose}
+      />
+      <div className="task-pick-list">
+        <button type="button" className="task-pick-row" aria-pressed={task.reviewer === ANYONE} disabled={task.reviewer === ANYONE} onClick={() => pick(ANYONE)}>
+          <span className="task-pick-glyph">
+            <Icon name="at" size={14} />
+          </span>
+          <span className="task-pick-text">
+            <span className="task-pick-name">Anyone</span>
+            <span className="task-pick-about">Whoever hasn't worked on it</span>
+          </span>
+          {task.reviewer === ANYONE && <Icon name="check" size={14} />}
+        </button>
+        {people.map((p) => (
+          <Choice key={p.name} channel={channel} person={p} on={p.name === task.reviewer} about={aboutOf(p)} onPick={() => pick(p.name)} />
+        ))}
+      </div>
+    </Dialog>
   )
 }
 
@@ -199,7 +331,8 @@ function Review({ channel, task }: { channel: Channel; task: Task }) {
   const last = task.rounds.at(-1)
   const yours = task.youReview !== undefined
   const past = yours && last?.result === "open" ? task.rounds.slice(0, -1) : task.rounds
-  if (!yours && past.length === 0) return null
+  const brief = last?.result === "open" ? last.summary : undefined
+  if (!yours && past.length === 0 && !brief) return null
   const owner = task.owner ? nickname(channel, task.owner) : null
   const ask =
     task.youReview === "send-back"
@@ -219,6 +352,12 @@ function Review({ channel, task }: { channel: Channel; task: Task }) {
   return (
     <section className="panel-section">
       <Heading>Review</Heading>
+      {brief && last && (
+        <div className="task-brief">
+          <p className="task-brief-head">Round {last.n} in short</p>
+          <p className="task-brief-text">{named(brief, channel.nicknames)}</p>
+        </div>
+      )}
       {yours && (
         <div className="task-box is-waiting task-review">
           <p className="task-review-ask">{ask}</p>
@@ -247,14 +386,16 @@ function Review({ channel, task }: { channel: Channel; task: Task }) {
       )}
       {past.length > 0 && (
         <ol className="task-rounds">
-          {past.map((r) => {
-            const who = r.judge ?? r.by
-            return (
-              <li key={r.n}>
-                Round {r.n} · {who === channel.you ? "you" : nickname(channel, who)} · <span className={ROUND_TONES[r.result]}>{ROUND_WORDS[r.result]}</span> · {ago(r.at)}
-              </li>
-            )
-          })}
+          {past
+            .filter((r) => r.result !== "open" || !brief)
+            .map((r) => {
+              const who = r.judge ?? r.by
+              return (
+                <li key={r.n}>
+                  Round {r.n} · {who === channel.you ? "you" : nickname(channel, who)} · <span className={ROUND_TONES[r.result]}>{ROUND_WORDS[r.result]}</span> · {ago(r.at)}
+                </li>
+              )
+            })}
         </ol>
       )}
     </section>
@@ -263,6 +404,7 @@ function Review({ channel, task }: { channel: Channel; task: Task }) {
 
 function Footer({ channel, task }: { channel: Channel; task: Task }) {
   const { app } = useApp()
+  const [cancelling, setCancelling] = useState(false)
   return (
     <section className="panel-section task-foot actions">
       {task.status === "done" ? (
@@ -270,10 +412,153 @@ function Footer({ channel, task }: { channel: Channel; task: Task }) {
           Reopen
         </button>
       ) : (
-        <button type="button" className="btn is-small" onClick={() => app.actions.setTaskStatus(channel.code, task.id, "done")}>
-          Mark done
+        <>
+          <button type="button" className="btn is-small" onClick={() => app.actions.setTaskStatus(channel.code, task.id, "done")}>
+            Mark done
+          </button>
+          <button type="button" className="btn is-small is-quiet" onClick={() => setCancelling(true)}>
+            Cancel task…
+          </button>
+        </>
+      )}
+      <Cancel channel={channel} task={task} open={cancelling} onClose={() => setCancelling(false)} />
+    </section>
+  )
+}
+
+function Cancel({ channel, task, open, onClose }: { channel: Channel; task: Task; open: boolean; onClose: () => void }) {
+  const { app, toast } = useApp()
+  const [why, setWhy] = useState("")
+  const close = () => {
+    setWhy("")
+    onClose()
+  }
+  return (
+    <Dialog open={open} onClose={close} label={`Cancel T${task.id}?`}>
+      <DialogHead title={`Cancel T${task.id}?`} sub={`It closes for everyone, marked cancelled${task.status === "review" ? ", and its open review round ends" : ""}.`} onClose={close} />
+      <form
+        className="task-cancel"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (!why.trim()) return
+          app.actions.cancelTask(channel.code, task.id, why.trim())
+          toast(`Cancelled T${task.id}`)
+          close()
+        }}
+      >
+        <input
+          className="input"
+          value={why}
+          aria-label="Why it's cancelled"
+          placeholder={task.owner ? `Why, so ${someone(channel, task.owner)} knows` : "Why it's cancelled"}
+          maxLength={500}
+          onChange={(e) => setWhy(e.target.value)}
+        />
+        <div className="dialog-foot">
+          <button type="button" className="btn is-quiet" onClick={close}>
+            Keep it
+          </button>
+          <button type="submit" className="btn is-danger" disabled={!why.trim()}>
+            Cancel task
+          </button>
+        </div>
+      </form>
+    </Dialog>
+  )
+}
+
+const SHOWN = 6
+
+const LONG = 280
+
+function moveWords(channel: Channel, e: TaskEvent): string {
+  const to = e.to ? (e.to === ANYONE ? "anyone" : someone(channel, e.to)) : ""
+  switch (e.what) {
+    case "created":
+      return e.to ? `created it for ${to}` : "created it"
+    case "took":
+      return "took it"
+    case "assigned":
+      return `gave it to ${to}`
+    case "unassigned":
+      return "unassigned it"
+    case "started":
+      return "started it"
+    case "blocked":
+      return "marked it blocked"
+    case "reopened":
+      return "reopened it"
+    case "review":
+      return e.round ? `sent it for review · round ${e.round}` : "sent it for review"
+    case "approved":
+      return e.round ? `approved round ${e.round}` : "approved it"
+    case "rejected":
+      return e.round ? `sent round ${e.round} back` : "sent it back"
+    case "done":
+      return "marked it done"
+    case "cancelled":
+      return "cancelled it"
+    case "reviewer":
+      return e.to === ANYONE ? "opened its review to anyone who hasn't worked on it" : e.to ? `asked ${to} to review it` : "cleared its reviewer"
+    case "renamed":
+      return "renamed it"
+    case "proof":
+      return "added proof"
+    case "checkpoint":
+      return "saved a checkpoint"
+    case "note":
+      return "added a note"
+    case "mention":
+      return `mentioned it in ${e.where ? whereLabel(channel, e.where).replace(/^# /, "#").replace(/^@ /, "a message to ") : "a message"}`
+  }
+}
+
+function Activity({ channel, history }: { channel: Channel; history: TaskEvent[] }) {
+  const [all, setAll] = useState(false)
+  const shown = all ? history : history.slice(-SHOWN)
+  const hidden = history.length - shown.length
+  return (
+    <section className="panel-section">
+      <Heading>Activity</Heading>
+      {hidden > 0 && (
+        <button type="button" className="task-change task-earlier" onClick={() => setAll(true)}>
+          Show {hidden} earlier
         </button>
       )}
+      <ol className="task-history">
+        {shown.map((e) => (
+          <Move key={`${e.seq}-${e.what}`} channel={channel} e={e} />
+        ))}
+      </ol>
     </section>
+  )
+}
+
+function Move({ channel, e }: { channel: Channel; e: TaskEvent }) {
+  const { go } = useApp()
+  const [full, setFull] = useState(false)
+  const note = e.note ? named(e.what === "mention" ? preview(e.note) : e.note, channel.nicknames) : ""
+  const long = note.length > LONG
+  const line = (
+    <>
+      <span className="task-move-who">{e.by === channel.you ? "You" : nickname(channel, e.by)}</span> {moveWords(channel, e)} <span className="dimmer num">· {ago(e.at)}</span>
+    </>
+  )
+  return (
+    <li className={cx("task-move", e.what === "cancelled" && "is-cancelled")}>
+      {e.what === "mention" && e.root !== undefined ? (
+        <button type="button" className="task-move-line task-move-open" onClick={() => go({ to: "panel", panel: { kind: "thread", seq: e.root ?? e.seq } })}>
+          {line}
+        </button>
+      ) : (
+        <p className="task-move-line">{line}</p>
+      )}
+      {note && <p className={cx("task-move-note", e.what === "mention" && "is-quote", long && !full && "is-cut")}>{note}</p>}
+      {long && (
+        <button type="button" className="task-change" onClick={() => setFull((v) => !v)}>
+          {full ? "Show less" : "Show all"}
+        </button>
+      )}
+    </li>
   )
 }

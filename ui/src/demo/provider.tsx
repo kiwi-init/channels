@@ -237,9 +237,43 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       addTask: (code, title, owner) =>
         edit(code, (c) => {
           const id = Math.max(0, ...c.tasks.map((t) => t.id)) + 1
-          return { ...c, tasks: [...c.tasks, { id, title, owner, status: "todo", createdBy: c.you, createdAt: Date.now(), updatedAt: Date.now(), notes: [], rounds: [], archived: false }] }
+          return {
+            ...c,
+            tasks: [...c.tasks, { id, title, owner, status: "todo", createdBy: c.you, createdAt: Date.now(), updatedAt: Date.now(), notes: [], rounds: [], history: [], archived: false }],
+          }
         }),
       setTaskStatus: (code, id, status) => editTask(code, id, (t) => ({ ...t, status, updatedAt: Date.now() })),
+      cancelTask: (code, id, why) =>
+        edit(code, (c, seq) => ({
+          ...c,
+          tasks: c.tasks.map((t) =>
+            t.id === id
+              ? {
+                  ...t,
+                  status: "done",
+                  cancelled: true,
+                  youReview: undefined,
+                  rounds: t.rounds.map((r) => (r.result === "open" ? { ...r, result: "withdrawn" } : r)),
+                  updatedAt: Date.now(),
+                  history: [...t.history, { seq, by: c.you, at: Date.now(), what: "cancelled", note: why }],
+                }
+              : t
+          ),
+        })),
+      assignTask: (code, id, to, why) =>
+        edit(code, (c, seq) => ({
+          ...c,
+          tasks: c.tasks.map((t) =>
+            t.id === id
+              ? { ...t, owner: to, suggested: undefined, updatedAt: Date.now(), history: [...t.history, { seq, by: c.you, at: Date.now(), what: "assigned", to, ...(why ? { note: why } : {}) }] }
+              : t
+          ),
+        })),
+      setReviewer: (code, id, reviewer) =>
+        edit(code, (c, seq) => ({
+          ...c,
+          tasks: c.tasks.map((t) => (t.id === id ? { ...t, reviewer, updatedAt: Date.now(), history: [...t.history, { seq, by: c.you, at: Date.now(), what: "reviewer", to: reviewer }] } : t)),
+        })),
       setRole: (code, name, role) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, role: role ?? undefined } : p)) })),
       removeMember: (code, name) => edit(code, (c) => ({ ...c, people: c.people.filter((p) => p.name !== name) })),
       setPersona: (code, name, persona) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, persona: persona ?? undefined } : p)) })),
