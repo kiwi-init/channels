@@ -1,7 +1,7 @@
 import { allSeats, type Config, type SeatRecord } from "../config.ts";
 import { helpersOn } from "../terminals/registry.ts";
 import type { Activity, Reach } from "@kiwi/core/protocol.ts";
-import { pidAlive } from "../seats.ts";
+import { pidAlive } from "../pid.ts";
 import { wakeKey } from "@kiwi/core/wake.ts";
 
 type Env = Record<string, string | undefined>;

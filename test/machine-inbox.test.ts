@@ -53,7 +53,7 @@ beforeAll(async () => {
       folders: () => [project],
       launch: async (req) => {
         launched.push(req);
-        return { ok: true, launch: req.launch!, placed: { ok: true, place: "terminal" } };
+        return { ok: true, launch: req.launch!, placed: { ok: true, place: "hosted", socket: "/tmp/kiwi-1/abc", window: "@1", pane: "%1" } };
       },
     }),
   });
@@ -186,7 +186,7 @@ describe("choices asked from another device", () => {
   const runner = remoteRunner({
     inventory: async () => [row],
     folders: () => [project],
-    launch: async (req) => (seen.push(req), { ok: true, launch: req.launch!, placed: { ok: true, place: "terminal" } }),
+    launch: async (req) => (seen.push(req), { ok: true, launch: req.launch!, placed: { ok: true, place: "hosted", socket: "/tmp/kiwi-1/abc", window: "@1", pane: "%1" } }),
   });
 
   test("reach the harness, except bypass, which this computer doesn't list or start while its switch is off", async () => {
@@ -219,7 +219,7 @@ describe("bypass from another device, with this computer's switch on", () => {
       inventory: async () => [row],
       folders: () => [project],
       bypass: () => on,
-      launch: async (req) => (seen.push(req), { ok: true, launch: req.launch!, placed: { ok: true, place: "terminal" } }),
+      launch: async (req) => (seen.push(req), { ok: true, launch: req.launch!, placed: { ok: true, place: "hosted", socket: "/tmp/kiwi-1/abc", window: "@1", pane: "%1" } }),
     });
     expect(await runner({ verb: "harnesses" }, "bypassAsk_01")).toEqual({ ok: true, harnesses: [row], bypass: true });
     expect(await runner({ verb: "launch", launch: { harness: "claude", folder: project, code, permission: "bypass" } }, "bypassAsk_02")).toMatchObject({ ok: true });
@@ -239,7 +239,12 @@ describe("the launch cap", () => {
     const starts = join(root, "remote-launches.json");
     const code = "mc2-AAAAAAAAAAAAAAAAAAAAAA-BBBBBBBBBBBBBBBB";
     const runner = () =>
-      remoteRunner({ inventory: async () => [], folders: () => [project], starts, launch: async (req) => ({ ok: true, launch: req.launch!, placed: { ok: true, place: "terminal" } }) });
+      remoteRunner({
+        inventory: async () => [],
+        folders: () => [project],
+        starts,
+        launch: async (req) => ({ ok: true, launch: req.launch!, placed: { ok: true, place: "hosted", socket: "/tmp/kiwi-1/abc", window: "@1", pane: "%1" } }),
+      });
     const first = runner();
     for (let i = 0; i < 3; i++) expect(await first({ verb: "launch", launch: { harness: "claude", folder: project, code } }, `restartTest_${i}`)).toMatchObject({ ok: true });
     const again = runner();
@@ -260,7 +265,7 @@ describe("where a launch from another device may start", () => {
     const runner = remoteRunner({
       inventory: async () => [],
       folders: () => [join(roots, "repo")],
-      launch: async (req) => (seen.push(req), { ok: true, launch: req.launch!, placed: { ok: true, place: "terminal" } }),
+      launch: async (req) => (seen.push(req), { ok: true, launch: req.launch!, placed: { ok: true, place: "hosted", socket: "/tmp/kiwi-1/abc", window: "@1", pane: "%1" } }),
     });
     const at = (folder: string, id: string) => runner({ verb: "launch", launch: { harness: "claude", folder, code } }, id);
     const refused = { ok: false, why: "bad-request", detail: "that folder isn't one this computer starts agents in" } as const;

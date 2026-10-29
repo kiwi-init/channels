@@ -5,6 +5,10 @@ built (#648, #649, #650, #651, #655, #659, #656, #658, #660) and shipped in v0.2
 from Needs you follows. What changed while building is under "As built". The audit and the plan below are kept as they were decided: their facts were read from
 `main` at `00217d35` (kiwi 0.23.1), before the code moved.
 
+Since T374 (2026-10-29, the owner's #355: plug and play), new agents always open in Channels' own
+tmux (T360), so the terminal app plugin, Prefer and the tmux helpers are gone, and no plugin opens
+windows. Rex is the one plugin left. The rest of this page is history.
+
 ## The ask
 
 - One Settings flow for starting agents on this computer:

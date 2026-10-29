@@ -14,42 +14,33 @@ import {
   type ShowResult,
 } from "@kiwi/core/terminals.ts";
 import { launchedView } from "../desktop/src/launch-view.ts";
-import { launchedText } from "../src/launch/wire.ts";
+import { hostedWhere, launchedText } from "../src/launch/wire.ts";
 
 const launch = "AbCdEfGhIjKlMnOpQrStUv";
 const rex = { server: "unix:///tmp/rex.sock", session: "session:0b0a5c1e-0000-4000-8000-000000000001", block: "block:0b0a5c1e-0000-4000-8000-000000000002" };
-const places: Opened[] = [
-  { ok: true, place: "rex", rex, window: "window:3", pid: 41 },
-  { ok: true, place: "rex", rex, window: "window:3" },
-  { ok: true, place: "tmux", socket: "/private/tmp/tmux-501/default", session: "kiwi", window: "@7", pane: "%7", pid: 42 },
-  { ok: true, place: "tmux", socket: "/private/tmp/tmux-501/default", session: "kiwi", window: "@7", pane: "%7" },
-  { ok: true, place: "terminal", window: 12 },
-  { ok: true, place: "terminal" },
-  { ok: true, place: "hosted", socket: "/tmp/kiwi-501/0123456789ab", window: "@3", pane: "%3", pid: 43 },
-  { ok: true, place: "hosted", socket: "/tmp/kiwi-501/0123456789ab", window: "@3", pane: "%3" },
-];
+const bare: Opened = { ok: true, place: "hosted", socket: "/tmp/kiwi-501/0123456789ab", window: "@3", pane: "%3" };
+const places: Opened[] = [{ ...bare, pid: 43 }, bare];
 
 const opened = (placed: Record<string, unknown>): unknown => ({ ok: true, launch, placed: { ok: true, ...placed } });
 
 describe("a launch's answer", () => {
-  test("every place kind reads back as the daemon sent it", () => {
+  test("a window in Channels' own tmux reads back as the daemon sent it", () => {
     for (const placed of places) {
       const sent: Launched = { ok: true, launch, placed };
       expect(readLaunched(JSON.parse(JSON.stringify(sent)))).toEqual(sent);
     }
-    expect(launchedView({ ok: true, launch, placed: places[7] })).toEqual({ ok: true, launch, place: "hosted", window: "@3" });
-    expect(places.map((p) => p.place).filter((kind, i, all) => all.indexOf(kind) === i)).toEqual(["rex", "tmux", "terminal", "hosted"]);
-    expect(Object.keys(PLACE_NAMES)).toEqual(["rex", "tmux", "terminal", "hosted"]);
+    expect(launchedView({ ok: true, launch, placed: places[0] })).toEqual({ ok: true, launch, place: "hosted", window: "@3" });
   });
 
-  test("each place is named the same in the CLI and the app", () => {
-    expect(PLACE_NAMES).toEqual({ rex: "Rex", tmux: "tmux", terminal: "Terminal", hosted: "Channels" });
-    expect(launchedText({ ok: true, launch, placed: places[0]! })).toBe(`started in a Rex window; it joins with launch ${launch}`);
-    expect(launchedText({ ok: true, launch, placed: places[2]! })).toBe(`started in tmux window @7 of session kiwi (tmux attach -t kiwi); it joins with launch ${launch}`);
-    expect(launchedText({ ok: true, launch, placed: places[5]! })).toBe(`started in a Terminal window; it joins with launch ${launch}`);
-    expect(launchedText({ ok: true, launch, placed: places[7]! })).toBe(
-      `started in Channels' own tmux, window @3 (to watch it: tmux -S /tmp/kiwi-501/0123456789ab attach -t _kiwi); it joins with launch ${launch}`,
+  test("each place is named the same in the CLI and the app, and the CLI says how to watch it with Channels' own tmux", () => {
+    expect(PLACE_NAMES).toEqual({ rex: "Rex", hosted: "Channels" });
+    expect(launchedText({ ok: true, launch, placed: bare })).toMatch(
+      new RegExp(`^started in Channels' own tmux, window @3 \\(to watch it: \\S+ -S /tmp/kiwi-501/0123456789ab attach -t _kiwi\\); it joins with launch ${launch}$`),
     );
+    expect(hostedWhere(bare, "/Users/someone/.kiwi/tmux/tmux-3.6a")).toBe(
+      "Channels' own tmux, window @3 (to watch it: /Users/someone/.kiwi/tmux/tmux-3.6a -S /tmp/kiwi-501/0123456789ab attach -t _kiwi)",
+    );
+    expect(hostedWhere({ ...bare, socket: "/tmp/a dir/s" }, "/Apps/My Tools/tmux")).toBe("Channels' own tmux, window @3 (to watch it: '/Apps/My Tools/tmux' -S '/tmp/a dir/s' attach -t _kiwi)");
   });
 
   test("a refusal keeps its reason and its words, an unknown reason is a failure", () => {
@@ -61,29 +52,26 @@ describe("a launch's answer", () => {
     const long = `${"/a".repeat(300)} isn't a folder`;
     expect(readLaunched({ ok: false, why: "bad-request", detail: long })).toEqual({ ok: false, why: "bad-request", detail: long });
     expect(launchedView({ ok: false, why: "bad-request", detail: long })).toEqual({ ok: false, why: "bad-request", detail: "" });
+    expect(launchedText({ ok: false, why: "no-place", detail: "hosted agents need tmux 3.2 or newer" })).toBe("hosted agents need tmux 3.2 or newer");
   });
 
-  test("an unknown place, a bad launch id, an oversized or missing field is no launch at all", () => {
+  test("a place other than Channels' own tmux, a bad launch id, an oversized or missing field is no launch at all", () => {
     for (const bad of [
       undefined,
       null,
       "started",
       [],
       { ok: "yes" },
-      { launch, placed: { ok: true, place: "terminal" } },
-      { ok: true, launch, placed: { ok: false, place: "terminal" } },
+      { launch, placed: bare },
+      { ok: true, launch, placed: { ...bare, ok: false } },
       { ok: true, launch, placed: null },
-      { ok: true, launch: "short", placed: { ok: true, place: "terminal" } },
-      { ok: true, launch: "has spaces in it", placed: { ok: true, place: "terminal" } },
+      { ok: true, launch: "short", placed: bare },
+      { ok: true, launch: "has spaces in it", placed: bare },
       opened({ place: "screen" }),
-      opened({ place: "rex", rex, window: "" }),
-      opened({ place: "rex", rex: { ...rex, server: "s".repeat(513) }, window: "window:3" }),
-      opened({ place: "rex", rex: { ...rex, block: 2 }, window: "window:3" }),
-      opened({ place: "rex", window: "window:3" }),
-      opened({ place: "tmux", socket: "/tmp/s", session: "k".repeat(129), window: "@4", pane: "%4" }),
-      opened({ place: "tmux", socket: "/tmp/s", session: "kiwi", window: "@".repeat(33), pane: "%4" }),
-      opened({ place: "tmux", session: "kiwi", window: "@4", pane: "%4" }),
-      opened({ place: "tmux", socket: "/tmp/s", session: "kiwi", window: "@4" }),
+      opened({ place: "terminal", window: 12 }),
+      opened({ place: "rex", rex, window: "window:3" }),
+      opened({ place: "tmux", socket: "/tmp/s", session: "kiwi", window: "@4", pane: "%4" }),
+      opened({ place: "hosted", socket: "/tmp/s", window: "@".repeat(33), pane: "%4" }),
       opened({ place: "hosted", window: "@4", pane: "%4" }),
       opened({ place: "hosted", socket: "/tmp/s", window: "@4" }),
     ]) {
@@ -92,14 +80,9 @@ describe("a launch's answer", () => {
     }
   });
 
-  test("a pid or a window number that isn't one is left out, the place kept", () => {
-    expect(readLaunched(opened({ place: "terminal", window: "12" }))).toEqual({ ok: true, launch, placed: { ok: true, place: "terminal" } });
-    expect(readLaunched(opened({ place: "terminal", window: -1 }))).toEqual({ ok: true, launch, placed: { ok: true, place: "terminal" } });
-    expect(readLaunched(opened({ place: "rex", rex: { ...rex, extra: 1 }, window: "window:3", pid: 1.5, extra: true }))).toEqual({
-      ok: true,
-      launch,
-      placed: { ok: true, place: "rex", rex, window: "window:3" },
-    });
+  test("a pid that isn't one is left out, the place kept", () => {
+    expect(readLaunched(opened({ ...bare, pid: 1.5, extra: true }))).toEqual({ ok: true, launch, placed: bare });
+    expect(readLaunched(opened({ ...bare, pid: -1 }))).toEqual({ ok: true, launch, placed: bare });
   });
 });
 
@@ -155,8 +138,8 @@ describe("a seat in a terminal that can show it", () => {
     expect(readPlacedSeat({ ...seat, extra: "dropped" })).toEqual(seat);
   });
 
-  test("a tmux seat reads back with its socket and pane, and a pane or socket tmux wouldn't give is refused", () => {
-    const pane: PlacedSeat = { place: "tmux", alias: seat.alias, agent: seat.agent, room: "abc", socket: "/private/tmp/tmux-501/default", pane: "%12" };
+  test("a seat in Channels' own tmux reads back with its socket and pane, and a pane or socket tmux wouldn't give, or a seat in the person's tmux, is refused", () => {
+    const pane: PlacedSeat = { place: "hosted", alias: seat.alias, agent: seat.agent, room: "abc", socket: "/private/tmp/tmux-501/default", pane: "%12" };
     expect(readPlacedSeat(JSON.parse(JSON.stringify(pane)))).toEqual(pane);
     for (const bad of [
       { ...pane, pane: "12" },
@@ -164,6 +147,7 @@ describe("a seat in a terminal that can show it", () => {
       { ...pane, socket: "tmp/default" },
       { ...pane, socket: "/tmp/a\nb" },
       { ...pane, place: "rex" },
+      { ...pane, place: "tmux" },
     ])
       expect(readPlacedSeat(bad)).toBeNull();
   });

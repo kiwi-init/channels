@@ -28,7 +28,6 @@ const fake = {
           value: {
             launch: "on" as const,
             bypass: "off" as const,
-            prefer: "tmux" as const,
             hooks: [{ harness: "claude" as const, state: "outdated" as const, text: "" }],
             seats: [{ channel: "kiwi", agent: "builder", wake: "on" as const }],
           },
@@ -73,7 +72,6 @@ describe("Settings > Agents shows this computer", () => {
     expect(await computerSettings("studio")).toEqual([
       ["New agents", ["Allowed"]],
       ["Bypass from your other devices", ["Off"]],
-      ["Opens them in", ["tmux"]],
       ["Hooks", ["Claude Code out of date"]],
       ["Agents", ["builder in kiwi, wakes on a message"]],
     ])

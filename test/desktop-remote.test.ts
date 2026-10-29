@@ -127,7 +127,6 @@ describe("reading another computer's settings", () => {
     const settings: ComputerSettings = {
       launch: "on",
       bypass: "off",
-      prefer: "rex",
       hooks: [{ harness: "claude", state: "installed", text: "installed" }],
       seats: [{ channel: "dev", agent: "otter", wake: "on" }],
     };

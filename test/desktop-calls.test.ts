@@ -167,7 +167,8 @@ describe("main's handlers reach the shell only through the host", () => {
   });
 
   test("a bad argument is refused under the call's name before anything runs", async () => {
-    await expect(bridge.terminalPrefer("vim" as "app")).rejects.toThrow("terminalPrefer takes app, rex or tmux");
+    await expect(bridge.terminalHelpers("vim" as "rex", "on")).rejects.toThrow("terminalHelpers takes rex, and on or off");
+    await expect(bridge.terminalPrefer("rex")).rejects.toThrow("new agents always open in Channels' own tmux");
     await expect(bridge.setLaunches("maybe" as "on")).rejects.toThrow("setLaunches takes on or off");
   });
 });

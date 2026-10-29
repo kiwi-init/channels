@@ -68,7 +68,7 @@ describe("the bridge answers only our page", () => {
   test("a bridge call runs its handler with its arguments, and a handler's throw comes back as a rejection", async () => {
     await answer(table, "notify", ["T436", "done"]);
     expect(await answer(table, "chooseFolder", [])).toBe("/Users/someone/app");
-    await expect(answer(table, "terminalPrefer", ["vim"])).rejects.toThrow("terminalPrefer takes app, rex or tmux");
+    await expect(answer(table, "terminalHelpers", ["vim", "on"])).rejects.toThrow("terminalHelpers takes rex, and on or off");
     expect(shell.did).toEqual(["notify T436: done"]);
   });
 });

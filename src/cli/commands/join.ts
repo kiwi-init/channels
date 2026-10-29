@@ -16,6 +16,7 @@ import { fingerprint } from "@kiwi/core/identity.ts";
 import { humanOf } from "@kiwi/core/state.ts";
 import { kimiSessionHere } from "../../kimi-server.ts";
 import { computerClaimFor } from "../../machine.ts";
+import { daemonAdmit, ensureDaemon } from "../../daemon.ts";
 import { joinedText } from "../brief.ts";
 import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor } from "../../hooks.ts";
 import { notePersonaTold, personaMark } from "../../hooks/persona-line.ts";
@@ -28,6 +29,8 @@ const JOIN_POLL_MS = /^[1-9]\d*$/.test(process.env.KIWI_JOIN_POLL_MS ?? "") ? Nu
 const OWNER_NAME = "human";
 
 const MODEL_WAIT_MS = 5_000;
+
+const POKE_EVERY_MS = 60_000;
 
 const joinedAlias = Effect.fn("kiwi.joinedAlias")(function* (roomId: string, alias?: string, title?: string | null) {
   const channels = (yield* config).channels;
@@ -240,8 +243,20 @@ export const joinCommands: Record<string, Command> = {
         ].join("\n"),
       );
       const deadline = Date.now() + parseDuration(wait) * 1000;
+      const poke = Effect.promise(() =>
+        ensureDaemon()
+          .then(() => daemonAdmit({ relay, roomId: req.roomId, ownerPk: req.ownerPk }))
+          .catch(() => {
+            // Without this computer's daemon the owner's app lets the agent in, as before.
+          }),
+      );
+      let poked = 0;
       let shown: string | null = null;
       for (;;) {
+        if (req.computer && Date.now() - poked >= POKE_EVERY_MS) {
+          poked = Date.now();
+          yield* poke;
+        }
         const st = yield* Channel.fx.joinStatus(relay, code, id, req.requestId);
         if (st.status === "pending" && st.code && st.code !== shown) {
           shown = st.code;

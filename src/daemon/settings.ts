@@ -2,7 +2,7 @@ import type { ComputerSettings, SeatSettings } from "@kiwi/core/computer-setting
 import type { HookRow } from "@kiwi/core/harnesses.ts";
 import { wakeKey } from "@kiwi/core/wake.ts";
 import { allSeats, type Config } from "../config.ts";
-import { launchesOn, preferred, remoteBypassOn } from "../terminals/registry.ts";
+import { launchesOn, remoteBypassOn } from "../terminals/registry.ts";
 
 export function computerSettings(cfg: Config, hooks: HookRow[]): ComputerSettings {
   const seats = new Map<string, SeatSettings>();
@@ -13,5 +13,5 @@ export function computerSettings(cfg: Config, hooks: HookRow[]): ComputerSetting
     const wake = cfg.wakeHooks?.[key] ? "webhook" : cfg.wakeOff?.includes(key) ? "off" : "on";
     seats.set(key, { channel: channel.title ?? seat.alias, agent: seat.as, wake });
   }
-  return { launch: launchesOn(cfg) ? "on" : "off", bypass: remoteBypassOn(cfg) ? "on" : "off", prefer: preferred(cfg), hooks, seats: [...seats.values()] };
+  return { launch: launchesOn(cfg) ? "on" : "off", bypass: remoteBypassOn(cfg) ? "on" : "off", hooks, seats: [...seats.values()] };
 }

@@ -28,7 +28,7 @@ describe("a computer's settings, as another of the person's devices reads them",
       },
       launch: "off",
       remoteBypass: "on",
-      terminals: { prefer: "tmux", helpers: { tmux: "on" } },
+      terminals: { helpers: { tmux: "on" } },
       wakeOff: [wakeKey("ops", "orca")],
       wakeHooks: { [wakeKey("dev", "heron")]: { url: "https://hook.example/secret", authorization: "Bearer s3cret" } },
     };
@@ -36,7 +36,6 @@ describe("a computer's settings, as another of the person's devices reads them",
     expect(got).toEqual({
       launch: "off",
       bypass: "on",
-      prefer: "tmux",
       hooks,
       seats: [
         { channel: "channels-dev", agent: "otter", wake: "on" },
@@ -45,15 +44,15 @@ describe("a computer's settings, as another of the person's devices reads them",
       ],
     });
     expect(JSON.stringify(got)).not.toContain("secret");
-    expect(computerSettings({ channels: {} }, [])).toEqual({ launch: "on", bypass: "off", prefer: "app", hooks: [], seats: [] });
+    expect(computerSettings({ channels: {} }, [])).toEqual({ launch: "on", bypass: "off", hooks: [], seats: [] });
   });
 
-  test("read back only in its own shape: a bad switch, terminal or list is no answer, and a bad row is dropped", () => {
-    const good: ComputerSettings = { launch: "on", bypass: "on", prefer: "rex", hooks, seats: [{ channel: "dev", agent: "otter", wake: "webhook" }] };
+  test("read back only in its own shape: a bad switch or list is no answer, an older kiwi's terminal is dropped, and a bad row is dropped", () => {
+    const good: ComputerSettings = { launch: "on", bypass: "on", hooks, seats: [{ channel: "dev", agent: "otter", wake: "webhook" }] };
     expect(readComputerSettings(good)).toEqual(good);
     expect(readComputerSettings({ ...good, bypass: undefined })).toEqual({ ...good, bypass: "off" });
     expect(readComputerSettings({ ...good, launch: "maybe" })).toBeNull();
-    expect(readComputerSettings({ ...good, prefer: "moon" })).toBeNull();
+    expect(readComputerSettings({ ...good, prefer: "app" })).toEqual(good);
     expect(readComputerSettings({ ...good, seats: "all" })).toBeNull();
     const rows = {
       ...good,
@@ -67,7 +66,7 @@ describe("a computer's settings, as another of the person's devices reads them",
     expect(readMachineArgs({ verb: "settings", args: {} })).toEqual({ verb: "settings" });
     expect(readMachineArgs({ verb: "settings", args: { write: true } })).toBeNull();
     const deps = { inventory: async () => [], folders: () => [], launch: async () => ({ ok: false as const, why: "failed" as const, detail: "" }) };
-    const settings: ComputerSettings = { launch: "on", bypass: "off", prefer: "app", hooks: [], seats: [] };
+    const settings: ComputerSettings = { launch: "on", bypass: "off", hooks: [], seats: [] };
     expect(await remoteRunner({ ...deps, settings: async () => settings })({ verb: "settings" }, "settingsAsk_1")).toEqual({ ok: true, settings });
     expect(await remoteRunner(deps)({ verb: "settings" }, "settingsAsk_2")).toEqual({ ok: false, why: "failed", detail: "this computer's kiwi doesn't share its settings" });
   });

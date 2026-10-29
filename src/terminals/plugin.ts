@@ -33,7 +33,7 @@ export interface RexActivity {
   tool?: string;
 }
 
-export type Capability = "open" | "locate" | "mark" | "show" | "watch" | "type";
+export type Capability = "locate" | "mark" | "show" | "watch" | "type";
 
 export interface TerminalManifest {
   id: TerminalId;
@@ -75,9 +75,6 @@ export interface PlaceTools {
   platform: NodeJS.Platform;
   shell: string;
   rex: string | null;
-  tmux: string | null;
-  socket?: string;
-  osascript: string | null;
 }
 
 export interface TerminalPlugin {
@@ -85,7 +82,6 @@ export interface TerminalPlugin {
   detect(opts?: { version?: boolean }): Promise<Detected>;
   helpers?: Helpers;
   locate?(env: Record<string, string | undefined>): SeatPlace;
-  open?(req: PlaceRequest): Promise<Placed>;
   mark?(seat: SeatRecord, changed: readonly StatusRecord[], cleared: readonly string[], all: readonly StatusRecord[]): Promise<boolean>;
   seats?(cfg: Config): PlacedSeat[];
   show?(place: SeatPlace): Promise<ShowResult>;

@@ -7,6 +7,7 @@ import type { DeviceLink } from "@kiwi/core/devices.ts";
 import { createDeviceHost } from "../desktop/src/devices.ts";
 import { foldersOn, harnessesOn, launchOn, machineOnline } from "../desktop/src/remote.ts";
 import { daemonSock, stopDaemon } from "../src/daemon.ts";
+import { HostedTmux } from "../src/daemon/hosted-tmux.ts";
 import { NO_REMOTE_BYPASS } from "../src/daemon/remote.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
@@ -21,6 +22,7 @@ const bins = join(root, "bins");
 const calls = join(root, "tmux-calls");
 const repo = join(home, "code", "payments");
 const code = "mc2-AAAAAAAAAAAAAAAAAAAAAA-BBBBBBBBBBBBBBBB";
+const TMUX = Bun.which("tmux");
 
 function script(path: string, body: string): string {
   writeFileSync(path, `#!/bin/sh\n${body}\n`);
@@ -42,7 +44,7 @@ const opened = (): string[][] =>
         .split("---\n")
         .filter(Boolean)
         .map((c) => c.split("\n").filter(Boolean))
-        .filter((argv) => argv.includes("new-window") || argv.includes("new-session"))
+        .filter((argv) => argv.includes("new-window"))
     : [];
 
 let server: ReturnType<typeof startRelay> | undefined;
@@ -69,9 +71,9 @@ async function digitsFrom(out: ReadableStream<Uint8Array>): Promise<string> {
 beforeAll(async () => {
   for (const d of [home, kiwiHome, bins, join(repo, ".git")]) mkdirSync(d, { recursive: true });
   script(join(bins, "claude"), "echo '2.1.304 (Claude Code)'");
-  script(join(bins, "tmux"), `for a in "$@"; do printf '%s\\n' "$a" >> '${calls}'; done\nprintf '%s\\n' --- >> '${calls}'\nprintf '/tmp/sock\\tkiwi\\t@7\\t%%9\\t4242\\n'`);
+  script(join(bins, "tmux"), `for a in "$@"; do printf '%s\\n' "$a" >> '${calls}'; done\nprintf '%s\\n' --- >> '${calls}'\nexec '${TMUX ?? "false"}' "$@"`);
   script(join(root, "login-shell"), `echo __kiwi_login_path__\necho '${bins}:/usr/bin:/bin'`);
-  writeFileSync(join(kiwiHome, "config.json"), JSON.stringify({ channels: {}, terminals: { prefer: "tmux", helpers: { tmux: "on" } } }));
+  writeFileSync(join(kiwiHome, "config.json"), JSON.stringify({ channels: {} }));
   server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: join(root, "relay"), human: devHumanAuth() });
   relay = server.url.origin;
   person = await withExchangeKey(await generateIdentity("Ada Lovelace"));
@@ -109,11 +111,12 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await stopDaemon(daemonSock(kiwiHome)).catch(() => {});
+  await new HostedTmux(kiwiHome).kill();
   server?.stop(true);
   rmSync(root, { recursive: true, force: true });
 });
 
-describe("starting an agent on one of your computers from another device (T394)", () => {
+describe.skipIf(!TMUX)("starting an agent on one of your computers from another device (T394)", () => {
   test("the computer comes online for its person once kiwi login starts its daemon", async () => {
     expect(await machineOnline({ person, relay }, machine.pk)).toBe(true);
   });
@@ -130,7 +133,7 @@ describe("starting an agent on one of your computers from another device (T394)"
     expect(folders.value).toContain(repo);
   });
 
-  test("it starts Claude Code in that repo with the model, effort and permission mode asked for, in its terminal", async () => {
+  test("it starts Claude Code in that repo with the model, effort and permission mode asked for, in Channels' own tmux", async () => {
     const launched = await launchOn({ person, relay }, machine, {
       launch: "fromThePhone_0123456789",
       harness: "claude",
@@ -141,7 +144,7 @@ describe("starting an agent on one of your computers from another device (T394)"
       effort: "high",
       permission: "plan",
     });
-    expect(launched).toMatchObject({ ok: true, launch: "fromThePhone_0123456789", place: "tmux" });
+    expect(launched).toMatchObject({ ok: true, launch: "fromThePhone_0123456789", place: "hosted" });
     const argv = opened().at(-1) ?? [];
     expect(argv.slice(argv.indexOf("-c"), argv.indexOf("-c") + 2)).toEqual(["-c", repo]);
     expect(argv).toContain("KIWI_LAUNCH=fromThePhone_0123456789");
@@ -158,7 +161,7 @@ describe("starting an agent on one of your computers from another device (T394)"
     const harnesses = await harnessesOn({ person, relay }, machine);
     expect(harnesses.ok && harnesses.value.find((r) => r.harness === "claude")?.options?.permission).toContain("bypass");
     const allowed = await launchOn({ person, relay }, machine, { launch: "bypassFromPhone_000002", harness: "claude", folder: repo, code, relay, permission: "bypass" });
-    expect(allowed).toMatchObject({ ok: true, place: "tmux" });
+    expect(allowed).toMatchObject({ ok: true, place: "hosted" });
     expect(opened().at(-1)).toContain("bypassPermissions");
   });
 

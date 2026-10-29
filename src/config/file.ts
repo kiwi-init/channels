@@ -18,6 +18,7 @@ export interface ChannelConfig extends ChannelAccess {
 interface SeatHold {
   key: string;
   at: number;
+  holder?: { pid: number; started: string };
 }
 
 export interface SeatRecord {
@@ -78,19 +79,15 @@ export interface Config {
   terminals?: Terminals;
 }
 
-export type HelperId = Exclude<TerminalId, "app">;
-
 interface Terminals {
-  prefer?: TerminalId;
-  helpers?: Partial<Record<HelperId, "on" | "off">>;
+  helpers?: Partial<Record<TerminalId | "tmux", "on" | "off">>;
 }
 
 function migrated(cfg: Config): Config {
   if (cfg.rex === undefined) return cfg;
   const { rex, ...rest } = cfg;
   const terminals = rest.terminals ?? {};
-  const prefer = terminals.prefer ?? (rex === "on" ? "rex" : undefined);
-  return { ...rest, terminals: { ...terminals, ...(prefer ? { prefer } : {}), helpers: { rex, ...terminals.helpers } } };
+  return { ...rest, terminals: { ...terminals, helpers: { rex, ...terminals.helpers } } };
 }
 
 export interface WakeHook {

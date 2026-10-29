@@ -7,7 +7,7 @@ import type { AgentStarts } from "~/model"
 
 const starts = store<AgentStarts | null>(null)
 
-const switches = (t: TerminalsStatus) => ({ launch: t.launch === "on", bypass: t.bypass === "on", prefer: t.prefer, terminals: t.terminals })
+const switches = (t: TerminalsStatus) => ({ launch: t.launch === "on", bypass: t.bypass === "on", terminals: t.terminals })
 
 function patch(next: Partial<AgentStarts>): void {
   const now = starts.get()
@@ -59,12 +59,7 @@ export async function allowRemoteBypass(on: boolean): Promise<void> {
   if (t) patch(switches(t))
 }
 
-export async function preferTerminal(id: TerminalId): Promise<void> {
-  const t = await need().terminalPrefer(id)
-  if (t) patch(switches(t))
-}
-
-export async function setTerminalHelpers(id: Exclude<TerminalId, "app">, on: boolean): Promise<void> {
+export async function setTerminalHelpers(id: TerminalId, on: boolean): Promise<void> {
   const t = await need().terminalHelpers(id, on ? "on" : "off")
   if (t) patch(switches(t))
 }

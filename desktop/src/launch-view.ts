@@ -33,9 +33,5 @@ export function launchedView(v: unknown): LaunchedView {
   const r = readLaunched(v);
   if (!r) return { ok: false, why: "failed", detail: "the daemon answered a launch in a shape this app doesn't know" };
   if (!r.ok) return { ok: false, why: r.why, detail: r.detail.length <= 400 ? r.detail : "" };
-  const p = r.placed;
-  if (p.place === "rex") return { ok: true, launch: r.launch, place: "rex", rex: p.rex };
-  if (p.place === "tmux") return { ok: true, launch: r.launch, place: "tmux", session: p.session, window: p.window };
-  if (p.place === "hosted") return { ok: true, launch: r.launch, place: "hosted", window: p.window };
-  return { ok: true, launch: r.launch, place: "terminal" };
+  return { ok: true, launch: r.launch, place: "hosted", window: r.placed.window };
 }

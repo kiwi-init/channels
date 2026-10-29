@@ -87,7 +87,7 @@ beforeAll(async () => {
       launch: async (req) => {
         launched.push(req);
         await agentAsks(req.nick ?? "launched", { machine, cert }, req.launch);
-        return { ok: true, launch: req.launch!, placed: { ok: true, place: "terminal" } };
+        return { ok: true, launch: req.launch!, placed: { ok: true, place: "hosted", socket: "/tmp/kiwi-1/abc", window: "@1", pane: "%1" } };
       },
     }),
   });
@@ -136,7 +136,7 @@ describe("the phone's engine starts agents on the person's own computers", () =>
     const from = pushes.length;
     const got = await ask<LaunchedView>({ op: "launch", code, computer: machine.pk, harness: "claude", folder: project, nick: "helper", model: "opus" });
     if (!got.ok) throw new Error(got.detail);
-    expect(got).toEqual({ ok: true, launch: got.launch, place: "terminal" });
+    expect(got).toEqual({ ok: true, launch: got.launch, place: "hosted", window: "@1" });
     expect(launched.at(-1)).toMatchObject({ harness: "claude", folder: realpathSync(project), code, relay, nick: "helper", launch: got.launch, model: "opus" });
     await until("the agent joined", () => launches(from).some((p) => p.type === "launch" && p.stage === "joined"));
     expect(launches(from)).toEqual([

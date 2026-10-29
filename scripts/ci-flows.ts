@@ -27,4 +27,5 @@ export const FLOWS: string[] = [
   "mimo-wake-restart",
   "held-seat",
   "loop-flows",
+  "daemon-admits",
 ];

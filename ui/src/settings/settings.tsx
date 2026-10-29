@@ -1,21 +1,21 @@
 import { useEffect } from "react"
 
 import { cx } from "~/kit/bits"
-import { Icon } from "~/kit/icons"
+import { Icon, type IconName } from "~/kit/icons"
 import { useApp, type Section } from "~/nav"
 import { AgentsSection } from "~/settings/agents"
 import { ComputersSection } from "~/settings/computers"
 import { AboutSection, AccountSection, AppearanceSection, NotificationsSection, UpdatesSection } from "~/settings/sections"
 import { SideCards } from "~/shell/updates"
 
-const SECTIONS: readonly (readonly [Section, string])[] = [
-  ["account", "Account"],
-  ["appearance", "Appearance"],
-  ["notifications", "Notifications"],
-  ["computers", "Computers and phones"],
-  ["agents", "Agents"],
-  ["updates", "Updates"],
-  ["about", "About"],
+const SECTIONS: readonly (readonly [Section, string, IconName])[] = [
+  ["account", "Account", "account"],
+  ["appearance", "Appearance", "paint"],
+  ["notifications", "Notifications", "bell"],
+  ["computers", "Computers and phones", "devices"],
+  ["agents", "Agents", "agent"],
+  ["updates", "Updates", "download"],
+  ["about", "About", "info"],
 ]
 
 export function Settings() {
@@ -43,11 +43,14 @@ export function Settings() {
       </header>
       <nav className="set-nav" aria-label="Settings sections">
         <ul>
-          {SECTIONS.map(([id, label]) => {
+          {SECTIONS.map(([id, label, icon]) => {
             const on = nav.section === id
             return (
               <li key={id}>
                 <button type="button" className={cx("side-row", on && "is-on")} aria-current={on ? "page" : undefined} onClick={() => go({ to: "settings", section: id })}>
+                  <span className="side-icon">
+                    <Icon name={icon} />
+                  </span>
                   <span className="side-label">{label}</span>
                 </button>
               </li>

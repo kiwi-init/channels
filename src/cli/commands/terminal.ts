@@ -1,38 +1,33 @@
 import * as Effect from "effect/Effect";
-import { PLACE_NAMES, readPlacedSeat, type TerminalId, type TerminalRow, type TerminalsStatus } from "@kiwi/core/terminals.ts";
-import { loadConfig, updateConfig, type HelperId } from "../../config.ts";
+import { isTerminalId, PLACE_NAMES, readPlacedSeat, type TerminalId, type TerminalRow, type TerminalsStatus } from "@kiwi/core/terminals.ts";
+import { loadConfig, updateConfig } from "../../config.ts";
 import { showNeedsYou, type NeedsYou, type ShowWhy } from "../../status.ts";
-import { helpersOn, launchesOn, remoteBypassOn, MANIFESTS, placeTools, preferred, seatPlaces, showSeat, switchHelpers, terminalPlugin, terminalPlugins } from "../../terminals/registry.ts";
+import { helpersOn, launchesOn, remoteBypassOn, placeTools, seatPlaces, showSeat, switchHelpers, terminalPlugin, terminalPlugins } from "../../terminals/registry.ts";
 import { parseJson } from "../../terminals/shared/json.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, out } from "../context.ts";
 
-const USAGE =
-  "usage: kiwi terminal [status] [--json] | kiwi terminal download|remove rex|tmux | kiwi terminal prefer app|rex|tmux | kiwi terminal seats [--json] | kiwi terminal show --needs-you | kiwi terminal show --seat SEAT";
+const USAGE = "usage: kiwi terminal [status] [--json] | kiwi terminal download|remove rex | kiwi terminal seats [--json] | kiwi terminal show --needs-you | kiwi terminal show --seat SEAT";
 const LAUNCHES_USAGE = "usage: kiwi launches on|off|status [--json] | kiwi launches bypass on|off|status [--json]";
-
-const isHelperId = (id: string | undefined): id is HelperId => id === "rex" || id === "tmux";
-const isTerminalId = (id: string | undefined): id is TerminalId => MANIFESTS.some((m) => m.id === id);
-const nameOf = (id: TerminalId): string => MANIFESTS.find((m) => m.id === id)?.name ?? id;
 
 async function terminalsStatus(): Promise<TerminalsStatus> {
   const cfg = loadConfig();
-  const plugins = await terminalPlugins(await placeTools());
+  const plugins = await terminalPlugins(placeTools());
   const terminals = await Promise.all(
     plugins.map(async (p): Promise<TerminalRow> => {
       const found = await p.detect();
       return { id: p.manifest.id, name: p.manifest.name, found: found.found, running: found.running, helpers: p.manifest.helpers ? (helpersOn(p.manifest.id, cfg) ? "on" : "off") : null };
     }),
   );
-  return { prefer: preferred(cfg), launch: launchesOn(cfg) ? "on" : "off", bypass: remoteBypassOn(cfg) ? "on" : "off", terminals };
+  return { launch: launchesOn(cfg) ? "on" : "off", bypass: remoteBypassOn(cfg) ? "on" : "off", terminals };
 }
 
 function statusText(s: TerminalsStatus): string {
   const rows = s.terminals.map((t) => {
     const state = !t.found ? "not installed" : t.running ? "running" : "installed, not running";
-    return `${t.name}: ${state}${t.helpers ? `, helpers ${t.helpers}` : ""}${t.id === s.prefer ? ", new agents open here" : ""}`;
+    return `${t.name}: ${state}${t.helpers ? `, helpers ${t.helpers}` : ""}`;
   });
-  return [...rows, launchesText(s.launch), bypassText(s.bypass)].join("\n");
+  return [...rows, `New agents open in ${PLACE_NAMES.hosted}' own tmux`, launchesText(s.launch), bypassText(s.bypass)].join("\n");
 }
 
 function bypassText(bypass: "on" | "off"): string {
@@ -47,9 +42,9 @@ function launchesText(launch: "on" | "off"): string {
     : "Creating new agents is off for this computer: every launch is refused, from this app or another of your devices (kiwi launches on allows it)";
 }
 
-export function setHelpers(id: HelperId, on: boolean) {
+export function setHelpers(id: TerminalId, on: boolean) {
   return Effect.gen(function* () {
-    const plugin = yield* Effect.promise(async () => terminalPlugin(id, await placeTools()));
+    const plugin = yield* Effect.promise(() => terminalPlugin(id));
     if (!plugin.helpers) return yield* die(`${plugin.manifest.name} has no helpers to download yet`);
     const helpers = plugin.helpers;
     if (on) yield* Effect.promise(() => helpers.download());
@@ -70,7 +65,7 @@ const SHOW_WHY: Record<ShowWhy, string> = {
 
 function needsYouText(got: Extract<NeedsYou, { shown: null }>): string {
   if (got.failed) return `Couldn't show ${got.failed.waiting.agent} in ${got.failed.waiting.alias}: ${SHOW_WHY[got.failed.why]}`;
-  return got.seats ? "Nothing needs you right now" : "No seat here runs where Kiwi can show it (Rex or tmux, with its helpers on)";
+  return got.seats ? "Nothing needs you right now" : "No seat here runs where Kiwi can show it (Rex, with its helpers on)";
 }
 
 export const terminalCommands: Record<string, Command> = {
@@ -83,7 +78,7 @@ export const terminalCommands: Record<string, Command> = {
         return out(opt.json ? JSON.stringify(s) : statusText(s));
       }
       if (sub === "download" || sub === "remove") {
-        if (!isHelperId(id)) return yield* die(USAGE);
+        if (!isTerminalId(id)) return yield* die(USAGE);
         yield* setHelpers(id, sub === "download");
         return out(statusText(yield* Effect.promise(() => terminalsStatus())));
       }
@@ -98,14 +93,6 @@ export const terminalCommands: Record<string, Command> = {
         if (got.shown) return;
         out(needsYouText(got));
         return got.failed ? 1 : 0;
-      }
-      if (sub === "prefer") {
-        if (!isTerminalId(id)) return yield* die(USAGE);
-        if (id !== "app" && !helpersOn(id, loadConfig())) return yield* die(`Download the ${nameOf(id)} helpers first: kiwi terminal download ${id}`);
-        updateConfig((c) => {
-          c.terminals = { ...c.terminals, prefer: id };
-        });
-        return out(statusText(yield* Effect.promise(() => terminalsStatus())));
       }
       if (sub === "seats") {
         const seats = yield* Effect.promise(() => seatPlaces());

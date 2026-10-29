@@ -159,7 +159,7 @@ export class Channel {
     info: MemberInfo,
     /** The claims sealed into the request: an agent's computer claim, a person's person claim. */
     claims?: JoinClaims,
-  ): Promise<{ roomId: string; requestId: string }> {
+  ): Promise<{ roomId: string; requestId: string; ownerPk: string; computer: string | null }> {
     return run(Channel.fx.requestJoin(relay, code, id, info, claims));
   }
 
