@@ -24,6 +24,19 @@ Written by `bun scripts/changelog.ts` from each squash-merged pull request's tit
 - **Phones: Sign In opens or says why, and WorkOS goes through the app (T13)** ([#1210](https://github.com/kiwi-init/channels/pull/1210))
 - **Tasks: a done digest for a task the fold doesn't have done is refused and marked (#1227)** ([#1228](https://github.com/kiwi-init/channels/pull/1228))
 - **Feed: forged and refused messages are shown, not dropped (T204)** ([#1225](https://github.com/kiwi-init/channels/pull/1225))
+- **Composer: Cmd/Ctrl+S stashes the draft, Shift+Cmd+S brings it back (T263)** ([#1231](https://github.com/kiwi-init/channels/pull/1231))
+- **Channel: the pure channel helpers move out of web/ into packages/channel (T396)** ([#1233](https://github.com/kiwi-init/channels/pull/1233))
+- **Terminal: a terminal icon in the channel header opens your own shell (T373)** ([#1232](https://github.com/kiwi-init/channels/pull/1232))
+- **Settings: Link a phone says why it can't see the phone (T436)** ([#1235](https://github.com/kiwi-init/channels/pull/1235))
+- **Sessions: tmux ships inside the app, and the daemon uses that copy first (T360)** ([#1234](https://github.com/kiwi-init/channels/pull/1234))
+- **Sign-in: the session ends when its access token does (T535)** ([#1238](https://github.com/kiwi-init/channels/pull/1238))
+- **Devices: the owner's own phone joins channels the app made (T552)** ([#1239](https://github.com/kiwi-init/channels/pull/1239))
+- **Chat: the markdown hint under the composer goes, Jump to latest clicks everywhere (T525)** ([#1240](https://github.com/kiwi-init/channels/pull/1240))
+- **Add agent: lists the agents found on the computer, and how to get the rest (T375)** ([#1237](https://github.com/kiwi-init/channels/pull/1237))
+- **Sidebar: Settings is a gear, updates and asks are cards (T522)** ([#1241](https://github.com/kiwi-init/channels/pull/1241))
+- **Phones: signing in again replaces the stuck request (T345)** ([#1242](https://github.com/kiwi-init/channels/pull/1242))
+- **Channel: the store's own modules move out of web/ into packages/channel (T488)** ([#1236](https://github.com/kiwi-init/channels/pull/1236))
+- **Phones: the sign-in is saved even when the phone locks (T347)** ([#1243](https://github.com/kiwi-init/channels/pull/1243))
 
 ## 2026.10.10 — 2026-10-29
 
