@@ -400,12 +400,6 @@ export function makeActions(): Actions {
         await run.ch.updateNickname(memberOf(run, name), nickname?.trim() || null)
         await run.refreshRoster()
       }),
-    setColor: (code, name, color) =>
-      attempt("Colour not changed", async () => {
-        const run = need(code)
-        if (name !== run.me && !run.isOwner) throw new Error("only that person or the owner sets a colour")
-        await event(run, color ? `${name}'s colour is ${color}` : `cleared ${name}'s colour`, { op: "color.set", member: name, color })
-      }),
     setPowers: (code, name, powers) =>
       attempt("Not changed", async () => {
         const run = owner(code)
