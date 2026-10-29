@@ -207,17 +207,23 @@ export interface Reaction {
   by: string[]
 }
 
+export interface Said {
+  text: string
+  tone: "quiet" | "ask" | "alert" | "decide"
+}
+
 export interface Message {
   seq: number
   from: string
   at: number
   text: string
   where: Where
+  said?: Said
   replyTo?: number
   inThread?: number
   thread?: { replies: number; last: number; people: string[] }
   task?: number
-  pr?: PullRequest
+  prs?: PullRequest[]
   images?: (Image | ImageSpot)[]
   reactions?: Reaction[]
   ask?: string
@@ -228,6 +234,7 @@ export interface Message {
   failed?: string
   mentionsYou?: boolean
   leftOut?: string
+  receipt?: string
 }
 
 export interface PermissionAsk {

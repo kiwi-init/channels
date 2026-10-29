@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { followLaunch, followedLaunches, sawMembers, sawRequests } from "./launch-follow"
+import { followLaunch, followedLaunches, sawMembers, sawRequests } from "@kiwi/app/launch-follow.ts"
 import { canStartAgents } from "./launches"
 
 describe("following a launch from the app that started it", () => {

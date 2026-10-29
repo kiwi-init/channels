@@ -1,6 +1,6 @@
 import { Download04Icon } from "@hugeicons/core-free-icons"
 
-import { openRelease, restartToUpdate, type UpdateView } from "@/lib/update"
+import { openRelease, restartToUpdate, type UpdateView } from "@kiwi/app/update.ts"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
 import { Tooltip } from "./ui/tooltip"

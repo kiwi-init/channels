@@ -18,8 +18,25 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Pointer
 
 import { MAX_IMAGE_SIDE } from "@kiwi/core/fit-image.ts"
 import { MAX_IMAGE_BYTES } from "@kiwi/core/protocol.ts"
-import { arrowHead, base64Blob, fitSide, INKS, markedName, meaningful, penPath, rect, strokeWidth, textSize, toImage, TOOL_KEYS, type Ink, type Mark, type Point, type Tool } from "@/lib/annotate"
-import { compressImage, readBase64 } from "@/lib/compress-image"
+import {
+  arrowHead,
+  base64Blob,
+  fitSide,
+  INKS,
+  markedName,
+  meaningful,
+  penPath,
+  rect,
+  strokeWidth,
+  textSize,
+  toImage,
+  TOOL_KEYS,
+  type Ink,
+  type Mark,
+  type Point,
+  type Tool,
+} from "@kiwi/app/annotate.ts"
+import { compressImage, readBase64 } from "@kiwi/app/compress-image.ts"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
 import { errorText, Monogram, toast } from "./kit"

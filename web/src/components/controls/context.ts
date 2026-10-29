@@ -5,7 +5,7 @@ import type { Persona, Personality } from "@kiwi/core/personality.ts"
 import type { ChannelIcon, Color } from "@kiwi/core/protocol.ts"
 import type { Scope } from "@kiwi/core/scopes.ts"
 import type { ChannelState } from "@kiwi/core/state.ts"
-import type { Exported } from "@/lib/log-export"
+import type { Exported } from "@kiwi/app/log-export.ts"
 
 export type Confirm =
   | { kind: "approve"; req: JoinRequest; powers?: PersonPowers }

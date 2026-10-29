@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { MAX_IMAGE_BYTES, RASTER_MIMES } from "@kiwi/core/protocol.ts"
-import { fileDrag, takeDropped } from "@/lib/dropped"
-import { takePasted } from "@/lib/pasted"
+import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
+import { takePasted } from "@kiwi/app/pasted.ts"
 import { preview, useReplying } from "~/chat/reply"
 import { STASH_SHOT, useStash, type Stashed } from "~/chat/stash"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
@@ -158,7 +158,7 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
         continue
       }
       if (f.size > MAX_IMAGE_BYTES) {
-        void import("@/lib/compress-image").then(({ compressImage, renamed }) =>
+        void import("@kiwi/app/compress-image.ts").then(({ compressImage, renamed }) =>
           compressImage(f, MAX_IMAGE_BYTES).then((done) => (done ? add({ ...done, name: renamed(name, done.mime) }) : toast(`${name} couldn't be read`)))
         )
         continue

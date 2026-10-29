@@ -7,22 +7,22 @@ import { JoinWithCode, NewChannel, Welcome } from "@/components/lazy"
 import { ChannelIconTile } from "@/components/channel-icon"
 import { Sidebar } from "@/components/sidebar"
 import { ShellSidebar } from "@/components/shell-sidebar"
-import { useMemberIcons } from "@/lib/icons"
-import { useIcons } from "@/lib/icons"
+import { useMemberIcons } from "@kiwi/app/icons.ts"
+import { useIcons } from "@kiwi/app/icons.ts"
 import type { Command, PaletteActions } from "@/components/ui/palette"
 import { usePaletteShortcut } from "@/components/ui/palette-shortcut"
 import { ComputersModal, Palette, preloadAccountItems, SettingsPage } from "@/components/lazy"
 import { whenIdle } from "@/lib/later"
-import { useAutoApproval } from "@/lib/auto-approval"
+import { useAutoApproval } from "@kiwi/app/auto-approval.ts"
 import { parseHash } from "@kiwi/channel/hash.ts"
 import { useChannelList } from "@kiwi/channel/list.ts"
-import { joinCodeFromLink } from "@/lib/deep-link"
+import { joinCodeFromLink } from "@kiwi/app/deep-link.ts"
 import { newsTotal, rowNews, startMarks, useMarks, useNewsKeys, useOpenNews, useTabNews } from "@kiwi/channel/news.ts"
-import { formatShort } from "@/lib/format"
-import { useSidebarShortcut } from "@/lib/sidebar-hidden"
+import { formatShort } from "@kiwi/app/format.ts"
+import { useSidebarShortcut } from "@kiwi/app/sidebar-hidden.ts"
 import { bridge, useSecrets } from "@kiwi/secrets/secrets.ts"
 import { cx } from "@/lib/utils"
-import { lastChannel, rememberChannel, reopenable } from "@/lib/last-channel"
+import { lastChannel, rememberChannel, reopenable } from "@kiwi/app/last-channel.ts"
 
 // The join code lives in the URL fragment, which never leaves the app.
 const readHash = () => parseHash(location.hash)
@@ -50,7 +50,7 @@ export default function App() {
   // The app's own computer joins the list once there's a person to certify it (lib/computers.ts).
   const personPk = person?.pk
   useEffect(() => {
-    if (personPk) void import("@/lib/computers").then((m) => m.adoptThisComputer()).catch(() => {})
+    if (personPk) void import("@kiwi/app/computers.ts").then((m) => m.adoptThisComputer()).catch(() => {})
   }, [personPk])
 
   // What's new where: a dot per channel, the total in the tab, Alt+↑/↓ through the ones with news.

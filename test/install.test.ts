@@ -7,7 +7,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
-import { joinCommand, kiwiJoin } from "../web/src/lib/join-line.ts";
+import { joinCommand, kiwiJoin } from "@kiwi/app/join-line.ts";
 
 const SCRIPT = join(import.meta.dir, "..", "site", "install.sh");
 

@@ -1,7 +1,7 @@
 import { AnimatePresence, MotionConfig, motion, useIsPresent } from "motion/react"
 import type { ReactNode } from "react"
 
-import { useAccessibilityOption } from "@/lib/accessibility"
+import { useAccessibilityOption } from "@kiwi/app/accessibility.ts"
 
 const EASE = [0.2, 0.8, 0.2, 1] as const
 

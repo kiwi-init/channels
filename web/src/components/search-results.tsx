@@ -4,9 +4,9 @@ import type { Message } from "@kiwi/core/protocol.ts"
 import { marks, snippet } from "@kiwi/core/search-rank.ts"
 import { taskId, type ChannelState, type Task } from "@kiwi/core/state.ts"
 
-import { formatShort } from "@/lib/format"
-import { roomOfMessage } from "@/lib/rooms"
-import { labelOf } from "@/lib/task-labels"
+import { formatShort } from "@kiwi/app/format.ts"
+import { roomOfMessage } from "@kiwi/app/rooms.ts"
+import { labelOf } from "@kiwi/app/task-labels.ts"
 import { cx } from "@/lib/utils"
 
 export type SearchHit = { kind: "task"; task: Task } | { kind: "message"; m: Message }

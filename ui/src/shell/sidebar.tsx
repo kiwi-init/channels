@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { roomProblem } from "@/lib/rooms"
+import { roomProblem } from "@kiwi/app/rooms.ts"
 import { liveOf, restOf } from "~/doing"
 
 import { Avatar, Count, cx, Heading, IconButton, STATUS_WORDS } from "~/kit/bits"

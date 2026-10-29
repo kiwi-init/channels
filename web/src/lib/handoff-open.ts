@@ -1,5 +1,5 @@
 import type { Handoff } from "@kiwi/core/protocol.ts"
-import { handoffOpen } from "./handoff"
+import { handoffOpen } from "@kiwi/app/handoff.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 
 export function openHandoff(h: Handoff, now = Date.now()): boolean {

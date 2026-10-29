@@ -3,7 +3,7 @@ import { Children, createContext, isValidElement, memo, useCallback, useContext,
 import ReactMarkdown, { type Components } from "react-markdown"
 import remarkBreaks from "remark-breaks"
 import remarkGfm from "remark-gfm"
-import { compareCells, knownRefs, mentionParts, messageRefs, nextSort, Recent, sanitizeMarkdownUrl, type SortDir } from "../lib/markdown"
+import { compareCells, knownRefs, mentionParts, messageRefs, nextSort, Recent, sanitizeMarkdownUrl, type SortDir } from "@kiwi/app/markdown.ts"
 import { MentionNames } from "../lib/mentions"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import { cx } from "../lib/utils"

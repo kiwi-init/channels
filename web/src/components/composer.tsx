@@ -4,11 +4,11 @@ import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type R
 import type { SendOptions } from "@kiwi/core/client.ts"
 import { MAX_IMAGE_BYTES, RASTER_MIMES, type Color, type Message, type StepReply } from "@kiwi/core/protocol.ts"
 import { matchCommands, parseCommand, type Command } from "@/lib/commands"
-import { answered } from "@/lib/asks"
+import { answered } from "@kiwi/app/asks.ts"
 import { draftOf, keepDraft, type DraftFile } from "@/lib/drafts"
-import { fileDrag, takeDropped } from "@/lib/dropped"
-import { takePasted } from "@/lib/pasted"
-import { excerpt } from "@/lib/format"
+import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
+import { takePasted } from "@kiwi/app/pasted.ts"
+import { excerpt } from "@kiwi/app/format.ts"
 import { composerMentions, mentionText, withHandles } from "@/lib/mentions"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
@@ -156,7 +156,7 @@ export function Composer({
         continue
       }
       if (f.size > MAX_IMAGE_BYTES) {
-        void import("@/lib/compress-image").then(({ compressImage, renamed }) =>
+        void import("@kiwi/app/compress-image.ts").then(({ compressImage, renamed }) =>
           compressImage(f, MAX_IMAGE_BYTES).then((done) => {
             if (!done) return toast(`${name} couldn’t be read.`, "error")
             setFiles((prev) => (prev.length < 8 ? [...prev, { ...done, name: renamed(name, done.mime) }] : prev))

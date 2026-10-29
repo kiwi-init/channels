@@ -6,7 +6,7 @@ import { Icon } from "~/kit/icons"
 import type { App, Task, TaskStatus, Theme } from "~/model"
 import { useApp, type Go, type Nav, type Panel } from "~/nav"
 import { nickname, shown } from "~/names"
-import { SIDEBAR_KEYS } from "@/lib/sidebar-hidden"
+import { SIDEBAR_KEYS } from "@kiwi/app/sidebar-hidden.ts"
 import { toggleSide } from "~/shell/side"
 import { statusOf } from "~/shell/sidebar"
 

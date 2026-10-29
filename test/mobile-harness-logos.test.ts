@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { monoHarness } from "../web/src/lib/harness.ts";
+import { monoHarness } from "@kiwi/app/harness.ts";
 
 const ROOT = join(import.meta.dir, "..");
 const ASSETS = join(ROOT, "assets/harness");
