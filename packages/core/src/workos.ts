@@ -1,5 +1,19 @@
+import { fromB64url } from "./crypto.ts";
+
 const WORKOS_DEVICE_URL = "https://api.workos.com/user_management/authorize/device";
 export const WORKOS_TOKEN_URL = "https://api.workos.com/user_management/authenticate";
+
+export function tokenExpiry(access: string): number | null {
+  try {
+    const claims = JSON.parse(new TextDecoder().decode(fromB64url(access.split(".")[1] ?? ""))) as { exp?: unknown };
+    return typeof claims.exp === "number" && Number.isFinite(claims.exp) ? claims.exp * 1000 : null;
+  } catch {
+    // Not a JWT, like a dev relay's token: the caller falls back to the lifetime it was told.
+    return null;
+  }
+}
+
+export const sessionExpiry = (access: string, expiresIn: number | undefined, now = Date.now()): number => tokenExpiry(access) ?? now + (expiresIn ?? 300) * 1000;
 
 export interface WorkosSession {
   access: string;
@@ -53,6 +67,6 @@ export async function workosDeviceSignIn(clientId: string, show: (start: DeviceS
     if (!res.ok) throw new Error(`sign-in failed (${res.status})`);
     const tok = (await res.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
     if (!tok.access_token || !tok.refresh_token) throw new Error("sign-in came back without a token");
-    return { access: tok.access_token, refresh: tok.refresh_token, exp: Date.now() + (tok.expires_in ?? 3600) * 1000 };
+    return { access: tok.access_token, refresh: tok.refresh_token, exp: sessionExpiry(tok.access_token, tok.expires_in) };
   }
 }
