@@ -46,11 +46,6 @@
       "entry": ["src/**/*.test.ts"],
       "project": ["src/**/*.ts"]
     },
-    "web": {
-      "entry": ["src/**/*.test.{ts,tsx}", "src/lib/no-elk.ts"],
-      "project": ["src/**/*.{ts,tsx,css}"],
-      "ignore": ["src/lib/design-tokens.ts", "src/lib/fonts.ts"]
-    },
     "desktop": {
       "entry": ["src/main-eb.ts", "src/preload-eb.ts", "src/keys-worker.ts", "src/message-box-worker.ts", "scripts/*.ts", "electrobun.config.ts"],
       "project": ["src/**/*.ts", "scripts/**/*.ts"]
