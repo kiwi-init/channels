@@ -75,6 +75,20 @@ describe("a person's other devices join as them (T634)", () => {
     await s.ownerCh.close();
   });
 
+  test("the owner's phone joins on its own in a channel the app made, whose owner record has no person key", async () => {
+    const s = await setupChannel(relay, { personInRecord: false });
+    const { links, phone } = await listWithPhone(s.person);
+    const joiner = await ask(s, phone, links, "owner");
+    const req = (await s.ownerCh.requests({ person: s.person.pk })).find((r) => r.id === joiner.requestId);
+    expect(req).toMatchObject({ kind: "human", device: { person: s.person.pk, own: true, joinsOnItsOwn: true, handle: "owner" } });
+
+    expect(await letThrough(s, joiner)).toHaveLength(1);
+    const member = (await s.ownerCh.members()).find((m) => m.pk === joiner.id.pk);
+    expect(member).toMatchObject({ name: "owner-2", kind: "human", owner: false, person: s.person.pk, device: { as: "phone" }, addsAgents: true, answersDecisions: true });
+    expect(member?.sponsor).toMatchObject({ user: s.person.pk, handle: "owner" });
+    await s.ownerCh.close();
+  });
+
   test("a member's phone joins on its own, with no more than that member may do", async () => {
     const s = await setupChannel(relay);
     const bobsPerson = await generateIdentity("bobs-person");
