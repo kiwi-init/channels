@@ -351,6 +351,7 @@
 }
 
 .set-pair .qr {
+  display: block;
   width: 176px;
   height: 176px;
   border-radius: var(--r-row);

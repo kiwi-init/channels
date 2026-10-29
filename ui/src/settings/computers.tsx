@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react"
+import { lazy, Suspense, useEffect, useState } from "react"
 
 import { cx, IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
-import { QrCode } from "~/kit/qr"
 import { ago } from "~/kit/time"
 import type { Account, Computer, Device } from "~/model"
 import { useApp } from "~/nav"
@@ -10,6 +9,8 @@ import { Confirm } from "~/settings/controls"
 import { Page } from "~/settings/sections"
 
 type Kind = "computer" | "phone"
+
+const QrCode = lazy(() => import("~/kit/qr"))
 
 const SHOT = new URLSearchParams(location.search).get("shot")
 const PRESET: Kind | null = SHOT === "settings-link-phone" ? "phone" : SHOT === "settings-add-computer" ? "computer" : null
@@ -289,7 +290,9 @@ export function ComputersSection() {
           {pairing.kind === "phone" ? (
             <>
               <p className="set-pair-how">On your phone, open Channels and tap Sign In, or tap Scan the code and scan this one.</p>
-              <QrCode text={pairing.code} label="Code to link a phone" />
+              <Suspense fallback={<span className="qr" aria-hidden="true" />}>
+                <QrCode text={pairing.code} label="Code to link a phone" />
+              </Suspense>
               <p className="set-pair-how">No camera? Copy the code, then tap Paste the code.</p>
               <PairLine text={pairing.code} label="Copy the code" />
             </>

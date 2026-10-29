@@ -2,7 +2,7 @@ import { encode } from "uqr"
 
 const QUIET = 2
 
-export function QrCode({ text, label }: { text: string; label: string }) {
+export default function QrCode({ text, label }: { text: string; label: string }) {
   const { data } = encode(text, { ecc: "M", border: 0 })
   const span = data.length + QUIET * 2
   const d = data.flatMap((row, y) => row.flatMap((on, x) => (on ? [`M${x + QUIET} ${y + QUIET}h1v1h-1z`] : []))).join("")
