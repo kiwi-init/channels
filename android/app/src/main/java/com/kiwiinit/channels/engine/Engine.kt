@@ -6,6 +6,7 @@ import android.content.MutableContextWrapper
 import android.content.pm.ApplicationInfo
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.JavascriptInterface
@@ -17,6 +18,8 @@ import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import java.io.IOException
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
@@ -39,6 +42,7 @@ class Engine(private val app: Context, private val onPush: (Push) -> Unit, priva
     private val host = MutableContextWrapper(app)
     private val main = Handler(Looper.getMainLooper())
     private val reader = Executors.newSingleThreadExecutor()
+    private val net = Executors.newSingleThreadExecutor()
     private val calls = ConcurrentHashMap<Int, CompletableDeferred<String>>()
     private val ids = AtomicInteger()
     private var loaded: CompletableDeferred<Unit>? = null
@@ -77,6 +81,7 @@ class Engine(private val app: Context, private val onPush: (Push) -> Unit, priva
         detach()
         web.destroy()
         reader.shutdown()
+        net.shutdown()
     }
 
     suspend fun load() {
@@ -126,6 +131,33 @@ class Engine(private val app: Context, private val onPush: (Push) -> Unit, priva
         }
     }
 
+    private fun fetchForEngine(call: Push.Fetch) {
+        val answer = JSONObject().put("id", call.id)
+        if (call.url !in WORKOS) {
+            answer.put("error", "this app only makes WorkOS's sign-in calls")
+        } else {
+            try {
+                val conn = URL(call.url).openConnection() as HttpURLConnection
+                try {
+                    conn.requestMethod = "POST"
+                    conn.connectTimeout = 20_000
+                    conn.readTimeout = 20_000
+                    conn.doOutput = true
+                    conn.setRequestProperty("content-type", "application/json")
+                    conn.outputStream.use { it.write(call.body.toByteArray()) }
+                    val status = conn.responseCode
+                    val stream = if (status >= 400) conn.errorStream else conn.inputStream
+                    answer.put("status", status).put("body", stream?.bufferedReader()?.use { it.readText() } ?: "")
+                } finally {
+                    conn.disconnect()
+                }
+            } catch (e: IOException) {
+                answer.put("error", e.message ?: "the sign-in service didn't answer")
+            }
+        }
+        main.post { if (!dead) web.evaluateJavascript("kiwi.fetched(${JSONObject.quote(answer.toString())})", null) }
+    }
+
     private fun fail(why: String) {
         for (call in calls.values) call.completeExceptionally(EngineException(why))
         calls.clear()
@@ -141,7 +173,14 @@ class Engine(private val app: Context, private val onPush: (Push) -> Unit, priva
                     // A push this build doesn't know (a newer engine's) is skipped; the next room push carries the state again.
                     null
                 }
-                if (push != null) main.post { onPush(push) }
+                when (push) {
+                    null -> Unit
+                    is Push.Fetch -> net.execute { fetchForEngine(push) }
+                    else -> {
+                        if (push is Push.Log) Log.i("ChannelsEngine", push.line)
+                        main.post { onPush(push) }
+                    }
+                }
             }
         }
 
@@ -177,6 +216,7 @@ class Engine(private val app: Context, private val onPush: (Push) -> Unit, priva
     }
 
     private companion object {
+        val WORKOS = setOf("https://api.workos.com/user_management/authorize/device", "https://api.workos.com/user_management/authenticate")
         const val LOCAL = "http://localhost/"
         const val SECURE = "https://appassets.androidplatform.net/"
         const val PAGE = "<!doctype html><meta charset=utf-8><title>Channels engine</title><script src=\"engine.js\"></script>"

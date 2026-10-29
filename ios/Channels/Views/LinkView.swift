@@ -42,7 +42,11 @@ struct LinkView: View {
                     .padding(.top, 20)
             }
         case .opening:
-            waiting("Opening the sign-in…")
+            VStack(alignment: .leading, spacing: 0) {
+                waiting("Opening the sign-in…")
+                QuietButton(title: "Cancel") { Task { await model.cancelLink() } }
+                    .padding(.top, 24)
+            }
         case .signingIn(let url, let code):
             VStack(alignment: .leading, spacing: 0) {
                 if let url {
