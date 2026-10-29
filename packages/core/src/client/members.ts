@@ -28,6 +28,7 @@ export interface MembersFx {
   reconcilePosting(state: Pick<ChannelState, "members" | "scopeSets" | "roleSets">, members?: Member[]): Effect.Effect<string[], Refused, Relay>;
   remove(pk: string): Effect.Effect<void, Refused, Relay>;
   cutDevices(list: DeviceList): Effect.Effect<Member[], Refused, Relay>;
+  dropDelegates(pks: readonly string[]): Effect.Effect<string[], Refused, Relay>;
   rotate(): Effect.Effect<number, Refused, Relay>;
   rotateIfDue(): Effect.Effect<boolean, Refused, Relay>;
   close(): Effect.Effect<void, Refused, Relay>;
@@ -169,6 +170,16 @@ export class ChannelMembers {
       }
       yield* this.rotation();
       return cut;
+    }),
+
+    dropDelegates: Effect.fn("Channel.dropDelegates")({ self: this }, function* (this: ChannelMembers, pks: readonly string[]) {
+      yield* this.ch.ownerOnly();
+      const listed = new Set((yield* this.ch.fx.delegations()).map((d) => d.delegate));
+      const dropped = pks.filter((pk) => listed.has(pk));
+      if (!dropped.length) return dropped;
+      for (const pk of dropped) yield* this.ch.fx.undelegate(pk);
+      yield* this.rotation();
+      return dropped;
     }),
 
     rotate: Effect.fn("Channel.rotate")({ self: this }, function* (this: ChannelMembers) {

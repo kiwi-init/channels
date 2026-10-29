@@ -79,8 +79,12 @@ agent                          relay                         owner's app
     computer, sponsored by that person, made while the delegation lasted, and
     no role, rules, personality, `runs` or powers.
     Anything else shows as unverified, as it does to clients from before
-    delegation. Revoking the computer in the device list drops its
-    delegations and rotates.
+    delegation. Revoking the computer in the device list, or forgetting it in
+    the app, drops its delegations and rotates. The owner's app issues one to
+    each of the person's computers in every channel it owns, renews it with
+    fewer than 7 days left, drops (and rotates past) any for a computer it no
+    longer lists, and re-signs the records a delegate signed with the owner
+    key.
   - **Who an agent belongs to.** The owner's client works out the sponsor and
     signs it into the agent's record: an agent from the owner's own computer is
     the owner's; a cert by a person key that a current human member's record
