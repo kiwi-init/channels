@@ -1,7 +1,7 @@
 // Regression tests for the security review: each test pins one hole shut.
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { Database } from "bun:sqlite";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as Effect from "effect/Effect";
@@ -526,5 +526,73 @@ describe("channels from before signed keys", () => {
     expect(await ownerCh.rotateIfDue()).toBe(true);
     const fresh = await Channel.resume(relay, code, agent);
     expect(fresh.signedKeys).toBe(true);
+  });
+});
+
+describe("the relay's front door", () => {
+  test("a request without a member key is refused before its room is opened, existing or not", async () => {
+    const { access } = await channelWithMember();
+    const nowhere = "0".repeat(32);
+    const refused = await fetch(`${relay}/v1/rooms/${nowhere}/messages`);
+    expect(refused.status).toBe(401);
+    expect(await refused.json()).toEqual({ error: "bad or expired signature", tag: "Unauthorized" });
+    expect(existsSync(join(dataDir, `${nowhere}.sqlite`))).toBe(false);
+    const junk = await fetch(`${relay}/v1/rooms/${access.roomId}/messages`, { headers: { authorization: "Bearer s1.junk.1.junk" } });
+    expect(junk.status).toBe(401);
+    expect(await junk.json()).toEqual({ error: "bad or expired signature", tag: "Unauthorized" });
+    const info = await fetch(`${relay}/v1/rooms/${access.roomId}/info?fp=wrong`);
+    expect(info.status).toBe(404);
+    expect(await info.json()).toEqual({ error: "no such channel", tag: "ChannelGone" });
+    const fp = await ownerFingerprint(access.ownerPk);
+    const ask = await fetch(`${relay}/v1/rooms/${access.roomId}/requests?fp=${fp}`, { method: "POST", body: "" });
+    expect(ask.status).toBe(400);
+    expect(await ask.json()).toEqual({ error: "bad json", tag: "BadRequest" });
+  });
+
+  test("a body that isn't a JSON object is a 400, never a 500", async () => {
+    const { access, owner } = await channelWithMember();
+    const put = async (body: string) => {
+      const res = await fetch(`${relay}/v1/rooms/${access.roomId}/icon`, {
+        method: "PUT",
+        headers: { authorization: `Bearer ${await signRequest(owner, access.roomId, "PUT", "/icon", body)}`, "content-type": "application/json" },
+        body,
+      });
+      return { status: res.status, body: (await res.json().catch(() => ({}))) as { error?: string; tag?: string } };
+    };
+    expect(await put("null")).toEqual({ status: 400, body: { error: "bad json", tag: "BadRequest" } });
+    expect((await put("[]")).status).toBe(400);
+    expect((await put("3")).status).toBe(400);
+    expect((await put("{}")).status).toBe(200);
+    const sent = await fetch(`${relay}/v1/rooms/${access.roomId}/messages`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${await signRequest(owner, access.roomId, "POST", "/messages", "null")}`, "content-type": "application/json" },
+      body: "null",
+    });
+    expect(sent.status).toBe(400);
+    expect(await sent.json()).toEqual({ error: "bad json", tag: "BadRequest" });
+  });
+
+  test("request rows that stopped being pending are swept away with the stale ones", async () => {
+    const { access, code, ownerCh } = await channelWithMember();
+    const denied = await generateIdentity("refused");
+    const deniedAsk = await Channel.requestJoin(relay, code, denied, { name: "refused" });
+    await ownerCh.deny(deniedAsk.requestId);
+    const db = new Database(join(dataDir, `${access.roomId}.sqlite`));
+    const settled = db.query("SELECT status, COUNT(*) AS n FROM requests WHERE status <> 'pending' GROUP BY status").all() as { status: string; n: number }[];
+    db.query("UPDATE requests SET received = ?").run(Date.now() - 2 * 3_600_000);
+    db.close();
+    expect(settled).toEqual(
+      expect.arrayContaining([
+        { status: "approved", n: 1 },
+        { status: "denied", n: 1 },
+      ]),
+    );
+    const fresh = await generateIdentity("newcomer");
+    await Channel.requestJoin(relay, code, fresh, { name: "newcomer" });
+    const after = new Database(join(dataDir, `${access.roomId}.sqlite`));
+    const rows = after.query("SELECT pk, status FROM requests").all() as { pk: string; status: string }[];
+    after.close();
+    expect(rows).toEqual([{ pk: fresh.pk, status: "pending" }]);
+    await expect(Channel.requestJoin(relay, code, denied, { name: "refused" })).resolves.toMatchObject({ requestId: expect.any(String) });
   });
 });

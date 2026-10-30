@@ -23,6 +23,7 @@ import {
   errorResponse,
   expire,
   forgetRoom,
+  gateRoom,
   idleExpired,
   missingFingerprint,
   onClientFrame,
@@ -85,6 +86,12 @@ interface Env {
   MAILBOX_WRITES: RateLimit;
   /** 60 machine registrations and inbox writes per minute per client address. */
   MACHINE_WRITES: RateLimit;
+  /** 240 mailbox reads per minute per client address (a pairing polls its slots about once a second). */
+  MAILBOX_READS: RateLimit;
+  /** 300 unsigned room reads and join asks per minute per client address (the join flow carries no member key). */
+  ROOM_JOINS: RateLimit;
+  /** 10 channel creates per minute per client address. */
+  ROOM_CREATES: RateLimit;
   /** "off": don't retry a room request the platform refused (to count refusals, e.g. on a canary). */
   KIWI_ROOM_RETRY?: string;
   KIWI_PAGE_KEY?: string;
@@ -639,6 +646,10 @@ export default {
       // One object per mailbox id; a path without one is a 404, never a wake-up.
       const id = /^\/v1\/mailbox\/([A-Za-z0-9_-]{43})(?:\/(?:a|b))?$/.exec(url.pathname)?.[1];
       if (!id) return withCors(errorResponse(new NotFound({ message: "not found" })));
+      const reader = req.headers.get("cf-connecting-ip");
+      if (req.method === "GET" && reader && !(await env.MAILBOX_READS.limit({ key: reader })).success) {
+        return withCors(errorResponse(new TooMany({ message: "too many pairing reads from this address; try again in a minute" })));
+      }
       return env.MAILBOX.get(env.MAILBOX.idFromName(id)).fetch(req);
     }
     if (url.pathname.startsWith("/v1/machine/")) {
@@ -676,6 +687,17 @@ export default {
     const early = missingFingerprint(req.method, route.rest, url);
     if (early) return withCors(errorResponse(early));
     if (PAGE_PATH.test(route.rest)) return withCors(await edgePage(req, route.roomId, route.rest, pageSecret(env.KIWI_PAGE_KEY), edgeCache, () => toRoom(env, route.roomId, req), Date.now()));
+    // The signature is checked here, before the room's object is woken: junk and anonymous
+    // traffic is refused at the edge, as the machine paths already were.
+    const gate = await gateRoom(req, route.roomId, route.rest);
+    if (gate instanceof Response) return withCors(gate);
+    const ip = req.headers.get("cf-connecting-ip");
+    if (gate.open && ip && !(await env.ROOM_JOINS.limit({ key: ip })).success) {
+      return withCors(errorResponse(new TooMany({ message: "too many join requests from this address; try again in a minute" })));
+    }
+    if (req.method === "POST" && route.rest === "/create" && ip && !(await env.ROOM_CREATES.limit({ key: ip })).success) {
+      return withCors(errorResponse(new TooMany({ message: "too many channels made from this address; try again in a few minutes" })));
+    }
     return toRoom(env, route.roomId, req);
   },
 } satisfies ExportedHandler<Env>;

@@ -46,6 +46,7 @@ import {
   authenticateSocket,
   errorResponse,
   expire,
+  gateRoom,
   idleExpired,
   missingFingerprint,
   onClientFrame,
@@ -475,6 +476,8 @@ export function startRelay(
         if (early) return withCors(errorResponse(early));
         if (pageCache && PAGE_PATH.test(route.rest))
           return withCors(await edgePage(req, route.roomId, route.rest, policy.pageKey, pageCache, () => pageFromRoom(req, route.roomId, route.rest), clock()));
+        const gate = await gateRoom(req, route.roomId, route.rest);
+        if (gate instanceof Response) return withCors(gate);
         const isCreate = route.rest === "/create";
         const db = storeFor(route.roomId, isCreate);
         if (isCreate) creating.set(route.roomId, (creating.get(route.roomId) ?? 0) + 1);
