@@ -215,7 +215,7 @@ export async function ensureDaemon(dir = home(), argv?: string[]): Promise<Daemo
   const current = (h: DaemonHello | null): h is DaemonHello => !!h && compareVersions(h.version, VERSION) >= 0 && h.protocol >= DAEMON_PROTOCOL;
   const live = await tryHello(sock, where);
   if (current(live)) return live;
-  if (live) await stopDaemon(sock);
+  if (live) await stopDaemon(sock, where);
   if (live || claimSpawn(where)) spawnDaemon(dir, argv);
   const until = Date.now() + 15_000;
   for (;;) {
@@ -471,9 +471,9 @@ export async function reportRead(channel: string, agent: string, session: string
   }
 }
 
-export async function stopDaemon(sock = daemonSock()): Promise<void> {
+export async function stopDaemon(sock = daemonSock(), dir?: string): Promise<void> {
   try {
-    const c = await openConn(sock, 2_000);
+    const c = await openConn(sock, 2_000, dir);
     try {
       await c.call("stop");
     } finally {

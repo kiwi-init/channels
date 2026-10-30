@@ -907,11 +907,12 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     return (await Promise.all(relays.map(answers))).every((up) => !up);
   };
   let statusWatch: { stop(): void } | null = null;
+  let relayForget: Promise<unknown> | null = null;
   const unpairHere = async (): Promise<void> => {
     const m = loadPairedMachine();
     if (m?.cert || m?.device) {
       saveMachine({ identity: m.identity, label: m.label, relay: m.relay });
-      void forgetAtRelay(m).catch(() => {
+      relayForget = forgetAtRelay(m).catch(() => {
         // The relay forgets this machine when it next hears from it; local pairing is already gone.
       });
     }
@@ -921,6 +922,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     dir,
     machine: loadPairedMachine,
     unpaired: unpairHere,
+    settled: () => relayForget,
     run: remoteRunner({
       inventory: () => harnessInventory(),
       folders: (room) => launchFolders(loadConfig(), room),
@@ -1111,9 +1113,9 @@ export async function runDaemonForeground(dir = home()): Promise<void> {
     process.once("SIGINT", () => resolve());
   });
   const sock = daemonSock(dir);
-  const live = await tryHello(sock);
+  const live = await tryHello(sock, dir);
   if (live && compareVersions(live.version, VERSION) >= 0) throw new PairError(`a kiwi ${live.version} daemon is already running (pid ${live.pid}) on ${sock}`);
-  if (live) await stopDaemon(sock);
+  if (live) await stopDaemon(sock, dir);
   const serving = await startDaemon(dir);
   process.stdout.write(`kiwi daemon ${VERSION} on ${sock} (pid ${process.pid})\n`);
   await Promise.race([goodbye, serving.stopped]);
