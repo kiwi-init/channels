@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
 import { readDeviceList, type DeviceLink } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
-import type { MachineCert } from "@kiwi/core/person.ts";
+import { personFingerprint, type MachineCert } from "@kiwi/core/person.ts";
 import type { ComputerView } from "../desktop/src/bridge.ts";
 import { createDeviceHost, type DeviceHost } from "../desktop/src/devices.ts";
 import { loginComputer } from "../src/login.ts";
@@ -67,32 +67,87 @@ function desktop(person: Identity, user: string): { host: DeviceHost; held: { de
   return { host, held, computers };
 }
 
-async function approveFrom(host: DeviceHost, digits: Promise<string>): Promise<void> {
+async function approveFrom(host: DeviceHost, digits: Promise<string>): Promise<string | null> {
   let ask = await host.poll();
   while (!ask) {
     await Bun.sleep(50);
     ask = await host.poll();
   }
   await host.answer(ask.id);
+  const shown = (await host.poll())?.fingerprint ?? null;
   expect(await host.confirm(ask.id, await digits)).toEqual({ ok: true, label: ask.label });
+  return shown;
 }
 
-function login(user: string) {
+function login(user: string, take = true) {
   const lines: string[] = [];
+  const asked: { name: string; fingerprint: string }[] = [];
   let shown: (d: string) => void = () => {};
   const digits = new Promise<string>((r) => (shown = r));
   const done = loginComputer({
     relay,
     user,
     everyMs: 50,
+    confirm: async (person) => (asked.push(person), take),
     say: (line) => {
       lines.push(line);
       const m = /digits in your app: (\d{3}) (\d{3})/.exec(line);
       if (m) shown(m[1]! + m[2]!);
     },
   });
-  return { done, digits, lines };
+  return { done, digits, lines, asked };
 }
+
+describe("kiwi login keeps a person only once it's checked (#1304)", () => {
+  test("the computer asks about the same key the app shows next to the digits", async () => {
+    freshMachine();
+    const user = `cli${++users}`;
+    const person = await withExchangeKey(await generateIdentity("Jow"));
+    const app = desktop(person, user);
+    await app.host.poll();
+    const run = login(user);
+    const inApp = await approveFrom(app.host, run.digits);
+    await run.done;
+    const key = await personFingerprint(person.pk);
+    expect(key).toMatch(/^[0-9a-f]{4}( [0-9a-f]{4}){4}$/);
+    expect(inApp).toBe(key);
+    expect(run.asked).toEqual([{ name: "Jow", fingerprint: key }]);
+  });
+
+  test("a key the person doesn't confirm keeps nothing", async () => {
+    freshMachine();
+    const user = `cli${++users}`;
+    const person = await withExchangeKey(await generateIdentity("Mallory"));
+    const app = desktop(person, user);
+    await app.host.poll();
+    const run = login(user, false);
+    void approveFrom(app.host, run.digits);
+    await expect(run.done).rejects.toThrow(`kept nothing: the grant came from a key your app didn't show (${await personFingerprint(person.pk)})`);
+    expect(loadMachine()?.device).toBeUndefined();
+    expect((loadMachine() as MachineFile & { cert?: MachineCert }).cert).toBeUndefined();
+  });
+
+  test("a computer that is one person's device refuses another's grant until kiwi unpair", async () => {
+    freshMachine();
+    const first = `cli${++users}`;
+    const jow = await withExchangeKey(await generateIdentity("Jow"));
+    const jowApp = desktop(jow, first);
+    await jowApp.host.poll();
+    const mine = login(first);
+    await approveFrom(jowApp.host, mine.digits);
+    await mine.done;
+
+    const second = `cli${++users}`;
+    const other = await withExchangeKey(await generateIdentity("Mallory"));
+    const otherApp = desktop(other, second);
+    await otherApp.host.poll();
+    const run = login(second);
+    void approveFrom(otherApp.host, run.digits);
+    await expect(run.done).rejects.toThrow(`is already one of Jow's devices (key ${await personFingerprint(jow.pk)}), and this grant is from Mallory`);
+    expect(run.asked).toEqual([]);
+    expect(loadMachine()?.device?.person.pk).toBe(jow.pk);
+  });
+});
 
 describe("kiwi login enrolls a computer (T637)", () => {
   test("it asks, prints the digits the person types in the app, and keeps the device list", async () => {
@@ -159,8 +214,8 @@ describe("kiwi login enrolls a computer (T637)", () => {
   });
 
   test("a dev relay needs the sign-in name", async () => {
-    await expect(loginComputer({ relay, say: () => {} })).rejects.toThrow(PairError);
-    await expect(loginComputer({ relay, say: () => {} })).rejects.toThrow("kiwi login --user");
+    await expect(loginComputer({ relay, say: () => {}, confirm: async () => true })).rejects.toThrow(PairError);
+    await expect(loginComputer({ relay, say: () => {}, confirm: async () => true })).rejects.toThrow("kiwi login --user");
   });
 
   test("an ask the app turns away ends the login", async () => {

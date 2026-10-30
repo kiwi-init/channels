@@ -13,6 +13,20 @@ import { opt } from "../args.ts";
 import { type Command, out, Quit, relayUrl } from "../context.ts";
 import { confirm } from "../input.ts";
 
+const plainKey = (key: string) => key.replace(/\s+/g, "").toLowerCase();
+
+async function sameKey({ name, fingerprint }: { name: string; fingerprint: string }): Promise<boolean> {
+  out(`${name}'s key is ${fingerprint}. Your app shows it next to the digits, and in Settings as "Your key for kiwi login".`);
+  if (typeof opt.fingerprint === "string") return plainKey(opt.fingerprint) === plainKey(fingerprint);
+  if (!process.stdin.isTTY) {
+    out(`no terminal to ask on: run kiwi login --fingerprint "<the key your app shows>"`);
+    return false;
+  }
+  process.stdout.write("Does your app show that key? [y/N] ");
+  for await (const line of console) return /^y(es)?$/i.test(line.trim());
+  return false;
+}
+
 export const setupCommands: Record<string, Command> = {
   setup: () =>
     Effect.gen(function* () {
@@ -50,7 +64,7 @@ export const setupCommands: Record<string, Command> = {
       const { loginComputer } = yield* Effect.promise(() => import("../../login.ts"));
       const { ensureDaemon, loadPairedMachine, PairError } = yield* Effect.promise(() => import("../../daemon.ts"));
       yield* Effect.tryPromise({
-        try: () => loginComputer({ relay: relayUrl(), ...(typeof opt.user === "string" ? { user: opt.user } : {}) }),
+        try: () => loginComputer({ relay: relayUrl(), ...(typeof opt.user === "string" ? { user: opt.user } : {}), confirm: sameKey }),
         catch: (err) => (err instanceof PairError ? new Quit({ message: err.message, code: err.code }) : err),
       });
       const paired = loadPairedMachine();

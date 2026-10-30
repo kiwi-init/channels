@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react"
 
 import { handleFor } from "@kiwi/core/membership.ts"
+import { personFingerprint } from "@kiwi/core/person.ts"
 import { useUnsealedKeys } from "@kiwi/secrets/keys-at-rest.ts"
 import { relayUrl } from "@kiwi/secrets/relay.ts"
 import { bridge, useSecrets, type ComputerView, type DeviceNewsView, type PhoneView } from "@kiwi/secrets/secrets.ts"
@@ -335,9 +336,19 @@ export function useAccount(): Account | null {
   const signed = useSyncExternalStore(devices.subscribe, devices.get)
   const news = useSyncExternalStore(deviceNews.subscribe, deviceNews.get)
   const unsealed = useUnsealedKeys()
+  const [loginKey, setLoginKey] = useState<{ pk: string; shown: string } | null>(null)
   useEffect(() => {
     if (person) void refreshGithub().catch(() => {})
   }, [person])
+  const personPk = person?.pk
+  useEffect(() => {
+    if (!personPk) return
+    let live = true
+    void personFingerprint(personPk).then((shown) => live && setLoginKey({ pk: personPk, shown }))
+    return () => {
+      live = false
+    }
+  }, [personPk])
   return useMemo((): Account | null => {
     if (!person) return null
     return {
@@ -349,6 +360,7 @@ export function useAccount(): Account | null {
       ...(update && !update.blocked ? { update: { version: update.version, ready: update.state === "ready", state: update.state } } : {}),
       ...(look ? { uiUpdate: look } : {}),
       key: person.pk.slice(0, 8),
+      ...(loginKey?.pk === person.pk ? { loginKey: loginKey.shown } : {}),
       relay: relayUrl(),
       ...(unsealed ? { keysUnsealed: true } : {}),
       ...(bridge() ? { desktop: true } : {}),
@@ -358,5 +370,5 @@ export function useAccount(): Account | null {
       ...deviceNotices(news),
       ...(code ? { githubCode: code } : {}),
     }
-  }, [person, linked, computers, phones, online, agents, update, code, look, unsealed, enroll, trouble, signed, news])
+  }, [person, linked, computers, phones, online, agents, update, code, look, unsealed, enroll, trouble, signed, news, loginKey])
 }

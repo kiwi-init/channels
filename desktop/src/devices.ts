@@ -2,7 +2,7 @@ import { accountClient, type AccountClient } from "@kiwi/core/account.ts";
 import { approvingDevice, certUntil, dueForRenewal, listedComputer, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceLinkBody, type DeviceList } from "@kiwi/core/devices.ts";
 import { askToEnroll, enrollDigits, enrollMailbox, enrollNonce, readEnrollGrant, revealMatches, type EnrollGrant, type Enrollment } from "@kiwi/core/enroll.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
-import { certifyMachine } from "@kiwi/core/person.ts";
+import { certifyMachine, personFingerprint } from "@kiwi/core/person.ts";
 import type { ComputerView, DeviceNewsView, DeviceView, EnrollAskView, EnrollConfirmView, EnrollStatusView, PublicPerson } from "./bridge.ts";
 
 const TRIES = 3;
@@ -170,7 +170,9 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
       }
       const mine = e.answer?.device === s.device.pk && answered.has(e.id);
       const stage = !e.answer ? "new" : !mine ? "elsewhere" : e.reveal ? "digits" : "waiting";
-      return { id: e.id, label: e.ask.label, os: e.ask.os, as: e.ask.as, at: e.at, stage };
+      const who = e.ask.as === "computer" ? deps.who() : null;
+      const fingerprint = who ? await personFingerprint(who.pk) : null;
+      return { id: e.id, label: e.ask.label, os: e.ask.os, as: e.ask.as, at: e.at, stage, fingerprint };
     },
 
     async answer(id) {

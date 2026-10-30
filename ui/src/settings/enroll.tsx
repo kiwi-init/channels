@@ -49,6 +49,11 @@ export function EnrollDialog() {
             Waiting for {ask.label} to show its code…
           </p>
         )}
+        {ask.stage === "digits" && ask.fingerprint && (
+          <p className="set-enroll-what">
+            After you approve, {ask.label} shows your key and asks you to check it. It must read <code className="set-key">{ask.fingerprint}</code>.
+          </p>
+        )}
         {ask.stage === "digits" && (
           <Field label={`The 6 digits ${ask.label} shows`} hint={mine.left !== null ? `Those don't match. ${mine.left} ${mine.left === 1 ? "try" : "tries"} left.` : undefined}>
             <input

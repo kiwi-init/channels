@@ -12,7 +12,14 @@
 // Nothing here touches the file system or the network: the CLI, the daemon, the desktop app and the
 // tests share it. Statements name what they are for, so a signature over one can't pass as another.
 
+import { fromB64url } from "./crypto.ts";
 import { sign, signText, verify, verifyText, type Identity } from "./identity.ts";
+
+export async function personFingerprint(pk: string): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", fromB64url(pk)));
+  const hex = [...digest.slice(0, 10)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return [0, 4, 8, 12, 16].map((at) => hex.slice(at, at + 4)).join(" ");
+}
 
 const KEY_RE = /^[A-Za-z0-9_-]{43}$/;
 const LABEL_MAX = 64;

@@ -88,6 +88,11 @@ export function AccountSection() {
             />
           </Row>
         )}
+        {account.loginKey && (
+          <Row label="Your key for kiwi login" hint="A computer you add with kiwi login shows this before it takes you as its person. Anything else means it isn't you.">
+            <code className="set-value set-key">{account.loginKey}</code>
+          </Row>
+        )}
       </Group>
       {account.keysUnsealed && (
         <p className="set-fine set-warning" role="note">
