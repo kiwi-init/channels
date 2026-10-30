@@ -37,7 +37,7 @@ describe("message text follows Settings > Appearance > Text size", () => {
     )
     expect(html).toMatch(/<div class="enrm-admonition"[^>]*><div style="[^"]*font-size:15px[^"]*"><svg[\s\S]*?<\/svg><span>Warning<\/span><\/div>/)
     const css = readFileSync(join(import.meta.dir, "../styles/chat.css"), "utf8")
-    expect(css).toContain(".md .enrm-admonition > div:first-child > span {\n  font-size: calc(15px * var(--text-scale, 1));\n}")
+    expect(css).toContain(".md .enrm-admonition > div:first-child > span {\n  font-size: var(--t-body);\n}")
   })
 })
 

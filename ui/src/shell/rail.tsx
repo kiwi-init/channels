@@ -52,19 +52,17 @@ export function Rail() {
           </button>
         </li>
       </ul>
-      {!(onChannel && app.channel) && (
-        <div className="rail-foot">
-          <button
-            type="button"
-            className={cx("rail-gear", nav.page === "settings" && "is-on")}
-            aria-label="Settings"
-            title="Settings"
-            onClick={() => (nav.page === "settings" ? go({ to: "back" }) : go({ to: "settings" }))}
-          >
-            <Icon name="gear" size={18} />
-          </button>
-        </div>
-      )}
+      <div className="rail-foot">
+        <button
+          type="button"
+          className={cx("rail-gear", nav.page === "settings" && "is-on")}
+          aria-label="Settings"
+          title="Settings"
+          onClick={() => (nav.page === "settings" ? go({ to: "back" }) : go({ to: "settings" }))}
+        >
+          <Icon name="gear" size={18} />
+        </button>
+      </div>
     </nav>
   )
 }

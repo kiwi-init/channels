@@ -84,7 +84,7 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
   paths. The list is the `html .msg-time, html .count, …` rule and the
   `code, pre, kbd, .mono, .codebox, …` rule in `base.css`; a new
   machine-word class joins it there, with `letter-spacing: -0.01em`.
-- Six steps, all scaled by `--text-scale`: `--t-stamp 11px` (times, counts),
+- Six steps and no sizes between them, all scaled by `--text-scale`: `--t-stamp 11px` (times, counts),
   `--t-meta 12px` (meta lines, section heads), `--t-ui 13px` (rows, names,
   buttons, menus), `--t-body 15px` (messages, task titles; message text at
   22px line height), `--t-title 17px` (panel and dialog titles),
@@ -98,11 +98,23 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
 
 ## 5. Radius, shadow, layout
 
-- Radii: `--r-row 8px` (rows, small buttons, icon buttons, segments),
-  `--r-ctl 10px` (buttons, fields, segmented tracks, toasts, messages on
-  hover), `--r-card 14px` (cards: the Now card, task groups, agent lanes,
-  Needs you cards), `--r-win 18px` (the composer, dialogs). Avatars of people
-  are round; agents and channel tiles are rounded squares.
+- Spacing: padding, margin and gap sit on one scale: 0, 1, 2, 4, 6, 8, 10, 12,
+  16, 20, 24, 32, 40, 48, 64. `test/ui-design-scale.test.ts` fails on anything
+  else.
+- Rhythm: a page has `--gutter` (24px) at its sides, 24px above and 48px below.
+  A card is `bg` with a 1px `line-2` border, `--r-card` and text inset
+  `--card-pad` (16px). A list of cards has 12px between them; sections of a
+  page or panel have 24px or 32px between them. A panel's text is inset 16px.
+- Control heights: `--ctl` (32px: buttons, fields, tabs, tracks, the channel
+  switcher, sidebar rows, send, attach) and `--ctl-sm` (24px: small buttons).
+  A quiet button or icon button at the end of a row is pulled out by its own
+  padding so its text or glyph lines up with the row's right edge.
+- Radii, only from tokens: `--r-tick 2px` (bars, ticks), `--r-tag 6px` (tags,
+  inline code), `--r-row 8px` (rows, small buttons, icon buttons, segments),
+  `--r-ctl 10px` (buttons, fields, segmented tracks, toasts, tiles, messages on
+  hover), `--r-card 14px` (cards), `--r-win 18px` (the composer, dialogs).
+  `999px` is for counts and the toggle track only. Avatars of people are round;
+  agents and channel tiles are rounded squares.
 - One shadow: `--shadow-pop` (`0 0 0 1px line-2`, then a soft black drop) for
   what floats over the page: the composer, dialogs, menus, the palette, the
   stash list, Jump to latest. No coloured shadows.
@@ -119,51 +131,67 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
 
 ## 6. Motion
 
-- Motion answers an action: something opens, arrives or moves because
-  someone did something. Two things loop: the working dots under the
-  conversation (`blink`) and the current step's mark while adding an agent
-  (`spin`).
-- CSS only. Two speeds and one ease: `--fast 0.16s`, `--slow 0.28s`,
-  `--ease cubic-bezier(0.32, 0.72, 0, 1)`.
-- Keyframes: `rise` (6px up and in: dialogs, toasts, menus and most things
-  that appear), `fade`, `panel-in` (the right panel, 12px from the right),
-  `palette-in` (6px down), `term-in` (the terminal drawer, 16px up),
-  `jump-in` (Jump to latest), `msg-flash` (a message you jumped to, 1.6s).
-- Hover and pressed states change `background` and `color` over `--fast`;
-  nothing scales or bounces.
-- Reduced motion: the OS setting or Settings' own (`data-motion="reduced"`
-  on `<html>`) cuts every animation and transition to 0.01ms.
+- Motion answers an action: something opens, arrives or moves because someone
+  did something. It is felt, never watched: short, soft, and nothing plays
+  twice for the same event. Three things loop: the working dots under the
+  conversation (`blink`), a working task's `Dot` (`spin`, 6s) and the current
+  step's mark while adding an agent (`spin`).
+- CSS first, and no animation library. Two speeds and one ease for fades and
+  fills: `--fast 0.16s`, `--slow 0.28s`, `--ease cubic-bezier(0.32, 0.72, 0, 1)`.
+  Two springs for things that move, written as `transition: transform var(--glide)`:
+  `--glide` (0.48s, a slight overshoot: selections, panels, dialogs, cards) and
+  `--pop` (0.35s, livelier: presses, marks, counts, toasts).
+- The selection glides. One pill moves between tabs, segments and sidebar rows
+  (`useGlide` and `Track` in `ui/src/kit/glide.tsx`) instead of each option
+  lighting up on its own.
+- Pressing a control dips it to 0.96 and it springs back on `--pop`. This is the
+  only scale on a resting control. Rows take hover at once and let it go slowly.
+- A change is marked once: a `Dot` pops when its status moves and rings when it
+  turns done (`done-ring`), a `Count` rolls to its new number (`count-roll`),
+  both through `useMoved`, so opening a view animates nothing that didn't change.
+- A message that arrives lands with `land()`: 8px up, 16px for your own, and only
+  for what just came in, never history or a scroll.
+- A view's cards rise in a short stagger when it opens (30ms apart, 120ms at
+  most). Clearing Needs you draws a tick (`tick-draw`).
+- Keyframes: `rise` (6px up and in), `fade`, `panel-in` (the right panel, 12px
+  from the right), `dialog-in`, `toast-in`, `pop-in`, `palette-in` (6px down),
+  `term-in` (the terminal drawer, 16px up), `jump-in` (Jump to latest),
+  `tile-bar` (the rail's mark), `msg-flash` (a message you jumped to, 1.6s).
+- Scrolling content fades under the top bar (16px, `bg` to transparent).
+- Reduced motion: the OS setting or Settings' own (`data-motion="reduced"` on
+  `<html>`) cuts every animation and transition to 0.01ms, and `land()` does
+  nothing.
 
 ## 7. Core components
 
 The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 
-- Buttons (`.btn`, 32px, `r-ctl`, 500 `t-ui`): default on `bg-3`;
+- Buttons (`.btn`, `--ctl`, `r-ctl`, 500 `t-ui`, 12px sides): default on `bg-3`;
   `is-primary` is an `ink` fill with `on-ink` text (white on black, black on
   white), the one loud button in a view; `is-danger` is `alert` on
   `alert-wash`; `is-quiet` has no fill until hover (`wash`); `is-small` is
-  26px. There is no blue button.
+  `--ctl-sm`. There is no blue button.
 - `IconButton` (`.icon-btn`, 28px, `r-row`): `ink-2`, `wash-2` on hover and
   while pressed.
-- Fields (`.input`, `.textarea`, `Field` with label and hint): `bg-3` fill;
-  `.input.is-mono` for codes and paths.
+- Fields (`.input`, `.textarea`, `Field` with label and hint): `bg-3` fill,
+  `--ctl` high, `t-ui`; `.input.is-mono` for codes and paths.
 - `Seg` (`.seg`): a `bg-3` track, the chosen segment on `wash-2` in `ink`
   and 600.
 - `Toggle`: a 36×22 track, `live` when on with a white knob.
 - `Dialog` / `DialogHead`: `bg-2`, `r-win`, `shadow-pop`, 480px (720px
   wide), rises in. A dialog is for one decision or a short form; Settings
   and the panels open in place.
-- `Avatar` (`.av` 34px, `av-sm` 24px, `av-lg` 56px) with a presence `pip`
+- `Avatar` (`.av` 32px, `av-sm` 24px, `av-lg` 56px) with a presence `pip`
   (`live` online, `decide` away, `ink-3` off). A person shows their picture
   or initials in their member colour; an agent shows its harness logo
   (`HarnessLogo`) in its `h-*` colour.
 - `Dot`: a task's state as one 8px mark: to do (`ink-2` ring), working
-  (`doing` dashed ring), in review (`review`, half filled), done (`live`,
+  (`doing` open ring, turning), in review (`review`, half filled), done (`live`,
   filled), needs you (`decide`, filled with a halo).
 - `Count`: plain `ink-2` numerals; `is-loud` (`decide` fill) for what waits
   on you, `is-mention` (`accent` fill) for a mention.
-- `Heading`: a section head in 600 `t-meta` `ink-3`, its action shown on
-  hover.
+- `Heading`: a section head in mono `t-stamp` `ink-3`, its action shown on
+  hover. Section heads are never uppercase.
 - `Empty`, `Loading`, `Toasts` (`ink` pill with `on-ink` text, bottom
   centre), `.codebox` (a `bg-3` box of mono text with Copy), `Boundary`
   (every channel view renders inside one).
@@ -190,25 +218,30 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 ## 9. App patterns
 
 - **Shell.** Three columns on `bg`: the rail (`--rail-w`: one 38px tile per
-  channel, a `decide` badge for what waits, + at the foot; on a Mac the
-  traffic lights sit above it), the sidebar (`--side-w`) and the main area.
+  channel, a `decide` badge for what waits, + after them and the Settings gear
+  at its foot, on every page; on a Mac the traffic lights sit above it, the rail
+  is 80px so tiles centre under them, and `--top-h` is 46px so the bar centres
+  on them), the sidebar (`--side-w`) and the main area.
   The top bar spans the sidebar and the main area (`--top-h`): the channel
   switcher and the sidebar toggle over the sidebar; the views in the middle
   (`# room`, Tasks with its count, Agents, Needs you in `decide` with its
   count), the open one on `wash-2`; on the right a mono summary
   (`2 working · 1 merged today · 7 need you`), Search and the terminal.
   No borders between the columns.
-- **Sidebar.** Sections with a mono head: Rooms (`#` rows), Direct, People
+- **Sidebar.** Every row's text starts on one edge, after a 24px icon column
+  (the `#`, a face, an icon). Sections with a mono head: Rooms (`#` rows), Direct, People
   (face, name, a mono role and status line), Agents (face with presence,
   name, what it runs now in `doing`), each with its + row (invite, add
-  agent). The open row is on `wash-2`; a row with news is 600 with a count.
-  Settings at the foot.
+  agent). The open row is on `wash-2`; a row with news is 600 with a count. A
+  member shows a status line only when there is something to say (working,
+  waiting, away, offline), and a role that repeats their name is left out. Cards
+  for what waits on you (an update, a device) sit at the foot.
 - **Right panel** (`--panel-w` to start, resizable by its grip): a thread,
   a task, a person or the channel slides in from the right (`panel-in`)
   beside the conversation, with a title, a mono sub line and a close button.
   A thread keeps its own composer.
 - **Conversation.** No bubbles, everyone on the left, in the `--col` column.
-  A message is a 34px face, then the name (600), a mono role, harness and
+  A message is a 32px face, 16px of gap, then the name (600), a mono role, harness and
   time, and the text in `t-body` under it. A run from one sender keeps one
   header (`is-compact`). A reply carries one quoted line with a return arrow.
   Task cards, PR lines and reactions sit under the text on `bg-2`. Under a
@@ -220,16 +253,19 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   as the heading, who and `from #N` under it, then a two-line row per task
   (its `Dot`, the title in `t-body`, a mono line of id, owner, state and
   age), with its PR number, diff bar, additions and checks on the right.
-- **Needs you.** A mono count line, then one card per thing waiting, oldest
-  first: who and what (a `decide` chip for a permission), the detail (a
+- **Needs you.** A mono count line, then one card per thing waiting (the same
+  card as Tasks), oldest first: who and what (a `decide` chip for a permission), the detail (a
   command or a diff in mono boxes), and the answers as buttons, the main one
   `is-primary`.
-- **Agents.** One card per agent, side by side: face, name, `for person ·
+- **Agents.** One card per agent, in a grid that wraps (nothing scrolls
+  sideways): face, name, `for person ·
   model`, a status line with a coloured dot, its tasks with PR and check
   ticks, Up next, Watching, and its last moves with mono times.
 - **Settings.** The sidebar trades the channels for Settings' sections (the
-  open one on `wash-2`), the page is one column of rows: a title, a quiet
-  line and the control on the right.
+  open one on `wash-2`) under a `‹ Settings` back button. The page sits beside
+  them, up to 720px: a `t-display` title, a quiet line, then groups of rows, each
+  group a card (hairlines between rows; a title, a quiet line and the control on
+  the right).
 - **Palette** (⌘K), **Search**, the **terminal drawer** and the **annotator**
   (a picture opened full window, marked up and sent back) float with
   `shadow-pop` and their own enter animation.
@@ -240,7 +276,7 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   column at the bottom of the conversation (and of a panel), over the fade.
   Top to bottom: the reply bar, attached images, the row with + (attach),
   the textarea and send.
-- Send is a 34px `r-ctl` square: `ink` with `on-ink` when there is something
+- Send is a `--ctl` `r-ctl` square: `ink` with `on-ink` when there is something
   to send, `line-2` when not. Enter sends (or ⌘Enter, per Settings).
 - Typing `@name` or a task id (`T12`) opens a list of people or tasks just
   above the composer; arrows move, Enter or Tab picks.

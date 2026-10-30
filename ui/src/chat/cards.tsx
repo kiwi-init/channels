@@ -21,7 +21,8 @@ export function TaskChip({ channel, id }: { channel: Channel; id: number }) {
       <span className="chip-id">T{t.id}</span>
       <span className="chip-title">{t.title}</span>
       <span className="chip-meta">
-        {t.owner ? ` · ${nickname(channel, t.owner)}` : ""} · {STATUS_WORDS[t.status]}
+        {t.owner ? `${nickname(channel, t.owner)} · ` : ""}
+        {STATUS_WORDS[t.status]}
         {t.pr ? ` · PR #${t.pr.number}` : ""}
       </span>
     </button>
@@ -39,11 +40,10 @@ export function PrChip({ pr }: { pr: PullRequest }) {
       <span className="chip-meta">
         {pr.additions !== undefined && (
           <>
-            {" · "}
             <span className="num">+{pr.additions}</span> <span className="num">−{pr.deletions}</span>
+            {" · "}
           </>
         )}
-        {" · "}
         <span
           className={
             pr.state === "merged"

@@ -11,6 +11,7 @@ import { flash, jumpTo, ReplyContext, type Replying } from "~/chat/reply"
 import type { Jump } from "~/chat/search-box"
 import { paintHits } from "~/chat/search-paint"
 import { Loading } from "~/kit/bits"
+import { land } from "~/kit/glide"
 import { later } from "~/kit/later"
 import { day, sameDay } from "~/kit/time"
 import type { Channel, Message, Person, Where } from "~/model"
@@ -269,6 +270,13 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
     const before = lastSeq.current
     lastSeq.current = last?.seq ?? 0
     if (!last || last.seq === before) return
+    const arriving = before ? list.filter((m) => m.seq > before) : []
+    if (arriving.length <= 3) {
+      for (const m of arriving) {
+        if (m.from === channel.you && !m.pending) continue
+        land(content.current?.querySelector(`[data-seq="${m.seq}"]`), m.from === channel.you ? 16 : 8)
+      }
+    }
     if (last.from === channel.you && !live.current) {
       latest.current = true
       queueMicrotask(() => setSpan({ top: null, bottom: null }))
@@ -277,7 +285,7 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
     if (last.from === channel.you) toBottom(false)
     else if (!stuck.current) setFresh((n) => n + list.filter((m) => m.seq > before && m.from !== channel.you && !m.system && !m.leftOut).length)
     settle()
-  }, [last, list, channel.you, toBottom, settle, stuck, live])
+  }, [last, list, channel.you, toBottom, settle, stuck, live, content])
 
   const onScroll = () => {
     remember()
