@@ -4,8 +4,9 @@ import { askToEnroll, enrollDigits, enrollMailbox, ENROLL_TTL_MS, readEnrollGran
 import { workosDeviceSignIn, type DeviceSignIn } from "@kiwi/core/workos.ts";
 import { home } from "./config.ts";
 import { ensureMachine, PairError, type PairedMachine } from "./daemon/pair.ts";
+import { inlineText } from "@kiwi/core/membership.ts";
 import { personFingerprint } from "@kiwi/core/person.ts";
-import { saveMachine, type EnrolledDevice } from "./machine.ts";
+import { newMachine, saveMachine, type EnrolledDevice } from "./machine.ts";
 
 const OS_NAMES: Partial<Record<NodeJS.Platform, string>> = { darwin: "macOS", linux: "Linux", win32: "Windows" };
 
@@ -80,24 +81,27 @@ export async function loginComputer(o: LoginOpts): Promise<EnrolledDevice> {
     if (raw !== null) {
       const grant = await readEnrollGrant(raw, m.identity.pk);
       if (!grant) throw new PairError("the app's grant didn't check out (another person's list, or a forged one); run kiwi login again");
+      const name = inlineText(grant.person.name, 60) || "someone";
+      const fingerprint = await personFingerprint(grant.person.pk);
       const before = m.device?.person ?? m.person;
       if (before && before.pk !== grant.person.pk) {
         await mailbox.drop().catch(() => {});
         throw new PairError(
-          `"${m.label}" is already one of ${before.name}'s devices (key ${await personFingerprint(before.pk)}), and this grant is from ${grant.person.name} (key ${await personFingerprint(grant.person.pk)}): run kiwi unpair first if it should change hands`,
+          `"${m.label}" is already one of ${inlineText(before.name, 60) || "someone"}'s devices (key ${await personFingerprint(before.pk)}), and this grant is from key ${fingerprint} (${name}): run kiwi unpair first if it should change hands`,
         );
       }
-      const fingerprint = await personFingerprint(grant.person.pk);
-      if (!(await o.confirm({ name: grant.person.name, fingerprint }))) {
+      if (!(await o.confirm({ name, fingerprint }))) {
         await mailbox.drop().catch(() => {});
+        if (before) throw new PairError(`kept nothing new: "${m.label}" stays one of ${inlineText(before.name, 60) || "someone"}'s devices`);
+        saveMachine(await newMachine(o.relay));
         throw new PairError(
-          `kept nothing: the grant came from a key your app didn't show (${fingerprint}). If your app approved "${m.label}", remove it from your devices there and run kiwi login again`,
+          `kept nothing, and "${m.label}" took a new key, so kiwi login can ask again. Your app may list it once more under the old key: remove that entry. If your app never showed ${fingerprint}, someone else answered this computer's ask`,
         );
       }
       const device: EnrolledDevice = { person: grant.person, links: grant.links };
       saveMachine({ ...m, device, ...(grant.cert ? { cert: grant.cert, person: grant.person } : {}) });
       await mailbox.drop().catch(() => {});
-      say(`"${m.label}" is one of ${grant.person.name}'s devices now: its agents join your channels on their own and your app can start agents here. Kept in ${join(home(), "machine.json")}.`);
+      say(`"${m.label}" is one of ${name}'s devices now: its agents join your channels on their own and your app can start agents here. Kept in ${join(home(), "machine.json")}.`);
       return device;
     }
     if (Date.now() > until) throw new PairError(`nothing approved "${m.label}" in time; run kiwi login again to ask again`, 3);

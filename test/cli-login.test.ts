@@ -120,11 +120,30 @@ describe("kiwi login keeps a person only once it's checked (#1304)", () => {
     const person = await withExchangeKey(await generateIdentity("Mallory"));
     const app = desktop(person, user);
     await app.host.poll();
+    const was = loadMachine()?.identity.pk;
     const run = login(user, false);
     void approveFrom(app.host, run.digits);
-    await expect(run.done).rejects.toThrow(`kept nothing: the grant came from a key your app didn't show (${await personFingerprint(person.pk)})`);
+    await expect(run.done).rejects.toThrow("took a new key, so kiwi login can ask again");
     expect(loadMachine()?.device).toBeUndefined();
     expect((loadMachine() as MachineFile & { cert?: MachineCert }).cert).toBeUndefined();
+    expect(loadMachine()?.identity.pk).not.toBe(was);
+
+    const again = login(user);
+    await approveFrom(app.host, again.digits);
+    expect((await again.done).person.pk).toBe(person.pk);
+  });
+
+  test("the person's name shows as plain text, so it can't fake the prompt or hide the key", async () => {
+    freshMachine();
+    const user = `cli${++users}`;
+    const person = await withExchangeKey(await generateIdentity("Jow 1111 2222 3333 4444 5555\n[y/N] \u001b[8m"));
+    const app = desktop(person, user);
+    await app.host.poll();
+    const run = login(user);
+    await approveFrom(app.host, run.digits);
+    await run.done;
+    expect(run.asked).toEqual([{ name: "Jow 1111 2222 3333 4444 5555 [y/N] [8m", fingerprint: await personFingerprint(person.pk) }]);
+    expect(run.lines.at(-1)).not.toMatch(/[\u0000-\u001f]/);
   });
 
   test("a computer that is one person's device refuses another's grant until kiwi unpair", async () => {
@@ -143,7 +162,7 @@ describe("kiwi login keeps a person only once it's checked (#1304)", () => {
     await otherApp.host.poll();
     const run = login(second);
     void approveFrom(otherApp.host, run.digits);
-    await expect(run.done).rejects.toThrow(`is already one of Jow's devices (key ${await personFingerprint(jow.pk)}), and this grant is from Mallory`);
+    await expect(run.done).rejects.toThrow(`is already one of Jow's devices (key ${await personFingerprint(jow.pk)}), and this grant is from key ${await personFingerprint(other.pk)} (Mallory)`);
     expect(run.asked).toEqual([]);
     expect(loadMachine()?.device?.person.pk).toBe(jow.pk);
   });

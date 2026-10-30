@@ -16,13 +16,10 @@ import { confirm } from "../input.ts";
 const plainKey = (key: string) => key.replace(/\s+/g, "").toLowerCase();
 
 async function sameKey({ name, fingerprint }: { name: string; fingerprint: string }): Promise<boolean> {
-  out(`${name}'s key is ${fingerprint}. Your app shows it next to the digits, and in Settings as "Your key for kiwi login".`);
+  out(`The key that approved this computer is ${fingerprint} (it says it's ${name}).`);
+  out(`Your app shows your key next to the digits, and in Settings as "Your key for kiwi login".`);
   if (typeof opt.fingerprint === "string") return plainKey(opt.fingerprint) === plainKey(fingerprint);
-  if (!process.stdin.isTTY) {
-    out(`no terminal to ask on: run kiwi login --fingerprint "<the key your app shows>"`);
-    return false;
-  }
-  process.stdout.write("Does your app show that key? [y/N] ");
+  process.stdout.write(`Is ${fingerprint} the key your app shows? [y/N] `);
   for await (const line of console) return /^y(es)?$/i.test(line.trim());
   return false;
 }
@@ -61,6 +58,11 @@ export const setupCommands: Record<string, Command> = {
 
   login: () =>
     Effect.gen(function* () {
+      if (typeof opt.fingerprint !== "string" && !process.stdin.isTTY)
+        return yield* new Quit({
+          message: `kiwi login asks you to check your key, and there's no terminal to ask on: run kiwi login --fingerprint "<Your key for kiwi login, from your app's Settings>"`,
+          code: 1,
+        });
       const { loginComputer } = yield* Effect.promise(() => import("../../login.ts"));
       const { ensureDaemon, loadPairedMachine, PairError } = yield* Effect.promise(() => import("../../daemon.ts"));
       yield* Effect.tryPromise({
