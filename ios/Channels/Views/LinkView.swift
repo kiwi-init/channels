@@ -104,7 +104,7 @@ struct LinkView: View {
                     .foregroundStyle(Tone.ink)
                     .textSelection(.enabled)
                     .padding(.vertical, 20)
-                Text("Your computer shows it in its approval and in Settings, under Your key for new devices. Join only if they match: a different key means someone else answered this iPhone.")
+                Text("Your computer shows it next to the digits and in Settings. Join only if they match: a different key means someone else answered.")
                     .type(.ui)
                     .foregroundStyle(Tone.ink2)
                 PrimaryButton(title: "It Matches, Join", busy: keeping) {
