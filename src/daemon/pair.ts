@@ -17,6 +17,10 @@ export function loadPairedMachine(): PairedMachine | null {
   return loadMachine() as PairedMachine | null;
 }
 
+export async function unpairedMachine(m: PairedMachine): Promise<MachineFile> {
+  return { ...(await newMachine(m.relay)), label: m.label };
+}
+
 export async function ensureMachine(relay: string): Promise<PairedMachine> {
   let m = loadPairedMachine();
   if (!m) {

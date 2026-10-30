@@ -9,8 +9,8 @@ import { personFingerprint, type MachineCert } from "@kiwi/core/person.ts";
 import type { ComputerView } from "../desktop/src/bridge.ts";
 import { createDeviceHost, type DeviceHost } from "../desktop/src/devices.ts";
 import { loginComputer } from "../src/login.ts";
-import { computerClaimFor, loadMachine, type MachineFile } from "../src/machine.ts";
-import { PairError } from "../src/daemon/pair.ts";
+import { computerClaimFor, loadMachine, saveMachine, type MachineFile } from "../src/machine.ts";
+import { PairError, unpairedMachine } from "../src/daemon/pair.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
 import { setupChannel } from "./owner.ts";
@@ -146,7 +146,7 @@ describe("kiwi login keeps a person only once it's checked (#1304)", () => {
     expect(run.lines.at(-1)).not.toMatch(/[\u0000-\u001f]/);
   });
 
-  test("a computer that is one person's device refuses another's grant until kiwi unpair", async () => {
+  test("a computer that is one person's device asks nothing until kiwi unpair, whose new key lets it log in again", async () => {
     freshMachine();
     const first = `cli${++users}`;
     const jow = await withExchangeKey(await generateIdentity("Jow"));
@@ -155,16 +155,23 @@ describe("kiwi login keeps a person only once it's checked (#1304)", () => {
     const mine = login(first);
     await approveFrom(jowApp.host, mine.digits);
     await mine.done;
+    const enrolled = loadMachine()!;
 
     const second = `cli${++users}`;
     const other = await withExchangeKey(await generateIdentity("Mallory"));
     const otherApp = desktop(other, second);
     await otherApp.host.poll();
-    const run = login(second);
-    void approveFrom(otherApp.host, run.digits);
-    await expect(run.done).rejects.toThrow(`is already one of Jow's devices (key ${await personFingerprint(jow.pk)}), and this grant is from key ${await personFingerprint(other.pk)} (Mallory)`);
-    expect(run.asked).toEqual([]);
+    const refused = login(second);
+    await expect(refused.done).rejects.toThrow(`is already one of Jow's devices (key ${await personFingerprint(jow.pk)}): run kiwi unpair first`);
+    expect(await otherApp.host.poll()).toBeNull();
     expect(loadMachine()?.device?.person.pk).toBe(jow.pk);
+
+    saveMachine(await unpairedMachine(enrolled));
+    expect(loadMachine()).toMatchObject({ label: enrolled.label, relay: enrolled.relay });
+    expect(loadMachine()?.identity.pk).not.toBe(enrolled.identity.pk);
+    const run = login(second);
+    await approveFrom(otherApp.host, run.digits);
+    expect((await run.done).person.pk).toBe(other.pk);
   });
 });
 
@@ -233,6 +240,7 @@ describe("kiwi login enrolls a computer (T637)", () => {
   });
 
   test("a dev relay needs the sign-in name", async () => {
+    freshMachine();
     await expect(loginComputer({ relay, say: () => {}, confirm: async () => true })).rejects.toThrow(PairError);
     await expect(loginComputer({ relay, say: () => {}, confirm: async () => true })).rejects.toThrow("kiwi login --user");
   });
