@@ -3,6 +3,7 @@ import type { DeviceList } from "../devices.ts";
 import { cleanPersona, personaScopes, type Persona } from "../personality.ts";
 import * as Effect from "effect/Effect";
 import { newChannelKey } from "../crypto.ts";
+import { sign } from "../identity.ts";
 import { inlineText, makeRecord, sealRecord, type Member, type PersonPowers } from "../membership.ts";
 import { omit } from "../omit.ts";
 import { Rejected } from "../refusals.ts";
@@ -11,7 +12,7 @@ import type { ChannelState } from "../state.ts";
 import type { ChannelCore } from "./core.ts";
 import { RelayError, type MemberRefusal, type Refused } from "./errors.ts";
 import type { ChannelInfo, MemberRow } from "./info.ts";
-import { wrapFor } from "./keys.ts";
+import { ownerStatement, wrapFor } from "./keys.ts";
 import type { Relay } from "./relay.ts";
 import { newestEpoch, stale } from "./sealed.ts";
 
@@ -190,14 +191,15 @@ export class ChannelMembers {
       if (!this.ch.isOwner) return false;
       this.info.forgetInfo();
       const info = yield* this.ch.fx.info();
-      if (!info.rotate) {
+      const legacy = (yield* Effect.promise(() => ownerStatement(this.ch.roomId, info))) === "legacy";
+      if (!info.rotate && !legacy) {
         if (stale(info, this.ch.access.keys)) {
           yield* Effect.ignoreCause(this.ch.fx.resealTitle());
           yield* Effect.ignoreCause(this.ch.fx.resealSettings());
         }
         return false;
       }
-      yield* this.ch.fx.rotate();
+      yield* this.rotation(undefined, legacy);
       return true;
     }),
 
@@ -207,16 +209,17 @@ export class ChannelMembers {
     }),
   };
 
-  private rotation(without?: string): Effect.Effect<number, Refused, Relay> {
+  private rotation(without?: string, restate?: boolean): Effect.Effect<number, Refused, Relay> {
     return Effect.gen({ self: this }, function* () {
       yield* this.ch.ownerOnly();
       const rows = yield* this.ch.fx.memberRows();
       const members = (yield* this.ch.fx.members(rows)).filter((m) => m.active && !m.unverified && m.pk !== without);
       this.info.forgetInfo();
-      const { epoch } = yield* this.ch.fx.info();
+      const { epoch, ownerXpk } = yield* this.ch.fx.info();
       const next = Math.max(epoch, newestEpoch(this.ch.access.keys)) + 1;
       if (!Number.isSafeInteger(next) || this.ch.access.keys[String(next)]) return yield* new Rejected(`the relay named epoch ${epoch}, which can't be the channel's next key: not rotating`);
       const key = newChannelKey();
+      const stated = restate ? yield* Effect.promise(() => sign(this.ch.identity, { room: this.ch.roomId, xpk: ownerXpk, v: 2 })) : null;
       const delegates = (yield* this.ch.fx.delegations().pipe(Effect.catchCause(() => Effect.succeed([])))).filter((d) => delegationLive(d));
       const keys = yield* Effect.promise(async () => {
         const out: Record<string, string> = {};
@@ -224,11 +227,13 @@ export class ChannelMembers {
         for (const d of delegates) out[d.delegate] ??= await wrapFor(this.ch.identity, this.ch.roomId, next, d.delegate, d.dxpk, key);
         return out;
       });
-      yield* this.ch.request("/epochs", { method: "POST", body: JSON.stringify({ epoch: next, keys }) }).pipe(
-        Effect.mapError((err) => this.stillListed(err, rows, without)),
-        Effect.ensuring(Effect.sync(() => this.info.forgetInfo())),
-      );
-      this.ch.access = { ...this.ch.access, epoch: next, keys: { ...this.ch.access.keys, [String(next)]: key } };
+      yield* this.ch
+        .request("/epochs", { method: "POST", body: JSON.stringify({ epoch: next, keys, ...(stated ? { owner: { pk: this.ch.identity.pk, xpk: ownerXpk, sig: stated.sig } } : {}) }) })
+        .pipe(
+          Effect.mapError((err) => this.stillListed(err, rows, without)),
+          Effect.ensuring(Effect.sync(() => this.info.forgetInfo())),
+        );
+      this.ch.access = { ...this.ch.access, epoch: next, keys: { ...this.ch.access.keys, [String(next)]: key }, ...(restate ? { signedKeys: true } : {}) };
       this.ch.onAccess?.(this.ch.access);
       this.ch.rotating = true;
       yield* Effect.all([Effect.ignoreCause(this.ch.fx.resealTitle()), Effect.ignoreCause(this.ch.fx.resealSettings()), Effect.ignoreCause(this.ch.fx.resealIcon())]).pipe(
