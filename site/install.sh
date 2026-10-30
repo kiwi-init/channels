@@ -187,7 +187,7 @@ PYKIWI
   python3 "$tmp/minisign-verify.py" "$tmp/SHA256SUMS" "$tmp/SHA256SUMS.minisig" "$KEY"
 else
   echo "kiwi: neither minisign nor python3 is installed here, so the release's signature can't be checked" >&2
-  if [ -z "${KIWI_UNVERIFIED_INSTALL:-}" ]; then
+  if [ "${KIWI_UNVERIFIED_INSTALL:-}" != "1" ]; then
     echo "kiwi: install minisign or python3 and run this again, or set KIWI_UNVERIFIED_INSTALL=1 to install on the checksum alone" >&2
     exit 1
   fi
