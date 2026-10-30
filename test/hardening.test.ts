@@ -8,10 +8,11 @@ import * as Effect from "effect/Effect";
 import { signRequest } from "@kiwi/core/auth.ts";
 import { Channel, fetchRelay, keepRecordsIn, Relay, type MemberRow, type RecordMemory } from "@kiwi/core/client.ts";
 import type { CallInit, RelayApi } from "@kiwi/core/client/relay.ts";
-import { newChannelKey, ownerFingerprint, sealTo } from "@kiwi/core/crypto.ts";
+import { type ChannelAccess, encodeJoinCode, decodeJoinCode, newChannelKey, newRoomId, ownerFingerprint, sealTo } from "@kiwi/core/crypto.ts";
 import { formatMessage } from "@kiwi/core/format.ts";
-import { generateIdentity, signText } from "@kiwi/core/identity.ts";
-import { inlineText, type Member } from "@kiwi/core/membership.ts";
+import { generateIdentity, sign, signText, type Identity } from "@kiwi/core/identity.ts";
+import { inlineText, makeRecord, sealRecord, type Member } from "@kiwi/core/membership.ts";
+import { ownerStatement, unwrapKeys } from "@kiwi/core/client/keys.ts";
 import { PROTOCOL_VERSION, wellFormed, type Message } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { wants } from "../src/agent/wants.ts";
@@ -388,5 +389,71 @@ describe("the join code check", () => {
     const members = await ownerCh.members();
     expect(members.find((m) => m.pk === win.pk)?.active).toBe(true);
     expect(members.some((m) => m.pk === thief.pk)).toBe(false);
+  });
+});
+
+describe("channels from before signed keys", () => {
+  async function legacyChannel() {
+    const owner = await generateIdentity("oldboss");
+    const agent = await generateIdentity("oldhelper");
+    const roomId = newRoomId();
+    const key = newChannelKey();
+    const stated = await sign(owner, { room: roomId, xpk: owner.xpk! });
+    const enroll = async (id: Identity, ownerFlag: boolean) => ({
+      pk: id.pk,
+      xpk: id.xpk!,
+      rec: await sealRecord(key, await makeRecord(owner, roomId, { name: id.name, pk: id.pk, xpk: id.xpk!, owner: ownerFlag })),
+      keys: { "0": await sealTo(id.xpk!, key, `mc/key\n${roomId}\n0`) },
+    });
+    await via(
+      fetchRelay.call(relay, roomId, "/create", {
+        method: "POST",
+        identity: owner,
+        body: JSON.stringify({ owner: { pk: owner.pk, xpk: owner.xpk!, sig: stated.sig }, members: [await enroll(owner, true), await enroll(agent, false)] }),
+      }),
+      fetchRelay,
+    );
+    const code = encodeJoinCode({ roomId, ownerFp: await ownerFingerprint(owner.pk) });
+    const ownerAccess: ChannelAccess = { roomId, ownerPk: owner.pk, ownerXpk: owner.xpk!, epoch: 0, keys: { "0": key }, signedKeys: false };
+    return { owner, agent, roomId, code, key, ownerAccess };
+  }
+
+  test("a wrapped key nobody signed never opens, whatever the channel's age", async () => {
+    const { agent, owner, roomId, code } = await legacyChannel();
+    const minted = await sealTo(agent.xpk!, newChannelKey(), `mc/key\n${roomId}\n0`);
+    expect(await unwrapKeys(agent, roomId, { "0": minted }, owner.pk)).toEqual({});
+    await expect(Channel.resume(relay, code, agent)).rejects.toThrow(/before channel keys were signed/);
+    await expect(Channel.requestJoin(relay, code, agent, { name: "again" })).rejects.toThrow(/before channel keys were signed/);
+  });
+
+  test("the owner's first open re-signs the statement and rotates the key, and then a new device joins", async () => {
+    const { owner, agent, roomId, code, ownerAccess } = await legacyChannel();
+    const ownerCh = new Channel(ownerAccess, relay, owner);
+    expect(await ownerCh.rotateIfDue()).toBe(true);
+    expect(ownerCh.access.signedKeys).toBe(true);
+    expect(ownerCh.access.epoch).toBe(1);
+    const info = await via(fetchRelay.call<{ ownerSig: string }>(relay, roomId, "/info", {}, { fp: decodeJoinCode(code).ownerFp }), fetchRelay);
+    expect(await ownerStatement(roomId, { ownerPk: owner.pk, ownerXpk: owner.xpk!, ownerSig: info.ownerSig })).toBe("signed-keys");
+    const fresh = await Channel.resume(relay, code, agent);
+    expect(fresh.signedKeys).toBe(true);
+    expect(fresh.epoch).toBe(1);
+    expect(Object.keys(fresh.keys)).toEqual(["1"]);
+  });
+
+  test("the relay won't swap in another owner's statement", async () => {
+    const { owner, agent, roomId, code, ownerAccess } = await legacyChannel();
+    const ownerCh = new Channel(ownerAccess, relay, owner);
+    const evil = await generateIdentity("evil owner");
+    const sig = await sign(evil, { room: roomId, xpk: owner.xpk!, v: 2 });
+    const key = newChannelKey();
+    const keys = {
+      [owner.pk]: await sealTo(owner.xpk!, key, `mc/key\n${roomId}\n1`),
+      [agent.pk]: await sealTo(agent.xpk!, key, `mc/key\n${roomId}\n1`),
+    };
+    await expect(
+      via(fetchRelay.call(relay, roomId, "/epochs", { method: "POST", identity: owner, body: JSON.stringify({ epoch: 1, keys, owner: { pk: evil.pk, xpk: owner.xpk!, sig: sig.sig } }) }), fetchRelay),
+    ).rejects.toThrow();
+    expect(ownerCh.access.signedKeys).toBe(false);
+    await expect(Channel.resume(relay, code, agent)).rejects.toThrow(/before channel keys were signed/);
   });
 });
