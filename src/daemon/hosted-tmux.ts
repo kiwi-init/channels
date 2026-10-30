@@ -261,11 +261,12 @@ export class HostedTmux {
   async ended(pane: string): Promise<Ended | null> {
     const st = this.state();
     if (!st) return null;
-    const r = await this.tmux(st, ["display-message", "-p", "-t", pane, "#{pane_dead}\t#{pane_dead_status}"]);
-    const [dead, status] = r.stdout.trim().split("\t");
-    if (r.status !== 0 || dead !== "1") return null;
+    const r = await this.tmux(st, ["display-message", "-p", "-t", pane, "#{pane_dead}\t#{pane_dead_status}\t#{pane_dead_signal}"]);
+    const [dead, status, signal] = r.stdout.replace(/\n$/, "").split("\t");
+    const code = /^\d+$/.test(status ?? "") ? Number(status) : /^\d+$/.test(signal ?? "") ? 128 + Number(signal) : null;
+    if (r.status !== 0 || dead !== "1" || code === null) return null;
     const shown = await this.tmux(st, ["capture-pane", "-p", "-J", "-S", "-", "-t", pane]);
-    return { code: Number(status) || 0, tail: lastLines(shown.status === 0 ? shown.stdout : "") };
+    return { code, tail: lastLines(shown.status === 0 ? shown.stdout : "") };
   }
 
   typing(pane: string): boolean {

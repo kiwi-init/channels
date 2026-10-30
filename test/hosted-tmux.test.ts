@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { OWN_TMUX_DIR } from "@kiwi/core/terminals.ts";
 import { loopArgv, readLoopStart, startLoop } from "../src/loop/start.ts";
+import type { Ran } from "../src/terminals/shared/run.ts";
 import { HOSTED_CONF, HOSTED_SESSION, HostedTmux, findTmux, hostedSocket, inFolder, ownTmux, privateDir, tmuxHosts, type HostedState } from "../src/daemon/hosted-tmux.ts";
 
 describe("the hosted tmux's settings", () => {
@@ -371,5 +372,33 @@ describe("a hosted tmux server whose own folder is deleted", () => {
       rmSync(home, { recursive: true, force: true });
       rmSync(folder, { recursive: true, force: true });
     }
+  });
+});
+
+describe("a hosted pane that has ended", () => {
+  class Scripted extends HostedTmux {
+    readonly shown: string[];
+    constructor(shown: string[]) {
+      super(mkdtempSync(join(tmpdir(), "kiwi-ended-")));
+      this.shown = shown;
+    }
+    override state(): HostedState {
+      return { bin: "tmux", version: "tmux 3.4", socket: "/tmp/kiwi-1/abc" };
+    }
+    override async tmux(_st: HostedState, args: readonly string[]): Promise<Ran> {
+      const stdout = args[0] === "capture-pane" ? "Not logged in\nPane is dead (status 1, Fri Oct 30 13:51:12 2026)\n" : (this.shown.shift() ?? "");
+      return { status: 0, stdout, stderr: "" };
+    }
+  }
+
+  test("isn't ended until tmux has its exit status, and then gives that status with its last words", async () => {
+    const pane = new Scripted(["0\t\t\n", "1\t\t\n", "1\t1\t\n"]);
+    expect(await pane.ended("%3")).toBeNull();
+    expect(await pane.ended("%3")).toBeNull();
+    expect(await pane.ended("%3")).toEqual({ code: 1, tail: ["Not logged in"] });
+  });
+
+  test("one killed by a signal ends as a shell says it, 128 and the signal", async () => {
+    expect(await new Scripted(["1\t\t9\n"]).ended("%3")).toEqual({ code: 137, tail: ["Not logged in"] });
   });
 });
