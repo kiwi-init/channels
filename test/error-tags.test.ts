@@ -53,10 +53,12 @@ test("not the owner, not a member, removed, gone: each says so", async () => {
   expect(await res.json()).toEqual({ error: "only the channel owner can do that", tag: "NotOwner" });
   void memberCh;
 
-  // A key that isn't a member. (Channel turns this into ChannelGone("removed") for its callers.)
+  // A key that isn't a member learns nothing: the room answers as if it weren't there.
   const eve = await generateIdentity("eve");
   const asEve = await fetch(`${relay}/v1/rooms/${made.access.roomId}/`, { headers: { authorization: `Bearer ${await signRequest(eve, made.access.roomId, "GET", "/")}` } });
-  expect(await asEve.json()).toEqual({ error: "not a member of this channel", tag: "NotMember" });
+  expect(await asEve.json()).toEqual({ error: "no such channel", tag: "ChannelGone" });
+  const nowhere = await fetch(`${relay}/v1/rooms/${"0".repeat(32)}/`, { headers: { authorization: `Bearer ${await signRequest(eve, "0".repeat(32), "GET", "/")}` } });
+  expect(await nowhere.json()).toEqual({ error: "no such channel", tag: "ChannelGone" });
 
   const leaver = await generateIdentity("lee");
   const leaverAsk = await Channel.requestJoin(relay, made.code, leaver, { name: "lee" });
