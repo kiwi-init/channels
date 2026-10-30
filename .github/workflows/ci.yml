@@ -386,6 +386,8 @@ jobs:
       - name: the tmux the app bundles, linked only to glibc
         if: steps.tmux.outputs.cache-hit != 'true'
         run: bash scripts/build-tmux.sh dist/tmux
+      - name: hosted agents and your terminal open in their folder on the bundled tmux, even once its server's folder is deleted
+        run: KIWI_TMUX="$PWD/dist/tmux" bun test test/hosted-tmux.test.ts
       - working-directory: desktop
         env:
           DASH_RELEASE_OFFLINE: "1"
