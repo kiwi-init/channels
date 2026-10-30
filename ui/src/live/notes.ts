@@ -8,7 +8,7 @@ import { type ChannelRow } from "@kiwi/channel/list.ts"
 import { ops, watches } from "@kiwi/channel/channel-ops.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import { named as withNicknames } from "~/chat/linked"
-import { elsewhere, heardHeads, lastWorth, messageLink, noteBody, noteTitle, rootOf, wirePlace, type NotePlace } from "~/live/notify"
+import { elsewhere, heardHeads, lastWorth, messageLink, noteBody, noteTitle, rootedPlace, rootOf, type NotePlace } from "~/live/notify"
 import { openMessage } from "~/live/open-message"
 import { ownPrefs } from "~/live/prefs"
 import { nicknamesOf } from "~/names"
@@ -52,7 +52,7 @@ async function placeElsewhere(code: string, m: Wire, fetched: readonly Wire[], h
     found = rootOf(m, known)
   }
   if (found.kind === "missing") return { kind: "thread" }
-  const place = wirePlace(found.m)
+  const place = rootedPlace(found)
   if (place.kind !== "room") return place
   const rooms = await ops()
     .call(code, "rooms")

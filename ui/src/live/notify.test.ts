@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test"
 import type { Message as Wire } from "@kiwi/core/protocol.ts"
+import { fold, type Roster } from "@kiwi/core/state.ts"
 import { joinCodeFromLink } from "@kiwi/app/deep-link.ts"
 import { encodeJoinCode, newRoomId } from "@kiwi/core/crypto.ts"
-import { channelLink, drawerNews, heardHeads, lastWorth, messageLink, messageOfLink, noteBody, noteTitle, rootOf, wirePlace, worthTelling } from "~/live/notify"
+import { channelLink, drawerNews, heardHeads, lastWorth, messageLink, messageOfLink, noteBody, noteTitle, rootedPlace, rootOf, wirePlace, worthTelling } from "~/live/notify"
 import { findWanted } from "~/live/open-message"
 import type { Message } from "~/model"
 
@@ -165,10 +166,35 @@ describe("what a notification says and opens (#1351)", () => {
     const reply = msg({ seq: 9, re: [5] })
     const middle = msg({ seq: 5, re: [3] })
     const known = new Map([root, middle, reply].map((x) => [x.seq, x]))
-    expect(rootOf(reply, known)).toEqual({ kind: "root", m: root })
-    expect(wirePlace(root)).toEqual({ kind: "room", name: "m0b1le00" })
+    expect(rootOf(reply, known)).toEqual({ kind: "root", m: root, below: middle })
+    expect(rootedPlace({ m: root, below: middle })).toEqual({ kind: "room", name: "m0b1le00" })
     expect(rootOf(reply, new Map([[5, middle]]))).toEqual({ kind: "missing", seq: 3 })
-    expect(rootOf(msg({ seq: 4, re: [9] }), known)).toEqual({ kind: "root", m: msg({ seq: 4, re: [9] }) })
+    const forward = msg({ seq: 4, re: [9] })
+    expect(rootOf(forward, known)).toEqual({ kind: "root", m: forward, below: forward })
     expect(noteTitle(reply, "jow", "lead", "ops", { kind: "thread" })).toBe("lead in ops · a thread")
+  })
+
+  test("a reply under a task event is in that task, and one under another event keeps its own room, matching the fold", () => {
+    const roster: Roster = [{ name: "lead", pk: "pk-lead", owner: true, at: 0, active: true, kind: "human" }]
+    const event = (seq: number, ev: Wire["ev"]): Wire => msg({ seq, from: "lead", pk: "pk-lead", id: `m${seq}`, kind: "event", body: "", ev })
+    const added = event(3, { op: "task.add", title: "ship it" })
+    const claimed = event(5, { op: "task.claim", task: 3 })
+    const plain = event(6, { op: "charter", text: "be kind" })
+    const toAdded = msg({ seq: 7, from: "lead", pk: "pk-lead", id: "m7", re: [3] })
+    const toClaim = msg({ seq: 8, from: "lead", pk: "pk-lead", id: "m8", re: [5] })
+    const toPlain = msg({ seq: 9, from: "lead", pk: "pk-lead", id: "m9", re: [6] })
+    const all = [added, claimed, plain, toAdded, toClaim, toPlain]
+    const state = fold(all, roster, 10, null, null, null)
+    const known = new Map(all.map((x) => [x.seq, x]))
+    const placed = (m: Wire) => {
+      const found = rootOf(m, known)
+      return found.kind === "root" ? rootedPlace(found) : null
+    }
+    expect(state.placeOf.get(7)).toEqual({ kind: "task", task: 3 })
+    expect(placed(toAdded)).toEqual({ kind: "task", task: 3 })
+    expect(state.placeOf.get(8)).toEqual({ kind: "task", task: 3 })
+    expect(placed(toClaim)).toEqual({ kind: "task", task: 3 })
+    expect(state.placeOf.get(9)).toEqual({ kind: "main" })
+    expect(placed(toPlain)).toEqual({ kind: "room", name: "general" })
   })
 })

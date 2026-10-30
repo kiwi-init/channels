@@ -34,17 +34,34 @@ export type NotePlace = { kind: "room"; name: string } | { kind: "task"; task: n
 export const wirePlace = (m: Pick<Wire, "room" | "task" | "dm">): NotePlace =>
   m.dm ? { kind: "dm" } : m.task !== undefined ? { kind: "task", task: m.task } : { kind: "room", name: m.room ?? GENERAL_ROOM }
 
-export type Rooted = { kind: "root"; m: Wire } | { kind: "missing"; seq: number }
+export type Rooted = { kind: "root"; m: Wire; below: Wire } | { kind: "missing"; seq: number }
 
 export function rootOf(m: Wire, known: ReadonlyMap<number, Wire>): Rooted {
   let at = m
+  let below = m
   for (;;) {
     const parent = at.re?.[0]
-    if (parent === undefined || parent >= at.seq) return { kind: "root", m: at }
+    if (parent === undefined || parent >= at.seq) return { kind: "root", m: at, below }
     const up = known.get(parent)
     if (!up) return { kind: "missing", seq: parent }
+    below = at
     at = up
   }
+}
+
+function eventTask(m: Wire): number | null {
+  const ev = m.kind === "event" ? m.ev : undefined
+  if (!ev) return null
+  if (ev.op === "task.add") return m.seq
+  if (ev.op === "task.update" || ev.op === "task.claim" || ev.op === "task.first") return ev.task
+  return null
+}
+
+export function rootedPlace(root: { m: Wire; below: Wire }): NotePlace {
+  const task = eventTask(root.m)
+  if (task !== null) return { kind: "task", task }
+  if (root.m.kind === "event") return { kind: "room", name: root.below.room ?? GENERAL_ROOM }
+  return wirePlace(root.m)
 }
 
 const placeText = (place: NotePlace): string => {
