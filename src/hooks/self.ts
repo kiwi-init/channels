@@ -32,7 +32,7 @@ export function selfArgv(): string[] {
   return compiled ? [stableBin(process.execPath)] : [Bun.which("bun") ?? process.execPath, Bun.main];
 }
 
-function selfCommand(): string {
+export function selfCommand(): string {
   return selfArgv().map(shellQuote).join(" ");
 }
 

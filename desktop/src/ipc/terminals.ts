@@ -93,7 +93,7 @@ export function terminalsCalls(): Serves<
   return {
     terminals: () => terminals(),
     terminalHelpers: (id: unknown, to: unknown) => {
-      if (!isTerminalId(id) || !isSwitch(to)) throw new Error("terminalHelpers takes rex, and on or off");
+      if (!isTerminalId(id) || !isSwitch(to)) throw new Error("terminalHelpers takes rex or tmux, and on or off");
       return change(["terminal", to === "on" ? "download" : "remove", id]);
     },
     terminalPrefer: async () => {
