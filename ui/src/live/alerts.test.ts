@@ -1,21 +1,20 @@
-import { afterEach, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test"
+import { afterAll, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test"
 
 void mock.module("~/live/prefs", () => ({ ownPrefs: () => ({ notify: "mentions" }) }))
 
 const { chime } = await import("~/live/alerts")
 
-type Played = { elements: number; started: number; resumes: number }
+type Played = { elements: number; contexts: number; decodes: number; resumes: number; started: number }
 
-let played: Played
-let resume: () => Promise<void>
+const played: Played = { elements: 0, contexts: 0, decodes: 0, resumes: 0, started: 0 }
+let decodeAudioData: () => Promise<object> = () => Promise.resolve({})
+let resume: () => Promise<void> = () => Promise.resolve()
 let at = 1_000_000
 
-const globals = globalThis as unknown as Record<string, unknown>
-const saved = { document: globals["document"], Audio: globals["Audio"], AudioContext: globals["AudioContext"], fetch: globals["fetch"] }
+const SWAPPED = ["document", "Audio", "AudioContext", "fetch"] as const
+const saved = new Map(SWAPPED.map((name) => [name, Reflect.get(globalThis, name)]))
 
-function shell(name: string): void {
-  globals["document"] = { documentElement: { dataset: { shell: name } } }
-}
+const shell = (name: string): void => void Reflect.set(globalThis, "document", { documentElement: { dataset: { shell: name } } })
 
 function ring(): Promise<void> {
   at += 10_000
@@ -24,10 +23,10 @@ function ring(): Promise<void> {
   return new Promise((done) => setTimeout(done, 10))
 }
 
-beforeEach(() => {
-  played = { elements: 0, started: 0, resumes: 0 }
-  resume = () => Promise.resolve()
-  globals["Audio"] = class {
+Reflect.set(
+  globalThis,
+  "Audio",
+  class {
     currentTime = 0
     constructor() {
       played.elements++
@@ -36,34 +35,56 @@ beforeEach(() => {
       return Promise.resolve()
     }
   }
-  globals["AudioContext"] = class {
+)
+Reflect.set(
+  globalThis,
+  "AudioContext",
+  class {
     destination = {}
+    constructor() {
+      played.contexts++
+    }
     resume(): Promise<void> {
       played.resumes++
       return resume()
     }
     decodeAudioData(): Promise<object> {
-      return Promise.resolve({})
+      played.decodes++
+      return decodeAudioData()
     }
     createBufferSource(): object {
       return { buffer: null, connect: () => {}, start: () => void played.started++ }
     }
   }
-  globals["fetch"] = () => Promise.resolve({ arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) })
+)
+Reflect.set(globalThis, "fetch", () => Promise.resolve({ arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }))
+
+beforeEach(() => {
+  Object.assign(played, { elements: 0, contexts: 0, decodes: 0, resumes: 0, started: 0 })
+  decodeAudioData = () => Promise.resolve({})
+  resume = () => Promise.resolve()
 })
 
-afterEach(() => {
+afterAll(() => {
   setSystemTime()
-  for (const [name, value] of Object.entries(saved)) globals[name] = value
+  for (const [name, value] of saved) Reflect.set(globalThis, name, value)
 })
 
 describe("the Needs-you chime (#1278)", () => {
-  test("on Linux it plays through WebAudio and never makes an <audio> element, which crashes WebKitGTK's web process without GStreamer's autoaudiosink", async () => {
+  test("on Linux with no GStreamer decoder, the chime stays silent, retries the decode next time, and keeps one AudioContext", async () => {
+    shell("linux")
+    decodeAudioData = () => Promise.reject(new Error("EncodingError: Decoding failed"))
+    await ring()
+    await ring()
+    await ring()
+    expect(played).toEqual({ elements: 0, contexts: 1, decodes: 3, resumes: 0, started: 0 })
+  })
+
+  test("on Linux it plays through WebAudio, decoding once, and never makes an <audio> element, which crashes WebKitGTK's web process without GStreamer's autoaudiosink", async () => {
     shell("linux")
     await ring()
-    expect(played).toEqual({ elements: 0, started: 1, resumes: 1 })
     await ring()
-    expect(played).toEqual({ elements: 0, started: 2, resumes: 2 })
+    expect(played).toEqual({ elements: 0, contexts: 0, decodes: 1, resumes: 2, started: 2 })
   })
 
   test("on Linux with no audio device, the chime stays silent and the next one tries again", async () => {
@@ -71,12 +92,12 @@ describe("the Needs-you chime (#1278)", () => {
     resume = () => Promise.reject(new Error("InvalidStateError: Failed to start the audio device"))
     await ring()
     await ring()
-    expect(played).toEqual({ elements: 0, started: 0, resumes: 2 })
+    expect(played).toEqual({ elements: 0, contexts: 0, decodes: 0, resumes: 2, started: 0 })
   })
 
   test("on a Mac it keeps playing its <audio> element", async () => {
     shell("mac")
     await ring()
-    expect(played).toEqual({ elements: 1, started: 0, resumes: 0 })
+    expect(played).toEqual({ elements: 1, contexts: 0, decodes: 0, resumes: 0, started: 0 })
   })
 })
