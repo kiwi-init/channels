@@ -184,7 +184,7 @@ export function daemonEnv(from: NodeJS.ProcessEnv, home: string, relay: string):
 
 export function spawnDaemon(bin: string, home: string, relay: string): void {
   const log = openDaemonLog(home);
-  const child = spawn(bin, ["daemon"], { env: daemonEnv(process.env, home, relay), detached: true, stdio: ["ignore", log, log], windowsHide: true });
+  const child = spawn(bin, ["daemon"], { cwd: os.homedir(), env: daemonEnv(process.env, home, relay), detached: true, stdio: ["ignore", log, log], windowsHide: true });
   if (typeof log === "number") fs.closeSync(log);
   // A binary that won't start shows as no hello (the caller waits for one), not an uncaught error.
   child.on("error", () => {});

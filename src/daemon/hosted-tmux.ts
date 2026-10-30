@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { chmodSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { loginPath, loginShell } from "../launch/shell.ts";
 import { OWN_TMUX_DIR } from "@kiwi/core/terminals.ts";
@@ -97,6 +98,12 @@ export function ownTmux(home: string): string[] {
     .map((name) => join(home, OWN_TMUX_DIR, name));
 }
 
+const CD_SHELL = existsSync("/bin/zsh") ? ["/bin/zsh", "-f"] : ["/bin/sh"];
+
+export function inFolder(folder: string, argv: readonly string[], sh: readonly string[] = CD_SHELL): string[] {
+  return [...sh, "-c", 'cd -- "$1" 2>/dev/null || cd; shift; exec "$@"', "kiwi-cd", folder, ...argv];
+}
+
 export async function findTmux(home: string, env: Record<string, string | undefined> = process.env): Promise<HostedTmuxBin | null> {
   const bins = [env.KIWI_TMUX, ...ownTmux(home), Bun.which("tmux", { PATH: await loginPath() })].filter((b): b is string => !!b);
   for (const bin of bins) {
@@ -129,7 +136,7 @@ export class HostedTmux {
   }
 
   tmux(st: HostedState, args: readonly string[]): Promise<Ran> {
-    return run([st.bin, "-u", "-S", st.socket, ...args], 5_000);
+    return run([st.bin, "-u", "-S", st.socket, ...args], 5_000, homedir());
   }
 
   async alive(st: HostedState): Promise<boolean> {
@@ -162,7 +169,7 @@ export class HostedTmux {
     privateDir(dirname(st.socket));
     const conf = join(this.home, CONF_FILE);
     writeFileSync(conf, HOSTED_CONF, { mode: 0o600 });
-    const started = await run([st.bin, "-u", "-S", st.socket, "-f", conf, "start-server"], 5_000);
+    const started = await run([st.bin, "-u", "-S", st.socket, "-f", conf, "start-server"], 5_000, homedir());
     if (started.status !== 0 || !(await this.alive(st))) throw new Error(`tmux didn't start on ${st.socket}: ${started.stderr.trim() || `exit ${started.status}`}`);
     this.save(st);
     await this.attach(st);
@@ -182,7 +189,7 @@ export class HostedTmux {
     const why = await this.ready();
     const st = this.state();
     if (why || !st) return { ok: false, why: "no-place", detail: why ?? "the hosted tmux server didn't start" };
-    const argv = loginArgv(loginShell(), req.argv, { ...req.env, KIWI_TMUX: st.bin });
+    const argv = inFolder(req.folder, loginArgv(loginShell(), req.argv, { ...req.env, KIWI_TMUX: st.bin }));
     const r = await this.tmux(st, ["new-window", "-d", "-t", `=${HOSTED_SESSION}:`, "-c", req.folder, "-n", req.name, "-P", "-F", WINDOW_FORMAT, "--", ...argv]);
     if (r.status !== 0) return { ok: false, why: "failed", detail: `tmux: ${said(r)}` };
     const [window, pane, pid] = r.stdout.trim().split("\t");
@@ -211,7 +218,7 @@ export class HostedTmux {
     const tabs = await this.mineTabs();
     const found = want === "new" ? undefined : (tabs.find((t) => t.pane === want) ?? tabs[0]);
     if (found) return { ok: true, pane: found.pane };
-    const argv = ["/usr/bin/env", ...SESSION_MARKERS.flatMap((key) => ["-u", key]), shell, "-l"];
+    const argv = inFolder(folder, ["/usr/bin/env", ...SESSION_MARKERS.flatMap((key) => ["-u", key]), shell, "-l"]);
     const r = await this.tmux(st, ["new-window", "-d", "-t", `=${HOSTED_SESSION}:`, "-c", folder, "-n", "you", "-P", "-F", WINDOW_FORMAT, "--", ...argv]);
     const [window, pane] = r.stdout.trim().split("\t");
     if (r.status !== 0 || !window || !pane) return { ok: false, detail: `tmux: ${said(r)}` };
@@ -320,7 +327,7 @@ export class HostedTmux {
       const made = await this.tmux(st, ["new-session", "-d", "-s", HOSTED_SESSION, "-n", "hold", "true"]);
       if (made.status !== 0) throw new Error(`tmux on ${st.socket} wouldn't make its ${HOSTED_SESSION} session: ${made.stderr.trim()}`);
     }
-    const client: Client = Bun.spawn([st.bin, "-u", "-S", st.socket, "-C", "attach-session", "-t", `=${HOSTED_SESSION}`], { stdin: "pipe", stdout: "pipe", stderr: "ignore" });
+    const client: Client = Bun.spawn([st.bin, "-u", "-S", st.socket, "-C", "attach-session", "-t", `=${HOSTED_SESSION}`], { cwd: homedir(), stdin: "pipe", stdout: "pipe", stderr: "ignore" });
     this.client = client;
     this.closing = false;
     client.stdin.write(`refresh-client -f pause-after=${PAUSE_AFTER_S}\n`);
