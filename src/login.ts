@@ -3,7 +3,7 @@ import { accountClient } from "@kiwi/core/account.ts";
 import { askToEnroll, enrollDigits, enrollMailbox, ENROLL_TTL_MS, readEnrollGrant, type Enrollment } from "@kiwi/core/enroll.ts";
 import { workosDeviceSignIn, type DeviceSignIn } from "@kiwi/core/workos.ts";
 import { home } from "./config.ts";
-import { ensureMachine, loadPairedMachine, PairError, type PairedMachine } from "./daemon/pair.ts";
+import { loadPairedMachine, PairError, type PairedMachine } from "./daemon/pair.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { personFingerprint } from "@kiwi/core/fingerprint.ts";
 import { newMachine, saveMachine, type EnrolledDevice } from "./machine.ts";
@@ -50,13 +50,14 @@ export async function loginComputer(o: LoginOpts): Promise<EnrolledDevice> {
   const say = o.say ?? ((line: string) => process.stdout.write(line + "\n"));
   const everyMs = o.everyMs ?? 1_500;
   const until = Date.now() + (o.timeoutMs ?? ENROLL_TTL_MS);
-  const here: PairedMachine = await ensureMachine(o.relay);
+  const here = loadPairedMachine();
   const already = ownerOf(here);
   if (already)
     throw new PairError(
-      `"${here.label}" is already one of ${inlineText(already.name, 60) || "someone"}'s devices (key ${await personFingerprint(already.pk)}): run kiwi unpair first, then kiwi login`,
+      `"${here?.label}" is already one of ${inlineText(already.name, 60) || "someone"}'s devices (key ${await personFingerprint(already.pk)}): run kiwi unpair first, then kiwi login`,
     );
-  const m: PairedMachine = { ...(await newMachine(o.relay)), label: here.label };
+  const fresh = await newMachine(o.relay);
+  const m: PairedMachine = { ...fresh, label: here?.label ?? fresh.label };
   const token = await signIn(o, say);
   const client = accountClient(o.relay, async () => token, m.identity, o.fetchImpl);
   const { ask, nonce } = await askToEnroll(m.identity, { label: m.label, os: OS_NAMES[process.platform] ?? process.platform, as: "computer" });

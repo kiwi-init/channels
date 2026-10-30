@@ -10,7 +10,7 @@ import type { MachineCert } from "@kiwi/core/person.ts";
 import type { ComputerView } from "../desktop/src/bridge.ts";
 import { createDeviceHost, type DeviceHost } from "../desktop/src/devices.ts";
 import { loginComputer } from "../src/login.ts";
-import { computerClaimFor, loadMachine, saveMachine, type MachineFile } from "../src/machine.ts";
+import { computerClaimFor, loadMachine, newMachine, saveMachine, type MachineFile } from "../src/machine.ts";
 import { loadPairedMachine, PairError, type PairedMachine } from "../src/daemon/pair.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
@@ -125,7 +125,7 @@ describe("kiwi login keeps a person only once it's checked (#1304)", () => {
     void approveFrom(app.host, run.digits);
     await expect(run.done).rejects.toThrow("kept nothing, so kiwi login can ask again with a new key");
     expect(loadMachine()?.device).toBeUndefined();
-    expect((loadMachine() as MachineFile & { cert?: MachineCert }).cert).toBeUndefined();
+    expect(loadPairedMachine()?.cert).toBeUndefined();
 
     const again = login(user);
     await approveFrom(app.host, again.digits);
@@ -175,6 +175,7 @@ describe("kiwi login keeps a person only once it's checked (#1304)", () => {
 
   test("a computer adopted while the login waits keeps that adoption (#1304)", async () => {
     freshMachine();
+    saveMachine(await newMachine(relay));
     const user = `cli${++users}`;
     const person = await withExchangeKey(await generateIdentity("Jow"));
     const app = desktop(person, user);
@@ -220,6 +221,8 @@ describe("kiwi login keeps a person only once it's checked (#1304)", () => {
     const certOnly: PairedMachine = { identity: m.identity, label: m.label, relay: m.relay, cert: m.cert };
     saveMachine(certOnly);
     await expect(login(user).done).rejects.toThrow(`is already one of someone's devices (key ${await personFingerprint(jow.pk)})`);
+    await expect(loginComputer({ relay: "http://127.0.0.1:9", user, say: () => {}, confirm: async () => true })).rejects.toThrow("is already one of someone's devices");
+    expect(loadPairedMachine()).toEqual(certOnly);
   });
 });
 
