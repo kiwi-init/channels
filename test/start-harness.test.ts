@@ -151,7 +151,8 @@ function report(): string {
     const took = starts.map((x) => x.steps[step]).filter((v): v is number => v !== undefined);
     if (took.length) lines.push(`  ${step}: ${took.length} of ${all}, median ${secs(median(took))}, slowest ${secs(Math.max(...took))}`);
   }
-  for (const x of starts.filter((y) => y.failed)) lines.push(`  FAILED ${x.launch} (${x.kind.unknown ? "a harness kiwi can't recognise" : x.kind.harness}${x.kind.nick ? `, nick ${x.kind.nick}` : ""}): ${x.failed}`);
+  for (const x of starts.filter((y) => y.failed))
+    lines.push(`  FAILED ${x.launch} (${x.kind.unknown ? "a harness kiwi can't recognise" : x.kind.harness}${x.kind.nick ? `, nick ${x.kind.nick}` : ""}): ${x.failed}`);
   try {
     lines.push(
       "launch.log:",
@@ -177,7 +178,10 @@ beforeAll(async () => {
     join(bins, "kimi-code.sh"),
     `echo "Welcome to Kimi Code. No session yet: one will be created on your first message"\nprintf '> '\nIFS= read -r prompt\nexport TERM=dumb NO_COLOR=1\n${JOIN}\n`,
   );
-  script(join(bins, "kimi"), `${VERSION}\ncase "$KIWI_LAUNCH" in *_unknown) exec /bin/sh '${join(bins, "kimi-code.sh")}' "$@" ;; esac\nexec '${join(bins, "kimi-code")}' '${join(bins, "kimi-code.sh")}' "$@"`);
+  script(
+    join(bins, "kimi"),
+    `${VERSION}\ncase "$KIWI_LAUNCH" in *_unknown) exec /bin/sh '${join(bins, "kimi-code.sh")}' "$@" ;; esac\nexec '${join(bins, "kimi-code")}' '${join(bins, "kimi-code.sh")}' "$@"`,
+  );
   script(join(bins, "gemini"), `${VERSION}\necho "gemini: not signed in"\nexit 3`);
   writeFileSync(join(home, ".profile"), `export PATH="${bins}:$PATH"\n`);
   writeFileSync(join(kiwiHome, "config.json"), JSON.stringify({ channels: {} }));
