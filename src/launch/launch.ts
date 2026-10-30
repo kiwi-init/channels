@@ -18,7 +18,7 @@ import { typeWhenReady, type Typed, type TypeOptions } from "./typed.ts";
 import type { Launched } from "@kiwi/core/terminals.ts";
 import type { LaunchRequest } from "./wire.ts";
 
-export interface WatchOptions {
+interface WatchOptions {
   startMs?: number;
   watchMs?: number;
   everyMs?: number;

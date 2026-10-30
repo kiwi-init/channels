@@ -1,6 +1,6 @@
 import type { Launching, Person } from "~/model"
 
-export type Stage = "starting" | Launching["stage"]
+type Stage = "starting" | Launching["stage"]
 
 export interface Launch {
   nick: string

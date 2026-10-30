@@ -101,7 +101,7 @@ export function ownTmux(home: string): string[] {
     .map((name) => join(home, OWN_TMUX_DIR, name));
 }
 
-export function lastLines(screen: string, most = TAIL_LINES): string[] {
+function lastLines(screen: string, most = TAIL_LINES): string[] {
   return screen
     .split("\n")
     .map((l) => l.trimEnd())
