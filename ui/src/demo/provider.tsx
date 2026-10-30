@@ -7,7 +7,7 @@ import { stepReplyText } from "~/chat/step"
 import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_PREFS, DEMO_TILES, DEMO_WAITING } from "~/demo/data"
 import { longFeed } from "~/demo/long"
 import { demoShell, demoShells, demoTerm } from "~/demo/term"
-import type { Account, Actions, AgentStarts, App, Enrolling, Finding, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Task } from "~/model"
+import type { Account, Actions, AgentStarts, App, Enrolling, Finding, Launching, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Task } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
 
@@ -475,33 +475,39 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
               folders: ["~/src/channels"],
             },
       chooseFolder: async () => "~/www/picked",
-      addAgent: (code, a) => {
-        window.setTimeout(
-          () =>
-            edit(code, (c) => ({
-              ...c,
-              people: [
-                ...c.people,
-                {
-                  name: a.name,
-                  kind: "agent",
-                  owner: false,
-                  you: false,
-                  presence: "online",
-                  harness: a.harness,
-                  runs: HARNESSES.find((h) => h.id === a.harness)?.label,
-                  machine: DEMO_ACCOUNT.computers.find((m) => m.id === a.computer)?.label ?? a.computer,
-                  persona: PERSONAS.find((p) => p.id === a.persona)?.label ?? a.persona,
-                  role: a.role,
-                  sponsor: c.you,
-                  lastSeen: Date.now(),
-                  joined: Date.now(),
-                  messages: 0,
-                },
-              ],
-            })),
-          2400
-        )
+      addAgent: (code, a, seen) => {
+        let following = true
+        const tell = (s: Launching) => following && seen(s)
+        window.setTimeout(() => tell({ stage: "started" }), 800)
+        window.setTimeout(() => tell({ stage: "asked", name: a.name }), 1600)
+        window.setTimeout(() => {
+          tell({ stage: "joined", name: a.name })
+          edit(code, (c) => ({
+            ...c,
+            people: [
+              ...c.people,
+              {
+                name: a.name,
+                kind: "agent",
+                owner: false,
+                you: false,
+                presence: "online",
+                harness: a.harness,
+                runs: HARNESSES.find((h) => h.id === a.harness)?.label,
+                machine: DEMO_ACCOUNT.computers.find((m) => m.id === a.computer)?.label ?? a.computer,
+                persona: PERSONAS.find((p) => p.id === a.persona)?.label ?? a.persona,
+                role: a.role,
+                sponsor: c.you,
+                lastSeen: Date.now(),
+                joined: Date.now(),
+                messages: 0,
+              },
+            ],
+          }))
+        }, 2400)
+        return () => {
+          following = false
+        }
       },
       addRoom: (code, name) => {
         edit(code, (c) => ({ ...c, rooms: [...c.rooms, { id: name, name, unread: 0, mentions: 0 }] }))
