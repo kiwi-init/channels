@@ -27,7 +27,8 @@ blur, no gradients for show. Colour means a state, never decoration.
   scrim, link, on-ink, accent, accent-wash, live, doing, review, decide,
   decide-wash, alert, alert-wash` and the ten `c-*` colours. The rest of
   `:root` (fonts, type steps, radii, sizes, motion, `shadow-pop`, `h-*`) is
-  the same in every theme.
+  the same in every theme, except `float` and `shadow-float`, which each
+  side sets (§5).
 - Settings → Appearance picks system / light / dark, and a theme for each
   side. Built in: OLED Black (`channels-oled`, the default dark), Channels
   Dark (`#111113`) and Channels Light (the default light), then the Rex
@@ -47,7 +48,7 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
 | Token | Dark (OLED Black) | Light |
 |---|---|---|
 | `bg` (canvas, rail, sidebar, panels) | `#000000` | `#ffffff` |
-| `bg-2` (raised: composer, dialogs, cards) | `#0c0c0d` | `#f7f7f8` |
+| `bg-2` (raised: dialogs, cards) | `#0c0c0d` | `#f7f7f8` |
 | `bg-3` (fills: buttons, fields, tiles, tracks) | `#18181a` | `#efeff1` |
 | `ink` | `#ececef` | `#18181b` |
 | `ink-2` (secondary text, idle controls) | `#a3a3ab` | `#56565e` |
@@ -115,9 +116,13 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
   hover), `--r-card 14px` (cards), `--r-win 18px` (the composer, dialogs).
   `999px` is for counts and the toggle track only. Avatars of people are round;
   agents and channel tiles are rounded squares.
-- One shadow: `--shadow-pop` (`0 0 0 1px line-2`, then a soft black drop) for
-  what floats over the page: the composer, dialogs, menus, the palette, the
-  stash list, Jump to latest. No coloured shadows.
+- Two shadows. `--shadow-pop` (`0 0 0 1px line-2`, then a soft black drop)
+  for what floats over the page: dialogs, menus, the palette, the stash
+  list, Jump to latest. `--shadow-float` for the chrome's controls and the
+  composer, which sit on the app like a Mac toolbar's buttons: a `float`
+  fill (`bg-3` in dark, `bg` in light), a 1px `line-2` ring and a short
+  drop; dark adds a `line` highlight along the top edge. No coloured
+  shadows.
 - Surfaces are told apart by a step of fill (`bg` → `bg-2` → `bg-3`) and by
   hairlines (`line`), not by shadows. Cards on the page are `bg` with a
   `line` border.
@@ -173,6 +178,18 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   `--ctl-sm`. There is no blue button.
 - `IconButton` (`.icon-btn`, 28px, `r-row`): `ink-2`, `wash-2` on hover and
   while pressed.
+- The top bar floats its controls: the channel switcher and the sidebar
+  button are each one `float` object (`r-ctl`, `shadow-float`); the view tabs
+  are one `float` group with the chosen tab's pill gliding inside it, and
+  search and the terminal share a second group (`.top-group`, 2px inset,
+  28px buttons at `r-row`). The search field floats the same way when open,
+  and on a narrow window it takes the tabs' place. The other bars follow:
+  Settings' back button and a panel's close button float too, and so does
+  the rail: home, every channel tile, + and the Settings gear (a tile still
+  waiting to be let in keeps its outline and no fill). In the terminal
+  drawer the tabs and + are one `float` group and close floats. Hover on a
+  floating control is `float-2` (the `float` fill, 10% toward `ink`); the
+  chosen one is `float-3` (20%).
 - Fields (`.input`, `.textarea`, `Field` with label and hint): `bg-3` fill,
   `--ctl` high, `t-ui`; `.input.is-mono` for codes and paths.
 - `Seg` (`.seg`): a `bg-3` track, the chosen segment on `wash-2` in `ink`
@@ -222,8 +239,9 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   at its foot, on every page; on a Mac the traffic lights sit above it, the rail
   is 80px so tiles centre under them, and `--top-h` is 46px so the bar centres
   on them), the sidebar (`--side-w`) and the main area.
-  The top bar spans the sidebar and the main area (`--top-h`): the channel
-  switcher and the sidebar toggle over the sidebar; the views in the middle
+  The top bar spans the sidebar and the main area (`--top-h`): the sidebar
+  toggle first at the left edge, then the channel switcher, both in the same
+  place whether the sidebar is open or collapsed; the views in the middle
   (`# room`, Tasks with its count, Agents, Needs you in `decide` with its
   count), the open one on `wash-2`; on the right a mono summary
   (`2 working · 1 merged today · 7 need you`), Search and the terminal.
@@ -272,10 +290,10 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 
 ## 10. Composer
 
-- A floating `bg-2` card at `r-win` with `shadow-pop`, centred in the
-  column at the bottom of the conversation (and of a panel), over the fade.
-  Top to bottom: the reply bar, attached images, the row with + (attach),
-  the textarea and send.
+- A floating `float` card at `r-win` with `shadow-float`, the same object as
+  the chrome's buttons, centred in the column at the bottom of the
+  conversation (and of a panel), over the fade. Top to bottom: the reply
+  bar, attached images, the row with + (attach), the textarea and send.
 - Send is a `--ctl` `r-ctl` square: `ink` with `on-ink` when there is something
   to send, `line-2` when not. Enter sends (or ⌘Enter, per Settings).
 - Typing `@name` or a task id (`T12`) opens a list of people or tasks just

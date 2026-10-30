@@ -15,10 +15,6 @@
   font: 600 var(--t-body) var(--ui);
 }
 
-.set-back {
-  gap: 6px;
-}
-
 .set-nav {
   display: flex;
   flex-direction: column;
@@ -564,7 +560,8 @@
   padding: 0 12px 0 8px;
   border: 0;
   border-radius: var(--r-ctl);
-  background: none;
+  background: var(--float);
+  box-shadow: var(--shadow-float);
   color: var(--ink);
   font: 600 var(--t-body) var(--ui);
   letter-spacing: -0.01em;
@@ -582,7 +579,7 @@
 }
 
 .set-back:hover {
-  background: var(--wash);
+  background: var(--float-2);
 }
 
 .set-back:hover .icon {

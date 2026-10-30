@@ -223,6 +223,9 @@ jobs:
       - name: ui thread in Chromium opens on the reply it was asked for, not its bottom
         if: ${{ !cancelled() }}
         run: bun scripts/ui-thread-focus.ts --dist ui/dist
+      - name: ui portrait window in WebKit is one tall page, agents, tasks and chat in view, and landscape is unchanged
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-tall-page.ts --dist ui/dist
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

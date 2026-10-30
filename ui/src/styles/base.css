@@ -756,10 +756,14 @@ kbd,
   font-family: var(--mono);
 }
 
-.dialog,
-.compose {
+.dialog {
   --raise: var(--bg-3);
   --raise-2: color-mix(in srgb, var(--bg-3) 86%, var(--ink));
+}
+
+.compose {
+  --raise: var(--float-2);
+  --raise-2: var(--float-3);
 }
 
 html .heading h3,
@@ -986,7 +990,7 @@ html .md {
 }
 
 .tabs[data-glide]::before {
-  border-radius: var(--r-ctl);
+  border-radius: var(--r-row);
 }
 
 [data-glide="move"]::before {
