@@ -10,6 +10,7 @@ const keyLine = readFileSync(join(FIXTURES, "test.pub"), "utf8").trim().split("\
 const sums = join(FIXTURES, "SHA256SUMS");
 const signed = join(FIXTURES, "SHA256SUMS.minisig");
 const legacy = join(FIXTURES, "SHA256SUMS.legacy.minisig");
+const L = 2n ** 252n + 27742317777372353535851937790883648493n;
 
 const work = mkdtempSync(join(tmpdir(), "kiwi-minisign-py-"));
 afterAll(() => rmSync(work, { recursive: true, force: true }));
@@ -23,6 +24,23 @@ const verifier = (): string => {
 };
 
 const run = (data: string, sig: string, key: string = keyLine) => Bun.spawnSync(["python3", verifier(), data, sig, key]);
+
+const raised = (data: string, sig: string, key: string = keyLine): string | undefined => {
+  const r = run(data, sig, key);
+  return r.exitCode === 0 ? undefined : r.stderr.toString().trim().split("\n").at(-1);
+};
+
+const scalarPlusL = (b64line: string): string => {
+  const raw = Buffer.from(b64line, "base64");
+  const s = BigInt(`0x${raw.subarray(42).toString("hex")}`) + L;
+  return Buffer.concat([raw.subarray(0, 42), Buffer.from(s.toString(16).padStart(64, "0"), "hex")]).toString("base64");
+};
+
+const withLine = (sigText: string, index: number, line: string): string => {
+  const lines = sigText.trim().split("\n");
+  lines[index] = line;
+  return `${lines.join("\n")}\n`;
+};
 
 const have = Bun.which("python3");
 (have ? describe : describe.skip)("the installer's built-in signature check", () => {
@@ -49,8 +67,17 @@ const have = Bun.which("python3");
   });
 
   test("says why it refused", () => {
-    const r = run(sums, signed, throwawayKey().publicKey);
-    expect(r.exitCode).toBe(1);
-    expect(r.stderr.toString()).toContain("names another key");
+    expect(raised(sums, signed, throwawayKey().publicKey)).toContain("names another key");
+  });
+
+  test("refuses a signature whose scalar was shifted by the group order", () => {
+    const text = readFileSync(signed, "utf8");
+    const lines = text.trim().split("\n");
+    const mainShifted = join(work, "main-plus-l.minisig");
+    writeFileSync(mainShifted, withLine(text, 1, scalarPlusL(lines[1]!)));
+    expect(run(sums, mainShifted).exitCode).toBe(1);
+    const globalShifted = join(work, "global-plus-l.minisig");
+    writeFileSync(globalShifted, withLine(text, 3, scalarPlusL(lines[3]!)));
+    expect(run(sums, globalShifted).exitCode).toBe(1);
   });
 });

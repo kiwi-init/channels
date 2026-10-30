@@ -3,7 +3,7 @@
 // Downloads are stubbed: a fake `curl` hands back a script standing in for kiwi, and its checksum.
 
 import { describe, expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
@@ -44,6 +44,23 @@ function sandbox(packed: readonly ("gz" | "xz")[] = []) {
 function install(dir: string, args: string[], env: Record<string, string> = {}, script = SCRIPT) {
   return Bun.spawnSync(["sh", script, ...args], {
     env: { PATH: `${dir}:${process.env.PATH}`, HOME: dir, KIWI_INSTALL: join(dir, "bin"), ...env },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+}
+
+const BARE_TOOLS = ["basename", "chmod", "cp", "cut", "dirname", "grep", "mkdir", "mktemp", "mv", "rm", "sha256sum", "tail", "uname"];
+
+function bare(dir: string, args: string[], env: Record<string, string> = {}) {
+  const toolbin = join(dir, "toolbin");
+  mkdirSync(toolbin);
+  for (const tool of BARE_TOOLS) {
+    const at = Bun.which(tool);
+    if (!at) return null;
+    symlinkSync(at, join(toolbin, tool));
+  }
+  return Bun.spawnSync(["/bin/sh", SCRIPT, ...args], {
+    env: { PATH: `${dir}:${toolbin}`, HOME: dir, KIWI_INSTALL: join(dir, "bin"), ...env },
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -269,6 +286,36 @@ describe("the installer's download", () => {
       expect(r.exitCode).not.toBe(0);
       expect(r.stderr.toString()).toContain("no SHA256SUMS.minisig");
       expect(existsSync(join(dir, "bin", "kiwi"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("with no way to check the signature, the install stops and says how to go on", () => {
+    if (process.platform !== "linux") return;
+    const dir = sandbox();
+    try {
+      rmSync(join(dir, "minisign"));
+      rmSync(join(dir, "python3"));
+      const r = bare(dir, []);
+      expect(r?.exitCode).toBe(1);
+      expect(r?.stderr.toString()).toContain("install minisign or python3");
+      expect(existsSync(join(dir, "bin", "kiwi"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("KIWI_UNVERIFIED_INSTALL=1 installs on the checksum alone, saying so", () => {
+    if (process.platform !== "linux") return;
+    const dir = sandbox();
+    try {
+      rmSync(join(dir, "minisign"));
+      rmSync(join(dir, "python3"));
+      const r = bare(dir, [], { KIWI_UNVERIFIED_INSTALL: "1" });
+      expect(r?.exitCode).toBe(0);
+      expect(r?.stderr.toString()).toContain("checksum alone");
+      expect(readFileSync(join(dir, "bin", "kiwi"), "utf8")).toBe(readFileSync(join(dir, "fake-kiwi"), "utf8"));
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

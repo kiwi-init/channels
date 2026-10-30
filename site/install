@@ -12,9 +12,9 @@
 #   4. puts it at ~/.kiwi/bin/kiwi (nothing outside your home folder, no sudo)
 #   5. adds that folder to PATH in your shell's profile, once (KIWI_NO_MODIFY_PATH=1 skips it)
 # The signature is the real gate: SHA256SUMS travels with the binary, so a
-# checksum alone would pass a release swapped for another. When neither minisign
-# nor python3 is installed the signature can't be checked and this script says
-# so before going on, on the checksum alone. The `gh attestation verify` line at
+# checksum alone would pass a release swapped for another. Without minisign or
+# python3 nothing here can check it, so the install stops; KIWI_UNVERIFIED_INSTALL=1
+# goes on anyway, on the checksum alone. The `gh attestation verify` line at
 # the end is printed for you to run; this script does not run it.
 # Read the source: https://github.com/kiwi-init/channels
 #
@@ -63,15 +63,20 @@ if command -v minisign >/dev/null 2>&1; then
   minisign -V -q -m "$tmp/SHA256SUMS" -x "$tmp/SHA256SUMS.minisig" -P "$KEY"
 elif command -v python3 >/dev/null 2>&1; then
   cat >"$tmp/minisign-verify.py" <<'PYKIWI'
-import base64, hashlib, sys
+import base64
+import hashlib
+import sys
+from typing import Optional, Tuple
 
 p = 2 ** 255 - 19
+L = 2 ** 252 + 27742317777372353535851937790883648493
 d = -121665 * pow(121666, p - 2, p) % p
 SQRT_M1 = pow(2, (p - 1) // 4, p)
 BASE_Y = 4 * pow(5, p - 2, p) % p
+Point = Tuple[int, int, int, int]
 
 
-def xrecover(y):
+def xrecover(y: int) -> int:
     xx = (y * y - 1) * pow(d * y * y + 1, p - 2, p) % p
     x = pow(xx, (p + 3) // 8, p)
     if (x * x - xx) % p != 0:
@@ -82,10 +87,10 @@ def xrecover(y):
 
 
 BASE = (xrecover(BASE_Y) % p, BASE_Y, 1, xrecover(BASE_Y) * BASE_Y % p)
-IDENTITY = (0, 1, 1, 0)
+IDENTITY: Point = (0, 1, 1, 0)
 
 
-def add(m, n):
+def add(m: Point, n: Point) -> Point:
     x1, y1, z1, t1 = m
     x2, y2, z2, t2 = n
     a = (y1 - x1) * (y2 - x2) % p
@@ -96,7 +101,7 @@ def add(m, n):
     return (e * f % p, g * h % p, f * g % p, e * h % p)
 
 
-def multiply(m, e):
+def multiply(m: Point, e: int) -> Point:
     r = IDENTITY
     while e > 0:
         if e & 1:
@@ -106,7 +111,7 @@ def multiply(m, e):
     return r
 
 
-def encode(m):
+def encode(m: Point) -> bytes:
     x, y, z, _ = m
     z_inv = pow(z, p - 2, p)
     x = x * z_inv % p
@@ -114,9 +119,13 @@ def encode(m):
     return (y | (x & 1) << 255).to_bytes(32, "little")
 
 
-def decode(s):
+def decode(s: bytes) -> Point:
     y = int.from_bytes(s, "little") & (1 << 255) - 1
+    if y >= p:
+        raise ValueError
     x = xrecover(y)
+    if x == 0 and s[31] >> 7:
+        raise ValueError
     if x & 1 != s[31] >> 7:
         x = p - x
     m = (x, y, 1, x * y % p)
@@ -125,11 +134,11 @@ def decode(s):
     return m
 
 
-def ed25519(public, signature, message):
+def ed25519(public: bytes, signature: bytes, message: bytes) -> bool:
     if len(public) != 32 or len(signature) != 64:
         return False
     s = int.from_bytes(signature[32:], "little")
-    if s >= 1 << 253:
+    if s >= L:
         return False
     try:
         a = decode(public)
@@ -140,14 +149,14 @@ def ed25519(public, signature, message):
     return encode(multiply(BASE, s)) == encode(add(r, multiply(a, h)))
 
 
-def b64(text):
+def b64(text: str) -> Optional[bytes]:
     try:
         return base64.b64decode(text, validate=True)
     except Exception:
         return None
 
 
-def why_not(data, sig_text, key_text):
+def why_not(data: bytes, sig_text: str, key_text: str) -> Optional[str]:
     lines = sig_text.replace("\r", "").split("\n")
     if len(lines) < 4 or not lines[0].startswith("untrusted comment:") or not lines[2].startswith("trusted comment: "):
         return "the signature file isn't a minisign signature"
@@ -169,14 +178,20 @@ def why_not(data, sig_text, key_text):
     return None
 
 
-refusal = why_not(open(sys.argv[1], "rb").read(), open(sys.argv[2], "r").read(), sys.argv[3])
-if refusal:
-    print("kiwi: %s" % refusal, file=sys.stderr)
-    sys.exit(1)
+if __name__ == "__main__":
+    refusal = why_not(open(sys.argv[1], "rb").read(), open(sys.argv[2], "r").read(), sys.argv[3])
+    if refusal:
+        print("kiwi: %s" % refusal, file=sys.stderr)
+        sys.exit(1)
 PYKIWI
   python3 "$tmp/minisign-verify.py" "$tmp/SHA256SUMS" "$tmp/SHA256SUMS.minisig" "$KEY"
 else
-  echo "kiwi: WARNING: neither minisign nor python3 is installed here, so the release's signature can't be checked; the checksum below is all this install verifies" >&2
+  echo "kiwi: neither minisign nor python3 is installed here, so the release's signature can't be checked" >&2
+  if [ -z "${KIWI_UNVERIFIED_INSTALL:-}" ]; then
+    echo "kiwi: install minisign or python3 and run this again, or set KIWI_UNVERIFIED_INSTALL=1 to install on the checksum alone" >&2
+    exit 1
+  fi
+  echo "kiwi: KIWI_UNVERIFIED_INSTALL=1: installing on the checksum alone" >&2
 fi
 listed() { grep -q " $1\$" "$tmp/SHA256SUMS"; }
 name="$asset"
