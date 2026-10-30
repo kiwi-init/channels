@@ -28,4 +28,5 @@ export const FLOWS: string[] = [
   "held-seat",
   "loop-flows",
   "daemon-admits",
+  "start-harness",
 ];
