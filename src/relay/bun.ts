@@ -12,7 +12,7 @@ import * as Layer from "effect/Layer";
 import { CLOSE_CLOSED, CLOSE_REMOVED, GONE_WORDS, MAX_BLOB_BYTES, PING, PONG } from "@kiwi/core/protocol.ts";
 import { ChannelGone, NotFound, UpdateRequired } from "./failures.ts";
 import { clockLayer, MAX_REQUEST_BYTES } from "./http.ts";
-import { authkitDomains, devHostOk, devHumanAuth, devRequestOk, Human, HUMAN_HEADER, workosFromSettings, type HumanAuth } from "./human.ts";
+import { authkitDomains, devHostOk, devHumanAuth, devRequestOk, Human, HUMAN_HEADER, withGithub, workosFromSettings, type HumanAuth } from "./human.ts";
 import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
 import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, type AccountStore } from "./account.ts";
@@ -739,7 +739,12 @@ export function runRelay(argv: string[], cmd = "bun src/relay/bun.ts"): void {
     process.stderr.write(`${devFlag} is for requests made on this machine: it can't go with --trust-proxy (or KIWI_TRUST_PROXY), since a proxy in front passes other people's requests on.\n`);
     process.exit(2);
   }
-  const human = dev ? devHumanAuth() : workosFromSettings({ clientId: arg("--workos-client-id", "WORKOS_CLIENT_ID"), authkitDomain, apiKey: process.env.WORKOS_API_KEY || undefined });
+  const human = dev
+    ? devHumanAuth()
+    : withGithub(workosFromSettings({ clientId: arg("--workos-client-id", "WORKOS_CLIENT_ID"), authkitDomain, apiKey: process.env.WORKOS_API_KEY || undefined }), {
+        clientId: process.env.GITHUB_APP_CLIENT_ID || undefined,
+        clientSecret: process.env.GITHUB_APP_CLIENT_SECRET || undefined,
+      });
   const siteDir = resolve(import.meta.dir, "../../site");
   const builtUi = resolve(import.meta.dir, "../../ui/dist");
   const defaultSite = existsSync(join(siteDir, "index.html")) ? siteDir : existsSync(join(builtUi, "index.html")) ? builtUi : undefined;

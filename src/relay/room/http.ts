@@ -44,5 +44,10 @@ export async function gateRoom(req: Request, roomId: string, rest: string, now =
 }
 
 export function relayConfig(human: HumanAuth | null, githubClientId?: string | null): Response {
-  return Response.json({ workosClientId: human?.clientId ?? null, ...(human?.dev ? { dev: true } : {}), ...(githubClientId ? { githubClientId } : {}) });
+  return Response.json({
+    workosClientId: human?.clientId ?? null,
+    ...(human?.dev ? { dev: true } : {}),
+    ...(githubClientId ? { githubClientId } : {}),
+    ...(human?.github ? { githubSignIn: true } : {}),
+  });
 }

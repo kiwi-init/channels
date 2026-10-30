@@ -17,7 +17,7 @@ import { profileOf } from "./human.ts";
 export const SAFETY_BYTES_PER_CHANNEL = 1024 ** 3;
 
 export interface RelayPolicy {
-  /** Who may create channels: WorkOS user ids, emails, or "@domain". Null: anyone signed in. */
+  /** Who may create channels: user ids, emails, "@domain" or "github:<login>". Null: anyone signed in. */
   betaUsers: string[] | null;
   /** Where people not on the list can ask for access. */
   waitlistUrl: string | null;
@@ -83,14 +83,16 @@ export function policyFrom(env: Record<string, string | undefined>): RelayPolicy
 
 /**
  * Whether a signed-in person may create channels during the beta: listed by
- * user id, by email, or by the "@domain" of their email (looked up from sign-in).
+ * user id, by email, by the "@domain" of their email, or by "github:<login>" (looked up from sign-in).
  */
 export const inBeta = Effect.fn("Policy.inBeta")(function* (user: string) {
   const policy = yield* Policy;
   if (!policy.betaUsers) return true;
   const list = new Set(policy.betaUsers);
   if (list.has(user.toLowerCase())) return true;
-  const email = (yield* profileOf(user))?.email?.toLowerCase();
+  const profile = yield* profileOf(user);
+  if (profile?.login && list.has(`github:${profile.login.toLowerCase()}`)) return true;
+  const email = profile?.email?.toLowerCase();
   if (!email) return false;
   return list.has(email) || list.has(`@${email.split("@")[1]}`);
 });
