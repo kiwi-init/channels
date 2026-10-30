@@ -38,3 +38,19 @@ test("an enrolled desktop refuses what only the person key does, and still tells
   mutate((s) => (s.pending = []));
   expect(told.at(-1)).toMatchObject({ type: "seats", person: person.pk });
 });
+
+test("the app holding the person key proves joins with its device claim too, never the person key's own (T899)", async () => {
+  const person = await withExchangeKey(await generateIdentity("Jow"));
+  const device = await withExchangeKey(await generateIdentity("desk"));
+  const links = [await rootLink(person, { pk: device.pk, xpk: device.xpk!, label: "desk", os: "macOS", as: "desktop" })];
+  const held = { name: "Jow", pk: person.pk, sk: person.sk, xpk: person.xpk!, xsk: person.xsk! };
+  openStore({ where: () => "/data/kiwi-store.bin", load: () => ({ ok: true, file: { person: held, device, deviceLinks: links }, resave: false }), save: () => {} });
+  const roomId = newRoomId();
+  const code = encodeJoinCode({ roomId, ownerFp: await ownerFingerprint(person.pk) });
+  const member = await generateIdentity("jow");
+  const { claim } = await asked({ type: "prove", id: 2, code, memberPk: member.pk });
+  expect(claim?.person).toBeUndefined();
+  expect(await checkDevice(claim?.device, roomId, member.pk)).toMatchObject({ person: person.pk, device: { device: device.pk } });
+  openStore({ where: () => "/data/kiwi-store.bin", load: () => ({ ok: true, file: { person: held }, resave: false }), save: () => {} });
+  expect((await asked({ type: "prove", id: 3, code, memberPk: member.pk })).claim).toBeNull();
+});

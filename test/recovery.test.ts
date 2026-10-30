@@ -12,6 +12,7 @@ import {
   recoveryAfter,
   recoveryKey,
   recoveryLink,
+  sealPerson,
   sealVault,
   type Recovery,
   type RecoveryLink,
@@ -218,5 +219,42 @@ describe("the vault (T693)", () => {
   test("the person key may seal it too, and a vault for another person is refused", async () => {
     expect(await checkVault(await sealVault(ids.person!, r, 1, contents, T0), list)).toBeNull();
     expect(await checkVault(await sealVault(ids.desk!, { ...r, person: ids.stranger!.pk }, 1, contents, T0), list)).toMatch(/another person/);
+  });
+});
+
+describe("the person key sealed on its own (T899)", () => {
+  let r: Recovery;
+  let channels: VaultContents["channels"];
+
+  beforeAll(async () => {
+    r = (await recovery(await chain([ids.person!, paper, T0]))) as Recovery;
+    channels = [{ label: "kiwi", code: "kiwi://join/abc", owner: ids.stranger! }];
+  });
+
+  test("a device that never held the person key reseals it, and the words open the vault to the whole key", async () => {
+    const held = await sealPerson(r, ids.person!);
+    expect(held.rxpk).toBe(r.rxpk);
+    expect(held.box).not.toContain(ids.person!.sk);
+    const v2 = await sealVault(ids.desk!, r, 2, { person: held, channels }, T0 + 1);
+    expect(await checkVault(v2, list, 1)).toBeNull();
+    expect(await openVault(v2, paper)).toEqual({ person: ids.person!, channels });
+    expect(await openVault(v2, other)).toBeNull();
+    expect(await openVault(v2, ids.desk!)).toBeNull();
+  });
+
+  test("only the person key this chain is for is sealed, and only to the chain's own recovery key", async () => {
+    await expect(sealPerson(r, ids.stranger!)).rejects.toThrow("isn't the one this recovery key is for");
+    const held = await sealPerson(r, ids.person!);
+    await expect(sealVault(ids.desk!, { ...r, rxpk: other.xpk! }, 2, { person: held, channels }, T0)).rejects.toThrow("earlier recovery key");
+    const moved = await sealVault(ids.desk!, { ...r, rxpk: other.xpk! }, 2, { person: { ...held, rxpk: other.xpk! }, channels }, T0);
+    expect(await openVault(moved, other)).toBeNull();
+  });
+
+  test("a person box lifted into another person's vault, or under another recovery key, doesn't open", async () => {
+    const held = await sealPerson(r, ids.person!);
+    const theirs = { ...r, person: ids.stranger!.pk };
+    expect(await openVault(await sealVault(ids.desk!, theirs, 1, { person: held, channels }, T0), paper)).toBeNull();
+    const forgedInner = await sealVault(ids.desk!, r, 1, { person: { rxpk: r.rxpk, box: "not.a.box" }, channels }, T0);
+    expect(await openVault(forgedInner, paper)).toBeNull();
   });
 });
