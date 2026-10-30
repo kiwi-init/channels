@@ -10,7 +10,7 @@ type Env = Record<string, string>;
 export interface JoinSeats {
   readonly claudeDir: string;
   scratch(tag: string): string;
-  spawn(home: string, args: string[], env?: Env, cwd?: string, stdin?: string): Bun.Subprocess<"ignore" | Uint8Array, "pipe", "pipe">;
+  spawn(home: string, args: string[], env?: Env, cwd?: string, stdin?: string, via?: string[]): Bun.Subprocess<"ignore" | Uint8Array, "pipe", "pipe">;
   run(home: string, args: string[], env?: Env, cwd?: string, stdin?: string): Promise<{ code: number; out: string; err: string }>;
   ok(home: string, args: string[], env?: Env, cwd?: string): Promise<string>;
   until(pred: () => boolean | Promise<boolean>, label: string, ms?: number): Promise<void>;
@@ -51,8 +51,8 @@ export function joinSeats(): JoinSeats {
     return d;
   };
 
-  const spawn = (home: string, args: string[], env: Env = {}, cwd = home, stdin?: string) =>
-    Bun.spawn(kiwiCmd(args), {
+  const spawn = (home: string, args: string[], env: Env = {}, cwd = home, stdin?: string, via: string[] = []) =>
+    Bun.spawn([...via, ...kiwiCmd(args)], {
       cwd,
       // The owner's person seat (--as human) runs from a person's terminal, never an agent's harness.
       // KIWI_MODEL: an agent in a harness says what runs it or can't join; these sessions have no transcript to read it from.
