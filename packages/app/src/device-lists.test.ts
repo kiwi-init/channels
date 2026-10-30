@@ -1,9 +1,10 @@
 import { afterEach, expect, test } from "bun:test";
 
-import { certUntil, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
+import { certUntil, nextLink, readDeviceList, rerootLink, rootLink, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import type { Member } from "@kiwi/core/membership.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
+import { recoveryKey, recoveryLink } from "@kiwi/core/recovery.ts";
 import { postedLists, postList, tendLists, type ListsApi } from "./device-lists";
 
 const store = new Map<string, string>();
@@ -92,4 +93,19 @@ test("a list is posted once per version into each channel", async () => {
   expect(await postList("mc2-a", revoked, api)).toBe(true);
   expect(await postList("mc2-a", [], api)).toBe(false);
   expect(sent.map((l) => l.length)).toEqual([2, 2, 3]);
+});
+
+test("a re-root that keeps every device still gets a cut pass, for the computers an old cert vouched for", async () => {
+  const person = await generateIdentity("jow");
+  const desk = await device("desk");
+  const root = [await rootLink(person, { pk: desk.pk, xpk: desk.xpk!, label: "desk", os: "macOS", as: "desktop" })];
+  const paper = await recoveryKey(new Uint8Array(32).fill(8));
+  const chain = [await recoveryLink(person, person.pk, null, { pk: paper.pk, xpk: paper.xpk! })];
+  const read = await readDeviceList(root);
+  if (!read.ok) throw new Error(read.why);
+  const rerooted = [...root, await rerootLink(read.list, paper, chain, await device("next"), [desk.pk])];
+  const ch = channel([event(2, "jow", root), event(5, "jow", rerooted)]);
+  const got = await tendLists("mc2-r", [], ch.api);
+  expect(got.lists.get(person.pk)?.revoked).toEqual([]);
+  expect(ch.cuts.map((l) => l.reroots.length)).toEqual([1]);
 });

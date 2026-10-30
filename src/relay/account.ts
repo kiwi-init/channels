@@ -1,6 +1,7 @@
 import { AUTH_SKEW_MS, verifyRequest } from "@kiwi/core/auth.ts";
 import { b64url } from "@kiwi/core/crypto.ts";
-import { approvingDevice, readDeviceList, type Device, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
+import type { FreshNotice } from "@kiwi/core/account.ts";
+import { approvingDevice, currentDevice, readDeviceList, speaksForPerson, type Device, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import { accountScope, ENROLL_TTL_MS, readEnrollAnswer, readEnrollAsk, revealMatches, type Enrollment } from "@kiwi/core/enroll.ts";
 import { canonical } from "@kiwi/core/identity.ts";
 import { checkVault, readRecovery, type Recovery, type RecoveryLink, type Vault } from "@kiwi/core/recovery.ts";
@@ -15,6 +16,18 @@ export const ACCOUNT_ASKS_PER_MINUTE = 5;
 const LIST_MAX_BYTES = 768 * 1024;
 const ASK_MAX_BYTES = 4096;
 const VAULT_MAX_BYTES = 1024 * 1024;
+export const FRESH_WAIT_MS = 7 * 24 * 3_600_000;
+export const FRESH_EVERY_MS = 24 * 3_600_000;
+
+interface FreshStart extends FreshNotice {
+  links: DeviceLink[];
+  device: string;
+}
+
+export interface FreshRecord {
+  pending: FreshStart | null;
+  lastAt: number;
+}
 
 export interface AccountStore {
   links(user: string): Promise<unknown[]>;
@@ -27,16 +40,24 @@ export interface AccountStore {
   extendRecovery(user: string, from: number, links: RecoveryLink[]): Promise<boolean>;
   vault(user: string): Promise<Vault | null>;
   setVault(user: string, next: Vault, prev: number): Promise<boolean>;
+  fresh(user: string): Promise<FreshRecord | null>;
+  setFresh(user: string, next: FreshRecord, prev: FreshRecord | null): Promise<boolean>;
+  startOver(user: string, start: FreshStart): Promise<boolean>;
 }
 
-const PATH = /^\/v1\/account(?:\/vault|\/ask(?:\/([A-Za-z0-9_-]{22})(?:\/(answer|reveal))?)?)?$/;
+const PATH = /^\/v1\/account(?:\/vault|\/fresh(?:\/([A-Za-z0-9_-]{22}))?|\/ask(?:\/([A-Za-z0-9_-]{22})(?:\/(answer|reveal))?)?)?$/;
 const VAULT_PATH = "/v1/account/vault";
+const FRESH_PATH = "/v1/account/fresh";
 
 export const isAccountPath = (pathname: string): boolean => PATH.test(pathname);
 
 const enrollmentLive = (e: Enrollment | null, now: number): Enrollment | null => (e && e.at + ENROLL_TTL_MS > now ? e : null);
 
 export const sameEnrollment = (a: Enrollment | null, b: Enrollment | null): boolean => (a === null ? b === null : b !== null && canonical(a) === canonical(b));
+
+export const sameFresh = (a: FreshRecord | null, b: FreshRecord | null): boolean => (a === null ? b === null : b !== null && canonical(a) === canonical(b));
+
+const noticeOf = (s: FreshStart): FreshNotice => ({ id: s.id, at: s.at, ends: s.ends, label: s.label, os: s.os });
 
 const refuse = (err: unknown): Response => withCors(errorResponse(err));
 const answer = (data: unknown, status = 200): Response => withCors(Response.json(data, { status }));
@@ -84,7 +105,7 @@ async function keepVault(store: AccountStore, user: string, list: DeviceList | n
   if (!list) return refuse(new NotFound({ message: "publish the device list before a recovery key" }));
   const { chain, recovery: kept } = await keptRecovery(store, user, list, now);
   let recovery = kept;
-  if (signer !== list.person && !approver(list, signer, now) && signer !== recovery?.rpk)
+  if (!speaksForPerson(list, signer, now) && signer !== recovery?.rpk)
     return refuse(new Forbidden({ message: "only the person key, the recovery key or an app that approves devices keeps the vault" }));
   if (Array.isArray(raw)) {
     if (raw.length < chain.length) return refuse(new Conflict({ message: "a newer recovery chain is already kept" }));
@@ -102,13 +123,67 @@ async function keepVault(store: AccountStore, user: string, list: DeviceList | n
   const bad = await checkVault(vault, list);
   if (bad) return refuse(new BadRequest({ message: `that vault doesn't hold up: ${bad}` }));
   const next = vault as Vault;
-  if (next.pk !== list.person && !approver(list, next.pk, now)) return refuse(new Forbidden({ message: "the vault is signed by a key that isn't one of this person's current approving devices" }));
+  if (!speaksForPerson(list, next.pk, now)) return refuse(new Forbidden({ message: "the vault is signed by a key that isn't one of this person's current approving devices" }));
   const prev = await store.vault(user);
   const known = prev?.version ?? 0;
   if (prev && canonical(prev) === canonical(next)) return done();
   if (next.version <= known) return refuse(new Conflict({ message: `vault version ${known} is already kept, so version ${next.version} is too old` }));
   if (next.version !== known + 1) return refuse(new BadRequest({ message: `vault version ${next.version} doesn't follow version ${known}` }));
   if (!(await store.setVault(user, next, known))) return refuse(new Conflict({ message: "the vault changed meanwhile; read it and try again" }));
+  return done();
+}
+
+async function settleFresh(store: AccountStore, user: string, now: number): Promise<void> {
+  const start = (await store.fresh(user))?.pending;
+  if (!start || start.ends > now) return;
+  const { list } = await kept(store, user);
+  if (list) await store.revoke(list.devices.map((d) => d.device));
+  await store.startOver(user, start);
+}
+
+async function dropFresh(store: AccountStore, user: string): Promise<void> {
+  const rec = await store.fresh(user);
+  if (rec?.pending) await store.setFresh(user, { pending: null, lastAt: rec.lastAt }, rec);
+}
+
+async function startFresh(store: AccountStore, user: string, list: DeviceList | null, signer: string, body: Record<string, unknown> | null, now: number): Promise<Response> {
+  const raw = body?.["links"];
+  if (!Array.isArray(raw) || raw.length !== 1) return refuse(new BadRequest({ message: "a start-over takes {links}: one link, a new person key adding this desktop" }));
+  const read = await readDeviceList(raw);
+  if (!read.ok) return refuse(new BadRequest({ message: `that device list doesn't hold up: ${read.why}` }));
+  const desk = read.list.devices[0]!;
+  if (signer !== desk.device) return refuse(new Forbidden({ message: "a desktop starts over for itself" }));
+  if (desk.as !== "desktop") return refuse(new BadRequest({ message: "only a desktop starts over" }));
+  if (!list) return refuse(new NotFound({ message: "this account has no devices yet, so there's nothing to start over" }));
+  const rec = await store.fresh(user);
+  if (rec?.pending) {
+    if (canonical(rec.pending.links) === canonical(raw)) return answer(noticeOf(rec.pending));
+    return refuse(new Conflict({ message: "a start-over is already waiting: it keeps its end time, and a device of this account can cancel it" }));
+  }
+  if (Math.abs((raw[0] as DeviceLink).at - now) > AUTH_SKEW_MS) return refuse(new BadRequest({ message: "a start-over carries the time it's sent, and this one doesn't" }));
+  const used = [list.person, ...list.reroots.map((r) => r.root), ...list.devices.map((d) => d.device), ...list.revoked];
+  if (used.includes(read.list.person) || used.includes(desk.device)) return refuse(new Conflict({ message: "a start-over needs a new person key and a new device key" }));
+  if (rec && now - rec.lastAt < FRESH_EVERY_MS) return refuse(new TooMany({ message: "this account started over less than a day ago; try again tomorrow" }));
+  const start: FreshStart = {
+    id: b64url(crypto.getRandomValues(new Uint8Array(16))),
+    at: now,
+    ends: now + FRESH_WAIT_MS,
+    label: desk.label,
+    os: desk.os,
+    links: raw as DeviceLink[],
+    device: desk.device,
+  };
+  if (!(await store.setFresh(user, { pending: start, lastAt: now }, rec))) return refuse(new Conflict({ message: "the start-over changed meanwhile; read it and try again" }));
+  return answer(noticeOf(start), 202);
+}
+
+async function cancelFresh(store: AccountStore, user: string, list: DeviceList | null, signer: string, id: string, now: number): Promise<Response> {
+  const rec = await store.fresh(user);
+  const start = rec?.pending;
+  if (!rec || !start || start.id !== id) return refuse(new NotFound({ message: "that start-over is gone" }));
+  const listed = !!list && (signer === list.root || !!currentDevice(list, signer, now));
+  if (!listed && signer !== start.device) return refuse(new Forbidden({ message: "only a device of this account cancels a start-over" }));
+  if (!(await store.setFresh(user, { pending: null, lastAt: rec.lastAt }, rec))) return refuse(new Conflict({ message: "the start-over changed meanwhile; read it and try again" }));
   return done();
 }
 
@@ -124,16 +199,22 @@ export async function onAccountHttp(
   if (req.method === "OPTIONS") return corsPreflight();
   const now = (opts.now ?? Date.now)();
   const onVault = url.pathname === VAULT_PATH;
-  const onAsk = url.pathname !== "/v1/account" && !onVault;
-  const id = m[1];
-  const step = m[2];
+  const onFresh = url.pathname.startsWith(FRESH_PATH);
+  const onAsk = url.pathname !== "/v1/account" && !onVault && !onFresh;
+  const id = m[2];
+  const step = m[3];
   const writes = req.method === "PUT" || req.method === "POST";
-  const bytes = writes ? await readCapped(req, onAsk ? ASK_MAX_BYTES : onVault ? VAULT_MAX_BYTES : LIST_MAX_BYTES) : new Uint8Array(0);
+  const bytes = writes ? await readCapped(req, onAsk || onFresh ? ASK_MAX_BYTES : onVault ? VAULT_MAX_BYTES : LIST_MAX_BYTES) : new Uint8Array(0);
   if (bytes === null) return refuse(new TooLarge({ message: "that request is too large for an account route" }));
   if (writes && opts.perAddress && !(await opts.perAddress())) return refuse(new TooMany({ message: "too many account requests from this address; try again in a few minutes" }));
   const body = new TextDecoder().decode(bytes);
+  await settleFresh(store, user, now);
   const { links, list } = await kept(store, user);
 
+  if (onFresh && !m[1] && req.method === "GET") {
+    const pending = (await store.fresh(user))?.pending;
+    return answer({ fresh: pending ? noticeOf(pending) : null });
+  }
   if (onVault && req.method === "GET") return answer({ recovery: await store.recovery(user), vault: await store.vault(user) });
   if (!onAsk && req.method === "GET") return answer({ user, links });
 
@@ -141,6 +222,12 @@ export async function onAccountHttp(
   const signer = token ? await verifyRequest(token, accountScope(user), req.method, url.pathname, body, now) : null;
   if (!signer) return refuse(new Unauthorized({ message: "sign this request for this account and path" }));
   if (list?.revoked.includes(signer)) return refuse(new Forbidden({ message: "this device was removed from this person's devices" }));
+
+  if (onFresh) {
+    if (!m[1] && req.method === "POST") return startFresh(store, user, list, signer, parse(body), now);
+    if (m[1] && req.method === "DELETE") return cancelFresh(store, user, list, signer, m[1], now);
+    return refuse(new NotFound({ message: "not found" }));
+  }
 
   if (onVault) return req.method === "PUT" ? keepVault(store, user, list, signer, parse(body), now) : refuse(new NotFound({ message: "not found" }));
 
@@ -150,12 +237,20 @@ export async function onAccountHttp(
     const read = await readDeviceList(raw);
     if (!read.ok) return refuse(new BadRequest({ message: `that device list doesn't hold up: ${read.why}` }));
     const next = read.list;
-    if (signer !== next.person && !approver(next, signer, now)) return refuse(new Forbidden({ message: "only the person key or an app that approves devices publishes their list" }));
+    if (!speaksForPerson(next, signer, now)) return refuse(new Forbidden({ message: "only the person key or an app that approves devices publishes their list" }));
     if (list && next.person !== list.person) return refuse(new Conflict({ message: "this account belongs to another person key" }));
     if (raw.length < links.length) return refuse(new Conflict({ message: "a newer device list is already kept" }));
     if (links.some((l, i) => canonical(l) !== canonical(raw[i]))) return refuse(new Conflict({ message: "that list doesn't extend the one kept" }));
     if (raw.length === links.length) return done();
+    const reroots = (raw.slice(links.length) as DeviceLink[]).flatMap((l) => (l.op === "reroot" ? [l] : []));
+    if (reroots.length) {
+      const chain = await store.recovery(user);
+      if (reroots.some((l) => Math.abs(l.at - now) > AUTH_SKEW_MS)) return refuse(new BadRequest({ message: "a re-root carries the time it's sent, and this one doesn't" }));
+      if (reroots.some((l) => canonical(l.recovery) !== canonical(chain)))
+        return refuse(new Conflict({ message: "a re-root is signed against the recovery chain this account keeps, and this one isn't" }));
+    }
     if (!(await store.extend(user, links.length, raw.slice(links.length) as DeviceLink[]))) return refuse(new Conflict({ message: "the device list changed meanwhile; read it and try again" }));
+    if ((raw.slice(links.length) as DeviceLink[]).some((l) => l.op === "reroot" || l.pk === list?.root)) await dropFresh(store, user);
     const cut = next.revoked.filter((k) => !list?.revoked.includes(k));
     if (cut.length) await store.revoke(cut);
     const computers = next.devices.filter((d) => d.as === "computer").map((d) => d.device);

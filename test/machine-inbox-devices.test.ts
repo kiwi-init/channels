@@ -49,6 +49,7 @@ beforeAll(async () => {
     dir: root,
     machine: () => paired,
     checkMs: 100,
+    listed: async () => false,
     unpaired: async () => {
       if (paired) await forgetAtRelay(paired);
       paired = paired ? { identity: paired.identity, label: paired.label, relay: paired.relay } : null;
