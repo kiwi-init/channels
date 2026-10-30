@@ -135,10 +135,24 @@ const WRAP: CSSProperties = { display: "flex", flexDirection: "column" }
 const parsing = new Map<string, Promise<ASTNode>>()
 
 const OWN_LINK = /^kiwi-(?:mention|task|msg):/
+const OPENED = /^(?:https?:\/\/|mailto:)/i
+const LOCAL_PICTURE = /^(?:data|blob):/i
+
+const opened = (url: string): boolean => OWN_LINK.test(url) || (OPENED.test(url.trim()) && !!sanitizeMarkdownUrl(url))
+
+function pictureLink(node: ASTNode): void {
+  const url = node.attributes?.url ?? ""
+  const safe = /^https?:\/\//i.test(url.trim()) ? sanitizeMarkdownUrl(url) : undefined
+  const alt = textOf(node) || "image"
+  node.type = "Link"
+  node.attributes = safe ? { url: safe } : {}
+  node.children = [{ type: "Text", content: safe ? `${alt} (opens ${new URL(safe).hostname})` : alt }]
+}
 
 export function safeLinks(node: ASTNode): void {
   const url = node.attributes?.url
-  if (node.type === "Link" && url !== undefined && !OWN_LINK.test(url) && !sanitizeMarkdownUrl(url)) delete node.attributes?.url
+  if (node.type === "Image" && !LOCAL_PICTURE.test(url?.trim() ?? "")) pictureLink(node)
+  else if (node.type === "Link" && url !== undefined && !opened(url)) delete node.attributes?.url
   for (const child of node.children ?? []) safeLinks(child)
 }
 
