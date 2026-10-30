@@ -1,3 +1,4 @@
+import { AccountError, moveAccount } from "@kiwi/core/account.ts";
 import { sessionExpiry, tokenExpiry, WORKOS_TOKEN_URL, workosDeviceSignIn } from "@kiwi/core/workos.ts";
 import type { SignInResult } from "./bridge.ts";
 import { linkedHere } from "./github-flow.ts";
@@ -51,18 +52,60 @@ export async function createToken(): Promise<string | null> {
 let refreshing: Promise<string | null> | null = null;
 
 /**
- * The token for the account (devices, enrolling): the WorkOS session, since an account made with
- * it is kept under its user until it moves. The GitHub sign-in only for a person whose key came
- * after it on this computer: their github_<id> account is their own. Anyone else without a session
- * gets no token, and the account routes say to sign in, rather than read an empty account.
+ * The token for the account (devices, enrolling): the GitHub sign-in once the account moved to it,
+ * else the WorkOS session, since an account made with it is kept under its user until it moves. The
+ * GitHub sign-in also for a person whose key came after it on this computer: their github_<id>
+ * account is their own. Anyone else without a session gets no token, and the account routes say to
+ * sign in, rather than read an empty account.
  */
 export async function freshToken(): Promise<string | null> {
+  if (store.github?.moved) {
+    const github = await githubSignInToken();
+    if (github) return github;
+  }
   const s = store.signin;
   if (!s) return store.github?.first ? githubSignInToken() : null;
-  if (Date.now() < Math.min(s.exp, tokenExpiry(s.access) ?? s.exp) - 60_000) return s.access;
+  return workosToken(s);
+}
+
+function workosToken(s: NonNullable<StoreFile["signin"]>): Promise<string | null> {
+  if (Date.now() < Math.min(s.exp, tokenExpiry(s.access) ?? s.exp) - 60_000) return Promise.resolve(s.access);
   refreshing ??= refreshToken(s).finally(() => (refreshing = null));
   return refreshing;
 }
+
+let moving: Promise<string | null> | null = null;
+let refused: { id: number; why: string } | null = null;
+
+export function moveToGithub(): Promise<string | null> {
+  moving ??= moveOnce().finally(() => (moving = null));
+  return moving;
+}
+
+async function moveOnce(): Promise<string | null> {
+  const link = store.github;
+  const s = store.signin;
+  if (!s || !link || link.first || link.moved) return null;
+  if (refused?.id === link.id) return refused.why;
+  const github = await githubSignInToken();
+  const signer = store.person ?? store.device;
+  if (!github || !signer) return null;
+  try {
+    await moveAccount(store.relayUrl, async () => (await workosToken(s)) ?? "", github, `github_${link.id}`, signer);
+  } catch (err) {
+    if (!(err instanceof AccountError) || err.status < 400 || err.status >= 500 || err.status === 401 || err.status === 429) return null;
+    refused = { id: link.id, why: err.message };
+    return err.message;
+  }
+  mutate((st) => {
+    if (st.github?.id === link.id) st.github = { ...st.github, moved: true };
+  });
+  return null;
+}
+
+export const forgetMoveRefusal = (): void => {
+  refused = null;
+};
 
 async function refreshToken(s: NonNullable<StoreFile["signin"]>): Promise<string | null> {
   try {
