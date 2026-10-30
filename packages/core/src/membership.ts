@@ -177,7 +177,7 @@ export function inlineText(s: unknown, max = 120): string {
   return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
 }
 
-export const ad = (room: string) => `mc-member\n${room}`;
+const ad = (room: string) => `mc-member\n${room}`;
 
 export async function makeRecord(owner: Identity, room: string, m: MemberInfo & { pk: string; xpk: string; owner?: boolean }): Promise<MemberRecord> {
   return sign(owner, {

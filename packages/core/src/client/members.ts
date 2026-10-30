@@ -2,9 +2,9 @@ import { delegationLive } from "../delegation.ts";
 import type { DeviceList } from "../devices.ts";
 import { cleanPersona, personaScopes, type Persona } from "../personality.ts";
 import * as Effect from "effect/Effect";
-import { newChannelKey, openWith, sealWith } from "../crypto.ts";
+import { newChannelKey } from "../crypto.ts";
 import { sign } from "../identity.ts";
-import { ad, inlineText, makeRecord, sealRecord, type Member, type PersonPowers } from "../membership.ts";
+import { inlineText, makeRecord, sealRecord, type Member, type PersonPowers } from "../membership.ts";
 import { omit } from "../omit.ts";
 import { Rejected } from "../refusals.ts";
 import { canPost, SCOPES, scopesOf, type Scope } from "../scopes.ts";
@@ -247,19 +247,6 @@ export class ChannelMembers {
           Effect.mapError((err) => this.stillListed(err, rows, without)),
           Effect.ensuring(Effect.sync(() => this.info.forgetInfo())),
         );
-      if (restate) {
-        for (const row of rows) {
-          if (!holders.some((h) => h.pk === row.pk)) continue;
-          const was = this.ch.access.keys[String(row.e)];
-          if (!was) continue;
-          const text = yield* Effect.promise(() => openWith(was, row.rec, ad(this.ch.roomId)));
-          if (!text) continue;
-          const rec = yield* Effect.promise(() => sealWith(key, text, ad(this.ch.roomId)));
-          yield* this.ch
-            .request(`/members/${row.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e: next, post: row.pk === this.ch.identity.pk ? true : !row.read_only }) })
-            .pipe(Effect.ignoreCause);
-        }
-      }
       this.ch.access = { ...this.ch.access, epoch: next, keys: { ...this.ch.access.keys, [String(next)]: key }, ...(restate ? { signedKeys: true } : {}) };
       this.ch.onAccess?.(this.ch.access);
       this.ch.rotating = true;

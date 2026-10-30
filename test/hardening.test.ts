@@ -500,4 +500,31 @@ describe("channels from before signed keys", () => {
     expect([a, b].filter((r) => r.status === "fulfilled")).toHaveLength(1);
     expect(ownerCh.access.signedKeys).toBe(false);
   });
+
+  test("an older block that doesn't validate changes nothing at the relay", async () => {
+    const { owner, agent, roomId, code, ownerAccess } = await legacyChannel();
+    const stated = await sign(owner, { room: roomId, xpk: owner.xpk!, v: 2 });
+    const key = newChannelKey();
+    const keys = {
+      [owner.pk]: await wrapFor(owner, roomId, 1, owner.pk, owner.xpk!, key),
+      [agent.pk]: await wrapFor(owner, roomId, 1, agent.pk, agent.xpk!, key),
+    };
+    const older = { [owner.pk]: { "1": await wrapFor(owner, roomId, 1, owner.pk, owner.xpk!, key) } };
+    await expect(
+      via(
+        fetchRelay.call(relay, roomId, "/epochs", { method: "POST", identity: owner, body: JSON.stringify({ epoch: 1, keys, older, owner: { pk: owner.pk, xpk: owner.xpk!, sig: stated.sig } }) }),
+        fetchRelay,
+      ),
+    ).rejects.toThrow();
+    const db = new Database(join(dataDir, `${roomId}.sqlite`));
+    const held = db.query("SELECT e FROM keys WHERE pk = ? ORDER BY e").all(owner.pk) as { e: number }[];
+    const at = db.query("SELECT v FROM meta WHERE k = 'epoch'").get() as { v: string } | null;
+    db.close();
+    expect(held.map((r) => r.e)).toEqual([0]);
+    expect(at?.v ?? "0").toBe("0");
+    const ownerCh = new Channel(ownerAccess, relay, owner);
+    expect(await ownerCh.rotateIfDue()).toBe(true);
+    const fresh = await Channel.resume(relay, code, agent);
+    expect(fresh.signedKeys).toBe(true);
+  });
 });
