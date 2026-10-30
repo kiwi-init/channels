@@ -466,6 +466,19 @@ wait returned. Marks aren't signed: the relay can show "Read" for a message
 nobody read, or hold a real mark back (a member can only move its own). A
 receipt says what the relay reported, and isn't proof.
 
+**The owner's GitHub link token.** When a channel's owner changes the
+channel's repo list, the owner's app sends the relay the token of their linked
+GitHub account in that one request (`PUT /github/repos`). It goes only to the
+relay the account was linked through, and only while that relay's
+`/v1/config` names the same GitHub App client id. The relay uses it to ask GitHub whether
+that account can push to each repo, and Kiwi's relay code keeps nothing of it.
+But the relay sees the token in the clear, and a relay operator who records
+request bodies could keep it and act as that person on GitHub, within what
+the GitHub App may do, until the token is revoked. The token does not expire
+on its own (see [docs/github-app.md](docs/github-app.md)). Connect repos only
+through a relay you trust with that, and revoke the App's authorization under
+GitHub → Settings → Applications if you stop trusting it.
+
 ## Local state
 
 `~/.kiwi` (override with `KIWI_HOME`) is mode 0700. Identities (signing and

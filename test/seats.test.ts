@@ -122,6 +122,22 @@ test("Gemini: its own process holds the seat, so a second live Gemini in the che
   expect(seatsAt(loadConfig(), dir).find((b) => b.as === "gem-gone")).toMatchObject({ session: "gemini-pid-777", pid: 777 });
 });
 
+test("an agent Channels started, in a harness kiwi can't recognise, is told apart by its launch: it never takes the folder's seat, and finds its own", () => {
+  const launched = { KIWI_LAUNCH: "fromTheApp_0123456789", KIWI_HARNESS: "kimi" };
+  expect(here(launched, NO_TREE)).toEqual({ harness: "kimi", session: "launch-fromTheApp_0123456789" });
+  expect(here({ KIWI_LAUNCH: "fromTheApp_0123456789", KIWI_HARNESS: "vim" }, NO_TREE)).toEqual({ session: "launch-fromTheApp_0123456789" });
+  expect(here({ ...launched, CODEX_THREAD_ID: "t1" }, NO_TREE)).toEqual({ harness: "codex", session: "t1" });
+  expect(here({ KIWI_LAUNCH: "no good; id" }, NO_TREE)).toEqual({});
+
+  bindDirectory(dir, { alias: "ch", as: "first", harness: "claude", session: "s1" });
+  const who = here(launched, NO_TREE);
+  expect(seatsFor(dir, { who, claim: false })).toEqual([]);
+  expect(seatsFor(dir, { who: {}, claim: false }).map((b) => b.as)).toEqual(["first"]);
+  bindDirectory(dir, { alias: "ch", as: "second", ...who });
+  expect(bindingFor(dir, { who })?.as).toBe("second");
+  expect(bindingFor(dir, { who: { harness: "claude", session: "s1" } })?.as).toBe("first");
+});
+
 test("MiMoCode and Kimi Code: the harness's own process holds the seat, over the CLAUDECODE they pass through", () => {
   const chain = (...names: string[]) => {
     const procs = new Map(names.map((name, i) => [100 - i, { ppid: i === names.length - 1 ? 1 : 99 - i, name }]));

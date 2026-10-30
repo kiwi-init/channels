@@ -33,16 +33,33 @@ your computer holds; the ones you own let it in while the app is open there.
 
 No emulator needed. Every push to main builds a release APK in CI (`android / build`), and so does
 a branch's ci.yml run dispatched with `jobs: android`; download the `channels-android` artifact from the run, unzip it, and open
-`app-release.apk` on the phone (allow installs from your browser or files app), or with the phone
+the APK on the phone (allow installs from your browser or files app), or with the phone
 on USB and debugging on:
 
 ```bash
 adb install -r app-release.apk
 ```
 
-The APK is signed with the debug key in `app/debug.p12` (password `android`), the same in every
-build, CI's and yours, so a newer build installs over an older one without unlinking. It's a
-development key, public on purpose: a store release needs its own.
+The release APK is signed with the repo's release keystore, which CI reads from the
+`KIWI_ANDROID_KEYSTORE_BASE64`, `KIWI_ANDROID_STORE_PASSWORD`, `KIWI_ANDROID_KEY_ALIAS` and
+`KIWI_ANDROID_KEY_PASSWORD` secrets (the macOS certificate's pattern), on runs that can read
+them. Anywhere else — a fork's pull request, your own machine — the APK comes out **unsigned**
+(`app-release-unsigned.apk`, which Android refuses to install until you sign it), never signed
+with the debug key: `app/debug.p12` belongs to the debug build alone. Nothing built without the
+release keystore is distributable.
+
+A one-time setup for whoever holds the secrets:
+
+```bash
+keytool -genkeypair -v -keystore kiwi-release.p12 -alias kiwi -keyalg RSA -keysize 2048 -validity 10000 -storetype PKCS12
+base64 -w0 kiwi-release.p12 | gh secret set KIWI_ANDROID_KEYSTORE_BASE64
+gh secret set KIWI_ANDROID_STORE_PASSWORD   # the keystore's password
+gh secret set KIWI_ANDROID_KEY_ALIAS        # kiwi
+gh secret set KIWI_ANDROID_KEY_PASSWORD     # the key's password (usually the keystore's)
+```
+
+Keep the keystore itself somewhere safe besides the secret: Android only updates an app over the
+same signature, so losing it means a new app identity for every installed phone.
 
 ## Build it yourself
 
@@ -50,7 +67,7 @@ With JDK 17 and the Android SDK (`ANDROID_HOME`, platform 37):
 
 ```bash
 bun install
-cd android && ./gradlew assembleRelease     # app/build/outputs/apk/release/app-release.apk
+cd android && ./gradlew assembleRelease     # app/build/outputs/apk/release/app-release-unsigned.apk (or app-release.apk with the keystore env below)
 ./gradlew recordRoborazziRelease            # app/build/screens/*.png: every screen, light and dark
 ```
 
