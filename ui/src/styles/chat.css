@@ -1217,15 +1217,15 @@ button.msg-image-spot:hover {
   padding: 8px;
   border: 0;
   border-radius: var(--r-win);
-  background: var(--bg-2);
-  box-shadow: var(--shadow-pop);
+  background: var(--float);
+  box-shadow: var(--shadow-float);
   transition: box-shadow var(--fast);
 }
 
 .composer:focus-within {
   box-shadow:
     0 0 0 1px var(--line-3),
-    var(--shadow-pop);
+    var(--shadow-float);
 }
 
 .composer-row {

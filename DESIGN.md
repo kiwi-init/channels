@@ -48,7 +48,7 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
 | Token | Dark (OLED Black) | Light |
 |---|---|---|
 | `bg` (canvas, rail, sidebar, panels) | `#000000` | `#ffffff` |
-| `bg-2` (raised: composer, dialogs, cards) | `#0c0c0d` | `#f7f7f8` |
+| `bg-2` (raised: dialogs, cards) | `#0c0c0d` | `#f7f7f8` |
 | `bg-3` (fills: buttons, fields, tiles, tracks) | `#18181a` | `#efeff1` |
 | `ink` | `#ececef` | `#18181b` |
 | `ink-2` (secondary text, idle controls) | `#a3a3ab` | `#56565e` |
@@ -117,9 +117,9 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
   `999px` is for counts and the toggle track only. Avatars of people are round;
   agents and channel tiles are rounded squares.
 - Two shadows. `--shadow-pop` (`0 0 0 1px line-2`, then a soft black drop)
-  for what floats over the page: the composer, dialogs, menus, the palette,
-  the stash list, Jump to latest. `--shadow-float` for the top bar's
-  controls, which sit on the bar like a Mac toolbar's buttons: a `float`
+  for what floats over the page: dialogs, menus, the palette, the stash
+  list, Jump to latest. `--shadow-float` for the chrome's controls and the
+  composer, which sit on the app like a Mac toolbar's buttons: a `float`
   fill (`bg-3` in dark, `bg` in light), a 1px `line-2` ring and a short
   drop; dark adds a `line` highlight along the top edge. No coloured
   shadows.
@@ -184,8 +184,12 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   search and the terminal share a second group (`.top-group`, 2px inset,
   28px buttons at `r-row`). The search field floats the same way when open,
   and on a narrow window it takes the tabs' place. The other bars follow:
-  Settings' back button and a panel's close button float too. Hover on a
-  floating control is `float-2` (the `float` fill, 10% toward `ink`).
+  Settings' back button and a panel's close button float too, and so does
+  the rail: home, every channel tile, + and the Settings gear (a tile still
+  waiting to be let in keeps its outline and no fill). In the terminal
+  drawer the tabs and + are one `float` group and close floats. Hover on a
+  floating control is `float-2` (the `float` fill, 10% toward `ink`); the
+  chosen one is `float-3` (20%).
 - Fields (`.input`, `.textarea`, `Field` with label and hint): `bg-3` fill,
   `--ctl` high, `t-ui`; `.input.is-mono` for codes and paths.
 - `Seg` (`.seg`): a `bg-3` track, the chosen segment on `wash-2` in `ink`
@@ -285,10 +289,10 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 
 ## 10. Composer
 
-- A floating `bg-2` card at `r-win` with `shadow-pop`, centred in the
-  column at the bottom of the conversation (and of a panel), over the fade.
-  Top to bottom: the reply bar, attached images, the row with + (attach),
-  the textarea and send.
+- A floating `float` card at `r-win` with `shadow-float`, the same object as
+  the chrome's buttons, centred in the column at the bottom of the
+  conversation (and of a panel), over the fade. Top to bottom: the reply
+  bar, attached images, the row with + (attach), the textarea and send.
 - Send is a `--ctl` `r-ctl` square: `ink` with `on-ink` when there is something
   to send, `line-2` when not. Enter sends (or ⌘Enter, per Settings).
 - Typing `@name` or a task id (`T12`) opens a list of people or tasks just
