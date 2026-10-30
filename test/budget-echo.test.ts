@@ -63,9 +63,38 @@ afterAll(() => {
   rmSync(dataDir, { recursive: true, force: true });
 });
 
-function legacyRelay(target: string): { url: string; stop: () => void } {
-  const ups = new WeakMap<ServerWebSocket<{ path: string; protocols: string[] }>, { up: WebSocket; queued: string[] }>();
-  const srv = Bun.serve<{ path: string; protocols: string[] }>({
+type Pipe = { up: WebSocket; early: string[]; client: ServerWebSocket<Pipe> | null };
+
+const asOldRelay = (data: string): string => {
+  const f = JSON.parse(data) as ServerFrame;
+  return f.t === "ack" ? JSON.stringify({ t: "ack", id: f.id, seq: f.seq }) : data;
+};
+
+function upstream(url: string, protocols: string[]): Promise<Pipe | null> {
+  return new Promise((resolve) => {
+    const up = new WebSocket(url, protocols);
+    const pipe: Pipe = { up, early: [], client: null };
+    up.onopen = () => resolve(pipe);
+    up.onerror = () => resolve(null);
+    up.onmessage = (ev: MessageEvent<string>) => {
+      const out = asOldRelay(String(ev.data));
+      if (pipe.client) pipe.client.send(out);
+      else pipe.early.push(out);
+    };
+    up.onclose = (ev) => {
+      resolve(null);
+      try {
+        pipe.client?.close(ev.code === 1005 || ev.code === 1006 ? 1000 : ev.code, ev.reason);
+      } catch {
+        // The client already hung up: nothing to pass the close on to.
+      }
+    };
+  });
+}
+
+function legacyRelay(target: string): { url: string; refused: () => number; stop: () => void } {
+  let refused = 0;
+  const srv = Bun.serve<Pipe>({
     port: 0,
     hostname: "127.0.0.1",
     async fetch(req, s) {
@@ -76,7 +105,14 @@ function legacyRelay(target: string): { url: string; stop: () => void } {
           .split(",")
           .map((p) => p.trim())
           .filter(Boolean);
-        if (s.upgrade(req, { data: { path: url.pathname + url.search, protocols }, headers: { "sec-websocket-protocol": WS_PROTOCOL } })) return undefined;
+        const pipe = await upstream(target.replace(/^http/, "ws") + url.pathname + url.search, protocols);
+        if (!pipe) {
+          refused++;
+          return new Response(null, { status: 401 });
+        }
+        if (s.upgrade(req, { data: pipe, headers: { "sec-websocket-protocol": WS_PROTOCOL } })) return undefined;
+        pipe.up.close(1000);
+        return new Response(null, { status: 400 });
       }
       const body = req.method === "GET" || req.method === "HEAD" ? undefined : new Uint8Array(await req.arrayBuffer());
       const res = await fetch(target + url.pathname + url.search, { method: req.method, headers: req.headers, body });
@@ -87,42 +123,23 @@ function legacyRelay(target: string): { url: string; stop: () => void } {
     },
     websocket: {
       open(ws) {
-        const up = new WebSocket(target.replace(/^http/, "ws") + ws.data.path, ws.data.protocols);
-        const pipe = { up, queued: [] as string[] };
-        ups.set(ws, pipe);
-        up.onopen = () => {
-          for (const m of pipe.queued) up.send(m);
-          pipe.queued = [];
-        };
-        up.onmessage = (ev: MessageEvent<string>) => {
-          const f = JSON.parse(String(ev.data)) as ServerFrame;
-          if (f.t === "ack") ws.send(JSON.stringify({ t: "ack", id: f.id, seq: f.seq }));
-          else ws.send(String(ev.data));
-        };
-        up.onclose = (ev) => {
-          try {
-            ws.close(ev.code === 1005 || ev.code === 1006 ? 1000 : ev.code, ev.reason);
-          } catch {
-            // The client already hung up: nothing to pass the close on to.
-          }
-        };
+        ws.data.client = ws;
+        for (const out of ws.data.early) ws.send(out);
+        ws.data.early = [];
       },
       message(ws, data) {
-        const pipe = ups.get(ws);
-        if (!pipe) return;
-        if (pipe.up.readyState === WebSocket.OPEN) pipe.up.send(String(data));
-        else pipe.queued.push(String(data));
+        ws.data.up.send(String(data));
       },
       close(ws) {
         try {
-          ups.get(ws)?.up.close(1000);
+          ws.data.up.close(1000);
         } catch {
           // The upstream is already closed: nothing to pass the close on to.
         }
       },
     },
   });
-  return { url: srv.url.origin, stop: () => srv.stop(true) };
+  return { url: srv.url.origin, refused: () => refused, stop: () => srv.stop(true) };
 }
 
 interface Sock {
@@ -312,6 +329,7 @@ describe("app: the open conversation's sends", () => {
     await Bun.sleep(300);
     seen.stop();
     expectOwn(seen.messages, seqs, "old");
+    expect(legacy!.refused()).toBeGreaterThan(0);
   });
 
   test("interleaved with someone else's posts: the stream stays in seq order with no gaps or repeats", async () => {
