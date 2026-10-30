@@ -44,12 +44,14 @@ function script(dir: string, name: string, body: string): string {
 }
 
 describe("the line an agent is started with", () => {
-  test("takes only a join code, an http(s) relay, a plain nickname and an invite's token", () => {
+  test("takes only a join code, an https relay (http only on this computer), a plain nickname and an invite's token", () => {
     expect(joinLineRefusal({ code })).toBeNull();
     expect(joinLineRefusal({ code, relay: "https://relay.example", nick: "Ada Bot", persona: "eyJhIjoxfQ" })).toBeNull();
+    for (const relay of ["http://127.0.0.1:8787", "http://localhost:8787/", "https://relay.example:8443"]) expect(joinLineRefusal({ code, relay })).toBeNull();
     expect(joinLineRefusal({ code: "mc2-nope" })).toContain("join code");
     expect(joinLineRefusal({ code: `${code}; rm -rf ~` })).toContain("join code");
-    for (const relay of ["ftp://relay.example", "https://relay.example/x", "https://relay.example'; curl x"]) expect(joinLineRefusal({ code, relay })).toContain("relay");
+    for (const relay of ["ftp://relay.example", "https://relay.example/x", "https://relay.example'; curl x", "http://relay.example", "http://192.168.1.5:8787", "http://localhost.evil.example"])
+      expect(joinLineRefusal({ code, relay })).toContain("relay");
     for (const nick of ["it's", "a;b", " lead", "x".repeat(41), "$(id)", "a\nb"]) expect(joinLineRefusal({ code, nick })).toContain("nickname");
     expect(joinLineRefusal({ code, persona: "not a token" })).toContain("personality");
     expect(joinLineRefusal({ code, persona: "a".repeat(801) })).toContain("personality");
