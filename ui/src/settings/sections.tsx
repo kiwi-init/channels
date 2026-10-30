@@ -38,12 +38,16 @@ export function AccountSection() {
         <Row
           label="GitHub"
           hint={
-            account.github
-              ? "Your pull requests and their checks show up in tasks, and your GitHub picture is your face in channels."
-              : "Link it to see pull requests and their checks in tasks, and to wear your GitHub picture in channels."
+            account.githubSignIn
+              ? "You sign in with it. Your pull requests and their checks show up in tasks, and your GitHub picture is your face in channels."
+              : account.github
+                ? "Your pull requests and their checks show up in tasks, and your GitHub picture is your face in channels."
+                : "Link it to see pull requests and their checks in tasks, and to wear your GitHub picture in channels."
           }
         >
-          {account.github ? (
+          {account.githubSignIn && account.github ? (
+            <span className="set-value">@{account.github.login}</span>
+          ) : account.github ? (
             <>
               <span className="set-value">@{account.github.login}</span>
               <button type="button" className="btn is-quiet is-small" onClick={actions.unlinkGithub}>
