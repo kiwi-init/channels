@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useState, type CSSProperties } from "react"
 
 import { Conversation } from "~/chat/conversation"
-import { SearchBox, type Jump } from "~/chat/search-box"
+import type { Jump } from "~/chat/search-box"
 import { cx, Count, IconButton, useLate } from "~/kit/bits"
+import { useGlide } from "~/kit/glide"
 import { Boundary } from "~/kit/boundary"
 import { Icon } from "~/kit/icons"
 import { later } from "~/kit/later"
@@ -21,6 +22,7 @@ import { headerLine } from "~/now"
 import { between, nickname } from "~/names"
 
 const TermDrawer = lazy(() => import("~/term/drawer"))
+const SearchBox = later(() => import("~/chat/search-box").then((m) => m.SearchBox))
 const Board = later(() => import("~/tasks/board").then((m) => m.Board))
 const Lanes = later(() => import("~/tasks/lanes").then((m) => m.Lanes))
 const NeedsYou = later(() => import("~/needs/needs").then((m) => m.NeedsYou))
@@ -39,6 +41,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   if (jump && (nav.tab !== "chat" || !sameWhere(jump.m.where, nav.where))) setJump(null)
   const [searching, setSearching] = useState(false)
   const drawer = useDrawer()
+  const tabsRef = useGlide<HTMLElement>('[aria-pressed="true"]')
   const offline = useLate(channel.connection !== "live", 1000)
   useEffect(() => {
     setDrawer(false)
@@ -69,7 +72,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const needs = openAsks(channel).length
   const tasks = openTasks(channel).length
   const agents = channel.people.some((p) => p.kind === "agent" && !p.left)
-  const line = channel.loading ? [] : headerLine(channel, needs)
+  const line = channel.loading ? [] : headerLine(channel, 0)
   const here =
     nav.where.kind === "room"
       ? `# ${channel.rooms.find((r) => r.id === (nav.where as { room: string }).room)?.name ?? "general"}`
@@ -108,7 +111,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
             <Icon name="down" size={14} />
           </button>
         </div>
-        <nav className="tabs" aria-label="Views">
+        <nav ref={tabsRef} className="tabs" aria-label="Views">
           <button type="button" aria-pressed={nav.tab === "chat"} onClick={() => go({ to: "tab", tab: "chat" })}>
             {here}
           </button>
@@ -137,7 +140,9 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
             </span>
           )}
           {searching ? (
-            <SearchBox channel={channel} focusAsk={focusAsk} onJump={setJump} onClose={() => setSearching(false)} />
+            <Suspense fallback={null}>
+              <SearchBox channel={channel} focusAsk={focusAsk} onJump={setJump} onClose={() => setSearching(false)} />
+            </Suspense>
           ) : (
             <IconButton icon="search" label="Search this channel (⌘F)" onClick={() => setSearching(true)} />
           )}

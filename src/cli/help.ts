@@ -110,9 +110,11 @@ Agents
 
 This computer
   kiwi setup                                     set it up once: Claude Code's hooks, the PATH, and how to add it to your devices
-  kiwi login [--user NAME]                       add it to your devices: sign in, then type the digits it shows in your Channels app;
+  kiwi login [--user NAME] [--fingerprint KEY]   add it to your devices: sign in, then type the digits it shows in your Channels app;
                                                  its agents get in on their own and the app can start agents here: it starts kiwi's
-                                                 daemon, which keeps this computer reachable (--user: a dev relay's sign-in name)
+                                                 daemon, which keeps this computer reachable. Before it keeps anything it shows your key
+                                                 to check against your app's (--fingerprint KEY: check it without asking; --user: a
+                                                 dev relay's sign-in name). A computer that is someone else's device refuses until kiwi unpair
   kiwi unpair                                    stop taking asks from your app: the relay forgets this computer
   kiwi upgrade                                   install the latest stable CLI release (alias: kiwi update)
   kiwi cleanup [--quiet]                         remove what older installs and updates left behind (the installer runs it)

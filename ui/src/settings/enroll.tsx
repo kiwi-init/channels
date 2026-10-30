@@ -42,7 +42,10 @@ export function EnrollDialog() {
           else confirm()
         }}
       >
-        <p className="set-enroll-what">If you approve it, it joins your channels as you. Only approve a device you are holding now.</p>
+        <p className="set-enroll-what">
+          If you approve it, it joins your channels as you. Only approve a device you are holding now.
+          {ask.stage === "digits" && ask.fingerprint && ` It then asks you to check your key: ${ask.fingerprint}.`}
+        </p>
         {ask.stage === "waiting" && (
           <p className="set-pair-wait">
             <span className="set-pip is-waiting" aria-hidden="true" />

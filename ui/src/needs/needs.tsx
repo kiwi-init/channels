@@ -41,9 +41,13 @@ export function NeedsYou({ channel, onJump }: { channel: Channel; onJump: (jump:
         ) : channel.loading ? (
           <Loading />
         ) : (
-          <Empty title="Nothing needs you." icon="clear">
-            Asks from agents and people who want in show up here.
-          </Empty>
+          <div className="needs-clear">
+            <svg className="needs-tick" viewBox="0 0 40 40" aria-hidden="true">
+              <circle cx="20" cy="20" r="18" pathLength="1" />
+              <path d="M12.5 20.5l5.5 5.5 10-11" pathLength="1" />
+            </svg>
+            <Empty title="Nothing needs you.">Asks from agents and people who want in show up here.</Empty>
+          </div>
         )}
         {idle.length > 0 && (
           <section className="needs-idle" aria-label="Asked, holding nothing up">

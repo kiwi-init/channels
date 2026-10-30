@@ -242,6 +242,7 @@ export interface EnrollAskView {
   as: "desktop" | "phone" | "computer";
   at: number;
   stage: "new" | "waiting" | "digits" | "elsewhere";
+  fingerprint: string | null;
 }
 
 export interface DeviceView {

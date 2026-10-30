@@ -37,7 +37,7 @@
   align-items: center;
   gap: 8px;
   min-height: 40px;
-  padding: 6px 8px 6px 14px;
+  padding: 6px 8px 6px 16px;
   font: var(--t-ui) var(--ui);
 }
 
@@ -125,7 +125,7 @@
 .term-screen {
   flex: 1;
   min-height: 0;
-  margin: 0 6px 6px 14px;
+  margin: 0 6px 6px 16px;
   overflow: hidden;
   caret-color: transparent;
 }

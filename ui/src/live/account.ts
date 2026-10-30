@@ -349,6 +349,7 @@ export function useAccount(): Account | null {
       ...(update && !update.blocked ? { update: { version: update.version, ready: update.state === "ready", state: update.state } } : {}),
       ...(look ? { uiUpdate: look } : {}),
       key: person.pk.slice(0, 8),
+      personPk: person.pk,
       relay: relayUrl(),
       ...(unsealed ? { keysUnsealed: true } : {}),
       ...(bridge() ? { desktop: true } : {}),

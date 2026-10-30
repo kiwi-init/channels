@@ -3,6 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathS
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
+import { personFingerprint } from "@kiwi/core/fingerprint.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
 import { createDeviceHost } from "../desktop/src/devices.ts";
 import { foldersOn, harnessesOn, launchOn, machineOnline } from "../desktop/src/remote.ts";
@@ -96,7 +97,12 @@ beforeAll(async () => {
     wipe: () => {},
   });
   await app.poll();
-  const login = Bun.spawn([process.execPath, MAIN_TS, "login", "--user", "ada"], { cwd: root, env: { ...env(), KIWI_RELAY: relay }, stdout: "pipe", stderr: "pipe" });
+  const login = Bun.spawn([process.execPath, MAIN_TS, "login", "--user", "ada", "--fingerprint", await personFingerprint(person.pk)], {
+    cwd: root,
+    env: { ...env(), KIWI_RELAY: relay },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
   let ask = await app.poll();
   for (const until = Date.now() + 20_000; !ask && Date.now() < until; ask = await app.poll()) await Bun.sleep(100);
   if (!ask) throw new Error("the computer never asked to be added");

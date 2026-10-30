@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react"
 
+import { useMoved } from "~/kit/glide"
 import { HarnessLogo, Icon, type IconName } from "~/kit/icons"
 import type { Person, TaskStatus } from "~/model"
 
@@ -32,12 +33,20 @@ export const STATUS_WORDS: Record<TaskStatus, string> = { todo: "to do", doing: 
 export const statusWord = (t: { status: TaskStatus; cancelled?: boolean }): string => (t.cancelled ? "cancelled" : STATUS_WORDS[t.status])
 
 export function Dot({ status }: { status: TaskStatus }) {
-  return <span className={cx("dot", `is-${status}`)} aria-hidden="true" />
+  const moved = useMoved(status)
+  return <span key={status} className={cx("dot", `is-${status}`, moved && "is-moved")} aria-hidden="true" />
 }
 
 export function Count({ n, loud }: { n: number; loud?: boolean }) {
+  const moved = useMoved(n)
   if (!n) return null
-  return <span className={cx("count", loud && "is-loud")}>{n > 99 ? "99+" : n}</span>
+  return (
+    <span className={cx("count", loud && "is-loud")}>
+      <span key={n} className={moved ? "count-n" : undefined}>
+        {n > 99 ? "99+" : n}
+      </span>
+    </span>
+  )
 }
 
 export function Heading({ children, action }: { children: ReactNode; action?: ReactNode }) {
