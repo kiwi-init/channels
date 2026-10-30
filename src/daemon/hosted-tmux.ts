@@ -3,6 +3,7 @@ import { chmodSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync,
 import { dirname, join } from "node:path";
 import { loginPath, loginShell } from "../launch/shell.ts";
 import { OWN_TMUX_DIR } from "@kiwi/core/terminals.ts";
+import type { Ended } from "../launch/place.ts";
 import type { Pane, PlaceRequest, Placed } from "../terminals/plugin.ts";
 import { loginArgv, SESSION_MARKERS } from "../terminals/shared/launch.ts";
 import { run, said, type Ran } from "../terminals/shared/run.ts";
@@ -24,6 +25,9 @@ const PAUSED = /^%pause (%\d+)$/;
 const GONE = /^%(?:window-close|unlinked-window-close) (@\d+)$/;
 const MINE = "@kiwi-mine";
 const MINE_FORMAT = `#{${MINE}}\t#{window_id}\t#{pane_id}\t#{pane_dead}\t#{pane_current_command}`;
+const DEAD_LINE = /^Pane is dead\b/;
+const TAIL_LINES = 6;
+const TAIL_WIDTH = 200;
 
 export const HOSTED_CONF = [
   "set -s exit-empty off",
@@ -95,6 +99,15 @@ export function ownTmux(home: string): string[] {
       return y[0] - x[0] || y[1] - x[1] || y[2].localeCompare(x[2]);
     })
     .map((name) => join(home, OWN_TMUX_DIR, name));
+}
+
+export function lastLines(screen: string, most = TAIL_LINES): string[] {
+  return screen
+    .split("\n")
+    .map((l) => l.trimEnd())
+    .filter((l) => l && !DEAD_LINE.test(l))
+    .slice(-most)
+    .map((l) => (l.length > TAIL_WIDTH ? `${l.slice(0, TAIL_WIDTH - 1)}…` : l));
 }
 
 export async function findTmux(home: string, env: Record<string, string | undefined> = process.env): Promise<HostedTmuxBin | null> {
@@ -236,6 +249,16 @@ export class HostedTmux {
       enter: () => free() && inner.enter(),
       erase: (count) => free() && inner.erase(count),
     };
+  }
+
+  async ended(pane: string): Promise<Ended | null> {
+    const st = this.state();
+    if (!st) return null;
+    const r = await this.tmux(st, ["display-message", "-p", "-t", pane, "#{pane_dead}\t#{pane_dead_status}"]);
+    const [dead, status] = r.stdout.trim().split("\t");
+    if (r.status !== 0 || dead !== "1") return null;
+    const shown = await this.tmux(st, ["capture-pane", "-p", "-J", "-S", "-", "-t", pane]);
+    return { code: Number(status) || 0, tail: lastLines(shown.status === 0 ? shown.stdout : "") };
   }
 
   typing(pane: string): boolean {
