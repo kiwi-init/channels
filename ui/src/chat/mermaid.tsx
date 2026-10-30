@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from "react"
+import { sanitizeMarkdownUrl } from "@kiwi/app/markdown.ts"
 
 type Mermaid = (typeof import("mermaid"))["default"]
 export type Drawn = { kind: "svg"; svg: string } | { kind: "error"; message: string } | null
@@ -94,12 +95,33 @@ export function errorLine(e: unknown): string {
   )
 }
 
+const ADDRESS = /\s(?:xlink:href|href|src)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g
+const OPENED = /^(?:https?:\/\/|mailto:)/i
+
+const unescaped = (value: string): string =>
+  value
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .trim()
+
+const keeping = (attrs: string, kept: (address: string) => boolean): string =>
+  attrs.replace(ADDRESS, (all: string, double?: string, single?: string, bare?: string) => (kept(unescaped(double ?? single ?? bare ?? "")) ? all : ""))
+
 export function linksApart(svg: string): string {
-  return svg.replace(
-    /<a\b([^>]*?)(\/?)>/g,
-    (_, attrs: string, close: string) => `<a${attrs.replace(/\s(?:target|rel)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/g, "")} target="_blank" rel="noopener noreferrer"${close}>`
-  )
+  return svg.replace(/<a\b([^>]*?)(\/?)>/g, (_, attrs: string, close: string) => {
+    const opened = keeping(attrs.replace(/\s(?:target|rel)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/g, ""), (url) => OPENED.test(url) && !!sanitizeMarkdownUrl(url))
+    return `<a${opened} target="_blank" rel="noopener noreferrer"${close}>`
+  })
 }
+
+export function picturesOff(svg: string): string {
+  return svg.replace(/<(image|img)\b([^>]*?)(\/?)>/gi, (_, tag: string, attrs: string, close: string) => `<${tag}${keeping(attrs, (url) => /^data:/i.test(url))}${close}>`)
+}
+
+const PICTURE_SHAPE = /@\{[^}]*?["']?\bimg\b["']?\s*:/is
 
 function draw(source: string): Promise<Drawn> {
   const run = queue.then(async (): Promise<Drawn> => {
@@ -140,7 +162,7 @@ function draw(source: string): Promise<Drawn> {
     try {
       await m.parse(source)
       const { svg } = await m.render(`kiwi-mermaid-${next++}`, source)
-      return { kind: "svg", svg: linksApart(svg) }
+      return { kind: "svg", svg: picturesOff(linksApart(svg)) }
     } catch (e) {
       return { kind: "error", message: errorLine(e) }
     }
@@ -161,7 +183,12 @@ export function drawCached(source: string, scheme: string, render: (source: stri
     drawings.set(key, held)
     return held
   }
-  const fresh = source.length > MAX_SOURCE ? Promise.resolve<Drawn>({ kind: "error", message: `it's too long to draw (over ${MAX_SOURCE.toLocaleString("en")} characters)` }) : render(source)
+  const fresh =
+    source.length > MAX_SOURCE
+      ? Promise.resolve<Drawn>({ kind: "error", message: `it's too long to draw (over ${MAX_SOURCE.toLocaleString("en")} characters)` })
+      : PICTURE_SHAPE.test(source)
+        ? Promise.resolve<Drawn>({ kind: "error", message: "it shows a picture from an address, and Kiwi doesn't load those" })
+        : render(source)
   drawings.set(key, fresh)
   const oldest = drawings.keys().next()
   if (drawings.size > MAX_DRAWN && !oldest.done) drawings.delete(oldest.value)

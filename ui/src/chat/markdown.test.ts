@@ -142,6 +142,15 @@ describe("the renderer only links what a click opens, and never loads a remote p
     expect(html).not.toContain("file:")
     expect(html).toContain('<img src="data:image/png;base64,AAAA"')
   })
+
+  test("a remote picture inside a link is its alt text, so the link around it stays the only one", async () => {
+    const html = await rendered("[![thumb *x*][pic]](https://destination.example) [![p](https://images.example/b.png)](https://two.example)\n\n[pic]: https://images.example/a.png")
+    expect(html).not.toContain("<img")
+    expect(html).not.toContain("images.example")
+    expect(html).not.toMatch(/<a[^>]*>(?:(?!<\/a>).)*<a/)
+    expect(html).toMatch(/<a href="https:\/\/destination.example"[^>]*>thumb x<\/a>/)
+    expect(html).toMatch(/<a href="https:\/\/two.example"[^>]*>p<\/a>/)
+  })
 })
 
 describe("a table sorts on a header click (T216)", () => {
