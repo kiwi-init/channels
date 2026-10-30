@@ -152,6 +152,28 @@ describe("a hosted tmux server", () => {
     expect(flags).toContain("pause-after=5");
   });
 
+  test.if(!!tmux)("agents and your terminal opened at the same moment on a server not started yet all open, on one control client", async () => {
+    const home = mkdtempSync(join(tmpdir(), "kiwi-hosted-burst-"));
+    const hosted = new HostedTmux(home);
+    try {
+      const opened = await Promise.all([
+        ...["a", "b", "c"].map((name) => hosted.open({ argv: ["/bin/sh", "-c", "exec sleep 60"], folder: home, name, env: {} })),
+        hosted.mine(home, null, "/bin/sh").then((m) => (m.ok ? { ok: true as const } : { ok: false as const, why: "failed", detail: m.detail })),
+      ]);
+      expect(opened.map((o) => (o.ok ? "ok" : o.detail))).toEqual(["ok", "ok", "ok", "ok"]);
+      const st = hosted.state()!;
+      expect(
+        (await hosted.tmux(st, ["list-clients", "-F", "#{client_flags}"])).stdout
+          .trim()
+          .split("\n")
+          .filter((f) => f.includes("control-mode")),
+      ).toHaveLength(1);
+    } finally {
+      await hosted.kill();
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   test.if(!!tmux)("a restarted daemon reattaches to the same server with the tmux it started with", async () => {
     const st = first.state()!;
     const pid = await read(st, ["display-message", "-p", "#{pid}"]);

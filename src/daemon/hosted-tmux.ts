@@ -132,6 +132,8 @@ export class HostedTmux {
   private readonly outputs = new Map<string, Set<HostedOutput>>();
   private readonly typed = new Map<string, number>();
   private closing = false;
+  private ensuring: Promise<HostedState> | null = null;
+  private attaching: Promise<void> | null = null;
 
   constructor(
     readonly home: string,
@@ -168,7 +170,12 @@ export class HostedTmux {
     return st;
   }
 
-  async ensure(): Promise<HostedState> {
+  ensure(): Promise<HostedState> {
+    this.ensuring ??= this.ensureOnce().finally(() => (this.ensuring = null));
+    return this.ensuring;
+  }
+
+  private async ensureOnce(): Promise<HostedState> {
     if (process.platform === "win32") throw new Error("hosted agents need tmux, which Windows doesn't have");
     this.closing = false;
     const known = this.state();
@@ -345,11 +352,17 @@ export class HostedTmux {
     renameSync(tmp, path);
   }
 
-  private async attach(st: HostedState): Promise<void> {
-    if (this.attached()) return;
-    if ((await this.tmux(st, ["has-session", "-t", `=${HOSTED_SESSION}`])).status !== 0) {
+  private attach(st: HostedState): Promise<void> {
+    if (this.attached()) return Promise.resolve();
+    this.attaching ??= this.attachOnce(st).finally(() => (this.attaching = null));
+    return this.attaching;
+  }
+
+  private async attachOnce(st: HostedState): Promise<void> {
+    const has = async () => (await this.tmux(st, ["has-session", "-t", `=${HOSTED_SESSION}`])).status === 0;
+    if (!(await has())) {
       const made = await this.tmux(st, ["new-session", "-d", "-s", HOSTED_SESSION, "-n", "hold", "true"]);
-      if (made.status !== 0) throw new Error(`tmux on ${st.socket} wouldn't make its ${HOSTED_SESSION} session: ${made.stderr.trim()}`);
+      if (made.status !== 0 && !(await has())) throw new Error(`tmux on ${st.socket} wouldn't make its ${HOSTED_SESSION} session: ${made.stderr.trim()}`);
     }
     const client: Client = Bun.spawn([st.bin, "-u", "-S", st.socket, "-C", "attach-session", "-t", `=${HOSTED_SESSION}`], { cwd: homedir(), stdin: "pipe", stdout: "pipe", stderr: "ignore" });
     this.client = client;

@@ -391,6 +391,9 @@ jobs:
         run: bash scripts/build-tmux.sh dist/tmux
       - name: hosted agents and your terminal open in their folder on the bundled tmux, even once its server's folder is deleted
         run: KIWI_TMUX="$PWD/dist/tmux" bun test test/hosted-tmux.test.ts
+      - name: Add agent, end to end, 30 times on the bundled tmux from a daemon whose folder was deleted, every start counted
+        timeout-minutes: 15
+        run: KIWI_TMUX="$PWD/dist/tmux" KIWI_STARTS=30 bun test test/start-harness.test.ts
       - working-directory: desktop
         env:
           DASH_RELEASE_OFFLINE: "1"
