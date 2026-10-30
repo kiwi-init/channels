@@ -22,6 +22,7 @@ enum Linking: Equatable {
     case signingIn(url: String?, code: String)
     case asking
     case approve(String)
+    case check(name: String, fingerprint: String)
     case failed(String)
 }
 
@@ -215,6 +216,15 @@ final class AppModel {
             linking = .asking
             let shown = try await engine.ask(["op": "enrollWait"], as: EnrollDigits.self)
             linking = .approve(shown.digits)
+            let person = try await engine.ask(["op": "enrollCheck"], as: EnrollPerson.self)
+            linking = .check(name: person.name, fingerprint: person.fingerprint)
+        } catch {
+            if linking != .idle { linking = .failed(error.localizedDescription) }
+        }
+    }
+
+    func keepLink() async {
+        do {
             let data = try await engine.ask(["op": "enrollFinish"])
             store(data)
             linking = .idle
@@ -223,6 +233,12 @@ final class AppModel {
         } catch {
             if linking != .idle { linking = .failed(error.localizedDescription) }
         }
+    }
+
+    func refuseLink(_ fingerprint: String) async {
+        linking = .failed(
+            "Kept nothing. If your computer never showed \(fingerprint), someone else answered this iPhone. Your computer may still list it under Devices: remove it there.")
+        try? await engine.ask(["op": "enrollCancel"])
     }
 
     func cancelLink() async {

@@ -27,7 +27,7 @@ import { createPerson, bridge, secrets, type KiwiBridge, type TermEvent, type Te
 import { isSignInGone } from "@kiwi/channel/session.ts"
 import { ANYONE, approveTask, assignTask, cancelTask, changeReviewer, closedDigest, sendBackTask, type TaskSend } from "@kiwi/channel/task-actions.ts"
 import { announce } from "~/kit/toasts"
-import { enrollAnswer, enrollBegin, enrollCancel, enrollConfirm, enrollDeny, forgetDevice, linkGithub, renewDevice, unlinkGithub, type EnrollDone } from "~/live/account"
+import { enrollAnswer, enrollBegin, enrollCancel, enrollConfirm, enrollDeny, enrollKeep, forgetDevice, linkGithub, renewDevice, unlinkGithub, type EnrollDone } from "~/live/account"
 import { loadPicture } from "~/live/pictures"
 import { newMemberPowers, newMemberScopes, setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
@@ -741,6 +741,7 @@ export function makeActions(): Actions {
           (d) => attempt("Couldn't join your channels", () => joinGranted(d))
         )
       ),
+    enrollKeep: () => attempt("Couldn't join as one of your devices", enrollKeep),
     enrollCancel: () => attempt("Couldn't take the ask back", enrollCancel),
     saveTheme,
     deleteTheme,

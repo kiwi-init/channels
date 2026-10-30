@@ -8,7 +8,7 @@ import type { LaunchedView } from "@kiwi/core/terminals.ts";
 import type { Identity } from "@kiwi/core/identity.ts";
 import { workosDeviceSignIn, type DeviceSignIn, type WorkosFetch } from "@kiwi/core/workos.ts";
 
-import type { ChannelIdentityView, EnrollStatusView, FromMachine } from "../../desktop/src/bridge.ts";
+import type { ChannelIdentityView, EnrollPersonView, EnrollStatusView, FromMachine } from "../../desktop/src/bridge.ts";
 import { createEnrollee, type Enrollee } from "../../desktop/src/devices.ts";
 import { Keyring } from "../../desktop/src/keyring.ts";
 import { launchRequestOf } from "../../desktop/src/launch-view.ts";
@@ -59,7 +59,6 @@ interface Enrolling {
   enrollee: Enrollee;
   device: Identity | null;
   grant: EnrollGrant | null;
-  done: boolean;
   stop: AbortController;
   asked: Promise<void> | null;
 }
@@ -362,16 +361,16 @@ async function enrollBegin(relay: string, label: string, os: string, user?: stri
     token: signIn.token,
     device: null,
     grant: null,
-    done: false,
     stop,
     asked: null,
     enrollee: createEnrollee({
       relayUrl: () => relay,
       token: () => e.token,
-      who: () => null,
-      device: () => e.device,
-      saveDevice: (d) => void (e.device = d),
-      enrolled: (grant) => void (e.grant = grant),
+      who: () => saved?.device?.person ?? (saved?.person ? { name: saved.person.name, pk: saved.person.pk, xpk: saved.person.xpk } : null),
+      enrolled: (grant, device) => {
+        e.grant = grant;
+        e.device = device;
+      },
       label: () => label,
       os: () => os,
       as: "phone",
@@ -389,8 +388,7 @@ async function enrollStage(e: Enrolling, until: (st: EnrollStatusView) => boolea
       enrolling = null;
       throw new Error("your computer turned this phone away, or the ask ran out: sign in again");
     }
-    if (st.stage === "done") e.done = true;
-    if (until(st) || e.done) return st;
+    if (until(st) || st.stage === "check") return st;
     await pause(ENROLL_EVERY_MS, e.stop.signal);
   }
 }
@@ -418,11 +416,22 @@ async function enrollWait(): Promise<{ digits: string }> {
   return { digits: st.stage === "digits" ? st.digits : "" };
 }
 
+async function enrollCheck(): Promise<EnrollPersonView> {
+  const e = enrolling;
+  if (!e) throw new Error("signing in hasn't started");
+  await enrollAsk();
+  const st = await enrollStage(e, (s) => s.stage === "check");
+  if (st.stage !== "check") throw new Error("your computer didn't send your person");
+  return st.person;
+}
+
 async function enrollFinish(): Promise<Saved> {
   const e = enrolling;
   if (!e) throw new Error("signing in hasn't started");
-  if (!e.done) await enrollStage(e, (s) => s.stage === "done");
+  await e.enrollee.keep();
+  if (enrolling !== e) throw new Error("signing in was cancelled, so this phone kept nothing");
   enrolling = null;
+  if (saved?.person || saved?.device) throw new Error("this phone is already one of your devices, so it kept nothing");
   const { grant, device } = e;
   if (!grant || !device?.xpk || !device.xsk) throw new Error("the grant came without this phone's keys: sign in again");
   const key = { name: device.name, pk: device.pk, sk: device.sk, xpk: device.xpk, xsk: device.xsk };
@@ -447,6 +456,8 @@ async function handle(ask: Ask): Promise<unknown> {
       return enrollAsk();
     case "enrollWait":
       return enrollWait();
+    case "enrollCheck":
+      return enrollCheck();
     case "enrollFinish":
       return enrollFinish();
     case "enrollCancel":

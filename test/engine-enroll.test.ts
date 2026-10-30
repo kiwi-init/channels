@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readDeviceList, type DeviceLink } from "@kiwi/core/devices.ts";
+import { personFingerprint } from "@kiwi/core/fingerprint.ts";
 import { withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { createDeviceHost, type DeviceHost } from "../desktop/src/devices.ts";
 import type { EnrollStart, Push, Reply, Saved } from "../ios/engine/wire.ts";
@@ -95,6 +96,8 @@ describe("the phone engine signs in and enrolls (T640)", () => {
     expect(digits).toMatch(/^\d{6}$/);
     expect(await host.confirm(id, digits)).toEqual({ ok: true, label: "Pixel 9" });
 
+    expect(await ask({ op: "enrollCheck" })).toEqual({ name: "Jow", fingerprint: await personFingerprint(person.pk) });
+    expect(pushes.some((p) => p.type === "saved")).toBe(false);
     const saved = await ask<Saved>({ op: "enrollFinish" });
     expect(saved.person).toBeNull();
     expect(saved.device?.person).toEqual({ name: "Jow", pk: person.pk, xpk: person.xpk! });
@@ -125,6 +128,7 @@ describe("the phone engine signs in and enrolls (T640)", () => {
     const waiting = ask<{ digits: string }>({ op: "enrollWait" });
     const id = await answered(host);
     await host.confirm(id, (await waiting).digits);
+    await ask({ op: "enrollCheck" });
     const saved = await ask<Saved>({ op: "enrollFinish" });
     const phone = saved.device!.key.pk;
     await letIn(s, () => pushes.some((p) => p.type === "room" && p.room.code === s.code && p.room.connection === "live"));
@@ -155,6 +159,43 @@ describe("the phone engine signs in and enrolls (T640)", () => {
     const id = await answered(host);
     await host.deny(id);
     await expect(waiting).rejects.toThrow("turned this phone away");
+  });
+
+  test("the phone keeps nothing until its person's key is confirmed, and a turned-down key leaves nothing behind (#1323)", async () => {
+    await ask({ op: "start", saved: { relay, person: null, seats: [] } });
+    const s = await setupChannel(relay, { personName: "Jow", human: "dev:phone4" });
+    const person = await withExchangeKey(s.person);
+    const host = desktop(person, "phone4", [{ label: "onemouse", code: s.code }]);
+    await host.poll();
+    await ask({ op: "enrollBegin", relay, label: "Pixel 9", os: "Android 16", user: "phone4" });
+    const waiting = ask<{ digits: string }>({ op: "enrollWait" });
+    const id = await answered(host);
+    await host.confirm(id, (await waiting).digits);
+    const before = pushes.length;
+    await expect(ask({ op: "enrollFinish" })).rejects.toThrow("check your person's key");
+    expect(await ask({ op: "enrollCheck" })).toEqual({ name: "Jow", fingerprint: await personFingerprint(person.pk) });
+    await ask({ op: "enrollCancel" });
+    await expect(ask({ op: "enrollFinish" })).rejects.toThrow("signing in hasn't started");
+    expect(pushes.slice(before).some((p) => p.type === "saved")).toBe(false);
+    await s.ownerCh.close();
+  });
+
+  test("a cancel that lands while the phone keeps its person wins, and nothing is saved (#1323)", async () => {
+    await ask({ op: "start", saved: { relay, person: null, seats: [] } });
+    const s = await setupChannel(relay, { personName: "Jow", human: "dev:phone5" });
+    const host = desktop(await withExchangeKey(s.person), "phone5", [{ label: "onemouse", code: s.code }]);
+    await host.poll();
+    await ask({ op: "enrollBegin", relay, label: "Pixel 9", os: "Android 16", user: "phone5" });
+    const waiting = ask<{ digits: string }>({ op: "enrollWait" });
+    const id = await answered(host);
+    await host.confirm(id, (await waiting).digits);
+    await ask({ op: "enrollCheck" });
+    const before = pushes.length;
+    const finishing = ask({ op: "enrollFinish" });
+    await ask({ op: "enrollCancel" });
+    await expect(finishing).rejects.toThrow("cancelled, so this phone kept nothing");
+    expect(pushes.slice(before).some((p) => p.type === "saved")).toBe(false);
+    await s.ownerCh.close();
   });
 
   test("a dev relay needs the sign-in name", async () => {

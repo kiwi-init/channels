@@ -3,6 +3,7 @@ import UIKit
 
 struct LinkView: View {
     @Environment(AppModel.self) private var model
+    @State private var keeping = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -93,6 +94,29 @@ struct LinkView: View {
                 waiting("Waiting for your computer")
                 QuietButton(title: "Cancel") { Task { await model.cancelLink() } }
                     .padding(.top, 24)
+            }
+        case .check(let name, let fingerprint):
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Is this your key, \(name)?").type(.title, .semibold).foregroundStyle(Tone.ink)
+                Text(fingerprint)
+                    .font(.mono(.title))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Tone.ink)
+                    .textSelection(.enabled)
+                    .padding(.vertical, 20)
+                Text("Your computer shows it next to the digits and in Settings. Join only if they match: a different key means someone else answered.")
+                    .type(.ui)
+                    .foregroundStyle(Tone.ink2)
+                PrimaryButton(title: "It Matches, Join", busy: keeping) {
+                    keeping = true
+                    Task {
+                        await model.keepLink()
+                        keeping = false
+                    }
+                }
+                .padding(.top, 20)
+                QuietButton(title: "It Doesn't Match") { if !keeping { Task { await model.refuseLink(fingerprint) } } }
+                    .padding(.top, 10)
             }
         }
     }

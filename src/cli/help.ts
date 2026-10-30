@@ -137,7 +137,8 @@ This computer
                                                  and version, whether kiwi launch starts it, with which options, and whether Kiwi can wake it
   kiwi folders [--room ROOM] [--json]            the folders an agent can be started in on this computer: where its seats work
                                                  (a channel's with --room, most recently seen first), the folders you added, and
-                                                 the git repos in your home folder, three levels down
+                                                 the git repos in your home folder, three levels down. Another of your devices
+                                                 starts agents only where its seats work and in the folders you added
      folders add|remove DIR                      let agents be started in DIR and the folders inside it, from this
                                                  computer or another of your devices; or stop that
   kiwi launch HARNESS --code CODE [--folder DIR] [--nick NAME] [--persona TOKEN]   start an agent in Channels' own
