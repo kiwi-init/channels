@@ -5,6 +5,7 @@ import { cx } from "~/kit/bits"
 import { useApp } from "~/nav"
 
 const Enroll = lazy(() => import("~/start/enroll"))
+const GithubSignIn = lazy(() => import("~/start/github-sign-in"))
 
 const ALLOWED = /^[A-Za-z0-9._-]+$/
 
@@ -18,6 +19,16 @@ function problemWith(name: string): string | null {
 
 export function FirstRun() {
   const { app } = useApp()
+  const signIn = app.signIn
+  if (signIn && (signIn.stage === "sign-in" || signIn.stage === "checking" || (signIn.stage === "signed-in" && !app.enrolling)))
+    return (
+      <main className="start-first">
+        <div className="start-drag" />
+        <Suspense fallback={null}>
+          <GithubSignIn signIn={signIn} />
+        </Suspense>
+      </main>
+    )
   if (app.enrolling)
     return (
       <main className="start-first">

@@ -429,6 +429,7 @@ export interface Account {
   handle?: string
   email?: string
   github?: { login: string }
+  githubSignIn?: boolean
   computers: Computer[]
   version: string
   update?: { version: string; ready: boolean; state?: "downloading" | "ready" | "available" }
@@ -572,6 +573,7 @@ export interface Actions {
   setPrefs(prefs: Partial<Prefs>): void
   forgetComputer(id: string): void
   linkGithub(): void
+  signInWithGithub(): void
   unlinkGithub(): void
   installUpdate(): void
   checkUpdate(): Promise<UpdateCheck | null>
@@ -637,8 +639,12 @@ export interface App {
   ownPersonalities: Personality[]
   computer: ThisComputer | null
   enrolling?: Enrolling | null
+  signIn?: GithubSignIn | null
   actions: Actions
 }
+
+/** Signing in with GitHub, the first thing on a relay that takes it: where it stands. */
+export type GithubSignIn = { stage: "checking" } | { stage: "sign-in"; code: { code: string; url: string } | null; problem: string | null } | { stage: "signed-in"; login: string }
 
 export function memberOf(channel: Pick<Channel, "people" | "former">, name: string): Person | undefined {
   return channel.people.find((p) => p.name === name) ?? channel.former?.find((p) => p.name === name)

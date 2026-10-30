@@ -1,4 +1,5 @@
-// Human sign-in at the relay: verifying WorkOS AuthKit access tokens.
+// Human sign-in at the relay: verifying GitHub user tokens from the relay's GitHub App, and
+// the WorkOS AuthKit access tokens older apps still send.
 //
 // When a relay is configured with a WorkOS client id, channels belong to a
 // signed-in human. Creating a channel, and every owner action (approve, deny,
@@ -16,8 +17,10 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 
 export interface HumanAuth {
-  /** The WorkOS client id the web app should sign in with. */
-  clientId: string;
+  /** The WorkOS client id older apps sign in with, or null when this relay takes only GitHub. */
+  clientId: string | null;
+  /** Whether a GitHub sign-in through this relay's GitHub App is taken in place of WorkOS. */
+  github?: boolean;
   /** The signed-in user's id (`sub`) if the token is valid, else null. */
   verify(token: string): Promise<string | null>;
   /** The user's real name (or email) from WorkOS, so the relay can vouch for "on behalf of whom". */
@@ -81,6 +84,8 @@ export function devRequestOk(req: Request, peer: string | undefined): boolean {
 interface HumanProfile {
   name: string;
   email?: string;
+  /** The GitHub login, for a person signed in with GitHub. */
+  login?: string;
 }
 
 /** Look up a WorkOS user's name with the API key (kept as a Worker secret). */
@@ -216,6 +221,81 @@ export function workosHumanAuth(clientId: string, jwksUrls: string | string[] = 
         return null;
       }
     },
+  };
+}
+
+/** A GitHub user token: a GitHub App's (ghu_) or an OAuth app's (gho_). WorkOS tokens are JWTs. */
+const GITHUB_TOKEN = /^gh[uo]_[A-Za-z0-9_]{20,255}$/;
+const GITHUB_SEEN_MS = 5 * 60_000;
+const GITHUB_SEEN_MAX = 1000;
+
+export interface GithubSignInSettings {
+  /** The relay's GitHub App client id, the one the apps sign in through. */
+  clientId?: string;
+  /** Its client secret: without it the relay can't tell this app's tokens from any other app's, so it takes none. */
+  clientSecret?: string;
+}
+
+interface GithubUser {
+  id: number;
+  login: string;
+  name?: string | null;
+  email?: string | null;
+}
+
+const sha256 = async (s: string): Promise<string> => b64(new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode(s))));
+const b64 = (bytes: Uint8Array): string => btoa(String.fromCharCode(...bytes));
+
+/**
+ * GitHub sign-in: a user token is taken only when GitHub says this relay's GitHub App issued
+ * it (the check-token API, which needs the app's client secret). The person is github_<id>:
+ * the numeric id, which outlives a renamed login. A token seen in the last five minutes isn't
+ * asked about again.
+ */
+export function githubHumanAuth(s: GithubSignInSettings, f: typeof fetch = fetch): Pick<HumanAuth, "verify" | "profile"> | null {
+  if (!s.clientId || !s.clientSecret) return null;
+  const basic = `Basic ${btoa(`${s.clientId}:${s.clientSecret}`)}`;
+  const seen = new Map<string, { user: string; until: number }>();
+  const profiles = new Map<string, HumanProfile>();
+  return {
+    async verify(token: string): Promise<string | null> {
+      if (!GITHUB_TOKEN.test(token)) return null;
+      const key = await sha256(token);
+      const hit = seen.get(key);
+      if (hit && hit.until > Date.now()) return hit.user;
+      seen.delete(key);
+      try {
+        const res = await f(`https://api.github.com/applications/${s.clientId}/token`, {
+          method: "POST",
+          headers: { authorization: basic, accept: "application/vnd.github+json", "x-github-api-version": "2022-11-28", "user-agent": "kiwi-relay", "content-type": "application/json" },
+          body: JSON.stringify({ access_token: token }),
+        });
+        if (!res.ok) return null;
+        const u = ((await res.json()) as { user?: GithubUser }).user;
+        if (!u || !Number.isInteger(u.id) || typeof u.login !== "string") return null;
+        const user = `github_${u.id}`;
+        if (seen.size >= GITHUB_SEEN_MAX) seen.delete(seen.keys().next().value!);
+        seen.set(key, { user, until: Date.now() + GITHUB_SEEN_MS });
+        profiles.set(user, { name: u.name || u.login, login: u.login, ...(u.email ? { email: u.email } : {}) });
+        return user;
+      } catch {
+        // GitHub unreachable: the sign-in can't be checked, so it isn't taken.
+        return null;
+      }
+    },
+    profile: async (user) => profiles.get(user) ?? null,
+  };
+}
+
+/** WorkOS for the apps that still send its tokens, GitHub for the rest: each token goes to the one that issued its kind. */
+export function withGithub(workos: HumanAuth | null, s: GithubSignInSettings, f: typeof fetch = fetch): HumanAuth | null {
+  const github = githubHumanAuth(s, f);
+  if (!github) return workos;
+  return {
+    clientId: workos?.clientId ?? null,
+    github: true,
+    verify: (token) => (GITHUB_TOKEN.test(token) ? github.verify(token) : (workos?.verify(token) ?? Promise.resolve(null))),
+    profile: async (user) => (user.startsWith("github_") ? github.profile!(user) : (workos?.profile?.(user) ?? null)),
   };
 }
 

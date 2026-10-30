@@ -223,21 +223,9 @@
 }
 
 .start-agents {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 24px;
+  margin: 24px 0 0;
   color: var(--ink-3);
-  font: var(--t-meta) var(--ui);
-}
-
-.start-agents .codebox {
-  padding: 6px 12px;
-  color: var(--ink-2);
-}
-
-.start-placeholder {
-  color: var(--ink-3);
+  font: var(--t-meta) / 1.55 var(--ui);
 }
 
 .start-wait {
@@ -335,10 +323,6 @@
     margin-bottom: 10px;
   }
 
-  .start-agents {
-    flex-wrap: wrap;
-  }
-
   .start-code {
     font-size: 40px;
   }
@@ -346,4 +330,30 @@
 
 .start-gone-foot {
   margin-top: 24px;
+}
+
+.start-gh {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  margin-top: 48px;
+  padding: 0 16px;
+}
+
+.start-gh-code {
+  margin-top: 4px;
+  user-select: all;
+}
+
+.start-go {
+  margin-top: 48px;
+}
+
+.start-go .btn {
+  padding: 0 24px;
+}
+
+.start-gh-wait {
+  margin-top: 16px;
 }

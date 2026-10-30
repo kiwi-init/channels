@@ -13,6 +13,7 @@ const kiwi = (nav: Partial<Nav> = {}): Shot => ({ scenario: "full", channel: "ki
 
 export const SHOTS: Record<string, Shot> = {
   channel: kiwi(),
+  home: { scenario: "full", channel: null },
   "long-feed": { scenario: "long", channel: "kiwi" },
   opening: { scenario: "opening", channel: "kiwi" },
   "opening-tasks": { scenario: "opening", channel: "kiwi", nav: { tab: "tasks" } },
@@ -101,5 +102,9 @@ export const SHOTS: Record<string, Shot> = {
   "channel-settings-guest": { scenario: "full", channel: "studio", nav: { panel: { kind: "channel" } } },
   updates: { scenario: "updates", channel: "kiwi" },
   "first-run": { scenario: "signed-out", channel: null },
+  "github-sign-in": { scenario: "github-sign-in", channel: null },
+  "github-code": { scenario: "github-code", channel: null },
+  "github-signed-in": { scenario: "github-signed-in", channel: null },
+  "github-gate": { scenario: "github-gate", channel: null },
   welcome: { scenario: "no-channels", channel: null },
 }

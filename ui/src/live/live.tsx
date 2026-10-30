@@ -14,7 +14,7 @@ import { lastChannel, rememberChannel, reopenable } from "@kiwi/app/last-channel
 import { newsTotal, rowNews, startMarks, useMarks, useOpenNews, useTabNews } from "@kiwi/channel/news.ts"
 import { useOwnPersonalities } from "@kiwi/app/personalities.ts"
 import { bridge, useSecrets } from "@kiwi/secrets/secrets.ts"
-import { useAccount, useEnrolling } from "~/live/account"
+import { useAccount, useEnrolling, useGithubGate, useGithubSignIn } from "~/live/account"
 import { makeActions } from "~/live/actions"
 import { chime } from "~/live/alerts"
 import { OpenMember, type View } from "~/live/channel"
@@ -109,13 +109,14 @@ export function useLive(open: string | null): App {
   const starts = useStarts()
   const computer = useComputer()
   const enrolling = useEnrolling()
+  const signIn = useGithubSignIn()
   const actions = useMemo(() => makeActions(), [])
   const channel = opened && opened.code === open ? opened.channel : null
   const lost = useGone()
   const gone = !channel && lost && lost.code === open ? lost : null
   return useMemo(
-    () => ({ account, channels, channel, ...(gone ? { gone } : {}), prefs, harnesses, personas, starts, ownPersonalities, computer, enrolling, actions }),
-    [account, channels, channel, gone, prefs, harnesses, personas, starts, ownPersonalities, computer, enrolling, actions]
+    () => ({ account, channels, channel, ...(gone ? { gone } : {}), prefs, harnesses, personas, starts, ownPersonalities, computer, enrolling, signIn, actions }),
+    [account, channels, channel, gone, prefs, harnesses, personas, starts, ownPersonalities, computer, enrolling, signIn, actions]
   )
 }
 
@@ -157,7 +158,8 @@ function useOpenLinks(go: (g: Go) => void, ready: boolean) {
 
 export function LiveDuties({ open, view, go }: { open: string | null; view: View; go: (g: Go) => void }) {
   const { person, channels } = useSecrets()
-  useOpenLinks(go, !!person)
+  const gate = useGithubGate()
+  useOpenLinks(go, !!person && gate !== "needed" && gate !== "unknown")
   const restored = useRef(false)
   useEffect(() => {
     if (restored.current || !person || !channels.length) return

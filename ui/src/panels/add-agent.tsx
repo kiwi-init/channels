@@ -88,7 +88,7 @@ export function AddAgentPanel({ channel }: { channel: Channel }) {
   const { app, go } = useApp()
   const taken = takenNames(channel)
   const [name, setName] = useState(() => freeName(taken))
-  const [way, setWay] = useState<Way>(PRESET === "add-agent-command" ? "command" : "here")
+  const [way, setWay] = useState<Way>(PRESET === "add-agent" ? "here" : "command")
   const [run, setRun] = useState<Run | null>(() => presetRun(app, name, channel.people))
   const following = useRef<(() => void) | null>(null)
 
@@ -125,13 +125,14 @@ export function AddAgentPanel({ channel }: { channel: Channel }) {
   return (
     <>
       <PanelHead title="Add agent" />
+      <p className="add-lede">Agents join a channel the way people join a chat. They stay yours: each one keeps running where it runs, and Channels never takes it over.</p>
       <div className="add-way">
         <Track className="seg" role="group" aria-label="How to add it">
+          <button type="button" aria-pressed={way === "command"} onClick={() => setWay("command")}>
+            Invite one you run
+          </button>
           <button type="button" aria-pressed={way === "here"} onClick={() => setWay("here")}>
             Start one here
-          </button>
-          <button type="button" aria-pressed={way === "command"} onClick={() => setWay("command")}>
-            Run the command
           </button>
         </Track>
       </div>
@@ -249,8 +250,9 @@ function StartHere({ channel, name, setName, taken, onStart }: NameProps & { onS
       }}
     >
       <div className="panel-body add-body">
+        <p className="add-how">Channels opens a new agent on one of your computers, in a terminal you can open from here. Once it's in, it's an agent like any other.</p>
         <Group label="Computer">
-          {computers.length === 0 && <p className="add-none">No computer of yours is linked. Use Run the command instead.</p>}
+          {computers.length === 0 && <p className="add-none">No computer of yours is linked. Invite one you run instead.</p>}
           {computers.map((c) => (
             <Choice
               key={c.id}
@@ -455,6 +457,7 @@ function RunCommand({ channel, name, setName, taken }: NameProps) {
   const { line, failed, retry } = useJoinCommand(channel.code, name, channel.youOwn ? persona : "")
   return (
     <div className="panel-body add-body">
+      <p className="add-how">Already running Claude Code, Codex or another agent? Give it this line. It asks to join, and it keeps working where it is.</p>
       <NameField name={name} setName={setName} problem={problem} />
       {channel.youOwn ? (
         <Group label="Personality">
@@ -490,8 +493,8 @@ function RunCommand({ channel, name, setName, taken }: NameProps) {
         )}
       </div>
       <p className="add-note">
-        Run it in the folder the agent should work in. It asks to join{persona && channel.youOwn ? ` as ${app.personas.find((p) => p.id === persona)?.label ?? "that personality"}` : ""}; you'll check
-        its code in Needs you.
+        Run it in the folder the agent should work in. If kiwi isn't on that computer yet, the line installs it first, from the same site, as a signed release. It asks to join
+        {persona && channel.youOwn ? ` as ${app.personas.find((p) => p.id === persona)?.label ?? "that personality"}` : ""}; you'll check its code in Needs you.
       </p>
     </div>
   )
@@ -504,7 +507,10 @@ export function AddAgentCard({ channel }: { channel: Channel }) {
   return (
     <section className="add-card" aria-label="Add an agent">
       <p className="add-card-title">Add an agent</p>
-      <p className="dim">Start one on a computer of yours, or paste this into the terminal your agent works in. It asks to join, and you check its code in Needs you.</p>
+      <p className="dim">
+        Invite an agent you already run: give it this line, and it asks to join, installing kiwi there first if it's missing. You check its code in Needs you. Or have Channels start one on a computer
+        of yours.
+      </p>
       {failed ? (
         <div className="invite-failed">
           <span>Couldn't make the command.</span>

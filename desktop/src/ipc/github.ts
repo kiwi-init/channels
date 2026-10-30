@@ -2,21 +2,29 @@ import type { GithubRepoView, GithubStatus } from "../bridge.ts";
 import type { MemberPicture } from "@kiwi/core/protocol.ts";
 import type { Pushes, Serves } from "../calls.ts";
 
-import { avatar, finishDevice, linkedHere, listRepos, startDevice } from "../github-flow.ts";
+import { avatar, finishDevice, linkedHere, listRepos, startDevice, type GithubAccount } from "../github-flow.ts";
 import { externalUrl } from "../guard.ts";
 import { held } from "../held.ts";
 import type { Host } from "../host.ts";
 import { openInBrowser } from "../open.ts";
-import { relayConfig } from "../signin.ts";
-import { mutate, store } from "../store.ts";
+import { githubSignsIn, relayConfig } from "../signin.ts";
+import { mutate, store, type StoreFile } from "../store.ts";
 
 async function status(): Promise<GithubStatus> {
   const link = linkedHere(store.github, store.relayUrl) ? store.github : undefined;
-  const available = await relayConfig(store.relayUrl).then(
-    (c) => !!c.githubClientId,
-    () => false,
-  );
-  return { available, account: link ? { login: link.login, id: link.id, at: link.at } : null };
+  const config = await relayConfig(store.relayUrl).catch(() => null);
+  return { available: !!config?.githubClientId, ...(config && githubSignsIn(config) ? { signIn: true } : {}), account: link ? { login: link.login, id: link.id, at: link.at } : null };
+}
+
+/**
+ * A new link, remembering whether GitHub sign-in came before the person key on this computer
+ * (first): only then is the relay account under github_<id> this person's own. A person who had a
+ * key before keeps their account where it is until it moves, and a link made again for the same
+ * GitHub account keeps what the first one knew.
+ */
+export function linkRecord(s: Pick<StoreFile, "person" | "github">, found: GithubAccount, relay: string, clientId: string, at: number): NonNullable<StoreFile["github"]> {
+  const first = s.github?.id === found.id ? s.github.first === true : !s.person;
+  return { ...found, at, relay, clientId, ...(first ? { first: true } : {}) };
 }
 
 let linking: Promise<GithubStatus> | null = null;
@@ -42,24 +50,34 @@ async function link(host: Host): Promise<GithubStatus> {
   host.push("githubCode", pending);
   await openInBrowser(page, (u) => host.openExternal(u));
   const found = await finishDevice(clientId, start, { fetch, sleep: (ms) => new Promise((r) => setTimeout(r, ms)), now: Date.now });
-  mutate((s) => (s.github = { ...found, at: Date.now(), relay, clientId }));
+  mutate((s) => (s.github = linkRecord(s, found, relay, clientId, Date.now())));
   return status();
+}
+
+function linkOnce(host: Host): Promise<GithubStatus> {
+  if (linking) {
+    if (pending) host.push("githubCode", pending);
+    return linking;
+  }
+  linking = link(host).finally(() => {
+    linking = null;
+    pending = null;
+  });
+  return linking;
+}
+
+/** Signing in on a relay that takes GitHub: the same device flow as the link, which it also is. */
+export async function signInWithGithub(host: Host): Promise<string> {
+  await linkOnce(host);
+  const token = store.github?.token;
+  if (!token) throw new Error("GitHub didn't sign you in");
+  return token;
 }
 
 export function githubCalls(host: Host): Serves<"githubStatus" | "githubLink" | "githubRepos" | "githubPicture" | "githubUnlink"> {
   return {
     githubStatus: () => status(),
-    githubLink: () => {
-      if (linking) {
-        if (pending) host.push("githubCode", pending);
-        return linking;
-      }
-      linking = link(host).finally(() => {
-        linking = null;
-        pending = null;
-      });
-      return linking;
-    },
+    githubLink: () => linkOnce(host),
     githubRepos: (): Promise<GithubRepoView[]> => {
       const link = store.github;
       if (!link || !linkedHere(link, store.relayUrl)) return Promise.reject(new Error("link GitHub in Settings first"));

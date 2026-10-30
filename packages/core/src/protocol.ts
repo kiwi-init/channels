@@ -472,6 +472,7 @@ export function cleanGithubNote(x: unknown): GithubNote | null {
     if (typeof v !== "string" || v.length > max || /[\u0000-\u001f\u007f]/.test(v)) return null;
     out[k] = v;
   }
+  if (out.url !== undefined && !handoffUrl(out.url)) return null;
   if (r.number !== undefined) {
     if (typeof r.number !== "number" || !Number.isSafeInteger(r.number) || r.number <= 0) return null;
     out.number = r.number;

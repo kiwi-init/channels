@@ -111,6 +111,38 @@
   color: var(--ink);
 }
 
+.tile.is-home {
+  flex: none;
+  margin: 8px 0 12px;
+  background: none;
+  color: var(--ink-2);
+}
+
+.tile.is-home::after {
+  content: "";
+  position: absolute;
+  bottom: -11px;
+  left: 50%;
+  width: 20px;
+  margin-left: -10px;
+  border-top: 1px solid var(--line-2);
+}
+
+.tile.is-home + .rail-list {
+  flex: 1;
+  align-content: start;
+}
+
+.tile.is-home:hover {
+  background: var(--wash);
+  color: var(--ink);
+}
+
+.tile.is-home.is-on {
+  background: color-mix(in srgb, var(--bg-3) 75%, var(--ink));
+  color: var(--ink);
+}
+
 .tile.is-add {
   background: none;
   color: var(--ink-3);
@@ -310,6 +342,39 @@
   justify-content: flex-end;
   gap: 8px;
   padding: 0 12px;
+}
+
+.top-tools.is-searching > :not(.top-find, :last-child) {
+  visibility: hidden;
+}
+
+.top-find {
+  position: absolute;
+  top: 50%;
+  right: calc(12px + var(--ctl) + 8px);
+  z-index: 2;
+  transform: translateY(-50%);
+}
+
+.top-tools {
+  position: relative;
+}
+
+@media (min-width: 761px) {
+  .top-tools {
+    min-width: calc(260px + var(--ctl) + 8px + 24px);
+  }
+}
+
+@media (max-width: 760px) {
+  .top-find {
+    position: static;
+    transform: none;
+  }
+
+  .top-tools.is-searching > .icon-btn:first-of-type {
+    display: none;
+  }
 }
 
 .top-search {

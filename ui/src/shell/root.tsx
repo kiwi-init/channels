@@ -27,7 +27,7 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
   usePaletteKey(useCallback(() => go({ to: "dialog", dialog: nav.dialog === "palette" ? null : "palette" }), [go, nav.dialog]))
   useTheme(app)
 
-  if (!app.account)
+  if (!app.account || app.signIn?.stage === "sign-in")
     return (
       <AppContext value={ctx}>
         <ActContext value={act}>

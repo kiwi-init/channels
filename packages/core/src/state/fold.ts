@@ -7,7 +7,7 @@ import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
 import { askHeadOf, fileTask } from "./asks.ts";
 import { taskId } from "./tasks.ts";
-import { prKey, releasesFrom, repoKey } from "./github.ts";
+import { linkSafe, prKey, releasesFrom, repoKey } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { roomName } from "./rooms.ts";
 import { settle } from "./leases.ts";
@@ -278,9 +278,9 @@ function folding(
     compactProposal: from?.compactProposal ?? null,
     repos: reposOf(from?.repos ?? []),
     github: {
-      prs: new Map(from?.github?.prs.map((p) => [prKey(p.repo, p.number), p])),
-      checks: new Map(from?.github?.checks.map(([k, runs]) => [k, new Map(runs.map((r) => [r.name, r]))])),
-      issues: new Map(from?.github?.issues?.map((i) => [prKey(i.repo, i.number), i])),
+      prs: new Map(from?.github?.prs.map((p) => [prKey(p.repo, p.number), linkSafe(p)])),
+      checks: new Map(from?.github?.checks.map(([k, runs]) => [k, new Map(runs.map((r) => [r.name, linkSafe(r)]))])),
+      issues: new Map(from?.github?.issues?.map((i) => [prKey(i.repo, i.number), linkSafe(i)])),
       rules: new Map(from?.github?.rules?.map((r) => [repoKey(r.repo), r])),
       releases: releasesFrom(from?.github?.releases),
     },

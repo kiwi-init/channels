@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react"
 
+import { inviteLine } from "@kiwi/app/join-line.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
 import { HANDOFF_DONE } from "@kiwi/core/protocol.ts"
 
@@ -7,7 +8,7 @@ import { stepReplyText } from "~/chat/step"
 import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_PREFS, DEMO_TILES, DEMO_WAITING } from "~/demo/data"
 import { longFeed } from "~/demo/long"
 import { demoShell, demoShells, demoTerm } from "~/demo/term"
-import type { Account, Actions, AgentStarts, App, Enrolling, Finding, Launching, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Task } from "~/model"
+import type { Account, Actions, AgentStarts, App, Enrolling, Finding, GithubSignIn, Launching, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Task } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
 
@@ -18,6 +19,7 @@ interface State {
   prefs: Prefs
   seq: number
   enrolling?: Enrolling | null
+  signIn?: GithubSignIn | null
   gone?: GoneChannel
 }
 
@@ -239,6 +241,10 @@ export type Scenario =
   | "devices-forgotten"
   | "forgot-here"
   | "link-stuck"
+  | "github-sign-in"
+  | "github-code"
+  | "github-signed-in"
+  | "github-gate"
 
 function initial(scenario: Scenario, look: Partial<Prefs>): State {
   const prefs = { ...DEMO_PREFS, ...look }
@@ -295,6 +301,11 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
   if (scenario === "enroll-desktop-check")
     return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, enrolling: { stage: "check", person: { name: "Jow", fingerprint: "3f9a 0c41 77e2 b8d5 1a06" } } }
   if (scenario === "signed-out") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000 }
+  if (scenario === "github-sign-in") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, signIn: { stage: "sign-in", code: null, problem: null } }
+  if (scenario === "github-code")
+    return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, signIn: { stage: "sign-in", code: { code: "8F3A-29KD", url: "https://github.com/login/device" }, problem: null } }
+  if (scenario === "github-signed-in") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, signIn: { stage: "signed-in", login: "ojowwalker77" } }
+  if (scenario === "github-gate") return { ...initial("full", look), signIn: { stage: "sign-in", code: null, problem: null } }
   if (scenario === "no-channels") return { account: DEMO_ACCOUNT, tiles: [], channels: new Map(), prefs, seq: 1000 }
   if (scenario === "closed" || scenario === "removed")
     return { account: DEMO_ACCOUNT, tiles: DEMO_TILES.filter((t) => t.code !== "studio"), channels, prefs, seq: 1000, gone: { code: "studio", title: "studio", why: scenario } }
@@ -540,14 +551,12 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       addRepo: (code, repo) => edit(code, (c) => ({ ...c, repos: [...new Set([...c.repos, repo])] })),
       removeRepo: (code, repo) => edit(code, (c) => ({ ...c, repos: c.repos.filter((r) => r !== repo) })),
       joinCommand: async (code, as) =>
-        [
-          `kiwi join ${code}-x7Qp2LmR`,
-          as.nick && `--nick ${as.nick}`,
-          as.persona &&
-            "--persona eyJyb29tIjoicjdLcTJtWGEiLCJwaW4iOnsiaWQiOiJsZWFkIiwibmFtZSI6IkxlYWQiLCJoYXNoIjoiOGYzYTYxYzI5ZDRlMGI3MWE1YzhmMDNkMmU5YjZhNDcifSwicGsiOiJRbTl2TFhCckxXVjRZVzF3YkdVdFptOXlMV1JsYlc4dGIyNXNlUzB3TVEiLCJzaWciOiJjMmxuYm1GMGRYSmxMV1Y0WVcxd2JHVXRabTl5TFdSbGJXOHRiMjVzZVMxdWIzUXRjbVZoYkMwd01USXpORFUyTnpnNVlXSmpaR1ZtIn0",
-        ]
-          .filter(Boolean)
-          .join(" "),
+        inviteLine("https://channels.kiwiinit.com", `${code}-x7Qp2LmR`, {
+          ...(as.nick ? { nick: as.nick } : {}),
+          persona: as.persona
+            ? "eyJyb29tIjoicjdLcTJtWGEiLCJwaW4iOnsiaWQiOiJsZWFkIiwibmFtZSI6IkxlYWQiLCJoYXNoIjoiOGYzYTYxYzI5ZDRlMGI3MWE1YzhmMDNkMmU5YjZhNDcifSwicGsiOiJRbTl2TFhCckxXVjRZVzF3YkdVdFptOXlMV1JsYlc4dGIyNXNlUzB3TVEiLCJzaWciOiJjMmxuYm1GMGRYSmxMV1Y0WVcxd2JHVXRabTl5TFdSbGJXOHRiMjVzZVMxdWIzUXRjbVZoYkMwd01USXpORFUyTnpnNVlXSmpaR1ZtIn0"
+            : null,
+        }),
       inviteLink: async (code) => `https://channels.kiwiinit.com/#${code}-x7Qp2LmR`,
       leaveChannel: (code) => setState((s) => ({ ...s, tiles: s.tiles.filter((t) => t.code !== code) })),
       newChannel: async (title) => {
@@ -598,6 +607,10 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       forgetDevice: (id) => setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.filter((d) => d.id !== id) } } : s)),
       renewDevice: (id) =>
         setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.map((d) => (d.id === id ? { ...d, until: Date.now() + 90 * 86_400_000 } : d)) } } : s)),
+      signInWithGithub: () => {
+        setState((s) => ({ ...s, signIn: { stage: "sign-in", code: { code: "8F3A-29KD", url: "https://github.com/login/device" }, problem: null } }))
+        setTimeout(() => setState((s) => (s.signIn ? { ...s, signIn: s.account ? null : { stage: "signed-in", login: "ojowwalker77" } } : s)), 1500)
+      },
       enrollBegin: () => {
         setState((s) => ({ ...s, enrolling: { stage: "asking" } }))
         setTimeout(() => setState((s) => (s.enrolling ? { ...s, enrolling: { stage: "digits", digits: "482915" } } : s)), 1500)
@@ -644,6 +657,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
     ownPersonalities,
     computer,
     enrolling: state.enrolling ?? null,
+    signIn: state.signIn ?? null,
     actions,
   }
 }
