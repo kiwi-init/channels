@@ -112,7 +112,7 @@ async function start(req: LaunchRequest, launch: string, opts: LaunchOptions): P
   if (!row?.path || !argv) return { ok: false, why: "not-installed", detail: `${req.harness} isn't installed on this computer` };
   const typed = typedPrompt(req.harness);
   hookUp(req.harness, row.version);
-  const env = { KIWI_LAUNCH: launch, ...(process.env.KIWI_HOME ? { KIWI_HOME: process.env.KIWI_HOME } : {}) };
+  const env = { KIWI_LAUNCH: launch, KIWI_HARNESS: req.harness, ...(process.env.KIWI_HOME ? { KIWI_HOME: process.env.KIWI_HOME } : {}) };
   const placed = await openHosted({ argv, folder: req.folder, name: req.nick ?? req.harness, env }, opts.hosted);
   if (!placed.ok) return placed;
   const died = await endedWithin(opts.hosted, placed.pane, opts.watch?.startMs ?? START_MS, opts.watch?.everyMs ?? EVERY_MS);
