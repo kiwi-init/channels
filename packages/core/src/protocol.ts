@@ -229,6 +229,7 @@ export type Event =
       title?: string;
       note?: string;
       review?: string | null;
+      claim?: true;
       verdict?: Verdict;
       round?: number;
       at?: string;
@@ -887,6 +888,7 @@ function eventCheck(ev: unknown): boolean | null {
         opt(e.title, (x): x is string => str(x, 500)) &&
         opt(e.note, (x): x is string => str(x)) &&
         (e.review === undefined || e.review === null || str(e.review, 64)) &&
+        (e.claim === undefined || (e.claim === true && typeof e.review === "string")) &&
         (e.verdict === undefined || e.verdict === "approved" || e.verdict === "rejected") &&
         (e.round === undefined || (Number.isSafeInteger(e.round) && (e.round as number) > 0)) &&
         opt(e.at, (x): x is string => str(x, 200) && x.trim().length > 0 && !/[\r\n]/.test(x)) &&

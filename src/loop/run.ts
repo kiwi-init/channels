@@ -93,20 +93,30 @@ const release = (seat: LoopSeat) =>
     return say(change.kind === "changed" ? `released ${seat.me} in ${seat.alias}` : `${seat.me} in ${seat.alias} wasn't held by this loop`);
   });
 
+const CLAIM_RETRY_MS = 10 * 60_000;
+
+const setAside = (claims: Map<string, number>): Set<string> => {
+  const now = Date.now();
+  for (const [name, until] of claims) if (until <= now) claims.delete(name);
+  return new Set(claims.keys());
+};
+
 const cycles = (seat: LoopSeat, stop: { asked: boolean; busy: boolean }): Effect.Effect<void, unknown, Agent> =>
   Effect.gen(function* () {
+    const claims = new Map<string, number>();
     while (!stop.asked) {
       const s = yield* openSession(seat.alias, seat.cfg, seat.me);
       let seen = yield* look(s);
-      let work = nextWork(seen.state, seat.me, seen.forMe);
+      let work = nextWork(seen.state, seat.me, seen.forMe, setAside(claims));
       while (!stop.asked && !work) {
         yield* Effect.sleep(POLL_MS);
         seen = yield* look(s);
-        work = nextWork(seen.state, seat.me, seen.forMe);
+        work = nextWork(seen.state, seat.me, seen.forMe, setAside(claims));
       }
       if (!work || stop.asked) break;
       if (work.kind === "reviewing" && seen.state.tasks.get(work.task)?.review === "*") {
-        yield* claimReview(s, seat.me, work, stop);
+        const taken = yield* claimReview(s, seat.me, work);
+        if (!taken) claims.set(workName(work), Date.now() + CLAIM_RETRY_MS);
         continue;
       }
       const ended = yield* runSession(seat, s, work, firstPrompt(work, seen.state, seat.me, seat.alias), stop);
@@ -130,14 +140,14 @@ const cycles = (seat: LoopSeat, stop: { asked: boolean; busy: boolean }): Effect
     }
   });
 
-function claimReview(s: AgentSession, me: string, work: Extract<Work, { kind: "reviewing" }>, stop: { asked: boolean }): Effect.Effect<void, never, Agent> {
-  return s.taskUpdate(work.task, { review: me, note: `taking round ${work.round}'s review` }).pipe(
+function claimReview(s: AgentSession, me: string, work: Extract<Work, { kind: "reviewing" }>): Effect.Effect<boolean, never, Agent> {
+  return s.taskUpdate(work.task, { review: me, claim: true, note: `taking round ${work.round}'s review` }).pipe(
     Effect.flatMap(() => say(`took ${workName(work)}'s review, open to anyone who hasn't worked on it`)),
+    Effect.as(true),
     Effect.catchCause((cause) =>
-      Effect.gen(function* () {
-        yield* say(`couldn't take ${workName(work)}'s review (${Cause.pretty(cause).split("\n")[0]}); looking again in ${Math.round(PAUSE_MS / 1000)}s`);
-        yield* pauseFor(PAUSE_MS, stop);
-      }),
+      say(`couldn't take ${workName(work)}'s review (${Cause.pretty(cause).split("\n")[0]}); other work goes first, and the loop tries again in ${CLAIM_RETRY_MS / 60_000} minutes`).pipe(
+        Effect.as(false),
+      ),
     ),
   );
 }

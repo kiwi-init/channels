@@ -12,21 +12,22 @@ const awaitingVerdict = (t: Task) => !!openRound(t);
 
 const owesReview = (t: Task, me: string) => t.owner !== me && (t.review === me || (t.review === "*" && !t.workedBy.includes(me)));
 
-function owedReview(state: ChannelState, me: string): Work | null {
+function owedReview(state: ChannelState, me: string, setAside: ReadonlySet<string> = new Set()): Work | null {
   for (const t of openTasks(state)) {
     const round = openRound(t);
-    if (round && owesReview(t, me)) return { kind: "reviewing", task: t.id, round: round.n };
+    const work: Work | null = round ? { kind: "reviewing", task: t.id, round: round.n } : null;
+    if (work && owesReview(t, me) && !(t.review === "*" && setAside.has(workName(work)))) return work;
   }
   return null;
 }
 
-export function nextWork(state: ChannelState, me: string, unreadForMe: number): Work | null {
+export function nextWork(state: ChannelState, me: string, unreadForMe: number, setAside: ReadonlySet<string> = new Set()): Work | null {
   const mine = openTasks(state).filter((t) => t.owner === me);
   const first = mine.filter((t) => t.first !== undefined && !awaitingVerdict(t)).sort((a, b) => (b.first ?? 0) - (a.first ?? 0))[0];
   if (first) return { kind: "coding", task: first.id };
   const doing = mine.find((t) => t.state === "doing" && !awaitingVerdict(t));
   if (doing) return { kind: "coding", task: doing.id };
-  const review = owedReview(state, me);
+  const review = owedReview(state, me, setAside);
   if (review) return review;
   const coding = mine.find((t) => !awaitingVerdict(t)) ?? mine[0];
   if (coding) return { kind: "coding", task: coding.id };

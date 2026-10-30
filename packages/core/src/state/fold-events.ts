@@ -8,7 +8,7 @@ import { omit } from "../omit.ts";
 import { readScopes, SCOPES, type Scope } from "../scopes.ts";
 import { isPerson } from "./people.ts";
 import { roomName } from "./rooms.ts";
-import { currentState, openRound, reviewMoveRefusal, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
+import { currentState, openRound, reviewClaimRefusal, reviewMoveRefusal, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
 import type { Charter, Compact, Fact, FoldMember, Hold, Lease, PersonaLead, Room, Task } from "./types.ts";
 
 export interface FoldCtx {
@@ -300,7 +300,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         break;
       }
       const lead = c.leads(member);
-      const reviewRefused = reviewMoveRefusal(task, { name: m.from, person: isPerson(member), lead }, ev.review);
+      const reviewRefused = ev.claim ? reviewClaimRefusal(task, m.from, ev.review) : reviewMoveRefusal(task, { name: m.from, person: isPerson(member), lead }, ev.review);
       if (reviewRefused) {
         reject(reviewRefused);
         break;

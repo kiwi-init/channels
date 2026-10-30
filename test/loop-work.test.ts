@@ -62,6 +62,7 @@ describe("the work a loop starts a session for", () => {
     const s = fold([t, round], roster);
     expect(nextWork(s, "ana", 0)).toEqual({ kind: "reviewing", task: t.seq, round: 1 });
     expect(waitingBehind({ kind: "answering" }, s, "ana")).toEqual([{ kind: "reviewing", task: t.seq, round: 1 }]);
+    expect(nextWork(s, "ana", 2, new Set([`T${t.seq} round 1`]))).toEqual({ kind: "answering" });
     const worked = await ev("jon", { op: "task.add", title: "Ana's too", owner: "ana", review: "*" });
     const handed = await ev("ana", { op: "task.update", task: worked.seq, owner: "bo" });
     const sent = await ev("bo", { op: "task.update", task: worked.seq, state: "review", at: "def5678" });
