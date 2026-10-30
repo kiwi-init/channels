@@ -4,7 +4,7 @@ import { accountScope, type EnrollAnswer, type EnrollAsk, type Enrollment } from
 import type { Identity } from "./identity.ts";
 import type { RecoveryLink, Vault } from "./recovery.ts";
 
-class AccountError extends Error {
+export class AccountError extends Error {
   constructor(
     readonly status: number,
     message: string,
@@ -64,4 +64,27 @@ export function accountClient(relay: string, token: () => Promise<string>, devic
     vault: async () => (await (await call("GET", "/v1/account/vault", undefined, { signed: false })).json()) as { recovery: unknown[]; vault: unknown },
     keepVault: async (update) => void (await call("PUT", "/v1/account/vault", update)),
   };
+}
+
+export async function moveAccount(relay: string, from: () => Promise<string>, github: string, to: string, signer: Identity, fetchImpl: typeof fetch = fetch): Promise<void> {
+  const ask = async (method: string, path: string, headers: Record<string, string>, text = ""): Promise<Response> => {
+    let res: Response;
+    try {
+      res = await fetchImpl(new URL(path, relay), { method, headers: { "x-human-token": await from(), ...headers }, ...(text ? { body: text } : {}) });
+    } catch (err) {
+      throw new AccountError(0, `couldn't reach ${relay}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    if (res.ok) return res;
+    const why = ((await res.json().catch(() => ({}))) as { error?: string }).error;
+    throw new AccountError(res.status, why ?? `the relay returned ${res.status}`);
+  };
+  const { user } = (await (await ask("GET", "/v1/account", {})).json()) as { user: string };
+  if (user === to) return;
+  const text = JSON.stringify({ to });
+  await ask(
+    "POST",
+    "/v1/account/move",
+    { authorization: `Bearer ${await signRequest(signer, accountScope(user), "POST", "/v1/account/move", text)}`, "x-human-token-to": github, "content-type": "application/json" },
+    text,
+  );
 }

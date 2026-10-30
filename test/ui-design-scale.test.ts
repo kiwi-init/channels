@@ -51,3 +51,66 @@ describe("ui styles keep to the design scale", () => {
     expect(rawRadii(".a { border-radius: var(--r-row); }")).toEqual([]);
   });
 });
+
+describe("the top bar's controls float", () => {
+  const tokens = readFileSync(join(STYLES, "tokens.css"), "utf8");
+  const shell = readFileSync(join(STYLES, "shell.css"), "utf8");
+  const settings = readFileSync(join(STYLES, "settings.css"), "utf8");
+  const chat = readFileSync(join(STYLES, "chat.css"), "utf8");
+  const term = readFileSync(join(STYLES, "term.css"), "utf8");
+  const rule = (css: string, selector: string): string => {
+    const at = css.indexOf(`\n${selector} {`);
+    return at < 0 ? "" : css.slice(at, css.indexOf("}", at));
+  };
+
+  test("every theme side sets the float fill and its shadow", () => {
+    const sides = [":root {", ':root[data-theme="light"] {', ':root:not([data-theme="dark"]) {'].map((head) => {
+      const at = tokens.indexOf(head);
+      return at < 0 ? "" : tokens.slice(at, tokens.indexOf("}", at));
+    });
+    for (const side of sides) {
+      expect(side).toContain("--float:");
+      expect(side).toContain("--shadow-float:");
+    }
+  });
+
+  test("the chrome sits on the float: the bars' controls, the rail, the composer and the terminal's tabs and close", () => {
+    const controls: [string, string][] = [
+      [shell, ".top-chan"],
+      [shell, ".top-drawer"],
+      [shell, ".tabs,\n.top-group"],
+      [shell, ".panel-head > .icon-btn"],
+      [settings, ".set-back"],
+      [shell, ".tile"],
+      [shell, ".rail-gear"],
+      [chat, ".composer"],
+      [term, ".term-tabs"],
+      [term, ".term-head > .icon-btn"],
+    ];
+    for (const [css, selector] of controls) {
+      const body = rule(css, selector);
+      expect(body).toContain("background: var(--float)");
+      expect(body).toContain("box-shadow: var(--shadow-float)");
+    }
+  });
+});
+
+describe("the sidebar button stays in one place, open or collapsed", () => {
+  const shell = readFileSync(join(STYLES, "shell.css"), "utf8");
+  const wide = shell.slice(shell.indexOf("@media (min-width: 761px) {\n  .chan:not(.is-bare) .top-drawer"));
+  const rule = (selector: string): string => {
+    const at = wide.indexOf(`\n  ${selector} {`);
+    return at < 0 ? "" : wide.slice(at, wide.indexOf("}", at));
+  };
+
+  test("open, it sits first at the bar's left edge, where the collapsed bar puts it", () => {
+    expect(rule(".chan:not(.is-bare) .top-drawer")).toContain("justify-self: start");
+    expect(rule(".chan:not(.is-bare) .top-drawer")).toContain("margin-left: 8px");
+    expect(rule(".chan.is-bare .top")).toContain("padding-left: 8px");
+  });
+
+  test("open, the switcher follows it at the same gap as collapsed", () => {
+    expect(rule(".chan.is-bare .top-title")).toContain("padding: 0 10px");
+    expect(rule(".chan:not(.is-bare) .top-title")).toContain("padding-left: calc(8px + var(--ctl) + 10px)");
+  });
+});

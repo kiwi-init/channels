@@ -35,7 +35,7 @@ function headOf(channel: Channel, head: TaskGroupHead): { label: string; sub: st
 
 const finished = (head: TaskGroupHead): boolean => head.kind === "next" || head.kind === "release" || head.kind === "cancelled"
 
-export function Board({ channel, needs }: { channel: Channel; needs: number }) {
+export function Board({ channel, needs, tall }: { channel: Channel; needs: number; tall?: boolean }) {
   const { nav } = useApp()
   const live = channel.tasks.filter((t) => !t.archived)
   const byId = new Map(live.map((t) => [t.id, t]))
@@ -45,7 +45,7 @@ export function Board({ channel, needs }: { channel: Channel; needs: number }) {
   return (
     <div className="board">
       <div className={cx("board-list", prs && "has-prs")}>
-        {live.length > 0 && <NowCard channel={channel} needs={needs} />}
+        {live.length > 0 && !tall && <NowCard channel={channel} needs={needs} />}
         <NewTask channel={channel} />
         {live.length === 0 && channel.loading ? (
           <Loading />

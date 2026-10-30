@@ -15,11 +15,18 @@ export function setDrawer(open: boolean): void {
   for (const l of listeners) l()
 }
 
-const narrow = (): boolean => matchMedia("(max-width: 760px)").matches
+const narrow = (): boolean => matchMedia("(max-width: 760px)").matches || matchMedia("(orientation: portrait)").matches
 
 export function toggleSide(): void {
   if (narrow()) setDrawer(!drawer)
   else toggleSidebar()
 }
+
+const TALL = "(orientation: portrait) and (min-width: 761px)"
+
+const onResize = (l: () => void) => (window.addEventListener("resize", l), () => window.removeEventListener("resize", l))
+
+/** A portrait window wider than a phone: the channel is one tall page there. */
+export const useTall = (): boolean => useSyncExternalStore(onResize, () => matchMedia(TALL).matches)
 
 export const isSideKey = (e: KeyboardEvent): boolean => e.key === "\\" && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey

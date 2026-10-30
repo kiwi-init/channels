@@ -48,6 +48,10 @@
 
   --white: #fff;
   --shadow-pop: 0 0 0 1px var(--line-2), 0 16px 48px rgb(0 0 0 / 0.32);
+  --float: var(--bg-3);
+  --float-2: color-mix(in srgb, var(--float) 90%, var(--ink));
+  --float-3: color-mix(in srgb, var(--float) 80%, var(--ink));
+  --shadow-float: 0 0 0 1px var(--line-2), inset 0 1px 0 var(--line), 0 1px 2px rgb(0 0 0 / 0.5), 0 4px 12px rgb(0 0 0 / 0.3);
 
   --mono: "Paper Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
   --ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, sans-serif;
@@ -125,6 +129,8 @@
   --h-codex: #111;
   --h-gemini: #2f6fe4;
   --h-opencode: #444;
+  --float: var(--bg);
+  --shadow-float: 0 0 0 1px var(--line-2), 0 1px 2px rgb(0 0 0 / 0.08), 0 4px 12px rgb(0 0 0 / 0.06);
 }
 
 @media (prefers-color-scheme: light) {
@@ -167,5 +173,7 @@
     --h-codex: #111;
     --h-gemini: #2f6fe4;
     --h-opencode: #444;
+    --float: var(--bg);
+    --shadow-float: 0 0 0 1px var(--line-2), 0 1px 2px rgb(0 0 0 / 0.08), 0 4px 12px rgb(0 0 0 / 0.06);
   }
 }

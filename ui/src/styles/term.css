@@ -51,6 +51,10 @@
   align-items: center;
   gap: 2px;
   min-width: 0;
+  padding: 2px;
+  border-radius: var(--r-ctl);
+  background: var(--float);
+  box-shadow: var(--shadow-float);
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -59,9 +63,20 @@
   display: inline-flex;
   flex: none;
   align-items: center;
-  height: 26px;
-  border-radius: var(--r-ctl);
+  height: calc(var(--ctl) - 4px);
+  border-radius: var(--r-row);
   color: var(--ink-3);
+}
+
+.term-head > .icon-btn {
+  width: var(--ctl);
+  height: var(--ctl);
+  background: var(--float);
+  box-shadow: var(--shadow-float);
+}
+
+.term-head > .icon-btn:hover {
+  background: var(--float-2);
 }
 
 .term-tab button {
