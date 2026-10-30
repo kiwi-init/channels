@@ -502,21 +502,19 @@ export class ChannelLive {
 
   private presenceIn(f: { iv: string; ct: string }, beacons: Map<string, number>): Effect.Effect<Live | null> {
     return Effect.gen({ self: this }, function* () {
-      for (const k of Object.values(this.ch.access.keys).reverse()) {
-        const p = (yield* Effect.promise(() => open(k, this.ch.roomId, f.iv, f.ct))) as (Presence & { e?: number }) | null;
-        if (p?.type === "presence" && typeof p.from === "string") {
-          const rest = omit(p, "e");
-          const sigOk = yield* Effect.promise(() => verify(rest));
-          if (!fresh(beacons, rest, sigOk, yield* Clock.currentTimeMillis)) return null;
-          const { activity: said, reach, ...fields } = omit(rest as Presence & { role?: unknown }, "role");
-          const activity = cleanActivity(said);
-          return {
-            _tag: "Presence",
-            presence: { ...fields, ...(activity ? { activity } : {}), ...(isReach(reach) ? { reach } : {}), sigOk },
-          } satisfies Live;
-        }
-      }
-      return null;
+      const k = this.ch.access.keys[String(this.ch.access.epoch)];
+      if (!k) return null;
+      const p = (yield* Effect.promise(() => open(k, this.ch.roomId, f.iv, f.ct))) as (Presence & { e?: number }) | null;
+      if (p?.type !== "presence" || typeof p.from !== "string") return null;
+      const rest = omit(p, "e");
+      const sigOk = yield* Effect.promise(() => verify(rest));
+      if (!fresh(beacons, rest, sigOk, yield* Clock.currentTimeMillis)) return null;
+      const { activity: said, reach, ...fields } = omit(rest as Presence & { role?: unknown }, "role");
+      const activity = cleanActivity(said);
+      return {
+        _tag: "Presence",
+        presence: { ...fields, ...(activity ? { activity } : {}), ...(isReach(reach) ? { reach } : {}), sigOk },
+      } satisfies Live;
     });
   }
 }
