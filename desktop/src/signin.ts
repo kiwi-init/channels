@@ -1,5 +1,6 @@
 import { sessionExpiry, tokenExpiry, WORKOS_TOKEN_URL, workosDeviceSignIn } from "@kiwi/core/workos.ts";
 import type { SignInResult } from "./bridge.ts";
+import { linkedHere } from "./github-flow.ts";
 import { externalUrl, type ExternalUrl } from "./guard.ts";
 import { held } from "./held.ts";
 import { openInBrowser } from "./open.ts";
@@ -8,6 +9,7 @@ import { mutate, store, type StoreFile } from "./store.ts";
 interface RelayConfig {
   workosClientId?: string | null;
   githubClientId?: string;
+  githubSignIn?: boolean;
   dev?: boolean;
 }
 
@@ -30,11 +32,33 @@ export async function signInMain(open: (url: ExternalUrl) => Promise<void>): Pro
   return { token: sess.access };
 }
 
+/** Whether this relay takes GitHub sign-in: then the GitHub link is the sign-in. */
+export const githubSignsIn = (config: RelayConfig): boolean => !!config.githubSignIn && !!config.githubClientId;
+
+/** The GitHub link's token when it is this relay's sign-in, else null. */
+export async function githubSignInToken(): Promise<string | null> {
+  const link = store.github;
+  if (!link || !linkedHere(link, store.relayUrl)) return null;
+  const config = await relayConfig(store.relayUrl).catch(() => null);
+  return config && githubSignsIn(config) && config.githubClientId === link.clientId ? link.token : null;
+}
+
+/** The token for creating a channel: the GitHub sign-in on a relay that takes it, else the WorkOS session. */
+export async function createToken(): Promise<string | null> {
+  return (await githubSignInToken()) ?? freshToken();
+}
+
 let refreshing: Promise<string | null> | null = null;
 
+/**
+ * The token for the account (devices, enrolling): the WorkOS session, since an account made with
+ * it is kept under its user until it moves. The GitHub sign-in only for a person whose key came
+ * after it on this computer: their github_<id> account is their own. Anyone else without a session
+ * gets no token, and the account routes say to sign in, rather than read an empty account.
+ */
 export async function freshToken(): Promise<string | null> {
   const s = store.signin;
-  if (!s) return null;
+  if (!s) return store.github?.first ? githubSignInToken() : null;
   if (Date.now() < Math.min(s.exp, tokenExpiry(s.access) ?? s.exp) - 60_000) return s.access;
   refreshing ??= refreshToken(s).finally(() => (refreshing = null));
   return refreshing;

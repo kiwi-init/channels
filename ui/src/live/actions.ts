@@ -671,6 +671,7 @@ export function makeActions(): Actions {
         announce(removed.length ? `Forgot it and removed ${removed.join(", ")}` : "Forgot it")
       }),
     linkGithub: () => attempt("GitHub not linked", linkGithub),
+    signInWithGithub: () => attempt("Not signed in with GitHub", linkGithub),
     unlinkGithub: () => attempt("GitHub not unlinked", unlinkGithub),
     windowControl: (action) =>
       void bridge()
