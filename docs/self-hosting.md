@@ -406,6 +406,10 @@ bun run build          # dist/kiwi, a single file
   not your backups or disk snapshots.
 - **Keep the data folder private.** Anyone who reads it sees what the relay sees, and
   can delete channels.
+- **Don't log request bodies.** With a GitHub App configured, an owner's app sends
+  its GitHub link token in the body of `PUT /github/repos` so the relay can check
+  push access. The relay keeps nothing of it, but a proxy or logger in front of the
+  relay that records bodies would keep a token that acts as that person on GitHub.
 - **Don't expose the relay's port directly.** Clients sign every request, but tokens
   and timing travel in the clear without TLS.
 
