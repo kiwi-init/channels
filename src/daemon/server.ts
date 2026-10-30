@@ -83,7 +83,7 @@ const LISTENER_GRACE_MS = 60_000;
 
 export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promise<Daemon> {
   const sock = daemonSock(dir);
-  if (await tryHello(sock)) throw new Error(`a daemon is already answering on ${sock}`);
+  if (await tryHello(sock, dir)) throw new Error(`a daemon is already answering on ${sock}`);
   const existed = existsSync(dir);
   const ours = existed && hasKiwiState(dir);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -627,6 +627,40 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
 
   const seatSync = throttled(syncSeats, SYNC_ON_REQUEST_MS);
 
+  let pairingBusy: Promise<unknown> = Promise.resolve();
+  const adoptOn = async (conn: ConnState, id: number, params: Record<string, unknown>): Promise<void> => {
+    const person = params.person as Partial<PairedPerson> | null;
+    if (!person || typeof person.pk !== "string" || typeof person.xpk !== "string" || typeof person.name !== "string") {
+      throw new Error("adopt needs {cert or links, person: {pk, xpk, name}}");
+    }
+    const named = { pk: person.pk, xpk: person.xpk, name: person.name };
+    const m = await ensureMachine(process.env.KIWI_RELAY ?? DEFAULT_RELAY);
+    let paired: PairedMachine;
+    if (Array.isArray(params.links)) {
+      const read = await readDeviceList(params.links);
+      if (!read.ok) throw new Error(`that device list doesn't check out: ${read.why}`);
+      if (read.list.person !== named.pk) throw new Error("that device list is another person's than the one named");
+      if (!listedComputer(read.list, m.identity.pk)) throw new Error("that device list doesn't list this computer");
+      const kept = m.device?.person.pk === named.pk ? await readDeviceList(m.device.links) : null;
+      if (kept?.ok && kept.list.version > read.list.version) throw new Error("this computer already holds a newer device list");
+      const device = { person: named, links: params.links as DeviceLink[] };
+      paired = m.cert?.pk === named.pk ? { ...m, device } : { identity: m.identity, label: m.label, relay: m.relay, device };
+    } else {
+      const cert = await readMachineCert(params.cert);
+      if (!cert) throw new Error("that cert doesn't check out (wrong signature or shape)");
+      if (named.pk !== cert.pk) throw new Error("that cert is by another person than the one named");
+      if (cert.machine !== m.identity.pk) throw new Error("that cert is for another computer");
+      paired = { ...m, cert, person: named };
+    }
+    const pairedTo = m.person?.pk ?? m.device?.person.pk ?? null;
+    if (pairedTo && pairedTo !== named.pk) {
+      const pairedName = m.person?.name ?? m.device?.person.name ?? "someone else";
+      throw new Error(`this computer is already paired with ${pairedName}; unpair it first (kiwi unpair)`);
+    }
+    saveMachine(paired);
+    sendLine(conn, JSON.stringify({ id, ok: true }));
+  };
+
   const onRequest = async (conn: ConnState, raw: string): Promise<void> => {
     let req: { id?: unknown; verb?: unknown } & Record<string, unknown>;
     try {
@@ -666,36 +700,9 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           break;
         }
         case "adopt": {
-          const person = params.person as Partial<PairedPerson> | null;
-          if (!person || typeof person.pk !== "string" || typeof person.xpk !== "string" || typeof person.name !== "string") {
-            throw new Error("adopt needs {cert or links, person: {pk, xpk, name}}");
-          }
-          const named = { pk: person.pk, xpk: person.xpk, name: person.name };
-          const m = await ensureMachine(process.env.KIWI_RELAY ?? DEFAULT_RELAY);
-          let paired: PairedMachine;
-          if (Array.isArray(params.links)) {
-            const read = await readDeviceList(params.links);
-            if (!read.ok) throw new Error(`that device list doesn't check out: ${read.why}`);
-            if (read.list.person !== named.pk) throw new Error("that device list is another person's than the one named");
-            if (!listedComputer(read.list, m.identity.pk)) throw new Error("that device list doesn't list this computer");
-            const kept = m.device?.person.pk === named.pk ? await readDeviceList(m.device.links) : null;
-            if (kept?.ok && kept.list.version > read.list.version) throw new Error("this computer already holds a newer device list");
-            const device = { person: named, links: params.links as DeviceLink[] };
-            paired = m.cert?.pk === named.pk ? { ...m, device } : { identity: m.identity, label: m.label, relay: m.relay, device };
-          } else {
-            const cert = await readMachineCert(params.cert);
-            if (!cert) throw new Error("that cert doesn't check out (wrong signature or shape)");
-            if (named.pk !== cert.pk) throw new Error("that cert is by another person than the one named");
-            if (cert.machine !== m.identity.pk) throw new Error("that cert is for another computer");
-            paired = { ...m, cert, person: named };
-          }
-          const pairedTo = m.person?.pk ?? m.device?.person.pk ?? null;
-          if (pairedTo && pairedTo !== named.pk) {
-            const pairedName = m.person?.name ?? m.device?.person.name ?? "someone else";
-            throw new Error(`this computer is already paired with ${pairedName}; unpair it first (kiwi unpair)`);
-          }
-          saveMachine(paired);
-          sendLine(conn, JSON.stringify({ id, ok: true }));
+          const run = pairingBusy.then(() => adoptOn(conn, id, params));
+          pairingBusy = run.catch(() => undefined);
+          await run;
           break;
         }
         case "listen":
@@ -846,31 +853,36 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   };
 
   const umaskWas = process.platform !== "win32" ? process.umask(0o077) : null;
-  const server = Bun.listen({
-    unix: sock,
-    socket: {
-      open(socket) {
-        conns.add({ socket: socket as Socket, decoder: new TextDecoder(), buf: "", subs: new Set(), held: new Set(), dead: false, out: [], queued: 0 });
+  let server: ReturnType<typeof Bun.listen>;
+  try {
+    server = Bun.listen({
+      unix: sock,
+      socket: {
+        open(socket) {
+          conns.add({ socket: socket as Socket, decoder: new TextDecoder(), buf: "", subs: new Set(), held: new Set(), dead: false, out: [], queued: 0 });
+        },
+        drain(socket) {
+          const conn = [...conns].find((c) => c.socket === socket);
+          if (conn && !conn.dead) flushOrDrop(conn);
+        },
+        data(socket, data) {
+          const conn = [...conns].find((c) => c.socket === socket);
+          if (!conn || conn.dead) return;
+          conn.buf += conn.decoder.decode(data, { stream: true });
+          const lines = conn.buf.split("\n");
+          conn.buf = lines.pop() ?? "";
+          for (const line of lines) if (line.trim()) void onRequest(conn, line);
+        },
+        close(socket) {
+          const conn = [...conns].find((c) => c.socket === socket);
+          if (conn) killConn(conn);
+        },
+        error() {},
       },
-      drain(socket) {
-        const conn = [...conns].find((c) => c.socket === socket);
-        if (conn && !conn.dead) flushOrDrop(conn);
-      },
-      data(socket, data) {
-        const conn = [...conns].find((c) => c.socket === socket);
-        if (!conn || conn.dead) return;
-        conn.buf += conn.decoder.decode(data, { stream: true });
-        const lines = conn.buf.split("\n");
-        conn.buf = lines.pop() ?? "";
-        for (const line of lines) if (line.trim()) void onRequest(conn, line);
-      },
-      close(socket) {
-        const conn = [...conns].find((c) => c.socket === socket);
-        if (conn) killConn(conn);
-      },
-      error() {},
-    },
-  });
+    });
+  } finally {
+    if (umaskWas !== null) process.umask(umaskWas);
+  }
   if (process.platform !== "win32") {
     try {
       chmodSync(sock, 0o600);
@@ -878,7 +890,6 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       // Same as the home chmod: a mode this user can't set must not stop the daemon.
     }
   }
-  if (umaskWas !== null) process.umask(umaskWas);
   const boundIno = inodeOf(sock);
 
   const tickMs = opts.tickMs ?? TICK_MS;
@@ -899,8 +910,10 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   const unpairHere = async (): Promise<void> => {
     const m = loadPairedMachine();
     if (m?.cert || m?.device) {
-      await forgetAtRelay(m);
       saveMachine({ identity: m.identity, label: m.label, relay: m.relay });
+      void forgetAtRelay(m).catch(() => {
+        // The relay forgets this machine when it next hears from it; local pairing is already gone.
+      });
     }
     inbox.close();
   };

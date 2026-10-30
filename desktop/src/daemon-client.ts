@@ -53,9 +53,13 @@ export function daemonSocketPath(home: string = kiwiHome()): string {
 
 type Reply = { id: number; ok: boolean; error?: string } & Record<string, unknown>;
 
-function daemonToken(home: string): string | null {
+function daemonTokenFile(home: string): string {
+  return path.join(home, "daemon.token");
+}
+
+export function daemonToken(home: string): string | null {
   try {
-    const read = fs.readFileSync(path.join(home, "daemon.token"), "utf8").trim();
+    const read = fs.readFileSync(daemonTokenFile(home), "utf8").trim();
     return read || null;
   } catch {
     // A daemon from before the token answers without one, and this frame still carries ours.
@@ -124,7 +128,6 @@ export async function daemonStop(home: string = kiwiHome(), timeoutMs = 5_000): 
   }
 }
 
-/** Ask the daemon to forget its pairing (before adopting for a different person). */
 export async function daemonUnpair(home: string = kiwiHome(), timeoutMs = 10_000): Promise<void> {
   await call(home, "unpair", {}, timeoutMs);
 }

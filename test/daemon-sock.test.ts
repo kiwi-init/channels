@@ -63,7 +63,6 @@ describe("the daemon socket", () => {
     await expect(adoptDaemon({ cert: foreign }, { pk: mallory.pk, xpk: mallory.xpk!, name: "M" })).rejects.toThrow(/another computer/);
     const take = await certifyMachine(mallory, { pk: h0.machine!, xpk: h0.mxpk!, label: "takeover" });
     await expect(adoptDaemon({ cert: take }, { pk: mallory.pk, xpk: mallory.xpk!, name: "M" })).rejects.toThrow(/already paired with Ada Lovelace/);
-    // The next test pairs a different person: give the machine back first, as `kiwi unpair` would.
     const paired = loadPairedMachine()!;
     saveMachine({ identity: paired.identity, label: paired.label, relay: paired.relay });
   });
@@ -108,6 +107,30 @@ describe("the daemon socket", () => {
     expect(h.person).toBeNull();
   });
 
+  test("two adoptions racing for different people leave one standing", async () => {
+    const h0 = await daemonHello();
+    const ada = await generateIdentity("Ada Lovelace");
+    const grace = await withExchangeKey(await generateIdentity("Grace Hopper"));
+    const cert = await certifyMachine(ada, { pk: h0.machine!, xpk: h0.mxpk!, label: "race" });
+    const desk = await withExchangeKey(await generateIdentity("desk"));
+    const root = [await rootLink(grace, { pk: desk.pk, xpk: desk.xpk!, label: "desk", os: "macOS", as: "desktop" })];
+    const read = await readDeviceList(root);
+    if (!read.ok) throw new Error(read.why);
+    const links = [
+      ...root,
+      await nextLink(read.list, desk, { op: "add", device: h0.machine!, dxpk: h0.mxpk!, label: "race", os: "macOS", as: "computer", approve: false, until: certUntil(Date.now()) }),
+    ];
+    const results = await Promise.allSettled([
+      adoptDaemon({ cert }, { pk: ada.pk, xpk: ada.xpk!, name: "Ada Lovelace" }),
+      adoptDaemon({ links }, { pk: grace.pk, xpk: grace.xpk!, name: "Grace Hopper" }),
+    ]);
+    const settled = results.map((r) => (r.status === "fulfilled" ? "ok" : "rejected"));
+    expect(settled.sort()).toEqual(["ok", "rejected"]);
+    const standing = loadPairedMachine()!.person?.pk ?? loadPairedMachine()!.device?.person.pk;
+    if (!standing) throw new Error("the race left no pairing standing");
+    expect([ada.pk, grace.pk]).toContain(standing);
+  });
+
   test("the socket answers only a caller holding the daemon's token", async () => {
     const token = readFileSync(join(home, "daemon.token"), "utf8").trim();
     expect(token.length).toBeGreaterThanOrEqual(32);
@@ -136,6 +159,7 @@ describe("the daemon socket", () => {
     await expect(ask({ id: 1, verb: "listening" })).resolves.toEqual({ id: 1, ok: false, error: expect.stringMatching(/token/) });
     await expect(ask({ id: 1, verb: "listening", token: "not-the-one" })).resolves.toEqual({ id: 1, ok: false, error: expect.stringMatching(/token/) });
     await expect(ask({ id: 1, verb: "launch", token: "not-the-one" })).resolves.toEqual({ id: 1, ok: false, error: expect.stringMatching(/token/) });
+    await expect(ask({ id: 1, verb: "term", pane: "nope", cols: 80, rows: 24, token })).resolves.toEqual({ id: 1, ok: false, error: expect.stringMatching(/term needs/) });
     await expect(ask({ id: 1, verb: "listening", token })).resolves.toMatchObject({ ok: true });
   });
 

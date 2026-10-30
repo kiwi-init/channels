@@ -76,7 +76,6 @@ export async function adoptDaemon(listComputer: ListComputer): Promise<ComputerV
   if (!hello) throw new Error(`no daemon answers at ${daemonSocketPath(home)}`);
   const label = os.hostname().split(".")[0] || "this computer";
   const named = { pk: who.pk, xpk: who.xpk, name: who.name };
-  // The daemon refuses a second person's pairing while the first stands: forget it for this one.
   if (hello.paired && hello.paired.person !== named.pk) await daemonUnpair(home);
   let links: DeviceLink[] | null;
   try {
