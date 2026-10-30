@@ -34,12 +34,13 @@ export function nextWork(state: ChannelState, me: string, unreadForMe: number, s
   return unreadForMe > 0 ? { kind: "answering" } : null;
 }
 
-export function waitingBehind(work: Work, state: ChannelState, me: string): Work[] {
+export function waitingBehind(work: Work, state: ChannelState, me: string, setAside: ReadonlySet<string> = new Set()): Work[] {
   const held = work.kind === "answering" ? null : work.task;
   const open = openTasks(state).filter((t) => t.id !== held);
   const reviews = open.flatMap((t): Work[] => {
     const round = openRound(t);
-    return round && owesReview(t, me) ? [{ kind: "reviewing", task: t.id, round: round.n }] : [];
+    const review: Work | null = round ? { kind: "reviewing", task: t.id, round: round.n } : null;
+    return review && owesReview(t, me) && !(t.review === "*" && setAside.has(workName(review))) ? [review] : [];
   });
   if (work.kind === "answering") return reviews;
   const coding = open.filter((t) => t.owner === me && !awaitingVerdict(t)).map((t): Work => ({ kind: "coding", task: t.id }));
@@ -79,11 +80,11 @@ export function waitingText(waiting: Work, session: Work, minutes: number, mc = 
   return `${workName(waiting)} has waited ${minutes} minutes behind my ${workName(session)} session, which is still running: my loop starts it only when that work is over. To start ${workName(waiting)} now, ${free}.`;
 }
 
-export function workOver(work: Work, state: ChannelState, me: string): boolean {
+export function workOver(work: Work, state: ChannelState, me: string, setAside: ReadonlySet<string> = new Set()): boolean {
   switch (work.kind) {
     case "coding": {
       const t = state.tasks.get(work.task);
-      return !live(t) || t.owner !== me || (awaitingVerdict(t) && owedReview(state, me) !== null);
+      return !live(t) || t.owner !== me || (awaitingVerdict(t) && owedReview(state, me, setAside) !== null);
     }
     case "reviewing": {
       const t = state.tasks.get(work.task);
@@ -100,12 +101,12 @@ export function workOver(work: Work, state: ChannelState, me: string): boolean {
 
 export type Step = { kind: "keep"; work: Work } | { kind: "over" } | { kind: "fresh"; work: Work; why: "took" | "checkpoint" };
 
-export function step(work: Work, state: ChannelState, me: string, freshFor: number | null): Step {
+export function step(work: Work, state: ChannelState, me: string, freshFor: number | null, setAside: ReadonlySet<string> = new Set()): Step {
   if (work.kind === "answering") {
     const taken = nextWork(state, me, 0);
     return taken?.kind === "coding" ? { kind: "fresh", work: taken, why: "took" } : { kind: "keep", work };
   }
-  if (workOver(work, state, me)) return { kind: "over" };
+  if (workOver(work, state, me, setAside)) return { kind: "over" };
   if (work.kind === "coding" && freshFor === work.task) return { kind: "fresh", work, why: "checkpoint" };
   return { kind: "keep", work };
 }

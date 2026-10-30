@@ -119,7 +119,7 @@ const cycles = (seat: LoopSeat, stop: { asked: boolean; busy: boolean }): Effect
         if (!taken) claims.set(workName(work), Date.now() + CLAIM_RETRY_MS);
         continue;
       }
-      const ended = yield* runSession(seat, s, work, firstPrompt(work, seen.state, seat.me, seat.alias), stop);
+      const ended = yield* runSession(seat, s, work, firstPrompt(work, seen.state, seat.me, seat.alias), stop, claims);
       yield* hold(seat);
       if (ended.kind === "done") yield* say(`${workName(ended.work)} is over; its session ended`);
       if (ended.kind === "fresh")
@@ -152,7 +152,7 @@ function claimReview(s: AgentSession, me: string, work: Extract<Work, { kind: "r
   );
 }
 
-function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string, stop: { asked: boolean; busy: boolean }): Effect.Effect<Ended, unknown, Agent> {
+function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string, stop: { asked: boolean; busy: boolean }, claims: Map<string, number>): Effect.Effect<Ended, unknown, Agent> {
   return Effect.suspend(() => {
     let spawned: { left: Effect.Effect<void>; mode: string | null } | null = null;
     const leave = Effect.gen(function* () {
@@ -161,7 +161,7 @@ function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string
       restoreTerminal(spawned.mode);
       stop.busy = false;
     });
-    return session(seat, s, first, prompt, stop, (left, mode) => void (spawned = { left, mode })).pipe(Effect.ensuring(leave));
+    return session(seat, s, first, prompt, stop, claims, (left, mode) => void (spawned = { left, mode })).pipe(Effect.ensuring(leave));
   });
 }
 
@@ -171,6 +171,7 @@ function session(
   first: Work,
   prompt: string,
   stop: { asked: boolean; busy: boolean },
+  claims: Map<string, number>,
   spawned: (left: Effect.Effect<void>, mode: string | null) => void,
 ): Effect.Effect<Ended, unknown, Agent> {
   return Effect.gen(function* () {
@@ -243,14 +244,14 @@ function session(
       if (stop.asked) return yield* end({ kind: "stopped" });
       if (polls++ % STRAY_EVERY === 0) noteStrays();
       const seen = yield* look(s);
-      const next = step(first, seen.state, seat.me, freshAsked(seat.alias, seat.me, started));
+      const next = step(first, seen.state, seat.me, freshAsked(seat.alias, seat.me, started), setAside(claims));
       if (next.kind === "fresh") {
         clearFresh(seat.alias, seat.me);
         return yield* end(next);
       }
       if (next.kind === "over" || (first.kind === "answering" && answered(live, started, seen.forMe))) return yield* end({ kind: "done", work: first });
       const now = Date.now();
-      const { fresh, due } = waitsDue(waits, waitingBehind(first, seen.state, seat.me), now, WAIT_TELL_MS);
+      const { fresh, due } = waitsDue(waits, waitingBehind(first, seen.state, seat.me, setAside(claims)), now, WAIT_TELL_MS);
       for (const w of fresh) yield* say(`${workName(w)} is waiting; the ${workName(first)} session is still running`);
       for (const w of due) yield* tellWait(s, seen.state, seat.me, w, first, waits, now);
       yield* Effect.sleep(POLL_MS);
