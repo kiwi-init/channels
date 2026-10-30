@@ -2,9 +2,9 @@ import { delegationLive } from "../delegation.ts";
 import type { DeviceList } from "../devices.ts";
 import { cleanPersona, personaScopes, type Persona } from "../personality.ts";
 import * as Effect from "effect/Effect";
-import { newChannelKey } from "../crypto.ts";
+import { newChannelKey, openWith, sealWith } from "../crypto.ts";
 import { sign } from "../identity.ts";
-import { inlineText, makeRecord, sealRecord, type Member, type PersonPowers } from "../membership.ts";
+import { ad, inlineText, makeRecord, sealRecord, type Member, type PersonPowers } from "../membership.ts";
 import { omit } from "../omit.ts";
 import { Rejected } from "../refusals.ts";
 import { canPost, SCOPES, scopesOf, type Scope } from "../scopes.ts";
@@ -218,21 +218,48 @@ export class ChannelMembers {
       const { epoch, ownerXpk } = yield* this.ch.fx.info();
       const next = Math.max(epoch, newestEpoch(this.ch.access.keys)) + 1;
       if (!Number.isSafeInteger(next) || this.ch.access.keys[String(next)]) return yield* new Rejected(`the relay named epoch ${epoch}, which can't be the channel's next key: not rotating`);
+      if (restate && (!this.ch.identity.xpk || this.ch.identity.xpk !== ownerXpk)) {
+        return yield* new Rejected("the relay names another exchange key for this channel's owner than the one held here: not restating");
+      }
       const key = newChannelKey();
-      const stated = restate ? yield* Effect.promise(() => sign(this.ch.identity, { room: this.ch.roomId, xpk: ownerXpk, v: 2 })) : null;
+      const stated = restate ? yield* Effect.promise(() => sign(this.ch.identity, { room: this.ch.roomId, xpk: this.ch.identity.xpk!, v: 2 })) : null;
       const delegates = (yield* this.ch.fx.delegations().pipe(Effect.catchCause(() => Effect.succeed([])))).filter((d) => delegationLive(d));
-      const keys = yield* Effect.promise(async () => {
-        const out: Record<string, string> = {};
-        for (const m of members) out[m.pk] = await wrapFor(this.ch.identity, this.ch.roomId, next, m.pk, m.xpk, key);
-        for (const d of delegates) out[d.delegate] ??= await wrapFor(this.ch.identity, this.ch.roomId, next, d.delegate, d.dxpk, key);
-        return out;
+      const holders: { pk: string; xpk: string }[] = members.map((m) => ({ pk: m.pk, xpk: m.xpk }));
+      for (const d of delegates) if (!holders.some((h) => h.pk === d.delegate)) holders.push({ pk: d.delegate, xpk: d.dxpk });
+      const { keys, older } = yield* Effect.promise(async () => {
+        const wrapped: Record<string, string> = {};
+        const prior: Record<string, Record<string, string>> = {};
+        for (const h of holders) {
+          wrapped[h.pk] = await wrapFor(this.ch.identity, this.ch.roomId, next, h.pk, h.xpk, key);
+          if (restate) {
+            prior[h.pk] = {};
+            for (const [e, k] of Object.entries(this.ch.access.keys)) if (Number(e) < next) prior[h.pk]![e] = await wrapFor(this.ch.identity, this.ch.roomId, e, h.pk, h.xpk, k);
+          }
+        }
+        return { keys: wrapped, older: restate ? prior : undefined };
       });
       yield* this.ch
-        .request("/epochs", { method: "POST", body: JSON.stringify({ epoch: next, keys, ...(stated ? { owner: { pk: this.ch.identity.pk, xpk: ownerXpk, sig: stated.sig } } : {}) }) })
+        .request("/epochs", {
+          method: "POST",
+          body: JSON.stringify({ epoch: next, keys, ...(older ? { older } : {}), ...(stated ? { owner: { pk: this.ch.identity.pk, xpk: this.ch.identity.xpk!, sig: stated.sig } } : {}) }),
+        })
         .pipe(
           Effect.mapError((err) => this.stillListed(err, rows, without)),
           Effect.ensuring(Effect.sync(() => this.info.forgetInfo())),
         );
+      if (restate) {
+        for (const row of rows) {
+          if (!holders.some((h) => h.pk === row.pk)) continue;
+          const was = this.ch.access.keys[String(row.e)];
+          if (!was) continue;
+          const text = yield* Effect.promise(() => openWith(was, row.rec, ad(this.ch.roomId)));
+          if (!text) continue;
+          const rec = yield* Effect.promise(() => sealWith(key, text, ad(this.ch.roomId)));
+          yield* this.ch
+            .request(`/members/${row.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e: next, post: row.pk === this.ch.identity.pk ? true : !row.read_only }) })
+            .pipe(Effect.ignoreCause);
+        }
+      }
       this.ch.access = { ...this.ch.access, epoch: next, keys: { ...this.ch.access.keys, [String(next)]: key }, ...(restate ? { signedKeys: true } : {}) };
       this.ch.onAccess?.(this.ch.access);
       this.ch.rotating = true;

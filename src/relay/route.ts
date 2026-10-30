@@ -747,9 +747,9 @@ const routes: RoomRoute[] = [
     guard: "owner",
     run: () =>
       Effect.gen(function* () {
-        const b = yield* json<{ epoch: number; keys: Record<string, string>; owner?: { pk: string; xpk: string; sig: string } }>();
+        const b = yield* json<{ epoch: number; keys: Record<string, string>; owner?: { pk: string; xpk: string; sig: string }; older?: Record<string, Record<string, string>> }>();
         if (!b || !Number.isSafeInteger(b.epoch) || b.epoch < 0 || typeof b.keys !== "object" || b.keys === null) return yield* new BadRequest({ message: "bad epoch" });
-        yield* rotate(b.epoch, b.keys, b.owner);
+        yield* rotate(b.epoch, b.keys, b.owner, b.older);
         return { data: { epoch: b.epoch }, fx: { broadcast: [frame({ t: "epoch", epoch: b.epoch })] } };
       }),
   },

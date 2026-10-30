@@ -12,7 +12,7 @@ import { type ChannelAccess, encodeJoinCode, decodeJoinCode, newChannelKey, newR
 import { formatMessage } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, signText, type Identity } from "@kiwi/core/identity.ts";
 import { inlineText, makeRecord, sealRecord, type Member } from "@kiwi/core/membership.ts";
-import { ownerStatement, unwrapKeys } from "@kiwi/core/client/keys.ts";
+import { ownerStatement, unwrapKeys, wrapFor } from "@kiwi/core/client/keys.ts";
 import { PROTOCOL_VERSION, wellFormed, type Message } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { wants } from "../src/agent/wants.ts";
@@ -437,7 +437,13 @@ describe("channels from before signed keys", () => {
     const fresh = await Channel.resume(relay, code, agent);
     expect(fresh.signedKeys).toBe(true);
     expect(fresh.epoch).toBe(1);
-    expect(Object.keys(fresh.keys)).toEqual(["1"]);
+    expect(Object.keys(fresh.keys).sort()).toEqual(["0", "1"]);
+    const freshOwner = await Channel.resume(relay, code, owner);
+    const ownerCh2 = new Channel(freshOwner, relay, owner);
+    const members = await ownerCh2.members();
+    expect(members.find((m) => m.pk === agent.pk)?.unverified).toBeUndefined();
+    expect(members.find((m) => m.pk === owner.pk)?.owner).toBe(true);
+    expect(await ownerCh2.rotate()).toBe(2);
   });
 
   test("the relay won't swap in another owner's statement", async () => {
@@ -455,5 +461,43 @@ describe("channels from before signed keys", () => {
     ).rejects.toThrow();
     expect(ownerCh.access.signedKeys).toBe(false);
     await expect(Channel.resume(relay, code, agent)).rejects.toThrow(/before channel keys were signed/);
+  });
+
+  test("a relay that names another exchange key mid-upgrade is refused, and nothing is signed", async () => {
+    const { owner, ownerAccess } = await legacyChannel();
+    const ownerCh = new Channel(ownerAccess, relay, owner);
+    const other = await generateIdentity("not-the-owners-key");
+    let reads = 0;
+    const lying = relayThat((path, data) => {
+      if (path === "/info") {
+        reads += 1;
+        if (reads > 1) return { ...(data as Record<string, unknown>), ownerXpk: other.xpk! };
+      }
+      return data;
+    }, []);
+    await expect(via(ownerCh.fx.rotateIfDue(), lying)).rejects.toThrow(/another exchange key/);
+    expect(ownerCh.access.signedKeys).toBe(false);
+  });
+
+  test("two rotations racing for the same epoch: exactly one takes", async () => {
+    const { owner, agent, roomId, ownerAccess } = await legacyChannel();
+    const ownerCh = new Channel(ownerAccess, relay, owner);
+    const stated = await sign(owner, { room: roomId, xpk: owner.xpk!, v: 2 });
+    const boxes = async (k: string) => ({
+      [owner.pk]: await wrapFor(owner, roomId, 1, owner.pk, owner.xpk!, k),
+      [agent.pk]: await wrapFor(owner, roomId, 1, agent.pk, agent.xpk!, k),
+    });
+    const post = (keys: Record<string, string>) =>
+      via(
+        fetchRelay.call(relay, roomId, "/epochs", {
+          method: "POST",
+          identity: owner,
+          body: JSON.stringify({ epoch: 1, keys, owner: { pk: owner.pk, xpk: owner.xpk!, sig: stated.sig } }),
+        }),
+        fetchRelay,
+      );
+    const [a, b] = await Promise.allSettled([post(await boxes(newChannelKey())), post(await boxes(newChannelKey()))]);
+    expect([a, b].filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(ownerCh.access.signedKeys).toBe(false);
   });
 });

@@ -99,18 +99,31 @@ export const remove = Effect.fn("Room.remove")(function* (pk: string, how: GoneH
   db.changed("info");
 });
 
-export const rotate = Effect.fn("Room.rotate")(function* (epoch: number, keys: Record<string, string>, owner?: { pk: string; xpk: string; sig: string }) {
+export const rotate = Effect.fn("Room.rotate")(function* (
+  epoch: number,
+  keys: Record<string, string>,
+  owner?: { pk: string; xpk: string; sig: string },
+  older?: Record<string, Record<string, string>>,
+) {
   const db = yield* RoomStore;
-  const meta = yield* readMeta;
-  if (epoch !== meta.epoch + 1) return yield* new Conflict({ message: `next epoch is ${meta.epoch + 1}` });
+  const stated = yield* readMeta;
   if (owner) {
-    const restated = owner.pk === meta.ownerPk && owner.xpk === meta.ownerXpk && (yield* Effect.promise(async () => verify({ room: db.roomId, pk: owner.pk, xpk: owner.xpk, v: 2, sig: owner.sig })));
+    const restated =
+      owner.pk === stated.ownerPk && owner.xpk === stated.ownerXpk && (yield* Effect.promise(async () => verify({ room: db.roomId, pk: owner.pk, xpk: owner.xpk, v: 2, sig: owner.sig })));
     if (!restated) return yield* new BadRequest({ message: "bad owner statement" });
   }
+  const meta = yield* readMeta;
+  if (epoch !== meta.epoch + 1) return yield* new Conflict({ message: `next epoch is ${meta.epoch + 1}` });
   const members = db.members().filter((m) => m.active);
   for (const m of members) if (!keys[m.pk]) return yield* new BadRequest({ message: `missing wrapped key for ${m.pk.slice(0, 8)}` });
   for (const m of members) if (typeof keys[m.pk] !== "string" || keys[m.pk]!.length > MAX_WRAPPED) return yield* new BadRequest({ message: "bad wrapped key" });
   for (const m of members) db.sql.run("INSERT OR REPLACE INTO keys (pk, e, wrapped) VALUES (?, ?, ?)", m.pk, epoch, keys[m.pk]!);
+  for (const [pk, boxes] of Object.entries(older ?? {})) {
+    for (const [e, box] of Object.entries(boxes)) {
+      if (!/^\d{1,9}$/.test(e) || Number(e) >= epoch || typeof box !== "string" || box.length > MAX_WRAPPED) return yield* new BadRequest({ message: "bad wrapped key" });
+      db.sql.run("INSERT OR REPLACE INTO keys (pk, e, wrapped) VALUES (?, ?, ?)", pk, Number(e), box);
+    }
+  }
   yield* rotateDelegations(epoch, keys);
   db.set("epoch", epoch);
   db.set("rotate", 0);
