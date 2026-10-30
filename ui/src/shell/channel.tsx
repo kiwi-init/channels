@@ -162,7 +162,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               <TallPage
                 channel={channel}
                 jump={jump}
-                work={<Board channel={channel} needs={needs} />}
+                work={<Board channel={channel} needs={needs} tall />}
                 open={
                   nav.panel ? (
                     <div className="panel">

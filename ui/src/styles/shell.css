@@ -1307,3 +1307,51 @@ html .rail-gear.is-on {
 .crew-idle {
   color: var(--ink-3);
 }
+
+.tall-work .board-list {
+  padding-bottom: 24px;
+}
+
+.tall-work .board-list .board-row,
+.tall-work .board-list.has-prs .board-row {
+  grid-template-columns: 8px minmax(0, 1fr) 200px auto;
+  grid-template-rows: auto;
+  padding: 6px 8px;
+}
+
+.tall-work .board-list.has-prs .board-row {
+  grid-template-columns: 8px minmax(0, 1fr) 200px 132px auto;
+}
+
+.tall-work .board-list .board-row > .dot {
+  grid-row: 1;
+}
+
+.tall-work .board-list .board-title {
+  overflow: hidden;
+  font-size: var(--t-ui);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tall-work .board-list .board-meta {
+  grid-row: 1;
+  grid-column: 3;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tall-work .board-list .board-pr {
+  grid-row: 1;
+  grid-column: 4;
+}
+
+.tall-work .board-list .board-pr-short,
+.tall-work .board-list .board-checks {
+  display: none;
+}
+
+.tall-work .board-list .board-owner {
+  grid-row: 1;
+}
