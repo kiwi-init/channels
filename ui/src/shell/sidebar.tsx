@@ -9,6 +9,7 @@ import { ago } from "~/kit/time"
 import { memberOf, type Channel, type Person } from "~/model"
 import { sameWhere, useApp } from "~/nav"
 import { between, nickname, shown } from "~/names"
+import { usePortrait } from "~/shell/panel-height"
 import { SideFoot } from "~/shell/updates"
 
 export function Sidebar({ channel }: { channel: Channel }) {
@@ -19,8 +20,9 @@ export function Sidebar({ channel }: { channel: Channel }) {
   const agents = channel.people.filter((p) => p.kind === "agent").sort((a, b) => rank(a) - rank(b))
   const onChat = nav.tab === "chat"
   const [openTheirs, setOpenTheirs] = useState(false)
+  const portrait = usePortrait()
   const onTheirs = onChat && nav.where.kind === "theirs"
-  const theirsShown = openTheirs || onTheirs
+  const theirsShown = openTheirs || onTheirs || portrait
   const sideRef = useGlide<HTMLDivElement>(".side-row.is-on")
   return (
     <div ref={sideRef} className="side">
@@ -119,7 +121,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
                   </li>
                 )
               })}
-            {channel.theirs.length > 0 && !onTheirs && (
+            {channel.theirs.length > 0 && !onTheirs && !portrait && (
               <li>
                 <button type="button" className="side-row is-add" aria-expanded={openTheirs} onClick={() => setOpenTheirs(!openTheirs)}>
                   <Icon name={openTheirs ? "down" : "chevron"} size={14} />

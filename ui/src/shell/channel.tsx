@@ -13,6 +13,7 @@ import { openAsks } from "~/needs/open"
 import { sameWhere, useApp } from "~/nav"
 import { ThreadPanel } from "~/panels/thread"
 import { SIDEBAR_KEYS, useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
+import { usePanelHeight, usePortrait } from "~/shell/panel-height"
 import { usePanelWidth } from "~/shell/panel-width"
 import { isSideKey, setDrawer, toggleSide, useDrawer } from "~/shell/side"
 import { Sidebar } from "~/shell/sidebar"
@@ -36,6 +37,8 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const { nav, go } = useApp()
   const hidden = useSidebarHidden()
   const panel = usePanelWidth(hidden)
+  const dock = usePanelHeight()
+  const portrait = usePortrait()
   const [jump, setJump] = useState<Jump | null>(null)
   const [focusAsk, setFocusAsk] = useState(0)
   if (jump && (nav.tab !== "chat" || !sameWhere(jump.m.where, nav.where))) setJump(null)
@@ -85,7 +88,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const news = drawerNews(channel)
 
   return (
-    <div className={cx("chan", nav.panel && "has-panel", drawer && "is-drawer", hidden && "is-bare")} style={{ "--panel-w": `${panel.width}px` } as CSSProperties}>
+    <div className={cx("chan", nav.panel && "has-panel", drawer && "is-drawer", hidden && "is-bare")} style={{ "--panel-w": `${panel.width}px`, "--dock-h": `${dock.height}px` } as CSSProperties}>
       <header className="top">
         <button
           type="button"
@@ -181,14 +184,14 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           <div
             className="panel-grip"
             role="separator"
-            aria-orientation="vertical"
+            aria-orientation={portrait ? "horizontal" : "vertical"}
             aria-label="Resize the panel"
-            aria-valuemin={panel.min}
-            aria-valuemax={panel.max}
-            aria-valuenow={panel.width}
+            aria-valuemin={portrait ? dock.min : panel.min}
+            aria-valuemax={portrait ? dock.max : panel.max}
+            aria-valuenow={portrait ? dock.height : panel.width}
             tabIndex={0}
             title="Drag to resize · double-click to reset"
-            {...panel.grip}
+            {...(portrait ? dock.grip : panel.grip)}
           />
           <Boundary panel resetKey={JSON.stringify(nav.panel)}>
             <Suspense fallback={null}>
