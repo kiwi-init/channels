@@ -67,13 +67,14 @@
     "KIWI_EXPIRE_AFTER_DAYS": "90"
   },
   // Rate limits per client address: 20 mailbox writes (launch asks and enrolments), 60 machine
-  // registrations and inbox writes, 240 mailbox reads (a pairing polls its slots about once a
-  // second), 300 unsigned room reads and join asks (the join flow carries no member key), and
-  // 10 channel creates. namespace_id must be unique in the Cloudflare account.
+  // registrations and inbox writes, 600 mailbox reads (pairings poll their slots about once a
+  // second and concurrent ones share an address), 300 room reads and join asks on the join
+  // flow's open paths (signed or not: a signature proves no membership), and 10 channel creates.
+  // namespace_id must be unique in the Cloudflare account.
   "ratelimits": [
     { "name": "MAILBOX_WRITES", "namespace_id": "870202", "simple": { "limit": 20, "period": 60 } },
     { "name": "MACHINE_WRITES", "namespace_id": "870204", "simple": { "limit": 60, "period": 60 } },
-    { "name": "MAILBOX_READS", "namespace_id": "870205", "simple": { "limit": 240, "period": 60 } },
+    { "name": "MAILBOX_READS", "namespace_id": "870205", "simple": { "limit": 600, "period": 60 } },
     { "name": "ROOM_JOINS", "namespace_id": "870206", "simple": { "limit": 300, "period": 60 } },
     { "name": "ROOM_CREATES", "namespace_id": "870207", "simple": { "limit": 10, "period": 60 } }
   ],

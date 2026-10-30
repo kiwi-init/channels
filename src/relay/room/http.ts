@@ -26,10 +26,8 @@ export async function gateRoom(req: Request, roomId: string, rest: string, now =
   const url = new URL(req.url);
   const token = requestToken(req);
   const method = req.method.toUpperCase();
-  if (!token) {
-    if (!((method === "GET" && rest === "/info") || (method === "POST" && rest === "/requests"))) return refused();
-    return { signer: null, open: true };
-  }
+  const open = (method === "GET" && rest === "/info") || (method === "POST" && rest === "/requests");
+  if (!token) return open ? { signer: null, open: true } : refused();
   if (rest === "/ws") {
     let signer = await verifyRequest(token, roomId, "GET", "/ws" + url.search, "", now);
     if (!signer && url.search) signer = await verifyRequest(token, roomId, "GET", "/ws", "", now);
@@ -42,7 +40,7 @@ export async function gateRoom(req: Request, roomId: string, rest: string, now =
     body = read;
   }
   const signer = await verifyRequest(token, roomId, method, rest + url.search, body, now);
-  return signer ? { signer, open: false } : refused();
+  return signer ? { signer, open } : refused();
 }
 
 export function relayConfig(human: HumanAuth | null, githubClientId?: string | null): Response {

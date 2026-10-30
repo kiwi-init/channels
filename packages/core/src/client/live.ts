@@ -320,7 +320,7 @@ export class ChannelLive {
           }),
       );
       const { code, reason, opened } = yield* Effect.promise(() => closed);
-      if (!opened) this.olderWsSign = true;
+      this.olderWsSign = !opened;
       if (code === 4000) {
         at.next = "page";
         return yield* Queue.end(q);

@@ -547,6 +547,18 @@ describe("the relay's front door", () => {
     const ask = await fetch(`${relay}/v1/rooms/${access.roomId}/requests?fp=${fp}`, { method: "POST", body: "" });
     expect(ask.status).toBe(400);
     expect(await ask.json()).toEqual({ error: "bad json", tag: "BadRequest" });
+    const keyed = await generateIdentity("keyedstranger");
+    const signed = await fetch(`${relay}/v1/rooms/${access.roomId}/info?fp=wrong`, {
+      headers: { authorization: `Bearer ${await signRequest(keyed, access.roomId, "GET", "/info?fp=wrong")}` },
+    });
+    expect(signed.status).toBe(404);
+    for (const [method, path] of [
+      ["GET", "/pages/3"],
+      ["POST", "/pages/3"],
+    ] as const) {
+      const page = await fetch(`${relay}/v1/rooms/${access.roomId}${path}`, { method });
+      expect(page.status).toBe(401);
+    }
   });
 
   test("a body that isn't a JSON object is a 400, never a 500", async () => {
@@ -588,11 +600,19 @@ describe("the relay's front door", () => {
       ]),
     );
     const fresh = await generateIdentity("newcomer");
-    await Channel.requestJoin(relay, code, fresh, { name: "newcomer" });
+    const freshAsk = await Channel.requestJoin(relay, code, fresh, { name: "newcomer" });
     const after = new Database(join(dataDir, `${access.roomId}.sqlite`));
     const rows = after.query("SELECT pk, status FROM requests").all() as { pk: string; status: string }[];
     after.close();
     expect(rows).toEqual([{ pk: fresh.pk, status: "pending" }]);
+    await ownerCh.approve((await checked(ownerCh, relay, code, [{ id: fresh, requestId: freshAsk.requestId }]))[0]!);
+    const again = await generateIdentity("again");
+    await Channel.requestJoin(relay, code, again, { name: "again" });
+    const kept = new Database(join(dataDir, `${access.roomId}.sqlite`));
+    const survivors = kept.query("SELECT pk, status FROM requests").all() as { pk: string; status: string }[];
+    kept.close();
+    expect(survivors).toContainEqual({ pk: fresh.pk, status: "approved" });
+    expect(survivors).toContainEqual({ pk: again.pk, status: "pending" });
     await expect(Channel.requestJoin(relay, code, denied, { name: "refused" })).resolves.toMatchObject({ requestId: expect.any(String) });
   });
 });
