@@ -1,4 +1,6 @@
 import { describe, expect, mock, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 
@@ -83,16 +85,11 @@ describe("drawing a Mermaid diagram", () => {
     expect(linksApart('<a href="mailto:a@b.example?x=1&amp;y=2">m</a>')).toBe('<a href="mailto:a@b.example?x=1&amp;y=2" target="_blank" rel="noopener noreferrer">m</a>')
   })
 
-  test("a diagram loads no picture from an address, and a source with a picture shape isn't drawn (#1308)", async () => {
+  test("a drawn diagram keeps no picture address but data:, and the page itself loads pictures only from its own origin (#1308)", () => {
     expect(picturesOff('<image href="https://evil.example/a.png" width="4"/><img src="/icon.svg?read=1" alt="i"><image xlink:href="data:image/png;base64,AA"/>')).toBe(
       '<image width="4"/><img alt="i"><image xlink:href="data:image/png;base64,AA"/>'
     )
-    let drawn = 0
-    const render = async () => (drawn++, { kind: "svg" as const, svg: "" })
-    for (const source of ['flowchart LR\n  A@{ img: "/icon.svg?message-read=1308" }', "flowchart LR\n  A@{ shape: rect, \"img\" : 'https://x.example/a.png' }"])
-      expect(await drawCached(source, "pictures", render)).toEqual({ kind: "error", message: "it shows a picture from an address, and Kiwi doesn't load those" })
-    expect(drawn).toBe(0)
-    await drawCached('flowchart LR\n  A@{ shape: rect, label: "imgs: none" }', "pictures", render)
-    expect(drawn).toBe(1)
+    const page = readFileSync(join(import.meta.dir, "../../index.html"), "utf8")
+    expect(page).toContain(`<meta http-equiv="Content-Security-Policy" content="img-src 'self' data: blob:" />`)
   })
 })

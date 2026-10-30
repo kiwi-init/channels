@@ -121,8 +121,6 @@ export function picturesOff(svg: string): string {
   return svg.replace(/<(image|img)\b([^>]*?)(\/?)>/gi, (_, tag: string, attrs: string, close: string) => `<${tag}${keeping(attrs, (url) => /^data:/i.test(url))}${close}>`)
 }
 
-const PICTURE_SHAPE = /@\{[^}]*?["']?\bimg\b["']?\s*:/is
-
 function draw(source: string): Promise<Drawn> {
   const run = queue.then(async (): Promise<Drawn> => {
     const m = await load()
@@ -183,12 +181,7 @@ export function drawCached(source: string, scheme: string, render: (source: stri
     drawings.set(key, held)
     return held
   }
-  const fresh =
-    source.length > MAX_SOURCE
-      ? Promise.resolve<Drawn>({ kind: "error", message: `it's too long to draw (over ${MAX_SOURCE.toLocaleString("en")} characters)` })
-      : PICTURE_SHAPE.test(source)
-        ? Promise.resolve<Drawn>({ kind: "error", message: "it shows a picture from an address, and Kiwi doesn't load those" })
-        : render(source)
+  const fresh = source.length > MAX_SOURCE ? Promise.resolve<Drawn>({ kind: "error", message: `it's too long to draw (over ${MAX_SOURCE.toLocaleString("en")} characters)` }) : render(source)
   drawings.set(key, fresh)
   const oldest = drawings.keys().next()
   if (drawings.size > MAX_DRAWN && !oldest.done) drawings.delete(oldest.value)
