@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -u
 
-usage="usage: session.sh none|gnome-keyring|kwallet|kwallet-unanswered|cancel|cancel-no-keyring|cancel-holds-key TAG APPIMAGE RESULTS LOGS tray|no-tray [HOME] (as the desktop user, under dbus-run-session)"
+usage="usage: session.sh none|gnome-keyring|kwallet|kwallet-unanswered|cancel|cancel-no-keyring|cancel-holds-key TAG APPIMAGE RESULTS LOGS tray|no-tray [HOME] [extract|entry] (as the desktop user, under dbus-run-session)"
 keyring=${1:?$usage}
 tag=${2:?$usage}
 image=${3:?$usage}
@@ -9,6 +9,7 @@ results=${4:?$usage}
 logs=${5:?$usage}
 tray=${6:?$usage}
 kept_home=${7:-}
+launch=${8:-extract}
 here=$(cd "$(dirname "$0")" && pwd)
 ok() { echo "ok   [$tag] $*" | tee -a "$results"; }
 bad() { echo "FAIL [$tag] $*" | tee -a "$results"; }
@@ -66,7 +67,14 @@ HOME="$home" gsettings set org.gnome.desktop.background picture-uri "file://$hom
 HOME="$home" gsettings set org.gnome.desktop.background picture-uri-dark "file://$home/wall.ppm" 2> /dev/null || true
 HOME="$home" gsettings set org.gnome.desktop.interface color-scheme prefer-dark 2> /dev/null || true
 start=$(date +%s)
-HOME="$home" setsid "$image" --appimage-extract-and-run > "$logs/$tag-app.log" 2>&1 &
+if [ "$launch" = entry ]; then
+  exec_line=$(sed -n 's/^Exec=//p' "$home/.local/share/applications/channels-desktop.desktop" 2> /dev/null | sed 's/ %U$//')
+  [ -n "$exec_line" ] || { bad "no desktop entry to start the app from"; kill "$watcher" "$proto" "$weston" 2> /dev/null; exit 0; }
+  info "started the way the app menu does: $exec_line"
+  HOME="$home" setsid sh -c "exec $exec_line" > "$logs/$tag-app.log" 2>&1 &
+else
+  HOME="$home" setsid "$image" --appimage-extract-and-run > "$logs/$tag-app.log" 2>&1 &
+fi
 pid=$!
 up=""
 for _ in $(seq 1 60); do

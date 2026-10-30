@@ -83,7 +83,20 @@ as_tester() {
   rm -rf "$rt"
   return $code
 }
-session() { as_tester bash /home/tester/session.sh "$1" "$2" /home/tester/Channels.AppImage "$results" "$out/logs" "$3" "${4:-}"; }
+session() { as_tester bash /home/tester/session.sh "$1" "$2" /home/tester/Channels.AppImage "$results" "$out/logs" "$3" "${4:-}" "${5:-extract}"; }
+entry_check() {
+  local home=$1 want=$2 file="$1/.local/share/applications/channels-desktop.desktop" exec icons handler
+  [ -f "$file" ] || { bad "no desktop entry at $file after a start"; return; }
+  exec=$(sed -n 's/^Exec=//p' "$file")
+  if [ "$exec" = "$want" ]; then ok "the app wrote its desktop entry: Exec=$exec"; else bad "the desktop entry's Exec is '$exec', not '$want'"; fi
+  icons=$(find "$home/.local/share/icons/hicolor" -name channels-desktop.png 2> /dev/null | wc -l)
+  if [ "$icons" -gt 0 ]; then ok "and $icons hicolor icons for it"; else bad "no hicolor icons for the desktop entry"; fi
+  handler=$(runuser -u tester -- env HOME="$home" gio mime x-scheme-handler/kiwi 2>&1 | head -n 1)
+  case "$handler" in *channels-desktop.desktop*) ok "kiwi:// links open it: $handler" ;; *) bad "kiwi:// doesn't open channels-desktop.desktop: $handler" ;; esac
+}
+mounted() {
+  if grep -q "$2" "$out/logs/$1-app.log"; then ok "$3"; else bad "$3 didn't happen: $(grep -m1 'Current directory' "$out/logs/$1-app.log")"; fi
+}
 lib_test() {
   local name=$1
   shift
@@ -93,7 +106,11 @@ lib_test() {
 plain_home=$(runuser -u tester -- mktemp -d)
 activatable=$(grep -lE 'org\.freedesktop\.secrets|org\.gnome\.keyring' /usr/share/dbus-1/services/*.service 2> /dev/null)
 for f in $activatable; do mv "$f" "$f.off"; done
+if ls /usr/bin/fusermount* > /dev/null 2>&1; then bad "the test tools pulled in FUSE, so the start without it can't be checked"; fi
 session none stock no-tray "$plain_home"
+entry_check "$plain_home" 'env APPIMAGE_EXTRACT_AND_RUN=1 "/home/tester/Channels.AppImage" %U'
+session none entry-no-fuse no-tray "$plain_home" entry
+mounted entry-no-fuse /tmp/appimage_extracted_ "with no FUSE, the entry's start extracts the AppImage and runs it"
 for f in $activatable; do mv "$f.off" "$f"; done
 lib_test kiwi-tray-test "$tests/kiwi-tray-test" "$lib" no-indicator
 install "${ayatana[@]}" || exit 1
@@ -108,6 +125,12 @@ session cancel-holds-key cancel-sealed tray "$sealed_home"
 session cancel keyless-dialog tray "$sealed_home"
 lib_test kiwi-scheme-test xvfb-run -a "$tests/kiwi-scheme-test" "$lib"
 lib_test kiwi-notify-test xvfb-run -a "$tests/kiwi-notify-test" "$lib"
+install fuse3 || exit 1
+fuse_home=$(runuser -u tester -- mktemp -d)
+session gnome-keyring fuse tray "$fuse_home"
+entry_check "$fuse_home" '"/home/tester/Channels.AppImage" %U'
+session gnome-keyring entry-fuse tray "$fuse_home" entry
+mounted entry-fuse /tmp/.mount_ "with fuse3, the entry's start mounts the AppImage"
 [ -z "$from" ] || as_tester bash /home/tester/update.sh "$from" "$results" "$out/logs"
 
 chmod -R a+rX "$out"
