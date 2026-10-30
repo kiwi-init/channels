@@ -28,6 +28,7 @@ type Step = "started" | "asked" | "in";
 interface Kind {
   harness: "claude" | "codex" | "kimi";
   nick?: string;
+  unknown?: true;
 }
 
 interface Start {
@@ -39,7 +40,7 @@ interface Start {
   failed?: string;
 }
 
-const ALL_KINDS: Kind[] = [{ harness: "claude", nick: "nova" }, { harness: "codex" }, { harness: "kimi", nick: "kim" }];
+const ALL_KINDS: Kind[] = [{ harness: "claude", nick: "nova" }, { harness: "codex" }, { harness: "kimi", nick: "kim" }, { harness: "kimi", nick: "anon", unknown: true }];
 const ONLY = process.env.KIWI_STARTS_ONLY?.split(",") ?? [];
 const KINDS = ALL_KINDS.filter((k) => !ONLY.length || ONLY.includes(k.harness));
 
@@ -130,7 +131,7 @@ async function follow(start: Start, launched: Launched): Promise<void> {
 }
 
 async function launchOne(kind: Kind, n: number): Promise<Start> {
-  const start: Start = { kind, launch: `harness_${String(n).padStart(4, "0")}_${kind.harness}`, at: Date.now(), steps: {} };
+  const start: Start = { kind, launch: `harness_${String(n).padStart(4, "0")}_${kind.harness}${kind.unknown ? "_unknown" : ""}`, at: Date.now(), steps: {} };
   const launched = await daemonLaunch(
     { harness: kind.harness, folder: repo, code: s.code, relay: server!.url.origin, launch: start.launch, ...(kind.nick ? { nick: kind.nick } : {}) },
     daemonSock(kiwiHome),
@@ -150,7 +151,7 @@ function report(): string {
     const took = starts.map((x) => x.steps[step]).filter((v): v is number => v !== undefined);
     if (took.length) lines.push(`  ${step}: ${took.length} of ${all}, median ${secs(median(took))}, slowest ${secs(Math.max(...took))}`);
   }
-  for (const x of starts.filter((y) => y.failed)) lines.push(`  FAILED ${x.launch} (${x.kind.harness}${x.kind.nick ? `, nick ${x.kind.nick}` : ""}): ${x.failed}`);
+  for (const x of starts.filter((y) => y.failed)) lines.push(`  FAILED ${x.launch} (${x.kind.unknown ? "a harness kiwi can't recognise" : x.kind.harness}${x.kind.nick ? `, nick ${x.kind.nick}` : ""}): ${x.failed}`);
   try {
     lines.push(
       "launch.log:",
@@ -176,7 +177,7 @@ beforeAll(async () => {
     join(bins, "kimi-code.sh"),
     `echo "Welcome to Kimi Code. No session yet: one will be created on your first message"\nprintf '> '\nIFS= read -r prompt\nexport TERM=dumb NO_COLOR=1\n${JOIN}\n`,
   );
-  script(join(bins, "kimi"), `${VERSION}\nexec '${join(bins, "kimi-code")}' '${join(bins, "kimi-code.sh")}' "$@"`);
+  script(join(bins, "kimi"), `${VERSION}\ncase "$KIWI_LAUNCH" in *_unknown) exec /bin/sh '${join(bins, "kimi-code.sh")}' "$@" ;; esac\nexec '${join(bins, "kimi-code")}' '${join(bins, "kimi-code.sh")}' "$@"`);
   script(join(bins, "gemini"), `${VERSION}\necho "gemini: not signed in"\nexit 3`);
   writeFileSync(join(home, ".profile"), `export PATH="${bins}:$PATH"\n`);
   writeFileSync(join(kiwiHome, "config.json"), JSON.stringify({ channels: {} }));
