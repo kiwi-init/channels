@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { useHost, type Host } from "../desktop/src/host.ts";
+import { linkRecord } from "../desktop/src/ipc/github.ts";
 import { signInCalls } from "../desktop/src/ipc/signin.ts";
 import { createToken, freshToken } from "../desktop/src/signin.ts";
 import { openStore, store, type StoreFile } from "../desktop/src/store.ts";
@@ -14,7 +15,8 @@ afterAll(() => {
 });
 
 const LINK_TOKEN = `ghu_${"a".repeat(36)}`;
-const link = (relay: string) => ({ login: "octocat", id: 583231, token: LINK_TOKEN, at: 1, relay, clientId: CLIENT });
+const link = (relay: string, first = true) => ({ login: "octocat", id: 583231, token: LINK_TOKEN, at: 1, relay, clientId: CLIENT, ...(first ? { first } : {}) });
+const person = { name: "octocat", pk: "pk", xpk: "xpk", secret: "s" } as unknown as StoreFile["person"];
 const session = { access: "workos-access", refresh: "r", exp: Number.MAX_SAFE_INTEGER };
 
 function open(file: Partial<StoreFile>): void {
@@ -49,12 +51,30 @@ describe("on a relay that takes GitHub sign-in", () => {
     expect(pushed).toEqual([]);
   });
 
-  test("signing out drops the GitHub link with the session, so the next sign-in asks GitHub again", async () => {
+  test("signing out drops the GitHub token, so the next sign-in asks GitHub again, and keeps the WorkOS session the account is under", async () => {
     const relay = github.url.origin;
     open({ relayUrl: relay, github: link(relay), signin: session });
     await signInCalls(host).signOut();
-    expect(store.github).toBeUndefined();
-    expect(store.signin).toBeUndefined();
+    expect(store.github?.token).toBe("");
+    expect(store.github?.first).toBe(true);
+    expect(await createToken()).toBe("workos-access");
+    expect(store.signin).toEqual(session);
+    expect(await freshToken()).toBe("workos-access");
+  });
+
+  test("someone whose key came before GitHub, with no WorkOS session left, gets no account token instead of an empty github_<id> account", async () => {
+    const relay = github.url.origin;
+    open({ relayUrl: relay, person, github: link(relay, false) });
+    expect(await createToken()).toBe(LINK_TOKEN);
+    expect(await freshToken()).toBeNull();
+  });
+
+  test("a link remembers whether GitHub came before the key, and signing in again as the same account keeps it", () => {
+    const found = { login: "octocat", id: 583231, token: LINK_TOKEN };
+    expect(linkRecord({ person: null }, found, "r", CLIENT, 5).first).toBe(true);
+    expect(linkRecord({ person }, found, "r", CLIENT, 5).first).toBeUndefined();
+    expect(linkRecord({ person, github: { ...link("r"), token: "" } }, found, "r", CLIENT, 5).first).toBe(true);
+    expect(linkRecord({ person, github: { ...link("r"), id: 1 } }, found, "r", CLIENT, 5).first).toBeUndefined();
   });
 
   test("a link made on another relay signs nobody in here", async () => {

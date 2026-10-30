@@ -51,12 +51,14 @@ export async function createToken(): Promise<string | null> {
 let refreshing: Promise<string | null> | null = null;
 
 /**
- * The token for the account (devices, enrolling): a WorkOS session first, since an account made
- * with it is kept under its user until it moves, else the GitHub sign-in.
+ * The token for the account (devices, enrolling): the WorkOS session, since an account made with
+ * it is kept under its user until it moves. The GitHub sign-in only for a person whose key came
+ * after it on this computer: their github_<id> account is their own. Anyone else without a session
+ * gets no token, and the account routes say to sign in, rather than read an empty account.
  */
 export async function freshToken(): Promise<string | null> {
   const s = store.signin;
-  if (!s) return githubSignInToken();
+  if (!s) return store.github?.first ? githubSignInToken() : null;
   if (Date.now() < Math.min(s.exp, tokenExpiry(s.access) ?? s.exp) - 60_000) return s.access;
   refreshing ??= refreshToken(s).finally(() => (refreshing = null));
   return refreshing;

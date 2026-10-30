@@ -21,8 +21,8 @@ export function signInCalls(host: Host): Serves<"signIn" | "devSignIn" | "getTok
     signOut: async () => {
       const github = githubSignsIn(await relayConfig(store.relayUrl).catch(() => ({})));
       mutate((s) => {
-        s.signin = undefined;
-        if (github) s.github = undefined;
+        if (!github) s.signin = undefined;
+        else if (s.github) s.github = { ...s.github, token: "" };
       });
     },
   };
