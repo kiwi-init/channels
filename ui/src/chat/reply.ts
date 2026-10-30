@@ -11,10 +11,11 @@ export const ReplyContext = createContext<Replying | null>(null)
 
 export const useReplying = (): Replying | null => useContext(ReplyContext)
 
-export function jumpTo(root: HTMLElement | null, seq: number): boolean {
+export function jumpTo(root: HTMLElement | null, seq: number, motion: "glide" | "instant" = "glide"): boolean {
   const el = root?.querySelector<HTMLElement>(`[data-seq="${seq}"]`)
   if (!el) return false
-  el.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })
+  const glide = motion === "glide" && !matchMedia("(prefers-reduced-motion: reduce)").matches
+  el.scrollIntoView({ block: "center", behavior: glide ? "smooth" : "auto" })
   flash(el)
   return true
 }

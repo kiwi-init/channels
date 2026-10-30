@@ -4,7 +4,13 @@ import type { Actions, App, Where } from "~/model"
 
 type Tab = "chat" | "tasks" | "agents" | "needs"
 
-export type Panel = { kind: "person"; name: string } | { kind: "task"; task: number } | { kind: "thread"; seq: number } | { kind: "channel" } | { kind: "invite" } | { kind: "add-agent" }
+export type Panel =
+  | { kind: "person"; name: string }
+  | { kind: "task"; task: number }
+  | { kind: "thread"; seq: number; focus?: number }
+  | { kind: "channel" }
+  | { kind: "invite" }
+  | { kind: "add-agent" }
 
 export type Dialog = "new-channel" | "join" | "palette" | null
 

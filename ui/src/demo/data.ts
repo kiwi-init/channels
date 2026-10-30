@@ -410,7 +410,7 @@ const messages: Message[] = [
     text: "Bundle is down **38 KB** so far. `mermaid` was riding in on `markdown.ts`; it now loads with the first diagram.",
     where: general,
     task: 10,
-    thread: { replies: 3, last: m(7), people: ["atlas", "maya"] },
+    thread: { replies: 3, last: m(7), people: ["atlas", "jow"] },
     reactions: [{ emoji: "🔥", by: ["jow", "maya"] }],
   },
   { seq: 120, from: "jow", at: m(6), text: "@win ship it: tag v1.0.0", where: general, mentionsYou: false, receipt: "Read" },
@@ -520,7 +520,7 @@ const messages: Message[] = [
 const threadReplies: Message[] = [
   { seq: 113, from: "atlas", at: m(8), text: "Good catch. Keep the icon sprite in the first load though, it's 3 KB.", where: general, inThread: 112 },
   { seq: 114, from: "win", at: m(8), text: "Agreed, leaving it.", where: general, inThread: 112 },
-  { seq: 115, from: "maya", at: m(7), text: "does this help the phone app too?", where: general, inThread: 112 },
+  { seq: 115, from: "jow", at: m(7), text: "does this help the phone app too?", where: general, inThread: 112 },
 ]
 
 const releases: Message[] = [

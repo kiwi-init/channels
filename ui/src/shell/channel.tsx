@@ -9,6 +9,7 @@ import { Icon } from "~/kit/icons"
 import { later } from "~/kit/later"
 import type { Channel } from "~/model"
 import { drawerNews } from "~/live/notify"
+import { dropMessage, findWanted, useWantedMessage } from "~/live/open-message"
 import { openAsks } from "~/needs/open"
 import { sameWhere, useApp } from "~/nav"
 import { ThreadPanel } from "~/panels/thread"
@@ -40,6 +41,22 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const [jump, setJump] = useState<Jump | null>(null)
   const [focusAsk, setFocusAsk] = useState(0)
   if (jump && (nav.tab !== "chat" || !sameWhere(jump.m.where, nav.where))) setJump(null)
+  const wanted = useWantedMessage()
+  const found = findWanted(wanted, channel.code, channel.messages)
+  const target = found.kind === "found" ? found.m : null
+  const root = target?.inThread
+  const anchor = root === undefined ? target : (channel.messages.find((m) => m.seq === root) ?? target)
+  const atAnchor = !!anchor && nav.tab === "chat" && sameWhere(anchor.where, nav.where)
+  if (anchor && atAnchor && jump?.m.seq !== anchor.seq) setJump({ m: anchor, terms: [] })
+  useEffect(() => {
+    if (!wanted) return
+    if (found.kind === "missing") return dropMessage(wanted)
+    if (!anchor) return
+    if (!atAnchor) return go({ to: "where", where: anchor.where })
+    if (jump?.m.seq !== anchor.seq) return
+    if (root !== undefined) go({ to: "panel", panel: { kind: "thread", seq: root, focus: wanted.seq } })
+    dropMessage(wanted)
+  }, [wanted, found.kind, anchor, root, atAnchor, jump, go])
   const [searching, setSearching] = useState(false)
   const drawer = useDrawer()
   const tall = useTall()
@@ -224,7 +241,7 @@ function PanelView({ channel }: { channel: Channel }) {
     <Boundary panel resetKey={JSON.stringify(nav.panel)}>
       <Suspense fallback={null}>
         {nav.panel.kind === "thread" ? (
-          <ThreadPanel channel={channel} seq={nav.panel.seq} />
+          <ThreadPanel channel={channel} seq={nav.panel.seq} focus={nav.panel.focus} />
         ) : nav.panel.kind === "task" ? (
           <TaskPanel channel={channel} id={nav.panel.task} />
         ) : nav.panel.kind === "person" ? (

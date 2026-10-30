@@ -20,6 +20,8 @@ import { chime } from "~/live/alerts"
 import { OpenMember, type View } from "~/live/channel"
 import { iconUrl } from "~/live/icon"
 import { useNotesElsewhere } from "~/live/notes"
+import { hashTarget, messageOfLink } from "~/live/notify"
+import { openFromNote } from "~/live/open-message"
 import { harnessChoices } from "~/live/harness-rows"
 import { OpenPending, pendingTitle } from "~/live/pending"
 import { ownPrefs, usePrefs } from "~/live/prefs"
@@ -131,10 +133,12 @@ function useOpenLinks(go: (g: Go) => void, ready: boolean) {
   useEffect(() => {
     if (!ready) return
     const fromHash = () => {
-      const { code } = parseHash(location.hash)
+      const { hash, seq } = hashTarget(location.hash)
+      const { code } = parseHash(hash)
       if (!code) return
       history.replaceState(null, "", `${location.pathname}${location.search}`)
-      take.current(code)
+      if (seq) openFromNote(code, seq, take.current)
+      else take.current(code)
     }
     fromHash()
     window.addEventListener("hashchange", fromHash)
@@ -148,7 +152,10 @@ function useOpenLinks(go: (g: Go) => void, ready: boolean) {
         .getDeepLink()
         .then((url) => {
           const code = url ? joinCodeFromLink(url) : null
-          if (code) take.current(code)
+          if (!url || !code) return
+          const seq = messageOfLink(url)
+          if (seq) openFromNote(code, seq, take.current)
+          else take.current(code)
         })
         .catch(() => {})
     pick()

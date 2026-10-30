@@ -223,6 +223,9 @@ jobs:
       - name: ui terminal in WebKit draws no browser caret down its left edge
         if: ${{ !cancelled() }}
         run: bun scripts/ui-term-caret.ts --dist ui/dist
+      - name: ui thread in Chromium opens on the reply it was asked for, not its bottom
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-thread-focus.ts --dist ui/dist
       - name: ui portrait window in WebKit is one tall page, agents, tasks and chat in view, and landscape is unchanged
         if: ${{ !cancelled() }}
         run: bun scripts/ui-tall-page.ts --dist ui/dist
