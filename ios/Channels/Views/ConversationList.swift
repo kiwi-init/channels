@@ -419,7 +419,7 @@ struct PinCell: View {
     private var peek: String? {
         if let need = row.need { return need }
         guard row.unread, let last = row.last else { return nil }
-        return last.body.replacingOccurrences(of: "\n", with: " ")
+        return last.plain.replacingOccurrences(of: "\n", with: " ")
     }
 }
 
@@ -491,7 +491,7 @@ struct RowPeek: View {
                 if let ask = row.asks.first {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(ask.label).type(.meta, .semibold).foregroundStyle(Tone.decide)
-                        Text(ask.body).type(.ui).foregroundStyle(Tone.ink).lineLimit(4)
+                        Text(ask.plain).type(.ui).foregroundStyle(Tone.ink).lineLimit(4)
                         ForEach(ask.choices, id: \.self) { choice in
                             Text(choice).type(.ui, .medium).foregroundStyle(Tone.ink)
                                 .padding(.horizontal, 10)
@@ -529,7 +529,7 @@ struct PeekBubble: View {
             if let name {
                 Text(name).type(.stamp).foregroundStyle(Tone.ink3).padding(.horizontal, 10)
             }
-            Text(message.body.isEmpty && message.images > 0 ? "Photo" : message.body)
+            Text(message.body.isEmpty && message.images > 0 ? "Photo" : message.plain)
                 .type(.ui)
                 .foregroundStyle(message.mine ? .white : Tone.ink)
                 .lineLimit(5)
@@ -569,7 +569,7 @@ struct Hit: View {
     }
 
     private var highlighted: AttributedString {
-        var out = AttributedString((message.mine ? "You: " : "\(row.room.display(message.from)): ") + message.body.replacingOccurrences(of: "\n", with: " "))
+        var out = AttributedString((message.mine ? "You: " : "\(row.room.display(message.from)): ") + message.plain.replacingOccurrences(of: "\n", with: " "))
         out.foregroundColor = Tone.ink2
         if let range = out.range(of: query, options: .caseInsensitive) {
             out[range].foregroundColor = Tone.ink

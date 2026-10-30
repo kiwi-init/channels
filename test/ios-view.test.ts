@@ -120,13 +120,34 @@ describe("names in the phone's room view (#1251)", () => {
     const room = named(await signedLog([say("lead", "In review with @dev, see `@dev` and\n\n```\n@dev\n```"), say("dev", "on it"), say("jow", "ok", { re: [1] }), say("jow", "@dev thanks")]));
     expect(room.messages[0]).toMatchObject({ body: "In review with @dev, see `@dev` and\n\n```\n@dev\n```", shown: "In review with @Earnest Heron, see `@dev` and\n\n```\n@dev\n```" });
     expect(room.messages[2]?.quote?.words).toBe("In review with @Earnest Heron, see `@dev` and ``` @dev ```");
-    expect(room.latest).toMatchObject({ body: "@dev thanks", shown: "@Earnest Heron thanks" });
+    expect(room.latest).toMatchObject({ body: "@dev thanks", shown: "@Earnest Heron thanks", plain: "@Earnest Heron thanks" });
   });
 
   test("a nickname is shown as text, never as Markdown", async () => {
     const room = named(await signedLog([say("lead", "Ping @dev")]), "Earnest _Heron_ *1*");
-    expect(room.messages[0]?.shown).toBe("Ping @Earnest \\_Heron\\_ \\*1\\*");
-    expect(room.messages[0]?.body).toBe("Ping @dev");
+    expect(room.messages[0]).toMatchObject({ body: "Ping @dev", shown: "Ping @Earnest \\_Heron\\_ \\*1\\*", plain: "Ping @Earnest _Heron_ *1*" });
+  });
+
+  test("a nickname a bare handle turns into can't start a Markdown block", async () => {
+    const people: Roster = roster.map((r) => (r.name === "dev" ? { ...r, name: "dev.bot", display: "# Heron" } : r));
+    const log = await signedLog([say("lead", "dev.bot says hello\n\n@dev.bot then")]);
+    const room = roomView({
+      code: "code",
+      title: "c",
+      icon: null,
+      me: "jow",
+      isOwner: true,
+      connection: "live",
+      gone: null,
+      error: null,
+      head: 1,
+      whole: true,
+      messages: log,
+      state: fold(log, people, T0 + 60_000),
+      online: new Map(),
+      place: "main",
+    });
+    expect(room.messages[0]).toMatchObject({ shown: "\\# Heron says hello\n\n@\\# Heron then", plain: "# Heron says hello\n\n@# Heron then" });
   });
 
   test("an ask shows the nickname, while its choices and the answer that picks one keep their text, which the phone sends back and matches", async () => {
@@ -134,6 +155,6 @@ describe("names in the phone's room view (#1251)", () => {
     expect(room.messages[0]).toMatchObject({ shown: "Who takes it, @Earnest Heron?", choices: ["@dev", "nobody"], chosen: { choice: "@dev", by: "jow" } });
     expect(room.messages[1]?.body).toBe("@dev");
     const open = named(await signedLog([ev("jow", { op: "task.add", title: "ship it", owner: "lead" }), say("lead", "Ping @dev?", { kind: "ask", to: ["jow"], choices: ["yes"], holds: [1] })]));
-    expect(open.asks[0]).toMatchObject({ body: "Ping @dev?", shown: "Ping @Earnest Heron?", choices: ["yes"] });
+    expect(open.asks[0]).toMatchObject({ body: "Ping @dev?", shown: "Ping @Earnest Heron?", plain: "Ping @Earnest Heron?", choices: ["yes"] });
   });
 });

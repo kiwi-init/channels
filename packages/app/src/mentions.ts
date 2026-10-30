@@ -98,8 +98,10 @@ export function swap(text: string, nicknames: ReadonlyMap<string, string>, out: 
 
 export const literal = (text: string): string => text.replace(/[\\`*_[\]()<>&!|~]/g, "\\$&");
 
+const asText = (text: string): string => text.replace(/[!-/:-@[-`{-~]/g, "\\$&");
+
 export function namedMarkdown(text: string, nicknames: ReadonlyMap<string, string>): string {
-  return swap(text, nicknames, (hit) => (hit.kind === "mention" || hit.kind === "bare" ? `${hit.kind === "mention" ? "@" : ""}${literal(hit.label)}` : null));
+  return swap(text, nicknames, (hit) => (hit.kind === "mention" || hit.kind === "bare" ? `${hit.kind === "mention" ? "@" : ""}${asText(hit.label)}` : null));
 }
 
 export function named(text: string, nicknames: ReadonlyMap<string, string>): string {

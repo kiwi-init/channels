@@ -96,6 +96,7 @@ export interface MessageView {
   kind: string;
   body: string;
   shown: string;
+  plain: string;
   event: boolean;
   mine: boolean;
   quote: QuoteView | null;
@@ -130,6 +131,7 @@ export interface AskView {
   from: string;
   body: string;
   shown: string;
+  plain: string;
   at: number;
   label: string;
   choices: string[];

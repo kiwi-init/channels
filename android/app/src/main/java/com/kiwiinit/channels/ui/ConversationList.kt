@@ -528,7 +528,7 @@ private fun androidx.compose.ui.text.AnnotatedString.Builder.words(row: Conversa
 @Composable
 private fun Hit(row: ConversationRow, message: MessageView, query: String, open: () -> Unit) {
     val tone = Tone.current
-    val words = (if (message.mine) "You: " else "${row.room.display(message.from)}: ") + message.shown.oneLine()
+    val words = (if (message.mine) "You: " else "${row.room.display(message.from)}: ") + message.plain.oneLine()
     val at = words.lowercase().indexOf(query)
     val strong = MaterialTheme.colorScheme.onSurface
     Row(
