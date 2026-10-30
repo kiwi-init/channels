@@ -1,4 +1,5 @@
 import type { ChannelIdentityView } from "../../../desktop/src/bridge.ts";
+import { CHANNELS_KEY, MEMBER_PREFIX, PENDING_PREFIX } from "@kiwi/secrets/local-store.ts";
 
 export interface KeyValues {
   readonly length: number;
@@ -39,12 +40,12 @@ export async function migrateLegacy(storage: KeyValues, migrate: (entries: Chann
   const found: { key: string; entry: ChannelIdentityView }[] = [];
   for (let i = 0; i < storage.length; i++) {
     const k = storage.key(i);
-    if (!k?.startsWith("mc.member.") && !k?.startsWith("mc.pending.")) continue;
+    if (!k?.startsWith(MEMBER_PREFIX) && !k?.startsWith(PENDING_PREFIX)) continue;
     const entry = legacyEntry(parsed(storage.getItem(k)));
     if (entry) found.push({ key: k, entry });
   }
-  await migrate(found.map((f) => f.entry));
+  const added = await migrate(found.map((f) => f.entry));
   for (const { key } of found) storage.removeItem(key);
-  if (found.length) storage.removeItem("mc.channels");
-  return found.length;
+  if (found.length) storage.removeItem(CHANNELS_KEY);
+  return added;
 }
