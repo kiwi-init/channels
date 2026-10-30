@@ -127,6 +127,7 @@
   min-height: 0;
   margin: 0 6px 6px 14px;
   overflow: hidden;
+  caret-color: transparent;
 }
 
 .term-screen canvas {
