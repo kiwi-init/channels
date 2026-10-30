@@ -862,13 +862,13 @@
     z-index: 1;
     display: grid;
     grid-area: 1 / 1;
-    justify-self: end;
-    margin-right: 12px;
+    justify-self: start;
+    margin-left: 8px;
   }
 
   .chan:not(.is-bare) .top-title {
     grid-area: 1 / 1;
-    padding-right: 48px;
+    padding-left: calc(8px + var(--ctl) + 10px);
   }
 
   .chan:not(.is-bare) .top-drawer-dot {

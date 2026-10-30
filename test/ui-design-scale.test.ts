@@ -94,3 +94,23 @@ describe("the top bar's controls float", () => {
     }
   });
 });
+
+describe("the sidebar button stays in one place, open or collapsed", () => {
+  const shell = readFileSync(join(STYLES, "shell.css"), "utf8");
+  const wide = shell.slice(shell.indexOf("@media (min-width: 761px) {\n  .chan:not(.is-bare) .top-drawer"));
+  const rule = (selector: string): string => {
+    const at = wide.indexOf(`\n  ${selector} {`);
+    return at < 0 ? "" : wide.slice(at, wide.indexOf("}", at));
+  };
+
+  test("open, it sits first at the bar's left edge, where the collapsed bar puts it", () => {
+    expect(rule(".chan:not(.is-bare) .top-drawer")).toContain("justify-self: start");
+    expect(rule(".chan:not(.is-bare) .top-drawer")).toContain("margin-left: 8px");
+    expect(rule(".chan.is-bare .top")).toContain("padding-left: 8px");
+  });
+
+  test("open, the switcher follows it at the same gap as collapsed", () => {
+    expect(rule(".chan.is-bare .top-title")).toContain("padding: 0 10px");
+    expect(rule(".chan:not(.is-bare) .top-title")).toContain("padding-left: calc(8px + var(--ctl) + 10px)");
+  });
+});
