@@ -90,6 +90,8 @@ describe("drawing a Mermaid diagram", () => {
       '<image width="4"/><img alt="i"><image xlink:href="data:image/png;base64,AA"/>'
     )
     const page = readFileSync(join(import.meta.dir, "../../index.html"), "utf8")
-    expect(page).toContain(`<meta http-equiv="Content-Security-Policy" content="img-src 'self' data: blob:" />`)
+    expect(page).toContain(
+      `<meta http-equiv="Content-Security-Policy" content="img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; object-src 'none'; frame-src 'none'" />`
+    )
   })
 })
