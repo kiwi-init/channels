@@ -51,3 +51,31 @@ describe("ui styles keep to the design scale", () => {
     expect(rawRadii(".a { border-radius: var(--r-row); }")).toEqual([]);
   });
 });
+
+describe("the top bar's controls float", () => {
+  const tokens = readFileSync(join(STYLES, "tokens.css"), "utf8");
+  const shell = readFileSync(join(STYLES, "shell.css"), "utf8");
+  const rule = (css: string, selector: string): string => {
+    const at = css.indexOf(`\n${selector} {`);
+    return at < 0 ? "" : css.slice(at, css.indexOf("}", at));
+  };
+
+  test("every theme side sets the float fill and its shadow", () => {
+    const sides = [":root {", ':root[data-theme="light"] {', ':root:not([data-theme="dark"]) {'].map((head) => {
+      const at = tokens.indexOf(head);
+      return at < 0 ? "" : tokens.slice(at, tokens.indexOf("}", at));
+    });
+    for (const side of sides) {
+      expect(side).toContain("--float:");
+      expect(side).toContain("--shadow-float:");
+    }
+  });
+
+  test("the switcher, the sidebar button and both groups sit on the float", () => {
+    for (const selector of [".top-chan", ".top-drawer", ".tabs,\n.top-group"]) {
+      const body = rule(shell, selector);
+      expect(body).toContain("background: var(--float)");
+      expect(body).toContain("box-shadow: var(--shadow-float)");
+    }
+  });
+});

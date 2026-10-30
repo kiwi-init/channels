@@ -986,7 +986,7 @@ html .md {
 }
 
 .tabs[data-glide]::before {
-  border-radius: var(--r-ctl);
+  border-radius: var(--r-row);
 }
 
 [data-glide="move"]::before {

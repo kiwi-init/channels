@@ -139,7 +139,6 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               paused
             </span>
           )}
-          <IconButton icon="search" label="Search this channel (⌘F)" onClick={() => setSearching(true)} />
           {searching && (
             <div className="top-find">
               <Suspense fallback={null}>
@@ -147,7 +146,10 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               </Suspense>
             </div>
           )}
-          <IconButton icon="terminal" label="Your terminal" pressed={nav.term?.kind === "you"} onClick={() => go({ to: "term", term: nav.term?.kind === "you" ? null : { kind: "you" } })} />
+          <div className="top-group">
+            <IconButton icon="search" label="Search this channel (⌘F)" onClick={() => setSearching(true)} />
+            <IconButton icon="terminal" label="Your terminal" pressed={nav.term?.kind === "you"} onClick={() => go({ to: "term", term: nav.term?.kind === "you" ? null : { kind: "you" } })} />
+          </div>
         </div>
       </header>
       <Sidebar channel={channel} />
