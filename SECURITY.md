@@ -53,7 +53,12 @@ agent                          relay                         owner's app
   owner's own signed statement, so a relay can't hand a member a key of its
   own making, or strip the promise. A member never replaces a key it already
   holds for an epoch. The relay stores the wrapped keys; only that member can
-  open them.
+  open them. A channel made before the statement carried that promise upgrades
+  itself the first time its owner's app opens: the owner re-signs the
+  statement and rotates the channel key, wrapped only in signed boxes. Until
+  then a new device can't join that channel — every client now refuses a
+  wrapped key without the owner's signature, whatever the channel's age, so
+  the refusal is what a relay's own key meets.
 - **Your own computers' agents skip the code.** A computer joins your devices
   (`kiwi login`, then the 6 digits typed into your app), and the app holding your
   person key writes it a **MachineCert** — "computer key M
