@@ -145,6 +145,9 @@ gets one pending ask at most. Approving it needs your app in your hand and the d
 | `PUT /v1/account/ask/<id>/answer` `{device, dxpk, nonce}` | an app that approves | once, with the app's own listed keys |
 | `PUT /v1/account/ask/<id>/reveal` `{nonce}` | the asking device | once, after the answer; checked against the commitment |
 | `DELETE /v1/account/ask/<id>` | the asking device, an app that approves | turns the ask away |
+| `GET /v1/account/fresh` | the session | `{fresh}`: the waiting start-over, with its end time, or null (section 6) |
+| `POST /v1/account/fresh` `{links}` | the new desktop | starts over: one link, a new person key adding this desktop |
+| `DELETE /v1/account/fresh/<id>` | a current device, the person key, the desktop that started it | cancels the start-over |
 
 A key revoked in a published list is refused on every account route, can't ask again, and loses its
 computer inbox at once (`/v1/machine/<key>` answers 403 and its socket closes).
@@ -332,6 +335,22 @@ For when every app is gone, or a thief revoked your other devices first. The rec
     replaced since can't re-root. A later re-root must carry a chain that extends the one before.
   - An app still holding the old key lets it go, and a sealed person box from before the re-root is
     never sealed into a new vault version.
+- **Start fresh** (T1010), for someone with no device left and no words, set up or forgotten. Nothing
+  can vouch for them but the sign-in, and whoever takes over the sign-in has that too, so it waits:
+  - A new desktop signed in to the account posts a `rootLink`: a new person key adding that desktop. The
+    relay keeps it for 7 days, and the account works as it did meanwhile.
+  - Every signed-in read of `GET /v1/account/fresh` shows it, so a device hears at its next poll, and one
+    that was offline when it comes back. Computers hold no sign-in: they aren't told and can't cancel.
+  - A current device, the person key or the starting desktop cancels it, by id. A sign-in alone can
+    neither cancel nor shorten the wait. A re-root, or a list link signed by the person key (what recovering
+    with the words publishes), cancels it too; a device's routine renewal doesn't.
+  - One at a time: a second start with other keys is refused and the first keeps its end time. A repeat
+    of the same link answers with the one waiting. One start a day per account, cancelled or not, so
+    nobody can spam old devices with notices.
+  - On the first account request after day 7 the relay cuts every old device and replaces the list, recovery
+    chain and vault with the new one-link list. It isn't a re-root: `list.person` is the new key, so nothing
+    chains to the old person. Old channels stay unreadable, since nothing is re-sealed. Old devices keep
+    what they already hold, and their seats in those channels stay until an owner removes them.
 - **Passkeys later:** per-passkey wrapping where native passkey PRF exists (macOS 15 and iOS 18 through
   AuthenticationServices; Android Credential Manager). Never in a page the relay serves, which would
   see the unlock key.

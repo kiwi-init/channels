@@ -56,7 +56,7 @@ import {
   type MachineStore,
   type PersonMachine,
 } from "./machine.ts";
-import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, type AccountStore } from "./account.ts";
+import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, sameFresh, type AccountStore, type FreshRecord } from "./account.ts";
 import { ENROLL_TTL_MS, type Enrollment } from "@kiwi/core/enroll.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
 import type { Vault } from "@kiwi/core/recovery.ts";
@@ -510,6 +510,12 @@ export class Account extends DurableObject<Env> {
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS ask (k INTEGER PRIMARY KEY CHECK (k = 1), rec TEXT NOT NULL)");
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS recovery (n INTEGER PRIMARY KEY, link TEXT NOT NULL)");
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS vault (k INTEGER PRIMARY KEY CHECK (k = 1), version INTEGER NOT NULL, rec TEXT NOT NULL)");
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS fresh (k INTEGER PRIMARY KEY CHECK (k = 1), rec TEXT NOT NULL)");
+  }
+
+  private freshRecord(): FreshRecord | null {
+    const row = this.ctx.storage.sql.exec("SELECT rec FROM fresh").toArray()[0] as { rec: string } | undefined;
+    return row ? (JSON.parse(row.rec) as FreshRecord) : null;
   }
 
   private enrollment(): Enrollment | null {
@@ -558,6 +564,22 @@ export class Account extends DurableObject<Env> {
         const row = sql.exec("SELECT version FROM vault").toArray()[0] as { version: number } | undefined;
         if ((row?.version ?? 0) !== prev) return false;
         sql.exec("INSERT OR REPLACE INTO vault (k, version, rec) VALUES (1, ?, ?)", next.version, JSON.stringify(next));
+        return true;
+      },
+      fresh: async () => this.freshRecord(),
+      setFresh: async (_user, next, prev) => {
+        if (!sameFresh(this.freshRecord(), prev)) return false;
+        sql.exec("INSERT OR REPLACE INTO fresh (k, rec) VALUES (1, ?)", JSON.stringify(next));
+        return true;
+      },
+      startOver: async (_user, start) => {
+        const rec = this.freshRecord();
+        if (rec?.pending?.id !== start.id) return false;
+        this.ctx.storage.transactionSync(() => {
+          for (const table of ["links", "recovery", "vault", "ask"]) sql.exec(`DELETE FROM ${table}`);
+          start.links.forEach((l, i) => sql.exec("INSERT INTO links (seq, link) VALUES (?, ?)", i + 1, JSON.stringify(l)));
+          sql.exec("INSERT OR REPLACE INTO fresh (k, rec) VALUES (1, ?)", JSON.stringify({ pending: null, lastAt: rec.lastAt }));
+        });
         return true;
       },
     };
