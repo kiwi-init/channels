@@ -15,7 +15,7 @@ const decoded = (text: string | undefined, bytes: number): Buffer | null => {
   return raw.length === bytes ? raw : null;
 };
 
-export function readPublicKey(text: string): PublicKey | null {
+function readPublicKey(text: string): PublicKey | null {
   const line = text
     .split("\n")
     .map((l) => l.trim())
