@@ -118,10 +118,10 @@ This computer
   kiwi cleanup [--quiet]                         remove what older installs and updates left behind (the installer runs it)
   kiwi daemon                                    this computer's hub: key, cert, and every agent's seat (starts on its own)
   kiwi context-line on|off|status                past 250k tokens, the Stop hook asks a seat for its checkpoints (off by default)
-  kiwi terminal [status] [--json]                Rex on this computer, its helpers, and whether creating new agents is on
-  kiwi terminal download|remove rex              Rex's helpers: they mark a seat that needs you in its Rex tab (off by default)
+  kiwi terminal [status] [--json]                Rex and tmux on this computer, their helpers, and whether creating new agents is on
+  kiwi terminal download|remove rex|tmux         a terminal's helpers: Rex and tmux mark a seat that needs you (off by default)
   kiwi terminal show --needs-you                 go to the seat with the oldest question for a person, else the oldest task
-                                                 waiting for review, in Rex
+                                                 waiting for review, in Rex or tmux (tmux's prefix K runs it)
   kiwi launches on|off|status                    whether new agents can be started on this computer, from here or another of your devices (on)
      launches bypass on|off|status               whether a launch from your phone or another computer may skip its harness's
                                                  permission prompts here (off)

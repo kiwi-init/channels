@@ -54,7 +54,10 @@ const STARTS: AgentStarts = {
   folders: ["~/www/channels", "~/www/landing"],
   launch: true,
   bypass: false,
-  terminals: [{ id: "rex", name: "Rex", found: true, running: true, helpers: "on" }],
+  terminals: [
+    { id: "rex", name: "Rex", found: true, running: true, helpers: "on" },
+    { id: "tmux", name: "tmux", found: true, running: false, helpers: "off" },
+  ],
 }
 
 function withLeftOut(c: Channel): Channel {
