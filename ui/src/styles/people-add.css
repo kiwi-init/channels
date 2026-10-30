@@ -369,6 +369,43 @@
   color: var(--ink);
 }
 
+.add-step.is-failed {
+  color: var(--ink);
+}
+
+.add-step.is-failed .add-step-mark {
+  border-color: var(--alert);
+  background: var(--alert);
+  color: var(--on-ink);
+}
+
+.add-failed,
+.add-stall {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  margin-top: 14px;
+  color: var(--ink-2);
+  font: var(--t-meta) / 1.55 var(--ui);
+}
+
+.add-failed > p {
+  color: var(--ink);
+}
+
+.add-said {
+  justify-self: stretch;
+  margin: 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border-radius: var(--r-ctl);
+  background: var(--alert-wash);
+  color: var(--ink);
+  font: var(--t-meta) / 1.5 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .add-body .input[aria-invalid="true"] {
   border-color: color-mix(in srgb, var(--alert) 60%, transparent);
 }

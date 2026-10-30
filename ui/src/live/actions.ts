@@ -17,6 +17,7 @@ import { linkOf, type ChannelLink } from "@kiwi/channel/channel-ops.ts"
 import { removeComputer } from "@kiwi/app/computers.ts"
 import { joinCodeFromLink } from "@kiwi/app/deep-link.ts"
 import { kiwiJoin } from "@kiwi/app/join-line.ts"
+import { followLaunch } from "@kiwi/app/launch-follow.ts"
 import { relayUrl } from "@kiwi/secrets/relay.ts"
 import { noteFor, showSeat, type ShowResult } from "@kiwi/app/show-seat.ts"
 import { cleanRoomName, roomProblem, roomsAfter } from "@kiwi/app/rooms.ts"
@@ -466,8 +467,10 @@ export function makeActions(): Actions {
       const b = bridge()
       return b ? b.chooseFolder() : null
     },
-    addAgent: (code, agent) =>
-      attempt("Agent not started", async () => {
+    addAgent: (code, agent, seen) => {
+      const launch = launchId()
+      const stop = followLaunch(code, launch, (s) => seen({ stage: s.stage, name: s.name }))
+      void (async () => {
         const b = bridge()
         if (!b) throw new Error("starting agents needs the Channels desktop app")
         const run = need(code)
@@ -478,7 +481,7 @@ export function makeActions(): Actions {
         const here = secrets().computers.find((c) => c.own)?.machinePk
         const r = await b.launchAgent({
           ...(agent.computer && agent.computer !== here && agent.computer !== "this" ? { machinePk: agent.computer } : {}),
-          launch: launchId(),
+          launch,
           harness,
           folder: agent.folder,
           code,
@@ -488,8 +491,15 @@ export function makeActions(): Actions {
           ...(agent.mode && agent.mode !== "ask-first" ? { permission: PERMISSION[agent.mode] } : {}),
         })
         if (!r.ok) throw new Error(r.detail || "Kiwi couldn't start it")
-        announce(`Starting ${agent.name || harness}`)
-      }),
+        seen({ stage: "started" })
+      })().catch((err: unknown) => {
+        stop()
+        const why = say(err)
+        announce(`${agent.name || "Agent"} not started: ${why.split("\n")[0]}`)
+        seen({ stage: "failed", why })
+      })
+      return stop
+    },
     addRoom: (code, typed) =>
       tried("Room not made", async () => {
         const run = owner(code)

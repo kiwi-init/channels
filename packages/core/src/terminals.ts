@@ -1,6 +1,6 @@
 import { readLaunch } from "./membership.ts";
 
-export const PLACE_NAMES = { rex: "Rex", hosted: "Channels" } as const;
+export const PLACE_NAMES = { rex: "Rex", tmux: "tmux", hosted: "Channels" } as const;
 
 export type PlaceKind = keyof typeof PLACE_NAMES;
 
@@ -44,7 +44,7 @@ export interface TmuxSeat {
   pane: string;
 }
 
-export type PlacedSeat = ({ place: "rex" } & RexSeat) | ({ place: "hosted" } & TmuxSeat);
+export type PlacedSeat = ({ place: "rex" } & RexSeat) | ({ place: "tmux" | "hosted" } & TmuxSeat);
 
 const SHOW_REFUSALS = ["no-rex", "no-server", "no-app", "remote-control", "failed"] as const;
 
@@ -135,7 +135,7 @@ export function readPlacedSeat(x: unknown): PlacedSeat | null {
     const seat = readRexSeat(x);
     return seat ? { place, ...seat } : null;
   }
-  if (place === "hosted") {
+  if (place === "tmux" || place === "hosted") {
     const seat = readTmuxSeat(x);
     return seat ? { place, ...seat } : null;
   }
@@ -148,7 +148,7 @@ export function readShowResult(x: unknown): ShowResult {
   return { ok: false, why: isShowRefusal(r?.why) ? r.why : "failed" };
 }
 
-const TERMINAL_IDS = ["rex"] as const;
+const TERMINAL_IDS = ["rex", "tmux"] as const;
 
 export type TerminalId = (typeof TERMINAL_IDS)[number];
 

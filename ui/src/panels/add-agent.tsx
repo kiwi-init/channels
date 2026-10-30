@@ -5,33 +5,31 @@ import { HARNESS_INSTALL, isKnownHarness } from "@kiwi/core/harnesses.ts"
 import { Avatar, cx } from "~/kit/bits"
 import { Track } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
-import { ago } from "~/kit/time"
-import type { App, Channel, Computer, ComputerChoices, Harness, NewAgent } from "~/model"
+import { ago, useNow } from "~/kit/time"
+import type { App, Channel, Computer, ComputerChoices, Harness, NewAgent, Person } from "~/model"
 import { useApp } from "~/nav"
 import { shown } from "~/names"
 import { PanelHead } from "~/panels/frame"
 import { CopyBox } from "~/panels/invite"
+import { joinedAs, seen, stallOf, starting, stepOf, type Launch, type Stall } from "~/panels/launch-progress"
 
 type Way = "here" | "command"
 type Mode = NonNullable<NewAgent["mode"]>
-type Step = 0 | 1 | 2
 type Taken = Map<string, "in" | "asking">
 
 interface Run {
   agent: NewAgent
   on: string
   runs: string
-  step: Step
+  launch: Launch
 }
 
 const NAMES = ["nova", "ember", "quill", "otto", "juno"]
 
 const PRESET = new URLSearchParams(location.search).get("shot")
 
-const DEMO_STEPS = new Map<Step, number>([
-  [1, 800],
-  [2, 1600],
-])
+const SHOT_FAILED =
+  "Claude Code stopped as it started (exit 1):\nshell-init: error retrieving current directory: getcwd: cannot access parent directories: No such file or directory\nThe current directory no longer exists (it was deleted or moved). Start Claude Code from an existing directory."
 
 const MODES: { id: Mode; label: string }[] = [
   { id: "ask-first", label: "Ask first" },
@@ -76,11 +74,14 @@ function firstChoices(app: App) {
   return { computer, harness }
 }
 
-function presetRun(app: App, name: string): Run | null {
-  if (PRESET !== "add-agent-starting") return null
+function presetRun(app: App, name: string, people: Person[]): Run | null {
+  if (PRESET !== "add-agent-starting" && PRESET !== "add-agent-failed") return null
   const { computer, harness } = firstChoices(app)
   if (!computer || !harness) return null
-  return { agent: { harness: harness.id, computer: computer.id, folder: "~/www/channels", name, mode: "ask-first" }, on: computer.label, runs: harness.label, step: 2 }
+  const now = Date.now()
+  const begun = starting(name, people, now)
+  const launch = PRESET === "add-agent-failed" ? seen(begun, { stage: "failed", why: SHOT_FAILED }, now) : seen(seen(begun, { stage: "started" }, now), { stage: "asked", name }, now)
+  return { agent: { harness: harness.id, computer: computer.id, folder: "~/www/channels", name, mode: "ask-first" }, on: computer.label, runs: harness.label, launch }
 }
 
 export function AddAgentPanel({ channel }: { channel: Channel }) {
@@ -88,18 +89,15 @@ export function AddAgentPanel({ channel }: { channel: Channel }) {
   const taken = takenNames(channel)
   const [name, setName] = useState(() => freeName(taken))
   const [way, setWay] = useState<Way>(PRESET === "add-agent-command" ? "command" : "here")
-  const [run, setRun] = useState<Run | null>(() => presetRun(app, name))
-  const timers = useRef<number[]>([])
+  const [run, setRun] = useState<Run | null>(() => presetRun(app, name, channel.people))
+  const following = useRef<(() => void) | null>(null)
 
-  useEffect(() => {
-    const list = timers.current
-    return () => list.forEach((t) => window.clearTimeout(t))
-  }, [])
+  useEffect(() => () => following.current?.(), [])
 
   const start = (agent: NewAgent, on: string, runs: string) => {
-    app.actions.addAgent(channel.code, agent)
-    setRun({ agent, on, runs, step: 0 })
-    for (const [step, ms] of DEMO_STEPS) timers.current.push(window.setTimeout(() => setRun((r) => r && { ...r, step }), ms))
+    following.current?.()
+    setRun({ agent, on, runs, launch: starting(agent.name, channel.people, Date.now()) })
+    following.current = app.actions.addAgent(channel.code, agent, (s) => setRun((r) => r && { ...r, launch: seen(r.launch, s, Date.now()) }))
   }
 
   if (run)
@@ -110,9 +108,15 @@ export function AddAgentPanel({ channel }: { channel: Channel }) {
           channel={channel}
           run={run}
           onDone={() => go({ to: "panel", panel: null })}
-          onMessage={() => {
-            go({ to: "where", where: { kind: "dm", with: run.agent.name } })
+          onMessage={(handle) => {
+            go({ to: "where", where: { kind: "dm", with: handle } })
             go({ to: "panel", panel: null })
+          }}
+          onRetry={() => start(run.agent, run.on, run.runs)}
+          onBack={() => {
+            following.current?.()
+            following.current = null
+            setRun(null)
           }}
         />
       </>
@@ -520,19 +524,42 @@ export function AddAgentCard({ channel }: { channel: Channel }) {
   )
 }
 
-function Progress({ channel, run, onDone, onMessage }: { channel: Channel; run: Run; onDone: () => void; onMessage: () => void }) {
-  const { app } = useApp()
-  const { agent, on, runs } = run
+interface ProgressProps {
+  channel: Channel
+  run: Run
+  onDone: () => void
+  onMessage: (handle: string) => void
+  onRetry: () => void
+  onBack: () => void
+}
+
+function stallText(stall: Stall, n: string, on: string, owner: string): string {
+  if (stall === "slow-start") return `${on} hasn't said whether ${n} started. It may be asleep or offline.`
+  if (stall === "not-asking") return `${n} is running on ${on} but hasn't asked to join. Its window may be waiting on a question: a sign-in, a folder to trust or a permission.`
+  if (stall === "not-let-in") return `${n} asked to join, but Kiwi didn't let it in on its own. Let it in from Needs you.`
+  return `${owner} hasn't let ${n} in yet. If they don't see it in their Needs you, ${n} may be waiting on a question in its window on ${on}.`
+}
+
+function Progress({ channel, run, onDone, onMessage, onRetry, onBack }: ProgressProps) {
+  const { app, go } = useApp()
+  const { agent, on, runs, launch } = run
   const n = agent.name
-  const done = channel.people.some((p) => p.name === n)
-  const step = done ? 3 : run.step
+  const handle = joinedAs(launch, channel.people)
+  const member = handle ? channel.people.find((p) => p.name === handle) : undefined
+  const done = !!handle
+  const failed = launch.stage === "failed"
+  const now = useNow(done || failed ? null : 1_000)
+  const step = stepOf(launch, channel.youOwn, done)
+  const stall = stallOf(launch, channel.youOwn, done, now)
   const found = channel.people.find((p) => p.owner && !p.you)
   const owner = found ? shown(found) : "the owner"
+  const name = member ? shown(member) : n
   const rows = [
-    { now: `Starting ${n} on ${on}`, done: `Started ${n} on ${on}` },
-    { now: `${n} is asking to join`, done: `${n} asked to join` },
-    { now: channel.youOwn ? `Letting ${n} in` : `Waiting for ${owner} to let ${n} in`, done: `${n} is in` },
+    { now: `Starting ${n} on ${on}`, done: `Started ${n} on ${on}`, failed: `Couldn't start ${n} on ${on}` },
+    ...(channel.youOwn ? [{ now: `${n} is asking to join`, done: `${n} asked to join`, failed: "" }] : []),
+    { now: channel.youOwn ? `Letting ${n} in` : `Waiting for ${owner} to let ${n} in`, done: `${name} is in`, failed: "" },
   ]
+  const [why = "", ...said] = (launch.why ?? "").split("\n")
   const persona = app.personas.find((p) => p.id === agent.persona)?.label
   return (
     <>
@@ -540,32 +567,59 @@ function Progress({ channel, run, onDone, onMessage }: { channel: Channel; run: 
         <div className="add-who">
           <Avatar person={{ name: n, kind: "agent", harness: agent.harness, presence: done ? "online" : "offline" }} size="lg" pip />
           <div className="add-who-text">
-            <p className="add-who-name">{n}</p>
+            <p className="add-who-name">{name}</p>
             <p className="add-who-meta">{[runs, persona, agent.folder].filter(Boolean).join(" · ")}</p>
           </div>
         </div>
         <ol className="add-steps" aria-live="polite">
           {rows.map((row, i) => {
-            const state = i < step ? "is-done" : i === step ? "is-now" : "is-next"
+            const state = failed && i === step ? "is-failed" : i < step ? "is-done" : i === step ? "is-now" : "is-next"
             return (
-              <li key={row.done} className={cx("add-step", state)}>
+              <li key={row.now} className={cx("add-step", state)}>
                 <span className="add-step-mark" aria-hidden="true">
                   {state === "is-done" && <Icon name="check" size={12} />}
+                  {state === "is-failed" && <Icon name="close" size={12} />}
                 </span>
-                <span>{state === "is-now" ? `${row.now}…` : row.done}</span>
+                <span>{state === "is-failed" ? row.failed : state === "is-now" ? `${row.now}…` : row.done}</span>
               </li>
             )
           })}
         </ol>
-        {!done && <p className="add-note">You can close this. {n} shows up under Agents once it's in.</p>}
+        {failed ? (
+          <div className="add-failed" role="alert">
+            <p>{why}</p>
+            {said.length > 0 && <pre className="add-said">{said.join("\n")}</pre>}
+          </div>
+        ) : stall ? (
+          <div className="add-stall" role="status">
+            <p>{stallText(stall, n, on, owner)}</p>
+            {stall === "not-let-in" && (
+              <button type="button" className="btn is-small" onClick={() => go({ to: "tab", tab: "needs" })}>
+                Open Needs you
+              </button>
+            )}
+          </div>
+        ) : (
+          !done && <p className="add-note">You can close this. {n} shows up under Agents once it's in.</p>
+        )}
       </div>
-      {done && (
+      {failed && (
+        <footer className="add-foot">
+          <button type="button" className="btn" onClick={onBack}>
+            Back
+          </button>
+          <button type="button" className="btn is-primary" onClick={onRetry}>
+            Try again
+          </button>
+        </footer>
+      )}
+      {handle && (
         <footer className="add-foot">
           <button type="button" className="btn" onClick={onDone}>
             Done
           </button>
-          <button type="button" className="btn is-primary" onClick={onMessage}>
-            Message {n}
+          <button type="button" className="btn is-primary" onClick={() => onMessage(handle)}>
+            Message {name}
           </button>
         </footer>
       )}

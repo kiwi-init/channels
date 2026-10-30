@@ -751,6 +751,7 @@ kbd,
 .set-pair-line,
 .set-folder-path,
 .palette-kbd,
+.add-said,
 .person-prop code {
   font-family: var(--mono);
 }
