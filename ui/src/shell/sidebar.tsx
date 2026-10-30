@@ -182,9 +182,9 @@ export function statusOf(p: Person, channel: Channel): string {
   return restOf(p)
 }
 
-const taskOf = (p: Person, channel: Channel) => (p.load?.doing[0] !== undefined ? channel.tasks.find((t) => t.id === p.load?.doing[0]) : undefined)
+export const taskOf = (p: Person, channel: Channel) => (p.load?.doing[0] !== undefined ? channel.tasks.find((t) => t.id === p.load?.doing[0]) : undefined)
 
-function toneOf(p: Person, channel: Channel): string | false {
+export function toneOf(p: Person, channel: Channel): string | false {
   const live = liveOf(p)
   if (live) return live.busy ? "is-doing" : "is-waiting"
   const t = taskOf(p, channel)
