@@ -652,7 +652,14 @@ device makes before it sees the app's nonce, so a relay that swaps keys can't gr
 (`packages/core/src/enroll.ts`; the design is [docs/linked-devices.md](docs/linked-devices.md)).
 The grant goes through the one-time mailbox, sealed to the two devices' keys, and holds the
 device list, the person's public key and name, and the channel codes it may join, never a
-secret key. A computer approved by the app holding your person key also gets its MachineCert
+secret key. Only the approving app checks the digits, so the new device can't tell by itself
+that your app answered, and not a relay that answered as someone else. Before it keeps anything,
+the new device shows the person's key (`packages/core/src/fingerprint.ts`) and asks you to check
+it against the key your app shows next to the digits and in Settings as "Your key for new
+devices". Until you confirm, it writes nothing: no device key, no device list, no person.
+Turning it down drops the grant, and the next ask uses a new device key. A device that already
+holds a person refuses another until it is unpaired or unlinked, and checks again right before
+it saves. A computer approved by the app holding your person key also gets its MachineCert
 there, so the app can start agents on it. A computer in your device list can instead register with
 the list, and then takes asks from your person key or any current approving desktop in it, never a
 phone or another computer.

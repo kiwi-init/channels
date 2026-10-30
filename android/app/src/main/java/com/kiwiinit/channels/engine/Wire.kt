@@ -218,6 +218,9 @@ data class EnrollStart(val url: String? = null, val code: String = "")
 data class EnrollDigits(val digits: String)
 
 @Serializable
+data class EnrollPerson(val name: String, val fingerprint: String)
+
+@Serializable
 sealed interface Push {
     @Serializable
     @SerialName("saved")

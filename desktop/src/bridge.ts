@@ -272,7 +272,14 @@ export interface DeviceNewsView {
 
 export type EnrollConfirmView = { ok: true; label: string } | { ok: false; left: number };
 
-export type EnrollStatusView = { stage: "asking" } | { stage: "digits"; digits: string } | { stage: "done"; person: PublicPerson; channels: { label: string; code: string }[] } | { stage: "gone" };
+export interface EnrollPersonView {
+  name: string;
+  fingerprint: string;
+}
+
+export type EnrollKeptView = { stage: "done"; person: PublicPerson; channels: { label: string; code: string }[] };
+
+export type EnrollStatusView = { stage: "asking" } | { stage: "digits"; digits: string } | { stage: "check"; person: EnrollPersonView } | EnrollKeptView | { stage: "gone" };
 
 /** "kiwi daemon" as the app sees it. */
 export interface DaemonStatus {
@@ -369,6 +376,7 @@ export interface KiwiBridge {
   enrollDeny(id: string): Promise<void>;
   enrollBegin(): Promise<void>;
   enrollStatus(): Promise<EnrollStatusView | null>;
+  enrollKeep(): Promise<EnrollKeptView>;
   enrollCancel(): Promise<void>;
   devices(): Promise<DeviceView[] | null>;
   forgetDevice(id: string): Promise<void>;

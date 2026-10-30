@@ -235,6 +235,7 @@ export type Scenario =
   | "devices"
   | "enroll-desktop"
   | "enroll-desktop-digits"
+  | "enroll-desktop-check"
   | "devices-forgotten"
   | "forgot-here"
   | "link-stuck"
@@ -291,6 +292,8 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
   if (scenario === "forgot-here") return { account: { ...DEMO_ACCOUNT, forgotHere: { by: "Jow's MacBook Air" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "enroll-desktop") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, enrolling: { stage: "asking" } }
   if (scenario === "enroll-desktop-digits") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, enrolling: { stage: "digits", digits: "482915" } }
+  if (scenario === "enroll-desktop-check")
+    return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, enrolling: { stage: "check", person: { name: "Jow", fingerprint: "3f9a 0c41 77e2 b8d5 1a06" } } }
   if (scenario === "signed-out") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000 }
   if (scenario === "no-channels") return { account: DEMO_ACCOUNT, tiles: [], channels: new Map(), prefs, seq: 1000 }
   if (scenario === "closed" || scenario === "removed")
@@ -599,6 +602,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         setState((s) => ({ ...s, enrolling: { stage: "asking" } }))
         setTimeout(() => setState((s) => (s.enrolling ? { ...s, enrolling: { stage: "digits", digits: "482915" } } : s)), 1500)
       },
+      enrollKeep: () => setState((s) => ({ ...s, enrolling: null })),
       enrollCancel: () => setState((s) => ({ ...s, enrolling: null })),
       enrollDeny: () => setState((s) => (s.account ? { ...s, account: { ...s.account, enrollAsk: undefined } } : s)),
       saveTheme: (theme) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...savedTheme(s.prefs, theme) } })),

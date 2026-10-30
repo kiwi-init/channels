@@ -68,6 +68,7 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     enrollDeny: (id) => t.call("enrollDeny", id),
     enrollBegin: () => t.call("enrollBegin"),
     enrollStatus: () => t.call("enrollStatus"),
+    enrollKeep: () => t.call("enrollKeep"),
     enrollCancel: () => t.call("enrollCancel"),
     devices: () => t.call("devices"),
     forgetDevice: (id) => t.call("forgetDevice", id),

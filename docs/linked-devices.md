@@ -126,7 +126,16 @@ reveal.
      reveal; there is no code to carry it.
    - The answer holds `{cert, relay, the person's public key and name, the channels it may join
      (codes, not keys)}`, never a secret key.
-7. **Join.**
+7. **Check the person's key.**
+   - Only the approving app checks the digits, so a relay that answers the ask itself, with a
+     device and person it controls, would otherwise get the new device to join that person.
+   - The new device shows the person's name and key (`personFingerprint`), the same key the
+     approving app shows next to the digits and in Settings. It writes nothing (its device key, the
+     list, the person) until you confirm they match. Turning it down drops the grant, and the next
+     ask uses a new device key.
+   - A device that already holds a person refuses another, and checks again right before it saves.
+     `kiwi login` follows the same rules.
+8. **Join.**
    - The device asks to join each channel with its `DeviceClaim`.
    - Owners' clients admit it on their own; channels you own admit it immediately.
 
