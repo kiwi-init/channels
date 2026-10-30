@@ -7,14 +7,15 @@ import { daemonSock } from "../src/daemon/protocol.ts";
 import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
 import { firstRun, letIn, newChannel } from "./perf-ui.ts";
+import { harnessDist } from "./ui-harness.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`Frames while each of the app's animations runs: a thread and a task opening and closing in the panel, a task moving on the board,
 the Now card folding, and a dialog closing, on a board of PERF_TASKS tasks (6). Each runs PERF_REPS times (5) with the CPU slowed
 PERF_CPU times (4), and reports the frames over 33 ms and 50 ms, the worst frame, and the long animation frames' blocking time: the median, and
-the most of any run. --dist DIR measures another build (ui/dist).
+the most of any run. --dist DIR measures another build (ui/dist-harness).
 
-  bun run ui:build && bun scripts/perf-motion.ts [--dist DIR] [--only "board move,dialog close"] [--json out.json]
+  bun scripts/ui-harness.ts && bun scripts/perf-motion.ts [--dist DIR] [--only "board move,dialog close"] [--json out.json]
 
 Needs Playwright's Chromium: bunx playwright-core install --only-shell chromium (or SMOKE_CHROMIUM=<Chrome binary>).`);
   process.exit(0);
@@ -28,7 +29,7 @@ const flag = (name: string) => {
   const at = process.argv.indexOf(name);
   return at > 0 ? process.argv[at + 1] : undefined;
 };
-const DIST = resolve(ROOT, flag("--dist") ?? "ui/dist");
+const DIST = harnessDist(flag("--dist"));
 const OUT = flag("--json");
 const ONLY = flag("--only")?.split(",");
 const data = mkdtempSync(join(tmpdir(), "kiwi-perf-motion-"));

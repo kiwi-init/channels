@@ -13,6 +13,7 @@ import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
 import { calibrate } from "./perf-calibrate.ts";
 import { firstRun, letIn, newChannel, panel, ROWS, view } from "./perf-ui.ts";
+import { harnessDist } from "./ui-harness.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`A busy channel, measured: PERF_AGENTS agents (10), PERF_TASKS tasks (100), PERF_MESSAGES messages (2000), then PERF_SOAK_MIN minutes (20) of agents posting.
@@ -21,7 +22,7 @@ PERF_TASKS_FIRST=1 makes the tasks before the messages, so a reload has to keep 
 PERF_GL=swiftshader draws with the CPU, as CI's runners do: on a Mac that's how to see what CI sees.
 --gated measures only what scripts/perf-check.ts gates: the reload at 1x, the views at 4x and typing, without the 1x views, details toggles, profiles or second reload.
 
-  bun run ui:build && bun scripts/perf-scale.ts [--gated] [--json out.json]
+  bun scripts/ui-harness.ts && bun scripts/perf-scale.ts [--gated] [--json out.json]
 
 Needs Playwright's Chromium: bunx playwright-core install --only-shell chromium (or SMOKE_CHROMIUM=<Chrome binary>).`);
   process.exit(0);
@@ -101,7 +102,7 @@ const median = (xs: number[]) => {
 const mb = (b: number) => Math.round((b / 1048576) * 10) / 10;
 const log = (...xs: unknown[]) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...xs);
 
-const { relay, port } = await startLocalRelay(join(data, "relay"), join(ROOT, "ui/dist"), { rateLimits: false });
+const { relay, port } = await startLocalRelay(join(data, "relay"), harnessDist(), { rateLimits: false });
 const BASE = `http://localhost:${port}/`;
 
 const browser = await chromium.launch({

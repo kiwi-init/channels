@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/browser
-      - run: bun run ui:build
+      - run: bun scripts/ui-harness.ts
       - name: perf-scale, four runs and one with the 20-minute soak
         run: |
           for i in 1 2 3 4; do PERF_SOAK_MIN=0 bun scripts/perf-scale.ts --json "$RUNNER_TEMP/perf-$i.json"; done
