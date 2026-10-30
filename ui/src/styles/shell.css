@@ -218,7 +218,8 @@
 }
 
 .top button,
-.top input {
+.top input,
+.top-find {
   -webkit-app-region: no-drag;
 }
 
