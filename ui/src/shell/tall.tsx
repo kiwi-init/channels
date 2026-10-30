@@ -9,7 +9,7 @@ import { useApp } from "~/nav"
 import { shown } from "~/names"
 import { statusOf, taskOf, toneOf } from "~/shell/sidebar"
 
-export const TALL = "(orientation: portrait) and (min-width: 761px)"
+const TALL = "(orientation: portrait) and (min-width: 761px)"
 
 const KEY = "channels.tall.work"
 const SHARE = 0.42
