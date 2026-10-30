@@ -93,7 +93,7 @@ async function moveOnce(): Promise<string | null> {
   try {
     await moveAccount(store.relayUrl, async () => (await workosToken(s)) ?? "", github, `github_${link.id}`, signer);
   } catch (err) {
-    if (!(err instanceof AccountError) || err.status < 400 || err.status >= 500 || err.status === 401 || err.status === 429) return null;
+    if (!(err instanceof AccountError) || (err.status !== 403 && err.status !== 409)) return null;
     refused = { id: link.id, why: err.message };
     return err.message;
   }

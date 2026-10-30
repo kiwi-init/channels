@@ -138,6 +138,32 @@ describe("the desktop moves its account to the GitHub sign-in (T261)", () => {
     }
   });
 
+  test("a relay that doesn't move accounts yet gets asked again later, and the person sees nothing", async () => {
+    const p = await someone();
+    const moves: string[] = [];
+    const older = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch: (req) => {
+        const path = new URL(req.url).pathname;
+        if (path === "/v1/config") return Response.json({ workosClientId: "client_old", githubClientId: CLIENT, githubSignIn: true });
+        if (path === "/v1/account") return Response.json({ user: `user_p${p.id}`, links: p.links });
+        moves.push(path);
+        return Response.json({ error: "not found", tag: "NotFound" }, { status: 404 });
+      },
+    });
+    try {
+      open(p, older.url.origin);
+      expect((await githubCalls(host).githubStatus()).moveRefused).toBeUndefined();
+      expect(store.github?.moved).toBeUndefined();
+      expect(await freshToken()).toBe(p.old);
+      expect((await githubCalls(host).githubStatus()).moveRefused).toBeUndefined();
+      expect(moves).toEqual(["/v1/account/move", "/v1/account/move"]);
+    } finally {
+      older.stop(true);
+    }
+  });
+
   test("a link made again for the same GitHub account remembers the move, and another account's doesn't", () => {
     const moved = { login: "octo", id: 9, token: "t", at: 1, moved: true };
     expect(linkRecord({ person: null, github: moved }, { login: "octo", id: 9, token: "u" }, "r", CLIENT, 2).moved).toBe(true);
