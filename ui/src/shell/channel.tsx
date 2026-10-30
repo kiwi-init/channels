@@ -16,6 +16,7 @@ import { SIDEBAR_KEYS, useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 import { usePanelWidth } from "~/shell/panel-width"
 import { isSideKey, setDrawer, toggleSide, useDrawer } from "~/shell/side"
 import { Sidebar } from "~/shell/sidebar"
+import { TallPage, useTall } from "~/shell/tall"
 import { Waiting } from "~/start/waiting"
 import { openTasks } from "~/tasks/open"
 import { headerLine } from "~/now"
@@ -41,6 +42,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   if (jump && (nav.tab !== "chat" || !sameWhere(jump.m.where, nav.where))) setJump(null)
   const [searching, setSearching] = useState(false)
   const drawer = useDrawer()
+  const tall = useTall()
   const tabsRef = useGlide<HTMLElement>('[aria-pressed="true"]')
   const offline = useLate(channel.connection !== "live", 1000)
   useEffect(() => {
@@ -85,7 +87,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const news = drawerNews(channel)
 
   return (
-    <div className={cx("chan", nav.panel && "has-panel", drawer && "is-drawer", hidden && "is-bare")} style={{ "--panel-w": `${panel.width}px` } as CSSProperties}>
+    <div className={cx("chan", nav.panel && !(tall && nav.tab !== "needs") && "has-panel", drawer && "is-drawer", hidden && "is-bare")} style={{ "--panel-w": `${panel.width}px` } as CSSProperties}>
       <header className="top">
         <button
           type="button"
@@ -112,14 +114,16 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           </button>
         </div>
         <nav ref={tabsRef} className="tabs" aria-label="Views">
-          <button type="button" aria-pressed={nav.tab === "chat"} onClick={() => go({ to: "tab", tab: "chat" })}>
+          <button type="button" aria-pressed={nav.tab === "chat" || (tall && nav.tab !== "needs")} onClick={() => go({ to: "tab", tab: "chat" })}>
             {here}
           </button>
-          <button type="button" aria-pressed={nav.tab === "tasks"} onClick={() => go({ to: "tab", tab: "tasks" })}>
-            <Icon name="tasks" size={14} />
-            Tasks <Count n={tasks} />
-          </button>
-          {(agents || nav.tab === "agents") && (
+          {!tall && (
+            <button type="button" aria-pressed={nav.tab === "tasks"} onClick={() => go({ to: "tab", tab: "tasks" })}>
+              <Icon name="tasks" size={14} />
+              Tasks <Count n={tasks} />
+            </button>
+          )}
+          {!tall && (agents || nav.tab === "agents") && (
             <button type="button" className="is-agents" aria-pressed={nav.tab === "agents"} onClick={() => go({ to: "tab", tab: "agents" })}>
               <Icon name="agent" size={14} />
               Agents
@@ -150,10 +154,23 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
         </div>
       </header>
       <Sidebar channel={channel} />
-      <main className="main">
+      <main className={cx("main", tall && nav.tab !== "needs" && "is-tall")}>
         <Boundary resetKey={nav.tab}>
           <Suspense fallback={null}>
-            {nav.tab === "tasks" ? (
+            {tall && nav.tab !== "needs" ? (
+              <TallPage
+                channel={channel}
+                jump={jump}
+                work={<Board channel={channel} needs={needs} />}
+                open={
+                  nav.panel ? (
+                    <div className="panel">
+                      <PanelView channel={channel} />
+                    </div>
+                  ) : null
+                }
+              />
+            ) : nav.tab === "tasks" ? (
               <Board channel={channel} needs={needs} />
             ) : nav.tab === "agents" ? (
               <Lanes channel={channel} />
@@ -176,7 +193,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           {channel.connection === "connecting" ? "Connecting…" : "Reconnecting…"}
         </p>
       )}
-      {nav.panel && (
+      {nav.panel && !(tall && nav.tab !== "needs") && (
         <aside className="panel" aria-label="Details">
           <div
             className="panel-grip"
@@ -190,25 +207,33 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
             title="Drag to resize · double-click to reset"
             {...panel.grip}
           />
-          <Boundary panel resetKey={JSON.stringify(nav.panel)}>
-            <Suspense fallback={null}>
-              {nav.panel.kind === "thread" ? (
-                <ThreadPanel channel={channel} seq={nav.panel.seq} />
-              ) : nav.panel.kind === "task" ? (
-                <TaskPanel channel={channel} id={nav.panel.task} />
-              ) : nav.panel.kind === "person" ? (
-                <PersonPanel channel={channel} name={nav.panel.name} />
-              ) : nav.panel.kind === "channel" ? (
-                <ChannelPanel channel={channel} />
-              ) : nav.panel.kind === "invite" ? (
-                <InvitePanel channel={channel} />
-              ) : (
-                <AddAgentPanel channel={channel} />
-              )}
-            </Suspense>
-          </Boundary>
+          <PanelView channel={channel} />
         </aside>
       )}
     </div>
+  )
+}
+
+function PanelView({ channel }: { channel: Channel }) {
+  const { nav } = useApp()
+  if (!nav.panel) return null
+  return (
+    <Boundary panel resetKey={JSON.stringify(nav.panel)}>
+      <Suspense fallback={null}>
+        {nav.panel.kind === "thread" ? (
+          <ThreadPanel channel={channel} seq={nav.panel.seq} />
+        ) : nav.panel.kind === "task" ? (
+          <TaskPanel channel={channel} id={nav.panel.task} />
+        ) : nav.panel.kind === "person" ? (
+          <PersonPanel channel={channel} name={nav.panel.name} />
+        ) : nav.panel.kind === "channel" ? (
+          <ChannelPanel channel={channel} />
+        ) : nav.panel.kind === "invite" ? (
+          <InvitePanel channel={channel} />
+        ) : (
+          <AddAgentPanel channel={channel} />
+        )}
+      </Suspense>
+    </Boundary>
   )
 }
