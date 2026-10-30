@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState, type CSSProperties } from "react"
 
 import { Conversation } from "~/chat/conversation"
-import { SearchBox, type Jump } from "~/chat/search-box"
+import type { Jump } from "~/chat/search-box"
 import { cx, Count, IconButton, useLate } from "~/kit/bits"
 import { useGlide } from "~/kit/glide"
 import { Boundary } from "~/kit/boundary"
@@ -22,6 +22,7 @@ import { headerLine } from "~/now"
 import { between, nickname } from "~/names"
 
 const TermDrawer = lazy(() => import("~/term/drawer"))
+const SearchBox = later(() => import("~/chat/search-box").then((m) => m.SearchBox))
 const Board = later(() => import("~/tasks/board").then((m) => m.Board))
 const Lanes = later(() => import("~/tasks/lanes").then((m) => m.Lanes))
 const NeedsYou = later(() => import("~/needs/needs").then((m) => m.NeedsYou))
@@ -139,7 +140,9 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
             </span>
           )}
           {searching ? (
-            <SearchBox channel={channel} focusAsk={focusAsk} onJump={setJump} onClose={() => setSearching(false)} />
+            <Suspense fallback={null}>
+              <SearchBox channel={channel} focusAsk={focusAsk} onJump={setJump} onClose={() => setSearching(false)} />
+            </Suspense>
           ) : (
             <IconButton icon="search" label="Search this channel (⌘F)" onClick={() => setSearching(true)} />
           )}
