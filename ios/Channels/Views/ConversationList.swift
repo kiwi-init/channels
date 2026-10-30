@@ -22,7 +22,7 @@ struct ConversationList: View {
     private var hits: [(Row, MessageView)] {
         guard query.count > 1 else { return [] }
         return model.rows(.all).flatMap { row in
-            (model.shown(row.spot)?.messages ?? []).filter { !$0.event && $0.body.lowercased().contains(query) }.suffix(3).map { (row, $0) }
+            (model.shown(row.spot)?.messages ?? []).filter { !$0.event && ($0.plain.lowercased().contains(query) || $0.body.lowercased().contains(query)) }.suffix(3).map { (row, $0) }
         }
         .sorted { $0.1.at > $1.1.at }
         .prefix(20)

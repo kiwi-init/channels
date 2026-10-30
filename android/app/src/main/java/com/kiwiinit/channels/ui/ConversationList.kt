@@ -124,7 +124,7 @@ fun ConversationList(model: AppModel, open: (Spot) -> Unit, settings: () -> Unit
         emptyList()
     } else {
         model.rows(Filter.All).flatMap { row ->
-            (model.shown(row.spot)?.messages ?: emptyList()).filter { !it.event && it.body.lowercase().contains(query) }.takeLast(3).map { row to it }
+            (model.shown(row.spot)?.messages ?: emptyList()).filter { !it.event && (it.plain.lowercase().contains(query) || it.body.lowercase().contains(query)) }.takeLast(3).map { row to it }
         }.sortedByDescending { it.second.at }.take(20)
     }
 
