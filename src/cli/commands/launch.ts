@@ -35,7 +35,7 @@ export const launchCommands: Record<string, Command> = {
         out(
           next.launchRoots?.length
             ? `agents can start in:\n${next.launchRoots.join("\n")}`
-            : "no folders added: agents start where this computer's agents already work, and in your home folder's git repos",
+            : "no folders added: agents start where this computer's agents already work, and here also in your home folder's git repos",
         );
         return 0;
       }
