@@ -423,7 +423,7 @@ struct Bubble: View {
                 Picture(code: room.code, seq: message.seq, index: i)
             }
             if !onlyPictures {
-                Markdown(text: message.body, ink: ink, link: link, code: wash, underline: message.mine, selectable: false)
+                Markdown(text: message.shown, ink: ink, link: link, code: wash, underline: message.mine, selectable: false)
                     .padding(.horizontal, 13)
                     .padding(.vertical, 8)
                     .background {
@@ -558,7 +558,7 @@ struct Poll {
 
     init(_ message: MessageView) {
         seq = message.seq
-        body = message.body
+        body = message.shown
         choices = message.choices
         chosen = message.chosen
         waiting = message.waiting
@@ -566,7 +566,7 @@ struct Poll {
 
     init(_ ask: AskView) {
         seq = ask.seq
-        body = ask.body
+        body = ask.shown
         choices = ask.choices
         chosen = nil
         waiting = true

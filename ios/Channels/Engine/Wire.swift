@@ -57,6 +57,7 @@ struct MessageView: Codable, Sendable, Hashable, Identifiable {
     let images: Int
     let task: Int?
     let reactions: [ReactionView]
+    let shown: String
 
     var id: Int { seq }
     var myReaction: String? { reactions.first { $0.mine }?.emoji }
@@ -92,6 +93,7 @@ struct AskView: Codable, Sendable, Hashable, Identifiable {
     let choices: [String]
     let task: Int?
     let place: String?
+    let shown: String
 
     var id: Int { seq }
     var date: Date { Date(timeIntervalSince1970: at / 1000) }

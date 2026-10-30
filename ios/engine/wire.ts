@@ -95,6 +95,7 @@ export interface MessageView {
   at: number;
   kind: string;
   body: string;
+  shown: string;
   event: boolean;
   mine: boolean;
   quote: QuoteView | null;
@@ -128,6 +129,7 @@ export interface AskView {
   seq: number;
   from: string;
   body: string;
+  shown: string;
   at: number;
   label: string;
   choices: string[];

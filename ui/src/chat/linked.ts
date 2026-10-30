@@ -1,9 +1,7 @@
 import { sanitizeMarkdownUrl } from "@kiwi/app/markdown.ts"
-import { spansOf, swap } from "@kiwi/app/mentions.ts"
+import { literal, spansOf, swap } from "@kiwi/app/mentions.ts"
 
 export { named } from "@kiwi/app/mentions.ts"
-
-const literal = (text: string): string => text.replace(/[\\`*_[\]()<>&!|~]/g, "\\$&")
 
 function remote(url: string, alt: string): string | null {
   if (/^(?:data|blob):/i.test(url.trim())) return null

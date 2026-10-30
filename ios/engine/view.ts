@@ -7,7 +7,7 @@ import { avatarIndex } from "@kiwi/app/avatar-pick.ts";
 import { chipsFor } from "@kiwi/app/reactions.ts";
 import type { Online } from "@kiwi/channel/online.ts";
 import { knownHarness, monoHarness } from "@kiwi/app/harness.ts";
-import { named } from "@kiwi/app/mentions.ts";
+import { named, namedMarkdown } from "@kiwi/app/mentions.ts";
 import { lastPreview } from "@kiwi/app/preview.ts";
 import { reviewsFor } from "@kiwi/channel/task-actions.ts";
 import type { AskView, Connection, IconView, MemberView, MessageView, PlaceView, ReviewView, RoomView, TaskView } from "./wire.ts";
@@ -78,7 +78,7 @@ export function roomView(r: RoomInput): RoomView {
   const general = here === "main" ? visible : r.messages.filter((m) => shownIn(m, state, "main"));
   const shown = visible.slice(-SHOWN);
   const nicknames = new Map([...state.members.values()].map((m) => [m.name, m.display || m.name]));
-  const said = (text: string) => named(text, nicknames);
+  const said = (text: string) => namedMarkdown(text, nicknames);
 
   const messageView = (m: Message, prev: Message | undefined): MessageView => {
     const re = m.re?.length === 1 ? m.re[0]! : null;
@@ -90,10 +90,11 @@ export function roomView(r: RoomInput): RoomView {
       from: m.from,
       at: m.rts ?? m.ts,
       kind: m.kind,
-      body: re !== null && bySeq.get(re)?.choices?.includes(m.body) ? m.body : said(m.body),
+      body: m.body,
+      shown: said(m.body),
       event: m.kind === "event",
       mine: m.from === me,
-      quote: quoted && quoted.kind !== "event" ? { seq: quoted.seq, from: quoted.from, words: oneLine(said(quoted.body), QUOTE_CHARS) } : null,
+      quote: quoted && quoted.kind !== "event" ? { seq: quoted.seq, from: quoted.from, words: oneLine(named(quoted.body, nicknames), QUOTE_CHARS) } : null,
       choices: m.choices ?? [],
       chosen: chosen ? { choice: chosen.choice, by: chosen.by } : null,
       waiting: waiting.has(m.seq),
@@ -170,7 +171,8 @@ export function roomView(r: RoomInput): RoomView {
     return {
       seq: m.seq,
       from: m.from,
-      body: said(m.body),
+      body: m.body,
+      shown: said(m.body),
       at: m.rts ?? m.ts,
       label: askLabel(m, me),
       choices: m.choices ?? [],
