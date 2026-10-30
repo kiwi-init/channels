@@ -1,7 +1,8 @@
-import { useState, type ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 
 import { IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
+import { personFingerprint } from "@kiwi/core/fingerprint.ts"
 import { KEYS_UNSEALED } from "@kiwi/secrets/keys-at-rest.ts"
 import type { Prefs, Theme, UpdateCheck } from "~/model"
 import { updateFound } from "~/settings/update-check"
@@ -88,6 +89,7 @@ export function AccountSection() {
             />
           </Row>
         )}
+        {account.personPk && <LoginKey pk={account.personPk} />}
       </Group>
       {account.keysUnsealed && (
         <p className="set-fine set-warning" role="note">
@@ -315,6 +317,23 @@ function RelayRow({ relay }: { relay: string }) {
           void app.actions.setRelay(url).then(setError)
         }}
       />
+    </Row>
+  )
+}
+
+function LoginKey({ pk }: { pk: string }) {
+  const [shown, setShown] = useState<{ pk: string; key: string } | null>(null)
+  useEffect(() => {
+    let live = true
+    void personFingerprint(pk).then((key) => live && setShown({ pk, key }))
+    return () => {
+      live = false
+    }
+  }, [pk])
+  if (shown?.pk !== pk) return null
+  return (
+    <Row label="Your key for kiwi login" hint="A computer you add with kiwi login shows this before it takes you as its person. Anything else means it isn't you.">
+      <code className="set-value set-key">{shown.key}</code>
     </Row>
   )
 }

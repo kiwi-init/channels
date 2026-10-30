@@ -173,6 +173,39 @@ describe("kiwi login keeps a person only once it's checked (#1304)", () => {
     expect(loadMachine()?.identity.pk).not.toBe(enrolled.identity.pk);
   });
 
+  test("a computer adopted while the login waits keeps that adoption (#1304)", async () => {
+    freshMachine();
+    const user = `cli${++users}`;
+    const person = await withExchangeKey(await generateIdentity("Jow"));
+    const app = desktop(person, user);
+    await app.host.poll();
+    const lines: string[] = [];
+    let shown: (d: string) => void = () => {};
+    const digits = new Promise<string>((r) => (shown = r));
+    const adopted = { pk: "adopter-key", name: "Ana", xpk: person.xpk! };
+    const done = loginComputer({
+      relay,
+      user,
+      everyMs: 50,
+      confirm: async () => {
+        const m = loadPairedMachine();
+        if (!m) throw new Error("no machine");
+        const taken: PairedMachine = { ...m, person: adopted };
+        saveMachine(taken);
+        return true;
+      },
+      say: (line) => {
+        lines.push(line);
+        const d = /digits in your app: (\d{3}) (\d{3})/.exec(line);
+        if (d) shown(d[1]! + d[2]!);
+      },
+    });
+    void approveFrom(app.host, digits);
+    await expect(done).rejects.toThrow("became one of Ana's devices");
+    expect(loadPairedMachine()?.person).toEqual(adopted);
+    expect(loadMachine()?.device).toBeUndefined();
+  });
+
   test("a computer holding only a person's cert counts as theirs", async () => {
     freshMachine();
     const user = `cli${++users}`;

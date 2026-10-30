@@ -3,7 +3,7 @@ import { accountClient } from "@kiwi/core/account.ts";
 import { askToEnroll, enrollDigits, enrollMailbox, ENROLL_TTL_MS, readEnrollGrant, type Enrollment } from "@kiwi/core/enroll.ts";
 import { workosDeviceSignIn, type DeviceSignIn } from "@kiwi/core/workos.ts";
 import { home } from "./config.ts";
-import { ensureMachine, PairError, type PairedMachine } from "./daemon/pair.ts";
+import { ensureMachine, loadPairedMachine, PairError, type PairedMachine } from "./daemon/pair.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { personFingerprint } from "@kiwi/core/fingerprint.ts";
 import { newMachine, saveMachine, type EnrolledDevice } from "./machine.ts";
@@ -44,12 +44,14 @@ async function signIn(o: LoginOpts, say: (line: string) => void): Promise<string
   return session.access;
 }
 
+const ownerOf = (m: PairedMachine | null): { pk: string; name: string } | null => m?.device?.person ?? m?.person ?? (m?.cert ? { pk: m.cert.pk, name: "" } : null);
+
 export async function loginComputer(o: LoginOpts): Promise<EnrolledDevice> {
   const say = o.say ?? ((line: string) => process.stdout.write(line + "\n"));
   const everyMs = o.everyMs ?? 1_500;
   const until = Date.now() + (o.timeoutMs ?? ENROLL_TTL_MS);
   const here: PairedMachine = await ensureMachine(o.relay);
-  const already = here.device?.person ?? here.person ?? (here.cert ? { pk: here.cert.pk, name: "" } : null);
+  const already = ownerOf(here);
   if (already)
     throw new PairError(
       `"${here.label}" is already one of ${inlineText(already.name, 60) || "someone"}'s devices (key ${await personFingerprint(already.pk)}): run kiwi unpair first, then kiwi login`,
@@ -93,6 +95,13 @@ export async function loginComputer(o: LoginOpts): Promise<EnrolledDevice> {
         await mailbox.drop().catch(() => {});
         throw new PairError(
           `kept nothing, so kiwi login can ask again with a new key. Your app may list "${m.label}" once more under this one: remove that entry. If your app never showed ${fingerprint}, someone else answered this computer's ask`,
+        );
+      }
+      const taken = ownerOf(loadPairedMachine());
+      if (taken) {
+        await mailbox.drop().catch(() => {});
+        throw new PairError(
+          `kept nothing: while this login waited, "${m.label}" became one of ${inlineText(taken.name, 60) || "someone"}'s devices (key ${await personFingerprint(taken.pk)}). Your app may list it once more under the key this login asked with: remove that entry`,
         );
       }
       const device: EnrolledDevice = { person: grant.person, links: grant.links };
