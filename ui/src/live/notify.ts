@@ -29,12 +29,36 @@ export function messageOfLink(url: string): number | null {
   return Number.isSafeInteger(seq) && seq > 0 ? seq : null
 }
 
-export type NotePlace = { kind: "room"; name: string } | { kind: "task"; task: number } | { kind: "dm" }
+export type NotePlace = { kind: "room"; name: string } | { kind: "task"; task: number } | { kind: "dm" } | { kind: "thread" }
 
 export const wirePlace = (m: Pick<Wire, "room" | "task" | "dm">): NotePlace =>
   m.dm ? { kind: "dm" } : m.task !== undefined ? { kind: "task", task: m.task } : { kind: "room", name: m.room ?? GENERAL_ROOM }
 
-const placeText = (place: NotePlace): string => (place.kind === "dm" ? "a direct message" : place.kind === "task" ? `T${place.task}` : `#${place.name}`)
+export type Rooted = { kind: "root"; m: Wire } | { kind: "missing"; seq: number }
+
+export function rootOf(m: Wire, known: ReadonlyMap<number, Wire>): Rooted {
+  let at = m
+  for (;;) {
+    const parent = at.re?.[0]
+    if (parent === undefined || parent >= at.seq) return { kind: "root", m: at }
+    const up = known.get(parent)
+    if (!up) return { kind: "missing", seq: parent }
+    at = up
+  }
+}
+
+const placeText = (place: NotePlace): string => {
+  switch (place.kind) {
+    case "dm":
+      return "a direct message"
+    case "task":
+      return `T${place.task}`
+    case "thread":
+      return "a thread"
+    case "room":
+      return `#${place.name}`
+  }
+}
 
 export function noteTitle(m: Wire, me: string, from: string, channel: string, place: NotePlace): string {
   const needsYou = isDecision(m) && (!!m.to?.includes(me) || !!m.esc)

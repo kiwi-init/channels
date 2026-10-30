@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import type { Message as Wire } from "@kiwi/core/protocol.ts"
 import { joinCodeFromLink } from "@kiwi/app/deep-link.ts"
 import { encodeJoinCode, newRoomId } from "@kiwi/core/crypto.ts"
-import { channelLink, drawerNews, heardHeads, lastWorth, messageLink, messageOfLink, noteBody, noteTitle, wirePlace, worthTelling } from "~/live/notify"
+import { channelLink, drawerNews, heardHeads, lastWorth, messageLink, messageOfLink, noteBody, noteTitle, rootOf, wirePlace, worthTelling } from "~/live/notify"
 import { findWanted } from "~/live/open-message"
 import type { Message } from "~/model"
 
@@ -149,13 +149,26 @@ describe("what a notification says and opens (#1351)", () => {
     expect(joinCodeFromLink(messageLink(code, 42))).toBe(code)
   })
 
-  test("the channel finds the message once it has loaded it, and knows when it never will", () => {
+  test("the channel waits until its feed reaches the message, and only then calls it missing", () => {
     const m = (seq: number): Message => ({ seq, from: "lead", at: seq, text: "hi", where: { kind: "task", task: 3 } }) as Message
     const want = { code: "mc2-abc", seq: 7 }
-    expect(findWanted(null, "mc2-abc", [m(7)], false)).toEqual({ kind: "none" })
-    expect(findWanted(want, "mc2-other", [m(7)], false)).toEqual({ kind: "none" })
-    expect(findWanted(want, "mc2-abc", [], true)).toEqual({ kind: "waiting" })
-    expect(findWanted(want, "mc2-abc", [m(6)], false)).toEqual({ kind: "missing" })
-    expect(findWanted(want, "mc2-abc", [m(6), m(7)], false)).toEqual({ kind: "found", m: m(7) })
+    expect(findWanted(null, "mc2-abc", [m(7)])).toEqual({ kind: "none" })
+    expect(findWanted(want, "mc2-other", [m(7)])).toEqual({ kind: "none" })
+    expect(findWanted(want, "mc2-abc", [])).toEqual({ kind: "waiting" })
+    expect(findWanted(want, "mc2-abc", [m(5), m(6)])).toEqual({ kind: "waiting" })
+    expect(findWanted(want, "mc2-abc", [m(6), m(7)])).toEqual({ kind: "found", m: m(7) })
+    expect(findWanted(want, "mc2-abc", [m(6), m(8)])).toEqual({ kind: "missing" })
+  })
+
+  test("a reply takes its place from its thread's root, as the fold does; an unknown root says so", () => {
+    const root = msg({ seq: 3, room: "m0b1le00" })
+    const reply = msg({ seq: 9, re: [5] })
+    const middle = msg({ seq: 5, re: [3] })
+    const known = new Map([root, middle, reply].map((x) => [x.seq, x]))
+    expect(rootOf(reply, known)).toEqual({ kind: "root", m: root })
+    expect(wirePlace(root)).toEqual({ kind: "room", name: "m0b1le00" })
+    expect(rootOf(reply, new Map([[5, middle]]))).toEqual({ kind: "missing", seq: 3 })
+    expect(rootOf(msg({ seq: 4, re: [9] }), known)).toEqual({ kind: "root", m: msg({ seq: 4, re: [9] }) })
+    expect(noteTitle(reply, "jow", "lead", "ops", { kind: "thread" })).toBe("lead in ops · a thread")
   })
 })

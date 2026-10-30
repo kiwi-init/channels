@@ -41,15 +41,21 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const [focusAsk, setFocusAsk] = useState(0)
   if (jump && (nav.tab !== "chat" || !sameWhere(jump.m.where, nav.where))) setJump(null)
   const wanted = useWantedMessage()
-  const found = findWanted(wanted, channel.code, channel.messages, !!channel.loading)
+  const found = findWanted(wanted, channel.code, channel.messages)
   const target = found.kind === "found" ? found.m : null
-  const atTarget = !!target && nav.tab === "chat" && sameWhere(target.where, nav.where)
-  if (target && atTarget && jump?.m.seq !== target.seq) setJump({ m: target, terms: [] })
+  const root = target?.inThread
+  const anchor = root === undefined ? target : (channel.messages.find((m) => m.seq === root) ?? target)
+  const atAnchor = !!anchor && nav.tab === "chat" && sameWhere(anchor.where, nav.where)
+  if (anchor && atAnchor && jump?.m.seq !== anchor.seq) setJump({ m: anchor, terms: [] })
   useEffect(() => {
     if (!wanted) return
-    if (found.kind === "missing" || jump?.m.seq === wanted.seq) return dropMessage(wanted)
-    if (target && !atTarget) go({ to: "where", where: target.where })
-  }, [wanted, found.kind, target, atTarget, jump, go])
+    if (found.kind === "missing") return dropMessage(wanted)
+    if (!anchor) return
+    if (!atAnchor) return go({ to: "where", where: anchor.where })
+    if (jump?.m.seq !== anchor.seq) return
+    if (root !== undefined) go({ to: "panel", panel: { kind: "thread", seq: root } })
+    dropMessage(wanted)
+  }, [wanted, found.kind, anchor, root, atAnchor, jump, go])
   const [searching, setSearching] = useState(false)
   const drawer = useDrawer()
   const tabsRef = useGlide<HTMLElement>('[aria-pressed="true"]')

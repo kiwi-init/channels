@@ -34,9 +34,9 @@ export function dropMessage(was: Wanted): void {
 
 export const useWantedMessage = (): Wanted | null => useSyncExternalStore(subscribe, () => wanted)
 
-export function findWanted(want: Wanted | null, code: string, messages: readonly Message[], loading: boolean): Found {
+export function findWanted(want: Wanted | null, code: string, messages: readonly Message[]): Found {
   if (!want || want.code !== code) return { kind: "none" }
   const m = messages.find((x) => x.seq === want.seq)
   if (m) return { kind: "found", m }
-  return loading ? { kind: "waiting" } : { kind: "missing" }
+  return messages.some((x) => x.seq > want.seq) ? { kind: "missing" } : { kind: "waiting" }
 }

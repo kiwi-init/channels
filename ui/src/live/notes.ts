@@ -8,7 +8,7 @@ import { type ChannelRow } from "@kiwi/channel/list.ts"
 import { ops, watches } from "@kiwi/channel/channel-ops.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import { named as withNicknames } from "~/chat/linked"
-import { elsewhere, heardHeads, lastWorth, messageLink, noteBody, noteTitle, wirePlace, type NotePlace } from "~/live/notify"
+import { elsewhere, heardHeads, lastWorth, messageLink, noteBody, noteTitle, rootOf, wirePlace, type NotePlace } from "~/live/notify"
 import { openMessage } from "~/live/open-message"
 import { ownPrefs } from "~/live/prefs"
 import { nicknamesOf } from "~/names"
@@ -39,6 +39,27 @@ export function tellMessage(m: Wire, t: Told): void {
   tell(noteTitle(m, t.me, t.display || m.from, t.channel, t.place), noteBody(withNicknames(m.body, nicknamesOf(t.members))), t.code, m.seq)
 }
 
+const PARENT_REACH = 500
+
+async function placeElsewhere(code: string, m: Wire, fetched: readonly Wire[], head: number): Promise<NotePlace> {
+  const known = new Map(fetched.map((x) => [x.seq, x]))
+  let found = rootOf(m, known)
+  while (found.kind === "missing" && head - found.seq <= PARENT_REACH) {
+    const wanted = found.seq
+    const { messages } = await ops().call(code, "history", wanted - 1)
+    for (const x of messages) known.set(x.seq, x)
+    if (!known.has(wanted)) break
+    found = rootOf(m, known)
+  }
+  if (found.kind === "missing") return { kind: "thread" }
+  const place = wirePlace(found.m)
+  if (place.kind !== "room") return place
+  const rooms = await ops()
+    .call(code, "rooms")
+    .catch(() => null)
+  return { kind: "room", name: rooms?.list.find((r) => r.id === place.name)?.name ?? place.name }
+}
+
 async function readElsewhere(code: string, after: number, upTo: number, title: string): Promise<void> {
   const me = loadMember(code)?.identity.name
   if (!me) return
@@ -49,7 +70,9 @@ async function readElsewhere(code: string, after: number, upTo: number, title: s
   const members = await ops().call(code, "members")
   const byName = new Map(members.map((m) => [m.name, m]))
   const last = lastWorth(fresh, me, notify, answersDecisions(byName, me))
-  if (last) tellMessage(last, { me, channel: title, code, place: wirePlace(last), members, display: byName.get(last.from)?.display })
+  if (!last) return
+  const place = await placeElsewhere(code, last, messages, upTo)
+  tellMessage(last, { me, channel: title, code, place, members, display: byName.get(last.from)?.display })
 }
 
 let openNow: string | null = null
