@@ -117,9 +117,9 @@ struct Dock: View {
             if let sendingBack {
                 bar("arrowshape.turn.up.left.fill", Tone.decide, "Send back \(taskLabel(sendingBack.task))", sendingBack.title) { self.sendingBack = nil }
             } else if let answering {
-                bar("hand.raised.fill", Tone.decide, room.display(answering.from), answering.body) { self.answering = nil }
+                bar("hand.raised.fill", Tone.decide, room.display(answering.from), answering.plain) { self.answering = nil }
             } else if let replyTo {
-                bar("arrowshape.turn.up.left.fill", Tone.accent, room.display(replyTo.from), replyTo.body) { self.replyTo = nil }
+                bar("arrowshape.turn.up.left.fill", Tone.accent, room.display(replyTo.from), replyTo.plain) { self.replyTo = nil }
             }
             GlassGroup(spacing: 12) {
                 HStack(alignment: .bottom, spacing: 8) {
