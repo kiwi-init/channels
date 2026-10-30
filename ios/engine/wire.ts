@@ -26,6 +26,7 @@ export type Ask =
   | { op: "enrollBegin"; relay: string; label: string; os: string; user?: string; waitMs?: number }
   | { op: "enrollAsk" }
   | { op: "enrollWait" }
+  | { op: "enrollCheck" }
   | { op: "enrollFinish" }
   | { op: "enrollCancel" }
   | { op: "send"; code: string; body: string; re: number | null; imgs: Picture[]; place?: string }

@@ -245,6 +245,11 @@ struct EnrollDigits: Codable, Sendable {
     let digits: String
 }
 
+struct EnrollPerson: Codable, Sendable {
+    let name: String
+    let fingerprint: String
+}
+
 struct Reply: Decodable {
     let ok: Bool
     let error: String?

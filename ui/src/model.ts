@@ -455,7 +455,7 @@ export interface EnrollAsk {
   fingerprint?: string | null
 }
 
-export type Enrolling = { stage: "asking" } | { stage: "digits"; digits: string }
+export type Enrolling = { stage: "asking" } | { stage: "digits"; digits: string } | { stage: "check"; person: { name: string; fingerprint: string } }
 
 export interface Device {
   id: string
@@ -587,6 +587,7 @@ export interface Actions {
   forgetDevice(id: string): void
   renewDevice(id: string): void
   enrollBegin(): void
+  enrollKeep(): void
   enrollCancel(): void
   closeChannel(code: string): void
   saveTheme(theme: CustomTheme): void

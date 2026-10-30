@@ -23,6 +23,7 @@ import com.kiwiinit.channels.engine.Connection
 import com.kiwiinit.channels.engine.Engine
 import com.kiwiinit.channels.engine.EngineException
 import com.kiwiinit.channels.engine.EnrollDigits
+import com.kiwiinit.channels.engine.EnrollPerson
 import com.kiwiinit.channels.engine.EnrollStart
 import com.kiwiinit.channels.engine.HarnessesOn
 import com.kiwiinit.channels.engine.Launched
@@ -72,6 +73,8 @@ sealed interface Linking {
     data object Asking : Linking
 
     data class Approve(val digits: String) : Linking
+
+    data class Check(val name: String, val fingerprint: String) : Linking
 
     data class Failed(val why: String) : Linking
 }
@@ -290,6 +293,17 @@ class AppModel(private val app: Application) {
                 linking = Linking.Asking
                 val shown = read(EnrollDigits.serializer(), ask(buildJsonObject { put("op", "enrollWait") }))
                 linking = Linking.Approve(shown.digits)
+                val person = read(EnrollPerson.serializer(), ask(buildJsonObject { put("op", "enrollCheck") }))
+                linking = Linking.Check(person.name, person.fingerprint)
+            } catch (e: EngineException) {
+                if (linking != Linking.Idle) linking = Linking.Failed(e.message ?: "Signing in didn't work. Try again.")
+            }
+        }
+    }
+
+    fun keepLink() {
+        scope.launch {
+            try {
                 val data = ask(buildJsonObject { put("op", "enrollFinish") }).toString().toByteArray()
                 store(data)
                 linking = Linking.Idle
@@ -297,6 +311,19 @@ class AppModel(private val app: Application) {
                 begin(data)
             } catch (e: EngineException) {
                 if (linking != Linking.Idle) linking = Linking.Failed(e.message ?: "Signing in didn't work. Try again.")
+            }
+        }
+    }
+
+    fun refuseLink(fingerprint: String) {
+        linking = Linking.Failed(
+            "Kept nothing. If your computer never showed $fingerprint, someone else answered this phone. Your computer may still list it under Devices: remove it there.",
+        )
+        scope.launch {
+            try {
+                ask(buildJsonObject { put("op", "enrollCancel") })
+            } catch (e: EngineException) {
+                // The ask already ran out on the relay: there's nothing left to drop.
             }
         }
     }

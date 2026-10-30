@@ -332,7 +332,10 @@ function LoginKey({ pk }: { pk: string }) {
   }, [pk])
   if (shown?.pk !== pk) return null
   return (
-    <Row label="Your key for kiwi login" hint="A computer you add with kiwi login shows this before it takes you as its person. Anything else means it isn't you.">
+    <Row
+      label="Your key for new devices"
+      hint="A new computer or phone you sign in, or a computer you add with kiwi login, shows this before it takes you as its person. Anything else means it isn't you."
+    >
       <code className="set-value set-key">{shown.key}</code>
     </Row>
   )
