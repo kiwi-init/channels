@@ -33,7 +33,7 @@ class MailboxError extends Error {
 
   /** The network or the relay failing for a moment: asking again may work. */
   get transient(): boolean {
-    return !this.lasting && (this.status === 0 || this.status >= 500);
+    return !this.lasting && (this.status === 0 || this.status === 429 || this.status >= 500);
   }
 }
 

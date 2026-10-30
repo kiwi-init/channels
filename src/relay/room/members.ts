@@ -46,7 +46,7 @@ export const approve = Effect.fn("Room.approve")(function* (body: MemberBody & {
   }
   yield* putMember(body, epoch, delegation);
   db.changed("roster");
-  if (body.request) db.sql.run("UPDATE requests SET status = 'approved' WHERE id = ? AND pk = ?", body.request, body.pk);
+  if (body.request) db.sql.run("UPDATE requests SET status = 'approved', received = ? WHERE id = ? AND pk = ?", Date.now(), body.request, body.pk);
 });
 
 export const keysFor = Effect.fn("Room.keysFor")(function* (pk: string) {

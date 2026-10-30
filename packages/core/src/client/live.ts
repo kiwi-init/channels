@@ -186,6 +186,7 @@ export interface LiveFx {
 export class ChannelLive {
   readonly wires = new Set<Wire>();
   private moreUnknown = false;
+  private olderWsSign = false;
   private readonly waits = new Set<() => void>();
   private readonly checks = new Set<() => void>();
   private kicked = false;
@@ -288,7 +289,6 @@ export class ChannelLive {
 
   private socket(at: Resume, presence: boolean, reads: boolean, q: Inbox, send: boolean, watch: boolean) {
     return Effect.gen({ self: this }, function* () {
-      const auth = yield* Effect.promise(() => signRequest(this.ch.identity, this.ch.roomId, "GET", "/ws"));
       const u = new URL(`/v1/rooms/${this.ch.roomId}/ws`, this.ch.relay);
       u.searchParams.set("since", String(at.seq));
       if (watch) u.searchParams.set("watch", "1");
@@ -296,6 +296,7 @@ export class ChannelLive {
       if (!reads) u.searchParams.set("reads", "0");
       if (send) u.searchParams.set("echo", "0");
       u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
+      const auth = yield* Effect.promise(() => signRequest(this.ch.identity, this.ch.roomId, "GET", this.olderWsSign ? "/ws" : `/ws${u.search}`));
       const { ws, closed, ping, heard, silent } = yield* Effect.acquireRelease(
         Effect.sync(() => this.connect(u, auth, q, at, send)),
         ({ ws }) => Effect.sync(() => ws.close(1000, "aborted")),
@@ -318,7 +319,8 @@ export class ChannelLive {
             clearTimeout(checking);
           }),
       );
-      const { code, reason } = yield* Effect.promise(() => closed);
+      const { code, reason, opened } = yield* Effect.promise(() => closed);
+      this.olderWsSign = !opened;
       if (code === 4000) {
         at.next = "page";
         return yield* Queue.end(q);
@@ -335,8 +337,9 @@ export class ChannelLive {
     const sock = wireOf(ws, at.seq);
     const wire = send ? wireOn(ws, q) : null;
     let ended = false;
+    let everOpened = false;
     let end!: (c: { code: number; reason: string }) => void;
-    const closed = new Promise<{ code: number; reason: string }>((resolve) => {
+    const closed = new Promise<{ code: number; reason: string; opened: boolean }>((resolve) => {
       end = (c) => {
         if (ended) return;
         ended = true;
@@ -345,7 +348,7 @@ export class ChannelLive {
           this.wires.delete(wire);
           wire.drop();
         }
-        resolve(c);
+        resolve({ ...c, opened: everOpened });
       };
       ws.onclose = (ev) => end({ code: ev.code, reason: ev.reason });
     });
@@ -362,6 +365,7 @@ export class ChannelLive {
     ws.onerror = () => {};
     let openedAs: OpenKind = at.next;
     ws.onopen = () => {
+      everOpened = true;
       openedAs = at.next;
       at.next = "reconnect";
       Queue.offerUnsafe(q, { t: "open", presence: this.presenceOn(ws), mark: markOn(ws), probe: sock.probe, kind: openedAs });

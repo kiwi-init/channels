@@ -22,7 +22,7 @@ export const request = Effect.fn("Room.request")(function* (body: RequestBody) {
   if (Math.abs(Date.now() - ts) > REQUEST_TTL_MS) return yield* new BadRequest({ message: "request timestamp out of range" });
   const toDelegate = yield* delegateBox(db.roomId, body);
   if (db.isMember(pk)) return yield* new Conflict({ message: "already a member" });
-  db.sql.run("DELETE FROM requests WHERE status = 'pending' AND COALESCE(received, ts) < ?", Date.now() - REQUEST_TTL_MS);
+  db.sql.run("DELETE FROM requests WHERE COALESCE(received, ts) < ?", Date.now() - REQUEST_TTL_MS);
   const existing = db.sql.all<{ id: string; status: string }>("SELECT id, status FROM requests WHERE pk = ?", pk)[0];
   if (existing?.status === "denied") return yield* new Denied({ message: "this key was denied" });
   if (db.sql.all("SELECT 1 FROM members WHERE pk = ? AND active = 0", pk).length) return yield* new Removed({ message: "this key was removed; join with a new identity" });

@@ -46,6 +46,7 @@ import {
   authenticateSocket,
   errorResponse,
   expire,
+  gateRoom,
   idleExpired,
   missingFingerprint,
   onClientFrame,
@@ -473,6 +474,8 @@ export function startRelay(
         // No fingerprint: 426 before the room file is opened.
         const early = missingFingerprint(req.method, route.rest, url);
         if (early) return withCors(errorResponse(early));
+        const gate = await gateRoom(req, route.roomId, route.rest);
+        if (gate instanceof Response) return withCors(gate);
         if (pageCache && PAGE_PATH.test(route.rest))
           return withCors(await edgePage(req, route.roomId, route.rest, policy.pageKey, pageCache, () => pageFromRoom(req, route.roomId, route.rest), clock()));
         const isCreate = route.rest === "/create";
