@@ -6,6 +6,7 @@ import type { Signed, SigningBudget } from "@kiwi/core/sas.ts";
 import { handleFor } from "@kiwi/core/membership.ts";
 import type { LaunchedView } from "@kiwi/core/terminals.ts";
 import type { Identity } from "@kiwi/core/identity.ts";
+import { pollToken, startDevice } from "@kiwi/core/github-device.ts";
 import { workosDeviceSignIn, type DeviceSignIn, type WorkosFetch } from "@kiwi/core/workos.ts";
 
 import type { ChannelIdentityView, EnrollPersonView, EnrollStatusView, FromMachine } from "../../desktop/src/bridge.ts";
@@ -307,12 +308,19 @@ function fetched(json: string): void {
   fetches.get(got.id)?.(got);
 }
 
-async function readConfig(relay: string, signal: AbortSignal): Promise<{ workosClientId?: string | null; dev?: boolean }> {
+interface RelayConfig {
+  workosClientId?: string | null;
+  dev?: boolean;
+  githubSignIn?: boolean;
+  githubClientId?: string;
+}
+
+async function readConfig(relay: string, signal: AbortSignal): Promise<RelayConfig> {
   const res = await fetch(new URL("/v1/config", relay), { signal }).catch((err: unknown) => {
     throw new Error(`couldn't reach ${relay}: ${said(err)}`);
   });
   if (!res.ok) throw new Error(`${relay} returned ${res.status}`);
-  return (await res.json()) as { workosClientId?: string | null; dev?: boolean };
+  return (await res.json()) as RelayConfig;
 }
 
 async function relaySignIn(relay: string, user: string | undefined, stop: AbortController, waitMs: number): Promise<{ start: DeviceSignIn | null; token: Promise<string> }> {
@@ -324,6 +332,7 @@ async function relaySignIn(relay: string, user: string | undefined, stop: AbortC
     if (!name) throw new Error("this relay takes dev sign-in: give the name your computer's app signed in with");
     return { start: null, token: Promise.resolve(`dev:${name}`) };
   }
+  if (config.githubSignIn && config.githubClientId) return githubSignIn(config.githubClientId, stop, waitMs);
   if (!config.workosClientId) throw new Error(`${relay} has no sign-in, so this phone can't join your devices there`);
   post({ type: "log", line: `sign-in: starting WorkOS${handler() ? " through the app" : ""}` });
   let shown: (s: DeviceSignIn) => void = () => {};
@@ -336,6 +345,20 @@ async function relaySignIn(relay: string, user: string | undefined, stop: AbortC
   const page = await within(ready, waitMs, "the sign-in service", stop);
   post({ type: "log", line: "sign-in: page ready" });
   return { start: page, token };
+}
+
+async function githubSignIn(clientId: string, stop: AbortController, waitMs: number): Promise<{ start: DeviceSignIn; token: Promise<string> }> {
+  const signal = stop.signal;
+  const via: WorkosFetch = handler() ? viaHost : fetch;
+  post({ type: "log", line: `sign-in: starting GitHub${handler() ? " through the app" : ""}` });
+  const opened = startDevice(clientId, via, signal).catch((err: unknown) => {
+    throw new Error(signal.aborted ? said(err) : `couldn't reach GitHub's sign-in: ${said(err)}`);
+  });
+  const start = await within(opened, waitMs, "GitHub's sign-in", stop);
+  const token = pollToken(clientId, start, { fetch: via, sleep: (ms) => pause(ms, signal), now: Date.now, signal });
+  token.catch(() => {});
+  post({ type: "log", line: "sign-in: page ready" });
+  return { start: { url: start.url, code: start.userCode }, token };
 }
 
 async function enrollCancel(): Promise<void> {

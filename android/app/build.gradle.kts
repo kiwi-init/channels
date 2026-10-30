@@ -72,9 +72,10 @@ android {
             keyPassword = "android"
         }
         create("release") {
-            val store = System.getenv("KIWI_ANDROID_KEYSTORE")
-            val storePassword = System.getenv("KIWI_ANDROID_STORE_PASSWORD")
-            val keyAlias = System.getenv("KIWI_ANDROID_KEY_ALIAS")
+            val secret = { name: String -> System.getenv(name)?.takeIf { it.isNotEmpty() } }
+            val store = secret("KIWI_ANDROID_KEYSTORE")
+            val storePassword = secret("KIWI_ANDROID_STORE_PASSWORD")
+            val keyAlias = secret("KIWI_ANDROID_KEY_ALIAS")
             if (store != null || storePassword != null || keyAlias != null) {
                 if (store == null || storePassword == null || keyAlias == null) {
                     throw GradleException("a release keystore takes KIWI_ANDROID_KEYSTORE, KIWI_ANDROID_STORE_PASSWORD and KIWI_ANDROID_KEY_ALIAS together")
@@ -85,7 +86,7 @@ android {
                 storeType = if (keystore.extension.equals("jks", ignoreCase = true)) "jks" else "pkcs12"
                 this.storePassword = storePassword
                 this.keyAlias = keyAlias
-                keyPassword = System.getenv("KIWI_ANDROID_KEY_PASSWORD") ?: storePassword
+                keyPassword = secret("KIWI_ANDROID_KEY_PASSWORD") ?: storePassword
             }
         }
     }

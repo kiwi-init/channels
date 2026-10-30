@@ -7,6 +7,7 @@ import { generateIdentity } from "@kiwi/core/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { githubHumanAuth, withGithub, type HumanAuth } from "../src/relay/human.ts";
 import { OPEN_POLICY } from "../src/relay/policy.ts";
+import { createEnrollee } from "../desktop/src/devices.ts";
 
 const CLIENT = "Iv23liTestClient";
 const SECRET = "test-secret";
@@ -94,6 +95,13 @@ describe("creating a channel with a GitHub sign-in", () => {
 
   test("/v1/config says GitHub sign-in is taken, and still names WorkOS for older apps", async () => {
     expect(await relayConfig(relay)).toMatchObject({ workosClientId: "client_old", githubSignIn: true });
+  });
+
+  test("a phone asking to join a GitHub sign-in that has no devices yet hears to open Channels on its computer; an older account keeps its words", async () => {
+    const ask = (token: string) =>
+      createEnrollee({ relayUrl: () => relay, token: async () => token, who: () => null, enrolled: () => {}, label: () => "iPhone", os: () => "iOS 27", as: "phone" }).begin();
+    await expect(ask(MONA)).rejects.toThrow("open Channels on your computer once to move your devices to your GitHub sign-in, then try again");
+    await expect(ask("old.workos.jwt")).rejects.toThrow("no app of this account can approve a device yet: sign in on your first app");
   });
 
   test("a GitHub sign-in creates a channel, an older app's WorkOS one still does, and the beta list names GitHub logins", async () => {
