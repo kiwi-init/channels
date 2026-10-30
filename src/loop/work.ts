@@ -103,7 +103,7 @@ export type Step = { kind: "keep"; work: Work } | { kind: "over" } | { kind: "fr
 
 export function step(work: Work, state: ChannelState, me: string, freshFor: number | null, setAside: ReadonlySet<string> = new Set()): Step {
   if (work.kind === "answering") {
-    const taken = nextWork(state, me, 0);
+    const taken = nextWork(state, me, 0, setAside);
     return taken?.kind === "coding" ? { kind: "fresh", work: taken, why: "took" } : { kind: "keep", work };
   }
   if (workOver(work, state, me, setAside)) return { kind: "over" };
