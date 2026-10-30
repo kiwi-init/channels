@@ -1,10 +1,10 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { OWN_TMUX_DIR } from "@kiwi/core/terminals.ts";
 import { loopArgv, readLoopStart, startLoop } from "../src/loop/start.ts";
-import { HOSTED_CONF, HOSTED_SESSION, HostedTmux, findTmux, hostedSocket, ownTmux, privateDir, tmuxHosts, type HostedState } from "../src/daemon/hosted-tmux.ts";
+import { HOSTED_CONF, HOSTED_SESSION, HostedTmux, findTmux, hostedSocket, inFolder, ownTmux, privateDir, tmuxHosts, type HostedState } from "../src/daemon/hosted-tmux.ts";
 
 describe("the hosted tmux's settings", () => {
   test("the config keeps the server up with no sessions, keeps dead panes, and never resizes on its own", () => {
@@ -112,7 +112,7 @@ describe("a loop start's request", () => {
   });
 });
 
-const tmux = process.platform === "win32" ? null : await findTmux(join(tmpdir(), "kiwi-no-own-tmux"), {});
+const tmux = process.platform === "win32" ? null : await findTmux(join(tmpdir(), "kiwi-no-own-tmux"), { KIWI_TMUX: process.env.KIWI_TMUX });
 
 describe("a hosted tmux server", () => {
   if (!tmux && process.env.GITHUB_ACTIONS) test("CI has tmux 3.2 or newer for these tests", () => expect(tmux).not.toBeNull());
@@ -293,5 +293,83 @@ describe("a hosted tmux server under a daemon with no UTF-8 locale", () => {
     expect(r.tabs).toEqual([{ pane: r.mine.pane, label: expect.any(String) }]);
     expect(r.info).toMatchObject({ session: "_kiwi", cols: expect.any(Number), rows: expect.any(Number) });
     expect(r.screen).toContain("café ✓");
+  });
+});
+
+describe("a hosted tmux server whose own folder is deleted", () => {
+  const where = 'printf "[%s]\\n" "$(pwd -P 2>/dev/null)"; exec sleep 60';
+  const screenOf = async (hosted: HostedTmux, pane: string, want: string): Promise<string> => {
+    let screen = "";
+    for (let i = 0; i < 100 && !screen.includes(want); i++) {
+      screen = hosted.pane(pane)?.screen() ?? "";
+      await Bun.sleep(100);
+    }
+    return screen;
+  };
+
+  test("a pane's first step goes to its folder itself, then runs the command as given", () => {
+    expect(inFolder("/w", ["claude", "--x"], ["/bin/sh"])).toEqual(["/bin/sh", "-c", 'cd -- "$1" 2>/dev/null || cd; shift; exec "$@"', "kiwi-cd", "/w", "claude", "--x"]);
+    const r = Bun.spawnSync(inFolder(tmpdir(), ["/bin/sh", "-c", "pwd -P"], ["/bin/sh"]), { cwd: "/" });
+    expect(r.stdout.toString().trim()).toBe(realpathSync(tmpdir()));
+  });
+
+  test.if(!!tmux)("a daemon running from a deleted folder starts tmux from home, so tmux's own -c still works", async () => {
+    const home = mkdtempSync(join(tmpdir(), "kiwi-hosted-gone-home-"));
+    const doomed = mkdtempSync(join(tmpdir(), "kiwi-hosted-gone-cwd-"));
+    const folder = mkdtempSync(join(tmpdir(), "kiwi-hosted-gone-work-"));
+    const script = `
+      const { rmdirSync } = await import("node:fs");
+      const { HostedTmux } = await import(${JSON.stringify(join(import.meta.dir, "../src/daemon/hosted-tmux.ts"))});
+      rmdirSync(process.cwd());
+      const [home, folder] = process.argv.slice(1);
+      const hosted = new HostedTmux(home);
+      const st = await hosted.ensure();
+      const raw = await hosted.tmux(st, ["new-window", "-d", "-P", "-F", "#{pane_id}", "-c", folder, "--", "/bin/sh", "-c", ${JSON.stringify(where)}]);
+      const pane = raw.stdout.trim();
+      let screen = "";
+      for (let i = 0; i < 100 && !screen.includes("]"); i++) {
+        screen = hosted.pane(pane)?.screen() ?? "";
+        await Bun.sleep(100);
+      }
+      await hosted.kill();
+      console.log(JSON.stringify({ screen }));
+    `;
+    const child = Bun.spawn([process.execPath, "-e", script, home, folder], { cwd: doomed, env: { ...process.env, KIWI_TMUX: tmux!.bin }, stdout: "pipe", stderr: "pipe" });
+    const [out, err] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
+    rmSync(home, { recursive: true, force: true });
+    if (!out.trim()) throw new Error(err);
+    expect(existsSync(doomed)).toBe(false);
+    expect(JSON.parse(out).screen).toContain(`[${realpathSync(folder)}]`);
+    rmSync(folder, { recursive: true, force: true });
+  });
+
+  test.if(!!tmux)("a server already stuck in a deleted folder still opens your terminal and agents in their folders, without a restart", async () => {
+    const home = mkdtempSync(join(tmpdir(), "kiwi-hosted-stuck-home-"));
+    const doomed = mkdtempSync(join(tmpdir(), "kiwi-hosted-stuck-cwd-"));
+    const folder = mkdtempSync(join(tmpdir(), "kiwi-hosted-stuck-work-"));
+    const st: HostedState = { ...tmux!, socket: hostedSocket(home) };
+    privateDir(join(st.socket, ".."));
+    writeFileSync(join(home, "hosted-tmux.conf"), HOSTED_CONF);
+    const started = Bun.spawnSync([st.bin, "-u", "-S", st.socket, "-f", join(home, "hosted-tmux.conf"), "new-session", "-d", "-s", HOSTED_SESSION, "-n", "hold", "true"], { cwd: doomed });
+    expect(started.exitCode).toBe(0);
+    rmSync(doomed, { recursive: true, force: true });
+    writeFileSync(join(home, "hosted-tmux.json"), JSON.stringify(st));
+    const hosted = new HostedTmux(home);
+    try {
+      expect(await hosted.ensure()).toEqual(st);
+      const pid = (await hosted.tmux(st, ["display-message", "-p", "#{pid}"])).stdout.trim();
+      const mine = await hosted.mine(folder, null, "/bin/sh");
+      if (!mine.ok) throw new Error(mine.detail);
+      await hosted.tmux(st, ["send-keys", "-t", mine.pane, `printf "[%s]\\n" "$(pwd -P)"`, "Enter"]);
+      expect(await screenOf(hosted, mine.pane, `[${realpathSync(folder)}]`)).toContain(`[${realpathSync(folder)}]`);
+      const agent = await hosted.open({ argv: ["/bin/sh", "-c", where], folder, name: "agent", env: {} });
+      if (!agent.ok || agent.place !== "hosted") throw new Error(JSON.stringify(agent));
+      expect(await screenOf(hosted, agent.pane, `[${realpathSync(folder)}]`)).toContain(`[${realpathSync(folder)}]`);
+      expect((await hosted.tmux(st, ["display-message", "-p", "#{pid}"])).stdout.trim()).toBe(pid);
+    } finally {
+      await hosted.kill();
+      rmSync(home, { recursive: true, force: true });
+      rmSync(folder, { recursive: true, force: true });
+    }
   });
 });

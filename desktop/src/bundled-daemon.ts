@@ -6,7 +6,7 @@ import { certifyMachine } from "@kiwi/core/person.ts";
 import type { ComputerView } from "./bridge.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
 import { ensureOnPath, keepCli, place, type KeptCli } from "./cli.ts";
-import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, noteDaemon, spawnDaemon, type HelloResult } from "./daemon-client.ts";
+import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, daemonUnpair, kiwiHome, noteDaemon, spawnDaemon, type HelloResult } from "./daemon-client.ts";
 import { keepAlive } from "./daemon-keeper.ts";
 import { host } from "./host.ts";
 import { publicPerson } from "./guard.ts";
@@ -76,6 +76,7 @@ export async function adoptDaemon(listComputer: ListComputer): Promise<ComputerV
   if (!hello) throw new Error(`no daemon answers at ${daemonSocketPath(home)}`);
   const label = os.hostname().split(".")[0] || "this computer";
   const named = { pk: who.pk, xpk: who.xpk, name: who.name };
+  if (hello.paired && hello.paired.person !== named.pk) await daemonUnpair(home);
   let links: DeviceLink[] | null;
   try {
     links = await listComputer({ pk: hello.machine.pk, xpk: hello.machine.xpk, label });
