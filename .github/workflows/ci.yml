@@ -145,6 +145,9 @@ jobs:
         run: bun run ui:build
       - name: ui bundle budget
         run: bun scripts/ui-bundle.ts
+      - name: ui harness build, with the plain-browser key store
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-harness.ts
       - name: app smoke
         if: ${{ !cancelled() }}
         run: bun scripts/smoke-app.ts

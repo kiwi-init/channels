@@ -1,6 +1,8 @@
 import "~/styles/start.css"
 
-import { Icon } from "~/kit/icons"
+import { GithubIcon } from "@hugeicons/core-free-icons"
+
+import { GlyphIcon } from "~/kit/icons"
 import type { GithubSignIn as SignIn } from "~/model"
 import { useApp } from "~/nav"
 
@@ -44,7 +46,7 @@ function Ask({ code, problem }: { code: { code: string; url: string } | null; pr
       ) : (
         <>
           <button type="button" className="btn is-primary start-gh" autoFocus onClick={() => app.actions.signInWithGithub()}>
-            <Icon name="github" size={16} />
+            <GlyphIcon glyph={GithubIcon} size={16} />
             Sign in with GitHub
           </button>
           <p className={problem ? "start-hint is-error" : "start-hint"} aria-live="polite">
