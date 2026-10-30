@@ -225,6 +225,8 @@
 .top-drawer {
   position: relative;
   display: none;
+  background: var(--float);
+  box-shadow: var(--shadow-float);
 }
 
 .top-drawer-dot {
@@ -235,7 +237,7 @@
   height: 7px;
   border-radius: 50%;
   background: var(--ink-2);
-  box-shadow: 0 0 0 2px var(--bg);
+  box-shadow: 0 0 0 2px var(--float);
 }
 
 .top-drawer-dot.is-loud {
@@ -276,7 +278,8 @@
   padding: 0 8px;
   border: 0;
   border-radius: var(--r-ctl);
-  background: var(--wash-2);
+  background: var(--float);
+  box-shadow: var(--shadow-float);
   color: var(--ink);
   -webkit-app-region: no-drag;
   transition: background var(--fast);
@@ -287,15 +290,30 @@
 }
 
 .top-chan:hover,
-.top-chan[aria-pressed="true"] {
-  background: color-mix(in srgb, var(--ink) 14%, transparent);
+.top-chan[aria-pressed="true"],
+.top-drawer:hover,
+.top-drawer[aria-pressed="true"] {
+  background: var(--float-2);
+}
+
+.tabs,
+.top-group {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 2px;
+  border-radius: var(--r-ctl);
+  background: var(--float);
+  box-shadow: var(--shadow-float);
 }
 
 .tabs {
-  display: flex;
-  justify-content: center;
-  gap: 4px;
-  min-width: 0;
+  justify-self: center;
+}
+
+.top-group {
+  flex: none;
 }
 
 .tabs button {
@@ -303,10 +321,10 @@
   align-items: center;
   gap: 6px;
   max-width: 240px;
-  height: var(--ctl);
+  height: calc(var(--ctl) - 4px);
   padding: 0 12px;
   border: 0;
-  border-radius: var(--r-ctl);
+  border-radius: var(--r-row);
   background: none;
   color: var(--ink-2);
   font: 500 var(--t-ui) var(--ui);
@@ -344,8 +362,24 @@
   padding: 0 12px;
 }
 
-.top-tools.is-searching > :not(.top-find, :last-child) {
+.top-tools.is-searching > :not(.top-find, .top-group) {
   visibility: hidden;
+}
+
+.top-tools.is-searching .top-group > :first-child {
+  display: none;
+}
+
+.top-find .search-field {
+  height: var(--ctl);
+  background: var(--float);
+  box-shadow: var(--shadow-float);
+}
+
+.top-find .search-field:focus-within {
+  box-shadow:
+    var(--shadow-float),
+    inset 0 0 0 1px var(--line-3);
 }
 
 .top-find {
@@ -369,10 +403,24 @@
 @media (max-width: 760px) {
   .top-find {
     position: static;
+    flex: 1;
+    min-width: 0;
     transform: none;
   }
 
-  .top-tools.is-searching > .icon-btn:first-of-type {
+  .top-find .search-field {
+    width: 100%;
+  }
+
+  .top:has(.top-tools.is-searching) .tabs {
+    display: none;
+  }
+
+  .top-tools.is-searching {
+    grid-column: 3 / -1;
+  }
+
+  .top-tools.is-searching > :not(.top-find, .top-group) {
     display: none;
   }
 }
@@ -678,6 +726,17 @@
   padding: 0 12px 0 16px;
 }
 
+.panel-head > .icon-btn {
+  width: var(--ctl);
+  height: var(--ctl);
+  background: var(--float);
+  box-shadow: var(--shadow-float);
+}
+
+.panel-head > .icon-btn:hover {
+  background: var(--float-2);
+}
+
 .panel-title {
   flex: 1;
   min-width: 0;
@@ -786,7 +845,7 @@
   }
 
   .tabs {
-    justify-content: flex-start;
+    justify-self: start;
     overflow-x: auto;
     scrollbar-width: none;
   }
@@ -933,7 +992,6 @@
   padding: 0;
 }
 
-.top-tools .icon-btn,
 .top-drawer {
   width: var(--ctl);
   height: var(--ctl);
