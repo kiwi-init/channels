@@ -38,9 +38,15 @@ describe("the Android release build never signs with the public debug key", () =
     const release = block(block(gradle, "signingConfigs {"), 'create("release") {');
     expect(debug).toContain('storeFile = file("debug.p12")');
     expect(release).not.toContain("debug.p12");
-    expect(release).toContain('System.getenv("KIWI_ANDROID_KEYSTORE")');
-    expect(release).toContain('System.getenv("KIWI_ANDROID_STORE_PASSWORD")');
-    expect(release).toContain('System.getenv("KIWI_ANDROID_KEY_ALIAS")');
+    expect(release).toContain('secret("KIWI_ANDROID_KEYSTORE")');
+    expect(release).toContain('secret("KIWI_ANDROID_STORE_PASSWORD")');
+    expect(release).toContain('secret("KIWI_ANDROID_KEY_ALIAS")');
+  });
+
+  test("a secret CI passes as an empty string counts as unset, so a branch without the secrets builds unsigned instead of failing (T312)", () => {
+    const release = block(block(gradle, "signingConfigs {"), 'create("release") {');
+    expect(release).toContain("val secret = { name: String -> System.getenv(name)?.takeIf { it.isNotEmpty() } }");
+    expect(release).not.toMatch(/System\.getenv\("KIWI_ANDROID_/);
   });
 
   test("CI signs with the repo's secret keystore or leaves the APK unsigned, and keeps both names", () => {
