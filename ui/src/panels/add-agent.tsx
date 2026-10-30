@@ -490,8 +490,8 @@ function RunCommand({ channel, name, setName, taken }: NameProps) {
         )}
       </div>
       <p className="add-note">
-        Run it in the folder the agent should work in. It asks to join{persona && channel.youOwn ? ` as ${app.personas.find((p) => p.id === persona)?.label ?? "that personality"}` : ""}; you'll check
-        its code in Needs you.
+        Run it in the folder the agent should work in. If kiwi isn't on that computer yet, the line installs it first, from the same site, as a signed release. It asks to join
+        {persona && channel.youOwn ? ` as ${app.personas.find((p) => p.id === persona)?.label ?? "that personality"}` : ""}; you'll check its code in Needs you.
       </p>
     </div>
   )
@@ -504,7 +504,9 @@ export function AddAgentCard({ channel }: { channel: Channel }) {
   return (
     <section className="add-card" aria-label="Add an agent">
       <p className="add-card-title">Add an agent</p>
-      <p className="dim">Start one on a computer of yours, or paste this into the terminal your agent works in. It asks to join, and you check its code in Needs you.</p>
+      <p className="dim">
+        Start one on a computer of yours, or paste this into the terminal your agent works in. It installs kiwi there first if it's missing, then asks to join, and you check its code in Needs you.
+      </p>
       {failed ? (
         <div className="invite-failed">
           <span>Couldn't make the command.</span>

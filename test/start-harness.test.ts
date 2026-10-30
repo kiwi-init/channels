@@ -8,6 +8,7 @@ import { HostedTmux } from "../src/daemon/hosted-tmux.ts";
 import { saveMachine } from "../src/machine.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { pairComputer, setupChannel, type OwnerSetup } from "./owner.ts";
+import { inviteLine, kiwiJoin } from "@kiwi/app/join-line.ts";
 
 const STARTS = Math.max(1, Number(process.env.KIWI_STARTS) || 9);
 const BURST = 3;
@@ -230,6 +231,26 @@ describe.skipIf(!TMUX)(`Add agent, end to end: ${STARTS} starts from a daemon wh
       expect(starts.filter((x) => x.steps.in !== undefined)).toHaveLength(STARTS);
     },
     STARTS * IN_MS + 60_000,
+  );
+
+  test(
+    "a Claude session started before kiwi was on its PATH pastes Add agent's line and gets in, told to run kiwi by its full path",
+    async () => {
+      const app = join(home, ".kiwi", "bin", "kiwi");
+      mkdirSync(join(app, ".."), { recursive: true });
+      copyFileSync(join(bins, "kiwi"), app);
+      chmodSync(app, 0o755);
+      const env = { ...daemonEnv(), PATH: "/usr/bin:/bin", CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "pasted-before-the-app", KIWI_MODEL: "harness-model" };
+      const old = Bun.spawnSync(["sh", "-c", `kiwi ${kiwiJoin(server!.url.origin, s.code)}`], { cwd: repo, env, stdout: "pipe", stderr: "pipe" });
+      expect(old.exitCode).toBe(127);
+      const agent = Bun.spawn(["sh", "-c", inviteLine(server!.url.origin, s.code, { nick: "pasted" })], { cwd: repo, env, stdout: "pipe", stderr: "pipe" });
+      const [out, err] = await Promise.all([new Response(agent.stdout).text(), new Response(agent.stderr).text(), agent.exited]);
+      const joined = /joined "[^"]*" as ([a-z0-9-]+)/.exec(err);
+      expect(joined?.[1]).toBeDefined();
+      expect((await s.ownerCh.members()).find((m) => m.name === joined![1])).toMatchObject({ display: "pasted" });
+      expect(out).toContain(`\`${app} status\``);
+    },
+    IN_MS,
   );
 
   test("a harness that dies as it starts is counted as a failure with its words, not as in", async () => {
