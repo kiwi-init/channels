@@ -53,7 +53,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
     if (!anchor) return
     if (!atAnchor) return go({ to: "where", where: anchor.where })
     if (jump?.m.seq !== anchor.seq) return
-    if (root !== undefined) go({ to: "panel", panel: { kind: "thread", seq: root } })
+    if (root !== undefined) go({ to: "panel", panel: { kind: "thread", seq: root, focus: wanted.seq } })
     dropMessage(wanted)
   }, [wanted, found.kind, anchor, root, atAnchor, jump, go])
   const [searching, setSearching] = useState(false)
@@ -211,7 +211,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           <Boundary panel resetKey={JSON.stringify(nav.panel)}>
             <Suspense fallback={null}>
               {nav.panel.kind === "thread" ? (
-                <ThreadPanel channel={channel} seq={nav.panel.seq} />
+                <ThreadPanel channel={channel} seq={nav.panel.seq} focus={nav.panel.focus} />
               ) : nav.panel.kind === "task" ? (
                 <TaskPanel channel={channel} id={nav.panel.task} />
               ) : nav.panel.kind === "person" ? (

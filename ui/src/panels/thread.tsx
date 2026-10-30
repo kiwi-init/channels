@@ -9,7 +9,7 @@ import type { Channel, Message } from "~/model"
 import { nickname } from "~/names"
 import { PanelHead } from "~/panels/frame"
 
-export function ThreadPanel({ channel, seq }: { channel: Channel; seq: number }) {
+export function ThreadPanel({ channel, seq, focus }: { channel: Channel; seq: number; focus?: number | undefined }) {
   const root = channel.messages.find((m) => m.seq === seq)
   const replies = useMemo(() => channel.messages.filter((m) => m.inThread === seq), [channel.messages, seq])
   const bySeq = useMemo(() => new Map(channel.messages.map((m) => [m.seq, m])), [channel.messages])
@@ -19,7 +19,9 @@ export function ThreadPanel({ channel, seq }: { channel: Channel; seq: number })
   const replying = useMemo((): Replying => ({ to: reply?.seq === seq ? reply.to : null, set: (to) => setReply(to ? { seq, to } : null) }), [reply, seq])
   const { scroller, content, remember, toBottom } = useStick()
   const last = replies.at(-1)?.seq
-  useLayoutEffect(() => toBottom(false), [seq, toBottom])
+  useLayoutEffect(() => {
+    if (focus === undefined || !jumpTo(content.current, focus)) toBottom(false)
+  }, [seq, focus, content, toBottom])
   useLayoutEffect(() => {
     if (last !== undefined && replies.at(-1)?.from === channel.you) toBottom(false)
   }, [last, replies, channel.you, toBottom])
