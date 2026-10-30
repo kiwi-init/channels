@@ -34,6 +34,9 @@ const VAULT_PATH = "/v1/account/vault";
 
 export const isAccountPath = (pathname: string): boolean => PATH.test(pathname);
 
+const NO_APPROVER = "no app of this account can approve a device yet: sign in on your first app";
+const NO_GITHUB_APPROVER = "nothing on this GitHub sign-in can approve a device yet: open Channels on your computer once to move your devices to your GitHub sign-in, then try again";
+
 const enrollmentLive = (e: Enrollment | null, now: number): Enrollment | null => (e && e.at + ENROLL_TTL_MS > now ? e : null);
 
 export const sameEnrollment = (a: Enrollment | null, b: Enrollment | null): boolean => (a === null ? b === null : b !== null && canonical(a) === canonical(b));
@@ -170,7 +173,7 @@ export async function onAccountHttp(
     const ask = readEnrollAsk(parse(body)?.ask);
     if (!ask) return refuse(new BadRequest({ message: "an ask takes {ask}: device, dxpk, label, os, as, at and commit" }));
     if (signer !== ask.device) return refuse(new Forbidden({ message: "a device asks to join for itself" }));
-    if (!list) return refuse(new NotFound({ message: "no app of this account can approve a device yet: sign in on your first app" }));
+    if (!list) return refuse(user.startsWith("github_") ? new NotFound({ message: NO_GITHUB_APPROVER }) : new NotFound({ message: NO_APPROVER }));
     if (list.revoked.includes(ask.device)) return refuse(new Forbidden({ message: "this device was removed from this person's devices" }));
     if (list.devices.some((d) => d.device === ask.device)) return refuse(new Conflict({ message: "this device is already one of this person's" }));
     if (opts.perAccount && !(await opts.perAccount(`account:${user}`))) return refuse(new TooMany({ message: "too many asks for this account; try again in a minute" }));

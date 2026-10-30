@@ -133,8 +133,8 @@ class Engine(private val app: Context, private val onPush: (Push) -> Unit, priva
 
     private fun fetchForEngine(call: Push.Fetch) {
         val answer = JSONObject().put("id", call.id)
-        if (call.url !in WORKOS) {
-            answer.put("error", "this app only makes WorkOS's sign-in calls")
+        if (call.url !in SIGN_IN) {
+            answer.put("error", "this app only makes its sign-in calls")
         } else {
             try {
                 val conn = URL(call.url).openConnection() as HttpURLConnection
@@ -144,6 +144,7 @@ class Engine(private val app: Context, private val onPush: (Push) -> Unit, priva
                     conn.readTimeout = 20_000
                     conn.doOutput = true
                     conn.setRequestProperty("content-type", "application/json")
+                    conn.setRequestProperty("accept", "application/json")
                     conn.outputStream.use { it.write(call.body.toByteArray()) }
                     val status = conn.responseCode
                     val stream = if (status >= 400) conn.errorStream else conn.inputStream
@@ -216,7 +217,12 @@ class Engine(private val app: Context, private val onPush: (Push) -> Unit, priva
     }
 
     private companion object {
-        val WORKOS = setOf("https://api.workos.com/user_management/authorize/device", "https://api.workos.com/user_management/authenticate")
+        val SIGN_IN = setOf(
+            "https://api.workos.com/user_management/authorize/device",
+            "https://api.workos.com/user_management/authenticate",
+            "https://github.com/login/device/code",
+            "https://github.com/login/oauth/access_token",
+        )
         const val LOCAL = "http://localhost/"
         const val SECURE = "https://appassets.androidplatform.net/"
         const val PAGE = "<!doctype html><meta charset=utf-8><title>Channels engine</title><script src=\"engine.js\"></script>"

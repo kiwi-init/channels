@@ -266,6 +266,42 @@ describe("the phone engine's sign-in opens or says why (T13)", () => {
     }
   });
 
+  test("on a relay that takes GitHub sign-in, the app makes GitHub's calls, shows its code, and a check cut off in the browser is asked again (T254)", async () => {
+    const both = configOnly(async () => Response.json({ workosClientId: "client_test", githubSignIn: true, githubClientId: "Iv23phoneTest" }));
+    asHost();
+    try {
+      const before = pushes.length;
+      const started = ask<EnrollStart>({ op: "enrollBegin", relay: both.url.origin, label: "iPhone", os: "iOS 27", waitMs: 5_000 });
+      const call = await asked(before);
+      expect(call.url).toBe("https://github.com/login/device/code");
+      expect(JSON.parse(call.body)).toEqual({ client_id: "Iv23phoneTest" });
+      const answer = { device_code: "dc", user_code: "WDJB-MJHT", verification_uri: "https://github.com/login/device", expires_in: 900, interval: 0.05 };
+      engine.fetched(JSON.stringify({ id: call.id, status: 200, body: JSON.stringify(answer) }));
+      expect(await started).toEqual({ url: "https://github.com/login/device", code: "WDJB-MJHT" });
+      ask({ op: "enrollAsk" }).catch(() => {});
+
+      const cut = pushes.length;
+      const first = await asked(cut);
+      expect(first.url).toBe("https://github.com/login/oauth/access_token");
+      expect(JSON.parse(first.body)).toEqual({ client_id: "Iv23phoneTest", device_code: "dc", grant_type: "urn:ietf:params:oauth:grant-type:device_code" });
+      engine.fetched(JSON.stringify({ id: first.id, error: "The network connection was lost." }));
+
+      const next = pushes.length;
+      const pending = await asked(next);
+      engine.fetched(JSON.stringify({ id: pending.id, status: 200, body: JSON.stringify({ error: "authorization_pending" }) }));
+      const last = pushes.length;
+      const granted = await asked(last);
+      engine.fetched(JSON.stringify({ id: granted.id, status: 200, body: JSON.stringify({ access_token: `ghu_${"p".repeat(36)}`, token_type: "bearer" }) }));
+      for (let i = 0; i < 200 && !pushes.slice(last).some((p) => p.type === "log" && p.line === "sign-in: signed in, asking your computer"); i++) await Bun.sleep(10);
+      expect(pushes.slice(last).some((p) => p.type === "log" && p.line === "sign-in: signed in, asking your computer")).toBe(true);
+      expect(pushes.slice(before).some((p) => p.type === "fetch" && p.url.startsWith("https://api.workos.com"))).toBe(false);
+      await ask({ op: "enrollCancel" });
+    } finally {
+      noHost();
+      both.stop(true);
+    }
+  });
+
   test("a token check cut off while the phone is in Safari is asked again", async () => {
     const workos = configOnly(async () => Response.json({ workosClientId: "client_test" }));
     asHost();
