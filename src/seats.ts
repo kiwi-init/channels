@@ -16,7 +16,7 @@
 import { readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { kimiAncestor, kimiCodePid, mimoHere, piHere, zcodePid, type ProcessTree } from "./ancestry.ts";
+import { geminiAncestor, kimiAncestor, kimiCodePid, mimoHere, piHere, zcodePid, type ProcessTree } from "./ancestry.ts";
 import { loadConfig, updateConfig, type Config, type SeatRecord } from "./config.ts";
 import { holdsSeat, seatHeldAway, seatHolds, seatRefusal } from "./hold.ts";
 import { pidAlive } from "./pid.ts";
@@ -72,7 +72,7 @@ export function here(env: Record<string, string | undefined> = process.env, tree
   if (env.GROK_SESSION_ID) return { harness: "grok", session: env.GROK_SESSION_ID };
   if (env.CLAUDECODE) return { harness: "claude", ...(env.CLAUDE_CODE_SESSION_ID ? { session: env.CLAUDE_CODE_SESSION_ID } : {}), ...(Number.isInteger(pid) && pid > 0 ? { pid } : {}) };
   if (env.CODEX_THREAD_ID) return { harness: "codex", session: env.CODEX_THREAD_ID };
-  if (env.GEMINI_CLI) return { harness: "gemini" };
+  if (env.GEMINI_CLI) return geminiHere(tree);
   if (onGrokBot(env, host)) return { harness: "grok-bot" };
   if (env.CURSOR_AGENT) return { harness: "cursor", ...(env.CURSOR_CONVERSATION_ID ? { session: env.CURSOR_CONVERSATION_ID } : {}) };
   if (env.OPENCODE_SESSION_ID) return { harness: "opencode", session: env.OPENCODE_SESSION_ID };
@@ -84,7 +84,7 @@ export type NamedHookHarness = "codex" | "gemini" | "grok";
 export function hereAs(harness: string | undefined, env: Record<string, string | undefined> = process.env, tree: ProcessTree = {}, host: string = hostname()): Here {
   if (harness === "codex") return { harness: "codex", ...(env.CODEX_THREAD_ID ? { session: env.CODEX_THREAD_ID } : {}) };
   if (harness === "grok") return { harness: "grok", ...(env.GROK_SESSION_ID ? { session: env.GROK_SESSION_ID } : {}) };
-  if (harness === "gemini") return { harness: "gemini" };
+  if (harness === "gemini") return geminiHere(tree);
   return here(env, tree, host);
 }
 
@@ -99,8 +99,13 @@ function sameModel(seat: string | undefined, session: string | undefined): boole
   return !seat || !session || modelKey(seat) === modelKey(session);
 }
 
-function heldByProcess(harness: "kimi" | "mimo" | "zcode", pid: number): Here {
+function heldByProcess(harness: "kimi" | "mimo" | "zcode" | "gemini", pid: number): Here {
   return { harness, session: `${harness}-pid-${pid}`, pid };
+}
+
+function geminiHere(tree: ProcessTree): Here {
+  const pid = geminiAncestor(tree);
+  return pid ? heldByProcess("gemini", pid) : { harness: "gemini" };
 }
 
 export function kimiHookHere(tree: ProcessTree = {}): Here {

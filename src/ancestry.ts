@@ -36,6 +36,8 @@ const HARNESS_PROCESSES: readonly string[] = ["claude", "codex", "opencode", "gr
 
 const KIMI_PROCESSES: readonly string[] = ["kimi-code", "kimi"];
 
+const GEMINI_PROCESSES: readonly string[] = ["gemini", "node"];
+
 export interface ProcessTree {
   lookup?: ProcLookup;
   from?: number;
@@ -43,14 +45,14 @@ export interface ProcessTree {
 
 type Nearest = { kind: "harness"; pid: number; name: string } | { kind: "pid"; pid: number } | { kind: "unknown" };
 
-function nearestHarness(tree: ProcessTree, mark: number | null, depth = 12): Nearest {
+function nearestHarness(tree: ProcessTree, mark: number | null, depth = 12, also: readonly string[] = []): Nearest {
   const lookup = tree.lookup ?? procInfo;
   let pid = tree.from ?? process.ppid;
   for (let i = 0; i < depth && pid > 1; i++) {
     if (pid === mark) return { kind: "pid", pid };
     const info = lookup(pid);
     if (!info) return { kind: "unknown" };
-    if (HARNESS_PROCESSES.includes(info.name)) return { kind: "harness", pid, name: info.name };
+    if (HARNESS_PROCESSES.includes(info.name) || also.includes(info.name)) return { kind: "harness", pid, name: info.name };
     pid = info.ppid;
   }
   return { kind: "unknown" };
@@ -64,6 +66,11 @@ export function kimiCodePid(env: Record<string, string | undefined>, tree: Proce
 export function kimiAncestor(tree: ProcessTree = {}): number | null {
   const near = nearestHarness(tree, null);
   return near.kind === "harness" && KIMI_PROCESSES.includes(near.name) ? near.pid : null;
+}
+
+export function geminiAncestor(tree: ProcessTree = {}): number | null {
+  const near = nearestHarness(tree, null, 12, GEMINI_PROCESSES);
+  return near.kind === "harness" && GEMINI_PROCESSES.includes(near.name) ? near.pid : null;
 }
 
 export function zcodePid(env: Record<string, string | undefined>, tree: ProcessTree = {}): number | null {

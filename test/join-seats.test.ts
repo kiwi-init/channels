@@ -2,14 +2,14 @@
 // owner's side), a seat per agent in its checkout (no -c/--as afterwards, two agents in one checkout
 // each act as themselves, a restart takes its seat back), and Claude Code's hooks doing the listening.
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
-import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { daemonListening, daemonSock } from "../src/daemon.ts";
 import { HANDLE, youAre, created, joinSeats } from "./join-seats-setup.ts";
 
 setDefaultTimeout(60_000);
 
-const { scratch, run, ok, until, join_ } = joinSeats();
+const { scratch, spawn, run, ok, until, join_ } = joinSeats();
 
 describe("joining without --as", () => {
   test("agents join under a random handle, nicknamed after what they run in, so two Claudes never clash and nothing is a RECLAIM", async () => {
@@ -75,6 +75,41 @@ describe("joining without --as", () => {
     cProcess.kill();
     expect(refused.code).toBe(1);
     expect(refused.err).toContain("in another session");
+  });
+
+  test("two Gemini CLIs in one checkout, both running, join as two agents: each is told apart by its own process", async () => {
+    const owner = scratch("own-gem");
+    const code = created(await ok(owner, ["create", "gems", "--as", "boss"]));
+    const h = scratch("gem");
+    const bin = scratch("gem-bin");
+    symlinkSync(process.execPath, join(bin, "gemini"));
+    const cli = join(bin, "gemini-cli.ts");
+    writeFileSync(cli, "const child = Bun.spawn(process.argv.slice(2), { stdout: 'inherit', stderr: 'inherit' });\nconsole.log(`joined: ${await child.exited}`);\nsetInterval(() => {}, 60_000);\n");
+    const running: Bun.Subprocess[] = [];
+    const gemini = async (): Promise<string> => {
+      const p = spawn(h, ["join", code, "--timeout", "40s"], { GEMINI_CLI: "1" }, h, undefined, [join(bin, "gemini"), cli]);
+      running.push(p);
+      let out = "";
+      void (async () => {
+        for await (const chunk of p.stdout) out += new TextDecoder().decode(chunk);
+      })();
+      await until(() => out.includes("waiting for the owner") || out.includes("joined: "), "the join asking, or ending");
+      if (out.includes("waiting for the owner")) {
+        let listed = "";
+        await until(async () => /\d{3}-\d{3}/.test((listed = await ok(owner, ["--as", "human", "requests"]))), "the request listed with its code");
+        await ok(owner, ["--as", "human", "approve", /(\d{3}-\d{3})/.exec(listed)![1]!, "--yes"]);
+      }
+      await until(() => out.includes("joined: "), "the join ending");
+      return out;
+    };
+    try {
+      const first = await gemini();
+      const second = await gemini();
+      expect(second).not.toContain("resumed");
+      expect(youAre(second)).not.toBe(youAre(first));
+    } finally {
+      for (const p of running) p.kill();
+    }
   });
 
   test("running the same join again while it waits asks once, under the same name", async () => {
