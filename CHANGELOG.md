@@ -2,6 +2,42 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.10.12 — 2026-10-30
+
+- **Channel: web/src/lib/channel moves into packages/channel (T494)** ([#1245](https://github.com/kiwi-init/channels/pull/1245))
+- **Feed: fold runs of events into one line (T620)** ([#1250](https://github.com/kiwi-init/channels/pull/1250))
+- **Markdown: mermaid diagrams render again (T635)** ([#1252](https://github.com/kiwi-init/channels/pull/1252))
+- **Messages: rows say what they are, with receipts and quotes (T641)** ([#1253](https://github.com/kiwi-init/channels/pull/1253))
+- **App: web/src/lib's last shared helpers move into packages/app (T650)** ([#1254](https://github.com/kiwi-init/channels/pull/1254))
+- **ui: receipts.ts takes roomOfMessage from @kiwi/app (T716)** ([#1258](https://github.com/kiwi-init/channels/pull/1258))
+- **Feed: compaction shows as a fold, with an Approve card (T663)** ([#1255](https://github.com/kiwi-init/channels/pull/1255))
+- **Retire web/: scripts, tests and CI build, smoke and shoot ui/ (T716)** ([#1259](https://github.com/kiwi-init/channels/pull/1259))
+- **Add new screenshot and demo explanation to README** ([#1260](https://github.com/kiwi-init/channels/pull/1260))
+- **Terminal: Your terminal opens a shell, not a tmux error (T701)** ([#1256](https://github.com/kiwi-init/channels/pull/1256))
+- **Devices: the owner can delegate admitting its own computer's agents (T677)** ([#1257](https://github.com/kiwi-init/channels/pull/1257))
+- **perf: perf-feel, perf-scale, perf-switch and perf-motion drive ui/ (T756)** ([#1263](https://github.com/kiwi-init/channels/pull/1263))
+- **CI: eb-env-check cleanup tolerates an exited process (T761)** ([#1262](https://github.com/kiwi-init/channels/pull/1262))
+- **Composer: clicking a stash brings it back in WebKit (T788)** ([#1264](https://github.com/kiwi-init/channels/pull/1264))
+- **Retire web/: delete it (T766)** ([#1261](https://github.com/kiwi-init/channels/pull/1261))
+- **Recovery: 24 words, the recovery chain and the vault format in core (T693)** ([#1267](https://github.com/kiwi-init/channels/pull/1267))
+- **DESIGN.md describes ui/, not web/ (T780)** ([#1268](https://github.com/kiwi-init/channels/pull/1268))
+- **ui: the first load drops from 952 KB to 739 KB, budget 760 KB (T814)** ([#1266](https://github.com/kiwi-init/channels/pull/1266))
+- **Devices: the daemon lets its own computer's agents in (T683)** ([#1265](https://github.com/kiwi-init/channels/pull/1265))
+- **Recovery: the relay keeps the recovery chain and vault versions (T823)** ([#1269](https://github.com/kiwi-init/channels/pull/1269))
+- **Icons: the app draws Hugeicons, and more of them (T524)** ([#1249](https://github.com/kiwi-init/channels/pull/1249))
+- **Loop: a messages session reads only what's for it and replies only where it's asked (#1270)** ([#1271](https://github.com/kiwi-init/channels/pull/1271))
+- **Sessions: new agents open only in Channels' own tmux; Terminal.app, Prefer and the tmux helpers go (T374)** ([#1248](https://github.com/kiwi-init/channels/pull/1248))
+- **Loop: a seat hold records its loop's process, and lapses when that process is gone (#1272)** ([#1273](https://github.com/kiwi-init/channels/pull/1273))
+- **Devices: computers trust your device list, not only the person key (T826)** ([#1277](https://github.com/kiwi-init/channels/pull/1277))
+- **Devices: the owner's app issues, renews and revokes delegations (T684)** ([#1275](https://github.com/kiwi-init/channels/pull/1275))
+- **desktop / mac: the size check's dmg is tried again when hdiutil flakes (T928)** ([#1279](https://github.com/kiwi-init/channels/pull/1279))
+- **Devices: the desktop signs with its device key (T898)** ([#1280](https://github.com/kiwi-init/channels/pull/1280))
+- **Test: the remote-launch flow logs each tmux call to its own file (T948)** ([#1281](https://github.com/kiwi-init/channels/pull/1281))
+- **Linux: the AppImage keeps its own desktop entry, and its menu start needs no FUSE (#1284, #1283)** ([#1285](https://github.com/kiwi-init/channels/pull/1285))
+- **Loop: a reviewer's loop takes a round open to anyone, naming itself first (#1244)** ([#1289](https://github.com/kiwi-init/channels/pull/1289))
+- **Linux: the Needs-you chime plays through WebAudio, so a missing GStreamer sink no longer crashes the window (#1278)** ([#1290](https://github.com/kiwi-init/channels/pull/1290))
+- **Daemons: an older daemon gives way to the app's copy when the CLI can't be kept (T1032)** ([#1293](https://github.com/kiwi-init/channels/pull/1293))
+
 ## 2026.10.11 — 2026-10-29
 
 - **Loop: the terminal's mode comes back after each session, so Ctrl-C stops the loop again (#1174)** ([#1207](https://github.com/kiwi-init/channels/pull/1207))
