@@ -21,7 +21,7 @@ import { OpenMember, type View } from "~/live/channel"
 import { iconUrl } from "~/live/icon"
 import { useNotesElsewhere } from "~/live/notes"
 import { messageOfLink } from "~/live/notify"
-import { openMessage } from "~/live/open-message"
+import { openFromNote } from "~/live/open-message"
 import { harnessChoices } from "~/live/harness-rows"
 import { OpenPending, pendingTitle } from "~/live/pending"
 import { ownPrefs, usePrefs } from "~/live/prefs"
@@ -152,8 +152,8 @@ function useOpenLinks(go: (g: Go) => void, ready: boolean) {
           const code = url ? joinCodeFromLink(url) : null
           if (!url || !code) return
           const seq = messageOfLink(url)
-          if (seq) openMessage(code, seq)
-          take.current(code)
+          if (seq) openFromNote(code, seq, null, take.current)
+          else take.current(code)
         })
         .catch(() => {})
     pick()

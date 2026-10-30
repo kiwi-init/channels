@@ -9,7 +9,7 @@ import { ops, watches } from "@kiwi/channel/channel-ops.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import { named as withNicknames } from "~/chat/linked"
 import { elsewhere, heardHeads, lastWorth, messageLink, noteBody, noteTitle, rootedPlace, rootOf, type NotePlace } from "~/live/notify"
-import { openMessage } from "~/live/open-message"
+import { openFromNote } from "~/live/open-message"
 import { ownPrefs } from "~/live/prefs"
 import { nicknamesOf } from "~/names"
 
@@ -20,8 +20,7 @@ function tell(title: string, body: string, code: string, seq: number): void {
   const note = new Notification(title, { body, silent: true })
   note.onclick = () => {
     window.focus()
-    openMessage(code, seq)
-    location.hash = encodeURIComponent(code)
+    openFromNote(code, seq, openNow, (c) => (location.hash = encodeURIComponent(c)))
     note.close()
   }
 }

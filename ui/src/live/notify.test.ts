@@ -4,7 +4,7 @@ import { fold, type Roster } from "@kiwi/core/state.ts"
 import { joinCodeFromLink } from "@kiwi/app/deep-link.ts"
 import { encodeJoinCode, newRoomId } from "@kiwi/core/crypto.ts"
 import { channelLink, drawerNews, heardHeads, lastWorth, messageLink, messageOfLink, noteBody, noteTitle, rootedPlace, rootOf, wirePlace, worthTelling } from "~/live/notify"
-import { findWanted } from "~/live/open-message"
+import { dropMessage, findWanted, openFromNote, wantedNow } from "~/live/open-message"
 import type { Message } from "~/model"
 
 const msg = (over: Partial<Wire>): Wire => ({ v: 1, id: "1", seq: 1, from: "atlas", kind: "msg", body: "hi", ts: 1, rts: 1, sigOk: true, sig: "", ...over }) as Wire
@@ -198,5 +198,25 @@ describe("what a notification says and opens (#1351)", () => {
     expect(placed(toClaim)).toEqual({ kind: "task", task: 3 })
     expect(state.placeOf.get(9)).toEqual({ kind: "main" })
     expect(placed(toPlain)).toEqual({ kind: "room", name: "general" })
+  })
+
+  test("a click for the channel already open leaves it in place, so the thread it opens stays; another channel is opened first", () => {
+    const steps: string[] = []
+    const show = (code: string) => {
+      steps.push(`show ${code} (wanted ${wantedNow()?.seq ?? "none"})`)
+    }
+    const clear = () => {
+      const was = wantedNow()
+      if (was) dropMessage(was)
+    }
+    clear()
+    openFromNote("mc2-open", 42, "mc2-open", show)
+    expect(steps).toEqual([])
+    expect(wantedNow()).toEqual({ code: "mc2-open", seq: 42 })
+    clear()
+    openFromNote("mc2-other", 7, "mc2-open", show)
+    expect(steps).toEqual(["show mc2-other (wanted none)"])
+    expect(wantedNow()).toEqual({ code: "mc2-other", seq: 7 })
+    clear()
   })
 })

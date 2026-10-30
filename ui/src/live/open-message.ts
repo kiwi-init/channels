@@ -21,10 +21,17 @@ const subscribe = (listener: () => void): (() => void) => {
   return () => void listeners.delete(listener)
 }
 
-export function openMessage(code: string, seq: number): void {
+function openMessage(code: string, seq: number): void {
   wanted = { code, seq }
   changed()
 }
+
+export function openFromNote(code: string, seq: number, open: string | null, showChannel: (code: string) => void): void {
+  if (code !== open) showChannel(code)
+  openMessage(code, seq)
+}
+
+export const wantedNow = (): Wanted | null => wanted
 
 export function dropMessage(was: Wanted): void {
   if (wanted !== was) return
