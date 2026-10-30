@@ -19,19 +19,20 @@ export function ThreadPanel({ channel, seq, focus }: { channel: Channel; seq: nu
   const replying = useMemo((): Replying => ({ to: reply?.seq === seq ? reply.to : null, set: (to) => setReply(to ? { seq, to } : null) }), [reply, seq])
   const { scroller, content, remember, toBottom, unstick } = useStick()
   const last = replies.at(-1)?.seq
-  const shownLast = useRef(last)
+  const shown = useRef({ seq, last })
   useLayoutEffect(() => {
     if (focus !== undefined) {
       unstick()
-      if (jumpTo(content.current, focus)) return
+      if (jumpTo(content.current, focus, "instant")) return
     }
     toBottom(false)
   }, [seq, focus, content, toBottom, unstick])
   useLayoutEffect(() => {
-    if (last === shownLast.current) return
-    shownLast.current = last
+    const was = shown.current
+    shown.current = { seq, last }
+    if (was.seq !== seq || was.last === last) return
     if (last !== undefined && replies.at(-1)?.from === channel.you) toBottom(false)
-  }, [last, replies, channel.you, toBottom])
+  }, [seq, last, replies, channel.you, toBottom])
   const onQuote = useCallback((target: number) => void jumpTo(content.current, target), [content])
 
   if (!root)

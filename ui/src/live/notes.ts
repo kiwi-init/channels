@@ -8,8 +8,7 @@ import { type ChannelRow } from "@kiwi/channel/list.ts"
 import { ops, watches } from "@kiwi/channel/channel-ops.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import { named as withNicknames } from "~/chat/linked"
-import { elsewhere, heardHeads, lastWorth, messageLink, noteBody, noteTitle, rootedPlace, rootOf, type NotePlace } from "~/live/notify"
-import { openFromNote } from "~/live/open-message"
+import { elsewhere, heardHeads, lastWorth, messageHash, messageLink, noteBody, noteTitle, rootedPlace, rootOf, type NotePlace } from "~/live/notify"
 import { ownPrefs } from "~/live/prefs"
 import { nicknamesOf } from "~/names"
 
@@ -20,7 +19,7 @@ function tell(title: string, body: string, code: string, seq: number): void {
   const note = new Notification(title, { body, silent: true })
   note.onclick = () => {
     window.focus()
-    openFromNote(code, seq, openNow, (c) => (location.hash = encodeURIComponent(c)))
+    location.hash = messageHash(code, seq)
     note.close()
   }
 }

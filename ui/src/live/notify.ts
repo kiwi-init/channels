@@ -29,6 +29,13 @@ export function messageOfLink(url: string): number | null {
   return Number.isSafeInteger(seq) && seq > 0 ? seq : null
 }
 
+export const messageHash = (code: string, seq: number): string => `#${encodeURIComponent(code)}?m=${seq}`
+
+export function hashTarget(hash: string): { hash: string; seq: number | null } {
+  const at = hash.indexOf("?")
+  return at < 0 ? { hash, seq: null } : { hash: hash.slice(0, at), seq: messageOfLink(hash.slice(at)) }
+}
+
 export type NotePlace = { kind: "room"; name: string } | { kind: "task"; task: number } | { kind: "dm" } | { kind: "thread" }
 
 export const wirePlace = (m: Pick<Wire, "room" | "task" | "dm">): NotePlace =>

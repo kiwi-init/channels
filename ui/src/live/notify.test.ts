@@ -3,7 +3,7 @@ import type { Message as Wire } from "@kiwi/core/protocol.ts"
 import { fold, type Roster } from "@kiwi/core/state.ts"
 import { joinCodeFromLink } from "@kiwi/app/deep-link.ts"
 import { encodeJoinCode, newRoomId } from "@kiwi/core/crypto.ts"
-import { channelLink, drawerNews, heardHeads, lastWorth, messageLink, messageOfLink, noteBody, noteTitle, rootedPlace, rootOf, wirePlace, worthTelling } from "~/live/notify"
+import { channelLink, drawerNews, hashTarget, heardHeads, lastWorth, messageHash, messageLink, messageOfLink, noteBody, noteTitle, rootedPlace, rootOf, wirePlace, worthTelling } from "~/live/notify"
 import { dropMessage, findWanted, openFromNote, wantedNow } from "~/live/open-message"
 import type { Message } from "~/model"
 
@@ -200,23 +200,24 @@ describe("what a notification says and opens (#1351)", () => {
     expect(placed(toPlain)).toEqual({ kind: "room", name: "general" })
   })
 
-  test("a click for the channel already open leaves it in place, so the thread it opens stays; another channel is opened first", () => {
+  test("a click always shows the channel first, from Settings or the same channel too, and only then asks for the message", () => {
     const steps: string[] = []
     const show = (code: string) => {
       steps.push(`show ${code} (wanted ${wantedNow()?.seq ?? "none"})`)
     }
-    const clear = () => {
-      const was = wantedNow()
-      if (was) dropMessage(was)
-    }
-    clear()
-    openFromNote("mc2-open", 42, "mc2-open", show)
-    expect(steps).toEqual([])
-    expect(wantedNow()).toEqual({ code: "mc2-open", seq: 42 })
-    clear()
-    openFromNote("mc2-other", 7, "mc2-open", show)
-    expect(steps).toEqual(["show mc2-other (wanted none)"])
-    expect(wantedNow()).toEqual({ code: "mc2-other", seq: 7 })
-    clear()
+    const was = wantedNow()
+    if (was) dropMessage(was)
+    openFromNote("mc2-abc", 42, show)
+    expect(steps).toEqual(["show mc2-abc (wanted none)"])
+    expect(wantedNow()).toEqual({ code: "mc2-abc", seq: 42 })
+    const now = wantedNow()
+    if (now) dropMessage(now)
+  })
+
+  test("the browser's hash carries the message the way the desktop link does", () => {
+    expect(messageHash("mc2-abc", 42)).toBe("#mc2-abc?m=42")
+    expect(hashTarget(messageHash("mc2-abc", 42))).toEqual({ hash: "#mc2-abc", seq: 42 })
+    expect(hashTarget("#mc2-abc")).toEqual({ hash: "#mc2-abc", seq: null })
+    expect(hashTarget("#mc2-abc?m=x")).toEqual({ hash: "#mc2-abc", seq: null })
   })
 })

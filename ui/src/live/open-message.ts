@@ -26,8 +26,8 @@ function openMessage(code: string, seq: number): void {
   changed()
 }
 
-export function openFromNote(code: string, seq: number, open: string | null, showChannel: (code: string) => void): void {
-  if (code !== open) showChannel(code)
+export function openFromNote(code: string, seq: number, showChannel: (code: string) => void): void {
+  showChannel(code)
   openMessage(code, seq)
 }
 
