@@ -15,7 +15,6 @@ import {
   Copy01Icon,
   Download01Icon,
   Folder01Icon,
-  GithubIcon,
   GitPullRequestIcon,
   HashtagIcon,
   Home01Icon,
@@ -64,7 +63,6 @@ const GLYPHS = {
   copy: Copy01Icon,
   folder: Folder01Icon,
   pr: GitPullRequestIcon,
-  github: GithubIcon,
   hash: HashtagIcon,
   home: Home01Icon,
   at: AtIcon,
@@ -91,7 +89,11 @@ export type IconName = keyof typeof GLYPHS
 const STROKE = 1.8
 
 export function Icon({ name, size = 16, label }: { name: IconName; size?: number; label?: string }) {
-  const glyph: Glyph = GLYPHS[name]
+  return <GlyphIcon glyph={GLYPHS[name]} size={size} label={label} />
+}
+
+/** An icon from its glyph, for a screen that loads later and brings its own (the GitHub mark on sign-in). */
+export function GlyphIcon({ glyph, size = 16, label }: { glyph: Glyph; size?: number; label?: string | undefined }) {
   return (
     <svg className="icon" width={size} height={size} viewBox="0 0 24 24" fill="none" role={label ? "img" : undefined} aria-label={label} aria-hidden={label ? undefined : true}>
       {glyph.map(([tag, attrs], i) => createElement(tag, { ...attrs, ...("strokeWidth" in attrs ? { strokeWidth: STROKE } : {}), key: i }))}
