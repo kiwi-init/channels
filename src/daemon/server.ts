@@ -20,7 +20,7 @@ import { readRexInto } from "./rex-reads.ts";
 import type { RexActivity, RexPlace, SeatPlace, TerminalPlugin } from "../terminals/plugin.ts";
 import { helpersOn, marking, remoteBypassOn, terminalPlugin } from "../terminals/registry.ts";
 import { pruneHookFiles } from "../hooks/delivered.ts";
-import { launchFolders, seatFolders } from "../launch/folders.ts";
+import { launchFolders, remoteFolders, seatFolders } from "../launch/folders.ts";
 import { hooksRows } from "../hooks/install/extra.ts";
 import { computerSettings } from "./settings.ts";
 import { harnessInventory } from "../launch/harnesses.ts";
@@ -925,7 +925,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     settled: () => relayForget,
     run: remoteRunner({
       inventory: () => harnessInventory(),
-      folders: (room) => launchFolders(loadConfig(), room),
+      folders: (room) => remoteFolders(loadConfig(), room),
       launch: (req) => launchAgent(req, { hosted }),
       bypass: () => remoteBypassOn(loadConfig()),
       settings: async () => computerSettings(loadConfig(), hooksRows()),

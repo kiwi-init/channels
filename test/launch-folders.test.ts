@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, utimesSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ChannelConfig, Config } from "../src/config.ts";
-import { gitRepos, launchFolders, seatFolders, withLaunchRoot, withoutLaunchRoot } from "../src/launch/folders.ts";
+import { gitRepos, launchFolders, remoteFolders, seatFolders, withLaunchRoot, withoutLaunchRoot } from "../src/launch/folders.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "kiwi-folders-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -71,6 +71,13 @@ describe("the folders an agent can be started in on a computer none has worked o
     const added = folder("added");
     const cfg: Config = { channels: { dev: channel("room-dev") }, bindings: { [deep]: { alias: "dev", as: "otter", seen: 5 } }, launchRoots: [added, join(dir, "gone-root")] };
     expect(launchFolders(cfg, "room-dev", home)).toEqual([deep, added, worktree, join(home, "outside/real"), shallow]);
+  });
+
+  test("another device starts agents only where seats work and in the folders added by hand, never in the home repos (#1303)", () => {
+    const added = folder("added");
+    const cfg: Config = { channels: { dev: channel("room-dev") }, bindings: { [deep]: { alias: "dev", as: "otter", seen: 5 } }, launchRoots: [added, join(dir, "gone-root")] };
+    expect(remoteFolders(cfg, "room-dev")).toEqual([deep, added]);
+    expect(remoteFolders({ channels: {} })).toEqual([]);
   });
 
   test("a folder is added by its real path, once, never the whole disk or something that isn't a folder; removing it by either path", () => {

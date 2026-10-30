@@ -198,7 +198,7 @@ export function AgentsSection() {
           </Group>
           <Group
             title="Folders agents can start in"
-            hint="New agent, here or from your phone, can start one in these folders and the folders inside them, as well as where agents on this computer already work and your home folder's git repos."
+            hint="New agent, here or from your phone, can start one in these folders and the folders inside them, and where agents on this computer already work. Here, it can also start one in your home folder's git repos."
           >
             {starts.folders.map((f) => (
               <div key={f} className="set-row set-folder">
