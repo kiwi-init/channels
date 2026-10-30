@@ -473,6 +473,7 @@ export function startRelay(
         people.query("INSERT OR REPLACE INTO account_adoptions (user, from_user, id, state) VALUES (?, ?, ?, 'abandoned')").run(to, from, id);
         return "abandoned" as const;
       })(),
+    adoptedFrom: async (to) => (people.query("SELECT from_user FROM account_adoptions WHERE user = ? AND state = 'adopted'").get(to) as { from_user: string } | null)?.from_user ?? null,
     rooms: async (from) =>
       listOf(from)
         .filter((e) => e.owner && e.code !== "")
@@ -540,7 +541,7 @@ export function startRelay(
           const frozen = home.frozen ? frozenWrite(req) : null;
           if (frozen) return frozen;
           const account = await onAccountHttp(req, accounts, home.user, {
-            ...(home.user !== user ? { formerly: user } : {}),
+            ...(home.formerly ? { formerly: home.formerly } : {}),
             now: clock,
             perAccount: (key) => allowPerMinute(key, ACCOUNT_ASKS_PER_MINUTE, clock()),
             ...(ip ? { perAddress: () => allowPerMinute(`account-ip:${instance}:${ip}`, MACHINE_WRITES_PER_ADDRESS, clock()) } : {}),

@@ -38,6 +38,7 @@ export interface MoveStore {
   holds(to: string): Promise<boolean>;
   adopt(to: string, from: string, id: string, rows: Rows): Promise<Adoption>;
   abandon(to: string, from: string, id: string): Promise<Exclude<Adoption, "taken">>;
+  adoptedFrom(to: string): Promise<string | null>;
   rooms(from: string): Promise<string[]>;
   reown(room: string, from: string, to: string): Promise<void>;
 }
@@ -61,10 +62,11 @@ async function current(store: MoveStore, from: string, now: number): Promise<Mov
   return state;
 }
 
-export async function accountHome(store: MoveStore, user: string, now: number): Promise<{ user: string; frozen: boolean }> {
+export async function accountHome(store: MoveStore, user: string, now: number): Promise<{ user: string; frozen: boolean; formerly: string | null }> {
+  if (user.startsWith("github_")) return { user, frozen: false, formerly: await store.adoptedFrom(user) };
   const state = await current(store, user, now);
-  if (state && "moved" in state) return { user: state.moved, frozen: false };
-  return { user, frozen: state !== null };
+  if (state && "moved" in state) return { user: state.moved, frozen: false, formerly: user };
+  return { user, frozen: state !== null, formerly: null };
 }
 
 export function movedHuman(human: HumanAuth | null, movedTo: (user: string) => Promise<string | null>): HumanAuth | null {

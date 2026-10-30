@@ -140,6 +140,9 @@ describe("moving an account from a WorkOS id to a GitHub id (T261)", () => {
     const next = await grown(longer, desk, await device("tablet"));
     expect((await call(p.old, p.github, desk, "PUT", "/v1/account", { links: next })).status).toBe(204);
     expect((await view(p.gh)).links).toEqual(next);
+    const last = await grown(next, desk, await device("watch"));
+    expect((await call(p.gh, p.user, desk, "PUT", "/v1/account", { links: last })).status).toBe(204);
+    expect((await view(p.gh)).links).toEqual(last);
   });
 
   test("running it again changes nothing and answers the same", async () => {
@@ -286,6 +289,7 @@ class Accounts {
         this.adoptions.set(`${to}<${from}`, { id, state: "abandoned" });
         return "abandoned";
       },
+      adoptedFrom: async (to) => [...this.adoptions].find(([k, v]) => k.startsWith(`${to}<`) && v.state === "adopted")?.[0].slice(to.length + 1) ?? null,
       rooms: async (from) => [...(this.owned.get(from) ?? [])],
       reown: async (room, from, to) => {
         this.trip("reown");
@@ -355,8 +359,8 @@ describe("a move that fails partway (T261)", () => {
     expect((await run(a, t)).status).toBe(500);
     const stale = a.moves.get(FROM)!.id;
     const { accountHome } = await import("../src/relay/move.ts");
-    expect(await accountHome(a.store(), FROM, t + FREEZE_MS - 1)).toEqual({ user: FROM, frozen: true });
-    expect(await accountHome(a.store(), FROM, t + FREEZE_MS)).toEqual({ user: FROM, frozen: false });
+    expect(await accountHome(a.store(), FROM, t + FREEZE_MS - 1)).toEqual({ user: FROM, frozen: true, formerly: null });
+    expect(await accountHome(a.store(), FROM, t + FREEZE_MS)).toEqual({ user: FROM, frozen: false, formerly: null });
     expect(a.moves.has(FROM)).toBe(false);
     a.fail.clear();
     expect(await a.store().adopt(TO, FROM, stale, a.data.get(FROM)!)).toBe("abandoned");
@@ -372,7 +376,7 @@ describe("a move that fails partway (T261)", () => {
     expect(a.data.get(TO)).toEqual(a.data.get(FROM)!);
     a.fail.clear();
     const { accountHome } = await import("../src/relay/move.ts");
-    expect(await accountHome(a.store(), FROM, t + FREEZE_MS)).toEqual({ user: TO, frozen: false });
+    expect(await accountHome(a.store(), FROM, t + FREEZE_MS)).toEqual({ user: TO, frozen: false, formerly: FROM });
     expect(a.moves.get(FROM)).toMatchObject({ done: true });
   });
 

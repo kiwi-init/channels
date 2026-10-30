@@ -610,6 +610,7 @@ export class Account extends DurableObject<Env> {
       holds: (to) => at(to).taken(),
       adopt: (to, from, id, rows) => at(to).adopt(from, id, rows),
       abandon: (to, from, id) => at(to).abandon(from, id),
+      adoptedFrom: async () => (sql.exec("SELECT from_user FROM adoptions WHERE state = 'adopted'").toArray()[0] as { from_user: string } | undefined)?.from_user ?? null,
       rooms: async (from) =>
         ((await (await this.env.OWNERS.get(this.env.OWNERS.idFromName(from)).fetch("https://owners/")).json()) as DirectoryEntry[]).filter((e) => e.owner && e.code !== "").map((e) => e.room),
       reown: (room, from, to) => this.env.CHANNELS.get(this.env.CHANNELS.idFromName(room)).reown(room, from, to),
@@ -682,6 +683,7 @@ export class Account extends DurableObject<Env> {
         if (home.user !== user) return await this.env.ACCOUNTS.get(this.env.ACCOUNTS.idFromName(home.user)).serve(home.user, req, user);
         const frozen = home.frozen ? frozenWrite(req) : null;
         if (frozen) return frozen;
+        formerly = home.formerly ?? undefined;
       }
       const out = await onAccountHttp(req, this.store(), user, { perAccount: (key) => allowPerMinute(key, ACCOUNT_ASKS_PER_MINUTE), ...(formerly ? { formerly } : {}) });
       return out ?? withCors(errorResponse(new NotFound({ message: "not found" })));
