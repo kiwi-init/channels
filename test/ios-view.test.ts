@@ -94,3 +94,41 @@ describe("the phone's room view", () => {
     expect(room.latestIn).toBe("main");
   });
 });
+
+describe("names in the phone's room view (#1251)", () => {
+  const named = (log: Message[]): RoomView => {
+    const people: Roster = roster.map((r) => (r.name === "dev" ? { ...r, display: "Earnest Heron" } : r));
+    return roomView({
+      code: "code",
+      title: "channels-dev",
+      icon: null,
+      me: "jow",
+      isOwner: true,
+      connection: "live",
+      gone: null,
+      error: null,
+      head: log.length,
+      whole: true,
+      messages: log,
+      state: fold(log, people, T0 + log.length * 60_000),
+      online: new Map(),
+      place: "main",
+    });
+  };
+
+  test("an @handle in a message, its quote and the channel's latest line reads as the nickname; code keeps the handle", async () => {
+    const room = named(await signedLog([say("lead", "In review with @dev, see `@dev` and\n\n```\n@dev\n```"), say("dev", "on it"), say("jow", "ok", { re: [1] }), say("jow", "@dev thanks")]));
+    expect(room.messages[0]?.body).toBe("In review with @Earnest Heron, see `@dev` and\n\n```\n@dev\n```");
+    expect(room.messages[2]?.quote?.words).toBe("In review with @Earnest Heron, see `@dev` and ``` @dev ```");
+    expect(room.latest?.body).toBe("@Earnest Heron thanks");
+  });
+
+  test("an ask's text reads as the nickname, while its choices and the answer that picks one keep their text, since the phone sends a choice back as it is", async () => {
+    const room = named(await signedLog([say("lead", "Who takes it, @dev?", { kind: "ask", to: ["jow"], choices: ["@dev", "nobody"] }), say("jow", "@dev", { re: [1] })]));
+    expect(room.asks).toEqual([]);
+    expect(room.messages[0]).toMatchObject({ body: "Who takes it, @Earnest Heron?", choices: ["@dev", "nobody"], chosen: { choice: "@dev", by: "jow" } });
+    expect(room.messages[1]?.body).toBe("@dev");
+    const open = named(await signedLog([ev("jow", { op: "task.add", title: "ship it", owner: "lead" }), say("lead", "Ping @dev?", { kind: "ask", to: ["jow"], choices: ["yes"], holds: [1] })]));
+    expect(open.asks[0]).toMatchObject({ body: "Ping @Earnest Heron?", choices: ["yes"] });
+  });
+});
