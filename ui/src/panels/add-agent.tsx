@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react"
 import { HARNESS_INSTALL, isKnownHarness } from "@kiwi/core/harnesses.ts"
 
 import { Avatar, cx } from "~/kit/bits"
+import { Track } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import type { App, Channel, Computer, ComputerChoices, Harness, NewAgent } from "~/model"
@@ -121,14 +122,14 @@ export function AddAgentPanel({ channel }: { channel: Channel }) {
     <>
       <PanelHead title="Add agent" />
       <div className="add-way">
-        <div className="seg" role="group" aria-label="How to add it">
+        <Track className="seg" role="group" aria-label="How to add it">
           <button type="button" aria-pressed={way === "here"} onClick={() => setWay("here")}>
             Start one here
           </button>
           <button type="button" aria-pressed={way === "command"} onClick={() => setWay("command")}>
             Run the command
           </button>
-        </div>
+        </Track>
       </div>
       {way === "here" ? <StartHere channel={channel} name={name} setName={setName} taken={taken} onStart={start} /> : <RunCommand channel={channel} name={name} setName={setName} taken={taken} />}
     </>
@@ -363,7 +364,7 @@ function StartHere({ channel, name, setName, taken, onStart }: NameProps & { onS
           <span className="field-label" id={`${id}-mode`}>
             Permission mode
           </span>
-          <div className="seg add-seg" role="group" aria-labelledby={`${id}-mode`}>
+          <Track className="seg add-seg" role="group" aria-labelledby={`${id}-mode`}>
             {MODES.map((m) => (
               <button
                 key={m.id}
@@ -377,7 +378,7 @@ function StartHere({ channel, name, setName, taken, onStart }: NameProps & { onS
                 {m.label}
               </button>
             ))}
-          </div>
+          </Track>
           {mode === "dont-ask" ? (
             <div className="add-warn">
               <p>

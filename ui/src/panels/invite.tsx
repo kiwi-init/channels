@@ -2,6 +2,7 @@ import { Fragment, useEffect, useState } from "react"
 
 import "~/styles/people-add.css"
 import { cx, Heading, Toggle } from "~/kit/bits"
+import { Track } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
 import type { Channel } from "~/model"
 import { useApp } from "~/nav"
@@ -106,13 +107,13 @@ export function InvitePanel({ channel }: { channel: Channel }) {
         {channel.youOwn && (
           <section className="panel-section" aria-label="New people can">
             <Heading>New people can</Heading>
-            <div className="seg invite-seg" role="group" aria-label="New people can">
+            <Track className="seg invite-seg" role="group" aria-label="New people can">
               {CAN.map((c) => (
                 <button key={c.id} type="button" aria-pressed={can === c.id} onClick={() => app.actions.setNewMembers(channel.code, c.id)}>
                   {c.label}
                 </button>
               ))}
-            </div>
+            </Track>
             <p className="invite-note">{CAN.find((c) => c.id === can)?.says}</p>
             {POWERS.map((power) => (
               <div key={power.id} className="invite-power">

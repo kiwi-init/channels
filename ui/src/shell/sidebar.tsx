@@ -3,6 +3,7 @@ import { roomProblem } from "@kiwi/app/rooms.ts"
 import { liveOf, restOf } from "~/doing"
 
 import { Avatar, Count, cx, Heading, IconButton, STATUS_WORDS } from "~/kit/bits"
+import { useGlide } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import { memberOf, type Channel, type Person } from "~/model"
@@ -20,8 +21,9 @@ export function Sidebar({ channel }: { channel: Channel }) {
   const [openTheirs, setOpenTheirs] = useState(false)
   const onTheirs = onChat && nav.where.kind === "theirs"
   const theirsShown = openTheirs || onTheirs
+  const sideRef = useGlide<HTMLDivElement>(".side-row.is-on")
   return (
-    <div className="side">
+    <div ref={sideRef} className="side">
       <section aria-label="Rooms">
         <Heading action={channel.youOwn ? <IconButton icon="plus" label="New room" onClick={() => setAdding(true)} /> : undefined}>Rooms</Heading>
         <ul>
@@ -192,20 +194,22 @@ function toneOf(p: Person, channel: Channel): string | false {
 function Member({ person, channel }: { person: Person; channel: Channel }) {
   const { nav, go } = useApp()
   const on = nav.panel?.kind === "person" && nav.panel.name === person.name
+  const tone = toneOf(person, channel)
+  const quiet = !tone && person.presence === "online"
   return (
     <li>
       <button
         type="button"
-        className={cx("side-member", on && "is-on", person.presence === "offline" && "is-off")}
+        className={cx("side-member", quiet && "is-quiet", on && "is-on", person.presence === "offline" && "is-off")}
         onClick={() => go({ to: "panel", panel: on ? null : { kind: "person", name: person.name } })}
       >
         <Avatar person={person} size="sm" pip />
         <span className="side-name">
           {shown(person)}
           {person.you && <span className="side-role"> you</span>}
-          {person.role && <span className="side-role"> {person.role}</span>}
+          {person.role && person.role.toLowerCase() !== shown(person).toLowerCase() && <span className="side-role"> {person.role}</span>}
         </span>
-        <span className={cx("side-status", toneOf(person, channel))}>{statusOf(person, channel)}</span>
+        {!quiet && <span className={cx("side-status", tone)}>{statusOf(person, channel)}</span>}
       </button>
     </li>
   )
