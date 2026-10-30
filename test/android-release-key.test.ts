@@ -43,6 +43,12 @@ describe("the Android release build never signs with the public debug key", () =
     expect(release).toContain('System.getenv("KIWI_ANDROID_KEY_ALIAS")');
   });
 
+  test("an empty environment variable counts as no keystore, so a repo without the secrets builds unsigned", () => {
+    const release = block(block(gradle, "signingConfigs {"), 'create("release") {');
+    expect(release.match(/\?\.ifBlank \{ null \}/g)).toHaveLength(4);
+    expect(release).toContain('keyPassword = System.getenv("KIWI_ANDROID_KEY_PASSWORD")?.ifBlank { null } ?: storePassword');
+  });
+
   test("CI signs with the repo's secret keystore or leaves the APK unsigned, and keeps both names", () => {
     const at = ci.indexOf("  android:");
     if (at < 0) throw new Error("no android job in ci.yml");

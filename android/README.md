@@ -74,6 +74,19 @@ cd android && ./gradlew assembleRelease     # app/build/outputs/apk/release/app-
 CI draws the same screens in `android / build` and keeps them as the `android-screens` artifact,
 so a change to a screen can be looked at without a phone.
 
+To sign your local release build, point the same variables CI uses at a keystore (an unset or
+empty variable counts as absent; the three below must come together):
+
+```bash
+KIWI_ANDROID_KEYSTORE=/path/to/kiwi-release.p12 \
+KIWI_ANDROID_STORE_PASSWORD=... \
+KIWI_ANDROID_KEY_ALIAS=kiwi \
+./gradlew assembleRelease
+```
+
+`KIWI_ANDROID_KEY_PASSWORD` is optional and defaults to the store password, which is the usual
+shape of a PKCS12 keystore; a JKS keystore is recognized by its extension.
+
 ## A channel to try it on
 
 `bun ios/scripts/dev-channel.ts --host <your Mac's LAN IP>` starts a relay with dev sign-in and a
