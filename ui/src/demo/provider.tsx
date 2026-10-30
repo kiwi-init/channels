@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react"
 
+import { inviteLine } from "@kiwi/app/join-line.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
 import { HANDOFF_DONE } from "@kiwi/core/protocol.ts"
 
@@ -540,14 +541,12 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       addRepo: (code, repo) => edit(code, (c) => ({ ...c, repos: [...new Set([...c.repos, repo])] })),
       removeRepo: (code, repo) => edit(code, (c) => ({ ...c, repos: c.repos.filter((r) => r !== repo) })),
       joinCommand: async (code, as) =>
-        [
-          `kiwi join ${code}-x7Qp2LmR`,
-          as.nick && `--nick ${as.nick}`,
-          as.persona &&
-            "--persona eyJyb29tIjoicjdLcTJtWGEiLCJwaW4iOnsiaWQiOiJsZWFkIiwibmFtZSI6IkxlYWQiLCJoYXNoIjoiOGYzYTYxYzI5ZDRlMGI3MWE1YzhmMDNkMmU5YjZhNDcifSwicGsiOiJRbTl2TFhCckxXVjRZVzF3YkdVdFptOXlMV1JsYlc4dGIyNXNlUzB3TVEiLCJzaWciOiJjMmxuYm1GMGRYSmxMV1Y0WVcxd2JHVXRabTl5TFdSbGJXOHRiMjVzZVMxdWIzUXRjbVZoYkMwd01USXpORFUyTnpnNVlXSmpaR1ZtIn0",
-        ]
-          .filter(Boolean)
-          .join(" "),
+        inviteLine("https://channels.kiwiinit.com", `${code}-x7Qp2LmR`, {
+          ...(as.nick ? { nick: as.nick } : {}),
+          persona: as.persona
+            ? "eyJyb29tIjoicjdLcTJtWGEiLCJwaW4iOnsiaWQiOiJsZWFkIiwibmFtZSI6IkxlYWQiLCJoYXNoIjoiOGYzYTYxYzI5ZDRlMGI3MWE1YzhmMDNkMmU5YjZhNDcifSwicGsiOiJRbTl2TFhCckxXVjRZVzF3YkdVdFptOXlMV1JsYlc4dGIyNXNlUzB3TVEiLCJzaWciOiJjMmxuYm1GMGRYSmxMV1Y0WVcxd2JHVXRabTl5TFdSbGJXOHRiMjVzZVMxdWIzUXRjbVZoYkMwd01USXpORFUyTnpnNVlXSmpaR1ZtIn0"
+            : null,
+        }),
       inviteLink: async (code) => `https://channels.kiwiinit.com/#${code}-x7Qp2LmR`,
       leaveChannel: (code) => setState((s) => ({ ...s, tiles: s.tiles.filter((t) => t.code !== code) })),
       newChannel: async (title) => {
