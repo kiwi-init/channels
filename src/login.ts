@@ -3,10 +3,10 @@ import { accountClient } from "@kiwi/core/account.ts";
 import { askToEnroll, enrollDigits, enrollMailbox, ENROLL_TTL_MS, readEnrollGrant, type Enrollment } from "@kiwi/core/enroll.ts";
 import { workosDeviceSignIn, type DeviceSignIn } from "@kiwi/core/workos.ts";
 import { home } from "./config.ts";
-import { ensureMachine, PairError, unpairedMachine, type PairedMachine } from "./daemon/pair.ts";
+import { ensureMachine, PairError, type PairedMachine } from "./daemon/pair.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
-import { personFingerprint } from "@kiwi/core/person.ts";
-import { saveMachine, type EnrolledDevice } from "./machine.ts";
+import { personFingerprint } from "@kiwi/core/fingerprint.ts";
+import { newMachine, saveMachine, type EnrolledDevice } from "./machine.ts";
 
 const OS_NAMES: Partial<Record<NodeJS.Platform, string>> = { darwin: "macOS", linux: "Linux", win32: "Windows" };
 
@@ -48,12 +48,13 @@ export async function loginComputer(o: LoginOpts): Promise<EnrolledDevice> {
   const say = o.say ?? ((line: string) => process.stdout.write(line + "\n"));
   const everyMs = o.everyMs ?? 1_500;
   const until = Date.now() + (o.timeoutMs ?? ENROLL_TTL_MS);
-  const m: PairedMachine = await ensureMachine(o.relay);
-  const already = m.device?.person ?? m.person;
+  const here: PairedMachine = await ensureMachine(o.relay);
+  const already = here.device?.person ?? here.person ?? (here.cert ? { pk: here.cert.pk, name: "" } : null);
   if (already)
     throw new PairError(
-      `"${m.label}" is already one of ${inlineText(already.name, 60) || "someone"}'s devices (key ${await personFingerprint(already.pk)}): run kiwi unpair first, which gives it a new key, then kiwi login`,
+      `"${here.label}" is already one of ${inlineText(already.name, 60) || "someone"}'s devices (key ${await personFingerprint(already.pk)}): run kiwi unpair first, then kiwi login`,
     );
+  const m: PairedMachine = { ...(await newMachine(o.relay)), label: here.label };
   const token = await signIn(o, say);
   const client = accountClient(o.relay, async () => token, m.identity, o.fetchImpl);
   const { ask, nonce } = await askToEnroll(m.identity, { label: m.label, os: OS_NAMES[process.platform] ?? process.platform, as: "computer" });
@@ -90,9 +91,8 @@ export async function loginComputer(o: LoginOpts): Promise<EnrolledDevice> {
       const fingerprint = await personFingerprint(grant.person.pk);
       if (!(await o.confirm({ name, fingerprint }))) {
         await mailbox.drop().catch(() => {});
-        saveMachine(await unpairedMachine(m));
         throw new PairError(
-          `kept nothing, and "${m.label}" took a new key, so kiwi login can ask again. Your app may list it once more under the old key: remove that entry. If your app never showed ${fingerprint}, someone else answered this computer's ask`,
+          `kept nothing, so kiwi login can ask again with a new key. Your app may list "${m.label}" once more under this one: remove that entry. If your app never showed ${fingerprint}, someone else answered this computer's ask`,
         );
       }
       const device: EnrolledDevice = { person: grant.person, links: grant.links };

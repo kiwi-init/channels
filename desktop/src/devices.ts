@@ -2,7 +2,8 @@ import { accountClient, type AccountClient } from "@kiwi/core/account.ts";
 import { approvingDevice, certUntil, dueForRenewal, listedComputer, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceLinkBody, type DeviceList } from "@kiwi/core/devices.ts";
 import { askToEnroll, enrollDigits, enrollMailbox, enrollNonce, readEnrollGrant, revealMatches, type EnrollGrant, type Enrollment } from "@kiwi/core/enroll.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
-import { certifyMachine, personFingerprint } from "@kiwi/core/person.ts";
+import { personFingerprint } from "@kiwi/core/fingerprint.ts";
+import { certifyMachine } from "@kiwi/core/person.ts";
 import type { ComputerView, DeviceNewsView, DeviceView, EnrollAskView, EnrollConfirmView, EnrollStatusView, PublicPerson } from "./bridge.ts";
 
 const TRIES = 3;

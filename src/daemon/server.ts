@@ -13,7 +13,7 @@ import { readMachineCert } from "@kiwi/core/person.ts";
 import { VERSION } from "../version.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
 import { listenedPath, pullsWake, viaOf } from "@kiwi/core/wake.ts";
-import { ensureMachine, loadPairedMachine, PairError, unpairedMachine, type PairedMachine, type PairedPerson } from "./pair.ts";
+import { ensureMachine, loadPairedMachine, PairError, type PairedMachine, type PairedPerson } from "./pair.ts";
 import { DAEMON_PROTOCOL, daemonSock, daemonToken, readListener, type DaemonEvent, type DaemonRead, type DaemonSeat, type DaemonVerb } from "./protocol.ts";
 import { activityEnv, reachOf, readsRex, seatRecordFor, wakeOn, type Attached } from "./reach.ts";
 import { readRexInto } from "./rex-reads.ts";
@@ -909,7 +909,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   const unpairHere = async (): Promise<void> => {
     const m = loadPairedMachine();
     if (m?.cert || m?.device) {
-      saveMachine(await unpairedMachine(m));
+      saveMachine({ identity: m.identity, label: m.label, relay: m.relay });
       relayForget = relayForget
         .then(() => forgetAtRelay(m))
         .catch(() => {

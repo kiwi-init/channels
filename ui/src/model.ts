@@ -434,7 +434,6 @@ export interface Account {
   update?: { version: string; ready: boolean; state?: "downloading" | "ready" | "available" }
   uiUpdate?: { version: string }
   key?: string
-  loginKey?: string
   relay?: string
   keysUnsealed?: boolean
   desktop?: boolean

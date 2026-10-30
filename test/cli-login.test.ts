@@ -5,12 +5,13 @@ import { join } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
 import { readDeviceList, type DeviceLink } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
-import { personFingerprint, type MachineCert } from "@kiwi/core/person.ts";
+import { personFingerprint } from "@kiwi/core/fingerprint.ts";
+import type { MachineCert } from "@kiwi/core/person.ts";
 import type { ComputerView } from "../desktop/src/bridge.ts";
 import { createDeviceHost, type DeviceHost } from "../desktop/src/devices.ts";
 import { loginComputer } from "../src/login.ts";
 import { computerClaimFor, loadMachine, saveMachine, type MachineFile } from "../src/machine.ts";
-import { PairError, unpairedMachine } from "../src/daemon/pair.ts";
+import { loadPairedMachine, PairError, type PairedMachine } from "../src/daemon/pair.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
 import { setupChannel } from "./owner.ts";
@@ -120,13 +121,11 @@ describe("kiwi login keeps a person only once it's checked (#1304)", () => {
     const person = await withExchangeKey(await generateIdentity("Mallory"));
     const app = desktop(person, user);
     await app.host.poll();
-    const was = loadMachine()?.identity.pk;
     const run = login(user, false);
     void approveFrom(app.host, run.digits);
-    await expect(run.done).rejects.toThrow("took a new key, so kiwi login can ask again");
+    await expect(run.done).rejects.toThrow("kept nothing, so kiwi login can ask again with a new key");
     expect(loadMachine()?.device).toBeUndefined();
     expect((loadMachine() as MachineFile & { cert?: MachineCert }).cert).toBeUndefined();
-    expect(loadMachine()?.identity.pk).not.toBe(was);
 
     const again = login(user);
     await approveFrom(app.host, again.digits);
@@ -146,7 +145,7 @@ describe("kiwi login keeps a person only once it's checked (#1304)", () => {
     expect(run.lines.at(-1)).not.toMatch(/[\u0000-\u001f]/);
   });
 
-  test("a computer that is one person's device asks nothing until kiwi unpair, whose new key lets it log in again", async () => {
+  test("a computer that is one person's device asks nothing until kiwi unpair, and logs in again after it with a new key", async () => {
     freshMachine();
     const first = `cli${++users}`;
     const jow = await withExchangeKey(await generateIdentity("Jow"));
@@ -166,12 +165,28 @@ describe("kiwi login keeps a person only once it's checked (#1304)", () => {
     expect(await otherApp.host.poll()).toBeNull();
     expect(loadMachine()?.device?.person.pk).toBe(jow.pk);
 
-    saveMachine(await unpairedMachine(enrolled));
-    expect(loadMachine()).toMatchObject({ label: enrolled.label, relay: enrolled.relay });
-    expect(loadMachine()?.identity.pk).not.toBe(enrolled.identity.pk);
+    saveMachine({ identity: enrolled.identity, label: enrolled.label, relay: enrolled.relay });
     const run = login(second);
     await approveFrom(otherApp.host, run.digits);
     expect((await run.done).person.pk).toBe(other.pk);
+    expect(loadMachine()).toMatchObject({ label: enrolled.label, relay: enrolled.relay });
+    expect(loadMachine()?.identity.pk).not.toBe(enrolled.identity.pk);
+  });
+
+  test("a computer holding only a person's cert counts as theirs", async () => {
+    freshMachine();
+    const user = `cli${++users}`;
+    const jow = await withExchangeKey(await generateIdentity("Jow"));
+    const app = desktop(jow, user);
+    await app.host.poll();
+    const first = login(user);
+    await approveFrom(app.host, first.digits);
+    await first.done;
+    const m = loadPairedMachine();
+    if (!m?.cert) throw new Error("the app didn't certify this computer");
+    const certOnly: PairedMachine = { identity: m.identity, label: m.label, relay: m.relay, cert: m.cert };
+    saveMachine(certOnly);
+    await expect(login(user).done).rejects.toThrow(`is already one of someone's devices (key ${await personFingerprint(jow.pk)})`);
   });
 });
 
