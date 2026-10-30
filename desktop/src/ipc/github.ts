@@ -7,13 +7,20 @@ import { externalUrl } from "../guard.ts";
 import { held } from "../held.ts";
 import type { Host } from "../host.ts";
 import { openInBrowser } from "../open.ts";
-import { githubSignsIn, relayConfig } from "../signin.ts";
+import { forgetMoveRefusal, githubSignsIn, moveToGithub, relayConfig } from "../signin.ts";
 import { mutate, store, type StoreFile } from "../store.ts";
 
 async function status(): Promise<GithubStatus> {
   const link = linkedHere(store.github, store.relayUrl) ? store.github : undefined;
   const config = await relayConfig(store.relayUrl).catch(() => null);
-  return { available: !!config?.githubClientId, ...(config && githubSignsIn(config) ? { signIn: true } : {}), account: link ? { login: link.login, id: link.id, at: link.at } : null };
+  const signIn = !!config && githubSignsIn(config);
+  const refused = signIn && link ? await moveToGithub() : null;
+  return {
+    available: !!config?.githubClientId,
+    ...(signIn ? { signIn: true } : {}),
+    account: link ? { login: link.login, id: link.id, at: link.at } : null,
+    ...(refused ? { moveRefused: refused } : {}),
+  };
 }
 
 /**
@@ -23,8 +30,9 @@ async function status(): Promise<GithubStatus> {
  * GitHub account keeps what the first one knew.
  */
 export function linkRecord(s: Pick<StoreFile, "person" | "github">, found: GithubAccount, relay: string, clientId: string, at: number): NonNullable<StoreFile["github"]> {
-  const first = s.github?.id === found.id ? s.github.first === true : !s.person;
-  return { ...found, at, relay, clientId, ...(first ? { first: true } : {}) };
+  const same = s.github?.id === found.id;
+  const first = same ? s.github?.first === true : !s.person;
+  return { ...found, at, relay, clientId, ...(first ? { first: true } : {}), ...(same && s.github?.moved ? { moved: true } : {}) };
 }
 
 let linking: Promise<GithubStatus> | null = null;
@@ -51,6 +59,7 @@ async function link(host: Host): Promise<GithubStatus> {
   await openInBrowser(page, (u) => host.openExternal(u));
   const found = await finishDevice(clientId, start, { fetch, sleep: (ms) => new Promise((r) => setTimeout(r, ms)), now: Date.now });
   mutate((s) => (s.github = linkRecord(s, found, relay, clientId, Date.now())));
+  forgetMoveRefusal();
   return status();
 }
 

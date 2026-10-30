@@ -60,6 +60,11 @@ export function AccountSection() {
             </button>
           )}
         </Row>
+        {account.githubMove && (
+          <Row label="Your devices" hint={`They stay under your earlier sign-in: ${account.githubMove}.`}>
+            <span className="set-value">Not moved to GitHub</span>
+          </Row>
+        )}
         {account.githubCode && !account.github && (
           <Row label="GitHub code" hint="Type it on the GitHub page that opened, then come back.">
             <code className="set-value set-key">{account.githubCode.code}</code>

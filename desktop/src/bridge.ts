@@ -302,6 +302,7 @@ export interface GithubStatus {
   /** The relay takes GitHub sign-in, so this link is how the person signs in. */
   signIn?: boolean;
   account: { login: string; id: number; at: number } | null;
+  moveRefused?: string;
 }
 
 export interface MachineView {

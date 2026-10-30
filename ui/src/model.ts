@@ -430,6 +430,7 @@ export interface Account {
   email?: string
   github?: { login: string }
   githubSignIn?: boolean
+  githubMove?: string
   computers: Computer[]
   version: string
   update?: { version: string; ready: boolean; state?: "downloading" | "ready" | "available" }
