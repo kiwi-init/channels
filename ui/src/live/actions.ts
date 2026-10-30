@@ -16,7 +16,7 @@ import { forgetChannel, forgetPending, isJoinCode, loadMember, loadPending, rena
 import { linkOf, type ChannelLink } from "@kiwi/channel/channel-ops.ts"
 import { removeComputer } from "@kiwi/app/computers.ts"
 import { joinCodeFromLink } from "@kiwi/app/deep-link.ts"
-import { kiwiJoin } from "@kiwi/app/join-line.ts"
+import { inviteLine } from "@kiwi/app/join-line.ts"
 import { followLaunch } from "@kiwi/app/launch-follow.ts"
 import { relayUrl } from "@kiwi/secrets/relay.ts"
 import { noteFor, showSeat, type ShowResult } from "@kiwi/app/show-seat.ts"
@@ -625,7 +625,7 @@ export function makeActions(): Actions {
       const picked = as.persona ? personalities().find((p) => p.id === as.persona) : undefined
       if (as.persona && !picked) throw new Error("that personality isn't on this computer")
       const pin = picked ? await owner(code).ch.pinPersona(picked) : null
-      return `kiwi ${kiwiJoin(relayUrl(), code, { ...(as.nick ? { nick: as.nick } : {}), persona: pin })}`
+      return inviteLine(relayUrl(), code, { ...(as.nick ? { nick: as.nick } : {}), persona: pin })
     },
     inviteLink: async (code) => {
       if (!loadMember(code)) throw new Error("you're not in that channel")

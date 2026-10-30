@@ -24,3 +24,9 @@ export const kiwiJoin = (origin: string, code: string, as: JoinAs = {}) =>
 
 /** The one line to paste into an agent's terminal: install kiwi if it isn't there, then ask to join. */
 export const joinCommand = (origin: string, code: string, as: JoinAs = {}) => installLine(origin, kiwiJoin(origin, code, as));
+
+export const inviteLine = (origin: string, code: string, as: JoinAs = {}) => {
+  const url = `${origin}/install`;
+  if (/["$`\\'\s]/.test(url)) throw new Error(`the relay address ${origin} can't go in a pasted line`);
+  return `sh -c 'k=$(command -v kiwi || echo "$HOME/.kiwi/bin/kiwi"); [ -x "$k" ] || curl -fsSL "${url}" | sh; exec "$k" "$@"' kiwi ${kiwiJoin(origin, code, as)}`;
+};
