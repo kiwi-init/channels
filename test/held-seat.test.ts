@@ -46,6 +46,7 @@ const PLAIN: Env = Object.fromEntries(
     "PI_CODING_AGENT",
     "KIWI_PI_PID",
     "KIWI_PI_SESSION",
+    "KIWI_LAUNCH",
     "KIWI_AS",
     "KIWI_CHANNEL",
     "KIWI_SEAT_TOKEN",

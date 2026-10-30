@@ -29,7 +29,7 @@
     },
     "desktop": {
       "name": "kiwi-desktop",
-      "version": "2026.10.11",
+      "version": "2026.10.12",
       "dependencies": {
         "@kiwi/core": "workspace:*",
       },
@@ -109,6 +109,10 @@
       },
     },
   },
+  "trustedDependencies": [
+    "esbuild",
+    "workerd",
+  ],
   "overrides": {
     "react-native": "file:./ui/stubs/react-native",
   },
