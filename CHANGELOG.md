@@ -36,6 +36,7 @@ Written by `bun scripts/changelog.ts` from each squash-merged pull request's tit
 - **Linux: the AppImage keeps its own desktop entry, and its menu start needs no FUSE (#1284, #1283)** ([#1285](https://github.com/kiwi-init/channels/pull/1285))
 - **Loop: a reviewer's loop takes a round open to anyone, naming itself first (#1244)** ([#1289](https://github.com/kiwi-init/channels/pull/1289))
 - **Linux: the Needs-you chime plays through WebAudio, so a missing GStreamer sink no longer crashes the window (#1278)** ([#1290](https://github.com/kiwi-init/channels/pull/1290))
+- **Daemons: an older daemon gives way to the app's copy when the CLI can't be kept (T1032)** ([#1293](https://github.com/kiwi-init/channels/pull/1293))
 
 ## 2026.10.11 — 2026-10-29
 
