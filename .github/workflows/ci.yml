@@ -217,6 +217,9 @@ jobs:
       - name: ui stash clicks in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-stash-click.ts --dist ui/dist
+      - name: ui top bar in Chromium moves the window only from its background
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-drag-regions.ts --dist ui/dist
       - name: ui terminal in WebKit draws no browser caret down its left edge
         if: ${{ !cancelled() }}
         run: bun scripts/ui-term-caret.ts --dist ui/dist
