@@ -22,8 +22,9 @@ import type {
   UpdateView,
 } from "../../../desktop/src/bridge.ts";
 import { publicChannel } from "../../../desktop/src/public-channel.ts";
-import { onLocalChange, readLocal, writeLocal, type Local } from "./local-store.ts";
+import { onLocalChange, readLocal, sweepBrowserKeys, writeLocal, type Local } from "./local-store.ts";
 import { persistQueue } from "./persist-queue.ts";
+import { devBuild } from "./relay.ts";
 
 export type { ChannelView, ComputerView, DeviceNewsView, GithubRepoView, KeysAtRest, KiwiBridge, PhoneView, PublicPerson, StoreSnapshot, TermEvent, TermOpenView, UpdateCheckView, UpdateView };
 
@@ -49,6 +50,7 @@ const publicOf = (l: Local): StoreSnapshot => ({
 
 let snapshot: StoreSnapshot = (() => {
   const b = bridge();
+  if (!b && !devBuild()) sweepBrowserKeys();
   return b ? b.getSnapshot() : publicOf(readLocal());
 })();
 const listeners = new Set<() => void>();

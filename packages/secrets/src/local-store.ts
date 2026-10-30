@@ -13,6 +13,9 @@ export interface Local {
 const LOCAL_KEY = "kiwi.secrets";
 const listeners = new Set<(l: Local) => void>();
 
+export const CHECKS_PREFIX = "mc.checks.";
+export const RECORD_PREFIX = "mc.rec.";
+
 export function read<T>(key: string): T | null {
   try {
     return JSON.parse(localStorage.getItem(key) ?? "null") as T | null;
@@ -31,6 +34,16 @@ export function writeLocal(patch: Partial<Local>): Local {
   localStorage.setItem(LOCAL_KEY, JSON.stringify(next));
   for (const l of listeners) l(next);
   return next;
+}
+
+export function sweepBrowserKeys(): void {
+  if (typeof localStorage === "undefined") return;
+  const stale: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k === LOCAL_KEY || k?.startsWith(CHECKS_PREFIX) || k?.startsWith(RECORD_PREFIX)) stale.push(k);
+  }
+  for (const k of stale) localStorage.removeItem(k);
 }
 
 export function onLocalChange(cb: (l: Local) => void): void {
