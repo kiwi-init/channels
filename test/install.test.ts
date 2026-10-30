@@ -26,13 +26,18 @@ function sandbox(packed: readonly ("gz" | "xz")[] = []) {
     sums.push(...TARGETS.map((a) => `${packedSum}  ${a}.${ext}`));
   }
   writeFileSync(join(dir, "sums"), sums.join("\n") + "\n");
+  writeFileSync(join(dir, "minisig"), "untrusted comment: signature from a test key\nRUTtest\ntrusted comment: kiwi 9.9.9 SHA256SUMS\ndGVzdA==\n");
   writeFileSync(
     join(dir, "curl"),
     `#!/bin/sh\nurl=""; out=""\nwhile [ $# -gt 0 ]; do case "$1" in -o) out="$2"; shift 2;; -*) shift;; *) url="$1"; shift;; esac; done\n` +
       `echo "$url" >> "${dir}/fetched"\n` +
-      `case "$url" in *SHA256SUMS) cp "${dir}/sums" "$out";; *.gz) cp "${dir}/fake-kiwi.gz" "$out";; *.xz) cp "${dir}/fake-kiwi.xz" "$out";; *) cp "${dir}/fake-kiwi" "$out";; esac\n`,
+      `case "$url" in *SHA256SUMS.minisig) cp "${dir}/minisig" "$out";; *SHA256SUMS) cp "${dir}/sums" "$out";; *.gz) cp "${dir}/fake-kiwi.gz" "$out";; *.xz) cp "${dir}/fake-kiwi.xz" "$out";; *) cp "${dir}/fake-kiwi" "$out";; esac\n`,
   );
   chmodSync(join(dir, "curl"), 0o755);
+  for (const tool of ["minisign", "python3"]) {
+    writeFileSync(join(dir, tool), `#!/bin/sh\necho "$*" >> "${dir}/verified"\n[ ! -f "${dir}/reject" ]\n`);
+    chmodSync(join(dir, tool), 0o755);
+  }
   return dir;
 }
 
@@ -162,7 +167,7 @@ describe("the installer's download", () => {
     readFileSync(join(dir, "fetched"), "utf8")
       .trim()
       .split("\n")
-      .filter((u) => !u.endsWith("SHA256SUMS"));
+      .filter((u) => !u.endsWith("SHA256SUMS") && !u.endsWith("SHA256SUMS.minisig"));
   const installs = (dir: string) => {
     const r = install(dir, []);
     expect(r.exitCode).toBe(0);
@@ -211,6 +216,63 @@ describe("the installer's download", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test("checks the release's signature with minisign when it's there, pinned key and all", () => {
+    const dir = sandbox();
+    try {
+      const r = install(dir, []);
+      expect(r.exitCode).toBe(0);
+      const calls = readFileSync(join(dir, "verified"), "utf8").trim().split("\n");
+      expect(calls).toHaveLength(1);
+      expect(calls[0]).toContain("-m ");
+      expect(calls[0]).toContain("SHA256SUMS.minisig");
+      expect(calls[0]).toContain("-P RWT9dHgjaqvLBIY4");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("without minisign, a self-contained python3 check of the same signature runs", () => {
+    const dir = sandbox();
+    try {
+      rmSync(join(dir, "minisign"));
+      const r = install(dir, []);
+      expect(r.exitCode).toBe(0);
+      const calls = readFileSync(join(dir, "verified"), "utf8").trim().split("\n");
+      expect(calls).toHaveLength(1);
+      expect(calls[0]).toContain("minisign-verify.py");
+      expect(calls[0]).toContain("SHA256SUMS");
+      expect(calls[0]).toContain("SHA256SUMS.minisig");
+      expect(calls[0]).toContain("RWT9dHgjaqvLBIY4");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a signature that doesn't verify isn't installed", () => {
+    const dir = sandbox();
+    try {
+      writeFileSync(join(dir, "reject"), "");
+      const r = install(dir, []);
+      expect(r.exitCode).not.toBe(0);
+      expect(existsSync(join(dir, "bin", "kiwi"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a release without SHA256SUMS.minisig isn't installed", () => {
+    const dir = sandbox();
+    try {
+      rmSync(join(dir, "minisig"));
+      const r = install(dir, []);
+      expect(r.exitCode).not.toBe(0);
+      expect(r.stderr.toString()).toContain("no SHA256SUMS.minisig");
+      expect(existsSync(join(dir, "bin", "kiwi"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("the installer's build", () => {
@@ -223,7 +285,7 @@ describe("the installer's build", () => {
       chmodSync(join(dir, "sysctl"), 0o755);
       expect(install(dir, []).exitCode).toBe(0);
       const urls = readFileSync(join(dir, "fetched"), "utf8").trim().split("\n");
-      return urls.filter((u) => !u.endsWith("SHA256SUMS")).map((u) => u.slice(u.lastIndexOf("/") + 1));
+      return urls.filter((u) => !u.endsWith("SHA256SUMS") && !u.endsWith("SHA256SUMS.minisig")).map((u) => u.slice(u.lastIndexOf("/") + 1));
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
