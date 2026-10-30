@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Launched } from "@kiwi/core/terminals.ts";
@@ -51,7 +51,7 @@ function script(path: string, body: string): void {
 const JOIN = `cmd=$(printf '%s' "$prompt" | sed -n 's/.*until it prints "joined": \\(kiwi join .*\\)\\. If it asks for your model.*/\\1/p')
 [ -n "$cmd" ] || { echo "no kiwi join line in the prompt"; exit 9; }
 eval "$cmd --model harness-model"
-exec sleep 600`;
+sleep 600`;
 const VERSION = `if [ "$1" = "--version" ]; then echo '9.9.9'; exit 0; fi`;
 
 let server: ReturnType<typeof startRelay> | undefined;
@@ -170,10 +170,13 @@ beforeAll(async () => {
   script(join(bins, "kiwi"), `exec '${process.execPath}' '${MAIN_TS}' "$@"`);
   script(join(bins, "claude"), `${VERSION}\nexport CLAUDECODE=1 CLAUDE_CODE_SESSION_ID="claude-$$-$(date +%s)"\neval "prompt=\\\${$#}"\n${JOIN}`);
   script(join(bins, "codex"), `${VERSION}\nexport CODEX_THREAD_ID="codex-$$-$(date +%s)"\neval "prompt=\\\${$#}"\n${JOIN}`);
-  script(
-    join(bins, "kimi"),
-    `${VERSION}\necho "Welcome to Kimi Code. No session yet: one will be created on your first message"\nprintf '> '\nIFS= read -r prompt\nexport TERM=dumb NO_COLOR=1\n${JOIN}`,
+  copyFileSync("/bin/bash", join(bins, "kimi-code"));
+  chmodSync(join(bins, "kimi-code"), 0o755);
+  writeFileSync(
+    join(bins, "kimi-code.sh"),
+    `echo "Welcome to Kimi Code. No session yet: one will be created on your first message"\nprintf '> '\nIFS= read -r prompt\nexport TERM=dumb NO_COLOR=1\n${JOIN}\n`,
   );
+  script(join(bins, "kimi"), `${VERSION}\nexec '${join(bins, "kimi-code")}' '${join(bins, "kimi-code.sh")}' "$@"`);
   script(join(bins, "gemini"), `${VERSION}\necho "gemini: not signed in"\nexit 3`);
   writeFileSync(join(home, ".profile"), `export PATH="${bins}:$PATH"\n`);
   writeFileSync(join(kiwiHome, "config.json"), JSON.stringify({ channels: {} }));
