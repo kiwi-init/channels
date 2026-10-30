@@ -907,14 +907,16 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     return (await Promise.all(relays.map(answers))).every((up) => !up);
   };
   let statusWatch: { stop(): void } | null = null;
-  let relayForget: Promise<unknown> | null = null;
+  let relayForget: Promise<unknown> = Promise.resolve();
   const unpairHere = async (): Promise<void> => {
     const m = loadPairedMachine();
     if (m?.cert || m?.device) {
       saveMachine({ identity: m.identity, label: m.label, relay: m.relay });
-      relayForget = forgetAtRelay(m).catch(() => {
-        // The relay forgets this machine when it next hears from it; local pairing is already gone.
-      });
+      relayForget = relayForget
+        .then(() => forgetAtRelay(m))
+        .catch(() => {
+          // The relay forgets this machine when it next hears from it; local pairing is already gone.
+        });
     }
     inbox.close();
   };
