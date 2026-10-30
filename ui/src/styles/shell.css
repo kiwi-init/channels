@@ -293,7 +293,7 @@
 .top-chan[aria-pressed="true"],
 .top-drawer:hover,
 .top-drawer[aria-pressed="true"] {
-  background: color-mix(in srgb, var(--float) 90%, var(--ink));
+  background: var(--float-2);
 }
 
 .tabs,
@@ -724,6 +724,17 @@
   gap: 8px;
   min-height: var(--top-h);
   padding: 0 12px 0 16px;
+}
+
+.panel-head > .icon-btn {
+  width: var(--ctl);
+  height: var(--ctl);
+  background: var(--float);
+  box-shadow: var(--shadow-float);
+}
+
+.panel-head > .icon-btn:hover {
+  background: var(--float-2);
 }
 
 .panel-title {

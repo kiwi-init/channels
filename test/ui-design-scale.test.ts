@@ -55,6 +55,7 @@ describe("ui styles keep to the design scale", () => {
 describe("the top bar's controls float", () => {
   const tokens = readFileSync(join(STYLES, "tokens.css"), "utf8");
   const shell = readFileSync(join(STYLES, "shell.css"), "utf8");
+  const settings = readFileSync(join(STYLES, "settings.css"), "utf8");
   const rule = (css: string, selector: string): string => {
     const at = css.indexOf(`\n${selector} {`);
     return at < 0 ? "" : css.slice(at, css.indexOf("}", at));
@@ -71,9 +72,16 @@ describe("the top bar's controls float", () => {
     }
   });
 
-  test("the switcher, the sidebar button and both groups sit on the float", () => {
-    for (const selector of [".top-chan", ".top-drawer", ".tabs,\n.top-group"]) {
-      const body = rule(shell, selector);
+  test("the bars' controls sit on the float: switcher, sidebar button, both groups, a panel's close and Settings' back", () => {
+    const controls: [string, string][] = [
+      [shell, ".top-chan"],
+      [shell, ".top-drawer"],
+      [shell, ".tabs,\n.top-group"],
+      [shell, ".panel-head > .icon-btn"],
+      [settings, ".set-back"],
+    ];
+    for (const [css, selector] of controls) {
+      const body = rule(css, selector);
       expect(body).toContain("background: var(--float)");
       expect(body).toContain("box-shadow: var(--shadow-float)");
     }

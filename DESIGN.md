@@ -183,7 +183,9 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   are one `float` group with the chosen tab's pill gliding inside it, and
   search and the terminal share a second group (`.top-group`, 2px inset,
   28px buttons at `r-row`). The search field floats the same way when open,
-  and on a narrow window it takes the tabs' place.
+  and on a narrow window it takes the tabs' place. The other bars follow:
+  Settings' back button and a panel's close button float too. Hover on a
+  floating control is `float-2` (the `float` fill, 10% toward `ink`).
 - Fields (`.input`, `.textarea`, `Field` with label and hint): `bg-3` fill,
   `--ctl` high, `t-ui`; `.input.is-mono` for codes and paths.
 - `Seg` (`.seg`): a `bg-3` track, the chosen segment on `wash-2` in `ink`
