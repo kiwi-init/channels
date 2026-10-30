@@ -1,33 +1,15 @@
 import { spawn } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
+import { harnessDist } from "./ui-harness.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
+const DIST = harnessDist(process.argv[2]);
+
 const data = mkdtempSync(join(tmpdir(), "kiwi-app-smoke-"));
-
-const developmentBuild = async (out: string): Promise<string> => {
-  const build = Bun.spawn(["bun", "x", "vite", "build", "--mode", "development", "--outDir", out, "--logLevel", "warn"], {
-    cwd: join(ROOT, "ui"),
-    env: { ...process.env, NODE_ENV: "development" },
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-  if ((await build.exited) !== 0) throw new Error("the development build of ui/ failed");
-  return out;
-};
-
-const DIST = await (process.argv[2] ? Promise.resolve(resolve(process.argv[2])) : developmentBuild(join(data, "ui"))).catch((e: unknown) => {
-  rmSync(data, { recursive: true, force: true });
-  throw e;
-});
-if (!existsSync(join(DIST, "index.html"))) {
-  rmSync(data, { recursive: true, force: true });
-  throw new Error(`no index.html in ${DIST}`);
-}
-
 const cli = join(data, "cli");
 mkdirSync(join(cli, "bin"), { recursive: true });
 mkdirSync(join(data, "relay"));
