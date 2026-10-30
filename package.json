@@ -56,5 +56,9 @@
   },
   "overrides": {
     "react-native": "file:./ui/stubs/react-native"
-  }
+  },
+  "trustedDependencies": [
+    "esbuild",
+    "workerd"
+  ]
 }
