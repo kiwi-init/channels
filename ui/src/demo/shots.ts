@@ -55,6 +55,7 @@ export const SHOTS: Record<string, Shot> = {
   "add-agent": kiwi({ panel: { kind: "add-agent" } }),
   "add-agent-command": kiwi({ panel: { kind: "add-agent" } }),
   "add-agent-starting": kiwi({ panel: { kind: "add-agent" } }),
+  "add-agent-failed": kiwi({ panel: { kind: "add-agent" } }),
   palette: kiwi({ dialog: "palette" }),
   "new-channel": kiwi({ dialog: "new-channel" }),
   join: kiwi({ dialog: "join" }),

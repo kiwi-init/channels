@@ -512,6 +512,8 @@ export interface NewAgent {
   mode?: "ask-first" | "accept-edits" | "dont-ask"
 }
 
+export type Launching = { stage: "started" } | { stage: "asked"; name: string } | { stage: "joined"; name: string } | { stage: "failed"; why: string }
+
 export interface Actions {
   send(code: string, where: Where, text: string, opts?: { replyTo?: number; inThread?: number; images?: Upload[] }): void
   retry(code: string, seq: number): void
@@ -536,7 +538,7 @@ export interface Actions {
   setWake(code: string, name: string, on: boolean): void
   setNickname(code: string, name: string, nickname: string | null): void
   setPowers(code: string, name: string, powers: Partial<Powers>): void
-  addAgent(code: string, agent: NewAgent): void
+  addAgent(code: string, agent: NewAgent, seen: (s: Launching) => void): () => void
   showAgent(code: string, name: string): Promise<string | null>
   openTerm(code: string, name: string, cols: number, rows: number, watch: TermWatch): Promise<TermOpened>
   openMyTerm(code: string, want: string | null, cols: number, rows: number, watch: TermWatch): Promise<TermOpened>

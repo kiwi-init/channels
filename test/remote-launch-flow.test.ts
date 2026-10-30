@@ -71,7 +71,7 @@ async function digitsFrom(out: ReadableStream<Uint8Array>): Promise<string> {
 
 beforeAll(async () => {
   for (const d of [home, kiwiHome, bins, calls, join(repo, ".git")]) mkdirSync(d, { recursive: true });
-  script(join(bins, "claude"), "echo '2.1.304 (Claude Code)'");
+  script(join(bins, "claude"), `if [ "$1" = "--version" ]; then echo '2.1.304 (Claude Code)'; exit 0; fi\nexec sleep 600`);
   script(join(bins, "tmux"), `t=$(mktemp '${root}/call.XXXXXX')\nprintf '%s\\n' "$@" > "$t"\nmv "$t" '${calls}/'\nexec '${TMUX ?? "false"}' "$@"`);
   script(join(root, "login-shell"), `echo __kiwi_login_path__\necho '${bins}:/usr/bin:/bin'`);
   writeFileSync(join(kiwiHome, "config.json"), JSON.stringify({ channels: {} }));
