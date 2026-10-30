@@ -6,10 +6,28 @@ import { chromium } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
-const DIST = resolve(process.argv[2] ?? join(ROOT, "ui/dist"));
-if (!existsSync(join(DIST, "index.html"))) throw new Error(`no index.html in ${DIST}: run bun run ui:build first`);
-
 const data = mkdtempSync(join(tmpdir(), "kiwi-app-smoke-"));
+
+const developmentBuild = async (out: string): Promise<string> => {
+  const build = Bun.spawn(["bun", "x", "vite", "build", "--mode", "development", "--outDir", out, "--logLevel", "warn"], {
+    cwd: join(ROOT, "ui"),
+    env: { ...process.env, NODE_ENV: "development" },
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  if ((await build.exited) !== 0) throw new Error("the development build of ui/ failed");
+  return out;
+};
+
+const DIST = await (process.argv[2] ? Promise.resolve(resolve(process.argv[2])) : developmentBuild(join(data, "ui"))).catch((e: unknown) => {
+  rmSync(data, { recursive: true, force: true });
+  throw e;
+});
+if (!existsSync(join(DIST, "index.html"))) {
+  rmSync(data, { recursive: true, force: true });
+  throw new Error(`no index.html in ${DIST}`);
+}
+
 const cli = join(data, "cli");
 mkdirSync(join(cli, "bin"), { recursive: true });
 mkdirSync(join(data, "relay"));
