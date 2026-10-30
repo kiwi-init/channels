@@ -6,6 +6,7 @@ import type { ChannelIdentityView, ComputerView, KeysAtRest, PendingItem, Person
 import { errorText, normalizeRelay, snapshotOf } from "./guard.ts";
 import { host } from "./host.ts";
 import { logMainError } from "./main-log.ts";
+import type { RecoveryKept } from "./recovery.ts";
 
 export interface StoreFile {
   relayUrl: string;
@@ -21,6 +22,7 @@ export interface StoreFile {
   device?: Identity;
   deviceLinks?: DeviceLink[];
   enrolled?: PublicPerson;
+  recovery?: RecoveryKept;
 }
 
 export type VaultRead = { ok: true; file: Partial<StoreFile> | null; resave: boolean } | { ok: false; why: string; advice?: string };

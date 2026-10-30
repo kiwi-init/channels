@@ -155,7 +155,13 @@ any current approving device in that list, then counts as its person: asks, unpa
 check and `/v1/person/<pk>/machines`. The relay never rolls the kept list back. Each list the account
 accepts reaches its computers, so a revoked or expired desktop stops counting at once. The daemon
 checks asks the same way (`readAsk` with the list). Under decision A, this is what lets a desktop
-without the person key start agents. The digits come from
+without the person key start agents.
+
+A computer paired by an older `MachineCert` alone keeps working once the person key is offline (T899).
+Before the first desktop lets go of the person key, it lists every computer it knows in the device
+list. The relay then keeps that list for a cert-registered computer it names, with the same person,
+and hands it back when the computer registers its cert again. The daemon takes it only when the list
+is its cert's person's and names it as a current computer, and from then on registers with the list. The digits come from
 `enrollDigits` in `packages/core/src/enroll.ts`.
 
 ## 3. Admitting agents without an app open (delegation)
@@ -272,13 +278,12 @@ For each phone:
 2. Re-key: a new person key and a new member key in every channel it joined. This is the one time
    "rejoin with a new member key" is needed (#524).
 
-The re-key cascades:
+The re-key cascades (the re-root, section 6, T827):
 
-- A new person key orphans every `kp1` `MachineCert` v1, and the `person` field in your member
-  records.
-  - Your computers are re-certified in the new list.
-  - Records are owner-signed, so in channels you don't own, the owner's app re-signs yours when it
-    sees the hand-over.
+- A new person key orphans every `kp1` `MachineCert` v1. The person's first key stays their name: the
+  `person` field in member records and the account keep it, so records need no re-signing.
+  - Your computers carry over as listed computers in the re-rooted list; an old cert alone counts for
+    nothing once an owner has seen the re-root, and the owner's app cuts the agents it vouched for.
 - **Which hand-over wins.** The hand-over link is signed by the old person key, which the phone also
   holds. A thief could therefore sign a competing one.
   - A hand-over must also be signed by the **recovery key** (section 6), which a phone never holds.
@@ -299,18 +304,40 @@ For when every app is gone, or a thief revoked your other devices first. The rec
   clients still read the list. The person key signs the first link. The recovery key replaces itself at
   once; an approving device may propose a new one, which takes over only after 7 days. Your devices show
   the proposal meanwhile, and the old words, or revoking the device that proposed it, cancel it.
-- **Format:** `{person, version, at, box}`. The box is sealed to the recovery X25519 key, with person,
-  version and time bound into the key derivation, and the vault is signed by the person key or any of
-  its current approving devices (decision A keeps the person key offline, so a device must be able to
-  add a new channel's owner key). Stored at `/v1/account/vault`. Clients remember the highest version
-  and refuse a lower one.
+- **Format:** `{person, version, at, held, boxes}`, signed by the person key or any of its current
+  approving devices (decision A keeps the person key offline, so a device must be able to add a new
+  channel's owner key). Stored at `/v1/account/vault`. Clients remember the highest version and refuse
+  a lower one.
+  - `held` is the person key, sealed to the recovery X25519 key with person, person key and recovery
+    key bound in (`sealPerson`, T899). It sits in the signed record, so every approving desktop reads
+    it and carries it into each new version unread (T969).
+  - `boxes` holds one box per desktop: the owner keys of the channels that desktop owns, sealed to the
+    recovery key with person, desktop and recovery key bound in. A desktop reseals only its own box and
+    carries the others unread, so two desktops never drop each other's channels. Boxes sealed to
+    earlier words are dropped; their desktops seal them again on their next look, within 10 minutes.
+  - The words open `held` and every box that opens; a box that doesn't is skipped.
+  - At most 64 boxes and 512 KB in all.
 - **The relay** keeps the chain and the newest vault at `/v1/account/vault`. `GET` needs only the sign-in,
   so a new desktop with nothing but the 24 words can read them. `PUT` takes `{recovery, vault}`, signed by
   the person key, the recovery key or a current approving device. The chain must extend the one kept,
   and each new link must carry the relay's time, so a proposal can't be backdated past its 7 days. A
-  vault must be version kept + 1, signed by the person key or a current approving device, and at most
-  512 KB. Links and vaults from revoked devices are refused.
+  vault must be version kept + 1, signed by the person key or a current approving device, with `held`
+  sealed for the current person key and recovery key. Links and vaults from revoked devices are refused.
 - In the code (T693, T823): `packages/core/src/recovery.ts`, `src/relay/account.ts`.
+- **Re-root** (T827), when the person key itself may be stolen: a `reroot {root, keep[]}` link in the
+  device list, signed by the new person key, with the recovery key's signature over it (`rsig`) and
+  the recovery chain it was checked against. From that link on:
+  - `list.person` stays the person's name; `list.root` is the key that speaks for them. The old key
+    signs no more links, recovery links or vaults, and machine asks and the relay's computer routes
+    refuse it.
+  - Every device not in `keep` is revoked. The owner's app cuts those devices, and the agents of
+    computers only an old `kp1` cert vouched for; join claims by the old key or its certs stop
+    counting.
+  - A list with more re-roots beats a longer one with fewer, so a fork the old key grows can't win.
+  - The relay takes a re-root only with its own time and the exact recovery chain it keeps, so words
+    replaced since can't re-root. A later re-root must carry a chain that extends the one before.
+  - An app still holding the old key lets it go, and a sealed person box from before the re-root is
+    never sealed into a new vault version.
 - **Passkeys later:** per-passkey wrapping where native passkey PRF exists (macOS 15 and iOS 18 through
   AuthenticationServices; Android Credential Manager). Never in a page the relay serves, which would
   see the unlock key.
@@ -321,6 +348,17 @@ For when every app is gone, or a thief revoked your other devices first. The rec
 
 - Once the first app has signed the device list's root, the person key stays only in the recovery
   vault (paper-key style), and the first desktop becomes a device like the rest.
+- In the code (T899, `desktop/src/recovery.ts`): once the 24 words are checked and the vault is kept,
+  the first desktop lists its computers and drops the person secret from its store. It keeps only the
+  sealed person box, to reseal the vault when a channel it owns appears. Other approving desktops take
+  that box from the vault (T969), and after a re-root they take the new person key's box from it. It doesn't let go while a
+  device's proposed recovery key is waiting, and never seals the person key to a key a device proposed.
+  An app that set up its words before T899 does the same on its next poll. Joins are proven with the
+  device claim alone.
+- After that, new words need the old ones (or a re-root, T827): no app holds the person key to seal
+  to a new recovery key.
+- Re-rooting (T827) is in core, the relay, the daemon and the channel cascade. The desktop doesn't
+  offer it yet: that screen builds on the recover flow (T825).
 - Whoever holds the person key can re-root the list. Keeping it offline means a stolen desktop can't
   beat the vault.
 - Re-rooting, and the `kl1` migration, then need the recovery key in hand.

@@ -12,6 +12,7 @@ import {
   recoveryAfter,
   recoveryKey,
   recoveryLink,
+  sealPerson,
   sealVault,
   type Recovery,
   type RecoveryLink,
@@ -208,15 +209,128 @@ describe("the vault (T693)", () => {
     expect(await checkVault(await sealVault(ids.thief!, r, 2, contents, T0 + 2), cut)).toMatch(/approving devices/);
   });
 
-  test("a box moved to another version doesn't open, even re-signed by a listed device", async () => {
+  test("a channel box moved to another desktop's name, or into another person's vault, doesn't open", async () => {
     const v1 = await sealVault(ids.desk!, r, 1, contents, T0);
-    const v2 = await sealVault(ids.desk!, r, 2, { person: ids.person!, channels: [] }, T0 + 1);
-    const moved: Vault = { ...v2, box: v1.box };
-    expect(await openVault(moved, paper)).toBeNull();
+    const moved: Vault = { ...v1, boxes: [{ ...v1.boxes[0]!, device: ids.thief!.pk }] };
+    expect(await openVault(moved, paper)).toEqual({ person: ids.person!, channels: [] });
+    const theirs = await sealVault(ids.desk!, { ...r, person: ids.stranger!.pk }, 1, { ...contents, person: await sealPerson(r, ids.person!) }, T0);
+    expect(await openVault({ ...v1, boxes: theirs.boxes }, paper)).toEqual({ person: ids.person!, channels: [] });
   });
 
   test("the person key may seal it too, and a vault for another person is refused", async () => {
     expect(await checkVault(await sealVault(ids.person!, r, 1, contents, T0), list)).toBeNull();
     expect(await checkVault(await sealVault(ids.desk!, { ...r, person: ids.stranger!.pk }, 1, contents, T0), list)).toMatch(/another person/);
+  });
+});
+
+describe("the person key sealed on its own (T899)", () => {
+  let r: Recovery;
+  let channels: VaultContents["channels"];
+
+  beforeAll(async () => {
+    r = (await recovery(await chain([ids.person!, paper, T0]))) as Recovery;
+    channels = [{ label: "kiwi", code: "kiwi://join/abc", owner: ids.stranger! }];
+  });
+
+  test("a device that never held the person key reseals it, and the words open the vault to the whole key", async () => {
+    const held = await sealPerson(r, ids.person!);
+    expect(held.rxpk).toBe(r.rxpk);
+    expect(held.box).not.toContain(ids.person!.sk);
+    const v2 = await sealVault(ids.desk!, r, 2, { person: held, channels }, T0 + 1);
+    expect(await checkVault(v2, list, 1)).toBeNull();
+    expect(await openVault(v2, paper)).toEqual({ person: ids.person!, channels });
+    expect(await openVault(v2, other)).toBeNull();
+    expect(await openVault(v2, ids.desk!)).toBeNull();
+  });
+
+  test("only the person key this chain is for is sealed, and only to the chain's own recovery key", async () => {
+    await expect(sealPerson(r, ids.stranger!)).rejects.toThrow("isn't the one this recovery key is for");
+    const held = await sealPerson(r, ids.person!);
+    await expect(sealVault(ids.desk!, { ...r, rxpk: other.xpk! }, 2, { person: held, channels }, T0)).rejects.toThrow("earlier recovery key");
+    const moved = await sealVault(ids.desk!, { ...r, rxpk: other.xpk! }, 2, { person: { ...held, rxpk: other.xpk! }, channels }, T0);
+    expect(await openVault(moved, other)).toBeNull();
+  });
+
+  test("a person box lifted into another person's vault, or under another recovery key, doesn't open", async () => {
+    const held = await sealPerson(r, ids.person!);
+    const theirs = { ...r, person: ids.stranger!.pk };
+    expect(await openVault(await sealVault(ids.desk!, theirs, 1, { person: held, channels }, T0), paper)).toBeNull();
+    const forgedInner = await sealVault(ids.desk!, r, 1, { person: { rxpk: r.rxpk, pk: ids.person!.pk, box: "not.a.box" }, channels }, T0);
+    expect(await openVault(forgedInner, paper)).toBeNull();
+  });
+});
+
+describe("each approving desktop seals its own channels (T969)", () => {
+  let r: Recovery;
+  const ch = (label: string) => ({ label, code: `kiwi://join/${label}`, owner: ids[label]! });
+  const resign = (v: Vault, change: Record<string, unknown>) => sign(ids.desk!, { ...v, ...change, pk: undefined, sig: undefined });
+
+  beforeAll(async () => {
+    r = (await recovery(await chain([ids.person!, paper, T0]))) as Recovery;
+    for (const name of ["work", "home", "side"]) ids[name] = await withExchangeKey(await generateIdentity(name));
+  });
+
+  test("the person box sits in the signed vault, so another desktop carries it, and each desktop's box rides along unread", async () => {
+    const v1 = await sealVault(ids.person!, r, 1, { person: ids.person!, channels: [ch("work")], device: ids.desk!.pk }, T0);
+    expect(v1.held.pk).toBe(ids.person!.pk);
+    expect(JSON.stringify(v1)).not.toContain(ids.person!.sk);
+    expect(JSON.stringify(v1)).not.toContain(ids.work!.sk);
+    const v2 = await sealVault(ids.thief!, r, 2, { person: v1.held, channels: [ch("home")], others: v1.boxes }, T0 + 1);
+    expect(await checkVault(v2, list, 1)).toBeNull();
+    expect(v2.held).toEqual(v1.held);
+    expect(v2.boxes[0]).toEqual(v1.boxes[0]);
+    expect(v2.boxes.map((b) => b.device)).toEqual([ids.desk!.pk, ids.thief!.pk]);
+    const v3 = await sealVault(ids.desk!, r, 3, { person: v2.held, channels: [ch("work"), ch("side")], others: v2.boxes }, T0 + 2);
+    expect(v3.boxes.map((b) => b.device)).toEqual([ids.thief!.pk, ids.desk!.pk]);
+    const inside = await openVault(v3, paper);
+    expect(inside?.person).toEqual(ids.person!);
+    expect(inside?.channels.map((c) => c.label).sort()).toEqual(["home", "side", "work"]);
+    expect(await openVault(v3, other)).toBeNull();
+    expect(await openVault(v3, ids.desk!)).toBeNull();
+  });
+
+  test("a channel box that doesn't open is skipped, and the rest still restore", async () => {
+    const v1 = await sealVault(ids.desk!, r, 1, { person: ids.person!, channels: [ch("work")] }, T0);
+    const junk = { device: ids.thief!.pk, rxpk: r.rxpk, box: "not.a.box" };
+    const v2 = await sealVault(ids.desk!, r, 2, { person: v1.held, channels: [ch("work")], others: [junk] }, T0 + 1);
+    expect((await openVault(v2, paper))?.channels.map((c) => c.label)).toEqual(["work"]);
+  });
+
+  test("boxes sealed to earlier words are dropped when the vault is sealed to new ones", async () => {
+    const v1 = await sealVault(ids.thief!, r, 1, { person: ids.person!, channels: [ch("home")] }, T0);
+    const r2 = (await recovery(await chain([ids.person!, paper, T0], [ids.person!, other, T0 + 1]))) as Recovery;
+    const v2 = await sealVault(ids.person!, r2, 2, { person: ids.person!, channels: [ch("work")], device: ids.desk!.pk, others: v1.boxes }, T0 + 2);
+    expect(v2.boxes.map((b) => b.device)).toEqual([ids.desk!.pk]);
+    expect((await openVault(v2, other))?.channels.map((c) => c.label)).toEqual(["work"]);
+  });
+
+  test("a person box opens only for the key it was sealed for, whatever its label says", async () => {
+    const v1 = await sealVault(ids.desk!, r, 1, { person: ids.person!, channels: [] }, T0);
+    expect(await openVault(v1, paper, ids.thief!.pk)).toBeNull();
+    expect(await openVault({ ...v1, held: { ...v1.held, pk: ids.thief!.pk } }, paper, ids.thief!.pk)).toBeNull();
+    expect(await openVault({ ...v1, held: { ...v1.held, rxpk: other.xpk! } }, other)).toBeNull();
+  });
+
+  test("a vault with a malformed person box or channel boxes is refused, even signed by a listed desktop", async () => {
+    const v1 = await sealVault(ids.desk!, r, 1, { person: ids.person!, channels: [ch("work")] }, T0);
+    const box = v1.boxes[0]!;
+    for (const change of [
+      { held: { ...v1.held, extra: "x" } },
+      { held: { rxpk: v1.held.rxpk, box: v1.held.box } },
+      { held: { ...v1.held, pk: "short" } },
+      { boxes: [box, box] },
+      { boxes: [{ ...box, device: "short" }] },
+      { boxes: [{ ...box, extra: "x" }] },
+      { boxes: "nope" },
+      { boxes: Array.from({ length: 65 }, (_, i) => ({ ...box, device: (i.toString(36) + "A".repeat(43)).slice(0, 43) })) },
+    ])
+      expect(await checkVault(await resign(v1, change), list)).toMatch(/bad person box|bad channel boxes/);
+    expect(await checkVault(await resign(v1, { boxes: [{ ...box, box: "x".repeat(600 * 1024) }] }), list)).toMatch(/too large/);
+    expect(await checkVault({ ...v1, boxes: [] }, list)).toMatch(/isn't signed/);
+  });
+
+  test("a vault that would grow past the relay's limit isn't sealed", async () => {
+    const big = Array.from({ length: 64 }, (_, i) => ({ device: (i.toString(36) + "B".repeat(43)).slice(0, 43), rxpk: r.rxpk, box: "x" }));
+    await expect(sealVault(ids.desk!, r, 1, { person: ids.person!, channels: [], others: big }, T0)).rejects.toThrow("past what the relay keeps");
   });
 });
