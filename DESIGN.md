@@ -239,8 +239,9 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   at its foot, on every page; on a Mac the traffic lights sit above it, the rail
   is 80px so tiles centre under them, and `--top-h` is 46px so the bar centres
   on them), the sidebar (`--side-w`) and the main area.
-  The top bar spans the sidebar and the main area (`--top-h`): the channel
-  switcher and the sidebar toggle over the sidebar; the views in the middle
+  The top bar spans the sidebar and the main area (`--top-h`): the sidebar
+  toggle first at the left edge, then the channel switcher, both in the same
+  place whether the sidebar is open or collapsed; the views in the middle
   (`# room`, Tasks with its count, Agents, Needs you in `decide` with its
   count), the open one on `wash-2`; on the right a mono summary
   (`2 working · 1 merged today · 7 need you`), Search and the terminal.
