@@ -224,6 +224,15 @@ describe("what's kept of an event", () => {
     expect(g.prs.get(prKey("o/r", 7))).toMatchObject({ additions: 30, deletions: 0, files: 2 });
   });
 
+  test("a note's link is a plain https link, or the note is dropped", () => {
+    const at = { event: "pull_request", repo: "o/r", at: 1 };
+    expect(cleanGithubNote({ ...at, url: "https://github.com/o/r/pull/7" })).toMatchObject({ url: "https://github.com/o/r/pull/7" });
+    expect(cleanGithubNote({ ...at, url: "javascript:alert(1)" })).toBeNull();
+    expect(cleanGithubNote({ ...at, url: "http://github.com/o/r/pull/7" })).toBeNull();
+    expect(cleanGithubNote({ ...at, url: "https://user:pw@github.com/o/r" })).toBeNull();
+    expect(cleanGithubNote({ ...at, url: "not a url" })).toBeNull();
+  });
+
   test("repos are owner/name, lowercased, at most 20; links say what was added and removed", () => {
     expect(githubRepos(["A/B", "a/b", "c/d"])).toEqual(["a/b", "c/d"]);
     expect(githubRepos(["a"])).toBeNull();
