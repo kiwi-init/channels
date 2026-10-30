@@ -1,4 +1,6 @@
 import { describe, expect, mock, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 
@@ -10,7 +12,7 @@ Object.assign(globalThis, { __DEV__: false })
 const { parseMarkdown } = await import("react-native-enriched-markdown/lib/module/web/parseMarkdown.js")
 const { default: Markdown, mermaidSource } = await import("~/chat/markdown")
 const { keepParsed } = await import("~/chat/parsed")
-const { drawCached, errorLine, linksApart } = await import("~/chat/mermaid")
+const { drawCached, errorLine, linksApart, picturesOff } = await import("~/chat/mermaid")
 
 const FLAGS = { latexMath: false, underline: false, hardSoftBreaks: true }
 const fence = "```"
@@ -75,5 +77,21 @@ describe("drawing a Mermaid diagram", () => {
     expect(linksApart('<g><a xlink:href="https://evil.example/login"><rect/></a></g>')).toBe('<g><a xlink:href="https://evil.example/login" target="_blank" rel="noopener noreferrer"><rect/></a></g>')
     expect(linksApart(`<a href="https://x.example" target="_self" rel='opener'><text>go</text></a>`)).toBe('<a href="https://x.example" target="_blank" rel="noopener noreferrer"><text>go</text></a>')
     expect(linksApart('<g><animate attributeName="x"/><text>a</text></g>')).toBe('<g><animate attributeName="x"/><text>a</text></g>')
+  })
+
+  test("a diagram's link keeps its address only when a click would open it (#1308)", () => {
+    expect(linksApart('<a xlink:href="tel:123"><rect/></a>')).toBe('<a target="_blank" rel="noopener noreferrer"><rect/></a>')
+    expect(linksApart("<a href='javascript:alert(1)' xlink:href=\"&#106;avascript:x\">go</a>")).toBe('<a target="_blank" rel="noopener noreferrer">go</a>')
+    expect(linksApart('<a href="mailto:a@b.example?x=1&amp;y=2">m</a>')).toBe('<a href="mailto:a@b.example?x=1&amp;y=2" target="_blank" rel="noopener noreferrer">m</a>')
+  })
+
+  test("a drawn diagram keeps no picture address but data:, and the page itself loads pictures only from its own origin (#1308)", () => {
+    expect(picturesOff('<image href="https://evil.example/a.png" width="4"/><img src="/icon.svg?read=1" alt="i"><image xlink:href="data:image/png;base64,AA"/>')).toBe(
+      '<image width="4"/><img alt="i"><image xlink:href="data:image/png;base64,AA"/>'
+    )
+    const page = readFileSync(join(import.meta.dir, "../../index.html"), "utf8")
+    expect(page).toContain(
+      `<meta http-equiv="Content-Security-Policy" content="img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; object-src 'none'; frame-src 'none'" />`
+    )
   })
 })

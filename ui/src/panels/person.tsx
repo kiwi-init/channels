@@ -4,6 +4,7 @@ import { useId, useState, type ReactNode } from "react"
 
 import { TaskChip } from "~/chat/cards"
 import { Avatar, cx, Dialog, DialogHead, Empty, Heading, Toggle } from "~/kit/bits"
+import { Track } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import { memberOf, type App, type Channel, type Person } from "~/model"
@@ -222,7 +223,7 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
       <Heading>Manage</Heading>
       <Row label="Role">
         {(id) => (
-          <div id={id} className="seg" role="group" aria-labelledby={`${id}-label`}>
+          <Track id={id} className="seg" role="group" aria-labelledby={`${id}-label`}>
             <button type="button" aria-pressed={!person.role} onClick={() => app.actions.setRole(channel.code, person.name, null)}>
               None
             </button>
@@ -231,7 +232,7 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
                 {r.slice(0, 1).toUpperCase() + r.slice(1)}
               </button>
             ))}
-          </div>
+          </Track>
         )}
       </Row>
       {agent && (

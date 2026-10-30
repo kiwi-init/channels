@@ -4,8 +4,8 @@
 
 .cpanel-part {
   display: grid;
-  gap: 10px;
-  padding: 18px 0;
+  gap: 8px;
+  padding: 12px 0;
 }
 
 .cpanel-part:first-child {
@@ -60,7 +60,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-height: 38px;
+  min-height: var(--ctl);
 }
 
 .cpanel-repo {
@@ -79,12 +79,9 @@
 
 .cpanel-add .input {
   flex: 1;
-  height: 30px;
-  padding: 5px 10px;
 }
 
 .cpanel-add .btn {
-  height: 30px;
 }
 
 .cpanel-hold {
@@ -112,16 +109,16 @@
 .cpanel-downloads {
   display: grid;
   justify-items: start;
-  margin: 0 -9px;
+  margin: 0 -8px;
 }
 
 .cpanel-download {
   gap: 10px;
-  padding: 0 9px;
+  padding: 0 8px;
 }
 
 .cpanel-end {
-  padding: 22px 0 8px;
+  padding: 24px 0 8px;
 }
 
 .cpanel-github {
@@ -143,7 +140,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .cpanel-icon-tile {
@@ -152,11 +149,11 @@
   width: 48px;
   height: 48px;
   overflow: hidden;
-  border-radius: 14px;
+  border-radius: var(--r-card);
   background: var(--bg-3);
   color: var(--ink);
   font-weight: 600;
-  font-size: 20px;
+  font-size: var(--t-title);
 }
 
 .cpanel-icon-tile img {
@@ -167,7 +164,7 @@
 
 .cpanel-rooms {
   display: grid;
-  gap: 6px;
+  gap: 0;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -194,7 +191,7 @@
   gap: 2px;
   padding: 6px 8px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--r-row);
   background: none;
   color: inherit;
   text-align: left;
@@ -228,4 +225,17 @@
   display: inline-flex;
   gap: 4px;
   padding-top: 4px;
+}
+
+.cpanel .set-inline {
+  justify-content: space-between;
+  min-height: var(--ctl);
+}
+
+.cpanel .set-inline > .btn.is-quiet:last-child {
+  margin-right: -8px;
+}
+
+.cpanel-item > .icon-btn:last-child {
+  margin-right: -6px;
 }

@@ -76,8 +76,6 @@
   padding: 10px 10px 6px;
   color: var(--ink-3);
   font: 400 var(--t-stamp) var(--ui);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
 }
 
 .search-item {
@@ -154,7 +152,7 @@
 }
 
 .search-mark {
-  border-radius: 3px;
+  border-radius: var(--r-tick);
   background: var(--accent-wash);
   color: var(--ink);
 }

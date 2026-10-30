@@ -18,6 +18,7 @@ const pinnedInfo = Effect.fn("Channel.pinnedInfo")(function* (relay: string, cod
   const info = yield* callRelay<Info>(relay, roomId, "/info", {}, { fp: ownerFp });
   if ((yield* Effect.promise(() => ownerFingerprint(info.ownerPk))) !== ownerFp) throw new Error("this relay is serving a different owner than the join code names; refusing");
   const statement = yield* Effect.promise(() => ownerStatement(roomId, info));
+  if (statement === "legacy") throw new Error("this channel was made before channel keys were signed: its owner's app upgrades it the first time it opens, and nothing joins it until then");
   if (!statement) throw new Error("the channel owner's keys aren't signed; refusing");
   return { roomId, ownerFp, info, signedKeys: statement === "signed-keys" };
 });
@@ -110,14 +111,14 @@ export const joinFx = {
       if (!r.revealed) yield* callRelay(relay, roomId, `/requests/${requestId}/reveal`, { method: "POST", identity: id, body: JSON.stringify({ nonce }) });
       return { status: "pending", code: yield* Effect.promise(() => joinCheckCode(roomId, id.pk, ownerNonce, nonce)) };
     }
-    const keys = yield* Effect.promise(() => unwrapKeys(id, roomId, r.keys ?? {}, info.ownerPk, signedKeys, r.delegation));
+    const keys = yield* Effect.promise(() => unwrapKeys(id, roomId, r.keys ?? {}, info.ownerPk, r.delegation));
     return { status: "approved", access: { roomId, ownerPk: info.ownerPk, ownerXpk: info.ownerXpk, ...keepHeld({ epoch: 0, keys: {} }, { epoch: r.epoch ?? 0, keys }), signedKeys } };
   }),
 
   resume: Effect.fn("Channel.resume")(function* (relay: string, code: string, id: Identity) {
     const { roomId, info, signedKeys } = yield* pinnedInfo(relay, code);
     const r = yield* callRelay<{ epoch: number; keys: Record<string, string>; delegation?: string }>(relay, roomId, "/keys", { identity: id });
-    const keys = yield* Effect.promise(() => unwrapKeys(id, roomId, r.keys, info.ownerPk, signedKeys, r.delegation));
+    const keys = yield* Effect.promise(() => unwrapKeys(id, roomId, r.keys, info.ownerPk, r.delegation));
     const access: ChannelAccess = { roomId, ownerPk: info.ownerPk, ownerXpk: info.ownerXpk, ...keepHeld({ epoch: 0, keys: {} }, { epoch: r.epoch, keys }), signedKeys };
     return access;
   }),
