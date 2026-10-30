@@ -2,10 +2,10 @@
 // pairing; adopt stores the cert; listening names the subscribers; stop quiets the socket.
 
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { chmodSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { adoptDaemon, daemonHello, daemonListening, daemonSock, ensureDaemon, loadPairedMachine, startDaemon, stopDaemon, type Daemon } from "../src/daemon.ts";
+import { adoptDaemon, daemonHello, daemonLaunch, daemonListening, daemonSock, ensureDaemon, loadPairedMachine, startDaemon, stopDaemon, type Daemon } from "../src/daemon.ts";
 import { certUntil, nextLink, readDeviceList, rootLink } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey } from "@kiwi/core/identity.ts";
 import { saveMachine } from "../src/machine.ts";
@@ -61,6 +61,11 @@ describe("the daemon socket", () => {
     const other = await generateIdentity("someone-else");
     const foreign = await certifyMachine(mallory, { pk: other.pk, xpk: other.xpk!, label: "x" });
     await expect(adoptDaemon({ cert: foreign }, { pk: mallory.pk, xpk: mallory.xpk!, name: "M" })).rejects.toThrow(/another computer/);
+    const take = await certifyMachine(mallory, { pk: h0.machine!, xpk: h0.mxpk!, label: "takeover" });
+    await expect(adoptDaemon({ cert: take }, { pk: mallory.pk, xpk: mallory.xpk!, name: "M" })).rejects.toThrow(/already paired with Ada Lovelace/);
+    // The next test pairs a different person: give the machine back first, as `kiwi unpair` would.
+    const paired = loadPairedMachine()!;
+    saveMachine({ identity: paired.identity, label: paired.label, relay: paired.relay });
   });
 
   test("adopt takes a device list that lists this computer, and refuses one that doesn't", async () => {
@@ -101,6 +106,41 @@ describe("the daemon socket", () => {
     expect(h.machine).toBe(paired.identity.pk);
     expect(h.certified).toBe(false);
     expect(h.person).toBeNull();
+  });
+
+  test("the socket answers only a caller holding the daemon's token", async () => {
+    const token = readFileSync(join(home, "daemon.token"), "utf8").trim();
+    expect(token.length).toBeGreaterThanOrEqual(32);
+    const ask = (frame: Record<string, unknown>): Promise<{ id: number; ok: boolean; error?: string }> =>
+      new Promise((resolve, reject) => {
+        void (async () => {
+          const socket = await Bun.connect({
+            unix: daemonSock(),
+            socket: {
+              data(_s, data) {
+                try {
+                  const first = new TextDecoder().decode(data).split("\n")[0] ?? "";
+                  resolve(JSON.parse(first) as { id: number; ok: boolean; error?: string });
+                } catch (err) {
+                  reject(err instanceof Error ? err : new Error(String(err)));
+                }
+              },
+              error(_s, e) {
+                reject(e instanceof Error ? e : new Error(String(e)));
+              },
+            },
+          });
+          socket.write(JSON.stringify(frame) + "\n");
+        })().catch((err: unknown) => reject(err instanceof Error ? err : new Error(String(err))));
+      });
+    await expect(ask({ id: 1, verb: "listening" })).resolves.toEqual({ id: 1, ok: false, error: expect.stringMatching(/token/) });
+    await expect(ask({ id: 1, verb: "listening", token: "not-the-one" })).resolves.toEqual({ id: 1, ok: false, error: expect.stringMatching(/token/) });
+    await expect(ask({ id: 1, verb: "launch", token: "not-the-one" })).resolves.toEqual({ id: 1, ok: false, error: expect.stringMatching(/token/) });
+    await expect(ask({ id: 1, verb: "listening", token })).resolves.toMatchObject({ ok: true });
+  });
+
+  test("a launch asking for bypass is refused while kiwi launches bypass is off", async () => {
+    await expect(daemonLaunch({ harness: "codex", folder: "/tmp", code: "mc2-00000000-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", permission: "bypass" })).rejects.toThrow(/launches bypass/);
   });
 
   test("listening is empty, and stop quiets the socket", async () => {
@@ -169,6 +209,7 @@ describe("the daemon socket", () => {
       d = await startDaemon(dir);
       expect(statSync(dir).mode & 0o777).toBe(0o700);
       expect(statSync(daemonSock(dir)).mode & 0o777).toBe(0o600);
+      expect(statSync(join(dir, "daemon.token")).mode & 0o777).toBe(0o600);
     } finally {
       await d?.stop().catch(() => {});
       rmSync(dir, { recursive: true, force: true });
