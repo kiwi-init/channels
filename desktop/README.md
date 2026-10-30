@@ -80,6 +80,10 @@ bun run typecheck:eb                                  # fetches the devkit into 
   no .deb, and CI checks the AppImage on a stock Arch container (`scripts/distro-check`).
   There is no pacman package either: it would lose the AppImage's self-update and gain
   nothing, since the app already uses Arch's own WebKitGTK.
+  WebKitGTK plays sound through the system's GStreamer: without `gst-plugins-good`
+  (`autoaudiosink`, `wavparse`) even making an `<audio>` element crashes its web process,
+  so on Linux the UI plays the Needs-you chime through WebAudio, which stays silent instead.
+  The distro check proves both.
 
 ## Layout
 
