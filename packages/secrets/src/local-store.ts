@@ -15,6 +15,9 @@ const listeners = new Set<(l: Local) => void>();
 
 export const CHECKS_PREFIX = "mc.checks.";
 export const RECORD_PREFIX = "mc.rec.";
+export const MEMBER_PREFIX = "mc.member.";
+export const PENDING_PREFIX = "mc.pending.";
+export const CHANNELS_KEY = "mc.channels";
 
 export function read<T>(key: string): T | null {
   try {
@@ -41,7 +44,7 @@ export function sweepBrowserKeys(): void {
   const stale: string[] = [];
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
-    if (k === LOCAL_KEY || k?.startsWith(CHECKS_PREFIX) || k?.startsWith(RECORD_PREFIX)) stale.push(k);
+    if (k === LOCAL_KEY || k === CHANNELS_KEY || k?.startsWith(CHECKS_PREFIX) || k?.startsWith(RECORD_PREFIX) || k?.startsWith(MEMBER_PREFIX) || k?.startsWith(PENDING_PREFIX)) stale.push(k);
   }
   for (const k of stale) localStorage.removeItem(k);
 }

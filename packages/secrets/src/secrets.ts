@@ -48,9 +48,13 @@ const publicOf = (l: Local): StoreSnapshot => ({
   personalities: l.personalities,
 });
 
+export function prepareBrowserStore(): void {
+  if (!bridge() && !devBuild()) sweepBrowserKeys();
+}
+
 let snapshot: StoreSnapshot = (() => {
+  prepareBrowserStore();
   const b = bridge();
-  if (!b && !devBuild()) sweepBrowserKeys();
   return b ? b.getSnapshot() : publicOf(readLocal());
 })();
 const listeners = new Set<() => void>();
@@ -106,6 +110,7 @@ export async function saveChannels(channels: ChannelView[]): Promise<void> {
 export async function migrateChannels(entries: ChannelIdentityView[]): Promise<number> {
   const b = bridge();
   if (b) return b.migrateChannels(entries);
+  if (!devBuild()) return 0;
   const { migrateEntries } = await import("../../../desktop/src/seats.ts");
   const { channels, added } = migrateEntries(readLocal().channels, entries);
   if (added) writeLocal({ channels });

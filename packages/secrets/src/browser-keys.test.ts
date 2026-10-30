@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { localOps, makeLocalPerson, NO_BROWSER_KEYS } from "./channel-local.ts";
-import { CHECKS_PREFIX, RECORD_PREFIX, readLocal, sweepBrowserKeys } from "./local-store.ts";
+import { CHANNELS_KEY, CHECKS_PREFIX, MEMBER_PREFIX, PENDING_PREFIX, RECORD_PREFIX, readLocal, sweepBrowserKeys } from "./local-store.ts";
 import { devBuild, relayUrl } from "./relay.ts";
 
 class FakeStorage {
@@ -24,6 +24,8 @@ class FakeStorage {
     this.map.clear();
   }
 }
+
+const page = (search: string): { location: { search: string; origin: string } } => ({ location: { search, origin: "https://page.example" } });
 
 let storage: FakeStorage;
 let hadWindow: { value: unknown } | undefined;
@@ -56,19 +58,42 @@ describe("the plain-browser key store", () => {
     expect(() => localOps()).not.toThrow();
     storage.setItem(`${CHECKS_PREFIX}room`, "[]");
     storage.setItem(`${RECORD_PREFIX}room.pk`, "{}");
+    storage.setItem(`${MEMBER_PREFIX}mc2-old`, "{}");
+    storage.setItem(`${PENDING_PREFIX}mc2-old`, "{}");
+    storage.setItem(CHANNELS_KEY, "[]");
     storage.setItem("unrelated", "keep");
     delete process.env.DEV;
     sweepBrowserKeys();
     expect(readLocal().person).toBeNull();
     expect(storage.getItem(`${CHECKS_PREFIX}room`)).toBeNull();
     expect(storage.getItem(`${RECORD_PREFIX}room.pk`)).toBeNull();
+    expect(storage.getItem(`${MEMBER_PREFIX}mc2-old`)).toBeNull();
+    expect(storage.getItem(`${PENDING_PREFIX}mc2-old`)).toBeNull();
+    expect(storage.getItem(CHANNELS_KEY)).toBeNull();
     expect(storage.getItem("unrelated")).toBe("keep");
+  });
+
+  test("a production load sweeps the legacy seats, and their migration writes nothing back", async () => {
+    delete process.env.DEV;
+    (globalThis as { window?: unknown }).window = page("");
+    const legacy = JSON.stringify({ code: "mc2-old", identity: { name: "probe", pk: "pk", sk: "SECRET", xsk: "EXCHANGE" }, requestId: "r" });
+    storage.map.clear();
+    storage.setItem(`${PENDING_PREFIX}mc2-old`, legacy);
+    const { prepareBrowserStore } = await import("./secrets.ts");
+    prepareBrowserStore();
+    expect(storage.getItem(`${PENDING_PREFIX}mc2-old`)).toBeNull();
+    storage.setItem(`${PENDING_PREFIX}mc2-old`, legacy);
+    const { migrateChannelsToStore } = await import("../../../packages/channel/src/store.ts");
+    expect(await migrateChannelsToStore()).toBe(0);
+    expect(storage.getItem(`${PENDING_PREFIX}mc2-old`)).toBeNull();
+    expect([...storage.map.keys()]).toEqual([]);
+    const { migrateChannels } = await import("./secrets.ts");
+    expect(await migrateChannels([{ label: "probe", pk: "pk", sk: "SECRET", code: "mc2-old", requestId: "r" }])).toBe(0);
+    expect([...storage.map.keys()]).toEqual([]);
   });
 });
 
 describe("the relay a plain browser talks to", () => {
-  const page = (search: string): { location: { search: string; origin: string } } => ({ location: { search, origin: "https://page.example" } });
-
   test("a production page's ?relay= steers nothing; a development build may point at one", () => {
     (globalThis as { window?: unknown }).window = page("?relay=https://attacker.example");
     delete process.env.DEV;
