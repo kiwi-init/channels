@@ -229,6 +229,7 @@ export type Event =
       title?: string;
       note?: string;
       review?: string | null;
+      claim?: true;
       verdict?: Verdict;
       round?: number;
       at?: string;
@@ -755,7 +756,7 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
 
 export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
-export const FOLD_RULES = 2;
+export const FOLD_RULES = 3;
 
 export const olderRules = (base: { rules?: number }): boolean => (base.rules ?? 0) < FOLD_RULES;
 
@@ -887,6 +888,7 @@ function eventCheck(ev: unknown): boolean | null {
         opt(e.title, (x): x is string => str(x, 500)) &&
         opt(e.note, (x): x is string => str(x)) &&
         (e.review === undefined || e.review === null || str(e.review, 64)) &&
+        (e.claim === undefined || (e.claim === true && typeof e.review === "string")) &&
         (e.verdict === undefined || e.verdict === "approved" || e.verdict === "rejected") &&
         (e.round === undefined || (Number.isSafeInteger(e.round) && (e.round as number) > 0)) &&
         opt(e.at, (x): x is string => str(x, 200) && x.trim().length > 0 && !/[\r\n]/.test(x)) &&

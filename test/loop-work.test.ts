@@ -11,7 +11,7 @@ import { grokArgv, grokIdle, grokSession } from "../src/loop/grok.ts";
 import { mimoArgv, mimoIdle, mimoSession } from "../src/loop/mimo.ts";
 import { isListener, kimiArgv, kimiIdle, kimiScreen, kimiSession, listenersUnder, stopStrays, strayKey, tmuxPastesFlag, type Proc } from "../src/loop/kimi.ts";
 import { Database } from "bun:sqlite";
-import { firstPrompt, nextWork, waitingBehind, waitingText, waitsDue, waitTellsTo, workOver, type Wait } from "../src/loop/work.ts";
+import { firstPrompt, nextWork, step, waitingBehind, waitingText, waitsDue, waitTellsTo, workOver, type Wait } from "../src/loop/work.ts";
 
 const ids: Record<string, Identity> = {};
 let seq = 0;
@@ -54,6 +54,29 @@ describe("the work a loop starts a session for", () => {
     const round = await ev("bo", { op: "task.update", task: t.seq, state: "review", at: "abc1234" });
     expect(nextWork(fold([t, round], roster), "ana", 2)).toEqual({ kind: "reviewing", task: t.seq, round: 1 });
     expect(nextWork(fold([t], roster), "ana", 2)).toEqual({ kind: "answering" });
+  });
+
+  test("a round open to anyone is owed by every seat that hasn't worked on the task (#1244)", async () => {
+    const t = await ev("jon", { op: "task.add", title: "Bo's", owner: "bo", review: "*" });
+    const round = await ev("bo", { op: "task.update", task: t.seq, state: "review", at: "abc1234" });
+    const s = fold([t, round], roster);
+    expect(nextWork(s, "ana", 0)).toEqual({ kind: "reviewing", task: t.seq, round: 1 });
+    expect(waitingBehind({ kind: "answering" }, s, "ana")).toEqual([{ kind: "reviewing", task: t.seq, round: 1 }]);
+    expect(nextWork(s, "ana", 2, new Set([`T${t.seq} round 1`]))).toEqual({ kind: "answering" });
+    const own = await ev("jon", { op: "task.add", title: "Ana's", owner: "ana", review: "bo" });
+    const sentOwn = await ev("ana", { op: "task.update", task: own.seq, state: "review", at: "fff6666" });
+    const waiting = fold([t, round, own, sentOwn], roster);
+    const coding = { kind: "coding" as const, task: own.seq };
+    expect(workOver(coding, waiting, "ana")).toBe(true);
+    expect(workOver(coding, waiting, "ana", new Set([`T${t.seq} round 1`]))).toBe(false);
+    expect(waitingBehind(coding, waiting, "ana", new Set([`T${t.seq} round 1`]))).toEqual([]);
+    const todo = await ev("jon", { op: "task.add", title: "Ana's next", owner: "ana" });
+    const answering = fold([t, round, todo], roster);
+    expect(step({ kind: "answering" }, answering, "ana", null, new Set([`T${t.seq} round 1`]))).toEqual({ kind: "fresh", work: { kind: "coding", task: todo.seq }, why: "took" });
+    const worked = await ev("jon", { op: "task.add", title: "Ana's too", owner: "ana", review: "*" });
+    const handed = await ev("ana", { op: "task.update", task: worked.seq, owner: "bo" });
+    const sent = await ev("bo", { op: "task.update", task: worked.seq, state: "review", at: "def5678" });
+    expect(nextWork(fold([worked, handed, sent], roster), "ana", 0)).toBeNull();
   });
 
   test("two coders reviewing each other: each one's waiting task yields to the round it owes", async () => {
