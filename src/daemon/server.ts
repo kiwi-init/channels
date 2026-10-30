@@ -1,10 +1,11 @@
 import { chmodSync, existsSync, mkdirSync, renameSync, rmSync, statSync } from "node:fs";
+import { getRandomValues, timingSafeEqual } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Socket } from "bun";
 import type { Channel, PresenceFields, Probe } from "@kiwi/core/client.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
-import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity, saveAccess, type Config } from "../config.ts";
+import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity, saveAccess, writePrivate, type Config } from "../config.ts";
 import { readCursor } from "../config/cursors.ts";
 import { saveMachine, takeDeviceList } from "../machine.ts";
 import { listedComputer, readDeviceList, type DeviceLink } from "@kiwi/core/devices.ts";
@@ -13,7 +14,7 @@ import { VERSION } from "../version.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
 import { listenedPath, pullsWake, viaOf } from "@kiwi/core/wake.ts";
 import { ensureMachine, loadPairedMachine, PairError, type PairedMachine, type PairedPerson } from "./pair.ts";
-import { DAEMON_PROTOCOL, daemonSock, readListener, type DaemonEvent, type DaemonRead, type DaemonSeat, type DaemonVerb } from "./protocol.ts";
+import { DAEMON_PROTOCOL, daemonSock, daemonToken, readListener, type DaemonEvent, type DaemonRead, type DaemonSeat, type DaemonVerb } from "./protocol.ts";
 import { activityEnv, reachOf, readsRex, seatRecordFor, wakeOn, type Attached } from "./reach.ts";
 import { readRexInto } from "./rex-reads.ts";
 import type { RexActivity, RexPlace, SeatPlace, TerminalPlugin } from "../terminals/plugin.ts";
@@ -52,6 +53,8 @@ const RETRY_MAX_MS = 30 * 60_000;
 const SYNC_ON_REQUEST_MS = 2_000;
 
 class NotAgentSeat extends Error {}
+
+const NO_SOCKET_BYPASS = "a bypass agent needs kiwi launches bypass on here first (the app's Allow bypass from your other devices setting)";
 
 export interface Daemon {
   readonly sock: string;
@@ -94,6 +97,13 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     }
   }
   await ensureMachine(process.env.KIWI_RELAY ?? DEFAULT_RELAY);
+  const token = Buffer.from(getRandomValues(new Uint8Array(32))).toString("base64url");
+  writePrivate(daemonToken(dir), token);
+  const tokenOk = (sent: string): boolean => {
+    const a = Buffer.from(sent);
+    const b = Buffer.from(token);
+    return a.length === b.length && timingSafeEqual(a, b);
+  };
   if (process.platform !== "win32" && (!existed || ours)) {
     try {
       chmodSync(dir, 0o700);
@@ -628,6 +638,10 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     const id = req.id;
     const verb = req.verb;
     const params: Record<string, unknown> = req;
+    if (typeof req.token !== "string" || !tokenOk(req.token)) {
+      sendLine(conn, JSON.stringify({ id, ok: false, error: "this daemon answers only a caller holding its token" }));
+      return;
+    }
     seatSync.soon();
     try {
       switch (verb as DaemonVerb) {
@@ -674,6 +688,11 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
             if (named.pk !== cert.pk) throw new Error("that cert is by another person than the one named");
             if (cert.machine !== m.identity.pk) throw new Error("that cert is for another computer");
             paired = { ...m, cert, person: named };
+          }
+          const pairedTo = m.person?.pk ?? m.device?.person.pk ?? null;
+          if (pairedTo && pairedTo !== named.pk) {
+            const pairedName = m.person?.name ?? m.device?.person.name ?? "someone else";
+            throw new Error(`this computer is already paired with ${pairedName}; unpair it first (kiwi unpair)`);
           }
           saveMachine(paired);
           sendLine(conn, JSON.stringify({ id, ok: true }));
@@ -755,6 +774,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         case "launch": {
           const launch = readLaunchRequest(params);
           if (!launch) throw new Error('launch needs {"harness", "folder", "code", "relay"?, "nick"?, "persona"?, "launch"?: an id of 8 to 64 of A-Z a-z 0-9 _ -}');
+          if (launch.permission === "bypass" && !remoteBypassOn(loadConfig())) throw new Error(NO_SOCKET_BYPASS);
           sendLine(conn, JSON.stringify({ id, ok: true, launched: await launchAgent(launch, { hosted }) }));
           break;
         }
@@ -825,6 +845,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     }
   };
 
+  const umaskWas = process.platform !== "win32" ? process.umask(0o077) : null;
   const server = Bun.listen({
     unix: sock,
     socket: {
@@ -857,6 +878,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       // Same as the home chmod: a mode this user can't set must not stop the daemon.
     }
   }
+  if (umaskWas !== null) process.umask(umaskWas);
   const boundIno = inodeOf(sock);
 
   const tickMs = opts.tickMs ?? TICK_MS;
