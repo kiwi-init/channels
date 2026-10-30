@@ -11,7 +11,6 @@ import { Rail } from "~/shell/rail"
 import { FirstRun } from "~/start/first-run"
 import { EnrollDialog } from "~/settings/enroll"
 import { Gone } from "~/start/gone"
-import { JoinDialog } from "~/start/join"
 import { NewChannelDialog } from "~/start/new-channel"
 import { Welcome } from "~/start/welcome"
 import { applyTheme, colorsOf, usePreview, useSystemDark } from "~/theme/apply"
@@ -19,6 +18,7 @@ import { loadRex, useRex } from "~/theme/rex"
 import { activeTheme, wantsRex } from "~/theme/themes"
 
 const Settings = later(() => import("~/settings/settings").then((m) => m.Settings))
+const JoinDialog = later(() => import("~/start/join").then((m) => m.JoinDialog))
 
 export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => void }) {
   const [toasts, toast] = useToasts()
@@ -59,7 +59,9 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
           </Boundary>
         </div>
         <NewChannelDialog />
-        <JoinDialog />
+        <Suspense fallback={null}>
+          <JoinDialog />
+        </Suspense>
         <EnrollDialog />
         <Palette />
         <Toasts toasts={toasts} />

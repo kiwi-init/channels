@@ -1,0 +1,190 @@
+import type { AccountClient } from "@kiwi/core/account.ts";
+import { readDeviceList, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
+import type { Identity } from "@kiwi/core/identity.ts";
+import {
+  checkVault,
+  newRecoveryPhrase,
+  readRecovery,
+  readRecoveryPhrase,
+  recoveryKey,
+  recoveryLink,
+  sealPerson,
+  sealVault,
+  type Recovery,
+  type RecoveryLink,
+  type SealedPerson,
+  type Vault,
+  type VaultContents,
+} from "@kiwi/core/recovery.ts";
+import type { RecoverySaveView, RecoveryView } from "./bridge.ts";
+
+const CHECKS = 3;
+
+export interface RecoveryKept {
+  at: number;
+  version: number;
+  owners: string[];
+  person?: SealedPerson;
+}
+
+export interface RecoveryHostDeps {
+  session: () => Promise<{ client: AccountClient; device: Identity } | null>;
+  person: () => Identity | null;
+  links: () => DeviceLink[];
+  owned: () => VaultContents["channels"];
+  kept: () => RecoveryKept | null;
+  keep: (k: RecoveryKept) => void;
+  letGo: () => Promise<void>;
+  forget: () => void;
+  now?: () => number;
+}
+
+export interface RecoveryHost {
+  status(): Promise<RecoveryView | null>;
+  words(): Promise<string[]>;
+  save(typed: { at: number; word: string }[]): Promise<RecoverySaveView>;
+  drop(): void;
+  keepCurrent(): Promise<void>;
+}
+
+const NOT_HERE = "set up the recovery key on the computer you first signed in on: it holds your person key";
+
+const matches = (word: string, typed: string): boolean => {
+  const t = typed.trim().toLowerCase();
+  return t === word || (t.length >= 4 && word.startsWith(t));
+};
+
+const ownersOf = (channels: VaultContents["channels"]): string[] => channels.map((c) => c.owner.pk).sort();
+
+const sameOwners = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((pk, i) => pk === b[i]);
+
+const lastSetUp = (chain: readonly unknown[]): RecoveryLink | null => [...(chain as RecoveryLink[])].reverse().find((l) => l.after === null) ?? null;
+
+const setUpAt = (chain: readonly unknown[]): number | null => lastSetUp(chain)?.at ?? null;
+
+const typedHere = (chain: readonly unknown[], recovery: Recovery): boolean => lastSetUp(chain)?.rpk === recovery.rpk;
+
+export function createRecoveryHost(deps: RecoveryHostDeps): RecoveryHost {
+  const now = deps.now ?? Date.now;
+  let held: string[] | null = null;
+  let looked = false;
+
+  const list = async (): Promise<DeviceList> => {
+    const read = await readDeviceList(deps.links());
+    if (!read.ok) throw new Error(`your device list doesn't hold up: ${read.why}`);
+    return read.list;
+  };
+
+  const kept = async (client: AccountClient, devices: DeviceList): Promise<{ chain: unknown[]; recovery: Recovery | null; version: number; at: number | null }> => {
+    const got = await client.vault();
+    const known = deps.kept()?.version ?? 0;
+    let recovery: Recovery | null = null;
+    if (got.recovery.length) {
+      const read = await readRecovery(got.recovery, devices, now());
+      if (!read.ok) throw new Error(`your recovery key doesn't hold up: ${read.why}`);
+      recovery = read.recovery;
+    }
+    if (got.vault === null) {
+      if (known) throw new Error(`the relay lost your recovery vault, which was at version ${known}`);
+      return { chain: got.recovery, recovery, version: 0, at: setUpAt(got.recovery) };
+    }
+    const bad = await checkVault(got.vault, devices, known);
+    if (bad) throw new Error(`the relay's recovery vault doesn't hold up: ${bad}`);
+    return { chain: got.recovery, recovery, version: (got.vault as Vault).version, at: setUpAt(got.recovery) };
+  };
+
+  const boxed = async (chain: readonly unknown[], recovery: Recovery): Promise<SealedPerson> => {
+    const person = deps.person();
+    if (person) {
+      if (!typedHere(chain, recovery)) throw new Error("your recovery key was replaced by a device's proposal, so this app won't seal your person key to it");
+      return sealPerson(recovery, person);
+    }
+    const kept = deps.kept()?.person;
+    if (!kept) throw new Error(NOT_HERE);
+    if (kept.rxpk !== recovery.rxpk) throw new Error("your recovery key changed after this app let go of your person key: type the old words to carry it over");
+    return kept;
+  };
+
+  const seal = async (s: { client: AccountClient; device: Identity }, recovery: Recovery, chain: readonly unknown[], version: number, at: number, extend?: RecoveryLink[]): Promise<RecoveryKept> => {
+    const channels = deps.owned();
+    const person = await boxed(chain, recovery);
+    const vault = await sealVault(deps.person() ?? s.device, recovery, version + 1, { person, channels }, now());
+    await s.client.keepVault({ ...(extend ? { recovery: extend } : {}), vault });
+    const next = { at, version: version + 1, owners: ownersOf(channels), person };
+    deps.keep(next);
+    return next;
+  };
+
+  const letGo = async (chain: readonly unknown[], recovery: Recovery): Promise<void> => {
+    if (deps.person() && !recovery.pending && typedHere(chain, recovery) && deps.kept()?.person?.rxpk === recovery.rxpk) await deps.letGo();
+  };
+
+  const signedIn = async () => {
+    const s = await deps.session();
+    if (!s) throw new Error("sign in to set up a recovery key");
+    return s;
+  };
+
+  return {
+    async status() {
+      const s = await deps.session();
+      if (!s) return null;
+      const got = await s.client.vault();
+      return { at: got.recovery.length ? setUpAt(got.recovery) : null, here: !!deps.person() };
+    },
+
+    async words() {
+      if (!deps.person()) throw new Error(NOT_HERE);
+      held ??= await newRecoveryPhrase();
+      return held;
+    },
+
+    async save(typed) {
+      const words = held;
+      if (!words) throw new Error("those words are gone: start the recovery key again");
+      const asked = new Set(typed.map((t) => t.at));
+      if (asked.size < CHECKS || typed.some((t) => !Number.isInteger(t.at) || t.at < 0 || t.at >= words.length)) throw new Error(`type ${CHECKS} of the words to check them`);
+      const wrong = typed.filter((t) => !matches(words[t.at]!, t.word)).map((t) => t.at);
+      if (wrong.length) return { ok: false, wrong };
+      const person = deps.person();
+      if (!person) throw new Error(NOT_HERE);
+      const phrase = await readRecoveryPhrase(words.join(" "));
+      if (!phrase.ok) throw new Error(`those words don't make a recovery key: ${phrase.why}`);
+      const key = await recoveryKey(phrase.entropy);
+      const session = await signedIn();
+      const devices = await list();
+      const before = await kept(session.client, devices);
+      const link = await recoveryLink(person, person.pk, before.recovery, { pk: key.pk, xpk: key.xpk! }, now());
+      const chain = [...(before.chain as RecoveryLink[]), link];
+      const read = await readRecovery(chain, devices, now());
+      if (!read.ok) throw new Error(`the new recovery key doesn't hold up: ${read.why}`);
+      const done = await seal(session, read.recovery, chain, before.version, link.at, chain);
+      held = null;
+      await letGo(chain, read.recovery).catch(() => {
+        // The words are saved either way; the next enrollPoll lists the computers and lets the person key go.
+      });
+      return { ok: true, at: done.at };
+    },
+
+    drop() {
+      held = null;
+    },
+
+    async keepCurrent() {
+      const held = deps.person();
+      if (held && deps.links().length && (await list()).root !== held.pk) deps.forget();
+      const person = deps.person();
+      const was = deps.kept();
+      if (!person && !was?.person) return;
+      const current = !!was && sameOwners(was.owners, ownersOf(deps.owned()));
+      if (person ? !was && looked : current) return;
+      const s = await deps.session();
+      if (!s) return;
+      const before = await kept(s.client, await list());
+      looked = true;
+      if (!before.recovery) return;
+      if (!current || !was?.person || was.version !== before.version) await seal(s, before.recovery, before.chain, before.version, before.at ?? now());
+      await letGo(before.chain, before.recovery);
+    },
+  };
+}

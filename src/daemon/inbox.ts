@@ -21,6 +21,7 @@ export interface InboxDeps {
   machine: () => PairedMachine | null;
   run: (args: MachineArgs, id: string) => Promise<unknown>;
   unpaired: () => Promise<void>;
+  listed: (links: unknown) => Promise<boolean>;
   now?: () => number;
   checkMs?: number;
 }
@@ -86,10 +87,13 @@ async function listOf(m: Paired): Promise<DeviceList | null> {
   return read.ok ? read.list : null;
 }
 
-async function register(m: Paired): Promise<Response | null> {
-  const listed = m.device?.links.length ? await machineFetch(m, "PUT", "", { links: m.device.links }).catch(() => null) : null;
-  if (listed?.ok || !m.cert || m.cert.pk !== m.owner) return listed;
-  return machineFetch(m, "PUT", "", { cert: m.cert }).catch(() => null);
+async function register(m: Paired, listed: InboxDeps["listed"]): Promise<Response | null> {
+  const byList = m.device?.links.length ? await machineFetch(m, "PUT", "", { links: m.device.links }).catch(() => null) : null;
+  if (byList?.ok || !m.cert || m.cert.pk !== m.owner) return byList;
+  const byCert = await machineFetch(m, "PUT", "", { cert: m.cert }).catch(() => null);
+  if (byCert?.status !== 200 || m.device) return byCert;
+  const links = ((await byCert.json().catch(() => null)) as { links?: unknown } | null)?.links;
+  return (await listed(links)) ? null : byCert;
 }
 
 export async function forgetAtRelay(m: PairedMachine): Promise<void> {
@@ -152,7 +156,7 @@ export function startMachineInbox(deps: InboxDeps): { stop(): void; close(): voi
   const connect = async (m: Paired): Promise<void> => {
     const key = pairedKey(m);
     held = key;
-    const registered = await register(m);
+    const registered = await register(m, deps.listed);
     if (!registered?.ok || stopped || held !== key) {
       held = null;
       retryAt = now() + wait;

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { signRequest } from "@kiwi/core/auth.ts";
-import { certUntil, nextLink, readDeviceList, rootLink, type DeviceLink, type DeviceLinkBody } from "@kiwi/core/devices.ts";
+import { certUntil, nextLink, readDeviceList, rerootLink, rootLink, type DeviceLink, type DeviceLinkBody } from "@kiwi/core/devices.ts";
 import { accountScope, askToEnroll, ENROLL_TTL_MS, enrollDigits, enrollNonce, type EnrollAnswer, type EnrollAsk, type Enrollment } from "@kiwi/core/enroll.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { openVault, readRecovery, recoveryAfter, recoveryKey, recoveryLink, sealVault, type Recovery, type RecoveryLink, type Vault } from "@kiwi/core/recovery.ts";
@@ -395,7 +395,7 @@ describe("the vault: the recovery chain and signed versions (T823)", () => {
       expect(await errorOf(res)).toContain("approving devices");
     }
     const elsewhere = await device("elsewhere");
-    const theirs = await sealVault(elsewhere, { ...(await readOf(links, chain)), person: elsewhere.pk }, 1, { person: elsewhere, channels: [] }, t);
+    const theirs = await sealVault(elsewhere, { ...(await readOf(links, chain)), person: elsewhere.pk, root: elsewhere.pk }, 1, { person: elsewhere, channels: [] }, t);
     expect(await errorOf(await call(a, desk, "PUT", "/v1/account/vault", { vault: theirs }))).toContain("another person");
     expect((await call(a, phone, "PUT", "/v1/account/vault", { vault: v1 })).status).toBe(403);
     expect((await kept(a)).vault).toBeNull();
@@ -473,5 +473,70 @@ describe("the vault: the recovery chain and signed versions (T823)", () => {
     const big = await call(a, desk, "PUT", "/v1/account/vault", { vault: { ...v1, box: "x".repeat(600 * 1024) } });
     expect(big.status).toBe(400);
     expect(await errorOf(big)).toContain("too large");
+  });
+});
+
+describe("re-rooting to a new person key (T827)", () => {
+  async function setUp(a: Account) {
+    const first = await firstApp(a);
+    const thief = await device("thief");
+    const links = await grow(first.links, first.desk, adds(thief, "desktop", true), t);
+    expect((await call(a, first.desk, "PUT", "/v1/account", { links })).status).toBe(204);
+    const key = await recoveryKey(new Uint8Array(32).fill(11));
+    const chain = [await recoveryLink(first.person, first.person.pk, null, { pk: key.pk, xpk: key.xpk! }, t)];
+    expect((await call(a, first.desk, "PUT", "/v1/account/vault", { recovery: chain })).status).toBe(204);
+    const list = await readDeviceList(links);
+    if (!list.ok) throw new Error(list.why);
+    return { ...first, thief, links, list: list.list, key, chain, next: await device("next") };
+  }
+
+  test("the recovery key and a new person key re-root the kept list, and the old key and the cut devices lose their say", async () => {
+    const a = account();
+    const { desk, person, thief, links, list, key, chain, next } = await setUp(a);
+    const rerooted = [...links, await rerootLink(list, key, chain, next, [desk.pk], t)];
+    expect((await call(a, next, "PUT", "/v1/account", { links: rerooted })).status).toBe(204);
+    expect(((await (await call(a, null, "GET", "/v1/account")).json()) as { links: unknown[] }).links).toEqual(rerooted);
+
+    const after = await readDeviceList(rerooted);
+    if (!after.ok) throw new Error(after.why);
+    const stranger = await device("stranger");
+    const byOld = await call(a, person, "PUT", "/v1/account", { links: [...rerooted, await nextLink(after.list, person, adds(stranger, "desktop", true), t)] });
+    expect(byOld.status).toBe(400);
+    expect(await errorOf(byOld)).toContain("may not change this person's devices");
+    expect((await call(a, thief, "PUT", "/v1/account", { links: rerooted })).status).toBe(403);
+    expect((await call(a, desk, "PUT", "/v1/account", { links: [...rerooted, await nextLink(after.list, desk, adds(stranger, "phone"), t)] })).status).toBe(204);
+
+    const recovery = await readRecovery(chain, after.list, t);
+    if (!recovery.ok) throw new Error(recovery.why);
+    const v1 = await sealVault(next, recovery.recovery, 1, { person: next, channels: [] }, t);
+    expect((await call(a, person, "PUT", "/v1/account/vault", { vault: v1 })).status).toBe(403);
+    const oldSigned = await sealVault(person, { ...recovery.recovery, root: person.pk }, 1, { person, channels: [] }, t);
+    expect((await call(a, desk, "PUT", "/v1/account/vault", { vault: oldSigned })).status).toBe(400);
+    expect((await call(a, next, "PUT", "/v1/account/vault", { vault: v1 })).status).toBe(204);
+    expect((await openVault(v1, key, next.pk))?.person.pk).toBe(next.pk);
+    const swap = await recoveryKey(new Uint8Array(32).fill(12));
+    const byOldKey = [...chain, await recoveryLink(person, person.pk, recovery.recovery, { pk: swap.pk, xpk: swap.xpk! }, t)];
+    expect((await call(a, person, "PUT", "/v1/account/vault", { recovery: byOldKey })).status).toBe(403);
+  });
+
+  test("a re-root carries the relay's time and the recovery chain it keeps, so replaced words can't re-root", async () => {
+    const a = account();
+    const { desk, links, list, key, chain, next } = await setUp(a);
+    const late = await call(a, next, "PUT", "/v1/account", { links: [...links, await rerootLink(list, key, chain, next, [desk.pk], t - 10 * 60_000)] });
+    expect(late.status).toBe(400);
+    expect(await errorOf(late)).toContain("time it's sent");
+
+    const words = await recoveryKey(new Uint8Array(32).fill(13));
+    const r1 = await readRecovery(chain, list, t);
+    if (!r1.ok) throw new Error(r1.why);
+    const replaced = [...chain, await recoveryLink(key, list.person, r1.recovery, { pk: words.pk, xpk: words.xpk! }, t)];
+    expect((await call(a, key, "PUT", "/v1/account/vault", { recovery: replaced })).status).toBe(204);
+    const stale = await call(a, next, "PUT", "/v1/account", { links: [...links, await rerootLink(list, key, chain, next, [desk.pk], t)] });
+    expect(stale.status).toBe(409);
+    expect(await errorOf(stale)).toContain("recovery chain this account keeps");
+    const old = await call(a, next, "PUT", "/v1/account", { links: [...links, await rerootLink(list, key, replaced, next, [desk.pk], t)] });
+    expect(old.status).toBe(400);
+    expect(await errorOf(old)).toContain("not signed by the recovery key");
+    expect((await call(a, next, "PUT", "/v1/account", { links: [...links, await rerootLink(list, words, replaced, next, [desk.pk], t)] })).status).toBe(204);
   });
 });
