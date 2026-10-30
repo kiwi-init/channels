@@ -9,7 +9,7 @@ import { DurableObject } from "cloudflare:workers";
 import * as Layer from "effect/Layer";
 import { CLOSE_CLOSED, CLOSE_REMOVED, GONE_WORDS, PING, PONG } from "@kiwi/core/protocol.ts";
 import { ChannelGone, NotFound, Refused, TooMany, UpdateRequired } from "./failures.ts";
-import { Human, workosFromSettings, type HumanAuth } from "./human.ts";
+import { Human, withGithub, workosFromSettings, type HumanAuth } from "./human.ts";
 import { pageSecret, Policy, policyFrom, type RelayPolicy } from "./policy.ts";
 import { edgePage, PAGE_PATH, type PageCache } from "./pages.ts";
 import {
@@ -95,6 +95,8 @@ interface Env {
   REPOS: DurableObjectNamespace<Repos>;
   GITHUB_WEBHOOK_SECRET?: string;
   GITHUB_APP_CLIENT_ID?: string;
+  /** Secret: lets the relay tell its GitHub App's sign-ins from any other app's. */
+  GITHUB_APP_CLIENT_SECRET?: string;
   GITHUB_APP_ID?: string;
   GITHUB_APP_PRIVATE_KEY?: string;
 }
@@ -108,7 +110,10 @@ let humanAuth: HumanAuth | null | undefined;
 /** One verifier (and JWKS cache) per isolate. */
 function human(env: Env): HumanAuth | null {
   if (humanAuth === undefined) {
-    humanAuth = workosFromSettings({ clientId: env.WORKOS_CLIENT_ID, authkitDomain: env.WORKOS_AUTHKIT_DOMAIN, apiKey: env.WORKOS_API_KEY });
+    humanAuth = withGithub(workosFromSettings({ clientId: env.WORKOS_CLIENT_ID, authkitDomain: env.WORKOS_AUTHKIT_DOMAIN, apiKey: env.WORKOS_API_KEY }), {
+      clientId: env.GITHUB_APP_CLIENT_ID,
+      clientSecret: env.GITHUB_APP_CLIENT_SECRET,
+    });
   }
   return humanAuth;
 }
