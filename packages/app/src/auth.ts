@@ -1,8 +1,9 @@
-// Sign-in, 0.11: only creating a channel needs it, and only on a relay that has sign-in. The
-// desktop app does it (window.kiwi.signIn(): WorkOS device authorization in the main process, in
-// the system browser, or a name for a relay run with dev sign-in). Nothing else asks: joining,
-// approving and running channels go by the person key. A plain browser (development) can only
-// sign in to a dev relay, as the person's name.
+// Sign-in: on a relay that takes GitHub sign-in, the desktop app signs in with GitHub before
+// anything else, and that sign-in is also the GitHub link. On the relay it only gates creating a
+// channel and the account: joining, approving and running channels go by the person key. Older
+// relays take WorkOS (device authorization in the main process, in the system browser) or a name
+// for a relay run with dev sign-in. A plain browser (development) can only sign in to a dev
+// relay, as the person's name.
 
 import * as Effect from "effect/Effect";
 import { useEffect, useState } from "react";
@@ -13,7 +14,7 @@ import { relayUrl } from "@kiwi/secrets/relay.ts";
 import { run } from "./runtime";
 import { bridge, secrets } from "@kiwi/secrets/secrets.ts";
 
-export type SignInMode = "loading" | "off" | "workos" | "dev";
+export type SignInMode = "loading" | "off" | "github" | "workos" | "dev";
 
 let mode: Promise<SignInMode> | null = null;
 
@@ -21,7 +22,9 @@ let mode: Promise<SignInMode> | null = null;
 function signInMode(): Promise<SignInMode> {
   mode ??= run(
     relayFx.relayConfig(relayUrl()).pipe(
-      Effect.map((c: { workosClientId: string | null; dev?: boolean }): SignInMode => (c.dev ? "dev" : c.workosClientId ? "workos" : "off")),
+      Effect.map((c: { workosClientId: string | null; dev?: boolean; githubSignIn?: boolean; githubClientId?: string }): SignInMode =>
+        c.dev ? "dev" : c.githubSignIn && c.githubClientId ? "github" : c.workosClientId ? "workos" : "off",
+      ),
       Effect.catchCause(() => Effect.succeed<SignInMode>("off")),
     ),
   );

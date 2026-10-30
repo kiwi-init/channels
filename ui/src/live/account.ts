@@ -8,11 +8,25 @@ import { useUpdate } from "@kiwi/app/update.ts"
 import { announce } from "~/kit/toasts"
 import { deviceNews, postDevicesNow } from "~/live/devices"
 import { store, type Listener } from "~/live/value"
-import type { Account, Computer, Device, EnrollAsk, Enrolling } from "~/model"
+import type { Account, Computer, Device, EnrollAsk, Enrolling, GithubSignIn } from "~/model"
 import { version } from "../../../package.json"
 
 const github = store<{ login: string } | null>(null)
 const githubCode = store<{ code: string; url: string } | null>(null)
+const githubGate = store<"unknown" | "needed" | "signed-in" | "off">("unknown")
+const githubBusy = store<string | null>(null)
+let codeListener: (() => void) | null = null
+
+function listenForCodes(): void {
+  const b = bridge()
+  if (!b || codeListener) return
+  codeListener = b.onGithubCode((c) => {
+    githubCode.set(c)
+    void navigator.clipboard?.writeText(c.code).catch(() => {})
+    announce(`Type ${c.code} on GitHub (copied)`)
+    void b.openExternal(c.url).catch(() => {})
+  })
+}
 
 const ENROLL_POLL_MS = 20_000
 const ENROLL_WAIT_MS = 2_000
@@ -214,29 +228,56 @@ export async function enrollDeny(id: string): Promise<void> {
 
 async function refreshGithub(): Promise<void> {
   const b = bridge()
-  if (!b) return github.set(null)
+  if (!b) {
+    github.set(null)
+    return githubGate.set("off")
+  }
+  listenForCodes()
   const s = await b.githubStatus()
   github.set(s.account ? { login: s.account.login } : null)
+  githubGate.set(!s.signIn ? "off" : s.account ? "signed-in" : "needed")
 }
 
 export async function linkGithub(): Promise<void> {
   const b = bridge()
   if (!b) throw new Error("Linking GitHub needs the Channels desktop app")
-  const stop = b.onGithubCode((c) => {
-    githubCode.set(c)
-    void navigator.clipboard?.writeText(c.code).catch(() => {})
-    announce(`Type ${c.code} on GitHub (copied)`)
-    void b.openExternal(c.url).catch(() => {})
-  })
+  listenForCodes()
+  githubBusy.set(null)
   try {
     const s = await b.githubLink()
     github.set(s.account ? { login: s.account.login } : null)
-    if (s.account) announce(`Linked GitHub as ${s.account.login}`)
+    if (s.signIn) githubGate.set(s.account ? "signed-in" : "needed")
+    if (s.account) announce(`Signed in with GitHub as ${s.account.login}`)
+  } catch (err) {
+    githubBusy.set(err instanceof Error ? err.message : String(err))
+    throw err
   } finally {
-    stop()
     githubCode.set(null)
   }
 }
+
+/** Where signing in with GitHub stands, on a relay that takes it; null on one that doesn't. */
+export function useGithubSignIn(): GithubSignIn | null {
+  const gate = useSyncExternalStore(githubGate.subscribe, githubGate.get)
+  const linked = useSyncExternalStore(github.subscribe, github.get)
+  const code = useSyncExternalStore(githubCode.subscribe, githubCode.get)
+  const problem = useSyncExternalStore(githubBusy.subscribe, githubBusy.get)
+  useEffect(() => {
+    void refreshGithub().catch(() => githubGate.set("off"))
+  }, [])
+  return useMemo((): GithubSignIn | null => {
+    if (gate === "unknown") return { stage: "checking" }
+    if (gate === "needed") return { stage: "sign-in", code, problem }
+    if (gate === "signed-in" && linked) return { stage: "signed-in", login: linked.login }
+    return null
+  }, [gate, linked, code, problem])
+}
+
+/** Whether the app waits on GitHub sign-in (or doesn't know yet whether it does). */
+export const useGithubGate = (): "unknown" | "needed" | "signed-in" | "off" => useSyncExternalStore(githubGate.subscribe, githubGate.get)
+
+/** The GitHub login this app is signed in as, once it is. */
+export const useGithubLogin = (): string | null => useSyncExternalStore(github.subscribe, github.get)?.login ?? null
 
 export async function unlinkGithub(): Promise<void> {
   const b = bridge()
@@ -348,6 +389,7 @@ export function useAccount(): Account | null {
   const agents = useOwnAgents()
   const linked = useSyncExternalStore(github.subscribe, github.get)
   const code = useSyncExternalStore(githubCode.subscribe, githubCode.get)
+  const gate = useSyncExternalStore(githubGate.subscribe, githubGate.get)
   const look = useSyncExternalStore(uiUpdate.subscribe, uiUpdate.get)
   const enroll = useSyncExternalStore(enrollAsk.subscribe, enrollAsk.get)
   const trouble = useSyncExternalStore(enrollTrouble.subscribe, enrollTrouble.get)
@@ -363,6 +405,7 @@ export function useAccount(): Account | null {
       name: person.name,
       handle: handleFor(person.name),
       ...(linked ? { github: linked } : {}),
+      ...(gate === "signed-in" ? { githubSignIn: true } : {}),
       computers: [...computers.map((c) => computerOf(c, online, agents)), ...phones.map(phoneOf)],
       version,
       ...(update && !update.blocked ? { update: { version: update.version, ready: update.state === "ready", state: update.state } } : {}),
@@ -378,5 +421,5 @@ export function useAccount(): Account | null {
       ...deviceNotices(news),
       ...(code ? { githubCode: code } : {}),
     }
-  }, [person, linked, computers, phones, online, agents, update, code, look, unsealed, enroll, trouble, signed, news])
+  }, [person, linked, gate, computers, phones, online, agents, update, code, look, unsealed, enroll, trouble, signed, news])
 }

@@ -7,16 +7,13 @@ import { externalUrl } from "../guard.ts";
 import { held } from "../held.ts";
 import type { Host } from "../host.ts";
 import { openInBrowser } from "../open.ts";
-import { relayConfig } from "../signin.ts";
+import { githubSignsIn, relayConfig } from "../signin.ts";
 import { mutate, store } from "../store.ts";
 
 async function status(): Promise<GithubStatus> {
   const link = linkedHere(store.github, store.relayUrl) ? store.github : undefined;
-  const available = await relayConfig(store.relayUrl).then(
-    (c) => !!c.githubClientId,
-    () => false,
-  );
-  return { available, account: link ? { login: link.login, id: link.id, at: link.at } : null };
+  const config = await relayConfig(store.relayUrl).catch(() => null);
+  return { available: !!config?.githubClientId, ...(config && githubSignsIn(config) ? { signIn: true } : {}), account: link ? { login: link.login, id: link.id, at: link.at } : null };
 }
 
 let linking: Promise<GithubStatus> | null = null;
@@ -46,20 +43,30 @@ async function link(host: Host): Promise<GithubStatus> {
   return status();
 }
 
+function linkOnce(host: Host): Promise<GithubStatus> {
+  if (linking) {
+    if (pending) host.push("githubCode", pending);
+    return linking;
+  }
+  linking = link(host).finally(() => {
+    linking = null;
+    pending = null;
+  });
+  return linking;
+}
+
+/** Signing in on a relay that takes GitHub: the same device flow as the link, which it also is. */
+export async function signInWithGithub(host: Host): Promise<string> {
+  await linkOnce(host);
+  const token = store.github?.token;
+  if (!token) throw new Error("GitHub didn't sign you in");
+  return token;
+}
+
 export function githubCalls(host: Host): Serves<"githubStatus" | "githubLink" | "githubRepos" | "githubPicture" | "githubUnlink"> {
   return {
     githubStatus: () => status(),
-    githubLink: () => {
-      if (linking) {
-        if (pending) host.push("githubCode", pending);
-        return linking;
-      }
-      linking = link(host).finally(() => {
-        linking = null;
-        pending = null;
-      });
-      return linking;
-    },
+    githubLink: () => linkOnce(host),
     githubRepos: (): Promise<GithubRepoView[]> => {
       const link = store.github;
       if (!link || !linkedHere(link, store.relayUrl)) return Promise.reject(new Error("link GitHub in Settings first"));
