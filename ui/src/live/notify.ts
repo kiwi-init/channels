@@ -41,7 +41,7 @@ export function rootOf(m: Wire, known: ReadonlyMap<number, Wire>): Rooted {
   let below = m
   for (;;) {
     const parent = at.re?.[0]
-    if (parent === undefined || parent >= at.seq) return { kind: "root", m: at, below }
+    if (at.kind === "event" || parent === undefined || parent >= at.seq) return { kind: "root", m: at, below }
     const up = known.get(parent)
     if (!up) return { kind: "missing", seq: parent }
     below = at

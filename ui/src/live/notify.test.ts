@@ -174,22 +174,24 @@ describe("what a notification says and opens (#1351)", () => {
     expect(noteTitle(reply, "jow", "lead", "ops", { kind: "thread" })).toBe("lead in ops · a thread")
   })
 
-  test("a reply under a task event is in that task, and one under another event keeps its own room, matching the fold", () => {
+  test("a reply under a task event is in that task, even when the task is filed under a goal, and one under another event keeps its own room, matching the fold", () => {
     const roster: Roster = [{ name: "lead", pk: "pk-lead", owner: true, at: 0, active: true, kind: "human" }]
     const event = (seq: number, ev: Wire["ev"]): Wire => msg({ seq, from: "lead", pk: "pk-lead", id: `m${seq}`, kind: "event", body: "", ev })
-    const added = event(3, { op: "task.add", title: "ship it" })
+    const goal = msg({ seq: 1, from: "lead", pk: "pk-lead", id: "m1", body: "ship the release" })
+    const added = { ...event(3, { op: "task.add", title: "ship it" }), re: [1] }
     const claimed = event(5, { op: "task.claim", task: 3 })
     const plain = event(6, { op: "charter", text: "be kind" })
     const toAdded = msg({ seq: 7, from: "lead", pk: "pk-lead", id: "m7", re: [3] })
     const toClaim = msg({ seq: 8, from: "lead", pk: "pk-lead", id: "m8", re: [5] })
     const toPlain = msg({ seq: 9, from: "lead", pk: "pk-lead", id: "m9", re: [6] })
-    const all = [added, claimed, plain, toAdded, toClaim, toPlain]
+    const all = [goal, added, claimed, plain, toAdded, toClaim, toPlain]
     const state = fold(all, roster, 10, null, null, null)
     const known = new Map(all.map((x) => [x.seq, x]))
     const placed = (m: Wire) => {
       const found = rootOf(m, known)
       return found.kind === "root" ? rootedPlace(found) : null
     }
+    expect(state.rejected.size).toBe(0)
     expect(state.placeOf.get(7)).toEqual({ kind: "task", task: 3 })
     expect(placed(toAdded)).toEqual({ kind: "task", task: 3 })
     expect(state.placeOf.get(8)).toEqual({ kind: "task", task: 3 })
