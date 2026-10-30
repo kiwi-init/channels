@@ -1,0 +1,74 @@
+name: walk
+on:
+  push:
+    branches: [T1031-walk]
+permissions:
+  contents: read
+jobs:
+  desktop-mac:
+    name: desktop / mac
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: bun run ui:build
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.hutch
+          key: hutch-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/electrobun-pins.json') }}
+      - name: electrobun toolchain
+        working-directory: desktop
+        timeout-minutes: 5
+        run: for i in 1 2 3; do bun run prepare:eb && exit 0; echo "electrobun prepare failed ($i of 3)"; [ "$i" -lt 3 ] && sleep 20; done; exit 1
+      - name: the kiwi CLI the app bundles
+        run: mkdir -p dist && bun scripts/build-cli.ts --js dist/kiwi.js
+      - id: tmux
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: dist/tmux
+          key: tmux-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build-tmux.sh') }}
+      - name: the tmux the app bundles, linked only to the system's own libraries
+        if: steps.tmux.outputs.cache-hit != 'true'
+        run: bash scripts/build-tmux.sh dist/tmux
+      - working-directory: desktop
+        if: ${{ !cancelled() }}
+        env:
+          DASH_RELEASE_OFFLINE: "1"
+        run: bun run build:eb
+      - if: ${{ !cancelled() }}
+        run: bun desktop/scripts/eb-size.ts desktop/release-eb
+      - name: the app carries its own tmux, and it runs
+        if: ${{ !cancelled() }}
+        run: |
+          into=$(mktemp -d)
+          app=$(INTO="$into" bun -e 'import { payloadOf, shippedApp } from "./desktop/scripts/eb-app.ts"; console.log(shippedApp(payloadOf("desktop/release-eb/artifacts"), process.env.INTO ?? ""))')
+          [ -x "$app/Contents/Resources/tmux" ] || { echo "the shipped app has no Contents/Resources/tmux"; exit 1; }
+          "$app/Contents/Resources/tmux" -V
+          rm -rf "$into"
+      - if: ${{ !cancelled() }}
+        run: bun desktop/scripts/eb-seal-check.ts
+      - name: the launcher keeps BUN_*, NODE_*, DYLD_* and JSC_* out of the app
+        if: ${{ !cancelled() }}
+        run: bun desktop/scripts/eb-env-check.ts desktop/release-eb
+      - name: the launcher holds the store key for one session, refuses a changed app, and its C runs clean under ASan and UBSan
+        if: ${{ !cancelled() }}
+        run: bun desktop/scripts/eb-keys-check.ts desktop/release-eb
+      - name: test build (the test driver in, its own bundle id)
+        if: ${{ !cancelled() }}
+        working-directory: desktop
+        run: bun scripts/eb.ts build --env=dev
+        env:
+          CHANNELS_EB_TEST: "1"
+          DASH_RELEASE_OFFLINE: "1"
+      - name: walk
+        if: ${{ !cancelled() }}
+        timeout-minutes: 20
+        env:
+          WALK_OUT: ${{ runner.temp }}/walk
+        run: bun desktop/scripts/walk-eb.ts desktop/release-eb/build/dev-macos-*/*.app
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: walk-mac
+          path: ${{ runner.temp }}/walk
