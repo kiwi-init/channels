@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { encodeJoinCode, newRoomId } from "@kiwi/core/crypto.ts";
 import { localOps, makeLocalPerson, NO_BROWSER_KEYS } from "./channel-local.ts";
 import { CHANNELS_KEY, CHECKS_PREFIX, MEMBER_PREFIX, PENDING_PREFIX, RECORD_PREFIX, readLocal, sweepBrowserKeys } from "./local-store.ts";
 import { devBuild, relayUrl } from "./relay.ts";
@@ -76,20 +77,25 @@ describe("the plain-browser key store", () => {
   test("a production load sweeps the legacy seats, and their migration writes nothing back", async () => {
     delete process.env.DEV;
     (globalThis as { window?: unknown }).window = page("");
-    const legacy = JSON.stringify({ code: "mc2-old", identity: { name: "probe", pk: "pk", sk: "SECRET", xsk: "EXCHANGE" }, requestId: "r" });
+    const code = encodeJoinCode({ roomId: newRoomId(), ownerFp: "A".repeat(16) });
+    const key = `${PENDING_PREFIX}${code}`;
+    const legacy = JSON.stringify({ code, identity: { name: "probe", pk: "pk", sk: "SECRET", xsk: "EXCHANGE" }, requestId: "r" });
     storage.map.clear();
-    storage.setItem(`${PENDING_PREFIX}mc2-old`, legacy);
+    storage.setItem(key, legacy);
     const { prepareBrowserStore } = await import("./secrets.ts");
     prepareBrowserStore();
-    expect(storage.getItem(`${PENDING_PREFIX}mc2-old`)).toBeNull();
-    storage.setItem(`${PENDING_PREFIX}mc2-old`, legacy);
+    expect(storage.getItem(key)).toBeNull();
+    storage.setItem(key, legacy);
     const { migrateChannelsToStore } = await import("../../../packages/channel/src/store.ts");
     expect(await migrateChannelsToStore()).toBe(0);
-    expect(storage.getItem(`${PENDING_PREFIX}mc2-old`)).toBeNull();
+    expect(storage.getItem(key)).toBeNull();
     expect([...storage.map.keys()]).toEqual([]);
     const { migrateChannels } = await import("./secrets.ts");
-    expect(await migrateChannels([{ label: "probe", pk: "pk", sk: "SECRET", code: "mc2-old", requestId: "r" }])).toBe(0);
+    expect(await migrateChannels([{ label: "probe", pk: "pk", sk: "SECRET", code, requestId: "r" }])).toBe(0);
     expect([...storage.map.keys()]).toEqual([]);
+    process.env.DEV = "true";
+    expect(await migrateChannels([{ label: "probe", pk: "pk", sk: "SECRET", code, requestId: "r" }])).toBe(1);
+    expect(readLocal().channels[0]?.sk).toBe("SECRET");
   });
 });
 
