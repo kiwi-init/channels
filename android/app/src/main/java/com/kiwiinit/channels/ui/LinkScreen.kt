@@ -141,7 +141,7 @@ fun LinkScreen(model: AppModel, modifier: Modifier = Modifier, linking: Linking 
                     keeping = true
                     model.keepLink()
                 }
-                QuietButton("It doesn't match", Modifier.padding(top = 10.dp)) { model.refuseLink(linking.fingerprint) }
+                QuietButton("It doesn't match", Modifier.padding(top = 10.dp)) { if (!keeping) model.refuseLink(linking.fingerprint) }
             }
         }
         Spacer(Modifier.size(24.dp))

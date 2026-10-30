@@ -429,7 +429,9 @@ async function enrollFinish(): Promise<Saved> {
   const e = enrolling;
   if (!e) throw new Error("signing in hasn't started");
   await e.enrollee.keep();
+  if (enrolling !== e) throw new Error("signing in was cancelled, so this phone kept nothing");
   enrolling = null;
+  if (saved?.person || saved?.device) throw new Error("this phone is already one of your devices, so it kept nothing");
   const { grant, device } = e;
   if (!grant || !device?.xpk || !device.xsk) throw new Error("the grant came without this phone's keys: sign in again");
   const key = { name: device.name, pk: device.pk, sk: device.sk, xpk: device.xpk, xsk: device.xsk };

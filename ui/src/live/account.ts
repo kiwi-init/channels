@@ -20,7 +20,7 @@ const ENROLLING_MS = 2_000
 
 const selfEnroll = store<Enrolling | null>(null)
 let enrollTimer: ReturnType<typeof setTimeout> | null = null
-let enrollDone: ((d: EnrollDone) => void) | null = null
+let enrollRun: { done: (d: EnrollDone) => void } | null = null
 
 export type EnrollDone = { person: { name: string }; channels: { label: string; code: string }[] }
 
@@ -34,7 +34,9 @@ export async function enrollBegin(signIn: () => Promise<unknown>, done: (d: Enro
   const b = enrollBridge()
   await signIn()
   await b.enrollBegin()
-  enrollDone = done
+  if (enrollTimer) clearTimeout(enrollTimer)
+  const mine = { done }
+  enrollRun = mine
   selfEnroll.set({ stage: "asking" })
   const tick = async () => {
     enrollTimer = null
@@ -42,21 +44,21 @@ export async function enrollBegin(signIn: () => Promise<unknown>, done: (d: Enro
     try {
       next = await b.enrollStatus()
     } catch (err) {
+      if (enrollRun !== mine) return
+      enrollRun = null
       selfEnroll.set(null)
       announce(`Couldn't sign in as one of your devices: ${err instanceof Error ? err.message : String(err)}`)
       return
     }
-    if (!next) return selfEnroll.set(null)
-    if (next.stage === "gone") {
+    if (enrollRun !== mine) return
+    if (!next || next.stage === "gone" || next.stage === "done") {
+      enrollRun = null
       selfEnroll.set(null)
-      return announce("Your other computer turned this one away, or the ask ran out")
+      if (next?.stage === "gone") announce("Your other computer turned this one away, or the ask ran out")
+      if (next?.stage === "done") done(next)
+      return
     }
-    if (next.stage === "done") {
-      selfEnroll.set(null)
-      return done(next)
-    }
-    const shown = selfEnroll.get()
-    if (JSON.stringify(shown) !== JSON.stringify(next)) selfEnroll.set(next)
+    if (JSON.stringify(selfEnroll.get()) !== JSON.stringify(next)) selfEnroll.set(next)
     if (next.stage === "check") return
     enrollTimer = setTimeout(() => void tick(), ENROLLING_MS)
   }
@@ -64,26 +66,27 @@ export async function enrollBegin(signIn: () => Promise<unknown>, done: (d: Enro
 }
 
 export async function enrollKeep(): Promise<void> {
-  const shown = selfEnroll.get()
-  const done = enrollDone
-  if (shown?.stage !== "check" || !done) return
+  const mine = enrollRun
+  if (selfEnroll.get()?.stage !== "check" || !mine) return
+  enrollRun = null
   selfEnroll.set(null)
-  enrollDone = null
-  done(await enrollBridge().enrollKeep())
+  mine.done(await enrollBridge().enrollKeep())
 }
 
 export async function enrollCancel(): Promise<void> {
   if (enrollTimer) clearTimeout(enrollTimer)
   enrollTimer = null
+  enrollRun = null
   const shown = selfEnroll.get()
   selfEnroll.set(null)
-  enrollDone = null
   await enrollBridge().enrollCancel()
   if (shown?.stage === "check")
     announce(`Kept nothing. If your other computer never showed ${shown.person.fingerprint}, someone else answered this computer. It may still list this computer under Devices: remove it there.`)
 }
 
-export const useEnrolling = (): Enrolling | null => useSyncExternalStore(selfEnroll.subscribe, selfEnroll.get)
+export const enrollingNow = (): Enrolling | null => selfEnroll.get()
+
+export const useEnrolling = (): Enrolling | null => useSyncExternalStore(selfEnroll.subscribe, enrollingNow)
 
 const enrollTrouble = store<string | null>(null)
 

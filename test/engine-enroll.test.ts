@@ -180,6 +180,24 @@ describe("the phone engine signs in and enrolls (T640)", () => {
     await s.ownerCh.close();
   });
 
+  test("a cancel that lands while the phone keeps its person wins, and nothing is saved (#1323)", async () => {
+    await ask({ op: "start", saved: { relay, person: null, seats: [] } });
+    const s = await setupChannel(relay, { personName: "Jow", human: "dev:phone5" });
+    const host = desktop(await withExchangeKey(s.person), "phone5", [{ label: "onemouse", code: s.code }]);
+    await host.poll();
+    await ask({ op: "enrollBegin", relay, label: "Pixel 9", os: "Android 16", user: "phone5" });
+    const waiting = ask<{ digits: string }>({ op: "enrollWait" });
+    const id = await answered(host);
+    await host.confirm(id, (await waiting).digits);
+    await ask({ op: "enrollCheck" });
+    const before = pushes.length;
+    const finishing = ask({ op: "enrollFinish" });
+    await ask({ op: "enrollCancel" });
+    await expect(finishing).rejects.toThrow("cancelled, so this phone kept nothing");
+    expect(pushes.slice(before).some((p) => p.type === "saved")).toBe(false);
+    await s.ownerCh.close();
+  });
+
   test("a dev relay needs the sign-in name", async () => {
     await expect(ask({ op: "enrollBegin", relay, label: "Pixel 9", os: "Android 16" })).rejects.toThrow("dev sign-in");
   });

@@ -115,7 +115,7 @@ struct LinkView: View {
                     }
                 }
                 .padding(.top, 20)
-                QuietButton(title: "It Doesn't Match") { Task { await model.refuseLink(fingerprint) } }
+                QuietButton(title: "It Doesn't Match") { if !keeping { Task { await model.refuseLink(fingerprint) } } }
                     .padding(.top, 10)
             }
         }
