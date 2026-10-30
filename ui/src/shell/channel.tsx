@@ -132,19 +132,20 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
             </button>
           )}
         </nav>
-        <div className="top-tools">
-          {line.length > 0 && !searching && <span className="top-meta num">{line.join(" · ")}</span>}
+        <div className={cx("top-tools", searching && "is-searching")}>
+          {line.length > 0 && <span className="top-meta num">{line.join(" · ")}</span>}
           {channel.hold && (
             <span className="top-hold" title={channel.hold.note}>
               paused
             </span>
           )}
-          {searching ? (
-            <Suspense fallback={null}>
-              <SearchBox channel={channel} focusAsk={focusAsk} onJump={setJump} onClose={() => setSearching(false)} />
-            </Suspense>
-          ) : (
-            <IconButton icon="search" label="Search this channel (⌘F)" onClick={() => setSearching(true)} />
+          <IconButton icon="search" label="Search this channel (⌘F)" onClick={() => setSearching(true)} />
+          {searching && (
+            <div className="top-find">
+              <Suspense fallback={null}>
+                <SearchBox channel={channel} focusAsk={focusAsk} onJump={setJump} onClose={() => setSearching(false)} />
+              </Suspense>
+            </div>
           )}
           <IconButton icon="terminal" label="Your terminal" pressed={nav.term?.kind === "you"} onClick={() => go({ to: "term", term: nav.term?.kind === "you" ? null : { kind: "you" } })} />
         </div>
