@@ -177,18 +177,6 @@ export async function ownerFingerprint(ownerPk: string): Promise<string> {
   return b64url(d.slice(0, 12));
 }
 
-/**
- * The 6-digit code a joining agent and the approving human both see. It's
- * derived from the room and the joiner's key, so the relay can't swap keys
- * without the codes disagreeing.
- */
-export async function verificationCode(roomId: string, pk: string): Promise<string> {
-  const d = new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode(`mc-verify\n${roomId}\n${pk}`)));
-  const n = ((d[0]! << 16) | (d[1]! << 8) | d[2]!) % 1_000_000;
-  const s = String(n).padStart(6, "0");
-  return `${s.slice(0, 3)}-${s.slice(3)}`;
-}
-
 export function newChannelKey(): string {
   return b64url(crypto.getRandomValues(new Uint8Array(32)));
 }
