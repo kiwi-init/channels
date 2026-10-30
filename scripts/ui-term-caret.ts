@@ -10,7 +10,7 @@ const dist = resolve(flag("--dist") ?? join(import.meta.dir, "../ui/dist"));
 if (!existsSync(join(dist, "index.html"))) throw new Error(`no index.html in ${dist}: run bun run ui:build first`);
 const engine = flag("--browser") ?? "webkit";
 if (engine !== "webkit" && engine !== "chromium") throw new Error(`--browser is webkit or chromium, not ${engine}`);
-const FRAMES = 4;
+const FRAMES = 6;
 const FRAME_MS = 100;
 
 async function differing(pngs: string[]): Promise<number> {
@@ -53,6 +53,15 @@ try {
   await page.goto(`http://127.0.0.1:${server.port}/?shot=terminal-mine`);
   const screen = page.locator(".term-screen");
   await screen.locator("canvas").waitFor();
+  await page.evaluate(async () => {
+    const drawer = document.querySelector(".term");
+    await Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => a.effect instanceof KeyframeEffect && a.effect.target instanceof Node && drawer?.contains(a.effect.target) && a.effect.getComputedTiming().iterations !== Infinity)
+        .map((a) => a.finished),
+    );
+  });
   expect(await screen.evaluate((el) => el.isContentEditable && el.querySelector(":scope > canvas") !== null), "ghostty-web makes the terminal an editable element around its canvas");
   await screen.evaluate((el) => {
     const bare = el.cloneNode(true);
@@ -64,12 +73,18 @@ try {
   if (!box) throw new Error("the terminal has no box");
   const clip = { x: box.x, y: box.y, width: box.width, height: box.height };
   let caret = 0;
+  let steady = 0;
   for (let i = 0; i < FRAMES; i++) {
-    const hidden = await page.screenshot({ caret: "hide", clip });
-    const shown = await page.screenshot({ caret: "initial", clip });
-    caret = Math.max(caret, await page.evaluate(differing, [hidden.toString("base64"), shown.toString("base64")]));
+    const hidden = (await page.screenshot({ caret: "hide", clip })).toString("base64");
+    const shown = (await page.screenshot({ caret: "initial", clip })).toString("base64");
+    const again = (await page.screenshot({ caret: "hide", clip })).toString("base64");
+    if ((await page.evaluate(differing, [hidden, again])) === 0) {
+      steady++;
+      caret = Math.max(caret, await page.evaluate(differing, [hidden, shown]));
+    }
     await page.waitForTimeout(FRAME_MS);
   }
+  expect(steady > 0, `the terminal holds still long enough to look for a caret (${steady} of ${FRAMES} frames)`);
   expect(caret === 0, `the browser draws no caret over the terminal (${caret} pixels where it would be)`);
 } finally {
   await browser.close();
