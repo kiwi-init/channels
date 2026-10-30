@@ -9,6 +9,7 @@ import { useApp } from "~/nav"
 export function Rail() {
   const { app, nav, go } = useApp()
   const onChannel = nav.page === "channel"
+  const home = onChannel && nav.channel === null
   const step = useEffectEvent((dir: 1 | -1) => {
     const from = onChannel ? app.channels.findIndex((c) => c.code === nav.channel) : -1
     const news = app.channels.map((c, i) => ({ open: i === from, fresh: c.unread > 0, needs: c.needsYou, count: c.unread }))
@@ -40,6 +41,9 @@ export function Rail() {
           </button>
         </div>
       )}
+      <button type="button" className={cx("tile is-home", home && "is-on")} aria-label="Home" aria-current={home ? "page" : undefined} title="Home" onClick={() => go({ to: "home" })}>
+        <Icon name="home" size={18} />
+      </button>
       <ul className="rail-list">
         {app.channels.map((c) => (
           <li key={c.code}>

@@ -111,6 +111,38 @@
   color: var(--ink);
 }
 
+.tile.is-home {
+  flex: none;
+  margin: 8px 0 12px;
+  background: none;
+  color: var(--ink-2);
+}
+
+.tile.is-home::after {
+  content: "";
+  position: absolute;
+  bottom: -11px;
+  left: 50%;
+  width: 20px;
+  margin-left: -10px;
+  border-top: 1px solid var(--line-2);
+}
+
+.tile.is-home + .rail-list {
+  flex: 1;
+  align-content: start;
+}
+
+.tile.is-home:hover {
+  background: var(--wash);
+  color: var(--ink);
+}
+
+.tile.is-home.is-on {
+  background: color-mix(in srgb, var(--bg-3) 75%, var(--ink));
+  color: var(--ink);
+}
+
 .tile.is-add {
   background: none;
   color: var(--ink-3);

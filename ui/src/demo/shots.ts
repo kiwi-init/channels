@@ -13,6 +13,7 @@ const kiwi = (nav: Partial<Nav> = {}): Shot => ({ scenario: "full", channel: "ki
 
 export const SHOTS: Record<string, Shot> = {
   channel: kiwi(),
+  home: { scenario: "full", channel: null },
   "long-feed": { scenario: "long", channel: "kiwi" },
   opening: { scenario: "opening", channel: "kiwi" },
   "opening-tasks": { scenario: "opening", channel: "kiwi", nav: { tab: "tasks" } },
