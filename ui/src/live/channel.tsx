@@ -10,7 +10,7 @@ import { type StoredMember } from "@kiwi/channel/store.ts"
 import { useIcons, useLiveIcon } from "@kiwi/app/icons.ts"
 import { markSeen, setOpenNews } from "@kiwi/channel/news.ts"
 import { lastPreview } from "@kiwi/app/preview.ts"
-import { roomLast, roomSeenKey } from "@kiwi/app/rooms.ts"
+import { roomLast, roomOfMessage, roomSeenKey } from "@kiwi/app/rooms.ts"
 import { sendsInTurn } from "@kiwi/app/send-order.ts"
 import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@kiwi/app/threads.ts"
 import { useAskChime } from "~/live/alerts"
@@ -22,7 +22,7 @@ import { usePinsHere } from "~/live/pins"
 import { usePublishFace } from "~/live/face"
 import { usePictures } from "~/live/pictures"
 import { seated, useSeats } from "~/live/seats"
-import { elsewhere, lastWorth } from "~/live/notify"
+import { elsewhere, lastWorth, type NotePlace } from "~/live/notify"
 import { tellMessage } from "~/live/notes"
 import { ownPrefs } from "~/live/prefs"
 import { receiptsOf, withReceipts } from "~/live/receipts"
@@ -306,18 +306,27 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     })
   }, [messages, others, state, code, me, member.at])
 
-  useNotify(messages, me, title, code, state.members)
+  useNotify(messages, me, title, code, state)
 
   return null
 })
 
-function useNotify(messages: readonly Wire[], me: string, title: string, code: string, members: ChannelState["members"]) {
+function statePlace(state: Pick<ChannelState, "placeOf" | "roomOf" | "rooms">, m: Wire): NotePlace {
+  const place = state.placeOf.get(m.seq)
+  if (place?.kind === "task") return { kind: "task", task: place.task }
+  if (place?.kind === "dm") return { kind: "dm" }
+  const id = roomOfMessage(state, m)
+  return { kind: "room", name: state.rooms.get(id)?.name ?? id }
+}
+
+function useNotify(messages: readonly Wire[], me: string, title: string, code: string, state: ChannelState) {
   const told = useRef(messages.at(-1)?.seq ?? 0)
   useEffect(() => {
     const fresh = messages.filter((m) => m.seq > told.current)
     told.current = Math.max(told.current, messages.at(-1)?.seq ?? 0)
     if (!fresh.length || !elsewhere()) return
+    const { members } = state
     const last = lastWorth(fresh, me, ownPrefs().notify, answersDecisions(members, me))
-    if (last) tellMessage(last, title, code, members.values(), members.get(last.from)?.display)
-  }, [messages, me, title, code, members])
+    if (last) tellMessage(last, { me, channel: title, code, place: statePlace(state, last), members: members.values(), display: members.get(last.from)?.display })
+  }, [messages, me, title, code, state])
 }

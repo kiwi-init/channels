@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test"
 import type { Message as Wire } from "@kiwi/core/protocol.ts"
-import { channelLink, drawerNews, heardHeads, lastWorth, worthTelling } from "~/live/notify"
+import { joinCodeFromLink } from "@kiwi/app/deep-link.ts"
+import { encodeJoinCode, newRoomId } from "@kiwi/core/crypto.ts"
+import { channelLink, drawerNews, heardHeads, lastWorth, messageLink, messageOfLink, noteBody, noteTitle, wirePlace, worthTelling } from "~/live/notify"
+import { findWanted } from "~/live/open-message"
+import type { Message } from "~/model"
 
 const msg = (over: Partial<Wire>): Wire => ({ v: 1, id: "1", seq: 1, from: "atlas", kind: "msg", body: "hi", ts: 1, rts: 1, sigOk: true, sig: "", ...over }) as Wire
 
@@ -107,5 +111,51 @@ describe("notifications for every channel (T657)", () => {
 
   test("a click opens the channel through its join link", () => {
     expect(channelLink("mc2-abc")).toBe("kiwi://join/mc2-abc")
+  })
+})
+
+describe("what a notification says and opens (#1351)", () => {
+  test("the title names the room, the task or a direct message", () => {
+    expect(noteTitle(msg({}), "jow", "lead", "ops", wirePlace(msg({})))).toBe("lead in ops · #general")
+    expect(noteTitle(msg({ room: "releases" }), "jow", "lead", "ops", { kind: "room", name: "Releases" })).toBe("lead in ops · #Releases")
+    expect(noteTitle(msg({ task: 12 }), "jow", "lead", "ops", wirePlace(msg({ task: 12 })))).toBe("lead in ops · T12")
+    expect(noteTitle(msg({ dm: true }), "jow", "lead", "ops", wirePlace(msg({ dm: true })))).toBe("lead in ops · a direct message")
+  })
+
+  test("a decision put to you, or escalated, says it needs you; a plain message or a permission prompt does not", () => {
+    const place = wirePlace(msg({ task: 3 }))
+    expect(noteTitle(msg({ kind: "ask", to: ["jow"] }), "jow", "lead", "ops", place)).toBe("lead needs you in ops · T3")
+    expect(noteTitle(msg({ kind: "blocking", esc: true }), "jow", "lead", "ops", place)).toBe("lead needs you in ops · T3")
+    expect(noteTitle(msg({ to: ["jow"] }), "jow", "lead", "ops", place)).toBe("lead in ops · T3")
+    expect(noteTitle(msg({ kind: "ask", to: ["maya"] }), "jow", "lead", "ops", place)).toBe("lead in ops · T3")
+  })
+
+  test("the body is plain text, without markdown or code blocks, cut at a word", () => {
+    const body = "**OPS-12: cards 1 and 2** (merged at 82f865f). Until card 2 runs, `deploy.sh` refuses.\n**1. Memory reading**\n```sh\nsystemctl show x\n```"
+    expect(noteBody(body)).toBe("OPS-12: cards 1 and 2 (merged at 82f865f). Until card 2 runs, deploy.sh refuses. 1. Memory reading")
+    const long = noteBody("word ".repeat(80))
+    expect(long.length).toBeLessThanOrEqual(200)
+    expect(long.endsWith("word…")).toBe(true)
+    expect(noteBody("x".repeat(300)).length).toBe(200)
+  })
+
+  test("View carries the message; the link still opens its channel", () => {
+    expect(messageLink("mc2-abc", 42)).toBe("kiwi://join/mc2-abc?m=42")
+    expect(messageOfLink(messageLink("mc2-abc", 42))).toBe(42)
+    expect(messageOfLink(channelLink("mc2-abc"))).toBeNull()
+    expect(messageOfLink("kiwi://join/mc2-abc?m=0")).toBeNull()
+    expect(messageOfLink("kiwi://join/mc2-abc?m=4x")).toBeNull()
+    const code = encodeJoinCode({ roomId: newRoomId(), ownerFp: "A".repeat(16) })
+    expect(joinCodeFromLink(messageLink(code, 42))).toBe(code)
+  })
+
+  test("the channel finds the message once it has loaded it, and knows when it never will", () => {
+    const m = (seq: number): Message => ({ seq, from: "lead", at: seq, text: "hi", where: { kind: "task", task: 3 } }) as Message
+    const want = { code: "mc2-abc", seq: 7 }
+    expect(findWanted(null, "mc2-abc", [m(7)], false)).toEqual({ kind: "none" })
+    expect(findWanted(want, "mc2-other", [m(7)], false)).toEqual({ kind: "none" })
+    expect(findWanted(want, "mc2-abc", [], true)).toEqual({ kind: "waiting" })
+    expect(findWanted(want, "mc2-abc", [m(6)], false)).toEqual({ kind: "missing" })
+    expect(findWanted(want, "mc2-abc", [m(6), m(7)], false)).toEqual({ kind: "found", m: m(7) })
   })
 })

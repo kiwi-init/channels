@@ -9,6 +9,7 @@ import { Icon } from "~/kit/icons"
 import { later } from "~/kit/later"
 import type { Channel } from "~/model"
 import { drawerNews } from "~/live/notify"
+import { dropMessage, findWanted, useWantedMessage } from "~/live/open-message"
 import { openAsks } from "~/needs/open"
 import { sameWhere, useApp } from "~/nav"
 import { ThreadPanel } from "~/panels/thread"
@@ -39,6 +40,16 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const [jump, setJump] = useState<Jump | null>(null)
   const [focusAsk, setFocusAsk] = useState(0)
   if (jump && (nav.tab !== "chat" || !sameWhere(jump.m.where, nav.where))) setJump(null)
+  const wanted = useWantedMessage()
+  const found = findWanted(wanted, channel.code, channel.messages, !!channel.loading)
+  const target = found.kind === "found" ? found.m : null
+  const atTarget = !!target && nav.tab === "chat" && sameWhere(target.where, nav.where)
+  if (target && atTarget && jump?.m.seq !== target.seq) setJump({ m: target, terms: [] })
+  useEffect(() => {
+    if (!wanted) return
+    if (found.kind === "missing" || jump?.m.seq === wanted.seq) return dropMessage(wanted)
+    if (target && !atTarget) go({ to: "where", where: target.where })
+  }, [wanted, found.kind, target, atTarget, jump, go])
   const [searching, setSearching] = useState(false)
   const drawer = useDrawer()
   const tabsRef = useGlide<HTMLElement>('[aria-pressed="true"]')

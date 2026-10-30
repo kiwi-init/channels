@@ -8,24 +8,35 @@ import { type ChannelRow } from "@kiwi/channel/list.ts"
 import { ops, watches } from "@kiwi/channel/channel-ops.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import { named as withNicknames } from "~/chat/linked"
-import { channelLink, elsewhere, heardHeads, lastWorth } from "~/live/notify"
+import { elsewhere, heardHeads, lastWorth, messageLink, noteBody, noteTitle, wirePlace, type NotePlace } from "~/live/notify"
+import { openMessage } from "~/live/open-message"
 import { ownPrefs } from "~/live/prefs"
 import { nicknamesOf } from "~/names"
 
-function tell(title: string, body: string, code: string): void {
+function tell(title: string, body: string, code: string, seq: number): void {
   const b = bridge()
-  if (b) return void b.notify(title, body, channelLink(code)).catch(() => {})
+  if (b) return void b.notify(title, body, messageLink(code, seq)).catch(() => {})
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return
   const note = new Notification(title, { body, silent: true })
   note.onclick = () => {
     window.focus()
+    openMessage(code, seq)
     location.hash = encodeURIComponent(code)
     note.close()
   }
 }
 
-export function tellMessage(m: Wire, title: string, code: string, members: Iterable<Pick<Member, "name" | "display">>, display: string | undefined): void {
-  tell(`${display || m.from} in ${title}`, withNicknames(m.body, nicknamesOf(members)).slice(0, 200), code)
+export interface Told {
+  me: string
+  channel: string
+  code: string
+  place: NotePlace
+  members: Iterable<Pick<Member, "name" | "display">>
+  display: string | undefined
+}
+
+export function tellMessage(m: Wire, t: Told): void {
+  tell(noteTitle(m, t.me, t.display || m.from, t.channel, t.place), noteBody(withNicknames(m.body, nicknamesOf(t.members))), t.code, m.seq)
 }
 
 async function readElsewhere(code: string, after: number, upTo: number, title: string): Promise<void> {
@@ -38,7 +49,7 @@ async function readElsewhere(code: string, after: number, upTo: number, title: s
   const members = await ops().call(code, "members")
   const byName = new Map(members.map((m) => [m.name, m]))
   const last = lastWorth(fresh, me, notify, answersDecisions(byName, me))
-  if (last) tellMessage(last, title, code, members, byName.get(last.from)?.display)
+  if (last) tellMessage(last, { me, channel: title, code, place: wirePlace(last), members, display: byName.get(last.from)?.display })
 }
 
 let openNow: string | null = null

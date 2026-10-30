@@ -1,5 +1,8 @@
-import type { Message as Wire } from "@kiwi/core/protocol.ts"
+import { GENERAL_ROOM, type Message as Wire } from "@kiwi/core/protocol.ts"
+import { preview } from "~/chat/preview"
 import type { Channel, Prefs } from "~/model"
+
+const NOTE_BODY = 200
 
 const isDecision = (m: Wire): boolean => (m.kind === "ask" || m.kind === "blocking") && !m.permission && !m.handoff
 
@@ -17,6 +20,34 @@ export function drawerNews(channel: Pick<Channel, "rooms" | "directs">): "loud" 
 }
 
 export const channelLink = (code: string): string => `kiwi://join/${encodeURIComponent(code)}`
+
+export const messageLink = (code: string, seq: number): string => `${channelLink(code)}?m=${seq}`
+
+export function messageOfLink(url: string): number | null {
+  const found = /[?&]m=(\d{1,15})(?:[&#]|$)/.exec(url)
+  const seq = found ? Number(found[1]) : Number.NaN
+  return Number.isSafeInteger(seq) && seq > 0 ? seq : null
+}
+
+export type NotePlace = { kind: "room"; name: string } | { kind: "task"; task: number } | { kind: "dm" }
+
+export const wirePlace = (m: Pick<Wire, "room" | "task" | "dm">): NotePlace =>
+  m.dm ? { kind: "dm" } : m.task !== undefined ? { kind: "task", task: m.task } : { kind: "room", name: m.room ?? GENERAL_ROOM }
+
+const placeText = (place: NotePlace): string => (place.kind === "dm" ? "a direct message" : place.kind === "task" ? `T${place.task}` : `#${place.name}`)
+
+export function noteTitle(m: Wire, me: string, from: string, channel: string, place: NotePlace): string {
+  const needsYou = isDecision(m) && (!!m.to?.includes(me) || !!m.esc)
+  return `${from}${needsYou ? " needs you" : ""} in ${channel} · ${placeText(place)}`
+}
+
+export function noteBody(text: string, max = NOTE_BODY): string {
+  const plain = preview(text)
+  if (plain.length <= max) return plain
+  const cut = plain.slice(0, max - 1)
+  const space = cut.lastIndexOf(" ")
+  return `${(space > max / 2 ? cut.slice(0, space) : cut).trimEnd()}…`
+}
 
 export function lastWorth(messages: readonly Wire[], me: string, notify: Prefs["notify"], decides: boolean): Wire | null {
   return messages.findLast((m) => m.sigOk && worthTelling(m, me, notify, decides)) ?? null
