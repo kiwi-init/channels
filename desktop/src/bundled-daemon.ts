@@ -110,7 +110,11 @@ export async function keepDaemon(stopped: () => boolean): Promise<void> {
     try {
       await keepOwnCli();
     } catch {
-      // The daemon still runs from the app's own copy below.
+      // The daemon still runs from the app's own copy, and an older one must give way to it.
+      kiwiBin = await runnableKiwi().then(
+        (bin) => ({ path: bin, version: host().app.version() }),
+        () => null,
+      );
     }
   }
   const tmux = bundledTmux();
