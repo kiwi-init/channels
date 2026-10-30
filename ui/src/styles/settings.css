@@ -639,3 +639,44 @@ html .set-body {
 .set-device-actions-inline > .btn.is-quiet:last-child {
   margin-right: -8px;
 }
+
+@media (orientation: portrait) and (min-width: 761px) {
+  .set {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: var(--top-h) auto minmax(0, 1fr);
+  }
+
+  .top.set-top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .set-nav {
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
+    padding: 0 20px 10px;
+    overflow: hidden;
+  }
+
+  .set-nav ul {
+    display: flex;
+    gap: 2px;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .set-nav .side-row {
+    width: auto;
+    white-space: nowrap;
+  }
+
+  .set-nav .side-cards {
+    margin: 0 0 0 auto;
+    padding: 0;
+  }
+
+  html .set .set-body {
+    margin-inline: auto;
+  }
+}

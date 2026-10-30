@@ -985,3 +985,268 @@ html .rail-gear.is-on {
     --rail-w: 56px;
   }
 }
+
+.panel-back {
+  display: none;
+}
+
+@media (orientation: portrait) and (min-width: 761px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .rail,
+  :root[data-shell="mac"] .rail,
+  :root[data-wm="floating"] .rail {
+    flex-direction: row;
+    gap: 12px;
+    padding: 6px 16px;
+  }
+
+  :root[data-shell="mac"] .rail,
+  :root[data-wm="floating"] .rail {
+    padding-left: 88px;
+  }
+
+  html .rail-list {
+    display: flex;
+    flex: 1;
+    gap: 8px;
+    width: auto;
+    padding: 6px 2px 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  html .tile.is-on::before {
+    top: auto;
+    bottom: -8px;
+    left: 50%;
+    width: 20px;
+    height: 3px;
+    margin: 0 0 0 -10px;
+    border-radius: var(--r-tick) var(--r-tick) 0 0;
+  }
+
+  html .tile-dot {
+    top: auto;
+    bottom: -8px;
+    left: 50%;
+    width: 8px;
+    height: 3px;
+    margin: 0 0 0 -4px;
+    border-radius: var(--r-tick) var(--r-tick) 0 0;
+  }
+
+  .chan,
+  .chan.has-panel,
+  .chan.is-bare,
+  .chan.is-bare.has-panel {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: var(--top-h) auto minmax(0, 1fr);
+  }
+
+  .top,
+  .chan.is-bare .top {
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    padding: 0 12px 0 8px;
+  }
+
+  .chan .top-drawer,
+  .chan:not(.is-bare) .top-drawer {
+    position: static;
+    display: grid;
+    grid-area: auto;
+    justify-self: auto;
+    margin: 0;
+  }
+
+  .chan .top-title,
+  .chan:not(.is-bare) .top-title {
+    grid-area: auto;
+    padding: 0 10px;
+  }
+
+  .tabs {
+    justify-content: flex-start;
+  }
+
+  .side {
+    flex-flow: row wrap;
+    align-items: center;
+    gap: 2px 28px;
+    padding: 0 20px 10px;
+    overflow: hidden;
+  }
+
+  .side::after {
+    content: "";
+    order: 3;
+    flex-basis: 100%;
+  }
+
+  .side section {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .side section[aria-label="Rooms"] {
+    order: 1;
+  }
+
+  .side section[aria-label="Direct messages"] {
+    order: 2;
+    flex: 1;
+  }
+
+  .side section[aria-label="People"] {
+    order: 4;
+  }
+
+  .side section[aria-label="Agents"] {
+    order: 5;
+    flex: 1;
+  }
+
+  .side section[aria-label="Direct messages"] ul,
+  .side section[aria-label="Agents"] ul {
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+  }
+
+  .side .side-foot {
+    order: 2;
+  }
+
+  .side section + section {
+    margin-top: 0;
+  }
+
+  .side .heading {
+    margin: 0;
+    padding: 0 2px 0 0;
+  }
+
+  .side ul {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .side-row,
+  .side-member {
+    width: auto;
+    white-space: nowrap;
+  }
+
+  .side-member,
+  .side-member.is-quiet {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: var(--ctl);
+    padding-inline: 6px 10px;
+  }
+
+  .side-name {
+    overflow: visible;
+  }
+
+  .side-status {
+    font-size: var(--t-stamp);
+  }
+
+  .side-problem {
+    display: none;
+  }
+
+
+  .chan.is-bare .side {
+    display: none;
+  }
+
+  .main,
+  .chan .panel,
+  .chan.has-panel .panel {
+    grid-row: 3;
+    grid-column: 1;
+  }
+
+  .chan.has-panel:not(.has-term) .main,
+  .chan.has-panel.has-term .panel {
+    display: none;
+  }
+
+  .chan.has-panel .panel {
+    position: relative;
+    inset: auto;
+    z-index: auto;
+    width: auto;
+    animation: none;
+  }
+
+  .panel-grip {
+    display: none;
+  }
+
+  .panel-head {
+    display: grid;
+    flex: none;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 8px;
+    padding: 8px max(16px, calc((100% - var(--col)) / 2)) 0;
+  }
+
+  .panel-head > .icon-btn:last-child {
+    display: none;
+  }
+
+  .panel-back {
+    display: inline-flex;
+    grid-column: 1 / -1;
+    justify-self: start;
+    align-items: center;
+    gap: 6px;
+    width: max-content;
+    max-width: 100%;
+    height: var(--ctl);
+    margin-left: -8px;
+    padding: 0 10px 0 8px;
+    border: 0;
+    border-radius: var(--r-row);
+    background: none;
+    color: var(--ink-2);
+    font: var(--t-ui) var(--ui);
+  }
+
+  .panel-back:hover {
+    background: var(--wash);
+    color: var(--ink);
+  }
+
+  .panel-title {
+    font-size: var(--t-title);
+  }
+
+  .panel-body {
+    padding-inline: max(16px, calc((100% - var(--col)) / 2));
+  }
+
+  .chan .panel .feed-list {
+    max-width: calc(var(--col) + 2 * var(--gutter));
+  }
+
+  .chan .panel .compose {
+    width: min(var(--col), calc(100% - 32px));
+  }
+
+  .chan .term {
+    height: min(64%, 1200px);
+  }
+}
