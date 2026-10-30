@@ -22,4 +22,11 @@ export function toggleSide(): void {
   else toggleSidebar()
 }
 
+const TALL = "(orientation: portrait) and (min-width: 761px)"
+
+const onResize = (l: () => void) => (window.addEventListener("resize", l), () => window.removeEventListener("resize", l))
+
+/** A portrait window wider than a phone: the channel is one tall page there. */
+export const useTall = (): boolean => useSyncExternalStore(onResize, () => matchMedia(TALL).matches)
+
 export const isSideKey = (e: KeyboardEvent): boolean => e.key === "\\" && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey

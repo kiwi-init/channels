@@ -9,16 +9,12 @@ import { useApp } from "~/nav"
 import { shown } from "~/names"
 import { statusOf, taskOf, toneOf } from "~/shell/sidebar"
 
-const TALL = "(orientation: portrait) and (min-width: 761px)"
-
 const KEY = "channels.tall.work"
 const SHARE = 0.42
 const MIN = 160
 const MIN_CHAT = 280
 
 const onResize = (l: () => void) => (window.addEventListener("resize", l), () => window.removeEventListener("resize", l))
-
-export const useTall = (): boolean => useSyncExternalStore(onResize, () => matchMedia(TALL).matches)
 
 const useWindowHeight = (): number => useSyncExternalStore(onResize, () => window.innerHeight)
 
@@ -128,7 +124,7 @@ function Crew({ channel }: { channel: Channel }) {
   )
 }
 
-export function TallPage({ channel, jump, work, open }: { channel: Channel; jump: Jump | null; work: ReactNode; open: ReactNode }) {
+export default function TallPage({ channel, jump, work, open }: { channel: Channel; jump: Jump | null; work: ReactNode; open: ReactNode }) {
   const split = useSplit()
   return (
     <div className="tall" style={{ "--work-h": `${split.height}px` } as CSSProperties}>

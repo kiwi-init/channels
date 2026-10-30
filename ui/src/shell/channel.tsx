@@ -14,15 +14,15 @@ import { sameWhere, useApp } from "~/nav"
 import { ThreadPanel } from "~/panels/thread"
 import { SIDEBAR_KEYS, useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 import { usePanelWidth } from "~/shell/panel-width"
-import { isSideKey, setDrawer, toggleSide, useDrawer } from "~/shell/side"
+import { isSideKey, setDrawer, toggleSide, useDrawer, useTall } from "~/shell/side"
 import { Sidebar } from "~/shell/sidebar"
-import { TallPage, useTall } from "~/shell/tall"
 import { Waiting } from "~/start/waiting"
 import { openTasks } from "~/tasks/open"
 import { headerLine } from "~/now"
 import { between, nickname } from "~/names"
 
 const TermDrawer = lazy(() => import("~/term/drawer"))
+const TallPage = lazy(() => import("~/shell/tall"))
 const SearchBox = later(() => import("~/chat/search-box").then((m) => m.SearchBox))
 const Board = later(() => import("~/tasks/board").then((m) => m.Board))
 const Lanes = later(() => import("~/tasks/lanes").then((m) => m.Lanes))
