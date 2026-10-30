@@ -82,7 +82,8 @@
   padding: 0;
   border: 0;
   border-radius: var(--r-ctl);
-  background: var(--bg-3);
+  background: var(--float);
+  box-shadow: var(--shadow-float);
   color: var(--ink-2);
   font: 600 var(--t-body) var(--ui);
   transition:
@@ -92,12 +93,12 @@
 }
 
 .tile:hover {
-  background: color-mix(in srgb, var(--bg-3) 88%, var(--ink));
+  background: var(--float-2);
   color: var(--ink);
 }
 
 .tile.is-on {
-  background: color-mix(in srgb, var(--bg-3) 75%, var(--ink));
+  background: var(--float-3);
   color: var(--ink);
 }
 
@@ -114,7 +115,6 @@
 .tile.is-home {
   flex: none;
   margin: 8px 0 12px;
-  background: none;
   color: var(--ink-2);
 }
 
@@ -133,20 +133,8 @@
   align-content: start;
 }
 
-.tile.is-home:hover {
-  background: var(--wash);
-  color: var(--ink);
-}
-
-.tile.is-home.is-on {
-  background: color-mix(in srgb, var(--bg-3) 75%, var(--ink));
-  color: var(--ink);
-}
-
 .tile.is-add {
-  background: none;
   color: var(--ink-3);
-  box-shadow: inset 0 0 0 1px var(--line-2);
 }
 
 .tile img {
@@ -928,18 +916,19 @@
   padding: 0;
   border: 0;
   border-radius: var(--r-row);
-  background: none;
+  background: var(--float);
+  box-shadow: var(--shadow-float);
   color: var(--ink-2);
 }
 
 .rail-gear:hover {
   color: var(--ink);
-  background: var(--wash);
+  background: var(--float-2);
 }
 
 .rail-gear.is-on {
   color: var(--ink);
-  background: var(--wash-2);
+  background: var(--float-3);
 }
 
 .panel-grip {
@@ -1075,7 +1064,7 @@ html .rail-list {
 }
 
 html .tile.is-on:not(.is-waiting) {
-  background: color-mix(in srgb, var(--bg-3) 86%, var(--ink));
+  background: var(--float-3);
 }
 
 html .rail-gear {

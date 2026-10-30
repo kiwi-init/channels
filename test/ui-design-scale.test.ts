@@ -56,6 +56,8 @@ describe("the top bar's controls float", () => {
   const tokens = readFileSync(join(STYLES, "tokens.css"), "utf8");
   const shell = readFileSync(join(STYLES, "shell.css"), "utf8");
   const settings = readFileSync(join(STYLES, "settings.css"), "utf8");
+  const chat = readFileSync(join(STYLES, "chat.css"), "utf8");
+  const term = readFileSync(join(STYLES, "term.css"), "utf8");
   const rule = (css: string, selector: string): string => {
     const at = css.indexOf(`\n${selector} {`);
     return at < 0 ? "" : css.slice(at, css.indexOf("}", at));
@@ -72,13 +74,18 @@ describe("the top bar's controls float", () => {
     }
   });
 
-  test("the bars' controls sit on the float: switcher, sidebar button, both groups, a panel's close and Settings' back", () => {
+  test("the chrome sits on the float: the bars' controls, the rail, the composer and the terminal's tabs and close", () => {
     const controls: [string, string][] = [
       [shell, ".top-chan"],
       [shell, ".top-drawer"],
       [shell, ".tabs,\n.top-group"],
       [shell, ".panel-head > .icon-btn"],
       [settings, ".set-back"],
+      [shell, ".tile"],
+      [shell, ".rail-gear"],
+      [chat, ".composer"],
+      [term, ".term-tabs"],
+      [term, ".term-head > .icon-btn"],
     ];
     for (const [css, selector] of controls) {
       const body = rule(css, selector);
