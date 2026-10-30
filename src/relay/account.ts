@@ -119,7 +119,7 @@ export async function onAccountHttp(
   req: Request,
   store: AccountStore,
   user: string,
-  opts: { now?: () => number; perAccount?: (key: string) => boolean | Promise<boolean>; perAddress?: () => boolean | Promise<boolean> } = {},
+  opts: { now?: () => number; perAccount?: (key: string) => boolean | Promise<boolean>; perAddress?: () => boolean | Promise<boolean>; formerly?: string } = {},
 ): Promise<Response | null> {
   const url = new URL(req.url);
   const m = PATH.exec(url.pathname);
@@ -141,7 +141,8 @@ export async function onAccountHttp(
   if (!onAsk && req.method === "GET") return answer({ user, links });
 
   const token = requestToken(req);
-  const signer = token ? await verifyRequest(token, accountScope(user), req.method, url.pathname, body, now) : null;
+  const signedFor = (scope: string) => verifyRequest(token, accountScope(scope), req.method, url.pathname, body, now);
+  const signer = token ? ((await signedFor(user)) ?? (opts.formerly ? await signedFor(opts.formerly) : null)) : null;
   if (!signer) return refuse(new Unauthorized({ message: "sign this request for this account and path" }));
   if (list?.revoked.includes(signer)) return refuse(new Forbidden({ message: "this device was removed from this person's devices" }));
 
