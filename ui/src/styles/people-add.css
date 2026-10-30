@@ -384,7 +384,7 @@
   display: grid;
   justify-items: start;
   gap: 10px;
-  margin-top: 14px;
+  margin-top: 16px;
   color: var(--ink-2);
   font: var(--t-meta) / 1.55 var(--ui);
 }
