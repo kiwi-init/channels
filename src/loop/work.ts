@@ -10,10 +10,12 @@ const openTasks = (state: ChannelState) => [...state.tasks.values()].filter(live
 
 const awaitingVerdict = (t: Task) => !!openRound(t);
 
+const owesReview = (t: Task, me: string) => t.owner !== me && (t.review === me || (t.review === "*" && !t.workedBy.includes(me)));
+
 function owedReview(state: ChannelState, me: string): Work | null {
   for (const t of openTasks(state)) {
     const round = openRound(t);
-    if (round && t.review === me && t.owner !== me) return { kind: "reviewing", task: t.id, round: round.n };
+    if (round && owesReview(t, me)) return { kind: "reviewing", task: t.id, round: round.n };
   }
   return null;
 }
@@ -36,7 +38,7 @@ export function waitingBehind(work: Work, state: ChannelState, me: string): Work
   const open = openTasks(state).filter((t) => t.id !== held);
   const reviews = open.flatMap((t): Work[] => {
     const round = openRound(t);
-    return round && t.review === me && t.owner !== me ? [{ kind: "reviewing", task: t.id, round: round.n }] : [];
+    return round && owesReview(t, me) ? [{ kind: "reviewing", task: t.id, round: round.n }] : [];
   });
   if (work.kind === "answering") return reviews;
   const coding = open.filter((t) => t.owner === me && !awaitingVerdict(t)).map((t): Work => ({ kind: "coding", task: t.id }));

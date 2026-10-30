@@ -56,6 +56,18 @@ describe("the work a loop starts a session for", () => {
     expect(nextWork(fold([t], roster), "ana", 2)).toEqual({ kind: "answering" });
   });
 
+  test("a round open to anyone is owed by every seat that hasn't worked on the task (#1244)", async () => {
+    const t = await ev("jon", { op: "task.add", title: "Bo's", owner: "bo", review: "*" });
+    const round = await ev("bo", { op: "task.update", task: t.seq, state: "review", at: "abc1234" });
+    const s = fold([t, round], roster);
+    expect(nextWork(s, "ana", 0)).toEqual({ kind: "reviewing", task: t.seq, round: 1 });
+    expect(waitingBehind({ kind: "answering" }, s, "ana")).toEqual([{ kind: "reviewing", task: t.seq, round: 1 }]);
+    const worked = await ev("jon", { op: "task.add", title: "Ana's too", owner: "ana", review: "*" });
+    const handed = await ev("ana", { op: "task.update", task: worked.seq, owner: "bo" });
+    const sent = await ev("bo", { op: "task.update", task: worked.seq, state: "review", at: "def5678" });
+    expect(nextWork(fold([worked, handed, sent], roster), "ana", 0)).toBeNull();
+  });
+
   test("two coders reviewing each other: each one's waiting task yields to the round it owes", async () => {
     const t1 = await ev("jon", { op: "task.add", title: "Ana's", owner: "ana", review: "bo" });
     const t2 = await ev("jon", { op: "task.add", title: "Bo's", owner: "bo", review: "ana" });

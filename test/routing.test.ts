@@ -252,6 +252,22 @@ describe("review", () => {
     expect(fold([open, set], roster).tasks.get(open.seq)!.review).toBe("mac");
   });
 
+  test("a review open to anyone is taken by a seat that hasn't worked on it, for itself only, and only once (#1244)", async () => {
+    const add = await ev("jon", { op: "task.add", title: "anyone's", owner: "win", review: "*" });
+    const round = await ev("win", { op: "task.update", task: add.seq, state: "review", at: "abc1234" });
+    const byOwner = await ev("win", { op: "task.update", task: add.seq, review: "win" });
+    const forAnother = await ev("mac", { op: "task.update", task: add.seq, review: "linux" });
+    const take = await ev("mac", { op: "task.update", task: add.seq, review: "mac" });
+    const late = await ev("linux", { op: "task.update", task: add.seq, review: "linux" });
+    const s = fold([add, round, byOwner, forAnother, take, late], roster);
+    const anyone = `only a person, the lead or someone who hasn't worked on T${add.seq}, taking its review for themselves, changes who reviews it`;
+    expect(s.rejected.get(byOwner.seq)).toBe(anyone);
+    expect(s.rejected.get(forAnother.seq)).toBe(anyone);
+    expect(s.rejected.has(take.seq)).toBe(false);
+    expect(s.rejected.get(late.seq)).toBe(`only a person, the lead or mac changes who reviews T${add.seq}`);
+    expect(s.tasks.get(add.seq)).toMatchObject({ review: "mac", rounds: [{ n: 1, at: "abc1234", result: { kind: "open" } }] });
+  });
+
   test("a role or signed-persona lead reassigns an open round without changing its number or commit", async () => {
     const add = await ev("jon", { op: "task.add", title: "stalled", owner: "win", review: "mac" });
     const round = await ev("win", { op: "task.update", task: add.seq, state: "review", at: "abc123" });

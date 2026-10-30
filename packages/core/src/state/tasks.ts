@@ -38,7 +38,10 @@ export function verdictRefusal(task: Task, verdict: Verdict, ev: { state?: strin
 export function reviewMoveRefusal(task: Task, from: { name: string; person: boolean; lead: boolean }, review: string | null | undefined): string | null {
   if (review === undefined || !task.review) return null;
   if (from.person || from.lead || from.name === task.review) return null;
-  return `only a person, the lead or ${task.review === "*" ? "a reviewer" : task.review} changes who reviews ${taskId(task.id)}`;
+  if (task.review === "*" && review === from.name && from.name !== task.owner && !task.workedBy.includes(from.name)) return null;
+  return task.review === "*"
+    ? `only a person, the lead or someone who hasn't worked on ${taskId(task.id)}, taking its review for themselves, changes who reviews it`
+    : `only a person, the lead or ${task.review} changes who reviews ${taskId(task.id)}`;
 }
 
 export function revisedOut(task: Task, from: string, open: ReviewRound | undefined): number | null {

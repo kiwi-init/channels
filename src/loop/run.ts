@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import * as Cause from "effect/Cause";
 import type { ChannelState } from "@kiwi/core/state.ts";
 import { openSession, type Agent } from "../agent.ts";
 import type { AgentSession } from "../agent.ts";
@@ -104,6 +105,10 @@ const cycles = (seat: LoopSeat, stop: { asked: boolean; busy: boolean }): Effect
         work = nextWork(seen.state, seat.me, seen.forMe);
       }
       if (!work || stop.asked) break;
+      if (work.kind === "reviewing" && seen.state.tasks.get(work.task)?.review === "*") {
+        yield* claimReview(s, seat.me, work, stop);
+        continue;
+      }
       const ended = yield* runSession(seat, s, work, firstPrompt(work, seen.state, seat.me, seat.alias), stop);
       yield* hold(seat);
       if (ended.kind === "done") yield* say(`${workName(ended.work)} is over; its session ended`);
@@ -124,6 +129,18 @@ const cycles = (seat: LoopSeat, stop: { asked: boolean; busy: boolean }): Effect
       }
     }
   });
+
+function claimReview(s: AgentSession, me: string, work: Extract<Work, { kind: "reviewing" }>, stop: { asked: boolean }): Effect.Effect<void, never, Agent> {
+  return s.taskUpdate(work.task, { review: me, note: `taking round ${work.round}'s review` }).pipe(
+    Effect.flatMap(() => say(`took ${workName(work)}'s review, open to anyone who hasn't worked on it`)),
+    Effect.catchCause((cause) =>
+      Effect.gen(function* () {
+        yield* say(`couldn't take ${workName(work)}'s review (${Cause.pretty(cause).split("\n")[0]}); looking again in ${Math.round(PAUSE_MS / 1000)}s`);
+        yield* pauseFor(PAUSE_MS, stop);
+      }),
+    ),
+  );
+}
 
 function runSession(seat: LoopSeat, s: AgentSession, first: Work, prompt: string, stop: { asked: boolean; busy: boolean }): Effect.Effect<Ended, unknown, Agent> {
   return Effect.suspend(() => {
