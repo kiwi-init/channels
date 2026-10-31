@@ -13,7 +13,8 @@ import { roomName } from "./rooms.ts";
 import { settle } from "./leases.ts";
 import { carriedPersona } from "../personality.ts";
 import { permissionAnswer } from "../permission.ts";
-import type { AskHead, ChannelState, Fact, FoldBase, FoldMember, GuardFloor, Lease, Member, PersonaLead, Place, Reaction, Room, RoomsFloor, Roster, Task } from "./types.ts";
+import type { AskHead, ChannelState, Fact, FoldBase, FoldMember, GuardFloor, Lease, Member, PersonaLead, Place, Reaction, Room, RoomsFloor, Roster, SecretRoom, Task } from "./types.ts";
+import { inRoom } from "../room-rules.ts";
 
 const STALE_MS = 24 * 3_600_000;
 const SENT_WINDOW_MS = 2 * STALE_MS;
@@ -263,6 +264,7 @@ function folding(
   const known = new Map<string, Room>(from?.rooms.map((r) => [r.id, r]));
   const rooms = new Map<string, Room>([[GENERAL_ROOM, known.get(GENERAL_ROOM) ?? { id: GENERAL_ROOM, name: GENERAL_ROOM, createdBy: null, at: 0 }]]);
   const roomsSince = roomsFloor?.since ?? -1;
+  const secret = new Map<string, SecretRoom>(from?.secret?.map(([id, r]): [string, SecretRoom] => [id, { ...r }]));
   for (const r of ahead(roomsFloor)?.list ?? []) {
     const name = roomName(r.name);
     if (!ROOM_ID_RE.test(r.id) || !name || (rooms.size >= MAX_ROOMS && !rooms.has(r.id))) continue;
@@ -289,6 +291,7 @@ function folding(
     facts,
     leases,
     rooms,
+    secret,
     roomsSince,
     nameTaken,
     charter: from?.charter ?? null,
@@ -358,6 +361,20 @@ function folding(
         sent.delete(id);
         sentFloors.set(pk, Math.max(sentFloors.get(pk) ?? 0, sentAt.get(id)! + 1));
         sentAt.delete(id);
+      }
+      if (m.sealed) {
+        const room = secret.get(m.sealed.room);
+        const why =
+          !room?.meta || room.n !== m.sealed.n || !inRoom(room.meta, m.from, m.pk)
+            ? `${m.from} wasn't in that private room, or wrote with a key it no longer uses`
+            : m.kind === "event" && m.ev?.op !== "react"
+              ? "a private room keeps to messages and reactions: tasks, notes and other channel events would be seen by everyone"
+              : null;
+        if (why) {
+          trust.set(m.seq, "refused");
+          rejected.set(m.seq, why);
+          continue;
+        }
       }
       const refused = refusal(scopesByKey.get(m.pk!) ?? [], m);
       if (refused) {
@@ -562,6 +579,7 @@ function folding(
       threadOf: keptThreads,
       threadPeople: [...threadPeople].filter(([root]) => root > cut || keptRoots.has(root)).map(([seq, people]): [number, string[]] => [seq, [...people]]),
       rooms: [...rooms.values()],
+      secret: [...secret].map(([id, r]): [string, SecretRoom] => [id, { ...r }]),
       roomOf: recent(roomOf),
       placeOf: recent(placeOf),
       personaLeads: [...personaLead],
@@ -617,6 +635,7 @@ function folding(
     threadPeople,
     lead: theLead ?? null,
     rooms,
+    secret,
     roomOf,
     placeOf,
     places: summarize(placeOf, tasks, trust, placesBefore),

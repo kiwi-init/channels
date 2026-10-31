@@ -15,6 +15,7 @@ const task = (id: number, owner: string | undefined, state: Task["state"], title
 });
 const board = (tasks: Task[]): ChannelState =>
   ({
+    secret: new Map(),
     members: new Map(),
     tasks: new Map(tasks.map((t) => [t.id, t])),
     facts: new Map(),

@@ -5,6 +5,7 @@ import { PRESETS } from "@kiwi/core/presets.ts"
 import type { Event } from "@kiwi/core/protocol.ts"
 import { fullyTrusted } from "@kiwi/core/state.ts"
 import { secrets } from "@kiwi/secrets/secrets.ts"
+import { announce } from "~/kit/toasts"
 import { openedRun, type Run } from "~/live/store"
 
 export function need(code: string): Run {
@@ -35,4 +36,10 @@ export function setup(code: string): Run {
   const run = need(code)
   if (!run.isOwner && !fullyTrusted(run.state.members.get(run.me))) throw new Error("only the owner, or a person they fully trust, sets up the channel")
   return run
+}
+
+export const say = (err: unknown): string => (err instanceof Error ? err.message : String(err))
+
+export function attempt(what: string, run: () => Promise<unknown>): void {
+  void (async () => run())().catch((err: unknown) => announce(`${what}: ${say(err)}`))
 }

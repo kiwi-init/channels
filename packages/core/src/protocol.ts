@@ -8,6 +8,10 @@ import { DEVICE_LIST_MAX, type DeviceLink } from "./devices.ts";
 import { cleanPersona, type Persona } from "./personality.ts";
 import { permissionChoices, wellFormedPermission, wellFormedPermReply, wellFormedSettled, type PermissionReply, type PermissionSettled, type PermissionShown } from "./permission.ts";
 
+import { MAX_ROOM_MEMBERS, type RoomMeta } from "./room-rules.ts";
+
+const sealedBox = (x: unknown): boolean =>
+  !!x && typeof x === "object" && typeof (x as { iv?: unknown }).iv === "string" && typeof (x as { ct?: unknown }).ct === "string" && (x as { ct: string }).ct.length <= 64_000;
 export const POWERS = ["addsAgents", "answersDecisions", "managesAgents"] as const;
 export type Power = (typeof POWERS)[number];
 
@@ -274,6 +278,8 @@ export type Event =
   | { op: "mode.set"; coordinatorOnly: boolean; strict: boolean }
   /** Owner only: a room in this channel. Its id never changes; the name is a label (room.rename). */
   | { op: "room.create"; id: string; name: string }
+  | { op: "room.seal"; id: string; n: number; keys: string[]; meta: { iv: string; ct: string }; proof?: string }
+  | { op: "room.msg"; room: string; n: number; iv: string; ct: string }
   /** Owner only: a room's new name ("general" included; its id stays). */
   | { op: "room.rename"; id: string; name: string }
   /**
@@ -743,7 +749,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 8;
+export const EVENT_OPS_VERSION = 9;
 const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 
 export const knownOp = (op: string): boolean => eventCheck({ op }) !== null;
@@ -763,7 +769,7 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
 
 export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
-export const FOLD_RULES = 6;
+export const FOLD_RULES = 7;
 
 export const olderRules = (base: { rules?: number }): boolean => (base.rules ?? 0) < FOLD_RULES;
 
@@ -772,6 +778,9 @@ export const decodedWhole = (page: { head: number; messages: readonly { seq: num
 
 export interface Message extends Payload {
   newer?: NewerEvent;
+  opened?: RoomMeta;
+  proven?: boolean;
+  sealed?: { room: string; n: number };
   seq: number;
   /** When the relay stored it (one clock for everyone, unlike `ts`). */
   rts?: number;
@@ -969,6 +978,20 @@ function eventCheck(ev: unknown): boolean | null {
       );
     case "mode.set":
       return typeof e.coordinatorOnly === "boolean" && typeof e.strict === "boolean";
+    case "room.seal":
+      return (
+        roomId(e.id) &&
+        Number.isSafeInteger(e.n) &&
+        (e.n as number) >= 1 &&
+        Array.isArray(e.keys) &&
+        e.keys.length >= 1 &&
+        e.keys.length <= MAX_ROOM_MEMBERS &&
+        e.keys.every((k) => str(k, 400)) &&
+        sealedBox(e.meta) &&
+        opt(e.proof, (x): x is string => str(x, 100))
+      );
+    case "room.msg":
+      return roomId(e.room) && Number.isSafeInteger(e.n) && (e.n as number) >= 1 && str(e.iv, 32) && str(e.ct, MAX_BODY_LENGTH * 2);
     case "room.create":
     case "room.rename":
       return roomId(e.id) && str(e.name, MAX_ROOM_NAME * 4);

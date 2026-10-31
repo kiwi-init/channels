@@ -3,6 +3,7 @@ import type { Card, Color, IssueRef, MemberPicture, Message, TaskState, Trust, V
 import type { GithubCheck, GithubIssue, GithubPr, GithubRelease, GithubRules, GithubState } from "./github.ts";
 import type { Persona } from "../personality.ts";
 import type { Power } from "../protocol.ts";
+import type { RoomMember, RoomMeta, RoomSeal } from "../room-rules.ts";
 import type { Scope } from "../scopes.ts";
 export interface Member {
   name: string;
@@ -190,6 +191,7 @@ export interface ChannelState {
   threadPeople: Map<number, Set<string>>;
   lead: string | null;
   rooms: Map<string, Room>;
+  secret: Map<string, SecretRoom>;
   roomOf: Map<number, string>;
   placeOf: Map<number, Place>;
   places: Map<string, PlaceSummary>;
@@ -237,6 +239,13 @@ export interface Room {
   createdBy: string | null;
   at: number;
   posters?: string[];
+  members?: RoomMember[];
+}
+
+export interface SecretRoom {
+  n: number;
+  seals: RoomSeal[];
+  meta?: RoomMeta;
 }
 
 export type PersonaLead = boolean | "roster";
@@ -278,6 +287,7 @@ export interface FoldBase {
   threadOf: [number, number][];
   threadPeople: [number, string[]][];
   rooms: Room[];
+  secret?: [string, SecretRoom][];
   roomOf: [number, string][];
   placeOf: [number, Place][];
   folded?: number;

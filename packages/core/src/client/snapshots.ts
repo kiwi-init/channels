@@ -4,6 +4,7 @@ import { decodedWhole, olderRules, SNAPSHOT_EVERY, SNAPSHOT_TOO_LARGE } from "..
 import { MissingKey } from "../refusals.ts";
 import { openSnapshot, sealSnapshot, wellFormedSnapshot } from "../snapshot.ts";
 import { fold, rosterOf, type FoldBase } from "../state.ts";
+import { publicView } from "../room-rules.ts";
 import type { ChannelCore } from "./core.ts";
 import type { MemberRefusal, Refused } from "./errors.ts";
 import type { ChannelHistory } from "./history.ts";
@@ -22,13 +23,18 @@ export class ChannelSnapshots {
     private readonly history: ChannelHistory,
   ) {}
 
+  private readonly sealedSnapshot = Effect.gen({ self: this }, function* () {
+    const got = yield* Effect.exit(this.ch.request<{ snapshot: unknown }>("/snapshot"));
+    if (Exit.isFailure(got) || !wellFormedSnapshot(got.value.snapshot)) return null;
+    const s = got.value.snapshot;
+    yield* this.history.keyFor(s.e);
+    return yield* Effect.promise(() => openSnapshot(this.ch.access, s).catch(() => null));
+  });
+
   readonly fx: SnapshotsFx = {
     snapshot: Effect.fn("Channel.snapshot")({ self: this }, function* (this: ChannelSnapshots) {
-      const got = yield* Effect.exit(this.ch.request<{ snapshot: unknown }>("/snapshot"));
-      if (Exit.isFailure(got) || !wellFormedSnapshot(got.value.snapshot)) return null;
-      const s = got.value.snapshot;
-      yield* this.history.keyFor(s.e);
-      return yield* Effect.promise(() => openSnapshot(this.ch.access, s).catch(() => null));
+      const base = yield* this.sealedSnapshot;
+      return base && (yield* this.ch.fx.openRooms(base));
     }),
 
     snapshotAt: Effect.fn("Channel.snapshotAt")({ self: this }, function* (this: ChannelSnapshots) {
@@ -48,7 +54,7 @@ export class ChannelSnapshots {
       yield* this.ch.ownerOnly();
       const at = (yield* this.ch.fx.snapshotAt()) ?? 0;
       if ((yield* this.ch.fx.head()) - at < Math.max(every, 1)) return null;
-      const prior = at ? yield* this.ch.fx.snapshot() : null;
+      const prior = at ? yield* this.sealedSnapshot : null;
       const whole = prior && olderRules(prior) ? yield* this.ch.fx.history(0) : null;
       const from = whole && decodedWhole(whole) ? null : prior;
       const since = from?.n ?? 0;
@@ -63,7 +69,7 @@ export class ChannelSnapshots {
       );
       if (through !== top || messages.some((m) => m.seq <= since || m.seq > top)) return null;
       const kept: { base?: FoldBase } = {};
-      fold(messages, rosterOf(members), Date.now(), rooms, guard, from, (b) => void (kept.base = b));
+      fold(publicView(messages), rosterOf(members), Date.now(), rooms, guard, from, (b) => void (kept.base = b));
       return kept.base && kept.base.n > at ? yield* this.ch.fx.putSnapshot(kept.base) : null;
     }),
   };

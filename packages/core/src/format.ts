@@ -139,6 +139,10 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return `set what ${nameOf(ev.member)} may do: ${ev.scopes === null ? "full" : describeScopes(readScopes(ev.scopes) ?? [])}`;
     case "mode.set":
       return `${ev.coordinatorOnly ? "turned on" : "turned off"} coordinator-only (gone: it no longer gates anything)`;
+    case "room.seal":
+      return "changed a private room";
+    case "room.msg":
+      return "wrote in a private room";
     case "room.create":
       return `made the room #${inlineText(ev.name, 40)}`;
     case "room.rename": {

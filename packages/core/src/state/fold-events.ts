@@ -10,7 +10,8 @@ import { cleanPersona } from "../personality.ts";
 import { isPerson } from "./people.ts";
 import { roomName } from "./rooms.ts";
 import { currentState, openRound, reviewClaimRefusal, reviewMoveRefusal, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
-import type { Charter, Compact, Fact, FoldMember, Hold, Lease, PersonaLead, Room, Task } from "./types.ts";
+import type { Charter, Compact, Fact, FoldMember, Hold, Lease, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
+import { inRoom, MAX_ROOM_SEALS } from "../room-rules.ts";
 
 const trustOnly = (what: string): string => `only the owner, or a person they fully trust, ${what}`;
 
@@ -34,6 +35,7 @@ export interface FoldCtx {
   facts: Map<string, Fact>;
   leases: Map<string, Lease>;
   rooms: Map<string, Room>;
+  secret: Map<string, SecretRoom>;
   roomsSince: number;
   nameTaken: (name: string, except?: string) => boolean;
   charter: Charter | null;
@@ -75,6 +77,27 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       else rooms.set(ev.id, { id: ev.id, name, createdBy: m.from, at });
       break;
     }
+
+    case "room.seal": {
+      const known = c.secret.get(ev.id);
+      const opened = m.opened;
+      if (!member.owner && !c.trusted(m.pk ?? "", member)) reject(trustOnly("makes private rooms"));
+      else if (m.proven === false || (known?.meta && !m.proven)) reject("that change to a private room doesn't hold the room's key");
+      else if (!known && (ev.id === GENERAL_ROOM || rooms.has(ev.id))) reject(`there's already a room ${ev.id}`);
+      else if (opened && !inRoom(opened, member.name, m.pk)) reject("whoever changes a private room stays in it");
+      else {
+        const seals = [...(known?.seals ?? []), { id: ev.id, n: ev.n, keys: ev.keys, meta: ev.meta, ...(ev.proof ? { proof: ev.proof } : {}) }].slice(-MAX_ROOM_SEALS);
+        const n = m.proven || !known ? ev.n : known.n;
+        c.secret.set(ev.id, { n, seals, ...(opened ? { meta: opened } : !m.proven && known?.meta ? { meta: known.meta } : {}) });
+        if (opened) rooms.set(ev.id, { ...(rooms.get(ev.id) ?? { id: ev.id, createdBy: m.from, at }), name: opened.name, members: opened.members });
+        else if (m.proven) rooms.delete(ev.id);
+      }
+      break;
+    }
+
+    case "room.msg":
+      reject("a private room's message this app couldn't open");
+      break;
 
     case "room.rename": {
       if (!member.owner && !c.trusted(m.pk ?? "", member)) {
