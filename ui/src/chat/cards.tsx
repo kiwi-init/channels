@@ -7,7 +7,7 @@ import { cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { clock } from "~/kit/time"
 import { announce } from "~/kit/toasts"
-import type { Channel, PermissionAsk, PullRequest, QuestionAsk } from "~/model"
+import type { Channel, PullRequest, QuestionAsk } from "~/model"
 import { useAct } from "~/nav"
 import { nickname } from "~/names"
 
@@ -63,35 +63,6 @@ export function PrChip({ pr }: { pr: PullRequest }) {
         </span>
       </span>
     </a>
-  )
-}
-
-export function PermissionCard({ channel, ask }: { channel: Channel; ask: PermissionAsk }) {
-  const { actions } = useAct()
-  return (
-    <div className={cx("ask", !ask.answer && "is-open")}>
-      <p className="ask-title">
-        {ask.summary} <span className="dim">· {ask.tool}</span>
-      </p>
-      <pre className="ask-code">{ask.code}</pre>
-      {ask.answer ? (
-        <p className="ask-state">
-          {ask.answer.allow ? "Allowed" : "Denied"} by {ask.answer.by === channel.you ? "you" : nickname(channel, ask.answer.by)} · {clock(ask.answer.at)}
-        </p>
-      ) : (
-        <>
-          <p className="ask-state is-waiting">Waiting on you</p>
-          <div className="actions">
-            <button type="button" className="btn is-primary is-small" onClick={() => actions.answerPermission(channel.code, ask.id, true)}>
-              Allow
-            </button>
-            <button type="button" className="btn is-small" onClick={() => actions.answerPermission(channel.code, ask.id, false)}>
-              Deny
-            </button>
-          </div>
-        </>
-      )}
-    </div>
   )
 }
 

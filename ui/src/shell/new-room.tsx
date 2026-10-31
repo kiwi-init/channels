@@ -8,6 +8,7 @@ import { Track } from "~/kit/glide"
 import type { Channel } from "~/model"
 import { useApp } from "~/nav"
 import { shown } from "~/names"
+import { RoomReadyNotes } from "~/shell/room-ready"
 
 const roomName = (typed: string): string => typed.trim().replace(/^#/, "").trim().toLowerCase().replace(/\s+/g, "-")
 
@@ -112,6 +113,7 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
                 </fieldset>
               ) : null
             )}
+            <RoomReadyNotes people={others.filter((p) => picked.has(p.name))} />
             <p className="start-hint">You're in it too. You can add or remove people later in the room's settings.</p>
           </div>
         )}

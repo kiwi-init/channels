@@ -17,6 +17,7 @@ import {
   goneHow,
   isReach,
   MORE_REFUSED,
+  EVENT_OPS_VERSION,
   PROTOCOL_VERSION,
   WS_PROTOCOL,
   wellFormedRead,
@@ -417,7 +418,7 @@ export class ChannelLive {
         if (ws.readyState !== WebSocket.OPEN) return;
         const ts = Math.max(Date.now(), this.lastBeacon + 1);
         this.lastBeacon = ts;
-        const full = yield* Effect.promise(() => sign(this.ch.identity, { v: PROTOCOL_VERSION, type: "presence", from: this.ch.name, ts, ...p } as Presence));
+        const full = yield* Effect.promise(() => sign(this.ch.identity, { v: PROTOCOL_VERSION, type: "presence", from: this.ch.name, ops: EVENT_OPS_VERSION, ts, ...p } as Presence));
         const e = this.ch.access.epoch;
         const sealed = yield* Effect.promise(() => seal(this.ch.access.keys[String(e)]!, this.ch.roomId, { ...full, e }));
         ws.send(JSON.stringify({ t: "eph", ...sealed }));

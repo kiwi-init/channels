@@ -90,3 +90,24 @@
   justify-content: flex-end;
   gap: 8px;
 }
+
+.room-ready {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-2);
+  font: var(--t-meta) / 1.5 var(--ui);
+}
+
+.room-ready li {
+  padding: 8px 12px;
+  border-radius: var(--r-ctl);
+  background: var(--wash);
+}
+
+.room-ready li.is-old {
+  background: var(--decide-wash);
+  color: var(--decide);
+}

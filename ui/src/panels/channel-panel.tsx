@@ -2,6 +2,7 @@ import "~/styles/channel-panel.css"
 import "~/styles/new-room.css"
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react"
+import { RoomReadyNotes } from "~/shell/room-ready"
 
 import { Avatar, cx, Field, Heading, IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
@@ -417,6 +418,7 @@ function RoomPeople({ channel, id, members, own }: { channel: Channel; id: strin
           <span className="room-member-name">{shown(p)}</span>
         </label>
       ))}
+      <RoomReadyNotes people={others.filter((p) => editing.has(p.name))} />
       <p className="cpanel-hint">{out ? "Whoever you take out keeps what they could read, and nothing after: the room moves to a new key." : "Whoever you add reads the room's history."}</p>
       <div className="room-edit-foot">
         <button type="button" className="btn is-quiet is-small" onClick={() => setEditing(null)}>
