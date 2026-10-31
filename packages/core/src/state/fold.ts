@@ -89,6 +89,7 @@ function folding(
       ...(r.runs ? { runs: r.runs } : {}),
       ...(r.persona ? { persona: r.persona } : {}),
       ...(r.answersDecisions && r.kind === "human" && !r.owner ? { answersDecisions: true } : {}),
+      ...(r.managesAgents && r.kind === "human" && !r.owner ? { managesAgents: true } : {}),
       owner: r.owner,
       joined: r.at,
       lastSeen: r.at,

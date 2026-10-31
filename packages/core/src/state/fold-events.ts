@@ -6,10 +6,14 @@ import { addRelease, applyGithub, repoKey, type GithubState } from "./github.ts"
 import { reposOf } from "./repos.ts";
 import { omit } from "../omit.ts";
 import { readScopes, SCOPES, type Scope } from "../scopes.ts";
+import { cleanPersona } from "../personality.ts";
 import { isPerson } from "./people.ts";
 import { roomName } from "./rooms.ts";
 import { currentState, openRound, reviewClaimRefusal, reviewMoveRefusal, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
 import type { Charter, Compact, Fact, FoldMember, Hold, Lease, PersonaLead, Room, Task } from "./types.ts";
+
+const managesAgent = (by: FoldMember, target: FoldMember | undefined): boolean =>
+  by.active && !!by.managesAgents && !by.owner && by.kind === "human" && !!target && target.kind === "agent" && !target.owner && target.name !== by.name;
 
 export interface FoldCtx {
   members: Map<string, FoldMember>;
@@ -180,11 +184,11 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
 
     case "role.set":
     case "role.refuse": {
-      if (!member.owner) {
-        reject("only the owner decides roles");
+      const target = members.get(ev.member);
+      if (!member.owner && !managesAgent(member, target)) {
+        reject("only the owner, or a person who manages agents, decides an agent's role");
         break;
       }
-      const target = members.get(ev.member);
       if (!target) {
         reject(`no member named ${ev.member}`);
         break;
@@ -197,8 +201,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "scope.set": {
-      if (!member.owner) {
-        reject("only the owner sets what members may do");
+      if (!member.owner && !managesAgent(member, members.get(ev.member))) {
+        reject("only the owner, or a person who manages agents, sets what an agent may do");
         break;
       }
       if (!keysByName.get(ev.member)?.has(ev.pk)) {
@@ -211,7 +215,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       }
       const scopes = ev.scopes === null ? [...SCOPES] : (readScopes(ev.scopes) ?? []);
       scopesByKey.set(ev.pk, scopes);
-      scopeSets.set(ev.pk, { seq: m.seq, scopes });
+      scopeSets.set(ev.pk, { seq: m.seq, scopes, ...(ev.persona !== undefined ? { persona: ev.persona === null ? null : cleanPersona(ev.persona) } : {}) });
       if (ev.lead !== undefined) c.personaLead.set(ev.member, ev.lead);
       else if (!ev.keepLead) c.personaLead.set(ev.member, "roster");
       break;

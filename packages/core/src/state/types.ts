@@ -17,6 +17,7 @@ export interface Member {
   runs?: Runs;
   persona?: Persona;
   answersDecisions?: boolean;
+  managesAgents?: boolean;
   owner: boolean;
   joined: number;
   active: boolean;
@@ -44,6 +45,7 @@ export type Roster = {
   runs?: Runs;
   persona?: Persona;
   answersDecisions?: boolean;
+  managesAgents?: boolean;
 }[];
 
 export const toRoster = (m: MemberRecord): Roster[number] => ({
@@ -64,6 +66,7 @@ export const toRoster = (m: MemberRecord): Roster[number] => ({
   ...(m.runs ? { runs: m.runs } : {}),
   ...(m.persona ? { persona: m.persona } : {}),
   ...(m.answersDecisions ? { answersDecisions: true } : {}),
+  ...(m.managesAgents ? { managesAgents: true } : {}),
 });
 
 export const rosterOf = (members: readonly MemberRecord[]): Roster => members.filter((m) => !m.unverified).map(toRoster);
@@ -176,7 +179,7 @@ export interface ChannelState {
   leases: Map<string, Lease>;
   trust: Map<number, Trust>;
   rejected: Map<number, string>;
-  scopeSets: Map<string, { seq: number; scopes: Scope[] }>;
+  scopeSets: Map<string, { seq: number; scopes: Scope[]; persona?: Persona | null }>;
   roleSets: Map<string, { seq: number; role: string | null; about?: string | null }>;
   openAsks: Message[];
   askHeads: Map<number, AskHead>;
@@ -249,7 +252,7 @@ export interface FoldBase {
   compact: Compact | null;
   compactProposal: Compact | null;
   scopesByKey: [string, Scope[]][];
-  scopeSets: [string, { seq: number; scopes: Scope[] }][];
+  scopeSets: [string, { seq: number; scopes: Scope[]; persona?: Persona | null }][];
   roleSets: [string, { seq: number; role: string | null; about?: string | null }][];
   tasks: Task[];
   facts: Fact[];

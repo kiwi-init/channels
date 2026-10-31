@@ -5,6 +5,7 @@
 // coordination events, signatures) lives inside the encrypted payload.
 
 import { DEVICE_LIST_MAX, type DeviceLink } from "./devices.ts";
+import { cleanPersona, type Persona } from "./personality.ts";
 import { permissionChoices, wellFormedPermission, wellFormedPermReply, wellFormedSettled, type PermissionReply, type PermissionSettled, type PermissionShown } from "./permission.ts";
 
 export const PROTOCOL_VERSION = 1;
@@ -263,7 +264,7 @@ export type Event =
    * Owner only: what a member may do besides read (null: everything). Names the member's key
    * too, so it never carries over to someone admitted under the same name later.
    */
-  | { op: "scope.set"; member: string; pk: string; scopes: string[] | null; lead?: boolean; wasLead?: boolean; keepLead?: true }
+  | { op: "scope.set"; member: string; pk: string; scopes: string[] | null; lead?: boolean; wasLead?: boolean; keepLead?: true; persona?: Persona | null }
   /** Coordinator-only mode is gone. Older logs still carry these; they fold to nothing. */
   | { op: "mode.set"; coordinatorOnly: boolean; strict: boolean }
   /** Owner only: a room in this channel. Its id never changes; the name is a label (room.rename). */
@@ -951,7 +952,8 @@ function eventCheck(ev: unknown): boolean | null {
         str(e.pk, 64) &&
         (e.scopes === null || strs(e.scopes, 32)) &&
         (e.keepLead === undefined || (e.keepLead === true && e.lead === undefined)) &&
-        (e.lead === undefined ? e.wasLead === undefined : typeof e.lead === "boolean" && typeof e.wasLead === "boolean")
+        (e.lead === undefined ? e.wasLead === undefined : typeof e.lead === "boolean" && typeof e.wasLead === "boolean") &&
+        (e.persona === undefined || e.persona === null || cleanPersona(e.persona) !== null)
       );
     case "mode.set":
       return typeof e.coordinatorOnly === "boolean" && typeof e.strict === "boolean";

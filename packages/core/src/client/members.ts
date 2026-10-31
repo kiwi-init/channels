@@ -105,14 +105,23 @@ export class ChannelMembers {
     updatePowers: Effect.fn("Channel.updatePowers")({ self: this }, function* (this: ChannelMembers, m: Member, powers: PersonPowers) {
       yield* this.ch.ownerOnly();
       if (m.unverified) return yield* new Rejected(NO_RECORD);
-      if (m.owner || m.kind !== "human") return yield* new Rejected("only a person's record says whether they add agents or answer decisions");
+      if (m.owner || m.kind !== "human") return yield* new Rejected("only a person's record says whether they add agents, answer decisions or manage agents");
       const e = this.ch.access.epoch;
       const key = this.ch.access.keys[String(e)]!;
-      const info = omit(m, "active", "readOnly", "unverified", "at", "addsAgents", "answersDecisions");
+      const info = omit(m, "active", "readOnly", "unverified", "at", "addsAgents", "answersDecisions", "managesAgents");
       const addsAgents = powers.addsAgents ?? !!m.addsAgents;
       const answersDecisions = powers.answersDecisions ?? !!m.answersDecisions;
+      const managesAgents = powers.managesAgents ?? !!m.managesAgents;
       const rec = yield* Effect.promise(async () =>
-        sealRecord(key, await makeRecord(this.ch.identity, this.ch.roomId, { ...info, ...(addsAgents ? { addsAgents } : {}), ...(answersDecisions ? { answersDecisions } : {}) })),
+        sealRecord(
+          key,
+          await makeRecord(this.ch.identity, this.ch.roomId, {
+            ...info,
+            ...(addsAgents ? { addsAgents } : {}),
+            ...(answersDecisions ? { answersDecisions } : {}),
+            ...(managesAgents ? { managesAgents } : {}),
+          }),
+        ),
       );
       const scopes = m.later?.scopes ?? scopesOf(m);
       yield* this.ch.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: canPost(scopes) }) });
@@ -133,7 +142,8 @@ export class ChannelMembers {
         }
         const set = state.scopeSets.get(m.pk);
         if (set && (m.later?.since ?? -1) < set.seq) {
-          yield* this.ch.fx.updateScopes(m, set.scopes, set.seq);
+          if (set.persona !== undefined && m.kind === "agent") yield* this.ch.fx.updatePersona(m, set.persona, set.seq);
+          else yield* this.ch.fx.updateScopes(m, set.scopes, set.seq);
           if (!changed.includes(m.pk)) changed.push(m.pk);
           continue;
         }
