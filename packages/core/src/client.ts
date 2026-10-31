@@ -436,21 +436,35 @@ export class Channel {
     const { newRoomKey, sealRoom } = await import("./private-room.ts");
     const id = newRoomId();
     const who = withMe(this.core.identity, members);
+    const key = newRoomKey();
+    const meta = { name, members: who.map(({ name, pk }) => ({ name, pk })) };
     const sealed = await sealRoom(
       this.roomId,
       id,
       1,
-      newRoomKey(),
-      { name, members: who.map(({ name, pk }) => ({ name, pk })) },
+      key,
+      meta,
       who.map((w) => w.xpk),
     );
-    await this.send("made a private room", { kind: "event", ev: { op: "room.seal", ...sealed } });
+    (await import("./private-room.ts")).ownSeal(this.core, id, await this.send("made a private room", { kind: "event", ev: { op: "room.seal", ...sealed } }), sealed, { n: 1, key, meta });
     return id;
   }
 
   async changeRoom(id: string, change: { name?: string; members?: readonly RoomPick[] }): Promise<boolean> {
     const now = this.core.roomNow.get(id);
     if (!now?.key || !now.meta) throw new Error("you're not in that private room");
+    const last = this.core.roomSeals.get(id)?.at(-1)?.seal;
+    if (change.name && !change.members && last?.n === now.n) {
+      const { renameRoom } = await import("./private-room.ts");
+      const meta = { ...now.meta, name: change.name };
+      const sealed = await renameRoom(this.roomId, last, now.key, meta);
+      (await import("./private-room.ts")).ownSeal(this.core, id, await this.send("changed a private room", { kind: "event", ev: { op: "room.seal", ...sealed } }), sealed, {
+        n: now.n,
+        key: now.key,
+        meta,
+      });
+      return true;
+    }
     const roster = await this.members();
     const here = new Map(roster.filter((r) => r.active).map((r) => [r.pk, r]));
     const asked = change.members ? withMe(this.core.identity, change.members) : null;
@@ -472,7 +486,7 @@ export class Channel {
       who.map((w) => w.xpk),
       now.key,
     );
-    await this.send("changed a private room", { kind: "event", ev: { op: "room.seal", ...sealed } });
+    (await import("./private-room.ts")).ownSeal(this.core, id, await this.send("changed a private room", { kind: "event", ev: { op: "room.seal", ...sealed } }), sealed, { n, key, meta });
     return true;
   }
 

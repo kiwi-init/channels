@@ -1,5 +1,5 @@
 import { b64url, fromB64url, newChannelKey, open, openFrom, seal, sealTo } from "./crypto.ts";
-import { MAX_ROOM_MEMBERS, MAX_ROOM_SEALS, type RoomLetter, type RoomMember, type RoomMeta, type RoomNow, type RoomSeal } from "./room-rules.ts";
+import { MAX_ROOM_MEMBERS, type RoomLetter, type RoomMember, type RoomMeta, type RoomNow, type RoomSeal } from "./room-rules.ts";
 import type { Message } from "./protocol.ts";
 import type { FoldBase, SecretRoom } from "./state/types.ts";
 
@@ -38,6 +38,12 @@ export async function sealRoom(channel: string, id: string, n: number, key: stri
   const sealed = { id, n, keys, meta: await seal(key, bound(channel, id, n), replaces && replaces !== key ? { ...meta, prev: replaces } : meta) };
   if (!replaces) return sealed;
   const proof = b64url(new Uint8Array(await crypto.subtle.sign("HMAC", await hmac(replaces), digest(channel, sealed))));
+  return { ...sealed, proof };
+}
+
+export async function renameRoom(channel: string, last: RoomSeal, key: string, meta: RoomMeta): Promise<RoomSeal> {
+  const sealed = { id: last.id, n: last.n, keys: last.keys, meta: await seal(key, bound(channel, last.id, last.n), meta) };
+  const proof = b64url(new Uint8Array(await crypto.subtle.sign("HMAC", await hmac(key), digest(channel, sealed))));
   return { ...sealed, proof };
 }
 
@@ -151,7 +157,10 @@ export async function settleSeal(c: RoomCache, m: Message): Promise<Message> {
   if (!c.sealSteps.has(m.seq)) {
     const seal = { id: ev.id, n: ev.n, keys: ev.keys, meta: ev.meta, ...(ev.proof ? { proof: ev.proof } : {}) };
     const list = [...(c.roomSeals.get(ev.id) ?? []).filter((x) => x.seq !== m.seq), { seq: m.seq, seal }].sort((a, b) => a.seq - b.seq);
-    c.roomSeals.set(ev.id, list.slice(-MAX_ROOM_SEALS));
+    c.roomSeals.set(
+      ev.id,
+      keptSeals(list, (x) => x.seal.n),
+    );
     await replay(c, ev.id);
   }
   const step = c.sealSteps.get(m.seq) ?? {};
@@ -170,4 +179,25 @@ export async function openBaseRooms(c: RoomCache, base: FoldBase): Promise<FoldB
     else if (room.meta) rooms.delete(id);
   }
   return { ...base, secret, rooms: [...rooms.values()] };
+}
+
+export function ownSeal(c: Omit<RoomCache, "roomId" | "identity">, id: string, seq: number, seal: RoomSeal, now: Required<RoomNow>): void {
+  const list = [...(c.roomSeals.get(id) ?? []).filter((x) => x.seq !== seq), { seq, seal }].sort((a, b) => a.seq - b.seq);
+  c.roomSeals.set(
+    id,
+    keptSeals(list, (x) => x.seal.n),
+  );
+  c.roomKeys.set(`${id}/${now.n}`, now.key);
+  c.sealSteps.set(seq, { proven: true, opened: now.meta });
+  if (list.at(-1)?.seq === seq) c.roomNow.set(id, now);
+}
+
+export const SEALS_PER_KEY = 8;
+
+export function keptSeals<T>(list: readonly T[], n: (x: T) => number): T[] {
+  const at = new Map<number, number[]>();
+  list.forEach((x, i) => at.set(n(x), [...(at.get(n(x)) ?? []), i]));
+  const keep = new Set<number>([0]);
+  for (const ids of at.values()) for (const i of [...ids.slice(0, SEALS_PER_KEY), ...ids.slice(-SEALS_PER_KEY)]) keep.add(i);
+  return list.filter((_, i) => keep.has(i));
 }

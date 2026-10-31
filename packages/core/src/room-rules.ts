@@ -1,5 +1,4 @@
 export const MAX_ROOM_MEMBERS = 200;
-export const MAX_ROOM_SEALS = 200;
 
 export interface RoomMember {
   name: string;
