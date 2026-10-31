@@ -1,6 +1,13 @@
 import { useEffect, type RefObject } from "react"
 
 const LINE_PX = 16
+const FADE_PX = 24
+
+export function revealTarget(at: number, view: { left: number; right: number }, item: { left: number; right: number }): number | null {
+  if (item.left < view.left + FADE_PX) return at - (view.left + FADE_PX - item.left)
+  if (item.right > view.right - FADE_PX) return at + (item.right - (view.right - FADE_PX))
+  return null
+}
 
 export function sidewaysTarget(at: number, max: number, deltaX: number, deltaY: number, lines: boolean): number | null {
   if (max <= 1 || Math.abs(deltaX) >= Math.abs(deltaY)) return null
@@ -8,7 +15,7 @@ export function sidewaysTarget(at: number, max: number, deltaX: number, deltaY: 
   return to === at ? null : to
 }
 
-export function useSideways(ref: RefObject<HTMLElement | null>, active: string): void {
+export function useSideways(ref: RefObject<HTMLElement | null>, active: string, chosen = ".side-row.is-on"): void {
   useEffect(() => {
     const el = ref.current
     if (!el) return
@@ -37,8 +44,16 @@ export function useSideways(ref: RefObject<HTMLElement | null>, active: string):
 
   useEffect(() => {
     const el = ref.current
-    const on = el?.querySelector<HTMLElement>(".side-row.is-on")
-    if (!el || !on || el.scrollWidth - el.clientWidth <= 1) return
-    on.scrollIntoView({ block: "nearest", inline: "nearest" })
-  }, [ref, active])
+    if (!el) return
+    const show = () => {
+      const on = el.querySelector<HTMLElement>(chosen)
+      if (!on || el.scrollWidth - el.clientWidth <= 1) return
+      const to = revealTarget(el.scrollLeft, el.getBoundingClientRect(), on.getBoundingClientRect())
+      if (to !== null) el.scrollLeft = to
+    }
+    show()
+    const watch = new MutationObserver(show)
+    watch.observe(el, { subtree: true, attributes: true, attributeFilter: ["aria-pressed", "class"] })
+    return () => watch.disconnect()
+  }, [ref, active, chosen])
 }

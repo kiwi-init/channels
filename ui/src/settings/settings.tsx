@@ -7,7 +7,7 @@ import { useApp, type Section } from "~/nav"
 import { AgentsSection } from "~/settings/agents"
 import { ComputersSection } from "~/settings/computers"
 import { AboutSection, AccountSection, AppearanceSection, NotificationsSection, UpdatesSection } from "~/settings/sections"
-import { useSideways } from "~/settings/sideways"
+import { useSideways } from "~/kit/sideways"
 import { SideCards } from "~/shell/updates"
 
 const SECTIONS: readonly (readonly [Section, string, IconName])[] = [

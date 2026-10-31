@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type RefObject } from "react"
 
+import { useSideways } from "~/kit/sideways"
+
 const ON = "data-glide-on"
 
 function offset(el: HTMLElement, root: HTMLElement): { x: number; y: number } {
@@ -57,6 +59,7 @@ export function useGlide<T extends HTMLElement>(selector: string): RefObject<T |
 
 export function Track({ children, ...rest }: ComponentProps<"div">) {
   const ref = useGlide<HTMLDivElement>('[aria-pressed="true"]')
+  useSideways(ref, "", '[aria-pressed="true"]')
   return (
     <div ref={ref} {...rest}>
       {children}

@@ -1,15 +1,19 @@
 import { memberName } from "@kiwi/app/format.ts"
-import { ANYONE, cancelTask as cancelling, changeReviewer, closedDigest, type TaskSend } from "@kiwi/channel/task-actions.ts"
+import { ANYONE, approveTask as approving, cancelTask as cancelling, changeReviewer, closedDigest, sendBackTask, type TaskSend } from "@kiwi/channel/task-actions.ts"
+import { ALLOW_ONCE, DENY } from "@kiwi/app/permission-settled.ts"
 import { changeTo } from "@kiwi/core/changes.ts"
+import { permissionReply } from "@kiwi/core/permission.ts"
 import { GENERAL_ROOM, MAX_GOAL_NAME, type Event, type StepReply } from "@kiwi/core/protocol.ts"
 import { taskId } from "@kiwi/core/state.ts"
 import { bridge, type KiwiBridge, type TermEvent, type TermOpenView } from "@kiwi/secrets/secrets.ts"
 import { stepReplyText } from "~/chat/step"
 import { announce } from "~/kit/toasts"
+import { ownPrefs, setPrefs } from "~/live/prefs"
+import { muteKey, snoozeEnd, type SnoozeFor } from "~/live/snooze"
 import { event, memberOf, need, owner } from "~/live/run"
 import { seatOf } from "~/live/seats"
 import type { Run } from "~/live/store"
-import type { TermOpened, TermWatch } from "~/model"
+import type { TaskStatus, TermOpened, TermWatch, UpdateCheck } from "~/model"
 
 const COMPACT_ASK =
   "Please draft a /compact summary of the history so far: name every open task (T7) and open question (#123) by its id, then run `kiwi compact --file summary.md`. I'll approve it in the app."
@@ -114,4 +118,54 @@ export async function openMyTerm(code: string, want: string | null, cols: number
   if (typeof b.termMine !== "function") return { error: "Update Channels to open your own terminal here." }
   const room = need(code).roomId
   return streamTerm(b, () => b.termMine(room, want, cols, rows), watch)
+}
+
+export function setMute(code: string, room: string | null, on: boolean): void {
+  const key = muteKey(code, room)
+  const rest = ownPrefs().muted.filter((k) => k !== key)
+  setPrefs({ muted: on ? [...rest, key] : rest })
+}
+
+export const snooze = (until: SnoozeFor | null): void => setPrefs({ snoozeUntil: until ? snoozeEnd(until, Date.now()) : null })
+
+export async function checkUpdate(): Promise<UpdateCheck | null> {
+  const b = bridge()
+  if (!b) return null
+  try {
+    const u = await b.checkUpdate()
+    if (u.state === "current" || u.state === "failed") return u
+    return { state: u.state, version: u.version, ...(u.blocked ? { blocked: true } : {}) }
+  } catch {
+    // A check that throws is shown the same as one that couldn't reach GitHub.
+    return { state: "failed" }
+  }
+}
+
+export async function answerPermission(code: string, id: string, allow: boolean): Promise<void> {
+  const run = need(code)
+  const m = run.messages.find((x) => x.seq === Number(id))
+  if (!m) throw new Error("that request is gone")
+  const perm = permissionReply(m, allow, run.state)
+  if (!perm) throw new Error("this one can only be answered in the terminal")
+  await run.send(allow ? ALLOW_ONCE : DENY, { to: [m.from], re: [m.seq], kind: "msg", perm })
+}
+
+const STATES: Partial<Record<TaskStatus, "todo" | "doing" | "review" | "done">> = { todo: "todo", doing: "doing", review: "review", done: "done" }
+
+export async function approveTask(code: string, id: number, approve: boolean, why?: string): Promise<void> {
+  const run = need(code)
+  const t = run.state.tasks.get(id)
+  if (!t) throw new Error(`no task ${taskId(id)}`)
+  if (approve) await sends(run, approving(t), closedDigest(run.state, [...run.messages], t, { by: run.me }))
+  else await sends(run, sendBackTask(t, why?.trim() || "sent back for another look"))
+}
+
+export async function setTaskStatus(code: string, id: number, status: TaskStatus): Promise<void> {
+  const run = need(code)
+  const t = run.state.tasks.get(id)
+  if (!t) throw new Error(`no task ${taskId(id)}`)
+  const state = STATES[status]
+  if (!state) throw new Error("a task waits on its own, when something holds it")
+  const to = t.owner && t.owner !== run.me ? [t.owner] : undefined
+  await event(run, `${taskId(id)} ${state}`, { op: "task.update", task: id, state }, to)
 }

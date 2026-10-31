@@ -17,6 +17,7 @@ import { SIDEBAR_KEYS, useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 import { usePanelWidth } from "~/shell/panel-width"
 import { isSideKey, setDrawer, toggleSide, useDrawer, useTall } from "~/shell/side"
 import { Sidebar } from "~/shell/sidebar"
+import { useSideways } from "~/kit/sideways"
 import { openTasks } from "~/tasks/open"
 import { headerLine } from "~/now"
 import { between, nickname } from "~/names"
@@ -61,6 +62,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const drawer = useDrawer()
   const tall = useTall()
   const tabsRef = useGlide<HTMLElement>('[aria-pressed="true"]')
+  useSideways(tabsRef, nav.tab, '[aria-pressed="true"]')
   const offline = useLate(channel.connection !== "live", 1000)
   useEffect(() => {
     setDrawer(false)

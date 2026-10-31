@@ -34,6 +34,10 @@ export const DEMO_PREFS: Prefs = {
   font: "system",
   reduceMotion: false,
   notify: "mentions",
+  muted: ["interlinked", "kiwi/releases"],
+  snoozeUntil: null,
+  quiet: { on: false, from: 22 * 60, to: 8 * 60 },
+  mentionSound: true,
   enterSends: true,
   darkTheme: "channels-oled",
   lightTheme: "channels-light",
@@ -43,7 +47,7 @@ export const DEMO_PREFS: Prefs = {
 
 export const DEMO_TILES: ChannelTile[] = [
   { code: "kiwi", title: "kiwi", state: "member", unread: 0, needsYou: 3, last: m(1) },
-  { code: "interlinked", title: "interlinked", state: "member", unread: 4, needsYou: 0, last: m(9) },
+  { code: "interlinked", title: "interlinked", state: "member", unread: 0, needsYou: 0, last: m(9), muted: true },
   { code: "landing", title: "landing", state: "member", unread: 0, needsYou: 0, last: m(300) },
   { code: "ops", title: "ops", state: "waiting", unread: 0, needsYou: 0, last: m(20) },
 ]
@@ -690,7 +694,7 @@ export const DEMO_CHANNEL: Channel = {
   repos: ["kiwi-init/channels", "kiwi-init/electrobun-livewire"],
   rooms: [
     { id: "general", name: "general", unread: 0, mentions: 0 },
-    { id: "releases", name: "releases", unread: 2, mentions: 0 },
+    { id: "releases", name: "releases", unread: 2, mentions: 0, muted: true },
     { id: "design", name: "design", unread: 0, mentions: 0 },
     { id: "launch-plan", name: "launch-plan", unread: 1, mentions: 0, members: ["jow", "maya", "atlas"] },
   ],

@@ -1027,8 +1027,25 @@
     padding: 0 8px;
   }
 
-  .tabs .is-agents {
+  .chan.has-panel .panel {
+    left: var(--rail-w);
+    width: auto;
+  }
+
+  .chan.has-panel .panel-grip {
     display: none;
+  }
+
+  .tabs[data-more-end] {
+    mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+  }
+
+  .tabs[data-more-start] {
+    mask-image: linear-gradient(to right, transparent, #000 24px);
+  }
+
+  .tabs[data-more-start][data-more-end] {
+    mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
   }
 
   .top-meta {
@@ -1581,4 +1598,17 @@ html .rail-gear.is-on {
 
 .tall-work .board-list .board-owner {
   grid-row: 1;
+}
+
+.side-row.is-muted .side-label,
+.side-row.is-muted .icon {
+  color: var(--ink-3);
+}
+
+.tile.is-muted {
+  opacity: 0.55;
+}
+
+.rail-gear.is-quiet {
+  color: var(--ink-2);
 }
