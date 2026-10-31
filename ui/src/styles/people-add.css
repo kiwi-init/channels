@@ -51,7 +51,7 @@
 .invite-trust {
   margin-top: 4px;
   margin-bottom: 16px;
-  padding: 12px 12px 12px 14px;
+  padding: 12px;
   border-radius: var(--r-ctl);
   background: var(--bg-3);
 }
