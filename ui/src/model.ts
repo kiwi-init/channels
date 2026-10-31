@@ -240,6 +240,9 @@ export interface Message {
   mentionsYou?: boolean
   leftOut?: string
   receipt?: string
+  edited?: number
+  deleted?: true
+  canChange?: true
 }
 
 export interface PermissionAsk {
@@ -545,6 +548,8 @@ export interface Actions {
   loadImage(code: string, spot: string): void
   discard(code: string, seq: number): void
   react(code: string, seq: number, emoji: string): void
+  editMessage(code: string, seq: number, text: string): void
+  deleteMessage(code: string, seq: number): void
   answerPermission(code: string, id: string, allow: boolean): void
   answerQuestion(code: string, id: string, text: string): void
   answerStep(code: string, id: string, reply: StepReply): void

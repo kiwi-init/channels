@@ -7,7 +7,7 @@ import { describeEvent, proofLabel } from "@kiwi/core/format.ts"
 import { memberLoad, showsLoad } from "@kiwi/core/load.ts"
 import { checksOf, FAILED, prLinks, taskPr } from "@kiwi/core/prs.ts"
 import { stageOf } from "@kiwi/core/stage.ts"
-import { GENERAL_ROOM, ignored, isQuiet, isRasterMime, isOverlay, type Message as Wire } from "@kiwi/core/protocol.ts"
+import { editable, GENERAL_ROOM, ignored, isQuiet, isRasterMime, isOverlay, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { pickFor, taskCandidates } from "@kiwi/core/routing.ts"
 import { canPost } from "@kiwi/core/scopes.ts"
 import { versionName } from "@kiwi/core/status.ts"
@@ -26,6 +26,7 @@ import {
   prChecks,
   prKey,
   releaseOf,
+  sameAuthor,
   tasksAwaitingPeople,
   type ChannelState,
   type Task as CoreTask,
@@ -360,16 +361,21 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
     const quoted = m.re?.[0]
     const target = quoted === undefined ? undefined : bySeq.get(quoted)
     const reactions = reactionsOf(state, m.seq)
-    const prs = prLinks(m.body).map((link) => prOf(state, link))
+    const gone = state.deleted.has(m.seq)
+    const changed = state.edits.get(m.seq)
+    const text = gone ? "" : (changed?.body ?? m.body)
+    const prs = prLinks(text).map((link) => prOf(state, link))
     const said = phraseOf(m, me, (name) => (name === me ? "you" : nameIn(state, name)), new Set((m.re ?? []).flatMap((seq) => bySeq.get(seq)?.from ?? [])))
-    const images = (m.imgs ?? []).flatMap((img, i) => (isRasterMime(img.mime) ? [pictures.get(m.seq, i, img.name)] : []))
+    const images = gone ? [] : (m.imgs ?? []).flatMap((img, i) => (isRasterMime(img.mime) ? [pictures.get(m.seq, i, img.name)] : []))
     const ask = askOf.get(m.seq)
     out.push({
       seq: m.seq,
       from: m.from,
       at: m.ts,
-      text: m.body,
+      text,
       where,
+      ...(gone ? { deleted: true as const } : changed ? { edited: changed.at } : {}),
+      ...(!gone && editable(m) && sameAuthor(state.members.get(m.from), state.members.get(me)) ? { canChange: true as const } : {}),
       ...(said ? { said } : {}),
       ...(root !== undefined ? { inThread: root } : {}),
       ...(quoted !== undefined && quoted !== root && target?.kind !== "event" ? { replyTo: quoted } : {}),

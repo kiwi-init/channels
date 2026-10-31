@@ -1,6 +1,6 @@
 import { handleFor } from "@kiwi/core/membership.ts"
 import { permissionReply } from "@kiwi/core/permission.ts"
-import { MAX_GOAL_NAME, ROBOT_FACES, TASK_TITLE_MAX_LENGTH } from "@kiwi/core/protocol.ts"
+import { ROBOT_FACES, TASK_TITLE_MAX_LENGTH } from "@kiwi/core/protocol.ts"
 import { taskId } from "@kiwi/core/state.ts"
 import { tokenForCreate } from "@kiwi/app/auth.ts"
 import { askToJoin, createChannel, inviteInfo } from "@kiwi/channel/join.ts"
@@ -13,7 +13,7 @@ import { ALLOW_ONCE, DENY } from "@kiwi/app/permission-settled.ts"
 import { savePersonalities } from "@kiwi/app/personalities.ts"
 import { createPerson, bridge, secrets, type KiwiBridge, type TermEvent, type TermOpenView } from "@kiwi/secrets/secrets.ts"
 import { isSignInGone } from "@kiwi/channel/session.ts"
-import { ANYONE, approveTask, assignTask, cancelTask, changeReviewer, closedDigest, sendBackTask, type TaskSend } from "@kiwi/channel/task-actions.ts"
+import { approveTask, assignTask, closedDigest, sendBackTask, type TaskSend } from "@kiwi/channel/task-actions.ts"
 import { announce } from "~/kit/toasts"
 import { enrollAnswer, enrollBegin, enrollCancel, enrollConfirm, enrollDeny, enrollKeep, forgetDevice, linkGithub, renewDevice, unlinkGithub, type EnrollDone } from "~/live/account"
 import { loadPicture } from "~/live/pictures"
@@ -21,21 +21,18 @@ import { setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
 import { iconFromFile } from "~/live/icon-file"
 import { seatOf } from "~/live/seats"
-import { memberName } from "@kiwi/app/format.ts"
 import { checkComputer, computerSettings, setContextLine, setHooks } from "~/live/computer"
 import { addStartFolder, allowNewAgents, allowRemoteBypass, removeStartFolder, setTerminalHelpers } from "~/live/starts"
 import { closeOpened, leavingOnPurpose, openedRun, type Run } from "~/live/store"
 import { attempt, event, memberOf, need, owner, say } from "~/live/run"
 
 const manage = () => import("~/live/manage")
+const rare = () => import("~/live/rare")
 import { stepReplyText } from "~/chat/step"
 import { downloadAndRestart } from "~/live/update"
 import { setWake } from "~/live/wakes"
 import { rememberOwner } from "~/live/invites"
 import type { Actions, InviteInfo, TaskStatus, TermOpened, TermWatch } from "~/model"
-
-const COMPACT_ASK =
-  "Please draft a /compact summary of the history so far: name every open task (T7) and open question (#123) by its id, then run `kiwi compact --file summary.md`. I'll approve it in the app."
 
 async function tried<T>(what: string, run: () => Promise<T>): Promise<T | null> {
   try {
@@ -177,6 +174,8 @@ export function makeActions(): Actions {
         const mine = run.state.reactions.get(seq)?.get(run.me)?.emoji === emoji
         await event(run, "reaction", { op: "react", seq, emoji: mine ? null : emoji })
       }),
+    editMessage: (code, seq, text) => attempt("Not edited", async () => (await rare()).change(code, seq, text)),
+    deleteMessage: (code, seq) => attempt("Not deleted", async () => (await rare()).change(code, seq, null)),
     answerPermission: (code, id, allow) =>
       attempt("Not answered", async () => {
         const run = need(code)
@@ -226,15 +225,7 @@ export function makeActions(): Actions {
         const to = t.owner && t.owner !== run.me ? [t.owner] : undefined
         await event(run, `${taskId(id)} ${state}`, { op: "task.update", task: id, state }, to)
       }),
-    cancelTask: (code, id, why) =>
-      attempt("Not cancelled", async () => {
-        const run = need(code)
-        const t = run.state.tasks.get(id)
-        if (!t) throw new Error(`no task ${taskId(id)}`)
-        const note = why.trim()
-        if (!note) throw new Error("say why it's cancelled")
-        await sends(run, cancelTask(t, note, run.me), closedDigest(run.state, [...run.messages], t, { by: run.me, cancelled: note }))
-      }),
+    cancelTask: (code, id, why) => attempt("Not cancelled", async () => (await rare()).cancelTask(code, id, why)),
     assignTask: (code, id, to, why) =>
       attempt("Not assigned", async () => {
         const run = need(code)
@@ -243,20 +234,8 @@ export function makeActions(): Actions {
         memberOf(run, to)
         await sends(run, assignTask(t, to, why.trim() || (t.owner ? `was ${t.owner}'s` : "nobody had it")))
       }),
-    setReviewer: (code, id, reviewer) =>
-      attempt("Reviewer not changed", async () => {
-        const run = need(code)
-        const t = run.state.tasks.get(id)
-        if (!t) throw new Error(`no task ${taskId(id)}`)
-        if (reviewer !== ANYONE) memberOf(run, reviewer)
-        await sends(run, changeReviewer(t, reviewer, run.me))
-      }),
-    nameGoal: (code, ask, name) =>
-      attempt("Goal not named", async () => {
-        const run = need(code)
-        const clean = name?.trim().slice(0, MAX_GOAL_NAME) || null
-        await event(run, clean ? `named the goal of #${ask}: ${clean}` : `#${ask}'s goal unnamed`, { op: "ask.name", ask, name: clean })
-      }),
+    setReviewer: (code, id, reviewer) => attempt("Reviewer not changed", async () => (await rare()).setReviewer(code, id, reviewer)),
+    nameGoal: (code, ask, name) => attempt("Goal not named", async () => (await rare()).nameGoal(code, ask, name)),
     setRole: (code, name, role) => attempt("Role not changed", async () => (await manage()).setRole(code, name, role)),
     removeMember: (code, name) => attempt(`Couldn't remove ${name}`, async () => (await manage()).removeMember(code, name)),
     setPersona: (code, name, id) => attempt("Personality not changed", async () => (await manage()).setPersona(code, name, id)),
@@ -334,21 +313,8 @@ export function makeActions(): Actions {
       }),
     setGoal: (code, goal) => attempt("Goal not set", async () => (await manage()).setGoal(code, goal)),
     setHold: (code, on, note) => attempt(on ? "Agents not paused" : "Agents not resumed", async () => (await manage()).setHold(code, on, note)),
-    askCompact: (code) =>
-      attempt("Not asked", async () => {
-        const run = need(code)
-        const lead = run.state.lead && run.state.lead !== run.me ? run.state.lead : null
-        await run.send(COMPACT_ASK, lead ? { to: [lead], kind: "ask" } : { kind: "ask" })
-        announce(lead ? `Asked ${memberName(run.state.members.get(lead), lead)} for a summary` : "Asked the agents for a summary")
-      }),
-    approveCompact: (code, proposal) =>
-      attempt("Not compacted", async () => {
-        const run = owner(code)
-        const p = run.state.compactProposal
-        if (p?.seq !== proposal) throw new Error("that proposal was replaced or already approved")
-        await event(run, `compacted the history through #${p.through}`, { op: "compact", summary: p.summary, through: p.through, proposal: p.seq })
-        announce(`History through #${p.through} compacted`)
-      }),
+    askCompact: (code) => attempt("Not asked", async () => (await rare()).askCompact(code)),
+    approveCompact: (code, proposal) => attempt("Not compacted", async () => (await rare()).approveCompact(code, proposal)),
     myRepos: async () => {
       const b = bridge()
       if (!b) return []
