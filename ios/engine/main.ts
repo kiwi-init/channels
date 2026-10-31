@@ -503,6 +503,7 @@ async function handle(ask: Ask): Promise<unknown> {
       return null;
     case "nudge":
       keyring?.nudge();
+      for (const r of rooms.values()) r.nudge();
       return null;
     case "computers":
       return listComputers();
