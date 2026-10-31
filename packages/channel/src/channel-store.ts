@@ -102,6 +102,8 @@ export class ChannelStore {
   private readonly head: ReadonlySignal<number>;
   private readonly count: ReadonlySignal<number>;
   private readonly reconcileDue: ReadonlySignal<string>;
+  private readonly pruneDue: ReadonlySignal<string>;
+
   private syncing = false;
   private readonly checksDue: ReadonlySignal<string>;
   private readonly rulesDue: ReadonlySignal<string>;
@@ -145,6 +147,7 @@ export class ChannelStore {
     const bitsKey = computed(() => this.roster.value.map((m) => `${m.pk}:${m.readOnly ? 0 : 1}`).join("|"));
     const repoList = computed(() => this.state.value.repos.join(","));
     this.reconcileDue = computed(() => `${scopesKey.value}\n${bitsKey.value}\n${this.caughtUp.value}`);
+    this.pruneDue = computed(() => `${[...this.keyOf.value.values()].sort().join(",")}\n${this.caughtUp.value}`);
     this.checksDue = computed(() => `${this.head.value}\n${this.caughtUp.value}`);
     this.rulesDue = computed(() => `${this.caughtUp.value}\n${repoList.value}`);
     const pkOf = computed(() => {
@@ -223,6 +226,8 @@ export class ChannelStore {
       this.follow(),
       on(this.count, () => this.trimSoon()),
       on(this.reconcileDue, () => this.reconcile()),
+      on(this.pruneDue, () => this.pruneRooms()),
+      () => void import("./prune-plan.ts").then((m) => m.stopPruning(this.ch)),
       on(this.checksDue, () => this.syncSettings()),
       on(this.head, (head) => this.snapshotIfDue(head)),
       on(this.checksDue, () => this.postReviewChecks()),
@@ -511,6 +516,10 @@ export class ChannelStore {
         () => {},
       )
       .finally(() => (this.syncing = false));
+  }
+
+  private pruneRooms(): void {
+    if (this.caughtUp.peek() && [...this.state.peek().rooms.values()].some((r) => r.members)) void import("./prune-plan.ts").then((m) => m.prune(this.ch, () => this.state.peek()));
   }
 
   private reconcile(): void {

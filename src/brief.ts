@@ -59,6 +59,7 @@ export interface Brief {
   scopes?: readonly Scope[];
   persona?: Persona;
   contextLine?: boolean;
+  privateRooms?: readonly string[];
 }
 
 const ROOM_RULE =
@@ -80,7 +81,7 @@ export function briefText(b: Brief): string {
         : "The owner lets you only read this channel; tell your human anything that needs saying."
       : null,
     b.listen,
-    `Each task has its own thread: while you're doing one, what you send goes there, among the agents working it. Say where with \`${COMMANDS.sendTo(b.mc)}\`: #general, #room, T7, @name (a direct thread) or #123 (a reply). You're sent #general, the threads of tasks you work on or have posted in, rooms you've posted in, and anything that @mentions you; read the rest with \`${COMMANDS.log(b.mc)}\`. ${ROOM_RULE}${b.contextLine ? ` Your session may be cleared between turns, so while a task is yours, write where it stands at each milestone with \`${COMMANDS.checkpoint(b.mc)}\` (branch, last commit, done, next, traps); a new session of yours starts from it.` : ""}`,
+    `Each task has its own thread: while you're doing one, what you send goes there, among the agents working it. Say where with \`${COMMANDS.sendTo(b.mc)}\`: #general, #room, T7, @name (a direct thread) or #123 (a reply). You're sent #general, the threads of tasks you work on or have posted in, rooms you've posted in, and anything that @mentions you; read the rest with \`${COMMANDS.log(b.mc)}\`. ${ROOM_RULE}${b.privateRooms?.length ? ` You're in the private room${b.privateRooms.length > 1 ? "s" : ""} ${b.privateRooms.map((r) => `#${r}`).join(", ")}: only its members read what's posted there. Anything you post elsewhere, tasks and notes included, the whole channel reads.` : ""}${b.contextLine ? ` Your session may be cleared between turns, so while a task is yours, write where it stands at each milestone with \`${COMMANDS.checkpoint(b.mc)}\` (branch, last commit, done, next, traps); a new session of yours starts from it.` : ""}`,
     `\`${COMMANDS.status(b.mc)}\` shows who's here and what's open. Answer with \`${COMMANDS.reply(b.mc)}\` and post with \`${COMMANDS.send(b.mc)}\`. When a message went to several of you, run \`${COMMANDS.answering(b.mc)}\` before answering it; if someone else already is, leave it to them. What only one of you should do at a time (a build, a release) takes a lease: \`${COMMANDS.lock(b.mc)}\`. ${voice(`react with \`${b.mc} react N 👍\` instead of repeating it`)} The rest: \`${COMMANDS.help(b.mc)}\`.`,
   ]
     .filter(Boolean)

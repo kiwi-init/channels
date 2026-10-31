@@ -448,36 +448,38 @@ export class Channel {
     return id;
   }
 
-  async changeRoom(id: string, change: { name?: string; members?: readonly RoomPick[] }): Promise<void> {
+  async changeRoom(id: string, change: { name?: string; members?: readonly RoomPick[] }): Promise<boolean> {
     const now = this.core.roomNow.get(id);
     if (!now?.key || !now.meta) throw new Error("you're not in that private room");
+    const roster = await this.members();
+    const here = new Map(roster.filter((r) => r.active).map((r) => [r.pk, r]));
+    const asked = change.members ? withMe(this.core.identity, change.members) : null;
+    const who = (asked ?? now.meta.members.flatMap((m) => (here.has(m.pk) ? [{ name: m.name, pk: m.pk, xpk: here.get(m.pk)!.xpk }] : []))).filter(
+      (w) => here.has(w.pk) || w.pk === this.core.identity.pk,
+    );
+    const out = now.meta.members.some((m) => !who.some((w) => w.pk === m.pk));
+    if (!out && !change.name && who.length === now.meta.members.length) return false;
     const { newRoomKey, sealRoom } = await import("./private-room.ts");
-    const who = change.members ? withMe(this.core.identity, change.members) : null;
-    const keeps = now.meta.members.filter((m) => who === null || who.some((w) => w.pk === m.pk));
-    if (!who && !change.name) return;
-    const out = who !== null && keeps.length < now.meta.members.length;
-    const xpks = who ?? (await this.roomXpks(now.meta.members));
     const n = out ? now.n + 1 : now.n;
     const key = out ? newRoomKey() : now.key;
-    const meta = { name: change.name ?? now.meta.name, members: (who ?? now.meta.members).map(({ name, pk }) => ({ name, pk })) };
+    const meta = { name: change.name ?? now.meta.name, members: who.map(({ name, pk }) => ({ name, pk })) };
     const sealed = await sealRoom(
       this.roomId,
       id,
       n,
       key,
       meta,
-      xpks.map((w) => w.xpk),
+      who.map((w) => w.xpk),
       now.key,
     );
     await this.send("changed a private room", { kind: "event", ev: { op: "room.seal", ...sealed } });
+    return true;
   }
 
-  private async roomXpks(members: readonly { name: string; pk: string }[]): Promise<RoomPick[]> {
-    const roster = await this.members();
-    return members.flatMap((m) => {
-      const r = roster.find((x) => x.active && x.pk === m.pk);
-      return r ? [{ name: m.name, pk: m.pk, xpk: r.xpk }] : [];
-    });
+  async pruneRooms(only?: readonly string[]): Promise<string[]> {
+    const pruned: string[] = [];
+    for (const [id, now] of this.core.roomNow) if ((!only || only.includes(id)) && now.key && now.meta && (await this.changeRoom(id, {}))) pruned.push(id);
+    return pruned;
   }
 
   async learnRooms(messages: readonly Message[]): Promise<void> {
