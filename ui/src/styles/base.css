@@ -581,6 +581,9 @@ kbd {
 
 .seg {
   display: inline-flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
   padding: 2px;
   gap: 2px;
   border: 0;

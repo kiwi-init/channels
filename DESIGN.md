@@ -74,10 +74,14 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
 
 ## 4. Typography
 
-- Two faces and no others. `--sans` / `--ui`: the system font
+- Two roles and no others. `--sans` / `--ui`: the text font, for
+  everything people read and press. It is the system font
   (`-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI",
-  Roboto, Ubuntu, Cantarell, sans-serif`) for everything people read and
-  press. `--mono`: Paper Mono (`/fonts/PaperMono.woff2`, weights 100-900),
+  Roboto, Ubuntu, Cantarell, sans-serif`) unless the person picks Inter
+  (`/fonts/Inter.woff2`, variable), Lato (`/fonts/Lato-*.woff2`, 400 and
+  700) or Atkinson Hyperlegible Next (`/fonts/Atkinson.woff2`, variable
+  200-800) in Settings > Appearance > Font; `<html data-font>` swaps both tokens,
+  with the system stack behind the pick. `--mono`: Paper Mono (`/fonts/PaperMono.woff2`, weights 100-900),
   then `ui-monospace, "SF Mono", Menlo`.
 - Paper Mono carries the machine's words: times, days, counts, task and PR
   ids, roles (`lead`, `owner`), statuses (`running Bash`, `offline · 1d`),
@@ -85,7 +89,8 @@ The two built-in sides, from `tokens.css` and `channels.ts`:
   paths. The list is the `html .msg-time, html .count, …` rule and the
   `code, pre, kbd, .mono, .codebox, …` rule in `base.css`; a new
   machine-word class joins it there, with `letter-spacing: -0.01em`.
-- Six steps and no sizes between them, all scaled by `--text-scale`: `--t-stamp 11px` (times, counts),
+- Six steps and no sizes between them, all scaled by `--text-scale`
+  (Default 1.1; Small 1, Large 1.25, Larger 1.4, Largest 1.6): `--t-stamp 11px` (times, counts),
   `--t-meta 12px` (meta lines, section heads), `--t-ui 13px` (rows, names,
   buttons, menus), `--t-body 15px` (messages, task titles; message text at
   22px line height), `--t-title 17px` (panel and dialog titles),
@@ -312,7 +317,7 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 - Focus: `:focus-visible` draws a 2px `ink` outline, 2px out.
 - Selection: `--selection` (ink at 28%). Scrollbars: thin, `line-3` thumb on
   transparent.
-- Text size (Settings: Small, Default, Large, Larger) sets `--text-scale`,
+- Text size (Settings: Small, Default, Large, Larger, Largest) sets `--text-scale`,
   which every type step multiplies; layout sizes don't scale.
 - Reduced motion: the OS setting and Settings' own toggle both cut motion
   (section 6).
@@ -330,11 +335,12 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 
 ## 13. Do and don't
 
-Do: use the tokens, Paper Mono for the machine's words and the system font
-for people's, tabular numerals for counts and times, one `is-primary` button
+Do: use the tokens, Paper Mono for the machine's words and the text font
+(the system font unless Settings > Appearance > Font picks another) for
+people's, tabular numerals for counts and times, one `is-primary` button
 per view, state colours only for states, hairlines and fill steps to separate
 surfaces.
-Don't: hard-code hex, add a font, add glass, blur or decorative gradients,
+Don't: hard-code hex, add a font outside the Font setting, add glass, blur or decorative gradients,
 fill a button with the accent, add coloured shadows, or animate anything
 that isn't answering an action.
 

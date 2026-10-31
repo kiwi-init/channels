@@ -1,7 +1,7 @@
 import { useMemo, useSyncExternalStore } from "react"
 
 import { setAccessibilityOption, useAccessibilityOption } from "@kiwi/app/accessibility.ts"
-import { setAppearance, setTextSize, useAppearance, useTextSize, type TextSize } from "@kiwi/app/theme.ts"
+import { setAppearance, setTextFont, setTextSize, useAppearance, useTextFont, useTextSize, type TextSize } from "@kiwi/app/theme.ts"
 import type { CustomTheme, Prefs } from "~/model"
 import { cleanFolders } from "~/shell/rail-items"
 import { cleanThemes, deletedTheme, movedDark, savedTheme, type ThemePrefs } from "~/theme/themes"
@@ -11,7 +11,7 @@ type Own = Pick<Prefs, "notify" | "enterSends" | "darkTheme" | "lightTheme" | "c
 const KEY = "ui.prefs"
 const MOVED = "ui.prefs.oled"
 const DEFAULTS: Own = { notify: "mentions", enterSends: true, darkTheme: "channels-oled", lightTheme: "channels-light", customThemes: [], folders: [] }
-const SIZES: readonly TextSize[] = ["small", "default", "large", "larger"]
+const SIZES: readonly TextSize[] = ["small", "default", "large", "larger", "largest"]
 const listeners = new Set<() => void>()
 let own: Own | null = null
 
@@ -70,17 +70,19 @@ export function storedThemePrefs(): ThemePrefs {
 export function usePrefs(): Prefs {
   const theme = useAppearance()
   const size = useTextSize()
+  const font = useTextFont()
   const reduceMotion = useAccessibilityOption("reduce-motion")
   const mine = useSyncExternalStore((l) => {
     listeners.add(l)
     return () => void listeners.delete(l)
   }, readOwn)
-  return useMemo(() => ({ theme, textSize: SIZES.indexOf(size) - 1, reduceMotion, ...mine }), [theme, size, reduceMotion, mine])
+  return useMemo(() => ({ theme, textSize: SIZES.indexOf(size) - 1, font, reduceMotion, ...mine }), [theme, size, font, reduceMotion, mine])
 }
 
 export function setPrefs(p: Partial<Prefs>): void {
   if (p.theme) setAppearance(p.theme)
   if (p.textSize !== undefined) setTextSize(SIZES[Math.min(Math.max(Math.round(p.textSize) + 1, 0), SIZES.length - 1)] ?? "default")
+  if (p.font !== undefined) setTextFont(p.font)
   if (p.reduceMotion !== undefined) setAccessibilityOption("reduce-motion", p.reduceMotion)
   if (p.notify !== undefined || p.enterSends !== undefined || p.darkTheme !== undefined || p.lightTheme !== undefined || p.customThemes !== undefined || p.folders !== undefined)
     writeOwn({

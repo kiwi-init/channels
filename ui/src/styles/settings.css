@@ -121,6 +121,7 @@
   align-items: center;
   flex: none;
   gap: 8px;
+  max-width: 100%;
 }
 
 .set-value {

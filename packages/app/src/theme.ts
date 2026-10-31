@@ -36,13 +36,13 @@ export function setAppearance(a: Appearance) {
   for (const l of listeners) l();
 }
 
-export type TextSize = "small" | "default" | "large" | "larger";
-const TEXT_SIZES: Record<TextSize, number> = { small: 0.92, default: 1, large: 1.1, larger: 1.22 };
+export type TextSize = "small" | "default" | "large" | "larger" | "largest";
+const TEXT_SIZES: Record<Exclude<TextSize, "default">, number> = { small: 1, large: 1.25, larger: 1.4, largest: 1.6 };
 const SIZE_KEY = "mc.text-size";
 
 function readSize(): TextSize {
   const v = localStorage.getItem(SIZE_KEY);
-  return v === "small" || v === "large" || v === "larger" ? v : "default";
+  return v === "small" || v === "large" || v === "larger" || v === "largest" ? v : "default";
 }
 
 /**
@@ -51,11 +51,10 @@ function readSize(): TextSize {
  * zoom the whole page, which moved and stretched everything.)
  */
 function applySize(t: TextSize) {
-  const z = TEXT_SIZES[t];
   const root = document.documentElement.style;
   root.removeProperty("zoom");
-  if (z === 1) root.removeProperty("--text-scale");
-  else root.setProperty("--text-scale", String(z));
+  if (t === "default") root.removeProperty("--text-scale");
+  else root.setProperty("--text-scale", String(TEXT_SIZES[t]));
 }
 
 export function setTextSize(t: TextSize) {
@@ -65,7 +64,39 @@ export function setTextSize(t: TextSize) {
   for (const l of listeners) l();
 }
 
-const SIZE_ORDER: TextSize[] = ["small", "default", "large", "larger"];
+export const TEXT_FONTS = ["system", "inter", "lato", "atkinson"] as const;
+export type TextFont = (typeof TEXT_FONTS)[number];
+const FONT_KEY = "mc.text-font";
+
+export function parseTextFont(v: string | null): TextFont {
+  return TEXT_FONTS.find((f) => f === v) ?? "system";
+}
+
+function readFont(): TextFont {
+  return parseTextFont(localStorage.getItem(FONT_KEY));
+}
+
+function applyFont(f: TextFont) {
+  const root = document.documentElement;
+  if (f === "system") delete root.dataset.font;
+  else root.dataset.font = f;
+}
+
+export function setTextFont(f: TextFont) {
+  if (f === "system") localStorage.removeItem(FONT_KEY);
+  else localStorage.setItem(FONT_KEY, f);
+  applyFont(f);
+  for (const l of listeners) l();
+}
+
+export function useTextFont(): TextFont {
+  return useSyncExternalStore((l) => {
+    listeners.add(l);
+    return () => listeners.delete(l);
+  }, readFont);
+}
+
+const SIZE_ORDER: TextSize[] = ["small", "default", "large", "larger", "largest"];
 
 export function nextTextSize(t: TextSize, step: TextStep): TextSize {
   if (step === "reset") return "default";
@@ -149,6 +180,7 @@ export function useTint(): string | null {
 export function applyStoredAppearance() {
   apply(read());
   applySize(readSize());
+  applyFont(readFont());
   applyTint(readTint());
 }
 

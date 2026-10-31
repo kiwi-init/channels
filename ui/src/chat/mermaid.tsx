@@ -191,7 +191,7 @@ export function drawCached(source: string, scheme: string, render: (source: stri
 function useScheme(): string {
   const read = () => {
     const root = document.documentElement
-    return `${root.dataset.theme ?? ""}:${matchMedia("(prefers-color-scheme: dark)").matches}:${root.style.cssText}`
+    return `${root.dataset.theme ?? ""}:${root.dataset.font ?? ""}:${matchMedia("(prefers-color-scheme: dark)").matches}:${root.style.cssText}`
   }
   const [scheme, setScheme] = useState("")
   useEffect(() => {
@@ -200,7 +200,7 @@ function useScheme(): string {
     const media = matchMedia("(prefers-color-scheme: dark)")
     media.addEventListener("change", update)
     const watch = new MutationObserver(update)
-    watch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "style"] })
+    watch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-font", "style"] })
     return () => {
       media.removeEventListener("change", update)
       watch.disconnect()

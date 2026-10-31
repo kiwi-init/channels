@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react"
 
 import { IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
+import type { TextFont } from "@kiwi/app/theme.ts"
 import { personFingerprint } from "@kiwi/core/fingerprint.ts"
 import { KEYS_UNSEALED } from "@kiwi/secrets/keys-at-rest.ts"
 import type { Prefs, Theme, UpdateCheck } from "~/model"
@@ -138,7 +139,15 @@ const SIZES = [
   [0, "Default"],
   [1, "Large"],
   [2, "Larger"],
+  [3, "Largest"],
 ] as const satisfies readonly (readonly [number, string])[]
+
+const FONTS = [
+  ["system", "System"],
+  ["inter", "Inter"],
+  ["lato", "Lato"],
+  ["atkinson", "Atkinson"],
+] as const satisfies readonly (readonly [TextFont, string])[]
 
 const MOTION = [
   ["full", "Full"],
@@ -157,6 +166,9 @@ export function AppearanceSection() {
         </Row>
         <Row label="Text size">
           <Seg<number> label="Text size" value={prefs.textSize} options={SIZES} onChange={(textSize) => set({ textSize })} />
+        </Row>
+        <Row label="Font" hint="For messages and the app's words. Times, ids and code keep Paper Mono.">
+          <Seg label="Font" value={prefs.font} options={FONTS} onChange={(font) => set({ font })} />
         </Row>
         <Row label="Motion" hint="Reduced keeps panels and dialogs still.">
           <Seg label="Motion" value={prefs.reduceMotion ? "reduced" : "full"} options={MOTION} onChange={(m) => set({ reduceMotion: m === "reduced" })} />
