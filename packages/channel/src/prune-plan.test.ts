@@ -50,3 +50,19 @@ describe("one app seals a person's new device into the private rooms they're in 
     expect(prunePlan(state(["pk-jow", "pk-tia", "pk-tia-2"], people), "pk-jow")).toEqual({ now: [], later: [] });
   });
 });
+
+describe("a person is who their signed person key says, never a matching handle (T1046)", () => {
+  test("someone whose handle collides with tia's name is a different person, and stays out of tia's rooms", () => {
+    const people = [
+      person("jow", "pk-jow", { owner: true }),
+      person("tia", "pk-tia", { sponsor: { user: "p-tia", name: "tia", handle: "tia" } }),
+      person("eve", "pk-eve", { sponsor: { user: "p-eve", name: "eve", handle: "tia" } }),
+    ];
+    expect(prunePlan(state(["pk-jow", "pk-tia"], people), "pk-jow")).toEqual({ now: [], later: [] });
+  });
+
+  test("the owner's own phone, whose record names the owner, is sealed into the owner's rooms", () => {
+    const people = [person("jow", "pk-jow", { owner: true }), person("jow-2", "pk-jow-2", { sponsor: { user: "p-jow", name: "jow", handle: "jow" } }), person("tia", "pk-tia")];
+    expect(prunePlan(state(["pk-jow", "pk-tia"], people), "pk-jow")).toEqual({ now: ["r"], later: [] });
+  });
+});

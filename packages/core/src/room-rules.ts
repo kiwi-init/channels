@@ -36,22 +36,30 @@ export interface Seat {
   name: string;
   pk: string;
   kind?: string;
+  owner?: boolean;
   active: boolean;
-  sponsor?: { handle?: string };
+  sponsor?: { user?: string; handle?: string };
 }
 
-export const seatRoot = (m: Pick<Seat, "name" | "kind" | "sponsor">): string => (m.kind === "human" && m.sponsor?.handle ? m.sponsor.handle : m.name);
+const isPerson = (s: Pick<Seat, "kind" | "owner">): boolean => s.owner === true || s.kind === "human";
+
+export function personOf(s: Seat, seats: readonly Seat[]): string {
+  if (!isPerson(s)) return `seat:${s.pk}`;
+  if (s.sponsor?.user) return `person:${s.sponsor.user}`;
+  const device = s.owner ? seats.find((x) => !x.owner && x.kind === "human" && x.sponsor?.user && x.sponsor.handle === s.name) : undefined;
+  return device?.sponsor?.user ? `person:${device.sponsor.user}` : `seat:${s.pk}`;
+}
 
 export function withSeats<P extends { name: string; pk: string }, S extends Seat>(seats: readonly S[], picked: readonly P[], pickOf: (s: S) => P): P[] {
   const byPk = new Map(seats.map((s) => [s.pk, s]));
-  const roots = new Set(
+  const people = new Set(
     picked.map((p) => {
       const s = byPk.get(p.pk);
-      return s ? seatRoot(s) : p.name;
+      return s ? personOf(s, seats) : `seat:${p.pk}`;
     }),
   );
   const out = new Map(picked.map((p) => [p.pk, p]));
-  for (const s of seats) if (s.active && s.kind === "human" && roots.has(seatRoot(s)) && !out.has(s.pk)) out.set(s.pk, pickOf(s));
+  for (const s of seats) if (s.active && isPerson(s) && people.has(personOf(s, seats)) && !out.has(s.pk)) out.set(s.pk, pickOf(s));
   return [...out.values()];
 }
 

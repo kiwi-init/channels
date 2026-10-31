@@ -1,4 +1,4 @@
-import { seatRoot } from "@kiwi/core/room-rules.ts";
+import { personOf } from "@kiwi/core/room-rules.ts";
 import { fullyTrusted, type ChannelState } from "@kiwi/core/state.ts";
 import type { ChannelLink } from "./channel-ops.ts";
 
@@ -12,14 +12,14 @@ export function prunePlan(state: Pick<ChannelState, "rooms" | "members">, me: st
   const later: string[] = [];
   for (const room of state.rooms.values()) {
     if (!room.members?.some((m) => m.pk === me)) continue;
-    const roots = new Set(
+    const inIt = new Set(room.members.map((m) => m.pk));
+    const people = new Set(
       room.members.map((m) => {
         const seat = members.find((x) => x.pk === m.pk);
-        return seat ? seatRoot(seat) : m.name;
+        return seat ? personOf(seat, members) : `seat:${m.pk}`;
       }),
     );
-    const inIt = new Set(room.members.map((m) => m.pk));
-    const newSeat = members.some((s) => s.active && s.kind === "human" && roots.has(seatRoot(s)) && !inIt.has(s.pk));
+    const newSeat = members.some((x) => x.active && (x.owner || x.kind === "human") && !inIt.has(x.pk) && people.has(personOf(x, members)));
     if (!newSeat && room.members.every((m) => active.has(m.pk))) continue;
     const managers = room.members.filter((m) => active.has(m.pk) && (m.pk === owner?.pk || fullyTrusted(members.find((x) => x.pk === m.pk))));
     if (!managers.some((m) => m.pk === me)) continue;
