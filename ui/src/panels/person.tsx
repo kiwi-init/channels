@@ -141,7 +141,7 @@ function Doors({ channel, person }: { channel: Channel; person: Person }) {
           go({ to: "panel", panel: null })
         }}
       >
-        Message privately
+        Message
       </button>
       {person.seat !== "hosted" && <ShowAgent channel={channel} person={person} />}
     </div>

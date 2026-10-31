@@ -196,7 +196,7 @@ struct Intro: View {
         }
         let member = room.member(lead)
         let now: String? = member?.working == true ? (member?.doing.first.map { "Working on \(taskLabel($0))" } ?? "Working") : nil
-        return ["Lead of \(room.title)", now ?? (room.messages.isEmpty ? "Only you and \(room.display(lead)) here" : nil)].compactMap { $0 }
+        return ["Lead of \(room.title)", now ?? (room.messages.isEmpty ? "Everyone in the channel can read this" : nil)].compactMap { $0 }
     }
 }
 
