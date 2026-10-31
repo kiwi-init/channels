@@ -92,7 +92,7 @@ function withEvents(c: Channel): Channel {
     { from: "atlas", text: "atlas moved T9 to done", task: 9 },
     { from: "jow", text: "jow set the goal" },
     { from: "maya", text: "maya joined the channel" },
-    { from: "jow", text: "scout is Builder now" },
+    { from: "jow", text: "scout is builder now" },
   ]
   return {
     ...c,

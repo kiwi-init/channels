@@ -276,7 +276,7 @@ function eventText(m: Wire, state: ChannelState): string {
     case "charter.set":
       return ev.text ? `${who} set the goal` : `${who} cleared the goal`
     case "role.set":
-      return ev.role ? `${nameIn(state, ev.member)} is ${ev.role} now` : `${nameIn(state, ev.member)} has no role now`
+      return ev.role ? `${nameIn(state, ev.member)} is ${ev.role.toLowerCase()} now` : `${nameIn(state, ev.member)} has no role now`
     default:
       return `${who} ${describeEvent(m, state, (handle) => nameIn(state, handle))}`
   }

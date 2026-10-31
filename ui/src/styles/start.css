@@ -242,7 +242,8 @@
   gap: 8px;
   margin-bottom: 16px;
   color: var(--ink-3);
-  font: var(--t-meta) var(--ui);
+  font: var(--t-meta) var(--mono);
+  letter-spacing: -0.01em;
 }
 
 .start-wait .start-sub {

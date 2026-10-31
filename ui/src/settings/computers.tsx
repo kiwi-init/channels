@@ -254,7 +254,7 @@ export function ComputersSection() {
           <div className="set-pair-foot">
             {account.enrollError ? (
               <span className="set-pair-wait is-stuck" role="alert">
-                Can't see the {linking}: {account.enrollError}
+                Can't see the {linking}: {account.enrollError.replace(/[.\s]+$/, "")}.
               </span>
             ) : (
               <span className="set-pair-wait">

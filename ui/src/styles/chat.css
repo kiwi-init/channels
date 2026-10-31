@@ -187,8 +187,8 @@
 }
 
 .msg.is-failed {
-  border-radius: 0;
-  background: linear-gradient(90deg, transparent, var(--alert-wash) 4%, transparent 85%);
+  border-radius: var(--r-ctl);
+  background: var(--alert-wash);
 }
 
 .msg.is-flash {
