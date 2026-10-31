@@ -224,3 +224,13 @@
 .person-term-note kbd {
   font-size: var(--t-meta);
 }
+
+.person-trust {
+  padding: 0 12px;
+  border-radius: var(--r-ctl);
+  background: var(--bg-3);
+}
+
+.person-trust .person-row-label {
+  font-weight: 600;
+}

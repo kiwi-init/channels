@@ -7,7 +7,7 @@ import { Avatar, cx, Dialog, DialogHead, Empty, Heading, Toggle } from "~/kit/bi
 import { Track } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
-import { memberOf, type App, type Channel, type Person } from "~/model"
+import { ALL_POWERS, memberOf, NO_POWERS, trusted, type App, type Channel, type Person } from "~/model"
 import { useApp } from "~/nav"
 import { nickname, shown } from "~/names"
 import { ShowAgent } from "~/kit/show-agent"
@@ -251,6 +251,7 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
   const persona = personaOf(app.personas, person.persona)
   const it = agent ? "It" : "They"
   const owns = channel.youOwn
+  const trust = !person.readOnly && trusted({ addsAgents: !!person.addsAgents, answersDecisions: !!person.answersDecisions, managesAgents: !!person.managesAgents })
   const remove = () => {
     app.actions.removeMember(channel.code, person.name)
     setConfirm(false)
@@ -298,6 +299,29 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
       )}
       {owns && (
         <>
+          {!agent && (
+            <div className="person-trust">
+              <Row
+                label="Full trust"
+                hint={
+                  trust
+                    ? "They write and work, add agents, answer decisions and manage agents. The channel stays yours."
+                    : "Every power at once, for someone you'd trust with your life. The channel stays yours."
+                }
+              >
+                {(id) => (
+                  <Toggle
+                    id={id}
+                    on={trust}
+                    onChange={(on) => {
+                      if (on && person.readOnly) app.actions.setReadOnly(channel.code, person.name, false)
+                      app.actions.setPowers(channel.code, person.name, on ? ALL_POWERS : NO_POWERS)
+                    }}
+                  />
+                )}
+              </Row>
+            </div>
+          )}
           <Row label="Can only read" hint={`${agent ? "It reads" : "They read"} messages but can't post or take tasks.`}>
             {(id) => <Toggle id={id} on={!!person.readOnly} onChange={(on) => app.actions.setReadOnly(channel.code, person.name, on)} />}
           </Row>
