@@ -48,6 +48,18 @@
   margin-top: 16px;
 }
 
+.invite-trust {
+  margin-top: 4px;
+  margin-bottom: 16px;
+  padding: 12px 12px 12px 14px;
+  border-radius: var(--r-ctl);
+  background: var(--bg-3);
+}
+
+.invite-trust .invite-power-label {
+  font-weight: 600;
+}
+
 .invite-power-text {
   min-width: 0;
 }
