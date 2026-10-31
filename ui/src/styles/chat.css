@@ -966,7 +966,7 @@ button.msg-image-spot:hover {
   padding: 1px 4px;
   border-radius: var(--r-tick);
   box-shadow: inset 0 0 0 1.5px currentColor;
-  font: 700 9px / 1 var(--ui);
+  font: 700 var(--t-stamp) / 1 var(--ui);
   letter-spacing: 0.04em;
 }
 
