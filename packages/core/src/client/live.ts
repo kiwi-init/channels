@@ -440,12 +440,17 @@ export class ChannelLive {
           if (f.seq <= at.seq) return null;
           const m = yield* this.ch.fx.decrypt(f);
           at.seq = f.seq;
-          return m ? ({ _tag: "Message", message: m, envelope: f } satisfies Live) : Number.isSafeInteger(f.seq) && f.seq > 0 ? ({ _tag: "Unread", envelope: f } satisfies Live) : null;
+          return m
+            ? ({ _tag: "Message", message: m, envelope: f } satisfies Live)
+            : Number.isSafeInteger(f.seq) && f.seq > 0 && !this.ch.hidden.has(f.seq)
+              ? ({ _tag: "Unread", envelope: f } satisfies Live)
+              : null;
         }
         case "own": {
           if (f.seq <= at.seq) return null;
           at.seq = f.seq;
-          const m = ownMessage(f.payload, f.seq, f.ts);
+          const own = ownMessage(f.payload, f.seq, f.ts);
+          const m = own && (yield* this.ch.fx.unseal(own));
           return m && ({ _tag: "Message", message: m } satisfies Live);
         }
         case "eph":

@@ -31,6 +31,7 @@ export {
   type Reaction,
   type ReviewRound,
   type RoomsFloor,
+  type SecretRoom,
   type Roster,
   type Task,
 } from "./state/types.ts";

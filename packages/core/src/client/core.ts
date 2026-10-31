@@ -23,6 +23,10 @@ export class ChannelCore {
   readonly name: string;
   fx!: ChannelFx;
   rotating = false;
+  readonly roomKeys = new Map<string, string>();
+  readonly hidden = new Set<number>();
+  readonly roomLatest = new Map<string, number>();
+  opensRooms = true;
 
   constructor(
     public access: ChannelAccess,

@@ -125,6 +125,10 @@ export class Channel {
     return this.core.isOwner;
   }
 
+  set opensRooms(on: boolean) {
+    this.core.opensRooms = on;
+  }
+
   static readonly fx = joinFx;
 
   // ---------- the same, as Promises ----------
@@ -419,6 +423,14 @@ export class Channel {
 
   closeIssue(c: { repo: string; number: number; reason: "completed" | "not_planned"; body: string }): Promise<{ url: string | null }> {
     return run(this.fx.closeIssue(c));
+  }
+
+  async learnRooms(messages: readonly Message[]): Promise<void> {
+    for (const m of messages) if (m.ev?.op === "room.seal") await run(this.fx.unseal(m));
+  }
+
+  openRooms(base: FoldBase): Promise<FoldBase> {
+    return run(this.fx.openRooms(base));
   }
 
   snapshot(): Promise<FoldBase | null> {
