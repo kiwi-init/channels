@@ -46,19 +46,19 @@ function powerOn(roomId: string, power: keyof Powers): boolean {
 }
 
 export function newMemberPowers(roomId: string): Powers {
-  return { addsAgents: powerOn(roomId, "addsAgents"), answersDecisions: powerOn(roomId, "answersDecisions") }
+  return { addsAgents: powerOn(roomId, "addsAgents"), answersDecisions: powerOn(roomId, "answersDecisions"), managesAgents: powerOn(roomId, "managesAgents") }
 }
 
 export function setNewMemberPowers(roomId: string, powers: Powers): void {
   try {
-    for (const power of ["addsAgents", "answersDecisions"] as const) localStorage.setItem(POWER_KEY(roomId, power), powers[power] ? "1" : "0")
+    for (const power of ["addsAgents", "answersDecisions", "managesAgents"] as const) localStorage.setItem(POWER_KEY(roomId, power), powers[power] ? "1" : "0")
   } catch {
     // Without storage the choice lasts until the page reloads: nothing else to keep it in.
   }
   for (const l of listeners) l()
 }
 
-const powersKey = (p: Powers): string => `${p.addsAgents ? 1 : 0}${p.answersDecisions ? 1 : 0}`
+const powersKey = (p: Powers): string => `${p.addsAgents ? 1 : 0}${p.answersDecisions ? 1 : 0}${p.managesAgents ? 1 : 0}`
 
 export function useNewPowers(roomId: string): Powers {
   const key = useSyncExternalStore(
@@ -68,5 +68,5 @@ export function useNewPowers(roomId: string): Powers {
     },
     () => powersKey(newMemberPowers(roomId))
   )
-  return useMemo(() => ({ addsAgents: key[0] === "1", answersDecisions: key[1] === "1" }), [key])
+  return useMemo(() => ({ addsAgents: key[0] === "1", answersDecisions: key[1] === "1", managesAgents: key[2] === "1" }), [key])
 }

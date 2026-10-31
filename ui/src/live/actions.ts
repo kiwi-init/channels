@@ -75,6 +75,15 @@ function owner(code: string): Run {
   return run
 }
 
+function agentManager(code: string, name: string): { run: Run; m: RosterMember } {
+  const run = need(code)
+  const m = memberOf(run, name)
+  if (run.isOwner) return { run, m }
+  const me = run.roster.find((r) => r.active && r.name === run.me)
+  if (!me?.managesAgents || m.kind !== "agent" || m.owner || m.name === run.me) throw new Error("only the owner, or a person who manages agents, changes an agent's role or personality")
+  return { run, m }
+}
+
 function link(code: string): ChannelLink {
   const run = openedRun(code)
   if (run) return run.ch
@@ -127,7 +136,9 @@ async function letIn(run: Run, r: JoinRequest, choice: JoinChoice): Promise<stri
   const persona = await personaFor(r, choice)
   const scopes = choice.readOnly === undefined ? newMemberScopes(run.roomId) : choice.readOnly ? [] : [...SCOPES]
   const powers = r.kind === "human" ? (choice.powers ?? newMemberPowers(run.roomId)) : null
-  const granted = powers ? { ...(powers.addsAgents ? { addsAgents: true } : {}), ...(powers.answersDecisions ? { answersDecisions: true } : {}) } : {}
+  const granted = powers
+    ? { ...(powers.addsAgents ? { addsAgents: true } : {}), ...(powers.answersDecisions ? { answersDecisions: true } : {}), ...(powers.managesAgents ? { managesAgents: true } : {}) }
+    : {}
   const as = persona ? { persona } : { ...(wireScopes(scopes) ? { scopes } : {}), ...granted }
   try {
     await run.ch.approve(name === r.name ? r : { ...r, name }, as, { person: secrets().person?.pk })
@@ -375,8 +386,7 @@ export function makeActions(): Actions {
       }),
     setRole: (code, name, role) =>
       attempt("Role not changed", async () => {
-        const run = owner(code)
-        memberOf(run, name)
+        const { run } = agentManager(code, name)
         await event(run, role ? `made ${name} ${role}` : `cleared ${name}'s role`, { op: "role.set", member: name, role })
       }),
     removeMember: (code, name) =>
@@ -392,8 +402,7 @@ export function makeActions(): Actions {
       }),
     setPersona: (code, name, id) =>
       attempt("Personality not changed", async () => {
-        const run = owner(code)
-        const m = memberOf(run, name)
+        const { run, m } = agentManager(code, name)
         const p = id === null ? null : personalities().find((x) => x.id === id)
         if (p === undefined) throw new Error("that personality isn't on this computer")
         const persona = p ? personaOf(p) : null
@@ -405,7 +414,9 @@ export function makeActions(): Actions {
           scopes: wire,
           lead: persona?.role === "lead",
           wasLead: m.persona?.role === "lead",
+          ...(run.isOwner ? {} : { persona }),
         })
+        if (!run.isOwner) return
         await run.ch.updatePersona(m, persona, seq)
         await run.refreshRoster()
       }),
@@ -421,7 +432,11 @@ export function makeActions(): Actions {
       attempt("Not changed", async () => {
         const run = owner(code)
         const m = memberOf(run, name)
-        await run.ch.updatePowers(m, { addsAgents: powers.addsAgents ?? !!m.addsAgents, answersDecisions: powers.answersDecisions ?? !!m.answersDecisions })
+        await run.ch.updatePowers(m, {
+          addsAgents: powers.addsAgents ?? !!m.addsAgents,
+          answersDecisions: powers.answersDecisions ?? !!m.answersDecisions,
+          managesAgents: powers.managesAgents ?? !!m.managesAgents,
+        })
         await run.refreshRoster()
       }),
     showAgent: async (code, name) => {

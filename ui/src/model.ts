@@ -60,6 +60,7 @@ export interface Person {
   attach?: string
   addsAgents?: boolean
   answersDecisions?: boolean
+  managesAgents?: boolean
   lastSeen: number
   joined: number
   messages: number
@@ -299,6 +300,7 @@ export interface JoinAsk {
 export interface Powers {
   addsAgents: boolean
   answersDecisions: boolean
+  managesAgents: boolean
 }
 
 export interface JoinChoice {
@@ -384,6 +386,7 @@ export interface Channel {
   title: string
   icon?: string
   youOwn: boolean
+  youManageAgents?: boolean
   you: string
   lead?: string
   goal?: string
