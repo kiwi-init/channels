@@ -1,5 +1,6 @@
 import { ignored, isQuiet, ROBOT_FACES, type ChannelIcon, type Message } from "@kiwi/core/protocol.ts";
 import { answersDecisions, decidersOf, MAIN, openRound, placeFromKey, placeKey, taskId, type ChannelState } from "@kiwi/core/state.ts";
+import { inGeneral } from "@kiwi/core/state/places.ts";
 import type { FoldMember } from "@kiwi/core/state/types.ts";
 
 import { askLabel, asksFor, chosenOf, heldAsks } from "@kiwi/app/asks.ts";
@@ -62,7 +63,8 @@ function memberView(m: FoldMember, state: ChannelState, online: ReadonlyMap<stri
 }
 
 function shownIn(m: Message, state: ChannelState, key: string): boolean {
-  if (placeKey(state.placeOf.get(m.seq) ?? MAIN) !== key) return false;
+  const here = key === placeKey(MAIN) ? inGeneral(state, m.seq) : placeKey(state.placeOf.get(m.seq) ?? MAIN) === key;
+  if (!here) return false;
   return !isQuiet(m) && !ignored(state.trust.get(m.seq));
 }
 

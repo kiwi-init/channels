@@ -94,6 +94,29 @@ describe("a private room's key and what it hides (T681)", () => {
     await expect(bo.ch.send("let me in", { room: id })).rejects.toThrow("not in that private room");
   });
 
+  test("an edit and a delete inside a private room are sealed like its messages, and reach only who's in it (T971)", async () => {
+    const id = newRoomId();
+    const key = newRoomKey();
+    const who = [
+      { name: s.owner.name, pk: s.owner.pk, xpk: s.owner.xpk! },
+      { name: "ana", pk: ana.id.pk, xpk: ana.id.xpk! },
+    ];
+    await s.ownerCh.send("made a private room", { kind: "event", ev: { op: "room.seal", ...(await sealFor(id, 1, key, "hiring", who)) } });
+    await ana.ch.history(0);
+    const said = await ana.ch.send("the offer is 120", { room: id });
+    const edited = await ana.ch.send(`edited #${said}`, { room: id, kind: "event", ev: { op: "msg.edit", seq: said, body: "the offer is 125" } });
+    const gone = await ana.ch.send("the start date is secret", { room: id });
+    const deleted = await ana.ch.send(`deleted #${gone}`, { room: id, kind: "event", ev: { op: "msg.delete", seq: gone } });
+    const anaSees = await state(ana.ch);
+    expect(anaSees.rejected.get(edited)).toBeUndefined();
+    expect(anaSees.edits.get(said)?.body).toBe("the offer is 125");
+    expect(anaSees.deleted.has(gone)).toBe(true);
+    expect(anaSees.rejected.get(deleted)).toBeUndefined();
+    const boHistory = JSON.stringify((await bo.ch.history(0)).messages);
+    expect(boHistory).not.toContain("125");
+    expect(boHistory).not.toContain("edited #");
+  });
+
   test("taking someone out moves the room to a new key: they can't post with the old one, and what they wrote before stays", async () => {
     const id = newRoomId();
     const one = newRoomKey();
@@ -114,7 +137,7 @@ describe("a private room's key and what it hides (T681)", () => {
     expect((await state(bo.ch)).rooms.has(id)).toBe(false);
   });
 
-  test("a private room keeps to messages and reactions: a task from inside it is refused before it's sent", async () => {
+  test("a private room keeps to messages, reactions, edits and deletes: a task from inside it is refused before it's sent", async () => {
     const id = newRoomId();
     const key = newRoomKey();
     await s.ownerCh.send("made a private room", {
@@ -122,7 +145,7 @@ describe("a private room's key and what it hides (T681)", () => {
       ev: { op: "room.seal", ...(await sealFor(id, 1, key, "quiet", [{ name: s.owner.name, pk: s.owner.pk, xpk: s.owner.xpk! }])) },
     });
     await s.ownerCh.history(0);
-    await expect(s.ownerCh.send("Ship it", { room: id, kind: "event", ev: { op: "task.add", title: "Ship it" } })).rejects.toThrow("messages and reactions");
+    await expect(s.ownerCh.send("Ship it", { room: id, kind: "event", ev: { op: "task.add", title: "Ship it" } })).rejects.toThrow("messages, reactions, edits and deletes");
   });
 
   test("the owner's snapshot holds no private room's name, members or messages", async () => {

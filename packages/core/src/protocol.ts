@@ -312,7 +312,9 @@ export type Event =
    * takes it back. Not news: it's no unread, no notification, no line in a feed. Its body is throwaway
    * (an older client drops the whole message, body and all, as malformed).
    */
-  | { op: "react"; seq: number; emoji: string | null };
+  | { op: "react"; seq: number; emoji: string | null }
+  | { op: "msg.edit"; seq: number; body: string }
+  | { op: "msg.delete"; seq: number };
 
 /** The longest reaction, in UTF-16 units: one emoji, family sequences and flags included. */
 const MAX_REACTION = 16;
@@ -329,9 +331,14 @@ export function isGifReaction(x: string): boolean {
   return GIF_REACTION_RE.test(x);
 }
 
-/** A reaction event, which feeds, unread counts and notifications leave out. */
-export function isReaction(m: Pick<Message, "kind" | "ev">): boolean {
-  return m.kind === "event" && m.ev?.op === "react";
+export const OVERLAY_OPS: ReadonlySet<string> = new Set(["react", "msg.edit", "msg.delete"]);
+
+export function isOverlay(m: Pick<Message, "kind" | "ev">): boolean {
+  return m.kind === "event" && !!m.ev && OVERLAY_OPS.has(m.ev.op);
+}
+
+export function editable(m: Pick<Message, "kind" | "esc" | "choices" | "step" | "stepReply" | "permission" | "perm" | "settled" | "handoff" | "ev">): boolean {
+  return (m.kind === "msg" || m.kind === "done") && !m.ev && !m.esc && !m.choices && !m.step && !m.stepReply && !m.permission && !m.perm && !m.settled && !m.handoff;
 }
 
 const QUIET_OPS: ReadonlySet<string> = new Set([
@@ -339,6 +346,8 @@ const QUIET_OPS: ReadonlySet<string> = new Set([
   "card",
   "picture.set",
   "react",
+  "msg.edit",
+  "msg.delete",
   "fact.set",
   "fact.del",
   "lease.take",
@@ -750,7 +759,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 9;
+export const EVENT_OPS_VERSION = 10;
 
 export const PRIVATE_ROOM_OPS = 9;
 
@@ -1047,6 +1056,10 @@ function eventCheck(ev: unknown): boolean | null {
       return e.prefix === null || (typeof e.prefix === "string" && BRANCH_PREFIX_RE.test(e.prefix));
     case "react":
       return n(e.seq) && (e.seq as number) > 0 && (e.emoji === null || wellFormedReaction(e.emoji));
+    case "msg.edit":
+      return n(e.seq) && (e.seq as number) > 0 && str(e.body, MAX_BODY_LENGTH) && (e.body as string).trim().length > 0;
+    case "msg.delete":
+      return n(e.seq) && (e.seq as number) > 0;
     case "ask.name":
       return n(e.ask) && (e.ask as number) > 0 && (e.name === null || str(e.name, MAX_GOAL_NAME * 4));
     case "ask.close":

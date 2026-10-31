@@ -94,6 +94,9 @@ final class AppModel {
         guard !booted else { return }
         booted = true
         engine.onPush = { [weak self] push in self?.take(push) }
+        engine.onLost = { [weak self] in
+            Task { await self?.recover() }
+        }
         do {
             try await engine.load()
         } catch {
@@ -107,6 +110,16 @@ final class AppModel {
                 return
             }
         #endif
+        await resume()
+    }
+
+    private func recover() async {
+        do {
+            try await engine.open()
+        } catch {
+            phase = .broken(error.localizedDescription)
+            return
+        }
         await resume()
     }
 
