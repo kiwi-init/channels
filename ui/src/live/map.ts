@@ -9,6 +9,7 @@ import { checksOf, FAILED, prLinks, taskPr } from "@kiwi/core/prs.ts"
 import { stageOf } from "@kiwi/core/stage.ts"
 import { editable, GENERAL_ROOM, ignored, isQuiet, isRasterMime, isOverlay, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { rootOf } from "@kiwi/core/room-rules.ts"
+import { dmOther } from "~/live/dm"
 import { pickFor, taskCandidates } from "@kiwi/core/routing.ts"
 import { canPost } from "@kiwi/core/scopes.ts"
 import { versionName } from "@kiwi/core/status.ts"
@@ -17,6 +18,7 @@ import {
   answersDecisions,
   colorOf,
   heldBy,
+  dmPlace,
   holdsWork,
   humanOf,
   isPerson,
@@ -190,11 +192,12 @@ export function roomsOf(state: ChannelState, messages: readonly Wire[], me: stri
     if (m.kind === "event" || m.from === me || ignored(state.trust.get(m.seq))) continue
     if ((state.placeOf.get(m.seq) ?? MAIN).kind !== "main") continue
     const id = roomOfMessage(state, m)
+    if (state.rooms.get(id)?.dm) continue
     if (m.seq <= (seen[roomSeenKey(id)] ?? (id === GENERAL_ROOM ? 0 : from))) continue
     unread.set(id, (unread.get(id) ?? 0) + 1)
     if (mentionsYou(m, me)) mentions.set(id, (mentions.get(id) ?? 0) + 1)
   }
-  const rooms = [...state.rooms.values()]
+  const rooms = [...state.rooms.values()].filter((r) => !r.dm)
   const list = rooms.some((r) => r.id === GENERAL_ROOM) ? rooms : [{ id: GENERAL_ROOM, name: GENERAL_ROOM }, ...rooms]
   return list.map((r) => ({
     id: r.id,
@@ -209,6 +212,7 @@ export function roomsOf(state: ChannelState, messages: readonly Wire[], me: stri
 export function directsOf(state: ChannelState, messages: readonly Wire[], seat: string, seen: Seen): Direct[] {
   const me = rootOf(seat, state.members)
   const at = new Map<string, number>()
+  const locked = new Set<string>()
   const unread = new Map<string, number>()
   const marks = new Map<string, number>()
   for (const m of messages) {
@@ -219,12 +223,23 @@ export function directsOf(state: ChannelState, messages: readonly Wire[], seat: 
     marks.set(other, seen[placeKey(place)] ?? 0)
     if (rootOf(m.from, state.members) !== me && m.kind !== "event" && m.seq > (seen[placeKey(place)] ?? 0)) unread.set(other, (unread.get(other) ?? 0) + 1)
   }
+  for (const m of messages) {
+    const room = (state.placeOf.get(m.seq) ?? MAIN).kind === "main" ? state.rooms.get(roomOfMessage(state, m)) : undefined
+    const other = room?.dm && room.members ? dmOther(state, seat, room.members) : undefined
+    if (!other || ignored(state.trust.get(m.seq))) continue
+    const key = placeKey(dmPlace(me, other))
+    at.set(other, Math.max(at.get(other) ?? 0, m.ts))
+    locked.add(other)
+    if (rootOf(m.from, state.members) !== me && m.kind !== "event" && m.seq > (seen[key] ?? 0)) unread.set(other, (unread.get(other) ?? 0) + 1)
+  }
   for (const s of state.places.values()) {
     if (s.place.kind !== "dm" || !s.place.with.includes(me)) continue
     const other = s.place.with[0] === me ? s.place.with[1] : s.place.with[0]
     if (!at.has(other)) at.set(other, 0)
   }
-  return [...at].map(([name, last]) => ({ with: name, unread: unread.get(name) ?? 0, last, seen: marks.get(name) ?? 0 })).sort((a, b) => b.last - a.last)
+  return [...at]
+    .map(([name, last]) => ({ with: name, unread: unread.get(name) ?? 0, last, seen: marks.get(name) ?? 0, ...(locked.has(name) ? { locked: true as const } : {}) }))
+    .sort((a, b) => b.last - a.last)
 }
 
 export function theirsOf(state: ChannelState, messages: readonly Wire[], seat: string): TheirDirect[] {
@@ -323,7 +338,9 @@ function whereOf(state: ChannelState, m: Wire, seat: string): Where {
   const place = state.placeOf.get(m.seq) ?? MAIN
   if (place.kind === "task") return { kind: "task", task: place.task }
   if (place.kind === "dm") return place.with.includes(me) ? { kind: "dm", with: place.with[0] === me ? place.with[1] : place.with[0] } : { kind: "theirs", between: place.with }
-  return { kind: "room", room: roomOfMessage(state, m) }
+  const room = state.rooms.get(roomOfMessage(state, m))
+  const other = room?.dm && room.members ? dmOther(state, seat, room.members) : undefined
+  return other ? { kind: "dm", with: other } : { kind: "room", room: roomOfMessage(state, m) }
 }
 
 export function messagesOf(state: ChannelState, messages: readonly Wire[], me: string, askOf: ReadonlyMap<number, string>, pictures: Pictures, pending: readonly Pending[]): Message[] {
@@ -385,6 +402,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       at: m.ts,
       text,
       where,
+      ...(state.rooms.get(roomOfMessage(state, m))?.dm ? { locked: true as const } : {}),
       ...(gone ? { deleted: true as const } : changed ? { edited: changed.at } : {}),
       ...(!gone && editable(m) && sameAuthor(state.members.get(m.from), state.members.get(me)) ? { canChange: true as const } : {}),
       ...(said ? { said } : {}),

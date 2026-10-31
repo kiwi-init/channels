@@ -29,6 +29,7 @@ import { ownPrefs } from "~/live/prefs"
 import { receiptsOf, withReceipts } from "~/live/receipts"
 import { closeOpened, markGone, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
+import { dmRoomOf, sealable } from "~/live/dm"
 import { clock } from "~/kit/time"
 import type { Channel, Upload, Where } from "~/model"
 import { nicknamesOf } from "~/names"
@@ -213,7 +214,21 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       if (where.kind === "theirs") throw new Error("Only the two of them write in their direct messages")
       const key = nextUnsentKey()
       const body = text.trim()
-      const sending = { ...sendOptions(state, messages, me, where, body, opts), ...(opts.images?.length ? { imgs: opts.images } : {}) }
+      const imgs = opts.images?.length ? { imgs: opts.images } : {}
+      const plain = { ...sendOptions(state, messages, me, where, body, opts), ...imgs }
+      const sealedIn = async (other: string): Promise<string | undefined> => {
+        const had = dmRoomOf(state, me, other)
+        if (had || !sealable(channel, other)) return had
+        const seat = roster.find((r) => r.active && r.name === other)
+        if (!seat?.xpk) return undefined
+        try {
+          return await ch.makeDm({ name: seat.name, pk: seat.pk, xpk: seat.xpk })
+        } catch (err) {
+          if (/no such call|not a call|unknown call/i.test(err instanceof Error ? err.message : String(err))) return undefined
+          throw err
+        }
+      }
+      const re = opts.replyTo ?? opts.inThread
       const landed = new Set(messages.map((m) => m.seq))
       const next: Pending = {
         key,
@@ -226,7 +241,10 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       }
       setPending((list) => [...list.filter((p) => p.seq === undefined || !landed.has(p.seq)), next].slice(-PENDING_MAX))
       try {
-        const seq = await inTurn(() => send(body, sending))
+        const seq = await inTurn(async () => {
+          const room = where.kind === "dm" ? await sealedIn(where.with) : undefined
+          return send(body, room ? { kind: "msg", room, ...(re !== undefined ? { re: [re] } : {}), ...imgs } : plain)
+        })
         setPending((list) => list.map((p) => (p.key === key ? { ...p, seq } : p)))
         return seq
       } catch (err) {
@@ -234,7 +252,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
         throw err
       }
     },
-    [state, messages, me, send, inTurn, setPending]
+    [state, messages, me, send, inTurn, setPending, channel, roster, ch]
   )
 
   const discard = useCallback((key: number) => setPending((list) => list.filter((p) => p.key !== key)), [setPending])

@@ -1898,3 +1898,10 @@ button.msg-image-spot:hover {
 .msg-edit-foot .dim {
   margin-right: auto;
 }
+
+.dm-note {
+  margin: 0 0 8px;
+  color: var(--ink-2);
+  font: var(--t-stamp) var(--ui);
+  text-align: center;
+}

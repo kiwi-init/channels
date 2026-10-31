@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react"
 
 import { useMoved } from "~/kit/glide"
-import { HarnessLogo, Icon, type IconName } from "~/kit/icons"
+import { Icon, type IconName } from "~/kit/icons"
 import { later } from "~/kit/later"
 import type { Person, TaskStatus } from "~/model"
 
@@ -28,7 +28,7 @@ export function Avatar({
       aria-hidden="true"
     >
       {person.kind === "agent" ? (
-        <Suspense fallback={<HarnessLogo harness={person.harness} />}>
+        <Suspense fallback={null}>
           <RoleFace role={person.face} harness={person.harness} />
         </Suspense>
       ) : person.picture ? (

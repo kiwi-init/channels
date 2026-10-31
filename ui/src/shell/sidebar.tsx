@@ -53,6 +53,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
                   <button type="button" className={cx("side-row", on && "is-on", d.unread > 0 && "is-news")} aria-current={on ? "page" : undefined} onClick={() => go({ to: "where", where })}>
                     <Avatar person={who} size="sm" />
                     <span className="side-label">{nickname(channel, d.with)}</span>
+                    {d.locked && <Icon name="lock" size={12} label="Private" />}
                     <Count n={d.unread} loud />
                   </button>
                 </li>

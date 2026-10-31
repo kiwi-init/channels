@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { LOGOS } from "~/kit/icons"
+import { LOGOS } from "~/kit/logos"
 import { harnessOf } from "~/live/map"
 
 const ASSETS = join(import.meta.dir, "../../../assets/harness")
