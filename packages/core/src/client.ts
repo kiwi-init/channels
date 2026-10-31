@@ -458,6 +458,24 @@ export class Channel {
     return id;
   }
 
+  async makeDm(other: RoomPick): Promise<string> {
+    const { newRoomKey, sealRoom } = await import("./private-room.ts");
+    const id = newRoomId();
+    const who = everySeat(await this.members(), withMe(this.core.identity, [other]));
+    const key = newRoomKey();
+    const meta = { name: "", members: who.map(({ name, pk }) => ({ name, pk })), dm: true as const };
+    const sealed = await sealRoom(
+      this.roomId,
+      id,
+      1,
+      key,
+      meta,
+      who.map((w) => w.xpk),
+    );
+    (await import("./private-room.ts")).ownSeal(this.core, id, await this.send("started a private conversation", { kind: "event", ev: { op: "room.seal", ...sealed } }), sealed, { n: 1, key, meta });
+    return id;
+  }
+
   async changeRoom(id: string, change: { name?: string; members?: readonly RoomPick[] }): Promise<boolean> {
     const now = this.core.roomNow.get(id);
     if (!now?.key || !now.meta) throw new Error("you're not in that private room");
@@ -485,7 +503,7 @@ export class Channel {
     const { newRoomKey, sealRoom } = await import("./private-room.ts");
     const n = out ? now.n + 1 : now.n;
     const key = out ? newRoomKey() : now.key;
-    const meta = { name: change.name ?? now.meta.name, members: who.map(({ name, pk }) => ({ name, pk })) };
+    const meta = { name: change.name ?? now.meta.name, members: who.map(({ name, pk }) => ({ name, pk })), ...(now.meta.dm ? { dm: true as const } : {}) };
     const sealed = await sealRoom(
       this.roomId,
       id,

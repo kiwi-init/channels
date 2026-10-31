@@ -241,6 +241,7 @@ export interface Room {
   at: number;
   posters?: string[];
   members?: RoomMember[];
+  dm?: true;
 }
 
 export interface SecretRoom {
