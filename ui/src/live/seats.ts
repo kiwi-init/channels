@@ -2,6 +2,7 @@ import { useEffect, useSyncExternalStore } from "react"
 
 import type { PlacedSeat } from "@kiwi/core/terminals.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
+import { whileShown } from "~/live/shown"
 import { store } from "~/live/value"
 import type { Person } from "~/model"
 
@@ -27,11 +28,11 @@ export function useSeats(): readonly PlacedSeat[] {
         () => {}
       )
     load()
-    const every = window.setInterval(load, 15_000)
+    const stop = whileShown(load, 15_000)
     window.addEventListener("focus", load)
     return () => {
       live = false
-      window.clearInterval(every)
+      stop()
       window.removeEventListener("focus", load)
     }
   }, [])
