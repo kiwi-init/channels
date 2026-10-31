@@ -530,7 +530,8 @@
 }
 
 .set-fine.set-warning {
-  padding: 8px 12px;
+  margin-bottom: 12px;
+  padding: 8px 16px;
   border-radius: var(--r-ctl);
   color: var(--ink-2);
   background: var(--alert-wash);

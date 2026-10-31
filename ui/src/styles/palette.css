@@ -183,6 +183,7 @@
   gap: 16px;
   flex: none;
   padding: 8px 16px;
+  border-top: 1px solid var(--line);
   color: var(--ink-3);
   font: var(--t-stamp) var(--ui);
 }

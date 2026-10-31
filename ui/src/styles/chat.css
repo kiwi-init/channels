@@ -95,7 +95,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 12px var(--gutter) 0;
+  width: min(var(--col), calc(100% - 48px));
+  margin: 12px auto 0;
   padding: 8px 8px 8px 16px;
   border-radius: var(--r-ctl);
   background: var(--decide-wash);
@@ -1842,8 +1843,9 @@ button.msg-image-spot:hover {
   display: none;
 }
 
-.msg-role + .msg-runs::before {
-  content: "· ";
+.msg-head > :is(.msg-role, .msg-runs, .msg-said) ~ :is(.msg-runs, .msg-time)::before {
+  content: "·";
+  margin-right: 8px;
 }
 
 .feed-wrap {
