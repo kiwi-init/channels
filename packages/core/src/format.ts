@@ -218,6 +218,10 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
         : "cleared the branch prefix: a PR shows on a task only when someone posts its link";
     case "react":
       return ev.emoji ? `reacted ${ev.emoji} to #${ev.seq}` : `took back the reaction on #${ev.seq}`;
+    case "msg.edit":
+      return `edited #${ev.seq}: ${ev.body}`;
+    case "msg.delete":
+      return `deleted #${ev.seq}`;
     case "ask.name":
       return ev.name ? `named the goal of #${ev.ask}: ${inlineText(ev.name, 80)}` : `took back the goal's name of #${ev.ask}`;
     case "ask.close":
@@ -327,9 +331,20 @@ export function messageHead(m: Message, trust?: Trust, state?: ChannelState, me?
 export function formatMessage(m: Message, trust?: Trust, state?: ChannelState, me?: string): string {
   const review = reviewBody(m);
   const refused = m.kind === "event" ? state?.rejected.get(m.seq) : undefined;
-  const said = refused !== undefined ? `refused: ${refused}` : m.kind === "event" ? `${describeEvent(m, state)}${review ? `\n${review}` : ""}` : String(m.body ?? "");
+  const gone = m.kind !== "event" && !!state?.deleted.has(m.seq);
+  const edit = m.kind !== "event" ? state?.edits.get(m.seq) : undefined;
+  const said =
+    refused !== undefined
+      ? `refused: ${refused}`
+      : m.kind === "event"
+        ? `${describeEvent(m, state)}${review ? `\n${review}` : ""}`
+        : gone
+          ? "[deleted]"
+          : edit
+            ? `${edit.body} (edited)`
+            : String(m.body ?? "");
   const body = cleanBody(said).replace(/\n/g, "\n  │ ");
-  const imgs = m.imgs?.length ? ` ${m.imgs.map((i) => imageMarker({ name: inlineText(i.name, 80), data: i.data, ref: i.ref })).join(" ")}` : "";
+  const imgs = !gone && m.imgs?.length ? ` ${m.imgs.map((i) => imageMarker({ name: inlineText(i.name, 80), data: i.data, ref: i.ref })).join(" ")}` : "";
   const link = m.handoff ? " [browser link]" : "";
   const options = m.choices?.length ? ` [options: ${m.choices.map((c) => inlineText(c, 200)).join(" | ")}]` : "";
   return `${messageHead(m, trust, state, me)}: ${body}${imgs}${link}${options}`;
