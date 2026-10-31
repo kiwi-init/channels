@@ -29,5 +29,6 @@ export const FLOWS: string[] = [
   "loop-flows",
   "daemon-admits",
   "private-room-history",
+  "private-dms",
   "start-harness",
 ];
