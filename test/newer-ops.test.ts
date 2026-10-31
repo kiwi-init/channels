@@ -141,6 +141,7 @@ const OPS_AT: Record<number, readonly string[]> = {
   8: [...V1, "branch.prefix.set", "github.rules", "github.release", "ask.name", "ask.close", "devices", "task.first", "power.set"],
   9: [...V1, "branch.prefix.set", "github.rules", "github.release", "ask.name", "ask.close", "devices", "task.first", "power.set", "room.seal", "room.msg"],
   10: [...V1, "branch.prefix.set", "github.rules", "github.release", "ask.name", "ask.close", "devices", "task.first", "power.set", "room.seal", "room.msg", "msg.edit", "msg.delete"],
+  11: [...V1, "branch.prefix.set", "github.rules", "github.release", "ask.name", "ask.close", "devices", "task.first", "power.set", "room.seal", "room.msg", "msg.edit", "msg.delete"],
 };
 
 describe("events from a newer client", () => {
