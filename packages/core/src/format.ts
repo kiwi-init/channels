@@ -4,7 +4,7 @@ import { ROLE_LABEL } from "./personality.ts";
 import { loadJson, loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { inlineText, runsLine, type Runs } from "./membership.ts";
 import { GENERAL_ROOM, ignored, imageMarker, isRunning } from "./protocol.ts";
-import type { Card, GithubNote, Message, OldTaskState, Reach, TaskState, Trust } from "./protocol.ts";
+import type { Card, GithubNote, Message, OldTaskState, Power, Reach, TaskState, Trust } from "./protocol.ts";
 import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "./scopes.ts";
 import {
   askGroups,
@@ -32,6 +32,7 @@ import { rulesText } from "./prs.ts";
 import { statusOf, statusWord } from "./status.ts";
 import { isWakeVia, wakesInSession, wakeWords, type WakeVia } from "./wake.ts";
 
+const POWER_WORDS: Record<Power, string> = { addsAgents: "add agents", answersDecisions: "answer decisions", managesAgents: "manage agents" };
 export function tokensWord(n: number): string {
   const k = Math.round(n / 1_000);
   if (k < 1) return String(n);
@@ -129,7 +130,7 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
     case "role.refuse":
       return `kept ${nameOf(ev.member)}'s role as it was`;
     case "power.set":
-      return ev.managesAgents ? `let ${nameOf(ev.member)} manage agents` : `took ${nameOf(ev.member)}'s power to manage agents`;
+      return `${ev.on ? "gave" : "took"} ${nameOf(ev.member)} ${ev.on ? "" : "back "}the power to ${POWER_WORDS[ev.power]}`;
     case "picture.set":
       return ev.picture ? "set their picture" : "cleared their picture";
     case "color.set":

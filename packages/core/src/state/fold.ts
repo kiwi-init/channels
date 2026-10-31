@@ -1,6 +1,6 @@
-import { EVENT_OPS_VERSION, FOLD_RULES, GENERAL_ROOM, ignored, isReaction, MAX_GOAL_NAME, MAX_ROOMS, ROOM_ID_RE, type Message, type Trust } from "../protocol.ts";
+import { EVENT_OPS_VERSION, FOLD_RULES, GENERAL_ROOM, ignored, isReaction, MAX_GOAL_NAME, MAX_ROOMS, POWERS, ROOM_ID_RE, type Message, type Power, type Trust } from "../protocol.ts";
 import { inlineText } from "../membership.ts";
-import { refusal, scopesOf, type Scope } from "../scopes.ts";
+import { canPost, refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
 import { allowedOnHold, answersAsk, isLeadRole, isPerson, LEAD, ON_HOLD } from "./people.ts";
 import { omit } from "../omit.ts";
@@ -166,14 +166,20 @@ function folding(
         m.seq > after && m.ev?.op === "scope.set" && m.ev.wasLead !== undefined && !personaLead.has(m.ev.member) ? [{ seq: m.seq, member: m.ev.member, was: m.ev.wasLead }] : [],
       )
     : [];
-  const managers = new Map<string, boolean>(from?.managers);
-  const powerChanges = lookAhead ? messages.flatMap((m) => (m.seq > after && m.ev?.op === "power.set" && !managers.has(m.ev.member) ? [{ seq: m.seq, member: m.ev.member, was: m.ev.was }] : [])) : [];
+  const powers = new Map<string, Partial<Record<Power, boolean>>>(from?.powers?.map(([name, p]) => [name, { ...p }]));
+  const powerChanges = lookAhead
+    ? messages.flatMap((m) =>
+        m.seq > after && m.ev?.op === "power.set" && powers.get(m.ev.member)?.[m.ev.power] === undefined ? [{ seq: m.seq, member: m.ev.member, power: m.ev.power, was: m.ev.was }] : [],
+      )
+    : [];
   if (leadChanges.length || powerChanges.length) {
     const accepted = folding(messages, roster, now, roomsFloor, guardFloor, given, undefined, false);
     const took = (seq: number) => accepted.trust.get(seq) === "verified" && !accepted.rejected.has(seq);
     for (const c of leadChanges) if (!personaLead.has(c.member) && took(c.seq)) personaLead.set(c.member, c.was);
-    for (const c of powerChanges) if (!managers.has(c.member) && took(c.seq)) managers.set(c.member, c.was);
+    for (const c of powerChanges) if (powers.get(c.member)?.[c.power] === undefined && took(c.seq)) powers.set(c.member, { ...powers.get(c.member), [c.power]: c.was });
   }
+  const held = (member: FoldMember, power: Power): boolean => powers.get(member.name)?.[power] ?? !!member[power];
+  const trusted = (member: FoldMember): boolean => member.kind === "human" && !member.owner && canPost(scopesByKey.get(member.pk) ?? member.scopes) && POWERS.every((p) => held(member, p));
   const logged = (member: FoldMember): boolean | undefined => {
     const lead = personaLead.get(member.name);
     return lead === "roster" ? undefined : lead;
@@ -267,7 +273,9 @@ function folding(
     members,
     signed,
     personaLead,
-    managers,
+    powers,
+    held,
+    trusted,
     leads,
     keysByName,
     scopesByKey,
@@ -554,7 +562,7 @@ function folding(
       roomOf: recent(roomOf),
       placeOf: recent(placeOf),
       personaLeads: [...personaLead],
-      managers: [...managers],
+      powers: [...powers].map(([name, p]): [string, Partial<Record<Power, boolean>>] => [name, { ...p }]),
       folded: EVENT_OPS_VERSION,
       rules: from ? Math.min(from.rules ?? 0, FOLD_RULES) : FOLD_RULES,
       ...(skipped ? { skipped: true as const } : {}),

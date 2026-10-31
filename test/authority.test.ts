@@ -66,7 +66,7 @@ describe("the charter", () => {
     const forged = await ev("win", { op: "charter.set", text: "anything goes" });
     const set = await ev("jon", { op: "charter.set", text: "  Ship the Windows input driver. Nothing in prod.  " });
     let s = fold([forged, set], roster);
-    expect(s.rejected.get(forged.seq)).toBe("only the owner sets the charter");
+    expect(s.rejected.get(forged.seq)).toBe("only the owner, or a person they fully trust, sets the charter");
     expect(s.charter?.text).toBe("Ship the Windows input driver. Nothing in prod.");
     expect(s.charter?.by).toBe("jon");
     expect(charterLines(s)).toContain("Nothing in prod.");
