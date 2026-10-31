@@ -5,7 +5,9 @@ import { join } from "node:path";
 const UI = join(import.meta.dir, "../ui/src");
 
 function files(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(join(dir, e.name)) : /\.(css|tsx?)$/.test(e.name) && !/\.test\.tsx?$/.test(e.name) ? [join(dir, e.name)] : []));
+  return readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? files(join(dir, e.name)) : /\.(css|tsx?)$/.test(e.name) && !/\.test\.tsx?$/.test(e.name) ? [join(dir, e.name)] : [],
+  );
 }
 
 test("no ui style animates forever: an idle app draws nothing (#1379)", () => {
