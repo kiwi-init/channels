@@ -37,6 +37,7 @@ export const DEMO_PREFS: Prefs = {
   darkTheme: "channels-oled",
   lightTheme: "channels-light",
   customThemes: [],
+  folders: [],
 }
 
 export const DEMO_TILES: ChannelTile[] = [

@@ -8,8 +8,6 @@ import { ActContext, AppContext, type Go, type Nav } from "~/nav"
 import { Palette } from "~/palette/palette"
 import { ChannelScreen } from "~/shell/channel"
 import { Rail } from "~/shell/rail"
-import { EnrollDialog } from "~/settings/enroll"
-import { NewChannelDialog } from "~/start/new-channel"
 import { applyTheme, colorsOf, usePreview, useSystemDark } from "~/theme/apply"
 import { loadRex, useRex } from "~/theme/rex"
 import { activeTheme, wantsRex } from "~/theme/themes"
@@ -17,6 +15,8 @@ import { activeTheme, wantsRex } from "~/theme/themes"
 const Settings = later(() => import("~/settings/settings").then((m) => m.Settings))
 const FirstRun = later(() => import("~/start/first-run").then((m) => m.FirstRun))
 const Gone = later(() => import("~/start/gone").then((m) => m.Gone))
+const NewChannelDialog = later(() => import("~/start/new-channel").then((m) => m.NewChannelDialog))
+const EnrollDialog = later(() => import("~/settings/enroll").then((m) => m.EnrollDialog))
 const JoinDialog = later(() => import("~/start/join").then((m) => m.JoinDialog))
 const Welcome = later(() => import("~/start/welcome").then((m) => m.Welcome))
 
@@ -58,13 +58,21 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
             )}
           </Boundary>
         </div>
-        <NewChannelDialog />
+        {nav.dialog === "new-channel" && (
+          <Suspense fallback={null}>
+            <NewChannelDialog />
+          </Suspense>
+        )}
         {nav.dialog === "join" && (
           <Suspense fallback={null}>
             <JoinDialog />
           </Suspense>
         )}
-        <EnrollDialog />
+        {app.account?.enrollAsk && (
+          <Suspense fallback={null}>
+            <EnrollDialog />
+          </Suspense>
+        )}
         <Palette />
         <Toasts toasts={toasts} />
       </ActContext>
