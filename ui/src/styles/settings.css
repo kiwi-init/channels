@@ -130,7 +130,14 @@
 }
 
 .set-key {
+  font-family: var(--mono);
   letter-spacing: 0.06em;
+}
+
+.set-mono,
+.set-harness-version {
+  font-family: var(--mono);
+  letter-spacing: -0.01em;
 }
 
 .set-inline {
@@ -328,7 +335,8 @@
 
 .set-pair-what {
   color: var(--ink-3);
-  font: var(--t-stamp) var(--ui);
+  font: var(--t-stamp) var(--mono);
+  letter-spacing: -0.01em;
 }
 
 .set-pair-line {

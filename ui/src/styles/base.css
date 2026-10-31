@@ -375,10 +375,6 @@ kbd {
   background: var(--wash);
 }
 
-.logo-letter {
-  font: 600 inherit var(--ui);
-}
-
 .dot {
   flex: none;
   display: inline-block;
@@ -484,6 +480,10 @@ kbd {
 
 .tone-alert {
   color: var(--alert);
+}
+
+.tone-quiet {
+  color: var(--ink-2);
 }
 
 @keyframes rise {

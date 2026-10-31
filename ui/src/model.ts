@@ -184,6 +184,7 @@ export interface Direct {
   unread: number
   last: number
   seen?: number
+  locked?: true
 }
 
 export interface TheirDirect {
@@ -225,6 +226,7 @@ export interface Message {
   from: string
   at: number
   text: string
+  locked?: true
   where: Where
   said?: Said
   replyTo?: number

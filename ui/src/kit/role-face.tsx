@@ -1,5 +1,5 @@
 import { useId } from "react"
-import { LOGOS } from "~/kit/icons"
+import { LOGOS } from "~/kit/logos"
 import type { Harness } from "~/model"
 
 export type Face = "lead" | "builder" | "reviewer" | "bug-hunter" | "explorer" | "releaser" | "default"

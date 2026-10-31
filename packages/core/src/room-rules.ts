@@ -9,6 +9,7 @@ export interface RoomMeta {
   name: string;
   members: RoomMember[];
   prev?: string;
+  dm?: true;
 }
 
 export interface RoomSeal {
@@ -61,6 +62,17 @@ function rootName(s: Seat, seats: readonly Seat[]): string {
 export function rootOf(name: string, members: ReadonlyMap<string, Seat>): string {
   const seat = members.get(name);
   return seat ? rootName(seat, [...members.values()]) : name;
+}
+
+export function dmPair(meta: Pick<RoomMeta, "members">, sender: string, members: ReadonlyMap<string, Seat>): boolean {
+  const seats = [...members.values()];
+  const people = new Set<string>();
+  for (const m of meta.members) {
+    const seat = members.get(m.name);
+    if (!seat || seat.pk !== m.pk || !isPerson(seat)) return false;
+    people.add(rootName(seat, seats));
+  }
+  return people.size === 2 && people.has(rootOf(sender, members));
 }
 
 export function withSeats<P extends { name: string; pk: string }, S extends Seat>(seats: readonly S[], picked: readonly P[], pickOf: (s: S) => P): P[] {

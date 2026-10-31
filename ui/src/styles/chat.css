@@ -1515,6 +1515,7 @@ button.msg-image-spot:hover {
 
 .stash-chip b {
   color: var(--ink);
+  font-family: var(--mono);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -1902,4 +1903,11 @@ button.msg-image-spot:hover {
 
 .msg-edit-foot .dim {
   margin-right: auto;
+}
+
+.dm-note {
+  margin: 0 0 8px;
+  color: var(--ink-2);
+  font: var(--t-stamp) var(--ui);
+  text-align: center;
 }
