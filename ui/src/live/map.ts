@@ -648,6 +648,7 @@ export function asksOf(
     const idle = !isOpen && !answer && pending.has(m.seq)
     if (!isOpen && !answer && !idle) continue
     const holds = heldBy(state, m)
+    const askedOf = m.esc && !m.handoff && m.to?.length && !m.to.includes(me) && !m.to.includes("*") ? [...m.to] : undefined
     if (isOpen) for (const t of holds) held.add(t)
     asks.push({
       kind: "question",
@@ -655,7 +656,7 @@ export function asksOf(
       from: m.from,
       at: m.ts,
       text: m.body,
-      label: m.handoff ? "Browser for you" : m.esc ? decisionLabel(m) : m.to?.includes(me) ? "Question for you" : "Question for everyone",
+      label: m.handoff ? "Browser for you" : m.esc ? (askedOf ? decisionLabel(m).replace(/ for you$/, "") : decisionLabel(m)) : m.to?.includes(me) ? "Question for you" : "Question for everyone",
       ...(m.decision === "irreversible" ? { irreversible: true as const } : {}),
       options: m.choices ?? [],
       holds,
@@ -663,6 +664,7 @@ export function asksOf(
       ...(m.handoff ? { handoff: { url: m.handoff.url, label: handoffLabel(m.handoff), expiresAt: m.handoff.expiresAt } } : {}),
       ...(task !== undefined ? { task } : {}),
       ...(idle ? { idle: true as const } : {}),
+      ...(askedOf ? { askedOf } : {}),
       ...(!isOpen && answer ? { answer: { text: answer.body, by: answer.from, at: answer.ts } } : {}),
     })
     askOf.set(m.seq, id)
