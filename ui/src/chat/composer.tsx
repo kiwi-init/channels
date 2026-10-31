@@ -139,7 +139,6 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
   const picker = useRef<HTMLInputElement>(null)
   const [files, setFiles] = useState<Upload[]>([])
   const [dropping, setDropping] = useState(false)
-  const [gifs, setGifs] = useState(false)
   const enterSends = app.prefs.enterSends
   const stash = useStash(key)
   const [cueOf, setCue] = useState<Cue | null>(() => (STASH_SHOT === "stash" ? { key, back: false, left: stash.list.length } : null))
@@ -296,11 +295,6 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
 
   return (
     <div className="compose" ref={box}>
-      {gifs && (
-        <Suspense fallback={null}>
-          <Gifs onClose={() => setGifs(false)} onFile={(file) => (file ? attach([file]) : toast("That GIF couldn't be loaded"))} />
-        </Suspense>
-      )}
       {listed.length > 0 && (
         <ul className="mentions" role="listbox" aria-label="Commands" id={`${key}-commands`}>
           {listed.map((c, i) => (
@@ -434,9 +428,9 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
           <button type="button" className="compose-attach" aria-label="Attach images" title="Attach images" onClick={() => picker.current?.click()}>
             <Icon name="plus" />
           </button>
-          <button type="button" className="compose-attach" aria-label="GIFs" title="GIFs" aria-expanded={gifs} data-gif-toggle disabled={files.length >= MAX_FILES} onClick={() => setGifs((v) => !v)}>
-            <span className="gif-mark">GIF</span>
-          </button>
+          <Suspense fallback={<span className="compose-attach" />}>
+            <Gifs onFile={(file) => (file ? attach([file]) : toast("That GIF couldn't be loaded"))} />
+          </Suspense>
           <input
             ref={picker}
             type="file"
