@@ -157,4 +157,11 @@ describe("names in the phone's room view (#1251)", () => {
     const open = named(await signedLog([ev("jow", { op: "task.add", title: "ship it", owner: "lead" }), say("lead", "Ping @dev?", { kind: "ask", to: ["jow"], choices: ["yes"], holds: [1] })]));
     expect(open.asks[0]).toMatchObject({ body: "Ping @dev?", shown: "Ping @Earnest Heron?", plain: "Ping @Earnest Heron?", choices: ["yes"] });
   });
+
+  test("a named room's messages stay out of #general (T948)", async () => {
+    const log = await signedLog([ev("jow", { op: "room.create", id: "ops", name: "ops" }), say("jow", "for everyone"), say("jow", "only for ops", { room: "ops" })]);
+    const bodies = view(log, "jow").messages.map((m) => m.body);
+    expect(bodies).toContain("for everyone");
+    expect(bodies).not.toContain("only for ops");
+  });
 });
