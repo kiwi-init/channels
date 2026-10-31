@@ -8,7 +8,7 @@ import { memberLoad, showsLoad } from "@kiwi/core/load.ts"
 import { checksOf, FAILED, prLinks, taskPr } from "@kiwi/core/prs.ts"
 import { stageOf } from "@kiwi/core/stage.ts"
 import { GENERAL_ROOM, ignored, isQuiet, isRasterMime, isReaction, type Message as Wire } from "@kiwi/core/protocol.ts"
-import { personOf as personKey } from "@kiwi/core/room-rules.ts"
+import { rootOf } from "@kiwi/core/room-rules.ts"
 import { pickFor, taskCandidates } from "@kiwi/core/routing.ts"
 import { canPost } from "@kiwi/core/scopes.ts"
 import { versionName } from "@kiwi/core/status.ts"
@@ -113,10 +113,8 @@ function loadOf(state: ChannelState, m: StateMember): Load | undefined {
 }
 
 function seatOfIn(state: ChannelState, m: StateMember): { seatOf?: string } {
-  const base = m.kind === "human" && m.sponsor?.handle && m.sponsor.handle !== m.name ? state.members.get(m.sponsor.handle) : undefined
-  if (!base?.active) return {}
-  const seats = [...state.members.values()]
-  return personKey(base, seats) === personKey(m, seats) ? { seatOf: base.name } : {}
+  const root = rootOf(m.name, state.members)
+  return root !== m.name && state.members.get(root)?.active ? { seatOf: root } : {}
 }
 
 function personOf(state: ChannelState, m: StateMember, record: RosterMember | undefined, here: Online | undefined, me: string, wakes: ReadonlyMap<string, boolean>): Person {
@@ -206,7 +204,8 @@ export function roomsOf(state: ChannelState, messages: readonly Wire[], me: stri
   }))
 }
 
-export function directsOf(state: ChannelState, messages: readonly Wire[], me: string, seen: Seen): Direct[] {
+export function directsOf(state: ChannelState, messages: readonly Wire[], seat: string, seen: Seen): Direct[] {
+  const me = rootOf(seat, state.members)
   const at = new Map<string, number>()
   const unread = new Map<string, number>()
   const marks = new Map<string, number>()
@@ -216,7 +215,7 @@ export function directsOf(state: ChannelState, messages: readonly Wire[], me: st
     const other = place.with[0] === me ? place.with[1] : place.with[0]
     at.set(other, m.ts)
     marks.set(other, seen[placeKey(place)] ?? 0)
-    if (m.from !== me && m.kind !== "event" && m.seq > (seen[placeKey(place)] ?? 0)) unread.set(other, (unread.get(other) ?? 0) + 1)
+    if (rootOf(m.from, state.members) !== me && m.kind !== "event" && m.seq > (seen[placeKey(place)] ?? 0)) unread.set(other, (unread.get(other) ?? 0) + 1)
   }
   for (const s of state.places.values()) {
     if (s.place.kind !== "dm" || !s.place.with.includes(me)) continue
@@ -226,7 +225,8 @@ export function directsOf(state: ChannelState, messages: readonly Wire[], me: st
   return [...at].map(([name, last]) => ({ with: name, unread: unread.get(name) ?? 0, last, seen: marks.get(name) ?? 0 })).sort((a, b) => b.last - a.last)
 }
 
-export function theirsOf(state: ChannelState, messages: readonly Wire[], me: string): TheirDirect[] {
+export function theirsOf(state: ChannelState, messages: readonly Wire[], seat: string): TheirDirect[] {
+  const me = rootOf(seat, state.members)
   const at = new Map<string, { between: readonly [string, string]; last: number }>()
   for (const m of messages) {
     const place = state.placeOf.get(m.seq)
@@ -316,7 +316,8 @@ export interface Pictures {
   get(seq: number, i: number, alt: string): Image | ImageSpot
 }
 
-function whereOf(state: ChannelState, m: Wire, me: string): Where {
+function whereOf(state: ChannelState, m: Wire, seat: string): Where {
+  const me = rootOf(seat, state.members)
   const place = state.placeOf.get(m.seq) ?? MAIN
   if (place.kind === "task") return { kind: "task", task: place.task }
   if (place.kind === "dm") return place.with.includes(me) ? { kind: "dm", with: place.with[0] === me ? place.with[1] : place.with[0] } : { kind: "theirs", between: place.with }
