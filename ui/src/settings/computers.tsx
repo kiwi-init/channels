@@ -120,8 +120,10 @@ function SignedDevices({ devices }: { devices: Device[] }) {
                 {d.thisOne && <span className="set-tag">this app</span>}
               </span>
               <span className="set-device-meta">
-                {KIND[d.as]}
-                {d.os ? ` · ${d.os}` : ""} · {expiry(d.until)}
+                <span className="set-device-status">
+                  {KIND[d.as]}
+                  {d.os ? ` · ${d.os}` : ""} · {expiry(d.until)}
+                </span>
               </span>
             </span>
             <span className="set-device-actions-inline">
@@ -219,8 +221,10 @@ export function ComputersSection() {
               </span>
               <span className="set-device-meta">
                 <span className={cx("set-pip", c.online && "is-online")} aria-hidden="true" />
-                {c.online ? "online" : `offline · ${ago(c.lastSeen)}`}
-                {!isPhone(c) && <span> · {c.agents === 0 ? "no agents" : c.agents === 1 ? "1 agent" : `${c.agents} agents`}</span>}
+                <span className="set-device-status">
+                  {c.online ? "online" : `offline · ${ago(c.lastSeen)}`}
+                  {!isPhone(c) && ` · ${c.agents === 0 ? "no agents" : c.agents === 1 ? "1 agent" : `${c.agents} agents`}`}
+                </span>
               </span>
             </span>
             {!c.thisOne && (
