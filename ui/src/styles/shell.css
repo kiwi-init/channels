@@ -1031,6 +1031,10 @@
     width: auto;
   }
 
+  .chan.has-panel .panel-grip {
+    display: none;
+  }
+
   .tabs[data-more-end] {
     mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
   }
