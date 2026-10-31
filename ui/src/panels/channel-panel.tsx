@@ -8,7 +8,7 @@ import { Avatar, cx, Field, Heading, IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import type { Channel } from "~/model"
-import { nickname, shown } from "~/names"
+import { nickname, roomPeople, seatRoot, shown } from "~/names"
 import { useApp } from "~/nav"
 import { PanelHead } from "~/panels/frame"
 import { repoOffers } from "~/panels/repo-offers"
@@ -387,15 +387,17 @@ function Rooms({ channel, own }: { channel: Channel; own: boolean }) {
 function RoomPeople({ channel, id, members, own }: { channel: Channel; id: string; members: string[]; own: boolean }) {
   const { app } = useApp()
   const [editing, setEditing] = useState<ReadonlySet<string> | null>(null)
-  const others = channel.people.filter((p) => !p.you && !p.left)
-  const names = members.filter((m) => m !== channel.you).map((m) => nickname(channel, m))
+  const others = roomPeople(channel)
+  const mine = seatRoot(channel, channel.you)
+  const roots = [...new Set(members.map((m) => seatRoot(channel, m)))].filter((m) => m !== mine)
+  const names = roots.map((m) => nickname(channel, m))
   if (!editing)
     return (
       <p className="cpanel-hint room-in">
         <Icon name="lock" size={12} />
         <span>Private: you{names.length ? `, ${names.join(", ")}` : ""}</span>
         {own && (
-          <button type="button" className="btn is-quiet is-small" onClick={() => setEditing(new Set(members))}>
+          <button type="button" className="btn is-quiet is-small" onClick={() => setEditing(new Set(roots))}>
             Change who's in
           </button>
         )}
@@ -408,7 +410,7 @@ function RoomPeople({ channel, id, members, own }: { channel: Channel; id: strin
       else next.delete(name)
       return next
     })
-  const out = members.some((m) => m !== channel.you && !editing.has(m))
+  const out = roots.some((m) => !editing.has(m))
   return (
     <div className="room-pick">
       {others.map((p) => (
@@ -428,11 +430,7 @@ function RoomPeople({ channel, id, members, own }: { channel: Channel; id: strin
           type="button"
           className="btn is-primary is-small"
           onClick={() => {
-            app.actions.setRoomMembers(
-              channel.code,
-              id,
-              [...editing].filter((m) => m !== channel.you)
-            )
+            app.actions.setRoomMembers(channel.code, id, [...editing])
             setEditing(null)
           }}
         >

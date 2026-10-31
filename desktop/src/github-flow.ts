@@ -68,7 +68,7 @@ export async function listRepos(token: string, f: typeof fetch = fetch): Promise
   return out;
 }
 
-const AVATAR_SIZES = [96, 64];
+const AVATAR_SIZES = [96, 64, 48, 32];
 
 /** The account's GitHub avatar as a small picture the person can publish: fetched here, so no page loads from GitHub. */
 export async function avatar(id: number, f: typeof fetch = fetch): Promise<MemberPicture | null> {

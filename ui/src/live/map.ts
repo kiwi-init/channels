@@ -8,6 +8,7 @@ import { memberLoad, showsLoad } from "@kiwi/core/load.ts"
 import { checksOf, FAILED, prLinks, taskPr } from "@kiwi/core/prs.ts"
 import { stageOf } from "@kiwi/core/stage.ts"
 import { editable, GENERAL_ROOM, ignored, isQuiet, isRasterMime, isOverlay, type Message as Wire } from "@kiwi/core/protocol.ts"
+import { personOf as personKey } from "@kiwi/core/room-rules.ts"
 import { pickFor, taskCandidates } from "@kiwi/core/routing.ts"
 import { canPost } from "@kiwi/core/scopes.ts"
 import { versionName } from "@kiwi/core/status.ts"
@@ -112,6 +113,13 @@ function loadOf(state: ChannelState, m: StateMember): Load | undefined {
   return { level: l.level, doing: l.current.map((t) => t.id), queued: l.queued.map((t) => t.id), waiting: l.waiting.map((t) => t.id) }
 }
 
+function seatOfIn(state: ChannelState, m: StateMember): { seatOf?: string } {
+  const base = m.kind === "human" && m.sponsor?.handle && m.sponsor.handle !== m.name ? state.members.get(m.sponsor.handle) : undefined
+  if (!base?.active) return {}
+  const seats = [...state.members.values()]
+  return personKey(base, seats) === personKey(m, seats) ? { seatOf: base.name } : {}
+}
+
 function personOf(state: ChannelState, m: StateMember, record: RosterMember | undefined, here: Online | undefined, me: string, wakes: ReadonlyMap<string, boolean>): Person {
   const human = isPerson(m)
   const raw = m.runs?.harness ?? m.card?.harness
@@ -131,6 +139,7 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
     ...(human && m.picture ? { picture: `data:${m.picture.mime};base64,${m.picture.data}` } : {}),
     owner: m.owner,
     you: m.name === me,
+    ...seatOfIn(state, m),
     presence: m.name === me || here ? (human && here?.activity?.state === "idle" ? "away" : "online") : "offline",
     ...(activity ? { activity } : {}),
     ...(reach && reach !== "unknown" ? { reach } : {}),

@@ -38,6 +38,7 @@ export interface Person {
   picture?: string
   owner: boolean
   you: boolean
+  seatOf?: string
   presence: Presence
   activity?: Activity
   reach?: "listening" | "running" | "wakes"
