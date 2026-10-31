@@ -40,6 +40,7 @@ function taskMatches(tasks: readonly Task[], query: string): Task[] {
 }
 
 const drafts = new Map<string, string>()
+const attached = new Map<string, Upload[]>()
 const picked = new Map<string, Picks>()
 function picksFor(key: string): Picks {
   const have = picked.get(key)
@@ -125,7 +126,13 @@ const readBase64 = (file: File): Promise<string> =>
     reader.readAsDataURL(file)
   })
 
-export function Composer({ channel, where, placeholder, inThread }: { channel: Channel; where: Where; placeholder: string; inThread?: number }) {
+type ComposerProps = { channel: Channel; where: Where; placeholder: string; inThread?: number }
+
+export function Composer(props: ComposerProps) {
+  return <ComposerIn key={`${props.channel.code}:${JSON.stringify(props.where)}:${props.inThread ?? ""}`} {...props} />
+}
+
+function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
   const { app, go, toast } = useApp()
   const replying = useReplying()
   const replyTo = replying?.to ?? null
@@ -137,7 +144,14 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
   const area = useRef<HTMLTextAreaElement>(null)
   const box = useRef<HTMLDivElement>(null)
   const picker = useRef<HTMLInputElement>(null)
-  const [files, setFiles] = useState<Upload[]>([])
+  const [files, setFilesNow] = useState<Upload[]>(() => attached.get(key) ?? [])
+  const setFiles = (next: Upload[] | ((now: Upload[]) => Upload[])) =>
+    setFilesNow((now) => {
+      const list = typeof next === "function" ? next(now) : next
+      if (list.length) attached.set(key, list)
+      else attached.delete(key)
+      return list
+    })
   const [dropping, setDropping] = useState(false)
   const enterSends = app.prefs.enterSends
   const stash = useStash(key)
@@ -247,8 +261,8 @@ export function Composer({ channel, where, placeholder, inThread }: { channel: C
       update("")
       return
     }
-    const body = value.trim() || files.map((f) => f.name).join(", ")
-    if (!body) return
+    const body = value.trim()
+    if (!body && !files.length) return
     const opts = { ...(inThread !== undefined ? { inThread } : {}), ...(replyTo ? { replyTo: replyTo.seq } : {}), ...(files.length ? { images: files } : {}) }
     app.actions.send(channel.code, where, mentions.sent(body, picksFor(key)), Object.keys(opts).length ? opts : undefined)
     picked.delete(key)

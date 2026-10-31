@@ -16,6 +16,7 @@ import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@kiwi/app/thre
 import { useAskChime } from "~/live/alerts"
 import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
+import { changeUnsent, nextUnsentKey, unsentIn } from "~/live/unsent"
 import { asksOf, directsOf, groupsOf, leftOutOf, messagesOf, formerOf, nextOf, peopleOf, roomsOf, tasksOf, theirsOf, type Pending } from "~/live/map"
 import { iconUrl } from "~/live/icon"
 import { usePinsHere } from "~/live/pins"
@@ -101,8 +102,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const known = useKnownChannels()
   const icon = iconUrl(useIcons().get(roomId) ?? null)
   useLiveIcon(member)
-  const [pending, setPending] = useState<Pending[]>([])
-  const counter = useRef(0)
+  const [pending, setPendingNow] = useState<Pending[]>(() => unsentIn(roomId))
+  const setPending = useCallback((change: (list: Pending[]) => Pending[]) => setPendingNow(changeUnsent(roomId, change)), [roomId])
   const [inTurn] = useState(sendsInTurn)
   const shown = useShown()
 
@@ -210,7 +211,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const post = useCallback(
     async (where: Where, text: string, opts: { replyTo?: number; inThread?: number; images?: Upload[] }): Promise<number> => {
       if (where.kind === "theirs") throw new Error("Only the two of them write in their direct messages")
-      const key = ++counter.current
+      const key = nextUnsentKey()
       const body = text.trim()
       const sending = { ...sendOptions(state, messages, me, where, body, opts), ...(opts.images?.length ? { imgs: opts.images } : {}) }
       const landed = new Set(messages.map((m) => m.seq))
@@ -233,10 +234,10 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
         throw err
       }
     },
-    [state, messages, me, send, inTurn]
+    [state, messages, me, send, inTurn, setPending]
   )
 
-  const discard = useCallback((key: number) => setPending((list) => list.filter((p) => p.key !== key)), [])
+  const discard = useCallback((key: number) => setPending((list) => list.filter((p) => p.key !== key)), [setPending])
   const retry = useCallback(
     async (key: number): Promise<number> => {
       const p = pending.find((x) => x.key === key)

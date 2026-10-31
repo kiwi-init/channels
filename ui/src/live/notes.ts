@@ -34,7 +34,9 @@ export interface Told {
 }
 
 export function tellMessage(m: Wire, t: Told): void {
-  tell(noteTitle(m, t.me, t.display || m.from, t.channel, t.place), noteBody(withNicknames(m.body, nicknamesOf(t.members))), t.code, m.seq)
+  const images = m.imgs?.length ?? 0
+  const body = noteBody(withNicknames(m.body, nicknamesOf(t.members))) || (images ? `Sent ${images === 1 ? "an image" : `${images} images`}` : "")
+  tell(noteTitle(m, t.me, t.display || m.from, t.channel, t.place), body, t.code, m.seq)
 }
 
 const PARENT_REACH = 500
