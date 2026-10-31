@@ -279,6 +279,8 @@ export function useGithubSignIn(): GithubSignIn | null {
 /** Whether the app waits on GitHub sign-in (or doesn't know yet whether it does). */
 export const useGithubGate = (): "unknown" | "needed" | "signed-in" | "off" => useSyncExternalStore(githubGate.subscribe, githubGate.get)
 
+export const useGithubLogin = (): string | null => useSyncExternalStore(github.subscribe, () => github.get()?.login ?? null)
+
 export async function unlinkGithub(): Promise<void> {
   const b = bridge()
   if (!b) throw new Error("Linking GitHub needs the Channels desktop app")
