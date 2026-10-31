@@ -309,7 +309,8 @@ export function makeActions(): Actions {
         stop()
       }
     },
-    addRoom: (code, typed) => tried("Room not made", async () => (await manage()).addRoom(code, typed)),
+    addRoom: (code, typed, members) => tried("Room not made", async () => (await manage()).addRoom(code, typed, members)),
+    setRoomMembers: (code, id, members) => attempt("Who's in didn't change", async () => (await manage()).setRoomMembers(code, id, members)),
     setGithubWrite: (code, on) => attempt("Not changed", async () => (await manage()).setGithubWrite(code, on)),
     setBranchPrefix: (code, typed) => attempt("Branch prefix not changed", async () => (await manage()).setBranchPrefix(code, typed)),
     renameRoom: (code, id, typed) => attempt("Room not renamed", async () => (await manage()).renameRoom(code, id, typed)),

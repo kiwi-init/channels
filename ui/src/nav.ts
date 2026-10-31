@@ -12,7 +12,7 @@ export type Panel =
   | { kind: "invite" }
   | { kind: "add-agent" }
 
-export type Dialog = "new-channel" | "join" | "palette" | null
+export type Dialog = "new-channel" | "new-room" | "join" | "palette" | null
 
 export type TermOf = { kind: "agent"; name: string } | { kind: "you" }
 

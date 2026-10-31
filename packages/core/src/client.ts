@@ -48,6 +48,13 @@ export type { SendOptions } from "./client/send.ts";
 export type { ChannelFx } from "./client/core.ts";
 export type { GithubDiff, GithubIssueInfo, ReviewCheck } from "./client/github.ts";
 
+export interface RoomPick {
+  name: string;
+  pk: string;
+  xpk: string;
+}
+
+const withMe = (me: Identity, members: readonly RoomPick[]): RoomPick[] => (members.some((m) => m.pk === me.pk) || !me.xpk ? [...members] : [{ name: me.name, pk: me.pk, xpk: me.xpk }, ...members]);
 export class Channel {
   private readonly core: ChannelCore;
   private readonly cache: ChannelInfo;
@@ -423,6 +430,54 @@ export class Channel {
 
   closeIssue(c: { repo: string; number: number; reason: "completed" | "not_planned"; body: string }): Promise<{ url: string | null }> {
     return run(this.fx.closeIssue(c));
+  }
+
+  async makeRoom(name: string, members: readonly RoomPick[]): Promise<string> {
+    const { newRoomKey, sealRoom } = await import("./private-room.ts");
+    const id = newRoomId();
+    const who = withMe(this.core.identity, members);
+    const sealed = await sealRoom(
+      this.roomId,
+      id,
+      1,
+      newRoomKey(),
+      { name, members: who.map(({ name, pk }) => ({ name, pk })) },
+      who.map((w) => w.xpk),
+    );
+    await this.send("made a private room", { kind: "event", ev: { op: "room.seal", ...sealed } });
+    return id;
+  }
+
+  async changeRoom(id: string, change: { name?: string; members?: readonly RoomPick[] }): Promise<void> {
+    const now = this.core.roomNow.get(id);
+    if (!now?.key || !now.meta) throw new Error("you're not in that private room");
+    const { newRoomKey, sealRoom } = await import("./private-room.ts");
+    const who = change.members ? withMe(this.core.identity, change.members) : null;
+    const keeps = now.meta.members.filter((m) => who === null || who.some((w) => w.pk === m.pk));
+    if (!who && !change.name) return;
+    const out = who !== null && keeps.length < now.meta.members.length;
+    const xpks = who ?? (await this.roomXpks(now.meta.members));
+    const n = out ? now.n + 1 : now.n;
+    const key = out ? newRoomKey() : now.key;
+    const meta = { name: change.name ?? now.meta.name, members: (who ?? now.meta.members).map(({ name, pk }) => ({ name, pk })) };
+    const sealed = await sealRoom(
+      this.roomId,
+      id,
+      n,
+      key,
+      meta,
+      xpks.map((w) => w.xpk),
+      now.key,
+    );
+    await this.send("changed a private room", { kind: "event", ev: { op: "room.seal", ...sealed } });
+  }
+
+  private async roomXpks(members: readonly { name: string; pk: string }[]): Promise<RoomPick[]> {
+    const roster = await this.members();
+    return members.flatMap((m) => {
+      const r = roster.find((x) => x.active && x.pk === m.pk);
+      return r ? [{ name: m.name, pk: m.pk, xpk: r.xpk }] : [];
+    });
   }
 
   async learnRooms(messages: readonly Message[]): Promise<void> {

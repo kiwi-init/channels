@@ -28,4 +28,13 @@ describe("the owner's app copies a trusted person's setup to the relay (T632)", 
   test("a relay with no copy yet gets one as soon as the log has something", () => {
     expect(Object.keys(settingsSync({ ...state, charter: null, rooms: new Map() }, null, null))).toEqual(["repos"]);
   });
+
+  test("a private room never goes to the relay's copy: its name and who's in it stay with its members (T681)", () => {
+    const rooms = new Map([
+      ["design", { id: "design", name: "design", createdBy: "tia", at: 0 }],
+      ["r-secret", { id: "r-secret", name: "launch-plan", createdBy: "tia", at: 0, members: [{ name: "tia", pk: "pk-tia" }] }],
+    ]);
+    expect(settingsSync({ ...state, rooms }, null, null).rooms?.list).toEqual([{ id: "design", name: "design" }]);
+    expect(settingsSync({ ...state, rooms }, null, { list: [{ id: "design", name: "design" }], since: 3 }).rooms).toBeUndefined();
+  });
 });

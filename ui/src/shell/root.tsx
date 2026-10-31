@@ -18,6 +18,7 @@ const Gone = later(() => import("~/start/gone").then((m) => m.Gone))
 const NewChannelDialog = later(() => import("~/start/new-channel").then((m) => m.NewChannelDialog))
 const EnrollDialog = later(() => import("~/settings/enroll").then((m) => m.EnrollDialog))
 const JoinDialog = later(() => import("~/start/join").then((m) => m.JoinDialog))
+const NewRoomDialog = later(() => import("~/shell/new-room").then((m) => m.NewRoomDialog))
 const Welcome = later(() => import("~/start/welcome").then((m) => m.Welcome))
 
 export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => void }) {
@@ -61,6 +62,11 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
         {nav.dialog === "new-channel" && (
           <Suspense fallback={null}>
             <NewChannelDialog />
+          </Suspense>
+        )}
+        {nav.dialog === "new-room" && app.channel && (
+          <Suspense fallback={null}>
+            <NewRoomDialog channel={app.channel} />
           </Suspense>
         )}
         {nav.dialog === "join" && (

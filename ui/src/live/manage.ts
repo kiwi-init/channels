@@ -182,16 +182,33 @@ async function roomFolded(run: () => Run | null, room: { id: string; name: strin
   throw new Error(`#${room.name} was sent but hasn't come back from the relay yet: look again in a moment`)
 }
 
-export async function addRoom(code: string, typed: string): Promise<string> {
+const picks = (run: Run, names: readonly string[]) =>
+  names.map((n) => {
+    const m = memberOf(run, n)
+    return { name: m.name, pk: m.pk, xpk: m.xpk }
+  })
+
+const open = (rooms: Iterable<{ id: string; name: string; members?: unknown }>) => [...rooms].filter((r) => !r.members)
+
+const updateFirst = (err: unknown): never => {
+  throw new Error(/not a call|unknown call|makeRoom|changeRoom/i.test(say(err)) ? "update Channels to make private rooms" : say(err))
+}
+
+export async function addRoom(code: string, typed: string, members?: string[]): Promise<string> {
   const run = setup(code)
   const problem = roomProblem(run.state.rooms.values(), typed)
   if (problem) throw new Error(problem)
   const name = cleanRoomName(typed)
+  if (members?.length) {
+    const id = await run.ch.makeRoom(name, picks(run, members)).catch(updateFirst)
+    await roomFolded(() => openedRun(code), { id, name })
+    return id
+  }
   const slug = name.toLowerCase()
   const room = { id: ROOM_ID_RE.test(slug) && !run.state.rooms.has(slug) ? slug : newRoomId(), name }
   const since = await event(run, `made the room #${room.name}`, { op: "room.create", ...room })
   await roomFolded(() => openedRun(code), room)
-  if (run.isOwner) await run.ch.setRooms({ list: roomsAfter(openedRun(code)?.state.rooms.values() ?? run.state.rooms.values(), room), since })
+  if (run.isOwner) await run.ch.setRooms({ list: roomsAfter(open(openedRun(code)?.state.rooms.values() ?? run.state.rooms.values()), room), since })
   return room.id
 }
 
@@ -201,9 +218,19 @@ export async function renameRoom(code: string, id: string, typed: string): Promi
   const problem = roomProblem(run.state.rooms.values(), typed, id)
   if (problem) throw new Error(problem)
   const room = { id, name: cleanRoomName(typed) }
+  if (run.state.rooms.get(id)?.members) {
+    await run.ch.changeRoom(id, { name: room.name }).catch(updateFirst)
+    return roomFolded(() => openedRun(code), room)
+  }
   const since = await event(run, `renamed a room to #${room.name}`, { op: "room.rename", ...room })
   await roomFolded(() => openedRun(code), room)
-  if (run.isOwner) await run.ch.setRooms({ list: roomsAfter(openedRun(code)?.state.rooms.values() ?? run.state.rooms.values(), room), since })
+  if (run.isOwner) await run.ch.setRooms({ list: roomsAfter(open(openedRun(code)?.state.rooms.values() ?? run.state.rooms.values()), room), since })
+}
+
+export async function setRoomMembers(code: string, id: string, members: string[]): Promise<void> {
+  const run = setup(code)
+  if (!run.state.rooms.get(id)?.members) throw new Error("that isn't a private room you're in")
+  await run.ch.changeRoom(id, { members: picks(run, members) }).catch(updateFirst)
 }
 
 export async function answerJoin(code: string, id: string, yes: boolean, choice?: JoinChoice): Promise<void> {
