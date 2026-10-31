@@ -11,6 +11,7 @@ import { demoShell, demoShells, demoTerm } from "~/demo/term"
 import type { Account, Actions, AgentStarts, App, Enrolling, Finding, GithubSignIn, Launching, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Task } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
+import { muteKey, snoozeEnd } from "~/live/quiet"
 
 interface State {
   account: Account | null
@@ -600,6 +601,13 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       },
       setName: (name) => setState((s) => (s.account ? { ...s, account: { ...s.account, name } } : { ...s, account: { ...DEMO_ACCOUNT, name } })),
       setPrefs: (p) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...p } })),
+      setMute: (code, room, on) =>
+        setState((s) => {
+          const key = muteKey(code, room)
+          const rest = s.prefs.muted.filter((k) => k !== key)
+          return { ...s, prefs: { ...s.prefs, muted: on ? [...rest, key] : rest } }
+        }),
+      snooze: (until) => setState((s) => ({ ...s, prefs: { ...s.prefs, snoozeUntil: until ? snoozeEnd(until, Date.now()) : null } })),
       forgetComputer: (id) => setState((s) => (s.account ? { ...s, account: { ...s.account, computers: s.account.computers.filter((c) => c.id !== id) } } : s)),
       linkGithub: () => setState((s) => (s.account ? { ...s, account: { ...s.account, github: { login: "ojowwalker77" } } } : s)),
       unlinkGithub: () => setState((s) => (s.account ? { ...s, account: { ...s.account, github: undefined } } : s)),

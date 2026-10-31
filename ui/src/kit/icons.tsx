@@ -27,6 +27,7 @@ import {
   MinusSignIcon,
   Moon02Icon,
   Notification01Icon,
+  NotificationOff01Icon,
   PaintBoardIcon,
   Search01Icon,
   Settings02Icon,
@@ -82,6 +83,7 @@ const GLYPHS = {
   account: UserCircleIcon,
   paint: PaintBoardIcon,
   bell: Notification01Icon,
+  bellOff: NotificationOff01Icon,
   devices: ComputerPhoneSyncIcon,
   info: InformationCircleIcon,
 } satisfies Record<string, Glyph>

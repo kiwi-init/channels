@@ -11,6 +11,7 @@ import { joinCodeFromLink } from "@kiwi/app/deep-link.ts"
 import { adoptThisComputer } from "@kiwi/app/computers.ts"
 import { useIcons, useMemberIcons } from "@kiwi/app/icons.ts"
 import { lastChannel, rememberChannel, reopenable } from "@kiwi/app/last-channel.ts"
+import { isMuted } from "~/live/quiet"
 import { badgeTotal, newsTotal, rowNews, startMarks, useMarks, useOpenNews, useTabNews } from "@kiwi/channel/news.ts"
 import { useOwnPersonalities } from "@kiwi/app/personalities.ts"
 import { bridge, useSecrets } from "@kiwi/secrets/secrets.ts"
@@ -34,13 +35,24 @@ import type { Go } from "~/nav"
 
 const STATE: Record<ChannelRow["state"], ChannelTile["state"]> = { member: "member", pending: "waiting", agents: "gone", elsewhere: "gone" }
 
-function useTiles(rows: ChannelRow[], notify: "all" | "mentions" | "none"): ChannelTile[] {
+function useTiles(rows: ChannelRow[], notify: "all" | "mentions" | "none", muted: readonly string[]): ChannelTile[] {
   const marks = useMarks()
   const openNews = useOpenNews()
   const icons = useIcons()
   const news = useMemo(() => rows.map((r) => rowNews(r, marks, openNews)), [rows, marks, openNews])
   useEffect(() => startMarks(rows), [rows])
-  useTabNews(newsTotal(news), badgeTotal(news, notify))
+  const hushed = useMemo(() => rows.map((r) => isMuted(muted, r.code)), [rows, muted])
+  useTabNews(
+    newsTotal(news),
+    badgeTotal(
+      news.filter((_, i) => !hushed[i]),
+      notify
+    ) +
+      badgeTotal(
+        news.filter((_, i) => hushed[i]),
+        notify === "none" ? "none" : "mentions"
+      )
+  )
   return useMemo(
     () =>
       rows.map((r, i): ChannelTile => {
@@ -51,12 +63,13 @@ function useTiles(rows: ChannelRow[], notify: "all" | "mentions" | "none"): Chan
           title: r.state === "pending" ? pendingTitle(r.code) : r.title,
           ...(icon ? { icon } : {}),
           state: STATE[r.state],
-          unread: n ? (n.open ? n.count : n.fresh ? 1 : 0) : 0,
+          unread: n ? (hushed[i] ? (n.open ? n.mentions : 0) : n.open ? n.count : n.fresh ? 1 : 0) : 0,
           needsYou: n?.needs ?? 0,
           last: r.ts,
+          ...(hushed[i] ? { muted: true as const } : {}),
         }
       }),
-    [rows, news, icons]
+    [rows, news, icons, hushed]
   )
 }
 
@@ -102,7 +115,7 @@ export function useLive(open: string | null): App {
   const account = useAccount()
   const rows = useChannelList()
   const prefs = usePrefs()
-  const channels = useTiles(rows, prefs.notify)
+  const channels = useTiles(rows, prefs.notify, prefs.muted)
   useDuties(rows, useSecrets().person?.pk, open)
   const opened = useOpened()
   const harnesses = useHarnesses()

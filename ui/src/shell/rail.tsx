@@ -6,8 +6,10 @@ import { later } from "~/kit/later"
 import { Icon } from "~/kit/icons"
 import type { ChannelTile } from "~/model"
 import { useApp } from "~/nav"
+import { useNow } from "~/kit/time"
 import type { Menu } from "~/shell/rail-menu"
 import { railItems, type DropTarget } from "~/shell/rail-items"
+import { pausedLabel, silentNow } from "~/live/quiet"
 
 const RailMenu = later(() => import("~/shell/rail-menu").then((m) => m.default))
 const FolderTile = later(() => import("~/shell/rail-folder").then((m) => m.default))
@@ -24,6 +26,7 @@ const keyOf = (t: DropTarget): string => (t.kind === "channel" ? `c:${t.code}` :
 
 export function Rail() {
   const { app, nav, go } = useApp()
+  const now = useNow(60_000)
   const onChannel = nav.page === "channel"
   const home = onChannel && nav.channel === null
   const on = onChannel ? nav.channel : null
@@ -142,6 +145,11 @@ export function Rail() {
         </li>
       </ul>
       <div className="rail-foot">
+        {silentNow(app.prefs, now) && (
+          <button type="button" className="rail-gear is-quiet" aria-label={pausedLabel(app.prefs)} title={pausedLabel(app.prefs)} onClick={() => go({ to: "settings", section: "notifications" })}>
+            <Icon name="moon" size={16} />
+          </button>
+        )}
         <button
           type="button"
           className={cx("rail-gear", nav.page === "settings" && "is-on")}
@@ -162,13 +170,15 @@ export function Rail() {
 }
 
 function Tile({ tile, on, drop, moving, onClick }: { tile: ChannelTile; on: boolean; drop: boolean; moving: boolean; onClick: () => void }) {
-  const label = [tile.title, tile.needsYou ? `${tile.needsYou} need you` : "", tile.unread ? "new messages" : "", tile.state === "waiting" ? "waiting to be let in" : ""].filter(Boolean).join(", ")
+  const label = [tile.title, tile.muted ? "muted" : "", tile.needsYou ? `${tile.needsYou} need you` : "", tile.unread ? "new messages" : "", tile.state === "waiting" ? "waiting to be let in" : ""]
+    .filter(Boolean)
+    .join(", ")
   return (
     <button
       type="button"
       draggable
       data-code={tile.code}
-      className={cx("tile", on && "is-on", tile.state !== "member" && "is-waiting", drop && "is-drop", moving && "is-moving")}
+      className={cx("tile", on && "is-on", tile.state !== "member" && "is-waiting", drop && "is-drop", moving && "is-moving", tile.muted && "is-muted")}
       aria-current={on ? "page" : undefined}
       aria-label={label}
       title={tile.title}

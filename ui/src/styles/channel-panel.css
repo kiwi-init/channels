@@ -239,3 +239,11 @@
 .cpanel-item > .icon-btn:last-child {
   margin-right: -6px;
 }
+
+.cpanel-mute,
+.cpanel-room-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}

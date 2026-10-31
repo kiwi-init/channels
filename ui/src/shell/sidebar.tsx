@@ -29,10 +29,16 @@ export function Sidebar({ channel }: { channel: Channel }) {
             const on = onChat && sameWhere(nav.where, where)
             return (
               <li key={r.id}>
-                <button type="button" className={cx("side-row", on && "is-on", r.unread > 0 && "is-news")} aria-current={on ? "page" : undefined} onClick={() => go({ to: "where", where })}>
+                <button
+                  type="button"
+                  className={cx("side-row", on && "is-on", (r.muted ? r.mentions : r.unread) > 0 && "is-news", r.muted && "is-muted")}
+                  aria-current={on ? "page" : undefined}
+                  onClick={() => go({ to: "where", where })}
+                >
                   <span className="side-hash">{r.members ? <Icon name="lock" size={12} /> : "#"}</span>
                   <span className="side-label">{r.name}</span>
-                  <Count n={r.mentions || r.unread} loud={r.mentions > 0} />
+                  {r.muted && <Icon name="bellOff" size={12} label="Muted" />}
+                  <Count n={r.muted ? r.mentions : r.mentions || r.unread} loud={r.mentions > 0} />
                 </button>
               </li>
             )

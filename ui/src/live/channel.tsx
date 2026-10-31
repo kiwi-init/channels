@@ -23,9 +23,10 @@ import { usePinsHere } from "~/live/pins"
 import { usePublishFace } from "~/live/face"
 import { usePictures } from "~/live/pictures"
 import { seated, useSeats } from "~/live/seats"
-import { elsewhere, lastWorth, type NotePlace } from "~/live/notify"
+import { elsewhere, type NotePlace } from "~/live/notify"
+import { isMuted, tells } from "~/live/quiet"
 import { tellMessage } from "~/live/notes"
-import { ownPrefs } from "~/live/prefs"
+import { ownPrefs, usePrefs } from "~/live/prefs"
 import { receiptsOf, withReceipts } from "~/live/receipts"
 import { closeOpened, markGone, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
@@ -122,7 +123,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const tasks = useMemo(() => tasksOf(state, asks.held, me, messages), [state, asks.held, me, messages])
   const taskGroups = useMemo(() => groupsOf(state, me), [state, me])
   const from = roomsFrom(roomId)
-  const rooms = useMemo(() => roomsOf(state, messages, me, seen, from), [state, messages, me, seen, from])
+  const { muted } = usePrefs()
+  const rooms = useMemo(() => roomsOf(state, messages, me, seen, from).map((r) => (isMuted(muted, code, r.id) ? { ...r, muted: true as const } : r)), [state, messages, me, seen, from, muted, code])
   const directs = useMemo(() => directsOf(state, messages, me, seen), [state, messages, me, seen])
   const theirs = useMemo(() => theirsOf(state, messages, me), [state, messages, me])
   const others = useMemo(() => people.filter((p) => !p.you), [people])
@@ -290,7 +292,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const needs = waiting.length
   useAskChime(waiting)
   const top = Math.max(live.head, messages.at(-1)?.seq ?? 0)
-  const unreadHere = rooms.reduce((n, r) => n + r.unread, 0) + directs.reduce((n, d) => n + d.unread, 0)
+  const unreadHere = rooms.reduce((n, r) => n + (r.muted ? r.mentions : r.unread), 0) + directs.reduce((n, d) => n + d.unread, 0)
   useEffect(() => {
     if (top > 0 && shown) markSeen(roomId, top, needs)
   }, [roomId, top, needs, shown])
@@ -332,7 +334,9 @@ function useNotify(messages: readonly Wire[], me: string, title: string, code: s
     told.current = Math.max(told.current, messages.at(-1)?.seq ?? 0)
     if (!fresh.length || !elsewhere()) return
     const { members } = state
-    const last = lastWorth(fresh, me, ownPrefs().notify, answersDecisions(members, me))
+    const prefs = ownPrefs()
+    const decides = answersDecisions(members, me)
+    const last = fresh.findLast((m) => m.sigOk && tells(m, me, prefs, code, decides, Date.now()))
     if (last) tellMessage(last, { me, channel: title, code, place: statePlace(state, last), members: members.values(), display: members.get(last.from)?.display })
   }, [messages, me, title, code, state])
 }

@@ -15,6 +15,7 @@ import { repoOffers } from "~/panels/repo-offers"
 import { Toggle } from "~/kit/bits"
 import { Confirm, InlineEdit } from "~/settings/controls"
 import { useAppCan } from "~/live/app-can"
+import { isMuted } from "~/live/quiet"
 
 const REPO = /^[\w.-]+\/[\w.-]+$/
 
@@ -47,6 +48,10 @@ export function ChannelPanel({ channel }: { channel: Channel }) {
 
         <Part title="Icon">
           <ChannelIcon channel={channel} own={own} />
+        </Part>
+
+        <Part title="Notifications">
+          <MuteChannel channel={channel} />
         </Part>
 
         <Part title="Rooms">
@@ -367,17 +372,40 @@ function ChannelIcon({ channel, own }: { channel: Channel; own: boolean }) {
   )
 }
 
+function MuteChannel({ channel }: { channel: Channel }) {
+  const { app } = useApp()
+  const muted = isMuted(app.prefs.muted, channel.code)
+  return (
+    <div className="cpanel-mute">
+      <span className="cpanel-hint">
+        {muted
+          ? "Muted on this computer: only mentions, direct messages and decisions for you notify or count."
+          : "Mute it on this computer: only mentions, direct messages and decisions for you will notify or count."}
+      </span>
+      <Toggle label="Mute this channel" on={muted} onChange={(on) => app.actions.setMute(channel.code, null, on)} />
+    </div>
+  )
+}
+
 function Rooms({ channel, own }: { channel: Channel; own: boolean }) {
   const { app } = useApp()
   return (
     <ul className="cpanel-rooms">
       {channel.rooms.map((r) => (
         <li key={r.id}>
-          {own ? (
-            <InlineEdit value={r.name} label={`Name of #${r.name}`} verb="Rename" onSave={(name) => app.actions.renameRoom(channel.code, r.id, name)} />
-          ) : (
-            <span className="cpanel-value">#{r.name}</span>
-          )}
+          <span className="cpanel-room-line">
+            {own ? (
+              <InlineEdit value={r.name} label={`Name of #${r.name}`} verb="Rename" onSave={(name) => app.actions.renameRoom(channel.code, r.id, name)} />
+            ) : (
+              <span className="cpanel-value">#{r.name}</span>
+            )}
+            <IconButton
+              icon={r.muted ? "bellOff" : "bell"}
+              label={r.muted ? `Unmute #${r.name}` : `Mute #${r.name}`}
+              pressed={!!r.muted}
+              onClick={() => app.actions.setMute(channel.code, r.id, !r.muted)}
+            />
+          </span>
           {r.members && <RoomPeople channel={channel} id={r.id} members={r.members} own={own} />}
         </li>
       ))}

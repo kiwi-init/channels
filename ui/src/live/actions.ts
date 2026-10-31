@@ -18,7 +18,8 @@ import { announce } from "~/kit/toasts"
 import { enrollAnswer, enrollBegin, enrollCancel, enrollConfirm, enrollDeny, enrollKeep, forgetDevice, linkGithub, renewDevice, unlinkGithub, type EnrollDone } from "~/live/account"
 import { loadPicture } from "~/live/pictures"
 import { setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
-import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
+import { deleteTheme, ownPrefs, saveTheme, setPrefs } from "~/live/prefs"
+import { muteKey, snoozeEnd } from "~/live/quiet"
 import { iconFromFile } from "~/live/icon-file"
 import { seatOf } from "~/live/seats"
 import { checkComputer, computerSettings, setContextLine, setHooks } from "~/live/computer"
@@ -314,6 +315,12 @@ export function makeActions(): Actions {
         await createPerson(name.trim())
       }),
     setPrefs,
+    setMute: (code, room, on) => {
+      const key = muteKey(code, room)
+      const rest = ownPrefs().muted.filter((k) => k !== key)
+      setPrefs({ muted: on ? [...rest, key] : rest })
+    },
+    snooze: (until) => setPrefs({ snoozeUntil: until ? snoozeEnd(until, Date.now()) : null }),
     forgetComputer: (id) => void manage().then((m) => m.forgetComputer(id)),
     linkGithub: () => attempt("GitHub not linked", linkGithub),
     signInWithGithub: () => attempt("Not signed in with GitHub", linkGithub),

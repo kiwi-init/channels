@@ -177,6 +177,7 @@ export interface Room {
   mentions: number
   seen?: number
   members?: string[]
+  muted?: true
 }
 
 export interface Direct {
@@ -342,6 +343,7 @@ export interface ChannelTile {
   unread: number
   needsYou: number
   last: number
+  muted?: true
 }
 
 export interface InviteInfo {
@@ -520,11 +522,21 @@ export interface Prefs {
   font: TextFont
   reduceMotion: boolean
   notify: "all" | "mentions" | "none"
+  muted: string[]
+  snoozeUntil: number | null
+  quiet: Quiet
+  mentionSound: boolean
   enterSends: boolean
   darkTheme: string
   lightTheme: string
   customThemes: CustomTheme[]
   folders: Folder[]
+}
+
+export interface Quiet {
+  on: boolean
+  from: number
+  to: number
 }
 
 export interface Folder {
@@ -604,6 +616,8 @@ export interface Actions {
   joinChannel(code: string, name?: string): Promise<string>
   setName(name: string): void
   setPrefs(prefs: Partial<Prefs>): void
+  setMute(code: string, room: string | null, on: boolean): void
+  snooze(until: "1h" | "8h" | "tomorrow" | null): void
   forgetComputer(id: string): void
   linkGithub(): void
   signInWithGithub(): void
