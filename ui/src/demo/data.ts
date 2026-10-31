@@ -67,6 +67,7 @@ const people: Person[] = [
   },
   {
     name: "atlas",
+    face: "lead",
     ops: { atlasKey: 9 },
     kind: "agent",
     owner: false,
@@ -95,6 +96,7 @@ const people: Person[] = [
   },
   {
     name: "win",
+    face: "builder",
     ops: { winMac: 9 },
     kind: "agent",
     owner: false,
@@ -118,6 +120,7 @@ const people: Person[] = [
   },
   {
     name: "pixel",
+    face: "reviewer",
     ops: { pixelKey: 8 },
     kind: "agent",
     owner: false,
@@ -141,6 +144,7 @@ const people: Person[] = [
   },
   {
     name: "ridge",
+    face: "bug-hunter",
     kind: "agent",
     owner: false,
     you: false,
