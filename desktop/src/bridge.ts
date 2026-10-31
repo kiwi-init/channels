@@ -428,6 +428,8 @@ export interface KiwiBridge {
   onTextStep(cb: (step: TextStep) => void): () => void;
   onFrost(cb: (on: boolean) => void): () => void;
   getAccentColor(): Promise<string | null>;
+  /** What this app can run: its UI contract version and the channel calls it serves, so a newer UI hides what it can't do. */
+  capabilities(): Promise<{ contract: string; channelCalls: string[] }>;
   onAccent(cb: (color: string | null) => void): () => void;
   setPersonalities(list: Personality[]): Promise<void>;
   seatPlaces(): Promise<PlacedSeat[]>;
