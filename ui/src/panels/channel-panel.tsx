@@ -14,6 +14,7 @@ import { PanelHead } from "~/panels/frame"
 import { repoOffers } from "~/panels/repo-offers"
 import { Toggle } from "~/kit/bits"
 import { Confirm, InlineEdit } from "~/settings/controls"
+import { useAppCan } from "~/live/app-can"
 
 const REPO = /^[\w.-]+\/[\w.-]+$/
 
@@ -387,6 +388,7 @@ function Rooms({ channel, own }: { channel: Channel; own: boolean }) {
 function RoomPeople({ channel, id, members, own }: { channel: Channel; id: string; members: string[]; own: boolean }) {
   const { app } = useApp()
   const [editing, setEditing] = useState<ReadonlySet<string> | null>(null)
+  const canChange = useAppCan("changeRoom")
   const others = channel.people.filter((p) => !p.you && !p.left)
   const names = members.filter((m) => m !== channel.you).map((m) => nickname(channel, m))
   if (!editing)
@@ -394,7 +396,7 @@ function RoomPeople({ channel, id, members, own }: { channel: Channel; id: strin
       <p className="cpanel-hint room-in">
         <Icon name="lock" size={12} />
         <span>Private: you{names.length ? `, ${names.join(", ")}` : ""}</span>
-        {own && (
+        {own && canChange && (
           <button type="button" className="btn is-quiet is-small" onClick={() => setEditing(new Set(members))}>
             Change who's in
           </button>
