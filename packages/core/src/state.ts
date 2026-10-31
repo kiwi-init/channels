@@ -28,7 +28,6 @@ export {
   type GuardFloor,
   type Member,
   type Place,
-  type Edit,
   type Reaction,
   type ReviewRound,
   type RoomsFloor,

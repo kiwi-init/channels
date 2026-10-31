@@ -1,11 +1,15 @@
 import { memberName } from "@kiwi/app/format.ts"
 import { ANYONE, cancelTask as cancelling, changeReviewer, closedDigest, type TaskSend } from "@kiwi/channel/task-actions.ts"
 import { changeTo } from "@kiwi/core/changes.ts"
-import { GENERAL_ROOM, MAX_GOAL_NAME, type Event } from "@kiwi/core/protocol.ts"
+import { GENERAL_ROOM, MAX_GOAL_NAME, type Event, type StepReply } from "@kiwi/core/protocol.ts"
 import { taskId } from "@kiwi/core/state.ts"
+import { bridge, type KiwiBridge, type TermEvent, type TermOpenView } from "@kiwi/secrets/secrets.ts"
+import { stepReplyText } from "~/chat/step"
 import { announce } from "~/kit/toasts"
 import { event, memberOf, need, owner } from "~/live/run"
+import { seatOf } from "~/live/seats"
 import type { Run } from "~/live/store"
+import type { TermOpened, TermWatch } from "~/model"
 
 const COMPACT_ASK =
   "Please draft a /compact summary of the history so far: name every open task (T7) and open question (#123) by its id, then run `kiwi compact --file summary.md`. I'll approve it in the app."
@@ -60,4 +64,54 @@ export async function change(code: string, seq: number, text: string | null): Pr
   const to = changeTo(original)
   const room = run.state.roomOf.get(seq)
   await run.send(text === null ? `deleted #${seq}` : `edited #${seq}`, { kind: "event", ev, ...(to.length ? { to } : {}), ...(room && room !== GENERAL_ROOM ? { room } : {}) })
+}
+
+export async function answerStep(code: string, id: string, reply: StepReply): Promise<void> {
+  const run = need(code)
+  const m = run.messages.find((x) => x.seq === Number(id))
+  if (!m) throw new Error("that step is gone")
+  await run.send(stepReplyText(reply), { to: [m.from], re: [m.seq], kind: "msg", stepReply: reply })
+}
+
+async function streamTerm(b: KiwiBridge, open: () => Promise<TermOpenView>, watch: TermWatch): Promise<TermOpened> {
+  const early: TermEvent[] = []
+  let mine: string | null = null
+  const deliver = (e: TermEvent) => ("out" in e ? watch.out(e.out) : watch.ended())
+  const off = b.onTerm((e) => (mine === null ? early.push(e) : e.term === mine && deliver(e)))
+  const r = await open().catch((err: unknown): TermOpenView => ({ ok: false, detail: err instanceof Error ? err.message : String(err) }))
+  if (!r.ok) {
+    off()
+    return { error: r.detail }
+  }
+  const term = r.term
+  mine = term
+  queueMicrotask(() => early.filter((e) => e.term === term).forEach(deliver))
+  return {
+    screen: { cols: r.cols, rows: r.rows, seed: r.seed, dead: r.dead, pane: r.pane },
+    link: {
+      keys: (text) => void b.termKeys(term, text).catch(() => {}),
+      size: (c, w) => void b.termSize(term, c, w).catch(() => {}),
+      close: () => {
+        off()
+        void b.termClose(term).catch(() => {})
+      },
+    },
+  }
+}
+
+export async function openTerm(code: string, name: string, cols: number, rows: number, watch: TermWatch): Promise<TermOpened> {
+  const b = bridge()
+  const seat = seatOf(need(code).roomId, name)
+  if (!b) return { error: "Terminals open in the Channels desktop app." }
+  if (typeof b.termOpen !== "function") return { error: "Update Channels to open its terminals here." }
+  if (seat?.place !== "hosted") return { error: "It isn't running in Channels' own terminal on this computer." }
+  return streamTerm(b, () => b.termOpen(seat.pane, cols, rows), watch)
+}
+
+export async function openMyTerm(code: string, want: string | null, cols: number, rows: number, watch: TermWatch): Promise<TermOpened> {
+  const b = bridge()
+  if (!b) return { error: "Your terminal opens in the Channels desktop app." }
+  if (typeof b.termMine !== "function") return { error: "Update Channels to open your own terminal here." }
+  const room = need(code).roomId
+  return streamTerm(b, () => b.termMine(room, want, cols, rows), watch)
 }
