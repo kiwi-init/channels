@@ -377,7 +377,6 @@
 .add-step.is-now .add-step-mark {
   border: 1.5px solid var(--doing);
   border-right-color: transparent;
-  animation: spin 2.4s linear infinite;
 }
 
 .add-step.is-done {

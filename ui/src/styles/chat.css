@@ -1343,14 +1343,17 @@ button.msg-image-spot:hover {
   height: 4px;
   border-radius: 50%;
   background: var(--ink-2);
-  animation: blink 1.2s infinite;
+  opacity: 0.35;
+  animation: blink 1.2s 3;
 }
 
 .working-dots i:nth-child(2) {
+  opacity: 0.6;
   animation-delay: 0.2s;
 }
 
 .working-dots i:nth-child(3) {
+  opacity: 1;
   animation-delay: 0.4s;
 }
 

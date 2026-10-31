@@ -483,12 +483,6 @@ kbd {
   color: var(--alert);
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 @keyframes rise {
   from {
     opacity: 0;
@@ -1101,10 +1095,6 @@ html .feed-jump:active {
   background: var(--live);
   animation: done-ring 0.6s var(--ease) forwards;
   pointer-events: none;
-}
-
-.dot.is-doing {
-  animation: spin 6s linear infinite;
 }
 
 .count-n {

@@ -175,7 +175,6 @@
 .set-state-dot.is-doing {
   border: 1.5px solid var(--doing);
   border-right-color: transparent;
-  animation: spin 2.4s linear infinite;
   width: 9px;
   height: 9px;
 }
@@ -291,7 +290,6 @@
 .set-pip.is-waiting {
   border: 1.5px solid var(--doing);
   border-right-color: transparent;
-  animation: spin 2.4s linear infinite;
   width: 9px;
   height: 9px;
 }
