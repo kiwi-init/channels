@@ -2,10 +2,11 @@ import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import { open } from "../crypto.ts";
-import { MAX_ROOM_SEALS, openLetter, stepRoom, type RoomNow, type RoomSeal } from "../private-room.ts";
+
+const rooms = () => import("../private-room.ts");
 import { verify } from "../identity.ts";
 import { isEvent, PAGE_LIMIT, rasterAttachment, wellFormed, type Envelope, type Message, type WirePayload } from "../protocol.ts";
-import type { FoldBase, SecretRoom } from "../state.ts";
+import type { FoldBase } from "../state.ts";
 import type { ChannelCore } from "./core.ts";
 import type { MemberRefusal } from "./errors.ts";
 import type { Relay } from "./relay.ts";
@@ -38,27 +39,6 @@ export class ChannelHistory {
 
   constructor(private readonly ch: ChannelCore) {}
 
-  private replay(id: string) {
-    return Effect.gen({ self: this }, function* () {
-      const xsk = this.ch.identity.xsk;
-      const accepted: RoomSeal[] = [];
-      let now: RoomNow | undefined;
-      for (const { seq, seal } of this.ch.roomSeals.get(id) ?? []) {
-        const step = yield* Effect.promise(() => stepRoom(this.ch.roomId, now, [...accepted, seal], xsk));
-        if (!step) {
-          this.ch.sealSteps.set(seq, { proven: false });
-          continue;
-        }
-        accepted.push(seal);
-        now = step.now;
-        if (now.key) this.ch.roomKeys.set(`${id}/${now.n}`, now.key);
-        this.ch.sealSteps.set(seq, { ...(step.proven !== undefined ? { proven: step.proven } : {}), ...(step.proven && now.meta ? { opened: now.meta } : {}) });
-      }
-      if (now) this.ch.roomNow.set(id, now);
-      return now;
-    });
-  }
-
   readonly fx: HistoryFx = {
     head: Effect.fn("Channel.head")({ self: this }, function* (this: ChannelHistory) {
       return (yield* this.ch.request<{ head: number }>("/")).head;
@@ -82,32 +62,12 @@ export class ChannelHistory {
 
     openRooms: Effect.fn("Channel.openRooms")({ self: this }, function* (this: ChannelHistory, base: FoldBase) {
       if (!this.ch.opensRooms || !base.secret?.length) return base;
-      const secret: [string, SecretRoom][] = [];
-      const rooms = new Map(base.rooms.map((r) => [r.id, r]));
-      for (const [id, room] of base.secret) {
-        const had = this.ch.roomSeals.get(id) ?? [];
-        const from = room.seals.map((seal, i) => ({ seq: -(room.seals.length - i), seal }));
-        this.ch.roomSeals.set(id, [...from, ...had.filter((x) => x.seq > 0)]);
-        const now = yield* this.replay(id);
-        secret.push([id, { n: now?.n ?? room.n, seals: room.seals, ...(now?.meta ? { meta: now.meta } : {}) }]);
-        if (now?.meta) rooms.set(id, { ...(rooms.get(id) ?? { id, createdBy: null, at: 0 }), name: now.meta.name, members: now.meta.members });
-        else if (now?.key === undefined && room.meta) rooms.delete(id);
-      }
-      return { ...base, secret, rooms: [...rooms.values()] };
+      return yield* Effect.promise(async () => (await rooms()).openBaseRooms(this.ch, base));
     }),
 
     settle: Effect.fn("Channel.settle")({ self: this }, function* (this: ChannelHistory, m: Message) {
-      const ev = m.ev;
-      if (ev?.op !== "room.seal" || !this.ch.opensRooms) return m;
-      const done = this.ch.sealSteps.get(m.seq);
-      if (!done) {
-        const seal = { id: ev.id, n: ev.n, keys: ev.keys, meta: ev.meta, ...(ev.proof ? { proof: ev.proof } : {}) };
-        const list = [...(this.ch.roomSeals.get(ev.id) ?? []).filter((x) => x.seq !== m.seq), { seq: m.seq, seal }].sort((a, b) => a.seq - b.seq);
-        this.ch.roomSeals.set(ev.id, list.slice(-MAX_ROOM_SEALS));
-        yield* this.replay(ev.id);
-      }
-      const step = this.ch.sealSteps.get(m.seq) ?? {};
-      return { ...m, ...(step.proven !== undefined ? { proven: step.proven } : {}), ...(step.opened ? { opened: step.opened } : {}) };
+      if (m.ev?.op !== "room.seal" || !this.ch.opensRooms) return m;
+      return yield* Effect.promise(async () => (await rooms()).settleSeal(this.ch, m));
     }),
 
     unseal: Effect.fn("Channel.unseal")({ self: this }, function* (this: ChannelHistory, m: Message) {
@@ -118,7 +78,7 @@ export class ChannelHistory {
         this.ch.hidden.add(m.seq);
         return null;
       }
-      const inner = yield* Effect.promise(() => openLetter(this.ch.roomId, ev, key));
+      const inner = yield* Effect.promise(async () => (await rooms()).openLetter(this.ch.roomId, ev, key));
       if (!wellFormed(inner) || inner.from !== m.from) return null;
       const opened = received(inner, m.seq, m.rts ?? m.ts, yield* Effect.promise(() => verify(inner)));
       if (opened.pk !== m.pk) return null;

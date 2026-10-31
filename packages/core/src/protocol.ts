@@ -8,7 +8,7 @@ import { DEVICE_LIST_MAX, type DeviceLink } from "./devices.ts";
 import { cleanPersona, type Persona } from "./personality.ts";
 import { permissionChoices, wellFormedPermission, wellFormedPermReply, wellFormedSettled, type PermissionReply, type PermissionSettled, type PermissionShown } from "./permission.ts";
 
-import { MAX_ROOM_MEMBERS, type RoomMeta } from "./private-room.ts";
+import { MAX_ROOM_MEMBERS, type RoomMeta } from "./room-rules.ts";
 
 const sealedBox = (x: unknown): boolean =>
   !!x && typeof x === "object" && typeof (x as { iv?: unknown }).iv === "string" && typeof (x as { ct?: unknown }).ct === "string" && (x as { ct: string }).ct.length <= 64_000;

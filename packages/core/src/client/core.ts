@@ -17,7 +17,7 @@ import type { SendFx } from "./send.ts";
 import type { SettingsFx } from "./settings.ts";
 import type { SnapshotsFx } from "./snapshots.ts";
 
-import type { RoomMeta, RoomNow, RoomSeal } from "../private-room.ts";
+import type { RoomMeta, RoomNow, RoomSeal } from "../room-rules.ts";
 export interface ChannelFx extends KeysFx, InfoFx, SettingsFx, RequestsFx, MembersFx, DelegationsFx, HistoryFx, SnapshotsFx, SendFx, ImagesFx, LiveFx, GithubFx {}
 
 export class ChannelCore {

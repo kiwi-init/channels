@@ -6,9 +6,18 @@ import { describeScopes, SCOPES, wireScopes, type Scope } from "@kiwi/core/scope
 import { secrets } from "@kiwi/secrets/secrets.ts"
 import { announce } from "~/kit/toasts"
 import { newMemberPowers, newMemberScopes } from "~/live/defaults"
-import { event, memberOf, need, owner, personalities, setup } from "~/live/run"
-import { openedRun, type Run } from "~/live/store"
-import type { JoinChoice, Powers } from "~/model"
+import { attempt, event, memberOf, need, owner, personalities, say, setup } from "~/live/run"
+import { followLaunch } from "@kiwi/app/launch-follow.ts"
+import { relayUrl } from "@kiwi/secrets/relay.ts"
+import { bridge } from "@kiwi/secrets/secrets.ts"
+import { harnessChoices, STARTS } from "~/live/harness-rows"
+import { memberName } from "@kiwi/app/format.ts"
+import { removeComputer } from "@kiwi/app/computers.ts"
+import { loadMember } from "@kiwi/channel/store.ts"
+import { inviteLine } from "@kiwi/app/join-line.ts"
+import type { Permission } from "@kiwi/core/launch-options.ts"
+import { openedChannel, openedRun, type Run } from "~/live/store"
+import type { Actions, JoinChoice, NewAgent, Powers } from "~/model"
 import { BRANCH_PREFIX_RE, POWERS, ROOM_ID_RE, type Power } from "@kiwi/core/protocol.ts"
 import { newRoomId } from "@kiwi/core/state.ts"
 import { cleanRoomName, roomProblem, roomsAfter } from "@kiwi/app/rooms.ts"
@@ -214,3 +223,111 @@ export async function answerJoin(code: string, id: string, yes: boolean, choice?
   if (r.check !== "ready" || !r.code) return announce(`Waiting for ${r.display || r.name}'s code`)
   announce(await letIn(run, r, choice ?? {}))
 }
+
+export const addAgent: Actions["addAgent"] = (code, agent, seen) => {
+  const launch = launchId()
+  const stop = followLaunch(code, launch, (s) => seen({ stage: s.stage, name: s.name }))
+  void (async () => {
+    const b = bridge()
+    if (!b) throw new Error("starting agents needs the Channels desktop app")
+    const run = need(code)
+    const harness = STARTS[agent.harness]
+    if (!harness) throw new Error("pick a harness Channels knows how to start")
+    const p = agent.persona ? personalities().find((x) => x.id === agent.persona) : undefined
+    const pin = p && run.isOwner ? await run.ch.pinPersona(p) : undefined
+    const here = secrets().computers.find((c) => c.own)?.machinePk
+    const r = await b.launchAgent({
+      ...(agent.computer && agent.computer !== here && agent.computer !== "this" ? { machinePk: agent.computer } : {}),
+      launch,
+      harness,
+      folder: agent.folder,
+      code,
+      relay: relayUrl(),
+      ...(agent.name ? { nick: agent.name } : {}),
+      ...(pin ? { persona: pin } : {}),
+      ...(agent.mode && agent.mode !== "ask-first" ? { permission: PERMISSION[agent.mode] } : {}),
+    })
+    if (!r.ok) throw new Error(r.detail || "Kiwi couldn't start it")
+    seen({ stage: "started" })
+  })().catch((err: unknown) => {
+    stop()
+    const why = say(err)
+    announce(`${agent.name || "Agent"} not started: ${why.split("\n")[0]}`)
+    seen({ stage: "failed", why })
+  })
+  return stop
+}
+
+export const exportHistory: Actions["exportHistory"] = async (code, kind) => {
+  try {
+    const run = need(code)
+    const b = bridge()
+    if (b && !("saveFile" in b)) return announce("Saving the history needs the next Channels update")
+    const [{ checkedState, exportNote, logExport, logFileName, transcript }, history] = await Promise.all([import("@kiwi/app/log-export.ts"), run.ch.history(0)])
+    const log = logExport(history)
+    const state = await checkedState(history, run.foldFrom, () => run.ch.snapshot().catch(() => null), run.state)
+    const at = new Date()
+    const title = openedChannel(code)?.title
+    const text = kind === "log" ? log.text : transcript({ title, log, state, nameOf: (from) => memberName(state.members.get(from), from), at })
+    const name = logFileName(title, at, kind)
+    if (b) {
+      const saved = await b.saveFile(name, text)
+      announce(`Saved ${saved} to Downloads`)
+    } else {
+      const url = URL.createObjectURL(new Blob([text], { type: kind === "log" ? "application/jsonl" : "text/markdown" }))
+      const a = document.createElement("a")
+      a.href = url
+      a.download = name
+      a.click()
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    }
+    const note = exportNote(log)
+    if (!note.complete) announce(note.text)
+  } catch (err) {
+    announce(`Not saved: ${err instanceof Error ? err.message : String(err)}`)
+  }
+}
+
+export const choicesOn: Actions["choicesOn"] = async (code, computer) => {
+  const b = bridge()
+  if (!b) return { error: "agents start from the Channels desktop app" }
+  const here = secrets().computers.find((c) => c.own)?.machinePk
+  try {
+    if (computer === "this" || computer === here) return { folders: await b.launchRoots() }
+    const [h, f] = await Promise.all([b.harnessesOn(computer), b.foldersOn(computer, need(code).roomId)])
+    if (!h.ok) return { error: h.detail }
+    return { harnesses: harnessChoices(h.value), folders: f.ok ? f.value : [] }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+export const forgetComputer: Actions["forgetComputer"] = (id) =>
+  attempt("Couldn't forget it", async () => {
+    if (id.startsWith("phone:")) {
+      const b = bridge()
+      if (!b?.forgetPhone) throw new Error("forgetting a phone here needs the next Channels update; until then, unlink it on the phone")
+      await b.forgetPhone(Number(id.slice("phone:".length)))
+      return announce("Forgot it. Unlink it on the phone too")
+    }
+    const removed = await removeComputer(id)
+    announce(removed.length ? `Forgot it and removed ${removed.join(", ")}` : "Forgot it")
+  })
+
+export const joinCommand: Actions["joinCommand"] = async (code, as) => {
+  if (!loadMember(code)) throw new Error("you're not in that channel")
+  const picked = as.persona ? personalities().find((p) => p.id === as.persona) : undefined
+  if (as.persona && !picked) throw new Error("that personality isn't on this computer")
+  const pin = picked ? await owner(code).ch.pinPersona(picked) : null
+  return inviteLine(relayUrl(), code, { ...(as.nick ? { nick: as.nick } : {}), persona: pin })
+}
+
+function launchId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "")
+}
+
+const PERMISSION: Record<NonNullable<NewAgent["mode"]>, Permission> = { "ask-first": "default", "accept-edits": "accept-edits", "dont-ask": "bypass" }

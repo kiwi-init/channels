@@ -1,39 +1,9 @@
 import { b64url, fromB64url, newChannelKey, open, openFrom, seal, sealTo } from "./crypto.ts";
+import { MAX_ROOM_MEMBERS, MAX_ROOM_SEALS, type RoomLetter, type RoomMember, type RoomMeta, type RoomNow, type RoomSeal } from "./room-rules.ts";
+import type { Message } from "./protocol.ts";
+import type { FoldBase, SecretRoom } from "./state/types.ts";
 
-export const MAX_ROOM_MEMBERS = 200;
-export const MAX_ROOM_SEALS = 200;
-
-export interface RoomMember {
-  name: string;
-  pk: string;
-}
-
-export interface RoomMeta {
-  name: string;
-  members: RoomMember[];
-  prev?: string;
-}
-
-export interface RoomSeal {
-  id: string;
-  n: number;
-  keys: string[];
-  meta: { iv: string; ct: string };
-  proof?: string;
-}
-
-export interface RoomLetter {
-  room: string;
-  n: number;
-  iv: string;
-  ct: string;
-}
-
-export interface RoomNow {
-  n: number;
-  key?: string;
-  meta?: RoomMeta;
-}
+export type { RoomMeta, RoomSeal } from "./room-rules.ts";
 
 export interface RoomStep {
   now: RoomNow;
@@ -148,7 +118,56 @@ function readMeta(x: unknown): RoomMeta | null {
   return { name: m.name, members, ...(m.prev ? { prev: m.prev } : {}) };
 }
 
-export const inRoom = (meta: Pick<RoomMeta, "members">, name: string, pk: string | undefined): boolean => !!pk && meta.members.some((m) => m.name === name && m.pk === pk);
+export interface RoomCache {
+  readonly roomId: string;
+  readonly identity: { xsk?: string };
+  readonly roomKeys: Map<string, string>;
+  readonly roomNow: Map<string, RoomNow>;
+  readonly roomSeals: Map<string, { seq: number; seal: RoomSeal }[]>;
+  readonly sealSteps: Map<number, { proven?: boolean; opened?: RoomMeta }>;
+}
 
-export const publicView = <M extends { sealed?: unknown; opened?: unknown; proven?: unknown }>(messages: readonly M[]): M[] =>
-  messages.flatMap((m) => (m.sealed ? [] : m.opened || m.proven !== undefined ? [Object.fromEntries(Object.entries(m).filter(([k]) => k !== "opened" && k !== "proven")) as M] : [m]));
+async function replay(c: RoomCache, id: string): Promise<RoomNow | undefined> {
+  const accepted: RoomSeal[] = [];
+  let now: RoomNow | undefined;
+  for (const { seq, seal } of c.roomSeals.get(id) ?? []) {
+    const step = await stepRoom(c.roomId, now, [...accepted, seal], c.identity.xsk);
+    if (!step) {
+      c.sealSteps.set(seq, { proven: false });
+      continue;
+    }
+    accepted.push(seal);
+    now = step.now;
+    if (now.key) c.roomKeys.set(`${id}/${now.n}`, now.key);
+    c.sealSteps.set(seq, { ...(step.proven !== undefined ? { proven: step.proven } : {}), ...(step.proven && now.meta ? { opened: now.meta } : {}) });
+  }
+  if (now) c.roomNow.set(id, now);
+  return now;
+}
+
+export async function settleSeal(c: RoomCache, m: Message): Promise<Message> {
+  const ev = m.ev;
+  if (ev?.op !== "room.seal") return m;
+  if (!c.sealSteps.has(m.seq)) {
+    const seal = { id: ev.id, n: ev.n, keys: ev.keys, meta: ev.meta, ...(ev.proof ? { proof: ev.proof } : {}) };
+    const list = [...(c.roomSeals.get(ev.id) ?? []).filter((x) => x.seq !== m.seq), { seq: m.seq, seal }].sort((a, b) => a.seq - b.seq);
+    c.roomSeals.set(ev.id, list.slice(-MAX_ROOM_SEALS));
+    await replay(c, ev.id);
+  }
+  const step = c.sealSteps.get(m.seq) ?? {};
+  return { ...m, ...(step.proven !== undefined ? { proven: step.proven } : {}), ...(step.opened ? { opened: step.opened } : {}) };
+}
+
+export async function openBaseRooms(c: RoomCache, base: FoldBase): Promise<FoldBase> {
+  const secret: [string, SecretRoom][] = [];
+  const rooms = new Map(base.rooms.map((r) => [r.id, r]));
+  for (const [id, room] of base.secret ?? []) {
+    const had = c.roomSeals.get(id) ?? [];
+    c.roomSeals.set(id, [...room.seals.map((seal, i) => ({ seq: -(room.seals.length - i), seal })), ...had.filter((x) => x.seq > 0)]);
+    const now = await replay(c, id);
+    secret.push([id, { n: now?.n ?? room.n, seals: room.seals, ...(now?.meta ? { meta: now.meta } : {}) }]);
+    if (now?.meta) rooms.set(id, { ...(rooms.get(id) ?? { id, createdBy: null, at: 0 }), name: now.meta.name, members: now.meta.members });
+    else if (room.meta) rooms.delete(id);
+  }
+  return { ...base, secret, rooms: [...rooms.values()] };
+}

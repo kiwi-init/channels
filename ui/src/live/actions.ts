@@ -2,15 +2,11 @@ import { handleFor } from "@kiwi/core/membership.ts"
 import { permissionReply } from "@kiwi/core/permission.ts"
 import { MAX_GOAL_NAME, ROBOT_FACES, TASK_TITLE_MAX_LENGTH } from "@kiwi/core/protocol.ts"
 import { taskId } from "@kiwi/core/state.ts"
-import type { Permission } from "@kiwi/core/launch-options.ts"
 import { tokenForCreate } from "@kiwi/app/auth.ts"
 import { askToJoin, createChannel, inviteInfo } from "@kiwi/channel/join.ts"
 import { forgetChannel, forgetPending, isJoinCode, loadMember, loadPending, renameChannel } from "@kiwi/channel/store.ts"
 import { linkOf, type ChannelLink } from "@kiwi/channel/channel-ops.ts"
-import { removeComputer } from "@kiwi/app/computers.ts"
 import { joinCodeFromLink } from "@kiwi/app/deep-link.ts"
-import { inviteLine } from "@kiwi/app/join-line.ts"
-import { followLaunch } from "@kiwi/app/launch-follow.ts"
 import { relayUrl } from "@kiwi/secrets/relay.ts"
 import { noteFor, showSeat, type ShowResult } from "@kiwi/app/show-seat.ts"
 import { ALLOW_ONCE, DENY } from "@kiwi/app/permission-settled.ts"
@@ -23,30 +19,23 @@ import { enrollAnswer, enrollBegin, enrollCancel, enrollConfirm, enrollDeny, enr
 import { loadPicture } from "~/live/pictures"
 import { setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
-import { harnessChoices, STARTS } from "~/live/harness-rows"
 import { iconFromFile } from "~/live/icon-file"
 import { seatOf } from "~/live/seats"
 import { memberName } from "@kiwi/app/format.ts"
 import { checkComputer, computerSettings, setContextLine, setHooks } from "~/live/computer"
 import { addStartFolder, allowNewAgents, allowRemoteBypass, removeStartFolder, setTerminalHelpers } from "~/live/starts"
-import { closeOpened, leavingOnPurpose, openedChannel, openedRun, type Run } from "~/live/store"
-import { event, memberOf, need, owner, personalities } from "~/live/run"
+import { closeOpened, leavingOnPurpose, openedRun, type Run } from "~/live/store"
+import { attempt, event, memberOf, need, owner, say } from "~/live/run"
 
 const manage = () => import("~/live/manage")
 import { stepReplyText } from "~/chat/step"
 import { downloadAndRestart } from "~/live/update"
 import { setWake } from "~/live/wakes"
 import { rememberOwner } from "~/live/invites"
-import type { Actions, InviteInfo, NewAgent, TaskStatus, TermOpened, TermWatch } from "~/model"
+import type { Actions, InviteInfo, TaskStatus, TermOpened, TermWatch } from "~/model"
 
 const COMPACT_ASK =
   "Please draft a /compact summary of the history so far: name every open task (T7) and open question (#123) by its id, then run `kiwi compact --file summary.md`. I'll approve it in the app."
-
-const say = (err: unknown): string => (err instanceof Error ? err.message : String(err))
-
-function attempt(what: string, run: () => Promise<unknown>): void {
-  void (async () => run())().catch((err: unknown) => announce(`${what}: ${say(err)}`))
-}
 
 async function tried<T>(what: string, run: () => Promise<T>): Promise<T | null> {
   try {
@@ -69,16 +58,6 @@ function link(code: string): ChannelLink {
 async function sends(run: Run, ...all: TaskSend[]): Promise<void> {
   for (const { body, opts } of all) await run.send(body, opts)
 }
-
-function launchId(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(16))
-  return btoa(String.fromCharCode(...bytes))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "")
-}
-
-const PERMISSION: Record<NonNullable<NewAgent["mode"]>, Permission> = { "ask-first": "default", "accept-edits": "accept-edits", "dont-ask": "bypass" }
 
 const STATES: Partial<Record<TaskStatus, "todo" | "doing" | "review" | "done">> = { todo: "todo", doing: "doing", review: "review", done: "done" }
 
@@ -314,55 +293,21 @@ export function makeActions(): Actions {
       const b = bridge()
       return b && typeof b.termTabClose === "function" ? b.termTabClose(pane).catch(() => []) : []
     },
-    choicesOn: async (code, computer) => {
-      const b = bridge()
-      if (!b) return { error: "agents start from the Channels desktop app" }
-      const here = secrets().computers.find((c) => c.own)?.machinePk
-      try {
-        if (computer === "this" || computer === here) return { folders: await b.launchRoots() }
-        const [h, f] = await Promise.all([b.harnessesOn(computer), b.foldersOn(computer, need(code).roomId)])
-        if (!h.ok) return { error: h.detail }
-        return { harnesses: harnessChoices(h.value), folders: f.ok ? f.value : [] }
-      } catch (err) {
-        return { error: err instanceof Error ? err.message : String(err) }
-      }
-    },
+    choicesOn: async (code, computer) => (await manage()).choicesOn(code, computer),
     chooseFolder: async () => {
       const b = bridge()
       return b ? b.chooseFolder() : null
     },
     addAgent: (code, agent, seen) => {
-      const launch = launchId()
-      const stop = followLaunch(code, launch, (s) => seen({ stage: s.stage, name: s.name }))
-      void (async () => {
-        const b = bridge()
-        if (!b) throw new Error("starting agents needs the Channels desktop app")
-        const run = need(code)
-        const harness = STARTS[agent.harness]
-        if (!harness) throw new Error("pick a harness Channels knows how to start")
-        const p = agent.persona ? personalities().find((x) => x.id === agent.persona) : undefined
-        const pin = p && run.isOwner ? await run.ch.pinPersona(p) : undefined
-        const here = secrets().computers.find((c) => c.own)?.machinePk
-        const r = await b.launchAgent({
-          ...(agent.computer && agent.computer !== here && agent.computer !== "this" ? { machinePk: agent.computer } : {}),
-          launch,
-          harness,
-          folder: agent.folder,
-          code,
-          relay: relayUrl(),
-          ...(agent.name ? { nick: agent.name } : {}),
-          ...(pin ? { persona: pin } : {}),
-          ...(agent.mode && agent.mode !== "ask-first" ? { permission: PERMISSION[agent.mode] } : {}),
-        })
-        if (!r.ok) throw new Error(r.detail || "Kiwi couldn't start it")
-        seen({ stage: "started" })
-      })().catch((err: unknown) => {
-        stop()
-        const why = say(err)
-        announce(`${agent.name || "Agent"} not started: ${why.split("\n")[0]}`)
-        seen({ stage: "failed", why })
+      let stop = () => {}
+      let stopped = false
+      void manage().then((m) => {
+        if (!stopped) stop = m.addAgent(code, agent, seen)
       })
-      return stop
+      return () => {
+        stopped = true
+        stop()
+      }
     },
     addRoom: (code, typed) => tried("Room not made", async () => (await manage()).addRoom(code, typed)),
     setGithubWrite: (code, on) => attempt("Not changed", async () => (await manage()).setGithubWrite(code, on)),
@@ -373,35 +318,7 @@ export function makeActions(): Actions {
         const run = owner(code)
         await run.ch.setIcon(file ? await iconFromFile(file) : null)
       }),
-    exportHistory: async (code, kind) => {
-      try {
-        const run = need(code)
-        const b = bridge()
-        if (b && !("saveFile" in b)) return announce("Saving the history needs the next Channels update")
-        const [{ checkedState, exportNote, logExport, logFileName, transcript }, history] = await Promise.all([import("@kiwi/app/log-export.ts"), run.ch.history(0)])
-        const log = logExport(history)
-        const state = await checkedState(history, run.foldFrom, () => run.ch.snapshot().catch(() => null), run.state)
-        const at = new Date()
-        const title = openedChannel(code)?.title
-        const text = kind === "log" ? log.text : transcript({ title, log, state, nameOf: (from) => memberName(state.members.get(from), from), at })
-        const name = logFileName(title, at, kind)
-        if (b) {
-          const saved = await b.saveFile(name, text)
-          announce(`Saved ${saved} to Downloads`)
-        } else {
-          const url = URL.createObjectURL(new Blob([text], { type: kind === "log" ? "application/jsonl" : "text/markdown" }))
-          const a = document.createElement("a")
-          a.href = url
-          a.download = name
-          a.click()
-          window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
-        }
-        const note = exportNote(log)
-        if (!note.complete) announce(note.text)
-      } catch (err) {
-        announce(`Not saved: ${err instanceof Error ? err.message : String(err)}`)
-      }
-    },
+    exportHistory: async (code, kind) => (await manage()).exportHistory(code, kind),
     clearFact: (code, key) =>
       attempt("Note not cleared", async () => {
         await event(need(code), `cleared ${key}`, { op: "fact.del", key })
@@ -443,13 +360,7 @@ export function makeActions(): Actions {
     },
     addRepo: (code, repo) => attempt("Repo not added", async () => (await manage()).addRepo(code, repo)),
     removeRepo: (code, repo) => attempt("Repo not removed", async () => (await manage()).removeRepo(code, repo)),
-    joinCommand: async (code, as) => {
-      if (!loadMember(code)) throw new Error("you're not in that channel")
-      const picked = as.persona ? personalities().find((p) => p.id === as.persona) : undefined
-      if (as.persona && !picked) throw new Error("that personality isn't on this computer")
-      const pin = picked ? await owner(code).ch.pinPersona(picked) : null
-      return inviteLine(relayUrl(), code, { ...(as.nick ? { nick: as.nick } : {}), persona: pin })
-    },
+    joinCommand: async (code, as) => (await manage()).joinCommand(code, as),
     inviteLink: async (code) => {
       if (!loadMember(code)) throw new Error("you're not in that channel")
       return `${relayUrl()}/#${code}`
@@ -482,17 +393,7 @@ export function makeActions(): Actions {
         await createPerson(name.trim())
       }),
     setPrefs,
-    forgetComputer: (id) =>
-      attempt("Couldn't forget it", async () => {
-        if (id.startsWith("phone:")) {
-          const b = bridge()
-          if (!b?.forgetPhone) throw new Error("forgetting a phone here needs the next Channels update; until then, unlink it on the phone")
-          await b.forgetPhone(Number(id.slice("phone:".length)))
-          return announce("Forgot it. Unlink it on the phone too")
-        }
-        const removed = await removeComputer(id)
-        announce(removed.length ? `Forgot it and removed ${removed.join(", ")}` : "Forgot it")
-      }),
+    forgetComputer: (id) => void manage().then((m) => m.forgetComputer(id)),
     linkGithub: () => attempt("GitHub not linked", linkGithub),
     signInWithGithub: () => attempt("Not signed in with GitHub", linkGithub),
     unlinkGithub: () => attempt("GitHub not unlinked", unlinkGithub),

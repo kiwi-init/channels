@@ -3,7 +3,7 @@ import type { Card, Color, IssueRef, MemberPicture, Message, TaskState, Trust, V
 import type { GithubCheck, GithubIssue, GithubPr, GithubRelease, GithubRules, GithubState } from "./github.ts";
 import type { Persona } from "../personality.ts";
 import type { Power } from "../protocol.ts";
-import type { RoomMember, RoomMeta, RoomSeal } from "../private-room.ts";
+import type { RoomMember, RoomMeta, RoomSeal } from "../room-rules.ts";
 import type { Scope } from "../scopes.ts";
 export interface Member {
   name: string;

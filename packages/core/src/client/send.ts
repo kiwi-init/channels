@@ -1,5 +1,4 @@
 import * as Effect from "effect/Effect";
-import { sealLetter } from "../private-room.ts";
 import { b64url, seal, slotId } from "../crypto.ts";
 import { sign, verify } from "../identity.ts";
 import {
@@ -174,7 +173,7 @@ export class ChannelSending {
                 from: this.ch.name,
                 kind: "event",
                 body: "A message in a private room. Update Kiwi to read it.",
-                ev: { op: "room.msg", ...(await sealLetter(this.ch.roomId, opts.room!, n, roomKey, inner)) },
+                ev: { op: "room.msg", ...(await (await import("../private-room.ts")).sealLetter(this.ch.roomId, opts.room!, n, roomKey, inner)) },
                 ts: payload.ts,
               }),
             )
