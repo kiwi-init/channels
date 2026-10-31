@@ -41,7 +41,7 @@ const copier = (toast: (text: string) => void, text: string) => () =>
 export function personItems({ channel, go }: MenuContext, person: Person): MenuItem[] {
   return [
     { label: "View profile", run: () => go({ to: "panel", panel: { kind: "person", name: person.name } }) },
-    ...(person.you ? [] : [{ label: "Message privately", run: () => go({ to: "where", where: { kind: "dm", with: seatRoot(channel, person.name) } }) }]),
+    ...(person.you ? [] : [{ label: "Message", run: () => go({ to: "where", where: { kind: "dm", with: seatRoot(channel, person.name) } }) }]),
   ]
 }
 
