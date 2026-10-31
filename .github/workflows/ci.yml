@@ -223,6 +223,9 @@ jobs:
       - name: ui the composer keeps each room's draft and images to itself, and an image sends without a file name as text, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-composer-rooms.ts --dist ui/dist
+      - name: ui pause, quiet hours and muting a room, in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-notification-controls.ts --dist ui/dist
       - name: ui edit and delete your own message (toolbar, Enter, ↑, Esc, the delete confirm), in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-edit-delete.ts --dist ui/dist

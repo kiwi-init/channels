@@ -601,12 +601,20 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       },
       setName: (name) => setState((s) => (s.account ? { ...s, account: { ...s.account, name } } : { ...s, account: { ...DEMO_ACCOUNT, name } })),
       setPrefs: (p) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...p } })),
-      setMute: (code, room, on) =>
+      setMute: (code, room, on) => {
         setState((s) => {
           const key = muteKey(code, room)
           const rest = s.prefs.muted.filter((k) => k !== key)
           return { ...s, prefs: { ...s.prefs, muted: on ? [...rest, key] : rest } }
-        }),
+        })
+        if (room)
+          edit(code, (c) => ({
+            ...c,
+            rooms: c.rooms.map((r) =>
+              r.id !== room ? r : on ? { ...r, muted: true as const } : { id: r.id, name: r.name, unread: r.unread, mentions: r.mentions, ...(r.members ? { members: r.members } : {}) }
+            ),
+          }))
+      },
       snooze: (until) => setState((s) => ({ ...s, prefs: { ...s.prefs, snoozeUntil: until ? snoozeEnd(until, Date.now()) : null } })),
       forgetComputer: (id) => setState((s) => (s.account ? { ...s, account: { ...s.account, computers: s.account.computers.filter((c) => c.id !== id) } } : s)),
       linkGithub: () => setState((s) => (s.account ? { ...s, account: { ...s.account, github: { login: "ojowwalker77" } } } : s)),
