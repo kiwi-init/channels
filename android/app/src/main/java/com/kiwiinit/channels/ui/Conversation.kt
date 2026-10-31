@@ -340,7 +340,7 @@ fun Intro(room: RoomView) {
     } else {
         val member = room.member(lead)
         val now = if (member?.working == true) member.doing.firstOrNull()?.let { "Working on ${taskLabel(it)}" } ?: "Working" else null
-        listOfNotNull("Lead of ${room.title}", now ?: if (room.messages.isEmpty()) "Only you and ${room.display(lead)} here" else null)
+        listOfNotNull("Lead of ${room.title}", now ?: if (room.messages.isEmpty()) "Everyone in the channel can read this" else null)
     }
     Column(
         Modifier.fillMaxWidth().padding(start = 32.dp, end = 32.dp, top = if (room.messages.isEmpty()) 72.dp else 28.dp, bottom = 20.dp),

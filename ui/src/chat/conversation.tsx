@@ -174,11 +174,7 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
     <ReplyContext.Provider value={replying}>
       {channel.hold && <HoldBanner channel={channel} hold={channel.hold} />}
       <Feed key={key} channel={channel} where={where} jump={jump && sameWhere(jump.m.where, where) ? jump : null} />
-      {where.kind === "theirs" ? (
-        <ReadOnly channel={channel} between={where.between} />
-      ) : (
-        <Composer channel={channel} where={where} placeholder={where.kind === "dm" ? `Message ${placeName} privately` : `Message ${placeName}`} />
-      )}
+      {where.kind === "theirs" ? <ReadOnly channel={channel} between={where.between} /> : <Composer channel={channel} where={where} placeholder={`Message ${placeName}`} />}
     </ReplyContext.Provider>
   )
 }
@@ -529,7 +525,7 @@ function Start({ channel, where }: { channel: Channel; where: Where }) {
         {where.kind === "room"
           ? `This is the start of #${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}.`
           : where.kind === "dm"
-            ? `Only you and ${nickname(channel, where.with)} read this.`
+            ? `This is the start of your messages with ${nickname(channel, where.with)}. Everyone in the channel can read them.`
             : where.kind === "theirs"
               ? `This is the start of ${between(channel, where.between)}.`
               : "Nothing here yet."}
