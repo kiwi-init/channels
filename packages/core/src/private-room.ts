@@ -179,7 +179,14 @@ export async function openBaseRooms(c: RoomCache, base: FoldBase): Promise<FoldB
     c.roomSeals.set(id, [...room.seals.map((seal, i) => ({ seq: -(room.seals.length - i), seal })), ...had.filter((x) => x.seq > 0)]);
     const now = await replay(c, id);
     secret.push([id, { n: now?.n ?? room.n, seals: room.seals, ...(now?.meta ? { meta: now.meta } : {}) }]);
-    if (now?.meta) rooms.set(id, { ...(rooms.get(id) ?? { id, createdBy: null, at: 0 }), name: now.meta.name, members: now.meta.members, ...(now.meta.dm ? { dm: true as const } : {}), ...(now.meta.self ? { self: true as const } : {}) });
+    if (now?.meta)
+      rooms.set(id, {
+        ...(rooms.get(id) ?? { id, createdBy: null, at: 0 }),
+        name: now.meta.name,
+        members: now.meta.members,
+        ...(now.meta.dm ? { dm: true as const } : {}),
+        ...(now.meta.self ? { self: true as const } : {}),
+      });
     else if (room.meta) rooms.delete(id);
   }
   return { ...base, secret, rooms: [...rooms.values()] };

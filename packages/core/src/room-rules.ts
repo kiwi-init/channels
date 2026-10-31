@@ -79,10 +79,13 @@ export function dmPair(meta: Pick<RoomMeta, "members">, sender: string, members:
 export function selfOnly(meta: Pick<RoomMeta, "members">, sender: string, members: ReadonlyMap<string, Seat>): boolean {
   const seats = [...members.values()];
   const mine = rootOf(sender, members);
-  return meta.members.length > 0 && meta.members.every((m) => {
-    const seat = members.get(m.name);
-    return !!seat && seat.pk === m.pk && isPerson(seat) && rootName(seat, seats) === mine;
-  });
+  return (
+    meta.members.length > 0 &&
+    meta.members.every((m) => {
+      const seat = members.get(m.name);
+      return !!seat && seat.pk === m.pk && isPerson(seat) && rootName(seat, seats) === mine;
+    })
+  );
 }
 
 export function withSeats<P extends { name: string; pk: string }, S extends Seat>(seats: readonly S[], picked: readonly P[], pickOf: (s: S) => P): P[] {

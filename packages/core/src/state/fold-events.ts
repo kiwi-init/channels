@@ -120,7 +120,14 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         const seals = [...(known?.seals ?? []), { id: ev.id, n: ev.n, keys: ev.keys, meta: ev.meta, ...(ev.proof ? { proof: ev.proof } : {}) }];
         const n = m.proven || !known ? ev.n : known.n;
         c.secret.set(ev.id, { n, seals, ...(opened ? { meta: opened } : !m.proven && known?.meta ? { meta: known.meta } : {}) });
-        if (opened) rooms.set(ev.id, { ...(rooms.get(ev.id) ?? { id: ev.id, createdBy: m.from, at }), name: opened.name, members: opened.members, ...(opened.dm ? { dm: true as const } : {}), ...(opened.self ? { self: true as const } : {}) });
+        if (opened)
+          rooms.set(ev.id, {
+            ...(rooms.get(ev.id) ?? { id: ev.id, createdBy: m.from, at }),
+            name: opened.name,
+            members: opened.members,
+            ...(opened.dm ? { dm: true as const } : {}),
+            ...(opened.self ? { self: true as const } : {}),
+          });
         else if (m.proven) rooms.delete(ev.id);
       }
       break;
