@@ -275,6 +275,7 @@ export interface QuestionAsk {
   step?: Step
   handoff?: { url: string; label: string; expiresAt: number }
   answer?: { text: string; by: string; at: number }
+  askedOf?: string[]
 }
 
 export interface JoinAsk {

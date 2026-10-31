@@ -220,6 +220,7 @@ export type Scenario =
   | "compacted"
   | "long"
   | "step"
+  | "asked-of"
   | "left-out"
   | "events"
   | "handoff"
@@ -254,19 +255,21 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
         ? longFeed(DEMO_CHANNEL)
         : scenario === "step"
           ? withStep(DEMO_CHANNEL)
-          : scenario === "left-out"
-            ? withLeftOut(DEMO_CHANNEL)
-            : scenario === "events"
-              ? withEvents(DEMO_CHANNEL)
-              : scenario === "handoff"
-                ? withHandoff(DEMO_CHANNEL)
-                : scenario === "opening"
-                  ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
-                  : scenario === "held"
-                    ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
-                    : scenario === "compact" || scenario === "compacted"
-                      ? withCompact(DEMO_CHANNEL, scenario === "compacted")
-                      : DEMO_CHANNEL,
+          : scenario === "asked-of"
+            ? { ...DEMO_CHANNEL, asks: DEMO_CHANNEL.asks.map((a) => (a.kind === "question" ? { ...a, label: a.label.replace(/ for you$/, ""), askedOf: ["maya"] } : a)) }
+            : scenario === "left-out"
+              ? withLeftOut(DEMO_CHANNEL)
+              : scenario === "events"
+                ? withEvents(DEMO_CHANNEL)
+                : scenario === "handoff"
+                  ? withHandoff(DEMO_CHANNEL)
+                  : scenario === "opening"
+                    ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
+                    : scenario === "held"
+                      ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
+                      : scenario === "compact" || scenario === "compacted"
+                        ? withCompact(DEMO_CHANNEL, scenario === "compacted")
+                        : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       { ...DEMO_EMPTY, code: "interlinked", title: "interlinked" },

@@ -271,21 +271,23 @@ function Written({ label, text, gone }: { label: string; text: string; gone?: bo
 function QuestionAskCard({ channel, ask, link }: { channel: Channel; ask: QuestionAsk; link: ReactNode }) {
   const who = member(channel, ask.from)
   const holds = [...new Set([...(ask.task !== undefined ? [ask.task] : []), ...ask.holds])]
+  const askedOf = ask.askedOf?.map((n) => nickname(channel, n)).join(" and ")
   return (
     <Shell
       face={who}
       name={nickname(channel, ask.from)}
       member={!!who}
       tag={{ text: ask.label, tone: ask.irreversible ? "alert" : ask.label.startsWith("Question") ? "quiet" : "decide" }}
-      verb={ask.step ? "has a step for you" : ask.handoff ? "needs you in a browser" : "asks you"}
+      verb={ask.step ? "has a step for you" : ask.handoff ? "needs you in a browser" : askedOf ? `asks ${askedOf}` : "asks you"}
       at={ask.at}
       link={link}
     >
       <p className="needs-text">{ask.text}</p>
+      {askedOf && <p className="needs-line">Put to {askedOf}. You can answer too, and the first answer counts.</p>}
       <QuestionCard channel={channel} ask={ask} />
       {holds.length > 0 && (
         <>
-          <p className="needs-label">{holds.length === 1 ? "This task waits on your answer" : "These tasks wait on your answer"}</p>
+          <p className="needs-label">{holds.length === 1 ? `This task waits on ${askedOf ? "an" : "your"} answer` : `These tasks wait on ${askedOf ? "an" : "your"} answer`}</p>
           <Holds channel={channel} ids={holds} />
         </>
       )}
