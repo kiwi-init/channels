@@ -28,6 +28,7 @@ import { commitTo, joinCheckCode, ownerNonceStatement, spendAuto, type SigningBu
 import { canPost, scopesOf, wireScopes } from "../scopes.ts";
 import type { ChannelCore } from "./core.ts";
 import type { MemberRefusal, Refused } from "./errors.ts";
+import { wasRemoved } from "./info.ts";
 import { requestInfo, wrapAllFor } from "./keys.ts";
 import type { DeviceList } from "../devices.ts";
 import type { Relay } from "./relay.ts";
@@ -223,7 +224,9 @@ export class ChannelRequests {
       const keys = yield* Effect.promise(() => wrapAllFor(this.ch.identity, this.ch.roomId, this.ch.access.keys, req.pk, req.xpk));
       const post = canPost(scopesOf(info));
       const sealed = yield* Effect.promise(() => sealRecord(current, rec));
+      const back = wasRemoved(this.ch.roomId, req.pk);
       yield* this.ch.request("/members", { method: "POST", body: JSON.stringify({ pk: req.pk, xpk: req.xpk, rec: sealed, keys, request: req.id, ...(post ? {} : { post }) }) });
+      if (back) yield* this.ch.fx.send(`let ${info.name} back in`, { kind: "event", ev: { op: "member.back", member: info.name, pk: req.pk } });
       return { pk: req.pk, xpk: req.xpk, ...info, owner: false, at: rec.at, active: true } satisfies Member;
     }),
 
