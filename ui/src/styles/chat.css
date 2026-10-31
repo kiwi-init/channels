@@ -1137,6 +1137,11 @@ button.msg-image-spot:hover {
   font-size: var(--t-ui);
 }
 
+.msg-tool:has(.gif-mark) {
+  width: auto;
+  padding: 0 6px;
+}
+
 .msg-tool:hover {
   background: var(--wash-2);
   color: var(--ink);
