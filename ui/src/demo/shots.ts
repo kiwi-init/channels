@@ -91,6 +91,8 @@ export const SHOTS: Record<string, Shot> = {
   "channel-cathode": { ...kiwi(), prefs: { darkTheme: "cathode-amber", lightTheme: "sunlit-parchment" } },
   "channel-silver": { ...kiwi(), prefs: { darkTheme: "silver-point-dark", lightTheme: "silver-point-light" } },
   "channel-heliotrope": { ...kiwi(), prefs: { darkTheme: "heliotrope-haze", lightTheme: "lavender-postcard" } },
+  "rail-folder": { ...kiwi(), prefs: { folders: [{ id: "side", name: "side projects", codes: ["interlinked", "landing", "ops"], open: false }] } },
+  "rail-folder-open": { ...kiwi(), prefs: { folders: [{ id: "side", name: "side projects", codes: ["interlinked", "landing", "ops"], open: true }] } },
   "settings-agents": kiwi({ page: "settings", section: "agents" }),
   "settings-computers": kiwi({ page: "settings", section: "computers" }),
   "settings-link-phone": kiwi({ page: "settings", section: "computers" }),

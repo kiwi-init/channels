@@ -512,6 +512,14 @@ export interface Prefs {
   darkTheme: string
   lightTheme: string
   customThemes: CustomTheme[]
+  folders: Folder[]
+}
+
+export interface Folder {
+  id: string
+  name: string
+  codes: string[]
+  open: boolean
 }
 
 export interface NewAgent {

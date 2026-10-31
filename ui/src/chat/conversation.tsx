@@ -1,6 +1,5 @@
 import { Fragment, startTransition, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
-import { HistoryFold, ProposalCard } from "~/chat/compact"
 import { Composer } from "~/chat/composer"
 import { EventRun } from "~/chat/events"
 import { continuesRun, eventRun } from "~/chat/fold-events"
@@ -19,6 +18,8 @@ import { liveOf, workingIn } from "~/doing"
 import { sameWhere, useApp, whereKey } from "~/nav"
 import { between, nickname, shown } from "~/names"
 
+const HistoryFold = later(() => import("~/chat/compact").then((m) => m.HistoryFold))
+const ProposalCard = later(() => import("~/chat/compact").then((m) => m.ProposalCard))
 const AddAgentCard = later(() => import("~/panels/add-agent").then((m) => m.AddAgentCard))
 
 const GROUP_MS = 5 * 60_000
@@ -430,10 +431,16 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
                       <span>New</span>
                     </p>
                   )}
-                  {compact && m.seq === foldAt && <HistoryFold channel={channel} compact={compact} earlier={earlier} onToggle={toggleEarlier} names={names} tasks={tasks} onQuote={onQuote} />}
+                  {compact && m.seq === foldAt && (
+                    <Suspense fallback={null}>
+                      <HistoryFold channel={channel} compact={compact} earlier={earlier} onToggle={toggleEarlier} names={names} tasks={tasks} onQuote={onQuote} />
+                    </Suspense>
+                  )}
                   {run && <Fold run={run} open={open} onToggle={() => toggleRun(m.seq)} />}
                   {m.seq === proposalAt && proposal ? (
-                    <ProposalCard channel={channel} proposal={proposal} names={names} tasks={tasks} onQuote={onQuote} />
+                    <Suspense fallback={null}>
+                      <ProposalCard channel={channel} proposal={proposal} names={names} tasks={tasks} onQuote={onQuote} />
+                    </Suspense>
                   ) : events ? (
                     <EventRun channel={channel} run={events} here={where.kind === "task" ? where.task : null} jump={jump?.m.seq ?? null} />
                   ) : (
@@ -453,8 +460,16 @@ function Feed({ channel, where, jump }: { channel: Channel; where: Where; jump: 
               )
             })
           )}
-          {compact && foldAt === undefined && <HistoryFold channel={channel} compact={compact} earlier={earlier} onToggle={toggleEarlier} names={names} tasks={tasks} onQuote={onQuote} />}
-          {proposal && proposalAt === undefined && end === list.length && <ProposalCard channel={channel} proposal={proposal} names={names} tasks={tasks} onQuote={onQuote} />}
+          {compact && foldAt === undefined && (
+            <Suspense fallback={null}>
+              <HistoryFold channel={channel} compact={compact} earlier={earlier} onToggle={toggleEarlier} names={names} tasks={tasks} onQuote={onQuote} />
+            </Suspense>
+          )}
+          {proposal && proposalAt === undefined && end === list.length && (
+            <Suspense fallback={null}>
+              <ProposalCard channel={channel} proposal={proposal} names={names} tasks={tasks} onQuote={onQuote} />
+            </Suspense>
+          )}
           {working.length > 0 && <Working people={working} />}
         </div>
       </div>
