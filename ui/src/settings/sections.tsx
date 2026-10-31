@@ -32,8 +32,8 @@ export function AccountSection() {
   return (
     <Page title="Account" lede="Who you are in every channel.">
       <Group>
-        <Row label="Name" hint="Shown next to everything you send.">
-          <InlineEdit value={account.name} label="Your name" verb="Change" onSave={actions.setName} />
+        <Row label="Name" hint="Shown next to everything you send. It's part of your key, so it stays the one you started with.">
+          <span className="set-value">{account.name}</span>
         </Row>
         <Row
           label="GitHub"
