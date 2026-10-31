@@ -96,6 +96,7 @@ export class ChannelHistory {
           for (let i = 0; i < decrypted.length; i++) {
             const m = decrypted[i];
             if (m?.ev?.op === "room.seal") decrypted[i] = yield* this.ch.fx.settle(m);
+            if (m?.ev?.op === "room.create") this.ch.publicRooms.add(m.ev.id);
           }
           if (this.ch.roomKeys.size > known) for (let i = 0; i < envelopes.length; i++) if (!decrypted[i]) decrypted[i] = yield* this.ch.fx.decrypt(envelopes[i]!);
           for (let i = 0; i < envelopes.length; i++) {
