@@ -21,7 +21,7 @@ import { SendBack } from "~/tasks/send-back"
 
 const ROUND_WORDS: Record<ReviewRound["result"], string> = { open: "reviewing", approved: "approved", rejected: "sent back", withdrawn: "withdrawn" }
 const ROUND_TONES: Record<ReviewRound["result"], string> = { open: "tone-review", approved: "tone-live", rejected: "", withdrawn: "" }
-const CHECK_TONES: Record<PullRequest["checks"], string> = { pass: "", fail: "tone-alert", running: "tone-decide", none: "" }
+const CHECK_TONES: Record<PullRequest["checks"], string> = { pass: "tone-quiet", fail: "tone-alert", running: "tone-decide", none: "" }
 const STATE_TONES: Record<PullRequest["state"], string> = { open: "", draft: "dim", merged: "tone-live", closed: "tone-alert" }
 
 function since(at: number): string {

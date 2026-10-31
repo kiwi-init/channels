@@ -37,7 +37,21 @@ export function PrChip({ pr }: { pr: PullRequest }) {
             {" · "}
           </>
         )}
-        <span className={pr.state === "merged" ? "tone-live" : pr.state === "closed" ? "tone-alert" : pr.checks === "fail" ? "tone-alert" : pr.checks === "running" ? "tone-decide" : ""}>
+        <span
+          className={
+            pr.state === "merged"
+              ? "tone-live"
+              : pr.state === "closed"
+                ? "tone-alert"
+                : pr.checks === "pass"
+                  ? "tone-quiet"
+                  : pr.checks === "fail"
+                    ? "tone-alert"
+                    : pr.checks === "running"
+                      ? "tone-decide"
+                      : ""
+          }
+        >
           {pr.state === "merged" ? "merged" : pr.state === "closed" ? "closed" : CHECKS[pr.checks]}
         </span>
       </span>
