@@ -1,4 +1,4 @@
-import { EVENT_OPS_VERSION, FOLD_RULES, GENERAL_ROOM, ignored, isOldGifKey, isReaction, MAX_GOAL_NAME, MAX_ROOMS, ROOM_ID_RE, type Message, type Trust } from "../protocol.ts";
+import { EVENT_OPS_VERSION, FOLD_RULES, GENERAL_ROOM, ignored, isReaction, MAX_GOAL_NAME, MAX_ROOMS, ROOM_ID_RE, type Message, type Trust } from "../protocol.ts";
 import { inlineText } from "../membership.ts";
 import { refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
@@ -440,7 +440,7 @@ function folding(
           continue;
         }
         let on = reactions.get(ev.seq);
-        if (ev.emoji === null || isOldGifKey(ev.emoji)) on?.delete(m.from);
+        if (ev.emoji === null) on?.delete(m.from);
         else {
           if (!on) reactions.set(ev.seq, (on = new Map()));
           on.set(m.from, { emoji: ev.emoji, seq: m.seq, at });

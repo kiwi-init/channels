@@ -306,17 +306,17 @@ export type Event =
 
 /** The longest reaction, in UTF-16 units: one emoji, family sequences and flags included. */
 const MAX_REACTION = 16;
-const OLD_GIF_KEY = /^[a-z0-9][a-z0-9-]{0,23}\/[a-z0-9][a-z0-9-]{0,47}$/;
+const GIF_REACTION_RE = /^[a-z0-9][a-z0-9-]{0,23}\/[a-z0-9][a-z0-9-]{0,47}$/;
 
 /** Whether `x` can be a reaction: a short single line with something to see (no letters spelling words, no markup). */
 export function wellFormedReaction(x: unknown): x is string {
   if (typeof x !== "string") return false;
-  if (OLD_GIF_KEY.test(x)) return true;
+  if (GIF_REACTION_RE.test(x)) return true;
   return x.length > 0 && x.length <= MAX_REACTION && x.trim() === x && !/[\u0000-\u001f\u007f<>&"'`\\]/.test(x) && !/[\p{L}\p{N}]/u.test(x);
 }
 
-export function isOldGifKey(x: string): boolean {
-  return OLD_GIF_KEY.test(x);
+export function isGifReaction(x: string): boolean {
+  return GIF_REACTION_RE.test(x);
 }
 
 /** A reaction event, which feeds, unread counts and notifications leave out. */
@@ -759,7 +759,7 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
 
 export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
-export const FOLD_RULES = 4;
+export const FOLD_RULES = 5;
 
 export const olderRules = (base: { rules?: number }): boolean => (base.rules ?? 0) < FOLD_RULES;
 
