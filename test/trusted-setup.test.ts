@@ -5,10 +5,10 @@ import { fold, type FoldBase, type Roster } from "@kiwi/core/state.ts";
 
 const ids: Record<string, Identity> = {};
 let seq = 0;
-async function ev(from: string, e: Event): Promise<Message> {
+async function ev(from: string, e: Event, key: Identity = ids[from]!): Promise<Message> {
   const at = ++seq;
   const base = { v: 1 as const, id: crypto.randomUUID(), from, kind: "event" as const, body: "", ev: e, ts: at };
-  const p = await sign(ids[from]!, base);
+  const p = await sign(key, base);
   return { ...p, seq: at, rts: at, sigOk: await verify(p) };
 }
 
@@ -16,7 +16,7 @@ const ALL = { addsAgents: true, answersDecisions: true, managesAgents: true } as
 
 let roster: Roster;
 beforeAll(async () => {
-  for (const n of ["jow", "tia", "bo", "ro"]) ids[n] = await generateIdentity(n);
+  for (const n of ["jow", "tia", "bo", "ro", "ana", "ana2"]) ids[n] = await generateIdentity(n);
   roster = [
     { name: "jow", pk: ids.jow!.pk, owner: true, at: 0, active: true, kind: "human" },
     { name: "tia", pk: ids.tia!.pk, owner: false, at: 1, active: true, kind: "human", ...ALL },
@@ -88,5 +88,44 @@ describe("a person the owner fully trusts sets up the channel (T632)", () => {
     const trusted = roster.map((r) => (r.name === "bo" ? { ...r, ...ALL } : r));
     const s = fold([before, ...gave, after], trusted);
     expect([s.rejected.has(before.seq), s.rejected.has(after.seq), s.charter?.text]).toEqual([true, false, "now"]);
+  });
+
+  test("trust belongs to a key: someone who joins later under a former member's name gets none of it", async () => {
+    const gave = await Promise.all(
+      (["addsAgents", "answersDecisions", "managesAgents"] as const).map((power) => ev("jow", { op: "power.set", member: "ana", pk: ids.ana!.pk, power, on: true, was: false })),
+    );
+    const theirs = await ev("ana", { op: "charter.set", text: "set while trusted" });
+    const newcomer = await ev("ana", { op: "repos.set", repos: ["someone/else"] }, ids.ana2!);
+    const rejoined: Roster = [
+      ...roster,
+      { name: "ana", pk: ids.ana!.pk, owner: false, at: 4, active: false, kind: "human", ...ALL },
+      { name: "ana", pk: ids.ana2!.pk, owner: false, at: 5, active: true, kind: "human" },
+    ];
+    const s = fold([...gave, theirs, newcomer], rejoined);
+    expect([s.rejected.has(theirs.seq), s.charter?.text]).toEqual([false, "set while trusted"]);
+    expect([s.rejected.has(newcomer.seq), s.repos]).toEqual([true, []]);
+  });
+
+  test("trusted from the record alone, without a power.set, it's still that key's record that counts", async () => {
+    const theirs = await ev("ana", { op: "charter.set", text: "from the old seat" });
+    const newcomer = await ev("ana", { op: "repos.set", repos: ["someone/else"] }, ids.ana2!);
+    const rejoined: Roster = [
+      ...roster,
+      { name: "ana", pk: ids.ana!.pk, owner: false, at: 4, active: false, kind: "human", ...ALL },
+      { name: "ana", pk: ids.ana2!.pk, owner: false, at: 5, active: true, kind: "human" },
+    ];
+    const s = fold([theirs, newcomer], rejoined);
+    expect([s.rejected.has(theirs.seq), s.rejected.has(newcomer.seq)]).toEqual([false, true]);
+  });
+
+  test("a power.set in T443's shape still counts, as managing agents", async () => {
+    const old = await ev("jow", { op: "power.set", member: "bo", pk: ids.bo!.pk, managesAgents: true, was: false });
+    const rest = await ev("jow", { op: "power.set", member: "bo", pk: ids.bo!.pk, power: "answersDecisions", on: true, was: false });
+    const after = await ev("bo", { op: "charter.set", text: "trusted now" });
+    const s = fold(
+      [old, rest, after],
+      roster.map((r) => (r.name === "bo" ? { ...r, ...ALL } : r)),
+    );
+    expect([s.rejected.has(old.seq), s.rejected.has(after.seq), s.charter?.text]).toEqual([false, false, "trusted now"]);
   });
 });

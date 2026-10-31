@@ -1,4 +1,4 @@
-import { GENERAL_ROOM, MAX_CHARTER, MAX_ROOMS, MAX_TAGS, PROOF_MAX, TASK_TITLE_MAX_LENGTH, type Event, type Message, type Power } from "../protocol.ts";
+import { GENERAL_ROOM, MAX_CHARTER, MAX_ROOMS, MAX_TAGS, PROOF_MAX, TASK_TITLE_MAX_LENGTH, type Event, type Message, type Power, powerChange } from "../protocol.ts";
 import { free, take } from "./leases.ts";
 import { unnamedTasks } from "./compact.ts";
 import { leadCheckpointKeyRefusal } from "./lead.ts";
@@ -21,8 +21,8 @@ export interface FoldCtx {
   members: Map<string, FoldMember>;
   signed: ReadonlySet<string>;
   personaLead: Map<string, PersonaLead>;
-  held: (member: FoldMember, power: Power) => boolean;
-  trusted: (member: FoldMember) => boolean;
+  held: (pk: string, power: Power) => boolean;
+  trusted: (pk: string, member: FoldMember) => boolean;
   powers: Map<string, Partial<Record<Power, boolean>>>;
   leads: (member: FoldMember) => boolean;
   keysByName: Map<string, Set<string>>;
@@ -58,7 +58,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "room.create": {
-      if (!member.owner && !c.trusted(member)) {
+      if (!member.owner && !c.trusted(m.pk ?? "", member)) {
         reject(trustOnly("makes rooms"));
         break;
       }
@@ -77,7 +77,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "room.rename": {
-      if (!member.owner && !c.trusted(member)) {
+      if (!member.owner && !c.trusted(m.pk ?? "", member)) {
         reject(trustOnly("names rooms"));
         break;
       }
@@ -95,7 +95,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       break;
 
     case "charter.set": {
-      if (!member.owner && !c.trusted(member)) {
+      if (!member.owner && !c.trusted(m.pk ?? "", member)) {
         reject(trustOnly("sets the charter"));
         break;
       }
@@ -148,7 +148,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "repos.set": {
-      if (!member.owner && !c.trusted(member)) {
+      if (!member.owner && !c.trusted(m.pk ?? "", member)) {
         reject(trustOnly("sets the channel's repos"));
         break;
       }
@@ -179,7 +179,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "branch.prefix.set": {
-      if (!member.owner && !c.trusted(member)) {
+      if (!member.owner && !c.trusted(m.pk ?? "", member)) {
         reject(trustOnly("sets the branch prefix"));
         break;
       }
@@ -190,7 +190,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     case "role.set":
     case "role.refuse": {
       const target = members.get(ev.member);
-      if (!member.owner && !managesAgent(c.held(member, "managesAgents"), member, target)) {
+      if (!member.owner && !managesAgent(c.held(m.pk ?? "", "managesAgents"), member, target)) {
         reject("only the owner, or a person who manages agents, decides an agent's role");
         break;
       }
@@ -206,7 +206,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "scope.set": {
-      if (!member.owner && !managesAgent(c.held(member, "managesAgents"), member, members.get(ev.member))) {
+      if (!member.owner && !managesAgent(c.held(m.pk ?? "", "managesAgents"), member, members.get(ev.member))) {
         reject("only the owner, or a person who manages agents, sets what an agent may do");
         break;
       }
@@ -231,7 +231,10 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       if (!member.owner) reject("only the owner gives or takes a power");
       else if (!target || !keysByName.get(ev.member)?.has(ev.pk)) reject(target ? `that key isn't ${ev.member}'s` : `no member named ${ev.member}`);
       else if (target.owner || target.kind !== "human") reject("only a person holds a power");
-      else c.powers.set(ev.member, { ...c.powers.get(ev.member), [ev.power]: ev.on });
+      else {
+        const { power, on } = powerChange(ev);
+        c.powers.set(ev.pk, { ...c.powers.get(ev.pk), [power]: on });
+      }
       break;
     }
 

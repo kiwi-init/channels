@@ -1,4 +1,4 @@
-import { EVENT_OPS_VERSION, FOLD_RULES, GENERAL_ROOM, ignored, isReaction, MAX_GOAL_NAME, MAX_ROOMS, POWERS, ROOM_ID_RE, type Message, type Power, type Trust } from "../protocol.ts";
+import { EVENT_OPS_VERSION, FOLD_RULES, GENERAL_ROOM, ignored, isReaction, MAX_GOAL_NAME, MAX_ROOMS, POWERS, powerChange, ROOM_ID_RE, type Message, type Power, type Trust } from "../protocol.ts";
 import { inlineText } from "../membership.ts";
 import { canPost, refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
@@ -168,18 +168,21 @@ function folding(
     : [];
   const powers = new Map<string, Partial<Record<Power, boolean>>>(from?.powers?.map(([name, p]) => [name, { ...p }]));
   const powerChanges = lookAhead
-    ? messages.flatMap((m) =>
-        m.seq > after && m.ev?.op === "power.set" && powers.get(m.ev.member)?.[m.ev.power] === undefined ? [{ seq: m.seq, member: m.ev.member, power: m.ev.power, was: m.ev.was }] : [],
-      )
+    ? messages.flatMap((m) => {
+        if (m.seq <= after || m.ev?.op !== "power.set") return [];
+        const { power } = powerChange(m.ev);
+        return powers.get(m.ev.pk)?.[power] === undefined ? [{ seq: m.seq, pk: m.ev.pk, power, was: m.ev.was }] : [];
+      })
     : [];
   if (leadChanges.length || powerChanges.length) {
     const accepted = folding(messages, roster, now, roomsFloor, guardFloor, given, undefined, false);
     const took = (seq: number) => accepted.trust.get(seq) === "verified" && !accepted.rejected.has(seq);
     for (const c of leadChanges) if (!personaLead.has(c.member) && took(c.seq)) personaLead.set(c.member, c.was);
-    for (const c of powerChanges) if (powers.get(c.member)?.[c.power] === undefined && took(c.seq)) powers.set(c.member, { ...powers.get(c.member), [c.power]: c.was });
+    for (const c of powerChanges) if (powers.get(c.pk)?.[c.power] === undefined && took(c.seq)) powers.set(c.pk, { ...powers.get(c.pk), [c.power]: c.was });
   }
-  const held = (member: FoldMember, power: Power): boolean => powers.get(member.name)?.[power] ?? !!member[power];
-  const trusted = (member: FoldMember): boolean => member.kind === "human" && !member.owner && canPost(scopesByKey.get(member.pk) ?? member.scopes) && POWERS.every((p) => held(member, p));
+  const recordOf = new Map(roster.map((r) => [r.pk, r]));
+  const held = (pk: string, power: Power): boolean => powers.get(pk)?.[power] ?? !!recordOf.get(pk)?.[power];
+  const trusted = (pk: string, member: FoldMember): boolean => member.kind === "human" && !member.owner && canPost(scopesByKey.get(pk) ?? []) && POWERS.every((p) => held(pk, p));
   const logged = (member: FoldMember): boolean | undefined => {
     const lead = personaLead.get(member.name);
     return lead === "roster" ? undefined : lead;
