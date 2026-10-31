@@ -79,10 +79,13 @@ export function messageGroups(ctx: MenuContext, m: Message, target: EventTarget,
   ]
 }
 
-export function roomGroups(ctx: MenuContext, actions: Actions, room: { id: string; name: string; unread: number }): MenuGroups {
+export function roomGroups(ctx: MenuContext, actions: Actions, room: { id: string; name: string; unread: number; muted?: boolean | undefined }): MenuGroups {
   const { channel, go, toast } = ctx
   return [
-    room.unread > 0 ? [{ label: "Mark as read", run: () => actions.markRead(channel.code, { kind: "room", room: room.id }) }] : [],
+    [
+      ...(room.unread > 0 ? [{ label: "Mark as read", run: () => actions.markRead(channel.code, { kind: "room", room: room.id }) }] : []),
+      { label: `${room.muted ? "Unmute" : "Mute"} #${room.name}`, run: () => actions.setMute(channel.code, room.id, !room.muted) },
+    ],
     channel.youOwn || channel.youTrusted ? [{ label: "Room settings", run: () => go({ to: "panel", panel: { kind: "channel" } }) }] : [],
     [{ label: "Copy name", run: copier(toast, `#${room.name}`) }],
   ]

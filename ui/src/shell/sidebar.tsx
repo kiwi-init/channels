@@ -33,14 +33,15 @@ export function Sidebar({ channel }: { channel: Channel }) {
               <li key={r.id}>
                 <button
                   type="button"
-                  className={cx("side-row", on && "is-on", r.unread > 0 && "is-news")}
+                  className={cx("side-row", on && "is-on", (r.muted ? r.mentions : r.unread) > 0 && "is-news", r.muted && "is-muted")}
                   aria-current={on ? "page" : undefined}
+                  title={r.muted ? `#${r.name} is muted` : undefined}
                   onClick={() => go({ to: "where", where })}
                   onContextMenu={(e) => showMenu(e, `#${r.name}`, (x) => x.roomGroups({ channel, go, toast }, actions, r))}
                 >
                   <span className="side-hash">{r.members ? <Icon name="lock" size={12} /> : "#"}</span>
                   <span className="side-label">{r.name}</span>
-                  <Count n={r.mentions || r.unread} loud={r.mentions > 0} />
+                  <Count n={r.muted ? r.mentions : r.mentions || r.unread} loud={r.mentions > 0} />
                 </button>
               </li>
             )

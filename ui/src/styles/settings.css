@@ -223,8 +223,9 @@
 
 .set-device-name {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px 8px;
   min-width: 0;
   color: var(--ink);
   font: var(--t-ui) var(--ui);
@@ -278,8 +279,24 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   color: var(--ink-3);
   font: var(--t-meta) var(--ui);
+}
+
+.set-device-status {
+  min-width: 0;
+}
+
+@media (max-width: 760px) {
+  .set-device {
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+
+  .set-device-actions-inline {
+    grid-column: 2;
+    margin-left: -8px;
+  }
 }
 
 .set-pip {
@@ -377,11 +394,14 @@
   align-items: center;
   gap: 8px;
   color: var(--doing);
-  font: var(--t-meta) var(--ui);
+  font: var(--t-meta) var(--mono);
+  letter-spacing: -0.01em;
 }
 
 .set-pair-wait.is-stuck {
   color: var(--alert);
+  font-family: var(--ui);
+  letter-spacing: normal;
 }
 
 .set-harness {
@@ -458,7 +478,8 @@
 
 .set-harness-state {
   color: var(--ink-3);
-  font: var(--t-meta) var(--ui);
+  font: var(--t-meta) var(--mono);
+  letter-spacing: -0.01em;
 }
 
 .set-harness-state.tone-live {
@@ -655,4 +676,17 @@ html .set-body {
 
 .set-device-actions-inline > .btn.is-quiet:last-child {
   margin-right: -8px;
+}
+
+.set-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.set-buttons .input {
+  width: auto;
+  height: var(--ctl-sm);
+  padding: 0 8px;
+  font: var(--t-ui) var(--mono);
 }

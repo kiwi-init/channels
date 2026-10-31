@@ -2,10 +2,11 @@ import { useEffect, useState, type ReactNode } from "react"
 
 import { IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
+import { useNow } from "~/kit/time"
 import type { TextFont } from "@kiwi/app/theme.ts"
 import { personFingerprint } from "@kiwi/core/fingerprint.ts"
 import { KEYS_UNSEALED } from "@kiwi/secrets/keys-at-rest.ts"
-import type { Prefs, Theme, UpdateCheck } from "~/model"
+import type { Channel, ChannelTile, Prefs, Theme, UpdateCheck } from "~/model"
 import { updateFound } from "~/settings/update-check"
 import { useApp } from "~/nav"
 import { Toggle } from "~/kit/bits"
@@ -188,18 +189,102 @@ const NOTIFY = [
 export function NotificationsSection() {
   const { app } = useApp()
   const { prefs, actions } = app
+  const now = useNow(60_000)
+  const paused = prefs.snoozeUntil !== null && prefs.snoozeUntil > now
+  const quiet = prefs.quiet
   return (
     <Page title="Notifications" lede="For every channel on this computer.">
       <Group>
         <Row label="Notify me" hint="Asks are things that wait on you: a permission, a question, someone at the door." wide>
           <Seg label="Notify me" value={prefs.notify} options={NOTIFY} onChange={(notify) => actions.setPrefs({ notify })} />
         </Row>
+        <Row label="Sound for mentions and direct messages" hint="A short chime when someone mentions you or writes to you directly, while Channels isn't in front.">
+          <Toggle label="Sound for mentions and direct messages" on={prefs.mentionSound} onChange={(mentionSound) => actions.setPrefs({ mentionSound })} />
+        </Row>
+      </Group>
+      <Group title="Pause" hint="While paused, nothing notifies or makes a sound. Counts still add up, so you see what you missed.">
+        <Row label={paused ? `Paused until ${clockAt(prefs.snoozeUntil!)}` : "Pause notifications"}>
+          {paused ? (
+            <button type="button" className="btn is-small" onClick={() => actions.snooze(null)}>
+              Resume
+            </button>
+          ) : (
+            <span className="set-buttons">
+              {SNOOZE.map(([until, label]) => (
+                <button key={until} type="button" className="btn is-small" onClick={() => actions.snooze(until)}>
+                  {label}
+                </button>
+              ))}
+            </span>
+          )}
+        </Row>
+        <Row label="Quiet hours" hint={quiet.on ? `Every day from ${hhmm(quiet.from)} to ${hhmm(quiet.to)}.` : "Pause every day at the same times."}>
+          <Toggle label="Quiet hours" on={quiet.on} onChange={(on) => actions.setPrefs({ quiet: { ...quiet, on } })} />
+        </Row>
+        {quiet.on && (
+          <Row label="From and to">
+            <span className="set-buttons">
+              <input
+                className="input is-small"
+                type="time"
+                aria-label="Quiet hours start"
+                value={hhmm(quiet.from)}
+                onChange={(e) => actions.setPrefs({ quiet: { ...quiet, from: minutesOf(e.target.value, quiet.from) } })}
+              />
+              <input
+                className="input is-small"
+                type="time"
+                aria-label="Quiet hours end"
+                value={hhmm(quiet.to)}
+                onChange={(e) => actions.setPrefs({ quiet: { ...quiet, to: minutesOf(e.target.value, quiet.to) } })}
+              />
+            </span>
+          </Row>
+        )}
+      </Group>
+      <Group title="Muted" hint="A muted channel or room stays quiet: no notifications, no sound and no count, except when someone mentions you, writes to you directly or a decision is put to you.">
+        {prefs.muted.length ? (
+          prefs.muted.map((key) => (
+            <Row key={key} label={mutedName(app.channels, app.channel, key)}>
+              <button type="button" className="btn is-quiet is-small" onClick={() => actions.setMute(key.split("/")[0]!, key.split("/")[1] ?? null, false)}>
+                Unmute
+              </button>
+            </Row>
+          ))
+        ) : (
+          <Row label="Nothing muted" hint="Mute a channel from its settings, or a room from the channel's room list." />
+        )}
+      </Group>
+      <Group>
         <Row label="Enter sends" hint={prefs.enterSends ? "Shift Enter starts a new line." : "Enter starts a new line. ⌘ Enter sends."}>
           <Toggle label="Enter sends" on={prefs.enterSends} onChange={(enterSends) => actions.setPrefs({ enterSends })} />
         </Row>
       </Group>
     </Page>
   )
+}
+
+const SNOOZE = [
+  ["1h", "1 hour"],
+  ["8h", "8 hours"],
+  ["tomorrow", "Until tomorrow"],
+] as const
+
+const hhmm = (minutes: number): string => `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`
+
+const minutesOf = (typed: string, fallback: number): number => {
+  const m = /^(\d{2}):(\d{2})$/.exec(typed)
+  return m ? Number(m[1]) * 60 + Number(m[2]) : fallback
+}
+
+const clockAt = (at: number): string => new Date(at).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })
+
+function mutedName(tiles: readonly ChannelTile[], open: Channel | null, key: string): string {
+  const [code, room] = key.split("/")
+  const title = tiles.find((t) => t.code === code)?.title ?? "A channel"
+  if (!room) return title
+  const name = open?.code === code ? open.rooms.find((r) => r.id === room)?.name : undefined
+  return name ? `#${name} in ${title}` : `A room in ${title}`
 }
 
 export function UpdatesSection() {

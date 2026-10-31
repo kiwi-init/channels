@@ -8,8 +8,10 @@ import { type ChannelRow } from "@kiwi/channel/list.ts"
 import { ops, watches } from "@kiwi/channel/channel-ops.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import { named as withNicknames } from "~/chat/linked"
-import { elsewhere, heardHeads, lastWorth, messageHash, messageLink, noteBody, noteTitle, rootedPlace, rootOf, type NotePlace } from "~/live/notify"
+import { elsewhere, heardHeads, messageHash, messageLink, noteBody, noteTitle, rootedPlace, rootOf, type NotePlace } from "~/live/notify"
+import { chime } from "~/live/alerts"
 import { ownPrefs } from "~/live/prefs"
+import { forYou, tells } from "~/live/quiet"
 import { nicknamesOf } from "~/names"
 
 function tell(title: string, body: string, code: string, seq: number): void {
@@ -34,6 +36,8 @@ export interface Told {
 }
 
 export function tellMessage(m: Wire, t: Told): void {
+  const prefs = ownPrefs()
+  if (prefs.mentionSound && (forYou(m, t.me) || t.place.kind === "dm")) chime()
   const images = m.imgs?.length ?? 0
   const body = noteBody(withNicknames(m.body, nicknamesOf(t.members))) || (images ? `Sent ${images === 1 ? "an image" : `${images} images`}` : "")
   tell(noteTitle(m, t.me, t.display || m.from, t.channel, t.place), body, t.code, m.seq)
@@ -63,13 +67,15 @@ async function placeElsewhere(code: string, m: Wire, fetched: readonly Wire[], h
 async function readElsewhere(code: string, after: number, upTo: number, title: string): Promise<void> {
   const me = loadMember(code)?.identity.name
   if (!me) return
-  const { notify } = ownPrefs()
+  const prefs = ownPrefs()
+  const now = Date.now()
   const { messages } = await ops().call(code, "history", after)
   const fresh = messages.filter((m) => m.seq > after && m.seq <= upTo)
-  if (!lastWorth(fresh, me, notify, true)) return
+  if (!fresh.some((m) => m.sigOk && tells(m, me, prefs, code, true, now))) return
   const members = await ops().call(code, "members")
   const byName = new Map(members.map((m) => [m.name, m]))
-  const last = lastWorth(fresh, me, notify, answersDecisions(byName, me))
+  const decides = answersDecisions(byName, me)
+  const last = fresh.findLast((m) => m.sigOk && tells(m, me, prefs, code, decides, now))
   if (!last) return
   const place = await placeElsewhere(code, last, messages, upTo)
   tellMessage(last, { me, channel: title, code, place, members, display: byName.get(last.from)?.display })

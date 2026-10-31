@@ -440,7 +440,7 @@ export function leftOutOf(state: ChannelState, messages: readonly Wire[], me: st
     const trust = state.trust.get(m.seq)
     if (!ignored(trust) || isOverlay(m)) continue
     const why = state.rejected.get(m.seq) ?? (trust === "forged" ? `not signed by ${m.from}'s key` : "not allowed here")
-    const leftOut = `${trust === "forged" ? "Forged" : "Refused"}: ${why}`
+    const leftOut = `${trust === "forged" ? "Bad signature" : "Refused"}: ${why}`
     if (m.kind === "event")
       out.push({
         seq: m.seq,
