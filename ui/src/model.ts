@@ -303,6 +303,10 @@ export interface Powers {
   managesAgents: boolean
 }
 
+export const NO_POWERS: Powers = { addsAgents: false, answersDecisions: false, managesAgents: false }
+export const ALL_POWERS: Powers = { addsAgents: true, answersDecisions: true, managesAgents: true }
+export const trusted = (p: Powers): boolean => p.addsAgents && p.answersDecisions && p.managesAgents
+
 export interface JoinChoice {
   as?: string
   persona?: string | null

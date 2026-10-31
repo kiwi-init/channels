@@ -9,7 +9,7 @@ import type { Jump } from "~/chat/search-box"
 import { Avatar, Empty, Loading, Toggle } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago, clock } from "~/kit/time"
-import type { Ask, Channel, JoinAsk, Message, PermissionAsk, Person, Powers, QuestionAsk, ReviewAsk } from "~/model"
+import { ALL_POWERS, NO_POWERS, trusted, type Ask, type Channel, type JoinAsk, type Message, type PermissionAsk, type Person, type Powers, type QuestionAsk, type ReviewAsk } from "~/model"
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
 import { ShowAgent } from "~/kit/show-agent"
@@ -361,7 +361,7 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
   const pinGone = agent && persona === undefined && !!ask.pin && ask.pin.persona === null
   const label = app.personas.find((p) => p.id === chosen)?.label
   const only = readOnly ?? channel.newMembers === "read"
-  const can = powers ?? channel.newPowers ?? { addsAgents: false, answersDecisions: false, managesAgents: false }
+  const can = powers ?? channel.newPowers ?? NO_POWERS
   const blocked = pinWaits || pinGone
   const letIn = () =>
     app.actions.answerJoin(channel.code, ask.id, true, {
@@ -457,6 +457,27 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
                   </select>
                   <Icon name="down" size={14} />
                 </span>
+              )}
+            </Opt>
+          )}
+          {!agent && (
+            <Opt
+              label="Full trust"
+              hint={
+                !only && trusted(can)
+                  ? "They write and work, add agents, answer decisions and manage agents. The channel stays yours."
+                  : "Every power at once, for someone you'd trust with your life. The channel stays yours."
+              }
+            >
+              {(id) => (
+                <Toggle
+                  id={id}
+                  on={!only && trusted(can)}
+                  onChange={(on) => {
+                    if (on) setReadOnly(false)
+                    setPowers(on ? ALL_POWERS : NO_POWERS)
+                  }}
+                />
               )}
             </Opt>
           )}
