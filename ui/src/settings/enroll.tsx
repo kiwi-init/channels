@@ -33,7 +33,7 @@ export function EnrollDialog() {
 
   return (
     <Dialog open={open} onClose={close} label="Approve a new device">
-      <DialogHead title={`Sign in ${ask.label} as you?`} sub={`A ${KIND[ask.as]}${ask.os ? ` on ${ask.os}` : ""} signed in with your account.`} onClose={close} />
+      <DialogHead title={`Let ${ask.label} sign in as you?`} sub={`A ${KIND[ask.as]}${ask.os ? ` on ${ask.os}` : ""} signed in with your account.`} onClose={close} />
       <form
         className="set-confirm"
         onSubmit={(e) => {

@@ -394,11 +394,14 @@
   align-items: center;
   gap: 8px;
   color: var(--doing);
-  font: var(--t-meta) var(--ui);
+  font: var(--t-meta) var(--mono);
+  letter-spacing: -0.01em;
 }
 
 .set-pair-wait.is-stuck {
   color: var(--alert);
+  font-family: var(--ui);
+  letter-spacing: normal;
 }
 
 .set-harness {
@@ -475,7 +478,8 @@
 
 .set-harness-state {
   color: var(--ink-3);
-  font: var(--t-meta) var(--ui);
+  font: var(--t-meta) var(--mono);
+  letter-spacing: -0.01em;
 }
 
 .set-harness-state.tone-live {
