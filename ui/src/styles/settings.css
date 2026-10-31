@@ -36,7 +36,7 @@
 
 .set-body {
   max-width: calc(640px + 2 * var(--gutter));
-  padding: 24px var(--gutter) 48px;
+  padding: 24px var(--gutter) 32px;
   animation: fade var(--fast) var(--ease);
   margin: 0 auto;
 }
@@ -457,7 +457,7 @@
 }
 
 .set-folder {
-  min-height: 48px;
+  min-height: 32px;
   padding: 8px 0;
 }
 
@@ -471,7 +471,7 @@
 .set-add {
   justify-content: flex-start;
   gap: 10px;
-  min-height: 48px;
+  min-height: 32px;
   color: var(--ink-3);
   font: var(--t-ui) var(--ui);
 }
@@ -511,8 +511,20 @@
     white-space: nowrap;
   }
 
+  .set-nav[data-more-end] {
+    mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+  }
+
+  .set-nav[data-more-start] {
+    mask-image: linear-gradient(to right, transparent, #000 32px);
+  }
+
+  .set-nav[data-more-start][data-more-end] {
+    mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent);
+  }
+
   .set-body {
-    padding: 24px 16px 48px;
+    padding: 24px 16px 32px;
   }
 }
 
