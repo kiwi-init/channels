@@ -22,7 +22,7 @@ export function TaskChip({ channel, id }: { channel: Channel; id: number }) {
   )
 }
 
-export const CHECKS: Record<PullRequest["checks"], string> = { pass: "checks pass", fail: "checks fail", running: "checks running", none: "no checks" }
+export const CHECKS: Record<PullRequest["checks"], string> = { pass: "checks passed", fail: "checks failed", running: "checks running", none: "no checks" }
 
 export function PrChip({ pr }: { pr: PullRequest }) {
   return (
@@ -40,11 +40,11 @@ export function PrChip({ pr }: { pr: PullRequest }) {
         <span
           className={
             pr.state === "merged"
-              ? "tone-review"
+              ? "tone-live"
               : pr.state === "closed"
                 ? "tone-alert"
                 : pr.checks === "pass"
-                  ? "tone-live"
+                  ? "tone-quiet"
                   : pr.checks === "fail"
                     ? "tone-alert"
                     : pr.checks === "running"
