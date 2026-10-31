@@ -5,6 +5,7 @@ import { applyEvent, type FoldCtx } from "./fold-events.ts";
 import { allowedOnHold, answersAsk, isLeadRole, isPerson, LEAD, ON_HOLD } from "./people.ts";
 import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
+import { rootOf } from "../room-rules.ts";
 import { askHeadOf, fileTask } from "./asks.ts";
 import { taskId } from "./tasks.ts";
 import { linkSafe, prKey, releasesFrom, repoKey } from "./github.ts";
@@ -415,8 +416,8 @@ function folding(
         roomOf.set(m.seq, room);
         const parentPlace = parent !== undefined ? placeOf.get(parent) : undefined;
         const to = m.to?.length === 1 ? m.to[0]! : undefined;
-        const place =
-          parentPlace ?? (m.task !== undefined && tasks.has(m.task) ? { kind: "task" as const, task: m.task } : m.dm && to && to !== m.from && members.has(to) ? dmPlace(m.from, to) : MAIN);
+        const pair = m.dm && to && members.has(to) ? ([rootOf(m.from, members), rootOf(to, members)] as const) : null;
+        const place = parentPlace ?? (m.task !== undefined && tasks.has(m.task) ? { kind: "task" as const, task: m.task } : pair && pair[0] !== pair[1] ? dmPlace(pair[0], pair[1]) : MAIN);
         placeOf.set(m.seq, place);
         if (m.kind === "done" && m.task !== undefined && tasks.get(m.task)?.state !== "done") rejected.set(m.seq, `${taskId(m.task)} isn't done here`);
         const posted = place.kind === "task" ? tasks.get(place.task) : place.kind === "main" && room !== GENERAL_ROOM ? rooms.get(room) : undefined;

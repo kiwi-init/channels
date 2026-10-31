@@ -9,7 +9,7 @@ import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import { ALL_POWERS, memberOf, NO_POWERS, trusted, type App, type Channel, type Person } from "~/model"
 import { useApp } from "~/nav"
-import { nickname, shown } from "~/names"
+import { nickname, seatRoot, shown } from "~/names"
 import { ShowAgent } from "~/kit/show-agent"
 import { contextOf, liveOf, restOf } from "~/doing"
 import { PanelHead } from "~/panels/frame"
@@ -137,7 +137,7 @@ function Doors({ channel, person }: { channel: Channel; person: Person }) {
         type="button"
         className="btn is-primary"
         onClick={() => {
-          go({ to: "where", where: { kind: "dm", with: person.name } })
+          go({ to: "where", where: { kind: "dm", with: seatRoot(channel, person.name) } })
           go({ to: "panel", panel: null })
         }}
       >

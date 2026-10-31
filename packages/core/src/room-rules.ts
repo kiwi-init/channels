@@ -50,6 +50,19 @@ export function personOf(s: Seat, seats: readonly Seat[]): string {
   return device?.sponsor?.user ? `person:${device.sponsor.user}` : `seat:${s.pk}`;
 }
 
+export function rootName(s: Seat, seats: readonly Seat[]): string {
+  const handle = isPerson(s) ? s.sponsor?.handle : undefined;
+  if (!handle || handle === s.name) return s.name;
+  const base = seats.find((x) => x.name === handle);
+  const person = personOf(s, seats);
+  return base && person.startsWith("person:") && personOf(base, seats) === person ? handle : s.name;
+}
+
+export function rootOf(name: string, members: ReadonlyMap<string, Seat>): string {
+  const seat = members.get(name);
+  return seat ? rootName(seat, [...members.values()]) : name;
+}
+
 export function withSeats<P extends { name: string; pk: string }, S extends Seat>(seats: readonly S[], picked: readonly P[], pickOf: (s: S) => P): P[] {
   const byPk = new Map(seats.map((s) => [s.pk, s]));
   const people = new Set(
