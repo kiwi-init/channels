@@ -7,7 +7,6 @@ import { useAct, useApp } from "~/nav"
 import { nickname } from "~/names"
 
 interface ForCompose {
-  onClose: () => void
   onFile: (file: File | null) => void
 }
 
@@ -19,8 +18,21 @@ interface ForMessage {
 
 export default function Gifs(props: ForCompose | ForMessage) {
   const host = gifHost(useApp().app.account?.relay)
-  if (!("m" in props)) return <GifPicker className="gifs-on-compose" onClose={props.onClose} onPick={(g) => void gifFile(host, g).then(props.onFile, () => props.onFile(null))} />
+  if (!("m" in props)) return <GifButton host={host} onFile={props.onFile} />
   return props.r ? <GifReaction channel={props.channel} m={props.m} r={props.r} /> : <GifTool channel={props.channel} m={props.m} />
+}
+
+function GifButton({ host, onFile }: { host: string; onFile: (file: File | null) => void }) {
+  const [open, setOpen] = useState(false)
+  const close = useCallback(() => setOpen(false), [])
+  return (
+    <>
+      <button type="button" className="compose-attach" aria-label="GIFs" title="GIFs" aria-expanded={open} data-gif-toggle onClick={() => setOpen((v) => !v)}>
+        <span className="gif-mark">GIF</span>
+      </button>
+      {open && <GifPicker className="gifs-on-compose" onClose={close} onPick={(g) => void gifFile(host, g).then(onFile, () => onFile(null))} />}
+    </>
+  )
 }
 
 function GifTool({ channel, m }: { channel: Channel; m: Message }) {
