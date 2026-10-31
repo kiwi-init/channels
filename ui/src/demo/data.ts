@@ -413,7 +413,10 @@ const messages: Message[] = [
     where: general,
     task: 10,
     thread: { replies: 3, last: m(7), people: ["atlas", "jow"] },
-    reactions: [{ emoji: "🔥", by: ["jow", "maya"] }],
+    reactions: [
+      { emoji: "🔥", by: ["jow", "maya"] },
+      { emoji: "celebrate/hard-work", by: ["atlas"] },
+    ],
   },
   { seq: 120, from: "jow", at: m(6), text: "@win ship it: tag v1.0.0", where: general, mentionsYou: false, receipt: "Read" },
   { seq: 121, from: "atlas", at: m(6), text: "T13 for win. It can't be undone, so it waits for you.", where: general, task: 13, said: { text: "to you", tone: "quiet" }, replyTo: 7 },

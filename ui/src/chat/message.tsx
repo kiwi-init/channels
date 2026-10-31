@@ -1,5 +1,7 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
+import { isGifReaction } from "@kiwi/core/protocol.ts"
+
 import { PermissionCard, PrChip, QuestionCard, TaskChip } from "~/chat/cards"
 import { parsedFor } from "~/chat/parsed"
 import { preview, useReplying } from "~/chat/reply"
@@ -13,6 +15,7 @@ import { linked, named, withNames } from "~/chat/linked"
 
 const Markdown = lazy(() => import("~/chat/markdown"))
 const Annotator = lazy(() => import("~/chat/annotator"))
+const Gifs = lazy(() => import("~/chat/gif-picker"))
 
 const QUICK = ["👍", "🔥", "👀", "✅"]
 const CLAMP_PX = 12 * 22
@@ -252,19 +255,25 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
         {ask?.kind === "question" && <QuestionCard channel={channel} ask={ask} />}
         {(m.reactions?.length ?? 0) > 0 && (
           <div className="reacts">
-            {m.reactions?.map((r) => (
-              <button
-                key={r.emoji}
-                type="button"
-                className={cx("react", r.by.includes(channel.you) && "is-mine")}
-                title={r.by.map((b) => nickname(channel, b)).join(", ")}
-                aria-pressed={r.by.includes(channel.you)}
-                disabled={m.where.kind === "theirs"}
-                onClick={() => actions.react(channel.code, m.seq, r.emoji)}
-              >
-                {r.emoji} <span className="num">{r.by.length}</span>
-              </button>
-            ))}
+            {m.reactions?.map((r) =>
+              isGifReaction(r.emoji) ? (
+                <Suspense key={r.emoji} fallback={null}>
+                  <Gifs channel={channel} m={m} r={r} />
+                </Suspense>
+              ) : (
+                <button
+                  key={r.emoji}
+                  type="button"
+                  className={cx("react", r.by.includes(channel.you) && "is-mine")}
+                  title={r.by.map((b) => nickname(channel, b)).join(", ")}
+                  aria-pressed={r.by.includes(channel.you)}
+                  disabled={m.where.kind === "theirs"}
+                  onClick={() => actions.react(channel.code, m.seq, r.emoji)}
+                >
+                  {r.emoji} <span className="num">{r.by.length}</span>
+                </button>
+              )
+            )}
           </div>
         )}
         {m.receipt && (
@@ -291,6 +300,11 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
                 {e}
               </button>
             ))}
+          {m.where.kind !== "theirs" && (
+            <Suspense fallback={null}>
+              <Gifs channel={channel} m={m} />
+            </Suspense>
+          )}
           {replying && m.where.kind !== "theirs" && (
             <button type="button" className="msg-tool" aria-label="Reply" title="Reply" onClick={() => replying.set(m)}>
               <Icon name="reply" size={14} />

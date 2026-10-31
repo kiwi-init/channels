@@ -743,7 +743,8 @@ function webApp(app: WebApp): (pathname: string) => Response {
     if (inside && isFile(path)) {
       const headers: Record<string, string> = { ...security };
       // Vite fingerprints everything under /assets; the rest must be rechecked each time.
-      headers["cache-control"] = rel.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache";
+      headers["cache-control"] = rel.startsWith("/assets/") ? "public, max-age=31536000, immutable" : rel.startsWith("/reactions/") ? "public, max-age=86400" : "no-cache";
+      if (rel.startsWith("/reactions/")) headers["access-control-allow-origin"] = "*";
       // The installers are fetched with curl | sh and must read as text.
       if (/^\/install(\.sh|\.ps1)?$/.test(rel)) headers["content-type"] = "text/plain; charset=utf-8";
       return new Response(Bun.file(path), { headers });

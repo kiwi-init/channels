@@ -910,6 +910,178 @@ button.msg-image-spot:hover {
   color: var(--accent);
 }
 
+.react-gif {
+  position: relative;
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-card);
+  background: none;
+  overflow: hidden;
+}
+
+.react-gif img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: 128px;
+  border-radius: var(--r-card);
+}
+
+.react-gif .gif-wait {
+  display: block;
+  width: 170px;
+  height: 128px;
+  border-radius: var(--r-card);
+  background: var(--bg-3);
+}
+
+.react-gif.is-mine {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.react-gif-who {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  max-width: calc(100% - 12px);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--scrim);
+  color: var(--ink);
+  font: var(--t-stamp) var(--ui);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transition: opacity var(--fast) var(--ease);
+}
+
+.react-gif:hover .react-gif-who,
+.react-gif:focus-visible .react-gif-who {
+  opacity: 1;
+}
+
+.gif-mark {
+  padding: 1px 4px;
+  border-radius: var(--r-tick);
+  box-shadow: inset 0 0 0 1.5px currentColor;
+  font: 700 var(--t-stamp) / 1 var(--ui);
+  letter-spacing: 0.04em;
+}
+
+.msg:has(.gifs-on-msg) {
+  position: relative;
+}
+
+.msg:has(.gifs-on-msg) .msg-tools {
+  display: flex;
+}
+
+.gifs {
+  position: absolute;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(420px, calc(100vw - 32px));
+  max-height: min(420px, 60vh);
+  padding: 8px;
+  border-radius: var(--r-card);
+  background: var(--bg-2);
+  box-shadow: var(--shadow-pop);
+  animation: dialog-in var(--glide);
+}
+
+.gifs-on-compose {
+  bottom: calc(100% - 4px);
+  left: 0;
+}
+
+.gifs-on-msg {
+  top: calc(100% + 4px);
+  right: 0;
+}
+
+.gifs-tabs {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.gifs-tab {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: var(--ctl-sm);
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-row);
+  background: none;
+  color: var(--ink-2);
+  font: var(--t-meta) var(--ui);
+  text-transform: capitalize;
+}
+
+.gifs-tab .num {
+  color: var(--ink-3);
+}
+
+.gifs-tab:hover {
+  background: var(--wash);
+  color: var(--ink);
+}
+
+.gifs-tab.is-on {
+  background: var(--wash-2);
+  color: var(--ink);
+}
+
+.gifs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.gifs-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: none;
+  text-align: left;
+}
+
+.gifs-item:hover,
+.gifs-item:focus-visible {
+  background: var(--wash-2);
+}
+
+.gifs-item img,
+.gifs-item .gif-wait {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--r-row);
+  background: var(--bg-3);
+  object-fit: cover;
+}
+
+.gifs-feeling {
+  padding: 0 2px;
+  color: var(--ink-3);
+  font: var(--t-stamp) var(--ui);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .msg-thread {
   display: flex;
   align-items: baseline;

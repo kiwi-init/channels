@@ -3,6 +3,10 @@
   Referrer-Policy: no-referrer
   X-Content-Type-Options: nosniff
 
+/reactions/*
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=86400
+
 /install
   Content-Type: text/plain; charset=utf-8
   Cache-Control: no-cache

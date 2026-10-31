@@ -16,6 +16,6 @@ export default defineConfig(({ mode }) => ({
   },
   server: {
     port: 5175,
-    proxy: { "/v1": { target: "http://localhost:8787", ws: true } },
+    proxy: { "/v1": { target: "http://localhost:8787", ws: true }, "/reactions": { target: "http://localhost:8787" } },
   },
 }))

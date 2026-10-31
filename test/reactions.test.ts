@@ -84,16 +84,19 @@ describe("the react event", () => {
     expect(wellFormedEvent({ op: "react", emoji: "👀" })).toBe(false);
   });
 
-  test("GIF reactions are gone: one already in a log still folds, shows nothing, and takes back that member's earlier one", async () => {
+  test("a GIF reaction folds like an emoji: it replaces that member's earlier one, and the latest wins", async () => {
     const hi = await msg("jon", "msg", "shipped");
-    const ms = [hi, await react("dev", hi.seq, "👍"), await react("dev2", hi.seq, "🎉"), await react("dev", hi.seq, "celebrate/confetti")];
+    const ms = [hi, await react("dev", hi.seq, "👍"), await react("dev2", hi.seq, "🎉"), await react("dev", hi.seq, "celebrate/hard-work")];
     expect(wellFormedEvent(ms[3]!.ev)).toBe(true);
     const s = fold(ms, roster);
     expect(s.rejected.has(ms[3]!.seq)).toBe(false);
     expect(s.trust.get(ms[3]!.seq)).toBe("verified");
-    expect([...s.reactions.get(hi.seq)!].map(([n, r]) => [n, r.emoji])).toEqual([["dev2", "🎉"]]);
-    const alone = fold([hi, await react("dev", hi.seq, "ok/trailer")], roster);
-    expect(alone.reactions.has(hi.seq)).toBe(false);
+    expect([...s.reactions.get(hi.seq)!].map(([n, r]) => [n, r.emoji])).toEqual([
+      ["dev", "celebrate/hard-work"],
+      ["dev2", "🎉"],
+    ]);
+    const back = fold([...ms, await react("dev", hi.seq, null)], roster);
+    expect([...back.reactions.get(hi.seq)!].map(([n, r]) => [n, r.emoji])).toEqual([["dev2", "🎉"]]);
   });
 
   test("a task made from a message (--re) remembers it", async () => {
@@ -146,10 +149,10 @@ describe("over a relay", () => {
     expect((await reactionsOn(dev, ask)).emoji).toEqual([]);
   });
 
-  test("an agent's GIF key is refused: a reaction is one emoji", async () => {
+  test("an agent may react with a GIF key, and it shows like any reaction", async () => {
     const hi = await owner.ownerCh.send("done for today");
-    await expect(run(dev.react(hi, "ok/trailer"))).rejects.toThrow("a reaction is one emoji");
-    expect((await reactionsOn(dev, hi)).sent).toBe(0);
+    await run(dev.react(hi, "ok/trailer"));
+    expect((await reactionsOn(dev, hi)).emoji).toEqual([["dev", "ok/trailer"]]);
   });
 
   test("by hand, anyone may react, and take it back", async () => {
