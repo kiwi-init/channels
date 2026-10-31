@@ -1515,6 +1515,7 @@ button.msg-image-spot:hover {
 
 .stash-chip b {
   color: var(--ink);
+  font-family: var(--mono);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
