@@ -146,6 +146,29 @@ export const messageCommands: Record<string, Command> = {
       }),
     ),
 
+  edit: () =>
+    oneLook(
+      Effect.gen(function* () {
+        const s = yield* session();
+        const usage = 'usage: kiwi edit N "the new text" (or --file PATH): your own message #N';
+        const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die(usage));
+        const body = yield* text(2);
+        if (!body.trim()) return yield* die(usage);
+        yield* s.change(seq, body);
+        out(`edited #${seq}`);
+      }),
+    ),
+
+  delete: () =>
+    oneLook(
+      Effect.gen(function* () {
+        const s = yield* session();
+        const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi delete N: your own message #N"));
+        yield* s.change(seq, null);
+        out(`deleted #${seq}: it reads as deleted for everyone, but anyone who already read it may keep a copy`);
+      }),
+    ),
+
   save: () =>
     Effect.gen(function* () {
       const s = yield* session();

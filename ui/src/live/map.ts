@@ -7,7 +7,7 @@ import { describeEvent, proofLabel } from "@kiwi/core/format.ts"
 import { memberLoad, showsLoad } from "@kiwi/core/load.ts"
 import { checksOf, FAILED, prLinks, taskPr } from "@kiwi/core/prs.ts"
 import { stageOf } from "@kiwi/core/stage.ts"
-import { GENERAL_ROOM, ignored, isQuiet, isRasterMime, isReaction, type Message as Wire } from "@kiwi/core/protocol.ts"
+import { GENERAL_ROOM, ignored, isQuiet, isRasterMime, isOverlay, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { pickFor, taskCandidates } from "@kiwi/core/routing.ts"
 import { canPost } from "@kiwi/core/scopes.ts"
 import { versionName } from "@kiwi/core/status.ts"
@@ -335,7 +335,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
   }
   const out: Message[] = []
   for (const m of messages) {
-    if (ignored(state.trust.get(m.seq)) || isReaction(m)) continue
+    if (ignored(state.trust.get(m.seq)) || isOverlay(m)) continue
     if (m.kind === "event") {
       if (isQuiet(m)) continue
       const place = state.placeOf.get(m.seq) ?? MAIN
@@ -403,7 +403,7 @@ export function leftOutOf(state: ChannelState, messages: readonly Wire[], me: st
   const out: Message[] = []
   for (const m of messages) {
     const trust = state.trust.get(m.seq)
-    if (!ignored(trust) || isReaction(m)) continue
+    if (!ignored(trust) || isOverlay(m)) continue
     const why = state.rejected.get(m.seq) ?? (trust === "forged" ? `not signed by ${m.from}'s key` : "not allowed here")
     const leftOut = `${trust === "forged" ? "Forged" : "Refused"}: ${why}`
     if (m.kind === "event")
@@ -475,7 +475,7 @@ function historyOf(state: ChannelState, messages: readonly Wire[], me: string): 
     else out.set(id, [e])
   }
   for (const m of messages) {
-    if (ignored(state.trust.get(m.seq)) || isReaction(m) || state.rejected.has(m.seq)) continue
+    if (ignored(state.trust.get(m.seq)) || isOverlay(m) || state.rejected.has(m.seq)) continue
     const base = { seq: m.seq, by: m.from, at: m.ts }
     const ev = m.ev
     if (m.kind === "event") {

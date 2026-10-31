@@ -96,6 +96,8 @@ const OPS: Record<Event["op"], true> = {
   "hold.set": true,
   "voice.set": true,
   react: true,
+  "msg.edit": true,
+  "msg.delete": true,
 };
 const V1 = [
   "hello",
