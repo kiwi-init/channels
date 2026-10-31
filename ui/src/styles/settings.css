@@ -216,8 +216,9 @@
 
 .set-device-name {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px 8px;
   min-width: 0;
   color: var(--ink);
   font: var(--t-ui) var(--ui);
@@ -271,8 +272,24 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   color: var(--ink-3);
   font: var(--t-meta) var(--ui);
+}
+
+.set-device-status {
+  min-width: 0;
+}
+
+@media (max-width: 760px) {
+  .set-device {
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+
+  .set-device-actions-inline {
+    grid-column: 2;
+    margin-left: -8px;
+  }
 }
 
 .set-pip {

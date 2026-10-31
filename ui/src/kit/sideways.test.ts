@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { sidewaysTarget } from "~/settings/sideways"
+import { sidewaysTarget } from "~/kit/sideways"
 
 describe("a vertical wheel scrolls the narrow settings tabs sideways (T849)", () => {
   test("down moves right and up moves left, within the row", () => {

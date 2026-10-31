@@ -1026,8 +1026,21 @@
     padding: 0 8px;
   }
 
-  .tabs .is-agents {
-    display: none;
+  .chan.has-panel .panel {
+    left: var(--rail-w);
+    width: auto;
+  }
+
+  .tabs[data-more-end] {
+    mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+  }
+
+  .tabs[data-more-start] {
+    mask-image: linear-gradient(to right, transparent, #000 24px);
+  }
+
+  .tabs[data-more-start][data-more-end] {
+    mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
   }
 
   .top-meta {

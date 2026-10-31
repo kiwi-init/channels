@@ -8,7 +8,7 @@ export function sidewaysTarget(at: number, max: number, deltaX: number, deltaY: 
   return to === at ? null : to
 }
 
-export function useSideways(ref: RefObject<HTMLElement | null>, active: string): void {
+export function useSideways(ref: RefObject<HTMLElement | null>, active: string, chosen = ".side-row.is-on"): void {
   useEffect(() => {
     const el = ref.current
     if (!el) return
@@ -37,8 +37,8 @@ export function useSideways(ref: RefObject<HTMLElement | null>, active: string):
 
   useEffect(() => {
     const el = ref.current
-    const on = el?.querySelector<HTMLElement>(".side-row.is-on")
+    const on = el?.querySelector<HTMLElement>(chosen)
     if (!el || !on || el.scrollWidth - el.clientWidth <= 1) return
     on.scrollIntoView({ block: "nearest", inline: "nearest" })
-  }, [ref, active])
+  }, [ref, active, chosen])
 }
