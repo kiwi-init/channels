@@ -193,7 +193,7 @@
 }
 
 .tile.is-drop {
-  border-radius: calc(var(--r-ctl) + 6px);
+  border-radius: var(--r-card);
   background: var(--wash-2);
   box-shadow:
     0 0 0 2px var(--bg),
@@ -244,7 +244,7 @@
   border-radius: var(--r-tick);
   background: var(--float-3);
   color: var(--ink);
-  font: 600 10px / 1 var(--ui);
+  font: 600 var(--t-stamp) / 1 var(--ui);
 }
 
 .is-new .folder-mini {
