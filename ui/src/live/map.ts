@@ -129,6 +129,7 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
     ...(human && m.picture ? { picture: `data:${m.picture.mime};base64,${m.picture.data}` } : {}),
     owner: m.owner,
     you: m.name === me,
+    ...(human && m.sponsor?.handle && m.sponsor.handle !== m.name ? { seatOf: m.sponsor.handle } : {}),
     presence: m.name === me || here ? (human && here?.activity?.state === "idle" ? "away" : "online") : "offline",
     ...(activity ? { activity } : {}),
     ...(reach && reach !== "unknown" ? { reach } : {}),

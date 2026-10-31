@@ -33,3 +33,20 @@ describe("one app rotates a private room when one of its members leaves the chan
     expect(prunePlan(state(["pk-tia", "pk-gone"], people), "pk-jow")).toEqual({ now: [], later: [] });
   });
 });
+
+describe("one app seals a person's new device into the private rooms they're in (T1046)", () => {
+  const people = [
+    person("jow", "pk-jow", { owner: true }),
+    person("tia", "pk-tia", { ...ALL, sponsor: { user: "p-tia", name: "tia", handle: "tia" } }),
+    person("tia-2", "pk-tia-2", { sponsor: { user: "p-tia", name: "tia", handle: "tia" } }),
+    person("ana", "pk-ana", { kind: "agent", sponsor: { user: "p-tia", name: "tia", handle: "tia" } }),
+  ];
+
+  test("the person's phone isn't in a room made for them yet: the owner seals it in", () => {
+    expect(prunePlan(state(["pk-jow", "pk-tia"], people), "pk-jow")).toEqual({ now: ["r"], later: [] });
+  });
+
+  test("nothing once the phone is in, and an agent of theirs is never brought in as a device", () => {
+    expect(prunePlan(state(["pk-jow", "pk-tia", "pk-tia-2"], people), "pk-jow")).toEqual({ now: [], later: [] });
+  });
+});
