@@ -32,3 +32,12 @@ test("help names ask-human as the way to ask a person, and --escalate as its old
   expect(escalate).toContain("ask-human");
   expect(HELP).toContain('kiwi ask-human "question"');
 });
+
+test("both briefs keep an answer in the room the message came from, unless the context helps agents elsewhere", () => {
+  const cli = briefText({ alias: "c", agent: "mac", mc: "kiwi", listen: "" });
+  const mcp = mcpBrief("c", "mac", false);
+  for (const brief of [cli, mcp]) {
+    expect(brief).toContain("A message from a room is answered in that room");
+    expect(brief).toContain("only when what you say is context other agents there need too");
+  }
+});
