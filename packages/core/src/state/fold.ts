@@ -88,6 +88,7 @@ function folding(
       scopes: scopesOf(r),
       ...(r.runs ? { runs: r.runs } : {}),
       ...(r.persona ? { persona: r.persona } : {}),
+      ...(r.addsAgents && r.kind === "human" && !r.owner ? { addsAgents: true } : {}),
       ...(r.answersDecisions && r.kind === "human" && !r.owner ? { answersDecisions: true } : {}),
       ...(r.managesAgents && r.kind === "human" && !r.owner ? { managesAgents: true } : {}),
       owner: r.owner,
