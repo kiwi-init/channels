@@ -73,7 +73,7 @@ function writeScript(path: string, text: string): boolean {
   }
 }
 
-export const SYSTEM_OPENER: TerminalOpener = {
+const SYSTEM_OPENER: TerminalOpener = {
   platform: process.platform,
   env: process.env,
   which: (bin) => Bun.which(bin),
