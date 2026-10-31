@@ -1,9 +1,27 @@
 import { outgrown, type Trust } from "./protocol.ts";
 import type { FoldBase, Place } from "./state.ts";
 
-export const BASE_WIRE_VERSION = 6;
+export const BASE_WIRE_VERSION = 7;
 
-const LISTS = ["members", "scopesByKey", "scopeSets", "roleSets", "tasks", "facts", "leases", "reactions", "reactSeqs", "rejected", "asks", "answered", "threadPeople", "rooms"] as const;
+const LISTS = [
+  "members",
+  "scopesByKey",
+  "scopeSets",
+  "roleSets",
+  "tasks",
+  "facts",
+  "leases",
+  "reactions",
+  "reactSeqs",
+  "chatBy",
+  "edits",
+  "deleted",
+  "rejected",
+  "asks",
+  "answered",
+  "threadPeople",
+  "rooms",
+] as const;
 
 interface Column<V> {
   d: number[];

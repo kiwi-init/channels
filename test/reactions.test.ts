@@ -8,7 +8,7 @@ import * as Effect from "effect/Effect";
 import { AgentLive, AgentSession, wants } from "../src/agent.ts";
 import { describeEvent } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
-import { isReaction, wellFormedEvent, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
+import { isOverlay, wellFormedEvent, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 import { joinAgent, pairComputer, setupChannel } from "./owner.ts";
@@ -70,8 +70,8 @@ describe("the react event", () => {
     const s = fold([hi, r], roster);
     expect(s.placeOf.has(r.seq)).toBe(false);
     expect([...s.places.values()].reduce((n, p) => n + p.count, 0)).toBe(1);
-    expect(isReaction(r)).toBe(true);
-    expect(isReaction(hi)).toBe(false);
+    expect(isOverlay(r)).toBe(true);
+    expect(isOverlay(hi)).toBe(false);
     for (const me of ["jon", "coord", "dev2"]) expect(wants(me, r, s)).toBe(false);
     expect(wants("jon", r, s, { all: true })).toBe(true);
     expect(describeEvent(r)).toBe(`reacted 👀 to #${hi.seq}`);
@@ -137,7 +137,7 @@ describe("over a relay", () => {
 
   const reactionsOn = async (s: AgentSession, on: number) => {
     const { messages, state } = await run(s.state());
-    return { emoji: [...(state.reactions.get(on) ?? new Map())].map(([n, r]) => [n, r.emoji]), sent: messages.filter((m) => isReaction(m)).length };
+    return { emoji: [...(state.reactions.get(on) ?? new Map())].map(([n, r]) => [n, r.emoji]), sent: messages.filter((m) => isOverlay(m)).length };
   };
 
   test("answering a message or claiming a task made from one leaves no reaction by itself", async () => {

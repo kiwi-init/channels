@@ -14,6 +14,7 @@ import {
   MAX_HOLDS,
   MAX_IMAGES,
   EVENT_OPS_VERSION,
+  OVERLAY_OPS,
   PROTOCOL_VERSION,
   rasterAttachment,
   wellFormed,
@@ -40,7 +41,7 @@ import type { ChannelLive } from "./live.ts";
 import type { Relay } from "./relay.ts";
 import type { ChannelSettings } from "./settings.ts";
 
-const PRIVATE_EVENTS = "a private room keeps to messages and reactions: post tasks, notes and other channel events outside it, where everyone sees them";
+const PRIVATE_EVENTS = "a private room keeps to messages, reactions, edits and deletes: post tasks, notes and other channel events outside it, where everyone sees them";
 export interface SendOptions {
   to?: string[];
   kind?: Kind;
@@ -164,7 +165,7 @@ export class ChannelSending {
       const n = now?.n;
       const roomKey = now?.key;
       if (now && !roomKey) return yield* new Rejected("you're not in that private room anymore");
-      if (roomKey && ((opts.ev && opts.ev.op !== "react") || opts.task)) return yield* new Rejected(PRIVATE_EVENTS);
+      if (roomKey && ((opts.ev && !OVERLAY_OPS.has(opts.ev.op)) || opts.task)) return yield* new Rejected(PRIVATE_EVENTS);
       const inner = yield* Effect.promise(() => sign(this.ch.identity, payload));
       const signed =
         roomKey && opts.room && n

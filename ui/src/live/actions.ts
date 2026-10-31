@@ -1,6 +1,6 @@
 import { handleFor } from "@kiwi/core/membership.ts"
 import { permissionReply } from "@kiwi/core/permission.ts"
-import { MAX_GOAL_NAME, ROBOT_FACES, TASK_TITLE_MAX_LENGTH } from "@kiwi/core/protocol.ts"
+import { ROBOT_FACES, TASK_TITLE_MAX_LENGTH } from "@kiwi/core/protocol.ts"
 import { taskId } from "@kiwi/core/state.ts"
 import { tokenForCreate } from "@kiwi/app/auth.ts"
 import { askToJoin, createChannel, inviteInfo } from "@kiwi/channel/join.ts"
@@ -11,9 +11,9 @@ import { relayUrl } from "@kiwi/secrets/relay.ts"
 import { noteFor, showSeat, type ShowResult } from "@kiwi/app/show-seat.ts"
 import { ALLOW_ONCE, DENY } from "@kiwi/app/permission-settled.ts"
 import { savePersonalities } from "@kiwi/app/personalities.ts"
-import { createPerson, bridge, secrets, type KiwiBridge, type TermEvent, type TermOpenView } from "@kiwi/secrets/secrets.ts"
+import { createPerson, bridge, secrets } from "@kiwi/secrets/secrets.ts"
 import { isSignInGone } from "@kiwi/channel/session.ts"
-import { ANYONE, approveTask, assignTask, cancelTask, changeReviewer, closedDigest, sendBackTask, type TaskSend } from "@kiwi/channel/task-actions.ts"
+import { approveTask, assignTask, closedDigest, sendBackTask, type TaskSend } from "@kiwi/channel/task-actions.ts"
 import { announce } from "~/kit/toasts"
 import { enrollAnswer, enrollBegin, enrollCancel, enrollConfirm, enrollDeny, enrollKeep, forgetDevice, linkGithub, renewDevice, unlinkGithub, type EnrollDone } from "~/live/account"
 import { loadPicture } from "~/live/pictures"
@@ -21,7 +21,6 @@ import { setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
 import { iconFromFile } from "~/live/icon-file"
 import { seatOf } from "~/live/seats"
-import { memberName } from "@kiwi/app/format.ts"
 import { checkComputer, computerSettings, setContextLine, setHooks } from "~/live/computer"
 import { addStartFolder, allowNewAgents, allowRemoteBypass, removeStartFolder, setTerminalHelpers } from "~/live/starts"
 import { markSeenIn } from "@kiwi/app/threads.ts"
@@ -30,14 +29,11 @@ import { closeOpened, leavingOnPurpose, openedRun, type Run } from "~/live/store
 import { attempt, event, memberOf, need, owner, say } from "~/live/run"
 
 const manage = () => import("~/live/manage")
-import { stepReplyText } from "~/chat/step"
+const rare = () => import("~/live/rare")
 import { downloadAndRestart } from "~/live/update"
 import { setWake } from "~/live/wakes"
 import { rememberOwner } from "~/live/invites"
-import type { Actions, InviteInfo, TaskStatus, TermOpened, TermWatch } from "~/model"
-
-const COMPACT_ASK =
-  "Please draft a /compact summary of the history so far: name every open task (T7) and open question (#123) by its id, then run `kiwi compact --file summary.md`. I'll approve it in the app."
+import type { Actions, InviteInfo, TaskStatus } from "~/model"
 
 async function tried<T>(what: string, run: () => Promise<T>): Promise<T | null> {
   try {
@@ -125,32 +121,6 @@ async function joinGranted(d: EnrollDone): Promise<void> {
   announce(asked ? `Signed in as ${d.person.name}. Asked to join ${asked === 1 ? "1 channel" : `${asked} channels`}` : `Signed in as ${d.person.name}`)
 }
 
-async function streamTerm(b: KiwiBridge, open: () => Promise<TermOpenView>, watch: TermWatch): Promise<TermOpened> {
-  const early: TermEvent[] = []
-  let mine: string | null = null
-  const deliver = (e: TermEvent) => ("out" in e ? watch.out(e.out) : watch.ended())
-  const off = b.onTerm((e) => (mine === null ? early.push(e) : e.term === mine && deliver(e)))
-  const r = await open().catch((err: unknown): TermOpenView => ({ ok: false, detail: err instanceof Error ? err.message : String(err) }))
-  if (!r.ok) {
-    off()
-    return { error: r.detail }
-  }
-  const term = r.term
-  mine = term
-  queueMicrotask(() => early.filter((e) => e.term === term).forEach(deliver))
-  return {
-    screen: { cols: r.cols, rows: r.rows, seed: r.seed, dead: r.dead, pane: r.pane },
-    link: {
-      keys: (text) => void b.termKeys(term, text).catch(() => {}),
-      size: (c, w) => void b.termSize(term, c, w).catch(() => {}),
-      close: () => {
-        off()
-        void b.termClose(term).catch(() => {})
-      },
-    },
-  }
-}
-
 export function makeActions(): Actions {
   return {
     send: (code, where, text, opts) =>
@@ -184,6 +154,8 @@ export function makeActions(): Actions {
         const mine = run.state.reactions.get(seq)?.get(run.me)?.emoji === emoji
         await event(run, "reaction", { op: "react", seq, emoji: mine ? null : emoji })
       }),
+    editMessage: (code, seq, text) => attempt("Not edited", async () => (await rare()).change(code, seq, text)),
+    deleteMessage: (code, seq) => attempt("Not deleted", async () => (await rare()).change(code, seq, null)),
     answerPermission: (code, id, allow) =>
       attempt("Not answered", async () => {
         const run = need(code)
@@ -200,13 +172,7 @@ export function makeActions(): Actions {
         if (!m) throw new Error("that question is gone")
         await run.send(text, { to: [m.from], re: [m.seq], kind: "msg" })
       }),
-    answerStep: (code, id, reply) =>
-      attempt("Not answered", async () => {
-        const run = need(code)
-        const m = run.messages.find((x) => x.seq === Number(id))
-        if (!m) throw new Error("that step is gone")
-        await run.send(stepReplyText(reply), { to: [m.from], re: [m.seq], kind: "msg", stepReply: reply })
-      }),
+    answerStep: (code, id, reply) => attempt("Not answered", async () => (await rare()).answerStep(code, id, reply)),
     answerJoin: (code, id, yes, choice) => attempt(yes ? "Couldn't let them in" : "Couldn't turn them away", async () => (await manage()).answerJoin(code, id, yes, choice)),
     approveTask: (code, id, approve, why) =>
       attempt(approve ? "Not approved" : "Not sent back", async () => {
@@ -233,15 +199,7 @@ export function makeActions(): Actions {
         const to = t.owner && t.owner !== run.me ? [t.owner] : undefined
         await event(run, `${taskId(id)} ${state}`, { op: "task.update", task: id, state }, to)
       }),
-    cancelTask: (code, id, why) =>
-      attempt("Not cancelled", async () => {
-        const run = need(code)
-        const t = run.state.tasks.get(id)
-        if (!t) throw new Error(`no task ${taskId(id)}`)
-        const note = why.trim()
-        if (!note) throw new Error("say why it's cancelled")
-        await sends(run, cancelTask(t, note, run.me), closedDigest(run.state, [...run.messages], t, { by: run.me, cancelled: note }))
-      }),
+    cancelTask: (code, id, why) => attempt("Not cancelled", async () => (await rare()).cancelTask(code, id, why)),
     assignTask: (code, id, to, why) =>
       attempt("Not assigned", async () => {
         const run = need(code)
@@ -250,20 +208,8 @@ export function makeActions(): Actions {
         memberOf(run, to)
         await sends(run, assignTask(t, to, why.trim() || (t.owner ? `was ${t.owner}'s` : "nobody had it")))
       }),
-    setReviewer: (code, id, reviewer) =>
-      attempt("Reviewer not changed", async () => {
-        const run = need(code)
-        const t = run.state.tasks.get(id)
-        if (!t) throw new Error(`no task ${taskId(id)}`)
-        if (reviewer !== ANYONE) memberOf(run, reviewer)
-        await sends(run, changeReviewer(t, reviewer, run.me))
-      }),
-    nameGoal: (code, ask, name) =>
-      attempt("Goal not named", async () => {
-        const run = need(code)
-        const clean = name?.trim().slice(0, MAX_GOAL_NAME) || null
-        await event(run, clean ? `named the goal of #${ask}: ${clean}` : `#${ask}'s goal unnamed`, { op: "ask.name", ask, name: clean })
-      }),
+    setReviewer: (code, id, reviewer) => attempt("Reviewer not changed", async () => (await rare()).setReviewer(code, id, reviewer)),
+    nameGoal: (code, ask, name) => attempt("Goal not named", async () => (await rare()).nameGoal(code, ask, name)),
     setRole: (code, name, role) => attempt("Role not changed", async () => (await manage()).setRole(code, name, role)),
     removeMember: (code, name) => attempt(`Couldn't remove ${name}`, async () => (await manage()).removeMember(code, name)),
     setPersona: (code, name, id) => attempt("Personality not changed", async () => (await manage()).setPersona(code, name, id)),
@@ -277,21 +223,8 @@ export function makeActions(): Actions {
       const r = await showSeat(seat).catch((): ShowResult => ({ ok: false, why: "failed" }))
       return noteFor(seat.place, r)
     },
-    openTerm: async (code, name, cols, rows, watch) => {
-      const b = bridge()
-      const seat = seatOf(need(code).roomId, name)
-      if (!b) return { error: "Terminals open in the Channels desktop app." }
-      if (typeof b.termOpen !== "function") return { error: "Update Channels to open its terminals here." }
-      if (seat?.place !== "hosted") return { error: "It isn't running in Channels' own terminal on this computer." }
-      return streamTerm(b, () => b.termOpen(seat.pane, cols, rows), watch)
-    },
-    openMyTerm: async (code, want, cols, rows, watch) => {
-      const b = bridge()
-      if (!b) return { error: "Your terminal opens in the Channels desktop app." }
-      if (typeof b.termMine !== "function") return { error: "Update Channels to open your own terminal here." }
-      const room = need(code).roomId
-      return streamTerm(b, () => b.termMine(room, want, cols, rows), watch)
-    },
+    openTerm: async (code, name, cols, rows, watch) => (await rare()).openTerm(code, name, cols, rows, watch),
+    openMyTerm: async (code, want, cols, rows, watch) => (await rare()).openMyTerm(code, want, cols, rows, watch),
     myTerms: async () => {
       const b = bridge()
       return b && typeof b.termTabs === "function" ? b.termTabs().catch(() => []) : []
@@ -341,21 +274,8 @@ export function makeActions(): Actions {
       }),
     setGoal: (code, goal) => attempt("Goal not set", async () => (await manage()).setGoal(code, goal)),
     setHold: (code, on, note) => attempt(on ? "Agents not paused" : "Agents not resumed", async () => (await manage()).setHold(code, on, note)),
-    askCompact: (code) =>
-      attempt("Not asked", async () => {
-        const run = need(code)
-        const lead = run.state.lead && run.state.lead !== run.me ? run.state.lead : null
-        await run.send(COMPACT_ASK, lead ? { to: [lead], kind: "ask" } : { kind: "ask" })
-        announce(lead ? `Asked ${memberName(run.state.members.get(lead), lead)} for a summary` : "Asked the agents for a summary")
-      }),
-    approveCompact: (code, proposal) =>
-      attempt("Not compacted", async () => {
-        const run = owner(code)
-        const p = run.state.compactProposal
-        if (p?.seq !== proposal) throw new Error("that proposal was replaced or already approved")
-        await event(run, `compacted the history through #${p.through}`, { op: "compact", summary: p.summary, through: p.through, proposal: p.seq })
-        announce(`History through #${p.through} compacted`)
-      }),
+    askCompact: (code) => attempt("Not asked", async () => (await rare()).askCompact(code)),
+    approveCompact: (code, proposal) => attempt("Not compacted", async () => (await rare()).approveCompact(code, proposal)),
     myRepos: async () => {
       const b = bridge()
       if (!b) return []

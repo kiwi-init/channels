@@ -374,6 +374,15 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
             return { ...m, reactions }
           }),
         })),
+      editMessage: (code, seq, text) => edit(code, (c) => ({ ...c, messages: c.messages.map((m) => (m.seq === seq ? { ...m, text, edited: Date.now() } : m)) })),
+      deleteMessage: (code, seq) =>
+        edit(code, (c) => ({
+          ...c,
+          messages: c.messages.map((m) => {
+            if (m.seq !== seq) return m
+            return { ...m, text: "", images: undefined, canChange: undefined, edited: undefined, deleted: true as const }
+          }),
+        })),
       answerPermission: (code, id, allow) =>
         edit(code, (c) => ({
           ...c,

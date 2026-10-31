@@ -1,8 +1,23 @@
-import { EVENT_OPS_VERSION, FOLD_RULES, GENERAL_ROOM, ignored, isReaction, MAX_GOAL_NAME, MAX_ROOMS, POWERS, powerChange, ROOM_ID_RE, type Message, type Power, type Trust } from "../protocol.ts";
+import {
+  editable,
+  EVENT_OPS_VERSION,
+  FOLD_RULES,
+  GENERAL_ROOM,
+  ignored,
+  isOverlay,
+  MAX_GOAL_NAME,
+  MAX_ROOMS,
+  POWERS,
+  powerChange,
+  ROOM_ID_RE,
+  type Message,
+  type Power,
+  type Trust,
+} from "../protocol.ts";
 import { inlineText } from "../membership.ts";
 import { canPost, refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
-import { allowedOnHold, answersAsk, isLeadRole, isPerson, LEAD, ON_HOLD } from "./people.ts";
+import { allowedOnHold, answersAsk, isLeadRole, isPerson, LEAD, ON_HOLD, sameAuthor } from "./people.ts";
 import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
 import { rootOf } from "../room-rules.ts";
@@ -14,7 +29,7 @@ import { roomName } from "./rooms.ts";
 import { settle } from "./leases.ts";
 import { carriedPersona } from "../personality.ts";
 import { permissionAnswer } from "../permission.ts";
-import type { AskHead, ChannelState, Fact, FoldBase, FoldMember, GuardFloor, Lease, Member, PersonaLead, Place, Reaction, Room, RoomsFloor, Roster, SecretRoom, Task } from "./types.ts";
+import type { AskHead, ChannelState, Edit, Fact, FoldBase, FoldMember, GuardFloor, Lease, Member, PersonaLead, Place, Reaction, Room, RoomsFloor, Roster, SecretRoom, Task } from "./types.ts";
 import { inRoom } from "../room-rules.ts";
 
 const STALE_MS = 24 * 3_600_000;
@@ -232,6 +247,9 @@ function folding(
   const leases = new Map<string, Lease>(from?.leases.map((l) => [l.name, l]));
   const reactions = new Map<number, Map<string, Reaction>>(from?.reactions.map(([seq, by]) => [seq, new Map(by)]));
   const reactSeqs = new Set<number>(from?.reactSeqs);
+  const chatBy = new Map<number, string>(from?.chatBy);
+  const edits = new Map<number, Edit>(from?.edits);
+  const deleted = new Map<number, number>(from?.deleted);
   let skipped = from?.skipped === true;
   const trust = new Map<number, Trust>(from?.trust);
   const rejected = new Map<number, string>(from?.rejected);
@@ -370,8 +388,8 @@ function folding(
         const why =
           !room?.meta || room.n !== m.sealed.n || !inRoom(room.meta, m.from, m.pk)
             ? `${m.from} wasn't in that private room, or wrote with a key it no longer uses`
-            : m.kind === "event" && m.ev?.op !== "react"
-              ? "a private room keeps to messages and reactions: tasks, notes and other channel events would be seen by everyone"
+            : m.kind === "event" && !isOverlay(m)
+              ? "a private room keeps to messages, reactions, edits and deletes: tasks, notes and other channel events would be seen by everyone"
               : null;
         if (why) {
           trust.set(m.seq, "refused");
@@ -419,13 +437,14 @@ function folding(
         const pair = m.dm && to && members.has(to) ? ([rootOf(m.from, members), rootOf(to, members)] as const) : null;
         const place = parentPlace ?? (m.task !== undefined && tasks.has(m.task) ? { kind: "task" as const, task: m.task } : pair && pair[0] !== pair[1] ? dmPlace(pair[0], pair[1]) : MAIN);
         placeOf.set(m.seq, place);
+        if (editable(m)) chatBy.set(m.seq, m.from);
         if (m.kind === "done" && m.task !== undefined && tasks.get(m.task)?.state !== "done") rejected.set(m.seq, `${taskId(m.task)} isn't done here`);
         const posted = place.kind === "task" ? tasks.get(place.task) : place.kind === "main" && room !== GENERAL_ROOM ? rooms.get(room) : undefined;
         if (posted && !posted.posters?.includes(m.from)) posted.posters = [...(posted.posters ?? []), m.from];
         if (place.kind === "task") touch(tasks.get(place.task), m.from, at);
       }
       member.lastSeen = Math.max(member.lastSeen, at);
-      if (!isReaction(m)) member.messages++;
+      if (!isOverlay(m)) member.messages++;
 
       for (const r of m.re ?? []) {
         if (!(r < m.seq)) continue;
@@ -477,6 +496,18 @@ function folding(
           on.set(m.from, { emoji: ev.emoji, seq: m.seq, at });
         }
         if (on && !on.size) reactions.delete(ev.seq);
+        continue;
+      }
+      if (ev.op === "msg.edit" || ev.op === "msg.delete") {
+        const author = ev.seq < m.seq ? chatBy.get(ev.seq) : undefined;
+        if (author === undefined) reject(`no message #${ev.seq} that can be edited or deleted`);
+        else if (!sameAuthor(members.get(author), member)) reject(`only who wrote #${ev.seq} edits or deletes it`);
+        else if (deleted.has(ev.seq)) reject(`#${ev.seq} is already deleted`);
+        else if (ev.op === "msg.edit") edits.set(ev.seq, { body: ev.body, at, seq: m.seq });
+        else {
+          deleted.set(ev.seq, at);
+          edits.delete(ev.seq);
+        }
         continue;
       }
       if (ev.op === "ask.close") {
@@ -578,6 +609,9 @@ function folding(
       leases: [...leases.values()],
       reactions: recent(reactions).map(([seq, by]): [number, [string, Reaction][]] => [seq, [...by]]),
       reactSeqs: [...reactSeqs].filter((seq) => seq > cut),
+      chatBy: recent(chatBy),
+      edits: recent(edits),
+      deleted: recent(deleted),
       trust: recent(trust),
       rejected: recent(rejected),
       sent: keptSent,
@@ -661,6 +695,8 @@ function folding(
     githubWrite: ctx.githubWrite,
     branchPrefix: ctx.branchPrefix,
     reactions,
+    edits,
+    deleted,
     head,
   };
 }
