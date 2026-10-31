@@ -6,9 +6,14 @@ import { describeScopes, SCOPES, wireScopes, type Scope } from "@kiwi/core/scope
 import { secrets } from "@kiwi/secrets/secrets.ts"
 import { announce } from "~/kit/toasts"
 import { newMemberPowers, newMemberScopes } from "~/live/defaults"
-import { event, memberOf, need, owner, personalities } from "~/live/run"
-import type { Run } from "~/live/store"
+import { event, memberOf, need, owner, personalities, setup } from "~/live/run"
+import { openedRun, type Run } from "~/live/store"
 import type { JoinChoice, Powers } from "~/model"
+import { BRANCH_PREFIX_RE, POWERS, ROOM_ID_RE, type Power } from "@kiwi/core/protocol.ts"
+import { newRoomId } from "@kiwi/core/state.ts"
+import { cleanRoomName, roomProblem, roomsAfter } from "@kiwi/app/rooms.ts"
+
+const POWER_WORDS: Record<Power, string> = { addsAgents: "add agents", answersDecisions: "answer decisions", managesAgents: "manage agents" }
 
 function agentManager(code: string, name: string): { run: Run; m: RosterMember } {
   const run = need(code)
@@ -112,13 +117,100 @@ export async function setNickname(code: string, name: string, nickname: string |
 export async function setPowers(code: string, name: string, powers: Partial<Powers>): Promise<void> {
   const run = owner(code)
   const m = memberOf(run, name)
-  const manages = powers.managesAgents
-  if (manages !== undefined && manages !== !!m.managesAgents)
-    await event(run, manages ? `let ${name} manage agents` : `took ${name}'s power to manage agents`, { op: "power.set", member: name, pk: m.pk, managesAgents: manages, was: !!m.managesAgents })
+  for (const power of POWERS) {
+    const on = powers[power]
+    if (on === undefined || on === !!m[power]) continue
+    await event(run, `${on ? "gave" : "took"} ${name} ${on ? "" : "back "}the power to ${POWER_WORDS[power]}`, { op: "power.set", member: name, pk: m.pk, power, on, was: !!m[power] })
+  }
   await run.ch.updatePowers(m, {
     addsAgents: powers.addsAgents ?? !!m.addsAgents,
     answersDecisions: powers.answersDecisions ?? !!m.answersDecisions,
     managesAgents: powers.managesAgents ?? !!m.managesAgents,
   })
   await run.refreshRoster()
+}
+
+async function setRepos(run: Run, repos: string[]): Promise<void> {
+  if (run.isOwner) await run.ch.setGithubRepos(repos)
+  const since = await event(run, repos.length ? `repos: ${repos.join(", ")}` : "cleared the channel's repos", { op: "repos.set", repos })
+  if (run.isOwner) await run.ch.setRepos({ list: repos, since })
+}
+
+export async function setGithubWrite(code: string, on: boolean): Promise<void> {
+  await event(owner(code), on ? "turned on Write to GitHub" : "turned off Write to GitHub", { op: "github.write.set", on })
+}
+
+export async function setBranchPrefix(code: string, typed: string | null): Promise<void> {
+  const prefix = typed?.trim() || null
+  if (prefix && !BRANCH_PREFIX_RE.test(prefix)) throw new Error("a branch prefix is up to 32 letters, digits, dots, dashes, underscores or slashes")
+  await event(setup(code), prefix ? `branch prefix: ${prefix}` : "cleared the branch prefix", { op: "branch.prefix.set", prefix })
+}
+
+export async function setGoal(code: string, goal: string): Promise<void> {
+  const run = setup(code)
+  const text = goal.trim() || null
+  const since = await event(run, text ? `charter: ${text}` : "cleared the charter", { op: "charter.set", text })
+  if (run.isOwner) await run.ch.setCharter({ text, since })
+}
+
+export async function setHold(code: string, on: boolean, note?: string): Promise<void> {
+  const run = owner(code)
+  const ev = { op: "hold.set" as const, on, ...(note ? { note } : {}) }
+  const since = await event(run, on ? `on hold${note ? `: ${note}` : ""}` : "hold lifted", ev)
+  await run.ch.setHold({ on, ...(note ? { note } : {}), since })
+}
+
+export const addRepo = (code: string, repo: string): Promise<void> => setRepos(setup(code), [...new Set([...setup(code).state.repos, repo.trim()])])
+
+export const removeRepo = (code: string, repo: string): Promise<void> =>
+  setRepos(
+    setup(code),
+    setup(code).state.repos.filter((r) => r !== repo)
+  )
+
+async function roomFolded(run: () => Run | null, room: { id: string; name: string }): Promise<void> {
+  for (const end = Date.now() + 10_000; Date.now() < end; await new Promise((r) => setTimeout(r, 50))) if (run()?.state.rooms.get(room.id)?.name === room.name) return
+  throw new Error(`#${room.name} was sent but hasn't come back from the relay yet: look again in a moment`)
+}
+
+export async function addRoom(code: string, typed: string): Promise<string> {
+  const run = setup(code)
+  const problem = roomProblem(run.state.rooms.values(), typed)
+  if (problem) throw new Error(problem)
+  const name = cleanRoomName(typed)
+  const slug = name.toLowerCase()
+  const room = { id: ROOM_ID_RE.test(slug) && !run.state.rooms.has(slug) ? slug : newRoomId(), name }
+  const since = await event(run, `made the room #${room.name}`, { op: "room.create", ...room })
+  await roomFolded(() => openedRun(code), room)
+  if (run.isOwner) await run.ch.setRooms({ list: roomsAfter(openedRun(code)?.state.rooms.values() ?? run.state.rooms.values(), room), since })
+  return room.id
+}
+
+export async function renameRoom(code: string, id: string, typed: string): Promise<void> {
+  const run = setup(code)
+  if (!run.state.rooms.has(id)) throw new Error("that room isn't in this channel")
+  const problem = roomProblem(run.state.rooms.values(), typed, id)
+  if (problem) throw new Error(problem)
+  const room = { id, name: cleanRoomName(typed) }
+  const since = await event(run, `renamed a room to #${room.name}`, { op: "room.rename", ...room })
+  await roomFolded(() => openedRun(code), room)
+  if (run.isOwner) await run.ch.setRooms({ list: roomsAfter(openedRun(code)?.state.rooms.values() ?? run.state.rooms.values(), room), since })
+}
+
+export async function answerJoin(code: string, id: string, yes: boolean, choice?: JoinChoice): Promise<void> {
+  const run = owner(code)
+  const r = run.requests.find((x) => x.id === id)
+  if (!r) throw new Error("that request is gone")
+  if (!yes) {
+    await run.ch.deny(r.id)
+    await run.refreshRequests()
+    return announce(`Turned ${r.display || r.name} away`)
+  }
+  if (r.check === "unchecked") {
+    await run.ch.checkRequest(r)
+    await run.refreshRequests()
+    return announce(`Asked ${r.display || r.name} for its code: compare it, then let it in`)
+  }
+  if (r.check !== "ready" || !r.code) return announce(`Waiting for ${r.display || r.name}'s code`)
+  announce(await letIn(run, r, choice ?? {}))
 }

@@ -1,7 +1,7 @@
 import { handleFor } from "@kiwi/core/membership.ts"
 import { permissionReply } from "@kiwi/core/permission.ts"
-import { BRANCH_PREFIX_RE, MAX_GOAL_NAME, ROBOT_FACES, ROOM_ID_RE, TASK_TITLE_MAX_LENGTH } from "@kiwi/core/protocol.ts"
-import { newRoomId, taskId } from "@kiwi/core/state.ts"
+import { MAX_GOAL_NAME, ROBOT_FACES, TASK_TITLE_MAX_LENGTH } from "@kiwi/core/protocol.ts"
+import { taskId } from "@kiwi/core/state.ts"
 import type { Permission } from "@kiwi/core/launch-options.ts"
 import { tokenForCreate } from "@kiwi/app/auth.ts"
 import { askToJoin, createChannel, inviteInfo } from "@kiwi/channel/join.ts"
@@ -13,7 +13,6 @@ import { inviteLine } from "@kiwi/app/join-line.ts"
 import { followLaunch } from "@kiwi/app/launch-follow.ts"
 import { relayUrl } from "@kiwi/secrets/relay.ts"
 import { noteFor, showSeat, type ShowResult } from "@kiwi/app/show-seat.ts"
-import { cleanRoomName, roomProblem, roomsAfter } from "@kiwi/app/rooms.ts"
 import { ALLOW_ONCE, DENY } from "@kiwi/app/permission-settled.ts"
 import { savePersonalities } from "@kiwi/app/personalities.ts"
 import { createPerson, bridge, secrets, type KiwiBridge, type TermEvent, type TermOpenView } from "@kiwi/secrets/secrets.ts"
@@ -69,11 +68,6 @@ function link(code: string): ChannelLink {
 
 async function sends(run: Run, ...all: TaskSend[]): Promise<void> {
   for (const { body, opts } of all) await run.send(body, opts)
-}
-
-async function roomFolded(run: () => Run | null, room: { id: string; name: string }): Promise<void> {
-  for (const end = Date.now() + 10_000; Date.now() < end; await new Promise((r) => setTimeout(r, 50))) if (run()?.state.rooms.get(room.id)?.name === room.name) return
-  throw new Error(`#${room.name} was sent but hasn't come back from the relay yet: look again in a moment`)
 }
 
 function launchId(): string {
@@ -227,24 +221,7 @@ export function makeActions(): Actions {
         if (!m) throw new Error("that step is gone")
         await run.send(stepReplyText(reply), { to: [m.from], re: [m.seq], kind: "msg", stepReply: reply })
       }),
-    answerJoin: (code, id, yes, choice) =>
-      attempt(yes ? "Couldn't let them in" : "Couldn't turn them away", async () => {
-        const run = owner(code)
-        const r = run.requests.find((x) => x.id === id)
-        if (!r) throw new Error("that request is gone")
-        if (!yes) {
-          await run.ch.deny(r.id)
-          await run.refreshRequests()
-          return announce(`Turned ${r.display || r.name} away`)
-        }
-        if (r.check === "unchecked") {
-          await run.ch.checkRequest(r)
-          await run.refreshRequests()
-          return announce(`Asked ${r.display || r.name} for its code: compare it, then let it in`)
-        }
-        if (r.check !== "ready" || !r.code) return announce(`Waiting for ${r.display || r.name}'s code`)
-        announce(await (await manage()).letIn(run, r, choice ?? {}))
-      }),
+    answerJoin: (code, id, yes, choice) => attempt(yes ? "Couldn't let them in" : "Couldn't turn them away", async () => (await manage()).answerJoin(code, id, yes, choice)),
     approveTask: (code, id, approve, why) =>
       attempt(approve ? "Not approved" : "Not sent back", async () => {
         const run = need(code)
@@ -387,40 +364,10 @@ export function makeActions(): Actions {
       })
       return stop
     },
-    addRoom: (code, typed) =>
-      tried("Room not made", async () => {
-        const run = owner(code)
-        const problem = roomProblem(run.state.rooms.values(), typed)
-        if (problem) throw new Error(problem)
-        const name = cleanRoomName(typed)
-        const slug = name.toLowerCase()
-        const room = { id: ROOM_ID_RE.test(slug) && !run.state.rooms.has(slug) ? slug : newRoomId(), name }
-        const since = await event(run, `made the room #${room.name}`, { op: "room.create", ...room })
-        await roomFolded(() => openedRun(code), room)
-        await run.ch.setRooms({ list: roomsAfter(openedRun(code)?.state.rooms.values() ?? run.state.rooms.values(), room), since })
-        return room.id
-      }),
-    setGithubWrite: (code, on) =>
-      attempt("Not changed", async () => {
-        await event(owner(code), on ? "turned on Write to GitHub" : "turned off Write to GitHub", { op: "github.write.set", on })
-      }),
-    setBranchPrefix: (code, typed) =>
-      attempt("Branch prefix not changed", async () => {
-        const prefix = typed?.trim() || null
-        if (prefix && !BRANCH_PREFIX_RE.test(prefix)) throw new Error("a branch prefix is up to 32 letters, digits, dots, dashes, underscores or slashes")
-        await event(owner(code), prefix ? `branch prefix: ${prefix}` : "cleared the branch prefix", { op: "branch.prefix.set", prefix })
-      }),
-    renameRoom: (code, id, typed) =>
-      attempt("Room not renamed", async () => {
-        const run = owner(code)
-        if (!run.state.rooms.has(id)) throw new Error("that room isn't in this channel")
-        const problem = roomProblem(run.state.rooms.values(), typed, id)
-        if (problem) throw new Error(problem)
-        const room = { id, name: cleanRoomName(typed) }
-        const since = await event(run, `renamed a room to #${room.name}`, { op: "room.rename", ...room })
-        await roomFolded(() => openedRun(code), room)
-        await run.ch.setRooms({ list: roomsAfter(openedRun(code)?.state.rooms.values() ?? run.state.rooms.values(), room), since })
-      }),
+    addRoom: (code, typed) => tried("Room not made", async () => (await manage()).addRoom(code, typed)),
+    setGithubWrite: (code, on) => attempt("Not changed", async () => (await manage()).setGithubWrite(code, on)),
+    setBranchPrefix: (code, typed) => attempt("Branch prefix not changed", async () => (await manage()).setBranchPrefix(code, typed)),
+    renameRoom: (code, id, typed) => attempt("Room not renamed", async () => (await manage()).renameRoom(code, id, typed)),
     setIcon: (code, file) =>
       attempt("Icon not changed", async () => {
         const run = owner(code)
@@ -467,20 +414,8 @@ export function makeActions(): Actions {
         await link(code).setTitle(name)
         if (loadMember(code)) await renameChannel(code, name)
       }),
-    setGoal: (code, goal) =>
-      attempt("Goal not set", async () => {
-        const run = owner(code)
-        const text = goal.trim() || null
-        const since = await event(run, text ? `charter: ${text}` : "cleared the charter", { op: "charter.set", text })
-        await run.ch.setCharter({ text, since })
-      }),
-    setHold: (code, on, note) =>
-      attempt(on ? "Agents not paused" : "Agents not resumed", async () => {
-        const run = owner(code)
-        const ev = { op: "hold.set" as const, on, ...(note ? { note } : {}) }
-        const since = await event(run, on ? `on hold${note ? `: ${note}` : ""}` : "hold lifted", ev)
-        await run.ch.setHold({ on, ...(note ? { note } : {}), since })
-      }),
+    setGoal: (code, goal) => attempt("Goal not set", async () => (await manage()).setGoal(code, goal)),
+    setHold: (code, on, note) => attempt(on ? "Agents not paused" : "Agents not resumed", async () => (await manage()).setHold(code, on, note)),
     askCompact: (code) =>
       attempt("Not asked", async () => {
         const run = need(code)
@@ -506,14 +441,8 @@ export function makeActions(): Actions {
         return []
       }
     },
-    addRepo: (code, repo) => attempt("Repo not added", () => setRepos(owner(code), [...new Set([...owner(code).state.repos, repo.trim()])])),
-    removeRepo: (code, repo) =>
-      attempt("Repo not removed", () =>
-        setRepos(
-          owner(code),
-          owner(code).state.repos.filter((r) => r !== repo)
-        )
-      ),
+    addRepo: (code, repo) => attempt("Repo not added", async () => (await manage()).addRepo(code, repo)),
+    removeRepo: (code, repo) => attempt("Repo not removed", async () => (await manage()).removeRepo(code, repo)),
     joinCommand: async (code, as) => {
       if (!loadMember(code)) throw new Error("you're not in that channel")
       const picked = as.persona ? personalities().find((p) => p.id === as.persona) : undefined
@@ -651,10 +580,4 @@ export function makeActions(): Actions {
     setTerminalHelpers: (id, on) => attempt(on ? "Couldn't download the helpers" : "Couldn't remove the helpers", () => setTerminalHelpers(id, on)),
     setContextLine: (on) => attempt("Couldn't change it", () => setContextLine(on)),
   }
-}
-
-async function setRepos(run: Run, repos: string[]): Promise<void> {
-  await run.ch.setGithubRepos(repos)
-  const since = await event(run, repos.length ? `repos: ${repos.join(", ")}` : "cleared the channel's repos", { op: "repos.set", repos })
-  await run.ch.setRepos({ list: repos, since })
 }
