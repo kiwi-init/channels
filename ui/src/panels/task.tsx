@@ -7,7 +7,6 @@ import { named } from "~/chat/linked"
 import { MessageRow } from "~/chat/message"
 import { preview } from "~/chat/preview"
 import { jumpTo } from "~/chat/reply"
-import { whereLabel } from "~/chat/search-hits"
 import { ANYONE } from "@kiwi/channel/task-actions.ts"
 import { Avatar, cx, Dialog, DialogHead, Dot, Empty, Heading, statusWord } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
@@ -16,13 +15,14 @@ import { memberOf, type Ask, type Channel, type PermissionAsk, type Person, type
 import { useApp } from "~/nav"
 import { nickname } from "~/names"
 import { PanelHead } from "~/panels/frame"
+import { moveWords, someone } from "~/panels/task-moves"
 import { TONES } from "~/tasks/board"
 import { SendBack } from "~/tasks/send-back"
 
 const ROUND_WORDS: Record<ReviewRound["result"], string> = { open: "reviewing", approved: "approved", rejected: "sent back", withdrawn: "withdrawn" }
 const ROUND_TONES: Record<ReviewRound["result"], string> = { open: "tone-review", approved: "tone-live", rejected: "", withdrawn: "" }
-const CHECK_TONES: Record<PullRequest["checks"], string> = { pass: "tone-live", fail: "tone-alert", running: "tone-decide", none: "" }
-const STATE_TONES: Record<PullRequest["state"], string> = { open: "", draft: "dim", merged: "tone-review", closed: "tone-alert" }
+const CHECK_TONES: Record<PullRequest["checks"], string> = { pass: "", fail: "tone-alert", running: "tone-decide", none: "" }
+const STATE_TONES: Record<PullRequest["state"], string> = { open: "", draft: "dim", merged: "tone-live", closed: "tone-alert" }
 
 function since(at: number): string {
   const a = ago(at)
@@ -105,8 +105,6 @@ function Who({ channel, name }: { channel: Channel; name: string }) {
     </button>
   )
 }
-
-const someone = (channel: Channel, name: string): string => (name === channel.you ? "you" : nickname(channel, name))
 
 function Props({ channel, task, may }: { channel: Channel; task: Task; may: boolean }) {
   const [picking, setPicking] = useState<"owner" | "reviewer" | null>(null)
@@ -479,48 +477,6 @@ function Cancel({ channel, task, open, onClose }: { channel: Channel; task: Task
 const SHOWN = 6
 
 const LONG = 280
-
-function moveWords(channel: Channel, e: TaskEvent): string {
-  const to = e.to ? (e.to === ANYONE ? "anyone" : someone(channel, e.to)) : ""
-  switch (e.what) {
-    case "created":
-      return e.to ? `created it for ${to}` : "created it"
-    case "took":
-      return "took it"
-    case "assigned":
-      return `gave it to ${to}`
-    case "unassigned":
-      return "unassigned it"
-    case "started":
-      return "started it"
-    case "blocked":
-      return "marked it blocked"
-    case "reopened":
-      return "reopened it"
-    case "review":
-      return e.round ? `sent it for review · round ${e.round}` : "sent it for review"
-    case "approved":
-      return e.round ? `approved round ${e.round}` : "approved it"
-    case "rejected":
-      return e.round ? `sent round ${e.round} back` : "sent it back"
-    case "done":
-      return "marked it done"
-    case "cancelled":
-      return "cancelled it"
-    case "reviewer":
-      return e.to === ANYONE ? "opened its review to anyone who hasn't worked on it" : e.to ? `asked ${to} to review it` : "cleared its reviewer"
-    case "renamed":
-      return "renamed it"
-    case "proof":
-      return "added proof"
-    case "checkpoint":
-      return "saved a checkpoint"
-    case "note":
-      return "added a note"
-    case "mention":
-      return `mentioned it in ${e.where ? whereLabel(channel, e.where).replace(/^# /, "#").replace(/^@ /, "a message to ") : "a message"}`
-  }
-}
 
 function Activity({ channel, history }: { channel: Channel; history: TaskEvent[] }) {
   const [all, setAll] = useState(false)
