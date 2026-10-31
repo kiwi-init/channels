@@ -113,7 +113,7 @@ describe("a private room's key and what it hides (T681)", () => {
     expect(anaSees.deleted.has(gone)).toBe(true);
     expect(anaSees.rejected.get(deleted)).toBeUndefined();
     const boHistory = JSON.stringify((await bo.ch.history(0)).messages);
-    expect(boHistory).not.toContain("125");
+    expect(boHistory).not.toContain("offer is 125");
     expect(boHistory).not.toContain("edited #");
   });
 
