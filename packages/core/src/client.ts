@@ -13,6 +13,7 @@ import type { Persona, Personality } from "./personality.ts";
 import { newRoomId, type ChannelAccess } from "./crypto.ts";
 import type { Identity } from "./identity.ts";
 import type { JoinClaims, JoinRequest, Member, MemberInfo, PersonPowers } from "./membership.ts";
+import { withSeats } from "./room-rules.ts";
 import type { ChannelIcon, Envelope, ImageAttachment, Message } from "./protocol.ts";
 import type { Scope } from "./scopes.ts";
 import type { ChannelState, FoldBase, GithubRelease, GithubRules, GuardFloor } from "./state.ts";
@@ -55,6 +56,13 @@ export interface RoomPick {
 }
 
 const withMe = (me: Identity, members: readonly RoomPick[]): RoomPick[] => (members.some((m) => m.pk === me.pk) || !me.xpk ? [...members] : [{ name: me.name, pk: me.pk, xpk: me.xpk }, ...members]);
+
+const everySeat = (roster: readonly Member[], picked: readonly RoomPick[]): RoomPick[] =>
+  withSeats(
+    roster.flatMap((r) => (r.xpk && !r.unverified ? [{ ...r, xpk: r.xpk }] : [])),
+    picked,
+    (r) => ({ name: r.name, pk: r.pk, xpk: r.xpk }),
+  );
 export class Channel {
   private readonly core: ChannelCore;
   private readonly cache: ChannelInfo;
@@ -435,7 +443,7 @@ export class Channel {
   async makeRoom(name: string, members: readonly RoomPick[]): Promise<string> {
     const { newRoomKey, sealRoom } = await import("./private-room.ts");
     const id = newRoomId();
-    const who = withMe(this.core.identity, members);
+    const who = everySeat(await this.members(), withMe(this.core.identity, members));
     const key = newRoomKey();
     const meta = { name, members: who.map(({ name, pk }) => ({ name, pk })) };
     const sealed = await sealRoom(
@@ -468,8 +476,9 @@ export class Channel {
     const roster = await this.members();
     const here = new Map(roster.filter((r) => r.active).map((r) => [r.pk, r]));
     const asked = change.members ? withMe(this.core.identity, change.members) : null;
-    const who = (asked ?? now.meta.members.flatMap((m) => (here.has(m.pk) ? [{ name: m.name, pk: m.pk, xpk: here.get(m.pk)!.xpk }] : []))).filter(
-      (w) => here.has(w.pk) || w.pk === this.core.identity.pk,
+    const who = everySeat(
+      roster,
+      (asked ?? now.meta.members.flatMap((m) => (here.has(m.pk) ? [{ name: m.name, pk: m.pk, xpk: here.get(m.pk)!.xpk }] : []))).filter((w) => here.has(w.pk) || w.pk === this.core.identity.pk),
     );
     const out = now.meta.members.some((m) => !who.some((w) => w.pk === m.pk));
     if (!out && !change.name && who.length === now.meta.members.length) return false;
