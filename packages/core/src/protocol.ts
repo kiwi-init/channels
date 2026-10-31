@@ -250,10 +250,11 @@ export type Event =
   | { op: "fact.del"; key: string }
   | { op: "lease.take"; name: string; ttl: number; note?: string }
   | { op: "lease.free"; name: string }
-  /** Owner only: set a member's role (and rules), or allow the one they asked for. */
+  /** The owner, or a person who manages agents (on an agent): set a member's role (and rules), or allow the one they asked for. */
   | { op: "role.set"; member: string; role: string | null; about?: string | null }
-  /** Owner only: turn down the role a member asked for. */
+  /** The owner, or a person who manages agents (on an agent): turn down the role a member asked for. */
   | { op: "role.refuse"; member: string }
+  | { op: "power.set"; member: string; pk: string; managesAgents: boolean; was: boolean }
   /** Owner only: a member's seat moved to a new key (fingerprints, for the record). */
   | { op: "seat.reclaim"; member: string; from: string; to: string }
   /** A person's colour (null clears it): set by that person, or by the owner for anyone. */
@@ -738,7 +739,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 7;
+export const EVENT_OPS_VERSION = 8;
 const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 
 export const knownOp = (op: string): boolean => eventCheck({ op }) !== null;
@@ -758,7 +759,7 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
 
 export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
-export const FOLD_RULES = 3;
+export const FOLD_RULES = 4;
 
 export const olderRules = (base: { rules?: number }): boolean => (base.rules ?? 0) < FOLD_RULES;
 
@@ -940,6 +941,8 @@ function eventCheck(ev: unknown): boolean | null {
       return str(e.member, 64) && (e.role === null || str(e.role, 200)) && (e.about === undefined || e.about === null || str(e.about, 2000));
     case "role.refuse":
       return str(e.member, 64);
+    case "power.set":
+      return str(e.member, 64) && str(e.pk, 64) && typeof e.managesAgents === "boolean" && typeof e.was === "boolean";
     case "seat.reclaim":
       return str(e.member, 64) && str(e.from, 64) && str(e.to, 64);
     case "color.set":

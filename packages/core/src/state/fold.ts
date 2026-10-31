@@ -165,9 +165,13 @@ function folding(
         m.seq > after && m.ev?.op === "scope.set" && m.ev.wasLead !== undefined && !personaLead.has(m.ev.member) ? [{ seq: m.seq, member: m.ev.member, was: m.ev.wasLead }] : [],
       )
     : [];
-  if (leadChanges.length) {
+  const managers = new Map<string, boolean>(from?.managers);
+  const powerChanges = lookAhead ? messages.flatMap((m) => (m.seq > after && m.ev?.op === "power.set" && !managers.has(m.ev.member) ? [{ seq: m.seq, member: m.ev.member, was: m.ev.was }] : [])) : [];
+  if (leadChanges.length || powerChanges.length) {
     const accepted = folding(messages, roster, now, roomsFloor, guardFloor, given, undefined, false);
-    for (const c of leadChanges) if (!personaLead.has(c.member) && accepted.trust.get(c.seq) === "verified" && !accepted.rejected.has(c.seq)) personaLead.set(c.member, c.was);
+    const took = (seq: number) => accepted.trust.get(seq) === "verified" && !accepted.rejected.has(seq);
+    for (const c of leadChanges) if (!personaLead.has(c.member) && took(c.seq)) personaLead.set(c.member, c.was);
+    for (const c of powerChanges) if (!managers.has(c.member) && took(c.seq)) managers.set(c.member, c.was);
   }
   const logged = (member: FoldMember): boolean | undefined => {
     const lead = personaLead.get(member.name);
@@ -262,6 +266,7 @@ function folding(
     members,
     signed,
     personaLead,
+    managers,
     leads,
     keysByName,
     scopesByKey,
@@ -548,6 +553,7 @@ function folding(
       roomOf: recent(roomOf),
       placeOf: recent(placeOf),
       personaLeads: [...personaLead],
+      managers: [...managers],
       folded: EVENT_OPS_VERSION,
       rules: from ? Math.min(from.rules ?? 0, FOLD_RULES) : FOLD_RULES,
       ...(skipped ? { skipped: true as const } : {}),

@@ -1,13 +1,6 @@
-import { handBackText, heldBy } from "@kiwi/core/handback.ts"
-import type { JoinRequest, Member as RosterMember } from "@kiwi/core/membership.ts"
-import { handleFor, NAME_RE, nameKey } from "@kiwi/core/membership.ts"
+import { handleFor } from "@kiwi/core/membership.ts"
 import { permissionReply } from "@kiwi/core/permission.ts"
-import { cleanPersonalities } from "@kiwi/core/personalities.ts"
-import { personaOf, personaScopes, type Persona, type Personality } from "@kiwi/core/personality.ts"
-import { pinned } from "@kiwi/core/pin.ts"
-import { PRESETS } from "@kiwi/core/presets.ts"
-import { BRANCH_PREFIX_RE, MAX_GOAL_NAME, ROBOT_FACES, ROOM_ID_RE, TASK_TITLE_MAX_LENGTH, type Event } from "@kiwi/core/protocol.ts"
-import { describeScopes, SCOPES, wireScopes, type Scope } from "@kiwi/core/scopes.ts"
+import { BRANCH_PREFIX_RE, MAX_GOAL_NAME, ROBOT_FACES, ROOM_ID_RE, TASK_TITLE_MAX_LENGTH } from "@kiwi/core/protocol.ts"
 import { newRoomId, taskId } from "@kiwi/core/state.ts"
 import type { Permission } from "@kiwi/core/launch-options.ts"
 import { tokenForCreate } from "@kiwi/app/auth.ts"
@@ -29,7 +22,7 @@ import { ANYONE, approveTask, assignTask, cancelTask, changeReviewer, closedDige
 import { announce } from "~/kit/toasts"
 import { enrollAnswer, enrollBegin, enrollCancel, enrollConfirm, enrollDeny, enrollKeep, forgetDevice, linkGithub, renewDevice, unlinkGithub, type EnrollDone } from "~/live/account"
 import { loadPicture } from "~/live/pictures"
-import { newMemberPowers, newMemberScopes, setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
+import { setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
 import { harnessChoices, STARTS } from "~/live/harness-rows"
 import { iconFromFile } from "~/live/icon-file"
@@ -38,11 +31,14 @@ import { memberName } from "@kiwi/app/format.ts"
 import { checkComputer, computerSettings, setContextLine, setHooks } from "~/live/computer"
 import { addStartFolder, allowNewAgents, allowRemoteBypass, removeStartFolder, setTerminalHelpers } from "~/live/starts"
 import { closeOpened, leavingOnPurpose, openedChannel, openedRun, type Run } from "~/live/store"
+import { event, memberOf, need, owner, personalities } from "~/live/run"
+
+const manage = () => import("~/live/manage")
 import { stepReplyText } from "~/chat/step"
 import { downloadAndRestart } from "~/live/update"
 import { setWake } from "~/live/wakes"
 import { rememberOwner } from "~/live/invites"
-import type { Actions, InviteInfo, JoinChoice, NewAgent, TaskStatus, TermOpened, TermWatch } from "~/model"
+import type { Actions, InviteInfo, NewAgent, TaskStatus, TermOpened, TermWatch } from "~/model"
 
 const COMPACT_ASK =
   "Please draft a /compact summary of the history so far: name every open task (T7) and open question (#123) by its id, then run `kiwi compact --file summary.md`. I'll approve it in the app."
@@ -63,27 +59,6 @@ async function tried<T>(what: string, run: () => Promise<T>): Promise<T | null> 
   }
 }
 
-function need(code: string): Run {
-  const run = openedRun(code)
-  if (!run) throw new Error("open the channel first")
-  return run
-}
-
-function owner(code: string): Run {
-  const run = need(code)
-  if (!run.isOwner) throw new Error("only the channel's owner can do that")
-  return run
-}
-
-function agentManager(code: string, name: string): { run: Run; m: RosterMember } {
-  const run = need(code)
-  const m = memberOf(run, name)
-  if (run.isOwner) return { run, m }
-  const me = run.roster.find((r) => r.active && r.name === run.me)
-  if (!me?.managesAgents || m.kind !== "agent" || m.owner || m.name === run.me) throw new Error("only the owner, or a person who manages agents, changes an agent's role or personality")
-  return { run, m }
-}
-
 function link(code: string): ChannelLink {
   const run = openedRun(code)
   if (run) return run.ch
@@ -92,71 +67,13 @@ function link(code: string): ChannelLink {
   return linkOf(m)
 }
 
-function memberOf(run: Run, name: string): RosterMember {
-  const m = run.roster.find((r) => r.active && !r.unverified && r.name === name)
-  if (!m) throw new Error(`${name} isn't in this channel`)
-  return m
-}
-
-const event = (run: Run, body: string, ev: Event, to?: string[]) => run.send(body, { kind: "event", ev, ...(to?.length ? { to } : {}) })
-
 async function sends(run: Run, ...all: TaskSend[]): Promise<void> {
   for (const { body, opts } of all) await run.send(body, opts)
-}
-
-function personalities(): Personality[] {
-  return [...PRESETS, ...cleanPersonalities(secrets().personalities)]
 }
 
 async function roomFolded(run: () => Run | null, room: { id: string; name: string }): Promise<void> {
   for (const end = Date.now() + 10_000; Date.now() < end; await new Promise((r) => setTimeout(r, 50))) if (run()?.state.rooms.get(room.id)?.name === room.name) return
   throw new Error(`#${room.name} was sent but hasn't come back from the relay yet: look again in a moment`)
-}
-
-async function personaFor(r: JoinRequest, choice: JoinChoice): Promise<Persona | null> {
-  if (r.kind === "human" || choice.persona === null) return null
-  const all = personalities()
-  if (choice.persona !== undefined) {
-    const p = all.find((x) => x.id === choice.persona)
-    if (!p) throw new Error("that personality isn't on this computer")
-    return personaOf(p)
-  }
-  if (!r.pin) return null
-  const pin = await pinned(r.pin, all)
-  if (!pin) throw new Error(`${r.name} was invited as ${r.pin.name}, which isn't on this computer anymore`)
-  return pin
-}
-
-async function letIn(run: Run, r: JoinRequest, choice: JoinChoice): Promise<string> {
-  const name = choice.as?.trim() || r.name
-  if (name !== r.name) {
-    if (!NAME_RE.test(name)) throw new Error(`${name} can't be a name: letters, digits, . _ - only`)
-    if (run.roster.some((m) => m.active && m.pk !== r.pk && nameKey(m.name) === nameKey(name))) throw new Error(`${name} is taken here too`)
-  }
-  const persona = await personaFor(r, choice)
-  const scopes = choice.readOnly === undefined ? newMemberScopes(run.roomId) : choice.readOnly ? [] : [...SCOPES]
-  const powers = r.kind === "human" ? (choice.powers ?? newMemberPowers(run.roomId)) : null
-  const granted = powers
-    ? { ...(powers.addsAgents ? { addsAgents: true } : {}), ...(powers.answersDecisions ? { answersDecisions: true } : {}), ...(powers.managesAgents ? { managesAgents: true } : {}) }
-    : {}
-  const as = persona ? { persona } : { ...(wireScopes(scopes) ? { scopes } : {}), ...granted }
-  try {
-    await run.ch.approve(name === r.name ? r : { ...r, name }, as, { person: secrets().person?.pk })
-  } catch (err) {
-    const joined = (await run.ch.members().catch(() => [])).find((m) => m.active && !m.unverified && m.pk === r.pk)
-    if (!joined) throw err
-  } finally {
-    await Promise.all([run.refreshRequests(), run.refreshRoster()])
-  }
-  return persona ? `${r.display || name} joined as ${persona.name}` : `${r.display || name} joined`
-}
-
-async function scopesFor(run: Run, name: string, scopes: Scope[]): Promise<void> {
-  const m = memberOf(run, name)
-  const wire = wireScopes(scopes)
-  const seq = await event(run, `set what ${m.name} may do: ${wire ? describeScopes(wire) : "full"}`, { op: "scope.set", member: m.name, pk: m.pk, scopes: wire, keepLead: true })
-  await run.ch.updateScopes(m, scopes, seq)
-  await run.refreshRoster()
 }
 
 function launchId(): string {
@@ -326,7 +243,7 @@ export function makeActions(): Actions {
           return announce(`Asked ${r.display || r.name} for its code: compare it, then let it in`)
         }
         if (r.check !== "ready" || !r.code) return announce(`Waiting for ${r.display || r.name}'s code`)
-        announce(await letIn(run, r, choice ?? {}))
+        announce(await (await manage()).letIn(run, r, choice ?? {}))
       }),
     approveTask: (code, id, approve, why) =>
       attempt(approve ? "Not approved" : "Not sent back", async () => {
@@ -384,61 +301,13 @@ export function makeActions(): Actions {
         const clean = name?.trim().slice(0, MAX_GOAL_NAME) || null
         await event(run, clean ? `named the goal of #${ask}: ${clean}` : `#${ask}'s goal unnamed`, { op: "ask.name", ask, name: clean })
       }),
-    setRole: (code, name, role) =>
-      attempt("Role not changed", async () => {
-        const { run } = agentManager(code, name)
-        await event(run, role ? `made ${name} ${role}` : `cleared ${name}'s role`, { op: "role.set", member: name, role })
-      }),
-    removeMember: (code, name) =>
-      attempt(`Couldn't remove ${name}`, async () => {
-        const run = owner(code)
-        const m = memberOf(run, name)
-        const held = heldBy(run.state, name)
-        const lead = run.state.lead && run.state.lead !== name ? [run.state.lead] : undefined
-        if (held.length) await run.send(handBackText(run.state, name, "removed", held), lead ? { to: lead } : {})
-        await run.ch.remove(m.pk)
-        await run.refreshRoster()
-        announce(`Removed ${m.display || name}`)
-      }),
-    setPersona: (code, name, id) =>
-      attempt("Personality not changed", async () => {
-        const { run, m } = agentManager(code, name)
-        const p = id === null ? null : personalities().find((x) => x.id === id)
-        if (p === undefined) throw new Error("that personality isn't on this computer")
-        const persona = p ? personaOf(p) : null
-        const wire = wireScopes(persona ? personaScopes(persona) : [...SCOPES])
-        const seq = await event(run, persona ? `made ${m.name} ${persona.name}` : `took ${m.name}'s personality away`, {
-          op: "scope.set",
-          member: m.name,
-          pk: m.pk,
-          scopes: wire,
-          lead: persona?.role === "lead",
-          wasLead: m.persona?.role === "lead",
-          ...(run.isOwner ? {} : { persona }),
-        })
-        if (!run.isOwner) return
-        await run.ch.updatePersona(m, persona, seq)
-        await run.refreshRoster()
-      }),
-    setReadOnly: (code, name, on) => attempt("Not changed", () => scopesFor(owner(code), name, on ? [] : [...SCOPES])),
+    setRole: (code, name, role) => attempt("Role not changed", async () => (await manage()).setRole(code, name, role)),
+    removeMember: (code, name) => attempt(`Couldn't remove ${name}`, async () => (await manage()).removeMember(code, name)),
+    setPersona: (code, name, id) => attempt("Personality not changed", async () => (await manage()).setPersona(code, name, id)),
+    setReadOnly: (code, name, on) => attempt("Not changed", async () => (await manage()).setReadOnly(code, name, on)),
     setWake: (code, name, on) => attempt("Not changed", () => setWake(need(code).roomId, name, on)),
-    setNickname: (code, name, nickname) =>
-      attempt("Nickname not changed", async () => {
-        const run = owner(code)
-        await run.ch.updateNickname(memberOf(run, name), nickname?.trim() || null)
-        await run.refreshRoster()
-      }),
-    setPowers: (code, name, powers) =>
-      attempt("Not changed", async () => {
-        const run = owner(code)
-        const m = memberOf(run, name)
-        await run.ch.updatePowers(m, {
-          addsAgents: powers.addsAgents ?? !!m.addsAgents,
-          answersDecisions: powers.answersDecisions ?? !!m.answersDecisions,
-          managesAgents: powers.managesAgents ?? !!m.managesAgents,
-        })
-        await run.refreshRoster()
-      }),
+    setNickname: (code, name, nickname) => attempt("Nickname not changed", async () => (await manage()).setNickname(code, name, nickname)),
+    setPowers: (code, name, powers) => attempt("Not changed", async () => (await manage()).setPowers(code, name, powers)),
     showAgent: async (code, name) => {
       const seat = seatOf(need(code).roomId, name)
       if (!seat) return "It isn't running in a window on this computer."
