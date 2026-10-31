@@ -13,8 +13,7 @@ import { memberOf, type Channel, type ImageSpot, type Message, type Person } fro
 import { useAct } from "~/nav"
 import { nickname } from "~/names"
 import { linked, named, withNames } from "~/chat/linked"
-import { openWebLink, personItems, saveImage, webLinkAt } from "~/chat/menus"
-import { showMenu, type MenuItem } from "~/kit/context-menu"
+import { showMenu } from "~/kit/menu-open"
 
 const Markdown = lazy(() => import("~/chat/markdown"))
 const Annotator = lazy(() => import("~/chat/annotator"))
@@ -173,7 +172,7 @@ function sameRow(a: RowProps, b: RowProps): boolean {
 }
 
 export const MessageRow = memo(function MessageRow({ channel, m, compact, names, tasks, inThread, quote, onQuote }: RowProps) {
-  const { actions, go } = useAct()
+  const { actions, go, toast } = useAct()
   const replying = useReplying()
   const [image, setImage] = useState<{ url: string; alt: string } | null>(null)
   const openImage = useCallback((url: string, alt: string) => setImage({ url, alt }), [])
@@ -199,34 +198,10 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
     )
 
   const onMenu = (e: MouseEvent<HTMLElement>) => {
-    if (m.pending || m.failed !== undefined || m.leftOut) return
-    const link = webLinkAt(e.target)
-    const picture = (e.target as Element).closest?.("img")
-    const linkItems: MenuItem[] = link
-      ? [
-          { label: "Open link", run: () => openWebLink(link) },
-          { label: "Copy link", run: () => void navigator.clipboard?.writeText(link).then(() => toast("Copied"), () => {}) },
-        ]
-      : []
-    const imageItems: MenuItem[] = picture
-      ? [
-          { label: "Open image", run: () => openImage(picture.src, picture.alt) },
-          { label: "Save image", run: () => saveImage(picture.src, picture.alt) },
-        ]
-      : []
-    const here = m.where.kind !== "theirs"
-    showMenu(e, "Message", [
-      linkItems,
-      imageItems,
-      [
-        ...(replying && here ? [{ label: "Reply", run: () => replying.set(m) }] : []),
-        ...(inThread ? [] : [{ label: "Open thread", run: () => go({ to: "panel", panel: { kind: "thread", seq: m.inThread ?? m.seq } }) }]),
-      ],
-      [
-        { label: "Copy text", run: () => void navigator.clipboard?.writeText(m.text).then(() => toast("Copied"), () => {}) },
-        { label: `Copy #${m.seq}`, run: () => void navigator.clipboard?.writeText(`#${m.seq}`).then(() => toast("Copied"), () => {}) },
-      ],
-    ])
+    if (m.pending || m.failed !== undefined || m.leftOut || m.deleted || editing) return
+    const target = e.target
+    const reply = replying && m.where.kind !== "theirs" ? () => replying.set(m) : null
+    showMenu(e, "Message", (x) => x.messageGroups({ channel, go, toast }, m, target, { openImage, reply, inThread: !!inThread })
   }
 
   return (
@@ -248,7 +223,12 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
       <div className="msg-body">
         {!compact && (
           <p className="msg-head">
-            <button type="button" className="msg-name" onClick={() => go({ to: "panel", panel: { kind: "person", name: m.from } })} onContextMenu={(e) => who && showMenu(e, nickname(channel, m.from), [personItems(channel, who, go)])}>
+            <button
+              type="button"
+              className="msg-name"
+              onClick={() => go({ to: "panel", panel: { kind: "person", name: m.from } })}
+              onContextMenu={(e) => who && showMenu(e, nickname(channel, m.from), () => import("~/chat/menus").then((x) => [x.personItems({ channel, go, toast }, who)]))}
+            >
               {nickname(channel, m.from)}
             </button>
             {who?.role && who.role.toLowerCase() !== nickname(channel, m.from).toLowerCase() && <span className="msg-role">{who.role}</span>}
@@ -385,7 +365,18 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
               <Icon name="thread" size={14} />
             </button>
           )}
-          <button type="button" className="msg-tool" aria-label="Copy text" title="Copy text" onClick={() => void navigator.clipboard?.writeText(m.text).then(() => toast("Copied"), () => {})}>
+          <button
+            type="button"
+            className="msg-tool"
+            aria-label="Copy text"
+            title="Copy text"
+            onClick={() =>
+              void navigator.clipboard?.writeText(m.text).then(
+                () => toast("Copied"),
+                () => {}
+              )
+            }
+          >
             <Icon name="copy" size={14} />
           </button>
         </div>

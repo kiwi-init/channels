@@ -2,7 +2,7 @@ import { Delete02Icon, PencilEdit02Icon } from "@hugeicons/core-free-icons"
 import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 
-import { startEditing, stopEditing } from "~/chat/editing"
+import { askDelete, startEditing, stopAskingDelete, stopEditing, useAskingDelete } from "~/chat/editing"
 import { Dialog, DialogHead } from "~/kit/bits"
 import { GlyphIcon } from "~/kit/icons"
 import type { Channel, Message } from "~/model"
@@ -16,31 +16,31 @@ export default function Changes({ kind, channel, m }: Props) {
 
 function Tools({ channel, m }: { channel: Channel; m: Message }) {
   const { actions } = useAct()
-  const [asking, setAsking] = useState(false)
+  const asking = useAskingDelete(channel.code, m.seq)
   return (
     <>
       <button type="button" className="msg-tool" aria-label="Edit" title="Edit" onClick={() => startEditing(channel.code, m.seq)}>
         <GlyphIcon glyph={PencilEdit02Icon} size={14} />
       </button>
-      <button type="button" className="msg-tool" aria-label="Delete" title="Delete" onClick={() => setAsking(true)}>
+      <button type="button" className="msg-tool" aria-label="Delete" title="Delete" onClick={() => askDelete(channel.code, m.seq)}>
         <GlyphIcon glyph={Delete02Icon} size={14} />
       </button>
       {createPortal(
-        <Dialog open={asking} onClose={() => setAsking(false)} label="Delete this message?">
+        <Dialog open={asking} onClose={stopAskingDelete} label="Delete this message?">
           <DialogHead
             title="Delete this message?"
             sub="It's removed from Channels for everyone. Anyone who already read it may still have it, and the relay keeps its encrypted copy until it ages out."
-            onClose={() => setAsking(false)}
+            onClose={() => stopAskingDelete()}
           />
           <div className="dialog-foot">
-            <button type="button" className="btn" onClick={() => setAsking(false)}>
+            <button type="button" className="btn" onClick={() => stopAskingDelete()}>
               Cancel
             </button>
             <button
               type="button"
               className="btn is-danger"
               onClick={() => {
-                setAsking(false)
+                stopAskingDelete()
                 actions.deleteMessage(channel.code, m.seq)
               }}
             >

@@ -1,32 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type MouseEvent } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 
-import { nativeMenuAllowed } from "~/kit/native-menu"
-import { store } from "~/live/value"
-
-export interface MenuItem {
-  label: string
-  run: () => void
-}
-
-interface OpenMenu {
-  x: number
-  y: number
-  label: string
-  groups: readonly (readonly MenuItem[])[]
-}
+import { openMenu, type OpenMenu } from "~/kit/menu-open"
 
 const GUTTER = 8
-
-const open = store<OpenMenu | null>(null)
-
-export function showMenu(e: MouseEvent, label: string, groups: readonly (readonly MenuItem[])[]): void {
-  if (nativeMenuAllowed(e.target, document.getSelection()?.toString() ?? "")) return
-  const filled = groups.filter((g) => g.length > 0)
-  if (!filled.length) return
-  e.preventDefault()
-  e.stopPropagation()
-  open.set({ x: e.clientX, y: e.clientY, label, groups: filled })
-}
 
 export function fitted(x: number, y: number, width: number, height: number, roomX: number, roomY: number): { left: number; top: number } {
   return {
@@ -43,7 +19,7 @@ export function stepped(key: string, at: number, count: number): number | null {
   return null
 }
 
-function Menu({ menu }: { menu: OpenMenu }) {
+export default function Menu({ menu }: { menu: OpenMenu }) {
   const box = useRef<HTMLDivElement>(null)
   const [place, setPlace] = useState({ left: menu.x, top: menu.y })
   useLayoutEffect(() => {
@@ -52,7 +28,7 @@ function Menu({ menu }: { menu: OpenMenu }) {
     box.current?.querySelector("button")?.focus()
   }, [menu])
   useEffect(() => {
-    const close = () => open.set(null)
+    const close = () => openMenu.set(null)
     const away = (e: PointerEvent) => {
       if (!(e.target instanceof Node) || !box.current?.contains(e.target)) close()
     }
@@ -90,7 +66,7 @@ function Menu({ menu }: { menu: OpenMenu }) {
               type="button"
               role="menuitem"
               onClick={() => {
-                open.set(null)
+                openMenu.set(null)
                 item.run()
               }}
             >
@@ -101,9 +77,4 @@ function Menu({ menu }: { menu: OpenMenu }) {
       ))}
     </div>
   )
-}
-
-export function ContextMenus() {
-  const menu = useSyncExternalStore(open.subscribe, open.get)
-  return menu ? <Menu key={`${menu.x}:${menu.y}:${menu.label}`} menu={menu} /> : null
 }
