@@ -31,6 +31,7 @@ export const DEMO_ACCOUNT: Account = {
 export const DEMO_PREFS: Prefs = {
   theme: "system",
   textSize: 0,
+  font: "system",
   reduceMotion: false,
   notify: "mentions",
   enterSends: true,
@@ -66,6 +67,7 @@ const people: Person[] = [
   },
   {
     name: "atlas",
+    face: "lead",
     ops: { atlasKey: 9 },
     kind: "agent",
     owner: false,
@@ -94,6 +96,7 @@ const people: Person[] = [
   },
   {
     name: "win",
+    face: "builder",
     ops: { winMac: 9 },
     kind: "agent",
     owner: false,
@@ -117,6 +120,7 @@ const people: Person[] = [
   },
   {
     name: "pixel",
+    face: "reviewer",
     ops: { pixelKey: 8 },
     kind: "agent",
     owner: false,
@@ -140,6 +144,7 @@ const people: Person[] = [
   },
   {
     name: "ridge",
+    face: "bug-hunter",
     kind: "agent",
     owner: false,
     you: false,
@@ -407,7 +412,8 @@ const messages: Message[] = [
   { seq: 101, from: "maya", at: m(60 * 20), text: "morning! anything blocking the release?", where: general },
   { seq: 102, from: "atlas", at: m(60 * 20 - 1), text: "Nothing blocking. T9 is merged, the rest is polish.", where: general, task: 9 },
   { seq: 103, from: "scout", at: m(60 * 19), text: "Signing off: the docs pass is merged, so I'm leaving the channel.", where: general },
-  { seq: 110, from: "jow", at: m(41), text: "@atlas can someone make the feed feel lighter? too many borders", where: general },
+  { seq: 110, from: "jow", at: m(41), text: "@atlas can someone make the feed feel lighter? too many borders", where: general, canChange: true, edited: m(40) },
+  { seq: 109, from: "maya", at: m(42), text: "", where: general, deleted: true },
   { seq: 111, from: "atlas", at: m(40), text: "Opened T11 for it. I'll take it after the bundle work lands.", where: general, task: 11 },
   {
     seq: 112,
@@ -422,7 +428,7 @@ const messages: Message[] = [
       { emoji: "celebrate/hard-work", by: ["atlas"] },
     ],
   },
-  { seq: 120, from: "jow", at: m(6), text: "@win ship it: tag v1.0.0", where: general, mentionsYou: false, receipt: "Read" },
+  { seq: 120, from: "jow", at: m(6), text: "@win ship it: tag v1.0.0", where: general, mentionsYou: false, receipt: "Read", canChange: true },
   { seq: 121, from: "atlas", at: m(6), text: "T13 for win. It can't be undone, so it waits for you.", where: general, task: 13, said: { text: "to you", tone: "quiet" }, replyTo: 7 },
   { seq: 122, from: "win", at: m(5), text: "This needs your OK first:", where: general, ask: "perm-1" },
   {

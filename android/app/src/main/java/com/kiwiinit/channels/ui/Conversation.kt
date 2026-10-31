@@ -293,7 +293,7 @@ fun Conversation(
                 if (room.whole || (room.messages.isEmpty() && room.connection == Connection.Live)) Intro(room)
                 if (!room.whole && room.messages.isNotEmpty()) {
                     Text(
-                        "Earlier messages are on your Mac",
+                        "Earlier messages aren't on this phone",
                         style = MaterialTheme.typography.labelMedium,
                         color = Tone.current.ink3,
                         modifier = Modifier.padding(vertical = 14.dp),

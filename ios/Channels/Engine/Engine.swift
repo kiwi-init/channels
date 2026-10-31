@@ -37,6 +37,7 @@ final class Engine: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         "https://github.com/login/device/code", "https://github.com/login/oauth/access_token",
     ]
     var onPush: (Push) -> Void = { _ in }
+    var onLost: () -> Void = {}
 
     override init() {
         let config = WKWebViewConfiguration()
@@ -55,6 +56,10 @@ final class Engine: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         let source = try String(contentsOf: url, encoding: .utf8)
         web.configuration.userContentController.addUserScript(
             WKUserScript(source: source, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+        try await open()
+    }
+
+    func open() async throws {
         try await withCheckedThrowingContinuation { (done: CheckedContinuation<Void, Error>) in
             loaded = done
             web.loadHTMLString("<!doctype html><meta charset=utf-8><title>Channels engine</title>", baseURL: URL(string: "http://localhost/"))
@@ -115,6 +120,9 @@ final class Engine: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         onPush(.log("engine restarted"))
+        loaded?.resume(throwing: EngineError.garbled)
+        loaded = nil
+        onLost()
     }
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {

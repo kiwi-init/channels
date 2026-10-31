@@ -96,6 +96,8 @@ const OPS: Record<Event["op"], true> = {
   "hold.set": true,
   "voice.set": true,
   react: true,
+  "msg.edit": true,
+  "msg.delete": true,
 };
 const V1 = [
   "hello",
@@ -138,6 +140,7 @@ const OPS_AT: Record<number, readonly string[]> = {
   7: [...V1, "branch.prefix.set", "github.rules", "github.release", "ask.name", "ask.close", "devices", "task.first"],
   8: [...V1, "branch.prefix.set", "github.rules", "github.release", "ask.name", "ask.close", "devices", "task.first", "power.set"],
   9: [...V1, "branch.prefix.set", "github.rules", "github.release", "ask.name", "ask.close", "devices", "task.first", "power.set", "room.seal", "room.msg"],
+  10: [...V1, "branch.prefix.set", "github.rules", "github.release", "ask.name", "ask.close", "devices", "task.first", "power.set", "room.seal", "room.msg", "msg.edit", "msg.delete"],
 };
 
 describe("events from a newer client", () => {

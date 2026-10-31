@@ -144,6 +144,12 @@ export interface AskHead {
   goalBy?: string;
 }
 
+export interface Edit {
+  body: string;
+  at: number;
+  seq: number;
+}
+
 export interface Reaction {
   emoji: string;
   seq: number;
@@ -205,6 +211,8 @@ export interface ChannelState {
   compact: Compact | null;
   compactProposal: Compact | null;
   reactions: Map<number, Map<string, Reaction>>;
+  edits: Map<number, Edit>;
+  deleted: Map<number, number>;
   head: number;
 }
 
@@ -272,6 +280,9 @@ export interface FoldBase {
   leases: Lease[];
   reactions: [number, [string, Reaction][]][];
   reactSeqs: number[];
+  chatBy: [number, string][];
+  edits: [number, Edit][];
+  deleted: [number, number][];
   trust: [number, Trust][];
   rejected: [number, string][];
   sent?: ([string, number] | [string, number, number, number])[];

@@ -4,6 +4,12 @@ import type { ChannelState, Member } from "./types.ts";
 
 export const isPerson = (m: { kind?: string; owner?: boolean }) => m.kind === "human" || !!m.owner;
 
+type Seat = Pick<Member, "name" | "kind" | "owner" | "sponsor">;
+
+const authorRoot = (m: Seat): string => (isPerson(m) ? `person:${m.sponsor?.user ?? m.name}` : `seat:${m.name}`);
+
+export const sameAuthor = (author: Seat | undefined, editor: Seat | undefined): boolean => !!author && !!editor && authorRoot(author) === authorRoot(editor);
+
 export function humanOf(state: Pick<ChannelState, "members">, name: string): string | null {
   const m = state.members.get(name);
   if (!m || isPerson(m) || !m.sponsor) return null;

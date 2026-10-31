@@ -3,6 +3,7 @@ import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo,
 import { isGifReaction } from "@kiwi/core/protocol.ts"
 
 import { PrChip, TaskChip } from "~/chat/cards"
+import { useEditing } from "~/chat/editing"
 import { parsedFor } from "~/chat/parsed"
 import { preview, useReplying } from "~/chat/reply"
 import { Avatar, cx } from "~/kit/bits"
@@ -16,6 +17,7 @@ import { linked, named, withNames } from "~/chat/linked"
 const Markdown = lazy(() => import("~/chat/markdown"))
 const Annotator = lazy(() => import("~/chat/annotator"))
 const Gifs = lazy(() => import("~/chat/gif-picker"))
+const Changes = lazy(() => import("~/chat/changes"))
 const PermissionCard = lazy(() => import("~/chat/permission-card"))
 const QuestionCard = lazy(() => import("~/chat/question-card"))
 
@@ -181,6 +183,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
     [onQuote, go, channel.messages]
   )
   const who = memberOf(channel, m.from)
+  const editing = useEditing(channel.code, m.seq)
   const ask = m.ask ? channel.asks.find((a) => a.id === m.ask) : undefined
 
   if (m.system)
@@ -220,10 +223,28 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             <time className="msg-time" dateTime={new Date(m.at).toISOString()}>
               {clock(m.at)}
             </time>
+            {m.edited !== undefined && (
+              <span className="msg-edited" title={`Edited ${clock(m.edited)}`}>
+                edited
+              </span>
+            )}
           </p>
         )}
         {typeof quote === "number" ? <Earlier /> : quote && <Quote quoted={quote} who={nickname(channel, quote.from)} names={names} onClick={onQuote ? () => onQuote(quote.seq) : undefined} />}
-        <Clamp on={who?.kind === "agent" && !inThread}>{m.text && <Body text={m.text} seq={m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={openMessage} />}</Clamp>
+        {m.deleted ? (
+          <p className="msg-deleted">Message deleted</p>
+        ) : editing ? (
+          <Suspense fallback={null}>
+            <Changes kind="editor" channel={channel} m={m} />
+          </Suspense>
+        ) : (
+          <Clamp on={who?.kind === "agent" && !inThread}>{m.text && <Body text={m.text} seq={m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={openMessage} />}</Clamp>
+        )}
+        {compact && m.edited !== undefined && !editing && (
+          <span className="msg-edited" title={`Edited ${clock(m.edited)}`}>
+            edited
+          </span>
+        )}
         {m.images && (
           <div className="msg-images">
             {m.images.map((img) =>
@@ -302,7 +323,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
           </button>
         )}
       </div>
-      {!m.pending && m.failed === undefined && !m.leftOut && (
+      {!m.pending && m.failed === undefined && !m.leftOut && !m.deleted && !editing && (
         <div className="msg-tools" role="toolbar" aria-label="Message actions">
           {m.where.kind !== "theirs" &&
             QUICK.map((e) => (
@@ -313,6 +334,11 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
           {m.where.kind !== "theirs" && (
             <Suspense fallback={null}>
               <Gifs channel={channel} m={m} />
+            </Suspense>
+          )}
+          {m.canChange && (
+            <Suspense fallback={null}>
+              <Changes kind="tools" channel={channel} m={m} />
             </Suspense>
           )}
           {replying && m.where.kind !== "theirs" && (

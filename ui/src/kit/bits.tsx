@@ -1,22 +1,41 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react"
+import { Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react"
 
 import { useMoved } from "~/kit/glide"
 import { HarnessLogo, Icon, type IconName } from "~/kit/icons"
+import { later } from "~/kit/later"
 import type { Person, TaskStatus } from "~/model"
 
 export const cx = (...parts: (string | false | null | undefined)[]): string => parts.filter(Boolean).join(" ")
 
-export function Avatar({ person, size = "md", pip }: { person: Pick<Person, "name" | "kind" | "harness" | "presence" | "color" | "picture"> | undefined; size?: "sm" | "md" | "lg"; pip?: boolean }) {
+const RoleFace = later(() => import("~/kit/role-face").then((m) => m.RoleFace))
+
+export function Avatar({
+  person,
+  size = "md",
+  pip,
+}: {
+  person: Pick<Person, "name" | "kind" | "harness" | "presence" | "color" | "picture" | "face"> | undefined
+  size?: "sm" | "md" | "lg"
+  pip?: boolean
+}) {
   if (!person) return <span className={cx("av", `av-${size}`, "av-gone")} aria-hidden="true" />
   const face = (
     <span
-      className={cx("av", `av-${size}`, person.kind === "agent" ? "av-agent" : "av-human", person.presence === "offline" && "is-off")}
+      className={cx("av", `av-${size}`, person.kind === "agent" ? "av-face" : "av-human", person.presence === "offline" && "is-off")}
       data-color={person.kind === "human" && person.color ? person.color : undefined}
       data-harness={person.kind === "agent" ? person.harness : undefined}
       style={person.kind === "human" && person.color ? ({ "--member": `var(--c-${person.color})` } as CSSProperties) : undefined}
       aria-hidden="true"
     >
-      {person.kind === "agent" ? <HarnessLogo harness={person.harness} /> : person.picture ? <img src={person.picture} alt="" /> : person.name.slice(0, 1).toUpperCase()}
+      {person.kind === "agent" ? (
+        <Suspense fallback={<HarnessLogo harness={person.harness} />}>
+          <RoleFace role={person.face} harness={person.harness} />
+        </Suspense>
+      ) : person.picture ? (
+        <img src={person.picture} alt="" />
+      ) : (
+        person.name.slice(0, 1).toUpperCase()
+      )}
     </span>
   )
   if (!pip) return face

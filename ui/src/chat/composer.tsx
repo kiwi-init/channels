@@ -4,13 +4,14 @@ import { MAX_IMAGE_BYTES, RASTER_MIMES } from "@kiwi/core/protocol.ts"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import { takePasted } from "@kiwi/app/pasted.ts"
 import { matchCommands, parseCommand, type Command } from "~/chat/commands"
+import { startEditing } from "~/chat/editing"
 import { preview, useReplying } from "~/chat/reply"
 import { STASH_SHOT, useStash, type Stashed } from "~/chat/stash"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import type { Channel, Task, Upload, Where } from "~/model"
-import { useApp } from "~/nav"
+import { sameWhere, useApp } from "~/nav"
 import { nickname, shown } from "~/names"
 import { mentionNames, withNames, type Picks } from "~/chat/linked"
 
@@ -487,6 +488,16 @@ function ComposerIn({ channel, where, placeholder, inThread }: ComposerProps) {
                 if (e.shiftKey) bringBack(0)
                 else putAway()
                 return
+              }
+              if (e.key === "ArrowUp" && !options && !text && !files.length && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey) {
+                const last = channel.messages.findLast(
+                  (m) => m.canChange && sameWhere(m.where, where) && (inThread === undefined ? m.inThread === undefined : m.inThread === inThread || m.seq === inThread)
+                )
+                if (last) {
+                  e.preventDefault()
+                  startEditing(channel.code, last.seq)
+                  return
+                }
               }
               if (options) {
                 if (e.key === "ArrowDown" || e.key === "ArrowUp") {

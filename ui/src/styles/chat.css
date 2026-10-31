@@ -1860,3 +1860,41 @@ button.msg-image-spot:hover {
 .panel .chip-title + .chip-meta::before {
   content: none;
 }
+
+.msg-edited {
+  color: var(--ink-3);
+  font: var(--t-stamp) var(--ui);
+}
+
+.msg-deleted {
+  margin: 0;
+  color: var(--ink-3);
+  font: italic var(--t-ui) var(--ui);
+}
+
+.msg-edit {
+  display: grid;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.msg-edit-text {
+  width: 100%;
+  min-height: 0;
+  padding: 8px 10px;
+  border-radius: var(--r-ctl);
+  font: var(--t-body) / 1.5 var(--ui);
+  resize: vertical;
+}
+
+.msg-edit-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font: var(--t-meta) var(--ui);
+}
+
+.msg-edit-foot .dim {
+  margin-right: auto;
+}

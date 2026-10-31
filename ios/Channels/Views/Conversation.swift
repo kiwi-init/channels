@@ -81,7 +81,7 @@ struct Conversation: View {
         ScrollView {
             LazyVStack(spacing: 0) {
                 if !room.whole && !room.messages.isEmpty {
-                    Text("Earlier messages are on your Mac")
+                    Text("Earlier messages aren't on this phone")
                         .type(.meta)
                         .foregroundStyle(Tone.ink3)
                         .padding(.vertical, 14)

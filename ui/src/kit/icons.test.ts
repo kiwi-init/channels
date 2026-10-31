@@ -11,7 +11,11 @@ const ruleOf = (tag: string, inherited: string) => / fill-rule="(\w+)"/.exec(tag
 const assetPaths = (file: string) => {
   const svg = readFileSync(join(ASSETS, file), "utf8")
   const inherited = ruleOf(/<svg[^>]*>/.exec(svg)?.[0] ?? "", "nonzero")
-  return [...svg.matchAll(/<path[^>]*>/g)].map(([tag]) => ({ d: / d="([^"]*)"/.exec(tag)?.[1], rule: ruleOf(tag, inherited) }))
+  return [...svg.matchAll(/<path[^>]*>/g)].map(([tag]) => {
+    const transform = / transform="([^"]*)"/.exec(tag)?.[1]
+    const opacity = / opacity="([^"]*)"/.exec(tag)?.[1]
+    return { d: / d="([^"]*)"/.exec(tag)?.[1], rule: ruleOf(tag, inherited), ...(transform ? { transform } : {}), ...(opacity ? { opacity: Number(opacity) } : {}) }
+  })
 }
 
 describe("each harness an agent runs shows its own mark", () => {

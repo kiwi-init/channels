@@ -347,16 +347,19 @@ kbd {
   border-radius: 50%;
 }
 
-.av-agent {
-  border-radius: var(--r-row);
+.av-face {
+  background: none;
+  color: var(--ink);
 }
 
-.av-sm.av-agent {
-  border-radius: var(--r-tag);
+.av.av-face > svg {
+  width: 100%;
+  height: 100%;
 }
 
-.av-lg.av-agent {
-  border-radius: var(--r-card);
+.face-body,
+.face-badge {
+  fill: currentColor;
 }
 
 .av svg {
@@ -443,19 +446,19 @@ kbd {
   color: var(--member);
 }
 
-.av-agent[data-harness="claude"] {
+.face-badge[data-harness="claude"] {
   color: var(--h-claude);
 }
 
-.av-agent[data-harness="codex"] {
+.face-badge[data-harness="codex"] {
   color: var(--h-codex);
 }
 
-.av-agent[data-harness="gemini"] {
+.face-badge[data-harness="gemini"] {
   color: var(--h-gemini);
 }
 
-.av-agent[data-harness="opencode"] {
+.face-badge[data-harness="opencode"] {
   color: var(--h-opencode);
 }
 
@@ -581,6 +584,9 @@ kbd {
 
 .seg {
   display: inline-flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
   padding: 2px;
   gap: 2px;
   border: 0;

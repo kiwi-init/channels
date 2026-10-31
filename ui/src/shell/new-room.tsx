@@ -7,7 +7,7 @@ import { Avatar, cx, Dialog, DialogHead, Field } from "~/kit/bits"
 import { Track } from "~/kit/glide"
 import type { Channel } from "~/model"
 import { useApp } from "~/nav"
-import { shown } from "~/names"
+import { roomPeople, shown } from "~/names"
 import { RoomReadyNotes } from "~/shell/room-ready"
 import { useAppCan } from "~/live/app-can"
 
@@ -34,7 +34,7 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
   const [busy, setBusy] = useState(false)
   const name = roomName(typed)
   const problem = name ? roomProblem(channel.rooms, name) : null
-  const others = channel.people.filter((p) => !p.you && !p.left)
+  const others = roomPeople(channel)
   const people = others.filter((p) => p.kind === "human")
   const agents = others.filter((p) => p.kind === "agent")
   const pick = (who: string, on: boolean) =>

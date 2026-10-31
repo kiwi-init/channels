@@ -1,3 +1,4 @@
+import type { TextFont } from "@kiwi/app/theme.ts"
 import type { HookHarness, HookState } from "@kiwi/core/harnesses.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
 import type { GithubNote, Step, StepReply } from "@kiwi/core/protocol.ts"
@@ -38,6 +39,8 @@ export interface Person {
   picture?: string
   owner: boolean
   you: boolean
+  seatOf?: string
+  face?: string
   presence: Presence
   activity?: Activity
   reach?: "listening" | "running" | "wakes"
@@ -240,6 +243,9 @@ export interface Message {
   mentionsYou?: boolean
   leftOut?: string
   receipt?: string
+  edited?: number
+  deleted?: true
+  canChange?: true
 }
 
 export interface PermissionAsk {
@@ -511,6 +517,7 @@ export interface CustomTheme {
 export interface Prefs {
   theme: Theme
   textSize: number
+  font: TextFont
   reduceMotion: boolean
   notify: "all" | "mentions" | "none"
   enterSends: boolean
@@ -545,6 +552,8 @@ export interface Actions {
   loadImage(code: string, spot: string): void
   discard(code: string, seq: number): void
   react(code: string, seq: number, emoji: string): void
+  editMessage(code: string, seq: number, text: string): void
+  deleteMessage(code: string, seq: number): void
   answerPermission(code: string, id: string, allow: boolean): void
   answerQuestion(code: string, id: string, text: string): void
   answerStep(code: string, id: string, reply: StepReply): void
